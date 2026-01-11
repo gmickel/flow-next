@@ -2,6 +2,14 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [Unreleased]
+
+### Added
+- `--watch` flag for Ralph to stream tool calls in real-time with TUI styling
+- `--watch verbose` flag to stream full Claude output
+- `--help` flag with usage information
+- `watch-filter.py` to parse stream-json and display tool icons
+
 ## [flow-next 0.5.8] - 2026-01-11
 
 ### Added

@@ -48,6 +48,9 @@ else
   C_RESET='' C_BOLD='' C_DIM='' C_BLUE='' C_GREEN='' C_YELLOW='' C_RED='' C_CYAN='' C_MAGENTA=''
 fi
 
+# Watch mode: "", "tools", "verbose"
+WATCH_MODE=""
+
 ui() {
   [[ "$UI_ENABLED" == "1" ]] || return 0
   echo -e "$*"
@@ -279,6 +282,40 @@ WORK_REVIEW="${WORK_REVIEW:-none}"
 REQUIRE_PLAN_REVIEW="${REQUIRE_PLAN_REVIEW:-0}"
 YOLO="${YOLO:-0}"
 EPICS="${EPICS:-}"
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --watch)
+      if [[ "${2:-}" == "verbose" ]]; then
+        WATCH_MODE="verbose"
+        shift
+      else
+        WATCH_MODE="tools"
+      fi
+      shift
+      ;;
+    --help|-h)
+      echo "Usage: ralph.sh [options]"
+      echo ""
+      echo "Options:"
+      echo "  --watch          Show tool calls in real-time"
+      echo "  --watch verbose  Show full Claude output"
+      echo "  --help, -h       Show this help"
+      echo ""
+      echo "Environment variables:"
+      echo "  EPICS            Comma/space-separated epic IDs to work on"
+      echo "  MAX_ITERATIONS   Max loop iterations (default: 25)"
+      echo "  YOLO             Set to 1 to skip permissions (required for unattended)"
+      echo ""
+      echo "See config.env for more options."
+      exit 0
+      ;;
+    *)
+      fail "Unknown option: $1 (use --help for usage)"
+      ;;
+  esac
+done
 
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 
@@ -663,10 +700,29 @@ Violations break automation and leave the user with incomplete work. Be precise,
   [[ "${FLOW_RALPH_CLAUDE_VERBOSE:-}" == "1" ]] && claude_args+=(--verbose)
 
   ui_waiting
-
+  claude_out=""
   set +e
-  claude_out="$(timeout "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1)"
-  claude_rc=$?
+  if [[ "$WATCH_MODE" == "verbose" ]]; then
+    # Full output: stream to terminal AND capture to log
+    echo ""
+    timeout "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log"
+    claude_rc=${PIPESTATUS[0]}
+    claude_out="$(cat "$iter_log")"
+  elif [[ "$WATCH_MODE" == "tools" ]]; then
+    # Filtered output: stream-json through watch-filter.py
+    claude_args+=(--output-format stream-json)
+    # Add --verbose only if not already set
+    [[ ! " ${claude_args[*]} " =~ " --verbose " ]] && claude_args+=(--verbose)
+    timeout "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py"
+    claude_rc=${PIPESTATUS[0]}
+    # Log contains stream-json; verdict/promise extraction handled by fallback logic
+    claude_out="$(cat "$iter_log")"
+  else
+    # Default: quiet mode
+    claude_out="$(timeout "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1)"
+    claude_rc=$?
+    printf '%s\n' "$claude_out" > "$iter_log"
+  fi
   set -e
 
   # Handle timeout (exit code 124)
@@ -675,7 +731,6 @@ Violations break automation and leave the user with incomplete work. Be precise,
     log "worker timeout after ${WORKER_TIMEOUT}s"
   fi
 
-  printf '%s\n' "$claude_out" > "$iter_log"
   log "claude rc=$claude_rc log=$iter_log"
 
   force_retry=0
