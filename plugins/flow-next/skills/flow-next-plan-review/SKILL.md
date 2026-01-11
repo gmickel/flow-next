@@ -1,7 +1,6 @@
 ---
 name: flow-next-plan-review
 description: Carmack-level plan review via RepoPrompt or Codex. Use when reviewing Flow epic specs or design docs. Triggers on /flow-next:plan-review.
-model: claude-opus-4-5-20251101
 ---
 
 # Plan Review Mode

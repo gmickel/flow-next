@@ -1,7 +1,6 @@
 ---
 name: flow-next-impl-review
 description: John Carmack-level implementation review via RepoPrompt or Codex. Use when reviewing code changes, PRs, or implementations. Triggers on /flow-next:impl-review.
-model: claude-opus-4-5-20251101
 ---
 
 # Implementation Review Mode
