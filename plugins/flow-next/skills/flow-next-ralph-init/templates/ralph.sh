@@ -732,7 +732,9 @@ Violations break automation and leave the user with incomplete work. Be precise,
     exit_code=2
   elif [[ "$force_retry" == "1" ]]; then
     exit_code=2
-  elif [[ "$claude_rc" -ne 0 ]]; then
+  elif [[ "$claude_rc" -ne 0 && "$task_status" != "done" ]]; then
+    # Only fail on non-zero exit code if task didn't complete successfully
+    # This prevents false failures from transient errors (telemetry, model fallback, etc.)
     exit_code=1
   fi
 
