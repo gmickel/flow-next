@@ -1,16 +1,26 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-12T22:05:52.823926Z",
   "created_at": "2026-01-12T21:03:46.120290Z",
   "depends_on": [
     "fn-9.1"
   ],
   "epic": "fn-9",
+  "evidence": {
+    "commits": [
+      "55d8d24",
+      "70e05a1"
+    ],
+    "prs": [],
+    "tests": [
+      "bun test"
+    ]
+  },
   "id": "fn-9.2",
   "priority": null,
   "spec_path": ".flow/tasks/fn-9.2.md",
-  "status": "todo",
+  "status": "done",
   "title": "Theme system (dark/light)",
-  "updated_at": "2026-01-12T21:07:02.700159Z"
+  "updated_at": "2026-01-12T22:05:52.913445Z"
 }

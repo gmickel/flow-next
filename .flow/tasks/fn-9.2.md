@@ -43,9 +43,20 @@ Export `getTheme(isLight: boolean)` function.
 - [ ] pi-tui compatible theme objects exportable
 - [ ] Colors render correctly in terminal (visual check)
 ## Done summary
-TBD
+- Implemented 256-color palette with dark (default) and light themes
+- Added color helper functions: text(), dim(), accent(), success(), progress(), warning(), error(), border()
+- Created pi-tui compatible theme objects: SelectListTheme, MarkdownTheme, EditorTheme
+- Added getTheme(isLight) switching function
 
+Why:
+- Terminal TUI needs consistent theming across all components
+- 256-color palette ensures compatibility with most terminals
+
+Verification:
+- bun test passes (14 tests)
+- bun run lint passes
+- TypeScript check passes
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 55d8d24, 70e05a1
+- Tests: bun test
 - PRs:
