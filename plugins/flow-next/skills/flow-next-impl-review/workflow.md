@@ -253,7 +253,7 @@ If verdict is NEEDS_WORK:
    - [Fix 2]: [file:line] [what changed]
    ...
 
-   Please re-review. Verify the actual code changes, not just this summary.
+   The updated files are attached to this message. Please review the actual file contents (not just this summary) and verify the fixes address the issues.
    EOF
 
    $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md
