@@ -52,26 +52,15 @@ async function fileExists(path: string): Promise<boolean> {
 }
 
 /**
- * Parse run ID to date for sorting
- * Format: YYYY-MM-DD-NNN or YYYY-MM-DD-HH-MM-SS-NNN
+ * Compare run IDs for sorting (newest first).
+ * Uses lexicographic comparison which works correctly for:
+ * - YYYY-MM-DD-NNN format (e.g., 2024-01-15-001 < 2024-01-15-002)
+ * - YYYY-MM-DD-HH-MM-SS-NNN format
+ * Zero-padded segments ensure correct ordering.
  */
-function parseRunDate(runId: string): Date {
-  // Try YYYY-MM-DD-HH-MM-SS format first
-  const longMatch = runId.match(/^(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})/);
-  if (longMatch) {
-    const [, year, month, day, hour, min, sec] = longMatch;
-    return new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}`);
-  }
-
-  // Fall back to YYYY-MM-DD format
-  const shortMatch = runId.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (shortMatch) {
-    const [, year, month, day] = shortMatch;
-    return new Date(`${year}-${month}-${day}T00:00:00`);
-  }
-
-  // Invalid format, return epoch
-  return new Date(0);
+function compareRunIds(a: string, b: string): number {
+  // Lexicographic descending (b > a = newest first)
+  return b.localeCompare(a);
 }
 
 /**
@@ -181,14 +170,15 @@ export async function discoverRuns(runsDir?: string): Promise<Run[]> {
     return [];
   }
 
-  // Filter to directories only (runs are directories)
-  const runDirs: string[] = [];
-  for (const entry of entries) {
-    const entryPath = join(dir, entry);
-    if (await dirExists(entryPath)) {
-      runDirs.push(entry);
-    }
-  }
+  // Filter to directories only (runs are directories) - parallel stat
+  const entryChecks = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = join(dir, entry);
+      const isDir = await dirExists(entryPath);
+      return { entry, isDir };
+    })
+  );
+  const runDirs = entryChecks.filter((e) => e.isDir).map((e) => e.entry);
 
   // Build Run objects
   const runs: Run[] = [];
@@ -211,23 +201,21 @@ export async function discoverRuns(runsDir?: string): Promise<Run[]> {
     });
   }
 
-  // Sort by date (newest first)
-  runs.sort((a, b) => {
-    const dateA = parseRunDate(a.id);
-    const dateB = parseRunDate(b.id);
-    return dateB.getTime() - dateA.getTime();
-  });
+  // Sort by run ID (lexicographic descending = newest first)
+  runs.sort((a, b) => compareRunIds(a.id, b.id));
 
   return runs;
 }
 
 /**
- * Get the latest (most recent) run
+ * Get the latest (most recent) run by ID.
+ * Computes the latest run regardless of input array order.
  */
 export function getLatestRun(runs: Run[]): Run | undefined {
   if (runs.length === 0) return undefined;
-  // Assumes runs are already sorted newest-first
-  return runs[0];
+  return runs.reduce((latest, run) =>
+    compareRunIds(run.id, latest.id) < 0 ? run : latest
+  );
 }
 
 /**
@@ -316,13 +304,22 @@ export async function getBlockReason(
 }
 
 /**
+ * Result from validateRun with optional warnings
+ */
+export interface ValidateRunResult {
+  run: Run;
+  warnings: string[];
+}
+
+/**
  * Validate a run ID and return the run if found
  * @throws Error with helpful message if run not found
+ * @returns Run with any warnings (e.g., corrupt run)
  */
 export async function validateRun(
   runId: string,
   runsDir?: string
-): Promise<Run> {
+): Promise<ValidateRunResult> {
   const runs = await discoverRuns(runsDir);
   const run = runs.find((r) => r.id === runId);
 
@@ -331,11 +328,13 @@ export async function validateRun(
     throw new Error(`Run '${runId}' not found. Available: ${available}`);
   }
 
-  // Warn if corrupt (missing progress.txt) but still return
+  const warnings: string[] = [];
+
+  // Check if corrupt (missing progress.txt)
   const progressPath = join(run.path, 'progress.txt');
   if (!(await fileExists(progressPath))) {
-    console.warn(`Warning: Run '${runId}' may be corrupt (missing progress.txt)`);
+    warnings.push(`Run '${runId}' may be corrupt (missing progress.txt)`);
   }
 
-  return run;
+  return { run, warnings };
 }

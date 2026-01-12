@@ -55,6 +55,40 @@ describe('runs', () => {
       expect(runs.at(2)?.id).toBe('2024-01-10-001');
     });
 
+    test('sorts same-date runs by suffix (newest first)', async () => {
+      const runsDir = join(tempDir, 'runs');
+      await mkdir(runsDir);
+
+      // Create runs on same date with different suffixes
+      await mkdir(join(runsDir, '2024-01-15-001'));
+      await mkdir(join(runsDir, '2024-01-15-003'));
+      await mkdir(join(runsDir, '2024-01-15-002'));
+
+      const runs = await discoverRuns(runsDir);
+
+      expect(runs).toHaveLength(3);
+      expect(runs.at(0)?.id).toBe('2024-01-15-003');
+      expect(runs.at(1)?.id).toBe('2024-01-15-002');
+      expect(runs.at(2)?.id).toBe('2024-01-15-001');
+    });
+
+    test('sorts long format runs correctly', async () => {
+      const runsDir = join(tempDir, 'runs');
+      await mkdir(runsDir);
+
+      // Create runs with YYYY-MM-DD-HH-MM-SS format
+      await mkdir(join(runsDir, '2024-01-15-10-30-00-001'));
+      await mkdir(join(runsDir, '2024-01-15-10-30-00-002'));
+      await mkdir(join(runsDir, '2024-01-15-11-00-00-001'));
+
+      const runs = await discoverRuns(runsDir);
+
+      expect(runs).toHaveLength(3);
+      expect(runs.at(0)?.id).toBe('2024-01-15-11-00-00-001');
+      expect(runs.at(1)?.id).toBe('2024-01-15-10-30-00-002');
+      expect(runs.at(2)?.id).toBe('2024-01-15-10-30-00-001');
+    });
+
     test('ignores files in runs directory', async () => {
       const runsDir = join(tempDir, 'runs');
       await mkdir(runsDir);
@@ -127,14 +161,26 @@ describe('runs', () => {
       expect(latest).toBeUndefined();
     });
 
-    test('returns first run (assumes pre-sorted)', () => {
+    test('finds latest regardless of input order', () => {
       const runs = [
-        { id: '2024-01-20-001', path: '/a', active: true, iteration: 1 },
         { id: '2024-01-15-001', path: '/b', active: false, iteration: 2 },
+        { id: '2024-01-20-001', path: '/a', active: true, iteration: 1 },
+        { id: '2024-01-10-001', path: '/c', active: false, iteration: 3 },
       ];
 
       const latest = getLatestRun(runs);
       expect(latest?.id).toBe('2024-01-20-001');
+    });
+
+    test('handles same-date runs with different suffixes', () => {
+      const runs = [
+        { id: '2024-01-15-001', path: '/a', active: true, iteration: 1 },
+        { id: '2024-01-15-003', path: '/b', active: false, iteration: 2 },
+        { id: '2024-01-15-002', path: '/c', active: false, iteration: 3 },
+      ];
+
+      const latest = getLatestRun(runs);
+      expect(latest?.id).toBe('2024-01-15-003');
     });
   });
 
@@ -247,14 +293,27 @@ describe('runs', () => {
       );
     });
 
-    test('returns run when found', async () => {
+    test('returns run and empty warnings when found', async () => {
       const runsDir = join(tempDir, 'runs');
       await mkdir(runsDir);
       await mkdir(join(runsDir, '2024-01-15-001'));
       await writeFile(join(runsDir, '2024-01-15-001', 'progress.txt'), 'ok');
 
-      const run = await validateRun('2024-01-15-001', runsDir);
-      expect(run.id).toBe('2024-01-15-001');
+      const result = await validateRun('2024-01-15-001', runsDir);
+      expect(result.run.id).toBe('2024-01-15-001');
+      expect(result.warnings).toEqual([]);
+    });
+
+    test('returns warning for missing progress.txt', async () => {
+      const runsDir = join(tempDir, 'runs');
+      await mkdir(runsDir);
+      await mkdir(join(runsDir, '2024-01-15-001'));
+      // No progress.txt file
+
+      const result = await validateRun('2024-01-15-001', runsDir);
+      expect(result.run.id).toBe('2024-01-15-001');
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toContain('corrupt');
     });
 
     test('lists available runs in error message', async () => {
