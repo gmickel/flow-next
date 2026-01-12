@@ -1,6 +1,8 @@
 import type {
 	Epic,
+	EpicListItem,
 	EpicShowResponse,
+	EpicsResponse,
 	ReadyResponse,
 	Task,
 	TaskListItem,
@@ -32,21 +34,20 @@ let usePython: boolean | null = null;
 
 /**
  * Check if a file exists and is executable
- * Uses `flowctl epics --json` as test command since --version is not supported
+ * Uses `flowctl --help` as test command (repo-independent, always exits 0)
  */
 async function canExecute(path: string): Promise<boolean> {
 	const file = Bun.file(path);
 	if (!(await file.exists())) return false;
 
-	// Try direct execution with a simple command
+	// Try direct execution with --help (repo-independent)
 	try {
-		const proc = Bun.spawn([path, "epics", "--json"], {
+		const proc = Bun.spawn([path, "--help"], {
 			stdout: "pipe",
 			stderr: "pipe",
 		});
 		await proc.exited;
-		// Exit 0 means success, exit 2 (arg error) or similar still means flowctl works
-		return proc.exitCode === 0 || proc.exitCode === 2;
+		return proc.exitCode === 0;
 	} catch {
 		return false;
 	}
@@ -60,12 +61,12 @@ async function canExecuteViaPython(path: string): Promise<boolean> {
 	if (!(await file.exists())) return false;
 
 	try {
-		const proc = Bun.spawn(["python3", path, "epics", "--json"], {
+		const proc = Bun.spawn(["python3", path, "--help"], {
 			stdout: "pipe",
 			stderr: "pipe",
 		});
 		await proc.exited;
-		return proc.exitCode === 0 || proc.exitCode === 2;
+		return proc.exitCode === 0;
 	} catch {
 		return false;
 	}
@@ -232,22 +233,18 @@ export async function flowctl<T>(args: string[]): Promise<T> {
 	try {
 		return JSON.parse(stdout) as T;
 	} catch {
-		throw new FlowctlError(
-			args,
-			0,
-			`Failed to parse JSON output: ${stdout.slice(0, 200)}`,
-		);
+		// Include both stdout and stderr for debugging parse failures
+		const context = stderr.trim()
+			? `stderr: ${stderr.trim()}, stdout: ${stdout.slice(0, 150)}`
+			: `stdout: ${stdout.slice(0, 200)}`;
+		throw new FlowctlError(args, 0, `Failed to parse JSON: ${context}`);
 	}
 }
 
 /**
- * Get all epics
+ * Get all epics (list items with counts)
  */
-export async function getEpics(): Promise<Epic[]> {
-	interface EpicsResponse {
-		success: boolean;
-		epics: Epic[];
-	}
+export async function getEpics(): Promise<EpicListItem[]> {
 	const response = await flowctl<EpicsResponse>(["epics", "--json"]);
 	return response.epics;
 }

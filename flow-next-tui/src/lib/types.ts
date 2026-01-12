@@ -83,6 +83,27 @@ export interface TasksResponse {
 }
 
 /**
+ * Epic list item as returned by flowctl epics --json
+ * (minimal fields for listing)
+ */
+export interface EpicListItem {
+	id: string; // fn-N
+	title: string;
+	status: EpicStatus;
+	tasks: number; // count of tasks
+	done: number; // count of done tasks
+}
+
+/**
+ * Response from flowctl epics command
+ */
+export interface EpicsResponse {
+	success: boolean;
+	epics: EpicListItem[];
+	count: number;
+}
+
+/**
  * Epic as returned by flowctl show command
  */
 export interface Epic {

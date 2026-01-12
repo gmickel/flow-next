@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "bun:test";
+import { describe, expect, it, beforeEach, beforeAll } from "bun:test";
 import {
 	FlowctlError,
 	getFlowctlPath,
@@ -11,6 +11,18 @@ import {
 	getTask,
 	clearFlowctlCache,
 } from "./flowctl";
+
+// Check if .flow/ directory exists (for integration tests)
+let hasFlowDir = false;
+beforeAll(async () => {
+	const file = Bun.file(`${process.cwd()}/.flow/config.json`);
+	hasFlowDir = await file.exists();
+	// Also check parent (for running from flow-next-tui subdir)
+	if (!hasFlowDir) {
+		const parentFile = Bun.file(`${process.cwd()}/../.flow/config.json`);
+		hasFlowDir = await parentFile.exists();
+	}
+});
 
 // Reset cache before each test
 beforeEach(() => {
@@ -54,7 +66,7 @@ describe("getFlowctlPath", () => {
 
 describe("flowctl", () => {
 	it("parses JSON output from flowctl command", async () => {
-		// Integration test - requires .flow directory
+		if (!hasFlowDir) return; // Skip if no .flow/
 		const result = await flowctl<{ success: boolean; epics: unknown[] }>(["epics", "--json"]);
 		expect(result).toHaveProperty("success");
 		expect(result).toHaveProperty("epics");
@@ -62,24 +74,29 @@ describe("flowctl", () => {
 });
 
 describe("getEpics", () => {
-	it("returns list of epics", async () => {
-		// Integration test
+	it("returns list of epics with list-item fields", async () => {
+		if (!hasFlowDir) return; // Skip if no .flow/
 		const epics = await getEpics();
 		expect(Array.isArray(epics)).toBe(true);
 		if (epics.length > 0) {
 			const first = epics[0];
+			// EpicListItem fields
 			expect(first).toHaveProperty("id");
 			expect(first).toHaveProperty("title");
 			expect(first).toHaveProperty("status");
+			expect(first).toHaveProperty("tasks"); // count
+			expect(first).toHaveProperty("done"); // count
+			expect(typeof first?.tasks).toBe("number");
+			expect(typeof first?.done).toBe("number");
 		}
 	});
 });
 
 describe("getTasks", () => {
 	it("returns tasks for an epic", async () => {
-		// First get epics to find a valid epic id
+		if (!hasFlowDir) return; // Skip if no .flow/
 		const epics = await getEpics();
-		if (epics.length === 0) return; // Skip if no epics
+		if (epics.length === 0) return;
 
 		const epicId = epics[0]?.id;
 		if (!epicId) return;
@@ -96,7 +113,7 @@ describe("getTasks", () => {
 	});
 
 	it("returns empty array for non-existent epic", async () => {
-		// flowctl returns success with empty tasks for non-existent epics
+		if (!hasFlowDir) return; // Skip if no .flow/
 		const tasks = await getTasks("fn-99999");
 		expect(Array.isArray(tasks)).toBe(true);
 		expect(tasks.length).toBe(0);
@@ -105,7 +122,7 @@ describe("getTasks", () => {
 
 describe("getTaskSpec", () => {
 	it("returns markdown spec for a task", async () => {
-		// Get first task from first epic
+		if (!hasFlowDir) return; // Skip if no .flow/
 		const epics = await getEpics();
 		if (epics.length === 0) return;
 
@@ -124,6 +141,7 @@ describe("getTaskSpec", () => {
 	});
 
 	it("throws FlowctlError for invalid task", async () => {
+		if (!hasFlowDir) return; // Skip if no .flow/
 		try {
 			await getTaskSpec("fn-99999.999");
 			expect.unreachable("Should have thrown");
@@ -135,6 +153,7 @@ describe("getTaskSpec", () => {
 
 describe("getReadyTasks", () => {
 	it("returns ready/in_progress/blocked categorization", async () => {
+		if (!hasFlowDir) return; // Skip if no .flow/
 		const epics = await getEpics();
 		if (epics.length === 0) return;
 
@@ -153,7 +172,8 @@ describe("getReadyTasks", () => {
 });
 
 describe("getEpic", () => {
-	it("returns epic details", async () => {
+	it("returns full epic details", async () => {
+		if (!hasFlowDir) return; // Skip if no .flow/
 		const epics = await getEpics();
 		if (epics.length === 0) return;
 
@@ -164,7 +184,7 @@ describe("getEpic", () => {
 		expect(epic).toHaveProperty("id");
 		expect(epic).toHaveProperty("title");
 		expect(epic).toHaveProperty("status");
-		expect(epic).toHaveProperty("tasks");
+		expect(epic).toHaveProperty("tasks"); // EpicTask[] for full epic
 		// Should not have success field
 		expect(epic).not.toHaveProperty("success");
 	});
@@ -172,6 +192,7 @@ describe("getEpic", () => {
 
 describe("getTask", () => {
 	it("returns task details", async () => {
+		if (!hasFlowDir) return; // Skip if no .flow/
 		const epics = await getEpics();
 		if (epics.length === 0) return;
 
