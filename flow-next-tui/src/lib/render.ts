@@ -1,7 +1,12 @@
 /**
- * ANSI-aware rendering utilities for terminal width/padding/truncation.
- * Re-exports truncateToWidth from pi-tui; implements visibleWidth, stripAnsi,
- * and padToWidth locally for comprehensive ANSI code handling.
+ * Terminal escape-aware rendering utilities for width/padding/truncation.
+ *
+ * Re-exports truncateToWidth from pi-tui.
+ * Implements visibleWidth (wraps pi-tui with comprehensive stripping),
+ * stripAnsi, and padToWidth locally.
+ *
+ * stripAnsi removes all terminal escape sequences, not just ANSI SGR styling:
+ * CSI sequences, OSC sequences, charset designators, and simple escapes.
  */
 
 import {
