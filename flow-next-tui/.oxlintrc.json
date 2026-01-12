@@ -1,0 +1,5 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "extends": ["ultracite/oxlint/core"],
+  "ignorePatterns": ["node_modules/**", "dist/**", "tmp/**"]
+}
