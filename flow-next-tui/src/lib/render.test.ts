@@ -24,6 +24,34 @@ describe("visibleWidth", () => {
 		expect(visibleWidth(`${RED}red ${GREEN}green${RESET}`)).toBe(9);
 	});
 
+	test("text with cursor movement codes", () => {
+		expect(visibleWidth("\x1b[3Aup")).toBe(2);
+		expect(visibleWidth("\x1b[2Bdown")).toBe(4);
+		expect(visibleWidth("\x1b[1;2Hpos")).toBe(3);
+	});
+
+	test("text with private mode sequences", () => {
+		expect(visibleWidth("\x1b[?25lhidden")).toBe(6);
+		expect(visibleWidth("\x1b[?25hvisible")).toBe(7);
+		expect(visibleWidth("\x1b[?1049halt")).toBe(3);
+	});
+
+	test("text with OSC sequences (BEL terminator)", () => {
+		const link = "\x1b]8;;https://example.com\x07Click\x1b]8;;\x07";
+		expect(visibleWidth(link)).toBe(5);
+		expect(visibleWidth("\x1b]0;Title\x07content")).toBe(7);
+	});
+
+	test("text with OSC sequences (ST terminator)", () => {
+		const linkST = "\x1b]8;;https://example.com\x1b\\Click\x1b]8;;\x1b\\";
+		expect(visibleWidth(linkST)).toBe(5);
+	});
+
+	test("text with simple escape sequences", () => {
+		expect(visibleWidth("\x1bcreset")).toBe(5);
+		expect(visibleWidth("\x1b7save\x1b8")).toBe(4);
+	});
+
 	test("edge cases", () => {
 		expect(visibleWidth("")).toBe(0);
 		expect(visibleWidth(`${RESET}`)).toBe(0);
@@ -48,31 +76,25 @@ describe("stripAnsi", () => {
 	});
 
 	test("removes cursor movement codes", () => {
-		// Clear line, cursor position
 		expect(stripAnsi("\x1b[2Kcleared")).toBe("cleared");
 		expect(stripAnsi("\x1b[1Gmoved")).toBe("moved");
-		// Cursor up/down/forward/back
 		expect(stripAnsi("\x1b[3Aup")).toBe("up");
 		expect(stripAnsi("\x1b[2Bdown")).toBe("down");
 		expect(stripAnsi("\x1b[5Cforward")).toBe("forward");
 		expect(stripAnsi("\x1b[1Dback")).toBe("back");
-		// Cursor position with params
 		expect(stripAnsi("\x1b[1;2Hpos")).toBe("pos");
 		expect(stripAnsi("\x1b[10;20fset")).toBe("set");
 	});
 
 	test("removes private mode sequences", () => {
-		// Hide/show cursor
 		expect(stripAnsi("\x1b[?25lhidden")).toBe("hidden");
 		expect(stripAnsi("\x1b[?25hvisible")).toBe("visible");
-		// Alternate screen buffer
 		expect(stripAnsi("\x1b[?1049halt")).toBe("alt");
 	});
 
 	test("removes OSC with BEL terminator", () => {
 		const link = "\x1b]8;;https://example.com\x07Click\x1b]8;;\x07";
 		expect(stripAnsi(link)).toBe("Click");
-		// Window title
 		expect(stripAnsi("\x1b]0;Title\x07content")).toBe("content");
 	});
 
@@ -82,8 +104,8 @@ describe("stripAnsi", () => {
 	});
 
 	test("removes simple escape sequences", () => {
-		// Reset terminal
 		expect(stripAnsi("\x1bcreset")).toBe("reset");
+		expect(stripAnsi("\x1b7save\x1b8")).toBe("save");
 	});
 
 	test("edge cases", () => {
@@ -94,12 +116,10 @@ describe("stripAnsi", () => {
 });
 
 describe("padToWidth", () => {
-	test("plain text adds reset before padding", () => {
-		const padded = padToWidth("hi", 5);
-		expect(visibleWidth(padded)).toBe(5);
-		// Should have reset before padding spaces
-		expect(padded).toContain(RESET);
-		expect(stripAnsi(padded)).toBe("hi   ");
+	test("plain text pads without reset", () => {
+		// Plain text without ANSI should not get reset added
+		expect(padToWidth("hi", 5)).toBe("hi   ");
+		expect(padToWidth("hello", 10)).toBe("hello     ");
 	});
 
 	test("no padding needed returns unchanged", () => {
@@ -107,10 +127,12 @@ describe("padToWidth", () => {
 		expect(padToWidth("hello world", 5)).toBe("hello world");
 	});
 
-	test("text with color codes produces correct width", () => {
+	test("text with color codes gets reset before padding", () => {
 		const colored = `${RED}hi${RESET}`;
 		const padded = padToWidth(colored, 5);
 		expect(visibleWidth(padded)).toBe(5);
+		// Should have reset before padding spaces
+		expect(padded).toContain(RESET);
 		expect(stripAnsi(padded)).toBe("hi   ");
 	});
 
@@ -125,14 +147,21 @@ describe("padToWidth", () => {
 		const noReset = `${RED}hi`;
 		const padded = padToWidth(noReset, 5);
 		expect(visibleWidth(padded)).toBe(5);
-		// Should contain reset somewhere to prevent leak
+		// Should contain reset before padding to prevent leak
+		expect(padded).toContain(RESET);
+	});
+
+	test("text with cursor codes gets reset before padding", () => {
+		const withCursor = "\x1b[2Khi";
+		const padded = padToWidth(withCursor, 5);
+		expect(visibleWidth(padded)).toBe(5);
 		expect(padded).toContain(RESET);
 	});
 
 	test("edge cases", () => {
 		const emptyPadded = padToWidth("", 5);
 		expect(visibleWidth(emptyPadded)).toBe(5);
-		expect(stripAnsi(emptyPadded)).toBe("     ");
+		expect(emptyPadded).toBe("     ");
 		expect(padToWidth("", 0)).toBe("");
 	});
 
@@ -164,9 +193,9 @@ describe("truncateToWidth", () => {
 	test("ellipsis is unstyled for colored text", () => {
 		const colored = `${RED}hello world${RESET}`;
 		const truncated = truncateToWidth(colored, 8);
-		// Ellipsis should not have RED style applied
-		// Verify by checking visible content ends with ...
-		expect(stripAnsi(truncated).endsWith("...")).toBe(true);
+		// pi-tui adds reset before ellipsis: verify reset appears before ...
+		// eslint-disable-next-line no-control-regex
+		expect(truncated).toMatch(/\x1b\[0m\.\.\.$/);
 	});
 
 	test("nested styles truncate correctly", () => {
