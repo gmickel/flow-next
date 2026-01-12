@@ -2,27 +2,15 @@
   "name": "@gmickel/flow-next-tui",
   "version": "0.1.0",
   "description": "A beautiful TUI app to watch your Flow-Next Ralph Mode runs",
-  "type": "module",
-  "module": "src/index.ts",
   "keywords": [
     "claude-code",
-    "plugin",
-    "workflow",
-    "planning",
     "execution",
+    "planning",
+    "plugin",
     "ralph",
-    "ralph-mode"
+    "ralph-mode",
+    "workflow"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "oxfmt": "^0.24.0",
-    "oxlint": "^1.39.0",
-    "oxlint-tsgolint": "^0.11.0",
-    "ultracite": "7.0.11"
-  },
   "homepage": "https://mickel.tech/apps/flow-next",
   "bugs": {
     "url": "https://github.com/gmickel/gmickel-claude-marketplace/issues"
@@ -36,11 +24,23 @@
   "bin": {
     "fntui": "src/index.ts"
   },
-  "peerDependencies": {
-    "typescript": "^5"
+  "type": "module",
+  "module": "src/index.ts",
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "lint": "oxlint --fix --type-aware --type-check && oxfmt .",
     "lint:check": "oxlint --type-aware --type-check && oxfmt --check ."
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "oxfmt": "^0.24.0",
+    "oxlint": "^1.39.0",
+    "oxlint-tsgolint": "^0.11.0",
+    "ultracite": "7.0.11"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
   }
 }

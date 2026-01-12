@@ -18,6 +18,6 @@
   "experimentalSortImports": {
     "ignoreCase": true,
     "newlinesBetween": true,
-    "order": "asc"
-  }
+    "order": "asc",
+  },
 }
