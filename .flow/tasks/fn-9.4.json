@@ -1,16 +1,25 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-12T22:36:04.487485Z",
   "created_at": "2026-01-12T21:03:49.478801Z",
   "depends_on": [
     "fn-9.3"
   ],
   "epic": "fn-9",
+  "evidence": {
+    "commits": [
+      "54a450cc6f6f1d6d2aaa4f46eed3dec2a134d788"
+    ],
+    "prs": [],
+    "tests": [
+      "bun test"
+    ]
+  },
   "id": "fn-9.4",
   "priority": null,
   "spec_path": ".flow/tasks/fn-9.4.md",
-  "status": "todo",
+  "status": "done",
   "title": "flowctl integration lib",
-  "updated_at": "2026-01-12T21:07:03.022621Z"
+  "updated_at": "2026-01-12T22:40:20.924852Z"
 }

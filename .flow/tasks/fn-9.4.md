@@ -55,9 +55,19 @@ Detect which works and cache the method.
 - [ ] `getTaskSpec('fn-1.1')` returns markdown string
 - [ ] Errors include context (command, exit code, stderr)
 ## Done summary
-TBD
+- Added `src/lib/flowctl.ts` with path resolution and JSON command runner
+- Searches .flow/bin, plugins dir, repo root (via .git/HEAD), then PATH
+- Helper functions: getEpics, getTasks, getTaskSpec, getReadyTasks, getEpic, getTask
+- FlowctlError class with command, exit code, stderr context
 
+Why:
+- TUI needs to invoke flowctl commands and parse results
+- Path resolution handles running from subdirectories
+
+Verification:
+- 32 tests pass including integration tests with real flowctl
+- Lint clean (oxlint)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 54a450cc6f6f1d6d2aaa4f46eed3dec2a134d788
+- Tests: bun test
 - PRs:
