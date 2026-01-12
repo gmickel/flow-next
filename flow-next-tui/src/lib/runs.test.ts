@@ -11,6 +11,7 @@ import {
   getReceiptStatus,
   getBlockReason,
   validateRun,
+  clearRepoRootCache,
 } from './runs';
 
 describe('runs', () => {
@@ -18,10 +19,12 @@ describe('runs', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'runs-test-'));
+    clearRepoRootCache();
   });
 
   afterEach(async () => {
     await rm(tempDir, { recursive: true });
+    clearRepoRootCache();
   });
 
   describe('discoverRuns', () => {
@@ -112,6 +115,53 @@ describe('runs', () => {
 
       const runs = await discoverRuns(runsDir);
       expect(runs.at(0)?.iteration).toBe(3);
+    });
+
+    test('parses epic from progress.txt (Ralph format)', async () => {
+      const runsDir = join(tempDir, 'runs');
+      const runDir = join(runsDir, '20240115T103000Z-mac-user-1234-abcd');
+      await mkdir(runDir, { recursive: true });
+
+      // Real Ralph progress.txt format
+      const progressContent = `# Ralph Progress Log
+Run: 20240115T103000Z-mac-user-1234-abcd
+Started: 2024-01-15T10:30:00Z
+---
+## 2024-01-15T10:30:05Z - iter 1
+status=ready epic=fn-9 task=fn-9.1 reason=
+claude_rc=0
+verdict=
+promise=CONTINUE
+---
+## 2024-01-15T10:35:00Z - iter 2
+status=ready epic=fn-9 task=fn-9.2 reason=
+claude_rc=0
+verdict=
+promise=CONTINUE
+---`;
+      await writeFile(join(runDir, 'progress.txt'), progressContent);
+
+      const runs = await discoverRuns(runsDir);
+      expect(runs).toHaveLength(1);
+      expect(runs.at(0)?.epic).toBe('fn-9');
+    });
+
+    test('handles real Ralph run ID format', async () => {
+      const runsDir = join(tempDir, 'runs');
+      await mkdir(runsDir);
+
+      // Real Ralph run IDs
+      await mkdir(join(runsDir, '20240115T103000Z-mac-user-1234-abcd'));
+      await mkdir(join(runsDir, '20240115T113000Z-mac-user-1234-efgh'));
+      await mkdir(join(runsDir, '20240114T093000Z-mac-user-1234-ijkl'));
+
+      const runs = await discoverRuns(runsDir);
+
+      expect(runs).toHaveLength(3);
+      // Lexicographic sort: newest first
+      expect(runs.at(0)?.id).toBe('20240115T113000Z-mac-user-1234-efgh');
+      expect(runs.at(1)?.id).toBe('20240115T103000Z-mac-user-1234-abcd');
+      expect(runs.at(2)?.id).toBe('20240114T093000Z-mac-user-1234-ijkl');
     });
   });
 

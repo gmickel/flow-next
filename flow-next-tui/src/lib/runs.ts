@@ -1,5 +1,5 @@
 import { readdir, stat } from 'node:fs/promises';
-import { join, basename } from 'node:path';
+import { join, basename, dirname } from 'node:path';
 
 import type { Run } from './types';
 
@@ -30,6 +30,54 @@ export interface ReceiptStatus {
  * Default runs directory relative to repo root
  */
 const DEFAULT_RUNS_DIR = 'scripts/ralph/runs';
+
+/**
+ * Cached repo root (resolved once per process)
+ */
+let cachedRepoRoot: string | null = null;
+
+/**
+ * Find repo root by walking up from cwd looking for .git or .flow directory
+ */
+async function findRepoRoot(startDir?: string): Promise<string> {
+  if (cachedRepoRoot) return cachedRepoRoot;
+
+  let dir = startDir ?? process.cwd();
+  while (dir !== dirname(dir)) {
+    // Check for .git directory or file (worktrees)
+    const gitPath = join(dir, '.git');
+    const gitFile = Bun.file(gitPath);
+    if (await gitFile.exists()) {
+      cachedRepoRoot = dir;
+      return dir;
+    }
+
+    // Check for .flow directory
+    const flowPath = join(dir, '.flow');
+    try {
+      const s = await stat(flowPath);
+      if (s.isDirectory()) {
+        cachedRepoRoot = dir;
+        return dir;
+      }
+    } catch {
+      // Continue searching
+    }
+
+    dir = dirname(dir);
+  }
+
+  // Fall back to cwd if no markers found
+  cachedRepoRoot = startDir ?? process.cwd();
+  return cachedRepoRoot;
+}
+
+/**
+ * Clear cached repo root (for testing)
+ */
+export function clearRepoRootCache(): void {
+  cachedRepoRoot = null;
+}
 
 /**
  * Regex for valid task IDs (fn-N or fn-N.M)
@@ -69,9 +117,9 @@ async function fileExists(path: string): Promise<boolean> {
 /**
  * Compare run IDs for sorting (newest first).
  * Uses lexicographic comparison which works correctly for:
- * - YYYY-MM-DD-NNN format (e.g., 2024-01-15-001 < 2024-01-15-002)
- * - YYYY-MM-DD-HH-MM-SS-NNN format
- * Zero-padded segments ensure correct ordering.
+ * - YYYYMMDDTHHMMSSZ-hostname-user-pid-rand format (real Ralph runs)
+ * - YYYY-MM-DD-NNN format (test fixtures)
+ * ISO-like timestamps ensure correct ordering.
  */
 function compareRunIds(a: string, b: string): number {
   // Lexicographic descending (b > a = newest first)
@@ -118,29 +166,34 @@ async function getIterationCount(runPath: string): Promise<number> {
 }
 
 /**
- * Get epic ID from run if recorded
+ * Get epic ID from run by parsing progress.txt
+ * Looks for lines like "status=... epic=fn-9 ..." (last occurrence wins)
  */
 async function getRunEpic(runPath: string): Promise<string | undefined> {
-  // Check attempts.json for epic info
-  const attemptsPath = join(runPath, 'attempts.json');
-  const attemptsFile = Bun.file(attemptsPath);
+  // Primary: parse progress.txt for epic= pattern
+  const progressPath = join(runPath, 'progress.txt');
+  const progressFile = Bun.file(progressPath);
 
-  if (await attemptsFile.exists()) {
+  if (await progressFile.exists()) {
     try {
-      const attempts = await attemptsFile.json();
-      if (Array.isArray(attempts) && attempts.length > 0) {
-        // Get epic from most recent attempt
-        const lastAttempt = attempts[attempts.length - 1];
-        if (lastAttempt?.epic) {
-          return lastAttempt.epic;
+      const content = await progressFile.text();
+      // Find all epic=fn-N patterns, use last one
+      const matches = content.match(/epic=(fn-\d+)/g);
+      if (matches && matches.length > 0) {
+        const lastMatch = matches.at(-1);
+        if (lastMatch) {
+          const epic = lastMatch.replace('epic=', '');
+          if (epic !== '') {
+            return epic;
+          }
         }
       }
     } catch {
-      // Ignore parse errors
+      // Ignore read errors
     }
   }
 
-  // Check branches.json for epic info
+  // Fallback: check branches.json for epic field (if future format adds it)
   const branchesPath = join(runPath, 'branches.json');
   const branchesFile = Bun.file(branchesPath);
 
@@ -172,11 +225,12 @@ async function getRunStartTime(runPath: string): Promise<string | undefined> {
 
 /**
  * Discover all runs in the runs directory
- * @param runsDir Path to runs directory (defaults to scripts/ralph/runs relative to cwd)
+ * @param runsDir Path to runs directory (defaults to scripts/ralph/runs relative to repo root)
  * @returns Array of Run objects sorted by date (newest first)
  */
 export async function discoverRuns(runsDir?: string): Promise<Run[]> {
-  const dir = runsDir ?? join(process.cwd(), DEFAULT_RUNS_DIR);
+  const repoRoot = await findRepoRoot();
+  const dir = runsDir ?? join(repoRoot, DEFAULT_RUNS_DIR);
 
   if (!(await dirExists(dir))) {
     return [];
@@ -305,8 +359,9 @@ export async function getBlockReason(
 ): Promise<string | null> {
   validateTaskId(taskId);
 
-  // Check .flow/blocks first
-  const flowBlockPath = join(process.cwd(), '.flow', 'blocks', `block-${taskId}.md`);
+  // Check .flow/blocks first (relative to repo root)
+  const repoRoot = await findRepoRoot();
+  const flowBlockPath = join(repoRoot, '.flow', 'blocks', `block-${taskId}.md`);
   const flowBlockFile = Bun.file(flowBlockPath);
 
   if (await flowBlockFile.exists()) {

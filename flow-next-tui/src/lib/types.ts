@@ -153,9 +153,9 @@ export interface ReadyResponse {
  * Ralph run directory info
  */
 export interface Run {
-	id: string; // YYYY-MM-DD-NNN
+	id: string; // YYYYMMDDTHHMMSSZ-hostname-user-pid-rand (real) or YYYY-MM-DD-NNN (test)
 	path: string; // full path to run dir
-	epic?: string; // epic being worked on
+	epic?: string; // epic being worked on (parsed from progress.txt)
 	active: boolean; // derived from progress.txt
 	iteration: number; // current iteration number
 	startedAt?: string; // ISO timestamp from run start
