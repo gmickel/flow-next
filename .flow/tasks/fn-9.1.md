@@ -74,9 +74,17 @@ src/
 - [ ] Directory structure matches spec
 - [ ] `bun run lint` passes
 ## Done summary
-TBD
+- Added pi-tui and commander dependencies
+- Created src/ with components/, lib/, themes/ directories
+- Added CLI entry with shebang, theme types, core types
 
+- Scaffolds foundation for TUI implementation
+- Follows gno pattern for bin/files/scripts
+
+- bun install: pass
+- bun run dev: pass (shows placeholder)
+- bun run lint: 0 warnings/errors
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 24cde68050ac454581829a297fcbf83c0d8005f4
+- Tests: bun run lint
 - PRs:

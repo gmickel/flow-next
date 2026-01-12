@@ -44,6 +44,10 @@
     "lint:check": "oxlint --type-aware --type-check && oxfmt --check .",
     "format": "oxfmt ."
   },
+  "dependencies": {
+    "@mariozechner/pi-tui": "^0.44.0",
+    "commander": "^14.0.0"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "oxfmt": "^0.24.0",
