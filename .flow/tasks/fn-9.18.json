@@ -1,16 +1,25 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-12T23:39:57.711025Z",
   "created_at": "2026-01-12T21:12:37.055601Z",
   "depends_on": [
     "fn-9.1"
   ],
   "epic": "fn-9",
+  "evidence": {
+    "commits": [
+      "2f4dcd0748500a6e861249674987a8f2fad72c31"
+    ],
+    "prs": [],
+    "tests": [
+      "bun test src/lib/render.test.ts"
+    ]
+  },
   "id": "fn-9.18",
   "priority": null,
   "spec_path": ".flow/tasks/fn-9.18.md",
-  "status": "todo",
+  "status": "done",
   "title": "Render utilities (ANSI-aware)",
-  "updated_at": "2026-01-12T21:13:11.486224Z"
+  "updated_at": "2026-01-12T23:41:48.353976Z"
 }

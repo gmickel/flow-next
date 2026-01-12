@@ -1,0 +1,138 @@
+import { describe, expect, test } from "bun:test";
+import { padToWidth, stripAnsi, truncateToWidth, visibleWidth } from "./render";
+
+// ANSI escape codes for testing
+const RED = "\x1b[31m";
+const GREEN = "\x1b[32m";
+const BOLD = "\x1b[1m";
+const RESET = "\x1b[0m";
+
+describe("visibleWidth", () => {
+	test("plain text", () => {
+		expect(visibleWidth("hello")).toBe(5);
+		expect(visibleWidth("")).toBe(0);
+		expect(visibleWidth("a b c")).toBe(5);
+	});
+
+	test("text with color codes", () => {
+		expect(visibleWidth(`${RED}hello${RESET}`)).toBe(5);
+		expect(visibleWidth(`${GREEN}world${RESET}`)).toBe(5);
+	});
+
+	test("text with nested styles", () => {
+		expect(visibleWidth(`${BOLD}${RED}bold red${RESET}`)).toBe(8);
+		expect(visibleWidth(`${RED}red ${GREEN}green${RESET}`)).toBe(9);
+	});
+
+	test("edge cases", () => {
+		expect(visibleWidth("")).toBe(0);
+		expect(visibleWidth(`${RESET}`)).toBe(0);
+		expect(visibleWidth(`${RED}${RESET}`)).toBe(0);
+	});
+});
+
+describe("stripAnsi", () => {
+	test("plain text unchanged", () => {
+		expect(stripAnsi("hello")).toBe("hello");
+		expect(stripAnsi("")).toBe("");
+	});
+
+	test("removes color codes", () => {
+		expect(stripAnsi(`${RED}hello${RESET}`)).toBe("hello");
+		expect(stripAnsi(`${GREEN}world${RESET}`)).toBe("world");
+	});
+
+	test("removes nested styles", () => {
+		expect(stripAnsi(`${BOLD}${RED}bold red${RESET}`)).toBe("bold red");
+		expect(stripAnsi(`${RED}red ${GREEN}green${RESET}`)).toBe("red green");
+	});
+
+	test("removes cursor/SGR codes", () => {
+		expect(stripAnsi("\x1b[2Kcleared")).toBe("cleared");
+		expect(stripAnsi("\x1b[1Gmoved")).toBe("moved");
+	});
+
+	test("removes OSC 8 hyperlinks", () => {
+		const link = "\x1b]8;;https://example.com\x07Click\x1b]8;;\x07";
+		expect(stripAnsi(link)).toBe("Click");
+	});
+
+	test("edge cases", () => {
+		expect(stripAnsi("")).toBe("");
+		expect(stripAnsi(`${RESET}`)).toBe("");
+		expect(stripAnsi(`${RED}${GREEN}${RESET}`)).toBe("");
+	});
+});
+
+describe("padToWidth", () => {
+	test("plain text", () => {
+		expect(padToWidth("hi", 5)).toBe("hi   ");
+		expect(padToWidth("hello", 5)).toBe("hello");
+		expect(padToWidth("hello world", 5)).toBe("hello world");
+	});
+
+	test("text with color codes", () => {
+		const colored = `${RED}hi${RESET}`;
+		const padded = padToWidth(colored, 5);
+		expect(visibleWidth(padded)).toBe(5);
+		expect(padded).toBe(`${RED}hi${RESET}   `);
+	});
+
+	test("text with nested styles", () => {
+		const styled = `${BOLD}${RED}hi${RESET}`;
+		const padded = padToWidth(styled, 5);
+		expect(visibleWidth(padded)).toBe(5);
+	});
+
+	test("edge cases", () => {
+		expect(padToWidth("", 5)).toBe("     ");
+		expect(padToWidth("hello", 5)).toBe("hello");
+		expect(padToWidth("hello!", 5)).toBe("hello!");
+		expect(padToWidth("", 0)).toBe("");
+	});
+});
+
+describe("truncateToWidth", () => {
+	test("plain text no truncation", () => {
+		expect(truncateToWidth("hello", 10)).toBe("hello");
+		expect(truncateToWidth("hi", 2)).toBe("hi");
+	});
+
+	test("plain text truncation", () => {
+		// pi-tui adds ANSI reset before ellipsis to prevent style leaking
+		const truncated = truncateToWidth("hello world", 8);
+		expect(stripAnsi(truncated)).toBe("hello...");
+		expect(visibleWidth(truncated)).toBeLessThanOrEqual(8);
+	});
+
+	test("text with color codes", () => {
+		const colored = `${RED}hello world${RESET}`;
+		const truncated = truncateToWidth(colored, 8);
+		expect(visibleWidth(truncated)).toBeLessThanOrEqual(8);
+		expect(stripAnsi(truncated)).toBe("hello...");
+	});
+
+	test("text with nested styles", () => {
+		const styled = `${BOLD}${RED}hello world${RESET}`;
+		const truncated = truncateToWidth(styled, 8);
+		expect(visibleWidth(truncated)).toBeLessThanOrEqual(8);
+	});
+
+	test("custom ellipsis", () => {
+		const t1 = truncateToWidth("hello world", 7, "…");
+		expect(stripAnsi(t1)).toBe("hello …");
+		expect(visibleWidth(t1)).toBeLessThanOrEqual(7);
+
+		const t2 = truncateToWidth("hello world", 8, ">>");
+		expect(stripAnsi(t2)).toBe("hello >>");
+		expect(visibleWidth(t2)).toBeLessThanOrEqual(8);
+	});
+
+	test("edge cases", () => {
+		expect(truncateToWidth("", 5)).toBe("");
+		expect(truncateToWidth("hi", 10)).toBe("hi");
+		// Very short widths
+		const t3 = truncateToWidth("hello", 3);
+		expect(visibleWidth(t3)).toBeLessThanOrEqual(3);
+	});
+});

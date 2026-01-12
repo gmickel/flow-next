@@ -42,9 +42,11 @@ Unit tests for each function with:
 - [ ] All functions handle empty strings
 - [ ] Unit tests pass for plain and styled text
 ## Done summary
-TBD
-
+- Added src/lib/render.ts with ANSI-aware utilities
+- Re-exported visibleWidth/truncateToWidth from pi-tui
+- Implemented padToWidth and stripAnsi locally
+- Full test coverage for plain/styled/edge cases
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 2f4dcd0748500a6e861249674987a8f2fad72c31
+- Tests: bun test src/lib/render.test.ts
 - PRs:
