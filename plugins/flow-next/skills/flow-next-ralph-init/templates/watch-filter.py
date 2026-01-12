@@ -3,8 +3,13 @@
 Watch filter for Ralph - parses Claude's stream-json output and shows key events.
 
 Reads JSON lines from stdin, outputs formatted tool calls in TUI style.
+
+Usage:
+    watch-filter.py           # Show tool calls only
+    watch-filter.py --verbose # Show tool calls + thinking + text responses
 """
 
+import argparse
 import json
 import os
 import sys
@@ -105,6 +110,11 @@ def format_tool_result(result):
     return None
 
 def main():
+    parser = argparse.ArgumentParser(description='Filter Claude stream-json output')
+    parser.add_argument('--verbose', action='store_true',
+                        help='Show text and thinking in addition to tool calls')
+    args = parser.parse_args()
+
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -123,11 +133,25 @@ def main():
             content = message.get("content", [])
 
             for block in content:
-                if block.get("type") == "tool_use":
+                block_type = block.get("type", "")
+
+                if block_type == "tool_use":
                     tool_name = block.get("name", "")
                     tool_input = block.get("input", {})
                     formatted = format_tool_use(tool_name, tool_input)
                     print(f"{INDENT}{C_DIM}{formatted}{C_RESET}", flush=True)
+
+                elif args.verbose and block_type == "text":
+                    text = block.get("text", "")
+                    if text.strip():
+                        # Show model response
+                        print(f"{INDENT}{C_CYAN}💬 {text}{C_RESET}", flush=True)
+
+                elif args.verbose and block_type == "thinking":
+                    thinking = block.get("thinking", "")
+                    if thinking.strip():
+                        # Show thinking (truncated)
+                        print(f"{INDENT}{C_DIM}🧠 {truncate(thinking, 100)}{C_RESET}", flush=True)
 
         # Tool results (show errors only)
         elif event_type == "user":

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Ensure Ctrl+C kills entire process group (needed for pipe chains in watch mode)
+trap 'kill 0' SIGINT SIGTERM
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CONFIG="$SCRIPT_DIR/config.env"
@@ -300,7 +303,7 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "Options:"
       echo "  --watch          Show tool calls in real-time"
-      echo "  --watch verbose  Show full Claude output"
+      echo "  --watch verbose  Show tool calls + model responses"
       echo "  --help, -h       Show this help"
       echo ""
       echo "Environment variables:"
@@ -703,9 +706,12 @@ Violations break automation and leave the user with incomplete work. Be precise,
   claude_out=""
   set +e
   if [[ "$WATCH_MODE" == "verbose" ]]; then
-    # Full output: stream to terminal AND capture to log
+    # Full output: stream through filter with --verbose to show text/thinking
+    # Must use stream-json for real-time output (text mode buffers until done)
+    claude_args+=(--output-format stream-json)
+    [[ ! " ${claude_args[*]} " =~ " --verbose " ]] && claude_args+=(--verbose)
     echo ""
-    timeout "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log"
+    timeout "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py" --verbose
     claude_rc=${PIPESTATUS[0]}
     claude_out="$(cat "$iter_log")"
   elif [[ "$WATCH_MODE" == "tools" ]]; then
