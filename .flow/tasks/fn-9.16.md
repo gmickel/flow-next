@@ -48,15 +48,55 @@ Publish TypeScript source directly - Bun executes .ts natively.
    - Setup Bun
    - `npm publish --provenance --access public`
 
-### OIDC publishing
+### OIDC publishing (trusted publishing - no NPM_TOKEN needed)
+
+**Benefits:**
+- No NPM_TOKEN secret to rotate/leak
+- Provenance attestation (cryptographic proof of build origin)
+- Can't be stolen from compromised CI logs
+
+**npm side setup (one-time):**
+1. Go to https://www.npmjs.com/package/@gmickel/flow-next-tui/access
+2. Scroll to "Publishing access" → "Add trusted publisher"
+3. Fill in:
+   - Owner: `gmickel`
+   - Repository: `gmickel-claude-marketplace`
+   - Workflow: `publish-tui.yml` (exact filename, case-sensitive)
+   - Environment: leave blank
+
+**Workflow requirements:**
 
 ```yaml
 permissions:
-  id-token: write
+  id-token: write   # CRITICAL: lets GH generate OIDC token
   contents: read
+
+steps:
+  - uses: actions/checkout@v4
+
+  # Node 24+ required (npm >= 11.5.1 for OIDC)
+  - uses: actions/setup-node@v4
+    with:
+      node-version: "24"
+      registry-url: "https://registry.npmjs.org"  # REQUIRED for npm auth
+
+  - run: npm publish --provenance --access public
+    # NO NODE_AUTH_TOKEN or NPM_TOKEN needed
 ```
 
-Configure trusted publisher on npmjs.com for `@gmickel/flow-next-tui`.
+**Key requirements:**
+| Requirement | Why |
+|-------------|-----|
+| `id-token: write` permission | Lets GH generate OIDC token |
+| `registry-url` in setup-node | Required for npm auth |
+| Node.js 24+ | npm 11.5.1+ has OIDC support |
+| `--provenance` flag | Enables attestation |
+| Workflow filename must match | npm checks exact match (case-sensitive) |
+
+**Troubleshooting:**
+- "No matching trusted publisher found" → check workflow filename matches exactly
+- "id-token permission not set" → add `permissions.id-token: write` to job
+- "npm version too old" → need npm >= 11.5.1 (Node 24+)
 ## Acceptance
 - [ ] Workflow triggers on tui-v* tags
 - [ ] Tests run on ubuntu and macos
