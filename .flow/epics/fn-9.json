@@ -1,0 +1,13 @@
+{
+  "branch_name": "feature/flow-next-tui",
+  "created_at": "2026-01-12T21:02:41.394820Z",
+  "depends_on_epics": [],
+  "id": "fn-9",
+  "next_task": 1,
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-01-12T21:26:37.095513Z",
+  "spec_path": ".flow/specs/fn-9.md",
+  "status": "open",
+  "title": "flow-next-tui MVP",
+  "updated_at": "2026-01-12T21:26:37.095693Z"
+}

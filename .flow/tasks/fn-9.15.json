@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-01-12T21:04:03.476320Z",
+  "depends_on": [
+    "fn-9.14"
+  ],
+  "epic": "fn-9",
+  "id": "fn-9.15",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-9.15.md",
+  "status": "todo",
+  "title": "CLI entry point",
+  "updated_at": "2026-01-12T21:07:04.760557Z"
+}

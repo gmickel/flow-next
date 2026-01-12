@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-01-12T21:03:46.120290Z",
+  "depends_on": [
+    "fn-9.1"
+  ],
+  "epic": "fn-9",
+  "id": "fn-9.2",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-9.2.md",
+  "status": "todo",
+  "title": "Theme system (dark/light)",
+  "updated_at": "2026-01-12T21:07:02.700159Z"
+}

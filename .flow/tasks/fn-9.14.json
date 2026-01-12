@@ -1,0 +1,23 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-01-12T21:04:02.226601Z",
+  "depends_on": [
+    "fn-9.8",
+    "fn-9.9",
+    "fn-9.10",
+    "fn-9.11",
+    "fn-9.12",
+    "fn-9.13",
+    "fn-9.5",
+    "fn-9.17"
+  ],
+  "epic": "fn-9",
+  "id": "fn-9.14",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-9.14.md",
+  "status": "todo",
+  "title": "App integration and state",
+  "updated_at": "2026-01-12T21:12:47.157778Z"
+}

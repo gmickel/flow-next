@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-01-12T21:12:37.055601Z",
+  "depends_on": [
+    "fn-9.1"
+  ],
+  "epic": "fn-9",
+  "id": "fn-9.18",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-9.18.md",
+  "status": "todo",
+  "title": "Render utilities (ANSI-aware)",
+  "updated_at": "2026-01-12T21:13:11.486224Z"
+}

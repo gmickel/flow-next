@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-01-12T21:03:52.640965Z",
+  "depends_on": [
+    "fn-9.2",
+    "fn-9.18"
+  ],
+  "epic": "fn-9",
+  "id": "fn-9.7",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-9.7.md",
+  "status": "todo",
+  "title": "SplitPanel component",
+  "updated_at": "2026-01-12T21:12:46.920122Z"
+}

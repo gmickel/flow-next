@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-01-12T21:03:59.788879Z",
+  "depends_on": [
+    "fn-9.2"
+  ],
+  "epic": "fn-9",
+  "id": "fn-9.12",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-9.12.md",
+  "status": "todo",
+  "title": "StatusBar component",
+  "updated_at": "2026-01-12T21:07:04.293975Z"
+}
