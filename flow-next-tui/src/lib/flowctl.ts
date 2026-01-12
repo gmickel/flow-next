@@ -21,7 +21,8 @@ export class FlowctlError extends Error {
   /** Just the flowctl args (for easier inspection) */
   args: string[];
   exitCode: number;
-  stderr: string;
+  /** Error output/context (may be stderr, stdout, or descriptive message) */
+  output: string;
   /** Error kind: "exec" for process failure, "parse" for JSON parse failure, "api" for success:false */
   kind: 'exec' | 'parse' | 'api';
 
@@ -29,16 +30,16 @@ export class FlowctlError extends Error {
     fullCommand: string[],
     args: string[],
     exitCode: number,
-    stderr: string,
-    kind: 'exec' | 'parse' = 'exec'
+    output: string,
+    kind: 'exec' | 'parse' | 'api' = 'exec'
   ) {
-    const msg = `flowctl ${args.join(' ')} failed (exit ${exitCode}): ${stderr}`;
+    const msg = `flowctl ${args.join(' ')} failed (exit ${exitCode}): ${output}`;
     super(msg);
     this.name = 'FlowctlError';
     this.fullCommand = fullCommand;
     this.args = args;
     this.exitCode = exitCode;
-    this.stderr = stderr;
+    this.output = output;
     this.kind = kind;
   }
 }
@@ -274,6 +275,16 @@ async function spawnFlowctl(args: string[]): Promise<{
  * Run flowctl command and parse JSON output
  */
 export async function flowctl<T>(args: string[]): Promise<T> {
+  const { result } = await flowctlWithCmd<T>(args);
+  return result;
+}
+
+/**
+ * Run flowctl command and parse JSON output, returning cmd for error context
+ */
+async function flowctlWithCmd<T>(
+  args: string[]
+): Promise<{ result: T; cmd: string[] }> {
   const { cmd, stdout, stderr, exitCode } = await spawnFlowctl(args);
 
   if (exitCode !== 0) {
@@ -285,7 +296,7 @@ export async function flowctl<T>(args: string[]): Promise<T> {
   }
 
   try {
-    return JSON.parse(stdout) as T;
+    return { result: JSON.parse(stdout) as T, cmd };
   } catch {
     // Include both stdout and stderr for debugging parse failures
     // Use real exitCode (could be non-zero with junk stdout)
@@ -307,11 +318,12 @@ export async function flowctl<T>(args: string[]): Promise<T> {
  */
 function assertSuccess<T extends { success: boolean }>(
   response: T,
+  cmd: string[],
   args: string[]
 ): asserts response is T & { success: true } {
   if (response.success !== true) {
     throw new FlowctlError(
-      ['flowctl', ...args],
+      cmd,
       args,
       0,
       'flowctl returned success:false',
@@ -325,9 +337,9 @@ function assertSuccess<T extends { success: boolean }>(
  */
 export async function getEpics(): Promise<EpicListItem[]> {
   const args = ['epics', '--json'];
-  const response = await flowctl<EpicsResponse>(args);
-  assertSuccess(response, args);
-  return response.epics;
+  const { result, cmd } = await flowctlWithCmd<EpicsResponse>(args);
+  assertSuccess(result, cmd, args);
+  return result.epics;
 }
 
 /**
@@ -335,9 +347,9 @@ export async function getEpics(): Promise<EpicListItem[]> {
  */
 export async function getTasks(epicId: string): Promise<TaskListItem[]> {
   const args = ['tasks', '--epic', epicId, '--json'];
-  const response = await flowctl<TasksResponse>(args);
-  assertSuccess(response, args);
-  return response.tasks;
+  const { result, cmd } = await flowctlWithCmd<TasksResponse>(args);
+  assertSuccess(result, cmd, args);
+  return result.tasks;
 }
 
 /**
@@ -362,9 +374,9 @@ export async function getTaskSpec(taskId: string): Promise<string> {
  */
 export async function getReadyTasks(epicId: string): Promise<ReadyResponse> {
   const args = ['ready', '--epic', epicId, '--json'];
-  const response = await flowctl<ReadyResponse>(args);
-  assertSuccess(response, args);
-  return response;
+  const { result, cmd } = await flowctlWithCmd<ReadyResponse>(args);
+  assertSuccess(result, cmd, args);
+  return result;
 }
 
 /**
@@ -372,9 +384,9 @@ export async function getReadyTasks(epicId: string): Promise<ReadyResponse> {
  */
 export async function getEpic(epicId: string): Promise<Epic> {
   const args = ['show', epicId, '--json'];
-  const response = await flowctl<EpicShowResponse>(args);
-  assertSuccess(response, args);
-  const { success: _, ...epic } = response;
+  const { result, cmd } = await flowctlWithCmd<EpicShowResponse>(args);
+  assertSuccess(result, cmd, args);
+  const { success: _, ...epic } = result;
   return epic as Epic;
 }
 
@@ -383,9 +395,9 @@ export async function getEpic(epicId: string): Promise<Epic> {
  */
 export async function getTask(taskId: string): Promise<Task> {
   const args = ['show', taskId, '--json'];
-  const response = await flowctl<TaskShowResponse>(args);
-  assertSuccess(response, args);
-  const { success: _, ...task } = response;
+  const { result, cmd } = await flowctlWithCmd<TaskShowResponse>(args);
+  assertSuccess(result, cmd, args);
+  const { success: _, ...task } = result;
   return task as Task;
 }
 

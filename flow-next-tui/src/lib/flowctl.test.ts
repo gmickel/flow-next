@@ -50,7 +50,7 @@ describe('FlowctlError', () => {
     expect(error.fullCommand).toEqual(fullCmd);
     expect(error.args).toEqual(args);
     expect(error.exitCode).toBe(1);
-    expect(error.stderr).toBe('Epic not found');
+    expect(error.output).toBe('Epic not found');
     expect(error.name).toBe('FlowctlError');
     expect(error.kind).toBe('exec');
   });
