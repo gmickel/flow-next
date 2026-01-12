@@ -90,6 +90,11 @@ describe("padToWidth", () => {
 		expect(padToWidth("hello!", 5)).toBe("hello!");
 		expect(padToWidth("", 0)).toBe("");
 	});
+
+	test("negative width treated as zero", () => {
+		expect(padToWidth("hi", -5)).toBe("hi");
+		expect(padToWidth("", -1)).toBe("");
+	});
 });
 
 describe("truncateToWidth", () => {
@@ -110,6 +115,18 @@ describe("truncateToWidth", () => {
 		const truncated = truncateToWidth(colored, 8);
 		expect(visibleWidth(truncated)).toBeLessThanOrEqual(8);
 		expect(stripAnsi(truncated)).toBe("hello...");
+	});
+
+	test("preserves ANSI reset before ellipsis", () => {
+		// pi-tui inserts reset before ellipsis to prevent style leaking
+		const colored = `${RED}hello world${RESET}`;
+		const truncated = truncateToWidth(colored, 8);
+		// Should contain reset code somewhere before the ellipsis
+		expect(truncated).toContain(RESET);
+		// Ellipsis should appear after reset (no red style on dots)
+		const resetIndex = truncated.lastIndexOf(RESET);
+		const ellipsisIndex = truncated.indexOf("...");
+		expect(resetIndex).toBeLessThan(ellipsisIndex);
 	});
 
 	test("text with nested styles", () => {
