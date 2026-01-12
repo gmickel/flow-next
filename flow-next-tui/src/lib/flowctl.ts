@@ -22,8 +22,8 @@ export class FlowctlError extends Error {
   args: string[];
   exitCode: number;
   stderr: string;
-  /** Error kind: "exec" for process failure, "parse" for JSON parse failure */
-  kind: 'exec' | 'parse';
+  /** Error kind: "exec" for process failure, "parse" for JSON parse failure, "api" for success:false */
+  kind: 'exec' | 'parse' | 'api';
 
   constructor(
     fullCommand: string[],
@@ -43,7 +43,12 @@ export class FlowctlError extends Error {
   }
 }
 
-/** Atomic cache for flowctl path and invocation method */
+/**
+ * Atomic cache for flowctl path and invocation method.
+ * Note: This assumes single-repo usage per process. The first successful
+ * path resolution is cached for all subsequent calls, even if different
+ * startDir values are passed. This is intentional for TUI usage.
+ */
 interface FlowctlCache {
   path: string;
   usePython: boolean;
@@ -53,7 +58,8 @@ let cache: FlowctlCache | null = null;
 
 /**
  * Check if a file exists and is executable
- * Uses `flowctl --help` as test command (repo-independent, always exits 0)
+ * Uses `flowctl --help` as test command (repo-independent)
+ * Accepts exit 0 or 1 (some --help implementations return 1)
  */
 async function canExecute(path: string): Promise<boolean> {
   const file = Bun.file(path);
@@ -65,7 +71,8 @@ async function canExecute(path: string): Promise<boolean> {
       stderr: 'pipe',
     });
     await proc.exited;
-    return proc.exitCode === 0;
+    // Accept 0 or 1 - some --help impls return 1
+    return proc.exitCode === 0 || proc.exitCode === 1;
   } catch {
     return false;
   }
@@ -73,6 +80,7 @@ async function canExecute(path: string): Promise<boolean> {
 
 /**
  * Check if flowctl works via python3
+ * Accepts exit 0 or 1 (some --help implementations return 1)
  */
 async function canExecuteViaPython(path: string): Promise<boolean> {
   const file = Bun.file(path);
@@ -84,7 +92,7 @@ async function canExecuteViaPython(path: string): Promise<boolean> {
       stderr: 'pipe',
     });
     await proc.exited;
-    return proc.exitCode === 0;
+    return proc.exitCode === 0 || proc.exitCode === 1;
   } catch {
     return false;
   }
@@ -232,9 +240,7 @@ export async function getFlowctlPath(startDir?: string): Promise<string> {
  * Spawn flowctl and return stdout/stderr
  * Shared helper for flowctl() and getTaskSpec()
  */
-async function spawnFlowctl(
-  args: string[]
-): Promise<{
+async function spawnFlowctl(args: string[]): Promise<{
   cmd: string[];
   stdout: string;
   stderr: string;
@@ -271,7 +277,11 @@ export async function flowctl<T>(args: string[]): Promise<T> {
   const { cmd, stdout, stderr, exitCode } = await spawnFlowctl(args);
 
   if (exitCode !== 0) {
-    throw new FlowctlError(cmd, args, exitCode, stderr.trim(), 'exec');
+    // Include stdout when stderr empty (some failures emit useful info on stdout)
+    const errorContext = stderr.trim()
+      ? stderr.trim()
+      : stdout.trim().slice(0, 200) || 'no output';
+    throw new FlowctlError(cmd, args, exitCode, errorContext, 'exec');
   }
 
   try {
@@ -293,10 +303,30 @@ export async function flowctl<T>(args: string[]): Promise<T> {
 }
 
 /**
+ * Validate response has success:true, throw FlowctlError if not
+ */
+function assertSuccess<T extends { success: boolean }>(
+  response: T,
+  args: string[]
+): asserts response is T & { success: true } {
+  if (response.success !== true) {
+    throw new FlowctlError(
+      ['flowctl', ...args],
+      args,
+      0,
+      'flowctl returned success:false',
+      'api'
+    );
+  }
+}
+
+/**
  * Get all epics (list items with counts)
  */
 export async function getEpics(): Promise<EpicListItem[]> {
-  const response = await flowctl<EpicsResponse>(['epics', '--json']);
+  const args = ['epics', '--json'];
+  const response = await flowctl<EpicsResponse>(args);
+  assertSuccess(response, args);
   return response.epics;
 }
 
@@ -304,12 +334,9 @@ export async function getEpics(): Promise<EpicListItem[]> {
  * Get tasks for an epic
  */
 export async function getTasks(epicId: string): Promise<TaskListItem[]> {
-  const response = await flowctl<TasksResponse>([
-    'tasks',
-    '--epic',
-    epicId,
-    '--json',
-  ]);
+  const args = ['tasks', '--epic', epicId, '--json'];
+  const response = await flowctl<TasksResponse>(args);
+  assertSuccess(response, args);
   return response.tasks;
 }
 
@@ -321,7 +348,10 @@ export async function getTaskSpec(taskId: string): Promise<string> {
   const { cmd, stdout, stderr, exitCode } = await spawnFlowctl(args);
 
   if (exitCode !== 0) {
-    throw new FlowctlError(cmd, args, exitCode, stderr.trim(), 'exec');
+    const errorContext = stderr.trim()
+      ? stderr.trim()
+      : stdout.trim().slice(0, 200) || 'no output';
+    throw new FlowctlError(cmd, args, exitCode, errorContext, 'exec');
   }
 
   return stdout;
@@ -331,14 +361,19 @@ export async function getTaskSpec(taskId: string): Promise<string> {
  * Get ready/in_progress/blocked tasks for an epic
  */
 export async function getReadyTasks(epicId: string): Promise<ReadyResponse> {
-  return flowctl<ReadyResponse>(['ready', '--epic', epicId, '--json']);
+  const args = ['ready', '--epic', epicId, '--json'];
+  const response = await flowctl<ReadyResponse>(args);
+  assertSuccess(response, args);
+  return response;
 }
 
 /**
  * Get epic details
  */
 export async function getEpic(epicId: string): Promise<Epic> {
-  const response = await flowctl<EpicShowResponse>(['show', epicId, '--json']);
+  const args = ['show', epicId, '--json'];
+  const response = await flowctl<EpicShowResponse>(args);
+  assertSuccess(response, args);
   const { success: _, ...epic } = response;
   return epic as Epic;
 }
@@ -347,7 +382,9 @@ export async function getEpic(epicId: string): Promise<Epic> {
  * Get task details
  */
 export async function getTask(taskId: string): Promise<Task> {
-  const response = await flowctl<TaskShowResponse>(['show', taskId, '--json']);
+  const args = ['show', taskId, '--json'];
+  const response = await flowctl<TaskShowResponse>(args);
+  assertSuccess(response, args);
   const { success: _, ...task } = response;
   return task as Task;
 }

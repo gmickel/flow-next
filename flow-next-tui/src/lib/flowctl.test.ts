@@ -18,6 +18,8 @@ import {
 // Check if flowctl is available (for integration tests)
 let hasFlowctl = false;
 let hasFlowDir = false;
+// Computed: can run flowctl commands that need .flow/
+let canRunFlowctlJson = false;
 
 beforeAll(async () => {
   clearFlowctlCache();
@@ -29,6 +31,8 @@ beforeAll(async () => {
     const parentFile = Bun.file(`${process.cwd()}/../.flow/config.json`);
     hasFlowDir = await parentFile.exists();
   }
+  // Both flowctl and .flow/ needed for JSON commands
+  canRunFlowctlJson = hasFlowctl && hasFlowDir;
 });
 
 beforeEach(() => {
@@ -105,7 +109,7 @@ describe('isFlowctlAvailable', () => {
 
 describe('flowctl', () => {
   it('parses JSON output from flowctl command', async () => {
-    if (!hasFlowDir) return;
+    if (!canRunFlowctlJson) return;
     const result = await flowctl<{ success: boolean; epics: unknown[] }>([
       'epics',
       '--json',
@@ -117,7 +121,7 @@ describe('flowctl', () => {
 
 describe('getEpics', () => {
   it('returns list of epics with list-item fields', async () => {
-    if (!hasFlowDir) return;
+    if (!canRunFlowctlJson) return;
     const epics = await getEpics();
     expect(Array.isArray(epics)).toBe(true);
     if (epics.length > 0) {
@@ -135,7 +139,7 @@ describe('getEpics', () => {
 
 describe('getTasks', () => {
   it('returns tasks for an epic', async () => {
-    if (!hasFlowDir) return;
+    if (!canRunFlowctlJson) return;
     const epics = await getEpics();
     if (epics.length === 0) return;
 
@@ -154,7 +158,7 @@ describe('getTasks', () => {
   });
 
   it('returns empty array for non-existent epic', async () => {
-    if (!hasFlowDir) return;
+    if (!canRunFlowctlJson) return;
     const tasks = await getTasks('fn-99999');
     expect(Array.isArray(tasks)).toBe(true);
     expect(tasks.length).toBe(0);
@@ -163,7 +167,7 @@ describe('getTasks', () => {
 
 describe('getTaskSpec', () => {
   it('returns markdown spec for a task', async () => {
-    if (!hasFlowDir) return;
+    if (!canRunFlowctlJson) return;
     const epics = await getEpics();
     if (epics.length === 0) return;
 
@@ -182,7 +186,7 @@ describe('getTaskSpec', () => {
   });
 
   it('throws FlowctlError for invalid task', async () => {
-    if (!hasFlowDir) return;
+    if (!canRunFlowctlJson) return;
     try {
       await getTaskSpec('fn-99999.999');
       expect.unreachable('Should have thrown');
@@ -195,7 +199,7 @@ describe('getTaskSpec', () => {
 
 describe('getReadyTasks', () => {
   it('returns ready/in_progress/blocked categorization', async () => {
-    if (!hasFlowDir) return;
+    if (!canRunFlowctlJson) return;
     const epics = await getEpics();
     if (epics.length === 0) return;
 
@@ -215,7 +219,7 @@ describe('getReadyTasks', () => {
 
 describe('getEpic', () => {
   it('returns full epic details', async () => {
-    if (!hasFlowDir) return;
+    if (!canRunFlowctlJson) return;
     const epics = await getEpics();
     if (epics.length === 0) return;
 
@@ -233,7 +237,7 @@ describe('getEpic', () => {
 
 describe('getTask', () => {
   it('returns task details', async () => {
-    if (!hasFlowDir) return;
+    if (!canRunFlowctlJson) return;
     const epics = await getEpics();
     if (epics.length === 0) return;
 
