@@ -39,10 +39,10 @@ describe("types match flowctl JSON output", () => {
 		expect(Array.isArray(firstTask.depends_on)).toBe(true);
 
 		// Validate status is valid
-		expect(epicFixture.status === "open" || epicFixture.status === "closed").toBe(true);
+		expect(epicFixture.status === "open" || epicFixture.status === "done").toBe(true);
 
 		// Type construction (compile-time check)
-		const epicStatus = epicFixture.status as "open" | "closed";
+		const epicStatus = epicFixture.status as "open" | "done";
 		const _epic: Epic = {
 			id: epicFixture.id,
 			title: epicFixture.title,
@@ -76,7 +76,10 @@ describe("types match flowctl JSON output", () => {
 		expect(taskFixture.epic).toBe("fn-9");
 		expect(taskFixture.status).toBe("done");
 		expect(isTaskStatus(taskFixture.status)).toBe(true);
-		expect(typeof taskFixture.assignee).toBe("string");
+		// assignee can be string or null for unclaimed tasks
+		expect(
+			taskFixture.assignee === null || typeof taskFixture.assignee === "string",
+		).toBe(true);
 		expect(Array.isArray(taskFixture.depends_on)).toBe(true);
 
 		// Validate evidence structure
