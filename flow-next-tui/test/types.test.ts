@@ -98,12 +98,11 @@ describe("types match flowctl JSON output", () => {
 		).toBe(true);
 		expect(Array.isArray(taskFixture.depends_on)).toBe(true);
 
-		// Validate evidence structure
+		// Validate evidence structure (can be string or array)
 		expect(taskFixture.evidence).toBeDefined();
-		expect(Array.isArray(taskFixture.evidence.commits)).toBe(true);
-		expect(taskFixture.evidence.commits).toContain(
-			"24cde68050ac454581829a297fcbf83c0d8005f4",
-		);
+		const commits = taskFixture.evidence.commits;
+		const commitList = Array.isArray(commits) ? commits : [commits];
+		expect(commitList).toContain("24cde68050ac454581829a297fcbf83c0d8005f4");
 
 		// Type construction using TaskShowResponse (includes success)
 		const evidence: TaskEvidence = {

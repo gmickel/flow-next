@@ -55,9 +55,10 @@ Types should match structure from `flowctl --json` commands.
 ### Test fixtures
 
 Create `test/fixtures/` with sample JSON:
-- `epic.json` - sample epic from `flowctl show fn-1 --json`
-- `tasks.json` - sample tasks from `flowctl tasks --epic fn-1 --json`
-- `ready.json` - sample from `flowctl ready --epic fn-1 --json`
+- `epic.json` - sample epic from `flowctl show fn-9 --json`
+- `task.json` - sample task from `flowctl show fn-9.1 --json`
+- `tasks.json` - sample tasks from `flowctl tasks --epic fn-9 --json`
+- `ready.json` - sample from `flowctl ready --epic fn-9 --json`
 
 Use fixtures in tests to validate type compatibility.
 ## Acceptance

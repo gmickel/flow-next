@@ -31,11 +31,12 @@ export interface Task {
 
 /**
  * Task evidence recorded on completion
+ * Note: flowctl can emit string or array for each field
  */
 export interface TaskEvidence {
-	commits: string[];
-	tests: string[];
-	prs: string[];
+	commits: string | string[];
+	tests: string | string[];
+	prs: string | string[];
 }
 
 /**
