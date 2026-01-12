@@ -1,16 +1,25 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-12T23:11:32.577039Z",
   "created_at": "2026-01-12T21:03:50.689707Z",
   "depends_on": [
     "fn-9.4"
   ],
   "epic": "fn-9",
+  "evidence": {
+    "commits": [
+      "f2bcbc2e51ad40985f9b7f9bce17b738d9b8a087"
+    ],
+    "prs": [],
+    "tests": [
+      "bun test"
+    ]
+  },
   "id": "fn-9.5",
   "priority": null,
   "spec_path": ".flow/tasks/fn-9.5.md",
-  "status": "todo",
+  "status": "done",
   "title": "Run discovery lib",
-  "updated_at": "2026-01-12T21:07:03.183193Z"
+  "updated_at": "2026-01-12T23:13:50.352800Z"
 }

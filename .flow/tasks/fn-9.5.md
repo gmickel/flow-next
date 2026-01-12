@@ -73,9 +73,19 @@ Block reason files: `.flow/blocks/block-<task-id>.md` or `runs/<id>/block-<task-
 - [ ] `getBlockReason()` returns block reason or null
 - [ ] Run validation returns clear error for invalid run ID
 ## Done summary
-TBD
+- Added run discovery library with discoverRuns(), isRunActive(), getLatestRun()
+- Added getRunDetails() for detailed run information
+- Added getReceiptStatus() and getBlockReason() for receipts/blocks
+- Added validateRun() with clear error messages for invalid run IDs
 
+Why:
+- TUI needs to find and display Ralph runs
+- Receipt/block status needed for task detail panel
+
+Verification:
+- 23 tests pass covering all functions
+- Lint clean
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f2bcbc2e51ad40985f9b7f9bce17b738d9b8a087
+- Tests: bun test
 - PRs:
