@@ -51,7 +51,11 @@ describe("types match flowctl JSON output", () => {
 			spec_path: epicFixture.spec_path,
 			next_task: epicFixture.next_task,
 			depends_on_epics: epicFixture.depends_on_epics,
-			plan_review_status: epicFixture.plan_review_status,
+			plan_review_status: epicFixture.plan_review_status as
+				| "ship"
+				| "needs_work"
+				| "major_rethink"
+				| null,
 			plan_reviewed_at: epicFixture.plan_reviewed_at,
 			created_at: epicFixture.created_at,
 			updated_at: epicFixture.updated_at,

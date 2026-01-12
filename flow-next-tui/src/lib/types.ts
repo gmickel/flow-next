@@ -92,7 +92,7 @@ export interface Epic {
 	spec_path: string;
 	next_task: number;
 	depends_on_epics: string[];
-	plan_review_status: string | null;
+	plan_review_status: "ship" | "needs_work" | "major_rethink" | null;
 	plan_reviewed_at: string | null; // ISO timestamp
 	created_at: string; // ISO timestamp
 	updated_at: string; // ISO timestamp

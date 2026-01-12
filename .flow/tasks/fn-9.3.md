@@ -11,10 +11,11 @@ Define TypeScript types/interfaces for all data structures.
 ### Types needed
 
 ```typescript
+// NOTE: Status values match flowctl.py EPIC_STATUS and TASK_STATUS constants
 interface Epic {
   id: string;          // fn-N
   title: string;
-  status: 'open' | 'closed';
+  status: 'open' | 'done';  // flowctl EPIC_STATUS
   branch_name: string;
   spec_path: string;
 }
@@ -23,7 +24,7 @@ interface Task {
   id: string;          // fn-N.M
   epic: string;
   title: string;
-  status: 'pending' | 'in_progress' | 'done' | 'blocked';
+  status: 'todo' | 'in_progress' | 'done' | 'blocked';  // flowctl TASK_STATUS
   depends_on: string[];
   spec_path: string;
 }
