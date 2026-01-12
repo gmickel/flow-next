@@ -2,12 +2,14 @@
 import { Command } from "commander";
 import { TUI } from "@mariozechner/pi-tui";
 
+const pkg = await Bun.file(new URL("../package.json", import.meta.url)).json();
+
 const program = new Command();
 
 program
 	.name("flow-next-tui")
 	.description("TUI for monitoring Flow-Next Ralph mode runs")
-	.version("0.1.0")
+	.version(pkg.version)
 	.option("-l, --light", "Use light theme")
 	.option("--no-emoji", "Use ASCII-only icons")
 	.argument("[run]", "Run directory to monitor")
@@ -20,4 +22,4 @@ program
 		console.log("TUI available:", typeof TUI);
 	});
 
-program.parse();
+await program.parseAsync();

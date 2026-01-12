@@ -15,6 +15,6 @@ export interface Epic {
 export interface Run {
 	id: string;
 	path: string;
-	startedAt: Date;
+	startedAt: string; // ISO timestamp, convert to Date at boundaries
 	active: boolean;
 }
