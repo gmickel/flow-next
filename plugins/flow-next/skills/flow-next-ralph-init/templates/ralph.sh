@@ -1,10 +1,91 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CONFIG="$SCRIPT_DIR/config.env"
+# ─────────────────────────────────────────────────────────────────────────────
+# Path resolution: supports user-level or project-local installation
+# ─────────────────────────────────────────────────────────────────────────────
+# User-level mode:
+#   - Scripts in ~/.config/flow-next/ralph/
+#   - User config in ~/.config/flow-next/ralph/config.env (defaults)
+#   - Project config in scripts/ralph/config.env (overrides)
+#   - Runs in scripts/ralph/runs/ (always project-local)
+#
+# Project-local mode: everything in scripts/ralph/ (original behavior)
+#
+# Detection order:
+# 1. RALPH_USER_DIR env var (explicit user-level path)
+# 2. ~/.config/flow-next/ralph/ if exists
+# 3. Fall back to project-local (script's directory)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_resolve_script_dir() {
+  local self_dir
+  self_dir="$(cd "$(dirname "$0")" && pwd)"
+
+  # Check if we're a symlink to user-level scripts
+  if [[ -L "$0" ]]; then
+    local target
+    target="$(readlink -f "$0")"
+    self_dir="$(dirname "$target")"
+  fi
+
+  echo "$self_dir"
+}
+
+_resolve_user_dir() {
+  # Explicit env var takes precedence
+  if [[ -n "${RALPH_USER_DIR:-}" ]]; then
+    echo "$RALPH_USER_DIR"
+    return
+  fi
+  # Default user-level location
+  local default_user_dir="${HOME}/.config/flow-next/ralph"
+  if [[ -d "$default_user_dir" ]]; then
+    echo "$default_user_dir"
+    return
+  fi
+  echo ""
+}
+
+_resolve_project_dir() {
+  # Project scripts/ralph/ directory (for config and runs)
+  local root="$1"
+  echo "$root/scripts/ralph"
+}
+
+# Determine actual script source (may be user-level)
+SCRIPT_DIR="$(_resolve_script_dir)"
+USER_DIR="$(_resolve_user_dir)"
+ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null)" || ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_DIR="$(_resolve_project_dir "$ROOT_DIR")"
+
+# Scripts come from user-level if available, else project-local
+if [[ -n "$USER_DIR" && -f "$USER_DIR/ralph.sh" ]]; then
+  SCRIPT_DIR="$USER_DIR"
+fi
+
+# Config: user-level defaults + project overrides
+# User config provides defaults, project config overrides
+USER_CONFIG=""
+PROJECT_CONFIG=""
+if [[ -n "$USER_DIR" && -f "$USER_DIR/config.env" ]]; then
+  USER_CONFIG="$USER_DIR/config.env"
+fi
+if [[ -f "$PROJECT_DIR/config.env" ]]; then
+  PROJECT_CONFIG="$PROJECT_DIR/config.env"
+fi
+# For compatibility, CONFIG points to the primary config (user or project)
+if [[ -n "$USER_CONFIG" ]]; then
+  CONFIG="$USER_CONFIG"
+elif [[ -n "$PROJECT_CONFIG" ]]; then
+  CONFIG="$PROJECT_CONFIG"
+else
+  CONFIG="$SCRIPT_DIR/config.env"
+fi
 FLOWCTL="$SCRIPT_DIR/flowctl"
+
+# Ensure runs directory exists in project
+mkdir -p "$PROJECT_DIR/runs" 2>/dev/null || true
 
 fail() { echo "ralph: $*" >&2; exit 1; }
 log() {
@@ -264,12 +345,15 @@ ui_waiting() {
   ui "   ${C_DIM}⏳ Claude working...${C_RESET}"
 }
 
-[[ -f "$CONFIG" ]] || fail "missing config.env"
+# Require at least one config file
+[[ -n "$USER_CONFIG" || -n "$PROJECT_CONFIG" ]] || fail "missing config.env (user or project)"
 [[ -x "$FLOWCTL" ]] || fail "missing flowctl"
 
+# Load config: user-level first (defaults), then project (overrides)
 # shellcheck disable=SC1090
 set -a
-source "$CONFIG"
+[[ -n "$USER_CONFIG" && -f "$USER_CONFIG" ]] && source "$USER_CONFIG"
+[[ -n "$PROJECT_CONFIG" && -f "$PROJECT_CONFIG" ]] && source "$PROJECT_CONFIG"
 set +a
 
 MAX_ITERATIONS="${MAX_ITERATIONS:-25}"
@@ -421,7 +505,7 @@ PY
 }
 
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$(hostname -s 2>/dev/null || hostname)-$(sanitize_id "$(get_actor)")-$$-$(rand4)"
-RUN_DIR="$SCRIPT_DIR/runs/$RUN_ID"
+RUN_DIR="$PROJECT_DIR/runs/$RUN_ID"
 mkdir -p "$RUN_DIR"
 ATTEMPTS_FILE="$RUN_DIR/attempts.json"
 ensure_attempts_file "$ATTEMPTS_FILE"
