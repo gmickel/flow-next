@@ -1,0 +1,20 @@
+{
+  "success": true,
+  "assignee": "gordon.mickel@gmail.com",
+  "claim_note": "",
+  "claimed_at": "2026-01-12T21:43:55.621059Z",
+  "created_at": "2026-01-12T21:03:44.401318Z",
+  "depends_on": [],
+  "epic": "fn-9",
+  "evidence": {
+    "commits": ["24cde68050ac454581829a297fcbf83c0d8005f4"],
+    "prs": [],
+    "tests": ["bun run lint"]
+  },
+  "id": "fn-9.1",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-9.1.md",
+  "status": "done",
+  "title": "Project scaffolding and dependencies",
+  "updated_at": "2026-01-12T21:45:06.410108Z"
+}

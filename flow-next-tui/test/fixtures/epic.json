@@ -1,0 +1,37 @@
+{
+  "success": true,
+  "branch_name": "feature/flow-next-tui",
+  "created_at": "2026-01-12T21:02:41.394820Z",
+  "depends_on_epics": [],
+  "id": "fn-9",
+  "next_task": 1,
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-01-12T21:26:37.095513Z",
+  "spec_path": ".flow/specs/fn-9.md",
+  "status": "open",
+  "title": "flow-next-tui MVP",
+  "updated_at": "2026-01-12T21:26:37.095693Z",
+  "tasks": [
+    {
+      "id": "fn-9.1",
+      "title": "Project scaffolding and dependencies",
+      "status": "done",
+      "priority": null,
+      "depends_on": []
+    },
+    {
+      "id": "fn-9.2",
+      "title": "Theme system (dark/light)",
+      "status": "todo",
+      "priority": null,
+      "depends_on": ["fn-9.1"]
+    },
+    {
+      "id": "fn-9.3",
+      "title": "Types and interfaces",
+      "status": "in_progress",
+      "priority": null,
+      "depends_on": ["fn-9.1"]
+    }
+  ]
+}

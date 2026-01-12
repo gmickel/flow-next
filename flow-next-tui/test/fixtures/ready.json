@@ -1,0 +1,36 @@
+{
+  "success": true,
+  "epic": "fn-9",
+  "actor": "gordon.mickel@gmail.com",
+  "ready": [
+    {
+      "id": "fn-9.2",
+      "title": "Theme system (dark/light)",
+      "depends_on": ["fn-9.1"]
+    },
+    {
+      "id": "fn-9.18",
+      "title": "Render utilities (ANSI-aware)",
+      "depends_on": ["fn-9.1"]
+    }
+  ],
+  "in_progress": [
+    {
+      "id": "fn-9.3",
+      "title": "Types and interfaces",
+      "assignee": "gordon.mickel@gmail.com"
+    }
+  ],
+  "blocked": [
+    {
+      "id": "fn-9.4",
+      "title": "flowctl integration lib",
+      "blocked_by": ["fn-9.3"]
+    },
+    {
+      "id": "fn-9.5",
+      "title": "Run discovery lib",
+      "blocked_by": ["fn-9.4"]
+    }
+  ]
+}

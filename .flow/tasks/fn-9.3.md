@@ -66,9 +66,20 @@ Use fixtures in tests to validate type compatibility.
 - [ ] No `any` types
 - [ ] TypeScript compiles without errors
 ## Done summary
-TBD
+- Added complete TypeScript types matching flowctl JSON output
+- Created Epic, Task, Run, LogEntry, ReadyResponse interfaces
+- Added test fixtures from actual flowctl output (epic.json, task.json, ready.json)
+- Tests validate type compatibility
 
+Why:
+- TUI needs typed parsing of flowctl commands
+- Fixtures enable testing without live flowctl
+
+Verification:
+- bun test passes (4 tests)
+- bun run lint passes (0 warnings)
+- bunx tsc --noEmit passes
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 2a78dc25c8c99da4c44f83ce1cb6b2d9dfffd829
+- Tests: bun test, bun run lint, bunx tsc --noEmit
 - PRs:
