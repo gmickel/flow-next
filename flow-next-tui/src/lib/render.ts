@@ -9,32 +9,32 @@ import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 export { truncateToWidth, visibleWidth };
 
 /**
- * Regex for common ANSI escape codes:
- * - SGR codes: \x1b[...m (colors, styles)
- * - Cursor codes: \x1b[...G/K/H/J (position, clear)
- * - OSC 8 hyperlinks: \x1b]8;;...\x07
- *
- * Note: This covers common terminal codes but not all ANSI sequences.
- * For comprehensive stripping, consider a dedicated library like strip-ansi.
+ * Comprehensive ANSI escape sequence regex.
+ * Matches:
+ * - CSI sequences: \x1b[ followed by params and final byte (covers SGR, cursor, etc)
+ * - OSC sequences: \x1b] followed by data and terminator (BEL \x07 or ST \x1b\\)
+ * - Simple escape sequences: \x1b followed by single char (like \x1bc for reset)
  */
 // eslint-disable-next-line no-control-regex
-const ANSI_REGEX = /\x1b\[[0-9;]*[mGKHJ]|\x1b\]8;;[^\x07]*\x07/g;
+const ANSI_REGEX = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-_a-z]/g;
 
 /**
- * Strip common ANSI escape codes from text (SGR, cursor, OSC 8 hyperlinks).
- * Does not strip all possible ANSI sequences - covers typical terminal output.
+ * Strip ANSI escape codes from text.
+ * Handles CSI sequences (colors, cursor), OSC sequences (hyperlinks, titles),
+ * and simple escape sequences.
  */
 export function stripAnsi(text: string): string {
 	return text.replace(ANSI_REGEX, "");
 }
+
+const RESET = "\x1b[0m";
 
 /**
  * Pad text to exact visible width (handles ANSI codes).
  * Adds spaces to reach target width, returns unchanged if already at/over width.
  * Negative width treated as 0.
  *
- * Note: Does not add ANSI reset before padding. If text ends with active styles,
- * the caller is responsible for adding reset codes before calling this function.
+ * Automatically adds ANSI reset before padding to prevent style leakage.
  */
 export function padToWidth(text: string, width: number): string {
 	const targetWidth = Math.max(0, width);
@@ -42,5 +42,7 @@ export function padToWidth(text: string, width: number): string {
 	if (currentWidth >= targetWidth) {
 		return text;
 	}
-	return text + " ".repeat(targetWidth - currentWidth);
+	const padding = " ".repeat(targetWidth - currentWidth);
+	// Add reset before padding to prevent style leaking into spaces
+	return text + RESET + padding;
 }
