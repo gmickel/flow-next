@@ -5,20 +5,48 @@ import type {
 	ReadyResponse,
 	Task,
 	TaskEvidence,
+	TaskListItem,
+	TaskStatus,
 	TaskSummary,
+	TasksResponse,
 } from "../src/lib/types";
 
 import epicFixture from "./fixtures/epic.json";
 import readyFixture from "./fixtures/ready.json";
 import taskFixture from "./fixtures/task.json";
+import tasksFixture from "./fixtures/tasks.json";
+
+// Type guard for TaskStatus
+function isTaskStatus(s: string): s is TaskStatus {
+	return ["todo", "in_progress", "done", "blocked"].includes(s);
+}
 
 describe("types match flowctl JSON output", () => {
 	test("Epic type matches epic.json fixture", () => {
-		// Extract epic fields (minus success wrapper)
-		const epic: Epic = {
+		// Validate fixture has expected shape
+		expect(epicFixture.success).toBe(true);
+		expect(typeof epicFixture.id).toBe("string");
+		expect(typeof epicFixture.title).toBe("string");
+		expect(epicFixture.status).toBe("open");
+		expect(typeof epicFixture.branch_name).toBe("string");
+		expect(Array.isArray(epicFixture.tasks)).toBe(true);
+		expect(epicFixture.tasks.length).toBeGreaterThan(0);
+
+		// Validate task structure within epic
+		const firstTask = epicFixture.tasks[0]!;
+		expect(firstTask.id).toBe("fn-9.1");
+		expect(firstTask.status).toBe("done");
+		expect(Array.isArray(firstTask.depends_on)).toBe(true);
+
+		// Validate status is valid
+		expect(epicFixture.status === "open" || epicFixture.status === "closed").toBe(true);
+
+		// Type construction (compile-time check)
+		const epicStatus = epicFixture.status as "open" | "closed";
+		const _epic: Epic = {
 			id: epicFixture.id,
 			title: epicFixture.title,
-			status: epicFixture.status as Epic["status"],
+			status: epicStatus,
 			branch_name: epicFixture.branch_name,
 			spec_path: epicFixture.spec_path,
 			next_task: epicFixture.next_task,
@@ -27,26 +55,48 @@ describe("types match flowctl JSON output", () => {
 			plan_reviewed_at: epicFixture.plan_reviewed_at,
 			created_at: epicFixture.created_at,
 			updated_at: epicFixture.updated_at,
-			tasks: epicFixture.tasks as EpicTask[],
+			tasks: epicFixture.tasks.map((t): EpicTask => {
+				expect(isTaskStatus(t.status)).toBe(true);
+				return {
+					id: t.id,
+					title: t.title,
+					status: t.status as TaskStatus,
+					priority: t.priority,
+					depends_on: t.depends_on,
+				};
+			}),
 		};
-
-		expect(epic.id).toBe("fn-9");
-		expect(epic.status).toBe("open");
-		expect(epic.tasks.length).toBeGreaterThan(0);
-
-		// Verify task structure
-		const task = epic.tasks[0] as EpicTask;
-		expect(task.id).toBe("fn-9.1");
-		expect(task.status).toBe("done");
-		expect(Array.isArray(task.depends_on)).toBe(true);
+		expect(_epic.id).toBe("fn-9");
 	});
 
 	test("Task type matches task.json fixture", () => {
-		const task: Task = {
+		// Validate fixture has expected shape
+		expect(taskFixture.success).toBe(true);
+		expect(taskFixture.id).toBe("fn-9.1");
+		expect(taskFixture.epic).toBe("fn-9");
+		expect(taskFixture.status).toBe("done");
+		expect(isTaskStatus(taskFixture.status)).toBe(true);
+		expect(typeof taskFixture.assignee).toBe("string");
+		expect(Array.isArray(taskFixture.depends_on)).toBe(true);
+
+		// Validate evidence structure
+		expect(taskFixture.evidence).toBeDefined();
+		expect(Array.isArray(taskFixture.evidence.commits)).toBe(true);
+		expect(taskFixture.evidence.commits).toContain(
+			"24cde68050ac454581829a297fcbf83c0d8005f4",
+		);
+
+		// Type construction (compile-time check)
+		const evidence: TaskEvidence = {
+			commits: taskFixture.evidence.commits,
+			tests: taskFixture.evidence.tests,
+			prs: taskFixture.evidence.prs,
+		};
+		const _task: Task = {
 			id: taskFixture.id,
 			epic: taskFixture.epic,
 			title: taskFixture.title,
-			status: taskFixture.status as Task["status"],
+			status: taskFixture.status as TaskStatus,
 			depends_on: taskFixture.depends_on,
 			spec_path: taskFixture.spec_path,
 			priority: taskFixture.priority,
@@ -55,45 +105,92 @@ describe("types match flowctl JSON output", () => {
 			claimed_at: taskFixture.claimed_at,
 			created_at: taskFixture.created_at,
 			updated_at: taskFixture.updated_at,
-			evidence: taskFixture.evidence as TaskEvidence,
+			evidence,
 		};
+		expect(_task.status).toBe("done");
+	});
 
-		expect(task.id).toBe("fn-9.1");
-		expect(task.epic).toBe("fn-9");
-		expect(task.status).toBe("done");
-		expect(task.evidence?.commits).toContain(
-			"24cde68050ac454581829a297fcbf83c0d8005f4",
-		);
+	test("TasksResponse type matches tasks.json fixture", () => {
+		// Validate fixture has expected shape
+		expect(tasksFixture.success).toBe(true);
+		expect(typeof tasksFixture.count).toBe("number");
+		expect(Array.isArray(tasksFixture.tasks)).toBe(true);
+		expect(tasksFixture.tasks.length).toBe(tasksFixture.count);
+		expect(tasksFixture.tasks.length).toBeGreaterThan(0);
+
+		// Validate task list item structure
+		const firstTask = tasksFixture.tasks[0]!;
+		expect(firstTask.id).toBe("fn-9.1");
+		expect(firstTask.epic).toBe("fn-9");
+		expect(firstTask.status).toBe("done");
+		expect(isTaskStatus(firstTask.status)).toBe(true);
+		expect(Array.isArray(firstTask.depends_on)).toBe(true);
+
+		// Type construction
+		const _response: TasksResponse = {
+			success: tasksFixture.success,
+			count: tasksFixture.count,
+			tasks: tasksFixture.tasks.map((t): TaskListItem => {
+				expect(isTaskStatus(t.status)).toBe(true);
+				return {
+					id: t.id,
+					epic: t.epic,
+					title: t.title,
+					status: t.status as TaskStatus,
+					priority: t.priority,
+					depends_on: t.depends_on,
+				};
+			}),
+		};
+		expect(_response.count).toBe(3);
 	});
 
 	test("ReadyResponse type matches ready.json fixture", () => {
-		const ready: ReadyResponse = {
-			success: readyFixture.success,
-			epic: readyFixture.epic,
-			actor: readyFixture.actor,
-			ready: readyFixture.ready as TaskSummary[],
-			in_progress: readyFixture.in_progress as TaskSummary[],
-			blocked: readyFixture.blocked as TaskSummary[],
-		};
+		// Validate fixture has expected shape
+		expect(readyFixture.success).toBe(true);
+		expect(readyFixture.epic).toBe("fn-9");
+		expect(typeof readyFixture.actor).toBe("string");
+		expect(Array.isArray(readyFixture.ready)).toBe(true);
+		expect(Array.isArray(readyFixture.in_progress)).toBe(true);
+		expect(Array.isArray(readyFixture.blocked)).toBe(true);
+		expect(readyFixture.ready.length).toBeGreaterThan(0);
+		expect(readyFixture.blocked.length).toBeGreaterThan(0);
 
-		expect(ready.success).toBe(true);
-		expect(ready.epic).toBe("fn-9");
-		expect(ready.ready.length).toBeGreaterThan(0);
-		expect(ready.in_progress.length).toBeGreaterThan(0);
-		expect(ready.blocked.length).toBeGreaterThan(0);
-
-		// Verify TaskSummary structure
-		const readyTask = ready.ready[0] as TaskSummary;
+		// Validate TaskSummary structure
+		const readyTask = readyFixture.ready[0]!;
 		expect(readyTask.id).toBe("fn-9.2");
 		expect(readyTask.depends_on).toContain("fn-9.1");
 
-		const blockedTask = ready.blocked[0] as TaskSummary;
+		const blockedTask = readyFixture.blocked[0]!;
 		expect(blockedTask.blocked_by).toContain("fn-9.3");
-	});
 
-	test("no any types in exports", () => {
-		// This test ensures the types file compiles without any implicit any
-		// If types.ts had any `any` types, TypeScript would catch it during build
-		expect(true).toBe(true);
+		// Type construction
+		const _ready: ReadyResponse = {
+			success: readyFixture.success,
+			epic: readyFixture.epic,
+			actor: readyFixture.actor,
+			ready: readyFixture.ready.map(
+				(t): TaskSummary => ({
+					id: t.id,
+					title: t.title,
+					depends_on: t.depends_on,
+				}),
+			),
+			in_progress: readyFixture.in_progress.map(
+				(t): TaskSummary => ({
+					id: t.id,
+					title: t.title,
+					assignee: t.assignee,
+				}),
+			),
+			blocked: readyFixture.blocked.map(
+				(t): TaskSummary => ({
+					id: t.id,
+					title: t.title,
+					blocked_by: t.blocked_by,
+				}),
+			),
+		};
+		expect(_ready.ready.length).toBeGreaterThan(0);
 	});
 });

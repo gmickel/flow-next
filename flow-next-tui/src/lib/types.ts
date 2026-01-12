@@ -61,6 +61,27 @@ export interface EpicTask {
 }
 
 /**
+ * Task as returned in flowctl tasks list (minimal fields)
+ */
+export interface TaskListItem {
+	id: string;
+	epic: string;
+	title: string;
+	status: TaskStatus;
+	priority: number | null;
+	depends_on: string[];
+}
+
+/**
+ * Response from flowctl tasks command
+ */
+export interface TasksResponse {
+	success: boolean;
+	tasks: TaskListItem[];
+	count: number;
+}
+
+/**
  * Epic as returned by flowctl show command
  */
 export interface Epic {
@@ -121,16 +142,6 @@ export interface ReviewReceipt {
 	timestamp: string;
 	summary?: string;
 	issues?: string[];
-}
-
-/**
- * Generic flowctl command response
- */
-export interface FlowctlResponse<T = unknown> {
-	success: boolean;
-	message?: string;
-	error?: string;
-	data?: T;
 }
 
 /**

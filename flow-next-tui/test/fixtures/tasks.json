@@ -1,0 +1,30 @@
+{
+  "success": true,
+  "tasks": [
+    {
+      "id": "fn-9.1",
+      "epic": "fn-9",
+      "title": "Project scaffolding and dependencies",
+      "status": "done",
+      "priority": null,
+      "depends_on": []
+    },
+    {
+      "id": "fn-9.2",
+      "epic": "fn-9",
+      "title": "Theme system (dark/light)",
+      "status": "todo",
+      "priority": null,
+      "depends_on": ["fn-9.1"]
+    },
+    {
+      "id": "fn-9.3",
+      "epic": "fn-9",
+      "title": "Types and interfaces",
+      "status": "in_progress",
+      "priority": null,
+      "depends_on": ["fn-9.1"]
+    }
+  ],
+  "count": 3
+}
