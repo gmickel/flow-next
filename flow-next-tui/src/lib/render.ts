@@ -9,21 +9,20 @@ import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 export { truncateToWidth, visibleWidth };
 
 /**
- * ANSI escape code patterns matching pi-tui's internal stripping for consistency.
- * Matches what visibleWidth() ignores:
+ * Regex for common ANSI escape codes:
  * - SGR codes: \x1b[...m (colors, styles)
  * - Cursor codes: \x1b[...G/K/H/J (position, clear)
  * - OSC 8 hyperlinks: \x1b]8;;...\x07
  *
- * Note: This intentionally matches pi-tui's scope, not all possible ANSI codes,
- * to ensure stripAnsi() and visibleWidth() are consistent.
+ * Note: This covers common terminal codes but not all ANSI sequences.
+ * For comprehensive stripping, consider a dedicated library like strip-ansi.
  */
 // eslint-disable-next-line no-control-regex
 const ANSI_REGEX = /\x1b\[[0-9;]*[mGKHJ]|\x1b\]8;;[^\x07]*\x07/g;
 
 /**
- * Strip ANSI escape codes from text.
- * Strips the same codes that visibleWidth() ignores (SGR, cursor, OSC 8).
+ * Strip common ANSI escape codes from text (SGR, cursor, OSC 8 hyperlinks).
+ * Does not strip all possible ANSI sequences - covers typical terminal output.
  */
 export function stripAnsi(text: string): string {
 	return text.replace(ANSI_REGEX, "");
@@ -33,6 +32,9 @@ export function stripAnsi(text: string): string {
  * Pad text to exact visible width (handles ANSI codes).
  * Adds spaces to reach target width, returns unchanged if already at/over width.
  * Negative width treated as 0.
+ *
+ * Note: Does not add ANSI reset before padding. If text ends with active styles,
+ * the caller is responsible for adding reset codes before calling this function.
  */
 export function padToWidth(text: string, width: number): string {
 	const targetWidth = Math.max(0, width);

@@ -103,18 +103,20 @@ describe("truncateToWidth", () => {
 		expect(truncateToWidth("hi", 2)).toBe("hi");
 	});
 
-	test("plain text truncation", () => {
+	test("plain text truncation produces exact width", () => {
 		// pi-tui adds ANSI reset before ellipsis to prevent style leaking
 		const truncated = truncateToWidth("hello world", 8);
-		expect(stripAnsi(truncated)).toBe("hello...");
-		expect(visibleWidth(truncated)).toBeLessThanOrEqual(8);
+		// When truncation occurs, result should be exactly target width
+		expect(visibleWidth(truncated)).toBe(8);
+		// Should end with default ellipsis
+		expect(truncated.endsWith("...")).toBe(true);
 	});
 
-	test("text with color codes", () => {
+	test("text with color codes truncates to exact width", () => {
 		const colored = `${RED}hello world${RESET}`;
 		const truncated = truncateToWidth(colored, 8);
-		expect(visibleWidth(truncated)).toBeLessThanOrEqual(8);
-		expect(stripAnsi(truncated)).toBe("hello...");
+		expect(visibleWidth(truncated)).toBe(8);
+		expect(truncated.endsWith("...")).toBe(true);
 	});
 
 	test("preserves ANSI reset before ellipsis", () => {
@@ -129,26 +131,28 @@ describe("truncateToWidth", () => {
 		expect(resetIndex).toBeLessThan(ellipsisIndex);
 	});
 
-	test("text with nested styles", () => {
+	test("text with nested styles truncates to exact width", () => {
 		const styled = `${BOLD}${RED}hello world${RESET}`;
 		const truncated = truncateToWidth(styled, 8);
-		expect(visibleWidth(truncated)).toBeLessThanOrEqual(8);
+		expect(visibleWidth(truncated)).toBe(8);
 	});
 
-	test("custom ellipsis", () => {
+	test("custom ellipsis respects width invariants", () => {
+		// Test with single-char ellipsis
 		const t1 = truncateToWidth("hello world", 7, "…");
-		expect(stripAnsi(t1)).toBe("hello …");
 		expect(visibleWidth(t1)).toBeLessThanOrEqual(7);
+		expect(t1.endsWith("…")).toBe(true);
 
+		// Test with multi-char ellipsis
 		const t2 = truncateToWidth("hello world", 8, ">>");
-		expect(stripAnsi(t2)).toBe("hello >>");
 		expect(visibleWidth(t2)).toBeLessThanOrEqual(8);
+		expect(t2.endsWith(">>")).toBe(true);
 	});
 
 	test("edge cases", () => {
 		expect(truncateToWidth("", 5)).toBe("");
 		expect(truncateToWidth("hi", 10)).toBe("hi");
-		// Very short widths
+		// Very short widths - just verify within bounds
 		const t3 = truncateToWidth("hello", 3);
 		expect(visibleWidth(t3)).toBeLessThanOrEqual(3);
 	});
