@@ -48,12 +48,17 @@ async function findRepoRoot(startDir?: string): Promise<string> {
 
   let dir = start;
   while (dir !== dirname(dir)) {
-    // Check for .git directory or file (worktrees)
+    // Check for .git directory or file (worktrees use .git file)
     const gitPath = join(dir, '.git');
-    const gitFile = Bun.file(gitPath);
-    if (await gitFile.exists()) {
-      repoRootCache.set(start, dir);
-      return dir;
+    try {
+      const s = await stat(gitPath);
+      // .git can be directory (regular) or file (worktrees)
+      if (s.isDirectory() || s.isFile()) {
+        repoRootCache.set(start, dir);
+        return dir;
+      }
+    } catch {
+      // Continue searching
     }
 
     // Check for .flow directory
@@ -89,12 +94,32 @@ export function clearRepoRootCache(): void {
 const TASK_ID_PATTERN = /^fn-\d+(?:\.\d+)?$/;
 
 /**
+ * Regex for valid run IDs (alphanumeric, hyphens, underscores only - no path traversal)
+ * Matches: YYYYMMDDTHHMMSSZ-hostname-user-pid-rand (real) or YYYY-MM-DD-NNN (test)
+ */
+const RUN_ID_PATTERN = /^[\w-]+$/;
+
+/**
  * Validate task ID to prevent path traversal
  * @throws Error if taskId is invalid
  */
 function validateTaskId(taskId: string): void {
   if (!TASK_ID_PATTERN.test(taskId)) {
-    throw new Error(`Invalid task ID: ${taskId}. Expected format: fn-N or fn-N.M`);
+    throw new Error(
+      `Invalid task ID: ${taskId}. Expected format: fn-N or fn-N.M`
+    );
+  }
+}
+
+/**
+ * Validate run ID to prevent path traversal
+ * @throws Error if runId is invalid
+ */
+function validateRunId(runId: string): void {
+  if (!RUN_ID_PATTERN.test(runId) || runId.includes('..')) {
+    throw new Error(
+      `Invalid run ID: ${runId}. Must be alphanumeric with hyphens/underscores only.`
+    );
   }
 }
 
@@ -146,7 +171,10 @@ export async function isRunActive(runPath: string): Promise<boolean> {
   try {
     const content = await file.text();
     // Check for COMPLETE marker
-    if (content.includes('promise=COMPLETE') || content.includes('<promise>COMPLETE</promise>')) {
+    if (
+      content.includes('promise=COMPLETE') ||
+      content.includes('<promise>COMPLETE</promise>')
+    ) {
       return false;
     }
     return true;
@@ -162,7 +190,9 @@ export async function isRunActive(runPath: string): Promise<boolean> {
 async function getIterationCount(runPath: string): Promise<number> {
   try {
     const entries = await readdir(runPath);
-    const iterLogs = entries.filter((e) => e.startsWith('iter-') && e.endsWith('.log'));
+    const iterLogs = entries.filter(
+      (e) => e.startsWith('iter-') && e.endsWith('.log')
+    );
     return iterLogs.length;
   } catch {
     return 0;
@@ -287,12 +317,11 @@ export async function discoverRuns(runsDir?: string): Promise<Run[]> {
 /**
  * Get the latest (most recent) run by ID.
  * Computes the latest run regardless of input array order.
+ * Uses lexicographic comparison (higher = newer for ISO-like run IDs).
  */
 export function getLatestRun(runs: Run[]): Run | undefined {
   if (runs.length === 0) return undefined;
-  return runs.reduce((latest, run) =>
-    compareRunIds(run.id, latest.id) < 0 ? run : latest
-  );
+  return runs.reduce((latest, run) => (run.id > latest.id ? run : latest));
 }
 
 /**
@@ -396,13 +425,16 @@ export interface ValidateRunResult {
 /**
  * Validate a run ID and return the run if found.
  * Fast-paths by checking if run directory exists before scanning all runs.
- * @throws Error with helpful message if run not found
+ * @throws Error with helpful message if run not found or invalid
  * @returns Run with any warnings (e.g., corrupt run)
  */
 export async function validateRun(
   runId: string,
   runsDir?: string
 ): Promise<ValidateRunResult> {
+  // Validate runId to prevent path traversal
+  validateRunId(runId);
+
   const repoRoot = await findRepoRoot();
   const dir = runsDir ?? join(repoRoot, DEFAULT_RUNS_DIR);
   const runPath = join(dir, runId);

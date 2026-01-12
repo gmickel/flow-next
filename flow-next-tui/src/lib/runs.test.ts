@@ -400,5 +400,24 @@ promise=CONTINUE
         'Available: none'
       );
     });
+
+    test('rejects invalid runId with path traversal', async () => {
+      const runsDir = join(tempDir, 'runs');
+      await mkdir(runsDir);
+
+      expect(validateRun('../../../etc/passwd', runsDir)).rejects.toThrow('Invalid run ID');
+      expect(validateRun('run/../escape', runsDir)).rejects.toThrow('Invalid run ID');
+      expect(validateRun('run/subdir', runsDir)).rejects.toThrow('Invalid run ID');
+    });
+
+    test('accepts valid runId formats', async () => {
+      const runsDir = join(tempDir, 'runs');
+      await mkdir(runsDir);
+      await mkdir(join(runsDir, '20240115T103000Z-mac-user-1234-abcd'));
+      await writeFile(join(runsDir, '20240115T103000Z-mac-user-1234-abcd', 'progress.txt'), 'ok');
+
+      const result = await validateRun('20240115T103000Z-mac-user-1234-abcd', runsDir);
+      expect(result.run.id).toBe('20240115T103000Z-mac-user-1234-abcd');
+    });
   });
 });
