@@ -12,16 +12,21 @@ Create flowctl integration library for spawning and parsing output.
 
 ```typescript
 // Find flowctl path (bundled or .flow/bin)
-function getFlowctlPath(): string
+// Note: async due to filesystem checks during path resolution
+async function getFlowctlPath(): Promise<string>
 
 // Run flowctl command, parse JSON output
 async function flowctl<T>(args: string[]): Promise<T>
 
-// Specific commands
-async function getEpics(): Promise<Epic[]>
-async function getTasks(epicId: string): Promise<Task[]>
+// List commands (return minimal types matching flowctl output)
+async function getEpics(): Promise<EpicListItem[]>  // id, title, status, tasks (count), done (count)
+async function getTasks(epicId: string): Promise<TaskListItem[]>  // id, epic, title, status, priority, depends_on
+async function getReadyTasks(epicId: string): Promise<ReadyResponse>  // ready/in_progress/blocked TaskSummary arrays
+
+// Detail commands (return full types via flowctl show)
+async function getEpic(epicId: string): Promise<Epic>
+async function getTask(taskId: string): Promise<Task>
 async function getTaskSpec(taskId: string): Promise<string>
-async function getReadyTasks(epicId: string): Promise<{ready: Task[], in_progress: Task[], blocked: Task[]}>
 ```
 
 ### flowctl location (for npm-distributed TUI)

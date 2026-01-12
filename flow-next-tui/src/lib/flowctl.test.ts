@@ -30,12 +30,15 @@ beforeEach(() => {
 });
 
 describe("FlowctlError", () => {
-	it("formats error message with command, exit code, and stderr", () => {
-		const error = new FlowctlError(["show", "fn-1", "--json"], 1, "Epic not found");
+	it("formats error message with args, exit code, and stderr", () => {
+		const fullCmd = ["python3", "/path/to/flowctl", "show", "fn-1", "--json"];
+		const args = ["show", "fn-1", "--json"];
+		const error = new FlowctlError(fullCmd, args, 1, "Epic not found");
 		expect(error.message).toBe(
 			"flowctl show fn-1 --json failed (exit 1): Epic not found"
 		);
-		expect(error.command).toEqual(["show", "fn-1", "--json"]);
+		expect(error.fullCommand).toEqual(fullCmd);
+		expect(error.args).toEqual(args);
 		expect(error.exitCode).toBe(1);
 		expect(error.stderr).toBe("Epic not found");
 		expect(error.name).toBe("FlowctlError");
@@ -56,11 +59,30 @@ describe("getFlowctlPath", () => {
 		expect(path1).toBe(path2);
 	});
 
-	it("error message contains helpful info", () => {
-		// Test error message format without mocking cwd
-		const errorMsg = "flowctl not found. Run `/flow-next:setup` or ensure flow-next plugin is installed.";
-		expect(errorMsg).toContain("flowctl not found");
-		expect(errorMsg).toContain("/flow-next:setup");
+	it("error message contains helpful info when not found", async () => {
+		// Capture original cwd value before mocking
+		const originalCwdValue = process.cwd();
+		// Point to a directory with no flowctl
+		Object.defineProperty(process, "cwd", {
+			value: () => "/tmp/nonexistent-flowctl-test-dir",
+			configurable: true,
+		});
+
+		try {
+			clearFlowctlCache();
+			await getFlowctlPath();
+			expect.unreachable("Should have thrown");
+		} catch (err) {
+			expect(err instanceof Error).toBe(true);
+			expect((err as Error).message).toContain("flowctl not found");
+			expect((err as Error).message).toContain("/flow-next:setup");
+		} finally {
+			Object.defineProperty(process, "cwd", {
+				value: () => originalCwdValue,
+				configurable: true,
+			});
+			clearFlowctlCache();
+		}
 	});
 });
 

@@ -1,3 +1,4 @@
+import { dirname } from "node:path";
 import type {
 	Epic,
 	EpicListItem,
@@ -14,15 +15,19 @@ import type {
  * Error thrown when flowctl command fails
  */
 export class FlowctlError extends Error {
-	command: string[];
+	/** Full command executed (including python3, path) */
+	fullCommand: string[];
+	/** Just the flowctl args (for easier inspection) */
+	args: string[];
 	exitCode: number;
 	stderr: string;
 
-	constructor(command: string[], exitCode: number, stderr: string) {
-		const msg = `flowctl ${command.join(" ")} failed (exit ${exitCode}): ${stderr}`;
+	constructor(fullCommand: string[], args: string[], exitCode: number, stderr: string) {
+		const msg = `flowctl ${args.join(" ")} failed (exit ${exitCode}): ${stderr}`;
 		super(msg);
 		this.name = "FlowctlError";
-		this.command = command;
+		this.fullCommand = fullCommand;
+		this.args = args;
 		this.exitCode = exitCode;
 		this.stderr = stderr;
 	}
@@ -114,8 +119,8 @@ async function tryFlowctl(path: string): Promise<boolean> {
  */
 async function findRepoRoot(startDir: string): Promise<string | null> {
 	let dir = startDir;
-	const root = "/";
-	while (dir !== root) {
+	// Stop when dirname returns the same value (reached filesystem root)
+	while (dir !== dirname(dir)) {
 		// Check for .git/HEAD file (works for both regular repos and worktrees)
 		const gitHeadPath = `${dir}/.git/HEAD`;
 		const gitHeadFile = Bun.file(gitHeadPath);
@@ -132,7 +137,7 @@ async function findRepoRoot(startDir: string): Promise<string | null> {
 				return dir;
 			}
 		}
-		dir = dir.substring(0, dir.lastIndexOf("/")) || root;
+		dir = dirname(dir);
 	}
 	return null;
 }
@@ -227,7 +232,7 @@ export async function flowctl<T>(args: string[]): Promise<T> {
 	await proc.exited;
 
 	if (proc.exitCode !== 0) {
-		throw new FlowctlError(args, proc.exitCode ?? 1, stderr.trim());
+		throw new FlowctlError(cmd, args, proc.exitCode ?? 1, stderr.trim());
 	}
 
 	try {
@@ -237,7 +242,7 @@ export async function flowctl<T>(args: string[]): Promise<T> {
 		const context = stderr.trim()
 			? `stderr: ${stderr.trim()}, stdout: ${stdout.slice(0, 150)}`
 			: `stdout: ${stdout.slice(0, 200)}`;
-		throw new FlowctlError(args, 0, `Failed to parse JSON: ${context}`);
+		throw new FlowctlError(cmd, args, 0, `Failed to parse JSON: ${context}`);
 	}
 }
 
@@ -286,7 +291,7 @@ export async function getTaskSpec(taskId: string): Promise<string> {
 	await proc.exited;
 
 	if (proc.exitCode !== 0) {
-		throw new FlowctlError(["cat", taskId], proc.exitCode ?? 1, stderr.trim());
+		throw new FlowctlError(cmd, ["cat", taskId], proc.exitCode ?? 1, stderr.trim());
 	}
 
 	return stdout;
