@@ -996,6 +996,12 @@ def patch_task_section(content: str, section: str, new_content: str) -> str:
             f"Cannot patch: duplicate heading '{section}' found ({matches} times)"
         )
 
+    # Strip leading section heading from new_content if present (defensive)
+    # Handles case where agent includes "## Description" in temp file
+    new_lines = new_content.lstrip().split("\n")
+    if new_lines and new_lines[0].strip() == section:
+        new_content = "\n".join(new_lines[1:]).lstrip()
+
     lines = content.split("\n")
     result = []
     in_target_section = False
