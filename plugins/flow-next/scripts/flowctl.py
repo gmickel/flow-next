@@ -853,6 +853,33 @@ Do NOT skip this tag. The automation depends on it."""
     return "\n\n".join(parts)
 
 
+def build_rereview_preamble(changed_files: list[str], review_type: str) -> str:
+    """Build preamble for re-reviews telling Codex to re-read changed files.
+
+    When resuming a Codex session, file contents may be cached from the original review.
+    This preamble explicitly instructs Codex to re-read the files that may have changed.
+    """
+    files_list = "\n".join(f"- {f}" for f in changed_files[:30])  # Cap at 30 files
+    if len(changed_files) > 30:
+        files_list += f"\n- ... and {len(changed_files) - 30} more files"
+
+    return f"""## IMPORTANT: Re-review After Fixes
+
+This is a RE-REVIEW. Code has been modified since your last review.
+
+**You MUST re-read these files before reviewing** - your cached view is stale:
+{files_list}
+
+Use your file reading tools to get the CURRENT content of these files.
+Do NOT rely on what you saw in the previous review - the code has changed.
+
+After re-reading, conduct a fresh {review_type} review on the updated code.
+
+---
+
+"""
+
+
 def get_actor() -> str:
     """Determine current actor for soft-claim semantics.
 
@@ -3332,17 +3359,26 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
         context_hints = gather_context_hints(base_branch)
         prompt = build_review_prompt("impl", task_spec, context_hints, diff_summary)
 
-    # Check for existing session in receipt
+    # Check for existing session in receipt (indicates re-review)
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
     session_id = None
+    is_rereview = False
     if receipt_path:
         receipt_file = Path(receipt_path)
         if receipt_file.exists():
             try:
                 receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
                 session_id = receipt_data.get("session_id")
+                is_rereview = session_id is not None
             except (json.JSONDecodeError, Exception):
                 pass
+
+    # For re-reviews, prepend instruction to re-read changed files
+    if is_rereview:
+        changed_files = get_changed_files(base_branch)
+        if changed_files:
+            rereview_preamble = build_rereview_preamble(changed_files, "implementation")
+            prompt = rereview_preamble + prompt
 
     # Run codex
     output, thread_id = run_codex_exec(prompt, session_id=session_id)
@@ -3416,17 +3452,26 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
     # Build prompt
     prompt = build_review_prompt("plan", epic_spec, context_hints)
 
-    # Check for existing session in receipt
+    # Check for existing session in receipt (indicates re-review)
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
     session_id = None
+    is_rereview = False
     if receipt_path:
         receipt_file = Path(receipt_path)
         if receipt_file.exists():
             try:
                 receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
                 session_id = receipt_data.get("session_id")
+                is_rereview = session_id is not None
             except (json.JSONDecodeError, Exception):
                 pass
+
+    # For re-reviews, prepend instruction to re-read spec file
+    if is_rereview:
+        # For plan reviews, the spec file is what changes
+        spec_files = [str(epic_spec_path)]
+        rereview_preamble = build_rereview_preamble(spec_files, "plan")
+        prompt = rereview_preamble + prompt
 
     # Run codex
     output, thread_id = run_codex_exec(prompt, session_id=session_id)
