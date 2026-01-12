@@ -1,11 +1,12 @@
 import chalk from "chalk";
+import { bgColor, color } from "./helpers.ts";
 import type { ColorPalette, Theme } from "./index.ts";
 
 /**
- * Dark theme - 256 color palette for terminal compatibility.
- * Uses terminal default background for transparency support.
+ * Dark theme palette - 256 color values for terminal compatibility.
+ * Uses -1 for terminal default (transparent background).
  */
-export const DARK_PALETTE: ColorPalette = {
+export const DARK: ColorPalette = {
 	bg: -1, // terminal default (transparent)
 	border: 239,
 	text: 252,
@@ -18,67 +19,61 @@ export const DARK_PALETTE: ColorPalette = {
 	selectedBg: 236,
 };
 
-// Color helper functions using 256-color ANSI
-const c = (code: number) => (s: string) =>
-	code === -1 ? s : chalk.ansi256(code)(s);
-const bg = (code: number) => (s: string) =>
-	code === -1 ? s : chalk.bgAnsi256(code)(s);
-
 export const darkTheme: Theme = {
 	name: "dark",
-	palette: DARK_PALETTE,
+	palette: DARK,
 
 	// Color functions
-	text: c(DARK_PALETTE.text),
-	dim: c(DARK_PALETTE.dim),
-	accent: c(DARK_PALETTE.accent),
-	success: c(DARK_PALETTE.success),
-	progress: c(DARK_PALETTE.progress),
-	warning: c(DARK_PALETTE.warning),
-	error: c(DARK_PALETTE.error),
-	border: c(DARK_PALETTE.border),
+	text: color(DARK.text),
+	dim: color(DARK.dim),
+	accent: color(DARK.accent),
+	success: color(DARK.success),
+	progress: color(DARK.progress),
+	warning: color(DARK.warning),
+	error: color(DARK.error),
+	border: color(DARK.border),
 
 	// Background functions
-	selectedBg: bg(DARK_PALETTE.selectedBg),
+	selectedBg: bgColor(DARK.selectedBg),
 
 	// pi-tui SelectListTheme (used for TaskList)
 	selectList: {
-		selectedPrefix: (s) => chalk.ansi256(DARK_PALETTE.accent)(s),
+		selectedPrefix: (s) => chalk.ansi256(DARK.accent)(s),
 		selectedText: (s) =>
-			chalk.bgAnsi256(DARK_PALETTE.selectedBg).ansi256(DARK_PALETTE.text)(s),
-		description: (s) => chalk.ansi256(DARK_PALETTE.dim)(s),
-		scrollInfo: (s) => chalk.ansi256(DARK_PALETTE.dim)(s),
-		noMatch: (s) => chalk.ansi256(DARK_PALETTE.warning)(s),
+			chalk.bgAnsi256(DARK.selectedBg).ansi256(DARK.text)(s),
+		description: (s) => chalk.ansi256(DARK.dim)(s),
+		scrollInfo: (s) => chalk.ansi256(DARK.dim)(s),
+		noMatch: (s) => chalk.ansi256(DARK.warning)(s),
 	},
 
 	// pi-tui MarkdownTheme (used for TaskDetail)
 	markdown: {
-		heading: (s) => chalk.bold.ansi256(DARK_PALETTE.accent)(s),
-		link: (s) => chalk.ansi256(DARK_PALETTE.accent)(s),
-		linkUrl: (s) => chalk.ansi256(DARK_PALETTE.dim)(s),
-		code: (s) => chalk.ansi256(DARK_PALETTE.warning)(s),
-		codeBlock: (s) => chalk.ansi256(DARK_PALETTE.text)(s),
-		codeBlockBorder: (s) => chalk.ansi256(DARK_PALETTE.border)(s),
-		quote: (s) => chalk.italic.ansi256(DARK_PALETTE.dim)(s),
-		quoteBorder: (s) => chalk.ansi256(DARK_PALETTE.border)(s),
-		hr: (s) => chalk.ansi256(DARK_PALETTE.border)(s),
-		listBullet: (s) => chalk.ansi256(DARK_PALETTE.accent)(s),
-		bold: (s) => chalk.bold.ansi256(DARK_PALETTE.text)(s),
-		italic: (s) => chalk.italic.ansi256(DARK_PALETTE.text)(s),
-		strikethrough: (s) => chalk.strikethrough.ansi256(DARK_PALETTE.dim)(s),
-		underline: (s) => chalk.underline.ansi256(DARK_PALETTE.text)(s),
+		heading: (s) => chalk.bold.ansi256(DARK.accent)(s),
+		link: (s) => chalk.ansi256(DARK.accent)(s),
+		linkUrl: (s) => chalk.ansi256(DARK.dim)(s),
+		code: (s) => chalk.ansi256(DARK.warning)(s),
+		codeBlock: (s) => chalk.ansi256(DARK.text)(s),
+		codeBlockBorder: (s) => chalk.ansi256(DARK.border)(s),
+		quote: (s) => chalk.italic.ansi256(DARK.dim)(s),
+		quoteBorder: (s) => chalk.ansi256(DARK.border)(s),
+		hr: (s) => chalk.ansi256(DARK.border)(s),
+		listBullet: (s) => chalk.ansi256(DARK.accent)(s),
+		bold: (s) => chalk.bold.ansi256(DARK.text)(s),
+		italic: (s) => chalk.italic.ansi256(DARK.text)(s),
+		strikethrough: (s) => chalk.strikethrough.ansi256(DARK.dim)(s),
+		underline: (s) => chalk.underline.ansi256(DARK.text)(s),
 	},
 
 	// pi-tui EditorTheme
 	editor: {
-		borderColor: (s) => chalk.ansi256(DARK_PALETTE.border)(s),
+		borderColor: (s) => chalk.ansi256(DARK.border)(s),
 		selectList: {
-			selectedPrefix: (s) => chalk.ansi256(DARK_PALETTE.accent)(s),
+			selectedPrefix: (s) => chalk.ansi256(DARK.accent)(s),
 			selectedText: (s) =>
-				chalk.bgAnsi256(DARK_PALETTE.selectedBg).ansi256(DARK_PALETTE.text)(s),
-			description: (s) => chalk.ansi256(DARK_PALETTE.dim)(s),
-			scrollInfo: (s) => chalk.ansi256(DARK_PALETTE.dim)(s),
-			noMatch: (s) => chalk.ansi256(DARK_PALETTE.warning)(s),
+				chalk.bgAnsi256(DARK.selectedBg).ansi256(DARK.text)(s),
+			description: (s) => chalk.ansi256(DARK.dim)(s),
+			scrollInfo: (s) => chalk.ansi256(DARK.dim)(s),
+			noMatch: (s) => chalk.ansi256(DARK.warning)(s),
 		},
 	},
 };

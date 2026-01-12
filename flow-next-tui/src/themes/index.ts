@@ -3,6 +3,8 @@ import type {
 	MarkdownTheme,
 	SelectListTheme,
 } from "@mariozechner/pi-tui";
+import { DARK, darkTheme } from "./dark.ts";
+import { LIGHT, lightTheme } from "./light.ts";
 
 /**
  * 256-color palette definition.
@@ -50,16 +52,14 @@ export interface Theme {
 	editor: EditorTheme;
 }
 
-// Re-export themes
-export { DARK_PALETTE, darkTheme } from "./dark.ts";
-export { LIGHT_PALETTE, lightTheme } from "./light.ts";
-
 // Re-export pi-tui theme types for convenience
 export type { EditorTheme, MarkdownTheme, SelectListTheme };
 
-// Import for getTheme
-import { darkTheme } from "./dark.ts";
-import { lightTheme } from "./light.ts";
+// Re-export palettes (DARK/LIGHT are ColorPalette objects per spec)
+export { DARK, LIGHT };
+
+// Re-export theme objects
+export { darkTheme, lightTheme };
 
 /**
  * Get theme by preference.
@@ -68,7 +68,3 @@ import { lightTheme } from "./light.ts";
 export function getTheme(isLight = false): Theme {
 	return isLight ? lightTheme : darkTheme;
 }
-
-// Convenience aliases
-export const DARK = darkTheme;
-export const LIGHT = lightTheme;
