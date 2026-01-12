@@ -21,8 +21,16 @@ export class FlowctlError extends Error {
 	args: string[];
 	exitCode: number;
 	stderr: string;
+	/** Error kind: "exec" for process failure, "parse" for JSON parse failure */
+	kind: "exec" | "parse";
 
-	constructor(fullCommand: string[], args: string[], exitCode: number, stderr: string) {
+	constructor(
+		fullCommand: string[],
+		args: string[],
+		exitCode: number,
+		stderr: string,
+		kind: "exec" | "parse" = "exec",
+	) {
 		const msg = `flowctl ${args.join(" ")} failed (exit ${exitCode}): ${stderr}`;
 		super(msg);
 		this.name = "FlowctlError";
@@ -30,12 +38,17 @@ export class FlowctlError extends Error {
 		this.args = args;
 		this.exitCode = exitCode;
 		this.stderr = stderr;
+		this.kind = kind;
 	}
 }
 
-// Cached flowctl path and invocation method
-let cachedFlowctlPath: string | null = null;
-let usePython: boolean | null = null;
+/** Atomic cache for flowctl path and invocation method */
+interface FlowctlCache {
+	path: string;
+	usePython: boolean;
+}
+
+let cache: FlowctlCache | null = null;
 
 /**
  * Check if a file exists and is executable
@@ -45,7 +58,6 @@ async function canExecute(path: string): Promise<boolean> {
 	const file = Bun.file(path);
 	if (!(await file.exists())) return false;
 
-	// Try direct execution with --help (repo-independent)
 	try {
 		const proc = Bun.spawn([path, "--help"], {
 			stdout: "pipe",
@@ -78,39 +90,16 @@ async function canExecuteViaPython(path: string): Promise<boolean> {
 }
 
 /**
- * Check if a command exists on PATH
+ * Try flowctl at a given path, returning cache entry if it works
  */
-async function commandExists(cmd: string): Promise<string | null> {
-	try {
-		const proc = Bun.spawn(["which", cmd], {
-			stdout: "pipe",
-			stderr: "pipe",
-		});
-		const stdout = await new Response(proc.stdout).text();
-		await proc.exited;
-		if (proc.exitCode === 0) {
-			return stdout.trim();
-		}
-	} catch {
-		// ignore
-	}
-	return null;
-}
-
-/**
- * Try flowctl at a given path, returning true if it works
- * Sets usePython based on which invocation method works
- */
-async function tryFlowctl(path: string): Promise<boolean> {
+async function tryFlowctl(path: string): Promise<FlowctlCache | null> {
 	if (await canExecute(path)) {
-		usePython = false;
-		return true;
+		return { path, usePython: false };
 	}
 	if (await canExecuteViaPython(path)) {
-		usePython = true;
-		return true;
+		return { path, usePython: true };
 	}
-	return false;
+	return null;
 }
 
 /**
@@ -119,20 +108,17 @@ async function tryFlowctl(path: string): Promise<boolean> {
  */
 async function findRepoRoot(startDir: string): Promise<string | null> {
 	let dir = startDir;
-	// Stop when dirname returns the same value (reached filesystem root)
 	while (dir !== dirname(dir)) {
-		// Check for .git/HEAD file (works for both regular repos and worktrees)
 		const gitHeadPath = `${dir}/.git/HEAD`;
 		const gitHeadFile = Bun.file(gitHeadPath);
 		if (await gitHeadFile.exists()) {
 			return dir;
 		}
-		// Also check for .git file (for worktrees, it's a file containing path)
+		// Also check for .git file (for worktrees)
 		const gitFilePath = `${dir}/.git`;
 		const gitFile = Bun.file(gitFilePath);
 		if (await gitFile.exists()) {
 			const content = await gitFile.text();
-			// If it's a worktree, the file contains "gitdir: /path/to/git"
 			if (content.startsWith("gitdir:")) {
 				return dir;
 			}
@@ -148,58 +134,66 @@ async function findRepoRoot(startDir: string): Promise<string | null> {
  * 1. .flow/bin/flowctl (installed via /flow-next:setup)
  * 2. ./plugins/flow-next/scripts/flowctl (repo-local plugin checkout)
  * 3. Search up to repo root for plugins/flow-next/scripts/flowctl
- * 4. flowctl or flowctl.py on PATH
+ * 4. flowctl or flowctl.py on PATH (via Bun.which)
  * 5. Error with helpful message
  */
 export async function getFlowctlPath(): Promise<string> {
-	if (cachedFlowctlPath) return cachedFlowctlPath;
+	if (cache) return cache.path;
 
 	const cwd = process.cwd();
 
 	// 1. .flow/bin/flowctl
 	const flowBinPath = `${cwd}/.flow/bin/flowctl`;
-	if (await tryFlowctl(flowBinPath)) {
-		cachedFlowctlPath = flowBinPath;
-		return flowBinPath;
+	let result = await tryFlowctl(flowBinPath);
+	if (result) {
+		cache = result;
+		return result.path;
 	}
 
 	// 2. ./plugins/flow-next/scripts/flowctl (from cwd)
 	const pluginPath = `${cwd}/plugins/flow-next/scripts/flowctl`;
-	if (await tryFlowctl(pluginPath)) {
-		cachedFlowctlPath = pluginPath;
-		return pluginPath;
+	result = await tryFlowctl(pluginPath);
+	if (result) {
+		cache = result;
+		return result.path;
 	}
 
 	// 3. Search up to repo root
 	const repoRoot = await findRepoRoot(cwd);
 	if (repoRoot && repoRoot !== cwd) {
-		// Try .flow/bin at repo root
 		const repoFlowBin = `${repoRoot}/.flow/bin/flowctl`;
-		if (await tryFlowctl(repoFlowBin)) {
-			cachedFlowctlPath = repoFlowBin;
-			return repoFlowBin;
+		result = await tryFlowctl(repoFlowBin);
+		if (result) {
+			cache = result;
+			return result.path;
 		}
 
-		// Try plugins dir at repo root
 		const repoPluginPath = `${repoRoot}/plugins/flow-next/scripts/flowctl`;
-		if (await tryFlowctl(repoPluginPath)) {
-			cachedFlowctlPath = repoPluginPath;
-			return repoPluginPath;
+		result = await tryFlowctl(repoPluginPath);
+		if (result) {
+			cache = result;
+			return result.path;
 		}
 	}
 
-	// 4. flowctl on PATH
-	const flowctlOnPath = await commandExists("flowctl");
-	if (flowctlOnPath && (await tryFlowctl(flowctlOnPath))) {
-		cachedFlowctlPath = flowctlOnPath;
-		return flowctlOnPath;
+	// 4. flowctl on PATH (use Bun.which instead of shelling out)
+	const flowctlOnPath = Bun.which("flowctl");
+	if (flowctlOnPath) {
+		result = await tryFlowctl(flowctlOnPath);
+		if (result) {
+			cache = result;
+			return result.path;
+		}
 	}
 
 	// 4b. flowctl.py on PATH
-	const flowctlPyOnPath = await commandExists("flowctl.py");
-	if (flowctlPyOnPath && (await tryFlowctl(flowctlPyOnPath))) {
-		cachedFlowctlPath = flowctlPyOnPath;
-		return flowctlPyOnPath;
+	const flowctlPyOnPath = Bun.which("flowctl.py");
+	if (flowctlPyOnPath) {
+		result = await tryFlowctl(flowctlPyOnPath);
+		if (result) {
+			cache = result;
+			return result.path;
+		}
 	}
 
 	// 5. Error
@@ -209,10 +203,15 @@ export async function getFlowctlPath(): Promise<string> {
 }
 
 /**
- * Run flowctl command and parse JSON output
+ * Spawn flowctl and return stdout/stderr
+ * Shared helper for flowctl() and getTaskSpec()
  */
-export async function flowctl<T>(args: string[]): Promise<T> {
+async function spawnFlowctl(
+	args: string[],
+): Promise<{ cmd: string[]; stdout: string; stderr: string; exitCode: number }> {
 	const flowctlPath = await getFlowctlPath();
+	// cache is guaranteed to be set after getFlowctlPath succeeds
+	const usePython = cache?.usePython ?? false;
 
 	const cmd = usePython
 		? ["python3", flowctlPath, ...args]
@@ -231,8 +230,17 @@ export async function flowctl<T>(args: string[]): Promise<T> {
 
 	await proc.exited;
 
-	if (proc.exitCode !== 0) {
-		throw new FlowctlError(cmd, args, proc.exitCode ?? 1, stderr.trim());
+	return { cmd, stdout, stderr, exitCode: proc.exitCode ?? 1 };
+}
+
+/**
+ * Run flowctl command and parse JSON output
+ */
+export async function flowctl<T>(args: string[]): Promise<T> {
+	const { cmd, stdout, stderr, exitCode } = await spawnFlowctl(args);
+
+	if (exitCode !== 0) {
+		throw new FlowctlError(cmd, args, exitCode, stderr.trim(), "exec");
 	}
 
 	try {
@@ -242,7 +250,7 @@ export async function flowctl<T>(args: string[]): Promise<T> {
 		const context = stderr.trim()
 			? `stderr: ${stderr.trim()}, stdout: ${stdout.slice(0, 150)}`
 			: `stdout: ${stdout.slice(0, 200)}`;
-		throw new FlowctlError(cmd, args, 0, `Failed to parse JSON: ${context}`);
+		throw new FlowctlError(cmd, args, 0, `Failed to parse JSON: ${context}`, "parse");
 	}
 }
 
@@ -271,27 +279,11 @@ export async function getTasks(epicId: string): Promise<TaskListItem[]> {
  * Get task spec (markdown content)
  */
 export async function getTaskSpec(taskId: string): Promise<string> {
-	const flowctlPath = await getFlowctlPath();
+	const args = ["cat", taskId];
+	const { cmd, stdout, stderr, exitCode } = await spawnFlowctl(args);
 
-	const cmd = usePython
-		? ["python3", flowctlPath, "cat", taskId]
-		: [flowctlPath, "cat", taskId];
-
-	const proc = Bun.spawn(cmd, {
-		stdout: "pipe",
-		stderr: "pipe",
-		cwd: process.cwd(),
-	});
-
-	const [stdout, stderr] = await Promise.all([
-		new Response(proc.stdout).text(),
-		new Response(proc.stderr).text(),
-	]);
-
-	await proc.exited;
-
-	if (proc.exitCode !== 0) {
-		throw new FlowctlError(cmd, ["cat", taskId], proc.exitCode ?? 1, stderr.trim());
+	if (exitCode !== 0) {
+		throw new FlowctlError(cmd, args, exitCode, stderr.trim(), "exec");
 	}
 
 	return stdout;
@@ -313,7 +305,6 @@ export async function getEpic(epicId: string): Promise<Epic> {
 		epicId,
 		"--json",
 	]);
-	// Strip success field from response
 	const { success: _, ...epic } = response;
 	return epic as Epic;
 }
@@ -327,7 +318,6 @@ export async function getTask(taskId: string): Promise<Task> {
 		taskId,
 		"--json",
 	]);
-	// Strip success field from response
 	const { success: _, ...task } = response;
 	return task as Task;
 }
@@ -336,6 +326,17 @@ export async function getTask(taskId: string): Promise<Task> {
  * Clear cached flowctl path (useful for testing)
  */
 export function clearFlowctlCache(): void {
-	cachedFlowctlPath = null;
-	usePython = null;
+	cache = null;
+}
+
+/**
+ * Check if flowctl is available (for test gating)
+ */
+export async function isFlowctlAvailable(): Promise<boolean> {
+	try {
+		await getFlowctlPath();
+		return true;
+	} catch {
+		return false;
+	}
 }
