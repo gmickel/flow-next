@@ -5,7 +5,7 @@ description: Scaffold Ralph autonomous harness. Supports project-local (scripts/
 
 # Ralph init
 
-Scaffold Ralph autonomous harness. Opt-in only.
+Scaffold Ralph autonomous harness. Opt-in only. Safe to re-run for updates.
 
 ## Installation Modes
 
@@ -16,26 +16,27 @@ Scaffold Ralph autonomous harness. Opt-in only.
 
 ### User-level (`--user` flag)
 - Scripts in `~/.config/flow-next/ralph/` (shared across projects)
-- Project gets `scripts/ralph/config.env` and symlinks
+- User config in `~/.config/flow-next/ralph/config.env` (defaults)
+- Project config in `scripts/ralph/config.env` (overrides)
 - Runs stay in project `scripts/ralph/runs/`
-- Good for: multiple projects, personal workflow, auto-updates via `/flow-next:sync`
+- Good for: multiple projects, personal workflow, easy updates
 
 ## Rules
 
 ### Project-local mode
 - Create `scripts/ralph/` in the current repo
-- If exists, stop and ask user to remove it first
+- If exists, ask user if they want to update or skip
 - Copy all templates from `templates/` into `scripts/ralph/`
 - Copy `flowctl` and `flowctl.py` from `${CLAUDE_PLUGIN_ROOT}/scripts/`
 - Set executable bits
 
 ### User-level mode (`--user`)
 - Create `~/.config/flow-next/ralph/` if not exists
-- If exists, ask user if they want to update (runs /flow-next:sync) or skip
-- Copy scripts to user dir: `ralph.sh`, `ralph_once.sh`, `flowctl`, `flowctl.py`, `watch-filter.py`, `prompt_*.md`
+- If exists, backup modified files then update from plugin
+- Copy scripts to user dir: `ralph.sh`, `ralph_once.sh`, `flowctl`, `flowctl.py`, `watch-filter.py`, `prompt_*.md`, `config.env`
 - Write VERSION file to track plugin version
 - In project, create `scripts/ralph/` with:
-  - `config.env` (project-specific config)
+  - `config.env` (project-specific overrides)
   - Symlinks: `ralph.sh -> ~/.config/flow-next/ralph/ralph.sh` etc.
   - `runs/` directory for run logs
 
@@ -63,21 +64,22 @@ Scaffold Ralph autonomous harness. Opt-in only.
    - If neither available: use `none`
 
 ### If project-local mode (no --user):
-5. Check `scripts/ralph/` does not exist
+5. Check `scripts/ralph/` - if exists, ask "Update existing? (y/n)"
 6. Copy templates to `scripts/ralph/`
 7. Copy flowctl files
-8. Replace `{{PLAN_REVIEW}}` and `{{WORK_REVIEW}}` in config.env
+8. Replace `{{PLAN_REVIEW}}` and `{{WORK_REVIEW}}` in config.env (only on first install)
 9. Set executable bits
 
 ### If user-level mode (--user):
-5. Check/create `~/.config/flow-next/ralph/`
-6. Copy scripts to user dir (skip config.env)
-7. Write `~/.config/flow-next/ralph/VERSION` with plugin version
-8. In project `scripts/ralph/`:
-   - Copy config.env template, replace placeholders
-   - Create symlinks to user scripts
+5. Check `~/.config/flow-next/ralph/VERSION` for existing version
+6. If exists: backup modified files to `~/.config/flow-next/ralph/backups/<timestamp>/`
+7. Copy scripts to user dir
+8. Update VERSION file with plugin version
+9. In project `scripts/ralph/`:
+   - Create config.env if not exists (project overrides only)
+   - Create/update symlinks to user scripts
    - Create `runs/` directory
-9. Set executable bits on user scripts
+10. Set executable bits on user scripts
 
 ## Print next steps
 
@@ -85,11 +87,14 @@ Scaffold Ralph autonomous harness. Opt-in only.
 - Edit `scripts/ralph/config.env` to customize settings
 - `./scripts/ralph/ralph_once.sh` (one iteration, observe)
 - `./scripts/ralph/ralph.sh` (full loop, AFK)
+- Update: re-run `/flow-next:ralph-init`
 - Uninstall: `rm -rf scripts/ralph/`
 
 ### User-level:
-- Edit `scripts/ralph/config.env` for project-specific settings
+- Edit `~/.config/flow-next/ralph/config.env` for user defaults
+- Edit `scripts/ralph/config.env` for project-specific overrides
 - `./scripts/ralph/ralph.sh` (runs from user-level scripts)
-- Update scripts: `/flow-next:sync` (backs up changes, updates from plugin)
+- Update: re-run `/flow-next:ralph-init --user` after plugin updates
+- Backups: `~/.config/flow-next/ralph/backups/` (if files were modified)
 - Uninstall project: `rm -rf scripts/ralph/`
 - Uninstall user-level: `rm -rf ~/.config/flow-next/ralph/`
