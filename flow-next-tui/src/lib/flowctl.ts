@@ -60,7 +60,7 @@ let cache: FlowctlCache | null = null;
 /**
  * Check if a file exists and is executable
  * Uses `flowctl --help` as test command (repo-independent)
- * Accepts exit 0 or 1 (some --help implementations return 1)
+ * Spawn success = executable (any exit code ok; ENOENT/EACCES throws)
  */
 async function canExecute(path: string): Promise<boolean> {
   const file = Bun.file(path);
@@ -72,8 +72,8 @@ async function canExecute(path: string): Promise<boolean> {
       stderr: 'pipe',
     });
     await proc.exited;
-    // Accept 0 or 1 - some --help impls return 1
-    return proc.exitCode === 0 || proc.exitCode === 1;
+    // Any exit code is fine - spawn success means executable
+    return true;
   } catch {
     return false;
   }
@@ -81,7 +81,7 @@ async function canExecute(path: string): Promise<boolean> {
 
 /**
  * Check if flowctl works via python3
- * Accepts exit 0 or 1 (some --help implementations return 1)
+ * Spawn success = executable (any exit code ok; ENOENT/EACCES throws)
  */
 async function canExecuteViaPython(path: string): Promise<boolean> {
   const file = Bun.file(path);
@@ -93,7 +93,7 @@ async function canExecuteViaPython(path: string): Promise<boolean> {
       stderr: 'pipe',
     });
     await proc.exited;
-    return proc.exitCode === 0 || proc.exitCode === 1;
+    return true;
   } catch {
     return false;
   }
@@ -148,7 +148,8 @@ export class FlowctlNotFoundError extends Error {
   startDir: string;
 
   constructor(startDir: string, searchedPaths: string[]) {
-    const msg = `flowctl not found. Run \`/flow-next:setup\` or ensure flow-next plugin is installed. Searched: ${searchedPaths.slice(0, 4).join(', ')}`;
+    const pathList = searchedPaths.join(', ');
+    const msg = `flowctl not found. Run \`/flow-next:setup\` or ensure flow-next plugin is installed. Searched: ${pathList}`;
     super(msg);
     this.name = 'FlowctlNotFoundError';
     this.startDir = startDir;
@@ -255,20 +256,24 @@ async function spawnFlowctl(args: string[]): Promise<{
     ? ['python3', flowctlPath, ...args]
     : [flowctlPath, ...args];
 
-  const proc = Bun.spawn(cmd, {
-    stdout: 'pipe',
-    stderr: 'pipe',
-    cwd: process.cwd(),
-  });
+  try {
+    const proc = Bun.spawn(cmd, {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
 
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
+    const [stdout, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
 
-  await proc.exited;
+    await proc.exited;
 
-  return { cmd, stdout, stderr, exitCode: proc.exitCode ?? 1 };
+    return { cmd, stdout, stderr, exitCode: proc.exitCode ?? 1 };
+  } catch (err) {
+    // Wrap spawn failures (ENOENT, EACCES, etc) in FlowctlError
+    throw new FlowctlError(cmd, args, -1, String(err), 'exec');
+  }
 }
 
 /**
@@ -298,11 +303,10 @@ async function flowctlWithCmd<T>(
   try {
     return { result: JSON.parse(stdout) as T, cmd };
   } catch {
-    // Include both stdout and stderr for debugging parse failures
-    // Use real exitCode (could be non-zero with junk stdout)
-    const context = stderr.trim()
-      ? `stderr: ${stderr.trim()}, stdout: ${stdout.slice(0, 150)}`
-      : `stdout: ${stdout.slice(0, 200)}`;
+    // Include both streams labeled consistently for debugging
+    const stdoutSnip = stdout.trim().slice(0, 150);
+    const stderrSnip = stderr.trim().slice(0, 150);
+    const context = `stdout=${stdoutSnip || '(empty)'}, stderr=${stderrSnip || '(empty)'}`;
     throw new FlowctlError(
       cmd,
       args,
@@ -315,20 +319,18 @@ async function flowctlWithCmd<T>(
 
 /**
  * Validate response has success:true, throw FlowctlError if not
+ * Includes error field from response if present
  */
-function assertSuccess<T extends { success: boolean }>(
+function assertSuccess<T extends { success: boolean; error?: string }>(
   response: T,
   cmd: string[],
   args: string[]
 ): asserts response is T & { success: true } {
   if (response.success !== true) {
-    throw new FlowctlError(
-      cmd,
-      args,
-      0,
-      'flowctl returned success:false',
-      'api'
-    );
+    const errorMsg = response.error
+      ? `flowctl returned success:false: ${response.error}`
+      : 'flowctl returned success:false';
+    throw new FlowctlError(cmd, args, 0, errorMsg, 'api');
   }
 }
 
