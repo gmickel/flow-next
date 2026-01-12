@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Ensure Ctrl+C kills entire process group (needed for pipe chains in watch mode)
-trap 'kill 0' SIGINT SIGTERM
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CONFIG="$SCRIPT_DIR/config.env"
@@ -320,7 +317,23 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Set up signal trap for watch mode (pipe chains need clean Ctrl+C handling)
+if [[ -n "$WATCH_MODE" ]]; then
+  cleanup() { kill -- -$$ 2>/dev/null; exit 130; }
+  trap cleanup SIGINT SIGTERM
+fi
+
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
+
+# Detect timeout command (GNU coreutils). On macOS: brew install coreutils
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="gtimeout"
+else
+  TIMEOUT_CMD=""
+  echo "ralph: warning: timeout command not found; worker timeout disabled (brew install coreutils)" >&2
+fi
 
 sanitize_id() {
   local v="$1"
@@ -431,6 +444,35 @@ tag = sys.argv[1]
 text = sys.stdin.read()
 matches = re.findall(rf"<{tag}>(.*?)</{tag}>", text, flags=re.S)
 print(matches[-1] if matches else "")
+PY
+}
+
+# Extract assistant text from stream-json log (for tag extraction in watch mode)
+extract_text_from_stream_json() {
+  local log_file="$1"
+  python3 - "$log_file" <<'PY'
+import json, sys
+path = sys.argv[1]
+out = []
+try:
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                ev = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if ev.get("type") != "assistant":
+                continue
+            msg = ev.get("message") or {}
+            for blk in (msg.get("content") or []):
+                if blk.get("type") == "text":
+                    out.append(blk.get("text", ""))
+except Exception:
+    pass
+print("\n".join(out))
 PY
 }
 
@@ -676,7 +718,13 @@ while (( iter <= MAX_ITERATIONS )); do
   fi
 
   export FLOW_RALPH="1"
-  claude_args=(-p --output-format text)
+  claude_args=(-p)
+  # Set output format based on watch mode (stream-json required for real-time output)
+  if [[ -n "$WATCH_MODE" ]]; then
+    claude_args+=(--output-format stream-json)
+  else
+    claude_args+=(--output-format text)
+  fi
 
   # Autonomous mode system prompt - critical for preventing drift
   claude_args+=(--append-system-prompt "AUTONOMOUS MODE ACTIVE (FLOW_RALPH=1). You are running unattended. CRITICAL RULES:
@@ -689,6 +737,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
 
   [[ -n "${MAX_TURNS:-}" ]] && claude_args+=(--max-turns "$MAX_TURNS")
   [[ "$YOLO" == "1" ]] && claude_args+=(--dangerously-skip-permissions)
+  [[ -n "${FLOW_RALPH_CLAUDE_PLUGIN_DIR:-}" ]] && claude_args+=(--plugin-dir "$FLOW_RALPH_CLAUDE_PLUGIN_DIR")
   [[ -n "${FLOW_RALPH_CLAUDE_MODEL:-}" ]] && claude_args+=(--model "$FLOW_RALPH_CLAUDE_MODEL")
   [[ -n "${FLOW_RALPH_CLAUDE_SESSION_ID:-}" ]] && claude_args+=(--session-id "$FLOW_RALPH_CLAUDE_SESSION_ID")
   [[ -n "${FLOW_RALPH_CLAUDE_PERMISSION_MODE:-}" ]] && claude_args+=(--permission-mode "$FLOW_RALPH_CLAUDE_PERMISSION_MODE")
@@ -707,39 +756,50 @@ Violations break automation and leave the user with incomplete work. Be precise,
   set +e
   if [[ "$WATCH_MODE" == "verbose" ]]; then
     # Full output: stream through filter with --verbose to show text/thinking
-    # Must use stream-json for real-time output (text mode buffers until done)
-    claude_args+=(--output-format stream-json)
     [[ ! " ${claude_args[*]} " =~ " --verbose " ]] && claude_args+=(--verbose)
     echo ""
-    timeout "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py" --verbose
+    if [[ -n "$TIMEOUT_CMD" ]]; then
+      "$TIMEOUT_CMD" "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py" --verbose
+    else
+      "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py" --verbose
+    fi
     claude_rc=${PIPESTATUS[0]}
     claude_out="$(cat "$iter_log")"
   elif [[ "$WATCH_MODE" == "tools" ]]; then
     # Filtered output: stream-json through watch-filter.py
-    claude_args+=(--output-format stream-json)
-    # Add --verbose only if not already set
+    # Add --verbose only if not already set (needed for tool visibility)
     [[ ! " ${claude_args[*]} " =~ " --verbose " ]] && claude_args+=(--verbose)
-    timeout "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py"
+    if [[ -n "$TIMEOUT_CMD" ]]; then
+      "$TIMEOUT_CMD" "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py"
+    else
+      "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py"
+    fi
     claude_rc=${PIPESTATUS[0]}
     # Log contains stream-json; verdict/promise extraction handled by fallback logic
     claude_out="$(cat "$iter_log")"
   else
     # Default: quiet mode
-    claude_out="$(timeout "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1)"
+    if [[ -n "$TIMEOUT_CMD" ]]; then
+      claude_out="$("$TIMEOUT_CMD" "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1)"
+    else
+      claude_out="$("$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1)"
+    fi
     claude_rc=$?
     printf '%s\n' "$claude_out" > "$iter_log"
   fi
   set -e
 
-  # Handle timeout (exit code 124)
-  if [[ "$claude_rc" -eq 124 ]]; then
+  # Handle timeout (exit code 124 from timeout command)
+  worker_timeout=0
+  if [[ -n "$TIMEOUT_CMD" && "$claude_rc" -eq 124 ]]; then
     echo "ralph: worker timed out after ${WORKER_TIMEOUT}s" >> "$iter_log"
     log "worker timeout after ${WORKER_TIMEOUT}s"
+    worker_timeout=1
   fi
 
   log "claude rc=$claude_rc log=$iter_log"
 
-  force_retry=0
+  force_retry=$worker_timeout
   plan_review_status=""
   task_status=""
   if [[ "$status" == "plan" && ( "$PLAN_REVIEW" == "rp" || "$PLAN_REVIEW" == "codex" ) ]]; then
@@ -761,8 +821,14 @@ Violations break automation and leave the user with incomplete work. Be precise,
   fi
 
   # Extract verdict/promise for progress log (not displayed in UI)
-  verdict="$(printf '%s' "$claude_out" | extract_tag verdict)"
-  promise="$(printf '%s' "$claude_out" | extract_tag promise)"
+  # In watch mode, parse stream-json to get assistant text; otherwise use raw output
+  if [[ -n "$WATCH_MODE" ]]; then
+    claude_text="$(extract_text_from_stream_json "$iter_log")"
+  else
+    claude_text="$claude_out"
+  fi
+  verdict="$(printf '%s' "$claude_text" | extract_tag verdict)"
+  promise="$(printf '%s' "$claude_text" | extract_tag promise)"
 
   # Fallback: derive verdict from flowctl status for logging
   if [[ -z "$verdict" && -n "$plan_review_status" ]]; then
@@ -787,16 +853,16 @@ Violations break automation and leave the user with incomplete work. Be precise,
   fi
   append_progress "$verdict" "$promise" "$plan_review_status" "$task_status"
 
-  if echo "$claude_out" | grep -q "<promise>COMPLETE</promise>"; then
+  if echo "$claude_text" | grep -q "<promise>COMPLETE</promise>"; then
     ui_complete
     echo "<promise>COMPLETE</promise>"
     exit 0
   fi
 
   exit_code=0
-  if echo "$claude_out" | grep -q "<promise>FAIL</promise>"; then
+  if echo "$claude_text" | grep -q "<promise>FAIL</promise>"; then
     exit_code=1
-  elif echo "$claude_out" | grep -q "<promise>RETRY</promise>"; then
+  elif echo "$claude_text" | grep -q "<promise>RETRY</promise>"; then
     exit_code=2
   elif [[ "$force_retry" == "1" ]]; then
     exit_code=2

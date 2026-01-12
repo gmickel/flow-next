@@ -2,13 +2,23 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
-## [Unreleased]
+## [flow-next 0.5.10] - 2026-01-12
 
 ### Added
-- `--watch` flag for Ralph to stream tool calls in real-time with TUI styling
-- `--watch verbose` flag to stream full Claude output
-- `--help` flag with usage information
-- `watch-filter.py` to parse stream-json and display tool icons
+- **Watch mode**: `--watch` flag streams tool calls in real-time with TUI styling (icons, colors)
+- **Watch verbose**: `--watch verbose` also streams model text responses
+- `watch-filter.py` for stream-json parsing (fail-open pattern, drains stdin on error)
+- **Standalone Codex review**: `flowctl codex impl-review --base main` works without task context
+- `--focus` flag for Codex reviews: `--focus "error handling, security"`
+- **Review feedback in receipts**: Codex plan/impl review receipts now include `review` field with full feedback (enables fix loops)
+- `FLOW_RALPH_CLAUDE_PLUGIN_DIR` env var for testing with local dev plugin
+
+### Changed
+- TIMEOUT_CMD detection for macOS (timeout/gtimeout/none with warning)
+- Stream-json text extraction for reliable tag parsing in watch mode
+- Conditional signal trap (only in watch mode)
+- Python 3.9 compatibility (Optional[str] not str | None)
+- Codex exec timeout increased 300s → 600s (matches RP timeout)
 
 ## [flow-next 0.5.8] - 2026-01-11
 
