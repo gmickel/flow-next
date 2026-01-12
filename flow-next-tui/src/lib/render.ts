@@ -1,7 +1,7 @@
 /**
  * ANSI-aware rendering utilities for terminal width/padding/truncation.
- * Re-exports truncateToWidth from pi-tui, implements others locally for
- * comprehensive ANSI handling.
+ * Re-exports truncateToWidth from pi-tui; implements visibleWidth, stripAnsi,
+ * and padToWidth locally for comprehensive ANSI code handling.
  */
 
 import {
@@ -18,30 +18,32 @@ export { truncateToWidth };
  * - CSI sequences: \x1b[ followed by params and final byte (covers SGR, cursor, etc)
  * - OSC sequences: \x1b] followed by data and terminator (BEL \x07 or ST \x1b\\)
  * - Simple escape sequences: \x1b followed by single char (ESC7, ESC8, ESCc, etc)
+ * - Charset designators: \x1b( or \x1b) followed by charset (B, 0, etc)
  */
 // eslint-disable-next-line no-control-regex
-const ANSI_REGEX = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[0-9A-Za-z@-_]/g;
+const ANSI_REGEX = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][A-Z0-9]|\x1b[0-9A-Za-z@-_]/g;
 
 /**
  * Strip ANSI escape codes from text.
  * Handles CSI sequences (colors, cursor, private mode), OSC sequences
- * (hyperlinks, titles), and simple escape sequences.
+ * (hyperlinks, titles), charset designators, and simple escape sequences.
  */
 export function stripAnsi(text: string): string {
 	return text.replace(ANSI_REGEX, "");
 }
 
 const RESET = "\x1b[0m";
-// Check if text contains any ANSI escape sequences
+// Detect if text contains SGR sequences (CSI ending with 'm') that could leak styles
 // eslint-disable-next-line no-control-regex
-const HAS_ANSI_REGEX = /\x1b/;
+const HAS_SGR_REGEX = /\x1b\[[0-9;]*m/;
 
 /**
  * Get the visible width of a string in terminal columns.
- * Strips ANSI codes before measuring. Handles wide characters and emoji.
+ * Strips all ANSI codes before measuring to ensure accurate width calculation.
+ * Handles wide characters and emoji via pi-tui's width calculation.
  */
 export function visibleWidth(text: string): number {
-	// Strip all ANSI codes first, then measure
+	// Strip all ANSI codes first to ensure accurate measurement
 	const stripped = stripAnsi(text);
 	return piTuiVisibleWidth(stripped);
 }
@@ -51,7 +53,8 @@ export function visibleWidth(text: string): number {
  * Adds spaces to reach target width, returns unchanged if already at/over width.
  * Negative width treated as 0.
  *
- * If text contains ANSI codes, adds reset before padding to prevent style leakage.
+ * If text contains SGR style codes (colors, bold, etc), adds reset before padding
+ * to prevent style leakage. Non-SGR ANSI codes (cursor, OSC) don't trigger reset.
  * Plain text without ANSI is padded directly without modification.
  */
 export function padToWidth(text: string, width: number): string {
@@ -61,8 +64,8 @@ export function padToWidth(text: string, width: number): string {
 		return text;
 	}
 	const padding = " ".repeat(targetWidth - currentWidth);
-	// Only add reset if text contains ANSI codes to prevent style leak
-	if (HAS_ANSI_REGEX.test(text)) {
+	// Only add reset if text contains SGR codes that could leak styles
+	if (HAS_SGR_REGEX.test(text)) {
 		return text + RESET + padding;
 	}
 	return text + padding;

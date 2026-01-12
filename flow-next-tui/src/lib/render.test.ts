@@ -52,6 +52,11 @@ describe("visibleWidth", () => {
 		expect(visibleWidth("\x1b7save\x1b8")).toBe(4);
 	});
 
+	test("text with charset designators", () => {
+		expect(visibleWidth("\x1b(Btext")).toBe(4);
+		expect(visibleWidth("\x1b)0graphics")).toBe(8);
+	});
+
 	test("edge cases", () => {
 		expect(visibleWidth("")).toBe(0);
 		expect(visibleWidth(`${RESET}`)).toBe(0);
@@ -108,6 +113,15 @@ describe("stripAnsi", () => {
 		expect(stripAnsi("\x1b7save\x1b8")).toBe("save");
 	});
 
+	test("removes charset designator sequences", () => {
+		// ESC ( B = US ASCII charset
+		expect(stripAnsi("\x1b(Btext")).toBe("text");
+		// ESC ) 0 = DEC Special Graphics
+		expect(stripAnsi("\x1b)0graphics")).toBe("graphics");
+		// Multiple charset sequences
+		expect(stripAnsi("\x1b(B\x1b)0mixed")).toBe("mixed");
+	});
+
 	test("edge cases", () => {
 		expect(stripAnsi("")).toBe("");
 		expect(stripAnsi(`${RESET}`)).toBe("");
@@ -151,11 +165,22 @@ describe("padToWidth", () => {
 		expect(padded).toContain(RESET);
 	});
 
-	test("text with cursor codes gets reset before padding", () => {
+	test("text with cursor codes does not get reset (no SGR)", () => {
+		// Cursor codes don't leak styles, so no reset needed
 		const withCursor = "\x1b[2Khi";
 		const padded = padToWidth(withCursor, 5);
 		expect(visibleWidth(padded)).toBe(5);
-		expect(padded).toContain(RESET);
+		// Should NOT contain reset since no SGR codes
+		expect(padded).toBe("\x1b[2Khi   ");
+	});
+
+	test("text with OSC hyperlink does not get reset (no SGR)", () => {
+		// OSC 8 hyperlinks don't leak styles
+		const link = "\x1b]8;;url\x07hi\x1b]8;;\x07";
+		const padded = padToWidth(link, 5);
+		expect(visibleWidth(padded)).toBe(5);
+		// Should NOT contain extra reset
+		expect(padded).toBe(link + "   ");
 	});
 
 	test("edge cases", () => {
