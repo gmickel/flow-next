@@ -32,23 +32,27 @@ export interface ReceiptStatus {
 const DEFAULT_RUNS_DIR = 'scripts/ralph/runs';
 
 /**
- * Cached repo root (resolved once per process)
+ * Cached repo roots by starting directory
  */
-let cachedRepoRoot: string | null = null;
+const repoRootCache = new Map<string, string>();
 
 /**
- * Find repo root by walking up from cwd looking for .git or .flow directory
+ * Find repo root by walking up from startDir looking for .git or .flow directory
  */
 async function findRepoRoot(startDir?: string): Promise<string> {
-  if (cachedRepoRoot) return cachedRepoRoot;
+  const start = startDir ?? process.cwd();
 
-  let dir = startDir ?? process.cwd();
+  // Check cache for this startDir
+  const cached = repoRootCache.get(start);
+  if (cached) return cached;
+
+  let dir = start;
   while (dir !== dirname(dir)) {
     // Check for .git directory or file (worktrees)
     const gitPath = join(dir, '.git');
     const gitFile = Bun.file(gitPath);
     if (await gitFile.exists()) {
-      cachedRepoRoot = dir;
+      repoRootCache.set(start, dir);
       return dir;
     }
 
@@ -57,7 +61,7 @@ async function findRepoRoot(startDir?: string): Promise<string> {
     try {
       const s = await stat(flowPath);
       if (s.isDirectory()) {
-        cachedRepoRoot = dir;
+        repoRootCache.set(start, dir);
         return dir;
       }
     } catch {
@@ -67,16 +71,16 @@ async function findRepoRoot(startDir?: string): Promise<string> {
     dir = dirname(dir);
   }
 
-  // Fall back to cwd if no markers found
-  cachedRepoRoot = startDir ?? process.cwd();
-  return cachedRepoRoot;
+  // Fall back to start if no markers found
+  repoRootCache.set(start, start);
+  return start;
 }
 
 /**
  * Clear cached repo root (for testing)
  */
 export function clearRepoRootCache(): void {
-  cachedRepoRoot = null;
+  repoRootCache.clear();
 }
 
 /**
@@ -390,7 +394,8 @@ export interface ValidateRunResult {
 }
 
 /**
- * Validate a run ID and return the run if found
+ * Validate a run ID and return the run if found.
+ * Fast-paths by checking if run directory exists before scanning all runs.
  * @throws Error with helpful message if run not found
  * @returns Run with any warnings (e.g., corrupt run)
  */
@@ -398,21 +403,52 @@ export async function validateRun(
   runId: string,
   runsDir?: string
 ): Promise<ValidateRunResult> {
-  const runs = await discoverRuns(runsDir);
-  const run = runs.find((r) => r.id === runId);
+  const repoRoot = await findRepoRoot();
+  const dir = runsDir ?? join(repoRoot, DEFAULT_RUNS_DIR);
+  const runPath = join(dir, runId);
 
-  if (!run) {
-    const available = runs.map((r) => r.id).join(', ') || 'none';
-    throw new Error(`Run '${runId}' not found. Available: ${available}`);
+  // Fast path: check if run directory exists
+  if (await dirExists(runPath)) {
+    const warnings: string[] = [];
+    const progressPath = join(runPath, 'progress.txt');
+
+    if (!(await fileExists(progressPath))) {
+      warnings.push(`Run '${runId}' may be corrupt (missing progress.txt)`);
+    }
+
+    // Get run details for this specific run
+    const [active, iteration, epic, startedAt] = await Promise.all([
+      isRunActive(runPath),
+      getIterationCount(runPath),
+      getRunEpic(runPath),
+      getRunStartTime(runPath),
+    ]);
+
+    return {
+      run: { id: runId, path: runPath, epic, active, iteration, startedAt },
+      warnings,
+    };
   }
 
-  const warnings: string[] = [];
-
-  // Check if corrupt (missing progress.txt)
-  const progressPath = join(run.path, 'progress.txt');
-  if (!(await fileExists(progressPath))) {
-    warnings.push(`Run '${runId}' may be corrupt (missing progress.txt)`);
+  // Run not found - enumerate available runs (cheap readdir only)
+  let available = 'none';
+  try {
+    const entries = await readdir(dir);
+    const runDirs = await Promise.all(
+      entries.map(async (entry) => {
+        const entryPath = join(dir, entry);
+        return (await dirExists(entryPath)) ? entry : null;
+      })
+    );
+    const validRuns = runDirs.filter((e): e is string => e !== null);
+    if (validRuns.length > 0) {
+      // Sort for consistent output
+      validRuns.sort((a, b) => b.localeCompare(a));
+      available = validRuns.join(', ');
+    }
+  } catch {
+    // Directory doesn't exist or unreadable
   }
 
-  return { run, warnings };
+  throw new Error(`Run '${runId}' not found. Available: ${available}`);
 }
