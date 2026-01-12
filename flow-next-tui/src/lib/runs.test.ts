@@ -247,6 +247,15 @@ describe('runs', () => {
       expect(status.plan).toBe(true);
       expect(status.impl).toBe(true);
     });
+
+    test('rejects invalid taskId with path traversal', async () => {
+      const runDir = join(tempDir, '2024-01-15-001');
+      await mkdir(runDir);
+
+      expect(getReceiptStatus(runDir, '../../../etc/passwd')).rejects.toThrow('Invalid task ID');
+      expect(getReceiptStatus(runDir, 'fn-1/../../etc')).rejects.toThrow('Invalid task ID');
+      expect(getReceiptStatus(runDir, 'invalid')).rejects.toThrow('Invalid task ID');
+    });
   });
 
   describe('getBlockReason', () => {
@@ -279,6 +288,12 @@ describe('runs', () => {
 
       const reason = await getBlockReason('fn-1.1', runDir);
       expect(reason).toBe('Run-specific block');
+    });
+
+    test('rejects invalid taskId with path traversal', async () => {
+      expect(getBlockReason('../../../etc/passwd')).rejects.toThrow('Invalid task ID');
+      expect(getBlockReason('fn-1/../etc')).rejects.toThrow('Invalid task ID');
+      expect(getBlockReason('not-a-task')).rejects.toThrow('Invalid task ID');
     });
   });
 

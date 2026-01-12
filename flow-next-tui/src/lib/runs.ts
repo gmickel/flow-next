@@ -32,6 +32,21 @@ export interface ReceiptStatus {
 const DEFAULT_RUNS_DIR = 'scripts/ralph/runs';
 
 /**
+ * Regex for valid task IDs (fn-N or fn-N.M)
+ */
+const TASK_ID_PATTERN = /^fn-\d+(?:\.\d+)?$/;
+
+/**
+ * Validate task ID to prevent path traversal
+ * @throws Error if taskId is invalid
+ */
+function validateTaskId(taskId: string): void {
+  if (!TASK_ID_PATTERN.test(taskId)) {
+    throw new Error(`Invalid task ID: ${taskId}. Expected format: fn-N or fn-N.M`);
+  }
+}
+
+/**
  * Check if a directory exists
  */
 async function dirExists(path: string): Promise<boolean> {
@@ -76,13 +91,17 @@ export async function isRunActive(runPath: string): Promise<boolean> {
     return true;
   }
 
-  const content = await file.text();
-  // Check for COMPLETE marker
-  if (content.includes('promise=COMPLETE') || content.includes('<promise>COMPLETE</promise>')) {
-    return false;
+  try {
+    const content = await file.text();
+    // Check for COMPLETE marker
+    if (content.includes('promise=COMPLETE') || content.includes('<promise>COMPLETE</promise>')) {
+      return false;
+    }
+    return true;
+  } catch {
+    // Unreadable/corrupt file = assume active (safer default)
+    return true;
   }
-
-  return true;
 }
 
 /**
@@ -180,26 +199,26 @@ export async function discoverRuns(runsDir?: string): Promise<Run[]> {
   );
   const runDirs = entryChecks.filter((e) => e.isDir).map((e) => e.entry);
 
-  // Build Run objects
-  const runs: Run[] = [];
-  for (const runId of runDirs) {
-    const runPath = join(dir, runId);
-    const [active, iteration, epic, startedAt] = await Promise.all([
-      isRunActive(runPath),
-      getIterationCount(runPath),
-      getRunEpic(runPath),
-      getRunStartTime(runPath),
-    ]);
-
-    runs.push({
-      id: runId,
-      path: runPath,
-      epic,
-      active,
-      iteration,
-      startedAt,
-    });
-  }
+  // Build Run objects in parallel
+  const runs = await Promise.all(
+    runDirs.map(async (runId) => {
+      const runPath = join(dir, runId);
+      const [active, iteration, epic, startedAt] = await Promise.all([
+        isRunActive(runPath),
+        getIterationCount(runPath),
+        getRunEpic(runPath),
+        getRunStartTime(runPath),
+      ]);
+      return {
+        id: runId,
+        path: runPath,
+        epic,
+        active,
+        iteration,
+        startedAt,
+      };
+    })
+  );
 
   // Sort by run ID (lexicographic descending = newest first)
   runs.sort((a, b) => compareRunIds(a.id, b.id));
@@ -252,14 +271,15 @@ export async function getRunDetails(runPath: string): Promise<RunDetails> {
 /**
  * Get receipt status for a task
  * Receipts are in runs/<id>/receipts/ as plan-<task-id>.json and impl-<task-id>.json
+ * @throws Error if taskId is invalid (path traversal protection)
  */
 export async function getReceiptStatus(
   runPath: string,
   taskId: string
 ): Promise<ReceiptStatus> {
-  const receiptsDir = join(runPath, 'receipts');
+  validateTaskId(taskId);
 
-  // Normalize task ID for filename (fn-1.2 -> fn-1.2)
+  const receiptsDir = join(runPath, 'receipts');
   const planPath = join(receiptsDir, `plan-${taskId}.json`);
   const implPath = join(receiptsDir, `impl-${taskId}.json`);
 
@@ -277,11 +297,14 @@ export async function getReceiptStatus(
 /**
  * Get block reason if task is blocked
  * Block files: .flow/blocks/block-<task-id>.md or runs/<id>/block-<task-id>.md
+ * @throws Error if taskId is invalid (path traversal protection)
  */
 export async function getBlockReason(
   taskId: string,
   runPath?: string
 ): Promise<string | null> {
+  validateTaskId(taskId);
+
   // Check .flow/blocks first
   const flowBlockPath = join(process.cwd(), '.flow', 'blocks', `block-${taskId}.md`);
   const flowBlockFile = Bun.file(flowBlockPath);
