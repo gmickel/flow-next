@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type {
-	Epic,
+	EpicShowResponse,
 	EpicTask,
 	ReadyResponse,
-	Task,
 	TaskEvidence,
 	TaskListItem,
+	TaskShowResponse,
 	TaskStatus,
 	TaskSummary,
 	TasksResponse,
@@ -21,16 +21,28 @@ function isTaskStatus(s: string): s is TaskStatus {
 	return ["todo", "in_progress", "done", "blocked"].includes(s);
 }
 
+// Type guard for plan_review_status
+function isPlanReviewStatus(
+	s: string | null,
+): s is "ship" | "needs_work" | "major_rethink" | "unknown" {
+	return s === null || ["ship", "needs_work", "major_rethink", "unknown"].includes(s);
+}
+
 describe("types match flowctl JSON output", () => {
-	test("Epic type matches epic.json fixture", () => {
-		// Validate fixture has expected shape
+	test("EpicShowResponse type matches epic.json fixture", () => {
+		// Validate fixture has expected shape (flowctl show response)
 		expect(epicFixture.success).toBe(true);
 		expect(typeof epicFixture.id).toBe("string");
 		expect(typeof epicFixture.title).toBe("string");
-		expect(epicFixture.status).toBe("open");
-		expect(typeof epicFixture.branch_name).toBe("string");
+		expect(epicFixture.status === "open" || epicFixture.status === "done").toBe(true);
+		// branch_name can be string or null
+		expect(
+			epicFixture.branch_name === null ||
+				typeof epicFixture.branch_name === "string",
+		).toBe(true);
 		expect(Array.isArray(epicFixture.tasks)).toBe(true);
 		expect(epicFixture.tasks.length).toBeGreaterThan(0);
+		expect(isPlanReviewStatus(epicFixture.plan_review_status)).toBe(true);
 
 		// Validate task structure within epic
 		const firstTask = epicFixture.tasks[0]!;
@@ -38,12 +50,15 @@ describe("types match flowctl JSON output", () => {
 		expect(firstTask.status).toBe("done");
 		expect(Array.isArray(firstTask.depends_on)).toBe(true);
 
-		// Validate status is valid
-		expect(epicFixture.status === "open" || epicFixture.status === "done").toBe(true);
-
-		// Type construction (compile-time check)
+		// Type construction using EpicShowResponse (includes success)
 		const epicStatus = epicFixture.status as "open" | "done";
-		const _epic: Epic = {
+		const planReviewStatus = epicFixture.plan_review_status as
+			| "ship"
+			| "needs_work"
+			| "major_rethink"
+			| "unknown";
+		const _epic: EpicShowResponse = {
+			success: epicFixture.success,
 			id: epicFixture.id,
 			title: epicFixture.title,
 			status: epicStatus,
@@ -51,11 +66,7 @@ describe("types match flowctl JSON output", () => {
 			spec_path: epicFixture.spec_path,
 			next_task: epicFixture.next_task,
 			depends_on_epics: epicFixture.depends_on_epics,
-			plan_review_status: epicFixture.plan_review_status as
-				| "ship"
-				| "needs_work"
-				| "major_rethink"
-				| null,
+			plan_review_status: planReviewStatus,
 			plan_reviewed_at: epicFixture.plan_reviewed_at,
 			created_at: epicFixture.created_at,
 			updated_at: epicFixture.updated_at,
@@ -71,10 +82,11 @@ describe("types match flowctl JSON output", () => {
 			}),
 		};
 		expect(_epic.id).toBe("fn-9");
+		expect(_epic.success).toBe(true);
 	});
 
-	test("Task type matches task.json fixture", () => {
-		// Validate fixture has expected shape
+	test("TaskShowResponse type matches task.json fixture", () => {
+		// Validate fixture has expected shape (flowctl show response)
 		expect(taskFixture.success).toBe(true);
 		expect(taskFixture.id).toBe("fn-9.1");
 		expect(taskFixture.epic).toBe("fn-9");
@@ -93,13 +105,14 @@ describe("types match flowctl JSON output", () => {
 			"24cde68050ac454581829a297fcbf83c0d8005f4",
 		);
 
-		// Type construction (compile-time check)
+		// Type construction using TaskShowResponse (includes success)
 		const evidence: TaskEvidence = {
 			commits: taskFixture.evidence.commits,
 			tests: taskFixture.evidence.tests,
 			prs: taskFixture.evidence.prs,
 		};
-		const _task: Task = {
+		const _task: TaskShowResponse = {
+			success: taskFixture.success,
 			id: taskFixture.id,
 			epic: taskFixture.epic,
 			title: taskFixture.title,
@@ -115,6 +128,7 @@ describe("types match flowctl JSON output", () => {
 			evidence,
 		};
 		expect(_task.status).toBe("done");
+		expect(_task.success).toBe(true);
 	});
 
 	test("TasksResponse type matches tasks.json fixture", () => {

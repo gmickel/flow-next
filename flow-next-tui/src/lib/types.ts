@@ -88,15 +88,31 @@ export interface Epic {
 	id: string; // fn-N
 	title: string;
 	status: EpicStatus;
-	branch_name: string;
+	branch_name: string | null; // can be null if not set
 	spec_path: string;
 	next_task: number;
 	depends_on_epics: string[];
-	plan_review_status: "ship" | "needs_work" | "major_rethink" | null;
+	plan_review_status: "ship" | "needs_work" | "major_rethink" | "unknown"; // flowctl default: "unknown"
 	plan_reviewed_at: string | null; // ISO timestamp
 	created_at: string; // ISO timestamp
 	updated_at: string; // ISO timestamp
 	tasks: EpicTask[];
+}
+
+/**
+ * Response from flowctl show <epic-id> --json
+ * Wraps Epic with success boolean
+ */
+export interface EpicShowResponse extends Epic {
+	success: boolean;
+}
+
+/**
+ * Response from flowctl show <task-id> --json
+ * Wraps Task with success boolean
+ */
+export interface TaskShowResponse extends Task {
+	success: boolean;
 }
 
 /**
