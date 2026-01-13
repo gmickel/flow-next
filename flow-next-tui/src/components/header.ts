@@ -146,13 +146,18 @@ export class Header implements Component {
       }
       const iconW = visibleWidth(icon);
       const brandW = Math.max(0, availableForLeft - iconW - 1);
+      const coloredIcon = truncateToWidth(colorFn(icon), iconW, '');
+      const coloredBrand = truncateToWidth(
+        this.theme.accent('flow-next'),
+        brandW,
+        '…'
+      );
+      // Only include icon↔brand space if brand has content
       const truncatedColoredLeft =
-        truncateToWidth(colorFn(icon), iconW, '') +
-        ' ' +
-        truncateToWidth(this.theme.accent('flow-next'), brandW, '…');
+        brandW > 0 ? `${coloredIcon} ${coloredBrand}` : coloredIcon;
       // Hard clamp the narrow path too
       return truncateToWidth(
-        truncatedColoredLeft + ' ' + this.theme.dim(timer),
+        `${truncatedColoredLeft} ${this.theme.dim(timer)}`,
         width,
         ''
       );

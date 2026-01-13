@@ -336,7 +336,7 @@ describe('Header', () => {
     }
   });
 
-  test('width=7 (timerWidth+2) edge case respects constraint', () => {
+  test('width=7 (timerWidth+2) edge case respects constraint and shows full timer', () => {
     // Timer is 5 chars (MM:SS), so width=7 is timerWidth+2
     // This tests the minWidth path boundary
     const header = new Header(
@@ -353,6 +353,8 @@ describe('Header', () => {
     for (const line of lines) {
       expect(visibleWidth(line)).toBeLessThanOrEqual(width);
     }
+    // Timer should be fully intact when width > timerWidth
+    expect(stripAnsi(lines[0]!)).toContain('02:05');
   });
 
   test('width=6 (timerWidth+1) boundary respects constraint', () => {
