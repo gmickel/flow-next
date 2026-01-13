@@ -183,6 +183,31 @@ describe('HelpOverlay', () => {
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
       }
     });
+
+    test('handles width < 4 without throwing', () => {
+      const overlay = new HelpOverlay(defaultProps());
+
+      // Width 3: should return blank lines, not throw
+      const lines3 = overlay.render(3);
+      expect(lines3.length).toBeGreaterThan(0);
+      for (const line of lines3) {
+        expect(visibleWidth(line)).toBeLessThanOrEqual(3);
+      }
+
+      // Width 0: edge case
+      const lines0 = overlay.render(0);
+      expect(lines0.length).toBeGreaterThan(0);
+      for (const line of lines0) {
+        expect(visibleWidth(line)).toBe(0);
+      }
+
+      // Width < 4 with height
+      const linesH = overlay.render(2, 10);
+      expect(linesH).toHaveLength(10);
+      for (const line of linesH) {
+        expect(visibleWidth(line)).toBe(2);
+      }
+    });
   });
 
   describe('input handling', () => {

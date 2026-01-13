@@ -78,7 +78,18 @@ export class HelpOverlay implements Component {
       return [];
     }
 
-    // Calculate overlay dimensions, clamped to available width
+    // Guard against very small widths that would cause repeat() to throw
+    // or produce invalid layout (box needs at least 4 cols: 2 border + 2 padding)
+    if (width < 4) {
+      const safeWidth = Math.max(0, width);
+      const blankLine = ' '.repeat(safeWidth);
+      if (height !== undefined) {
+        return Array.from({ length: height }, () => blankLine);
+      }
+      return [padToWidth('', safeWidth)];
+    }
+
+    // Calculate overlay dimensions, clamped to fit within available width
     const overlayWidth = Math.min(
       MAX_OVERLAY_WIDTH,
       Math.max(MIN_OVERLAY_WIDTH, width - 4),
