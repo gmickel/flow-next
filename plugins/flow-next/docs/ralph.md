@@ -59,6 +59,18 @@ scripts/ralph/ralph.sh --watch           # Stream tool calls
 scripts/ralph/ralph.sh --watch verbose   # Also stream model responses
 ```
 
+### Step 2.5: Monitor with TUI (Optional)
+
+```bash
+# Install TUI (requires Bun)
+bun add -g @gmickel/flow-next-tui
+
+# Start TUI (auto-selects latest run)
+flow-next-tui
+```
+
+Real-time visibility into task progress, streaming logs, and run state. See [flow-next-tui README](../../../flow-next-tui/README.md).
+
 ### Step 3: Uninstall
 
 ```bash

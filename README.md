@@ -247,6 +247,8 @@ Most agents gate by tests alone. Ralph adds production-grade quality gates:
 
 📖 **[Ralph deep dive](plugins/flow-next/docs/ralph.md)**
 
+🖥️ **[Ralph TUI](flow-next-tui/)** — Terminal UI for monitoring runs in real-time (`bun add -g @gmickel/flow-next-tui`)
+
 ### Why Flow-Next Ralph vs Anthropic's ralph-wiggum?
 
 Anthropic's official ralph-wiggum plugin uses a Stop hook to keep Claude in the same session. Flow-Next inverts this architecture for production-grade reliability.

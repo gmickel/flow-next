@@ -29,9 +29,19 @@ Create README.md for flow-next-tui and update existing docs to link to it.
 - [ ] Root README.md mentions TUI in Ralph section
 
 ## Done summary
-TBD
+- Created flow-next-tui/README.md with installation, CLI usage, keyboard shortcuts, layout diagram, tool icons, architecture, troubleshooting
+- Updated plugins/flow-next/docs/ralph.md with TUI quickstart section
+- Updated plugins/flow-next/README.md with TUI link
+- Updated root README.md with TUI link
 
+Why:
+- Provide comprehensive documentation for TUI users
+- Link TUI from Ralph docs for discoverability
+
+Verification:
+- bun test (379 tests pass)
+- All acceptance criteria from spec met
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 7b6b4c01005343565440bea14ea99fcc28400f75
+- Tests: bun test
 - PRs:

@@ -257,6 +257,8 @@ Ralph writes run artifacts under `scripts/ralph/runs/`, including review receipt
 
 📖 **[Ralph deep dive](docs/ralph.md)**
 
+🖥️ **[Ralph TUI](../../flow-next-tui/)** — Terminal UI for monitoring runs in real-time (`bun add -g @gmickel/flow-next-tui`)
+
 ### How Ralph Differs from Other Autonomous Agents
 
 Autonomous coding agents are taking the industry by storm—loop until done, commit, repeat. Most solutions gate progress by tests and linting alone. Ralph goes further.
