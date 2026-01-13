@@ -14,8 +14,8 @@ export type LogEntryType = 'tool' | 'response' | 'error';
  * Task as returned by flowctl show/tasks commands
  */
 export interface Task {
-  id: string; // fn-N.M
-  epic: string; // fn-N
+  id: string; // fn-N.M or fn-N-xxx.M
+  epic: string; // fn-N or fn-N-xxx
   title: string;
   status: TaskStatus;
   depends_on: string[];
@@ -87,7 +87,7 @@ export interface TasksResponse {
  * (minimal fields for listing)
  */
 export interface EpicListItem {
-  id: string; // fn-N
+  id: string; // fn-N or fn-N-xxx
   title: string;
   status: EpicStatus;
   tasks: number; // count of tasks
@@ -107,7 +107,7 @@ export interface EpicsResponse {
  * Epic as returned by flowctl show command
  */
 export interface Epic {
-  id: string; // fn-N
+  id: string; // fn-N or fn-N-xxx
   title: string;
   status: EpicStatus;
   branch_name: string | null; // can be null if not set

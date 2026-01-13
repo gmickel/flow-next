@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-12.md",
-  "status": "open",
+  "status": "done",
   "title": "Collision-resistant epic IDs (fn-N-xxx format)",
-  "updated_at": "2026-01-13T16:28:07.249193Z"
+  "updated_at": "2026-01-13T18:32:43.732721Z"
 }

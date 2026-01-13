@@ -1567,7 +1567,7 @@ def cmd_task_create(args: argparse.Namespace) -> None:
 
     if not is_epic_id(args.epic):
         error_exit(
-            f"Invalid epic ID: {args.epic}. Expected format: fn-N", use_json=args.json
+            f"Invalid epic ID: {args.epic}. Expected format: fn-N or fn-N-xxx", use_json=args.json
         )
 
     flow_dir = get_flow_dir()
@@ -1599,7 +1599,7 @@ def cmd_task_create(args: argparse.Namespace) -> None:
         for dep in deps:
             if not is_task_id(dep):
                 error_exit(
-                    f"Invalid dependency ID: {dep}. Expected format: fn-N.M",
+                    f"Invalid dependency ID: {dep}. Expected format: fn-N.M or fn-N-xxx.M",
                     use_json=args.json,
                 )
             if epic_id_from_task(dep) != args.epic:
@@ -1663,12 +1663,12 @@ def cmd_dep_add(args: argparse.Namespace) -> None:
 
     if not is_task_id(args.task):
         error_exit(
-            f"Invalid task ID: {args.task}. Expected format: fn-N.M", use_json=args.json
+            f"Invalid task ID: {args.task}. Expected format: fn-N.M or fn-N-xxx.M", use_json=args.json
         )
 
     if not is_task_id(args.depends_on):
         error_exit(
-            f"Invalid dependency ID: {args.depends_on}. Expected format: fn-N.M",
+            f"Invalid dependency ID: {args.depends_on}. Expected format: fn-N.M or fn-N-xxx.M",
             use_json=args.json,
         )
 
@@ -1781,7 +1781,7 @@ def cmd_show(args: argparse.Namespace) -> None:
 
     else:
         error_exit(
-            f"Invalid ID: {args.id}. Expected format: fn-N (epic) or fn-N.M (task)",
+            f"Invalid ID: {args.id}. Expected format: fn-N[-xxx] (epic) or fn-N[-xxx].M (task)",
             use_json=args.json,
         )
 
@@ -2034,7 +2034,7 @@ def cmd_cat(args: argparse.Namespace) -> None:
         spec_path = flow_dir / TASKS_DIR / f"{args.id}.md"
     else:
         error_exit(
-            f"Invalid ID: {args.id}. Expected format: fn-N (epic) or fn-N.M (task)",
+            f"Invalid ID: {args.id}. Expected format: fn-N[-xxx] (epic) or fn-N[-xxx].M (task)",
             use_json=False,
         )
         return
@@ -2052,7 +2052,7 @@ def cmd_epic_set_plan(args: argparse.Namespace) -> None:
 
     if not is_epic_id(args.id):
         error_exit(
-            f"Invalid epic ID: {args.id}. Expected format: fn-N", use_json=args.json
+            f"Invalid epic ID: {args.id}. Expected format: fn-N or fn-N-xxx", use_json=args.json
         )
 
     flow_dir = get_flow_dir()
@@ -2095,7 +2095,7 @@ def cmd_epic_set_plan_review_status(args: argparse.Namespace) -> None:
 
     if not is_epic_id(args.id):
         error_exit(
-            f"Invalid epic ID: {args.id}. Expected format: fn-N", use_json=args.json
+            f"Invalid epic ID: {args.id}. Expected format: fn-N or fn-N-xxx", use_json=args.json
         )
 
     flow_dir = get_flow_dir()
@@ -2134,7 +2134,7 @@ def cmd_epic_set_branch(args: argparse.Namespace) -> None:
 
     if not is_epic_id(args.id):
         error_exit(
-            f"Invalid epic ID: {args.id}. Expected format: fn-N", use_json=args.json
+            f"Invalid epic ID: {args.id}. Expected format: fn-N or fn-N-xxx", use_json=args.json
         )
 
     flow_dir = get_flow_dir()
@@ -2183,7 +2183,7 @@ def _task_set_section(
 
     if not is_task_id(task_id):
         error_exit(
-            f"Invalid task ID: {task_id}. Expected format: fn-N.M", use_json=use_json
+            f"Invalid task ID: {task_id}. Expected format: fn-N.M or fn-N-xxx.M", use_json=use_json
         )
 
     flow_dir = get_flow_dir()
@@ -2237,7 +2237,7 @@ def cmd_ready(args: argparse.Namespace) -> None:
 
     if not is_epic_id(args.epic):
         error_exit(
-            f"Invalid epic ID: {args.epic}. Expected format: fn-N", use_json=args.json
+            f"Invalid epic ID: {args.epic}. Expected format: fn-N or fn-N-xxx", use_json=args.json
         )
 
     flow_dir = get_flow_dir()
@@ -2538,7 +2538,7 @@ def cmd_start(args: argparse.Namespace) -> None:
 
     if not is_task_id(args.id):
         error_exit(
-            f"Invalid task ID: {args.id}. Expected format: fn-N.M", use_json=args.json
+            f"Invalid task ID: {args.id}. Expected format: fn-N.M or fn-N-xxx.M", use_json=args.json
         )
 
     flow_dir = get_flow_dir()
@@ -2638,7 +2638,7 @@ def cmd_done(args: argparse.Namespace) -> None:
 
     if not is_task_id(args.id):
         error_exit(
-            f"Invalid task ID: {args.id}. Expected format: fn-N.M", use_json=args.json
+            f"Invalid task ID: {args.id}. Expected format: fn-N.M or fn-N-xxx.M", use_json=args.json
         )
 
     flow_dir = get_flow_dir()
@@ -2764,7 +2764,7 @@ def cmd_block(args: argparse.Namespace) -> None:
 
     if not is_task_id(args.id):
         error_exit(
-            f"Invalid task ID: {args.id}. Expected format: fn-N.M", use_json=args.json
+            f"Invalid task ID: {args.id}. Expected format: fn-N.M or fn-N-xxx.M", use_json=args.json
         )
 
     flow_dir = get_flow_dir()
@@ -2823,7 +2823,7 @@ def cmd_epic_close(args: argparse.Namespace) -> None:
 
     if not is_epic_id(args.id):
         error_exit(
-            f"Invalid epic ID: {args.id}. Expected format: fn-N", use_json=args.json
+            f"Invalid epic ID: {args.id}. Expected format: fn-N or fn-N-xxx", use_json=args.json
         )
 
     flow_dir = get_flow_dir()
@@ -3640,7 +3640,7 @@ def cmd_validate(args: argparse.Namespace) -> None:
     # Single epic validation
     if not is_epic_id(args.epic):
         error_exit(
-            f"Invalid epic ID: {args.epic}. Expected format: fn-N", use_json=args.json
+            f"Invalid epic ID: {args.epic}. Expected format: fn-N or fn-N-xxx", use_json=args.json
         )
 
     errors, warnings, task_count = validate_epic(
