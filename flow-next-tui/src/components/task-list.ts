@@ -175,6 +175,14 @@ export class TaskList implements Component {
     }
 
     const lines: string[] = [];
+    // Safety helper: truncate any line that exceeds width (handles edge cases)
+    const safePush = (line: string): void => {
+      if (visibleWidth(line) > width) {
+        lines.push(truncateToWidth(line, width, '…'));
+      } else {
+        lines.push(line);
+      }
+    };
 
     // Calculate visible range with scrolling
     const startIndex = Math.max(
@@ -205,7 +213,7 @@ export class TaskList implements Component {
       // Minimum: just icon (edge case: width <= iconWidth)
       if (width <= iconWidth) {
         const truncatedIcon = truncateToWidth(icon, width, '');
-        lines.push(isSelected ? this.applySelectedBg(truncatedIcon, width) : truncatedIcon);
+        safePush(isSelected ? this.applySelectedBg(truncatedIcon, width) : truncatedIcon);
         continue;
       }
 
@@ -213,7 +221,7 @@ export class TaskList implements Component {
       const prefixWidth = iconWidth + 1;
       if (width <= prefixWidth) {
         const line = icon;
-        lines.push(isSelected ? this.applySelectedBg(line, width) : line);
+        safePush(isSelected ? this.applySelectedBg(line, width) : line);
         continue;
       }
 
@@ -289,7 +297,7 @@ export class TaskList implements Component {
           padding = ' '.repeat(paddingNeeded);
         }
 
-        lines.push(`${coloredIcon}${coloredId}${coloredTitle}${coloredDep}${padding}`);
+        safePush(`${coloredIcon}${coloredId}${coloredTitle}${coloredDep}${padding}`);
       } else {
         // For unselected rows: use per-segment colors
         const coloredIcon = colorFn(icon);
@@ -297,7 +305,7 @@ export class TaskList implements Component {
         const titleStr = truncatedTitle ? ` ${truncatedTitle}` : '';
         // Dep indicator uses same color as status (blocked => warning)
         const coloredDep = actualDepStr ? colorFn(actualDepStr) : '';
-        lines.push(`${coloredIcon}${dimId}${titleStr}${coloredDep}`);
+        safePush(`${coloredIcon}${dimId}${titleStr}${coloredDep}`);
       }
     }
 
@@ -305,7 +313,7 @@ export class TaskList implements Component {
     if (this.tasks.length > this.maxVisible) {
       const scrollText = `  (${this.selectedIndex + 1}/${this.tasks.length})`;
       const truncatedScroll = truncateToWidth(scrollText, width, '…');
-      lines.push(this.theme.dim(truncatedScroll));
+      safePush(this.theme.dim(truncatedScroll));
     }
 
     return lines;

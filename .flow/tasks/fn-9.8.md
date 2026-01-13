@@ -15,7 +15,7 @@ due to different rendering requirements: status icons, blocked indicators, etc.)
 - Status icons: ● done, ◉ in_progress, ○ todo, ⊘ blocked
 - Full task ID (fn-N.M) + truncated title
 - Blocked tasks (status: blocked) show dependency indicator: `→ 1.3`
-- Selected row background highlight (uses selectList.selectedText)
+- Selected row background highlight (manual bg+fg per segment to preserve status colors)
 - j/k and arrow navigation with wrap-around
 - Scroll indicator when tasks exceed maxVisible
 
@@ -69,7 +69,7 @@ Use theme colors for status icons.
 - Matches pi-tui Component interface for integration
 - ASCII mode (--no-emoji) support included
 
-- 33 tests passing
+- 44 tests passing
 - Lint clean
 ## Evidence
 - Commits: 83ac1bc75db3c7e8d5979793f1d4be7e1652dde7
