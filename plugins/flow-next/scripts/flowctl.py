@@ -699,6 +699,7 @@ def run_codex_exec(
             pass
 
     # New session with model + high reasoning effort
+    # --skip-git-repo-check: safe with read-only sandbox, allows reviews from /tmp etc (GH-33)
     cmd = [
         codex,
         "exec",
@@ -708,6 +709,7 @@ def run_codex_exec(
         'model_reasoning_effort="high"',
         "--sandbox",
         sandbox,
+        "--skip-git-repo-check",
         "--json",
         prompt,
     ]
