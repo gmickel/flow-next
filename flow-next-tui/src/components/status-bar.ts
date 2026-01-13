@@ -76,7 +76,8 @@ export class StatusBar implements Component {
     }
 
     // Calculate total raw width
-    const totalRawWidth = segments.reduce((acc, s) => acc + visibleWidth(s.raw), 0) +
+    const totalRawWidth =
+      segments.reduce((acc, s) => acc + visibleWidth(s.raw), 0) +
       (segments.length - 1) * visibleWidth(sepRaw);
 
     // Build the line
@@ -89,9 +90,21 @@ export class StatusBar implements Component {
         line = segments[0]!.colored + ' '.repeat(gapWidth);
       } else {
         const firstSeg = segments[0]!;
-        const restSegs = segments.slice(1).map(s => s.colored).join(sep);
-        const restRaw = segments.slice(1).map(s => s.raw).join(sepRaw);
-        const gapForRest = Math.max(0, width - visibleWidth(firstSeg.raw) - visibleWidth(restRaw) - (segments.length - 1) * visibleWidth(sepRaw));
+        const restSegs = segments
+          .slice(1)
+          .map((s) => s.colored)
+          .join(sep);
+        const restRaw = segments
+          .slice(1)
+          .map((s) => s.raw)
+          .join(sepRaw);
+        const gapForRest = Math.max(
+          0,
+          width -
+            visibleWidth(firstSeg.raw) -
+            visibleWidth(restRaw) -
+            (segments.length - 1) * visibleWidth(sepRaw)
+        );
         line = firstSeg.colored + ' '.repeat(gapForRest) + restSegs;
       }
     } else {

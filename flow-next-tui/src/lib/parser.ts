@@ -5,17 +5,17 @@ import type { LogEntry } from './types';
  * Use with width-based padding for alignment
  */
 export const TOOL_ICONS = {
-  Read: '▸',      // file read (triangle pointer)
-  Write: '◂',     // file write (triangle pointer left)
-  Glob: '◦',      // pattern search (hollow bullet)
-  Grep: '⌕',      // content search (search icon) - falls back to /
-  Edit: '✎',      // edit operation (pencil)
-  Bash: '$',      // command execution (shell prompt - ASCII)
-  Task: '◈',      // agent task (diamond)
-  WebFetch: '⬇',  // web fetch (down arrow)
+  Read: '▸', // file read (triangle pointer)
+  Write: '◂', // file write (triangle pointer left)
+  Glob: '◦', // pattern search (hollow bullet)
+  Grep: '⌕', // content search (search icon) - falls back to /
+  Edit: '✎', // edit operation (pencil)
+  Bash: '$', // command execution (shell prompt - ASCII)
+  Task: '◈', // agent task (diamond)
+  WebFetch: '⬇', // web fetch (down arrow)
   WebSearch: '◎', // web search (bullseye)
-  success: '✓',   // success checkmark
-  failure: '✗',   // failure X
+  success: '✓', // success checkmark
+  failure: '✗', // failure X
 } as const;
 
 /**

@@ -176,7 +176,10 @@ export class LogWatcher extends EventEmitter {
    * Find the highest iteration number from existing iter-*.log files
    * Returns both the number and the actual filename (preserves padding format)
    */
-  private async findLatestIteration(): Promise<{ num: number; filename: string } | null> {
+  private async findLatestIteration(): Promise<{
+    num: number;
+    filename: string;
+  } | null> {
     try {
       const entries = await readdir(this.runPath);
       let maxIter = -1;
@@ -226,7 +229,11 @@ export class LogWatcher extends EventEmitter {
           }
 
           // Also trigger read if event is for current log file (backup for file watcher)
-          if (name && this.currentLogPath && name === basename(this.currentLogPath)) {
+          if (
+            name &&
+            this.currentLogPath &&
+            name === basename(this.currentLogPath)
+          ) {
             this.debouncedRead();
           }
         }
@@ -389,26 +396,22 @@ export class LogWatcher extends EventEmitter {
     this.watchedFilePath = watchedPath;
 
     try {
-      const watcher = watch(
-        watchedPath,
-        { persistent: false },
-        (eventType) => {
-          if (!this.isRunning) return;
+      const watcher = watch(watchedPath, { persistent: false }, (eventType) => {
+        if (!this.isRunning) return;
 
-          // Ignore stale events from old watcher after path changed
-          if (this.currentLogPath !== watchedPath) {
-            return;
-          }
-
-          if (eventType === 'change') {
-            this.debouncedRead();
-          } else if (eventType === 'rename') {
-            // 'rename' can occur on truncation, atomic replace, or log rotation.
-            // Watcher may stop delivering events after rename - re-arm it.
-            this.handleFileRename();
-          }
+        // Ignore stale events from old watcher after path changed
+        if (this.currentLogPath !== watchedPath) {
+          return;
         }
-      );
+
+        if (eventType === 'change') {
+          this.debouncedRead();
+        } else if (eventType === 'rename') {
+          // 'rename' can occur on truncation, atomic replace, or log rotation.
+          // Watcher may stop delivering events after rename - re-arm it.
+          this.handleFileRename();
+        }
+      });
 
       watcher.on('error', (error) => {
         // File may have been deleted (normal at run end)

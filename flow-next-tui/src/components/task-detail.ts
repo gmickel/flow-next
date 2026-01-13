@@ -11,7 +11,12 @@ import type { ReceiptStatus } from '../lib/runs.ts';
 import type { Task } from '../lib/types.ts';
 import type { Theme } from '../themes/index.ts';
 
-import { visibleWidth, truncateToWidth, stripAnsi, padToWidth } from '../lib/render.ts';
+import {
+  visibleWidth,
+  truncateToWidth,
+  stripAnsi,
+  padToWidth,
+} from '../lib/render.ts';
 import { STATUS_ICONS, ASCII_ICONS } from './task-list.ts';
 
 export interface TaskDetailProps {
@@ -195,7 +200,9 @@ export class TaskDetail implements Component {
     // Block reason (if blocked)
     if (this.blockReason && this.task.status === 'blocked') {
       lines.push('');
-      const blockHeader = this.theme.warning(this.useAscii ? '[!] Blocked' : '⊘ Blocked');
+      const blockHeader = this.theme.warning(
+        this.useAscii ? '[!] Blocked' : '⊘ Blocked'
+      );
       lines.push(blockHeader);
       const sanitizedReason = this.sanitizeMultiLine(this.blockReason.trim());
       const reasonLines = this.wrapText(sanitizedReason, contentWidth - 2);
@@ -264,15 +271,18 @@ export class TaskDetail implements Component {
     const label = ' Details ';
     const labelWidth = visibleWidth(label);
     const innerWidth = width - 2;
-    const leftBorderLen = Math.max(0, Math.floor((innerWidth - labelWidth) / 2));
+    const leftBorderLen = Math.max(
+      0,
+      Math.floor((innerWidth - labelWidth) / 2)
+    );
     const rightBorderLen = Math.max(0, innerWidth - leftBorderLen - labelWidth);
 
     allLines.push(
       this.theme.border(cornerTL) +
-      this.theme.border(borderH.repeat(leftBorderLen)) +
-      this.theme.accent(label) +
-      this.theme.border(borderH.repeat(rightBorderLen)) +
-      this.theme.border(cornerTR)
+        this.theme.border(borderH.repeat(leftBorderLen)) +
+        this.theme.accent(label) +
+        this.theme.border(borderH.repeat(rightBorderLen)) +
+        this.theme.border(cornerTR)
     );
 
     // Content width (inside borders + padding)
@@ -302,10 +312,10 @@ export class TaskDetail implements Component {
       const paddedLine = padToWidth(line, contentWidth);
       allLines.push(
         this.theme.border(borderV) +
-        ' ' +
-        truncateToWidth(paddedLine, contentWidth, '…') +
-        ' ' +
-        this.theme.border(borderV)
+          ' ' +
+          truncateToWidth(paddedLine, contentWidth, '…') +
+          ' ' +
+          this.theme.border(borderV)
       );
     }
 

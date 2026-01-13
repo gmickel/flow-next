@@ -14,10 +14,7 @@ import {
 /**
  * Helper to create Claude stream-json format for tool_use
  */
-function makeToolUse(
-  name: string,
-  input?: Record<string, unknown>
-): string {
+function makeToolUse(name: string, input?: Record<string, unknown>): string {
   return JSON.stringify({
     type: 'assistant',
     message: {

@@ -187,10 +187,7 @@ describe('LogWatcher', () => {
     test('emits new-iteration when iter file appears', async () => {
       // Start with iter-1.log
       const log1 = join(tempDir, 'iter-1.log');
-      await writeFile(
-        log1,
-        JSON.stringify(makeText('iter1')) + '\n'
-      );
+      await writeFile(log1, JSON.stringify(makeText('iter1')) + '\n');
 
       const watcher = new LogWatcher(tempDir);
       const iterations: Array<{ num: number; path: string }> = [];
@@ -204,10 +201,7 @@ describe('LogWatcher', () => {
 
       // Create iter-2.log
       const log2 = join(tempDir, 'iter-2.log');
-      await writeFile(
-        log2,
-        JSON.stringify(makeText('iter2')) + '\n'
-      );
+      await writeFile(log2, JSON.stringify(makeText('iter2')) + '\n');
 
       // Poll for iteration 2 event (fs.watch timing varies by platform)
       // Note: iterations[0] is iter-1 from startup, we want iter-2
@@ -230,10 +224,7 @@ describe('LogWatcher', () => {
     test('does not switch to lower iteration number', async () => {
       // Start with iter-5.log
       const log5 = join(tempDir, 'iter-5.log');
-      await writeFile(
-        log5,
-        JSON.stringify(makeText('iter5')) + '\n'
-      );
+      await writeFile(log5, JSON.stringify(makeText('iter5')) + '\n');
 
       const watcher = new LogWatcher(tempDir);
       const iterations: number[] = [];
@@ -247,10 +238,7 @@ describe('LogWatcher', () => {
 
       // Create iter-3.log (lower)
       const log3 = join(tempDir, 'iter-3.log');
-      await writeFile(
-        log3,
-        JSON.stringify(makeText('iter3')) + '\n'
-      );
+      await writeFile(log3, JSON.stringify(makeText('iter3')) + '\n');
 
       await new Promise((resolve) => setTimeout(resolve, 250));
 
@@ -283,10 +271,7 @@ describe('LogWatcher', () => {
 
     test('handles file deletion gracefully', async () => {
       const logPath = join(tempDir, 'iter-1.log');
-      await writeFile(
-        logPath,
-        JSON.stringify(makeText('initial')) + '\n'
-      );
+      await writeFile(logPath, JSON.stringify(makeText('initial')) + '\n');
 
       const watcher = new LogWatcher(tempDir);
       const errors: Error[] = [];
@@ -324,10 +309,7 @@ describe('LogWatcher', () => {
 
       // Multiple appends
       for (let i = 1; i <= 3; i++) {
-        await appendFile(
-          logPath,
-          JSON.stringify(makeText(`msg${i}`)) + '\n'
-        );
+        await appendFile(logPath, JSON.stringify(makeText(`msg${i}`)) + '\n');
         await new Promise((resolve) => setTimeout(resolve, 150));
       }
 
@@ -340,10 +322,7 @@ describe('LogWatcher', () => {
 
     test('handles file truncation', async () => {
       const logPath = join(tempDir, 'iter-1.log');
-      await writeFile(
-        logPath,
-        JSON.stringify(makeText('original')) + '\n'
-      );
+      await writeFile(logPath, JSON.stringify(makeText('original')) + '\n');
 
       const watcher = new LogWatcher(tempDir);
       const received: LogEntry[] = [];
@@ -361,10 +340,7 @@ describe('LogWatcher', () => {
 
       // Truncate file and write new content
       await writeFile(logPath, '');
-      await appendFile(
-        logPath,
-        JSON.stringify(makeText('new')) + '\n'
-      );
+      await appendFile(logPath, JSON.stringify(makeText('new')) + '\n');
 
       // Poll for new content (fs.watch timing varies by platform)
       let attempts = 0;

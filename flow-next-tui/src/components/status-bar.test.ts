@@ -67,7 +67,9 @@ describe('StatusBar', () => {
   });
 
   test('does not show error count when 0', () => {
-    const bar = new StatusBar(defaultProps({ runId: 'run-001', errorCount: 0 }));
+    const bar = new StatusBar(
+      defaultProps({ runId: 'run-001', errorCount: 0 })
+    );
     const lines = bar.render(80);
 
     const stripped = stripAnsi(lines[0]!);

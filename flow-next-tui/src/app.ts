@@ -3,9 +3,16 @@
  * Wires together all components with state management and polling.
  */
 
-import { TUI, matchesKey, ProcessTerminal, type Component } from '@mariozechner/pi-tui';
+import {
+  TUI,
+  matchesKey,
+  ProcessTerminal,
+  type Component,
+} from '@mariozechner/pi-tui';
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
+
+import type { Epic, EpicTask, LogEntry, Run, Task } from './lib/types.ts';
 
 import { Header } from './components/header.ts';
 import { HelpOverlay } from './components/help-overlay.ts';
@@ -14,7 +21,13 @@ import { SplitPanel } from './components/split-panel.ts';
 import { StatusBar } from './components/status-bar.ts';
 import { TaskDetail } from './components/task-detail.ts';
 import { TaskList } from './components/task-list.ts';
-import { getEpic, getEpics, getTask, getTaskSpec, FlowctlNotFoundError } from './lib/flowctl.ts';
+import {
+  getEpic,
+  getEpics,
+  getTask,
+  getTaskSpec,
+  FlowctlNotFoundError,
+} from './lib/flowctl.ts';
 import { LogWatcher } from './lib/log-watcher.ts';
 import {
   discoverRuns,
@@ -23,8 +36,11 @@ import {
   getReceiptStatus,
   getBlockReason,
 } from './lib/runs.ts';
-import { spawnRalph, findRalphScript, RalphNotFoundError } from './lib/spawn.ts';
-import type { Epic, EpicTask, LogEntry, Run, Task } from './lib/types.ts';
+import {
+  spawnRalph,
+  findRalphScript,
+  RalphNotFoundError,
+} from './lib/spawn.ts';
 import { getTheme, type Theme } from './themes/index.ts';
 
 /**
@@ -75,7 +91,9 @@ async function dirExists(path: string): Promise<boolean> {
  * Fetch tasks from multiple epics, aggregating them in order
  * If epicIds is empty, fetches all open epics
  */
-async function fetchAllTasks(epicIds: string[]): Promise<{ tasks: EpicTask[]; epicIds: string[] }> {
+async function fetchAllTasks(
+  epicIds: string[]
+): Promise<{ tasks: EpicTask[]; epicIds: string[] }> {
   let targetEpics = epicIds;
 
   // If no epics specified, get all open epics (same as Ralph behavior)
@@ -85,7 +103,9 @@ async function fetchAllTasks(epicIds: string[]): Promise<{ tasks: EpicTask[]; ep
   }
 
   // Fetch all epics in parallel
-  const epics = await Promise.all(targetEpics.map((id) => getEpic(id).catch(() => null)));
+  const epics = await Promise.all(
+    targetEpics.map((id) => getEpic(id).catch(() => null))
+  );
 
   // Aggregate tasks from all epics
   const allTasks: EpicTask[] = [];
@@ -276,11 +296,17 @@ class App implements Component {
       : NaN;
     const runStartMs = Number.isFinite(parsed) ? parsed : Date.now();
     // Initialize elapsed immediately
-    this.state.elapsed = Math.max(0, Math.floor((Date.now() - runStartMs) / 1000));
+    this.state.elapsed = Math.max(
+      0,
+      Math.floor((Date.now() - runStartMs) / 1000)
+    );
     this.header.update({ elapsed: this.state.elapsed });
 
     this.timerInterval = setInterval(() => {
-      this.state.elapsed = Math.max(0, Math.floor((Date.now() - runStartMs) / 1000));
+      this.state.elapsed = Math.max(
+        0,
+        Math.floor((Date.now() - runStartMs) / 1000)
+      );
       this.header.update({ elapsed: this.state.elapsed });
       this.tui?.requestRender();
     }, TIMER_INTERVAL);
@@ -302,7 +328,10 @@ class App implements Component {
     // Use request token to handle out-of-order responses from rapid navigation
     const req = ++this.taskDetailReq;
     try {
-      const [task, spec] = await Promise.all([getTask(taskId), getTaskSpec(taskId)]);
+      const [task, spec] = await Promise.all([
+        getTask(taskId),
+        getTaskSpec(taskId),
+      ]);
       if (req !== this.taskDetailReq) return; // Stale request
 
       this.taskDetail.setTask(task);
@@ -319,7 +348,9 @@ class App implements Component {
         if (req !== this.taskDetailReq) return; // Stale request
 
         this.taskDetail.setReceipts(receipts);
-        this.taskDetail.setBlockReason(task.status === 'blocked' ? reason : null);
+        this.taskDetail.setBlockReason(
+          task.status === 'blocked' ? reason : null
+        );
       }
 
       this.header.update({ task });
@@ -420,8 +451,12 @@ class App implements Component {
     }
 
     // j/k navigation - forward to task list
-    if (matchesKey(data, 'j') || matchesKey(data, 'k') ||
-        matchesKey(data, 'up') || matchesKey(data, 'down')) {
+    if (
+      matchesKey(data, 'j') ||
+      matchesKey(data, 'k') ||
+      matchesKey(data, 'up') ||
+      matchesKey(data, 'down')
+    ) {
       this.taskList.handleInput(data);
       return;
     }
@@ -467,7 +502,7 @@ export async function createApp(options: AppOptions = {}): Promise<void> {
   const flowDir = join(repoRoot, '.flow');
   if (!(await dirExists(flowDir))) {
     renderError(
-      'No .flow/ directory. Run flowctl init or ensure you\'re in a flow-next project.',
+      "No .flow/ directory. Run flowctl init or ensure you're in a flow-next project.",
       theme
     );
     process.exit(1);
@@ -517,7 +552,10 @@ export async function createApp(options: AppOptions = {}): Promise<void> {
         const openEpics = epics.filter((e) => e.status === 'open');
 
         if (openEpics.length === 0) {
-          renderError('No open epics. Create an epic first with flowctl epic create.', theme);
+          renderError(
+            'No open epics. Create an epic first with flowctl epic create.',
+            theme
+          );
           process.exit(1);
         }
 
@@ -530,13 +568,18 @@ export async function createApp(options: AppOptions = {}): Promise<void> {
 
         console.log(theme.dim(`Starting Ralph on ${epicId}...`));
         const result = await spawnRalph(epicId);
-        console.log(theme.success(`Ralph started: ${result.runId} (pid ${result.pid})`));
+        console.log(
+          theme.success(`Ralph started: ${result.runId} (pid ${result.pid})`)
+        );
 
         // Re-discover runs and validate we found the new one
         state.runs = await discoverRuns();
         state.currentRun = state.runs.find((r) => r.id === result.runId);
         if (!state.currentRun) {
-          renderError(`Started Ralph but run '${result.runId}' not found in discovery.`, theme);
+          renderError(
+            `Started Ralph but run '${result.runId}' not found in discovery.`,
+            theme
+          );
           process.exit(1);
         }
       } catch (err) {
@@ -549,7 +592,10 @@ export async function createApp(options: AppOptions = {}): Promise<void> {
         process.exit(1);
       }
     } else {
-      renderError('No runs found. Start Ralph with: cd scripts/ralph && ./ralph.sh', theme);
+      renderError(
+        'No runs found. Start Ralph with: cd scripts/ralph && ./ralph.sh',
+        theme
+      );
       process.exit(1);
     }
   }
@@ -565,7 +611,12 @@ export async function createApp(options: AppOptions = {}): Promise<void> {
     state.tasks = tasks;
 
     // Get first epic for header display (if any)
-    const actualEpicIds = epicIds.length > 0 ? epicIds : tasks.map((t) => t.id.split('.')[0]).filter((v, i, a) => a.indexOf(v) === i);
+    const actualEpicIds =
+      epicIds.length > 0
+        ? epicIds
+        : tasks
+            .map((t) => t.id.split('.')[0])
+            .filter((v, i, a) => a.indexOf(v) === i);
     const firstEpicId = actualEpicIds[0];
     if (firstEpicId) {
       epic = await getEpic(firstEpicId).catch(() => undefined);
@@ -583,15 +634,18 @@ export async function createApp(options: AppOptions = {}): Promise<void> {
     const activeTask = inProgress ?? firstTodo;
 
     if (activeTask) {
-      state.selectedTaskIndex = state.tasks.findIndex((t) => t.id === activeTask.id);
+      state.selectedTaskIndex = state.tasks.findIndex(
+        (t) => t.id === activeTask.id
+      );
       currentTask = await getTask(activeTask.id);
       taskSpec = await getTaskSpec(activeTask.id);
     }
   } catch (err) {
     // Fail fast with clean error instead of broken UI state
-    const msg = err instanceof FlowctlNotFoundError
-      ? err.message
-      : `Failed to load tasks: ${err instanceof Error ? err.message : String(err)}`;
+    const msg =
+      err instanceof FlowctlNotFoundError
+        ? err.message
+        : `Failed to load tasks: ${err instanceof Error ? err.message : String(err)}`;
     renderError(msg, theme);
     process.exit(1);
   }

@@ -109,8 +109,12 @@ export class HelpOverlay implements Component {
       // Re-apply colors to truncated content
       const truncatedKey = truncatedLine.slice(0, keyColWidth);
       const truncatedDesc = truncatedLine.slice(keyColWidth);
-      const coloredLine = this.theme.accent(truncatedKey) + this.theme.text(truncatedDesc);
-      contentLines.push({ line: coloredLine, width: visibleWidth(truncatedLine) });
+      const coloredLine =
+        this.theme.accent(truncatedKey) + this.theme.text(truncatedDesc);
+      contentLines.push({
+        line: coloredLine,
+        width: visibleWidth(truncatedLine),
+      });
     }
 
     // Footer hint - centered
@@ -169,9 +173,7 @@ export class HelpOverlay implements Component {
     }
 
     // Bottom border
-    boxLines.push(
-      this.theme.border('└' + '─'.repeat(overlayWidth - 2) + '┘')
-    );
+    boxLines.push(this.theme.border('└' + '─'.repeat(overlayWidth - 2) + '┘'));
 
     // Center horizontally
     const leftPad = Math.max(0, Math.floor((width - overlayWidth) / 2));

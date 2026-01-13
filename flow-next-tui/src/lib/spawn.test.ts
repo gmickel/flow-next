@@ -1,15 +1,15 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdtemp, rm, mkdir, writeFile, chmod } from 'node:fs/promises';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
+import { clearRepoRootCache as clearRunsCache } from './runs';
 import {
   findRalphScript,
   isRalphRunning,
   clearRepoRootCache,
   RalphNotFoundError,
 } from './spawn';
-import { clearRepoRootCache as clearRunsCache } from './runs';
 
 describe('spawn', () => {
   let tempDir: string;

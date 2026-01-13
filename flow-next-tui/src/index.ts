@@ -4,6 +4,7 @@
  * Parses arguments and starts the TUI.
  */
 import { Command } from 'commander';
+
 import { createApp } from './app.ts';
 
 let pkg: { version: string } = { version: '0.0.0' };
@@ -22,13 +23,15 @@ program
   .option('-l, --light', 'Use light theme')
   .option('--no-emoji', 'Use ASCII icons instead of unicode')
   .option('-r, --run <id>', 'Select specific run')
-  .action(async (options: { light?: boolean; emoji: boolean; run?: string }) => {
-    await createApp({
-      light: options.light,
-      noEmoji: options.emoji === false,
-      run: options.run,
-    });
-  });
+  .action(
+    async (options: { light?: boolean; emoji: boolean; run?: string }) => {
+      await createApp({
+        light: options.light,
+        noEmoji: options.emoji === false,
+        run: options.run,
+      });
+    }
+  );
 
 try {
   await program.parseAsync();

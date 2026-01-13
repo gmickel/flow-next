@@ -184,15 +184,18 @@ export class TaskList implements Component {
     const label = ' Tasks ';
     const labelWidth = visibleWidth(label);
     const innerWidth = width - 2;
-    const leftBorderLen = Math.max(0, Math.floor((innerWidth - labelWidth) / 2));
+    const leftBorderLen = Math.max(
+      0,
+      Math.floor((innerWidth - labelWidth) / 2)
+    );
     const rightBorderLen = Math.max(0, innerWidth - leftBorderLen - labelWidth);
 
     lines.push(
       this.theme.border(cornerTL) +
-      this.theme.border(borderH.repeat(leftBorderLen)) +
-      this.theme.accent(label) +
-      this.theme.border(borderH.repeat(rightBorderLen)) +
-      this.theme.border(cornerTR)
+        this.theme.border(borderH.repeat(leftBorderLen)) +
+        this.theme.accent(label) +
+        this.theme.border(borderH.repeat(rightBorderLen)) +
+        this.theme.border(cornerTR)
     );
 
     // Content area width
@@ -201,7 +204,11 @@ export class TaskList implements Component {
     if (this.tasks.length === 0) {
       const emptyMsg = padToWidth(' No tasks', contentWidth);
       lines.push(
-        this.theme.border(borderV) + ' ' + this.theme.dim(emptyMsg) + ' ' + this.theme.border(borderV)
+        this.theme.border(borderV) +
+          ' ' +
+          this.theme.dim(emptyMsg) +
+          ' ' +
+          this.theme.border(borderV)
       );
       return lines;
     }
@@ -233,8 +240,19 @@ export class TaskList implements Component {
 
       // Build task line content
       const idDisplay = task.id;
-      const availableForTitle = Math.max(0, contentWidth - visibleWidth(icon) - visibleWidth(idDisplay) - visibleWidth(depStr) - 3);
-      const truncatedTitle = truncateToWidth(task.title, availableForTitle, '…');
+      const availableForTitle = Math.max(
+        0,
+        contentWidth -
+          visibleWidth(icon) -
+          visibleWidth(idDisplay) -
+          visibleWidth(depStr) -
+          3
+      );
+      const truncatedTitle = truncateToWidth(
+        task.title,
+        availableForTitle,
+        '…'
+      );
 
       if (isSelected) {
         // Selected row with background highlight
@@ -247,7 +265,9 @@ export class TaskList implements Component {
             chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(icon) +
             chalk.bgAnsi256(bgCode).ansi256(dimFgCode)(` ${idDisplay} `) +
             chalk.bgAnsi256(bgCode).ansi256(textFgCode)(truncatedTitle) +
-            (depStr ? chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(depStr) : '');
+            (depStr
+              ? chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(depStr)
+              : '');
         } else {
           content =
             chalk.ansi256(statusFgCode)(icon) +
@@ -256,7 +276,12 @@ export class TaskList implements Component {
             (depStr ? chalk.ansi256(statusFgCode)(depStr) : '');
         }
 
-        const rawLen = visibleWidth(icon) + visibleWidth(idDisplay) + visibleWidth(truncatedTitle) + visibleWidth(depStr) + 2;
+        const rawLen =
+          visibleWidth(icon) +
+          visibleWidth(idDisplay) +
+          visibleWidth(truncatedTitle) +
+          visibleWidth(depStr) +
+          2;
         const paddingNeeded = Math.max(0, contentWidth - rawLen);
         const padding = validBg
           ? chalk.bgAnsi256(bgCode)(' '.repeat(paddingNeeded))
@@ -265,8 +290,8 @@ export class TaskList implements Component {
         const fullContent = ' ' + content + padding + ' ';
         lines.push(
           this.theme.border(borderV) +
-          truncateToWidth(fullContent, width - 2, '…') +
-          this.theme.border(borderV)
+            truncateToWidth(fullContent, width - 2, '…') +
+            this.theme.border(borderV)
         );
       } else {
         // Unselected row
@@ -276,14 +301,19 @@ export class TaskList implements Component {
           truncatedTitle +
           (depStr ? colorFn(depStr) : '');
 
-        const rawLen = visibleWidth(icon) + visibleWidth(idDisplay) + visibleWidth(truncatedTitle) + visibleWidth(depStr) + 2;
+        const rawLen =
+          visibleWidth(icon) +
+          visibleWidth(idDisplay) +
+          visibleWidth(truncatedTitle) +
+          visibleWidth(depStr) +
+          2;
         const paddingNeeded = Math.max(0, contentWidth - rawLen);
 
         const fullContent = ' ' + content + ' '.repeat(paddingNeeded) + ' ';
         lines.push(
           this.theme.border(borderV) +
-          truncateToWidth(fullContent, width - 2, '…') +
-          this.theme.border(borderV)
+            truncateToWidth(fullContent, width - 2, '…') +
+            this.theme.border(borderV)
         );
       }
     }
@@ -291,9 +321,16 @@ export class TaskList implements Component {
     // Scroll indicator at bottom
     if (this.tasks.length > this.maxVisible) {
       const scrollInfo = `${this.selectedIndex + 1}/${this.tasks.length}`;
-      const scrollLine = padToWidth(this.theme.dim(` ↕ ${scrollInfo}`), contentWidth);
+      const scrollLine = padToWidth(
+        this.theme.dim(` ↕ ${scrollInfo}`),
+        contentWidth
+      );
       lines.push(
-        this.theme.border(borderV) + ' ' + scrollLine + ' ' + this.theme.border(borderV)
+        this.theme.border(borderV) +
+          ' ' +
+          scrollLine +
+          ' ' +
+          this.theme.border(borderV)
       );
     }
 

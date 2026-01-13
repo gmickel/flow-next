@@ -78,7 +78,8 @@ export class Header implements Component {
     if (props.task !== undefined) this.task = props.task;
     if (props.epic !== undefined) this.epic = props.epic;
     if (props.iteration !== undefined) this.iteration = props.iteration;
-    if (props.taskProgress !== undefined) this.taskProgress = props.taskProgress;
+    if (props.taskProgress !== undefined)
+      this.taskProgress = props.taskProgress;
     if (props.elapsed !== undefined) this.elapsed = props.elapsed;
     if (props.theme !== undefined) this.theme = props.theme;
     if (props.useAscii !== undefined) this.useAscii = props.useAscii;
@@ -132,9 +133,20 @@ export class Header implements Component {
     const { done, total } = this.taskProgress;
 
     // Build segments
-    const statusSeg = colorFn(icon) + ' ' + (this.state === 'running' ? this.theme.text('Running') : this.state === 'complete' ? this.theme.dim('Done') : this.theme.dim('Idle'));
-    const iterSeg = this.theme.dim('Iter ') + this.theme.accent(`#${this.iteration}`);
-    const progressSeg = this.theme.accent(`${done}`) + this.theme.dim('/') + this.theme.text(`${total}`);
+    const statusSeg =
+      colorFn(icon) +
+      ' ' +
+      (this.state === 'running'
+        ? this.theme.text('Running')
+        : this.state === 'complete'
+          ? this.theme.dim('Done')
+          : this.theme.dim('Idle'));
+    const iterSeg =
+      this.theme.dim('Iter ') + this.theme.accent(`#${this.iteration}`);
+    const progressSeg =
+      this.theme.accent(`${done}`) +
+      this.theme.dim('/') +
+      this.theme.text(`${total}`);
     const timerSeg = this.theme.dim('⏱ ') + this.theme.text(timer);
 
     // Task info (if available)
@@ -159,12 +171,13 @@ export class Header implements Component {
     const timerWidth = visibleWidth(timerRaw);
 
     const gapWidth = Math.max(1, contentWidth - leftWidth - timerWidth);
-    const contentLine = ' ' + leftContent + ' '.repeat(gapWidth) + timerSeg + ' ';
+    const contentLine =
+      ' ' + leftContent + ' '.repeat(gapWidth) + timerSeg + ' ';
 
     lines.push(
       this.theme.border(borderV) +
-      truncateToWidth(contentLine, width - 2, '…') +
-      this.theme.border(borderV)
+        truncateToWidth(contentLine, width - 2, '…') +
+        this.theme.border(borderV)
     );
 
     // Bottom border

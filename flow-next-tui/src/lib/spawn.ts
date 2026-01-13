@@ -1,7 +1,11 @@
-import { join, dirname } from 'node:path';
 import { stat } from 'node:fs/promises';
+import { join, dirname } from 'node:path';
 
-import { discoverRuns, findRepoRoot, clearRepoRootCache as clearRunsRepoRootCache } from './runs';
+import {
+  discoverRuns,
+  findRepoRoot,
+  clearRepoRootCache as clearRunsRepoRootCache,
+} from './runs';
 
 /**
  * Error thrown when ralph.sh cannot be found
@@ -108,7 +112,15 @@ export async function spawnRalph(epicId: string): Promise<SpawnResult> {
   if (!result) {
     const searchedPaths = [
       join(repoRoot, 'scripts', 'ralph', 'ralph.sh'),
-      join(repoRoot, 'plugins', 'flow-next', 'skills', 'flow-next-ralph-init', 'templates', 'ralph.sh'),
+      join(
+        repoRoot,
+        'plugins',
+        'flow-next',
+        'skills',
+        'flow-next-ralph-init',
+        'templates',
+        'ralph.sh'
+      ),
     ];
     throw new RalphNotFoundError(searchedPaths);
   }
@@ -182,7 +194,10 @@ export async function spawnRalph(epicId: string): Promise<SpawnResult> {
  * @param runsDir Optional runs directory (defaults to scripts/ralph/runs)
  * @returns true if ralph is still running (not complete)
  */
-export async function isRalphRunning(runId: string, runsDir?: string): Promise<boolean> {
+export async function isRalphRunning(
+  runId: string,
+  runsDir?: string
+): Promise<boolean> {
   const cwd = process.cwd();
   const repoRoot = await findRepoRoot(cwd);
   const dir = runsDir ?? join(repoRoot, DEFAULT_RUNS_DIR);

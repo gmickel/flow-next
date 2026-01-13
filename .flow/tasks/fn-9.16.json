@@ -1,16 +1,26 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-13T15:50:57.175523Z",
   "created_at": "2026-01-12T21:04:05.601344Z",
   "depends_on": [
     "fn-9.15"
   ],
   "epic": "fn-9",
+  "evidence": {
+    "commits": [
+      "d0d735be5a782b3f22180cc8998598bfe986099a"
+    ],
+    "prs": [],
+    "tests": [
+      "bun test",
+      "bun run lint:check"
+    ]
+  },
   "id": "fn-9.16",
   "priority": null,
   "spec_path": ".flow/tasks/fn-9.16.md",
-  "status": "todo",
+  "status": "done",
   "title": "CI/CD workflow",
-  "updated_at": "2026-01-12T21:07:04.918880Z"
+  "updated_at": "2026-01-13T15:52:16.928852Z"
 }

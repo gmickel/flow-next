@@ -169,7 +169,10 @@ export class OutputPanel implements Component {
 
     const leftLabelWidth = visibleWidth(leftLabel);
     const rightLabelWidth = visibleWidth(rightLabel);
-    const middleBorderLen = Math.max(0, innerWidth - leftLabelWidth - rightLabelWidth);
+    const middleBorderLen = Math.max(
+      0,
+      innerWidth - leftLabelWidth - rightLabelWidth
+    );
 
     return (
       this.theme.border(cornerTL) +
@@ -208,7 +211,9 @@ export class OutputPanel implements Component {
 
     // Pad icon to fixed column width for alignment
     const iconWidth = visibleWidth(icon);
-    const iconPadding = ' '.repeat(Math.max(0, OutputPanel.ICON_COL_WIDTH - iconWidth));
+    const iconPadding = ' '.repeat(
+      Math.max(0, OutputPanel.ICON_COL_WIDTH - iconWidth)
+    );
     const prefix = colorFn(icon) + iconPadding + ' ';
     const prefixWidth = OutputPanel.ICON_COL_WIDTH + 1; // icon col + 1 space
 
@@ -243,7 +248,9 @@ export class OutputPanel implements Component {
     if (this.isNoiseContent(firstLine)) {
       // For tool results, show a cleaner summary
       if (entry.type === 'response' && entry.success !== undefined) {
-        return entry.success ? this.theme.success('OK') : this.theme.error('Failed');
+        return entry.success
+          ? this.theme.success('OK')
+          : this.theme.error('Failed');
       }
       return this.theme.dim('…');
     }
@@ -280,7 +287,12 @@ export class OutputPanel implements Component {
     if (!content) return true;
 
     // Pure JSON object/array starts (not useful as single line)
-    if (content === '{' || content === '[' || content === '}' || content === ']') {
+    if (
+      content === '{' ||
+      content === '[' ||
+      content === '}' ||
+      content === ']'
+    ) {
       return true;
     }
 

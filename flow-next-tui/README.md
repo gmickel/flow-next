@@ -1,6 +1,10 @@
 # flow-next-tui
 
-Terminal UI for monitoring Flow-Next Ralph autonomous agent runs. Real-time visibility into task progress, streaming logs, and run state.
+Terminal UI for monitoring [Flow-Next](https://github.com/gmickel/gmickel-claude-marketplace/tree/main/plugins/flow-next) Ralph autonomous agent runs.
+
+**Flow-Next** is a Claude Code plugin for structured task planning and execution. **Ralph** is its autonomous mode - an external loop that runs Claude overnight, completing epics task-by-task with multi-model review gates.
+
+This TUI provides real-time visibility into Ralph runs: task progress, streaming logs, and run state.
 
 ## Features
 
@@ -46,24 +50,27 @@ flow-next-tui -v               # Show version
 ## Keyboard Shortcuts
 
 ### Navigation
-| Key | Action |
-|-----|--------|
-| `j` / `↓` | Next task |
+
+| Key       | Action        |
+| --------- | ------------- |
+| `j` / `↓` | Next task     |
 | `k` / `↑` | Previous task |
 
 ### Output Panel
-| Key | Action |
-|-----|--------|
-| `g` | Jump to top |
-| `G` | Jump to bottom |
-| `Space` / `Ctrl+D` | Page down |
-| `Ctrl+U` | Page up |
+
+| Key                | Action         |
+| ------------------ | -------------- |
+| `g`                | Jump to top    |
+| `G`                | Jump to bottom |
+| `Space` / `Ctrl+D` | Page down      |
+| `Ctrl+U`           | Page up        |
 
 ### General
-| Key | Action |
-|-----|--------|
-| `?` | Toggle help overlay |
-| `Esc` | Close overlay |
+
+| Key            | Action                 |
+| -------------- | ---------------------- |
+| `?`            | Toggle help overlay    |
+| `Esc`          | Close overlay          |
 | `q` / `Ctrl+C` | Quit (detach from run) |
 
 ## Layout
@@ -93,28 +100,28 @@ flow-next-tui -v               # Show version
 
 ## Status Icons
 
-| Icon | ASCII | Meaning |
-|------|-------|---------|
-| `●` | `[x]` | Done |
-| `◉` | `[>]` | In Progress |
-| `○` | `[ ]` | Todo |
-| `⊘` | `[!]` | Blocked |
+| Icon | ASCII | Meaning     |
+| ---- | ----- | ----------- |
+| `●`  | `[x]` | Done        |
+| `◉`  | `[>]` | In Progress |
+| `○`  | `[ ]` | Todo        |
+| `⊘`  | `[!]` | Blocked     |
 
 ## Tool Icons (Output Panel)
 
-| Icon | Tool |
-|------|------|
-| `▸` | Read |
-| `◂` | Write |
-| `✎` | Edit |
-| `$` | Bash |
-| `◦` | Glob |
-| `⌕` | Grep |
-| `◈` | Task |
-| `⬇` | WebFetch |
-| `◎` | WebSearch |
-| `✓` | Success |
-| `✗` | Failure |
+| Icon | Tool      |
+| ---- | --------- |
+| `▸`  | Read      |
+| `◂`  | Write     |
+| `✎`  | Edit      |
+| `$`  | Bash      |
+| `◦`  | Glob      |
+| `⌕`  | Grep      |
+| `◈`  | Task      |
+| `⬇`  | WebFetch  |
+| `◎`  | WebSearch |
+| `✓`  | Success   |
+| `✗`  | Failure   |
 
 ## Integration with Ralph
 
@@ -195,6 +202,7 @@ Run `/flow-next:ralph-init` to scaffold the Ralph harness.
 ### "flowctl not found"
 
 The TUI searches for flowctl in:
+
 1. `.flow/bin/flowctl`
 2. `plugins/flow-next/scripts/flowctl.py`
 3. System PATH

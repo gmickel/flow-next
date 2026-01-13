@@ -216,9 +216,27 @@ promise=CONTINUE
 
     test('finds latest regardless of input order', () => {
       const runs = [
-        { id: '2024-01-15-001', path: '/b', epics: [], active: false, iteration: 2 },
-        { id: '2024-01-20-001', path: '/a', epics: [], active: true, iteration: 1 },
-        { id: '2024-01-10-001', path: '/c', epics: [], active: false, iteration: 3 },
+        {
+          id: '2024-01-15-001',
+          path: '/b',
+          epics: [],
+          active: false,
+          iteration: 2,
+        },
+        {
+          id: '2024-01-20-001',
+          path: '/a',
+          epics: [],
+          active: true,
+          iteration: 1,
+        },
+        {
+          id: '2024-01-10-001',
+          path: '/c',
+          epics: [],
+          active: false,
+          iteration: 3,
+        },
       ];
 
       const latest = getLatestRun(runs);
@@ -227,9 +245,27 @@ promise=CONTINUE
 
     test('handles same-date runs with different suffixes', () => {
       const runs = [
-        { id: '2024-01-15-001', path: '/a', epics: [], active: true, iteration: 1 },
-        { id: '2024-01-15-003', path: '/b', epics: [], active: false, iteration: 2 },
-        { id: '2024-01-15-002', path: '/c', epics: [], active: false, iteration: 3 },
+        {
+          id: '2024-01-15-001',
+          path: '/a',
+          epics: [],
+          active: true,
+          iteration: 1,
+        },
+        {
+          id: '2024-01-15-003',
+          path: '/b',
+          epics: [],
+          active: false,
+          iteration: 2,
+        },
+        {
+          id: '2024-01-15-002',
+          path: '/c',
+          epics: [],
+          active: false,
+          iteration: 3,
+        },
       ];
 
       const latest = getLatestRun(runs);
