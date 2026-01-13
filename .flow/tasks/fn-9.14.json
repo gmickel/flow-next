@@ -1,7 +1,7 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-13T10:25:37.737431Z",
   "created_at": "2026-01-12T21:04:02.226601Z",
   "depends_on": [
     "fn-9.8",
@@ -14,10 +14,19 @@
     "fn-9.17"
   ],
   "epic": "fn-9",
+  "evidence": {
+    "commits": [
+      "9060bb7"
+    ],
+    "prs": [],
+    "tests": [
+      "bun test"
+    ]
+  },
   "id": "fn-9.14",
   "priority": null,
   "spec_path": ".flow/tasks/fn-9.14.md",
-  "status": "todo",
+  "status": "done",
   "title": "App integration and state",
-  "updated_at": "2026-01-12T21:12:47.157778Z"
+  "updated_at": "2026-01-13T10:29:45.949220Z"
 }

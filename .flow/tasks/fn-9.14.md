@@ -84,9 +84,15 @@ On error: render error view with message + exit code 1 (not crash)
 - [ ] Missing scripts/ralph/ shows specific error message
 - [ ] Error view renders cleanly (not exception trace)
 ## Done summary
-TBD
+- Implemented App class with AppState interface and pi-tui Component integration
+- Wired Header, TaskList, TaskDetail, OutputPanel, StatusBar, HelpOverlay components
+- Added polling (tasks 2s, timer 1s), log watcher integration
+- Implemented auto-compact mode for small terminals (< 120x30)
+- Added startup validation (.flow/, scripts/ralph/) with clean error messages
+- Run discovery and auto-select latest; prompt to spawn ralph if no runs
 
+Verified via bun test (386 tests pass), bun lint (0 errors)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 9060bb7
+- Tests: bun test
 - PRs:
