@@ -39,9 +39,10 @@ Single row, full terminal width.
 - [ ] Full width with space between left/right
 - [ ] Theme colors applied
 ## Done summary
-TBD
-
+- Created StatusBar component with shortcuts on left, run ID + error count on right
+- Handles truncation at narrow widths gracefully
+- 18 tests covering rendering, width constraints, and updates
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c762230c61f55d475b6db57bedb18fcd3de91f29
+- Tests: bun test src/components/status-bar.test.ts
 - PRs:

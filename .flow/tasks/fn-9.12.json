@@ -1,16 +1,25 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-13T08:52:50.345760Z",
   "created_at": "2026-01-12T21:03:59.788879Z",
   "depends_on": [
     "fn-9.2"
   ],
   "epic": "fn-9",
+  "evidence": {
+    "commits": [
+      "c762230c61f55d475b6db57bedb18fcd3de91f29"
+    ],
+    "prs": [],
+    "tests": [
+      "bun test src/components/status-bar.test.ts"
+    ]
+  },
   "id": "fn-9.12",
   "priority": null,
   "spec_path": ".flow/tasks/fn-9.12.md",
-  "status": "todo",
+  "status": "done",
   "title": "StatusBar component",
-  "updated_at": "2026-01-12T21:07:04.293975Z"
+  "updated_at": "2026-01-13T08:54:41.806754Z"
 }
