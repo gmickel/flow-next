@@ -141,6 +141,20 @@ export class TaskList implements Component {
     }
   }
 
+  /** Apply selected background to a line, padding to width */
+  private applySelectedBg(line: string, width: number): string {
+    const bgCode = this.theme.palette.selectedBg;
+    // Validate bgCode: -1 means no bg, otherwise must be 0-255
+    if (bgCode < 0 || bgCode > 255) {
+      // Fall back to no background styling
+      const paddingNeeded = Math.max(0, width - visibleWidth(line));
+      return line + ' '.repeat(paddingNeeded);
+    }
+    const paddingNeeded = Math.max(0, width - visibleWidth(line));
+    const padding = ' '.repeat(paddingNeeded);
+    return chalk.bgAnsi256(bgCode)(line + padding);
+  }
+
   /** Format dependency indicator for blocked tasks only */
   private formatDependency(task: EpicTask): string {
     // Defensive: handle missing/empty depends_on
@@ -180,68 +194,98 @@ export class TaskList implements Component {
       const icon = this.getStatusIcon(task);
 
       // Format: "● fn-1.3 Add validation... → 1.2"
-      const depStr = this.formatDependency(task);
+      // For very narrow widths, use progressive truncation to guarantee line fits
 
-      // Calculate component widths for proper truncation
-      // Use visibleWidth for icon to handle both Unicode and ASCII modes
+      // Calculate base widths
       const iconWidth = visibleWidth(icon);
-      const prefixWidth = iconWidth + 1; // icon + space
-      const idWidth = task.id.length + 1; // id + space
+      const depStr = this.formatDependency(task);
       const depWidth = depStr ? visibleWidth(depStr) : 0;
 
-      // Handle very narrow widths: if fixed parts don't fit, truncate id too
-      const fixedWidth = prefixWidth + idWidth + depWidth;
-      let displayId = task.id;
-      let actualIdWidth = idWidth;
-      if (fixedWidth >= width) {
-        // Truncate id to fit
-        const availableForId = Math.max(1, width - prefixWidth - depWidth - 2);
-        displayId = truncateToWidth(task.id, availableForId, '…');
-        actualIdWidth = visibleWidth(displayId) + 1;
+      // Minimum: just icon (edge case: width <= iconWidth)
+      if (width <= iconWidth) {
+        const truncatedIcon = truncateToWidth(icon, width, '');
+        lines.push(isSelected ? this.applySelectedBg(truncatedIcon, width) : truncatedIcon);
+        continue;
       }
+
+      // Build progressively: icon + space
+      const prefixWidth = iconWidth + 1;
+      if (width <= prefixWidth) {
+        const line = icon;
+        lines.push(isSelected ? this.applySelectedBg(line, width) : line);
+        continue;
+      }
+
+      // icon + space + id (possibly truncated)
+      const availableForId = width - prefixWidth - depWidth - 1; // -1 for minimum title space
+      let displayId: string;
+      if (availableForId < task.id.length) {
+        displayId = availableForId > 0 ? truncateToWidth(task.id, availableForId, '…') : '';
+      } else {
+        displayId = task.id;
+      }
+      const actualIdWidth = displayId ? visibleWidth(displayId) + 1 : 0;
 
       // Calculate available space for title
       const availableWidth = width - prefixWidth - actualIdWidth - depWidth;
-      const titleMaxWidth = Math.max(1, availableWidth);
-      const truncatedTitle = truncateToWidth(task.title, titleMaxWidth, '…');
+      const titleMaxWidth = Math.max(0, availableWidth);
+      const truncatedTitle = titleMaxWidth > 0 ? truncateToWidth(task.title, titleMaxWidth, '…') : '';
 
       // Get colors based on status
       const colorFn = this.getStatusColor(task);
       const bgCode = this.theme.palette.selectedBg;
+      const validBg = bgCode >= 0 && bgCode <= 255;
+
+      // Build the line content
+      const idPart = displayId ? ` ${displayId}` : '';
+      const titlePart = truncatedTitle ? ` ${truncatedTitle}` : '';
 
       if (isSelected) {
         // For selected rows: apply per-segment fg + selected bg to each segment
         // This preserves status colors while indicating selection
         const statusFgCode = this.getStatusColorCode(task);
         const dimFgCode = this.theme.palette.dim;
+        const textFgCode = this.theme.palette.text;
 
-        // Build line with both bg and fg per segment
-        const coloredIcon = chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(icon);
-        const space1 = chalk.bgAnsi256(bgCode)(' ');
-        const coloredId = chalk.bgAnsi256(bgCode).ansi256(dimFgCode)(displayId);
-        const space2 = chalk.bgAnsi256(bgCode)(' ');
-        const coloredTitle = chalk.bgAnsi256(bgCode).ansi256(this.theme.palette.text)(
-          truncatedTitle
-        );
-        const coloredDep = depStr
-          ? chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(depStr)
-          : '';
+        // Build styled segments (with or without bg based on validation)
+        let coloredIcon: string;
+        let coloredId: string;
+        let coloredTitle: string;
+        let coloredDep: string;
+        let padding: string;
 
         // Calculate padding needed
-        const rawLine = `${icon} ${displayId} ${truncatedTitle}${depStr}`;
+        const rawLine = `${icon}${idPart}${titlePart}${depStr}`;
         const paddingNeeded = Math.max(0, width - visibleWidth(rawLine));
-        const padding = chalk.bgAnsi256(bgCode)(' '.repeat(paddingNeeded));
 
-        lines.push(
-          `${coloredIcon}${space1}${coloredId}${space2}${coloredTitle}${coloredDep}${padding}`
-        );
+        if (validBg) {
+          coloredIcon = chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(icon);
+          coloredId = displayId
+            ? chalk.bgAnsi256(bgCode).ansi256(dimFgCode)(` ${displayId}`)
+            : '';
+          coloredTitle = truncatedTitle
+            ? chalk.bgAnsi256(bgCode).ansi256(textFgCode)(` ${truncatedTitle}`)
+            : '';
+          coloredDep = depStr ? chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(depStr) : '';
+          padding = chalk.bgAnsi256(bgCode)(' '.repeat(paddingNeeded));
+        } else {
+          // No bg, just fg colors
+          coloredIcon = chalk.ansi256(statusFgCode)(icon);
+          coloredId = displayId ? chalk.ansi256(dimFgCode)(` ${displayId}`) : '';
+          coloredTitle = truncatedTitle ? chalk.ansi256(textFgCode)(` ${truncatedTitle}`) : '';
+          coloredDep = depStr ? chalk.ansi256(statusFgCode)(depStr) : '';
+          padding = ' '.repeat(paddingNeeded);
+        }
+
+        lines.push(`${coloredIcon}${coloredId}${coloredTitle}${coloredDep}${padding}`);
       } else {
         // For unselected rows: use per-segment colors
         const coloredIcon = colorFn(icon);
-        const dimId = this.theme.dim(displayId);
+        const dimId = displayId ? this.theme.dim(` ${displayId}`) : '';
+        const titleStr = truncatedTitle ? ` ${truncatedTitle}` : '';
         // Dep indicator uses same color as status (blocked => warning)
         const coloredDep = depStr ? colorFn(depStr) : '';
-        lines.push(`${coloredIcon} ${dimId} ${truncatedTitle}${coloredDep}`);
+        lines.push(`${coloredIcon}${dimId}${titleStr}${coloredDep}`);
       }
     }
 
