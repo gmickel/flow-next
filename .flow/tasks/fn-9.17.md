@@ -43,9 +43,17 @@ Ralph creates run ID in format `YYYY-MM-DD-NNN`. After spawn, poll `scripts/ralp
 - [ ] Run ID returned matches new run directory
 - [ ] Missing ralph.sh shows helpful error message
 ## Done summary
-TBD
+- Added `spawn.ts` with ralph spawning and detach functionality
+- `findRalphScript()` searches scripts/ralph then plugin template
+- `spawnRalph()` spawns detached, polls for new run ID
+- `isRalphRunning()` checks progress.txt for COMPLETE marker
 
+- Enables TUI to spawn ralph without blocking
+- Clean Ctrl+C exit won't kill spawned ralph process
+
+- All tests pass (383 total, 7 new for spawn.ts)
+- Lint clean
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 49e181519aafc7d70070cd354bdddbf1f161565b
+- Tests: bun test
 - PRs:

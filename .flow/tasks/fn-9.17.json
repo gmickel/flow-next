@@ -1,17 +1,26 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-13T09:40:16.128984Z",
   "created_at": "2026-01-12T21:12:36.975114Z",
   "depends_on": [
     "fn-9.4",
     "fn-9.5"
   ],
   "epic": "fn-9",
+  "evidence": {
+    "commits": [
+      "49e181519aafc7d70070cd354bdddbf1f161565b"
+    ],
+    "prs": [],
+    "tests": [
+      "bun test"
+    ]
+  },
   "id": "fn-9.17",
   "priority": null,
   "spec_path": ".flow/tasks/fn-9.17.md",
-  "status": "todo",
+  "status": "done",
   "title": "Run spawning and detach",
-  "updated_at": "2026-01-12T21:13:11.315064Z"
+  "updated_at": "2026-01-13T09:42:56.630435Z"
 }
