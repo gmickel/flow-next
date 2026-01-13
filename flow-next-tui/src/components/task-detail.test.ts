@@ -268,10 +268,11 @@ describe('TaskDetail', () => {
   describe('scrolling', () => {
     test('j key scrolls down', () => {
       const task = mockTask();
-      const spec = 'Line 1\nLine 2\nLine 3\nLine 4\nLine 5';
+      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n');
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50); // Initialize content height
+      detail.setViewportHeight(5); // Small viewport enables scrolling
       expect(detail.getScrollOffset()).toBe(0);
 
       detail.handleInput('j');
@@ -280,10 +281,11 @@ describe('TaskDetail', () => {
 
     test('k key scrolls up', () => {
       const task = mockTask();
-      const spec = 'Line 1\nLine 2\nLine 3';
+      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n');
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
+      detail.setViewportHeight(5);
       detail.handleInput('j');
       detail.handleInput('j');
       expect(detail.getScrollOffset()).toBe(2);
@@ -317,34 +319,56 @@ describe('TaskDetail', () => {
       expect(detail.getScrollOffset()).toBe(0);
     });
 
-    test('G key goes to bottom', () => {
+    test('G key goes to max scroll (not totalHeight - 1)', () => {
+      const task = mockTask();
+      const spec = Array.from({ length: 30 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const detail = new TaskDetail({ task, spec, theme: darkTheme });
+
+      detail.render(50);
+      detail.setViewportHeight(10); // Set viewport to 10 lines
+      const maxScroll = detail.getMaxScroll();
+
+      detail.handleInput('G');
+      expect(detail.getScrollOffset()).toBe(maxScroll);
+      // maxScroll should be totalHeight - viewportHeight, not totalHeight - 1
+      expect(maxScroll).toBe(detail.getTotalHeight() - detail.getViewportHeight());
+    });
+
+    test('uppercase G is distinct from lowercase g', () => {
+      const task = mockTask();
+      const spec = Array.from({ length: 30 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const detail = new TaskDetail({ task, spec, theme: darkTheme });
+
+      detail.render(50);
+      detail.setViewportHeight(10);
+
+      // G should go to max scroll
+      detail.handleInput('G');
+      expect(detail.getScrollOffset()).toBe(detail.getMaxScroll());
+
+      // g should go to top
+      detail.handleInput('g');
+      expect(detail.getScrollOffset()).toBe(0);
+    });
+
+    test('down arrow scrolls down', () => {
       const task = mockTask();
       const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n');
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
-      const totalHeight = detail.getTotalHeight();
-
-      detail.handleInput('G');
-      expect(detail.getScrollOffset()).toBe(totalHeight - 1);
-    });
-
-    test('down arrow scrolls down', () => {
-      const task = mockTask();
-      const spec = 'Line 1\nLine 2\nLine 3';
-      const detail = new TaskDetail({ task, spec, theme: darkTheme });
-
-      detail.render(50);
+      detail.setViewportHeight(5);
       detail.handleInput('\x1b[B'); // Down arrow
       expect(detail.getScrollOffset()).toBe(1);
     });
 
     test('up arrow scrolls up', () => {
       const task = mockTask();
-      const spec = 'Line 1\nLine 2\nLine 3';
+      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n');
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
+      detail.setViewportHeight(5);
       detail.handleInput('j');
       detail.handleInput('\x1b[A'); // Up arrow
       expect(detail.getScrollOffset()).toBe(0);
@@ -352,10 +376,11 @@ describe('TaskDetail', () => {
 
     test('resetScroll resets scroll position', () => {
       const task = mockTask();
-      const spec = 'Line 1\nLine 2\nLine 3';
+      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n');
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
+      detail.setViewportHeight(5);
       detail.handleInput('j');
       detail.handleInput('j');
 
@@ -373,6 +398,113 @@ describe('TaskDetail', () => {
 
       // Should be at least header lines (3-4) + spec lines
       expect(height).toBeGreaterThanOrEqual(5);
+    });
+
+    test('setViewportHeight sets viewport and clamps scroll', () => {
+      const task = mockTask();
+      const spec = Array.from({ length: 30 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const detail = new TaskDetail({ task, spec, theme: darkTheme });
+
+      detail.render(50);
+      detail.setViewportHeight(5);
+      expect(detail.getViewportHeight()).toBe(5);
+
+      // Scroll to end, then reduce viewport - scroll should stay clamped
+      detail.handleInput('G');
+      const scrollBefore = detail.getScrollOffset();
+      detail.setViewportHeight(10); // Larger viewport = smaller maxScroll
+      expect(detail.getScrollOffset()).toBeLessThanOrEqual(scrollBefore);
+    });
+
+    test('page down (space) moves by viewportHeight - 2', () => {
+      const task = mockTask();
+      const spec = Array.from({ length: 50 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const detail = new TaskDetail({ task, spec, theme: darkTheme });
+
+      detail.render(50);
+      detail.setViewportHeight(10);
+      expect(detail.getScrollOffset()).toBe(0);
+
+      detail.handleInput(' '); // space = page down
+      expect(detail.getScrollOffset()).toBe(8); // viewportHeight(10) - 2 = 8
+    });
+
+    test('page down (ctrl+d) moves by viewportHeight - 2', () => {
+      const task = mockTask();
+      const spec = Array.from({ length: 50 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const detail = new TaskDetail({ task, spec, theme: darkTheme });
+
+      detail.render(50);
+      detail.setViewportHeight(10);
+
+      detail.handleInput('\x04'); // ctrl+d
+      expect(detail.getScrollOffset()).toBe(8);
+    });
+
+    test('page up (ctrl+u) moves by viewportHeight - 2', () => {
+      const task = mockTask();
+      const spec = Array.from({ length: 50 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const detail = new TaskDetail({ task, spec, theme: darkTheme });
+
+      detail.render(50);
+      detail.setViewportHeight(10);
+
+      // Go to end first
+      detail.handleInput('G');
+      const endOffset = detail.getScrollOffset();
+
+      detail.handleInput('\x15'); // ctrl+u
+      expect(detail.getScrollOffset()).toBe(endOffset - 8); // viewportHeight(10) - 2 = 8
+    });
+
+    test('page down does not exceed maxScroll', () => {
+      const task = mockTask();
+      const spec = Array.from({ length: 15 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const detail = new TaskDetail({ task, spec, theme: darkTheme });
+
+      detail.render(50);
+      detail.setViewportHeight(10);
+      const maxScroll = detail.getMaxScroll();
+
+      // Multiple page downs should not exceed maxScroll
+      detail.handleInput(' ');
+      detail.handleInput(' ');
+      detail.handleInput(' ');
+      expect(detail.getScrollOffset()).toBeLessThanOrEqual(maxScroll);
+    });
+
+    test('page up does not go below 0', () => {
+      const task = mockTask();
+      const spec = Array.from({ length: 15 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const detail = new TaskDetail({ task, spec, theme: darkTheme });
+
+      detail.render(50);
+      detail.setViewportHeight(10);
+
+      // Start at 0, page up should stay at 0
+      detail.handleInput('\x15');
+      expect(detail.getScrollOffset()).toBe(0);
+    });
+
+    test('scroll respects maxScroll not totalHeight - 1', () => {
+      const task = mockTask();
+      const spec = Array.from({ length: 30 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const detail = new TaskDetail({ task, spec, theme: darkTheme });
+
+      detail.render(50);
+      detail.setViewportHeight(10);
+      const totalHeight = detail.getTotalHeight();
+      const maxScroll = detail.getMaxScroll();
+
+      // maxScroll should be totalHeight - viewportHeight
+      expect(maxScroll).toBe(totalHeight - 10);
+
+      // j key should stop at maxScroll, not totalHeight - 1
+      for (let i = 0; i < 100; i++) {
+        detail.handleInput('j');
+      }
+      expect(detail.getScrollOffset()).toBe(maxScroll);
+      expect(detail.getScrollOffset()).toBeLessThan(totalHeight - 1);
     });
   });
 

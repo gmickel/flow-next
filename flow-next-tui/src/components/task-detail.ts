@@ -48,7 +48,7 @@ export class TaskDetail implements Component {
 
   // Scroll state
   private scrollOffset = 0;
-  private lastRenderedHeight = 0;
+  private viewportHeight = 20; // Default viewport, updated by setViewportHeight
   private totalContentHeight = 0;
 
   // Markdown component (lazy-initialized)
@@ -81,11 +81,25 @@ export class TaskDetail implements Component {
   /** Update receipt status */
   setReceipts(receipts: ReceiptStatus): void {
     this.receipts = receipts;
+    this.invalidate();
   }
 
   /** Update block reason */
   setBlockReason(reason: string | null): void {
     this.blockReason = reason;
+    this.clampScroll();
+    this.invalidate();
+  }
+
+  /** Set viewport height for proper scroll bounds */
+  setViewportHeight(height: number): void {
+    this.viewportHeight = Math.max(1, height);
+    this.clampScroll();
+  }
+
+  /** Clamp scroll offset to valid range */
+  private clampScroll(): void {
+    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, this.getMaxScroll()));
   }
 
   /** Get status icon for the task */
@@ -248,9 +262,19 @@ export class TaskDetail implements Component {
   }
 
   handleInput(data: string): void {
+    const maxScroll = this.getMaxScroll();
+
+    // End (G - check uppercase first before lowercase g)
+    if (data === 'G' || matchesKey(data, 'shift+g')) {
+      this.scrollOffset = maxScroll;
+    }
+    // Home (g - lowercase only)
+    else if (data === 'g') {
+      this.scrollOffset = 0;
+    }
     // j or down arrow - scroll down
-    if (matchesKey(data, 'j') || matchesKey(data, 'down')) {
-      if (this.scrollOffset < this.totalContentHeight - 1) {
+    else if (matchesKey(data, 'j') || matchesKey(data, 'down')) {
+      if (this.scrollOffset < maxScroll) {
         this.scrollOffset++;
       }
     }
@@ -262,24 +286,13 @@ export class TaskDetail implements Component {
     }
     // Page down (space or ctrl+d)
     else if (data === ' ' || data === '\x04') {
-      const pageSize = Math.max(1, this.lastRenderedHeight - 2);
-      this.scrollOffset = Math.min(
-        this.scrollOffset + pageSize,
-        Math.max(0, this.totalContentHeight - 1)
-      );
+      const pageSize = Math.max(1, this.viewportHeight - 2);
+      this.scrollOffset = Math.min(this.scrollOffset + pageSize, maxScroll);
     }
     // Page up (ctrl+u)
     else if (data === '\x15') {
-      const pageSize = Math.max(1, this.lastRenderedHeight - 2);
+      const pageSize = Math.max(1, this.viewportHeight - 2);
       this.scrollOffset = Math.max(0, this.scrollOffset - pageSize);
-    }
-    // Home (g or ctrl+home)
-    else if (matchesKey(data, 'g')) {
-      this.scrollOffset = 0;
-    }
-    // End (G or ctrl+end)
-    else if (matchesKey(data, 'shift+g') || data === 'G') {
-      this.scrollOffset = Math.max(0, this.totalContentHeight - 1);
     }
   }
 
@@ -296,6 +309,16 @@ export class TaskDetail implements Component {
   /** Get total content height */
   getTotalHeight(): number {
     return this.totalContentHeight;
+  }
+
+  /** Get current viewport height */
+  getViewportHeight(): number {
+    return this.viewportHeight;
+  }
+
+  /** Get max scroll offset */
+  getMaxScroll(): number {
+    return Math.max(0, this.totalContentHeight - this.viewportHeight);
   }
 
   invalidate(): void {
