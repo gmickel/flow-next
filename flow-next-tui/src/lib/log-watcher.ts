@@ -50,7 +50,8 @@ export class LogWatcher extends EventEmitter {
   }
 
   /**
-   * Start watching the run directory
+   * Start watching the run directory.
+   * Note: Returns Promise - callers should await to ensure initial read completes.
    */
   async start(): Promise<void> {
     if (this.isRunning) {
@@ -132,6 +133,11 @@ export class LogWatcher extends EventEmitter {
         { persistent: false },
         (eventType, filename) => {
           if (!this.isRunning) return;
+
+          // Note: fs.watch eventType is platform-dependent and unreliable.
+          // 'rename' typically indicates create/delete but isn't guaranteed.
+          // handleNewLogFile has guards (iteration comparison, pendingIteration)
+          // that prevent redundant switches, so we process all events.
 
           // Normalize filename (can be Buffer on some platforms)
           const name =

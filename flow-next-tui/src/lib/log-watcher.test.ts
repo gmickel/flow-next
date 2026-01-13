@@ -7,6 +7,31 @@ import type { LogEntry } from './types';
 
 import { LogWatcher } from './log-watcher';
 
+/**
+ * Wait for at least n 'line' events or timeout
+ */
+async function waitForLines(
+  watcher: LogWatcher,
+  minCount: number,
+  timeout = 1000
+): Promise<LogEntry[]> {
+  const entries: LogEntry[] = [];
+  return new Promise((resolve) => {
+    const handler = (entry: LogEntry) => {
+      entries.push(entry);
+      if (entries.length >= minCount) {
+        watcher.off('line', handler);
+        resolve(entries);
+      }
+    };
+    watcher.on('line', handler);
+    setTimeout(() => {
+      watcher.off('line', handler);
+      resolve(entries);
+    }, timeout);
+  });
+}
+
 describe('LogWatcher', () => {
   let tempDir: string;
 
@@ -46,17 +71,13 @@ describe('LogWatcher', () => {
       await writeFile(logPath, JSON.stringify(entry) + '\n');
 
       const watcher = new LogWatcher(tempDir);
-      const received: LogEntry[] = [];
 
-      watcher.on('line', (entry) => {
-        received.push(entry);
-      });
+      // Set up listener before start() - initial read happens during start()
+      const linesPromise = waitForLines(watcher, 1, 500);
 
       await watcher.start();
 
-      // Wait for initial read
-      await new Promise((resolve) => setTimeout(resolve, 150));
-
+      const received = await linesPromise;
       watcher.stop();
 
       expect(received).toHaveLength(1);
@@ -70,15 +91,13 @@ describe('LogWatcher', () => {
       await writeFile(logPath, '');
 
       const watcher = new LogWatcher(tempDir);
-      const received: LogEntry[] = [];
 
-      watcher.on('line', (entry) => {
-        received.push(entry);
-      });
+      // Set up event-driven wait for 2 entries
+      const linesPromise = waitForLines(watcher, 2, 1000);
 
       await watcher.start();
 
-      // Append content
+      // Append content (triggers fs.watch -> debounced read)
       const entry1 = {
         type: 'tool_call',
         tool: 'Read',
@@ -88,9 +107,7 @@ describe('LogWatcher', () => {
       await appendFile(logPath, JSON.stringify(entry1) + '\n');
       await appendFile(logPath, JSON.stringify(entry2) + '\n');
 
-      // Wait for debounced read (100ms debounce + buffer)
-      await new Promise((resolve) => setTimeout(resolve, 250));
-
+      const received = await linesPromise;
       watcher.stop();
 
       expect(received.length).toBeGreaterThanOrEqual(2);
@@ -110,14 +127,16 @@ describe('LogWatcher', () => {
       );
 
       const watcher = new LogWatcher(tempDir);
-      const received: LogEntry[] = [];
       const errors: Error[] = [];
 
-      watcher.on('line', (entry) => received.push(entry));
       watcher.on('error', (err) => errors.push(err));
 
+      // Wait for 2 valid entries (invalid line skipped)
+      const linesPromise = waitForLines(watcher, 2, 500);
+
       await watcher.start();
-      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      const received = await linesPromise;
       watcher.stop();
 
       // Should have 2 valid entries, no errors (invalid lines skipped)
@@ -327,16 +346,12 @@ describe('LogWatcher', () => {
       const originalEntries = received.filter((e) => e.content === 'original');
       expect(originalEntries.length).toBe(1);
 
-      // New content detection after truncation
-      const newEntries = received.filter((e) => e.content === 'new');
-      // NOTE: fs.watch 'rename' event timing varies significantly by platform.
-      // On some systems this works reliably, on others truncation isn't detected
-      // until additional writes occur. This test verifies no crash on truncation
-      // and no duplicate "original" entries. Full truncation recovery is
+      // New content detection after truncation is platform-dependent.
+      // fs.watch 'rename' event timing varies significantly by platform.
+      // This test primarily verifies: no crash on truncation, no duplicate
+      // "original" entries, no errors emitted. Full truncation recovery is
       // integration-tested in actual Ralph runs.
-      if (newEntries.length === 0) {
-        console.warn('Truncation: new content not detected (platform-dependent)');
-      }
+      // Note: newEntries may be empty on some platforms (expected)
     });
   });
 
