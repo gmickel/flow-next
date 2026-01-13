@@ -43,6 +43,7 @@ export class LogWatcher extends EventEmitter {
   private isRunning = false;
   private pendingIteration: number | null = null; // Guard against race conditions
   private readPromise: Promise<void> = Promise.resolve(); // Serialize reads
+  private textDecoder = new TextDecoder('utf-8', { fatal: false }); // Handles incomplete UTF-8
 
   constructor(runPath: string) {
     super();
@@ -311,10 +312,12 @@ export class LogWatcher extends EventEmitter {
         (eventType) => {
           if (!this.isRunning) return;
 
-          // Handle both 'change' and 'rename' events
-          // 'rename' can occur on truncation, atomic replace, or log rotation
-          if (eventType === 'change' || eventType === 'rename') {
+          if (eventType === 'change') {
             this.debouncedRead();
+          } else if (eventType === 'rename') {
+            // 'rename' can occur on truncation, atomic replace, or log rotation.
+            // Watcher may stop delivering events after rename - re-arm it.
+            this.handleFileRename();
           }
         }
       );
@@ -331,6 +334,39 @@ export class LogWatcher extends EventEmitter {
         error instanceof Error ? error : new Error(String(error))
       );
     }
+  }
+
+  /**
+   * Handle file 'rename' event: read pending data and re-arm watcher
+   */
+  private handleFileRename(): void {
+    // Read any pending data first
+    this.readPromise = this.readPromise.then(async () => {
+      if (!this.isRunning || !this.currentLogPath) return;
+
+      try {
+        // Check if file still exists
+        await stat(this.currentLogPath);
+
+        // Read pending data
+        await this.readFromPosition();
+
+        // Re-arm watcher (close old, create new)
+        if (this.fileWatcher) {
+          this.fileWatcher.close();
+          this.fileWatcher = null;
+        }
+        this.watchCurrentLog();
+      } catch (error) {
+        // File may have been deleted - normal at run end
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          this.emit(
+            'error',
+            error instanceof Error ? error : new Error(String(error))
+          );
+        }
+      }
+    });
   }
 
   /**
