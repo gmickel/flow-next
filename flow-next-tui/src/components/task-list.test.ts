@@ -157,6 +157,37 @@ describe('TaskList', () => {
       expect(visibleWidth(lines[0]!)).toBeLessThanOrEqual(35);
     });
 
+    test('lines never exceed width even at very narrow widths', () => {
+      // Test edge case: blocked task with dep indicator at very narrow width
+      const tasks = [
+        mockTask({ status: 'blocked', depends_on: ['fn-1.2'], title: 'Long title' }),
+        mockTask({ id: 'fn-1.2', title: 'Another long title here' }),
+      ];
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+
+      // Test various narrow widths - all lines must fit
+      for (const width of [5, 8, 10, 15, 20]) {
+        const lines = list.render(width);
+        for (const line of lines) {
+          expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+        }
+      }
+    });
+
+    test('drops dependency indicator when width too narrow', () => {
+      // Blocked task with dep at narrow width should drop dep, not overflow
+      const tasks = [mockTask({ status: 'blocked', depends_on: ['fn-1.2'], title: 'Task' })];
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+
+      // At width 5: spaceForContent = 5-2 = 3, depWidth = 6
+      // Since depWidth (6) >= spaceForContent (3), dep is dropped
+      const lines = list.render(5);
+      const line = stripAnsi(lines[0]!);
+      expect(visibleWidth(lines[0]!)).toBeLessThanOrEqual(5);
+      // Dep should be dropped at this width
+      expect(line).not.toContain('→');
+    });
+
     test('selected row is padded to full width', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2', title: 'Second' })];
       const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });

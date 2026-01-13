@@ -216,8 +216,17 @@ export class TaskList implements Component {
         continue;
       }
 
+      // Drop dep if it leaves no room for id/title (need at least 1 char for id)
+      const spaceForContent = width - prefixWidth;
+      let actualDepStr = depStr;
+      let actualDepWidth = depWidth;
+      if (actualDepWidth >= spaceForContent) {
+        actualDepStr = '';
+        actualDepWidth = 0;
+      }
+
       // icon + space + id (possibly truncated)
-      const availableForId = width - prefixWidth - depWidth - 1; // -1 for minimum title space
+      const availableForId = spaceForContent - actualDepWidth - 1; // -1 for minimum title space
       let displayId: string;
       if (availableForId < task.id.length) {
         displayId = availableForId > 0 ? truncateToWidth(task.id, availableForId, '…') : '';
@@ -227,7 +236,7 @@ export class TaskList implements Component {
       const actualIdWidth = displayId ? visibleWidth(displayId) + 1 : 0;
 
       // Calculate available space for title
-      const availableWidth = width - prefixWidth - actualIdWidth - depWidth;
+      const availableWidth = spaceForContent - actualIdWidth - actualDepWidth;
       const titleMaxWidth = Math.max(0, availableWidth);
       const truncatedTitle = titleMaxWidth > 0 ? truncateToWidth(task.title, titleMaxWidth, '…') : '';
 
@@ -241,8 +250,10 @@ export class TaskList implements Component {
       const titlePart = truncatedTitle ? ` ${truncatedTitle}` : '';
 
       if (isSelected) {
-        // For selected rows: apply per-segment fg + selected bg to each segment
-        // This preserves status colors while indicating selection
+        // For selected rows: apply per-segment fg + selected bg to each segment.
+        // NOTE: We don't use theme.selectList.selectedText because it's a single
+        // transform that would lose per-segment status colors. Instead we apply
+        // bg+fg directly per segment to preserve status icon coloring.
         const statusFgCode = this.getStatusColorCode(task);
         const dimFgCode = this.theme.palette.dim;
         const textFgCode = this.theme.palette.text;
@@ -255,7 +266,7 @@ export class TaskList implements Component {
         let padding: string;
 
         // Calculate padding needed
-        const rawLine = `${icon}${idPart}${titlePart}${depStr}`;
+        const rawLine = `${icon}${idPart}${titlePart}${actualDepStr}`;
         const paddingNeeded = Math.max(0, width - visibleWidth(rawLine));
 
         if (validBg) {
@@ -266,14 +277,14 @@ export class TaskList implements Component {
           coloredTitle = truncatedTitle
             ? chalk.bgAnsi256(bgCode).ansi256(textFgCode)(` ${truncatedTitle}`)
             : '';
-          coloredDep = depStr ? chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(depStr) : '';
+          coloredDep = actualDepStr ? chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(actualDepStr) : '';
           padding = chalk.bgAnsi256(bgCode)(' '.repeat(paddingNeeded));
         } else {
           // No bg, just fg colors
           coloredIcon = chalk.ansi256(statusFgCode)(icon);
           coloredId = displayId ? chalk.ansi256(dimFgCode)(` ${displayId}`) : '';
           coloredTitle = truncatedTitle ? chalk.ansi256(textFgCode)(` ${truncatedTitle}`) : '';
-          coloredDep = depStr ? chalk.ansi256(statusFgCode)(depStr) : '';
+          coloredDep = actualDepStr ? chalk.ansi256(statusFgCode)(actualDepStr) : '';
           padding = ' '.repeat(paddingNeeded);
         }
 
@@ -284,7 +295,7 @@ export class TaskList implements Component {
         const dimId = displayId ? this.theme.dim(` ${displayId}`) : '';
         const titleStr = truncatedTitle ? ` ${truncatedTitle}` : '';
         // Dep indicator uses same color as status (blocked => warning)
-        const coloredDep = depStr ? colorFn(depStr) : '';
+        const coloredDep = actualDepStr ? colorFn(actualDepStr) : '';
         lines.push(`${coloredIcon}${dimId}${titleStr}${coloredDep}`);
       }
     }
