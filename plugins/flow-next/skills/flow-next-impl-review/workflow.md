@@ -163,7 +163,12 @@ cat > /tmp/review-prompt.md << 'EOF'
 ---
 
 ## IMPORTANT: File Contents
-The files listed in the selection are included in this context. You MUST read and analyze their actual source code - do not reason only from summaries or descriptions.
+RepoPrompt includes the actual source code of selected files in a `<file_contents>` XML section at the end of this message. You MUST:
+1. Locate the `<file_contents>` section
+2. Read and analyze the actual source code within it
+3. Base your review on the code, not summaries or descriptions
+
+If you cannot find `<file_contents>`, ask for the files to be re-attached before proceeding.
 
 ## Changes Under Review
 Branch: [BRANCH_NAME]
@@ -249,6 +254,15 @@ If verdict is NEEDS_WORK:
    **If you skip this and re-review without committing changes, reviewer will return NEEDS_WORK again.**
 
 5. **Re-review with fix summary** (only AFTER step 4):
+
+   First, refresh the file selection to get updated contents:
+   ```bash
+   for f in $CHANGED_FILES; do
+     $FLOWCTL rp select-add --window "$W" --tab "$T" "$f"
+   done
+   ```
+
+   Then send re-review request:
    ```bash
    cat > /tmp/re-review.md << 'EOF'
    ## Fixes Applied
@@ -256,7 +270,12 @@ If verdict is NEEDS_WORK:
    - [Fix 2]: [file:line] [what changed]
    ...
 
-   The updated files are attached to this message. Please review the actual file contents (not just this summary) and verify the fixes address the issues.
+   The updated files should be attached in the `<file_contents>` XML section below. Please:
+   1. Locate the `<file_contents>` XML section at the end of this message
+   2. Read the actual updated source code within it
+   3. Verify the fixes address the issues raised
+
+   If you cannot find `<file_contents>`, say so and I will re-attach the files.
    EOF
 
    $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md
