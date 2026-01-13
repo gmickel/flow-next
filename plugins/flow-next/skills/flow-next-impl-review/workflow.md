@@ -162,6 +162,9 @@ cat > /tmp/review-prompt.md << 'EOF'
 
 ---
 
+## IMPORTANT: File Contents
+The files listed in the selection are included in this context. You MUST read and analyze their actual source code - do not reason only from summaries or descriptions.
+
 ## Changes Under Review
 Branch: [BRANCH_NAME]
 Files: [LIST CHANGED FILES]
