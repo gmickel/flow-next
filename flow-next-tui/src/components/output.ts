@@ -10,6 +10,7 @@ import { matchesKey } from '@mariozechner/pi-tui';
 import type { LogEntry } from '../lib/types.ts';
 import type { Theme } from '../themes/index.ts';
 
+import { iconForEntry } from '../lib/parser.ts';
 import {
   visibleWidth,
   truncateToWidth,
@@ -19,29 +20,6 @@ import {
 
 /** Default buffer size */
 const DEFAULT_MAX_BUFFER = 500;
-
-/** Tool icons by type */
-const TOOL_ICONS: Record<string, string> = {
-  // File operations
-  Read: '→',
-  Write: '→',
-  Glob: '→',
-  Edit: '→',
-  // Bash
-  Bash: '⚡',
-  // API / other
-  default: '◆',
-};
-
-/** ASCII fallbacks for tool icons */
-const ASCII_TOOL_ICONS: Record<string, string> = {
-  Read: '>',
-  Write: '>',
-  Glob: '>',
-  Edit: '>',
-  Bash: '$',
-  default: '*',
-};
 
 export interface OutputPanelProps {
   buffer?: LogEntry[];
@@ -96,6 +74,12 @@ export class OutputPanel implements Component {
     // Auto-scroll to bottom if enabled
     if (this.autoScroll) {
       this.scrollToBottom();
+    } else {
+      // Re-enable auto-scroll if trim/append moved us to bottom
+      // (per spec: "Reset when at bottom")
+      if (this.scrollOffset >= this.getMaxScroll()) {
+        this.autoScroll = true;
+      }
     }
   }
 
@@ -104,9 +88,9 @@ export class OutputPanel implements Component {
     this.iteration = iteration;
   }
 
-  /** Clear all buffer entries */
+  /** Clear all buffer entries (clears in-place to preserve shared reference) */
   clearBuffer(): void {
-    this.buffer = [];
+    this.buffer.length = 0;
     this.scrollOffset = 0;
     this.autoScroll = true;
   }
@@ -129,25 +113,9 @@ export class OutputPanel implements Component {
     this.autoScroll = true;
   }
 
-  /** Get tool icon for a log entry */
+  /** Get tool icon for a log entry (uses shared iconForEntry from parser) */
   private getToolIcon(entry: LogEntry): string {
-    const icons = this.useAscii ? ASCII_TOOL_ICONS : TOOL_ICONS;
-    const defaultIcon = icons.default ?? '◆';
-
-    // Check for success/failure indicators
-    if (entry.success === true) {
-      return this.useAscii ? '+' : '✓';
-    }
-    if (entry.success === false) {
-      return this.useAscii ? 'x' : '✗';
-    }
-
-    // Get icon by tool name
-    if (entry.tool) {
-      return icons[entry.tool] ?? defaultIcon;
-    }
-
-    return defaultIcon;
+    return iconForEntry(entry, this.useAscii);
   }
 
   /** Get color function for a log entry */
@@ -175,19 +143,29 @@ export class OutputPanel implements Component {
 
   /** Render the bordered header */
   private renderHeader(width: number): string {
-    const label = ` Iteration ${this.iteration} `;
-    const labelWidth = visibleWidth(label);
-
-    // Border character
     const borderChar = this.useAscii ? '-' : '─';
-
-    // Calculate left/right padding
-    const innerWidth = width - 2; // Account for corners
-    const leftPad = Math.max(0, Math.floor((innerWidth - labelWidth) / 2));
-    const rightPad = Math.max(0, innerWidth - labelWidth - leftPad);
-
     const topLeft = this.useAscii ? '+' : '┌';
     const topRight = this.useAscii ? '+' : '┐';
+    const innerWidth = width - 2; // Account for corners
+
+    // Handle very narrow widths - minimal header
+    if (innerWidth <= 0) {
+      return this.theme.border(topLeft) + this.theme.border(topRight);
+    }
+
+    // Build label, truncate if needed
+    let label = ` Iteration ${this.iteration} `;
+    let labelWidth = visibleWidth(label);
+
+    if (labelWidth > innerWidth) {
+      // Truncate label to fit
+      label = truncateToWidth(label, innerWidth, '…');
+      labelWidth = visibleWidth(label);
+    }
+
+    // Calculate left/right padding
+    const leftPad = Math.max(0, Math.floor((innerWidth - labelWidth) / 2));
+    const rightPad = Math.max(0, innerWidth - labelWidth - leftPad);
 
     return (
       this.theme.border(topLeft) +
@@ -211,20 +189,28 @@ export class OutputPanel implements Component {
     );
   }
 
-  /** Format a single log entry as a line */
+  /**
+   * Format a single log entry as a line.
+   * Note: Only renders first line of content - multiline entries are summarized.
+   * This is intentional for the output panel which shows one line per LogEntry.
+   */
   private formatEntry(entry: LogEntry, contentWidth: number): string {
     const icon = this.getToolIcon(entry);
     const colorFn = this.getEntryColor(entry);
-
-    // Format: "icon content"
-    const sanitized = this.sanitize(entry.content);
-    // Take first line only for display
-    const firstLine = sanitized.split('\n')[0] ?? '';
     const iconColored = colorFn(icon);
     const iconWidth = visibleWidth(icon);
 
     // Available width for content (icon + space + content)
     const availableWidth = contentWidth - iconWidth - 1;
+
+    // Guard against very narrow widths - just show icon
+    if (availableWidth <= 0) {
+      return iconColored;
+    }
+
+    // Sanitize and take first line only for display
+    const sanitized = this.sanitize(entry.content);
+    const firstLine = sanitized.split('\n')[0] ?? '';
 
     if (visibleWidth(firstLine) > availableWidth) {
       return `${iconColored} ${truncateToWidth(firstLine, availableWidth, '…')}`;

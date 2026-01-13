@@ -95,7 +95,7 @@ describe('OutputPanel', () => {
 
       const content = lines.map((l) => stripAnsi(l)).join('\n');
       expect(content).toContain('>'); // File op
-      expect(content).toContain('$'); // Bash
+      expect(content).toContain('!'); // Bash (per parser.ts ASCII_ICONS)
       expect(content).toContain('+'); // Success
       expect(content).toContain('x'); // Failure
     });
