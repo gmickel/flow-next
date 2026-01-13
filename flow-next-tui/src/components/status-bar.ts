@@ -5,11 +5,14 @@
 
 import type { Component } from '@mariozechner/pi-tui';
 
-import { truncateToWidth } from '@mariozechner/pi-tui';
-
 import type { Theme } from '../themes/index.ts';
 
-import { visibleWidth } from '../lib/render.ts';
+import {
+  padToWidth,
+  stripAnsi,
+  truncateToWidth,
+  visibleWidth,
+} from '../lib/render.ts';
 
 /** Shortcut definitions for the status bar */
 const SHORTCUTS = 'q quit  j/k nav  ? help';
@@ -36,21 +39,29 @@ export class StatusBar implements Component {
     this.theme = props.theme;
   }
 
-  /** Update status bar state */
+  /** Update status bar state (uses 'in' semantics to allow clearing) */
   update(props: Partial<StatusBarProps>): void {
-    if (props.runId !== undefined) this.runId = props.runId;
-    if (props.errorCount !== undefined) this.errorCount = props.errorCount;
-    if (props.theme !== undefined) this.theme = props.theme;
+    if ('runId' in props) this.runId = props.runId;
+    if ('errorCount' in props) this.errorCount = props.errorCount ?? 0;
+    if ('theme' in props && props.theme) this.theme = props.theme;
   }
 
   render(width: number): string[] {
+    // Handle very narrow widths
+    if (width <= 0) {
+      return [''];
+    }
+
+    // Sanitize runId to prevent ANSI injection
+    const safeRunId = this.runId ? stripAnsi(this.runId) : undefined;
+
     // Left side: shortcuts (dimmed)
     const shortcutsWidth = visibleWidth(SHORTCUTS);
 
     // Right side: run ID + error count
     let rightContent = '';
-    if (this.runId) {
-      rightContent = this.runId;
+    if (safeRunId) {
+      rightContent = safeRunId;
       if (this.errorCount > 0) {
         rightContent += ` (${this.errorCount} error${this.errorCount === 1 ? '' : 's'})`;
       }
@@ -59,64 +70,60 @@ export class StatusBar implements Component {
     }
     const rightWidth = visibleWidth(rightContent);
 
-    // Handle very narrow widths
-    if (width <= 0) {
-      return [''];
-    }
-
     // Build the row
     const minWidth = shortcutsWidth + (rightWidth > 0 ? 2 + rightWidth : 0);
+    let line: string;
 
     if (width < shortcutsWidth) {
       // Too narrow for full shortcuts - truncate
       const truncatedShortcuts = truncateToWidth(SHORTCUTS, width, '…');
-      return [this.theme.dim(truncatedShortcuts)];
-    }
-
-    if (width < minWidth && rightWidth > 0) {
+      line = this.theme.dim(truncatedShortcuts);
+    } else if (width < minWidth && rightWidth > 0) {
       // Can fit shortcuts but not full right side
       const availableForRight = width - shortcutsWidth - 2;
       if (availableForRight <= 0) {
         // Just show shortcuts
         const gap = ' '.repeat(Math.max(0, width - shortcutsWidth));
-        return [this.theme.dim(SHORTCUTS) + gap];
+        line = this.theme.dim(SHORTCUTS) + gap;
+      } else {
+        // Truncate right content
+        const truncatedRight = truncateToWidth(rightContent, availableForRight, '…');
+        const truncatedRightWidth = visibleWidth(truncatedRight);
+        const gapWidth = Math.max(0, width - shortcutsWidth - truncatedRightWidth);
+        const gap = ' '.repeat(gapWidth);
+
+        const rightColored =
+          this.errorCount > 0
+            ? this.theme.error(truncatedRight)
+            : this.theme.dim(truncatedRight);
+
+        line = this.theme.dim(SHORTCUTS) + gap + rightColored;
       }
-      // Truncate right content
-      const truncatedRight = truncateToWidth(rightContent, availableForRight, '…');
-      const truncatedRightWidth = visibleWidth(truncatedRight);
-      const gapWidth = Math.max(0, width - shortcutsWidth - truncatedRightWidth);
+    } else {
+      // Full content fits
+      const gapWidth = Math.max(0, width - shortcutsWidth - rightWidth);
       const gap = ' '.repeat(gapWidth);
 
-      let rightColored = truncatedRight;
-      if (this.errorCount > 0) {
-        rightColored = this.theme.error(truncatedRight);
-      } else {
-        rightColored = this.theme.dim(truncatedRight);
-      }
-
-      return [this.theme.dim(SHORTCUTS) + gap + rightColored];
-    }
-
-    // Full content fits
-    const gapWidth = Math.max(0, width - shortcutsWidth - rightWidth);
-    const gap = ' '.repeat(gapWidth);
-
-    let rightColored = '';
-    if (rightContent) {
-      if (this.errorCount > 0) {
-        // Color error part differently
-        if (this.runId) {
-          const errorPart = ` (${this.errorCount} error${this.errorCount === 1 ? '' : 's'})`;
-          rightColored = this.theme.dim(this.runId) + this.theme.error(errorPart);
+      let rightColored = '';
+      if (rightContent) {
+        if (this.errorCount > 0) {
+          // Color error part differently
+          if (safeRunId) {
+            const errorPart = ` (${this.errorCount} error${this.errorCount === 1 ? '' : 's'})`;
+            rightColored = this.theme.dim(safeRunId) + this.theme.error(errorPart);
+          } else {
+            rightColored = this.theme.error(rightContent);
+          }
         } else {
-          rightColored = this.theme.error(rightContent);
+          rightColored = this.theme.dim(rightContent);
         }
-      } else {
-        rightColored = this.theme.dim(rightContent);
       }
+
+      line = this.theme.dim(SHORTCUTS) + gap + rightColored;
     }
 
-    return [this.theme.dim(SHORTCUTS) + gap + rightColored];
+    // Ensure full width (prevents stale chars on screen)
+    return [padToWidth(line, width)];
   }
 
   handleInput(_data: string): void {
