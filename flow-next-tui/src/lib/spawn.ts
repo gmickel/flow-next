@@ -123,6 +123,7 @@ export async function spawnRalph(epicId: string): Promise<SpawnResult> {
 
   // Spawn detached using setsid for true process group separation
   // This ensures TUI Ctrl+C won't kill ralph
+  // Note: setsid required (macOS/Linux only; Windows not supported for ralph)
   const proc = Bun.spawn(['setsid', 'bash', ralphPath], {
     cwd: ralphDir,
     env: {
@@ -130,6 +131,7 @@ export async function spawnRalph(epicId: string): Promise<SpawnResult> {
       EPICS: epicId,
       YOLO: '1', // Required for unattended mode
     },
+    stdin: 'ignore',
     stdout: 'ignore',
     stderr: 'ignore',
   });
