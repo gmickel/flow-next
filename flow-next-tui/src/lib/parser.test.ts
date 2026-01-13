@@ -52,16 +52,16 @@ function makeText(text: string): string {
 
 describe('parser', () => {
   describe('getIcon', () => {
-    test('returns ASCII icons by default (consistent width)', () => {
-      expect(getIcon('Read')).toBe('>');
-      expect(getIcon('Write')).toBe('<');
+    test('returns Unicode icons by default', () => {
+      expect(getIcon('Read')).toBe('▸');
+      expect(getIcon('Write')).toBe('◂');
       expect(getIcon('Bash')).toBe('$');
-      expect(getIcon('Task')).toBe('@');
-      expect(getIcon('success')).toBe('+');
-      expect(getIcon('failure')).toBe('x');
+      expect(getIcon('Task')).toBe('◈');
+      expect(getIcon('success')).toBe('✓');
+      expect(getIcon('failure')).toBe('✗');
     });
 
-    test('returns same ASCII icons when ascii=true', () => {
+    test('returns ASCII icons when ascii=true', () => {
       expect(getIcon('Read', true)).toBe('>');
       expect(getIcon('Write', true)).toBe('<');
       expect(getIcon('Bash', true)).toBe('$');
@@ -71,7 +71,7 @@ describe('parser', () => {
     });
 
     test('returns default icon for unknown tools', () => {
-      expect(getIcon('UnknownTool')).toBe('@');
+      expect(getIcon('UnknownTool')).toBe('◈');
       expect(getIcon('UnknownTool', true)).toBe('@');
     });
   });
@@ -79,7 +79,7 @@ describe('parser', () => {
   describe('iconForEntry', () => {
     test('returns tool icon for tool entries', () => {
       const entry = { type: 'tool', tool: 'Read', content: 'Read: /a.ts' };
-      expect(iconForEntry(entry)).toBe('>');
+      expect(iconForEntry(entry)).toBe('▸');
       expect(iconForEntry(entry, true)).toBe('>');
     });
 
@@ -91,26 +91,25 @@ describe('parser', () => {
 
     test('returns success icon for successful responses', () => {
       const entry = { type: 'response', content: 'ok', success: true };
-      expect(iconForEntry(entry)).toBe('+');
+      expect(iconForEntry(entry)).toBe('✓');
       expect(iconForEntry(entry, true)).toBe('+');
     });
 
     test('returns failure icon for failed responses', () => {
       const entry = { type: 'response', content: 'error', success: false };
-      expect(iconForEntry(entry)).toBe('x');
+      expect(iconForEntry(entry)).toBe('✗');
       expect(iconForEntry(entry, true)).toBe('x');
     });
 
     test('returns default icon for text responses', () => {
       const entry = { type: 'response', content: 'text' };
-      // Default @ for text/task-like responses
-      expect(iconForEntry(entry)).toBe('@');
+      expect(iconForEntry(entry)).toBe('◈');
       expect(iconForEntry(entry, true)).toBe('@');
     });
 
     test('returns failure icon for error entries', () => {
       const entry = { type: 'error', content: 'error', success: false };
-      expect(iconForEntry(entry)).toBe('x');
+      expect(iconForEntry(entry)).toBe('✗');
       expect(iconForEntry(entry, true)).toBe('x');
     });
   });

@@ -61,7 +61,7 @@ describe('OutputPanel', () => {
       const lines = panel.render(50);
 
       const content = lines.map((l) => stripAnsi(l)).join('\n');
-      expect(content).toContain('>'); // Read icon
+      expect(content).toContain('▸'); // Read icon (Unicode)
       expect(content).toContain('$'); // Bash icon
     });
 
@@ -72,7 +72,7 @@ describe('OutputPanel', () => {
       const lines = panel.render(50);
 
       const content = lines.map((l) => stripAnsi(l)).join('\n');
-      expect(content).toContain('+'); // success icon
+      expect(content).toContain('✓'); // success icon (Unicode)
     });
 
     test('renders failure icon for failed entries', () => {
@@ -82,10 +82,10 @@ describe('OutputPanel', () => {
       const lines = panel.render(50);
 
       const content = lines.map((l) => stripAnsi(l)).join('\n');
-      expect(content).toContain('x'); // failure icon
+      expect(content).toContain('✗'); // failure icon (Unicode)
     });
 
-    test('ASCII mode uses same ASCII icons', () => {
+    test('ASCII mode uses ASCII icons', () => {
       const panel = new OutputPanel({ theme: darkTheme, useAscii: true });
       panel.appendLine(mockEntry({ tool: 'Read', content: 'Reading' }));
       panel.appendLine(mockEntry({ tool: 'Bash', content: 'Running' }));
@@ -95,9 +95,9 @@ describe('OutputPanel', () => {
       const lines = panel.render(50);
 
       const content = lines.map((l) => stripAnsi(l)).join('\n');
-      expect(content).toContain('>'); // Read icon
+      expect(content).toContain('>'); // Read icon (ASCII)
       expect(content).toContain('$'); // Bash icon
-      expect(content).toContain('x'); // Failure
+      expect(content).toContain('x'); // Failure (ASCII)
     });
 
     test('fills empty viewport with empty lines', () => {

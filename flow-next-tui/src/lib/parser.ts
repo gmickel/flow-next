@@ -1,25 +1,25 @@
 import type { LogEntry } from './types';
 
 /**
- * Tool icons for display - using reliably single-cell ASCII characters
- * These render consistently across all monospace fonts
+ * Tool icons for display - Unicode symbols for visual appeal
+ * Use with width-based padding for alignment
  */
 export const TOOL_ICONS = {
-  Read: '>',      // file read (arrow in)
-  Write: '<',     // file write (arrow out)
-  Glob: '?',      // pattern search
-  Grep: '/',      // content search (like vim search)
-  Edit: '*',      // edit operation
-  Bash: '$',      // command execution (shell prompt)
-  Task: '@',      // agent task
-  WebFetch: 'v',  // web fetch (download)
-  WebSearch: '?', // web search
-  success: '+',   // success (green)
-  failure: 'x',   // failure (red)
+  Read: '▸',      // file read (triangle pointer)
+  Write: '◂',     // file write (triangle pointer left)
+  Glob: '◦',      // pattern search (hollow bullet)
+  Grep: '⌕',      // content search (search icon) - falls back to /
+  Edit: '✎',      // edit operation (pencil)
+  Bash: '$',      // command execution (shell prompt - ASCII)
+  Task: '◈',      // agent task (diamond)
+  WebFetch: '⬇',  // web fetch (down arrow)
+  WebSearch: '◎', // web search (bullseye)
+  success: '✓',   // success checkmark
+  failure: '✗',   // failure X
 } as const;
 
 /**
- * ASCII fallbacks for --no-emoji mode (same as above since we use ASCII)
+ * ASCII fallbacks for --no-emoji mode
  */
 export const ASCII_ICONS = {
   Read: '>',
@@ -88,8 +88,8 @@ export function getIcon(tool: string, ascii = false): string {
   if (tool in icons) {
     return icons[tool as keyof typeof icons];
   }
-  // Default icon for unknown tools (@ for agent/task style)
-  return '@';
+  // Default icon for unknown tools
+  return ascii ? '@' : '◈';
 }
 
 /**
@@ -113,7 +113,7 @@ export function iconForEntry(
     return getIcon('success', ascii);
   }
   // Default for text responses
-  return '@';
+  return ascii ? '@' : '◈';
 }
 
 /**

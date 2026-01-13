@@ -193,9 +193,12 @@ export class OutputPanel implements Component {
     );
   }
 
+  /** Fixed icon column width (icon + padding to this width + 1 space) */
+  private static readonly ICON_COL_WIDTH = 2;
+
   /**
    * Format a single log entry as a line.
-   * - Icon + consistent spacing for alignment
+   * - Icon padded to fixed column width for alignment
    * - Filters noise (JSON-only responses, empty content)
    * - Content fills to available width
    */
@@ -203,9 +206,11 @@ export class OutputPanel implements Component {
     const icon = this.getToolIcon(entry);
     const colorFn = this.getEntryColor(entry);
 
-    // Icon + 2 spaces for alignment (all icons are 1-char wide in terminal)
-    const prefix = colorFn(icon) + '  ';
-    const prefixWidth = 3; // 1 icon + 2 spaces
+    // Pad icon to fixed column width for alignment
+    const iconWidth = visibleWidth(icon);
+    const iconPadding = ' '.repeat(Math.max(0, OutputPanel.ICON_COL_WIDTH - iconWidth));
+    const prefix = colorFn(icon) + iconPadding + ' ';
+    const prefixWidth = OutputPanel.ICON_COL_WIDTH + 1; // icon col + 1 space
 
     // Available width for content
     const availableWidth = contentWidth - prefixWidth;
