@@ -7,3 +7,4 @@ plans/
 todos/
 /docs/
 !plugins/*/docs/
+plugins/flow-next/scripts/__pycache__/

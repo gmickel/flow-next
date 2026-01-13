@@ -1,0 +1,13 @@
+{
+  "branch_name": "pr-22-user-flag",
+  "created_at": "2026-01-13T05:56:37.540724Z",
+  "depends_on_epics": [],
+  "id": "fn-5",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-5.md",
+  "status": "open",
+  "title": "PR 22: User-level storage (--user flag)",
+  "updated_at": "2026-01-13T05:56:37.540740Z"
+}

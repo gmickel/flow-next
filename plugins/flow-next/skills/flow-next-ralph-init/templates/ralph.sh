@@ -80,7 +80,7 @@ if [[ -n "$USER_DIR" && -f "$USER_DIR/ralph.sh" ]]; then
 fi
 
 # Config: user-level defaults + project overrides
-# User config provides defaults, project config overrides
+# Both are sourced: user first (defaults), then project (overrides)
 USER_CONFIG=""
 PROJECT_CONFIG=""
 if [[ -n "$USER_DIR" && -f "$USER_DIR/config.env" ]]; then
@@ -88,14 +88,6 @@ if [[ -n "$USER_DIR" && -f "$USER_DIR/config.env" ]]; then
 fi
 if [[ -f "$PROJECT_DIR/config.env" ]]; then
   PROJECT_CONFIG="$PROJECT_DIR/config.env"
-fi
-# For compatibility, CONFIG points to the primary config (user or project)
-if [[ -n "$USER_CONFIG" ]]; then
-  CONFIG="$USER_CONFIG"
-elif [[ -n "$PROJECT_CONFIG" ]]; then
-  CONFIG="$PROJECT_CONFIG"
-else
-  CONFIG="$SCRIPT_DIR/config.env"
 fi
 FLOWCTL="$SCRIPT_DIR/flowctl"
 
