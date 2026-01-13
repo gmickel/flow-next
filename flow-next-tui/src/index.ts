@@ -6,7 +6,12 @@
 import { Command } from 'commander';
 import { createApp } from './app.ts';
 
-const pkg = await Bun.file(new URL('../package.json', import.meta.url)).json();
+let pkg: { version: string } = { version: '0.0.0' };
+try {
+  pkg = await Bun.file(new URL('../package.json', import.meta.url)).json();
+} catch {
+  // Fallback version if package.json unreadable
+}
 
 const program = new Command();
 
@@ -20,13 +25,15 @@ program
   .action(async (options: { light?: boolean; emoji: boolean; run?: string }) => {
     await createApp({
       light: options.light,
-      noEmoji: !options.emoji,
+      noEmoji: options.emoji === false,
       run: options.run,
     });
   });
 
-// Handle signals before parsing (in case parsing hangs)
-process.on('SIGINT', () => process.exit(0));
-process.on('SIGTERM', () => process.exit(0));
-
-await program.parseAsync();
+try {
+  await program.parseAsync();
+} catch (err) {
+  const msg = err instanceof Error ? err.message : String(err);
+  console.error(`Error: ${msg}`);
+  process.exit(1);
+}
