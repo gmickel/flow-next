@@ -50,9 +50,16 @@ Use theme colors for status icons.
 - [ ] Long titles truncated with ellipsis
 - [ ] onSelect callback fires on Enter
 ## Done summary
-TBD
+- Added TaskList component with status icons (●/◉/○/⊘)
+- Implemented j/k and arrow navigation with wrap-around
+- Added selected row background highlight
 
+- Matches pi-tui Component interface for integration
+- ASCII mode (--no-emoji) support included
+
+- 33 tests passing
+- Lint clean
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 83ac1bc75db3c7e8d5979793f1d4be7e1652dde7
+- Tests: bun test src/components/task-list.test.ts
 - PRs:

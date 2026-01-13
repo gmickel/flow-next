@@ -1,7 +1,7 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-13T00:57:17.440621Z",
   "created_at": "2026-01-12T21:03:53.809480Z",
   "depends_on": [
     "fn-9.7",
@@ -10,10 +10,19 @@
     "fn-9.18"
   ],
   "epic": "fn-9",
+  "evidence": {
+    "commits": [
+      "83ac1bc75db3c7e8d5979793f1d4be7e1652dde7"
+    ],
+    "prs": [],
+    "tests": [
+      "bun test src/components/task-list.test.ts"
+    ]
+  },
   "id": "fn-9.8",
   "priority": null,
   "spec_path": ".flow/tasks/fn-9.8.md",
-  "status": "todo",
+  "status": "done",
   "title": "TaskList component",
-  "updated_at": "2026-01-12T21:12:46.996269Z"
+  "updated_at": "2026-01-13T01:00:42.736421Z"
 }
