@@ -517,4 +517,73 @@ describe('TaskDetail', () => {
       expect(() => detail.invalidate()).not.toThrow();
     });
   });
+
+  describe('sanitization', () => {
+    test('control chars in task title are neutralized', () => {
+      const task = mockTask({ title: 'Legit\rPWN\tSpoofed' });
+      const detail = new TaskDetail({ task, spec: '', theme: darkTheme });
+      const lines = detail.render(60);
+
+      // \r and \t should be replaced with spaces, not executed
+      const titleLine = stripAnsi(lines[0]!);
+      expect(titleLine).toContain('Legit');
+      expect(titleLine).not.toContain('\r');
+      expect(titleLine).not.toContain('\t');
+      // PWN should still be visible (not overwriting), separated by space
+      expect(titleLine).toContain('PWN');
+    });
+
+    test('control chars in task id are neutralized', () => {
+      const task = mockTask({ id: 'fn-1\x00evil' });
+      const detail = new TaskDetail({ task, spec: '', theme: darkTheme });
+      const lines = detail.render(60);
+
+      const metaLine = stripAnsi(lines[1]!);
+      expect(metaLine).toContain('fn-1');
+      expect(metaLine).not.toContain('\x00');
+    });
+
+    test('control chars in spec are neutralized except newlines', () => {
+      const task = mockTask();
+      const spec = 'Line1\nLine2\rOverwrite\tTabbed';
+      const detail = new TaskDetail({ task, spec, theme: darkTheme });
+      const lines = detail.render(60);
+
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      // newlines preserved (multiple lines rendered)
+      expect(allText).toContain('Line1');
+      expect(allText).toContain('Line2');
+      // \r and \t replaced with space, not executed
+      expect(allText).not.toContain('\r');
+      expect(allText).not.toContain('\t');
+      expect(allText).toContain('Overwrite');
+    });
+
+    test('control chars in blockReason are neutralized', () => {
+      const task = mockTask({ status: 'blocked' });
+      const blockReason = 'Blocked\rby\ttask';
+      const detail = new TaskDetail({ task, spec: '', blockReason, theme: darkTheme });
+      const lines = detail.render(60);
+
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      expect(allText).toContain('Blocked');
+      expect(allText).toContain('by');
+      expect(allText).toContain('task');
+      expect(allText).not.toContain('\r');
+      expect(allText).not.toContain('\t');
+    });
+
+    test('ANSI escape sequences in spec are stripped', () => {
+      const task = mockTask();
+      const spec = 'Normal \x1b[31mRED\x1b[0m text';
+      const detail = new TaskDetail({ task, spec, theme: darkTheme });
+      const lines = detail.render(60);
+
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      expect(allText).toContain('Normal');
+      expect(allText).toContain('RED');
+      expect(allText).toContain('text');
+      expect(allText).not.toContain('\x1b');
+    });
+  });
 });

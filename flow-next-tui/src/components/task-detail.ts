@@ -83,7 +83,7 @@ export class TaskDetail implements Component {
   /** Update block reason */
   setBlockReason(reason: string | null): void {
     this.blockReason = reason;
-    this.clampScroll();
+    // clampScroll happens in render() after totalContentHeight is recomputed
     this.invalidate();
   }
 
@@ -106,6 +106,16 @@ export class TaskDetail implements Component {
     // Strip ANSI, then replace control chars with spaces
     // eslint-disable-next-line no-control-regex
     return stripAnsi(text).replace(/[\x00-\x1F\x7F]/g, ' ');
+  }
+
+  /**
+   * Sanitize a multiline field for display.
+   * Strips ANSI and control chars except newlines.
+   */
+  private sanitizeMultiLine(text: string): string {
+    // Strip ANSI, then replace control chars except \n with spaces
+    // eslint-disable-next-line no-control-regex
+    return stripAnsi(text).replace(/[\x00-\x09\x0B-\x1F\x7F]/g, ' ');
   }
 
   /** Get status icon for the task */
@@ -190,8 +200,8 @@ export class TaskDetail implements Component {
         this.useAscii ? '[!] Blocked:' : '⊘ Blocked:'
       );
       lines.push(blockHeader);
-      // Wrap block reason to width (sanitized)
-      const sanitizedReason = stripAnsi(this.blockReason.trim());
+      // Wrap block reason to width (sanitized for control chars)
+      const sanitizedReason = this.sanitizeMultiLine(this.blockReason.trim());
       const reasonLines = this.wrapText(sanitizedReason, width - 2);
       for (const line of reasonLines) {
         lines.push(`  ${line}`);
@@ -250,7 +260,7 @@ export class TaskDetail implements Component {
     allLines.push(...headerLines);
 
     // Render markdown spec (sanitize to prevent terminal injection)
-    const sanitizedSpec = stripAnsi(this.spec);
+    const sanitizedSpec = this.sanitizeMultiLine(this.spec);
     if (sanitizedSpec.trim()) {
       const md = this.getMarkdown(width, sanitizedSpec);
       const mdLines = md.render(width);
