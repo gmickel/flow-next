@@ -144,15 +144,18 @@ export class Header implements Component {
       if (availableForLeft <= 0) {
         return truncateToWidth(this.theme.dim(timer), width, '');
       }
+      const iconW = visibleWidth(icon);
+      const brandW = Math.max(0, availableForLeft - iconW - 1);
       const truncatedColoredLeft =
-        truncateToWidth(colorFn(icon), visibleWidth(icon), '') +
+        truncateToWidth(colorFn(icon), iconW, '') +
         ' ' +
-        truncateToWidth(
-          this.theme.accent('flow-next'),
-          availableForLeft - visibleWidth(icon) - 1,
-          '…'
-        );
-      return truncatedColoredLeft + ' ' + this.theme.dim(timer);
+        truncateToWidth(this.theme.accent('flow-next'), brandW, '…');
+      // Hard clamp the narrow path too
+      return truncateToWidth(
+        truncatedColoredLeft + ' ' + this.theme.dim(timer),
+        width,
+        ''
+      );
     }
 
     // Task info in brackets (if task exists and fits)
@@ -161,9 +164,9 @@ export class Header implements Component {
     if (this.task) {
       const taskId = this.task.id;
       const taskTitle = this.task.title;
-      // Available = width - left - gap(1) - timer - space before timer
+      // Available = width - left - timer - space before timer (gap can be 0)
       // Brackets take 2 chars, need at least 3 for content
-      const availableForTask = width - leftWidth - timerWidth - 2; // 2 = gaps
+      const availableForTask = width - leftWidth - timerWidth - 1; // 1 = space before timer
 
       if (availableForTask > 4) {
         // Enough room for brackets (2) + some content (2+)

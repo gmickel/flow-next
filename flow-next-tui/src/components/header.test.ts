@@ -335,4 +335,40 @@ describe('Header', () => {
       expect(visibleWidth(line)).toBeLessThanOrEqual(width);
     }
   });
+
+  test('width=7 (timerWidth+2) edge case respects constraint', () => {
+    // Timer is 5 chars (MM:SS), so width=7 is timerWidth+2
+    // This tests the minWidth path boundary
+    const header = new Header(
+      defaultProps({
+        task: mockTask(),
+        epic: mockEpic(),
+        elapsed: 125, // 02:05 = 5 chars
+      })
+    );
+    const width = 7;
+    const lines = header.render(width);
+
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+    }
+  });
+
+  test('width=6 (timerWidth+1) boundary respects constraint', () => {
+    const header = new Header(
+      defaultProps({
+        task: mockTask(),
+        epic: mockEpic(),
+        elapsed: 125,
+      })
+    );
+    const width = 6;
+    const lines = header.render(width);
+
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+    }
+  });
 });
