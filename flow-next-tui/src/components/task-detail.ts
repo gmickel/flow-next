@@ -13,9 +13,6 @@ import type { Theme } from '../themes/index.ts';
 
 import { STATUS_ICONS, ASCII_ICONS } from './task-list.ts';
 
-// Re-export for backwards compatibility
-export type { ReceiptStatus } from '../lib/runs.ts';
-
 export interface TaskDetailProps {
   task: Task;
   spec: string; // markdown content
@@ -73,6 +70,7 @@ export class TaskDetail implements Component {
   setSpec(spec: string): void {
     this.spec = spec;
     this.markdown = null; // Force re-creation
+    this.scrollOffset = 0; // Reset scroll on content change
     this.invalidate();
   }
 
@@ -213,12 +211,12 @@ export class TaskDetail implements Component {
     return lines.length > 0 ? lines : [''];
   }
 
-  /** Get or create Markdown component */
-  private getMarkdown(width: number): Markdown {
+  /** Get or create Markdown component with sanitized spec */
+  private getMarkdown(width: number, sanitizedSpec: string): Markdown {
     if (!this.markdown || this.lastWidth !== width) {
       this.markdown = new Markdown(
-        this.spec,
-        1, // paddingX
+        sanitizedSpec, // Use sanitized spec directly
+        0, // paddingX - no padding, we handle truncation
         0, // paddingY
         this.theme.markdown
       );
@@ -240,11 +238,7 @@ export class TaskDetail implements Component {
     // Render markdown spec (sanitize to prevent terminal injection)
     const sanitizedSpec = stripAnsi(this.spec);
     if (sanitizedSpec.trim()) {
-      const md = this.getMarkdown(width);
-      // Update markdown with sanitized spec if changed
-      if (this.spec !== sanitizedSpec) {
-        md.setText(sanitizedSpec);
-      }
+      const md = this.getMarkdown(width, sanitizedSpec);
       const mdLines = md.render(width);
       allLines.push(...mdLines);
     }
@@ -252,11 +246,8 @@ export class TaskDetail implements Component {
     // Store total content height
     this.totalContentHeight = allLines.length;
 
-    // Apply scrolling and viewport cap
-    const visibleLines = allLines.slice(
-      this.scrollOffset,
-      this.scrollOffset + this.viewportHeight
-    );
+    // Apply scrolling (let parent/TUI handle height clipping)
+    const visibleLines = allLines.slice(this.scrollOffset);
 
     // Truncate lines to width for consistent display
     return visibleLines.map((line) => {

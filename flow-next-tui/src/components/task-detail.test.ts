@@ -3,7 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import { stripAnsi, visibleWidth } from '../lib/render.ts';
 import type { Task } from '../lib/types.ts';
 import { darkTheme } from '../themes/dark.ts';
-import { TaskDetail, type ReceiptStatus } from './task-detail.ts';
+import { TaskDetail } from './task-detail.ts';
+import type { ReceiptStatus } from '../lib/runs.ts';
 import { STATUS_ICONS, ASCII_ICONS } from './task-list.ts';
 
 /** Create a mock task for testing */
