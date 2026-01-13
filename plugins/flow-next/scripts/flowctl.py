@@ -2631,11 +2631,17 @@ def cmd_done(args: argparse.Namespace) -> None:
 
     # MU-2: Require in_progress status (unless --force)
     if not args.force and task_data["status"] != "in_progress":
-        error_exit(
-            f"Cannot complete task {args.id}: status is '{task_data['status']}', expected 'in_progress'. "
-            f"Use --force to override.",
-            use_json=args.json,
-        )
+        status = task_data["status"]
+        if status == "done":
+            error_exit(
+                f"Task {args.id} is already done.",
+                use_json=args.json,
+            )
+        else:
+            error_exit(
+                f"Task {args.id} is '{status}', not 'in_progress'. Use --force to override.",
+                use_json=args.json,
+            )
 
     # MU-2: Prevent cross-actor completion (unless --force)
     current_actor = get_actor()
@@ -2647,19 +2653,35 @@ def cmd_done(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
 
-    # Read summary from file
-    summary = read_text_or_exit(
-        Path(args.summary_file), "Summary file", use_json=args.json
-    )
+    # Get summary: file > inline > default
+    summary: str
+    if args.summary_file:
+        summary = read_text_or_exit(
+            Path(args.summary_file), "Summary file", use_json=args.json
+        )
+    elif args.summary:
+        summary = args.summary
+    else:
+        summary = "- Task completed"
 
-    # Read evidence from JSON file
-    evidence_raw = read_text_or_exit(
-        Path(args.evidence_json), "Evidence file", use_json=args.json
-    )
-    try:
-        evidence = json.loads(evidence_raw)
-    except json.JSONDecodeError as e:
-        error_exit(f"Evidence file invalid JSON: {e}", use_json=args.json)
+    # Get evidence: file > inline > default
+    evidence: dict
+    if args.evidence_json:
+        evidence_raw = read_text_or_exit(
+            Path(args.evidence_json), "Evidence file", use_json=args.json
+        )
+        try:
+            evidence = json.loads(evidence_raw)
+        except json.JSONDecodeError as e:
+            error_exit(f"Evidence file invalid JSON: {e}", use_json=args.json)
+    elif args.evidence:
+        try:
+            evidence = json.loads(args.evidence)
+        except json.JSONDecodeError as e:
+            error_exit(f"Evidence invalid JSON: {e}", use_json=args.json)
+    else:
+        evidence = {"commits": [], "tests": [], "prs": []}
+
     if not isinstance(evidence, dict):
         error_exit(
             "Evidence JSON must be an object with keys: commits/tests/prs",
@@ -3844,10 +3866,10 @@ def main() -> None:
     # done
     p_done = subparsers.add_parser("done", help="Complete task")
     p_done.add_argument("id", help="Task ID (fn-N.M)")
-    p_done.add_argument(
-        "--summary-file", required=True, help="Done summary markdown file"
-    )
-    p_done.add_argument("--evidence-json", required=True, help="Evidence JSON file")
+    p_done.add_argument("--summary-file", help="Done summary markdown file")
+    p_done.add_argument("--summary", help="Done summary (inline text)")
+    p_done.add_argument("--evidence-json", help="Evidence JSON file")
+    p_done.add_argument("--evidence", help="Evidence JSON (inline string)")
     p_done.add_argument("--force", action="store_true", help="Skip status checks")
     p_done.add_argument("--json", action="store_true", help="JSON output")
     p_done.set_defaults(func=cmd_done)
