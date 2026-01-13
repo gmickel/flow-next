@@ -8,6 +8,48 @@ import type { LogEntry } from './types';
 import { LogWatcher } from './log-watcher';
 
 /**
+ * Helper to create Claude stream-json format for tool_use
+ */
+function makeToolUse(
+  name: string,
+  input?: Record<string, unknown>
+): Record<string, unknown> {
+  return {
+    type: 'assistant',
+    message: {
+      content: [{ type: 'tool_use', name, input: input ?? {} }],
+    },
+  };
+}
+
+/**
+ * Helper to create Claude stream-json format for tool_result
+ */
+function makeToolResult(
+  content: string,
+  isError = false
+): Record<string, unknown> {
+  return {
+    type: 'user',
+    message: {
+      content: [{ type: 'tool_result', content, is_error: isError }],
+    },
+  };
+}
+
+/**
+ * Helper to create Claude stream-json format for text
+ */
+function makeText(text: string): Record<string, unknown> {
+  return {
+    type: 'assistant',
+    message: {
+      content: [{ type: 'text', text }],
+    },
+  };
+}
+
+/**
  * Wait for at least n 'line' events or timeout
  */
 async function waitForLines(
@@ -67,7 +109,7 @@ describe('LogWatcher', () => {
     test('emits line event for existing log content', async () => {
       // Create log file with content
       const logPath = join(tempDir, 'iter-1.log');
-      const entry = { type: 'text', content: 'hello' };
+      const entry = makeText('hello');
       await writeFile(logPath, JSON.stringify(entry) + '\n');
 
       const watcher = new LogWatcher(tempDir);
@@ -98,12 +140,8 @@ describe('LogWatcher', () => {
       await watcher.start();
 
       // Append content (triggers fs.watch -> debounced read)
-      const entry1 = {
-        type: 'tool_call',
-        tool: 'Read',
-        input: { file_path: '/a.ts' },
-      };
-      const entry2 = { type: 'tool_result', content: 'file contents' };
+      const entry1 = makeToolUse('Read', { file_path: '/a.ts' });
+      const entry2 = makeToolResult('file contents');
       await appendFile(logPath, JSON.stringify(entry1) + '\n');
       await appendFile(logPath, JSON.stringify(entry2) + '\n');
 
@@ -119,9 +157,9 @@ describe('LogWatcher', () => {
       await writeFile(
         logPath,
         [
-          JSON.stringify({ type: 'text', content: 'valid1' }),
+          JSON.stringify(makeText('valid1')),
           'invalid json here',
-          JSON.stringify({ type: 'text', content: 'valid2' }),
+          JSON.stringify(makeText('valid2')),
           '',
         ].join('\n')
       );
@@ -151,7 +189,7 @@ describe('LogWatcher', () => {
       const log1 = join(tempDir, 'iter-1.log');
       await writeFile(
         log1,
-        JSON.stringify({ type: 'text', content: 'iter1' }) + '\n'
+        JSON.stringify(makeText('iter1')) + '\n'
       );
 
       const watcher = new LogWatcher(tempDir);
@@ -168,24 +206,25 @@ describe('LogWatcher', () => {
       const log2 = join(tempDir, 'iter-2.log');
       await writeFile(
         log2,
-        JSON.stringify({ type: 'text', content: 'iter2' }) + '\n'
+        JSON.stringify(makeText('iter2')) + '\n'
       );
 
-      // Poll for iteration event (fs.watch timing varies by platform)
+      // Poll for iteration 2 event (fs.watch timing varies by platform)
+      // Note: iterations[0] is iter-1 from startup, we want iter-2
       let attempts = 0;
-      while (iterations.length === 0 && attempts < 10) {
+      while (iterations.length < 2 && attempts < 10) {
         await new Promise((resolve) => setTimeout(resolve, 100));
         attempts++;
       }
 
       watcher.stop();
 
-      // Should have detected the new iteration
-      expect(iterations.length).toBeGreaterThanOrEqual(1);
-      if (iterations.length > 0) {
-        expect(iterations[0]!.num).toBe(2);
-        expect(iterations[0]!.path).toContain('iter-2.log');
-      }
+      // Should have initial iteration (1) and new iteration (2)
+      expect(iterations.length).toBeGreaterThanOrEqual(2);
+      expect(iterations[0]!.num).toBe(1);
+      expect(iterations[0]!.path).toContain('iter-1.log');
+      expect(iterations[1]!.num).toBe(2);
+      expect(iterations[1]!.path).toContain('iter-2.log');
     });
 
     test('does not switch to lower iteration number', async () => {
@@ -193,7 +232,7 @@ describe('LogWatcher', () => {
       const log5 = join(tempDir, 'iter-5.log');
       await writeFile(
         log5,
-        JSON.stringify({ type: 'text', content: 'iter5' }) + '\n'
+        JSON.stringify(makeText('iter5')) + '\n'
       );
 
       const watcher = new LogWatcher(tempDir);
@@ -210,7 +249,7 @@ describe('LogWatcher', () => {
       const log3 = join(tempDir, 'iter-3.log');
       await writeFile(
         log3,
-        JSON.stringify({ type: 'text', content: 'iter3' }) + '\n'
+        JSON.stringify(makeText('iter3')) + '\n'
       );
 
       await new Promise((resolve) => setTimeout(resolve, 250));
@@ -246,7 +285,7 @@ describe('LogWatcher', () => {
       const logPath = join(tempDir, 'iter-1.log');
       await writeFile(
         logPath,
-        JSON.stringify({ type: 'text', content: 'initial' }) + '\n'
+        JSON.stringify(makeText('initial')) + '\n'
       );
 
       const watcher = new LogWatcher(tempDir);
@@ -287,7 +326,7 @@ describe('LogWatcher', () => {
       for (let i = 1; i <= 3; i++) {
         await appendFile(
           logPath,
-          JSON.stringify({ type: 'text', content: `msg${i}` }) + '\n'
+          JSON.stringify(makeText(`msg${i}`)) + '\n'
         );
         await new Promise((resolve) => setTimeout(resolve, 150));
       }
@@ -303,7 +342,7 @@ describe('LogWatcher', () => {
       const logPath = join(tempDir, 'iter-1.log');
       await writeFile(
         logPath,
-        JSON.stringify({ type: 'text', content: 'original' }) + '\n'
+        JSON.stringify(makeText('original')) + '\n'
       );
 
       const watcher = new LogWatcher(tempDir);
@@ -324,7 +363,7 @@ describe('LogWatcher', () => {
       await writeFile(logPath, '');
       await appendFile(
         logPath,
-        JSON.stringify({ type: 'text', content: 'new' }) + '\n'
+        JSON.stringify(makeText('new')) + '\n'
       );
 
       // Poll for new content (fs.watch timing varies by platform)
@@ -368,7 +407,7 @@ describe('LogWatcher', () => {
       // Create content in iter-3.log to verify it was selected
       await writeFile(
         join(tempDir, 'iter-3.log'),
-        JSON.stringify({ type: 'text', content: 'from iter 3' }) + '\n'
+        JSON.stringify(makeText('from iter 3')) + '\n'
       );
 
       watcher.on('line', (entry) => received.push(entry));

@@ -143,7 +143,7 @@ promise=CONTINUE
 
       const runs = await discoverRuns(runsDir);
       expect(runs).toHaveLength(1);
-      expect(runs.at(0)?.epic).toBe('fn-9');
+      expect(runs.at(0)?.epics).toEqual(['fn-9']);
     });
 
     test('handles real Ralph run ID format', async () => {
@@ -216,9 +216,9 @@ promise=CONTINUE
 
     test('finds latest regardless of input order', () => {
       const runs = [
-        { id: '2024-01-15-001', path: '/b', active: false, iteration: 2 },
-        { id: '2024-01-20-001', path: '/a', active: true, iteration: 1 },
-        { id: '2024-01-10-001', path: '/c', active: false, iteration: 3 },
+        { id: '2024-01-15-001', path: '/b', epics: [], active: false, iteration: 2 },
+        { id: '2024-01-20-001', path: '/a', epics: [], active: true, iteration: 1 },
+        { id: '2024-01-10-001', path: '/c', epics: [], active: false, iteration: 3 },
       ];
 
       const latest = getLatestRun(runs);
@@ -227,9 +227,9 @@ promise=CONTINUE
 
     test('handles same-date runs with different suffixes', () => {
       const runs = [
-        { id: '2024-01-15-001', path: '/a', active: true, iteration: 1 },
-        { id: '2024-01-15-003', path: '/b', active: false, iteration: 2 },
-        { id: '2024-01-15-002', path: '/c', active: false, iteration: 3 },
+        { id: '2024-01-15-001', path: '/a', epics: [], active: true, iteration: 1 },
+        { id: '2024-01-15-003', path: '/b', epics: [], active: false, iteration: 2 },
+        { id: '2024-01-15-002', path: '/c', epics: [], active: false, iteration: 3 },
       ];
 
       const latest = getLatestRun(runs);

@@ -14,7 +14,7 @@ import { SplitPanel } from './components/split-panel.ts';
 import { StatusBar } from './components/status-bar.ts';
 import { TaskDetail } from './components/task-detail.ts';
 import { TaskList } from './components/task-list.ts';
-import { getEpic, getTask, getTaskSpec, FlowctlNotFoundError } from './lib/flowctl.ts';
+import { getEpic, getEpics, getTask, getTaskSpec, FlowctlNotFoundError } from './lib/flowctl.ts';
 import { LogWatcher } from './lib/log-watcher.ts';
 import {
   discoverRuns,
@@ -69,6 +69,33 @@ async function dirExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Fetch tasks from multiple epics, aggregating them in order
+ * If epicIds is empty, fetches all open epics
+ */
+async function fetchAllTasks(epicIds: string[]): Promise<{ tasks: EpicTask[]; epicIds: string[] }> {
+  let targetEpics = epicIds;
+
+  // If no epics specified, get all open epics (same as Ralph behavior)
+  if (targetEpics.length === 0) {
+    const allEpics = await getEpics();
+    targetEpics = allEpics.filter((e) => e.status === 'open').map((e) => e.id);
+  }
+
+  // Fetch all epics in parallel
+  const epics = await Promise.all(targetEpics.map((id) => getEpic(id).catch(() => null)));
+
+  // Aggregate tasks from all epics
+  const allTasks: EpicTask[] = [];
+  for (const epic of epics) {
+    if (epic?.tasks) {
+      allTasks.push(...epic.tasks);
+    }
+  }
+
+  return { tasks: allTasks, epicIds: targetEpics };
 }
 
 /**
@@ -214,28 +241,34 @@ class App implements Component {
   }
 
   setupPolling(): void {
-    // Polling for tasks
-    if (this.state.currentRun?.epic) {
-      const epicId = this.state.currentRun.epic;
-      this.taskPollTimer = setInterval(() => {
-        void (async () => {
-          try {
-            const freshEpic = await getEpic(epicId);
-            this.state.tasks = freshEpic.tasks;
-            this.taskList.setTasks(freshEpic.tasks);
-            this.header.update({
-              taskProgress: {
-                done: freshEpic.tasks.filter((t) => t.status === 'done').length,
-                total: freshEpic.tasks.length,
-              },
-            });
-            this.tui?.requestRender();
-          } catch {
-            // Ignore poll errors
+    // Polling for tasks from all epics
+    const epicIds = this.state.currentRun?.epics ?? [];
+    this.taskPollTimer = setInterval(() => {
+      void (async () => {
+        try {
+          const { tasks } = await fetchAllTasks(epicIds);
+
+          this.state.tasks = tasks;
+          this.taskList.setTasks(tasks);
+          this.header.update({
+            taskProgress: {
+              done: tasks.filter((t) => t.status === 'done').length,
+              total: tasks.length,
+            },
+          });
+
+          // Always refresh selected task detail (status, receipts, etc.)
+          const selectedTask = tasks[this.state.selectedTaskIndex];
+          if (selectedTask) {
+            void this.updateTaskDetail(selectedTask.id);
           }
-        })();
-      }, TASK_POLL_INTERVAL);
-    }
+
+          this.tui?.requestRender();
+        } catch {
+          // Ignore poll errors
+        }
+      })();
+    }, TASK_POLL_INTERVAL);
 
     // Timer for elapsed time (from run start, not TUI start)
     const parsed = this.state.currentRun?.startedAt
@@ -479,7 +512,6 @@ export async function createApp(options: AppOptions = {}): Promise<void> {
     if (shouldStart) {
       try {
         // Need an epic to start Ralph - check for open epics
-        const { getEpics } = await import('./lib/flowctl.ts');
         const epics = await getEpics();
         const openEpics = epics.filter((e) => e.status === 'open');
 
@@ -521,37 +553,46 @@ export async function createApp(options: AppOptions = {}): Promise<void> {
     }
   }
 
-  // Load initial epic/tasks if we have a run with epic
-  let epic: Epic | undefined;
+  // Load initial epics/tasks
+  let epic: Epic | undefined; // First epic (for header display)
   let currentTask: Task | undefined;
   let taskSpec = '';
 
-  if (state.currentRun?.epic) {
-    try {
-      epic = await getEpic(state.currentRun.epic);
-      state.tasks = epic.tasks;
-      // iteration is 0-indexed, runs.ts counts files; use max(0, count-1) for correct initial value
-      // LogWatcher will update to actual value when it starts
-      state.iteration = Math.max(0, state.currentRun.iteration - 1);
+  try {
+    const epicIds = state.currentRun?.epics ?? [];
+    const { tasks } = await fetchAllTasks(epicIds);
+    state.tasks = tasks;
 
-      // Find current task (first in_progress or first todo)
-      const inProgress = state.tasks.find((t) => t.status === 'in_progress');
-      const firstTodo = state.tasks.find((t) => t.status === 'todo');
-      const activeTask = inProgress ?? firstTodo;
-
-      if (activeTask) {
-        state.selectedTaskIndex = state.tasks.findIndex((t) => t.id === activeTask.id);
-        currentTask = await getTask(activeTask.id);
-        taskSpec = await getTaskSpec(activeTask.id);
-      }
-    } catch (err) {
-      // Fail fast with clean error instead of broken UI state
-      const msg = err instanceof FlowctlNotFoundError
-        ? err.message
-        : `Failed to load epic: ${err instanceof Error ? err.message : String(err)}`;
-      renderError(msg, theme);
-      process.exit(1);
+    // Get first epic for header display (if any)
+    const actualEpicIds = epicIds.length > 0 ? epicIds : tasks.map((t) => t.id.split('.')[0]).filter((v, i, a) => a.indexOf(v) === i);
+    const firstEpicId = actualEpicIds[0];
+    if (firstEpicId) {
+      epic = await getEpic(firstEpicId).catch(() => undefined);
     }
+
+    // iteration is 0-indexed, runs.ts counts files; use max(0, count-1) for correct initial value
+    // LogWatcher will update to actual value when it starts
+    if (state.currentRun) {
+      state.iteration = Math.max(0, state.currentRun.iteration - 1);
+    }
+
+    // Find current task (first in_progress or first todo)
+    const inProgress = state.tasks.find((t) => t.status === 'in_progress');
+    const firstTodo = state.tasks.find((t) => t.status === 'todo');
+    const activeTask = inProgress ?? firstTodo;
+
+    if (activeTask) {
+      state.selectedTaskIndex = state.tasks.findIndex((t) => t.id === activeTask.id);
+      currentTask = await getTask(activeTask.id);
+      taskSpec = await getTaskSpec(activeTask.id);
+    }
+  } catch (err) {
+    // Fail fast with clean error instead of broken UI state
+    const msg = err instanceof FlowctlNotFoundError
+      ? err.message
+      : `Failed to load tasks: ${err instanceof Error ? err.message : String(err)}`;
+    renderError(msg, theme);
+    process.exit(1);
   }
 
   // Create app component

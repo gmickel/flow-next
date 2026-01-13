@@ -155,7 +155,7 @@ export interface ReadyResponse {
 export interface Run {
   id: string; // YYYYMMDDTHHMMSSZ-hostname-user-pid-rand (real) or YYYY-MM-DD-NNN (test)
   path: string; // full path to run dir
-  epic?: string; // epic being worked on (parsed from progress.txt)
+  epics: string[]; // epics being worked on (from run.json or progress.txt)
   active: boolean; // derived from progress.txt
   iteration: number; // current iteration number
   startedAt?: string; // ISO timestamp from run start

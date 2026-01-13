@@ -4,10 +4,20 @@ All notable changes to the gmickel-claude-marketplace.
 
 ## [flow-next 0.6.1] - 2026-01-12
 
+### Changed
+- Ralph now always outputs stream-json to logs (TUI compatibility)
+  - `--watch` flag only controls terminal display, not log format
+  - Logs always parseable by TUI regardless of watch mode
+
 ### Fixed
+- Add `--verbose` to quiet mode (required by Claude CLI for `stream-json` + `--print`)
+  - Without this, quiet mode errored: "output-format=stream-json requires --verbose"
 - Skip artifact files in `.flow/tasks/` that don't have `id` field (GH-21)
   - Prevents `KeyError` crash when Claude writes temp files like `fn-1.1-evidence.json`
   - Affects: `next`, `list`, `ready`, `show`, `validate` commands
+- Ralph now exports `FLOW_REVIEW_BACKEND` based on `PLAN_REVIEW`/`WORK_REVIEW`
+  - Skills inside Claude now see consistent backend config
+  - Previously skills would re-detect and potentially choose different backend
 
 ## [flow-next 0.6.0] - 2026-01-12
 

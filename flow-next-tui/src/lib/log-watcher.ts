@@ -19,7 +19,19 @@ export interface LogWatcherEvents {
 /**
  * Debounce delay for file change events (ms)
  */
-const DEBOUNCE_MS = 100;
+const DEBOUNCE_MS = 50;
+
+/**
+ * Polling watchdog interval (ms) - safety net for dropped fs.watch events
+ */
+const POLL_INTERVAL_MS = 500;
+
+/**
+ * Drain-to-EOF settings
+ */
+const DRAIN_MAX_ROUNDS = 20;
+const DRAIN_SETTLE_MS = 30;
+const DRAIN_MAX_TOTAL_MS = 1500;
 
 /**
  * Pattern for iteration log files
@@ -37,9 +49,11 @@ export class LogWatcher extends EventEmitter {
   private dirWatcher: FSWatcher | null = null;
   private fileWatcher: FSWatcher | null = null;
   private currentLogPath: string | null = null;
+  private watchedFilePath: string | null = null; // Immutable path for current watcher
   private bytePosition = 0;
   private remainder = '';
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
   private isRunning = false;
   private pendingIteration: number | null = null; // Guard against race conditions
   private readPromise: Promise<void> = Promise.resolve(); // Serialize reads
@@ -62,18 +76,23 @@ export class LogWatcher extends EventEmitter {
     this.textDecoder = new TextDecoder('utf-8', { fatal: false });
 
     // Find current iteration log (use != null to allow iter 0)
-    const currentIter = await this.findLatestIteration();
-    if (currentIter != null) {
-      this.currentLogPath = join(this.runPath, `iter-${currentIter}.log`);
-      await this.readFromPosition();
+    const latest = await this.findLatestIteration();
+    if (latest != null) {
+      this.currentLogPath = join(this.runPath, latest.filename);
+      // Emit initial iteration so UI knows what iteration we're on
+      this.emit('new-iteration', latest.num, this.currentLogPath);
+      await this.drainToEOF();
       this.watchCurrentLog();
     }
 
     // Watch directory for new iteration logs
     this.watchDirectory();
 
+    // Start polling watchdog as safety net
+    this.startPollWatchdog();
+
     // If no iter found, proactively rescan (fs.watch may miss first file on some platforms)
-    if (currentIter == null) {
+    if (latest == null) {
       setTimeout(() => {
         if (this.isRunning && !this.currentLogPath) {
           this.rescanForNewIteration();
@@ -93,6 +112,8 @@ export class LogWatcher extends EventEmitter {
       this.debounceTimer = null;
     }
 
+    this.stopPollWatchdog();
+
     if (this.fileWatcher) {
       this.fileWatcher.close();
       this.fileWatcher = null;
@@ -104,6 +125,7 @@ export class LogWatcher extends EventEmitter {
     }
 
     this.currentLogPath = null;
+    this.watchedFilePath = null;
     this.bytePosition = 0;
     this.remainder = '';
     this.pendingIteration = null;
@@ -112,12 +134,53 @@ export class LogWatcher extends EventEmitter {
   }
 
   /**
-   * Find the highest iteration number from existing iter-*.log files
+   * Start polling watchdog - safety net for dropped fs.watch events
    */
-  private async findLatestIteration(): Promise<number | null> {
+  private startPollWatchdog(): void {
+    if (this.pollTimer) return;
+
+    this.pollTimer = setInterval(() => {
+      if (!this.isRunning || !this.currentLogPath) return;
+
+      // Check if file has grown beyond our position
+      stat(this.currentLogPath)
+        .then((info) => {
+          if (info.size > this.bytePosition) {
+            this.readPromise = this.readPromise.then(() =>
+              this.drainToEOF().catch((error) => {
+                this.emit(
+                  'error',
+                  error instanceof Error ? error : new Error(String(error))
+                );
+              })
+            );
+          }
+        })
+        .catch(() => {
+          // File may not exist - ignore
+        });
+    }, POLL_INTERVAL_MS);
+  }
+
+  /**
+   * Stop polling watchdog
+   */
+  private stopPollWatchdog(): void {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+  }
+
+  /**
+   * Find the highest iteration number from existing iter-*.log files
+   * Returns both the number and the actual filename (preserves padding format)
+   */
+  private async findLatestIteration(): Promise<{ num: number; filename: string } | null> {
     try {
       const entries = await readdir(this.runPath);
       let maxIter = -1;
+      let maxFilename = '';
 
       for (const entry of entries) {
         const match = ITER_LOG_PATTERN.exec(entry);
@@ -125,11 +188,12 @@ export class LogWatcher extends EventEmitter {
           const iter = Number.parseInt(match[1], 10);
           if (iter > maxIter) {
             maxIter = iter;
+            maxFilename = entry;
           }
         }
       }
 
-      return maxIter >= 0 ? maxIter : null;
+      return maxIter >= 0 ? { num: maxIter, filename: maxFilename } : null;
     } catch {
       return null;
     }
@@ -146,11 +210,6 @@ export class LogWatcher extends EventEmitter {
         (eventType, filename) => {
           if (!this.isRunning) return;
 
-          // Note: fs.watch eventType is platform-dependent and unreliable.
-          // 'rename' typically indicates create/delete but isn't guaranteed.
-          // handleNewLogFile has guards (iteration comparison, pendingIteration)
-          // that prevent redundant switches, so we process all events.
-
           // Normalize filename (can be Buffer on some platforms)
           const name =
             typeof filename === 'string'
@@ -164,6 +223,11 @@ export class LogWatcher extends EventEmitter {
             // On some platforms fs.watch delivers null/empty filename.
             // Rescan to detect any new iteration.
             this.rescanForNewIteration();
+          }
+
+          // Also trigger read if event is for current log file (backup for file watcher)
+          if (name && this.currentLogPath && name === basename(this.currentLogPath)) {
+            this.debouncedRead();
           }
         }
       );
@@ -217,12 +281,12 @@ export class LogWatcher extends EventEmitter {
    */
   private rescanForNewIteration(): void {
     this.findLatestIteration()
-      .then((latestIter) => {
-        if (latestIter == null) return;
+      .then((latest) => {
+        if (latest == null) return;
 
         const currentIter = this.getCurrentIteration();
-        if (latestIter > currentIter) {
-          this.handleNewLogFile(`iter-${latestIter}.log`);
+        if (latest.num > currentIter) {
+          this.handleNewLogFile(latest.filename);
         }
       })
       .catch((error) => {
@@ -297,6 +361,7 @@ export class LogWatcher extends EventEmitter {
       oldWatcher.close();
     }
     this.fileWatcher = null;
+    this.watchedFilePath = null;
 
     this.currentLogPath = newLogPath;
     this.bytePosition = 0;
@@ -307,23 +372,33 @@ export class LogWatcher extends EventEmitter {
 
     this.emit('new-iteration', newIter, newLogPath);
 
-    // Await initial read before starting watcher to avoid race
-    await this.readFromPosition();
+    // Await initial drain before starting watcher to avoid race
+    await this.drainToEOF();
     this.watchCurrentLog();
   }
 
   /**
    * Watch the current log file for changes
+   * Captures watchedFilePath immutably to avoid logging wrong path on close
    */
   private watchCurrentLog(): void {
     if (!this.currentLogPath) return;
 
+    // Capture path immutably for this watcher instance
+    const watchedPath = this.currentLogPath;
+    this.watchedFilePath = watchedPath;
+
     try {
-      this.fileWatcher = watch(
-        this.currentLogPath,
+      const watcher = watch(
+        watchedPath,
         { persistent: false },
         (eventType) => {
           if (!this.isRunning) return;
+
+          // Ignore stale events from old watcher after path changed
+          if (this.currentLogPath !== watchedPath) {
+            return;
+          }
 
           if (eventType === 'change') {
             this.debouncedRead();
@@ -335,12 +410,14 @@ export class LogWatcher extends EventEmitter {
         }
       );
 
-      this.fileWatcher.on('error', (error) => {
+      watcher.on('error', (error) => {
         // File may have been deleted (normal at run end)
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
           this.emit('error', error);
         }
       });
+
+      this.fileWatcher = watcher;
     } catch (error) {
       this.emit(
         'error',
@@ -361,8 +438,8 @@ export class LogWatcher extends EventEmitter {
         // Check if file still exists
         await stat(this.currentLogPath);
 
-        // Read pending data
-        await this.readFromPosition();
+        // Drain pending data
+        await this.drainToEOF();
 
         // Re-arm watcher (close old, create new)
         if (this.fileWatcher) {
@@ -383,7 +460,7 @@ export class LogWatcher extends EventEmitter {
   }
 
   /**
-   * Debounce rapid file change events
+   * Debounce rapid file change events, then drain to EOF
    */
   private debouncedRead(): void {
     if (this.debounceTimer) {
@@ -392,9 +469,9 @@ export class LogWatcher extends EventEmitter {
 
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
-      // Chain reads to serialize (prevent concurrent readFromPosition races)
+      // Chain reads to serialize (prevent concurrent races)
       this.readPromise = this.readPromise.then(() =>
-        this.readFromPosition().catch((error) => {
+        this.drainToEOF().catch((error) => {
           this.emit(
             'error',
             error instanceof Error ? error : new Error(String(error))
@@ -405,17 +482,69 @@ export class LogWatcher extends EventEmitter {
   }
 
   /**
-   * Read new content from current log file starting at bytePosition
+   * Drain file to EOF - keep reading until file size stops growing
+   * This handles macOS fs.watch event coalescing where one event may
+   * arrive before file is fully written.
    */
-  private async readFromPosition(): Promise<void> {
+  private async drainToEOF(): Promise<void> {
     if (!this.currentLogPath || !this.isRunning) return;
+
+    const startTime = Date.now();
+    let rounds = 0;
+    let lastSize = -1;
+
+    while (rounds < DRAIN_MAX_ROUNDS) {
+      // Check time limit
+      if (Date.now() - startTime > DRAIN_MAX_TOTAL_MS) {
+        break;
+      }
+
+      const didRead = await this.readFromPositionOnce();
+      rounds++;
+
+      if (!this.isRunning) return;
+
+      // Get current size
+      try {
+        const info = await stat(this.currentLogPath);
+        const currentSize = info.size;
+
+        // If we didn't read anything and size is stable, we're done
+        if (!didRead && currentSize === lastSize) {
+          break;
+        }
+
+        // If we're caught up to file size and didn't read, done
+        if (!didRead && this.bytePosition >= currentSize) {
+          break;
+        }
+
+        lastSize = currentSize;
+
+        // Small delay to let writer flush more data
+        if (didRead) {
+          await new Promise((resolve) => setTimeout(resolve, DRAIN_SETTLE_MS));
+        }
+      } catch {
+        // File may not exist - stop draining
+        break;
+      }
+    }
+  }
+
+  /**
+   * Read new content from current log file starting at bytePosition
+   * Returns true if any bytes were read
+   */
+  private async readFromPositionOnce(): Promise<boolean> {
+    if (!this.currentLogPath || !this.isRunning) return false;
 
     try {
       // Get file size to check if there's new content
       const fileInfo = await stat(this.currentLogPath);
 
       // Re-check after await (stop() may have been called)
-      if (!this.isRunning) return;
+      if (!this.isRunning) return false;
 
       const fileSize = fileInfo.size;
 
@@ -427,7 +556,7 @@ export class LogWatcher extends EventEmitter {
           this.remainder = '';
           this.textDecoder = new TextDecoder('utf-8', { fatal: false });
         }
-        return;
+        return false;
       }
 
       // Read new bytes (not text - avoids mid-UTF-8 corruption)
@@ -436,8 +565,9 @@ export class LogWatcher extends EventEmitter {
       const bytes = await slice.arrayBuffer();
 
       // Re-check after await (stop() may have been called)
-      if (!this.isRunning) return;
+      if (!this.isRunning) return false;
 
+      const bytesRead = bytes.byteLength;
       this.bytePosition = fileSize;
 
       // Decode with streaming to handle incomplete UTF-8 codepoints at boundary
@@ -453,9 +583,11 @@ export class LogWatcher extends EventEmitter {
 
       // Emit each entry
       for (const entry of entries) {
-        if (!this.isRunning) return; // Check before each emit
+        if (!this.isRunning) return true; // Check before each emit
         this.emit('line', entry);
       }
+
+      return bytesRead > 0;
     } catch (error) {
       // File may not exist yet or may have been deleted
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
@@ -464,6 +596,7 @@ export class LogWatcher extends EventEmitter {
           error instanceof Error ? error : new Error(String(error))
         );
       }
+      return false;
     }
   }
 

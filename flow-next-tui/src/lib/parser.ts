@@ -35,31 +35,30 @@ export const ASCII_ICONS = {
 } as const;
 
 /**
- * Raw JSON line types from Claude --watch stream-json output
+ * Raw JSON line types from Claude --output-format stream-json
+ *
+ * Actual format has top-level types: "assistant", "user", "system", "result"
+ * with nested message.content arrays containing blocks.
  */
-interface ToolCallLine {
-  type: 'tool_call';
-  tool: string;
-  input?: unknown;
+
+interface ContentBlock {
+  type: string;
+  name?: string; // tool_use
+  input?: unknown; // tool_use
+  text?: string; // text block
+  thinking?: string; // thinking block
+  content?: unknown; // tool_result content
+  is_error?: boolean; // tool_result error flag
 }
 
-interface ToolResultLine {
-  type: 'tool_result';
-  content?: string;
-  error?: string;
+interface MessageWrapper {
+  content?: ContentBlock[];
 }
 
-interface TextLine {
-  type: 'text';
-  content?: string;
+interface StreamJsonLine {
+  type: string;
+  message?: MessageWrapper;
 }
-
-interface ErrorLine {
-  type: 'error';
-  message?: string;
-}
-
-type StreamJsonLine = ToolCallLine | ToolResultLine | TextLine | ErrorLine;
 
 /**
  * Safely coerce a value to string (handles non-string content from runtime JSON)
@@ -119,67 +118,89 @@ export function iconForEntry(
 /**
  * Parse a single JSON line from stream-json format
  * @param line Raw JSON string
- * @returns LogEntry or null if parse fails or line is invalid
+ * @returns LogEntry array (may return multiple for assistant messages with multiple blocks)
  */
 export function parseLine(line: string): LogEntry | null {
+  const entries = parseLineMulti(line);
+  return entries.length > 0 ? (entries[0] ?? null) : null;
+}
+
+/**
+ * Parse a line returning all entries (assistant messages can have multiple tool_use blocks)
+ */
+export function parseLineMulti(line: string): LogEntry[] {
   const trimmed = line.trim();
   if (!trimmed) {
-    return null;
+    return [];
   }
 
   let parsed: StreamJsonLine;
   try {
     parsed = JSON.parse(trimmed);
   } catch {
-    // Malformed JSON - skip gracefully
-    return null;
+    return [];
   }
 
-  // Validate structure
   if (!parsed || typeof parsed !== 'object' || !('type' in parsed)) {
-    return null;
+    return [];
   }
+
+  const entries: LogEntry[] = [];
+  const blocks = parsed.message?.content ?? [];
 
   switch (parsed.type) {
-    case 'tool_call': {
-      // Safely extract tool name (handle non-string values from malformed JSON)
-      const rawTool = typeof parsed.tool === 'string' ? parsed.tool.trim() : '';
-      const tool = rawTool || 'unknown';
-      return {
-        type: 'tool',
-        tool,
-        content: formatToolInput(tool, parsed.input),
-      };
+    case 'assistant': {
+      // Extract tool_use and text blocks from assistant message
+      for (const block of blocks) {
+        if (block.type === 'tool_use') {
+          const tool = typeof block.name === 'string' ? block.name : 'unknown';
+          entries.push({
+            type: 'tool',
+            tool,
+            content: formatToolInput(tool, block.input),
+          });
+        } else if (block.type === 'text' && block.text) {
+          entries.push({
+            type: 'response',
+            content: coerceToString(block.text),
+          });
+        }
+      }
+      break;
     }
 
-    case 'tool_result': {
-      // Coerce content/error to string (runtime JSON may not be string)
-      const content =
-        coerceToString(parsed.content) || coerceToString(parsed.error);
-      return {
-        type: 'response',
-        content,
-        success: parsed.error == null,
-      };
+    case 'user': {
+      // Extract tool_result blocks from user message
+      for (const block of blocks) {
+        if (block.type === 'tool_result') {
+          const content = coerceToString(block.content);
+          entries.push({
+            type: 'response',
+            content,
+            success: !block.is_error,
+          });
+        }
+      }
+      break;
     }
 
-    case 'text':
-      return {
-        type: 'response',
-        content: coerceToString(parsed.content),
-      };
+    case 'result': {
+      // Final result message
+      const resultContent = (parsed as { result?: string }).result;
+      if (resultContent) {
+        entries.push({
+          type: 'response',
+          content: coerceToString(resultContent),
+          success: true,
+        });
+      }
+      break;
+    }
 
-    case 'error':
-      return {
-        type: 'error',
-        content: coerceToString(parsed.message) || 'Unknown error',
-        success: false,
-      };
-
-    default:
-      // Unknown type - skip
-      return null;
+    // Skip system messages - not useful for TUI display
   }
+
+  return entries;
 }
 
 /**
@@ -260,10 +281,7 @@ function formatToolInput(tool: string, input: unknown): string {
 export function parseLines(lines: string[]): LogEntry[] {
   const entries: LogEntry[] = [];
   for (const line of lines) {
-    const entry = parseLine(line);
-    if (entry) {
-      entries.push(entry);
-    }
+    entries.push(...parseLineMulti(line));
   }
   return entries;
 }
@@ -284,17 +302,14 @@ export function parseChunk(chunk: string): {
   let remainder = lines.pop() ?? '';
 
   for (const line of lines) {
-    const entry = parseLine(line);
-    if (entry) {
-      entries.push(entry);
-    }
+    entries.push(...parseLineMulti(line));
   }
 
   // Try parsing remainder - if valid JSON, it's complete (no trailing newline)
   if (remainder) {
-    const lastEntry = parseLine(remainder);
-    if (lastEntry) {
-      entries.push(lastEntry);
+    const lastEntries = parseLineMulti(remainder);
+    if (lastEntries.length > 0) {
+      entries.push(...lastEntries);
       remainder = '';
     }
   }

@@ -2,6 +2,7 @@ import { describe, test, expect } from 'bun:test';
 
 import {
   parseLine,
+  parseLineMulti,
   parseLines,
   parseChunk,
   getIcon,
@@ -9,6 +10,45 @@ import {
   TOOL_ICONS,
   ASCII_ICONS,
 } from './parser';
+
+/**
+ * Helper to create Claude stream-json format for tool_use
+ */
+function makeToolUse(
+  name: string,
+  input?: Record<string, unknown>
+): string {
+  return JSON.stringify({
+    type: 'assistant',
+    message: {
+      content: [{ type: 'tool_use', name, input: input ?? {} }],
+    },
+  });
+}
+
+/**
+ * Helper to create Claude stream-json format for tool_result
+ */
+function makeToolResult(content: string, isError = false): string {
+  return JSON.stringify({
+    type: 'user',
+    message: {
+      content: [{ type: 'tool_result', content, is_error: isError }],
+    },
+  });
+}
+
+/**
+ * Helper to create Claude stream-json format for text
+ */
+function makeText(text: string): string {
+  return JSON.stringify({
+    type: 'assistant',
+    message: {
+      content: [{ type: 'text', text }],
+    },
+  });
+}
 
 describe('parser', () => {
   describe('getIcon', () => {
@@ -76,12 +116,8 @@ describe('parser', () => {
   });
 
   describe('parseLine', () => {
-    test('parses tool_call with Read tool', () => {
-      const line = JSON.stringify({
-        type: 'tool_call',
-        tool: 'Read',
-        input: { file_path: '/path/to/file.ts' },
-      });
+    test('parses tool_use with Read tool', () => {
+      const line = makeToolUse('Read', { file_path: '/path/to/file.ts' });
 
       const result = parseLine(line);
 
@@ -92,12 +128,8 @@ describe('parser', () => {
       });
     });
 
-    test('parses tool_call with Bash tool', () => {
-      const line = JSON.stringify({
-        type: 'tool_call',
-        tool: 'Bash',
-        input: { command: 'npm test' },
-      });
+    test('parses tool_use with Bash tool', () => {
+      const line = makeToolUse('Bash', { command: 'npm test' });
 
       const result = parseLine(line);
 
@@ -111,11 +143,7 @@ describe('parser', () => {
     test('truncates long Bash commands', () => {
       const longCommand =
         'npm run build && npm test && npm run lint && npm run format --check';
-      const line = JSON.stringify({
-        type: 'tool_call',
-        tool: 'Bash',
-        input: { command: longCommand },
-      });
+      const line = makeToolUse('Bash', { command: longCommand });
 
       const result = parseLine(line);
 
@@ -125,12 +153,8 @@ describe('parser', () => {
       expect(result?.content?.length).toBeLessThanOrEqual(66);
     });
 
-    test('parses tool_call with Glob tool', () => {
-      const line = JSON.stringify({
-        type: 'tool_call',
-        tool: 'Glob',
-        input: { pattern: '**/*.ts' },
-      });
+    test('parses tool_use with Glob tool', () => {
+      const line = makeToolUse('Glob', { pattern: '**/*.ts' });
 
       const result = parseLine(line);
 
@@ -141,11 +165,8 @@ describe('parser', () => {
       });
     });
 
-    test('parses tool_call without input', () => {
-      const line = JSON.stringify({
-        type: 'tool_call',
-        tool: 'SomeTool',
-      });
+    test('parses tool_use without input', () => {
+      const line = makeToolUse('SomeTool');
 
       const result = parseLine(line);
 
@@ -157,10 +178,7 @@ describe('parser', () => {
     });
 
     test('parses tool_result with content', () => {
-      const line = JSON.stringify({
-        type: 'tool_result',
-        content: 'File contents here...',
-      });
+      const line = makeToolResult('File contents here...');
 
       const result = parseLine(line);
 
@@ -172,10 +190,7 @@ describe('parser', () => {
     });
 
     test('parses tool_result with error', () => {
-      const line = JSON.stringify({
-        type: 'tool_result',
-        error: 'File not found',
-      });
+      const line = makeToolResult('File not found', true);
 
       const result = parseLine(line);
 
@@ -187,31 +202,13 @@ describe('parser', () => {
     });
 
     test('parses text message', () => {
-      const line = JSON.stringify({
-        type: 'text',
-        content: 'Thinking about the problem...',
-      });
+      const line = makeText('Thinking about the problem...');
 
       const result = parseLine(line);
 
       expect(result).toEqual({
         type: 'response',
         content: 'Thinking about the problem...',
-      });
-    });
-
-    test('parses error message', () => {
-      const line = JSON.stringify({
-        type: 'error',
-        message: 'Something went wrong',
-      });
-
-      const result = parseLine(line);
-
-      expect(result).toEqual({
-        type: 'error',
-        content: 'Something went wrong',
-        success: false,
       });
     });
 
@@ -234,21 +231,17 @@ describe('parser', () => {
       expect(parseLine('123')).toBeNull();
     });
 
-    test('returns null for unknown type', () => {
+    test('returns null for system type (skipped)', () => {
       const line = JSON.stringify({
-        type: 'unknown_type',
-        data: 'something',
+        type: 'system',
+        message: { content: [{ type: 'text', text: 'system prompt' }] },
       });
 
       expect(parseLine(line)).toBeNull();
     });
 
     test('handles WebFetch tool', () => {
-      const line = JSON.stringify({
-        type: 'tool_call',
-        tool: 'WebFetch',
-        input: { url: 'https://example.com' },
-      });
+      const line = makeToolUse('WebFetch', { url: 'https://example.com' });
 
       const result = parseLine(line);
 
@@ -260,11 +253,7 @@ describe('parser', () => {
     });
 
     test('handles WebSearch tool', () => {
-      const line = JSON.stringify({
-        type: 'tool_call',
-        tool: 'WebSearch',
-        input: { query: 'typescript generics' },
-      });
+      const line = makeToolUse('WebSearch', { query: 'typescript generics' });
 
       const result = parseLine(line);
 
@@ -276,11 +265,7 @@ describe('parser', () => {
     });
 
     test('handles Task tool', () => {
-      const line = JSON.stringify({
-        type: 'tool_call',
-        tool: 'Task',
-        input: { description: 'Explore codebase' },
-      });
+      const line = makeToolUse('Task', { description: 'Explore codebase' });
 
       const result = parseLine(line);
 
@@ -292,11 +277,7 @@ describe('parser', () => {
     });
 
     test('handles key aliases for Read (path instead of file_path)', () => {
-      const line = JSON.stringify({
-        type: 'tool_call',
-        tool: 'Read',
-        input: { path: '/alt/path.ts' },
-      });
+      const line = makeToolUse('Read', { path: '/alt/path.ts' });
 
       const result = parseLine(line);
 
@@ -308,11 +289,7 @@ describe('parser', () => {
     });
 
     test('handles key aliases for Grep (glob instead of pattern)', () => {
-      const line = JSON.stringify({
-        type: 'tool_call',
-        tool: 'Grep',
-        input: { glob: '*.md' },
-      });
+      const line = makeToolUse('Grep', { glob: '*.md' });
 
       const result = parseLine(line);
 
@@ -324,11 +301,7 @@ describe('parser', () => {
     });
 
     test('shows first string value for unknown tools', () => {
-      const line = JSON.stringify({
-        type: 'tool_call',
-        tool: 'CustomTool',
-        input: { arg1: 'some value' },
-      });
+      const line = makeToolUse('CustomTool', { arg1: 'some value' });
 
       const result = parseLine(line);
 
@@ -341,29 +314,39 @@ describe('parser', () => {
 
     test('truncates long fallback values', () => {
       const longValue = 'x'.repeat(60);
-      const line = JSON.stringify({
-        type: 'tool_call',
-        tool: 'CustomTool',
-        input: { arg1: longValue },
-      });
+      const line = makeToolUse('CustomTool', { arg1: longValue });
 
       const result = parseLine(line);
 
       expect(result?.content?.endsWith('...')).toBe(true);
       expect(result?.content?.length).toBeLessThanOrEqual(70);
     });
+
+    test('parseLineMulti returns all entries from assistant with multiple blocks', () => {
+      const line = JSON.stringify({
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'tool_use', name: 'Read', input: { file_path: '/a.ts' } },
+            { type: 'tool_use', name: 'Glob', input: { pattern: '*.md' } },
+          ],
+        },
+      });
+
+      const result = parseLineMulti(line);
+
+      expect(result).toHaveLength(2);
+      expect(result[0]!.tool).toBe('Read');
+      expect(result[1]!.tool).toBe('Glob');
+    });
   });
 
   describe('parseLines', () => {
     test('parses multiple valid lines', () => {
       const lines = [
-        JSON.stringify({
-          type: 'tool_call',
-          tool: 'Read',
-          input: { file_path: '/a.ts' },
-        }),
-        JSON.stringify({ type: 'tool_result', content: 'file content' }),
-        JSON.stringify({ type: 'text', content: 'done' }),
+        makeToolUse('Read', { file_path: '/a.ts' }),
+        makeToolResult('file content'),
+        makeText('done'),
       ];
 
       const result = parseLines(lines);
@@ -376,10 +359,10 @@ describe('parser', () => {
 
     test('filters out invalid lines', () => {
       const lines = [
-        JSON.stringify({ type: 'tool_call', tool: 'Read' }),
+        makeToolUse('Read', { file_path: '/a.ts' }),
         'invalid json',
         '',
-        JSON.stringify({ type: 'text', content: 'valid' }),
+        makeText('valid'),
       ];
 
       const result = parseLines(lines);
@@ -394,11 +377,7 @@ describe('parser', () => {
 
   describe('parseChunk', () => {
     test('parses complete chunk', () => {
-      const chunk = [
-        JSON.stringify({ type: 'text', content: 'line 1' }),
-        JSON.stringify({ type: 'text', content: 'line 2' }),
-        '', // empty line at end
-      ].join('\n');
+      const chunk = [makeText('line 1'), makeText('line 2'), ''].join('\n');
 
       const result = parseChunk(chunk);
 
@@ -407,15 +386,12 @@ describe('parser', () => {
     });
 
     test('preserves incomplete line as remainder', () => {
-      const chunk = [
-        JSON.stringify({ type: 'text', content: 'complete' }),
-        '{"type": "tex', // incomplete
-      ].join('\n');
+      const chunk = [makeText('complete'), '{"type": "ass'].join('\n');
 
       const result = parseChunk(chunk);
 
       expect(result.entries).toHaveLength(1);
-      expect(result.remainder).toBe('{"type": "tex');
+      expect(result.remainder).toBe('{"type": "ass');
     });
 
     test('handles chunk with only incomplete line', () => {
@@ -435,7 +411,7 @@ describe('parser', () => {
     });
 
     test('handles chunk with single complete line', () => {
-      const chunk = JSON.stringify({ type: 'text', content: 'only' }) + '\n';
+      const chunk = makeText('only') + '\n';
 
       const result = parseChunk(chunk);
 
@@ -445,7 +421,7 @@ describe('parser', () => {
 
     test('parses complete last line without trailing newline', () => {
       // JSON without trailing newline (e.g., at end of file)
-      const chunk = JSON.stringify({ type: 'text', content: 'final' });
+      const chunk = makeText('final');
 
       const result = parseChunk(chunk);
 
@@ -456,8 +432,8 @@ describe('parser', () => {
 
     test('parses multiple lines where last has no trailing newline', () => {
       const chunk = [
-        JSON.stringify({ type: 'text', content: 'first' }),
-        JSON.stringify({ type: 'text', content: 'last' }), // no \n after
+        makeText('first'),
+        makeText('last'), // no \n after
       ].join('\n');
 
       const result = parseChunk(chunk);

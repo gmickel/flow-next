@@ -9,7 +9,7 @@ import type { Run } from './types';
 export interface RunDetails {
   id: string;
   path: string;
-  epic?: string;
+  epics: string[];
   active: boolean;
   iteration: number;
   startedAt?: string;
@@ -200,49 +200,59 @@ async function getIterationCount(runPath: string): Promise<number> {
 }
 
 /**
- * Get epic ID from run by parsing progress.txt
- * Looks for lines like "status=... epic=fn-9 ..." (last occurrence wins)
+ * Get epics from run - checks run.json first (all epics), then progress.txt (current epic)
+ * Returns array of epic IDs. Empty array if none found.
  */
-async function getRunEpic(runPath: string): Promise<string | undefined> {
-  // Primary: parse progress.txt for epic= pattern
+async function getRunEpics(runPath: string): Promise<string[]> {
+  // Primary: check run.json for epics array (the authoritative source when EPICS is set)
+  const runJsonPath = join(runPath, 'run.json');
+  const runJsonFile = Bun.file(runJsonPath);
+
+  if (await runJsonFile.exists()) {
+    try {
+      const runJson = await runJsonFile.json();
+      if (Array.isArray(runJson?.epics) && runJson.epics.length > 0) {
+        return runJson.epics.filter((e: unknown) => typeof e === 'string');
+      }
+    } catch {
+      // Ignore parse errors, try other sources
+    }
+  }
+
+  // Fallback: parse progress.txt for epic= patterns (collect unique epics)
   const progressPath = join(runPath, 'progress.txt');
   const progressFile = Bun.file(progressPath);
 
   if (await progressFile.exists()) {
     try {
       const content = await progressFile.text();
-      // Find all epic=fn-N patterns, use last one
       const matches = content.match(/epic=(fn-\d+)/g);
       if (matches && matches.length > 0) {
-        const lastMatch = matches.at(-1);
-        if (lastMatch) {
-          const epic = lastMatch.replace('epic=', '');
-          if (epic !== '') {
-            return epic;
-          }
-        }
+        const epics = matches.map((m) => m.replace('epic=', ''));
+        // Return unique epics in order of appearance
+        return [...new Set(epics)];
       }
     } catch {
       // Ignore read errors
     }
   }
 
-  // Fallback: check branches.json for epic field (if future format adds it)
+  // Fallback: check branches.json for epic field (legacy single-epic)
   const branchesPath = join(runPath, 'branches.json');
   const branchesFile = Bun.file(branchesPath);
 
   if (await branchesFile.exists()) {
     try {
       const branches = await branchesFile.json();
-      if (branches?.epic) {
-        return branches.epic;
+      if (branches?.epic && typeof branches.epic === 'string') {
+        return [branches.epic];
       }
     } catch {
       // Ignore parse errors
     }
   }
 
-  return undefined;
+  return [];
 }
 
 /**
@@ -291,16 +301,16 @@ export async function discoverRuns(runsDir?: string): Promise<Run[]> {
   const runs = await Promise.all(
     runDirs.map(async (runId) => {
       const runPath = join(dir, runId);
-      const [active, iteration, epic, startedAt] = await Promise.all([
+      const [active, iteration, epics, startedAt] = await Promise.all([
         isRunActive(runPath),
         getIterationCount(runPath),
-        getRunEpic(runPath),
+        getRunEpics(runPath),
         getRunStartTime(runPath),
       ]);
       return {
         id: runId,
         path: runPath,
-        epic,
+        epics,
         active,
         iteration,
         startedAt,
@@ -329,10 +339,10 @@ export function getLatestRun(runs: Run[]): Run | undefined {
  */
 export async function getRunDetails(runPath: string): Promise<RunDetails> {
   const id = basename(runPath);
-  const [active, iteration, epic, startedAt] = await Promise.all([
+  const [active, iteration, epics, startedAt] = await Promise.all([
     isRunActive(runPath),
     getIterationCount(runPath),
-    getRunEpic(runPath),
+    getRunEpics(runPath),
     getRunStartTime(runPath),
   ]);
 
@@ -345,7 +355,7 @@ export async function getRunDetails(runPath: string): Promise<RunDetails> {
   return {
     id,
     path: runPath,
-    epic,
+    epics,
     active,
     iteration,
     startedAt,
@@ -449,15 +459,15 @@ export async function validateRun(
     }
 
     // Get run details for this specific run
-    const [active, iteration, epic, startedAt] = await Promise.all([
+    const [active, iteration, epics, startedAt] = await Promise.all([
       isRunActive(runPath),
       getIterationCount(runPath),
-      getRunEpic(runPath),
+      getRunEpics(runPath),
       getRunStartTime(runPath),
     ]);
 
     return {
-      run: { id: runId, path: runPath, epic, active, iteration, startedAt },
+      run: { id: runId, path: runPath, epics, active, iteration, startedAt },
       warnings,
     };
   }

@@ -688,6 +688,7 @@ while (( iter <= MAX_ITERATIONS )); do
     export EPIC_ID="$epic_id"
     export PLAN_REVIEW
     export REQUIRE_PLAN_REVIEW
+    export FLOW_REVIEW_BACKEND="$PLAN_REVIEW"  # Skills read this
     if [[ "$PLAN_REVIEW" != "none" ]]; then
       export REVIEW_RECEIPT_PATH="$RECEIPTS_DIR/plan-${epic_id}.json"
     else
@@ -705,6 +706,7 @@ while (( iter <= MAX_ITERATIONS )); do
     fi
     export BRANCH_MODE_EFFECTIVE
     export WORK_REVIEW
+    export FLOW_REVIEW_BACKEND="$WORK_REVIEW"  # Skills read this
     if [[ "$WORK_REVIEW" != "none" ]]; then
       export REVIEW_RECEIPT_PATH="$RECEIPTS_DIR/impl-${task_id}.json"
     else
@@ -719,12 +721,8 @@ while (( iter <= MAX_ITERATIONS )); do
 
   export FLOW_RALPH="1"
   claude_args=(-p)
-  # Set output format based on watch mode (stream-json required for real-time output)
-  if [[ -n "$WATCH_MODE" ]]; then
-    claude_args+=(--output-format stream-json)
-  else
-    claude_args+=(--output-format text)
-  fi
+  # Always use stream-json for logs (TUI needs it), watch mode only controls terminal display
+  claude_args+=(--output-format stream-json)
 
   # Autonomous mode system prompt - critical for preventing drift
   claude_args+=(--append-system-prompt "AUTONOMOUS MODE ACTIVE (FLOW_RALPH=1). You are running unattended. CRITICAL RULES:
@@ -779,14 +777,16 @@ Violations break automation and leave the user with incomplete work. Be precise,
     # Log contains stream-json; verdict/promise extraction handled by fallback logic
     claude_out="$(cat "$iter_log")"
   else
-    # Default: quiet mode
+    # Default: quiet mode (stream-json to log, no terminal display)
+    # --verbose required for stream-json with --print
+    [[ ! " ${claude_args[*]} " =~ " --verbose " ]] && claude_args+=(--verbose)
     if [[ -n "$TIMEOUT_CMD" ]]; then
-      claude_out="$("$TIMEOUT_CMD" "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1)"
+      "$TIMEOUT_CMD" "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" > "$iter_log" 2>&1
     else
-      claude_out="$("$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1)"
+      "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" > "$iter_log" 2>&1
     fi
     claude_rc=$?
-    printf '%s\n' "$claude_out" > "$iter_log"
+    claude_out="$(cat "$iter_log")"
   fi
   set -e
 
@@ -822,12 +822,8 @@ Violations break automation and leave the user with incomplete work. Be precise,
   fi
 
   # Extract verdict/promise for progress log (not displayed in UI)
-  # In watch mode, parse stream-json to get assistant text; otherwise use raw output
-  if [[ -n "$WATCH_MODE" ]]; then
-    claude_text="$(extract_text_from_stream_json "$iter_log")"
-  else
-    claude_text="$claude_out"
-  fi
+  # Always parse stream-json since we always use that format now
+  claude_text="$(extract_text_from_stream_json "$iter_log")"
   verdict="$(printf '%s' "$claude_text" | extract_tag verdict)"
   promise="$(printf '%s' "$claude_text" | extract_tag promise)"
 
