@@ -2,7 +2,9 @@
 
 ## Description
 
-Create TaskList component wrapping pi-tui SelectList with custom styling.
+Create TaskList component implementing navigable task list with status icons.
+Uses pi-tui Component interface with custom rendering (not wrapping SelectList
+due to different rendering requirements: status icons, blocked indicators, etc.)
 
 ### File
 
@@ -10,26 +12,36 @@ Create TaskList component wrapping pi-tui SelectList with custom styling.
 
 ### Features
 
-- Status icons: ● done, ◉ in_progress, ○ pending, ⊘ blocked
-- Task ID + truncated title
-- Blocked tasks show dependency: `→ 1.3`
-- Selected row background highlight
-- j/k navigation
+- Status icons: ● done, ◉ in_progress, ○ todo, ⊘ blocked
+- Full task ID (fn-N.M) + truncated title
+- Blocked tasks (status: blocked) show dependency indicator: `→ 1.3`
+- Selected row background highlight (uses selectList.selectedText)
+- j/k and arrow navigation with wrap-around
+- Scroll indicator when tasks exceed maxVisible
 
 ### Interface
 
 ```typescript
 interface TaskListProps {
-  tasks: Task[];
+  tasks: EpicTask[];
   selectedIndex: number;
-  onSelect: (task: Task) => void;
+  onSelect: (task: EpicTask) => void;
   theme: Theme;
+  // Optional extensions
+  onSelectionChange?: (task: EpicTask, index: number) => void;
+  maxVisible?: number;  // default: 10
+  useAscii?: boolean;   // default: false
 }
 
 class TaskList implements Component {
   render(width: number): string[]
   handleInput(data: string): void
   invalidate(): void
+  // Helpers
+  setTasks(tasks: EpicTask[]): void
+  getSelectedTask(): EpicTask | undefined
+  getSelectedIndex(): number
+  setSelectedIndex(index: number): void
 }
 ```
 

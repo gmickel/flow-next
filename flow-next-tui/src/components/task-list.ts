@@ -150,38 +150,33 @@ export class TaskList implements Component {
 
       const isSelected = i === this.selectedIndex;
       const icon = this.getStatusIcon(task);
-      const colorFn = this.getStatusColor(task);
 
-      // Format: "● fn-1.3 Add validation..."
+      // Format: "● fn-1.3 Add validation... → 1.2"
       const iconWidth = this.useAscii ? 3 : 1;
-      const prefix = colorFn(icon) + ' ';
-      const prefixWidth = iconWidth + 1;
-
-      // Render full task id (fn-1.3)
-      const idStr = this.theme.dim(task.id) + ' ';
-      const idWidth = task.id.length + 1;
-
-      // Calculate space for title
       const depStr = this.formatDependency(task);
-      const depWidth = visibleWidth(depStr);
-      const titleMaxWidth = Math.max(10, width - prefixWidth - idWidth - depWidth - 2);
 
-      // Truncate title
+      // Calculate component widths for proper truncation
+      // prefix (icon + space) + id + space + title + dep indicator
+      const prefixWidth = iconWidth + 1;
+      const idWidth = task.id.length + 1; // id + space
+      const depWidth = depStr ? visibleWidth(depStr) : 0;
+      // Reserve 1 char safety margin
+      const titleMaxWidth = Math.max(5, width - prefixWidth - idWidth - depWidth - 1);
       const truncatedTitle = truncateToWidth(task.title, titleMaxWidth, '…');
 
-      // Build the line
-      let line = prefix + idStr + truncatedTitle;
-      if (depStr) {
-        line += this.theme.warning(depStr);
-      }
-
-      // Apply background highlight for selected row
       if (isSelected) {
-        // Pad to full width before applying background
-        const padded = padToWidth(line, width);
-        lines.push(this.theme.selectedBg(padded));
+        // For selected rows: build unstyled line, apply single bg+fg to avoid nested reset issues
+        const rawLine = `${icon} ${task.id} ${truncatedTitle}${depStr}`;
+        const padded = padToWidth(rawLine, width);
+        // Use selectList.selectedText which applies bg+fg together
+        lines.push(this.theme.selectList.selectedText(padded));
       } else {
-        lines.push(line);
+        // For unselected rows: use per-segment colors
+        const colorFn = this.getStatusColor(task);
+        const coloredIcon = colorFn(icon);
+        const dimId = this.theme.dim(task.id);
+        const coloredDep = depStr ? this.theme.warning(depStr) : '';
+        lines.push(`${coloredIcon} ${dimId} ${truncatedTitle}${coloredDep}`);
       }
     }
 

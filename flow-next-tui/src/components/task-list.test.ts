@@ -113,17 +113,21 @@ describe('TaskList', () => {
       expect(line).not.toContain('→');
     });
 
-    test('blocked status uses warning color', () => {
+    test('blocked status uses warning color (unselected row)', () => {
       // Create a mock theme that marks warning color
       const mockTheme = {
         ...darkTheme,
         warning: (s: string) => `[WARN]${s}[/WARN]`,
       };
-      const tasks = [mockTask({ status: 'blocked', depends_on: ['fn-1.2'] })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: mockTheme });
+      // Use two tasks, select the second so first (blocked) row uses per-segment colors
+      const tasks = [
+        mockTask({ status: 'blocked', depends_on: ['fn-1.2'] }),
+        mockTask({ id: 'fn-1.2', status: 'todo' }),
+      ];
+      const list = new TaskList({ tasks, selectedIndex: 1, onSelect: noop, theme: mockTheme });
       const lines = list.render(60);
 
-      // Blocked icon should have warning color
+      // Blocked icon (first row, unselected) should have warning color
       expect(lines[0]).toContain('[WARN]');
     });
 
@@ -172,21 +176,24 @@ describe('TaskList', () => {
       expect(visibleWidth(lines[1]!)).toBeLessThan(50);
     });
 
-    test('selected row has background applied (with colors)', () => {
-      // Create a mock theme that always applies a marker
+    test('selected row uses selectList.selectedText for single-pass styling', () => {
+      // Create a mock theme that marks selectedText usage
       const mockTheme = {
         ...darkTheme,
-        selectedBg: (s: string) => `[BG]${s}[/BG]`,
+        selectList: {
+          ...darkTheme.selectList,
+          selectedText: (s: string) => `[SEL]${s}[/SEL]`,
+        },
       };
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2', title: 'Second' })];
       const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: mockTheme });
       const lines = list.render(50);
 
-      // Selected row should have background marker
-      expect(lines[0]).toContain('[BG]');
-      expect(lines[0]).toContain('[/BG]');
+      // Selected row should use selectList.selectedText
+      expect(lines[0]).toContain('[SEL]');
+      expect(lines[0]).toContain('[/SEL]');
       // Second row should not have marker
-      expect(lines[1]).not.toContain('[BG]');
+      expect(lines[1]).not.toContain('[SEL]');
     });
 
     test('scroll indicator shown when tasks exceed maxVisible', () => {
