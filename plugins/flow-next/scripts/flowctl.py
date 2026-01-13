@@ -1509,7 +1509,8 @@ def cmd_epic_create(args: argparse.Namespace) -> None:
     # Scan existing epics to determine next ID (don't rely on counter)
     max_epic = scan_max_epic_id(flow_dir)
     epic_num = max_epic + 1
-    epic_id = f"fn-{epic_num}"
+    suffix = generate_epic_suffix()
+    epic_id = f"fn-{epic_num}-{suffix}"
 
     # Double-check no collision (shouldn't happen with scan-based allocation)
     epic_json_path = flow_dir / EPICS_DIR / f"{epic_id}.json"
