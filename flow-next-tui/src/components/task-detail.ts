@@ -3,20 +3,18 @@
  * Shows task header, metadata, receipt status, and markdown spec with scrolling.
  */
 
-import { matchesKey, Markdown, truncateToWidth } from '@mariozechner/pi-tui';
+import { matchesKey, Markdown } from '@mariozechner/pi-tui';
 import type { Component } from '@mariozechner/pi-tui';
 
-import { visibleWidth } from '../lib/render.ts';
+import { visibleWidth, truncateToWidth, stripAnsi } from '../lib/render.ts';
 import type { Task } from '../lib/types.ts';
+import type { ReceiptStatus } from '../lib/runs.ts';
 import type { Theme } from '../themes/index.ts';
 
 import { STATUS_ICONS, ASCII_ICONS } from './task-list.ts';
 
-/** Receipt status for plan/impl reviews */
-export interface ReceiptStatus {
-  plan?: boolean;
-  impl?: boolean;
-}
+// Re-export for backwards compatibility
+export type { ReceiptStatus } from '../lib/runs.ts';
 
 export interface TaskDetailProps {
   task: Task;
@@ -174,14 +172,15 @@ export class TaskDetail implements Component {
     // Line 4: Empty separator
     lines.push('');
 
-    // Block reason (if blocked)
+    // Block reason (if blocked) - sanitize to prevent terminal injection
     if (this.blockReason && this.task.status === 'blocked') {
       const blockHeader = this.theme.warning(
         this.useAscii ? '[!] Blocked:' : '⊘ Blocked:'
       );
       lines.push(blockHeader);
-      // Wrap block reason to width
-      const reasonLines = this.wrapText(this.blockReason.trim(), width - 2);
+      // Wrap block reason to width (sanitized)
+      const sanitizedReason = stripAnsi(this.blockReason.trim());
+      const reasonLines = this.wrapText(sanitizedReason, width - 2);
       for (const line of reasonLines) {
         lines.push(`  ${line}`);
       }
@@ -238,9 +237,14 @@ export class TaskDetail implements Component {
     const headerLines = this.renderHeader(width);
     allLines.push(...headerLines);
 
-    // Render markdown spec
-    if (this.spec.trim()) {
+    // Render markdown spec (sanitize to prevent terminal injection)
+    const sanitizedSpec = stripAnsi(this.spec);
+    if (sanitizedSpec.trim()) {
       const md = this.getMarkdown(width);
+      // Update markdown with sanitized spec if changed
+      if (this.spec !== sanitizedSpec) {
+        md.setText(sanitizedSpec);
+      }
       const mdLines = md.render(width);
       allLines.push(...mdLines);
     }
@@ -248,10 +252,13 @@ export class TaskDetail implements Component {
     // Store total content height
     this.totalContentHeight = allLines.length;
 
-    // Apply scrolling
-    const visibleLines = allLines.slice(this.scrollOffset);
+    // Apply scrolling and viewport cap
+    const visibleLines = allLines.slice(
+      this.scrollOffset,
+      this.scrollOffset + this.viewportHeight
+    );
 
-    // Pad lines to width for consistent display
+    // Truncate lines to width for consistent display
     return visibleLines.map((line) => {
       const w = visibleWidth(line);
       if (w > width) {
