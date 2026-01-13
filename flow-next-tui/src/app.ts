@@ -93,6 +93,7 @@ class App implements Component {
   private taskPollTimer: ReturnType<typeof setInterval> | null = null;
   private timerInterval: ReturnType<typeof setInterval> | null = null;
   private tui: TUI | null = null;
+  private taskDetailReq = 0; // Request token for async task detail updates
 
   constructor(
     state: AppState,
@@ -160,6 +161,9 @@ class App implements Component {
       visible: state.showHelp,
       onClose: () => {
         this.state.showHelp = false;
+        this.helpOverlay.hide();
+        this.tui?.hideOverlay();
+        this.tui?.requestRender();
       },
     });
 
@@ -233,10 +237,17 @@ class App implements Component {
       }, TASK_POLL_INTERVAL);
     }
 
-    // Timer for elapsed time
-    const startTime = Date.now();
+    // Timer for elapsed time (from run start, not TUI start)
+    const parsed = this.state.currentRun?.startedAt
+      ? Date.parse(this.state.currentRun.startedAt)
+      : NaN;
+    const runStartMs = Number.isFinite(parsed) ? parsed : Date.now();
+    // Initialize elapsed immediately
+    this.state.elapsed = Math.max(0, Math.floor((Date.now() - runStartMs) / 1000));
+    this.header.update({ elapsed: this.state.elapsed });
+
     this.timerInterval = setInterval(() => {
-      this.state.elapsed = Math.floor((Date.now() - startTime) / 1000);
+      this.state.elapsed = Math.max(0, Math.floor((Date.now() - runStartMs) / 1000));
       this.header.update({ elapsed: this.state.elapsed });
       this.tui?.requestRender();
     }, TIMER_INTERVAL);
@@ -255,25 +266,27 @@ class App implements Component {
   }
 
   private async updateTaskDetail(taskId: string): Promise<void> {
+    // Use request token to handle out-of-order responses from rapid navigation
+    const req = ++this.taskDetailReq;
     try {
-      const task = await getTask(taskId);
-      const spec = await getTaskSpec(taskId);
+      const [task, spec] = await Promise.all([getTask(taskId), getTaskSpec(taskId)]);
+      if (req !== this.taskDetailReq) return; // Stale request
 
       this.taskDetail.setTask(task);
       this.taskDetail.setSpec(spec);
 
-      // Update receipts
+      // Update receipts and block reason
       if (this.state.currentRun) {
-        const receipts = await getReceiptStatus(this.state.currentRun.path, taskId);
-        this.taskDetail.setReceipts(receipts);
+        const [receipts, reason] = await Promise.all([
+          getReceiptStatus(this.state.currentRun.path, taskId),
+          task.status === 'blocked'
+            ? getBlockReason(taskId, this.state.currentRun.path)
+            : Promise.resolve(null),
+        ]);
+        if (req !== this.taskDetailReq) return; // Stale request
 
-        // Update block reason
-        if (task.status === 'blocked') {
-          const reason = await getBlockReason(taskId, this.state.currentRun.path);
-          this.taskDetail.setBlockReason(reason);
-        } else {
-          this.taskDetail.setBlockReason(null);
-        }
+        this.taskDetail.setReceipts(receipts);
+        this.taskDetail.setBlockReason(task.status === 'blocked' ? reason : null);
       }
 
       this.header.update({ task });
@@ -288,10 +301,10 @@ class App implements Component {
     const height = terminal?.rows ?? 40;
     const isCompact = width < COMPACT_WIDTH || height < COMPACT_HEIGHT;
 
-    // Calculate layout heights
+    // Calculate layout heights (clamp to avoid negative slice indices)
     const headerHeight = isCompact ? 1 : 2;
     const statusBarHeight = 1;
-    const contentHeight = height - headerHeight - statusBarHeight;
+    const contentHeight = Math.max(0, height - headerHeight - statusBarHeight);
 
     // Update viewports
     if (!isCompact) {
@@ -486,9 +499,13 @@ export async function createApp(options: AppOptions = {}): Promise<void> {
         const result = await spawnRalph(epicId);
         console.log(theme.success(`Ralph started: ${result.runId} (pid ${result.pid})`));
 
-        // Re-discover runs
+        // Re-discover runs and validate we found the new one
         state.runs = await discoverRuns();
         state.currentRun = state.runs.find((r) => r.id === result.runId);
+        if (!state.currentRun) {
+          renderError(`Started Ralph but run '${result.runId}' not found in discovery.`, theme);
+          process.exit(1);
+        }
       } catch (err) {
         if (err instanceof RalphNotFoundError) {
           renderError(err.message, theme);
@@ -513,7 +530,9 @@ export async function createApp(options: AppOptions = {}): Promise<void> {
     try {
       epic = await getEpic(state.currentRun.epic);
       state.tasks = epic.tasks;
-      state.iteration = state.currentRun.iteration;
+      // iteration is 0-indexed, runs.ts counts files; use max(0, count-1) for correct initial value
+      // LogWatcher will update to actual value when it starts
+      state.iteration = Math.max(0, state.currentRun.iteration - 1);
 
       // Find current task (first in_progress or first todo)
       const inProgress = state.tasks.find((t) => t.status === 'in_progress');
@@ -526,12 +545,12 @@ export async function createApp(options: AppOptions = {}): Promise<void> {
         taskSpec = await getTaskSpec(activeTask.id);
       }
     } catch (err) {
-      if (err instanceof FlowctlNotFoundError) {
-        state.error = err.message;
-      } else {
-        const msg = err instanceof Error ? err.message : String(err);
-        state.error = `Failed to load epic: ${msg}`;
-      }
+      // Fail fast with clean error instead of broken UI state
+      const msg = err instanceof FlowctlNotFoundError
+        ? err.message
+        : `Failed to load epic: ${err instanceof Error ? err.message : String(err)}`;
+      renderError(msg, theme);
+      process.exit(1);
     }
   }
 
