@@ -68,11 +68,15 @@ if [[ "$TARGET" == "flow-next" || "$TARGET" == "all" ]]; then
   # Update marketplace.json flow-next plugin version
   jq --arg v "$NEW" '(.plugins[] | select(.name == "flow-next")).version = $v' "$MARKETPLACE" > tmp.json && mv tmp.json "$MARKETPLACE"
 
+  # Update marketplace metadata version to match (required for auto-updates)
+  jq --arg v "$NEW" '.metadata.version = $v' "$MARKETPLACE" > tmp.json && mv tmp.json "$MARKETPLACE"
+
   # Update version badges in READMEs
   sed -i '' "s/Flow--next-v[0-9]*\.[0-9]*\.[0-9]*/Flow--next-v$NEW/" README.md
   sed -i '' "s/Version-[0-9]*\.[0-9]*\.[0-9]*/Version-$NEW/" plugins/flow-next/README.md
 
   echo "flow-next: $OLD -> $NEW"
+  echo "marketplace: -> $NEW (synced)"
 fi
 
 echo "done"
