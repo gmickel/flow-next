@@ -255,14 +255,16 @@ If verdict is NEEDS_WORK:
 
 5. **Re-review with fix summary** (only AFTER step 4):
 
-   First, refresh the file selection to get updated contents:
+   **IMPORTANT**: Do NOT re-add files already in the selection. RepoPrompt auto-refreshes
+   file contents on every message. Only use `select-add` for NEW files created during fixes:
    ```bash
-   for f in $CHANGED_FILES; do
-     $FLOWCTL rp select-add --window "$W" --tab "$T" "$f"
-   done
+   # Only if fixes created new files not in original selection
+   if [[ -n "$NEW_FILES" ]]; then
+     $FLOWCTL rp select-add --window "$W" --tab "$T" $NEW_FILES
+   fi
    ```
 
-   Then send re-review request:
+   Then send re-review request (NO --new-chat, stay in same chat):
    ```bash
    cat > /tmp/re-review.md << 'EOF'
    ## Fixes Applied
@@ -270,19 +272,16 @@ If verdict is NEEDS_WORK:
    - [Fix 2]: [file:line] [what changed]
    ...
 
-   The updated files should be attached in the `<file_contents>` XML section below. Please:
-   1. Locate the `<file_contents>` XML section at the end of this message
-   2. Read the actual updated source code within it
-   3. Verify the fixes address the issues raised
+   Please re-review. The files in your selection are automatically updated to latest.
 
-   If you cannot find `<file_contents>`, say so and I will re-attach the files.
+   **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>`
    EOF
 
    $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md
    ```
 6. **Repeat** until Ship
 
-**Anti-pattern**: Re-reviewing without committing fixes. This wastes reviewer time and loops forever.
+**Anti-pattern**: Re-adding already-selected files before re-review. RP auto-refreshes; re-adding can cause issues.
 
 ---
 
