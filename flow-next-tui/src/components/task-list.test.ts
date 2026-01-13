@@ -5,6 +5,9 @@ import type { EpicTask } from '../lib/types.ts';
 import { darkTheme } from '../themes/dark.ts';
 import { ASCII_ICONS, STATUS_ICONS, TaskList } from './task-list.ts';
 
+/** No-op onSelect for tests that don't need it */
+const noop = () => {};
+
 /** Create a mock task for testing */
 function mockTask(overrides: Partial<EpicTask> = {}): EpicTask {
   return {
@@ -20,28 +23,28 @@ function mockTask(overrides: Partial<EpicTask> = {}): EpicTask {
 describe('TaskList', () => {
   describe('rendering', () => {
     test('renders empty state when no tasks', () => {
-      const list = new TaskList({ tasks: [], theme: darkTheme });
+      const list = new TaskList({ tasks: [], selectedIndex: 0, onSelect: noop, theme: darkTheme });
       const lines = list.render(40);
 
       expect(lines).toHaveLength(1);
       expect(stripAnsi(lines[0]!)).toContain('No tasks');
     });
 
-    test('renders task with status icon and id', () => {
+    test('renders task with status icon and full id', () => {
       const tasks = [mockTask({ id: 'fn-1.3', title: 'Add validation' })];
-      const list = new TaskList({ tasks, theme: darkTheme });
-      const lines = list.render(40);
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const lines = list.render(50);
 
       expect(lines.length).toBeGreaterThanOrEqual(1);
       const line = stripAnsi(lines[0]!);
       expect(line).toContain(STATUS_ICONS.todo);
-      expect(line).toContain('1.3');
+      expect(line).toContain('fn-1.3'); // Full id, not just 1.3
       expect(line).toContain('Add validation');
     });
 
     test('renders done task with success icon', () => {
       const tasks = [mockTask({ status: 'done' })];
-      const list = new TaskList({ tasks, theme: darkTheme });
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
       const lines = list.render(40);
 
       expect(stripAnsi(lines[0]!)).toContain(STATUS_ICONS.done);
@@ -49,15 +52,16 @@ describe('TaskList', () => {
 
     test('renders in_progress task with progress icon', () => {
       const tasks = [mockTask({ status: 'in_progress' })];
-      const list = new TaskList({ tasks, theme: darkTheme });
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
       const lines = list.render(40);
 
       expect(stripAnsi(lines[0]!)).toContain(STATUS_ICONS.in_progress);
     });
 
     test('renders blocked task with blocked icon and dependency indicator', () => {
-      const tasks = [mockTask({ status: 'todo', depends_on: ['fn-1.2'] })];
-      const list = new TaskList({ tasks, theme: darkTheme });
+      // Use actual blocked status
+      const tasks = [mockTask({ status: 'blocked', depends_on: ['fn-1.2'] })];
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
       const lines = list.render(60);
 
       const line = stripAnsi(lines[0]!);
@@ -65,25 +69,73 @@ describe('TaskList', () => {
       expect(line).toContain('→ 1.2');
     });
 
-    test('done task with dependencies shows done icon not blocked', () => {
-      const tasks = [mockTask({ status: 'done', depends_on: ['fn-1.2'] })];
-      const list = new TaskList({ tasks, theme: darkTheme });
-      const lines = list.render(40);
+    test('blocked task without deps shows blocked icon but no indicator', () => {
+      const tasks = [mockTask({ status: 'blocked', depends_on: [] })];
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const lines = list.render(60);
 
-      expect(stripAnsi(lines[0]!)).toContain(STATUS_ICONS.done);
+      const line = stripAnsi(lines[0]!);
+      expect(line).toContain(STATUS_ICONS.blocked);
+      expect(line).not.toContain('→');
     });
 
-    test('in_progress task with dependencies shows progress icon not blocked', () => {
-      const tasks = [mockTask({ status: 'in_progress', depends_on: ['fn-1.2'] })];
-      const list = new TaskList({ tasks, theme: darkTheme });
-      const lines = list.render(40);
+    test('done task with dependencies shows done icon, no dependency indicator', () => {
+      const tasks = [mockTask({ status: 'done', depends_on: ['fn-1.2'] })];
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const lines = list.render(60);
 
-      expect(stripAnsi(lines[0]!)).toContain(STATUS_ICONS.in_progress);
+      const line = stripAnsi(lines[0]!);
+      expect(line).toContain(STATUS_ICONS.done);
+      // Done tasks should NOT show dependency indicator even if they have deps
+      expect(line).not.toContain('→');
+    });
+
+    test('in_progress task with dependencies shows progress icon, no dependency indicator', () => {
+      const tasks = [mockTask({ status: 'in_progress', depends_on: ['fn-1.2'] })];
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const lines = list.render(60);
+
+      const line = stripAnsi(lines[0]!);
+      expect(line).toContain(STATUS_ICONS.in_progress);
+      // In progress tasks should NOT show dependency indicator
+      expect(line).not.toContain('→');
+    });
+
+    test('todo task with dependencies shows todo icon, no dependency indicator', () => {
+      // Todo tasks are not blocked just because they have deps
+      const tasks = [mockTask({ status: 'todo', depends_on: ['fn-1.2'] })];
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const lines = list.render(60);
+
+      const line = stripAnsi(lines[0]!);
+      expect(line).toContain(STATUS_ICONS.todo);
+      // Todo with deps is NOT blocked - only status: blocked shows indicator
+      expect(line).not.toContain('→');
+    });
+
+    test('blocked status uses warning color', () => {
+      // Create a mock theme that marks warning color
+      const mockTheme = {
+        ...darkTheme,
+        warning: (s: string) => `[WARN]${s}[/WARN]`,
+      };
+      const tasks = [mockTask({ status: 'blocked', depends_on: ['fn-1.2'] })];
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: mockTheme });
+      const lines = list.render(60);
+
+      // Blocked icon should have warning color
+      expect(lines[0]).toContain('[WARN]');
     });
 
     test('ASCII mode uses text icons', () => {
       const tasks = [mockTask({ status: 'done' })];
-      const list = new TaskList({ tasks, theme: darkTheme, useAscii: true });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+        useAscii: true,
+      });
       const lines = list.render(40);
 
       expect(stripAnsi(lines[0]!)).toContain(ASCII_ICONS.done);
@@ -93,31 +145,31 @@ describe('TaskList', () => {
       const tasks = [
         mockTask({ title: 'This is a very long task title that should be truncated' }),
       ];
-      const list = new TaskList({ tasks, theme: darkTheme });
-      const lines = list.render(30);
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const lines = list.render(35);
 
       const line = stripAnsi(lines[0]!);
       expect(line).toContain('…');
-      expect(visibleWidth(lines[0]!)).toBeLessThanOrEqual(30);
+      expect(visibleWidth(lines[0]!)).toBeLessThanOrEqual(35);
     });
 
     test('selected row is padded to full width', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2', title: 'Second' })];
-      const list = new TaskList({ tasks, theme: darkTheme, selectedIndex: 0 });
-      const lines = list.render(40);
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const lines = list.render(50);
 
       // First line (selected) should be padded to full width
       // Note: chalk colors may not be present in non-TTY test environment
-      expect(visibleWidth(lines[0]!)).toBe(40);
+      expect(visibleWidth(lines[0]!)).toBe(50);
     });
 
     test('unselected rows do not have background padding', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2', title: 'Second' })];
-      const list = new TaskList({ tasks, theme: darkTheme, selectedIndex: 0 });
-      const lines = list.render(40);
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const lines = list.render(50);
 
       // Second row should not be padded to full width
-      expect(visibleWidth(lines[1]!)).toBeLessThan(40);
+      expect(visibleWidth(lines[1]!)).toBeLessThan(50);
     });
 
     test('selected row has background applied (with colors)', () => {
@@ -127,8 +179,8 @@ describe('TaskList', () => {
         selectedBg: (s: string) => `[BG]${s}[/BG]`,
       };
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2', title: 'Second' })];
-      const list = new TaskList({ tasks, theme: mockTheme, selectedIndex: 0 });
-      const lines = list.render(40);
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: mockTheme });
+      const lines = list.render(50);
 
       // Selected row should have background marker
       expect(lines[0]).toContain('[BG]');
@@ -141,8 +193,14 @@ describe('TaskList', () => {
       const tasks = Array.from({ length: 15 }, (_, i) =>
         mockTask({ id: `fn-1.${i + 1}`, title: `Task ${i + 1}` })
       );
-      const list = new TaskList({ tasks, theme: darkTheme, maxVisible: 5 });
-      const lines = list.render(40);
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+        maxVisible: 5,
+      });
+      const lines = list.render(50);
 
       // Last line should be scroll indicator
       const lastLine = stripAnsi(lines[lines.length - 1]!);
@@ -151,8 +209,14 @@ describe('TaskList', () => {
 
     test('no scroll indicator when tasks fit in maxVisible', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2' })];
-      const list = new TaskList({ tasks, theme: darkTheme, maxVisible: 10 });
-      const lines = list.render(40);
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+        maxVisible: 10,
+      });
+      const lines = list.render(50);
 
       // Should only have task lines, no scroll indicator
       expect(lines).toHaveLength(2);
@@ -162,7 +226,7 @@ describe('TaskList', () => {
   describe('navigation', () => {
     test('j key moves selection down', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2' }), mockTask({ id: 'fn-1.3' })];
-      const list = new TaskList({ tasks, theme: darkTheme });
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
 
       expect(list.getSelectedIndex()).toBe(0);
       list.handleInput('j');
@@ -171,7 +235,7 @@ describe('TaskList', () => {
 
     test('k key moves selection up', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2' }), mockTask({ id: 'fn-1.3' })];
-      const list = new TaskList({ tasks, theme: darkTheme, selectedIndex: 2 });
+      const list = new TaskList({ tasks, selectedIndex: 2, onSelect: noop, theme: darkTheme });
 
       expect(list.getSelectedIndex()).toBe(2);
       list.handleInput('k');
@@ -180,7 +244,7 @@ describe('TaskList', () => {
 
     test('down arrow moves selection down', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2' })];
-      const list = new TaskList({ tasks, theme: darkTheme });
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
 
       list.handleInput('\x1b[B'); // Down arrow escape sequence
       expect(list.getSelectedIndex()).toBe(1);
@@ -188,7 +252,7 @@ describe('TaskList', () => {
 
     test('up arrow moves selection up', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2' })];
-      const list = new TaskList({ tasks, theme: darkTheme, selectedIndex: 1 });
+      const list = new TaskList({ tasks, selectedIndex: 1, onSelect: noop, theme: darkTheme });
 
       list.handleInput('\x1b[A'); // Up arrow escape sequence
       expect(list.getSelectedIndex()).toBe(0);
@@ -196,7 +260,7 @@ describe('TaskList', () => {
 
     test('j wraps to top when at bottom', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2' })];
-      const list = new TaskList({ tasks, theme: darkTheme, selectedIndex: 1 });
+      const list = new TaskList({ tasks, selectedIndex: 1, onSelect: noop, theme: darkTheme });
 
       list.handleInput('j');
       expect(list.getSelectedIndex()).toBe(0);
@@ -204,17 +268,19 @@ describe('TaskList', () => {
 
     test('k wraps to bottom when at top', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2' })];
-      const list = new TaskList({ tasks, theme: darkTheme, selectedIndex: 0 });
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
 
       list.handleInput('k');
       expect(list.getSelectedIndex()).toBe(1);
     });
 
-    test('navigation with empty list does not crash', () => {
-      const list = new TaskList({ tasks: [], theme: darkTheme });
+    test('navigation with empty list does not crash or mutate index', () => {
+      const list = new TaskList({ tasks: [], selectedIndex: 0, onSelect: noop, theme: darkTheme });
 
       expect(() => list.handleInput('j')).not.toThrow();
       expect(() => list.handleInput('k')).not.toThrow();
+      // Index should remain 0, not go negative or grow
+      expect(list.getSelectedIndex()).toBe(0);
     });
   });
 
@@ -243,6 +309,8 @@ describe('TaskList', () => {
       const list = new TaskList({
         tasks,
         theme: darkTheme,
+        selectedIndex: 0,
+        onSelect: noop,
         onSelectionChange: (task, index) => {
           changedTo = task;
           changedIndex = index;
@@ -257,7 +325,7 @@ describe('TaskList', () => {
 
     test('getSelectedTask returns current selection', () => {
       const tasks = [mockTask({ id: 'fn-1.1' }), mockTask({ id: 'fn-1.2' })];
-      const list = new TaskList({ tasks, theme: darkTheme, selectedIndex: 1 });
+      const list = new TaskList({ tasks, selectedIndex: 1, onSelect: noop, theme: darkTheme });
 
       const selected = list.getSelectedTask();
       expect(selected).toBeDefined();
@@ -270,6 +338,8 @@ describe('TaskList', () => {
       const list = new TaskList({
         tasks,
         theme: darkTheme,
+        selectedIndex: 0,
+        onSelect: noop,
         onSelectionChange: (task) => {
           changedTo = task;
         },
@@ -282,7 +352,7 @@ describe('TaskList', () => {
 
     test('setSelectedIndex clamps to valid range', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2' })];
-      const list = new TaskList({ tasks, theme: darkTheme });
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
 
       list.setSelectedIndex(100);
       expect(list.getSelectedIndex()).toBe(1); // clamped to max
@@ -298,6 +368,7 @@ describe('TaskList', () => {
         tasks,
         theme: darkTheme,
         selectedIndex: 1,
+        onSelect: noop,
         onSelectionChange: () => {
           callCount++;
         },
@@ -310,25 +381,35 @@ describe('TaskList', () => {
 
   describe('setTasks', () => {
     test('setTasks updates task list', () => {
-      const list = new TaskList({ tasks: [mockTask()], theme: darkTheme });
+      const list = new TaskList({
+        tasks: [mockTask()],
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       const newTasks = [mockTask({ id: 'fn-2.1' }), mockTask({ id: 'fn-2.2' })];
 
       list.setTasks(newTasks);
-      const lines = list.render(40);
+      const lines = list.render(50);
 
-      expect(stripAnsi(lines[0]!)).toContain('2.1');
+      expect(stripAnsi(lines[0]!)).toContain('fn-2.1');
     });
 
     test('setTasks clamps selection when new list is shorter', () => {
       const tasks = Array.from({ length: 5 }, (_, i) => mockTask({ id: `fn-1.${i + 1}` }));
-      const list = new TaskList({ tasks, theme: darkTheme, selectedIndex: 4 });
+      const list = new TaskList({ tasks, selectedIndex: 4, onSelect: noop, theme: darkTheme });
 
       list.setTasks([mockTask()]); // Now only 1 task
       expect(list.getSelectedIndex()).toBe(0);
     });
 
     test('setTasks handles empty list', () => {
-      const list = new TaskList({ tasks: [mockTask()], theme: darkTheme });
+      const list = new TaskList({
+        tasks: [mockTask()],
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
 
       list.setTasks([]);
       expect(list.getSelectedIndex()).toBe(0);
@@ -341,11 +422,17 @@ describe('TaskList', () => {
       const tasks = Array.from({ length: 20 }, (_, i) =>
         mockTask({ id: `fn-1.${i + 1}`, title: `Task ${i + 1}` })
       );
-      const list = new TaskList({ tasks, theme: darkTheme, maxVisible: 5, selectedIndex: 15 });
-      const lines = list.render(40);
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 15,
+        onSelect: noop,
+        theme: darkTheme,
+        maxVisible: 5,
+      });
+      const lines = list.render(50);
 
       // Selected task should be visible in rendered output
-      const hasSelectedTask = lines.some((line) => stripAnsi(line).includes('1.16'));
+      const hasSelectedTask = lines.some((line) => stripAnsi(line).includes('fn-1.16'));
       expect(hasSelectedTask).toBe(true);
     });
 
@@ -353,23 +440,34 @@ describe('TaskList', () => {
       const tasks = Array.from({ length: 20 }, (_, i) =>
         mockTask({ id: `fn-1.${i + 1}`, title: `Task ${i + 1}` })
       );
-      const list = new TaskList({ tasks, theme: darkTheme, maxVisible: 5 });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+        maxVisible: 5,
+      });
 
       // Navigate to bottom
       for (let i = 0; i < 15; i++) {
         list.handleInput('j');
       }
 
-      const lines = list.render(40);
+      const lines = list.render(50);
       // Task 16 should be visible
-      const hasTask16 = lines.some((line) => stripAnsi(line).includes('1.16'));
+      const hasTask16 = lines.some((line) => stripAnsi(line).includes('fn-1.16'));
       expect(hasTask16).toBe(true);
     });
   });
 
   describe('invalidate', () => {
     test('invalidate does not throw', () => {
-      const list = new TaskList({ tasks: [mockTask()], theme: darkTheme });
+      const list = new TaskList({
+        tasks: [mockTask()],
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       expect(() => list.invalidate()).not.toThrow();
     });
   });

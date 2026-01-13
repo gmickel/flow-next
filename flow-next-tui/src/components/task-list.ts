@@ -28,11 +28,14 @@ export const ASCII_ICONS = {
 
 export interface TaskListProps {
   tasks: EpicTask[];
-  selectedIndex?: number;
-  onSelect?: (task: EpicTask) => void;
-  onSelectionChange?: (task: EpicTask, index: number) => void;
+  selectedIndex: number;
+  onSelect: (task: EpicTask) => void;
   theme: Theme;
+  /** Optional: callback when selection changes via navigation */
+  onSelectionChange?: (task: EpicTask, index: number) => void;
+  /** Optional: max visible items before scrolling (default: 10) */
   maxVisible?: number;
+  /** Optional: use ASCII icons instead of Unicode (default: false) */
   useAscii?: boolean;
 }
 
@@ -48,7 +51,7 @@ export interface TaskListProps {
 export class TaskList implements Component {
   private tasks: EpicTask[];
   private selectedIndex: number;
-  private onSelectCb?: (task: EpicTask) => void;
+  private onSelectCb: (task: EpicTask) => void;
   private onSelectionChangeCb?: (task: EpicTask, index: number) => void;
   private theme: Theme;
   private maxVisible: number;
@@ -56,7 +59,7 @@ export class TaskList implements Component {
 
   constructor(props: TaskListProps) {
     this.tasks = props.tasks;
-    this.selectedIndex = props.selectedIndex ?? 0;
+    this.selectedIndex = props.selectedIndex;
     this.onSelectCb = props.onSelect;
     this.onSelectionChangeCb = props.onSelectionChange;
     this.theme = props.theme;
@@ -95,35 +98,27 @@ export class TaskList implements Component {
   /** Get status icon for a task */
   private getStatusIcon(task: EpicTask): string {
     const icons = this.useAscii ? ASCII_ICONS : STATUS_ICONS;
-    // Blocked = has unfinished dependencies
-    const isBlocked =
-      task.depends_on.length > 0 && task.status !== 'done' && task.status !== 'in_progress';
-    if (isBlocked) {
-      return icons.blocked;
-    }
     return icons[task.status] ?? icons.todo;
   }
 
   /** Get status color function for a task */
   private getStatusColor(task: EpicTask): (s: string) => string {
-    const isBlocked =
-      task.depends_on.length > 0 && task.status !== 'done' && task.status !== 'in_progress';
-    if (isBlocked) {
-      return this.theme.warning;
-    }
     switch (task.status) {
       case 'done':
         return this.theme.success;
       case 'in_progress':
         return this.theme.progress;
+      case 'blocked':
+        return this.theme.warning;
       default:
         return this.theme.dim;
     }
   }
 
-  /** Format dependency indicator for blocked tasks */
+  /** Format dependency indicator for blocked tasks only */
   private formatDependency(task: EpicTask): string {
-    if (task.depends_on.length === 0) return '';
+    // Only show dependency indicator for blocked tasks
+    if (task.status !== 'blocked' || task.depends_on.length === 0) return '';
     // Show first blocker in short form (just the task number part)
     const dep = task.depends_on[0];
     // Extract task number from "fn-N.M" -> "N.M"
@@ -162,10 +157,9 @@ export class TaskList implements Component {
       const prefix = colorFn(icon) + ' ';
       const prefixWidth = iconWidth + 1;
 
-      // Extract short task id (fn-1.3 -> 1.3)
-      const shortId = task.id.replace(/^fn-/, '');
-      const idStr = this.theme.dim(shortId) + ' ';
-      const idWidth = shortId.length + 1;
+      // Render full task id (fn-1.3)
+      const idStr = this.theme.dim(task.id) + ' ';
+      const idWidth = task.id.length + 1;
 
       // Calculate space for title
       const depStr = this.formatDependency(task);
@@ -203,6 +197,9 @@ export class TaskList implements Component {
   }
 
   handleInput(data: string): void {
+    // Early return when no tasks to prevent invalid index mutations
+    if (this.tasks.length === 0) return;
+
     // j or down arrow - move down
     if (matchesKey(data, 'j') || matchesKey(data, 'down')) {
       this.selectedIndex =
@@ -218,7 +215,7 @@ export class TaskList implements Component {
     // Enter - select task
     else if (matchesKey(data, 'enter')) {
       const task = this.tasks[this.selectedIndex];
-      if (task && this.onSelectCb) {
+      if (task) {
         this.onSelectCb(task);
       }
     }
