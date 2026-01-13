@@ -152,6 +152,9 @@ flowctl ready --epic fn-1    # What's ready to work on
 
 # Work: execute tasks in dependency order
 /flow-next:work fn-1
+
+# Or work directly from a spec file (creates epic automatically)
+/flow-next:work docs/my-feature-spec.md
 ```
 
 That's it. Flow-Next handles research, task ordering, reviews, and audit trails.
@@ -530,7 +533,7 @@ Seven commands, complete workflow:
 | Command | What It Does |
 |---------|--------------|
 | `/flow-next:plan <idea>` | Research the codebase, create epic with dependency-ordered tasks |
-| `/flow-next:work <id>` | Execute epic or single task, re-anchoring before each |
+| `/flow-next:work <id\|file>` | Execute epic, task, or spec file, re-anchoring before each |
 | `/flow-next:interview <id>` | Deep interview to flesh out a spec before planning |
 | `/flow-next:plan-review <id>` | Carmack-level plan review via RepoPrompt |
 | `/flow-next:impl-review` | Carmack-level impl review of current branch |
@@ -538,7 +541,7 @@ Seven commands, complete workflow:
 | `/flow-next:setup` | Optional: install flowctl locally + add docs (for power users) |
 | `/flow-next:uninstall` | Remove flow-next from project (keeps tasks if desired) |
 
-Work accepts an epic (fn-N) or a task (fn-N.M). Tasks always belong to an epic.
+Work accepts an epic (`fn-N`), task (`fn-N.M`), or markdown spec file (`.md`). Spec files auto-create an epic with one task.
 
 ### Autonomous Mode (Flags)
 
