@@ -7,7 +7,7 @@ import type { Component } from '@mariozechner/pi-tui';
 
 import type { Theme } from '../themes/index.ts';
 
-import { padToWidth, visibleWidth } from '../lib/render.ts';
+import { padToWidth, truncateToWidth, visibleWidth } from '../lib/render.ts';
 
 /** Keybinding definitions displayed in help overlay */
 const KEYBINDINGS: Array<{ key: string; desc: string }> = [
@@ -78,28 +78,40 @@ export class HelpOverlay implements Component {
       return [];
     }
 
-    // Calculate overlay dimensions
+    // Calculate overlay dimensions, clamped to available width
     const overlayWidth = Math.min(
       MAX_OVERLAY_WIDTH,
-      Math.max(MIN_OVERLAY_WIDTH, width - 4)
+      Math.max(MIN_OVERLAY_WIDTH, width - 4),
+      Math.max(0, width)
     );
-    const innerWidth = overlayWidth - 4; // 2 border + 2 padding
+    const innerWidth = Math.max(0, overlayWidth - 4); // 2 border + 2 padding
 
-    // Build content lines
-    const contentLines: string[] = [];
+    // Build content lines (with precomputed widths for proper padding)
+    const contentLines: Array<{ line: string; width: number }> = [];
 
-    // Keybindings
+    // Keybindings - truncate to fit innerWidth
     const keyColWidth = Math.max(...KEYBINDINGS.map((kb) => kb.key.length)) + 2;
     for (const kb of KEYBINDINGS) {
       const keyPart = kb.key.padEnd(keyColWidth);
-      const line = `${this.theme.accent(keyPart)}${this.theme.text(kb.desc)}`;
-      contentLines.push(line);
+      const fullLine = keyPart + kb.desc;
+      const truncatedLine = truncateToWidth(fullLine, innerWidth, '…');
+      // Re-apply colors to truncated content
+      const truncatedKey = truncatedLine.slice(0, keyColWidth);
+      const truncatedDesc = truncatedLine.slice(keyColWidth);
+      const coloredLine = this.theme.accent(truncatedKey) + this.theme.text(truncatedDesc);
+      contentLines.push({ line: coloredLine, width: visibleWidth(truncatedLine) });
     }
 
-    // Footer hint
-    contentLines.push('');
+    // Footer hint - centered
+    contentLines.push({ line: '', width: 0 });
     const hint = 'Press ? or Esc to close';
-    contentLines.push(this.theme.dim(hint));
+    const truncatedHint = truncateToWidth(hint, innerWidth, '…');
+    const hintWidth = visibleWidth(truncatedHint);
+    const hintPadLeft = Math.max(0, Math.floor((innerWidth - hintWidth) / 2));
+    contentLines.push({
+      line: ' '.repeat(hintPadLeft) + this.theme.dim(truncatedHint),
+      width: hintPadLeft + hintWidth,
+    });
 
     // Build box
     const boxLines: string[] = [];
@@ -124,8 +136,7 @@ export class HelpOverlay implements Component {
     }
 
     // Content lines
-    for (const line of contentLines) {
-      const lineWidth = visibleWidth(line);
+    for (const { line, width: lineWidth } of contentLines) {
       const paddingLeft = 2;
       const paddingRight = Math.max(0, innerWidth - lineWidth);
       const paddedLine =
@@ -160,10 +171,11 @@ export class HelpOverlay implements Component {
       const boxHeight = boxLines.length;
       const topPad = Math.max(0, Math.floor((height - boxHeight) / 2));
       const paddedLines: string[] = [];
+      const blankLine = ' '.repeat(width);
 
-      // Top vertical padding (empty lines)
+      // Top vertical padding (space-filled lines to clear stale content)
       for (let i = 0; i < topPad; i++) {
-        paddedLines.push('');
+        paddedLines.push(blankLine);
       }
 
       // Box content
@@ -171,10 +183,10 @@ export class HelpOverlay implements Component {
         paddedLines.push(padToWidth(line, width));
       }
 
-      // Bottom vertical padding
+      // Bottom vertical padding (space-filled lines)
       const bottomPad = Math.max(0, height - topPad - boxHeight);
       for (let i = 0; i < bottomPad; i++) {
-        paddedLines.push('');
+        paddedLines.push(blankLine);
       }
 
       return paddedLines;
@@ -184,12 +196,24 @@ export class HelpOverlay implements Component {
   }
 
   handleInput(data: string): void {
+    // ? toggles overlay regardless of visibility
+    if (data === '?') {
+      const wasVisible = this.visible;
+      this.toggle();
+      // Only call onClose when transitioning from visible → hidden
+      if (wasVisible && !this.visible) {
+        this.onClose?.();
+      }
+      return;
+    }
+
+    // Other keys only work when visible
     if (!this.visible) {
       return;
     }
 
-    // Close on Escape or ?
-    if (data === '\x1b' || data === '?' || data === '\x1b[27~') {
+    // Escape closes overlay
+    if (data === '\x1b' || data === '\x1b[27~') {
       this.hide();
       this.onClose?.();
     }

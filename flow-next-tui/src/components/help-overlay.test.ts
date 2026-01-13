@@ -177,6 +177,11 @@ describe('HelpOverlay', () => {
 
       // Should still render something
       expect(lines.length).toBeGreaterThan(0);
+
+      // All lines must respect width constraint
+      for (const line of lines) {
+        expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+      }
     });
   });
 
@@ -213,7 +218,15 @@ describe('HelpOverlay', () => {
       expect(closeCalled).toBe(true);
     });
 
-    test('ignores input when not visible', () => {
+    test('? key opens overlay when hidden', () => {
+      const overlay = new HelpOverlay(defaultProps({ visible: false }));
+
+      overlay.handleInput('?');
+
+      expect(overlay.isVisible()).toBe(true);
+    });
+
+    test('? key does not call onClose when opening', () => {
       let closeCalled = false;
       const overlay = new HelpOverlay(
         defaultProps({
@@ -226,8 +239,18 @@ describe('HelpOverlay', () => {
 
       overlay.handleInput('?');
 
-      expect(overlay.isVisible()).toBe(false);
+      expect(overlay.isVisible()).toBe(true);
       expect(closeCalled).toBe(false);
+    });
+
+    test('ignores non-? keys when not visible', () => {
+      const overlay = new HelpOverlay(defaultProps({ visible: false }));
+
+      overlay.handleInput('j');
+      expect(overlay.isVisible()).toBe(false);
+
+      overlay.handleInput('\x1b');
+      expect(overlay.isVisible()).toBe(false);
     });
 
     test('other keys do not close overlay', () => {
@@ -313,11 +336,9 @@ describe('HelpOverlay', () => {
       const height = 20;
       const lines = overlay.render(width, height);
 
-      // Non-empty lines should be padded
+      // All lines (including vertical padding) should be padded to width
       for (const line of lines) {
-        if (stripAnsi(line).trim() !== '') {
-          expect(visibleWidth(line)).toBe(width);
-        }
+        expect(visibleWidth(line)).toBe(width);
       }
     });
   });
