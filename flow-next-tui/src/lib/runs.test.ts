@@ -146,6 +146,25 @@ promise=CONTINUE
       expect(runs.at(0)?.epics).toEqual(['fn-9']);
     });
 
+    test('parses epic with new fn-N-xxx format from progress.txt', async () => {
+      const runsDir = join(tempDir, 'runs');
+      const runDir = join(runsDir, '20240115T103000Z-mac-user-1234-abcd');
+      await mkdir(runDir, { recursive: true });
+
+      // Progress with collision-resistant epic ID
+      const progressContent = `# Ralph Progress Log
+---
+## 2024-01-15T10:30:05Z - iter 1
+status=ready epic=fn-5-x7k task=fn-5-x7k.1 reason=
+promise=CONTINUE
+---`;
+      await writeFile(join(runDir, 'progress.txt'), progressContent);
+
+      const runs = await discoverRuns(runsDir);
+      expect(runs).toHaveLength(1);
+      expect(runs.at(0)?.epics).toEqual(['fn-5-x7k']);
+    });
+
     test('handles real Ralph run ID format', async () => {
       const runsDir = join(tempDir, 'runs');
       await mkdir(runsDir);
@@ -351,6 +370,22 @@ promise=CONTINUE
         'Invalid task ID'
       );
     });
+
+    test('handles new fn-N-xxx format (collision-resistant IDs)', async () => {
+      const runDir = join(tempDir, '2024-01-15-001');
+      const receiptsDir = join(runDir, 'receipts');
+      await mkdir(receiptsDir, { recursive: true });
+      await writeFile(join(receiptsDir, 'plan-fn-5-x7k.json'), '{}');
+      await writeFile(join(receiptsDir, 'impl-fn-5-x7k.3.json'), '{}');
+
+      // Epic ID with suffix
+      const epicStatus = await getReceiptStatus(runDir, 'fn-5-x7k');
+      expect(epicStatus.plan).toBe(true);
+
+      // Task ID with suffix
+      const taskStatus = await getReceiptStatus(runDir, 'fn-5-x7k.3');
+      expect(taskStatus.impl).toBe(true);
+    });
   });
 
   describe('getBlockReason', () => {
@@ -394,6 +429,25 @@ promise=CONTINUE
       );
       expect(getBlockReason('fn-1/../etc')).rejects.toThrow('Invalid task ID');
       expect(getBlockReason('not-a-task')).rejects.toThrow('Invalid task ID');
+    });
+
+    test('accepts new fn-N-xxx format (collision-resistant IDs)', async () => {
+      const blocksDir = join(tempDir, '.flow', 'blocks');
+      await mkdir(blocksDir, { recursive: true });
+      await writeFile(
+        join(blocksDir, 'block-fn-5-x7k.2.md'),
+        'Blocked: new format'
+      );
+
+      const origCwd = process.cwd();
+      process.chdir(tempDir);
+
+      try {
+        const reason = await getBlockReason('fn-5-x7k.2');
+        expect(reason).toBe('Blocked: new format');
+      } finally {
+        process.chdir(origCwd);
+      }
     });
   });
 
