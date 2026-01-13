@@ -258,7 +258,7 @@ export class OutputPanel implements Component {
       }
     }
 
-    // For successful responses, use text color; for errors, use error color
+    // For responses, color based on type
     if (entry.type === 'response') {
       if (entry.success === false) {
         return this.theme.error(firstLine);
@@ -266,6 +266,8 @@ export class OutputPanel implements Component {
       if (entry.success === true) {
         return this.theme.dim(firstLine);
       }
+      // Text responses (Claude thinking/speaking) - use progress blue
+      return this.theme.progress(firstLine);
     }
 
     return firstLine;
