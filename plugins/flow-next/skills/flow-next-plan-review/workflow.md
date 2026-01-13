@@ -254,20 +254,12 @@ If verdict is NEEDS_WORK:
    $FLOWCTL rp select-add --window "$W" --tab "$T" .flow/specs/<epic-id>.md
    ```
 
-   Then send re-review request:
+   Then send re-review request (NO --new-chat, stay in same chat):
    ```bash
    cat > /tmp/re-review.md << 'EOF'
-   ## Fixes Applied
-   - [Fix 1]: [what changed]
-   - [Fix 2]: [what changed]
-   ...
+   Re-review the plan.
 
-   The updated files should be attached in the `<file_contents>` XML section below. Please:
-   1. Locate the `<file_contents>` XML section at the end of this message
-   2. Read the actual updated plan/spec
-   3. Verify the fixes address the issues raised
-
-   If you cannot find `<file_contents>`, say so and I will re-attach the files.
+   **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>`
    EOF
 
    $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md

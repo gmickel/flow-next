@@ -267,12 +267,7 @@ If verdict is NEEDS_WORK:
    Then send re-review request (NO --new-chat, stay in same chat):
    ```bash
    cat > /tmp/re-review.md << 'EOF'
-   ## Fixes Applied
-   - [Fix 1]: [file:line] [what changed]
-   - [Fix 2]: [file:line] [what changed]
-   ...
-
-   Please re-review. The files in your selection are automatically updated to latest.
+   Re-review the implementation.
 
    **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>`
    EOF
