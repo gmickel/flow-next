@@ -53,9 +53,16 @@ Track if user scrolled up manually. Reset when at bottom.
 - [ ] Scrolling to bottom re-enables auto-scroll
 - [ ] Buffer limited to maxBuffer lines
 ## Done summary
-TBD
+- Added OutputPanel component with bordered header showing iteration number
+- Implemented tool icons (→ file ops, ⚡ bash, ◆ API, ✓/✗ status indicators)
+- Auto-scroll to bottom, disabled when user scrolls up, re-enabled on scroll to bottom
+- Buffer limited to configurable maxBuffer (default 500)
+- j/k/g/G/arrows/space/ctrl+d/ctrl+u scrolling supported
+- ASCII mode for non-Unicode terminals
+- Content sanitized for control chars and ANSI sequences
 
+Verified via bun test (298 tests pass, 37 in output.test.ts)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0907671
+- Tests: bun test
 - PRs:

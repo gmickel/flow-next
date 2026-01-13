@@ -3,13 +3,15 @@
  * Implements j/k navigation, Enter to select, and background highlight for selected row.
  */
 
-import chalk from 'chalk';
 import type { Component } from '@mariozechner/pi-tui';
-import { matchesKey, truncateToWidth } from '@mariozechner/pi-tui';
 
-import { visibleWidth } from '../lib/render.ts';
+import { matchesKey, truncateToWidth } from '@mariozechner/pi-tui';
+import chalk from 'chalk';
+
 import type { EpicTask } from '../lib/types.ts';
 import type { Theme } from '../themes/index.ts';
+
+import { visibleWidth } from '../lib/render.ts';
 
 /** Status icons for each task status */
 export const STATUS_ICONS = {
@@ -61,7 +63,10 @@ export class TaskList implements Component {
   constructor(props: TaskListProps) {
     this.tasks = props.tasks;
     // Clamp selectedIndex to valid range
-    this.selectedIndex = this.clampIndex(props.selectedIndex, props.tasks.length);
+    this.selectedIndex = this.clampIndex(
+      props.selectedIndex,
+      props.tasks.length
+    );
     this.onSelectCb = props.onSelect;
     this.onSelectionChangeCb = props.onSelectionChange;
     this.theme = props.theme;
@@ -221,7 +226,9 @@ export class TaskList implements Component {
         const truncatedIcon = truncateToWidth(icon, width, '');
         // Apply status color even at narrow widths
         if (isSelected && validBg) {
-          safePush(chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(truncatedIcon));
+          safePush(
+            chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(truncatedIcon)
+          );
         } else {
           safePush(colorFn(truncatedIcon));
         }
@@ -253,7 +260,10 @@ export class TaskList implements Component {
       const availableForId = spaceForContent - actualDepWidth - 1; // -1 for minimum title space
       let displayId: string;
       if (availableForId < task.id.length) {
-        displayId = availableForId > 0 ? truncateToWidth(task.id, availableForId, '…') : '';
+        displayId =
+          availableForId > 0
+            ? truncateToWidth(task.id, availableForId, '…')
+            : '';
       } else {
         displayId = task.id;
       }
@@ -262,7 +272,10 @@ export class TaskList implements Component {
       // Calculate available space for title
       const availableWidth = spaceForContent - actualIdWidth - actualDepWidth;
       const titleMaxWidth = Math.max(0, availableWidth);
-      const truncatedTitle = titleMaxWidth > 0 ? truncateToWidth(task.title, titleMaxWidth, '…') : '';
+      const truncatedTitle =
+        titleMaxWidth > 0
+          ? truncateToWidth(task.title, titleMaxWidth, '…')
+          : '';
 
       // Build the line content
       const idPart = displayId ? ` ${displayId}` : '';
@@ -295,18 +308,28 @@ export class TaskList implements Component {
           coloredTitle = truncatedTitle
             ? chalk.bgAnsi256(bgCode).ansi256(textFgCode)(` ${truncatedTitle}`)
             : '';
-          coloredDep = actualDepStr ? chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(actualDepStr) : '';
+          coloredDep = actualDepStr
+            ? chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(actualDepStr)
+            : '';
           padding = chalk.bgAnsi256(bgCode)(' '.repeat(paddingNeeded));
         } else {
           // No bg, just fg colors
           coloredIcon = chalk.ansi256(statusFgCode)(icon);
-          coloredId = displayId ? chalk.ansi256(dimFgCode)(` ${displayId}`) : '';
-          coloredTitle = truncatedTitle ? chalk.ansi256(textFgCode)(` ${truncatedTitle}`) : '';
-          coloredDep = actualDepStr ? chalk.ansi256(statusFgCode)(actualDepStr) : '';
+          coloredId = displayId
+            ? chalk.ansi256(dimFgCode)(` ${displayId}`)
+            : '';
+          coloredTitle = truncatedTitle
+            ? chalk.ansi256(textFgCode)(` ${truncatedTitle}`)
+            : '';
+          coloredDep = actualDepStr
+            ? chalk.ansi256(statusFgCode)(actualDepStr)
+            : '';
           padding = ' '.repeat(paddingNeeded);
         }
 
-        safePush(`${coloredIcon}${coloredId}${coloredTitle}${coloredDep}${padding}`);
+        safePush(
+          `${coloredIcon}${coloredId}${coloredTitle}${coloredDep}${padding}`
+        );
       } else {
         // For unselected rows: use per-segment colors
         const coloredIcon = colorFn(icon);
@@ -335,13 +358,17 @@ export class TaskList implements Component {
     // j or down arrow - move down
     if (matchesKey(data, 'j') || matchesKey(data, 'down')) {
       this.selectedIndex =
-        this.selectedIndex === this.tasks.length - 1 ? 0 : this.selectedIndex + 1;
+        this.selectedIndex === this.tasks.length - 1
+          ? 0
+          : this.selectedIndex + 1;
       this.notifySelectionChange();
     }
     // k or up arrow - move up
     else if (matchesKey(data, 'k') || matchesKey(data, 'up')) {
       this.selectedIndex =
-        this.selectedIndex === 0 ? this.tasks.length - 1 : this.selectedIndex - 1;
+        this.selectedIndex === 0
+          ? this.tasks.length - 1
+          : this.selectedIndex - 1;
       this.notifySelectionChange();
     }
     // Enter - select task

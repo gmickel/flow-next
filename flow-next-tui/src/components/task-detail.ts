@@ -3,14 +3,15 @@
  * Shows task header, metadata, receipt status, and markdown spec with scrolling.
  */
 
-import { matchesKey, Markdown } from '@mariozechner/pi-tui';
 import type { Component } from '@mariozechner/pi-tui';
 
-import { visibleWidth, truncateToWidth, stripAnsi } from '../lib/render.ts';
-import type { Task } from '../lib/types.ts';
+import { matchesKey, Markdown } from '@mariozechner/pi-tui';
+
 import type { ReceiptStatus } from '../lib/runs.ts';
+import type { Task } from '../lib/types.ts';
 import type { Theme } from '../themes/index.ts';
 
+import { visibleWidth, truncateToWidth, stripAnsi } from '../lib/render.ts';
 import { STATUS_ICONS, ASCII_ICONS } from './task-list.ts';
 
 export interface TaskDetailProps {
@@ -95,7 +96,10 @@ export class TaskDetail implements Component {
 
   /** Clamp scroll offset to valid range */
   private clampScroll(): void {
-    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, this.getMaxScroll()));
+    this.scrollOffset = Math.max(
+      0,
+      Math.min(this.scrollOffset, this.getMaxScroll())
+    );
   }
 
   /**

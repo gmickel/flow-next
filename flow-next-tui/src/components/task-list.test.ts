@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
-import { stripAnsi, visibleWidth } from '../lib/render.ts';
 import type { EpicTask } from '../lib/types.ts';
+
+import { stripAnsi, visibleWidth } from '../lib/render.ts';
 import { darkTheme } from '../themes/dark.ts';
 import { ASCII_ICONS, STATUS_ICONS, TaskList } from './task-list.ts';
 
@@ -23,7 +24,12 @@ function mockTask(overrides: Partial<EpicTask> = {}): EpicTask {
 describe('TaskList', () => {
   describe('rendering', () => {
     test('renders empty state when no tasks', () => {
-      const list = new TaskList({ tasks: [], selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks: [],
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       const lines = list.render(40);
 
       expect(lines).toHaveLength(1);
@@ -31,7 +37,12 @@ describe('TaskList', () => {
     });
 
     test('empty state respects width constraint', () => {
-      const list = new TaskList({ tasks: [], selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks: [],
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       const lines = list.render(5);
 
       expect(lines).toHaveLength(1);
@@ -40,7 +51,12 @@ describe('TaskList', () => {
 
     test('renders task with status icon and full id', () => {
       const tasks = [mockTask({ id: 'fn-1.3', title: 'Add validation' })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       const lines = list.render(50);
 
       expect(lines.length).toBeGreaterThanOrEqual(1);
@@ -52,7 +68,12 @@ describe('TaskList', () => {
 
     test('renders done task with success icon', () => {
       const tasks = [mockTask({ status: 'done' })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       const lines = list.render(40);
 
       expect(stripAnsi(lines[0]!)).toContain(STATUS_ICONS.done);
@@ -60,7 +81,12 @@ describe('TaskList', () => {
 
     test('renders in_progress task with progress icon', () => {
       const tasks = [mockTask({ status: 'in_progress' })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       const lines = list.render(40);
 
       expect(stripAnsi(lines[0]!)).toContain(STATUS_ICONS.in_progress);
@@ -69,7 +95,12 @@ describe('TaskList', () => {
     test('renders blocked task with blocked icon and dependency indicator', () => {
       // Use actual blocked status
       const tasks = [mockTask({ status: 'blocked', depends_on: ['fn-1.2'] })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       const lines = list.render(60);
 
       const line = stripAnsi(lines[0]!);
@@ -79,7 +110,12 @@ describe('TaskList', () => {
 
     test('blocked task without deps shows blocked icon but no indicator', () => {
       const tasks = [mockTask({ status: 'blocked', depends_on: [] })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       const lines = list.render(60);
 
       const line = stripAnsi(lines[0]!);
@@ -89,7 +125,12 @@ describe('TaskList', () => {
 
     test('done task with dependencies shows done icon, no dependency indicator', () => {
       const tasks = [mockTask({ status: 'done', depends_on: ['fn-1.2'] })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       const lines = list.render(60);
 
       const line = stripAnsi(lines[0]!);
@@ -99,8 +140,15 @@ describe('TaskList', () => {
     });
 
     test('in_progress task with dependencies shows progress icon, no dependency indicator', () => {
-      const tasks = [mockTask({ status: 'in_progress', depends_on: ['fn-1.2'] })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const tasks = [
+        mockTask({ status: 'in_progress', depends_on: ['fn-1.2'] }),
+      ];
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       const lines = list.render(60);
 
       const line = stripAnsi(lines[0]!);
@@ -112,7 +160,12 @@ describe('TaskList', () => {
     test('todo task with dependencies shows todo icon, no dependency indicator', () => {
       // Todo tasks are not blocked just because they have deps
       const tasks = [mockTask({ status: 'todo', depends_on: ['fn-1.2'] })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       const lines = list.render(60);
 
       const line = stripAnsi(lines[0]!);
@@ -132,7 +185,12 @@ describe('TaskList', () => {
         mockTask({ status: 'blocked', depends_on: ['fn-1.2'] }),
         mockTask({ id: 'fn-1.2', status: 'todo' }),
       ];
-      const list = new TaskList({ tasks, selectedIndex: 1, onSelect: noop, theme: mockTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 1,
+        onSelect: noop,
+        theme: mockTheme,
+      });
       const lines = list.render(60);
 
       // Blocked icon (first row, unselected) should have warning color
@@ -155,9 +213,16 @@ describe('TaskList', () => {
 
     test('truncates long titles with ellipsis', () => {
       const tasks = [
-        mockTask({ title: 'This is a very long task title that should be truncated' }),
+        mockTask({
+          title: 'This is a very long task title that should be truncated',
+        }),
       ];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       const lines = list.render(35);
 
       const line = stripAnsi(lines[0]!);
@@ -168,10 +233,19 @@ describe('TaskList', () => {
     test('lines never exceed width even at very narrow widths', () => {
       // Test edge case: blocked task with dep indicator at very narrow width
       const tasks = [
-        mockTask({ status: 'blocked', depends_on: ['fn-1.2'], title: 'Long title' }),
+        mockTask({
+          status: 'blocked',
+          depends_on: ['fn-1.2'],
+          title: 'Long title',
+        }),
         mockTask({ id: 'fn-1.2', title: 'Another long title here' }),
       ];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
 
       // Test various narrow widths - all lines must fit
       for (const width of [5, 8, 10, 15, 20]) {
@@ -184,8 +258,15 @@ describe('TaskList', () => {
 
     test('drops dependency indicator when width too narrow', () => {
       // Blocked task with dep at narrow width should drop dep, not overflow
-      const tasks = [mockTask({ status: 'blocked', depends_on: ['fn-1.2'], title: 'Task' })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const tasks = [
+        mockTask({ status: 'blocked', depends_on: ['fn-1.2'], title: 'Task' }),
+      ];
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
 
       // At width 5: spaceForContent = 5-2 = 3, depWidth = 6
       // Since depWidth (6) >= spaceForContent (3), dep is dropped
@@ -198,7 +279,12 @@ describe('TaskList', () => {
 
     test('selected row is padded to full width', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2', title: 'Second' })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       const lines = list.render(50);
 
       // First line (selected) should be padded to full width
@@ -208,7 +294,12 @@ describe('TaskList', () => {
 
     test('unselected rows do not have background padding', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2', title: 'Second' })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       const lines = list.render(50);
 
       // Second row should not be padded to full width
@@ -223,7 +314,12 @@ describe('TaskList', () => {
         mockTask({ status: 'done' }),
         mockTask({ id: 'fn-1.2', status: 'todo' }),
       ];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       const lines = list.render(50);
 
       // Selected row should be padded to full width
@@ -289,7 +385,11 @@ describe('TaskList', () => {
     });
 
     test('maxVisible is clamped to at least 1', () => {
-      const tasks = [mockTask(), mockTask({ id: 'fn-1.2' }), mockTask({ id: 'fn-1.3' })];
+      const tasks = [
+        mockTask(),
+        mockTask({ id: 'fn-1.2' }),
+        mockTask({ id: 'fn-1.3' }),
+      ];
 
       // Test with 0
       const list1 = new TaskList({
@@ -319,8 +419,17 @@ describe('TaskList', () => {
 
   describe('navigation', () => {
     test('j key moves selection down', () => {
-      const tasks = [mockTask(), mockTask({ id: 'fn-1.2' }), mockTask({ id: 'fn-1.3' })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const tasks = [
+        mockTask(),
+        mockTask({ id: 'fn-1.2' }),
+        mockTask({ id: 'fn-1.3' }),
+      ];
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
 
       expect(list.getSelectedIndex()).toBe(0);
       list.handleInput('j');
@@ -328,8 +437,17 @@ describe('TaskList', () => {
     });
 
     test('k key moves selection up', () => {
-      const tasks = [mockTask(), mockTask({ id: 'fn-1.2' }), mockTask({ id: 'fn-1.3' })];
-      const list = new TaskList({ tasks, selectedIndex: 2, onSelect: noop, theme: darkTheme });
+      const tasks = [
+        mockTask(),
+        mockTask({ id: 'fn-1.2' }),
+        mockTask({ id: 'fn-1.3' }),
+      ];
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 2,
+        onSelect: noop,
+        theme: darkTheme,
+      });
 
       expect(list.getSelectedIndex()).toBe(2);
       list.handleInput('k');
@@ -338,7 +456,12 @@ describe('TaskList', () => {
 
     test('down arrow moves selection down', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2' })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
 
       list.handleInput('\x1b[B'); // Down arrow escape sequence
       expect(list.getSelectedIndex()).toBe(1);
@@ -346,7 +469,12 @@ describe('TaskList', () => {
 
     test('up arrow moves selection up', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2' })];
-      const list = new TaskList({ tasks, selectedIndex: 1, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 1,
+        onSelect: noop,
+        theme: darkTheme,
+      });
 
       list.handleInput('\x1b[A'); // Up arrow escape sequence
       expect(list.getSelectedIndex()).toBe(0);
@@ -354,7 +482,12 @@ describe('TaskList', () => {
 
     test('j wraps to top when at bottom', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2' })];
-      const list = new TaskList({ tasks, selectedIndex: 1, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 1,
+        onSelect: noop,
+        theme: darkTheme,
+      });
 
       list.handleInput('j');
       expect(list.getSelectedIndex()).toBe(0);
@@ -362,14 +495,24 @@ describe('TaskList', () => {
 
     test('k wraps to bottom when at top', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2' })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
 
       list.handleInput('k');
       expect(list.getSelectedIndex()).toBe(1);
     });
 
     test('navigation with empty list does not crash or mutate index', () => {
-      const list = new TaskList({ tasks: [], selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks: [],
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
 
       expect(() => list.handleInput('j')).not.toThrow();
       expect(() => list.handleInput('k')).not.toThrow();
@@ -419,7 +562,12 @@ describe('TaskList', () => {
 
     test('getSelectedTask returns current selection', () => {
       const tasks = [mockTask({ id: 'fn-1.1' }), mockTask({ id: 'fn-1.2' })];
-      const list = new TaskList({ tasks, selectedIndex: 1, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 1,
+        onSelect: noop,
+        theme: darkTheme,
+      });
 
       const selected = list.getSelectedTask();
       expect(selected).toBeDefined();
@@ -428,7 +576,11 @@ describe('TaskList', () => {
 
     test('setSelectedIndex updates selection', () => {
       let changedTo: EpicTask | undefined;
-      const tasks = [mockTask(), mockTask({ id: 'fn-1.2' }), mockTask({ id: 'fn-1.3' })];
+      const tasks = [
+        mockTask(),
+        mockTask({ id: 'fn-1.2' }),
+        mockTask({ id: 'fn-1.3' }),
+      ];
       const list = new TaskList({
         tasks,
         theme: darkTheme,
@@ -446,7 +598,12 @@ describe('TaskList', () => {
 
     test('setSelectedIndex clamps to valid range', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2' })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+      });
 
       list.setSelectedIndex(100);
       expect(list.getSelectedIndex()).toBe(1); // clamped to max
@@ -459,15 +616,30 @@ describe('TaskList', () => {
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2' })];
 
       // Test high value
-      const list1 = new TaskList({ tasks, selectedIndex: 100, onSelect: noop, theme: darkTheme });
+      const list1 = new TaskList({
+        tasks,
+        selectedIndex: 100,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       expect(list1.getSelectedIndex()).toBe(1); // clamped to max
 
       // Test negative value
-      const list2 = new TaskList({ tasks, selectedIndex: -5, onSelect: noop, theme: darkTheme });
+      const list2 = new TaskList({
+        tasks,
+        selectedIndex: -5,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       expect(list2.getSelectedIndex()).toBe(0); // clamped to 0
 
       // Test empty tasks with non-zero index
-      const list3 = new TaskList({ tasks: [], selectedIndex: 5, onSelect: noop, theme: darkTheme });
+      const list3 = new TaskList({
+        tasks: [],
+        selectedIndex: 5,
+        onSelect: noop,
+        theme: darkTheme,
+      });
       expect(list3.getSelectedIndex()).toBe(0); // clamped to 0 for empty list
     });
 
@@ -506,8 +678,15 @@ describe('TaskList', () => {
     });
 
     test('setTasks clamps selection when new list is shorter', () => {
-      const tasks = Array.from({ length: 5 }, (_, i) => mockTask({ id: `fn-1.${i + 1}` }));
-      const list = new TaskList({ tasks, selectedIndex: 4, onSelect: noop, theme: darkTheme });
+      const tasks = Array.from({ length: 5 }, (_, i) =>
+        mockTask({ id: `fn-1.${i + 1}` })
+      );
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 4,
+        onSelect: noop,
+        theme: darkTheme,
+      });
 
       list.setTasks([mockTask()]); // Now only 1 task
       expect(list.getSelectedIndex()).toBe(0);
@@ -516,7 +695,9 @@ describe('TaskList', () => {
     test('setTasks notifies when selection changes due to clamping', () => {
       let changedTo: EpicTask | undefined;
       let changedIndex: number | undefined;
-      const tasks = Array.from({ length: 5 }, (_, i) => mockTask({ id: `fn-1.${i + 1}` }));
+      const tasks = Array.from({ length: 5 }, (_, i) =>
+        mockTask({ id: `fn-1.${i + 1}` })
+      );
       const list = new TaskList({
         tasks,
         selectedIndex: 4,
@@ -583,7 +764,9 @@ describe('TaskList', () => {
       const lines = list.render(50);
 
       // Selected task should be visible in rendered output
-      const hasSelectedTask = lines.some((line) => stripAnsi(line).includes('fn-1.16'));
+      const hasSelectedTask = lines.some((line) =>
+        stripAnsi(line).includes('fn-1.16')
+      );
       expect(hasSelectedTask).toBe(true);
     });
 
@@ -606,7 +789,9 @@ describe('TaskList', () => {
 
       const lines = list.render(50);
       // Task 16 should be visible
-      const hasTask16 = lines.some((line) => stripAnsi(line).includes('fn-1.16'));
+      const hasTask16 = lines.some((line) =>
+        stripAnsi(line).includes('fn-1.16')
+      );
       expect(hasTask16).toBe(true);
     });
   });

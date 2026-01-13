@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
-import { stripAnsi, visibleWidth } from '../lib/render.ts';
+import type { ReceiptStatus } from '../lib/runs.ts';
 import type { Task } from '../lib/types.ts';
+
+import { stripAnsi, visibleWidth } from '../lib/render.ts';
 import { darkTheme } from '../themes/dark.ts';
 import { TaskDetail } from './task-detail.ts';
-import type { ReceiptStatus } from '../lib/runs.ts';
 import { STATUS_ICONS, ASCII_ICONS } from './task-list.ts';
 
 /** Create a mock task for testing */
@@ -53,7 +54,12 @@ describe('TaskDetail', () => {
     test('renders receipt indicators', () => {
       const task = mockTask();
       const receipts: ReceiptStatus = { plan: true, impl: false };
-      const detail = new TaskDetail({ task, spec: '', receipts, theme: darkTheme });
+      const detail = new TaskDetail({
+        task,
+        spec: '',
+        receipts,
+        theme: darkTheme,
+      });
       const lines = detail.render(50);
 
       // Line 3 should be receipts
@@ -68,7 +74,12 @@ describe('TaskDetail', () => {
     test('renders receipt with dash for undefined status', () => {
       const task = mockTask();
       const receipts: ReceiptStatus = { plan: true }; // impl undefined
-      const detail = new TaskDetail({ task, spec: '', receipts, theme: darkTheme });
+      const detail = new TaskDetail({
+        task,
+        spec: '',
+        receipts,
+        theme: darkTheme,
+      });
       const lines = detail.render(50);
 
       const receiptLine = stripAnsi(lines[2]!);
@@ -168,7 +179,8 @@ describe('TaskDetail', () => {
 
     test('truncates long title with ellipsis', () => {
       const task = mockTask({
-        title: 'This is a very long task title that should be truncated at narrow width',
+        title:
+          'This is a very long task title that should be truncated at narrow width',
       });
       const detail = new TaskDetail({ task, spec: '', theme: darkTheme });
       const lines = detail.render(30);
@@ -198,7 +210,8 @@ describe('TaskDetail', () => {
       const task = mockTask({
         title: 'A very long title that exceeds the width',
       });
-      const spec = '## Long heading that is quite long\n\nSome paragraph content here.';
+      const spec =
+        '## Long heading that is quite long\n\nSome paragraph content here.';
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       for (const width of [20, 30, 40, 50]) {
@@ -214,7 +227,11 @@ describe('TaskDetail', () => {
     test('setTask updates task and resets scroll', () => {
       const task1 = mockTask({ id: 'fn-1.1', title: 'First task' });
       const task2 = mockTask({ id: 'fn-1.2', title: 'Second task' });
-      const detail = new TaskDetail({ task: task1, spec: '', theme: darkTheme });
+      const detail = new TaskDetail({
+        task: task1,
+        spec: '',
+        theme: darkTheme,
+      });
 
       // Simulate scrolling
       detail.handleInput('j');
@@ -230,7 +247,11 @@ describe('TaskDetail', () => {
 
     test('setSpec updates markdown content', () => {
       const task = mockTask();
-      const detail = new TaskDetail({ task, spec: 'Initial spec', theme: darkTheme });
+      const detail = new TaskDetail({
+        task,
+        spec: 'Initial spec',
+        theme: darkTheme,
+      });
       detail.setSpec('## New content\n\nUpdated spec.');
 
       const lines = detail.render(50);
@@ -269,7 +290,9 @@ describe('TaskDetail', () => {
   describe('scrolling', () => {
     test('j key scrolls down', () => {
       const task = mockTask();
-      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join(
+        '\n'
+      );
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50); // Initialize content height
@@ -282,7 +305,9 @@ describe('TaskDetail', () => {
 
     test('k key scrolls up', () => {
       const task = mockTask();
-      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join(
+        '\n'
+      );
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
@@ -308,7 +333,9 @@ describe('TaskDetail', () => {
 
     test('g key goes to top', () => {
       const task = mockTask();
-      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join(
+        '\n'
+      );
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
@@ -322,7 +349,9 @@ describe('TaskDetail', () => {
 
     test('G key goes to max scroll (not totalHeight - 1)', () => {
       const task = mockTask();
-      const spec = Array.from({ length: 30 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const spec = Array.from({ length: 30 }, (_, i) => `Line ${i + 1}`).join(
+        '\n'
+      );
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
@@ -332,12 +361,16 @@ describe('TaskDetail', () => {
       detail.handleInput('G');
       expect(detail.getScrollOffset()).toBe(maxScroll);
       // maxScroll should be totalHeight - viewportHeight, not totalHeight - 1
-      expect(maxScroll).toBe(detail.getTotalHeight() - detail.getViewportHeight());
+      expect(maxScroll).toBe(
+        detail.getTotalHeight() - detail.getViewportHeight()
+      );
     });
 
     test('uppercase G is distinct from lowercase g', () => {
       const task = mockTask();
-      const spec = Array.from({ length: 30 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const spec = Array.from({ length: 30 }, (_, i) => `Line ${i + 1}`).join(
+        '\n'
+      );
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
@@ -354,7 +387,9 @@ describe('TaskDetail', () => {
 
     test('down arrow scrolls down', () => {
       const task = mockTask();
-      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join(
+        '\n'
+      );
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
@@ -365,7 +400,9 @@ describe('TaskDetail', () => {
 
     test('up arrow scrolls up', () => {
       const task = mockTask();
-      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join(
+        '\n'
+      );
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
@@ -377,7 +414,9 @@ describe('TaskDetail', () => {
 
     test('resetScroll resets scroll position', () => {
       const task = mockTask();
-      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const spec = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join(
+        '\n'
+      );
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
@@ -403,7 +442,9 @@ describe('TaskDetail', () => {
 
     test('setViewportHeight sets viewport and clamps scroll', () => {
       const task = mockTask();
-      const spec = Array.from({ length: 30 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const spec = Array.from({ length: 30 }, (_, i) => `Line ${i + 1}`).join(
+        '\n'
+      );
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
@@ -419,7 +460,9 @@ describe('TaskDetail', () => {
 
     test('page down (space) moves by viewportHeight - 2', () => {
       const task = mockTask();
-      const spec = Array.from({ length: 50 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const spec = Array.from({ length: 50 }, (_, i) => `Line ${i + 1}`).join(
+        '\n'
+      );
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
@@ -432,7 +475,9 @@ describe('TaskDetail', () => {
 
     test('page down (ctrl+d) moves by viewportHeight - 2', () => {
       const task = mockTask();
-      const spec = Array.from({ length: 50 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const spec = Array.from({ length: 50 }, (_, i) => `Line ${i + 1}`).join(
+        '\n'
+      );
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
@@ -444,7 +489,9 @@ describe('TaskDetail', () => {
 
     test('page up (ctrl+u) moves by viewportHeight - 2', () => {
       const task = mockTask();
-      const spec = Array.from({ length: 50 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const spec = Array.from({ length: 50 }, (_, i) => `Line ${i + 1}`).join(
+        '\n'
+      );
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
@@ -460,7 +507,9 @@ describe('TaskDetail', () => {
 
     test('page down does not exceed maxScroll', () => {
       const task = mockTask();
-      const spec = Array.from({ length: 15 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const spec = Array.from({ length: 15 }, (_, i) => `Line ${i + 1}`).join(
+        '\n'
+      );
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
@@ -476,7 +525,9 @@ describe('TaskDetail', () => {
 
     test('page up does not go below 0', () => {
       const task = mockTask();
-      const spec = Array.from({ length: 15 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const spec = Array.from({ length: 15 }, (_, i) => `Line ${i + 1}`).join(
+        '\n'
+      );
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
@@ -489,7 +540,9 @@ describe('TaskDetail', () => {
 
     test('scroll respects maxScroll not totalHeight - 1', () => {
       const task = mockTask();
-      const spec = Array.from({ length: 30 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const spec = Array.from({ length: 30 }, (_, i) => `Line ${i + 1}`).join(
+        '\n'
+      );
       const detail = new TaskDetail({ task, spec, theme: darkTheme });
 
       detail.render(50);
@@ -562,7 +615,12 @@ describe('TaskDetail', () => {
     test('control chars in blockReason are neutralized', () => {
       const task = mockTask({ status: 'blocked' });
       const blockReason = 'Blocked\rby\ttask';
-      const detail = new TaskDetail({ task, spec: '', blockReason, theme: darkTheme });
+      const detail = new TaskDetail({
+        task,
+        spec: '',
+        blockReason,
+        theme: darkTheme,
+      });
       const lines = detail.render(60);
 
       const allText = lines.map((l) => stripAnsi(l)).join('\n');
