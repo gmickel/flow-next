@@ -147,8 +147,12 @@ export class TaskDetail implements Component {
     const colorFn = this.getStatusColor();
     const icon = this.getStatusIcon();
 
+    // Sanitize task-provided strings to prevent terminal injection
+    const safeTitle = stripAnsi(this.task.title);
+    const safeId = stripAnsi(this.task.id);
+
     // Line 1: Status icon + full title
-    const titleLine = `${colorFn(icon)} ${this.task.title}`;
+    const titleLine = `${colorFn(icon)} ${safeTitle}`;
     if (visibleWidth(titleLine) > width) {
       lines.push(truncateToWidth(titleLine, width, '…'));
     } else {
@@ -157,7 +161,7 @@ export class TaskDetail implements Component {
 
     // Line 2: Metadata (ID, status)
     const statusText = this.task.status.replace('_', ' '); // in_progress -> in progress
-    const metaLine = `${this.theme.dim('ID:')} ${this.task.id}  ${this.theme.dim('Status:')} ${colorFn(statusText)}`;
+    const metaLine = `${this.theme.dim('ID:')} ${safeId}  ${this.theme.dim('Status:')} ${colorFn(statusText)}`;
     if (visibleWidth(metaLine) > width) {
       lines.push(truncateToWidth(metaLine, width, '…'));
     } else {
