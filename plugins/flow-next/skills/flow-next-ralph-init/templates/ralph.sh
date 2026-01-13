@@ -18,6 +18,21 @@ set -euo pipefail
 # 3. Fall back to project-local (script's directory)
 # ─────────────────────────────────────────────────────────────────────────────
 
+_portable_realpath() {
+  # Portable realpath: resolve symlinks to absolute path
+  # Works on Linux (readlink -f) and macOS (greadlink/python fallback)
+  local path="$1"
+  if readlink -f "$path" 2>/dev/null; then
+    return
+  elif command -v greadlink >/dev/null 2>&1; then
+    greadlink -f "$path"
+  elif command -v realpath >/dev/null 2>&1; then
+    realpath "$path"
+  else
+    python3 -c "import os; print(os.path.realpath('$path'))"
+  fi
+}
+
 _resolve_script_dir() {
   local self_dir
   self_dir="$(cd "$(dirname "$0")" && pwd)"
@@ -25,7 +40,7 @@ _resolve_script_dir() {
   # Check if we're a symlink to user-level scripts
   if [[ -L "$0" ]]; then
     local target
-    target="$(readlink -f "$0")"
+    target="$(_portable_realpath "$0")"
     self_dir="$(dirname "$target")"
   fi
 
