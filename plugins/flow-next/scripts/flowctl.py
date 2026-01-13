@@ -340,8 +340,11 @@ def generate_epic_suffix(length: int = 3) -> str:
 
 
 def parse_id(id_str: str) -> tuple[Optional[int], Optional[int]]:
-    """Parse ID into (epic_num, task_num). Returns (epic, None) for epic IDs."""
-    match = re.match(r"^fn-(\d+)(?:\.(\d+))?$", id_str)
+    """Parse ID into (epic_num, task_num). Returns (epic, None) for epic IDs.
+
+    Supports both legacy (fn-N) and new (fn-N-xxx) formats with optional suffix.
+    """
+    match = re.match(r"^fn-(\d+)(?:-[a-z0-9]{3})?(?:\.(\d+))?$", id_str)
     if not match:
         return None, None
     epic = int(match.group(1))
@@ -392,11 +395,15 @@ def is_task_id(id_str: str) -> bool:
 
 
 def epic_id_from_task(task_id: str) -> str:
-    """Extract epic ID from task ID. Raises ValueError if invalid."""
+    """Extract epic ID from task ID. Raises ValueError if invalid.
+
+    Preserves suffix: fn-5-x7k.3 -> fn-5-x7k
+    """
     epic, task = parse_id(task_id)
     if epic is None or task is None:
         raise ValueError(f"Invalid task ID: {task_id}")
-    return f"fn-{epic}"
+    # Split on '.' and take epic part (preserves suffix if present)
+    return task_id.rsplit(".", 1)[0]
 
 
 # --- Context Hints (for codex reviews) ---
