@@ -1125,8 +1125,8 @@ def cmd_init(args: argparse.Namespace) -> None:
     meta = {"schema_version": SCHEMA_VERSION, "next_epic": 1}
     atomic_write_json(flow_dir / META_FILE, meta)
 
-    # Create config.json with defaults
-    atomic_write_json(flow_dir / CONFIG_FILE, get_default_config())
+    # Create empty config.json (inherits from user config)
+    atomic_write_json(flow_dir / CONFIG_FILE, {})
 
     if args.json:
         json_output({"message": ".flow/ initialized", "path": str(flow_dir)})

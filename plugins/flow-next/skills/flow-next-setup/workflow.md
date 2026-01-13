@@ -26,10 +26,10 @@ Check if `.flow/` directory exists (use Bash `ls .flow/` or check for `.flow/met
   {"schema_version": 2, "next_epic": 1}
   ```
 
-Also ensure `.flow/config.json` exists with defaults:
+Also ensure `.flow/config.json` exists (empty to inherit user config):
 ```bash
 if [ ! -f .flow/config.json ]; then
-  echo '{"memory":{"enabled":false}}' > .flow/config.json
+  echo '{}' > .flow/config.json
 fi
 ```
 
