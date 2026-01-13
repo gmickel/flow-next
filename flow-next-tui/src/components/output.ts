@@ -189,33 +189,79 @@ export class OutputPanel implements Component {
     );
   }
 
+  /** Fixed icon width for alignment (all icons padded to this) */
+  private readonly ICON_WIDTH = 2;
+
   /**
    * Format a single log entry as a line.
-   * Note: Only renders first line of content - multiline entries are summarized.
-   * This is intentional for the output panel which shows one line per LogEntry.
+   * - Fixed-width icon column for alignment
+   * - Filters noise (JSON-only responses, empty content)
+   * - Takes first meaningful line of content
    */
   private formatEntry(entry: LogEntry, contentWidth: number): string {
     const icon = this.getToolIcon(entry);
     const colorFn = this.getEntryColor(entry);
-    const iconColored = colorFn(icon);
-    const iconWidth = visibleWidth(icon);
 
-    // Available width for content (icon + space + content)
-    const availableWidth = contentWidth - iconWidth - 1;
+    // Pad icon to fixed width for alignment
+    const iconRaw = icon;
+    const iconPadding = Math.max(0, this.ICON_WIDTH - visibleWidth(iconRaw));
+    const iconColored = colorFn(iconRaw) + ' '.repeat(iconPadding);
 
-    // Guard against very narrow widths - just show icon
+    // Available width for content
+    const availableWidth = contentWidth - this.ICON_WIDTH - 1;
+
     if (availableWidth <= 0) {
       return iconColored;
     }
 
-    // Sanitize and take first line only for display
+    // Sanitize and get display content
     const sanitized = this.sanitize(entry.content);
-    const firstLine = sanitized.split('\n')[0] ?? '';
+    let displayContent = this.getDisplayContent(entry, sanitized);
 
-    if (visibleWidth(firstLine) > availableWidth) {
-      return `${iconColored} ${truncateToWidth(firstLine, availableWidth, '…')}`;
+    // Truncate if needed
+    if (visibleWidth(displayContent) > availableWidth) {
+      displayContent = truncateToWidth(displayContent, availableWidth, '…');
     }
-    return `${iconColored} ${firstLine}`;
+
+    return `${iconColored} ${displayContent}`;
+  }
+
+  /**
+   * Get meaningful display content for an entry.
+   * Filters noise like raw JSON, empty content, etc.
+   */
+  private getDisplayContent(entry: LogEntry, sanitized: string): string {
+    const firstLine = sanitized.split('\n')[0]?.trim() ?? '';
+
+    // Skip noise patterns
+    if (this.isNoiseContent(firstLine)) {
+      // For tool results, show a cleaner summary
+      if (entry.type === 'response' && entry.success !== undefined) {
+        return entry.success ? this.theme.dim('OK') : this.theme.error('Failed');
+      }
+      return this.theme.dim('…');
+    }
+
+    return firstLine;
+  }
+
+  /**
+   * Check if content is "noise" that should be filtered/simplified.
+   */
+  private isNoiseContent(content: string): boolean {
+    if (!content) return true;
+
+    // Pure JSON object/array starts (not useful as single line)
+    if (content === '{' || content === '[' || content === '}' || content === ']') {
+      return true;
+    }
+
+    // Just whitespace or brackets
+    if (/^[\s\[\]\{\}]+$/.test(content)) {
+      return true;
+    }
+
+    return false;
   }
 
   /** Get max scroll offset */
