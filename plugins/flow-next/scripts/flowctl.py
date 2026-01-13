@@ -66,6 +66,11 @@ def get_flow_dir() -> Path:
     return get_repo_root() / FLOW_DIR
 
 
+def get_user_config_dir() -> Path:
+    """Get user-level config directory (~/.config/flow-next/)."""
+    return Path.home() / ".config" / "flow-next"
+
+
 def ensure_flow_exists() -> bool:
     """Check if .flow/ exists."""
     return get_flow_dir().exists()
@@ -76,17 +81,48 @@ def get_default_config() -> dict:
     return {"memory": {"enabled": False}}
 
 
-def load_flow_config() -> dict:
-    """Load .flow/config.json, returning defaults if missing."""
-    config_path = get_flow_dir() / CONFIG_FILE
-    defaults = get_default_config()
+def deep_merge(base: dict, override: dict) -> dict:
+    """Deep merge two dicts. Override values take precedence."""
+    result = base.copy()
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def load_user_config() -> dict:
+    """Load user-level config from ~/.config/flow-next/config.json."""
+    config_path = get_user_config_dir() / CONFIG_FILE
     if not config_path.exists():
-        return defaults
+        return {}
     try:
         data = json.loads(config_path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else defaults
+        return data if isinstance(data, dict) else {}
     except (json.JSONDecodeError, Exception):
-        return defaults
+        return {}
+
+
+def load_flow_config() -> dict:
+    """Load config, merging user-level with project-level (project overrides user)."""
+    defaults = get_default_config()
+    user_config = load_user_config()
+
+    # Start with defaults, overlay user config
+    config = deep_merge(defaults, user_config)
+
+    # Overlay project config if .flow/ exists
+    config_path = get_flow_dir() / CONFIG_FILE
+    if config_path.exists():
+        try:
+            project_config = json.loads(config_path.read_text(encoding="utf-8"))
+            if isinstance(project_config, dict):
+                config = deep_merge(config, project_config)
+        except (json.JSONDecodeError, Exception):
+            pass
+
+    return config
 
 
 def get_config(key: str, default=None):
@@ -101,16 +137,28 @@ def get_config(key: str, default=None):
     return config if config != {} else default
 
 
-def set_config(key: str, value) -> dict:
-    """Set nested config value and return updated config."""
-    config_path = get_flow_dir() / CONFIG_FILE
+def set_config(key: str, value, user_level: bool = False) -> dict:
+    """Set nested config value and return updated config.
+
+    Args:
+        key: Config key (e.g., 'memory.enabled')
+        value: Value to set
+        user_level: If True, set in ~/.config/flow-next/config.json instead of .flow/config.json
+    """
+    if user_level:
+        config_dir = get_user_config_dir()
+        config_dir.mkdir(parents=True, exist_ok=True)
+        config_path = config_dir / CONFIG_FILE
+    else:
+        config_path = get_flow_dir() / CONFIG_FILE
+
     if config_path.exists():
         try:
             config = json.loads(config_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, Exception):
-            config = get_default_config()
+            config = {}
     else:
-        config = get_default_config()
+        config = {}
 
     # Navigate/create nested path
     parts = key.split(".")
@@ -1135,12 +1183,8 @@ def cmd_detect(args: argparse.Namespace) -> None:
 
 
 def cmd_config_get(args: argparse.Namespace) -> None:
-    """Get a config value."""
-    if not ensure_flow_exists():
-        error_exit(
-            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
-        )
-
+    """Get a config value (merges user-level + project-level)."""
+    # Config get works even without .flow/ (reads user config)
     value = get_config(args.key)
     if args.json:
         json_output({"key": args.key, "value": value})
@@ -1154,19 +1198,32 @@ def cmd_config_get(args: argparse.Namespace) -> None:
 
 
 def cmd_config_set(args: argparse.Namespace) -> None:
-    """Set a config value."""
-    if not ensure_flow_exists():
+    """Set a config value (use --user for user-level config)."""
+    user_level = getattr(args, "user", False)
+
+    if not user_level and not ensure_flow_exists():
         error_exit(
-            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
+            ".flow/ does not exist. Use --user for user-level config or run 'flowctl init' first.",
+            use_json=args.json,
         )
 
-    set_config(args.key, args.value)
-    new_value = get_config(args.key)
+    set_config(args.key, args.value, user_level=user_level)
 
+    # Parse the value the same way set_config does for display
+    display_value = args.value
+    if isinstance(display_value, str):
+        if display_value.lower() == "true":
+            display_value = True
+        elif display_value.lower() == "false":
+            display_value = False
+        elif display_value.isdigit():
+            display_value = int(display_value)
+
+    location = "user-level (~/.config/flow-next/)" if user_level else "project (.flow/)"
     if args.json:
-        json_output({"key": args.key, "value": new_value, "message": f"{args.key} set"})
+        json_output({"key": args.key, "value": display_value, "location": location, "message": f"{args.key} set"})
     else:
-        print(f"{args.key} set to {new_value}")
+        print(f"{args.key} = {display_value} ({location})")
 
 
 MEMORY_TEMPLATES = {
@@ -3617,6 +3674,7 @@ def main() -> None:
     p_config_set = config_sub.add_parser("set", help="Set config value")
     p_config_set.add_argument("key", help="Config key (e.g., memory.enabled)")
     p_config_set.add_argument("value", help="Config value")
+    p_config_set.add_argument("--user", action="store_true", help="Set in user-level config (~/.config/flow-next/)")
     p_config_set.add_argument("--json", action="store_true", help="JSON output")
     p_config_set.set_defaults(func=cmd_config_set)
 

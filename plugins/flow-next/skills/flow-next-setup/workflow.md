@@ -194,6 +194,13 @@ To use from command line:
 Documentation updated:
 - <files updated or "none">
 
+Config hierarchy (project overrides user):
+  1. ~/.config/flow-next/config.json (user defaults)
+  2. .flow/config.json (project overrides)
+
+Set user-level defaults:
+  flowctl config set memory.enabled true --user
+
 Notes:
 - Re-run /flow-next:setup --user after plugin updates
 - Scripts shared across all projects
@@ -217,7 +224,8 @@ Documentation updated:
 - <files updated or "none">
 
 Memory system: disabled by default
-Enable with: flowctl config set memory.enabled true
+Enable for this project: flowctl config set memory.enabled true
+Enable for all projects: flowctl config set memory.enabled true --user
 
 Notes:
 - Re-run /flow-next:setup after plugin updates to refresh scripts

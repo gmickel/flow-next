@@ -70,6 +70,23 @@ Task tracking for AI agents. All state lives in `.flow/`.
 {"commits": ["abc123"], "tests": ["npm test"], "prs": []}
 ```
 
+## Configuration
+
+Config hierarchy (project overrides user):
+1. `~/.config/flow-next/config.json` - user-level defaults
+2. `.flow/config.json` - project-level overrides
+
+```bash
+# Get config (reads merged user + project)
+.flow/bin/flowctl config get memory.enabled
+
+# Set project-level config
+.flow/bin/flowctl config set memory.enabled true
+
+# Set user-level config (applies to all projects)
+.flow/bin/flowctl config set memory.enabled true --user
+```
+
 ## More Info
 
 - Human docs: https://github.com/gmickel/gmickel-claude-marketplace/blob/main/plugins/flow-next/docs/flowctl.md
