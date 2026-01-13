@@ -53,8 +53,8 @@ function makeText(text: string): string {
 describe('parser', () => {
   describe('getIcon', () => {
     test('returns unicode icons by default', () => {
-      expect(getIcon('Read')).toBe('→');
-      expect(getIcon('Write')).toBe('→');
+      expect(getIcon('Read')).toBe('◂');
+      expect(getIcon('Write')).toBe('▸');
       expect(getIcon('Bash')).toBe('⚡');
       expect(getIcon('Task')).toBe('◆');
       expect(getIcon('success')).toBe('✓');
@@ -62,7 +62,7 @@ describe('parser', () => {
     });
 
     test('returns ASCII icons when ascii=true', () => {
-      expect(getIcon('Read', true)).toBe('>');
+      expect(getIcon('Read', true)).toBe('<');
       expect(getIcon('Write', true)).toBe('>');
       expect(getIcon('Bash', true)).toBe('!');
       expect(getIcon('Task', true)).toBe('*');
@@ -79,8 +79,8 @@ describe('parser', () => {
   describe('iconForEntry', () => {
     test('returns tool icon for tool entries', () => {
       const entry = { type: 'tool', tool: 'Read', content: 'Read: /a.ts' };
-      expect(iconForEntry(entry)).toBe('→');
-      expect(iconForEntry(entry, true)).toBe('>');
+      expect(iconForEntry(entry)).toBe('◂');
+      expect(iconForEntry(entry, true)).toBe('<');
     });
 
     test('returns Bash icon for Bash tool', () => {

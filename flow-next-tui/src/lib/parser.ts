@@ -1,18 +1,18 @@
 import type { LogEntry } from './types';
 
 /**
- * Tool icons for display
+ * Tool icons for display - distinctive glyphs per tool type
  */
 export const TOOL_ICONS = {
-  Read: '→',
-  Write: '→',
-  Glob: '→',
-  Grep: '→',
-  Edit: '→',
-  Bash: '⚡',
-  Task: '◆',
-  WebFetch: '◆',
-  WebSearch: '◆',
+  Read: '◂',      // file read
+  Write: '▸',     // file write
+  Glob: '◇',      // pattern search
+  Grep: '◈',      // content search
+  Edit: '✎',      // edit operation
+  Bash: '⚡',     // command execution
+  Task: '◆',      // agent task
+  WebFetch: '↯',  // web fetch
+  WebSearch: '⌕', // web search
   success: '✓',
   failure: '✗',
 } as const;
@@ -21,15 +21,15 @@ export const TOOL_ICONS = {
  * ASCII fallbacks for --no-emoji mode
  */
 export const ASCII_ICONS = {
-  Read: '>',
+  Read: '<',
   Write: '>',
-  Glob: '>',
-  Grep: '>',
-  Edit: '>',
+  Glob: '?',
+  Grep: '/',
+  Edit: 'e',
   Bash: '!',
   Task: '*',
-  WebFetch: '*',
-  WebSearch: '*',
+  WebFetch: 'w',
+  WebSearch: 's',
   success: '+',
   failure: 'x',
 } as const;

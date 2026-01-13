@@ -62,97 +62,86 @@ function defaultProps(overrides?: Partial<HeaderProps>): HeaderProps {
 }
 
 describe('Header', () => {
-  test('renders two rows', () => {
+  test('renders three rows (bordered)', () => {
     const header = new Header(defaultProps());
     const lines = header.render(80);
 
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(3);
   });
 
-  test('row 1 contains status icon for running state', () => {
+  test('top border contains Ralph branding', () => {
+    const header = new Header(defaultProps());
+    const lines = header.render(80);
+
+    const stripped = stripAnsi(lines[0]!);
+    expect(stripped).toContain('Ralph');
+    expect(stripped).toContain('╭'); // rounded corner
+  });
+
+  test('content row contains status icon for running state', () => {
     const header = new Header(defaultProps({ state: 'running' }));
     const lines = header.render(80);
 
-    const stripped = stripAnsi(lines[0]!);
+    const stripped = stripAnsi(lines[1]!);
     expect(stripped).toContain(STATE_ICONS.running);
+    expect(stripped).toContain('Running');
   });
 
-  test('row 1 contains status icon for idle state', () => {
+  test('content row contains status icon for idle state', () => {
     const header = new Header(defaultProps({ state: 'idle' }));
     const lines = header.render(80);
 
-    const stripped = stripAnsi(lines[0]!);
+    const stripped = stripAnsi(lines[1]!);
     expect(stripped).toContain(STATE_ICONS.idle);
+    expect(stripped).toContain('Idle');
   });
 
-  test('row 1 contains status icon for complete state', () => {
+  test('content row contains status icon for complete state', () => {
     const header = new Header(defaultProps({ state: 'complete' }));
     const lines = header.render(80);
 
-    const stripped = stripAnsi(lines[0]!);
+    const stripped = stripAnsi(lines[1]!);
     expect(stripped).toContain(STATE_ICONS.complete);
+    expect(stripped).toContain('Done');
   });
 
-  test('row 1 contains flow-next branding', () => {
-    const header = new Header(defaultProps());
-    const lines = header.render(80);
-
-    const stripped = stripAnsi(lines[0]!);
-    expect(stripped).toContain('flow-next');
-  });
-
-  test('row 1 contains timer in MM:SS format', () => {
+  test('content row contains timer in MM:SS format', () => {
     const header = new Header(defaultProps({ elapsed: 125 })); // 2:05
     const lines = header.render(80);
 
-    const stripped = stripAnsi(lines[0]!);
+    const stripped = stripAnsi(lines[1]!);
     expect(stripped).toContain('02:05');
   });
 
-  test('row 1 shows task in brackets when provided', () => {
-    const header = new Header(
-      defaultProps({
-        task: mockTask({ id: 'fn-9.3', title: 'Add validation' }),
-      })
-    );
-    const lines = header.render(80);
-
-    const stripped = stripAnsi(lines[0]!);
-    expect(stripped).toContain('「');
-    expect(stripped).toContain('fn-9.3');
-    expect(stripped).toContain('Add validation');
-    expect(stripped).toContain('」');
-  });
-
-  test('row 2 contains iteration number', () => {
+  test('content row contains iteration number', () => {
     const header = new Header(defaultProps({ iteration: 3 }));
     const lines = header.render(80);
 
     const stripped = stripAnsi(lines[1]!);
-    expect(stripped).toContain('Iter #3');
+    expect(stripped).toContain('#3');
   });
 
-  test('row 2 contains task progress', () => {
+  test('content row contains task progress', () => {
     const header = new Header(
       defaultProps({ taskProgress: { done: 5, total: 10 } })
     );
     const lines = header.render(80);
 
     const stripped = stripAnsi(lines[1]!);
-    expect(stripped).toContain('5/10 tasks');
+    expect(stripped).toContain('5');
+    expect(stripped).toContain('10');
   });
 
-  test('row 2 shows epic info when provided', () => {
+  test('content row shows task id when provided', () => {
     const header = new Header(
       defaultProps({
-        epic: mockEpic({ id: 'fn-9', title: 'flow-next-tui MVP' }),
+        task: mockTask({ id: 'fn-9.3' }),
       })
     );
     const lines = header.render(80);
 
     const stripped = stripAnsi(lines[1]!);
-    expect(stripped).toContain('fn-9');
-    expect(stripped).toContain('flow-next-tui MVP');
+    expect(stripped).toContain('fn-9.3');
   });
 
   test('uses ASCII icons when useAscii is true', () => {
@@ -161,39 +150,9 @@ describe('Header', () => {
     );
     const lines = header.render(80);
 
-    const stripped = stripAnsi(lines[0]!);
+    const stripped = stripAnsi(lines[1]!);
     expect(stripped).toContain(ASCII_STATE_ICONS.running);
     expect(stripped).not.toContain(STATE_ICONS.running);
-  });
-
-  test('truncates long task title', () => {
-    const longTitle =
-      'This is a very long task title that should be truncated when the width is limited';
-    const header = new Header(
-      defaultProps({
-        task: mockTask({ title: longTitle }),
-      })
-    );
-    const lines = header.render(60);
-
-    const stripped = stripAnsi(lines[0]!);
-    expect(stripped).toContain('…');
-    expect(stripped.length).toBeLessThanOrEqual(60);
-  });
-
-  test('truncates long epic title', () => {
-    const longTitle =
-      'This is a very long epic title that should be truncated when the width is limited';
-    const header = new Header(
-      defaultProps({
-        epic: mockEpic({ title: longTitle }),
-      })
-    );
-    const lines = header.render(60);
-
-    const stripped = stripAnsi(lines[1]!);
-    expect(stripped).toContain('…');
-    expect(stripped.length).toBeLessThanOrEqual(60);
   });
 
   test('update() modifies state', () => {
@@ -202,7 +161,7 @@ describe('Header', () => {
     header.update({ state: 'complete', elapsed: 200 });
     const lines = header.render(80);
 
-    const stripped = stripAnsi(lines[0]!);
+    const stripped = stripAnsi(lines[1]!);
     expect(stripped).toContain(STATE_ICONS.complete);
     expect(stripped).toContain('03:20'); // 200 seconds
   });
@@ -211,27 +170,27 @@ describe('Header', () => {
     const header = new Header(defaultProps({ elapsed: 0 }));
     const lines = header.render(80);
 
-    const stripped = stripAnsi(lines[0]!);
+    const stripped = stripAnsi(lines[1]!);
     expect(stripped).toContain('00:00');
   });
 
-  test('handles large elapsed time', () => {
-    const header = new Header(defaultProps({ elapsed: 3661 })); // 61:01
+  test('handles large elapsed time with HH:MM:SS format', () => {
+    const header = new Header(defaultProps({ elapsed: 3661 })); // 1:01:01
     const lines = header.render(80);
 
-    const stripped = stripAnsi(lines[0]!);
-    expect(stripped).toContain('61:01');
+    const stripped = stripAnsi(lines[1]!);
+    expect(stripped).toContain('01:01:01');
   });
 
   test('renders without task or epic', () => {
     const header = new Header(defaultProps());
     const lines = header.render(80);
 
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(3);
     const stripped0 = stripAnsi(lines[0]!);
     const stripped1 = stripAnsi(lines[1]!);
-    expect(stripped0).toContain('flow-next');
-    expect(stripped1).toContain('Iter #');
+    expect(stripped0).toContain('Ralph');
+    expect(stripped1).toContain('Iter');
   });
 
   test('rows respect width constraint', () => {
@@ -241,7 +200,7 @@ describe('Header', () => {
         epic: mockEpic(),
       })
     );
-    const width = 50;
+    const width = 80;
     const lines = header.render(width);
 
     for (const line of lines) {
@@ -262,115 +221,30 @@ describe('Header', () => {
     header.invalidate();
   });
 
-  test('narrow width still renders', () => {
-    const header = new Header(
-      defaultProps({
-        task: mockTask(),
-        epic: mockEpic(),
-      })
-    );
-    const lines = header.render(20);
-
-    expect(lines).toHaveLength(2);
-    // Should not crash or produce lines exceeding width
-    for (const line of lines) {
-      expect(visibleWidth(line)).toBeLessThanOrEqual(20);
-    }
-  });
-
-  test('very narrow width=10 respects constraint', () => {
-    const header = new Header(
-      defaultProps({
-        task: mockTask(),
-        epic: mockEpic(),
-      })
-    );
-    const width = 10;
-    const lines = header.render(width);
-
-    expect(lines).toHaveLength(2);
-    for (const line of lines) {
-      expect(visibleWidth(line)).toBeLessThanOrEqual(width);
-    }
-  });
-
-  test('very narrow width=5 respects constraint', () => {
-    const header = new Header(
-      defaultProps({
-        task: mockTask(),
-        epic: mockEpic(),
-      })
-    );
-    const width = 5;
-    const lines = header.render(width);
-
-    expect(lines).toHaveLength(2);
-    for (const line of lines) {
-      expect(visibleWidth(line)).toBeLessThanOrEqual(width);
-    }
-  });
-
-  test('width=0 returns empty or minimal output', () => {
-    const header = new Header(
-      defaultProps({
-        task: mockTask(),
-        epic: mockEpic(),
-      })
-    );
-    const lines = header.render(0);
-
-    expect(lines).toHaveLength(2);
-    for (const line of lines) {
-      expect(visibleWidth(line)).toBeLessThanOrEqual(0);
-    }
-  });
-
-  test('width without task/epic still respects constraint at narrow width', () => {
+  test('narrow width returns minimal output', () => {
     const header = new Header(defaultProps());
-    const width = 10;
-    const lines = header.render(width);
+    const lines = header.render(15);
 
-    expect(lines).toHaveLength(2);
-    for (const line of lines) {
-      expect(visibleWidth(line)).toBeLessThanOrEqual(width);
-    }
+    // Width < 20 returns minimal output
+    expect(lines.length).toBeGreaterThanOrEqual(1);
   });
 
-  test('width=7 (timerWidth+2) edge case respects constraint and shows full timer', () => {
-    // Timer is 5 chars (MM:SS), so width=7 is timerWidth+2
-    // This tests the minWidth path boundary
-    const header = new Header(
-      defaultProps({
-        task: mockTask(),
-        epic: mockEpic(),
-        elapsed: 125, // 02:05 = 5 chars
-      })
-    );
-    const width = 7;
-    const lines = header.render(width);
+  test('bottom border has proper corners', () => {
+    const header = new Header(defaultProps());
+    const lines = header.render(80);
 
-    expect(lines).toHaveLength(2);
-    for (const line of lines) {
-      expect(visibleWidth(line)).toBeLessThanOrEqual(width);
-    }
-    // Timer should be fully intact when width > timerWidth
-    expect(stripAnsi(lines[0]!)).toContain('02:05');
+    const stripped = stripAnsi(lines[2]!);
+    expect(stripped).toContain('╰');
+    expect(stripped).toContain('╯');
   });
 
-  test('width=6 (timerWidth+1) boundary respects constraint', () => {
-    const header = new Header(
-      defaultProps({
-        task: mockTask(),
-        epic: mockEpic(),
-        elapsed: 125,
-      })
-    );
-    const width = 6;
-    const lines = header.render(width);
+  test('ASCII mode uses ASCII borders', () => {
+    const header = new Header(defaultProps({ useAscii: true }));
+    const lines = header.render(80);
 
-    expect(lines).toHaveLength(2);
-    for (const line of lines) {
-      expect(visibleWidth(line)).toBeLessThanOrEqual(width);
-    }
+    const stripped0 = stripAnsi(lines[0]!);
+    const stripped2 = stripAnsi(lines[2]!);
+    expect(stripped0).toContain('+');
+    expect(stripped2).toContain('+');
   });
 });

@@ -28,15 +28,15 @@ describe('themes', () => {
   });
 
   test('DARK palette matches spec values', () => {
-    expect(DARK.accent).toBe(81); // electric cyan
-    expect(DARK.success).toBe(114); // muted green
-    expect(DARK.progress).toBe(75); // bright blue
-    expect(DARK.warning).toBe(221); // amber
-    expect(DARK.error).toBe(203); // coral red
-    expect(DARK.text).toBe(252);
-    expect(DARK.dim).toBe(242);
-    expect(DARK.border).toBe(239);
-    expect(DARK.selectedBg).toBe(236);
+    expect(DARK.accent).toBe(50); // vibrant teal-cyan
+    expect(DARK.success).toBe(78); // brighter green
+    expect(DARK.progress).toBe(39); // vivid blue
+    expect(DARK.warning).toBe(214); // bright orange-amber
+    expect(DARK.error).toBe(196); // vivid red
+    expect(DARK.text).toBe(255); // pure white
+    expect(DARK.dim).toBe(245); // brighter dim
+    expect(DARK.border).toBe(240);
+    expect(DARK.selectedBg).toBe(238);
     expect(DARK.bg).toBe(-1); // terminal default
   });
 

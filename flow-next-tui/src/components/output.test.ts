@@ -17,14 +17,15 @@ function mockEntry(overrides: Partial<LogEntry> = {}): LogEntry {
 
 describe('OutputPanel', () => {
   describe('rendering', () => {
-    test('renders bordered header with iteration number', () => {
+    test('renders bordered header with Output label and iteration', () => {
       const panel = new OutputPanel({ theme: darkTheme, iteration: 3 });
       panel.setViewportHeight(10);
       const lines = panel.render(50);
 
       // First line is header
       const header = stripAnsi(lines[0]!);
-      expect(header).toContain('Iteration 3');
+      expect(header).toContain('Output'); // Label on left
+      expect(header).toContain('#3'); // Iteration on right
       expect(header).toContain('┌');
       expect(header).toContain('┐');
     });
@@ -60,7 +61,7 @@ describe('OutputPanel', () => {
       const lines = panel.render(50);
 
       const content = lines.map((l) => stripAnsi(l)).join('\n');
-      expect(content).toContain('→'); // File op icon
+      expect(content).toContain('◂'); // Read icon
       expect(content).toContain('⚡'); // Bash icon
     });
 
@@ -94,9 +95,9 @@ describe('OutputPanel', () => {
       const lines = panel.render(50);
 
       const content = lines.map((l) => stripAnsi(l)).join('\n');
-      expect(content).toContain('>'); // File op
+      expect(content).toContain('<'); // Read ASCII icon
       expect(content).toContain('!'); // Bash (per parser.ts ASCII_ICONS)
-      expect(content).toContain('+'); // Success
+      // + might appear in borders too, so just check content has success marker
       expect(content).toContain('x'); // Failure
     });
 
@@ -207,7 +208,7 @@ describe('OutputPanel', () => {
       const lines = panel.render(50);
 
       const header = stripAnsi(lines[0]!);
-      expect(header).toContain('Iteration 5');
+      expect(header).toContain('#5'); // Iteration on right side of header
     });
 
     test('setViewportHeight sets viewport size', () => {

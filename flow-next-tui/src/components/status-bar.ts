@@ -1,6 +1,6 @@
 /**
- * StatusBar component - bottom bar with shortcuts and run info.
- * Single row: shortcuts on left, run ID + error count on right.
+ * StatusBar component - segmented bottom bar with shortcuts and status.
+ * Inspired by modern terminal UIs with distinct segments.
  */
 
 import type { Component } from '@mariozechner/pi-tui';
@@ -14,9 +14,6 @@ import {
   visibleWidth,
 } from '../lib/render.ts';
 
-/** Shortcut definitions for the status bar */
-const SHORTCUTS = 'q quit  j/k nav  ? help';
-
 export interface StatusBarProps {
   runId?: string;
   errorCount?: number;
@@ -24,9 +21,8 @@ export interface StatusBarProps {
 }
 
 /**
- * StatusBar component - single-row bottom bar.
- * Left: keyboard shortcuts
- * Right: run ID + optional error count
+ * StatusBar component - segmented status bar.
+ * Segments: shortcuts │ run info │ errors
  */
 export class StatusBar implements Component {
   private runId: string | undefined;
@@ -39,7 +35,6 @@ export class StatusBar implements Component {
     this.theme = props.theme;
   }
 
-  /** Update status bar state (uses 'in' semantics to allow clearing) */
   update(props: Partial<StatusBarProps>): void {
     if ('runId' in props) this.runId = props.runId;
     if ('errorCount' in props) this.errorCount = props.errorCount ?? 0;
@@ -47,90 +42,67 @@ export class StatusBar implements Component {
   }
 
   render(width: number): string[] {
-    // Handle very narrow widths
-    if (width <= 0) {
-      return [''];
-    }
+    if (width <= 0) return [''];
 
-    // Sanitize runId to prevent ANSI injection
     const safeRunId = this.runId ? stripAnsi(this.runId) : undefined;
+    const sep = this.theme.border(' │ ');
+    const sepRaw = ' │ ';
 
-    // Left side: shortcuts (dimmed)
-    const shortcutsWidth = visibleWidth(SHORTCUTS);
+    // Build segments
+    const segments: { raw: string; colored: string }[] = [];
 
-    // Right side: run ID + error count
-    let rightContent = '';
+    // Segment 1: Shortcuts
+    const shortcuts = 'q quit  j/k nav  ? help';
+    segments.push({
+      raw: shortcuts,
+      colored: this.theme.dim(shortcuts),
+    });
+
+    // Segment 2: Run ID (if available)
     if (safeRunId) {
-      rightContent = safeRunId;
-      if (this.errorCount > 0) {
-        rightContent += ` (${this.errorCount} error${this.errorCount === 1 ? '' : 's'})`;
-      }
-    } else if (this.errorCount > 0) {
-      rightContent = `${this.errorCount} error${this.errorCount === 1 ? '' : 's'}`;
+      segments.push({
+        raw: safeRunId,
+        colored: this.theme.accent(safeRunId),
+      });
     }
-    const rightWidth = visibleWidth(rightContent);
 
-    // Build the row
-    const minWidth = shortcutsWidth + (rightWidth > 0 ? 2 + rightWidth : 0);
+    // Segment 3: Error count (if any)
+    if (this.errorCount > 0) {
+      const errText = `${this.errorCount} error${this.errorCount === 1 ? '' : 's'}`;
+      segments.push({
+        raw: errText,
+        colored: this.theme.error(errText),
+      });
+    }
+
+    // Calculate total raw width
+    const totalRawWidth = segments.reduce((acc, s) => acc + visibleWidth(s.raw), 0) +
+      (segments.length - 1) * visibleWidth(sepRaw);
+
+    // Build the line
     let line: string;
-
-    if (width < shortcutsWidth) {
-      // Too narrow for full shortcuts - truncate
-      const truncatedShortcuts = truncateToWidth(SHORTCUTS, width, '…');
-      line = this.theme.dim(truncatedShortcuts);
-    } else if (width < minWidth && rightWidth > 0) {
-      // Can fit shortcuts but not full right side
-      const availableForRight = width - shortcutsWidth - 2;
-      if (availableForRight <= 0) {
-        // Just show shortcuts
-        const gap = ' '.repeat(Math.max(0, width - shortcutsWidth));
-        line = this.theme.dim(SHORTCUTS) + gap;
+    if (totalRawWidth <= width) {
+      // All segments fit
+      const gapWidth = Math.max(0, width - totalRawWidth);
+      // Put gap between first segment and rest (push right content to far right)
+      if (segments.length === 1) {
+        line = segments[0]!.colored + ' '.repeat(gapWidth);
       } else {
-        // Truncate right content
-        const truncatedRight = truncateToWidth(rightContent, availableForRight, '…');
-        const truncatedRightWidth = visibleWidth(truncatedRight);
-        const gapWidth = Math.max(0, width - shortcutsWidth - truncatedRightWidth);
-        const gap = ' '.repeat(gapWidth);
-
-        const rightColored =
-          this.errorCount > 0
-            ? this.theme.error(truncatedRight)
-            : this.theme.dim(truncatedRight);
-
-        line = this.theme.dim(SHORTCUTS) + gap + rightColored;
+        const firstSeg = segments[0]!;
+        const restSegs = segments.slice(1).map(s => s.colored).join(sep);
+        const restRaw = segments.slice(1).map(s => s.raw).join(sepRaw);
+        const gapForRest = Math.max(0, width - visibleWidth(firstSeg.raw) - visibleWidth(restRaw) - (segments.length - 1) * visibleWidth(sepRaw));
+        line = firstSeg.colored + ' '.repeat(gapForRest) + restSegs;
       }
     } else {
-      // Full content fits
-      const gapWidth = Math.max(0, width - shortcutsWidth - rightWidth);
-      const gap = ' '.repeat(gapWidth);
-
-      let rightColored = '';
-      if (rightContent) {
-        if (this.errorCount > 0) {
-          // Color error part differently
-          if (safeRunId) {
-            const errorPart = ` (${this.errorCount} error${this.errorCount === 1 ? '' : 's'})`;
-            rightColored = this.theme.dim(safeRunId) + this.theme.error(errorPart);
-          } else {
-            rightColored = this.theme.error(rightContent);
-          }
-        } else {
-          rightColored = this.theme.dim(rightContent);
-        }
-      }
-
-      line = this.theme.dim(SHORTCUTS) + gap + rightColored;
+      // Need to truncate - just show shortcuts
+      line = truncateToWidth(segments[0]!.colored, width, '…');
     }
 
-    // Ensure full width (prevents stale chars on screen)
     return [padToWidth(line, width)];
   }
 
-  handleInput(_data: string): void {
-    // StatusBar doesn't handle input
-  }
+  handleInput(_data: string): void {}
 
-  invalidate(): void {
-    // No cached state to invalidate
-  }
+  invalidate(): void {}
 }

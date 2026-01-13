@@ -147,51 +147,45 @@ export class OutputPanel implements Component {
     return stripAnsi(text).replace(/[\x00-\x09\x0B-\x1F\x7F]/g, ' ');
   }
 
-  /** Render the bordered header */
+  /** Render the bordered header with "Output" label and iteration */
   private renderHeader(width: number): string {
-    const borderChar = this.useAscii ? '-' : '─';
-    const topLeft = this.useAscii ? '+' : '┌';
-    const topRight = this.useAscii ? '+' : '┐';
-    const innerWidth = width - 2; // Account for corners
+    const borderH = this.useAscii ? '-' : '─';
+    const cornerTL = this.useAscii ? '+' : '┌';
+    const cornerTR = this.useAscii ? '+' : '┐';
+    const innerWidth = width - 2;
 
-    // Handle very narrow widths - minimal header
     if (innerWidth <= 0) {
-      return this.theme.border(topLeft) + this.theme.border(topRight);
+      return this.theme.border(cornerTL) + this.theme.border(cornerTR);
     }
 
-    // Build label, truncate if needed
-    let label = ` Iteration ${this.iteration} `;
-    let labelWidth = visibleWidth(label);
+    // Left label: "Output"
+    const leftLabel = ' Output ';
+    // Right label: iteration number
+    const rightLabel = ` #${this.iteration} `;
 
-    if (labelWidth > innerWidth) {
-      // Truncate label to fit
-      label = truncateToWidth(label, innerWidth, '…');
-      labelWidth = visibleWidth(label);
-    }
-
-    // Calculate left/right padding
-    const leftPad = Math.max(0, Math.floor((innerWidth - labelWidth) / 2));
-    const rightPad = Math.max(0, innerWidth - labelWidth - leftPad);
+    const leftLabelWidth = visibleWidth(leftLabel);
+    const rightLabelWidth = visibleWidth(rightLabel);
+    const middleBorderLen = Math.max(0, innerWidth - leftLabelWidth - rightLabelWidth);
 
     return (
-      this.theme.border(topLeft) +
-      this.theme.border(borderChar.repeat(leftPad)) +
-      this.theme.accent(label) +
-      this.theme.border(borderChar.repeat(rightPad)) +
-      this.theme.border(topRight)
+      this.theme.border(cornerTL) +
+      this.theme.accent(leftLabel) +
+      this.theme.border(borderH.repeat(middleBorderLen)) +
+      this.theme.dim(rightLabel) +
+      this.theme.border(cornerTR)
     );
   }
 
   /** Render the bottom border */
   private renderFooter(width: number): string {
-    const borderChar = this.useAscii ? '-' : '─';
-    const bottomLeft = this.useAscii ? '+' : '└';
-    const bottomRight = this.useAscii ? '+' : '┘';
+    const borderH = this.useAscii ? '-' : '─';
+    const cornerBL = this.useAscii ? '+' : '└';
+    const cornerBR = this.useAscii ? '+' : '┘';
 
     return (
-      this.theme.border(bottomLeft) +
-      this.theme.border(borderChar.repeat(width - 2)) +
-      this.theme.border(bottomRight)
+      this.theme.border(cornerBL) +
+      this.theme.border(borderH.repeat(width - 2)) +
+      this.theme.border(cornerBR)
     );
   }
 

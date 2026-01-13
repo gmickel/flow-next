@@ -6,19 +6,20 @@ import { bgColor, color } from './helpers.ts';
 
 /**
  * Dark theme palette - 256 color values for terminal compatibility.
+ * Inspired by modern terminal UIs with vibrant cyan accent.
  * Uses -1 for terminal default (transparent background).
  */
 export const DARK: ColorPalette = {
   bg: -1, // terminal default (transparent)
-  border: 239,
-  text: 252,
-  dim: 242,
-  accent: 81, // electric cyan
-  success: 114, // muted green
-  progress: 75, // bright blue
-  warning: 221, // amber
-  error: 203, // coral red
-  selectedBg: 236,
+  border: 240, // slightly brighter border for visibility
+  text: 255, // pure white for max contrast
+  dim: 245, // brighter dim for better readability
+  accent: 50, // vibrant teal-cyan (pops more than 81)
+  success: 78, // brighter green
+  progress: 39, // vivid blue
+  warning: 214, // bright orange-amber
+  error: 196, // vivid red
+  selectedBg: 238, // slightly lighter selection
 };
 
 export const darkTheme: Theme = {

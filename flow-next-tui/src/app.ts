@@ -194,11 +194,11 @@ class App implements Component {
       },
     });
 
-    // Create split panel for TaskList | TaskDetail
+    // Create split panel for TaskList | TaskDetail (40/60 split)
     this.taskSplitPanel = new SplitPanel({
       left: this.taskList,
       right: this.taskDetail,
-      ratio: 0.35,
+      ratio: 0.4,
       active: 'left',
     });
   }
@@ -335,7 +335,8 @@ class App implements Component {
     const isCompact = width < COMPACT_WIDTH || height < COMPACT_HEIGHT;
 
     // Calculate layout heights (clamp to avoid negative slice indices)
-    const headerHeight = isCompact ? 1 : 2;
+    // Header is now 3 rows: top border, content, bottom border
+    const headerHeight = isCompact ? 1 : 3;
     const statusBarHeight = 1;
     const contentHeight = Math.max(0, height - headerHeight - statusBarHeight);
 

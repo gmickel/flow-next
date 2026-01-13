@@ -1,6 +1,6 @@
 /**
- * TaskDetail component for displaying full task info with markdown rendering.
- * Shows task header, metadata, receipt status, and markdown spec with scrolling.
+ * TaskDetail component with bordered panel and clean sections.
+ * Shows task info, metadata, receipts, and markdown spec.
  */
 
 import type { Component } from '@mariozechner/pi-tui';
@@ -11,16 +11,15 @@ import type { ReceiptStatus } from '../lib/runs.ts';
 import type { Task } from '../lib/types.ts';
 import type { Theme } from '../themes/index.ts';
 
-import { visibleWidth, truncateToWidth, stripAnsi } from '../lib/render.ts';
+import { visibleWidth, truncateToWidth, stripAnsi, padToWidth } from '../lib/render.ts';
 import { STATUS_ICONS, ASCII_ICONS } from './task-list.ts';
 
 export interface TaskDetailProps {
   task: Task;
-  spec: string; // markdown content
+  spec: string;
   receipts?: ReceiptStatus;
   blockReason?: string;
   theme: Theme;
-  /** Use ASCII icons instead of Unicode (default: false) */
   useAscii?: boolean;
 }
 
@@ -170,48 +169,46 @@ export class TaskDetail implements Component {
     const lines: string[] = [];
     const colorFn = this.getStatusColor();
     const icon = this.getStatusIcon();
+    const contentWidth = width - 2; // for internal padding
 
-    // Sanitize task-provided strings to prevent terminal injection
+    // Sanitize task-provided strings
     const safeTitle = this.sanitizeSingleLine(this.task.title);
     const safeId = this.sanitizeSingleLine(this.task.id);
 
-    // Line 1: Status icon + full title
-    const titleLine = `${colorFn(icon)} ${safeTitle}`;
-    if (visibleWidth(titleLine) > width) {
-      lines.push(truncateToWidth(titleLine, width, '…'));
-    } else {
-      lines.push(titleLine);
-    }
+    // Line 1: Status icon + task ID
+    const idLine = colorFn(icon) + ' ' + this.theme.accent(safeId);
+    lines.push(truncateToWidth(idLine, contentWidth, '…'));
 
-    // Line 2: Metadata (ID, status)
-    const statusText = this.task.status.replace('_', ' '); // in_progress -> in progress
-    const metaLine = `${this.theme.dim('ID:')} ${safeId}  ${this.theme.dim('Status:')} ${colorFn(statusText)}`;
-    if (visibleWidth(metaLine) > width) {
-      lines.push(truncateToWidth(metaLine, width, '…'));
-    } else {
-      lines.push(metaLine);
-    }
+    // Line 2: Full title
+    lines.push(truncateToWidth(this.theme.text(safeTitle), contentWidth, '…'));
 
-    // Line 3: Receipt status
-    lines.push(this.formatReceipts());
-
-    // Line 4: Empty separator
+    // Line 3: Empty separator
     lines.push('');
 
-    // Block reason (if blocked) - sanitize to prevent terminal injection
+    // Line 4: Status badge + receipts inline
+    const statusText = this.task.status.replace('_', ' ');
+    const statusBadge = this.theme.dim('Status: ') + colorFn(statusText);
+    const receipts = this.formatReceipts();
+    const metaLine = statusBadge + this.theme.dim('  │  ') + receipts;
+    lines.push(truncateToWidth(metaLine, contentWidth, '…'));
+
+    // Block reason (if blocked)
     if (this.blockReason && this.task.status === 'blocked') {
-      const blockHeader = this.theme.warning(
-        this.useAscii ? '[!] Blocked:' : '⊘ Blocked:'
-      );
-      lines.push(blockHeader);
-      // Wrap block reason to width (sanitized for control chars)
-      const sanitizedReason = this.sanitizeMultiLine(this.blockReason.trim());
-      const reasonLines = this.wrapText(sanitizedReason, width - 2);
-      for (const line of reasonLines) {
-        lines.push(`  ${line}`);
-      }
       lines.push('');
+      const blockHeader = this.theme.warning(this.useAscii ? '[!] Blocked' : '⊘ Blocked');
+      lines.push(blockHeader);
+      const sanitizedReason = this.sanitizeMultiLine(this.blockReason.trim());
+      const reasonLines = this.wrapText(sanitizedReason, contentWidth - 2);
+      for (const line of reasonLines) {
+        lines.push(this.theme.dim('  ' + line));
+      }
     }
+
+    // Separator before spec
+    lines.push('');
+    const sepChar = this.useAscii ? '-' : '─';
+    lines.push(this.theme.border(sepChar.repeat(Math.min(20, contentWidth))));
+    lines.push('');
 
     return lines;
   }
@@ -254,38 +251,65 @@ export class TaskDetail implements Component {
   }
 
   render(width: number): string[] {
-    // Handle edge case of very narrow width
-    if (width <= 0) return [];
+    if (width <= 4) return [];
+
+    const borderH = this.useAscii ? '-' : '─';
+    const borderV = this.useAscii ? '|' : '│';
+    const cornerTL = this.useAscii ? '+' : '┌';
+    const cornerTR = this.useAscii ? '+' : '┐';
 
     const allLines: string[] = [];
 
-    // Render header
-    const headerLines = this.renderHeader(width);
-    allLines.push(...headerLines);
+    // Panel header with "Details" label
+    const label = ' Details ';
+    const labelWidth = visibleWidth(label);
+    const innerWidth = width - 2;
+    const leftBorderLen = Math.max(0, Math.floor((innerWidth - labelWidth) / 2));
+    const rightBorderLen = Math.max(0, innerWidth - leftBorderLen - labelWidth);
 
-    // Render markdown spec (sanitize to prevent terminal injection)
+    allLines.push(
+      this.theme.border(cornerTL) +
+      this.theme.border(borderH.repeat(leftBorderLen)) +
+      this.theme.accent(label) +
+      this.theme.border(borderH.repeat(rightBorderLen)) +
+      this.theme.border(cornerTR)
+    );
+
+    // Content width (inside borders + padding)
+    const contentWidth = width - 4;
+
+    // Render header (task info)
+    const headerLines = this.renderHeader(contentWidth);
+
+    // Render markdown spec
     const sanitizedSpec = this.sanitizeMultiLine(this.spec);
+    let specLines: string[] = [];
     if (sanitizedSpec.trim()) {
-      const md = this.getMarkdown(width, sanitizedSpec);
-      const mdLines = md.render(width);
-      allLines.push(...mdLines);
+      const md = this.getMarkdown(contentWidth, sanitizedSpec);
+      specLines = md.render(contentWidth);
     }
 
-    // Store total content height and clamp scroll to avoid blank panel
-    this.totalContentHeight = allLines.length;
+    // Combine content
+    const contentLines = [...headerLines, ...specLines];
+    this.totalContentHeight = contentLines.length;
     this.clampScroll();
 
-    // Apply scrolling (let parent/TUI handle height clipping)
-    const visibleLines = allLines.slice(this.scrollOffset);
+    // Apply scrolling
+    const visibleContent = contentLines.slice(this.scrollOffset);
 
-    // Truncate lines to width for consistent display
-    return visibleLines.map((line) => {
-      const w = visibleWidth(line);
-      if (w > width) {
-        return truncateToWidth(line, width, '…');
-      }
-      return line;
-    });
+    // Wrap each line with borders
+    for (const line of visibleContent) {
+      const paddedLine = padToWidth(line, contentWidth);
+      allLines.push(
+        this.theme.border(borderV) +
+        ' ' +
+        truncateToWidth(paddedLine, contentWidth, '…') +
+        ' ' +
+        this.theme.border(borderV)
+      );
+    }
+
+    return allLines;
   }
 
   handleInput(data: string): void {
