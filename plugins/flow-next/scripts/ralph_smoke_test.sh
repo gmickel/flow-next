@@ -74,6 +74,11 @@ cfg.write_text(text)
 PY
 }
 
+# Extract epic/task ID from JSON output
+extract_id() {
+  python3 -c "import json,sys; print(json.load(sys.stdin)['id'])"
+}
+
 scaffold
 
 echo -e "${YELLOW}--- ralph-init scaffold ---${NC}"
@@ -92,6 +97,7 @@ else
 fi
 
 mkdir -p "$TEST_DIR/bin"
+# Dynamic claude stub that extracts epic IDs from prompts using the new fn-N-xxx format
 cat > "$TEST_DIR/bin/claude" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -116,7 +122,8 @@ if [[ "$mode" == "retry" ]]; then
 fi
 
 if [[ "$prompt" == *"Ralph plan gate iteration"* ]]; then
-  epic_id="$(printf '%s\n' "$prompt" | sed -n 's/.*EPIC_ID=\(fn-[0-9][0-9]*\).*/\1/p' | head -n1)"
+  # Extract epic ID with optional suffix (fn-N or fn-N-xxx)
+  epic_id="$(printf '%s\n' "$prompt" | sed -n 's/.*EPIC_ID=\(fn-[0-9][0-9]*\(-[a-z0-9][a-z0-9][a-z0-9]\)\{0,1\}\).*/\1/p' | head -n1)"
   if [[ -n "$epic_id" ]]; then
     scripts/ralph/flowctl epic set-plan-review-status "$epic_id" --status ship --json >/dev/null
   fi
@@ -133,7 +140,8 @@ EOF_RECEIPT
 fi
 
 if [[ "$prompt" == *"Ralph work iteration"* ]]; then
-  task_id="$(printf '%s\n' "$prompt" | sed -n 's/.*TASK_ID=\(fn-[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -n1)"
+  # Extract task ID with optional suffix (fn-N.M or fn-N-xxx.M)
+  task_id="$(printf '%s\n' "$prompt" | sed -n 's/.*TASK_ID=\(fn-[0-9][0-9]*\(-[a-z0-9][a-z0-9][a-z0-9]\)\{0,1\}\.[0-9][0-9]*\).*/\1/p' | head -n1)"
   if [[ "$skip_done" != "1" ]]; then
     summary="$(mktemp)"
     evidence="$(mktemp)"
@@ -167,41 +175,45 @@ latest_run_dir() {
 }
 
 echo -e "${YELLOW}--- ralph_once ---${NC}"
-scripts/ralph/flowctl epic create --title "Ralph Epic" --json >/dev/null
-scripts/ralph/flowctl task create --epic fn-1 --title "Ralph Task" --json >/dev/null
+EPIC1_JSON="$(scripts/ralph/flowctl epic create --title "Ralph Epic" --json)"
+EPIC1="$(echo "$EPIC1_JSON" | extract_id)"
+scripts/ralph/flowctl task create --epic "$EPIC1" --title "Ralph Task" --json >/dev/null
 write_config "none" "none" "0" "new" "3" "5" "2"
 CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph_once.sh >/dev/null
-# Mark fn-1 plan review done so it doesn't block fn-2 tests when REQUIRE_PLAN_REVIEW=1
-scripts/ralph/flowctl epic set-plan-review-status fn-1 --status ship --json >/dev/null
+# Mark plan review done so it doesn't block later tests when REQUIRE_PLAN_REVIEW=1
+scripts/ralph/flowctl epic set-plan-review-status "$EPIC1" --status ship --json >/dev/null
 echo -e "${GREEN}✓${NC} ralph_once runs"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- ralph.sh completes epic ---${NC}"
-scripts/ralph/flowctl epic create --title "Ralph Epic 2" --json >/dev/null
-scripts/ralph/flowctl task create --epic fn-2 --title "Task 1" --json >/dev/null
-scripts/ralph/flowctl task create --epic fn-2 --title "Task 2" --json >/dev/null
+EPIC2_JSON="$(scripts/ralph/flowctl epic create --title "Ralph Epic 2" --json)"
+EPIC2="$(echo "$EPIC2_JSON" | extract_id)"
+TASK2_1_JSON="$(scripts/ralph/flowctl task create --epic "$EPIC2" --title "Task 1" --json)"
+TASK2_1="$(echo "$TASK2_1_JSON" | extract_id)"
+TASK2_2_JSON="$(scripts/ralph/flowctl task create --epic "$EPIC2" --title "Task 2" --json)"
+TASK2_2="$(echo "$TASK2_2_JSON" | extract_id)"
 # Use rp for both to test receipt generation (none skips receipts correctly via fix for #8)
 write_config "rp" "rp" "1" "new" "6" "5" "2"
 STUB_MODE=success STUB_WRITE_RECEIPT=1 CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh >/dev/null
-python3 - <<'PY'
-import json
+python3 - <<PY "$TASK2_1" "$TASK2_2"
+import json, sys
 from pathlib import Path
-for tid in ["fn-2.1", "fn-2.2"]:
+for tid in sys.argv[1:3]:
     data = json.loads(Path(f".flow/tasks/{tid}.json").read_text())
     assert data["status"] == "done"
 PY
 run_dir="$(latest_run_dir)"
-python3 - <<'PY' "$run_dir"
+python3 - <<PY "$run_dir" "$EPIC2" "$TASK2_1"
 import json, sys
 from pathlib import Path
-run_dir = sys.argv[1]
+run_dir, epic2, task2_1 = sys.argv[1:4]
 receipts = Path(f"scripts/ralph/runs/{run_dir}/receipts")
-plan = json.loads((receipts / "plan-fn-2.json").read_text())
-impl = json.loads((receipts / "impl-fn-2.1.json").read_text())
+plan = json.loads((receipts / f"plan-{epic2}.json").read_text())
+impl = json.loads((receipts / f"impl-{task2_1}.json").read_text())
 assert plan["type"] == "plan_review"
-assert plan["id"] == "fn-2"
+assert plan["id"] == epic2
 assert impl["type"] == "impl_review"
-assert impl["id"] == "fn-2.1"
+assert impl["id"] == task2_1
 PY
 iter_log="scripts/ralph/runs/$run_dir/iter-001.log"
 if [[ -f "$iter_log" ]]; then
@@ -231,10 +243,9 @@ else
 fi
 
 echo -e "${YELLOW}--- UI output verification ---${NC}"
-# Run with UI enabled and capture output
-# Note: fn-1 and fn-2 already exist from previous tests, so this creates fn-3
-scripts/ralph/flowctl epic create --title "UI Test Epic" --json >/dev/null
-scripts/ralph/flowctl task create --epic fn-3 --title "UI Test Task" --json >/dev/null
+EPIC3_JSON="$(scripts/ralph/flowctl epic create --title "UI Test Epic" --json)"
+EPIC3="$(echo "$EPIC3_JSON" | extract_id)"
+scripts/ralph/flowctl task create --epic "$EPIC3" --title "UI Test Task" --json >/dev/null
 write_config "none" "none" "0" "new" "3" "5" "2"
 ui_output="$(STUB_MODE=success CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh 2>&1)"
 
@@ -247,7 +258,7 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# Check progress counter (Epic X/Y • Task X/Y)
+# Check progress counter (Epic X/Y * Task X/Y)
 if echo "$ui_output" | grep -qE 'Epic [0-9]+/[0-9]+.*Task [0-9]+/[0-9]+'; then
   echo -e "${GREEN}✓${NC} progress counter shown"
   PASS=$((PASS + 1))
@@ -284,24 +295,26 @@ else
 fi
 
 echo -e "${YELLOW}--- ralph.sh backstop ---${NC}"
-# Note: fn-1, fn-2, fn-3 already exist, so this creates fn-4
-scripts/ralph/flowctl epic create --title "Ralph Epic 4" --json >/dev/null
-scripts/ralph/flowctl task create --epic fn-4 --title "Stuck Task" --json >/dev/null
+EPIC4_JSON="$(scripts/ralph/flowctl epic create --title "Ralph Epic 4" --json)"
+EPIC4="$(echo "$EPIC4_JSON" | extract_id)"
+TASK4_1_JSON="$(scripts/ralph/flowctl task create --epic "$EPIC4" --title "Stuck Task" --json)"
+TASK4_1="$(echo "$TASK4_1_JSON" | extract_id)"
 write_config "none" "none" "0" "new" "3" "5" "2"
 STUB_MODE=retry CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh >/dev/null
-python3 - <<'PY'
-import json
+python3 - <<PY "$TASK4_1"
+import json, sys
 from pathlib import Path
-data = json.loads(Path(".flow/tasks/fn-4.1.json").read_text())
+data = json.loads(Path(f".flow/tasks/{sys.argv[1]}.json").read_text())
 assert data["status"] == "blocked"
 PY
 echo -e "${GREEN}✓${NC} blocks after attempts"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- missing receipt forces retry ---${NC}"
-# Note: fn-1 through fn-4 already exist, so this creates fn-5
-scripts/ralph/flowctl epic create --title "Ralph Epic 5" --json >/dev/null
-scripts/ralph/flowctl task create --epic fn-5 --title "Receipt Task" --json >/dev/null
+EPIC5_JSON="$(scripts/ralph/flowctl epic create --title "Ralph Epic 5" --json)"
+EPIC5="$(echo "$EPIC5_JSON" | extract_id)"
+TASK5_1_JSON="$(scripts/ralph/flowctl task create --epic "$EPIC5" --title "Receipt Task" --json)"
+TASK5_1="$(echo "$TASK5_1_JSON" | extract_id)"
 write_config "none" "rp" "0" "new" "3" "5" "1"
 set +e
 STUB_MODE=success STUB_WRITE_PLAN_RECEIPT=1 STUB_WRITE_IMPL_RECEIPT=0 CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh >/dev/null
@@ -309,7 +322,7 @@ rc=$?
 set -e
 run_dir="$(latest_run_dir)"
 receipts_dir="scripts/ralph/runs/$run_dir/receipts"
-if [[ -f "$receipts_dir/impl-fn-5.1.json" ]]; then
+if [[ -f "$receipts_dir/impl-$TASK5_1.json" ]]; then
   echo -e "${RED}✗${NC} impl receipt unexpectedly exists"
   FAIL=$((FAIL + 1))
 else
@@ -329,49 +342,53 @@ else
 fi
 
 echo -e "${YELLOW}--- non-zero exit code handling (#11) ---${NC}"
-# Test 1: task done + non-zero exit → should NOT fail
+# Test 1: task done + non-zero exit -> should NOT fail
 # This validates fix for issue #11 where transient errors caused false failures
-scripts/ralph/flowctl epic create --title "Exit Code Epic 1" --json >/dev/null
-scripts/ralph/flowctl task create --epic fn-6 --title "Done but exit 1" --json >/dev/null
+EPIC6_JSON="$(scripts/ralph/flowctl epic create --title "Exit Code Epic 1" --json)"
+EPIC6="$(echo "$EPIC6_JSON" | extract_id)"
+TASK6_1_JSON="$(scripts/ralph/flowctl task create --epic "$EPIC6" --title "Done but exit 1" --json)"
+TASK6_1="$(echo "$TASK6_1_JSON" | extract_id)"
 write_config "none" "none" "0" "new" "3" "5" "2"
 set +e
 STUB_MODE=success STUB_EXIT_CODE=1 CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh >/dev/null 2>&1
 rc=$?
 set -e
-python3 - <<'PY'
-import json
+python3 - <<PY "$TASK6_1"
+import json, sys
 from pathlib import Path
-data = json.loads(Path(".flow/tasks/fn-6.1.json").read_text())
+data = json.loads(Path(f".flow/tasks/{sys.argv[1]}.json").read_text())
 assert data["status"] == "done", f"Expected done, got {data['status']}"
 PY
 if [[ $? -eq 0 ]]; then
-  echo -e "${GREEN}✓${NC} task done + exit 1 → task completed (rc=$rc)"
+  echo -e "${GREEN}✓${NC} task done + exit 1 -> task completed (rc=$rc)"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} task done + exit 1 → task completed"
+  echo -e "${RED}✗${NC} task done + exit 1 -> task completed"
   FAIL=$((FAIL + 1))
 fi
 
-# Test 2: task NOT done + non-zero exit → should fail/block
-scripts/ralph/flowctl epic create --title "Exit Code Epic 2" --json >/dev/null
-scripts/ralph/flowctl task create --epic fn-7 --title "Not done and exit 1" --json >/dev/null
+# Test 2: task NOT done + non-zero exit -> should fail/block
+EPIC7_JSON="$(scripts/ralph/flowctl epic create --title "Exit Code Epic 2" --json)"
+EPIC7="$(echo "$EPIC7_JSON" | extract_id)"
+TASK7_1_JSON="$(scripts/ralph/flowctl task create --epic "$EPIC7" --title "Not done and exit 1" --json)"
+TASK7_1="$(echo "$TASK7_1_JSON" | extract_id)"
 write_config "none" "none" "0" "new" "3" "5" "1"
 set +e
 STUB_MODE=success STUB_EXIT_CODE=1 STUB_SKIP_DONE=1 CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh >/dev/null 2>&1
 rc=$?
 set -e
-python3 - <<'PY'
-import json
+python3 - <<PY "$TASK7_1"
+import json, sys
 from pathlib import Path
-data = json.loads(Path(".flow/tasks/fn-7.1.json").read_text())
+data = json.loads(Path(f".flow/tasks/{sys.argv[1]}.json").read_text())
 # Should be blocked because task wasn't done AND exit was non-zero
 assert data["status"] == "blocked", f"Expected blocked, got {data['status']}"
 PY
 if [[ $? -eq 0 ]]; then
-  echo -e "${GREEN}✓${NC} task not done + exit 1 → blocked (rc=$rc)"
+  echo -e "${GREEN}✓${NC} task not done + exit 1 -> blocked (rc=$rc)"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} task not done + exit 1 → blocked"
+  echo -e "${RED}✗${NC} task not done + exit 1 -> blocked"
   FAIL=$((FAIL + 1))
 fi
 
