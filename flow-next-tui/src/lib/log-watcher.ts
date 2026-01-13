@@ -206,10 +206,8 @@ export class LogWatcher extends EventEmitter {
     newIter: number,
     newLogPath: string
   ): Promise<void> {
-    if (this.fileWatcher) {
-      this.fileWatcher.close();
-      this.fileWatcher = null;
-    }
+    // Keep old watcher until we confirm new file exists (avoid orphan state)
+    const oldWatcher = this.fileWatcher;
 
     // Wait for file to exist (fs.watch event can fire before file is created)
     let attempts = 0;
@@ -229,13 +227,13 @@ export class LogWatcher extends EventEmitter {
       }
     }
 
-    // Bail if file never appeared
+    // Bail if file never appeared - keep old watcher active
     if (!fileExists) {
       this.pendingIteration = null;
       return;
     }
 
-    // Check if this switch is stale (higher iteration now pending)
+    // Check if this switch is stale (higher iteration now pending) - keep old watcher
     if (this.pendingIteration != null && newIter < this.pendingIteration) {
       return;
     }
@@ -244,6 +242,12 @@ export class LogWatcher extends EventEmitter {
       this.pendingIteration = null;
       return;
     }
+
+    // Now safe to close old watcher and commit to new file
+    if (oldWatcher) {
+      oldWatcher.close();
+    }
+    this.fileWatcher = null;
 
     this.currentLogPath = newLogPath;
     this.bytePosition = 0;

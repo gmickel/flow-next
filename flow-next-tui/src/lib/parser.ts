@@ -93,6 +93,30 @@ export function getIcon(tool: string, ascii = false): string {
 }
 
 /**
+ * Get icon for a LogEntry (uses tool name or success/failure state)
+ * @param entry LogEntry to get icon for
+ * @param ascii Use ASCII fallbacks instead of unicode
+ */
+export function iconForEntry(
+  entry: { type: string; tool?: string; success?: boolean },
+  ascii = false
+): string {
+  // For tool entries, use tool name
+  if (entry.type === 'tool' && entry.tool) {
+    return getIcon(entry.tool, ascii);
+  }
+  // For response/error entries, use success state
+  if (entry.success === false) {
+    return getIcon('failure', ascii);
+  }
+  if (entry.success === true) {
+    return getIcon('success', ascii);
+  }
+  // Default for text responses
+  return ascii ? '>' : '→';
+}
+
+/**
  * Parse a single JSON line from stream-json format
  * @param line Raw JSON string
  * @returns LogEntry or null if parse fails or line is invalid
