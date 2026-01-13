@@ -42,6 +42,7 @@ export class LogWatcher extends EventEmitter {
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private isRunning = false;
   private pendingIteration: number | null = null; // Guard against race conditions
+  private readPromise: Promise<void> = Promise.resolve(); // Serialize reads
 
   constructor(runPath: string) {
     super();
@@ -134,7 +135,7 @@ export class LogWatcher extends EventEmitter {
           const name =
             typeof filename === 'string'
               ? filename
-              : (filename as Buffer | null)?.toString() ?? '';
+              : ((filename as Buffer | null)?.toString() ?? '');
 
           // Check if it's a new iteration log
           if (name && ITER_LOG_PATTERN.test(name)) {
@@ -199,7 +200,10 @@ export class LogWatcher extends EventEmitter {
   /**
    * Switch to a new log file, waiting for file existence and initial read
    */
-  private async switchToNewLog(newIter: number, newLogPath: string): Promise<void> {
+  private async switchToNewLog(
+    newIter: number,
+    newLogPath: string
+  ): Promise<void> {
     if (this.fileWatcher) {
       this.fileWatcher.close();
       this.fileWatcher = null;
@@ -296,12 +300,15 @@ export class LogWatcher extends EventEmitter {
 
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
-      this.readFromPosition().catch((error) => {
-        this.emit(
-          'error',
-          error instanceof Error ? error : new Error(String(error))
-        );
-      });
+      // Chain reads to serialize (prevent concurrent readFromPosition races)
+      this.readPromise = this.readPromise.then(() =>
+        this.readFromPosition().catch((error) => {
+          this.emit(
+            'error',
+            error instanceof Error ? error : new Error(String(error))
+          );
+        })
+      );
     }, DEBOUNCE_MS);
   }
 
@@ -314,6 +321,10 @@ export class LogWatcher extends EventEmitter {
     try {
       // Get file size to check if there's new content
       const fileInfo = await stat(this.currentLogPath);
+
+      // Re-check after await (stop() may have been called)
+      if (!this.isRunning) return;
+
       const fileSize = fileInfo.size;
 
       if (fileSize <= this.bytePosition) {
@@ -331,6 +342,9 @@ export class LogWatcher extends EventEmitter {
       const slice = file.slice(this.bytePosition, fileSize);
       const newContent = await slice.text();
 
+      // Re-check after await (stop() may have been called)
+      if (!this.isRunning) return;
+
       this.bytePosition = fileSize;
 
       // Parse with remainder from previous read
@@ -340,6 +354,7 @@ export class LogWatcher extends EventEmitter {
 
       // Emit each entry
       for (const entry of entries) {
+        if (!this.isRunning) return; // Check before each emit
         this.emit('line', entry);
       }
     } catch (error) {

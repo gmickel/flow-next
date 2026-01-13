@@ -118,8 +118,9 @@ export function parseLine(line: string): LogEntry | null {
 
   switch (parsed.type) {
     case 'tool_call': {
-      // Treat empty/whitespace-only tool as 'unknown'
-      const tool = parsed.tool?.trim() || 'unknown';
+      // Safely extract tool name (handle non-string values from malformed JSON)
+      const rawTool = typeof parsed.tool === 'string' ? parsed.tool.trim() : '';
+      const tool = rawTool || 'unknown';
       return {
         type: 'tool',
         tool,
@@ -129,7 +130,8 @@ export function parseLine(line: string): LogEntry | null {
 
     case 'tool_result': {
       // Coerce content/error to string (runtime JSON may not be string)
-      const content = coerceToString(parsed.content) || coerceToString(parsed.error);
+      const content =
+        coerceToString(parsed.content) || coerceToString(parsed.error);
       return {
         type: 'response',
         content,

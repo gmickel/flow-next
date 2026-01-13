@@ -205,7 +205,12 @@ describe('LogWatcher', () => {
 
   describe('error handling', () => {
     test('emits error for non-existent directory', async () => {
-      const watcher = new LogWatcher('/nonexistent/path/that/does/not/exist');
+      // Use temp-based path that won't exist on any platform
+      const nonExistentPath = join(
+        tmpdir(),
+        `nonexistent-${Date.now()}-${Math.random()}`
+      );
+      const watcher = new LogWatcher(nonExistentPath);
       const errors: Error[] = [];
 
       watcher.on('error', (err) => errors.push(err));
