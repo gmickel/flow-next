@@ -73,30 +73,9 @@ flow-next-tui -v               # Show version
 | `Esc`          | Close overlay          |
 | `q` / `Ctrl+C` | Quit (detach from run) |
 
-## Layout
+## Screenshot
 
-```
-┌─ flow-next-tui ────────────────────────────────────────────────┐
-│ ● RUNNING    fn-9 flow-next-tui MVP         #3    00:05:23     │
-│ TaskDetail: fn-9.5 Run discovery lib                           │
-├─────────────────────────────────────────────────────────────────┤
-│ ┌─ Tasks ──────────┐ ┌─ Detail ────────────────────────────────┐│
-│ │ ● fn-9.1 Scaff.. │ │ # fn-9.5 Run discovery lib             ││
-│ │ ● fn-9.2 Theme.. │ │                                        ││
-│ │ ● fn-9.3 Types.. │ │ ## Description                         ││
-│ │ ● fn-9.4 flowc.. │ │ Discover runs in scripts/ralph/runs/   ││
-│ │ ◉ fn-9.5 Run d.. │ │ ...                                    ││
-│ │ ○ fn-9.6 Log w.. │ │                                        ││
-│ └──────────────────┘ └─────────────────────────────────────────┘│
-├─ Output ─────────────────────────────────────────────────── #3 ─┤
-│ ▸ Read: src/lib/runs.ts                                        │
-│ ✓ OK                                                           │
-│ $ Bash: bun test src/lib/runs.test.ts                          │
-│ ✓ 12 tests passed                                              │
-├─────────────────────────────────────────────────────────────────┤
-│ j/k navigate │ ? help │ q quit                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+![flow-next-tui](../assets/tui.png)
 
 ## Status Icons
 

@@ -69,7 +69,11 @@ bun add -g @gmickel/flow-next-tui
 flow-next-tui
 ```
 
-Real-time visibility into task progress, streaming logs, and run state. See [flow-next-tui README](../../../flow-next-tui/README.md).
+Real-time visibility into task progress, streaming logs, and run state.
+
+![flow-next-tui](../../../assets/tui.png)
+
+See [flow-next-tui README](../../../flow-next-tui/README.md).
 
 ### Step 3: Uninstall
 
