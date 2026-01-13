@@ -202,6 +202,12 @@ export class TaskList implements Component {
       const isSelected = i === this.selectedIndex;
       const icon = this.getStatusIcon(task);
 
+      // Get status colors early (needed for narrow-width branches too)
+      const colorFn = this.getStatusColor(task);
+      const bgCode = this.theme.palette.selectedBg;
+      const validBg = bgCode >= 0 && bgCode <= 255;
+      const statusFgCode = this.getStatusColorCode(task);
+
       // Format: "● fn-1.3 Add validation... → 1.2"
       // For very narrow widths, use progressive truncation to guarantee line fits
 
@@ -213,15 +219,24 @@ export class TaskList implements Component {
       // Minimum: just icon (edge case: width <= iconWidth)
       if (width <= iconWidth) {
         const truncatedIcon = truncateToWidth(icon, width, '');
-        safePush(isSelected ? this.applySelectedBg(truncatedIcon, width) : truncatedIcon);
+        // Apply status color even at narrow widths
+        if (isSelected && validBg) {
+          safePush(chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(truncatedIcon));
+        } else {
+          safePush(colorFn(truncatedIcon));
+        }
         continue;
       }
 
       // Build progressively: icon + space
       const prefixWidth = iconWidth + 1;
       if (width <= prefixWidth) {
-        const line = icon;
-        safePush(isSelected ? this.applySelectedBg(line, width) : line);
+        // Apply status color even at narrow widths
+        if (isSelected && validBg) {
+          safePush(chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(icon));
+        } else {
+          safePush(colorFn(icon));
+        }
         continue;
       }
 
@@ -249,11 +264,6 @@ export class TaskList implements Component {
       const titleMaxWidth = Math.max(0, availableWidth);
       const truncatedTitle = titleMaxWidth > 0 ? truncateToWidth(task.title, titleMaxWidth, '…') : '';
 
-      // Get colors based on status
-      const colorFn = this.getStatusColor(task);
-      const bgCode = this.theme.palette.selectedBg;
-      const validBg = bgCode >= 0 && bgCode <= 255;
-
       // Build the line content
       const idPart = displayId ? ` ${displayId}` : '';
       const titlePart = truncatedTitle ? ` ${truncatedTitle}` : '';
@@ -263,7 +273,6 @@ export class TaskList implements Component {
         // NOTE: We don't use theme.selectList.selectedText because it's a single
         // transform that would lose per-segment status colors. Instead we apply
         // bg+fg directly per segment to preserve status icon coloring.
-        const statusFgCode = this.getStatusColorCode(task);
         const dimFgCode = this.theme.palette.dim;
         const textFgCode = this.theme.palette.text;
 
