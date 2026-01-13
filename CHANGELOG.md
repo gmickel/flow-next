@@ -2,6 +2,16 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next-tui 0.1.2] - 2026-01-14
+
+### Added
+- Support for collision-resistant epic IDs (`fn-N-xxx` format)
+  - Updated runs.ts receipt/block/epic parsing
+  - Added tests for new ID format
+
+### Fixed
+- Resolved oxlint warnings (useless escapes, control-regex disable comments)
+
 ## [flow-next 0.7.0] - 2026-01-14
 
 ### Added

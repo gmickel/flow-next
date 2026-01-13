@@ -1,6 +1,6 @@
 {
   "name": "@gmickel/flow-next-tui",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A beautiful TUI app to watch your Flow-Next Ralph Mode runs",
   "keywords": [
     "claude-code",
