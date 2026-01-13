@@ -10,9 +10,9 @@
  */
 
 import {
-	truncateToWidth,
-	visibleWidth as piTuiVisibleWidth,
-} from "@mariozechner/pi-tui";
+  truncateToWidth,
+  visibleWidth as piTuiVisibleWidth,
+} from '@mariozechner/pi-tui';
 
 // Re-export truncateToWidth from pi-tui
 export { truncateToWidth };
@@ -26,7 +26,8 @@ export { truncateToWidth };
  * - Charset designators: \x1b( or \x1b) followed by charset (B, 0, etc)
  */
 // eslint-disable-next-line no-control-regex
-const ANSI_REGEX = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][A-Z0-9]|\x1b[0-9A-Za-z@-_]/g;
+const ANSI_REGEX =
+  /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][A-Z0-9]|\x1b[0-9A-Za-z@-_]/g;
 
 /**
  * Strip ANSI escape codes from text.
@@ -34,10 +35,10 @@ const ANSI_REGEX = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x
  * (hyperlinks, titles), charset designators, and simple escape sequences.
  */
 export function stripAnsi(text: string): string {
-	return text.replace(ANSI_REGEX, "");
+  return text.replace(ANSI_REGEX, '');
 }
 
-const RESET = "\x1b[0m";
+const RESET = '\x1b[0m';
 // Detect if text contains SGR sequences (CSI ending with 'm') that could leak styles
 // eslint-disable-next-line no-control-regex
 const HAS_SGR_REGEX = /\x1b\[[0-9;]*m/;
@@ -48,9 +49,9 @@ const HAS_SGR_REGEX = /\x1b\[[0-9;]*m/;
  * Handles wide characters and emoji via pi-tui's width calculation.
  */
 export function visibleWidth(text: string): number {
-	// Strip all ANSI codes first to ensure accurate measurement
-	const stripped = stripAnsi(text);
-	return piTuiVisibleWidth(stripped);
+  // Strip all ANSI codes first to ensure accurate measurement
+  const stripped = stripAnsi(text);
+  return piTuiVisibleWidth(stripped);
 }
 
 /**
@@ -63,15 +64,15 @@ export function visibleWidth(text: string): number {
  * Plain text without ANSI is padded directly without modification.
  */
 export function padToWidth(text: string, width: number): string {
-	const targetWidth = Math.max(0, width);
-	const currentWidth = visibleWidth(text);
-	if (currentWidth >= targetWidth) {
-		return text;
-	}
-	const padding = " ".repeat(targetWidth - currentWidth);
-	// Only add reset if text contains SGR codes that could leak styles
-	if (HAS_SGR_REGEX.test(text)) {
-		return text + RESET + padding;
-	}
-	return text + padding;
+  const targetWidth = Math.max(0, width);
+  const currentWidth = visibleWidth(text);
+  if (currentWidth >= targetWidth) {
+    return text;
+  }
+  const padding = ' '.repeat(targetWidth - currentWidth);
+  // Only add reset if text contains SGR codes that could leak styles
+  if (HAS_SGR_REGEX.test(text)) {
+    return text + RESET + padding;
+  }
+  return text + padding;
 }

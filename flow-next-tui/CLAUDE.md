@@ -138,6 +138,7 @@ console.log(theme.dim('muted text'));
 ## pi-tui Reference
 
 Components we use:
+
 - `SelectList` - keyboard-navigable list
 - `Markdown` - spec rendering with theming
 - `Box` - padding/background wrapper
@@ -146,6 +147,7 @@ Components we use:
 - `TUI` - main app with differential rendering
 
 Utilities:
+
 - `visibleWidth()` - terminal column width (ANSI-aware)
 - `truncateToWidth()` - truncate with ellipsis
 - `wrapTextWithAnsi()` - word wrap preserving ANSI

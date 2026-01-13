@@ -186,7 +186,10 @@ promise=CONTINUE
     test('returns false when progress.txt has promise=COMPLETE', async () => {
       const runDir = join(tempDir, '2024-01-15-001');
       await mkdir(runDir);
-      await writeFile(join(runDir, 'progress.txt'), 'promise=COMPLETE\nAll done');
+      await writeFile(
+        join(runDir, 'progress.txt'),
+        'promise=COMPLETE\nAll done'
+      );
 
       const active = await isRunActive(runDir);
       expect(active).toBe(false);
@@ -302,9 +305,15 @@ promise=CONTINUE
       const runDir = join(tempDir, '2024-01-15-001');
       await mkdir(runDir);
 
-      expect(getReceiptStatus(runDir, '../../../etc/passwd')).rejects.toThrow('Invalid task ID');
-      expect(getReceiptStatus(runDir, 'fn-1/../../etc')).rejects.toThrow('Invalid task ID');
-      expect(getReceiptStatus(runDir, 'invalid')).rejects.toThrow('Invalid task ID');
+      expect(getReceiptStatus(runDir, '../../../etc/passwd')).rejects.toThrow(
+        'Invalid task ID'
+      );
+      expect(getReceiptStatus(runDir, 'fn-1/../../etc')).rejects.toThrow(
+        'Invalid task ID'
+      );
+      expect(getReceiptStatus(runDir, 'invalid')).rejects.toThrow(
+        'Invalid task ID'
+      );
     });
   });
 
@@ -317,7 +326,10 @@ promise=CONTINUE
     test('returns content from .flow/blocks/block-<task>.md', async () => {
       const blocksDir = join(tempDir, '.flow', 'blocks');
       await mkdir(blocksDir, { recursive: true });
-      await writeFile(join(blocksDir, 'block-fn-1.1.md'), 'Blocked: dependency failed');
+      await writeFile(
+        join(blocksDir, 'block-fn-1.1.md'),
+        'Blocked: dependency failed'
+      );
 
       // Temporarily change cwd
       const origCwd = process.cwd();
@@ -341,7 +353,9 @@ promise=CONTINUE
     });
 
     test('rejects invalid taskId with path traversal', async () => {
-      expect(getBlockReason('../../../etc/passwd')).rejects.toThrow('Invalid task ID');
+      expect(getBlockReason('../../../etc/passwd')).rejects.toThrow(
+        'Invalid task ID'
+      );
       expect(getBlockReason('fn-1/../etc')).rejects.toThrow('Invalid task ID');
       expect(getBlockReason('not-a-task')).rejects.toThrow('Invalid task ID');
     });
@@ -405,18 +419,30 @@ promise=CONTINUE
       const runsDir = join(tempDir, 'runs');
       await mkdir(runsDir);
 
-      expect(validateRun('../../../etc/passwd', runsDir)).rejects.toThrow('Invalid run ID');
-      expect(validateRun('run/../escape', runsDir)).rejects.toThrow('Invalid run ID');
-      expect(validateRun('run/subdir', runsDir)).rejects.toThrow('Invalid run ID');
+      expect(validateRun('../../../etc/passwd', runsDir)).rejects.toThrow(
+        'Invalid run ID'
+      );
+      expect(validateRun('run/../escape', runsDir)).rejects.toThrow(
+        'Invalid run ID'
+      );
+      expect(validateRun('run/subdir', runsDir)).rejects.toThrow(
+        'Invalid run ID'
+      );
     });
 
     test('accepts valid runId formats', async () => {
       const runsDir = join(tempDir, 'runs');
       await mkdir(runsDir);
       await mkdir(join(runsDir, '20240115T103000Z-mac-user-1234-abcd'));
-      await writeFile(join(runsDir, '20240115T103000Z-mac-user-1234-abcd', 'progress.txt'), 'ok');
+      await writeFile(
+        join(runsDir, '20240115T103000Z-mac-user-1234-abcd', 'progress.txt'),
+        'ok'
+      );
 
-      const result = await validateRun('20240115T103000Z-mac-user-1234-abcd', runsDir);
+      const result = await validateRun(
+        '20240115T103000Z-mac-user-1234-abcd',
+        runsDir
+      );
       expect(result.run.id).toBe('20240115T103000Z-mac-user-1234-abcd');
     });
   });

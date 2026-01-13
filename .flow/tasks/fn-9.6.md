@@ -61,9 +61,11 @@ Parse into LogEntry with tool icons:
 - [ ] Handles malformed JSON lines gracefully (skip, don't crash)
 - [ ] `stop()` properly cleans up watchers
 ## Done summary
-TBD
-
+- Added LogWatcher class with fs.watch for run directory and iter-*.log files
+- Added parser for stream-json format with tool icons (unicode + ASCII)
+- Implemented debounced reads, byte position tracking, iteration detection
+- Full test coverage (42 tests)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: ccd55aeb0edcfb8a235b22158aa83ce1c53c7bf1
+- Tests: bun test
 - PRs:

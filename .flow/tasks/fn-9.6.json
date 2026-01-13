@@ -1,16 +1,25 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-13T00:08:09.251043Z",
   "created_at": "2026-01-12T21:03:51.671405Z",
   "depends_on": [
     "fn-9.3"
   ],
   "epic": "fn-9",
+  "evidence": {
+    "commits": [
+      "ccd55aeb0edcfb8a235b22158aa83ce1c53c7bf1"
+    ],
+    "prs": [],
+    "tests": [
+      "bun test"
+    ]
+  },
   "id": "fn-9.6",
   "priority": null,
   "spec_path": ".flow/tasks/fn-9.6.md",
-  "status": "todo",
+  "status": "done",
   "title": "Log watcher and parser lib",
-  "updated_at": "2026-01-12T21:07:03.353485Z"
+  "updated_at": "2026-01-13T00:12:49.313797Z"
 }
