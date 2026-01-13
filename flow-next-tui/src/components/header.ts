@@ -110,8 +110,8 @@ export class Header implements Component {
     const cornerBR = this.useAscii ? '+' : '╯';
     const borderV = this.useAscii ? '|' : '│';
 
-    // Top border with "Ralph" label
-    const label = ' Ralph ';
+    // Top border with branding label
+    const label = ' flow-next ';
     const labelWidth = visibleWidth(label);
     const borderWidth = width - 2;
     const leftBorderLen = Math.floor((borderWidth - labelWidth) / 2);

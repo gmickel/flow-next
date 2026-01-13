@@ -140,17 +140,15 @@ describe('parser', () => {
       });
     });
 
-    test('truncates long Bash commands', () => {
+    test('preserves full Bash commands (truncation done by output panel)', () => {
       const longCommand =
         'npm run build && npm test && npm run lint && npm run format --check';
       const line = makeToolUse('Bash', { command: longCommand });
 
       const result = parseLine(line);
 
-      // 60 char limit: "Bash: " (6) + 57 chars of command + "..." (3) = ~66
-      expect(result?.content?.startsWith('Bash: npm run build')).toBe(true);
-      expect(result?.content?.endsWith('...')).toBe(true);
-      expect(result?.content?.length).toBeLessThanOrEqual(66);
+      // No pre-truncation - full command preserved
+      expect(result?.content).toBe(`Bash: ${longCommand}`);
     });
 
     test('parses tool_use with Glob tool', () => {
@@ -312,14 +310,14 @@ describe('parser', () => {
       });
     });
 
-    test('truncates long fallback values', () => {
+    test('preserves full fallback values (truncation done by output panel)', () => {
       const longValue = 'x'.repeat(60);
       const line = makeToolUse('CustomTool', { arg1: longValue });
 
       const result = parseLine(line);
 
-      expect(result?.content?.endsWith('...')).toBe(true);
-      expect(result?.content?.length).toBeLessThanOrEqual(70);
+      // No pre-truncation
+      expect(result?.content).toBe(`CustomTool: ${longValue}`);
     });
 
     test('parseLineMulti returns all entries from assistant with multiple blocks', () => {

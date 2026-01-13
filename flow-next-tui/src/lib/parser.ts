@@ -239,12 +239,8 @@ function formatToolInput(tool: string, input: unknown): string {
 
     case 'Bash': {
       const command = getString('command', 'cmd');
-      if (command) {
-        return command.length > 60
-          ? `${tool}: ${command.slice(0, 57)}...`
-          : `${tool}: ${command}`;
-      }
-      return tool;
+      // Don't pre-truncate - let output panel truncate based on width
+      return command ? `${tool}: ${command}` : tool;
     }
 
     case 'Task': {
@@ -260,12 +256,12 @@ function formatToolInput(tool: string, input: unknown): string {
     }
 
     default: {
-      // Fallback: show first string value from input (generic preview)
+      // Fallback: show first string value from input
+      // Don't pre-truncate - let output panel handle based on width
       for (const key of Object.keys(obj)) {
         const val = obj[key];
         if (typeof val === 'string' && val.length > 0) {
-          const preview = val.length > 50 ? val.slice(0, 47) + '...' : val;
-          return `${tool}: ${preview}`;
+          return `${tool}: ${val}`;
         }
       }
       return tool;

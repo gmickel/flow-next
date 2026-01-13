@@ -189,41 +189,37 @@ export class OutputPanel implements Component {
     );
   }
 
-  /** Fixed icon width for alignment (all icons padded to this) */
-  private readonly ICON_WIDTH = 2;
-
   /**
    * Format a single log entry as a line.
-   * - Fixed-width icon column for alignment
+   * - Icon + consistent spacing for alignment
    * - Filters noise (JSON-only responses, empty content)
-   * - Takes first meaningful line of content
+   * - Content fills to available width
    */
   private formatEntry(entry: LogEntry, contentWidth: number): string {
     const icon = this.getToolIcon(entry);
     const colorFn = this.getEntryColor(entry);
 
-    // Pad icon to fixed width for alignment
-    const iconRaw = icon;
-    const iconPadding = Math.max(0, this.ICON_WIDTH - visibleWidth(iconRaw));
-    const iconColored = colorFn(iconRaw) + ' '.repeat(iconPadding);
+    // Icon + 2 spaces for alignment (all icons are 1-char wide in terminal)
+    const prefix = colorFn(icon) + '  ';
+    const prefixWidth = 3; // 1 icon + 2 spaces
 
     // Available width for content
-    const availableWidth = contentWidth - this.ICON_WIDTH - 1;
+    const availableWidth = contentWidth - prefixWidth;
 
     if (availableWidth <= 0) {
-      return iconColored;
+      return colorFn(icon);
     }
 
     // Sanitize and get display content
     const sanitized = this.sanitize(entry.content);
     let displayContent = this.getDisplayContent(entry, sanitized);
 
-    // Truncate if needed
+    // Truncate to fill available width (not before)
     if (visibleWidth(displayContent) > availableWidth) {
       displayContent = truncateToWidth(displayContent, availableWidth, '…');
     }
 
-    return `${iconColored} ${displayContent}`;
+    return `${prefix}${displayContent}`;
   }
 
   /**
