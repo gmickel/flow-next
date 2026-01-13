@@ -1,16 +1,25 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-13T18:11:49.066116Z",
   "created_at": "2026-01-13T16:30:07.842366Z",
   "depends_on": [
     "fn-12.2"
   ],
   "epic": "fn-12",
+  "evidence": {
+    "commits": [
+      "e41cf1b992a28021484912b395dbf4f0ca5b1933"
+    ],
+    "prs": [],
+    "tests": [
+      "inline regex test"
+    ]
+  },
   "id": "fn-12.5",
   "priority": null,
   "spec_path": ".flow/tasks/fn-12.5.md",
-  "status": "todo",
+  "status": "done",
   "title": "Update ralph-guard.py receipt parsing patterns",
-  "updated_at": "2026-01-13T16:30:07.842540Z"
+  "updated_at": "2026-01-13T18:12:32.654487Z"
 }

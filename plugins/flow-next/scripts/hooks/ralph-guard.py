@@ -256,16 +256,16 @@ def parse_receipt_path(receipt_path: str) -> tuple:
     """Parse receipt path to derive type and id.
 
     Returns (receipt_type, item_id) based on filename pattern:
-    - plan-fn-N.json -> ("plan_review", "fn-N")
-    - impl-fn-N.M.json -> ("impl_review", "fn-N.M")
+    - plan-fn-N.json or plan-fn-N-xxx.json -> ("plan_review", "fn-N" or "fn-N-xxx")
+    - impl-fn-N.M.json or impl-fn-N-xxx.M.json -> ("impl_review", "fn-N.M" or "fn-N-xxx.M")
     """
     basename = os.path.basename(receipt_path)
-    # Try plan pattern first: plan-fn-N.json
-    plan_match = re.match(r"plan-(fn-\d+)\.json$", basename)
+    # Try plan pattern first: plan-fn-N.json or plan-fn-N-xxx.json
+    plan_match = re.match(r"plan-(fn-\d+(?:-[a-z0-9]{3})?)\.json$", basename)
     if plan_match:
         return ("plan_review", plan_match.group(1))
-    # Try impl pattern: impl-fn-N.M.json
-    impl_match = re.match(r"impl-(fn-\d+\.\d+)\.json$", basename)
+    # Try impl pattern: impl-fn-N.M.json or impl-fn-N-xxx.M.json
+    impl_match = re.match(r"impl-(fn-\d+(?:-[a-z0-9]{3})?\.\d+)\.json$", basename)
     if impl_match:
         return ("impl_review", impl_match.group(1))
     # Fallback
