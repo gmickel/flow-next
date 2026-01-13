@@ -1,7 +1,7 @@
 import { join, dirname } from 'node:path';
-import { readdir } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 
-import { discoverRuns } from './runs';
+import { discoverRuns, findRepoRoot, clearRepoRootCache as clearRunsRepoRootCache } from './runs';
 
 /**
  * Error thrown when ralph.sh cannot be found
@@ -27,51 +27,18 @@ export interface SpawnResult {
 }
 
 /**
- * Cached repo root (single-repo usage per process)
+ * Default runs directory relative to repo root
  */
-let repoRootCache: string | null = null;
+const DEFAULT_RUNS_DIR = 'scripts/ralph/runs';
 
 /**
- * Find repo root by looking for .git directory
+ * Check if path is a readable file (not directory)
+ * Since we run via `bash ralph.sh`, we only need it to exist and be a file.
  */
-async function findRepoRoot(startDir: string): Promise<string | null> {
-  if (repoRootCache) return repoRootCache;
-
-  let dir = startDir;
-  while (dir !== dirname(dir)) {
-    // Check for .git directory or file (worktrees)
-    const gitPath = join(dir, '.git');
-    const gitFile = Bun.file(gitPath);
-    if (await gitFile.exists()) {
-      repoRootCache = dir;
-      return dir;
-    }
-    // Also check .git/HEAD for regular repos
-    const gitHead = Bun.file(join(dir, '.git', 'HEAD'));
-    if (await gitHead.exists()) {
-      repoRootCache = dir;
-      return dir;
-    }
-    dir = dirname(dir);
-  }
-  return null;
-}
-
-/**
- * Check if file exists and is executable
- */
-async function isExecutable(path: string): Promise<boolean> {
-  const file = Bun.file(path);
-  if (!(await file.exists())) return false;
-
+async function isReadableFile(path: string): Promise<boolean> {
   try {
-    // Test execution with --help (any exit code ok, spawn fail = not executable)
-    const proc = Bun.spawn(['bash', path, '--help'], {
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    await proc.exited;
-    return true;
+    const s = await stat(path);
+    return s.isFile();
   } catch {
     return false;
   }
@@ -86,37 +53,35 @@ async function isExecutable(path: string): Promise<boolean> {
  * 3. null (caller should show helpful error)
  *
  * @param startDir Starting directory (defaults to cwd)
- * @returns Path to ralph.sh or null if not found
+ * @returns Object with path and searched paths, or null if not found
  */
-export async function findRalphScript(startDir?: string): Promise<string | null> {
+export async function findRalphScript(
+  startDir?: string
+): Promise<{ path: string; searchedPaths: string[] } | null> {
   const cwd = startDir ?? process.cwd();
   const repoRoot = await findRepoRoot(cwd);
   const searchedPaths: string[] = [];
 
   // 1. Repo-local: scripts/ralph/ralph.sh
-  if (repoRoot) {
-    const localPath = join(repoRoot, 'scripts', 'ralph', 'ralph.sh');
-    searchedPaths.push(localPath);
-    if (await isExecutable(localPath)) {
-      return localPath;
-    }
+  const localPath = join(repoRoot, 'scripts', 'ralph', 'ralph.sh');
+  searchedPaths.push(localPath);
+  if (await isReadableFile(localPath)) {
+    return { path: localPath, searchedPaths };
   }
 
   // 2. Plugin template (for dev/testing in plugin repo)
-  if (repoRoot) {
-    const templatePath = join(
-      repoRoot,
-      'plugins',
-      'flow-next',
-      'skills',
-      'flow-next-ralph-init',
-      'templates',
-      'ralph.sh'
-    );
-    searchedPaths.push(templatePath);
-    if (await isExecutable(templatePath)) {
-      return templatePath;
-    }
+  const templatePath = join(
+    repoRoot,
+    'plugins',
+    'flow-next',
+    'skills',
+    'flow-next-ralph-init',
+    'templates',
+    'ralph.sh'
+  );
+  searchedPaths.push(templatePath);
+  if (await isReadableFile(templatePath)) {
+    return { path: templatePath, searchedPaths };
   }
 
   return null;
@@ -126,7 +91,7 @@ export async function findRalphScript(startDir?: string): Promise<string | null>
  * Spawn ralph as detached process
  *
  * - Spawns ralph.sh with epic ID via EPICS env var
- * - Process runs detached (TUI exit won't kill ralph)
+ * - Process runs in new session via setsid (TUI exit won't kill ralph)
  * - Polls for new run directory to get run ID
  *
  * @param epicId Epic ID to work on (e.g., "fn-9")
@@ -135,27 +100,30 @@ export async function findRalphScript(startDir?: string): Promise<string | null>
  */
 export async function spawnRalph(epicId: string): Promise<SpawnResult> {
   const cwd = process.cwd();
-  const repoRoot = (await findRepoRoot(cwd)) ?? cwd;
+  const repoRoot = await findRepoRoot(cwd);
+  const runsDir = join(repoRoot, DEFAULT_RUNS_DIR);
 
   // Find ralph script
-  const ralphPath = await findRalphScript(cwd);
-  if (!ralphPath) {
+  const result = await findRalphScript(cwd);
+  if (!result) {
     const searchedPaths = [
       join(repoRoot, 'scripts', 'ralph', 'ralph.sh'),
       join(repoRoot, 'plugins', 'flow-next', 'skills', 'flow-next-ralph-init', 'templates', 'ralph.sh'),
     ];
     throw new RalphNotFoundError(searchedPaths);
   }
+  const { path: ralphPath } = result;
 
-  // Get existing runs before spawn (to detect new run)
-  const existingRuns = await discoverRuns();
+  // Get existing runs before spawn (use same runsDir for consistency)
+  const existingRuns = await discoverRuns(runsDir);
   const existingIds = new Set(existingRuns.map((r) => r.id));
 
   // ralph.sh expects to run from its directory for relative paths
   const ralphDir = dirname(ralphPath);
 
-  // Spawn detached
-  const proc = Bun.spawn(['bash', ralphPath], {
+  // Spawn detached using setsid for true process group separation
+  // This ensures TUI Ctrl+C won't kill ralph
+  const proc = Bun.spawn(['setsid', 'bash', ralphPath], {
     cwd: ralphDir,
     env: {
       ...process.env,
@@ -164,14 +132,11 @@ export async function spawnRalph(epicId: string): Promise<SpawnResult> {
     },
     stdout: 'ignore',
     stderr: 'ignore',
-    // Note: Bun doesn't have detached option like Node
-    // But stdio: 'ignore' + not awaiting allows parent to exit
   });
 
   const pid = proc.pid;
 
   // Poll for new run directory (ralph creates it immediately)
-  const runsDir = join(repoRoot, 'scripts', 'ralph', 'runs');
   let runId: string | null = null;
   const maxAttempts = 20;
   const pollInterval = 100; // ms
@@ -180,15 +145,17 @@ export async function spawnRalph(epicId: string): Promise<SpawnResult> {
     await Bun.sleep(pollInterval);
 
     try {
-      const entries = await readdir(runsDir);
-      for (const entry of entries) {
-        if (!existingIds.has(entry)) {
-          // Found new run
-          runId = entry;
-          break;
-        }
+      // Re-discover runs and find newest new one
+      const currentRuns = await discoverRuns(runsDir);
+      const newRuns = currentRuns.filter((r) => !existingIds.has(r.id));
+
+      if (newRuns.length > 0) {
+        // Pick the newest (discoverRuns sorts newest first, but be explicit)
+        runId = newRuns.reduce((newest, r) =>
+          r.id > newest.id ? r : newest
+        ).id;
+        break;
       }
-      if (runId) break;
     } catch {
       // runsDir may not exist yet on first run
       continue;
@@ -210,12 +177,14 @@ export async function spawnRalph(epicId: string): Promise<SpawnResult> {
  * No marker = still running.
  *
  * @param runId Run ID to check
+ * @param runsDir Optional runs directory (defaults to scripts/ralph/runs)
  * @returns true if ralph is still running (not complete)
  */
-export async function isRalphRunning(runId: string): Promise<boolean> {
+export async function isRalphRunning(runId: string, runsDir?: string): Promise<boolean> {
   const cwd = process.cwd();
-  const repoRoot = (await findRepoRoot(cwd)) ?? cwd;
-  const progressPath = join(repoRoot, 'scripts', 'ralph', 'runs', runId, 'progress.txt');
+  const repoRoot = await findRepoRoot(cwd);
+  const dir = runsDir ?? join(repoRoot, DEFAULT_RUNS_DIR);
+  const progressPath = join(dir, runId, 'progress.txt');
 
   const file = Bun.file(progressPath);
   if (!(await file.exists())) {
@@ -241,7 +210,8 @@ export async function isRalphRunning(runId: string): Promise<boolean> {
 
 /**
  * Clear cached repo root (for testing)
+ * Delegates to runs.ts cache clearing
  */
 export function clearRepoRootCache(): void {
-  repoRootCache = null;
+  clearRunsRepoRootCache();
 }

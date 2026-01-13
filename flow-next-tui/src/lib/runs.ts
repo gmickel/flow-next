@@ -39,7 +39,7 @@ const repoRootCache = new Map<string, string>();
 /**
  * Find repo root by walking up from startDir looking for .git or .flow directory
  */
-async function findRepoRoot(startDir?: string): Promise<string> {
+export async function findRepoRoot(startDir?: string): Promise<string> {
   const start = startDir ?? process.cwd();
 
   // Check cache for this startDir
