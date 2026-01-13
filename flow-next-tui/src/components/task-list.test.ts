@@ -30,6 +30,14 @@ describe('TaskList', () => {
       expect(stripAnsi(lines[0]!)).toContain('No tasks');
     });
 
+    test('empty state respects width constraint', () => {
+      const list = new TaskList({ tasks: [], selectedIndex: 0, onSelect: noop, theme: darkTheme });
+      const lines = list.render(5);
+
+      expect(lines).toHaveLength(1);
+      expect(visibleWidth(lines[0]!)).toBeLessThanOrEqual(5);
+    });
+
     test('renders task with status icon and full id', () => {
       const tasks = [mockTask({ id: 'fn-1.3', title: 'Add validation' })];
       const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
@@ -259,6 +267,25 @@ describe('TaskList', () => {
 
       // Should only have task lines, no scroll indicator
       expect(lines).toHaveLength(2);
+    });
+
+    test('scroll indicator respects width constraint', () => {
+      const tasks = Array.from({ length: 15 }, (_, i) =>
+        mockTask({ id: `fn-1.${i + 1}`, title: `Task ${i + 1}` })
+      );
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+        maxVisible: 5,
+      });
+
+      // At narrow width, scroll indicator "(1/15)" should be truncated
+      const lines = list.render(5);
+      for (const line of lines) {
+        expect(visibleWidth(line)).toBeLessThanOrEqual(5);
+      }
     });
 
     test('maxVisible is clamped to at least 1', () => {

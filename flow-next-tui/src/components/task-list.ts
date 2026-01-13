@@ -170,7 +170,8 @@ export class TaskList implements Component {
 
   render(width: number): string[] {
     if (this.tasks.length === 0) {
-      return [this.theme.dim('  No tasks')];
+      const msg = truncateToWidth('  No tasks', width, '…');
+      return [this.theme.dim(msg)];
     }
 
     const lines: string[] = [];
@@ -302,10 +303,9 @@ export class TaskList implements Component {
 
     // Add scroll indicator if needed
     if (this.tasks.length > this.maxVisible) {
-      const scrollInfo = this.theme.dim(
-        `  (${this.selectedIndex + 1}/${this.tasks.length})`
-      );
-      lines.push(scrollInfo);
+      const scrollText = `  (${this.selectedIndex + 1}/${this.tasks.length})`;
+      const truncatedScroll = truncateToWidth(scrollText, width, '…');
+      lines.push(this.theme.dim(truncatedScroll));
     }
 
     return lines;
