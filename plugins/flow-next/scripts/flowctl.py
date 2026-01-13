@@ -2384,9 +2384,9 @@ def cmd_next(args: argparse.Namespace) -> None:
         epics_dir = flow_dir / EPICS_DIR
         if epics_dir.exists():
             for epic_file in sorted(epics_dir.glob("fn-*.json")):
-                match = re.match(r"^fn-(\d+)\.json$", epic_file.name)
+                match = re.match(r"^fn-(\d+)(?:-[a-z0-9]{3})?\.json$", epic_file.name)
                 if match:
-                    epic_ids.append(f"fn-{match.group(1)}")
+                    epic_ids.append(epic_file.stem)  # Use full ID from filename
         epic_ids.sort(key=lambda e: parse_id(e)[0] or 0)
 
     current_actor = get_actor()
@@ -3576,9 +3576,9 @@ def cmd_validate(args: argparse.Namespace) -> None:
         epic_ids = []
         if epics_dir.exists():
             for epic_file in sorted(epics_dir.glob("fn-*.json")):
-                match = re.match(r"^fn-(\d+)\.json$", epic_file.name)
+                match = re.match(r"^fn-(\d+)(?:-[a-z0-9]{3})?\.json$", epic_file.name)
                 if match:
-                    epic_ids.append(f"fn-{match.group(1)}")
+                    epic_ids.append(epic_file.stem)  # Use full ID from filename
 
         # Start with root errors
         all_errors = list(root_errors)
