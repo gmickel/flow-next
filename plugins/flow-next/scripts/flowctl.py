@@ -10,6 +10,8 @@ import argparse
 import json
 import os
 import re
+import secrets
+import string
 import subprocess
 import shlex
 import shutil
@@ -329,6 +331,12 @@ def read_text_or_exit(path: Path, what: str, use_json: bool = True) -> str:
         return path.read_text(encoding="utf-8")
     except Exception as e:
         error_exit(f"{what} unreadable: {path} ({e})", use_json=use_json)
+
+
+def generate_epic_suffix(length: int = 3) -> str:
+    """Generate random alphanumeric suffix for epic IDs (a-z0-9)."""
+    alphabet = string.ascii_lowercase + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
 def parse_id(id_str: str) -> tuple[Optional[int], Optional[int]]:
