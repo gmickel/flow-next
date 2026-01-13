@@ -40,12 +40,14 @@ Full request: $ARGUMENTS
 Accepts:
 - Flow epic ID `fn-N` to work through all tasks
 - Flow task ID `fn-N.M` to work on single task
+- Markdown spec file path (creates epic from file, then executes)
 - Idea text (creates minimal epic + single task, then executes)
 - Chained instructions like "then review with /flow-next:impl-review"
 
 Examples:
 - `/flow-next:work fn-1`
 - `/flow-next:work fn-1.3`
+- `/flow-next:work docs/my-feature-spec.md`
 - `/flow-next:work Add rate limiting`
 - `/flow-next:work fn-1 then review via /flow-next:impl-review`
 

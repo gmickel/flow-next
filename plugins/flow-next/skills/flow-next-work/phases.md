@@ -21,21 +21,39 @@ FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 
 ## Phase 1: Resolve Input
 
-**Spec-less start (idea text)**:
-1. Initialize: `$FLOWCTL init --json`
-2. Create epic: `$FLOWCTL epic create --title "<idea>" --json`
-3. Create single task: `$FLOWCTL task create --epic <epic-id> --title "Implement <idea>" --json`
-4. Continue with epic-id
+Detect input type in this order (first match wins):
+
+1. **Flow task ID** `fn-N.M` (e.g., fn-1.3)
+2. **Flow epic ID** `fn-N` (e.g., fn-1)
+3. **Spec file** `.md` path that exists on disk
+4. **Idea text** everything else
+
+---
+
+**Flow task ID (fn-N.M)**:
+- Read task: `$FLOWCTL show <id> --json`
+- Read spec: `$FLOWCTL cat <id>`
+- Get epic from task data for context: `$FLOWCTL show <epic-id> --json && $FLOWCTL cat <epic-id>`
 
 **Flow epic ID (fn-N)**:
 - Read epic: `$FLOWCTL show <id> --json`
 - Read spec: `$FLOWCTL cat <id>`
 - Get first ready task: `$FLOWCTL ready --epic <id> --json`
 
-**Flow task ID (fn-N.M)**:
-- Read task: `$FLOWCTL show <id> --json`
-- Read spec: `$FLOWCTL cat <id>`
-- Get epic from task data for context: `$FLOWCTL show <epic-id> --json && $FLOWCTL cat <epic-id>`
+**Spec file start (.md path that exists)**:
+1. Check file exists: `test -f "<path>"` — if not, treat as idea text
+2. Initialize: `$FLOWCTL init --json`
+3. Read file and extract title from first `# Heading` or use filename
+4. Create epic: `$FLOWCTL epic create --title "<extracted-title>" --json`
+5. Set spec from file: `$FLOWCTL epic set-plan <epic-id> --file <path> --json`
+6. Create single task: `$FLOWCTL task create --epic <epic-id> --title "Implement <title>" --json`
+7. Continue with epic-id
+
+**Spec-less start (idea text)**:
+1. Initialize: `$FLOWCTL init --json`
+2. Create epic: `$FLOWCTL epic create --title "<idea>" --json`
+3. Create single task: `$FLOWCTL task create --epic <epic-id> --title "Implement <idea>" --json`
+4. Continue with epic-id
 
 ## Phase 2: Apply Branch Choice
 
