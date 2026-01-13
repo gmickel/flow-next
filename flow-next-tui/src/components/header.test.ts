@@ -277,4 +277,62 @@ describe('Header', () => {
       expect(visibleWidth(line)).toBeLessThanOrEqual(20);
     }
   });
+
+  test('very narrow width=10 respects constraint', () => {
+    const header = new Header(
+      defaultProps({
+        task: mockTask(),
+        epic: mockEpic(),
+      })
+    );
+    const width = 10;
+    const lines = header.render(width);
+
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+    }
+  });
+
+  test('very narrow width=5 respects constraint', () => {
+    const header = new Header(
+      defaultProps({
+        task: mockTask(),
+        epic: mockEpic(),
+      })
+    );
+    const width = 5;
+    const lines = header.render(width);
+
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+    }
+  });
+
+  test('width=0 returns empty or minimal output', () => {
+    const header = new Header(
+      defaultProps({
+        task: mockTask(),
+        epic: mockEpic(),
+      })
+    );
+    const lines = header.render(0);
+
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(0);
+    }
+  });
+
+  test('width without task/epic still respects constraint at narrow width', () => {
+    const header = new Header(defaultProps());
+    const width = 10;
+    const lines = header.render(width);
+
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+    }
+  });
 });

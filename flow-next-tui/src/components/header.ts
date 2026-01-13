@@ -11,7 +11,7 @@ import { truncateToWidth } from '@mariozechner/pi-tui';
 import type { Epic, Task } from '../lib/types.ts';
 import type { Theme } from '../themes/index.ts';
 
-import { padToWidth, visibleWidth } from '../lib/render.ts';
+import { visibleWidth } from '../lib/render.ts';
 
 /** Status icons for header state */
 export const STATE_ICONS = {
@@ -20,7 +20,7 @@ export const STATE_ICONS = {
   complete: '✓',
 } as const;
 
-/** ASCII fallback icons for --no-emoji mode */
+/** ASCII fallback icons for --ascii mode (use when Unicode symbols not supported) */
 export const ASCII_STATE_ICONS = {
   running: '>',
   idle: '|',
@@ -124,33 +124,52 @@ export class Header implements Component {
     const icon = this.getStateIcon();
     const colorFn = this.getStateColor();
     const timer = formatTime(this.elapsed);
+    const timerWidth = visibleWidth(timer);
+
+    // Handle very narrow widths: just show truncated timer
+    if (width <= timerWidth) {
+      return truncateToWidth(this.theme.dim(timer), width, '');
+    }
 
     // Left side: icon + branding
     const leftContent = `${icon} flow-next`;
+    const leftWidth = visibleWidth(leftContent);
     const coloredLeft = colorFn(icon) + ' ' + this.theme.accent('flow-next');
 
-    // Right side: timer (always visible)
-    const timerWidth = visibleWidth(timer);
+    // Minimum: left + space + timer
+    const minWidth = leftWidth + 1 + timerWidth;
+    if (width < minWidth) {
+      // Truncate left to fit with timer
+      const availableForLeft = width - timerWidth - 1;
+      if (availableForLeft <= 0) {
+        return truncateToWidth(this.theme.dim(timer), width, '');
+      }
+      const truncatedColoredLeft =
+        truncateToWidth(colorFn(icon), visibleWidth(icon), '') +
+        ' ' +
+        truncateToWidth(
+          this.theme.accent('flow-next'),
+          availableForLeft - visibleWidth(icon) - 1,
+          '…'
+        );
+      return truncatedColoredLeft + ' ' + this.theme.dim(timer);
+    }
 
-    // Task info in brackets (if task exists)
+    // Task info in brackets (if task exists and fits)
     let taskPart = '';
     let taskPartColored = '';
     if (this.task) {
       const taskId = this.task.id;
       const taskTitle = this.task.title;
-      // Calculate available width for task (excluding left, timer, and spacing)
-      const leftWidth = visibleWidth(leftContent);
-      const reservedWidth = leftWidth + timerWidth + 4; // 4 = spaces + bracket chars
-      const availableForTask = width - reservedWidth;
+      // Available = width - left - gap(1) - timer - space before timer
+      // Brackets take 2 chars, need at least 3 for content
+      const availableForTask = width - leftWidth - timerWidth - 2; // 2 = gaps
 
-      if (availableForTask > 5) {
-        // Enough room for brackets + some content
+      if (availableForTask > 4) {
+        // Enough room for brackets (2) + some content (2+)
         const fullTask = `${taskId} ${taskTitle}`;
-        const truncatedTask = truncateToWidth(
-          fullTask,
-          availableForTask - 2,
-          '…'
-        ); // -2 for brackets
+        const innerWidth = availableForTask - 2; // subtract brackets
+        const truncatedTask = truncateToWidth(fullTask, innerWidth, '…');
         taskPart = `「${truncatedTask}」`;
         taskPartColored =
           this.theme.dim('「') + truncatedTask + this.theme.dim('」');
@@ -158,19 +177,23 @@ export class Header implements Component {
     }
 
     // Calculate spacing
-    const leftWidth = visibleWidth(leftContent);
     const taskWidth = visibleWidth(taskPart);
     const rightPartWidth = taskWidth + (taskWidth > 0 ? 1 : 0) + timerWidth;
-    const gapWidth = Math.max(1, width - leftWidth - rightPartWidth);
+    const gapWidth = Math.max(0, width - leftWidth - rightPartWidth);
 
-    // Build row with padding
+    // Build row
     const gap = ' '.repeat(gapWidth);
     const coloredTimer = this.theme.dim(timer);
 
+    let row: string;
     if (taskPartColored) {
-      return coloredLeft + gap + taskPartColored + ' ' + coloredTimer;
+      row = coloredLeft + gap + taskPartColored + ' ' + coloredTimer;
+    } else {
+      row = coloredLeft + gap + coloredTimer;
     }
-    return padToWidth(coloredLeft + gap + coloredTimer, width);
+
+    // Hard clamp to width
+    return truncateToWidth(row, width, '');
   }
 
   /**
@@ -183,20 +206,39 @@ export class Header implements Component {
     const iterPart = `Iter #${this.iteration}`;
     const progressPart = `${done}/${total} tasks`;
     const leftContent = `${iterPart} · ${progressPart}`;
+    const leftWidth = visibleWidth(leftContent);
+
+    // Handle very narrow widths: truncate left content
+    if (width < leftWidth) {
+      // Rebuild with colors, truncated
+      const truncatedIter = truncateToWidth(iterPart, width, '…');
+      if (visibleWidth(truncatedIter) >= width) {
+        return this.theme.dim(truncatedIter);
+      }
+      const remaining = width - visibleWidth(truncatedIter) - 3; // " · "
+      if (remaining <= 0) {
+        return this.theme.dim(truncatedIter);
+      }
+      return (
+        this.theme.dim(truncatedIter) +
+        this.theme.dim(' · ') +
+        this.theme.accent(truncateToWidth(progressPart, remaining, '…'))
+      );
+    }
+
     const coloredLeft =
       this.theme.dim(iterPart) +
       this.theme.dim(' · ') +
       this.theme.accent(progressPart);
 
-    // Right side: epic info (if epic exists)
+    // Right side: epic info (if epic exists and fits)
     let epicPart = '';
     let epicPartColored = '';
     if (this.epic) {
       const epicId = this.epic.id;
       const epicTitle = this.epic.title;
-      // Calculate available width for epic
-      const leftWidth = visibleWidth(leftContent);
-      const availableForEpic = width - leftWidth - 2; // -2 for spacing
+      // Available = width - left - gap(1)
+      const availableForEpic = width - leftWidth - 1;
 
       if (availableForEpic > 5) {
         const fullEpic = `${epicId} ${epicTitle}`;
@@ -206,15 +248,19 @@ export class Header implements Component {
     }
 
     // Calculate spacing
-    const leftWidth = visibleWidth(leftContent);
     const epicWidth = visibleWidth(epicPart);
-    const gapWidth = Math.max(1, width - leftWidth - epicWidth);
+    const gapWidth = Math.max(0, width - leftWidth - epicWidth);
     const gap = ' '.repeat(gapWidth);
 
+    let row: string;
     if (epicPartColored) {
-      return coloredLeft + gap + epicPartColored;
+      row = coloredLeft + gap + epicPartColored;
+    } else {
+      row = coloredLeft + gap;
     }
-    return padToWidth(coloredLeft, width);
+
+    // Hard clamp to width
+    return truncateToWidth(row, width, '');
   }
 
   handleInput(_data: string): void {
