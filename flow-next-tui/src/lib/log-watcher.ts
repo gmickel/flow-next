@@ -43,7 +43,7 @@ export class LogWatcher extends EventEmitter {
   private isRunning = false;
   private pendingIteration: number | null = null; // Guard against race conditions
   private readPromise: Promise<void> = Promise.resolve(); // Serialize reads
-  private textDecoder = new TextDecoder('utf-8', { fatal: false }); // Handles incomplete UTF-8
+  private textDecoder: TextDecoder | null = null; // Streaming UTF-8 decoder
 
   constructor(runPath: string) {
     super();
@@ -52,13 +52,14 @@ export class LogWatcher extends EventEmitter {
 
   /**
    * Start watching the run directory.
-   * Note: Returns Promise - callers should await to ensure initial read completes.
+   * Returns Promise<void> - callers should await to ensure initial read completes.
    */
   async start(): Promise<void> {
     if (this.isRunning) {
       return;
     }
     this.isRunning = true;
+    this.textDecoder = new TextDecoder('utf-8', { fatal: false });
 
     // Find current iteration log (use != null to allow iter 0)
     const currentIter = await this.findLatestIteration();
@@ -70,6 +71,15 @@ export class LogWatcher extends EventEmitter {
 
     // Watch directory for new iteration logs
     this.watchDirectory();
+
+    // If no iter found, proactively rescan (fs.watch may miss first file on some platforms)
+    if (currentIter == null) {
+      setTimeout(() => {
+        if (this.isRunning && !this.currentLogPath) {
+          this.rescanForNewIteration();
+        }
+      }, 200);
+    }
   }
 
   /**
@@ -98,6 +108,7 @@ export class LogWatcher extends EventEmitter {
     this.remainder = '';
     this.pendingIteration = null;
     this.readPromise = Promise.resolve();
+    this.textDecoder = null;
   }
 
   /**
@@ -291,6 +302,8 @@ export class LogWatcher extends EventEmitter {
     this.bytePosition = 0;
     this.remainder = '';
     this.pendingIteration = null;
+    // Reset decoder for clean UTF-8 stream on new iteration
+    this.textDecoder = new TextDecoder('utf-8', { fatal: false });
 
     this.emit('new-iteration', newIter, newLogPath);
 
@@ -409,22 +422,29 @@ export class LogWatcher extends EventEmitter {
       if (fileSize <= this.bytePosition) {
         // No new content (or file truncated)
         if (fileSize < this.bytePosition) {
-          // File was truncated - reset
+          // File was truncated - reset position, remainder, and decoder
           this.bytePosition = 0;
           this.remainder = '';
+          this.textDecoder = new TextDecoder('utf-8', { fatal: false });
         }
         return;
       }
 
-      // Read new bytes
+      // Read new bytes (not text - avoids mid-UTF-8 corruption)
       const file = Bun.file(this.currentLogPath);
       const slice = file.slice(this.bytePosition, fileSize);
-      const newContent = await slice.text();
+      const bytes = await slice.arrayBuffer();
 
       // Re-check after await (stop() may have been called)
       if (!this.isRunning) return;
 
       this.bytePosition = fileSize;
+
+      // Decode with streaming to handle incomplete UTF-8 codepoints at boundary
+      // stream:true buffers incomplete sequences for next decode call
+      const newContent = this.textDecoder
+        ? this.textDecoder.decode(new Uint8Array(bytes), { stream: true })
+        : new TextDecoder('utf-8').decode(new Uint8Array(bytes));
 
       // Parse with remainder from previous read
       const toParse = this.remainder + newContent;

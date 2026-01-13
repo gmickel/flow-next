@@ -192,29 +192,32 @@ function formatToolInput(tool: string, input: unknown): string {
 
   const obj = input as Record<string, unknown>;
 
-  // Helper to safely get string value
-  const getString = (key: string): string | undefined => {
-    const val = obj[key];
-    return typeof val === 'string' ? val : undefined;
+  // Helper to safely get string value with key aliases
+  const getString = (...keys: string[]): string | undefined => {
+    for (const key of keys) {
+      const val = obj[key];
+      if (typeof val === 'string') return val;
+    }
+    return undefined;
   };
 
-  // Extract meaningful info per tool type
+  // Extract meaningful info per tool type (with common aliases)
   switch (tool) {
     case 'Read':
     case 'Write':
     case 'Edit': {
-      const filePath = getString('file_path');
+      const filePath = getString('file_path', 'path', 'file');
       return filePath ? `${tool}: ${filePath}` : tool;
     }
 
     case 'Glob':
     case 'Grep': {
-      const pattern = getString('pattern');
+      const pattern = getString('pattern', 'glob', 'query', 'regex');
       return pattern ? `${tool}: ${pattern}` : tool;
     }
 
     case 'Bash': {
-      const command = getString('command');
+      const command = getString('command', 'cmd');
       if (command) {
         return command.length > 60
           ? `${tool}: ${command.slice(0, 57)}...`
@@ -224,19 +227,28 @@ function formatToolInput(tool: string, input: unknown): string {
     }
 
     case 'Task': {
-      const description = getString('description');
+      const description = getString('description', 'prompt', 'task');
       return description ? `${tool}: ${description}` : tool;
     }
 
     case 'WebFetch':
     case 'WebSearch': {
-      const url = getString('url');
-      const query = getString('query');
+      const url = getString('url', 'uri');
+      const query = getString('query', 'q', 'search');
       return url ? `${tool}: ${url}` : query ? `${tool}: ${query}` : tool;
     }
 
-    default:
+    default: {
+      // Fallback: show first string value from input (generic preview)
+      for (const key of Object.keys(obj)) {
+        const val = obj[key];
+        if (typeof val === 'string' && val.length > 0) {
+          const preview = val.length > 50 ? val.slice(0, 47) + '...' : val;
+          return `${tool}: ${preview}`;
+        }
+      }
       return tool;
+    }
   }
 }
 

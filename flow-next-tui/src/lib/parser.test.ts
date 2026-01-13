@@ -289,6 +289,68 @@ describe('parser', () => {
         content: 'Task: Explore codebase',
       });
     });
+
+    test('handles key aliases for Read (path instead of file_path)', () => {
+      const line = JSON.stringify({
+        type: 'tool_call',
+        tool: 'Read',
+        input: { path: '/alt/path.ts' },
+      });
+
+      const result = parseLine(line);
+
+      expect(result).toEqual({
+        type: 'tool',
+        tool: 'Read',
+        content: 'Read: /alt/path.ts',
+      });
+    });
+
+    test('handles key aliases for Grep (glob instead of pattern)', () => {
+      const line = JSON.stringify({
+        type: 'tool_call',
+        tool: 'Grep',
+        input: { glob: '*.md' },
+      });
+
+      const result = parseLine(line);
+
+      expect(result).toEqual({
+        type: 'tool',
+        tool: 'Grep',
+        content: 'Grep: *.md',
+      });
+    });
+
+    test('shows first string value for unknown tools', () => {
+      const line = JSON.stringify({
+        type: 'tool_call',
+        tool: 'CustomTool',
+        input: { arg1: 'some value' },
+      });
+
+      const result = parseLine(line);
+
+      expect(result).toEqual({
+        type: 'tool',
+        tool: 'CustomTool',
+        content: 'CustomTool: some value',
+      });
+    });
+
+    test('truncates long fallback values', () => {
+      const longValue = 'x'.repeat(60);
+      const line = JSON.stringify({
+        type: 'tool_call',
+        tool: 'CustomTool',
+        input: { arg1: longValue },
+      });
+
+      const result = parseLine(line);
+
+      expect(result?.content?.endsWith('...')).toBe(true);
+      expect(result?.content?.length).toBeLessThanOrEqual(70);
+    });
   });
 
   describe('parseLines', () => {
