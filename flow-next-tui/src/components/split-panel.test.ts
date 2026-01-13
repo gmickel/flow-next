@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Component } from "@mariozechner/pi-tui";
+import { visibleWidth } from "../lib/render.ts";
 import { SplitPanel } from "./split-panel.ts";
 
 /** Simple mock component that renders fixed lines */
@@ -131,15 +132,27 @@ describe("SplitPanel", () => {
 		const panel = new SplitPanel({ left, right, ratio: 0.5 });
 
 		// 21 - 1 = 20, 50% = 10 each
-		const lines = panel.render(21);
+		const targetWidth = 21;
+		const lines = panel.render(targetWidth);
 
 		expect(lines).toHaveLength(1);
-		// The line should contain the ANSI sequence
-		expect(lines[0]).toContain("\x1b[31m");
-		expect(lines[0]).toContain("RED");
+		const line = lines[0];
+		expect(line).toBeDefined();
+
+		// Verify ANSI sequence present
+		expect(line).toContain("\x1b[31m");
+		expect(line).toContain("RED");
+
+		// Verify visible width matches target (ANSI codes don't affect it)
+		expect(visibleWidth(line!)).toBe(targetWidth);
+
+		// Verify left section is padded to correct visible width
+		const sepIdx = line!.indexOf("│");
+		const leftPart = line!.slice(0, sepIdx);
+		expect(visibleWidth(leftPart)).toBe(10);
 	});
 
-	test("input forwarded to children", () => {
+	test("input forwarded to active child only (default left)", () => {
 		const left = new MockComponent(["L"]);
 		const right = new MockComponent(["R"]);
 		const panel = new SplitPanel({ left, right });
@@ -147,7 +160,33 @@ describe("SplitPanel", () => {
 		panel.handleInput("j");
 
 		expect(left.inputReceived).toContain("j");
-		expect(right.inputReceived).toContain("j");
+		expect(right.inputReceived).not.toContain("j");
+	});
+
+	test("input forwarded to right when active=right", () => {
+		const left = new MockComponent(["L"]);
+		const right = new MockComponent(["R"]);
+		const panel = new SplitPanel({ left, right, active: "right" });
+
+		panel.handleInput("k");
+
+		expect(left.inputReceived).not.toContain("k");
+		expect(right.inputReceived).toContain("k");
+	});
+
+	test("setActive changes which child receives input", () => {
+		const left = new MockComponent(["L"]);
+		const right = new MockComponent(["R"]);
+		const panel = new SplitPanel({ left, right });
+
+		panel.handleInput("a");
+		expect(left.inputReceived).toContain("a");
+		expect(right.inputReceived).not.toContain("a");
+
+		panel.setActive("right");
+		panel.handleInput("b");
+		expect(left.inputReceived).not.toContain("b");
+		expect(right.inputReceived).toContain("b");
 	});
 
 	test("invalidate calls invalidate on children", () => {

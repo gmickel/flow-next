@@ -11,6 +11,7 @@ export interface SplitPanelProps {
 	right: Component;
 	ratio?: number; // default 0.3 (30% left)
 	separator?: string; // default '│'
+	active?: "left" | "right"; // default 'left' - which panel receives input
 }
 
 /**
@@ -21,12 +22,19 @@ export class SplitPanel implements Component {
 	right: Component;
 	ratio: number;
 	separator: string;
+	active: "left" | "right";
 
 	constructor(props: SplitPanelProps) {
 		this.left = props.left;
 		this.right = props.right;
 		this.ratio = props.ratio ?? 0.3;
 		this.separator = props.separator ?? "│";
+		this.active = props.active ?? "left";
+	}
+
+	/** Set which panel receives input */
+	setActive(panel: "left" | "right"): void {
+		this.active = panel;
 	}
 
 	render(width: number): string[] {
@@ -47,18 +55,16 @@ export class SplitPanel implements Component {
 		const result: string[] = [];
 		for (let i = 0; i < maxHeight; i++) {
 			const l = padToWidth(leftLines[i] ?? "", leftWidth);
-			const r = rightLines[i] ?? "";
+			const r = padToWidth(rightLines[i] ?? "", rightWidth);
 			result.push(l + this.separator + r);
 		}
 		return result;
 	}
 
 	handleInput(data: string): void {
-		// Forward input to both children - let the focused one handle it
-		// In practice, parent component should manage focus and call handleInput
-		// on the appropriate child directly. This is a fallback.
-		this.left.handleInput?.(data);
-		this.right.handleInput?.(data);
+		// Forward input only to the active child
+		const target = this.active === "left" ? this.left : this.right;
+		target.handleInput?.(data);
 	}
 
 	invalidate(): void {
