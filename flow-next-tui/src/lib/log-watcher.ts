@@ -56,9 +56,9 @@ export class LogWatcher extends EventEmitter {
     }
     this.isRunning = true;
 
-    // Find current iteration log
+    // Find current iteration log (use != null to allow iter 0)
     const currentIter = await this.findLatestIteration();
-    if (currentIter) {
+    if (currentIter != null) {
       this.currentLogPath = join(this.runPath, `iter-${currentIter}.log`);
       await this.readFromPosition();
       this.watchCurrentLog();
@@ -169,11 +169,41 @@ export class LogWatcher extends EventEmitter {
       }
     }
 
-    // Switch to new log
+    // Switch to new log (async to await initial read)
+    this.switchToNewLog(newIter, newLogPath).catch((error) => {
+      this.emit(
+        'error',
+        error instanceof Error ? error : new Error(String(error))
+      );
+    });
+  }
+
+  /**
+   * Switch to a new log file, waiting for file existence and initial read
+   */
+  private async switchToNewLog(newIter: number, newLogPath: string): Promise<void> {
     if (this.fileWatcher) {
       this.fileWatcher.close();
       this.fileWatcher = null;
     }
+
+    // Wait for file to exist (fs.watch event can fire before file is created)
+    let attempts = 0;
+    while (attempts < 10) {
+      try {
+        await stat(newLogPath);
+        break;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          attempts++;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    if (!this.isRunning) return;
 
     this.currentLogPath = newLogPath;
     this.bytePosition = 0;
@@ -181,14 +211,8 @@ export class LogWatcher extends EventEmitter {
 
     this.emit('new-iteration', newIter, newLogPath);
 
-    // Read existing content before watching for changes
-    this.readFromPosition().catch((error) => {
-      this.emit(
-        'error',
-        error instanceof Error ? error : new Error(String(error))
-      );
-    });
-
+    // Await initial read before starting watcher to avoid race
+    await this.readFromPosition();
     this.watchCurrentLog();
   }
 
@@ -205,7 +229,9 @@ export class LogWatcher extends EventEmitter {
         (eventType) => {
           if (!this.isRunning) return;
 
-          if (eventType === 'change') {
+          // Handle both 'change' and 'rename' events
+          // 'rename' can occur on truncation, atomic replace, or log rotation
+          if (eventType === 'change' || eventType === 'rename') {
             this.debouncedRead();
           }
         }

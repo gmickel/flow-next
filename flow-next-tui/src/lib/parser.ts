@@ -62,6 +62,23 @@ interface ErrorLine {
 type StreamJsonLine = ToolCallLine | ToolResultLine | TextLine | ErrorLine;
 
 /**
+ * Safely coerce a value to string (handles non-string content from runtime JSON)
+ */
+function coerceToString(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (value == null) {
+    return '';
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+/**
  * Get icon for a tool (or success/failure indicator)
  * @param tool Tool name or 'success'/'failure'
  * @param ascii Use ASCII fallbacks instead of unicode
@@ -109,23 +126,26 @@ export function parseLine(line: string): LogEntry | null {
       };
     }
 
-    case 'tool_result':
+    case 'tool_result': {
+      // Coerce content/error to string (runtime JSON may not be string)
+      const content = coerceToString(parsed.content) || coerceToString(parsed.error);
       return {
         type: 'response',
-        content: parsed.content ?? parsed.error ?? '',
+        content,
         success: parsed.error == null,
       };
+    }
 
     case 'text':
       return {
         type: 'response',
-        content: parsed.content ?? '',
+        content: coerceToString(parsed.content),
       };
 
     case 'error':
       return {
         type: 'error',
-        content: parsed.message ?? 'Unknown error',
+        content: coerceToString(parsed.message) || 'Unknown error',
         success: false,
       };
 
