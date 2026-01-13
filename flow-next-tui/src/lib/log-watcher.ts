@@ -148,6 +148,10 @@ export class LogWatcher extends EventEmitter {
           // Check if it's a new iteration log
           if (name && ITER_LOG_PATTERN.test(name)) {
             this.handleNewLogFile(name);
+          } else if (!name) {
+            // On some platforms fs.watch delivers null/empty filename.
+            // Rescan to detect any new iteration.
+            this.rescanForNewIteration();
           }
         }
       );
@@ -197,6 +201,27 @@ export class LogWatcher extends EventEmitter {
   }
 
   /**
+   * Rescan for new iterations (used when fs.watch doesn't provide filename)
+   */
+  private rescanForNewIteration(): void {
+    this.findLatestIteration()
+      .then((latestIter) => {
+        if (latestIter == null) return;
+
+        const currentIter = this.getCurrentIteration();
+        if (latestIter > currentIter) {
+          this.handleNewLogFile(`iter-${latestIter}.log`);
+        }
+      })
+      .catch((error) => {
+        this.emit(
+          'error',
+          error instanceof Error ? error : new Error(String(error))
+        );
+      });
+  }
+
+  /**
    * Get current iteration number from currentLogPath
    */
   private getCurrentIteration(): number {
@@ -233,9 +258,15 @@ export class LogWatcher extends EventEmitter {
       }
     }
 
-    // Bail if file never appeared - keep old watcher active
+    // If file never appeared, schedule a rescan and keep old watcher active
     if (!fileExists) {
       this.pendingIteration = null;
+      // Schedule rescan in case file appears later (slow FS, race)
+      setTimeout(() => {
+        if (this.isRunning) {
+          this.rescanForNewIteration();
+        }
+      }, 500);
       return;
     }
 
