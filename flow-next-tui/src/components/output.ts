@@ -22,7 +22,12 @@ import {
 const DEFAULT_MAX_BUFFER = 500;
 
 export interface OutputPanelProps {
+  /**
+   * Buffer of log entries to display. Defaults to internal empty array.
+   * Note: If passed, caller shares ownership - appendLine mutates it, clearBuffer clears in-place.
+   */
   buffer?: LogEntry[];
+  /** Current iteration number for header display. Defaults to 0. */
   iteration?: number;
   theme: Theme;
   maxBuffer?: number;
@@ -61,6 +66,9 @@ export class OutputPanel implements Component {
 
   /** Append a log entry to the buffer */
   appendLine(entry: LogEntry): void {
+    // Capture wasAtBottom BEFORE mutating buffer (per spec: "Reset when at bottom")
+    const wasAtBottom = this.scrollOffset >= this.getMaxScroll();
+
     this.buffer.push(entry);
 
     // Trim buffer if over limit
@@ -71,15 +79,9 @@ export class OutputPanel implements Component {
       this.scrollOffset = Math.max(0, this.scrollOffset - excess);
     }
 
-    // Auto-scroll to bottom if enabled
-    if (this.autoScroll) {
+    // Auto-scroll to bottom if enabled OR user was at bottom before append
+    if (this.autoScroll || wasAtBottom) {
       this.scrollToBottom();
-    } else {
-      // Re-enable auto-scroll if trim/append moved us to bottom
-      // (per spec: "Reset when at bottom")
-      if (this.scrollOffset >= this.getMaxScroll()) {
-        this.autoScroll = true;
-      }
     }
   }
 
@@ -95,7 +97,11 @@ export class OutputPanel implements Component {
     this.autoScroll = true;
   }
 
-  /** Set viewport height for proper scroll bounds */
+  /**
+   * Set viewport height for proper scroll bounds.
+   * MUST be called before render() for correct scroll math.
+   * @param height Total height in lines (including 2 lines for borders)
+   */
   setViewportHeight(height: number): void {
     // Subtract 2 for top/bottom borders
     this.viewportHeight = Math.max(1, height - 2);

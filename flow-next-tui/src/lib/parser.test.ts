@@ -63,8 +63,9 @@ describe('parser', () => {
 
     test('returns default icon for text responses', () => {
       const entry = { type: 'response', content: 'text' };
-      expect(iconForEntry(entry)).toBe('→');
-      expect(iconForEntry(entry, true)).toBe('>');
+      // Default distinct from file ops (→) per review feedback
+      expect(iconForEntry(entry)).toBe('◆');
+      expect(iconForEntry(entry, true)).toBe('*');
     });
 
     test('returns failure icon for error entries', () => {

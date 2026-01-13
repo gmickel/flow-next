@@ -112,8 +112,8 @@ export function iconForEntry(
   if (entry.success === true) {
     return getIcon('success', ascii);
   }
-  // Default for text responses
-  return ascii ? '>' : '→';
+  // Default for text responses (distinct from file ops which use →)
+  return ascii ? '*' : '◆';
 }
 
 /**
