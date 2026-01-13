@@ -46,9 +46,11 @@ Use pi-tui overlay system if available, or render centered box.
 - [ ] ? toggles overlay
 - [ ] Theme colors applied
 ## Done summary
-TBD
-
+- Added HelpOverlay component with keybinding list
+- Centered modal box, toggles on ? key
+- Esc or ? dismisses overlay
+- 26 tests covering visibility, input, centering
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 8ddf481
+- Tests: bun test src/components/help-overlay.test.ts
 - PRs:
