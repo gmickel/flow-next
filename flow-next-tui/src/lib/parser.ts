@@ -74,6 +74,7 @@ function coerceToString(value: unknown): string {
   try {
     return JSON.stringify(value);
   } catch {
+    // oxlint-disable-next-line no-base-to-string -- fallback for circular refs, [object Object] is acceptable
     return String(value);
   }
 }

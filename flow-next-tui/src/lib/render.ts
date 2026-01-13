@@ -25,9 +25,10 @@ export { truncateToWidth };
  * - Simple escape sequences: \x1b followed by single char (ESC7, ESC8, ESCc, etc)
  * - Charset designators: \x1b( or \x1b) followed by charset (B, 0, etc)
  */
-// eslint-disable-next-line no-control-regex
+/* oxlint-disable no-control-regex -- ANSI escape sequences require literal control chars */
 const ANSI_REGEX =
   /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][A-Z0-9]|\x1b[0-9A-Za-z@-_]/g;
+/* oxlint-enable no-control-regex */
 
 /**
  * Strip ANSI escape codes from text.
@@ -40,7 +41,7 @@ export function stripAnsi(text: string): string {
 
 const RESET = '\x1b[0m';
 // Detect if text contains SGR sequences (CSI ending with 'm') that could leak styles
-// eslint-disable-next-line no-control-regex
+// oxlint-disable-next-line no-control-regex -- SGR detection requires literal ESC char
 const HAS_SGR_REGEX = /\x1b\[[0-9;]*m/;
 
 /**

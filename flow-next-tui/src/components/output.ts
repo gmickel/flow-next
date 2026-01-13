@@ -297,7 +297,7 @@ export class OutputPanel implements Component {
     }
 
     // Just whitespace or brackets
-    if (/^[\s\[\]\{\}]+$/.test(content)) {
+    if (/^[\s[\]{}]+$/.test(content)) {
       return true;
     }
 
