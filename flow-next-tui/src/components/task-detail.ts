@@ -98,6 +98,16 @@ export class TaskDetail implements Component {
     this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, this.getMaxScroll()));
   }
 
+  /**
+   * Sanitize a single-line field for display.
+   * Strips ANSI and replaces control chars (newlines, tabs, etc) with spaces.
+   */
+  private sanitizeSingleLine(text: string): string {
+    // Strip ANSI, then replace control chars with spaces
+    // eslint-disable-next-line no-control-regex
+    return stripAnsi(text).replace(/[\x00-\x1F\x7F]/g, ' ');
+  }
+
   /** Get status icon for the task */
   private getStatusIcon(): string {
     const icons = this.useAscii ? ASCII_ICONS : STATUS_ICONS;
@@ -148,8 +158,8 @@ export class TaskDetail implements Component {
     const icon = this.getStatusIcon();
 
     // Sanitize task-provided strings to prevent terminal injection
-    const safeTitle = stripAnsi(this.task.title);
-    const safeId = stripAnsi(this.task.id);
+    const safeTitle = this.sanitizeSingleLine(this.task.title);
+    const safeId = this.sanitizeSingleLine(this.task.id);
 
     // Line 1: Status icon + full title
     const titleLine = `${colorFn(icon)} ${safeTitle}`;
@@ -247,8 +257,9 @@ export class TaskDetail implements Component {
       allLines.push(...mdLines);
     }
 
-    // Store total content height
+    // Store total content height and clamp scroll to avoid blank panel
     this.totalContentHeight = allLines.length;
+    this.clampScroll();
 
     // Apply scrolling (let parent/TUI handle height clipping)
     const visibleLines = allLines.slice(this.scrollOffset);
