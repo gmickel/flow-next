@@ -228,6 +228,34 @@ describe('TaskList', () => {
       // Should only have task lines, no scroll indicator
       expect(lines).toHaveLength(2);
     });
+
+    test('maxVisible is clamped to at least 1', () => {
+      const tasks = [mockTask(), mockTask({ id: 'fn-1.2' }), mockTask({ id: 'fn-1.3' })];
+
+      // Test with 0
+      const list1 = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+        maxVisible: 0,
+      });
+      const lines1 = list1.render(50);
+      // Should render at least 1 task + scroll indicator
+      expect(lines1.length).toBeGreaterThanOrEqual(1);
+
+      // Test with negative
+      const list2 = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+        maxVisible: -5,
+      });
+      const lines2 = list2.render(50);
+      // Should render at least 1 task + scroll indicator
+      expect(lines2.length).toBeGreaterThanOrEqual(1);
+    });
   });
 
   describe('navigation', () => {
@@ -368,6 +396,22 @@ describe('TaskList', () => {
       expect(list.getSelectedIndex()).toBe(0); // clamped to min
     });
 
+    test('constructor clamps out-of-range selectedIndex', () => {
+      const tasks = [mockTask(), mockTask({ id: 'fn-1.2' })];
+
+      // Test high value
+      const list1 = new TaskList({ tasks, selectedIndex: 100, onSelect: noop, theme: darkTheme });
+      expect(list1.getSelectedIndex()).toBe(1); // clamped to max
+
+      // Test negative value
+      const list2 = new TaskList({ tasks, selectedIndex: -5, onSelect: noop, theme: darkTheme });
+      expect(list2.getSelectedIndex()).toBe(0); // clamped to 0
+
+      // Test empty tasks with non-zero index
+      const list3 = new TaskList({ tasks: [], selectedIndex: 5, onSelect: noop, theme: darkTheme });
+      expect(list3.getSelectedIndex()).toBe(0); // clamped to 0 for empty list
+    });
+
     test('setSelectedIndex does not fire callback if index unchanged', () => {
       let callCount = 0;
       const tasks = [mockTask(), mockTask({ id: 'fn-1.2' })];
@@ -408,6 +452,47 @@ describe('TaskList', () => {
 
       list.setTasks([mockTask()]); // Now only 1 task
       expect(list.getSelectedIndex()).toBe(0);
+    });
+
+    test('setTasks notifies when selection changes due to clamping', () => {
+      let changedTo: EpicTask | undefined;
+      let changedIndex: number | undefined;
+      const tasks = Array.from({ length: 5 }, (_, i) => mockTask({ id: `fn-1.${i + 1}` }));
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 4,
+        onSelect: noop,
+        theme: darkTheme,
+        onSelectionChange: (task, index) => {
+          changedTo = task;
+          changedIndex = index;
+        },
+      });
+
+      // Reduce to 2 tasks - selection should clamp from 4 to 1 and notify
+      list.setTasks([mockTask({ id: 'fn-2.1' }), mockTask({ id: 'fn-2.2' })]);
+      expect(list.getSelectedIndex()).toBe(1);
+      expect(changedIndex).toBe(1);
+      expect(changedTo!.id).toBe('fn-2.2');
+    });
+
+    test('setTasks does not notify when selection unchanged', () => {
+      let callCount = 0;
+      const tasks = [mockTask(), mockTask({ id: 'fn-1.2' })];
+      const list = new TaskList({
+        tasks,
+        selectedIndex: 0,
+        onSelect: noop,
+        theme: darkTheme,
+        onSelectionChange: () => {
+          callCount++;
+        },
+      });
+
+      // Replace with same-length list - selection stays at 0
+      list.setTasks([mockTask({ id: 'fn-2.1' }), mockTask({ id: 'fn-2.2' })]);
+      expect(list.getSelectedIndex()).toBe(0);
+      expect(callCount).toBe(0);
     });
 
     test('setTasks handles empty list', () => {

@@ -59,20 +59,31 @@ export class TaskList implements Component {
 
   constructor(props: TaskListProps) {
     this.tasks = props.tasks;
-    this.selectedIndex = props.selectedIndex;
+    // Clamp selectedIndex to valid range
+    this.selectedIndex = this.clampIndex(props.selectedIndex, props.tasks.length);
     this.onSelectCb = props.onSelect;
     this.onSelectionChangeCb = props.onSelectionChange;
     this.theme = props.theme;
-    this.maxVisible = props.maxVisible ?? 10;
+    // Ensure maxVisible is at least 1
+    this.maxVisible = Math.max(1, props.maxVisible ?? 10);
     this.useAscii = props.useAscii ?? false;
   }
 
-  /** Update tasks list */
+  /** Clamp index to valid range [0, length-1], or 0 if empty */
+  private clampIndex(index: number, length: number): number {
+    if (length === 0) return 0;
+    return Math.max(0, Math.min(index, length - 1));
+  }
+
+  /** Update tasks list. Clamps selection and notifies if changed. */
   setTasks(tasks: EpicTask[]): void {
+    const oldIndex = this.selectedIndex;
     this.tasks = tasks;
     // Clamp selection to valid range
-    if (this.selectedIndex >= tasks.length) {
-      this.selectedIndex = Math.max(0, tasks.length - 1);
+    this.selectedIndex = this.clampIndex(this.selectedIndex, tasks.length);
+    // Notify if selection changed due to clamping
+    if (this.selectedIndex !== oldIndex) {
+      this.notifySelectionChange();
     }
   }
 
@@ -88,7 +99,7 @@ export class TaskList implements Component {
 
   /** Set selected index */
   setSelectedIndex(index: number): void {
-    const newIndex = Math.max(0, Math.min(index, this.tasks.length - 1));
+    const newIndex = this.clampIndex(index, this.tasks.length);
     if (newIndex !== this.selectedIndex) {
       this.selectedIndex = newIndex;
       this.notifySelectionChange();
@@ -117,10 +128,12 @@ export class TaskList implements Component {
 
   /** Format dependency indicator for blocked tasks only */
   private formatDependency(task: EpicTask): string {
-    // Only show dependency indicator for blocked tasks
-    if (task.status !== 'blocked' || task.depends_on.length === 0) return '';
+    // Defensive: handle missing/empty depends_on
+    const deps = task.depends_on ?? [];
+    // Only show dependency indicator for blocked tasks with deps
+    if (task.status !== 'blocked' || deps.length === 0) return '';
     // Show first blocker in short form (just the task number part)
-    const dep = task.depends_on[0];
+    const dep = deps[0];
     // Extract task number from "fn-N.M" -> "N.M"
     const short = dep?.replace(/^fn-/, '') ?? '';
     return ` → ${short}`;
