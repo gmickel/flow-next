@@ -49,9 +49,12 @@ Update via external interval, format as MM:SS.
 - [ ] Progress shows X/Y tasks format
 - [ ] Epic title truncated when needed
 ## Done summary
-TBD
-
+- Added Header component with two-row layout per spec
+- Row 1: status icon + branding, task in brackets, timer MM:SS
+- Row 2: iteration + progress, epic ID + title
+- Supports ASCII icons via useAscii prop
+- All tests (21) pass
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 4c9b9d7aa2091e5609652c2f0e7e7a364c222b28
+- Tests: bun test src/components/header.test.ts
 - PRs:

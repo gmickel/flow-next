@@ -1,7 +1,7 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-13T08:24:49.908199Z",
   "created_at": "2026-01-12T21:03:58.939688Z",
   "depends_on": [
     "fn-9.2",
@@ -9,10 +9,19 @@
     "fn-9.18"
   ],
   "epic": "fn-9",
+  "evidence": {
+    "commits": [
+      "4c9b9d7aa2091e5609652c2f0e7e7a364c222b28"
+    ],
+    "prs": [],
+    "tests": [
+      "bun test src/components/header.test.ts"
+    ]
+  },
   "id": "fn-9.11",
   "priority": null,
   "spec_path": ".flow/tasks/fn-9.11.md",
-  "status": "todo",
+  "status": "done",
   "title": "Header component",
-  "updated_at": "2026-01-12T21:12:47.075492Z"
+  "updated_at": "2026-01-13T08:27:18.285545Z"
 }
