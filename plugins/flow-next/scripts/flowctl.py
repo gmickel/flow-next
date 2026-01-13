@@ -938,14 +938,17 @@ def get_actor() -> str:
 
 
 def scan_max_epic_id(flow_dir: Path) -> int:
-    """Scan .flow/epics/ to find max epic number. Returns 0 if none exist."""
+    """Scan .flow/epics/ to find max epic number. Returns 0 if none exist.
+
+    Handles both legacy (fn-N.json) and new (fn-N-xxx.json) formats.
+    """
     epics_dir = flow_dir / EPICS_DIR
     if not epics_dir.exists():
         return 0
 
     max_n = 0
     for epic_file in epics_dir.glob("fn-*.json"):
-        match = re.match(r"^fn-(\d+)\.json$", epic_file.name)
+        match = re.match(r"^fn-(\d+)(?:-[a-z0-9]{3})?\.json$", epic_file.name)
         if match:
             n = int(match.group(1))
             max_n = max(max_n, n)
