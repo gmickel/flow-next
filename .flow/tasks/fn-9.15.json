@@ -1,16 +1,25 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-13T10:49:05.291727Z",
   "created_at": "2026-01-12T21:04:03.476320Z",
   "depends_on": [
     "fn-9.14"
   ],
   "epic": "fn-9",
+  "evidence": {
+    "commits": [
+      "5b8b6cde99931c6c4fadc5f1d3826c9270f18867"
+    ],
+    "prs": [],
+    "tests": [
+      "bun test"
+    ]
+  },
   "id": "fn-9.15",
   "priority": null,
   "spec_path": ".flow/tasks/fn-9.15.md",
-  "status": "todo",
+  "status": "done",
   "title": "CLI entry point",
-  "updated_at": "2026-01-12T21:07:04.760557Z"
+  "updated_at": "2026-01-13T10:49:47.851072Z"
 }

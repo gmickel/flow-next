@@ -1,6 +1,10 @@
 #!/usr/bin/env bun
-import { TUI } from '@mariozechner/pi-tui';
+/**
+ * CLI entry point for flow-next-tui.
+ * Parses arguments and starts the TUI.
+ */
 import { Command } from 'commander';
+import { createApp } from './app.ts';
 
 const pkg = await Bun.file(new URL('../package.json', import.meta.url)).json();
 
@@ -11,15 +15,18 @@ program
   .description('TUI for monitoring Flow-Next Ralph mode runs')
   .version(pkg.version)
   .option('-l, --light', 'Use light theme')
-  .option('--no-emoji', 'Use ASCII-only icons')
-  .argument('[run]', 'Run directory to monitor')
-  .action(async (run, options) => {
-    console.log('flow-next-tui starting...');
-    console.log('Run:', run ?? 'auto-detect');
-    console.log('Options:', options);
-
-    // Placeholder - will initialize TUI in later tasks
-    console.log('TUI available:', typeof TUI);
+  .option('--no-emoji', 'Use ASCII icons instead of unicode')
+  .option('-r, --run <id>', 'Select specific run')
+  .action(async (options: { light?: boolean; emoji: boolean; run?: string }) => {
+    await createApp({
+      light: options.light,
+      noEmoji: !options.emoji,
+      run: options.run,
+    });
   });
+
+// Handle signals before parsing (in case parsing hangs)
+process.on('SIGINT', () => process.exit(0));
+process.on('SIGTERM', () => process.exit(0));
 
 await program.parseAsync();

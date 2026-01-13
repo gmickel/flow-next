@@ -58,9 +58,12 @@ Required for global npm installs to work.
 - [ ] Ctrl+C exits cleanly
 - [ ] Shebang present: `#!/usr/bin/env bun`
 ## Done summary
-TBD
-
+- Wired index.ts to createApp() with options mapping
+- Added --run <id> option (was positional, now proper option per spec)
+- Added signal handlers before parseAsync
+- Verified: --help, --version, shebang all work
+- Tests pass (386), lint clean
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 5b8b6cde99931c6c4fadc5f1d3826c9270f18867
+- Tests: bun test
 - PRs:
