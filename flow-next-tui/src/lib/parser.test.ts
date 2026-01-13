@@ -340,6 +340,31 @@ describe('parser', () => {
       expect(result.entries).toHaveLength(1);
       expect(result.remainder).toBe('');
     });
+
+    test('parses complete last line without trailing newline', () => {
+      // JSON without trailing newline (e.g., at end of file)
+      const chunk = JSON.stringify({ type: 'text', content: 'final' });
+
+      const result = parseChunk(chunk);
+
+      expect(result.entries).toHaveLength(1);
+      expect(result.entries[0]!.content).toBe('final');
+      expect(result.remainder).toBe('');
+    });
+
+    test('parses multiple lines where last has no trailing newline', () => {
+      const chunk = [
+        JSON.stringify({ type: 'text', content: 'first' }),
+        JSON.stringify({ type: 'text', content: 'last' }), // no \n after
+      ].join('\n');
+
+      const result = parseChunk(chunk);
+
+      expect(result.entries).toHaveLength(2);
+      expect(result.entries[0]!.content).toBe('first');
+      expect(result.entries[1]!.content).toBe('last');
+      expect(result.remainder).toBe('');
+    });
   });
 
   describe('icon constants', () => {

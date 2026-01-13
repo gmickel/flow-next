@@ -94,6 +94,8 @@ export class LogWatcher extends EventEmitter {
     this.currentLogPath = null;
     this.bytePosition = 0;
     this.remainder = '';
+    this.pendingIteration = null;
+    this.readPromise = Promise.resolve();
   }
 
   /**

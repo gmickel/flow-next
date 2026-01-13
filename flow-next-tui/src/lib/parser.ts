@@ -245,12 +245,21 @@ export function parseChunk(chunk: string): {
   const entries: LogEntry[] = [];
 
   // Last line may be incomplete - preserve it as remainder
-  const remainder = lines.pop() ?? '';
+  let remainder = lines.pop() ?? '';
 
   for (const line of lines) {
     const entry = parseLine(line);
     if (entry) {
       entries.push(entry);
+    }
+  }
+
+  // Try parsing remainder - if valid JSON, it's complete (no trailing newline)
+  if (remainder) {
+    const lastEntry = parseLine(remainder);
+    if (lastEntry) {
+      entries.push(lastEntry);
+      remainder = '';
     }
   }
 
