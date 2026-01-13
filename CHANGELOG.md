@@ -2,6 +2,14 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.6.3] - 2026-01-13
+
+### Added
+- **Spec file input for `/flow-next:work`**: Pass `.md` files directly to create epic and start work
+  - `/flow-next:work docs/my-spec.md` creates epic from file, sets plan, creates task, executes
+  - Detection order: task ID > epic ID > .md file > idea text
+  - No changes to Ralph or existing workflows
+
 ## [flow-next-tui 0.1.1] - 2026-01-13
 
 ### Added
