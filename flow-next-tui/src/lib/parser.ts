@@ -118,7 +118,8 @@ export function parseLine(line: string): LogEntry | null {
 
   switch (parsed.type) {
     case 'tool_call': {
-      const tool = parsed.tool ?? 'unknown';
+      // Treat empty/whitespace-only tool as 'unknown'
+      const tool = parsed.tool?.trim() || 'unknown';
       return {
         type: 'tool',
         tool,

@@ -41,6 +41,7 @@ export class LogWatcher extends EventEmitter {
   private remainder = '';
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private isRunning = false;
+  private pendingIteration: number | null = null; // Guard against race conditions
 
   constructor(runPath: string) {
     super();
@@ -129,9 +130,15 @@ export class LogWatcher extends EventEmitter {
         (eventType, filename) => {
           if (!this.isRunning) return;
 
+          // Normalize filename (can be Buffer on some platforms)
+          const name =
+            typeof filename === 'string'
+              ? filename
+              : (filename as Buffer | null)?.toString() ?? '';
+
           // Check if it's a new iteration log
-          if (filename && ITER_LOG_PATTERN.test(filename)) {
-            this.handleNewLogFile(filename);
+          if (name && ITER_LOG_PATTERN.test(name)) {
+            this.handleNewLogFile(name);
           }
         }
       );
@@ -157,17 +164,19 @@ export class LogWatcher extends EventEmitter {
     const newIter = Number.parseInt(match[1], 10);
     const newLogPath = join(this.runPath, filename);
 
-    // Only switch if this is a newer iteration
-    if (this.currentLogPath) {
-      const currentMatch = ITER_LOG_PATTERN.exec(basename(this.currentLogPath));
-      const currentIter = currentMatch?.[1]
-        ? Number.parseInt(currentMatch[1], 10)
-        : -1;
-
-      if (newIter <= currentIter) {
-        return;
-      }
+    // Only switch if this is a newer iteration (including pending)
+    const currentIter = this.getCurrentIteration();
+    if (newIter <= currentIter) {
+      return;
     }
+
+    // Also skip if we're already switching to this or higher iteration
+    if (this.pendingIteration != null && newIter <= this.pendingIteration) {
+      return;
+    }
+
+    // Mark as pending to prevent race conditions
+    this.pendingIteration = newIter;
 
     // Switch to new log (async to await initial read)
     this.switchToNewLog(newIter, newLogPath).catch((error) => {
@@ -176,6 +185,15 @@ export class LogWatcher extends EventEmitter {
         error instanceof Error ? error : new Error(String(error))
       );
     });
+  }
+
+  /**
+   * Get current iteration number from currentLogPath
+   */
+  private getCurrentIteration(): number {
+    if (!this.currentLogPath) return -1;
+    const match = ITER_LOG_PATTERN.exec(basename(this.currentLogPath));
+    return match?.[1] ? Number.parseInt(match[1], 10) : -1;
   }
 
   /**
@@ -189,9 +207,11 @@ export class LogWatcher extends EventEmitter {
 
     // Wait for file to exist (fs.watch event can fire before file is created)
     let attempts = 0;
+    let fileExists = false;
     while (attempts < 10) {
       try {
         await stat(newLogPath);
+        fileExists = true;
         break;
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -203,11 +223,26 @@ export class LogWatcher extends EventEmitter {
       }
     }
 
-    if (!this.isRunning) return;
+    // Bail if file never appeared
+    if (!fileExists) {
+      this.pendingIteration = null;
+      return;
+    }
+
+    // Check if this switch is stale (higher iteration now pending)
+    if (this.pendingIteration != null && newIter < this.pendingIteration) {
+      return;
+    }
+
+    if (!this.isRunning) {
+      this.pendingIteration = null;
+      return;
+    }
 
     this.currentLogPath = newLogPath;
     this.bytePosition = 0;
     this.remainder = '';
+    this.pendingIteration = null;
 
     this.emit('new-iteration', newIter, newLogPath);
 

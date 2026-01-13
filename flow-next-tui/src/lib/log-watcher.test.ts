@@ -284,27 +284,45 @@ describe('LogWatcher', () => {
 
       const watcher = new LogWatcher(tempDir);
       const received: LogEntry[] = [];
+      const errors: Error[] = [];
 
       watcher.on('line', (entry) => received.push(entry));
+      watcher.on('error', (err) => errors.push(err));
 
       await watcher.start();
       await new Promise((resolve) => setTimeout(resolve, 150));
 
-      // Truncate file
-      await writeFile(logPath, '');
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      // Should have received original content
+      expect(received.length).toBeGreaterThanOrEqual(1);
+      expect(received[0]!.content).toBe('original');
 
-      // Write new content
+      // Truncate file and write new content
+      await writeFile(logPath, '');
       await appendFile(
         logPath,
         JSON.stringify({ type: 'text', content: 'new' }) + '\n'
       );
-      await new Promise((resolve) => setTimeout(resolve, 250));
+
+      // Poll for new content (fs.watch timing varies by platform)
+      let attempts = 0;
+      while (
+        received.filter((e) => e.content === 'new').length === 0 &&
+        attempts < 15
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        attempts++;
+      }
 
       watcher.stop();
 
-      // Should have original + new content
-      expect(received.length).toBeGreaterThanOrEqual(1);
+      // No errors during truncation handling
+      expect(errors).toHaveLength(0);
+
+      // Should not have duplicate "original" entries
+      const originalEntries = received.filter((e) => e.content === 'original');
+      expect(originalEntries.length).toBe(1);
+
+      // New content detection is platform-dependent; at minimum verify no crash
     });
   });
 
