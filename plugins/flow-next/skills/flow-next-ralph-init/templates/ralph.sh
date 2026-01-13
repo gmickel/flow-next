@@ -317,16 +317,27 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Set up signal trap for watch mode (pipe chains need clean Ctrl+C handling)
-if [[ -n "$WATCH_MODE" ]]; then
-  cleanup() { kill -- -$$ 2>/dev/null; exit 130; }
-  trap cleanup SIGINT SIGTERM
-fi
+# Set up signal trap for clean Ctrl+C handling
+# Must kill all child processes including timeout and claude
+cleanup() {
+  trap - SIGINT SIGTERM  # Prevent re-entry
+  # Kill all child processes
+  pkill -P $$ 2>/dev/null
+  # Kill process group as fallback
+  kill -- -$$ 2>/dev/null
+  exit 130
+}
+trap cleanup SIGINT SIGTERM
 
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 
 # Detect timeout command (GNU coreutils). On macOS: brew install coreutils
-if command -v timeout >/dev/null 2>&1; then
+# Use --foreground to keep child in same process group for signal handling
+if command -v timeout >/dev/null 2>&1 && timeout --foreground 0 true 2>/dev/null; then
+  TIMEOUT_CMD="timeout --foreground"
+elif command -v gtimeout >/dev/null 2>&1 && gtimeout --foreground 0 true 2>/dev/null; then
+  TIMEOUT_CMD="gtimeout --foreground"
+elif command -v timeout >/dev/null 2>&1; then
   TIMEOUT_CMD="timeout"
 elif command -v gtimeout >/dev/null 2>&1; then
   TIMEOUT_CMD="gtimeout"
@@ -758,7 +769,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
     [[ ! " ${claude_args[*]} " =~ " --verbose " ]] && claude_args+=(--verbose)
     echo ""
     if [[ -n "$TIMEOUT_CMD" ]]; then
-      "$TIMEOUT_CMD" "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py" --verbose
+      $TIMEOUT_CMD "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py" --verbose
     else
       "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py" --verbose
     fi
@@ -769,7 +780,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
     # Add --verbose only if not already set (needed for tool visibility)
     [[ ! " ${claude_args[*]} " =~ " --verbose " ]] && claude_args+=(--verbose)
     if [[ -n "$TIMEOUT_CMD" ]]; then
-      "$TIMEOUT_CMD" "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py"
+      $TIMEOUT_CMD "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py"
     else
       "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py"
     fi
@@ -781,7 +792,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
     # --verbose required for stream-json with --print
     [[ ! " ${claude_args[*]} " =~ " --verbose " ]] && claude_args+=(--verbose)
     if [[ -n "$TIMEOUT_CMD" ]]; then
-      "$TIMEOUT_CMD" "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" > "$iter_log" 2>&1
+      $TIMEOUT_CMD "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" > "$iter_log" 2>&1
     else
       "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" > "$iter_log" 2>&1
     fi
