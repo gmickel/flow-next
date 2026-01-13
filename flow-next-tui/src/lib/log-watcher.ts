@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { watch, type FSWatcher } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import type { LogEntry } from './types';
 
@@ -159,9 +159,7 @@ export class LogWatcher extends EventEmitter {
 
     // Only switch if this is a newer iteration
     if (this.currentLogPath) {
-      const currentMatch = ITER_LOG_PATTERN.exec(
-        this.currentLogPath.split('/').pop() ?? ''
-      );
+      const currentMatch = ITER_LOG_PATTERN.exec(basename(this.currentLogPath));
       const currentIter = currentMatch?.[1]
         ? Number.parseInt(currentMatch[1], 10)
         : -1;
@@ -182,6 +180,15 @@ export class LogWatcher extends EventEmitter {
     this.remainder = '';
 
     this.emit('new-iteration', newIter, newLogPath);
+
+    // Read existing content before watching for changes
+    this.readFromPosition().catch((error) => {
+      this.emit(
+        'error',
+        error instanceof Error ? error : new Error(String(error))
+      );
+    });
+
     this.watchCurrentLog();
   }
 

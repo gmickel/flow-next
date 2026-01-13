@@ -100,18 +100,20 @@ export function parseLine(line: string): LogEntry | null {
   }
 
   switch (parsed.type) {
-    case 'tool_call':
+    case 'tool_call': {
+      const tool = parsed.tool ?? 'unknown';
       return {
         type: 'tool',
-        tool: parsed.tool ?? 'unknown',
-        content: formatToolInput(parsed.tool, parsed.input),
+        tool,
+        content: formatToolInput(tool, parsed.input),
       };
+    }
 
     case 'tool_result':
       return {
         type: 'response',
         content: parsed.content ?? parsed.error ?? '',
-        success: !parsed.error,
+        success: parsed.error == null,
       };
 
     case 'text':

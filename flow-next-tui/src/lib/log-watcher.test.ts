@@ -152,13 +152,21 @@ describe('LogWatcher', () => {
         JSON.stringify({ type: 'text', content: 'iter2' }) + '\n'
       );
 
-      // Wait for directory watch to pick it up
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      // Poll for iteration event (fs.watch timing varies by platform)
+      let attempts = 0;
+      while (iterations.length === 0 && attempts < 10) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        attempts++;
+      }
 
       watcher.stop();
 
-      // May or may not fire depending on fs.watch timing
-      // Just check no errors occurred
+      // Should have detected the new iteration
+      expect(iterations.length).toBeGreaterThanOrEqual(1);
+      if (iterations.length > 0) {
+        expect(iterations[0]!.num).toBe(2);
+        expect(iterations[0]!.path).toContain('iter-2.log');
+      }
     });
 
     test('does not switch to lower iteration number', async () => {
