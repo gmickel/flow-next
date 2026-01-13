@@ -3,10 +3,11 @@
  * Implements j/k navigation, Enter to select, and background highlight for selected row.
  */
 
+import chalk from 'chalk';
 import type { Component } from '@mariozechner/pi-tui';
 import { matchesKey, truncateToWidth } from '@mariozechner/pi-tui';
 
-import { padToWidth, visibleWidth } from '../lib/render.ts';
+import { visibleWidth } from '../lib/render.ts';
 import type { EpicTask } from '../lib/types.ts';
 import type { Theme } from '../themes/index.ts';
 
@@ -126,6 +127,20 @@ export class TaskList implements Component {
     }
   }
 
+  /** Get status color code (256-color) for a task */
+  private getStatusColorCode(task: EpicTask): number {
+    switch (task.status) {
+      case 'done':
+        return this.theme.palette.success;
+      case 'in_progress':
+        return this.theme.palette.progress;
+      case 'blocked':
+        return this.theme.palette.warning;
+      default:
+        return this.theme.palette.dim;
+    }
+  }
+
   /** Format dependency indicator for blocked tasks only */
   private formatDependency(task: EpicTask): string {
     // Defensive: handle missing/empty depends_on
@@ -173,22 +188,57 @@ export class TaskList implements Component {
       const prefixWidth = iconWidth + 1; // icon + space
       const idWidth = task.id.length + 1; // id + space
       const depWidth = depStr ? visibleWidth(depStr) : 0;
-      // Clamp titleMaxWidth to available space (min 1 for truncateToWidth)
-      const availableWidth = width - prefixWidth - idWidth - depWidth - 1;
+
+      // Handle very narrow widths: if fixed parts don't fit, truncate id too
+      const fixedWidth = prefixWidth + idWidth + depWidth;
+      let displayId = task.id;
+      let actualIdWidth = idWidth;
+      if (fixedWidth >= width) {
+        // Truncate id to fit
+        const availableForId = Math.max(1, width - prefixWidth - depWidth - 2);
+        displayId = truncateToWidth(task.id, availableForId, '…');
+        actualIdWidth = visibleWidth(displayId) + 1;
+      }
+
+      // Calculate available space for title
+      const availableWidth = width - prefixWidth - actualIdWidth - depWidth;
       const titleMaxWidth = Math.max(1, availableWidth);
       const truncatedTitle = truncateToWidth(task.title, titleMaxWidth, '…');
 
+      // Get colors based on status
+      const colorFn = this.getStatusColor(task);
+      const bgCode = this.theme.palette.selectedBg;
+
       if (isSelected) {
-        // For selected rows: build unstyled line, apply single bg+fg to avoid nested reset issues
-        const rawLine = `${icon} ${task.id} ${truncatedTitle}${depStr}`;
-        const padded = padToWidth(rawLine, width);
-        // Use selectList.selectedText which applies bg+fg together
-        lines.push(this.theme.selectList.selectedText(padded));
+        // For selected rows: apply per-segment fg + selected bg to each segment
+        // This preserves status colors while indicating selection
+        const statusFgCode = this.getStatusColorCode(task);
+        const dimFgCode = this.theme.palette.dim;
+
+        // Build line with both bg and fg per segment
+        const coloredIcon = chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(icon);
+        const space1 = chalk.bgAnsi256(bgCode)(' ');
+        const coloredId = chalk.bgAnsi256(bgCode).ansi256(dimFgCode)(displayId);
+        const space2 = chalk.bgAnsi256(bgCode)(' ');
+        const coloredTitle = chalk.bgAnsi256(bgCode).ansi256(this.theme.palette.text)(
+          truncatedTitle
+        );
+        const coloredDep = depStr
+          ? chalk.bgAnsi256(bgCode).ansi256(statusFgCode)(depStr)
+          : '';
+
+        // Calculate padding needed
+        const rawLine = `${icon} ${displayId} ${truncatedTitle}${depStr}`;
+        const paddingNeeded = Math.max(0, width - visibleWidth(rawLine));
+        const padding = chalk.bgAnsi256(bgCode)(' '.repeat(paddingNeeded));
+
+        lines.push(
+          `${coloredIcon}${space1}${coloredId}${space2}${coloredTitle}${coloredDep}${padding}`
+        );
       } else {
         // For unselected rows: use per-segment colors
-        const colorFn = this.getStatusColor(task);
         const coloredIcon = colorFn(icon);
-        const dimId = this.theme.dim(task.id);
+        const dimId = this.theme.dim(displayId);
         // Dep indicator uses same color as status (blocked => warning)
         const coloredDep = depStr ? colorFn(depStr) : '';
         lines.push(`${coloredIcon} ${dimId} ${truncatedTitle}${coloredDep}`);

@@ -176,24 +176,25 @@ describe('TaskList', () => {
       expect(visibleWidth(lines[1]!)).toBeLessThan(50);
     });
 
-    test('selected row uses selectList.selectedText for single-pass styling', () => {
-      // Create a mock theme that marks selectedText usage
-      const mockTheme = {
-        ...darkTheme,
-        selectList: {
-          ...darkTheme.selectList,
-          selectedText: (s: string) => `[SEL]${s}[/SEL]`,
-        },
-      };
-      const tasks = [mockTask(), mockTask({ id: 'fn-1.2', title: 'Second' })];
-      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: mockTheme });
+    test('selected row preserves status colors with selection background', () => {
+      // The implementation applies per-segment bg+fg using chalk.bgAnsi256().ansi256()
+      // We can verify this by checking the row has ANSI codes (when in TTY)
+      // Since tests don't run in TTY, just verify width and basic structure
+      const tasks = [
+        mockTask({ status: 'done' }),
+        mockTask({ id: 'fn-1.2', status: 'todo' }),
+      ];
+      const list = new TaskList({ tasks, selectedIndex: 0, onSelect: noop, theme: darkTheme });
       const lines = list.render(50);
 
-      // Selected row should use selectList.selectedText
-      expect(lines[0]).toContain('[SEL]');
-      expect(lines[0]).toContain('[/SEL]');
-      // Second row should not have marker
-      expect(lines[1]).not.toContain('[SEL]');
+      // Selected row should be padded to full width
+      expect(visibleWidth(lines[0]!)).toBe(50);
+      // Unselected row should not be padded
+      expect(visibleWidth(lines[1]!)).toBeLessThan(50);
+
+      // Both rows should contain the status icon (content preserved)
+      expect(stripAnsi(lines[0]!)).toContain(STATUS_ICONS.done);
+      expect(stripAnsi(lines[1]!)).toContain(STATUS_ICONS.todo);
     });
 
     test('scroll indicator shown when tasks exceed maxVisible', () => {
