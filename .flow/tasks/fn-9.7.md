@@ -57,9 +57,15 @@ render(width: number): string[] {
 - [ ] ANSI codes don't break width calculation
 - [ ] Input forwarded to appropriate child
 ## Done summary
-TBD
+- Added SplitPanel component for horizontal two-panel layout
+- Implements configurable ratio (default 0.3) and separator (default │)
+- Handles ANSI codes via visibleWidth/padToWidth from render.ts
+- Falls back to left-only when width too small
 
+Tests verify all acceptance criteria:
+- Side-by-side rendering, ratio control, separator visibility
+- Height padding, ANSI handling, input forwarding
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 8073ab1d1378824ab736cc4ae74c5645280f24d0
+- Tests: bun test
 - PRs:

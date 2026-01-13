@@ -1,17 +1,26 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-13T00:00:00.254165Z",
   "created_at": "2026-01-12T21:03:52.640965Z",
   "depends_on": [
     "fn-9.2",
     "fn-9.18"
   ],
   "epic": "fn-9",
+  "evidence": {
+    "commits": [
+      "8073ab1d1378824ab736cc4ae74c5645280f24d0"
+    ],
+    "prs": [],
+    "tests": [
+      "bun test"
+    ]
+  },
   "id": "fn-9.7",
   "priority": null,
   "spec_path": ".flow/tasks/fn-9.7.md",
-  "status": "todo",
+  "status": "done",
   "title": "SplitPanel component",
-  "updated_at": "2026-01-12T21:12:46.920122Z"
+  "updated_at": "2026-01-13T00:02:02.742640Z"
 }
