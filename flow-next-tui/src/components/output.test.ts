@@ -61,8 +61,8 @@ describe('OutputPanel', () => {
       const lines = panel.render(50);
 
       const content = lines.map((l) => stripAnsi(l)).join('\n');
-      expect(content).toContain('◂'); // Read icon
-      expect(content).toContain('⚡'); // Bash icon
+      expect(content).toContain('>'); // Read icon
+      expect(content).toContain('$'); // Bash icon
     });
 
     test('renders success icon for successful entries', () => {
@@ -72,7 +72,7 @@ describe('OutputPanel', () => {
       const lines = panel.render(50);
 
       const content = lines.map((l) => stripAnsi(l)).join('\n');
-      expect(content).toContain('✓');
+      expect(content).toContain('+'); // success icon
     });
 
     test('renders failure icon for failed entries', () => {
@@ -82,10 +82,10 @@ describe('OutputPanel', () => {
       const lines = panel.render(50);
 
       const content = lines.map((l) => stripAnsi(l)).join('\n');
-      expect(content).toContain('✗');
+      expect(content).toContain('x'); // failure icon
     });
 
-    test('ASCII mode uses ASCII icons', () => {
+    test('ASCII mode uses same ASCII icons', () => {
       const panel = new OutputPanel({ theme: darkTheme, useAscii: true });
       panel.appendLine(mockEntry({ tool: 'Read', content: 'Reading' }));
       panel.appendLine(mockEntry({ tool: 'Bash', content: 'Running' }));
@@ -95,9 +95,8 @@ describe('OutputPanel', () => {
       const lines = panel.render(50);
 
       const content = lines.map((l) => stripAnsi(l)).join('\n');
-      expect(content).toContain('<'); // Read ASCII icon
-      expect(content).toContain('!'); // Bash (per parser.ts ASCII_ICONS)
-      // + might appear in borders too, so just check content has success marker
+      expect(content).toContain('>'); // Read icon
+      expect(content).toContain('$'); // Bash icon
       expect(content).toContain('x'); // Failure
     });
 

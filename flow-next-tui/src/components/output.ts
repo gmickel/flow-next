@@ -124,7 +124,7 @@ export class OutputPanel implements Component {
     return iconForEntry(entry, this.useAscii);
   }
 
-  /** Get color function for a log entry */
+  /** Get color function for a log entry icon */
   private getEntryColor(entry: LogEntry): (s: string) => string {
     if (entry.success === true) {
       return this.theme.success;
@@ -135,7 +135,11 @@ export class OutputPanel implements Component {
     if (entry.type === 'error') {
       return this.theme.error;
     }
-    return this.theme.text;
+    // Tool entries use accent color for their icons
+    if (entry.type === 'tool') {
+      return this.theme.accent;
+    }
+    return this.theme.dim;
   }
 
   /**
@@ -225,6 +229,7 @@ export class OutputPanel implements Component {
   /**
    * Get meaningful display content for an entry.
    * Filters noise like raw JSON, empty content, etc.
+   * Applies color to tool names and content.
    */
   private getDisplayContent(entry: LogEntry, sanitized: string): string {
     const firstLine = sanitized.split('\n')[0]?.trim() ?? '';
@@ -233,9 +238,29 @@ export class OutputPanel implements Component {
     if (this.isNoiseContent(firstLine)) {
       // For tool results, show a cleaner summary
       if (entry.type === 'response' && entry.success !== undefined) {
-        return entry.success ? this.theme.dim('OK') : this.theme.error('Failed');
+        return entry.success ? this.theme.success('OK') : this.theme.error('Failed');
       }
       return this.theme.dim('…');
+    }
+
+    // For tool entries, colorize the tool name
+    if (entry.type === 'tool' && entry.tool) {
+      const colonIndex = firstLine.indexOf(':');
+      if (colonIndex > 0) {
+        const toolName = firstLine.slice(0, colonIndex + 1);
+        const rest = firstLine.slice(colonIndex + 1);
+        return this.theme.accent(toolName) + this.theme.text(rest);
+      }
+    }
+
+    // For successful responses, use text color; for errors, use error color
+    if (entry.type === 'response') {
+      if (entry.success === false) {
+        return this.theme.error(firstLine);
+      }
+      if (entry.success === true) {
+        return this.theme.dim(firstLine);
+      }
     }
 
     return firstLine;

@@ -1,35 +1,36 @@
 import type { LogEntry } from './types';
 
 /**
- * Tool icons for display - distinctive glyphs per tool type
+ * Tool icons for display - using reliably single-cell ASCII characters
+ * These render consistently across all monospace fonts
  */
 export const TOOL_ICONS = {
-  Read: '◂',      // file read
-  Write: '▸',     // file write
-  Glob: '◇',      // pattern search
-  Grep: '◈',      // content search
-  Edit: '✎',      // edit operation
-  Bash: '⚡',     // command execution
-  Task: '◆',      // agent task
-  WebFetch: '↯',  // web fetch
-  WebSearch: '⌕', // web search
-  success: '✓',
-  failure: '✗',
+  Read: '>',      // file read (arrow in)
+  Write: '<',     // file write (arrow out)
+  Glob: '?',      // pattern search
+  Grep: '/',      // content search (like vim search)
+  Edit: '*',      // edit operation
+  Bash: '$',      // command execution (shell prompt)
+  Task: '@',      // agent task
+  WebFetch: 'v',  // web fetch (download)
+  WebSearch: '?', // web search
+  success: '+',   // success (green)
+  failure: 'x',   // failure (red)
 } as const;
 
 /**
- * ASCII fallbacks for --no-emoji mode
+ * ASCII fallbacks for --no-emoji mode (same as above since we use ASCII)
  */
 export const ASCII_ICONS = {
-  Read: '<',
-  Write: '>',
+  Read: '>',
+  Write: '<',
   Glob: '?',
   Grep: '/',
-  Edit: 'e',
-  Bash: '!',
-  Task: '*',
-  WebFetch: 'w',
-  WebSearch: 's',
+  Edit: '*',
+  Bash: '$',
+  Task: '@',
+  WebFetch: 'v',
+  WebSearch: '?',
   success: '+',
   failure: 'x',
 } as const;
@@ -87,8 +88,8 @@ export function getIcon(tool: string, ascii = false): string {
   if (tool in icons) {
     return icons[tool as keyof typeof icons];
   }
-  // Default icon for unknown tools
-  return ascii ? '*' : '◆';
+  // Default icon for unknown tools (@ for agent/task style)
+  return '@';
 }
 
 /**
@@ -111,8 +112,8 @@ export function iconForEntry(
   if (entry.success === true) {
     return getIcon('success', ascii);
   }
-  // Default for text responses (distinct from file ops which use →)
-  return ascii ? '*' : '◆';
+  // Default for text responses
+  return '@';
 }
 
 /**

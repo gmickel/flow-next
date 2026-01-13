@@ -35,9 +35,10 @@ describe('TaskDetail', () => {
       const lines = detail.render(50);
 
       expect(lines.length).toBeGreaterThan(0);
-      const titleLine = stripAnsi(lines[0]!);
-      expect(titleLine).toContain(STATUS_ICONS.todo);
-      expect(titleLine).toContain('Add validation');
+      // Line 0 is panel header, content starts at line 1+
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      expect(allText).toContain(STATUS_ICONS.todo);
+      expect(allText).toContain('Add validation');
     });
 
     test('renders metadata line with id and status', () => {
@@ -45,10 +46,10 @@ describe('TaskDetail', () => {
       const detail = new TaskDetail({ task, spec: '', theme: darkTheme });
       const lines = detail.render(60);
 
-      // Line 2 should be metadata
-      const metaLine = stripAnsi(lines[1]!);
-      expect(metaLine).toContain('fn-2.5');
-      expect(metaLine).toContain('in progress');
+      // Content is wrapped in borders, search all text
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      expect(allText).toContain('fn-2.5');
+      expect(allText).toContain('in progress');
     });
 
     test('renders receipt indicators', () => {
@@ -62,13 +63,13 @@ describe('TaskDetail', () => {
       });
       const lines = detail.render(50);
 
-      // Line 3 should be receipts
-      const receiptLine = stripAnsi(lines[2]!);
-      expect(receiptLine).toContain('Plan');
-      expect(receiptLine).toContain('Impl');
+      // Content is wrapped in borders, search all text
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      expect(allText).toContain('Plan');
+      expect(allText).toContain('Impl');
       // Has both check and cross
-      expect(receiptLine).toContain('✓');
-      expect(receiptLine).toContain('✗');
+      expect(allText).toContain('✓');
+      expect(allText).toContain('✗');
     });
 
     test('renders receipt with dash for undefined status', () => {
@@ -82,10 +83,10 @@ describe('TaskDetail', () => {
       });
       const lines = detail.render(50);
 
-      const receiptLine = stripAnsi(lines[2]!);
-      expect(receiptLine).toContain('Plan');
-      expect(receiptLine).toContain('✓');
-      expect(receiptLine).toContain('-'); // dash for undefined impl
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      expect(allText).toContain('Plan');
+      expect(allText).toContain('✓');
+      expect(allText).toContain('-'); // dash for undefined impl
     });
 
     test('renders done task with success icon', () => {
@@ -93,7 +94,8 @@ describe('TaskDetail', () => {
       const detail = new TaskDetail({ task, spec: '', theme: darkTheme });
       const lines = detail.render(50);
 
-      expect(stripAnsi(lines[0]!)).toContain(STATUS_ICONS.done);
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      expect(allText).toContain(STATUS_ICONS.done);
     });
 
     test('renders blocked task with blocked icon', () => {
@@ -101,7 +103,8 @@ describe('TaskDetail', () => {
       const detail = new TaskDetail({ task, spec: '', theme: darkTheme });
       const lines = detail.render(50);
 
-      expect(stripAnsi(lines[0]!)).toContain(STATUS_ICONS.blocked);
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      expect(allText).toContain(STATUS_ICONS.blocked);
     });
 
     test('renders block reason for blocked tasks', () => {
@@ -157,7 +160,8 @@ describe('TaskDetail', () => {
       });
       const lines = detail.render(50);
 
-      expect(stripAnsi(lines[0]!)).toContain(ASCII_ICONS.done);
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      expect(allText).toContain(ASCII_ICONS.done);
     });
 
     test('ASCII mode uses Y/N for receipts', () => {
@@ -172,9 +176,9 @@ describe('TaskDetail', () => {
       });
       const lines = detail.render(50);
 
-      const receiptLine = stripAnsi(lines[2]!);
-      expect(receiptLine).toContain('Y');
-      expect(receiptLine).toContain('N');
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      expect(allText).toContain('Y');
+      expect(allText).toContain('N');
     });
 
     test('truncates long title with ellipsis', () => {
@@ -185,8 +189,12 @@ describe('TaskDetail', () => {
       const detail = new TaskDetail({ task, spec: '', theme: darkTheme });
       const lines = detail.render(30);
 
-      expect(stripAnsi(lines[0]!)).toContain('…');
-      expect(visibleWidth(lines[0]!)).toBeLessThanOrEqual(30);
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      expect(allText).toContain('…');
+      // All lines should respect width
+      for (const line of lines) {
+        expect(visibleWidth(line)).toBeLessThanOrEqual(30);
+      }
     });
 
     test('handles empty spec', () => {
@@ -241,7 +249,8 @@ describe('TaskDetail', () => {
       detail.setTask(task2);
       const lines = detail.render(50);
 
-      expect(stripAnsi(lines[0]!)).toContain('Second task');
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      expect(allText).toContain('Second task');
       expect(detail.getScrollOffset()).toBe(0);
     });
 
@@ -271,8 +280,8 @@ describe('TaskDetail', () => {
       detail.setReceipts({ plan: true, impl: true });
       const lines = detail.render(50);
 
-      const receiptLine = stripAnsi(lines[2]!);
-      expect(receiptLine.match(/✓/g)?.length).toBe(2);
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      expect(allText.match(/✓/g)?.length).toBe(2);
     });
 
     test('setBlockReason updates block reason', () => {
@@ -578,12 +587,12 @@ describe('TaskDetail', () => {
       const lines = detail.render(60);
 
       // \r and \t should be replaced with spaces, not executed
-      const titleLine = stripAnsi(lines[0]!);
-      expect(titleLine).toContain('Legit');
-      expect(titleLine).not.toContain('\r');
-      expect(titleLine).not.toContain('\t');
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      expect(allText).toContain('Legit');
+      expect(allText).not.toContain('\r');
+      expect(allText).not.toContain('\t');
       // PWN should still be visible (not overwriting), separated by space
-      expect(titleLine).toContain('PWN');
+      expect(allText).toContain('PWN');
     });
 
     test('control chars in task id are neutralized', () => {
@@ -591,9 +600,9 @@ describe('TaskDetail', () => {
       const detail = new TaskDetail({ task, spec: '', theme: darkTheme });
       const lines = detail.render(60);
 
-      const metaLine = stripAnsi(lines[1]!);
-      expect(metaLine).toContain('fn-1');
-      expect(metaLine).not.toContain('\x00');
+      const allText = lines.map((l) => stripAnsi(l)).join('\n');
+      expect(allText).toContain('fn-1');
+      expect(allText).not.toContain('\x00');
     });
 
     test('control chars in spec are neutralized except newlines', () => {
