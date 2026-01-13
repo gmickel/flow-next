@@ -18,7 +18,7 @@ const program = new Command();
 program
   .name('flow-next-tui')
   .description('TUI for monitoring Flow-Next Ralph mode runs')
-  .version(pkg.version)
+  .version(pkg.version, '-v, --version')
   .option('-l, --light', 'Use light theme')
   .option('--no-emoji', 'Use ASCII icons instead of unicode')
   .option('-r, --run <id>', 'Select specific run')
