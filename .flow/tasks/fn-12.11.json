@@ -1,16 +1,21 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-13T18:30:21.144824Z",
   "created_at": "2026-01-13T16:30:26.428416Z",
   "depends_on": [
     "fn-12.9"
   ],
   "epic": "fn-12",
+  "evidence": {
+    "docs": [
+      "README.md ID Format section updated"
+    ]
+  },
   "id": "fn-12.11",
   "priority": null,
   "spec_path": ".flow/tasks/fn-12.11.md",
-  "status": "todo",
+  "status": "done",
   "title": "Update README.md docs for new ID format",
-  "updated_at": "2026-01-13T16:30:26.428605Z"
+  "updated_at": "2026-01-13T18:31:09.380607Z"
 }
