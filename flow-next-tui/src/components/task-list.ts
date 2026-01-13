@@ -165,16 +165,17 @@ export class TaskList implements Component {
       const icon = this.getStatusIcon(task);
 
       // Format: "● fn-1.3 Add validation... → 1.2"
-      const iconWidth = this.useAscii ? 3 : 1;
       const depStr = this.formatDependency(task);
 
       // Calculate component widths for proper truncation
-      // prefix (icon + space) + id + space + title + dep indicator
-      const prefixWidth = iconWidth + 1;
+      // Use visibleWidth for icon to handle both Unicode and ASCII modes
+      const iconWidth = visibleWidth(icon);
+      const prefixWidth = iconWidth + 1; // icon + space
       const idWidth = task.id.length + 1; // id + space
       const depWidth = depStr ? visibleWidth(depStr) : 0;
-      // Reserve 1 char safety margin
-      const titleMaxWidth = Math.max(5, width - prefixWidth - idWidth - depWidth - 1);
+      // Clamp titleMaxWidth to available space (min 1 for truncateToWidth)
+      const availableWidth = width - prefixWidth - idWidth - depWidth - 1;
+      const titleMaxWidth = Math.max(1, availableWidth);
       const truncatedTitle = truncateToWidth(task.title, titleMaxWidth, '…');
 
       if (isSelected) {
@@ -188,7 +189,8 @@ export class TaskList implements Component {
         const colorFn = this.getStatusColor(task);
         const coloredIcon = colorFn(icon);
         const dimId = this.theme.dim(task.id);
-        const coloredDep = depStr ? this.theme.warning(depStr) : '';
+        // Dep indicator uses same color as status (blocked => warning)
+        const coloredDep = depStr ? colorFn(depStr) : '';
         lines.push(`${coloredIcon} ${dimId} ${truncatedTitle}${coloredDep}`);
       }
     }
