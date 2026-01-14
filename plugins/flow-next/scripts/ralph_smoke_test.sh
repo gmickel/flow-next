@@ -5,6 +5,19 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TEST_DIR="/tmp/ralph-smoke-$$"
 
+# Python detection: prefer python3, fallback to python (Windows support, GH-35)
+pick_python() {
+  if [[ -n "${PYTHON_BIN:-}" ]]; then
+    command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
+  fi
+  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
+  if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
+  echo ""
+}
+
+PYTHON_BIN="$(pick_python)"
+[[ -n "$PYTHON_BIN" ]] || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
+
 # Safety: never run tests from the main plugin repo
 if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-next/.claude-plugin/plugin.json" ]]; then
   echo "ERROR: refusing to run from main plugin repo. Run from any other directory." >&2
@@ -54,7 +67,7 @@ write_config() {
   local max_iter="$5"
   local max_turns="$6"
   local max_attempts="$7"
-  python3 - <<'PY' "$plan" "$work" "$require" "$branch" "$max_iter" "$max_turns" "$max_attempts"
+  "$PYTHON_BIN" - <<'PY' "$plan" "$work" "$require" "$branch" "$max_iter" "$max_turns" "$max_attempts"
 from pathlib import Path
 import re, sys
 plan, work, require, branch, max_iter, max_turns, max_attempts = sys.argv[1:8]
@@ -76,7 +89,7 @@ PY
 
 # Extract epic/task ID from JSON output
 extract_id() {
-  python3 -c "import json,sys; print(json.load(sys.stdin)['id'])"
+  "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['id'])"
 }
 
 scaffold
@@ -195,7 +208,7 @@ TASK2_2="$(echo "$TASK2_2_JSON" | extract_id)"
 # Use rp for both to test receipt generation (none skips receipts correctly via fix for #8)
 write_config "rp" "rp" "1" "new" "6" "5" "2"
 STUB_MODE=success STUB_WRITE_RECEIPT=1 CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh >/dev/null
-python3 - <<PY "$TASK2_1" "$TASK2_2"
+"$PYTHON_BIN" - <<PY "$TASK2_1" "$TASK2_2"
 import json, sys
 from pathlib import Path
 for tid in sys.argv[1:3]:
@@ -203,7 +216,7 @@ for tid in sys.argv[1:3]:
     assert data["status"] == "done"
 PY
 run_dir="$(latest_run_dir)"
-python3 - <<PY "$run_dir" "$EPIC2" "$TASK2_1"
+"$PYTHON_BIN" - <<PY "$run_dir" "$EPIC2" "$TASK2_1"
 import json, sys
 from pathlib import Path
 run_dir, epic2, task2_1 = sys.argv[1:4]
@@ -301,7 +314,7 @@ TASK4_1_JSON="$(scripts/ralph/flowctl task create --epic "$EPIC4" --title "Stuck
 TASK4_1="$(echo "$TASK4_1_JSON" | extract_id)"
 write_config "none" "none" "0" "new" "3" "5" "2"
 STUB_MODE=retry CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh >/dev/null
-python3 - <<PY "$TASK4_1"
+"$PYTHON_BIN" - <<PY "$TASK4_1"
 import json, sys
 from pathlib import Path
 data = json.loads(Path(f".flow/tasks/{sys.argv[1]}.json").read_text())
@@ -353,7 +366,7 @@ set +e
 STUB_MODE=success STUB_EXIT_CODE=1 CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh >/dev/null 2>&1
 rc=$?
 set -e
-python3 - <<PY "$TASK6_1"
+"$PYTHON_BIN" - <<PY "$TASK6_1"
 import json, sys
 from pathlib import Path
 data = json.loads(Path(f".flow/tasks/{sys.argv[1]}.json").read_text())
@@ -377,7 +390,7 @@ set +e
 STUB_MODE=success STUB_EXIT_CODE=1 STUB_SKIP_DONE=1 CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh >/dev/null 2>&1
 rc=$?
 set -e
-python3 - <<PY "$TASK7_1"
+"$PYTHON_BIN" - <<PY "$TASK7_1"
 import json, sys
 from pathlib import Path
 data = json.loads(Path(f".flow/tasks/{sys.argv[1]}.json").read_text())

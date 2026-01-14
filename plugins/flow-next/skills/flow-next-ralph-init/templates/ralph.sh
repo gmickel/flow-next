@@ -1,10 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Windows / Git Bash hardening (GH-35)
+# ─────────────────────────────────────────────────────────────────────────────
+UNAME_S="$(uname -s 2>/dev/null || echo "")"
+IS_WINDOWS=0
+case "$UNAME_S" in
+  MINGW*|MSYS*|CYGWIN*) IS_WINDOWS=1 ;;
+esac
+
+# Python detection: prefer python3, fallback to python (common on Windows)
+pick_python() {
+  if [[ -n "${PYTHON_BIN:-}" ]]; then
+    command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
+  fi
+  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
+  if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
+  echo ""
+}
+
+PYTHON_BIN="$(pick_python)"
+[[ -n "$PYTHON_BIN" ]] || { echo "ralph: python not found (need python3 or python in PATH)" >&2; exit 1; }
+export PYTHON_BIN
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CONFIG="$SCRIPT_DIR/config.env"
 FLOWCTL="$SCRIPT_DIR/flowctl"
+FLOWCTL_PY="$SCRIPT_DIR/flowctl.py"
 
 fail() { echo "ralph: $*" >&2; exit 1; }
 log() {
@@ -12,6 +36,35 @@ log() {
   [[ "${UI_ENABLED:-1}" != "1" ]] && echo "ralph: $*"
   return 0
 }
+
+# Ensure flowctl is runnable even when NTFS exec bit / shebang handling is flaky on Windows
+ensure_flowctl_wrapper() {
+  # If flowctl exists and is executable, use it
+  if [[ -f "$FLOWCTL" && -x "$FLOWCTL" ]]; then
+    return 0
+  fi
+
+  # On Windows or if flowctl not executable, create a wrapper that calls Python explicitly
+  if [[ -f "$FLOWCTL_PY" ]]; then
+    local wrapper="$SCRIPT_DIR/flowctl-wrapper.sh"
+    cat > "$wrapper" <<SH
+#!/usr/bin/env bash
+set -euo pipefail
+DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+PY="\${PYTHON_BIN:-python3}"
+command -v "\$PY" >/dev/null 2>&1 || PY="python"
+exec "\$PY" "\$DIR/flowctl.py" "\$@"
+SH
+    chmod +x "$wrapper" 2>/dev/null || true
+    FLOWCTL="$wrapper"
+    export FLOWCTL
+    return 0
+  fi
+
+  fail "missing flowctl (expected $SCRIPT_DIR/flowctl or $SCRIPT_DIR/flowctl.py)"
+}
+
+ensure_flowctl_wrapper
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Presentation layer (human-readable output)
@@ -59,7 +112,7 @@ ui() {
 # Get title from epic/task JSON
 get_title() {
   local json="$1"
-  python3 - "$json" <<'PY'
+  "$PYTHON_BIN" - "$json" <<'PY'
 import json, sys
 try:
     data = json.loads(sys.argv[1])
@@ -71,7 +124,7 @@ PY
 
 # Count progress (done/total tasks for scoped epics)
 get_progress() {
-  python3 - "$ROOT_DIR" "${EPICS_FILE:-}" <<'PY'
+  "$PYTHON_BIN" - "$ROOT_DIR" "${EPICS_FILE:-}" <<'PY'
 import json, sys
 from pathlib import Path
 root = Path(sys.argv[1])
@@ -125,7 +178,7 @@ get_git_stats() {
     echo ""
     return
   fi
-  python3 - "$stats" <<'PY'
+  "$PYTHON_BIN" - "$stats" <<'PY'
 import re, sys
 s = sys.argv[1]
 files = re.search(r"(\d+) files? changed", s)
@@ -366,7 +419,7 @@ get_actor() {
 }
 
 rand4() {
-  python3 - <<'PY'
+  "$PYTHON_BIN" - <<'PY'
 import secrets
 print(secrets.token_hex(2))
 PY
@@ -374,7 +427,7 @@ PY
 
 render_template() {
   local path="$1"
-  python3 - "$path" <<'PY'
+  "$PYTHON_BIN" - "$path" <<'PY'
 import os, sys
 path = sys.argv[1]
 text = open(path, encoding="utf-8").read()
@@ -388,7 +441,7 @@ PY
 json_get() {
   local key="$1"
   local json="$2"
-  python3 - "$key" "$json" <<'PY'
+  "$PYTHON_BIN" - "$key" "$json" <<'PY'
 import json, sys
 key = sys.argv[1]
 data = json.loads(sys.argv[2])
@@ -407,7 +460,7 @@ ensure_attempts_file() {
 }
 
 bump_attempts() {
-  python3 - "$1" "$2" <<'PY'
+  "$PYTHON_BIN" - "$1" "$2" <<'PY'
 import json, sys, os
 path, task = sys.argv[1], sys.argv[2]
 data = {}
@@ -423,7 +476,7 @@ PY
 }
 
 write_epics_file() {
-  python3 - "$1" <<'PY'
+  "$PYTHON_BIN" - "$1" <<'PY'
 import json, sys
 raw = sys.argv[1]
 parts = [p.strip() for p in raw.replace(",", " ").split() if p.strip()]
@@ -449,7 +502,7 @@ PROGRESS_FILE="$RUN_DIR/progress.txt"
 
 extract_tag() {
   local tag="$1"
-  python3 - "$tag" <<'PY'
+  "$PYTHON_BIN" - "$tag" <<'PY'
 import re, sys
 tag = sys.argv[1]
 text = sys.stdin.read()
@@ -461,7 +514,7 @@ PY
 # Extract assistant text from stream-json log (for tag extraction in watch mode)
 extract_text_from_stream_json() {
   local log_file="$1"
-  python3 - "$log_file" <<'PY'
+  "$PYTHON_BIN" - "$log_file" <<'PY'
 import json, sys
 path = sys.argv[1]
 out = []
@@ -516,7 +569,7 @@ init_branches_file() {
   if [[ -f "$BRANCHES_FILE" ]]; then return; fi
   local base_branch
   base_branch="$(git -C "$ROOT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-  python3 - "$BRANCHES_FILE" "$base_branch" <<'PY'
+  "$PYTHON_BIN" - "$BRANCHES_FILE" "$base_branch" <<'PY'
 import json, sys
 path, base = sys.argv[1], sys.argv[2]
 data = {"base_branch": base, "run_branch": ""}
@@ -526,7 +579,7 @@ PY
 }
 
 get_base_branch() {
-  python3 - "$BRANCHES_FILE" <<'PY'
+  "$PYTHON_BIN" - "$BRANCHES_FILE" <<'PY'
 import json, sys
 try:
     with open(sys.argv[1], encoding="utf-8") as f:
@@ -538,7 +591,7 @@ PY
 }
 
 get_run_branch() {
-  python3 - "$BRANCHES_FILE" <<'PY'
+  "$PYTHON_BIN" - "$BRANCHES_FILE" <<'PY'
 import json, sys
 try:
     with open(sys.argv[1], encoding="utf-8") as f:
@@ -550,7 +603,7 @@ PY
 }
 
 set_run_branch() {
-  python3 - "$BRANCHES_FILE" "$1" <<'PY'
+  "$PYTHON_BIN" - "$BRANCHES_FILE" "$1" <<'PY'
 import json, sys
 path, branch = sys.argv[1], sys.argv[2]
 data = {"base_branch": "", "run_branch": ""}
@@ -566,7 +619,7 @@ PY
 }
 
 list_epics_from_file() {
-  python3 - "$EPICS_FILE" <<'PY'
+  "$PYTHON_BIN" - "$EPICS_FILE" <<'PY'
 import json, sys
 path = sys.argv[1]
 if not path:
@@ -581,7 +634,7 @@ PY
 }
 
 epic_all_tasks_done() {
-  python3 - "$1" <<'PY'
+  "$PYTHON_BIN" - "$1" <<'PY'
 import json, sys
 try:
     data = json.loads(sys.argv[1])
@@ -622,7 +675,7 @@ verify_receipt() {
   local kind="$2"
   local id="$3"
   [[ -f "$path" ]] || return 1
-  python3 - "$path" "$kind" "$id" <<'PY'
+  "$PYTHON_BIN" - "$path" "$kind" "$id" <<'PY'
 import json, sys
 path, kind, rid = sys.argv[1], sys.argv[2], sys.argv[3]
 try:

@@ -12,6 +12,21 @@ All notable changes to the gmickel-claude-marketplace.
 ### Fixed
 - Resolved oxlint warnings (useless escapes, control-regex disable comments)
 
+## [flow-next 0.7.2] - 2026-01-14
+
+### Added
+- **Windows/Git Bash support** (GH-35, thanks @VexyCats)
+  - Python detection: prefer `python3`, fallback to `python` (common on Windows)
+  - Windows platform detection (`IS_WINDOWS` flag in ralph.sh)
+  - Auto-generated flowctl wrapper for NTFS exec bit issues
+  - Codex stdin-based prompt passing to avoid Windows CLI length limits (~8191 chars)
+- **CI workflow** for cross-platform testing (Linux, macOS, Windows)
+  - flowctl.py syntax and basic command tests
+  - ralph.sh syntax and Python detection tests
+
+### Changed
+- `smoke_test.sh` and `ralph_smoke_test.sh` now use dynamic Python detection
+
 ## [flow-next 0.7.1] - 2026-01-14
 
 ### Added

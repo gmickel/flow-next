@@ -4,6 +4,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Python detection: prefer python3, fallback to python (Windows support, GH-35)
+pick_python() {
+  if [[ -n "${PYTHON_BIN:-}" ]]; then
+    command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
+  fi
+  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
+  if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
+  echo ""
+}
+
+PYTHON_BIN="$(pick_python)"
+[[ -n "$PYTHON_BIN" ]] || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
+
 # Safety: never run tests from the main plugin repo
 if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-next/.claude-plugin/plugin.json" ]]; then
   echo "ERROR: refusing to run from main plugin repo. Run from any other directory." >&2
@@ -41,12 +54,12 @@ printf "ok\n" > "$TEST_DIR/summary.md"
 echo -e "${YELLOW}--- next: plan/work/none + priority ---${NC}"
 # Capture epic ID from create output (fn-N-xxx format)
 EPIC1_JSON="$(scripts/flowctl epic create --title "Epic One" --json)"
-EPIC1="$(echo "$EPIC1_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+EPIC1="$(echo "$EPIC1_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 scripts/flowctl task create --epic "$EPIC1" --title "Low pri" --priority 5 --json >/dev/null
 scripts/flowctl task create --epic "$EPIC1" --title "High pri" --priority 1 --json >/dev/null
 
 plan_json="$(scripts/flowctl next --require-plan-review --json)"
-python3 - "$plan_json" "$EPIC1" <<'PY'
+"$PYTHON_BIN" - "$plan_json" "$EPIC1" <<'PY'
 import json, sys
 data = json.loads(sys.argv[1])
 expected_epic = sys.argv[2]
@@ -58,7 +71,7 @@ PASS=$((PASS + 1))
 
 scripts/flowctl epic set-plan-review-status "$EPIC1" --status ship --json >/dev/null
 work_json="$(scripts/flowctl next --json)"
-python3 - "$work_json" "$EPIC1" <<'PY'
+"$PYTHON_BIN" - "$work_json" "$EPIC1" <<'PY'
 import json, sys
 data = json.loads(sys.argv[1])
 expected_epic = sys.argv[2]
@@ -73,7 +86,7 @@ scripts/flowctl done "${EPIC1}.2" --summary-file "$TEST_DIR/summary.md" --eviden
 scripts/flowctl start "${EPIC1}.1" --json >/dev/null
 scripts/flowctl done "${EPIC1}.1" --summary-file "$TEST_DIR/summary.md" --evidence-json "$TEST_DIR/evidence.json" --json >/dev/null
 none_json="$(scripts/flowctl next --json)"
-python3 - <<'PY' "$none_json"
+"$PYTHON_BIN" - <<'PY' "$none_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["status"] == "none"
@@ -154,7 +167,7 @@ fi
 rm -f ".flow/tasks/${EPIC1}.1-evidence.json" ".flow/tasks/${EPIC1}.1-summary.json"
 
 echo -e "${YELLOW}--- plan_review_status default ---${NC}"
-python3 - "$EPIC1" <<'PY'
+"$PYTHON_BIN" - "$EPIC1" <<'PY'
 import json, sys
 from pathlib import Path
 epic_id = sys.argv[1]
@@ -166,7 +179,7 @@ data.pop("branch_name", None)
 path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 PY
 show_json="$(scripts/flowctl show "$EPIC1" --json)"
-python3 - <<'PY' "$show_json"
+"$PYTHON_BIN" - <<'PY' "$show_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data.get("plan_review_status") == "unknown"
@@ -179,7 +192,7 @@ PASS=$((PASS + 1))
 echo -e "${YELLOW}--- branch_name set ---${NC}"
 scripts/flowctl epic set-branch "$EPIC1" --branch "${EPIC1}-epic" --json >/dev/null
 show_json="$(scripts/flowctl show "$EPIC1" --json)"
-python3 - "$show_json" "$EPIC1" <<'PY'
+"$PYTHON_BIN" - "$show_json" "$EPIC1" <<'PY'
 import json, sys
 data = json.loads(sys.argv[1])
 expected_branch = f"{sys.argv[2]}-epic"
@@ -190,7 +203,7 @@ PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- block + validate + epic close ---${NC}"
 EPIC2_JSON="$(scripts/flowctl epic create --title "Epic Two" --json)"
-EPIC2="$(echo "$EPIC2_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+EPIC2="$(echo "$EPIC2_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 scripts/flowctl task create --epic "$EPIC2" --title "Block me" --json >/dev/null
 scripts/flowctl task create --epic "$EPIC2" --title "Other" --json >/dev/null
 printf "Blocked by test\n" > "$TEST_DIR/reason.md"
@@ -222,7 +235,7 @@ PASS=$((PASS + 1))
 echo -e "${YELLOW}--- config set/get ---${NC}"
 scripts/flowctl config set memory.enabled true --json >/dev/null
 config_json="$(scripts/flowctl config get memory.enabled --json)"
-python3 - <<'PY' "$config_json"
+"$PYTHON_BIN" - <<'PY' "$config_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["value"] == True, f"Expected True, got {data['value']}"
@@ -232,7 +245,7 @@ PASS=$((PASS + 1))
 
 scripts/flowctl config set memory.enabled false --json >/dev/null
 config_json="$(scripts/flowctl config get memory.enabled --json)"
-python3 - <<'PY' "$config_json"
+"$PYTHON_BIN" - <<'PY' "$config_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["value"] == False, f"Expected False, got {data['value']}"
@@ -263,7 +276,7 @@ fi
 scripts/flowctl memory add --type convention "Test convention" --json >/dev/null
 scripts/flowctl memory add --type decision "Test decision" --json >/dev/null
 list_json="$(scripts/flowctl memory list --json)"
-python3 - <<'PY' "$list_json"
+"$PYTHON_BIN" - <<'PY' "$list_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["success"] == True
@@ -277,7 +290,7 @@ echo -e "${GREEN}✓${NC} memory list"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- schema v1 validate ---${NC}"
-python3 - <<'PY'
+"$PYTHON_BIN" - <<'PY'
 import json
 from pathlib import Path
 path = Path(".flow/meta.json")
@@ -292,7 +305,7 @@ PASS=$((PASS + 1))
 echo -e "${YELLOW}--- codex commands ---${NC}"
 # Test codex check (may or may not have codex installed)
 codex_check_json="$(scripts/flowctl codex check --json 2>/dev/null || echo '{"success":true}')"
-python3 - <<'PY' "$codex_check_json"
+"$PYTHON_BIN" - <<'PY' "$codex_check_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["success"] == True, f"codex check failed: {data}"
@@ -369,7 +382,7 @@ git -C "$TEST_DIR/repo" commit -m "Update auth with expiry" >/dev/null
 
 # Test context hints: should find handler.py referencing validate_token/User
 cd "$TEST_DIR/repo"
-hints_output="$(PYTHONPATH="$SCRIPT_DIR" python3 -c "
+hints_output="$(PYTHONPATH="$SCRIPT_DIR" "$PYTHON_BIN" -c "
 from flowctl import gather_context_hints
 hints = gather_context_hints('HEAD~1')
 print(hints)
@@ -388,7 +401,7 @@ echo -e "${YELLOW}--- build_review_prompt ---${NC}"
 # Go back to plugin root for Python tests
 cd "$TEST_DIR/repo"
 # Test that build_review_prompt generates proper structure
-python3 - "$SCRIPT_DIR" <<'PY'
+"$PYTHON_BIN" - "$SCRIPT_DIR" <<'PY'
 import sys
 sys.path.insert(0, sys.argv[1])
 from flowctl import build_review_prompt
@@ -430,7 +443,7 @@ PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- parse_receipt_path ---${NC}"
 # Test receipt path parsing for Ralph gating (both legacy and new fn-N-xxx formats)
-python3 - "$SCRIPT_DIR/hooks" <<'PY'
+"$PYTHON_BIN" - "$SCRIPT_DIR/hooks" <<'PY'
 import sys
 hooks_dir = sys.argv[1]
 sys.path.insert(0, hooks_dir)
@@ -469,11 +482,11 @@ PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- codex e2e (requires codex CLI) ---${NC}"
 # Check if codex is available (handles its own auth)
-codex_available="$(scripts/flowctl codex check --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('available', False))" 2>/dev/null || echo "False")"
+codex_available="$(scripts/flowctl codex check --json 2>/dev/null | "$PYTHON_BIN" -c "import sys,json; print(json.load(sys.stdin).get('available', False))" 2>/dev/null || echo "False")"
 if [[ "$codex_available" == "True" ]]; then
   # Create a simple epic + task for testing
   EPIC3_JSON="$(scripts/flowctl epic create --title "Codex test epic" --json)"
-  EPIC3="$(echo "$EPIC3_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  EPIC3="$(echo "$EPIC3_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
   scripts/flowctl task create --epic "$EPIC3" --title "Test task" --json >/dev/null
 
   # Write a simple spec
@@ -505,7 +518,7 @@ EOF
   if [[ "$plan_rc" -eq 0 ]]; then
     # Verify receipt was written with correct schema
     if [[ -f "$TEST_DIR/plan-receipt.json" ]]; then
-      python3 - "$TEST_DIR/plan-receipt.json" "$EPIC3" <<'PY'
+      "$PYTHON_BIN" - "$TEST_DIR/plan-receipt.json" "$EPIC3" <<'PY'
 import sys, json
 from pathlib import Path
 data = json.loads(Path(sys.argv[1]).read_text())
@@ -543,7 +556,7 @@ EOF
   if [[ "$impl_rc" -eq 0 ]]; then
     # Verify receipt was written with correct schema
     if [[ -f "$TEST_DIR/impl-receipt.json" ]]; then
-      python3 - "$TEST_DIR/impl-receipt.json" "$EPIC3" <<'PY'
+      "$PYTHON_BIN" - "$TEST_DIR/impl-receipt.json" "$EPIC3" <<'PY'
 import sys, json
 from pathlib import Path
 data = json.loads(Path(sys.argv[1]).read_text())
@@ -572,11 +585,11 @@ echo -e "${YELLOW}--- depends_on_epics gate ---${NC}"
 cd "$TEST_DIR/repo"  # Back to test repo
 # Create epics and capture their IDs
 DEP_BASE_JSON="$(scripts/flowctl epic create --title "Dep base" --json)"
-DEP_BASE_ID="$(echo "$DEP_BASE_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+DEP_BASE_ID="$(echo "$DEP_BASE_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 scripts/flowctl task create --epic "$DEP_BASE_ID" --title "Base task" --json >/dev/null
 DEP_CHILD_JSON="$(scripts/flowctl epic create --title "Dep child" --json)"
-DEP_CHILD_ID="$(echo "$DEP_CHILD_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-python3 - "$DEP_CHILD_ID" "$DEP_BASE_ID" <<'PY'
+DEP_CHILD_ID="$(echo "$DEP_CHILD_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+"$PYTHON_BIN" - "$DEP_CHILD_ID" "$DEP_BASE_ID" <<'PY'
 import json, sys
 from pathlib import Path
 child_id, base_id = sys.argv[1], sys.argv[2]
@@ -587,7 +600,7 @@ path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 PY
 printf '{"epics":["%s"]}\n' "$DEP_CHILD_ID" > "$TEST_DIR/epics.json"
 blocked_json="$(scripts/flowctl next --epics-file "$TEST_DIR/epics.json" --json)"
-python3 - "$DEP_CHILD_ID" "$blocked_json" <<'PY'
+"$PYTHON_BIN" - "$DEP_CHILD_ID" "$blocked_json" <<'PY'
 import json, sys
 child_id = sys.argv[1]
 data = json.loads(sys.argv[2])

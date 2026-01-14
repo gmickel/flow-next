@@ -695,17 +695,21 @@ def run_codex_exec(
 
     If session_id provided, tries to resume. Falls back to new session if resume fails.
     Model: FLOW_CODEX_MODEL env > parameter > default (gpt-5.2 + high reasoning).
+
+    Note: Prompt is passed via stdin (using '-') to avoid Windows command-line
+    length limits (~8191 chars) and special character escaping issues. (GH-35)
     """
     codex = require_codex()
     # Model priority: env > parameter > default (gpt-5.2 + high reasoning = GPT 5.2 High)
     effective_model = os.environ.get("FLOW_CODEX_MODEL") or model or "gpt-5.2"
 
     if session_id:
-        # Try resume first (model already set in original session)
-        cmd = [codex, "exec", "resume", session_id, prompt]
+        # Try resume first - use stdin for prompt (model already set in original session)
+        cmd = [codex, "exec", "resume", session_id, "-"]
         try:
             result = subprocess.run(
                 cmd,
+                input=prompt,
                 capture_output=True,
                 text=True,
                 check=True,
@@ -720,6 +724,7 @@ def run_codex_exec(
 
     # New session with model + high reasoning effort
     # --skip-git-repo-check: safe with read-only sandbox, allows reviews from /tmp etc (GH-33)
+    # Use '-' to read prompt from stdin - avoids Windows CLI length limits (GH-35)
     cmd = [
         codex,
         "exec",
@@ -731,11 +736,12 @@ def run_codex_exec(
         sandbox,
         "--skip-git-repo-check",
         "--json",
-        prompt,
+        "-",
     ]
     try:
         result = subprocess.run(
             cmd,
+            input=prompt,
             capture_output=True,
             text=True,
             check=True,
