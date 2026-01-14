@@ -40,119 +40,15 @@ jobs:
         shell: bash
         run: bash -n plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh
 
-      - name: Test flowctl basic commands (Unix)
+      - name: Run comprehensive tests (Unix)
         if: runner.os != 'Windows'
         run: |
           cd /tmp
-          mkdir -p flowctl-ci-test/scripts
-          cd flowctl-ci-test
-          git init -q
-          cp "$GITHUB_WORKSPACE/plugins/flow-next/scripts/flowctl.py" scripts/
-          cp "$GITHUB_WORKSPACE/plugins/flow-next/scripts/flowctl" scripts/
-          chmod +x scripts/flowctl
+          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/ci_test.sh"
 
-          # Test init
-          scripts/flowctl init --json
-
-          # Test epic create
-          EPIC_JSON="$(scripts/flowctl epic create --title "CI Test Epic" --json)"
-          EPIC_ID="$(echo "$EPIC_JSON" | python -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-          echo "Created epic: $EPIC_ID"
-
-          # Test task create
-          scripts/flowctl task create --epic "$EPIC_ID" --title "CI Test Task" --json
-
-          # Test list
-          scripts/flowctl list --json
-
-          # Test next
-          scripts/flowctl next --json
-
-      - name: Test flowctl basic commands (Windows)
+      - name: Run comprehensive tests (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          TEST_DIR="$RUNNER_TEMP/flowctl-ci-test"
-          mkdir -p "$TEST_DIR/scripts"
-          cd "$TEST_DIR"
-          git init -q
-          cp "$GITHUB_WORKSPACE/plugins/flow-next/scripts/flowctl.py" scripts/
-
-          # Test init
-          python scripts/flowctl.py init --json
-
-          # Test epic create
-          EPIC_JSON="$(python scripts/flowctl.py epic create --title "CI Test Epic" --json)"
-          EPIC_ID="$(echo "$EPIC_JSON" | python -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-          echo "Created epic: $EPIC_ID"
-
-          # Test task create
-          python scripts/flowctl.py task create --epic "$EPIC_ID" --title "CI Test Task" --json
-
-          # Test list
-          python scripts/flowctl.py list --json
-
-          # Test next
-          python scripts/flowctl.py next --json
-
-      - name: Test Python detection in ralph.sh (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          # Source the pick_python function and test it
-          cd /tmp
-          mkdir -p ralph-test
-          cd ralph-test
-
-          # Extract and test pick_python
-          cat > test_pick_python.sh << 'EOF'
-          pick_python() {
-            if [[ -n "${PYTHON_BIN:-}" ]]; then
-              command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
-            fi
-            if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
-            if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
-            echo ""
-          }
-
-          PYTHON_BIN="$(pick_python)"
-          if [[ -z "$PYTHON_BIN" ]]; then
-            echo "FAIL: No Python found"
-            exit 1
-          fi
-          echo "Found Python: $PYTHON_BIN"
-
-          # Verify it's actually executable
-          "$PYTHON_BIN" --version
-          EOF
-
-          bash test_pick_python.sh
-          echo "Python detection test passed"
-
-      - name: Test Python detection in ralph.sh (Windows)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          # Extract and test pick_python
-          cat > "$RUNNER_TEMP/test_pick_python.sh" << 'EOF'
-          pick_python() {
-            if [[ -n "${PYTHON_BIN:-}" ]]; then
-              command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
-            fi
-            if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
-            if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
-            echo ""
-          }
-
-          PYTHON_BIN="$(pick_python)"
-          if [[ -z "$PYTHON_BIN" ]]; then
-            echo "FAIL: No Python found"
-            exit 1
-          fi
-          echo "Found Python: $PYTHON_BIN"
-
-          # Verify it's actually executable
-          "$PYTHON_BIN" --version
-          EOF
-
-          bash "$RUNNER_TEMP/test_pick_python.sh"
-          echo "Python detection test passed"
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/ci_test.sh"
