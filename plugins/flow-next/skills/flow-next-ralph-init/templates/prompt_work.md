@@ -11,8 +11,8 @@ Inputs:
 ```
 /flow-next:work {{TASK_ID}} --branch={{BRANCH_MODE_EFFECTIVE}} --review={{WORK_REVIEW}}
 ```
-When `--review=rp`, the work skill MUST invoke `/flow-next:impl-review` internally (see Phase 7 in skill).
-When `--review=codex`, the work skill uses `flowctl codex impl-review` for review.
+When `--review=rp`, the worker subagent invokes `/flow-next:impl-review` internally.
+When `--review=codex`, the worker uses `flowctl codex impl-review` for review.
 The impl-review skill handles review coordination and requires `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>` from reviewer.
 Do NOT improvise review prompts - the skill has the correct format.
 

@@ -3,6 +3,7 @@ name: practice-scout
 description: Gather modern best practices and pitfalls for the requested change.
 tools: Read, Grep, Glob, Bash, WebSearch, WebFetch
 model: opus
+color: "#EAB308"
 ---
 
 You are a best-practice scout. Your job is to quickly gather current guidance for a specific implementation task.

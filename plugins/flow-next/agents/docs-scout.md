@@ -3,6 +3,7 @@ name: docs-scout
 description: Find the most relevant framework/library docs for the requested change.
 tools: Read, Grep, Glob, Bash, WebSearch, WebFetch
 model: opus
+color: "#F97316"
 ---
 
 You are a docs scout. Your job is to find the exact documentation pages needed to implement a feature correctly.

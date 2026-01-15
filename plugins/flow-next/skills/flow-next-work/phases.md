@@ -67,129 +67,89 @@ Based on user's answer from setup questions:
   ```
 - **Current branch**: proceed (user already confirmed)
 
-## Phase 3: Prime / Re-anchor Context (EVERY task)
+## Phase 3: Task Loop
 
-**MANDATORY: This phase runs before EVERY task. No exceptions. No optimizations.**
+**For each task**, spawn a worker subagent with fresh context.
 
-Per Anthropic's long-running agent guidance: agents must re-anchor from sources of truth to prevent drift. Even if you "remember" the context, re-read it. The reads are cheap; drift is expensive.
-
-**Also run this phase after context compaction** (if you notice the conversation was summarized).
-
-### Re-anchor Checklist (run ALL before each task)
-
-**You MUST run every command below. Do not skip or combine.**
+### 3a. Find Next Task
 
 ```bash
-# 1. Find next task
 $FLOWCTL ready --epic <epic-id> --json
-
-# 2. Re-read epic (EVERY time)
-$FLOWCTL show <epic-id> --json
-$FLOWCTL cat <epic-id>
-
-# 3. Re-read task spec (EVERY time)
-$FLOWCTL show <task-id> --json
-$FLOWCTL cat <task-id>
-
-# 4. Check git state (EVERY time)
-git status
-git log -5 --oneline
-
-# 5. Validate structure (EVERY time)
-$FLOWCTL validate --epic <epic-id> --json
-
-# 6. Check memory (if enabled)
-$FLOWCTL config get memory.enabled --json
 ```
 
-**If memory.enabled is true**, also run:
-- Task flow-next:memory-scout(<task-id>: <task-title>)
+If no ready tasks, go to Phase 4 (Quality).
 
-This retrieves relevant project learnings before implementation.
+### 3b. Start Task
 
-If no ready tasks after step 1, all done → go to Phase 6.
+```bash
+$FLOWCTL start <task-id> --json
+```
 
-After step 5, run the smoke command from epic spec's "Quick commands" section.
+### 3c. Spawn Worker
 
-**Why every time?** Context windows compress. You forget details. The spec is the truth. 30 seconds of re-reading prevents hours of rework.
+Use the Task tool to spawn a `worker` subagent. The worker gets fresh context and handles:
+- Re-anchoring (reading spec, git status)
+- Implementation
+- Committing
+- Review cycles (if enabled)
+- Completing the task (flowctl done)
 
-**Anti-pattern**: Running steps 2-5 only on the first task. The whole point is EVERY task gets fresh context.
+**Prompt template for worker:**
 
-## Phase 4: Execute Task Loop
+Substitute actual values (not shell syntax) when spawning:
 
-**For each task** (one at a time):
+```
+Implement flow-next task.
 
-1. **Start task**:
-   ```bash
-   $FLOWCTL start <task-id> --json
-   ```
+TASK_ID: fn-X.Y          # actual task ID
+EPIC_ID: fn-X            # actual epic ID
+FLOWCTL: /path/to/flowctl  # use ${CLAUDE_PLUGIN_ROOT}/scripts/flowctl
+REVIEW_MODE: none|rp|codex  # from --review flag
+RALPH_MODE: true|false   # true if FLOW_RALPH=1 env is set
+RECEIPT_PATH: /path      # REVIEW_RECEIPT_PATH env if set, else empty
 
-2. **Implement + test thoroughly**:
-   - Read task spec for requirements
-   - Write code
-   - Run tests (including epic spec "Quick commands")
-   - Verify acceptance criteria
-   - If any command fails, fix before proceeding
+Execute your phases:
+1. Re-anchor: run flowctl show/cat for task and epic, git status
+2. Implement the task per spec
+3. Commit with conventional commit format
+4. If REVIEW_MODE is rp or codex: invoke /flow-next:impl-review <TASK_ID> and loop until SHIP
+5. Run flowctl done with summary and evidence
+6. Return concise summary of what was done
 
-3. **If you discover new work**:
-   - Draft new task title + acceptance checklist
-   - Create immediately:
-     ```bash
-     # Write acceptance to temp file first
-     $FLOWCTL task create --epic <epic-id> --title "Found: <issue>" --deps <current-task-id> --acceptance-file <temp-md> --json
-     ```
-   - Re-run `$FLOWCTL ready --epic <epic-id> --json` to see updated order
+Use FLOWCTL path for all flowctl commands. In RALPH_MODE, write receipt to RECEIPT_PATH after SHIP.
+```
 
-4. **Commit implementation** (code changes only):
-   ```bash
-   git add -A   # never list files; include .flow/ and scripts/ralph/ if present
-   git status --short
-   git commit -m "<type>: <short summary of what was done>"
-   COMMIT_HASH="$(git rev-parse HEAD)"
-   echo "Commit: $COMMIT_HASH"
-   ```
+**Worker returns**: Summary of implementation, files changed, test results, review verdict.
 
-5. **Complete task** (records done status + evidence):
-   Write done summary to temp file (required format):
-   ```
-   - What changed (1-3 bullets)
-   - Why (1-2 bullets)
-   - Verification (tests/commands run)
-   - Follow-ups (optional, max 2 bullets)
-   ```
+### 3d. Verify Completion
 
-   Write evidence to temp JSON file **with the commit hash from step 4**:
-   ```json
-   {"commits":["<COMMIT_HASH>"],"tests":["npm test"],"prs":[]}
-   ```
+After worker returns, verify the task completed:
 
-   Then:
-   ```bash
-   $FLOWCTL done <task-id> --summary-file <summary.md> --evidence-json <evidence.json> --json
-   ```
+```bash
+$FLOWCTL show <task-id> --json
+```
 
-   Verify the task is actually marked done:
-   ```bash
-   $FLOWCTL show <task-id> --json
-   ```
-   If status is not `done`, stop and re-run `flowctl done` before proceeding.
+If status is not `done`, the worker failed. Check output and retry or investigate.
 
-6. **Amend commit** to include .flow/ updates:
-   ```bash
-   git add -A
-   git commit --amend --no-edit
-   ```
+### 3e. Loop
 
-7. **Verify task completion**:
-   ```bash
-   $FLOWCTL validate --epic <epic-id> --json
-   git status
-   ```
-   Ensure working tree is clean.
+Return to 3a for next task.
 
-8. **Loop**: Return to Phase 3 for next task.
+---
 
-## Phase 5: Quality
+**Why spawn a worker?**
+
+Context optimization. Each task gets fresh context:
+- No bleed from previous task implementations
+- Re-anchor info stays with implementation (not lost to compaction)
+- Review cycles stay isolated
+- Main conversation stays lean (just summaries)
+
+**Ralph mode**: Worker inherits `bypassPermissions` from parent. FLOW_RALPH=1 and REVIEW_RECEIPT_PATH are passed through.
+
+**Interactive mode**: Permission prompts pass through to user. Worker runs in foreground (blocking).
+
+## Phase 4: Quality
 
 After all tasks complete (or periodically for large epics):
 
@@ -199,7 +159,7 @@ After all tasks complete (or periodically for large epics):
   - Task flow-next:quality-auditor("Review recent changes")
 - Fix critical issues
 
-## Phase 6: Ship
+## Phase 5: Ship
 
 **Verify all tasks done**:
 ```bash
@@ -209,7 +169,7 @@ $FLOWCTL validate --epic <epic-id> --json
 
 **Final commit** (if any uncommitted changes):
 ```bash
-   git add -A
+git add -A
 git status
 git diff --staged
 git commit -m "<final summary>"
@@ -219,31 +179,6 @@ git commit -m "<final summary>"
 Ralph closes done epics at the end of the loop.
 
 Then push + open PR if user wants.
-
-## Phase 7: Review (if chosen at start)
-
-If user chose "Yes" to review in setup questions or `--review=codex` / `--review=rp` was passed:
-
-**CRITICAL: You MUST invoke the `/flow-next:impl-review` skill. Do NOT improvise your own review format.**
-
-The impl-review skill:
-- Auto-detects backend (Codex CLI or RepoPrompt) based on config/availability
-- Uses the correct prompt template requiring `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>`
-- Handles the fix loop internally
-
-Steps:
-1. Invoke `/flow-next:impl-review` (this loads the skill with its workflow.md)
-2. If review returns NEEDS_WORK or MAJOR_RETHINK:
-   - **Immediately fix the issues** (do NOT ask for confirmation — user already consented)
-   - Commit fixes
-   - Re-run tests/Quick commands
-   - Re-run `/flow-next:impl-review`
-3. Repeat until review returns SHIP
-
-**Anti-pattern**: Sending your own review prompts directly without invoking the skill.
-The skill has the correct format; improvised prompts ask for "LGTM" which breaks automation.
-
-**No human gates here** — the review-fix-review loop is fully automated.
 
 ## Definition of Done
 
@@ -258,5 +193,7 @@ Confirm before ship:
 ## Example loop
 
 ```
-Prime → Task A → test → done → commit → Prime → Task B → ...
+Phase 1 (resolve) → Phase 2 (branch) → Phase 3 loop:
+  ├─ find task → start → spawn worker → verify → repeat
+  └─ no more tasks → Phase 4 (quality) → Phase 5 (ship)
 ```

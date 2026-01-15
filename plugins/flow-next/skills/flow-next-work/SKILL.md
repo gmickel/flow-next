@@ -170,9 +170,10 @@ Wait for response. Parse naturally — user may reply terse or ramble via voice.
 ## Workflow
 
 After setup questions answered, read [phases.md](phases.md) and execute each phase in order.
-If user chose review:
-- Option 2a: run `/flow-next:impl-review` after Phase 6, fix issues until it passes
-- Option 2b: run `/flow-next:impl-review` with export mode after Phase 6
+
+**Worker subagent model**: Each task is implemented by a `worker` subagent with fresh context. This prevents context bleed between tasks and keeps re-anchor info with the implementation. The main conversation handles task selection and looping; worker handles implementation, commits, and reviews.
+
+If user chose review, pass the review mode to the worker. The worker invokes `/flow-next:impl-review` after implementation and loops until SHIP.
 
 ## Guardrails
 
