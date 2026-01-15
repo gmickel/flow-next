@@ -16,6 +16,9 @@ Supports both review backends:
 - codex: tracks flowctl codex impl-review/plan-review and verdict output
 """
 
+# Version for drift detection (bump when making changes)
+RALPH_GUARD_VERSION = "0.11.0"
+
 import json
 import os
 import re

@@ -379,9 +379,12 @@ def normalize_epic(epic_data: dict) -> dict:
 
 
 def normalize_task(task_data: dict) -> dict:
-    """Apply defaults for optional task fields."""
+    """Apply defaults for optional task fields and migrate legacy keys."""
     if "priority" not in task_data:
         task_data["priority"] = None
+    # Migrate legacy 'deps' key to 'depends_on'
+    if "depends_on" not in task_data:
+        task_data["depends_on"] = task_data.get("deps", [])
     return task_data
 
 
@@ -2044,6 +2047,10 @@ def cmd_dep_add(args: argparse.Namespace) -> None:
 
     task_data = load_json_or_exit(task_path, f"Task {args.task}", use_json=args.json)
 
+    # Migrate old 'deps' key to 'depends_on' if needed
+    if "depends_on" not in task_data:
+        task_data["depends_on"] = task_data.pop("deps", [])
+
     if args.depends_on not in task_data["depends_on"]:
         task_data["depends_on"].append(args.depends_on)
         task_data["updated_at"] = now_iso()
@@ -2094,7 +2101,7 @@ def cmd_show(args: argparse.Namespace) -> None:
                         "title": task_data["title"],
                         "status": task_data["status"],
                         "priority": task_data.get("priority"),
-                        "depends_on": task_data["depends_on"],
+                        "depends_on": task_data.get("depends_on", task_data.get("deps", [])),
                     }
                 )
 
@@ -2239,7 +2246,7 @@ def cmd_tasks(args: argparse.Namespace) -> None:
                     "title": task_data["title"],
                     "status": task_data["status"],
                     "priority": task_data.get("priority"),
-                    "depends_on": task_data["depends_on"],
+                    "depends_on": task_data.get("depends_on", task_data.get("deps", [])),
                 }
             )
 
@@ -2323,7 +2330,7 @@ def cmd_list(args: argparse.Namespace) -> None:
                     "title": task_data["title"],
                     "status": task_data["status"],
                     "priority": task_data.get("priority"),
-                    "depends_on": task_data["depends_on"],
+                    "depends_on": task_data.get("depends_on", task_data.get("deps", [])),
                 }
             )
 

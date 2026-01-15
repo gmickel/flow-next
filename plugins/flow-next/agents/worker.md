@@ -16,7 +16,6 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `FLOWCTL` - path to flowctl CLI
 - `REVIEW_MODE` - none, rp, or codex
 - `RALPH_MODE` - true if running autonomously
-- `RECEIPT_PATH` - where to write review receipt (Ralph mode)
 
 ## Phase 1: Re-anchor (CRITICAL - DO NOT SKIP)
 
@@ -80,13 +79,14 @@ Use conventional commits. Scope from task context.
 
 Skip if REVIEW_MODE is `none`.
 
-Invoke the impl-review skill with the task ID:
+**IMPORTANT: Use the Skill tool to invoke impl-review, NOT flowctl directly.**
 
 ```
 /flow-next:impl-review <TASK_ID>
 ```
 
-The skill handles:
+The skill handles everything:
+- Receipt paths (don't pass --receipt yourself)
 - Sending to reviewer (rp or codex backend)
 - Parsing verdict (SHIP/NEEDS_WORK/MAJOR_RETHINK)
 - Fix loops until SHIP
@@ -94,7 +94,7 @@ The skill handles:
 If NEEDS_WORK:
 1. Fix the issues identified
 2. Commit fixes
-3. Re-review (skill handles the loop)
+3. Re-invoke the skill (NOT flowctl): `/flow-next:impl-review <TASK_ID>`
 
 Continue until SHIP verdict.
 
@@ -130,19 +130,7 @@ Verify completion:
 ```
 Status must be `done`. If not, debug and retry.
 
-## Phase 6: Receipt (Ralph mode only)
-
-**Only if RALPH_MODE is true AND RECEIPT_PATH is set AND review passed (SHIP):**
-
-```bash
-mkdir -p "$(dirname '<RECEIPT_PATH>')"
-ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-cat > '<RECEIPT_PATH>' << EOF
-{"type":"impl_review","id":"<TASK_ID>","mode":"<rp or codex>","timestamp":"$ts"}
-EOF
-```
-
-## Phase 7: Return
+## Phase 6: Return
 
 Return a concise summary to the main conversation:
 - What was implemented (1-2 sentences)

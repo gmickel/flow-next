@@ -111,6 +111,37 @@ FLOW_RALPH_CLAUDE_PERMISSION_MODE=bypassPermissions
 FLOW_RALPH_CLAUDE_NO_SESSION_PERSISTENCE=1
 ```
 
+### Testing Ralph with --plugin-dir (dev mode)
+
+**Bug #14410**: Plugin hooks don't fire when using `--plugin-dir`. Subagents get `${CLAUDE_PLUGIN_ROOT}` literal instead of expanded path.
+
+**Required setup** for test repos (do BEFORE running ralph.sh):
+```bash
+# In test repo root
+PLUGIN_ROOT="/Users/gordon/work/gmickel-claude-marketplace/plugins/flow-next"
+
+mkdir -p .claude/hooks
+cp "$PLUGIN_ROOT/scripts/hooks/"* .claude/hooks/
+chmod +x .claude/hooks/*.py
+
+cat > .claude/settings.local.json <<'EOF'
+{
+  "hooks": {
+    "PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ralph-guard.py", "timeout": 5}]}],
+    "PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ralph-guard.py", "timeout": 5}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ralph-guard.py", "timeout": 5}]}],
+    "SubagentStop": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ralph-guard.py", "timeout": 5}]}]
+  }
+}
+EOF
+```
+
+**Key points:**
+- Hooks MUST be in `.claude/hooks/` (NOT `scripts/ralph/hooks/`)
+- Paths MUST use `"$CLAUDE_PROJECT_DIR"` (NOT relative paths)
+- ralph.sh checks for `.claude/hooks/ralph-guard.py` and `.claude/settings.local.json`
+- See `plans/ralph-e2e-notes.md` for full details
+
 Logs:
 - Ralph run logs: `scripts/ralph/runs/<run>/`
 - Verbose log: `scripts/ralph/runs/<run>/ralph.log`

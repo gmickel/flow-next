@@ -96,27 +96,18 @@ Use the Task tool to spawn a `worker` subagent. The worker gets fresh context an
 
 **Prompt template for worker:**
 
-Substitute actual values (not shell syntax) when spawning:
+Pass config values only. Worker reads worker.md for phases. Do NOT paraphrase or add step-by-step instructions - worker.md has them.
 
 ```
 Implement flow-next task.
 
-TASK_ID: fn-X.Y          # actual task ID
-EPIC_ID: fn-X            # actual epic ID
-FLOWCTL: /path/to/flowctl  # use ${CLAUDE_PLUGIN_ROOT}/scripts/flowctl
-REVIEW_MODE: none|rp|codex  # from --review flag
-RALPH_MODE: true|false   # true if FLOW_RALPH=1 env is set
-RECEIPT_PATH: /path      # REVIEW_RECEIPT_PATH env if set, else empty
+TASK_ID: fn-X.Y
+EPIC_ID: fn-X
+FLOWCTL: /path/to/flowctl
+REVIEW_MODE: none|rp|codex
+RALPH_MODE: true|false
 
-Execute your phases:
-1. Re-anchor: run flowctl show/cat for task and epic, git status
-2. Implement the task per spec
-3. Commit with conventional commit format
-4. If REVIEW_MODE is rp or codex: invoke /flow-next:impl-review <TASK_ID> and loop until SHIP
-5. Run flowctl done with summary and evidence
-6. Return concise summary of what was done
-
-Use FLOWCTL path for all flowctl commands. In RALPH_MODE, write receipt to RECEIPT_PATH after SHIP.
+Follow your phases in worker.md exactly.
 ```
 
 **Worker returns**: Summary of implementation, files changed, test results, review verdict.

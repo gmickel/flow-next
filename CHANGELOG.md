@@ -2,6 +2,29 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.11.0] - 2026-01-15
+
+### Added
+- **Worker subagent model** - Each task spawns isolated worker for implementation
+  - Prevents context bleed between tasks during `/flow-next:work`
+  - Re-anchor info stays with implementation (survives compaction)
+  - Worker handles: re-anchor → implement → commit → review → complete
+  - Main conversation handles task selection and looping only
+  - `disallowedTools: Task` prevents infinite subagent nesting
+- **Agent colors** - Visual identification in Claude Code UI
+  - worker: blue (#3B82F6), repo-scout: green (#22C55E)
+  - context-scout: cyan (#06B6D4), practice-scout: yellow (#EAB308)
+  - docs-scout: orange (#F97316), memory-scout: purple (#A855F7)
+  - flow-gap-analyst: red (#EF4444), quality-auditor: pink (#EC4899)
+
+### Fixed
+- **ralph-init efficiency** - Uses `cp -R` instead of read/Write per file
+  - Single bash command copies all templates (including dotfiles)
+  - Only edits `config.env` for review backend setting
+- **Legacy `deps` key migration** - flowctl now handles both `deps` and `depends_on`
+  - `normalize_task()` auto-migrates legacy `deps` to `depends_on`
+  - Backwards compatible with older task files
+
 ## [flow-next 0.10.0] - 2026-01-15
 
 ### Added

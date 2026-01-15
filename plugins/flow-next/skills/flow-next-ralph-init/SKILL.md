@@ -37,10 +37,17 @@ Scaffold repo-local Ralph harness. Opt-in only.
    - If only rp-cli available: use `rp`
    - If only codex available: use `codex`
    - If neither available: use `none`
-5. Write `scripts/ralph/config.env` with:
-   - `PLAN_REVIEW=<chosen>` and `WORK_REVIEW=<chosen>`
-   - replace `{{PLAN_REVIEW}}` and `{{WORK_REVIEW}}` placeholders in the template
-6. Copy templates and flowctl files.
+5. Copy all files using bash (MUST use cp, NOT Write tool):
+   ```bash
+   mkdir -p scripts/ralph/runs
+   cp -R "${CLAUDE_PLUGIN_ROOT}/skills/flow-next-ralph-init/templates/." scripts/ralph/
+   cp "${CLAUDE_PLUGIN_ROOT}/scripts/flowctl" "${CLAUDE_PLUGIN_ROOT}/scripts/flowctl.py" scripts/ralph/
+   chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl
+   ```
+   Note: `cp -R templates/.` copies all files including dotfiles (.gitignore).
+6. Edit `scripts/ralph/config.env` to set the chosen review backend:
+   - Replace `PLAN_REVIEW=codex` with `PLAN_REVIEW=<chosen>`
+   - Replace `WORK_REVIEW=codex` with `WORK_REVIEW=<chosen>`
 7. Print next steps (run from terminal, NOT inside Claude Code):
    - Edit `scripts/ralph/config.env` to customize settings
    - `./scripts/ralph/ralph_once.sh` (one iteration, observe)
