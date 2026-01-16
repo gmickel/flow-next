@@ -2,6 +2,21 @@
 
 Ralph is Flow-Next's repo-local autonomous harness. It loops over tasks, applies multi-model review gates, and produces production-quality code overnight.
 
+## Table of Contents
+
+- [Quick Start](#quick-start) — Setup, configure, run
+- [How It Works](#how-it-works) — Loop architecture
+- [Why Ralph vs ralph-wiggum](#why-flow-next-ralph-vs-anthropics-ralph-wiggum)
+- [Quality Gates](#quality-gates) — Reviews, receipts, memory
+- [Configuration](#configuration) — All config.env options
+- [Run Artifacts](#run-artifacts) — Logs, receipts, blocks
+- [RepoPrompt Integration](#repoprompt-integration)
+- [Codex Integration](#codex-integration)
+- [Troubleshooting](#troubleshooting)
+- [Testing Ralph](#testing-ralph) — Single iteration, sandbox, watch mode
+- [Guard Hooks](#guard-hooks) — Workflow enforcement
+- [Morning Review Workflow](#morning-review-workflow) — What to check after overnight runs
+
 ---
 
 ## Quick Start

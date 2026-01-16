@@ -23,6 +23,22 @@
 
 ---
 
+## Table of Contents
+
+- [What Is This?](#what-is-this)
+- [Why It Works](#why-it-works)
+- [Quick Start](#quick-start) — Install, setup, use
+- [When to Use What](#when-to-use-what) — Interview vs Plan vs Work
+- [Troubleshooting](#troubleshooting)
+- [Ralph (Autonomous Mode)](#ralph-autonomous-mode) — Run overnight
+- [Features](#features) — Re-anchoring, multi-user, reviews, dependencies
+- [Commands](#commands) — All slash commands + flags
+- [The Workflow](#the-workflow) — Planning and work phases
+- [.flow/ Directory](#flow-directory) — File structure
+- [flowctl CLI](#flowctl-cli) — Direct CLI usage
+
+---
+
 ## What Is This?
 
 Flow-Next is a Claude Code plugin for plan-first orchestration. Bundled task tracking, dependency graphs, re-anchoring, and cross-model reviews.
@@ -157,18 +173,68 @@ flowctl ready --epic fn-1    # What's ready to work on
 
 That's it. Flow-Next handles research, task ordering, reviews, and audit trails.
 
-### Recommended Workflow
+### When to Use What
 
-**Spec -> Interview -> Plan -> Work**
+Flow-next is flexible. There's no single "correct" order — the right sequence depends on how well-defined your spec already is.
 
-1. **Write a short spec** - 1-5 sentences describing what you want to build
-2. **Interview** (optional) - `/flow-next:interview "your idea"` - 40+ questions to surface edge cases
-3. **Plan** - `/flow-next:plan "your idea"` - creates epic with dependency-ordered tasks
-4. **Work** - `/flow-next:work fn-1` - executes tasks with re-anchoring and reviews
+**The key question: How fleshed out is your idea?**
 
-Start simple. Add interview when specs are fuzzy. Add reviews when quality matters.
+#### Vague idea or rough concept
 
-### 4. Autonomous Mode (Optional)
+```
+Interview → Plan → Work
+```
+
+1. **Interview first** — `/flow-next:interview "your rough idea"` asks 40+ deep questions to surface requirements, edge cases, and decisions you haven't thought about
+2. **Plan** — `/flow-next:plan fn-1` takes the refined spec and researches best practices, current docs, repo patterns, then splits into properly-sized tasks
+3. **Work** — `/flow-next:work fn-1` executes with re-anchoring and reviews
+
+#### Well-written spec or PRD
+
+```
+Plan → Interview → Work
+```
+
+1. **Plan first** — `/flow-next:plan specs/my-feature.md` researches best practices and current patterns, then breaks your spec into epic + tasks
+2. **Interview after** — `/flow-next:interview fn-1` runs deep questions against the plan to catch edge cases, missing requirements, or assumptions
+3. **Work** — `/flow-next:work fn-1` executes
+
+#### Minimal planning
+
+```
+Plan → Work
+```
+
+Skip interview entirely for well-understood changes. Plan still researches best practices and splits into tasks.
+
+#### Quick single-task (spec already complete)
+
+```
+Work directly
+```
+
+```bash
+/flow-next:work specs/small-fix.md
+```
+
+For small, self-contained changes where you already have a complete spec. Creates an epic with **one task** and executes immediately. You get flow tracking, re-anchoring, and optional review — without full planning overhead.
+
+Best for: bug fixes, small features, well-scoped changes that don't need task splitting.
+
+**Note:** This does NOT split into multiple tasks. For detailed specs that need breakdown, use Plan first.
+
+**Summary:**
+
+| Starting point | Recommended sequence |
+|----------------|---------------------|
+| Vague idea, rough notes | Interview → Plan → Work |
+| Detailed spec/PRD | Plan → Interview → Work |
+| Well-understood, needs task splitting | Plan → Work |
+| Small single-task, spec complete | Work directly (creates 1 epic + 1 task) |
+
+You can always run interview again after planning to catch anything missed. Interview writes back to the spec, so iterations refine rather than replace.
+
+### Autonomous Mode (Optional)
 
 Want to run overnight? See [Ralph Mode](#ralph-autonomous-mode).
 
