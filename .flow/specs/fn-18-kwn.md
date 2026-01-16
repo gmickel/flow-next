@@ -2,36 +2,37 @@
 
 ## Overview
 
-RepoPrompt now supports `rp-cli open <path>` to programmatically open a window. Update `flowctl rp` commands to auto-open RP window instead of requiring user to have it open beforehand.
+RepoPrompt 1.5.68+ supports `workspace create <name> --new-window --folder-path <path>` to programmatically open a window. Added `--create` flag to `flowctl rp setup-review` to auto-create RP windows instead of requiring user to have one open beforehand.
 
 ## Scope
 
-- Update `flowctl rp pick-window` to open window if none found
-- Update `flowctl rp builder` to auto-open if needed
-- Ralph reviews "just work" without manual RP window setup
+- ✅ Add `--create` flag to `flowctl rp setup-review`
+- ✅ Auto-creates window via `workspace create --new-window` when no match found
+- ✅ Reuses existing windows (no duplicates)
+- ✅ Docs updated with RP 1.5.68+ requirement
 
-## Approach
+## Implementation
 
-Modify `pick_window()` in flowctl.py to call `rp-cli open` when no existing window matches the repo root.
+Added `--create` flag to `setup-review` command in flowctl.py. When no window matches repo root and `--create` is set, calls `rp-cli -e 'workspace create <basename> --new-window --folder-path <repo_root>'` and extracts `window_id` from JSON response.
 
 ## Quick commands
 
 ```bash
-# Test pick-window auto-opens
-flowctl rp pick-window --repo-root .
+# Test auto-create (no RP window needed)
+flowctl rp setup-review --repo-root . --summary "Test" --create --json
 
-# Verify with Ralph smoke test
-KEEP_TEST_DIR=1 plugins/flow-next/scripts/ralph_smoke_test.sh
+# Without --create, still requires pre-existing window (backward compatible)
+flowctl rp setup-review --repo-root . --summary "Test"
 ```
 
 ## Acceptance
 
-- [ ] `flowctl rp pick-window --repo-root .` opens RP if not already open
-- [ ] `flowctl rp builder` works without pre-existing RP window
-- [ ] Existing open windows are reused (no duplicate windows)
-- [ ] Clear error message if rp-cli not installed
+- [x] `flowctl rp setup-review --create` opens RP if not already open
+- [x] Existing open windows are reused (no duplicate windows)
+- [x] Without `--create`, behavior unchanged (errors if no window)
+- [x] Docs mention RP 1.5.68+ requirement
 
 ## References
 
-- `rp-cli --help`, `rp-cli open --help`
-- `plugins/flow-next/scripts/flowctl.py` - rp subcommand
+- `rp-cli -e 'workspace create --help'`
+- `plugins/flow-next/scripts/flowctl.py` - `cmd_rp_setup_review()`

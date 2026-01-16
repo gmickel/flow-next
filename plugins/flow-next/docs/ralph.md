@@ -316,7 +316,7 @@ flowctl rp chat-send ...               # Send to reviewer
 
 Never call `rp-cli` directly in Ralph mode.
 
-**Window selection** is automatic by repo root. RepoPrompt must have a window open on your project.
+**Window selection** is automatic by repo root. With RP 1.5.68+, use `--create` flag to auto-open windows (or have RP open on your project).
 
 ---
 
@@ -367,7 +367,7 @@ After `MAX_ATTEMPTS_PER_TASK` failures, Ralph:
 
 ### RepoPrompt not found
 
-Ensure rp-cli is installed and RepoPrompt window is open on your repo.
+Ensure rp-cli is installed. With RP 1.5.68+, windows auto-open via `--create` flag. For older versions, open RepoPrompt on your repo manually.
 
 Alternatives:
 - Use Codex instead: set `PLAN_REVIEW=codex` and `WORK_REVIEW=codex`

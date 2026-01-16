@@ -77,13 +77,13 @@ plugins/flow-next/scripts/smoke_test.sh
 plugins/flow-next/scripts/ralph_smoke_test.sh
 ```
 
-RP smoke (requires RepoPrompt window open on `${TEST_DIR}/repo`):
+RP smoke (RP 1.5.68+ auto-opens window with --create, or open manually on `${TEST_DIR}/repo`):
 ```bash
 RP_SMOKE=1 TEST_DIR=/tmp/flow-next-ralph-smoke-rpN KEEP_TEST_DIR=1 \
   plugins/flow-next/scripts/ralph_smoke_rp.sh
 ```
 
-Full RP e2e (requires RepoPrompt window open on `${TEST_DIR}/repo`):
+Full RP e2e (RP 1.5.68+ auto-opens window with --create, or open manually on `${TEST_DIR}/repo`):
 ```bash
 TEST_DIR=/tmp/flow-next-ralph-e2e-rpN KEEP_TEST_DIR=1 \
   plugins/flow-next/scripts/ralph_e2e_rp_test.sh
@@ -93,7 +93,7 @@ Short RP e2e (2 tasks, faster iteration):
 ```bash
 CREATE=1 TEST_DIR=/tmp/flow-next-ralph-e2e-short-rpN \
   plugins/flow-next/scripts/ralph_e2e_short_rp_test.sh
-# Then open RepoPrompt on test repo and re-run without CREATE
+# With RP 1.5.68+: windows auto-open. Older: open RP on test repo, re-run without CREATE
 ```
 
 RP gotchas (must follow):

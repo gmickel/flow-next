@@ -3992,7 +3992,24 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
                 break
 
     if win_id is None:
-        error_exit("No RepoPrompt window matches repo root", use_json=False, code=2)
+        if getattr(args, "create", False):
+            # Auto-create window via workspace create --new-window (RP 1.5.68+)
+            ws_name = os.path.basename(repo_root)
+            create_cmd = f"workspace create {shlex.quote(ws_name)} --new-window --folder-path {shlex.quote(repo_root)}"
+            create_res = run_rp_cli(["--raw-json", "-e", create_cmd])
+            try:
+                data = json.loads(create_res.stdout or "{}")
+                win_id = data.get("window_id")
+            except json.JSONDecodeError:
+                pass
+            if not win_id:
+                error_exit(
+                    f"Failed to create RP window: {create_res.stderr or create_res.stdout}",
+                    use_json=False,
+                    code=2,
+                )
+        else:
+            error_exit("No RepoPrompt window matches repo root", use_json=False, code=2)
 
     # Write state file for ralph-guard verification
     repo_hash = hashlib.sha256(repo_root.encode()).hexdigest()[:16]
@@ -5027,6 +5044,11 @@ def main() -> None:
     )
     p_rp_setup.add_argument("--repo-root", required=True, help="Repo root path")
     p_rp_setup.add_argument("--summary", required=True, help="Builder summary")
+    p_rp_setup.add_argument(
+        "--create",
+        action="store_true",
+        help="Create new RP window if none matches (requires RP 1.5.68+)",
+    )
     p_rp_setup.add_argument("--json", action="store_true", help="JSON output")
     p_rp_setup.set_defaults(func=cmd_rp_setup_review)
 

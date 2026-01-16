@@ -440,7 +440,7 @@ Notes:
 - `/flow-next:interview` accepts Flow IDs or spec file paths and writes refinements back
 - `/flow-next:plan` accepts new ideas or an existing Flow ID to update the plan
 
-Recommendation: open RepoPrompt in the repo before starting a new flow so plan/impl reviews have fast context.
+Tip: with RP 1.5.68+, use `flowctl rp setup-review --create` to auto-open RepoPrompt windows. Alternatively, open RP on your repo beforehand for faster context loading.
 Plan review in rp mode requires `flowctl rp chat-send`; if rp-cli/windows unavailable, the review gate retries.
 
 ---
@@ -544,9 +544,9 @@ Reviews block progress until `<verdict>SHIP</verdict>`. Fix → re-review cycles
 
 **Setup:**
 ```bash
-# Install rp-cli (macOS only)
+# Install rp-cli (macOS only, requires RP 1.5.68+ for auto-open)
 brew install --cask repoprompt
-# Open RepoPrompt on your repo before running reviews
+# Window auto-opens if needed with --create flag (or open manually for faster context)
 ```
 
 **Usage:**
@@ -612,7 +612,7 @@ Priority: `--review=...` argument > `FLOW_REVIEW_BACKEND` env > `.flow/config.js
 | macOS with GUI available | RepoPrompt (better context) |
 | Linux/Windows | Codex (only option) |
 | CI/headless environments | Codex (no GUI needed) |
-| Ralph overnight runs | Either works; RP needs window open |
+| Ralph overnight runs | Either works; RP auto-opens with --create (1.5.68+) |
 
 Without a backend configured, reviews fail with a clear error. Run `/flow-next:setup` or pass `--review=X`.
 

@@ -453,17 +453,36 @@ Output (stdout or file):
 
 ### rp
 
-RepoPrompt wrappers (preferred for reviews):
+RepoPrompt wrappers (preferred for reviews). Requires RepoPrompt 1.5.68+.
+
+**Primary entry point** (handles window selection + builder atomically):
 
 ```bash
-flowctl rp pick-window --repo-root "$REPO_ROOT"
-flowctl rp ensure-workspace --window "$W" --repo-root "$REPO_ROOT"
-flowctl rp builder --window "$W" --summary "Review a plan to ..."
+# Atomic setup - picks window by repo root and creates builder tab
+eval "$(flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "Review a plan to ...")"
+# Returns: W=<window> T=<tab>
+
+# With --create: auto-creates RP window if none matches (RP 1.5.68+)
+eval "$(flowctl rp setup-review --repo-root "$REPO_ROOT" --summary "..." --create)"
+```
+
+**Post-setup commands** (use $W and $T from setup-review):
+
+```bash
 flowctl rp prompt-get --window "$W" --tab "$T"
 flowctl rp prompt-set --window "$W" --tab "$T" --message-file /tmp/review-prompt.md
 flowctl rp select-add --window "$W" --tab "$T" path/to/file
 flowctl rp chat-send --window "$W" --tab "$T" --message-file /tmp/review-prompt.md
 flowctl rp prompt-export --window "$W" --tab "$T" --out /tmp/export.md
+```
+
+**Low-level commands** (prefer setup-review instead):
+
+```bash
+flowctl rp windows [--json]
+flowctl rp pick-window --repo-root "$REPO_ROOT"
+flowctl rp ensure-workspace --window "$W" --repo-root "$REPO_ROOT"
+flowctl rp builder --window "$W" --summary "Review a plan to ..."
 ```
 
 ### codex
