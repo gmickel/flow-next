@@ -178,6 +178,7 @@ Documentation updated:
 
 Notes:
 - Re-run /flow-next:setup after plugin updates to refresh scripts
+- Interested in autonomous mode? Run /flow-next:ralph-init
 - Uninstall: rm -rf .flow/bin .flow/usage.md and remove <!-- BEGIN/END FLOW-NEXT --> block from docs
 - This setup is optional - plugin works without it
 ```
