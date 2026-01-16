@@ -2,6 +2,22 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.11.8] - 2026-01-16
+
+### Added
+- **`/flow-next:sync` command** - Manual plan-sync trigger ([#43](https://github.com/gmickel/gmickel-claude-marketplace/issues/43))
+  - Sync from task: `/flow-next:sync fn-1.2`
+  - Scan whole epic: `/flow-next:sync fn-1`
+  - Preview mode: `/flow-next:sync fn-1.2 --dry-run`
+  - Ignores `planSync.enabled` config (manual = always run)
+  - Works with any source task status (not just done)
+- **Dry-run support in plan-sync agent** - Shows proposed changes without writing
+
+### Fixed
+- **flowctl tasks/list KeyError** - Task JSON uses `epic` field, not `epic_id`
+  - Fixes `flowctl tasks --epic` crash
+  - Fixes TUI task fetching on repos with collision-resistant IDs
+
 ## [flow-next 0.11.5] - 2026-01-16
 
 ### Fixed
@@ -45,9 +61,7 @@ All notable changes to the gmickel-claude-marketplace.
 ## [flow-next 0.11.1] - 2026-01-15
 
 ### Fixed
-- **flowctl tasks/list commands** - Fixed KeyError crash when TUI calls `flowctl tasks --epic`
-  - Used `epic_id` field (correct) instead of `epic` (wrong) in task JSON
-  - Added guard to skip artifact files lacking required fields (GH-21)
+- **flowctl tasks/list commands** - Added guard to skip artifact files lacking required fields (GH-21)
 
 ## [flow-next 0.11.0] - 2026-01-15
 
