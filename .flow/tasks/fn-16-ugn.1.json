@@ -1,14 +1,14 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-16T09:11:29.465588Z",
   "created_at": "2026-01-16T09:05:26.208859Z",
   "depends_on": [],
   "epic": "fn-16-ugn",
   "id": "fn-16-ugn.1",
   "priority": null,
   "spec_path": ".flow/tasks/fn-16-ugn.1.md",
-  "status": "todo",
+  "status": "in_progress",
   "title": "Create flow-next-sync skill",
-  "updated_at": "2026-01-16T09:05:26.209022Z"
+  "updated_at": "2026-01-16T09:11:29.465818Z"
 }
