@@ -631,6 +631,7 @@ Prevents infinite retry loops. Review `block-*.md` files in the morning to under
 
 Synchronizes downstream task specs when implementation drifts from the original plan.
 
+**Automatic (opt-in):**
 ```bash
 flowctl config set planSync.enabled true
 ```
@@ -641,6 +642,15 @@ When enabled, after each task completes, a plan-sync agent:
 3. Updates affected task specs with accurate info
 
 Skip conditions: disabled (default), task failed, no downstream tasks.
+
+**Manual trigger:**
+```bash
+/flow-next:sync fn-1.2              # Sync from specific task
+/flow-next:sync fn-1                # Scan whole epic for drift
+/flow-next:sync fn-1.2 --dry-run    # Preview changes without writing
+```
+
+Manual sync ignores `planSync.enabled` config—if you run it, you want it. Works with any source task status (not just done).
 
 ### Memory System (Opt-in)
 
@@ -675,7 +685,7 @@ Config lives in `.flow/config.json`, separate from Ralph's `scripts/ralph/config
 
 ## Commands
 
-Seven commands, complete workflow:
+Eight commands, complete workflow:
 
 | Command | What It Does |
 |---------|--------------|
@@ -684,6 +694,7 @@ Seven commands, complete workflow:
 | `/flow-next:interview <id>` | Deep interview to flesh out a spec before planning |
 | `/flow-next:plan-review <id>` | Carmack-level plan review via RepoPrompt |
 | `/flow-next:impl-review` | Carmack-level impl review of current branch |
+| `/flow-next:sync <id>` | Manual plan-sync: update downstream tasks after implementation drift |
 | `/flow-next:ralph-init` | Scaffold repo-local Ralph harness (`scripts/ralph/`) |
 | `/flow-next:setup` | Optional: install flowctl locally + add docs (for power users) |
 | `/flow-next:uninstall` | Remove flow-next from project (keeps tasks if desired) |
@@ -721,6 +732,7 @@ Natural language also works:
 | `/flow-next:work` | `--branch=current\|new\|worktree`, `--review=rp\|codex\|export\|none`, `--no-review` |
 | `/flow-next:plan-review` | `--review=rp\|codex\|export` |
 | `/flow-next:impl-review` | `--review=rp\|codex\|export` |
+| `/flow-next:sync` | `--dry-run` |
 
 ---
 
