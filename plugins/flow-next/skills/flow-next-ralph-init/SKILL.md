@@ -20,7 +20,7 @@ Scaffold or update repo-local Ralph harness. Opt-in only.
 1. Resolve repo root: `git rev-parse --show-toplevel`
 
 2. Check if `scripts/ralph/` exists:
-   - If exists: ask "Update existing Ralph setup? (preserves config.env) [y/n]"
+   - If exists: ask "Update existing Ralph setup? (preserves config.env and runs/) [y/n]"
      - If no: stop
      - If yes: set UPDATE_MODE=1
    - If not exists: set UPDATE_MODE=0
