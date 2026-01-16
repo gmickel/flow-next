@@ -81,13 +81,11 @@ No files modified.
 - [ ] Summary clearly indicates dry-run mode when active
 
 ## Done summary
-TBD
-
+Added DRY_RUN parameter to plan-sync agent. Phase 5 skips Edit tool when dry-run, Phase 6 shows "Would update (DRY RUN)" format with "No files modified" footer.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 05e024af578e2d4200923574083e74e56813876b
+- Tests: smoke_test.sh
 - PRs:
-
 ## References
 
 - Agent file: `plugins/flow-next/agents/plan-sync.md`

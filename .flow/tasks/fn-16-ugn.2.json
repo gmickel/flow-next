@@ -7,10 +7,19 @@
     "fn-16-ugn.1"
   ],
   "epic": "fn-16-ugn",
+  "evidence": {
+    "commits": [
+      "05e024af578e2d4200923574083e74e56813876b"
+    ],
+    "prs": [],
+    "tests": [
+      "smoke_test.sh"
+    ]
+  },
   "id": "fn-16-ugn.2",
   "priority": null,
   "spec_path": ".flow/tasks/fn-16-ugn.2.md",
-  "status": "in_progress",
+  "status": "done",
   "title": "Update plan-sync agent for dry-run support",
-  "updated_at": "2026-01-16T09:20:27.562355Z"
+  "updated_at": "2026-01-16T09:26:38.033927Z"
 }

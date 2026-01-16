@@ -735,6 +735,61 @@ scripts/flowctl checkpoint delete --epic "$STDIN_EPIC" --json >/dev/null
 echo -e "${GREEN}✓${NC} checkpoint save/restore/delete"
 PASS=$((PASS + 1))
 
+echo -e "${YELLOW}--- sync command files ---${NC}"
+# Test 1: Command stub exists
+if [[ -f "$PLUGIN_ROOT/commands/flow-next/sync.md" ]]; then
+  echo -e "${GREEN}✓${NC} sync command stub exists"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} sync command stub missing"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 2: Skill file exists
+if [[ -f "$PLUGIN_ROOT/skills/flow-next-sync/SKILL.md" ]]; then
+  echo -e "${GREEN}✓${NC} sync skill exists"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} sync skill missing"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 3: Command invokes skill
+if grep -q "flow-next-sync" "$PLUGIN_ROOT/commands/flow-next/sync.md"; then
+  echo -e "${GREEN}✓${NC} sync command invokes skill"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} sync command doesn't reference skill"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 4: Skill has correct frontmatter
+if grep -q "name: flow-next-sync" "$PLUGIN_ROOT/skills/flow-next-sync/SKILL.md"; then
+  echo -e "${GREEN}✓${NC} sync skill has correct name"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} sync skill missing name frontmatter"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 5: Skill mentions plan-sync agent
+if grep -q "plan-sync" "$PLUGIN_ROOT/skills/flow-next-sync/SKILL.md"; then
+  echo -e "${GREEN}✓${NC} sync skill references plan-sync agent"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} sync skill doesn't reference plan-sync agent"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 6: Skill supports dry-run
+if grep -qi "dry.run\|dry-run\|DRY_RUN" "$PLUGIN_ROOT/skills/flow-next-sync/SKILL.md"; then
+  echo -e "${GREEN}✓${NC} sync skill supports dry-run"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} sync skill missing dry-run support"
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo -e "${YELLOW}=== Results ===${NC}"
 echo -e "Passed: ${GREEN}$PASS${NC}"
