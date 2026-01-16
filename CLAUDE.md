@@ -111,36 +111,26 @@ FLOW_RALPH_CLAUDE_PERMISSION_MODE=bypassPermissions
 FLOW_RALPH_CLAUDE_NO_SESSION_PERSISTENCE=1
 ```
 
-### Testing Ralph with --plugin-dir (dev mode)
+### Developing with local changes
 
-**Bug #14410**: Plugin hooks don't fire when using `--plugin-dir`. Subagents get `${CLAUDE_PLUGIN_ROOT}` literal instead of expanded path.
-
-**Required setup** for test repos (do BEFORE running ralph.sh):
+**Preferred: local marketplace install** (hooks work correctly):
 ```bash
-# In test repo root
-PLUGIN_ROOT="/Users/gordon/work/gmickel-claude-marketplace/plugins/flow-next"
+# From this repo root
+/plugin marketplace add ./
+/plugin install flow-next@gmickel-claude-marketplace
 
-mkdir -p .claude/hooks
-cp "$PLUGIN_ROOT/scripts/hooks/"* .claude/hooks/
-chmod +x .claude/hooks/*.py
-
-cat > .claude/settings.local.json <<'EOF'
-{
-  "hooks": {
-    "PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ralph-guard.py", "timeout": 5}]}],
-    "PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ralph-guard.py", "timeout": 5}]}],
-    "Stop": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ralph-guard.py", "timeout": 5}]}],
-    "SubagentStop": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ralph-guard.py", "timeout": 5}]}]
-  }
-}
-EOF
+# Test in any project - plugin hooks work via ${CLAUDE_PLUGIN_ROOT}
 ```
 
-**Key points:**
-- Hooks MUST be in `.claude/hooks/` (NOT `scripts/ralph/hooks/`)
-- Paths MUST use `"$CLAUDE_PROJECT_DIR"` (NOT relative paths)
-- ralph.sh checks for `.claude/hooks/ralph-guard.py` and `.claude/settings.local.json`
-- See `plans/ralph-e2e-notes.md` for full details
+Uninstall global version first if installed: `claude plugins uninstall flow-next`
+
+**Alternative: --plugin-dir** (test scripts only):
+
+Bug #14410: Plugin hooks don't fire when using `--plugin-dir`. Subagents get `${CLAUDE_PLUGIN_ROOT}` literal instead of expanded path.
+
+Test scripts (`ralph_smoke_test.sh`, `ralph_e2e_rp_test.sh`) handle this by copying hooks to `.claude/hooks/` in the test repo. This workaround is only needed for automated tests using `--plugin-dir`.
+
+See `plans/ralph-e2e-notes.md` for full --plugin-dir hook setup if needed.
 
 Logs:
 - Ralph run logs: `scripts/ralph/runs/<run>/`
