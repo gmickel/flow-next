@@ -172,13 +172,11 @@ No files modified.
 - [ ] Works without `.flow/config.json` planSync setting
 
 ## Done summary
-TBD
-
+Created /flow-next:sync command and skill for manual plan-sync trigger. Supports task ID (fn-N.M) or epic ID (fn-N), --dry-run flag, with ID validation and source task selection for epic mode.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 9c54c1b, 0a2bdb7
+- Tests: jq validate marketplace.json, jq validate plugin.json
 - PRs:
-
 ## References
 
 - Epic spec: `.flow/specs/fn-16-ugn.md`

@@ -5,10 +5,21 @@
   "created_at": "2026-01-16T09:05:26.208859Z",
   "depends_on": [],
   "epic": "fn-16-ugn",
+  "evidence": {
+    "commits": [
+      "9c54c1b",
+      "0a2bdb7"
+    ],
+    "prs": [],
+    "tests": [
+      "jq validate marketplace.json",
+      "jq validate plugin.json"
+    ]
+  },
   "id": "fn-16-ugn.1",
   "priority": null,
   "spec_path": ".flow/tasks/fn-16-ugn.1.md",
-  "status": "in_progress",
+  "status": "done",
   "title": "Create flow-next-sync skill",
-  "updated_at": "2026-01-16T09:11:29.465818Z"
+  "updated_at": "2026-01-16T09:20:01.659372Z"
 }

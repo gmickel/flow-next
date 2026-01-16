@@ -16,6 +16,7 @@ You synchronize downstream task specs after implementation drift.
 - `EPIC_ID` - parent epic (e.g., fn-1)
 - `FLOWCTL` - path to flowctl CLI
 - `DOWNSTREAM_TASK_IDS` - comma-separated list of remaining tasks
+- `DRY_RUN` - "true" or "false" (optional, defaults to false)
 
 ## Phase 1: Re-anchor on Completed Task
 
@@ -82,6 +83,18 @@ Flag tasks that need updates.
 
 ## Phase 5: Update Affected Tasks
 
+**If DRY_RUN is "true":**
+Report what would be changed without using Edit tool:
+
+```
+Would update:
+- fn-1.3: Change `UserAuth.login()` → `authService.authenticate()`
+- fn-1.5: Change return type `boolean` → `AuthResult`
+```
+
+Do NOT use Edit tool. Skip to Phase 6.
+
+**If DRY_RUN is "false" or not set:**
 For each affected downstream task, edit only the stale references:
 
 ```bash
@@ -103,12 +116,21 @@ Changes should:
 
 ## Phase 6: Return Summary
 
-Return to main conversation:
-- Drift detected: yes/no
-- Tasks updated: list or "none"
-- Key changes: brief summary
+Return to main conversation.
 
-Example:
+**If DRY_RUN is "true":**
+```
+Drift detected: yes
+- fn-1.2 used `authService` singleton instead of `UserAuth` class
+
+Would update (DRY RUN):
+- fn-1.3: Change references from `UserAuth.login()` to `authService.authenticate()`
+- fn-1.4: Update expected return type from `boolean` to `AuthResult`
+
+No files modified.
+```
+
+**If DRY_RUN is "false" or not set:**
 ```
 Drift detected: yes
 - fn-1.2 used `authService` singleton instead of `UserAuth` class

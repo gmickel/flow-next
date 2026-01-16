@@ -1,7 +1,7 @@
 {
-  "assignee": null,
+  "assignee": "gordon.mickel@gmail.com",
   "claim_note": "",
-  "claimed_at": null,
+  "claimed_at": "2026-01-16T09:20:27.562162Z",
   "created_at": "2026-01-16T09:05:33.471981Z",
   "depends_on": [
     "fn-16-ugn.1"
@@ -10,7 +10,7 @@
   "id": "fn-16-ugn.2",
   "priority": null,
   "spec_path": ".flow/tasks/fn-16-ugn.2.md",
-  "status": "todo",
+  "status": "in_progress",
   "title": "Update plan-sync agent for dry-run support",
-  "updated_at": "2026-01-16T09:05:33.647072Z"
+  "updated_at": "2026-01-16T09:20:27.562355Z"
 }
