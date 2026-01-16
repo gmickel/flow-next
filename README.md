@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin_Marketplace-blueviolet)](https://claude.ai/code)
 
-[![Flow-next](https://img.shields.io/badge/Flow--next-v0.11.4-green)](plugins/flow-next/)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v0.11.5-green)](plugins/flow-next/)
 [![Flow-next Docs](https://img.shields.io/badge/Docs-📖_Full_Guide-informational)](plugins/flow-next/README.md)
 
 [![Flow](https://img.shields.io/badge/Flow-v0.8.4-blue)](plugins/flow/)

@@ -13,6 +13,8 @@ Scaffold repo-local Ralph harness. Opt-in only.
 - If `scripts/ralph/` already exists, stop and ask the user to remove it first.
 - Copy templates from `templates/` into `scripts/ralph/`.
 - Copy `flowctl` and `flowctl.py` from `${CLAUDE_PLUGIN_ROOT}/scripts/` into `scripts/ralph/`.
+- Copy `ralph-guard.py` hook to `.claude/hooks/` (required for subagent compatibility).
+- Create/update `.claude/settings.local.json` with hook config.
 - Set executable bit on `scripts/ralph/ralph.sh`, `scripts/ralph/ralph_once.sh`, and `scripts/ralph/flowctl`.
 
 ## Workflow
@@ -45,11 +47,32 @@ Scaffold repo-local Ralph harness. Opt-in only.
    chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl
    ```
    Note: `cp -R templates/.` copies all files including dotfiles (.gitignore).
-6. Edit `scripts/ralph/config.env` to set the chosen review backend:
+6. Set up hooks (required for subagent compatibility - Bug #14410):
+   ```bash
+   mkdir -p .claude/hooks
+   cp "${CLAUDE_PLUGIN_ROOT}/scripts/hooks/ralph-guard.py" .claude/hooks/
+   chmod +x .claude/hooks/ralph-guard.py
+   ```
+7. Create/update `.claude/settings.local.json` with hook config:
+   - If file doesn't exist, create it with the hooks config below
+   - If file exists, merge the hooks (preserve existing settings)
+
+   Required hooks config:
+   ```json
+   {
+     "hooks": {
+       "PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ralph-guard.py", "timeout": 5}]}],
+       "PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ralph-guard.py", "timeout": 5}]}],
+       "Stop": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ralph-guard.py", "timeout": 5}]}],
+       "SubagentStop": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ralph-guard.py", "timeout": 5}]}]
+     }
+   }
+   ```
+8. Edit `scripts/ralph/config.env` to set the chosen review backend:
    - Replace `PLAN_REVIEW=codex` with `PLAN_REVIEW=<chosen>`
    - Replace `WORK_REVIEW=codex` with `WORK_REVIEW=<chosen>`
-7. Print next steps (run from terminal, NOT inside Claude Code):
+9. Print next steps (run from terminal, NOT inside Claude Code):
    - Edit `scripts/ralph/config.env` to customize settings
    - `./scripts/ralph/ralph_once.sh` (one iteration, observe)
    - `./scripts/ralph/ralph.sh` (full loop, AFK)
-   - Uninstall: `rm -rf scripts/ralph/`
+   - Uninstall: `rm -rf scripts/ralph/ .claude/hooks/ralph-guard.py` and remove hooks from `.claude/settings.local.json`
