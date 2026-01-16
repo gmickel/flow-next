@@ -93,13 +93,11 @@ Add after the existing test sections, before the final results summary.
 - [ ] All tests pass when run: `plugins/flow-next/scripts/smoke_test.sh`
 
 ## Done summary
-TBD
-
+Added 6 smoke tests verifying /flow-next:sync command stub and skill files exist with correct content (name frontmatter, plan-sync reference, dry-run support).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 491d8593fd3eaedda39f05438e860b34607f5754
+- Tests: plugins/flow-next/scripts/smoke_test.sh
 - PRs:
-
 ## References
 
 - Smoke test: `plugins/flow-next/scripts/smoke_test.sh`

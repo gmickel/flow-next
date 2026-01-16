@@ -7,10 +7,19 @@
     "fn-16-ugn.2"
   ],
   "epic": "fn-16-ugn",
+  "evidence": {
+    "commits": [
+      "491d8593fd3eaedda39f05438e860b34607f5754"
+    ],
+    "prs": [],
+    "tests": [
+      "plugins/flow-next/scripts/smoke_test.sh"
+    ]
+  },
   "id": "fn-16-ugn.3",
   "priority": null,
   "spec_path": ".flow/tasks/fn-16-ugn.3.md",
-  "status": "in_progress",
+  "status": "done",
   "title": "Add smoke test for /flow-next:sync",
-  "updated_at": "2026-01-16T09:26:59.924480Z"
+  "updated_at": "2026-01-16T09:31:33.874909Z"
 }
