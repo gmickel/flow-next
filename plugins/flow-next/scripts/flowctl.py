@@ -2276,7 +2276,7 @@ def cmd_tasks(args: argparse.Namespace) -> None:
             tasks.append(
                 {
                     "id": task_data["id"],
-                    "epic": task_data["epic_id"],
+                    "epic": task_data["epic"],
                     "title": task_data["title"],
                     "status": task_data["status"],
                     "priority": task_data.get("priority"),
@@ -2351,16 +2351,16 @@ def cmd_list(args: argparse.Namespace) -> None:
             task_data = normalize_task(
                 load_json_or_exit(task_file, f"Task {stem}", use_json=args.json)
             )
-            if "id" not in task_data or "epic_id" not in task_data:
+            if "id" not in task_data or "epic" not in task_data:
                 continue  # Skip artifact files (GH-21)
-            epic_id = task_data["epic_id"]
+            epic_id = task_data["epic"]
             if epic_id not in tasks_by_epic:
                 tasks_by_epic[epic_id] = []
             tasks_by_epic[epic_id].append(task_data)
             all_tasks.append(
                 {
                     "id": task_data["id"],
-                    "epic": task_data["epic_id"],
+                    "epic": task_data["epic"],
                     "title": task_data["title"],
                     "status": task_data["status"],
                     "priority": task_data.get("priority"),
