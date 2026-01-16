@@ -5,11 +5,15 @@ All notable changes to the gmickel-claude-marketplace.
 ## [flow-next 0.11.5] - 2026-01-16
 
 ### Fixed
-- **Ralph hooks setup** - `/flow-next:ralph-init` now automatically sets up hooks ([#45](https://github.com/gmickel/gmickel-claude-marketplace/issues/45))
-  - Copies `ralph-guard.py` to `.claude/hooks/`
-  - Creates `.claude/settings.local.json` with hook config
-  - Previously required manual setup, now works out of the box
-  - Fixes "missing ralph-guard.py" error when running from installed plugin
+- **Ralph hooks check removed** - Remove blocking local hooks check from `ralph.sh` ([#45](https://github.com/gmickel/gmickel-claude-marketplace/issues/45))
+  - Plugin hooks work via `hooks/hooks.json` when installed normally
+  - The check was blocking ALL users, not just `--plugin-dir` users
+  - Test scripts handle the `--plugin-dir` workaround for bug #14410
+
+### Changed
+- **Dev guidance** - CLAUDE.md now recommends local marketplace install over `--plugin-dir`
+  - `/plugin marketplace add ./` then `/plugin install flow-next@gmickel-claude-marketplace`
+  - Hooks work correctly this way (no workaround needed)
 
 ## [flow-next 0.11.4] - 2026-01-16
 
