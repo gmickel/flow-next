@@ -33,6 +33,11 @@ Parse $ARGUMENTS for:
 - First positional arg = `ID`
 - `--dry-run` flag = `DRY_RUN` (true/false)
 
+**Validate ID format first:**
+- Must start with `fn-`
+- If no ID provided: "Usage: /flow-next:sync <id> [--dry-run]"
+- If doesn't match `fn-*` pattern: "Invalid ID format. Use fn-N (epic) or fn-N.M (task)."
+
 Detect ID type:
 - Contains `.` (e.g., fn-1.2) -> task ID
 - No `.` (e.g., fn-1 or fn-1-abc) -> epic ID
@@ -75,7 +80,12 @@ Filter to `status: todo` or `status: blocked`. Exclude the source task itself.
 $FLOWCTL tasks --epic "<epic-id>" --json
 ```
 
-Filter to `status: todo` or `status: blocked`.
+1. First, find a **source task** to anchor drift detection (agent requires `COMPLETED_TASK_ID`):
+   - Prefer most recently updated task with `status: done`
+   - Else: most recently updated task with `status: in_progress`
+   - Else: error "No completed or in-progress tasks to sync from. Complete a task first."
+
+2. Then filter remaining tasks to `status: todo` or `status: blocked` (these are downstream).
 
 **If no downstream tasks:**
 ```
@@ -90,7 +100,7 @@ Build context and spawn via Task tool:
 ```
 Sync task specs from <source> to downstream tasks.
 
-SOURCE_ID: <the ID provided>
+COMPLETED_TASK_ID: <source task id - the input task, or selected source for epic mode>
 FLOWCTL: ${CLAUDE_PLUGIN_ROOT}/scripts/flowctl
 EPIC_ID: <epic id>
 DOWNSTREAM_TASK_IDS: <comma-separated list from step 4>
@@ -99,13 +109,11 @@ DRY_RUN: <true|false>
 <if DRY_RUN is true>
 DRY RUN MODE: Report what would change but do NOT use Edit tool. Only analyze and report drift.
 </if>
-
-<if source is a task>
-COMPLETED_TASK_ID: <task-id>
-</if>
 ```
 
 Use Task tool with `subagent_type: flow-next:plan-sync`
+
+**Note:** `COMPLETED_TASK_ID` is always provided - for task-mode it's the input task, for epic-mode it's the source task selected in Step 4.
 
 ### Step 6: Report Results
 
@@ -132,10 +140,12 @@ No files modified.
 
 | Case | Message |
 |------|---------|
+| No ID provided | "Usage: /flow-next:sync <id> [--dry-run]" |
 | No `.flow/` | "No .flow/ found. Run `flowctl init` first." |
 | Invalid format | "Invalid ID format. Use fn-N (epic) or fn-N.M (task)." |
 | Task not found | "Task <id> not found. Run `flowctl list` to see available." |
-| Epic not found | "Epic <id> not found. Run `flowctl epics` to see available." |
+| Epic not found | "Epic <id> not found. Run `flowctl list` to see available." |
+| No source (epic mode) | "No completed or in-progress tasks to sync from. Complete a task first." |
 | No downstream | "No downstream tasks to sync (all done or none exist)." |
 
 ## Rules
