@@ -2,6 +2,18 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.12.9] - 2026-01-18
+
+### Fixed
+- **Task jumping on timeout** - Prevent tasks from being skipped when worker times out after `flowctl done` but before receipt write (#57)
+  - Reset `done→todo` if receipt missing (ensures `flowctl next` picks it up)
+  - Fatal abort if reset fails (prevents silent skipping)
+  - Delete corrupted/partial receipts on verification failure
+- **Timeout retry handling** - Don't count timeouts against `MAX_ATTEMPTS_PER_TASK` (infrastructure ≠ code failure)
+- **Unnecessary retry on proven completion** - Clear `force_retry` when task done + receipt valid
+
+Thanks to @VexyCats for the detailed analysis and logs that identified the root cause.
+
 ## [flow-next 0.12.8] - 2026-01-18
 
 ### Added
