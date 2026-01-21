@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 
-[![Version](https://img.shields.io/badge/Version-0.13.0-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.14.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/ST5Y39hQ)
@@ -21,6 +21,16 @@
 🌐 **Prefer a visual overview?** See the [Flow-Next app page](https://mickel.tech/apps/flow-next) for diagrams and examples.
 
 > **New: Codex Review Backend.** Cross-model reviews now work on Linux/Windows via OpenAI Codex CLI. Same Carmack-level criteria as RepoPrompt. See [Cross-Model Reviews](#cross-model-reviews) for setup.
+
+---
+
+> ### ⚠️ RepoPrompt 1.6.0+ Required (v0.14.0)
+>
+> If you use the **RepoPrompt (rp) backend** for `/flow-next:impl-review`, you must upgrade to **RepoPrompt 1.6.0 or later**.
+>
+> Check your version: `rp-cli --version`
+>
+> The new builder review mode provides better context discovery and more focused reviews. If you can't upgrade yet, use `--review=codex` or `--review=none` as alternatives.
 
 ---
 

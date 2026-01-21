@@ -2,6 +2,41 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.14.0] - 2026-01-21
+
+### ⚠️ Breaking Change: RepoPrompt 1.6.0+ Required
+
+The RepoPrompt (rp) backend for `/flow-next:impl-review` now uses the new **builder review mode** introduced in RepoPrompt 1.6.0. This provides better context discovery and more focused reviews.
+
+**Before upgrading**: Check your RepoPrompt version with `rp-cli --version`. If you're on an older version, update RepoPrompt first or use `--review=codex` as an alternative.
+
+### Changed
+
+- **RP impl-review uses builder review mode** — Instead of manually building review prompts and selecting files, the builder's discovery agent now:
+  - Automatically includes git diffs for the commits being reviewed
+  - Selects relevant context files with full codebase awareness
+  - Produces structured review findings before verdict
+  - Lower token usage (~26K vs ~71K) with better coverage
+
+- **New flowctl rp commands**:
+  - `--response-type review` on `rp builder` and `rp setup-review`
+  - `--chat-id` on `rp chat-send` for conversation continuity
+  - `--mode` on `rp chat-send` (chat/review/plan/edit)
+
+- **Simplified RP workflow** — Removed manual file selection (Phase 2) and elaborate prompt building (Phase 3). Builder handles context discovery; follow-up chat requests verdict.
+
+- **Fix loop uses `--chat-id`** — Re-reviews now use explicit chat ID for session continuity instead of relying on tab state.
+
+### Added
+
+- RP 1.6.0 requirement notice in SKILL.md and workflow.md
+
+### Unchanged
+
+- Codex backend — No changes, works as before
+- Plan-review — No changes, only impl-review affected
+- Receipt format — Compatible with Ralph
+
 ## [flow-next 0.13.0] - 2026-01-19
 
 ### ⚠️ Significant Planning Workflow Changes

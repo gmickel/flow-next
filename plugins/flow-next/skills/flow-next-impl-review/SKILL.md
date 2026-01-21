@@ -12,6 +12,8 @@ Conduct a John Carmack-level review of implementation changes on the current bra
 **Role**: Code Review Coordinator (NOT the reviewer)
 **Backends**: RepoPrompt (rp) or Codex CLI (codex)
 
+**⚠️ RepoPrompt 1.6.0+ Required**: The RP backend now uses builder review mode which requires RepoPrompt 1.6.0 or later. Check version: `rp-cli --version`
+
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Always use:
 ```bash
 FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
