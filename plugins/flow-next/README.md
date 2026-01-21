@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 
-[![Version](https://img.shields.io/badge/Version-0.15.0-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.16.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/ST5Y39hQ)
@@ -639,6 +639,8 @@ Without a backend configured, reviews fail with a clear error. Run `/flow-next:s
 
 Tasks declare their blockers. `flowctl ready` shows what can start. Nothing executes until dependencies resolve.
 
+**Epic-level dependencies**: During planning, `epic-scout` runs in parallel with other research scouts to find relationships with existing open epics. If the new plan depends on APIs/patterns from another epic, dependencies are auto-set via `flowctl epic add-dep`. Findings reported at end of planning—no prompts needed.
+
 ### Auto-Block Stuck Tasks
 
 After MAX_ATTEMPTS_PER_TASK failures (default 5), Ralph:
@@ -663,6 +665,13 @@ When enabled, after each task completes, a plan-sync agent:
 3. Updates affected task specs with accurate info
 
 Skip conditions: disabled (default), task failed, no downstream tasks.
+
+**Cross-epic sync (opt-in, default false):**
+```bash
+flowctl config set planSync.crossEpic true
+```
+
+When enabled, plan-sync also checks other open epics for stale references. Useful when multiple epics share APIs/patterns, but increases sync time. Disabled by default to avoid long Ralph loops.
 
 **Manual trigger:**
 ```bash
@@ -771,10 +780,10 @@ Override via flags or `scripts/ralph/config.env`.
 
 ### Planning Phase
 
-1. **Research (parallel subagents)**: `repo-scout` (or `context-scout` if rp-cli) + `practice-scout` + `docs-scout` + `github-scout` (cross-repo code search)
+1. **Research (parallel subagents)**: `repo-scout` (or `context-scout` if rp-cli) + `practice-scout` + `docs-scout` + `github-scout` + `epic-scout` + `docs-gap-scout`
 2. **Gap analysis**: `flow-gap-analyst` finds edge cases + missing requirements
-3. **Epic creation**: Writes spec to `.flow/specs/fn-N.md`
-4. **Task breakdown**: Creates tasks + explicit dependencies in `.flow/tasks/`
+3. **Epic creation**: Writes spec to `.flow/specs/fn-N.md`, sets epic dependencies from `epic-scout` findings
+4. **Task breakdown**: Creates tasks + explicit dependencies in `.flow/tasks/`, adds doc update acceptance criteria from `docs-gap-scout`
 5. **Validate**: `flowctl validate --epic fn-N`
 6. **Review** (optional): `/flow-next:plan-review fn-N` with re-anchor + fix loop until "Ship"
 

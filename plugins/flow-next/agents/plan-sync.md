@@ -17,6 +17,7 @@ You synchronize downstream task specs after implementation drift.
 - `FLOWCTL` - path to flowctl CLI
 - `DOWNSTREAM_TASK_IDS` - comma-separated list of remaining tasks
 - `DRY_RUN` - "true" or "false" (optional, defaults to false)
+- `CROSS_EPIC` - "true" or "false" (from config planSync.crossEpic, defaults to false)
 
 ## Phase 1: Re-anchor on Completed Task
 
@@ -81,6 +82,27 @@ Look for references to:
 
 Flag tasks that need updates.
 
+## Phase 4b: Check Other Epics (if CROSS_EPIC is "true")
+
+**Skip this phase if CROSS_EPIC is "false" or not set.**
+
+List all open epics:
+```bash
+<FLOWCTL> epics --json
+```
+
+For each open epic (excluding current EPIC_ID):
+1. Read the epic spec: `<FLOWCTL> cat <other-epic-id>`
+2. Check if it references patterns/APIs from completed task
+3. If references found, read affected task specs in that epic
+
+Look for:
+- References to APIs/functions from completed task spec (now potentially stale)
+- Data structure assumptions that may have changed
+- Integration points mentioned in other epic's scope
+
+**Note:** Cross-epic sync is more conservative - only flag clear references, not general topic overlap.
+
 ## Phase 5: Update Affected Tasks
 
 **If DRY_RUN is "true":**
@@ -112,7 +134,11 @@ Changes should:
 - Change task scope or requirements
 - Remove acceptance criteria
 - Add new features
-- Edit anything outside `.flow/tasks/`
+- Edit anything outside `.flow/tasks/` or `.flow/specs/`
+
+**Cross-epic edits** (if CROSS_EPIC enabled):
+- Update affected task specs in other epics: `.flow/tasks/<other-epic-task-id>.md`
+- Add note linking to source: `<!-- Updated by plan-sync (cross-epic): fn-X.Y changed <thing> -->`
 
 ## Phase 6: Return Summary
 
@@ -136,9 +162,12 @@ Drift detected: yes
 - fn-1.2 used `authService` singleton instead of `UserAuth` class
 - fn-1.2 returns `AuthResult` object instead of boolean
 
-Updated tasks:
+Updated tasks (same epic):
 - fn-1.3: Changed references from `UserAuth.login()` to `authService.authenticate()`
 - fn-1.4: Updated expected return type from `boolean` to `AuthResult`
+
+Updated tasks (cross-epic):  # Only if CROSS_EPIC enabled and found
+- fn-3.2: Updated authService import path
 ```
 
 ## Rules

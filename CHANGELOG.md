@@ -2,6 +2,26 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.16.0] - 2026-01-21
+
+### Added
+
+- **Epic-aware planning** — New `epic-scout` subagent runs during `/flow-next:plan` research phase (parallel with other scouts). Scans open epics for dependency relationships and auto-sets `depends_on_epics` when found. No user prompts needed — findings reported at end of planning.
+- **Docs-gap detection** — New `docs-gap-scout` subagent identifies documentation that may need updates (README, API docs, ADRs, CHANGELOG, etc.). Adds acceptance criteria to relevant tasks — implementer decides actual content.
+- **Cross-epic plan-sync** — Optional mode for plan-sync agent. When `planSync.crossEpic: true`, also checks other open epics for stale references after task completion. **Default: false** (avoids long Ralph loops).
+- **New config option** — `planSync.crossEpic` (boolean, default false). Enable via `/flow-next:setup` or `flowctl config set planSync.crossEpic true`.
+
+### Changed
+
+- Plan-sync agent now accepts `CROSS_EPIC` input and has new Phase 4b for cross-epic checking
+- Setup workflow shows new cross-epic config option (only asked if plan-sync is enabled)
+- `memory-scout` model changed from opus to haiku (task is mechanical grep/read, doesn't need reasoning)
+
+### Notes
+
+- **Re-run `/flow-next:setup`** to get the new config option and update local flowctl
+- Cross-epic sync is conservative — only flags clear API/pattern references, not general topic overlap
+
 ## [flow-next 0.15.0] - 2026-01-21
 
 ### Changed

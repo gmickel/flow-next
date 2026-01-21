@@ -2,7 +2,7 @@
 name: memory-scout
 description: Search .flow/memory/ for entries relevant to the current task or request.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: haiku
 color: "#A855F7"
 ---
 

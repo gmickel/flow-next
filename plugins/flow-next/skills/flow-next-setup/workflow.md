@@ -83,6 +83,7 @@ HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
 CURRENT_BACKEND=$("${PLUGIN_ROOT}/scripts/flowctl" config get review.backend --json 2>/dev/null | jq -r '.value // empty')
 CURRENT_MEMORY=$("${PLUGIN_ROOT}/scripts/flowctl" config get memory.enabled --json 2>/dev/null | jq -r '.value // empty')
 CURRENT_PLANSYNC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.enabled --json 2>/dev/null | jq -r '.value // empty')
+CURRENT_CROSSEPIC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.crossEpic --json 2>/dev/null | jq -r '.value // empty')
 ```
 
 Store detection results for use in questions. When showing options, indicate current value if set (e.g., "(current)" after the matching option label).
@@ -109,6 +110,7 @@ If ANY config values are already set, print a notice before asking questions:
 Current configuration:
 - Memory: <enabled|disabled> (change with: flowctl config set memory.enabled <true|false>)
 - Plan-Sync: <enabled|disabled> (change with: flowctl config set planSync.enabled <true|false>)
+- Plan-Sync cross-epic: <enabled|disabled> (change with: flowctl config set planSync.crossEpic <true|false>)
 - Review backend: <codex|rp|none> (change with: flowctl config set review.backend <codex|rp|none>)
 ```
 
@@ -141,6 +143,19 @@ Available questions (include only if corresponding config is unset):
   "options": [
     {"label": "No", "description": "Off by default. Enable later with: flowctl config set planSync.enabled true"},
     {"label": "Yes", "description": "Sync task specs when implementation differs from original plan"}
+  ],
+  "multiSelect": false
+}
+```
+
+**Plan-Sync cross-epic question** (include if CURRENT_PLANSYNC is "true" AND CURRENT_CROSSEPIC is empty):
+```json
+{
+  "header": "Cross-Epic",
+  "question": "Enable cross-epic plan-sync? (Also checks other open epics for stale references)",
+  "options": [
+    {"label": "No (Recommended)", "description": "Only sync within current epic. Faster, avoids long Ralph loops."},
+    {"label": "Yes", "description": "Also update tasks in other epics that reference changed APIs/patterns."}
   ],
   "multiSelect": false
 }
@@ -206,6 +221,10 @@ Only process answers for questions that were asked (config values that were unse
 - If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.enabled true --json`
 - If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.enabled false --json`
 
+**Plan-Sync cross-epic** (if question was asked):
+- If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.crossEpic true --json`
+- If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.crossEpic false --json`
+
 **Review** (if question was asked):
 Map user's answer to config value and persist:
 
@@ -249,6 +268,7 @@ To use from command line:
 Configuration (use flowctl config set to change):
 - Memory: <enabled|disabled>
 - Plan-Sync: <enabled|disabled>
+- Plan-Sync cross-epic: <enabled|disabled>
 - Review backend: <codex|rp|none>
 
 Documentation updated:

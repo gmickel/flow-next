@@ -75,7 +75,11 @@ def ensure_flow_exists() -> bool:
 
 def get_default_config() -> dict:
     """Return default config structure."""
-    return {"memory": {"enabled": False}, "planSync": {"enabled": False}, "review": {"backend": None}}
+    return {
+        "memory": {"enabled": False},
+        "planSync": {"enabled": False, "crossEpic": False},
+        "review": {"backend": None},
+    }
 
 
 def deep_merge(base: dict, override: dict) -> dict:
