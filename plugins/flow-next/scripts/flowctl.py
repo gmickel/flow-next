@@ -7,7 +7,6 @@ Agents must use flowctl for all writes - never edit .flow/* directly.
 """
 
 import argparse
-import fcntl
 import json
 import os
 import re
@@ -23,6 +22,23 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, ContextManager, Optional
+
+# Platform-specific file locking (fcntl on Unix, no-op on Windows)
+try:
+    import fcntl
+
+    def _flock(f, lock_type):
+        fcntl.flock(f, lock_type)
+
+    LOCK_EX = fcntl.LOCK_EX
+    LOCK_UN = fcntl.LOCK_UN
+except ImportError:
+    # Windows: fcntl not available, use no-op (acceptable for single-machine use)
+    def _flock(f, lock_type):
+        pass
+
+    LOCK_EX = 0
+    LOCK_UN = 0
 
 
 # --- Constants ---
@@ -180,10 +196,10 @@ class LocalFileStateStore(StateStore):
         lock_path = self._lock_path(task_id)
         with open(lock_path, "w") as f:
             try:
-                fcntl.flock(f, fcntl.LOCK_EX)
+                _flock(f, LOCK_EX)
                 yield
             finally:
-                fcntl.flock(f, fcntl.LOCK_UN)
+                _flock(f, LOCK_UN)
 
     def list_runtime_files(self) -> list[str]:
         if not self.tasks_dir.exists():
