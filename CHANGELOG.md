@@ -2,6 +2,33 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.17.1] - 2026-01-21
+
+### Fixed
+
+- **Plan review now includes task specs** — `/flow-next:plan-review` previously reviewed only the epic spec, leaving task specs stale when epic changes occurred during the fix loop. Now both RP and Codex backends include task specs in the review. Reviewers can flag inconsistencies between epic and task specs, and the fix loop instructs the agent to sync affected task specs.
+
+### Added
+
+- **`task set-spec --file`** — Full spec replacement mode for task specs (like `epic set-plan --file`). Supports both file paths and stdin (`-`). Use in plan-review fix loops to sync task specs after epic changes.
+- **Consistency checking in review criteria** — Both plan review backends now explicitly check for epic/task consistency: contradicting requirements, misaligned acceptance criteria, stale state/enum references.
+- **Task sync instructions in re-review preamble** — When re-reviewing, Codex backend now instructs the agent to sync task specs if epic changes affected them.
+
+### Changed
+
+- **Review prompt expanded** — Plan review now includes `<task_specs>` section with all task spec content (Codex backend). RP backend adds task spec files to selection.
+- **Fix loop steps updated** — Both SKILL.md and workflow.md now include task spec sync as explicit step (step 3 in SKILL.md, step 4 in workflow.md) before re-review.
+- **Anti-pattern added** — "Updating epic spec without syncing affected task specs" documented as anti-pattern in workflow.md.
+
+### Technical Details
+
+Task specs need syncing when epic changes affect:
+- State/enum values referenced in tasks
+- Acceptance criteria that tasks implement
+- Approach/design decisions tasks depend on
+- Lock/retry/error handling semantics
+- API signatures or type definitions
+
 ## [flow-next 0.17.0] - 2026-01-21
 
 ### Added

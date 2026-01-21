@@ -715,6 +715,51 @@ echo "$task_spec" | grep -q "Check 1" || { echo "set-spec acceptance failed"; FA
 echo -e "${GREEN}✓${NC} task set-spec combined"
 PASS=$((PASS + 1))
 
+echo -e "${YELLOW}--- task set-spec --file (full replacement) ---${NC}"
+scripts/flowctl task create --epic "$STDIN_EPIC" --title "Full replacement test" --json >/dev/null
+FULLREPLACE_TASK="${STDIN_EPIC}.2"
+# Write complete spec file
+cat > "$TEST_DIR/full_spec.md" << 'FULLSPEC'
+# Task: Full replacement test
+
+## Description
+
+This is a completely new spec that replaces everything.
+
+## Acceptance
+
+- [ ] Verify full replacement works
+- [ ] Original content is gone
+FULLSPEC
+scripts/flowctl task set-spec "$FULLREPLACE_TASK" --file "$TEST_DIR/full_spec.md" --json >/dev/null
+# Verify full replacement
+full_spec="$(scripts/flowctl cat "$FULLREPLACE_TASK")"
+echo "$full_spec" | grep -q "completely new spec that replaces everything" || { echo "set-spec --file content failed"; FAIL=$((FAIL + 1)); }
+echo "$full_spec" | grep -q "Verify full replacement works" || { echo "set-spec --file acceptance failed"; FAIL=$((FAIL + 1)); }
+echo -e "${GREEN}✓${NC} task set-spec --file"
+PASS=$((PASS + 1))
+
+echo -e "${YELLOW}--- task set-spec --file stdin ---${NC}"
+scripts/flowctl task create --epic "$STDIN_EPIC" --title "Stdin replacement test" --json >/dev/null
+STDIN_REPLACE_TASK="${STDIN_EPIC}.3"
+# Full replacement via stdin
+scripts/flowctl task set-spec "$STDIN_REPLACE_TASK" --file - --json <<'EOF'
+# Task: Stdin replacement test
+
+## Description
+
+This spec was written via stdin.
+
+## Acceptance
+
+- [ ] Stdin replacement works
+EOF
+# Verify stdin replacement
+stdin_spec="$(scripts/flowctl cat "$STDIN_REPLACE_TASK")"
+echo "$stdin_spec" | grep -q "spec was written via stdin" || { echo "set-spec --file stdin failed"; FAIL=$((FAIL + 1)); }
+echo -e "${GREEN}✓${NC} task set-spec --file stdin"
+PASS=$((PASS + 1))
+
 echo -e "${YELLOW}--- checkpoint save/restore ---${NC}"
 # Save checkpoint
 scripts/flowctl checkpoint save --epic "$STDIN_EPIC" --json >/dev/null

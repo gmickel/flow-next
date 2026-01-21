@@ -1018,10 +1018,12 @@ def build_review_prompt(
     spec_content: str,
     context_hints: str,
     diff_summary: str = "",
+    task_specs: str = "",
 ) -> str:
     """Build XML-structured review prompt for codex.
 
     review_type: 'impl' or 'plan'
+    task_specs: Combined task spec content (plan reviews only)
 
     Uses same Carmack-level criteria as RepoPrompt workflow to ensure parity.
     """
@@ -1113,6 +1115,18 @@ Do NOT skip this tag. The automation depends on it."""
             context_preamble
             + """Conduct a John Carmack-level review of this plan.
 
+## Review Scope
+
+You are reviewing:
+1. **Epic spec** in `<spec>` - The high-level plan
+2. **Task specs** in `<task_specs>` - Individual task breakdowns (if provided)
+
+**CRITICAL**: Check for consistency between epic and tasks. Flag if:
+- Task specs contradict or miss epic requirements
+- Task acceptance criteria don't align with epic acceptance criteria
+- Task approaches would need to change based on epic design decisions
+- Epic mentions states/enums/types that tasks don't account for
+
 ## Review Criteria
 
 1. **Completeness** - All requirements covered? Missing edge cases?
@@ -1122,6 +1136,7 @@ Do NOT skip this tag. The automation depends on it."""
 5. **Risks** - Blockers identified? Security gaps? Mitigation?
 6. **Scope** - Right-sized? Over/under-engineering?
 7. **Testability** - How will we verify this works?
+8. **Consistency** - Do task specs align with epic spec?
 
 ## Verdict Scope
 
@@ -1129,6 +1144,7 @@ Explore the codebase to understand context, but your VERDICT must only consider:
 - Issues **within this plan** that block implementation
 - Feasibility problems given the **current codebase state**
 - Missing requirements that are **part of the stated goal**
+- Inconsistencies between epic and task specs
 
 Do NOT mark NEEDS_WORK for:
 - Pre-existing codebase issues unrelated to this plan
@@ -1141,7 +1157,7 @@ You MAY mention these as "FYI" observations without affecting the verdict.
 
 For each issue found:
 - **Severity**: Critical / Major / Minor / Nitpick
-- **Location**: Which task or section
+- **Location**: Which task or section (e.g., "fn-1.3 Description" or "Epic Acceptance #2")
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
@@ -1164,6 +1180,10 @@ Do NOT skip this tag. The automation depends on it."""
         parts.append(f"<diff_summary>\n{diff_summary}\n</diff_summary>")
 
     parts.append(f"<spec>\n{spec_content}\n</spec>")
+
+    if task_specs:
+        parts.append(f"<task_specs>\n{task_specs}\n</task_specs>")
+
     parts.append(f"<review_instructions>\n{instruction}\n</review_instructions>")
 
     return "\n\n".join(parts)
@@ -1179,6 +1199,29 @@ def build_rereview_preamble(changed_files: list[str], review_type: str) -> str:
     if len(changed_files) > 30:
         files_list += f"\n- ... and {len(changed_files) - 30} more files"
 
+    task_sync_note = ""
+    if review_type == "plan":
+        task_sync_note = """
+
+## Task Spec Sync Required
+
+If you modified the epic spec in ways that affect task specs, you MUST also update
+the affected task specs before requesting re-review. Use:
+
+```bash
+flowctl task set-spec <TASK_ID> --file - <<'EOF'
+<updated task spec content>
+EOF
+```
+
+Task specs need updating when epic changes affect:
+- State/enum values referenced in tasks
+- Acceptance criteria that tasks implement
+- Approach/design decisions tasks depend on
+- Lock/retry/error handling semantics
+- API signatures or type definitions
+"""
+
     return f"""## IMPORTANT: Re-review After Fixes
 
 This is a RE-REVIEW. Code has been modified since your last review.
@@ -1188,7 +1231,7 @@ This is a RE-REVIEW. Code has been modified since your last review.
 
 Use your file reading tools to get the CURRENT content of these files.
 Do NOT rely on what you saw in the previous review - the code has changed.
-
+{task_sync_note}
 After re-reading, conduct a fresh {review_type} review on the updated code.
 
 ---
@@ -2965,10 +3008,10 @@ def cmd_task_set_acceptance(args: argparse.Namespace) -> None:
 
 
 def cmd_task_set_spec(args: argparse.Namespace) -> None:
-    """Set task description and/or acceptance in one call.
+    """Set task spec - full replacement (--file) or section patches.
 
-    Reduces tool calls: instead of separate set-description + set-acceptance,
-    both can be set atomically with a single JSON timestamp update.
+    Full replacement mode: --file replaces entire spec content (like epic set-plan).
+    Section patch mode: --description and/or --acceptance update specific sections.
     """
     if not ensure_flow_exists():
         error_exit(
@@ -2982,10 +3025,11 @@ def cmd_task_set_spec(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
 
-    # Need at least one of description or acceptance
-    if not args.description and not args.acceptance:
+    # Need at least one of file, description, or acceptance
+    has_file = hasattr(args, "file") and args.file
+    if not has_file and not args.description and not args.acceptance:
         error_exit(
-            "At least one of --description or --acceptance required",
+            "Requires --file, --description, or --acceptance",
             use_json=args.json,
         )
 
@@ -3000,6 +3044,20 @@ def cmd_task_set_spec(args: argparse.Namespace) -> None:
     # Load task JSON first (fail early)
     task_data = load_json_or_exit(task_json_path, f"Task {task_id}", use_json=args.json)
 
+    # Full file replacement mode (like epic set-plan)
+    if has_file:
+        content = read_file_or_stdin(args.file, "Spec file", use_json=args.json)
+        atomic_write(task_spec_path, content)
+        task_data["updated_at"] = now_iso()
+        atomic_write_json(task_json_path, task_data)
+
+        if args.json:
+            json_output({"id": task_id, "message": f"Task {task_id} spec replaced"})
+        else:
+            print(f"Task {task_id} spec replaced")
+        return
+
+    # Section patch mode (existing behavior)
     # Read current spec
     current_spec = read_text_or_exit(
         task_spec_path, f"Task {task_id} spec", use_json=args.json
@@ -4701,12 +4759,22 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
 
     epic_spec = epic_spec_path.read_text(encoding="utf-8")
 
+    # Load task specs for this epic
+    tasks_dir = flow_dir / TASKS_DIR
+    task_specs_parts = []
+    for task_file in sorted(tasks_dir.glob(f"{epic_id}.*.md")):
+        task_id = task_file.stem
+        task_content = task_file.read_text(encoding="utf-8")
+        task_specs_parts.append(f"### {task_id}\n\n{task_content}")
+
+    task_specs = "\n\n---\n\n".join(task_specs_parts) if task_specs_parts else ""
+
     # Get context hints (from main branch for plans)
     base_branch = args.base if hasattr(args, "base") and args.base else "main"
     context_hints = gather_context_hints(base_branch)
 
     # Build prompt
-    prompt = build_review_prompt("plan", epic_spec, context_hints)
+    prompt = build_review_prompt("plan", epic_spec, context_hints, task_specs=task_specs)
 
     # Check for existing session in receipt (indicates re-review)
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
@@ -4722,10 +4790,13 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
             except (json.JSONDecodeError, Exception):
                 pass
 
-    # For re-reviews, prepend instruction to re-read spec file
+    # For re-reviews, prepend instruction to re-read spec files
     if is_rereview:
-        # For plan reviews, the spec file is what changes
+        # For plan reviews, epic spec and task specs may change
         spec_files = [str(epic_spec_path)]
+        # Add task spec files
+        for task_file in sorted(tasks_dir.glob(f"{epic_id}.*.md")):
+            spec_files.append(str(task_file))
         rereview_preamble = build_rereview_preamble(spec_files, "plan")
         prompt = rereview_preamble + prompt
 
@@ -5271,14 +5342,17 @@ def main() -> None:
     p_task_acc.set_defaults(func=cmd_task_set_acceptance)
 
     p_task_set_spec = task_sub.add_parser(
-        "set-spec", help="Set description and/or acceptance in one call"
+        "set-spec", help="Set task spec (full file or sections)"
     )
     p_task_set_spec.add_argument("id", help="Task ID (fn-N.M)")
     p_task_set_spec.add_argument(
-        "--description", help="Description file (use '-' for stdin)"
+        "--file", help="Full spec file (use '-' for stdin) - replaces entire spec"
     )
     p_task_set_spec.add_argument(
-        "--acceptance", help="Acceptance file (use '-' for stdin)"
+        "--description", help="Description section file (use '-' for stdin)"
+    )
+    p_task_set_spec.add_argument(
+        "--acceptance", help="Acceptance section file (use '-' for stdin)"
     )
     p_task_set_spec.add_argument("--json", action="store_true", help="JSON output")
     p_task_set_spec.set_defaults(func=cmd_task_set_spec)

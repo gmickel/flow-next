@@ -130,14 +130,19 @@ Builder selects context automatically. Review and add must-haves:
 # See what builder selected
 $FLOWCTL rp select-get --window "$W" --tab "$T"
 
-# Always add the plan spec
+# Always add the epic spec
 $FLOWCTL rp select-add --window "$W" --tab "$T" .flow/specs/<epic-id>.md
+
+# Always add ALL task specs for this epic
+for task_spec in .flow/tasks/${EPIC_ID}.*.md; do
+  [[ -f "$task_spec" ]] && $FLOWCTL rp select-add --window "$W" --tab "$T" "$task_spec"
+done
 
 # Add PRD/architecture docs if found
 $FLOWCTL rp select-add --window "$W" --tab "$T" docs/prd.md
 ```
 
-**Why this matters:** Chat only sees selected files.
+**Why this matters:** Chat only sees selected files. Reviewer needs both epic spec AND task specs to check for consistency.
 
 ---
 
@@ -171,6 +176,18 @@ If you cannot find `<file_contents>`, ask for the files to be re-attached before
 ## Review Focus
 [USER'S FOCUS AREAS]
 
+## Review Scope
+
+You are reviewing:
+1. **Epic spec** - The high-level plan
+2. **Task specs** - Individual task breakdowns
+
+**CRITICAL**: Check for consistency between epic and tasks. Flag if:
+- Task specs contradict or miss epic requirements
+- Task acceptance criteria don't align with epic acceptance criteria
+- Task approaches would need to change based on epic design decisions
+- Epic mentions states/enums/types that tasks don't account for
+
 ## Review Criteria
 
 Conduct a John Carmack-level review:
@@ -182,12 +199,13 @@ Conduct a John Carmack-level review:
 5. **Risks** - Blockers identified? Security gaps? Mitigation?
 6. **Scope** - Right-sized? Over/under-engineering?
 7. **Testability** - How will we verify this works?
+8. **Consistency** - Do task specs align with epic spec?
 
 ## Output Format
 
 For each issue:
 - **Severity**: Critical / Major / Minor / Nitpick
-- **Location**: Which task or section
+- **Location**: Which task or section (e.g., "fn-1.3 Description" or "Epic Acceptance #2")
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
@@ -247,12 +265,12 @@ If no verdict tag, output `<promise>RETRY</promise>` and stop.
 If verdict is NEEDS_WORK:
 
 1. **Parse issues** - Extract ALL issues by severity (Critical → Major → Minor)
-2. **Fix the plan** - Address each issue.
-3. **Update plan in flowctl** (MANDATORY before re-review):
+2. **Fix the epic spec** - Address each issue.
+3. **Update epic spec in flowctl** (MANDATORY before re-review):
    ```bash
    # Option A: stdin heredoc (preferred, no temp file)
    $FLOWCTL epic set-plan <EPIC_ID> --file - --json <<'EOF'
-   <updated plan content>
+   <updated epic spec content>
    EOF
 
    # Option B: temp file (if content has single quotes)
@@ -265,7 +283,20 @@ If verdict is NEEDS_WORK:
    $FLOWCTL checkpoint restore --epic <EPIC_ID> --json
    ```
 
-4. **Request re-review** (only AFTER step 3):
+4. **Sync affected task specs** - If epic changes affect task specs, update them:
+   ```bash
+   $FLOWCTL task set-spec <TASK_ID> --file - --json <<'EOF'
+   <updated task spec content>
+   EOF
+   ```
+   Task specs need updating when epic changes affect:
+   - State/enum values referenced in tasks
+   - Acceptance criteria that tasks implement
+   - Approach/design decisions tasks depend on
+   - Lock/retry/error handling semantics
+   - API signatures or type definitions
+
+5. **Request re-review** (only AFTER steps 3-4):
 
    **IMPORTANT**: Do NOT re-add files already in the selection. RepoPrompt auto-refreshes
    file contents on every message. Only use `select-add` for NEW files created during fixes:
@@ -289,11 +320,13 @@ If verdict is NEEDS_WORK:
 
    $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md
    ```
-5. **Repeat** until Ship
+6. **Repeat** until Ship
 
 **Anti-pattern**: Re-adding already-selected files before re-review. RP auto-refreshes; re-adding can cause issues.
 
 **Anti-pattern**: Re-reviewing without calling `epic set-plan` first. This wastes reviewer time and loops forever.
+
+**Anti-pattern**: Updating epic spec without syncing affected task specs. Causes reviewer to flag consistency issues again.
 
 ---
 

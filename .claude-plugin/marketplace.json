@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Plan-first workflows for Claude Code. Two plugins: flow (Beads integration) and flow-next (zero-dep, Ralph autonomous mode).",
-    "version": "0.17.0"
+    "version": "0.17.1"
   },
   "plugins": [
     {
@@ -31,7 +31,7 @@
     {
       "name": "flow-next",
       "description": "Zero-dependency planning + execution with .flow/ task tracking and Ralph autonomous mode (multi-model review gates). Worker subagent per task for context isolation. Includes 12 subagents, 9 commands, 14 skills.",
-      "version": "0.17.0",
+      "version": "0.17.1",
       "author": {
         "name": "Gordon Mickel",
         "email": "gordon@mickel.tech",
