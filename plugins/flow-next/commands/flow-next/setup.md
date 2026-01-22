@@ -3,8 +3,8 @@ name: flow-next:setup
 description: Optional local install of flowctl CLI and project docs
 ---
 
-# IMPORTANT: This command MUST invoke the skill `flow-next-setup`
+# Flow-Next Setup
 
-The ONLY purpose of this command is to call the `flow-next-setup` skill. You MUST use that skill now.
+Execute the `flow-next-setup` skill now.
 
-This is an **optional** setup for power users. Flow-next works without it.
+**Do not** re-invoke this command or try name variations. Skill name is exactly `flow-next-setup` (dashes, not colons).

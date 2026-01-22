@@ -1,5 +1,7 @@
 # Flow-Next Setup Workflow
 
+**IMPORTANT: These are instructions for YOU (Claude) to execute directly.** Do NOT invoke other skills or commands. Do NOT delegate steps to subagents. Follow each step yourself using the tools available (Bash, Read, Edit, Write, AskUserQuestion).
+
 Follow these steps in order. This workflow is **idempotent** - safe to re-run.
 
 ## Step 0: Resolve plugin path
@@ -203,7 +205,7 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-Use `AskUserQuestion` with the built questions array.
+Use the **AskUserQuestion tool** with the built questions array. (This is a tool call, NOT a skill invocation.)
 
 **Note:** If docs are already current, adjust the Docs question description to mention "(already up to date)" or skip that question entirely.
 

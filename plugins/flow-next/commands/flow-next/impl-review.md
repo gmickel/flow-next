@@ -4,10 +4,8 @@ description: John Carmack-level implementation review via RepoPrompt or Codex
 argument-hint: "[--review=rp|codex|export] [focus areas]"
 ---
 
-# IMPORTANT: This command MUST invoke the skill `flow-next-impl-review`
+# Flow-Next Implementation Review
 
-The ONLY purpose of this command is to call the `flow-next-impl-review` skill. You MUST use that skill now.
+Execute the `flow-next-impl-review` skill now with input: $ARGUMENTS
 
-**Arguments:** $ARGUMENTS
-
-Pass the arguments to the skill. The skill handles the review logic.
+**Do not** re-invoke this command or try name variations. Skill name is exactly `flow-next-impl-review`.

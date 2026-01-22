@@ -4,10 +4,8 @@ description: Manually trigger plan-sync to update downstream task specs after im
 argument-hint: "<id> [--dry-run]"
 ---
 
-# IMPORTANT: This command MUST invoke the skill `flow-next-sync`
+# Flow-Next Sync
 
-The ONLY purpose of this command is to call the `flow-next-sync` skill. You MUST use that skill now.
+Execute the `flow-next-sync` skill now with input: $ARGUMENTS
 
-**Arguments:** $ARGUMENTS
-
-Pass the arguments to the skill. The skill handles the sync logic.
+**Do not** re-invoke this command or try name variations. Skill name is exactly `flow-next-sync`.

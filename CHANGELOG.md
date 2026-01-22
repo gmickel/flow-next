@@ -2,6 +2,12 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.17.5] - 2026-01-23
+
+### Fixed
+
+- **Skill invocation loop on /flow-next:setup** — First-time users experienced Claude cycling through name variations (`flow-next:setup`, `flow-next:flow-next:setup`, `flow-next-setup`) or misinterpreting workflow.md steps as tasks to delegate. Root causes: (1) aggressive "MUST invoke" language in command files, (2) sparse SKILL.md jumped straight to "read workflow.md" without context, (3) workflow.md lacked explicit "execute directly, don't delegate" framing. Fixes: simplified all command files to calm language with "do not re-invoke" guidance, expanded setup SKILL.md with context before workflow reference, added explicit framing to workflow.md. Thanks @FrantisekHeca for reporting.
+
 ## [flow-next 0.17.4] - 2026-01-22
 
 ### Fixed

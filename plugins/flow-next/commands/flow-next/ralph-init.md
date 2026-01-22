@@ -3,8 +3,8 @@ name: flow-next:ralph-init
 description: Scaffold repo-local Ralph autonomous harness (scripts/ralph/)
 ---
 
-# IMPORTANT: This command MUST invoke the skill `flow-next-ralph-init`
+# Flow-Next Ralph Init
 
-The ONLY purpose of this command is to call the `flow-next-ralph-init` skill. You MUST use that skill now.
+Execute the `flow-next-ralph-init` skill now.
 
-Creates `scripts/ralph/` in the current repo.
+**Do not** re-invoke this command or try name variations. Skill name is exactly `flow-next-ralph-init`.
