@@ -2,6 +2,14 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.18.3] - 2026-01-23
+
+### Fixed
+
+- **Ralph now enforces receipt verdict** — Previously Ralph only checked that impl-review receipts existed but ignored the `verdict` field. Now Ralph reads the verdict from the receipt file and forces a retry if `NEEDS_WORK`, even if the worker marked the task as done. This fixes issue #70 where NEEDS_WORK verdicts from Codex reviews were being ignored.
+
+- **Added `read_receipt_verdict()` helper** — New function in ralph.sh to read the verdict field from receipt JSON files.
+
 ## [flow-next 0.18.2] - 2026-01-23
 
 ### Changed

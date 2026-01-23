@@ -730,6 +730,20 @@ sys.exit(0)
 PY
 }
 
+# Read verdict field from receipt file (returns empty string if not found/error)
+read_receipt_verdict() {
+  local path="$1"
+  [[ -f "$path" ]] || return 0
+  "$PYTHON_BIN" - "$path" <<'PY'
+import json, sys
+try:
+    data = json.load(open(sys.argv[1], encoding="utf-8"))
+    print(data.get("verdict", ""))
+except Exception:
+    pass
+PY
+}
+
 # Create/switch to run branch (once at start, all epics work here)
 ensure_run_branch() {
   if [[ "$BRANCH_MODE" != "new" ]]; then
@@ -928,6 +942,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
     epic_json="$("$FLOWCTL" show "$epic_id" --json 2>/dev/null || true)"
     plan_review_status="$(json_get plan_review_status "$epic_json")"
   fi
+  receipt_verdict=""
   if [[ "$status" == "work" && ( "$WORK_REVIEW" == "rp" || "$WORK_REVIEW" == "codex" ) ]]; then
     if ! verify_receipt "$REVIEW_RECEIPT_PATH" "impl_review" "$task_id"; then
       echo "ralph: missing impl review receipt; forcing retry" >> "$iter_log"
@@ -936,6 +951,9 @@ Violations break automation and leave the user with incomplete work. Be precise,
       # Delete corrupted/partial receipt so next attempt starts clean
       rm -f "$REVIEW_RECEIPT_PATH" 2>/dev/null || true
       force_retry=1
+    else
+      # Receipt is valid - read the verdict field
+      receipt_verdict="$(read_receipt_verdict "$REVIEW_RECEIPT_PATH")"
     fi
   fi
 
@@ -973,11 +991,29 @@ Violations break automation and leave the user with incomplete work. Be precise,
         fi
         force_retry=1
       else
-        ui_task_done "$task_id"
-        # Derive verdict from task completion for logging
-        [[ -z "$verdict" ]] && verdict="SHIP"
-        # If we timed out but can prove completion (done + receipt valid), don't retry
-        force_retry=0
+        # Receipt is structurally valid - now check the verdict
+        if [[ "$receipt_verdict" == "NEEDS_WORK" ]]; then
+          # Task marked done but review said NEEDS_WORK - must retry
+          echo "ralph: receipt verdict is NEEDS_WORK; resetting task to todo" >> "$iter_log"
+          log "task $task_id: receipt verdict=NEEDS_WORK despite done status; resetting"
+          if "$FLOWCTL" task reset "$task_id" --json >/dev/null 2>&1; then
+            task_status="todo"
+          else
+            echo "ralph: FATAL: failed to reset task $task_id; aborting" >> "$iter_log"
+            ui_fail "Failed to reset $task_id after NEEDS_WORK verdict; aborting"
+            write_completion_marker "FAILED"
+            exit 1
+          fi
+          verdict="NEEDS_WORK"
+          force_retry=1
+        else
+          ui_task_done "$task_id"
+          # Use receipt verdict if available, otherwise derive from task completion
+          [[ -n "$receipt_verdict" ]] && verdict="$receipt_verdict"
+          [[ -z "$verdict" ]] && verdict="SHIP"
+          # If we timed out but can prove completion (done + receipt valid + verdict OK), don't retry
+          force_retry=0
+        fi
       fi
     else
       echo "ralph: task not done; forcing retry" >> "$iter_log"
