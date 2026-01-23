@@ -115,7 +115,7 @@ Signals that the codebase follows good practices.
 | CQ3 | PR template exists | .github/PULL_REQUEST_TEMPLATE.md |
 | CQ4 | Issue templates exist | .github/ISSUE_TEMPLATE/ |
 | CQ5 | CODEOWNERS exists | .github/CODEOWNERS file |
-| CQ6 | License exists | LICENSE file present |
+| CQ6 | License exists | LICENSE file present (do NOT create - requires user decision) |
 
 ### Scoring
 - ✅ 80%+: Production-grade governance

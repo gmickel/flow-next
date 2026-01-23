@@ -59,3 +59,4 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 - Always ask before modifying existing files
 - Respect .gitignore patterns
 - Don't add dependencies without consent
+- **Never create LICENSE files** — license choice requires explicit user decision
