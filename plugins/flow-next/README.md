@@ -40,6 +40,7 @@
 - [Why It Works](#why-it-works)
 - [Quick Start](#quick-start) — Install, setup, use
 - [When to Use What](#when-to-use-what) — Interview vs Plan vs Work
+- [Agent Readiness Assessment](#agent-readiness-assessment) — `/flow-next:prime`
 - [Troubleshooting](#troubleshooting)
 - [Ralph (Autonomous Mode)](#ralph-autonomous-mode) — Run overnight
 - [Features](#features) — Re-anchoring, multi-user, reviews, dependencies
@@ -248,6 +249,145 @@ Best for: bug fixes, small features, well-scoped changes that don't need task sp
 - **Plan** researches best practices, analyzes existing patterns, and creates sized tasks with dependencies.
 
 You can always run interview again after planning to catch anything missed. Interview writes back to the epic spec only — it won't modify existing tasks.
+
+---
+
+## Agent Readiness Assessment
+
+> Inspired by [Factory.ai's Agent Readiness framework](https://factory.ai/news/agent-readiness)
+
+`/flow-next:prime` assesses your codebase for agent-readiness and proposes improvements. Works for greenfield and brownfield projects.
+
+### The Problem
+
+Agents waste cycles when codebases lack:
+- **Pre-commit hooks** → waits 10min for CI instead of 5sec local feedback
+- **Documented env vars** → guesses, fails, guesses again
+- **CLAUDE.md** → doesn't know project conventions
+- **Test commands** → can't verify changes work
+
+These are **environment problems**, not agent problems. Prime helps fix them.
+
+### Quick Start
+
+```bash
+/flow-next:prime                 # Full assessment + interactive fixes
+/flow-next:prime --report-only   # Just show the report
+/flow-next:prime --fix-all       # Apply all fixes without asking
+```
+
+### The Six Pillars
+
+Prime evaluates your codebase across six pillars:
+
+| Pillar | What It Checks |
+|--------|----------------|
+| **Style & Validation** | Linters, formatters, type checking, pre-commit hooks |
+| **Build System** | Build tool, commands, CI, lock files, output gitignored |
+| **Testing** | Test framework, coverage, CI integration, E2E tests |
+| **Documentation** | README, CLAUDE.md, setup docs, ADRs, architecture |
+| **Dev Environment** | .env.example, Docker, devcontainer, runtime version |
+| **Code Quality** | CONTRIBUTING.md, PR templates, CODEOWNERS, license |
+
+Each pillar has 6 binary criteria (pass/fail). Scores are calculated per-pillar and overall.
+
+### Maturity Levels
+
+| Level | Name | Description | Overall Score |
+|-------|------|-------------|---------------|
+| 1 | Minimal | Basic project structure only | <30% |
+| 2 | Functional | Can build and run, limited docs | 30-49% |
+| 3 | **Standardized** | Agent-ready for routine work | 50-69% |
+| 4 | Optimized | Fast feedback loops, comprehensive docs | 70-84% |
+| 5 | Autonomous | Full autonomous operation capable | 85%+ |
+
+**Level 3 is the target** for most teams. It means agents can handle routine work: bug fixes, tests, docs, dependency updates.
+
+### How It Works
+
+1. **Parallel Assessment** — 6 haiku scouts run in parallel (~10-15 seconds):
+   - `tooling-scout` — linters, formatters, pre-commit, type checking
+   - `claude-md-scout` — CLAUDE.md/AGENTS.md analysis
+   - `env-scout` — environment setup
+   - `testing-scout` — test infrastructure
+   - `build-scout` — build system and CI
+   - `docs-gap-scout` — README, ADRs, architecture docs
+
+2. **Synthesize Report** — Calculates pillar scores and maturity level
+
+3. **Interactive Remediation** — Uses `AskUserQuestion` for each category:
+   ```
+   Which documentation improvements should I apply?
+   ☐ Create CLAUDE.md (project conventions for agents)
+   ☐ Add .env.example (template with 5 detected env vars)
+   ☐ Create ADR template (architecture decisions)
+   ```
+
+4. **Apply Fixes** — Creates/modifies files based on your selections
+
+5. **Re-assess** — Optionally re-run to show improvement
+
+### Example Report
+
+```markdown
+# Agent Readiness Report
+
+**Repository**: my-project
+**Maturity Level**: 2 - Functional
+**Overall Score**: 42%
+
+## Pillar Scores
+
+| Pillar | Score | Status |
+|--------|-------|--------|
+| Style & Validation | 67% | ⚠️ |
+| Build System | 83% | ✅ |
+| Testing | 50% | ⚠️ |
+| Documentation | 17% | ❌ |
+| Dev Environment | 33% | ❌ |
+| Code Quality | 0% | ❌ |
+
+## Top Recommendations
+
+1. **Documentation**: Create CLAUDE.md — high impact, enables agent understanding
+2. **Environment**: Add .env.example — prevents env var guessing
+3. **Tooling**: Add pre-commit hooks — faster feedback loops
+```
+
+### Remediation Templates
+
+Prime includes templates for common fixes:
+
+| Fix | What Gets Created |
+|-----|-------------------|
+| CLAUDE.md | Project overview, commands, structure, conventions |
+| .env.example | Template with detected env vars |
+| ADR template | `docs/adr/template.md` + first ADR |
+| Pre-commit (JS) | Husky + lint-staged config |
+| Pre-commit (Python) | `.pre-commit-config.yaml` |
+| CI workflow | `.github/workflows/ci.yml` |
+| CONTRIBUTING.md | Setup, development, PR process |
+| PR template | `.github/PULL_REQUEST_TEMPLATE.md` |
+
+Templates adapt to your project's detected conventions (indent style, package manager, etc.).
+
+### Non-Destructive
+
+- **Never overwrites** existing files without explicit consent
+- **Never commits** changes (leaves for you to review)
+- **Never deletes** files
+- **Merges** with existing configs when possible
+- **Respects** project conventions
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--report-only` | Skip remediation, just show report |
+| `--fix-all` | Apply all recommendations without asking |
+| `<path>` | Assess a different directory |
+
+---
 
 ### Interactive vs Autonomous (The Handoff)
 
@@ -759,7 +899,7 @@ Config lives in `.flow/config.json`, separate from Ralph's `scripts/ralph/config
 
 ## Commands
 
-Eight commands, complete workflow:
+Ten commands, complete workflow:
 
 | Command | What It Does |
 |---------|--------------|
@@ -768,6 +908,7 @@ Eight commands, complete workflow:
 | `/flow-next:interview <id>` | Deep interview to flesh out a spec before planning |
 | `/flow-next:plan-review <id>` | Carmack-level plan review via RepoPrompt |
 | `/flow-next:impl-review` | Carmack-level impl review of current branch |
+| `/flow-next:prime` | Assess codebase agent-readiness, propose fixes ([details](#agent-readiness-assessment)) |
 | `/flow-next:sync <id>` | Manual plan-sync: update downstream tasks after implementation drift |
 | `/flow-next:ralph-init` | Scaffold repo-local Ralph harness (`scripts/ralph/`) |
 | `/flow-next:setup` | Optional: install flowctl locally + add docs (for power users) |

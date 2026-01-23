@@ -23,6 +23,8 @@
 >
 > 💡 **Force update (most reliable):** `/plugin` → Marketplaces → gmickel-claude-marketplace → Update marketplace
 >
+> 🆕 **[/flow-next:prime](plugins/flow-next/README.md#agent-readiness-assessment)**: Assess your codebase for agent-readiness. 6 pillars, maturity levels, interactive fixes.
+>
 > 🤖 **[Ralph mode](plugins/flow-next/docs/ralph.md)**: Ship features while you sleep. Fresh context per iteration, multi-model review gates, auto-blocks stuck tasks.
 >
 > 💪 **Stable features**: Plan-first workflow, re-anchoring, receipt-based gating, structured task management
@@ -84,6 +86,7 @@ This marketplace ships plugins that fix these problems.
 | `/flow-next:interview` | Deep spec refinement (40+ questions) |
 | `/flow-next:plan-review` | Cross-model plan review |
 | `/flow-next:impl-review` | Cross-model implementation review |
+| `/flow-next:prime` | Assess codebase agent-readiness, propose fixes |
 | `/flow-next:ralph-init` | Scaffold autonomous loop |
 
 📖 **[Full documentation](plugins/flow-next/README.md)** — CLI reference, workflow details, troubleshooting
