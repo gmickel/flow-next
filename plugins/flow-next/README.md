@@ -288,9 +288,9 @@ Prime evaluates your codebase across six pillars:
 | **Testing** | Test framework, coverage, CI integration, E2E tests |
 | **Documentation** | README, CLAUDE.md, setup docs, ADRs, architecture |
 | **Dev Environment** | .env.example, Docker, devcontainer, runtime version |
-| **Code Quality** | CONTRIBUTING.md, PR templates, CODEOWNERS, license |
+| **Team Governance** | CONTRIBUTING.md, PR templates, CODEOWNERS, license *(informational only)* |
 
-Each pillar has 6 binary criteria (pass/fail). Scores are calculated per-pillar and overall.
+**Note**: Pillars 1-5 affect agent readiness score. Pillar 6 (Team Governance) is **informational only** — reported but not scored, no fixes offered. These are team decisions, not agent requirements.
 
 ### Maturity Levels
 
@@ -357,28 +357,33 @@ Each pillar has 6 binary criteria (pass/fail). Scores are calculated per-pillar 
 
 ### Remediation Templates
 
-Prime includes templates for common fixes:
+Prime offers fixes for agent readiness gaps (**not** team governance):
 
 | Fix | What Gets Created |
 |-----|-------------------|
 | CLAUDE.md | Project overview, commands, structure, conventions |
 | .env.example | Template with detected env vars |
-| ADR template | `docs/adr/template.md` + first ADR |
 | Pre-commit (JS) | Husky + lint-staged config |
 | Pre-commit (Python) | `.pre-commit-config.yaml` |
-| CI workflow | `.github/workflows/ci.yml` |
-| CONTRIBUTING.md | Setup, development, PR process |
-| PR template | `.github/PULL_REQUEST_TEMPLATE.md` |
+| Linter config | ESLint, Biome, or Ruff config (if none exists) |
+| Formatter config | Prettier or Biome config (if none exists) |
+| .nvmrc/.python-version | Runtime version pinning |
+| .gitignore entries | .env, build outputs, node_modules |
 
-Templates adapt to your project's detected conventions (indent style, package manager, etc.).
+Templates adapt to your project's detected conventions and existing tools. Won't suggest ESLint if you have Biome, etc.
 
-### Non-Destructive
+### User Consent Required
 
+**By default, prime asks before every change** using interactive checkboxes. You choose what gets created.
+
+- **Asks first** — uses `AskUserQuestion` tool for interactive selection per category
 - **Never overwrites** existing files without explicit consent
 - **Never commits** changes (leaves for you to review)
 - **Never deletes** files
 - **Merges** with existing configs when possible
-- **Respects** project conventions
+- **Respects** your existing tools (won't add ESLint if you have Biome)
+
+Use `--fix-all` to skip questions and apply everything. Use `--report-only` to just see the assessment.
 
 ### Flags
 
