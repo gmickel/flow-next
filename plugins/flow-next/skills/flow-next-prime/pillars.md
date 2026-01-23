@@ -102,9 +102,9 @@ Reproducible environment setup.
 - ⚠️ 40-79%: Setup mostly documented
 - ❌ <40%: Setup requires tribal knowledge
 
-## Pillar 6: Code Quality
+## Pillar 6: Team Governance (Informational)
 
-Signals that the codebase follows good practices.
+**Note**: This pillar measures team processes, NOT agent readiness. Reported for awareness but NOT included in agent maturity calculation. No remediation offered for these items.
 
 ### Criteria
 
@@ -115,16 +115,18 @@ Signals that the codebase follows good practices.
 | CQ3 | PR template exists | .github/PULL_REQUEST_TEMPLATE.md |
 | CQ4 | Issue templates exist | .github/ISSUE_TEMPLATE/ |
 | CQ5 | CODEOWNERS exists | .github/CODEOWNERS file |
-| CQ6 | License exists | LICENSE file present (do NOT create - requires user decision) |
+| CQ6 | License exists | LICENSE file present |
 
 ### Scoring
-- ✅ 80%+: Production-grade governance
-- ⚠️ 40-79%: Basic governance
-- ❌ <40%: Minimal governance
+- Reported for awareness only
+- Does NOT affect agent maturity level
+- Team should address these independently if desired
 
 ---
 
 ## Maturity Level Calculation
+
+**Based on Pillars 1-5 only** (Style, Build, Testing, Documentation, Dev Environment). Pillar 6 (Team Governance) is informational and excluded from scoring.
 
 | Level | Name | Requirements |
 |-------|------|--------------|
@@ -134,6 +136,6 @@ Signals that the codebase follows good practices.
 | 4 | Optimized | 70-84% overall, all pillars ≥60% |
 | 5 | Autonomous | 85%+ overall, all pillars ≥80% |
 
-**Overall score** = average of all pillar scores
+**Overall score** = average of Pillars 1-5 scores
 
 **Level 3 (Standardized)** is the target for most teams. It means agents can handle routine work: bug fixes, tests, docs, dependency updates.

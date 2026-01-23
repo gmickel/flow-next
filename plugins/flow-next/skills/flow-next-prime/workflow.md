@@ -21,17 +21,26 @@ Wait for all scouts to complete. Collect findings.
 
 Read [pillars.md](pillars.md) for pillar definitions and criteria.
 
-For each pillar:
+**Important**: Only Pillars 1-5 affect the maturity score. Pillar 6 (Team Governance) is informational only.
+
+For each pillar (1-5):
 1. Map scout findings to criteria (pass/fail)
 2. Calculate pillar score: `(passed / total) * 100`
 
+For Pillar 6:
+- Report findings for awareness
+- Do NOT include in overall score
+- Do NOT offer remediation
+
 Calculate overall:
-- **Overall score**: average of all pillar scores
+- **Overall score**: average of Pillars 1-5 only
 - **Maturity level**: based on thresholds in pillars.md
 
-Generate prioritized recommendations:
-1. High impact, low effort first (e.g., add .env.example)
-2. Group by category for user decision
+Generate prioritized recommendations (from Pillars 1-5 only):
+1. Critical first (CLAUDE.md, .env.example)
+2. High impact second (pre-commit hooks, lint commands)
+3. Medium last (build scripts, .gitignore)
+4. Never offer team governance fixes (Pillar 6 items)
 
 ## Phase 3: Present Report
 
@@ -40,7 +49,7 @@ Generate prioritized recommendations:
 
 **Repository**: [name]
 **Maturity Level**: [1-5] - [label]
-**Overall Score**: [X]%
+**Overall Score**: [X]% (Pillars 1-5)
 
 ## Pillar Scores
 
@@ -51,13 +60,23 @@ Generate prioritized recommendations:
 | Testing | X% | ✅/⚠️/❌ |
 | Documentation | X% | ✅/⚠️/❌ |
 | Dev Environment | X% | ✅/⚠️/❌ |
-| Code Quality | X% | ✅/⚠️/❌ |
+
+## Team Governance (Informational)
+
+| Item | Status |
+|------|--------|
+| CONTRIBUTING.md | ✅/❌ |
+| PR Template | ✅/❌ |
+| License | ✅/❌ |
+...
+
+*Note: Team governance items don't affect agent maturity. Address independently if desired.*
 
 ## Top Recommendations
 
-1. **[Category]**: [specific action] - [impact]
-2. **[Category]**: [specific action] - [impact]
-3. **[Category]**: [specific action] - [impact]
+1. **[Category]**: [specific action] - [why it helps agents]
+2. **[Category]**: [specific action] - [why it helps agents]
+3. **[Category]**: [specific action] - [why it helps agents]
 
 ## Detailed Findings
 
@@ -68,45 +87,127 @@ Generate prioritized recommendations:
 
 ## Phase 4: Interactive Remediation
 
-**If `--fix-all`**: Skip to Phase 5, apply all recommendations.
+**If `--fix-all`**: Skip to Phase 5, apply all recommendations from Pillars 1-5.
 
-Otherwise, use **AskUserQuestion** tool to get consent.
+**CRITICAL**: You MUST use the `AskUserQuestion` tool for consent. Do NOT just print questions as text.
 
-Group recommendations by category:
+### Using AskUserQuestion Correctly
 
-```
-Based on the assessment, I can help improve agent readiness.
+The tool provides an interactive UI. Each question should:
+- Have a clear header (max 12 chars)
+- Explain what each option does and WHY it helps agents
+- Use `multiSelect: true` so users can pick multiple items
+- Include impact description for each option
 
-Which improvements would you like me to apply?
-```
+### Question Structure
 
-Use AskUserQuestion with:
-- `multiSelect: true` (user can pick multiple)
-- Group options by impact (high/medium/low)
-- Include brief description of each fix
+Ask ONE question per category that has recommendations. Skip categories with no gaps.
 
-Example question structure:
+**Question 1: Documentation (if gaps exist)**
+
 ```json
 {
-  "question": "Which documentation improvements should I apply?",
-  "header": "Docs",
-  "multiSelect": true,
-  "options": [
-    {"label": "Create CLAUDE.md", "description": "Project conventions, commands, structure for agents"},
-    {"label": "Add .env.example", "description": "Template with 5 detected env vars"},
-    {"label": "Create ADR template", "description": "Architecture decision records in docs/adr/"}
-  ]
+  "questions": [{
+    "question": "Which documentation improvements should I create? These help agents understand your project without guessing.",
+    "header": "Docs",
+    "multiSelect": true,
+    "options": [
+      {
+        "label": "Create CLAUDE.md (Recommended)",
+        "description": "Agent instruction file with commands, conventions, and project structure. Critical for agents to work effectively."
+      },
+      {
+        "label": "Create .env.example",
+        "description": "Template with [N] detected env vars. Prevents agents from guessing required configuration."
+      }
+    ]
+  }]
 }
 ```
 
-Ask separate questions for each category with improvements:
-- Documentation (if any gaps)
-- Tooling (if any gaps)
-- Environment (if any gaps)
-- Testing (if any gaps)
-- CI/Build (if any gaps)
+**Question 2: Tooling (if gaps exist)**
 
-Skip categories with no recommendations.
+```json
+{
+  "questions": [{
+    "question": "Which tooling improvements should I add? These give agents instant feedback instead of waiting for CI.",
+    "header": "Tooling",
+    "multiSelect": true,
+    "options": [
+      {
+        "label": "Add pre-commit hooks (Recommended)",
+        "description": "Husky + lint-staged for instant lint/format feedback. Catches errors in 5 seconds instead of 10 minutes."
+      },
+      {
+        "label": "Add ESLint config",
+        "description": "Linter configuration for code quality checks. Agents can run 'npm run lint' to verify their changes."
+      },
+      {
+        "label": "Add Prettier config",
+        "description": "Formatter configuration for consistent code style. Prevents style drift across agent sessions."
+      },
+      {
+        "label": "Add .nvmrc",
+        "description": "Pin Node.js version to [detected version]. Ensures consistent runtime across environments."
+      }
+    ]
+  }]
+}
+```
+
+**Question 3: Testing (if gaps exist)**
+
+```json
+{
+  "questions": [{
+    "question": "Which testing improvements should I add? These let agents verify their work.",
+    "header": "Testing",
+    "multiSelect": true,
+    "options": [
+      {
+        "label": "Add test config (Recommended)",
+        "description": "[Framework] configuration file. Enables 'npm test' command for agents to verify changes."
+      },
+      {
+        "label": "Add test script to package.json",
+        "description": "Adds 'test' command that agents can discover and run."
+      }
+    ]
+  }]
+}
+```
+
+**Question 4: Environment (if gaps exist)**
+
+```json
+{
+  "questions": [{
+    "question": "Which environment improvements should I add?",
+    "header": "Environment",
+    "multiSelect": true,
+    "options": [
+      {
+        "label": "Add .gitignore entries (Recommended)",
+        "description": "Ignore .env, build outputs, node_modules. Prevents accidental commits of sensitive data."
+      },
+      {
+        "label": "Create devcontainer (Bonus)",
+        "description": "VS Code devcontainer config for reproducible environment. Nice-to-have, not essential for agents."
+      }
+    ]
+  }]
+}
+```
+
+### Rules for Questions
+
+1. **MUST use AskUserQuestion tool** - Never just print questions
+2. **Mark recommended items** - Add "(Recommended)" to high-impact options
+3. **Mark bonus items** - Add "(Bonus)" to nice-to-have options
+4. **Explain agent benefit** - Each description should say WHY it helps agents
+5. **Skip empty categories** - Don't ask if no recommendations
+6. **Max 4 options per question** - Tool limit, prioritize if more
+7. **Never offer Pillar 6 items** - Team governance is informational only
 
 ## Phase 5: Apply Fixes
 
@@ -141,12 +242,15 @@ After fixes applied:
 
 ### Skipped (user declined)
 - Pre-commit hooks
+
+### Not Offered (team governance)
+- CONTRIBUTING.md, PR templates, etc. (address independently if desired)
 ```
 
-Offer re-assessment:
+Offer re-assessment only if changes were made:
 
 ```
-Re-run assessment to see updated score? (Recommended to verify improvements)
+Run assessment again to see updated score?
 ```
 
 If yes, run Phase 1-3 again and show:

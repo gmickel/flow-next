@@ -1,20 +1,30 @@
 # Remediation Templates
 
-Templates for fixing common agent readiness gaps. Each section includes what to create and where.
+Templates for fixing agent readiness gaps. Focus on what helps agents work effectively: fast local feedback, clear commands, documented conventions.
 
-## Documentation Fixes
+**Priority order:**
+1. **Critical**: CLAUDE.md, .env.example, lint/format commands
+2. **High**: Pre-commit hooks, test command, runtime version
+3. **Medium**: Build scripts, .gitignore entries
+4. **Low/Bonus**: Devcontainer, Docker (nice-to-have, not essential)
+
+**NOT offered** (team governance, not agent readiness):
+- CONTRIBUTING.md, PR templates, issue templates, CODEOWNERS, LICENSE
+
+---
+
+## Critical: Documentation
 
 ### Create CLAUDE.md
 
 Location: `CLAUDE.md` (repo root)
 
+**Why**: Agents need to know project conventions, commands, and structure. Without this, they guess.
+
 Template (adapt based on detected stack):
 
 ```markdown
 # Project Name
-
-## Overview
-[One paragraph describing what this project does]
 
 ## Quick Commands
 
@@ -33,19 +43,22 @@ Template (adapt based on detected stack):
 
 # Lint code
 [detected lint command]
+
+# Format code
+[detected format command]
 ```
 
 ## Project Structure
 
 ```
-[detected structure]
+[detected structure - key directories only]
 ```
 
 ## Code Conventions
 
 - [Detected naming convention]
 - [Detected file organization]
-- [Any patterns from existing code]
+- [Patterns from existing code]
 
 ## Things to Avoid
 
@@ -56,6 +69,8 @@ Template (adapt based on detected stack):
 
 Location: `.env.example` (repo root)
 
+**Why**: Agents waste cycles guessing env vars. This documents what's required.
+
 Process:
 1. Scan code for env var usage (process.env.*, os.environ, etc.)
 2. Create template with detected vars
@@ -65,69 +80,19 @@ Template:
 
 ```bash
 # Required for [feature]
-VAR_NAME=placeholder_value
+VAR_NAME=your_value_here
 
 # Optional: [description]
 OPTIONAL_VAR=default_value
 ```
 
-### Create ADR Template
+---
 
-Location: `docs/adr/0001-record-architecture-decisions.md`
-
-First, create directory and template:
-
-```markdown
-# 1. Record Architecture Decisions
-
-Date: [today]
-
-## Status
-
-Accepted
-
-## Context
-
-We need to record the architectural decisions made on this project.
-
-## Decision
-
-We will use Architecture Decision Records (ADRs) as described by Michael Nygard.
-
-## Consequences
-
-- Decisions are documented and discoverable
-- New team members can understand past choices
-- Agents can reference decisions when making changes
-```
-
-Also create `docs/adr/template.md`:
-
-```markdown
-# [Number]. [Title]
-
-Date: [YYYY-MM-DD]
-
-## Status
-
-[Proposed | Accepted | Deprecated | Superseded by [link]]
-
-## Context
-
-[What is the issue that we're seeing that is motivating this decision?]
-
-## Decision
-
-[What is the change that we're proposing and/or doing?]
-
-## Consequences
-
-[What becomes easier or harder as a result of this change?]
-```
-
-## Tooling Fixes
+## High: Fast Local Feedback
 
 ### Add Pre-commit Hooks (JavaScript/TypeScript)
+
+**Why**: Agents get instant feedback instead of waiting 10min for CI.
 
 If husky not installed, add to package.json devDependencies:
 
@@ -202,7 +167,21 @@ Create `.prettierrc`:
 }
 ```
 
-## Environment Fixes
+### Add Runtime Version File
+
+For Node.js, create `.nvmrc`:
+```
+20
+```
+
+For Python, create `.python-version`:
+```
+3.12
+```
+
+---
+
+## Medium: Build & Environment
 
 ### Add .gitignore Entries
 
@@ -229,58 +208,21 @@ node_modules/
 *.swp
 ```
 
-### Add Runtime Version File
+### Add Test Config (if test framework detected but no config)
 
-For Node.js, create `.nvmrc`:
-```
-20
-```
-
-For Python, create `.python-version`:
-```
-3.12
-```
-
-### Create Devcontainer
-
-Create `.devcontainer/devcontainer.json`:
-
-```json
-{
-  "name": "[Project Name]",
-  "image": "mcr.microsoft.com/devcontainers/[language]:latest",
-  "features": {},
-  "postCreateCommand": "[install command]",
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        // Add relevant extensions
-      ]
-    }
-  }
-}
-```
-
-## Testing Fixes
-
-### Add Jest Config (JavaScript/TypeScript)
-
-Create `jest.config.js`:
+Jest - create `jest.config.js`:
 
 ```javascript
 /** @type {import('jest').Config} */
 const config = {
   testEnvironment: 'node',
   testMatch: ['**/*.test.js', '**/*.test.ts'],
-  collectCoverageFrom: ['src/**/*.{js,ts}'],
 };
 
 module.exports = config;
 ```
 
-### Add Vitest Config (modern alternative)
-
-Create `vitest.config.ts`:
+Vitest - create `vitest.config.ts`:
 
 ```typescript
 import { defineConfig } from 'vitest/config';
@@ -289,16 +231,11 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    coverage: {
-      reporter: ['text', 'json', 'html'],
-    },
   },
 });
 ```
 
-### Add pytest.ini (Python)
-
-Create `pytest.ini`:
+pytest - create `pytest.ini`:
 
 ```ini
 [pytest]
@@ -308,9 +245,28 @@ python_functions = test_*
 addopts = -v --tb=short
 ```
 
-## CI Fixes
+---
 
-### Add GitHub Actions Workflow
+## Low/Bonus: Optional Enhancements
+
+These are nice-to-have but NOT essential for agent readiness. Only offer if user explicitly wants them.
+
+### Create Devcontainer (Bonus)
+
+Create `.devcontainer/devcontainer.json`:
+
+```json
+{
+  "name": "[Project Name]",
+  "image": "mcr.microsoft.com/devcontainers/[language]:latest",
+  "features": {},
+  "postCreateCommand": "[install command]"
+}
+```
+
+### Add Basic CI Workflow (Bonus)
+
+**Note**: Agents benefit more from pre-commit hooks (instant feedback) than CI (slow feedback). Only add if user wants CI.
 
 Create `.github/workflows/ci.yml`:
 
@@ -328,86 +284,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup [runtime]
         uses: actions/setup-[runtime]@v4
-        with:
-          [runtime]-version-file: '.[runtime]-version'
-
-      - name: Install dependencies
+      - name: Install
         run: [install command]
-
       - name: Lint
         run: [lint command]
-
       - name: Test
         run: [test command]
-
-      - name: Build
-        run: [build command]
-```
-
-## Code Quality Fixes
-
-### Create CONTRIBUTING.md
-
-```markdown
-# Contributing to [Project Name]
-
-## Getting Started
-
-1. Fork the repository
-2. Clone your fork
-3. Install dependencies: `[install command]`
-4. Create a branch: `git checkout -b feature/your-feature`
-
-## Development
-
-```bash
-# Run development server
-[dev command]
-
-# Run tests
-[test command]
-
-# Lint code
-[lint command]
-```
-
-## Pull Request Process
-
-1. Update documentation if needed
-2. Add tests for new functionality
-3. Ensure all tests pass
-4. Update CHANGELOG.md if applicable
-
-## Code Style
-
-[Describe code style or link to CLAUDE.md]
-```
-
-### Create PR Template
-
-Create `.github/PULL_REQUEST_TEMPLATE.md`:
-
-```markdown
-## Description
-
-[Describe your changes]
-
-## Type of Change
-
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Breaking change
-- [ ] Documentation update
-
-## Checklist
-
-- [ ] Tests pass locally
-- [ ] Lint passes
-- [ ] Documentation updated (if needed)
-- [ ] CHANGELOG updated (if needed)
 ```
 
 ---
@@ -416,6 +300,7 @@ Create `.github/PULL_REQUEST_TEMPLATE.md`:
 
 1. **Detect before creating** - Check if file exists first
 2. **Preserve existing content** - Merge with existing configs when possible
-3. **Match project style** - Use detected indent (tabs/spaces), quote style, etc.
+3. **Match project style** - Use detected indent (tabs/spaces), quote style
 4. **Don't add unused features** - Only add what the project needs
 5. **Explain changes** - Tell user what was created and why
+6. **Respect user choices** - Never force changes without consent

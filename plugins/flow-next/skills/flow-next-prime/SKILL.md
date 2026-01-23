@@ -51,12 +51,29 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 
 **Level 3 is the target** for most teams. Don't over-engineer.
 
+## Scope: Agent Readiness Only
+
+Focus on what helps **agents work effectively**:
+- Fast local feedback (pre-commit, lint, format)
+- Clear commands (build, test, dev)
+- Documentation (CLAUDE.md with conventions)
+- Environment (.env.example with required vars)
+
+**NOT in scope** (team governance):
+- CONTRIBUTING.md, PR templates, issue templates
+- CODEOWNERS, branch protection
+- LICENSE (legal decision, not agent readiness)
+
+Pillar 6 (Team Governance) is **informational only** — reported but not scored, no remediation offered.
+
 ## Guardrails
 
 - Never modify code files (only config, docs, scripts)
 - Never commit changes (leave for user to review)
 - Never delete files
+- **MUST use AskUserQuestion tool** for consent — never just print questions as text
 - Always ask before modifying existing files
 - Respect .gitignore patterns
 - Don't add dependencies without consent
 - **Never create LICENSE files** — license choice requires explicit user decision
+- **Never offer team governance fixes** — CONTRIBUTING, PR templates, etc.
