@@ -10,7 +10,7 @@ description: Carmack-level plan review via RepoPrompt or Codex. Use when reviewi
 Conduct a John Carmack-level review of epic plans.
 
 **Role**: Code Review Coordinator (NOT the reviewer)
-**Backends**: RepoPrompt (rp) or Codex CLI (codex)
+**Backends**: RepoPrompt (rp), RepoPrompt MCP (mcp), or Codex CLI (codex)
 
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Always use:
 ```bash
@@ -20,8 +20,8 @@ FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 ## Backend Selection
 
 **Priority** (first match wins):
-1. `--review=rp|codex|export|none` argument
-2. `FLOW_REVIEW_BACKEND` env var (`rp`, `codex`, `none`)
+1. `--review=rp|codex|mcp|export|none` argument
+2. `FLOW_REVIEW_BACKEND` env var (`rp`, `codex`, `mcp`, `none`)
 3. `.flow/config.json` → `review.backend`
 4. **Error** - no auto-detection
 
@@ -30,6 +30,7 @@ FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 Check $ARGUMENTS for:
 - `--review=rp` or `--review rp` → use rp
 - `--review=codex` or `--review codex` → use codex
+- `--review=mcp` or `--review mcp` → use mcp
 - `--review=export` or `--review export` → use export
 - `--review=none` or `--review none` → skip review
 
@@ -43,11 +44,11 @@ BACKEND=$($FLOWCTL review-backend)
 
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."
-  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|none"
+  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|mcp|none"
   exit 1
 fi
 
-echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
+echo "Review backend: $BACKEND (override: --review=rp|codex|mcp|none)"
 ```
 
 ## Critical Rules
@@ -63,6 +64,13 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
 1. Use `$FLOWCTL codex plan-review` exclusively
 2. Pass `--receipt` for session continuity on re-reviews
 3. Parse verdict from command output
+
+**For mcp backend:**
+1. **DO NOT REVIEW THE PLAN YOURSELF** - you coordinate, RepoPrompt reviews
+2. **MUST WAIT for actual MCP response** - never simulate/skip the review
+3. **Use MCP tools directly** - do NOT call `flowctl rp *` commands
+4. **Re-reviews MUST stay in SAME chat** - pass same chat_id, new_chat: false
+5. See [workflow.md](workflow.md) Phase: MCP Backend Workflow
 
 **For all backends:**
 - If `REVIEW_RECEIPT_PATH` set: write receipt after review (any verdict)

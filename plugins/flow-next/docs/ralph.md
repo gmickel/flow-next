@@ -174,7 +174,8 @@ Ralph enforces quality through three mechanisms:
 Reviews use a second model to verify code. Two models catch what one misses.
 
 **Review backends:**
-- `rp` — [RepoPrompt](https://repoprompt.com/?atp=KJbuL4) (macOS only, GUI-based) **← recommended**
+- `rp` — [RepoPrompt](https://repoprompt.com/?atp=KJbuL4) via rp-cli (macOS, requires GUI + rp-cli)
+- `mcp` — RepoPrompt via MCP server (cross-platform, requires MCP connection) **← recommended when MCP available**
 - `codex` — OpenAI Codex CLI (cross-platform, terminal-based)
 - `none` — skip reviews (not recommended for production)
 
@@ -235,11 +236,12 @@ Edit `scripts/ralph/config.env`:
 
 | Variable | Values | Description |
 |----------|--------|-------------|
-| `PLAN_REVIEW` | `rp`, `codex`, `none` | How to review plans |
-| `WORK_REVIEW` | `rp`, `codex`, `none` | How to review implementations |
+| `PLAN_REVIEW` | `rp`, `mcp`, `codex`, `none` | How to review plans |
+| `WORK_REVIEW` | `rp`, `mcp`, `codex`, `none` | How to review implementations |
 | `REQUIRE_PLAN_REVIEW` | `1`, `0` | Block work until plan review passes |
 
-- `rp` — RepoPrompt (macOS, requires GUI)
+- `rp` — RepoPrompt via rp-cli (macOS, requires GUI + rp-cli)
+- `mcp` — RepoPrompt via MCP server (cross-platform, requires MCP connection)
 - `codex` — OpenAI Codex CLI (cross-platform, terminal-based)
 - `none` — skip reviews
 
@@ -346,6 +348,24 @@ flowctl codex plan-review ...  # Run plan review
 
 ---
 
+## MCP Integration
+
+When `PLAN_REVIEW=mcp` or `WORK_REVIEW=mcp`, Claude calls RepoPrompt MCP tools directly instead of using `flowctl rp` wrappers.
+
+**Requirements:**
+- RepoPrompt MCP server connected to Claude Code
+- No rp-cli installation needed
+
+**Key MCP tools used:**
+- `mcp__RepoPrompt__manage_workspaces` — Tab selection and setup
+- `mcp__RepoPrompt__manage_selection` — File selection
+- `mcp__RepoPrompt__chat_send` — Send review request
+- `mcp__RepoPrompt__prompt` — Get/set prompts
+
+**Session continuity:** MCP reviews store `chat_id` in receipts. Subsequent reviews in the same run continue the conversation.
+
+---
+
 ## Troubleshooting
 
 ### Plan gate loops / retries
@@ -385,6 +405,18 @@ codex auth
 ```
 
 Or switch to RepoPrompt: set `PLAN_REVIEW=rp` and `WORK_REVIEW=rp`.
+
+### MCP not connected
+
+If using `mcp` backend and reviews fail with MCP connection errors:
+
+1. Verify RepoPrompt MCP server is running and connected to Claude Code
+2. Check MCP tools are available: try calling `mcp__RepoPrompt__manage_workspaces` with `action="list"`
+
+Alternatives:
+- Use Codex instead: set `PLAN_REVIEW=codex` and `WORK_REVIEW=codex`
+- Use rp-cli instead: set `PLAN_REVIEW=rp` and `WORK_REVIEW=rp` (requires rp-cli installed)
+- Skip reviews: set `PLAN_REVIEW=none` and `WORK_REVIEW=none`
 
 ---
 

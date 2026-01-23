@@ -13,6 +13,7 @@ Inputs:
 ```
 When `--review=rp`, the worker subagent invokes `/flow-next:impl-review` internally.
 When `--review=codex`, the worker uses `flowctl codex impl-review` for review.
+When `--review=mcp`, the worker uses MCP tools directly (mcp__RepoPrompt__*) for review.
 The impl-review skill handles review coordination and requires `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>` from reviewer.
 Do NOT improvise review prompts - the skill has the correct format.
 
@@ -22,13 +23,13 @@ scripts/ralph/flowctl show {{TASK_ID}} --json
 ```
 If status != `done`, output `<promise>RETRY</promise>` and stop.
 
-**Step 3: Write impl receipt** (MANDATORY if WORK_REVIEW=rp or codex)
-For rp mode:
+**Step 3: Write impl receipt** (MANDATORY if WORK_REVIEW=rp, mcp, or codex)
+For rp or mcp mode:
 ```bash
 mkdir -p "$(dirname '{{REVIEW_RECEIPT_PATH}}')"
 ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 cat > '{{REVIEW_RECEIPT_PATH}}' <<EOF
-{"type":"impl_review","id":"{{TASK_ID}}","mode":"rp","timestamp":"$ts","iteration":{{RALPH_ITERATION}}}
+{"type":"impl_review","id":"{{TASK_ID}}","mode":"{{WORK_REVIEW}}","timestamp":"$ts","iteration":{{RALPH_ITERATION}}}
 EOF
 echo "Receipt written: {{REVIEW_RECEIPT_PATH}}"
 ```

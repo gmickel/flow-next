@@ -211,8 +211,10 @@ ui_config() {
   local plan_display="$PLAN_REVIEW" work_display="$WORK_REVIEW"
   [[ "$PLAN_REVIEW" == "rp" ]] && plan_display="RepoPrompt"
   [[ "$PLAN_REVIEW" == "codex" ]] && plan_display="Codex"
+  [[ "$PLAN_REVIEW" == "mcp" ]] && plan_display="MCP"
   [[ "$WORK_REVIEW" == "rp" ]] && work_display="RepoPrompt"
   [[ "$WORK_REVIEW" == "codex" ]] && work_display="Codex"
+  [[ "$WORK_REVIEW" == "mcp" ]] && work_display="MCP"
   ui "${C_DIM}   Reviews:${C_RESET} Plan=$plan_display ${C_DIM}•${C_RESET} Work=$work_display"
   [[ -n "${EPICS:-}" ]] && ui "${C_DIM}   Scope:${C_RESET} $EPICS"
   ui ""
@@ -247,6 +249,10 @@ ui_plan_review() {
     ui ""
     ui "   ${C_YELLOW}📝 Plan Review${C_RESET}"
     ui "      ${C_DIM}Sending to reviewer via Codex...${C_RESET}"
+  elif [[ "$mode" == "mcp" ]]; then
+    ui ""
+    ui "   ${C_YELLOW}📝 Plan Review${C_RESET}"
+    ui "      ${C_DIM}Sending to reviewer via MCP...${C_RESET}"
   fi
 }
 
@@ -260,6 +266,10 @@ ui_impl_review() {
     ui ""
     ui "   ${C_MAGENTA}🔍 Implementation Review${C_RESET}"
     ui "      ${C_DIM}Sending to reviewer via Codex...${C_RESET}"
+  elif [[ "$mode" == "mcp" ]]; then
+    ui ""
+    ui "   ${C_MAGENTA}🔍 Implementation Review${C_RESET}"
+    ui "      ${C_DIM}Sending to reviewer via MCP...${C_RESET}"
   fi
 }
 
@@ -916,7 +926,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
   plan_review_status=""
   task_status=""
   impl_receipt_ok="1"
-  if [[ "$status" == "plan" && ( "$PLAN_REVIEW" == "rp" || "$PLAN_REVIEW" == "codex" ) ]]; then
+  if [[ "$status" == "plan" && ( "$PLAN_REVIEW" == "rp" || "$PLAN_REVIEW" == "codex" || "$PLAN_REVIEW" == "mcp" ) ]]; then
     if ! verify_receipt "$REVIEW_RECEIPT_PATH" "plan_review" "$epic_id"; then
       echo "ralph: missing plan review receipt; forcing retry" >> "$iter_log"
       log "missing plan receipt; forcing retry"
@@ -928,7 +938,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
     epic_json="$("$FLOWCTL" show "$epic_id" --json 2>/dev/null || true)"
     plan_review_status="$(json_get plan_review_status "$epic_json")"
   fi
-  if [[ "$status" == "work" && ( "$WORK_REVIEW" == "rp" || "$WORK_REVIEW" == "codex" ) ]]; then
+  if [[ "$status" == "work" && ( "$WORK_REVIEW" == "rp" || "$WORK_REVIEW" == "codex" || "$WORK_REVIEW" == "mcp" ) ]]; then
     if ! verify_receipt "$REVIEW_RECEIPT_PATH" "impl_review" "$task_id"; then
       echo "ralph: missing impl review receipt; forcing retry" >> "$iter_log"
       log "missing impl receipt; forcing retry"

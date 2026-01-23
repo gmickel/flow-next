@@ -11,13 +11,14 @@ Enforces:
 - Receipt must be written after SHIP verdict
 - Validates flowctl command patterns
 
-Supports both review backends:
-- rp (RepoPrompt): tracks chat-send calls and receipt writes
+Supports all review backends:
+- rp (RepoPrompt CLI): tracks chat-send calls and receipt writes
 - codex: tracks flowctl codex impl-review/plan-review and verdict output
+- mcp (RepoPrompt MCP): tracks mcp__RepoPrompt__chat_send calls and verdicts
 """
 
 # Version for drift detection (bump when making changes)
-RALPH_GUARD_VERSION = "0.11.0"
+RALPH_GUARD_VERSION = "0.12.0"
 
 import json
 import os
@@ -46,6 +47,7 @@ def load_state(session_id: str) -> dict:
             state.setdefault("chat_send_succeeded", False)
             state.setdefault("flowctl_done_called", set())
             state.setdefault("codex_review_succeeded", False)
+            state.setdefault("mcp_review_succeeded", False)
             return state
         except (json.JSONDecodeError, KeyError, TypeError):
             pass
@@ -57,6 +59,7 @@ def load_state(session_id: str) -> dict:
         "chat_send_succeeded": False,  # Track if chat-send actually returned review text
         "flowctl_done_called": set(),  # Track tasks that had flowctl done called
         "codex_review_succeeded": False,  # Track if codex review returned verdict
+        "mcp_review_succeeded": False,  # Track if MCP review returned verdict
     }
 
 
@@ -121,8 +124,139 @@ def output_json(data: dict) -> None:
     sys.exit(0)
 
 
+def handle_mcp_pre_tool_use(data: dict) -> None:
+    """Handle PreToolUse event for MCP tools - validate parameters before execution."""
+    tool_name = data.get("tool_name", "")
+    tool_input = data.get("tool_input", {})
+    session_id = data.get("session_id", "unknown")
+
+    # Validate mcp__RepoPrompt__chat_send
+    if tool_name == "mcp__RepoPrompt__chat_send":
+        new_chat = tool_input.get("new_chat", False)
+        state = load_state(session_id)
+
+        # Check for new_chat on re-reviews (same rule as RP --new-chat)
+        # This matches RP behavior: chats_sent > 0 means a review chat already exists
+        # for this session, so new_chat=true would lose reviewer context.
+        # First review (chats_sent == 0) is allowed to use new_chat=true.
+        if new_chat and state.get("chats_sent", 0) > 0:
+            output_block(
+                "BLOCKED: Do not use new_chat=true for re-reviews. "
+                "Stay in the same chat so reviewer has context. "
+                "Set new_chat=false and provide chat_id from previous call."
+            )
+
+    # All MCP checks passed
+    sys.exit(0)
+
+
+def handle_mcp_post_tool_use(data: dict) -> None:
+    """Handle PostToolUse event for MCP tools - track state and provide feedback.
+
+    State management notes:
+    - chats_sent: incremented on each successful chat_send (used for re-review detection)
+    - chat_send_succeeded: set True on success, reset when receipt is written
+    - mcp_review_succeeded: set True when verdict found, reset when receipt is written
+
+    The reset-on-receipt-write pattern ensures each review cycle is independent:
+    after receipt is written, the next review needs a fresh review call.
+    """
+    tool_name = data.get("tool_name", "")
+    tool_input = data.get("tool_input", {})
+    tool_response = data.get("tool_response", {})
+    session_id = data.get("session_id", "unknown")
+
+    # Get response text
+    response_text = ""
+    if isinstance(tool_response, dict):
+        response_text = str(tool_response)
+    elif isinstance(tool_response, str):
+        response_text = tool_response
+
+    state = load_state(session_id)
+
+    # Track mcp__RepoPrompt__chat_send calls
+    if tool_name == "mcp__RepoPrompt__chat_send":
+        # Check for verdict in response FIRST - only set success flags if verdict found
+        # Note: This uses the same regex as RP/Codex verdict parsing for consistency.
+        # The verdict tag format is explicitly required in review prompts, so we expect
+        # it to appear unambiguously in the response (not in code blocks or quoted text
+        # from prior messages). The workflow docs enforce this prompt structure.
+        verdict_match = re.search(
+            r"<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>", response_text
+        )
+        if verdict_match:
+            state["chats_sent"] = state.get("chats_sent", 0) + 1
+            state["last_verdict"] = verdict_match.group(1)
+            # Only set success flags for SHIP - NEEDS_WORK/MAJOR_RETHINK should block receipt
+            if verdict_match.group(1) == "SHIP":
+                state["chat_send_succeeded"] = True
+                state["mcp_review_succeeded"] = True
+            save_state(session_id, state)
+            with Path("/tmp/ralph-guard-debug.log").open("a") as f:
+                f.write(f"  -> MCP review verdict: {verdict_match.group(1)}, success={verdict_match.group(1) == 'SHIP'}\n")
+
+            # If SHIP, remind about receipt
+            if verdict_match.group(1) == "SHIP":
+                receipt_path = os.environ.get("REVIEW_RECEIPT_PATH", "")
+                if receipt_path and not Path(receipt_path).exists():
+                    # Derive type and id from receipt path
+                    receipt_type, item_id = parse_receipt_path(receipt_path)
+                    # Build command with ts variable
+                    cmd = (
+                        f"mkdir -p \"$(dirname '{receipt_path}')\"\n"
+                        'ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"\n'
+                        f"cat > '{receipt_path}' <<EOF\n"
+                        f'{{"type":"{receipt_type}","id":"{item_id}","mode":"mcp","timestamp":"$ts"}}\n'
+                        "EOF"
+                    )
+                    output_json(
+                        {
+                            "hookSpecificOutput": {
+                                "hookEventName": "PostToolUse",
+                                "additionalContext": (
+                                    f"IMPORTANT: SHIP verdict received. You MUST now write the receipt. "
+                                    f"Run this command:\n{cmd}"
+                                ),
+                            }
+                        }
+                    )
+
+            # Prompt for learnings on NEEDS_WORK
+            elif verdict_match.group(1) in ("NEEDS_WORK", "MAJOR_RETHINK"):
+                if is_memory_enabled():
+                    output_json(
+                        {
+                            "hookSpecificOutput": {
+                                "hookEventName": "PostToolUse",
+                                "additionalContext": (
+                                    "MEMORY: Review returned NEEDS_WORK. After fixing, consider if any lessons are "
+                                    "GENERALIZABLE. If so, capture with:\n"
+                                    '  flowctl memory add --type <type> "<one-line lesson>"\n'
+                                    "Types: pitfall, convention, decision"
+                                ),
+                            }
+                        }
+                    )
+
+        elif response_text and len(response_text) > 100:
+            # Log response without verdict for debugging (do NOT set chat_send_succeeded)
+            with Path("/tmp/ralph-guard-debug.log").open("a") as f:
+                f.write(f"  -> MCP response received ({len(response_text)} chars) but no verdict tag found\n")
+                f.write(f"  -> Response preview: {response_text[:300]}...\n")
+
+    sys.exit(0)
+
+
 def handle_pre_tool_use(data: dict) -> None:
     """Handle PreToolUse event - validate commands before execution."""
+    tool_name = data.get("tool_name", "")
+
+    # Route MCP tools to MCP handler
+    if tool_name.startswith("mcp__RepoPrompt__"):
+        handle_mcp_pre_tool_use(data)
+        return
+
     tool_input = data.get("tool_input", {})
     command = tool_input.get("command", "")
     session_id = data.get("session_id", "unknown")
@@ -222,11 +356,11 @@ def handle_pre_tool_use(data: dict) -> None:
             state = load_state(session_id)
             if not state.get("chat_send_succeeded") and not state.get(
                 "codex_review_succeeded"
-            ):
+            ) and not state.get("mcp_review_succeeded"):
                 output_block(
                     "BLOCKED: Cannot write receipt before review completes. "
-                    "You must run 'flowctl rp chat-send' or 'flowctl codex impl-review/plan-review' "
-                    "and receive a review response before writing the receipt."
+                    "You must run 'flowctl rp chat-send', 'flowctl codex impl-review/plan-review', "
+                    "or 'mcp__RepoPrompt__chat_send' and receive a review response before writing the receipt."
                 )
             # Validate receipt has required 'id' field
             if '"id"' not in command and "'id'" not in command:
@@ -277,6 +411,13 @@ def parse_receipt_path(receipt_path: str) -> tuple:
 
 def handle_post_tool_use(data: dict) -> None:
     """Handle PostToolUse event - track state and provide feedback."""
+    tool_name = data.get("tool_name", "")
+
+    # Route MCP tools to MCP handler
+    if tool_name.startswith("mcp__RepoPrompt__"):
+        handle_mcp_post_tool_use(data)
+        return
+
     tool_input = data.get("tool_input", {})
     tool_response = data.get("tool_response", {})
     command = tool_input.get("command", "")
@@ -314,8 +455,10 @@ def handle_post_tool_use(data: dict) -> None:
             r"<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>", response_text
         )
         if verdict_in_output:
-            state["codex_review_succeeded"] = True
             state["last_verdict"] = verdict_in_output.group(1)
+            # Only set success flag for SHIP - NEEDS_WORK/MAJOR_RETHINK should block receipt
+            if verdict_in_output.group(1) == "SHIP":
+                state["codex_review_succeeded"] = True
             save_state(session_id, state)
 
     # Track flowctl done calls - match various invocation patterns:
@@ -364,6 +507,7 @@ def handle_post_tool_use(data: dict) -> None:
     if receipt_path and receipt_path in command and ">" in command:
         state["chat_send_succeeded"] = False  # Reset for next review
         state["codex_review_succeeded"] = False  # Reset codex state too
+        state["mcp_review_succeeded"] = False  # Reset MCP state too
         save_state(session_id, state)
 
     # Track setup-review output (W= T=)
@@ -545,10 +689,21 @@ def main():
     with debug_file.open("a") as f:
         f.write(f"  -> Event: {event}, Tool: {tool_name}\n")
 
-    # Only process Bash tool calls for Pre/Post
-    if event in ("PreToolUse", "PostToolUse") and tool_name != "Bash":
+    # Process Bash and MCP RepoPrompt tool calls for Pre/Post
+    # Note: RP backend uses Bash to call "flowctl rp ..." commands (handled via Bash tool)
+    # Note: Codex backend uses Bash to call "flowctl codex ..." commands (handled via Bash tool)
+    # Note: MCP backend uses MCP tools directly (handled via MCP tool allowlist below)
+    # This is NOT a regression - RP/Codex were always Bash-based, MCP is additive.
+    MCP_TOOLS = {
+        "mcp__RepoPrompt__chat_send",
+        "mcp__RepoPrompt__manage_selection",
+        "mcp__RepoPrompt__manage_workspaces",
+        "mcp__RepoPrompt__context_builder",
+    }
+    is_supported_tool = tool_name == "Bash" or tool_name in MCP_TOOLS
+    if event in ("PreToolUse", "PostToolUse") and not is_supported_tool:
         with debug_file.open("a") as f:
-            f.write("  -> Skipping: not Bash\n")
+            f.write(f"  -> Skipping: not Bash or MCP ({tool_name})\n")
         sys.exit(0)
 
     # Route to handler

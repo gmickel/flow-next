@@ -1925,12 +1925,12 @@ def cmd_review_backend(args: argparse.Namespace) -> None:
     """Get review backend for skill conditionals. Returns ASK if not configured."""
     # Priority: FLOW_REVIEW_BACKEND env > config > ASK
     env_val = os.environ.get("FLOW_REVIEW_BACKEND", "").strip()
-    if env_val and env_val in ("rp", "codex", "none"):
+    if env_val and env_val in ("rp", "codex", "mcp", "none"):
         backend = env_val
         source = "env"
     elif ensure_flow_exists():
         cfg_val = get_config("review.backend")
-        if cfg_val and cfg_val in ("rp", "codex", "none"):
+        if cfg_val and cfg_val in ("rp", "codex", "mcp", "none"):
             backend = cfg_val
             source = "config"
         else:

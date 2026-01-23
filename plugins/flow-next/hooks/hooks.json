@@ -11,11 +11,31 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "mcp__RepoPrompt__chat_send",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/hooks/ralph-guard.py",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
       {
         "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/hooks/ralph-guard.py",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__RepoPrompt__chat_send",
         "hooks": [
           {
             "type": "command",
