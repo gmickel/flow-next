@@ -2,6 +2,36 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.18.0] - 2026-01-23
+
+### Added
+
+- **`/flow-next:prime` command** — New agent readiness assessment inspired by Factory.ai's framework. Analyzes your codebase across 6 pillars (Style & Validation, Build System, Testing, Documentation, Dev Environment, Code Quality) and proposes non-destructive improvements.
+
+- **5 new haiku scouts** for fast parallel assessment:
+  - `tooling-scout` — Scans linters, formatters, pre-commit hooks, type checking
+  - `claude-md-scout` — Analyzes CLAUDE.md/AGENTS.md quality and completeness
+  - `env-scout` — Checks .env.example, Docker, devcontainer, setup scripts
+  - `testing-scout` — Evaluates test framework, coverage config, test commands
+  - `build-scout` — Reviews build system, scripts, CI configuration
+
+- **Maturity levels 1-5** — Repositories scored from Minimal (1) to Autonomous (5). Level 3 (Standardized) is the recommended target for most teams.
+
+- **Interactive remediation** — After assessment, offers to fix gaps with user consent via AskUserQuestion. Supports `--report-only` (skip fixes) and `--fix-all` (apply all without asking).
+
+- **Remediation templates** — Built-in templates for common fixes: CLAUDE.md, .env.example, pre-commit hooks, ADR structure, CI workflows, and more.
+
+### Technical Details
+
+The prime workflow:
+1. Runs 6 haiku scouts in parallel (fast, ~10-15 seconds)
+2. Synthesizes findings into a readiness report with pillar scores
+3. Uses AskUserQuestion for each category of improvements
+4. Applies approved fixes non-destructively (never overwrites without consent)
+5. Offers re-assessment to show improvement
+
+Works for both greenfield and brownfield projects.
+
 ## [flow-next 0.17.4] - 2026-01-22
 
 ### Fixed
