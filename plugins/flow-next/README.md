@@ -277,20 +277,29 @@ These are **environment problems**, not agent problems. Prime helps fix them.
 /flow-next:prime --fix-all       # Apply all fixes without asking
 ```
 
-### The Six Pillars
+### The Eight Pillars
 
-Prime evaluates your codebase across six pillars:
+Prime evaluates your codebase across eight pillars (48 criteria total):
+
+#### Agent Readiness (Pillars 1-5) — Scored, Fixes Offered
 
 | Pillar | What It Checks |
 |--------|----------------|
-| **Style & Validation** | Linters, formatters, type checking, pre-commit hooks |
-| **Build System** | Build tool, commands, CI, lock files, output gitignored |
-| **Testing** | Test framework, coverage, CI integration, E2E tests |
-| **Documentation** | README, CLAUDE.md, setup docs, ADRs, architecture |
-| **Dev Environment** | .env.example, Docker, devcontainer, runtime version |
-| **Team Governance** | CONTRIBUTING.md, PR templates, CODEOWNERS, license *(informational only)* |
+| **1. Style & Validation** | Linters, formatters, type checking, pre-commit hooks |
+| **2. Build System** | Build tool, commands, lock files, monorepo tooling |
+| **3. Testing** | Test framework, commands, verification, coverage, E2E |
+| **4. Documentation** | README, CLAUDE.md, setup docs, architecture |
+| **5. Dev Environment** | .env.example, Docker, devcontainer, runtime version |
 
-**Note**: Pillars 1-5 affect agent readiness score. Pillar 6 (Team Governance) is **informational only** — reported but not scored, no fixes offered. These are team decisions, not agent requirements.
+#### Production Readiness (Pillars 6-8) — Reported Only
+
+| Pillar | What It Checks |
+|--------|----------------|
+| **6. Observability** | Structured logging, tracing, metrics, error tracking, health endpoints |
+| **7. Security** | Branch protection, secret scanning, CODEOWNERS, Dependabot |
+| **8. Workflow & Process** | CI/CD, PR templates, issue templates, release automation |
+
+**Two-tier approach**: Pillars 1-5 determine your agent maturity level and are eligible for fixes. Pillars 6-8 are reported for visibility but no fixes are offered — these are team/production decisions.
 
 ### Maturity Levels
 
@@ -306,27 +315,36 @@ Prime evaluates your codebase across six pillars:
 
 ### How It Works
 
-1. **Parallel Assessment** — 6 haiku scouts run in parallel (~10-15 seconds):
+1. **Parallel Assessment** — 9 haiku scouts run in parallel (~15-20 seconds):
+
+   Agent Readiness scouts:
    - `tooling-scout` — linters, formatters, pre-commit, type checking
    - `claude-md-scout` — CLAUDE.md/AGENTS.md analysis
    - `env-scout` — environment setup
    - `testing-scout` — test infrastructure
-   - `build-scout` — build system and CI
+   - `build-scout` — build system
    - `docs-gap-scout` — README, ADRs, architecture docs
 
-2. **Synthesize Report** — Calculates pillar scores and maturity level
+   Production Readiness scouts:
+   - `observability-scout` — logging, tracing, metrics, health endpoints
+   - `security-scout` — GitHub API checks, CODEOWNERS, Dependabot
+   - `workflow-scout` — CI/CD, templates, automation
 
-3. **Interactive Remediation** — Uses `AskUserQuestion` for each category:
+2. **Verification** — Verifies test commands actually work (e.g., `pytest --collect-only`)
+
+3. **Synthesize Report** — Calculates Agent Readiness score, Production Readiness score, and maturity level
+
+4. **Interactive Remediation** — Uses `AskUserQuestion` for agent readiness fixes only:
    ```
-   Which documentation improvements should I apply?
-   ☐ Create CLAUDE.md (project conventions for agents)
-   ☐ Add .env.example (template with 5 detected env vars)
-   ☐ Create ADR template (architecture decisions)
+   Which tooling improvements should I add?
+   ☐ Add pre-commit hooks (Recommended)
+   ☐ Add linter config
+   ☐ Add runtime version file
    ```
 
-4. **Apply Fixes** — Creates/modifies files based on your selections
+5. **Apply Fixes** — Creates/modifies files based on your selections
 
-5. **Re-assess** — Optionally re-run to show improvement
+6. **Re-assess** — Optionally re-run to show improvement
 
 ### Example Report
 
@@ -334,25 +352,39 @@ Prime evaluates your codebase across six pillars:
 # Agent Readiness Report
 
 **Repository**: my-project
-**Maturity Level**: 2 - Functional
-**Overall Score**: 42%
+**Assessed**: 2026-01-23
 
-## Pillar Scores
+## Scores Summary
+
+| Category | Score | Level |
+|----------|-------|-------|
+| **Agent Readiness** (Pillars 1-5) | 73% | Level 4 - Optimized |
+| Production Readiness (Pillars 6-8) | 17% | — |
+| **Overall** | 52% | — |
+
+## Agent Readiness (Pillars 1-5)
 
 | Pillar | Score | Status |
 |--------|-------|--------|
-| Style & Validation | 67% | ⚠️ |
-| Build System | 83% | ✅ |
-| Testing | 50% | ⚠️ |
-| Documentation | 17% | ❌ |
-| Dev Environment | 33% | ❌ |
-| Code Quality | 0% | ❌ |
+| Style & Validation | 67% (4/6) | ⚠️ |
+| Build System | 100% (6/6) | ✅ |
+| Testing | 67% (4/6) | ⚠️ |
+| Documentation | 83% (5/6) | ✅ |
+| Dev Environment | 83% (5/6) | ✅ |
 
-## Top Recommendations
+## Production Readiness (Pillars 6-8) — Report Only
 
-1. **Documentation**: Create CLAUDE.md — high impact, enables agent understanding
-2. **Environment**: Add .env.example — prevents env var guessing
-3. **Tooling**: Add pre-commit hooks — faster feedback loops
+| Pillar | Score | Status |
+|--------|-------|--------|
+| Observability | 33% (2/6) | ❌ |
+| Security | 17% (1/6) | ❌ |
+| Workflow & Process | 0% (0/6) | ❌ |
+
+## Top Recommendations (Agent Readiness)
+
+1. **Tooling**: Add pre-commit hooks — 5 sec feedback vs 10 min CI wait
+2. **Tooling**: Add Python type checking — catch errors locally
+3. **Docs**: Update README — replace generic template
 ```
 
 ### Remediation Templates

@@ -2,29 +2,49 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.18.2] - 2026-01-23
+
+### Changed
+
+- **Expanded `/flow-next:prime` to 8 pillars (48 criteria)** — Now matches Factory.ai's comprehensive assessment:
+  - Agent Readiness (Pillars 1-5): Style & Validation, Build System, Testing, Documentation, Dev Environment
+  - Production Readiness (Pillars 6-8): Observability, Security, Workflow & Process
+
+- **Two-tier scoring** — Agent Readiness score (determines maturity level, fixes offered) + Production Readiness score (reported only, no fixes). Gives full visibility while keeping remediation focused.
+
+- **3 new scouts** for production readiness:
+  - `observability-scout` — Structured logging, tracing, metrics, error tracking, health endpoints
+  - `security-scout` — Branch protection, secret scanning, CODEOWNERS, Dependabot (via GitHub API)
+  - `workflow-scout` — CI/CD pipelines, PR templates, issue templates, release automation
+
+- **Test verification** — Now runs `pytest --collect-only` (or equivalent) to verify tests actually work, not just that files exist.
+
+- **GitHub API integration** — Uses `gh` CLI to check branch protection, secret scanning status, and repository settings.
+
 ## [flow-next 0.18.0] - 2026-01-23
 
 ### Added
 
-- **`/flow-next:prime` command** — New agent readiness assessment inspired by Factory.ai's framework. Analyzes your codebase across 6 pillars (Style & Validation, Build System, Testing, Documentation, Dev Environment, Code Quality) and proposes non-destructive improvements.
+- **`/flow-next:prime` command** — Agent readiness assessment inspired by Factory.ai's framework. Analyzes your codebase and proposes non-destructive improvements.
 
-- **5 new haiku scouts** for fast parallel assessment:
+- **6 haiku scouts** for fast parallel assessment:
   - `tooling-scout` — Scans linters, formatters, pre-commit hooks, type checking
   - `claude-md-scout` — Analyzes CLAUDE.md/AGENTS.md quality and completeness
   - `env-scout` — Checks .env.example, Docker, devcontainer, setup scripts
   - `testing-scout` — Evaluates test framework, coverage config, test commands
   - `build-scout` — Reviews build system, scripts, CI configuration
+  - `docs-gap-scout` — README, ADRs, architecture docs
 
 - **Maturity levels 1-5** — Repositories scored from Minimal (1) to Autonomous (5). Level 3 (Standardized) is the recommended target for most teams.
 
 - **Interactive remediation** — After assessment, offers to fix gaps with user consent via AskUserQuestion. Supports `--report-only` (skip fixes) and `--fix-all` (apply all without asking).
 
-- **Remediation templates** — Built-in templates for common fixes: CLAUDE.md, .env.example, pre-commit hooks, ADR structure, CI workflows, and more.
+- **Remediation templates** — Built-in templates for common fixes: CLAUDE.md, .env.example, pre-commit hooks, and more.
 
 ### Technical Details
 
 The prime workflow:
-1. Runs 6 haiku scouts in parallel (fast, ~10-15 seconds)
+1. Runs scouts in parallel (fast, ~15-20 seconds)
 2. Synthesizes findings into a readiness report with pillar scores
 3. Uses AskUserQuestion for each category of improvements
 4. Applies approved fixes non-destructively (never overwrites without consent)

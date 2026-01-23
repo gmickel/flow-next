@@ -23,7 +23,7 @@
 >
 > 💡 **Force update (most reliable):** `/plugin` → Marketplaces → gmickel-claude-marketplace → Update marketplace
 >
-> 🆕 **[/flow-next:prime](plugins/flow-next/README.md#agent-readiness-assessment)**: Assess your codebase for agent-readiness. 6 pillars, maturity levels, interactive fixes.
+> 🆕 **[/flow-next:prime](plugins/flow-next/README.md#agent-readiness-assessment)**: Assess codebase readiness. 8 pillars (48 criteria), GitHub API checks, two-tier scoring (agent vs production).
 >
 > 🤖 **[Ralph mode](plugins/flow-next/docs/ralph.md)**: Ship features while you sleep. Fresh context per iteration, multi-model review gates, auto-blocks stuck tasks.
 >
