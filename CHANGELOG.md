@@ -2,6 +2,14 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.18.4] - 2026-01-23
+
+### Fixed
+
+- **Ralph now auto-closes epics in unscoped runs** — Previously `maybe_close_epics()` only ran when `EPICS=...` was specified, meaning unscoped Ralph runs would never auto-close epics even when all tasks were done. This blocked downstream epics that depended on them. Now Ralph checks all open epics and closes any with all tasks completed. Thanks to [@VexyCats](https://github.com/VexyCats) for the report!
+
+- **Added `list_open_epics()` helper** — New function to get all non-done epic IDs from flowctl for unscoped runs.
+
 ## [flow-next 0.18.3] - 2026-01-23
 
 ### Fixed

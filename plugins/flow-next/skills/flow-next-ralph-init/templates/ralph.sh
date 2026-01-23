@@ -693,10 +693,33 @@ print("1")
 PY
 }
 
+# Get list of open (non-done) epic IDs from flowctl epics --json
+list_open_epics() {
+  local tmpfile
+  tmpfile="$(mktemp)"
+  "$FLOWCTL" epics --json 2>/dev/null > "$tmpfile"
+  "$PYTHON_BIN" - "$tmpfile" <<'PY'
+import sys, json
+try:
+    with open(sys.argv[1]) as f:
+        data = json.load(f)
+    for e in data.get('epics', []):
+        if e.get('status') != 'done':
+            print(e.get('id', ''))
+except: pass
+PY
+  rm -f "$tmpfile"
+}
+
 maybe_close_epics() {
-  [[ -z "$EPICS_FILE" ]] && return 0
   local epics json status all_done
-  epics="$(list_epics_from_file)"
+  if [[ -n "$EPICS_FILE" ]]; then
+    # Scoped run: use epic list from file
+    epics="$(list_epics_from_file)"
+  else
+    # Unscoped run: get all open epics from flowctl
+    epics="$(list_open_epics)"
+  fi
   [[ -z "$epics" ]] && return 0
   for epic in $epics; do
     json="$("$FLOWCTL" show "$epic" --json 2>/dev/null || true)"
