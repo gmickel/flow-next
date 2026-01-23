@@ -41,17 +41,21 @@ After scouts complete, verify key commands actually work.
 
 ### Test Verification
 
-If test framework detected by testing-scout, verify tests are runnable using the **appropriate command for the detected framework**:
+If test framework detected by testing-scout, verify tests are runnable using the **appropriate command for the detected framework**.
+
+**Common examples** (adapt to whatever framework is detected):
 
 | Framework | Verification Command |
 |-----------|---------------------|
 | pytest | `pytest --collect-only` |
 | Jest | `npx jest --listTests` |
-| Vitest | `npx vitest --run --reporter=dot` (quick) |
+| Vitest | `npx vitest --run --reporter=dot` |
 | Mocha | `npx mocha --dry-run` |
 | Go test | `go test ./... -list .` |
 | Cargo test | `cargo test --no-run` |
 | PHPUnit | `phpunit --list-tests` |
+
+These are examples. For other frameworks, find the equivalent "list tests" or "dry run" command. The goal is to verify tests are discoverable without actually running them.
 
 **For monorepos**: Run verification in each app directory that has tests.
 
