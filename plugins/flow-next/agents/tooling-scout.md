@@ -20,9 +20,9 @@ Agents waste cycles when:
 
 ### Linters
 ```bash
-# JavaScript/TypeScript
-ls -la .eslintrc* eslint.config.* biome.json 2>/dev/null
-grep -l '"eslint"' package.json 2>/dev/null
+# JavaScript/TypeScript (check all common tools)
+ls -la .eslintrc* eslint.config.* biome.json biome.jsonc oxlint.json .oxlintrc.json 2>/dev/null
+grep -E '"(eslint|@biomejs/biome|oxlint)"' package.json 2>/dev/null
 
 # Python
 ls -la .flake8 .pylintrc pyproject.toml ruff.toml .ruff.toml 2>/dev/null
@@ -35,10 +35,13 @@ ls -la .golangci.yml .golangci.yaml 2>/dev/null
 ls -la .clippy.toml clippy.toml 2>/dev/null
 ```
 
+**Note**: ESLint, Biome, oxlint, Ruff are all valid linters. If ANY is configured, mark as ✅.
+
 ### Formatters
 ```bash
-# JavaScript/TypeScript
-ls -la .prettierrc* prettier.config.* biome.json 2>/dev/null
+# JavaScript/TypeScript (Biome does both lint + format)
+ls -la .prettierrc* prettier.config.* biome.json biome.jsonc 2>/dev/null
+grep -E '"(prettier|@biomejs/biome)"' package.json 2>/dev/null
 
 # Python
 grep -E "black|autopep8|yapf|ruff.format" pyproject.toml 2>/dev/null
@@ -49,6 +52,8 @@ grep -l "goimports" Makefile .golangci.yml 2>/dev/null
 # Rust (rustfmt is built-in)
 ls -la rustfmt.toml .rustfmt.toml 2>/dev/null
 ```
+
+**Note**: Biome handles both linting AND formatting. Prettier, Black, gofmt, rustfmt are all valid.
 
 ### Type Checking
 ```bash

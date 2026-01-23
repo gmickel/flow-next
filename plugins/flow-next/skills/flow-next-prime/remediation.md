@@ -137,35 +137,51 @@ repos:
       - id: ruff-format
 ```
 
-### Add ESLint Config (if missing)
+### Add Linter Config (if NO linter detected)
 
-Create `eslint.config.js` (flat config, modern):
+**Important**: Only offer if NO linter exists. ESLint, Biome, oxlint, Ruff are all valid. Don't replace one with another.
+
+Recommend based on project:
+- **Biome** (recommended for new projects): fast, does lint + format
+- **ESLint** (established projects): wide ecosystem
+- **oxlint** (performance-critical): very fast
+- **Ruff** (Python): very fast
+
+Example ESLint - `eslint.config.js`:
 
 ```javascript
 import js from '@eslint/js';
 
 export default [
   js.configs.recommended,
-  {
-    rules: {
-      // Add project-specific rules
-    }
-  }
 ];
 ```
 
-### Add Prettier Config (if missing)
+Example Biome - `biome.json`:
 
-Create `.prettierrc`:
+```json
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "linter": { "enabled": true },
+  "formatter": { "enabled": true }
+}
+```
+
+### Add Formatter Config (if NO formatter detected)
+
+**Important**: Only offer if NO formatter exists. Biome handles both lint + format. Prettier, Black, gofmt are all valid.
+
+Example Prettier - `.prettierrc`:
 
 ```json
 {
   "semi": true,
   "singleQuote": true,
-  "tabWidth": 2,
-  "trailingComma": "es5"
+  "tabWidth": 2
 }
 ```
+
+Note: If Biome is already configured, it handles formatting. Don't add Prettier.
 
 ### Add Runtime Version File
 
