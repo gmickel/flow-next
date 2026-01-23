@@ -2,92 +2,175 @@
 
 Execute these phases in order. Reference [pillars.md](pillars.md) for scoring criteria and [remediation.md](remediation.md) for fix templates.
 
+**Model guidance**: This skill uses sonnet for synthesis and report generation. Scouts run as haiku for speed.
+
+---
+
 ## Phase 1: Parallel Assessment
 
-Run all scouts in parallel using the Task tool (all haiku, fast):
+Run all 9 scouts in parallel using the Task tool:
+
+### Agent Readiness Scouts (Pillars 1-5)
 
 ```
-Task flow-next:tooling-scout   # linters, formatters, pre-commit, type checking
-Task flow-next:claude-md-scout # CLAUDE.md/AGENTS.md quality
-Task flow-next:env-scout       # .env.example, docker, devcontainer
-Task flow-next:testing-scout   # test framework, coverage, commands
-Task flow-next:build-scout     # build system, scripts, CI
-Task flow-next:docs-gap-scout  # README, ADRs, architecture docs (existing agent)
+Task flow-next:tooling-scout    # linters, formatters, pre-commit, type checking
+Task flow-next:claude-md-scout  # CLAUDE.md/AGENTS.md quality
+Task flow-next:env-scout        # .env.example, docker, devcontainer
+Task flow-next:testing-scout    # test framework, coverage, commands
+Task flow-next:build-scout      # build system, scripts, CI
+Task flow-next:docs-gap-scout   # README, ADRs, architecture docs
 ```
+
+### Production Readiness Scouts (Pillars 6-8)
+
+```
+Task flow-next:observability-scout  # logging, tracing, metrics, health
+Task flow-next:security-scout       # branch protection, CODEOWNERS, secrets
+Task flow-next:workflow-scout       # CI/CD, templates, automation
+```
+
+**Important**: Launch all 9 scouts in parallel for speed (~15-20 seconds total).
 
 Wait for all scouts to complete. Collect findings.
 
-## Phase 2: Score & Synthesize
+---
+
+## Phase 2: Verification (Optional but Recommended)
+
+After scouts complete, verify key commands actually work:
+
+### Test Verification
+
+If test framework detected, verify tests are runnable:
+
+```bash
+# Python
+cd [app_path] && source .venv/bin/activate && pytest --collect-only 2>&1 | head -20
+
+# JavaScript/TypeScript
+pnpm test --dry-run 2>&1 || npm test --dry-run 2>&1 | head -20
+
+# Go
+go test ./... -list . 2>&1 | head -20
+```
+
+Mark TS4 as ✅ only if verification succeeds.
+
+### Build Verification (Quick)
+
+```bash
+# Check if build command exists and is valid
+pnpm build --help 2>&1 | head -5 || npm run build --help 2>&1 | head -5
+```
+
+---
+
+## Phase 3: Score & Synthesize
 
 Read [pillars.md](pillars.md) for pillar definitions and criteria.
 
-**Important**: Only Pillars 1-5 affect the maturity score. Pillar 6 (Team Governance) is informational only.
+### Agent Readiness Score (Pillars 1-5)
 
 For each pillar (1-5):
 1. Map scout findings to criteria (pass/fail)
 2. Calculate pillar score: `(passed / total) * 100`
 
-For Pillar 6:
-- Report findings for awareness
-- Do NOT include in overall score
-- Do NOT offer remediation
+Calculate:
+- **Agent Readiness Score**: average of Pillars 1-5 scores
+- **Maturity Level**: based on thresholds in pillars.md
 
-Calculate overall:
-- **Overall score**: average of Pillars 1-5 only
-- **Maturity level**: based on thresholds in pillars.md
+### Production Readiness Score (Pillars 6-8)
 
-Generate prioritized recommendations (from Pillars 1-5 only):
+For each pillar (6-8):
+1. Map scout findings to criteria (pass/fail)
+2. Calculate pillar score: `(passed / total) * 100`
+
+Calculate:
+- **Production Readiness Score**: average of Pillars 6-8 scores
+
+### Overall Score
+
+**Overall Score** = average of all 8 pillar scores
+
+### Prioritize Recommendations
+
+Generate prioritized recommendations from **Pillars 1-5 only**:
 1. Critical first (CLAUDE.md, .env.example)
 2. High impact second (pre-commit hooks, lint commands)
 3. Medium last (build scripts, .gitignore)
-4. Never offer team governance fixes (Pillar 6 items)
 
-## Phase 3: Present Report
+**Never offer fixes for Pillars 6-8** — these are informational only.
+
+---
+
+## Phase 4: Present Report
 
 ```markdown
 # Agent Readiness Report
 
 **Repository**: [name]
-**Maturity Level**: [1-5] - [label]
-**Overall Score**: [X]% (Pillars 1-5)
+**Assessed**: [timestamp]
 
-## Pillar Scores
+## Scores Summary
+
+| Category | Score | Level |
+|----------|-------|-------|
+| **Agent Readiness** (Pillars 1-5) | X% | Level N - [Name] |
+| Production Readiness (Pillars 6-8) | X% | — |
+| **Overall** | X% | — |
+
+## Agent Readiness (Pillars 1-5)
+
+These affect your maturity level and are eligible for fixes.
 
 | Pillar | Score | Status |
 |--------|-------|--------|
-| Style & Validation | X% | ✅ ≥80% / ⚠️ 40-79% / ❌ <40% |
-| Build System | X% | ✅/⚠️/❌ |
-| Testing | X% | ✅/⚠️/❌ |
-| Documentation | X% | ✅/⚠️/❌ |
-| Dev Environment | X% | ✅/⚠️/❌ |
+| Style & Validation | X% (N/6) | ✅ ≥80% / ⚠️ 40-79% / ❌ <40% |
+| Build System | X% (N/6) | ✅/⚠️/❌ |
+| Testing | X% (N/6) | ✅/⚠️/❌ |
+| Documentation | X% (N/6) | ✅/⚠️/❌ |
+| Dev Environment | X% (N/6) | ✅/⚠️/❌ |
 
-## Team Governance (Informational)
+## Production Readiness (Pillars 6-8)
 
-| Item | Status |
-|------|--------|
-| CONTRIBUTING.md | ✅/❌ |
-| PR Template | ✅/❌ |
-| License | ✅/❌ |
-...
+Informational only. No fixes offered — address independently if desired.
 
-*Note: Team governance items don't affect agent maturity. Address independently if desired.*
-
-## Top Recommendations
-
-1. **[Category]**: [specific action] - [why it helps agents]
-2. **[Category]**: [specific action] - [why it helps agents]
-3. **[Category]**: [specific action] - [why it helps agents]
+| Pillar | Score | Status |
+|--------|-------|--------|
+| Observability | X% (N/6) | ✅/⚠️/❌ |
+| Security | X% (N/6) | ✅/⚠️/❌ |
+| Workflow & Process | X% (N/6) | ✅/⚠️/❌ |
 
 ## Detailed Findings
 
-[Per-pillar breakdown from scouts]
+### Pillar 1: Style & Validation (X%)
+
+| Criterion | Status | Evidence |
+|-----------|--------|----------|
+| SV1: Linter | ✅/❌ | [details] |
+| SV2: Formatter | ✅/❌ | [details] |
+| ... | ... | ... |
+
+[Repeat for each pillar]
+
+## Top Recommendations (Agent Readiness)
+
+1. **[Category]**: [specific action] — [why it helps agents]
+2. **[Category]**: [specific action] — [why it helps agents]
+3. **[Category]**: [specific action] — [why it helps agents]
+
+## Production Readiness Notes
+
+[Key observations from Pillars 6-8 that the team should be aware of]
 ```
 
 **If `--report-only`**: Stop here. Show report and exit.
 
-## Phase 4: Interactive Remediation
+---
 
-**If `--fix-all`**: Skip to Phase 5, apply all recommendations from Pillars 1-5.
+## Phase 5: Interactive Remediation
+
+**If `--fix-all`**: Skip to Phase 6, apply all recommendations from Pillars 1-5.
 
 **CRITICAL**: You MUST use the `AskUserQuestion` tool for consent. Do NOT just print questions as text.
 
@@ -139,16 +222,16 @@ Ask ONE question per category that has recommendations. Skip categories with no 
         "description": "Husky + lint-staged for instant lint/format feedback. Catches errors in 5 seconds instead of 10 minutes."
       },
       {
-        "label": "Add ESLint config",
-        "description": "Linter configuration for code quality checks. Agents can run 'npm run lint' to verify their changes."
+        "label": "Add linter config",
+        "description": "[Tool] configuration for code quality checks. Agents can run lint to verify their changes."
       },
       {
-        "label": "Add Prettier config",
-        "description": "Formatter configuration for consistent code style. Prevents style drift across agent sessions."
+        "label": "Add formatter config",
+        "description": "[Tool] configuration for consistent code style. Prevents style drift across agent sessions."
       },
       {
-        "label": "Add .nvmrc",
-        "description": "Pin Node.js version to [detected version]. Ensures consistent runtime across environments."
+        "label": "Add runtime version file",
+        "description": "Pin [runtime] version. Ensures consistent environment across machines."
       }
     ]
   }]
@@ -166,10 +249,10 @@ Ask ONE question per category that has recommendations. Skip categories with no 
     "options": [
       {
         "label": "Add test config (Recommended)",
-        "description": "[Framework] configuration file. Enables 'npm test' command for agents to verify changes."
+        "description": "[Framework] configuration file. Enables test command for agents to verify changes."
       },
       {
-        "label": "Add test script to package.json",
+        "label": "Add test script",
         "description": "Adds 'test' command that agents can discover and run."
       }
     ]
@@ -201,15 +284,17 @@ Ask ONE question per category that has recommendations. Skip categories with no 
 
 ### Rules for Questions
 
-1. **MUST use AskUserQuestion tool** - Never just print questions
-2. **Mark recommended items** - Add "(Recommended)" to high-impact options
-3. **Mark bonus items** - Add "(Bonus)" to nice-to-have options
-4. **Explain agent benefit** - Each description should say WHY it helps agents
-5. **Skip empty categories** - Don't ask if no recommendations
-6. **Max 4 options per question** - Tool limit, prioritize if more
-7. **Never offer Pillar 6 items** - Team governance is informational only
+1. **MUST use AskUserQuestion tool** — Never just print questions
+2. **Mark recommended items** — Add "(Recommended)" to high-impact options
+3. **Mark bonus items** — Add "(Bonus)" to nice-to-have options
+4. **Explain agent benefit** — Each description should say WHY it helps agents
+5. **Skip empty categories** — Don't ask if no recommendations
+6. **Max 4 options per question** — Tool limit, prioritize if more
+7. **Never offer Pillar 6-8 items** — Production readiness is informational only
 
-## Phase 5: Apply Fixes
+---
+
+## Phase 6: Apply Fixes
 
 For each approved fix:
 1. Read [remediation.md](remediation.md) for the template
@@ -226,7 +311,9 @@ For each approved fix:
 - Use detected project style
 - Don't add unused features
 
-## Phase 6: Summary
+---
+
+## Phase 7: Summary
 
 After fixes applied:
 
@@ -234,17 +321,17 @@ After fixes applied:
 ## Changes Applied
 
 ### Created
-- `CLAUDE.md` - Project conventions for agents
-- `.env.example` - Environment variable template
+- `CLAUDE.md` — Project conventions for agents
+- `.env.example` — Environment variable template
 
 ### Modified
-- `package.json` - Added lint-staged config
+- `package.json` — Added lint-staged config
 
 ### Skipped (user declined)
 - Pre-commit hooks
 
-### Not Offered (team governance)
-- CONTRIBUTING.md, PR templates, etc. (address independently if desired)
+### Not Offered (production readiness)
+- CI/CD, PR templates, observability, security — address independently if desired
 ```
 
 Offer re-assessment only if changes were made:
@@ -253,7 +340,7 @@ Offer re-assessment only if changes were made:
 Run assessment again to see updated score?
 ```
 
-If yes, run Phase 1-3 again and show:
-- New maturity level
+If yes, run Phase 1-4 again and show:
+- New Agent Readiness score and maturity level
 - Score changes per pillar
 - Remaining recommendations
