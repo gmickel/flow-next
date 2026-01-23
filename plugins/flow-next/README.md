@@ -45,6 +45,7 @@
 - [Ralph (Autonomous Mode)](#ralph-autonomous-mode) — Run overnight
 - [Features](#features) — Re-anchoring, multi-user, reviews, dependencies
 - [Commands](#commands) — All slash commands + flags
+  - [Command Reference](#command-reference) — Detailed input docs for each command
 - [The Workflow](#the-workflow) — Planning and work phases
 - [.flow/ Directory](#flow-directory) — File structure
 - [flowctl CLI](#flowctl-cli) — Direct CLI usage
@@ -947,7 +948,146 @@ Natural language also works:
 | `/flow-next:work` | `--branch=current\|new\|worktree`, `--review=rp\|codex\|export\|none`, `--no-review` |
 | `/flow-next:plan-review` | `--review=rp\|codex\|export` |
 | `/flow-next:impl-review` | `--review=rp\|codex\|export` |
+| `/flow-next:prime` | `--report-only`, `--fix-all` |
 | `/flow-next:sync` | `--dry-run` |
+
+### Command Reference
+
+Detailed input documentation for each command.
+
+#### `/flow-next:plan`
+
+```
+/flow-next:plan <idea or fn-N> [--research=rp|grep] [--review=rp|codex|export|none]
+```
+
+| Input | Description |
+|-------|-------------|
+| `<idea>` | Free-form feature description ("Add user authentication with OAuth") |
+| `fn-N` | Existing epic ID to update the plan |
+| `--research=rp` | Use RepoPrompt context-scout for deeper codebase discovery |
+| `--research=grep` | Use grep-based repo-scout (default, faster) |
+| `--review=rp\|codex\|export\|none` | Review backend after planning |
+| `--no-review` | Shorthand for `--review=none` |
+
+#### `/flow-next:work`
+
+```
+/flow-next:work <id|file> [--branch=current|new|worktree] [--review=rp|codex|export|none]
+```
+
+| Input | Description |
+|-------|-------------|
+| `fn-N` | Execute entire epic (all tasks in dependency order) |
+| `fn-N.M` | Execute single task |
+| `path/to/spec.md` | Create epic from spec file, execute immediately |
+| `--branch=current` | Work on current branch |
+| `--branch=new` | Create new branch `fn-N-slug` (default) |
+| `--branch=worktree` | Create git worktree for isolated work |
+| `--review=rp\|codex\|export\|none` | Review backend after work |
+| `--no-review` | Shorthand for `--review=none` |
+
+#### `/flow-next:interview`
+
+```
+/flow-next:interview <id|file>
+```
+
+| Input | Description |
+|-------|-------------|
+| `fn-N` | Interview about epic to refine requirements |
+| `fn-N.M` | Interview about specific task |
+| `path/to/spec.md` | Interview about spec file |
+| `"rough idea"` | Interview about a new idea (creates epic) |
+
+Deep questioning (40+ questions) to surface requirements, edge cases, and decisions.
+
+#### `/flow-next:plan-review`
+
+```
+/flow-next:plan-review <fn-N> [--review=rp|codex|export] [focus areas]
+```
+
+| Input | Description |
+|-------|-------------|
+| `fn-N` | Epic ID to review |
+| `--review=rp` | Use RepoPrompt (macOS, visual builder) |
+| `--review=codex` | Use OpenAI Codex CLI (cross-platform) |
+| `--review=export` | Export context for manual review |
+| `[focus areas]` | Optional: "focus on security" or "check API design" |
+
+Carmack-level criteria: Completeness, Feasibility, Clarity, Architecture, Risks, Scope, Testability.
+
+#### `/flow-next:impl-review`
+
+```
+/flow-next:impl-review [--review=rp|codex|export] [focus areas]
+```
+
+| Input | Description |
+|-------|-------------|
+| `--review=rp` | Use RepoPrompt (macOS, visual builder) |
+| `--review=codex` | Use OpenAI Codex CLI (cross-platform) |
+| `--review=export` | Export context for manual review |
+| `[focus areas]` | Optional: "focus on performance" or "check error handling" |
+
+Reviews current branch changes. Carmack-level criteria: Correctness, Simplicity, DRY, Architecture, Edge Cases, Tests, Security.
+
+#### `/flow-next:prime`
+
+```
+/flow-next:prime [--report-only] [--fix-all] [path]
+```
+
+| Input | Description |
+|-------|-------------|
+| (no args) | Assess current directory, interactive fixes |
+| `--report-only` | Show assessment report, skip remediation |
+| `--fix-all` | Apply all recommendations without asking |
+| `[path]` | Assess a different directory |
+
+See [Agent Readiness Assessment](#agent-readiness-assessment) for details.
+
+#### `/flow-next:sync`
+
+```
+/flow-next:sync <id> [--dry-run]
+```
+
+| Input | Description |
+|-------|-------------|
+| `fn-N` | Sync entire epic's downstream tasks |
+| `fn-N.M` | Sync from specific task |
+| `--dry-run` | Preview changes without writing |
+
+Updates downstream task specs when implementation drifts from plan.
+
+#### `/flow-next:ralph-init`
+
+```
+/flow-next:ralph-init
+```
+
+No arguments. Scaffolds `scripts/ralph/` for autonomous operation.
+
+#### `/flow-next:setup`
+
+```
+/flow-next:setup
+```
+
+No arguments. Optional setup that:
+- Configures review backend (rp, codex, or none)
+- Copies flowctl to `.flow/bin/`
+- Adds flow-next instructions to CLAUDE.md/AGENTS.md
+
+#### `/flow-next:uninstall`
+
+```
+/flow-next:uninstall
+```
+
+No arguments. Interactive removal with option to keep tasks.
 
 ---
 
