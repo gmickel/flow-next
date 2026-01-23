@@ -37,24 +37,39 @@ Wait for all scouts to complete. Collect findings.
 
 ## Phase 2: Verification (Optional but Recommended)
 
-After scouts complete, verify key commands actually work:
+After scouts complete, verify key commands actually work.
 
 ### Test Verification
 
-If test framework detected, verify tests are runnable:
+If test framework detected by testing-scout, verify tests are runnable using the **appropriate command for the detected framework**:
 
+| Framework | Verification Command |
+|-----------|---------------------|
+| pytest | `pytest --collect-only` |
+| Jest | `npx jest --listTests` |
+| Vitest | `npx vitest --run --reporter=dot` (quick) |
+| Mocha | `npx mocha --dry-run` |
+| Go test | `go test ./... -list .` |
+| Cargo test | `cargo test --no-run` |
+| PHPUnit | `phpunit --list-tests` |
+
+**For monorepos**: Run verification in each app directory that has tests.
+
+**Adapt to project**: Use the package manager detected (pnpm/npm/yarn/bun). If venv detected for Python, activate it first.
+
+Example:
 ```bash
-# Python
-cd [app_path] && source .venv/bin/activate && pytest --collect-only 2>&1 | head -20
+# Python with venv
+cd apps/api && source .venv/bin/activate && pytest --collect-only 2>&1 | head -20
 
-# JavaScript/TypeScript
-pnpm test --dry-run 2>&1 || npm test --dry-run 2>&1 | head -20
+# JS with pnpm
+pnpm test --passWithNoTests 2>&1 | head -10
 
 # Go
 go test ./... -list . 2>&1 | head -20
 ```
 
-Mark TS4 as ✅ only if verification succeeds.
+Mark TS4 as ✅ only if verification succeeds (tests are discoverable and runnable).
 
 ### Build Verification (Quick)
 
