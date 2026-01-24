@@ -2,6 +2,31 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.18.15] - 2026-01-24
+
+### Fixed
+
+- **Restored manual prompt building for RP reviews** — Reverted from the flaky two-step chat approach (`--response-type review` + follow-up) back to the reliable single-chat approach with custom review prompts.
+
+  **Why this was necessary:**
+  - The `--response-type review` mode introduced in 0.14.0 delegates prompt construction to RepoPrompt's builder, giving us no control over the exact prompt sent to the reviewer model
+  - RP returns its own verdict format (`request-changes`, `approve`, etc.) instead of our `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>` tags
+  - This required a follow-up message just to get the verdict in the correct format, making the flow fragile
+  - Versions 0.18.5 through 0.18.12 were all attempts to patch this two-step flow, adding warnings, stronger instructions, and format reminders — none fully resolved the flakiness
+  - In autonomous operation (Ralph), this unreliability breaks the review loop entirely when the model skips the follow-up or misparses the builder's verdict
+
+  **What changed:**
+  - Removed `--response-type review` from `setup-review` calls
+  - Restored Phase 2 manual file selection (explicitly add changed files)
+  - Restored Phase 3 `prompt-get` + custom review prompt with full Carmack criteria and verdict requirement baked in
+  - Single `chat-send --new-chat` returns verdict directly — no follow-up needed
+
+  **What was preserved:**
+  - MAX_REVIEW_ITERATIONS=3 (reduced from 5)
+  - Checkpoint save/restore for context compaction recovery
+  - Task spec inclusion and syncing in plan-review
+  - All flowctl.py improvements (`--chat-id`, `--mode`, etc. remain available)
+
 ## [flow-next 0.18.14] - 2026-01-24
 
 ### Fixed

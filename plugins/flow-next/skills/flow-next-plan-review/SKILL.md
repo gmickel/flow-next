@@ -5,7 +5,7 @@ description: Carmack-level plan review via RepoPrompt or Codex. Use when reviewi
 
 # Plan Review Mode
 
-**⚠️ MANDATORY: Read [workflow.md](workflow.md) BEFORE executing RP backend steps. Contains critical details (review instructions format, verdict extraction, re-review flow) not fully replicated here.**
+**Read [workflow.md](workflow.md) for detailed phases and anti-patterns.**
 
 Conduct a John Carmack-level review of epic plans.
 
@@ -80,7 +80,7 @@ Format: `<flow-epic-id> [focus areas]`
 
 ## Workflow
 
-**⚠️ STOP: Read [workflow.md](workflow.md) NOW if using RP backend. The steps below are a summary — workflow.md has the complete flow.**
+**See [workflow.md](workflow.md) for full details on each backend.**
 
 ```bash
 FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
@@ -118,13 +118,9 @@ $FLOWCTL cat <id>
 # Save checkpoint before review (recovery point if context compacts)
 $FLOWCTL checkpoint save --epic <id> --json
 
-# Step 2: Atomic setup (--response-type review triggers RP's review mode)
-eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "Review plan for <EPIC_ID>: <summary>" --response-type review)"
-# Outputs W=<window> T=<tab> CHAT_ID=<id>. If fails → <promise>RETRY</promise>
-#
-# ⚠️ WARNING: Builder returns findings + RP's verdict (e.g. "request-changes", "approve").
-# ⚠️ RP's verdict format is INVALID for Ralph. You MUST complete Step 4 below.
-# ⚠️ DO NOT go to Fix Loop yet - no valid verdict exists until Step 4 completes.
+# Step 2: Atomic setup (pick-window + builder)
+eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "Review plan for <EPIC_ID>: <summary>")"
+# Outputs W=<window> T=<tab>. If fails → <promise>RETRY</promise>
 
 # Step 3: Augment selection - add epic AND task specs
 $FLOWCTL rp select-add --window "$W" --tab "$T" .flow/specs/<epic-id>.md
@@ -133,26 +129,18 @@ for task_spec in .flow/tasks/${EPIC_ID}.*.md; do
   [[ -f "$task_spec" ]] && $FLOWCTL rp select-add --window "$W" --tab "$T" "$task_spec"
 done
 
-# Step 4: REQUEST VERDICT IN OUR FORMAT (MANDATORY - DO NOT SKIP)
-# The builder's verdict (request-changes, approve, etc.) is NOT valid.
-# You MUST send this follow-up to get a verdict Ralph can parse:
-cat > /tmp/verdict-request.md << 'EOF'
-Based on your review findings above, provide your final verdict using EXACTLY one of these tags:
+# Step 4: Get builder handoff and build review prompt
+HANDOFF="$($FLOWCTL rp prompt-get --window "$W" --tab "$T")"
+# Build /tmp/review-prompt.md with handoff + review criteria (see workflow.md)
 
-`<verdict>SHIP</verdict>` - Plan is ready to implement
-`<verdict>NEEDS_WORK</verdict>` - Issues must be fixed before implementation
-`<verdict>MAJOR_RETHINK</verdict>` - Fundamental approach problems
-
-Do NOT use any other verdict format (not "request-changes", not "approve"). Use exactly one of the three tags above.
-EOF
-
-$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/verdict-request.md --chat-id "$CHAT_ID" --mode review
-# WAIT for response. Extract verdict ONLY from this response.
+# Step 5: Send review prompt
+$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/review-prompt.md --new-chat --chat-name "Plan Review: <EPIC_ID>"
+# WAIT for response. Extract verdict from response.
 # Valid verdicts: SHIP, NEEDS_WORK, MAJOR_RETHINK
 # If no valid verdict tag → <promise>RETRY</promise>
 
-# Step 5: Write receipt if REVIEW_RECEIPT_PATH set
-# Step 6: Update status
+# Step 6: Write receipt if REVIEW_RECEIPT_PATH set
+# Step 7: Update status
 $FLOWCTL epic set-plan-review-status <EPIC_ID> --status ship --json
 ```
 

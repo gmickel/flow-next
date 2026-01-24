@@ -6,8 +6,8 @@ Use `flowctl rp` wrappers only.
 
 ```bash
 # Atomic setup: pick-window + builder
-eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "..." --response-type review)"
-# Returns: W=<window> T=<tab> CHAT_ID=<id>
+eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "...")"
+# Returns: W=<window> T=<tab>
 ```
 
 This is the **only** way to initialize a review session. Do not call `pick-window` or `builder` individually.

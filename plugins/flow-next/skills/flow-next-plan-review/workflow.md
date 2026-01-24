@@ -89,7 +89,7 @@ Use when `BACKEND="rp"`.
 
 ```bash
 # Atomic: pick-window + builder
-eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "Review plan for <EPIC_ID>: <summary>" --response-type review)"
+eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "Review plan for <EPIC_ID>: <summary>")"
 
 # Verify we have W and T
 if [[ -z "${W:-}" || -z "${T:-}" ]]; then

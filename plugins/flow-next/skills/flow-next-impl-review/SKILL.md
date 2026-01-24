@@ -5,14 +5,12 @@ description: John Carmack-level implementation review via RepoPrompt or Codex. U
 
 # Implementation Review Mode
 
-**⚠️ MANDATORY: Read [workflow.md](workflow.md) BEFORE executing RP backend steps. Contains critical details (review instructions format, verdict extraction, re-review flow) not fully replicated here.**
+**Read [workflow.md](workflow.md) for detailed phases and anti-patterns.**
 
 Conduct a John Carmack-level review of implementation changes on the current branch.
 
 **Role**: Code Review Coordinator (NOT the reviewer)
 **Backends**: RepoPrompt (rp) or Codex CLI (codex)
-
-**⚠️ RepoPrompt 1.6.0+ Required**: The RP backend now uses builder review mode which requires RepoPrompt 1.6.0 or later. Check version: `rp-cli --version`
 
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Always use:
 ```bash
@@ -89,7 +87,7 @@ Format: `[task ID] [--base <commit>] [focus areas]`
 
 ## Workflow
 
-**⚠️ STOP: Read [workflow.md](workflow.md) NOW if using RP backend. The steps below are a summary — workflow.md has the complete flow.**
+**See [workflow.md](workflow.md) for full details on each backend.**
 
 ```bash
 FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
@@ -137,38 +135,29 @@ else
   git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
 fi
 git log ${DIFF_BASE}..HEAD --oneline
-git diff ${DIFF_BASE}..HEAD --name-only
+CHANGED_FILES="$(git diff ${DIFF_BASE}..HEAD --name-only)"
 
-# Step 2: Atomic setup (--response-type review triggers RP's review mode)
-eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "<review instructions>" --response-type review)"
-# Outputs W=<window> T=<tab> CHAT_ID=<id>. If fails → <promise>RETRY</promise>
-#
-# ⚠️ WARNING: Builder returns findings + RP's verdict (e.g. "request-changes", "approve").
-# ⚠️ RP's verdict format is INVALID for Ralph. You MUST complete Step 4 below.
-# ⚠️ DO NOT go to Fix Loop yet - no valid verdict exists until Step 4 completes.
+# Step 2: Atomic setup (pick-window + builder)
+eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "Review implementation: <summary>")"
+# Outputs W=<window> T=<tab>. If fails → <promise>RETRY</promise>
 
-# Step 3: Augment selection (add changed files)
-$FLOWCTL rp select-add --window "$W" --tab "$T" path/to/changed/files...
+# Step 3: Augment selection (add changed files + task spec)
+for f in $CHANGED_FILES; do
+  $FLOWCTL rp select-add --window "$W" --tab "$T" "$f"
+done
+$FLOWCTL rp select-add --window "$W" --tab "$T" .flow/specs/<task-id>.md
 
-# Step 4: REQUEST VERDICT IN OUR FORMAT (MANDATORY - DO NOT SKIP)
-# The builder's verdict (request-changes, approve, etc.) is NOT valid.
-# You MUST send this follow-up to get a verdict Ralph can parse:
-cat > /tmp/verdict-request.md << 'EOF'
-Based on your review findings above, provide your final verdict using EXACTLY one of these tags:
+# Step 4: Get builder handoff and build review prompt
+HANDOFF="$($FLOWCTL rp prompt-get --window "$W" --tab "$T")"
+# Build /tmp/review-prompt.md with handoff + review criteria (see workflow.md)
 
-`<verdict>SHIP</verdict>` - Code is production-ready
-`<verdict>NEEDS_WORK</verdict>` - Issues must be fixed before shipping
-`<verdict>MAJOR_RETHINK</verdict>` - Fundamental approach problems
-
-Do NOT use any other verdict format (not "request-changes", not "approve"). Use exactly one of the three tags above.
-EOF
-
-$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/verdict-request.md --chat-id "$CHAT_ID" --mode review
-# WAIT for response. Extract verdict ONLY from this response.
+# Step 5: Send review prompt
+$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/review-prompt.md --new-chat --chat-name "Impl Review: [BRANCH]"
+# WAIT for response. Extract verdict from response.
 # Valid verdicts: SHIP, NEEDS_WORK, MAJOR_RETHINK
 # If no valid verdict tag → <promise>RETRY</promise>
 
-# Step 5: Write receipt if REVIEW_RECEIPT_PATH set
+# Step 6: Write receipt if REVIEW_RECEIPT_PATH set
 ```
 
 ## Fix Loop (INTERNAL - do not exit to Ralph)
