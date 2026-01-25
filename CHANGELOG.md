@@ -33,10 +33,15 @@ All notable changes to the gmickel-claude-marketplace.
 
 - **Codex sandbox on Windows blocking all reads** — Codex CLI's `read-only` sandbox uses Windows AppContainer which blocks ALL shell commands, including file reads. Added `--sandbox` flag to `flowctl codex impl-review` and `flowctl codex plan-review` with `auto` mode that resolves to `danger-full-access` on Windows and `read-only` on Unix. Added `CODEX_SANDBOX` config option for Ralph. Full file contents are now embedded in review prompts to work around sandbox limitations.
 
+### ⚠️ Breaking Change: `--files` required for `flowctl codex plan-review`
+
+`flowctl codex plan-review` now requires `--files` (comma-separated **code** file paths) so the reviewer has concrete repository context (and so Windows can embed file contents when the Codex sandbox blocks reads).
+
+Migration: update any scripts to pass `--files`, e.g. `--files "src/auth.ts,src/config.ts"`.
+
 ### Added
 
 - **`--sandbox` flag for codex commands** — Supports `read-only`, `workspace-write`, `danger-full-access`, and `auto` modes
-- **`--files` requirement for plan-review** — `flowctl codex plan-review` now requires `--files` argument with comma-separated file paths
 - **`CODEX_SANDBOX` config option for Ralph** — Configure sandbox mode in `scripts/ralph/config.env` (default: `auto`)
 - **Exit code 3 for sandbox errors** — flowctl returns exit code 3 for sandbox configuration issues
 

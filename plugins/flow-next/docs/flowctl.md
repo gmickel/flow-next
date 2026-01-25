@@ -509,7 +509,8 @@ flowctl codex impl-review <task-id> --base <branch> [--sandbox <mode>] [--receip
 
 # Plan review (reviews epic spec before implementation)
 flowctl codex plan-review <epic-id> --files <file1,file2,...> [--sandbox <mode>] [--receipt <path>] [--json]
-# Example: flowctl codex plan-review fn-1 --files .flow/specs/fn-1.md,.flow/tasks/fn-1.1.md --sandbox auto --receipt /tmp/plan-fn-1.json
+# Example: flowctl codex plan-review fn-1 --files "src/auth.ts,src/config.ts" --sandbox auto --receipt /tmp/plan-fn-1.json
+# Note: Epic/task specs are included automatically; --files should be CODE files for repository context.
 ```
 
 **How it works:**

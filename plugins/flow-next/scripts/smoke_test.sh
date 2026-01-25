@@ -579,8 +579,11 @@ Add a simple hello world function.
 EOF
 
   # Test plan-review e2e
+  # Create a simple code file inside the repo for the plan to reference
+  mkdir -p src
+  echo 'def hello(): return "hello world"' > src/hello.py
   set +e
-  plan_result="$(scripts/flowctl codex plan-review "$EPIC3" --base main --receipt "$TEST_DIR/plan-receipt.json" --json 2>&1)"
+  plan_result="$(scripts/flowctl codex plan-review "$EPIC3" --files "src/hello.py" --base main --receipt "$TEST_DIR/plan-receipt.json" --json 2>&1)"
   plan_rc=$?
   set -e
 

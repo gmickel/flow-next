@@ -52,7 +52,11 @@ $FLOWCTL checkpoint save --epic "$EPIC_ID" --json
 ```bash
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
 
-$FLOWCTL codex plan-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
+# Get code files for context (epic/task specs are auto-included in prompt)
+# --files should contain relevant CODE files the plan will modify
+CODE_FILES="src/main.py,src/config.py"  # Adjust based on epic scope
+
+$FLOWCTL codex plan-review "$EPIC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
 ```
 
 **Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`.**

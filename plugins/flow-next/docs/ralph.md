@@ -343,7 +343,7 @@ When `PLAN_REVIEW=codex` or `WORK_REVIEW=codex`, Ralph uses `flowctl codex` wrap
 ```bash
 flowctl codex check            # Verify codex available
 flowctl codex impl-review ...  # Run implementation review
-flowctl codex plan-review ...  # Run plan review
+flowctl codex plan-review <epic-id> --files "src/auth.ts,src/config.ts"  # Run plan review (--files required)
 ```
 
 **Requirements:**
