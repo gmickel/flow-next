@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-10.md",
-  "status": "done",
+  "status": "open",
   "title": "TUI multi-tool parser adapters",
   "updated_at": "2026-01-13T11:52:28.393626Z"
 }

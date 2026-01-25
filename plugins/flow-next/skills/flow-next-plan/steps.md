@@ -43,6 +43,15 @@ Use **T-shirt sizes** based on observable metrics — not token estimates (model
   - "Create OAuth callback routes" (M)
   - "Add Google sign-in button" (S)
 
+**Minimize file overlap for parallel work:**
+
+When splitting tasks, design for minimal file overlap. Tasks touching disjoint files can be worked in parallel without merge conflicts.
+
+- ❌ Bad: Task A and B both modify `src/auth.ts`
+- ✅ Good: Task A modifies `src/auth.ts`, Task B modifies `src/routes.ts`
+
+List expected files in each task's `**Files:**` field. If multiple tasks must touch the same file, mark dependencies explicitly with `flowctl dep add`.
+
 ## Step 0: Initialize .flow
 
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Always use:

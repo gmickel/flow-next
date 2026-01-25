@@ -198,12 +198,13 @@ Conduct a John Carmack-level review:
 
 1. **Completeness** - All requirements covered? Missing edge cases?
 2. **Feasibility** - Technically sound? Dependencies clear?
-3. **Clarity** - Specs unambiguous? Acceptance criteria testable?
-4. **Architecture** - Right abstractions? Clean boundaries?
-5. **Risks** - Blockers identified? Security gaps? Mitigation?
-6. **Scope** - Right-sized? Over/under-engineering?
-7. **Testability** - How will we verify this works?
-8. **Consistency** - Do task specs align with epic spec?
+3. **Parallelizability** - Do independent tasks touch disjoint files? Flag overlapping file scopes that will cause merge conflicts.
+4. **Clarity** - Specs unambiguous? Acceptance criteria testable?
+5. **Architecture** - Right abstractions? Clean boundaries?
+6. **Risks** - Blockers identified? Security gaps? Mitigation?
+7. **Scope** - Right-sized? Over/under-engineering?
+8. **Testability** - How will we verify this works?
+9. **Consistency** - Do task specs align with epic spec?
 
 ## Output Format
 

@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-6.md",
-  "status": "done",
+  "status": "open",
   "title": "TUI: Multi-run support",
   "updated_at": "2026-01-12T20:34:12.304662Z"
 }

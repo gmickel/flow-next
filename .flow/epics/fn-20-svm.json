@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-20-svm.md",
-  "status": "done",
+  "status": "open",
   "title": "Codex Multi-agents Parity",
   "updated_at": "2026-01-23T08:46:52.701077Z"
 }

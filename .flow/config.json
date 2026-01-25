@@ -3,9 +3,10 @@
     "enabled": true
   },
   "planSync": {
+    "crossEpic": true,
     "enabled": true
   },
   "review": {
-    "backend": "codex"
+    "backend": "rp"
   }
 }

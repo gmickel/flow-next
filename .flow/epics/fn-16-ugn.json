@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-16-ugn.md",
-  "status": "done",
+  "status": "open",
   "title": "Manual plan-sync trigger",
   "updated_at": "2026-01-16T00:35:49.873786Z"
 }

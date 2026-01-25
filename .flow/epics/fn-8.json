@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-8.md",
-  "status": "done",
+  "status": "open",
   "title": "Explore OpenProse for Ralph orchestration",
   "updated_at": "2026-01-12T20:39:15.195566Z"
 }

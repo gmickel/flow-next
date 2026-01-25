@@ -2,6 +2,22 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.18.17] - 2026-01-25
+
+### Fixed
+
+- **Filter artifact files using is_task_id() validation** — Replaced weak `"." not in task_id` check with proper `is_task_id()` regex validation. Fixes `KeyError: 'title'` crash when `.flow/tasks/` contains artifact files like `fn-1.2-review.json`. Works with both legacy (`fn-3.1`) and new (`fn-3-sds.1`) ID formats. Thanks to @kirillzh for the contribution!
+
+## [flow-next 0.18.16] - 2026-01-24
+
+### Added
+
+- **Parallelization guidance for task splitting** — Plan skill now includes guidance to minimize file overlap when splitting tasks. Tasks touching disjoint files can be worked in parallel without merge conflicts.
+
+- **Plan-review parallelizability criterion** — Added "Parallelizability" as review criterion #3: flags independent tasks that touch overlapping files.
+
+- **Interview probe for parallel work** — Architecture questions now include "Can this be split so tasks touch disjoint files?"
+
 ## [flow-next 0.18.15] - 2026-01-24
 
 ### Fixed
