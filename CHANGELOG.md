@@ -2,6 +2,12 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.18.17] - 2026-01-25
+
+### Fixed
+
+- **Filter artifact files using is_task_id() validation** — Replaced weak `"." not in task_id` check with proper `is_task_id()` regex validation. Fixes `KeyError: 'title'` crash when `.flow/tasks/` contains artifact files like `fn-1.2-review.json`. Works with both legacy (`fn-3.1`) and new (`fn-3-sds.1`) ID formats. Thanks to @kirillzh for the contribution!
+
 ## [flow-next 0.18.16] - 2026-01-24
 
 ### Added
