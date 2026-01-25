@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-7.md",
-  "status": "open",
+  "status": "done",
   "title": "TUI: Search overlay",
   "updated_at": "2026-01-12T20:34:13.775378Z"
 }

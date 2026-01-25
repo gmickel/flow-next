@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-5.md",
-  "status": "open",
+  "status": "done",
   "title": "TUI: ETA calculation",
   "updated_at": "2026-01-12T20:34:10.537556Z"
 }

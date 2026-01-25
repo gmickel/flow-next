@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-18-kwn.md",
-  "status": "open",
+  "status": "done",
   "title": "RP CLI: Auto-open RepoPrompt window for reviews",
   "updated_at": "2026-01-16T20:28:31.339251Z"
 }

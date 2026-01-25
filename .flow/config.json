@@ -6,6 +6,6 @@
     "enabled": true
   },
   "review": {
-    "backend": "null"
+    "backend": "codex"
   }
 }

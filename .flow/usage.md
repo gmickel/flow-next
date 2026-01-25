@@ -14,18 +14,18 @@ Task tracking for AI agents. All state lives in `.flow/`.
 ```
 .flow/
 ├── bin/flowctl         # CLI (this install)
-├── epics/fn-N.json     # Epic metadata
-├── specs/fn-N.md       # Epic specifications
-├── tasks/fn-N.M.json   # Task metadata
-├── tasks/fn-N.M.md     # Task specifications
+├── epics/fn-N-xxx.json # Epic metadata
+├── specs/fn-N-xxx.md   # Epic specifications
+├── tasks/fn-N-xxx.M.json # Task metadata
+├── tasks/fn-N-xxx.M.md   # Task specifications
 ├── memory/             # Context memory
 └── meta.json           # Project metadata
 ```
 
 ## IDs
 
-- Epics: `fn-N` (e.g., fn-1, fn-2)
-- Tasks: `fn-N.M` (e.g., fn-1.1, fn-1.2)
+- Epics: `fn-N-xxx` (e.g., fn-1-abc, fn-2-z9k) or legacy `fn-N`
+- Tasks: `fn-N-xxx.M` (e.g., fn-1-abc.1, fn-1-abc.2) or legacy `fn-N.M`
 
 ## Common Commands
 
@@ -46,6 +46,7 @@ Task tracking for AI agents. All state lives in `.flow/`.
 # Status
 .flow/bin/flowctl ready --epic fn-1  # What's ready to work on
 .flow/bin/flowctl validate --all     # Check structure
+.flow/bin/flowctl state-path         # Show state directory (for worktrees)
 
 # Create
 .flow/bin/flowctl epic create --title "..."
@@ -69,6 +70,18 @@ Task tracking for AI agents. All state lives in `.flow/`.
 ```json
 {"commits": ["abc123"], "tests": ["npm test"], "prs": []}
 ```
+
+## Parallel Worktrees
+
+Runtime state (status, assignee, etc.) is stored in `.git/flow-state/`, shared across worktrees:
+
+```bash
+.flow/bin/flowctl state-path              # Show state directory
+.flow/bin/flowctl migrate-state           # Migrate existing repo
+.flow/bin/flowctl migrate-state --clean   # Migrate + remove runtime from tracked files
+```
+
+Migration is optional — existing repos work without changes.
 
 ## More Info
 

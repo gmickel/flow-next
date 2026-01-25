@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-19-vby.md",
-  "status": "open",
+  "status": "done",
   "title": "Shared runtime state for parallel worktree execution",
   "updated_at": "2026-01-21T15:35:28.779632Z"
 }
