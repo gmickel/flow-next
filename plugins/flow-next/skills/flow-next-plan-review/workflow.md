@@ -52,9 +52,10 @@ $FLOWCTL checkpoint save --epic "$EPIC_ID" --json
 ```bash
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
 
-# Get code files for context (epic/task specs are auto-included in prompt)
-# --files should contain relevant CODE files the plan will modify
-CODE_FILES="src/main.py,src/config.py"  # Adjust based on epic scope
+# --files: comma-separated CODE files for reviewer context
+# Epic/task specs are auto-included; pass files the plan will CREATE or MODIFY
+# Read epic spec to identify affected paths, then list key files
+CODE_FILES="src/main.py,src/config.py"  # Customize per epic
 
 $FLOWCTL codex plan-review "$EPIC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
 ```

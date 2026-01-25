@@ -100,10 +100,15 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
 # Save checkpoint before review (recovery point if context compacts)
 $FLOWCTL checkpoint save --epic "$EPIC_ID" --json
 
-# Get code files for context (epic/task specs are auto-included in prompt)
-# --files should contain relevant CODE files the plan will modify
-# Example: if plan touches src/auth/, include those files
-CODE_FILES="src/main.py,src/config.py"  # Adjust based on epic scope
+# --files: comma-separated CODE files for reviewer context
+# Epic/task specs are auto-included; pass files the plan will CREATE or MODIFY
+# How to identify: read the epic spec, find files mentioned or directories affected
+# Example: epic touches auth → pass existing auth files for context
+#
+# Dynamic approach (if epic mentions specific paths):
+#   CODE_FILES=$(grep -oE 'src/[^ ]+\.(ts|py|js)' .flow/specs/${EPIC_ID}.md | sort -u | paste -sd,)
+# Or list key files manually:
+CODE_FILES="src/main.py,src/config.py"
 
 $FLOWCTL codex plan-review "$EPIC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
 # Output includes VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK

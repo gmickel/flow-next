@@ -1048,11 +1048,14 @@ Violations break automation and leave the user with incomplete work. Be precise,
   fi
   append_progress "$verdict" "$promise" "$plan_review_status" "$task_status"
 
-  # Only honor COMPLETE promise if we're not forcing a retry (e.g., NEEDS_WORK verdict)
-  if [[ "$force_retry" != "1" ]] && echo "$claude_text" | grep -q "<promise>COMPLETE</promise>"; then
-    ui_complete
-    write_completion_marker "DONE"
-    exit 0
+  # NEVER honor COMPLETE from worker output (GH-73: premature completion bug)
+  # Workers are single-task/single-epic scope. Completion detection happens via
+  # the selector returning status=none at the top of the loop. Workers should
+  # NEVER output COMPLETE (both prompt_work.md and prompt_plan.md forbid it).
+  # If Claude outputs COMPLETE anyway, log it and continue - let selector decide.
+  if echo "$claude_text" | grep -q "<promise>COMPLETE</promise>"; then
+    echo "ralph: WARNING: COMPLETE promise ignored (invalid in $status context)" >> "$iter_log"
+    log "COMPLETE ignored (invalid in $status context) - letting selector decide"
   fi
 
   exit_code=0

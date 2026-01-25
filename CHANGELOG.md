@@ -2,6 +2,16 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.18.18] - 2026-01-25
+
+### Fixed
+
+- **Preserve GH-73 COMPLETE handling fix** — PR #74 inadvertently reverted the fix for premature completion in Ralph. Workers should NEVER output `<promise>COMPLETE</promise>` (prompts forbid it); completion is detected via selector returning `status=none`. Restored the ignore-and-log behavior.
+
+### Documentation
+
+- **Improved `--files` guidance in plan-review skills** — Added explanation of how to identify which files to pass (read epic spec, find affected paths) instead of just a hardcoded example.
+
 ## [flow-next 0.18.17] - 2026-01-25
 
 ### Fixed
