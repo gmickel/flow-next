@@ -807,6 +807,10 @@ while (( iter <= MAX_ITERATIONS )); do
   # Check for pause/stop at start of iteration (before work selection)
   check_sentinels
 
+  # Close any epics with all tasks done BEFORE calling selector
+  # This ensures dependent epics become unblocked in the same iteration
+  maybe_close_epics
+
   selector_args=("$FLOWCTL" next --json)
   [[ -n "$EPICS_FILE" ]] && selector_args+=(--epics-file "$EPICS_FILE")
   [[ "$REQUIRE_PLAN_REVIEW" == "1" ]] && selector_args+=(--require-plan-review)
@@ -824,7 +828,7 @@ while (( iter <= MAX_ITERATIONS )); do
     if [[ "$reason" == "blocked_by_epic_deps" ]]; then
       log "blocked by epic deps"
     fi
-    maybe_close_epics
+    # maybe_close_epics already called at start of iteration
     ui_complete
     write_completion_marker "NO_WORK"
     exit 0
