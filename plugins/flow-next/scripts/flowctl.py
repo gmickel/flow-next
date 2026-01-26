@@ -605,6 +605,13 @@ def normalize_epic(epic_data: dict) -> dict:
         epic_data["branch_name"] = None
     if "depends_on_epics" not in epic_data:
         epic_data["depends_on_epics"] = []
+    # Backend spec defaults (for orchestration products like flow-swarm)
+    if "default_impl" not in epic_data:
+        epic_data["default_impl"] = None
+    if "default_review" not in epic_data:
+        epic_data["default_review"] = None
+    if "default_sync" not in epic_data:
+        epic_data["default_sync"] = None
     return epic_data
 
 
@@ -615,6 +622,13 @@ def normalize_task(task_data: dict) -> dict:
     # Migrate legacy 'deps' key to 'depends_on'
     if "depends_on" not in task_data:
         task_data["depends_on"] = task_data.get("deps", [])
+    # Backend spec defaults (for orchestration products like flow-swarm)
+    if "impl" not in task_data:
+        task_data["impl"] = None
+    if "review" not in task_data:
+        task_data["review"] = None
+    if "sync" not in task_data:
+        task_data["sync"] = None
     return task_data
 
 
@@ -3397,6 +3411,193 @@ def cmd_epic_rm_dep(args: argparse.Namespace) -> None:
         print(f"Removed {dep_id} from {epic_id} dependencies")
 
 
+def cmd_epic_set_backend(args: argparse.Namespace) -> None:
+    """Set epic default backend specs for impl/review/sync."""
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
+        )
+
+    if not is_epic_id(args.id):
+        error_exit(
+            f"Invalid epic ID: {args.id}. Expected format: fn-N or fn-N-xxx",
+            use_json=args.json,
+        )
+
+    # At least one of impl/review/sync must be provided
+    if args.impl is None and args.review is None and args.sync is None:
+        error_exit(
+            "At least one of --impl, --review, or --sync must be provided",
+            use_json=args.json,
+        )
+
+    flow_dir = get_flow_dir()
+    epic_path = flow_dir / EPICS_DIR / f"{args.id}.json"
+
+    if not epic_path.exists():
+        error_exit(f"Epic {args.id} not found", use_json=args.json)
+
+    epic_data = normalize_epic(
+        load_json_or_exit(epic_path, f"Epic {args.id}", use_json=args.json)
+    )
+
+    # Update fields (empty string means clear)
+    updated = []
+    if args.impl is not None:
+        epic_data["default_impl"] = args.impl if args.impl else None
+        updated.append(f"default_impl={args.impl or 'null'}")
+    if args.review is not None:
+        epic_data["default_review"] = args.review if args.review else None
+        updated.append(f"default_review={args.review or 'null'}")
+    if args.sync is not None:
+        epic_data["default_sync"] = args.sync if args.sync else None
+        updated.append(f"default_sync={args.sync or 'null'}")
+
+    epic_data["updated_at"] = now_iso()
+    atomic_write_json(epic_path, epic_data)
+
+    if args.json:
+        json_output(
+            {
+                "id": args.id,
+                "default_impl": epic_data["default_impl"],
+                "default_review": epic_data["default_review"],
+                "default_sync": epic_data["default_sync"],
+                "message": f"Epic {args.id} backend specs updated: {', '.join(updated)}",
+            }
+        )
+    else:
+        print(f"Epic {args.id} backend specs updated: {', '.join(updated)}")
+
+
+def cmd_task_set_backend(args: argparse.Namespace) -> None:
+    """Set task backend specs for impl/review/sync."""
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
+        )
+
+    task_id = args.id
+    if not is_task_id(task_id):
+        error_exit(
+            f"Invalid task ID: {task_id}. Expected format: fn-N.M or fn-N-xxx.M",
+            use_json=args.json,
+        )
+
+    # At least one of impl/review/sync must be provided
+    if args.impl is None and args.review is None and args.sync is None:
+        error_exit(
+            "At least one of --impl, --review, or --sync must be provided",
+            use_json=args.json,
+        )
+
+    flow_dir = get_flow_dir()
+    task_path = flow_dir / TASKS_DIR / f"{task_id}.json"
+
+    if not task_path.exists():
+        error_exit(f"Task {task_id} not found", use_json=args.json)
+
+    task_data = load_json_or_exit(task_path, f"Task {task_id}", use_json=args.json)
+
+    # Update fields (empty string means clear)
+    updated = []
+    if args.impl is not None:
+        task_data["impl"] = args.impl if args.impl else None
+        updated.append(f"impl={args.impl or 'null'}")
+    if args.review is not None:
+        task_data["review"] = args.review if args.review else None
+        updated.append(f"review={args.review or 'null'}")
+    if args.sync is not None:
+        task_data["sync"] = args.sync if args.sync else None
+        updated.append(f"sync={args.sync or 'null'}")
+
+    atomic_write_json(task_path, task_data)
+
+    if args.json:
+        json_output(
+            {
+                "id": task_id,
+                "impl": task_data.get("impl"),
+                "review": task_data.get("review"),
+                "sync": task_data.get("sync"),
+                "message": f"Task {task_id} backend specs updated: {', '.join(updated)}",
+            }
+        )
+    else:
+        print(f"Task {task_id} backend specs updated: {', '.join(updated)}")
+
+
+def cmd_task_show_backend(args: argparse.Namespace) -> None:
+    """Show effective backend specs for a task (task + epic levels only)."""
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
+        )
+
+    task_id = args.id
+    if not is_task_id(task_id):
+        error_exit(
+            f"Invalid task ID: {task_id}. Expected format: fn-N.M or fn-N-xxx.M",
+            use_json=args.json,
+        )
+
+    flow_dir = get_flow_dir()
+    task_path = flow_dir / TASKS_DIR / f"{task_id}.json"
+
+    if not task_path.exists():
+        error_exit(f"Task {task_id} not found", use_json=args.json)
+
+    task_data = normalize_task(
+        load_json_or_exit(task_path, f"Task {task_id}", use_json=args.json)
+    )
+
+    # Get epic data for defaults
+    epic_id = task_data.get("epic")
+    epic_data = None
+    if epic_id:
+        epic_path = flow_dir / EPICS_DIR / f"{epic_id}.json"
+        if epic_path.exists():
+            epic_data = normalize_epic(
+                load_json_or_exit(epic_path, f"Epic {epic_id}", use_json=args.json)
+            )
+
+    # Compute effective values with source tracking
+    def resolve_spec(task_key: str, epic_key: str) -> tuple:
+        """Return (spec, source) tuple."""
+        task_val = task_data.get(task_key)
+        if task_val:
+            return (task_val, "task")
+        if epic_data:
+            epic_val = epic_data.get(epic_key)
+            if epic_val:
+                return (epic_val, "epic")
+        return (None, None)
+
+    impl_spec, impl_source = resolve_spec("impl", "default_impl")
+    review_spec, review_source = resolve_spec("review", "default_review")
+    sync_spec, sync_source = resolve_spec("sync", "default_sync")
+
+    if args.json:
+        json_output(
+            {
+                "id": task_id,
+                "epic": epic_id,
+                "impl": {"spec": impl_spec, "source": impl_source},
+                "review": {"spec": review_spec, "source": review_source},
+                "sync": {"spec": sync_spec, "source": sync_source},
+            }
+        )
+    else:
+        def fmt(spec, source):
+            if spec:
+                return f"{spec} ({source})"
+            return "null"
+
+        print(f"impl: {fmt(impl_spec, impl_source)}")
+        print(f"review: {fmt(review_spec, review_source)}")
+        print(f"sync: {fmt(sync_spec, sync_source)}")
+
+
 def cmd_task_set_description(args: argparse.Namespace) -> None:
     """Set task description section."""
     _task_set_section(args.id, "## Description", args.file, args.json)
@@ -5956,6 +6157,22 @@ def main() -> None:
     p_epic_rm_dep.add_argument("--json", action="store_true", help="JSON output")
     p_epic_rm_dep.set_defaults(func=cmd_epic_rm_dep)
 
+    p_epic_set_backend = epic_sub.add_parser(
+        "set-backend", help="Set default backend specs for impl/review/sync"
+    )
+    p_epic_set_backend.add_argument("id", help="Epic ID (fn-N)")
+    p_epic_set_backend.add_argument(
+        "--impl", help="Default impl backend spec (e.g., 'codex:gpt-5.2-high')"
+    )
+    p_epic_set_backend.add_argument(
+        "--review", help="Default review backend spec (e.g., 'claude:opus')"
+    )
+    p_epic_set_backend.add_argument(
+        "--sync", help="Default sync backend spec (e.g., 'claude:haiku')"
+    )
+    p_epic_set_backend.add_argument("--json", action="store_true", help="JSON output")
+    p_epic_set_backend.set_defaults(func=cmd_epic_set_backend)
+
     # task create
     p_task = subparsers.add_parser("task", help="Task commands")
     task_sub = p_task.add_subparsers(dest="task_cmd", required=True)
@@ -6008,6 +6225,29 @@ def main() -> None:
     )
     p_task_reset.add_argument("--json", action="store_true", help="JSON output")
     p_task_reset.set_defaults(func=cmd_task_reset)
+
+    p_task_set_backend = task_sub.add_parser(
+        "set-backend", help="Set backend specs for impl/review/sync"
+    )
+    p_task_set_backend.add_argument("id", help="Task ID (fn-N.M)")
+    p_task_set_backend.add_argument(
+        "--impl", help="Impl backend spec (e.g., 'codex:gpt-5.2-high')"
+    )
+    p_task_set_backend.add_argument(
+        "--review", help="Review backend spec (e.g., 'claude:opus')"
+    )
+    p_task_set_backend.add_argument(
+        "--sync", help="Sync backend spec (e.g., 'claude:haiku')"
+    )
+    p_task_set_backend.add_argument("--json", action="store_true", help="JSON output")
+    p_task_set_backend.set_defaults(func=cmd_task_set_backend)
+
+    p_task_show_backend = task_sub.add_parser(
+        "show-backend", help="Show effective backend specs (task + epic levels)"
+    )
+    p_task_show_backend.add_argument("id", help="Task ID (fn-N.M)")
+    p_task_show_backend.add_argument("--json", action="store_true", help="JSON output")
+    p_task_show_backend.set_defaults(func=cmd_task_show_backend)
 
     # dep add
     p_dep = subparsers.add_parser("dep", help="Dependency commands")

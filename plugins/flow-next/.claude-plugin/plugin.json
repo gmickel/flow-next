@@ -1,6 +1,6 @@
 {
   "name": "flow-next",
-  "version": "0.18.20",
+  "version": "0.18.21",
   "description": "Zero-dependency planning + execution with .flow/ task tracking and Ralph autonomous mode (multi-model review gates). Worker subagent per task for context isolation. Prime assesses 8 pillars (48 criteria) with GitHub API integration. Includes 20 subagents, 10 commands, 14 skills.",
   "author": {
     "name": "Gordon Mickel",

@@ -40,8 +40,8 @@ Works out of the box for parallel branches. No setup required.
 Flowctl accepts schema v1 and v2; new fields are optional and defaulted.
 
 New fields:
-- Epic JSON: `plan_review_status`, `plan_reviewed_at`, `depends_on_epics`, `branch_name`
-- Task JSON: `priority`
+- Epic JSON: `plan_review_status`, `plan_reviewed_at`, `depends_on_epics`, `branch_name`, `default_impl`, `default_review`, `default_sync`
+- Task JSON: `priority`, `impl`, `review`, `sync`
 
 ## ID Format
 
@@ -116,6 +116,23 @@ Close epic (requires all tasks done).
 flowctl epic close fn-1 [--json]
 ```
 
+### epic set-backend
+
+Set default backend specs for impl/review/sync workers. Used by orchestration products (e.g., flow-swarm).
+
+```bash
+flowctl epic set-backend fn-1 --impl codex:gpt-5.2-codex [--json]
+flowctl epic set-backend fn-1 --impl codex:gpt-5.2-high --review claude:opus [--json]
+flowctl epic set-backend fn-1 --impl "" [--json]  # Clear impl (inherit from config)
+```
+
+Options:
+- `--impl SPEC`: Default impl backend (e.g., `codex:gpt-5.2-high`, `claude:opus`)
+- `--review SPEC`: Default review backend (e.g., `claude:opus`, `agent:opus-4.5-thinking`)
+- `--sync SPEC`: Default sync backend (e.g., `claude:haiku`, `gemini:gemini-2.5-flash`)
+
+Format: `backend:model` where backend is a CLI name and model is backend-specific.
+
 ### task create
 
 Create task under epic.
@@ -164,6 +181,50 @@ flowctl task reset fn-1.2 [--cascade] [--json]
 ```
 
 Use `--cascade` to also reset dependent tasks within the same epic.
+
+### task set-backend
+
+Set backend specs for impl/review/sync workers. Used by orchestration products (e.g., flow-swarm).
+
+```bash
+flowctl task set-backend fn-1.1 --impl codex:gpt-5.2-high [--json]
+flowctl task set-backend fn-1.1 --impl codex:gpt-5.2-high --review claude:opus [--json]
+flowctl task set-backend fn-1.1 --impl "" [--json]  # Clear impl (inherit from epic/config)
+```
+
+Options:
+- `--impl SPEC`: Impl backend (e.g., `codex:gpt-5.2-high`, `claude:opus`)
+- `--review SPEC`: Review backend (e.g., `claude:opus`, `agent:opus-4.5-thinking`)
+- `--sync SPEC`: Sync backend (e.g., `claude:haiku`, `gemini:gemini-2.5-flash`)
+
+Format: `backend:model` where backend is a CLI name and model is backend-specific.
+
+### task show-backend
+
+Show effective backend specs for a task. Reports task-level and epic-level specs only (config-level resolution happens in flow-swarm).
+
+```bash
+flowctl task show-backend fn-1.1 [--json]
+```
+
+Output (text):
+```
+impl: codex:gpt-5.2-high (task)
+review: claude:opus (epic)
+sync: null
+```
+
+Output (json):
+```json
+{
+  "success": true,
+  "id": "fn-1.1",
+  "epic": "fn-1",
+  "impl": {"spec": "codex:gpt-5.2-high", "source": "task"},
+  "review": {"spec": "claude:opus", "source": "epic"},
+  "sync": {"spec": null, "source": null}
+}
+```
 
 ### dep add
 

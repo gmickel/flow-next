@@ -2,6 +2,20 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.18.21] - 2026-01-26
+
+### Added
+
+- **Backend spec fields for tasks and epics** — New optional `impl`, `review`, `sync` fields on tasks and `default_impl`, `default_review`, `default_sync` on epics. These fields store preferred AI backend + model specs (e.g., `codex:gpt-5.2-high`, `claude:opus`). Pure storage - flowctl doesn't interpret them; orchestration products like flow-swarm use them to route different tasks to different backends.
+
+- **`flowctl task set-backend`** — Set backend specs on a task: `flowctl task set-backend fn-1.1 --impl codex:gpt-5.2-high --review claude:opus`
+
+- **`flowctl epic set-backend`** — Set default backend specs on an epic: `flowctl epic set-backend fn-1 --impl codex:gpt-5.2-codex`
+
+- **`flowctl task show-backend`** — Query effective backend specs for a task (task + epic levels): `flowctl task show-backend fn-1.1 --json`
+
+**Note:** These fields have no effect on current flow-next/Ralph usage. They enable an upcoming orchestration product where different tasks can use different backends (complex refactors → expensive reasoning models, simple fixes → fast cheap models).
+
 ## [flow-next 0.18.20] - 2026-01-26
 
 ### Changed
