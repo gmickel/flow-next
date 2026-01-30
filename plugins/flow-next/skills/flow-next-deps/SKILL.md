@@ -39,37 +39,34 @@ done
 
 ## Step 2: Identify Blocking Chains
 
-Determine which epics are ready vs blocked:
+Determine which epics are ready vs blocked (pure jq, works on any shell):
 
 ```bash
 FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 
-# Build status map first
-declare -A status_map
-for id in $($FLOWCTL epics --json | jq -r '.epics[].id'); do
-  status_map[$id]=$($FLOWCTL show "$id" --json | jq -r '.status')
-done
+# Collect all epic data with deps
+epics_json=$($FLOWCTL epics --json | jq -r '.epics[].id' | while read id; do
+  $FLOWCTL show "$id" --json | jq -c '{id: .id, title: .title, status: .status, deps: (.depends_on_epics // [])}'
+done | jq -s '.')
 
-# Check each non-done epic
-for id in $($FLOWCTL epics --json | jq -r '.epics[].id'); do
-  epic_data=$($FLOWCTL show "$id" --json)
-  status=$(echo "$epic_data" | jq -r '.status')
-  [[ "$status" == "done" ]] && continue
+# Compute blocking status
+echo "$epics_json" | jq -r '
+  # Build status lookup
+  (map({(.id): .status}) | add // {}) as $status |
 
-  title=$(echo "$epic_data" | jq -r '.title')
-  deps=$(echo "$epic_data" | jq -r '.depends_on_epics // [] | .[]')
+  # Check each non-done epic
+  .[] | select(.status != "done") |
+  .id as $id | .title as $title |
 
-  blocked_by=""
-  for dep in $deps; do
-    [[ "${status_map[$dep]}" != "done" ]] && blocked_by="$blocked_by $dep"
-  done
+  # Find deps that are not done
+  ([.deps[] | select($status[.] != "done")] | join(", ")) as $blocked_by |
 
-  if [[ -z "$blocked_by" ]]; then
-    echo "READY: $id - $title"
+  if ($blocked_by | length) == 0 then
+    "READY: \($id) - \($title)"
   else
-    echo "BLOCKED: $id - $title (by:$blocked_by)"
-  fi
-done
+    "BLOCKED: \($id) - \($title) (by: \($blocked_by))"
+  end
+'
 ```
 
 ## Step 3: Compute Execution Phases
