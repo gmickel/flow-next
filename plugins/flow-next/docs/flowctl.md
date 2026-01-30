@@ -7,7 +7,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 ## Available Commands
 
 ```
-init, detect, epic, task, dep, show, epics, tasks, list, cat, ready, next, start, done, block, validate, config, memory, prep-chat, rp, codex, checkpoint, status, state-path, migrate-state
+init, detect, epic, task, dep, show, epics, tasks, list, cat, ready, next, start, done, block, validate, config, memory, prep-chat, rp, codex, copilot, checkpoint, status, state-path, migrate-state
 ```
 
 ## Multi-User Safety
@@ -446,7 +446,7 @@ flowctl config get review.backend [--json]
 
 # Set a config value
 flowctl config set memory.enabled true [--json]
-flowctl config set review.backend codex [--json]  # rp, codex, or none
+flowctl config set review.backend codex [--json]  # rp, codex, copilot, or none
 
 # Toggle boolean config
 flowctl config toggle memory.enabled [--json]
@@ -458,7 +458,7 @@ flowctl config toggle memory.enabled [--json]
 |-----|------|---------|-------------|
 | `memory.enabled` | bool | `false` | Enable memory system |
 | `planSync.enabled` | bool | `false` | Enable plan-sync after task completion |
-| `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `none`). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
+| `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `none`). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
 
 Priority: `--review=...` argument > `FLOW_REVIEW_BACKEND` env > `.flow/config.json` > error.
 
@@ -651,6 +651,79 @@ Completion review receipt:
 
 **Note:** After plugin update, re-run `/flow-next:setup` or `/flow-next:ralph-init` to get sandbox fixes.
 
+### copilot
+
+GitHub Copilot CLI wrappers — cross-platform alternative to RepoPrompt.
+
+**Requirements:**
+```bash
+copilot auth
+```
+
+**Commands:**
+
+```bash
+# Verify copilot is available
+flowctl copilot check [--json]
+
+# Implementation review (reviews code changes for a task)
+flowctl copilot impl-review <task-id> --base <branch> [--receipt <path>] [--json]
+# Example: flowctl copilot impl-review fn-1.3 --base main --receipt /tmp/impl-fn-1.3.json
+
+# Plan review (reviews epic spec before implementation)
+flowctl copilot plan-review <epic-id> --files <file1,file2,...> [--receipt <path>] [--json]
+# Example: flowctl copilot plan-review fn-1 --files "src/auth.ts,src/config.ts" --receipt /tmp/plan-fn-1.json
+# Note: Epic/task specs are included automatically; --files should be CODE files for repository context.
+
+# Completion review (reviews epic implementation against spec)
+flowctl copilot completion-review <epic-id> [--receipt <path>] [--json]
+# Example: flowctl copilot completion-review fn-1 --receipt /tmp/completion-fn-1.json
+# Runs after all tasks done; verifies implementation matches spec requirements
+```
+
+**How it works:**
+
+1. **Gather context hints** — Analyzes changed files, extracts symbols (functions, classes), finds references in unchanged files
+2. **Build review prompt** — Uses same Carmack-level criteria as RepoPrompt (7 criteria each for plan/impl)
+3. **Run copilot** — Executes `copilot --prompt -` with the prompt on stdin
+4. **Parse verdict** — Extracts `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>` from output
+5. **Write receipt** — If `--receipt` provided, writes JSON for Ralph gating
+
+**Review criteria (identical to RepoPrompt):**
+
+| Review | Criteria |
+|--------|----------|
+| Plan | Completeness, Feasibility, Clarity, Architecture, Risks, Scope, Testability |
+| Impl | Correctness, Simplicity, DRY, Architecture, Edge Cases, Tests, Security |
+
+**Receipt schema (Ralph-compatible):**
+
+Impl review receipt:
+```json
+{
+  "type": "impl_review",
+  "id": "fn-1.3",
+  "mode": "copilot",
+  "verdict": "SHIP",
+  "session_id": "copilot-session-xyz",
+  "timestamp": "2026-01-11T10:30:00Z"
+}
+```
+
+Completion review receipt:
+```json
+{
+  "type": "completion_review",
+  "id": "fn-1",
+  "mode": "copilot",
+  "verdict": "SHIP",
+  "session_id": "copilot-session-xyz",
+  "timestamp": "2026-01-11T10:30:00Z"
+}
+```
+
+**Session continuity:** Receipts include `session_id` parsed from Copilot output. Re-reviews resume with `copilot --resume=<session_id>` when available.
+
 ### checkpoint
 
 Save and restore epic state (used during review-fix cycles).
@@ -725,7 +798,7 @@ What it does:
 
 ## Ralph Receipts
 
-RepoPrompt review receipts are written by the review skills (not flowctl commands). Codex review receipts are written by `flowctl codex impl-review` and `flowctl codex completion-review` when `--receipt` is provided. Ralph sets `REVIEW_RECEIPT_PATH` to coordinate both.
+RepoPrompt review receipts are written by the review skills (not flowctl commands). Codex and Copilot review receipts are written by `flowctl codex impl-review`, `flowctl codex completion-review`, `flowctl copilot impl-review`, or `flowctl copilot completion-review` when `--receipt` is provided. Ralph sets `REVIEW_RECEIPT_PATH` to coordinate both.
 
 See: [Ralph deep dive](ralph.md)
 

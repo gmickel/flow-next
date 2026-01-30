@@ -11,13 +11,14 @@ Enforces:
 - Receipt must be written after SHIP verdict
 - Validates flowctl command patterns
 
-Supports both review backends:
-- rp (RepoPrompt): tracks chat-send calls and receipt writes
-- codex: tracks flowctl codex impl-review/plan-review and verdict output
+    Supports both review backends:
+    - rp (RepoPrompt): tracks chat-send calls and receipt writes
+    - codex: tracks flowctl codex impl-review/plan-review and verdict output
+    - copilot: tracks flowctl copilot impl-review/plan-review and verdict output
 """
 
 # Version for drift detection (bump when making changes)
-RALPH_GUARD_VERSION = "0.12.0"
+RALPH_GUARD_VERSION = "0.12.1"
 
 import json
 import os
@@ -46,6 +47,7 @@ def load_state(session_id: str) -> dict:
             state.setdefault("chat_send_succeeded", False)
             state.setdefault("flowctl_done_called", set())
             state.setdefault("codex_review_succeeded", False)
+            state.setdefault("copilot_review_succeeded", False)
             return state
         except (json.JSONDecodeError, KeyError, TypeError):
             pass
@@ -57,6 +59,7 @@ def load_state(session_id: str) -> dict:
         "chat_send_succeeded": False,  # Track if chat-send actually returned review text
         "flowctl_done_called": set(),  # Track tasks that had flowctl done called
         "codex_review_succeeded": False,  # Track if codex review returned verdict
+        "copilot_review_succeeded": False,  # Track if copilot review returned verdict
     }
 
 
@@ -170,6 +173,17 @@ def handle_pre_tool_use(data: dict) -> None:
                 "Session continuity is managed via session_id in receipts."
             )
 
+    # Block direct copilot calls (must use flowctl copilot wrappers)
+    if re.search(r"\bcopilot\b", command):
+        is_wrapper = re.search(r"flowctl\s+copilot|FLOWCTL.*copilot", command)
+        if not is_wrapper:
+            if re.search(r"\bcopilot\s+exec\b", command):
+                output_block(
+                    "BLOCKED: Do not call 'copilot exec' directly. "
+                    "Use 'flowctl copilot impl-review' or 'flowctl copilot plan-review' "
+                    "to ensure proper receipt handling and session continuity."
+                )
+
     # Validate setup-review usage
     if "setup-review" in command:
         if not re.search(r"--repo-root", command):
@@ -220,13 +234,16 @@ def handle_pre_tool_use(data: dict) -> None:
         )
         if is_receipt_write:
             state = load_state(session_id)
-            if not state.get("chat_send_succeeded") and not state.get(
-                "codex_review_succeeded"
+            if (
+                not state.get("chat_send_succeeded")
+                and not state.get("codex_review_succeeded")
+                and not state.get("copilot_review_succeeded")
             ):
                 output_block(
                     "BLOCKED: Cannot write receipt before review completes. "
                     "You must run 'flowctl rp chat-send' or 'flowctl codex impl-review/plan-review' "
-                    "and receive a review response before writing the receipt."
+                    "or 'flowctl copilot impl-review/plan-review' and receive a review response "
+                    "before writing the receipt."
                 )
             # Validate receipt has required 'id' field
             if '"id"' not in command and "'id'" not in command:
@@ -331,6 +348,20 @@ def handle_post_tool_use(data: dict) -> None:
             state["last_verdict"] = verdict_in_output.group(1)
             save_state(session_id, state)
 
+    # Track copilot review calls - check for verdict in output
+    if (
+        "flowctl" in command
+        and "copilot" in command
+        and ("impl-review" in command or "plan-review" in command or "completion-review" in command)
+    ):
+        verdict_in_output = re.search(
+            r"<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>", response_text
+        )
+        if verdict_in_output:
+            state["copilot_review_succeeded"] = True
+            state["last_verdict"] = verdict_in_output.group(1)
+            save_state(session_id, state)
+
     # Track flowctl done calls - match various invocation patterns:
     # - flowctl done <task>
     # - flowctl.py done <task>
@@ -377,6 +408,7 @@ def handle_post_tool_use(data: dict) -> None:
     if receipt_path and receipt_path in command and ">" in command:
         state["chat_send_succeeded"] = False  # Reset for next review
         state["codex_review_succeeded"] = False  # Reset codex state too
+        state["copilot_review_succeeded"] = False  # Reset copilot state too
         save_state(session_id, state)
 
     # Track setup-review output (W= T=)

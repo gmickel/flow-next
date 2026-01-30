@@ -227,10 +227,13 @@ ui_config() {
   local plan_display="$PLAN_REVIEW" work_display="$WORK_REVIEW" completion_display="$COMPLETION_REVIEW"
   [[ "$PLAN_REVIEW" == "rp" ]] && plan_display="RepoPrompt"
   [[ "$PLAN_REVIEW" == "codex" ]] && plan_display="Codex"
+  [[ "$PLAN_REVIEW" == "copilot" ]] && plan_display="Copilot"
   [[ "$WORK_REVIEW" == "rp" ]] && work_display="RepoPrompt"
   [[ "$WORK_REVIEW" == "codex" ]] && work_display="Codex"
+  [[ "$WORK_REVIEW" == "copilot" ]] && work_display="Copilot"
   [[ "$COMPLETION_REVIEW" == "rp" ]] && completion_display="RepoPrompt"
   [[ "$COMPLETION_REVIEW" == "codex" ]] && completion_display="Codex"
+  [[ "$COMPLETION_REVIEW" == "copilot" ]] && completion_display="Copilot"
   ui "${C_DIM}   Reviews:${C_RESET} Plan=$plan_display ${C_DIM}•${C_RESET} Work=$work_display ${C_DIM}•${C_RESET} Completion=$completion_display"
   [[ -n "${EPICS:-}" ]] && ui "${C_DIM}   Scope:${C_RESET} $EPICS"
   ui ""
@@ -1047,7 +1050,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
   plan_review_status=""
   task_status=""
   impl_receipt_ok="1"
-  if [[ "$status" == "plan" && ( "$PLAN_REVIEW" == "rp" || "$PLAN_REVIEW" == "codex" ) ]]; then
+  if [[ "$status" == "plan" && ( "$PLAN_REVIEW" == "rp" || "$PLAN_REVIEW" == "codex" || "$PLAN_REVIEW" == "copilot" ) ]]; then
     if ! verify_receipt "$REVIEW_RECEIPT_PATH" "plan_review" "$epic_id"; then
       echo "ralph: missing plan review receipt; forcing retry" >> "$iter_log"
       log "missing plan receipt; forcing retry"
@@ -1061,7 +1064,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
   fi
   completion_review_status=""
   completion_receipt_ok="1"
-  if [[ "$status" == "completion_review" && ( "$COMPLETION_REVIEW" == "rp" || "$COMPLETION_REVIEW" == "codex" ) ]]; then
+  if [[ "$status" == "completion_review" && ( "$COMPLETION_REVIEW" == "rp" || "$COMPLETION_REVIEW" == "codex" || "$COMPLETION_REVIEW" == "copilot" ) ]]; then
     if ! verify_receipt "$REVIEW_RECEIPT_PATH" "completion_review" "$epic_id"; then
       echo "ralph: missing completion review receipt; forcing retry" >> "$iter_log"
       log "missing completion receipt; forcing retry"
@@ -1084,7 +1087,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
     fi
   fi
   receipt_verdict=""
-  if [[ "$status" == "work" && ( "$WORK_REVIEW" == "rp" || "$WORK_REVIEW" == "codex" ) ]]; then
+  if [[ "$status" == "work" && ( "$WORK_REVIEW" == "rp" || "$WORK_REVIEW" == "codex" || "$WORK_REVIEW" == "copilot" ) ]]; then
     if ! verify_receipt "$REVIEW_RECEIPT_PATH" "impl_review" "$task_id"; then
       echo "ralph: missing impl review receipt; forcing retry" >> "$iter_log"
       log "missing impl receipt; forcing retry"

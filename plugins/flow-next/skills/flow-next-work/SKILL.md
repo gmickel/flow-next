@@ -60,7 +60,7 @@ Check configured backend:
 ```bash
 REVIEW_BACKEND=$($FLOWCTL review-backend)
 ```
-Returns: `ASK` (not configured), or `rp`/`codex`/`none` (configured).
+Returns: `ASK` (not configured), or `rp`/`codex`/`copilot`/`none` (configured).
 
 ### Option Parsing (skip questions if found in arguments)
 
@@ -72,6 +72,7 @@ Parse the arguments for these patterns. If found, use them and skip correspondin
 - `--branch=worktree` or `--worktree` or "isolated worktree" or "worktree" → isolated worktree
 
 **Review mode**:
+- `--review=copilot` or "review with copilot" or "copilot review" or "use copilot" → Copilot CLI
 - `--review=codex` or "review with codex" or "codex review" or "use codex" → Codex CLI (GPT 5.2 High)
 - `--review=rp` or "review with rp" or "rp chat" or "repoprompt review" → RepoPrompt chat (via `flowctl rp chat-send`)
 - `--review=export` or "export review" or "external llm" → export for external LLM
@@ -79,14 +80,14 @@ Parse the arguments for these patterns. If found, use them and skip correspondin
 
 ### If options NOT found in arguments
 
-**If REVIEW_BACKEND is rp, codex, or none** (already configured): Only ask branch question. Show override hint:
+**If REVIEW_BACKEND is rp, codex, copilot, or none** (already configured): Only ask branch question. Show override hint:
 
 ```
 Quick setup: Where to work?
 a) Current branch  b) New branch  c) Isolated worktree
 
 (Reply: "a", "current", or just tell me)
-(Tip: --review=rp|codex|export|none overrides configured backend)
+(Tip: --review=rp|codex|copilot|export|none overrides configured backend)
 ```
 
 **If REVIEW_BACKEND is ASK** (not configured): Ask both branch AND review questions:
@@ -100,10 +101,11 @@ Quick setup before starting:
    c) Isolated worktree
 
 2. **Review** — Run Carmack-level review after?
-   a) Codex CLI
-   b) RepoPrompt
-   c) Export for external LLM
-   d) None (configure later with --review flag)
+   a) Copilot CLI
+   b) Codex CLI
+   c) RepoPrompt
+   d) Export for external LLM
+   e) None (configure later with --review flag)
 
 (Reply: "1a 2a", "current branch, codex", or just tell me naturally)
 ```

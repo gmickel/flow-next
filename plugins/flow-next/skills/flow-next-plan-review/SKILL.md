@@ -1,6 +1,6 @@
 ---
 name: flow-next-plan-review
-description: Carmack-level plan review via RepoPrompt or Codex. Use when reviewing Flow epic specs or design docs. Triggers on /flow-next:plan-review.
+description: Carmack-level plan review via RepoPrompt, Codex, or Copilot. Use when reviewing Flow epic specs or design docs. Triggers on /flow-next:plan-review.
 ---
 
 # Plan Review Mode
@@ -10,7 +10,7 @@ description: Carmack-level plan review via RepoPrompt or Codex. Use when reviewi
 Conduct a John Carmack-level review of epic plans.
 
 **Role**: Code Review Coordinator (NOT the reviewer)
-**Backends**: RepoPrompt (rp) or Codex CLI (codex)
+**Backends**: RepoPrompt (rp) or Codex CLI (codex) or Copilot CLI (copilot)
 
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Always use:
 ```bash
@@ -20,8 +20,8 @@ FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 ## Backend Selection
 
 **Priority** (first match wins):
-1. `--review=rp|codex|export|none` argument
-2. `FLOW_REVIEW_BACKEND` env var (`rp`, `codex`, `none`)
+1. `--review=rp|codex|copilot|export|none` argument
+2. `FLOW_REVIEW_BACKEND` env var (`rp`, `codex`, `copilot`, `none`)
 3. `.flow/config.json` → `review.backend`
 4. **Error** - no auto-detection
 
@@ -30,6 +30,7 @@ FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 Check $ARGUMENTS for:
 - `--review=rp` or `--review rp` → use rp
 - `--review=codex` or `--review codex` → use codex
+- `--review=copilot` or `--review copilot` → use copilot
 - `--review=export` or `--review export` → use export
 - `--review=none` or `--review none` → skip review
 
@@ -43,11 +44,11 @@ BACKEND=$($FLOWCTL review-backend)
 
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."
-  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|none"
+echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
   exit 1
 fi
 
-echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
+echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 ```
 
 ## Critical Rules
@@ -61,6 +62,11 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
 
 **For codex backend:**
 1. Use `$FLOWCTL codex plan-review` exclusively
+2. Pass `--receipt` for session continuity on re-reviews
+3. Parse verdict from command output
+
+**For copilot backend:**
+1. Use `$FLOWCTL copilot plan-review` exclusively
 2. Pass `--receipt` for session continuity on re-reviews
 3. Parse verdict from command output
 
@@ -117,6 +123,26 @@ $FLOWCTL codex plan-review "$EPIC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_
 On NEEDS_WORK: fix plan via `$FLOWCTL epic set-plan` AND sync affected task specs via `$FLOWCTL task set-spec`, then re-run (receipt enables session continuity).
 
 **Note**: `codex plan-review` automatically includes task specs in the review prompt.
+
+### Copilot Backend
+
+```bash
+EPIC_ID="${1:-}"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
+
+# Save checkpoint before review (recovery point if context compacts)
+$FLOWCTL checkpoint save --epic "$EPIC_ID" --json
+
+# --files: comma-separated CODE files for reviewer context
+CODE_FILES="src/main.py,src/config.py"
+
+$FLOWCTL copilot plan-review "$EPIC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
+# Output includes VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK
+```
+
+On NEEDS_WORK: fix plan via `$FLOWCTL epic set-plan` AND sync affected task specs via `$FLOWCTL task set-spec`, then re-run (receipt enables session continuity).
+
+**Note**: `copilot plan-review` automatically includes task specs in the review prompt.
 
 ### RepoPrompt Backend
 

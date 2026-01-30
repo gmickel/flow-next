@@ -75,7 +75,7 @@ Check configured backend:
 ```bash
 REVIEW_BACKEND=$($FLOWCTL review-backend)
 ```
-Returns: `ASK` (not configured), or `rp`/`codex`/`none` (configured).
+Returns: `ASK` (not configured), or `rp`/`codex`/`copilot`/`none` (configured).
 
 ### Option Parsing (skip questions if found in arguments)
 
@@ -86,6 +86,7 @@ Parse the arguments for these patterns. If found, use them and skip questions:
 - `--research=grep` or `--research grep` or "use grep" or "repo-scout" or "fast" → repo-scout
 
 **Review mode**:
+- `--review=copilot` or "review with copilot" or "copilot review" or "use copilot" → Copilot CLI
 - `--review=codex` or "review with codex" or "codex review" or "use codex" → Codex CLI (GPT 5.2 High)
 - `--review=rp` or "review with rp" or "rp chat" or "repoprompt review" → RepoPrompt chat (via `flowctl rp chat-send`)
 - `--review=export` or "export review" or "external llm" → export for external LLM
@@ -99,7 +100,7 @@ Parse the arguments for these patterns. If found, use them and skip questions:
 - `--depth=deep` or "comprehensive" or "detailed" → DEEP
 - Default: SHORT (simpler is better)
 
-**If REVIEW_BACKEND is rp, codex, or none** (already configured): Only ask research question. Show override hint:
+**If REVIEW_BACKEND is rp, codex, copilot, or none** (already configured): Only ask research question. Show override hint:
 
 ```
 Quick setup: Use RepoPrompt for deeper context?
@@ -107,7 +108,7 @@ a) Yes, context-scout (slower, thorough)
 b) No, repo-scout (faster)
 
 (Reply: "a", "b", or just tell me)
-(Tip: --depth=short|standard|deep, --review=rp|codex|none)
+(Tip: --depth=short|standard|deep, --review=rp|codex|copilot|none)
 ```
 
 **If REVIEW_BACKEND is ASK** (not configured): Ask all questions (do NOT use AskUserQuestion tool):
@@ -125,10 +126,11 @@ Quick setup before planning:
    b) No, repo-scout (faster)
 
 3. **Review** — Run Carmack-level review after?
-   a) Codex CLI
-   b) RepoPrompt
-   c) Export for external LLM
-   d) None (configure later)
+   a) Copilot CLI
+   b) Codex CLI
+   c) RepoPrompt
+   d) Export for external LLM
+   e) None (configure later)
 
 (Reply: "1a 2b 3d", or just tell me naturally)
 ```

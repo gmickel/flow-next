@@ -1,6 +1,6 @@
 ---
 name: flow-next-impl-review
-description: John Carmack-level implementation review via RepoPrompt or Codex. Use when reviewing code changes, PRs, or implementations. Triggers on /flow-next:impl-review.
+description: John Carmack-level implementation review via RepoPrompt, Codex, or Copilot. Use when reviewing code changes, PRs, or implementations. Triggers on /flow-next:impl-review.
 ---
 
 # Implementation Review Mode
@@ -10,7 +10,7 @@ description: John Carmack-level implementation review via RepoPrompt or Codex. U
 Conduct a John Carmack-level review of implementation changes on the current branch.
 
 **Role**: Code Review Coordinator (NOT the reviewer)
-**Backends**: RepoPrompt (rp) or Codex CLI (codex)
+**Backends**: RepoPrompt (rp) or Codex CLI (codex) or Copilot CLI (copilot)
 
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Always use:
 ```bash
@@ -20,8 +20,8 @@ FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 ## Backend Selection
 
 **Priority** (first match wins):
-1. `--review=rp|codex|export|none` argument
-2. `FLOW_REVIEW_BACKEND` env var (`rp`, `codex`, `none`)
+1. `--review=rp|codex|copilot|export|none` argument
+2. `FLOW_REVIEW_BACKEND` env var (`rp`, `codex`, `copilot`, `none`)
 3. `.flow/config.json` → `review.backend`
 4. **Error** - no auto-detection
 
@@ -30,6 +30,7 @@ FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 Check $ARGUMENTS for:
 - `--review=rp` or `--review rp` → use rp
 - `--review=codex` or `--review codex` → use codex
+- `--review=copilot` or `--review copilot` → use copilot
 - `--review=export` or `--review export` → use export
 - `--review=none` or `--review none` → skip review
 
@@ -42,11 +43,11 @@ BACKEND=$($FLOWCTL review-backend)
 
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."
-  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|none"
+echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
   exit 1
 fi
 
-echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
+echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 ```
 
 ## Critical Rules
@@ -60,6 +61,11 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
 
 **For codex backend:**
 1. Use `$FLOWCTL codex impl-review` exclusively
+2. Pass `--receipt` for session continuity on re-reviews
+3. Parse verdict from command output
+
+**For copilot backend:**
+1. Use `$FLOWCTL copilot impl-review` exclusively
 2. Pass `--receipt` for session continuity on re-reviews
 3. Parse verdict from command output
 
@@ -117,6 +123,22 @@ if [[ -n "$BASE_COMMIT" ]]; then
   $FLOWCTL codex impl-review "$TASK_ID" --base "$BASE_COMMIT" --receipt "$RECEIPT_PATH"
 else
   $FLOWCTL codex impl-review "$TASK_ID" --base main --receipt "$RECEIPT_PATH"
+fi
+# Output includes VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK
+```
+
+On NEEDS_WORK: fix code, commit, re-run (receipt enables session continuity).
+
+### Copilot Backend
+
+```bash
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
+
+# Use BASE_COMMIT if provided, else fall back to main
+if [[ -n "$BASE_COMMIT" ]]; then
+  $FLOWCTL copilot impl-review "$TASK_ID" --base "$BASE_COMMIT" --receipt "$RECEIPT_PATH"
+else
+  $FLOWCTL copilot impl-review "$TASK_ID" --base main --receipt "$RECEIPT_PATH"
 fi
 # Output includes VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK
 ```

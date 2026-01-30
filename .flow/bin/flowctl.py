@@ -670,7 +670,7 @@ def epic_id_from_task(task_id: str) -> str:
     return task_id.rsplit(".", 1)[0]
 
 
-# --- Context Hints (for codex reviews) ---
+# --- Context Hints (for codex/copilot reviews) ---
 
 
 def get_changed_files(base_branch: str) -> list[str]:
@@ -1162,6 +1162,36 @@ def get_codex_version() -> Optional[str]:
         return None
 
 
+# --- Copilot Backend Helpers ---
+
+
+def require_copilot() -> str:
+    """Ensure copilot CLI is available. Returns path to copilot."""
+    copilot = shutil.which("copilot")
+    if not copilot:
+        error_exit("copilot not found in PATH", use_json=False, code=2)
+    return copilot
+
+
+def get_copilot_version() -> Optional[str]:
+    """Get copilot version, or None if not available."""
+    copilot = shutil.which("copilot")
+    if not copilot:
+        return None
+    try:
+        result = subprocess.run(
+            [copilot, "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        output = result.stdout.strip()
+        match = re.search(r"(\d+\.\d+\.\d+)", output)
+        return match.group(1) if match else output
+    except subprocess.CalledProcessError:
+        return None
+
+
 CODEX_SANDBOX_MODES = {"read-only", "workspace-write", "danger-full-access", "auto"}
 
 
@@ -1279,6 +1309,35 @@ def run_codex_exec(
         return "", None, 2, "codex exec timed out (600s)"
 
 
+def run_copilot_exec(
+    prompt: str,
+    session_id: Optional[str] = None,
+) -> tuple[str, Optional[str], int, str]:
+    """Run copilot CLI and return (stdout, session_id, exit_code, stderr).
+
+    Note: uses --resume=<session_id> when available to continue review sessions.
+    """
+    copilot = require_copilot()
+    cmd = [copilot]
+    if session_id:
+        cmd.append(f"--resume={session_id}")
+    cmd.extend(["--stream", "--prompt", "-"])
+    try:
+        result = subprocess.run(
+            cmd,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=600,
+        )
+        output = result.stdout
+        new_session_id = parse_copilot_session_id(output) or session_id
+        return output, new_session_id, result.returncode, result.stderr
+    except subprocess.TimeoutExpired:
+        return "", session_id, 2, "copilot exec timed out (600s)"
+
+
 def parse_codex_thread_id(output: str) -> Optional[str]:
     """Extract thread_id from codex --json output.
 
@@ -1291,6 +1350,28 @@ def parse_codex_thread_id(output: str) -> Optional[str]:
             data = json.loads(line)
             if data.get("type") == "thread.started" and "thread_id" in data:
                 return data["thread_id"]
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+def parse_copilot_session_id(output: str) -> Optional[str]:
+    """Extract session id from copilot output if present."""
+    for line in output.split("\n"):
+        if not line.strip():
+            continue
+        try:
+            data = json.loads(line)
+            if isinstance(data, dict):
+                for key in ("session_id", "thread_id", "conversation_id", "id"):
+                    value = data.get(key)
+                    if isinstance(value, str) and value:
+                        return value
+                session = data.get("session")
+                if isinstance(session, dict):
+                    value = session.get("id")
+                    if isinstance(value, str) and value:
+                        return value
         except json.JSONDecodeError:
             continue
     return None
@@ -1372,13 +1453,13 @@ def build_review_prompt(
     diff_content: str = "",
     files_embedded: bool = False,
 ) -> str:
-    """Build XML-structured review prompt for codex.
+    """Build XML-structured review prompt for codex/copilot.
 
     review_type: 'impl' or 'plan'
     task_specs: Combined task spec content (plan reviews only)
-    embedded_files: Pre-read file contents for codex sandbox mode
+    embedded_files: Pre-read file contents for sandboxed review
     diff_content: Actual git diff output (impl reviews only)
-    files_embedded: True if files are embedded (Windows), False if Codex can read from disk (Unix)
+    files_embedded: True if files are embedded (Windows), False if CLI can read from disk (Unix)
 
     Uses same Carmack-level criteria as RepoPrompt workflow to ensure parity.
     """
@@ -2351,12 +2432,12 @@ def cmd_review_backend(args: argparse.Namespace) -> None:
     """Get review backend for skill conditionals. Returns ASK if not configured."""
     # Priority: FLOW_REVIEW_BACKEND env > config > ASK
     env_val = os.environ.get("FLOW_REVIEW_BACKEND", "").strip()
-    if env_val and env_val in ("rp", "codex", "none"):
+    if env_val and env_val in ("rp", "codex", "copilot", "none"):
         backend = env_val
         source = "env"
     elif ensure_flow_exists():
         cfg_val = get_config("review.backend")
-        if cfg_val and cfg_val in ("rp", "codex", "none"):
+        if cfg_val and cfg_val in ("rp", "codex", "copilot", "none"):
             backend = cfg_val
             source = "config"
         else:
@@ -5230,6 +5311,21 @@ def cmd_codex_check(args: argparse.Namespace) -> None:
             print("codex not available")
 
 
+def cmd_copilot_check(args: argparse.Namespace) -> None:
+    """Check if copilot CLI is available and return version."""
+    copilot = shutil.which("copilot")
+    available = copilot is not None
+    version = get_copilot_version() if available else None
+
+    if args.json:
+        json_output({"available": available, "version": version})
+    else:
+        if available:
+            print(f"copilot available: {version or 'unknown version'}")
+        else:
+            print("copilot not available")
+
+
 def build_standalone_review_prompt(
     base_branch: str, focus: Optional[str], diff_summary: str, files_embedded: bool = True
 ) -> str:
@@ -5555,6 +5651,193 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
 
 
+def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
+    """Run implementation review via copilot."""
+    task_id = args.task
+    base_branch = args.base
+    focus = getattr(args, "focus", None)
+
+    standalone = task_id is None
+
+    if not standalone:
+        if not ensure_flow_exists():
+            error_exit(".flow/ does not exist", use_json=args.json)
+        if not is_task_id(task_id):
+            error_exit(f"Invalid task ID: {task_id}", use_json=args.json)
+
+        flow_dir = get_flow_dir()
+        task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
+        if not task_spec_path.exists():
+            error_exit(f"Task spec not found: {task_spec_path}", use_json=args.json)
+        task_spec = task_spec_path.read_text(encoding="utf-8")
+
+    diff_summary = ""
+    try:
+        diff_result = subprocess.run(
+            ["git", "diff", "--stat", f"{base_branch}..HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=get_repo_root(),
+        )
+        if diff_result.returncode == 0:
+            diff_summary = diff_result.stdout.strip()
+    except (subprocess.CalledProcessError, OSError):
+        pass
+
+    diff_content = ""
+    max_diff_bytes = 50000
+    try:
+        proc = subprocess.Popen(
+            ["git", "diff", f"{base_branch}..HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=get_repo_root(),
+        )
+        diff_bytes = proc.stdout.read(max_diff_bytes + 1)
+        was_truncated = len(diff_bytes) > max_diff_bytes
+        if was_truncated:
+            diff_bytes = diff_bytes[:max_diff_bytes]
+        while proc.stdout.read(65536):
+            pass
+        stderr_bytes = proc.stderr.read()
+        proc.stdout.close()
+        proc.stderr.close()
+        returncode = proc.wait()
+
+        if returncode != 0 and stderr_bytes:
+            diff_content = f"[git diff failed: {stderr_bytes.decode('utf-8', errors='replace').strip()}]"
+        else:
+            diff_content = diff_bytes.decode("utf-8", errors="replace").strip()
+            if was_truncated:
+                diff_content += "\n\n... [diff truncated at 50KB]"
+    except (subprocess.CalledProcessError, OSError):
+        pass
+
+    if os.name == "nt":
+        changed_files = get_changed_files(base_branch)
+        embedded_content, embed_stats = get_embedded_file_contents(changed_files)
+    else:
+        embedded_content = ""
+        embed_stats = {
+            "embedded": 0,
+            "total": 0,
+            "bytes": 0,
+            "binary_skipped": [],
+            "deleted_skipped": [],
+            "outside_repo_skipped": [],
+            "budget_skipped": [],
+        }
+
+    files_embedded = os.name == "nt"
+    if standalone:
+        prompt = build_standalone_review_prompt(base_branch, focus, diff_summary, files_embedded)
+        if diff_content:
+            prompt += f"\n\n<diff_content>\n{diff_content}\n</diff_content>"
+        if embedded_content:
+            prompt += f"\n\n<embedded_files>\n{embedded_content}\n</embedded_files>"
+    else:
+        context_hints = gather_context_hints(base_branch)
+        prompt = build_review_prompt(
+            "impl",
+            task_spec,
+            context_hints,
+            diff_summary,
+            embedded_files=embedded_content,
+            diff_content=diff_content,
+            files_embedded=files_embedded,
+        )
+
+    receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
+    session_id = None
+    is_rereview = False
+    if receipt_path:
+        receipt_file = Path(receipt_path)
+        if receipt_file.exists():
+            try:
+                receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
+                session_id = receipt_data.get("session_id")
+                is_rereview = session_id is not None
+            except (json.JSONDecodeError, Exception):
+                pass
+
+    if is_rereview:
+        changed_files = get_changed_files(base_branch)
+        if changed_files:
+            rereview_preamble = build_rereview_preamble(
+                changed_files, "implementation", files_embedded
+            )
+            prompt = rereview_preamble + prompt
+
+    output, new_session_id, exit_code, stderr = run_copilot_exec(
+        prompt, session_id=session_id
+    )
+
+    if exit_code != 0:
+        if receipt_path:
+            try:
+                Path(receipt_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        msg = (stderr or output or "copilot exec failed").strip()
+        error_exit(f"copilot exec failed: {msg}", use_json=args.json, code=2)
+
+    verdict = parse_codex_verdict(output)
+    if not verdict:
+        if receipt_path:
+            try:
+                Path(receipt_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        error_exit(
+            "Copilot review completed but no verdict found in output. "
+            "Expected <verdict>SHIP</verdict> or <verdict>NEEDS_WORK</verdict>",
+            use_json=args.json,
+            code=2,
+        )
+
+    review_id = task_id if task_id else "branch"
+    session_id_to_write = new_session_id or session_id
+
+    if receipt_path:
+        receipt_data = {
+            "type": "impl_review",
+            "id": review_id,
+            "mode": "copilot",
+            "base": base_branch,
+            "verdict": verdict,
+            "session_id": session_id_to_write,
+            "timestamp": now_iso(),
+            "review": output,
+        }
+        ralph_iter = os.environ.get("RALPH_ITERATION")
+        if ralph_iter:
+            try:
+                receipt_data["iteration"] = int(ralph_iter)
+            except ValueError:
+                pass
+        if focus:
+            receipt_data["focus"] = focus
+        Path(receipt_path).write_text(
+            json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
+        )
+
+    if args.json:
+        json_output(
+            {
+                "type": "impl_review",
+                "id": review_id,
+                "verdict": verdict,
+                "session_id": session_id_to_write,
+                "mode": "copilot",
+                "standalone": standalone,
+                "review": output,
+            }
+        )
+    else:
+        print(output)
+        print(f"\nVERDICT={verdict or 'UNKNOWN'}")
+
+
 def cmd_codex_plan_review(args: argparse.Namespace) -> None:
     """Run plan review via codex exec."""
     if not ensure_flow_exists():
@@ -5769,6 +6052,185 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
                 "session_id": thread_id,
                 "mode": "codex",
                 "review": output,  # Full review feedback for fix loop
+            }
+        )
+    else:
+        print(output)
+        print(f"\nVERDICT={verdict or 'UNKNOWN'}")
+
+
+def cmd_copilot_plan_review(args: argparse.Namespace) -> None:
+    """Run plan review via copilot."""
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist", use_json=args.json)
+
+    epic_id = args.epic
+    if not is_epic_id(epic_id):
+        error_exit(f"Invalid epic ID: {epic_id}", use_json=args.json)
+
+    files_arg = getattr(args, "files", None)
+    if not files_arg:
+        error_exit(
+            "plan-review requires --files argument (comma-separated CODE file paths). "
+            "On Windows: files are embedded for context. On Unix: used as relevance list. "
+            "Example: --files src/main.py,src/utils.py",
+            use_json=args.json,
+        )
+
+    repo_root = get_repo_root()
+    file_paths = []
+    invalid_paths = []
+    for f in files_arg.split(","):
+        f = f.strip()
+        if not f:
+            continue
+        full_path = (repo_root / f).resolve()
+        try:
+            full_path.relative_to(repo_root)
+            if full_path.exists():
+                file_paths.append(f)
+            else:
+                invalid_paths.append(f"{f} (not found)")
+        except ValueError:
+            invalid_paths.append(f"{f} (outside repo)")
+
+    if invalid_paths:
+        print(f"Warning: Skipping invalid paths: {', '.join(invalid_paths)}", file=sys.stderr)
+
+    if not file_paths:
+        error_exit(
+            "No valid file paths provided. Use --files with comma-separated repo-relative code paths.",
+            use_json=args.json,
+        )
+
+    flow_dir = get_flow_dir()
+    epic_spec_path = flow_dir / SPECS_DIR / f"{epic_id}.md"
+    if not epic_spec_path.exists():
+        error_exit(f"Epic spec not found: {epic_spec_path}", use_json=args.json)
+    epic_spec = epic_spec_path.read_text(encoding="utf-8")
+
+    tasks_dir = flow_dir / TASKS_DIR
+    task_specs_parts = []
+    for task_file in sorted(tasks_dir.glob(f"{epic_id}.*.md")):
+        task_id = task_file.stem
+        task_content = task_file.read_text(encoding="utf-8")
+        task_specs_parts.append(f"### {task_id}\n\n{task_content}")
+
+    task_specs = "\n\n---\n\n".join(task_specs_parts) if task_specs_parts else ""
+
+    if os.name == "nt":
+        embedded_content, embed_stats = get_embedded_file_contents(file_paths)
+    else:
+        embedded_content = ""
+        embed_stats = {
+            "embedded": 0,
+            "total": 0,
+            "bytes": 0,
+            "binary_skipped": [],
+            "deleted_skipped": [],
+            "outside_repo_skipped": [],
+            "budget_skipped": [],
+        }
+
+    base_branch = args.base if hasattr(args, "base") and args.base else "main"
+    context_hints = gather_context_hints(base_branch)
+
+    files_embedded = os.name == "nt"
+    prompt = build_review_prompt(
+        "plan",
+        epic_spec,
+        context_hints,
+        task_specs=task_specs,
+        embedded_files=embedded_content,
+        files_embedded=files_embedded,
+    )
+
+    if file_paths:
+        files_list = "\n".join(f"- {f}" for f in file_paths)
+        prompt += (
+            "\n\n<requested_files>\nThe following code files are relevant to this plan:\n"
+            f"{files_list}\n</requested_files>"
+        )
+
+    receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
+    session_id = None
+    is_rereview = False
+    if receipt_path:
+        receipt_file = Path(receipt_path)
+        if receipt_file.exists():
+            try:
+                receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
+                session_id = receipt_data.get("session_id")
+                is_rereview = session_id is not None
+            except (json.JSONDecodeError, Exception):
+                pass
+
+    if is_rereview:
+        repo_root = get_repo_root()
+        spec_files = [str(epic_spec_path.relative_to(repo_root))]
+        for task_file in sorted(tasks_dir.glob(f"{epic_id}.*.md")):
+            spec_files.append(str(task_file.relative_to(repo_root)))
+        rereview_preamble = build_rereview_preamble(spec_files, "plan", files_embedded)
+        prompt = rereview_preamble + prompt
+
+    output, new_session_id, exit_code, stderr = run_copilot_exec(
+        prompt, session_id=session_id
+    )
+
+    if exit_code != 0:
+        if receipt_path:
+            try:
+                Path(receipt_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        msg = (stderr or output or "copilot exec failed").strip()
+        error_exit(f"copilot exec failed: {msg}", use_json=args.json, code=2)
+
+    verdict = parse_codex_verdict(output)
+    if not verdict:
+        if receipt_path:
+            try:
+                Path(receipt_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        error_exit(
+            "Copilot review completed but no verdict found in output. "
+            "Expected <verdict>SHIP</verdict> or <verdict>NEEDS_WORK</verdict>",
+            use_json=args.json,
+            code=2,
+        )
+
+    session_id_to_write = new_session_id or session_id
+
+    if receipt_path:
+        receipt_data = {
+            "type": "plan_review",
+            "id": epic_id,
+            "mode": "copilot",
+            "verdict": verdict,
+            "session_id": session_id_to_write,
+            "timestamp": now_iso(),
+            "review": output,
+        }
+        ralph_iter = os.environ.get("RALPH_ITERATION")
+        if ralph_iter:
+            try:
+                receipt_data["iteration"] = int(ralph_iter)
+            except ValueError:
+                pass
+        Path(receipt_path).write_text(
+            json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
+        )
+
+    if args.json:
+        json_output(
+            {
+                "type": "plan_review",
+                "id": epic_id,
+                "verdict": verdict,
+                "session_id": session_id_to_write,
+                "mode": "copilot",
+                "review": output,
             }
         )
     else:
@@ -6126,6 +6588,182 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
                 "verdict": verdict,
                 "session_id": session_id_to_write,
                 "mode": "codex",
+                "review": output,
+            }
+        )
+    else:
+        print(output)
+        print(f"\nVERDICT={verdict or 'UNKNOWN'}")
+
+
+def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
+    """Run epic completion review via copilot.
+
+    Verifies that all epic requirements are implemented before closing.
+    Two-phase approach: extract requirements, then verify coverage.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist", use_json=args.json)
+
+    epic_id = args.epic
+    if not is_epic_id(epic_id):
+        error_exit(f"Invalid epic ID: {epic_id}", use_json=args.json)
+
+    flow_dir = get_flow_dir()
+
+    epic_spec_path = flow_dir / SPECS_DIR / f"{epic_id}.md"
+    if not epic_spec_path.exists():
+        error_exit(f"Epic spec not found: {epic_spec_path}", use_json=args.json)
+    epic_spec = epic_spec_path.read_text(encoding="utf-8")
+
+    tasks_dir = flow_dir / TASKS_DIR
+    task_specs_parts = []
+    for task_file in sorted(tasks_dir.glob(f"{epic_id}.*.md")):
+        task_id = task_file.stem
+        task_content = task_file.read_text(encoding="utf-8")
+        task_specs_parts.append(f"### {task_id}\n\n{task_content}")
+    task_specs = "\n\n---\n\n".join(task_specs_parts) if task_specs_parts else ""
+
+    base_branch = args.base if hasattr(args, "base") and args.base else "main"
+
+    diff_summary = ""
+    try:
+        diff_result = subprocess.run(
+            ["git", "diff", "--stat", f"{base_branch}..HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=get_repo_root(),
+        )
+        if diff_result.returncode == 0:
+            diff_summary = diff_result.stdout.strip()
+    except (subprocess.CalledProcessError, OSError):
+        pass
+
+    diff_content = ""
+    max_diff_bytes = 50000
+    try:
+        proc = subprocess.Popen(
+            ["git", "diff", f"{base_branch}..HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=get_repo_root(),
+        )
+        diff_bytes = proc.stdout.read(max_diff_bytes + 1)
+        was_truncated = len(diff_bytes) > max_diff_bytes
+        if was_truncated:
+            diff_bytes = diff_bytes[:max_diff_bytes]
+        while proc.stdout.read(65536):
+            pass
+        stderr_bytes = proc.stderr.read()
+        proc.stdout.close()
+        proc.stderr.close()
+        returncode = proc.wait()
+
+        if returncode != 0 and stderr_bytes:
+            diff_content = f"[git diff failed: {stderr_bytes.decode('utf-8', errors='replace').strip()}]"
+        else:
+            diff_content = diff_bytes.decode("utf-8", errors="replace").strip()
+            if was_truncated:
+                diff_content += "\n\n... [diff truncated at 50KB]"
+    except (subprocess.CalledProcessError, OSError):
+        pass
+
+    if os.name == "nt":
+        changed_files = get_changed_files(base_branch)
+        embedded_content, _ = get_embedded_file_contents(changed_files)
+    else:
+        embedded_content = ""
+
+    files_embedded = os.name == "nt"
+    prompt = build_completion_review_prompt(
+        epic_spec,
+        task_specs,
+        diff_summary,
+        diff_content,
+        embedded_files=embedded_content,
+        files_embedded=files_embedded,
+    )
+
+    receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
+    session_id = None
+    is_rereview = False
+    if receipt_path:
+        receipt_file = Path(receipt_path)
+        if receipt_file.exists():
+            try:
+                receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
+                session_id = receipt_data.get("session_id")
+                is_rereview = session_id is not None
+            except (json.JSONDecodeError, Exception):
+                pass
+
+    if is_rereview:
+        changed_files = get_changed_files(base_branch)
+        if changed_files:
+            rereview_preamble = build_rereview_preamble(
+                changed_files, "completion", files_embedded
+            )
+            prompt = rereview_preamble + prompt
+
+    output, new_session_id, exit_code, stderr = run_copilot_exec(
+        prompt, session_id=session_id
+    )
+
+    if exit_code != 0:
+        if receipt_path:
+            try:
+                Path(receipt_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        msg = (stderr or output or "copilot exec failed").strip()
+        error_exit(f"copilot exec failed: {msg}", use_json=args.json, code=2)
+
+    verdict = parse_codex_verdict(output)
+    if not verdict:
+        if receipt_path:
+            try:
+                Path(receipt_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        error_exit(
+            "Copilot review completed but no verdict found in output. "
+            "Expected <verdict>SHIP</verdict> or <verdict>NEEDS_WORK</verdict>",
+            use_json=args.json,
+            code=2,
+        )
+
+    session_id_to_write = new_session_id or session_id
+
+    if receipt_path:
+        receipt_data = {
+            "type": "completion_review",
+            "id": epic_id,
+            "mode": "copilot",
+            "base": base_branch,
+            "verdict": verdict,
+            "session_id": session_id_to_write,
+            "timestamp": now_iso(),
+            "review": output,
+        }
+        ralph_iter = os.environ.get("RALPH_ITERATION")
+        if ralph_iter:
+            try:
+                receipt_data["iteration"] = int(ralph_iter)
+            except ValueError:
+                pass
+        Path(receipt_path).write_text(
+            json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
+        )
+
+    if args.json:
+        json_output(
+            {
+                "type": "completion_review",
+                "id": epic_id,
+                "base": base_branch,
+                "verdict": verdict,
+                "session_id": session_id_to_write,
+                "mode": "copilot",
                 "review": output,
             }
         )
@@ -7074,6 +7712,58 @@ def main() -> None:
         help="Sandbox mode (auto: danger-full-access on Windows, read-only on Unix)",
     )
     p_codex_completion.set_defaults(func=cmd_codex_completion_review)
+
+    # copilot (Copilot CLI wrappers)
+    p_copilot = subparsers.add_parser("copilot", help="Copilot CLI helpers")
+    copilot_sub = p_copilot.add_subparsers(dest="copilot_cmd", required=True)
+
+    p_copilot_check = copilot_sub.add_parser("check", help="Check copilot availability")
+    p_copilot_check.add_argument("--json", action="store_true", help="JSON output")
+    p_copilot_check.set_defaults(func=cmd_copilot_check)
+
+    p_copilot_impl = copilot_sub.add_parser("impl-review", help="Implementation review")
+    p_copilot_impl.add_argument(
+        "task",
+        nargs="?",
+        default=None,
+        help="Task ID (fn-N.M), optional for standalone",
+    )
+    p_copilot_impl.add_argument("--base", required=True, help="Base branch for diff")
+    p_copilot_impl.add_argument(
+        "--focus", help="Focus areas for standalone review (comma-separated)"
+    )
+    p_copilot_impl.add_argument(
+        "--receipt", help="Receipt file path for session continuity"
+    )
+    p_copilot_impl.add_argument("--json", action="store_true", help="JSON output")
+    p_copilot_impl.set_defaults(func=cmd_copilot_impl_review)
+
+    p_copilot_plan = copilot_sub.add_parser("plan-review", help="Plan review")
+    p_copilot_plan.add_argument("epic", help="Epic ID (fn-N)")
+    p_copilot_plan.add_argument(
+        "--files",
+        required=True,
+        help="Comma-separated file paths to embed for context (required)",
+    )
+    p_copilot_plan.add_argument("--base", default="main", help="Base branch for context")
+    p_copilot_plan.add_argument(
+        "--receipt", help="Receipt file path for session continuity"
+    )
+    p_copilot_plan.add_argument("--json", action="store_true", help="JSON output")
+    p_copilot_plan.set_defaults(func=cmd_copilot_plan_review)
+
+    p_copilot_completion = copilot_sub.add_parser(
+        "completion-review", help="Epic completion review"
+    )
+    p_copilot_completion.add_argument("epic", help="Epic ID (fn-N)")
+    p_copilot_completion.add_argument(
+        "--base", default="main", help="Base branch for diff"
+    )
+    p_copilot_completion.add_argument(
+        "--receipt", help="Receipt file path for session continuity"
+    )
+    p_copilot_completion.add_argument("--json", action="store_true", help="JSON output")
+    p_copilot_completion.set_defaults(func=cmd_copilot_completion_review)
 
     args = parser.parse_args()
     args.func(args)

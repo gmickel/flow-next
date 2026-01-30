@@ -22,6 +22,7 @@ Ralph is Flow-Next's repo-local autonomous harness. It loops over tasks, applies
 - [Review Backends](#review-backends)
   - [RepoPrompt](#repoprompt-integration)
   - [Codex CLI](#codex-integration)
+  - [Copilot CLI](#copilot-integration)
 - [Run Artifacts](#run-artifacts)
 - [Controlling Ralph](#controlling-ralph)
 - [Testing & Debugging](#testing--debugging)
@@ -60,8 +61,8 @@ Creates `scripts/ralph/` with:
 Edit `scripts/ralph/config.env`:
 
 ```bash
-PLAN_REVIEW=codex   # rp, codex, or none
-WORK_REVIEW=codex   # rp, codex, or none
+PLAN_REVIEW=codex   # rp, codex, copilot, or none
+WORK_REVIEW=codex   # rp, codex, copilot, or none
 ```
 
 ### 3. Test
@@ -183,6 +184,7 @@ A second model verifies code. Two models catch what one misses.
 |---------|----------|---------|-------------|
 | `rp` | macOS (GUI) | Full file context via Builder | Yes |
 | `codex` | Cross-platform | Heuristic context from changed files | Fallback |
+| `copilot` | Cross-platform | Heuristic context from changed files | Fallback |
 | `none` | Any | — | Not for production |
 
 Two review types:
@@ -217,7 +219,7 @@ Both settings are required for plan reviews:
 ```bash
 # config.env
 REQUIRE_PLAN_REVIEW=1   # Gate: don't start work until plans reviewed
-PLAN_REVIEW=codex       # Backend: rp, codex, or export
+PLAN_REVIEW=codex       # Backend: rp, codex, copilot, or export
 ```
 
 | `REQUIRE_PLAN_REVIEW` | `PLAN_REVIEW` | Behavior |
@@ -225,6 +227,7 @@ PLAN_REVIEW=codex       # Backend: rp, codex, or export
 | `0` | any | Plans auto-ship, work starts immediately |
 | `1` | `rp` | Plans reviewed via RepoPrompt |
 | `1` | `codex` | Plans reviewed via Codex CLI |
+| `1` | `copilot` | Plans reviewed via Copilot CLI |
 | `1` | `export` | Context exported for manual review |
 | `1` | `none` | **Blocked forever** — no backend to review |
 
@@ -248,7 +251,7 @@ When `flowctl next` returns `status=plan`:
    - Parse reviewer feedback
    - Update epic spec via `flowctl epic set-plan`
    - Sync affected task specs via `flowctl task set-spec`
-   - Re-review (same chat for RP, receipt continuity for Codex)
+    - Re-review (same chat for RP, receipt continuity for Codex)
    - Repeat until `SHIP`
 
 4. **Receipt** — Write proof-of-work
@@ -318,7 +321,7 @@ The epic-completion review gate ensures implementation matches the spec before c
 
 ```bash
 # config.env
-COMPLETION_REVIEW=codex       # Backend: rp, codex, or none
+COMPLETION_REVIEW=codex       # Backend: rp, codex, copilot, or none
 ```
 
 When `COMPLETION_REVIEW != none`, Ralph passes `--require-completion-review` to the selector. There is no separate `REQUIRE_COMPLETION_REVIEW` flag—the presence of a backend implies the gate is active.
@@ -327,6 +330,7 @@ When `COMPLETION_REVIEW != none`, Ralph passes `--require-completion-review` to 
 |---------------------|----------|
 | `rp` | Completion reviewed via RepoPrompt |
 | `codex` | Completion reviewed via Codex CLI |
+| `copilot` | Completion reviewed via Copilot CLI |
 | `none` | No completion review, epics close immediately |
 
 #### The Review Cycle
@@ -437,9 +441,9 @@ Edit `scripts/ralph/config.env`:
 
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
-| `PLAN_REVIEW` | `rp`, `codex`, `none` | — | Plan review backend |
-| `WORK_REVIEW` | `rp`, `codex`, `none` | — | Impl review backend |
-| `COMPLETION_REVIEW` | `rp`, `codex`, `none` | — | Completion review backend |
+| `PLAN_REVIEW` | `rp`, `codex`, `copilot`, `none` | — | Plan review backend |
+| `WORK_REVIEW` | `rp`, `codex`, `copilot`, `none` | — | Impl review backend |
+| `COMPLETION_REVIEW` | `rp`, `codex`, `copilot`, `none` | — | Completion review backend |
 | `REQUIRE_PLAN_REVIEW` | `0`, `1` | `0` | Block work until plan approved |
 
 ### Branches
@@ -530,6 +534,22 @@ npm install -g @openai/codex && codex auth
 - Terminal-based (no GUI)
 - Session continuity via `thread_id`
 
+### Copilot Integration
+
+When using `PLAN_REVIEW=copilot` or `WORK_REVIEW=copilot`:
+
+```bash
+flowctl copilot check                    # Verify available
+flowctl copilot impl-review ...          # Run impl review
+flowctl copilot plan-review <id> --files "src/auth.ts,src/config.ts"
+```
+
+**Requirements:**
+
+```bash
+copilot auth
+```
+
 ---
 
 ## Run Artifacts
@@ -616,7 +636,7 @@ scripts/ralph/ralph.sh --watch --config rp-reviews.env
 ```
 
 Use alternate config files for different platforms or review backends without editing `config.env`. Useful for:
-- Separate configs for RepoPrompt vs Codex reviews
+- Separate configs for RepoPrompt vs Codex/Copilot reviews
 - Platform-specific settings (macOS vs Linux vs Windows)
 - Testing different `MAX_ITERATIONS` or `WORKER_TIMEOUT` values
 
@@ -740,7 +760,7 @@ grep -E "REQUIRE_PLAN_REVIEW|PLAN_REVIEW" scripts/ralph/config.env
 | Config | Problem | Fix |
 |--------|---------|-----|
 | `REQUIRE_PLAN_REVIEW=0` | Plan gate disabled | Set to `1` |
-| `PLAN_REVIEW=none` + `REQUIRE_PLAN_REVIEW=1` | No backend to review | Set `PLAN_REVIEW=codex` or `rp` |
+| `PLAN_REVIEW=none` + `REQUIRE_PLAN_REVIEW=1` | No backend to review | Set `PLAN_REVIEW=codex`, `copilot`, or `rp` |
 | `PLAN_REVIEW` unset | Defaults to template placeholder | Set explicitly |
 
 **Verify selector sees plan work:**
@@ -877,6 +897,20 @@ CODEX_SANDBOX=auto
 ```
 
 The `read-only` sandbox blocks all commands on Windows.
+
+### Copilot Issues
+
+**"copilot not found":**
+
+```bash
+copilot --version
+```
+
+**Not authenticated:**
+
+```bash
+copilot auth
+```
 
 ### Run Inspection
 
