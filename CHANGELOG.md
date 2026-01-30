@@ -2,6 +2,16 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.20.1] - 2026-01-30
+
+### Added
+
+- **Epic dependency visualization skill** — New `flow-next-deps` skill shows epic dependency graphs, blocking chains, and execution phases. Triggers on "what's blocking", "execution order", "critical path", "which epics can run in parallel". Uses flowctl for data access with jq-based phase computation. Thanks [@clairernovotny](https://github.com/clairernovotny)! (PR #85)
+
+### Fixed
+
+- **Skill count sync** — Updated manifest descriptions to reflect actual counts (20 subagents, 11 commands, 16 skills).
+
 ## [flow-next 0.20.0] - 2026-01-30
 
 ### Added

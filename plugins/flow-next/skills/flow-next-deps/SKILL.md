@@ -1,91 +1,154 @@
 ---
 name: flow-next-deps
-description: "Show epic dependency graph and execution order. Use when asking 'what's blocking what', 'execution order', 'dependency graph', 'what order should epics run', 'critical path'."
+description: "Show epic dependency graph and execution order. Use when asking 'what's blocking what', 'execution order', 'dependency graph', 'what order should epics run', 'critical path', 'which epics can run in parallel'."
 ---
 
 # Flow-Next Dependency Graph
 
-Shows epic dependencies, blocking chains, and execution order phases.
+Visualize epic dependencies, blocking chains, and execution phases.
 
-
-## Step 1: Get all epic dependencies and status
+## Setup
 
 ```bash
-for epic in $(ls .flow/epics/fn-*.json | xargs -I{} basename {} .json); do
-  deps=$(jq -c '.depends_on_epics // []' ".flow/epics/${epic}.json" 2>/dev/null)
-  status=$(jq -r '.status' ".flow/epics/${epic}.json" 2>/dev/null)
-  title=$(jq -r '.title' ".flow/epics/${epic}.json" 2>/dev/null)
-  plan_review=$(jq -r '.plan_review_status' ".flow/epics/${epic}.json" 2>/dev/null)
-  echo "$epic|$status|$plan_review|$deps|$title"
+FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
+$FLOWCTL detect --json | jq -e '.exists' >/dev/null && echo "OK: .flow/ exists" || echo "ERROR: run $FLOWCTL init"
+command -v jq >/dev/null 2>&1 && echo "OK: jq installed" || echo "ERROR: brew install jq"
+```
+
+## Step 1: Gather Epic Data
+
+Build a consolidated view of all epics with their dependencies:
+
+```bash
+FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
+
+# Get all epic IDs
+epic_ids=$($FLOWCTL epics --json | jq -r '.epics[].id')
+
+# For each epic, get full details including dependencies
+for id in $epic_ids; do
+  $FLOWCTL show "$id" --json | jq -c '{
+    id: .id,
+    title: .title,
+    status: .status,
+    plan_review: .plan_review_status,
+    deps: (.depends_on_epics // [])
+  }'
 done
 ```
 
-## Step 2: Identify blocking chains
+## Step 2: Identify Blocking Chains
 
-For each open epic, check if its dependencies are done:
+Determine which epics are ready vs blocked:
 
 ```bash
-for epic in $(ls .flow/epics/fn-*.json | xargs -I{} basename {} .json); do
-  status=$(jq -r '.status' ".flow/epics/${epic}.json" 2>/dev/null)
+FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
+
+# Build status map first
+declare -A status_map
+for id in $($FLOWCTL epics --json | jq -r '.epics[].id'); do
+  status_map[$id]=$($FLOWCTL show "$id" --json | jq -r '.status')
+done
+
+# Check each non-done epic
+for id in $($FLOWCTL epics --json | jq -r '.epics[].id'); do
+  epic_data=$($FLOWCTL show "$id" --json)
+  status=$(echo "$epic_data" | jq -r '.status')
   [[ "$status" == "done" ]] && continue
 
-  title=$(jq -r '.title' ".flow/epics/${epic}.json" 2>/dev/null)
-  deps=$(jq -r '.depends_on_epics // [] | .[]' ".flow/epics/${epic}.json" 2>/dev/null)
+  title=$(echo "$epic_data" | jq -r '.title')
+  deps=$(echo "$epic_data" | jq -r '.depends_on_epics // [] | .[]')
 
   blocked_by=""
   for dep in $deps; do
-    dep_status=$(jq -r '.status' ".flow/epics/${dep}.json" 2>/dev/null)
-    [[ "$dep_status" != "done" ]] && blocked_by="$blocked_by $dep"
+    [[ "${status_map[$dep]}" != "done" ]] && blocked_by="$blocked_by $dep"
   done
 
   if [[ -z "$blocked_by" ]]; then
-    echo "READY: $epic - $title"
+    echo "READY: $id - $title"
   else
-    echo "BLOCKED: $epic - $title (by:$blocked_by)"
+    echo "BLOCKED: $id - $title (by:$blocked_by)"
   fi
 done
 ```
 
-## Step 3: Build execution order table
+## Step 3: Compute Execution Phases
 
-Present results as a table with descriptions:
+Group epics into parallel execution phases:
 
-| Epic | Description | Blocked By | Status |
-|------|-------------|------------|--------|
-| **fn-41-9xt** | Silent by Default CLI Output | - | **READY** |
-| fn-31-gib | Import Reliability & Testing | fn-41-9xt | blocked |
-| fn-33-lp4 | User Templates & Customization | fn-31-gib, fn-41-9xt | blocked |
+```bash
+FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 
-## Step 4: Compute execution phases
+# Collect all epic data
+epics_json=$($FLOWCTL epics --json | jq -r '.epics[].id' | while read id; do
+  $FLOWCTL show "$id" --json | jq -c '{id: .id, title: .title, status: .status, deps: (.depends_on_epics // [])}'
+done | jq -s '.')
 
-Group epics into phases where each phase can run in parallel:
+# Phase assignment algorithm (run in jq for reliability)
+echo "$epics_json" | jq '
+  # Build status lookup
+  (map({(.id): .status}) | add) as $status |
 
-1. **Phase 1**: Epics with all deps done (READY now)
-2. **Phase 2**: Epics unblocked after Phase 1 completes
-3. **Phase 3**: Epics unblocked after Phase 2 completes
-4. etc.
+  # Filter to non-done epics
+  [.[] | select(.status != "done")] |
+
+  # Assign phases iteratively
+  reduce range(10) as $phase (
+    {assigned: {}, result: []};
+
+    # Find epics whose deps are all done or assigned to earlier phases
+    .assigned as $assigned |
+    [.result[].epics[].id] as $prev_assigned |
+
+    ([.[] | select(
+      (.id | in($assigned) | not) and
+      ((.deps // []) | all(. as $d | $status[$d] == "done" or ($prev_assigned | index($d))))
+    )] | map(.id)) as $ready |
+
+    if ($ready | length) > 0 then
+      .result += [{phase: ($phase + 1), epics: [.[] | select(.id | IN($ready[]))]}] |
+      .assigned += ($ready | map({(.): true}) | add)
+    else . end
+  ) |
+  .result
+'
+```
 
 ## Output Format
 
-Present as:
+Present results as:
 
+```markdown
+## Epic Dependency Graph
+
+### Status Overview
+
+| Epic | Title | Status | Dependencies | Blocked By |
+|------|-------|--------|--------------|------------|
+| **fn-1-abc** | Feature Alpha | **READY** | - | - |
+| fn-2-def | Feature Beta | blocked | fn-1-abc | fn-1-abc |
+| fn-3-ghi | Feature Gamma | blocked | fn-1-abc, fn-2-def | fn-2-def |
+
+### Execution Phases
+
+| Phase | Epics | Can Start |
+|-------|-------|-----------|
+| **1** | fn-1-abc | **NOW** |
+| 2 | fn-2-def | After Phase 1 |
+| 3 | fn-3-ghi | After Phase 2 |
+
+### Critical Path
+
+fn-1-abc → fn-2-def → fn-3-ghi (3 phases)
 ```
-## Epic Dependency Graph with Descriptions
 
-### Blocking Chain Table
+## Quick One-Liner
 
-| Epic | Description | Blocked By | Status |
-|------|-------------|------------|--------|
-| **fn-41-9xt** | Silent by Default CLI Output | fn-36-rb7 ✓ | **READY** |
-| fn-31-gib | Import Reliability & Comprehensive Testing | fn-36 ✓, **fn-41** | blocked |
+For a fast dependency check:
 
-### Execution Order
-
-| Phase | Epics | Description |
-|-------|-------|-------------|
-| **1** | **fn-41-9xt** | Silent by Default CLI Output ← **NOW** |
-| **2** | fn-13-1c7, fn-31-gib | Devcontainer Research + Import Reliability |
-| **3** | fn-33-lp4 | User Templates & Customization |
+```bash
+FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
+$FLOWCTL epics --json | jq -r '.epics[] | select(.status != "done") | "\(.id): \(.title) [\(.status)]"'
 ```
 
 ## When to Use
@@ -96,3 +159,4 @@ Present as:
 - "What's the critical path?"
 - "Which epics can run in parallel?"
 - "Why is Ralph working on X?"
+- "What should I work on next?"
