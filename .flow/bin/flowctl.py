@@ -6090,6 +6090,9 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
             code=2,
         )
 
+    # Preserve session_id for continuity (avoid clobbering on resumed sessions)
+    session_id_to_write = thread_id or session_id
+
     # Write receipt if path provided (Ralph-compatible schema)
     if receipt_path:
         receipt_data = {
@@ -6098,7 +6101,7 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
             "mode": "codex",
             "base": base_branch,
             "verdict": verdict,
-            "session_id": thread_id,
+            "session_id": session_id_to_write,
             "timestamp": now_iso(),
             "review": output,  # Full review feedback for fix loop
         }
@@ -6119,8 +6122,9 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
             {
                 "type": "completion_review",
                 "id": epic_id,
+                "base": base_branch,
                 "verdict": verdict,
-                "session_id": thread_id,
+                "session_id": session_id_to_write,
                 "mode": "codex",
                 "review": output,
             }
