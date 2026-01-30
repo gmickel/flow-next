@@ -87,27 +87,27 @@ done | jq -s '.')
 # Phase assignment algorithm (run in jq for reliability)
 echo "$epics_json" | jq '
   # Build status lookup
-  (map({(.id): .status}) | add) as $status |
+  (map({(.id): .status}) | add // {}) as $status |
 
   # Filter to non-done epics
-  [.[] | select(.status != "done")] |
+  [.[] | select(.status != "done")] as $open |
 
   # Assign phases iteratively
   reduce range(10) as $phase (
-    {assigned: {}, result: []};
+    {assigned: [], result: [], open: $open};
 
-    # Find epics whose deps are all done or assigned to earlier phases
     .assigned as $assigned |
-    [.result[].epics[].id] as $prev_assigned |
+    .open as $remaining |
 
-    ([.[] | select(
-      (.id | in($assigned) | not) and
-      ((.deps // []) | all(. as $d | $status[$d] == "done" or ($prev_assigned | index($d))))
+    # Find epics not yet assigned whose deps are all done or in earlier phases
+    ([.open[] | select(
+      ([.id] | inside($assigned) | not) and
+      ((.deps // []) | all(. as $d | $status[$d] == "done" or ($assigned | index($d))))
     )] | map(.id)) as $ready |
 
     if ($ready | length) > 0 then
-      .result += [{phase: ($phase + 1), epics: [.[] | select(.id | IN($ready[]))]}] |
-      .assigned += ($ready | map({(.): true}) | add)
+      .result += [{phase: ($phase + 1), epics: [.open[] | select(.id | IN($ready[]))]}] |
+      .assigned += $ready
     else . end
   ) |
   .result
