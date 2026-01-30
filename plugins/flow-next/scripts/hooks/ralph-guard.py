@@ -17,7 +17,7 @@ Supports both review backends:
 """
 
 # Version for drift detection (bump when making changes)
-RALPH_GUARD_VERSION = "0.11.0"
+RALPH_GUARD_VERSION = "0.12.0"
 
 import json
 import os
@@ -235,6 +235,14 @@ def handle_pre_tool_use(data: dict) -> None:
                     'Receipt must include: {"type":"...","id":"<TASK_OR_EPIC_ID>",...} '
                     "Copy the exact command from the prompt template."
                 )
+            # Validate completion_review receipts have verdict field
+            if "completion_review" in command or "completion-" in receipt_path:
+                if '"verdict"' not in command and "'verdict'" not in command:
+                    output_block(
+                        "BLOCKED: Receipt JSON is missing required 'verdict' field. "
+                        'Completion review receipts must include: {"verdict":"SHIP",...} '
+                        "Copy the exact command from the prompt template."
+                    )
             # For impl receipts, verify flowctl done was called
             if "impl_review" in command:
                 # Extract task id from receipt
@@ -261,6 +269,7 @@ def parse_receipt_path(receipt_path: str) -> tuple:
     Returns (receipt_type, item_id) based on filename pattern:
     - plan-fn-N.json or plan-fn-N-xxx.json -> ("plan_review", "fn-N" or "fn-N-xxx")
     - impl-fn-N.M.json or impl-fn-N-xxx.M.json -> ("impl_review", "fn-N.M" or "fn-N-xxx.M")
+    - completion-fn-N.json or completion-fn-N-xxx.json -> ("completion_review", "fn-N" or "fn-N-xxx")
     """
     basename = os.path.basename(receipt_path)
     # Try plan pattern first: plan-fn-N.json or plan-fn-N-xxx.json
@@ -271,6 +280,10 @@ def parse_receipt_path(receipt_path: str) -> tuple:
     impl_match = re.match(r"impl-(fn-\d+(?:-[a-z0-9]{3})?\.\d+)\.json$", basename)
     if impl_match:
         return ("impl_review", impl_match.group(1))
+    # Try completion pattern: completion-fn-N.json or completion-fn-N-xxx.json
+    completion_match = re.match(r"completion-(fn-\d+(?:-[a-z0-9]{3})?)\.json$", basename)
+    if completion_match:
+        return ("completion_review", completion_match.group(1))
     # Fallback
     return ("impl_review", "UNKNOWN")
 
@@ -307,7 +320,7 @@ def handle_post_tool_use(data: dict) -> None:
     if (
         "flowctl" in command
         and "codex" in command
-        and ("impl-review" in command or "plan-review" in command)
+        and ("impl-review" in command or "plan-review" in command or "completion-review" in command)
     ):
         # Codex writes receipt automatically with --receipt flag, but we still track success
         verdict_in_output = re.search(
@@ -400,7 +413,7 @@ def handle_post_tool_use(data: dict) -> None:
                     f"mkdir -p \"$(dirname '{receipt_path}')\"\n"
                     'ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"\n'
                     f"cat > '{receipt_path}' <<EOF\n"
-                    f'{{"type":"{receipt_type}","id":"{item_id}","mode":"rp","timestamp":"$ts"}}\n'
+                    f'{{"type":"{receipt_type}","id":"{item_id}","mode":"rp","verdict":"SHIP","timestamp":"$ts"}}\n'
                     "EOF"
                 )
                 # Provide feedback to Claude (rp mode only - codex writes receipt automatically)
@@ -490,6 +503,9 @@ def handle_stop(data: dict) -> None:
             if receipt_type == "impl_review":
                 skill = "/flow-next:impl-review"
                 skill_desc = "implementation review"
+            elif receipt_type == "completion_review":
+                skill = "/flow-next:epic-review"
+                skill_desc = "epic completion review"
             else:
                 skill = "/flow-next:plan-review"
                 skill_desc = "plan review"

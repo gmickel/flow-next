@@ -541,6 +541,16 @@ rtype, rid = guard.parse_receipt_path("/tmp/receipts/impl-fn-5-x7k.3.json")
 assert rtype == "impl_review", f"Expected impl_review, got {rtype}"
 assert rid == "fn-5-x7k.3", f"Expected fn-5-x7k.3, got {rid}"
 
+# Test completion receipt parsing (legacy format)
+rtype, rid = guard.parse_receipt_path("/tmp/receipts/completion-fn-2.json")
+assert rtype == "completion_review", f"Expected completion_review, got {rtype}"
+assert rid == "fn-2", f"Expected fn-2, got {rid}"
+
+# Test completion receipt parsing (new fn-N-xxx format)
+rtype, rid = guard.parse_receipt_path("/tmp/receipts/completion-fn-7-abc.json")
+assert rtype == "completion_review", f"Expected completion_review, got {rtype}"
+assert rid == "fn-7-abc", f"Expected fn-7-abc, got {rid}"
+
 # Test fallback
 rtype, rid = guard.parse_receipt_path("/tmp/unknown.json")
 assert rtype == "impl_review"
