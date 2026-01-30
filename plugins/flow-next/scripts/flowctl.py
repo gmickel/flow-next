@@ -589,6 +589,8 @@ def slugify(text: str, max_length: int = 40) -> Optional[str]:
     Uses Django pattern (stdlib only): normalize unicode, strip non-alphanumeric,
     collapse whitespace/hyphens. Returns None if result is empty (for fallback).
 
+    Output contains only [a-z0-9-] to match parse_id() regex.
+
     Args:
         text: Input text to slugify
         max_length: Maximum length (40 default, leaves room for fn-XXX- prefix)
@@ -601,11 +603,16 @@ def slugify(text: str, max_length: int = 40) -> Optional[str]:
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
     # Remove non-word chars (except spaces and hyphens), lowercase
     text = re.sub(r"[^\w\s-]", "", text.lower())
+    # Convert underscores to spaces (will be collapsed to hyphens)
+    text = text.replace("_", " ")
     # Collapse whitespace and hyphens to single hyphen, strip leading/trailing
-    text = re.sub(r"[-\s]+", "-", text).strip("-_")
+    text = re.sub(r"[-\s]+", "-", text).strip("-")
     # Truncate at word boundary if too long
     if max_length and len(text) > max_length:
-        text = text[:max_length].rsplit("-", 1)[0]
+        truncated = text[:max_length]
+        if "-" in truncated:
+            truncated = truncated.rsplit("-", 1)[0]
+        text = truncated.strip("-")
     return text if text else None
 
 

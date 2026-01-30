@@ -17,6 +17,7 @@ import shlex
 import shutil
 import sys
 import tempfile
+import unicodedata
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from datetime import datetime
@@ -582,12 +583,52 @@ def generate_epic_suffix(length: int = 3) -> str:
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
+def slugify(text: str, max_length: int = 40) -> Optional[str]:
+    """Convert text to URL-safe slug for epic IDs.
+
+    Uses Django pattern (stdlib only): normalize unicode, strip non-alphanumeric,
+    collapse whitespace/hyphens. Returns None if result is empty (for fallback).
+
+    Output contains only [a-z0-9-] to match parse_id() regex.
+
+    Args:
+        text: Input text to slugify
+        max_length: Maximum length (40 default, leaves room for fn-XXX- prefix)
+
+    Returns:
+        Slugified string or None if empty
+    """
+    text = str(text)
+    # Normalize unicode and convert to ASCII
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    # Remove non-word chars (except spaces and hyphens), lowercase
+    text = re.sub(r"[^\w\s-]", "", text.lower())
+    # Convert underscores to spaces (will be collapsed to hyphens)
+    text = text.replace("_", " ")
+    # Collapse whitespace and hyphens to single hyphen, strip leading/trailing
+    text = re.sub(r"[-\s]+", "-", text).strip("-")
+    # Truncate at word boundary if too long
+    if max_length and len(text) > max_length:
+        truncated = text[:max_length]
+        if "-" in truncated:
+            truncated = truncated.rsplit("-", 1)[0]
+        text = truncated.strip("-")
+    return text if text else None
+
+
 def parse_id(id_str: str) -> tuple[Optional[int], Optional[int]]:
     """Parse ID into (epic_num, task_num). Returns (epic, None) for epic IDs.
 
-    Supports both legacy (fn-N) and new (fn-N-xxx) formats with optional suffix.
+    Supports formats:
+    - Legacy: fn-N, fn-N.M
+    - Short suffix: fn-N-xxx, fn-N-xxx.M (3-char random)
+    - Slug suffix: fn-N-longer-slug, fn-N-longer-slug.M (slugified title)
     """
-    match = re.match(r"^fn-(\d+)(?:-[a-z0-9]{3})?(?:\.(\d+))?$", id_str)
+    # Pattern supports: fn-N, fn-N-x (1-3 char), fn-N-xx-yy (multi-segment slug)
+    match = re.match(
+        r"^fn-(\d+)(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?(?:\.(\d+))?$",
+        id_str,
+    )
     if not match:
         return None, None
     epic = int(match.group(1))
@@ -1727,7 +1768,7 @@ def get_actor() -> str:
 def scan_max_epic_id(flow_dir: Path) -> int:
     """Scan .flow/epics/ to find max epic number. Returns 0 if none exist.
 
-    Handles both legacy (fn-N.json) and new (fn-N-xxx.json) formats.
+    Handles legacy (fn-N.json), short suffix (fn-N-xxx.json), and slug (fn-N-slug.json) formats.
     """
     epics_dir = flow_dir / EPICS_DIR
     if not epics_dir.exists():
@@ -1735,7 +1776,11 @@ def scan_max_epic_id(flow_dir: Path) -> int:
 
     max_n = 0
     for epic_file in epics_dir.glob("fn-*.json"):
-        match = re.match(r"^fn-(\d+)(?:-[a-z0-9]{3})?\.json$", epic_file.name)
+        # Match: fn-N.json, fn-N-x.json (1-3 char), fn-N-xx-yy.json (slug)
+        match = re.match(
+            r"^fn-(\d+)(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?\.json$",
+            epic_file.name,
+        )
         if match:
             n = int(match.group(1))
             max_n = max(max_n, n)
@@ -2661,7 +2706,9 @@ def cmd_epic_create(args: argparse.Namespace) -> None:
     # Scan existing epics to determine next ID (don't rely on counter)
     max_epic = scan_max_epic_id(flow_dir)
     epic_num = max_epic + 1
-    suffix = generate_epic_suffix()
+    # Use slugified title as suffix, fallback to random if empty/invalid
+    slug = slugify(args.title)
+    suffix = slug if slug else generate_epic_suffix()
     epic_id = f"fn-{epic_num}-{suffix}"
 
     # Double-check no collision (shouldn't happen with scan-based allocation)
@@ -4162,7 +4209,11 @@ def cmd_next(args: argparse.Namespace) -> None:
         epics_dir = flow_dir / EPICS_DIR
         if epics_dir.exists():
             for epic_file in sorted(epics_dir.glob("fn-*.json")):
-                match = re.match(r"^fn-(\d+)(?:-[a-z0-9]{3})?\.json$", epic_file.name)
+                # Match: fn-N.json, fn-N-xxx.json (short), fn-N-slug.json (long)
+                match = re.match(
+                    r"^fn-(\d+)(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?\.json$",
+                    epic_file.name,
+                )
                 if match:
                     epic_ids.append(epic_file.stem)  # Use full ID from filename
         epic_ids.sort(key=lambda e: parse_id(e)[0] or 0)
@@ -6440,7 +6491,11 @@ def cmd_validate(args: argparse.Namespace) -> None:
         epic_ids = []
         if epics_dir.exists():
             for epic_file in sorted(epics_dir.glob("fn-*.json")):
-                match = re.match(r"^fn-(\d+)(?:-[a-z0-9]{3})?\.json$", epic_file.name)
+                # Match: fn-N.json, fn-N-xxx.json (short), fn-N-slug.json (long)
+                match = re.match(
+                    r"^fn-(\d+)(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?\.json$",
+                    epic_file.name,
+                )
                 if match:
                     epic_ids.append(epic_file.stem)  # Use full ID from filename
 
