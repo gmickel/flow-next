@@ -20,14 +20,14 @@ Steps:
 Ralph mode rules (must follow):
 - If PLAN_REVIEW=rp: use `flowctl rp` wrappers (setup-review, select-add, prompt-get, chat-send).
 - If PLAN_REVIEW=codex: use `flowctl codex` wrappers (plan-review with --receipt).
-- If PLAN_REVIEW=copilot: use `flowctl copilot` wrappers (plan-review with --receipt).
+- If PLAN_REVIEW=copilot: use `flowctl copilot` wrappers (plan-review with --receipt and `--model "$COPILOT_MODEL"`).
 - Write receipt via bash heredoc (no Write tool) if `REVIEW_RECEIPT_PATH` set.
 - If any rule is violated, output `<promise>RETRY</promise>` and stop.
 
 3) Plan review gate:
    - If PLAN_REVIEW=rp: run `/flow-next:plan-review {{EPIC_ID}} --review=rp`
    - If PLAN_REVIEW=codex: run `/flow-next:plan-review {{EPIC_ID}} --review=codex`
-   - If PLAN_REVIEW=copilot: run `/flow-next:plan-review {{EPIC_ID}} --review=copilot`
+  - If PLAN_REVIEW=copilot: run `/flow-next:plan-review {{EPIC_ID}} --review=copilot` (flowctl will use `--model "$COPILOT_MODEL"`).
    - If PLAN_REVIEW=export: run `/flow-next:plan-review {{EPIC_ID}} --review=export`
    - If PLAN_REVIEW=none:
      - If REQUIRE_PLAN_REVIEW=1: output `<promise>RETRY</promise>` and stop.

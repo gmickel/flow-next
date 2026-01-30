@@ -667,17 +667,17 @@ copilot auth
 flowctl copilot check [--json]
 
 # Implementation review (reviews code changes for a task)
-flowctl copilot impl-review <task-id> --base <branch> [--receipt <path>] [--json]
-# Example: flowctl copilot impl-review fn-1.3 --base main --receipt /tmp/impl-fn-1.3.json
+flowctl copilot impl-review <task-id> --base <branch> --model <model> [--receipt <path>] [--json]
+# Example: flowctl copilot impl-review fn-1.3 --base main --model gpt-5.1 --receipt /tmp/impl-fn-1.3.json
 
 # Plan review (reviews epic spec before implementation)
-flowctl copilot plan-review <epic-id> --files <file1,file2,...> [--receipt <path>] [--json]
-# Example: flowctl copilot plan-review fn-1 --files "src/auth.ts,src/config.ts" --receipt /tmp/plan-fn-1.json
+flowctl copilot plan-review <epic-id> --files <file1,file2,...> --model <model> [--receipt <path>] [--json]
+# Example: flowctl copilot plan-review fn-1 --files "src/auth.ts,src/config.ts" --model gpt-5.1 --receipt /tmp/plan-fn-1.json
 # Note: Epic/task specs are included automatically; --files should be CODE files for repository context.
 
 # Completion review (reviews epic implementation against spec)
-flowctl copilot completion-review <epic-id> [--receipt <path>] [--json]
-# Example: flowctl copilot completion-review fn-1 --receipt /tmp/completion-fn-1.json
+flowctl copilot completion-review <epic-id> --model <model> [--receipt <path>] [--json]
+# Example: flowctl copilot completion-review fn-1 --model gpt-5.1 --receipt /tmp/completion-fn-1.json
 # Runs after all tasks done; verifies implementation matches spec requirements
 ```
 
@@ -685,7 +685,7 @@ flowctl copilot completion-review <epic-id> [--receipt <path>] [--json]
 
 1. **Gather context hints** — Analyzes changed files, extracts symbols (functions, classes), finds references in unchanged files
 2. **Build review prompt** — Uses same Carmack-level criteria as RepoPrompt (7 criteria each for plan/impl)
-3. **Run copilot** — Executes `copilot --prompt -` with the prompt on stdin
+3. **Run copilot** — Executes `copilot --model <model> --allow-all --stream --prompt -` with the prompt on stdin (model required; flowctl uses `--model` or `COPILOT_MODEL`)
 4. **Parse verdict** — Extracts `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>` from output
 5. **Write receipt** — If `--receipt` provided, writes JSON for Ralph gating
 

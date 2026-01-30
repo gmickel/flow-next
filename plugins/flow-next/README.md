@@ -862,8 +862,8 @@ copilot auth
 /flow-next:impl-review --review=copilot
 
 # Or via flowctl directly
-flowctl copilot plan-review fn-1 --files "src/auth.ts,src/config.ts"
-flowctl copilot impl-review fn-1.3 --base main
+flowctl copilot plan-review fn-1 --files "src/auth.ts,src/config.ts" --model gpt-5.1
+flowctl copilot impl-review fn-1.3 --base main --model gpt-5.1
 ```
 
 **Verify installation:**

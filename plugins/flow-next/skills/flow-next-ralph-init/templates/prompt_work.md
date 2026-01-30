@@ -13,7 +13,7 @@ Inputs:
 ```
 When `--review=rp`, the worker subagent invokes `/flow-next:impl-review` internally.
 When `--review=codex`, the worker uses `flowctl codex impl-review` for review.
-When `--review=copilot`, the worker uses `flowctl copilot impl-review` for review.
+When `--review=copilot`, the worker uses `flowctl copilot impl-review` with `--model "$COPILOT_MODEL"` for review.
 The impl-review skill handles review coordination and requires `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>` from reviewer.
 Do NOT improvise review prompts - the skill has the correct format.
 
