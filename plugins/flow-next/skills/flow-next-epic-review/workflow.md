@@ -72,7 +72,7 @@ If `VERDICT=NEEDS_WORK`:
 ### Step 4: Receipt
 
 Receipt is written automatically by `flowctl codex completion-review` when `--receipt` provided.
-Format: `{"mode":"codex","epic":"<id>","verdict":"<verdict>","session_id":"<thread_id>","timestamp":"..."}`
+Format: `{"type":"completion_review","id":"<epic-id>","mode":"codex","verdict":"<verdict>","session_id":"<thread_id>","timestamp":"..."}`
 
 ---
 
@@ -265,12 +265,14 @@ echo "VERDICT=$VERDICT"
 
 ### Write receipt (if REVIEW_RECEIPT_PATH set)
 
+Receipt written after SHIP verdict (not on NEEDS_WORK):
+
 ```bash
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
   cat > "$REVIEW_RECEIPT_PATH" <<EOF
-{"type":"completion_review","id":"$EPIC_ID","mode":"rp","timestamp":"$ts"}
+{"type":"completion_review","id":"$EPIC_ID","mode":"rp","verdict":"SHIP","timestamp":"$ts"}
 EOF
   echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi

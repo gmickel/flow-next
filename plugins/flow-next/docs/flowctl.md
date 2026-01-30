@@ -725,7 +725,7 @@ What it does:
 
 ## Ralph Receipts
 
-Review receipts are **not** managed by flowctl. They are written by the review skills when `REVIEW_RECEIPT_PATH` is set (Ralph sets this env var).
+RepoPrompt review receipts are written by the review skills (not flowctl commands). Codex review receipts are written by `flowctl codex impl-review` and `flowctl codex completion-review` when `--receipt` is provided. Ralph sets `REVIEW_RECEIPT_PATH` to coordinate both.
 
 See: [Ralph deep dive](ralph.md)
 
