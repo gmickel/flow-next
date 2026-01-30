@@ -762,12 +762,18 @@ Each epic and task gets its own JSON + markdown file pair. Merge conflicts are r
 
 Two models catch what one misses. Reviews use a second model (via RepoPrompt or Codex) to verify plans and implementations before they ship.
 
+**Three review types:**
+- **Plan reviews** — Verify architecture before coding starts
+- **Impl reviews** — Verify each task implementation
+- **Completion reviews** — Verify epic delivers all spec requirements before closing
+
 **Review criteria (Carmack-level, identical for both backends):**
 
 | Review Type | Criteria |
 |-------------|----------|
 | **Plan** | Completeness, Feasibility, Clarity, Architecture, Risks (incl. security), Scope, Testability |
 | **Impl** | Correctness, Simplicity, DRY, Architecture, Edge Cases, Tests, Security |
+| **Completion** | Spec compliance: all requirements delivered, docs updated, no gaps |
 
 Reviews block progress until `<verdict>SHIP</verdict>`. Fix → re-review cycles continue until approved.
 
@@ -943,6 +949,7 @@ Ten commands, complete workflow:
 | `/flow-next:interview <id>` | Deep interview to flesh out a spec before planning |
 | `/flow-next:plan-review <id>` | Carmack-level plan review via RepoPrompt |
 | `/flow-next:impl-review` | Carmack-level impl review of current branch |
+| `/flow-next:epic-review <id>` | Epic-completion review: verify implementation matches spec |
 | `/flow-next:prime` | Assess codebase agent-readiness, propose fixes ([details](#agent-readiness-assessment)) |
 | `/flow-next:sync <id>` | Manual plan-sync: update downstream tasks after implementation drift |
 | `/flow-next:ralph-init` | Scaffold repo-local Ralph harness (`scripts/ralph/`) |
@@ -1066,6 +1073,21 @@ Carmack-level criteria: Completeness, Feasibility, Clarity, Architecture, Risks,
 | `[focus areas]` | Optional: "focus on performance" or "check error handling" |
 
 Reviews current branch changes. Carmack-level criteria: Correctness, Simplicity, DRY, Architecture, Edge Cases, Tests, Security.
+
+#### `/flow-next:epic-review`
+
+```
+/flow-next:epic-review <fn-N> [--review=rp|codex|export]
+```
+
+| Input | Description |
+|-------|-------------|
+| `fn-N` | Epic ID to review |
+| `--review=rp` | Use RepoPrompt (macOS, visual builder) |
+| `--review=codex` | Use OpenAI Codex CLI (cross-platform) |
+| `--review=export` | Export context for manual review |
+
+Reviews epic implementation against spec. Runs after all tasks complete. Catches requirement gaps, missing functionality, incomplete doc updates.
 
 #### `/flow-next:prime`
 
@@ -1254,7 +1276,7 @@ flowchart TD
 Flowctl accepts schema v1 and v2; new fields are optional and defaulted.
 
 New fields:
-- Epic JSON: `plan_review_status`, `plan_reviewed_at`, `depends_on_epics`, `branch_name`
+- Epic JSON: `plan_review_status`, `plan_reviewed_at`, `completion_review_status`, `completion_reviewed_at`, `depends_on_epics`, `branch_name`
 - Task JSON: `priority`
 
 ### ID Format

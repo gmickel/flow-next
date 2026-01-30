@@ -40,7 +40,7 @@ Works out of the box for parallel branches. No setup required.
 Flowctl accepts schema v1 and v2; new fields are optional and defaulted.
 
 New fields:
-- Epic JSON: `plan_review_status`, `plan_reviewed_at`, `depends_on_epics`, `branch_name`, `default_impl`, `default_review`, `default_sync`
+- Epic JSON: `plan_review_status`, `plan_reviewed_at`, `completion_review_status`, `completion_reviewed_at`, `depends_on_epics`, `branch_name`, `default_impl`, `default_review`, `default_sync`
 - Task JSON: `priority`, `impl`, `review`, `sync`
 
 ## ID Format
@@ -98,6 +98,14 @@ Set plan review status and timestamp.
 
 ```bash
 flowctl epic set-plan-review-status fn-1 --status ship|needs_work|unknown [--json]
+```
+
+### epic set-completion-review-status
+
+Set completion review status and timestamp.
+
+```bash
+flowctl epic set-completion-review-status fn-1 --status ship|needs_work|unknown [--json]
 ```
 
 ### epic set-branch
@@ -341,13 +349,15 @@ Output:
 Select next plan/work unit.
 
 ```bash
-flowctl next [--epics-file epics.json] [--require-plan-review] [--json]
+flowctl next [--epics-file epics.json] [--require-plan-review] [--require-completion-review] [--json]
 ```
 
 Output:
 ```json
-{"status":"plan|work|none","epic":"fn-12","task":"fn-12.3","reason":"needs_plan_review|resume_in_progress|ready_task|none|blocked_by_epic_deps","blocked_epics":{"fn-12":["fn-3"]}}
+{"status":"plan|work|completion_review|none","epic":"fn-12","task":"fn-12.3","reason":"needs_plan_review|needs_completion_review|resume_in_progress|ready_task|none|blocked_by_epic_deps","blocked_epics":{"fn-12":["fn-3"]}}
 ```
+
+The `--require-completion-review` flag gates epic closure on completion review. When all tasks are done but `completion_review_status != ship`, returns `status: completion_review`.
 
 ### start
 
@@ -572,6 +582,10 @@ flowctl codex impl-review <task-id> --base <branch> [--sandbox <mode>] [--receip
 flowctl codex plan-review <epic-id> --files <file1,file2,...> [--sandbox <mode>] [--receipt <path>] [--json]
 # Example: flowctl codex plan-review fn-1 --files "src/auth.ts,src/config.ts" --sandbox auto --receipt /tmp/plan-fn-1.json
 # Note: Epic/task specs are included automatically; --files should be CODE files for repository context.
+
+# Completion review (reviews epic implementation against spec)
+flowctl codex completion-review <epic-id> [--sandbox <mode>] [--receipt <path>] [--json]
+# Example: flowctl codex completion-review fn-1 --sandbox auto --receipt /tmp/completion-fn-1.json
 ```
 
 **How it works:**

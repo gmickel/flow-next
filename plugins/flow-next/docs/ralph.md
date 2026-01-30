@@ -133,8 +133,10 @@ flowchart TD
   C --> D[/flow-next:plan-review/]
   B -->|work needed| E[/flow-next:work/]
   E --> F[/flow-next:impl-review/]
+  B -->|completion review needed| K[/flow-next:epic-review/]
   D --> G{Receipt valid?}
   F --> G
+  K --> G
   G -- yes --> H{Verdict = SHIP?}
   H -- yes --> B
   H -- no --> I[Fix issues, retry review]
@@ -292,6 +294,89 @@ flowctl next --require-plan-review --json
 | **Focus** | Architecture, feasibility, scope | Correctness, security, tests |
 | **Config** | `PLAN_REVIEW` + `REQUIRE_PLAN_REVIEW` | `WORK_REVIEW` |
 
+### Epic-Completion Review Gate
+
+The epic-completion review gate ensures implementation matches the spec before closing an epic. Runs after all tasks complete, checking for requirement gaps.
+
+#### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  flowctl next --require-completion-review                    │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  1. All tasks done, completion_review_status != ship   │ │
+│  │  2. Return status=completion_review, epic=fn-1         │ │
+│  │  3. Ralph invokes /flow-next:epic-review fn-1          │ │
+│  │  4. Skill loops until <verdict>SHIP</verdict>          │ │
+│  │  5. flowctl epic set-completion-review-status fn-1 --status ship │
+│  │  6. Next iteration: epic can close                     │ │
+│  └────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Configuration
+
+Both settings control completion reviews:
+
+```bash
+# config.env
+COMPLETION_REVIEW=codex       # Backend: rp, codex, or none
+```
+
+When `COMPLETION_REVIEW != none`, Ralph passes `--require-completion-review` to the selector.
+
+| `COMPLETION_REVIEW` | Behavior |
+|---------------------|----------|
+| `rp` | Completion reviewed via RepoPrompt |
+| `codex` | Completion reviewed via Codex CLI |
+| `none` | No completion review, epics close immediately |
+
+#### The Review Cycle
+
+When `flowctl next` returns `status=completion_review`:
+
+1. **Review** — Invoke the epic-review skill
+   ```bash
+   /flow-next:epic-review fn-1 --review=codex
+   ```
+
+2. **Fix loop** — If `NEEDS_WORK`:
+   - Parse reviewer feedback (requirement gaps, missing functionality)
+   - Implement missing requirements inline
+   - Re-review (same chat for RP, receipt continuity for Codex)
+   - Repeat until `SHIP`
+
+3. **Receipt** — Write proof-of-work
+   ```json
+   {"type":"completion_review","id":"fn-1","mode":"codex","verdict":"SHIP","timestamp":"..."}
+   ```
+
+4. **Unlock** — Set status to ship
+   ```bash
+   flowctl epic set-completion-review-status fn-1 --status ship
+   ```
+
+5. **Close** — Epic can now close normally
+
+#### What Completion Review Catches
+
+| Issue Type | Example |
+|------------|---------|
+| **Decomposition gaps** | Spec mentioned rate limiting, no task created |
+| **Partial implementation** | Task marked done but only covers happy path |
+| **Cross-task gaps** | Auth task done, logging task done, but no audit trail |
+| **Missing doc updates** | Spec required README update, not done |
+
+#### Completion Review vs Impl Review
+
+| Aspect | Impl Review | Completion Review |
+|--------|-------------|-------------------|
+| **When** | After each task | After all tasks done |
+| **Scope** | Single task acceptance | Entire epic spec |
+| **Checks** | Code quality, tests | Spec compliance |
+| **Focus** | "Is this task done right?" | "Did we deliver everything?" |
+| **Config** | `WORK_REVIEW` | `COMPLETION_REVIEW` |
+
 ### 2. Receipt-Based Gating
 
 Every review produces a receipt JSON:
@@ -356,6 +441,7 @@ Edit `scripts/ralph/config.env`:
 |----------|--------|---------|-------------|
 | `PLAN_REVIEW` | `rp`, `codex`, `none` | — | Plan review backend |
 | `WORK_REVIEW` | `rp`, `codex`, `none` | — | Impl review backend |
+| `COMPLETION_REVIEW` | `rp`, `codex`, `none` | — | Completion review backend |
 | `REQUIRE_PLAN_REVIEW` | `0`, `1` | `0` | Block work until plan approved |
 
 ### Branches
@@ -460,8 +546,9 @@ scripts/ralph/runs/<run-id>/
 ├── attempts.json          # Per-task retry counts
 ├── branches.json          # Branch info
 ├── receipts/
-│   ├── plan-fn-1.json     # Plan review receipt
-│   └── impl-fn-1.1.json   # Impl review receipt
+│   ├── plan-fn-1.json        # Plan review receipt
+│   ├── impl-fn-1.1.json      # Impl review receipt
+│   └── completion-fn-1.json  # Completion review receipt
 └── block-fn-1.2.md        # Written when task auto-blocked
 ```
 
