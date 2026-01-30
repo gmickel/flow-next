@@ -124,6 +124,8 @@ After setup questions answered, read [phases.md](phases.md) and execute each pha
 
 If user chose review, pass the review mode to the worker. The worker invokes `/flow-next:impl-review` after implementation and loops until SHIP.
 
+**Completion review gate**: When all tasks in an epic are done, if `--require-completion-review` is configured (via `flowctl next`), the work skill invokes `/flow-next:epic-review` before allowing the epic to close. This verifies the combined implementation satisfies the spec. The epic-review skill handles the fix loop internally until SHIP.
+
 ## Guardrails
 
 - Don't start without asking branch question
