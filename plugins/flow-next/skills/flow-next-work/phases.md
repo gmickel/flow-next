@@ -180,29 +180,29 @@ Plan-sync returns summary. Log it but don't block - task updates are best-effort
 
 ### 3g. Completion Review Gate (EPIC_MODE only)
 
-When 3a finds no ready tasks, check if completion review is required:
+When 3a finds no ready tasks, check if completion review is required.
+
+**Check epic's completion review status directly:**
 
 ```bash
-$FLOWCTL next --epic <epic-id> --require-completion-review --json
+$FLOWCTL show <epic-id> --json | jq -r '.completion_review_status'
 ```
 
-Parse the output:
-- `status: "completion_review"` → needs review before epic can close
-- `status: "none"` with `reason: "all_done"` → all tasks done, no review needed (go to Phase 4)
+- If `ship` → review already passed, go to Phase 4
+- If `unknown` or `needs_work` → needs review
 
-**If status is `completion_review`:**
+**If review needed:**
 
 1. Invoke `/flow-next:epic-review <epic-id>` skill
    - Pass `--review=<backend>` matching the work review backend
    - Skill handles rp/codex backend dispatch
    - Skill runs fix loop internally until SHIP verdict
 
-2. After SHIP:
-   - Skill sets `completion_review_status=ship` automatically
-   - Receipt written if `REVIEW_RECEIPT_PATH` was set
+2. After skill returns with SHIP:
+   - Set status: `$FLOWCTL epic set-completion-review-status <epic-id> --status ship --json`
    - Go to Phase 4 (Quality)
 
-**IMPORTANT**: Do not manually set completion_review_status. The epic-review skill handles this after receiving SHIP verdict from the reviewer.
+**Note:** The epic-review skill gets SHIP from the reviewer but does NOT set the status itself. The caller (work skill or Ralph) sets `completion_review_status=ship` after successful review.
 
 **Fix loop behavior**: Same as impl-review. If reviewer returns NEEDS_WORK:
 1. Skill parses issues
@@ -276,8 +276,8 @@ Phase 1 (resolve) → Phase 2 (branch) → Phase 3:
   ├─ 3d: verify done
   ├─ 3e: plan-sync (if enabled + downstream tasks exist)
   ├─ 3f: EPIC_MODE? → loop to 3a | SINGLE_TASK_MODE? → Phase 4
-  ├─ no more tasks → 3g: check completion_review gate
-  │   ├─ status=completion_review → invoke /flow-next:epic-review → fix loop until SHIP
-  │   └─ status=none → Phase 4
+  ├─ no more tasks → 3g: check completion_review_status
+  │   ├─ status != ship → invoke /flow-next:epic-review → fix loop until SHIP → set status=ship
+  │   └─ status = ship → Phase 4
   └─ Phase 4 (quality) → Phase 5 (ship)
 ```
