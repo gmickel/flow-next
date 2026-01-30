@@ -601,6 +601,10 @@ def normalize_epic(epic_data: dict) -> dict:
         epic_data["plan_review_status"] = "unknown"
     if "plan_reviewed_at" not in epic_data:
         epic_data["plan_reviewed_at"] = None
+    if "completion_review_status" not in epic_data:
+        epic_data["completion_review_status"] = "unknown"
+    if "completion_reviewed_at" not in epic_data:
+        epic_data["completion_reviewed_at"] = None
     if "branch_name" not in epic_data:
         epic_data["branch_name"] = None
     if "depends_on_epics" not in epic_data:
@@ -3248,6 +3252,45 @@ def cmd_epic_set_plan_review_status(args: argparse.Namespace) -> None:
         print(f"Epic {args.id} plan review status set to {args.status}")
 
 
+def cmd_epic_set_completion_review_status(args: argparse.Namespace) -> None:
+    """Set completion review status for an epic."""
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
+        )
+
+    if not is_epic_id(args.id):
+        error_exit(
+            f"Invalid epic ID: {args.id}. Expected format: fn-N or fn-N-xxx", use_json=args.json
+        )
+
+    flow_dir = get_flow_dir()
+    epic_path = flow_dir / EPICS_DIR / f"{args.id}.json"
+
+    if not epic_path.exists():
+        error_exit(f"Epic {args.id} not found", use_json=args.json)
+
+    epic_data = normalize_epic(
+        load_json_or_exit(epic_path, f"Epic {args.id}", use_json=args.json)
+    )
+    epic_data["completion_review_status"] = args.status
+    epic_data["completion_reviewed_at"] = now_iso()
+    epic_data["updated_at"] = now_iso()
+    atomic_write_json(epic_path, epic_data)
+
+    if args.json:
+        json_output(
+            {
+                "id": args.id,
+                "completion_review_status": epic_data["completion_review_status"],
+                "completion_reviewed_at": epic_data["completion_reviewed_at"],
+                "message": f"Epic {args.id} completion review status set to {args.status}",
+            }
+        )
+    else:
+        print(f"Epic {args.id} completion review status set to {args.status}")
+
+
 def cmd_epic_set_branch(args: argparse.Namespace) -> None:
     """Set epic branch name."""
     if not ensure_flow_exists():
@@ -4153,6 +4196,26 @@ def cmd_next(args: argparse.Namespace) -> None:
                 )
             else:
                 print(f"work {task_id} ready_task")
+            return
+
+        # Check if all tasks are done and completion review is needed
+        if (
+            args.require_completion_review
+            and tasks
+            and all(t.get("status") == "done" for t in tasks.values())
+            and epic_data.get("completion_review_status") != "ship"
+        ):
+            if args.json:
+                json_output(
+                    {
+                        "status": "completion_review",
+                        "epic": epic_id,
+                        "task": None,
+                        "reason": "needs_completion_review",
+                    }
+                )
+            else:
+                print(f"completion_review {epic_id} needs_completion_review")
             return
 
     if args.json:
@@ -6134,6 +6197,19 @@ def main() -> None:
     p_epic_set_review.add_argument("--json", action="store_true", help="JSON output")
     p_epic_set_review.set_defaults(func=cmd_epic_set_plan_review_status)
 
+    p_epic_set_completion_review = epic_sub.add_parser(
+        "set-completion-review-status", help="Set completion review status"
+    )
+    p_epic_set_completion_review.add_argument("id", help="Epic ID (fn-N)")
+    p_epic_set_completion_review.add_argument(
+        "--status",
+        required=True,
+        choices=["ship", "needs_work", "unknown"],
+        help="Completion review status",
+    )
+    p_epic_set_completion_review.add_argument("--json", action="store_true", help="JSON output")
+    p_epic_set_completion_review.set_defaults(func=cmd_epic_set_completion_review_status)
+
     p_epic_set_branch = epic_sub.add_parser("set-branch", help="Set epic branch name")
     p_epic_set_branch.add_argument("id", help="Epic ID (fn-N)")
     p_epic_set_branch.add_argument("--branch", required=True, help="Branch name")
@@ -6304,6 +6380,11 @@ def main() -> None:
         "--require-plan-review",
         action="store_true",
         help="Require plan review before work",
+    )
+    p_next.add_argument(
+        "--require-completion-review",
+        action="store_true",
+        help="Require completion review when all tasks done",
     )
     p_next.add_argument("--json", action="store_true", help="JSON output")
     p_next.set_defaults(func=cmd_next)
