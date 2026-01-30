@@ -57,6 +57,7 @@ Scaffold or update repo-local Ralph harness. Opt-in only.
    cp "${CLAUDE_PLUGIN_ROOT}/skills/flow-next-ralph-init/templates/ralph_once.sh" scripts/ralph/
    cp "${CLAUDE_PLUGIN_ROOT}/skills/flow-next-ralph-init/templates/prompt_plan.md" scripts/ralph/
    cp "${CLAUDE_PLUGIN_ROOT}/skills/flow-next-ralph-init/templates/prompt_work.md" scripts/ralph/
+   cp "${CLAUDE_PLUGIN_ROOT}/skills/flow-next-ralph-init/templates/prompt_completion.md" scripts/ralph/
    cp "${CLAUDE_PLUGIN_ROOT}/skills/flow-next-ralph-init/templates/watch-filter.py" scripts/ralph/
    cp "${CLAUDE_PLUGIN_ROOT}/scripts/flowctl" "${CLAUDE_PLUGIN_ROOT}/scripts/flowctl.py" scripts/ralph/
    chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl
@@ -75,8 +76,9 @@ Scaffold or update repo-local Ralph harness. Opt-in only.
    Note: `cp -R templates/.` copies all files including dotfiles (.gitignore).
 
 6. Edit `scripts/ralph/config.env` to set the chosen review backend (skip if UPDATE_MODE=1):
-   - Replace `PLAN_REVIEW=codex` with `PLAN_REVIEW=<chosen>`
-   - Replace `WORK_REVIEW=codex` with `WORK_REVIEW=<chosen>`
+   - Replace `PLAN_REVIEW={{PLAN_REVIEW}}` with `PLAN_REVIEW=<chosen>`
+   - Replace `WORK_REVIEW={{WORK_REVIEW}}` with `WORK_REVIEW=<chosen>`
+   - Replace `COMPLETION_REVIEW={{COMPLETION_REVIEW}}` with `COMPLETION_REVIEW=<chosen>`
 
 7. Print next steps (run from terminal, NOT inside Claude Code):
 

@@ -224,12 +224,14 @@ ui_config() {
   ui "${C_DIM}   Branch:${C_RESET} ${C_BOLD}$git_branch${C_RESET}"
   ui "${C_DIM}   Progress:${C_RESET} Epic ${epics_done}/${epics_total} ${C_DIM}•${C_RESET} Task ${tasks_done}/${tasks_total}"
 
-  local plan_display="$PLAN_REVIEW" work_display="$WORK_REVIEW"
+  local plan_display="$PLAN_REVIEW" work_display="$WORK_REVIEW" completion_display="$COMPLETION_REVIEW"
   [[ "$PLAN_REVIEW" == "rp" ]] && plan_display="RepoPrompt"
   [[ "$PLAN_REVIEW" == "codex" ]] && plan_display="Codex"
   [[ "$WORK_REVIEW" == "rp" ]] && work_display="RepoPrompt"
   [[ "$WORK_REVIEW" == "codex" ]] && work_display="Codex"
-  ui "${C_DIM}   Reviews:${C_RESET} Plan=$plan_display ${C_DIM}•${C_RESET} Work=$work_display"
+  [[ "$COMPLETION_REVIEW" == "rp" ]] && completion_display="RepoPrompt"
+  [[ "$COMPLETION_REVIEW" == "codex" ]] && completion_display="Codex"
+  ui "${C_DIM}   Reviews:${C_RESET} Plan=$plan_display ${C_DIM}•${C_RESET} Work=$work_display ${C_DIM}•${C_RESET} Completion=$completion_display"
   [[ -n "${EPICS:-}" ]] && ui "${C_DIM}   Scope:${C_RESET} $EPICS"
   ui ""
 }
@@ -264,6 +266,11 @@ ui_iteration() {
     title="$(get_title "$item_json")"
     ui "   ${C_DIM}Task:${C_RESET} ${C_BOLD}$task${C_RESET} ${C_DIM}\"$title\"${C_RESET}"
     ui "   ${C_DIM}Phase:${C_RESET} ${C_MAGENTA}Implementation${C_RESET}"
+  elif [[ "$status" == "completion_review" ]]; then
+    item_json="$("$FLOWCTL" show "$epic" --json 2>/dev/null || true)"
+    title="$(get_title "$item_json")"
+    ui "   ${C_DIM}Epic:${C_RESET} ${C_BOLD}$epic${C_RESET} ${C_DIM}\"$title\"${C_RESET}"
+    ui "   ${C_DIM}Phase:${C_RESET} ${C_GREEN}Completion Review${C_RESET}"
   fi
 }
 
@@ -290,6 +297,19 @@ ui_impl_review() {
     ui ""
     ui "   ${C_MAGENTA}🔍 Implementation Review${C_RESET}"
     ui "      ${C_DIM}Sending to reviewer via Codex...${C_RESET}"
+  fi
+}
+
+ui_completion_review() {
+  local mode="$1" epic="$2"
+  if [[ "$mode" == "rp" ]]; then
+    ui ""
+    ui "   ${C_GREEN}✅ Epic Completion Review${C_RESET}"
+    ui "      ${C_DIM}Verifying spec compliance via RepoPrompt...${C_RESET}"
+  elif [[ "$mode" == "codex" ]]; then
+    ui ""
+    ui "   ${C_GREEN}✅ Epic Completion Review${C_RESET}"
+    ui "      ${C_DIM}Verifying spec compliance via Codex...${C_RESET}"
   fi
 }
 
@@ -362,6 +382,7 @@ WORKER_TIMEOUT="${WORKER_TIMEOUT:-3600}"  # 1hr default; safety guard against ru
 BRANCH_MODE="${BRANCH_MODE:-new}"
 PLAN_REVIEW="${PLAN_REVIEW:-none}"
 WORK_REVIEW="${WORK_REVIEW:-none}"
+COMPLETION_REVIEW="${COMPLETION_REVIEW:-none}"
 CODEX_SANDBOX="${CODEX_SANDBOX:-auto}"  # Codex sandbox mode; flowctl reads this env var
 REQUIRE_PLAN_REVIEW="${REQUIRE_PLAN_REVIEW:-0}"
 YOLO="${YOLO:-0}"
@@ -468,7 +489,7 @@ render_template() {
 import os, sys
 path = sys.argv[1]
 text = open(path, encoding="utf-8").read()
-keys = ["EPIC_ID","TASK_ID","PLAN_REVIEW","WORK_REVIEW","BRANCH_MODE","BRANCH_MODE_EFFECTIVE","REQUIRE_PLAN_REVIEW","REVIEW_RECEIPT_PATH","RALPH_ITERATION"]
+keys = ["EPIC_ID","TASK_ID","PLAN_REVIEW","WORK_REVIEW","COMPLETION_REVIEW","BRANCH_MODE","BRANCH_MODE_EFFECTIVE","REQUIRE_PLAN_REVIEW","REVIEW_RECEIPT_PATH","RALPH_ITERATION"]
 for k in keys:
     text = text.replace("{{%s}}" % k, os.environ.get(k, ""))
 print(text)
@@ -749,7 +770,7 @@ PY
 }
 
 maybe_close_epics() {
-  local epics json status all_done
+  local epics json status all_done review_status
   if [[ -n "$EPICS_FILE" ]]; then
     # Scoped run: use epic list from file
     epics="$(list_epics_from_file)"
@@ -765,6 +786,18 @@ maybe_close_epics() {
     [[ "$status" == "done" ]] && continue
     all_done="$(epic_all_tasks_done "$json")"
     if [[ "$all_done" == "1" ]]; then
+      # Gate on completion review if enabled
+      if [[ "$COMPLETION_REVIEW" != "none" ]]; then
+        review_status="$(json_get completion_review_status "$json")"
+        if [[ "$review_status" != "ship" ]]; then
+          # Don't close - selector will return completion_review status
+          continue
+        fi
+        # Also verify receipt exists (ralph.sh enforces, not just guard)
+        if ! verify_receipt "$RECEIPTS_DIR/completion-${epic}.json" "completion_review" "$epic"; then
+          continue
+        fi
+      fi
       "$FLOWCTL" epic close "$epic" --json >/dev/null 2>&1 || true
     fi
   done
@@ -850,6 +883,7 @@ while (( iter <= MAX_ITERATIONS )); do
   selector_args=("$FLOWCTL" next --json)
   [[ -n "$EPICS_FILE" ]] && selector_args+=(--epics-file "$EPICS_FILE")
   [[ "$REQUIRE_PLAN_REVIEW" == "1" ]] && selector_args+=(--require-plan-review)
+  [[ "$COMPLETION_REVIEW" != "none" ]] && selector_args+=(--require-completion-review)
 
   selector_json="$("${selector_args[@]}")"
   status="$(json_get status "$selector_json")"
@@ -904,6 +938,18 @@ while (( iter <= MAX_ITERATIONS )); do
     log "work task=$task_id review=$WORK_REVIEW receipt=${REVIEW_RECEIPT_PATH:-} branch=$BRANCH_MODE_EFFECTIVE"
     ui_impl_review "$WORK_REVIEW" "$task_id"
     prompt="$(render_template "$SCRIPT_DIR/prompt_work.md")"
+  elif [[ "$status" == "completion_review" ]]; then
+    export EPIC_ID="$epic_id"
+    export COMPLETION_REVIEW
+    export FLOW_REVIEW_BACKEND="$COMPLETION_REVIEW"  # Skills read this
+    if [[ "$COMPLETION_REVIEW" != "none" ]]; then
+      export REVIEW_RECEIPT_PATH="$RECEIPTS_DIR/completion-${epic_id}.json"
+    else
+      unset REVIEW_RECEIPT_PATH
+    fi
+    log "completion_review epic=$epic_id review=$COMPLETION_REVIEW receipt=${REVIEW_RECEIPT_PATH:-}"
+    ui_completion_review "$COMPLETION_REVIEW" "$epic_id"
+    prompt="$(render_template "$SCRIPT_DIR/prompt_completion.md")"
   else
     fail "invalid selector status: $status"
   fi
@@ -1012,6 +1058,30 @@ Violations break automation and leave the user with incomplete work. Be precise,
     epic_json="$("$FLOWCTL" show "$epic_id" --json 2>/dev/null || true)"
     plan_review_status="$(json_get plan_review_status "$epic_json")"
   fi
+  completion_review_status=""
+  completion_receipt_ok="1"
+  if [[ "$status" == "completion_review" && ( "$COMPLETION_REVIEW" == "rp" || "$COMPLETION_REVIEW" == "codex" ) ]]; then
+    if ! verify_receipt "$REVIEW_RECEIPT_PATH" "completion_review" "$epic_id"; then
+      echo "ralph: missing completion review receipt; forcing retry" >> "$iter_log"
+      log "missing completion receipt; forcing retry"
+      completion_receipt_ok="0"
+      # Delete corrupted/partial receipt so next attempt starts clean
+      rm -f "$REVIEW_RECEIPT_PATH" 2>/dev/null || true
+      "$FLOWCTL" epic set-completion-review-status "$epic_id" --status needs_work --json >/dev/null 2>&1 || true
+      force_retry=1
+    fi
+    epic_json="$("$FLOWCTL" show "$epic_id" --json 2>/dev/null || true)"
+    completion_review_status="$(json_get completion_review_status "$epic_json")"
+    if [[ "$completion_review_status" == "ship" && "$completion_receipt_ok" == "1" ]]; then
+      # Completion review passed - epic can now be closed by maybe_close_epics next iteration
+      log "completion_review epic=$epic_id SHIP (will close next iteration)"
+      force_retry=0
+    elif [[ "$completion_review_status" == "needs_work" ]]; then
+      # Review found gaps - skill should have handled fix loop but if we get here, retry
+      log "completion_review epic=$epic_id NEEDS_WORK; forcing retry"
+      force_retry=1
+    fi
+  fi
   receipt_verdict=""
   if [[ "$status" == "work" && ( "$WORK_REVIEW" == "rp" || "$WORK_REVIEW" == "codex" ) ]]; then
     if ! verify_receipt "$REVIEW_RECEIPT_PATH" "impl_review" "$task_id"; then
@@ -1036,6 +1106,12 @@ Violations break automation and leave the user with incomplete work. Be precise,
   # Fallback: derive verdict from flowctl status for logging
   if [[ -z "$verdict" && -n "$plan_review_status" ]]; then
     case "$plan_review_status" in
+      ship) verdict="SHIP" ;;
+      needs_work) verdict="NEEDS_WORK" ;;
+    esac
+  fi
+  if [[ -z "$verdict" && -n "$completion_review_status" ]]; then
+    case "$completion_review_status" in
       ship) verdict="SHIP" ;;
       needs_work) verdict="NEEDS_WORK" ;;
     esac
