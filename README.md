@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin_Marketplace-blueviolet)](https://claude.ai/code)
 
-[![Flow-next](https://img.shields.io/badge/Flow--next-v0.19.1-green)](plugins/flow-next/)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v0.20.0-green)](plugins/flow-next/)
 [![Flow-next Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -21,13 +21,9 @@
 >
 > 🔄 **Update issues?** Run: `claude plugin update flow-next@gmickel-claude-marketplace`
 >
-> 💡 **Force update (most reliable):** `/plugin` → Marketplaces → gmickel-claude-marketplace → Update marketplace
->
-> 🆕 **[/flow-next:prime](plugins/flow-next/README.md#agent-readiness-assessment)**: Assess codebase readiness. 8 pillars (48 criteria), GitHub API checks, two-tier scoring (agent vs production).
+> 🆕 **[/flow-next:epic-review](plugins/flow-next/README.md#cross-model-reviews)**: Epic-completion review gate. Catches requirement gaps that per-task reviews miss—before epic closes.
 >
 > 🤖 **[Ralph mode](plugins/flow-next/docs/ralph.md)**: Ship features while you sleep. Fresh context per iteration, multi-model review gates, auto-blocks stuck tasks.
->
-> 💪 **Stable features**: Plan-first workflow, re-anchoring, receipt-based gating, structured task management
 >
 > 📡 **Cross-platform reviews**: [RepoPrompt](https://repoprompt.com/?atp=KJbuL4) (macOS) or [Codex CLI](plugins/flow-next/README.md#cross-model-reviews) (any OS)
 >

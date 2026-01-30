@@ -2,6 +2,24 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.20.0] - 2026-01-30
+
+### Added
+
+- **Epic-completion review gate** — New `/flow-next:epic-review` skill runs when all epic tasks complete, before epic closes. Two-phase review (extract requirements → verify coverage) catches gaps that per-task impl-review misses: decomposition gaps, cross-task requirements, scope drift. Supports RepoPrompt and Codex backends. Closes #83.
+
+- **flowctl commands** — `codex completion-review` for LLM-driven epic review, `epic set-completion-review-status` for manual status control, `--require-completion-review` selector flag.
+
+- **Ralph integration** — `COMPLETION_REVIEW` config (rp/codex/none), gating in `maybe_close_epics()`, `status=completion_review` handler, `prompt_completion.md` template.
+
+- **ralph-guard support** — Parses `completion-fn-N.json` receipt pattern, tracks `flowctl codex completion-review` calls, routes stop-hook to `/flow-next:epic-review`.
+
+- **Work skill update** — `/flow-next:work` now handles `completion_review` status after all tasks complete.
+
+### Changed
+
+- **README callouts** — Replaced `/flow-next:prime` callout with `/flow-next:epic-review`. Removed "Stable features" line (now baseline).
+
 ## [flow-next 0.19.1] - 2026-01-30
 
 ### Fixed
