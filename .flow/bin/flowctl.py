@@ -2859,6 +2859,77 @@ def cmd_dep_add(args: argparse.Namespace) -> None:
         print(f"Dependency {args.depends_on} added to {args.task}")
 
 
+def cmd_task_set_deps(args: argparse.Namespace) -> None:
+    """Set dependencies for a task (convenience wrapper for dep add)."""
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
+        )
+
+    if not is_task_id(args.task_id):
+        error_exit(
+            f"Invalid task ID: {args.task_id}. Expected format: fn-N.M or fn-N-xxx.M",
+            use_json=args.json,
+        )
+
+    if not args.deps:
+        error_exit("--deps is required", use_json=args.json)
+
+    # Parse comma-separated deps
+    dep_ids = [d.strip() for d in args.deps.split(",") if d.strip()]
+    if not dep_ids:
+        error_exit("--deps cannot be empty", use_json=args.json)
+
+    task_epic = epic_id_from_task(args.task_id)
+    flow_dir = get_flow_dir()
+    task_path = flow_dir / TASKS_DIR / f"{args.task_id}.json"
+
+    task_data = load_json_or_exit(
+        task_path, f"Task {args.task_id}", use_json=args.json
+    )
+
+    # Migrate old 'deps' key if needed
+    if "depends_on" not in task_data:
+        task_data["depends_on"] = task_data.pop("deps", [])
+
+    added = []
+    for dep_id in dep_ids:
+        if not is_task_id(dep_id):
+            error_exit(
+                f"Invalid dependency ID: {dep_id}. Expected format: fn-N.M or fn-N-xxx.M",
+                use_json=args.json,
+            )
+        dep_epic = epic_id_from_task(dep_id)
+        if dep_epic != task_epic:
+            error_exit(
+                f"Dependencies must be within same epic. Task {args.task_id} is in {task_epic}, dependency {dep_id} is in {dep_epic}",
+                use_json=args.json,
+            )
+        if dep_id not in task_data["depends_on"]:
+            task_data["depends_on"].append(dep_id)
+            added.append(dep_id)
+
+    if added:
+        task_data["updated_at"] = now_iso()
+        atomic_write_json(task_path, task_data)
+
+    if args.json:
+        json_output(
+            {
+                "success": True,
+                "task": args.task_id,
+                "depends_on": task_data["depends_on"],
+                "added": added,
+                "message": f"Dependencies set for {args.task_id}",
+            }
+        )
+    else:
+        if added:
+            print(f"Added dependencies to {args.task_id}: {', '.join(added)}")
+        else:
+            print(f"No new dependencies added (already set)")
+
+
 def cmd_show(args: argparse.Namespace) -> None:
     """Show epic or task details."""
     if not ensure_flow_exists():
@@ -6705,6 +6776,16 @@ def main() -> None:
     p_task_show_backend.add_argument("id", help="Task ID (fn-N.M)")
     p_task_show_backend.add_argument("--json", action="store_true", help="JSON output")
     p_task_show_backend.set_defaults(func=cmd_task_show_backend)
+
+    p_task_set_deps = task_sub.add_parser(
+        "set-deps", help="Set task dependencies (comma-separated)"
+    )
+    p_task_set_deps.add_argument("task_id", help="Task ID (fn-N.M)")
+    p_task_set_deps.add_argument(
+        "--deps", required=True, help="Comma-separated dependency IDs (e.g., fn-1.1,fn-1.2)"
+    )
+    p_task_set_deps.add_argument("--json", action="store_true", help="JSON output")
+    p_task_set_deps.set_defaults(func=cmd_task_set_deps)
 
     # dep add
     p_dep = subparsers.add_parser("dep", help="Dependency commands")
