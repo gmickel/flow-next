@@ -586,6 +586,7 @@ flowctl codex plan-review <epic-id> --files <file1,file2,...> [--sandbox <mode>]
 # Completion review (reviews epic implementation against spec)
 flowctl codex completion-review <epic-id> [--sandbox <mode>] [--receipt <path>] [--json]
 # Example: flowctl codex completion-review fn-1 --sandbox auto --receipt /tmp/completion-fn-1.json
+# Runs after all tasks done; verifies implementation matches spec requirements
 ```
 
 **How it works:**
@@ -611,6 +612,8 @@ References: src/middleware.py:45 (calls authenticate), tests/test_auth.py:12
 | Impl | Correctness, Simplicity, DRY, Architecture, Edge Cases, Tests, Security |
 
 **Receipt schema (Ralph-compatible):**
+
+Impl review receipt:
 ```json
 {
   "type": "impl_review",
@@ -618,6 +621,18 @@ References: src/middleware.py:45 (calls authenticate), tests/test_auth.py:12
   "mode": "codex",
   "verdict": "SHIP",
   "session_id": "thread_abc123",
+  "timestamp": "2026-01-11T10:30:00Z"
+}
+```
+
+Completion review receipt:
+```json
+{
+  "type": "completion_review",
+  "id": "fn-1",
+  "mode": "codex",
+  "verdict": "SHIP",
+  "session_id": "thread_xyz456",
   "timestamp": "2026-01-11T10:30:00Z"
 }
 ```

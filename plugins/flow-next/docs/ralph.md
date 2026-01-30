@@ -316,14 +316,12 @@ The epic-completion review gate ensures implementation matches the spec before c
 
 #### Configuration
 
-Both settings control completion reviews:
-
 ```bash
 # config.env
 COMPLETION_REVIEW=codex       # Backend: rp, codex, or none
 ```
 
-When `COMPLETION_REVIEW != none`, Ralph passes `--require-completion-review` to the selector.
+When `COMPLETION_REVIEW != none`, Ralph passes `--require-completion-review` to the selector. There is no separate `REQUIRE_COMPLETION_REVIEW` flag—the presence of a backend implies the gate is active.
 
 | `COMPLETION_REVIEW` | Behavior |
 |---------------------|----------|
@@ -346,7 +344,7 @@ When `flowctl next` returns `status=completion_review`:
    - Re-review (same chat for RP, receipt continuity for Codex)
    - Repeat until `SHIP`
 
-3. **Receipt** — Write proof-of-work
+3. **Receipt** — Skill writes proof-of-work to `receipts/completion-fn-1.json`
    ```json
    {"type":"completion_review","id":"fn-1","mode":"codex","verdict":"SHIP","timestamp":"..."}
    ```

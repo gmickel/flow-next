@@ -1077,7 +1077,7 @@ Reviews current branch changes. Carmack-level criteria: Correctness, Simplicity,
 #### `/flow-next:epic-review`
 
 ```
-/flow-next:epic-review <fn-N> [--review=rp|codex|export]
+/flow-next:epic-review <fn-N> [--review=rp|codex|none]
 ```
 
 | Input | Description |
@@ -1085,7 +1085,7 @@ Reviews current branch changes. Carmack-level criteria: Correctness, Simplicity,
 | `fn-N` | Epic ID to review |
 | `--review=rp` | Use RepoPrompt (macOS, visual builder) |
 | `--review=codex` | Use OpenAI Codex CLI (cross-platform) |
-| `--review=export` | Export context for manual review |
+| `--review=none` | Skip review |
 
 Reviews epic implementation against spec. Runs after all tasks complete. Catches requirement gaps, missing functionality, incomplete doc updates.
 
