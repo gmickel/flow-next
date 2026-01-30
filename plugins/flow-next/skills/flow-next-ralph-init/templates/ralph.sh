@@ -603,6 +603,7 @@ append_progress() {
   local promise="$2"
   local plan_review_status="${3:-}"
   local task_status="${4:-}"
+  local completion_review_status="${5:-}"
   local receipt_exists="0"
   if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -f "$REVIEW_RECEIPT_PATH" ]]; then
     receipt_exists="1"
@@ -615,6 +616,7 @@ append_progress() {
     echo "promise=${promise:-}"
     echo "receipt=${REVIEW_RECEIPT_PATH:-} exists=$receipt_exists"
     echo "plan_review_status=${plan_review_status:-}"
+    echo "completion_review_status=${completion_review_status:-}"
     echo "task_status=${task_status:-}"
     echo "iter_log=$iter_log"
     echo "last_output:"
@@ -992,7 +994,6 @@ Violations break automation and leave the user with incomplete work. Be precise,
   ui_waiting
   claude_out=""
   set +e
-  [[ -n "${FLOW_RALPH_CLAUDE_PLUGIN_DIR:-}" ]] && claude_args+=(--plugin-dir "$FLOW_RALPH_CLAUDE_PLUGIN_DIR")
   if [[ "$WATCH_MODE" == "verbose" ]]; then
     # Full output: stream through filter with --verbose to show text/thinking
     [[ ! " ${claude_args[*]} " =~ " --verbose " ]] && claude_args+=(--verbose)
@@ -1167,7 +1168,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
       force_retry=1
     fi
   fi
-  append_progress "$verdict" "$promise" "$plan_review_status" "$task_status"
+  append_progress "$verdict" "$promise" "$plan_review_status" "$task_status" "$completion_review_status"
 
   # NEVER honor COMPLETE from worker output (GH-73: premature completion bug)
   # Workers are single-task/single-epic scope. Completion detection happens via
