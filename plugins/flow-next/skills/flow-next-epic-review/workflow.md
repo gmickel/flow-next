@@ -30,7 +30,7 @@ if [[ "$BACKEND" == "ASK" ]]; then
   exit 1
 fi
 
-echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
+echo "Review backend: $BACKEND"
 ```
 
 **If backend is "none"**: Skip review, inform user, and exit cleanly (no error).
@@ -232,10 +232,29 @@ Do NOT skip this tag. The automation depends on it.
 EOF
 ```
 
-### Send to RepoPrompt
+**Note:** Replace bracket placeholders (`[EPIC_ID]`, `[BRANCH_NAME]`, etc.) with actual values before sending.
+
+### Send to RepoPrompt and Parse Verdict
 
 ```bash
-$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/completion-review-prompt.md --new-chat --chat-name "Epic Review: $EPIC_ID"
+# Send review and capture response
+REVIEW_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/completion-review-prompt.md --new-chat --chat-name "Epic Review: $EPIC_ID")"
+echo "$REVIEW_RESPONSE"
+
+# Extract verdict tag from response
+VERDICT="$(echo "$REVIEW_RESPONSE" \
+  | tr -d '\r' \
+  | grep -oE '<verdict>(SHIP|NEEDS_WORK)</verdict>' \
+  | tail -n 1 \
+  | sed -E 's#</?verdict>##g')"
+
+if [[ -z "$VERDICT" ]]; then
+  echo "No verdict tag found in response"
+  echo "<promise>RETRY</promise>"
+  exit 0
+fi
+
+echo "VERDICT=$VERDICT"
 ```
 
 **WAIT** for response. Takes 1-5+ minutes.
@@ -251,13 +270,11 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
   cat > "$REVIEW_RECEIPT_PATH" <<EOF
-{"type":"completion_review","id":"$EPIC_ID","mode":"rp","verdict":"$VERDICT","timestamp":"$ts"}
+{"type":"completion_review","id":"$EPIC_ID","mode":"rp","timestamp":"$ts"}
 EOF
   echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi
 ```
-
-If no verdict tag in response, output `<promise>RETRY</promise>` and stop.
 
 ---
 

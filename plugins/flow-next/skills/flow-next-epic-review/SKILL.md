@@ -20,7 +20,7 @@ FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 ## Backend Selection
 
 **Priority** (first match wins):
-1. `--review=rp|codex|export|none` argument
+1. `--review=rp|codex|none` argument
 2. `FLOW_REVIEW_BACKEND` env var (`rp`, `codex`, `none`)
 3. `.flow/config.json` → `review.backend`
 4. **Error** - no auto-detection
@@ -30,7 +30,6 @@ FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 Check $ARGUMENTS for:
 - `--review=rp` or `--review rp` → use rp
 - `--review=codex` or `--review codex` → use codex
-- `--review=export` or `--review export` → use export
 - `--review=none` or `--review none` → skip review
 
 If found, use that backend and skip all other detection.
@@ -70,16 +69,15 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
 **FORBIDDEN**:
 - Self-declaring SHIP without actual backend verdict
 - Mixing backends mid-review (stick to one)
-- Skipping review when backend is "none" without user consent
+- Skipping review silently (must inform user and exit cleanly when backend is "none")
 
 ## Input
 
 Arguments: $ARGUMENTS
-Format: `<epic-id> [--review=rp|codex|none] [focus areas]`
+Format: `<epic-id> [--review=rp|codex|none]`
 
 - Epic ID - Required, e.g. `fn-1` or `fn-22-53k`
 - `--review` - Optional backend override
-- Focus areas - Optional, specific areas to examine
 
 ## Workflow
 
