@@ -63,7 +63,7 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
 3. Parse verdict from command output
 
 **For all backends:**
-- If `REVIEW_RECEIPT_PATH` set: write receipt after review (any verdict)
+- If `REVIEW_RECEIPT_PATH` set: write receipt after SHIP verdict (RP writes manually after fix loop; codex writes automatically via `--receipt`)
 - Any failure → output `<promise>RETRY</promise>` and stop
 
 **FORBIDDEN**:
