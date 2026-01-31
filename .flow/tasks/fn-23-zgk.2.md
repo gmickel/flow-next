@@ -49,9 +49,8 @@ Pattern explanation:
 - [ ] ralph-guard receipt parsing works with slug format
 - [ ] All 45 smoke tests pass
 ## Done summary
-TBD
-
+Updated ralph-guard.py parse_receipt_path() regex to support variable-length slugs. All 45 smoke tests pass.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c14a11f9566da386af16bf10b570c854eeb3f9da
+- Tests: python3 regex acceptance tests (all pass), smoke_test.sh (45/45 pass)
 - PRs:
