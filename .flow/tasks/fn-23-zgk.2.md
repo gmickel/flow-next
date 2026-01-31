@@ -10,20 +10,19 @@ Update all regex patterns that parse epic/task IDs to support variable-length sl
 
 ## Approach
 
-1. Update main `parse_id()` regex at line 590:
-   ```python
-   # Current: r"^fn-(\d+)(?:-[a-z0-9]{3})?(?:\.(\d+))?$"
-   # New: supports fn-N, fn-N-xxx, fn-N-longer-slug
-   r"^fn-(\d+)(?:-[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)?(?:\.(\d+))?$"
-   ```
+<!-- Updated by plan-sync: fn-23-zgk.1 already updated flowctl.py regexes with alternation pattern -->
 
-2. Update file glob regexes at lines 1738, 4094, 6372:
-   ```python
-   # Current: r"^fn-(\d+)(?:-[a-z0-9]{3})?\.json$"
-   # New: same pattern adjustment
-   ```
+**Already done in fn-23-zgk.1:** flowctl.py regex updates at lines 629, 1781, 4214, 6496 using:
+```python
+r"^fn-(\d+)(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?(?:\.(\d+))?$"
+```
 
-3. Update ralph-guard.py receipt parsing at lines 276-284
+**Remaining work:** Update ralph-guard.py receipt parsing at lines 276, 280, 284:
+```python
+# Current: r"plan-(fn-\d+(?:-[a-z0-9]{3})?)\.json$"
+# New: r"plan-(fn-\d+(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?)\.json$"
+```
+Same pattern for impl and completion matches
 
 ## Key context
 
@@ -37,15 +36,16 @@ Pattern explanation:
 - `(?:[a-z0-9-]*[a-z0-9])?` - optional middle with hyphens, must end alphanumeric
 - This prevents leading/trailing hyphens in slug
 ## Acceptance
-- [ ] `parse_id("fn-1")` returns valid (legacy format)
-- [ ] `parse_id("fn-1-abc")` returns valid (3-char format)
-- [ ] `parse_id("fn-1-add-oauth")` returns valid (slug format)
-- [ ] `parse_id("fn-1.2")` returns valid (legacy task)
-- [ ] `parse_id("fn-1-abc.2")` returns valid (3-char task)
-- [ ] `parse_id("fn-1-add-oauth.2")` returns valid (slug task)
-- [ ] `parse_id("fn-1-")` returns invalid (trailing hyphen)
-- [ ] `parse_id("fn-1--double")` returns invalid (double hyphen)
-- [ ] File glob patterns match all three formats
+<!-- Updated by plan-sync: flowctl.py items already done in fn-23-zgk.1 -->
+- [x] `parse_id("fn-1")` returns valid (legacy format) - done in fn-23-zgk.1
+- [x] `parse_id("fn-1-abc")` returns valid (3-char format) - done in fn-23-zgk.1
+- [x] `parse_id("fn-1-add-oauth")` returns valid (slug format) - done in fn-23-zgk.1
+- [x] `parse_id("fn-1.2")` returns valid (legacy task) - done in fn-23-zgk.1
+- [x] `parse_id("fn-1-abc.2")` returns valid (3-char task) - done in fn-23-zgk.1
+- [x] `parse_id("fn-1-add-oauth.2")` returns valid (slug task) - done in fn-23-zgk.1
+- [x] `parse_id("fn-1-")` returns invalid (trailing hyphen) - done in fn-23-zgk.1
+- [x] `parse_id("fn-1--double")` returns invalid (double hyphen) - done in fn-23-zgk.1
+- [x] File glob patterns match all three formats - done in fn-23-zgk.1
 - [ ] ralph-guard receipt parsing works with slug format
 - [ ] All 45 smoke tests pass
 ## Done summary

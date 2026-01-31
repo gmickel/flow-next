@@ -267,21 +267,33 @@ def parse_receipt_path(receipt_path: str) -> tuple:
     """Parse receipt path to derive type and id.
 
     Returns (receipt_type, item_id) based on filename pattern:
-    - plan-fn-N.json or plan-fn-N-xxx.json -> ("plan_review", "fn-N" or "fn-N-xxx")
-    - impl-fn-N.M.json or impl-fn-N-xxx.M.json -> ("impl_review", "fn-N.M" or "fn-N-xxx.M")
-    - completion-fn-N.json or completion-fn-N-xxx.json -> ("completion_review", "fn-N" or "fn-N-xxx")
+    - plan-fn-N.json or plan-fn-N-xxx.json or plan-fn-N-slug.json
+      -> ("plan_review", "fn-N" or "fn-N-xxx" or "fn-N-slug")
+    - impl-fn-N.M.json or impl-fn-N-xxx.M.json or impl-fn-N-slug.M.json
+      -> ("impl_review", "fn-N.M" or "fn-N-xxx.M" or "fn-N-slug.M")
+    - completion-fn-N.json or completion-fn-N-xxx.json or completion-fn-N-slug.json
+      -> ("completion_review", "fn-N" or "fn-N-xxx" or "fn-N-slug")
+
+    Suffix pattern supports:
+    - Legacy: fn-N (no suffix)
+    - Short: fn-N-xxx (1-3 char random)
+    - Slug: fn-N-longer-slug (multi-segment slugified title)
     """
     basename = os.path.basename(receipt_path)
-    # Try plan pattern first: plan-fn-N.json or plan-fn-N-xxx.json
-    plan_match = re.match(r"plan-(fn-\d+(?:-[a-z0-9]{3})?)\.json$", basename)
+    # Suffix pattern: optional hyphen + alphanumeric slug (1-3 char or multi-segment)
+    # Pattern: (?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?
+    suffix_pattern = r"(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?"
+
+    # Try plan pattern first: plan-fn-N.json, plan-fn-N-xxx.json, plan-fn-N-slug.json
+    plan_match = re.match(rf"plan-(fn-\d+{suffix_pattern})\.json$", basename)
     if plan_match:
         return ("plan_review", plan_match.group(1))
-    # Try impl pattern: impl-fn-N.M.json or impl-fn-N-xxx.M.json
-    impl_match = re.match(r"impl-(fn-\d+(?:-[a-z0-9]{3})?\.\d+)\.json$", basename)
+    # Try impl pattern: impl-fn-N.M.json, impl-fn-N-xxx.M.json, impl-fn-N-slug.M.json
+    impl_match = re.match(rf"impl-(fn-\d+{suffix_pattern}\.\d+)\.json$", basename)
     if impl_match:
         return ("impl_review", impl_match.group(1))
-    # Try completion pattern: completion-fn-N.json or completion-fn-N-xxx.json
-    completion_match = re.match(r"completion-(fn-\d+(?:-[a-z0-9]{3})?)\.json$", basename)
+    # Try completion pattern: completion-fn-N.json, completion-fn-N-xxx.json, etc.
+    completion_match = re.match(rf"completion-(fn-\d+{suffix_pattern})\.json$", basename)
     if completion_match:
         return ("completion_review", completion_match.group(1))
     # Fallback

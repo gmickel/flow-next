@@ -43,9 +43,8 @@ Edge cases requiring fallback to random:
 - [ ] `flowctl epic create --title ""` falls back to 3-char random
 - [ ] Existing tests still pass
 ## Done summary
-TBD
-
+Added slugify() function using Django pattern (stdlib only) and updated epic creation to use slugified titles as suffixes with random fallback. Updated regex patterns in both plugin and vendored copies for parity.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 453eac5, f5b5488
+- Tests: smoke_test.sh (45/45 pass)
 - PRs:
