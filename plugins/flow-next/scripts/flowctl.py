@@ -1319,9 +1319,11 @@ def run_copilot_exec(
     Note: uses --resume=<session_id> when available to continue review sessions.
     """
     copilot = require_copilot()
-    if not model:
-        error_exit("Copilot model is required (use --model or COPILOT_MODEL)", use_json=False, code=2)
-    cmd = [copilot, "--model", model]
+    # Model priority: env > parameter (required, no default).
+    effective_model = os.environ.get("FLOW_COPILOT_MODEL") or model
+    if not effective_model:
+        error_exit("Copilot model is required (set FLOW_COPILOT_MODEL or pass --model)", use_json=False, code=2)
+    cmd = [copilot, "--model", effective_model]
     if session_id:
         cmd.append(f"--resume={session_id}")
     cmd.extend(["--allow-all", "--stream", "--prompt", "-"])
@@ -5659,7 +5661,7 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
     task_id = args.task
     base_branch = args.base
     focus = getattr(args, "focus", None)
-    model = getattr(args, "model", None) or os.environ.get("COPILOT_MODEL")
+    model = getattr(args, "model", None)
 
     standalone = task_id is None
 
@@ -6177,7 +6179,7 @@ def cmd_copilot_plan_review(args: argparse.Namespace) -> None:
         rereview_preamble = build_rereview_preamble(spec_files, "plan", files_embedded)
         prompt = rereview_preamble + prompt
 
-    model = getattr(args, "model", None) or os.environ.get("COPILOT_MODEL")
+    model = getattr(args, "model", None)
     output, new_session_id, exit_code, stderr = run_copilot_exec(
         prompt, session_id=session_id, model=model
     )
@@ -6710,7 +6712,7 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
             )
             prompt = rereview_preamble + prompt
 
-    model = getattr(args, "model", None) or os.environ.get("COPILOT_MODEL")
+    model = getattr(args, "model", None)
     output, new_session_id, exit_code, stderr = run_copilot_exec(
         prompt, session_id=session_id, model=model
     )
@@ -7735,7 +7737,7 @@ def main() -> None:
         help="Task ID (fn-N.M), optional for standalone",
     )
     p_copilot_impl.add_argument("--base", required=True, help="Base branch for diff")
-    p_copilot_impl.add_argument("--model", required=True, help="Copilot model name")
+    p_copilot_impl.add_argument("--model", help="Copilot model name")
     p_copilot_impl.add_argument(
         "--focus", help="Focus areas for standalone review (comma-separated)"
     )
@@ -7753,7 +7755,7 @@ def main() -> None:
         help="Comma-separated file paths to embed for context (required)",
     )
     p_copilot_plan.add_argument("--base", default="main", help="Base branch for context")
-    p_copilot_plan.add_argument("--model", required=True, help="Copilot model name")
+    p_copilot_plan.add_argument("--model", help="Copilot model name")
     p_copilot_plan.add_argument(
         "--receipt", help="Receipt file path for session continuity"
     )
@@ -7767,7 +7769,7 @@ def main() -> None:
     p_copilot_completion.add_argument(
         "--base", default="main", help="Base branch for diff"
     )
-    p_copilot_completion.add_argument("--model", required=True, help="Copilot model name")
+    p_copilot_completion.add_argument("--model", help="Copilot model name")
     p_copilot_completion.add_argument(
         "--receipt", help="Receipt file path for session continuity"
     )

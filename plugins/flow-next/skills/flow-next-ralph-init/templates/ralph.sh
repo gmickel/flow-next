@@ -387,12 +387,12 @@ PLAN_REVIEW="${PLAN_REVIEW:-none}"
 WORK_REVIEW="${WORK_REVIEW:-none}"
 COMPLETION_REVIEW="${COMPLETION_REVIEW:-none}"
 CODEX_SANDBOX="${CODEX_SANDBOX:-auto}"  # Codex sandbox mode; flowctl reads this env var
-COPILOT_MODEL="${COPILOT_MODEL:-gpt-5.1}"
+FLOW_COPILOT_MODEL="${FLOW_COPILOT_MODEL:-gpt-5.2}"
 REQUIRE_PLAN_REVIEW="${REQUIRE_PLAN_REVIEW:-0}"
 YOLO="${YOLO:-0}"
 EPICS="${EPICS:-}"
 export CODEX_SANDBOX  # Ensure available to Claude worker for flowctl codex commands
-export COPILOT_MODEL
+export FLOW_COPILOT_MODEL
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do

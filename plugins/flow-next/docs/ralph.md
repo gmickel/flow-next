@@ -540,8 +540,8 @@ When using `PLAN_REVIEW=copilot` or `WORK_REVIEW=copilot`:
 
 ```bash
 flowctl copilot check                    # Verify available
-flowctl copilot impl-review ... --model gpt-5.1          # Run impl review
-flowctl copilot plan-review <id> --files "src/auth.ts,src/config.ts" --model gpt-5.1
+flowctl copilot impl-review ... --model gpt-5.2          # Run impl review
+flowctl copilot plan-review <id> --files "src/auth.ts,src/config.ts" --model gpt-5.2
 ```
 
 **Requirements:**
@@ -550,7 +550,7 @@ flowctl copilot plan-review <id> --files "src/auth.ts,src/config.ts" --model gpt
 copilot auth
 ```
 
-Set `COPILOT_MODEL` in `scripts/ralph/config.env` (required).
+Set `FLOW_COPILOT_MODEL` in your environment (required).
 
 ---
 
