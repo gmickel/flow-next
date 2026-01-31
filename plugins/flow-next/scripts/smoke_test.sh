@@ -42,6 +42,10 @@ echo -e "${YELLOW}=== flowctl smoke tests ===${NC}"
 mkdir -p "$TEST_DIR/repo/scripts"
 cd "$TEST_DIR/repo"
 git init -q
+git config user.name "flowctl-smoke"
+git config user.email "flowctl-smoke@example.com"
+git config commit.gpgsign false
+git config gpg.format openpgp
 
 cp "$PLUGIN_ROOT/scripts/flowctl.py" scripts/flowctl.py
 cp "$PLUGIN_ROOT/scripts/flowctl" scripts/flowctl

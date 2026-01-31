@@ -10,7 +10,7 @@ description: Epic completion review - verifies all epic tasks implement spec req
 Verify that the combined implementation of all epic tasks satisfies the spec requirements. This is NOT a code quality review (that's impl-review's job) — this confirms spec compliance only.
 
 **Role**: Epic Review Coordinator (NOT the reviewer)
-**Backends**: RepoPrompt (rp) or Codex CLI (codex)
+**Backends**: RepoPrompt (rp) or Codex CLI (codex) or Copilot CLI (copilot)
 
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Always use:
 ```bash
@@ -20,8 +20,8 @@ FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 ## Backend Selection
 
 **Priority** (first match wins):
-1. `--review=rp|codex|none` argument
-2. `FLOW_REVIEW_BACKEND` env var (`rp`, `codex`, `none`)
+1. `--review=rp|codex|copilot|none` argument
+2. `FLOW_REVIEW_BACKEND` env var (`rp`, `codex`, `copilot`, `none`)
 3. `.flow/config.json` → `review.backend`
 4. **Error** - no auto-detection
 
@@ -30,6 +30,7 @@ FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 Check $ARGUMENTS for:
 - `--review=rp` or `--review rp` → use rp
 - `--review=codex` or `--review codex` → use codex
+- `--review=copilot` or `--review copilot` → use copilot
 - `--review=none` or `--review none` → skip review
 
 If found, use that backend and skip all other detection.
@@ -41,11 +42,11 @@ BACKEND=$($FLOWCTL review-backend)
 
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."
-  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|none"
+echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
   exit 1
 fi
 
-echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
+echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 ```
 
 ## Critical Rules
@@ -62,6 +63,11 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
 2. Pass `--receipt` for session continuity on re-reviews
 3. Parse verdict from command output
 
+**For copilot backend:**
+1. Use `$FLOWCTL copilot completion-review` exclusively
+2. Pass `--receipt` for session continuity on re-reviews
+3. Parse verdict from command output
+
 **For all backends:**
 - If `REVIEW_RECEIPT_PATH` set: write receipt after SHIP verdict (RP writes manually after fix loop; codex writes automatically via `--receipt`)
 - Any failure → output `<promise>RETRY</promise>` and stop
@@ -74,7 +80,7 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
 ## Input
 
 Arguments: $ARGUMENTS
-Format: `<epic-id> [--review=rp|codex|none]`
+Format: `<epic-id> [--review=rp|codex|copilot|none]`
 
 - Epic ID - Required, e.g. `fn-1` or `fn-22-53k`
 - `--review` - Optional backend override
@@ -105,6 +111,17 @@ Run backend detection from SKILL.md above. Then branch:
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt.json}"
 
 $FLOWCTL codex completion-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
+# Output includes VERDICT=SHIP|NEEDS_WORK
+```
+
+On NEEDS_WORK: fix code, commit, re-run (receipt enables session continuity).
+
+### Copilot Backend
+
+```bash
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt.json}"
+
+$FLOWCTL copilot completion-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
 # Output includes VERDICT=SHIP|NEEDS_WORK
 ```
 

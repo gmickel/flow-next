@@ -78,6 +78,8 @@ Before asking questions, detect available tools and read current config:
 # Detect available review backends
 HAVE_RP=$(which rp-cli >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
+HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
+HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
 
 # Read current config values if they exist
 CURRENT_BACKEND=$("${PLUGIN_ROOT}/scripts/flowctl" config get review.backend --json 2>/dev/null | jq -r '.value // empty')
@@ -111,7 +113,7 @@ Current configuration:
 - Memory: <enabled|disabled> (change with: flowctl config set memory.enabled <true|false>)
 - Plan-Sync: <enabled|disabled> (change with: flowctl config set planSync.enabled <true|false>)
 - Plan-Sync cross-epic: <enabled|disabled> (change with: flowctl config set planSync.crossEpic <true|false>)
-- Review backend: <codex|rp|none> (change with: flowctl config set review.backend <codex|rp|none>)
+- Review backend: <copilot|codex|rp|none> (change with: flowctl config set review.backend <copilot|codex|rp|none>)
 ```
 
 Only include lines for config values that are set. If no config is set, skip this notice.
@@ -167,6 +169,7 @@ Available questions (include only if corresponding config is unset):
   "header": "Review",
   "question": "Which review backend for Carmack-level reviews?",
   "options": [
+    {"label": "Copilot CLI", "description": "Cross-platform, uses GitHub Copilot CLI for reviews. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
     {"label": "Codex CLI", "description": "Cross-platform, uses GPT 5.2 High for reviews. Simple setup, works everywhere. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
     {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, ~65% fewer tokens than traditional approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
     {"label": "None", "description": "Skip reviews, can configure later with --review flag"}
@@ -207,7 +210,7 @@ Use `AskUserQuestion` with the built questions array.
 
 **Note:** If docs are already current, adjust the Docs question description to mention "(already up to date)" or skip that question entirely.
 
-**Note:** If neither rp-cli nor codex is detected, add note to the Review question: "Neither rp-cli nor codex detected. Install one for review support."
+**Note:** If none of rp-cli, codex, or copilot is detected, add note to the Review question: "No review backends detected. Install one for review support."
 
 ## Step 7: Process Answers
 
@@ -231,6 +234,7 @@ Map user's answer to config value and persist:
 ```bash
 # Determine backend from answer
 case "$review_answer" in
+  "Copilot"*) REVIEW_BACKEND="copilot" ;;
   "Codex"*) REVIEW_BACKEND="codex" ;;
   "RepoPrompt"*) REVIEW_BACKEND="rp" ;;
   *) REVIEW_BACKEND="none" ;;
@@ -269,7 +273,7 @@ Configuration (use flowctl config set to change):
 - Memory: <enabled|disabled>
 - Plan-Sync: <enabled|disabled>
 - Plan-Sync cross-epic: <enabled|disabled>
-- Review backend: <codex|rp|none>
+- Review backend: <copilot|codex|rp|none>
 
 Documentation updated:
 - <files updated or "none">

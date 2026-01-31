@@ -20,7 +20,7 @@
 
 🌐 **Prefer a visual overview?** See the [Flow-Next app page](https://mickel.tech/apps/flow-next) for diagrams and examples.
 
-> **New: Codex Review Backend.** Cross-model reviews now work on Linux/Windows via OpenAI Codex CLI. Same Carmack-level criteria as RepoPrompt. See [Cross-Model Reviews](#cross-model-reviews) for setup.
+> **New: Copilot Review Backend.** Cross-model reviews now work on Linux/Windows via GitHub Copilot CLI. Same Carmack-level criteria as RepoPrompt. See [Cross-Model Reviews](#cross-model-reviews) for setup.
 
 ---
 
@@ -145,7 +145,7 @@ Two models catch what one misses.
 ```
 
 This is technically optional but **highly recommended**. It:
-- **Configures review backend** (RepoPrompt, Codex, or none) — required for cross-model reviews
+- **Configures review backend** (RepoPrompt, Codex, Copilot, or none) — required for cross-model reviews
 - Copies `flowctl` to `.flow/bin/` for direct CLI access
 - Adds flow-next instructions to CLAUDE.md/AGENTS.md (helps other AI tools understand your project)
 - Creates `.flow/usage.md` with full CLI reference
@@ -551,7 +551,7 @@ Ralph writes run artifacts under `scripts/ralph/runs/`, including review receipt
 
 Autonomous coding agents are taking the industry by storm—loop until done, commit, repeat. Most solutions gate progress by tests and linting alone. Ralph goes further.
 
-**Multi-model review gates**: Ralph uses [RepoPrompt](https://repoprompt.com/?atp=KJbuL4) (macOS) or OpenAI Codex CLI (cross-platform) to send plan and implementation reviews to a *different* model. A second set of eyes catches blind spots that self-review misses. RepoPrompt's builder provides full file context; Codex uses context hints from changed files.
+**Multi-model review gates**: Ralph uses [RepoPrompt](https://repoprompt.com/?atp=KJbuL4) (macOS), OpenAI Codex CLI, or GitHub Copilot CLI (cross-platform) to send plan and implementation reviews to a *different* model. A second set of eyes catches blind spots that self-review misses. RepoPrompt's builder provides full file context; Codex and Copilot use context hints from changed files.
 
 **Review loops until Ship**: Reviews don't just flag issues—they block progress until resolved. Ralph runs fix → re-review cycles until the reviewer returns `<verdict>SHIP</verdict>`. No "LGTM with nits" that get ignored.
 
@@ -766,7 +766,7 @@ Each epic and task gets its own JSON + markdown file pair. Merge conflicts are r
 
 ### Cross-Model Reviews
 
-Two models catch what one misses. Reviews use a second model (via RepoPrompt or Codex) to verify plans and implementations before they ship.
+Two models catch what one misses. Reviews use a second model (via RepoPrompt, Codex, or Copilot) to verify plans and implementations before they ship.
 
 **Three review types:**
 - **Plan reviews** — Verify architecture before coding starts
@@ -840,12 +840,43 @@ flowctl codex impl-review fn-1.3 --base main
 flowctl codex check
 ```
 
+#### Copilot (Cross-Platform Alternative)
+
+GitHub Copilot CLI works on any platform (macOS, Linux, Windows).
+
+**Why use Copilot:**
+- Cross-platform (no macOS requirement)
+- Terminal-based (no GUI needed)
+- Same Carmack-level review criteria as RepoPrompt
+
+**Trade-off:** Uses heuristic context hints from changed files rather than RepoPrompt's intelligent file selection.
+
+**Setup:**
+```bash
+copilot auth
+```
+
+**Usage:**
+```bash
+/flow-next:plan-review fn-1 --review=copilot
+/flow-next:impl-review --review=copilot
+
+# Or via flowctl directly
+flowctl copilot plan-review fn-1 --files "src/auth.ts,src/config.ts" --model gpt-5.2
+flowctl copilot impl-review fn-1.3 --base main --model gpt-5.2
+```
+
+**Verify installation:**
+```bash
+flowctl copilot check
+```
+
 #### Configuration
 
 Set default review backend:
 ```bash
 # Per-project (saved in .flow/config.json)
-flowctl config set review.backend rp      # or codex, or none
+flowctl config set review.backend rp      # or codex, copilot, or none
 
 # Per-session (environment variable)
 export FLOW_REVIEW_BACKEND=codex
@@ -860,8 +891,8 @@ Priority: `--review=...` argument > `FLOW_REVIEW_BACKEND` env > `.flow/config.js
 | Scenario | Recommendation |
 |----------|----------------|
 | macOS with GUI available | RepoPrompt (better context) |
-| Linux/Windows | Codex (only option) |
-| CI/headless environments | Codex (no GUI needed) |
+| Linux/Windows | Codex or Copilot |
+| CI/headless environments | Codex or Copilot |
 | Ralph overnight runs | Either works; RP auto-opens with --create (1.5.68+) |
 
 Without a backend configured, reviews fail with a clear error. Run `/flow-next:setup` or pass `--review=X`.
@@ -991,10 +1022,10 @@ Natural language also works:
 
 | Command | Available Flags |
 |---------|-----------------|
-| `/flow-next:plan` | `--research=rp\|grep`, `--review=rp\|codex\|export\|none`, `--no-review` |
-| `/flow-next:work` | `--branch=current\|new\|worktree`, `--review=rp\|codex\|export\|none`, `--no-review` |
-| `/flow-next:plan-review` | `--review=rp\|codex\|export` |
-| `/flow-next:impl-review` | `--review=rp\|codex\|export` |
+| `/flow-next:plan` | `--research=rp\|grep`, `--review=rp\|codex\|copilot\|export\|none`, `--no-review` |
+| `/flow-next:work` | `--branch=current\|new\|worktree`, `--review=rp\|codex\|copilot\|export\|none`, `--no-review` |
+| `/flow-next:plan-review` | `--review=rp\|codex\|copilot\|export` |
+| `/flow-next:impl-review` | `--review=rp\|codex\|copilot\|export` |
 | `/flow-next:prime` | `--report-only`, `--fix-all` |
 | `/flow-next:sync` | `--dry-run` |
 
@@ -1005,7 +1036,7 @@ Detailed input documentation for each command.
 #### `/flow-next:plan`
 
 ```
-/flow-next:plan <idea or fn-N> [--research=rp|grep] [--review=rp|codex|export|none]
+/flow-next:plan <idea or fn-N> [--research=rp|grep] [--review=rp|codex|copilot|export|none]
 ```
 
 | Input | Description |
@@ -1014,13 +1045,13 @@ Detailed input documentation for each command.
 | `fn-N` | Existing epic ID to update the plan |
 | `--research=rp` | Use RepoPrompt context-scout for deeper codebase discovery |
 | `--research=grep` | Use grep-based repo-scout (default, faster) |
-| `--review=rp\|codex\|export\|none` | Review backend after planning |
+| `--review=rp\|codex\|copilot\|export\|none` | Review backend after planning |
 | `--no-review` | Shorthand for `--review=none` |
 
 #### `/flow-next:work`
 
 ```
-/flow-next:work <id|file> [--branch=current|new|worktree] [--review=rp|codex|export|none]
+/flow-next:work <id|file> [--branch=current|new|worktree] [--review=rp|codex|copilot|export|none]
 ```
 
 | Input | Description |
@@ -1031,7 +1062,7 @@ Detailed input documentation for each command.
 | `--branch=current` | Work on current branch |
 | `--branch=new` | Create new branch `fn-N-slug` (default) |
 | `--branch=worktree` | Create git worktree for isolated work |
-| `--review=rp\|codex\|export\|none` | Review backend after work |
+| `--review=rp\|codex\|copilot\|export\|none` | Review backend after work |
 | `--no-review` | Shorthand for `--review=none` |
 
 #### `/flow-next:interview`
@@ -1052,7 +1083,7 @@ Deep questioning (40+ questions) to surface requirements, edge cases, and decisi
 #### `/flow-next:plan-review`
 
 ```
-/flow-next:plan-review <fn-N> [--review=rp|codex|export] [focus areas]
+/flow-next:plan-review <fn-N> [--review=rp|codex|copilot|export] [focus areas]
 ```
 
 | Input | Description |
@@ -1060,6 +1091,7 @@ Deep questioning (40+ questions) to surface requirements, edge cases, and decisi
 | `fn-N` | Epic ID to review |
 | `--review=rp` | Use RepoPrompt (macOS, visual builder) |
 | `--review=codex` | Use OpenAI Codex CLI (cross-platform) |
+| `--review=copilot` | Use GitHub Copilot CLI (cross-platform) |
 | `--review=export` | Export context for manual review |
 | `[focus areas]` | Optional: "focus on security" or "check API design" |
 
@@ -1068,13 +1100,14 @@ Carmack-level criteria: Completeness, Feasibility, Clarity, Architecture, Risks,
 #### `/flow-next:impl-review`
 
 ```
-/flow-next:impl-review [--review=rp|codex|export] [focus areas]
+/flow-next:impl-review [--review=rp|codex|copilot|export] [focus areas]
 ```
 
 | Input | Description |
 |-------|-------------|
 | `--review=rp` | Use RepoPrompt (macOS, visual builder) |
 | `--review=codex` | Use OpenAI Codex CLI (cross-platform) |
+| `--review=copilot` | Use GitHub Copilot CLI (cross-platform) |
 | `--review=export` | Export context for manual review |
 | `[focus areas]` | Optional: "focus on performance" or "check error handling" |
 
@@ -1083,7 +1116,7 @@ Reviews current branch changes. Carmack-level criteria: Correctness, Simplicity,
 #### `/flow-next:epic-review`
 
 ```
-/flow-next:epic-review <fn-N> [--review=rp|codex|none]
+/flow-next:epic-review <fn-N> [--review=rp|codex|copilot|none]
 ```
 
 | Input | Description |
@@ -1091,6 +1124,7 @@ Reviews current branch changes. Carmack-level criteria: Correctness, Simplicity,
 | `fn-N` | Epic ID to review |
 | `--review=rp` | Use RepoPrompt (macOS, visual builder) |
 | `--review=codex` | Use OpenAI Codex CLI (cross-platform) |
+| `--review=copilot` | Use GitHub Copilot CLI (cross-platform) |
 | `--review=none` | Skip review |
 
 Reviews epic implementation against spec. Runs after all tasks complete. Catches requirement gaps, missing functionality, incomplete doc updates.
@@ -1139,7 +1173,7 @@ No arguments. Scaffolds `scripts/ralph/` for autonomous operation.
 ```
 
 No arguments. Optional setup that:
-- Configures review backend (rp, codex, or none)
+- Configures review backend (rp, codex, copilot, or none)
 - Copies flowctl to `.flow/bin/`
 - Adds flow-next instructions to CLAUDE.md/AGENTS.md
 
@@ -1417,8 +1451,9 @@ This creates a complete audit trail: what was planned, what was done, how it was
 
 - Python 3.8+
 - git
-- Optional: [RepoPrompt](https://repoprompt.com/?atp=KJbuL4) for macOS GUI reviews + enables **context-scout** (deeper codebase discovery than repo-scout). Reviews work without it via Codex backend.
+- Optional: [RepoPrompt](https://repoprompt.com/?atp=KJbuL4) for macOS GUI reviews + enables **context-scout** (deeper codebase discovery than repo-scout). Reviews work without it via Codex or Copilot backend.
 - Optional: OpenAI Codex CLI (`npm install -g @openai/codex`) for cross-platform terminal-based reviews
+- Optional: GitHub Copilot CLI (`copilot auth`) for cross-platform terminal-based reviews
 
 Without a review backend, reviews are skipped.
 

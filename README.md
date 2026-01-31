@@ -25,7 +25,7 @@
 >
 > 🤖 **[Ralph mode](plugins/flow-next/docs/ralph.md)**: Ship features while you sleep. Fresh context per iteration, multi-model review gates, auto-blocks stuck tasks.
 >
-> 📡 **Cross-platform reviews**: [RepoPrompt](https://repoprompt.com/?atp=KJbuL4) (macOS) or [Codex CLI](plugins/flow-next/README.md#cross-model-reviews) (any OS)
+> 📡 **Cross-platform reviews**: [RepoPrompt](https://repoprompt.com/?atp=KJbuL4) (macOS) or [Codex/Copilot CLI](plugins/flow-next/README.md#cross-model-reviews) (any OS)
 >
 > 🧪 **OpenCode user?** Try [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) (experimental port)
 
@@ -67,7 +67,7 @@ This marketplace ships plugins that fix these problems.
 |---------|----------|
 | Context drift | **Re-anchoring** before EVERY task — re-reads specs + git state from `.flow/` |
 | 200K token limits | **Fresh context per task** — worker subagent starts clean each task |
-| Single-model blind spots | **Cross-model reviews** — RepoPrompt or Codex as second opinion |
+| Single-model blind spots | **Cross-model reviews** — RepoPrompt, Codex, or Copilot as second opinion |
 | Forgotten requirements | **Dependency graphs** — tasks declare blockers, nothing runs out of order |
 | "It worked on my machine" | **Evidence recording** — commits, test output, PRs tracked per task |
 | Infinite retry loops | **Auto-block stuck tasks** — fails after N attempts, moves on |

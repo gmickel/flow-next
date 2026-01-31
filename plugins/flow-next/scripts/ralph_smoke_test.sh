@@ -43,6 +43,7 @@ cd "$TEST_DIR/repo"
 git init -q
 git config user.email "ralph-smoke@example.com"
 git config user.name "Ralph Smoke"
+git config commit.gpgsign false
 git checkout -b main >/dev/null 2>&1 || true
 
 cat > README.md <<'EOF'
@@ -67,17 +68,20 @@ write_config() {
   local max_iter="$5"
   local max_turns="$6"
   local max_attempts="$7"
-  "$PYTHON_BIN" - <<'PY' "$plan" "$work" "$require" "$branch" "$max_iter" "$max_turns" "$max_attempts"
+  local completion="${8:-none}"
+  "$PYTHON_BIN" - <<'PY' "$plan" "$work" "$require" "$branch" "$max_iter" "$max_turns" "$max_attempts" "$completion"
 from pathlib import Path
 import re, sys
-plan, work, require, branch, max_iter, max_turns, max_attempts = sys.argv[1:8]
+plan, work, require, branch, max_iter, max_turns, max_attempts, completion = sys.argv[1:9]
 cfg = Path("scripts/ralph/config.env")
 text = cfg.read_text()
 # Replace template placeholders first (for initial setup)
 text = text.replace("{{PLAN_REVIEW}}", plan).replace("{{WORK_REVIEW}}", work)
+text = text.replace("{{COMPLETION_REVIEW}}", completion)
 # Then use re.sub for subsequent calls (when values are already set)
 text = re.sub(r"^PLAN_REVIEW=.*$", f"PLAN_REVIEW={plan}", text, flags=re.M)
 text = re.sub(r"^WORK_REVIEW=.*$", f"WORK_REVIEW={work}", text, flags=re.M)
+text = re.sub(r"^COMPLETION_REVIEW=.*$", f"COMPLETION_REVIEW={completion}", text, flags=re.M)
 text = re.sub(r"^REQUIRE_PLAN_REVIEW=.*$", f"REQUIRE_PLAN_REVIEW={require}", text, flags=re.M)
 text = re.sub(r"^BRANCH_MODE=.*$", f"BRANCH_MODE={branch}", text, flags=re.M)
 text = re.sub(r"^MAX_ITERATIONS=.*$", f"MAX_ITERATIONS={max_iter}", text, flags=re.M)

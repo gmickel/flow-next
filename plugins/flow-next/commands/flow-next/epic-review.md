@@ -1,7 +1,7 @@
 ---
 name: flow-next:epic-review
 description: Epic completion review - verify implementation matches spec
-argument-hint: "<fn-N> [--review=rp|codex|none]"
+argument-hint: "<fn-N> [--review=rp|codex|copilot|none]"
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-epic-review`

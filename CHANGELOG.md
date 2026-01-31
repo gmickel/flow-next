@@ -13,6 +13,7 @@ All notable changes to the gmickel-claude-marketplace.
 ### Added
 
 - **Epic dependency visualization skill** — New `flow-next-deps` skill shows epic dependency graphs, blocking chains, and execution phases. Triggers on "what's blocking", "execution order", "critical path", "which epics can run in parallel". Uses flowctl for data access with jq-based phase computation. Thanks [@clairernovotny](https://github.com/clairernovotny)! (PR #85)
+- **Copilot review backend** — Added GitHub Copilot CLI review backend with the same prompts/verdict parsing/receipts as Codex. Updated Ralph guard enforcement and documentation across flowctl/README/Ralph.
 
 ### Fixed
 
