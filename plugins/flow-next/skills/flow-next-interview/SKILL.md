@@ -1,6 +1,6 @@
 ---
 name: flow-next-interview
-description: Interview user in-depth about an epic, task, or spec file to extract complete implementation details. Use when user wants to flesh out a spec, refine requirements, or clarify a feature before building. Triggers on /flow-next:interview with Flow IDs (fn-1-abc, fn-1-abc.2, or legacy fn-1, fn-1.2) or file paths.
+description: Interview user in-depth about an epic, task, or spec file to extract complete implementation details. Use when user wants to flesh out a spec, refine requirements, or clarify a feature before building. Triggers on /flow-next:interview with Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2) or file paths.
 ---
 
 # Flow interview
@@ -35,18 +35,18 @@ Continue regardless (non-blocking).
 Full request: $ARGUMENTS
 
 Accepts:
-- **Flow epic ID** `fn-N-xxx` (e.g., `fn-1-abc`) or legacy `fn-N`: Fetch with `flowctl show`, write back with `flowctl epic set-plan`
-- **Flow task ID** `fn-N-xxx.M` (e.g., `fn-1-abc.2`) or legacy `fn-N.M`: Fetch with `flowctl show`, write back with `flowctl task set-description/set-acceptance`
+- **Flow epic ID** `fn-N-slug` (e.g., `fn-1-add-oauth`) or legacy `fn-N`: Fetch with `flowctl show`, write back with `flowctl epic set-plan`
+- **Flow task ID** `fn-N-slug.M` (e.g., `fn-1-add-oauth.2`) or legacy `fn-N.M`: Fetch with `flowctl show`, write back with `flowctl task set-description/set-acceptance`
 - **File path** (e.g., `docs/spec.md`): Read file, interview, rewrite file
 - **Empty**: Prompt for target
 
 Examples:
-- `/flow-next:interview fn-1-abc`
-- `/flow-next:interview fn-1-abc.3`
+- `/flow-next:interview fn-1-add-oauth`
+- `/flow-next:interview fn-1-add-oauth.3`
 - `/flow-next:interview fn-1` (legacy format still supported)
 - `/flow-next:interview docs/oauth-spec.md`
 
-If empty, ask: "What should I interview you about? Give me a Flow ID (e.g., fn-1-abc) or file path (e.g., docs/spec.md)"
+If empty, ask: "What should I interview you about? Give me a Flow ID (e.g., fn-1-add-oauth) or file path (e.g., docs/spec.md)"
 
 ## Setup
 
@@ -56,11 +56,11 @@ FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 
 ## Detect Input Type
 
-1. **Flow epic ID pattern**: matches `fn-\d+(-[a-z0-9]+)?` (e.g., fn-1-abc, fn-12, fn-42-z9k)
+1. **Flow epic ID pattern**: matches `fn-\d+(-[a-z0-9-]+)?` (e.g., fn-1-add-oauth, fn-12, fn-2-fix-login-bug)
    - Fetch: `$FLOWCTL show <id> --json`
    - Read spec: `$FLOWCTL cat <id>`
 
-2. **Flow task ID pattern**: matches `fn-\d+(-[a-z0-9]+)?\.\d+` (e.g., fn-1-abc.3, fn-12.5)
+2. **Flow task ID pattern**: matches `fn-\d+(-[a-z0-9-]+)?\.\d+` (e.g., fn-1-add-oauth.3, fn-12.5)
    - Fetch: `$FLOWCTL show <id> --json`
    - Read spec: `$FLOWCTL cat <id>`
    - Also get epic context: `$FLOWCTL cat <epic-id>`

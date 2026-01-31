@@ -45,8 +45,10 @@ New fields:
 
 ## ID Format
 
-- Epic: `fn-N` (e.g., `fn-1`, `fn-42`)
-- Task: `fn-N.M` (e.g., `fn-1.3`, `fn-42.7`)
+- **Epic**: `fn-N-slug` where `slug` is derived from the title (e.g., `fn-1-add-oauth`, `fn-2-fix-login-bug`)
+- **Task**: `fn-N-slug.M` (e.g., `fn-1-add-oauth.1`, `fn-2-fix-login-bug.2`)
+
+**Backwards compatibility**: Legacy formats `fn-N` (no suffix) and `fn-N-xxx` (random 3-char suffix) are still supported.
 
 ## Commands
 

@@ -598,10 +598,10 @@ Ralph checks sentinels at iteration boundaries (after Claude returns, before nex
 **Task retry/rollback:**
 ```bash
 # Reset completed/blocked task to todo
-flowctl task reset fn-1-abc.3
+flowctl task reset fn-1-add-oauth.3
 
 # Reset + cascade to dependent tasks (same epic)
-flowctl task reset fn-1-abc.2 --cascade
+flowctl task reset fn-1-add-oauth.2 --cascade
 ```
 
 ---
@@ -1272,12 +1272,12 @@ flowchart TD
 ├── meta.json              # Schema version
 ├── config.json            # Project settings (memory enabled, etc.)
 ├── epics/
-│   └── fn-1-abc.json      # Epic metadata (id, title, status, deps)
+│   └── fn-1-add-oauth.json      # Epic metadata (id, title, status, deps)
 ├── specs/
-│   └── fn-1-abc.md        # Epic spec (plan, scope, acceptance)
+│   └── fn-1-add-oauth.md        # Epic spec (plan, scope, acceptance)
 ├── tasks/
-│   ├── fn-1-abc.1.json    # Task metadata (id, status, priority, deps, assignee)
-│   ├── fn-1-abc.1.md      # Task spec (description, acceptance, done summary)
+│   ├── fn-1-add-oauth.1.json    # Task metadata (id, status, priority, deps, assignee)
+│   ├── fn-1-add-oauth.1.md      # Task spec (description, acceptance, done summary)
 │   └── ...
 └── memory/                # Persistent learnings (opt-in)
     ├── pitfalls.md        # Lessons from NEEDS_WORK reviews
@@ -1293,12 +1293,12 @@ New fields:
 
 ### ID Format
 
-- **Epic**: `fn-N-xxx` where `xxx` is a 3-character alphanumeric suffix (e.g., `fn-1-abc`, `fn-42-z9k`)
-- **Task**: `fn-N-xxx.M` (e.g., `fn-1-abc.1`, `fn-42-z9k.7`)
+- **Epic**: `fn-N-slug` where `slug` is derived from the epic title (e.g., `fn-1-add-oauth`, `fn-2-fix-login-bug`)
+- **Task**: `fn-N-slug.M` (e.g., `fn-1-add-oauth.1`, `fn-2-fix-login-bug.2`)
 
-The random suffix prevents ID collisions when team members create epics simultaneously. Legacy `fn-N` format (without suffix) is still supported for backwards compatibility.
+The slug is automatically generated from the epic title (lowercase, hyphens for spaces, max 40 chars). This makes IDs human-readable and self-documenting.
 
-> **Note**: Examples in this README may use shorter `fn-1` format for brevity. New epics always receive a collision-resistant suffix.
+**Backwards compatibility**: Legacy formats `fn-N` (no suffix) and `fn-N-xxx` (random 3-char suffix) are still fully supported. Existing epics don't need migration.
 
 There are no task IDs outside an epic. If you want a single task, create an epic with one task.
 

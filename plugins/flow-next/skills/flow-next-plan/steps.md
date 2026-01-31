@@ -72,7 +72,7 @@ $FLOWCTL init --json
 
 ## Step 1: Fast research (parallel)
 
-**If input is a Flow ID** (fn-N-xxx or fn-N.M, including legacy fn-N): First fetch it with `$FLOWCTL show <id> --json` and `$FLOWCTL cat <id>` to get the request context.
+**If input is a Flow ID** (fn-N-slug or fn-N.M, including legacy fn-N): First fetch it with `$FLOWCTL show <id> --json` and `$FLOWCTL cat <id>` to get the request context.
 
 **Check if memory is enabled:**
 ```bash
@@ -174,7 +174,7 @@ Default to standard unless complexity demands more or less.
 
 **Route A - Input was an existing Flow ID**:
 
-1. If epic ID (fn-N-xxx or legacy fn-N):
+1. If epic ID (fn-N-slug or legacy fn-N):
    ```bash
    # Use stdin heredoc (no temp file needed)
    $FLOWCTL epic set-plan <id> --file - --json <<'EOF'
@@ -183,7 +183,7 @@ Default to standard unless complexity demands more or less.
    ```
    - Create/update child tasks as needed
 
-2. If task ID (fn-N-xxx.M or legacy fn-N.M):
+2. If task ID (fn-N-slug.M or legacy fn-N.M):
    ```bash
    # Combined set-spec: description + acceptance in one call
    # Write to temp files only if content has single quotes
@@ -196,10 +196,10 @@ Default to standard unless complexity demands more or less.
    ```bash
    $FLOWCTL epic create --title "<Short title>" --json
    ```
-   This returns the epic ID (e.g., fn-1-abc).
+   This returns the epic ID (e.g., fn-1-add-oauth).
 
 2. Set epic branch_name (deterministic):
-   - Default: use epic ID (e.g., fn-1-abc)
+   - Default: use epic ID (e.g., fn-1-add-oauth)
    ```bash
    $FLOWCTL epic set-branch <epic-id> --branch "<epic-id>" --json
    ```
@@ -236,8 +236,8 @@ Default to standard unless complexity demands more or less.
    Report findings at end of planning (no user prompt needed):
    ```
    Epic dependencies set:
-   - fn-N-xxx → fn-2-abc (Auth): Uses authService from fn-2-abc.1
-   - fn-N-xxx → fn-5-xyz (DB): Extends User model
+   - fn-N-slug → fn-2-add-auth (Auth): Uses authService from fn-2-add-auth.1
+   - fn-N-slug → fn-5-user-model (DB): Extends User model
    ```
 
 5. Create child tasks:
@@ -328,13 +328,13 @@ If user chose "Yes" to review in SKILL.md setup question:
 Show epic summary with size breakdown and offer options:
 
 ```
-Epic fn-N-xxx created: "<title>"
+Epic fn-N-slug created: "<title>"
 Tasks: M total | Sizes: Ns S, Nm M
 
 Next steps:
-1) Start work: `/flow-next:work fn-N-xxx`
-2) Refine via interview: `/flow-next:interview fn-N-xxx`
-3) Review the plan: `/flow-next:plan-review fn-N-xxx`
+1) Start work: `/flow-next:work fn-N-slug`
+2) Refine via interview: `/flow-next:interview fn-N-slug`
+3) Review the plan: `/flow-next:plan-review fn-N-slug`
 4) Go deeper on specific tasks (tell me which)
 5) Simplify (reduce detail level)
 ```

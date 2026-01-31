@@ -24,8 +24,8 @@ Task tracking for AI agents. All state lives in `.flow/`.
 
 ## IDs
 
-- Epics: `fn-N-xxx` (e.g., fn-1-abc, fn-2-z9k) or legacy `fn-N`
-- Tasks: `fn-N-xxx.M` (e.g., fn-1-abc.1, fn-1-abc.2) or legacy `fn-N.M`
+- Epics: `fn-N-slug` where slug is derived from title (e.g., fn-1-add-oauth, fn-2-fix-login-bug) or legacy `fn-N`
+- Tasks: `fn-N-slug.M` (e.g., fn-1-add-oauth.1, fn-2-fix-login-bug.2) or legacy `fn-N.M`
 
 ## Common Commands
 

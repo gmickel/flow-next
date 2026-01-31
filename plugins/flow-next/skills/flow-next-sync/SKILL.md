@@ -39,8 +39,8 @@ Parse $ARGUMENTS for:
 - If doesn't match `fn-*` pattern: "Invalid ID format. Use fn-N (epic) or fn-N.M (task)."
 
 Detect ID type:
-- Contains `.` (e.g., fn-1.2) -> task ID
-- No `.` (e.g., fn-1 or fn-1-abc) -> epic ID
+- Contains `.` (e.g., fn-1.2 or fn-1-add-oauth.2) -> task ID
+- No `.` (e.g., fn-1 or fn-1-add-oauth) -> epic ID
 
 ### Step 2: Validate Environment
 

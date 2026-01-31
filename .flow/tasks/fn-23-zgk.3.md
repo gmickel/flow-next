@@ -42,9 +42,8 @@ Use find-replace with care - some messages are for epics (`fn-N`), some for task
 - [ ] `flowctl --help` shows new format
 - [ ] `flowctl epic --help` shows new format
 ## Done summary
-TBD
-
+Updated 31 error messages and 31 CLI help strings to use slug-based ID format with descriptive examples (fn-1-add-auth instead of fn-1-abc).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 13fbff5fa74a0b8fc1ef53e98a50cdc03b65d03a, 530a71346b1acd1bb15a49e051c29c9ff271aed8
+- Tests: smoke_test.sh (45 tests pass)
 - PRs:

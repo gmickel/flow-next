@@ -122,21 +122,21 @@ Present results as:
 
 | Epic | Title | Status | Dependencies | Blocked By |
 |------|-------|--------|--------------|------------|
-| **fn-1-abc** | Feature Alpha | **READY** | - | - |
-| fn-2-def | Feature Beta | blocked | fn-1-abc | fn-1-abc |
-| fn-3-ghi | Feature Gamma | blocked | fn-1-abc, fn-2-def | fn-2-def |
+| **fn-1-add-auth** | Add Authentication | **READY** | - | - |
+| fn-2-add-oauth | Add OAuth Login | blocked | fn-1-add-auth | fn-1-add-auth |
+| fn-3-user-profile | User Profile Page | blocked | fn-1-add-auth, fn-2-add-oauth | fn-2-add-oauth |
 
 ### Execution Phases
 
 | Phase | Epics | Can Start |
 |-------|-------|-----------|
-| **1** | fn-1-abc | **NOW** |
-| 2 | fn-2-def | After Phase 1 |
-| 3 | fn-3-ghi | After Phase 2 |
+| **1** | fn-1-add-auth | **NOW** |
+| 2 | fn-2-add-oauth | After Phase 1 |
+| 3 | fn-3-user-profile | After Phase 2 |
 
 ### Critical Path
 
-fn-1-abc → fn-2-def → fn-3-ghi (3 phases)
+fn-1-add-auth → fn-2-add-oauth → fn-3-user-profile (3 phases)
 ```
 
 ## Quick One-Liner

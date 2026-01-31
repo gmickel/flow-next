@@ -1,6 +1,6 @@
 ---
 name: flow-next
-description: "Manage .flow/ tasks and epics. Triggers: 'show me my tasks', 'list epics', 'what tasks are there', 'add a task', 'create task', 'what's ready', 'task status', 'show fn-1-abc'. NOT for /flow-next:plan or /flow-next:work."
+description: "Manage .flow/ tasks and epics. Triggers: 'show me my tasks', 'list epics', 'what tasks are there', 'add a task', 'create task', 'what's ready', 'task status', 'show fn-1-add-oauth'. NOT for /flow-next:plan or /flow-next:work."
 ---
 
 # Flow-Next Task Management
@@ -144,8 +144,10 @@ $FLOWCTL epic create --title "Epic title" --json
 
 ## ID Format
 
-- Epic: `fn-N-xxx` (e.g., `fn-1-abc`, `fn-42-z9k`) or legacy `fn-N`
-- Task: `fn-N-xxx.M` (e.g., `fn-1-abc.1`, `fn-42-z9k.7`) or legacy `fn-N.M`
+- Epic: `fn-N-slug` where slug is derived from title (e.g., `fn-1-add-oauth`, `fn-2-fix-login-bug`)
+- Task: `fn-N-slug.M` (e.g., `fn-1-add-oauth.1`, `fn-2-fix-login-bug.2`)
+
+Legacy formats `fn-N` and `fn-N-xxx` (random 3-char suffix) are still supported.
 
 ## Notes
 

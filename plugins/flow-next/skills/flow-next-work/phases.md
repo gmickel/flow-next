@@ -23,8 +23,8 @@ FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 
 Detect input type in this order (first match wins):
 
-1. **Flow task ID** `fn-N-xxx.M` (e.g., fn-1-abc.3) or legacy `fn-N.M` → **SINGLE_TASK_MODE**
-2. **Flow epic ID** `fn-N-xxx` (e.g., fn-1-abc) or legacy `fn-N` → **EPIC_MODE**
+1. **Flow task ID** `fn-N-slug.M` (e.g., fn-1-add-oauth.3) or legacy `fn-N.M` → **SINGLE_TASK_MODE**
+2. **Flow epic ID** `fn-N-slug` (e.g., fn-1-add-oauth) or legacy `fn-N` → **EPIC_MODE**
 3. **Spec file** `.md` path that exists on disk → **EPIC_MODE**
 4. **Idea text** everything else → **EPIC_MODE**
 
@@ -32,13 +32,13 @@ Detect input type in this order (first match wins):
 
 ---
 
-**Flow task ID (fn-N-xxx.M or fn-N.M)** → SINGLE_TASK_MODE:
+**Flow task ID (fn-N-slug.M or fn-N.M)** → SINGLE_TASK_MODE:
 - Read task: `$FLOWCTL show <id> --json`
 - Read spec: `$FLOWCTL cat <id>`
 - Get epic from task data for context: `$FLOWCTL show <epic-id> --json && $FLOWCTL cat <epic-id>`
 - **This is the only task to execute** — no loop to next task
 
-**Flow epic ID (fn-N-xxx or fn-N)** → EPIC_MODE:
+**Flow epic ID (fn-N-slug or fn-N)** → EPIC_MODE:
 - Read epic: `$FLOWCTL show <id> --json`
 - Read spec: `$FLOWCTL cat <id>`
 - Get first ready task: `$FLOWCTL ready --epic <id> --json`
