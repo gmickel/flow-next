@@ -17,7 +17,7 @@ FLOWCTL="${CLAUDE_PLUGIN_ROOT}/scripts/flowctl"
 Arguments: $ARGUMENTS
 Format: `<id> [--dry-run]`
 
-- `<id>` - task ID (fn-N-slug.M) or epic ID (fn-N-slug)
+- `<id>` - task ID `fn-N-slug.M` (or legacy `fn-N.M`, `fn-N-xxx.M`) or epic ID `fn-N-slug` (or legacy `fn-N`, `fn-N-xxx`)
 - `--dry-run` - show changes without writing
 
 ## Workflow
@@ -36,7 +36,7 @@ Parse $ARGUMENTS for:
 **Validate ID format first:**
 - Must start with `fn-`
 - If no ID provided: "Usage: /flow-next:sync <id> [--dry-run]"
-- If doesn't match `fn-*` pattern: "Invalid ID format. Use fn-N-slug (epic) or fn-N-slug.M (task)."
+- If doesn't match `fn-*` pattern: "Invalid ID format. Use fn-N-slug (epic) or fn-N-slug.M (task). Legacy fn-N, fn-N-xxx also work."
 
 Detect ID type:
 - Contains `.` (e.g., fn-1.2 or fn-1-add-oauth.2) -> task ID

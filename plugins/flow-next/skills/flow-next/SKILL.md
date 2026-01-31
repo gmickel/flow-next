@@ -122,18 +122,20 @@ $FLOWCTL epics --json
 $FLOWCTL tasks --json
 
 # Tasks for specific epic
-$FLOWCTL tasks --epic fn-1 --json
+$FLOWCTL tasks --epic fn-1-add-oauth --json
 
 # Ready tasks for an epic
-$FLOWCTL ready --epic fn-1 --json
+$FLOWCTL ready --epic fn-1-add-oauth --json
 ```
 
 ### "Show me task X"
 
 ```bash
-$FLOWCTL show fn-1.2 --json   # Metadata
-$FLOWCTL cat fn-1.2           # Full spec
+$FLOWCTL show fn-1-add-oauth.2 --json   # Metadata
+$FLOWCTL cat fn-1-add-oauth.2           # Full spec
 ```
+
+(Legacy `fn-1.2` / `fn-1-xxx.2` still works.)
 
 ### Create new epic (rare - usually via /flow-next:plan)
 
