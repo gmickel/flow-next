@@ -142,7 +142,7 @@ No files modified.
 |------|---------|
 | No ID provided | "Usage: /flow-next:sync <id> [--dry-run]" |
 | No `.flow/` | "No .flow/ found. Run `flowctl init` first." |
-| Invalid format | "Invalid ID format. Use fn-N (epic) or fn-N.M (task)." |
+| Invalid format | "Invalid ID format. Use fn-N-slug (epic) or fn-N-slug.M (task). Legacy fn-N, fn-N-xxx also work." |
 | Task not found | "Task <id> not found. Run `flowctl list` to see available." |
 | Epic not found | "Epic <id> not found. Run `flowctl list` to see available." |
 | No source (epic mode) | "No completed or in-progress tasks to sync from. Complete a task first." |

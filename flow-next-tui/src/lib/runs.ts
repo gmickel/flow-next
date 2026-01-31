@@ -89,9 +89,13 @@ export function clearRepoRootCache(): void {
 }
 
 /**
- * Regex for valid task IDs (fn-N, fn-N-xxx, fn-N.M, or fn-N-xxx.M)
+ * Regex for valid task IDs:
+ * - fn-N (epic only)
+ * - fn-N-xxx (legacy 3-char suffix)
+ * - fn-N-slug (new slug suffix, e.g., fn-1-add-oauth)
+ * - fn-N.M, fn-N-xxx.M, fn-N-slug.M (task variants)
  */
-const TASK_ID_PATTERN = /^fn-\d+(?:-[a-z0-9]{3})?(?:\.\d+)?$/;
+const TASK_ID_PATTERN = /^fn-\d+(?:(?:-[a-z0-9][a-z0-9-]*[a-z0-9])|(?:-[a-z0-9]{1,3}))?(?:\.\d+)?$/;
 
 /**
  * Regex for valid run IDs (alphanumeric, hyphens, underscores only - no path traversal)
@@ -106,7 +110,7 @@ const RUN_ID_PATTERN = /^[\w-]+$/;
 function validateTaskId(taskId: string): void {
   if (!TASK_ID_PATTERN.test(taskId)) {
     throw new Error(
-      `Invalid task ID: ${taskId}. Expected format: fn-N, fn-N-xxx, fn-N.M, or fn-N-xxx.M`
+      `Invalid task ID: ${taskId}. Expected format: fn-N, fn-N-slug, fn-N.M, or fn-N-slug.M (e.g., fn-1, fn-1-add-auth, fn-1.2, fn-1-add-auth.2)`
     );
   }
 }
@@ -226,7 +230,7 @@ async function getRunEpics(runPath: string): Promise<string[]> {
   if (await progressFile.exists()) {
     try {
       const content = await progressFile.text();
-      const matches = content.match(/epic=(fn-\d+(?:-[a-z0-9]{3})?)/g);
+      const matches = content.match(/epic=(fn-\d+(?:(?:-[a-z0-9][a-z0-9-]*[a-z0-9])|(?:-[a-z0-9]{1,3}))?)/g);
       if (matches && matches.length > 0) {
         const epics = matches.map((m) => m.replace('epic=', ''));
         // Return unique epics in order of appearance

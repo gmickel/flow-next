@@ -2766,7 +2766,7 @@ def cmd_task_create(args: argparse.Namespace) -> None:
 
     if not is_epic_id(args.epic):
         error_exit(
-            f"Invalid epic ID: {args.epic}. Expected format: fn-N or fn-N-xxx", use_json=args.json
+            f"Invalid epic ID: {args.epic}. Expected format: fn-N or fn-N-slug (e.g., fn-1, fn-1-add-auth)", use_json=args.json
         )
 
     flow_dir = get_flow_dir()
@@ -4061,7 +4061,7 @@ def cmd_ready(args: argparse.Namespace) -> None:
 
     if not is_epic_id(args.epic):
         error_exit(
-            f"Invalid epic ID: {args.epic}. Expected format: fn-N or fn-N-xxx", use_json=args.json
+            f"Invalid epic ID: {args.epic}. Expected format: fn-N or fn-N-slug (e.g., fn-1, fn-1-add-auth)", use_json=args.json
         )
 
     flow_dir = get_flow_dir()
@@ -6559,7 +6559,7 @@ def cmd_validate(args: argparse.Namespace) -> None:
     # Single epic validation
     if not is_epic_id(args.epic):
         error_exit(
-            f"Invalid epic ID: {args.epic}. Expected format: fn-N or fn-N-xxx", use_json=args.json
+            f"Invalid epic ID: {args.epic}. Expected format: fn-N or fn-N-slug (e.g., fn-1, fn-1-add-auth)", use_json=args.json
         )
 
     errors, warnings, task_count = validate_epic(
@@ -6686,7 +6686,7 @@ def main() -> None:
     p_epic_create.set_defaults(func=cmd_epic_create)
 
     p_epic_set_plan = epic_sub.add_parser("set-plan", help="Set epic spec from file")
-    p_epic_set_plan.add_argument("id", help="Epic ID (fn-N)")
+    p_epic_set_plan.add_argument("id", help="Epic ID (e.g., fn-1, fn-1-add-auth)")
     p_epic_set_plan.add_argument("--file", required=True, help="Markdown file (use '-' for stdin)")
     p_epic_set_plan.add_argument("--json", action="store_true", help="JSON output")
     p_epic_set_plan.set_defaults(func=cmd_epic_set_plan)
@@ -6694,7 +6694,7 @@ def main() -> None:
     p_epic_set_review = epic_sub.add_parser(
         "set-plan-review-status", help="Set plan review status"
     )
-    p_epic_set_review.add_argument("id", help="Epic ID (fn-N)")
+    p_epic_set_review.add_argument("id", help="Epic ID (e.g., fn-1, fn-1-add-auth)")
     p_epic_set_review.add_argument(
         "--status",
         required=True,
@@ -6707,7 +6707,7 @@ def main() -> None:
     p_epic_set_completion_review = epic_sub.add_parser(
         "set-completion-review-status", help="Set completion review status"
     )
-    p_epic_set_completion_review.add_argument("id", help="Epic ID (fn-N)")
+    p_epic_set_completion_review.add_argument("id", help="Epic ID (e.g., fn-1, fn-1-add-auth)")
     p_epic_set_completion_review.add_argument(
         "--status",
         required=True,
@@ -6718,13 +6718,13 @@ def main() -> None:
     p_epic_set_completion_review.set_defaults(func=cmd_epic_set_completion_review_status)
 
     p_epic_set_branch = epic_sub.add_parser("set-branch", help="Set epic branch name")
-    p_epic_set_branch.add_argument("id", help="Epic ID (fn-N)")
+    p_epic_set_branch.add_argument("id", help="Epic ID (e.g., fn-1, fn-1-add-auth)")
     p_epic_set_branch.add_argument("--branch", required=True, help="Branch name")
     p_epic_set_branch.add_argument("--json", action="store_true", help="JSON output")
     p_epic_set_branch.set_defaults(func=cmd_epic_set_branch)
 
     p_epic_close = epic_sub.add_parser("close", help="Close epic")
-    p_epic_close.add_argument("id", help="Epic ID (fn-N)")
+    p_epic_close.add_argument("id", help="Epic ID (e.g., fn-1, fn-1-add-auth)")
     p_epic_close.add_argument("--json", action="store_true", help="JSON output")
     p_epic_close.set_defaults(func=cmd_epic_close)
 
@@ -6743,7 +6743,7 @@ def main() -> None:
     p_epic_set_backend = epic_sub.add_parser(
         "set-backend", help="Set default backend specs for impl/review/sync"
     )
-    p_epic_set_backend.add_argument("id", help="Epic ID (fn-N)")
+    p_epic_set_backend.add_argument("id", help="Epic ID (e.g., fn-1, fn-1-add-auth)")
     p_epic_set_backend.add_argument(
         "--impl", help="Default impl backend spec (e.g., 'codex:gpt-5.2-high')"
     )
@@ -6761,7 +6761,7 @@ def main() -> None:
     task_sub = p_task.add_subparsers(dest="task_cmd", required=True)
 
     p_task_create = task_sub.add_parser("create", help="Create new task")
-    p_task_create.add_argument("--epic", required=True, help="Epic ID (fn-N)")
+    p_task_create.add_argument("--epic", required=True, help="Epic ID (e.g., fn-1, fn-1-add-auth)")
     p_task_create.add_argument("--title", required=True, help="Task title")
     p_task_create.add_argument("--deps", help="Comma-separated dependency IDs")
     p_task_create.add_argument(
@@ -6774,13 +6774,13 @@ def main() -> None:
     p_task_create.set_defaults(func=cmd_task_create)
 
     p_task_desc = task_sub.add_parser("set-description", help="Set task description")
-    p_task_desc.add_argument("id", help="Task ID (fn-N.M)")
+    p_task_desc.add_argument("id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
     p_task_desc.add_argument("--file", required=True, help="Markdown file (use '-' for stdin)")
     p_task_desc.add_argument("--json", action="store_true", help="JSON output")
     p_task_desc.set_defaults(func=cmd_task_set_description)
 
     p_task_acc = task_sub.add_parser("set-acceptance", help="Set task acceptance")
-    p_task_acc.add_argument("id", help="Task ID (fn-N.M)")
+    p_task_acc.add_argument("id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
     p_task_acc.add_argument("--file", required=True, help="Markdown file (use '-' for stdin)")
     p_task_acc.add_argument("--json", action="store_true", help="JSON output")
     p_task_acc.set_defaults(func=cmd_task_set_acceptance)
@@ -6788,7 +6788,7 @@ def main() -> None:
     p_task_set_spec = task_sub.add_parser(
         "set-spec", help="Set task spec (full file or sections)"
     )
-    p_task_set_spec.add_argument("id", help="Task ID (fn-N.M)")
+    p_task_set_spec.add_argument("id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
     p_task_set_spec.add_argument(
         "--file", help="Full spec file (use '-' for stdin) - replaces entire spec"
     )
@@ -6802,7 +6802,7 @@ def main() -> None:
     p_task_set_spec.set_defaults(func=cmd_task_set_spec)
 
     p_task_reset = task_sub.add_parser("reset", help="Reset task to todo")
-    p_task_reset.add_argument("task_id", help="Task ID (fn-N.M)")
+    p_task_reset.add_argument("task_id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
     p_task_reset.add_argument(
         "--cascade", action="store_true", help="Also reset dependent tasks (same epic)"
     )
@@ -6812,7 +6812,7 @@ def main() -> None:
     p_task_set_backend = task_sub.add_parser(
         "set-backend", help="Set backend specs for impl/review/sync"
     )
-    p_task_set_backend.add_argument("id", help="Task ID (fn-N.M)")
+    p_task_set_backend.add_argument("id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
     p_task_set_backend.add_argument(
         "--impl", help="Impl backend spec (e.g., 'codex:gpt-5.2-high')"
     )
@@ -6828,14 +6828,14 @@ def main() -> None:
     p_task_show_backend = task_sub.add_parser(
         "show-backend", help="Show effective backend specs (task + epic levels)"
     )
-    p_task_show_backend.add_argument("id", help="Task ID (fn-N.M)")
+    p_task_show_backend.add_argument("id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
     p_task_show_backend.add_argument("--json", action="store_true", help="JSON output")
     p_task_show_backend.set_defaults(func=cmd_task_show_backend)
 
     p_task_set_deps = task_sub.add_parser(
         "set-deps", help="Set task dependencies (comma-separated)"
     )
-    p_task_set_deps.add_argument("task_id", help="Task ID (fn-N.M)")
+    p_task_set_deps.add_argument("task_id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
     p_task_set_deps.add_argument(
         "--deps", required=True, help="Comma-separated dependency IDs (e.g., fn-1.1,fn-1.2)"
     )
@@ -6847,14 +6847,14 @@ def main() -> None:
     dep_sub = p_dep.add_subparsers(dest="dep_cmd", required=True)
 
     p_dep_add = dep_sub.add_parser("add", help="Add dependency")
-    p_dep_add.add_argument("task", help="Task ID (fn-N.M)")
-    p_dep_add.add_argument("depends_on", help="Dependency task ID (fn-N.M)")
+    p_dep_add.add_argument("task", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
+    p_dep_add.add_argument("depends_on", help="Dependency task ID (e.g., fn-1.1, fn-1-add-auth.1)")
     p_dep_add.add_argument("--json", action="store_true", help="JSON output")
     p_dep_add.set_defaults(func=cmd_dep_add)
 
     # show
     p_show = subparsers.add_parser("show", help="Show epic or task")
-    p_show.add_argument("id", help="Epic (fn-N) or task (fn-N.M) ID")
+    p_show.add_argument("id", help="Epic (e.g., fn-1, fn-1-add-auth) or task (e.g., fn-1.2, fn-1-add-auth.2) ID")
     p_show.add_argument("--json", action="store_true", help="JSON output")
     p_show.set_defaults(func=cmd_show)
 
@@ -6865,7 +6865,7 @@ def main() -> None:
 
     # tasks
     p_tasks = subparsers.add_parser("tasks", help="List tasks")
-    p_tasks.add_argument("--epic", help="Filter by epic ID (fn-N)")
+    p_tasks.add_argument("--epic", help="Filter by epic ID (e.g., fn-1, fn-1-add-auth)")
     p_tasks.add_argument(
         "--status",
         choices=["todo", "in_progress", "blocked", "done"],
