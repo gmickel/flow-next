@@ -2,6 +2,18 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.20.3] - 2026-01-31
+
+### Changed
+
+- **Readable epic IDs** — Epic IDs now use slugified titles instead of random suffixes. `fn-23-zgk` → `fn-23-readable-epic-ids`. Random 3-char suffix only used as fallback for empty/special-char titles. Existing IDs remain fully compatible.
+
+### Updated
+
+- All error messages and CLI help strings to show new slug format examples
+- TUI regex patterns to accept slug-based IDs
+- Skill docs with new ID format examples
+
 ## [flow-next 0.20.2] - 2026-01-31
 
 ### Added
