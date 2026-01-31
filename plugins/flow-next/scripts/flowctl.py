@@ -3052,7 +3052,7 @@ def cmd_show(args: argparse.Namespace) -> None:
 
     else:
         error_exit(
-            f"Invalid ID: {args.id}. Expected format: fn-N[-slug] (epic) or fn-N[-slug].M (task)",
+            f"Invalid ID: {args.id}. Expected format: fn-N or fn-N-slug (epic), fn-N.M or fn-N-slug.M (task)",
             use_json=args.json,
         )
 
@@ -3302,7 +3302,7 @@ def cmd_cat(args: argparse.Namespace) -> None:
         spec_path = flow_dir / TASKS_DIR / f"{args.id}.md"
     else:
         error_exit(
-            f"Invalid ID: {args.id}. Expected format: fn-N[-slug] (epic) or fn-N[-slug].M (task)",
+            f"Invalid ID: {args.id}. Expected format: fn-N or fn-N-slug (epic), fn-N.M or fn-N-slug.M (task)",
             use_json=False,
         )
         return
