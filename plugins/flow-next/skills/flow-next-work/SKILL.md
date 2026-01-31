@@ -1,6 +1,6 @@
 ---
 name: flow-next-work
-description: Execute a Flow epic or task systematically with git setup, task tracking, quality checks, and commit workflow. Use when implementing a plan or working through a spec. Triggers on /flow-next:work with Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2).
+description: Execute a Flow epic or task systematically with git setup, task tracking, quality checks, and commit workflow. Use when implementing a plan or working through a spec. Triggers on /flow-next:work with Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2, fn-1-xxx, fn-1-xxx.2).
 ---
 
 # Flow work
@@ -38,8 +38,8 @@ If `REVIEW_RECEIPT_PATH` is set or `FLOW_RALPH=1`:
 Full request: $ARGUMENTS
 
 Accepts:
-- Flow epic ID `fn-N-slug` (e.g., `fn-1-add-oauth`) or legacy `fn-N` to work through all tasks
-- Flow task ID `fn-N-slug.M` (e.g., `fn-1-add-oauth.2`) or legacy `fn-N.M` to work on single task
+- Flow epic ID `fn-N-slug` (e.g., `fn-1-add-oauth`) or legacy `fn-N`/`fn-N-xxx` to work through all tasks
+- Flow task ID `fn-N-slug.M` (e.g., `fn-1-add-oauth.2`) or legacy `fn-N.M`/`fn-N-xxx.M` to work on single task
 - Markdown spec file path (creates epic from file, then executes)
 - Idea text (creates minimal epic + single task, then executes)
 - Chained instructions like "then review with /flow-next:impl-review"
@@ -47,7 +47,7 @@ Accepts:
 Examples:
 - `/flow-next:work fn-1-add-oauth`
 - `/flow-next:work fn-1-add-oauth.3`
-- `/flow-next:work fn-1` (legacy format still supported)
+- `/flow-next:work fn-1` (legacy formats fn-1, fn-1-xxx still supported)
 - `/flow-next:work docs/my-feature-spec.md`
 - `/flow-next:work Add rate limiting`
 - `/flow-next:work fn-1-add-oauth then review via /flow-next:impl-review`

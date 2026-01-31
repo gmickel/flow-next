@@ -1,6 +1,6 @@
 ---
 name: flow-next-interview
-description: Interview user in-depth about an epic, task, or spec file to extract complete implementation details. Use when user wants to flesh out a spec, refine requirements, or clarify a feature before building. Triggers on /flow-next:interview with Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2) or file paths.
+description: Interview user in-depth about an epic, task, or spec file to extract complete implementation details. Use when user wants to flesh out a spec, refine requirements, or clarify a feature before building. Triggers on /flow-next:interview with Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2, fn-1-xxx, fn-1-xxx.2) or file paths.
 ---
 
 # Flow interview
@@ -35,15 +35,15 @@ Continue regardless (non-blocking).
 Full request: $ARGUMENTS
 
 Accepts:
-- **Flow epic ID** `fn-N-slug` (e.g., `fn-1-add-oauth`) or legacy `fn-N`: Fetch with `flowctl show`, write back with `flowctl epic set-plan`
-- **Flow task ID** `fn-N-slug.M` (e.g., `fn-1-add-oauth.2`) or legacy `fn-N.M`: Fetch with `flowctl show`, write back with `flowctl task set-description/set-acceptance`
+- **Flow epic ID** `fn-N-slug` (e.g., `fn-1-add-oauth`) or legacy `fn-N`/`fn-N-xxx`: Fetch with `flowctl show`, write back with `flowctl epic set-plan`
+- **Flow task ID** `fn-N-slug.M` (e.g., `fn-1-add-oauth.2`) or legacy `fn-N.M`/`fn-N-xxx.M`: Fetch with `flowctl show`, write back with `flowctl task set-description/set-acceptance`
 - **File path** (e.g., `docs/spec.md`): Read file, interview, rewrite file
 - **Empty**: Prompt for target
 
 Examples:
 - `/flow-next:interview fn-1-add-oauth`
 - `/flow-next:interview fn-1-add-oauth.3`
-- `/flow-next:interview fn-1` (legacy format still supported)
+- `/flow-next:interview fn-1` (legacy formats fn-1, fn-1-xxx still supported)
 - `/flow-next:interview docs/oauth-spec.md`
 
 If empty, ask: "What should I interview you about? Give me a Flow ID (e.g., fn-1-add-oauth) or file path (e.g., docs/spec.md)"

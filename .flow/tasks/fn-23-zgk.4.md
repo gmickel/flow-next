@@ -47,9 +47,8 @@ Keep examples realistic:
 - [ ] Backwards compatibility note present (old formats still work)
 - [ ] No broken example IDs (all match new regex)
 ## Done summary
-TBD
-
+Updated all skill docs and documentation with new descriptive slug ID format examples. Replaced random 3-char suffix examples (fn-1-abc) with meaningful slugs (fn-1-add-oauth, fn-2-fix-login-bug) across 12 files including SKILL.md files, README, flowctl.md, and usage.md templates.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c9e9547f0ca2d05a8fad80f03bd089d8adde20b1
+- Tests: grep -r 'fn-[0-9]-[a-z]{3}' plugins/flow-next/skills/ (verified no old-format examples remain)
 - PRs:

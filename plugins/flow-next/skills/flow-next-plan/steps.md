@@ -72,7 +72,7 @@ $FLOWCTL init --json
 
 ## Step 1: Fast research (parallel)
 
-**If input is a Flow ID** (fn-N-slug or fn-N.M, including legacy fn-N): First fetch it with `$FLOWCTL show <id> --json` and `$FLOWCTL cat <id>` to get the request context.
+**If input is a Flow ID** (fn-N-slug or fn-N-slug.M, including legacy fn-N/fn-N-xxx): First fetch it with `$FLOWCTL show <id> --json` and `$FLOWCTL cat <id>` to get the request context.
 
 **Check if memory is enabled:**
 ```bash
@@ -174,7 +174,7 @@ Default to standard unless complexity demands more or less.
 
 **Route A - Input was an existing Flow ID**:
 
-1. If epic ID (fn-N-slug or legacy fn-N):
+1. If epic ID (fn-N-slug or legacy fn-N/fn-N-xxx):
    ```bash
    # Use stdin heredoc (no temp file needed)
    $FLOWCTL epic set-plan <id> --file - --json <<'EOF'
@@ -183,7 +183,7 @@ Default to standard unless complexity demands more or less.
    ```
    - Create/update child tasks as needed
 
-2. If task ID (fn-N-slug.M or legacy fn-N.M):
+2. If task ID (fn-N-slug.M or legacy fn-N.M/fn-N-xxx.M):
    ```bash
    # Combined set-spec: description + acceptance in one call
    # Write to temp files only if content has single quotes

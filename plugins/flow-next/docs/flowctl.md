@@ -25,16 +25,16 @@ Works out of the box for parallel branches. No setup required.
 
 ```
 .flow/
-├── meta.json          # {schema_version, next_epic}
-├── epics/fn-N.json    # Epic state
-├── specs/fn-N.md      # Epic spec (markdown)
-├── tasks/fn-N.M.json  # Task state
-├── tasks/fn-N.M.md    # Task spec (markdown)
-├── memory/            # Agent memory (reserved)
-├── bin/               # (optional) Local flowctl install via /flow-next:setup
+├── meta.json               # {schema_version, next_epic}
+├── epics/fn-N-slug.json    # Epic state (e.g., fn-1-add-oauth.json)
+├── specs/fn-N-slug.md      # Epic spec (markdown)
+├── tasks/fn-N-slug.M.json  # Task state (e.g., fn-1-add-oauth.1.json)
+├── tasks/fn-N-slug.M.md    # Task spec (markdown)
+├── memory/                 # Agent memory (reserved)
+├── bin/                    # (optional) Local flowctl install via /flow-next:setup
 │   ├── flowctl
 │   └── flowctl.py
-└── usage.md           # (optional) CLI reference via /flow-next:setup
+└── usage.md                # (optional) CLI reference via /flow-next:setup
 ```
 
 Flowctl accepts schema v1 and v2; new fields are optional and defaulted.
@@ -78,12 +78,12 @@ Output:
 Create new epic.
 
 ```bash
-flowctl epic create --title "Epic title" [--branch "fn-1-epic"] [--json]
+flowctl epic create --title "Epic title" [--branch "fn-1-epic-title"] [--json]
 ```
 
 Output:
 ```json
-{"success": true, "id": "fn-1", "title": "Epic title", "spec_path": ".flow/specs/fn-1.md"}
+{"success": true, "id": "fn-1-epic-title", "title": "Epic title", "spec_path": ".flow/specs/fn-1-epic-title.md"}
 ```
 
 ### epic set-plan

@@ -40,41 +40,41 @@ $FLOWCTL epics --json
 
 # List all tasks (or filter by epic/status)
 $FLOWCTL tasks --json
-$FLOWCTL tasks --epic fn-1 --json
+$FLOWCTL tasks --epic fn-1-add-oauth --json
 $FLOWCTL tasks --status todo --json
 
 # View epic with all tasks
-$FLOWCTL show fn-1 --json
-$FLOWCTL cat fn-1              # Spec markdown
+$FLOWCTL show fn-1-add-oauth --json
+$FLOWCTL cat fn-1-add-oauth              # Spec markdown
 
 # View single task
-$FLOWCTL show fn-1.2 --json
-$FLOWCTL cat fn-1.2            # Task spec
+$FLOWCTL show fn-1-add-oauth.2 --json
+$FLOWCTL cat fn-1-add-oauth.2            # Task spec
 
 # What's ready to work on?
-$FLOWCTL ready --epic fn-1 --json
+$FLOWCTL ready --epic fn-1-add-oauth --json
 
 # Create task under existing epic
-$FLOWCTL task create --epic fn-1 --title "Fix bug X" --json
+$FLOWCTL task create --epic fn-1-add-oauth --title "Fix bug X" --json
 
 # Set task description and acceptance (combined, fewer writes)
-$FLOWCTL task set-spec fn-1.2 --description /tmp/desc.md --acceptance /tmp/accept.md --json
+$FLOWCTL task set-spec fn-1-add-oauth.2 --description /tmp/desc.md --acceptance /tmp/accept.md --json
 
 # Or use stdin with heredoc (no temp file):
-$FLOWCTL task set-description fn-1.2 --file - --json <<'EOF'
+$FLOWCTL task set-description fn-1-add-oauth.2 --file - --json <<'EOF'
 Description here
 EOF
 
 # Start working on task
-$FLOWCTL start fn-1.2 --json
+$FLOWCTL start fn-1-add-oauth.2 --json
 
 # Mark task done
 echo "What was done" > /tmp/summary.md
 echo '{"commits":["abc123"],"tests":["npm test"],"prs":[]}' > /tmp/evidence.json
-$FLOWCTL done fn-1.2 --summary-file /tmp/summary.md --evidence-json /tmp/evidence.json --json
+$FLOWCTL done fn-1-add-oauth.2 --summary-file /tmp/summary.md --evidence-json /tmp/evidence.json --json
 
 # Validate structure
-$FLOWCTL validate --epic fn-1 --json
+$FLOWCTL validate --epic fn-1-add-oauth --json
 $FLOWCTL validate --all --json
 ```
 
@@ -139,7 +139,7 @@ $FLOWCTL cat fn-1.2           # Full spec
 
 ```bash
 $FLOWCTL epic create --title "Epic title" --json
-# Returns: {"success": true, "id": "fn-N", ...}
+# Returns: {"success": true, "id": "fn-N-epic-title", ...}
 ```
 
 ## ID Format
