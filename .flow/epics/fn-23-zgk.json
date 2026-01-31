@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-23-zgk",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-01-31T00:52:20.900782Z",
   "created_at": "2026-01-30T23:25:25.570417Z",
   "default_impl": null,
   "default_review": null,
@@ -14,5 +14,5 @@
   "spec_path": ".flow/specs/fn-23-zgk.md",
   "status": "open",
   "title": "Readable epic IDs (slugified titles)",
-  "updated_at": "2026-01-30T23:25:55.378328Z"
+  "updated_at": "2026-01-31T00:52:20.901039Z"
 }
