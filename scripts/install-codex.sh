@@ -122,7 +122,36 @@ patch_for_codex() {
 
 # Scouts that need full intelligence despite being sonnet-tier in Claude Code.
 # These do reasoning/judgment, not just config scanning.
-INTELLIGENT_SCOUTS="epic-scout claude-md-scout docs-gap-scout"
+# Note: claude-md-scout is renamed to agents-md-scout (Codex uses AGENTS.md not CLAUDE.md)
+INTELLIGENT_SCOUTS="epic-scout agents-md-scout docs-gap-scout"
+
+# Agent renames for Codex (Claude Code name → Codex name)
+# Codex uses AGENTS.md, not CLAUDE.md
+rename_agent_for_codex() {
+    local name="$1"
+    case "$name" in
+        claude-md-scout) echo "agents-md-scout" ;;
+        *) echo "$name" ;;
+    esac
+}
+
+# Patch agent body content for Codex differences
+patch_agent_body_for_codex() {
+    local body="$1"
+    local name="$2"
+    case "$name" in
+        claude-md-scout|agents-md-scout)
+            # Codex uses AGENTS.md, not CLAUDE.md
+            echo "$body" | sed \
+                -e 's/CLAUDE\.md/AGENTS.md/g' \
+                -e 's/claude\.md/agents.md/g' \
+                -e 's/Claude Code/Codex/g'
+            ;;
+        *)
+            echo "$body"
+            ;;
+    esac
+}
 
 # Map Claude Code model to Codex model
 # Takes claude_model and agent_name to handle sonnet scouts that need intelligence
@@ -216,17 +245,24 @@ convert_agent_to_toml() {
         fi
     done < "$md_file"
 
-    # Map model
+    # Apply Codex renames
+    local codex_name
+    codex_name=$(rename_agent_for_codex "$name")
+
+    # Map model (use codex_name for intelligent scout matching)
     local codex_model
-    codex_model=$(map_model_to_codex "$model" "$name")
+    codex_model=$(map_model_to_codex "$model" "$codex_name")
 
     # Strip leading/trailing blank lines from body (macOS-compatible)
     body="$(echo "$body" | awk 'NF{p=1} p')"
     body="$(echo "$body" | awk '{a[NR]=$0} END{for(i=NR;i>=1;i--) if(a[i]!=""){for(j=1;j<=i;j++) print a[j]; break}}')"
 
+    # Patch body content for Codex differences
+    body="$(patch_agent_body_for_codex "$body" "$name")"
+
     # Write .toml role config
     {
-        echo "# Auto-generated from $name.md — do not edit manually"
+        echo "# Auto-generated from $name.md (codex: $codex_name) — do not edit manually"
         echo "# Re-run install-codex.sh to regenerate"
         echo ""
         if [ -n "$codex_model" ]; then
@@ -261,6 +297,9 @@ generate_config_entries() {
         echo "# --- flow-next multi-agent roles (auto-generated) ---"
         echo "# Re-run install-codex.sh to regenerate"
         echo ""
+        echo "# Enable custom multi-agent roles (Codex 0.102.0+)"
+        echo "multi_agent = true"
+        echo ""
         echo "[agents]"
         echo "max_threads = $CODEX_MAX_THREADS"
         echo ""
@@ -269,8 +308,11 @@ generate_config_entries() {
             if [ ! -f "$md_file" ]; then continue; fi
             local basename
             basename="$(basename "${md_file%.md}")"
+            # Apply Codex renames
+            local codex_basename
+            codex_basename=$(rename_agent_for_codex "$basename")
             # Convert hyphens to underscores for TOML key
-            local role_key="${basename//-/_}"
+            local role_key="${codex_basename//-/_}"
 
             # Parse description from frontmatter
             local desc=""
@@ -286,6 +328,10 @@ generate_config_entries() {
                             desc="${line#description: }"
                             desc="${desc#description:}"
                             desc="$(echo "$desc" | xargs)"
+                            # Patch description for renames
+                            if [ "$basename" = "claude-md-scout" ]; then
+                                desc="Used by /flow-next:prime to analyze AGENTS.md quality and completeness. Do not invoke directly."
+                            fi
                             ;;
                     esac
                 fi
@@ -293,7 +339,7 @@ generate_config_entries() {
 
             echo "[agents.$role_key]"
             echo "description = \"$desc\""
-            echo "config_file = \"agents/$basename.toml\""
+            echo "config_file = \"agents/$codex_basename.toml\""
             echo ""
         done
 
@@ -575,13 +621,23 @@ echo -e "  ${GREEN}✓${NC} RP review skills (patched - DO NOT RETRY warnings)"
 # ====================
 if [ -d "$PLUGIN_DIR/agents" ] && [ "$(ls -A "$PLUGIN_DIR/agents" 2>/dev/null)" ]; then
     echo -e "${BLUE}Installing agents (multi-agent roles)...${NC}"
+
+    # Clean old flow-next .toml role configs to remove stale/renamed agents
+    # Only removes files we generated (identified by our header comment)
+    grep -rl "Auto-generated from.*\.md.*do not edit manually" "$CODEX_DIR/agents/"*.toml 2>/dev/null | xargs rm -f 2>/dev/null || true
+
     AGENT_COUNT=0
 
     for agent_file in "$PLUGIN_DIR/agents/"*.md; do
         if [ -f "$agent_file" ]; then
             name="$(basename "${agent_file%.md}")"
-            convert_agent_to_toml "$agent_file" "$CODEX_DIR/agents/$name.toml"
-            echo -e "  ${GREEN}✓${NC} $name.toml"
+            codex_name=$(rename_agent_for_codex "$name")
+            convert_agent_to_toml "$agent_file" "$CODEX_DIR/agents/$codex_name.toml"
+            if [ "$name" != "$codex_name" ]; then
+                echo -e "  ${GREEN}✓${NC} $codex_name.toml (renamed from $name)"
+            else
+                echo -e "  ${GREEN}✓${NC} $codex_name.toml"
+            fi
             AGENT_COUNT=$((AGENT_COUNT + 1))
         fi
     done
@@ -631,7 +687,7 @@ fi
 echo
 echo -e "${BLUE}Model mapping:${NC}"
 echo "  Intelligent agents (opus):   $CODEX_MODEL_INTELLIGENT (reasoning: $CODEX_REASONING_EFFORT)"
-echo "  Smart scouts (reasoning):    $CODEX_MODEL_INTELLIGENT (epic-scout, claude-md-scout, docs-gap-scout)"
+echo "  Smart scouts (reasoning):    $CODEX_MODEL_INTELLIGENT (epic-scout, agents-md-scout, docs-gap-scout)"
 echo "  Fast scouts (scanning):      $CODEX_MODEL_FAST (8 remaining scouts)"
 echo "  Worker agent:                inherited from parent"
 echo "  Max parallel threads:        $CODEX_MAX_THREADS"
