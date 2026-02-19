@@ -237,12 +237,22 @@ Install flow or flow-next to OpenAI Codex (requires Codex CLI 0.102.0+):
 
 **Path patching:** All `${CLAUDE_PLUGIN_ROOT}` references are automatically replaced with `~/.codex` paths during install.
 
-**Agent conversion (multi-agent roles):** Claude Code agent `.md` files are converted to Codex `.toml` role configs:
+**Agent conversion (multi-agent roles):** Claude Code `.md` agents → Codex `.toml` role configs:
 - Frontmatter → `model`, `sandbox_mode`, reasoning settings
-- Body → `developer_instructions`
-- Model mapping: `opus` → `gpt-5.3-codex`, `claude-sonnet-4-6` → `gpt-5.3-codex-spark`, `inherit` → parent
-- Spark agents skip `model_reasoning_effort` (not supported)
-- `max_threads = 12` for parallel scout execution
+- Body → `developer_instructions` (backslashes auto-escaped for TOML)
+- `claude-md-scout` → `agents-md-scout` (CLAUDE.md refs patched to AGENTS.md)
+- Prime workflow patched: `Task flow-next:<scout>` → `Use the <scout_name> agent`
+
+**Model mapping (3-tier):**
+
+| Claude Code | Codex | Agents |
+|-------------|-------|--------|
+| `opus` | `gpt-5.3-codex` (reasoning: high) | quality-auditor, flow-gap-analyst, context-scout |
+| `claude-sonnet-4-6` (smart) | `gpt-5.3-codex` (reasoning: high) | epic-scout, agents-md-scout, docs-gap-scout |
+| `claude-sonnet-4-6` (fast) | `gpt-5.3-codex-spark` (no reasoning) | build-scout, env-scout, testing-scout, tooling-scout, observability-scout, security-scout, workflow-scout, memory-scout |
+| `inherit` | inherited from parent | worker, plan-sync |
+
+Smart scouts (epic-scout, agents-md-scout, docs-gap-scout) need deeper reasoning for context building. Remaining 8 scanning scouts run on Spark for speed. Spark agents skip `model_reasoning_effort` (not supported). `max_threads = 12` for parallel scout execution.
 
 Override defaults:
 ```bash

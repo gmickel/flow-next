@@ -1477,14 +1477,35 @@ Flow-Next works in OpenAI Codex with near-parity to Claude Code. The install scr
 
 **What works:**
 - Planning, work execution, interviews, reviews — full workflow
-- Multi-agent roles: scouts, workers, and reviewers run as parallel Codex threads
+- Multi-agent roles: 20 agents run as parallel Codex threads (up to 12 concurrent)
 - Cross-model reviews (Codex as review backend)
 - Ralph autonomous mode
 - flowctl CLI
 
+**Model mapping (3-tier):**
+
+| Tier | Codex Model | Agents | Reasoning |
+|------|-------------|--------|-----------|
+| Intelligent | `gpt-5.3-codex` | quality-auditor, flow-gap-analyst, context-scout | high |
+| Smart scouts | `gpt-5.3-codex` | epic-scout, agents-md-scout, docs-gap-scout | high |
+| Fast scouts | `gpt-5.3-codex-spark` | build, env, testing, tooling, observability, security, workflow, memory scouts | skipped |
+| Inherited | parent model | worker, plan-sync | parent |
+
+Smart scouts (epic-scout, agents-md-scout, docs-gap-scout) need deeper reasoning for context building and analysis. The remaining 8 scanning scouts run on Spark for speed — they check for file presence and patterns without needing multi-step reasoning.
+
+Override model defaults:
+```bash
+CODEX_MODEL_INTELLIGENT=gpt-5.3-codex \
+CODEX_MODEL_FAST=gpt-5.3-codex-spark \
+CODEX_REASONING_EFFORT=high \
+CODEX_MAX_THREADS=12 \
+./scripts/install-codex.sh flow-next
+```
+
 **Caveats:**
 - `/prompts:setup` not supported — use manual project setup below
-- Some scout agents may be slightly less reliable than in Claude Code (Codex's multi-agent threading differs)
+- Hooks not supported (ralph-guard won't run in Codex)
+- `claude-md-scout` is auto-renamed to `agents-md-scout` (CLAUDE.md → AGENTS.md patching)
 
 **Install:**
 ```bash

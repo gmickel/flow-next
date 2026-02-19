@@ -21,13 +21,16 @@
 #   Codex .toml role configs (model, developer_instructions, sandbox_mode).
 #   Agent entries are merged into ~/.codex/config.toml with descriptions.
 #
-#   Model mapping (Claude → Codex):
-#     opus              → CODEX_MODEL_INTELLIGENT (default: gpt-5.3-codex)
-#     claude-sonnet-4-6 → CODEX_MODEL_FAST (default: gpt-5.3-codex-spark)
-#       except: epic-scout, claude-md-scout, docs-gap-scout → CODEX_MODEL_INTELLIGENT
-#       (these do reasoning/judgment, not just config scanning)
-#     haiku             → CODEX_MODEL_FAST
-#     inherit           → (omitted, inherits from parent)
+#   Model mapping (3-tier, Claude → Codex):
+#     opus              → gpt-5.3-codex + reasoning:high
+#       (quality-auditor, flow-gap-analyst, context-scout)
+#     sonnet (smart)    → gpt-5.3-codex + reasoning:high
+#       (epic-scout, agents-md-scout, docs-gap-scout — need deeper analysis)
+#     sonnet (fast)     → gpt-5.3-codex-spark (no reasoning)
+#       (build, env, testing, tooling, observability, security, workflow, memory scouts)
+#     inherit           → (omitted, inherits from parent: worker, plan-sync)
+#
+#   claude-md-scout is auto-renamed to agents-md-scout (AGENTS.md, not CLAUDE.md)
 #
 #   Override defaults via env vars:
 #     CODEX_MODEL_INTELLIGENT=gpt-5.3-codex
@@ -37,9 +40,10 @@
 #     CODEX_MAX_THREADS=12
 #
 # Skill patching:
-#   flow-next-work phases.md is patched to use Codex multi-agent role
-#   invocations instead of Claude Code's Task tool.
-#   flow-next-plan steps.md is patched to reference Codex agent role names.
+#   flow-next-work: Task tool → Codex multi-agent role invocations
+#   flow-next-plan: flow-next:<scout> refs → Codex role names (underscore)
+#   flow-next-prime: Task flow-next:<scout> → Use the <role> agent (9 scouts)
+#   RP review skills: adds CRITICAL wait/no-retry warnings for slow commands
 #
 # Requires Codex CLI 0.102.0+ for multi-agent role support.
 
@@ -300,8 +304,11 @@ generate_config_entries() {
         echo "# --- flow-next multi-agent roles (auto-generated) ---"
         echo "# Re-run install-codex.sh to regenerate"
         echo ""
-        echo "# Enable custom multi-agent roles (Codex 0.102.0+)"
-        echo "multi_agent = true"
+        # Only add multi_agent if not already set in user config
+        if ! grep -q "^multi_agent" "$config_file" 2>/dev/null; then
+            echo "# Enable custom multi-agent roles (Codex 0.102.0+)"
+            echo "multi_agent = true"
+        fi
         echo ""
         echo "[agents]"
         echo "max_threads = $CODEX_MAX_THREADS"
