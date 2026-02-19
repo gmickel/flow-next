@@ -290,6 +290,7 @@ def get_default_config() -> dict:
         "memory": {"enabled": True},
         "planSync": {"enabled": True, "crossEpic": False},
         "review": {"backend": None},
+        "scouts": {"github": False},
     }
 
 
@@ -5413,9 +5414,10 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
 
     win_id: Optional[int] = None
 
-    # Single window with no root paths - use it
+    # Single window with no root paths - use it (unless --create, which needs a folder)
     if len(windows) == 1 and not extract_root_paths(windows[0]):
-        win_id = extract_window_id(windows[0])
+        if not getattr(args, "create", False):
+            win_id = extract_window_id(windows[0])
 
     # Otherwise match by root
     if win_id is None:

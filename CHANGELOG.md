@@ -2,6 +2,12 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.22.3] - 2026-02-19
+
+### Fixed
+
+- **RP `--create` fails on empty default window** — when only an empty RP window exists (no folder loaded), `setup-review --create` reused it instead of creating a workspace with the repo folder, causing "No workspace open" from the builder. Now falls through to workspace creation.
+
 ## [flow-next 0.22.2] - 2026-02-19
 
 ### Fixed
