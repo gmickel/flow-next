@@ -436,6 +436,30 @@ SECTION3CEOF
     fi
 }
 
+# Patch flow-next-prime for Codex multi-agent (replace Task tool scout refs with role names)
+patch_prime_for_codex_agents() {
+    local skills_dir="$1"
+    local workflow_file="$skills_dir/flow-next-prime/workflow.md"
+
+    if [ -f "$workflow_file" ]; then
+        # Replace "Task flow-next:scout-name" with "Use the scout_name agent"
+        sed -i.bak \
+            -e 's|Task flow-next:tooling-scout|Use the tooling_scout agent|g' \
+            -e 's|Task flow-next:claude-md-scout|Use the agents_md_scout agent|g' \
+            -e 's|Task flow-next:env-scout|Use the env_scout agent|g' \
+            -e 's|Task flow-next:testing-scout|Use the testing_scout agent|g' \
+            -e 's|Task flow-next:build-scout|Use the build_scout agent|g' \
+            -e 's|Task flow-next:docs-gap-scout|Use the docs_gap_scout agent|g' \
+            -e 's|Task flow-next:observability-scout|Use the observability_scout agent|g' \
+            -e 's|Task flow-next:security-scout|Use the security_scout agent|g' \
+            -e 's|Task flow-next:workflow-scout|Use the workflow_scout agent|g' \
+            -e 's/Run all 9 scouts in parallel using the Task tool:/Run all 9 scouts in parallel (Codex spawns them as multi-agent threads):/g' \
+            -e 's/Launch all 9 scouts in parallel for speed/Launch all 9 scout agents in parallel for speed/g' \
+            "$workflow_file"
+        rm -f "${workflow_file}.bak"
+    fi
+}
+
 # Patch flow-next-plan for Codex multi-agent (replace Task tool scout refs with role names)
 patch_plan_for_codex_agents() {
     local skills_dir="$1"
@@ -611,6 +635,10 @@ fi
 # Patch flow-next-plan for Codex multi-agent roles
 patch_plan_for_codex_agents "$CODEX_DIR/skills"
 echo -e "  ${GREEN}✓${NC} flow-next-plan (patched for multi-agent roles)"
+
+# Patch flow-next-prime for Codex multi-agent roles
+patch_prime_for_codex_agents "$CODEX_DIR/skills"
+echo -e "  ${GREEN}✓${NC} flow-next-prime (patched for multi-agent roles)"
 
 # Patch all RP review skills for Codex
 patch_rp_review_skills_for_codex "$CODEX_DIR/skills"

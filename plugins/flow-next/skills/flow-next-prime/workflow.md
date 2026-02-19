@@ -2,7 +2,7 @@
 
 Execute these phases in order. Reference [pillars.md](pillars.md) for scoring criteria and [remediation.md](remediation.md) for fix templates.
 
-**Model guidance**: This skill uses sonnet for synthesis and report generation. Scouts run as haiku for speed.
+**Model guidance**: This skill uses sonnet for synthesis and report generation. Scouts run as sonnet for quality.
 
 ---
 

@@ -6,7 +6,7 @@ Use `flowctl rp` wrappers only.
 
 ```bash
 # Atomic setup: pick-window + builder
-eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "...")"
+eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "..." --create)"
 # Returns: W=<window> T=<tab>
 ```
 
