@@ -293,24 +293,48 @@ convert_agent_to_toml() {
 
 # Generate config.toml agent entries
 # Reads existing config.toml, removes old flow-next agent entries, adds new ones
+# Handles: root-level multi_agent, [agents] dedup, sub-table merging
 generate_config_entries() {
     local config_file="$CODEX_DIR/config.toml"
     local agents_dir="$1"  # Source .md files dir
     local tmp_entries="/tmp/codex-agent-entries.toml"
 
-    # Generate agent entries
+    # --- Step 1: Ensure multi_agent = true at TOML root ---
+    # Must appear before any [table] header to stay at root scope.
+    if [ -f "$config_file" ]; then
+        if ! grep -q "^multi_agent" "$config_file" 2>/dev/null; then
+            # Insert at line 1 (before any table headers)
+            local tmp_cfg="/tmp/codex-config-prepend.toml"
+            {
+                echo "# Enable custom multi-agent roles (Codex 0.102.0+)"
+                echo "multi_agent = true"
+                echo ""
+                cat "$config_file"
+            } > "$tmp_cfg"
+            mv "$tmp_cfg" "$config_file"
+        fi
+    fi
+
+    # --- Step 2: Clean old flow-next entries ---
+    if [ -f "$config_file" ]; then
+        if grep -q "flow-next multi-agent roles" "$config_file" 2>/dev/null; then
+            sed -i.bak '/# --- flow-next multi-agent roles/,/# --- end flow-next roles ---/d' "$config_file"
+            rm -f "${config_file}.bak"
+        fi
+    fi
+
+    # --- Step 3: Generate agent sub-table entries ---
     {
         echo ""
         echo "# --- flow-next multi-agent roles (auto-generated) ---"
         echo "# Re-run install-codex.sh to regenerate"
         echo ""
-        # Only add multi_agent if not already set in user config
-        if ! grep -q "^multi_agent" "$config_file" 2>/dev/null; then
-            echo "# Enable custom multi-agent roles (Codex 0.102.0+)"
-            echo "multi_agent = true"
+
+        # Only declare [agents] if it doesn't already exist in user config
+        if ! grep -q "^\[agents\]" "$config_file" 2>/dev/null; then
+            echo "[agents]"
         fi
-        echo ""
-        echo "[agents]"
+        # Always set max_threads under [agents] (idempotent — appears right after [agents])
         echo "max_threads = $CODEX_MAX_THREADS"
         echo ""
 
@@ -347,6 +371,7 @@ generate_config_entries() {
                 fi
             done < "$md_file"
 
+            # [agents.X] sub-tables are always safe to append — they extend [agents]
             echo "[agents.$role_key]"
             echo "description = \"$desc\""
             echo "config_file = \"agents/$codex_basename.toml\""
@@ -356,22 +381,22 @@ generate_config_entries() {
         echo "# --- end flow-next roles ---"
     } > "$tmp_entries"
 
-    # Merge into config.toml
+    # --- Step 4: Merge into config.toml ---
     if [ -f "$config_file" ]; then
-        # Remove old flow-next entries if they exist
-        if grep -q "flow-next multi-agent roles" "$config_file" 2>/dev/null; then
-            sed -i.bak '/# --- flow-next multi-agent roles/,/# --- end flow-next roles ---/d' "$config_file"
-            rm -f "${config_file}.bak"
-        fi
-        # Also remove any old max_threads under [agents] if we wrote it
+        # Remove old max_threads we may have written (will be re-added from tmp_entries)
         if grep -q "^max_threads" "$config_file" 2>/dev/null; then
             sed -i.bak '/^max_threads/d' "$config_file"
             rm -f "${config_file}.bak"
         fi
-        # Append new entries
         cat "$tmp_entries" >> "$config_file"
     else
-        cp "$tmp_entries" "$config_file"
+        # No config.toml yet — prepend multi_agent before our entries
+        {
+            echo "# Enable custom multi-agent roles (Codex 0.102.0+)"
+            echo "multi_agent = true"
+            echo ""
+            cat "$tmp_entries"
+        } > "$config_file"
     fi
 
     rm -f "$tmp_entries"
