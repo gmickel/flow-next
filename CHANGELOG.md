@@ -2,6 +2,21 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.22.2] - 2026-02-19
+
+### Fixed
+
+- **Codex: ensure `multi_agent` at TOML root** — `generate_config_entries` appended `multi_agent = true` at end of config.toml, which landed inside a preceding table instead of at root scope. Now prepended before any `[table]` header.
+- **Codex: deduplicate `[agents]` table** — installer always emitted a fresh `[agents]` declaration; if user already had one, the resulting file was invalid TOML. Now checks before declaring.
+- **Codex: patch prime workflow for multi-agent** — `Task flow-next:<scout>` references in prime's workflow.md were not converted to Codex role names, causing "Scout availability partial" (only 4/9 scouts resolved). All 9 scouts now patched.
+- **Codex: escape backslashes in TOML agent configs** — agent markdown containing regex patterns (`\.env`, `\[test\]`) broke TOML `"""` strings. Backslashes now auto-escaped.
+
+### Added
+
+- **RP auto-create workspace** — all `setup-review` calls now pass `--create`, so RepoPrompt auto-opens a workspace + window if none matches the repo root (RP 1.5.68+).
+- **Codex multi-agent roles** — complete rewrite of `install-codex.sh` for Codex 0.102.0+: `.md` agents → `.toml` role configs, 3-tier model mapping (intelligent/smart scouts/fast scouts), `agents-md-scout` rename, prime/plan/work skill patching.
+- **Codex install docs** — clone instructions, 3-tier model mapping table, override examples.
+
 ## [flow-next 0.22.0] - 2026-02-17
 
 ### Fixed
