@@ -219,12 +219,18 @@ Global installs take precedence over `--plugin-dir`, causing tests to use stale 
 Install flow or flow-next to OpenAI Codex (requires Codex CLI 0.102.0+):
 
 ```bash
+# Clone the marketplace repo (one-time)
+git clone https://github.com/gmickel/gmickel-claude-marketplace.git
+cd gmickel-claude-marketplace
+
 # Install flow-next (recommended)
 ./scripts/install-codex.sh flow-next
 
 # Or install flow
 ./scripts/install-codex.sh flow
 ```
+
+> Codex has no plugin marketplace — clone this repo to install. Everything copies to `~/.codex/`, so the clone can be deleted after (re-clone to update).
 
 **What gets installed:**
 - `~/.codex/bin/flowctl` + `flowctl.py` - CLI tool

@@ -1509,8 +1509,15 @@ CODEX_MAX_THREADS=12 \
 
 **Install:**
 ```bash
+# Clone the marketplace repo (one-time)
+git clone https://github.com/gmickel/gmickel-claude-marketplace.git
+cd gmickel-claude-marketplace
+
+# Run the install script
 ./scripts/install-codex.sh flow-next
 ```
+
+> Codex doesn't have a plugin marketplace yet, so installation requires cloning this repo and running the install script. The script copies everything to `~/.codex/` — you can delete the clone after install (re-clone to update).
 
 **Per-project setup** (run in each project):
 ```bash
