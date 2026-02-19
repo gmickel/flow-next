@@ -272,6 +272,7 @@ CODEX_MAX_THREADS=12 \
 **Limitations:**
 - Hooks not supported (ralph-guard won't run)
 - Core `/flow-next:plan` and `/flow-next:work` commands work with native multi-agent roles
+- Prompts (`/prompts:*`) are global-only (`~/.codex/prompts/`). Agents, skills, and config support project-scoped `.codex/` but prompts don't yet — tracked in [openai/codex#4734](https://github.com/openai/codex/issues/4734). Once shipped, add `--target <dir>` to `install-codex.sh` for project-local installs.
 
 **Usage in Codex:**
 ```bash
