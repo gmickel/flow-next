@@ -59,7 +59,7 @@ git diff main..HEAD --name-only 2>/dev/null || git diff master..HEAD --name-only
 ### Step 3: Setup RepoPrompt
 
 ```bash
-eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "<summary based on type>")"
+eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "<summary based on type>" --create)"
 ```
 
 ### Step 4: Augment Selection

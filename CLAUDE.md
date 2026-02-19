@@ -216,7 +216,7 @@ Global installs take precedence over `--plugin-dir`, causing tests to use stale 
 
 ## Codex CLI Installation
 
-Install flow or flow-next to OpenAI Codex:
+Install flow or flow-next to OpenAI Codex (requires Codex CLI 0.102.0+):
 
 ```bash
 # Install flow-next (recommended)
@@ -229,31 +229,43 @@ Install flow or flow-next to OpenAI Codex:
 **What gets installed:**
 - `~/.codex/bin/flowctl` + `flowctl.py` - CLI tool
 - `~/.codex/skills/` - Skill definitions (patched for Codex paths)
-- `~/.codex/agents/` - Agent definitions (20 subagents)
+- `~/.codex/agents/*.toml` - Multi-agent role configs (20 roles)
+- `~/.codex/config.toml` - Agent entries merged (descriptions + config_file refs)
 - `~/.codex/prompts/` - Command prompts
 - `~/.codex/scripts/` - Helper scripts (worktree.sh)
 - `~/.codex/templates/` - Ralph/setup templates
 
 **Path patching:** All `${CLAUDE_PLUGIN_ROOT}` references are automatically replaced with `~/.codex` paths during install.
 
-**Agent conversion:** Claude Code frontmatter is converted to Codex format:
-- Removed: `tools`, `disallowedTools`, `color`
-- Added: `profile`, `approval_policy`, `sandbox_mode`
-- Transformed: `model` → `gpt-5.2-codex-medium` (configurable via env)
+**Agent conversion (multi-agent roles):** Claude Code `.md` agents → Codex `.toml` role configs:
+- Frontmatter → `model`, `sandbox_mode`, reasoning settings
+- Body → `developer_instructions` (backslashes auto-escaped for TOML)
+- `claude-md-scout` → `agents-md-scout` (CLAUDE.md refs patched to AGENTS.md)
+- Prime workflow patched: `Task flow-next:<scout>` → `Use the <scout_name> agent`
+
+**Model mapping (3-tier):**
+
+| Claude Code | Codex | Agents |
+|-------------|-------|--------|
+| `opus` | `gpt-5.3-codex` (reasoning: high) | quality-auditor, flow-gap-analyst, context-scout |
+| `claude-sonnet-4-6` (smart) | `gpt-5.3-codex` (reasoning: high) | epic-scout, agents-md-scout, docs-gap-scout |
+| `claude-sonnet-4-6` (fast) | `gpt-5.3-codex-spark` (no reasoning) | build-scout, env-scout, testing-scout, tooling-scout, observability-scout, security-scout, workflow-scout, memory-scout |
+| `inherit` | inherited from parent | worker, plan-sync |
+
+Smart scouts (epic-scout, agents-md-scout, docs-gap-scout) need deeper reasoning for context building. Remaining 8 scanning scouts run on Spark for speed. Spark agents skip `model_reasoning_effort` (not supported). `max_threads = 12` for parallel scout execution.
 
 Override defaults:
 ```bash
-CODEX_AGENT_MODEL=gpt-5.2-codex-medium \
-CODEX_AGENT_PROFILE=default \
-CODEX_AGENT_APPROVAL=on-request \
-CODEX_AGENT_SANDBOX=workspace-write \
+CODEX_MODEL_INTELLIGENT=gpt-5.3-codex \
+CODEX_MODEL_FAST=gpt-5.3-codex-spark \
+CODEX_REASONING_EFFORT=high \
+CODEX_MAX_THREADS=12 \
 ./scripts/install-codex.sh flow-next
 ```
 
 **Limitations:**
-- Subagents won't run (Codex lacks Task tool)
-- Hooks not supported
-- Core `/flow-next:plan` and `/flow-next:work` commands work
+- Hooks not supported (ralph-guard won't run)
+- Core `/flow-next:plan` and `/flow-next:work` commands work with native multi-agent roles
 
 **Usage in Codex:**
 ```bash

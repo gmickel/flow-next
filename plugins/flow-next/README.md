@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 
-[![Version](https://img.shields.io/badge/Version-0.20.21-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.22.1-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/nHEmyJB5tg)
@@ -814,9 +814,11 @@ OpenAI Codex CLI works on any platform (macOS, Linux, Windows).
 - Terminal-based (no GUI needed)
 - Session continuity via thread IDs
 - Same Carmack-level review criteria as RepoPrompt
-- Uses GPT 5.2 High by default (no config needed)
+- Uses GPT 5.2 High by default when used as a review backend from Claude Code (no config needed)
 
 **Trade-off:** Uses heuristic context hints from changed files rather than RepoPrompt's intelligent file selection.
+
+> **Note:** When running Flow-Next inside Codex itself, commands use `/prompts:` prefix (e.g., `/prompts:impl-review`). The `/flow-next:` prefix below applies to Claude Code.
 
 **Setup:**
 ```bash
@@ -1456,13 +1458,54 @@ Flow-Next works natively in [Factory Droid](https://factory.ai) — no modificat
 
 > **Rollback:** If you experience issues, downgrade to v0.20.9 (last pre-Droid version): `claude plugins install flow-next@0.20.9`
 
-### OpenAI Codex (Experimental)
+### OpenAI Codex
 
-Flow-Next partially works in OpenAI Codex with some limitations:
+Flow-Next works in OpenAI Codex with near-parity to Claude Code. The install script converts Claude Code's plugin system to Codex's multi-agent roles, prompts, and config.
+
+**Key difference:** Commands use the `/prompts:` prefix in Codex instead of `/flow-next:`:
+
+| Claude Code | Codex |
+|-------------|-------|
+| `/flow-next:plan` | `/prompts:plan` |
+| `/flow-next:work` | `/prompts:work` |
+| `/flow-next:impl-review` | `/prompts:impl-review` |
+| `/flow-next:plan-review` | `/prompts:plan-review` |
+| `/flow-next:epic-review` | `/prompts:epic-review` |
+| `/flow-next:interview` | `/prompts:interview` |
+| `/flow-next:prime` | `/prompts:prime` |
+| `/flow-next:ralph-init` | `/prompts:ralph-init` |
+
+**What works:**
+- Planning, work execution, interviews, reviews — full workflow
+- Multi-agent roles: 20 agents run as parallel Codex threads (up to 12 concurrent)
+- Cross-model reviews (Codex as review backend)
+- Ralph autonomous mode
+- flowctl CLI
+
+**Model mapping (3-tier):**
+
+| Tier | Codex Model | Agents | Reasoning |
+|------|-------------|--------|-----------|
+| Intelligent | `gpt-5.3-codex` | quality-auditor, flow-gap-analyst, context-scout | high |
+| Smart scouts | `gpt-5.3-codex` | epic-scout, agents-md-scout, docs-gap-scout | high |
+| Fast scouts | `gpt-5.3-codex-spark` | build, env, testing, tooling, observability, security, workflow, memory scouts | skipped |
+| Inherited | parent model | worker, plan-sync | parent |
+
+Smart scouts (epic-scout, agents-md-scout, docs-gap-scout) need deeper reasoning for context building and analysis. The remaining 8 scanning scouts run on Spark for speed — they check for file presence and patterns without needing multi-step reasoning.
+
+Override model defaults:
+```bash
+CODEX_MODEL_INTELLIGENT=gpt-5.3-codex \
+CODEX_MODEL_FAST=gpt-5.3-codex-spark \
+CODEX_REASONING_EFFORT=high \
+CODEX_MAX_THREADS=12 \
+./scripts/install-codex.sh flow-next
+```
 
 **Caveats:**
-- No subagent support (research scouts run inline or are skipped)
-- `/flow-next:setup` not supported — use manual project setup below
+- `/prompts:setup` not supported — use manual project setup below
+- Hooks not supported (ralph-guard won't run in Codex)
+- `claude-md-scout` is auto-renamed to `agents-md-scout` (CLAUDE.md → AGENTS.md patching)
 
 **Install:**
 ```bash
@@ -1496,6 +1539,12 @@ Quick commands:
 - `flowctl ready --epic fn-N` — what's ready
 - `flowctl start fn-N.M` — claim task
 - `flowctl done fn-N.M --summary-file s.md --evidence-json e.json`
+
+Prompts (use `/prompts:<name>`):
+- `/prompts:plan` — create a build plan
+- `/prompts:work` — execute tasks
+- `/prompts:impl-review` — implementation review
+- `/prompts:interview` — refine specs interactively
 <!-- END FLOW-NEXT -->
 ```
 

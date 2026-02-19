@@ -116,7 +116,7 @@ This creates `.flow/.checkpoint-<id>.json` with full state. If compaction occurs
 
 ```bash
 # Atomic: pick-window + builder (uses REVIEW_SUMMARY from Phase 1)
-eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "$REVIEW_SUMMARY")"
+eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "$REVIEW_SUMMARY" --create)"
 
 # Verify we have W and T
 if [[ -z "${W:-}" || -z "${T:-}" ]]; then
