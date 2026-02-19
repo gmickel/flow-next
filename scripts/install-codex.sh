@@ -260,6 +260,9 @@ convert_agent_to_toml() {
     # Patch body content for Codex differences
     body="$(patch_agent_body_for_codex "$body" "$name")"
 
+    # Escape backslashes for TOML basic strings (triple-quoted """ still interprets \)
+    body="$(echo "$body" | sed 's/\\/\\\\/g')"
+
     # Write .toml role config
     {
         echo "# Auto-generated from $name.md (codex: $codex_name) — do not edit manually"
