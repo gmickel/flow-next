@@ -28,7 +28,8 @@
 #       (epic-scout, agents-md-scout, docs-gap-scout — need deeper analysis)
 #     sonnet (fast)     → gpt-5.3-codex-spark (no reasoning)
 #       (build, env, testing, tooling, observability, security, workflow, memory scouts)
-#     inherit           → (omitted, inherits from parent: worker, plan-sync)
+#     inherit           → (omitted, inherits from parent: plan-sync)
+#     worker            → skipped (inlined into work skill, no subagent)
 #
 #   claude-md-scout is auto-renamed to agents-md-scout (AGENTS.md, not CLAUDE.md)
 #
@@ -40,7 +41,7 @@
 #     CODEX_MAX_THREADS=12
 #
 # Skill patching:
-#   flow-next-work: Task tool → Codex multi-agent role invocations
+#   flow-next-work: worker subagent → inlined phases (no agent delegation)
 #   flow-next-plan: flow-next:<scout> refs → Codex role names (underscore)
 #   flow-next-prime: Task flow-next:<scout> → Use the <role> agent (9 scouts)
 #   RP review skills: adds CRITICAL wait/no-retry warnings for slow commands
@@ -342,6 +343,8 @@ generate_config_entries() {
             if [ ! -f "$md_file" ]; then continue; fi
             local basename
             basename="$(basename "${md_file%.md}")"
+            # Skip worker — inlined into work skill
+            if [ "$basename" = "worker" ]; then continue; fi
             # Apply Codex renames
             local codex_basename
             codex_basename=$(rename_agent_for_codex "$basename")
@@ -406,10 +409,44 @@ generate_config_entries() {
 patch_work_for_codex_agents() {
     local phases_file="$1/phases.md"
     local skill_md="$1/SKILL.md"
+    local worker_md="$PLUGIN_DIR/agents/worker.md"
 
     if [ ! -f "$phases_file" ]; then return; fi
+    if [ ! -f "$worker_md" ]; then
+        echo -e "  ${YELLOW}⚠${NC} worker.md not found, skipping inline patch"
+        return
+    fi
 
-    # Replace section 3c "Spawn Worker" with Codex role invocation
+    # --- Extract worker body (strip YAML frontmatter) ---
+    local worker_body
+    worker_body=$(awk 'BEGIN{fm=0} /^---$/{fm++; next} fm>=2{print}' "$worker_md")
+
+    # Remove the top-level heading and intro paragraph (before Phase 1)
+    worker_body=$(echo "$worker_body" | awk '
+        /^# Task Implementation Worker/{skip_intro=1; next}
+        skip_intro && /^## Phase 1:/{skip_intro=0}
+        skip_intro{next}
+        {print}
+    ')
+
+    # Remove Phase 6 (Return) and Rules sections — not needed inline
+    worker_body=$(echo "$worker_body" | awk '
+        /^## Phase 6: Return/{skip=1; next}
+        /^## Rules/{skip=1; next}
+        skip{next}
+        {print}
+    ')
+
+    # Demote headings: ## → ####, so they nest under ### 3c
+    worker_body=$(echo "$worker_body" | sed 's/^## /#### /g')
+
+    # Replace variable placeholders to match work-phases context
+    worker_body=$(echo "$worker_body" | sed \
+        -e 's/<FLOWCTL>/$FLOWCTL/g' \
+        -e 's/<TASK_ID>/<task-id>/g' \
+        -e 's/<EPIC_ID>/<epic-id>/g')
+
+    # --- Replace section 3c "Spawn Worker" with inlined worker phases ---
     local start_line end_line
     start_line=$(grep -n "^### 3c\. Spawn Worker" "$phases_file" | cut -d: -f1)
     end_line=$(grep -n "^### 3d\." "$phases_file" | cut -d: -f1)
@@ -418,54 +455,51 @@ patch_work_for_codex_agents() {
         end_line=$((end_line - 1))
         head -n $((start_line - 1)) "$phases_file" > "${phases_file}.tmp"
         cat >> "${phases_file}.tmp" << 'SECTION3CEOF'
-### 3c. Run Worker Agent
+### 3c. Implement Task
 
-Use the **worker** agent role to implement the task. The worker gets fresh context and handles:
-- Re-anchoring (reading spec, git status)
-- Implementation
-- Committing
-- Review cycles (if enabled)
-- Completing the task (flowctl done)
-
-**Invoke the worker:**
-
-"Use the worker agent to implement this task:
-
-TASK_ID: fn-X.Y
-EPIC_ID: fn-X
-FLOWCTL: $FLOWCTL
-REVIEW_MODE: none|rp|codex
-RALPH_MODE: true|false
-
-Follow your phases exactly."
-
-**Worker returns**: Summary of implementation, files changed, test results, review verdict.
+Implement the task directly (no subagent delegation). Follow these phases in order:
 
 SECTION3CEOF
+        echo "$worker_body" >> "${phases_file}.tmp"
+        echo "" >> "${phases_file}.tmp"
         tail -n +$end_line "$phases_file" >> "${phases_file}.tmp"
         mv "${phases_file}.tmp" "$phases_file"
     fi
 
-    # Light text replacements
+    # --- Remove "Why spawn a worker?" section (no longer applies) ---
+    local why_start why_end
+    why_start=$(grep -n "^\*\*Why spawn a worker" "$phases_file" | cut -d: -f1)
+    if [ -n "$why_start" ]; then
+        # Find next section (## or ### heading) or --- separator after it
+        why_end=$(tail -n +$((why_start + 1)) "$phases_file" | grep -n "^---$\|^## \|^### " | head -1 | cut -d: -f1)
+        if [ -n "$why_end" ]; then
+            why_end=$((why_start + why_end - 1))
+            sed -i.bak "${why_start},${why_end}d" "$phases_file"
+            rm -f "${phases_file}.bak"
+        fi
+    fi
+
+    # Light text replacements for remaining references
     sed -i.bak \
-        -e 's/Use the Task tool to spawn a `worker` subagent/Use the worker agent role/g' \
-        -e 's/spawn a worker subagent with fresh context/use the worker agent with fresh context/g' \
-        -e 's/After worker returns/After the worker agent returns/g' \
-        -e 's/the worker failed/the worker agent failed/g' \
+        -e 's/Use the Task tool to spawn a `worker` subagent/Implement the task inline/g' \
+        -e 's/spawn a worker subagent with fresh context/implement the task directly/g' \
+        -e 's/After worker returns/After implementation completes/g' \
+        -e 's/the worker failed/the implementation failed/g' \
         -e 's/spawn the `plan-sync` subagent/use the plan_sync agent/g' \
         -e 's/quality auditor subagent/quality_auditor agent/g' \
         "$phases_file"
     rm -f "${phases_file}.bak"
 
-    # Patch SKILL.md
+    # Patch SKILL.md — describe inline execution
     if [ -f "$skill_md" ]; then
         sed -i.bak \
-            -e 's/worker subagent with fresh context/worker agent with fresh context/g' \
-            -e 's/worker subagent/worker agent/g' \
-            -e 's/Worker subagent/Worker agent/g' \
-            -e 's/Each task is implemented by a `worker` subagent/Each task is implemented by the `worker` agent role/g' \
-            -e 's/worker handles/worker agent handles/g' \
-            -e 's/The worker invokes/The worker agent invokes/g' \
+            -e 's/worker subagent with fresh context/inline implementation (no subagent)/g' \
+            -e 's/worker subagent/inline implementation/g' \
+            -e 's/Worker subagent/Inline implementation/g' \
+            -e 's/Each task is implemented by a `worker` subagent/Each task is implemented inline (no subagent delegation)/g' \
+            -e 's/worker handles/implementation handles/g' \
+            -e 's/The worker invokes/The implementation invokes/g' \
+            -e 's/\*\*Worker subagent model\*\*: Each task is implemented by the `worker` agent role.*$/\*\*Inline execution\*\*: Each task is implemented directly in the current context. Re-anchoring happens before each task to maintain spec fidelity./g' \
             "$skill_md"
         rm -f "${skill_md}.bak"
     fi
@@ -664,7 +698,7 @@ done
 # Patch flow-next-work for Codex multi-agent roles
 if [ -d "$CODEX_DIR/skills/flow-next-work" ]; then
     patch_work_for_codex_agents "$CODEX_DIR/skills/flow-next-work"
-    echo -e "  ${GREEN}✓${NC} flow-next-work (patched for multi-agent roles)"
+    echo -e "  ${GREEN}✓${NC} flow-next-work (worker inlined, no subagent)"
 fi
 
 # Patch flow-next-plan for Codex multi-agent roles
@@ -694,6 +728,11 @@ if [ -d "$PLUGIN_DIR/agents" ] && [ "$(ls -A "$PLUGIN_DIR/agents" 2>/dev/null)" 
     for agent_file in "$PLUGIN_DIR/agents/"*.md; do
         if [ -f "$agent_file" ]; then
             name="$(basename "${agent_file%.md}")"
+            # Skip worker — inlined into work skill, no subagent needed
+            if [ "$name" = "worker" ]; then
+                echo -e "  ${YELLOW}⊘${NC} worker.toml (skipped — inlined into work skill)"
+                continue
+            fi
             codex_name=$(rename_agent_for_codex "$name")
             convert_agent_to_toml "$agent_file" "$CODEX_DIR/agents/$codex_name.toml"
             if [ "$name" != "$codex_name" ]; then
