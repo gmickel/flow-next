@@ -745,16 +745,17 @@ def get_embedded_file_contents(file_paths: list[str]) -> tuple[str, dict]:
 
     Environment:
         FLOW_CODEX_EMBED_MAX_BYTES: Total byte budget for embedded files.
-            Default 102400 (100KB). Set to 0 for unlimited.
+            Default 512000 (500KB). Set to 0 for unlimited.
     """
     repo_root = get_repo_root()
 
-    # Get budget from env (default 100KB to prevent oversized prompts)
-    max_bytes_str = os.environ.get("FLOW_CODEX_EMBED_MAX_BYTES", "102400")
+    # Get budget from env (default 500KB — large enough for complex epics with
+    # many source files while still preventing excessively large prompts)
+    max_bytes_str = os.environ.get("FLOW_CODEX_EMBED_MAX_BYTES", "512000")
     try:
         max_total_bytes = int(max_bytes_str)
     except ValueError:
-        max_total_bytes = 102400  # Invalid value uses default
+        max_total_bytes = 512000  # Invalid value uses default
 
     stats = {
         "embedded": 0,
@@ -5701,25 +5702,16 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     except (subprocess.CalledProcessError, OSError):
         pass
 
-    # Embed changed file contents for codex only on Windows (sandbox is broken there)
-    # Unix sandbox works correctly, so no embedding needed
-    if os.name == "nt":
-        changed_files = get_changed_files(base_branch)
-        embedded_content, embed_stats = get_embedded_file_contents(changed_files)
-    else:
-        embedded_content = ""
-        embed_stats = {
-            "embedded": 0,
-            "total": 0,
-            "bytes": 0,
-            "binary_skipped": [],
-            "deleted_skipped": [],
-            "outside_repo_skipped": [],
-            "budget_skipped": [],
-        }
+    # Always embed changed file contents so Codex doesn't waste turns reading
+    # files from disk. Without embedding, Codex exhausts its turn budget on
+    # sed/rg commands before producing a verdict (observed 114 turns with no
+    # verdict on complex epics). The FLOW_CODEX_EMBED_MAX_BYTES budget cap
+    # prevents oversized prompts.
+    changed_files = get_changed_files(base_branch)
+    embedded_content, embed_stats = get_embedded_file_contents(changed_files)
 
     # Build prompt
-    files_embedded = os.name == "nt"
+    files_embedded = True
     if standalone:
         prompt = build_standalone_review_prompt(base_branch, focus, diff_summary, files_embedded)
         # Append embedded files and diff content to standalone prompt
@@ -5928,28 +5920,16 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
 
     task_specs = "\n\n---\n\n".join(task_specs_parts) if task_specs_parts else ""
 
-    # Embed specified file contents for codex only on Windows (sandbox is broken there)
-    # Unix sandbox works correctly, so no embedding needed
-    if os.name == "nt":
-        embedded_content, embed_stats = get_embedded_file_contents(file_paths)
-    else:
-        embedded_content = ""
-        embed_stats = {
-            "embedded": 0,
-            "total": 0,
-            "bytes": 0,
-            "binary_skipped": [],
-            "deleted_skipped": [],
-            "outside_repo_skipped": [],
-            "budget_skipped": [],
-        }
+    # Always embed file contents so Codex doesn't waste turns reading files
+    # from disk. See cmd_codex_impl_review comment for rationale.
+    embedded_content, embed_stats = get_embedded_file_contents(file_paths)
 
     # Get context hints (from main branch for plans)
     base_branch = args.base if hasattr(args, "base") and args.base else "main"
     context_hints = gather_context_hints(base_branch)
 
     # Build prompt
-    files_embedded = os.name == "nt"
+    files_embedded = True
     prompt = build_review_prompt(
         "plan", epic_spec, context_hints, task_specs=task_specs, embedded_files=embedded_content,
         files_embedded=files_embedded
@@ -6302,15 +6282,13 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
     except (subprocess.CalledProcessError, OSError):
         pass
 
-    # Embed changed file contents for codex only on Windows
-    if os.name == "nt":
-        changed_files = get_changed_files(base_branch)
-        embedded_content, _ = get_embedded_file_contents(changed_files)
-    else:
-        embedded_content = ""
+    # Always embed changed file contents. See cmd_codex_impl_review comment
+    # for rationale.
+    changed_files = get_changed_files(base_branch)
+    embedded_content, _ = get_embedded_file_contents(changed_files)
 
     # Build prompt
-    files_embedded = os.name == "nt"
+    files_embedded = True
     prompt = build_completion_review_prompt(
         epic_spec,
         task_specs,
