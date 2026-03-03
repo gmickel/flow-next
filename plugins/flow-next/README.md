@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 
-[![Version](https://img.shields.io/badge/Version-0.24.0-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.25.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/nHEmyJB5tg)
@@ -1514,7 +1514,6 @@ Flow-Next works in OpenAI Codex with near-parity to Claude Code. The install scr
 - Planning, work execution, interviews, reviews — full workflow
 - Multi-agent roles: 20 agents run as parallel Codex threads (up to 12 concurrent)
 - Cross-model reviews (Codex as review backend)
-- Ralph autonomous mode
 - flowctl CLI
 
 **Model mapping (3-tier):**
@@ -1539,7 +1538,8 @@ CODEX_MAX_THREADS=12 \
 
 **Caveats:**
 - `/prompts:setup` not supported — use manual project setup below
-- Hooks not supported (ralph-guard won't run in Codex)
+- Ralph autonomous mode not supported — requires plugin hooks (guard hooks, receipt gating) which Codex doesn't support
+- `/prompts:ralph-init` scaffolds files but the loop won't enforce workflow rules without hooks
 - `claude-md-scout` is auto-renamed to `agents-md-scout` (CLAUDE.md → AGENTS.md patching)
 
 **Install:**
