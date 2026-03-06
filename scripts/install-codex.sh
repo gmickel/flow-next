@@ -22,9 +22,9 @@
 #   Agent entries are merged into ~/.codex/config.toml with descriptions.
 #
 #   Model mapping (3-tier, Claude → Codex):
-#     opus              → gpt-5.3-codex + reasoning:high
+#     opus              → gpt-5.4 + reasoning:medium
 #       (quality-auditor, flow-gap-analyst, context-scout)
-#     sonnet (smart)    → gpt-5.3-codex + reasoning:high
+#     sonnet (smart)    → gpt-5.4 + reasoning:medium
 #       (epic-scout, agents-md-scout, docs-gap-scout — need deeper analysis)
 #     sonnet (fast)     → gpt-5.3-codex-spark (no reasoning)
 #       (build, env, testing, tooling, observability, security, workflow, memory scouts)
@@ -33,9 +33,9 @@
 #   claude-md-scout is auto-renamed to agents-md-scout (AGENTS.md, not CLAUDE.md)
 #
 #   Override defaults via env vars:
-#     CODEX_MODEL_INTELLIGENT=gpt-5.3-codex
+#     CODEX_MODEL_INTELLIGENT=gpt-5.4
 #     CODEX_MODEL_FAST=gpt-5.3-codex-spark
-#     CODEX_REASONING_EFFORT=high
+#     CODEX_REASONING_EFFORT=medium
 #     CODEX_AGENT_SANDBOX=workspace-write
 #     CODEX_MAX_THREADS=12
 #
@@ -61,9 +61,9 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Codex model defaults (override via env vars)
-CODEX_MODEL_INTELLIGENT="${CODEX_MODEL_INTELLIGENT:-gpt-5.3-codex}"
+CODEX_MODEL_INTELLIGENT="${CODEX_MODEL_INTELLIGENT:-gpt-5.4}"
 CODEX_MODEL_FAST="${CODEX_MODEL_FAST:-gpt-5.3-codex-spark}"
-CODEX_REASONING_EFFORT="${CODEX_REASONING_EFFORT:-high}"
+CODEX_REASONING_EFFORT="${CODEX_REASONING_EFFORT:-medium}"
 CODEX_AGENT_SANDBOX="${CODEX_AGENT_SANDBOX:-workspace-write}"
 CODEX_MAX_THREADS="${CODEX_MAX_THREADS:-12}"
 
@@ -778,7 +778,7 @@ echo "  2. Use /$PLUGIN:work to execute tasks"
 fi
 echo
 echo -e "${BLUE}Override models:${NC}"
-echo "  CODEX_MODEL_INTELLIGENT=gpt-5.3-codex \\"
+echo "  CODEX_MODEL_INTELLIGENT=gpt-5.4 \\"
 echo "  CODEX_MODEL_FAST=gpt-5.3-codex-spark \\"
 echo "  CODEX_MAX_THREADS=12 \\"
 echo "  ./scripts/install-codex.sh $PLUGIN"

@@ -253,8 +253,8 @@ cd gmickel-claude-marketplace
 
 | Claude Code | Codex | Agents |
 |-------------|-------|--------|
-| `opus` | `gpt-5.3-codex` (reasoning: high) | quality-auditor, flow-gap-analyst, context-scout |
-| `claude-sonnet-4-6` (smart) | `gpt-5.3-codex` (reasoning: high) | epic-scout, agents-md-scout, docs-gap-scout |
+| `opus` | `gpt-5.4` (reasoning: medium) | quality-auditor, flow-gap-analyst, context-scout |
+| `claude-sonnet-4-6` (smart) | `gpt-5.4` (reasoning: medium) | epic-scout, agents-md-scout, docs-gap-scout |
 | `claude-sonnet-4-6` (fast) | `gpt-5.3-codex-spark` (no reasoning) | build-scout, env-scout, testing-scout, tooling-scout, observability-scout, security-scout, workflow-scout, memory-scout |
 | `inherit` | inherited from parent | worker, plan-sync |
 
@@ -262,9 +262,9 @@ Smart scouts (epic-scout, agents-md-scout, docs-gap-scout) need deeper reasoning
 
 Override defaults:
 ```bash
-CODEX_MODEL_INTELLIGENT=gpt-5.3-codex \
+CODEX_MODEL_INTELLIGENT=gpt-5.4 \
 CODEX_MODEL_FAST=gpt-5.3-codex-spark \
-CODEX_REASONING_EFFORT=high \
+CODEX_REASONING_EFFORT=medium \
 CODEX_MAX_THREADS=12 \
 ./scripts/install-codex.sh flow-next
 ```

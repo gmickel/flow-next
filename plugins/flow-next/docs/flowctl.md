@@ -131,13 +131,13 @@ flowctl epic close fn-1 [--json]
 Set default backend specs for impl/review/sync workers. Used by orchestration products (e.g., flow-swarm).
 
 ```bash
-flowctl epic set-backend fn-1 --impl codex:gpt-5.2-codex [--json]
-flowctl epic set-backend fn-1 --impl codex:gpt-5.2-high --review claude:opus [--json]
+flowctl epic set-backend fn-1 --impl codex:gpt-5.4 [--json]
+flowctl epic set-backend fn-1 --impl codex:gpt-5.4-high --review claude:opus [--json]
 flowctl epic set-backend fn-1 --impl "" [--json]  # Clear impl (inherit from config)
 ```
 
 Options:
-- `--impl SPEC`: Default impl backend (e.g., `codex:gpt-5.2-high`, `claude:opus`)
+- `--impl SPEC`: Default impl backend (e.g., `codex:gpt-5.4-high`, `claude:opus`)
 - `--review SPEC`: Default review backend (e.g., `claude:opus`, `agent:opus-4.5-thinking`)
 - `--sync SPEC`: Default sync backend (e.g., `claude:haiku`, `gemini:gemini-2.5-flash`)
 
@@ -197,13 +197,13 @@ Use `--cascade` to also reset dependent tasks within the same epic.
 Set backend specs for impl/review/sync workers. Used by orchestration products (e.g., flow-swarm).
 
 ```bash
-flowctl task set-backend fn-1.1 --impl codex:gpt-5.2-high [--json]
-flowctl task set-backend fn-1.1 --impl codex:gpt-5.2-high --review claude:opus [--json]
+flowctl task set-backend fn-1.1 --impl codex:gpt-5.4-high [--json]
+flowctl task set-backend fn-1.1 --impl codex:gpt-5.4-high --review claude:opus [--json]
 flowctl task set-backend fn-1.1 --impl "" [--json]  # Clear impl (inherit from epic/config)
 ```
 
 Options:
-- `--impl SPEC`: Impl backend (e.g., `codex:gpt-5.2-high`, `claude:opus`)
+- `--impl SPEC`: Impl backend (e.g., `codex:gpt-5.4-high`, `claude:opus`)
 - `--review SPEC`: Review backend (e.g., `claude:opus`, `agent:opus-4.5-thinking`)
 - `--sync SPEC`: Sync backend (e.g., `claude:haiku`, `gemini:gemini-2.5-flash`)
 
@@ -219,7 +219,7 @@ flowctl task show-backend fn-1.1 [--json]
 
 Output (text):
 ```
-impl: codex:gpt-5.2-high (task)
+impl: codex:gpt-5.4-high (task)
 review: claude:opus (epic)
 sync: null
 ```
@@ -230,7 +230,7 @@ Output (json):
   "success": true,
   "id": "fn-1.1",
   "epic": "fn-1",
-  "impl": {"spec": "codex:gpt-5.2-high", "source": "task"},
+  "impl": {"spec": "codex:gpt-5.4-high", "source": "task"},
   "review": {"spec": "claude:opus", "source": "epic"},
   "sync": {"spec": null, "source": null}
 }

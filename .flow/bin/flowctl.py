@@ -1253,7 +1253,7 @@ def run_codex_exec(
     """Run codex exec and return (stdout, thread_id, exit_code, stderr).
 
     If session_id provided, tries to resume. Falls back to new session if resume fails.
-    Model: FLOW_CODEX_MODEL env > parameter > default (gpt-5.2 + high reasoning).
+    Model: FLOW_CODEX_MODEL env > parameter > default (gpt-5.4 + high reasoning).
 
     Note: Prompt is passed via stdin (using '-') to avoid Windows command-line
     length limits (~8191 chars) and special character escaping issues. (GH-35)
@@ -1264,8 +1264,8 @@ def run_codex_exec(
         - stderr contains error output from the process
     """
     codex = require_codex()
-    # Model priority: env > parameter > default (gpt-5.2 + high reasoning = GPT 5.2 High)
-    effective_model = os.environ.get("FLOW_CODEX_MODEL") or model or "gpt-5.2"
+    # Model priority: env > parameter > default (gpt-5.4 + high reasoning = GPT 5.4 High)
+    effective_model = os.environ.get("FLOW_CODEX_MODEL") or model or "gpt-5.4"
 
     if session_id:
         # Try resume first - use stdin for prompt (model already set in original session)
@@ -6962,7 +6962,7 @@ def main() -> None:
     )
     p_epic_set_backend.add_argument("id", help="Epic ID (e.g., fn-1, fn-1-add-auth)")
     p_epic_set_backend.add_argument(
-        "--impl", help="Default impl backend spec (e.g., 'codex:gpt-5.2-high')"
+        "--impl", help="Default impl backend spec (e.g., 'codex:gpt-5.4-high')"
     )
     p_epic_set_backend.add_argument(
         "--review", help="Default review backend spec (e.g., 'claude:opus')"
@@ -7031,7 +7031,7 @@ def main() -> None:
     )
     p_task_set_backend.add_argument("id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
     p_task_set_backend.add_argument(
-        "--impl", help="Impl backend spec (e.g., 'codex:gpt-5.2-high')"
+        "--impl", help="Impl backend spec (e.g., 'codex:gpt-5.4-high')"
     )
     p_task_set_backend.add_argument(
         "--review", help="Review backend spec (e.g., 'claude:opus')"

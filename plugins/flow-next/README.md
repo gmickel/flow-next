@@ -1520,8 +1520,8 @@ Flow-Next works in OpenAI Codex with near-parity to Claude Code. The install scr
 
 | Tier | Codex Model | Agents | Reasoning |
 |------|-------------|--------|-----------|
-| Intelligent | `gpt-5.3-codex` | quality-auditor, flow-gap-analyst, context-scout | high |
-| Smart scouts | `gpt-5.3-codex` | epic-scout, agents-md-scout, docs-gap-scout | high |
+| Intelligent | `gpt-5.4` | quality-auditor, flow-gap-analyst, context-scout | medium |
+| Smart scouts | `gpt-5.4` | epic-scout, agents-md-scout, docs-gap-scout | medium |
 | Fast scouts | `gpt-5.3-codex-spark` | build, env, testing, tooling, observability, security, workflow, memory scouts | skipped |
 | Inherited | parent model | worker, plan-sync | parent |
 
@@ -1529,9 +1529,9 @@ Smart scouts (epic-scout, agents-md-scout, docs-gap-scout) need deeper reasoning
 
 Override model defaults:
 ```bash
-CODEX_MODEL_INTELLIGENT=gpt-5.3-codex \
+CODEX_MODEL_INTELLIGENT=gpt-5.4 \
 CODEX_MODEL_FAST=gpt-5.3-codex-spark \
-CODEX_REASONING_EFFORT=high \
+CODEX_REASONING_EFFORT=medium \
 CODEX_MAX_THREADS=12 \
 ./scripts/install-codex.sh flow-next
 ```
