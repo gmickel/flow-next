@@ -2,6 +2,16 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.26.0] - 2026-03-06
+
+### Changed
+
+- **Codex model defaults: gpt-5.4 across the board** — review/oracle model upgraded from `gpt-5.2` to `gpt-5.4` (high reasoning). Agent intelligent tier upgraded from `gpt-5.3-codex` to `gpt-5.4` (high reasoning). Fast scouts remain on `gpt-5.3-codex-spark`.
+
+### Fixed
+
+- **Codex docs: removed incorrect Ralph support claim** — "What works" section incorrectly listed Ralph autonomous mode. Ralph requires plugin hooks (guard hooks, receipt gating) which Codex doesn't support. Expanded caveats to clarify.
+
 ## [flow-next 0.25.0] - 2026-03-01
 
 ### Fixed
