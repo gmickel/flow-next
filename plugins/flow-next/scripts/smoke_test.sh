@@ -875,6 +875,55 @@ echo "$stdin_spec" | grep -q "spec was written via stdin" || { echo "set-spec --
 echo -e "${GREEN}✓${NC} task set-spec --file stdin"
 PASS=$((PASS + 1))
 
+echo -e "${YELLOW}--- task set-spec with extra headings (no duplicates) ---${NC}"
+scripts/flowctl task create --epic "$STDIN_EPIC" --title "Heading dedup test" --json >/dev/null
+DEDUP_TASK="${STDIN_EPIC}.4"
+# First set-spec: description includes ## Approach and ## Key context
+cat > "$TEST_DIR/desc_with_headings.md" << 'DESCEOF'
+Initial description.
+
+## Approach
+Initial approach content.
+
+## Key context
+Initial key context.
+DESCEOF
+echo '- [ ] Initial check' > "$TEST_DIR/acc_initial.md"
+scripts/flowctl task set-spec "$DEDUP_TASK" --description "$TEST_DIR/desc_with_headings.md" --acceptance "$TEST_DIR/acc_initial.md" --json >/dev/null
+# Second set-spec: updated description also includes ## Approach (should replace, not duplicate)
+cat > "$TEST_DIR/desc_updated.md" << 'DESCEOF2'
+Updated description.
+
+## Approach
+Updated approach content.
+
+## Key context
+Updated key context.
+DESCEOF2
+scripts/flowctl task set-spec "$DEDUP_TASK" --description "$TEST_DIR/desc_updated.md" --json >/dev/null
+dedup_spec="$(scripts/flowctl cat "$DEDUP_TASK")"
+# Should contain updated content
+echo "$dedup_spec" | grep -q "Updated description" || { echo "set-spec dedup: missing updated description"; FAIL=$((FAIL + 1)); }
+echo "$dedup_spec" | grep -q "Updated approach content" || { echo "set-spec dedup: missing updated approach"; FAIL=$((FAIL + 1)); }
+echo "$dedup_spec" | grep -q "Updated key context" || { echo "set-spec dedup: missing updated key context"; FAIL=$((FAIL + 1)); }
+# Should NOT contain old content (the bug: old sections were preserved)
+if echo "$dedup_spec" | grep -q "Initial approach content"; then
+  echo "set-spec dedup: OLD approach still present (duplicate heading bug)"
+  FAIL=$((FAIL + 1))
+else
+  true  # old content correctly removed
+fi
+if echo "$dedup_spec" | grep -q "Initial key context"; then
+  echo "set-spec dedup: OLD key context still present (duplicate heading bug)"
+  FAIL=$((FAIL + 1))
+else
+  true  # old content correctly removed
+fi
+# Acceptance should still be present (not touched by description update)
+echo "$dedup_spec" | grep -q "Initial check" || { echo "set-spec dedup: acceptance lost"; FAIL=$((FAIL + 1)); }
+echo -e "${GREEN}✓${NC} task set-spec heading dedup"
+PASS=$((PASS + 1))
+
 echo -e "${YELLOW}--- checkpoint save/restore ---${NC}"
 # Save checkpoint
 scripts/flowctl checkpoint save --epic "$STDIN_EPIC" --json >/dev/null

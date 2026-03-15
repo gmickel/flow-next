@@ -1873,6 +1873,10 @@ TBD
 def patch_task_section(content: str, section: str, new_content: str) -> str:
     """Patch a specific section in task spec. Preserves other sections.
 
+    When new_content introduces additional ## headings (e.g., replacing
+    ## Description with content that also contains ## Approach), any OLD
+    sections with those same headings are removed to prevent duplicates.
+
     Raises ValueError on invalid content (duplicate/missing headings).
     """
     # Check for duplicate headings first (defensive)
@@ -1889,15 +1893,24 @@ def patch_task_section(content: str, section: str, new_content: str) -> str:
     if new_lines and new_lines[0].strip() == section:
         new_content = "\n".join(new_lines[1:]).lstrip()
 
+    # Collect ## headings introduced by the new content so we can remove
+    # old sections with the same headings (prevents duplicates).
+    new_headings: set[str] = set()
+    for nl in new_content.split("\n"):
+        if nl.startswith("## "):
+            new_headings.add(nl.strip())
+
     lines = content.split("\n")
     result = []
     in_target_section = False
+    in_superseded_section = False
     section_found = False
 
     for i, line in enumerate(lines):
         if line.startswith("## "):
             if line.strip() == section:
                 in_target_section = True
+                in_superseded_section = False
                 section_found = True
                 result.append(line)
                 # Add new content
@@ -1905,8 +1918,14 @@ def patch_task_section(content: str, section: str, new_content: str) -> str:
                 continue
             else:
                 in_target_section = False
+                # Skip old sections whose headings are now part of new content
+                if line.strip() in new_headings:
+                    in_superseded_section = True
+                    continue
+                else:
+                    in_superseded_section = False
 
-        if not in_target_section:
+        if not in_target_section and not in_superseded_section:
             result.append(line)
 
     if not section_found:
