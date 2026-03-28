@@ -171,6 +171,8 @@ scripts/ralph/ralph.sh          # Run from terminal
 > bun install -g @gmickel/gno && gno mcp install --target claude-code
 > ```
 
+> **[claude-dash](https://github.com/krabat-l/claude-dash)** — Real-time statusline for Claude Code showing context, cost, quota, cache, tools, and git status.
+
 ---
 
 ## Contributing
