@@ -1,0 +1,7 @@
+interface:
+  display_name: "Flow Plan"
+  short_description: "Create structured build plans from feature requests"
+  brand_color: "#3B82F6"
+  default_prompt: "Plan out this feature: "
+policy:
+  allow_implicit_invocation: false

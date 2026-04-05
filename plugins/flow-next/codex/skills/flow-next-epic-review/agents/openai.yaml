@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Epic Review"
+  short_description: "Verify epic implementation matches spec"
+  brand_color: "#EF4444"
+policy:
+  allow_implicit_invocation: false

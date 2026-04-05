@@ -333,6 +333,41 @@ done
 # Remove .DS_Store and other cruft
 find "$CODEX_DIR" -name ".DS_Store" -delete 2>/dev/null || true
 
+# --- UI metadata: agents/openai.yaml for key skills ---
+generate_openai_yaml() {
+  local skill="$1" display="$2" desc="$3" color="$4" implicit="$5"
+  local prompt="${6:-}"
+  local dir="$CODEX_DIR/skills/$skill/agents"
+  mkdir -p "$dir"
+  {
+    echo "interface:"
+    echo "  display_name: \"$display\""
+    echo "  short_description: \"$desc\""
+    echo "  brand_color: \"$color\""
+    [ -n "$prompt" ] && echo "  default_prompt: \"$prompt\""
+    echo "policy:"
+    echo "  allow_implicit_invocation: $implicit"
+  } > "$dir/openai.yaml"
+}
+
+# Workflow skills (blue, explicit)
+generate_openai_yaml "flow-next-plan"      "Flow Plan"      "Create structured build plans from feature requests" "#3B82F6" false "Plan out this feature: "
+generate_openai_yaml "flow-next-work"      "Flow Work"      "Execute planned tasks with worker subagents"          "#3B82F6" false "Work on: "
+generate_openai_yaml "flow-next-interview" "Flow Interview" "Deep Q&A to refine specs and requirements"            "#3B82F6" false
+generate_openai_yaml "flow-next-setup"     "Flow Setup"     "Initialize flow-next in current project"              "#3B82F6" false
+
+# Review skills (red, explicit)
+generate_openai_yaml "flow-next-impl-review" "Flow Implementation Review" "Carmack-level code review via RepoPrompt"  "#EF4444" false
+generate_openai_yaml "flow-next-plan-review" "Flow Plan Review"           "Carmack-level plan review via RepoPrompt"  "#EF4444" false
+generate_openai_yaml "flow-next-epic-review" "Flow Epic Review"           "Verify epic implementation matches spec"   "#EF4444" false
+
+# Utility skills (blue/amber, implicit allowed)
+generate_openai_yaml "flow-next"       "Flow Tasks" "Manage .flow/ tasks and epics"                           "#3B82F6" true
+generate_openai_yaml "flow-next-prime" "Flow Prime" "Comprehensive codebase assessment for agent readiness"    "#F59E0B" false
+
+openai_yaml_count=$(find "$CODEX_DIR/skills" -name "openai.yaml" | wc -l | tr -d ' ')
+echo -e "  ${GREEN}✓${NC} $openai_yaml_count openai.yaml metadata files generated"
+
 echo -e "  ${GREEN}✓${NC} $skill_count skills generated"
 
 # ─── 2. Convert agents (.md → .toml) ─────────────────────────────────────────
@@ -534,6 +569,29 @@ if [ "$task_refs" != "0" ]; then
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} No 'Task flow-next:' refs"
+fi
+
+# Validate openai.yaml files
+yaml_count=$(find "$CODEX_DIR/skills" -name "openai.yaml" | wc -l | tr -d ' ')
+if [ "$yaml_count" -ge 9 ]; then
+  echo -e "  ${GREEN}✓${NC} $yaml_count openai.yaml files"
+else
+  echo -e "  ${RED}✗${NC} Expected >= 9 openai.yaml files, found $yaml_count"
+  errors=$((errors + 1))
+fi
+
+# Validate openai.yaml content (each must have interface + policy keys)
+yaml_errors=0
+for yf in $(find "$CODEX_DIR/skills" -name "openai.yaml"); do
+  if ! grep -q 'interface:' "$yf" || ! grep -q 'policy:' "$yf"; then
+    echo -e "  ${RED}✗${NC} $(dirname "$(dirname "$yf")" | xargs basename)/agents/openai.yaml missing required keys"
+    yaml_errors=$((yaml_errors + 1))
+  fi
+done
+if [ "$yaml_errors" -eq 0 ]; then
+  echo -e "  ${GREEN}✓${NC} All openai.yaml files have required keys"
+else
+  errors=$((errors + yaml_errors))
 fi
 
 # Check claude-md-scout renamed (exclude provenance comments in .toml headers)

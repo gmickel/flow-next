@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Implementation Review"
+  short_description: "Carmack-level code review via RepoPrompt"
+  brand_color: "#EF4444"
+policy:
+  allow_implicit_invocation: false

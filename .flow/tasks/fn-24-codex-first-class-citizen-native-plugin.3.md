@@ -28,3 +28,10 @@ Run `scripts/sync-codex.sh` (created in task 2) to generate the initial `plugins
 - [ ] All spot-checks pass
 - [ ] No validation errors
 - [ ] Changes committed
+
+## Done summary
+Verified codex/ output from sync-codex.sh: 16 skills, 20 agents, valid hooks.json. All spot-checks pass, no bare CLAUDE_PLUGIN_ROOT refs, no Task flow-next: refs, all TOML files parse clean.
+## Evidence
+- Commits: 4cbc0d1
+- Tests: TOML parse validation (20/20 pass), grep CLAUDE_PLUGIN_ROOT without fallback (0 hits), grep Task flow-next: (0 hits), spot-check: work/phases.md uses worker agent, spot-check: plan/steps.md uses context_scout, spot-check: prime/workflow.md uses 'Use the X_scout agent', spot-check: agents-md-scout.toml renamed + AGENTS.md refs, spot-check: worker.toml inherits model + workspace-write, spot-check: build-scout.toml gpt-5.4-mini + read-only, spot-check: quality-auditor.toml gpt-5.4 + reasoning high + read-only, hooks.json valid JSON + Bash|Execute matcher
+- PRs:

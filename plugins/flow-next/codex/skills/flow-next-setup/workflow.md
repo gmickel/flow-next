@@ -2,13 +2,32 @@
 
 Follow these steps in order. This workflow is **idempotent** - safe to re-run.
 
-## Step 0: Resolve plugin path
+## Step 0: Resolve plugin path and detect platform
 
 The plugin root is the parent of this skill's directory. From this SKILL.md location, go up to find `scripts/` and `.claude-plugin/`.
 
 Example: if this file is at `~/.claude/plugins/cache/.../flow-next/0.3.12/skills/flow-next-setup/workflow.md`, then plugin root is `~/.claude/plugins/cache/.../flow-next/0.3.12/`.
 
 Store this as `PLUGIN_ROOT` for use in later steps.
+
+### Platform detection
+
+Detect which platform is running:
+
+```bash
+if [ -n "${DROID_PLUGIN_ROOT:-}" ]; then
+  PLATFORM="droid"
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  PLATFORM="claude-code"
+else
+  PLATFORM="codex"
+fi
+```
+
+Store `PLATFORM` for use in later steps. This determines:
+- Which manifest to read for version (`plugin.json`)
+- Which docs file to prefer (CLAUDE.md vs AGENTS.md)
+- Whether to copy Codex agents and hooks to project
 
 ## Step 1: Initialize .flow/
 
@@ -27,7 +46,12 @@ This creates/upgrades:
 
 Read `.flow/meta.json` and check for `setup_version` field.
 
-Also read plugin version from `${PLUGIN_ROOT}/.claude-plugin/plugin.json` (Claude Code) or `${PLUGIN_ROOT}/.claude-plugin/plugin.json` (Factory Droid) - check whichever exists.
+Also read plugin version from the platform-specific manifest:
+- Codex: `${PLUGIN_ROOT}/.codex-plugin/plugin.json`
+- Claude Code: `${PLUGIN_ROOT}/.claude-plugin/plugin.json`
+- Factory Droid: `${PLUGIN_ROOT}/.claude-plugin/plugin.json`
+
+Check whichever matches `PLATFORM`. Fall back to `.claude-plugin/plugin.json` if the platform-specific file doesn't exist.
 
 **If `setup_version` exists (already set up):**
 - If **same version**: tell user "Already set up with v<VERSION>. Re-run to update docs only? (y/n)"
@@ -56,6 +80,54 @@ chmod +x .flow/bin/flowctl
 ```
 
 Then read [templates/usage.md](templates/usage.md) and write it to `.flow/usage.md`.
+
+## Step 4b: Codex-specific project setup (PLATFORM=codex only)
+
+**Skip this step entirely if PLATFORM is not `codex`.**
+
+On Codex, agents and hooks live in project-scoped `.codex/` directories (not in the plugin cache). Copy them:
+
+### Copy agent .toml files
+
+```bash
+# Source: pre-built agents from plugin (or global install)
+AGENTS_SRC="${PLUGIN_ROOT}/codex/agents"
+[ -d "$AGENTS_SRC" ] || AGENTS_SRC="$HOME/.codex/agents"
+
+if [ -d "$AGENTS_SRC" ]; then
+  mkdir -p .codex/agents
+  cp "$AGENTS_SRC"/*.toml .codex/agents/
+  echo "Copied $(ls .codex/agents/*.toml 2>/dev/null | wc -l | tr -d ' ') agent configs to .codex/agents/"
+else
+  echo "Warning: No agent .toml files found at ${PLUGIN_ROOT}/codex/agents/ or ~/.codex/agents/"
+fi
+```
+
+### Copy hooks.json
+
+```bash
+HOOKS_SRC="${PLUGIN_ROOT}/codex/hooks.json"
+[ -f "$HOOKS_SRC" ] || HOOKS_SRC="$HOME/.codex/hooks.json"
+
+if [ -f "$HOOKS_SRC" ]; then
+  mkdir -p .codex
+  cp "$HOOKS_SRC" .codex/hooks.json
+  echo "Copied hooks.json to .codex/hooks.json"
+else
+  echo "Warning: No hooks.json found at ${PLUGIN_ROOT}/codex/hooks.json or ~/.codex/hooks.json"
+fi
+```
+
+### Enable Codex hooks feature (if config.toml exists)
+
+```bash
+if [ -f .codex/config.toml ]; then
+  if ! grep -q 'codex_hooks' .codex/config.toml 2>/dev/null; then
+    echo -e '\n[features]\ncodex_hooks = true' >> .codex/config.toml
+    echo "Enabled codex_hooks in .codex/config.toml"
+  fi
+fi
+```
 
 ## Step 5: Update meta.json
 
@@ -91,7 +163,9 @@ Store detection results for use in questions. When showing options, indicate cur
 
 ### 6b: Check docs status
 
-Read the template from [templates/claude-md-snippet.md](templates/claude-md-snippet.md).
+Choose the correct template based on platform:
+- **Codex** (`PLATFORM=codex`): read [templates/agents-md-snippet.md](templates/agents-md-snippet.md) — uses `$flow-next-plan` syntax
+- **Claude Code / Droid**: read [templates/claude-md-snippet.md](templates/claude-md-snippet.md) — uses `/flow-next:plan` syntax
 
 For each of CLAUDE.md and AGENTS.md:
 1. Check if file exists
@@ -190,7 +264,24 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-**Docs question** (always include):
+**Docs question** (always include — adjust default based on platform):
+
+For **Codex** (`PLATFORM=codex`):
+```json
+{
+  "header": "Docs",
+  "question": "Update project documentation with Flow-Next instructions?",
+  "options": [
+    {"label": "AGENTS.md only (Recommended)", "description": "Add flow-next section to AGENTS.md (Codex reads this)"},
+    {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
+    {"label": "Both", "description": "Add flow-next section to both files"},
+    {"label": "Skip", "description": "Don't update documentation"}
+  ],
+  "multiSelect": false
+}
+```
+
+For **Claude Code / Droid**:
 ```json
 {
   "header": "Docs",
@@ -262,7 +353,12 @@ esac
 For each chosen file (CLAUDE.md and/or AGENTS.md):
 1. Read the file (create if doesn't exist)
 2. If marker exists: replace everything between `<!-- BEGIN FLOW-NEXT -->` and `<!-- END FLOW-NEXT -->` (inclusive)
-3. If no marker: append the snippet from [templates/claude-md-snippet.md](templates/claude-md-snippet.md)
+3. If no marker: append the snippet
+
+Use the correct template based on **target file** and **platform**:
+- AGENTS.md on **Codex**: use [templates/agents-md-snippet.md](templates/agents-md-snippet.md) (uses `$flow-next-plan` syntax)
+- AGENTS.md on **Claude Code / Droid**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (uses `/flow-next:plan` syntax)
+- CLAUDE.md (any platform): use [templates/claude-md-snippet.md](templates/claude-md-snippet.md)
 
 **Star:**
 - If "Yes, star it":
@@ -275,11 +371,23 @@ For each chosen file (CLAUDE.md and/or AGENTS.md):
 ```
 Flow-Next setup complete!
 
+Platform: <claude-code|codex|droid>
+
 Installed:
 - .flow/bin/flowctl (v<VERSION>)
 - .flow/bin/flowctl.py
 - .flow/usage.md
+```
 
+**If PLATFORM=codex, also show:**
+```
+Codex project setup:
+- .codex/agents/*.toml (<N> agent configs)
+- .codex/hooks.json (Ralph workflow guards)
+```
+
+**Then always show:**
+```
 To use from command line:
   export PATH=".flow/bin:$PATH"
   flowctl --help

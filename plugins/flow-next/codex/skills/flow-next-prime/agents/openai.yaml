@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Prime"
+  short_description: "Comprehensive codebase assessment for agent readiness"
+  brand_color: "#F59E0B"
+policy:
+  allow_implicit_invocation: false

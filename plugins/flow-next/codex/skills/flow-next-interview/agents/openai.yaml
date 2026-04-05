@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Interview"
+  short_description: "Deep Q&A to refine specs and requirements"
+  brand_color: "#3B82F6"
+policy:
+  allow_implicit_invocation: false

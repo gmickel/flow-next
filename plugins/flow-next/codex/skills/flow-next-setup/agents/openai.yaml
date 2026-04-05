@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Setup"
+  short_description: "Initialize flow-next in current project"
+  brand_color: "#3B82F6"
+policy:
+  allow_implicit_invocation: false
