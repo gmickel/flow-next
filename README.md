@@ -25,7 +25,7 @@
 >
 > 🤖 **[Ralph mode](plugins/flow-next/docs/ralph.md)**: Ship features while you sleep. Fresh context per iteration, multi-model review gates, auto-blocks stuck tasks.
 >
-> 📡 **Cross-platform reviews**: [RepoPrompt](https://repoprompt.com/?atp=KJbuL4) (macOS) or [Codex CLI](plugins/flow-next/README.md#cross-model-reviews) (any OS) · [Codex install](plugins/flow-next/README.md#openai-codex-experimental)
+> 📡 **Cross-platform reviews**: [RepoPrompt](https://repoprompt.com/?atp=KJbuL4) (macOS) or [Codex CLI](plugins/flow-next/README.md#cross-model-reviews) (any OS) · [Codex install](plugins/flow-next/README.md#openai-codex)
 >
 > 🧪 **OpenCode user?** Try [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) (experimental port)
 
@@ -37,12 +37,12 @@
 > Then `/plugins` → Marketplace → install flow-next. Commands don't autocomplete yet but work when typed (e.g. `/flow-next:plan`). Skills load automatically.
 
 > [!TIP]
-> **🖥️ [OpenAI Codex](https://developers.openai.com/codex/cli/) user?** Full multi-agent support (20 roles, parallel scouts, 3-tier model mapping):
+> **🖥️ [OpenAI Codex](https://developers.openai.com/codex/cli/) user?** Flow-Next is a native Codex plugin — clone this repo, open Codex, install via `/plugins`:
 > ```bash
 > git clone https://github.com/gmickel/gmickel-claude-marketplace.git
-> cd gmickel-claude-marketplace && ./scripts/install-codex.sh flow-next
+> cd gmickel-claude-marketplace && codex  # → /plugins → install Flow-Next
 > ```
-> Requires Codex 0.102.0+. Commands use `/prompts:` prefix (e.g. `/prompts:plan`). See [Codex install guide](plugins/flow-next/README.md#openai-codex).
+> Or global install: `./scripts/install-codex.sh flow-next`. Commands use `$` prefix (e.g. `$flow-next-plan`). See [Codex install guide](plugins/flow-next/README.md#openai-codex).
 
 ---
 

@@ -2,6 +2,26 @@
 
 All notable changes to the gmickel-claude-marketplace.
 
+## [flow-next 0.27.0] - 2026-04-05
+
+### Added
+- **Native Codex plugin support** (`.codex-plugin/plugin.json`) — Flow-Next is now a first-class Codex plugin discoverable via `/plugins`
+- **Codex marketplace discovery** (`.agents/plugins/marketplace.json`) — repo works as a Codex marketplace source
+- **Pre-built Codex agents** as `.toml` files with subagent optimizations (`sandbox_mode`, `nickname_candidates`)
+- **Pre-built Codex skills** with platform-specific invocation patterns (`$flow-next-plan` instead of `/flow-next:plan`)
+- **Codex-compatible hooks** for Ralph mode — Bash tool guard + Stop hook (experimental)
+- **`openai.yaml` UI metadata** for Codex app display (brand color, descriptions, default prompts)
+- **`scripts/sync-codex.sh`** — build script generates `codex/` directory from canonical Claude Code sources
+- **SessionStart hook** for Codex (flow context loading)
+
+### Changed
+- **`install-codex.sh` simplified** — 785 → 257 lines; uses pre-built `codex/` files instead of runtime conversion
+- **Model mapping updated** — `gpt-5.4-mini` replaces `gpt-5.3-codex-spark` for scanning scouts
+- **flowctl path** — installed to `~/.codex/scripts/` (was `~/.codex/bin/`) for consistency
+- **`bump.sh`** updates both `.claude-plugin/` and `.codex-plugin/` manifests
+- **Setup skill** detects Codex platform and configures project-scoped agents/hooks
+- Plugin README updated with native Codex install instructions
+
 ## [flow-next 0.26.0] - 2026-03-06
 
 ### Changed

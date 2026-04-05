@@ -118,6 +118,17 @@ Add entry:
 - Plugin README updated with native Codex install instructions
 ```
 
+## Done summary
+Updated all documentation for Codex native plugin support (0.27.0):
+
+1. **CHANGELOG.md** — Added [flow-next 0.27.0] entry with 8 Added items + 6 Changed items
+2. **plugins/flow-next/README.md** — Added Codex badge, Codex install paths in Quick Start, full rewrite of OpenAI Codex section (native plugin primary, install-codex.sh secondary, $-prefix commands, gpt-5.4-mini model mapping, hooks experimental, setup skill)
+3. **README.md (root)** — Updated Codex tip box (native plugin primary, $ prefix), fixed anchor link
+4. **CLAUDE.md** — Updated Structure (codex-plugin, agents marketplace, codex/ dir), Versioning (codex-plugin in bump, sync-codex.sh), Release checklist (sync-codex + verify steps), Codex Installation (complete rewrite with native plugin + global install)
+## Evidence
+- Commits:
+- Tests:
+- PRs:
 ## Acceptance criteria
 - [ ] plugins/flow-next/README.md has Codex badge
 - [ ] plugins/flow-next/README.md Quick Start shows both CC and Codex install
