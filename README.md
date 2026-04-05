@@ -3,7 +3,7 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v0.27.0-green)](plugins/flow-next/)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v0.28.0-green)](plugins/flow-next/)
 [![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -68,6 +68,8 @@ droid plugin marketplace add \
 </tr>
 </table>
 
+**Update Codex:** `cd flow-next && git pull`, then `/plugins` → uninstall → install.
+
 📖 **[Full docs](plugins/flow-next/README.md)** · **[Codex install guide](plugins/flow-next/README.md#openai-codex)** · **[OpenCode port](https://github.com/gmickel/flow-next-opencode)**
 
 ---
@@ -82,6 +84,7 @@ droid plugin marketplace add \
 | Forgotten requirements | **Dependency graphs** — tasks declare blockers, run in order |
 | "It worked on my machine" | **Evidence recording** — commits, tests, PRs tracked per task |
 | Infinite retry loops | **Auto-block stuck tasks** — fails after N attempts, moves on |
+| Duplicate implementations | **Pre-implementation search** — worker checks for similar code before writing new |
 
 ---
 

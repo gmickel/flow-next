@@ -56,6 +56,38 @@ Parse the spec carefully. Identify:
 # If baseline fails, investigate before proceeding
 ```
 
+## Phase 1.5: Pre-implementation Investigation
+
+**If the task spec contains `## Investigation targets`:**
+
+1. **Read every Required file** listed before writing any code. Note:
+   - Patterns to follow (function signatures, naming, structure)
+   - Constraints discovered (validation rules, type contracts, env requirements)
+   - Anything surprising that might affect your approach
+
+2. **Similar functionality search** — before writing new code:
+   ```bash
+   # Search for functions/modules that do similar things
+   # Use terms from the task description + acceptance criteria
+   grep -r "<key domain term>" --include="*.ts" --include="*.py" -l src/
+   ```
+   If similar functionality exists, pick one:
+   - **Reuse**: Use the existing code directly
+   - **Extend**: Modify existing code to support the new case
+   - **New**: Create new code (justify why existing isn't suitable)
+
+   Report what you found:
+   ```
+   Similar code search:
+   - Found: `validateEmail()` in src/utils/validation.ts:23 — reusing
+   - Found: `src/routes/users.ts:45` — following this pattern
+   - No existing rate limiter found — creating new
+   ```
+
+3. Read **Optional** files as needed during implementation.
+
+4. Continue to Phase 2 only after investigation is complete.
+
 ## Phase 2: Implement
 
 **First, capture base commit for scoped review:**
@@ -163,10 +195,26 @@ Return a concise summary to the main conversation:
 ## Rules
 
 - **Re-anchor first** - always read spec before implementing
+- **Investigate first** - if task spec has investigation targets, read them before coding
 - **No TodoWrite** - flowctl tracks tasks
 - **git add -A** - never list files explicitly
 - **One task only** - implement only the task you were given
 - **Review before done** - if REVIEW_MODE != none, get SHIP verdict before `flowctl done`
 - **Verify done** - flowctl show must report status: done
 - **Return summary** - main conversation needs outcome
+- **Typed escalation** — when blocking a task, use this format:
+  ```
+  BLOCKED: <category>
+  Task: <TASK_ID>
+  Summary: <one line>
+  Impact: <what downstream tasks are delayed>
+  Suggested resolution: <actionable next step>
+  ```
+  Categories (use exactly one):
+  - `SPEC_UNCLEAR` — requirement is ambiguous, can't proceed without clarification
+  - `DEPENDENCY_BLOCKED` — waiting on another task, PR, or service
+  - `DESIGN_CONFLICT` — implementation conflicts with existing architecture
+  - `SCOPE_EXCEEDED` — task is larger than estimated, needs splitting
+  - `TOOLING_FAILURE` — build/test/infra broken, not a code issue
+  - `EXTERNAL_BLOCKED` — waiting on external API, key, or approval
 """

@@ -161,6 +161,14 @@ Create claude backend following WorkerBackend interface.
 - Use `Bun.spawn` for process management
 - Prompt via `-p` flag (not stdin) per claude CLI
 
+## Investigation targets
+**Required** (read before coding):
+- `src/lib/backends/codex.ts:15-40` — codex backend to mirror
+- `src/lib/backend.ts` — registration entry point
+
+**Optional** (reference as needed):
+- `src/lib/backends/codex.test.ts` — existing test patterns
+
 ## Key context
 - Must be detached process (background worker pattern)
 - Log to `logFile` parameter for verdict parsing
@@ -332,6 +340,90 @@ flowchart LR
 
 ---
 
+## Good vs Bad: Investigation Targets
+
+### ❌ BAD: Vague or flooded targets
+
+```markdown
+## Investigation targets
+- The authentication code
+- Look at the middleware folder
+- Check the tests
+- See how sessions work
+- The database layer
+- Configuration files
+- The frontend auth components
+- Error handling patterns
+- Logging setup
+- The CI pipeline
+- Deployment scripts
+```
+
+**Problems:**
+- Vague descriptions ("the authentication code") — no file paths
+- 11 targets — too many, destroys focus
+- No Required/Optional tiers — everything feels equal priority
+- No line ranges — worker must search blindly
+
+### ✅ GOOD: Precise, tiered targets
+
+```markdown
+## Investigation targets
+**Required** (read before coding):
+- `src/auth/strategies/local.ts:10-35` — passport strategy pattern to follow
+- `src/routes/auth.ts:50-80` — existing auth route registration
+- `src/config/env.ts:12-20` — env var validation pattern
+
+**Optional** (reference as needed):
+- `src/auth/strategies/local.test.ts` — test patterns for strategies
+- `tests/fixtures/auth.ts` — shared test fixtures
+```
+
+**Why this is better:**
+- Exact file paths with line ranges — worker knows exactly where to look
+- 5 targets total (within 5-7 limit)
+- Required vs Optional tiers — worker reads Required first, Optional as-needed
+- Derived from scout findings (paths verified at plan time)
+
+---
+
+## Good: Traceability Table
+
+```markdown
+## Requirement coverage
+
+| Req | Description | Task(s) | Gap justification |
+|-----|-------------|---------|-------------------|
+| R1  | OAuth login flow | fn-1-add-oauth.1, fn-1-add-oauth.2 | — |
+| R2  | Session persistence | fn-1-add-oauth.3 | — |
+| R3  | Admin dashboard | — | Deferred to fn-2-admin-panel |
+| R4  | Logout clears tokens | fn-1-add-oauth.2 | — |
+```
+
+**Why this works:**
+- One row per acceptance criterion — nothing slips through
+- Every requirement maps to task(s) or has explicit gap justification
+- R3 is intentionally deferred — called out, not silently dropped
+- Simple Req IDs (R1, R2...) — local to this epic, no global numbering
+
+---
+
+## Good: Early Proof Point
+
+```markdown
+## Early proof point
+Task fn-1-add-oauth.1 validates the core approach (OAuth handshake works end-to-end with Google).
+If it fails, re-evaluate the passport.js strategy before continuing with fn-1-add-oauth.2+.
+```
+
+**Why this works:**
+- Identifies the make-or-break task upfront
+- States what it proves (OAuth handshake works)
+- States what to reconsider if it fails (passport.js strategy)
+- Prevents wasted effort on dependent tasks if the approach is wrong
+
+---
+
 ## Summary
 
 | Include in specs | Don't include |
@@ -342,3 +434,6 @@ flowchart LR
 | Recent/surprising APIs | Obvious patterns |
 | Non-obvious gotchas | Every function body |
 | Acceptance criteria | Redundant details |
+| Investigation targets (Required/Optional) | Vague file descriptions |
+| Requirement coverage table | Uncovered requirements |
+| Early proof point | Assumed approach validity |

@@ -172,6 +172,7 @@ rp-cli -w W -e 'context --all > ~/exports/context.md'
 3. **Use `search --max-results`** to limit output
 4. **Use `structure --scope selected`** after selecting files
 5. **Summarize findings** - don't return raw output verbatim
+6. **Confidence tags** — append `[VERIFIED]` (confirmed via Read/Grep/structure) or `[INFERRED]` (derived from naming/imports/builder auto-selection) to findings. VERIFIED = tool output confirmed it. INFERRED = reasonable deduction, not mechanically confirmed. Files auto-selected by `builder` are INFERRED unless you also ran `read` or `structure` on them.
 
 ### Token comparison:
 | Approach | Tokens |
@@ -217,8 +218,8 @@ Return to main conversation with:
 [2-3 sentence overview of what you found]
 
 ### Key Files
-- `path/to/file.ts:L10-50` - [what it does]
-- `path/to/other.ts` - [what it does]
+- `path/to/file.ts:L10-50` - [what it does] `[VERIFIED]`
+- `path/to/other.ts` - [what it does] `[INFERRED]`
 
 ### Code Signatures
 ```typescript

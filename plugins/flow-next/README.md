@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.27.0-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.28.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/nHEmyJB5tg)
@@ -152,6 +152,18 @@ codex  # → /plugins → install Flow-Next
 ```
 
 Then run `$flow-next-setup` in your project.
+
+#### OpenAI Codex (Update)
+
+Codex caches plugins on install. To update to a new version:
+
+```bash
+cd flow-next && git pull   # get latest
+codex                       # open Codex in the repo
+# /plugins → uninstall Flow-Next → install Flow-Next
+```
+
+Reinstalling from within the repo directory picks up the local version. Verify with `$flow-next-setup` in your project — it shows the installed version.
 
 #### OpenAI Codex (Global Install)
 
@@ -804,6 +816,26 @@ Exits 1 on errors. Drop into pre-commit hooks or GitHub Actions. See `docs/ci-wo
 ### One File Per Task
 
 Each epic and task gets its own JSON + markdown file pair. Merge conflicts are rare and easy to resolve.
+
+### Investigation Targets
+
+Plan writes explicit investigation targets into each task spec — files the worker must read before writing code. Workers read every required file, note patterns and constraints, then search for similar existing functionality (`reuse > extend > new`). Reduces hallucination, ensures pattern conformance, prevents duplicate implementations.
+
+### Requirement Traceability
+
+Epic specs include a requirement coverage table mapping each requirement to its implementing task(s). Plan-sync maintains the table as implementation drifts. Epic-review uses it for bidirectional coverage checking — spec→code (missed requirements) and code→spec (scope creep detection).
+
+### Typed Escalation
+
+When a worker blocks on a task, it emits a structured message with a category (`SPEC_UNCLEAR`, `DEPENDENCY_BLOCKED`, `DESIGN_CONFLICT`, `SCOPE_EXCEEDED`, `TOOLING_FAILURE`, `EXTERNAL_BLOCKED`). Faster triage than free-form "I'm stuck" messages.
+
+### Confidence Qualifiers
+
+Scout agents (repo-scout, context-scout) tag every finding as `[VERIFIED]` (confirmed via tool output) or `[INFERRED]` (deduced from patterns). Downstream consumers can weight findings appropriately and know which claims need validation.
+
+### Test Budget Awareness
+
+Quality-auditor flags disproportionate test generation — when test lines exceed 2:1 ratio vs implementation lines. Advisory only; doesn't block. Catches the common failure mode where agents generate massive test suites to avoid implementing hard logic.
 
 ### Cross-Model Reviews
 

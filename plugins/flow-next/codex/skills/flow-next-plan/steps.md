@@ -209,7 +209,8 @@ Default to standard unless complexity demands more or less.
 
 3. Write epic spec (use stdin heredoc):
    ```bash
-   # Include: Overview, Scope, Approach, Quick commands (REQUIRED), Acceptance, References
+   # Include: Overview, Scope, Approach, Quick commands (REQUIRED), Acceptance,
+   # Early proof point, Requirement coverage, References
    # Add mermaid diagram if data model or architecture changes
    $FLOWCTL epic set-plan <epic-id> --file - --json <<'EOF'
    # Epic Title
@@ -223,9 +224,34 @@ Default to standard unless complexity demands more or less.
    ```
 
    ## Acceptance
-   ...
+   - [ ] Criterion 1
+   - [ ] Criterion 2
+
+   ## Early proof point
+   Task fn-N-slug.1 validates the core approach (<what it proves>).
+   If it fails, re-evaluate <strategy> before continuing with fn-N-slug.2+.
+
+   ## Requirement coverage
+
+   | Req | Description | Task(s) | Gap justification |
+   |-----|-------------|---------|-------------------|
+   | R1  | <criterion from Acceptance> | fn-N-slug.1, fn-N-slug.2 | — |
+   | R2  | <another criterion> | fn-N-slug.3 | — |
+   | R3  | <deferred item> | — | Deferred to fn-M-slug |
    EOF
    ```
+
+   **Early proof point rules:**
+   - Identify which task proves the fundamental approach works
+   - One sentence: which task + what it proves
+   - One sentence: what to reconsider if it fails
+   - Usually the first task in dependency order, but not always
+
+   **Requirement coverage rules:**
+   - One row per acceptance criterion or distinct requirement from the epic spec
+   - Every requirement must map to at least one task OR have a gap justification
+   - Table goes at the bottom of the epic spec (after Acceptance + Early proof point)
+   - Keep Req IDs simple (R1, R2...) — they're local to this epic
 
 4. Set epic dependencies (from epic-scout findings):
 
@@ -272,6 +298,14 @@ Default to standard unless complexity demands more or less.
    - Follow pattern at `src/example.ts:42`
    - Reuse `existingHelper()` from `lib/utils.ts`
 
+   ## Investigation targets
+   **Required** (read before coding):
+   - `src/auth/oauth.ts` — existing OAuth flow to extend
+   - `src/middleware/session.ts:23-45` — session validation pattern
+
+   **Optional** (reference as needed):
+   - `src/auth/*.test.ts` — existing test patterns
+
    ## Key context
    [Only for recent API changes, surprising patterns, or non-obvious gotchas]
 
@@ -279,6 +313,13 @@ Default to standard unless complexity demands more or less.
    - [ ] Criterion 1
    - [ ] Criterion 2
    ```
+
+   **Investigation targets rules:**
+   - Max 5-7 targets per task (focus, don't flood)
+   - Use exact file paths with optional line ranges — not descriptions alone
+   - Validate paths exist at plan time (repo-scout/context-scout already found them)
+   - "Required" = must read before implementing. "Optional" = helpful reference
+   - Targets come from repo-scout/context-scout findings in Step 1
 
 7. Add task dependencies (if not already set via `--deps`):
 

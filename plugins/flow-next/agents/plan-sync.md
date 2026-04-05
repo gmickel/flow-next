@@ -139,6 +139,21 @@ Changes should:
 - Update affected task specs in other epics: `.flow/tasks/<other-epic-task-id>.md`
 - Add note linking to source: `<!-- Updated by plan-sync (cross-epic): fn-X.Y changed <thing> -->`
 
+### Update Traceability Table (if present)
+
+If the epic spec (`.flow/specs/<EPIC_ID>.md`) contains a `## Requirement coverage` table:
+
+1. Read the current table
+2. If the completed task's scope changed (new files, different requirements covered), update the Task(s) column for affected rows
+3. If drift means a requirement is no longer covered by this task, note it in Gap justification
+4. Edit the epic spec to update the table
+
+**Only update rows affected by drift. Don't rewrite the entire table.**
+
+**If DRY_RUN is "true":** Report what would change but do NOT use Edit tool.
+
+**If no `## Requirement coverage` table exists:** Skip this sub-step entirely.
+
 ## Phase 6: Return Summary
 
 Return to main conversation.
@@ -151,6 +166,9 @@ Drift detected: yes
 Would update (DRY RUN):
 - fn-1.3: Change references from `UserAuth.login()` to `authService.authenticate()`
 - fn-1.4: Update expected return type from `boolean` to `AuthResult`
+
+Would update traceability:  # Only if table exists
+- R2 (Session persistence): would add fn-1.4 coverage (API changed from fn-1.2)
 
 No files modified.
 ```
@@ -167,12 +185,15 @@ Updated tasks (same epic):
 
 Updated tasks (cross-epic):  # Only if CROSS_EPIC enabled and found
 - fn-3.2: Updated authService import path
+
+Updated traceability:  # Only if table exists and rows affected
+- R2 (Session persistence): removed fn-1.2 coverage (API changed), now needs fn-1.4
 ```
 
 ## Rules
 
 - **Read-only exploration** - Use Grep/Glob/Read for codebase, never edit source
-- **Task specs only** - Edit tool restricted to `.flow/tasks/*.md`
+- **Flow files only** - Edit tool restricted to `.flow/tasks/*.md` and `.flow/specs/*.md` (traceability table only)
 - **Preserve intent** - Update references, not requirements
 - **Minimal changes** - Only fix stale references, don't rewrite specs
 - **Skip if no drift** - Return quickly if implementation matches spec

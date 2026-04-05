@@ -2,6 +2,23 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.28.0] - 2026-04-05
+
+### Added
+- **Investigation targets** in task specs — plan writes file paths (Required/Optional) workers must read before coding, reducing hallucination and ensuring pattern conformance
+- **Requirement coverage** traceability table in epic specs — maps each requirement to covering task(s) with gap justification, maintained by plan-sync on drift
+- **Early proof point** in epic specs — identifies which task validates the core approach and what to reconsider if it fails
+- **Bidirectional epic-review** — adds code→spec reverse coverage check detecting scope creep (UNDOCUMENTED_ADDITION, LEGITIMATE_SUPPORT, UNRELATED_CHANGE classifications)
+- **Pre-implementation search** — worker greps for similar functionality before coding, applies reuse > extend > new decision tree
+- **Typed escalation** — structured block messages with 6 categories (SPEC_UNCLEAR, DEPENDENCY_BLOCKED, DESIGN_CONFLICT, SCOPE_EXCEEDED, TOOLING_FAILURE, EXTERNAL_BLOCKED)
+- **Confidence qualifiers** — repo-scout and context-scout tag findings as `[VERIFIED]` (tool-confirmed) or `[INFERRED]` (derived from naming/structure)
+- **Test budget awareness** — quality-auditor flags disproportionate test generation (>2:1 ratio) and existing test modifications as advisory
+
+### Changed
+- **Plan-sync scope** widened to also update `## Requirement coverage` table in epic specs when drift is detected
+- **Epic-review prompt** upgraded from two-phase to three-phase (extract requirements → verify implementation → reverse coverage)
+- Codex plugin update instructions documented (uninstall → reinstall from repo)
+
 ## [flow-next 0.27.0] - 2026-04-05
 
 ### Added

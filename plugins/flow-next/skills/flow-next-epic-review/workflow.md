@@ -195,7 +195,7 @@ This is NOT a code quality review — impl-review handles that per-task.
 
 Your job: Verify the combined implementation delivers everything the spec requires.
 
-### Two-Phase Approach
+### Three-Phase Approach
 
 **Phase 1: Extract Requirements**
 Read the epic spec and list ALL explicit requirements as bullets:
@@ -211,23 +211,46 @@ For each requirement from Phase 1:
 - [ ] Is the implementation complete (not partial)?
 - [ ] Does it match the spec intent?
 
+**Phase 3: Reverse Coverage (Code → Spec)**
+For each new/modified file in the changed files list:
+- Identify which epic requirement it serves
+- Flag any file that doesn't trace to a spec requirement
+
+If the epic spec has a `## Requirement coverage` traceability table, use it as the primary reference for mapping files to requirements.
+
+Classification for untraced changes:
+- `UNDOCUMENTED_ADDITION` — new functionality not in spec (scope creep)
+- `LEGITIMATE_SUPPORT` — refactoring/infrastructure needed to implement a requirement (OK)
+- `UNRELATED_CHANGE` — changes outside epic scope (may be accidental)
+
+Report untraced changes but don't auto-reject. UNDOCUMENTED_ADDITION is a flag for acknowledgment, not automatic NEEDS_WORK.
+
 ### What to Check
 - Requirements that never became tasks (decomposition gaps)
 - Requirements partially implemented across tasks (cross-task gaps)
 - Scope drift (task marked done without fully addressing spec intent)
 - Missing doc updates specified in acceptance criteria
+- Scope creep (code changes that don't trace to spec requirements)
 
 ### What NOT to Check
 - Code style, patterns, architecture (impl-review covers this)
 - Test quality (impl-review covers this)
 - Performance (impl-review covers this)
+- Legitimate refactoring needed to implement requirements (flag as LEGITIMATE_SUPPORT but don't block)
 
 ## Output Format
 
+**Forward coverage (Spec → Code):**
 For each gap found:
 - **Requirement**: What the spec says
 - **Status**: Missing / Partial / Wrong
 - **Evidence**: What you found (or didn't find) in the code
+
+**Reverse coverage (Code → Spec):**
+For each untraced change:
+- **File**: Changed file path
+- **Classification**: UNDOCUMENTED_ADDITION / LEGITIMATE_SUPPORT / UNRELATED_CHANGE
+- **Note**: Brief explanation
 
 **REQUIRED**: You MUST end your response with exactly one verdict tag. This is mandatory:
 `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`
