@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-05T11:26:35.789833Z",
+  "depends_on": [
+    "fn-24-codex-first-class-citizen-native-plugin.1"
+  ],
+  "epic": "fn-24-codex-first-class-citizen-native-plugin",
+  "id": "fn-24-codex-first-class-citizen-native-plugin.2",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-24-codex-first-class-citizen-native-plugin.2.md",
+  "status": "todo",
+  "title": "Create sync-codex.sh build script",
+  "updated_at": "2026-04-05T11:27:56.657109Z"
+}

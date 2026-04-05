@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-05T11:25:51.540621Z",
+  "depends_on": [],
+  "epic": "fn-24-codex-first-class-citizen-native-plugin",
+  "id": "fn-24-codex-first-class-citizen-native-plugin.1",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-24-codex-first-class-citizen-native-plugin.1.md",
+  "status": "todo",
+  "title": "Add .codex-plugin/plugin.json manifest and Codex marketplace",
+  "updated_at": "2026-04-05T11:30:32.758172Z"
+}

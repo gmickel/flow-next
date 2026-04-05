@@ -1,0 +1,13 @@
+{
+  "branch_name": "fn-24-codex-first-class-citizen-native-plugin",
+  "created_at": "2026-04-05T11:24:12.089406Z",
+  "depends_on_epics": [],
+  "id": "fn-24-codex-first-class-citizen-native-plugin",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-24-codex-first-class-citizen-native-plugin.md",
+  "status": "open",
+  "title": "Codex first-class citizen: native plugin, dual skills, pre-built agents",
+  "updated_at": "2026-04-05T11:25:36.494019Z"
+}

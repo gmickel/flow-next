@@ -1,0 +1,18 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-05T11:30:00.520016Z",
+  "depends_on": [
+    "fn-24-codex-first-class-citizen-native-plugin.5",
+    "fn-24-codex-first-class-citizen-native-plugin.6",
+    "fn-24-codex-first-class-citizen-native-plugin.7"
+  ],
+  "epic": "fn-24-codex-first-class-citizen-native-plugin",
+  "id": "fn-24-codex-first-class-citizen-native-plugin.8",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-24-codex-first-class-citizen-native-plugin.8.md",
+  "status": "todo",
+  "title": "Update documentation: README, CLAUDE.md, CHANGELOG",
+  "updated_at": "2026-04-05T11:34:07.067652Z"
+}
