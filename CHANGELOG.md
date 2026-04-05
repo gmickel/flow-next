@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## [flow-next 0.27.1] - 2026-04-05
+## [flow-next 0.28.0] - 2026-04-05
 
 ### Added
 - **Investigation targets** in task specs — plan writes file paths workers must read before coding
