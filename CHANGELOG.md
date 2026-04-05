@@ -20,7 +20,8 @@ All notable changes to the flow-next.
 - **flowctl path** — installed to `~/.codex/scripts/` (was `~/.codex/bin/`) for consistency
 - **`bump.sh`** updates both `.claude-plugin/` and `.codex-plugin/` manifests
 - **Setup skill** detects Codex platform and configures project-scoped agents/hooks
-- Plugin README updated with native Codex install instructions
+- Plugin README updated with native Codex install instructions and skill invocation guide
+- **Repo renamed** `gmickel-claude-marketplace` → `flow-next` (GitHub auto-redirects old URLs)
 
 ## [flow-next 0.26.0] - 2026-03-06
 
