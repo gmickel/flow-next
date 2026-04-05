@@ -363,8 +363,8 @@ Use the correct template based on **target file** and **platform**:
 **Star:**
 - If "Yes, star it":
   1. Check if `gh` CLI is available: `which gh`
-  2. If available, run: `gh api -X PUT /user/starred/gmickel/gmickel-claude-marketplace`
-  3. If `gh` not available or command fails, show: `Star manually: https://github.com/gmickel/gmickel-claude-marketplace`
+  2. If available, run: `gh api -X PUT /user/starred/gmickel/flow-next`
+  3. If `gh` not available or command fails, show: `Star manually: https://github.com/gmickel/flow-next`
 
 ## Step 8: Print Summary
 

@@ -17,7 +17,7 @@
 
 ---
 
-> **Active development.** [Changelog](../../CHANGELOG.md) | [Report issues](https://github.com/gmickel/gmickel-claude-marketplace/issues)
+> **Active development.** [Changelog](../../CHANGELOG.md) | [Report issues](https://github.com/gmickel/flow-next/issues)
 
 🌐 **Prefer a visual overview?** See the [Flow-Next app page](https://mickel.tech/apps/flow-next) for diagrams and examples.
 
@@ -103,7 +103,7 @@ Both get: re-anchoring before each task, evidence recording, cross-model review 
 - **Survives compaction:** Re-anchors after conversation summarization too
 - **Fresh context in Ralph:** Each iteration starts with a clean context window
 
-Never worry about 200K token limits again.
+Never worry about context window limits again.
 
 ### Reviewer as Safety Net
 
@@ -135,7 +135,7 @@ Two models catch what one misses.
 
 ```bash
 # Add marketplace
-/plugin marketplace add https://github.com/gmickel/gmickel-claude-marketplace
+/plugin marketplace add https://github.com/gmickel/flow-next
 
 # Install flow-next
 /plugin install flow-next
@@ -146,8 +146,8 @@ Two models catch what one misses.
 Clone this repo and open Codex — the plugin appears in `/plugins`:
 
 ```bash
-git clone https://github.com/gmickel/gmickel-claude-marketplace.git
-cd gmickel-claude-marketplace
+git clone https://github.com/gmickel/flow-next.git
+cd flow-next
 codex  # → /plugins → install Flow-Next
 ```
 
@@ -156,7 +156,7 @@ Then run `$flow-next-setup` in your project.
 #### OpenAI Codex (Global Install)
 
 ```bash
-git clone --depth 1 https://github.com/gmickel/gmickel-claude-marketplace.git /tmp/flow-next-install \
+git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-install \
   && /tmp/flow-next-install/scripts/install-codex.sh flow-next
 ```
 
@@ -1500,7 +1500,7 @@ Flow-Next works natively in [Factory Droid](https://factory.ai) — no modificat
 **Install:**
 ```bash
 # In Droid CLI
-/plugin marketplace add https://github.com/gmickel/gmickel-claude-marketplace
+/plugin marketplace add https://github.com/gmickel/flow-next
 /plugin install flow-next
 ```
 
@@ -1526,15 +1526,15 @@ Flow-Next is a **native Codex plugin** with near-parity to Claude Code. Pre-buil
 Clone this repo and open Codex. The plugin appears in `/plugins`:
 
 ```bash
-git clone https://github.com/gmickel/gmickel-claude-marketplace.git
-cd gmickel-claude-marketplace
+git clone https://github.com/gmickel/flow-next.git
+cd flow-next
 codex  # → /plugins → install Flow-Next
 ```
 
 **Option B — Global install** (copies to `~/.codex/`):
 
 ```bash
-git clone --depth 1 https://github.com/gmickel/gmickel-claude-marketplace.git /tmp/flow-next-install \
+git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-install \
   && /tmp/flow-next-install/scripts/install-codex.sh flow-next
 ```
 

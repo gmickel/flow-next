@@ -152,7 +152,7 @@ FLOW_RALPH_CLAUDE_NO_SESSION_PERSISTENCE=1
 ```bash
 # From this repo root
 /plugin marketplace add ./
-/plugin install flow-next@gmickel-claude-marketplace
+/plugin install flow-next@flow-next
 
 # Test in any project - plugin hooks work via ${CLAUDE_PLUGIN_ROOT}
 ```
@@ -219,7 +219,7 @@ Global installs take precedence over `--plugin-dir`, causing tests to use stale 
 ## Repo metadata
 - Author: Gordon Mickel (gordon@mickel.tech)
 - Homepage: https://mickel.tech
-- Marketplace repo: https://github.com/gmickel/gmickel-claude-marketplace
+- Marketplace repo: https://github.com/gmickel/flow-next
 
 ## Codex Installation
 
@@ -227,8 +227,8 @@ Flow-Next is a native Codex plugin. Two install methods:
 
 **Option A — Native plugin** (recommended):
 ```bash
-git clone https://github.com/gmickel/gmickel-claude-marketplace.git
-cd gmickel-claude-marketplace
+git clone https://github.com/gmickel/flow-next.git
+cd flow-next
 codex  # → /plugins → install Flow-Next
 ```
 
@@ -236,7 +236,7 @@ Then run `$flow-next-setup` in your project.
 
 **Option B — Global install** (copies to `~/.codex/`):
 ```bash
-git clone --depth 1 https://github.com/gmickel/gmickel-claude-marketplace.git /tmp/flow-next-install \
+git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-install \
   && /tmp/flow-next-install/scripts/install-codex.sh flow-next
 ```
 

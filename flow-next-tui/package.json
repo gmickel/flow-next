@@ -13,13 +13,13 @@
   ],
   "homepage": "https://mickel.tech/apps/flow-next",
   "bugs": {
-    "url": "https://github.com/gmickel/gmickel-claude-marketplace/issues"
+    "url": "https://github.com/gmickel/flow-next/issues"
   },
   "license": "MIT",
   "author": "Gordon Mickel <gordon@mickel.tech>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gmickel/gmickel-claude-marketplace.git"
+    "url": "git+https://github.com/gmickel/flow-next.git"
   },
   "bin": {
     "flow-next-tui": "src/index.ts",

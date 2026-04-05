@@ -1,6 +1,6 @@
 <div align="center">
 
-# gmickel claude marketplace
+# Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin_Marketplace-blueviolet)](https://claude.ai/code)
@@ -19,7 +19,7 @@
 
 > 💬 **[Join the Discord](https://discord.gg/nHEmyJB5tg)** — discussions, updates, feature requests, bug reports
 >
-> 🔄 **Update issues?** Run: `claude plugin update flow-next@gmickel-claude-marketplace`
+> 🔄 **Update issues?** Run: `claude plugin update flow-next@flow-next`
 >
 > 🆕 **[/flow-next:epic-review](plugins/flow-next/README.md#cross-model-reviews)**: Epic-completion review gate. Catches requirement gaps that per-task reviews miss—before epic closes.
 >
@@ -32,15 +32,15 @@
 > [!TIP]
 > **🤖 Works on [Factory Droid](https://factory.ai) too!** Claude Code plugins are fully compatible:
 > ```bash
-> droid plugin marketplace add https://github.com/gmickel/gmickel-claude-marketplace
+> droid plugin marketplace add https://github.com/gmickel/flow-next
 > ```
 > Then `/plugins` → Marketplace → install flow-next. Commands don't autocomplete yet but work when typed (e.g. `/flow-next:plan`). Skills load automatically.
 
 > [!TIP]
 > **🖥️ [OpenAI Codex](https://developers.openai.com/codex/cli/) user?** Flow-Next is a native Codex plugin — clone this repo, open Codex, install via `/plugins`:
 > ```bash
-> git clone https://github.com/gmickel/gmickel-claude-marketplace.git
-> cd gmickel-claude-marketplace && codex  # → /plugins → install Flow-Next
+> git clone https://github.com/gmickel/flow-next.git
+> cd flow-next && codex  # → /plugins → install Flow-Next
 > ```
 > Or global install: `./scripts/install-codex.sh flow-next`. Commands use `$` prefix (e.g. `$flow-next-plan`). See [Codex install guide](plugins/flow-next/README.md#openai-codex).
 
@@ -65,7 +65,7 @@ This marketplace ships plugins that fix these problems.
 
 ```bash
 # Install
-/plugin marketplace add https://github.com/gmickel/gmickel-claude-marketplace
+/plugin marketplace add https://github.com/gmickel/flow-next
 /plugin install flow-next
 
 # Setup (configures review backend + CLI tools)
@@ -134,7 +134,7 @@ scripts/ralph/ralph.sh          # Run from terminal
 
 ```bash
 # Add marketplace
-/plugin marketplace add https://github.com/gmickel/gmickel-claude-marketplace
+/plugin marketplace add https://github.com/gmickel/flow-next
 
 # Install flow-next
 /plugin install flow-next

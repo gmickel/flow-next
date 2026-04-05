@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the gmickel-claude-marketplace.
+All notable changes to the flow-next.
 
 ## [flow-next 0.27.0] - 2026-04-05
 
@@ -36,7 +36,7 @@ All notable changes to the gmickel-claude-marketplace.
 
 ### Fixed
 
-- **Codex reviews: embed files on all platforms** — removed `os.name == "nt"` gate that restricted file embedding to Windows only. On Unix/macOS, Codex wasted its entire turn budget reading files via `sed`/`rg` before producing a verdict (observed 114 shell commands, 3.68M tokens, no verdict on complex epics). Now always embeds changed files with budget-aware fallback: disk reads allowed when embed budget is exceeded. Default `FLOW_CODEX_EMBED_MAX_BYTES` raised from 100KB to 500KB. (Thanks @acebytes — [#93](https://github.com/gmickel/gmickel-claude-marketplace/pull/93))
+- **Codex reviews: embed files on all platforms** — removed `os.name == "nt"` gate that restricted file embedding to Windows only. On Unix/macOS, Codex wasted its entire turn budget reading files via `sed`/`rg` before producing a verdict (observed 114 shell commands, 3.68M tokens, no verdict on complex epics). Now always embeds changed files with budget-aware fallback: disk reads allowed when embed budget is exceeded. Default `FLOW_CODEX_EMBED_MAX_BYTES` raised from 100KB to 500KB. (Thanks @acebytes — [#93](https://github.com/gmickel/flow-next/pull/93))
 
 ## [flow-next 0.24.0] - 2026-02-21
 
@@ -278,8 +278,8 @@ All notable changes to the gmickel-claude-marketplace.
 ### Migration
 
 This release modifies ralph-guard hook behavior. If you encounter issues:
-1. Report at https://github.com/gmickel/gmickel-claude-marketplace/issues
-2. Downgrade: `claude plugins uninstall flow-next && claude plugins add https://github.com/gmickel/gmickel-claude-marketplace && claude plugins install flow-next@0.18.27`
+1. Report at https://github.com/gmickel/flow-next/issues
+2. Downgrade: `claude plugins uninstall flow-next && claude plugins add https://github.com/gmickel/flow-next && claude plugins install flow-next@0.18.27`
 
 ## [flow-next 0.18.27] - 2026-01-28
 
@@ -650,7 +650,7 @@ Runtime fields moved to state: `status`, `updated_at`, `assignee`, `claimed_at`,
 
 ### Changed
 
-- **WORKER_TIMEOUT default** — 45min → 1hr (3600s). Timeout is now a safety guard against runaway workers, not flow control. Properly sized tasks shouldn't hit it ([#59](https://github.com/gmickel/gmickel-claude-marketplace/issues/59))
+- **WORKER_TIMEOUT default** — 45min → 1hr (3600s). Timeout is now a safety guard against runaway workers, not flow control. Properly sized tasks shouldn't hit it ([#59](https://github.com/gmickel/flow-next/issues/59))
 - **MAX_REVIEW_ITERATIONS default** — 5 → 3. Tighter cap; if 3 fix cycles don't pass review, task/spec is likely too big or ambiguous. Let next Ralph iteration start fresh
 - **Timeout philosophy** — Docs and comments now clarify: time is arbitrary, `MAX_REVIEW_ITERATIONS` is the real control. One Ralph iteration = impl + review, should complete within single context window
 
@@ -693,7 +693,7 @@ Runtime fields moved to state: `status`, `updated_at`, `assignee`, `claimed_at`,
   - File path → rewrite file, suggest `/flow-next:plan <file>`
 - **README clarification** — Added explicit "Interview vs Plan boundary" note in "When to Use What" section
 
-Thanks to @tiagoefreitas for the detailed issue report ([#62](https://github.com/gmickel/gmickel-claude-marketplace/issues/62)).
+Thanks to @tiagoefreitas for the detailed issue report ([#62](https://github.com/gmickel/flow-next/issues/62)).
 
 ## [flow-next 0.14.0] - 2026-01-21
 
@@ -823,7 +823,7 @@ The changes affect:
 
 ### Feedback Welcome
 
-This is a significant change to the planning philosophy. If you find plans are now too sparse, or the "surprised you" heuristic isn't working well, please open an issue at https://github.com/gmickel/gmickel-claude-marketplace/issues
+This is a significant change to the planning philosophy. If you find plans are now too sparse, or the "surprised you" heuristic isn't working well, please open an issue at https://github.com/gmickel/flow-next/issues
 
 We'd rather iterate based on real usage than guess at the right balance.
 
@@ -972,7 +972,7 @@ Thanks to @VexyCats for the detailed analysis and logs that identified the root 
 ## [flow-next 0.11.8] - 2026-01-16
 
 ### Added
-- **`/flow-next:sync` command** - Manual plan-sync trigger ([#43](https://github.com/gmickel/gmickel-claude-marketplace/issues/43))
+- **`/flow-next:sync` command** - Manual plan-sync trigger ([#43](https://github.com/gmickel/flow-next/issues/43))
   - Sync from task: `/flow-next:sync fn-1.2`
   - Scan whole epic: `/flow-next:sync fn-1`
   - Preview mode: `/flow-next:sync fn-1.2 --dry-run`
@@ -988,7 +988,7 @@ Thanks to @VexyCats for the detailed analysis and logs that identified the root 
 ## [flow-next 0.11.5] - 2026-01-16
 
 ### Fixed
-- **Ralph hooks check removed** - Remove blocking local hooks check from `ralph.sh` ([#45](https://github.com/gmickel/gmickel-claude-marketplace/issues/45))
+- **Ralph hooks check removed** - Remove blocking local hooks check from `ralph.sh` ([#45](https://github.com/gmickel/flow-next/issues/45))
   - Plugin hooks work via `hooks/hooks.json` when installed normally
   - The check was blocking ALL users, not just `--plugin-dir` users
   - Test scripts handle the `--plugin-dir` workaround for bug #14410
@@ -999,7 +999,7 @@ Thanks to @VexyCats for the detailed analysis and logs that identified the root 
 
 ### Changed
 - **Dev guidance** - CLAUDE.md now recommends local marketplace install over `--plugin-dir`
-  - `/plugin marketplace add ./` then `/plugin install flow-next@gmickel-claude-marketplace`
+  - `/plugin marketplace add ./` then `/plugin install flow-next@flow-next`
   - Hooks work correctly this way (no workaround needed)
 - **Setup notes** - `/flow-next:setup` now mentions `/flow-next:ralph-init` for autonomous mode
 

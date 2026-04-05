@@ -1,6 +1,6 @@
 # flow-next-tui
 
-Terminal UI for monitoring [Flow-Next](https://github.com/gmickel/gmickel-claude-marketplace/tree/main/plugins/flow-next) Ralph autonomous agent runs.
+Terminal UI for monitoring [Flow-Next](https://github.com/gmickel/flow-next/tree/main/plugins/flow-next) Ralph autonomous agent runs.
 
 **Flow-Next** is a Claude Code plugin for structured task planning and execution. **Ralph** is its autonomous mode - an external loop that runs Claude overnight, completing epics task-by-task with multi-model review gates.
 

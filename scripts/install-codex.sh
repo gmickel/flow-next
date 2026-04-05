@@ -2,7 +2,7 @@
 # Install Flow-Next into Codex CLI (~/.codex) using pre-built files.
 #
 # One-liner install (no manual clone needed):
-#   git clone --depth 1 https://github.com/gmickel/gmickel-claude-marketplace.git /tmp/flow-next-install \
+#   git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-install \
 #     && /tmp/flow-next-install/scripts/install-codex.sh flow-next \
 #     && trash /tmp/flow-next-install
 #

@@ -48,7 +48,7 @@ Flow doesn't make Claude smarter. It makes the workflow disciplined enough that 
 ## Install
 
 ```bash
-/plugin marketplace add https://github.com/gmickel/gmickel-claude-marketplace
+/plugin marketplace add https://github.com/gmickel/flow-next
 /plugin install flow
 ```
 
