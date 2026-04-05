@@ -1,0 +1,7 @@
+interface:
+  display_name: "Flow Work"
+  short_description: "Execute planned tasks with worker subagents"
+  brand_color: "#3B82F6"
+  default_prompt: "Work on: "
+policy:
+  allow_implicit_invocation: false

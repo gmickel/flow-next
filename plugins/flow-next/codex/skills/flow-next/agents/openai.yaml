@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Tasks"
+  short_description: "Manage .flow/ tasks and epics"
+  brand_color: "#3B82F6"
+policy:
+  allow_implicit_invocation: true

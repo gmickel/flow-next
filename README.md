@@ -1,11 +1,11 @@
 <div align="center">
 
-# gmickel claude marketplace
+# Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin_Marketplace-blueviolet)](https://claude.ai/code)
 
-[![Flow-next](https://img.shields.io/badge/Flow--next-v0.26.1-green)](plugins/flow-next/)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v0.27.0-green)](plugins/flow-next/)
 [![Flow-next Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -19,30 +19,30 @@
 
 > 💬 **[Join the Discord](https://discord.gg/nHEmyJB5tg)** — discussions, updates, feature requests, bug reports
 >
-> 🔄 **Update issues?** Run: `claude plugin update flow-next@gmickel-claude-marketplace`
+> 🔄 **Update issues?** Run: `claude plugin update flow-next@flow-next`
 >
 > 🆕 **[/flow-next:epic-review](plugins/flow-next/README.md#cross-model-reviews)**: Epic-completion review gate. Catches requirement gaps that per-task reviews miss—before epic closes.
 >
 > 🤖 **[Ralph mode](plugins/flow-next/docs/ralph.md)**: Ship features while you sleep. Fresh context per iteration, multi-model review gates, auto-blocks stuck tasks.
 >
-> 📡 **Cross-platform reviews**: [RepoPrompt](https://repoprompt.com/?atp=KJbuL4) (macOS) or [Codex CLI](plugins/flow-next/README.md#cross-model-reviews) (any OS) · [Codex install](plugins/flow-next/README.md#openai-codex-experimental)
+> 📡 **Cross-platform reviews**: [RepoPrompt](https://repoprompt.com/?atp=KJbuL4) (macOS) or [Codex CLI](plugins/flow-next/README.md#cross-model-reviews) (any OS) · [Codex install](plugins/flow-next/README.md#openai-codex)
 >
 > 🧪 **OpenCode user?** Try [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) (experimental port)
 
 > [!TIP]
 > **🤖 Works on [Factory Droid](https://factory.ai) too!** Claude Code plugins are fully compatible:
 > ```bash
-> droid plugin marketplace add https://github.com/gmickel/gmickel-claude-marketplace
+> droid plugin marketplace add https://github.com/gmickel/flow-next
 > ```
 > Then `/plugins` → Marketplace → install flow-next. Commands don't autocomplete yet but work when typed (e.g. `/flow-next:plan`). Skills load automatically.
 
 > [!TIP]
-> **🖥️ [OpenAI Codex](https://developers.openai.com/codex/cli/) user?** Full multi-agent support (20 roles, parallel scouts, 3-tier model mapping):
+> **🖥️ [OpenAI Codex](https://developers.openai.com/codex/cli/) user?** Flow-Next is a native Codex plugin — clone this repo, open Codex, install via `/plugins`:
 > ```bash
-> git clone https://github.com/gmickel/gmickel-claude-marketplace.git
-> cd gmickel-claude-marketplace && ./scripts/install-codex.sh flow-next
+> git clone https://github.com/gmickel/flow-next.git
+> cd flow-next && codex  # → /plugins → install Flow-Next
 > ```
-> Requires Codex 0.102.0+. Commands use `/prompts:` prefix (e.g. `/prompts:plan`). See [Codex install guide](plugins/flow-next/README.md#openai-codex).
+> Or global install: `./scripts/install-codex.sh flow-next`. Commands use `$` prefix (e.g. `$flow-next-plan`). See [Codex install guide](plugins/flow-next/README.md#openai-codex).
 
 ---
 
@@ -65,7 +65,7 @@ This marketplace ships plugins that fix these problems.
 
 ```bash
 # Install
-/plugin marketplace add https://github.com/gmickel/gmickel-claude-marketplace
+/plugin marketplace add https://github.com/gmickel/flow-next
 /plugin install flow-next
 
 # Setup (configures review backend + CLI tools)
@@ -134,7 +134,7 @@ scripts/ralph/ralph.sh          # Run from terminal
 
 ```bash
 # Add marketplace
-/plugin marketplace add https://github.com/gmickel/gmickel-claude-marketplace
+/plugin marketplace add https://github.com/gmickel/flow-next
 
 # Install flow-next
 /plugin install flow-next

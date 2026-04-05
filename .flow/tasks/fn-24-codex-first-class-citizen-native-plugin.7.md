@@ -65,3 +65,10 @@ This task modifies the **canonical** setup skill (not just the codex/ copy), sin
 - [ ] On Codex, updates AGENTS.md (not CLAUDE.md)
 - [ ] On Claude Code / Droid, behavior unchanged
 - [ ] After setup on Codex, project-scoped agents are discoverable by Codex
+
+## Done summary
+Updated setup skill with Codex platform detection and project-scoped agent/hooks copying.
+## Evidence
+- Commits:
+- Tests: smoke_test.sh (52/52 pass), sync-codex.sh validation (all checks pass)
+- PRs:

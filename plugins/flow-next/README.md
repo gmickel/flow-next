@@ -4,8 +4,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
+[![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.26.1-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.27.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/nHEmyJB5tg)
@@ -16,7 +17,7 @@
 
 ---
 
-> **Active development.** [Changelog](../../CHANGELOG.md) | [Report issues](https://github.com/gmickel/gmickel-claude-marketplace/issues)
+> **Active development.** [Changelog](../../CHANGELOG.md) | [Report issues](https://github.com/gmickel/flow-next/issues)
 
 🌐 **Prefer a visual overview?** See the [Flow-Next app page](https://mickel.tech/apps/flow-next) for diagrams and examples.
 
@@ -102,7 +103,7 @@ Both get: re-anchoring before each task, evidence recording, cross-model review 
 - **Survives compaction:** Re-anchors after conversation summarization too
 - **Fresh context in Ralph:** Each iteration starts with a clean context window
 
-Never worry about 200K token limits again.
+Never worry about context window limits again.
 
 ### Reviewer as Safety Net
 
@@ -130,12 +131,33 @@ Two models catch what one misses.
 
 ### 1. Install
 
+#### Claude Code / Factory Droid
+
 ```bash
 # Add marketplace
-/plugin marketplace add https://github.com/gmickel/gmickel-claude-marketplace
+/plugin marketplace add https://github.com/gmickel/flow-next
 
 # Install flow-next
 /plugin install flow-next
+```
+
+#### OpenAI Codex (Native Plugin)
+
+Clone this repo and open Codex — the plugin appears in `/plugins`:
+
+```bash
+git clone https://github.com/gmickel/flow-next.git
+cd flow-next
+codex  # → /plugins → install Flow-Next
+```
+
+Then run `$flow-next-setup` in your project.
+
+#### OpenAI Codex (Global Install)
+
+```bash
+git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-install \
+  && /tmp/flow-next-install/scripts/install-codex.sh flow-next
 ```
 
 ### 2. Setup (Recommended)
@@ -842,18 +864,18 @@ Reviews block progress until `<verdict>SHIP</verdict>`. Fix → re-review cycles
 
 #### Codex (Cross-Platform Alternative)
 
-OpenAI Codex CLI works on any platform (macOS, Linux, Windows).
+OpenAI Codex CLI works on any platform (macOS, Linux, Windows). Flow-Next is also a [native Codex plugin](#openai-codex) — install via `/plugins` or `install-codex.sh`.
 
 **Why use Codex:**
 - Cross-platform (no macOS requirement)
 - Terminal-based (no GUI needed)
 - Session continuity via thread IDs
 - Same Carmack-level review criteria as RepoPrompt
-- Uses GPT 5.2 High by default when used as a review backend from Claude Code (no config needed)
+- Uses GPT 5.4 High by default when used as a review backend from Claude Code (no config needed)
 
 **Trade-off:** Uses heuristic context hints from changed files rather than RepoPrompt's intelligent file selection.
 
-> **Note:** When running Flow-Next inside Codex itself, commands use `/prompts:` prefix (e.g., `/prompts:impl-review`). The `/flow-next:` prefix below applies to Claude Code.
+> **Note:** When running Flow-Next inside Codex as a native plugin, commands use `$` prefix (e.g., `$flow-next-impl-review`). The `/flow-next:` prefix below applies to Claude Code.
 
 **Setup:**
 ```bash
@@ -1455,7 +1477,7 @@ This creates a complete audit trail: what was planned, what was done, how it was
 - Python 3.8+
 - git
 - Optional: [RepoPrompt](https://repoprompt.com/?atp=KJbuL4) for macOS GUI reviews + enables **context-scout** (deeper codebase discovery than repo-scout). Reviews work without it via Codex backend.
-- Optional: OpenAI Codex CLI (`npm install -g @openai/codex`) for cross-platform terminal-based reviews
+- Optional: [OpenAI Codex CLI](https://developers.openai.com/codex/cli/) (`npm install -g @openai/codex`) for cross-platform reviews. Also available as a [native Codex plugin](#openai-codex).
 
 Without a review backend, reviews are skipped.
 
@@ -1478,7 +1500,7 @@ Flow-Next works natively in [Factory Droid](https://factory.ai) — no modificat
 **Install:**
 ```bash
 # In Droid CLI
-/plugin marketplace add https://github.com/gmickel/gmickel-claude-marketplace
+/plugin marketplace add https://github.com/gmickel/flow-next
 /plugin install flow-next
 ```
 
@@ -1495,100 +1517,113 @@ Flow-Next works natively in [Factory Droid](https://factory.ai) — no modificat
 
 ### OpenAI Codex
 
-Flow-Next works in OpenAI Codex with near-parity to Claude Code. The install script converts Claude Code's plugin system to Codex's multi-agent roles, prompts, and config.
+Flow-Next is a **native Codex plugin** with near-parity to Claude Code. Pre-built agents, skills, and hooks ship in the `codex/` directory — no runtime conversion needed.
 
-**Key difference:** Commands use the `/prompts:` prefix in Codex instead of `/flow-next:`:
+#### Install
 
-| Claude Code | Codex |
-|-------------|-------|
-| `/flow-next:plan` | `/prompts:plan` |
-| `/flow-next:work` | `/prompts:work` |
-| `/flow-next:impl-review` | `/prompts:impl-review` |
-| `/flow-next:plan-review` | `/prompts:plan-review` |
-| `/flow-next:epic-review` | `/prompts:epic-review` |
-| `/flow-next:interview` | `/prompts:interview` |
-| `/flow-next:prime` | `/prompts:prime` |
-| `/flow-next:ralph-init` | `/prompts:ralph-init` |
+**Option A — Native plugin** (recommended):
 
-**What works:**
+Clone this repo and open Codex. The plugin appears in `/plugins`:
+
+```bash
+git clone https://github.com/gmickel/flow-next.git
+cd flow-next
+codex  # → /plugins → install Flow-Next
+```
+
+**Option B — Global install** (copies to `~/.codex/`):
+
+```bash
+git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-install \
+  && /tmp/flow-next-install/scripts/install-codex.sh flow-next
+```
+
+> The install script (257 lines) copies pre-built files from `codex/` to `~/.codex/` and merges agent entries into `config.toml`. Delete the clone after install; re-clone to update.
+
+#### Skill invocation
+
+In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setup**, **Flow Plan**). You can invoke them three ways:
+
+1. **Dropdown**: Type `$` → select from the list (e.g. select "Flow Setup")
+2. **Direct name**: Type `$flow-next-setup` in your prompt
+3. **Implicit**: Just describe the task — Codex matches the skill description automatically (for skills with `allow_implicit_invocation: true`)
+
+| Claude Code | Codex (dropdown) | Codex (direct) |
+|-------------|-------------------|----------------|
+| `/flow-next:plan` | Flow Plan | `$flow-next-plan` |
+| `/flow-next:work` | Flow Work | `$flow-next-work` |
+| `/flow-next:impl-review` | Flow Implementation Review | `$flow-next-impl-review` |
+| `/flow-next:plan-review` | Flow Plan Review | `$flow-next-plan-review` |
+| `/flow-next:epic-review` | Flow Epic Review | `$flow-next-epic-review` |
+| `/flow-next:interview` | Flow Interview | `$flow-next-interview` |
+| `/flow-next:prime` | Flow Prime | `$flow-next-prime` |
+| `/flow-next:setup` | Flow Setup | `$flow-next-setup` |
+
+#### What works
+
 - Planning, work execution, interviews, reviews — full workflow
-- Multi-agent roles: 20 agents run as parallel Codex threads (up to 12 concurrent)
+- Multi-agent roles: 20 agents as `.toml` files with subagent optimizations (`sandbox_mode`, `nickname_candidates`)
 - Cross-model reviews (Codex as review backend)
-- flowctl CLI
+- flowctl CLI (`~/.codex/scripts/flowctl`)
+- Setup skill (`$flow-next-setup`) — detects Codex platform, copies agents/hooks/flowctl to project
+- `openai.yaml` UI metadata for Codex app display (brand color, descriptions)
 
-**Model mapping (3-tier):**
+#### Model mapping (3-tier)
 
 | Tier | Codex Model | Agents | Reasoning |
 |------|-------------|--------|-----------|
 | Intelligent | `gpt-5.4` | quality-auditor, flow-gap-analyst, context-scout | high |
 | Smart scouts | `gpt-5.4` | epic-scout, agents-md-scout, docs-gap-scout | high |
-| Fast scouts | `gpt-5.3-codex-spark` | build, env, testing, tooling, observability, security, workflow, memory scouts | skipped |
+| Fast scouts | `gpt-5.4-mini` | build, env, testing, tooling, observability, security, workflow, memory scouts | default |
 | Inherited | parent model | worker, plan-sync | parent |
 
-Smart scouts (epic-scout, agents-md-scout, docs-gap-scout) need deeper reasoning for context building and analysis. The remaining 8 scanning scouts run on Spark for speed — they check for file presence and patterns without needing multi-step reasoning.
+Smart scouts need deeper reasoning for context building. Fast scouts check file presence and patterns — `gpt-5.4-mini` handles them efficiently.
 
-Override model defaults:
+Override model defaults (global install only):
 ```bash
 CODEX_MODEL_INTELLIGENT=gpt-5.4 \
-CODEX_MODEL_FAST=gpt-5.3-codex-spark \
+CODEX_MODEL_FAST=gpt-5.4-mini \
 CODEX_REASONING_EFFORT=high \
 CODEX_MAX_THREADS=12 \
 ./scripts/install-codex.sh flow-next
 ```
 
-**Caveats:**
-- `/prompts:setup` not supported — use manual project setup below
-- Ralph autonomous mode not supported — requires plugin hooks (guard hooks, receipt gating) which Codex doesn't support
-- `/prompts:ralph-init` scaffolds files but the loop won't enforce workflow rules without hooks
-- `claude-md-scout` is auto-renamed to `agents-md-scout` (CLAUDE.md → AGENTS.md patching)
+#### Hooks (experimental)
 
-**Install:**
-```bash
-# Clone the marketplace repo (one-time)
-git clone https://github.com/gmickel/gmickel-claude-marketplace.git
-cd gmickel-claude-marketplace
+Codex now supports hooks. The pre-built `codex/hooks.json` includes Ralph guard hooks for `Bash|Execute` tool calls and `Stop` events.
 
-# Run the install script
-./scripts/install-codex.sh flow-next
-```
+**Limitation:** Codex hooks only intercept `Bash` (not `Edit`/`Write`). Ralph's file-modification guard won't catch direct file edits. The `SubagentStop` event is also not supported.
 
-> Codex doesn't have a plugin marketplace yet, so installation requires cloning this repo and running the install script. The script copies everything to `~/.codex/` — you can delete the clone after install (re-clone to update).
+#### Per-project setup
 
-**Per-project setup** (run in each project):
+Run `$flow-next-setup` (or select **Flow Setup** from the `$` dropdown) in your project. It detects the Codex platform and:
+- Initializes `.flow/` directory
+- Copies flowctl to `.flow/bin/`
+- Copies 20 agent `.toml` configs to `.codex/agents/` (project-scoped)
+- Copies `hooks.json` to `.codex/hooks.json` (project-scoped)
+- Adds Flow-Next instructions to AGENTS.md
+- Configures review backend and recommended defaults
+
+**Manual setup** (alternative):
 ```bash
 # Initialize .flow/ directory
-~/.codex/bin/flowctl init
+~/.codex/scripts/flowctl init
 
-# Optional: copy flowctl locally for project portability
+# Optional: copy flowctl locally
 mkdir -p .flow/bin
-cp ~/.codex/bin/flowctl .flow/bin/
-cp ~/.codex/bin/flowctl.py .flow/bin/
+cp ~/.codex/scripts/flowctl .flow/bin/
+cp ~/.codex/scripts/flowctl.py .flow/bin/
 chmod +x .flow/bin/flowctl
 
-# Optional: configure review backend (codex recommended for Codex CLI)
-~/.codex/bin/flowctl config set review.backend codex
+# Configure review backend
+~/.codex/scripts/flowctl config set review.backend codex
 ```
 
-**Optional AGENTS.md snippet** (helps Codex understand flow-next):
-```markdown
-<!-- BEGIN FLOW-NEXT -->
-## Flow-Next
+#### Caveats
 
-This project uses Flow-Next for task tracking. Use `.flow/bin/flowctl` or `~/.codex/bin/flowctl`.
-
-Quick commands:
-- `flowctl list` — list epics + tasks
-- `flowctl ready --epic fn-N` — what's ready
-- `flowctl start fn-N.M` — claim task
-- `flowctl done fn-N.M --summary-file s.md --evidence-json e.json`
-
-Prompts (use `/prompts:<name>`):
-- `/prompts:plan` — create a build plan
-- `/prompts:work` — execute tasks
-- `/prompts:impl-review` — implementation review
-- `/prompts:interview` — refine specs interactively
-<!-- END FLOW-NEXT -->
-```
+- Ralph autonomous mode is limited — hooks intercept Bash only (not Edit/Write), no `SubagentStop` support
+- `claude-md-scout` is auto-renamed to `agents-md-scout` (CLAUDE.md → AGENTS.md patching)
+- Global install prompts (`/prompts:*`) are global-only (`~/.codex/prompts/`); native plugin avoids this limitation
 
 ### Community Ports and Inspired Projects
 

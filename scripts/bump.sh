@@ -48,6 +48,13 @@ if [[ "$TARGET" == "flow" || "$TARGET" == "all" ]]; then
   # Update plugin.json
   jq --arg v "$NEW" '.version = $v' "$PLUGIN_FLOW" > tmp.json && mv tmp.json "$PLUGIN_FLOW"
 
+  # Update .codex-plugin/plugin.json if it exists
+  CODEX_PLUGIN="plugins/flow/.codex-plugin/plugin.json"
+  if [[ -f "$CODEX_PLUGIN" ]]; then
+    jq --arg v "$NEW" '.version = $v' "$CODEX_PLUGIN" > tmp.json && mv tmp.json "$CODEX_PLUGIN"
+    echo "flow (codex): $OLD -> $NEW"
+  fi
+
   # Update marketplace.json flow plugin version
   jq --arg v "$NEW" '(.plugins[] | select(.name == "flow")).version = $v' "$MARKETPLACE" > tmp.json && mv tmp.json "$MARKETPLACE"
 
@@ -56,6 +63,12 @@ if [[ "$TARGET" == "flow" || "$TARGET" == "all" ]]; then
   sed -i '' "s/Version-[0-9]*\.[0-9]*\.[0-9]*/Version-$NEW/" plugins/flow/README.md
 
   echo "flow: $OLD -> $NEW"
+
+  # Sync codex/ if plugin has codex directory
+  if [[ -d "plugins/flow/codex" ]]; then
+    echo "syncing codex/ for flow..."
+    bash scripts/sync-codex.sh
+  fi
 fi
 
 if [[ "$TARGET" == "flow-next" || "$TARGET" == "all" ]]; then
@@ -64,6 +77,13 @@ if [[ "$TARGET" == "flow-next" || "$TARGET" == "all" ]]; then
 
   # Update plugin.json
   jq --arg v "$NEW" '.version = $v' "$PLUGIN_FLOW_NEXT" > tmp.json && mv tmp.json "$PLUGIN_FLOW_NEXT"
+
+  # Update .codex-plugin/plugin.json if it exists
+  CODEX_PLUGIN="plugins/flow-next/.codex-plugin/plugin.json"
+  if [[ -f "$CODEX_PLUGIN" ]]; then
+    jq --arg v "$NEW" '.version = $v' "$CODEX_PLUGIN" > tmp.json && mv tmp.json "$CODEX_PLUGIN"
+    echo "flow-next (codex): $OLD -> $NEW"
+  fi
 
   # Update marketplace.json flow-next plugin version
   jq --arg v "$NEW" '(.plugins[] | select(.name == "flow-next")).version = $v' "$MARKETPLACE" > tmp.json && mv tmp.json "$MARKETPLACE"
@@ -77,6 +97,13 @@ if [[ "$TARGET" == "flow-next" || "$TARGET" == "all" ]]; then
 
   echo "flow-next: $OLD -> $NEW"
   echo "marketplace: -> $NEW (synced)"
+
+  # Sync codex/ if plugin has codex directory
+  if [[ -d "plugins/flow-next/codex" ]]; then
+    echo "syncing codex/ for flow-next..."
+    bash scripts/sync-codex.sh
+  fi
+
   echo ""
   echo "Next steps:"
   echo "  1. Update CHANGELOG.md"

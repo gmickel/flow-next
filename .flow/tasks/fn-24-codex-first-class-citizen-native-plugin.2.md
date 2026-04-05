@@ -122,3 +122,10 @@ Create Codex hooks from canonical hooks/hooks.json:
 - [ ] Path patches applied (grep for CLAUDE_PLUGIN_ROOT in codex/skills/ should find 0 bare refs without fallback)
 - [ ] Task→agent patches applied (grep for "Task flow-next:" in codex/skills/ returns 0)
 - [ ] claude-md-scout renamed to agents-md-scout everywhere in codex/
+
+## Done summary
+Created scripts/sync-codex.sh that generates plugins/flow-next/codex/ from canonical sources. Produces 16 patched skills, 20 .toml agent configs, and hooks.json. All patches applied: PATH fixes, Task→agent invocation, RP warnings, claude-md-scout→agents-md-scout rename. Idempotent and validated.
+## Evidence
+- Commits: 4cbc0d19ec7fa0536dea3c7a9b7230c43a5e9553
+- Tests: bash scripts/sync-codex.sh (idempotency verified via md5 hash comparison)
+- PRs:

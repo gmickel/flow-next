@@ -80,6 +80,54 @@ End-to-end validation of both platforms after all changes.
 3. Verify sync-codex.sh ran
 4. Verify codex/ directory regenerated with new version
 
+## Done summary
+# End-to-end validation of both platforms
+
+All validation checks passed.
+
+## Codex plugin structure
+- `.codex-plugin/plugin.json`: valid JSON, name=flow-next, version=0.26.1
+- `.agents/plugins/marketplace.json`: valid JSON
+- `codex/skills/`: 16 dirs (matches canonical)
+- `codex/agents/`: 20 .toml files (matches canonical)
+- `codex/hooks.json`: valid JSON
+
+## Codex skills patches
+- No bare `${CLAUDE_PLUGIN_ROOT}` without fallback
+- No `Task flow-next:` patterns (all converted to agent roles)
+- `claude-md-scout` renamed to `agents-md-scout` everywhere (only provenance comment remains)
+- RP review skills have DO NOT RETRY warnings
+
+## Codex agents
+- All 20 .toml files parse (tomli)
+- Scouts: sandbox_mode=read-only, have nickname_candidates
+- Worker: sandbox_mode=workspace-write
+- plan-sync: sandbox_mode=workspace-write
+- Model mapping: gpt-5.4 for intelligent (opus/smart scouts), gpt-5.4-mini for fast scouts
+
+## No Claude Code regressions
+- `skills/`: only expected additions/modifications from task .7 (setup skill)
+- `agents/`: unchanged
+- `.claude-plugin/marketplace.json`: unchanged
+- `hooks/hooks.json`: unchanged
+
+## Cross-platform consistency
+- Both plugin.json files: name=flow-next, version=0.26.1
+- 16 skills each, 20 agents each
+
+## Script validation
+- `bash -n scripts/install-codex.sh`: syntax OK
+- `bash -n scripts/bump.sh`: syntax OK
+- `sync-codex.sh`: idempotent (no diff after re-run)
+
+## Hooks structure
+- Events: PreToolUse, PostToolUse, Stop
+- No SubagentStop (correctly dropped)
+- Matchers: Bash|Execute (cross-platform)
+## Evidence
+- Commits:
+- Tests:
+- PRs:
 ## Acceptance criteria
 - [ ] Claude Code plugin installs and works (no regressions)
 - [ ] install-codex.sh produces correct output

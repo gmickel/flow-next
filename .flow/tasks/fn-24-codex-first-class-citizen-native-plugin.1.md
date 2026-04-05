@@ -67,3 +67,14 @@ Codex marketplace at repo root:
 - [ ] Plugin version matches Claude Code version (0.26.1)
 - [ ] Plugin name is "flow-next" in both manifests
 - [ ] No changes to existing .claude-plugin/ files
+
+## Done summary
+Created two files:
+- `plugins/flow-next/.codex-plugin/plugin.json` — Codex plugin manifest (v0.26.1, skills point to ./codex/skills/)
+- `.agents/plugins/marketplace.json` — Codex marketplace entry for plugin discovery
+
+Validations passed: valid JSON, version matches Claude Code manifest (0.26.1), name "flow-next" consistent across all manifests, no changes to existing .claude-plugin/ files.
+## Evidence
+- Commits: b3a5411 feat(flow-next): add .codex-plugin/plugin.json manifest and Codex marketplace
+- Tests: jq validates both JSON files, version match 0.26.1, name match 'flow-next' across all manifests, no changes to .claude-plugin/ files
+- PRs:

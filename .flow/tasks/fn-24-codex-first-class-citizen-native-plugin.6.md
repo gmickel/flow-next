@@ -25,3 +25,9 @@ After bumping versions, automatically run `scripts/sync-codex.sh` to regenerate 
 - [ ] sync-codex.sh runs automatically after bump
 - [ ] Bumping flow (which has no .codex-plugin/) doesn't error
 - [ ] Script output shows both manifest updates
+
+## Done summary
+TBD
+
+## Evidence
+TBD

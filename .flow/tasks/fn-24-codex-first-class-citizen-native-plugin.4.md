@@ -122,3 +122,10 @@ policy:
 - [ ] Workflow/review skills have `allow_implicit_invocation: false`
 - [ ] Utility skills have `allow_implicit_invocation: true`
 - [ ] Brand colors are consistent (#3B82F6 for workflow, #EF4444 for review, #F59E0B for prime)
+
+## Done summary
+Added agents/openai.yaml UI metadata to 9 key Codex skills. Added generate_openai_yaml() function to sync-codex.sh for idempotent regeneration. Added validation checks for openai.yaml count and required keys.
+## Evidence
+- Commits:
+- Tests: sync-codex.sh runs clean: 9 openai.yaml files, all validation green, Idempotent: second sync produces identical output, Brand colors verified: #3B82F6 (workflow), #EF4444 (review), #F59E0B (prime), Implicit invocation: 8 false (workflow/review), 1 true (flow-next utility)
+- PRs:

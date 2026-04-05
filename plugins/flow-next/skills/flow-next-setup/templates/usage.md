@@ -92,5 +92,5 @@ Migration is optional — existing repos work without changes.
 
 ## More Info
 
-- Human docs: https://github.com/gmickel/gmickel-claude-marketplace/blob/main/plugins/flow-next/docs/flowctl.md
+- Human docs: https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/flowctl.md
 - CLI reference: `.flow/bin/flowctl --help`
