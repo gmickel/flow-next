@@ -1,0 +1,34 @@
+{
+  "name": "flow-next",
+  "version": "0.26.1",
+  "description": "Zero-dependency planning + execution with .flow/ task tracking and Ralph autonomous mode. Worker subagent per task for context isolation. Compatible with Codex, Claude Code, and Factory Droid.",
+  "author": {
+    "name": "Gordon Mickel",
+    "email": "gordon@mickel.tech",
+    "url": "https://mickel.tech"
+  },
+  "homepage": "https://mickel.tech/apps/flow-next",
+  "repository": "https://github.com/gmickel/gmickel-claude-marketplace",
+  "license": "MIT",
+  "keywords": [
+    "workflow",
+    "planning",
+    "execution",
+    "automation",
+    "ai"
+  ],
+  "skills": "./codex/skills/",
+  "interface": {
+    "displayName": "Flow-Next",
+    "shortDescription": "Plan-first workflow with subagent execution",
+    "longDescription": "Structured plan-first workflow engine. Tracks epics and tasks in .flow/ directory. Spawns isolated worker subagents per task to prevent context bleed. Ralph mode enables fully autonomous execution with multi-model review gates. Prime command assesses 8 pillars (48 criteria) for agent readiness. 20 subagents, 16 skills.",
+    "developerName": "Gordon Mickel",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://mickel.tech/apps/flow-next",
+    "brandColor": "#3B82F6"
+  }
+}
