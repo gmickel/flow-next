@@ -1540,21 +1540,24 @@ git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-inst
 
 > The install script (257 lines) copies pre-built files from `codex/` to `~/.codex/` and merges agent entries into `config.toml`. Delete the clone after install; re-clone to update.
 
-#### Command mapping
+#### Skill invocation
 
-Commands use `$` prefix in Codex (native plugin skills) instead of `/flow-next:`:
+In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setup**, **Flow Plan**). You can invoke them three ways:
 
-| Claude Code | Codex |
-|-------------|-------|
-| `/flow-next:plan` | `$flow-next-plan` |
-| `/flow-next:work` | `$flow-next-work` |
-| `/flow-next:impl-review` | `$flow-next-impl-review` |
-| `/flow-next:plan-review` | `$flow-next-plan-review` |
-| `/flow-next:epic-review` | `$flow-next-epic-review` |
-| `/flow-next:interview` | `$flow-next-interview` |
-| `/flow-next:prime` | `$flow-next-prime` |
-| `/flow-next:setup` | `$flow-next-setup` |
-| `/flow-next:ralph-init` | `$flow-next-ralph-init` |
+1. **Dropdown**: Type `$` → select from the list (e.g. select "Flow Setup")
+2. **Direct name**: Type `$flow-next-setup` in your prompt
+3. **Implicit**: Just describe the task — Codex matches the skill description automatically (for skills with `allow_implicit_invocation: true`)
+
+| Claude Code | Codex (dropdown) | Codex (direct) |
+|-------------|-------------------|----------------|
+| `/flow-next:plan` | Flow Plan | `$flow-next-plan` |
+| `/flow-next:work` | Flow Work | `$flow-next-work` |
+| `/flow-next:impl-review` | Flow Implementation Review | `$flow-next-impl-review` |
+| `/flow-next:plan-review` | Flow Plan Review | `$flow-next-plan-review` |
+| `/flow-next:epic-review` | Flow Epic Review | `$flow-next-epic-review` |
+| `/flow-next:interview` | Flow Interview | `$flow-next-interview` |
+| `/flow-next:prime` | Flow Prime | `$flow-next-prime` |
+| `/flow-next:setup` | Flow Setup | `$flow-next-setup` |
 
 #### What works
 
@@ -1593,11 +1596,13 @@ Codex now supports hooks. The pre-built `codex/hooks.json` includes Ralph guard 
 
 #### Per-project setup
 
-Run `$flow-next-setup` in your project. It detects the Codex platform and:
+Run `$flow-next-setup` (or select **Flow Setup** from the `$` dropdown) in your project. It detects the Codex platform and:
 - Initializes `.flow/` directory
 - Copies flowctl to `.flow/bin/`
+- Copies 20 agent `.toml` configs to `.codex/agents/` (project-scoped)
+- Copies `hooks.json` to `.codex/hooks.json` (project-scoped)
 - Adds Flow-Next instructions to AGENTS.md
-- Configures review backend
+- Configures review backend and recommended defaults
 
 **Manual setup** (alternative):
 ```bash
