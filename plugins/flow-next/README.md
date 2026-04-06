@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.28.0-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.29.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/nHEmyJB5tg)
@@ -836,6 +836,19 @@ Scout agents (repo-scout, context-scout) tag every finding as `[VERIFIED]` (conf
 ### Test Budget Awareness
 
 Quality-auditor flags disproportionate test generation — when test lines exceed 2:1 ratio vs implementation lines. Advisory only; doesn't block. Catches the common failure mode where agents generate massive test suites to avoid implementing hard logic.
+
+### DESIGN.md Awareness
+
+When a project has a [DESIGN.md](https://stitch.withgoogle.com/docs/design-md/overview/) file (Google Stitch format), flow-next detects it and injects design context at each pipeline stage:
+
+- **Planning**: repo-scout reads DESIGN.md, plan writes `## Design context` in frontend task specs with relevant color/component/typography tokens
+- **Implementation**: worker reads referenced DESIGN.md sections before coding, uses design tokens over hard-coded values
+- **Readiness**: `/flow-next:prime` checks for DESIGN.md in Pillar 4 (Documentation) as informational criterion
+- **Quality audit**: quality-auditor flags hard-coded colors/spacing in frontend files when design tokens exist (advisory)
+
+Backend tasks are not affected — design injection only applies to tasks touching frontend files.
+
+No DESIGN.md? No change in behavior. The feature is entirely opt-in.
 
 ### Cross-Model Reviews
 

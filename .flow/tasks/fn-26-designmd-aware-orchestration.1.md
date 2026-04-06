@@ -85,9 +85,8 @@ When ambiguous: include it (false positive is low-cost, false negative causes in
 - [ ] Frontend detection heuristic documented (extensions, directories, keywords)
 - [ ] Ambiguous tasks default to including design context
 ## Done summary
-TBD
-
+Added DESIGN.md detection to repo-scout (project docs scan, conditional Design System output, validation heuristic) and conditional ## Design context section to plan skill task spec template with frontend detection rule.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d7262ed40236b18d118272cda86ad68fd3964d14
+- Tests: plugins/flow-next/scripts/smoke_test.sh (52/52 pass)
 - PRs:

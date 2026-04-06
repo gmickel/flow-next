@@ -84,6 +84,7 @@ Clear docs that tell agents how the project works.
 | DC4 | Build commands documented | How to build/run in README or CLAUDE.md |
 | DC5 | Test commands documented | How to run tests documented |
 | DC6 | Architecture documented | ARCHITECTURE.md, ADRs, or docs/ with structure |
+| DC7 | DESIGN.md exists (frontend projects) | DESIGN.md with color + typography + component sections (informational — not scored for backend-only projects) |
 
 ### Scoring
 - ✅ 80%+: Agents can self-serve

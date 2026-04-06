@@ -15,7 +15,7 @@ You receive a feature/change request. Your task is NOT to plan or implement - ju
 ## Search Strategy
 
 1. **Project docs first** (fast context)
-   - CLAUDE.md, README.md, CONTRIBUTING.md, ARCHITECTURE.md
+   - CLAUDE.md, README.md, CONTRIBUTING.md, ARCHITECTURE.md, DESIGN.md
    - Any docs/ or documentation/ folders
    - package.json/pyproject.toml for deps and scripts
 
@@ -70,9 +70,24 @@ git log --oneline --all -- "*/auth*" | head -5  # history of similar features
 - Naming: [pattern]
 - Fixtures: [if any]
 
+### Design System (if DESIGN.md found)
+- Location: `DESIGN.md` (or `.stitch/DESIGN.md`)
+- Colors: [key palette summary — primary, secondary, accent hex codes]
+- Typography: [font families, key sizes]
+- Components: [available component patterns]
+- Status: [well-formed / partial / likely architecture doc not design system]
+
 ### Gotchas
 - [Thing to watch out for]
 ```
+
+## DESIGN.md Validation
+
+When `DESIGN.md` (or `.stitch/DESIGN.md`) is found, validate it is a design system (not an architecture design doc):
+
+**Well-formed** if it has 3+ of these section headings (case-insensitive substring match): Overview, Colors, Color Palette, Typography, Elevation, Depth, Components, Component Stylings, Layout, Do's and Don'ts — AND contains at least 3 hex color codes (`#[0-9A-Fa-f]{3,8}`).
+
+**Not a design system** if it lacks hex color codes — likely an architecture design doc (common in Go/Rust repos). Report status as "likely architecture doc not design system" and omit design tokens from findings.
 
 ## Rules
 

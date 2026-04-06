@@ -48,6 +48,16 @@ Map the complete user journey:
 - **Failure modes**: What if each dependency fails?
 - **Data consistency**: What if partial success?
 
+### 6. Design System Alignment (if DESIGN.md exists)
+
+Skip if no DESIGN.md in project.
+
+If DESIGN.md exists and the feature involves UI:
+- Are the components needed for this feature defined in DESIGN.md?
+- Do the color/spacing tokens in DESIGN.md cover this feature's needs?
+- Are responsive breakpoints defined for the contexts this feature uses?
+- Any design gaps that should be raised before implementation?
+
 ## Output Format
 
 ```markdown
@@ -71,6 +81,9 @@ Map the complete user journey:
 
 ### Integration Risks
 - [Dependency]: [What could go wrong?]
+
+### Design Gaps (if DESIGN.md present)
+- [ ] [Missing component/token/breakpoint]: [What's needed]
 
 ### Priority Questions (MUST answer before coding)
 1. [Critical question]

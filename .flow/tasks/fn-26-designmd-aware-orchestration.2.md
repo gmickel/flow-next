@@ -43,9 +43,8 @@ This goes after the existing investigation targets reading (step 1) and before t
 - [ ] Phase numbering unchanged (still Phase 1.5)
 - [ ] Ralph mode unaffected
 ## Done summary
-TBD
-
+Added DESIGN.md reading conditional in worker.md Phase 1.5 — reads design tokens/components/dos-donts when task spec has `## Design context`, non-blocking if missing.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 5cedb99dd6fbb22c1f7aeb42531414b0f5d732a1
+- Tests: smoke_test.sh (52/52 pass)
 - PRs:

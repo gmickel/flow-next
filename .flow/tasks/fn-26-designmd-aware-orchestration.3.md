@@ -47,9 +47,8 @@ Add to the output categories (around line 48):
 - [ ] Scoring thresholds still make sense with 7 criteria (80% = 6/7)
 - [ ] No changes to prime workflow or scout dispatch
 ## Done summary
-TBD
-
+Added DC7 DESIGN.md criterion to Pillar 4 in pillars.md (informational for backend-only). Updated docs-gap-scout with DESIGN.md/.stitch/DESIGN.md scan, category entry, match table row, and output example.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 1509dc4
+- Tests: n/a — prompt-only changes
 - PRs:

@@ -79,8 +79,12 @@ Add to output format after Integration Risks:
 - [ ] Both agents remain read-only (no new tool access)
 - [ ] Both sections are advisory (flag, never block)
 ## Done summary
-TBD
+Added conditional DESIGN.md-aware sections to both agents:
 
+- **quality-auditor.md**: Section 8 (Design System Conformance) checks hard-coded colors, spacing, missing token usage, component drift in frontend files. Advisory only. Output format extended with Design Conformance block.
+- **flow-gap-analyst.md**: Section 6 (Design System Alignment) checks for missing components, tokens, breakpoints needed by the feature. Output format extended with Design Gaps block.
+
+Both sections conditional ("skip if no DESIGN.md"). Both agents remain read-only (disallowedTools unchanged). Zero impact on projects without DESIGN.md.
 ## Evidence
 - Commits:
 - Tests:

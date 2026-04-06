@@ -2,6 +2,21 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.29.0] - 2026-04-05
+
+### Added
+- **DESIGN.md awareness** — conditional design system integration when Google Stitch DESIGN.md exists
+- repo-scout detects and validates DESIGN.md (section headings + hex color heuristic)
+- Plan skill writes `## Design context` in frontend task specs with relevant tokens
+- Worker reads DESIGN.md sections in Phase 1.5 when design context present
+- Prime Pillar 4 DC7 criterion: DESIGN.md exists (informational)
+- docs-gap-scout scans for DESIGN.md and .stitch/DESIGN.md
+- Quality-auditor checks design token conformance in frontend diffs (advisory)
+- Flow-gap-analyst checks design system alignment for UI features (advisory)
+
+### Changed
+- Frontend task detection heuristic documented (file extensions, directories, keywords)
+
 ## [flow-next 0.28.0] - 2026-04-05
 
 ### Added

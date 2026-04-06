@@ -71,6 +71,17 @@ Red flags:
 - Missing pagination/limits
 - Blocking operations on hot paths
 
+### 8. Design System Conformance (if DESIGN.md exists)
+
+Skip this section if no DESIGN.md in project root.
+
+If DESIGN.md exists and diff contains frontend files (.jsx, .tsx, .vue, .svelte, .css, .scss):
+- **Hard-coded colors**: Check for hex codes (#xxx) in component files that should use design tokens
+- **Hard-coded spacing**: Arbitrary pixel values where design system spacing scale exists
+- **Missing token usage**: Components not referencing CSS variables / theme tokens when DESIGN.md defines them
+- **Component drift**: UI patterns that diverge from DESIGN.md component specifications
+- This is ADVISORY — design token adoption is gradual, don't block shipping
+
 ## Output Format
 
 ```markdown
@@ -99,6 +110,11 @@ Red flags:
 ### Test Budget
 - Ratio: [test lines : impl lines] (flag if > 2:1)
 - Modified existing tests: [list if any — verify intentional]
+
+### Design Conformance (if DESIGN.md present)
+- Hard-coded values found: [list files with raw hex/px instead of tokens]
+- Design token coverage: [% of UI changes using design system tokens]
+- Advisory: [specific suggestions]
 
 ### Security Notes
 - [Any security observations]
