@@ -33,6 +33,9 @@ find . -name "*.openapi.yaml" -o -name "*.swagger.json" 2>/dev/null | head -5
 # Component docs
 ls -la .storybook/ stories/ 2>/dev/null
 
+# Design system
+ls -la DESIGN.md .stitch/DESIGN.md 2>/dev/null
+
 # Architecture
 ls -la adr/ adrs/ decisions/ architecture/ 2>/dev/null
 
@@ -47,6 +50,7 @@ Build a map:
 - **API docs**: OpenAPI specs, endpoint documentation
 - **Component docs**: Storybook, component library docs
 - **Architecture**: ADRs, design docs
+- **Design system**: DESIGN.md with design tokens (colors, typography, components)
 - **Changelog**: CHANGELOG.md or similar
 
 ### 3. Match request to docs
@@ -62,6 +66,7 @@ Based on the REQUEST, identify which docs likely need updates:
 | Breaking change | CHANGELOG, migration guide |
 | Architectural decision | ADR |
 | CLI change | README CLI section, --help text |
+| Design tokens/theming | DESIGN.md color, typography, component sections |
 
 ### 4. Check current doc state
 
@@ -87,6 +92,7 @@ For identified docs, quick scan to understand structure:
 - **openapi.yaml**: Add new /auth endpoint spec
 
 ### No Updates Expected
+- DESIGN.md (no design token changes)
 - Storybook (no UI components in this change)
 - ADR (no architectural decisions)
 

@@ -71,8 +71,7 @@ plugins/flow-next/scripts/smoke_test.sh
 - [ ] `plugins/flow-next/scripts/smoke_test.sh` passes
 - [ ] No changes to flowctl, .flow/ JSON, or hooks
 ## Done summary
-TBD
-
+Updated flow-next README with DESIGN.md Awareness feature section. Added [flow-next 0.29.0] CHANGELOG entry. Ran `scripts/bump.sh minor flow-next` (0.28.0 → 0.29.0, updates marketplace + plugin manifests + codex manifests). Codex sync regenerated 16 skills + 20 agents. Smoke test: 52/52 passed. No changes to flowctl, .flow/ JSON, or hooks.
 ## Evidence
 - Commits:
 - Tests:
