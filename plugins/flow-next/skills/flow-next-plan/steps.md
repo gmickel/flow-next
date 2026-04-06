@@ -125,6 +125,7 @@ Must capture:
 - Architecture patterns and data flow (especially with context-scout)
 - Epic dependencies (from epic-scout)
 - Doc updates needed (from docs-gap-scout) - add to task acceptance criteria
+- DESIGN.md design system tokens (if repo-scout found one)
 
 ## Step 2: Stakeholder & scope check
 
@@ -305,6 +306,16 @@ Default to standard unless complexity demands more or less.
    **Optional** (reference as needed):
    - `src/auth/*.test.ts` — existing test patterns
 
+   ## Design context
+   *Only include for frontend tasks when DESIGN.md exists in project.*
+
+   Relevant DESIGN.md sections for this task:
+   - **Colors:** Primary (#2665fd) for CTAs, Neutral (#757681) for backgrounds
+   - **Components:** Buttons are rounded (8px), primary uses brand blue fill
+   - **Do's/Don'ts:** Primary color only for single most important action per screen
+
+   Full design system: `DESIGN.md` (read before implementing UI changes)
+
    ## Key context
    [Only for recent API changes, surprising patterns, or non-obvious gotchas]
 
@@ -312,6 +323,14 @@ Default to standard unless complexity demands more or less.
    - [ ] Criterion 1
    - [ ] Criterion 2
    ```
+
+   **Design context rule:** Only add `## Design context` to tasks where Files/Description reference frontend patterns:
+   - Extensions: `.jsx`, `.tsx`, `.vue`, `.svelte`, `.css`, `.scss`
+   - Directories: `components/`, `pages/`, `views/`, `layouts/`, `styles/`, `app/`
+   - Keywords: button, modal, form, layout, responsive, color, font, card, navigation, theme, UI, component
+
+   Backend-only tasks (`api/`, `server/`, `controllers/`, `.py`, `.go`): skip design context.
+   When ambiguous: include it (false positive is low-cost, false negative causes inconsistency).
 
    **Investigation targets rules:**
    - Max 5-7 targets per task (focus, don't flood)
