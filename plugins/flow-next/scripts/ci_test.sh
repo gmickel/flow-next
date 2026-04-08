@@ -328,6 +328,145 @@ PYTEST
 [[ $? -eq 0 ]] && pass "symbol extraction (6 languages)" || fail "symbol extraction"
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 6b. RepoPrompt Setup Review Regression Coverage
+# ─────────────────────────────────────────────────────────────────────────────
+echo -e "\n${YELLOW}--- RepoPrompt Setup Review ---${NC}"
+
+"$PYTHON_BIN" - "$TEST_DIR" << 'PYTEST'
+import hashlib
+import importlib.util
+import io
+import json
+import sys
+from argparse import Namespace
+from contextlib import redirect_stdout
+from pathlib import Path
+from types import SimpleNamespace
+
+test_dir = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("flowctl", test_dir / "scripts/flowctl.py")
+flowctl = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(flowctl)
+
+errors = []
+
+tab = flowctl.parse_builder_tab('{"result":{"tab_id":"json-tab-1"}}')
+if tab != "json-tab-1":
+    errors.append(f"parse_builder_tab should parse nested JSON tab ids, got {tab!r}")
+
+
+def make_result(stdout="", stderr=""):
+    return SimpleNamespace(stdout=stdout, stderr=stderr)
+
+
+def cleanup_state(repo_root: str) -> None:
+    state_file = Path(f"/tmp/.ralph-pick-window-{hashlib.sha256(repo_root.encode()).hexdigest()[:16]}")
+    if state_file.exists():
+        state_file.unlink()
+
+
+def run_setup(fake_run, repo_root: str, summary: str):
+    flowctl.run_rp_cli = fake_run
+    cleanup_state(repo_root)
+    output = io.StringIO()
+    with redirect_stdout(output):
+        flowctl.cmd_rp_setup_review(
+            Namespace(
+                repo_root=repo_root,
+                summary=summary,
+                response_type=None,
+                create=True,
+                json=False,
+            )
+        )
+    cleanup_state(repo_root)
+    return output.getvalue().strip()
+
+
+repo_root = "/Users/claire/dev/Humanizer"
+commands = []
+
+
+def fake_reuse_existing(args, timeout=None):
+    commands.append(args)
+    if args == ["--raw-json", "-e", "windows"]:
+        return make_result(json.dumps([
+            {"windowID": 7, "rootFolderPaths": ["/Users/claire/dev/OtherRepo"]}
+        ]))
+    if args == [
+        "--raw-json",
+        "-e",
+        'call manage_workspaces {"action": "list"}',
+    ]:
+        return make_result(json.dumps([
+            {
+                "id": "ws-1",
+                "name": "Humanizer",
+                "repoPaths": [repo_root],
+                "showingWindows": [42],
+            }
+        ]))
+    if args == ["-w", "42", "-e", 'builder "Review me"']:
+        return make_result("Tab: tab-123\n")
+    raise AssertionError(f"Unexpected rp-cli args: {args}")
+
+
+result = run_setup(fake_reuse_existing, repo_root, "Review me")
+if result != "W=42 T=tab-123":
+    errors.append(f"setup-review should reuse visible workspace window, got {result!r}")
+if any(arg.startswith("workspace create ") for cmd in commands for arg in cmd):
+    errors.append("setup-review should not create a new workspace when one with the same repo path is already visible")
+
+commands = []
+
+
+def fake_reopen_hidden_workspace(args, timeout=None):
+    commands.append(args)
+    if args == ["--raw-json", "-e", "windows"]:
+        return make_result(json.dumps([
+            {"windowID": 7, "rootFolderPaths": ["/Users/claire/dev/OtherRepo"]}
+        ]))
+    if args == [
+        "--raw-json",
+        "-e",
+        'call manage_workspaces {"action": "list"}',
+    ]:
+        return make_result(json.dumps([
+            {
+                "id": "ws-hidden",
+                "name": "Humanizer",
+                "repoPaths": [repo_root],
+                "showingWindows": [],
+            }
+        ]))
+    if args == [
+        "--raw-json",
+        "-e",
+        'call manage_workspaces {"action": "switch", "workspace": "ws-hidden", "open_in_new_window": true}',
+    ]:
+        return make_result(json.dumps({"window_id": 84}))
+    if args == ["-w", "84", "-e", 'builder "Reopen me"']:
+        return make_result("Tab: tab-84\n")
+    raise AssertionError(f"Unexpected rp-cli args: {args}")
+
+
+result = run_setup(fake_reopen_hidden_workspace, repo_root, "Reopen me")
+if result != "W=84 T=tab-84":
+    errors.append(f"setup-review should reopen an existing hidden workspace before creating a duplicate, got {result!r}")
+if any(arg.startswith("workspace create ") for cmd in commands for arg in cmd):
+    errors.append("setup-review should switch an existing hidden workspace into a new window instead of creating a duplicate workspace")
+
+if errors:
+    print("RepoPrompt regression test errors:")
+    for error in errors:
+        print(f"  - {error}")
+    sys.exit(1)
+
+print("RepoPrompt setup-review regressions passed")
+PYTEST
+[[ $? -eq 0 ]] && pass "RepoPrompt setup-review regression" || fail "RepoPrompt setup-review regression"
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 7. ralph.sh Helper Functions
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "\n${YELLOW}--- ralph.sh Helpers ---${NC}"
