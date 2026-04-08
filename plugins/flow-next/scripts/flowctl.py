@@ -489,7 +489,7 @@ def extract_root_paths(win: dict[str, Any]) -> list[str]:
 
 
 def parse_manage_workspaces(raw: str) -> list[dict[str, Any]]:
-    """Parse manage_workspaces list JSON."""
+    """Parse manage_workspaces list JSON, tolerating nested wrappers."""
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
@@ -499,17 +499,27 @@ def parse_manage_workspaces(raw: str) -> list[dict[str, Any]]:
             code=2,
         )
 
-    if isinstance(data, dict):
-        for key in ("workspaces", "result"):
-            val = data.get(key)
-            if isinstance(val, list):
-                data = val
+    for _ in range(4):
+        if isinstance(data, list):
+            break
+        if isinstance(data, dict):
+            for key in ("workspaces", "result", "data"):
+                if key in data:
+                    data = data[key]
+                    break
+            else:
                 break
         else:
-            data = [data]
+            break
 
     if isinstance(data, list):
-        return [item for item in data if isinstance(item, dict)]
+        workspaces: list[dict[str, Any]] = []
+        for item in data:
+            if isinstance(item, dict):
+                workspaces.append(item)
+            elif isinstance(item, str):
+                workspaces.append({"name": item})
+        return workspaces
 
     error_exit("manage_workspaces list JSON has unexpected shape", use_json=False, code=2)
 
@@ -5744,7 +5754,7 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
 
     # Write state file for ralph-guard verification
     repo_hash = hashlib.sha256(repo_root.encode()).hexdigest()[:16]
-    state_file = Path(f"/tmp/.ralph-pick-window-{repo_hash}")
+    state_file = Path(tempfile.gettempdir()) / f".ralph-pick-window-{repo_hash}"
     state_file.write_text(f"{win_id}\n{repo_root}\n")
 
     # Step 2: builder (with optional --type flag for RP 1.6.0+)

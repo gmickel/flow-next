@@ -338,6 +338,7 @@ import importlib.util
 import io
 import json
 import sys
+import tempfile
 from argparse import Namespace
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -354,13 +355,21 @@ tab = flowctl.parse_builder_tab('{"result":{"tab_id":"json-tab-1"}}')
 if tab != "json-tab-1":
     errors.append(f"parse_builder_tab should parse nested JSON tab ids, got {tab!r}")
 
+nested = flowctl.parse_manage_workspaces('{"result":{"workspaces":[{"id":"ws-1","repoPaths":["/x"]}]}}')
+if not nested or nested[0].get("id") != "ws-1":
+    errors.append(f"parse_manage_workspaces should unwrap nested result objects, got {nested!r}")
+
+string_items = flowctl.parse_manage_workspaces('["project-a", {"id":"ws-2","repoPaths":["/y"]}]')
+if not string_items or string_items[0].get("name") != "project-a":
+    errors.append(f"parse_manage_workspaces should preserve string workspace names, got {string_items!r}")
+
 
 def make_result(stdout="", stderr=""):
     return SimpleNamespace(stdout=stdout, stderr=stderr)
 
 
 def cleanup_state(repo_root: str) -> None:
-    state_file = Path(f"/tmp/.ralph-pick-window-{hashlib.sha256(repo_root.encode()).hexdigest()[:16]}")
+    state_file = Path(tempfile.gettempdir()) / f".ralph-pick-window-{hashlib.sha256(repo_root.encode()).hexdigest()[:16]}"
     if state_file.exists():
         state_file.unlink()
 
@@ -401,8 +410,6 @@ def fake_bind_context(args, timeout=None):
 
 def fake_bind_context_builder(args, timeout=None):
     commands.append(args)
-    if args == ["--raw-json", "-e", "windows"]:
-        return make_result(json.dumps([]))
     if args == ["-w", "55", "-e", 'builder "Bind me"']:
         return make_result("Tab: tab-55\n")
     raise AssertionError(f"Unexpected rp-cli args: {args}")
