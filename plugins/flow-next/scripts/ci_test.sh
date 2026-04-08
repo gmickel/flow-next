@@ -399,12 +399,10 @@ commands = []
 
 
 def fake_bind_context(args, timeout=None):
-    if args == [
-        "--raw-json",
-        "-e",
-        'call bind_context {"op": "bind", "working_dirs": ["/workspace/test-project"]}',
-    ]:
-        return make_result(json.dumps({"window_id": 55, "match_method": "working_dirs"}))
+    if args[:2] == ["--raw-json", "-e"] and args[2].startswith("call bind_context "):
+        payload = json.loads(args[2][len("call bind_context "):])
+        if payload.get("op") == "bind" and payload.get("working_dirs") == flowctl.normalize_repo_root(repo_root):
+            return make_result(json.dumps({"window_id": 55, "match_method": "working_dirs"}))
     return None
 
 
