@@ -383,7 +383,8 @@ def run_setup(fake_run, repo_root: str, summary: str):
     return output.getvalue().strip()
 
 
-repo_root = "/Users/claire/dev/Humanizer"
+repo_root = "/tmp/test-project"
+other_repo_root = "/tmp/other-project"
 commands = []
 
 
@@ -391,7 +392,7 @@ def fake_reuse_existing(args, timeout=None):
     commands.append(args)
     if args == ["--raw-json", "-e", "windows"]:
         return make_result(json.dumps([
-            {"windowID": 7, "rootFolderPaths": ["/Users/claire/dev/OtherRepo"]}
+            {"windowID": 7, "rootFolderPaths": [other_repo_root]}
         ]))
     if args == [
         "--raw-json",
@@ -401,7 +402,7 @@ def fake_reuse_existing(args, timeout=None):
         return make_result(json.dumps([
             {
                 "id": "ws-1",
-                "name": "Humanizer",
+                "name": "test-project",
                 "repoPaths": [repo_root],
                 "showingWindows": [42],
             }
@@ -424,7 +425,7 @@ def fake_reopen_hidden_workspace(args, timeout=None):
     commands.append(args)
     if args == ["--raw-json", "-e", "windows"]:
         return make_result(json.dumps([
-            {"windowID": 7, "rootFolderPaths": ["/Users/claire/dev/OtherRepo"]}
+            {"windowID": 7, "rootFolderPaths": [other_repo_root]}
         ]))
     if args == [
         "--raw-json",
@@ -434,7 +435,7 @@ def fake_reopen_hidden_workspace(args, timeout=None):
         return make_result(json.dumps([
             {
                 "id": "ws-hidden",
-                "name": "Humanizer",
+                "name": "test-project",
                 "repoPaths": [repo_root],
                 "showingWindows": [],
             }
