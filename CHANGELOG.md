@@ -2,6 +2,11 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.29.2] - 2026-04-09
+
+### Fixed
+- **RepoPrompt 2.1.4 `Context:` builder output** — `flowctl rp builder` / `flowctl rp setup-review` now accept the new `Context: <uuid>` text format and `context_id`/`context`/`contextId` JSON keys alongside the legacy `Tab:` / `tab_id` shapes. Downstream `--tab` flag unchanged; legacy paths still tried first for backward compat. CI regression coverage added. Thanks @clairernovotny — [#106](https://github.com/gmickel/flow-next/pull/106)
+
 ## [flow-next 0.29.1] - 2026-04-08
 
 ### Fixed
