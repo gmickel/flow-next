@@ -5787,7 +5787,7 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
             review_response = data.get("review", {}).get("response", "")
 
             if not tab:
-                error_exit("Builder did not return a tab id", use_json=False, code=2)
+                error_exit("Builder did not return a tab/context id", use_json=False, code=2)
 
             if args.json:
                 print(
@@ -5812,7 +5812,7 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
     else:
         tab = parse_builder_tab(output)
         if not tab:
-            error_exit("Builder did not return a tab id", use_json=False, code=2)
+            error_exit("Builder did not return a tab/context id", use_json=False, code=2)
 
         if args.json:
             print(json.dumps({"window": win_id, "tab": tab, "repo_root": repo_root}))
