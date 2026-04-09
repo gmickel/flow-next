@@ -327,6 +327,40 @@ print("All symbol extractions passed")
 PYTEST
 [[ $? -eq 0 ]] && pass "symbol extraction (6 languages)" || fail "symbol extraction"
 
+# RepoPrompt builder parsing regressions
+"$PYTHON_BIN" - "$TEST_DIR" << 'PYTEST'
+import sys
+sys.path.insert(0, sys.argv[1] + "/scripts")
+from flowctl import extract_builder_tab_from_payload, parse_builder_tab
+
+errors = []
+
+tab = parse_builder_tab('Tab: tab-123 • Builder Session')
+if tab != "tab-123":
+    errors.append(f"Expected Tab output to parse as tab-123, got {tab!r}")
+
+context = parse_builder_tab('Context: 123e4567-e89b-12d3-a456-426614174000 • Builder Session')
+if context != "123e4567-e89b-12d3-a456-426614174000":
+    errors.append(f"Expected Context output to parse UUID, got {context!r}")
+
+context_json = parse_builder_tab('{"result":{"context_id":"ctx-1"}}')
+if context_json != "ctx-1":
+    errors.append(f"Expected nested context_id JSON to parse as ctx-1, got {context_json!r}")
+
+payload_tab = extract_builder_tab_from_payload({"result": {"context_id": "ctx-2"}})
+if payload_tab != "ctx-2":
+    errors.append(f"Expected extractor to unwrap nested context_id, got {payload_tab!r}")
+
+if errors:
+    print("Builder parsing errors:")
+    for err in errors:
+        print(f"  - {err}")
+    sys.exit(1)
+
+print("Builder parsing tests passed")
+PYTEST
+[[ $? -eq 0 ]] && pass "RepoPrompt builder parsing" || fail "RepoPrompt builder parsing"
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 6b. RepoPrompt Setup Review Regression Coverage
 # ─────────────────────────────────────────────────────────────────────────────

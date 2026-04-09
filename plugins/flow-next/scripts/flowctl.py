@@ -654,7 +654,7 @@ def extract_response_window_id(data: Any) -> Optional[int]:
 
 def extract_builder_tab_from_payload(data: Any) -> Optional[str]:
     if isinstance(data, dict):
-        for key in ("tab_id", "tab", "tabId"):
+        for key in ("tab_id", "tab", "tabId", "context_id", "context", "contextId"):
             val = data.get(key)
             if isinstance(val, str) and val:
                 return val
@@ -694,9 +694,12 @@ def bind_context_window(repo_root: str) -> Optional[int]:
 def parse_builder_tab(output: str) -> str:
     for pattern in (
         r"Tab:\s*([A-Za-z0-9-]+)",
+        r"Context:\s*([A-Za-z0-9-]+)",
         r"\bT=([A-Za-z0-9-]+)\b",
         r'"tab_id"\s*:\s*"([^\"]+)"',
         r'"tab"\s*:\s*"([^\"]+)"',
+        r'"context_id"\s*:\s*"([^\"]+)"',
+        r'"context"\s*:\s*"([^\"]+)"',
     ):
         match = re.search(pattern, output)
         if match:
@@ -712,7 +715,7 @@ def parse_builder_tab(output: str) -> str:
         if tab:
             return tab
 
-    error_exit("builder output missing Tab id", use_json=False, code=2)
+    error_exit("builder output missing tab/context id", use_json=False, code=2)
 
 
 def parse_chat_id(output: str) -> Optional[str]:
@@ -5784,7 +5787,7 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
             review_response = data.get("review", {}).get("response", "")
 
             if not tab:
-                error_exit("Builder did not return a tab id", use_json=False, code=2)
+                error_exit("Builder did not return a tab/context id", use_json=False, code=2)
 
             if args.json:
                 print(
@@ -5809,7 +5812,7 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
     else:
         tab = parse_builder_tab(output)
         if not tab:
-            error_exit("Builder did not return a tab id", use_json=False, code=2)
+            error_exit("Builder did not return a tab/context id", use_json=False, code=2)
 
         if args.json:
             print(json.dumps({"window": win_id, "tab": tab, "repo_root": repo_root}))
