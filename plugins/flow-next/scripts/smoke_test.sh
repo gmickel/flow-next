@@ -657,8 +657,41 @@ assert rid == "fn-7-abc", f"Expected fn-7-abc, got {rid}"
 rtype, rid = guard.parse_receipt_path("/tmp/unknown.json")
 assert rtype == "impl_review"
 assert rid == "UNKNOWN"
+
+# Receipt write detection must catch variable-based redirects like:
+#   printf ... > "$RECEIPT_PATH"
+# This was the bypass observed in a real Ralph run.
+receipt_path = "/tmp/run/receipts/completion-fn-7-ci.json"
+command = (
+    "RECEIPT_DIR='/tmp/run/receipts'\n"
+    'RECEIPT_PATH="$RECEIPT_DIR/completion-fn-7-ci.json"\n'
+    "printf '{\"type\":\"completion_review\",\"id\":\"fn-7-ci\",\"mode\":\"rp\"}\\n' > \"$RECEIPT_PATH\""
+)
+assert guard.is_receipt_write_command(command, receipt_path), "variable receipt redirect not detected"
+assert guard.command_has_json_field(command, "type")
+assert guard.command_has_json_field(command, "id")
+assert not guard.command_has_json_field(command, "verdict")
+
+# All review receipts require a valid verdict and must match the filename.
+assert guard.validate_receipt_data({
+    "type": "completion_review",
+    "id": "fn-7-ci",
+    "mode": "rp",
+}, receipt_path=receipt_path) == "missing or invalid verdict"
+assert guard.validate_receipt_data({
+    "type": "completion_review",
+    "id": "fn-7-ci",
+    "mode": "rp",
+    "verdict": "SHIP",
+}, receipt_path=receipt_path) == ""
+assert guard.validate_receipt_data({
+    "type": "completion_review",
+    "id": "fn-7-other",
+    "mode": "rp",
+    "verdict": "SHIP",
+}, receipt_path=receipt_path).startswith("id mismatch")
 PY
-echo -e "${GREEN}✓${NC} parse_receipt_path works"
+echo -e "${GREEN}✓${NC} receipt path parsing and validation works"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- codex e2e (requires codex CLI) ---${NC}"

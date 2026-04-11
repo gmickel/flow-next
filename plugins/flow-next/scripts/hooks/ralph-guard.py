@@ -17,7 +17,7 @@ Supports both review backends:
 """
 
 # Version for drift detection (bump when making changes)
-RALPH_GUARD_VERSION = "0.13.0"
+RALPH_GUARD_VERSION = "0.13.1"
 
 import json
 import os
@@ -84,6 +84,79 @@ def output_block(reason: str) -> None:
     """Output blocking response (exit code 2 style via stderr)."""
     print(reason, file=sys.stderr)
     sys.exit(2)
+
+
+VALID_RECEIPT_VERDICTS = {"SHIP", "NEEDS_WORK", "MAJOR_RETHINK"}
+
+
+def is_receipt_write_command(command: str, receipt_path: str) -> bool:
+    """Return true when a Bash command redirects output to the active receipt."""
+    if not receipt_path:
+        return False
+
+    patterns = [
+        rf">\s*['\"]?{re.escape(receipt_path)}['\"]?",
+        r">\s*['\"]?.*receipts/.*\.json",
+        r">\s*['\"]?\$[{]?REVIEW_RECEIPT_PATH[}]?['\"]?",
+        r">\s*['\"]?\$[{]?RECEIPT_PATH[}]?['\"]?",
+        r">\s*['\"]?\$[{]?RECEIPT_DIR[}]?/",
+        r"cat\s*>\s*.*receipt",
+        r"\btee\s+['\"]?\$[{]?REVIEW_RECEIPT_PATH[}]?['\"]?",
+        r"\btee\s+['\"]?\$[{]?RECEIPT_PATH[}]?['\"]?",
+    ]
+    receipt_dir = os.path.dirname(receipt_path)
+    if receipt_dir:
+        patterns.append(rf">\s*['\"]?{re.escape(receipt_dir)}")
+    return any(re.search(pattern, command, re.I) for pattern in patterns)
+
+
+def command_has_json_field(command: str, field: str) -> bool:
+    """Best-effort check that a shell command writes a JSON field literally."""
+    return bool(re.search(rf"['\"]{re.escape(field)}['\"]\s*:", command))
+
+
+def validate_receipt_data(
+    data: object,
+    receipt_path: str = "",
+    expected_kind: str = "",
+    expected_id: str = "",
+) -> str:
+    """Return empty string for valid receipt data, otherwise an error string."""
+    if not isinstance(data, dict):
+        return "expected object"
+
+    receipt_type = data.get("type")
+    receipt_id = data.get("id")
+    verdict = data.get("verdict")
+    if not receipt_type or not receipt_id:
+        return "missing type/id"
+    if verdict not in VALID_RECEIPT_VERDICTS:
+        return "missing or invalid verdict"
+
+    if receipt_path and (not expected_kind or not expected_id):
+        parsed_kind, parsed_id = parse_receipt_path(receipt_path)
+        if parsed_id != "UNKNOWN":
+            expected_kind = expected_kind or parsed_kind
+            expected_id = expected_id or parsed_id
+
+    if expected_kind and receipt_type != expected_kind:
+        return f"type mismatch: expected {expected_kind}, got {receipt_type}"
+    if expected_id and receipt_id != expected_id:
+        return f"id mismatch: expected {expected_id}, got {receipt_id}"
+
+    return ""
+
+
+def validate_receipt_file(receipt_path: str) -> str:
+    """Return empty string for a valid receipt file, otherwise an error string."""
+    path = Path(receipt_path)
+    if not path.exists():
+        return "missing receipt"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return f"invalid JSON: {exc}"
+    return validate_receipt_data(data, receipt_path=receipt_path)
 
 
 # --- Memory helpers ---
@@ -236,13 +309,7 @@ def handle_pre_tool_use(data: dict) -> None:
     # Block receipt writes unless chat-send has succeeded + validate format
     receipt_path = os.environ.get("REVIEW_RECEIPT_PATH", "")
     if receipt_path:
-        # Check if this command writes to a receipt path
-        receipt_dir = os.path.dirname(receipt_path)
-        is_receipt_write = receipt_dir and (
-            re.search(rf">\s*['\"]?{re.escape(receipt_dir)}", command)
-            or re.search(r">\s*['\"]?.*receipts/.*\.json", command)
-            or re.search(r"cat\s*>\s*.*receipt", command, re.I)
-        )
+        is_receipt_write = is_receipt_write_command(command, receipt_path)
         if is_receipt_write:
             state = load_state(session_id)
             if not state.get("chat_send_succeeded") and not state.get(
@@ -253,36 +320,40 @@ def handle_pre_tool_use(data: dict) -> None:
                     "You must run 'flowctl rp chat-send' or 'flowctl codex impl-review/plan-review' "
                     "and receive a review response before writing the receipt."
                 )
-            # Validate receipt has required 'id' field
-            if '"id"' not in command and "'id'" not in command:
+            # Validate receipt has required fields. Stop/ralph.sh validate the actual file.
+            if not command_has_json_field(command, "type"):
+                output_block(
+                    "BLOCKED: Receipt JSON is missing required 'type' field. "
+                    'Receipt must include: {"type":"...","id":"...","verdict":"...",...} '
+                    "Copy the exact command from the prompt template."
+                )
+            if not command_has_json_field(command, "id"):
                 output_block(
                     "BLOCKED: Receipt JSON is missing required 'id' field. "
                     'Receipt must include: {"type":"...","id":"<TASK_OR_EPIC_ID>",...} '
                     "Copy the exact command from the prompt template."
                 )
-            # Validate completion_review receipts have verdict field
-            if "completion_review" in command or "completion-" in receipt_path:
-                if '"verdict"' not in command and "'verdict'" not in command:
-                    output_block(
-                        "BLOCKED: Receipt JSON is missing required 'verdict' field. "
-                        'Completion review receipts must include: {"verdict":"SHIP",...} '
-                        "Copy the exact command from the prompt template."
-                    )
+            if not command_has_json_field(command, "verdict"):
+                output_block(
+                    "BLOCKED: Receipt JSON is missing required 'verdict' field. "
+                    'Review receipts must include: {"verdict":"SHIP",...} '
+                    "Copy the exact command from the prompt template."
+                )
             # For impl receipts, verify flowctl done was called
-            if "impl_review" in command:
+            receipt_type, item_id = parse_receipt_path(receipt_path)
+            if receipt_type == "impl_review" or "impl_review" in command:
                 # Extract task id from receipt
                 id_match = re.search(r'"id"\s*:\s*"([^"]+)"', command)
-                if id_match:
-                    task_id = id_match.group(1)
-                    done_set = state.get("flowctl_done_called", set())
-                    if isinstance(done_set, list):
-                        done_set = set(done_set)
-                    if task_id not in done_set:
-                        output_block(
-                            f"BLOCKED: Cannot write impl receipt for {task_id} - flowctl done was not called. "
-                            f"You MUST run 'flowctl done {task_id} --evidence ...' BEFORE writing the receipt. "
-                            "The task is NOT complete until flowctl done succeeds."
-                        )
+                task_id = id_match.group(1) if id_match else item_id
+                done_set = state.get("flowctl_done_called", set())
+                if isinstance(done_set, list):
+                    done_set = set(done_set)
+                if task_id not in done_set:
+                    output_block(
+                        f"BLOCKED: Cannot write impl receipt for {task_id} - flowctl done was not called. "
+                        f"You MUST run 'flowctl done {task_id} --evidence ...' BEFORE writing the receipt. "
+                        "The task is NOT complete until flowctl done succeeds."
+                    )
 
     # All checks passed
     sys.exit(0)
@@ -414,13 +485,7 @@ def handle_post_tool_use(data: dict) -> None:
     # that merely contain the receipt path as an argument (e.g. --receipt flag)
     receipt_path = os.environ.get("REVIEW_RECEIPT_PATH", "")
     if receipt_path:
-        receipt_dir = os.path.dirname(receipt_path)
-        is_receipt_write = receipt_dir and (
-            re.search(rf">\s*['\"]?{re.escape(receipt_dir)}", command)
-            or re.search(r">\s*['\"]?.*receipts/.*\.json", command)
-            or re.search(r"cat\s*>\s*.*receipt", command, re.I)
-        )
-        if is_receipt_write:
+        if is_receipt_write_command(command, receipt_path):
             state["chat_send_succeeded"] = False  # Reset for next review
             state["codex_review_succeeded"] = False  # Reset codex state too
             save_state(session_id, state)
@@ -542,7 +607,8 @@ def handle_stop(data: dict) -> None:
     receipt_path = os.environ.get("REVIEW_RECEIPT_PATH", "")
 
     if receipt_path:
-        if not Path(receipt_path).exists():
+        validation_error = validate_receipt_file(receipt_path)
+        if validation_error:
             # Derive type and id from receipt path
             receipt_type, item_id = parse_receipt_path(receipt_path)
             # Tell worker to invoke the review skill, not write receipt manually
@@ -560,7 +626,7 @@ def handle_stop(data: dict) -> None:
                 {
                     "decision": "block",
                     "reason": (
-                        f"Cannot stop: {skill_desc} not completed.\n"
+                        f"Cannot stop: {skill_desc} not completed ({validation_error}).\n"
                         f"You MUST invoke `{skill} {item_id}` to complete the review.\n"
                         f"The skill writes the receipt on SHIP verdict.\n"
                         f"Do NOT write the receipt manually - that skips the actual review."

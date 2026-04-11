@@ -16,7 +16,9 @@ fi
 
 python3 - "$REVIEW_RECEIPT_PATH" <<'PY'
 import json
+import re
 import sys
+from pathlib import Path
 
 path = sys.argv[1]
 try:
@@ -33,6 +35,24 @@ if not isinstance(data, dict):
 if not data.get("type") or not data.get("id"):
     print("Invalid receipt JSON: missing type/id", file=sys.stderr)
     sys.exit(2)
+
+if data.get("verdict") not in ("SHIP", "NEEDS_WORK", "MAJOR_RETHINK"):
+    print("Invalid receipt JSON: missing or invalid verdict", file=sys.stderr)
+    sys.exit(2)
+
+basename = Path(path).name
+patterns = [
+    (r"^plan-(fn-\d+(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?)\.json$", "plan_review"),
+    (r"^impl-(fn-\d+(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?\.\d+)\.json$", "impl_review"),
+    (r"^completion-(fn-\d+(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?)\.json$", "completion_review"),
+]
+for pattern, expected_type in patterns:
+    match = re.match(pattern, basename)
+    if match:
+        if data.get("type") != expected_type or data.get("id") != match.group(1):
+            print("Invalid receipt JSON: type/id do not match receipt filename", file=sys.stderr)
+            sys.exit(2)
+        break
 
 sys.exit(0)
 PY

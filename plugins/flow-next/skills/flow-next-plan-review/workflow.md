@@ -231,7 +231,20 @@ EOF
 ### Send to RepoPrompt
 
 ```bash
-$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/review-prompt.md --new-chat --chat-name "Plan Review: <EPIC_ID>"
+REVIEW_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/review-prompt.md --new-chat --chat-name "Plan Review: <EPIC_ID>")"
+echo "$REVIEW_RESPONSE"
+
+VERDICT="$(echo "$REVIEW_RESPONSE" \
+  | tr -d '\r' \
+  | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>' \
+  | tail -n 1 \
+  | sed -E 's#</?verdict>##g')"
+
+if [[ -z "$VERDICT" ]]; then
+  echo "No verdict tag found in response"
+  echo "<promise>RETRY</promise>"
+  exit 0
+fi
 ```
 
 **WAIT** for response. Takes 1-5+ minutes.
@@ -247,7 +260,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
   cat > "$REVIEW_RECEIPT_PATH" <<EOF
-{"type":"plan_review","id":"<EPIC_ID>","mode":"rp","timestamp":"$ts"}
+{"type":"plan_review","id":"<EPIC_ID>","mode":"rp","verdict":"$VERDICT","timestamp":"$ts"}
 EOF
   echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi
@@ -255,7 +268,6 @@ fi
 
 ### Update status
 
-Extract verdict from response, then:
 ```bash
 # If SHIP
 $FLOWCTL epic set-plan-review-status <EPIC_ID> --status ship --json

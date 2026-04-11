@@ -44,12 +44,12 @@ Ralph mode rules (must follow):
    mkdir -p "$(dirname '{{REVIEW_RECEIPT_PATH}}')"
    ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
    cat > '{{REVIEW_RECEIPT_PATH}}' <<EOF
-   {"type":"plan_review","id":"{{EPIC_ID}}","mode":"rp","timestamp":"$ts","iteration":{{RALPH_ITERATION}}}
+   {"type":"plan_review","id":"{{EPIC_ID}}","mode":"rp","verdict":"SHIP","timestamp":"$ts","iteration":{{RALPH_ITERATION}}}
    EOF
    ```
    For codex mode, receipt is written automatically by `flowctl codex plan-review --receipt`.
-   **CRITICAL: Copy EXACTLY. The `"id":"{{EPIC_ID}}"` field is REQUIRED.**
-   Missing id = verification fails = forced retry.
+   **CRITICAL: Copy EXACTLY. The `"id":"{{EPIC_ID}}"` and `"verdict":"SHIP"` fields are REQUIRED.**
+   Missing id/verdict = verification fails = forced retry.
 
 6) After SHIP:
    - `scripts/ralph/flowctl epic set-plan-review-status {{EPIC_ID}} --status ship --json`

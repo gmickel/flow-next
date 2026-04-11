@@ -28,13 +28,13 @@ For rp mode:
 mkdir -p "$(dirname '{{REVIEW_RECEIPT_PATH}}')"
 ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 cat > '{{REVIEW_RECEIPT_PATH}}' <<EOF
-{"type":"impl_review","id":"{{TASK_ID}}","mode":"rp","timestamp":"$ts","iteration":{{RALPH_ITERATION}}}
+{"type":"impl_review","id":"{{TASK_ID}}","mode":"rp","verdict":"SHIP","timestamp":"$ts","iteration":{{RALPH_ITERATION}}}
 EOF
 echo "Receipt written: {{REVIEW_RECEIPT_PATH}}"
 ```
 For codex mode, receipt is written automatically by `flowctl codex impl-review --receipt`.
-**CRITICAL: Copy the command EXACTLY. The `"id":"{{TASK_ID}}"` field is REQUIRED.**
-Ralph verifies receipts match this exact schema. Missing id = verification fails = forced retry.
+**CRITICAL: Copy the command EXACTLY. The `"id":"{{TASK_ID}}"` and `"verdict":"SHIP"` fields are REQUIRED.**
+Ralph verifies receipts match this exact schema. Missing id/verdict = verification fails = forced retry.
 
 **Step 4: Validate epic**
 ```bash
