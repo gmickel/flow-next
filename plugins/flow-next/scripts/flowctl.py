@@ -20,7 +20,7 @@ import tempfile
 import unicodedata
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, ContextManager, Optional
 
@@ -382,7 +382,7 @@ def error_exit(message: str, code: int = 1, use_json: bool = True) -> None:
 
 def now_iso() -> str:
     """Current timestamp in ISO format."""
-    return datetime.utcnow().isoformat() + "Z"
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def require_rp_cli() -> str:
@@ -2844,7 +2844,7 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
     # Format entry
     from datetime import datetime
 
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # Normalize type name
     type_name = args.type.lower().rstrip("s")  # pitfalls -> pitfall
@@ -5556,11 +5556,10 @@ def cmd_rp_builder(args: argparse.Namespace) -> None:
     cmd = [
         "-w",
         str(window),
-        "--raw-json" if response_type else "",
+        "--raw-json",
         "-e",
         builder_expr,
     ]
-    cmd = [c for c in cmd if c]
     res = run_rp_cli(cmd)
     output = (res.stdout or "") + ("\n" + res.stderr if res.stderr else "")
 
@@ -5594,7 +5593,15 @@ def cmd_rp_builder(args: argparse.Namespace) -> None:
             else:
                 print(tab)
     else:
-        tab = parse_builder_tab(output)
+        # Try JSON first (RP 2.1.4+), fall back to regex for older versions
+        tab = ""
+        try:
+            data = json.loads(res.stdout or "{}")
+            tab = extract_builder_tab_from_payload(data) or ""
+        except json.JSONDecodeError:
+            pass
+        if not tab:
+            tab = parse_builder_tab(output)
         if args.json:
             print(json.dumps({"window": window, "tab": tab}))
         else:
@@ -5819,11 +5826,10 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
     builder_cmd = [
         "-w",
         str(win_id),
-        "--raw-json" if response_type else "",
+        "--raw-json",
         "-e",
         builder_expr,
     ]
-    builder_cmd = [c for c in builder_cmd if c]  # Remove empty strings
     builder_res = run_rp_cli(builder_cmd)
     output = (builder_res.stdout or "") + (
         "\n" + builder_res.stderr if builder_res.stderr else ""
@@ -5861,7 +5867,15 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
         except json.JSONDecodeError:
             error_exit("Failed to parse builder review response", use_json=False, code=2)
     else:
-        tab = parse_builder_tab(output)
+        # Try JSON first (RP 2.1.4+), fall back to regex for older versions
+        tab = ""
+        try:
+            data = json.loads(builder_res.stdout or "{}")
+            tab = extract_builder_tab_from_payload(data) or ""
+        except json.JSONDecodeError:
+            pass
+        if not tab:
+            tab = parse_builder_tab(output)
         if not tab:
             error_exit("Builder did not return a tab/context id", use_json=False, code=2)
 

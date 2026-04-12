@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.29.3-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.29.4-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -880,15 +880,16 @@ Reviews block progress until `<verdict>SHIP</verdict>`. Fix → re-review cycles
 
 **Setup:**
 
-1. Install RepoPrompt:
+1. Install RepoPrompt (v2.1.6+ recommended):
    ```bash
    brew install --cask repoprompt
    ```
+   Already installed? Update via RepoPrompt → Check for Updates, or `brew upgrade --cask repoprompt`.
 
 2. **Enable MCP Server** (required for rp-cli):
    - Settings → MCP Server → Enable
    - Click "Install CLI to PATH" (creates `/usr/local/bin/rp-cli`)
-   - Verify: `rp-cli --version`
+   - Verify: `rp-cli --version` (should show 2.1.6+)
 
 3. **Configure models** — RepoPrompt uses two models that must be set in the UI (not controllable via CLI):
 

@@ -442,8 +442,8 @@ def fake_bind_context(args, timeout=None):
 
 def fake_bind_context_builder(args, timeout=None):
     commands.append(args)
-    if args == ["-w", "55", "-e", 'builder "Bind me"']:
-        return make_result("Tab: tab-55\n")
+    if args == ["-w", "55", "--raw-json", "-e", 'builder "Bind me"']:
+        return make_result(json.dumps({"context_id": "tab-55"}))
     raise AssertionError(f"Unexpected rp-cli args: {args}")
 
 
@@ -475,8 +475,8 @@ def fake_reuse_existing(args, timeout=None):
                 "showingWindows": [42],
             }
         ]))
-    if args == ["-w", "42", "-e", 'builder "Review me"']:
-        return make_result("Tab: tab-123\n")
+    if args == ["-w", "42", "--raw-json", "-e", 'builder "Review me"']:
+        return make_result(json.dumps({"context_id": "tab-123"}))
     raise AssertionError(f"Unexpected rp-cli args: {args}")
 
 
@@ -514,8 +514,8 @@ def fake_reopen_hidden_workspace(args, timeout=None):
         'call manage_workspaces {"action": "switch", "workspace": "ws-hidden", "open_in_new_window": true}',
     ]:
         return make_result(json.dumps({"window_id": 84}))
-    if args == ["-w", "84", "-e", 'builder "Reopen me"']:
-        return make_result("Tab: tab-84\n")
+    if args == ["-w", "84", "--raw-json", "-e", 'builder "Reopen me"']:
+        return make_result(json.dumps({"context_id": "tab-84"}))
     raise AssertionError(f"Unexpected rp-cli args: {args}")
 
 

@@ -2,6 +2,15 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.29.4] - 2026-04-12
+
+### Fixed
+- **rp-cli 2.1.6: builder output missing tab/context ID** — `cmd_rp_builder` and `cmd_rp_setup_review` now always pass `--raw-json` to builder (was conditional on `--response-type`). RP 2.1.6 removed the `Tab:`/`Context:` text line from plain-text output; IDs are only in JSON mode. JSON parse tried first, regex fallback for older RP versions. Closes #109. Thanks @berhanbero
+- **Python 3.12+ `datetime.utcnow()` deprecation** — replaced with `datetime.now(timezone.utc)` in `now_iso()` and `cmd_memory_add`. Eliminates `DeprecationWarning` on Python 3.12+.
+
+### Changed
+- README recommends RepoPrompt v2.1.6+ and documents update path (`brew upgrade --cask repoprompt`)
+
 ## [flow-next 0.29.3] - 2026-04-12
 
 ### Fixed
