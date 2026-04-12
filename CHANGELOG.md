@@ -2,6 +2,18 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.29.3] - 2026-04-12
+
+### Fixed
+- **RepoPrompt 2.x `oracle_send` support** — `flowctl rp chat-send` now prefers RP 2.x `oracle_send` over legacy `chat_send`, falling back only on missing-tool errors. Strips `chat_name` and `selected_paths` fields that RP 2.1.x rejects. Real errors propagate immediately instead of being masked by fallback. Thanks @clairernovotny — [#107](https://github.com/gmickel/flow-next/pull/107)
+- **Ralph receipt gate hardened** — review receipts now require `type`, `id`, and `verdict` (SHIP/NEEDS_WORK/MAJOR_RETHINK). Catches variable-based receipt writes (`printf ... > "$RECEIPT_PATH"`) that previously bypassed the guard. Defense in depth: pre-tool-use checks command text, Stop handler validates actual file on disk.
+- **Ralph prompt templates** — all three templates (`prompt_plan.md`, `prompt_work.md`, `prompt_completion.md`) now include `"verdict":"SHIP"` in receipt JSON. Review workflows capture response and extract verdict from `<verdict>` tags.
+
+### Added
+- `run_rp_cli_unchecked` — graceful rp-cli runner for oracle_send fallback detection
+- `ralph-receipt-guard.sh` — shell-level receipt validation with verdict + type/id cross-checking
+- CI test coverage: oracle_send modern/legacy/error paths, receipt bypass patterns, receipt validation
+
 ## [flow-next 0.29.2] - 2026-04-09
 
 ### Fixed
