@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-21T23:41:49.673398Z",
+  "depends_on": [
+    "fn-28-unified-review-backend-spec-parser.1"
+  ],
+  "epic": "fn-28-unified-review-backend-spec-parser",
+  "id": "fn-28-unified-review-backend-spec-parser.3",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-28-unified-review-backend-spec-parser.3.md",
+  "status": "todo",
+  "title": "Thread resolved spec (model+effort) into run_codex_exec, run_copilot_exec, all 6 review commands",
+  "updated_at": "2026-04-21T23:43:50.828470Z"
+}

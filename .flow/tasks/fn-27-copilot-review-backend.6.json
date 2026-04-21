@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-21T23:38:29.931031Z",
+  "depends_on": [
+    "fn-27-copilot-review-backend.2"
+  ],
+  "epic": "fn-27-copilot-review-backend",
+  "id": "fn-27-copilot-review-backend.6",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-27-copilot-review-backend.6.md",
+  "status": "todo",
+  "title": "Setup skill detection + smoke_test.sh copilot e2e coverage",
+  "updated_at": "2026-04-21T23:41:29.247808Z"
+}

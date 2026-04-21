@@ -212,6 +212,29 @@ FLOW_REVIEW_BACKEND="codex:gpt-5.4:high" $FLOWCTL codex impl-review fn-5.2
 
 5. **Env-var fallback semantics** — "env only fills missing fields" is subtle. Users may expect `FLOW_CODEX_MODEL` to always win. Mitigation: document clearly; add `flowctl task show-backend --json` output that surfaces every field's source.
 
+## Early proof point
+
+Task **fn-28-unified-review-backend-spec-parser.1** (parser + dataclass + `BACKEND_REGISTRY` + unit tests) validates the grammar: legal specs round-trip; illegal specs raise clean errors; `resolve()` precedence works for all four edge cases (missing model, missing effort, env fills, defaults fill).
+
+If it fails: reconsider the `backend:model:effort` grammar (maybe drop effort from the spec and keep it env-only) before plumbing it into runtime tasks 2-4.
+
+## Requirement coverage
+
+| Req | Description | Task(s) | Gap justification |
+|-----|-------------|---------|-------------------|
+| R1 | `parse_backend_spec()` handles bare, backend+model, full three-part | fn-28-unified-review-backend-spec-parser.1 | — |
+| R2 | Invalid specs rejected at set-backend with helpful errors | fn-28-unified-review-backend-spec-parser.1, fn-28-unified-review-backend-spec-parser.2 | — |
+| R3 | `FLOW_REVIEW_BACKEND` accepts full spec form | fn-28-unified-review-backend-spec-parser.4 | — |
+| R4 | Resolution precedence: task > epic > env > config > backend-specific env > default | fn-28-unified-review-backend-spec-parser.1, fn-28-unified-review-backend-spec-parser.3 | — |
+| R5 | `cmd_task_show_backend` shows raw + resolved with per-field sources | fn-28-unified-review-backend-spec-parser.2 | — |
+| R6 | `run_codex_exec` honors per-task model + effort from spec | fn-28-unified-review-backend-spec-parser.3 | — |
+| R7 | `run_copilot_exec` honors per-task model + effort from spec | fn-28-unified-review-backend-spec-parser.3 | — |
+| R8 | Ralph templates accept spec-form `WORK_REVIEW` / `PLAN_REVIEW` | fn-28-unified-review-backend-spec-parser.4 | — |
+| R9 | Legacy stored values don't crash; graceful fallback to bare backend | fn-28-unified-review-backend-spec-parser.1, fn-28-unified-review-backend-spec-parser.2 | — |
+| R10 | Help text on `--review` matches actual parser behavior | fn-28-unified-review-backend-spec-parser.5 | — |
+| R11 | Tests cover edge cases | fn-28-unified-review-backend-spec-parser.1 | — |
+| R12 | Docs updated (CLAUDE.md grammar block, README) | fn-28-unified-review-backend-spec-parser.5 | — |
+
 ## References
 
 - fn-27 (copilot backend — prerequisite): `.flow/specs/fn-27-copilot-review-backend.md`

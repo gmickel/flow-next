@@ -192,6 +192,31 @@ FLOW_REVIEW_BACKEND=copilot FLOW_COPILOT_MODEL=claude-haiku-4.5 FLOW_COPILOT_EFF
 4. **Windows ARG_MAX** — `-p "$(cat ...)"` with huge embeds could blow the 8191-char limit. Mitigation: temp-file + shell-var pattern already handles this (prompt never appears on the command line; it's in an env var loaded from a file).
 5. **Premium-request cost** — Copilot charges per-request (claude-haiku-4.5 ≈ 0.33 requests per turn, opus-4.5 higher). Receipts should note model used so cost tracking is visible. Not in scope as automation, but document the trade-off.
 
+## Early proof point
+
+Task **fn-27-copilot-review-backend.1** (helpers: `run_copilot_exec` + verdict + check primitives) validates the fundamental approach: client-generated UUID + `--resume=<uuid>` creates-or-resumes, text mode yields clean output, exit-code handling behaves as probed, large-prompt tempfile fallback works on Windows paths.
+
+If it fails: re-evaluate the decision to use text mode (consider JSONL + event-filter fallback), or revisit the prompt-delivery strategy (consider `--additional-mcp-config=@file` style `@file` reference if copilot supports it for `-p`) before investing in tasks 2-7.
+
+## Requirement coverage
+
+| Req | Description | Task(s) | Gap justification |
+|-----|-------------|---------|-------------------|
+| R1 | `flowctl copilot check` returns availability + version + live auth probe | fn-27-copilot-review-backend.2 | — |
+| R2 | `flowctl copilot {impl,plan,completion}-review` writes receipt with session_id + model + effort | fn-27-copilot-review-backend.3 | — |
+| R3 | Session continuity works (re-review uses stored UUID) | fn-27-copilot-review-backend.1, fn-27-copilot-review-backend.3 | — |
+| R4 | `cmd_review_backend` accepts `copilot` | fn-27-copilot-review-backend.2 | — |
+| R5 | `--review=copilot` bare-backend accepted at epic/task set-backend | fn-27-copilot-review-backend.2 | Opaque metadata path; spec parsing is fn-28 |
+| R6 | `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars honored | fn-27-copilot-review-backend.1, fn-27-copilot-review-backend.3 | — |
+| R7 | Review skills branch on copilot backend | fn-27-copilot-review-backend.4 | — |
+| R8 | Ralph templates include copilot; Ralph works with `PLAN_REVIEW=copilot WORK_REVIEW=copilot` | fn-27-copilot-review-backend.5 | — |
+| R9 | `ralph-guard.py` blocks direct copilot + `--continue` | fn-27-copilot-review-backend.5 | — |
+| R10 | Temp-file pattern handles >100 KB prompts without shell errors | fn-27-copilot-review-backend.1, fn-27-copilot-review-backend.6 | — |
+| R11 | Graceful fallback when copilot unavailable/unauthed | fn-27-copilot-review-backend.2, fn-27-copilot-review-backend.6 | — |
+| R12 | Smoke tests pass with copilot backend | fn-27-copilot-review-backend.6 | — |
+| R13 | Docs updated (README, CLAUDE.md) | fn-27-copilot-review-backend.7 | — |
+| R14 | RP remains primary, Codex + Copilot both listed as alternatives | fn-27-copilot-review-backend.7 | — |
+
 ## References
 
 - Existing Codex implementation: `plugins/flow-next/scripts/flowctl.py:1522-1894` (`run_codex_exec`, `build_review_prompt`, `build_rereview_preamble`), `:5998-6770` (`cmd_codex_{impl,plan,completion}_review`)

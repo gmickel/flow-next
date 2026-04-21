@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-21T23:38:29.375626Z",
+  "depends_on": [],
+  "epic": "fn-27-copilot-review-backend",
+  "id": "fn-27-copilot-review-backend.1",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-27-copilot-review-backend.1.md",
+  "status": "todo",
+  "title": "Copilot backend helpers: run_copilot_exec + version/verdict/check primitives",
+  "updated_at": "2026-04-21T23:39:13.735855Z"
+}

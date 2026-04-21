@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-21T23:41:49.452503Z",
+  "depends_on": [],
+  "epic": "fn-28-unified-review-backend-spec-parser",
+  "id": "fn-28-unified-review-backend-spec-parser.1",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-28-unified-review-backend-spec-parser.1.md",
+  "status": "todo",
+  "title": "parse_backend_spec + BackendSpec + BACKEND_REGISTRY + unit tests",
+  "updated_at": "2026-04-21T23:43:50.608020Z"
+}
