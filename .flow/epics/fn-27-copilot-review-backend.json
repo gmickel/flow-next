@@ -1,0 +1,13 @@
+{
+  "branch_name": "fn-27-copilot-review-backend",
+  "created_at": "2026-04-21T22:33:30.514145Z",
+  "depends_on_epics": [],
+  "id": "fn-27-copilot-review-backend",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-27-copilot-review-backend.md",
+  "status": "open",
+  "title": "Copilot Review Backend",
+  "updated_at": "2026-04-21T22:40:29.677744Z"
+}

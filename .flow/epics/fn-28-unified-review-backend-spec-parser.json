@@ -1,0 +1,15 @@
+{
+  "branch_name": "fn-28-unified-review-backend-spec-parser",
+  "created_at": "2026-04-21T22:40:33.116268Z",
+  "depends_on_epics": [
+    "fn-27-copilot-review-backend"
+  ],
+  "id": "fn-28-unified-review-backend-spec-parser",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-28-unified-review-backend-spec-parser.md",
+  "status": "open",
+  "title": "Unified review backend spec parser (model + effort)",
+  "updated_at": "2026-04-21T22:42:16.902115Z"
+}
