@@ -85,9 +85,8 @@ Updates all three manifest files. Per CLAUDE.md, skill + command + agent changes
 - [ ] No hand edits under `plugins/flow-next/codex/**` (all via sync-codex.sh)
 
 ## Done summary
-
-(filled in when task completes)
-
+Documented the GitHub Copilot CLI review backend in plugins/flow-next/README.md (Cross-Model Reviews section with setup/usage/verify/env-var coverage, all flag-reference tables now list rp|codex|copilot|export|none), updated CLAUDE.md to mention copilot alongside rp-cli for reviews, ran scripts/sync-codex.sh to regenerate plugins/flow-next/codex/** mirroring the task 4-6 skill/template/ralph-guard changes, ran scripts/bump.sh patch flow-next which synced all three manifests + marketplace metadata to 0.29.5, and added the [flow-next 0.29.5] CHANGELOG entry covering the new copilot backend, ralph-guard 0.14.0 (blocks direct copilot + --continue, tracks copilot_review_succeeded), setup auto-detect, 52->59 smoke test growth, and the three FLOW_COPILOT_{MODEL,EFFORT,EMBED_MAX_BYTES} env vars with env > arg > default cascade semantics. Smoke suite runs 59/59 green from /tmp.
 ## Evidence
-
-(filled in when task completes)
+- Commits: 25ef086fdb011c39b5fb37a8855735436fae39f5
+- Tests: cd /tmp && /Users/gordon/work/gmickel-claude-marketplace/plugins/flow-next/scripts/smoke_test.sh (59/59 pass), jq . .claude-plugin/marketplace.json plugins/flow-next/.claude-plugin/plugin.json plugins/flow-next/.codex-plugin/plugin.json (all parse; versions == 0.29.5), grep copilot plugins/flow-next/codex/skills/ (13 files, 106 occurrences after sync)
+- PRs:
