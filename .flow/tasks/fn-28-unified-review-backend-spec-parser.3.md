@@ -16,8 +16,8 @@ Thread the resolved `BackendSpec` (backend + model + effort) from spec sources t
   5. Call `.resolve()` on whatever BackendSpec falls out → fills missing fields from `FLOW_<BACKEND>_MODEL` / `FLOW_<BACKEND>_EFFORT` env → then registry defaults
 - Return resolved spec. Graceful fallback via task 2's legacy rules if any stored value fails to parse.
 
-**`run_codex_exec` at `flowctl.py:1522-1596`**:
-- Current signature: `(prompt, session_id, sandbox, model=None)`
+**`run_codex_exec` at `flowctl.py:1534`**:
+- Current signature (as of fn-27 landed): `(prompt: str, session_id: Optional[str] = None, sandbox: str = "read-only", model: Optional[str] = None)`
 - New: `(prompt, session_id, sandbox, spec: BackendSpec)`
 - Drop the `os.environ.get("FLOW_CODEX_MODEL")` fallback at line 1543 — that lives inside `spec.resolve()` now
 - Build the `-c model_reasoning_effort=<spec.effort>` flag from the spec instead of hard-coding `"high"` at line 1576
@@ -37,15 +37,15 @@ Thread the resolved `BackendSpec` (backend + model + effort) from spec sources t
 ## Investigation targets
 
 **Required:**
-- `plugins/flow-next/scripts/flowctl.py:1522-1596` — `run_codex_exec` signature to change
-- `plugins/flow-next/scripts/flowctl.py:5998-6222` — `cmd_codex_impl_review` (add --spec)
-- `plugins/flow-next/scripts/flowctl.py:6224-6430` — `cmd_codex_plan_review`
-- `plugins/flow-next/scripts/flowctl.py:6574-6790` — `cmd_codex_completion_review`
+- `plugins/flow-next/scripts/flowctl.py:1534` — `run_codex_exec` signature to change
+- `plugins/flow-next/scripts/flowctl.py` — `cmd_codex_impl_review` (add --spec); caller at line 6405
+- `plugins/flow-next/scripts/flowctl.py` — `cmd_codex_plan_review`; caller at line 6621
+- `plugins/flow-next/scripts/flowctl.py` — `cmd_codex_completion_review`; caller at line 6975
 - The three copilot equivalents (from fn-27 task 3)
-- `plugins/flow-next/scripts/flowctl.py:2679-2702` — `cmd_review_backend` (task 4 extends this; stay aware)
+- `plugins/flow-next/scripts/flowctl.py:2830-2852` — `cmd_review_backend` (task 4 extends this; stay aware)
 
 **Optional:**
-- `plugins/flow-next/scripts/flowctl.py:4171-4220+` — `cmd_task_show_backend` (for source-tracking semantics)
+- `plugins/flow-next/scripts/flowctl.py:4322` — `cmd_task_show_backend` (for source-tracking semantics)
 
 ## Acceptance
 

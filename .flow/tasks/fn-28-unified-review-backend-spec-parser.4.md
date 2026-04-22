@@ -13,7 +13,7 @@ Lift the spec grammar into the top-of-the-cascade surfaces: `FLOW_REVIEW_BACKEND
 
 ## Approach
 
-**`cmd_review_backend`** at `flowctl.py:2679-2702`:
+**`cmd_review_backend`** at `flowctl.py:2830-2852`:
 - Replace the hardcoded tuple check. Instead:
   1. Get `env_val` from `FLOW_REVIEW_BACKEND`.
   2. If non-empty, try `BackendSpec.parse(env_val)`. If valid: return `{backend: spec.backend, spec: str(spec), source: "env"}`.
@@ -45,7 +45,7 @@ Lift the spec grammar into the top-of-the-cascade surfaces: `FLOW_REVIEW_BACKEND
 ## Investigation targets
 
 **Required:**
-- `plugins/flow-next/scripts/flowctl.py:2679-2702` — `cmd_review_backend`
+- `plugins/flow-next/scripts/flowctl.py:2830-2852` — `cmd_review_backend` (already accepts bare copilot as of fn-27; task 4 adds spec-form support)
 - `plugins/flow-next/skills/flow-next-impl-review/workflow.md` — current invocation comments
 - `plugins/flow-next/skills/flow-next-ralph-init/templates/config.env` — current comment block
 - `plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh:1061-1098` — backend equality checks

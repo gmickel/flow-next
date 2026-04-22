@@ -40,8 +40,8 @@ Inside `flowctl.py`, add a new section (suggested location: right after the exis
 ## Investigation targets
 
 **Required:**
-- `plugins/flow-next/scripts/flowctl.py:2679-2702` — `cmd_review_backend` (understand the cascade we're extending)
-- `plugins/flow-next/scripts/flowctl.py:1543` — current `FLOW_CODEX_MODEL` resolution pattern (mirror for copilot)
+- `plugins/flow-next/scripts/flowctl.py:2830-2852` — `cmd_review_backend` (already accepts copilot as of fn-27) (understand the cascade we're extending)
+- `plugins/flow-next/scripts/flowctl.py:1555` — current `FLOW_CODEX_MODEL` resolution pattern (to be replaced by `BackendSpec.resolve()`)
 - `.flow/specs/fn-28-unified-review-backend-spec-parser.md` — spec includes the parser shape in §Parser Shape
 - `.flow/specs/fn-27-copilot-review-backend.md` — for the copilot model catalog and default
 

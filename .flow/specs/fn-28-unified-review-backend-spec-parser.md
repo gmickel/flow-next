@@ -239,8 +239,8 @@ If it fails: reconsider the `backend:model:effort` grammar (maybe drop effort fr
 
 - fn-27 (copilot backend — prerequisite): `.flow/specs/fn-27-copilot-review-backend.md`
 - fn-2 (codex backend — existing template): `.flow/specs/fn-2.md`
-- Current opaque storage: `cmd_epic_set_backend` / `cmd_task_set_backend` at `flowctl.py:4055-4168`
-- Current resolution (bare backend only): `cmd_review_backend` at `flowctl.py:2679-2702`
-- Current runtime model resolution (env-only): `run_codex_exec` at `flowctl.py:1543`
-- Aspirational help text we're making real: `flowctl.py:7316, 7385`
+- Current opaque storage: `cmd_epic_set_backend` at `flowctl.py:4206` / `cmd_task_set_backend` at `flowctl.py:4265`
+- Current resolution (bare backend only): `cmd_review_backend` at `flowctl.py:2830-2852` (already extended for copilot in fn-27; tuples at lines 2834+2839)
+- Current runtime model resolution (env-only): `run_codex_exec` at `flowctl.py:1534`, env-lookup at `:1555`. Sibling `run_copilot_exec` at `flowctl.py:1732` already has `(prompt, session_id, repo_root, model=None, effort=None)` shape that fn-28 generalizes.
+- Aspirational help text we're making real: `flowctl.py:8171` (epic impl), `:8174` (epic review), `:8243` (task review)
 - flow-swarm's parseBackendSpec reference: `~/work/flow-swarm/docs/adding-backends.md` section 3.3

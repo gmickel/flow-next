@@ -7,14 +7,14 @@ Wire validation into store-time commands (`cmd_epic_set_backend`, `cmd_task_set_
 
 ## Approach
 
-**`cmd_epic_set_backend`** at `flowctl.py:4055-4111`:
+**`cmd_epic_set_backend`** at `flowctl.py:4206`:
 - Before storing each of `--impl`, `--review`, `--sync`, call `BackendSpec.parse(value)` if non-empty. On ValueError, call `error_exit` with the parser's message (which already includes valid-values hints).
 - Store the raw string (validated) as-is — we don't normalize. User sees back exactly what they typed.
 
-**`cmd_task_set_backend`** at `flowctl.py:4114-4168`:
+**`cmd_task_set_backend`** at `flowctl.py:4265`:
 - Same pattern.
 
-**`cmd_task_show_backend`** at `flowctl.py:4171-~4220`:
+**`cmd_task_show_backend`** at `flowctl.py:4322`:
 - After `resolve_spec` computes the source-traced raw spec, also call `BackendSpec.parse(raw).resolve()` to get the full backend/model/effort triple.
 - Extend JSON output to show both raw (stored) and resolved (runtime) forms:
   ```json
@@ -44,10 +44,10 @@ Wire validation into store-time commands (`cmd_epic_set_backend`, `cmd_task_set_
 ## Investigation targets
 
 **Required:**
-- `plugins/flow-next/scripts/flowctl.py:4055-4111` — `cmd_epic_set_backend`
-- `plugins/flow-next/scripts/flowctl.py:4114-4168` — `cmd_task_set_backend`
-- `plugins/flow-next/scripts/flowctl.py:4171-4220+` — `cmd_task_show_backend` (full function)
-- `plugins/flow-next/scripts/flowctl.py:4206-4215` — existing `resolve_spec` helper (extend to return sources)
+- `plugins/flow-next/scripts/flowctl.py:4206-` — `cmd_epic_set_backend`
+- `plugins/flow-next/scripts/flowctl.py:4265-` — `cmd_task_set_backend`
+- `plugins/flow-next/scripts/flowctl.py:4322-` — `cmd_task_show_backend` (full function)
+- `plugins/flow-next/scripts/flowctl.py` — look inside `cmd_task_show_backend` for the existing `resolve_spec` inner helper (extend to return sources)
 
 **Optional:**
 - `plugins/flow-next/scripts/flowctl.py` grep for `error_exit` — match the error-reporting style
