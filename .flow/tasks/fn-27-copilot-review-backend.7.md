@@ -18,9 +18,16 @@ Documentation updates, `scripts/sync-codex.sh` regeneration of the codex mirror,
 - `### Cross-Model Reviews` section (starts line 853): add "GitHub Copilot CLI" to intro enumeration
 - Line 862: `**Review criteria (Carmack-level, identical for both backends):**` → change "both" to "all"
 - Insert new `#### GitHub Copilot CLI (Cross-Platform Alternative)` subsection after the Codex subsection (after line 972). Same structure: Why use, Setup, Usage, Verify. Reference `copilot login` and fine-grained PAT with Copilot Requests permission.
+- **Env-var documentation (task-5 finding):** in the new Copilot subsection, document the three runtime knobs landed in `config.env` / `ralph.sh`:
+  - `FLOW_COPILOT_MODEL` (default `claude-opus-4.5`; catalog: claude-sonnet-4.5, claude-haiku-4.5, claude-opus-4.5, claude-sonnet-4, gpt-5.2, gpt-5.2-codex, gpt-5-mini, gpt-4.1)
+  - `FLOW_COPILOT_EFFORT` (default `high`; `low|medium|high|xhigh`)
+  - `FLOW_COPILOT_EMBED_MAX_BYTES` (default 512000; `0` = unlimited)
+  - Note env-only resolution via `_resolve_copilot_model_effort()` (env > arg > default cascade), values stamped into every receipt (`model` + `effort` keys) for reproducibility. No CLI flags.
+  - Note ralph.sh only exports these when set (conditional export at `ralph.sh:409-411`) — empty values would clobber flowctl defaults.
 - `#### Which to Choose?` (line 963): add a row for Copilot in the scenario table
 - Command flag reference tables (lines 1099-1199): add `copilot` to every `--review=rp|codex|export|none` enumeration
 - `#### Configuration` block (line 948, line 953, line 956): update prose + comment to mention `copilot` as a valid value
+<!-- Updated by plan-sync: task 5 landed FLOW_COPILOT_{MODEL,EFFORT,EMBED_MAX_BYTES} with env-cascade resolver and conditional export in ralph.sh -->
 
 **CLAUDE.md** (repo root):
 - Lines 23-24: flow-next commands block — extend `/flow-next:plan-review`/`impl-review` comments to mention all three backends (rp, codex, copilot). Not mandatory but contributor-friendly.
@@ -29,11 +36,12 @@ Documentation updates, `scripts/sync-codex.sh` regeneration of the codex mirror,
 ```bash
 scripts/sync-codex.sh
 ```
-This regenerates `plugins/flow-next/codex/**` from source skills. Do NOT hand-edit codex files. Confirm task 4 and task 5's skill changes get reflected across:
+This regenerates `plugins/flow-next/codex/**` from source skills. Do NOT hand-edit codex files. Confirm task 4, 5, 6 skill changes get reflected across:
 - `codex/skills/flow-next-{impl,plan,epic}-review/`
-- `codex/skills/flow-next-ralph-init/`
+- `codex/skills/flow-next-ralph-init/` (ralph-guard.py bumped to 0.14.0 with copilot block + `copilot_review_succeeded` state key; config.env + ralph.sh templates carry `FLOW_COPILOT_*` vars; prompt_{plan,work,completion}.md carry `--review=copilot` branch per task 5)
 - `codex/skills/flow-next-setup/`
 - `codex/skills/flow-next-{work,plan}/` (if they have copilot references)
+<!-- Updated by plan-sync: task 5 landed ralph-guard 0.14.0 + FLOW_COPILOT_* templates; sync-codex must mirror them -->
 
 **Version bump:**
 ```bash

@@ -64,9 +64,8 @@ Wire Copilot into the Ralph autonomous loop. Covers ralph-guard.py (blocks direc
 - [ ] Unit-equivalent: `PLAN_REVIEW=copilot WORK_REVIEW=copilot bash ralph.sh` (ralph smoke path) does not hit "unknown backend" errors
 
 ## Done summary
-
-(filled in when task completes)
-
+Wired Copilot into the Ralph autonomous loop: ralph-guard.py blocks direct `copilot` / `--continue` and tracks `copilot_review_succeeded` state; ralph-init SKILL.md detects `HAVE_COPILOT` and offers a 3-way backend choice; config.env/ralph.sh/prompt_{plan,work,completion}.md all accept `copilot` as a first-class PLAN/WORK/COMPLETION_REVIEW value with `FLOW_COPILOT_MODEL|EFFORT|EMBED_MAX_BYTES` flowing through the env-cascade resolver into receipts.
 ## Evidence
-
-(filled in when task completes)
+- Commits: b5d13d2ea8e878153e30c28ff91053e897a2f17f
+- Tests: plugins/flow-next/scripts/smoke_test.sh (52/52 pass), direct ralph-guard.py PreToolUse exercise: 12 copilot block/allow cases, direct ralph-guard.py state-gate exercise: copilot_review_succeeded set/reset, bash -n ralph.sh (syntax OK), config.env sourced with PLAN/WORK/COMPLETION_REVIEW=copilot (vars exported correctly)
+- PRs:

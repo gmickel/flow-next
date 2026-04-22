@@ -511,6 +511,57 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+echo -e "${YELLOW}--- copilot commands ---${NC}"
+# Test copilot check (may or may not have copilot installed)
+copilot_check_json="$(scripts/flowctl copilot check --skip-probe --json 2>/dev/null || echo '{"success":true}')"
+"$PYTHON_BIN" - <<'PY' "$copilot_check_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["success"] == True, f"copilot check failed: {data}"
+# available can be true or false depending on copilot install
+PY
+echo -e "${GREEN}✓${NC} copilot check"
+PASS=$((PASS + 1))
+
+# Test copilot impl-review help (no copilot required for argparse check)
+set +e
+scripts/flowctl copilot impl-review --help >/dev/null 2>&1
+rc=$?
+set -e
+if [[ "$rc" -eq 0 ]]; then
+  echo -e "${GREEN}✓${NC} copilot impl-review --help"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} copilot impl-review --help"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test copilot plan-review help
+set +e
+scripts/flowctl copilot plan-review --help >/dev/null 2>&1
+rc=$?
+set -e
+if [[ "$rc" -eq 0 ]]; then
+  echo -e "${GREEN}✓${NC} copilot plan-review --help"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} copilot plan-review --help"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test copilot completion-review help
+set +e
+scripts/flowctl copilot completion-review --help >/dev/null 2>&1
+rc=$?
+set -e
+if [[ "$rc" -eq 0 ]]; then
+  echo -e "${GREEN}✓${NC} copilot completion-review --help"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} copilot completion-review --help"
+  FAIL=$((FAIL + 1))
+fi
+
 echo -e "${YELLOW}--- context hints ---${NC}"
 # Create files in same commit, then modify one to test context hints
 mkdir -p "$TEST_DIR/repo/src"
@@ -796,6 +847,156 @@ PY
   fi
 else
   echo -e "${YELLOW}⊘${NC} codex e2e skipped (codex not available)"
+fi
+
+echo -e "${YELLOW}--- copilot e2e (requires copilot CLI) ---${NC}"
+# Check if copilot is available. Use --skip-probe to avoid spending a premium
+# request on availability detection; the real review below exercises auth for
+# real. With --skip-probe, `authed` is null (can't know without a probe), so
+# we gate on `available` alone and let a real auth failure fail the e2e below.
+copilot_available="$(scripts/flowctl copilot check --skip-probe --json 2>/dev/null | "$PYTHON_BIN" -c "import sys,json; d=json.load(sys.stdin); print(bool(d.get('available', False)))" 2>/dev/null || echo "False")"
+if [[ "$copilot_available" == "True" ]]; then
+  # Use gpt-5-mini + effort=low to minimize premium-request cost and wall time.
+  # Note: claude-family models reject --effort (task-1 finding), so GPT is required.
+  export FLOW_COPILOT_MODEL=gpt-5-mini
+  export FLOW_COPILOT_EFFORT=low
+
+  # Create a simple epic + task for testing
+  EPIC4_JSON="$(scripts/flowctl epic create --title "Copilot test epic" --json)"
+  EPIC4="$(echo "$EPIC4_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  scripts/flowctl task create --epic "$EPIC4" --title "Test task" --json >/dev/null
+
+  # Write a simple spec
+  cat > ".flow/specs/${EPIC4}.md" << 'EOF'
+# Copilot Test Epic
+
+Simple test epic for smoke testing copilot reviews.
+
+## Scope
+- Test that copilot can review a plan
+- Test that copilot can review an implementation
+EOF
+
+  cat > ".flow/tasks/${EPIC4}.1.md" << 'EOF'
+# Test Task
+
+Add a simple hello world function.
+
+## Acceptance
+- Function returns "hello world"
+EOF
+
+  # Test plan-review e2e
+  # Create a simple code file inside the repo for the plan to reference
+  mkdir -p src
+  echo 'def hello_copilot(): return "hello copilot"' > src/hello_copilot.py
+  set +e
+  cop_plan_result="$(scripts/flowctl copilot plan-review "$EPIC4" --files "src/hello_copilot.py" --base main --receipt "$TEST_DIR/cop-plan-receipt.json" --json 2>&1)"
+  cop_plan_rc=$?
+  set -e
+
+  if [[ "$cop_plan_rc" -eq 0 ]]; then
+    # Verify receipt was written with correct schema (mode=copilot + model + effort)
+    if [[ -f "$TEST_DIR/cop-plan-receipt.json" ]]; then
+      "$PYTHON_BIN" - "$TEST_DIR/cop-plan-receipt.json" "$EPIC4" <<'PY'
+import sys, json
+from pathlib import Path
+data = json.loads(Path(sys.argv[1]).read_text())
+expected_id = sys.argv[2]
+assert data.get("type") == "plan_review", f"Expected type=plan_review, got {data.get('type')}"
+assert data.get("id") == expected_id, f"Expected id={expected_id}, got {data.get('id')}"
+assert data.get("mode") == "copilot", f"Expected mode=copilot, got {data.get('mode')}"
+assert "verdict" in data, "Missing verdict in receipt"
+assert "session_id" in data, "Missing session_id in receipt"
+# New vs codex: copilot receipts must carry model + effort fields
+assert data.get("model"), f"Missing or empty model in receipt: {data.get('model')!r}"
+assert data.get("effort"), f"Missing or empty effort in receipt: {data.get('effort')!r}"
+assert data["model"] == "gpt-5-mini", f"Expected model=gpt-5-mini, got {data['model']}"
+assert data["effort"] == "low", f"Expected effort=low, got {data['effort']}"
+PY
+      echo -e "${GREEN}✓${NC} copilot plan-review e2e"
+      PASS=$((PASS + 1))
+    else
+      echo -e "${RED}✗${NC} copilot plan-review e2e (no receipt)"
+      FAIL=$((FAIL + 1))
+    fi
+  else
+    echo -e "${RED}✗${NC} copilot plan-review e2e (exit $cop_plan_rc)"
+    echo "  output: $cop_plan_result" | head -5
+    FAIL=$((FAIL + 1))
+  fi
+
+  # Re-review smoke: run plan-review again against the same --receipt.
+  # Task-3 guards session resume on prior receipt mode==copilot — a copilot-
+  # mode receipt here must yield the SAME session_id (resume path), not a
+  # fresh UUID (new-session path). This proves cross-run continuity works.
+  if [[ -f "$TEST_DIR/cop-plan-receipt.json" ]]; then
+    prior_session="$("$PYTHON_BIN" -c 'import json,sys; print(json.load(open(sys.argv[1]))["session_id"])' "$TEST_DIR/cop-plan-receipt.json")"
+    set +e
+    cop_re_result="$(scripts/flowctl copilot plan-review "$EPIC4" --files "src/hello_copilot.py" --base main --receipt "$TEST_DIR/cop-plan-receipt.json" --json 2>&1)"
+    cop_re_rc=$?
+    set -e
+    if [[ "$cop_re_rc" -eq 0 ]]; then
+      new_session="$("$PYTHON_BIN" -c 'import json,sys; print(json.load(open(sys.argv[1]))["session_id"])' "$TEST_DIR/cop-plan-receipt.json")"
+      if [[ "$prior_session" == "$new_session" ]]; then
+        echo -e "${GREEN}✓${NC} copilot plan-review re-review resumes session"
+        PASS=$((PASS + 1))
+      else
+        echo -e "${RED}✗${NC} copilot plan-review re-review (session changed: $prior_session -> $new_session)"
+        FAIL=$((FAIL + 1))
+      fi
+    else
+      echo -e "${RED}✗${NC} copilot plan-review re-review (exit $cop_re_rc)"
+      FAIL=$((FAIL + 1))
+    fi
+  fi
+
+  # Test impl-review e2e (create a simple change first)
+  cat > "$TEST_DIR/repo/src/hello_copilot.py" << 'EOF'
+def hello_copilot():
+    return "hello copilot"
+EOF
+  git -C "$TEST_DIR/repo" add src/hello_copilot.py
+  git -C "$TEST_DIR/repo" commit -m "Add hello_copilot function" >/dev/null
+
+  set +e
+  cop_impl_result="$(scripts/flowctl copilot impl-review "${EPIC4}.1" --base HEAD~1 --receipt "$TEST_DIR/cop-impl-receipt.json" --json 2>&1)"
+  cop_impl_rc=$?
+  set -e
+
+  if [[ "$cop_impl_rc" -eq 0 ]]; then
+    # Verify receipt was written with correct schema (mode=copilot + model + effort)
+    if [[ -f "$TEST_DIR/cop-impl-receipt.json" ]]; then
+      "$PYTHON_BIN" - "$TEST_DIR/cop-impl-receipt.json" "$EPIC4" <<'PY'
+import sys, json
+from pathlib import Path
+data = json.loads(Path(sys.argv[1]).read_text())
+expected_id = f"{sys.argv[2]}.1"
+assert data.get("type") == "impl_review", f"Expected type=impl_review, got {data.get('type')}"
+assert data.get("id") == expected_id, f"Expected id={expected_id}, got {data.get('id')}"
+assert data.get("mode") == "copilot", f"Expected mode=copilot, got {data.get('mode')}"
+assert "verdict" in data, "Missing verdict in receipt"
+assert "session_id" in data, "Missing session_id in receipt"
+assert data.get("model"), f"Missing or empty model in receipt: {data.get('model')!r}"
+assert data.get("effort"), f"Missing or empty effort in receipt: {data.get('effort')!r}"
+assert data["model"] == "gpt-5-mini", f"Expected model=gpt-5-mini, got {data['model']}"
+assert data["effort"] == "low", f"Expected effort=low, got {data['effort']}"
+PY
+      echo -e "${GREEN}✓${NC} copilot impl-review e2e"
+      PASS=$((PASS + 1))
+    else
+      echo -e "${RED}✗${NC} copilot impl-review e2e (no receipt)"
+      FAIL=$((FAIL + 1))
+    fi
+  else
+    echo -e "${RED}✗${NC} copilot impl-review e2e (exit $cop_impl_rc)"
+    echo "  output: $cop_impl_result" | head -5
+    FAIL=$((FAIL + 1))
+  fi
+
+  unset FLOW_COPILOT_MODEL FLOW_COPILOT_EFFORT
+else
+  echo -e "${YELLOW}⊘${NC} copilot e2e skipped (copilot not available or not authed)"
 fi
 
 echo -e "${YELLOW}--- depends_on_epics gate ---${NC}"
