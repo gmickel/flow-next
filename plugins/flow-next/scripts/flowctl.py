@@ -1801,9 +1801,12 @@ def run_copilot_exec(
         "--no-auto-update",
         "--model",
         effective_model,
-        "--effort",
-        effective_effort,
     ]
+    # Claude models via Copilot reject --effort ("does not support reasoning
+    # effort configuration"). Default model is claude-opus-4.5, so this branch
+    # is the hot path. GPT-5.x models accept --effort.
+    if not effective_model.startswith("claude-"):
+        cmd += ["--effort", effective_effort]
 
     try:
         try:
