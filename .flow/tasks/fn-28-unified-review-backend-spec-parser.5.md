@@ -40,7 +40,7 @@ scripts/sync-codex.sh
 scripts/bump.sh patch flow-next
 ```
 
-**Tests verified green**: run `plugins/flow-next/scripts/smoke_test.sh` (67 tests as of fn-28.2) and `python3 -m unittest plugins.flow-next.tests.test_backend_spec` (80 tests total as of fn-28.2 — 56 from task 1 + 24 from task 2) before committing the bump. Task 3 and task 4 will add more unit/smoke tests; update the counts here when those land. <!-- Updated by plan-sync: counts refreshed from fn-28.2 evidence (was 56 after task 1 only) -->
+**Tests verified green**: run `plugins/flow-next/scripts/smoke_test.sh` (67 tests as of fn-28.3 — unchanged) and `python3 -m unittest discover -s plugins/flow-next/tests` (98 tests total as of fn-28.3 — 56 from task 1 + 24 from task 2 + 18 from task 3) before committing the bump. Task 4 may add more unit/smoke tests; update the counts here when those land. <!-- Updated by plan-sync: counts refreshed from fn-28.3 evidence (was 80 after fn-28.2; +18 from fn-28.3 --spec/resolve_review_spec tests) -->
 
 ## Investigation targets
 
@@ -64,7 +64,10 @@ scripts/bump.sh patch flow-next
 - [ ] `scripts/bump.sh patch flow-next` has bumped all three manifest versions consistently
 - [ ] `jq . .claude-plugin/marketplace.json` parses cleanly
 - [ ] `plugins/flow-next/scripts/smoke_test.sh` green (67+ tests)
-- [ ] `python3 -m unittest plugins.flow-next.tests.test_backend_spec` green (80+ tests — 56 from task 1, +24 from task 2, plus any from tasks 3-4) <!-- Updated by plan-sync -->
+- [ ] `python3 -m unittest discover -s plugins/flow-next/tests` green (98+ tests — 56 from task 1, +24 from task 2, +18 from task 3, plus any from task 4) <!-- Updated by plan-sync: fn-28.3 landed 18 new unit tests -->
+
+**Receipt schema note for docs** <!-- Added by plan-sync -->:
+- Receipts now include a `spec` field alongside `model` + `effort`: `{"mode": "codex", "model": "gpt-5.4", "effort": "high", "spec": "codex:gpt-5.4:high"}`. README should mention this if it documents receipt schema. The `spec` field is the canonical round-trippable form (via `str(resolved_spec)`); `model` + `effort` stay for backward compatibility.
 - [ ] No hand edits under `plugins/flow-next/codex/**`
 
 ## Done summary

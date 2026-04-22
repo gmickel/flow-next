@@ -3191,28 +3191,65 @@ def cmd_config_set(args: argparse.Namespace) -> None:
 
 
 def cmd_review_backend(args: argparse.Namespace) -> None:
-    """Get review backend for skill conditionals. Returns ASK if not configured."""
+    """Get review backend for skill conditionals. Returns ASK if not configured.
+
+    Accepts spec-form values (``codex:gpt-5.4:high``) from ``FLOW_REVIEW_BACKEND``
+    and ``.flow/config.json`` ``review.backend``. JSON mode returns the full
+    resolved spec plus model + effort fields so skills / Ralph can route model
+    choice. Text mode still prints just the bare backend name for back-compat
+    with skill greps (``BACKEND=$(flowctl review-backend)``).
+    """
     # Priority: FLOW_REVIEW_BACKEND env > config > ASK
+    spec: Optional[BackendSpec] = None
+    source = "none"
+
     env_val = os.environ.get("FLOW_REVIEW_BACKEND", "").strip()
-    if env_val and env_val in ("rp", "codex", "copilot", "none"):
-        backend = env_val
-        source = "env"
-    elif ensure_flow_exists():
+    if env_val:
+        # Lenient parse handles spec-form and legacy bare values; degrades on
+        # bad input rather than silently falling to ASK (previous behavior
+        # quietly dropped ``codex:gpt-5.2``).
+        parsed = parse_backend_spec_lenient(env_val, warn=False)
+        if parsed is not None:
+            spec = parsed.resolve()
+            source = "env"
+
+    if spec is None and ensure_flow_exists():
         cfg_val = get_config("review.backend")
-        if cfg_val and cfg_val in ("rp", "codex", "copilot", "none"):
-            backend = cfg_val
-            source = "config"
-        else:
-            backend = "ASK"
-            source = "none"
-    else:
+        if cfg_val:
+            parsed = parse_backend_spec_lenient(str(cfg_val), warn=False)
+            if parsed is not None:
+                spec = parsed.resolve()
+                source = "config"
+
+    if spec is None:
         backend = "ASK"
-        source = "none"
+        if args.json:
+            json_output(
+                {
+                    "backend": backend,
+                    "spec": backend,
+                    "source": source,
+                    "model": None,
+                    "effort": None,
+                }
+            )
+        else:
+            print(backend)
+        return
 
     if args.json:
-        json_output({"backend": backend, "source": source})
+        json_output(
+            {
+                "backend": spec.backend,
+                "spec": str(spec),
+                "source": source,
+                "model": spec.model,
+                "effort": spec.effort,
+            }
+        )
     else:
-        print(backend)
+        # Text mode: bare backend name only (skills grep this output).
+        print(spec.backend)
 
 
 MEMORY_TEMPLATES = {

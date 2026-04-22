@@ -22,8 +22,8 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 
 **Priority** (first match wins):
 1. `--review=rp|codex|copilot|none` argument
-2. `FLOW_REVIEW_BACKEND` env var (`rp`, `codex`, `copilot`, `none`)
-3. `.flow/config.json` → `review.backend`
+2. `FLOW_REVIEW_BACKEND` env var — bare backend (`rp`, `codex`, `copilot`, `none`) OR spec form (`codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5`)
+3. `.flow/config.json` → `review.backend` (same bare / spec forms)
 4. **Error** - no auto-detection
 
 ### Parse from arguments first
@@ -53,8 +53,10 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 ### Backend at a glance
 
 - **rp** — RepoPrompt (macOS GUI); builder auto-selects context. Primary backend.
-- **codex** — Codex CLI (cross-platform); uses OpenAI models (default `gpt-5.4`). `FLOW_CODEX_MODEL` / `FLOW_CODEX_EFFORT` env vars.
-- **copilot** — GitHub Copilot CLI (cross-platform); supports Claude Opus/Sonnet/Haiku 4.5 and GPT-5.2 families via a Copilot subscription. `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars (no CLI flags).
+- **codex** — Codex CLI (cross-platform); uses OpenAI models (default `gpt-5.4`). `FLOW_CODEX_MODEL` / `FLOW_CODEX_EFFORT` env vars, or `--spec codex:gpt-5.4:xhigh`.
+- **copilot** — GitHub Copilot CLI (cross-platform); supports Claude Opus/Sonnet/Haiku 4.5 and GPT-5.2 families via a Copilot subscription. `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, or `--spec copilot:claude-opus-4.5:xhigh`.
+
+**Spec grammar:** `backend[:model[:effort]]` — `FLOW_REVIEW_BACKEND` and `.flow/config.json review.backend` both accept this. Examples: `codex`, `codex:gpt-5.2`, `copilot:claude-opus-4.5:xhigh`. Per-epic `default_review` (set via `flowctl epic set-backend`) overrides env.
 
 ## Critical Rules
 
@@ -73,7 +75,7 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 **For copilot backend:**
 1. Use `$FLOWCTL copilot completion-review` exclusively
 2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "copilot"`)
-3. Model + effort are env-only: `FLOW_COPILOT_MODEL`, `FLOW_COPILOT_EFFORT` (no CLI flags)
+3. Model + effort resolved via (first match wins): `--spec backend:model:effort` flag, per-epic `default_review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, registry defaults
 4. Parse verdict from command output
 
 **For all backends:**
@@ -129,8 +131,10 @@ On NEEDS_WORK: fix code, commit, re-run (receipt enables session continuity).
 ```bash
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt.json}"
 
-# Optional: override model + effort via env (no CLI flags)
-# FLOW_COPILOT_MODEL=gpt-5.2 FLOW_COPILOT_EFFORT=high \
+# Override model + effort (pick one):
+#   --spec copilot:claude-opus-4.5:xhigh   (preferred)
+#   FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5:xhigh
+#   FLOW_COPILOT_MODEL=gpt-5.2 FLOW_COPILOT_EFFORT=high
 
 $FLOWCTL copilot completion-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
 # Output includes VERDICT=SHIP|NEEDS_WORK

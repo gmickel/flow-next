@@ -1350,5 +1350,189 @@ class TestPerTaskReviewSpecIntegration(unittest.TestCase):
             self.assertIn("Unknown model for codex", payload["error"])
 
 
+# --- cmd_review_backend (fn-28.4) ---
+
+
+class TestReviewBackendCmd(unittest.TestCase):
+    """``flowctl review-backend`` accepts spec-form FLOW_REVIEW_BACKEND and
+    config.json review.backend. Text mode still prints bare backend for
+    back-compat with skill greps; JSON mode returns full resolved spec."""
+
+    def setUp(self) -> None:
+        self._env_snapshot = os.environ.copy()
+        # Scrub any FLOW_* env so each test starts clean.
+        for key in list(os.environ.keys()):
+            if key.startswith("FLOW_"):
+                os.environ.pop(key, None)
+
+    def tearDown(self) -> None:
+        os.environ.clear()
+        os.environ.update(self._env_snapshot)
+
+    def _run_json(self) -> dict:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            flowctl.cmd_review_backend(_ns(json=True))
+        return json.loads(out.getvalue())
+
+    def _run_text(self) -> str:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            flowctl.cmd_review_backend(_ns(json=False))
+        return out.getvalue().strip()
+
+    # --- env spec form ---
+
+    def test_env_spec_returns_full_resolution(self) -> None:
+        os.environ["FLOW_REVIEW_BACKEND"] = "codex:gpt-5.2:medium"
+        with _flow_fixture():
+            payload = self._run_json()
+            self.assertEqual(payload["backend"], "codex")
+            self.assertEqual(payload["spec"], "codex:gpt-5.2:medium")
+            self.assertEqual(payload["model"], "gpt-5.2")
+            self.assertEqual(payload["effort"], "medium")
+            self.assertEqual(payload["source"], "env")
+
+    def test_env_spec_text_mode_prints_bare_backend(self) -> None:
+        # Back-compat contract: `BACKEND=$(flowctl review-backend)` in skills
+        # must still get `codex`, not `codex:gpt-5.4:xhigh`.
+        os.environ["FLOW_REVIEW_BACKEND"] = "codex:gpt-5.4:xhigh"
+        with _flow_fixture():
+            self.assertEqual(self._run_text(), "codex")
+
+    def test_env_copilot_spec_full_form(self) -> None:
+        os.environ["FLOW_REVIEW_BACKEND"] = "copilot:claude-opus-4.5:xhigh"
+        with _flow_fixture():
+            payload = self._run_json()
+            self.assertEqual(payload["backend"], "copilot")
+            self.assertEqual(payload["spec"], "copilot:claude-opus-4.5:xhigh")
+            self.assertEqual(payload["model"], "claude-opus-4.5")
+            self.assertEqual(payload["effort"], "xhigh")
+
+    # --- env bare form (back-compat) ---
+
+    def test_env_bare_codex_resolves_defaults(self) -> None:
+        os.environ["FLOW_REVIEW_BACKEND"] = "codex"
+        with _flow_fixture():
+            payload = self._run_json()
+            self.assertEqual(payload["backend"], "codex")
+            self.assertEqual(payload["spec"], "codex:gpt-5.4:high")
+            self.assertEqual(payload["model"], "gpt-5.4")
+            self.assertEqual(payload["effort"], "high")
+            self.assertEqual(payload["source"], "env")
+
+    def test_env_bare_rp_has_no_model_or_effort(self) -> None:
+        os.environ["FLOW_REVIEW_BACKEND"] = "rp"
+        with _flow_fixture():
+            payload = self._run_json()
+            self.assertEqual(payload["backend"], "rp")
+            self.assertEqual(payload["spec"], "rp")
+            self.assertIsNone(payload["model"])
+            self.assertIsNone(payload["effort"])
+
+    def test_env_bare_none_returns_none(self) -> None:
+        os.environ["FLOW_REVIEW_BACKEND"] = "none"
+        with _flow_fixture():
+            payload = self._run_json()
+            self.assertEqual(payload["backend"], "none")
+            self.assertEqual(payload["source"], "env")
+
+    # --- config.json source ---
+
+    def test_config_spec_form_resolves(self) -> None:
+        with _flow_fixture() as td:
+            (td / ".flow" / "config.json").write_text(
+                json.dumps({"review": {"backend": "copilot:claude-haiku-4.5"}})
+            )
+            payload = self._run_json()
+            self.assertEqual(payload["backend"], "copilot")
+            self.assertEqual(payload["spec"], "copilot:claude-haiku-4.5:high")
+            self.assertEqual(payload["model"], "claude-haiku-4.5")
+            self.assertEqual(payload["source"], "config")
+
+    def test_env_beats_config(self) -> None:
+        os.environ["FLOW_REVIEW_BACKEND"] = "codex:gpt-5.2"
+        with _flow_fixture() as td:
+            (td / ".flow" / "config.json").write_text(
+                json.dumps({"review": {"backend": "copilot"}})
+            )
+            payload = self._run_json()
+            self.assertEqual(payload["backend"], "codex")
+            self.assertEqual(payload["model"], "gpt-5.2")
+            self.assertEqual(payload["source"], "env")
+
+    # --- unset fallback ---
+
+    def test_unset_returns_ask(self) -> None:
+        with _flow_fixture():
+            payload = self._run_json()
+            self.assertEqual(payload["backend"], "ASK")
+            self.assertEqual(payload["spec"], "ASK")
+            self.assertIsNone(payload["model"])
+            self.assertIsNone(payload["effort"])
+            self.assertEqual(payload["source"], "none")
+
+    def test_unset_text_prints_ask(self) -> None:
+        with _flow_fixture():
+            self.assertEqual(self._run_text(), "ASK")
+
+    # --- legacy / invalid fallthrough ---
+
+    def test_invalid_spec_falls_back_to_bare_backend(self) -> None:
+        # Pre-fn-28 legacy stored value "codex:gpt-5.4-high" (no colon between
+        # model+effort). Lenient parse recovers the bare backend rather than
+        # silently returning ASK (pre-fn-28.4 behavior).
+        os.environ["FLOW_REVIEW_BACKEND"] = "codex:gpt-5.4-high"
+        with _flow_fixture():
+            payload = self._run_json()
+            self.assertEqual(payload["backend"], "codex")
+            # Full spec resolves to registry defaults since model was unparseable.
+            self.assertEqual(payload["spec"], "codex:gpt-5.4:high")
+            self.assertEqual(payload["source"], "env")
+
+    def test_garbage_env_returns_ask(self) -> None:
+        # Garbage with no recognizable backend prefix → fall through to ASK.
+        os.environ["FLOW_REVIEW_BACKEND"] = "not-a-backend"
+        with _flow_fixture():
+            payload = self._run_json()
+            self.assertEqual(payload["backend"], "ASK")
+
+    # --- spec-form config precedence vs env bare ---
+
+    def test_config_spec_beats_empty_env(self) -> None:
+        # Spec-form in config resolves even when env is empty string.
+        os.environ["FLOW_REVIEW_BACKEND"] = ""
+        with _flow_fixture() as td:
+            (td / ".flow" / "config.json").write_text(
+                json.dumps({"review": {"backend": "codex:gpt-5.2:low"}})
+            )
+            payload = self._run_json()
+            self.assertEqual(payload["backend"], "codex")
+            self.assertEqual(payload["spec"], "codex:gpt-5.2:low")
+            self.assertEqual(payload["effort"], "low")
+            self.assertEqual(payload["source"], "config")
+
+
+class TestRalphBareBackendExtraction(unittest.TestCase):
+    """Ralph's `${VAR%%:*}` pattern must extract bare backend for both bare
+    and spec forms. This is a smoke test against the pattern the Ralph shell
+    script uses — not the shell itself, but the equivalent pure-Python form.
+    If this pattern is ever changed in ralph.sh, update this test too.
+    """
+
+    def test_bare_backend_extraction_python_equivalent(self) -> None:
+        # Python equivalent of bash ${VAR%%:*}
+        def bare(v: str) -> str:
+            return v.split(":", 1)[0]
+
+        self.assertEqual(bare("codex"), "codex")
+        self.assertEqual(bare("codex:gpt-5.4:xhigh"), "codex")
+        self.assertEqual(bare("copilot:claude-opus-4.5"), "copilot")
+        self.assertEqual(bare("rp"), "rp")
+        self.assertEqual(bare("none"), "none")
+        # Degenerate: trailing colon still parses cleanly.
+        self.assertEqual(bare("codex:"), "codex")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

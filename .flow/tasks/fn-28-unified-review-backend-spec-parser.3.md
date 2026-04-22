@@ -65,9 +65,8 @@ Thread the resolved `BackendSpec` (backend + model + effort) from spec sources t
 - [ ] All six review commands pass `--help` smoke; new `--spec` flag documented
 
 ## Done summary
-
-(filled in when task completes)
-
+Threaded resolved BackendSpec through run_codex_exec, run_copilot_exec, and all six review commands. Added resolve_review_spec() with task/epic/env/config/defaults precedence, --spec CLI flag (strict parse), and receipt fields (model, effort, spec) stamped from resolved spec - per-task review: "codex:gpt-5.2" now actually runs gpt-5.2. Copilot's claude-* --effort skip preserved; 18 new unit tests (80 -> 98).
 ## Evidence
-
-(filled in when task completes)
+- Commits: 9bc0d2288f5736b9531bbf1d4013f5c179b13481
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (98 pass, +18 new), plugins/flow-next/scripts/smoke_test.sh (67 pass)
+- PRs:
