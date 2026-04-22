@@ -1184,6 +1184,111 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+echo -e "${YELLOW}--- backend spec validation (fn-28.2) ---${NC}"
+# Fresh epic + task for backend spec tests
+BSPEC_EPIC_JSON="$(scripts/flowctl epic create --title "Backend spec test" --json)"
+BSPEC_EPIC="$(echo "$BSPEC_EPIC_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+scripts/flowctl task create --epic "$BSPEC_EPIC" --title "Backend task" --json >/dev/null
+BSPEC_TASK="${BSPEC_EPIC}.1"
+
+# Test 1: valid full spec accepted
+if scripts/flowctl task set-backend "$BSPEC_TASK" --review "codex:gpt-5.4:xhigh" --json >/dev/null 2>&1; then
+  echo -e "${GREEN}✓${NC} set-backend accepts valid codex:gpt-5.4:xhigh spec"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} set-backend rejected valid codex:gpt-5.4:xhigh spec"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 2: invalid model rejected
+invalid_out="$(scripts/flowctl task set-backend "$BSPEC_TASK" --review "codex:gpt-99" --json 2>&1 || true)"
+if echo "$invalid_out" | grep -q '"success": false' && echo "$invalid_out" | grep -q "Unknown model for codex"; then
+  echo -e "${GREEN}✓${NC} set-backend rejects unknown codex model with helpful error"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} set-backend didn't reject unknown codex model cleanly: $invalid_out"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 3: rp with model rejected
+rp_out="$(scripts/flowctl task set-backend "$BSPEC_TASK" --review "rp:claude-opus" --json 2>&1 || true)"
+if echo "$rp_out" | grep -q '"success": false' && echo "$rp_out" | grep -q "does not accept a model"; then
+  echo -e "${GREEN}✓${NC} set-backend rejects rp:model spec"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} set-backend didn't reject rp:model: $rp_out"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 4: copilot xhigh accepted
+if scripts/flowctl task set-backend "$BSPEC_TASK" --review "copilot:claude-opus-4.5:xhigh" --json >/dev/null 2>&1; then
+  echo -e "${GREEN}✓${NC} set-backend accepts copilot:claude-opus-4.5:xhigh"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} set-backend rejected valid copilot xhigh spec"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 5: show-backend json has raw + resolved + sources
+show_out="$(scripts/flowctl task show-backend "$BSPEC_TASK" --json)"
+raw_val="$(echo "$show_out" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["review"]["raw"])')"
+resolved_str="$(echo "$show_out" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["review"]["resolved"]["str"])')"
+effort_src="$(echo "$show_out" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["review"]["effort_source"])')"
+if [[ "$raw_val" == "copilot:claude-opus-4.5:xhigh" && "$resolved_str" == "copilot:claude-opus-4.5:xhigh" && "$effort_src" == "spec" ]]; then
+  echo -e "${GREEN}✓${NC} show-backend emits raw + resolved + source fields"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} show-backend output wrong: raw=$raw_val resolved=$resolved_str effort_src=$effort_src"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 6: legacy stored value (codex:gpt-5.4-high dash form) falls back with warning
+# Directly patch the task JSON to simulate pre-epic stored data.
+"$PYTHON_BIN" -c "
+import json
+p = '.flow/tasks/${BSPEC_TASK}.json'
+d = json.load(open(p))
+d['review'] = 'codex:gpt-5.4-high'
+json.dump(d, open(p, 'w'))
+"
+legacy_stdout="$(scripts/flowctl task show-backend "$BSPEC_TASK" --json 2>/tmp/legacy_stderr_$$.txt)"
+legacy_stderr="$(cat /tmp/legacy_stderr_$$.txt)"
+legacy_backend="$(echo "$legacy_stdout" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["review"]["resolved"]["backend"])')"
+legacy_raw="$(echo "$legacy_stdout" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["review"]["raw"])')"
+trash /tmp/legacy_stderr_$$.txt 2>/dev/null || rm -f /tmp/legacy_stderr_$$.txt
+if [[ "$legacy_backend" == "codex" && "$legacy_raw" == "codex:gpt-5.4-high" ]] && echo "$legacy_stderr" | grep -qi "warning:"; then
+  echo -e "${GREEN}✓${NC} legacy spec codex:gpt-5.4-high falls back to bare codex with stderr warning"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} legacy fallback broken: backend=$legacy_backend raw=$legacy_raw stderr=$legacy_stderr"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 7: empty-string clears field without validation
+if scripts/flowctl task set-backend "$BSPEC_TASK" --review "" --json >/dev/null 2>&1; then
+  cleared="$(scripts/flowctl task show-backend "$BSPEC_TASK" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["review"]["raw"])')"
+  if [[ "$cleared" == "None" ]]; then
+    echo -e "${GREEN}✓${NC} empty string clears backend spec"
+    PASS=$((PASS + 1))
+  else
+    echo -e "${RED}✗${NC} empty string didn't clear: raw=$cleared"
+    FAIL=$((FAIL + 1))
+  fi
+else
+  echo -e "${RED}✗${NC} empty string rejected by validator (should bypass)"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 8: epic set-backend also validates
+epic_invalid="$(scripts/flowctl epic set-backend "$BSPEC_EPIC" --impl "bogus:foo" --json 2>&1 || true)"
+if echo "$epic_invalid" | grep -q '"success": false' && echo "$epic_invalid" | grep -q "Unknown backend"; then
+  echo -e "${GREEN}✓${NC} epic set-backend rejects unknown backend"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} epic set-backend didn't reject unknown backend: $epic_invalid"
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo -e "${YELLOW}=== Results ===${NC}"
 echo -e "Passed: ${GREEN}$PASS${NC}"

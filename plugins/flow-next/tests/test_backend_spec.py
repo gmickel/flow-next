@@ -10,10 +10,15 @@ fn-28 plumbing chain will be wrong downstream.
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
+import io
+import json
 import os
 import sys
+import tempfile
 import unittest
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any
 
@@ -408,6 +413,452 @@ class TestFrozen(unittest.TestCase):
         s = BackendSpec("codex", "gpt-5.4", "high")
         with self.assertRaises(Exception):  # FrozenInstanceError is a dataclass subclass
             s.model = "gpt-5.2"  # type: ignore[misc]
+
+
+# --- VALID_BACKENDS constant (fn-28.2) ---
+
+
+class TestValidBackends(unittest.TestCase):
+    """``VALID_BACKENDS`` mirrors registry keys sorted — downstream argparse
+    ``choices=`` and any "valid list" UI depends on this shape."""
+
+    def test_exists(self) -> None:
+        self.assertTrue(hasattr(flowctl, "VALID_BACKENDS"))
+
+    def test_matches_registry(self) -> None:
+        self.assertEqual(
+            flowctl.VALID_BACKENDS, sorted(BACKEND_REGISTRY.keys())
+        )
+
+    def test_is_sorted(self) -> None:
+        self.assertEqual(
+            list(flowctl.VALID_BACKENDS), sorted(flowctl.VALID_BACKENDS)
+        )
+
+
+# --- parse_backend_spec_lenient (legacy fallback — fn-28.2) ---
+
+
+class TestLenientParse(unittest.TestCase):
+    """Graceful fallback for stored legacy values. Runtime must never crash on
+    old data — warn and degrade to bare backend."""
+
+    def _capture_stderr(self, fn):
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            result = fn()
+        return result, buf.getvalue()
+
+    def test_empty_returns_none_no_warning(self) -> None:
+        result, err = self._capture_stderr(
+            lambda: flowctl.parse_backend_spec_lenient("")
+        )
+        self.assertIsNone(result)
+        self.assertEqual(err, "")
+
+    def test_whitespace_returns_none_no_warning(self) -> None:
+        result, err = self._capture_stderr(
+            lambda: flowctl.parse_backend_spec_lenient("   ")
+        )
+        self.assertIsNone(result)
+        self.assertEqual(err, "")
+
+    def test_none_returns_none_no_warning(self) -> None:
+        result, err = self._capture_stderr(
+            lambda: flowctl.parse_backend_spec_lenient(None)
+        )
+        self.assertIsNone(result)
+        self.assertEqual(err, "")
+
+    def test_valid_spec_roundtrips_no_warning(self) -> None:
+        result, err = self._capture_stderr(
+            lambda: flowctl.parse_backend_spec_lenient("codex:gpt-5.4:high")
+        )
+        self.assertEqual(result, BackendSpec("codex", "gpt-5.4", "high"))
+        self.assertEqual(err, "")
+
+    def test_legacy_dash_model_effort_falls_back_to_bare(self) -> None:
+        # Hot-path case called out in the task spec: pre-epic users stored
+        # ``codex:gpt-5.4-high`` (dash, not colon). Parser rejects as unknown
+        # model; lenient must degrade to bare backend + stderr warning.
+        result, err = self._capture_stderr(
+            lambda: flowctl.parse_backend_spec_lenient("codex:gpt-5.4-high")
+        )
+        self.assertEqual(result, BackendSpec("codex", None, None))
+        self.assertIn("warning:", err)
+        self.assertIn("codex:gpt-5.4-high", err)
+        self.assertIn("codex", err)
+
+    def test_legacy_bad_effort_falls_back_to_bare(self) -> None:
+        result, err = self._capture_stderr(
+            lambda: flowctl.parse_backend_spec_lenient("codex:gpt-5.4:bogus")
+        )
+        self.assertEqual(result, BackendSpec("codex", None, None))
+        self.assertIn("warning:", err)
+
+    def test_unknown_backend_returns_none(self) -> None:
+        # No recognizable backend prefix — caller gets None and stderr note.
+        result, err = self._capture_stderr(
+            lambda: flowctl.parse_backend_spec_lenient("bogus-prefix:foo:bar")
+        )
+        self.assertIsNone(result)
+        self.assertIn("No recognizable backend prefix", err)
+
+    def test_warn_false_suppresses_stderr(self) -> None:
+        result, err = self._capture_stderr(
+            lambda: flowctl.parse_backend_spec_lenient(
+                "codex:gpt-5.4-high", warn=False
+            )
+        )
+        self.assertEqual(result, BackendSpec("codex", None, None))
+        self.assertEqual(err, "")
+
+
+# --- Command integration tests (fn-28.2) ---
+
+
+@contextmanager
+def _flow_fixture():
+    """Spin up an isolated .flow dir under a temp cwd for command tests.
+
+    Yields the temp path. Restores cwd + clears the module-level cache so each
+    fixture test sees a fresh .flow/. Temp dir is cleaned via TemporaryDirectory.
+    """
+    old_cwd = os.getcwd()
+    with tempfile.TemporaryDirectory(prefix="flowctl-cmd-test-") as td:
+        os.chdir(td)
+        try:
+            # cmd_init requires git init — not strictly needed for set/show
+            # commands but mirrors real usage.
+            flow_dir = Path(td) / ".flow"
+            flow_dir.mkdir(parents=True, exist_ok=True)
+            (flow_dir / "epics").mkdir(exist_ok=True)
+            (flow_dir / "tasks").mkdir(exist_ok=True)
+            (flow_dir / "config.json").write_text("{}")
+            yield Path(td)
+        finally:
+            os.chdir(old_cwd)
+
+
+def _write_epic(flow_dir: Path, epic_id: str, **fields: Any) -> None:
+    data = {
+        "id": epic_id,
+        "title": "Test epic",
+        "status": "open",
+        "branch_name": epic_id,
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "next_task": 1,
+        "depends_on_epics": [],
+        "default_impl": None,
+        "default_review": None,
+        "default_sync": None,
+    }
+    data.update(fields)
+    (flow_dir / "epics" / f"{epic_id}.json").write_text(json.dumps(data))
+
+
+def _write_task(flow_dir: Path, task_id: str, epic_id: str, **fields: Any) -> None:
+    data = {
+        "id": task_id,
+        "epic": epic_id,
+        "title": "Test task",
+        "status": "todo",
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "depends_on": [],
+        "impl": None,
+        "review": None,
+        "sync": None,
+    }
+    data.update(fields)
+    (flow_dir / "tasks" / f"{task_id}.json").write_text(json.dumps(data))
+
+
+def _ns(**kwargs: Any) -> argparse.Namespace:
+    return argparse.Namespace(**kwargs)
+
+
+class TestSetBackendValidation(unittest.TestCase):
+    """``cmd_epic_set_backend`` / ``cmd_task_set_backend`` must reject bad
+    specs before writing to disk."""
+
+    def test_task_set_backend_valid_spec_stored_as_is(self) -> None:
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
+            out = io.StringIO()
+            with redirect_stdout(out):
+                flowctl.cmd_task_set_backend(
+                    _ns(
+                        id="fn-9-e.1",
+                        impl=None,
+                        review="codex:gpt-5.4:xhigh",
+                        sync=None,
+                        json=True,
+                    )
+                )
+            raw = json.loads(
+                (td / ".flow" / "tasks" / "fn-9-e.1.json").read_text()
+            )
+            # Store raw string exactly as typed (no normalization).
+            self.assertEqual(raw["review"], "codex:gpt-5.4:xhigh")
+
+    def test_task_set_backend_rejects_unknown_model(self) -> None:
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
+            out = io.StringIO()
+            with self.assertRaises(SystemExit) as cm, redirect_stdout(out):
+                flowctl.cmd_task_set_backend(
+                    _ns(
+                        id="fn-9-e.1",
+                        impl=None,
+                        review="codex:gpt-99",
+                        sync=None,
+                        json=True,
+                    )
+                )
+            self.assertEqual(cm.exception.code, 1)
+            payload = json.loads(out.getvalue())
+            self.assertFalse(payload["success"])
+            self.assertIn("--review", payload["error"])
+            self.assertIn("Unknown model for codex", payload["error"])
+
+    def test_task_set_backend_rejects_rp_with_model(self) -> None:
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
+            out = io.StringIO()
+            with self.assertRaises(SystemExit), redirect_stdout(out):
+                flowctl.cmd_task_set_backend(
+                    _ns(
+                        id="fn-9-e.1",
+                        impl=None,
+                        review="rp:claude-opus",
+                        sync=None,
+                        json=True,
+                    )
+                )
+            payload = json.loads(out.getvalue())
+            self.assertFalse(payload["success"])
+            self.assertIn("does not accept a model", payload["error"])
+
+    def test_task_set_backend_accepts_copilot_xhigh(self) -> None:
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
+            out = io.StringIO()
+            with redirect_stdout(out):
+                flowctl.cmd_task_set_backend(
+                    _ns(
+                        id="fn-9-e.1",
+                        impl=None,
+                        review="copilot:claude-opus-4.5:xhigh",
+                        sync=None,
+                        json=True,
+                    )
+                )
+            raw = json.loads(
+                (td / ".flow" / "tasks" / "fn-9-e.1.json").read_text()
+            )
+            self.assertEqual(raw["review"], "copilot:claude-opus-4.5:xhigh")
+
+    def test_task_set_backend_rejects_bad_spec_does_not_touch_disk(self) -> None:
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(
+                td / ".flow", "fn-9-e.1", "fn-9-e", review="codex"
+            )
+            before = (td / ".flow" / "tasks" / "fn-9-e.1.json").read_text()
+            with self.assertRaises(SystemExit), redirect_stdout(io.StringIO()):
+                flowctl.cmd_task_set_backend(
+                    _ns(
+                        id="fn-9-e.1",
+                        impl=None,
+                        review="codex:gpt-99",
+                        sync=None,
+                        json=True,
+                    )
+                )
+            after = (td / ".flow" / "tasks" / "fn-9-e.1.json").read_text()
+            self.assertEqual(
+                before, after, "disk must be untouched on validation failure"
+            )
+
+    def test_epic_set_backend_rejects_unknown_backend(self) -> None:
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            out = io.StringIO()
+            with self.assertRaises(SystemExit), redirect_stdout(out):
+                flowctl.cmd_epic_set_backend(
+                    _ns(
+                        id="fn-9-e",
+                        impl="bogus:foo",
+                        review=None,
+                        sync=None,
+                        json=True,
+                    )
+                )
+            payload = json.loads(out.getvalue())
+            self.assertFalse(payload["success"])
+            self.assertIn("--impl", payload["error"])
+            self.assertIn("Unknown backend", payload["error"])
+
+    def test_epic_set_backend_clears_with_empty_string(self) -> None:
+        # Empty string means "clear" — must NOT validate (nothing to validate).
+        with _flow_fixture() as td:
+            _write_epic(
+                td / ".flow", "fn-9-e", default_review="codex:gpt-5.4"
+            )
+            out = io.StringIO()
+            with redirect_stdout(out):
+                flowctl.cmd_epic_set_backend(
+                    _ns(
+                        id="fn-9-e",
+                        impl=None,
+                        review="",
+                        sync=None,
+                        json=True,
+                    )
+                )
+            raw = json.loads(
+                (td / ".flow" / "epics" / "fn-9-e.json").read_text()
+            )
+            self.assertIsNone(raw["default_review"])
+
+
+class TestShowBackendResolution(unittest.TestCase):
+    """``cmd_task_show_backend`` emits raw + resolved + per-field sources and
+    degrades gracefully on legacy values."""
+
+    def setUp(self) -> None:
+        # Scrub env so registry defaults are deterministic.
+        self._env_snapshot = os.environ.copy()
+        for key in list(os.environ.keys()):
+            if key.startswith("FLOW_"):
+                os.environ.pop(key, None)
+
+    def tearDown(self) -> None:
+        os.environ.clear()
+        os.environ.update(self._env_snapshot)
+
+    def _show_json(self, task_id: str) -> dict:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            flowctl.cmd_task_show_backend(_ns(id=task_id, json=True))
+        return json.loads(out.getvalue())
+
+    def test_null_when_no_spec_set(self) -> None:
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
+            result = self._show_json("fn-9-e.1")
+            self.assertIsNone(result["review"]["raw"])
+            self.assertIsNone(result["review"]["resolved"])
+            self.assertIsNone(result["review"]["source"])
+
+    def test_task_spec_full_fields(self) -> None:
+        # Valid spec → raw + source=task + resolved with per-field sources.
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(
+                td / ".flow",
+                "fn-9-e.1",
+                "fn-9-e",
+                review="codex:gpt-5.4:xhigh",
+            )
+            r = self._show_json("fn-9-e.1")["review"]
+            self.assertEqual(r["raw"], "codex:gpt-5.4:xhigh")
+            self.assertEqual(r["source"], "task")
+            self.assertEqual(
+                r["resolved"],
+                {
+                    "backend": "codex",
+                    "model": "gpt-5.4",
+                    "effort": "xhigh",
+                    "str": "codex:gpt-5.4:xhigh",
+                },
+            )
+            self.assertEqual(r["model_source"], "spec")
+            self.assertEqual(r["effort_source"], "spec")
+
+    def test_epic_default_shows_source_epic(self) -> None:
+        with _flow_fixture() as td:
+            _write_epic(
+                td / ".flow", "fn-9-e", default_review="codex"
+            )
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
+            r = self._show_json("fn-9-e.1")["review"]
+            self.assertEqual(r["raw"], "codex")
+            self.assertEqual(r["source"], "epic")
+            self.assertEqual(r["resolved"]["backend"], "codex")
+            # bare backend → model/effort fill from registry defaults
+            self.assertEqual(r["model_source"], "registry_default")
+            self.assertEqual(r["effort_source"], "registry_default")
+
+    def test_env_fills_missing_effort_source_reported(self) -> None:
+        os.environ["FLOW_CODEX_EFFORT"] = "low"
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(
+                td / ".flow",
+                "fn-9-e.1",
+                "fn-9-e",
+                review="codex:gpt-5.2",
+            )
+            r = self._show_json("fn-9-e.1")["review"]
+            self.assertEqual(r["resolved"]["effort"], "low")
+            self.assertEqual(r["model_source"], "spec")
+            self.assertEqual(r["effort_source"], "env:FLOW_CODEX_EFFORT")
+
+    def test_effort_only_spec_roundtrips_in_str(self) -> None:
+        # `codex::high` stored directly must show `codex::high` in
+        # resolved.str — preserving empty-model slot honesty.
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(
+                td / ".flow",
+                "fn-9-e.1",
+                "fn-9-e",
+                review="codex::high",
+            )
+            r = self._show_json("fn-9-e.1")["review"]
+            self.assertEqual(r["raw"], "codex::high")
+            # resolve() fills in the model from registry default, so str
+            # becomes the full form. The important invariant is the resolved
+            # dict has both fields populated without raising.
+            self.assertEqual(r["resolved"]["model"], "gpt-5.4")
+            self.assertEqual(r["resolved"]["effort"], "high")
+            self.assertEqual(r["resolved"]["str"], "codex:gpt-5.4:high")
+
+    def test_legacy_value_falls_back_with_warning(self) -> None:
+        # The hot-path compat case: stored ``codex:gpt-5.4-high`` (dash) from
+        # before this epic existed. Must warn to stderr, not crash, and
+        # resolved must fall back to bare-backend defaults.
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(
+                td / ".flow",
+                "fn-9-e.1",
+                "fn-9-e",
+                review="codex:gpt-5.4-high",
+            )
+            out = io.StringIO()
+            err = io.StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                flowctl.cmd_task_show_backend(
+                    _ns(id="fn-9-e.1", json=True)
+                )
+            r = json.loads(out.getvalue())["review"]
+            self.assertEqual(r["raw"], "codex:gpt-5.4-high")
+            self.assertEqual(r["source"], "task")
+            # Lenient fallback → bare codex → registry defaults fill.
+            self.assertEqual(r["resolved"]["backend"], "codex")
+            self.assertEqual(r["resolved"]["model"], "gpt-5.4")
+            self.assertEqual(r["resolved"]["effort"], "high")
+            self.assertIn("warning:", err.getvalue())
+            self.assertIn("codex:gpt-5.4-high", err.getvalue())
 
 
 if __name__ == "__main__":

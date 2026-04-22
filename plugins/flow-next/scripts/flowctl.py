@@ -1761,6 +1761,11 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
 }
 
 
+# Sorted list of backend names. Handy for argparse ``choices=`` and for any
+# call-site that needs the valid set without touching registry internals.
+VALID_BACKENDS: list[str] = sorted(BACKEND_REGISTRY.keys())
+
+
 @dataclass(frozen=True)
 class BackendSpec:
     """Parsed review-backend spec: ``backend[:model[:effort]]``.
@@ -1896,6 +1901,47 @@ class BackendSpec:
         # effort set; model may be None
         model_part = self.model if self.model is not None else ""
         return f"{self.backend}:{model_part}:{self.effort}"
+
+
+def parse_backend_spec_lenient(
+    raw: str, *, warn: bool = True
+) -> Optional[BackendSpec]:
+    """Parse a stored spec, degrading to bare backend on validation failure.
+
+    Used at read time (show-backend, runtime resolution) so pre-epic stored
+    values like ``codex:gpt-5.4-high`` (no colon between model and effort) do
+    not crash. On ValueError we:
+
+      1. Try the first colon-separated part as a bare backend name.
+      2. If that is a known backend, emit a stderr warning (when ``warn``) and
+         return ``BackendSpec(backend=<first>)``.
+      3. Otherwise return ``None`` — caller decides how to surface it.
+
+    Returns ``None`` for empty / whitespace-only input (no warning — that is
+    just "unset").
+    """
+    if raw is None or not str(raw).strip():
+        return None
+    try:
+        return BackendSpec.parse(raw)
+    except ValueError as e:
+        # Try bare-backend fallback: first ':'-separated part.
+        first = str(raw).strip().split(":", 1)[0].strip()
+        if first in BACKEND_REGISTRY:
+            if warn:
+                print(
+                    f'warning: spec {str(raw)!r} failed validation: {e}. '
+                    f'Treating as bare backend {first!r}.',
+                    file=sys.stderr,
+                )
+            return BackendSpec(backend=first)
+        if warn:
+            print(
+                f'warning: spec {str(raw)!r} failed validation: {e}. '
+                f'No recognizable backend prefix; ignoring.',
+                file=sys.stderr,
+            )
+        return None
 
 
 # --- Copilot Backend Helpers ---
@@ -4440,7 +4486,23 @@ def cmd_epic_set_backend(args: argparse.Namespace) -> None:
         load_json_or_exit(epic_path, f"Epic {args.id}", use_json=args.json)
     )
 
-    # Update fields (empty string means clear)
+    # Validate each non-empty spec up front — reject bad specs before we touch
+    # disk. Empty string is a clear-signal and skips validation.
+    for field, value in (
+        ("--impl", args.impl),
+        ("--review", args.review),
+        ("--sync", args.sync),
+    ):
+        if value:
+            try:
+                BackendSpec.parse(value)
+            except ValueError as e:
+                error_exit(
+                    f"Invalid spec for {field}: {e}", use_json=args.json
+                )
+
+    # Update fields (empty string means clear). Store raw strings as typed —
+    # no normalization — so users see back exactly what they set.
     updated = []
     if args.impl is not None:
         epic_data["default_impl"] = args.impl if args.impl else None
@@ -4498,7 +4560,22 @@ def cmd_task_set_backend(args: argparse.Namespace) -> None:
 
     task_data = load_json_or_exit(task_path, f"Task {task_id}", use_json=args.json)
 
-    # Update fields (empty string means clear)
+    # Validate each non-empty spec up front — reject bad specs before we touch
+    # disk. Empty string is a clear-signal and skips validation.
+    for field, value in (
+        ("--impl", args.impl),
+        ("--review", args.review),
+        ("--sync", args.sync),
+    ):
+        if value:
+            try:
+                BackendSpec.parse(value)
+            except ValueError as e:
+                error_exit(
+                    f"Invalid spec for {field}: {e}", use_json=args.json
+                )
+
+    # Update fields (empty string means clear). Store raw strings as typed.
     updated = []
     if args.impl is not None:
         task_data["impl"] = args.impl if args.impl else None
@@ -4560,9 +4637,9 @@ def cmd_task_show_backend(args: argparse.Namespace) -> None:
                 load_json_or_exit(epic_path, f"Epic {epic_id}", use_json=args.json)
             )
 
-    # Compute effective values with source tracking
+    # Compute effective values with source tracking.
     def resolve_spec(task_key: str, epic_key: str) -> tuple:
-        """Return (spec, source) tuple."""
+        """Return (raw_spec, source) tuple for a given field."""
         task_val = task_data.get(task_key)
         if task_val:
             return (task_val, "task")
@@ -4572,29 +4649,136 @@ def cmd_task_show_backend(args: argparse.Namespace) -> None:
                 return (epic_val, "epic")
         return (None, None)
 
-    impl_spec, impl_source = resolve_spec("impl", "default_impl")
-    review_spec, review_source = resolve_spec("review", "default_review")
-    sync_spec, sync_source = resolve_spec("sync", "default_sync")
+    def resolve_field(raw: Optional[str], spec_source: Optional[str]) -> dict:
+        """Build the richer JSON shape: raw + resolved + per-field sources.
+
+        ``raw`` is what's stored (possibly invalid legacy data). ``spec_source``
+        is where it came from ("task" / "epic" / None when unset).
+
+        Per-field sources ("model_source" / "effort_source") distinguish
+        between an explicit spec value ("spec"), env-var fill
+        ("env:FLOW_<BACKEND>_<FIELD>"), registry default
+        ("registry_default"), or n/a when the backend rejects the field.
+
+        Returns a dict with keys: ``raw``, ``source``, ``resolved``,
+        ``model_source``, ``effort_source``. On legacy-data parse failure we
+        degrade to bare backend (warning already went to stderr from
+        parse_backend_spec_lenient) so callers don't crash on old values.
+        """
+        if raw is None:
+            return {
+                "raw": None,
+                "source": None,
+                "resolved": None,
+                "model_source": None,
+                "effort_source": None,
+            }
+
+        parsed = parse_backend_spec_lenient(raw, warn=True)
+        if parsed is None:
+            # Unrecognizable — surface what we have without a resolved form.
+            return {
+                "raw": raw,
+                "source": spec_source,
+                "resolved": None,
+                "model_source": None,
+                "effort_source": None,
+            }
+
+        resolved = parsed.resolve()
+        reg = BACKEND_REGISTRY[parsed.backend]
+        env_model_key = f"FLOW_{parsed.backend.upper()}_MODEL"
+        env_effort_key = f"FLOW_{parsed.backend.upper()}_EFFORT"
+
+        # Derive per-field source to mirror resolve()'s precedence.
+        if reg["models"] is None:
+            model_source: Optional[str] = None
+        elif parsed.model is not None:
+            model_source = "spec"
+        elif os.environ.get(env_model_key):
+            model_source = f"env:{env_model_key}"
+        else:
+            model_source = "registry_default"
+
+        if reg["efforts"] is None:
+            effort_source: Optional[str] = None
+        elif parsed.effort is not None:
+            effort_source = "spec"
+        elif os.environ.get(env_effort_key):
+            effort_source = f"env:{env_effort_key}"
+        else:
+            effort_source = "registry_default"
+
+        return {
+            "raw": raw,
+            "source": spec_source,
+            "resolved": {
+                "backend": resolved.backend,
+                "model": resolved.model,
+                "effort": resolved.effort,
+                "str": str(resolved),
+            },
+            "model_source": model_source,
+            "effort_source": effort_source,
+        }
+
+    impl_raw, impl_source = resolve_spec("impl", "default_impl")
+    review_raw, review_source = resolve_spec("review", "default_review")
+    sync_raw, sync_source = resolve_spec("sync", "default_sync")
+
+    impl_field = resolve_field(impl_raw, impl_source)
+    review_field = resolve_field(review_raw, review_source)
+    sync_field = resolve_field(sync_raw, sync_source)
 
     if args.json:
         json_output(
             {
                 "id": task_id,
                 "epic": epic_id,
-                "impl": {"spec": impl_spec, "source": impl_source},
-                "review": {"spec": review_spec, "source": review_source},
-                "sync": {"spec": sync_spec, "source": sync_source},
+                "impl": impl_field,
+                "review": review_field,
+                "sync": sync_field,
             }
         )
     else:
-        def fmt(spec, source):
-            if spec:
-                return f"{spec} ({source})"
-            return "null"
+        def _short_src(src: Optional[str]) -> Optional[str]:
+            """Compact a per-field source tag for non-JSON display.
 
-        print(f"impl: {fmt(impl_spec, impl_source)}")
-        print(f"review: {fmt(review_spec, review_source)}")
-        print(f"sync: {fmt(sync_spec, sync_source)}")
+            ``env:FLOW_CODEX_EFFORT`` → ``env`` (keeps line short; JSON output
+            still has the full key for anyone who cares).
+            """
+            if src is None:
+                return None
+            if src.startswith("env:"):
+                return "env"
+            if src == "registry_default":
+                return "registry"
+            return src
+
+        def fmt(field: dict) -> str:
+            raw = field["raw"]
+            if raw is None:
+                return "null"
+            src = field["source"] or "unknown"
+            resolved = field["resolved"]
+            if resolved is None:
+                return f"{raw} ({src}) [unresolved - invalid spec]"
+            # Use str(resolved) so empty-model slot round-trips honestly
+            # (e.g. codex::high stays codex::high, not codex:high).
+            resolved_str = resolved["str"]
+            annotations = []
+            ms = field.get("model_source")
+            if ms and ms != "spec":
+                annotations.append(f"model: {_short_src(ms)}")
+            es = field.get("effort_source")
+            if es and es != "spec":
+                annotations.append(f"effort: {_short_src(es)}")
+            suffix = f" ({', '.join(annotations)})" if annotations else ""
+            return f"{raw} ({src}) -> {resolved_str}{suffix}"
+
+        print(f"impl: {fmt(impl_field)}")
+        print(f"review: {fmt(review_field)}")
+        print(f"sync: {fmt(sync_field)}")
 
 
 def cmd_task_set_description(args: argparse.Namespace) -> None:
