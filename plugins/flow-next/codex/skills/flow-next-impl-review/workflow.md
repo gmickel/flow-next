@@ -47,6 +47,9 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 # Priority: --review flag > env > config (flag parsed in SKILL.md)
+# Text output is bare backend name for back-compat grep. The same command in
+# --json mode returns {backend, spec, model, effort, source} — use that if you
+# need the model / effort resolved from a spec-form env value.
 BACKEND=$($FLOWCTL review-backend)
 
 if [[ "$BACKEND" == "ASK" ]]; then
@@ -57,6 +60,22 @@ fi
 
 echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 ```
+
+**Spec-form env var (optional):** `FLOW_REVIEW_BACKEND` accepts bare or full spec:
+
+```bash
+# Bare backend (back-compat)
+FLOW_REVIEW_BACKEND=codex $FLOWCTL codex impl-review "$TASK_ID" --receipt "$RECEIPT_PATH"
+
+# Full spec — model + effort resolved automatically
+FLOW_REVIEW_BACKEND=codex:gpt-5.4:xhigh $FLOWCTL codex impl-review "$TASK_ID" --receipt "$RECEIPT_PATH"
+FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5 $FLOWCTL copilot impl-review "$TASK_ID" --receipt "$RECEIPT_PATH"
+
+# Or pass spec directly (preferred for one-offs, avoids env pollution):
+$FLOWCTL codex impl-review "$TASK_ID" --spec "codex:gpt-5.4:xhigh" --receipt "$RECEIPT_PATH"
+```
+
+Per-task `review` (set via `flowctl task set-backend`) overrides env.
 
 **If backend is "none"**: Skip review, inform user, and exit cleanly (no error).
 
@@ -137,9 +156,12 @@ git log ${DIFF_BASE}..HEAD --oneline
 ```bash
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
 
-# Runtime config via env vars (no CLI flags for model/effort):
-#   FLOW_COPILOT_MODEL   (default gpt-5.2)
-#   FLOW_COPILOT_EFFORT  (default high; values: low|medium|high|xhigh)
+# Runtime config:
+#   --spec <spec>           full spec (backend:model:effort), highest priority
+#   FLOW_REVIEW_BACKEND     env (spec-form ok: copilot:claude-opus-4.5:xhigh)
+#   FLOW_COPILOT_MODEL      env (fills missing model only; default gpt-5.2)
+#   FLOW_COPILOT_EFFORT     env (fills missing effort only; default high)
+#   per-task stored review  via `flowctl task set-backend` (highest if set)
 
 $FLOWCTL copilot impl-review "$TASK_ID" --base "$DIFF_BASE" --receipt "$RECEIPT_PATH"
 ```
@@ -158,7 +180,9 @@ If `VERDICT=NEEDS_WORK`:
 ### Step 4: Receipt
 
 Receipt is written automatically by `flowctl copilot impl-review` when `--receipt` provided.
-Format: `{"type":"impl_review","id":"<id>","mode":"copilot","verdict":"<verdict>","session_id":"<uuid>","model":"<model>","effort":"<effort>","timestamp":"..."}`
+Format: `{"type":"impl_review","id":"<id>","mode":"copilot","verdict":"<verdict>","session_id":"<uuid>","model":"<model>","effort":"<effort>","spec":"copilot:<model>:<effort>","timestamp":"..."}`
+
+The `spec` field is the canonical round-trippable form (added in fn-28.3). `model` + `effort` remain for backward compatibility.
 
 Session resume guard: re-review only resumes the copilot session when the existing receipt at `$RECEIPT_PATH` has `mode == "copilot"`. A cross-backend switch (e.g., codex receipt at the same path) starts a fresh session.
 
@@ -432,6 +456,6 @@ If verdict is NEEDS_WORK:
 
 **Copilot backend only:**
 - **Direct copilot calls** - Must use `flowctl copilot` wrappers
-- **Inventing `--model`/`--effort` CLI flags** - Those are env-only (`FLOW_COPILOT_MODEL`, `FLOW_COPILOT_EFFORT`)
+- **Inventing `--model`/`--effort` CLI flags** - Use `--spec` for a full backend:model:effort value, or `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars to fill individual fields
 - **Using `--continue`** - Conflicts with parallel usage; session resume uses `--resume=<uuid>` under the hood via `--receipt`
 - **Assuming cross-backend session continuity** - Resume only works when prior receipt has `mode == "copilot"`

@@ -79,7 +79,7 @@ Depends on fn-27 landing first (copilot runtime needs to exist before its spec c
 
 5. **RP gets only `backend` form.** RP doesn't have per-call model or effort (model is determined by the RP window configuration). Spec `rp:anything` rejected. `rp` accepted.
 
-6. **Receipt schema unchanged.** fn-27 already writes `model` + `effort` into receipts. fn-28 just makes those fields come from the resolved spec instead of only from env vars / defaults.
+6. **Receipt schema: additive change.** fn-27 already writes `model` + `effort` into receipts. fn-28.3 additionally stamps a new `spec` field (`str(resolved_spec)`) as the canonical round-trippable form. `model` + `effort` remain for backward compatibility; readers tolerant of missing `spec` stay correct. <!-- Updated by plan-sync: fn-28.3 added `spec` field; original claim "unchanged" was aspirational -->
 
 7. **Back-compat**: existing `default_review` / `review` stored values are either bare backend (`codex`, `rp`) or never-parsed strings. Bare backend passes validation unchanged. Any stored string that fails validation falls back to backend-only with a warning — don't crash on old data.
 

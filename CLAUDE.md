@@ -23,10 +23,21 @@ Commands:
 - `/flow-next:plan-review` → Carmack-level plan review (rp-cli, Codex CLI, or Copilot CLI)
 - `/flow-next:impl-review` → Carmack-level impl review of current branch (rp-cli, Codex CLI, or Copilot CLI)
 
+Review backend spec grammar (v0.31.0+):
+- `backend[:model[:effort]]` — colon-delimited, trailing parts optional
+- Examples: `rp`, `codex`, `codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5:high`
+- RP bare only (model set via window config); `none` accepted as explicit opt-out
+- Valid values: `flowctl review-backend --help`, full catalog in plugin README
+- Resolution precedence (first match wins): `--spec` CLI flag > per-task `review` > per-epic `default_review` > `FLOW_REVIEW_BACKEND` env > `.flow/config.json` `review.backend` > backend-specific env (`FLOW_CODEX_MODEL`, `FLOW_COPILOT_EFFORT`, ...) > registry default
+- Legacy bare-backend values (`codex`, `copilot`) still work; unparseable strings fall back to bare backend with stderr warning
+- `flowctl review-backend --json` returns `{backend, spec, model, effort, source}` (spec-form round-trippable); text mode prints bare backend for skill grep back-compat
+- Receipts now include a `spec` field alongside `model` + `effort`: `{"mode": "codex", "model": "gpt-5.4", "effort": "high", "spec": "codex:gpt-5.4:high"}`
+
 Ralph (autonomous loop):
 - Script template lives in `plugins/flow-next/skills/flow-next-ralph-init/templates/`.
 - Ralph uses `flowctl rp` wrappers (not direct rp-cli) for reviews.
 - Receipts gate progress when `REVIEW_RECEIPT_PATH` is set.
+- `config.env` accepts spec form on `PLAN_REVIEW` / `WORK_REVIEW` / `COMPLETION_REVIEW` (e.g. `WORK_REVIEW=codex:gpt-5.4:xhigh`). `ralph.sh` exports the full spec via `FLOW_REVIEW_BACKEND` and derives `PLAN_REVIEW_BACKEND` / `WORK_REVIEW_BACKEND` / `COMPLETION_REVIEW_BACKEND` (bare backend, via `${VAR%%:*}`) for prompt-level branching.
 - Runbooks: `plans/ralph-e2e-notes.md`, `plans/ralph-getting-started.md`.
 
 Memory system (opt-in):

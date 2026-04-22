@@ -21,6 +21,7 @@ import unicodedata
 import uuid
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, ContextManager, Optional
@@ -1535,12 +1536,18 @@ def run_codex_exec(
     prompt: str,
     session_id: Optional[str] = None,
     sandbox: str = "read-only",
-    model: Optional[str] = None,
+    spec: Optional["BackendSpec"] = None,
 ) -> tuple[str, Optional[str], int, str]:
     """Run codex exec and return (stdout, thread_id, exit_code, stderr).
 
     If session_id provided, tries to resume. Falls back to new session if resume fails.
-    Model: FLOW_CODEX_MODEL env > parameter > default (gpt-5.4 + high reasoning).
+
+    ``spec``: a resolved ``BackendSpec`` (backend=codex) whose ``model`` and
+    ``effort`` are used verbatim. The spec is assumed to be already resolved
+    by ``resolve_review_spec()`` or ``.resolve()`` so env-var fills live
+    upstream — this function just reads ``spec.model`` / ``spec.effort``.
+    When ``spec`` is ``None`` (defensive path for non-review callers), fall
+    back to bare-codex resolution (env + registry defaults).
 
     Note: Prompt is passed via stdin (using '-') to avoid Windows command-line
     length limits (~8191 chars) and special character escaping issues. (GH-35)
@@ -1551,8 +1558,14 @@ def run_codex_exec(
         - stderr contains error output from the process
     """
     codex = require_codex()
-    # Model priority: env > parameter > default (gpt-5.4 + high reasoning = GPT 5.4 High)
-    effective_model = os.environ.get("FLOW_CODEX_MODEL") or model or "gpt-5.4"
+    # Resolve spec so model+effort are populated. Defensive: older call sites
+    # (or tests) may pass spec=None; treat that as bare-codex resolution.
+    if spec is None:
+        spec = BackendSpec("codex").resolve()
+    elif spec.model is None or spec.effort is None:
+        spec = spec.resolve()
+    effective_model = spec.model or "gpt-5.4"
+    effective_effort = spec.effort or "high"
 
     if session_id:
         # Try resume first - use stdin for prompt (model already set in original session)
@@ -1576,7 +1589,7 @@ def run_codex_exec(
             # Resume failed - fall through to new session
             pass
 
-    # New session with model + high reasoning effort
+    # New session with model + reasoning effort from resolved spec
     # --skip-git-repo-check: safe with read-only sandbox, allows reviews from /tmp etc (GH-33)
     # Use '-' to read prompt from stdin - avoids Windows CLI length limits (GH-35)
     cmd = [
@@ -1585,7 +1598,7 @@ def run_codex_exec(
         "--model",
         effective_model,
         "-c",
-        'model_reasoning_effort="high"',
+        f'model_reasoning_effort="{effective_effort}"',
         "--sandbox",
         sandbox,
         "--skip-git-repo-check",
@@ -1691,6 +1704,350 @@ def is_sandbox_failure(exit_code: int, stdout: str, stderr: str) -> bool:
     return False
 
 
+# --- Backend Spec Parser (unified model + effort grammar, fn-28) ---
+#
+# Spec grammar: ``backend[:model[:effort]]`` — colon-delimited, three parts max,
+# trailing parts optional. Examples:
+#   - ``rp``                              backend only (RP uses window/session, not per-call model)
+#   - ``codex``                           backend only, defaults from registry
+#   - ``codex:gpt-5.4``                   backend + model, default effort
+#   - ``codex:gpt-5.4:xhigh``             full spec
+#   - ``copilot:claude-opus-4.5:xhigh``   copilot with its own effort set
+#
+# ``BACKEND_REGISTRY`` is a static dict (no plugin discovery). When the registry
+# has ``models`` or ``efforts`` set to ``None``, that backend rejects the
+# corresponding spec field (e.g. ``rp:opus`` is invalid — RP doesn't accept a
+# model). Every validation error lists the valid set sorted alphabetically so
+# users get a deterministic, copy-pasteable hint.
+#
+# Codex ``minimal`` effort caveat: passes codex config validation but the server
+# returns 400 when the ``web_search`` tool is enabled. flowctl reviews do not
+# enable web_search, so ``minimal`` is safe here — documented for the day we do.
+
+BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
+    "rp": {
+        # RepoPrompt picks model via window/session config, not per-call.
+        "models": None,
+        "efforts": None,
+    },
+    "codex": {
+        "models": {
+            "gpt-5.4",
+            "gpt-5.2",
+            "gpt-5",
+            "gpt-5-mini",
+            "gpt-5-codex",
+        },
+        # ``none`` / ``minimal`` accepted at CLI layer; ``minimal`` is gated by
+        # server-side web_search check (not applicable to our reviews).
+        "efforts": {"none", "minimal", "low", "medium", "high", "xhigh"},
+        "default_model": "gpt-5.4",
+        "default_effort": "high",
+    },
+    "copilot": {
+        # Verified via ``copilot --help`` + live probe (fn-27 §Model Catalog).
+        "models": {
+            "claude-sonnet-4.5",
+            "claude-haiku-4.5",
+            "claude-opus-4.5",
+            "claude-sonnet-4",
+            "gpt-5.2",
+            "gpt-5.2-codex",
+            "gpt-5-mini",
+            "gpt-4.1",
+        },
+        # Copilot exposes ``xhigh`` in addition to standard tiers. No ``none`` /
+        # ``minimal`` — Claude-family models reject ``--effort`` entirely, which
+        # ``run_copilot_exec`` handles by dropping the flag when model starts
+        # with ``claude-``.
+        "efforts": {"low", "medium", "high", "xhigh"},
+        "default_model": "gpt-5.2",
+        "default_effort": "high",
+    },
+    "none": {
+        # Explicit opt-out. Parser still validates it so ``--review=none`` can
+        # be stored as a spec without special-casing upstream.
+        "models": None,
+        "efforts": None,
+    },
+}
+
+
+# Sorted list of backend names. Handy for argparse ``choices=`` and for any
+# call-site that needs the valid set without touching registry internals.
+VALID_BACKENDS: list[str] = sorted(BACKEND_REGISTRY.keys())
+
+
+@dataclass(frozen=True)
+class BackendSpec:
+    """Parsed review-backend spec: ``backend[:model[:effort]]``.
+
+    Fields are ``None`` when unspecified. Use ``.resolve()`` to fill missing
+    fields from ``FLOW_<BACKEND>_MODEL`` / ``FLOW_<BACKEND>_EFFORT`` env vars
+    then registry defaults (env only fills fields that the spec left blank —
+    explicit spec values always win).
+    """
+
+    backend: str
+    model: Optional[str] = None
+    effort: Optional[str] = None
+
+    @classmethod
+    def parse(cls, spec: str) -> "BackendSpec":
+        """Parse ``backend[:model[:effort]]``. Raises ``ValueError`` on invalid.
+
+        Validation:
+          - empty / whitespace-only → ``Empty backend spec``
+          - more than 3 colon-separated parts → explicit ValueError
+          - unknown backend → lists valid backends
+          - model on backend that doesn't accept one (rp/none) → ValueError
+          - unknown model → lists valid models for that backend
+          - effort on backend that doesn't accept one → ValueError
+          - unknown effort → lists valid efforts for that backend
+
+        Backend names are case-sensitive and lowercase. Model and effort are
+        matched exactly against the registry (no case-folding) so users see
+        consistent spec strings everywhere.
+        """
+        if spec is None or not str(spec).strip():
+            raise ValueError("Empty backend spec")
+        raw = str(spec).strip()
+        parts = raw.split(":")
+        if len(parts) > 3:
+            raise ValueError(
+                f"Too many ':' separators in spec: {raw!r} "
+                f"(expected backend[:model[:effort]], max 3 parts)"
+            )
+        backend = parts[0].strip()
+        if not backend:
+            raise ValueError(f"Empty backend in spec: {raw!r}")
+        if backend not in BACKEND_REGISTRY:
+            valid = sorted(BACKEND_REGISTRY.keys())
+            raise ValueError(
+                f"Unknown backend: {backend!r}. Valid: {valid}"
+            )
+        reg = BACKEND_REGISTRY[backend]
+
+        model: Optional[str] = None
+        if len(parts) > 1:
+            m = parts[1].strip()
+            model = m if m else None
+        effort: Optional[str] = None
+        if len(parts) > 2:
+            e = parts[2].strip()
+            effort = e if e else None
+
+        if model is not None:
+            if reg["models"] is None:
+                raise ValueError(
+                    f"Backend {backend!r} does not accept a model "
+                    f"(got {model!r})"
+                )
+            if model not in reg["models"]:
+                raise ValueError(
+                    f"Unknown model for {backend}: {model!r}. "
+                    f"Valid: {sorted(reg['models'])}"
+                )
+        if effort is not None:
+            if reg["efforts"] is None:
+                raise ValueError(
+                    f"Backend {backend!r} does not accept an effort "
+                    f"(got {effort!r})"
+                )
+            if effort not in reg["efforts"]:
+                raise ValueError(
+                    f"Unknown effort for {backend}: {effort!r}. "
+                    f"Valid: {sorted(reg['efforts'])}"
+                )
+        return cls(backend=backend, model=model, effort=effort)
+
+    def resolve(self) -> "BackendSpec":
+        """Fill missing fields from env vars then registry defaults.
+
+        Precedence (per field, most specific wins):
+          1. explicit value on this spec
+          2. ``FLOW_<BACKEND>_MODEL`` / ``FLOW_<BACKEND>_EFFORT`` env var
+          3. registry ``default_model`` / ``default_effort``
+
+        Backends with ``models is None`` (rp, none) always resolve ``model`` to
+        ``None`` — env vars are ignored for fields the backend doesn't accept.
+        Same for ``effort``. This prevents a stray ``FLOW_RP_MODEL`` from
+        leaking into an RP spec.
+        """
+        reg = BACKEND_REGISTRY[self.backend]
+        env_model_key = f"FLOW_{self.backend.upper()}_MODEL"
+        env_effort_key = f"FLOW_{self.backend.upper()}_EFFORT"
+
+        if reg["models"] is None:
+            model = None
+        else:
+            model = (
+                self.model
+                or os.environ.get(env_model_key)
+                or reg.get("default_model")
+            )
+
+        if reg["efforts"] is None:
+            effort = None
+        else:
+            effort = (
+                self.effort
+                or os.environ.get(env_effort_key)
+                or reg.get("default_effort")
+            )
+
+        return BackendSpec(self.backend, model, effort)
+
+    def __str__(self) -> str:
+        """Serialize back to ``backend[:model[:effort]]``.
+
+        Trailing ``None`` parts are dropped so ``str(BackendSpec("codex"))``
+        round-trips to ``"codex"`` (not ``"codex::"``). If only ``effort`` is
+        set (no model) we still emit ``backend::effort`` — that's a legal spec
+        shape and keeps the round-trip honest.
+        """
+        if self.model is None and self.effort is None:
+            return self.backend
+        if self.effort is None:
+            return f"{self.backend}:{self.model}"
+        # effort set; model may be None
+        model_part = self.model if self.model is not None else ""
+        return f"{self.backend}:{model_part}:{self.effort}"
+
+
+def parse_backend_spec_lenient(
+    raw: str, *, warn: bool = True
+) -> Optional[BackendSpec]:
+    """Parse a stored spec, degrading to bare backend on validation failure.
+
+    Used at read time (show-backend, runtime resolution) so pre-epic stored
+    values like ``codex:gpt-5.4-high`` (no colon between model and effort) do
+    not crash. On ValueError we:
+
+      1. Try the first colon-separated part as a bare backend name.
+      2. If that is a known backend, emit a stderr warning (when ``warn``) and
+         return ``BackendSpec(backend=<first>)``.
+      3. Otherwise return ``None`` — caller decides how to surface it.
+
+    Returns ``None`` for empty / whitespace-only input (no warning — that is
+    just "unset").
+    """
+    if raw is None or not str(raw).strip():
+        return None
+    try:
+        return BackendSpec.parse(raw)
+    except ValueError as e:
+        # Try bare-backend fallback: first ':'-separated part.
+        first = str(raw).strip().split(":", 1)[0].strip()
+        if first in BACKEND_REGISTRY:
+            if warn:
+                print(
+                    f'warning: spec {str(raw)!r} failed validation: {e}. '
+                    f'Treating as bare backend {first!r}.',
+                    file=sys.stderr,
+                )
+            return BackendSpec(backend=first)
+        if warn:
+            print(
+                f'warning: spec {str(raw)!r} failed validation: {e}. '
+                f'No recognizable backend prefix; ignoring.',
+                file=sys.stderr,
+            )
+        return None
+
+
+def resolve_review_spec(
+    backend_hint: str, task_id: Optional[str] = None
+) -> BackendSpec:
+    """Resolve a fully-filled ``BackendSpec`` for a review invocation.
+
+    ``backend_hint`` is the command-level backend name (``"codex"`` or
+    ``"copilot"``) — what the user typed when running ``flowctl codex
+    impl-review`` vs ``flowctl copilot impl-review``. It anchors the fallback
+    when no per-task / per-epic / env / config spec is found.
+
+    Precedence (first hit wins, then ``.resolve()`` fills missing fields):
+      1. Per-task ``review`` field (stored spec; may be legacy → lenient parse)
+      2. Per-epic ``default_review`` field (stored spec; lenient parse)
+      3. ``FLOW_REVIEW_BACKEND`` env var (lenient parse — user-typed at shell,
+         but we tolerate stale values)
+      4. ``.flow/config.json`` ``review.backend`` (lenient parse)
+      5. Bare ``backend_hint`` — caller's CLI subcommand name
+
+    The resolved spec's backend is **not** forced to ``backend_hint`` when a
+    per-task / per-epic / env spec picked a different backend. Example: task
+    has ``review: "copilot:gpt-5.2"`` and user runs ``flowctl codex
+    impl-review`` — we return a copilot spec. The caller (cmd_codex_*_review)
+    decides whether to warn or honor it. Current call sites ignore the
+    mismatch and pass the spec straight to ``run_codex_exec`` /
+    ``run_copilot_exec``; the command name already pins the execution path.
+
+    This helper does NOT read ``--spec`` argv — cmd functions call
+    ``BackendSpec.parse(args.spec)`` directly when set (strict parse, since
+    the user just typed it).
+    """
+    # 1 + 2: per-task / per-epic stored specs
+    if task_id is not None and is_task_id(task_id) and ensure_flow_exists():
+        flow_dir = get_flow_dir()
+        task_path = flow_dir / TASKS_DIR / f"{task_id}.json"
+        if task_path.exists():
+            try:
+                task_data = normalize_task(
+                    json.loads(task_path.read_text(encoding="utf-8"))
+                )
+                task_review = task_data.get("review")
+                if task_review:
+                    parsed = parse_backend_spec_lenient(task_review, warn=True)
+                    if parsed is not None:
+                        return parsed.resolve()
+                # Epic fallback
+                epic_id = task_data.get("epic")
+                if epic_id:
+                    epic_path = flow_dir / EPICS_DIR / f"{epic_id}.json"
+                    if epic_path.exists():
+                        try:
+                            epic_data = normalize_epic(
+                                json.loads(
+                                    epic_path.read_text(encoding="utf-8")
+                                )
+                            )
+                            epic_review = epic_data.get("default_review")
+                            if epic_review:
+                                parsed = parse_backend_spec_lenient(
+                                    epic_review, warn=True
+                                )
+                                if parsed is not None:
+                                    return parsed.resolve()
+                        except (json.JSONDecodeError, OSError):
+                            pass
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    # 3: FLOW_REVIEW_BACKEND env (spec-form or bare backend)
+    env_val = os.environ.get("FLOW_REVIEW_BACKEND", "").strip()
+    if env_val:
+        parsed = parse_backend_spec_lenient(env_val, warn=True)
+        if parsed is not None:
+            return parsed.resolve()
+
+    # 4: .flow/config.json review.backend
+    if ensure_flow_exists():
+        cfg_val = get_config("review.backend")
+        if cfg_val:
+            parsed = parse_backend_spec_lenient(str(cfg_val), warn=True)
+            if parsed is not None:
+                return parsed.resolve()
+
+    # 5: fall back to bare backend_hint and resolve defaults
+    if backend_hint not in BACKEND_REGISTRY:
+        # Defensive — caller always passes a known backend, but don't crash.
+        raise ValueError(
+            f"Unknown backend_hint: {backend_hint!r}. "
+            f"Valid: {sorted(BACKEND_REGISTRY.keys())}"
+        )
+    return BackendSpec(backend_hint).resolve()
+
+
 # --- Copilot Backend Helpers ---
 
 
@@ -1733,8 +2090,7 @@ def run_copilot_exec(
     prompt: str,
     session_id: str,
     repo_root: Path,
-    model: Optional[str] = None,
-    effort: Optional[str] = None,
+    spec: Optional["BackendSpec"] = None,
 ) -> tuple[str, str, int, str]:
     """Run copilot -p and return (stdout, session_id, exit_code, stderr).
 
@@ -1750,9 +2106,16 @@ def run_copilot_exec(
       syntax). The temp file is removed in ``finally`` so KeyboardInterrupt,
       TimeoutExpired, and non-zero exits all clean up.
 
-    Config cascade (env > parameter > default):
-    - Model:  FLOW_COPILOT_MODEL  > ``model``  > ``claude-opus-4.5``
-    - Effort: FLOW_COPILOT_EFFORT > ``effort`` > ``high``
+    ``spec``: a resolved ``BackendSpec`` (backend=copilot) whose ``model`` and
+    ``effort`` are used verbatim. Env-var fills happen upstream in
+    ``resolve_review_spec()`` / ``BackendSpec.resolve()``; this function
+    reads ``spec.model`` / ``spec.effort`` directly. When ``spec`` is
+    ``None`` (defensive / non-review callers), fall back to bare-copilot
+    resolution (env + registry defaults).
+
+    Claude-model effort skip: the ``--effort`` flag is passed unless
+    ``effective_model`` starts with ``claude-`` (Copilot rejects
+    reasoning-effort on Claude-family models).
 
     Returns:
         tuple: (stdout, session_id, exit_code, stderr)
@@ -1761,12 +2124,12 @@ def run_copilot_exec(
     """
     copilot = require_copilot()
 
-    effective_model = (
-        os.environ.get("FLOW_COPILOT_MODEL") or model or "gpt-5.2"
-    )
-    effective_effort = (
-        os.environ.get("FLOW_COPILOT_EFFORT") or effort or "high"
-    )
+    if spec is None:
+        spec = BackendSpec("copilot").resolve()
+    elif spec.model is None or spec.effort is None:
+        spec = spec.resolve()
+    effective_model = spec.model or "gpt-5.2"
+    effective_effort = spec.effort or "high"
 
     # For large prompts, stage to disk then read back. Copilot has no @file
     # syntax for -p, so we always end up with the prompt in argv — but the
@@ -2828,28 +3191,65 @@ def cmd_config_set(args: argparse.Namespace) -> None:
 
 
 def cmd_review_backend(args: argparse.Namespace) -> None:
-    """Get review backend for skill conditionals. Returns ASK if not configured."""
+    """Get review backend for skill conditionals. Returns ASK if not configured.
+
+    Accepts spec-form values (``codex:gpt-5.4:high``) from ``FLOW_REVIEW_BACKEND``
+    and ``.flow/config.json`` ``review.backend``. JSON mode returns the full
+    resolved spec plus model + effort fields so skills / Ralph can route model
+    choice. Text mode still prints just the bare backend name for back-compat
+    with skill greps (``BACKEND=$(flowctl review-backend)``).
+    """
     # Priority: FLOW_REVIEW_BACKEND env > config > ASK
+    spec: Optional[BackendSpec] = None
+    source = "none"
+
     env_val = os.environ.get("FLOW_REVIEW_BACKEND", "").strip()
-    if env_val and env_val in ("rp", "codex", "copilot", "none"):
-        backend = env_val
-        source = "env"
-    elif ensure_flow_exists():
+    if env_val:
+        # Lenient parse handles spec-form and legacy bare values; degrades on
+        # bad input rather than silently falling to ASK (previous behavior
+        # quietly dropped ``codex:gpt-5.2``).
+        parsed = parse_backend_spec_lenient(env_val, warn=False)
+        if parsed is not None:
+            spec = parsed.resolve()
+            source = "env"
+
+    if spec is None and ensure_flow_exists():
         cfg_val = get_config("review.backend")
-        if cfg_val and cfg_val in ("rp", "codex", "copilot", "none"):
-            backend = cfg_val
-            source = "config"
-        else:
-            backend = "ASK"
-            source = "none"
-    else:
+        if cfg_val:
+            parsed = parse_backend_spec_lenient(str(cfg_val), warn=False)
+            if parsed is not None:
+                spec = parsed.resolve()
+                source = "config"
+
+    if spec is None:
         backend = "ASK"
-        source = "none"
+        if args.json:
+            json_output(
+                {
+                    "backend": backend,
+                    "spec": backend,
+                    "source": source,
+                    "model": None,
+                    "effort": None,
+                }
+            )
+        else:
+            print(backend)
+        return
 
     if args.json:
-        json_output({"backend": backend, "source": source})
+        json_output(
+            {
+                "backend": spec.backend,
+                "spec": str(spec),
+                "source": source,
+                "model": spec.model,
+                "effort": spec.effort,
+            }
+        )
     else:
-        print(backend)
+        # Text mode: bare backend name only (skills grep this output).
+        print(spec.backend)
 
 
 MEMORY_TEMPLATES = {
@@ -4233,7 +4633,23 @@ def cmd_epic_set_backend(args: argparse.Namespace) -> None:
         load_json_or_exit(epic_path, f"Epic {args.id}", use_json=args.json)
     )
 
-    # Update fields (empty string means clear)
+    # Validate each non-empty spec up front — reject bad specs before we touch
+    # disk. Empty string is a clear-signal and skips validation.
+    for field, value in (
+        ("--impl", args.impl),
+        ("--review", args.review),
+        ("--sync", args.sync),
+    ):
+        if value:
+            try:
+                BackendSpec.parse(value)
+            except ValueError as e:
+                error_exit(
+                    f"Invalid spec for {field}: {e}", use_json=args.json
+                )
+
+    # Update fields (empty string means clear). Store raw strings as typed —
+    # no normalization — so users see back exactly what they set.
     updated = []
     if args.impl is not None:
         epic_data["default_impl"] = args.impl if args.impl else None
@@ -4291,7 +4707,22 @@ def cmd_task_set_backend(args: argparse.Namespace) -> None:
 
     task_data = load_json_or_exit(task_path, f"Task {task_id}", use_json=args.json)
 
-    # Update fields (empty string means clear)
+    # Validate each non-empty spec up front — reject bad specs before we touch
+    # disk. Empty string is a clear-signal and skips validation.
+    for field, value in (
+        ("--impl", args.impl),
+        ("--review", args.review),
+        ("--sync", args.sync),
+    ):
+        if value:
+            try:
+                BackendSpec.parse(value)
+            except ValueError as e:
+                error_exit(
+                    f"Invalid spec for {field}: {e}", use_json=args.json
+                )
+
+    # Update fields (empty string means clear). Store raw strings as typed.
     updated = []
     if args.impl is not None:
         task_data["impl"] = args.impl if args.impl else None
@@ -4353,9 +4784,9 @@ def cmd_task_show_backend(args: argparse.Namespace) -> None:
                 load_json_or_exit(epic_path, f"Epic {epic_id}", use_json=args.json)
             )
 
-    # Compute effective values with source tracking
+    # Compute effective values with source tracking.
     def resolve_spec(task_key: str, epic_key: str) -> tuple:
-        """Return (spec, source) tuple."""
+        """Return (raw_spec, source) tuple for a given field."""
         task_val = task_data.get(task_key)
         if task_val:
             return (task_val, "task")
@@ -4365,29 +4796,136 @@ def cmd_task_show_backend(args: argparse.Namespace) -> None:
                 return (epic_val, "epic")
         return (None, None)
 
-    impl_spec, impl_source = resolve_spec("impl", "default_impl")
-    review_spec, review_source = resolve_spec("review", "default_review")
-    sync_spec, sync_source = resolve_spec("sync", "default_sync")
+    def resolve_field(raw: Optional[str], spec_source: Optional[str]) -> dict:
+        """Build the richer JSON shape: raw + resolved + per-field sources.
+
+        ``raw`` is what's stored (possibly invalid legacy data). ``spec_source``
+        is where it came from ("task" / "epic" / None when unset).
+
+        Per-field sources ("model_source" / "effort_source") distinguish
+        between an explicit spec value ("spec"), env-var fill
+        ("env:FLOW_<BACKEND>_<FIELD>"), registry default
+        ("registry_default"), or n/a when the backend rejects the field.
+
+        Returns a dict with keys: ``raw``, ``source``, ``resolved``,
+        ``model_source``, ``effort_source``. On legacy-data parse failure we
+        degrade to bare backend (warning already went to stderr from
+        parse_backend_spec_lenient) so callers don't crash on old values.
+        """
+        if raw is None:
+            return {
+                "raw": None,
+                "source": None,
+                "resolved": None,
+                "model_source": None,
+                "effort_source": None,
+            }
+
+        parsed = parse_backend_spec_lenient(raw, warn=True)
+        if parsed is None:
+            # Unrecognizable — surface what we have without a resolved form.
+            return {
+                "raw": raw,
+                "source": spec_source,
+                "resolved": None,
+                "model_source": None,
+                "effort_source": None,
+            }
+
+        resolved = parsed.resolve()
+        reg = BACKEND_REGISTRY[parsed.backend]
+        env_model_key = f"FLOW_{parsed.backend.upper()}_MODEL"
+        env_effort_key = f"FLOW_{parsed.backend.upper()}_EFFORT"
+
+        # Derive per-field source to mirror resolve()'s precedence.
+        if reg["models"] is None:
+            model_source: Optional[str] = None
+        elif parsed.model is not None:
+            model_source = "spec"
+        elif os.environ.get(env_model_key):
+            model_source = f"env:{env_model_key}"
+        else:
+            model_source = "registry_default"
+
+        if reg["efforts"] is None:
+            effort_source: Optional[str] = None
+        elif parsed.effort is not None:
+            effort_source = "spec"
+        elif os.environ.get(env_effort_key):
+            effort_source = f"env:{env_effort_key}"
+        else:
+            effort_source = "registry_default"
+
+        return {
+            "raw": raw,
+            "source": spec_source,
+            "resolved": {
+                "backend": resolved.backend,
+                "model": resolved.model,
+                "effort": resolved.effort,
+                "str": str(resolved),
+            },
+            "model_source": model_source,
+            "effort_source": effort_source,
+        }
+
+    impl_raw, impl_source = resolve_spec("impl", "default_impl")
+    review_raw, review_source = resolve_spec("review", "default_review")
+    sync_raw, sync_source = resolve_spec("sync", "default_sync")
+
+    impl_field = resolve_field(impl_raw, impl_source)
+    review_field = resolve_field(review_raw, review_source)
+    sync_field = resolve_field(sync_raw, sync_source)
 
     if args.json:
         json_output(
             {
                 "id": task_id,
                 "epic": epic_id,
-                "impl": {"spec": impl_spec, "source": impl_source},
-                "review": {"spec": review_spec, "source": review_source},
-                "sync": {"spec": sync_spec, "source": sync_source},
+                "impl": impl_field,
+                "review": review_field,
+                "sync": sync_field,
             }
         )
     else:
-        def fmt(spec, source):
-            if spec:
-                return f"{spec} ({source})"
-            return "null"
+        def _short_src(src: Optional[str]) -> Optional[str]:
+            """Compact a per-field source tag for non-JSON display.
 
-        print(f"impl: {fmt(impl_spec, impl_source)}")
-        print(f"review: {fmt(review_spec, review_source)}")
-        print(f"sync: {fmt(sync_spec, sync_source)}")
+            ``env:FLOW_CODEX_EFFORT`` → ``env`` (keeps line short; JSON output
+            still has the full key for anyone who cares).
+            """
+            if src is None:
+                return None
+            if src.startswith("env:"):
+                return "env"
+            if src == "registry_default":
+                return "registry"
+            return src
+
+        def fmt(field: dict) -> str:
+            raw = field["raw"]
+            if raw is None:
+                return "null"
+            src = field["source"] or "unknown"
+            resolved = field["resolved"]
+            if resolved is None:
+                return f"{raw} ({src}) [unresolved - invalid spec]"
+            # Use str(resolved) so empty-model slot round-trips honestly
+            # (e.g. codex::high stays codex::high, not codex:high).
+            resolved_str = resolved["str"]
+            annotations = []
+            ms = field.get("model_source")
+            if ms and ms != "spec":
+                annotations.append(f"model: {_short_src(ms)}")
+            es = field.get("effort_source")
+            if es and es != "spec":
+                annotations.append(f"effort: {_short_src(es)}")
+            suffix = f" ({', '.join(annotations)})" if annotations else ""
+            return f"{raw} ({src}) -> {resolved_str}{suffix}"
+
+        print(f"impl: {fmt(impl_field)}")
+        print(f"review: {fmt(review_field)}")
+        print(f"sync: {fmt(sync_field)}")
 
 
 def cmd_task_set_description(args: argparse.Namespace) -> None:
@@ -6401,9 +6939,12 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     except ValueError as e:
         error_exit(str(e), use_json=args.json, code=2)
 
+    # Resolve review spec (--spec overrides task/epic/env/config resolution)
+    resolved_spec = _resolve_codex_review_spec(args, task_id)
+
     # Run codex
     output, thread_id, exit_code, stderr = run_codex_exec(
-        prompt, session_id=session_id, sandbox=sandbox
+        prompt, session_id=session_id, sandbox=sandbox, spec=resolved_spec
     )
 
     # Check for sandbox failures (clear stale receipt and exit)
@@ -6461,6 +7002,9 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
             "base": base_branch,
             "verdict": verdict,
             "session_id": thread_id,
+            "model": resolved_spec.model,
+            "effort": resolved_spec.effort,
+            "spec": str(resolved_spec),
             "timestamp": now_iso(),
             "review": output,  # Full review feedback for fix loop
         }
@@ -6486,6 +7030,9 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
                 "verdict": verdict,
                 "session_id": thread_id,
                 "mode": "codex",
+                "model": resolved_spec.model,
+                "effort": resolved_spec.effort,
+                "spec": str(resolved_spec),
                 "standalone": standalone,
                 "review": output,  # Full review feedback for fix loop
             }
@@ -6493,6 +7040,30 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     else:
         print(output)
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
+
+
+def _resolve_codex_review_spec(
+    args: argparse.Namespace, task_id: Optional[str]
+) -> BackendSpec:
+    """Resolve ``BackendSpec`` for a codex review command.
+
+    Precedence:
+      1. ``--spec`` argv (strict parse — user just typed it, surface errors)
+      2. ``resolve_review_spec("codex", task_id)`` — task/epic/env/config/defaults
+
+    The resolved spec's backend is whatever the source said (task spec might
+    request ``copilot:gpt-5.2`` from a codex command); the codex command
+    still executes via codex CLI because the subcommand name pins the path.
+    Model/effort from the spec are still honored (codex accepts whatever
+    model string you pass; misconfigured ones fail at codex-CLI layer).
+    """
+    spec_arg = getattr(args, "spec", None)
+    if spec_arg:
+        try:
+            return BackendSpec.parse(spec_arg).resolve()
+        except ValueError as e:
+            error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
+    return resolve_review_spec("codex", task_id)
 
 
 def cmd_codex_plan_review(args: argparse.Namespace) -> None:
@@ -6617,9 +7188,12 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
     except ValueError as e:
         error_exit(str(e), use_json=args.json, code=2)
 
+    # Resolve review spec — plan reviews are epic-scoped (no task_id context)
+    resolved_spec = _resolve_codex_review_spec(args, None)
+
     # Run codex
     output, thread_id, exit_code, stderr = run_codex_exec(
-        prompt, session_id=session_id, sandbox=sandbox
+        prompt, session_id=session_id, sandbox=sandbox, spec=resolved_spec
     )
 
     # Check for sandbox failures (clear stale receipt and exit)
@@ -6673,6 +7247,9 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
             "mode": "codex",
             "verdict": verdict,
             "session_id": thread_id,
+            "model": resolved_spec.model,
+            "effort": resolved_spec.effort,
+            "spec": str(resolved_spec),
             "timestamp": now_iso(),
             "review": output,  # Full review feedback for fix loop
         }
@@ -6696,6 +7273,9 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
                 "verdict": verdict,
                 "session_id": thread_id,
                 "mode": "codex",
+                "model": resolved_spec.model,
+                "effort": resolved_spec.effort,
+                "spec": str(resolved_spec),
                 "review": output,  # Full review feedback for fix loop
             }
         )
@@ -6971,9 +7551,12 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
     except ValueError as e:
         error_exit(str(e), use_json=args.json, code=2)
 
+    # Resolve review spec — completion reviews are epic-scoped
+    resolved_spec = _resolve_codex_review_spec(args, None)
+
     # Run codex
     output, thread_id, exit_code, stderr = run_codex_exec(
-        prompt, session_id=session_id, sandbox=sandbox
+        prompt, session_id=session_id, sandbox=sandbox, spec=resolved_spec
     )
 
     # Check for sandbox failures
@@ -7028,6 +7611,9 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
             "base": base_branch,
             "verdict": verdict,
             "session_id": session_id_to_write,
+            "model": resolved_spec.model,
+            "effort": resolved_spec.effort,
+            "spec": str(resolved_spec),
             "timestamp": now_iso(),
             "review": output,  # Full review feedback for fix loop
         }
@@ -7052,6 +7638,9 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
                 "verdict": verdict,
                 "session_id": session_id_to_write,
                 "mode": "codex",
+                "model": resolved_spec.model,
+                "effort": resolved_spec.effort,
+                "spec": str(resolved_spec),
                 "review": output,
             }
         )
@@ -7063,17 +7652,26 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
 # --- Copilot Review Commands ---
 
 
-def _resolve_copilot_model_effort(
-    model_arg: Optional[str] = None, effort_arg: Optional[str] = None
-) -> tuple[str, str]:
-    """Resolve effective copilot model + effort using env > arg > default.
+def _resolve_copilot_review_spec(
+    args: argparse.Namespace, task_id: Optional[str]
+) -> BackendSpec:
+    """Resolve ``BackendSpec`` for a copilot review command.
 
-    Matches the cascade inside ``run_copilot_exec`` so the receipt reflects
-    the exact values sent to copilot.
+    Precedence:
+      1. ``--spec`` argv (strict parse — user just typed it, surface errors)
+      2. ``resolve_review_spec("copilot", task_id)`` — task/epic/env/config/defaults
+
+    Caller uses ``resolved.model`` / ``resolved.effort`` for receipts and
+    passes the spec to ``run_copilot_exec`` which honors ``spec.model`` /
+    ``spec.effort`` and still skips ``--effort`` for ``claude-*`` models.
     """
-    model = os.environ.get("FLOW_COPILOT_MODEL") or model_arg or "gpt-5.2"
-    effort = os.environ.get("FLOW_COPILOT_EFFORT") or effort_arg or "high"
-    return model, effort
+    spec_arg = getattr(args, "spec", None)
+    if spec_arg:
+        try:
+            return BackendSpec.parse(spec_arg).resolve()
+        except ValueError as e:
+            error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
+    return resolve_review_spec("copilot", task_id)
 
 
 def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
@@ -7204,13 +7802,15 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
             )
             prompt = rereview_preamble + prompt
 
-    # Resolve model + effort for receipt (matches run_copilot_exec cascade)
-    effective_model, effective_effort = _resolve_copilot_model_effort()
+    # Resolve review spec (task/epic/env/config/defaults or --spec override)
+    resolved_spec = _resolve_copilot_review_spec(args, task_id)
+    effective_model = resolved_spec.model or "gpt-5.2"
+    effective_effort = resolved_spec.effort or "high"
 
     # Run copilot
     repo_root = get_repo_root()
     output, returned_session_id, exit_code, stderr = run_copilot_exec(
-        prompt, session_id=session_id, repo_root=repo_root
+        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
     )
 
     # Handle failures (no sandbox branch — copilot has no sandbox)
@@ -7251,6 +7851,7 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
             "session_id": returned_session_id,
             "model": effective_model,
             "effort": effective_effort,
+            "spec": str(resolved_spec),
             "timestamp": now_iso(),
             "review": output,
         }
@@ -7276,6 +7877,7 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
                 "mode": "copilot",
                 "model": effective_model,
                 "effort": effective_effort,
+                "spec": str(resolved_spec),
                 "standalone": standalone,
                 "review": output,
             }
@@ -7387,10 +7989,13 @@ def cmd_copilot_plan_review(args: argparse.Namespace) -> None:
         rereview_preamble = build_rereview_preamble(spec_files, "plan", files_embedded)
         prompt = rereview_preamble + prompt
 
-    effective_model, effective_effort = _resolve_copilot_model_effort()
+    # Resolve review spec — plan reviews are epic-scoped (no task_id context)
+    resolved_spec = _resolve_copilot_review_spec(args, None)
+    effective_model = resolved_spec.model or "gpt-5.2"
+    effective_effort = resolved_spec.effort or "high"
 
     output, returned_session_id, exit_code, stderr = run_copilot_exec(
-        prompt, session_id=session_id, repo_root=repo_root
+        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
     )
 
     if exit_code != 0:
@@ -7426,6 +8031,7 @@ def cmd_copilot_plan_review(args: argparse.Namespace) -> None:
             "session_id": returned_session_id,
             "model": effective_model,
             "effort": effective_effort,
+            "spec": str(resolved_spec),
             "timestamp": now_iso(),
             "review": output,
         }
@@ -7449,6 +8055,7 @@ def cmd_copilot_plan_review(args: argparse.Namespace) -> None:
                 "mode": "copilot",
                 "model": effective_model,
                 "effort": effective_effort,
+                "spec": str(resolved_spec),
                 "review": output,
             }
         )
@@ -7568,11 +8175,14 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
             )
             prompt = rereview_preamble + prompt
 
-    effective_model, effective_effort = _resolve_copilot_model_effort()
+    # Resolve review spec — completion reviews are epic-scoped
+    resolved_spec = _resolve_copilot_review_spec(args, None)
+    effective_model = resolved_spec.model or "gpt-5.2"
+    effective_effort = resolved_spec.effort or "high"
 
     repo_root = get_repo_root()
     output, returned_session_id, exit_code, stderr = run_copilot_exec(
-        prompt, session_id=session_id, repo_root=repo_root
+        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
     )
 
     if exit_code != 0:
@@ -7612,6 +8222,7 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
             "session_id": session_id_to_write,
             "model": effective_model,
             "effort": effective_effort,
+            "spec": str(resolved_spec),
             "timestamp": now_iso(),
             "review": output,
         }
@@ -7636,6 +8247,7 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
                 "mode": "copilot",
                 "model": effective_model,
                 "effort": effective_effort,
+                "spec": str(resolved_spec),
                 "review": output,
             }
         )
@@ -8593,6 +9205,11 @@ def main() -> None:
         default="auto",
         help="Sandbox mode (auto: danger-full-access on Windows, read-only on Unix)",
     )
+    p_codex_impl.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'codex:gpt-5.2:medium'). "
+        "Overrides task/epic/env/config resolution. Strict parse.",
+    )
     p_codex_impl.set_defaults(func=cmd_codex_impl_review)
 
     p_codex_plan = codex_sub.add_parser("plan-review", help="Plan review")
@@ -8613,6 +9230,11 @@ def main() -> None:
         default="auto",
         help="Sandbox mode (auto: danger-full-access on Windows, read-only on Unix)",
     )
+    p_codex_plan.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'codex:gpt-5.2:medium'). "
+        "Overrides env/config resolution. Strict parse.",
+    )
     p_codex_plan.set_defaults(func=cmd_codex_plan_review)
 
     p_codex_completion = codex_sub.add_parser(
@@ -8631,6 +9253,11 @@ def main() -> None:
         choices=["read-only", "workspace-write", "danger-full-access", "auto"],
         default="auto",
         help="Sandbox mode (auto: danger-full-access on Windows, read-only on Unix)",
+    )
+    p_codex_completion.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'codex:gpt-5.2:medium'). "
+        "Overrides env/config resolution. Strict parse.",
     )
     p_codex_completion.set_defaults(func=cmd_codex_completion_review)
 
@@ -8667,6 +9294,11 @@ def main() -> None:
         "--receipt", help="Receipt file path for session continuity"
     )
     p_copilot_impl.add_argument("--json", action="store_true", help="JSON output")
+    p_copilot_impl.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'copilot:claude-opus-4.5:xhigh'). "
+        "Overrides task/epic/env/config resolution. Strict parse.",
+    )
     p_copilot_impl.set_defaults(func=cmd_copilot_impl_review)
 
     p_copilot_plan = copilot_sub.add_parser("plan-review", help="Plan review")
@@ -8681,6 +9313,11 @@ def main() -> None:
         "--receipt", help="Receipt file path for session continuity"
     )
     p_copilot_plan.add_argument("--json", action="store_true", help="JSON output")
+    p_copilot_plan.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'copilot:claude-opus-4.5:xhigh'). "
+        "Overrides env/config resolution. Strict parse.",
+    )
     p_copilot_plan.set_defaults(func=cmd_copilot_plan_review)
 
     p_copilot_completion = copilot_sub.add_parser(
@@ -8696,6 +9333,11 @@ def main() -> None:
         "--receipt", help="Receipt file path for session continuity"
     )
     p_copilot_completion.add_argument("--json", action="store_true", help="JSON output")
+    p_copilot_completion.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'copilot:claude-opus-4.5:xhigh'). "
+        "Overrides env/config resolution. Strict parse.",
+    )
     p_copilot_completion.set_defaults(func=cmd_copilot_completion_review)
 
     args = parser.parse_args()

@@ -2,6 +2,28 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.31.0] - 2026-04-22
+
+### Added
+- **Unified review backend spec parser** — `backend[:model[:effort]]` grammar accepted at every surface (env, config, per-task, per-epic, CLI flag). `parse_backend_spec()` + `BackendSpec` dataclass + `BACKEND_REGISTRY` (rp/codex/copilot/none) validate specs on store; invalid values rejected with helpful errors listing valid models/efforts. Legacy bare-backend values (`codex`, `copilot`, `rp`) still work unchanged. Unparseable strings on disk degrade to bare backend with a stderr warning — never crash.
+- Backend registry (static dict in `flowctl.py`):
+  - `codex`: models `gpt-5.4`, `gpt-5.2`, `gpt-5`, `gpt-5-mini`, `gpt-5-codex`; efforts `none|minimal|low|medium|high|xhigh`; defaults `gpt-5.4` / `high`.
+  - `copilot`: models `claude-sonnet-4.5`, `claude-haiku-4.5`, `claude-opus-4.5`, `claude-sonnet-4`, `gpt-5.2`, `gpt-5.2-codex`, `gpt-5-mini`, `gpt-4.1`; efforts `low|medium|high|xhigh`; defaults `gpt-5.2` / `high`. `claude-*` models drop `--effort` at runtime.
+  - `rp` and `none`: bare-only (no model/effort).
+- **Resolution precedence** (first match wins): `--spec` CLI flag > per-task `review` > per-epic `default_review` > `FLOW_REVIEW_BACKEND` env > `.flow/config.json` `review.backend` > backend-specific env (`FLOW_CODEX_MODEL` / `FLOW_CODEX_EFFORT` / `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT`) > registry default. Env fills **missing** fields only — explicit spec values always win.
+- `--spec backend:model:effort` flag on all six review commands: `flowctl {codex,copilot} {impl,plan,completion}-review`. Parses + resolves + threads `model` + `effort` into `run_codex_exec` / `run_copilot_exec`.
+- `flowctl review-backend --json` now returns `{backend, spec, model, effort, source}` — full resolved spec + field-level source tag (`env` / `config` / `none`). Text mode still prints bare backend for skill grep back-compat.
+- `flowctl task show-backend --json` / `flowctl epic show-backend --json` expose raw stored spec + resolved spec + per-field source (`task` / `epic` / `env` / `default`).
+- `parse_backend_spec_lenient()` + `resolve_review_spec()` helpers centralise spec parsing for skills and Ralph.
+- Ralph integration: `scripts/ralph/config.env` accepts spec form on `PLAN_REVIEW` / `WORK_REVIEW` / `COMPLETION_REVIEW` (e.g. `WORK_REVIEW=codex:gpt-5.4:xhigh`). `ralph.sh` exports the full spec via `FLOW_REVIEW_BACKEND` and derives `PLAN_REVIEW_BACKEND` / `WORK_REVIEW_BACKEND` / `COMPLETION_REVIEW_BACKEND` (bare backend, via `${VAR%%:*}`) so existing prompt-level branching keeps working unchanged.
+- Review skills (`flow-next-impl-review`, `flow-next-plan-review`, `flow-next-epic-review`) document the `--spec` flag + spec grammar + precedence in both SKILL.md and workflow.md. `flow-next-setup` workflow now offers spec-form defaults.
+- Receipts include a new `spec` field alongside `model` + `effort`: `{"mode": "codex", "model": "gpt-5.4", "effort": "high", "spec": "codex:gpt-5.4:high"}`. `spec` is the canonical round-trippable form (via `str(resolved_spec)`); older readers that only look at `model` + `effort` stay correct.
+- Smoke suite: 60 → 67 tests (backend spec validation, set-backend rejection paths, show-backend field sources, legacy fallback). Unit tests: 56 → 112 (parser edges, registry integrity, precedence resolution, Ralph bare-backend extraction, `cmd_review_backend` JSON shape).
+
+### Changed
+- Aspirational `--review=codex:gpt-5.4-high` help text (never implemented) replaced with real `backend:model:effort` grammar. No migration needed; old stored bare-backend values continue to parse.
+- `run_codex_exec` and `run_copilot_exec` now take a resolved `BackendSpec` argument instead of ad-hoc `model=` / `effort=` kwargs. Env-var fallback moved up into `BackendSpec.resolve()`.
+
 ## [flow-next 0.30.0] - 2026-04-22
 
 ### Added

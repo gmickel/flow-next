@@ -63,9 +63,8 @@ Inside `flowctl.py`, add a new section (suggested location: right after the exis
 - [ ] No call sites wired yet (task 3 does that); adding the module doesn't regress existing commands
 
 ## Done summary
-
-(filled in when task completes)
-
+Added `BackendSpec` frozen dataclass + `BACKEND_REGISTRY` (rp/codex/copilot/none) to `flowctl.py` with `parse`/`resolve`/`__str__`, plus a 56-case unit-test file covering every invalid-input branch (empty, unknown backend/model/effort, too-many-colons, rp-rejects-model, case sensitivity, idempotent resolve, frozen+hashable invariants). No call sites wired yet — task 3 does that. Full flow-next smoke test still green (59/59).
 ## Evidence
-
-(filled in when task completes)
+- Commits: f1976879c6ccf3d725ae9a41a7e0cb9a4281a971
+- Tests: python3 -m unittest plugins.flow-next.tests.test_backend_spec -v, cd /tmp && /Users/gordon/work/gmickel-claude-marketplace/plugins/flow-next/scripts/smoke_test.sh
+- PRs:

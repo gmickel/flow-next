@@ -2,8 +2,11 @@ You are running one Ralph plan gate iteration.
 
 Inputs:
 - EPIC_ID={{EPIC_ID}}
-- PLAN_REVIEW={{PLAN_REVIEW}}
+- PLAN_REVIEW={{PLAN_REVIEW}}                  (may be spec form, e.g. `codex:gpt-5.4:xhigh`)
+- PLAN_REVIEW_BACKEND={{PLAN_REVIEW_BACKEND}}  (bare backend name — use this for branching)
 - REQUIRE_PLAN_REVIEW={{REQUIRE_PLAN_REVIEW}}
+
+The full spec is also exported as `FLOW_REVIEW_BACKEND` for flowctl to resolve model + effort.
 
 Steps:
 1) Re-anchor:
@@ -18,21 +21,28 @@ Steps:
    ```
 
 Ralph mode rules (must follow):
-- If PLAN_REVIEW=rp: use `flowctl rp` wrappers (setup-review, select-add, prompt-get, chat-send).
-- If PLAN_REVIEW=codex: use `flowctl codex` wrappers (plan-review with --receipt).
-- If PLAN_REVIEW=copilot: use `flowctl copilot` wrappers (plan-review with --receipt). Never call `copilot` directly; never pass `--continue`.
+- Branch on PLAN_REVIEW_BACKEND (bare name), NOT the full PLAN_REVIEW spec.
+  Spec form (e.g. `codex:gpt-5.4:xhigh`) carries model + effort; the backend
+  name picks the wrapper and the full spec flows through `FLOW_REVIEW_BACKEND`.
+- If PLAN_REVIEW_BACKEND=rp: use `flowctl rp` wrappers (setup-review, select-add, prompt-get, chat-send).
+- If PLAN_REVIEW_BACKEND=codex: use `flowctl codex` wrappers (plan-review with --receipt).
+- If PLAN_REVIEW_BACKEND=copilot: use `flowctl copilot` wrappers (plan-review with --receipt). Never call `copilot` directly; never pass `--continue`.
 - Write receipt via bash heredoc (no Write tool) if `REVIEW_RECEIPT_PATH` set.
 - If any rule is violated, output `<promise>RETRY</promise>` and stop.
 
-3) Plan review gate:
-   - If PLAN_REVIEW=rp: run `/flow-next:plan-review {{EPIC_ID}} --review=rp`
-   - If PLAN_REVIEW=codex: run `/flow-next:plan-review {{EPIC_ID}} --review=codex`
-   - If PLAN_REVIEW=copilot: run `/flow-next:plan-review {{EPIC_ID}} --review=copilot`
-   - If PLAN_REVIEW=export: run `/flow-next:plan-review {{EPIC_ID}} --review=export`
-   - If PLAN_REVIEW=none:
+3) Plan review gate (branch on bare backend; full spec is already in env):
+   - If PLAN_REVIEW_BACKEND=rp: run `/flow-next:plan-review {{EPIC_ID}} --review=rp`
+   - If PLAN_REVIEW_BACKEND=codex: run `/flow-next:plan-review {{EPIC_ID}} --review=codex`
+   - If PLAN_REVIEW_BACKEND=copilot: run `/flow-next:plan-review {{EPIC_ID}} --review=copilot`
+   - If PLAN_REVIEW_BACKEND=export: run `/flow-next:plan-review {{EPIC_ID}} --review=export`
+   - If PLAN_REVIEW_BACKEND=none:
      - If REQUIRE_PLAN_REVIEW=1: output `<promise>RETRY</promise>` and stop.
      - Else: set ship and stop:
        `scripts/ralph/flowctl epic set-plan-review-status {{EPIC_ID}} --status ship --json`
+
+   Note: when PLAN_REVIEW is spec form (e.g. `codex:gpt-5.4:xhigh`), the
+   /flow-next:plan-review skill picks up the spec from `FLOW_REVIEW_BACKEND`
+   automatically — no extra flag needed.
 
 4) The skill will loop internally until `<verdict>SHIP</verdict>`:
    - First review uses `--new-chat`

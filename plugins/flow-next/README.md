@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.30.0-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.31.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -1009,18 +1009,59 @@ Ralph's `scripts/ralph/config.env` declares all three vars. `ralph.sh` only expo
 
 #### Configuration
 
-Set default review backend:
+Set default review backend (bare or spec form — `backend[:model[:effort]]`):
 ```bash
 # Per-project (saved in .flow/config.json)
-flowctl config set review.backend rp      # or codex, copilot, or none
+flowctl config set review.backend rp                        # bare backend
+flowctl config set review.backend codex:gpt-5.4:xhigh       # full spec
+flowctl config set review.backend copilot:claude-opus-4.5   # backend + model, default effort
 
-# Per-session (environment variable)
-export FLOW_REVIEW_BACKEND=copilot
+# Per-session (environment variable) — same grammar as config key
+export FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5:xhigh
+
+# Per-task / per-epic pinning (stored in .flow/tasks/<id>.json / .flow/epics/<id>.json)
+flowctl task set-backend fn-5.2 --review "codex:gpt-5.2"
+flowctl epic set-backend fn-5   --review "copilot:claude-sonnet-4.5:high"
 ```
 
-Priority: `--review=...` argument > `FLOW_REVIEW_BACKEND` env > `.flow/config.json` > error.
+**Priority cascade** (first match wins):
 
-**No auto-detect.** Run `/flow-next:setup` to configure your preferred review backend, or pass `--review=X` explicitly.
+1. `--spec backend:model:effort` CLI flag on review commands
+2. Per-task `review` field (`.flow/tasks/<id>.json`)
+3. Per-epic `default_review` field (`.flow/epics/<id>.json`)
+4. `FLOW_REVIEW_BACKEND` env var (full spec accepted)
+5. `.flow/config.json` `review.backend`
+6. Backend-specific env vars fill missing fields only: `FLOW_CODEX_MODEL`, `FLOW_CODEX_EFFORT`, `FLOW_COPILOT_MODEL`, `FLOW_COPILOT_EFFORT`
+7. Registry defaults (see table below)
+
+Invalid specs are rejected at `set-backend` time with a helpful error listing valid values. Legacy bare-backend values (`codex`, `copilot`, `rp`) still work. Unparseable strings stored on disk fall back to bare backend with a stderr warning — never crash.
+
+**Spec grammar — `backend[:model[:effort]]`:**
+
+| Backend | Supported models | Supported efforts | Default model | Default effort |
+|---------|------------------|-------------------|---------------|----------------|
+| `rp` | _(bare only — model set via window/session)_ | _(n/a)_ | _n/a_ | _n/a_ |
+| `codex` | `gpt-5.4`, `gpt-5.2`, `gpt-5`, `gpt-5-mini`, `gpt-5-codex` | `none`, `minimal`, `low`, `medium`, `high`, `xhigh` | `gpt-5.4` | `high` |
+| `copilot` | `claude-sonnet-4.5`, `claude-haiku-4.5`, `claude-opus-4.5`, `claude-sonnet-4`, `gpt-5.2`, `gpt-5.2-codex`, `gpt-5-mini`, `gpt-4.1` | `low`, `medium`, `high`, `xhigh` | `gpt-5.2` | `high` |
+| `none` | _(explicit opt-out)_ | _(n/a)_ | _n/a_ | _n/a_ |
+
+Notes:
+- `rp:model` and `rp:model:effort` are rejected — RepoPrompt picks model via its window/session config, not per-call.
+- Codex `minimal` effort passes flowctl validation but is rejected server-side when `web_search` is enabled. Safe for flowctl reviews (no `web_search` used).
+- Copilot `claude-*` models reject `--effort` at runtime — flowctl drops the flag automatically.
+- Field-level resolution: env fills **missing** spec fields only. Task spec `codex:gpt-5.2` plus `FLOW_CODEX_EFFORT=low` resolves to `codex:gpt-5.2:low`. Same task with `FLOW_CODEX_MODEL=gpt-5.4` still resolves to `codex:gpt-5.2:low` — explicit spec values win over env.
+- To override a stored task spec for one session, set `FLOW_REVIEW_BACKEND=codex:gpt-5.4:high` (full spec) or pass `--spec codex:gpt-5.4:high` on the review command.
+
+**Inspect resolved backend:**
+```bash
+flowctl review-backend                    # prints bare backend (skill grep)
+flowctl review-backend --json             # {"backend": "...", "spec": "...", "model": "...", "effort": "...", "source": "env"}
+flowctl task show-backend fn-5.2 --json   # per-task raw + resolved + field-level sources
+```
+
+**Receipt schema:** reviews stamp `{"mode", "model", "effort", "spec"}` into receipts. `spec` is the canonical round-trippable form (`str(resolved_spec)`); `model` + `effort` stay for back-compat with older readers.
+
+**No auto-detect.** Run `/flow-next:setup` to configure your preferred review backend, or pass `--review=X` (or `--spec backend:model:effort`) explicitly.
 
 #### Which to Choose?
 
