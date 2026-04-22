@@ -46,9 +46,8 @@ Insert a new `# --- Copilot Backend Helpers ---` block in `flowctl.py` (mirrorin
 - [ ] Manual probe: `run_copilot_exec("say OK. End with <verdict>SHIP</verdict>", str(uuid.uuid4()), repo_root, "claude-haiku-4.5", "low")` returns exit 0 with verdict extractable
 
 ## Done summary
-
-(filled in when task completes)
-
+Added copilot backend primitives to `flowctl.py`: `require_copilot`, `get_copilot_version`, and `run_copilot_exec` mirroring the codex helper shape. `run_copilot_exec` uses caller-supplied UUIDs via `--resume=<uuid>` (create-or-resume, no fallback), argv dispatch for <30KB prompts with `.flow/tmp/` tempfile fallback for larger, and `finally`-block cleanup that survives timeouts/interrupts/non-zero exits. Reuses `parse_codex_verdict` as-is. Defaults: `claude-opus-4.5` + `effort=high`; overridable via `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT`. Verified end-to-end with a live copilot call (`gpt-5-mini` + `effort=low`): rc=0, verdict extracted, session materialized under `~/.copilot/session-state/`. Full smoke suite green (52/52).
 ## Evidence
-
-(filled in when task completes)
+- Commits: a396ced8cac728268178df389d8adf2e779a6b03
+- Tests: plugins/flow-next/scripts/smoke_test.sh (52/52 passed, run from /tmp), live probe: run_copilot_exec(model=gpt-5-mini, effort=low) -> rc=0, verdict=SHIP, session materialized under ~/.copilot/session-state/<uuid>/, live probe: copilot -p directly with claude-haiku-4.5 (no --effort; model rejects it) -> rc=0, verdict=SHIP, large-prompt (36KB) tempfile dispatch -> rc=0, verdict=SHIP, .flow/tmp/ cleaned up, require_copilot + get_copilot_version error paths verified (returns None / exits 2 when binary missing), parse_codex_verdict reuse confirmed: 3 existing codex callers untouched (at 6161/6377/6729)
+- PRs:

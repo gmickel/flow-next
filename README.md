@@ -3,7 +3,7 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v0.29.4-green)](plugins/flow-next/)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v0.30.0-green)](plugins/flow-next/)
 [![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -24,6 +24,8 @@
 Flow-Next is an AI agent orchestration plugin. Bundled task tracking, dependency graphs, re-anchoring, and cross-model reviews. Everything lives in your repo — no external services, no global config. Uninstall: delete `.flow/`.
 
 Works on **Claude Code**, **OpenAI Codex** (CLI + Desktop), **Factory Droid**, and **OpenCode**.
+
+> 🆕 **v0.30.0 — GitHub Copilot CLI review backend.** Third cross-model review option alongside RepoPrompt and Codex. Works on Linux/Windows/CI via a GitHub Copilot subscription. [Setup](plugins/flow-next/README.md#cross-model-reviews).
 
 ---
 
@@ -80,7 +82,7 @@ droid plugin marketplace add \
 |---------|----------|
 | Context drift | **Re-anchoring** before every task — re-reads specs + git state |
 | Context window limits | **Fresh context per task** — worker subagent starts clean |
-| Single-model blind spots | **Cross-model reviews** — RepoPrompt or Codex as second opinion |
+| Single-model blind spots | **Cross-model reviews** — RepoPrompt, Codex, or Copilot as second opinion |
 | Forgotten requirements | **Dependency graphs** — tasks declare blockers, run in order |
 | "It worked on my machine" | **Evidence recording** — commits, tests, PRs tracked per task |
 | Infinite retry loops | **Auto-block stuck tasks** — fails after N attempts, moves on |

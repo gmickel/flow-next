@@ -26,6 +26,8 @@ Wire Copilot into the Ralph autonomous loop. Covers ralph-guard.py (blocks direc
   - `FLOW_COPILOT_MODEL` (default `claude-opus-4.5`)
   - `FLOW_COPILOT_EFFORT` (default `high`)
   - `FLOW_COPILOT_EMBED_MAX_BYTES` (default 512000)
+  - **Note (task-3 finding):** `FLOW_COPILOT_MODEL`/`FLOW_COPILOT_EFFORT` flow through `_resolve_copilot_model_effort()` (env > arg > default cascade) and land in the receipt (`model`, `effort` keys). No CLI flags — env-only. Document accordingly in config.env comments.
+<!-- Updated by plan-sync: task 3 landed env-cascade resolver; receipts stamp resolved values -->
 - `templates/ralph.sh`:
   - Lines 227-233 (UI display): add copilot to backend display strings
   - Lines 277-312 (spinner messages for plan/impl/completion review UI): add copilot variants
@@ -62,9 +64,8 @@ Wire Copilot into the Ralph autonomous loop. Covers ralph-guard.py (blocks direc
 - [ ] Unit-equivalent: `PLAN_REVIEW=copilot WORK_REVIEW=copilot bash ralph.sh` (ralph smoke path) does not hit "unknown backend" errors
 
 ## Done summary
-
-(filled in when task completes)
-
+Wired Copilot into the Ralph autonomous loop: ralph-guard.py blocks direct `copilot` / `--continue` and tracks `copilot_review_succeeded` state; ralph-init SKILL.md detects `HAVE_COPILOT` and offers a 3-way backend choice; config.env/ralph.sh/prompt_{plan,work,completion}.md all accept `copilot` as a first-class PLAN/WORK/COMPLETION_REVIEW value with `FLOW_COPILOT_MODEL|EFFORT|EMBED_MAX_BYTES` flowing through the env-cascade resolver into receipts.
 ## Evidence
-
-(filled in when task completes)
+- Commits: b5d13d2ea8e878153e30c28ff91053e897a2f17f
+- Tests: plugins/flow-next/scripts/smoke_test.sh (52/52 pass), direct ralph-guard.py PreToolUse exercise: 12 copilot block/allow cases, direct ralph-guard.py state-gate exercise: copilot_review_succeeded set/reset, bash -n ralph.sh (syntax OK), config.env sourced with PLAN/WORK/COMPLETION_REVIEW=copilot (vars exported correctly)
+- PRs:

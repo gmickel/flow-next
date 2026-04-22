@@ -2,7 +2,7 @@
 
 ## Philosophy
 
-The reviewer model only sees selected files. RepoPrompt's Builder discovers context you'd miss (rp backend). Codex uses context hints from flowctl (codex backend).
+The reviewer model only sees selected files. RepoPrompt's Builder discovers context you'd miss (rp backend). Codex and Copilot use context hints from flowctl (codex/copilot backends).
 
 ---
 
@@ -22,11 +22,11 @@ BACKEND=$($FLOWCTL review-backend)
 
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."
-  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|none"
+  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
   exit 1
 fi
 
-echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
+echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 ```
 
 **If backend is "none"**: Skip review, inform user, and exit cleanly (no error).
@@ -83,6 +83,62 @@ If `VERDICT=NEEDS_WORK`:
 
 Receipt is written automatically by `flowctl codex plan-review` when `--receipt` provided.
 Format: `{"mode":"codex","epic":"<id>","verdict":"<verdict>","session_id":"<thread_id>","timestamp":"..."}`
+
+---
+
+## Copilot Backend Workflow
+
+Use when `BACKEND="copilot"`.
+
+### Step 0: Save Checkpoint
+
+**Before review** (protects against context compaction):
+```bash
+EPIC_ID="${1:-}"
+$FLOWCTL checkpoint save --epic "$EPIC_ID" --json
+```
+
+### Step 1: Execute Review
+
+```bash
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
+
+# --files: comma-separated CODE files for reviewer context
+# Epic/task specs are auto-included; pass files the plan will CREATE or MODIFY
+CODE_FILES="src/main.py,src/config.py"  # Customize per epic
+
+# Runtime config via env vars (no CLI flags for model/effort):
+#   FLOW_COPILOT_MODEL   (default gpt-5.2)
+#   FLOW_COPILOT_EFFORT  (default high)
+
+$FLOWCTL copilot plan-review "$EPIC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
+```
+
+**Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`.**
+
+### Step 2: Update Status
+
+```bash
+# Based on verdict
+$FLOWCTL epic set-plan-review-status "$EPIC_ID" --status ship --json
+# OR
+$FLOWCTL epic set-plan-review-status "$EPIC_ID" --status needs_work --json
+```
+
+### Step 3: Handle Verdict
+
+If `VERDICT=NEEDS_WORK`:
+1. Parse issues from output
+2. Fix plan via `$FLOWCTL epic set-plan`
+3. Re-run step 1 (receipt enables session continuity when `mode == "copilot"`)
+4. Repeat until SHIP
+
+### Step 4: Receipt
+
+Receipt is written automatically by `flowctl copilot plan-review` when `--receipt` provided.
+Format: `{"type":"plan_review","id":"<epic-id>","mode":"copilot","verdict":"<verdict>","session_id":"<uuid>","model":"<model>","effort":"<effort>","timestamp":"..."}`
+
+Session resume guard: re-review only resumes the copilot session when the existing receipt at `$RECEIPT_PATH` has `mode == "copilot"`. Cross-backend switches start a fresh session.
 
 ---
 
@@ -370,3 +426,9 @@ If verdict is NEEDS_WORK:
 **Codex backend only:**
 - **Using `--last` flag** - Conflicts with parallel usage; use `--receipt` instead
 - **Direct codex calls** - Must use `flowctl codex` wrappers
+
+**Copilot backend only:**
+- **Direct copilot calls** - Must use `flowctl copilot` wrappers
+- **Inventing `--model`/`--effort` CLI flags** - Those are env-only (`FLOW_COPILOT_MODEL`, `FLOW_COPILOT_EFFORT`)
+- **Using `--continue`** - Conflicts with parallel usage; session resume uses `--resume=<uuid>` under the hood via `--receipt`
+- **Assuming cross-backend session continuity** - Resume only works when prior receipt has `mode == "copilot"`

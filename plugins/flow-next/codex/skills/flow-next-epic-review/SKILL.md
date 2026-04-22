@@ -11,7 +11,7 @@ user-invocable: false
 Verify that the combined implementation of all epic tasks satisfies the spec requirements. This is NOT a code quality review (that's impl-review's job) — this confirms spec compliance only.
 
 **Role**: Epic Review Coordinator (NOT the reviewer)
-**Backends**: RepoPrompt (rp) or Codex CLI (codex)
+**Backends**: RepoPrompt (rp), Codex CLI (codex), or GitHub Copilot CLI (copilot)
 
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Always use:
 ```bash
@@ -22,8 +22,8 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 ## Backend Selection
 
 **Priority** (first match wins):
-1. `--review=rp|codex|none` argument
-2. `FLOW_REVIEW_BACKEND` env var (`rp`, `codex`, `none`)
+1. `--review=rp|codex|copilot|none` argument
+2. `FLOW_REVIEW_BACKEND` env var (`rp`, `codex`, `copilot`, `none`)
 3. `.flow/config.json` → `review.backend`
 4. **Error** - no auto-detection
 
@@ -32,6 +32,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 Check $ARGUMENTS for:
 - `--review=rp` or `--review rp` → use rp
 - `--review=codex` or `--review codex` → use codex
+- `--review=copilot` or `--review copilot` → use copilot
 - `--review=none` or `--review none` → skip review
 
 If found, use that backend and skip all other detection.
@@ -43,12 +44,18 @@ BACKEND=$($FLOWCTL review-backend)
 
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."
-  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|none"
+  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
   exit 1
 fi
 
-echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
+echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 ```
+
+### Backend at a glance
+
+- **rp** — RepoPrompt (macOS GUI); builder auto-selects context. Primary backend.
+- **codex** — Codex CLI (cross-platform); uses OpenAI models (default `gpt-5.4`). `FLOW_CODEX_MODEL` / `FLOW_CODEX_EFFORT` env vars.
+- **copilot** — GitHub Copilot CLI (cross-platform); supports Claude Opus/Sonnet/Haiku 4.5 and GPT-5.2 families via a Copilot subscription. `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars (no CLI flags).
 
 ## Critical Rules
 
@@ -64,6 +71,12 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
 2. Pass `--receipt` for session continuity on re-reviews
 3. Parse verdict from command output
 
+**For copilot backend:**
+1. Use `$FLOWCTL copilot completion-review` exclusively
+2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "copilot"`)
+3. Model + effort are env-only: `FLOW_COPILOT_MODEL`, `FLOW_COPILOT_EFFORT` (no CLI flags)
+4. Parse verdict from command output
+
 **For all backends:**
 - If `REVIEW_RECEIPT_PATH` set: write receipt after SHIP verdict (RP writes manually after fix loop; codex writes automatically via `--receipt`)
 - Any failure → output `<promise>RETRY</promise>` and stop
@@ -76,7 +89,7 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|none)"
 ## Input
 
 Arguments: $ARGUMENTS
-Format: `<epic-id> [--review=rp|codex|none]`
+Format: `<epic-id> [--review=rp|codex|copilot|none]`
 
 - Epic ID - Required, e.g. `fn-1` or `fn-22-53k`
 - `--review` - Optional backend override
@@ -112,6 +125,20 @@ $FLOWCTL codex completion-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
 
 On NEEDS_WORK: fix code, commit, re-run (receipt enables session continuity).
 
+### Copilot Backend
+
+```bash
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt.json}"
+
+# Optional: override model + effort via env (no CLI flags)
+# FLOW_COPILOT_MODEL=gpt-5.2 FLOW_COPILOT_EFFORT=high \
+
+$FLOWCTL copilot completion-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
+# Output includes VERDICT=SHIP|NEEDS_WORK
+```
+
+On NEEDS_WORK: fix code, commit, re-run. Session resume only when prior receipt has `mode == "copilot"`.
+
 ### RepoPrompt Backend
 
 **⚠️ STOP: You MUST read and execute [workflow.md](workflow.md) now.**
@@ -137,6 +164,7 @@ If verdict is NEEDS_WORK, loop internally until SHIP:
 3. **Commit fixes** (mandatory before re-review)
 4. **Re-review**:
    - **Codex**: Re-run `flowctl codex completion-review` (receipt enables context)
+   - **Copilot**: Re-run `flowctl copilot completion-review` (receipt enables context; must be `mode == "copilot"` to resume)
    - **RP**: `$FLOWCTL rp chat-send (2-10 min, DO NOT RETRY) --window "$W" --tab "$T" --message-file /tmp/re-review.md` (NO `--new-chat`)
 5. **Repeat** until `<verdict>SHIP</verdict>`
 

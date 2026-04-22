@@ -2,6 +2,23 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.30.0] - 2026-04-22
+
+### Added
+- **GitHub Copilot CLI review backend** — third cross-platform option alongside RepoPrompt and Codex. New `flowctl copilot` command group (`check`, `impl-review`, `plan-review`, `completion-review`) with same receipt schema as Codex. Session continuity via client-generated UUIDs (`copilot --resume=<uuid>` creates-or-resumes; flowctl stores the UUID, reuses it on re-review). Text mode output with `<verdict>` tag extraction. Temp-file prompt delivery handles >100KB prompts and dodges Windows `ARG_MAX`.
+- `flowctl copilot check` does a live auth probe (trivial `-p "ok"` with `gpt-5-mini` + `effort=low`) instead of only checking binary presence — auth failures surface here, not at first review. GPT model chosen because Claude-family models reject `--effort`.
+- Review skills (`flow-next-impl-review`, `flow-next-plan-review`, `flow-next-epic-review`) branch on `copilot` backend.
+- `/flow-next:setup` auto-detects `copilot` on `PATH` and offers it as a review backend option.
+- Ralph integration: `ralph-guard.py` bumped to `0.14.0` — blocks direct `copilot` calls outside `flowctl copilot …` wrappers and blocks `--continue` (conflicts with parallel sessions / multiple projects). New `copilot_review_succeeded` state key. `ralph-init` templates (`config.env`, `ralph.sh`, `prompt_{plan,work,completion}.md`) carry the `copilot` review branch.
+- Runtime knobs (env-only, no CLI flags): `FLOW_COPILOT_MODEL` (default `gpt-5.2`; matches Codex's GPT-5.x + high philosophy), `FLOW_COPILOT_EFFORT` (default `high`; `low|medium|high|xhigh`), `FLOW_COPILOT_EMBED_MAX_BYTES` (default `512000`). Resolved via `env > arg > default` cascade in `_resolve_copilot_model_effort()` and stamped into every receipt (`model` + `effort` keys) for reproducibility. `ralph.sh` conditionally exports each var only when set, so empty values in `config.env` fall back to flowctl defaults instead of clobbering them. Claude-family models reject `--effort`; flowctl omits the flag automatically for them.
+- Model catalog: `claude-sonnet-4.5`, `claude-haiku-4.5`, `claude-opus-4.5`, `claude-sonnet-4`, `gpt-5.2`, `gpt-5.2-codex`, `gpt-5-mini`, `gpt-4.1`.
+- Smoke suite grew 52 → 59 tests (4 copilot command-help checks + 3 live copilot e2e: `plan-review`, `plan-review` re-resume asserting stable `session_id`, `impl-review`). Live e2e uses `gpt-5-mini` + `FLOW_COPILOT_EFFORT=low` to minimise premium-request cost.
+- README `Cross-Model Reviews` section documents Copilot on equal footing with RP and Codex (setup, usage, verify, env vars, which-to-choose table). `CLAUDE.md` project guide lists Copilot as a valid review backend. All `--review=` flag tables now enumerate `rp|codex|copilot|export|none`.
+
+### Changed
+- RepoPrompt remains the recommended (best-context) backend. Codex and Copilot are both listed as cross-platform alternatives for Linux / Windows / CI / headless.
+- Inline `backend:model:effort` spec parsing is intentionally out of scope here — that unification ships in a follow-up epic so RP, Codex and Copilot can all be retrofitted in one pass.
+
 ## [flow-next 0.29.4] - 2026-04-12
 
 ### Fixed

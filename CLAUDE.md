@@ -20,8 +20,8 @@ Commands:
 - `/flow-next:plan` → creates epic + tasks in `.flow/`
 - `/flow-next:work` → executes tasks with re-anchoring
 - `/flow-next:interview` → deep spec refinement
-- `/flow-next:plan-review` → Carmack-level plan review via rp-cli
-- `/flow-next:impl-review` → Carmack-level impl review (current branch)
+- `/flow-next:plan-review` → Carmack-level plan review (rp-cli, Codex CLI, or Copilot CLI)
+- `/flow-next:impl-review` → Carmack-level impl review of current branch (rp-cli, Codex CLI, or Copilot CLI)
 
 Ralph (autonomous loop):
 - Script template lives in `plugins/flow-next/skills/flow-next-ralph-init/templates/`.

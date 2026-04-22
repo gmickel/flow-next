@@ -19,12 +19,14 @@ Steps:
 Ralph mode rules (must follow):
 - If COMPLETION_REVIEW=rp: use `flowctl rp` wrappers (setup-review, select-add, prompt-get, chat-send).
 - If COMPLETION_REVIEW=codex: use `flowctl codex` wrappers (completion-review with --receipt).
+- If COMPLETION_REVIEW=copilot: use `flowctl copilot` wrappers (completion-review with --receipt). Never call `copilot` directly; never pass `--continue`.
 - Write receipt via bash heredoc (no Write tool) if `REVIEW_RECEIPT_PATH` set.
 - If any rule is violated, output `<promise>RETRY</promise>` and stop.
 
 3) Completion review gate:
    - If COMPLETION_REVIEW=rp: run `/flow-next:epic-review {{EPIC_ID}} --review=rp`
    - If COMPLETION_REVIEW=codex: run `/flow-next:epic-review {{EPIC_ID}} --review=codex`
+   - If COMPLETION_REVIEW=copilot: run `/flow-next:epic-review {{EPIC_ID}} --review=copilot`
    - If COMPLETION_REVIEW=none: set ship and stop:
      `scripts/ralph/flowctl epic set-completion-review-status {{EPIC_ID}} --status ship --json`
 
@@ -44,6 +46,7 @@ Ralph mode rules (must follow):
    EOF
    ```
    For codex mode, receipt is written automatically by `flowctl codex completion-review --receipt`.
+   For copilot mode, receipt is written automatically by `flowctl copilot completion-review --receipt`.
    **CRITICAL: Copy EXACTLY. The `"id":"{{EPIC_ID}}"` and `"verdict":"SHIP"` fields are REQUIRED.**
    Missing id/verdict = verification fails = forced retry.
 

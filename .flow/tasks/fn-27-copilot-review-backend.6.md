@@ -26,7 +26,17 @@ Setup-skill detection of `copilot` CLI + smoke test coverage for the copilot bac
   - Assert `mode == "copilot"`
   - Clean up: epic reset, receipt unlink
 
-Use `claude-haiku-4.5` + `--effort low` for the e2e to minimize premium-request cost and wall time.
+- **Optional re-review smoke (task-3 finding):** if covering session continuity (R3), the prior receipt MUST have `mode == "copilot"` — task 3 guards re-review resume on this key to prevent cross-backend UUID leakage. A codex-mode receipt at the same path will be treated as no-prior-receipt and a fresh UUID will be generated. Sequence: run copilot plan-review → assert receipt → run again against same --receipt → assert `session_id` unchanged.
+<!-- Updated by plan-sync: task 3 only resumes copilot session when prior receipt mode==copilot; cross-backend receipts fresh-start -->
+
+Use `gpt-5-mini` + `--effort low` for the e2e to minimize premium-request cost and wall time.
+
+**Model caveat from task 1**: Claude-family models (e.g., `claude-haiku-4.5`) reject `--effort` with `Error: Model ... does not support reasoning effort configuration`. Since `run_copilot_exec` always passes `--effort`, the e2e must use a GPT model that accepts effort. `gpt-5-mini` is the cheapest viable choice.
+<!-- Updated by plan-sync: task 1 discovered claude-haiku-4.5 rejects --effort; e2e must use gpt-5-mini -->
+
+**Auth-failure test caveat from task 2**: `COPILOT_GITHUB_TOKEN=bogus flowctl copilot check` does NOT force an auth failure in copilot CLI 1.0.34 — the CLI uses its own credential store and ignores env-var overrides. To cover the `authed: false` branch of `cmd_copilot_check` (and any equivalent failure paths added to review commands), write a **mocked subprocess test** rather than relying on a live env override. (Task 2 acceptance item 4 was satisfied via the exit-path docstring + skip-probe check; smoke_test.sh should follow the same pattern or skip the failure branch entirely.)
+<!-- Updated by plan-sync: task 2 worker found env-var override doesn't force auth failure; use mocked subprocess for the authed:false branch -->
+
 
 ## Investigation targets
 
@@ -45,13 +55,12 @@ Use `claude-haiku-4.5` + `--effort low` for the e2e to minimize premium-request 
 - [ ] `smoke_test.sh` runs copilot command help checks in parallel with codex
 - [ ] `smoke_test.sh` copilot e2e runs against live copilot CLI when installed; skips cleanly otherwise
 - [ ] E2e asserts receipt schema includes `model` and `effort` fields (new vs codex)
-- [ ] E2e uses `claude-haiku-4.5` + `--effort low` to stay cheap/fast
+- [ ] E2e uses `gpt-5-mini` + `--effort low` to stay cheap/fast (claude-haiku-4.5 rejects `--effort`; see task-1 caveat)
 - [ ] Full `smoke_test.sh` still passes with no copilot installed (skipped path)
 
 ## Done summary
-
-(filled in when task completes)
-
+Added `copilot` CLI detection + Copilot CLI backend option to the flow-next-setup workflow, and extended smoke_test.sh with copilot command help checks plus a live copilot e2e covering plan-review, re-review session resume (asserts stable session_id via prior mode==copilot receipt), and impl-review. E2e uses gpt-5-mini + --effort low (claude models reject --effort per task-1) and asserts mode, model, effort fields on each receipt.
 ## Evidence
-
-(filled in when task completes)
+- Commits: 79bbf0ac25668105890eb064da2cb9d7a065fb5d
+- Tests: plugins/flow-next/scripts/smoke_test.sh (59/59 pass, +7 new: 4 copilot command help + 3 live copilot e2e: plan-review, re-review session resume, impl-review)
+- PRs:
