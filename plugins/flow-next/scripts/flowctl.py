@@ -1005,8 +1005,11 @@ def get_changed_files(base_branch: str) -> list[str]:
         return []
 
 
-def get_embedded_file_contents(file_paths: list[str]) -> tuple[str, dict]:
-    """Read and embed file contents for codex review prompts.
+def get_embedded_file_contents(
+    file_paths: list[str],
+    budget_env_var: str = "FLOW_CODEX_EMBED_MAX_BYTES",
+) -> tuple[str, dict]:
+    """Read and embed file contents for codex/copilot review prompts.
 
     Returns:
         tuple: (embedded_content_str, stats_dict)
@@ -1017,16 +1020,24 @@ def get_embedded_file_contents(file_paths: list[str]) -> tuple[str, dict]:
 
     Args:
         file_paths: List of file paths (relative to repo root)
+        budget_env_var: Env var name that supplies the total byte budget.
+            Defaults to ``FLOW_CODEX_EMBED_MAX_BYTES`` so existing codex
+            callers are unaffected; copilot callers pass
+            ``FLOW_COPILOT_EMBED_MAX_BYTES``. Default budget is 512000
+            (500KB) when the env var is unset or invalid. Set to 0 for
+            unlimited.
 
     Environment:
-        FLOW_CODEX_EMBED_MAX_BYTES: Total byte budget for embedded files.
-            Default 512000 (500KB). Set to 0 for unlimited.
+        FLOW_CODEX_EMBED_MAX_BYTES (default): Total byte budget.
+        FLOW_COPILOT_EMBED_MAX_BYTES (when ``budget_env_var`` overridden):
+            Same semantics for the copilot backend.
     """
     repo_root = get_repo_root()
 
     # Get budget from env (default 500KB — large enough for complex epics with
-    # many source files while still preventing excessively large prompts)
-    max_bytes_str = os.environ.get("FLOW_CODEX_EMBED_MAX_BYTES", "512000")
+    # many source files while still preventing excessively large prompts).
+    # Callers can select the env var (codex vs copilot) via budget_env_var.
+    max_bytes_str = os.environ.get(budget_env_var, "512000")
     try:
         max_total_bytes = int(max_bytes_str)
     except ValueError:
@@ -2817,12 +2828,12 @@ def cmd_review_backend(args: argparse.Namespace) -> None:
     """Get review backend for skill conditionals. Returns ASK if not configured."""
     # Priority: FLOW_REVIEW_BACKEND env > config > ASK
     env_val = os.environ.get("FLOW_REVIEW_BACKEND", "").strip()
-    if env_val and env_val in ("rp", "codex", "none"):
+    if env_val and env_val in ("rp", "codex", "copilot", "none"):
         backend = env_val
         source = "env"
     elif ensure_flow_exists():
         cfg_val = get_config("review.backend")
-        if cfg_val and cfg_val in ("rp", "codex", "none"):
+        if cfg_val and cfg_val in ("rp", "codex", "copilot", "none"):
             backend = cfg_val
             source = "config"
         else:
@@ -6040,6 +6051,129 @@ def cmd_codex_check(args: argparse.Namespace) -> None:
             print("codex not available")
 
 
+# --- Copilot Commands ---
+
+
+def cmd_copilot_check(args: argparse.Namespace) -> None:
+    """Check if copilot CLI is available, returning version + live auth probe.
+
+    Unlike ``cmd_codex_check`` which only verifies binary presence, copilot
+    MUST probe live auth — a present binary with stale/missing credentials
+    still fails on first real invocation, and catching that at check-time
+    is the whole point of this command.
+
+    Probe model: ``gpt-5-mini`` — cheap, fast, accepts ``--effort`` (required
+    by ``run_copilot_exec``). Claude-family models accessible via Copilot
+    (e.g. ``claude-haiku-4.5``) reject ``--effort`` with
+    ``Error: Model ... does not support reasoning effort configuration``,
+    so they can't be used here without plumbing a skip-effort path through
+    ``run_copilot_exec`` (out of scope for this task).
+
+    Probe behavior:
+    - Trivial prompt ("ok"), fresh UUID, 60s timeout.
+    - ``authed: true`` iff exit_code == 0.
+    - ``error`` captures first stderr line on failure.
+    - ``--skip-probe`` bypasses the live call (fast CI path where auth
+      already verified).
+
+    JSON output schema:
+        {
+          "available": bool,      # binary on PATH
+          "version": str|null,    # parsed from --version
+          "authed": bool,         # live probe succeeded (null if skipped)
+          "model_used": str,      # probe model (even when skipped)
+          "error": str|null       # first stderr line or timeout message
+        }
+    """
+    copilot = shutil.which("copilot")
+    available = copilot is not None
+    version = get_copilot_version() if available else None
+
+    # Probe model: MUST accept --effort. gpt-5-mini is the cheapest option
+    # in the copilot catalog that accepts --effort. See docstring.
+    probe_model = "gpt-5-mini"
+    probe_effort = "low"
+
+    authed: Optional[bool] = None
+    error: Optional[str] = None
+
+    if available and not getattr(args, "skip_probe", False):
+        # Live probe — trivial prompt, short timeout. Fresh UUID per probe
+        # so we don't accidentally resume an old session's context.
+        repo_root = get_repo_root() if ensure_flow_exists() else Path.cwd()
+        # Use a short, dedicated timeout for the probe (60s) rather than
+        # the 600s default inside run_copilot_exec. We do this by calling
+        # subprocess.run directly with our own timeout, because
+        # run_copilot_exec hard-codes 600s.
+        probe_prompt = "ok"
+        session_id = str(uuid.uuid4())
+        cmd = [
+            copilot,
+            "-p",
+            probe_prompt,
+            f"--resume={session_id}",
+            "--output-format",
+            "text",
+            "-s",
+            "--no-ask-user",
+            "--allow-all-tools",
+            "--add-dir",
+            str(repo_root),
+            "--disable-builtin-mcps",
+            "--no-custom-instructions",
+            "--log-level",
+            "error",
+            "--no-auto-update",
+            "--model",
+            probe_model,
+            "--effort",
+            probe_effort,
+        ]
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=60,
+            )
+            authed = result.returncode == 0
+            if not authed:
+                stderr_first = (result.stderr or "").strip().splitlines()
+                error = stderr_first[0] if stderr_first else f"exit {result.returncode}"
+        except subprocess.TimeoutExpired:
+            authed = False
+            error = "copilot probe timed out (60s)"
+        except OSError as e:
+            authed = False
+            error = f"copilot probe failed to launch: {e}"
+
+    if args.json:
+        json_output(
+            {
+                "available": available,
+                "version": version,
+                "authed": authed,
+                "model_used": probe_model,
+                "error": error,
+            }
+        )
+    else:
+        if not available:
+            print("copilot not available")
+            return
+        version_str = version or "unknown version"
+        if authed is None:
+            print(f"copilot available: {version_str} (auth probe skipped)")
+        elif authed:
+            print(f"copilot available: {version_str} (authed via {probe_model})")
+        else:
+            print(
+                f"copilot available: {version_str} but auth probe failed: "
+                f"{error or 'unknown error'}"
+            )
+
+
 def build_standalone_review_prompt(
     base_branch: str, focus: Optional[str], diff_summary: str, files_embedded: bool = True
 ) -> str:
@@ -7912,6 +8046,24 @@ def main() -> None:
         help="Sandbox mode (auto: danger-full-access on Windows, read-only on Unix)",
     )
     p_codex_completion.set_defaults(func=cmd_codex_completion_review)
+
+    # copilot (GitHub Copilot CLI helpers). Subcommand surface mirrors codex;
+    # review subcommands (impl-review/plan-review/completion-review) are
+    # added in task fn-27-copilot-review-backend.3.
+    p_copilot = subparsers.add_parser("copilot", help="GitHub Copilot CLI helpers")
+    copilot_sub = p_copilot.add_subparsers(dest="copilot_cmd", required=True)
+
+    p_copilot_check = copilot_sub.add_parser(
+        "check",
+        help="Check copilot availability + live auth probe",
+    )
+    p_copilot_check.add_argument("--json", action="store_true", help="JSON output")
+    p_copilot_check.add_argument(
+        "--skip-probe",
+        action="store_true",
+        help="Skip live auth probe (fast CI path when auth already verified)",
+    )
+    p_copilot_check.set_defaults(func=cmd_copilot_check)
 
     args = parser.parse_args()
     args.func(args)

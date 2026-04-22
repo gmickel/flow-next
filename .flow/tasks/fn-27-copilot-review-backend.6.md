@@ -26,7 +26,11 @@ Setup-skill detection of `copilot` CLI + smoke test coverage for the copilot bac
   - Assert `mode == "copilot"`
   - Clean up: epic reset, receipt unlink
 
-Use `claude-haiku-4.5` + `--effort low` for the e2e to minimize premium-request cost and wall time.
+Use `gpt-5-mini` + `--effort low` for the e2e to minimize premium-request cost and wall time.
+
+**Model caveat from task 1**: Claude-family models (e.g., `claude-haiku-4.5`) reject `--effort` with `Error: Model ... does not support reasoning effort configuration`. Since `run_copilot_exec` always passes `--effort`, the e2e must use a GPT model that accepts effort. `gpt-5-mini` is the cheapest viable choice.
+<!-- Updated by plan-sync: task 1 discovered claude-haiku-4.5 rejects --effort; e2e must use gpt-5-mini -->
+
 
 ## Investigation targets
 
@@ -45,7 +49,7 @@ Use `claude-haiku-4.5` + `--effort low` for the e2e to minimize premium-request 
 - [ ] `smoke_test.sh` runs copilot command help checks in parallel with codex
 - [ ] `smoke_test.sh` copilot e2e runs against live copilot CLI when installed; skips cleanly otherwise
 - [ ] E2e asserts receipt schema includes `model` and `effort` fields (new vs codex)
-- [ ] E2e uses `claude-haiku-4.5` + `--effort low` to stay cheap/fast
+- [ ] E2e uses `gpt-5-mini` + `--effort low` to stay cheap/fast (claude-haiku-4.5 rejects `--effort`; see task-1 caveat)
 - [ ] Full `smoke_test.sh` still passes with no copilot installed (skipped path)
 
 ## Done summary

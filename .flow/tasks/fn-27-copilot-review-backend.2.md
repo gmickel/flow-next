@@ -12,9 +12,12 @@ Wire Copilot into flowctl's argparse + backend-selection cascade. Adds the `flow
   - Line 2688: `if cfg_val and cfg_val in ("rp", "codex", "copilot", "none"):`
   - No further changes — the function returns the plain backend string; skills will branch on it in task 4.
 
-- **`cmd_copilot_check`** — mirror `cmd_codex_check` at `flowctl.py:5891-5903`. Unlike codex check (binary presence only), copilot check MUST also probe auth live — per spec acceptance #1 and risks #1. Use a trivial invocation: `run_copilot_exec("ok", str(uuid.uuid4()), repo_root, "claude-haiku-4.5", "low")` with a 60s timeout (override 600s default for the probe). Report JSON: `{installed: bool, version: str, authed: bool, model_used: str, error: str|null}`.
+- **`cmd_copilot_check`** — mirror `cmd_codex_check` at `flowctl.py:5891-5903`. Unlike codex check (binary presence only), copilot check MUST also probe auth live — per spec acceptance #1 and risks #1. Use a trivial invocation against a GPT probe model that accepts `--effort`: `run_copilot_exec("ok", str(uuid.uuid4()), repo_root, "gpt-5-mini", "low")` with a 60s timeout (override 600s default for the probe). Report JSON: `{installed: bool, version: str, authed: bool, model_used: str, error: str|null}`.
+  - **Model caveat from task 1**: Claude Haiku models (and likely all Claude-family models accessible via Copilot) REJECT the `--effort` flag with `Error: Model ... does not support reasoning effort configuration`. `run_copilot_exec` always passes `--effort`, so the probe MUST use a GPT model (`gpt-5-mini` is cheap + fast + accepts effort). If you need Claude for the probe, you must plumb a skip-effort path through `run_copilot_exec` — out of scope for this task.
   - Auth failure signature: exit 1 + stderr containing `"not authenticated"` or similar (probe to confirm actual message). Treat any exit-1 with `Error:` prefix as auth/config problem.
   - Allow `--skip-probe` flag to skip the live probe (fast CI path where auth already verified).
+<!-- Updated by plan-sync: task 1 discovered claude-haiku-4.5 rejects --effort; probe must use gpt-5-mini -->
+
 
 - **Argparse `p_copilot` subparser** — mirror `p_codex` at `flowctl.py:7710-7777`, insert immediately after the codex block. Include only the `check` subcommand now (`p_copilot_check`). Leave `impl-review`, `plan-review`, `completion-review` to task 3 — wire them in the same subparser when task 3 adds the commands.
 
