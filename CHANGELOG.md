@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## [flow-next 0.29.5] - 2026-04-22
+## [flow-next 0.30.0] - 2026-04-22
 
 ### Added
 - **GitHub Copilot CLI review backend** — third cross-platform option alongside RepoPrompt and Codex. New `flowctl copilot` command group (`check`, `impl-review`, `plan-review`, `completion-review`) with same receipt schema as Codex. Session continuity via client-generated UUIDs (`copilot --resume=<uuid>` creates-or-resumes; flowctl stores the UUID, reuses it on re-review). Text mode output with `<verdict>` tag extraction. Temp-file prompt delivery handles >100KB prompts and dodges Windows `ARG_MAX`.
