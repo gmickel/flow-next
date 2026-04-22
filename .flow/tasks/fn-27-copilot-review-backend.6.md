@@ -59,9 +59,8 @@ Use `gpt-5-mini` + `--effort low` for the e2e to minimize premium-request cost a
 - [ ] Full `smoke_test.sh` still passes with no copilot installed (skipped path)
 
 ## Done summary
-
-(filled in when task completes)
-
+Added `copilot` CLI detection + Copilot CLI backend option to the flow-next-setup workflow, and extended smoke_test.sh with copilot command help checks plus a live copilot e2e covering plan-review, re-review session resume (asserts stable session_id via prior mode==copilot receipt), and impl-review. E2e uses gpt-5-mini + --effort low (claude models reject --effort per task-1) and asserts mode, model, effort fields on each receipt.
 ## Evidence
-
-(filled in when task completes)
+- Commits: 79bbf0ac25668105890eb064da2cb9d7a065fb5d
+- Tests: plugins/flow-next/scripts/smoke_test.sh (59/59 pass, +7 new: 4 copilot command help + 3 live copilot e2e: plan-review, re-review session resume, impl-review)
+- PRs:

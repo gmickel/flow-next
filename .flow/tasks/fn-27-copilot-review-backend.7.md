@@ -32,6 +32,12 @@ Documentation updates, `scripts/sync-codex.sh` regeneration of the codex mirror,
 **CLAUDE.md** (repo root):
 - Lines 23-24: flow-next commands block — extend `/flow-next:plan-review`/`impl-review` comments to mention all three backends (rp, codex, copilot). Not mandatory but contributor-friendly.
 
+**flow-next-setup/workflow.md note (task-6 finding):** setup skill already lands `HAVE_COPILOT=$(which copilot ...)` detection at line 153 and a "Copilot CLI" option in the Review question (line 261) mapping to `review.backend=copilot` (line 347). README Setup/Verify for Copilot should reference the setup skill offering Copilot auto-detection — no additional skill edits needed in task 7.
+<!-- Updated by plan-sync: task 6 landed HAVE_COPILOT detection + Copilot option in flow-next-setup/workflow.md; task 7 only documents it -->
+
+**smoke_test.sh coverage note (task-6 finding):** smoke suite grew 52→59 tests (4 copilot command help checks + 3 live copilot e2e: plan-review, plan-review re-resume asserting stable session_id, impl-review). Live e2e gates on `available` (not `authed`) because `--skip-probe` returns `authed: null`; real auth failure surfaces as natural e2e failure. E2e uses `gpt-5-mini` + `FLOW_COPILOT_EFFORT=low`. CHANGELOG entry should mention new smoke coverage.
+<!-- Updated by plan-sync: task 6 added 7 smoke tests (4 help + 3 live e2e); CHANGELOG should reference -->
+
 **Generated codex mirror:**
 ```bash
 scripts/sync-codex.sh
