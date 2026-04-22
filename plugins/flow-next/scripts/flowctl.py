@@ -21,6 +21,7 @@ import unicodedata
 import uuid
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, ContextManager, Optional
@@ -1689,6 +1690,212 @@ def is_sandbox_failure(exit_code: int, stdout: str, stderr: str) -> bool:
             continue
 
     return False
+
+
+# --- Backend Spec Parser (unified model + effort grammar, fn-28) ---
+#
+# Spec grammar: ``backend[:model[:effort]]`` — colon-delimited, three parts max,
+# trailing parts optional. Examples:
+#   - ``rp``                              backend only (RP uses window/session, not per-call model)
+#   - ``codex``                           backend only, defaults from registry
+#   - ``codex:gpt-5.4``                   backend + model, default effort
+#   - ``codex:gpt-5.4:xhigh``             full spec
+#   - ``copilot:claude-opus-4.5:xhigh``   copilot with its own effort set
+#
+# ``BACKEND_REGISTRY`` is a static dict (no plugin discovery). When the registry
+# has ``models`` or ``efforts`` set to ``None``, that backend rejects the
+# corresponding spec field (e.g. ``rp:opus`` is invalid — RP doesn't accept a
+# model). Every validation error lists the valid set sorted alphabetically so
+# users get a deterministic, copy-pasteable hint.
+#
+# Codex ``minimal`` effort caveat: passes codex config validation but the server
+# returns 400 when the ``web_search`` tool is enabled. flowctl reviews do not
+# enable web_search, so ``minimal`` is safe here — documented for the day we do.
+
+BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
+    "rp": {
+        # RepoPrompt picks model via window/session config, not per-call.
+        "models": None,
+        "efforts": None,
+    },
+    "codex": {
+        "models": {
+            "gpt-5.4",
+            "gpt-5.2",
+            "gpt-5",
+            "gpt-5-mini",
+            "gpt-5-codex",
+        },
+        # ``none`` / ``minimal`` accepted at CLI layer; ``minimal`` is gated by
+        # server-side web_search check (not applicable to our reviews).
+        "efforts": {"none", "minimal", "low", "medium", "high", "xhigh"},
+        "default_model": "gpt-5.4",
+        "default_effort": "high",
+    },
+    "copilot": {
+        # Verified via ``copilot --help`` + live probe (fn-27 §Model Catalog).
+        "models": {
+            "claude-sonnet-4.5",
+            "claude-haiku-4.5",
+            "claude-opus-4.5",
+            "claude-sonnet-4",
+            "gpt-5.2",
+            "gpt-5.2-codex",
+            "gpt-5-mini",
+            "gpt-4.1",
+        },
+        # Copilot exposes ``xhigh`` in addition to standard tiers. No ``none`` /
+        # ``minimal`` — Claude-family models reject ``--effort`` entirely, which
+        # ``run_copilot_exec`` handles by dropping the flag when model starts
+        # with ``claude-``.
+        "efforts": {"low", "medium", "high", "xhigh"},
+        "default_model": "gpt-5.2",
+        "default_effort": "high",
+    },
+    "none": {
+        # Explicit opt-out. Parser still validates it so ``--review=none`` can
+        # be stored as a spec without special-casing upstream.
+        "models": None,
+        "efforts": None,
+    },
+}
+
+
+@dataclass(frozen=True)
+class BackendSpec:
+    """Parsed review-backend spec: ``backend[:model[:effort]]``.
+
+    Fields are ``None`` when unspecified. Use ``.resolve()`` to fill missing
+    fields from ``FLOW_<BACKEND>_MODEL`` / ``FLOW_<BACKEND>_EFFORT`` env vars
+    then registry defaults (env only fills fields that the spec left blank —
+    explicit spec values always win).
+    """
+
+    backend: str
+    model: Optional[str] = None
+    effort: Optional[str] = None
+
+    @classmethod
+    def parse(cls, spec: str) -> "BackendSpec":
+        """Parse ``backend[:model[:effort]]``. Raises ``ValueError`` on invalid.
+
+        Validation:
+          - empty / whitespace-only → ``Empty backend spec``
+          - more than 3 colon-separated parts → explicit ValueError
+          - unknown backend → lists valid backends
+          - model on backend that doesn't accept one (rp/none) → ValueError
+          - unknown model → lists valid models for that backend
+          - effort on backend that doesn't accept one → ValueError
+          - unknown effort → lists valid efforts for that backend
+
+        Backend names are case-sensitive and lowercase. Model and effort are
+        matched exactly against the registry (no case-folding) so users see
+        consistent spec strings everywhere.
+        """
+        if spec is None or not str(spec).strip():
+            raise ValueError("Empty backend spec")
+        raw = str(spec).strip()
+        parts = raw.split(":")
+        if len(parts) > 3:
+            raise ValueError(
+                f"Too many ':' separators in spec: {raw!r} "
+                f"(expected backend[:model[:effort]], max 3 parts)"
+            )
+        backend = parts[0].strip()
+        if not backend:
+            raise ValueError(f"Empty backend in spec: {raw!r}")
+        if backend not in BACKEND_REGISTRY:
+            valid = sorted(BACKEND_REGISTRY.keys())
+            raise ValueError(
+                f"Unknown backend: {backend!r}. Valid: {valid}"
+            )
+        reg = BACKEND_REGISTRY[backend]
+
+        model: Optional[str] = None
+        if len(parts) > 1:
+            m = parts[1].strip()
+            model = m if m else None
+        effort: Optional[str] = None
+        if len(parts) > 2:
+            e = parts[2].strip()
+            effort = e if e else None
+
+        if model is not None:
+            if reg["models"] is None:
+                raise ValueError(
+                    f"Backend {backend!r} does not accept a model "
+                    f"(got {model!r})"
+                )
+            if model not in reg["models"]:
+                raise ValueError(
+                    f"Unknown model for {backend}: {model!r}. "
+                    f"Valid: {sorted(reg['models'])}"
+                )
+        if effort is not None:
+            if reg["efforts"] is None:
+                raise ValueError(
+                    f"Backend {backend!r} does not accept an effort "
+                    f"(got {effort!r})"
+                )
+            if effort not in reg["efforts"]:
+                raise ValueError(
+                    f"Unknown effort for {backend}: {effort!r}. "
+                    f"Valid: {sorted(reg['efforts'])}"
+                )
+        return cls(backend=backend, model=model, effort=effort)
+
+    def resolve(self) -> "BackendSpec":
+        """Fill missing fields from env vars then registry defaults.
+
+        Precedence (per field, most specific wins):
+          1. explicit value on this spec
+          2. ``FLOW_<BACKEND>_MODEL`` / ``FLOW_<BACKEND>_EFFORT`` env var
+          3. registry ``default_model`` / ``default_effort``
+
+        Backends with ``models is None`` (rp, none) always resolve ``model`` to
+        ``None`` — env vars are ignored for fields the backend doesn't accept.
+        Same for ``effort``. This prevents a stray ``FLOW_RP_MODEL`` from
+        leaking into an RP spec.
+        """
+        reg = BACKEND_REGISTRY[self.backend]
+        env_model_key = f"FLOW_{self.backend.upper()}_MODEL"
+        env_effort_key = f"FLOW_{self.backend.upper()}_EFFORT"
+
+        if reg["models"] is None:
+            model = None
+        else:
+            model = (
+                self.model
+                or os.environ.get(env_model_key)
+                or reg.get("default_model")
+            )
+
+        if reg["efforts"] is None:
+            effort = None
+        else:
+            effort = (
+                self.effort
+                or os.environ.get(env_effort_key)
+                or reg.get("default_effort")
+            )
+
+        return BackendSpec(self.backend, model, effort)
+
+    def __str__(self) -> str:
+        """Serialize back to ``backend[:model[:effort]]``.
+
+        Trailing ``None`` parts are dropped so ``str(BackendSpec("codex"))``
+        round-trips to ``"codex"`` (not ``"codex::"``). If only ``effort`` is
+        set (no model) we still emit ``backend::effort`` — that's a legal spec
+        shape and keeps the round-trip honest.
+        """
+        if self.model is None and self.effort is None:
+            return self.backend
+        if self.effort is None:
+            return f"{self.backend}:{self.model}"
+        # effort set; model may be None
+        model_part = self.model if self.model is not None else ""
+        return f"{self.backend}:{model_part}:{self.effort}"
 
 
 # --- Copilot Backend Helpers ---
