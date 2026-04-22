@@ -31,6 +31,9 @@ Use `gpt-5-mini` + `--effort low` for the e2e to minimize premium-request cost a
 **Model caveat from task 1**: Claude-family models (e.g., `claude-haiku-4.5`) reject `--effort` with `Error: Model ... does not support reasoning effort configuration`. Since `run_copilot_exec` always passes `--effort`, the e2e must use a GPT model that accepts effort. `gpt-5-mini` is the cheapest viable choice.
 <!-- Updated by plan-sync: task 1 discovered claude-haiku-4.5 rejects --effort; e2e must use gpt-5-mini -->
 
+**Auth-failure test caveat from task 2**: `COPILOT_GITHUB_TOKEN=bogus flowctl copilot check` does NOT force an auth failure in copilot CLI 1.0.34 — the CLI uses its own credential store and ignores env-var overrides. To cover the `authed: false` branch of `cmd_copilot_check` (and any equivalent failure paths added to review commands), write a **mocked subprocess test** rather than relying on a live env override. (Task 2 acceptance item 4 was satisfied via the exit-path docstring + skip-probe check; smoke_test.sh should follow the same pattern or skip the failure branch entirely.)
+<!-- Updated by plan-sync: task 2 worker found env-var override doesn't force auth failure; use mocked subprocess for the authed:false branch -->
+
 
 ## Investigation targets
 

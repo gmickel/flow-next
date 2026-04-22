@@ -11,7 +11,8 @@ Three new commands, each mirroring the codex counterpart with these adaptations:
 
 - **Resolve model + effort**: read `FLOW_COPILOT_MODEL` (default `claude-opus-4.5`) and `FLOW_COPILOT_EFFORT` (default `high`) at the top of each function, after args parsing. These flow into `run_copilot_exec` and into the receipt.
 - **Session UUID**: if prior receipt exists with `mode == "copilot"`, read its `session_id`. Else generate `str(uuid.uuid4())`.
-- **Context gathering**: call `gather_context_hints(base_branch)` and `get_embedded_file_contents(files, budget_env_var="FLOW_COPILOT_EMBED_MAX_BYTES")` — same API as codex commands, just the budget env var name changes.
+- **Context gathering**: call `gather_context_hints(base_branch)` and `get_embedded_file_contents(files, budget_env_var="FLOW_COPILOT_EMBED_MAX_BYTES")` — same API as codex commands, just the budget env var name changes. (Confirmed landed in task 2: `get_embedded_file_contents` at `flowctl.py:1008` accepts `budget_env_var` kwarg with `FLOW_CODEX_EMBED_MAX_BYTES` default; codex call sites unchanged.)
+<!-- Updated by plan-sync: task 2 landed the budget_env_var kwarg at flowctl.py:1008 as specified; no further changes needed there -->
 - **Prompt build**: call `build_review_prompt(...)` / `build_rereview_preamble(...)` / `build_completion_review_prompt(...)` / `build_standalone_review_prompt(...)` **unchanged** — XML scaffold + `<verdict>` tag is backend-agnostic (per repo-scout verification).
 - **Invoke `run_copilot_exec`** from task 1.
 - **Error handling**: match codex patterns (`flowctl.py:6136-6176`). SKIP sandbox-failure branch (copilot has no sandbox concept). Handle:
@@ -24,7 +25,8 @@ Three new commands, each mirroring the codex counterpart with these adaptations:
   - `model: <resolved model>`
   - `effort: <resolved effort>`
   - Everything else (type, id, base, verdict, timestamp, review, iteration if RALPH_ITERATION set, focus if provided) stays the same.
-- **Argparse wiring** — extend the `p_copilot` subparser created in task 2 with `impl-review`, `plan-review`, `completion-review` subcommands. Mirror the codex subparser flags at `flowctl.py:7710-7777` exactly (`--base`, `--files`, `--receipt`, `--focus`, etc.).
+- **Argparse wiring** — extend the `p_copilot` subparser created in task 2 (lives at `flowctl.py:8053`, currently only has `check`) with `impl-review`, `plan-review`, `completion-review` subcommands. Mirror the codex subparser flags at `flowctl.py:7710-7777` exactly (`--base`, `--files`, `--receipt`, `--focus`, etc.). Do NOT recreate the `p_copilot = subparsers.add_parser("copilot", ...)` block — it already exists; just add parsers to the existing `copilot_sub` subparsers object.
+<!-- Updated by plan-sync: task 2 landed p_copilot at flowctl.py:8053 with only check subcommand; task 3 extends existing copilot_sub, not creates new -->
 
 ## Investigation targets
 
