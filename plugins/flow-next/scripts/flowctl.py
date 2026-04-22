@@ -18,6 +18,7 @@ import shutil
 import sys
 import tempfile
 import unicodedata
+import uuid
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -1677,6 +1678,142 @@ def is_sandbox_failure(exit_code: int, stdout: str, stderr: str) -> bool:
             continue
 
     return False
+
+
+# --- Copilot Backend Helpers ---
+
+
+def require_copilot() -> str:
+    """Ensure copilot CLI is available. Returns path to copilot."""
+    copilot = shutil.which("copilot")
+    if not copilot:
+        error_exit("copilot not found in PATH", use_json=False, code=2)
+    return copilot
+
+
+def get_copilot_version() -> Optional[str]:
+    """Get copilot version, or None if not available."""
+    copilot = shutil.which("copilot")
+    if not copilot:
+        return None
+    try:
+        result = subprocess.run(
+            [copilot, "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        # Parse version from output like "GitHub Copilot CLI 1.0.34." or "1.0.34"
+        output = result.stdout.strip()
+        match = re.search(r"(\d+\.\d+\.\d+)", output)
+        return match.group(1) if match else output
+    except subprocess.CalledProcessError:
+        return None
+
+
+# Prompt-size threshold for argv vs. temp-file dispatch.
+# Windows CreateProcessW caps the whole command line at 32768 UTF-16 chars.
+# POSIX is much higher (macOS ~256KB, Linux ~2MB) but we use the same threshold
+# uniformly so behaviour is deterministic across platforms.
+COPILOT_ARGV_PROMPT_MAX = 30000
+
+
+def run_copilot_exec(
+    prompt: str,
+    session_id: str,
+    repo_root: Path,
+    model: Optional[str] = None,
+    effort: Optional[str] = None,
+) -> tuple[str, str, int, str]:
+    """Run copilot -p and return (stdout, session_id, exit_code, stderr).
+
+    Copilot's ``--resume=<uuid>`` is create-or-resume: the caller always supplies
+    a UUID. First call creates a session with that exact ID; subsequent calls
+    with the same ID resume. We therefore don't need stdout parsing to recover
+    the session ID (unlike Codex).
+
+    Prompt delivery:
+    - Short prompts (< COPILOT_ARGV_PROMPT_MAX chars): passed directly as argv.
+    - Large prompts: staged via ``.flow/tmp/copilot-prompt-<uuid>.txt`` then
+      read back into a Python string for argv (copilot's ``-p`` has no @file
+      syntax). The temp file is removed in ``finally`` so KeyboardInterrupt,
+      TimeoutExpired, and non-zero exits all clean up.
+
+    Config cascade (env > parameter > default):
+    - Model:  FLOW_COPILOT_MODEL  > ``model``  > ``claude-opus-4.5``
+    - Effort: FLOW_COPILOT_EFFORT > ``effort`` > ``high``
+
+    Returns:
+        tuple: (stdout, session_id, exit_code, stderr)
+        - exit_code 0 = success; non-zero = failure
+        - On timeout (600s) returns ("", session_id, 2, "<msg>")
+    """
+    copilot = require_copilot()
+
+    effective_model = (
+        os.environ.get("FLOW_COPILOT_MODEL") or model or "claude-opus-4.5"
+    )
+    effective_effort = (
+        os.environ.get("FLOW_COPILOT_EFFORT") or effort or "high"
+    )
+
+    # For large prompts, stage to disk then read back. Copilot has no @file
+    # syntax for -p, so we always end up with the prompt in argv — but the
+    # temp file acts as a scratch buffer that avoids exposing huge strings
+    # in any command-line reconstruction path.
+    tmp_prompt_path: Optional[Path] = None
+    prompt_for_argv = prompt
+    if len(prompt) >= COPILOT_ARGV_PROMPT_MAX:
+        tmp_dir = repo_root / ".flow" / "tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        tmp_prompt_path = tmp_dir / f"copilot-prompt-{uuid.uuid4()}.txt"
+        tmp_prompt_path.write_text(prompt, encoding="utf-8")
+        # Read back (copilot has no --prompt-file; argv is the only delivery path)
+        prompt_for_argv = tmp_prompt_path.read_text(encoding="utf-8")
+
+    cmd = [
+        copilot,
+        "-p",
+        prompt_for_argv,
+        f"--resume={session_id}",
+        "--output-format",
+        "text",
+        "-s",
+        "--no-ask-user",
+        "--allow-all-tools",
+        "--add-dir",
+        str(repo_root),
+        "--disable-builtin-mcps",
+        "--no-custom-instructions",
+        "--log-level",
+        "error",
+        "--no-auto-update",
+        "--model",
+        effective_model,
+        "--effort",
+        effective_effort,
+    ]
+
+    try:
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=False,  # Don't raise on non-zero exit; caller inspects
+                timeout=600,
+            )
+            return result.stdout, session_id, result.returncode, result.stderr
+        except subprocess.TimeoutExpired:
+            return "", session_id, 2, "copilot -p timed out (600s)"
+    finally:
+        # Clean up temp file on every exit path (success, failure, timeout,
+        # KeyboardInterrupt). unlink(missing_ok=True) avoids TOCTOU races.
+        if tmp_prompt_path is not None:
+            try:
+                tmp_prompt_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def build_review_prompt(
