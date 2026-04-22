@@ -11,13 +11,14 @@ Enforces:
 - Receipt must be written after SHIP verdict
 - Validates flowctl command patterns
 
-Supports both review backends:
+Supports three review backends:
 - rp (RepoPrompt): tracks chat-send calls and receipt writes
 - codex: tracks flowctl codex impl-review/plan-review and verdict output
+- copilot: tracks flowctl copilot impl-review/plan-review and verdict output
 """
 
 # Version for drift detection (bump when making changes)
-RALPH_GUARD_VERSION = "0.13.1"
+RALPH_GUARD_VERSION = "0.14.0"
 
 import json
 import os
@@ -46,6 +47,7 @@ def load_state(session_id: str) -> dict:
             state.setdefault("chat_send_succeeded", False)
             state.setdefault("flowctl_done_called", set())
             state.setdefault("codex_review_succeeded", False)
+            state.setdefault("copilot_review_succeeded", False)
             return state
         except (json.JSONDecodeError, KeyError, TypeError):
             pass
@@ -57,6 +59,7 @@ def load_state(session_id: str) -> dict:
         "chat_send_succeeded": False,  # Track if chat-send actually returned review text
         "flowctl_done_called": set(),  # Track tasks that had flowctl done called
         "codex_review_succeeded": False,  # Track if codex review returned verdict
+        "copilot_review_succeeded": False,  # Track if copilot review returned verdict
     }
 
 
@@ -268,6 +271,28 @@ def handle_pre_tool_use(data: dict) -> None:
                 "Session continuity is managed via session_id in receipts."
             )
 
+    # Block direct copilot calls (must use flowctl copilot wrappers)
+    if re.search(r"\bcopilot\b", command):
+        # Allow flowctl copilot wrappers
+        is_wrapper = re.search(r"flowctl\s+copilot|FLOWCTL.*copilot", command)
+        if not is_wrapper:
+            # Block any direct copilot invocation
+            output_block(
+                "BLOCKED: Do not call 'copilot' directly. "
+                "Use 'flowctl copilot impl-review', 'flowctl copilot plan-review', "
+                "or 'flowctl copilot completion-review' to ensure proper receipt "
+                "handling and session continuity (via client-generated UUID)."
+            )
+        # Block --continue even through wrappers (resumes most recent session,
+        # conflicts with parallel reviews and multi-project usage)
+        if re.search(r"--continue\b", command):
+            output_block(
+                "BLOCKED: Do not use '--continue' with copilot. "
+                "It resumes the most recent session and conflicts with parallel "
+                "reviews. Session continuity is managed via session_id (UUID) "
+                "stored in receipts and replayed with --resume=<uuid>."
+            )
+
     # Validate setup-review usage
     if "setup-review" in command:
         if not re.search(r"--repo-root", command):
@@ -312,13 +337,16 @@ def handle_pre_tool_use(data: dict) -> None:
         is_receipt_write = is_receipt_write_command(command, receipt_path)
         if is_receipt_write:
             state = load_state(session_id)
-            if not state.get("chat_send_succeeded") and not state.get(
-                "codex_review_succeeded"
+            if (
+                not state.get("chat_send_succeeded")
+                and not state.get("codex_review_succeeded")
+                and not state.get("copilot_review_succeeded")
             ):
                 output_block(
                     "BLOCKED: Cannot write receipt before review completes. "
-                    "You must run 'flowctl rp chat-send' or 'flowctl codex impl-review/plan-review' "
-                    "and receive a review response before writing the receipt."
+                    "You must run 'flowctl rp chat-send', 'flowctl codex impl-review/plan-review', "
+                    "or 'flowctl copilot impl-review/plan-review' and receive a review "
+                    "response before writing the receipt."
                 )
             # Validate receipt has required fields. Stop/ralph.sh validate the actual file.
             if not command_has_json_field(command, "type"):
@@ -439,6 +467,21 @@ def handle_post_tool_use(data: dict) -> None:
             state["last_verdict"] = verdict_in_output.group(1)
             save_state(session_id, state)
 
+    # Track copilot review calls - check for verdict in output
+    if (
+        "flowctl" in command
+        and "copilot" in command
+        and ("impl-review" in command or "plan-review" in command or "completion-review" in command)
+    ):
+        # Copilot writes receipt automatically with --receipt flag, but we still track success
+        verdict_in_output = re.search(
+            r"<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>", response_text
+        )
+        if verdict_in_output:
+            state["copilot_review_succeeded"] = True
+            state["last_verdict"] = verdict_in_output.group(1)
+            save_state(session_id, state)
+
     # Track flowctl done calls - match various invocation patterns:
     # - flowctl done <task>
     # - flowctl.py done <task>
@@ -488,6 +531,7 @@ def handle_post_tool_use(data: dict) -> None:
         if is_receipt_write_command(command, receipt_path):
             state["chat_send_succeeded"] = False  # Reset for next review
             state["codex_review_succeeded"] = False  # Reset codex state too
+            state["copilot_review_succeeded"] = False  # Reset copilot state too
             save_state(session_id, state)
 
     # Track setup-review output (W= T=)

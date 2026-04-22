@@ -26,6 +26,8 @@ Wire Copilot into the Ralph autonomous loop. Covers ralph-guard.py (blocks direc
   - `FLOW_COPILOT_MODEL` (default `claude-opus-4.5`)
   - `FLOW_COPILOT_EFFORT` (default `high`)
   - `FLOW_COPILOT_EMBED_MAX_BYTES` (default 512000)
+  - **Note (task-3 finding):** `FLOW_COPILOT_MODEL`/`FLOW_COPILOT_EFFORT` flow through `_resolve_copilot_model_effort()` (env > arg > default cascade) and land in the receipt (`model`, `effort` keys). No CLI flags — env-only. Document accordingly in config.env comments.
+<!-- Updated by plan-sync: task 3 landed env-cascade resolver; receipts stamp resolved values -->
 - `templates/ralph.sh`:
   - Lines 227-233 (UI display): add copilot to backend display strings
   - Lines 277-312 (spinner messages for plan/impl/completion review UI): add copilot variants

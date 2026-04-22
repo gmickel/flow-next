@@ -26,6 +26,9 @@ Setup-skill detection of `copilot` CLI + smoke test coverage for the copilot bac
   - Assert `mode == "copilot"`
   - Clean up: epic reset, receipt unlink
 
+- **Optional re-review smoke (task-3 finding):** if covering session continuity (R3), the prior receipt MUST have `mode == "copilot"` — task 3 guards re-review resume on this key to prevent cross-backend UUID leakage. A codex-mode receipt at the same path will be treated as no-prior-receipt and a fresh UUID will be generated. Sequence: run copilot plan-review → assert receipt → run again against same --receipt → assert `session_id` unchanged.
+<!-- Updated by plan-sync: task 3 only resumes copilot session when prior receipt mode==copilot; cross-backend receipts fresh-start -->
+
 Use `gpt-5-mini` + `--effort low` for the e2e to minimize premium-request cost and wall time.
 
 **Model caveat from task 1**: Claude-family models (e.g., `claude-haiku-4.5`) reject `--effort` with `Error: Model ... does not support reasoning effort configuration`. Since `run_copilot_exec` always passes `--effort`, the e2e must use a GPT model that accepts effort. `gpt-5-mini` is the cheapest viable choice.

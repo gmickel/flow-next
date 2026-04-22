@@ -30,21 +30,25 @@ Scaffold or update repo-local Ralph harness. Opt-in only.
    ```bash
    HAVE_RP=$(which rp-cli >/dev/null 2>&1 && echo 1 || echo 0)
    HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
+   HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
    ```
 
 4. Determine review backend (skip if UPDATE_MODE=1):
-   - If BOTH available, ask user (do NOT use AskUserQuestion tool):
+   - If MULTIPLE available, ask user (do NOT use AskUserQuestion tool). Only
+     show the options whose CLIs were detected:
      ```
-     Both RepoPrompt and Codex available. Which review backend?
+     Multiple review backends available. Which one?
      a) RepoPrompt (macOS, visual builder)
      b) Codex CLI (cross-platform, GPT 5.2 High)
+     c) GitHub Copilot CLI (cross-platform, Claude/GPT via Copilot)
 
-     (Reply: "a", "rp", "b", "codex", or just tell me)
+     (Reply: "a", "rp", "b", "codex", "c", "copilot", or just tell me)
      ```
-     Wait for response. Default if empty/ambiguous: `rp`
+     Wait for response. Default if empty/ambiguous: prefer `rp` > `codex` > `copilot`.
    - If only rp-cli available: use `rp`
    - If only codex available: use `codex`
-   - If neither available: use `none`
+   - If only copilot available: use `copilot`
+   - If none available: use `none`
 
 5. Copy files using bash (MUST use cp, NOT Write tool):
 

@@ -55,9 +55,8 @@ Three new commands, each mirroring the codex counterpart with these adaptations:
 - [ ] `RALPH_ITERATION=3 ...` stamps iteration in receipt (same as codex)
 
 ## Done summary
-
-(filled in when task completes)
-
+Added cmd_copilot_{impl,plan,completion}_review mirroring the codex trio, plus argparse wiring on the existing copilot_sub: client-generated session UUIDs, FLOW_COPILOT_EMBED_MAX_BYTES routing via the budget_env_var kwarg, receipts stamped with mode=copilot + resolved model + effort, stale-receipt cleanup on errors, and no sandbox branch.
 ## Evidence
-
-(filled in when task completes)
+- Commits: 3616187818f601337cc01091eb6504d2e428473a
+- Tests: bash plugins/flow-next/scripts/smoke_test.sh (52/52 passed, pre and post commit), python3 -m py_compile plugins/flow-next/scripts/flowctl.py, flowctl copilot --help -> lists check,impl-review,plan-review,completion-review, flowctl copilot impl-review --help -> [task] --base --focus --receipt --json, flowctl copilot plan-review --help -> epic --files --base --receipt --json, flowctl copilot completion-review --help -> epic --base --receipt --json, Standalone impl-review invocation (cd /tmp dir, no .flow) reached run_copilot_exec -> captured copilot CLI 'claude-opus-4.5 does not support reasoning effort' error and routed through error_exit code=2 as expected, Stale-receipt cleanup: wrote receipt with fake uuid, ran impl-review -> copilot rejected fake uuid, stale receipt unlinked, error_exit returned
+- PRs:
