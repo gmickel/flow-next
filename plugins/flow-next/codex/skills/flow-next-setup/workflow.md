@@ -187,7 +187,7 @@ Current configuration:
 - Memory: <enabled|disabled> (change with: flowctl config set memory.enabled <true|false>)
 - Plan-Sync: <enabled|disabled> (change with: flowctl config set planSync.enabled <true|false>)
 - Plan-Sync cross-epic: <enabled|disabled> (change with: flowctl config set planSync.crossEpic <true|false>)
-- Review backend: <codex|rp|copilot|none> (change with: flowctl config set review.backend <codex|rp|copilot|none>)
+- Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|rp|copilot|none OR spec form like codex:gpt-5.4:xhigh>)
 - GitHub scout: <enabled|disabled> (change with: flowctl config set scouts.github <true|false>)
 ```
 
@@ -265,6 +265,8 @@ Available questions (include only if corresponding config is unset):
   "multiSelect": false
 }
 ```
+
+Stored value is a bare backend name by default. Power users can also write a full spec like `codex:gpt-5.4:high` or `copilot:claude-opus-4.5:xhigh` via `flowctl config set review.backend <spec>` after setup — the review commands accept both forms.
 
 **Docs question** (always include — adjust default based on platform):
 

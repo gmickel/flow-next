@@ -2,7 +2,10 @@ You are running one Ralph epic completion review iteration.
 
 Inputs:
 - EPIC_ID={{EPIC_ID}}
-- COMPLETION_REVIEW={{COMPLETION_REVIEW}}
+- COMPLETION_REVIEW={{COMPLETION_REVIEW}}                  (may be spec form, e.g. `codex:gpt-5.4:xhigh`)
+- COMPLETION_REVIEW_BACKEND={{COMPLETION_REVIEW_BACKEND}}  (bare backend name — use this for branching)
+
+The full spec is also exported as `FLOW_REVIEW_BACKEND` for flowctl to resolve model + effort.
 
 Steps:
 1) Re-anchor:
@@ -17,18 +20,25 @@ Steps:
    ```
 
 Ralph mode rules (must follow):
-- If COMPLETION_REVIEW=rp: use `flowctl rp` wrappers (setup-review, select-add, prompt-get, chat-send).
-- If COMPLETION_REVIEW=codex: use `flowctl codex` wrappers (completion-review with --receipt).
-- If COMPLETION_REVIEW=copilot: use `flowctl copilot` wrappers (completion-review with --receipt). Never call `copilot` directly; never pass `--continue`.
+- Branch on COMPLETION_REVIEW_BACKEND (bare name), NOT the full spec.
+  Spec form (e.g. `codex:gpt-5.4:xhigh`) carries model + effort; the backend
+  name picks the wrapper and the full spec flows through `FLOW_REVIEW_BACKEND`.
+- If COMPLETION_REVIEW_BACKEND=rp: use `flowctl rp` wrappers (setup-review, select-add, prompt-get, chat-send).
+- If COMPLETION_REVIEW_BACKEND=codex: use `flowctl codex` wrappers (completion-review with --receipt).
+- If COMPLETION_REVIEW_BACKEND=copilot: use `flowctl copilot` wrappers (completion-review with --receipt). Never call `copilot` directly; never pass `--continue`.
 - Write receipt via bash heredoc (no Write tool) if `REVIEW_RECEIPT_PATH` set.
 - If any rule is violated, output `<promise>RETRY</promise>` and stop.
 
-3) Completion review gate:
-   - If COMPLETION_REVIEW=rp: run `/flow-next:epic-review {{EPIC_ID}} --review=rp`
-   - If COMPLETION_REVIEW=codex: run `/flow-next:epic-review {{EPIC_ID}} --review=codex`
-   - If COMPLETION_REVIEW=copilot: run `/flow-next:epic-review {{EPIC_ID}} --review=copilot`
-   - If COMPLETION_REVIEW=none: set ship and stop:
+3) Completion review gate (branch on bare backend; full spec is already in env):
+   - If COMPLETION_REVIEW_BACKEND=rp: run `/flow-next:epic-review {{EPIC_ID}} --review=rp`
+   - If COMPLETION_REVIEW_BACKEND=codex: run `/flow-next:epic-review {{EPIC_ID}} --review=codex`
+   - If COMPLETION_REVIEW_BACKEND=copilot: run `/flow-next:epic-review {{EPIC_ID}} --review=copilot`
+   - If COMPLETION_REVIEW_BACKEND=none: set ship and stop:
      `scripts/ralph/flowctl epic set-completion-review-status {{EPIC_ID}} --status ship --json`
+
+   Note: when COMPLETION_REVIEW is spec form (e.g. `codex:gpt-5.4:xhigh`), the
+   /flow-next:epic-review skill picks up the spec from `FLOW_REVIEW_BACKEND`
+   automatically — no extra flag needed.
 
 4) The skill will loop internally until `<verdict>SHIP</verdict>`:
    - First review uses `--new-chat`

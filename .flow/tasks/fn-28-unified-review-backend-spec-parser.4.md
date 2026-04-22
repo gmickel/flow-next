@@ -83,9 +83,8 @@ Lift the spec grammar into the top-of-the-cascade surfaces: `FLOW_REVIEW_BACKEND
 - [ ] No edits to generated codex mirror files (task 5 regens)
 
 ## Done summary
-
-(filled in when task completes)
-
+cmd_review_backend now accepts spec form (codex:gpt-5.4:xhigh) from FLOW_REVIEW_BACKEND and .flow/config.json via parse_backend_spec_lenient; JSON mode returns full {backend, spec, model, effort, source} and text mode still prints bare backend for skill grep back-compat. Six review skill files (impl/plan/epic x SKILL+workflow), flow-next-setup workflow, and all Ralph templates (config.env, ralph.sh, prompt_{plan,work,completion}.md) now document the spec grammar and pass full spec through FLOW_REVIEW_BACKEND while keeping equality/gate checks on the bare backend (extracted via ${VAR%%:*}).
 ## Evidence
-
-(filled in when task completes)
+- Commits: 59eeb68bcee06cdd068d8456338e51c392417a8f
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (112 pass, +14 new), plugins/flow-next/scripts/smoke_test.sh (67 pass), bash -n plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh (syntax OK), manual: FLOW_REVIEW_BACKEND=codex:gpt-5.4:xhigh flowctl review-backend --json returns full spec + model + effort + source (env), manual: text mode still prints bare 'codex' for skill grep back-compat, manual: legacy FLOW_REVIEW_BACKEND=codex still resolves to codex:gpt-5.4:high, manual: bash ${VAR%%:*} extracts bare backend from both spec and bare forms
+- PRs:
