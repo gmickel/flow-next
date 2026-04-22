@@ -138,7 +138,7 @@ git log ${DIFF_BASE}..HEAD --oneline
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
 
 # Runtime config via env vars (no CLI flags for model/effort):
-#   FLOW_COPILOT_MODEL   (default claude-opus-4.5)
+#   FLOW_COPILOT_MODEL   (default gpt-5.2)
 #   FLOW_COPILOT_EFFORT  (default high; values: low|medium|high|xhigh)
 
 $FLOWCTL copilot impl-review "$TASK_ID" --base "$DIFF_BASE" --receipt "$RECEIPT_PATH"

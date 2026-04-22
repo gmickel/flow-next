@@ -67,7 +67,7 @@ Depends on fn-27 landing first (copilot runtime needs to exist before its spec c
        "copilot": {
            "models": {"claude-sonnet-4.5", "claude-haiku-4.5", "claude-opus-4.5", "claude-sonnet-4", "gpt-5.2", "gpt-5.2-codex", "gpt-5-mini", "gpt-4.1"},
            "efforts": {"low", "medium", "high", "xhigh"},
-           "default_model": "claude-opus-4.5",
+           "default_model": "gpt-5.2",
            "default_effort": "high",
        },
        "none": {

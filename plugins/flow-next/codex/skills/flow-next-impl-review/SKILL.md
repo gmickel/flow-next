@@ -144,7 +144,7 @@ On NEEDS_WORK: fix code, commit, re-run (receipt enables session continuity).
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
 
 # Optional: override model + effort via env (no CLI flags)
-# FLOW_COPILOT_MODEL=claude-opus-4.5 FLOW_COPILOT_EFFORT=high \
+# FLOW_COPILOT_MODEL=gpt-5.2 FLOW_COPILOT_EFFORT=high \
 
 if [[ -n "$BASE_COMMIT" ]]; then
   $FLOWCTL copilot impl-review "$TASK_ID" --base "$BASE_COMMIT" --receipt "$RECEIPT_PATH"

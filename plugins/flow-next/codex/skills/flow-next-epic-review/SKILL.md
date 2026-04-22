@@ -131,7 +131,7 @@ On NEEDS_WORK: fix code, commit, re-run (receipt enables session continuity).
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt.json}"
 
 # Optional: override model + effort via env (no CLI flags)
-# FLOW_COPILOT_MODEL=claude-opus-4.5 FLOW_COPILOT_EFFORT=high \
+# FLOW_COPILOT_MODEL=gpt-5.2 FLOW_COPILOT_EFFORT=high \
 
 $FLOWCTL copilot completion-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
 # Output includes VERDICT=SHIP|NEEDS_WORK

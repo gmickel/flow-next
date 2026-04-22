@@ -146,7 +146,7 @@ $FLOWCTL checkpoint save --epic "$EPIC_ID" --json
 CODE_FILES="src/main.py,src/config.py"
 
 # Optional: override model + effort via env (no CLI flags)
-# FLOW_COPILOT_MODEL=claude-opus-4.5 FLOW_COPILOT_EFFORT=high \
+# FLOW_COPILOT_MODEL=gpt-5.2 FLOW_COPILOT_EFFORT=high \
 
 $FLOWCTL copilot plan-review "$EPIC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
 # Output includes VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK

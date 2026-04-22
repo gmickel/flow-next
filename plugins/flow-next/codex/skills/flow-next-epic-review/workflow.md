@@ -122,7 +122,7 @@ $FLOWCTL show "$EPIC_ID" --json
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt.json}"
 
 # Runtime config via env vars (no CLI flags for model/effort):
-#   FLOW_COPILOT_MODEL   (default claude-opus-4.5)
+#   FLOW_COPILOT_MODEL   (default gpt-5.2)
 #   FLOW_COPILOT_EFFORT  (default high)
 
 $FLOWCTL copilot completion-review "$EPIC_ID" --receipt "$RECEIPT_PATH"

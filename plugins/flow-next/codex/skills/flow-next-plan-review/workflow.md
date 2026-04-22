@@ -137,7 +137,7 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
 CODE_FILES="src/main.py,src/config.py"  # Customize per epic
 
 # Runtime config via env vars (no CLI flags for model/effort):
-#   FLOW_COPILOT_MODEL   (default claude-opus-4.5)
+#   FLOW_COPILOT_MODEL   (default gpt-5.2)
 #   FLOW_COPILOT_EFFORT  (default high)
 
 $FLOWCTL copilot plan-review "$EPIC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"

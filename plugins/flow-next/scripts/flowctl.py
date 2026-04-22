@@ -1762,7 +1762,7 @@ def run_copilot_exec(
     copilot = require_copilot()
 
     effective_model = (
-        os.environ.get("FLOW_COPILOT_MODEL") or model or "claude-opus-4.5"
+        os.environ.get("FLOW_COPILOT_MODEL") or model or "gpt-5.2"
     )
     effective_effort = (
         os.environ.get("FLOW_COPILOT_EFFORT") or effort or "high"
@@ -7071,7 +7071,7 @@ def _resolve_copilot_model_effort(
     Matches the cascade inside ``run_copilot_exec`` so the receipt reflects
     the exact values sent to copilot.
     """
-    model = os.environ.get("FLOW_COPILOT_MODEL") or model_arg or "claude-opus-4.5"
+    model = os.environ.get("FLOW_COPILOT_MODEL") or model_arg or "gpt-5.2"
     effort = os.environ.get("FLOW_COPILOT_EFFORT") or effort_arg or "high"
     return model, effort
 

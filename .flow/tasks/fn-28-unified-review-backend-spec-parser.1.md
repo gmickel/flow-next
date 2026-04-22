@@ -17,7 +17,7 @@ Inside `flowctl.py`, add a new section (suggested location: right after the exis
 - **`BACKEND_REGISTRY`** — module-level dict:
   - `"rp"` → `{models: None, efforts: None}` (bare-backend only)
   - `"codex"` → `{models: {"gpt-5.4", "gpt-5.2", "gpt-5-mini", ...}, efforts: {"none","minimal","low","medium","high","xhigh"}, default_model: "gpt-5.4", default_effort: "high"}`
-  - `"copilot"` → `{models: {"claude-sonnet-4.5","claude-haiku-4.5","claude-opus-4.5","claude-sonnet-4","gpt-5.2","gpt-5.2-codex","gpt-5-mini","gpt-4.1"}, efforts: {"low","medium","high","xhigh"}, default_model: "claude-opus-4.5", default_effort: "high"}`
+  - `"copilot"` → `{models: {"claude-sonnet-4.5","claude-haiku-4.5","claude-opus-4.5","claude-sonnet-4","gpt-5.2","gpt-5.2-codex","gpt-5-mini","gpt-4.1"}, efforts: {"low","medium","high","xhigh"}, default_model: "gpt-5.2", default_effort: "high"}`
   - `"none"` → `{models: None, efforts: None}`
   - Include a brief docstring noting the `minimal` effort caveat for codex (server-side rejects when `web_search` tool enabled — safe for flowctl's review use case).
 
