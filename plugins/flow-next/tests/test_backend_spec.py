@@ -861,5 +861,494 @@ class TestShowBackendResolution(unittest.TestCase):
             self.assertIn("codex:gpt-5.4-high", err.getvalue())
 
 
+# --- run_codex_exec / run_copilot_exec honor spec.model + spec.effort (fn-28.3) ---
+
+
+class _FakeCompleted:
+    """Minimal stand-in for subprocess.CompletedProcess.
+
+    Captures the argv the caller would have passed to subprocess.run so tests
+    can assert on --model / --effort / -c model_reasoning_effort flags
+    without actually invoking codex or copilot.
+    """
+
+    def __init__(self, stdout: str = "", stderr: str = "", returncode: int = 0) -> None:
+        self.stdout = stdout
+        self.stderr = stderr
+        self.returncode = returncode
+
+
+@contextmanager
+def _stub_subprocess(module, captured: list, *, stdout: str = "", returncode: int = 0):
+    """Replace ``subprocess.run`` in the flowctl module with a capturing stub.
+
+    The stub records ``(cmd_argv, kwargs)`` to ``captured`` and returns a
+    ``_FakeCompleted`` whose stdout/returncode match the test's intent.
+    Any call into ``shutil.which`` is also stubbed to return a sentinel path
+    so ``require_codex`` / ``require_copilot`` don't error out on hosts that
+    don't have codex/copilot installed.
+    """
+    import subprocess as _subprocess
+
+    real_run = module.subprocess.run
+    real_which = module.shutil.which
+
+    def fake_run(cmd, **kwargs):
+        captured.append((list(cmd), kwargs))
+        return _FakeCompleted(stdout=stdout, returncode=returncode)
+
+    def fake_which(binary):
+        if binary in ("codex", "copilot"):
+            return f"/fake/bin/{binary}"
+        return real_which(binary)
+
+    module.subprocess.run = fake_run
+    module.shutil.which = fake_which
+    try:
+        yield
+    finally:
+        module.subprocess.run = real_run
+        module.shutil.which = real_which
+
+
+class TestRunCodexExecHonorsSpec(unittest.TestCase):
+    """``run_codex_exec`` must pull model + effort from the passed ``BackendSpec``
+    instead of the env-var / hardcoded defaults that lived there pre-fn-28.3."""
+
+    def setUp(self) -> None:
+        self._env_snapshot = os.environ.copy()
+        for key in list(os.environ.keys()):
+            if key.startswith("FLOW_"):
+                os.environ.pop(key, None)
+
+    def tearDown(self) -> None:
+        os.environ.clear()
+        os.environ.update(self._env_snapshot)
+
+    def test_spec_model_and_effort_flow_into_argv(self) -> None:
+        # BackendSpec("codex", "gpt-5.2", "medium") must produce:
+        #   --model gpt-5.2
+        #   -c model_reasoning_effort="medium"
+        # NOT the old hardcoded --model gpt-5.4 / effort="high".
+        captured: list = []
+        spec = BackendSpec("codex", "gpt-5.2", "medium")
+        with _stub_subprocess(flowctl, captured, stdout='{"type":"thread.started","thread_id":"t1"}'):
+            flowctl.run_codex_exec("prompt", sandbox="read-only", spec=spec)
+        self.assertEqual(len(captured), 1)
+        argv, _kwargs = captured[0]
+        self.assertIn("--model", argv)
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.2")
+        # -c flag carries the effort in the form model_reasoning_effort="<val>"
+        self.assertIn("-c", argv)
+        c_val = argv[argv.index("-c") + 1]
+        self.assertEqual(c_val, 'model_reasoning_effort="medium"')
+
+    def test_spec_none_falls_back_to_registry_defaults(self) -> None:
+        # Defensive path: spec=None must resolve via bare-codex defaults
+        # (gpt-5.4 / high). This keeps non-review callers safe.
+        captured: list = []
+        with _stub_subprocess(flowctl, captured, stdout='{"type":"thread.started","thread_id":"t1"}'):
+            flowctl.run_codex_exec("prompt", sandbox="read-only", spec=None)
+        argv, _ = captured[0]
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.4")
+        self.assertEqual(
+            argv[argv.index("-c") + 1],
+            'model_reasoning_effort="high"',
+        )
+
+    def test_partial_spec_gets_resolved(self) -> None:
+        # Spec with only backend set — should resolve() upstream. Effort env
+        # fills the gap.
+        os.environ["FLOW_CODEX_EFFORT"] = "low"
+        captured: list = []
+        spec = BackendSpec("codex")  # no model, no effort
+        with _stub_subprocess(flowctl, captured, stdout='{"type":"thread.started","thread_id":"t1"}'):
+            flowctl.run_codex_exec("prompt", sandbox="read-only", spec=spec)
+        argv, _ = captured[0]
+        # Registry default model (no env set) + env effort.
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.4")
+        self.assertEqual(
+            argv[argv.index("-c") + 1],
+            'model_reasoning_effort="low"',
+        )
+
+    def test_explicit_spec_wins_over_env(self) -> None:
+        # Env must NOT override an explicit spec value — that would defeat
+        # per-task model pinning.
+        os.environ["FLOW_CODEX_MODEL"] = "gpt-5"
+        os.environ["FLOW_CODEX_EFFORT"] = "low"
+        captured: list = []
+        spec = BackendSpec("codex", "gpt-5.2", "xhigh")
+        with _stub_subprocess(flowctl, captured, stdout='{"type":"thread.started","thread_id":"t1"}'):
+            flowctl.run_codex_exec("prompt", sandbox="read-only", spec=spec)
+        argv, _ = captured[0]
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.2")
+        self.assertEqual(
+            argv[argv.index("-c") + 1],
+            'model_reasoning_effort="xhigh"',
+        )
+
+
+class TestRunCopilotExecHonorsSpec(unittest.TestCase):
+    """``run_copilot_exec`` must honor the spec. The claude-* effort skip
+    is a live fn-27 bug fix and must remain intact."""
+
+    def setUp(self) -> None:
+        self._env_snapshot = os.environ.copy()
+        for key in list(os.environ.keys()):
+            if key.startswith("FLOW_"):
+                os.environ.pop(key, None)
+        self._tmp = tempfile.TemporaryDirectory(prefix="copilot-spec-test-")
+        self.repo_root = Path(self._tmp.name)
+
+    def tearDown(self) -> None:
+        os.environ.clear()
+        os.environ.update(self._env_snapshot)
+        self._tmp.cleanup()
+
+    def test_spec_model_and_effort_flow_into_argv(self) -> None:
+        captured: list = []
+        spec = BackendSpec("copilot", "gpt-5.2", "medium")
+        with _stub_subprocess(flowctl, captured, stdout="verdict"):
+            flowctl.run_copilot_exec(
+                "prompt", session_id="s1", repo_root=self.repo_root, spec=spec
+            )
+        argv, _ = captured[0]
+        self.assertIn("--model", argv)
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.2")
+        # gpt-5.2 accepts --effort (non-claude model).
+        self.assertIn("--effort", argv)
+        self.assertEqual(argv[argv.index("--effort") + 1], "medium")
+
+    def test_claude_model_skips_effort_flag(self) -> None:
+        # THE fn-27 live bug fix: Claude models reject --effort. Must stay.
+        captured: list = []
+        spec = BackendSpec("copilot", "claude-opus-4.5", "xhigh")
+        with _stub_subprocess(flowctl, captured, stdout="verdict"):
+            flowctl.run_copilot_exec(
+                "prompt", session_id="s1", repo_root=self.repo_root, spec=spec
+            )
+        argv, _ = captured[0]
+        self.assertEqual(argv[argv.index("--model") + 1], "claude-opus-4.5")
+        # --effort must NOT appear for claude-* — Copilot CLI rejects it.
+        self.assertNotIn("--effort", argv)
+
+    def test_claude_haiku_also_skips_effort(self) -> None:
+        # Every claude-* model, not just opus. Use .startswith("claude-").
+        captured: list = []
+        spec = BackendSpec("copilot", "claude-haiku-4.5", "low")
+        with _stub_subprocess(flowctl, captured, stdout="verdict"):
+            flowctl.run_copilot_exec(
+                "prompt", session_id="s1", repo_root=self.repo_root, spec=spec
+            )
+        argv, _ = captured[0]
+        self.assertEqual(argv[argv.index("--model") + 1], "claude-haiku-4.5")
+        self.assertNotIn("--effort", argv)
+
+    def test_gpt_model_keeps_effort(self) -> None:
+        # Sanity — non-claude must keep --effort.
+        captured: list = []
+        spec = BackendSpec("copilot", "gpt-4.1", "high")
+        with _stub_subprocess(flowctl, captured, stdout="verdict"):
+            flowctl.run_copilot_exec(
+                "prompt", session_id="s1", repo_root=self.repo_root, spec=spec
+            )
+        argv, _ = captured[0]
+        self.assertIn("--effort", argv)
+        self.assertEqual(argv[argv.index("--effort") + 1], "high")
+
+    def test_explicit_spec_wins_over_env(self) -> None:
+        os.environ["FLOW_COPILOT_MODEL"] = "gpt-4.1"
+        os.environ["FLOW_COPILOT_EFFORT"] = "low"
+        captured: list = []
+        spec = BackendSpec("copilot", "gpt-5.2", "xhigh")
+        with _stub_subprocess(flowctl, captured, stdout="verdict"):
+            flowctl.run_copilot_exec(
+                "prompt", session_id="s1", repo_root=self.repo_root, spec=spec
+            )
+        argv, _ = captured[0]
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.2")
+        self.assertEqual(argv[argv.index("--effort") + 1], "xhigh")
+
+
+# --- resolve_review_spec precedence (fn-28.3) ---
+
+
+class TestResolveReviewSpec(unittest.TestCase):
+    """The resolution helper is the single source of truth for which spec
+    flows into a review. Test each precedence rung."""
+
+    def setUp(self) -> None:
+        self._env_snapshot = os.environ.copy()
+        for key in list(os.environ.keys()):
+            if key.startswith("FLOW_"):
+                os.environ.pop(key, None)
+
+    def tearDown(self) -> None:
+        os.environ.clear()
+        os.environ.update(self._env_snapshot)
+
+    def test_task_review_spec_wins(self) -> None:
+        # Task fn-9-e.1 has review: "codex:gpt-5.2" — resolved spec must
+        # carry that model through even when an env model var is set.
+        os.environ["FLOW_CODEX_MODEL"] = "gpt-5"  # loses to task spec
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e", default_review="codex:gpt-5.4")
+            _write_task(
+                td / ".flow", "fn-9-e.1", "fn-9-e", review="codex:gpt-5.2"
+            )
+            resolved = flowctl.resolve_review_spec("codex", "fn-9-e.1")
+            self.assertEqual(resolved.backend, "codex")
+            self.assertEqual(resolved.model, "gpt-5.2")
+
+    def test_epic_default_fills_when_task_unset(self) -> None:
+        with _flow_fixture() as td:
+            _write_epic(
+                td / ".flow", "fn-9-e", default_review="codex:gpt-5.2:medium"
+            )
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")  # no per-task spec
+            resolved = flowctl.resolve_review_spec("codex", "fn-9-e.1")
+            self.assertEqual(resolved.model, "gpt-5.2")
+            self.assertEqual(resolved.effort, "medium")
+
+    def test_env_review_backend_beats_config(self) -> None:
+        os.environ["FLOW_REVIEW_BACKEND"] = "codex:gpt-5.2"
+        with _flow_fixture() as td:
+            # Config says gpt-5 but env wins.
+            (td / ".flow" / "config.json").write_text(
+                json.dumps({"review": {"backend": "codex:gpt-5"}})
+            )
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
+            resolved = flowctl.resolve_review_spec("codex", "fn-9-e.1")
+            self.assertEqual(resolved.model, "gpt-5.2")
+
+    def test_config_backend_when_nothing_else_set(self) -> None:
+        with _flow_fixture() as td:
+            (td / ".flow" / "config.json").write_text(
+                json.dumps({"review": {"backend": "copilot:gpt-5.2"}})
+            )
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
+            resolved = flowctl.resolve_review_spec("codex", "fn-9-e.1")
+            # Config spec says copilot — resolved carries that forward. The
+            # codex command still executes via codex CLI; model name travels
+            # in spec.
+            self.assertEqual(resolved.backend, "copilot")
+            self.assertEqual(resolved.model, "gpt-5.2")
+
+    def test_backend_hint_fallback_when_nothing_set(self) -> None:
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
+            resolved = flowctl.resolve_review_spec("codex", "fn-9-e.1")
+            self.assertEqual(resolved.backend, "codex")
+            self.assertEqual(resolved.model, "gpt-5.4")  # registry default
+            self.assertEqual(resolved.effort, "high")
+
+    def test_no_task_id_still_resolves(self) -> None:
+        # Plan / completion reviews pass task_id=None — must still resolve.
+        with _flow_fixture():
+            resolved = flowctl.resolve_review_spec("copilot", None)
+            self.assertEqual(resolved.backend, "copilot")
+            self.assertEqual(resolved.model, "gpt-5.2")
+
+
+# --- Per-task review spec actually runs that model (fn-28.3 integration) ---
+
+
+class TestPerTaskReviewSpecIntegration(unittest.TestCase):
+    """End-to-end-ish: task with ``review: "codex:gpt-5.2"`` + `flowctl codex
+    impl-review fn-X` => subprocess argv contains ``--model gpt-5.2`` (not the
+    default gpt-5.4). Receipt stamps model+effort+spec from resolved spec."""
+
+    def setUp(self) -> None:
+        self._env_snapshot = os.environ.copy()
+        for key in list(os.environ.keys()):
+            if key.startswith("FLOW_"):
+                os.environ.pop(key, None)
+
+    def tearDown(self) -> None:
+        os.environ.clear()
+        os.environ.update(self._env_snapshot)
+
+    def _stub_review_side_effects(self, module):
+        """Stub out git/file-system heavy helpers so cmd_codex_impl_review
+        can run in-process without an actual git repo or codex binary.
+
+        Returns a context manager. Minimum set needed:
+          - get_repo_root → fixture dir
+          - get_changed_files → empty list (skip embed logic)
+          - gather_context_hints → ""
+          - build_review_prompt → returns "fake"
+          - parse_codex_verdict → SHIP
+        Plus ``subprocess.run`` / ``shutil.which`` from _stub_subprocess for
+        the run_codex_exec call.
+        """
+        @contextmanager
+        def _cm(fixture_dir: Path, captured: list):
+            saved = {
+                "get_repo_root": module.get_repo_root,
+                "get_changed_files": module.get_changed_files,
+                "gather_context_hints": module.gather_context_hints,
+                "get_embedded_file_contents": module.get_embedded_file_contents,
+                "build_review_prompt": module.build_review_prompt,
+                "parse_codex_verdict": module.parse_codex_verdict,
+                "resolve_codex_sandbox": module.resolve_codex_sandbox,
+                "is_sandbox_failure": module.is_sandbox_failure,
+                "subprocess_Popen": module.subprocess.Popen,
+            }
+
+            # Minimal git diff via Popen stub — return empty diff.
+            class _FakePopen:
+                def __init__(self, *args, **kwargs):
+                    self.stdout = io.BytesIO(b"")
+                    self.stderr = io.BytesIO(b"")
+
+                def wait(self):
+                    return 0
+
+            module.get_repo_root = lambda: fixture_dir
+            module.get_changed_files = lambda base: []
+            module.gather_context_hints = lambda base: ""
+            module.get_embedded_file_contents = (
+                lambda files, **kw: ("", {"budget_skipped": False, "truncated": False})
+            )
+            module.build_review_prompt = lambda *a, **kw: "fake-prompt"
+            module.parse_codex_verdict = lambda out: "SHIP"
+            module.resolve_codex_sandbox = lambda s: "read-only"
+            module.is_sandbox_failure = lambda *a, **kw: False
+            module.subprocess.Popen = _FakePopen
+
+            with _stub_subprocess(
+                module,
+                captured,
+                stdout='{"type":"thread.started","thread_id":"t-abc"}\n',
+            ):
+                try:
+                    yield
+                finally:
+                    for name, fn in saved.items():
+                        if name == "subprocess_Popen":
+                            module.subprocess.Popen = fn
+                        else:
+                            setattr(module, name, fn)
+
+        return _cm
+
+    def test_task_with_codex_gpt52_spec_runs_gpt52(self) -> None:
+        captured: list = []
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(
+                td / ".flow", "fn-9-e.1", "fn-9-e", review="codex:gpt-5.2"
+            )
+            # Task spec markdown needs to exist too (cmd reads .md file).
+            (td / ".flow" / "tasks" / "fn-9-e.1.md").write_text(
+                "# Fake task\n\nTest task spec content."
+            )
+            receipt_path = td / "receipt.json"
+            cm = self._stub_review_side_effects(flowctl)
+            with cm(td, captured):
+                args = _ns(
+                    task="fn-9-e.1",
+                    base="main",
+                    focus=None,
+                    receipt=str(receipt_path),
+                    json=True,
+                    sandbox="read-only",
+                    spec=None,
+                )
+                try:
+                    with redirect_stdout(io.StringIO()):
+                        flowctl.cmd_codex_impl_review(args)
+                except SystemExit:
+                    # json_output calls sys.exit(0) on success — fine.
+                    pass
+            # Find the codex exec argv (not the git diff Popen calls).
+            exec_calls = [
+                (argv, kw) for (argv, kw) in captured
+                if argv and argv[0].endswith("/codex")
+            ]
+            self.assertTrue(exec_calls, f"no codex exec calls captured: {captured}")
+            argv, _ = exec_calls[-1]
+            # Per-task spec `codex:gpt-5.2` (effort unset → registry default "high").
+            self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.2")
+            self.assertEqual(
+                argv[argv.index("-c") + 1],
+                'model_reasoning_effort="high"',
+            )
+            # Receipt carries model + effort + canonical spec string.
+            receipt = json.loads(receipt_path.read_text())
+            self.assertEqual(receipt["model"], "gpt-5.2")
+            self.assertEqual(receipt["effort"], "high")
+            self.assertEqual(receipt["spec"], "codex:gpt-5.2:high")
+
+    def test_spec_cli_flag_overrides_task_spec(self) -> None:
+        # Task says codex:gpt-5.2 but --spec on argv says codex:gpt-5:low.
+        # --spec must win.
+        captured: list = []
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(
+                td / ".flow", "fn-9-e.1", "fn-9-e", review="codex:gpt-5.2"
+            )
+            (td / ".flow" / "tasks" / "fn-9-e.1.md").write_text("# Fake")
+            receipt_path = td / "receipt.json"
+            cm = self._stub_review_side_effects(flowctl)
+            with cm(td, captured):
+                args = _ns(
+                    task="fn-9-e.1",
+                    base="main",
+                    focus=None,
+                    receipt=str(receipt_path),
+                    json=True,
+                    sandbox="read-only",
+                    spec="codex:gpt-5:low",
+                )
+                try:
+                    with redirect_stdout(io.StringIO()):
+                        flowctl.cmd_codex_impl_review(args)
+                except SystemExit:
+                    pass
+            exec_calls = [
+                (argv, kw) for (argv, kw) in captured
+                if argv and argv[0].endswith("/codex")
+            ]
+            argv, _ = exec_calls[-1]
+            self.assertEqual(argv[argv.index("--model") + 1], "gpt-5")
+            self.assertEqual(
+                argv[argv.index("-c") + 1],
+                'model_reasoning_effort="low"',
+            )
+            receipt = json.loads(receipt_path.read_text())
+            self.assertEqual(receipt["model"], "gpt-5")
+            self.assertEqual(receipt["effort"], "low")
+            self.assertEqual(receipt["spec"], "codex:gpt-5:low")
+
+    def test_invalid_spec_cli_flag_rejected(self) -> None:
+        # --spec takes strict parse — bad specs must fail loudly.
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
+            (td / ".flow" / "tasks" / "fn-9-e.1.md").write_text("# Fake")
+            args = _ns(
+                task="fn-9-e.1",
+                base="main",
+                focus=None,
+                receipt=None,
+                json=True,
+                sandbox="read-only",
+                spec="codex:gpt-99",  # unknown model
+            )
+            out = io.StringIO()
+            with self.assertRaises(SystemExit), redirect_stdout(out):
+                flowctl.cmd_codex_impl_review(args)
+            payload = json.loads(out.getvalue())
+            self.assertFalse(payload["success"])
+            self.assertIn("Invalid --spec", payload["error"])
+            self.assertIn("Unknown model for codex", payload["error"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

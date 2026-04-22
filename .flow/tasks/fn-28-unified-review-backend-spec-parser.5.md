@@ -24,7 +24,7 @@ Documentation, sync-codex regeneration, and version bump. Gates on all code task
 
 **plugins/flow-next/README.md**:
 - Extend `#### Configuration` block to show spec-form examples for `FLOW_REVIEW_BACKEND` and `review.backend` config key.
-- Add a small table of backend × supported models × supported efforts.
+- Add a small table of backend × supported models × supported efforts. <!-- plan-sync note: pull catalog from flowctl.py:1715 BACKEND_REGISTRY. codex models: gpt-5.4, gpt-5.2, gpt-5, gpt-5-mini, gpt-5-codex. codex efforts: none, minimal, low, medium, high, xhigh. copilot models: claude-sonnet-4.5, claude-haiku-4.5, claude-opus-4.5, claude-sonnet-4, gpt-5.2, gpt-5.2-codex, gpt-5-mini, gpt-4.1. copilot efforts: low, medium, high, xhigh (note: claude-* models drop --effort at runtime). rp/none: no models/efforts. -->
 - Note: per-task pinning via `flowctl task set-backend fn-X.Y --review codex:gpt-5.2`.
 - Note the precedence cascade (per-task > per-epic > env > config > backend-default).
 
@@ -40,7 +40,7 @@ scripts/sync-codex.sh
 scripts/bump.sh patch flow-next
 ```
 
-**Tests verified green**: run `scripts/smoke_test.sh` (and the new `test_backend_spec.py` from task 1) before committing the bump.
+**Tests verified green**: run `plugins/flow-next/scripts/smoke_test.sh` (67 tests as of fn-28.2) and `python3 -m unittest plugins.flow-next.tests.test_backend_spec` (80 tests total as of fn-28.2 — 56 from task 1 + 24 from task 2) before committing the bump. Task 3 and task 4 will add more unit/smoke tests; update the counts here when those land. <!-- Updated by plan-sync: counts refreshed from fn-28.2 evidence (was 56 after task 1 only) -->
 
 ## Investigation targets
 
@@ -63,8 +63,8 @@ scripts/bump.sh patch flow-next
 - [ ] `scripts/sync-codex.sh` has been run; codex mirror reflects all skill changes from task 4
 - [ ] `scripts/bump.sh patch flow-next` has bumped all three manifest versions consistently
 - [ ] `jq . .claude-plugin/marketplace.json` parses cleanly
-- [ ] `scripts/smoke_test.sh` green
-- [ ] `test_backend_spec.py` green (from task 1)
+- [ ] `plugins/flow-next/scripts/smoke_test.sh` green (67+ tests)
+- [ ] `python3 -m unittest plugins.flow-next.tests.test_backend_spec` green (80+ tests — 56 from task 1, +24 from task 2, plus any from tasks 3-4) <!-- Updated by plan-sync -->
 - [ ] No hand edits under `plugins/flow-next/codex/**`
 
 ## Done summary

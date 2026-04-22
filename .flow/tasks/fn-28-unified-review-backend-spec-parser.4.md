@@ -13,14 +13,15 @@ Lift the spec grammar into the top-of-the-cascade surfaces: `FLOW_REVIEW_BACKEND
 
 ## Approach
 
-**`cmd_review_backend`** at `flowctl.py:2830-2852`:
-- Replace the hardcoded tuple check. Instead:
+**`cmd_review_backend`** at `flowctl.py:3083` <!-- Updated by plan-sync: was 3037; post-fn-28.2 layout. Current tuple at line 3087 is ("rp", "codex", "copilot", "none") — replace the whole tuple check -->:
+- Replace the hardcoded `(env_val in ("rp", "codex", "copilot", "none"))` tuple check. Instead:
   1. Get `env_val` from `FLOW_REVIEW_BACKEND`.
-  2. If non-empty, try `BackendSpec.parse(env_val)`. If valid: return `{backend: spec.backend, spec: str(spec), source: "env"}`.
+  2. If non-empty, try `parse_backend_spec_lenient(env_val, warn=False)` (from fn-28.2 at `flowctl.py:1906`). Degrades to bare backend on invalid; returns None only if nothing recognizable. If valid: return `{backend: spec.backend, spec: str(spec.resolve()), source: "env", model: resolved.model, effort: resolved.effort}`.
   3. Same for `.flow/config.json review.backend`.
-  4. Legacy fallback: if parse fails, try to interpret as bare backend (`env_val in VALID_BACKENDS`). Return bare.
-  5. Else `ASK`.
-- Output in JSON mode: `{backend, spec, source, model, effort}` where spec is the resolved form.
+  4. Else `ASK`.
+- Note: legacy fallback is already baked into `parse_backend_spec_lenient`. Do not reimplement it here. <!-- plan-sync note: reuse helper instead of duplicating -->
+- `VALID_BACKENDS` (`flowctl.py:1766`) is available if argparse `choices=` is wanted on any new `--backend`-style flag, but the env/config paths should use the lenient parser, not `choices=`.
+- Output in JSON mode: `{backend, spec, source, model, effort}` where spec is the resolved form (via `str(resolved)`).
 - Output in text mode: `backend` (backward compatible for skills that grep stdout).
 
 **Skills** — the three review workflows (`flow-next-impl-review/workflow.md`, etc.):
@@ -37,18 +38,21 @@ Lift the spec grammar into the top-of-the-cascade surfaces: `FLOW_REVIEW_BACKEND
 
 **Ralph templates**:
 - `config.env`: extend `PLAN_REVIEW` / `WORK_REVIEW` / `COMPLETION_REVIEW` comment to note spec form: `# e.g. PLAN_REVIEW=codex:gpt-5.4:xhigh or PLAN_REVIEW=copilot:claude-opus-4.5`.
-- `ralph.sh`: backend-check gates (lines 1061-1098 area) already handle bare backends. Add: after env export, strip to bare backend for the equality check (`${PLAN_REVIEW%%:*}`). Pass the full spec via the `FLOW_REVIEW_BACKEND` export so flowctl resolves.
+- `ralph.sh`: backend-check gates at lines **1082, 1096, 1119** (plus display-name checks at 228-236) already handle bare backends. Add: after env export, strip to bare backend for the equality check (`${PLAN_REVIEW%%:*}`). Pass the full spec via the `FLOW_REVIEW_BACKEND` export so flowctl resolves. <!-- Updated by plan-sync: actual gate lines verified -->
 - `prompt_plan.md`, `prompt_work.md`, `prompt_completion.md`: show a spec-form example alongside the existing bare-backend examples.
 
 **ralph-guard.py**: no changes needed — it guards tool calls, not spec strings.
 
 ## Investigation targets
 
-**Required:**
-- `plugins/flow-next/scripts/flowctl.py:2830-2852` — `cmd_review_backend` (already accepts bare copilot as of fn-27; task 4 adds spec-form support)
+**Required:** <!-- Updated by plan-sync: line numbers reverified post-fn-28.2 -->
+- `plugins/flow-next/scripts/flowctl.py:3083` — `cmd_review_backend` (was 3037; already accepts bare copilot as of fn-27; task 4 adds spec-form support)
+- `plugins/flow-next/scripts/flowctl.py:1715` — `BACKEND_REGISTRY` (source of truth for spec validation)
+- `plugins/flow-next/scripts/flowctl.py:1766` — `VALID_BACKENDS` (available as `sorted(BACKEND_REGISTRY.keys())`, added by fn-28.2)
+- `plugins/flow-next/scripts/flowctl.py:1906` — `parse_backend_spec_lenient` (use this for env/config reads; returns `Optional[BackendSpec]`, handles legacy fallback, added by fn-28.2)
 - `plugins/flow-next/skills/flow-next-impl-review/workflow.md` — current invocation comments
 - `plugins/flow-next/skills/flow-next-ralph-init/templates/config.env` — current comment block
-- `plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh:1061-1098` — backend equality checks
+- `plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh:1082, 1096, 1119` — backend equality checks (plus 228-236 for display-name branches)
 - `.flow/specs/fn-28-unified-review-backend-spec-parser.md` §Resolution Precedence
 
 **Optional:**
