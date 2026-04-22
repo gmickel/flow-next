@@ -25,6 +25,8 @@ Flow-Next is an AI agent orchestration plugin. Bundled task tracking, dependency
 
 Works on **Claude Code**, **OpenAI Codex** (CLI + Desktop), **Factory Droid**, and **OpenCode**.
 
+> 🆕 **v0.30.0 — GitHub Copilot CLI review backend.** Third cross-model review option alongside RepoPrompt and Codex. Works on Linux/Windows/CI via a GitHub Copilot subscription. [Setup](plugins/flow-next/README.md#cross-model-reviews).
+
 ---
 
 ## Install
@@ -80,7 +82,7 @@ droid plugin marketplace add \
 |---------|----------|
 | Context drift | **Re-anchoring** before every task — re-reads specs + git state |
 | Context window limits | **Fresh context per task** — worker subagent starts clean |
-| Single-model blind spots | **Cross-model reviews** — RepoPrompt or Codex as second opinion |
+| Single-model blind spots | **Cross-model reviews** — RepoPrompt, Codex, or Copilot as second opinion |
 | Forgotten requirements | **Dependency graphs** — tasks declare blockers, run in order |
 | "It worked on my machine" | **Evidence recording** — commits, tests, PRs tracked per task |
 | Infinite retry loops | **Auto-block stuck tasks** — fails after N attempts, moves on |
