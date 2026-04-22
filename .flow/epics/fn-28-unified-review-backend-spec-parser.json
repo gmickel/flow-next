@@ -9,7 +9,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-28-unified-review-backend-spec-parser.md",
-  "status": "open",
+  "status": "done",
   "title": "Unified review backend spec parser (model + effort)",
-  "updated_at": "2026-04-21T22:42:16.902115Z"
+  "updated_at": "2026-04-22T11:58:45.285619Z"
 }

@@ -75,9 +75,8 @@ scripts/bump.sh minor flow-next
 - [ ] No hand edits under `plugins/flow-next/codex/**`
 
 ## Done summary
-
-(filled in when task completes)
-
+Documented spec-grammar surface across CLAUDE.md + plugin README (Configuration section, backend x models x efforts table, 7-level precedence cascade, review-backend --json shape, receipt schema, inspect commands) and CHANGELOG (flow-next 0.31.0). Regenerated codex mirror (sync-codex), then bumped 0.30.0 -> 0.31.0 across all three manifests + README badges. Final gates green: 112 unittest + 67 smoke.
 ## Evidence
-
-(filled in when task completes)
+- Commits: 253bce8e920cff86d581b67aca6097aacdca0591
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (112 pass), cd /tmp && bash plugins/flow-next/scripts/smoke_test.sh (67 pass), bash scripts/sync-codex.sh (16 skills + 20 agents + hooks.json regen; all validations green), bash scripts/bump.sh minor flow-next (0.30.0 -> 0.31.0 across marketplace.json + both plugin manifests), jq . .claude-plugin/marketplace.json plugins/flow-next/.claude-plugin/plugin.json plugins/flow-next/.codex-plugin/plugin.json (all parse; all at 0.31.0), grep -c -- '--spec' codex mirror skill files (24 occurrences across 6 review skill files — matches upstream), manual: FLOW_REVIEW_BACKEND=codex:gpt-5.4:xhigh flowctl review-backend --json returns full {backend, spec, model, effort, source} shape, manual: FLOW_REVIEW_BACKEND=codex flowctl review-backend text mode prints bare 'codex' for skill grep back-compat
+- PRs:
