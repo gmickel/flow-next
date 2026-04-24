@@ -122,7 +122,8 @@ This is pure rollup. Split out because doing all of this in the same task as pro
 - Breaking-change migration docs (this release is additive).
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Rolled up fn-29 review rigor bundle into 0.32.1 release: CHANGELOG entry, root+plugin README updates (new "Review Rigor" section), CLAUDE.md receipt/triage additions, website page refresh (mickel.tech), Codex mirror regenerated via scripts/sync-codex.sh, and scripts/bump.sh patch flow-next lifted all three manifests + both README badges from 0.32.0 -> 0.32.1. Smoke: 71/71.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: cb44eab1bfe754736775b930276f65dc827b4d1a, 585baaf4442d72e2d012a4c1f8f2540120e9c7b4
+- Tests: plugins/flow-next/scripts/smoke_test.sh (71/71 pass, baseline + post-change)
+- PRs:
