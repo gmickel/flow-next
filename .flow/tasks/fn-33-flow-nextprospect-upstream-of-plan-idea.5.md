@@ -95,7 +95,8 @@ satisfies: [R6, R14, R20]
 - [ ] Unit tests cover: basic promote, idempotency refuse, `--force` override, out-of-range N, corrupt artifact refuse, promoted_ideas + promoted_to tracking.
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Implemented `flowctl prospect promote <id> --idea <N>` with idempotency guard (R14) and `promoted_to` per-idea epic-id tracking (R20). Reuses task-4 helpers (`_prospect_resolve_id`, `_prospect_parse_frontmatter`, `_prospect_extract_section`, `_prospect_extract_survivors`); extracted shared `_prospect_rewrite_in_place` (atomic tmp+os.replace) used by both promote and refactored archive without changing `write_prospect_artifact`'s fails-on-exists contract; extended frontmatter schema with inline-flow dict rendering + parser fallback; 21 new unit tests cover happy path, idempotency, --force, edge cases.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 9dd36768b446d87771b0d2c5c276844c4c6879cd
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests
+- PRs:
