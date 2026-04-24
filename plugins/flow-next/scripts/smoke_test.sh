@@ -780,14 +780,24 @@ assert _classify_triage_path("pyproject.toml") == "chore"
 assert _classify_triage_path(".flow/specs/fn-1.md") == "artifact"
 assert _classify_triage_path(".flow/tasks/fn-1.1.md") == "artifact"
 assert _classify_triage_path("random.xyz") == "other"
+# Generated-prefix must only match repo-root, not substring anywhere
+# (e.g. scripts/build/release.sh must stay as code, not "generated").
+assert _classify_triage_path("scripts/build/release.sh") == "code"
+assert _classify_triage_path("packages/dist/util.ts") == "code"
+assert _classify_triage_path("vendor_notes/README.md") == "docs"
 
 # AC6: lockfile-only → SKIP
 v, r = _triage_deterministic(["bun.lock"])
 assert v == "SKIP" and "lockfile" in r.lower(), (v, r)
 
-# AC7: version bump + CHANGELOG → SKIP
+# AC7: chore-containing shapes require git context — without it, ambiguous.
+# This prevents package.json dep edits from silently bypassing full review.
 v, r = _triage_deterministic(["plugin/plugin.json", "CHANGELOG.md"])
-assert v == "SKIP", (v, r)
+assert v is None, (v, r)
+v, r = _triage_deterministic(["package.json"])
+assert v is None, (v, r)
+v, r = _triage_deterministic(["bun.lock", "package.json"])
+assert v is None, (v, r)
 
 # AC8: docs-only → SKIP
 v, r = _triage_deterministic(["README.md", "docs/guide.md"])
@@ -811,11 +821,7 @@ assert v == "SKIP", (v, r)
 v, r = _triage_deterministic([".flow/specs/fn-29.md"])
 assert v == "REVIEW", (v, r)
 
-# Lockfile + manifest combo → SKIP
-v, r = _triage_deterministic(["bun.lock", "package.json"])
-assert v == "SKIP", (v, r)
-
-# Lockfile + generated → SKIP
+# Lockfile + generated → SKIP (no chore, no content check needed)
 v, r = _triage_deterministic(["bun.lock", "node_modules/x.js"])
 assert v == "SKIP", (v, r)
 
@@ -877,6 +883,63 @@ mkdir -p "$TRIAGE_TEST_DIR"
   grep -q '"verdict": "REVIEW"' "$TRIAGE_TEST_DIR/out2.json" || { echo "FAIL: REVIEW verdict missing from json"; cat "$TRIAGE_TEST_DIR/out2.json"; exit 1; }
 )
 echo -e "${GREEN}✓${NC} triage-skip e2e: lockfile→SKIP+receipt, code→REVIEW+no-receipt"
+PASS=$((PASS + 1))
+
+echo -e "${YELLOW}--- triage-skip chore content verification (fn-29.6 fix) ---${NC}"
+# Chore classification (package.json etc.) must verify diff content — version
+# bumps SKIP, dependency/script edits fall through to REVIEW.
+CHORE_TEST_DIR="$TEST_DIR/triage-chore"
+rm -rf "$CHORE_TEST_DIR"
+mkdir -p "$CHORE_TEST_DIR"
+(
+  cd "$CHORE_TEST_DIR"
+  git init -q
+  git config user.email test@test.com
+  git config user.name test
+  printf '{\n  "name": "pkg",\n  "version": "0.1.0"\n}\n' > package.json
+  printf '# Changelog\n' > CHANGELOG.md
+  git add package.json CHANGELOG.md
+  git commit -qm init
+  git checkout -qb feature
+
+  # Scenario A: pure version bump + CHANGELOG addition → SKIP
+  printf '{\n  "name": "pkg",\n  "version": "0.1.1"\n}\n' > package.json
+  printf '# Changelog\n\n## [0.1.1]\n- bump\n' > CHANGELOG.md
+  git add -A
+  git commit -qm "bump"
+  set +e
+  "$PYTHON_BIN" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --json > "$CHORE_TEST_DIR/outA.json"
+  EXITA=$?
+  set -e
+  [ "$EXITA" = "0" ] || { echo "FAIL: version bump should SKIP (exit 0), got $EXITA"; cat "$CHORE_TEST_DIR/outA.json"; exit 1; }
+  grep -q '"verdict": "SHIP"' "$CHORE_TEST_DIR/outA.json" || { echo "FAIL: expected SHIP on version bump"; cat "$CHORE_TEST_DIR/outA.json"; exit 1; }
+
+  # Scenario B: dependency edit in package.json → must REVIEW
+  git reset --hard main -q
+  git checkout -qb feature-deps
+  printf '{\n  "name": "pkg",\n  "version": "0.1.0",\n  "dependencies": {\n    "lodash": "^4.0.0"\n  }\n}\n' > package.json
+  git add package.json
+  git commit -qm "add dep"
+  set +e
+  "$PYTHON_BIN" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --json > "$CHORE_TEST_DIR/outB.json"
+  EXITB=$?
+  set -e
+  [ "$EXITB" = "1" ] || { echo "FAIL: dep edit must REVIEW (exit 1), got $EXITB"; cat "$CHORE_TEST_DIR/outB.json"; exit 1; }
+  grep -q '"verdict": "REVIEW"' "$CHORE_TEST_DIR/outB.json" || { echo "FAIL: expected REVIEW on dep edit"; cat "$CHORE_TEST_DIR/outB.json"; exit 1; }
+
+  # Scenario C: CHANGELOG-only addition → SKIP
+  git reset --hard main -q
+  git checkout -qb feature-changelog
+  printf '# Changelog\n\n## [0.1.1]\n- note\n' > CHANGELOG.md
+  git add CHANGELOG.md
+  git commit -qm "changelog"
+  set +e
+  "$PYTHON_BIN" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --json > "$CHORE_TEST_DIR/outC.json"
+  EXITC=$?
+  set -e
+  [ "$EXITC" = "0" ] || { echo "FAIL: CHANGELOG-only should SKIP (exit 0), got $EXITC"; cat "$CHORE_TEST_DIR/outC.json"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} triage-skip chore verify: version→SKIP, deps→REVIEW, CHANGELOG→SKIP"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- parse_receipt_path ---${NC}"

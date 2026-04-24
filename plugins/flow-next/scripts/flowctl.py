@@ -8886,9 +8886,12 @@ def _classify_triage_path(path: str) -> str:
         return "other"
 
     # Generated / vendored wins over extension match — e.g. a .ts file under
-    # node_modules/ is still "generated" for our purposes.
+    # node_modules/ is still "generated" for our purposes. Match only at the
+    # repo-root prefix; git diff output is always repo-root-relative, and a
+    # loose substring match would false-positive paths like `scripts/build/…`
+    # against the `build/` prefix.
     for prefix in TRIAGE_GENERATED_PREFIXES:
-        if p.startswith(prefix) or f"/{prefix}" in f"/{p}":
+        if p.startswith(prefix):
             return "generated"
 
     base = p.rsplit("/", 1)[-1]
@@ -8919,13 +8922,88 @@ def _classify_triage_path(path: str) -> str:
     return "other"
 
 
-def _triage_deterministic(changed_files: list[str]) -> tuple[Optional[str], str]:
+_TRIAGE_VERSION_JSON_RE = re.compile(r'^\s*"version"\s*:\s*"[^"]*"\s*,?\s*$')
+_TRIAGE_VERSION_TOML_RE = re.compile(r'^\s*version\s*=\s*"[^"]*"\s*$')
+
+
+def _triage_chore_is_version_only(
+    path: str, base: str, repo_root: str
+) -> bool:
+    """Verify a chore-classified file's diff only touches version-like fields.
+
+    A file is basename-matched as ``chore`` (``package.json``, ``plugin.json``,
+    ``Cargo.toml``, ``pyproject.toml``, ``CHANGELOG.md``) but that alone does
+    not prove the edit is trivial — changing ``package.json`` dependencies or
+    scripts must still route through a full review. This helper inspects the
+    actual diff hunks and returns True only when every +/- content line is:
+
+    - a ``"version": "..."`` line (JSON manifests), or
+    - a ``version = "..."`` line (TOML manifests), or
+    - any addition-only line for ``CHANGELOG.md`` (prose content).
+
+    Any other modification (dependency bumps, script edits, CHANGELOG
+    deletions, etc.) disqualifies the file and the triage-skip layer falls
+    through to full review.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "diff", "--unified=0", f"{base}..HEAD", "--", path],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=repo_root,
+        )
+    except OSError:
+        return False
+    if proc.returncode != 0 or not proc.stdout:
+        return False
+
+    base_name = path.rsplit("/", 1)[-1]
+    is_changelog = base_name == "CHANGELOG.md"
+    is_json = base_name.endswith(".json")
+    is_toml = base_name.endswith(".toml")
+
+    saw_change = False
+    for line in proc.stdout.splitlines():
+        if line.startswith(("+++", "---", "diff ", "index ", "@@", "Binary ")):
+            continue
+        if not (line.startswith("+") or line.startswith("-")):
+            continue
+        content = line[1:]
+        if not content.strip():
+            continue
+        saw_change = True
+        if is_changelog:
+            # CHANGELOG-only edits are safe when purely additive. Removals
+            # (history rewrites, entry deletions) warrant a full review.
+            if line.startswith("-"):
+                return False
+            continue
+        if is_json and _TRIAGE_VERSION_JSON_RE.match(content):
+            continue
+        if is_toml and _TRIAGE_VERSION_TOML_RE.match(content):
+            continue
+        return False
+    return saw_change
+
+
+def _triage_deterministic(
+    changed_files: list[str],
+    base: Optional[str] = None,
+    repo_root: Optional[str] = None,
+) -> tuple[Optional[str], str]:
     """Run the deterministic layer of triage.
 
     Returns ``(verdict_or_none, reason)``:
       - ``("SKIP", reason)`` — whitelist match, safe to skip
       - ``("REVIEW", reason)`` — hard override (code change, empty diff, etc.)
       - ``(None, reason)`` — ambiguous; caller may run LLM judge or default REVIEW
+
+    When ``chore``-classified files (manifests, CHANGELOG) are present, a
+    content-level check is required: callers must pass ``base`` + ``repo_root``
+    so the helper can inspect diff hunks. Without git context the chore path
+    falls through to ambiguous to prevent non-trivial ``package.json`` edits
+    from bypassing full review.
 
     ``reason`` is always a one-line human-readable string.
     """
@@ -8957,6 +9035,22 @@ def _triage_deterministic(changed_files: list[str]) -> tuple[Optional[str], str]
     # At this point every file is in {lockfile, docs, chore, generated}.
     kinds = set(buckets.keys())
 
+    # Chore-containing shapes require content verification before SKIP.
+    if "chore" in buckets:
+        if base is None or repo_root is None:
+            return (
+                None,
+                "manifest change (needs content verification — no git context)",
+            )
+        unverified = [
+            f
+            for f in buckets["chore"]
+            if not _triage_chore_is_version_only(f, base, repo_root)
+        ]
+        if unverified:
+            example = unverified[0]
+            return None, f"manifest edit beyond version field: {example}"
+
     if kinds == {"lockfile"}:
         if len(changed_files) == 1:
             return "SKIP", f"lockfile-only ({changed_files[0]})"
@@ -8973,24 +9067,17 @@ def _triage_deterministic(changed_files: list[str]) -> tuple[Optional[str], str]
         return "SKIP", f"generated-only ({len(changed_files)} files)"
 
     if kinds <= {"chore"}:
-        # pure manifest-only — allow (version bumps without CHANGELOG still count)
         return "SKIP", f"release-chore ({len(changed_files)} manifest files)"
 
     if kinds <= {"chore", "docs"}:
-        # Release chore with CHANGELOG + version bumps. Keep a tight cap so
-        # "one line of chore + a whole docs rewrite" doesn't silently slip.
         chore_files = buckets.get("chore", [])
         doc_files = buckets.get("docs", [])
-        # Only allow SKIP when the manifest file(s) look like version bumps —
-        # we trust the basename whitelist here and rely on the conservative
-        # default.
         return (
             "SKIP",
             f"release-chore ({len(chore_files)} manifest + {len(doc_files)} doc file(s))",
         )
 
     if kinds <= {"lockfile", "chore"}:
-        # dep update that also bumps package.json — common shape, safe.
         return (
             "SKIP",
             f"dep-update ({len(buckets.get('lockfile', []))} lock + "
@@ -9232,8 +9319,11 @@ def cmd_triage_skip(args: argparse.Namespace) -> None:
     except OSError:
         pass
 
-    # Deterministic layer.
-    det_verdict, det_reason = _triage_deterministic(changed_files)
+    # Deterministic layer. Pass git context so the chore-path content check
+    # can inspect diff hunks and reject non-trivial manifest edits.
+    det_verdict, det_reason = _triage_deterministic(
+        changed_files, base=base, repo_root=repo_root
+    )
 
     verdict: Optional[str] = det_verdict
     reason: str = det_reason
