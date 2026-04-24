@@ -13,13 +13,14 @@ Task tracking for AI agents. All state lives in `.flow/`.
 
 ```
 .flow/
-├── bin/flowctl             # CLI (this install)
-├── epics/fn-N-slug.json    # Epic metadata (e.g., fn-1-add-oauth.json)
-├── specs/fn-N-slug.md      # Epic specifications
-├── tasks/fn-N-slug.M.json  # Task metadata (e.g., fn-1-add-oauth.1.json)
-├── tasks/fn-N-slug.M.md    # Task specifications
-├── memory/                 # Context memory
-└── meta.json               # Project metadata
+├── bin/flowctl                  # CLI (this install)
+├── epics/fn-N-slug.json         # Epic metadata (e.g., fn-1-add-oauth.json)
+├── specs/fn-N-slug.md           # Epic specifications
+├── tasks/fn-N-slug.M.json       # Task metadata (e.g., fn-1-add-oauth.1.json)
+├── tasks/fn-N-slug.M.md         # Task specifications
+├── memory/                      # Context memory (categorized bug/ + knowledge/)
+├── prospects/<slug>-<date>.md   # Ideation artifacts (v0.36.0+)
+└── meta.json                    # Project metadata
 ```
 
 ## IDs
@@ -62,6 +63,15 @@ Task tracking for AI agents. All state lives in `.flow/`.
 # Work
 .flow/bin/flowctl start fn-1-add-oauth.2        # Claim task
 .flow/bin/flowctl done fn-1-add-oauth.2 --summary-file s.md --evidence-json e.json
+
+# Prospect (ideation artifacts under .flow/prospects/, v0.36.0+)
+.flow/bin/flowctl prospect list                          # active artifacts (<30d)
+.flow/bin/flowctl prospect list --all --json             # everything
+.flow/bin/flowctl prospect read <id>                     # full body
+.flow/bin/flowctl prospect read <id> --section survivors # focus|grounding|survivors|rejected
+.flow/bin/flowctl prospect promote <id> --idea N         # idea N → new epic
+.flow/bin/flowctl prospect promote <id> --idea N --force # override idempotency guard
+.flow/bin/flowctl prospect archive <id>                  # → .flow/prospects/_archive/
 ```
 
 ## Workflow

@@ -68,7 +68,8 @@ Phases 2-4 of the skill: persona-seeded candidate generation, two-pass critique 
 - [ ] No numeric scores emitted anywhere in the survivor output.
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Phases 2-4 of /flow-next:prospect landed: persona-seeded divergent generation (volume table covers default / top N / N ideas / raise the bar; >=2 of senior-maintainer / first-time-user / adversarial-reviewer, picked by focus-hint kind), separate-prompt critique with fixed rejection taxonomy + 40%/60% rejection floor enforced via blocking question (regenerate | loosen-floor | ship-anyway), and bucketed rank (High leverage 1-3 / Worth considering 4-7 / If you have the time 8+) with forced-format leverage sentence ("Small-diff lever because X; impact lands on Y.") - no numeric scores. Personas sidecar added at plugins/flow-next/skills/flow-next-prospect/personas.md; workflow.md +412 lines; SKILL.md phase summary updated. Smoke 125/125 still green.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: ae368af4fd735e982992d1c8722b1ac6331768ad
+- Tests: plugins/flow-next/scripts/smoke_test.sh (125/125 pass)
+- PRs:

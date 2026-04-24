@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.35.1-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.36.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -282,18 +282,138 @@ Best for: bug fixes, small features, well-scoped changes that don't need task sp
 
 | Starting point | Recommended sequence |
 |----------------|---------------------|
+| No target yet — "what should I build?" | Prospect → Interview/Plan → Work ([details](#prospecting)) |
 | New feature, want solid spec first | Spec → Interview/Plan → Work |
 | Vague idea, rough notes | Interview → Plan → Work |
 | Detailed spec/PRD | Plan → Interview → Work |
 | Well-understood, needs task splitting | Plan → Work |
 | Small single-task, spec complete | Work directly (creates 1 epic + 1 task) |
 
-**Spec vs Interview vs Plan:**
+**Prospect vs Spec vs Interview vs Plan:**
+- **Prospect** (`/flow-next:prospect [hint]`) generates many candidate ideas, critiques each one, and writes a ranked artifact under `.flow/prospects/`. Use when you don't have a target yet. Promote a survivor to an epic via `flowctl prospect promote`.
 - **Spec** (just ask "create a spec") creates an epic with structured requirements (goal, architecture, API contracts, edge cases, acceptance criteria, boundaries). No tasks, no codebase research.
 - **Interview** refines an epic via deep Q&A (40+ questions). Writes back to the epic spec only — no tasks.
 - **Plan** researches best practices, analyzes existing patterns, and creates sized tasks with dependencies.
 
 You can always run interview again after planning to catch anything missed. Interview writes back to the epic spec only — it won't modify existing tasks.
+
+---
+
+## Prospecting
+
+`/flow-next:prospect [focus hint]` fills the "what should I build?" gap above `interview` and `plan`. Generates many candidate ideas grounded in the repo, critiques every one with explicit rejection reasons, and surfaces only the survivors bucketed by leverage. Output is a ranked artifact under `.flow/prospects/<slug>-<date>.md` that promotes directly into an epic via `flowctl prospect promote`.
+
+### When to use it
+
+- You don't have a target yet — "what should I build next?"
+- You want to compare candidates side-by-side before committing
+- You want a durable record of ideas (and rejection reasons) that survives sessions
+
+If you already have a target, skip prospect and go straight to `/flow-next:interview` or `/flow-next:plan`.
+
+### Quick start
+
+```bash
+# Open-ended ideation
+/flow-next:prospect
+
+# Concept hint
+/flow-next:prospect DX improvements
+
+# Path hint (ideate inside a subtree)
+/flow-next:prospect plugins/flow-next/skills/
+
+# Constraint hint
+/flow-next:prospect quick wins under 200 LOC
+
+# Volume hint
+/flow-next:prospect top 3
+/flow-next:prospect 50 ideas
+/flow-next:prospect raise the bar      # 60-70% rejection target
+```
+
+### How it works
+
+Six phases, single chat (no subagent dispatch):
+
+1. **Resume check** — artifacts <30 days old offered for extension; corrupt artifacts surface but never extend.
+2. **Ground** — recent files (git log, 30 days), open epics, memory entries matching the hint, recent CHANGELOG. Records `scanned: none (reason)` for missing inputs.
+3. **Generate (persona-seeded, divergent)** — 15-25 candidates by default, using ≥2 personas (`senior-maintainer` / `first-time-user` / `adversarial-reviewer`) to counter mode collapse.
+4. **Critique (separate prompt, second pass)** — every candidate gets `keep`/`drop` with a taxonomy reason (`duplicates-open-epic | out-of-scope | insufficient-signal | too-large | backward-incompat | other`). Floor: ≥40% rejection (or 60-70% under `raise the bar`); on floor violation the skill asks whether to regenerate, loosen, or ship anyway.
+5. **Rank survivors (bucketed)** — `High leverage (1-3)` / `Worth considering (4-7)` / `If you have the time (8+)`. Prose-only forced-format leverage sentence per survivor; no numeric scores.
+6. **Write + handoff** — atomic write of the artifact, then a frozen-format prompt `1`|`2`|`...`|`skip`|`interview` to promote a survivor or refine via interview.
+
+### Promote → epic
+
+```bash
+# Read the artifact
+flowctl prospect read <artifact-id>
+
+# Promote idea #2 to a new epic
+flowctl prospect promote <artifact-id> --idea 2 --json
+# -> Promoted idea #2 ("<title>") to <epic-id>. Next: /flow-next:interview <epic-id>
+
+# Refine the new epic
+/flow-next:interview <epic-id>
+```
+
+The new epic ships with a pre-filled spec skeleton: original idea summary, leverage reasoning, suggested size, and a `## Source` section linking back to `.flow/prospects/<artifact-id>.md#idea-N`. Promote is idempotent — if you try to promote the same idea twice, it refuses with exit 2 and a message referencing the prior epic-id; pass `--force` to override.
+
+### flowctl prospect cheat sheet
+
+```bash
+# List artifacts (default: <30 days old)
+flowctl prospect list                              # active artifacts
+flowctl prospect list --all --json                 # everything (archived, stale, corrupt)
+
+# Read an artifact (full body, or one section)
+flowctl prospect read <id>
+flowctl prospect read <id> --section focus
+flowctl prospect read <id> --section grounding
+flowctl prospect read <id> --section survivors
+flowctl prospect read <id> --section rejected
+
+# Promote a survivor to a new epic
+flowctl prospect promote <id> --idea N
+flowctl prospect promote <id> --idea N --epic-title "Custom title"
+flowctl prospect promote <id> --idea N --force --json
+
+# Archive (move to .flow/prospects/_archive/)
+flowctl prospect archive <id>
+```
+
+ID forms: full id (`<slug>-<date>`), slug-only (latest date wins), or filepath. Same-day reruns are suffixed with `-2`, `-3` to avoid collisions.
+
+**Exit codes:**
+- `read` / `promote` on a corrupt artifact → exit **3** (stderr marker `[ARTIFACT CORRUPT: <reason>]`).
+- `promote` on a duplicate idea without `--force` → exit **2** with the prior epic-id.
+- Ralph-block (`REVIEW_RECEIPT_PATH` or `FLOW_RALPH=1` set when running `/flow-next:prospect`) → exit **2**.
+
+### Artifact schema
+
+```yaml
+---
+title: "DX improvements for flow-next"
+date: "2026-04-24"
+focus_hint: "DX improvements"
+volume: 22
+survivor_count: 6
+rejected_count: 16
+rejection_rate: 0.73
+artifact_id: dx-improvements-2026-04-24
+promoted_to: {2: [fn-37-dx-faster-resume]}    # numeric idea positions → epic ids
+status: active                                  # active | corrupt | stale | archived
+---
+```
+
+Optional flags `floor_violation`, `generation_under_volume` are omitted when unset. `promoted_to` is omitted when no idea has been promoted.
+
+### Decision context
+
+- **Why prose-only ranking?** Numeric scores are near-random past position 5 across reruns. Bucketing (3/4/∞) stabilizes the top-3 while preserving prose reasoning within each bucket.
+- **Why two passes?** Single-pass prompts soft-reject — everything is kept, just ordered. A separate critique pass forces explicit rejection with a taxonomy.
+- **Why persona seeding?** Post-RLHF mode collapse — same 5-8 "obvious" ideas every run. Persona-seeded divergent generation (≥2 personas) increases idea diversity.
+- **Why Ralph-out?** Autonomous loops have no business deciding what a repo should tackle next; that's a human-in-the-loop judgement call.
 
 ---
 
@@ -703,6 +823,11 @@ Default flow when you drive manually:
 
 ```mermaid
 flowchart TD
+  A0{Have a target?} -- no --> A1[/flow-next:prospect hint/<br/>generate ranked candidates]
+  A1 --> A2[.flow/prospects/<br/>ranked artifact]
+  A2 --> A3[flowctl prospect promote --idea N<br/>creates epic from survivor]
+  A3 --> A
+  A0 -- yes --> A
   A[Idea or short spec<br/>prompt or doc] --> B{Need deeper spec?}
   B -- yes --> C[Optional: /flow-next:interview fn-N or spec.md<br/>40+ deep questions to refine spec]
   C --> D[Refined spec]
@@ -735,10 +860,11 @@ flowchart TD
   X -- yes --> U[Close epic]
   V -- no --> U
   classDef optional stroke-dasharray: 6 4,stroke:#999;
-  class C,J,S,W optional;
+  class C,J,S,W,A1,A2,A3 optional;
 ```
 
 Notes:
+- `/flow-next:prospect` accepts an optional focus hint (concept / path / constraint / volume) and writes a ranked artifact under `.flow/prospects/` — see [Prospecting](#prospecting)
 - `/flow-next:interview` accepts Flow IDs or spec file paths and writes refinements back
 - `/flow-next:plan` accepts new ideas or an existing Flow ID to update the plan
 
@@ -1465,10 +1591,11 @@ Until migration runs, legacy flat files continue to work; `list` / `read` / `sea
 
 ## Commands
 
-Twelve commands, complete workflow:
+Thirteen commands, complete workflow:
 
 | Command | What It Does |
 |---------|--------------|
+| `/flow-next:prospect [hint]` | Generate ranked candidate ideas grounded in the repo, upstream of `interview`/`plan` ([details](#prospecting)) |
 | `/flow-next:plan <idea>` | Research the codebase, create epic with dependency-ordered tasks |
 | `/flow-next:work <id\|file>` | Execute epic, task, or spec file, re-anchoring before each |
 | `/flow-next:interview <id>` | Deep interview to flesh out a spec before planning |
@@ -1511,6 +1638,7 @@ Natural language also works:
 
 | Command | Available Flags |
 |---------|-----------------|
+| `/flow-next:prospect` | `[focus hint]` (positional) — concept / path / constraint / volume |
 | `/flow-next:plan` | `--research=rp\|grep`, `--review=rp\|codex\|copilot\|export\|none`, `--no-review` |
 | `/flow-next:work` | `--branch=current\|new\|worktree`, `--review=rp\|codex\|copilot\|export\|none`, `--no-review` |
 | `/flow-next:plan-review` | `--review=rp\|codex\|copilot\|export` |
@@ -1522,6 +1650,18 @@ Natural language also works:
 ### Command Reference
 
 Detailed input documentation for each command.
+
+#### `/flow-next:prospect`
+
+```
+/flow-next:prospect [focus hint]
+```
+
+| Input | Description |
+|-------|-------------|
+| `[focus hint]` | Optional freeform single string. Concept (`DX improvements`), path (`plugins/flow-next/skills/`), constraint (`quick wins under 200 LOC`), or volume hint (`top 3` / `50 ideas` / `raise the bar`). Empty = open-ended (15-25 candidates → 5-8 survivors). |
+
+Output: `.flow/prospects/<slug>-<date>.md` (atomic write, same-day collisions suffixed `-2`/`-3`). Promote a survivor with `flowctl prospect promote <id> --idea N`. Hard-errors with exit 2 under Ralph (`REVIEW_RECEIPT_PATH` or `FLOW_RALPH=1`). See [Prospecting](#prospecting) for full phase details.
 
 #### `/flow-next:plan`
 
@@ -1904,6 +2044,15 @@ flowctl validate --all                    # Validate everything (for CI)
 # Review helpers
 flowctl rp chat-send --window W --tab T --message-file m.md
 flowctl prep-chat --message-file m.md --selected-paths a.ts b.ts -o payload.json
+
+# Prospect (ideation artifacts under .flow/prospects/)
+flowctl prospect list                          # active artifacts (<30d)
+flowctl prospect list --all --json             # everything
+flowctl prospect read <id>                     # full body
+flowctl prospect read <id> --section survivors # focus|grounding|survivors|rejected
+flowctl prospect promote <id> --idea N         # idea N → new epic
+flowctl prospect promote <id> --idea N --force # override idempotency guard
+flowctl prospect archive <id>                  # → .flow/prospects/_archive/
 ```
 
 📖 **[Full CLI reference](docs/flowctl.md)**  
@@ -2044,6 +2193,7 @@ In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setu
 
 | Claude Code | Codex (dropdown) | Codex (direct) |
 |-------------|-------------------|----------------|
+| `/flow-next:prospect` | Flow Prospect | `$flow-next-prospect` |
 | `/flow-next:plan` | Flow Plan | `$flow-next-plan` |
 | `/flow-next:work` | Flow Work | `$flow-next-work` |
 | `/flow-next:impl-review` | Flow Implementation Review | `$flow-next-impl-review` |

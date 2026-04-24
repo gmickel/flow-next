@@ -35,21 +35,24 @@ satisfies: [R5, R7, R15, R16]
 - Never auto-archives — explicit user action only.
 
 **Malformed artifact detection (R16):**
-- Shared helper `_prospect_detect_corruption(path)` returns `None` for clean artifacts or a reason string:
-  - `"frontmatter-parse-error"` — YAML doesn't parse
-  - `"missing-required-section:<name>"` — `## Grounding snapshot` or `## Survivors` absent
-  - `"missing-frontmatter-field:<name>"` — required field absent
-  - `"empty"` — zero-byte file or whitespace only
+- Shared helper `_prospect_detect_corruption(path)` returns `None` for clean artifacts or a reason string. <!-- Updated by plan-sync: task 3 landed the Phase 0 inline classifier in skills/flow-next-prospect/workflow.md §0.2 with the reason strings below. This helper must match them byte-for-byte so R16 has a single source of truth, OR replace the Phase 0 inline parser by importing `_prospect_detect_corruption` (preferred: land helper here + adapt §0.2 in a follow-on touch-up commit within this same task). -->
+  - `"no frontmatter block"` — YAML frontmatter block missing (file has no `---` delimiter pair at top)
+  - `"unparseable date"` — `date` field absent or not `YYYY-MM-DD` parseable
+  - `"missing Grounding snapshot section"` — `## Grounding snapshot` heading absent
+  - `"missing Survivors section"` — `## Survivors` heading absent
+  - `"unreadable"` — `OSError` on `open()` (matches the inline Phase 0 parser's behaviour)
+- Also emit `"empty"` for zero-byte / whitespace-only files (no existing Phase 0 coverage — this helper extends the contract; Phase 0 touch-up must add the same branch).
 - Used by both `list` (marks corrupt artifacts) and resume check (never offers corrupt for extension).
-- Reuses existing YAML parser from memory subsystem (`_parse_inline_yaml` or similar — pick whichever is used by `validate_memory_frontmatter`).
+- Reuses `validate_prospect_frontmatter` from task 3's shipped flowctl.py helpers to check `PROSPECT_REQUIRED_FIELDS` presence (emit `"missing frontmatter field: <name>"` for missing keys; keep reason string format consistent with the others). <!-- Updated by plan-sync: task 3 shipped `PROSPECT_REQUIRED_FIELDS` + `validate_prospect_frontmatter` (flowctl.py §3958-4081) — reuse directly instead of rolling a parallel checker. -->
 
 ## Investigation targets
 
 **Required:**
 - `plugins/flow-next/scripts/flowctl.py:4917` (`cmd_memory_read`) — id-resolution pattern
 - `plugins/flow-next/scripts/flowctl.py:5049` (`cmd_memory_list`) — listing + filter template
-- `plugins/flow-next/scripts/flowctl.py:3958` (`validate_memory_frontmatter`) — parse + validate reuse
+- `plugins/flow-next/scripts/flowctl.py:3958` — shipped prospect helpers from task 3: `PROSPECT_REQUIRED_FIELDS`, `PROSPECT_STATUS_VALUES`, `validate_prospect_frontmatter`, `write_prospect_artifact`, `render_prospect_body`, `_prospect_slug`, `_prospect_next_id`. Reuse for parse + validate; build a companion parser (invert the writer's YAML output) for `cmd_prospect_read`. <!-- Updated by plan-sync: task 3 shipped these bundled helpers; task 4 reuses rather than duplicating. -->
 - `plugins/flow-next/scripts/flowctl.py` (argparse registry around `p_memory_*`) — subcommand registration pattern
+- `plugins/flow-next/skills/flow-next-prospect/workflow.md:48-132` — Phase 0 inline corruption classifier; reason strings are the R16 contract.
 
 **Optional:**
 - `plugins/flow-next/scripts/flowctl.py` `cmd_memory_discoverability_patch` — path manipulation precedent
@@ -64,13 +67,14 @@ satisfies: [R5, R7, R15, R16]
 - [ ] `flowctl prospect list` with no args lists <30d active artifacts; `--all` includes stale/corrupt/archived.
 - [ ] `flowctl prospect read <id>` accepts full id + slug-only; `--section` filters body; `--json` returns structured parse.
 - [ ] `flowctl prospect archive <id>` moves to `_archive/` and updates frontmatter `status: archived`; mkdir if missing.
-- [ ] `_prospect_detect_corruption` identifies: parse errors, missing required sections, missing required frontmatter fields, empty files.
+- [ ] `_prospect_detect_corruption` identifies: parse errors, missing required sections, missing required frontmatter fields, empty files. Reason strings match the Phase 0 inline classifier contract (workflow.md §0.2): `"no frontmatter block" | "unparseable date" | "missing Grounding snapshot section" | "missing Survivors section" | "unreadable"`, plus helper-added `"empty"` and `"missing frontmatter field: <name>"` variants. <!-- Updated by plan-sync: reason strings aligned with shipped Phase 0 classifier for R16 single-source-of-truth. -->
 - [ ] Corrupt artifacts surface via `list --all` with a reason note; `read` on corrupt artifact exits 3 with the reason.
 - [ ] Unit tests cover: id resolution (3 cases), corruption detection (4 cases), archive move atomicity, list default vs `--all` filter, JSON output shape.
 - [ ] All three commands support `--json` with consistent `{success, ...}` envelope.
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Implemented `flowctl prospect list / read / archive` plus `_prospect_parse_frontmatter` + `_prospect_detect_corruption` shared helpers with R16 byte-for-byte reason-string alignment to the Phase 0 inline classifier. Reuses `validate_prospect_frontmatter` + `PROSPECT_REQUIRED_FIELDS` shipped in task 3; adds 34 unit tests; full suite passes (287/287) plus smoke (125/125).
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: c3e3fedff1b71f2898f6015a7aee3f1aea330209
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (287/287 ok), plugins/flow-next/scripts/smoke_test.sh (125/125 passed), manual end-to-end: list / list --all / read --section / archive / archive (corrupt) / archive (already archived)
+- PRs:
