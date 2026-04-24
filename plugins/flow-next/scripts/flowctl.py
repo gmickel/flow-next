@@ -3873,6 +3873,14 @@ def _yaml_scalar_needs_quoting(text: str) -> bool:
     # Flow-list / flow-map indicators inside a list break the inline parser.
     if any(c in text for c in ",[]{}"):
         return True
+    # Colon followed by space (or at end of line) is a YAML mapping
+    # indicator — chokes PyYAML when it appears unquoted in a scalar.
+    if ": " in text or text.endswith(":"):
+        return True
+    # Leading characters that YAML treats as flow indicators / anchors /
+    # references / tags. Conservative — quote any of these.
+    if text and text[0] in "#&*!|>%@`":
+        return True
     return False
 
 
@@ -5376,6 +5384,789 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
             print(f"  > {r['snippet']}")
         print()
     print(f"Found {len(combined)} matches")
+
+
+# --- Migration (fn-30 task 4) ---
+#
+# Convert legacy flat files (pitfalls.md / conventions.md / decisions.md)
+# into categorized YAML-frontmatter entries. Mechanical fallback uses the
+# track/category implied by the source filename. Optional fast-model
+# classifier refines individual entries into a more specific category
+# when available; failure falls back to mechanical with a warning.
+
+# Heading lines that introduce an entry. Tolerant of:
+#   "## 2026-01-01 manual [pitfall]"
+#   "## Title"
+#   "# Title"
+#   "- Title" (bullet)
+_MEMORY_LEGACY_DATE_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
+_MEMORY_LEGACY_TAG_RE = re.compile(r"#([a-z0-9][a-z0-9_-]*)", re.IGNORECASE)
+
+# Banner headings that appear at the top of legacy files. Skipped during
+# title extraction so the first real entry gets its own title.
+_MEMORY_LEGACY_BANNER_TITLES: frozenset[str] = frozenset(
+    {"pitfalls", "conventions", "decisions"}
+)
+
+
+def _memory_legacy_extract_title(segment: str) -> str:
+    """Pick a one-line title from a legacy entry segment.
+
+    Strategy:
+      1. Walk all lines; collect candidates from headings ("# ...", "## ...")
+         after stripping date / "manual" / [type] / #tag markers.
+      2. Prefer the first non-banner heading (banners = the file's main
+         "# Pitfalls" / "# Conventions" / "# Decisions" title).
+      3. Fall back to first bullet line ("- ...", "* ...").
+      4. Fall back to first plain prose line.
+    Returns "" when the segment is whitespace-only.
+    """
+    if not segment.strip():
+        return ""
+
+    heading_candidates: list[str] = []
+    bullet_fallback: Optional[str] = None
+    prose_fallback: Optional[str] = None
+
+    for raw in segment.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        # Real markdown heading: 1-6 `#` followed by whitespace.
+        if re.match(r"^#{1,6}\s+", line):
+            stripped = line.lstrip("#").strip()
+            stripped = re.sub(r"^\d{4}-\d{2}-\d{2}\s*", "", stripped)
+            stripped = re.sub(r"^manual\s*", "", stripped, flags=re.IGNORECASE)
+            stripped = re.sub(r"\[[^\]]*\]", "", stripped).strip()
+            stripped = _MEMORY_LEGACY_TAG_RE.sub("", stripped).strip()
+            if stripped:
+                heading_candidates.append(stripped)
+            continue
+        # Hash-prefixed tag-only line (`#auth #runtime`). Skip — it's
+        # not a heading and not useful as a title.
+        if line.startswith("#"):
+            continue
+        if line.startswith(("- ", "* ")) and bullet_fallback is None:
+            stripped = line[2:].strip()
+            stripped = _MEMORY_LEGACY_TAG_RE.sub("", stripped).strip()
+            if stripped:
+                bullet_fallback = stripped
+            continue
+        if prose_fallback is None:
+            cleaned = _MEMORY_LEGACY_TAG_RE.sub("", line).strip()
+            if cleaned:
+                prose_fallback = cleaned
+
+    # Prefer first non-banner heading.
+    for cand in heading_candidates:
+        if cand.lower() not in _MEMORY_LEGACY_BANNER_TITLES:
+            return cand[:80]
+    # Then bullet / prose fallbacks.
+    if bullet_fallback:
+        return bullet_fallback[:80]
+    if prose_fallback:
+        return prose_fallback[:80]
+    # Last resort: even a banner heading is better than nothing.
+    if heading_candidates:
+        return heading_candidates[0][:80]
+    return ""
+
+
+def _memory_legacy_extract_date(segment: str) -> Optional[str]:
+    """Find the first YYYY-MM-DD date in the segment, if any."""
+    m = _MEMORY_LEGACY_DATE_RE.search(segment)
+    if m:
+        return m.group(1)
+    return None
+
+
+def _memory_legacy_extract_tags(segment: str) -> list[str]:
+    """Pull `#tag` markers from the segment (deduped, lowercased)."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for m in _MEMORY_LEGACY_TAG_RE.finditer(segment):
+        tag = m.group(1).lower()
+        if tag in seen:
+            continue
+        seen.add(tag)
+        out.append(tag)
+    return out
+
+
+def _memory_legacy_strip_title_line(segment: str, title: str) -> str:
+    """Drop the heading line we used as a title from the segment body.
+
+    Best-effort — only strips a line that matches the chosen title's
+    normalized substring AND is a heading or bullet line. Plain prose
+    titles are kept in the body so we don't accidentally drop body
+    content. If nothing matches, returns the segment unchanged.
+    """
+    if not title:
+        return segment.strip()
+    title_lower = title.lower()
+    # Use first 4 tokens of the title (or all tokens if fewer) for fuzzy
+    # match. Bare token matching can over-strip; require a heading or
+    # bullet line for safety.
+    tokens = [t for t in re.findall(r"[a-z0-9]+", title_lower) if len(t) >= 3]
+    needle = " ".join(tokens[:4]) if tokens else title_lower
+    if not needle:
+        return segment.strip()
+    out: list[str] = []
+    dropped = False
+    for raw in segment.splitlines():
+        line_lower = raw.strip().lower()
+        if (
+            not dropped
+            and (raw.lstrip().startswith(("#", "-", "*")))
+            and needle in line_lower
+        ):
+            dropped = True
+            continue
+        out.append(raw)
+    body = "\n".join(out).strip()
+    return body or segment.strip()
+
+
+def _strip_file_banner(segment: str) -> str:
+    """Remove a top-level `# Pitfalls/Conventions/Decisions` banner line.
+
+    Only applied to the first segment of a legacy file — once the banner
+    is gone, the rest of the segment is the actual first entry.
+    """
+    lines = segment.splitlines()
+    out: list[str] = []
+    stripped_banner = False
+    for raw in lines:
+        if not stripped_banner:
+            stripped = raw.strip()
+            if not stripped:
+                # Keep leading blanks consistent.
+                continue
+            if stripped.startswith("# "):
+                heading = stripped[2:].strip().lower()
+                if heading in _MEMORY_LEGACY_BANNER_TITLES:
+                    stripped_banner = True
+                    continue
+            # Not a banner — bail and keep everything from here.
+            out.append(raw)
+            stripped_banner = True
+            continue
+        out.append(raw)
+    return "\n".join(out).strip()
+
+
+def _memory_parse_legacy_entries(path: Path) -> list[dict[str, Any]]:
+    """Parse a legacy flat file into structured entry descriptors.
+
+    Each descriptor: {"title", "body", "tags", "date"}.
+    Empty segments and segments that are pure whitespace are dropped.
+    The first segment has any file-level banner heading stripped so the
+    real first entry's title is used.
+    Returns [] when the file can't be read.
+    """
+    segments = _memory_legacy_entry_segments(path)
+    out: list[dict[str, Any]] = []
+    for idx, seg in enumerate(segments):
+        if idx == 0:
+            seg = _strip_file_banner(seg)
+        if not seg.strip():
+            continue
+        title = _memory_legacy_extract_title(seg)
+        if not title:
+            continue
+        body = _memory_legacy_strip_title_line(seg, title)
+        out.append(
+            {
+                "title": title,
+                "body": body,
+                "tags": _memory_legacy_extract_tags(seg),
+                "date": _memory_legacy_extract_date(seg),
+            }
+        )
+    return out
+
+
+def _memory_classify_mechanical(legacy_filename: str) -> tuple[str, str]:
+    """Return the deterministic (track, category) for a legacy filename.
+
+    Falls through `_memory_resolve_legacy_type` so this stays the single
+    source of truth for the mechanical map.
+    """
+    stem = Path(legacy_filename).stem
+    mapped = _memory_resolve_legacy_type(stem)
+    if mapped is None:
+        return ("knowledge", "best-practices")
+    return mapped
+
+
+def _memory_classify_build_prompt(
+    title: str, body: str, source_filename: str
+) -> str:
+    """Build the one-shot classifier prompt sent to the fast model."""
+    bug_cats = ", ".join(MEMORY_CATEGORIES["bug"])
+    knowledge_cats = ", ".join(MEMORY_CATEGORIES["knowledge"])
+    body_preview = body.strip()
+    if len(body_preview) > 1200:
+        body_preview = body_preview[:1200] + "..."
+    return f"""Classify a project-memory entry into a track + category.
+
+Tracks:
+  bug         — bugs, regressions, gotchas, things that broke
+  knowledge   — conventions, decisions, architecture patterns, workflow tips
+
+Bug categories: {bug_cats}
+Knowledge categories: {knowledge_cats}
+
+Source file: {source_filename}
+Entry title: {title}
+Entry body:
+{body_preview}
+
+Output exactly one line in the form:
+track/category
+
+Examples:
+bug/runtime-errors
+knowledge/conventions
+knowledge/tooling-decisions
+
+Pick the single best fit. If unsure, default to the source file's natural
+track (pitfalls→bug, conventions→knowledge/conventions, decisions→
+knowledge/tooling-decisions).
+"""
+
+
+def _memory_classify_parse_response(text: str) -> Optional[tuple[str, str]]:
+    """Extract `track/category` from the classifier's reply, validating enums."""
+    if not text:
+        return None
+    candidates: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip().strip("`*_> ").rstrip(".,;")
+        if not line:
+            continue
+        # Tolerate "Answer: bug/runtime-errors" prefixes.
+        if ":" in line and line.lower().startswith(("answer", "verdict", "result", "category", "track")):
+            line = line.split(":", 1)[1].strip()
+        candidates.append(line)
+    # Prefer the last bare line — many models trail with reasoning.
+    for cand in reversed(candidates):
+        m = re.match(r"^([a-z]+)\s*/\s*([a-z][a-z0-9-]*)$", cand)
+        if not m:
+            continue
+        track = m.group(1)
+        category = m.group(2)
+        if track not in MEMORY_TRACKS:
+            continue
+        if category not in MEMORY_CATEGORIES.get(track, []):
+            continue
+        return (track, category)
+    return None
+
+
+def _memory_classify_run_codex(
+    prompt: str, model: Optional[str], effort: Optional[str]
+) -> tuple[Optional[tuple[str, str]], Optional[str], Optional[str]]:
+    """Invoke codex CLI as classifier. Returns (result, error, model_used)."""
+    codex = shutil.which("codex")
+    if not codex:
+        return None, "codex CLI not on PATH", None
+    effective_model = model or "gpt-5-mini"
+    effective_effort = effort or "low"
+    cmd = [
+        codex,
+        "exec",
+        "--model",
+        effective_model,
+        "-c",
+        f'model_reasoning_effort="{effective_effort}"',
+        "--sandbox",
+        "read-only" if os.name != "nt" else "danger-full-access",
+        "--skip-git-repo-check",
+        "-",
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        return None, "codex classifier timed out (60s)", effective_model
+    except OSError as exc:
+        return None, f"codex classifier OS error: {exc}", effective_model
+    if result.returncode != 0:
+        msg = (result.stderr or "codex classifier exited non-zero").strip().splitlines()[-1]
+        return None, f"codex classifier failed: {msg}", effective_model
+    parsed = _memory_classify_parse_response(result.stdout)
+    if parsed is None:
+        return None, "codex classifier returned malformed output", effective_model
+    return parsed, None, effective_model
+
+
+def _memory_classify_run_copilot(
+    prompt: str, model: Optional[str], effort: Optional[str]
+) -> tuple[Optional[tuple[str, str]], Optional[str], Optional[str]]:
+    """Invoke copilot CLI as classifier."""
+    copilot = shutil.which("copilot")
+    if not copilot:
+        return None, "copilot CLI not on PATH", None
+    effective_model = model or "claude-haiku-4.5"
+    effective_effort = effort or "low"
+    repo_root = get_repo_root()
+    cmd = [
+        copilot,
+        "-p",
+        prompt,
+        f"--resume={uuid.uuid4()}",
+        "--output-format",
+        "text",
+        "-s",
+        "--no-ask-user",
+        "--allow-all-tools",
+        "--add-dir",
+        str(repo_root),
+        "--disable-builtin-mcps",
+        "--no-custom-instructions",
+        "--log-level",
+        "error",
+        "--no-auto-update",
+        "--model",
+        effective_model,
+    ]
+    if not effective_model.startswith("claude-"):
+        cmd += ["--effort", effective_effort]
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        return None, "copilot classifier timed out (60s)", effective_model
+    except OSError as exc:
+        return None, f"copilot classifier OS error: {exc}", effective_model
+    if result.returncode != 0:
+        msg = (result.stderr or "copilot classifier exited non-zero").strip().splitlines()[-1]
+        return None, f"copilot classifier failed: {msg}", effective_model
+    parsed = _memory_classify_parse_response(result.stdout)
+    if parsed is None:
+        return None, "copilot classifier returned malformed output", effective_model
+    return parsed, None, effective_model
+
+
+def _memory_classify_select_backend() -> tuple[str, Optional[str], Optional[str]]:
+    """Pick a classifier backend.
+
+    Resolution order:
+      1. FLOW_MEMORY_CLASSIFIER_BACKEND env (codex | copilot | none)
+      2. codex CLI on PATH
+      3. copilot CLI on PATH
+      4. ("none", None, None) — caller falls back to mechanical
+
+    Model + effort respect FLOW_MEMORY_CLASSIFIER_MODEL /
+    FLOW_MEMORY_CLASSIFIER_EFFORT when set.
+    """
+    forced = (os.environ.get("FLOW_MEMORY_CLASSIFIER_BACKEND") or "").strip().lower()
+    model = os.environ.get("FLOW_MEMORY_CLASSIFIER_MODEL") or None
+    effort = os.environ.get("FLOW_MEMORY_CLASSIFIER_EFFORT") or None
+    if forced == "none":
+        return ("none", model, effort)
+    if forced in ("codex", "copilot"):
+        return (forced, model, effort)
+    if shutil.which("codex"):
+        return ("codex", model, effort)
+    if shutil.which("copilot"):
+        return ("copilot", model, effort)
+    return ("none", model, effort)
+
+
+def _memory_classify_entry(
+    title: str,
+    body: str,
+    source_filename: str,
+    backend: str,
+    model: Optional[str],
+    effort: Optional[str],
+) -> tuple[tuple[str, str], str, Optional[str], Optional[str]]:
+    """Classify a single entry. Returns ((track, category), method, model, error).
+
+    method ∈ {"llm", "mechanical"}.
+    error is set when the LLM was attempted but failed (caller can record).
+    """
+    if backend == "none":
+        return (
+            _memory_classify_mechanical(source_filename),
+            "mechanical",
+            None,
+            None,
+        )
+    prompt = _memory_classify_build_prompt(title, body, source_filename)
+    if backend == "codex":
+        result, err, used_model = _memory_classify_run_codex(prompt, model, effort)
+    elif backend == "copilot":
+        result, err, used_model = _memory_classify_run_copilot(prompt, model, effort)
+    else:
+        return (
+            _memory_classify_mechanical(source_filename),
+            "mechanical",
+            None,
+            f"unknown backend '{backend}'",
+        )
+    if result is None:
+        return (
+            _memory_classify_mechanical(source_filename),
+            "mechanical",
+            used_model,
+            err,
+        )
+    return (result, "llm", used_model, None)
+
+
+def _memory_migrate_build_frontmatter(
+    *,
+    title: str,
+    date: str,
+    track: str,
+    category: str,
+    tags: list[str],
+    body: str,
+) -> dict[str, Any]:
+    """Construct a valid frontmatter dict for a migrated entry.
+
+    Bug track gets `problem_type` derived from the category (build-errors
+    → build-error, etc.) and a default `resolution_type=fix`. Knowledge
+    track gets a one-line `applies_when` from the title.
+    """
+    fm: dict[str, Any] = {
+        "title": title[:80],
+        "date": date,
+        "track": track,
+        "category": category,
+    }
+    if tags:
+        fm["tags"] = tags
+    if track == "bug":
+        # Map category → problem_type enum (categories use plural forms).
+        category_to_problem = {
+            "build-errors": "build-error",
+            "test-failures": "test-failure",
+            "runtime-errors": "runtime-error",
+            "performance": "performance",
+            "security": "security",
+            "integration": "integration",
+            "data": "data",
+            "ui": "ui",
+        }
+        fm["problem_type"] = category_to_problem.get(category, "build-error")
+        fm["symptoms"] = (_first_meaningful_line(body) or title)[:200]
+        fm["root_cause"] = "(migrated from legacy file — original lacked structured root cause)"
+        fm["resolution_type"] = "fix"
+    else:
+        fm["applies_when"] = (_first_meaningful_line(body) or title)[:200]
+    return fm
+
+
+def _first_meaningful_line(body: str) -> str:
+    """Return the first body line that isn't a heading or tag-only marker."""
+    for raw in body.splitlines():
+        stripped = raw.strip()
+        if not stripped:
+            continue
+        # Skip markdown headings (`# ...`) and tag-only lines (`#auth`).
+        if stripped.startswith("#"):
+            continue
+        # Skip pure list bullets without content.
+        cleaned = stripped.lstrip("-* ").strip()
+        cleaned = _MEMORY_LEGACY_TAG_RE.sub("", cleaned).strip()
+        if cleaned:
+            return cleaned
+    return ""
+
+
+def _memory_migrate_target_path(
+    memory_dir: Path,
+    track: str,
+    category: str,
+    title: str,
+    date: str,
+    used_slugs: set[str],
+) -> tuple[Path, str]:
+    """Compute the destination path, disambiguating same-day collisions.
+
+    `used_slugs` accumulates slugs already chosen during this migration
+    pass so two entries in the legacy file with the same title don't
+    collide before the files are written.
+    """
+    base_slug = slugify(title) or "entry"
+    candidate = base_slug
+    n = 2
+    while True:
+        path = _memory_entry_path(memory_dir, track, category, candidate, date)
+        key = f"{track}/{category}/{candidate}-{date}"
+        if key not in used_slugs and not path.exists():
+            used_slugs.add(key)
+            return path, candidate
+        candidate = f"{base_slug}-{n}"
+        n += 1
+
+
+def cmd_memory_migrate(args: argparse.Namespace) -> None:
+    """Convert legacy flat memory files into categorized YAML entries.
+
+    Default: interactive. Flags:
+      --dry-run   plan only, no writes
+      --yes       skip the y/N prompt
+      --no-llm    skip LLM classification, mechanical only
+      --json      machine-readable output
+    """
+    memory_dir = require_memory_enabled(args)
+    is_json = bool(getattr(args, "json", False))
+    dry_run = bool(getattr(args, "dry_run", False))
+    assume_yes = bool(getattr(args, "yes", False))
+    no_llm = bool(getattr(args, "no_llm", False))
+
+    # 1. Detect legacy files.
+    legacy_paths: list[tuple[str, Path]] = []
+    for name in MEMORY_LEGACY_FILES:
+        path = memory_dir / name
+        if path.exists() and path.is_file():
+            legacy_paths.append((name, path))
+
+    if not legacy_paths:
+        if is_json:
+            json_output(
+                {
+                    "migrated": [],
+                    "warnings": [],
+                    "message": "No legacy files to migrate.",
+                    "dry_run": dry_run,
+                }
+            )
+        else:
+            print("No legacy files to migrate.")
+        return
+
+    # 2. Pick classifier backend.
+    if no_llm:
+        backend, model, effort = ("none", None, None)
+    else:
+        backend, model, effort = _memory_classify_select_backend()
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # 3. Build per-entry plan: parse + classify + compute target path.
+    used_slugs: set[str] = set()
+    plan: list[dict[str, Any]] = []
+    warnings: list[str] = []
+
+    backend_failed_once = False
+    for filename, path in legacy_paths:
+        entries = _memory_parse_legacy_entries(path)
+        if not entries:
+            warnings.append(
+                f"{filename}: no parseable entries (file kept in place; nothing to migrate)"
+            )
+            continue
+        for idx, entry in enumerate(entries, start=1):
+            (track, category), method, model_used, err = _memory_classify_entry(
+                entry["title"],
+                entry["body"],
+                filename,
+                backend,
+                model,
+                effort,
+            )
+            if err and not backend_failed_once:
+                # Surface the first failure once; subsequent calls would
+                # spam if the CLI is missing/auth-broken.
+                warnings.append(
+                    f"LLM classifier unavailable ({err}). Falling back to mechanical "
+                    "mapping for remaining entries. Re-run with `--no-llm` to suppress."
+                )
+                backend_failed_once = True
+                # Force mechanical for the rest of this run.
+                backend = "none"
+            entry_date = entry["date"] or today
+            target_path, slug = _memory_migrate_target_path(
+                memory_dir, track, category, entry["title"], entry_date, used_slugs
+            )
+            entry_id = _memory_entry_id(track, category, slug, entry_date)
+            plan.append(
+                {
+                    "source": filename,
+                    "source_entry": idx,
+                    "target": entry_id,
+                    "target_path": str(target_path),
+                    "method": method,
+                    "model": model_used,
+                    "track": track,
+                    "category": category,
+                    "title": entry["title"],
+                    "tags": entry["tags"],
+                    "date": entry_date,
+                    "body": entry["body"],
+                }
+            )
+
+    if not plan:
+        if is_json:
+            json_output(
+                {
+                    "migrated": [],
+                    "warnings": warnings,
+                    "message": "Legacy files present but contained no usable entries.",
+                    "dry_run": dry_run,
+                }
+            )
+        else:
+            print("Legacy files present but contained no usable entries.")
+            for w in warnings:
+                print(f"  warning: {w}")
+        return
+
+    # 4. Print plan when not pure --json (always print summary in --json).
+    if not is_json:
+        print("Migration plan:\n")
+        by_source: dict[str, list[dict[str, Any]]] = {}
+        for item in plan:
+            by_source.setdefault(item["source"], []).append(item)
+        for source, items in by_source.items():
+            print(f"From {source} ({len(items)} entries):")
+            for it in items:
+                marker = " (mechanical)" if it["method"] == "mechanical" else ""
+                print(f"  -> {it['target']}.md{marker}")
+            print()
+        print(
+            f"Legacy files will be moved to {memory_dir}/_legacy/ (preserved)."
+        )
+        for w in warnings:
+            print(f"  warning: {w}")
+
+    # 5. Dry-run exit.
+    if dry_run:
+        if is_json:
+            json_output(
+                {
+                    "migrated": [
+                        {
+                            "source": it["source"],
+                            "source_entry": it["source_entry"],
+                            "target": it["target"],
+                            "method": it["method"],
+                            "model": it["model"],
+                        }
+                        for it in plan
+                    ],
+                    "warnings": warnings,
+                    "legacy_moved_to": str(memory_dir / "_legacy"),
+                    "dry_run": True,
+                }
+            )
+        else:
+            print("\nDry run — no files written.")
+        return
+
+    # 6. Confirmation prompt (unless --yes / --json).
+    if not assume_yes and not is_json:
+        try:
+            answer = input("\nProceed? [y/N] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print("\nAborted.")
+            sys.exit(1)
+        if answer not in ("y", "yes"):
+            print("Aborted.")
+            sys.exit(1)
+    elif not assume_yes and is_json:
+        # JSON callers must opt in explicitly — refusing to write without
+        # consent prevents accidental destructive automation.
+        json_output(
+            {
+                "error": "Refusing to migrate without --yes (or interactive confirmation).",
+                "migrated": [],
+                "warnings": warnings,
+                "dry_run": False,
+            },
+            success=False,
+        )
+        sys.exit(1)
+
+    # 7. Apply: write entry files, then move legacy files into _legacy/.
+    written: list[dict[str, Any]] = []
+    for item in plan:
+        fm = _memory_migrate_build_frontmatter(
+            title=item["title"],
+            date=item["date"],
+            track=item["track"],
+            category=item["category"],
+            tags=item["tags"],
+            body=item["body"],
+        )
+        target = Path(item["target_path"])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            write_memory_entry(target, fm, item["body"])
+        except ValueError as exc:
+            warnings.append(
+                f"failed to write {item['target']}: {exc}. Skipping."
+            )
+            continue
+        written.append(
+            {
+                "source": item["source"],
+                "source_entry": item["source_entry"],
+                "target": item["target"],
+                "target_path": item["target_path"],
+                "method": item["method"],
+                "model": item["model"],
+            }
+        )
+
+    legacy_dir = memory_dir / "_legacy"
+    legacy_dir.mkdir(parents=True, exist_ok=True)
+    moved_files: list[str] = []
+    for filename, path in legacy_paths:
+        dest = legacy_dir / filename
+        try:
+            # shutil.move handles cross-fs correctly; for same-fs it's a rename.
+            shutil.move(str(path), str(dest))
+            moved_files.append(filename)
+        except OSError as exc:
+            warnings.append(
+                f"failed to move {filename} to _legacy/: {exc}"
+            )
+
+    # 8. Ensure README exists post-migration.
+    readme_path = memory_dir / "README.md"
+    if not readme_path.exists():
+        atomic_write(
+            readme_path,
+            _read_memory_template("README.md.tpl", _default_memory_readme()),
+        )
+
+    if is_json:
+        json_output(
+            {
+                "migrated": written,
+                "moved_legacy": moved_files,
+                "legacy_moved_to": str(legacy_dir),
+                "warnings": warnings,
+                "dry_run": False,
+                "count": len(written),
+            }
+        )
+    else:
+        print(
+            f"\nMigrated {len(written)} entries; legacy files preserved at {legacy_dir}."
+        )
+        if warnings:
+            for w in warnings:
+                print(f"  warning: {w}")
 
 
 def cmd_epic_create(args: argparse.Namespace) -> None:
@@ -11444,6 +12235,30 @@ def main() -> None:
     )
     p_memory_search.add_argument("--json", action="store_true", help="JSON output")
     p_memory_search.set_defaults(func=cmd_memory_search)
+
+    p_memory_migrate = memory_sub.add_parser(
+        "migrate",
+        help="Migrate legacy flat memory files (pitfalls/conventions/decisions.md) to categorized YAML entries",
+    )
+    p_memory_migrate.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        help="Print plan without writing files",
+    )
+    p_memory_migrate.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip interactive confirmation prompt",
+    )
+    p_memory_migrate.add_argument(
+        "--no-llm",
+        dest="no_llm",
+        action="store_true",
+        help="Skip LLM classifier; use mechanical mapping only",
+    )
+    p_memory_migrate.add_argument("--json", action="store_true", help="JSON output")
+    p_memory_migrate.set_defaults(func=cmd_memory_migrate)
 
     # epic create
     p_epic = subparsers.add_parser("epic", help="Epic commands")

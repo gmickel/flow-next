@@ -137,6 +137,20 @@ If the fast model call fails (network, auth, backend not configured), fall back 
 - fn-30-memory-schema-upgrade.1 (schema)
 - fn-30-memory-schema-upgrade.2 (memory add — used internally by migrate to write entries, or direct file writes if simpler)
 
+## Notes from fn-30.2 (plan-sync)
+
+Helpers landed in `flowctl.py` that this task can reuse instead of rolling its own file-writer:
+
+- `write_memory_entry(path, frontmatter, body)` — validates frontmatter, enforces deterministic field order, quotes YAML scalars that would otherwise coerce (dates/bools/numbers).
+- `_memory_entry_id(track, category, slug, date)` / `_memory_entry_path(memory_dir, track, category, slug, date)` — canonical id / path builders.
+- `_memory_resolve_legacy_type(name)` — mechanical fallback maps `pitfall[s]` → `bug/build-errors`, `convention[s]` → `knowledge/conventions`, `decision[s]` → `knowledge/tooling-decisions`.
+- `MEMORY_CATEGORIES`, `MEMORY_PROBLEM_TYPES`, `MEMORY_RESOLUTION_TYPES` constants are the authoritative enums.
+
+`memory add` JSON output shape (for call-through paths): `{success, entry_id, path, overlap_level, related_to, action: "created"|"updated", warnings}`. Same-day slug collisions are auto-disambiguated with a `-2`, `-3`, ... suffix in the slug. `--no-overlap-check` is the right flag when migrate wants to force a clean import without dedup against in-progress writes.
+
+<!-- Updated by plan-sync: fn-30.2 exposes write_memory_entry / _memory_entry_id / _memory_resolve_legacy_type helpers migrate can reuse. -->
+
+
 ## Done summary
 _(populated by /flow-next:work upon completion)_
 

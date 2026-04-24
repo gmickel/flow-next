@@ -120,7 +120,8 @@ Keep working for 2 minor releases, then remove. Document deprecation in CHANGELO
 - fn-30-memory-schema-upgrade.1 (schema constants and templates)
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+`flowctl memory add` rewritten for the categorized YAML schema: new `--track`/`--category` flags, overlap detection (high → update, moderate → related_to, low → new), legacy `--type` backcompat with suppressible deprecation warning, and stdin body support. YAML writer hardened to quote reserved scalars so round-trip survives without PyYAML. 19-case unit suite (`tests/test_memory_add.py`) plus 7 new smoke cases; mirror `.flow/bin/flowctl.py` kept in sync.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 03bfdab205a82282beba9be7a2d15ca685cf5fcc
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_memory_*.py' (60/60 passed), plugins/flow-next/scripts/smoke_test.sh (79 pass; 2 pre-existing codex e2e fails require codex CLI)
+- PRs:

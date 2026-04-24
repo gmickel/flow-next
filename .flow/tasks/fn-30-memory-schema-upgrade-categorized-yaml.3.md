@@ -134,7 +134,8 @@ The current `cmd_memory_read` / `cmd_memory_list` / `cmd_memory_search` in flowc
 
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Rewrote `flowctl memory list`, `memory read`, and `memory search` to walk the fn-30 categorized tree with --track/--category/--status filters, three-form entry-id resolution (full, slug+date, slug-latest), and weighted token-overlap search; legacy flat files remain readable until migration via synthetic `legacy/<file>[#N]` ids. 13 new smoke cases (81→94) and 32 new unittest cases (169→201) all pass.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 93d9ddaf04ca4f6b13477a61edf2bfee55af27c0
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (201 pass), plugins/flow-next/scripts/smoke_test.sh (94 pass)
+- PRs:

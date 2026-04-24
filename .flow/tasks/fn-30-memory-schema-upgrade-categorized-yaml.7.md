@@ -35,7 +35,15 @@ New entry:
 
 ### Changed
 - `memory list` / `read` / `search` gain `--track` and `--category` filter flags; still read legacy flat files until migration runs.
+- `memory list` also gains `--status active|stale|all` (default: active) — stale entries hidden unless asked.
+- `memory search` also gains `--module <m>`, `--tags "a,b"`, `--limit <N>` filters plus weighted token-overlap scoring (title 5×, tags 3×, body 1.5×, misc 1×).
+- `memory read` accepts three id forms — full (`bug/runtime-errors/slug-YYYY-MM-DD`), slug+date (unique lookup), and slug-only (latest date wins) — plus legacy forms (`legacy/pitfalls.md`, `legacy/pitfalls#N`).
 - Entry IDs now `<track>/<category>/<slug>-<date>` matching filepath.
+- Legacy hits in `search` surface as synthetic entries with `track: "legacy"` and `entry_id` like `legacy/pitfalls#3` (1-based).
+- JSON output shapes: `list` returns `{entries, legacy, count, status}`; `search` returns `{query, matches, count}`; `read` returns `{entry_id, path, frontmatter, body}` (categorized) or `{entry_id, path, legacy: true, body, index?}` (legacy).
+
+<!-- Updated by plan-sync: fn-30.3 landed list/read/search with richer filter flags and concrete JSON shapes; CHANGELOG should enumerate them. -->
+
 
 ### Deprecated
 - `memory add --type pitfall|convention|decision` maps to new `--track/--category` flags with deprecation warning. Will be removed in 0.36.0.

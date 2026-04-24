@@ -1913,6 +1913,78 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+echo -e "${YELLOW}--- memory migrate (fn-30.4) ---${NC}"
+MIG_TEST_DIR="$TEST_DIR/memory-migrate"
+rm -rf "$MIG_TEST_DIR"
+mkdir -p "$MIG_TEST_DIR"
+(
+  cd "$MIG_TEST_DIR"
+  git init -q
+  git config user.email t@t
+  git config user.name t
+  mkdir -p .flow/memory
+  cat > .flow/memory/pitfalls.md <<'LEGEOF'
+# Pitfalls
+
+## 2026-03-01 Race condition
+Worker race.
+
+---
+
+## 2026-03-15 Null crash
+Crash on empty payload.
+LEGEOF
+  cat > .flow/memory/conventions.md <<'LEGEOF'
+# Conventions
+
+## Use pnpm
+Project standard.
+LEGEOF
+  cat > .flow/memory/decisions.md <<'LEGEOF'
+# Decisions
+
+## 2026-02-01 Chose Postgres
+Replication story.
+LEGEOF
+
+  "$SCRIPT_DIR/flowctl" memory init --json >/dev/null
+
+  # Dry-run must not write anything.
+  dry_out=$("$SCRIPT_DIR/flowctl" memory migrate --dry-run --no-llm --json 2>&1)
+  dry_count=$(echo "$dry_out" | jq '.migrated | length')
+  [ "$dry_count" = "4" ] || { echo "FAIL: dry-run expected 4 migrated entries, got $dry_count"; echo "$dry_out"; exit 1; }
+  [ ! -d .flow/memory/_legacy ] || { echo "FAIL: dry-run must not move legacy files"; exit 1; }
+  [ -f .flow/memory/pitfalls.md ] || { echo "FAIL: dry-run removed pitfalls.md"; exit 1; }
+
+  # Real migrate.
+  real_out=$("$SCRIPT_DIR/flowctl" memory migrate --yes --no-llm --json 2>&1)
+  real_count=$(echo "$real_out" | jq '.migrated | length')
+  [ "$real_count" = "4" ] || { echo "FAIL: real migrate expected 4, got $real_count"; echo "$real_out"; exit 1; }
+
+  # Legacy files moved to _legacy/
+  [ -f .flow/memory/_legacy/pitfalls.md ] || { echo "FAIL: pitfalls.md not archived to _legacy"; exit 1; }
+  [ ! -f .flow/memory/pitfalls.md ] || { echo "FAIL: pitfalls.md should have been moved"; exit 1; }
+
+  # Categorized entries created.
+  bug_count=$(find .flow/memory/bug -type f -name "*.md" ! -name "README.md" | wc -l | tr -d ' ')
+  know_count=$(find .flow/memory/knowledge -type f -name "*.md" ! -name "README.md" | wc -l | tr -d ' ')
+  [ "$bug_count" = "2" ] || { echo "FAIL: expected 2 bug entries, got $bug_count"; exit 1; }
+  [ "$know_count" = "2" ] || { echo "FAIL: expected 2 knowledge entries, got $know_count"; exit 1; }
+
+  # Entry carries YAML frontmatter with track + category.
+  sample=$(find .flow/memory/bug -type f -name "race-condition*.md" | head -1)
+  [ -n "$sample" ] || { echo "FAIL: race-condition entry missing"; exit 1; }
+  grep -q "^track: bug$" "$sample" || { echo "FAIL: entry missing track frontmatter"; cat "$sample"; exit 1; }
+  grep -q "^category:" "$sample" || { echo "FAIL: entry missing category frontmatter"; cat "$sample"; exit 1; }
+
+  # Idempotent: re-running finds nothing to migrate.
+  rerun=$("$SCRIPT_DIR/flowctl" memory migrate --yes --no-llm --json 2>&1)
+  rerun_count=$(echo "$rerun" | jq '.migrated | length')
+  [ "$rerun_count" = "0" ] || { echo "FAIL: second migrate found $rerun_count (expected 0 — idempotent)"; echo "$rerun"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} memory migrate: dry-run, real, 3 legacy files → 4 entries, idempotent"
+PASS=$((PASS + 1))
+
 echo ""
 echo -e "${YELLOW}=== Results ===${NC}"
 echo -e "Passed: ${GREEN}$PASS${NC}"

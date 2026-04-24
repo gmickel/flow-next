@@ -39,16 +39,23 @@ $FLOWCTL memory add \
   --title "<one-line summary>" \
   --module "<primary-affected-file-or-module>" \
   --tags "<tag1>,<tag2>" \
-  --problem-type <one-of: build-error|test-failure|runtime-error|performance|security|integration|data|ui> \
   --symptoms "<what went wrong>" \
   --root-cause "<what caused it>" \
-  --resolution-type fix \
   --body-file /tmp/memory-body.md
 \`\`\`
 
 Where `/tmp/memory-body.md` contains structured markdown with Problem / What Didn't Work / Solution / Prevention sections.
 
+Optional flags the impl auto-fills with sensible defaults when omitted (fn-30.2):
+- `--problem-type` — derived from `--category` (e.g. `runtime-errors` → `runtime-error`, `build-errors` → `build-error`, `test-failures` → `test-failure`; for other categories, defaults to `build-error`). Pass explicitly only when the category-derived default is wrong.
+- `--resolution-type` — defaults to `fix`.
+- `--symptoms` — defaults to the title when omitted.
+- `--root-cause` — defaults to `(unspecified)` when omitted; prefer populating it for useful entries.
+
 The overlap-detection in `memory add` handles duplicates automatically — if this pattern has been captured before, the existing entry is updated instead of a new one being created. No deduplication burden on the worker.
+
+<!-- Updated by plan-sync: fn-30.2 auto-derives problem-type/resolution-type/symptoms defaults; --problem-type no longer required at the CLI. -->
+
 
 ### Inferring category
 
@@ -69,9 +76,17 @@ When ambiguous, pick the most specific that fits; overlap detection will merge i
 
 Current memory-scout reads flat files. Update to:
 
-1. Walk `.flow/memory/` tree first (new schema)
-2. Read legacy flat files if present
+1. Call `flowctl memory list --json` and/or `flowctl memory search <q> --json` (fn-30.3 already ships these) — no direct filesystem walking needed
+2. Parse the returned entries + legacy descriptors for track/category context
 3. Return results with track/category context
+
+CLI shapes landed in fn-30.3 (use these — don't reinvent):
+
+- `flowctl memory list --json` → `{entries: [{entry_id, title, track, category, module, tags, date, status, path}, ...], legacy: [{filename, path, entries, legacy_type}, ...], count, status}`
+- `flowctl memory search <q> --json` → `{query, matches: [{entry_id, title, track, category, module, tags, score, snippet, path, legacy?}, ...], count}`
+- Legacy hits in `search` appear with `track: "legacy"`, `category` set from the legacy-file map (`pitfall`/`convention`/`decision`), and an `entry_id` like `legacy/pitfalls#3`.
+- `list` accepts `--track`, `--category`, `--status active|stale|all` (default active).
+- `search` accepts `--track`, `--category`, `--module`, `--tags "a,b"`, `--limit N`.
 
 In the scout's output format, add category column:
 
@@ -87,8 +102,11 @@ In the scout's output format, add category column:
 
 Scout prompt guidance:
 - Prefer new-schema entries over legacy when both match (newer format likely more current)
-- Filter by task context: if task touches `src/auth.ts`, prioritize entries with `module: src/auth.ts*`
+- Filter by task context: if task touches `src/auth.ts`, prefer `flowctl memory search --module src/auth.ts` or post-filter on the `module` field; `flowctl memory list --category <c>` also works when the category is known
 - Return compact summaries (title + one-sentence why-relevant), not full entry bodies
+
+<!-- Updated by plan-sync: fn-30.3 ships `flowctl memory list/search --json` with concrete shapes `{entries, legacy, count, status}` and `{query, matches, count}`; scout should call those CLIs instead of walking the filesystem directly. -->
+
 
 ## Ralph template sync
 
