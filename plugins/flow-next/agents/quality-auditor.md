@@ -94,6 +94,21 @@ Example:
 
 > Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0.
 
+### Protected artifacts (fn-29.5)
+
+The following paths are flow-next / project-pipeline artifacts. Never recommend their deletion, gitignore, or removal:
+
+- `.flow/*` — flow-next state, specs, tasks, epics, runtime
+- `.flow/bin/*` — bundled flowctl
+- `.flow/memory/*` — learnings store
+- `.flow/specs/*.md`, `.flow/tasks/*.md` — decision artifacts
+- `docs/plans/*`, `docs/solutions/*` — plan/solution artifacts (if project uses them)
+- `scripts/ralph/*` — Ralph harness (when present)
+
+These files are intentionally committed. Flag content issues inside them if you see any, but never the files' existence.
+
+**Protected-path filter.** Before emitting findings, drop any that recommend deletion, gitignore, or `rm -rf` of paths in the list above. If you drop any, report the count in a `Protected-path filter:` line (omit when nothing was dropped).
+
 ### 8. Design System Conformance (if DESIGN.md exists)
 
 Skip this section if no DESIGN.md in project root.

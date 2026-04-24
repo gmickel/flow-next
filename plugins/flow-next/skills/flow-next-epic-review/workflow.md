@@ -345,6 +345,25 @@ Pre-existing gaps go under a separate `## Pre-existing issues (not blocking this
 
 Never delete pre-existing gaps from the report — they stay visible for future prioritization.
 
+## Protected artifacts
+
+The following paths are flow-next / project-pipeline artifacts. Any gap/finding recommending their deletion, gitignore, or removal MUST be discarded during synthesis. Do not flag these paths for cleanup under any circumstances:
+
+- `.flow/*` — flow-next state, specs, tasks, epics, runtime
+- `.flow/bin/*` — bundled flowctl
+- `.flow/memory/*` — learnings store (pitfalls, conventions, decisions)
+- `.flow/specs/*.md` — epic specs (decision artifacts)
+- `.flow/tasks/*.md` — task specs (decision artifacts)
+- `docs/plans/*` — plan artifacts (if project uses this convention)
+- `docs/solutions/*` — solutions artifacts (if project uses this convention)
+- `scripts/ralph/*` — Ralph harness (when present)
+
+These files are intentionally committed. They are the pipeline's state, not clutter. An agent that deletes them destroys the project's planning trail and breaks Ralph autonomous runs.
+
+If you notice genuine issues with content INSIDE these files (e.g., a spec that contradicts itself, a stale runtime value, a memory entry that's wrong), flag the content — not the file's existence.
+
+**Protected-path filter.** Before emitting findings, scan each for recommendations to delete, gitignore, or `rm -rf` any path matching the protected list above. Drop those findings. If you drop any, report the drop count in a `Protected-path filter:` line in the review output (e.g. `Protected-path filter: dropped 2 findings`). Omit the line when nothing was dropped.
+
 ## Output Format
 
 **Forward coverage (Spec → Code):** for each `introduced` gap:
@@ -367,6 +386,7 @@ For each untraced change:
 After the findings list, emit:
 - A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
 - A `Classification counts:` line tallying `introduced` vs `pre_existing` gaps, e.g. `Classification counts: 1 introduced, 0 pre_existing.`.
+- A `Protected-path filter:` line tallying gaps dropped by the protected-path filter (omit when nothing was dropped).
 
 **REQUIRED**: You MUST end your response with exactly one verdict tag. This is mandatory:
 `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`

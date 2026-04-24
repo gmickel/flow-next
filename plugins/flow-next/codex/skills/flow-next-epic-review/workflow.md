@@ -350,14 +350,59 @@ Example:
 
 > Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0.
 
+## Introduced vs pre-existing classification
+
+For each gap, classify whether this branch's diff caused it:
+
+- **introduced** — this epic's branch is responsible for the gap (new requirement not implemented, or a requirement this epic was supposed to satisfy and did not)
+- **pre_existing** — the gap predates this epic's branch (the requirement was already not satisfied on the base branch; this epic did not touch the relevant code). Pre-existing gaps do not block this verdict.
+
+Evidence methods:
+- `git blame <file> <line>` to see when the line was last touched
+- Read the base-branch version of the file directly
+- Check the epic scope: a gap about an area this epic never claimed to touch is `pre_existing`
+
+**Verdict gate:** only `introduced` gaps affect the verdict. An epic-review whose sole surviving gaps are all `pre_existing` MUST ship.
+
+Pre-existing gaps go under a separate `## Pre-existing issues (not blocking this verdict)` heading:
+
+```
+## Pre-existing issues (not blocking this verdict)
+
+- [confidence 75, introduced=false] missing migration docs in README — predates this epic
+```
+
+Never delete pre-existing gaps from the report — they stay visible for future prioritization.
+
+## Protected artifacts
+
+The following paths are flow-next / project-pipeline artifacts. Any gap/finding recommending their deletion, gitignore, or removal MUST be discarded during synthesis. Do not flag these paths for cleanup under any circumstances:
+
+- `.flow/*` — flow-next state, specs, tasks, epics, runtime
+- `.flow/bin/*` — bundled flowctl
+- `.flow/memory/*` — learnings store (pitfalls, conventions, decisions)
+- `.flow/specs/*.md` — epic specs (decision artifacts)
+- `.flow/tasks/*.md` — task specs (decision artifacts)
+- `docs/plans/*` — plan artifacts (if project uses this convention)
+- `docs/solutions/*` — solutions artifacts (if project uses this convention)
+- `scripts/ralph/*` — Ralph harness (when present)
+
+These files are intentionally committed. They are the pipeline's state, not clutter. An agent that deletes them destroys the project's planning trail and breaks Ralph autonomous runs.
+
+If you notice genuine issues with content INSIDE these files (e.g., a spec that contradicts itself, a stale runtime value, a memory entry that's wrong), flag the content — not the file's existence.
+
+**Protected-path filter.** Before emitting findings, scan each for recommendations to delete, gitignore, or `rm -rf` any path matching the protected list above. Drop those findings. If you drop any, report the drop count in a `Protected-path filter:` line in the review output (e.g. `Protected-path filter: dropped 2 findings`). Omit the line when nothing was dropped.
+
 ## Output Format
 
-**Forward coverage (Spec → Code):**
-For each gap found:
+**Forward coverage (Spec → Code):** for each `introduced` gap:
 - **Requirement**: What the spec says
 - **Status**: Missing / Partial / Wrong
 - **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
+- **Classification**: introduced
 - **Evidence**: What you found (or didn't find) in the code
+
+List each `pre_existing` gap under the dedicated non-blocking section above using the compact form `[confidence N, introduced=false] requirement — summary`.
 
 **Reverse coverage (Code → Spec):**
 For each untraced change:
@@ -365,13 +410,18 @@ For each untraced change:
 - **Classification**: UNDOCUMENTED_ADDITION / LEGITIMATE_SUPPORT / UNRELATED_CHANGE
 - **Note**: Brief explanation
 
-After the findings list, emit a `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
+(Note: the reverse-coverage `Classification` uses untraced-change labels, distinct from the `introduced` / `pre_existing` per-gap classification above.)
+
+After the findings list, emit:
+- A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
+- A `Classification counts:` line tallying `introduced` vs `pre_existing` gaps, e.g. `Classification counts: 1 introduced, 0 pre_existing.`.
+- A `Protected-path filter:` line tallying gaps dropped by the protected-path filter (omit when nothing was dropped).
 
 **REQUIRED**: You MUST end your response with exactly one verdict tag. This is mandatory:
 `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`
 
-- SHIP: All spec requirements are implemented
-- NEEDS_WORK: One or more requirements are missing, partial, or wrong
+- SHIP: All `introduced` spec requirements are implemented (pre-existing gaps do not block)
+- NEEDS_WORK: One or more `introduced` requirements are missing, partial, or wrong
 
 Do NOT skip this tag. The automation depends on it.
 EOF
@@ -437,15 +487,41 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
       }
       END { printf "}" }')"
 
-  if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
-    cat > "$REVIEW_RECEIPT_PATH" <<EOF
-{"type":"completion_review","id":"$EPIC_ID","mode":"rp","verdict":"SHIP","suppressed_count":$SUPPRESSED_JSON,"timestamp":"$ts"}
-EOF
-  else
-    cat > "$REVIEW_RECEIPT_PATH" <<EOF
-{"type":"completion_review","id":"$EPIC_ID","mode":"rp","verdict":"SHIP","timestamp":"$ts"}
-EOF
+  # Optional: capture introduced vs pre_existing classification tally (fn-29.4).
+  # Reviewer emits a line like "Classification counts: 1 introduced, 0 pre_existing."
+  # Uses portable grep -Eio so this works on BSD awk / mawk / gawk alike.
+  CLASSIFICATION_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
+    | grep -iE '^[>*_` ]*classification counts[ *_`]*:' \
+    | head -n 1 \
+    | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//')"
+  INTRODUCED_COUNT=""
+  PRE_EXISTING_COUNT=""
+  if [[ -n "$CLASSIFICATION_LINE" ]]; then
+    INTRODUCED_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
+      | grep -Eio '[0-9]+[[:space:]]+introduced' \
+      | head -n 1 \
+      | grep -Eo '^[0-9]+')"
+    PRE_EXISTING_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
+      | grep -Eio '[0-9]+[[:space:]]+pre[-_ ]?existing' \
+      | head -n 1 \
+      | grep -Eo '^[0-9]+')"
+    if [[ -n "$INTRODUCED_COUNT" || -n "$PRE_EXISTING_COUNT" ]]; then
+      INTRODUCED_COUNT="${INTRODUCED_COUNT:-0}"
+      PRE_EXISTING_COUNT="${PRE_EXISTING_COUNT:-0}"
+    fi
   fi
+
+  EXTRA_FIELDS=""
+  if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
+    EXTRA_FIELDS+=",\"suppressed_count\":$SUPPRESSED_JSON"
+  fi
+  if [[ -n "$INTRODUCED_COUNT" && -n "$PRE_EXISTING_COUNT" ]]; then
+    EXTRA_FIELDS+=",\"introduced_count\":$INTRODUCED_COUNT,\"pre_existing_count\":$PRE_EXISTING_COUNT"
+  fi
+
+  cat > "$REVIEW_RECEIPT_PATH" <<EOF
+{"type":"completion_review","id":"$EPIC_ID","mode":"rp","verdict":"SHIP"$EXTRA_FIELDS,"timestamp":"$ts"}
+EOF
   echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi
 ```

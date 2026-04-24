@@ -352,19 +352,69 @@ Example:
 
 > Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0.
 
+## Introduced vs pre-existing classification
+
+For each finding, classify whether this branch's diff caused it:
+
+- **introduced** — this branch caused the issue (new code, or a pre-existing bug that this diff amplified/exposed in a way that now matters)
+- **pre_existing** — the issue was already present on the base branch; this diff did not touch it
+
+Evidence methods (use whatever is cheapest):
+- `git blame <file> <line>` to see when the line was last touched
+- Read the base-branch version of the file directly
+- Infer from diff context: a finding on an unchanged line in an unchanged file is `pre_existing` by default
+
+**Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship.
+
+Report pre-existing findings in a dedicated non-blocking section:
+
+```
+## Pre-existing issues (not blocking this verdict)
+
+- [P1, confidence 75, introduced=false] src/legacy.ts:102 — null dereference on empty array
+- ...
+```
+
+Never delete pre-existing findings from the report — they stay visible for future prioritization.
+
+## Protected artifacts
+
+The following paths are flow-next / project-pipeline artifacts. Any finding recommending their deletion, gitignore, or removal MUST be discarded during synthesis. Do not flag these paths for cleanup under any circumstances:
+
+- `.flow/*` — flow-next state, specs, tasks, epics, runtime
+- `.flow/bin/*` — bundled flowctl
+- `.flow/memory/*` — learnings store (pitfalls, conventions, decisions)
+- `.flow/specs/*.md` — epic specs (decision artifacts)
+- `.flow/tasks/*.md` — task specs (decision artifacts)
+- `docs/plans/*` — plan artifacts (if project uses this convention)
+- `docs/solutions/*` — solutions artifacts (if project uses this convention)
+- `scripts/ralph/*` — Ralph harness (when present)
+
+These files are intentionally committed. They are the pipeline's state, not clutter. An agent that deletes them destroys the project's planning trail and breaks Ralph autonomous runs.
+
+If you notice genuine issues with content INSIDE these files (e.g., a spec that contradicts itself, a stale runtime value, a memory entry that's wrong), flag the content — not the file's existence.
+
+**Protected-path filter.** Before emitting findings, scan each for recommendations to delete, gitignore, or `rm -rf` any path matching the protected list above. Drop those findings. If you drop any, report the drop count in a `Protected-path filter:` line in the review output (e.g. `Protected-path filter: dropped 2 findings`). Omit the line when nothing was dropped.
+
 ## Output Format
 
-For each surviving finding:
+For each surviving `introduced` finding:
 - **Severity**: Critical / Major / Minor / Nitpick (P0 / P1 / P2 / P3 accepted)
 - **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
+- **Classification**: introduced
 - **File:Line**: Exact location
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
-After the findings list, emit a `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
+Then list each `pre_existing` finding under a separate `## Pre-existing issues (not blocking this verdict)` heading using the compact form `[severity, confidence N, introduced=false] file:line — summary`.
+
+After the findings list, emit:
+- A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
+- A `Classification counts:` line tallying `introduced` vs `pre_existing` survivors, e.g. `Classification counts: 2 introduced, 4 pre_existing.`.
+- A `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
 
 **REQUIRED**: You MUST end your response with exactly one verdict tag. This is mandatory:
-`<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>`
+`<verdict>SHIP</verdict>` (no blocking `introduced` findings) or `<verdict>NEEDS_WORK</verdict>` (introduced findings to fix) or `<verdict>MAJOR_RETHINK</verdict>`
 
 Do NOT skip this tag. The automation depends on it.
 EOF
@@ -422,16 +472,43 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
       }
       END { printf "}" }')"
 
-  # Build receipt; inject suppressed_count only when non-empty
-  if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
-    cat > "$REVIEW_RECEIPT_PATH" <<EOF
-{"type":"impl_review","id":"<TASK_ID>","mode":"rp","verdict":"$VERDICT","suppressed_count":$SUPPRESSED_JSON,"timestamp":"$ts"}
-EOF
-  else
-    cat > "$REVIEW_RECEIPT_PATH" <<EOF
-{"type":"impl_review","id":"<TASK_ID>","mode":"rp","verdict":"$VERDICT","timestamp":"$ts"}
-EOF
+  # Optional: capture introduced vs pre_existing classification tally (fn-29.4).
+  # Reviewer emits a line like "Classification counts: 2 introduced, 4 pre_existing."
+  # Uses portable grep -Eio so this works on BSD awk / mawk / gawk alike.
+  CLASSIFICATION_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
+    | grep -iE '^[>*_` ]*classification counts[ *_`]*:' \
+    | head -n 1 \
+    | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//')"
+  INTRODUCED_COUNT=""
+  PRE_EXISTING_COUNT=""
+  if [[ -n "$CLASSIFICATION_LINE" ]]; then
+    INTRODUCED_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
+      | grep -Eio '[0-9]+[[:space:]]+introduced' \
+      | head -n 1 \
+      | grep -Eo '^[0-9]+')"
+    PRE_EXISTING_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
+      | grep -Eio '[0-9]+[[:space:]]+pre[-_ ]?existing' \
+      | head -n 1 \
+      | grep -Eo '^[0-9]+')"
+    # Default the missing bucket to 0 when the other is present
+    if [[ -n "$INTRODUCED_COUNT" || -n "$PRE_EXISTING_COUNT" ]]; then
+      INTRODUCED_COUNT="${INTRODUCED_COUNT:-0}"
+      PRE_EXISTING_COUNT="${PRE_EXISTING_COUNT:-0}"
+    fi
   fi
+
+  # Build receipt; inject optional fn-29.3/fn-29.4 signals only when present
+  EXTRA_FIELDS=""
+  if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
+    EXTRA_FIELDS+=",\"suppressed_count\":$SUPPRESSED_JSON"
+  fi
+  if [[ -n "$INTRODUCED_COUNT" && -n "$PRE_EXISTING_COUNT" ]]; then
+    EXTRA_FIELDS+=",\"introduced_count\":$INTRODUCED_COUNT,\"pre_existing_count\":$PRE_EXISTING_COUNT"
+  fi
+
+  cat > "$REVIEW_RECEIPT_PATH" <<EOF
+{"type":"impl_review","id":"<TASK_ID>","mode":"rp","verdict":"$VERDICT"$EXTRA_FIELDS,"timestamp":"$ts"}
+EOF
   echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi
 ```
