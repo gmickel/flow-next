@@ -53,13 +53,13 @@ Execute the phases in [workflow.md](workflow.md) in order:
 
 0. **Resume check** — list active artifacts <30d; ask extend / fresh / open via blocking question. Corrupt artifacts surfaced but never offered for extension.
 1. **Ground** — scan repo with graceful degradation: git log (30d), open epics, CHANGELOG top, memory matches, memory audit (if present). Emit a structured 30-50 line snapshot — titles + tags only, never raw bodies.
-2. **Generate** _(task 2 — not implemented yet)_ — divergent-convergent + persona seeding (≥2 of `senior-maintainer` / `first-time-user` / `adversarial-reviewer`).
-3. **Critique** _(task 2)_ — separate prompt pass with rejection floor ≥40% (≥60% under `raise the bar`).
-4. **Rank** _(task 2)_ — bucketed: high leverage 1-3, worth-considering 4-7, if-you-have-the-time 8+.
+2. **Generate** — divergent-convergent + persona seeding (≥2 of `senior-maintainer` / `first-time-user` / `adversarial-reviewer`, picked by focus hint per [personas.md](personas.md)). One divergent prompt; no self-judging.
+3. **Critique** — separate prompt pass that does NOT see the focus hint or persona texts; rejection floor ≥40% (≥60% under `raise the bar`); fixed taxonomy (`duplicates-open-epic | out-of-scope | insufficient-signal | too-large | backward-incompat | other`); floor violation surfaces blocking question with frozen options `regenerate | loosen-floor | ship-anyway`.
+4. **Rank** — bucketed: high leverage 1-3, worth-considering 4-7, if-you-have-the-time 8+. Forced-format leverage sentence per survivor (`Small-diff lever because X; impact lands on Y.`); no numeric scores.
 5. **Write artifact** _(task 3)_ — atomic write-then-rename to `.flow/prospects/<slug>-<date>.md`.
 6. **Handoff** _(task 3)_ — blocking prompt for promote / interview / skip.
 
-This task implements 0 + 1 + the Ralph-block. Phases 2-6 land in subsequent tasks.
+Phases 0-4 are implemented; Phases 5-6 land in task 3.
 
 ## Pre-check: local setup version
 

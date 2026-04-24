@@ -342,6 +342,342 @@ If grounding can't produce a useful snapshot from a real repo (too noisy / too s
 
 ---
 
-## Phases 2-6 — deferred
+## Phase 2: Generate (R2, R18) — divergent-convergent + persona seeding
 
-Phase 2 (persona-seeded generate), Phase 3 (two-pass critique with rejection floor), Phase 4 (bucketed rank), Phase 5 (atomic artifact write), and Phase 6 (handoff prompt) are implemented in subsequent tasks of fn-33. Their prompt scaffolding consumes the snapshot from Phase 1 verbatim, so the snapshot format is the cross-task contract.
+**Goal:** produce a flat candidate list with **wide spread** by running one divergent generation pass anchored by ≥2 distinct persona voices. Phase 2 does **not** self-judge or pre-rank — that is Phase 3's job, on a separate prompt without this prompt's framing.
+
+### 2.1 — Resolve volume from focus hint
+
+Volume comes from `FOCUS_HINT` (Phase 1 §1.1). Default if no hint:
+
+```bash
+VOLUME_TARGET_MIN=15
+VOLUME_TARGET_MAX=25
+REJECTION_FLOOR=0.40   # Phase 3 default
+```
+
+Hint patterns (case-insensitive, leading/trailing whitespace tolerated):
+
+| Hint | Generation target | Phase 3 rejection floor |
+|---|---|---|
+| _(none)_ or `concept` / `path` / `constraint` | 15-25 candidates | 0.40 |
+| `top N` (with N integer) | `ceil(N * 1.8)` candidates | 0.40 (must leave ≥N survivors) |
+| `N ideas` (with N integer) | `≥N` candidates (LLM may exceed) | 0.40 |
+| `raise the bar` | 25-30 candidates | 0.60-0.70 |
+
+`top N` math: with a 0.40 rejection floor, `ceil(N * 1.8)` keeps ≥N alive in expectation (`1.8 * 0.6 ≈ 1.08`, so the count survives even when the LLM rejects slightly more than the floor). When `top N` and `raise the bar` both appear, take the stricter floor (0.60) and bump generation to `ceil(N * 3.0)` to keep ≥N survivors.
+
+Stash the resolved settings in shell:
+
+```bash
+GENERATION_TARGET="${VOLUME_TARGET_MIN}-${VOLUME_TARGET_MAX}"   # display-only string
+SURVIVOR_TARGET=""                                              # set only when "top N" hint
+```
+
+### 2.2 — Pick personas
+
+Apply the selection rule from `personas.md` based on `FOCUS_KIND` plus hint flavor:
+
+- `open-ended` / `path` / `constraint` / generic `concept` / `top N` / `N ideas` → **senior-maintainer + first-time-user**
+- `concept` matching `/audit|harden|secur|review|polish|risk|qual/i` → **senior-maintainer + adversarial-reviewer**
+- `raise the bar` → **all three** (senior-maintainer + first-time-user + adversarial-reviewer)
+
+The selected persona texts are read from `personas.md` and concatenated under `## Personas` in the Phase 2 prompt. Order: senior-maintainer first, then the others in the order listed by the rule.
+
+### 2.3 — Run the divergent generation pass
+
+Issue **one** prompt. Inputs: the Phase 1 grounding snapshot, the focus hint, the persona texts, the generation target. **Do not** include any critique-pass scaffolding — the generator must not self-judge. The critique runs as a separate prompt in Phase 3 without these instructions.
+
+Prompt template (fill in the bracketed slots):
+
+```
+You are generating candidate ideas for a `/flow-next:prospect` artifact. This is the divergent generation pass — produce a wide net. Critique runs separately afterwards; do not self-judge here.
+
+## Focus
+
+focus_hint: [FOCUS_HINT or "(open-ended)"]
+focus_kind: [FOCUS_KIND]
+[focus_path: <FOCUS_PATH> if path]
+
+## Grounding snapshot
+
+[Phase 1 snapshot verbatim — git log, open epics, CHANGELOG, memory, audit]
+
+## Personas
+
+[Concatenated persona texts from personas.md, in selection-rule order]
+
+Generate as if alternating between these voices. Let each voice claim ideas the others would miss. Do **not** flatten them into a single neutral perspective.
+
+## Generation target
+
+Produce [GENERATION_TARGET_DESCRIPTION] candidates. Wide net — encourage contrarian, unobvious takes. Repeating the obvious 3-5 ideas everyone would suggest is failure.
+
+## Output format
+
+Emit a flat YAML list. **One item per candidate.** No nesting, no preamble, no commentary outside YAML. The list is consumed verbatim by the next prompt — extra prose breaks the parser.
+
+```yaml
+candidates:
+  - title: <short title, ≤80 chars>
+    summary: <one-line summary, ≤120 chars>
+    affected_areas:
+      - <path or subsystem>
+      - <path or subsystem>
+    size: <S | M | L | XL>
+    risk_notes: <one-line risk / unknown / caveat — ≤120 chars>
+    persona: <senior-maintainer | first-time-user | adversarial-reviewer>
+  - title: ...
+```
+
+Constraints:
+
+- Each candidate must list at least one `affected_areas` entry.
+- `size` is one of S (≤200 LOC), M (200-800 LOC), L (800-2000 LOC), XL (>2000 LOC).
+- `persona` records which voice's lens the idea came from (used by Phase 3 only as metadata; do not let it bias the generation).
+- `risk_notes` is the one-line caveat — *what could make this a bad call* — not a sales pitch.
+- Do not add scores, rankings, or "priority" fields. Phase 4 ranks; you generate.
+```
+
+The `GENERATION_TARGET_DESCRIPTION` slot:
+
+| Hint | Slot text |
+|---|---|
+| _(default)_ | `15-25` |
+| `top N` | `ceil(N*1.8) — generate at least <K> so that ≥N survive critique` (substitute K) |
+| `N ideas` | `at least N (you may exceed N if the wide net produces more)` |
+| `raise the bar` | `25-30 — broader net, the critique pass will be stricter` |
+
+### 2.4 — Validate the YAML
+
+Parse the model output. The skill must accept output the model wraps in ```yaml fences as well as bare YAML. A defensive parser:
+
+```bash
+python3 - <<'PY'
+import sys, re, yaml  # PyYAML may not be installed — fall back to a stdlib loader if needed.
+text = sys.stdin.read()
+m = re.search(r"```yaml\s*\n(.*?)\n```", text, re.DOTALL)
+body = m.group(1) if m else text
+data = yaml.safe_load(body) if 'yaml' in dir() else None
+PY
+```
+
+If PyYAML is unavailable on the host, fall back to the stdlib parser pattern from Phase 0 §0.2 — it covers the limited subset (block list, scalar fields, no anchors / no nesting beyond `affected_areas`). Any candidate missing `title`, `summary`, or `affected_areas` is dropped before Phase 3 with a stderr warning (`Phase 2: dropped malformed candidate at index <i>: <reason>`).
+
+Hand the validated list to Phase 3 as `CANDIDATES_YAML` (canonical form: re-serialize from the parsed object so downstream prompts get a clean shape).
+
+If fewer than `floor(GENERATION_TARGET_MIN * 0.7)` valid candidates survive validation, surface a blocking question:
+
+```
+Phase 2 produced only K valid candidates (target was M-N). Options:
+  retry      — re-run Phase 2 with the same prompt
+  loosen     — proceed with K candidates anyway (Phase 3 floor still applies)
+  abort      — exit; no artifact written
+```
+
+The `loosen` path keeps the run going but flags the under-volume in the eventual artifact frontmatter (`generation_under_volume: true`) so downstream readers know the spread was narrow.
+
+---
+
+## Phase 3: Critique (R3, R12) — separate prompt, rejection floor enforced
+
+**Goal:** evaluate every candidate from Phase 2 with explicit `keep|drop` verdicts plus a fixed taxonomy reason. The critique pass runs in a **separate prompt** that does **not** see Phase 2's system prompt, the personas, or the focus hint — this prevents sycophancy ("the generator wanted X, the critic finds reasons to keep X"). The critique sees only the grounding snapshot and the candidate list.
+
+### 3.1 — Build the critique prompt
+
+Inputs: `CANDIDATES_YAML` (Phase 2 §2.4) + the Phase 1 grounding snapshot. **Excluded:** `FOCUS_HINT`, persona texts, Phase 2 prompt.
+
+Rejection taxonomy (R3 anchor — frozen string list):
+
+```
+duplicates-open-epic   — material overlap with an open epic in the grounding snapshot
+out-of-scope           — outside what this codebase / the focus area should tackle
+insufficient-signal    — speculative without evidence in grounding snapshot
+too-large              — XL or undermined by size; should be split or deferred
+backward-incompat      — would break public contracts / users without strong justification
+other                  — explain in `reason` field; use sparingly
+```
+
+Prompt template:
+
+```
+You are critiquing candidate ideas for a `/flow-next:prospect` artifact. You are the second pass — you did **not** generate these. Your job is to reject what does not belong.
+
+## Grounding snapshot
+
+[Phase 1 snapshot verbatim]
+
+## Candidates
+
+[CANDIDATES_YAML — one entry per candidate]
+
+## Critique instructions
+
+Evaluate each candidate against the grounding snapshot. Reject aggressively. "Could be useful someday" is not a reason to keep — that is exactly what `insufficient-signal` is for.
+
+For each candidate, emit a verdict: `keep` or `drop`. If `drop`, the `taxonomy` field must be one of:
+
+- `duplicates-open-epic` — same direction as a listed open epic
+- `out-of-scope` — not aligned with this codebase or the focus area
+- `insufficient-signal` — no grounding evidence supports this being worth doing now
+- `too-large` — XL size or scope creep without commensurate payoff
+- `backward-incompat` — breaks contracts / users without strong justification
+- `other` — explain specifically in `reason`
+
+If `keep`, leave `taxonomy: null`. The `reason` field is required for both verdicts and should be one specific sentence — no hedging, no "could be a good idea but" language.
+
+Target rejection rate: **[REJECTION_FLOOR_PCT]%**. Below that floor, the run will surface a violation and ask the user to regenerate, loosen, or ship anyway. Aim above the floor. If you cannot in good conscience reject the floor's worth of these candidates, that is a signal the generation pass was already too narrow.
+
+## Output format
+
+```yaml
+critiques:
+  - index: 0       # zero-indexed position in the input list
+    verdict: keep | drop
+    taxonomy: null | duplicates-open-epic | out-of-scope | insufficient-signal | too-large | backward-incompat | other
+    reason: <one specific sentence>
+  - index: 1
+    ...
+```
+
+Emit one entry per candidate, in order. No preamble, no commentary outside YAML.
+```
+
+`REJECTION_FLOOR_PCT` is `40` (default), `60` (under `raise the bar`).
+
+### 3.2 — Parse + apply the floor
+
+Pair each critique entry with its candidate by `index`. Compute:
+
+```
+rejection_rate = drops / total
+```
+
+If `rejection_rate < REJECTION_FLOOR`, surface a **blocking question** with the frozen options:
+
+```
+Critique rejected only X% (below the ≥Y% floor). Options:
+  regenerate    — re-run Phase 2 + Phase 3 from scratch (new candidates)
+  loosen-floor  — accept this critique result; ship survivors as-is
+  ship-anyway   — same as loosen-floor; preserved for clarity in transcripts
+```
+
+Frozen string format (R12 anchor — must match across backends): `regenerate | loosen-floor | ship-anyway`. Use the platform's blocking question tool (`AskUserQuestion` / `request_user_input` / `ask_user`); fall back to numbered-options when no blocking tool is available. Validate the choice; reject anything outside the three options.
+
+- `regenerate` → loop back to Phase 2 §2.3 with a fresh prompt invocation. Cap at **1 regeneration**; a second floor violation auto-routes to `loosen-floor` with a printed warning (avoids infinite loops on a model that genuinely can't reject).
+- `loosen-floor` / `ship-anyway` → continue to Phase 4. Record `floor_violation: true` in the eventual artifact frontmatter.
+
+### 3.3 — Hand off survivors + drops to Phase 4
+
+Materialize:
+
+- `SURVIVORS` — list of `{candidate, critique}` pairs where `critique.verdict == "keep"`. Order preserved from Phase 2.
+- `DROPS` — list of `{candidate, critique}` pairs where `critique.verdict == "drop"`. Used by Phase 5 (task 3) to populate the `## Rejected` section.
+
+If `len(SURVIVORS) == 0`, surface a blocking question:
+
+```
+Critique rejected every candidate. Options:
+  regenerate    — re-run Phase 2 + Phase 3 with a fresh prompt
+  abort         — exit; no artifact written
+```
+
+No third option here — shipping zero survivors produces a useless artifact.
+
+---
+
+## Phase 4: Rank survivors (R2) — bucketed, prose-only
+
+**Goal:** assign each survivor to one of three labeled buckets and stamp it with a forced-format leverage sentence. **No numeric scores.** Past position 5, ranking is near-random across reruns; bucketing stabilizes the top-3 while keeping the rest legible.
+
+### 4.1 — Build the rank prompt
+
+Inputs: `SURVIVORS` (Phase 3 §3.3) + the Phase 1 grounding snapshot. Personas and focus hint are **not** re-introduced — Phase 4 ranks on grounding-evidence, not on the generator's framing.
+
+Buckets (R2 / R4 anchor — frozen labels):
+
+```
+High leverage (1-3)            — small-diff, large-impact wins; top-3 cap
+Worth considering (4-7)        — solid mid-leverage; positions 4-7
+If you have the time (8+)      — lower priority; positions 8 and beyond
+```
+
+Prompt template:
+
+```
+You are ranking survivors of a critique pass for a `/flow-next:prospect` artifact. You did not generate or critique these — your job is to bucket and order.
+
+## Grounding snapshot
+
+[Phase 1 snapshot verbatim]
+
+## Survivors
+
+[SURVIVORS — yaml list with original candidate fields + the critique reason that kept each one]
+
+## Ranking instructions
+
+Assign each survivor to exactly one bucket and a position within that bucket. Cap the top bucket at 3 entries — High leverage is a scarce label, not a default. Most survivors land in Worth considering; only the genuinely lower-priority ones land in If you have the time.
+
+Each survivor gets a **leverage sentence** in this exact forced format:
+
+`Small-diff lever because <X>; impact lands on <Y>.`
+
+- `<X>` names the structural reason this is a small change (one or two existing files, well-isolated boundary, additive, etc.).
+- `<Y>` names what the impact reaches (which call sites, which user flows, which subsystems benefit).
+- One sentence. No hedging. No "could potentially" / "might enable" / "would be nice" — those are signals to drop the candidate, not to rank it.
+
+Do **not** emit numeric scores, percentage estimates, "leverage values", or rank weights. Prose only.
+
+## Output format
+
+```yaml
+ranking:
+  high_leverage:           # 0-3 entries
+    - position: 1
+      original_index: <int>   # the index from the Phase 3 SURVIVORS list
+      leverage: "Small-diff lever because ...; impact lands on ..."
+    - position: 2
+      ...
+  worth_considering:       # 0-N entries
+    - position: 4
+      original_index: <int>
+      leverage: "..."
+    ...
+  if_you_have_the_time:    # 0-N entries
+    - position: 8
+      original_index: <int>
+      leverage: "..."
+    ...
+```
+
+Position numbers run 1-indexed, sequential, and stable across the buckets (positions 1-3 in High leverage, 4-7 in Worth considering, 8+ in If you have the time). Skip positions if a bucket is shorter than its slot — e.g., if High leverage has only 2 entries, Worth considering still starts at position 4. Buckets may be empty.
+```
+
+### 4.2 — Validate the ranking
+
+Parse the model output. Reject and re-prompt **once** if any of:
+
+- `high_leverage` has more than 3 entries.
+- A `position` number is reused or non-sequential within its bucket.
+- An `original_index` is out of range or duplicated across buckets.
+- A `leverage` sentence does not match the regex `^Small-diff lever because .+; impact lands on .+\.$` — the format is the forced function, not a suggestion.
+- Any numeric scoring leaks in (regex-check for `score:`, `priority:`, `weight:`, `\d+/10`, `\d+%`).
+
+On re-prompt, send a single corrective message: `Output rejected — <specific reason>. Re-emit the ranking in the exact format above.` After one retry, fall through with whatever validates and surface a stderr warning.
+
+### 4.3 — Hand off to Phase 5
+
+Materialize `RANKED` — the parsed ranking with each survivor's full candidate record (title, summary, affected_areas, size, risk_notes, persona) joined in by `original_index`. Order:
+
+1. High leverage entries by position
+2. Worth considering entries by position
+3. If you have the time entries by position
+
+`RANKED` plus `DROPS` (Phase 3 §3.3) is the input to Phase 5 (task 3) — the artifact writer.
+
+---
+
+## Phases 5-6 — deferred
+
+Phase 5 (atomic artifact write to `.flow/prospects/<slug>-<date>.md`) and Phase 6 (handoff prompt for promote / interview / skip) are implemented in task 3 of fn-33. The Phase 4 output (`RANKED` + `DROPS`) is the cross-task contract — Phase 5 consumes both verbatim to populate the `## Survivors` (with bucket headings) and `## Rejected` sections of the artifact.
