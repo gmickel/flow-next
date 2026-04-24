@@ -126,7 +126,8 @@ git push origin flow-next-v0.34.0
 - Separate Discord announcement (default release automation).
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+fn-30 rollup shipped: flow-next 0.33.0. CHANGELOG + plugin README + root CLAUDE.md + website page.tsx updated for categorized memory schema, overlap detection, migrate, discoverability-patch, Ralph auto-capture rewrite, and category-aware memory-scout. Marketplace, plugin, and codex-plugin manifests bumped 0.32.1 -> 0.33.0 via scripts/bump.sh minor flow-next; codex mirror regenerated clean; badges synced. Smoke: 99/99. Website page (mickel.tech) updated locally and left staged for Gordon to commit in that repo. Release tag (flow-next-v0.33.0) not pushed per worker protocol -- user triggers.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: c3833f2a92e617a01b7936682d4131a5e88bbebf
+- Tests: plugins/flow-next/scripts/smoke_test.sh (99/99 pass)
+- PRs:
