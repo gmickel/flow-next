@@ -155,7 +155,8 @@ Actually simpler: after walkthrough, invoke fixer for Apply list, commit changes
 - None hard. Can land independently of tasks 1 & 2 (no shared code paths, just shared flag-parsing infrastructure).
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Implemented fn-32.3 --interactive flag: SKILL.md parses the flag and hard-errors on Ralph env (REVIEW_RECEIPT_PATH / FLOW_RALPH) with exit 2 (no env-var form — per-invocation only). New walkthrough.md documents the per-finding flow (Apply / Defer / Skip / Acknowledge / LFG-rest) via platform blocking tools (AskUserQuestion / request_user_input / ask_user) with pre-load rule for deferred tool schemas. New flowctl review-walkthrough-defer appends deferred findings to .flow/review-deferred/<branch-slug>.md (append-only, auto-creates directory, stamps each session with timestamp + receipt id + session_id; per-finding deferred_reason override supported). New flowctl review-walkthrough-record stamps receipt.walkthrough counts (applied/deferred/skipped/acknowledged/lfg_rest) and walkthrough_timestamp without ever flipping verdict. workflow.md Step W.1-W.5 covers the full phase across all backends. .flow/bin mirror synced. 12 new smoke tests added (help, required args, sink creation, append-only multi-session, empty no-op, --branch override, verdict preservation, receipt creation, lfg-rest truthy parsing, Ralph-block enforcement); 125/125 total smoke tests pass. All 11 AC covered.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: b3bf3b71e455be0b2de6900c9f0d8edde7980bc3
+- Tests: bash plugins/flow-next/scripts/smoke_test.sh (125 passed, 0 failed); bash Ralph-block trace (5 cases); flowctl review-walkthrough-defer/-record manual smoke (branch slug, append-only, empty no-op, --branch override, receipt preservation, lfg-rest parsing)
+- PRs:
