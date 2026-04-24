@@ -23,7 +23,7 @@ import uuid
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, ContextManager, Optional
 
@@ -55,6 +55,8 @@ EPICS_DIR = "epics"
 SPECS_DIR = "specs"
 TASKS_DIR = "tasks"
 MEMORY_DIR = "memory"
+PROSPECTS_DIR = "prospects"
+PROSPECTS_ARCHIVE_DIR = "_archive"
 CONFIG_FILE = "config.json"
 
 EPIC_STATUS = ["open", "done"]
@@ -4277,6 +4279,193 @@ def render_prospect_body(
     return "\n".join(out)
 
 
+# ---------- Prospect read / list / archive helpers (fn-33 task 4) --------
+
+
+# R16 single-source-of-truth: corruption reason strings must match the
+# Phase 0 inline classifier in skills/flow-next-prospect/workflow.md §0.2
+# byte-for-byte. Any change here must update both surfaces.
+PROSPECT_CORRUPT_NO_FRONTMATTER = "no frontmatter block"
+PROSPECT_CORRUPT_UNPARSEABLE_DATE = "unparseable date"
+PROSPECT_CORRUPT_MISSING_GROUNDING = "missing Grounding snapshot section"
+PROSPECT_CORRUPT_MISSING_SURVIVORS = "missing Survivors section"
+PROSPECT_CORRUPT_UNREADABLE = "unreadable"
+PROSPECT_CORRUPT_EMPTY = "empty"
+
+
+def _prospect_parse_frontmatter(text: str) -> Optional[dict[str, Any]]:
+    """Parse YAML frontmatter from raw artifact text.
+
+    Returns the parsed dict, or `None` when no `---`-delimited block is
+    present at the top of the file. Mirrors the Phase 0 inline classifier:
+    the test for "no frontmatter block" is `parse → None`. Uses
+    `_parse_inline_yaml` so output matches `parse_memory_frontmatter`'s
+    PyYAML-fallback path; callers may then validate with
+    `validate_prospect_frontmatter`.
+
+    The Phase 0 inline classifier hand-rolls a similar shallow parser; this
+    helper is the canonical implementation that `flowctl prospect list` and
+    `flowctl prospect read` defer to. Phase 0 may import / shell out to this
+    helper in a follow-on touch-up.
+    """
+    if not text or not text.startswith("---"):
+        return None
+    # Need a full ---\n<frontmatter>\n---\n block at the top.
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return None
+    fm_text = parts[1]
+    # Closing delimiter must be its own line — `_parse_inline_yaml` is
+    # tolerant, but a bare `---` mid-line wouldn't open the block above.
+    # Prefer PyYAML when available so the parse matches `parse_memory_frontmatter`.
+    try:
+        import yaml  # type: ignore[import-not-found]
+
+        try:
+            parsed = yaml.safe_load(fm_text)
+        except yaml.YAMLError:
+            return None
+        if not isinstance(parsed, dict):
+            return None
+        return parsed
+    except ImportError:
+        result = _parse_inline_yaml(fm_text)
+        # `_parse_inline_yaml` returns {} for malformed input — distinguish
+        # "no frontmatter" (None) from "empty frontmatter dict" by checking
+        # whether the block contained any non-blank lines.
+        if not result and any(line.strip() for line in fm_text.splitlines()):
+            return None
+        return result
+
+
+def _prospect_detect_corruption(path: Path) -> Optional[str]:
+    """Return a corruption reason string for `path`, or None for a clean artifact.
+
+    Reason strings (R16 contract — must match Phase 0 inline classifier):
+      - `no frontmatter block`        — no `---`-delimited YAML block at top
+      - `unparseable date`            — `date` field absent or not ISO YYYY-MM-DD
+      - `missing Grounding snapshot section`
+      - `missing Survivors section`
+      - `unreadable`                  — OSError on open()
+      - `empty`                       — zero-byte / whitespace-only file
+        (helper extension; Phase 0 inline classifier does not yet emit it)
+      - `missing frontmatter field: <name>` — required field per
+        `validate_prospect_frontmatter` is missing
+
+    Detection order: read errors first, then empty, then frontmatter
+    presence + parse, then date validity, then required body sections,
+    then frontmatter required-field presence (last so the more specific
+    "missing date / sections" reasons surface before the generic
+    "missing field" reason).
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return PROSPECT_CORRUPT_UNREADABLE
+
+    if not text.strip():
+        return PROSPECT_CORRUPT_EMPTY
+
+    fm = _prospect_parse_frontmatter(text)
+    if fm is None:
+        return PROSPECT_CORRUPT_NO_FRONTMATTER
+
+    # Date must be present and ISO-parseable.
+    raw_date = fm.get("date")
+    if raw_date is None:
+        return PROSPECT_CORRUPT_UNPARSEABLE_DATE
+    try:
+        # Accept either a `datetime.date` (PyYAML auto-coerces unquoted dates)
+        # or an ISO string. write_prospect_artifact quotes the field so the
+        # round-trip is always a string, but read-side must tolerate both.
+        if isinstance(raw_date, str):
+            datetime.fromisoformat(raw_date).date()
+        elif hasattr(raw_date, "isoformat"):
+            # date / datetime — fine.
+            raw_date.isoformat()
+        else:
+            return PROSPECT_CORRUPT_UNPARSEABLE_DATE
+    except (TypeError, ValueError):
+        return PROSPECT_CORRUPT_UNPARSEABLE_DATE
+
+    if "## Grounding snapshot" not in text:
+        return PROSPECT_CORRUPT_MISSING_GROUNDING
+    if "## Survivors" not in text:
+        return PROSPECT_CORRUPT_MISSING_SURVIVORS
+
+    # Required-field presence — surface the first missing field so the
+    # message stays actionable. validate_prospect_frontmatter returns a
+    # sorted list including unrelated errors; pick the missing-required
+    # surface explicitly.
+    missing = PROSPECT_REQUIRED_FIELDS - set(fm.keys())
+    if missing:
+        # Sort for determinism across PyYAML / inline-parser dict ordering.
+        first = sorted(missing)[0]
+        return f"missing frontmatter field: {first}"
+
+    return None
+
+
+def get_prospects_dir() -> Path:
+    """Return the project's `.flow/prospects/` directory (no mkdir)."""
+    return get_flow_dir() / PROSPECTS_DIR
+
+
+def _prospect_artifact_status(
+    path: Path, corruption: Optional[str], today: Optional[date] = None
+) -> tuple[str, Optional[int]]:
+    """Derive (status, age_days) for an artifact.
+
+    `corruption` is `_prospect_detect_corruption`'s result. Status is one of
+    `active | corrupt | stale | archived` matching `PROSPECT_STATUS_VALUES`.
+    Stale = >30 days old AND frontmatter status is `active`/absent. Archived
+    = frontmatter status explicitly set to `archived`.
+
+    Pure function — no I/O beyond a single read of the file (callers already
+    invoke `_prospect_detect_corruption` which reads it; the small extra cost
+    of a second open is the price of keeping this stateless).
+    """
+    if corruption is not None:
+        return ("corrupt", None)
+
+    if today is None:
+        today = datetime.now(timezone.utc).date()
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return ("corrupt", None)
+
+    fm = _prospect_parse_frontmatter(text) or {}
+    raw_status = (fm.get("status") or "active")
+    status = str(raw_status).strip().lower() or "active"
+
+    raw_date = fm.get("date")
+    age_days: Optional[int] = None
+    try:
+        if isinstance(raw_date, str):
+            d = datetime.fromisoformat(raw_date).date()
+        elif hasattr(raw_date, "isoformat") and not isinstance(raw_date, str):
+            # date / datetime — date() if datetime-like.
+            d = raw_date if isinstance(raw_date, date) else raw_date.date()
+        else:
+            d = None
+        if d is not None:
+            age_days = (today - d).days
+    except (TypeError, ValueError):
+        age_days = None
+
+    if status == "archived":
+        return ("archived", age_days)
+    if age_days is not None and age_days > 30:
+        return ("stale", age_days)
+    if status not in PROSPECT_STATUS_VALUES:
+        # Unknown frontmatter status — surface as corrupt rather than silently
+        # coercing to active.
+        return ("corrupt", age_days)
+    return (status or "active", age_days)
+
+
 def validate_memory_frontmatter(frontmatter: dict[str, Any]) -> list[str]:
     """Return a list of validation errors (empty = valid).
 
@@ -6848,6 +7037,650 @@ def cmd_memory_discoverability_patch(args: argparse.Namespace) -> None:
         )
     else:
         print(f"\nPatched {rel_path}.")
+
+
+# ---------- Prospect CLI commands (fn-33 task 4) ------------------------
+
+
+# Sentinel reasons that should sort *after* normal-case corruption messages
+# in `list --all` output (defensive — the Phase 0 contract owns the order).
+_PROSPECT_LIST_AGE_THRESHOLD_DAYS = 30
+
+
+def _prospect_iter_artifacts(
+    prospects_dir: Path,
+    include_archive: bool = False,
+    today: Optional[date] = None,
+) -> list[dict[str, Any]]:
+    """Walk `.flow/prospects/` and return artifact descriptors.
+
+    Each descriptor:
+        {artifact_id, path, status, corruption, age_days, frontmatter,
+         survivor_count, promoted_count, focus_hint, date, in_archive,
+         title}
+    Files starting with `.` or `_` (other than `_archive/`) are skipped at
+    the top level. `_archive/` contents are included only when
+    `include_archive=True`.
+
+    Errors during read are surfaced as `status: corrupt` descriptors
+    rather than raising — the list/read commands always want a complete
+    picture even when one entry is unreadable.
+    """
+    if today is None:
+        today = datetime.now(timezone.utc).date()
+
+    out: list[dict[str, Any]] = []
+
+    def _emit(path: Path, in_archive: bool) -> None:
+        corruption = _prospect_detect_corruption(path)
+        status, age_days = _prospect_artifact_status(path, corruption, today)
+        artifact_id = path.stem  # filename stem == artifact id
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        fm = _prospect_parse_frontmatter(text) or {}
+        # Robustly read survivor / promoted counts; fall back to body scan
+        # only when the frontmatter is missing (corrupt-but-readable case).
+        survivor_count = fm.get("survivor_count")
+        if not isinstance(survivor_count, int):
+            try:
+                survivor_count = int(survivor_count)
+            except (TypeError, ValueError):
+                survivor_count = None
+        promoted_raw = fm.get("promoted_ideas")
+        if isinstance(promoted_raw, list):
+            promoted_count = len(promoted_raw)
+        else:
+            promoted_count = 0
+        focus_hint = fm.get("focus_hint") or ""
+        date_field = fm.get("date") or ""
+        title = fm.get("title") or ""
+        out.append(
+            {
+                "artifact_id": artifact_id,
+                "path": str(path),
+                "status": status,
+                "corruption": corruption,
+                "age_days": age_days,
+                "frontmatter": fm,
+                "survivor_count": survivor_count,
+                "promoted_count": promoted_count,
+                "focus_hint": str(focus_hint) if focus_hint else "",
+                "date": str(date_field) if date_field else "",
+                "in_archive": in_archive,
+                "title": str(title) if title else "",
+            }
+        )
+
+    if not prospects_dir.is_dir():
+        return out
+
+    for entry in sorted(prospects_dir.iterdir()):
+        name = entry.name
+        if name.startswith("."):
+            continue
+        if entry.is_dir():
+            continue  # recursion handled separately for _archive
+        if name.startswith("_"):
+            continue
+        if entry.suffix != ".md":
+            continue
+        _emit(entry, in_archive=False)
+
+    if include_archive:
+        archive_dir = prospects_dir / PROSPECTS_ARCHIVE_DIR
+        if archive_dir.is_dir():
+            for entry in sorted(archive_dir.iterdir()):
+                name = entry.name
+                if name.startswith("."):
+                    continue
+                if entry.is_dir():
+                    continue
+                if entry.suffix != ".md":
+                    continue
+                _emit(entry, in_archive=True)
+
+    return out
+
+
+def _prospect_resolve_id(
+    prospects_dir: Path, artifact_id: str, include_archive: bool = True
+) -> Optional[dict[str, Any]]:
+    """Resolve an artifact id (full / slug-only) to a descriptor.
+
+    Mirrors `cmd_memory_read`'s precedence:
+      1. Exact filename match (`<id>.md`) under `.flow/prospects/` and
+         (if `include_archive`) under `_archive/`.
+      2. `<slug>-<YYYY-MM-DD>` form: re-attempt as full id.
+      3. Slug-only: collect all artifacts whose stem starts with
+         `<slug>-` and ends with an ISO date; latest date wins.
+
+    Returns None if no match. Returns a descriptor dict matching
+    `_prospect_iter_artifacts`'s shape.
+    """
+    if not artifact_id or not artifact_id.strip():
+        return None
+
+    # Direct filename hit (handles full id, including same-day suffixes).
+    for in_archive, base in [
+        (False, prospects_dir),
+        (True, prospects_dir / PROSPECTS_ARCHIVE_DIR) if include_archive else (False, None),  # type: ignore[misc]
+    ]:
+        if base is None or not isinstance(base, Path):
+            continue
+        candidate = base / f"{artifact_id}.md"
+        if candidate.is_file():
+            artifacts = _prospect_iter_artifacts(
+                prospects_dir, include_archive=include_archive
+            )
+            for a in artifacts:
+                if a["path"] == str(candidate):
+                    return a
+
+    artifacts = _prospect_iter_artifacts(
+        prospects_dir, include_archive=include_archive
+    )
+    if not artifacts:
+        return None
+
+    # Slug-only — latest date wins. Match stems of the form `<slug>-<date>`
+    # or `<slug>-<date>-<n>` (same-day collision suffix).
+    iso_re = re.compile(r"-(\d{4}-\d{2}-\d{2})(?:-\d+)?$")
+    candidates: list[tuple[str, dict[str, Any]]] = []
+    for a in artifacts:
+        stem = Path(a["path"]).stem
+        m = iso_re.search(stem)
+        if not m:
+            continue
+        # Strip the trailing date (and optional -N suffix) to get the slug.
+        slug = stem[: m.start()]
+        if slug == artifact_id:
+            candidates.append((m.group(1), a))
+    if not candidates:
+        return None
+    # Latest date wins; tiebreak by full stem alphabetic order so
+    # `slug-date-2` beats `slug-date` when both share the same date.
+    candidates.sort(key=lambda x: (x[0], Path(x[1]["path"]).stem), reverse=True)
+    return candidates[0][1]
+
+
+def _prospect_extract_section(text: str, section: str) -> Optional[str]:
+    """Extract a `--section` body slice from artifact text.
+
+    `section` is one of `focus | grounding | survivors | rejected`. The
+    extractor finds the matching `## <heading>` line and returns body
+    until the next `## ` line (exclusive). Returns None if the section
+    isn't present.
+    """
+    section_map = {
+        "focus": "## Focus",
+        "grounding": "## Grounding snapshot",
+        "survivors": "## Survivors",
+        "rejected": "## Rejected",
+    }
+    heading = section_map.get(section)
+    if heading is None:
+        return None
+    lines = text.splitlines()
+    start: Optional[int] = None
+    for i, line in enumerate(lines):
+        if line.strip() == heading:
+            start = i
+            break
+    if start is None:
+        return None
+    end = len(lines)
+    for j in range(start + 1, len(lines)):
+        if lines[j].startswith("## "):
+            end = j
+            break
+    return "\n".join(lines[start:end]).rstrip("\n") + "\n"
+
+
+def _prospect_extract_survivors(body: str) -> list[dict[str, Any]]:
+    """Extract structured survivor entries from a `## Survivors` body slice.
+
+    Best-effort regex scan — looks for `#### <position>. <title>` headers
+    and the `**Summary:** ...`, `**Leverage:** ...`, `**Size:** ...`
+    lines that follow. Empty list when the section is missing or has no
+    survivors. Bucket boundaries (`### High leverage (1-3)` etc.) are
+    captured into `bucket` per entry.
+    """
+    survivors: list[dict[str, Any]] = []
+    if not body:
+        return survivors
+
+    bucket = ""
+    bucket_re = re.compile(r"^### (.+)$")
+    head_re = re.compile(r"^#### (\d+)\. (.+)$")
+    field_re = re.compile(r"^\*\*([^*]+):\*\* (.+)$")
+
+    current: Optional[dict[str, Any]] = None
+
+    def _flush() -> None:
+        if current is not None:
+            survivors.append(current)
+
+    for raw_line in body.splitlines():
+        line = raw_line.rstrip()
+        bm = bucket_re.match(line)
+        if bm:
+            bucket = bm.group(1).strip()
+            continue
+        hm = head_re.match(line)
+        if hm:
+            _flush()
+            current = {
+                "position": int(hm.group(1)),
+                "title": hm.group(2).strip(),
+                "bucket": bucket,
+            }
+            continue
+        if current is None:
+            continue
+        fm = field_re.match(line)
+        if fm:
+            key = fm.group(1).strip().lower().replace(" ", "_")
+            current[key] = fm.group(2).strip()
+
+    _flush()
+    return survivors
+
+
+def _prospect_extract_rejected(body: str) -> list[dict[str, Any]]:
+    """Extract rejected entries from a `## Rejected` body slice.
+
+    Format mirrors `render_prospect_body`'s `- <title> — <taxonomy>: <reason>`
+    or `- <title> — <taxonomy>` lines. Returns empty list if section is
+    `_(none)_` or absent.
+    """
+    rejected: list[dict[str, Any]] = []
+    if not body:
+        return rejected
+    line_re = re.compile(
+        r"^-\s+(?P<title>.+?)\s+—\s+(?P<taxonomy>[^:]+?)(?::\s+(?P<reason>.+))?$"
+    )
+    for raw_line in body.splitlines():
+        line = raw_line.rstrip()
+        if not line.startswith("- "):
+            continue
+        m = line_re.match(line)
+        if not m:
+            continue
+        rejected.append(
+            {
+                "title": m.group("title").strip(),
+                "taxonomy": m.group("taxonomy").strip(),
+                "reason": (m.group("reason") or "").strip(),
+            }
+        )
+    return rejected
+
+
+def cmd_prospect_list(args: argparse.Namespace) -> None:
+    """List prospect artifacts under `.flow/prospects/`.
+
+    Default filter (fn-33 R5/R15):
+      - Active artifacts (≤30 days old, status: active) only.
+      - `_archive/` excluded.
+      - Stale (>30 days) and corrupt artifacts hidden.
+    `--all` lifts every filter and includes archived entries.
+
+    Sort: newest first by frontmatter date (corrupt sort last with a note).
+    """
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.",
+            use_json=args.json,
+        )
+    show_all = bool(getattr(args, "all", False))
+    prospects_dir = get_prospects_dir()
+    today = datetime.now(timezone.utc).date()
+    artifacts = _prospect_iter_artifacts(
+        prospects_dir, include_archive=show_all, today=today
+    )
+
+    if not show_all:
+        artifacts = [a for a in artifacts if a["status"] == "active"]
+
+    # Sort: corrupt last; everyone else newest-first by date (descending).
+    def _sort_key(a: dict[str, Any]) -> tuple[int, str, str]:
+        is_corrupt = 1 if a["status"] == "corrupt" else 0
+        # Reverse-sort newest first: invert the date.
+        date_key = a["date"] or ""
+        return (is_corrupt, date_key, a["artifact_id"])
+
+    artifacts.sort(key=_sort_key, reverse=True)
+    # Reverse leaves corrupt at the *top*; flip back so corrupt sorts last.
+    actives = [a for a in artifacts if a["status"] != "corrupt"]
+    corrupts = [a for a in artifacts if a["status"] == "corrupt"]
+    actives.sort(key=lambda a: (a["date"] or "", a["artifact_id"]), reverse=True)
+    corrupts.sort(key=lambda a: (a["date"] or "", a["artifact_id"]), reverse=True)
+    artifacts = actives + corrupts
+
+    if args.json:
+        payload = {
+            "artifacts": [
+                {
+                    "artifact_id": a["artifact_id"],
+                    "date": a["date"],
+                    "focus_hint": a["focus_hint"],
+                    "title": a["title"],
+                    "survivor_count": a["survivor_count"],
+                    "promoted_count": a["promoted_count"],
+                    "status": a["status"],
+                    "path": a["path"],
+                    "in_archive": a["in_archive"],
+                    "age_days": a["age_days"],
+                    "corruption": a["corruption"],
+                }
+                for a in artifacts
+            ],
+            "count": len(artifacts),
+            "show_all": show_all,
+        }
+        json_output(payload)
+        return
+
+    if not artifacts:
+        print("No prospect artifacts.")
+        if not show_all:
+            print("  (run with --all to include stale/corrupt/archived)")
+        return
+
+    # Human output.
+    headers = (
+        ["id", "date", "focus", "survivors", "promoted", "status"]
+        if not show_all
+        else ["id", "date", "focus", "survivors", "promoted", "status", "path"]
+    )
+    rows: list[list[str]] = []
+    for a in artifacts:
+        survivor_disp = (
+            str(a["survivor_count"]) if a["survivor_count"] is not None else "?"
+        )
+        promoted_disp = f"{a['promoted_count']}"
+        status_disp = a["status"]
+        if a["status"] == "corrupt" and a["corruption"]:
+            status_disp = f"corrupt ({a['corruption']})"
+        elif a["in_archive"]:
+            status_disp = f"{a['status']} (archived)"
+        row = [
+            a["artifact_id"],
+            a["date"] or "?",
+            a["focus_hint"] or "(open-ended)",
+            survivor_disp,
+            promoted_disp,
+            status_disp,
+        ]
+        if show_all:
+            row.append(a["path"])
+        rows.append(row)
+
+    widths = [len(h) for h in headers]
+    for r in rows:
+        for i, cell in enumerate(r):
+            widths[i] = max(widths[i], len(cell))
+
+    line_fmt = "  ".join(f"{{:<{w}}}" for w in widths)
+    print(line_fmt.format(*headers))
+    print(line_fmt.format(*["-" * w for w in widths]))
+    for r in rows:
+        print(line_fmt.format(*r))
+
+
+def cmd_prospect_read(args: argparse.Namespace) -> None:
+    """Read a prospect artifact body or a single section.
+
+    Id resolution (parallels `cmd_memory_read`):
+      - Full id (`dx-improvements-2026-04-24`) → direct filename hit.
+      - Slug only (`dx-improvements`) → latest date wins.
+      - `<slug>-<date>` always disambiguates same-day collisions via the
+        `-N` suffix retained in the artifact_id.
+
+    `--section <name>` extracts one of `focus | grounding | survivors |
+    rejected` body slices.
+    `--json` emits structured frontmatter + survivors + rejected.
+    Corrupt artifacts: print frontmatter (best-effort) plus a
+    `[ARTIFACT CORRUPT: <reason>]` marker; exit code 3 (distinct from
+    Ralph-block 2).
+    """
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.",
+            use_json=args.json,
+        )
+
+    artifact_id = getattr(args, "artifact_id", None)
+    if not artifact_id:
+        error_exit("artifact_id required", use_json=args.json)
+
+    section = getattr(args, "section", None)
+    if section is not None and section not in (
+        "focus",
+        "grounding",
+        "survivors",
+        "rejected",
+    ):
+        error_exit(
+            f"invalid --section '{section}' (valid: focus, grounding, survivors, rejected)",
+            use_json=args.json,
+        )
+
+    prospects_dir = get_prospects_dir()
+    descriptor = _prospect_resolve_id(
+        prospects_dir, artifact_id, include_archive=True
+    )
+    if descriptor is None:
+        error_exit(
+            f"prospect artifact '{artifact_id}' not found",
+            use_json=args.json,
+        )
+
+    path = Path(descriptor["path"])
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        error_exit(
+            f"failed to read {path}: {exc}", use_json=args.json, code=3
+        )
+
+    if descriptor["status"] == "corrupt":
+        reason = descriptor["corruption"] or "unknown"
+        if args.json:
+            json_output(
+                {
+                    "artifact_id": descriptor["artifact_id"],
+                    "path": str(path),
+                    "status": "corrupt",
+                    "corruption": reason,
+                    "frontmatter": descriptor["frontmatter"],
+                },
+                success=False,
+            )
+        else:
+            # Print frontmatter (raw block) when present, then marker.
+            if text.startswith("---"):
+                parts = text.split("---", 2)
+                if len(parts) >= 3:
+                    print("---")
+                    print(parts[1].strip("\n"))
+                    print("---")
+            print(f"[ARTIFACT CORRUPT: {reason}]")
+        sys.exit(3)
+
+    if section is not None:
+        slice_text = _prospect_extract_section(text, section)
+        if slice_text is None:
+            error_exit(
+                f"section '{section}' not found in {path.name}",
+                use_json=args.json,
+                code=3,
+            )
+        if args.json:
+            json_output(
+                {
+                    "artifact_id": descriptor["artifact_id"],
+                    "path": str(path),
+                    "section": section,
+                    "body": slice_text,
+                }
+            )
+        else:
+            sys.stdout.write(slice_text)
+        return
+
+    if args.json:
+        # Body without frontmatter.
+        body = ""
+        if text.startswith("---"):
+            parts = text.split("---", 2)
+            if len(parts) >= 3:
+                body = parts[2].lstrip("\n")
+        survivors_section = _prospect_extract_section(text, "survivors") or ""
+        rejected_section = _prospect_extract_section(text, "rejected") or ""
+        json_output(
+            {
+                "artifact_id": descriptor["artifact_id"],
+                "path": str(path),
+                "status": descriptor["status"],
+                "frontmatter": descriptor["frontmatter"],
+                "body": body,
+                "survivors": _prospect_extract_survivors(survivors_section),
+                "rejected": _prospect_extract_rejected(rejected_section),
+            }
+        )
+    else:
+        sys.stdout.write(text)
+        if not text.endswith("\n"):
+            sys.stdout.write("\n")
+
+
+def cmd_prospect_archive(args: argparse.Namespace) -> None:
+    """Move a prospect artifact to `.flow/prospects/_archive/`.
+
+    Updates frontmatter `status: archived` before the move so any reader
+    (including `list --all`) sees the archived status without an extra
+    parse pass. Refuses if the target already exists in the archive
+    (concurrent archive race).
+
+    Currently never runs the in-progress-extension check — task 5
+    introduces `promote` and at that point the lifecycle gets richer;
+    this command stays explicit-only. Corrupt artifacts can still be
+    archived (cleans up bad state without forcing a delete).
+    """
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.",
+            use_json=args.json,
+        )
+
+    artifact_id = getattr(args, "artifact_id", None)
+    if not artifact_id:
+        error_exit("artifact_id required", use_json=args.json)
+
+    prospects_dir = get_prospects_dir()
+    descriptor = _prospect_resolve_id(
+        prospects_dir, artifact_id, include_archive=False
+    )
+    if descriptor is None:
+        # Maybe it's already archived — surface a clear error.
+        archived = _prospect_resolve_id(
+            prospects_dir, artifact_id, include_archive=True
+        )
+        if archived is not None and archived["in_archive"]:
+            error_exit(
+                f"prospect '{artifact_id}' is already archived at "
+                f"{archived['path']}",
+                use_json=args.json,
+            )
+        error_exit(
+            f"prospect artifact '{artifact_id}' not found",
+            use_json=args.json,
+        )
+
+    src = Path(descriptor["path"])
+    archive_dir = prospects_dir / PROSPECTS_ARCHIVE_DIR
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    dst = archive_dir / src.name
+    if dst.exists():
+        error_exit(
+            f"archive target already exists: {dst}",
+            use_json=args.json,
+        )
+
+    # Update frontmatter status: archived. Re-write the whole file with
+    # new frontmatter + original body. Skip update if the artifact is
+    # corrupt and we couldn't parse — fall back to a raw move so the
+    # cleanup still works.
+    text = ""
+    try:
+        text = src.read_text(encoding="utf-8")
+    except OSError as exc:
+        error_exit(
+            f"failed to read {src}: {exc}", use_json=args.json, code=2
+        )
+
+    rewritten = False
+    fm = descriptor["frontmatter"]
+    if (
+        descriptor["status"] != "corrupt"
+        and isinstance(fm, dict)
+        and fm
+        and text.startswith("---")
+    ):
+        parts = text.split("---", 2)
+        if len(parts) >= 3:
+            body = parts[2].lstrip("\n")
+            new_fm = dict(fm)
+            new_fm["status"] = "archived"
+            # Re-emit using the canonical writer so field order is stable.
+            errors = validate_prospect_frontmatter(new_fm)
+            if not errors:
+                # Use a temp file alongside `src`, then rename onto src to
+                # keep updates atomic before the move.
+                tmp = src.parent / f".tmp.{os.getpid()}.{src.name}"
+                lines = ["---"]
+                for key in sorted(
+                    new_fm.keys(), key=_prospect_frontmatter_sort_key
+                ):
+                    rendered = _format_prospect_yaml_value(new_fm[key], key)
+                    lines.append(f"{key}: {rendered}")
+                lines.append("---")
+                lines.append("")
+                body_text = body.rstrip("\n") + "\n" if body else ""
+                content = "\n".join(lines) + "\n" + body_text
+                with open(tmp, "w", encoding="utf-8") as f:
+                    f.write(content)
+                os.replace(tmp, src)
+                rewritten = True
+
+    # Move src → dst. os.rename is atomic on the same filesystem; fall
+    # back to copy+unlink if cross-device.
+    try:
+        os.rename(src, dst)
+    except OSError:
+        shutil.copy2(src, dst)
+        try:
+            os.unlink(src)
+        except OSError:
+            pass
+
+    if args.json:
+        json_output(
+            {
+                "artifact_id": descriptor["artifact_id"],
+                "from": str(src),
+                "to": str(dst),
+                "frontmatter_updated": rewritten,
+                "status": "archived",
+            }
+        )
+    else:
+        print(f"Archived {descriptor['artifact_id']} → {dst}")
+        if not rewritten:
+            print("  (frontmatter not updated — corrupt or unparseable artifact)")
 
 
 def cmd_epic_create(args: argparse.Namespace) -> None:
@@ -14428,6 +15261,46 @@ def main() -> None:
     )
     p_memory_disc.add_argument("--json", action="store_true", help="JSON output")
     p_memory_disc.set_defaults(func=cmd_memory_discoverability_patch)
+
+    # prospect list / read / archive (fn-33 task 4)
+    p_prospect = subparsers.add_parser("prospect", help="Prospect artifact commands")
+    prospect_sub = p_prospect.add_subparsers(dest="prospect_cmd", required=True)
+
+    p_prospect_list = prospect_sub.add_parser(
+        "list",
+        help="List prospect artifacts (default: <30d active; --all for everything)",
+    )
+    p_prospect_list.add_argument(
+        "--all",
+        action="store_true",
+        help="Include archived, stale, and corrupt artifacts",
+    )
+    p_prospect_list.add_argument("--json", action="store_true", help="JSON output")
+    p_prospect_list.set_defaults(func=cmd_prospect_list)
+
+    p_prospect_read = prospect_sub.add_parser(
+        "read",
+        help="Read a prospect artifact (full id or slug-only)",
+    )
+    p_prospect_read.add_argument(
+        "artifact_id",
+        help="Artifact id (e.g. dx-improvements-2026-04-24 or dx-improvements)",
+    )
+    p_prospect_read.add_argument(
+        "--section",
+        choices=["focus", "grounding", "survivors", "rejected"],
+        help="Print just one body section",
+    )
+    p_prospect_read.add_argument("--json", action="store_true", help="JSON output")
+    p_prospect_read.set_defaults(func=cmd_prospect_read)
+
+    p_prospect_archive = prospect_sub.add_parser(
+        "archive",
+        help="Move a prospect artifact to .flow/prospects/_archive/",
+    )
+    p_prospect_archive.add_argument("artifact_id", help="Artifact id to archive")
+    p_prospect_archive.add_argument("--json", action="store_true", help="JSON output")
+    p_prospect_archive.set_defaults(func=cmd_prospect_archive)
 
     # epic create
     p_epic = subparsers.add_parser("epic", help="Epic commands")

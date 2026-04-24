@@ -26,7 +26,7 @@ Shell-level smoke test, pattern matches `impl-review_smoke_test.sh` (fn-32.5) �
    - `--all` lists all three with correct `status` markers.
    - Corrupt artifact has `status: corrupt` and a reason note.
 
-4. **Artifact writer (R4, R13).** Call `write_prospect_artifact` directly (via a thin Python harness) twice on the same day with the same slug. Assert: first writes `dx-2026-04-24.md`; second suffixes to `dx-2026-04-24-2.md`. Both atomic (no `.tmp.*` leftovers). Frontmatter round-trips via `_prospect_parse_frontmatter`, including optional Phase 2/3 flags `floor_violation: true` and `generation_under_volume: true` when present (task 3 must preserve both keys across the read/write cycle). <!-- Updated by plan-sync: task 2 landed the two optional frontmatter flags -->
+4. **Artifact writer (R4, R13).** Call `write_prospect_artifact` + `_prospect_next_id` directly (via a thin Python harness; both ship in task 3 at flowctl.py:4106-4186) twice on the same day with the same slug. Assert: first writes `dx-2026-04-24.md`; second (via `_prospect_next_id`) suffixes to `dx-2026-04-24-2.md`. Both atomic (no `.tmp.*` leftovers). Frontmatter round-trips — once task 4 ships `_prospect_parse_frontmatter`, use it; until then, parse via the Phase 0 inline Python or grep the raw text. Round-trip must preserve optional Phase 2/3 flags `floor_violation: true` and `generation_under_volume: true` when present; task 3's `PROSPECT_FIELD_ORDER` places them after `status` so the smoke test can grep for `^floor_violation: true$` deterministically. Additional shipped invariant: `date` round-trips as a quoted string (`date: "2026-04-24"`) not bare YAML date. <!-- Updated by plan-sync: task 3 shipped write_prospect_artifact + render_prospect_body + validate_prospect_frontmatter + PROSPECT_FIELD_ORDER; parser helper name is task 4's responsibility. -->
 
 5. **Graceful degradation (R17).** Phase 1 grounding harness run against:
    - An ungitted temp dir → snapshot includes `scanned: none (no git)` for the git section.
@@ -57,6 +57,8 @@ Shell-level smoke test, pattern matches `impl-review_smoke_test.sh` (fn-32.5) �
 - `plugins/flow-next/scripts/impl-review_smoke_test.sh` (fn-32.5) — smoke-test structure template
 - `plugins/flow-next/scripts/resolve-pr_smoke_test.sh` (fn-31.6) — GraphQL-free smoke pattern
 - `plugins/flow-next/scripts/smoke_test.sh` — existing suite for integration
+- `plugins/flow-next/tests/test_prospect_artifact.py` (task 3) — 36 unit tests already cover slug + collision + round-trip + atomic semantics; smoke test must not duplicate, focuses on shell-level + cross-subcommand integration. <!-- Updated by plan-sync: task 3 shipped comprehensive unit coverage; smoke test scope narrows to integration. -->
+- `plugins/flow-next/scripts/flowctl.py:4189` (`render_prospect_body`) — available as test scaffold for generating synthetic artifacts with deterministic body format. <!-- Updated by plan-sync: use render_prospect_body to build fixture artifacts instead of hand-rolling markdown. -->
 
 **Optional:**
 - `plugins/flow-next/scripts/ralph_smoke_test.sh` — Ralph regression harness

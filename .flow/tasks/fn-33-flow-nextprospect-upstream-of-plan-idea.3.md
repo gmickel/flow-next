@@ -76,7 +76,8 @@ Phases 5-6: atomic artifact writer + handoff prompt with frozen numbered-options
 - [ ] Unit tests in `test_prospect_artifact.py`: slug derivation, collision suffix, frontmatter round-trip, atomic rename semantics.
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Implemented Phases 5-6 of `/flow-next:prospect`: atomic artifact writer (`write_prospect_artifact` + `_prospect_slug` + `_prospect_next_id` + `render_prospect_body` + `validate_prospect_frontmatter`) in `flowctl.py` (mirrored to `.flow/bin/`), handoff-prompt phase with frozen numbered-options fallback in `workflow.md`, and 36 unit tests covering slug derivation, collision suffixing, frontmatter round-trip (including optional `floor_violation` / `generation_under_volume` flags), body rendering with optional `affected_areas` / `risk_notes` / `persona` fields, and concurrent-create EEXIST safety. All 253 plugin tests pass.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: a485c9ab1a26e25f4b0e742a308d7e17ed196035
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (253 tests, OK), python3 -m unittest plugins.flow-next.tests.test_prospect_artifact -v (36 tests, OK), python3 end-to-end smoke: write+collision+round-trip OK
+- PRs:
