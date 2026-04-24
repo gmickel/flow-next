@@ -105,7 +105,8 @@ Document results in the task PR: "Ralph smoke: 4/4 configurations passing."
 - fn-32-opt-in-review-flags.1, .2, .3, .4 (all flags implemented)
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+New `impl-review_smoke_test.sh` covers the 7-case matrix from the fn-32.5 spec (default review regression, --validate empty+upgrade+keep, --deep auto-enable+blocking-upgrade, --deep=performance explicit, --interactive Ralph-block via FLOW_RALPH and REVIEW_RECEIPT_PATH, flag combination, FLOW_VALIDATE_REVIEW / FLOW_REVIEW_DEEP env-var opt-ins) plus a parallel 4-configuration Ralph regression sweep. 74 assertions, ~58s wall-clock (under the 2-minute AC).
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 6bbb163486bbe5789b4c20f165a3ceb35d82e037
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (217/217 pass), plugins/flow-next/scripts/impl-review_smoke_test.sh (74/74 pass, ~58s including 4-config parallel Ralph sweep), plugins/flow-next/scripts/smoke_test.sh (125/125 pass), plugins/flow-next/scripts/ralph_smoke_test.sh under FLOW_VALIDATE_REVIEW=1 / FLOW_REVIEW_DEEP=1 / both / neither (4/4 configurations green)
+- PRs:

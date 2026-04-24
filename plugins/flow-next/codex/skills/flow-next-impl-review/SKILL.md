@@ -92,15 +92,30 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 ## Input
 
 Arguments: $ARGUMENTS
-Format: `[task ID] [--base <commit>] [focus areas]`
+Format: `[task ID] [--base <commit>] [--validate] [--deep[=passes]] [--interactive] [focus areas]`
 
 - `--base <commit>` - Compare against this commit instead of main/master (for task-scoped reviews)
+- `--validate` - After NEEDS_WORK verdict, run a validator pass that drops false-positive findings (fn-32.1, opt-in)
+- `--deep` / `--deep=<passes>` - Run additional specialized passes (adversarial / security / performance) after primary review (fn-32.2, opt-in)
+- `--interactive` - On NEEDS_WORK, walk through each finding with the user (Apply/Defer/Skip/Acknowledge) (fn-32.3, opt-in, Ralph-incompatible)
 - Task ID - Optional, for context and receipt tracking
 - Focus areas - Optional, specific areas to examine
 
 **Scope behavior:**
 - With `--base`: Reviews only changes since that commit (task-scoped)
 - Without `--base`: Reviews entire branch vs main/master (full branch review)
+
+**Opt-in flags (fn-32):**
+- `--validate` — adds a validator pass on NEEDS_WORK that re-checks each finding
+  for false positives. All findings dropping upgrades verdict to SHIP.
+- `FLOW_VALIDATE_REVIEW=1` env var — enables `--validate` session-wide (works in Ralph).
+- `--deep` — adds adversarial pass always + security/performance auto-enabled
+  per diff paths. `--deep=adversarial,security` restricts to listed passes.
+- `FLOW_REVIEW_DEEP=1` env var — enables `--deep` session-wide (works in Ralph).
+- `--interactive` — per-finding walkthrough on NEEDS_WORK. **No env var form** —
+  per-invocation only, always hard-errors in Ralph mode (`REVIEW_RECEIPT_PATH` or
+  `FLOW_RALPH=1`) to prevent accidental autonomous engagement.
+- Default review behavior (no flags) is unchanged.
 
 ## Workflow
 
@@ -116,10 +131,105 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 Parse $ARGUMENTS for:
 - `--base <commit>` → `BASE_COMMIT` (if provided, use for scoped diff)
 - `--no-triage` → set `TRIAGE_DISABLED=1` (skip trivial-diff pre-check)
+- `--validate` → set `VALIDATE=true` (fn-32.1 validator pass on NEEDS_WORK)
+- `--deep` / `--deep=<passes>` → set `DEEP=true` + optional `DEEP_PASSES` CSV (fn-32.2)
+- `--interactive` → set `INTERACTIVE=true` (fn-32.3 per-finding walkthrough on NEEDS_WORK; Ralph-blocked)
 - First positional arg matching `fn-*` → `TASK_ID`
 - Remaining args → focus areas
 
 If `--base` not provided, `BASE_COMMIT` stays empty (will fall back to main/master).
+
+**Validate flag + env var:**
+
+```bash
+VALIDATE=false
+# Parse --validate from $ARGUMENTS (same pattern as --base)
+for arg in $ARGUMENTS; do
+  case "$arg" in
+    --validate) VALIDATE=true ;;
+  esac
+done
+
+# Env opt-in (Ralph-friendly)
+if [[ "${FLOW_VALIDATE_REVIEW:-}" == "1" ]]; then
+  VALIDATE=true
+fi
+```
+
+`VALIDATE` gates the validator pass in workflow.md. When false (default),
+behavior is unchanged.
+
+**Deep flag + env var:**
+
+```bash
+DEEP=false
+DEEP_PASSES=""  # optional CSV: "adversarial,security"
+for arg in $ARGUMENTS; do
+  case "$arg" in
+    --deep) DEEP=true ;;
+    --deep=*) DEEP=true; DEEP_PASSES="${arg#--deep=}" ;;
+  esac
+done
+
+# Env opt-in (Ralph-friendly)
+if [[ "${FLOW_REVIEW_DEEP:-}" == "1" ]]; then
+  DEEP=true
+fi
+```
+
+`DEEP` gates the deep-pass phase in workflow.md. When false (default),
+behavior is unchanged.
+
+**Pass selection (when DEEP=true):**
+
+```bash
+# If explicit CSV provided, use those passes verbatim.
+# Otherwise: adversarial always + security/performance auto-enabled by
+# changed-file globs via `flowctl review-deep-auto`.
+if [[ -n "$DEEP_PASSES" ]]; then
+  SELECTED_PASSES="${DEEP_PASSES//,/ }"
+else
+  # Determine changed files for auto-enable heuristic
+  if [[ -n "$BASE_COMMIT" ]]; then
+    CHANGED="$(git diff --name-only "$BASE_COMMIT"..HEAD)"
+  else
+    DIFF_BASE=main; git rev-parse main >/dev/null 2>&1 || DIFF_BASE=master
+    CHANGED="$(git diff --name-only "$DIFF_BASE"..HEAD)"
+  fi
+  SELECTED_PASSES="$(printf '%s\n' "$CHANGED" | $FLOWCTL review-deep-auto)"
+fi
+echo "Deep passes selected: $SELECTED_PASSES"
+```
+
+See [deep-passes.md](deep-passes.md) for the pass prompt templates, the
+auto-enable globs, and merge/promotion rules.
+
+**Interactive flag + Ralph-block (fn-32.3):**
+
+```bash
+INTERACTIVE=false
+for arg in $ARGUMENTS; do
+  case "$arg" in
+    --interactive) INTERACTIVE=true ;;
+  esac
+done
+
+# No env var form — per-invocation only. Ralph must never engage interactive.
+if [[ "$INTERACTIVE" == "true" ]]; then
+  if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
+    echo "Error: --interactive requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
+    exit 2
+  fi
+fi
+```
+
+`INTERACTIVE` gates the walkthrough phase in [walkthrough.md](walkthrough.md).
+When false (default), behavior is unchanged. When true + verdict is
+NEEDS_WORK, the skill walks each finding with the user via the platform's
+blocking question tool (Apply / Defer / Skip / Acknowledge / LFG-rest).
+
+See [walkthrough.md](walkthrough.md) for the full per-finding flow and
+deferred-findings sink contract.
 
 ### Step 0.5: Trivial-diff triage (fn-29.6)
 
@@ -217,13 +327,30 @@ The workflow covers:
 
 If verdict is NEEDS_WORK, loop internally until SHIP:
 
-1. **Parse issues** from reviewer feedback (Critical → Major → Minor)
-2. **Fix code** and run tests/lints
-3. **Commit fixes** (mandatory before re-review)
-4. **Re-review**:
+0. **Deep-pass phase (only if `DEEP=true`)** — see [workflow.md](workflow.md) "Deep-Pass Phase" section.
+   - After primary review completes (any verdict) and before validator,
+     run each selected pass via
+     `$FLOWCTL <backend> deep-pass --pass <name> --receipt ... --primary-findings ...`.
+   - Passes merge into receipt via fingerprint dedup + cross-pass promotion.
+   - Deep may upgrade `SHIP → NEEDS_WORK` if it surfaces new blocking findings;
+     it never downgrades `NEEDS_WORK → SHIP`.
+1. **Validator pass (only if `VALIDATE=true`)** — see [workflow.md](workflow.md) "Validator Pass" section.
+   - Extract findings JSON-lines, dispatch `$FLOWCTL <backend> validate --findings-file ... --receipt ...`
+   - If all findings drop → verdict upgrades to SHIP automatically (exit fix loop)
+   - Else → only surviving (kept) findings enter the fix loop in step 2
+2. **Interactive walkthrough (only if `INTERACTIVE=true` AND verdict still NEEDS_WORK)** — see [walkthrough.md](walkthrough.md).
+   - For each surviving finding, ask user via platform blocking question tool: Apply / Defer / Skip / Acknowledge / LFG-rest.
+   - Deferred findings appended to `.flow/review-deferred/<branch-slug>.md`.
+   - Skip / Acknowledge are no-ops beyond receipt logging.
+   - Apply list restricts the fix loop below to just those findings.
+   - Receipt gains `walkthrough: {applied, deferred, skipped, acknowledged}`.
+3. **Parse issues** from reviewer feedback (Critical → Major → Minor)
+4. **Fix code** and run tests/lints
+5. **Commit fixes** (mandatory before re-review)
+6. **Re-review**:
    - **Codex**: Re-run `flowctl codex impl-review` (receipt enables context)
    - **Copilot**: Re-run `flowctl copilot impl-review` (receipt enables context; must be `mode == "copilot"` to resume)
    - **RP**: `$FLOWCTL rp chat-send (2-10 min, DO NOT RETRY) --window "$W" --tab "$T" --message-file /tmp/re-review.md` (NO `--new-chat`)
-5. **Repeat** until `<verdict>SHIP</verdict>`
+7. **Repeat** until `<verdict>SHIP</verdict>`
 
 **CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.

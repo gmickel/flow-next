@@ -6,13 +6,13 @@
   },
   "metadata": {
     "description": "Plan-first workflows for Claude Code and Factory Droid. Two plugins: flow-next (recommended, zero-dep, Ralph autonomous mode) and flow (Beads integration).",
-    "version": "0.34.0"
+    "version": "0.35.0"
   },
   "plugins": [
     {
       "name": "flow-next",
       "description": "Zero-dependency planning + execution with .flow/ task tracking and Ralph autonomous mode (multi-model review gates). Worker subagent per task for context isolation. Includes 21 subagents, 12 commands, 17 skills.",
-      "version": "0.34.0",
+      "version": "0.35.0",
       "author": {
         "name": "Gordon Mickel",
         "email": "gordon@mickel.tech",
