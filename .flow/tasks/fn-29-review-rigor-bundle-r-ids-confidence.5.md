@@ -64,7 +64,8 @@ This is a safety rail, not a feature. External reviewers (codex/copilot running 
 - User-configurable protected paths — list is hardcoded for the plugin's use case.
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Added hardcoded protected-artifacts path list (.flow/*, .flow/memory/*, .flow/specs/*.md, .flow/tasks/*.md, docs/plans/*, docs/solutions/*, scripts/ralph/*) to all three review prompts (impl-review, epic-review, plan-review) plus quality-auditor agent. Shared PROTECTED_ARTIFACTS_BLOCK constant in flowctl.py injected into build_review_prompt (impl + plan), build_standalone_review_prompt, and build_completion_review_prompt so rp/codex/copilot backends all discard findings recommending deletion/gitignore/removal of those paths and surface drop count via a "Protected-path filter:" line. .flow/bin/flowctl.py synced; Codex mirror regenerated via sync-codex.sh.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: c27f606150168e9f0442eea4e4592437f22df89a
+- Tests: plugins/flow-next/scripts/smoke_test.sh (69/69 passed), python3 prompt-builder checks: build_review_prompt (impl + plan), build_standalone_review_prompt, build_completion_review_prompt all include Protected artifacts block, parse_suppressed_count + parse_classification_counts + parse_codex_verdict still parse correctly with Protected-path filter line present
+- PRs:

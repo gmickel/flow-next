@@ -1762,6 +1762,95 @@ def parse_classification_counts(output: str) -> Optional[dict[str, int]]:
     return per_finding if saw_any else None
 
 
+def parse_unaddressed_rids(output: str) -> Optional[list[str]]:
+    """Extract unaddressed R-IDs from review output (fn-29.2).
+
+    Primary signal: a summary line the reviewer is asked to emit, e.g.
+        Unaddressed R-IDs: [R3, R5]
+        Unaddressed R-ID: R3
+        Unaddressed: [R3, R5]
+
+    Fallback: scan a `## Requirements coverage` markdown table for rows whose
+    Status column is `not-addressed` (or `not addressed`). Deferred R-IDs are
+    never returned. Returns a de-duplicated list preserving first-seen order.
+    Returns None when no R-ID coverage signal is present at all (legacy specs
+    without R-IDs, or reviewer skipped the block). Returns ``[]`` when the
+    reviewer explicitly reported zero unaddressed R-IDs (`Unaddressed R-IDs: []`
+    or `none`).
+
+    Flowctl does not enforce the verdict gate here — the reviewer LLM is
+    instructed to flip NEEDS_WORK when any non-deferred R-ID is unaddressed.
+    This helper just stores the array so downstream fix loops can target
+    specific requirements.
+    """
+    if not output:
+        return None
+
+    def _extract_rids(text: str) -> list[str]:
+        """Return R-ID tokens found in ``text`` (de-duped, order-preserving)."""
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for match in re.finditer(r"\bR(\d+)\b", text):
+            rid = f"R{match.group(1)}"
+            if rid not in seen:
+                seen.add(rid)
+                ordered.append(rid)
+        return ordered
+
+    # Primary: `Unaddressed R-IDs: [R3, R5]` / `Unaddressed: R3, R5` / `Unaddressed R-ID: R3`
+    summary_match = re.search(
+        r"(?im)^[\s>*_`]*unaddressed(?:\s+r[-_ ]?ids?)?[\s*_`]*:\s*(.+?)\s*$",
+        output,
+    )
+    if summary_match:
+        payload = summary_match.group(1).strip()
+        # Strip markdown emphasis / brackets / trailing punctuation.
+        stripped = payload.strip("[]`*_ ").rstrip(".")
+        if stripped.lower() in {"", "none", "n/a", "[]"}:
+            return []
+        rids = _extract_rids(payload)
+        return rids  # may be empty if the payload had text but no R-ID tokens
+
+    # Fallback: look for a requirements coverage markdown table and extract
+    # rows with not-addressed status. Deferred rows are skipped.
+    coverage_match = re.search(
+        r"(?is)##\s*Requirements?\s+coverage[^\n]*\n(.+?)(?:\n##\s|\nUnaddressed\s|\Z)",
+        output,
+    )
+    if not coverage_match:
+        return None
+    table_text = coverage_match.group(1)
+    unaddressed: list[str] = []
+    seen: set[str] = set()
+    for line in table_text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        # Skip separator rows like | --- | --- | --- |
+        if re.fullmatch(r"\|[\s:\-|]+\|?", stripped):
+            continue
+        cols = [c.strip() for c in stripped.strip("|").split("|")]
+        if len(cols) < 2:
+            continue
+        rid_token = cols[0]
+        status = cols[1].lower()
+        # Header row detection
+        if rid_token.lower() in {"r-id", "rid", "r id", "r"}:
+            continue
+        rid_match = re.search(r"\bR(\d+)\b", rid_token)
+        if not rid_match:
+            continue
+        rid = f"R{rid_match.group(1)}"
+        # Normalize status: strip markdown emphasis; accept "not-addressed",
+        # "not addressed", "not_addressed", "unaddressed".
+        status_norm = re.sub(r"[`*_\s]+", "", status).lower()
+        if status_norm in {"not-addressed", "notaddressed", "unaddressed"}:
+            if rid not in seen:
+                seen.add(rid)
+                unaddressed.append(rid)
+    return unaddressed  # may be empty when table exists but all rows met/deferred
+
+
 def is_sandbox_failure(exit_code: int, stdout: str, stderr: str) -> bool:
     """Detect if codex failure is due to sandbox restrictions.
 
@@ -2410,6 +2499,58 @@ If you notice genuine issues with content INSIDE these files (e.g., a spec that 
 """
 
 
+# --- Per-R-ID requirements coverage (fn-29.2) ---
+#
+# Shared prompt block that instructs reviewers to emit a per-R-ID coverage table
+# whenever the epic spec numbers its acceptance criteria (`- **R1:** ...`). The
+# reviewer parses the heading in either `## Acceptance` or the legacy
+# `## Acceptance criteria` form (plan skill writes the former; older epic specs
+# may use the latter). Missing R-IDs flip the verdict to NEEDS_WORK unless the
+# spec marks the requirement deferred. The block is injected into impl-review
+# and epic-review (completion-review) prompts. Keep synchronized with the RP
+# workflow.md files.
+
+R_ID_COVERAGE_BLOCK = """## Requirements coverage (if spec has R-IDs)
+
+If the task or epic spec references an epic spec with numbered acceptance
+criteria like `- **R1:** ...`, `- **R2:** ...`, produce a per-R-ID coverage
+table. Read the epic spec's `## Acceptance` section (or the legacy
+`## Acceptance criteria` heading — reviewer MUST tolerate both). If no R-IDs
+are present anywhere, skip this block entirely — the rest of the review is
+unchanged.
+
+For each R-ID, classify status:
+
+| Status | Meaning |
+|--------|---------|
+| met | Diff clearly implements the requirement with appropriate tests/evidence |
+| partial | Diff advances the requirement but leaves gaps (missing tests, missing edge case, missing integration point) |
+| not-addressed | Diff does not advance this requirement at all |
+| deferred | Spec explicitly defers this requirement to a later task/PR |
+
+Report as a markdown table in the review output:
+
+| R-ID | Status | Evidence |
+|------|--------|----------|
+| R1 | met | src/auth.ts:42 + tests/auth.test.ts:17 |
+| R2 | partial | implementation exists but no error-path tests |
+| R3 | not-addressed | — |
+
+After the table, emit one line listing every `not-addressed` R-ID that is NOT
+explicitly deferred in the spec:
+
+> Unaddressed R-IDs: [R3, R5]
+
+If there are zero unaddressed R-IDs, emit `Unaddressed R-IDs: []` or omit the
+line entirely — both forms are valid. Deferred R-IDs are never listed here.
+
+**Verdict gate:** any `not-addressed` R-ID that is NOT marked `deferred` in the
+spec MUST flip the verdict to `NEEDS_WORK`. A clean coverage table (all `met`
+or `deferred`) does not by itself force SHIP — the other review gates still
+apply.
+"""
+
+
 def build_review_prompt(
     review_type: str,
     spec_content: str,
@@ -2524,6 +2665,8 @@ Do NOT mark NEEDS_WORK for:
 You MAY mention these as "FYI" observations without affecting the verdict.
 
 """
+            + R_ID_COVERAGE_BLOCK
+            + "\n"
             + CONFIDENCE_RUBRIC_BLOCK
             + "\n"
             + CLASSIFICATION_RUBRIC_BLOCK
@@ -2543,17 +2686,18 @@ For each surviving `introduced` finding:
 Then, under a separate `## Pre-existing issues (not blocking this verdict)` heading, list each `pre_existing` finding using the compact form `[severity, confidence N, introduced=false] file:line — summary`. Never silently drop pre-existing findings.
 
 After the findings list, emit:
+- The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the spec uses R-IDs; otherwise skip).
 - A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
 - A `Classification counts:` line tallying `introduced` vs `pre_existing` survivors, e.g. `Classification counts: 2 introduced, 4 pre_existing.`.
 - A `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
 
 Be critical. Find real issues.
 
-**Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship.
+**Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship. Any non-deferred `not-addressed` R-ID also forces NEEDS_WORK regardless of other findings.
 
 **REQUIRED**: End your response with exactly one verdict tag:
-<verdict>SHIP</verdict> - Ready to merge (no blocking `introduced` findings)
-<verdict>NEEDS_WORK</verdict> - `introduced` issues must be fixed
+<verdict>SHIP</verdict> - Ready to merge (no blocking `introduced` findings, all R-IDs met or deferred)
+<verdict>NEEDS_WORK</verdict> - `introduced` issues or unaddressed R-IDs must be fixed
 <verdict>MAJOR_RETHINK</verdict> - Fundamental approach problems
 
 Do NOT skip this tag. The automation depends on it."""
@@ -7030,6 +7174,7 @@ Do NOT mark NEEDS_WORK for:
 
 You MAY mention these as "FYI" observations without affecting the verdict.
 
+{R_ID_COVERAGE_BLOCK}
 {CONFIDENCE_RUBRIC_BLOCK}
 {CLASSIFICATION_RUBRIC_BLOCK}
 {PROTECTED_ARTIFACTS_BLOCK}
@@ -7046,17 +7191,18 @@ For each surviving `introduced` finding:
 Then, under a separate `## Pre-existing issues (not blocking this verdict)` heading, list each `pre_existing` finding as `[severity, confidence N, introduced=false] file:line — summary`. Never silently drop pre-existing findings.
 
 After the findings list, emit:
+- The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the spec uses R-IDs; otherwise skip).
 - A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
 - A `Classification counts:` line tallying `introduced` vs `pre_existing` survivors, e.g. `Classification counts: 2 introduced, 4 pre_existing.`.
 - A `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
 
 Be critical. Find real issues.
 
-**Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship.
+**Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship. Any non-deferred `not-addressed` R-ID also forces NEEDS_WORK regardless of other findings.
 
 **REQUIRED**: End your response with exactly one verdict tag:
-- `<verdict>SHIP</verdict>` - Ready to merge (no blocking `introduced` findings)
-- `<verdict>NEEDS_WORK</verdict>` - `introduced` issues must be fixed first
+- `<verdict>SHIP</verdict>` - Ready to merge (no blocking `introduced` findings, all R-IDs met or deferred)
+- `<verdict>NEEDS_WORK</verdict>` - `introduced` issues or unaddressed R-IDs must be fixed first
 - `<verdict>MAJOR_RETHINK</verdict>` - Fundamental problems, reconsider approach
 """
 
@@ -7247,9 +7393,10 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     # Determine review id (task_id for task reviews, "branch" for standalone)
     review_id = task_id if task_id else "branch"
 
-    # Parse optional review-rigor signals from output (fn-29.3, fn-29.4)
+    # Parse optional review-rigor signals from output (fn-29.2, fn-29.3, fn-29.4)
     suppressed_count = parse_suppressed_count(output)
     classification_counts = parse_classification_counts(output)
+    unaddressed_rids = parse_unaddressed_rids(output)
 
     # Write receipt if path provided (Ralph-compatible schema)
     if receipt_path:
@@ -7280,6 +7427,8 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
         if classification_counts is not None:
             receipt_data["introduced_count"] = classification_counts["introduced"]
             receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            receipt_data["unaddressed"] = unaddressed_rids
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
@@ -7303,6 +7452,8 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
         if classification_counts is not None:
             json_payload["introduced_count"] = classification_counts["introduced"]
             json_payload["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            json_payload["unaddressed"] = unaddressed_rids
         json_output(
             json_payload
         )
@@ -7642,6 +7793,8 @@ For EACH requirement from Phase 1:
 - Missing doc updates mentioned in spec
 
 """
+        + R_ID_COVERAGE_BLOCK
+        + "\n"
         + CONFIDENCE_RUBRIC_BLOCK
         + "\n"
         + CLASSIFICATION_RUBRIC_BLOCK
@@ -7671,18 +7824,19 @@ For EACH requirement from Phase 1:
 Pre-existing gaps (code smells or missing features that predate this epic's branch) go under a separate `## Pre-existing issues (not blocking this verdict)` heading and do not gate the verdict.
 
 After the findings list, emit:
+- The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the epic spec uses R-IDs; otherwise skip).
 - A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
 - A `Classification counts:` line tallying `introduced` vs `pre_existing` gaps, e.g. `Classification counts: 1 introduced, 0 pre_existing.`.
 - A `Protected-path filter:` line tallying gaps dropped by the protected-path filter (omit when nothing was dropped).
 
 ## Verdict
 
-**SHIP** - All requirements covered. Epic can close.
-**NEEDS_WORK** - Gaps found. Must fix before closing.
+**SHIP** - All requirements covered (all R-IDs met or deferred). Epic can close.
+**NEEDS_WORK** - Gaps found (or unaddressed R-IDs). Must fix before closing.
 
 **REQUIRED**: End your response with exactly one verdict tag:
-<verdict>SHIP</verdict> - All requirements implemented
-<verdict>NEEDS_WORK</verdict> - Gaps need addressing
+<verdict>SHIP</verdict> - All requirements implemented (R-IDs all met or deferred)
+<verdict>NEEDS_WORK</verdict> - Gaps or unaddressed R-IDs need addressing
 
 Do NOT skip this tag. The automation depends on it."""
     )
@@ -7885,9 +8039,10 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
     # Preserve session_id for continuity (avoid clobbering on resumed sessions)
     session_id_to_write = thread_id or session_id
 
-    # Parse optional review-rigor signals from output (fn-29.3, fn-29.4)
+    # Parse optional review-rigor signals from output (fn-29.2, fn-29.3, fn-29.4)
     suppressed_count = parse_suppressed_count(output)
     classification_counts = parse_classification_counts(output)
+    unaddressed_rids = parse_unaddressed_rids(output)
 
     # Write receipt if path provided (Ralph-compatible schema)
     if receipt_path:
@@ -7916,6 +8071,8 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
         if classification_counts is not None:
             receipt_data["introduced_count"] = classification_counts["introduced"]
             receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            receipt_data["unaddressed"] = unaddressed_rids
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
@@ -7939,6 +8096,8 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
         if classification_counts is not None:
             json_payload["introduced_count"] = classification_counts["introduced"]
             json_payload["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            json_payload["unaddressed"] = unaddressed_rids
         json_output(json_payload)
     else:
         print(output)
@@ -8137,9 +8296,10 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
 
     review_id = task_id if task_id else "branch"
 
-    # Parse optional review-rigor signals from output (fn-29.3, fn-29.4)
+    # Parse optional review-rigor signals from output (fn-29.2, fn-29.3, fn-29.4)
     suppressed_count = parse_suppressed_count(output)
     classification_counts = parse_classification_counts(output)
+    unaddressed_rids = parse_unaddressed_rids(output)
 
     if receipt_path:
         receipt_data = {
@@ -8168,6 +8328,8 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
         if classification_counts is not None:
             receipt_data["introduced_count"] = classification_counts["introduced"]
             receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            receipt_data["unaddressed"] = unaddressed_rids
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
@@ -8190,6 +8352,8 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
         if classification_counts is not None:
             json_payload["introduced_count"] = classification_counts["introduced"]
             json_payload["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            json_payload["unaddressed"] = unaddressed_rids
         json_output(json_payload)
     else:
         print(output)
@@ -8521,9 +8685,10 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
     # Preserve session_id for continuity (avoid clobbering on resumed sessions)
     session_id_to_write = returned_session_id or session_id
 
-    # Parse optional review-rigor signals from output (fn-29.3, fn-29.4)
+    # Parse optional review-rigor signals from output (fn-29.2, fn-29.3, fn-29.4)
     suppressed_count = parse_suppressed_count(output)
     classification_counts = parse_classification_counts(output)
+    unaddressed_rids = parse_unaddressed_rids(output)
 
     if receipt_path:
         receipt_data = {
@@ -8550,6 +8715,8 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
         if classification_counts is not None:
             receipt_data["introduced_count"] = classification_counts["introduced"]
             receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            receipt_data["unaddressed"] = unaddressed_rids
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
@@ -8572,6 +8739,8 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
         if classification_counts is not None:
             json_payload["introduced_count"] = classification_counts["introduced"]
             json_payload["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            json_payload["unaddressed"] = unaddressed_rids
         json_output(json_payload)
     else:
         print(output)

@@ -150,7 +150,8 @@ Ralph loops regularly produce lockfile-only commits (dep updates via tools), rel
 | User expects full review on lockfile-only diff | `--no-triage` opt-out documented |
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Added `flowctl triage-skip` subcommand + impl-review Step 0.5 integration that short-circuits lockfile-only / docs-only / release-chore / generated-only diffs with SHIP verdict (mode=triage_skip), avoiding full rp/codex/copilot review calls. Deterministic whitelist layer is the default (conservative: ambiguous → REVIEW); optional LLM judge via FLOW_TRIAGE_LLM=1 (codex gpt-5-mini / copilot claude-haiku-4.5). Opt-out via --no-triage or FLOW_RALPH_NO_TRIAGE. Smoke tests (71/71) cover classifier, deterministic logic (all 4 AC scenarios: lockfile/docs/release-chore/generated → SKIP, code → REVIEW), LLM-output parser, and git-diff e2e.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 691b13e172d36b69c8bfafe1709082914f33af90
+- Tests: plugins/flow-next/scripts/smoke_test.sh (71/71 passed)
+- PRs:
