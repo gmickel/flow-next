@@ -157,7 +157,8 @@ Verify:
 - fn-32-opt-in-review-flags.3 (--interactive)
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Added explicit phase-ordering + 8-row flag-combination matrix to impl-review workflow.md and a new 16-test suite (`test_review_receipt_schema.py`) that locks receipt additivity — default review has no flag blocks, each flag writes exactly its own block, combined flags compose without mutation, and Ralph gate keys (`verdict`/`mode`/`session_id`) survive all 8 combos. Verified against 217 unit tests + 125 smoke tests, all green.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 6f9444d17f8f6cd669a0a735ac3a1bc192ffa9d1
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests, plugins/flow-next/scripts/smoke_test.sh
+- PRs:
