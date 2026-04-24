@@ -95,7 +95,8 @@ git push origin flow-next-v0.36.0
 - fn-32-opt-in-review-flags.1, .2, .3, .4, .5 (all features + tests land first)
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Rollup for fn-32: bumped flow-next to 0.35.0 (minor), regenerated codex mirror, and shipped docs for the three opt-in review flags — --validate, --deep, --interactive. Updated CHANGELOG.md, plugins/flow-next/README.md (new "Opt-in Review Flags" section with combination matrix + Ralph-compat table), root CLAUDE.md, and the ~/work/mickel.tech flow-next page (version, FAQ, core feature, optInFeatures). All docs emphasize that the default Carmack-level review is unchanged and flags only add structure/validation/deep-dives on top.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 0e02dd9d5ab63cdb9b73b4b1b3c1bd5e2d87a9cf
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (217/217 pass), plugins/flow-next/scripts/smoke_test.sh (125/125 pass), plugins/flow-next/scripts/impl-review_smoke_test.sh (74/74 pass, 4-config parallel Ralph sweep green), jq . on all three manifests (valid JSON), tsc --noEmit on ~/work/mickel.tech (page.tsx clean)
+- PRs:
