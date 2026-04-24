@@ -163,3 +163,5 @@ Planned task breakdown (epic-review will finalize):
 4. Resume / extend logic (Phase 0) + artifact frontmatter schema
 5. Smoke test + Ralph-block verification
 6. Docs, website, codex mirror, version bump (minor: 0.35.1 → 0.36.0)
+
+Rollup covers: CHANGELOG entry, `plugins/flow-next/README.md` (new "Prospecting" section positioned before "Planning" — explains `prospect → interview → plan` pipeline, shows an artifact example, documents `flowctl prospect list / read / archive / promote`), `CLAUDE.md` (new "`/flow-next:prospect` (v0.36.0+)" block in the command list with the lifecycle flow + artifact schema + Ralph-out note), `~/work/mickel.tech/app/apps/flow-next/page.tsx` (new `optInFeatures` / `coreFeatures` card for Prospecting, new command reference entry, FAQ entry on "when do I use prospect vs interview vs plan", update lifecycle diagram if present). Plus `scripts/sync-codex.sh` regen + `scripts/bump.sh minor flow-next`.

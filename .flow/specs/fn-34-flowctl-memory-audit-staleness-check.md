@@ -205,4 +205,6 @@ Planned task breakdown (epic-review will finalize):
 3. `flowctl memory audit` CLI + argparse wiring + frontmatter updater
 4. Optional `--rewrite` pass using fn-30's classifier dispatch
 5. Smoke test + Ralph-block verification + idempotency check
-6. Docs, codex mirror, version bump (patch: 0.35.1 → 0.35.2)
+6. Docs, website, codex mirror, version bump (patch: 0.35.1 → 0.35.2)
+
+Rollup covers: CHANGELOG entry, `plugins/flow-next/README.md` memory section (add `memory audit` to the subcommand table alongside existing `add / list / read / search / migrate / discoverability-patch`), `CLAUDE.md` memory-system block (add `memory audit` bullet with `--rewrite` / `--no-llm` / `--track` / `--category` flags + Ralph-block note), `~/work/mickel.tech/app/apps/flow-next/page.tsx` — one-line addition to the existing memory coreFeature card ("entries get staleness-audited against current code; stale flagged, never deleted"), no new feature card since this is a lifecycle extension of fn-30. Plus `scripts/sync-codex.sh` regen + `scripts/bump.sh patch flow-next`.
