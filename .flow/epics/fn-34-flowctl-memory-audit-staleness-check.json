@@ -1,0 +1,13 @@
+{
+  "branch_name": "fn-34-flowctl-memory-audit-staleness-check",
+  "created_at": "2026-04-24T20:58:09.406217Z",
+  "depends_on_epics": [],
+  "id": "fn-34-flowctl-memory-audit-staleness-check",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-34-flowctl-memory-audit-staleness-check.md",
+  "status": "open",
+  "title": "flowctl memory audit \u2014 staleness check against current code",
+  "updated_at": "2026-04-24T20:59:33.242955Z"
+}
