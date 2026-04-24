@@ -1647,6 +1647,52 @@ def parse_codex_verdict(output: str) -> Optional[str]:
     return match.group(1) if match else None
 
 
+def parse_suppressed_count(output: str) -> Optional[dict[str, int]]:
+    """Extract suppression-gate counts from review output (fn-29.3).
+
+    Looks for a line like:
+        Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0.
+
+    Returns a {anchor: count} dict (keys are stringified anchor ints so the
+    resulting JSON receipt field stays stable across json.dumps round-trips).
+    Returns None when no such line is present (nothing suppressed, or reviewer
+    skipped the summary). An empty dict is never returned — callers can treat
+    None as "no data".
+    """
+    if not output:
+        return None
+    # Accept "Suppressed findings:" anywhere in the text, case-insensitive.
+    # Tolerate bold markers and trailing punctuation.
+    line_match = re.search(
+        r"(?im)^[\s>*_`]*suppressed\s+findings[\s*_`]*:\s*(.+?)\s*$", output
+    )
+    if not line_match:
+        return None
+    payload = line_match.group(1).strip().rstrip(".")
+    if not payload or payload.lower() in {"none", "n/a", "0"}:
+        return None
+    counts: dict[str, int] = {}
+    # Match fragments like "3 at anchor 50" or "50: 3".
+    # Accept only the 5 canonical anchors to stay aligned with the rubric.
+    valid_anchors = {"0", "25", "50", "75", "100"}
+    for frag_match in re.finditer(
+        r"(\d+)\s*(?:at\s+anchor|@|:)\s*(\d+)|anchor\s*(\d+)[^\d]+(\d+)",
+        payload,
+        re.IGNORECASE,
+    ):
+        if frag_match.group(1) and frag_match.group(2):
+            count, anchor = frag_match.group(1), frag_match.group(2)
+        else:
+            anchor, count = frag_match.group(3), frag_match.group(4)
+        if anchor not in valid_anchors:
+            continue
+        try:
+            counts[anchor] = counts.get(anchor, 0) + int(count)
+        except ValueError:
+            continue
+    return counts or None
+
+
 def is_sandbox_failure(exit_code: int, stdout: str, stderr: str) -> bool:
     """Detect if codex failure is due to sandbox restrictions.
 
@@ -2194,6 +2240,40 @@ def run_copilot_exec(
                 pass
 
 
+# --- Confidence calibration (fn-29.3) ---
+#
+# Shared rubric + suppression gate injected into review prompts so rp, codex,
+# and copilot all emit the same discrete confidence anchors. Keep synchronized
+# with the RP workflow.md files and quality-auditor.md — if you change the
+# wording, update those copies too.
+
+CONFIDENCE_RUBRIC_BLOCK = """## Confidence calibration
+
+Rate each finding on exactly one of these 5 discrete anchors. Do not use interpolated values (no 33, 80, 90).
+
+| Anchor | Meaning |
+|--------|---------|
+| 100 | Verifiable from the code alone, zero interpretation. A definitive logic error (off-by-one in a tested algorithm, wrong return type, swapped arguments, clear type error). The bug is mechanical. |
+| 75 | Full execution path traced: "input X enters here, takes this branch, reaches line Z, produces wrong result." Reproducible from the code alone. A normal caller will hit it. |
+| 50 | Depends on conditions visible but not fully confirmable from this diff — e.g., whether a value can actually be null depends on callers not in the diff. Surfaces only as P0-escape or via soft-bucket routing. |
+| 25 | Requires runtime conditions with no direct evidence — specific timing, specific input shapes, specific external state. |
+| 0 | Speculative. Not worth filing. |
+
+## Suppression gate
+
+After all findings are collected:
+1. Suppress findings below anchor 75.
+2. **Exception:** P0 severity findings at anchor 50+ survive the gate. Critical-but-uncertain issues must not be silently dropped.
+3. Report the suppressed count by anchor in a `Suppressed findings` section of the review output.
+
+Example:
+
+> Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0.
+
+Each surviving finding carries a `Confidence: <N>` field alongside severity, file, and line.
+"""
+
+
 def build_review_prompt(
     review_type: str,
     spec_content: str,
@@ -2307,13 +2387,19 @@ Do NOT mark NEEDS_WORK for:
 
 You MAY mention these as "FYI" observations without affecting the verdict.
 
+"""
+            + CONFIDENCE_RUBRIC_BLOCK
+            + """
 ## Output Format
 
-For each issue found:
-- **Severity**: Critical / Major / Minor / Nitpick
+For each surviving finding:
+- **Severity**: Critical / Major / Minor / Nitpick (P0 / P1 / P2 / P3 accepted)
+- **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
 - **File:Line**: Exact location
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
+
+After the findings list, emit a `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
 
 Be critical. Find real issues.
 
@@ -6791,13 +6877,17 @@ Do NOT mark NEEDS_WORK for:
 
 You MAY mention these as "FYI" observations without affecting the verdict.
 
+{CONFIDENCE_RUBRIC_BLOCK}
 ## Output Format
 
-For each issue found:
-- **Severity**: Critical / Major / Minor / Nitpick
+For each surviving finding:
+- **Severity**: Critical / Major / Minor / Nitpick (P0 / P1 / P2 / P3 accepted)
+- **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
 - **File:Line**: Exact location
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
+
+After the findings list, emit a `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
 
 Be critical. Find real issues.
 
@@ -6994,6 +7084,9 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     # Determine review id (task_id for task reviews, "branch" for standalone)
     review_id = task_id if task_id else "branch"
 
+    # Parse optional review-rigor signals from output (fn-29.3)
+    suppressed_count = parse_suppressed_count(output)
+
     # Write receipt if path provided (Ralph-compatible schema)
     if receipt_path:
         receipt_data = {
@@ -7018,25 +7111,30 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
                 pass
         if focus:
             receipt_data["focus"] = focus
+        if suppressed_count:
+            receipt_data["suppressed_count"] = suppressed_count
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
 
     # Output
     if args.json:
+        json_payload = {
+            "type": "impl_review",
+            "id": review_id,
+            "verdict": verdict,
+            "session_id": thread_id,
+            "mode": "codex",
+            "model": resolved_spec.model,
+            "effort": resolved_spec.effort,
+            "spec": str(resolved_spec),
+            "standalone": standalone,
+            "review": output,  # Full review feedback for fix loop
+        }
+        if suppressed_count:
+            json_payload["suppressed_count"] = suppressed_count
         json_output(
-            {
-                "type": "impl_review",
-                "id": review_id,
-                "verdict": verdict,
-                "session_id": thread_id,
-                "mode": "codex",
-                "model": resolved_spec.model,
-                "effort": resolved_spec.effort,
-                "spec": str(resolved_spec),
-                "standalone": standalone,
-                "review": output,  # Full review feedback for fix loop
-            }
+            json_payload
         )
     else:
         print(output)
@@ -7373,6 +7471,9 @@ For EACH requirement from Phase 1:
 - Scope drift (task marked done without fully addressing spec intent)
 - Missing doc updates mentioned in spec
 
+"""
+        + CONFIDENCE_RUBRIC_BLOCK
+        + """
 ## Output Format
 
 ```
@@ -7390,8 +7491,10 @@ For EACH requirement from Phase 1:
 
 ## Gaps Found
 
-[For each GAP, describe what's missing and suggest fix]
+[For each GAP, describe what's missing and suggest fix. Include `Confidence: <0|25|50|75|100>`.]
 ```
+
+After the findings list, emit a `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
 
 ## Verdict
 
@@ -7603,6 +7706,9 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
     # Preserve session_id for continuity (avoid clobbering on resumed sessions)
     session_id_to_write = thread_id or session_id
 
+    # Parse optional review-rigor signals from output (fn-29.3)
+    suppressed_count = parse_suppressed_count(output)
+
     # Write receipt if path provided (Ralph-compatible schema)
     if receipt_path:
         receipt_data = {
@@ -7625,26 +7731,29 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
                 receipt_data["iteration"] = int(ralph_iter)
             except ValueError:
                 pass
+        if suppressed_count:
+            receipt_data["suppressed_count"] = suppressed_count
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
 
     # Output
     if args.json:
-        json_output(
-            {
-                "type": "completion_review",
-                "id": epic_id,
-                "base": base_branch,
-                "verdict": verdict,
-                "session_id": session_id_to_write,
-                "mode": "codex",
-                "model": resolved_spec.model,
-                "effort": resolved_spec.effort,
-                "spec": str(resolved_spec),
-                "review": output,
-            }
-        )
+        json_payload = {
+            "type": "completion_review",
+            "id": epic_id,
+            "base": base_branch,
+            "verdict": verdict,
+            "session_id": session_id_to_write,
+            "mode": "codex",
+            "model": resolved_spec.model,
+            "effort": resolved_spec.effort,
+            "spec": str(resolved_spec),
+            "review": output,
+        }
+        if suppressed_count:
+            json_payload["suppressed_count"] = suppressed_count
+        json_output(json_payload)
     else:
         print(output)
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
@@ -7842,6 +7951,9 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
 
     review_id = task_id if task_id else "branch"
 
+    # Parse optional review-rigor signals from output (fn-29.3)
+    suppressed_count = parse_suppressed_count(output)
+
     if receipt_path:
         receipt_data = {
             "type": "impl_review",
@@ -7864,25 +7976,28 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
                 pass
         if focus:
             receipt_data["focus"] = focus
+        if suppressed_count:
+            receipt_data["suppressed_count"] = suppressed_count
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
 
     if args.json:
-        json_output(
-            {
-                "type": "impl_review",
-                "id": review_id,
-                "verdict": verdict,
-                "session_id": returned_session_id,
-                "mode": "copilot",
-                "model": effective_model,
-                "effort": effective_effort,
-                "spec": str(resolved_spec),
-                "standalone": standalone,
-                "review": output,
-            }
-        )
+        json_payload = {
+            "type": "impl_review",
+            "id": review_id,
+            "verdict": verdict,
+            "session_id": returned_session_id,
+            "mode": "copilot",
+            "model": effective_model,
+            "effort": effective_effort,
+            "spec": str(resolved_spec),
+            "standalone": standalone,
+            "review": output,
+        }
+        if suppressed_count:
+            json_payload["suppressed_count"] = suppressed_count
+        json_output(json_payload)
     else:
         print(output)
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
@@ -8213,6 +8328,9 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
     # Preserve session_id for continuity (avoid clobbering on resumed sessions)
     session_id_to_write = returned_session_id or session_id
 
+    # Parse optional review-rigor signals from output (fn-29.3)
+    suppressed_count = parse_suppressed_count(output)
+
     if receipt_path:
         receipt_data = {
             "type": "completion_review",
@@ -8233,25 +8351,28 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
                 receipt_data["iteration"] = int(ralph_iter)
             except ValueError:
                 pass
+        if suppressed_count:
+            receipt_data["suppressed_count"] = suppressed_count
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
 
     if args.json:
-        json_output(
-            {
-                "type": "completion_review",
-                "id": epic_id,
-                "base": base_branch,
-                "verdict": verdict,
-                "session_id": session_id_to_write,
-                "mode": "copilot",
-                "model": effective_model,
-                "effort": effective_effort,
-                "spec": str(resolved_spec),
-                "review": output,
-            }
-        )
+        json_payload = {
+            "type": "completion_review",
+            "id": epic_id,
+            "base": base_branch,
+            "verdict": verdict,
+            "session_id": session_id_to_write,
+            "mode": "copilot",
+            "model": effective_model,
+            "effort": effective_effort,
+            "spec": str(resolved_spec),
+            "review": output,
+        }
+        if suppressed_count:
+            json_payload["suppressed_count"] = suppressed_count
+        json_output(json_payload)
     else:
         print(output)
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")

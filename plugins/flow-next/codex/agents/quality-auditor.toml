@@ -72,6 +72,29 @@ Red flags:
 - Missing pagination/limits
 - Blocking operations on hot paths
 
+### Confidence calibration (fn-29.3)
+
+Rate each finding on exactly one of these 5 discrete anchors. Do not use interpolated values (no 33, 80, 90).
+
+| Anchor | Meaning |
+|--------|---------|
+| 100 | Verifiable from the code alone, zero interpretation. A definitive logic error (off-by-one in a tested algorithm, wrong return type, swapped arguments, clear type error). The bug is mechanical. |
+| 75 | Full execution path traced: "input X enters here, takes this branch, reaches line Z, produces wrong result." Reproducible from the code alone. A normal caller will hit it. |
+| 50 | Depends on conditions visible but not fully confirmable from this diff — e.g., whether a value can actually be null depends on callers not in the diff. Surfaces only as P0-escape or via soft-bucket routing. |
+| 25 | Requires runtime conditions with no direct evidence — specific timing, specific input shapes, specific external state. |
+| 0 | Speculative. Not worth filing. |
+
+### Suppression gate
+
+After all findings are collected:
+1. Suppress findings below anchor 75.
+2. **Exception:** P0 / Critical findings at anchor 50+ survive the gate. Critical-but-uncertain issues must not be silently dropped.
+3. Report the suppressed count by anchor in a `Suppressed findings:` line in the audit output (omit when nothing was suppressed).
+
+Example:
+
+> Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0.
+
 ### 8. Design System Conformance (if DESIGN.md exists)
 
 Skip this section if no DESIGN.md in project root.
@@ -94,16 +117,20 @@ If DESIGN.md exists and diff contains frontend files (.jsx, .tsx, .vue, .svelte,
 - Ship recommendation: ✅ Ship / ⚠️ Fix first / ❌ Major rework
 
 ### Critical (MUST fix before shipping)
-- **[File:line]**: [Issue]
+- **[File:line]** (Confidence: 0|25|50|75|100): [Issue]
   - Risk: [What could go wrong]
   - Fix: [Specific suggestion]
 
 ### Should Fix (High priority)
-- **[File:line]**: [Issue]
+- **[File:line]** (Confidence: 0|25|50|75|100): [Issue]
   - [Brief fix suggestion]
 
 ### Consider (Nice to have)
-- [Minor improvement suggestion]
+- (Confidence: 0|25|50|75|100) [Minor improvement suggestion]
+
+### Suppressed findings
+> Suppressed findings: <N> at anchor 50, <N> at anchor 25, <N> at anchor 0.
+(Omit this section entirely when nothing was suppressed.)
 
 ### Test Gaps
 - [ ] [Untested scenario]

@@ -327,12 +327,36 @@ Report untraced changes but don't auto-reject. UNDOCUMENTED_ADDITION is a flag f
 - Performance (impl-review covers this)
 - Legitimate refactoring needed to implement requirements (flag as LEGITIMATE_SUPPORT but don't block)
 
+## Confidence calibration
+
+Rate each gap on exactly one of these 5 discrete anchors. Do not use interpolated values (no 33, 80, 90).
+
+| Anchor | Meaning |
+|--------|---------|
+| 100 | Verifiable from the code alone, zero interpretation. A definitive logic error (off-by-one in a tested algorithm, wrong return type, swapped arguments, clear type error). The bug is mechanical. |
+| 75 | Full execution path traced: "input X enters here, takes this branch, reaches line Z, produces wrong result." Reproducible from the code alone. A normal caller will hit it. |
+| 50 | Depends on conditions visible but not fully confirmable from this diff — e.g., whether a value can actually be null depends on callers not in the diff. Surfaces only as P0-escape or via soft-bucket routing. |
+| 25 | Requires runtime conditions with no direct evidence — specific timing, specific input shapes, specific external state. |
+| 0 | Speculative. Not worth filing. |
+
+## Suppression gate
+
+After all gaps/findings are collected:
+1. Suppress findings below anchor 75.
+2. **Exception:** P0 severity findings at anchor 50+ survive the gate. Critical-but-uncertain issues must not be silently dropped.
+3. Report the suppressed count by anchor in a `Suppressed findings` section of the review output.
+
+Example:
+
+> Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0.
+
 ## Output Format
 
 **Forward coverage (Spec → Code):**
 For each gap found:
 - **Requirement**: What the spec says
 - **Status**: Missing / Partial / Wrong
+- **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
 - **Evidence**: What you found (or didn't find) in the code
 
 **Reverse coverage (Code → Spec):**
@@ -340,6 +364,8 @@ For each untraced change:
 - **File**: Changed file path
 - **Classification**: UNDOCUMENTED_ADDITION / LEGITIMATE_SUPPORT / UNRELATED_CHANGE
 - **Note**: Brief explanation
+
+After the findings list, emit a `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
 
 **REQUIRED**: You MUST end your response with exactly one verdict tag. This is mandatory:
 `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`
@@ -390,9 +416,36 @@ Receipt written after SHIP verdict (not on NEEDS_WORK):
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
-  cat > "$REVIEW_RECEIPT_PATH" <<EOF
+
+  # Optional: capture suppression-gate tally (fn-29.3).
+  # Reviewer emits a line like "Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0."
+  SUPPRESSED_JSON="$(printf '%s' "$REVIEW_RESPONSE" \
+    | grep -iE '^[>*_` ]*suppressed findings[ *_`]*:' \
+    | head -n 1 \
+    | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//' \
+    | awk '
+      BEGIN { first=1; printf "{" }
+      {
+        n=split($0, parts, /,[[:space:]]*/)
+        for (i=1; i<=n; i++) {
+          if (match(parts[i], /([0-9]+)[[:space:]]+at[[:space:]]+anchor[[:space:]]+(0|25|50|75|100)/, m)) {
+            if (!first) printf ","
+            printf "\"%s\":%s", m[2], m[1]
+            first=0
+          }
+        }
+      }
+      END { printf "}" }')"
+
+  if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
+    cat > "$REVIEW_RECEIPT_PATH" <<EOF
+{"type":"completion_review","id":"$EPIC_ID","mode":"rp","verdict":"SHIP","suppressed_count":$SUPPRESSED_JSON,"timestamp":"$ts"}
+EOF
+  else
+    cat > "$REVIEW_RECEIPT_PATH" <<EOF
 {"type":"completion_review","id":"$EPIC_ID","mode":"rp","verdict":"SHIP","timestamp":"$ts"}
 EOF
+  fi
   echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi
 ```

@@ -659,8 +659,46 @@ assert "<diff_summary>" in impl_prompt
 assert "Test diff" in impl_prompt
 assert "<spec>" in impl_prompt
 assert "Test spec" in impl_prompt
+
+# fn-29.3: confidence rubric + suppression gate baked into impl prompt
+assert "Confidence calibration" in impl_prompt
+assert "Suppression gate" in impl_prompt
+assert "0 / 25 / 50 / 75 / 100" in impl_prompt
+assert "Suppressed findings" in impl_prompt
 PY
 echo -e "${GREEN}✓${NC} build_review_prompt has full criteria"
+PASS=$((PASS + 1))
+
+echo -e "${YELLOW}--- parse_suppressed_count (fn-29.3) ---${NC}"
+"$PYTHON_BIN" - "$SCRIPT_DIR" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+from flowctl import parse_suppressed_count
+
+# Canonical line
+r = parse_suppressed_count("blah\nSuppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0.\n")
+assert r == {"50": 3, "25": 7, "0": 2}, r
+
+# Blockquote + partial anchors
+r = parse_suppressed_count("> Suppressed findings: 1 at anchor 50, 5 at anchor 25")
+assert r == {"50": 1, "25": 5}, r
+
+# Bold markdown wrappers
+r = parse_suppressed_count("**Suppressed findings:** 2 at anchor 25, 1 at anchor 0.")
+assert r == {"25": 2, "0": 1}, r
+
+# Empty / none payload → None
+assert parse_suppressed_count("Suppressed findings: none.") is None
+assert parse_suppressed_count("no suppression line here") is None
+
+# Invalid anchors are rejected (e.g. 42 is not one of {0,25,50,75,100})
+assert parse_suppressed_count("Suppressed findings: 3 at anchor 42") is None
+
+# High anchors still recognized
+r = parse_suppressed_count("Suppressed findings: 5 at anchor 100, 2 at anchor 75")
+assert r == {"100": 5, "75": 2}, r
+PY
+echo -e "${GREEN}✓${NC} parse_suppressed_count handles canonical + edge cases"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- parse_receipt_path ---${NC}"

@@ -82,7 +82,8 @@ Inspired by MergeFoundry upstream's requirement-ID traceability pattern. Stable 
 - Enforcement of `satisfies` population (plan-sync populates when obvious; omissions are not errors).
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Added R-ID convention to plan skill (epic-spec template uses `- **Rn:**` prose prefix, renumber-forbidden rule, optional `satisfies: [Rn]` task frontmatter) and plan-sync preservation rules. Root CLAUDE.md documents the convention under the flow-next spec-grammar section.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 99da2686653aa74515f0c1d46b82f7f799a19f19
+- Tests: plugins/flow-next/scripts/smoke_test.sh (67 passed, 0 failed)
+- PRs:
