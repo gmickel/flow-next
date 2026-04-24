@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-24T08:11:55.862110Z",
+  "depends_on": [],
+  "epic": "fn-29-review-rigor-bundle-r-ids-confidence",
+  "id": "fn-29-review-rigor-bundle-r-ids-confidence.4",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-29-review-rigor-bundle-r-ids-confidence.4.md",
+  "status": "todo",
+  "title": "Pre-existing vs introduced classification in review prompts + verdict gate",
+  "updated_at": "2026-04-24T08:15:42.534352Z"
+}

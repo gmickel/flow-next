@@ -1647,6 +1647,210 @@ def parse_codex_verdict(output: str) -> Optional[str]:
     return match.group(1) if match else None
 
 
+def parse_suppressed_count(output: str) -> Optional[dict[str, int]]:
+    """Extract suppression-gate counts from review output (fn-29.3).
+
+    Looks for a line like:
+        Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0.
+
+    Returns a {anchor: count} dict (keys are stringified anchor ints so the
+    resulting JSON receipt field stays stable across json.dumps round-trips).
+    Returns None when no such line is present (nothing suppressed, or reviewer
+    skipped the summary). An empty dict is never returned — callers can treat
+    None as "no data".
+    """
+    if not output:
+        return None
+    # Accept "Suppressed findings:" anywhere in the text, case-insensitive.
+    # Tolerate bold markers and trailing punctuation.
+    line_match = re.search(
+        r"(?im)^[\s>*_`]*suppressed\s+findings[\s*_`]*:\s*(.+?)\s*$", output
+    )
+    if not line_match:
+        return None
+    payload = line_match.group(1).strip().rstrip(".")
+    if not payload or payload.lower() in {"none", "n/a", "0"}:
+        return None
+    counts: dict[str, int] = {}
+    # Match fragments like "3 at anchor 50" or "50: 3".
+    # Accept only the 5 canonical anchors to stay aligned with the rubric.
+    valid_anchors = {"0", "25", "50", "75", "100"}
+    for frag_match in re.finditer(
+        r"(\d+)\s*(?:at\s+anchor|@|:)\s*(\d+)|anchor\s*(\d+)[^\d]+(\d+)",
+        payload,
+        re.IGNORECASE,
+    ):
+        if frag_match.group(1) and frag_match.group(2):
+            count, anchor = frag_match.group(1), frag_match.group(2)
+        else:
+            anchor, count = frag_match.group(3), frag_match.group(4)
+        if anchor not in valid_anchors:
+            continue
+        try:
+            counts[anchor] = counts.get(anchor, 0) + int(count)
+        except ValueError:
+            continue
+    return counts or None
+
+
+def parse_classification_counts(output: str) -> Optional[dict[str, int]]:
+    """Extract introduced/pre_existing tallies from review output (fn-29.4).
+
+    Primary signal: a summary line the reviewer is asked to emit, e.g.
+        Classification counts: 2 introduced, 4 pre_existing.
+
+    Fallback: count `Classification: introduced | pre_existing` fragments in
+    per-finding blocks. Either path returns `{"introduced": int, "pre_existing": int}`
+    with zero counts preserved when the other bucket is non-zero — so callers
+    can compute a verdict gate from `introduced_count`. Returns None when no
+    classification signal is present at all (legacy reviews, pre-migration).
+    """
+    if not output:
+        return None
+
+    # Canonical summary line (preferred — reviewer reports tallies directly).
+    summary_match = re.search(
+        r"(?im)^[\s>*_`]*classification\s+counts[\s*_`]*:\s*(.+?)\s*$",
+        output,
+    )
+    if summary_match:
+        payload = summary_match.group(1).strip().rstrip(".")
+        if payload and payload.lower() not in {"none", "n/a"}:
+            found: dict[str, int] = {}
+            for frag_match in re.finditer(
+                r"(\d+)\s*(introduced|pre[-_ ]existing)",
+                payload,
+                re.IGNORECASE,
+            ):
+                raw_bucket = frag_match.group(2).lower().replace("-", "_").replace(
+                    " ", "_"
+                )
+                bucket = "pre_existing" if "pre" in raw_bucket else "introduced"
+                try:
+                    found[bucket] = found.get(bucket, 0) + int(frag_match.group(1))
+                except ValueError:
+                    continue
+            if found:
+                # Fill missing bucket with 0 so downstream always has both keys.
+                found.setdefault("introduced", 0)
+                found.setdefault("pre_existing", 0)
+                return found
+
+    # Fallback: tally per-finding Classification: lines.
+    per_finding: dict[str, int] = {"introduced": 0, "pre_existing": 0}
+    saw_any = False
+    for frag_match in re.finditer(
+        r"(?im)classification[\s*_`]*[:=][\s*_`]*(introduced|pre[-_ ]existing)",
+        output,
+    ):
+        raw_bucket = frag_match.group(1).lower().replace("-", "_").replace(" ", "_")
+        bucket = "pre_existing" if "pre" in raw_bucket else "introduced"
+        per_finding[bucket] += 1
+        saw_any = True
+
+    # Also catch the inline `[..., introduced=false]` / `introduced=true` markers
+    # that appear in the pre-existing-issues report format.
+    for frag_match in re.finditer(
+        r"introduced\s*=\s*(true|false)",
+        output,
+        re.IGNORECASE,
+    ):
+        bucket = "introduced" if frag_match.group(1).lower() == "true" else "pre_existing"
+        per_finding[bucket] += 1
+        saw_any = True
+
+    return per_finding if saw_any else None
+
+
+def parse_unaddressed_rids(output: str) -> Optional[list[str]]:
+    """Extract unaddressed R-IDs from review output (fn-29.2).
+
+    Primary signal: a summary line the reviewer is asked to emit, e.g.
+        Unaddressed R-IDs: [R3, R5]
+        Unaddressed R-ID: R3
+        Unaddressed: [R3, R5]
+
+    Fallback: scan a `## Requirements coverage` markdown table for rows whose
+    Status column is `not-addressed` (or `not addressed`). Deferred R-IDs are
+    never returned. Returns a de-duplicated list preserving first-seen order.
+    Returns None when no R-ID coverage signal is present at all (legacy specs
+    without R-IDs, or reviewer skipped the block). Returns ``[]`` when the
+    reviewer explicitly reported zero unaddressed R-IDs (`Unaddressed R-IDs: []`
+    or `none`).
+
+    Flowctl does not enforce the verdict gate here — the reviewer LLM is
+    instructed to flip NEEDS_WORK when any non-deferred R-ID is unaddressed.
+    This helper just stores the array so downstream fix loops can target
+    specific requirements.
+    """
+    if not output:
+        return None
+
+    def _extract_rids(text: str) -> list[str]:
+        """Return R-ID tokens found in ``text`` (de-duped, order-preserving)."""
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for match in re.finditer(r"\bR(\d+)\b", text):
+            rid = f"R{match.group(1)}"
+            if rid not in seen:
+                seen.add(rid)
+                ordered.append(rid)
+        return ordered
+
+    # Primary: `Unaddressed R-IDs: [R3, R5]` / `Unaddressed: R3, R5` / `Unaddressed R-ID: R3`
+    summary_match = re.search(
+        r"(?im)^[\s>*_`]*unaddressed(?:\s+r[-_ ]?ids?)?[\s*_`]*:\s*(.+?)\s*$",
+        output,
+    )
+    if summary_match:
+        payload = summary_match.group(1).strip()
+        # Strip markdown emphasis / brackets / trailing punctuation.
+        stripped = payload.strip("[]`*_ ").rstrip(".")
+        if stripped.lower() in {"", "none", "n/a", "[]"}:
+            return []
+        rids = _extract_rids(payload)
+        return rids  # may be empty if the payload had text but no R-ID tokens
+
+    # Fallback: look for a requirements coverage markdown table and extract
+    # rows with not-addressed status. Deferred rows are skipped.
+    coverage_match = re.search(
+        r"(?is)##\s*Requirements?\s+coverage[^\n]*\n(.+?)(?:\n##\s|\nUnaddressed\s|\Z)",
+        output,
+    )
+    if not coverage_match:
+        return None
+    table_text = coverage_match.group(1)
+    unaddressed: list[str] = []
+    seen: set[str] = set()
+    for line in table_text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        # Skip separator rows like | --- | --- | --- |
+        if re.fullmatch(r"\|[\s:\-|]+\|?", stripped):
+            continue
+        cols = [c.strip() for c in stripped.strip("|").split("|")]
+        if len(cols) < 2:
+            continue
+        rid_token = cols[0]
+        status = cols[1].lower()
+        # Header row detection
+        if rid_token.lower() in {"r-id", "rid", "r id", "r"}:
+            continue
+        rid_match = re.search(r"\bR(\d+)\b", rid_token)
+        if not rid_match:
+            continue
+        rid = f"R{rid_match.group(1)}"
+        # Normalize status: strip markdown emphasis; accept "not-addressed",
+        # "not addressed", "not_addressed", "unaddressed".
+        status_norm = re.sub(r"[`*_\s]+", "", status).lower()
+        if status_norm in {"not-addressed", "notaddressed", "unaddressed"}:
+            if rid not in seen:
+                seen.add(rid)
+                unaddressed.append(rid)
+    return unaddressed  # may be empty when table exists but all rows met/deferred
+
+
 def is_sandbox_failure(exit_code: int, stdout: str, stderr: str) -> bool:
     """Detect if codex failure is due to sandbox restrictions.
 
@@ -2194,6 +2398,159 @@ def run_copilot_exec(
                 pass
 
 
+# --- Confidence calibration (fn-29.3) ---
+#
+# Shared rubric + suppression gate injected into review prompts so rp, codex,
+# and copilot all emit the same discrete confidence anchors. Keep synchronized
+# with the RP workflow.md files and quality-auditor.md — if you change the
+# wording, update those copies too.
+
+CONFIDENCE_RUBRIC_BLOCK = """## Confidence calibration
+
+Rate each finding on exactly one of these 5 discrete anchors. Do not use interpolated values (no 33, 80, 90).
+
+| Anchor | Meaning |
+|--------|---------|
+| 100 | Verifiable from the code alone, zero interpretation. A definitive logic error (off-by-one in a tested algorithm, wrong return type, swapped arguments, clear type error). The bug is mechanical. |
+| 75 | Full execution path traced: "input X enters here, takes this branch, reaches line Z, produces wrong result." Reproducible from the code alone. A normal caller will hit it. |
+| 50 | Depends on conditions visible but not fully confirmable from this diff — e.g., whether a value can actually be null depends on callers not in the diff. Surfaces only as P0-escape or via soft-bucket routing. |
+| 25 | Requires runtime conditions with no direct evidence — specific timing, specific input shapes, specific external state. |
+| 0 | Speculative. Not worth filing. |
+
+## Suppression gate
+
+After all findings are collected:
+1. Suppress findings below anchor 75.
+2. **Exception:** P0 severity findings at anchor 50+ survive the gate. Critical-but-uncertain issues must not be silently dropped.
+3. Report the suppressed count by anchor in a `Suppressed findings` section of the review output.
+
+Example:
+
+> Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0.
+
+Each surviving finding carries a `Confidence: <N>` field alongside severity, file, and line.
+"""
+
+
+# --- Introduced-vs-pre_existing classification (fn-29.4) ---
+#
+# Shared classification rubric injected alongside CONFIDENCE_RUBRIC_BLOCK. Only
+# `introduced` findings gate the verdict; `pre_existing` surface in a separate
+# non-blocking section. Keep synchronized with the RP workflow.md files.
+
+CLASSIFICATION_RUBRIC_BLOCK = """## Introduced vs pre-existing classification
+
+For each finding, classify whether this branch's diff caused it:
+
+- **introduced** — this branch caused the issue (new code, or a pre-existing bug that this diff amplified/exposed in a way that now matters)
+- **pre_existing** — the issue was already present on the base branch; this diff did not touch it
+
+Evidence methods (use whatever is cheapest for this diff):
+- `git blame <file> <line>` to see when the line was last touched
+- Read the base-branch version of the file directly
+- Infer from diff context: a finding on an unchanged line in an unchanged file is `pre_existing` by default
+
+**Verdict gate:** only `introduced` findings affect the verdict. A review whose only surviving findings are all `pre_existing` ships.
+
+Report pre-existing findings in a dedicated non-blocking section:
+
+```
+## Pre-existing issues (not blocking this verdict)
+
+- [P1, confidence 75, introduced=false] src/legacy.ts:102 — null dereference on empty array
+- ...
+```
+
+Never delete pre-existing findings from the report — they stay visible for future prioritization. After the lists, emit a `Classification counts:` line tallying both buckets, e.g.:
+
+> Classification counts: 2 introduced, 4 pre_existing.
+
+Each surviving finding carries a `Classification: introduced | pre_existing` field alongside severity, confidence, file, and line.
+"""
+
+
+# --- Protected artifacts (fn-29.5) ---
+#
+# Safety rail: external reviewers (codex/copilot on unfamiliar projects) routinely
+# look at committed `.flow/*` JSONs/specs and naturally suggest "why are these
+# committed?" Ralph in autofix mode could then apply that finding and destroy its
+# own state. This block is injected alongside the confidence + classification
+# rubrics so every review backend (rp, codex, copilot) honors the same hard list.
+# Keep synchronized with the three workflow.md files + quality-auditor.md.
+
+PROTECTED_ARTIFACTS_BLOCK = """## Protected artifacts
+
+The following paths are flow-next / project-pipeline artifacts. Any finding recommending their deletion, gitignore, or removal MUST be discarded during synthesis. Do not flag these paths for cleanup under any circumstances:
+
+- `.flow/*` — flow-next state, specs, tasks, epics, runtime
+- `.flow/bin/*` — bundled flowctl
+- `.flow/memory/*` — learnings store (pitfalls, conventions, decisions)
+- `.flow/specs/*.md` — epic specs (decision artifacts)
+- `.flow/tasks/*.md` — task specs (decision artifacts)
+- `docs/plans/*` — plan artifacts (if project uses this convention)
+- `docs/solutions/*` — solutions artifacts (if project uses this convention)
+- `scripts/ralph/*` — Ralph harness (when present)
+
+These files are intentionally committed. They are the pipeline's state, not clutter. An agent that deletes them destroys the project's planning trail and breaks Ralph autonomous runs.
+
+If you notice genuine issues with content INSIDE these files (e.g., a spec that contradicts itself, a stale runtime value, a memory entry that's wrong), flag the content — not the file's existence.
+
+**Protected-path filter.** Before emitting findings, scan each for recommendations to delete, gitignore, or `rm -rf` any path matching the protected list above. Drop those findings. If you drop any, report the drop count in a `Protected-path filter:` line in the review output (e.g. `Protected-path filter: dropped 2 findings`). Omit the line when nothing was dropped.
+"""
+
+
+# --- Per-R-ID requirements coverage (fn-29.2) ---
+#
+# Shared prompt block that instructs reviewers to emit a per-R-ID coverage table
+# whenever the epic spec numbers its acceptance criteria (`- **R1:** ...`). The
+# reviewer parses the heading in either `## Acceptance` or the legacy
+# `## Acceptance criteria` form (plan skill writes the former; older epic specs
+# may use the latter). Missing R-IDs flip the verdict to NEEDS_WORK unless the
+# spec marks the requirement deferred. The block is injected into impl-review
+# and epic-review (completion-review) prompts. Keep synchronized with the RP
+# workflow.md files.
+
+R_ID_COVERAGE_BLOCK = """## Requirements coverage (if spec has R-IDs)
+
+If the task or epic spec references an epic spec with numbered acceptance
+criteria like `- **R1:** ...`, `- **R2:** ...`, produce a per-R-ID coverage
+table. Read the epic spec's `## Acceptance` section (or the legacy
+`## Acceptance criteria` heading — reviewer MUST tolerate both). If no R-IDs
+are present anywhere, skip this block entirely — the rest of the review is
+unchanged.
+
+For each R-ID, classify status:
+
+| Status | Meaning |
+|--------|---------|
+| met | Diff clearly implements the requirement with appropriate tests/evidence |
+| partial | Diff advances the requirement but leaves gaps (missing tests, missing edge case, missing integration point) |
+| not-addressed | Diff does not advance this requirement at all |
+| deferred | Spec explicitly defers this requirement to a later task/PR |
+
+Report as a markdown table in the review output:
+
+| R-ID | Status | Evidence |
+|------|--------|----------|
+| R1 | met | src/auth.ts:42 + tests/auth.test.ts:17 |
+| R2 | partial | implementation exists but no error-path tests |
+| R3 | not-addressed | — |
+
+After the table, emit one line listing every `not-addressed` R-ID that is NOT
+explicitly deferred in the spec:
+
+> Unaddressed R-IDs: [R3, R5]
+
+If there are zero unaddressed R-IDs, emit `Unaddressed R-IDs: []` or omit the
+line entirely — both forms are valid. Deferred R-IDs are never listed here.
+
+**Verdict gate:** any `not-addressed` R-ID that is NOT marked `deferred` in the
+spec MUST flip the verdict to `NEEDS_WORK`. A clean coverage table (all `met`
+or `deferred`) does not by itself force SHIP — the other review gates still
+apply.
+"""
+
+
 def build_review_prompt(
     review_type: str,
     spec_content: str,
@@ -2307,19 +2664,40 @@ Do NOT mark NEEDS_WORK for:
 
 You MAY mention these as "FYI" observations without affecting the verdict.
 
+"""
+            + R_ID_COVERAGE_BLOCK
+            + "\n"
+            + CONFIDENCE_RUBRIC_BLOCK
+            + "\n"
+            + CLASSIFICATION_RUBRIC_BLOCK
+            + "\n"
+            + PROTECTED_ARTIFACTS_BLOCK
+            + """
 ## Output Format
 
-For each issue found:
-- **Severity**: Critical / Major / Minor / Nitpick
+For each surviving `introduced` finding:
+- **Severity**: Critical / Major / Minor / Nitpick (P0 / P1 / P2 / P3 accepted)
+- **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
+- **Classification**: introduced
 - **File:Line**: Exact location
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
+Then, under a separate `## Pre-existing issues (not blocking this verdict)` heading, list each `pre_existing` finding using the compact form `[severity, confidence N, introduced=false] file:line — summary`. Never silently drop pre-existing findings.
+
+After the findings list, emit:
+- The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the spec uses R-IDs; otherwise skip).
+- A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
+- A `Classification counts:` line tallying `introduced` vs `pre_existing` survivors, e.g. `Classification counts: 2 introduced, 4 pre_existing.`.
+- A `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
+
 Be critical. Find real issues.
 
+**Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship. Any non-deferred `not-addressed` R-ID also forces NEEDS_WORK regardless of other findings.
+
 **REQUIRED**: End your response with exactly one verdict tag:
-<verdict>SHIP</verdict> - Ready to merge
-<verdict>NEEDS_WORK</verdict> - Has issues that must be fixed
+<verdict>SHIP</verdict> - Ready to merge (no blocking `introduced` findings, all R-IDs met or deferred)
+<verdict>NEEDS_WORK</verdict> - `introduced` issues or unaddressed R-IDs must be fixed
 <verdict>MAJOR_RETHINK</verdict> - Fundamental approach problems
 
 Do NOT skip this tag. The automation depends on it."""
@@ -2367,6 +2745,9 @@ Do NOT mark NEEDS_WORK for:
 
 You MAY mention these as "FYI" observations without affecting the verdict.
 
+"""
+            + PROTECTED_ARTIFACTS_BLOCK
+            + """
 ## Output Format
 
 For each issue found:
@@ -2374,6 +2755,8 @@ For each issue found:
 - **Location**: Which task or section (e.g., "fn-1.3 Description" or "Epic Acceptance #2")
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
+
+After the issues list, emit a `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
 
 Be critical. Find real issues.
 
@@ -6791,19 +7174,35 @@ Do NOT mark NEEDS_WORK for:
 
 You MAY mention these as "FYI" observations without affecting the verdict.
 
+{R_ID_COVERAGE_BLOCK}
+{CONFIDENCE_RUBRIC_BLOCK}
+{CLASSIFICATION_RUBRIC_BLOCK}
+{PROTECTED_ARTIFACTS_BLOCK}
 ## Output Format
 
-For each issue found:
-- **Severity**: Critical / Major / Minor / Nitpick
+For each surviving `introduced` finding:
+- **Severity**: Critical / Major / Minor / Nitpick (P0 / P1 / P2 / P3 accepted)
+- **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
+- **Classification**: introduced
 - **File:Line**: Exact location
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
+Then, under a separate `## Pre-existing issues (not blocking this verdict)` heading, list each `pre_existing` finding as `[severity, confidence N, introduced=false] file:line — summary`. Never silently drop pre-existing findings.
+
+After the findings list, emit:
+- The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the spec uses R-IDs; otherwise skip).
+- A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
+- A `Classification counts:` line tallying `introduced` vs `pre_existing` survivors, e.g. `Classification counts: 2 introduced, 4 pre_existing.`.
+- A `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
+
 Be critical. Find real issues.
 
+**Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship. Any non-deferred `not-addressed` R-ID also forces NEEDS_WORK regardless of other findings.
+
 **REQUIRED**: End your response with exactly one verdict tag:
-- `<verdict>SHIP</verdict>` - Ready to merge
-- `<verdict>NEEDS_WORK</verdict>` - Issues must be fixed first
+- `<verdict>SHIP</verdict>` - Ready to merge (no blocking `introduced` findings, all R-IDs met or deferred)
+- `<verdict>NEEDS_WORK</verdict>` - `introduced` issues or unaddressed R-IDs must be fixed first
 - `<verdict>MAJOR_RETHINK</verdict>` - Fundamental problems, reconsider approach
 """
 
@@ -6994,6 +7393,11 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     # Determine review id (task_id for task reviews, "branch" for standalone)
     review_id = task_id if task_id else "branch"
 
+    # Parse optional review-rigor signals from output (fn-29.2, fn-29.3, fn-29.4)
+    suppressed_count = parse_suppressed_count(output)
+    classification_counts = parse_classification_counts(output)
+    unaddressed_rids = parse_unaddressed_rids(output)
+
     # Write receipt if path provided (Ralph-compatible schema)
     if receipt_path:
         receipt_data = {
@@ -7018,25 +7422,40 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
                 pass
         if focus:
             receipt_data["focus"] = focus
+        if suppressed_count:
+            receipt_data["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            receipt_data["introduced_count"] = classification_counts["introduced"]
+            receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            receipt_data["unaddressed"] = unaddressed_rids
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
 
     # Output
     if args.json:
+        json_payload = {
+            "type": "impl_review",
+            "id": review_id,
+            "verdict": verdict,
+            "session_id": thread_id,
+            "mode": "codex",
+            "model": resolved_spec.model,
+            "effort": resolved_spec.effort,
+            "spec": str(resolved_spec),
+            "standalone": standalone,
+            "review": output,  # Full review feedback for fix loop
+        }
+        if suppressed_count:
+            json_payload["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            json_payload["introduced_count"] = classification_counts["introduced"]
+            json_payload["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            json_payload["unaddressed"] = unaddressed_rids
         json_output(
-            {
-                "type": "impl_review",
-                "id": review_id,
-                "verdict": verdict,
-                "session_id": thread_id,
-                "mode": "codex",
-                "model": resolved_spec.model,
-                "effort": resolved_spec.effort,
-                "spec": str(resolved_spec),
-                "standalone": standalone,
-                "review": output,  # Full review feedback for fix loop
-            }
+            json_payload
         )
     else:
         print(output)
@@ -7373,6 +7792,15 @@ For EACH requirement from Phase 1:
 - Scope drift (task marked done without fully addressing spec intent)
 - Missing doc updates mentioned in spec
 
+"""
+        + R_ID_COVERAGE_BLOCK
+        + "\n"
+        + CONFIDENCE_RUBRIC_BLOCK
+        + "\n"
+        + CLASSIFICATION_RUBRIC_BLOCK
+        + "\n"
+        + PROTECTED_ARTIFACTS_BLOCK
+        + """
 ## Output Format
 
 ```
@@ -7390,17 +7818,25 @@ For EACH requirement from Phase 1:
 
 ## Gaps Found
 
-[For each GAP, describe what's missing and suggest fix]
+[For each GAP, describe what's missing and suggest fix. Include `Confidence: <0|25|50|75|100>` and `Classification: introduced | pre_existing` — `pre_existing` means the gap existed before this epic's branch touched the code and is therefore not blocking.]
 ```
+
+Pre-existing gaps (code smells or missing features that predate this epic's branch) go under a separate `## Pre-existing issues (not blocking this verdict)` heading and do not gate the verdict.
+
+After the findings list, emit:
+- The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the epic spec uses R-IDs; otherwise skip).
+- A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
+- A `Classification counts:` line tallying `introduced` vs `pre_existing` gaps, e.g. `Classification counts: 1 introduced, 0 pre_existing.`.
+- A `Protected-path filter:` line tallying gaps dropped by the protected-path filter (omit when nothing was dropped).
 
 ## Verdict
 
-**SHIP** - All requirements covered. Epic can close.
-**NEEDS_WORK** - Gaps found. Must fix before closing.
+**SHIP** - All requirements covered (all R-IDs met or deferred). Epic can close.
+**NEEDS_WORK** - Gaps found (or unaddressed R-IDs). Must fix before closing.
 
 **REQUIRED**: End your response with exactly one verdict tag:
-<verdict>SHIP</verdict> - All requirements implemented
-<verdict>NEEDS_WORK</verdict> - Gaps need addressing
+<verdict>SHIP</verdict> - All requirements implemented (R-IDs all met or deferred)
+<verdict>NEEDS_WORK</verdict> - Gaps or unaddressed R-IDs need addressing
 
 Do NOT skip this tag. The automation depends on it."""
     )
@@ -7603,6 +8039,11 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
     # Preserve session_id for continuity (avoid clobbering on resumed sessions)
     session_id_to_write = thread_id or session_id
 
+    # Parse optional review-rigor signals from output (fn-29.2, fn-29.3, fn-29.4)
+    suppressed_count = parse_suppressed_count(output)
+    classification_counts = parse_classification_counts(output)
+    unaddressed_rids = parse_unaddressed_rids(output)
+
     # Write receipt if path provided (Ralph-compatible schema)
     if receipt_path:
         receipt_data = {
@@ -7625,26 +8066,39 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
                 receipt_data["iteration"] = int(ralph_iter)
             except ValueError:
                 pass
+        if suppressed_count:
+            receipt_data["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            receipt_data["introduced_count"] = classification_counts["introduced"]
+            receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            receipt_data["unaddressed"] = unaddressed_rids
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
 
     # Output
     if args.json:
-        json_output(
-            {
-                "type": "completion_review",
-                "id": epic_id,
-                "base": base_branch,
-                "verdict": verdict,
-                "session_id": session_id_to_write,
-                "mode": "codex",
-                "model": resolved_spec.model,
-                "effort": resolved_spec.effort,
-                "spec": str(resolved_spec),
-                "review": output,
-            }
-        )
+        json_payload = {
+            "type": "completion_review",
+            "id": epic_id,
+            "base": base_branch,
+            "verdict": verdict,
+            "session_id": session_id_to_write,
+            "mode": "codex",
+            "model": resolved_spec.model,
+            "effort": resolved_spec.effort,
+            "spec": str(resolved_spec),
+            "review": output,
+        }
+        if suppressed_count:
+            json_payload["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            json_payload["introduced_count"] = classification_counts["introduced"]
+            json_payload["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            json_payload["unaddressed"] = unaddressed_rids
+        json_output(json_payload)
     else:
         print(output)
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
@@ -7842,6 +8296,11 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
 
     review_id = task_id if task_id else "branch"
 
+    # Parse optional review-rigor signals from output (fn-29.2, fn-29.3, fn-29.4)
+    suppressed_count = parse_suppressed_count(output)
+    classification_counts = parse_classification_counts(output)
+    unaddressed_rids = parse_unaddressed_rids(output)
+
     if receipt_path:
         receipt_data = {
             "type": "impl_review",
@@ -7864,25 +8323,38 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
                 pass
         if focus:
             receipt_data["focus"] = focus
+        if suppressed_count:
+            receipt_data["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            receipt_data["introduced_count"] = classification_counts["introduced"]
+            receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            receipt_data["unaddressed"] = unaddressed_rids
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
 
     if args.json:
-        json_output(
-            {
-                "type": "impl_review",
-                "id": review_id,
-                "verdict": verdict,
-                "session_id": returned_session_id,
-                "mode": "copilot",
-                "model": effective_model,
-                "effort": effective_effort,
-                "spec": str(resolved_spec),
-                "standalone": standalone,
-                "review": output,
-            }
-        )
+        json_payload = {
+            "type": "impl_review",
+            "id": review_id,
+            "verdict": verdict,
+            "session_id": returned_session_id,
+            "mode": "copilot",
+            "model": effective_model,
+            "effort": effective_effort,
+            "spec": str(resolved_spec),
+            "standalone": standalone,
+            "review": output,
+        }
+        if suppressed_count:
+            json_payload["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            json_payload["introduced_count"] = classification_counts["introduced"]
+            json_payload["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            json_payload["unaddressed"] = unaddressed_rids
+        json_output(json_payload)
     else:
         print(output)
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
@@ -8213,6 +8685,11 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
     # Preserve session_id for continuity (avoid clobbering on resumed sessions)
     session_id_to_write = returned_session_id or session_id
 
+    # Parse optional review-rigor signals from output (fn-29.2, fn-29.3, fn-29.4)
+    suppressed_count = parse_suppressed_count(output)
+    classification_counts = parse_classification_counts(output)
+    unaddressed_rids = parse_unaddressed_rids(output)
+
     if receipt_path:
         receipt_data = {
             "type": "completion_review",
@@ -8233,28 +8710,722 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
                 receipt_data["iteration"] = int(ralph_iter)
             except ValueError:
                 pass
+        if suppressed_count:
+            receipt_data["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            receipt_data["introduced_count"] = classification_counts["introduced"]
+            receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            receipt_data["unaddressed"] = unaddressed_rids
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
 
     if args.json:
-        json_output(
-            {
-                "type": "completion_review",
-                "id": epic_id,
-                "base": base_branch,
-                "verdict": verdict,
-                "session_id": session_id_to_write,
-                "mode": "copilot",
-                "model": effective_model,
-                "effort": effective_effort,
-                "spec": str(resolved_spec),
-                "review": output,
-            }
-        )
+        json_payload = {
+            "type": "completion_review",
+            "id": epic_id,
+            "base": base_branch,
+            "verdict": verdict,
+            "session_id": session_id_to_write,
+            "mode": "copilot",
+            "model": effective_model,
+            "effort": effective_effort,
+            "spec": str(resolved_spec),
+            "review": output,
+        }
+        if suppressed_count:
+            json_payload["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            json_payload["introduced_count"] = classification_counts["introduced"]
+            json_payload["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            json_payload["unaddressed"] = unaddressed_rids
+        json_output(json_payload)
     else:
         print(output)
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
+
+
+# --- Trivial-diff triage (fn-29.6) ---
+#
+# Fast pre-check before full impl-review: judges whether the diff is worth
+# a Carmack-level review. Saves rp/codex/copilot calls on lockfile-only /
+# release-chore / docs-only / generated-only commits. Conservative:
+# "when in doubt, REVIEW" — false SKIPs are strictly worse than false REVIEWs.
+#
+# Strategy (hybrid, deterministic-first):
+#   1. Deterministic REVIEW-override: any file that matches a code path
+#      (src/, flowctl.py, *.py/.ts/.js/.go/.rs/.sh/..., etc.) forces REVIEW
+#      without an LLM call. This is AC9.
+#   2. Deterministic SKIP whitelist: lockfile-only / docs-only / release-
+#      chore / generated-only diffs. Tight, narrow match — everything else
+#      falls through.
+#   3. Optional LLM judge (`--backend codex|copilot`) for ambiguous diffs.
+#      When tooling is unavailable, falls through to REVIEW (exit 1).
+#
+# Exit codes:
+#   0  SKIP (verdict=SHIP)
+#   1  proceed to full review (verdict not set by triage)
+#   2+ error (bad args, tooling unavailable when required, malformed output)
+
+TRIAGE_LOCKFILES: frozenset[str] = frozenset({
+    # Exact basenames only; matching is case-sensitive on basename.
+    "package-lock.json",
+    "bun.lock",
+    "bun.lockb",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "Gemfile.lock",
+    "poetry.lock",
+    "Cargo.lock",
+    "uv.lock",
+    "composer.lock",
+    "mix.lock",
+    "go.sum",
+})
+
+TRIAGE_RELEASE_CHORE_BASENAMES: frozenset[str] = frozenset({
+    "plugin.json",
+    "package.json",
+    "Cargo.toml",
+    "pyproject.toml",
+    "CHANGELOG.md",
+})
+
+# Generated / vendored path prefixes. Matched against POSIX-normalized path
+# substrings. Keep this list tight — overly broad matches silently skip real
+# review work.
+TRIAGE_GENERATED_PREFIXES: tuple[str, ...] = (
+    "plugins/flow-next/codex/",
+    "node_modules/",
+    "vendor/",
+    "third_party/",
+    "dist/",
+    "build/",
+    ".next/",
+)
+
+# Extensions treated as executable code. A single match forces REVIEW.
+# Keep synchronized with common code files the reviewer actually needs to see.
+TRIAGE_CODE_EXTS: frozenset[str] = frozenset({
+    ".py",
+    ".pyi",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs",
+    ".ts",
+    ".tsx",
+    ".go",
+    ".rs",
+    ".rb",
+    ".java",
+    ".kt",
+    ".scala",
+    ".swift",
+    ".cs",
+    ".c",
+    ".cc",
+    ".cpp",
+    ".cxx",
+    ".h",
+    ".hh",
+    ".hpp",
+    ".hxx",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".fish",
+    ".lua",
+    ".pl",
+    ".php",
+    ".ex",
+    ".exs",
+    ".erl",
+    ".elm",
+    ".clj",
+    ".sql",
+})
+
+# Docs-only extensions. A diff of only these (outside .flow/specs or
+# .flow/tasks — those are artifacts, not pure docs) may SKIP.
+TRIAGE_DOC_EXTS: frozenset[str] = frozenset({
+    ".md",
+    ".mdx",
+    ".txt",
+    ".rst",
+    ".adoc",
+})
+
+# Paths that are artifacts (not code, not docs). Changes here can be
+# semantically important (task status etc.) — conservative: treat as REVIEW
+# when present without other SKIP-category files.
+TRIAGE_ARTIFACT_PREFIXES: tuple[str, ...] = (
+    ".flow/specs/",
+    ".flow/tasks/",
+    ".flow/epics/",
+)
+
+
+def _classify_triage_path(path: str) -> str:
+    """Classify a changed file into one triage bucket.
+
+    Returns one of:
+      - ``code``      — forces REVIEW
+      - ``lockfile``  — SKIP candidate
+      - ``docs``      — SKIP candidate
+      - ``chore``     — release-chore SKIP candidate
+      - ``generated`` — SKIP candidate
+      - ``artifact``  — flow state spec/task (do not SKIP on these alone)
+      - ``other``     — unknown; forces REVIEW by fallthrough
+    """
+    # Normalize to POSIX for stable prefix matching even on Windows checkouts.
+    p = path.replace("\\", "/").strip()
+    if not p:
+        return "other"
+
+    # Generated / vendored wins over extension match — e.g. a .ts file under
+    # node_modules/ is still "generated" for our purposes. Match only at the
+    # repo-root prefix; git diff output is always repo-root-relative, and a
+    # loose substring match would false-positive paths like `scripts/build/…`
+    # against the `build/` prefix.
+    for prefix in TRIAGE_GENERATED_PREFIXES:
+        if p.startswith(prefix):
+            return "generated"
+
+    base = p.rsplit("/", 1)[-1]
+    if base in TRIAGE_LOCKFILES:
+        return "lockfile"
+
+    # Artifacts (flow state) before release-chore — plugin.json inside
+    # .flow/epics/ isn't a chore.
+    for prefix in TRIAGE_ARTIFACT_PREFIXES:
+        if p.startswith(prefix):
+            return "artifact"
+
+    if base in TRIAGE_RELEASE_CHORE_BASENAMES:
+        return "chore"
+
+    # Extension-based classification. ``os.path.splitext`` handles multi-dot
+    # filenames (``foo.test.ts`` → ``.ts``).
+    ext = ""
+    dot = base.rfind(".")
+    if dot > 0:
+        ext = base[dot:].lower()
+
+    if ext in TRIAGE_CODE_EXTS:
+        return "code"
+    if ext in TRIAGE_DOC_EXTS:
+        return "docs"
+
+    return "other"
+
+
+_TRIAGE_VERSION_JSON_RE = re.compile(r'^\s*"version"\s*:\s*"[^"]*"\s*,?\s*$')
+_TRIAGE_VERSION_TOML_RE = re.compile(r'^\s*version\s*=\s*"[^"]*"\s*$')
+
+
+def _triage_chore_is_version_only(
+    path: str, base: str, repo_root: str
+) -> bool:
+    """Verify a chore-classified file's diff only touches version-like fields.
+
+    A file is basename-matched as ``chore`` (``package.json``, ``plugin.json``,
+    ``Cargo.toml``, ``pyproject.toml``, ``CHANGELOG.md``) but that alone does
+    not prove the edit is trivial — changing ``package.json`` dependencies or
+    scripts must still route through a full review. This helper inspects the
+    actual diff hunks and returns True only when every +/- content line is:
+
+    - a ``"version": "..."`` line (JSON manifests), or
+    - a ``version = "..."`` line (TOML manifests), or
+    - any addition-only line for ``CHANGELOG.md`` (prose content).
+
+    Any other modification (dependency bumps, script edits, CHANGELOG
+    deletions, etc.) disqualifies the file and the triage-skip layer falls
+    through to full review.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "diff", "--unified=0", f"{base}..HEAD", "--", path],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=repo_root,
+        )
+    except OSError:
+        return False
+    if proc.returncode != 0 or not proc.stdout:
+        return False
+
+    base_name = path.rsplit("/", 1)[-1]
+    is_changelog = base_name == "CHANGELOG.md"
+    is_json = base_name.endswith(".json")
+    is_toml = base_name.endswith(".toml")
+
+    saw_change = False
+    for line in proc.stdout.splitlines():
+        if line.startswith(("+++", "---", "diff ", "index ", "@@", "Binary ")):
+            continue
+        if not (line.startswith("+") or line.startswith("-")):
+            continue
+        content = line[1:]
+        if not content.strip():
+            continue
+        saw_change = True
+        if is_changelog:
+            # CHANGELOG-only edits are safe when purely additive. Removals
+            # (history rewrites, entry deletions) warrant a full review.
+            if line.startswith("-"):
+                return False
+            continue
+        if is_json and _TRIAGE_VERSION_JSON_RE.match(content):
+            continue
+        if is_toml and _TRIAGE_VERSION_TOML_RE.match(content):
+            continue
+        return False
+    return saw_change
+
+
+def _triage_deterministic(
+    changed_files: list[str],
+    base: Optional[str] = None,
+    repo_root: Optional[str] = None,
+) -> tuple[Optional[str], str]:
+    """Run the deterministic layer of triage.
+
+    Returns ``(verdict_or_none, reason)``:
+      - ``("SKIP", reason)`` — whitelist match, safe to skip
+      - ``("REVIEW", reason)`` — hard override (code change, empty diff, etc.)
+      - ``(None, reason)`` — ambiguous; caller may run LLM judge or default REVIEW
+
+    When ``chore``-classified files (manifests, CHANGELOG) are present, a
+    content-level check is required: callers must pass ``base`` + ``repo_root``
+    so the helper can inspect diff hunks. Without git context the chore path
+    falls through to ambiguous to prevent non-trivial ``package.json`` edits
+    from bypassing full review.
+
+    ``reason`` is always a one-line human-readable string.
+    """
+    if not changed_files:
+        # No diff at all — nothing to review. Conservative: REVIEW so the
+        # caller sees this as an odd case (empty diff usually means bad base).
+        return "REVIEW", "no changed files (empty diff — refusing to skip)"
+
+    buckets: dict[str, list[str]] = {}
+    for f in changed_files:
+        kind = _classify_triage_path(f)
+        buckets.setdefault(kind, []).append(f)
+
+    # Any code file → REVIEW (AC9: src/, flowctl.py always reviewed).
+    if "code" in buckets:
+        example = buckets["code"][0]
+        return "REVIEW", f"code change detected: {example}"
+
+    # Any artifact file → REVIEW (flow state can carry semantic intent).
+    if "artifact" in buckets:
+        example = buckets["artifact"][0]
+        return "REVIEW", f"flow artifact change detected: {example}"
+
+    # Any unknown/other file → REVIEW (conservative fallthrough).
+    if "other" in buckets:
+        example = buckets["other"][0]
+        return "REVIEW", f"unclassified path: {example}"
+
+    # At this point every file is in {lockfile, docs, chore, generated}.
+    kinds = set(buckets.keys())
+
+    # Chore-containing shapes require content verification before SKIP.
+    if "chore" in buckets:
+        if base is None or repo_root is None:
+            return (
+                None,
+                "manifest change (needs content verification — no git context)",
+            )
+        unverified = [
+            f
+            for f in buckets["chore"]
+            if not _triage_chore_is_version_only(f, base, repo_root)
+        ]
+        if unverified:
+            example = unverified[0]
+            return None, f"manifest edit beyond version field: {example}"
+
+    if kinds == {"lockfile"}:
+        if len(changed_files) == 1:
+            return "SKIP", f"lockfile-only ({changed_files[0]})"
+        return "SKIP", f"lockfile-only ({len(changed_files)} lock files)"
+
+    if kinds == {"docs"}:
+        if len(changed_files) == 1:
+            return "SKIP", f"docs-only ({changed_files[0]})"
+        return "SKIP", f"docs-only ({len(changed_files)} files)"
+
+    if kinds == {"generated"}:
+        if len(changed_files) == 1:
+            return "SKIP", f"generated-only ({changed_files[0]})"
+        return "SKIP", f"generated-only ({len(changed_files)} files)"
+
+    if kinds <= {"chore"}:
+        return "SKIP", f"release-chore ({len(changed_files)} manifest files)"
+
+    if kinds <= {"chore", "docs"}:
+        chore_files = buckets.get("chore", [])
+        doc_files = buckets.get("docs", [])
+        return (
+            "SKIP",
+            f"release-chore ({len(chore_files)} manifest + {len(doc_files)} doc file(s))",
+        )
+
+    if kinds <= {"lockfile", "chore"}:
+        return (
+            "SKIP",
+            f"dep-update ({len(buckets.get('lockfile', []))} lock + "
+            f"{len(buckets.get('chore', []))} manifest file(s))",
+        )
+
+    if kinds <= {"lockfile", "generated"}:
+        return (
+            "SKIP",
+            f"lockfile+generated ({len(changed_files)} files)",
+        )
+
+    # Anything else — mixed or unknown combo — fall through to LLM / default REVIEW.
+    return None, f"mixed non-code categories: {sorted(kinds)}"
+
+
+def _triage_build_llm_prompt(
+    diff_stat: str, changed_files: list[str]
+) -> str:
+    """Build the one-shot triage prompt for fast-model judgment."""
+    # Cap the file list + stat to keep the prompt cheap.
+    files_preview = "\n".join(changed_files[:50])
+    if len(changed_files) > 50:
+        files_preview += f"\n... ({len(changed_files) - 50} more)"
+    stat = diff_stat.strip() or "(diff stat unavailable)"
+    return f"""Diff summary:
+{stat}
+
+Changed files:
+{files_preview}
+
+Is this diff worth a full code review?
+
+Answer SKIP only if the diff matches one of:
+- Lockfile-only bumps: package-lock.json, bun.lock, pnpm-lock.yaml, yarn.lock, Gemfile.lock, poetry.lock, Cargo.lock, uv.lock (and nothing else)
+- Pure release chore: version bump in plugin.json / package.json / Cargo.toml + CHANGELOG entry, no other code
+- Pure documentation: only *.md files changed, no executable code
+- Pure generated-file regeneration: plugins/flow-next/codex/ (from sync-codex.sh), or other clearly-generated paths
+- Pure vendored-asset changes: files under /vendor/, /third_party/, or similarly designated paths
+
+When in doubt, answer REVIEW. A missed review is worse than a skipped chore.
+
+Output exactly one line:
+SKIP: <one-line reason>
+or
+REVIEW: <one-line reason>
+"""
+
+
+def _triage_parse_llm_output(text: str) -> tuple[Optional[str], str]:
+    """Parse SKIP/REVIEW line from LLM output. Conservative on malformed."""
+    if not text:
+        return None, "empty LLM response"
+    # Prefer the last matching line so trailing reasoning doesn't win.
+    verdict: Optional[str] = None
+    reason: str = ""
+    for raw in text.splitlines():
+        line = raw.strip().lstrip(">*_ `").rstrip()
+        if not line:
+            continue
+        m = re.match(r"^(SKIP|REVIEW)\s*:\s*(.+?)\s*$", line, re.IGNORECASE)
+        if m:
+            verdict = m.group(1).upper()
+            reason = m.group(2).strip()
+    if verdict is None:
+        return None, "malformed LLM response (no SKIP:/REVIEW: line)"
+    return verdict, reason
+
+
+def _triage_run_codex_judge(
+    prompt: str, model: Optional[str], effort: Optional[str]
+) -> tuple[Optional[str], str, Optional[str]]:
+    """Invoke codex as the triage judge. Returns (verdict, reason, model_used).
+
+    verdict is ``SKIP`` / ``REVIEW`` / ``None`` (on tooling failure or malformed).
+    """
+    codex = shutil.which("codex")
+    if not codex:
+        return None, "codex CLI not available for triage", None
+    effective_model = model or "gpt-5-mini"
+    effective_effort = effort or "low"
+    cmd = [
+        codex,
+        "exec",
+        "--model",
+        effective_model,
+        "-c",
+        f'model_reasoning_effort="{effective_effort}"',
+        "--sandbox",
+        "read-only" if os.name != "nt" else "danger-full-access",
+        "--skip-git-repo-check",
+        "-",
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return None, "codex triage timed out (120s)", effective_model
+    except OSError as e:
+        return None, f"codex triage OS error: {e}", effective_model
+    if result.returncode != 0:
+        msg = (result.stderr or "codex triage exited non-zero").strip().splitlines()[-1]
+        return None, f"codex triage failed: {msg}", effective_model
+    verdict, reason = _triage_parse_llm_output(result.stdout)
+    return verdict, reason, effective_model
+
+
+def _triage_run_copilot_judge(
+    prompt: str, model: Optional[str], effort: Optional[str]
+) -> tuple[Optional[str], str, Optional[str]]:
+    """Invoke copilot as the triage judge."""
+    copilot = shutil.which("copilot")
+    if not copilot:
+        return None, "copilot CLI not available for triage", None
+    effective_model = model or "claude-haiku-4.5"
+    effective_effort = effort or "low"
+    repo_root = get_repo_root()
+    cmd = [
+        copilot,
+        "-p",
+        prompt,
+        f"--resume={uuid.uuid4()}",
+        "--output-format",
+        "text",
+        "-s",
+        "--no-ask-user",
+        "--allow-all-tools",
+        "--add-dir",
+        str(repo_root),
+        "--disable-builtin-mcps",
+        "--no-custom-instructions",
+        "--log-level",
+        "error",
+        "--no-auto-update",
+        "--model",
+        effective_model,
+    ]
+    if not effective_model.startswith("claude-"):
+        cmd += ["--effort", effective_effort]
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return None, "copilot triage timed out (120s)", effective_model
+    except OSError as e:
+        return None, f"copilot triage OS error: {e}", effective_model
+    if result.returncode != 0:
+        msg = (result.stderr or "copilot triage exited non-zero").strip().splitlines()[-1]
+        return None, f"copilot triage failed: {msg}", effective_model
+    verdict, reason = _triage_parse_llm_output(result.stdout)
+    return verdict, reason, effective_model
+
+
+def cmd_triage_skip(args: argparse.Namespace) -> None:
+    """Trivial-diff triage pre-check.
+
+    Decides whether the diff between ``--base`` and HEAD is worth a full
+    Carmack-level review. Uses a deterministic whitelist first (lockfiles,
+    docs-only, generated, release-chore) and an optional LLM judge only for
+    ambiguous cases. When in doubt, falls through to exit 1 (proceed to
+    full review) — false SKIPs are strictly worse than false REVIEWs.
+
+    Exit codes:
+        0   SKIP (verdict=SHIP, receipt written if --receipt)
+        1   proceed to full review
+        2+  error (invalid arguments, malformed state)
+    """
+    base = args.base or "main"
+    # Resolve 'main' vs 'master' when caller didn't specify --base.
+    if not args.base:
+        repo_root = get_repo_root()
+        try:
+            subprocess.run(
+                ["git", "rev-parse", "--verify", "main"],
+                capture_output=True,
+                check=True,
+                cwd=repo_root,
+            )
+        except (subprocess.CalledProcessError, OSError):
+            try:
+                subprocess.run(
+                    ["git", "rev-parse", "--verify", "master"],
+                    capture_output=True,
+                    check=True,
+                    cwd=repo_root,
+                )
+                base = "master"
+            except (subprocess.CalledProcessError, OSError):
+                # Leave base="main"; git diff will fail below and we'll surface
+                # that as an error exit.
+                pass
+
+    repo_root = get_repo_root()
+    # Gather changed file list.
+    try:
+        proc = subprocess.run(
+            ["git", "diff", "--name-only", f"{base}..HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=repo_root,
+        )
+    except OSError as e:
+        error_exit(f"git diff failed: {e}", use_json=args.json, code=2)
+    if proc.returncode != 0:
+        stderr = (proc.stderr or "").strip()
+        error_exit(
+            f"git diff --name-only {base}..HEAD failed: {stderr}",
+            use_json=args.json,
+            code=2,
+        )
+    changed_files = [
+        line.strip() for line in proc.stdout.splitlines() if line.strip()
+    ]
+
+    # Gather --stat for the LLM prompt (best-effort).
+    diff_stat = ""
+    try:
+        stat_proc = subprocess.run(
+            ["git", "diff", "--stat", f"{base}..HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=repo_root,
+        )
+        if stat_proc.returncode == 0:
+            diff_stat = stat_proc.stdout.strip()
+    except OSError:
+        pass
+
+    # Deterministic layer. Pass git context so the chore-path content check
+    # can inspect diff hunks and reject non-trivial manifest edits.
+    det_verdict, det_reason = _triage_deterministic(
+        changed_files, base=base, repo_root=repo_root
+    )
+
+    verdict: Optional[str] = det_verdict
+    reason: str = det_reason
+    model_used: Optional[str] = None
+    judge_source = "deterministic"
+
+    # Optional LLM judge for ambiguous cases. ``--no-llm`` skips the call and
+    # defaults to REVIEW so tests / offline runs remain deterministic.
+    if det_verdict is None and not args.no_llm:
+        backend = (args.backend or "codex").strip().lower()
+        if backend == "codex":
+            v, r, m = _triage_run_codex_judge(
+                _triage_build_llm_prompt(diff_stat, changed_files),
+                args.model,
+                args.effort,
+            )
+        elif backend == "copilot":
+            v, r, m = _triage_run_copilot_judge(
+                _triage_build_llm_prompt(diff_stat, changed_files),
+                args.model,
+                args.effort,
+            )
+        else:
+            error_exit(
+                f"Unknown triage backend: {backend!r}. Valid: codex, copilot",
+                use_json=args.json,
+                code=2,
+            )
+        model_used = m
+        judge_source = f"{backend}-judge"
+        if v is None:
+            # Judge failed or malformed — conservative fallthrough to REVIEW.
+            verdict = "REVIEW"
+            reason = f"{r} (defaulting to REVIEW)"
+        else:
+            verdict = v
+            reason = r
+    elif det_verdict is None:
+        # No LLM path and deterministic was ambiguous → REVIEW (conservative).
+        verdict = "REVIEW"
+        reason = f"{det_reason} (no LLM, defaulting to REVIEW)"
+
+    # Write receipt on SKIP (only when requested). REVIEW path leaves receipt
+    # untouched so the downstream impl-review can write its own receipt.
+    receipt_written: Optional[str] = None
+    if verdict == "SKIP" and args.receipt:
+        receipt_data = {
+            "type": "impl_review",
+            "id": args.task or "branch",
+            "mode": "triage_skip",
+            "base": base,
+            "verdict": "SHIP",
+            "reason": reason,
+            "source": judge_source,
+            "changed_file_count": len(changed_files),
+            "timestamp": now_iso(),
+        }
+        if model_used:
+            receipt_data["model"] = model_used
+        ralph_iter = os.environ.get("RALPH_ITERATION")
+        if ralph_iter:
+            try:
+                receipt_data["iteration"] = int(ralph_iter)
+            except ValueError:
+                pass
+        try:
+            Path(args.receipt).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.receipt).write_text(
+                json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
+            )
+            receipt_written = args.receipt
+        except OSError as e:
+            error_exit(
+                f"failed to write receipt {args.receipt}: {e}",
+                use_json=args.json,
+                code=2,
+            )
+
+    # Output + exit.
+    if args.json:
+        payload = {
+            "verdict": "SHIP" if verdict == "SKIP" else "REVIEW",
+            "mode": "triage_skip" if verdict == "SKIP" else "triage_review",
+            "reason": reason,
+            "source": judge_source,
+            "base": base,
+            "changed_file_count": len(changed_files),
+        }
+        if model_used:
+            payload["model"] = model_used
+        if receipt_written:
+            payload["receipt"] = receipt_written
+        json_output(payload)
+    else:
+        if verdict == "SKIP":
+            print(f"SKIP: {reason}")
+            if receipt_written:
+                print(f"REVIEW_RECEIPT_WRITTEN: {receipt_written}")
+        else:
+            print(f"REVIEW: {reason}")
+
+    sys.exit(0 if verdict == "SKIP" else 1)
 
 
 # --- Checkpoint commands ---
@@ -9000,6 +10171,43 @@ def main() -> None:
     )
     p_validate.add_argument("--json", action="store_true", help="JSON output")
     p_validate.set_defaults(func=cmd_validate)
+
+    # triage-skip (fn-29.6)
+    p_triage = subparsers.add_parser(
+        "triage-skip",
+        help="Trivial-diff triage pre-check (exit 0=SKIP, 1=REVIEW, 2+=error)",
+    )
+    p_triage.add_argument(
+        "--base", help="Base ref to diff against (default: main, fallback master)"
+    )
+    p_triage.add_argument(
+        "--task", help="Task ID for receipt id field (default: 'branch')"
+    )
+    p_triage.add_argument(
+        "--backend",
+        choices=["codex", "copilot"],
+        default="codex",
+        help="LLM judge backend for ambiguous diffs (default: codex)",
+    )
+    p_triage.add_argument(
+        "--model",
+        help="Fast model override (default: gpt-5-mini for codex, claude-haiku-4.5 for copilot)",
+    )
+    p_triage.add_argument(
+        "--effort",
+        help="Reasoning effort for LLM judge (default: low)",
+    )
+    p_triage.add_argument(
+        "--receipt",
+        help="Path to write triage-skip receipt (only on SKIP verdict)",
+    )
+    p_triage.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="Skip LLM judge; rely on deterministic whitelist only (ambiguous → REVIEW)",
+    )
+    p_triage.add_argument("--json", action="store_true", help="JSON output")
+    p_triage.set_defaults(func=cmd_triage_skip)
 
     # checkpoint
     p_checkpoint = subparsers.add_parser("checkpoint", help="Checkpoint commands")

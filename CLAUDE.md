@@ -33,6 +33,17 @@ Review backend spec grammar (v0.31.0+):
 - `flowctl review-backend --json` returns `{backend, spec, model, effort, source}` (spec-form round-trippable); text mode prints bare backend for skill grep back-compat
 - Receipts now include a `spec` field alongside `model` + `effort`: `{"mode": "codex", "model": "gpt-5.4", "effort": "high", "spec": "codex:gpt-5.4:high"}`
 
+R-ID convention (v0.32.1+):
+- New epic specs number acceptance criteria as `- **R1:** ...`, `- **R2:** ...` in creation order (plain markdown prose, not YAML).
+- Renumber-forbidden after first review cycle — deletions leave gaps (`R1, R3, R5`); new criteria take the next unused number.
+- Task specs may carry optional `satisfies: [R1, R3]` frontmatter linking to the epic's R-IDs; additive and omittable.
+- Plan skill writes R-IDs on every new spec; plan-sync preserves them during drift updates. See `plugins/flow-next/skills/flow-next-plan/steps.md` for the full rule.
+
+Review rigor additions (v0.32.1+):
+- Review receipts may carry optional fields: `unaddressed` (array of R-IDs not addressed by the branch), `suppressed_count` (dict keyed by confidence anchor: `{"50": 3, "25": 7, "0": 2}`), `introduced_count`, `pre_existing_count`. New receipt `mode: triage_skip` indicates trivial-diff fast-path. All additive; old Ralph scripts read by key and ignore unknowns.
+- `flowctl triage-skip --base <ref>` runs a deterministic whitelist (lockfile-only / docs-only / release-chore / generated-file-only) and returns `VERDICT=SHIP` without invoking the configured backend. On by default in Ralph mode; opt-out via `--no-triage` or `FLOW_RALPH_NO_TRIAGE=1`. Optional fast-model LLM judge for ambiguous diffs gated behind `FLOW_TRIAGE_LLM=1`.
+- Review prompts score findings on five discrete confidence anchors (`0 / 25 / 50 / 75 / 100`) and suppress `<75` except P0 @ 50+; findings classified `introduced` vs `pre_existing` (verdict gate considers only `introduced`); protected-artifact list prevents findings that recommend deletion of `.flow/*`, `scripts/ralph/*`, etc.
+
 Ralph (autonomous loop):
 - Script template lives in `plugins/flow-next/skills/flow-next-ralph-init/templates/`.
 - Ralph uses `flowctl rp` wrappers (not direct rp-cli) for reviews.

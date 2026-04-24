@@ -286,6 +286,25 @@ Conduct a John Carmack-level review:
 9. **Testability** - How will we verify this works?
 10. **Consistency** - Do task specs align with epic spec?
 
+## Protected artifacts
+
+The following paths are flow-next / project-pipeline artifacts. Any finding recommending their deletion, gitignore, or removal MUST be discarded during synthesis. Do not flag these paths for cleanup under any circumstances:
+
+- `.flow/*` — flow-next state, specs, tasks, epics, runtime
+- `.flow/bin/*` — bundled flowctl
+- `.flow/memory/*` — learnings store (pitfalls, conventions, decisions)
+- `.flow/specs/*.md` — epic specs (decision artifacts)
+- `.flow/tasks/*.md` — task specs (decision artifacts)
+- `docs/plans/*` — plan artifacts (if project uses this convention)
+- `docs/solutions/*` — solutions artifacts (if project uses this convention)
+- `scripts/ralph/*` — Ralph harness (when present)
+
+These files are intentionally committed. They are the pipeline's state, not clutter. An agent that deletes them destroys the project's planning trail and breaks Ralph autonomous runs.
+
+If you notice genuine issues with content INSIDE these files (e.g., a spec that contradicts itself, a stale entry), flag the content — not the file's existence.
+
+**Protected-path filter.** Before emitting findings, scan each for recommendations to delete, gitignore, or `rm -rf` any path matching the protected list above. Drop those findings. If you drop any, report the drop count in a `Protected-path filter:` line in the review output (e.g. `Protected-path filter: dropped 2 findings`). Omit the line when nothing was dropped.
+
 ## Output Format
 
 For each issue:
@@ -293,6 +312,8 @@ For each issue:
 - **Location**: Which task or section (e.g., "fn-1.3 Description" or "Epic Acceptance #2")
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
+
+After the issues list, emit a `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
 
 **REQUIRED**: You MUST end your response with exactly one verdict tag. This is mandatory:
 `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>`

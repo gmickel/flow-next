@@ -167,3 +167,4 @@ All plans go into `.flow/`:
 - Only create/update epics and tasks via flowctl
 - No code changes
 - No plan files outside `.flow/`
+- R-IDs are mandatory on new epic spec acceptance criteria — use `- **Rn:** ...` prose prefix format; never renumber after first review cycle (see `steps.md` R-ID rule)

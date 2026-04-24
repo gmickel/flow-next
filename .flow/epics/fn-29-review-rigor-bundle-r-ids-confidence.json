@@ -1,0 +1,13 @@
+{
+  "branch_name": "fn-29-review-rigor-bundle-r-ids-confidence",
+  "created_at": "2026-04-24T08:09:36.021784Z",
+  "depends_on_epics": [],
+  "id": "fn-29-review-rigor-bundle-r-ids-confidence",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-29-review-rigor-bundle-r-ids-confidence.md",
+  "status": "open",
+  "title": "Review rigor bundle: R-IDs, confidence anchors, pre-existing separation, protected artifacts, trivial-diff skip",
+  "updated_at": "2026-04-24T08:11:40.138080Z"
+}

@@ -2,6 +2,24 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.32.1] - 2026-04-24
+
+### Added
+- **Requirement-ID traceability (R-IDs).** Epic specs emit numbered acceptance criteria (`- **R1:**`, `- **R2:**`, ...). Task specs support optional `satisfies: [R1, R3]` frontmatter. Impl-review and epic-review produce per-R-ID coverage tables (met / partial / not-addressed / deferred). Any unaddressed R-ID flips verdict to `NEEDS_WORK`; receipt carries an `unaddressed` array. Renumber-forbidden after first review cycle — deletions leave gaps, new criteria take the next unused number. Plan skill writes R-IDs on creation; plan-sync preserves them during drift updates.
+- **Confidence anchors (0 / 25 / 50 / 75 / 100) + suppression gate.** Reviewers score each finding on exactly five discrete anchors. Findings below 75 are suppressed except P0 @ 50+. Reviews report `suppressed_count` by anchor; receipt optionally carries a `suppressed_count` dict. Prose rubric tells the reviewer to treat scores as integers, not a continuous scale.
+- **Introduced vs pre-existing classification.** Reviewers mark each finding `introduced: true` (caused by this branch's diff) or `pre_existing: true` (broken on the base branch). Verdict gate considers only `introduced`. Pre-existing findings surface in a separate non-blocking "Pre-existing issues" section. Receipt carries `introduced_count` and `pre_existing_count`.
+- **Protected artifacts list in review prompts.** Hardcoded never-flag paths (`.flow/*`, `.flow/bin/*`, `.flow/memory/*`, `docs/plans/*`, `docs/solutions/*`, `scripts/ralph/*`). Review synthesis discards findings recommending their deletion or gitignore. Prevents cross-model reviewers unfamiliar with flow-next conventions from proposing destructive cleanups.
+- **Trivial-diff skip (`flowctl triage-skip`).** Deterministic whitelist pre-check (lockfile-only / docs-only / release-chore / generated-file-only) returns `VERDICT=SHIP` with receipt `mode: triage_skip` and `source: deterministic`. Optional fast-model LLM judge (`gpt-5-mini` / `claude-haiku-4.5`) gated behind `FLOW_TRIAGE_LLM=1`; deterministic layer is conservative (ambiguous → REVIEW). On by default in Ralph mode; opt-out via `--no-triage` or `FLOW_RALPH_NO_TRIAGE=1`. Saves rp / codex / copilot calls on trivial commits.
+
+### Changed
+- Impl-review and epic-review workflows now emit structured per-finding metadata (severity, confidence, introduced/pre_existing) instead of free-form prose.
+- Receipt schema gains optional fields: `unaddressed`, `suppressed_count`, `introduced_count`, `pre_existing_count`, plus new receipt `mode: triage_skip`. All additive — existing Ralph scripts read by key and ignore unknowns.
+
+### Notes
+- Zero breaking changes. Specs without R-IDs continue to work. Ralph's autonomous loop is unchanged in shape; review inputs and outputs are sharper.
+- Carmack-level review remains the default and baseline. This release adds structure; it does not change the review style.
+- Smoke suite: 71 tests pass (unchanged — rollup is prompt + docs only).
+
 ## [flow-next 0.32.0] - 2026-04-24
 
 ### Added

@@ -298,13 +298,122 @@ Report untraced changes but don't auto-reject. UNDOCUMENTED_ADDITION is a flag f
 - Performance (impl-review covers this)
 - Legitimate refactoring needed to implement requirements (flag as LEGITIMATE_SUPPORT but don't block)
 
+## Requirements coverage (if epic spec has R-IDs)
+
+If the epic spec numbers its acceptance criteria like `- **R1:** ...`, `- **R2:** ...`,
+produce a per-R-ID coverage table. Read the epic spec's `## Acceptance` section
+(or the legacy `## Acceptance criteria` heading — reviewer MUST tolerate both).
+If no R-IDs are present, skip this block entirely — Phase 2 and Phase 3 above
+still apply.
+
+This forward coverage (spec → code) is **additive to Phase 3 reverse coverage
+(code → spec)**. Both phases feed the final verdict.
+
+For each R-ID, classify status:
+
+| Status | Meaning |
+|--------|---------|
+| met | Implementation delivers the requirement with appropriate tests/evidence |
+| partial | Implementation advances the requirement but leaves gaps |
+| not-addressed | Implementation does not advance this requirement at all |
+| deferred | Spec explicitly defers this requirement to a later epic/PR |
+
+Report as a markdown table in the review output:
+
+| R-ID | Status | Evidence |
+|------|--------|----------|
+| R1 | met | src/auth.ts:42 + tests/auth.test.ts:17 |
+| R2 | partial | implementation exists but no error-path tests |
+| R3 | not-addressed | — |
+
+After the table, emit one line listing every `not-addressed` R-ID that is NOT
+explicitly deferred in the spec:
+
+> Unaddressed R-IDs: [R3, R5]
+
+If there are zero unaddressed R-IDs, emit `Unaddressed R-IDs: []` or omit the
+line entirely. Deferred R-IDs are never listed here.
+
+**Verdict gate:** any `not-addressed` R-ID that is NOT marked `deferred` in the
+spec MUST flip the verdict to `NEEDS_WORK`, regardless of reverse-coverage
+findings.
+
+## Confidence calibration
+
+Rate each gap on exactly one of these 5 discrete anchors. Do not use interpolated values (no 33, 80, 90).
+
+| Anchor | Meaning |
+|--------|---------|
+| 100 | Verifiable from the code alone, zero interpretation. A definitive logic error (off-by-one in a tested algorithm, wrong return type, swapped arguments, clear type error). The bug is mechanical. |
+| 75 | Full execution path traced: "input X enters here, takes this branch, reaches line Z, produces wrong result." Reproducible from the code alone. A normal caller will hit it. |
+| 50 | Depends on conditions visible but not fully confirmable from this diff — e.g., whether a value can actually be null depends on callers not in the diff. Surfaces only as P0-escape or via soft-bucket routing. |
+| 25 | Requires runtime conditions with no direct evidence — specific timing, specific input shapes, specific external state. |
+| 0 | Speculative. Not worth filing. |
+
+## Suppression gate
+
+After all gaps/findings are collected:
+1. Suppress findings below anchor 75.
+2. **Exception:** P0 severity findings at anchor 50+ survive the gate. Critical-but-uncertain issues must not be silently dropped.
+3. Report the suppressed count by anchor in a `Suppressed findings` section of the review output.
+
+Example:
+
+> Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0.
+
+## Introduced vs pre-existing classification
+
+For each gap, classify whether this branch's diff caused it:
+
+- **introduced** — this epic's branch is responsible for the gap (new requirement not implemented, or a requirement this epic was supposed to satisfy and did not)
+- **pre_existing** — the gap predates this epic's branch (the requirement was already not satisfied on the base branch; this epic did not touch the relevant code). Pre-existing gaps do not block this verdict.
+
+Evidence methods:
+- `git blame <file> <line>` to see when the line was last touched
+- Read the base-branch version of the file directly
+- Check the epic scope: a gap about an area this epic never claimed to touch is `pre_existing`
+
+**Verdict gate:** only `introduced` gaps affect the verdict. An epic-review whose sole surviving gaps are all `pre_existing` MUST ship.
+
+Pre-existing gaps go under a separate `## Pre-existing issues (not blocking this verdict)` heading:
+
+```
+## Pre-existing issues (not blocking this verdict)
+
+- [confidence 75, introduced=false] missing migration docs in README — predates this epic
+```
+
+Never delete pre-existing gaps from the report — they stay visible for future prioritization.
+
+## Protected artifacts
+
+The following paths are flow-next / project-pipeline artifacts. Any gap/finding recommending their deletion, gitignore, or removal MUST be discarded during synthesis. Do not flag these paths for cleanup under any circumstances:
+
+- `.flow/*` — flow-next state, specs, tasks, epics, runtime
+- `.flow/bin/*` — bundled flowctl
+- `.flow/memory/*` — learnings store (pitfalls, conventions, decisions)
+- `.flow/specs/*.md` — epic specs (decision artifacts)
+- `.flow/tasks/*.md` — task specs (decision artifacts)
+- `docs/plans/*` — plan artifacts (if project uses this convention)
+- `docs/solutions/*` — solutions artifacts (if project uses this convention)
+- `scripts/ralph/*` — Ralph harness (when present)
+
+These files are intentionally committed. They are the pipeline's state, not clutter. An agent that deletes them destroys the project's planning trail and breaks Ralph autonomous runs.
+
+If you notice genuine issues with content INSIDE these files (e.g., a spec that contradicts itself, a stale runtime value, a memory entry that's wrong), flag the content — not the file's existence.
+
+**Protected-path filter.** Before emitting findings, scan each for recommendations to delete, gitignore, or `rm -rf` any path matching the protected list above. Drop those findings. If you drop any, report the drop count in a `Protected-path filter:` line in the review output (e.g. `Protected-path filter: dropped 2 findings`). Omit the line when nothing was dropped.
+
 ## Output Format
 
-**Forward coverage (Spec → Code):**
-For each gap found:
+**Forward coverage (Spec → Code):** for each `introduced` gap:
 - **Requirement**: What the spec says
 - **Status**: Missing / Partial / Wrong
+- **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
+- **Classification**: introduced
 - **Evidence**: What you found (or didn't find) in the code
+
+List each `pre_existing` gap under the dedicated non-blocking section above using the compact form `[confidence N, introduced=false] requirement — summary`.
 
 **Reverse coverage (Code → Spec):**
 For each untraced change:
@@ -312,11 +421,19 @@ For each untraced change:
 - **Classification**: UNDOCUMENTED_ADDITION / LEGITIMATE_SUPPORT / UNRELATED_CHANGE
 - **Note**: Brief explanation
 
+(Note: the reverse-coverage `Classification` uses untraced-change labels, distinct from the `introduced` / `pre_existing` per-gap classification above.)
+
+After the findings list, emit:
+- The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the epic spec uses R-IDs; otherwise skip).
+- A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
+- A `Classification counts:` line tallying `introduced` vs `pre_existing` gaps, e.g. `Classification counts: 1 introduced, 0 pre_existing.`.
+- A `Protected-path filter:` line tallying gaps dropped by the protected-path filter (omit when nothing was dropped).
+
 **REQUIRED**: You MUST end your response with exactly one verdict tag. This is mandatory:
 `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`
 
-- SHIP: All spec requirements are implemented
-- NEEDS_WORK: One or more requirements are missing, partial, or wrong
+- SHIP: All `introduced` spec requirements are implemented and every R-ID is `met` or `deferred` (pre-existing gaps do not block)
+- NEEDS_WORK: One or more `introduced` requirements are missing, partial, or wrong — or any non-deferred R-ID is `not-addressed`
 
 Do NOT skip this tag. The automation depends on it.
 EOF
@@ -361,8 +478,90 @@ Receipt written after SHIP verdict (not on NEEDS_WORK):
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
+
+  # Optional: capture suppression-gate tally (fn-29.3).
+  # Reviewer emits a line like "Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0."
+  SUPPRESSED_JSON="$(printf '%s' "$REVIEW_RESPONSE" \
+    | grep -iE '^[>*_` ]*suppressed findings[ *_`]*:' \
+    | head -n 1 \
+    | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//' \
+    | awk '
+      BEGIN { first=1; printf "{" }
+      {
+        n=split($0, parts, /,[[:space:]]*/)
+        for (i=1; i<=n; i++) {
+          if (match(parts[i], /([0-9]+)[[:space:]]+at[[:space:]]+anchor[[:space:]]+(0|25|50|75|100)/, m)) {
+            if (!first) printf ","
+            printf "\"%s\":%s", m[2], m[1]
+            first=0
+          }
+        }
+      }
+      END { printf "}" }')"
+
+  # Optional: capture introduced vs pre_existing classification tally (fn-29.4).
+  # Reviewer emits a line like "Classification counts: 1 introduced, 0 pre_existing."
+  # Uses portable grep -Eio so this works on BSD awk / mawk / gawk alike.
+  CLASSIFICATION_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
+    | grep -iE '^[>*_` ]*classification counts[ *_`]*:' \
+    | head -n 1 \
+    | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//')"
+  INTRODUCED_COUNT=""
+  PRE_EXISTING_COUNT=""
+  if [[ -n "$CLASSIFICATION_LINE" ]]; then
+    INTRODUCED_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
+      | grep -Eio '[0-9]+[[:space:]]+introduced' \
+      | head -n 1 \
+      | grep -Eo '^[0-9]+')"
+    PRE_EXISTING_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
+      | grep -Eio '[0-9]+[[:space:]]+pre[-_ ]?existing' \
+      | head -n 1 \
+      | grep -Eo '^[0-9]+')"
+    if [[ -n "$INTRODUCED_COUNT" || -n "$PRE_EXISTING_COUNT" ]]; then
+      INTRODUCED_COUNT="${INTRODUCED_COUNT:-0}"
+      PRE_EXISTING_COUNT="${PRE_EXISTING_COUNT:-0}"
+    fi
+  fi
+
+  # Optional: capture unaddressed R-IDs (fn-29.2).
+  # Reviewer emits `Unaddressed R-IDs: [R3, R5]` (or `[]` / `none` for empty).
+  # Absent line => epic spec has no R-IDs — leave field off the receipt entirely.
+  UNADDRESSED_JSON=""
+  UNADDRESSED_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
+    | grep -iE '^[>*_` ]*unaddressed([[:space:]]+r[-_ ]?ids?)?[ *_`]*:' \
+    | head -n 1 \
+    | sed -E 's/^[^:]+:[[:space:]]*//; s/[[:space:]]*$//; s/\.$//')"
+  if [[ -n "$UNADDRESSED_LINE" ]]; then
+    normalized="$(printf '%s' "$UNADDRESSED_LINE" | sed -E 's/^[[:space:]]*\[|\][[:space:]]*$//g; s/[[:space:]]+//g')"
+    lower="$(printf '%s' "$normalized" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$lower" == "none" || "$lower" == "n/a" || -z "$lower" ]]; then
+      UNADDRESSED_JSON="[]"
+    else
+      rids="$(printf '%s' "$UNADDRESSED_LINE" \
+        | grep -oE '\bR[0-9]+\b' \
+        | awk '!seen[$0]++')"
+      if [[ -z "$rids" ]]; then
+        UNADDRESSED_JSON="[]"
+      else
+        UNADDRESSED_JSON="$(printf '%s' "$rids" \
+          | awk 'BEGIN{printf "["} {printf (NR>1?",":"") "\"" $0 "\""} END{printf "]"}')"
+      fi
+    fi
+  fi
+
+  EXTRA_FIELDS=""
+  if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
+    EXTRA_FIELDS+=",\"suppressed_count\":$SUPPRESSED_JSON"
+  fi
+  if [[ -n "$INTRODUCED_COUNT" && -n "$PRE_EXISTING_COUNT" ]]; then
+    EXTRA_FIELDS+=",\"introduced_count\":$INTRODUCED_COUNT,\"pre_existing_count\":$PRE_EXISTING_COUNT"
+  fi
+  if [[ -n "$UNADDRESSED_JSON" ]]; then
+    EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
+  fi
+
   cat > "$REVIEW_RECEIPT_PATH" <<EOF
-{"type":"completion_review","id":"$EPIC_ID","mode":"rp","verdict":"SHIP","timestamp":"$ts"}
+{"type":"completion_review","id":"$EPIC_ID","mode":"rp","verdict":"SHIP"$EXTRA_FIELDS,"timestamp":"$ts"}
 EOF
   echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi

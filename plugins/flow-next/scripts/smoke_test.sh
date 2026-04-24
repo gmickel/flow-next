@@ -659,8 +659,287 @@ assert "<diff_summary>" in impl_prompt
 assert "Test diff" in impl_prompt
 assert "<spec>" in impl_prompt
 assert "Test spec" in impl_prompt
+
+# fn-29.3: confidence rubric + suppression gate baked into impl prompt
+assert "Confidence calibration" in impl_prompt
+assert "Suppression gate" in impl_prompt
+assert "0 / 25 / 50 / 75 / 100" in impl_prompt
+assert "Suppressed findings" in impl_prompt
+
+# fn-29.4: introduced vs pre_existing classification baked into impl prompt
+assert "Introduced vs pre-existing classification" in impl_prompt
+assert "introduced" in impl_prompt
+assert "pre_existing" in impl_prompt
+assert "Pre-existing issues (not blocking this verdict)" in impl_prompt
+assert "Classification counts" in impl_prompt
+assert "Verdict gate" in impl_prompt
+
+# fn-29.4: plan review does NOT need classification (plans don't have diffs to classify against)
+assert "Introduced vs pre-existing classification" not in plan_prompt
 PY
 echo -e "${GREEN}✓${NC} build_review_prompt has full criteria"
+PASS=$((PASS + 1))
+
+echo -e "${YELLOW}--- parse_suppressed_count (fn-29.3) ---${NC}"
+"$PYTHON_BIN" - "$SCRIPT_DIR" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+from flowctl import parse_suppressed_count
+
+# Canonical line
+r = parse_suppressed_count("blah\nSuppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0.\n")
+assert r == {"50": 3, "25": 7, "0": 2}, r
+
+# Blockquote + partial anchors
+r = parse_suppressed_count("> Suppressed findings: 1 at anchor 50, 5 at anchor 25")
+assert r == {"50": 1, "25": 5}, r
+
+# Bold markdown wrappers
+r = parse_suppressed_count("**Suppressed findings:** 2 at anchor 25, 1 at anchor 0.")
+assert r == {"25": 2, "0": 1}, r
+
+# Empty / none payload → None
+assert parse_suppressed_count("Suppressed findings: none.") is None
+assert parse_suppressed_count("no suppression line here") is None
+
+# Invalid anchors are rejected (e.g. 42 is not one of {0,25,50,75,100})
+assert parse_suppressed_count("Suppressed findings: 3 at anchor 42") is None
+
+# High anchors still recognized
+r = parse_suppressed_count("Suppressed findings: 5 at anchor 100, 2 at anchor 75")
+assert r == {"100": 5, "75": 2}, r
+PY
+echo -e "${GREEN}✓${NC} parse_suppressed_count handles canonical + edge cases"
+PASS=$((PASS + 1))
+
+echo -e "${YELLOW}--- parse_classification_counts (fn-29.4) ---${NC}"
+"$PYTHON_BIN" - "$SCRIPT_DIR" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+from flowctl import parse_classification_counts
+
+# Canonical summary line
+r = parse_classification_counts("blah\nClassification counts: 2 introduced, 4 pre_existing.\n")
+assert r == {"introduced": 2, "pre_existing": 4}, r
+
+# Blockquote prefix + reversed order
+r = parse_classification_counts("> Classification counts: 3 pre_existing, 1 introduced")
+assert r == {"introduced": 1, "pre_existing": 3}, r
+
+# Bold markdown wrappers
+r = parse_classification_counts("**Classification counts:** 0 introduced, 5 pre-existing.")
+assert r == {"introduced": 0, "pre_existing": 5}, r
+
+# Summary with only one bucket → missing bucket defaults to 0
+r = parse_classification_counts("Classification counts: 3 introduced.")
+assert r == {"introduced": 3, "pre_existing": 0}, r
+
+# Fallback: count per-finding Classification: lines when no summary
+body = """Some review
+**Classification**: introduced
+blah
+Classification: pre_existing
+more
+**Classification:** introduced
+"""
+r = parse_classification_counts(body)
+assert r == {"introduced": 2, "pre_existing": 1}, r
+
+# Fallback: inline introduced=true/false markers
+body = "[P1, confidence 75, introduced=false] foo\n[P0, confidence 100, introduced=true] bar"
+r = parse_classification_counts(body)
+assert r == {"introduced": 1, "pre_existing": 1}, r
+
+# Empty → None
+assert parse_classification_counts("no classification anywhere") is None
+assert parse_classification_counts("") is None
+PY
+echo -e "${GREEN}✓${NC} parse_classification_counts handles summary + per-finding fallback"
+PASS=$((PASS + 1))
+
+echo -e "${YELLOW}--- triage-skip classifier (fn-29.6) ---${NC}"
+"$PYTHON_BIN" - "$SCRIPT_DIR" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+from flowctl import _classify_triage_path, _triage_deterministic, _triage_parse_llm_output
+
+# Path classification
+assert _classify_triage_path("bun.lock") == "lockfile"
+assert _classify_triage_path("package-lock.json") == "lockfile"
+assert _classify_triage_path("Cargo.lock") == "lockfile"
+assert _classify_triage_path("src/main.py") == "code"
+assert _classify_triage_path("plugins/flow-next/scripts/flowctl.py") == "code"
+assert _classify_triage_path("README.md") == "docs"
+assert _classify_triage_path("docs/guide.md") == "docs"
+assert _classify_triage_path("plugins/flow-next/codex/hooks.json") == "generated"
+assert _classify_triage_path("node_modules/pkg/index.js") == "generated"
+assert _classify_triage_path("vendor/lib.go") == "generated"
+assert _classify_triage_path("plugin/plugin.json") == "chore"
+assert _classify_triage_path("CHANGELOG.md") == "chore"
+assert _classify_triage_path("pyproject.toml") == "chore"
+assert _classify_triage_path(".flow/specs/fn-1.md") == "artifact"
+assert _classify_triage_path(".flow/tasks/fn-1.1.md") == "artifact"
+assert _classify_triage_path("random.xyz") == "other"
+# Generated-prefix must only match repo-root, not substring anywhere
+# (e.g. scripts/build/release.sh must stay as code, not "generated").
+assert _classify_triage_path("scripts/build/release.sh") == "code"
+assert _classify_triage_path("packages/dist/util.ts") == "code"
+assert _classify_triage_path("vendor_notes/README.md") == "docs"
+
+# AC6: lockfile-only → SKIP
+v, r = _triage_deterministic(["bun.lock"])
+assert v == "SKIP" and "lockfile" in r.lower(), (v, r)
+
+# AC7: chore-containing shapes require git context — without it, ambiguous.
+# This prevents package.json dep edits from silently bypassing full review.
+v, r = _triage_deterministic(["plugin/plugin.json", "CHANGELOG.md"])
+assert v is None, (v, r)
+v, r = _triage_deterministic(["package.json"])
+assert v is None, (v, r)
+v, r = _triage_deterministic(["bun.lock", "package.json"])
+assert v is None, (v, r)
+
+# AC8: docs-only → SKIP
+v, r = _triage_deterministic(["README.md", "docs/guide.md"])
+assert v == "SKIP" and "docs" in r.lower(), (v, r)
+
+# AC9: any code → REVIEW (even alone)
+v, r = _triage_deterministic(["plugins/flow-next/scripts/flowctl.py"])
+assert v == "REVIEW", (v, r)
+v, r = _triage_deterministic(["src/main.ts", "README.md"])
+assert v == "REVIEW", (v, r)
+
+# Empty diff → REVIEW (conservative)
+v, r = _triage_deterministic([])
+assert v == "REVIEW", (v, r)
+
+# Generated-only → SKIP
+v, r = _triage_deterministic(["plugins/flow-next/codex/skills/x.md", "plugins/flow-next/codex/hooks.json"])
+assert v == "SKIP", (v, r)
+
+# Artifact alone → REVIEW (conservative — flow state carries intent)
+v, r = _triage_deterministic([".flow/specs/fn-29.md"])
+assert v == "REVIEW", (v, r)
+
+# Lockfile + generated → SKIP (no chore, no content check needed)
+v, r = _triage_deterministic(["bun.lock", "node_modules/x.js"])
+assert v == "SKIP", (v, r)
+
+# LLM output parser
+v, r = _triage_parse_llm_output("SKIP: lockfile only")
+assert v == "SKIP" and r == "lockfile only"
+v, r = _triage_parse_llm_output("REVIEW: touches auth logic")
+assert v == "REVIEW"
+v, r = _triage_parse_llm_output("> **SKIP: docs only**")
+assert v == "SKIP"
+v, r = _triage_parse_llm_output("reasoning blah\nSKIP: trivial")
+assert v == "SKIP" and r == "trivial"
+v, r = _triage_parse_llm_output("no verdict here")
+assert v is None
+v, r = _triage_parse_llm_output("")
+assert v is None
+PY
+echo -e "${GREEN}✓${NC} triage-skip classifier + deterministic layer + LLM parser"
+PASS=$((PASS + 1))
+
+echo -e "${YELLOW}--- triage-skip e2e (fn-29.6) ---${NC}"
+# End-to-end: tiny git repo, three scenarios (SKIP, REVIEW, receipt).
+TRIAGE_TEST_DIR="$TEST_DIR/triage-e2e"
+rm -rf "$TRIAGE_TEST_DIR"
+mkdir -p "$TRIAGE_TEST_DIR"
+(
+  cd "$TRIAGE_TEST_DIR"
+  git init -q
+  git config user.email test@test.com
+  git config user.name test
+  echo "base" > base.txt
+  git add base.txt
+  git commit -qm init
+  git checkout -qb feature
+
+  # AC6: lockfile-only → SKIP exit 0, receipt written
+  echo "{}" > bun.lock
+  git add bun.lock
+  git commit -qm "dep bump"
+  RECEIPT="$TRIAGE_TEST_DIR/r1.json"
+  "$PYTHON_BIN" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --receipt "$RECEIPT" --task fn-9-test.1 --json > "$TRIAGE_TEST_DIR/out1.json"
+  EXIT1=$?
+  [ "$EXIT1" = "0" ] || { echo "FAIL: expected exit 0 on lockfile SKIP, got $EXIT1"; exit 1; }
+  grep -q '"mode": "triage_skip"' "$RECEIPT" || { echo "FAIL: receipt missing triage_skip mode"; cat "$RECEIPT"; exit 1; }
+  grep -q '"verdict": "SHIP"' "$RECEIPT" || { echo "FAIL: receipt missing SHIP verdict"; cat "$RECEIPT"; exit 1; }
+  grep -q '"id": "fn-9-test.1"' "$RECEIPT" || { echo "FAIL: receipt missing task id"; cat "$RECEIPT"; exit 1; }
+
+  # AC9: add code → REVIEW exit 1, no receipt overwrite
+  echo "print('x')" > script.py
+  git add script.py
+  git commit -qm "add script"
+  RECEIPT2="$TRIAGE_TEST_DIR/r2.json"
+  set +e
+  "$PYTHON_BIN" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --receipt "$RECEIPT2" --json > "$TRIAGE_TEST_DIR/out2.json"
+  EXIT2=$?
+  set -e
+  [ "$EXIT2" = "1" ] || { echo "FAIL: expected exit 1 on code REVIEW, got $EXIT2"; exit 1; }
+  [ ! -f "$RECEIPT2" ] || { echo "FAIL: receipt should not exist on REVIEW"; exit 1; }
+  grep -q '"verdict": "REVIEW"' "$TRIAGE_TEST_DIR/out2.json" || { echo "FAIL: REVIEW verdict missing from json"; cat "$TRIAGE_TEST_DIR/out2.json"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} triage-skip e2e: lockfile→SKIP+receipt, code→REVIEW+no-receipt"
+PASS=$((PASS + 1))
+
+echo -e "${YELLOW}--- triage-skip chore content verification (fn-29.6 fix) ---${NC}"
+# Chore classification (package.json etc.) must verify diff content — version
+# bumps SKIP, dependency/script edits fall through to REVIEW.
+CHORE_TEST_DIR="$TEST_DIR/triage-chore"
+rm -rf "$CHORE_TEST_DIR"
+mkdir -p "$CHORE_TEST_DIR"
+(
+  cd "$CHORE_TEST_DIR"
+  git init -q
+  git config user.email test@test.com
+  git config user.name test
+  printf '{\n  "name": "pkg",\n  "version": "0.1.0"\n}\n' > package.json
+  printf '# Changelog\n' > CHANGELOG.md
+  git add package.json CHANGELOG.md
+  git commit -qm init
+  git checkout -qb feature
+
+  # Scenario A: pure version bump + CHANGELOG addition → SKIP
+  printf '{\n  "name": "pkg",\n  "version": "0.1.1"\n}\n' > package.json
+  printf '# Changelog\n\n## [0.1.1]\n- bump\n' > CHANGELOG.md
+  git add -A
+  git commit -qm "bump"
+  set +e
+  "$PYTHON_BIN" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --json > "$CHORE_TEST_DIR/outA.json"
+  EXITA=$?
+  set -e
+  [ "$EXITA" = "0" ] || { echo "FAIL: version bump should SKIP (exit 0), got $EXITA"; cat "$CHORE_TEST_DIR/outA.json"; exit 1; }
+  grep -q '"verdict": "SHIP"' "$CHORE_TEST_DIR/outA.json" || { echo "FAIL: expected SHIP on version bump"; cat "$CHORE_TEST_DIR/outA.json"; exit 1; }
+
+  # Scenario B: dependency edit in package.json → must REVIEW
+  git reset --hard main -q
+  git checkout -qb feature-deps
+  printf '{\n  "name": "pkg",\n  "version": "0.1.0",\n  "dependencies": {\n    "lodash": "^4.0.0"\n  }\n}\n' > package.json
+  git add package.json
+  git commit -qm "add dep"
+  set +e
+  "$PYTHON_BIN" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --json > "$CHORE_TEST_DIR/outB.json"
+  EXITB=$?
+  set -e
+  [ "$EXITB" = "1" ] || { echo "FAIL: dep edit must REVIEW (exit 1), got $EXITB"; cat "$CHORE_TEST_DIR/outB.json"; exit 1; }
+  grep -q '"verdict": "REVIEW"' "$CHORE_TEST_DIR/outB.json" || { echo "FAIL: expected REVIEW on dep edit"; cat "$CHORE_TEST_DIR/outB.json"; exit 1; }
+
+  # Scenario C: CHANGELOG-only addition → SKIP
+  git reset --hard main -q
+  git checkout -qb feature-changelog
+  printf '# Changelog\n\n## [0.1.1]\n- note\n' > CHANGELOG.md
+  git add CHANGELOG.md
+  git commit -qm "changelog"
+  set +e
+  "$PYTHON_BIN" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --json > "$CHORE_TEST_DIR/outC.json"
+  EXITC=$?
+  set -e
+  [ "$EXITC" = "0" ] || { echo "FAIL: CHANGELOG-only should SKIP (exit 0), got $EXITC"; cat "$CHORE_TEST_DIR/outC.json"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} triage-skip chore verify: version→SKIP, deps→REVIEW, CHANGELOG→SKIP"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- parse_receipt_path ---${NC}"
