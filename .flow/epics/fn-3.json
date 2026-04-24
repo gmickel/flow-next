@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-3.md",
-  "status": "open",
+  "status": "done",
   "title": "Async mode: CLI control for external agents",
-  "updated_at": "2026-01-11T20:16:42.440421Z"
+  "updated_at": "2026-04-24T20:25:08.596155Z"
 }

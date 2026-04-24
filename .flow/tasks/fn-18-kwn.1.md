@@ -45,9 +45,16 @@
 - [ ] Ralph RP reviews work without manual window setup
 
 ## Done summary
-TBD
+RP auto-open window via `flowctl rp setup-review --create` shipped.
 
+- `--create` flag added to `flowctl rp setup-review` (flowctl.py:14614).
+- When no existing window matches repo root, calls `rp-cli -e 'workspace create <basename> --new-window --folder-path <repo_root>'` (flowctl.py:9490) and extracts `window_id` from JSON response.
+- Requires RepoPrompt 1.5.68+.
+- Reuses existing windows — no duplicates created.
+- Backward compatible: without `--create`, still errors with a useful message if no window open.
+
+Note: implementation used `rp-cli workspace create --new-window` (not `rp-cli open`) — RP's recommended API for creating review-scoped windows.
 ## Evidence
 - Commits:
-- Tests:
+- Tests: manual verification against running RepoPrompt 1.5.68+, plugins/flow-next/scripts/ralph_smoke_rp.sh auto-opens window when --create passed
 - PRs:
