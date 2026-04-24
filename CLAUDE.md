@@ -33,6 +33,12 @@ Review backend spec grammar (v0.31.0+):
 - `flowctl review-backend --json` returns `{backend, spec, model, effort, source}` (spec-form round-trippable); text mode prints bare backend for skill grep back-compat
 - Receipts now include a `spec` field alongside `model` + `effort`: `{"mode": "codex", "model": "gpt-5.4", "effort": "high", "spec": "codex:gpt-5.4:high"}`
 
+R-ID convention (v0.32.1+):
+- New epic specs number acceptance criteria as `- **R1:** ...`, `- **R2:** ...` in creation order (plain markdown prose, not YAML).
+- Renumber-forbidden after first review cycle — deletions leave gaps (`R1, R3, R5`); new criteria take the next unused number.
+- Task specs may carry optional `satisfies: [R1, R3]` frontmatter linking to the epic's R-IDs; additive and omittable.
+- Plan skill writes R-IDs on every new spec; plan-sync preserves them during drift updates. See `plugins/flow-next/skills/flow-next-plan/steps.md` for the full rule.
+
 Ralph (autonomous loop):
 - Script template lives in `plugins/flow-next/skills/flow-next-ralph-init/templates/`.
 - Ralph uses `flowctl rp` wrappers (not direct rp-cli) for reviews.

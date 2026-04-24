@@ -224,8 +224,9 @@ Default to standard unless complexity demands more or less.
    ```
 
    ## Acceptance
-   - [ ] Criterion 1
-   - [ ] Criterion 2
+   - **R1:** <testable criterion>
+   - **R2:** <testable criterion>
+   - **R3:** <testable criterion>
 
    ## Early proof point
    Task fn-N-slug.1 validates the core approach (<what it proves>).
@@ -252,6 +253,13 @@ Default to standard unless complexity demands more or less.
    - Every requirement must map to at least one task OR have a gap justification
    - Table goes at the bottom of the epic spec (after Acceptance + Early proof point)
    - Keep Req IDs simple (R1, R2...) — they're local to this epic
+
+   **R-ID rule (MANDATORY for new epic specs):**
+   - Number acceptance criteria as `R1`, `R2`, `R3`, ... in creation order using the `- **Rn:** ...` prose prefix format shown in the template above.
+   - Once a review cycle has run against an R-ID, **never renumber**. Reordering is fine (R1, R3, R5 after R2/R4 deletion is correct).
+   - New criteria take the next unused number. Gaps are fine — do not compact.
+   - R-IDs in `## Acceptance` and `## Requirement coverage` must match (same IDs, same meanings).
+   - R-IDs are plain markdown prose, not YAML — the reviewer matches them via LLM reasoning, not strict parsing.
 
 4. Set epic dependencies (from epic-scout findings):
 
@@ -286,8 +294,27 @@ Default to standard unless complexity demands more or less.
    $FLOWCTL task set-spec <task-id> --description /tmp/desc.md --acceptance /tmp/acc.md --json
    ```
 
+   **When the task needs `satisfies:` frontmatter**, use `--file` mode instead (frontmatter lives above the sections, not inside them):
+   ```bash
+   $FLOWCTL task set-spec <task-id> --file - --json <<'EOF'
+   ---
+   satisfies: [R1, R3]
+   ---
+
+   ## Description
+   ...
+
+   ## Acceptance
+   - [ ] ...
+   EOF
+   ```
+
    **Task spec content** (remember: NO implementation code):
    ```markdown
+   ---
+   satisfies: [R1, R3]
+   ---
+
    ## Description
    [What to build, not how to build it]
 
@@ -338,6 +365,12 @@ Default to standard unless complexity demands more or less.
    - Validate paths exist at plan time (repo-scout/context-scout already found them)
    - "Required" = must read before implementing. "Optional" = helpful reference
    - Targets come from repo-scout/context-scout findings in Step 1
+
+   **`satisfies` frontmatter rules (optional, additive):**
+   - Populate `satisfies: [R1, R3]` only when the task obviously advances specific R-IDs from the epic's `## Acceptance` section.
+   - Tasks that do infrastructure, refactoring, shared plumbing, or docs-only work may legitimately have **no** `satisfies` entry — omit the frontmatter entirely.
+   - Use bare R-ID tokens (`[R1, R3]`), not quoted strings.
+   - Frontmatter is additive — tasks created without it parse unchanged.
 
 7. Add task dependencies (if not already set via `--deps`):
 
