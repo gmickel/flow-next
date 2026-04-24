@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PR_NUMBER="${1:?Usage: $0 PR_NUMBER COMMENT_NODE_ID [OWNER/REPO]}"
+COMMENT_NODE_ID="${2:?Usage: $0 PR_NUMBER COMMENT_NODE_ID [OWNER/REPO]}"
+OWNER_REPO="${3:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}"
+OWNER="${OWNER_REPO%/*}"
+REPO="${OWNER_REPO#*/}"
+
+# Minimal thread listing (IDs + first comment IDs only, no bodies) to find the
+# matching thread for a given comment node id.
+gh api graphql -F owner="$OWNER" -F repo="$REPO" -F pr="$PR_NUMBER" -f query='
+query($owner: String!, $repo: String!, $pr: Int!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $pr) {
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          path
+          line
+          originalLine
+          comments(first: 50) { nodes { id } }
+        }
+      }
+    }
+  }
+}' | jq --arg cid "$COMMENT_NODE_ID" '
+  .data.repository.pullRequest.reviewThreads.nodes[]
+  | select(.comments.nodes | map(.id) | index($cid))
+  | {id, path, line: (.line // .originalLine), isResolved}
+'

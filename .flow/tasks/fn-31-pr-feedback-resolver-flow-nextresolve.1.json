@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-24T08:23:48.128435Z",
+  "depends_on": [],
+  "epic": "fn-31-pr-feedback-resolver-flow-nextresolve",
+  "id": "fn-31-pr-feedback-resolver-flow-nextresolve.1",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-31-pr-feedback-resolver-flow-nextresolve.1.md",
+  "status": "todo",
+  "title": "GraphQL scripts: get-pr-comments, get-thread-for-comment, reply, resolve",
+  "updated_at": "2026-04-24T08:27:42.694916Z"
+}

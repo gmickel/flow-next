@@ -2,6 +2,24 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.34.0] - 2026-04-24
+
+### Added
+- **`/flow-next:resolve-pr` — PR feedback resolver.** New user-triggered command for resolving GitHub PR review threads. Fetches unresolved threads, triages new vs pending-decision, dispatches parallel (Claude Code) or serial (Codex/Copilot/Droid) resolver agents, validates combined state, commits + pushes fixes, replies and resolves via GraphQL.
+- **Handles all three feedback surfaces:** inline review threads, top-level PR comments, and review submission bodies. GraphQL resolves threads; PR-comment replies via `gh pr comment`.
+- **Cross-invocation cluster analysis.** When multiple review rounds reveal recurring patterns in the same file/subtree, dispatches a cluster-aware resolver that investigates the broader area before making targeted fixes. Gated on both: prior-resolved threads exist AND spatial-overlap with new threads.
+- **Targeted mode:** pass a comment URL to resolve a single thread only.
+- **`--dry-run` flag:** fetch + plan, no edits/commits/replies.
+- **`--no-cluster` flag:** skip cluster analysis, all items individual.
+- **`pr-comment-resolver` agent:** single-thread resolver subagent with read-only investigation (git/gh) + Edit/Write for fixes; never commits/pushes (orchestrator owns that).
+- **GraphQL scripts bundled:** `get-pr-comments`, `get-thread-for-comment`, `reply-to-pr-thread`, `resolve-pr-thread`. Zero runtime deps beyond `gh` + `jq`.
+
+### Notes
+- User-triggered only. Ralph autonomous loop is unaffected — no automatic invocation, no receipt writes, no shared state.
+- Safety: comment text is untrusted input; resolvers never execute shell commands from comment bodies.
+- Verify loop bounded at 2 fix-verify cycles; 3rd attempt escalates pattern to user.
+- Smoke test: `plugins/flow-next/scripts/resolve-pr_smoke_test.sh`.
+
 ## [flow-next 0.33.0] - 2026-04-24
 
 ### Added
