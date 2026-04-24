@@ -108,7 +108,8 @@ git push origin flow-next-v0.35.0
 - Discord announcement (default release automation).
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Version-bumped flow-next to 0.34.0 (minor) and rolled up PR resolver docs across CHANGELOG, root + plugin README, CLAUDE.md, website page (~/work/mickel.tech), and codex mirror. scripts/sync-codex.sh regenerated 17 skills + 21 agents, including flow-next-resolve-pr skill and pr-comment-resolver agent. All smoke tests green: flowctl smoke (99 passing) + resolve-pr smoke (58 passing).
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 6d546869a3041eb5e83d12ee45e49339a3fb04d0
+- Tests: plugins/flow-next/scripts/smoke_test.sh (99 passing), plugins/flow-next/scripts/resolve-pr_smoke_test.sh (58 passing), bun x biome check app/apps/flow-next/page.tsx
+- PRs:
