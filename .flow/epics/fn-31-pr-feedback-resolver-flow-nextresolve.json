@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-31-pr-feedback-resolver-flow-nextresolve.md",
-  "status": "open",
+  "status": "done",
   "title": "PR feedback resolver: /flow-next:resolve-pr for GitHub PR review thread resolution",
-  "updated_at": "2026-04-24T08:23:48.012446Z"
+  "updated_at": "2026-04-24T20:19:19.346518Z"
 }

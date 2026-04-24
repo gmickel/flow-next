@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-29-review-rigor-bundle-r-ids-confidence.md",
-  "status": "open",
+  "status": "done",
   "title": "Review rigor bundle: R-IDs, confidence anchors, pre-existing separation, protected artifacts, trivial-diff skip",
-  "updated_at": "2026-04-24T08:11:40.138080Z"
+  "updated_at": "2026-04-24T20:19:18.775587Z"
 }

@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-30-memory-schema-upgrade-categorized-yaml.md",
-  "status": "open",
+  "status": "done",
   "title": "Memory schema upgrade: categorized YAML-frontmatter learnings with overlap detection and Ralph auto-capture rewrite",
-  "updated_at": "2026-04-24T08:17:27.199405Z"
+  "updated_at": "2026-04-24T20:19:19.057739Z"
 }

@@ -12,7 +12,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-25-prompt-quality-improvements-for-flow.md",
-  "status": "open",
+  "status": "done",
   "title": "Prompt-quality improvements for flow-next agents",
-  "updated_at": "2026-04-05T22:23:17.690468Z"
+  "updated_at": "2026-04-24T20:20:02.081340Z"
 }
