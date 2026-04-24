@@ -77,7 +77,8 @@ Shell-level smoke test, pattern matches `impl-review_smoke_test.sh` (fn-32.5) â€
 - [ ] `smoke_test.sh` total count increased appropriately (prospect unit tests added).
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Added `plugins/flow-next/scripts/prospect_smoke_test.sh` (executable, ~764 lines): an 11-case shell-level smoke test for the `/flow-next:prospect` skill and `flowctl prospect` subcommands (94 assertions; ~58s runtime; zero LLM calls). Covers skeleton + slash-command registration, Ralph-block (exit 2 under FLOW_RALPH=1 / REVIEW_RECEIPT_PATH), list classification (active/stale/corrupt/archived), atomic writer with `-N` collision suffix and frontmatter roundtrip, graceful degradation, promote happy path (full JSON shape, `## Source`, `## Acceptance`), idempotency + `--force` with `promoted_to` dict, error paths (out-of-range / 0 / non-int / corrupt â†’ correct exit codes 2/3 + literal error strings), list/read/archive with section slicing + slug-only resolution + re-archive guard, numbered-options fallback frozen format (workflow.md grep contract + reply-routing simulator), and Ralph regression sweep verifying `ralph_smoke_test.sh` stays green under FLOW_RALPH=1.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: cb3fecce3e07b98fd011e2fdf775dd9bd26c25d1
+- Tests: plugins/flow-next/scripts/prospect_smoke_test.sh (94 PASS / 0 FAIL, ~58s), plugins/flow-next/scripts/smoke_test.sh (125 PASS / 0 FAIL, regression check)
+- PRs:

@@ -33,6 +33,7 @@ Mechanical rollup following the pattern used by fn-29.7, fn-30.7, fn-31.7, fn-32
    - Document exit codes: `flowctl prospect read` on corrupt artifact exits `3` (distinct from Ralph-block `2`); `flowctl prospect promote` on corrupt artifact also exits `3` (stderr marker `[ARTIFACT CORRUPT: <reason>]`); `promote` on duplicate idea without `--force` exits `2` with a message referencing the prior epic-id; `list --all` surfaces corrupt entries with `corrupt (<reason>)` in the status column. <!-- Updated by plan-sync: task 5 added promote's exit-3 corrupt branch and exit-2 idempotency branch. -->
    - Artifact frontmatter shape: `date` round-trips as quoted string; optional flags `floor_violation`, `generation_under_volume`, `promoted_to` (post-task-5, renders as inline-flow dict `{N: [epic-A, epic-B]}` with bare-numeric keys for integer idea positions) are omitted when unset.
    - `### Changed` block if any existing behavior shifted (expected: none — prospect is purely additive).
+   - Mention testing: dedicated `plugins/flow-next/scripts/prospect_smoke_test.sh` (11 cases, 94 assertions, ~58s, zero LLM calls) — pattern matches `impl-review_smoke_test.sh` (fn-32.5); existing `smoke_test.sh` unchanged (regression-checked only). <!-- Updated by plan-sync: fn-33-…6 shipped a standalone smoke script rather than extending smoke_test.sh; changelog should say so. -->
    - Match verbose style of `[flow-next 0.34.0]` (resolve-pr) entry.
 
 3. **`plugins/flow-next/README.md` updates:**
@@ -89,7 +90,7 @@ Mechanical rollup following the pattern used by fn-29.7, fn-30.7, fn-31.7, fn-32
 - [ ] `README.md` (root) + `.flow/usage.md` updated.
 - [ ] Website `page.tsx` updated: version, commands, coreFeatures/optInFeatures card, FAQ; committed + pushed.
 - [ ] `scripts/sync-codex.sh` regenerates Codex mirror; second run is no-op (zero drift).
-- [ ] All three smoke suites + unit tests pass.
+- [ ] Both smoke suites (`smoke_test.sh`, `prospect_smoke_test.sh`) + unit tests pass. <!-- Updated by plan-sync: fn-33-…6 shipped prospect_smoke_test.sh as a dedicated standalone script (764 lines, 94 assertions, ~58s) instead of extending smoke_test.sh; there are two smoke suites, not three. -->
 - [ ] No references to compound-engineering or other plugins in shipped docs.
 
 ## Done summary

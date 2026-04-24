@@ -3,7 +3,7 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v0.35.1-green)](plugins/flow-next/)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v0.36.0-green)](plugins/flow-next/)
 [![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -94,6 +94,7 @@ droid plugin marketplace add \
 
 | Command | What It Does |
 |---------|--------------|
+| `/flow-next:prospect` | Generate ranked candidate ideas grounded in the repo, upstream of `interview`/`plan` |
 | `/flow-next:plan` | Research codebase, create epic + tasks |
 | `/flow-next:work` | Execute tasks with re-anchoring |
 | `/flow-next:interview` | Deep spec refinement (40+ questions) |

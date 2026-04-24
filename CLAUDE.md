@@ -17,6 +17,7 @@ This repo is a Claude Code plugin marketplace. It ships two plugins: **flow** an
 Zero-dependency workflow with bundled `flowctl.py`. All state in `.flow/` directory.
 
 Commands:
+- `/flow-next:prospect [focus hint]` → upstream-of-plan idea generation. Generates ranked candidates, critiques each one, writes ranked artifact under `.flow/prospects/<slug>-<date>.md`. Promote a survivor via `flowctl prospect promote <id> --idea N`. User-triggered only; Ralph-out (exits 2 under `REVIEW_RECEIPT_PATH` / `FLOW_RALPH=1`). Added in 0.36.0.
 - `/flow-next:plan` → creates epic + tasks in `.flow/`
 - `/flow-next:work` → executes tasks with re-anchoring
 - `/flow-next:interview` → deep spec refinement
@@ -74,6 +75,17 @@ Memory system (categorized — v0.33.0+):
 - `memory-scout` is category-aware: returns track/category-tagged results, prioritizing module matches
 - Backcompat: `memory add --type pitfall|convention|decision` auto-maps to new flags with a deprecation warning; removed in 0.36.0
 - Legacy flat files (`.flow/memory/pitfalls.md` etc.) continue to work until `memory migrate` runs; `search` surfaces legacy hits as `track: "legacy"` synthetic entries
+
+Prospecting (v0.36.0+):
+- New skill `/flow-next:prospect [focus hint]` — upstream of `interview`/`plan` for "what should I build?" phase. Generates many candidates grounded in repo (recent files, open epics, memory, CHANGELOG), critiques every one with rejection taxonomy (`duplicates-open-epic | out-of-scope | insufficient-signal | too-large | backward-incompat | other`), ranks survivors into buckets (`High leverage 1-3` / `Worth considering 4-7` / `If you have the time 8+`).
+- Artifact under `.flow/prospects/<slug>-<date>.md` (atomic write; same-day collisions suffixed `-2`/`-3`). YAML frontmatter: `title`, `date` (quoted), `focus_hint`, `volume`, `survivor_count`, `rejected_count`, `rejection_rate`, `artifact_id`, `promoted_to` (inline-flow dict `{N: [epic-id]}`, omitted when empty), `status` (`active|corrupt|stale|archived`).
+- Subcommands: `flowctl prospect list [--all] [--json]` (default <30d), `flowctl prospect read <id> [--section focus|grounding|survivors|rejected]`, `flowctl prospect promote <id> --idea N [--epic-title "..."] [--force] [--json]`, `flowctl prospect archive <id>`.
+- Volume semantics: `top N` = N survivors; `N ideas` = generate ≥N candidates; `raise the bar` = 60-70% rejection target; default = 15-25 → 5-8.
+- Rejection floor ≥40% (R12) — critique that rejects fewer asks user to regenerate / loosen / ship-anyway.
+- Persona seeding (R18) ≥2 personas: `senior-maintainer`, `first-time-user`, `adversarial-reviewer`. Two-pass generate-then-critique with separate prompts.
+- Promote allocates an epic via the same scan-based logic as `cmd_epic_create`, inlining the spec write so the prospect-context spec lands on disk from the first byte. Idempotency guard (R14): refuses if `promoted_to` contains the target idea; `--force` overrides.
+- Exit codes: `read`/`promote` on corrupt artifact → 3 (stderr `[ARTIFACT CORRUPT: <reason>]`); duplicate idea on `promote` without `--force` → 2; Ralph-block (`REVIEW_RECEIPT_PATH`/`FLOW_RALPH=1`) on `/flow-next:prospect` → 2.
+- User-triggered only. Ralph autonomous loop is unaffected — autonomous loops have no business deciding what a repo should tackle next.
 
 ### flow
 Original plugin with optional Beads integration. Plan files in `plans/`.
