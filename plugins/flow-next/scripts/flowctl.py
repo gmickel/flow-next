@@ -4552,12 +4552,15 @@ def _prospect_artifact_status(
 
     if status == "archived":
         return ("archived", age_days)
+    if status not in PROSPECT_STATUS_VALUES:
+        # Validate the status enum before age-based classification. An
+        # artifact with an invalid status value is evidence of tampering or
+        # a schema mismatch; surfacing it as corrupt preserves the signal.
+        # If we checked age first, `status: bogus` on a 40-day-old artifact
+        # would get labelled "stale" and the corruption would hide.
+        return ("corrupt", age_days)
     if age_days is not None and age_days > 30:
         return ("stale", age_days)
-    if status not in PROSPECT_STATUS_VALUES:
-        # Unknown frontmatter status — surface as corrupt rather than silently
-        # coercing to active.
-        return ("corrupt", age_days)
     return (status or "active", age_days)
 
 
@@ -7969,20 +7972,20 @@ def cmd_prospect_promote(args: argparse.Namespace) -> None:
             use_json=args.json,
             code=2,
         )
-    if idea_n > survivor_count:
-        error_exit(
-            f"--idea {idea_n} out of range (artifact has {survivor_count} survivors)",
-            use_json=args.json,
-            code=2,
-        )
 
+    # Position numbers in the artifact can be sparse — buckets only ever
+    # hold the survivors assigned to them, so "High leverage (1-3)" with
+    # two entries leaves position 3 unused and the next survivor lands at
+    # 4. Don't reject by list length; look up by position and surface the
+    # valid set when the lookup misses.
     survivor = next((s for s in survivors if s.get("position") == idea_n), None)
     if survivor is None:
-        # Position numbering may have a gap — surface the same out-of-range
-        # error so callers don't have to distinguish the two.
+        valid_positions = sorted(
+            p for p in (s.get("position") for s in survivors) if p is not None
+        )
         error_exit(
             f"--idea {idea_n} not present among survivors "
-            f"(positions: {sorted(s.get('position') for s in survivors)})",
+            f"(valid positions: {valid_positions})",
             use_json=args.json,
             code=2,
         )

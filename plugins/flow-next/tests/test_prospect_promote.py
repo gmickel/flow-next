@@ -416,7 +416,12 @@ class EdgeCases(unittest.TestCase):
                 tdp, "dx-improvements-2026-04-24", 99
             )
             self.assertEqual(code, 2)
-            self.assertIn("out of range", str(result.get("error", "")))
+            err = str(result.get("error", ""))
+            # Position-lookup error covers both "out of range" and "gap in
+            # bucket numbering" cases with one message that also surfaces
+            # the valid set — strictly better UX than the old length check.
+            self.assertIn("not present among survivors", err)
+            self.assertIn("valid positions", err)
 
     def test_corrupt_artifact_refuses_with_exit_3(self) -> None:
         with tempfile.TemporaryDirectory() as td:

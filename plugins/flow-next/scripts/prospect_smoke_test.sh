@@ -553,12 +553,17 @@ CASE8_REPO="$TEST_DIR/case8"
 init_test_repo "$CASE8_REPO"
 synthetic_artifact "$CASE8_REPO" "errs-$TODAY" "$TODAY" "errors" 3
 
-# 8a: --idea 99 (out of range) → exit 2 with N-survivors message
+# 8a: --idea 99 (out of range) → exit 2 with position-lookup message.
+# Buckets can leave gaps (e.g. "High leverage (1-3)" with two entries
+# jumps to position 4), so the error surfaces the valid position set
+# rather than just a count — that's strictly better UX than the old
+# "out of range (artifact has N survivors)" message and covers both
+# truly-invalid numbers and gap positions with one check.
 rc=0
 out="$( cd "$CASE8_REPO" && "$FLOWCTL" prospect promote "errs-$TODAY" --idea 99 --json 2>&1 )" || rc=$?
 assert_rc 2 "$rc" "Case 8a: --idea 99 → exit 2"
-assert_grep "out of range" "$out" "Case 8a: error mentions 'out of range'"
-assert_grep "3 survivors"  "$out" "Case 8a: error reports survivor count"
+assert_grep "not present among survivors" "$out" "Case 8a: error mentions 'not present among survivors'"
+assert_grep "valid positions" "$out" "Case 8a: error reports valid position set"
 
 # 8b: --idea 0 → exit 2 with >= 1 message
 rc=0
