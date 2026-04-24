@@ -1,0 +1,21 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-24T21:21:45.853641Z",
+  "depends_on": [
+    "fn-33-flow-nextprospect-upstream-of-plan-idea.1",
+    "fn-33-flow-nextprospect-upstream-of-plan-idea.2",
+    "fn-33-flow-nextprospect-upstream-of-plan-idea.3",
+    "fn-33-flow-nextprospect-upstream-of-plan-idea.4",
+    "fn-33-flow-nextprospect-upstream-of-plan-idea.5",
+    "fn-33-flow-nextprospect-upstream-of-plan-idea.6"
+  ],
+  "epic": "fn-33-flow-nextprospect-upstream-of-plan-idea",
+  "id": "fn-33-flow-nextprospect-upstream-of-plan-idea.7",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-33-flow-nextprospect-upstream-of-plan-idea.7.md",
+  "status": "todo",
+  "title": "Docs, website, codex mirror, version bump (minor 0.35.1 \u2192 0.36.0)",
+  "updated_at": "2026-04-24T21:25:30.226303Z"
+}

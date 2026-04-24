@@ -1,7 +1,10 @@
 {
   "branch_name": "fn-33-flow-nextprospect-upstream-of-plan-idea",
   "created_at": "2026-04-24T20:56:47.150351Z",
-  "depends_on_epics": [],
+  "depends_on_epics": [
+    "fn-30-memory-schema-upgrade-categorized-yaml",
+    "fn-32-opt-in-review-flags-validate-deep"
+  ],
   "id": "fn-33-flow-nextprospect-upstream-of-plan-idea",
   "next_task": 1,
   "plan_review_status": "unknown",
@@ -9,5 +12,5 @@
   "spec_path": ".flow/specs/fn-33-flow-nextprospect-upstream-of-plan-idea.md",
   "status": "open",
   "title": "/flow-next:prospect \u2014 upstream-of-plan idea generation with ranked candidates",
-  "updated_at": "2026-04-24T20:58:02.670368Z"
+  "updated_at": "2026-04-24T21:21:44.973190Z"
 }

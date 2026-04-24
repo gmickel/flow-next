@@ -1,0 +1,20 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-24T21:21:45.729099Z",
+  "depends_on": [
+    "fn-33-flow-nextprospect-upstream-of-plan-idea.1",
+    "fn-33-flow-nextprospect-upstream-of-plan-idea.2",
+    "fn-33-flow-nextprospect-upstream-of-plan-idea.3",
+    "fn-33-flow-nextprospect-upstream-of-plan-idea.4",
+    "fn-33-flow-nextprospect-upstream-of-plan-idea.5"
+  ],
+  "epic": "fn-33-flow-nextprospect-upstream-of-plan-idea",
+  "id": "fn-33-flow-nextprospect-upstream-of-plan-idea.6",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-33-flow-nextprospect-upstream-of-plan-idea.6.md",
+  "status": "todo",
+  "title": "Smoke tests: generate, promote, idempotency, Ralph-block, edge cases",
+  "updated_at": "2026-04-24T21:25:30.111083Z"
+}

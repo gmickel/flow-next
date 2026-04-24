@@ -1,0 +1,80 @@
+---
+satisfies: [R4, R9, R13, R19]
+---
+
+## Description
+
+Phases 5-6: atomic artifact writer + handoff prompt with frozen numbered-options fallback.
+
+**Size:** M
+**Files:**
+- `plugins/flow-next/skills/flow-next-prospect/workflow.md` (extend)
+- `plugins/flow-next/scripts/flowctl.py` (new helpers: `write_prospect_artifact`, `_prospect_slug`, `_prospect_next_id`)
+- `.flow/bin/flowctl.py` (mirror)
+- `plugins/flow-next/tests/test_prospect_artifact.py` (new — unit tests for writer + slug helpers)
+
+## Approach
+
+**Phase 5 — Write artifact (before handoff):**
+- Build YAML frontmatter + body in memory first (no partial writes).
+- Atomic write-then-rename: write to `.flow/prospects/.tmp.<pid>.<artifact-id>.md`, `rename()` to final path on success. Ensures Ctrl-C mid-write never leaves a malformed artifact.
+- Slug derivation: `slugify(focus_hint or "open-ended") + "-" + YYYY-MM-DD`.
+- Same-day collision (R13): suffix with `-2`, `-3`, ...; base slug stays stable for `promote` lookup. Slug derivation is deterministic across processes (sequential suffixes, no uuid).
+- Frontmatter fields: `title, date, focus_hint, volume, survivor_count, rejected_count, rejection_rate, artifact_id, promoted_ideas: [], status: active`.
+- Body sections (in order): `## Focus`, `## Grounding snapshot`, `## Survivors` (with `### High leverage` / `### Worth considering` / `### If you have the time` subsections), `## Rejected`.
+- Reuse `write_memory_entry` as a structural model but do NOT reuse it directly — `cmd_memory_add` has memory-specific validation. Build a parallel helper `write_prospect_artifact(path, frontmatter, body)` that shares the YAML serialization path (via `_format_yaml_value` / `_yaml_scalar_needs_quoting` / `_quote_yaml_scalar`) but skips memory-specific enum validation.
+
+**Phase 6 — Handoff prompt:**
+- After artifact is written, blocking prompt via the platform's question tool.
+- Prompt text: "Artifact saved to `<path>`. Promote a survivor to an epic now?"
+- Options: one per survivor (label: "Promote #1: <title>") + "Skip" + "Interview instead".
+- Frozen numbered-options fallback (R19): when no blocking tool available OR the tool errors, print exact string:
+  ```
+  Saved: .flow/prospects/<artifact-id>.md
+
+  Promote a survivor to an epic?
+    1) Promote #1: <title>
+    2) Promote #2: <title>
+    ...
+    N) Skip
+    i) Interview (ask /flow-next:interview what to refine)
+
+  Enter choice [1-N|i|skip]:
+  ```
+- Parse reply:
+  - `1` | `2` | ... → invoke `flowctl prospect promote <artifact-id> --idea <N>`
+  - `i` | `interview` → print `/flow-next:interview` invocation suggestion (do NOT auto-invoke — user decides target)
+  - `skip` | `<empty>` → exit cleanly
+
+## Investigation targets
+
+**Required:**
+- `plugins/flow-next/scripts/flowctl.py:3874-3955` — YAML serialization helpers + `write_memory_entry` (parallel pattern)
+- `plugins/flow-next/scripts/flowctl.py` function `atomic_write` (used throughout memory subsystem)
+- `plugins/flow-next/skills/flow-next-impl-review/walkthrough.md:40-46` — platform tool table for blocking questions
+
+**Optional:**
+- `plugins/flow-next/skills/flow-next-impl-review/walkthrough.md` — per-finding Apply/Defer/Skip walkthrough as handoff-prompt UX precedent
+
+## Key context
+
+- Atomic rename is critical: same-process concurrent runs on the same day need deterministic suffix allocation. Use `O_EXCL` on open or scan existing files to find next suffix.
+- `promoted_ideas` starts as `[]`; task 5 (promote) appends to it. Task 3 just needs to write the empty list correctly.
+- Never gate artifact write on the handoff prompt — if the user Ctrl-C's Phase 6, the artifact should already be on disk.
+
+## Acceptance
+
+- [ ] `write_prospect_artifact(path, frontmatter, body)` helper lands in `flowctl.py` with atomic write-then-rename.
+- [ ] Same-day slug collision: second invocation suffixes with `-2`; third with `-3`; thread-safe via file-existence check.
+- [ ] YAML frontmatter includes all fields listed in the epic schema (title, date, focus_hint, volume, survivor_count, rejected_count, rejection_rate, artifact_id, promoted_ideas, status).
+- [ ] Body emits bucketed `## Survivors` subsections (`### High leverage (1-3)`, `### Worth considering (4-7)`, `### If you have the time (8+)`).
+- [ ] Handoff prompt uses platform blocking-question tool when available; falls back to frozen numbered-options string format.
+- [ ] Frozen fallback format tested — exact string emitted, reply parse handles `1` / `2` / `i` / `interview` / `skip` / empty.
+- [ ] Ctrl-C at Phase 6 preserves the artifact (verified via unit test — artifact exists after `write_prospect_artifact` returns, independent of prompt outcome).
+- [ ] Unit tests in `test_prospect_artifact.py`: slug derivation, collision suffix, frontmatter round-trip, atomic rename semantics.
+
+## Done summary
+_(populated by /flow-next:work upon completion)_
+
+## Evidence
+_(populated by /flow-next:work upon completion)_

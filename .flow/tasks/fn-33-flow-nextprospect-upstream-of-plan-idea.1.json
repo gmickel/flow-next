@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-24T21:21:45.100096Z",
+  "depends_on": [],
+  "epic": "fn-33-flow-nextprospect-upstream-of-plan-idea",
+  "id": "fn-33-flow-nextprospect-upstream-of-plan-idea.1",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-33-flow-nextprospect-upstream-of-plan-idea.1.md",
+  "status": "todo",
+  "title": "Skill skeleton + Phase 0 resume check + Phase 1 grounding + Ralph-block",
+  "updated_at": "2026-04-24T21:22:50.939765Z"
+}
