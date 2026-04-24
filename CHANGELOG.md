@@ -12,6 +12,7 @@ All notable changes to the flow-next.
 ### Changed
 - Review workflow documents the phase ordering for flag combinations: **primary → deep → validate → interactive → verdict**.
 - Receipt schema gains optional fields: `validator`, `validator_timestamp`, `verdict_before_validate` (validate); `deep_passes`, `deep_findings_count`, `cross_pass_promotions`, `verdict_before_deep`, `deep_timestamp` (deep); `walkthrough` (with `lfg_rest`), `walkthrough_timestamp` (interactive). All additive — existing Ralph scripts read by key and ignore unknowns.
+- **Copilot backend model catalog + defaults refreshed.** Added `claude-opus-4.7`, `claude-opus-4.6`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex` to the registered model set (verified live against copilot CLI 1.0.36 via `copilot -p "/model"`). Default bumped `gpt-5.2` → `gpt-5.5`; `high` effort retained (confirmed `gpt-5.5` honors `--effort {low,medium,high,xhigh}`). Older rows stay listed — copilot itself still accepts them. Use `flowctl config set review.backend copilot:<model>:<effort>` to pin a different model.
 
 ### Notes
 - **Default review is unchanged.** These flags are opt-in. The Carmack-level single-chat primary review remains the baseline and the primary. Flags add structure, validation, and deep-dives **on top** — they do not replace.

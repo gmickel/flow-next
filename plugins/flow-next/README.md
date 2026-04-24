@@ -1080,7 +1080,7 @@ Invalid specs are rejected at `set-backend` time with a helpful error listing va
 |---------|------------------|-------------------|---------------|----------------|
 | `rp` | _(bare only — model set via window/session)_ | _(n/a)_ | _n/a_ | _n/a_ |
 | `codex` | `gpt-5.5`, `gpt-5.4`, `gpt-5.2`, `gpt-5`, `gpt-5-mini`, `gpt-5-codex` | `none`, `minimal`, `low`, `medium`, `high`, `xhigh` | `gpt-5.5` | `high` |
-| `copilot` | `claude-sonnet-4.5`, `claude-haiku-4.5`, `claude-opus-4.5`, `claude-sonnet-4`, `gpt-5.2`, `gpt-5.2-codex`, `gpt-5-mini`, `gpt-4.1` | `low`, `medium`, `high`, `xhigh` | `gpt-5.2` | `high` |
+| `copilot` | `claude-sonnet-4.5`, `claude-haiku-4.5`, `claude-opus-4.7`, `claude-opus-4.6`, `claude-opus-4.5`, `claude-sonnet-4`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`, `gpt-5.2`, `gpt-5.2-codex`, `gpt-5-mini`, `gpt-4.1` | `low`, `medium`, `high`, `xhigh` | `gpt-5.5` | `high` |
 | `none` | _(explicit opt-out)_ | _(n/a)_ | _n/a_ | _n/a_ |
 
 Notes:

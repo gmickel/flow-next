@@ -1951,12 +1951,21 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         "default_effort": "high",
     },
     "copilot": {
-        # Verified via ``copilot --help`` + live probe (fn-27 §Model Catalog).
+        # Verified via live probe against copilot CLI 1.0.36 — asked the CLI
+        # itself for the exact set of ``--model`` strings it accepts. Keep
+        # this list synced with ``copilot -p "/model"`` output; GitHub ships
+        # new rows without changelog.
         "models": {
             "claude-sonnet-4.5",
             "claude-haiku-4.5",
+            "claude-opus-4.7",
+            "claude-opus-4.6",
             "claude-opus-4.5",
             "claude-sonnet-4",
+            "gpt-5.5",
+            "gpt-5.4",
+            "gpt-5.4-mini",
+            "gpt-5.3-codex",
             "gpt-5.2",
             "gpt-5.2-codex",
             "gpt-5-mini",
@@ -1967,7 +1976,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ``run_copilot_exec`` handles by dropping the flag when model starts
         # with ``claude-``.
         "efforts": {"low", "medium", "high", "xhigh"},
-        "default_model": "gpt-5.2",
+        "default_model": "gpt-5.5",
         "default_effort": "high",
     },
     "none": {

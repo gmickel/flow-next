@@ -85,19 +85,30 @@ class TestRegistryShape(unittest.TestCase):
         self.assertEqual(BACKEND_REGISTRY["codex"]["default_effort"], "high")
 
     def test_copilot_defaults(self) -> None:
-        # Matches fn-27 runtime default (commit f519faa).
-        self.assertEqual(BACKEND_REGISTRY["copilot"]["default_model"], "gpt-5.2")
+        # Bumped to gpt-5.5/high when the newer OpenAI/Anthropic rows were
+        # activated in copilot CLI 1.0.36 (verified live via `copilot -p
+        # "/model"`). Stays on `high` effort — `xhigh` spends far more
+        # reasoning tokens without matching quality gains on review prompts.
+        self.assertEqual(BACKEND_REGISTRY["copilot"]["default_model"], "gpt-5.5")
         self.assertEqual(BACKEND_REGISTRY["copilot"]["default_effort"], "high")
 
     def test_copilot_model_catalog(self) -> None:
-        # Verified list from fn-27 §Model Catalog (copilot --help + live probe).
+        # Source of truth: `copilot -p "/model"` against CLI 1.0.36. Keep in
+        # sync when GitHub activates new rows; older rows stay listed until
+        # copilot itself rejects them.
         self.assertEqual(
             BACKEND_REGISTRY["copilot"]["models"],
             {
                 "claude-sonnet-4.5",
                 "claude-haiku-4.5",
+                "claude-opus-4.7",
+                "claude-opus-4.6",
                 "claude-opus-4.5",
                 "claude-sonnet-4",
+                "gpt-5.5",
+                "gpt-5.4",
+                "gpt-5.4-mini",
+                "gpt-5.3-codex",
                 "gpt-5.2",
                 "gpt-5.2-codex",
                 "gpt-5-mini",
@@ -307,7 +318,7 @@ class TestResolve(unittest.TestCase):
 
     def test_bare_copilot_fills_both_defaults(self) -> None:
         r = BackendSpec.parse("copilot").resolve()
-        self.assertEqual(r, BackendSpec("copilot", "gpt-5.2", "high"))
+        self.assertEqual(r, BackendSpec("copilot", "gpt-5.5", "high"))
 
     def test_env_fills_missing_model(self) -> None:
         os.environ["FLOW_CODEX_MODEL"] = "gpt-5.2"
@@ -1151,7 +1162,7 @@ class TestResolveReviewSpec(unittest.TestCase):
         with _flow_fixture():
             resolved = flowctl.resolve_review_spec("copilot", None)
             self.assertEqual(resolved.backend, "copilot")
-            self.assertEqual(resolved.model, "gpt-5.2")
+            self.assertEqual(resolved.model, "gpt-5.5")  # registry default
 
 
 # --- Per-task review spec actually runs that model (fn-28.3 integration) ---
