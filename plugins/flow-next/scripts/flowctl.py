@@ -3848,19 +3848,62 @@ _MEMORY_QUOTED_STRING_FIELDS: frozenset[str] = frozenset(
 )
 
 
+# YAML 1.1 scalars that PyYAML would coerce to non-string types. We always
+# quote these when they appear as scalar values or inside inline lists so the
+# round-trip preserves them as strings. Matches PyYAML's BaseResolver defaults.
+_YAML_RESERVED_SCALARS: frozenset[str] = frozenset(
+    {
+        "null", "Null", "NULL", "~", "",
+        "true", "True", "TRUE", "false", "False", "FALSE",
+        "yes", "Yes", "YES", "no", "No", "NO",
+        "on", "On", "ON", "off", "Off", "OFF",
+    }
+)
+
+
+def _yaml_scalar_needs_quoting(text: str) -> bool:
+    """Return True when the value would be mis-parsed as non-string by YAML."""
+    if text in _YAML_RESERVED_SCALARS:
+        return True
+    # Numeric-looking strings get coerced to int/float by PyYAML.
+    if re.fullmatch(r"[+-]?\d+", text):
+        return True
+    if re.fullmatch(r"[+-]?\d*\.\d+([eE][+-]?\d+)?", text):
+        return True
+    # Flow-list / flow-map indicators inside a list break the inline parser.
+    if any(c in text for c in ",[]{}"):
+        return True
+    return False
+
+
+def _quote_yaml_scalar(text: str) -> str:
+    """Double-quote a scalar with embedded quotes escaped."""
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _format_yaml_list_item(item: Any) -> str:
+    """Render a list item for inline flow-style output, quoting when needed."""
+    if item is None:
+        return '"null"'
+    text = str(item)
+    if _yaml_scalar_needs_quoting(text):
+        return _quote_yaml_scalar(text)
+    return text
+
+
 def _format_yaml_value(value: Any, key: Optional[str] = None) -> str:
     """Render a frontmatter value back to a YAML scalar or inline list."""
     if isinstance(value, list):
-        inner = ", ".join(str(item) for item in value)
+        inner = ", ".join(_format_yaml_list_item(item) for item in value)
         return f"[{inner}]"
     if value is None:
         return ""
     text = str(value)
     if key in _MEMORY_QUOTED_STRING_FIELDS:
-        # Escape embedded double quotes defensively; dates don't carry them
-        # in practice, but keep the writer robust.
-        escaped = text.replace('"', '\\"')
-        return f'"{escaped}"'
+        return _quote_yaml_scalar(text)
+    if _yaml_scalar_needs_quoting(text):
+        return _quote_yaml_scalar(text)
     return text
 
 
@@ -4020,6 +4063,274 @@ def _default_memory_readme() -> str:
     )
 
 
+# --- Overlap detection + entry helpers (fn-30 task 2) ---
+
+
+def _memory_entry_id(track: str, category: str, slug: str, date: str) -> str:
+    """Build a canonical entry id: `<track>/<category>/<slug>-<date>`."""
+    return f"{track}/{category}/{slug}-{date}"
+
+
+def _memory_entry_path(memory_dir: Path, track: str, category: str, slug: str, date: str) -> Path:
+    return memory_dir / track / category / f"{slug}-{date}.md"
+
+
+def _memory_parse_entry_filename(path: Path) -> tuple[str, str]:
+    """Split `<slug>-YYYY-MM-DD.md` into (slug, date).
+
+    Returns ("", "") if the stem doesn't match the convention.
+    """
+    stem = path.stem
+    m = re.match(r"^(.*)-(\d{4}-\d{2}-\d{2})$", stem)
+    if not m:
+        return ("", "")
+    return (m.group(1), m.group(2))
+
+
+_WORD_RE = re.compile(r"[a-z0-9]+")
+
+
+def _memory_title_tokens(title: str) -> set[str]:
+    """Normalize a title into a lowercase alphanumeric token set.
+
+    Used for fuzzy title-overlap scoring. Punctuation and case are ignored.
+    """
+    if not title:
+        return set()
+    return set(_WORD_RE.findall(title.lower()))
+
+
+def _memory_read_entry(path: Path) -> dict[str, Any]:
+    """Read a memory entry file into {frontmatter, body}.
+
+    Returns {"frontmatter": {}, "body": ""} on any failure so callers can
+    continue the overlap scan past a malformed entry.
+    """
+    if not path.exists():
+        return {"frontmatter": {}, "body": ""}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return {"frontmatter": {}, "body": ""}
+    fm = parse_memory_frontmatter(path)
+    body = ""
+    if text.startswith("---"):
+        parts = text.split("---", 2)
+        if len(parts) >= 3:
+            body = parts[2].lstrip("\n")
+    else:
+        body = text
+    return {"frontmatter": fm, "body": body}
+
+
+def _memory_score_overlap(
+    new_title: str,
+    new_tags: list[str],
+    new_module: Optional[str],
+    existing_fm: dict[str, Any],
+) -> int:
+    """Score overlap between a proposed entry and an existing one (0-4).
+
+    Dimensions (1 point each):
+      1. Category match (always 1 — caller scans same category dir)
+      2. Title token overlap >= 50%
+      3. At least one tag match
+      4. Module match (only scored if both entries specify a module)
+
+    Dimension 4 is skipped (not counted) if either side is unspecified —
+    this keeps the score meaningful for modules that are optional.
+    """
+    score = 1  # category dimension — caller restricts the scan
+
+    # Title tokens.
+    new_tokens = _memory_title_tokens(new_title)
+    existing_tokens = _memory_title_tokens(str(existing_fm.get("title", "")))
+    if new_tokens and existing_tokens:
+        shared = new_tokens & existing_tokens
+        # ≥50% overlap of the smaller set.
+        denom = min(len(new_tokens), len(existing_tokens))
+        if denom and (len(shared) / denom) >= 0.5:
+            score += 1
+
+    # Tags.
+    new_tag_set = {t.strip().lower() for t in new_tags if t and t.strip()}
+    raw_existing_tags = existing_fm.get("tags", []) or []
+    if isinstance(raw_existing_tags, str):
+        raw_existing_tags = [raw_existing_tags]
+    existing_tag_set = {
+        str(t).strip().lower() for t in raw_existing_tags if str(t).strip()
+    }
+    if new_tag_set and existing_tag_set and (new_tag_set & existing_tag_set):
+        score += 1
+
+    # Module — only score when both sides specify one.
+    new_mod = (new_module or "").strip()
+    existing_mod = str(existing_fm.get("module", "") or "").strip()
+    if new_mod and existing_mod and new_mod == existing_mod:
+        score += 1
+
+    return score
+
+
+def check_memory_overlap(
+    memory_dir: Path,
+    track: str,
+    category: str,
+    title: str,
+    tags: list[str],
+    module: Optional[str],
+) -> dict[str, Any]:
+    """Scan existing entries in `track/category` and classify overlap.
+
+    Returns:
+      {
+        "level": "high" | "moderate" | "low",
+        "matches": [{"id": str, "path": str, "score": int}, ...],  # best-first
+      }
+
+    Thresholds (score 0-4, category always contributes 1):
+      score >= 3 -> high (update existing)
+      score == 2 -> moderate (create new with related_to)
+      score <= 1 -> low (standalone)
+    """
+    cat_dir = memory_dir / track / category
+    if not cat_dir.is_dir():
+        return {"level": "low", "matches": []}
+
+    scored: list[dict[str, Any]] = []
+    for entry_path in sorted(cat_dir.iterdir()):
+        if entry_path.name.startswith("."):  # skip .gitkeep etc.
+            continue
+        if entry_path.suffix != ".md":
+            continue
+        slug, date = _memory_parse_entry_filename(entry_path)
+        if not slug or not date:
+            continue
+        fm = parse_memory_frontmatter(entry_path)
+        if not fm:
+            continue
+        score = _memory_score_overlap(title, tags, module, fm)
+        scored.append(
+            {
+                "id": _memory_entry_id(track, category, slug, date),
+                "path": str(entry_path),
+                "score": score,
+            }
+        )
+
+    # Sort best-first, keep only score >= 2 as candidates.
+    scored.sort(key=lambda item: item["score"], reverse=True)
+    if not scored:
+        return {"level": "low", "matches": []}
+    top_score = scored[0]["score"]
+    if top_score >= 3:
+        matches = [m for m in scored if m["score"] >= 3]
+        return {"level": "high", "matches": matches}
+    if top_score == 2:
+        matches = [m for m in scored if m["score"] == 2]
+        return {"level": "moderate", "matches": matches}
+    return {"level": "low", "matches": []}
+
+
+def _memory_merge_tags(existing: Any, incoming: list[str]) -> list[str]:
+    """Union + preserve order: existing tags first, then any new ones."""
+    if isinstance(existing, str):
+        existing_list = [existing]
+    elif isinstance(existing, list):
+        existing_list = [str(t) for t in existing]
+    else:
+        existing_list = []
+    seen: set[str] = set()
+    out: list[str] = []
+    for t in existing_list + list(incoming):
+        t = str(t).strip()
+        if not t:
+            continue
+        key = t.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(t)
+    return out
+
+
+def _memory_update_existing_entry(
+    path: Path,
+    body_addition: str,
+    incoming_tags: list[str],
+    today: str,
+) -> dict[str, Any]:
+    """Update an existing entry in place for high-overlap adds.
+
+    - Sets `last_updated` to today
+    - Unions tags (preserving existing order)
+    - Appends body under a `## Update YYYY-MM-DD` heading when body given
+
+    Returns the updated frontmatter for reporting.
+    """
+    existing = _memory_read_entry(path)
+    fm = dict(existing["frontmatter"])
+    body = existing["body"]
+
+    fm["last_updated"] = today
+    if incoming_tags:
+        fm["tags"] = _memory_merge_tags(fm.get("tags"), incoming_tags)
+
+    if body_addition.strip():
+        suffix = f"\n\n## Update {today}\n\n{body_addition.rstrip()}\n"
+        body = body.rstrip() + suffix
+
+    write_memory_entry(path, fm, body)
+    return fm
+
+
+_DEPRECATED_TYPE_MAP: dict[str, tuple[str, str]] = {
+    "pitfall": ("bug", "build-errors"),
+    "pitfalls": ("bug", "build-errors"),
+    "convention": ("knowledge", "conventions"),
+    "conventions": ("knowledge", "conventions"),
+    "decision": ("knowledge", "tooling-decisions"),
+    "decisions": ("knowledge", "tooling-decisions"),
+}
+
+
+def _memory_resolve_legacy_type(
+    legacy_type: str,
+) -> Optional[tuple[str, str]]:
+    """Map `--type` value to (track, category). Returns None on unknown."""
+    return _DEPRECATED_TYPE_MAP.get(legacy_type.lower())
+
+
+def _memory_emit_deprecation(
+    legacy_type: str, track: str, category: str, warnings: list[str]
+) -> None:
+    """Print deprecation warning unless `FLOW_NO_DEPRECATION=1` is set."""
+    msg = (
+        f"--type is deprecated; use --track and --category. "
+        f"Auto-mapped `--type {legacy_type}` to `--track {track} --category {category}`. "
+        f"(Suppress with FLOW_NO_DEPRECATION=1.)"
+    )
+    warnings.append(msg)
+    if os.environ.get("FLOW_NO_DEPRECATION") != "1":
+        print(f"Warning: {msg}", file=sys.stderr)
+
+
+def _memory_read_body(body_file: Optional[str], fallback: str = "") -> str:
+    """Load body content from file, stdin (`-`), or fallback.
+
+    Returns the fallback when body_file is None (caller decides what to do
+    with empty body).
+    """
+    if body_file is None:
+        return fallback
+    if body_file == "-":
+        return sys.stdin.read()
+    path = Path(body_file)
+    if not path.exists():
+        raise FileNotFoundError(f"body file not found: {body_file}")
+    return path.read_text(encoding="utf-8")
+
+
 def cmd_memory_init(args: argparse.Namespace) -> None:
     """Initialize categorized memory directory tree.
 
@@ -4163,59 +4474,243 @@ def require_memory_enabled(args) -> Path:
 
 
 def cmd_memory_add(args: argparse.Namespace) -> None:
-    """Add a memory entry manually."""
+    """Add a categorized memory entry with overlap detection (fn-30 task 2).
+
+    Preferred form:
+      flowctl memory add --track <bug|knowledge> --category <cat> \\
+          --title <title> [--module <m>] [--tags "a,b"] \\
+          [--body-file <path> | --body-file -] \\
+          [--problem-type <t>] [--symptoms <s>] [--root-cause <r>] \\
+          [--resolution-type <t>] [--applies-when <a>] \\
+          [--no-overlap-check] [--json]
+
+    Legacy form (backward-compat, deprecated — suppress with
+    FLOW_NO_DEPRECATION=1):
+      flowctl memory add --type <pitfall|convention|decision> "content"
+    """
     memory_dir = require_memory_enabled(args)
 
-    # Map type to file
-    type_map = {
-        "pitfall": "pitfalls.md",
-        "pitfalls": "pitfalls.md",
-        "convention": "conventions.md",
-        "conventions": "conventions.md",
-        "decision": "decisions.md",
-        "decisions": "decisions.md",
-    }
+    warnings: list[str] = []
 
-    filename = type_map.get(args.type.lower())
-    if not filename:
+    # --- Resolve track / category ---
+    track = getattr(args, "track", None)
+    category = getattr(args, "category", None)
+    legacy_type = getattr(args, "type", None)
+
+    if legacy_type is not None:
+        mapped = _memory_resolve_legacy_type(legacy_type)
+        if mapped is None:
+            error_exit(
+                f"Invalid --type '{legacy_type}'. Valid legacy values: "
+                f"pitfall, convention, decision. Prefer --track/--category.",
+                code=2,
+                use_json=args.json,
+            )
+        if track is None:
+            track = mapped[0]
+        if category is None:
+            category = mapped[1]
+        _memory_emit_deprecation(legacy_type, track, category, warnings)
+
+    if track is None or category is None:
         error_exit(
-            f"Invalid type '{args.type}'. Use: pitfall, convention, or decision",
+            "Required: --track <bug|knowledge> and --category <cat>. "
+            f"Bug categories: {', '.join(MEMORY_CATEGORIES['bug'])}. "
+            f"Knowledge categories: {', '.join(MEMORY_CATEGORIES['knowledge'])}.",
+            code=2,
             use_json=args.json,
         )
 
-    filepath = memory_dir / filename
-    # fn-30 task 1: tree-first init no longer creates legacy files. Seed the
-    # flat file on demand so legacy `--type pitfall|convention|decision`
-    # keeps working until task 2 rewrites this command around the new tree.
-    if not filepath.exists():
-        legacy_headers = {
-            "pitfalls.md": "# Pitfalls\n\nLessons learned from NEEDS_WORK feedback.\n",
-            "conventions.md": "# Conventions\n\nProject patterns discovered during work.\n",
-            "decisions.md": "# Decisions\n\nArchitectural choices with rationale.\n",
-        }
-        atomic_write(filepath, legacy_headers.get(filename, ""))
+    if track not in MEMORY_TRACKS:
+        error_exit(
+            f"Invalid track '{track}'. Valid: {', '.join(MEMORY_TRACKS)}.",
+            code=2,
+            use_json=args.json,
+        )
 
-    # Format entry
+    if category not in MEMORY_CATEGORIES[track]:
+        error_exit(
+            f"Invalid category '{category}' for track '{track}'. "
+            f"Valid: {', '.join(MEMORY_CATEGORIES[track])}.",
+            code=2,
+            use_json=args.json,
+        )
+
+    # --- Title + slug + date ---
+    title = getattr(args, "title", None)
+    legacy_content = getattr(args, "content", None)
+    if not title and legacy_content:
+        # Legacy: first line of content becomes title.
+        first_line = legacy_content.strip().splitlines()[0] if legacy_content.strip() else ""
+        title = first_line[:80] if first_line else legacy_content.strip()[:80]
+    if not title:
+        error_exit(
+            "Required: --title <one-line-summary>.",
+            code=2,
+            use_json=args.json,
+        )
+    if len(title) > 80:
+        title = title[:80]
+
+    slug = slugify(title)
+    if not slug:
+        error_exit(
+            "Could not derive slug from title (title is empty or non-ASCII-only).",
+            code=2,
+            use_json=args.json,
+        )
+
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    # Normalize type name
-    type_name = args.type.lower().rstrip("s")  # pitfalls -> pitfall
+    # --- Tags / module ---
+    tags_raw = getattr(args, "tags", None) or ""
+    tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
+    module = getattr(args, "module", None) or None
 
-    entry = f"""
-## {today} manual [{type_name}]
-{args.content}
-"""
+    # --- Body ---
+    try:
+        body = _memory_read_body(
+            getattr(args, "body_file", None), fallback=legacy_content or ""
+        )
+    except FileNotFoundError as e:
+        error_exit(str(e), code=2, use_json=args.json)
 
-    # Append to file
-    with filepath.open("a", encoding="utf-8") as f:
-        f.write(entry)
+    # --- Track-specific required fields ---
+    problem_type = getattr(args, "problem_type", None)
+    symptoms = getattr(args, "symptoms", None)
+    root_cause = getattr(args, "root_cause", None)
+    resolution_type = getattr(args, "resolution_type", None)
+    applies_when = getattr(args, "applies_when", None)
+
+    if track == "bug":
+        if not problem_type:
+            # Default to category if the enum accepts it; else fall back
+            # to a safe bug problem_type for the category.
+            if category in MEMORY_PROBLEM_TYPES:
+                problem_type = category
+            elif category == "build-errors":
+                problem_type = "build-error"
+            elif category == "test-failures":
+                problem_type = "test-failure"
+            elif category == "runtime-errors":
+                problem_type = "runtime-error"
+            else:
+                problem_type = "build-error"
+        if problem_type not in MEMORY_PROBLEM_TYPES:
+            error_exit(
+                f"Invalid --problem-type '{problem_type}'. Valid: "
+                f"{', '.join(MEMORY_PROBLEM_TYPES)}.",
+                code=2,
+                use_json=args.json,
+            )
+        if not symptoms:
+            symptoms = title
+        if not root_cause:
+            root_cause = "(unspecified)"
+        if not resolution_type:
+            resolution_type = "fix"
+        if resolution_type not in MEMORY_RESOLUTION_TYPES:
+            error_exit(
+                f"Invalid --resolution-type '{resolution_type}'. Valid: "
+                f"{', '.join(MEMORY_RESOLUTION_TYPES)}.",
+                code=2,
+                use_json=args.json,
+            )
+    else:  # knowledge
+        if not applies_when:
+            applies_when = title
+
+    # --- Overlap detection ---
+    no_overlap = bool(getattr(args, "no_overlap_check", False))
+    overlap = (
+        {"level": "low", "matches": []}
+        if no_overlap
+        else check_memory_overlap(
+            memory_dir, track, category, title, tags, module
+        )
+    )
+
+    # --- Build frontmatter ---
+    frontmatter: dict[str, Any] = {
+        "title": title,
+        "date": today,
+        "track": track,
+        "category": category,
+    }
+    if module:
+        frontmatter["module"] = module
+    if tags:
+        frontmatter["tags"] = tags
+    if track == "bug":
+        frontmatter["problem_type"] = problem_type
+        frontmatter["symptoms"] = symptoms
+        frontmatter["root_cause"] = root_cause
+        frontmatter["resolution_type"] = resolution_type
+    else:
+        frontmatter["applies_when"] = applies_when
+
+    related_to: list[str] = []
+    action: str
+    target_path: Path
+
+    if overlap["level"] == "high":
+        existing = overlap["matches"][0]
+        target_path = Path(existing["path"])
+        entry_id = existing["id"]
+        updated_fm = _memory_update_existing_entry(
+            target_path, body, tags, today
+        )
+        action = "updated"
+        related_to = list(updated_fm.get("related_to", []) or [])
+        if not args.json:
+            print(
+                f"High overlap with {entry_id}. Updating existing entry "
+                f"instead of creating duplicate. (Override with --no-overlap-check.)"
+            )
+    else:
+        # Fresh entry path.
+        target_path = _memory_entry_path(memory_dir, track, category, slug, today)
+        if target_path.exists():
+            # Disambiguate same-day duplicates with a numeric suffix.
+            n = 2
+            while True:
+                candidate = _memory_entry_path(
+                    memory_dir, track, category, f"{slug}-{n}", today
+                )
+                if not candidate.exists():
+                    target_path = candidate
+                    slug = f"{slug}-{n}"
+                    break
+                n += 1
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if overlap["level"] == "moderate":
+            related_to = [m["id"] for m in overlap["matches"]]
+            frontmatter["related_to"] = related_to
+            if not args.json:
+                print(
+                    f"Moderate overlap with {', '.join(related_to)}. "
+                    f"Creating new entry with related_to reference."
+                )
+
+        write_memory_entry(target_path, frontmatter, body)
+        action = "created"
+        entry_id = _memory_entry_id(track, category, slug, today)
+
+    payload: dict[str, Any] = {
+        "entry_id": entry_id,
+        "path": str(target_path),
+        "overlap_level": overlap["level"],
+        "related_to": related_to,
+        "action": action,
+        "warnings": warnings,
+    }
 
     if args.json:
-        json_output(
-            {"type": type_name, "file": filename, "message": f"Added {type_name} entry"}
-        )
+        json_output(payload)
     else:
-        print(f"Added {type_name} entry to {filename}")
+        verb = "Updated" if action == "updated" else "Created"
+        print(f"{verb} {entry_id} at {target_path}")
 
 
 def cmd_memory_read(args: argparse.Namespace) -> None:
@@ -10267,11 +10762,68 @@ def main() -> None:
     p_memory_init.add_argument("--json", action="store_true", help="JSON output")
     p_memory_init.set_defaults(func=cmd_memory_init)
 
-    p_memory_add = memory_sub.add_parser("add", help="Add memory entry")
-    p_memory_add.add_argument(
-        "--type", required=True, help="Type: pitfall, convention, or decision"
+    p_memory_add = memory_sub.add_parser(
+        "add",
+        help="Add memory entry (categorized schema with overlap detection)",
     )
-    p_memory_add.add_argument("content", help="Entry content")
+    # Preferred form (fn-30 task 2).
+    p_memory_add.add_argument(
+        "--track",
+        choices=list(MEMORY_TRACKS),
+        help="Track: bug | knowledge",
+    )
+    p_memory_add.add_argument(
+        "--category",
+        help="Category (see `flowctl memory add --help` output for valid list per track)",
+    )
+    p_memory_add.add_argument("--title", help="One-line summary (max 80 chars)")
+    p_memory_add.add_argument("--module", help="Affected module / file / subsystem")
+    p_memory_add.add_argument(
+        "--tags", help="Comma-separated tags (e.g. 'webpack,oom')"
+    )
+    p_memory_add.add_argument(
+        "--body-file",
+        dest="body_file",
+        help="Path to body markdown ('-' for stdin)",
+    )
+    # Bug-track optional overrides.
+    p_memory_add.add_argument(
+        "--problem-type",
+        dest="problem_type",
+        choices=list(MEMORY_PROBLEM_TYPES),
+        help="Bug track: problem type (defaults derived from category)",
+    )
+    p_memory_add.add_argument("--symptoms", help="Bug track: one-line symptoms")
+    p_memory_add.add_argument(
+        "--root-cause", dest="root_cause", help="Bug track: one-line root cause"
+    )
+    p_memory_add.add_argument(
+        "--resolution-type",
+        dest="resolution_type",
+        choices=list(MEMORY_RESOLUTION_TYPES),
+        help="Bug track: resolution kind (default: fix)",
+    )
+    # Knowledge-track optional override.
+    p_memory_add.add_argument(
+        "--applies-when",
+        dest="applies_when",
+        help="Knowledge track: situations this guidance applies to",
+    )
+    # Overlap detection.
+    p_memory_add.add_argument(
+        "--no-overlap-check",
+        dest="no_overlap_check",
+        action="store_true",
+        help="Skip overlap detection; always create a standalone entry",
+    )
+    # Legacy backward-compat.
+    p_memory_add.add_argument(
+        "--type",
+        help="DEPRECATED: pitfall | convention | decision (auto-mapped to --track/--category)",
+    )
+    p_memory_add.add_argument(
+        "content", nargs="?", help="DEPRECATED: entry body (use --body-file instead)"
+    )
     p_memory_add.add_argument("--json", action="store_true", help="JSON output")
     p_memory_add.set_defaults(func=cmd_memory_add)
 

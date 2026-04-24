@@ -193,7 +193,15 @@ Slug rules: lowercase, hyphenated, max 60 chars, derived from title.
 None — this is the foundation.
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
+Schema + directory tree + YAML frontmatter + entry templates shipped.
 
+- `.flow/memory/` tree: `bug/<category>/` and `knowledge/<category>/` with fixed category lists baked into flowctl.
+- YAML frontmatter schema with track-specific fields (problem_type/root_cause/resolution_type for bug; applies_when for knowledge).
+- Entry templates in `plugins/flow-next/templates/memory/`: bug-track-entry.md.tpl, knowledge-track-entry.md.tpl, README.md.tpl.
+- `plugins/flow-next/tests/test_memory_schema.py` (371 lines) covers schema validation.
+- Smoke extended; 74/74 pass.
+- `flowctl memory init` creates tree + README.md using templates.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 95bf5b8
+- Tests: plugins/flow-next/scripts/smoke_test.sh (74/74), plugins/flow-next/tests/test_memory_schema.py
+- PRs:

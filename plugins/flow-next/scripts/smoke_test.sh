@@ -447,17 +447,175 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# Legacy backcompat: --type pitfall still appends to pitfalls.md (task 2 rewrites this).
-scripts/flowctl memory add --type pitfall "Test pitfall entry" --json >/dev/null
-if grep -q "Test pitfall entry" .flow/memory/pitfalls.md; then
-  echo -e "${GREEN}✓${NC} memory add pitfall (legacy backcompat)"
+# fn-30 task 2: --type legacy backcompat auto-maps to --track/--category with stderr warning.
+add_json="$(scripts/flowctl memory add --type pitfall "Test pitfall entry" --json 2>/dev/null)"
+"$PYTHON_BIN" - <<'PY' "$add_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["success"] is True
+assert data["action"] == "created"
+assert data["entry_id"].startswith("bug/build-errors/"), data
+assert data["path"].endswith(".md"), data
+assert data["overlap_level"] == "low"
+# Warning surfaces in the JSON payload.
+warnings = data.get("warnings", [])
+assert any("deprecated" in w for w in warnings), warnings
+PY
+echo -e "${GREEN}✓${NC} memory add --type pitfall auto-maps to bug/build-errors with deprecation warning"
+PASS=$((PASS + 1))
+
+# FLOW_NO_DEPRECATION=1 suppresses stderr but keeps the JSON warning.
+stderr_out="$(FLOW_NO_DEPRECATION=1 scripts/flowctl memory add --type convention "Silenced" --json 2>&1 >/dev/null)"
+if [[ -z "$stderr_out" ]]; then
+  echo -e "${GREEN}✓${NC} FLOW_NO_DEPRECATION=1 suppresses stderr warning"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} memory add pitfall (legacy backcompat)"
+  echo -e "${RED}✗${NC} FLOW_NO_DEPRECATION=1 did not suppress stderr (got: $stderr_out)"
   FAIL=$((FAIL + 1))
 fi
 
-# Re-run init with legacy present — hint should surface.
+# New schema: --track bug --category runtime-errors creates categorized entry.
+add_json="$(scripts/flowctl memory add \
+  --track bug --category runtime-errors \
+  --title "Null deref in auth middleware" \
+  --module "src/auth.ts" \
+  --tags "auth,nullcheck" \
+  --problem-type runtime-error \
+  --symptoms "TypeError on missing session" \
+  --root-cause "Missing optional chaining" \
+  --resolution-type fix \
+  --json 2>/dev/null)"
+"$PYTHON_BIN" - <<'PY' "$add_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["success"] is True
+assert data["action"] == "created"
+assert data["entry_id"].startswith("bug/runtime-errors/null-deref"), data
+assert data["overlap_level"] == "low"
+assert data["warnings"] == []
+PY
+echo -e "${GREEN}✓${NC} memory add --track bug --category runtime-errors (new schema)"
+PASS=$((PASS + 1))
+
+# Overlap detection: adding a similar entry (same title+tags+module) should update in place.
+add_json="$(scripts/flowctl memory add \
+  --track bug --category runtime-errors \
+  --title "Null deref auth middleware" \
+  --module "src/auth.ts" \
+  --tags "auth,nullcheck" \
+  --problem-type runtime-error \
+  --json 2>/dev/null)"
+"$PYTHON_BIN" - <<'PY' "$add_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["success"] is True, data
+assert data["action"] == "updated", data
+assert data["overlap_level"] == "high", data
+PY
+echo -e "${GREEN}✓${NC} memory add high overlap updates existing entry"
+PASS=$((PASS + 1))
+
+# Overlap detection: --no-overlap-check always creates new.
+add_json="$(scripts/flowctl memory add \
+  --track bug --category runtime-errors \
+  --title "Null deref auth middleware again" \
+  --module "src/auth.ts" \
+  --tags "auth,nullcheck" \
+  --no-overlap-check \
+  --json 2>/dev/null)"
+"$PYTHON_BIN" - <<'PY' "$add_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["success"] is True, data
+assert data["action"] == "created", data
+assert data["overlap_level"] == "low", data
+PY
+echo -e "${GREEN}✓${NC} memory add --no-overlap-check bypasses detection"
+PASS=$((PASS + 1))
+
+# Moderate overlap: different title but shared tag (2 dimensions -> moderate).
+add_json="$(scripts/flowctl memory add \
+  --track knowledge --category conventions \
+  --title "Prefer pnpm over npm" \
+  --tags "pnpm,tooling" \
+  --applies-when "choosing package manager" \
+  --json 2>/dev/null)"
+"$PYTHON_BIN" - <<'PY' "$add_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["action"] == "created"
+assert data["overlap_level"] == "low"
+PY
+add_json="$(scripts/flowctl memory add \
+  --track knowledge --category conventions \
+  --title "Lockfile discipline for pnpm workspaces" \
+  --tags "pnpm,workspace" \
+  --json 2>/dev/null)"
+"$PYTHON_BIN" - <<'PY' "$add_json"
+import json, sys
+data = json.loads(sys.argv[1])
+# Shared tag pnpm + same category = score 2 (moderate).
+assert data["action"] == "created"
+assert data["overlap_level"] == "moderate", data
+assert len(data["related_to"]) >= 1, data
+PY
+echo -e "${GREEN}✓${NC} memory add moderate overlap sets related_to reference"
+PASS=$((PASS + 1))
+
+# Invalid category returns exit code 2 with list of valid categories.
+set +e
+err_out="$(scripts/flowctl memory add --track bug --category nonsense --title "x" --json 2>&1)"
+rc=$?
+set -e
+if [[ $rc -ne 0 ]] && echo "$err_out" | grep -q "build-errors"; then
+  echo -e "${GREEN}✓${NC} memory add rejects invalid category with list of valid options"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} memory add invalid category (rc=$rc, err=$err_out)"
+  FAIL=$((FAIL + 1))
+fi
+
+# Missing --title returns exit code 2.
+set +e
+scripts/flowctl memory add --track bug --category build-errors --json >/dev/null 2>&1
+rc=$?
+set -e
+if [[ $rc -eq 2 ]]; then
+  echo -e "${GREEN}✓${NC} memory add missing --title returns exit code 2"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} memory add missing --title exit code (got $rc, expected 2)"
+  FAIL=$((FAIL + 1))
+fi
+
+# Body via stdin (--body-file -).
+add_json="$(printf 'Body from stdin\n' | scripts/flowctl memory add \
+  --track knowledge --category workflow \
+  --title "Entry with stdin body" \
+  --body-file - \
+  --applies-when "always" \
+  --json 2>/dev/null)"
+"$PYTHON_BIN" - <<'PY' "$add_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["action"] == "created", data
+PY
+stdin_path=$(echo "$add_json" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["path"])')
+if grep -q "Body from stdin" "$stdin_path"; then
+  echo -e "${GREEN}✓${NC} memory add --body-file - reads body from stdin"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} memory add --body-file - (body not written)"
+  FAIL=$((FAIL + 1))
+fi
+
+# Legacy detection hint: seed a flat pitfalls.md and re-init.
+cat > .flow/memory/pitfalls.md <<'EOF'
+# Pitfalls
+
+## 2026-01-01 manual [pitfall]
+legacy entry
+EOF
 hint_json="$(scripts/flowctl memory init --json)"
 "$PYTHON_BIN" - <<'PY' "$hint_json"
 import json, sys
@@ -468,22 +626,7 @@ assert "migrate" in data.get("hint", ""), f"migration hint missing: {data}"
 PY
 echo -e "${GREEN}✓${NC} memory init detects legacy files and emits hint"
 PASS=$((PASS + 1))
-
-scripts/flowctl memory add --type convention "Test convention" --json >/dev/null
-scripts/flowctl memory add --type decision "Test decision" --json >/dev/null
-list_json="$(scripts/flowctl memory list --json)"
-"$PYTHON_BIN" - <<'PY' "$list_json"
-import json, sys
-data = json.loads(sys.argv[1])
-assert data["success"] == True
-counts = data["counts"]
-assert counts["pitfalls.md"] >= 1
-assert counts["conventions.md"] >= 1
-assert counts["decisions.md"] >= 1
-assert data["total"] >= 3
-PY
-echo -e "${GREEN}✓${NC} memory list (legacy backcompat)"
-PASS=$((PASS + 1))
+rm -f .flow/memory/pitfalls.md
 
 echo -e "${YELLOW}--- schema v1 validate ---${NC}"
 "$PYTHON_BIN" - <<'PY'
