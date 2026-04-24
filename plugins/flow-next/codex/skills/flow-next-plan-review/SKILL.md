@@ -56,7 +56,7 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 ### Backend at a glance
 
 - **rp** — RepoPrompt (macOS GUI); builder auto-selects context. Primary backend.
-- **codex** — Codex CLI (cross-platform); uses OpenAI models (default `gpt-5.4`). `FLOW_CODEX_MODEL` / `FLOW_CODEX_EFFORT` env vars, or `--spec codex:gpt-5.4:xhigh`.
+- **codex** — Codex CLI (cross-platform); uses OpenAI models (default `gpt-5.5`). `FLOW_CODEX_MODEL` / `FLOW_CODEX_EFFORT` env vars, or `--spec codex:gpt-5.4:xhigh`.
 - **copilot** — GitHub Copilot CLI (cross-platform); supports Claude Opus/Sonnet/Haiku 4.5 and GPT-5.2 families via a Copilot subscription. `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, or `--spec copilot:claude-opus-4.5:xhigh`.
 
 **Spec grammar:** `backend[:model[:effort]]` — `FLOW_REVIEW_BACKEND` and `.flow/config.json review.backend` both accept this. Examples: `codex`, `codex:gpt-5.2`, `copilot:claude-opus-4.5:xhigh`. Per-epic `default_review` (set via `flowctl epic set-backend`) overrides env.

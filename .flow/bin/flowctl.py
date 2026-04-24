@@ -1564,7 +1564,7 @@ def run_codex_exec(
         spec = BackendSpec("codex").resolve()
     elif spec.model is None or spec.effort is None:
         spec = spec.resolve()
-    effective_model = spec.model or "gpt-5.4"
+    effective_model = spec.model or "gpt-5.5"
     effective_effort = spec.effort or "high"
 
     if session_id:
@@ -1732,6 +1732,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
     },
     "codex": {
         "models": {
+            "gpt-5.5",
             "gpt-5.4",
             "gpt-5.2",
             "gpt-5",
@@ -1741,7 +1742,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ``none`` / ``minimal`` accepted at CLI layer; ``minimal`` is gated by
         # server-side web_search check (not applicable to our reviews).
         "efforts": {"none", "minimal", "low", "medium", "high", "xhigh"},
-        "default_model": "gpt-5.4",
+        "default_model": "gpt-5.5",
         "default_effort": "high",
     },
     "copilot": {

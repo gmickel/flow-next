@@ -81,7 +81,7 @@ class TestRegistryShape(unittest.TestCase):
         )
 
     def test_codex_defaults(self) -> None:
-        self.assertEqual(BACKEND_REGISTRY["codex"]["default_model"], "gpt-5.4")
+        self.assertEqual(BACKEND_REGISTRY["codex"]["default_model"], "gpt-5.5")
         self.assertEqual(BACKEND_REGISTRY["codex"]["default_effort"], "high")
 
     def test_copilot_defaults(self) -> None:
@@ -303,7 +303,7 @@ class TestResolve(unittest.TestCase):
 
     def test_bare_codex_fills_both_defaults(self) -> None:
         r = BackendSpec.parse("codex").resolve()
-        self.assertEqual(r, BackendSpec("codex", "gpt-5.4", "high"))
+        self.assertEqual(r, BackendSpec("codex", "gpt-5.5", "high"))
 
     def test_bare_copilot_fills_both_defaults(self) -> None:
         r = BackendSpec.parse("copilot").resolve()
@@ -828,9 +828,9 @@ class TestShowBackendResolution(unittest.TestCase):
             # resolve() fills in the model from registry default, so str
             # becomes the full form. The important invariant is the resolved
             # dict has both fields populated without raising.
-            self.assertEqual(r["resolved"]["model"], "gpt-5.4")
+            self.assertEqual(r["resolved"]["model"], "gpt-5.5")
             self.assertEqual(r["resolved"]["effort"], "high")
-            self.assertEqual(r["resolved"]["str"], "codex:gpt-5.4:high")
+            self.assertEqual(r["resolved"]["str"], "codex:gpt-5.5:high")
 
     def test_legacy_value_falls_back_with_warning(self) -> None:
         # The hot-path compat case: stored ``codex:gpt-5.4-high`` (dash) from
@@ -855,7 +855,7 @@ class TestShowBackendResolution(unittest.TestCase):
             self.assertEqual(r["source"], "task")
             # Lenient fallback → bare codex → registry defaults fill.
             self.assertEqual(r["resolved"]["backend"], "codex")
-            self.assertEqual(r["resolved"]["model"], "gpt-5.4")
+            self.assertEqual(r["resolved"]["model"], "gpt-5.5")
             self.assertEqual(r["resolved"]["effort"], "high")
             self.assertIn("warning:", err.getvalue())
             self.assertIn("codex:gpt-5.4-high", err.getvalue())
@@ -945,12 +945,12 @@ class TestRunCodexExecHonorsSpec(unittest.TestCase):
 
     def test_spec_none_falls_back_to_registry_defaults(self) -> None:
         # Defensive path: spec=None must resolve via bare-codex defaults
-        # (gpt-5.4 / high). This keeps non-review callers safe.
+        # (gpt-5.5 / high). This keeps non-review callers safe.
         captured: list = []
         with _stub_subprocess(flowctl, captured, stdout='{"type":"thread.started","thread_id":"t1"}'):
             flowctl.run_codex_exec("prompt", sandbox="read-only", spec=None)
         argv, _ = captured[0]
-        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.4")
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.5")
         self.assertEqual(
             argv[argv.index("-c") + 1],
             'model_reasoning_effort="high"',
@@ -966,7 +966,7 @@ class TestRunCodexExecHonorsSpec(unittest.TestCase):
             flowctl.run_codex_exec("prompt", sandbox="read-only", spec=spec)
         argv, _ = captured[0]
         # Registry default model (no env set) + env effort.
-        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.4")
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.5")
         self.assertEqual(
             argv[argv.index("-c") + 1],
             'model_reasoning_effort="low"',
@@ -1143,7 +1143,7 @@ class TestResolveReviewSpec(unittest.TestCase):
             _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
             resolved = flowctl.resolve_review_spec("codex", "fn-9-e.1")
             self.assertEqual(resolved.backend, "codex")
-            self.assertEqual(resolved.model, "gpt-5.4")  # registry default
+            self.assertEqual(resolved.model, "gpt-5.5")  # registry default
             self.assertEqual(resolved.effort, "high")
 
     def test_no_task_id_still_resolves(self) -> None:
@@ -1160,7 +1160,7 @@ class TestResolveReviewSpec(unittest.TestCase):
 class TestPerTaskReviewSpecIntegration(unittest.TestCase):
     """End-to-end-ish: task with ``review: "codex:gpt-5.2"`` + `flowctl codex
     impl-review fn-X` => subprocess argv contains ``--model gpt-5.2`` (not the
-    default gpt-5.4). Receipt stamps model+effort+spec from resolved spec."""
+    default gpt-5.5). Receipt stamps model+effort+spec from resolved spec."""
 
     def setUp(self) -> None:
         self._env_snapshot = os.environ.copy()
@@ -1416,8 +1416,8 @@ class TestReviewBackendCmd(unittest.TestCase):
         with _flow_fixture():
             payload = self._run_json()
             self.assertEqual(payload["backend"], "codex")
-            self.assertEqual(payload["spec"], "codex:gpt-5.4:high")
-            self.assertEqual(payload["model"], "gpt-5.4")
+            self.assertEqual(payload["spec"], "codex:gpt-5.5:high")
+            self.assertEqual(payload["model"], "gpt-5.5")
             self.assertEqual(payload["effort"], "high")
             self.assertEqual(payload["source"], "env")
 
@@ -1487,7 +1487,7 @@ class TestReviewBackendCmd(unittest.TestCase):
             payload = self._run_json()
             self.assertEqual(payload["backend"], "codex")
             # Full spec resolves to registry defaults since model was unparseable.
-            self.assertEqual(payload["spec"], "codex:gpt-5.4:high")
+            self.assertEqual(payload["spec"], "codex:gpt-5.5:high")
             self.assertEqual(payload["source"], "env")
 
     def test_garbage_env_returns_ask(self) -> None:

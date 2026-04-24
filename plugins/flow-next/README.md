@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.31.0-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.32.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -1013,7 +1013,7 @@ Set default review backend (bare or spec form — `backend[:model[:effort]]`):
 ```bash
 # Per-project (saved in .flow/config.json)
 flowctl config set review.backend rp                        # bare backend
-flowctl config set review.backend codex:gpt-5.4:xhigh       # full spec
+flowctl config set review.backend codex:gpt-5.5:xhigh       # full spec
 flowctl config set review.backend copilot:claude-opus-4.5   # backend + model, default effort
 
 # Per-session (environment variable) — same grammar as config key
@@ -1041,7 +1041,7 @@ Invalid specs are rejected at `set-backend` time with a helpful error listing va
 | Backend | Supported models | Supported efforts | Default model | Default effort |
 |---------|------------------|-------------------|---------------|----------------|
 | `rp` | _(bare only — model set via window/session)_ | _(n/a)_ | _n/a_ | _n/a_ |
-| `codex` | `gpt-5.4`, `gpt-5.2`, `gpt-5`, `gpt-5-mini`, `gpt-5-codex` | `none`, `minimal`, `low`, `medium`, `high`, `xhigh` | `gpt-5.4` | `high` |
+| `codex` | `gpt-5.5`, `gpt-5.4`, `gpt-5.2`, `gpt-5`, `gpt-5-mini`, `gpt-5-codex` | `none`, `minimal`, `low`, `medium`, `high`, `xhigh` | `gpt-5.5` | `high` |
 | `copilot` | `claude-sonnet-4.5`, `claude-haiku-4.5`, `claude-opus-4.5`, `claude-sonnet-4`, `gpt-5.2`, `gpt-5.2-codex`, `gpt-5-mini`, `gpt-4.1` | `low`, `medium`, `high`, `xhigh` | `gpt-5.2` | `high` |
 | `none` | _(explicit opt-out)_ | _(n/a)_ | _n/a_ | _n/a_ |
 
