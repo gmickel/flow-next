@@ -73,7 +73,8 @@ satisfies: [R5, R7, R15, R16]
 - [ ] All three commands support `--json` with consistent `{success, ...}` envelope.
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Implemented `flowctl prospect list / read / archive` plus `_prospect_parse_frontmatter` + `_prospect_detect_corruption` shared helpers with R16 byte-for-byte reason-string alignment to the Phase 0 inline classifier. Reuses `validate_prospect_frontmatter` + `PROSPECT_REQUIRED_FIELDS` shipped in task 3; adds 34 unit tests; full suite passes (287/287) plus smoke (125/125).
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: c3e3fedff1b71f2898f6015a7aee3f1aea330209
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (287/287 ok), plugins/flow-next/scripts/smoke_test.sh (125/125 passed), manual end-to-end: list / list --all / read --section / archive / archive (corrupt) / archive (already archived)
+- PRs:

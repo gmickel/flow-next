@@ -26,15 +26,17 @@ Mechanical rollup following the pattern used by fn-29.7, fn-30.7, fn-31.7, fn-32
 1. **Version bump:** `scripts/bump.sh minor flow-next` (0.35.1 → 0.36.0). New skill = minor bump.
 
 2. **CHANGELOG entry** under new `[flow-next 0.36.0]`:
-   - `### Added` block covering `/flow-next:prospect` command, all 4 `flowctl prospect` subcommands, `.flow/prospects/` artifact directory, Ralph-out behavior, bucketed ranking, persona seeding, rejection floor.
-   - Mention the shipped flowctl.py helpers from task 3: `write_prospect_artifact`, `render_prospect_body`, `validate_prospect_frontmatter`, `_prospect_slug`, `_prospect_next_id`, `PROSPECT_REQUIRED_FIELDS`/`PROSPECT_OPTIONAL_FIELDS`/`PROSPECT_FIELD_ORDER` — worth a one-line note in the technical-details paragraph so consumers know the public helper surface. <!-- Updated by plan-sync: task 3 shipped these public-ish helpers; include in changelog. -->
+   - `### Added` block covering `/flow-next:prospect` command, all 4 `flowctl prospect` subcommands (`list`, `read`, `archive`, `promote`), `.flow/prospects/` artifact directory, Ralph-out behavior, bucketed ranking, persona seeding, rejection floor.
+   - Mention the shipped flowctl.py helpers from task 3: `write_prospect_artifact`, `render_prospect_body`, `validate_prospect_frontmatter`, `_prospect_slug`, `_prospect_next_id`, `PROSPECT_REQUIRED_FIELDS`/`PROSPECT_OPTIONAL_FIELDS`/`PROSPECT_FIELD_ORDER`. <!-- Updated by plan-sync: task 3 shipped these public-ish helpers; include in changelog. -->
+   - Mention the shipped flowctl.py helpers from task 4: `_prospect_parse_frontmatter`, `_prospect_detect_corruption`, `_prospect_artifact_status`, `_prospect_resolve_id`, `_prospect_iter_artifacts`, `_prospect_extract_section`, `_prospect_extract_survivors`, `_prospect_extract_rejected`, `get_prospects_dir`, plus the `PROSPECT_CORRUPT_*` module constants that own the R16 reason-string contract. <!-- Updated by plan-sync: task 4 shipped the CLI + parsing/status helper surface; document in the technical-details paragraph. -->
+   - Document exit codes: `flowctl prospect read` on corrupt artifact exits `3` (distinct from Ralph-block `2`); `list --all` surfaces corrupt entries with `corrupt (<reason>)` in the status column.
    - Artifact frontmatter shape: `date` round-trips as quoted string; optional flags `floor_violation`, `generation_under_volume`, `promoted_to` (post-task-5) are omitted when unset.
    - `### Changed` block if any existing behavior shifted (expected: none — prospect is purely additive).
    - Match verbose style of `[flow-next 0.34.0]` (resolve-pr) entry.
 
 3. **`plugins/flow-next/README.md` updates:**
    - Command table: add `/flow-next:prospect [focus hint]` row.
-   - flowctl cheat sheet: add `flowctl prospect list / read / archive / promote` block with examples.
+   - flowctl cheat sheet: add `flowctl prospect list / read / archive / promote` block with examples. Include `--section focus|grounding|survivors|rejected` on `read`, `--all` on `list`, and the exit-3 contract for corrupt artifacts. <!-- Updated by plan-sync: task 4 shipped these exact flag shapes. -->
    - Lifecycle diagram (mermaid): insert `prospect → interview → plan → work` as an upstream branch before the current `interview → plan → work` path.
    - New "## Prospecting (v0.36.0+)" section before "## Planning" covering: when to use, artifact schema, promote flow, decision context (why prose-only ranking, why bucketed, why Ralph-out).
 

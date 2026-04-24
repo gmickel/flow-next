@@ -3807,6 +3807,77 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
                     cleaned.append(item)
                 result[key] = cleaned
             continue
+        # Inline flow-mapping: {1: [a, b], 2: [c]} — used by prospect
+        # `promoted_to`. Values are restricted to inline-list / scalar so
+        # the parser stays bounded; PyYAML is the canonical reader and
+        # produces typed output, this fallback keeps strings.
+        if value.startswith("{") and value.endswith("}"):
+            inner = value[1:-1].strip()
+            if not inner:
+                result[key] = {}
+                continue
+            mapping: dict[str, Any] = {}
+            # Split on top-level commas (don't split inside brackets).
+            depth = 0
+            start = 0
+            parts: list[str] = []
+            for i, ch in enumerate(inner):
+                if ch in "[{":
+                    depth += 1
+                elif ch in "]}":
+                    depth -= 1
+                elif ch == "," and depth == 0:
+                    parts.append(inner[start:i])
+                    start = i + 1
+            parts.append(inner[start:])
+            ok = True
+            for part in parts:
+                part = part.strip()
+                if not part or ":" not in part:
+                    ok = False
+                    break
+                k_raw, _, v_raw = part.partition(":")
+                k_raw = k_raw.strip()
+                v_raw = v_raw.strip()
+                if (
+                    len(k_raw) >= 2
+                    and k_raw[0] == k_raw[-1]
+                    and k_raw[0] in ('"', "'")
+                ):
+                    k_raw = k_raw[1:-1]
+                # Inline list inside the value.
+                if v_raw.startswith("[") and v_raw.endswith("]"):
+                    list_inner = v_raw[1:-1].strip()
+                    if not list_inner:
+                        mapping[k_raw] = []
+                    else:
+                        items = [it.strip() for it in list_inner.split(",")]
+                        cleaned = []
+                        for it in items:
+                            if (
+                                len(it) >= 2
+                                and it[0] == it[-1]
+                                and it[0] in ('"', "'")
+                            ):
+                                it = it[1:-1]
+                            cleaned.append(it)
+                        mapping[k_raw] = cleaned
+                else:
+                    # Strip surrounding quotes from scalar values.
+                    if (
+                        len(v_raw) >= 2
+                        and v_raw[0] == v_raw[-1]
+                        and v_raw[0] in ('"', "'")
+                    ):
+                        v_raw = v_raw[1:-1]
+                    mapping[k_raw] = v_raw
+            if ok:
+                result[key] = mapping
+            else:
+                # Malformed mapping → preserve raw string so we don't
+                # silently drop data; callers can detect and warn.
+                result[key] = value
+            continue
         # Booleans / null / numbers — keep strings for determinism.
         # (Memory entries don't need typed scalars; readers treat as strings.)
         result[key] = value
@@ -3978,7 +4049,7 @@ PROSPECT_REQUIRED_FIELDS: frozenset[str] = frozenset(
     }
 )
 PROSPECT_OPTIONAL_FIELDS: frozenset[str] = frozenset(
-    {"floor_violation", "generation_under_volume"}
+    {"floor_violation", "generation_under_volume", "promoted_to"}
 )
 PROSPECT_STATUS_VALUES: frozenset[str] = frozenset(
     {"active", "corrupt", "stale", "archived"}
@@ -3993,6 +4064,7 @@ PROSPECT_FIELD_ORDER: list[str] = [
     "rejection_rate",
     "artifact_id",
     "promoted_ideas",
+    "promoted_to",
     "status",
     "floor_violation",
     "generation_under_volume",
@@ -4028,13 +4100,32 @@ def _format_prospect_list_item(item: Any) -> str:
 
 
 def _format_prospect_yaml_value(value: Any, key: Optional[str] = None) -> str:
-    """Render a prospect frontmatter value to YAML scalar / inline list.
+    """Render a prospect frontmatter value to YAML scalar / inline list / inline dict.
 
     Mirrors `_format_yaml_value` but uses the prospect-quoted-string list so
     the writer is independent of memory-field policy. Lists render inline
-    (`[1, 2]`); int / float / bool scalars render natively (no string
-    coercion); strings quote when YAML would otherwise coerce them.
+    (`[1, 2]`); dicts render inline-flow (`{1: [a, b], 2: [c]}`) — used by
+    `promoted_to` to track per-idea epic-id history (R20). Int / float / bool
+    scalars render natively (no string coercion); strings quote when YAML
+    would otherwise coerce them.
     """
+    if isinstance(value, dict):
+        # Inline-flow mapping. Keys coerced to str via `_format_prospect_list_item`
+        # for round-trip safety; values pass through the same recursive renderer
+        # so nested lists / scalars are handled uniformly.
+        inner_parts: list[str] = []
+        # Sort keys deterministically — int keys first (idea positions), then str.
+        def _key_sort(k: Any) -> tuple[int, str]:
+            try:
+                return (0, f"{int(k):08d}")
+            except (TypeError, ValueError):
+                return (1, str(k))
+
+        for k in sorted(value.keys(), key=_key_sort):
+            rendered_k = _format_prospect_list_item(k)
+            rendered_v = _format_prospect_yaml_value(value[k])
+            inner_parts.append(f"{rendered_k}: {rendered_v}")
+        return "{" + ", ".join(inner_parts) + "}"
     if isinstance(value, list):
         inner = ", ".join(_format_prospect_list_item(item) for item in value)
         return f"[{inner}]"
@@ -4079,6 +4170,10 @@ def validate_prospect_frontmatter(frontmatter: dict[str, Any]) -> list[str]:
     promoted = frontmatter.get("promoted_ideas")
     if promoted is not None and not isinstance(promoted, list):
         errors.append("promoted_ideas must be a list")
+
+    promoted_to = frontmatter.get("promoted_to")
+    if promoted_to is not None and not isinstance(promoted_to, dict):
+        errors.append("promoted_to must be a dict")
 
     return errors
 
@@ -7318,6 +7413,48 @@ def _prospect_extract_rejected(body: str) -> list[dict[str, Any]]:
     return rejected
 
 
+def _prospect_rewrite_in_place(
+    src: Path, frontmatter: dict[str, Any], body: str
+) -> None:
+    """Rewrite a prospect artifact at `src` with new frontmatter + body.
+
+    Pattern: write a per-pid temp file alongside `src`, then `os.replace`
+    onto `src` (POSIX atomic, overwrites). Used by `cmd_prospect_archive`
+    (status flip) and `cmd_prospect_promote` (promoted_ideas + promoted_to
+    update). NOT a drop-in replacement for `write_prospect_artifact`: that
+    writer enforces fails-on-exists via `os.link` for the initial create
+    (collision-detection invariant `_prospect_next_id` relies on); this
+    helper is for in-place updates where overwrite is the contract.
+
+    Raises ValueError on invalid frontmatter so callers can surface a
+    clean error before mutating the file.
+    """
+    errors = validate_prospect_frontmatter(frontmatter)
+    if errors:
+        raise ValueError("; ".join(errors))
+
+    lines = ["---"]
+    for key in sorted(frontmatter.keys(), key=_prospect_frontmatter_sort_key):
+        rendered = _format_prospect_yaml_value(frontmatter[key], key)
+        lines.append(f"{key}: {rendered}")
+    lines.append("---")
+    lines.append("")
+    body_text = body.rstrip("\n") + "\n" if body else ""
+    content = "\n".join(lines) + "\n" + body_text
+
+    tmp = src.parent / f".tmp.{os.getpid()}.{src.name}"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.replace(tmp, src)
+    finally:
+        try:
+            if tmp.exists():
+                os.unlink(tmp)
+        except OSError:
+            pass
+
+
 def cmd_prospect_list(args: argparse.Namespace) -> None:
     """List prospect artifacts under `.flow/prospects/`.
 
@@ -7635,26 +7772,14 @@ def cmd_prospect_archive(args: argparse.Namespace) -> None:
             body = parts[2].lstrip("\n")
             new_fm = dict(fm)
             new_fm["status"] = "archived"
-            # Re-emit using the canonical writer so field order is stable.
-            errors = validate_prospect_frontmatter(new_fm)
-            if not errors:
-                # Use a temp file alongside `src`, then rename onto src to
-                # keep updates atomic before the move.
-                tmp = src.parent / f".tmp.{os.getpid()}.{src.name}"
-                lines = ["---"]
-                for key in sorted(
-                    new_fm.keys(), key=_prospect_frontmatter_sort_key
-                ):
-                    rendered = _format_prospect_yaml_value(new_fm[key], key)
-                    lines.append(f"{key}: {rendered}")
-                lines.append("---")
-                lines.append("")
-                body_text = body.rstrip("\n") + "\n" if body else ""
-                content = "\n".join(lines) + "\n" + body_text
-                with open(tmp, "w", encoding="utf-8") as f:
-                    f.write(content)
-                os.replace(tmp, src)
+            # Re-emit via the shared in-place writer so field order is
+            # stable and the rewrite is atomic.
+            try:
+                _prospect_rewrite_in_place(src, new_fm, body)
                 rewritten = True
+            except ValueError:
+                # Validation failed — fall through to the raw move.
+                rewritten = False
 
     # Move src → dst. os.rename is atomic on the same filesystem; fall
     # back to copy+unlink if cross-device.
@@ -7681,6 +7806,334 @@ def cmd_prospect_archive(args: argparse.Namespace) -> None:
         print(f"Archived {descriptor['artifact_id']} → {dst}")
         if not rewritten:
             print("  (frontmatter not updated — corrupt or unparseable artifact)")
+
+
+def _render_epic_skeleton_from_prospect(
+    epic_id: str,
+    title: str,
+    survivor: dict[str, Any],
+    artifact_id: str,
+    idea: int,
+    focus_hint: Optional[str],
+    prospected_date: Optional[str],
+) -> str:
+    """Render an epic spec body extending the default skeleton with prospect context.
+
+    Format mirrors `create_epic_spec` (Overview / Acceptance / etc.) but
+    pre-fills Overview, Leverage, Suggested size, and a `## Source` link
+    that points back to the prospect artifact + idea position. Acceptance
+    is left as a placeholder pointing at `/flow-next:interview` /
+    `/flow-next:plan` for next-step refinement.
+    """
+    summary = (survivor.get("summary") or "").strip() or "_(summary missing — see prospect artifact)_"
+    leverage = (survivor.get("leverage") or "").strip() or "_(leverage missing — see prospect artifact)_"
+    size = (survivor.get("size") or "?").strip() or "?"
+    source_link = f".flow/prospects/{artifact_id}.md#idea-{idea}"
+    focus_text = focus_hint if focus_hint else "(open-ended)"
+    date_text = prospected_date if prospected_date else "(unknown)"
+
+    affected = survivor.get("affected_areas")
+    affected_line = ""
+    if affected:
+        if isinstance(affected, list):
+            affected_text = ", ".join(str(a) for a in affected)
+        else:
+            affected_text = str(affected)
+        affected_line = f"\n## Affected areas\n{affected_text}\n"
+
+    risk = survivor.get("risk_notes")
+    risk_block = ""
+    if risk:
+        risk_block = f"\n## Risk notes\n{str(risk).strip()}\n"
+
+    return (
+        f"# {epic_id} {title}\n"
+        "\n"
+        "## Overview\n"
+        f"{summary}\n"
+        "\n"
+        "## Leverage\n"
+        f"{leverage}\n"
+        "\n"
+        "## Suggested size\n"
+        f"{size} (from prospect ranking)\n"
+        f"{affected_line}{risk_block}"
+        "\n"
+        "## Source\n"
+        f"- Prospect: `{source_link}`\n"
+        f"- Focus hint: {focus_text}\n"
+        f"- Prospected: {date_text}\n"
+        "\n"
+        "## Acceptance\n"
+        "_(to be defined — run `/flow-next:interview <epic-id>` or `/flow-next:plan <epic-id>` next)_\n"
+        "\n"
+        "## Quick commands\n"
+        "<!-- Required: at least one smoke command for the repo -->\n"
+        "- `# e.g., npm test, bun test, make test`\n"
+    )
+
+
+def cmd_prospect_promote(args: argparse.Namespace) -> None:
+    """Promote a prospect survivor to a new epic.
+
+    Reuses `_prospect_resolve_id` + `_prospect_parse_frontmatter` +
+    `_prospect_extract_section`/`_prospect_extract_survivors` (task 4) for
+    artifact load + survivor extraction. Refuses on corrupt artifacts
+    (exit 3, matches `cmd_prospect_read`). Idempotency guard via
+    frontmatter `promoted_ideas` (R14 / R20); `--force` overrides and
+    tracks the additional epic-id under `promoted_to`.
+
+    Epic creation goes through `cmd_epic_create` indirectly: this command
+    inlines the same scan-based allocation + spec write so the survivor
+    context is in the spec from the first byte (no two-step write that
+    leaves a default skeleton on disk if the spec write fails).
+    """
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.",
+            use_json=args.json,
+        )
+
+    artifact_id = getattr(args, "artifact_id", None)
+    if not artifact_id:
+        error_exit("artifact_id required", use_json=args.json)
+
+    idea = getattr(args, "idea", None)
+    if idea is None:
+        error_exit("--idea N required", use_json=args.json, code=2)
+    try:
+        idea_n = int(idea)
+    except (TypeError, ValueError):
+        error_exit(
+            f"--idea must be a positive integer (got {idea!r})",
+            use_json=args.json,
+            code=2,
+        )
+    if idea_n < 1:
+        error_exit(
+            f"--idea must be >= 1 (got {idea_n})",
+            use_json=args.json,
+            code=2,
+        )
+
+    force = bool(getattr(args, "force", False))
+    epic_title_override = getattr(args, "epic_title", None)
+
+    prospects_dir = get_prospects_dir()
+    descriptor = _prospect_resolve_id(
+        prospects_dir, artifact_id, include_archive=True
+    )
+    if descriptor is None:
+        error_exit(
+            f"prospect artifact '{artifact_id}' not found",
+            use_json=args.json,
+        )
+
+    if descriptor["status"] == "corrupt":
+        reason = descriptor.get("corruption") or "unknown"
+        if args.json:
+            json_output(
+                {
+                    "artifact_id": descriptor["artifact_id"],
+                    "path": descriptor["path"],
+                    "status": "corrupt",
+                    "corruption": reason,
+                    "error": f"refusing to promote: artifact corrupt ({reason})",
+                },
+                success=False,
+            )
+        else:
+            print(f"[ARTIFACT CORRUPT: {reason}]", file=sys.stderr)
+        sys.exit(3)
+
+    src = Path(descriptor["path"])
+    try:
+        text = src.read_text(encoding="utf-8")
+    except OSError as exc:
+        error_exit(f"failed to read {src}: {exc}", use_json=args.json, code=3)
+
+    fm = _prospect_parse_frontmatter(text)
+    if fm is None:
+        error_exit(
+            f"failed to parse frontmatter on {src}",
+            use_json=args.json,
+            code=3,
+        )
+
+    survivors_section = _prospect_extract_section(text, "survivors") or ""
+    survivors = _prospect_extract_survivors(survivors_section)
+    survivor_count = len(survivors)
+    if survivor_count == 0:
+        error_exit(
+            f"prospect '{descriptor['artifact_id']}' has no survivors to promote",
+            use_json=args.json,
+            code=2,
+        )
+    if idea_n > survivor_count:
+        error_exit(
+            f"--idea {idea_n} out of range (artifact has {survivor_count} survivors)",
+            use_json=args.json,
+            code=2,
+        )
+
+    survivor = next((s for s in survivors if s.get("position") == idea_n), None)
+    if survivor is None:
+        # Position numbering may have a gap — surface the same out-of-range
+        # error so callers don't have to distinguish the two.
+        error_exit(
+            f"--idea {idea_n} not present among survivors "
+            f"(positions: {sorted(s.get('position') for s in survivors)})",
+            use_json=args.json,
+            code=2,
+        )
+
+    # Idempotency guard (R14).
+    raw_promoted = fm.get("promoted_ideas") or []
+    promoted_ideas: list[int] = []
+    for v in raw_promoted:
+        try:
+            promoted_ideas.append(int(v))
+        except (TypeError, ValueError):
+            # Tolerate stringly-typed int from the inline-yaml fallback.
+            try:
+                promoted_ideas.append(int(str(v).strip()))
+            except (TypeError, ValueError):
+                continue
+
+    raw_promoted_to = fm.get("promoted_to") or {}
+    promoted_to: dict[str, list[str]] = {}
+    if isinstance(raw_promoted_to, dict):
+        for k, v in raw_promoted_to.items():
+            key = str(k).strip()
+            if isinstance(v, list):
+                promoted_to[key] = [str(x).strip() for x in v]
+            elif v is None:
+                promoted_to[key] = []
+            else:
+                promoted_to[key] = [str(v).strip()]
+
+    if idea_n in promoted_ideas and not force:
+        prior = promoted_to.get(str(idea_n)) or []
+        prior_disp = ", ".join(prior) if prior else "(unknown epic)"
+        error_exit(
+            f"Idea #{idea_n} already promoted to {prior_disp}. "
+            f"Use --force to create another epic from the same idea.",
+            use_json=args.json,
+            code=2,
+        )
+
+    # Resolve epic title.
+    epic_title = (epic_title_override or survivor.get("title") or "").strip()
+    if not epic_title:
+        error_exit(
+            f"survivor #{idea_n} has no title and --epic-title was not provided",
+            use_json=args.json,
+            code=2,
+        )
+
+    # Allocate epic id (mirrors cmd_epic_create exactly).
+    flow_dir = get_flow_dir()
+    meta_path = flow_dir / META_FILE
+    load_json_or_exit(meta_path, "meta.json", use_json=args.json)
+    max_epic = scan_max_epic_id(flow_dir)
+    epic_num = max_epic + 1
+    slug = slugify(epic_title)
+    suffix = slug if slug else generate_epic_suffix()
+    epic_id = f"fn-{epic_num}-{suffix}"
+    epic_json_path = flow_dir / EPICS_DIR / f"{epic_id}.json"
+    epic_spec_path = flow_dir / SPECS_DIR / f"{epic_id}.md"
+    if epic_json_path.exists() or epic_spec_path.exists():
+        error_exit(
+            f"Refusing to overwrite existing epic {epic_id}. "
+            f"This shouldn't happen - check for orphaned files.",
+            use_json=args.json,
+        )
+
+    # Build epic JSON + spec.
+    epic_data = {
+        "id": epic_id,
+        "title": epic_title,
+        "status": "open",
+        "plan_review_status": "unknown",
+        "plan_reviewed_at": None,
+        "branch_name": epic_id,
+        "depends_on_epics": [],
+        "spec_path": f"{FLOW_DIR}/{SPECS_DIR}/{epic_id}.md",
+        "next_task": 1,
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    raw_date = fm.get("date")
+    prospected_date = (
+        raw_date if isinstance(raw_date, str) else
+        (raw_date.isoformat() if hasattr(raw_date, "isoformat") else None)
+    )
+    spec_content = _render_epic_skeleton_from_prospect(
+        epic_id=epic_id,
+        title=epic_title,
+        survivor=survivor,
+        artifact_id=descriptor["artifact_id"],
+        idea=idea_n,
+        focus_hint=fm.get("focus_hint"),
+        prospected_date=prospected_date,
+    )
+
+    atomic_write_json(epic_json_path, epic_data)
+    atomic_write(epic_spec_path, spec_content)
+
+    # Update artifact frontmatter atomically. Failure here doesn't roll
+    # back the epic — surface a warning so the caller can re-run with
+    # --force if needed.
+    artifact_updated = False
+    artifact_warning: Optional[str] = None
+    try:
+        new_fm = dict(fm)
+        new_promoted = sorted(set(promoted_ideas + [idea_n]))
+        new_fm["promoted_ideas"] = new_promoted
+
+        new_promoted_to = {k: list(v) for k, v in promoted_to.items()}
+        existing = new_promoted_to.get(str(idea_n), [])
+        if epic_id not in existing:
+            existing.append(epic_id)
+        new_promoted_to[str(idea_n)] = existing
+        new_fm["promoted_to"] = new_promoted_to
+
+        # Strip the body's frontmatter delimiters before rewrite.
+        body_only = ""
+        if text.startswith("---"):
+            parts = text.split("---", 2)
+            if len(parts) >= 3:
+                body_only = parts[2].lstrip("\n")
+        _prospect_rewrite_in_place(src, new_fm, body_only)
+        artifact_updated = True
+    except (OSError, ValueError) as exc:
+        artifact_warning = (
+            f"epic {epic_id} created but artifact frontmatter not updated: {exc}. "
+            f"Re-run with --force if needed."
+        )
+
+    source_link = f".flow/prospects/{descriptor['artifact_id']}.md#idea-{idea_n}"
+
+    if args.json:
+        payload: dict[str, Any] = {
+            "epic_id": epic_id,
+            "epic_title": epic_title,
+            "idea": idea_n,
+            "artifact_id": descriptor["artifact_id"],
+            "source_link": source_link,
+            "spec_path": str(epic_spec_path),
+            "artifact_updated": artifact_updated,
+        }
+        if artifact_warning:
+            payload["warning"] = artifact_warning
+        json_output(payload)
+    else:
+        print(
+            f"Promoted idea #{idea_n} (\"{epic_title}\") to {epic_id}. "
+            f"Next: /flow-next:interview {epic_id}"
+        )
+        if artifact_warning:
+            print(f"  WARNING: {artifact_warning}", file=sys.stderr)
 
 
 def cmd_epic_create(args: argparse.Namespace) -> None:
@@ -15301,6 +15754,36 @@ def main() -> None:
     p_prospect_archive.add_argument("artifact_id", help="Artifact id to archive")
     p_prospect_archive.add_argument("--json", action="store_true", help="JSON output")
     p_prospect_archive.set_defaults(func=cmd_prospect_archive)
+
+    # prospect promote (fn-33 task 5)
+    p_prospect_promote = prospect_sub.add_parser(
+        "promote",
+        help="Promote a survivor to a new epic with pre-filled skeleton",
+    )
+    p_prospect_promote.add_argument(
+        "artifact_id",
+        help="Artifact id (full or slug-only) to promote from",
+    )
+    p_prospect_promote.add_argument(
+        "--idea",
+        required=True,
+        type=int,
+        help="Survivor position number (1-based) to promote",
+    )
+    p_prospect_promote.add_argument(
+        "--epic-title",
+        dest="epic_title",
+        help="Override the epic title (defaults to the survivor's title)",
+    )
+    p_prospect_promote.add_argument(
+        "--force",
+        action="store_true",
+        help="Promote again even if --idea was already promoted",
+    )
+    p_prospect_promote.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_prospect_promote.set_defaults(func=cmd_prospect_promote)
 
     # epic create
     p_epic = subparsers.add_parser("epic", help="Epic commands")
