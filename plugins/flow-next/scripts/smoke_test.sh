@@ -2179,6 +2179,161 @@ PASS=$((PASS + 1))
 echo -e "${GREEN}✓${NC} validate: --receipt required (argparse rejection)"
 PASS=$((PASS + 1))
 
+# --- deep-pass subcommands (fn-32.2 --deep) ---
+echo -e "${YELLOW}--- deep-pass (fn-32.2) ---${NC}"
+
+DEEP_TEST_DIR="$(mktemp -d)"
+
+# Test: codex deep-pass and copilot deep-pass --help surfaces discoverable.
+(
+  cd "$DEEP_TEST_DIR"
+  "$SCRIPT_DIR/flowctl" codex deep-pass --help > /dev/null \
+    || { echo "FAIL: codex deep-pass --help"; exit 1; }
+  "$SCRIPT_DIR/flowctl" copilot deep-pass --help > /dev/null \
+    || { echo "FAIL: copilot deep-pass --help"; exit 1; }
+  "$SCRIPT_DIR/flowctl" review-deep-auto --help > /dev/null \
+    || { echo "FAIL: review-deep-auto --help"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} deep-pass subcommands + review-deep-auto: --help available"
+PASS=$((PASS + 1))
+
+# Test: review-deep-auto — security glob matches produce adversarial + security.
+(
+  cd "$DEEP_TEST_DIR"
+  out=$("$SCRIPT_DIR/flowctl" review-deep-auto --files "src/auth.ts,README.md" --json) \
+    || { echo "FAIL: review-deep-auto security"; exit 1; }
+  echo "$out" | grep -q '"security"' \
+    || { echo "FAIL: expected security in auto_enabled"; echo "$out"; exit 1; }
+  echo "$out" | grep -q '"adversarial"' \
+    || { echo "FAIL: expected adversarial in selected"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} review-deep-auto: security glob triggers security pass"
+PASS=$((PASS + 1))
+
+# Test: review-deep-auto — performance glob.
+(
+  cd "$DEEP_TEST_DIR"
+  out=$("$SCRIPT_DIR/flowctl" review-deep-auto --files "db/migrations/001.sql" --json) \
+    || { echo "FAIL: review-deep-auto perf"; exit 1; }
+  echo "$out" | grep -q '"performance"' \
+    || { echo "FAIL: expected performance in auto_enabled"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} review-deep-auto: migration glob triggers performance pass"
+PASS=$((PASS + 1))
+
+# Test: review-deep-auto — non-matching paths yield adversarial only.
+(
+  cd "$DEEP_TEST_DIR"
+  out=$("$SCRIPT_DIR/flowctl" review-deep-auto --files "src/utils/date.ts" --json) \
+    || { echo "FAIL: review-deep-auto no-match"; exit 1; }
+  echo "$out" | grep -q '"auto_enabled": \[\]' \
+    || { echo "FAIL: expected empty auto_enabled"; echo "$out"; exit 1; }
+  echo "$out" | grep -q '"adversarial"' \
+    || { echo "FAIL: expected adversarial always-on"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} review-deep-auto: no-match paths yield adversarial only"
+PASS=$((PASS + 1))
+
+# Test: deep-pass requires --pass.
+(
+  cd "$DEEP_TEST_DIR"
+  RPATH="$DEEP_TEST_DIR/receipt.json"
+  printf '%s\n' '{"mode":"codex","verdict":"NEEDS_WORK","session_id":"s-dp"}' > "$RPATH"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" codex deep-pass --receipt "$RPATH" --json 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || { echo "FAIL: expected nonzero exit when --pass missing"; echo "$out"; exit 1; }
+  echo "$out" | grep -qi "pass" \
+    || { echo "FAIL: expected error mentioning --pass"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} deep-pass: --pass required (argparse rejection)"
+PASS=$((PASS + 1))
+
+# Test: deep-pass --pass only accepts valid values.
+(
+  cd "$DEEP_TEST_DIR"
+  RPATH="$DEEP_TEST_DIR/receipt.json"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" codex deep-pass --pass bogus --receipt "$RPATH" --json 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || { echo "FAIL: expected nonzero exit for bogus pass"; echo "$out"; exit 1; }
+  echo "$out" | grep -qi "invalid choice" \
+    || { echo "FAIL: expected 'invalid choice' error"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} deep-pass: --pass rejects invalid values"
+PASS=$((PASS + 1))
+
+# Test: deep-pass requires session_id in receipt.
+(
+  cd "$DEEP_TEST_DIR"
+  RPATH="$DEEP_TEST_DIR/receipt-nosess.json"
+  printf '%s\n' '{"mode":"codex","verdict":"NEEDS_WORK"}' > "$RPATH"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" codex deep-pass --pass adversarial --receipt "$RPATH" --json 2>&1) || rc=$?
+  [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2 for missing session_id, got $rc"; echo "$out"; exit 1; }
+  echo "$out" | grep -q "No session_id" \
+    || { echo "FAIL: expected 'No session_id' in error"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} deep-pass: missing session_id exits 2 with clear error"
+PASS=$((PASS + 1))
+
+# Test: cross-backend guard — codex receipt, copilot deep-pass → error.
+(
+  cd "$DEEP_TEST_DIR"
+  RPATH="$DEEP_TEST_DIR/receipt-codex.json"
+  printf '%s\n' '{"mode":"codex","verdict":"SHIP","session_id":"s-xbdp"}' > "$RPATH"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" copilot deep-pass --pass adversarial --receipt "$RPATH" --json 2>&1) || rc=$?
+  [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2 for cross-backend, got $rc"; echo "$out"; exit 1; }
+  echo "$out" | grep -qi "same backend" \
+    || { echo "FAIL: expected cross-backend error"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} deep-pass: cross-backend receipt rejected with exit 2"
+PASS=$((PASS + 1))
+
+# Test: helper functions — fingerprint/merge/promotion unit tests.
+(
+  cd "$DEEP_TEST_DIR"
+  "$PYTHON_BIN" - "$SCRIPT_DIR/flowctl.py" <<'PYEOF' || { echo "FAIL: helper unit tests"; exit 1; }
+import sys, importlib.util
+spec = importlib.util.spec_from_file_location("flowctl", sys.argv[1])
+mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+
+# fingerprint: same file + near-line + same title
+f1 = {"file":"src/auth.ts","line":42,"title":"null deref"}
+f2 = {"file":"./src/auth.ts","line":45,"title":"Null Deref"}
+assert mod.finding_fingerprint(f1) == mod.finding_fingerprint(f2), "near-line dedup fail"
+
+# promotion anchors
+for before, after in [(0,25),(25,50),(50,75),(75,100),(100,100)]:
+    assert mod.promote_confidence(before) == after, f"promote({before}) != {after}"
+
+# merge: primary+deep agreement promotes; cross-deep only dedups
+primary = [{"id":"f1","file":"src/auth.ts","line":42,"title":"null deref","confidence":50,"severity":"P1","classification":"introduced"}]
+deep = {
+  "adversarial": [{"id":"a1","file":"src/auth.ts","line":40,"title":"Null Deref","confidence":75,"pass":"adversarial"}],
+  "security":    [{"id":"s1","file":"src/auth.ts","line":42,"title":"null deref","confidence":75,"pass":"security"}],
+}
+r = mod.merge_deep_findings(primary, deep)
+# primary f1 should be promoted TWICE (once per agreeing deep pass) → 50 → 75 → 100
+assert len(r["promotions"]) == 2, f"expected 2 promotions, got {r['promotions']}"
+f1m = next(x for x in r["merged"] if x["id"] == "f1")
+assert f1m["confidence"] == 100, f"expected f1 promoted to 100, got {f1m['confidence']}"
+# No deep-pass findings should survive (both match primary)
+assert len(r["merged"]) == 1, f"expected only primary in merged, got {r['merged']}"
+
+# auto-enable heuristic
+assert mod.auto_enabled_passes(["src/auth.ts"]) == ["security"]
+assert mod.auto_enabled_passes(["db/migrations/001.sql"]) == ["performance"]
+assert mod.auto_enabled_passes(["src/utils/date.ts"]) == []
+
+print("helpers OK")
+PYEOF
+)
+echo -e "${GREEN}✓${NC} deep-pass helpers: fingerprint/promote/merge/auto-enable"
+PASS=$((PASS + 1))
+
+# Cleanup deep-pass test dir (use trash when available, fallback to rmdir tree)
+trash "$DEEP_TEST_DIR" 2>/dev/null || true
+
 echo ""
 echo -e "${YELLOW}=== Results ===${NC}"
 echo -e "Passed: ${GREEN}$PASS${NC}"

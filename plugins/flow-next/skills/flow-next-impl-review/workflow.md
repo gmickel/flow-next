@@ -634,6 +634,121 @@ If no verdict tag in response, output `<promise>RETRY</promise>` and stop.
 
 ---
 
+## Deep-Pass Phase (fn-32.2 --deep) — all backends
+
+When `DEEP=true`, run the selected specialized passes after the primary
+review completes — regardless of verdict. Each pass continues the primary
+backend session (via receipt `session_id`) so the model already has the
+diff + primary findings loaded; deep-pass prompts re-use that context to
+probe for what the primary framing may have missed.
+
+**Preserved by default:** when `DEEP=false` (or `--deep` not passed and
+`FLOW_REVIEW_DEEP` unset), this entire section is skipped — primary
+Carmack flow is unchanged.
+
+### Step D.1: Determine which passes to run
+
+The skill layer computes `SELECTED_PASSES` in Step 0 (see SKILL.md) using
+`flowctl review-deep-auto` against the changed-file list. Explicit CSV
+form (`--deep=adversarial,security`) overrides auto-enable.
+
+Adversarial always runs. Security auto-enables for auth / routes /
+middleware / session / token / `.env` / workflow paths. Performance
+auto-enables for migrations / SQL / cache / jobs paths. See
+[deep-passes.md](deep-passes.md) for the full pattern list.
+
+### Step D.2: Extract primary findings
+
+Parse the primary review output into a JSON-lines file
+(`/tmp/primary-findings.jsonl`) using the same format as the validator
+pass — one object per line, with at least `id`, plus `severity`,
+`confidence`, `classification`, `file`, `line`, `title`, `suggested_fix`.
+
+The deep-pass prompt embeds these as context so the pass avoids
+re-flagging issues the primary already caught.
+
+### Step D.3: Dispatch each pass
+
+```bash
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
+PRIMARY_FINDINGS="/tmp/primary-findings.jsonl"
+
+for pass in $SELECTED_PASSES; do
+  case "$BACKEND" in
+    codex)
+      $FLOWCTL codex deep-pass \
+        --pass "$pass" \
+        --primary-findings "$PRIMARY_FINDINGS" \
+        --receipt "$RECEIPT_PATH" \
+        --json
+      ;;
+    copilot)
+      $FLOWCTL copilot deep-pass \
+        --pass "$pass" \
+        --primary-findings "$PRIMARY_FINDINGS" \
+        --receipt "$RECEIPT_PATH" \
+        --json
+      ;;
+    rp)
+      # RP: same-chat session continuity is automatic. Render the
+      # pass-specific prompt from deep-passes.md (inject primary
+      # findings block), send via `rp chat-send` (NO --new-chat),
+      # parse findings with the same header regex flowctl uses,
+      # merge into receipt manually (or via a shared helper).
+      # See deep-passes.md for template markers.
+      :
+      ;;
+  esac
+done
+```
+
+### Step D.4: Re-compute verdict after merge
+
+Each `deep-pass` call writes the merged receipt in place. Final verdict
+is read back from the receipt:
+
+```bash
+NEW_VERDICT="$(jq -r '.verdict' "$RECEIPT_PATH" 2>/dev/null || echo NEEDS_WORK)"
+DEEP_COUNTS="$(jq -c '.deep_findings_count // {}' "$RECEIPT_PATH")"
+PROMOTIONS="$(jq -c '.cross_pass_promotions // []' "$RECEIPT_PATH")"
+
+echo "Deep passes: $SELECTED_PASSES"
+echo "Deep findings per pass: $DEEP_COUNTS"
+echo "Cross-pass promotions: $PROMOTIONS"
+echo "VERDICT=$NEW_VERDICT"
+```
+
+If the verdict was upgraded (`SHIP → NEEDS_WORK`), the receipt records
+`verdict_before_deep` for telemetry. Verdict is **never** downgraded by
+deep-pass — that is the validator's job.
+
+### Step D.5: Receipt contract (additive fields)
+
+After deep passes run, the receipt carries:
+
+```json
+{
+  "type": "impl_review",
+  "id": "fn-32.2",
+  "mode": "codex",
+  "verdict": "NEEDS_WORK",
+  "verdict_before_deep": "SHIP",
+  "session_id": "019ba...",
+  "deep_passes": ["adversarial", "security"],
+  "deep_findings_count": {"adversarial": 2, "security": 1},
+  "cross_pass_promotions": [
+    {"id": "f1", "from": 50, "to": 75, "pass": "adversarial"}
+  ],
+  "deep_timestamp": "2026-04-24T10:10:00Z"
+}
+```
+
+All fields are **additive** — existing Ralph scripts and receipt
+consumers that don't know about deep-pass read `verdict` as before and
+ignore the new keys.
+
+---
+
 ## Validator Pass (fn-32.1 --validate) — all backends
 
 When `VALIDATE=true` AND the primary review verdict is `NEEDS_WORK`, run a

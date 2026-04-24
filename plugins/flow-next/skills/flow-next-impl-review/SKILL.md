@@ -91,10 +91,11 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 ## Input
 
 Arguments: $ARGUMENTS
-Format: `[task ID] [--base <commit>] [--validate] [focus areas]`
+Format: `[task ID] [--base <commit>] [--validate] [--deep[=passes]] [focus areas]`
 
 - `--base <commit>` - Compare against this commit instead of main/master (for task-scoped reviews)
 - `--validate` - After NEEDS_WORK verdict, run a validator pass that drops false-positive findings (fn-32.1, opt-in)
+- `--deep` / `--deep=<passes>` - Run additional specialized passes (adversarial / security / performance) after primary review (fn-32.2, opt-in)
 - Task ID - Optional, for context and receipt tracking
 - Focus areas - Optional, specific areas to examine
 
@@ -106,6 +107,9 @@ Format: `[task ID] [--base <commit>] [--validate] [focus areas]`
 - `--validate` — adds a validator pass on NEEDS_WORK that re-checks each finding
   for false positives. All findings dropping upgrades verdict to SHIP.
 - `FLOW_VALIDATE_REVIEW=1` env var — enables `--validate` session-wide (works in Ralph).
+- `--deep` — adds adversarial pass always + security/performance auto-enabled
+  per diff paths. `--deep=adversarial,security` restricts to listed passes.
+- `FLOW_REVIEW_DEEP=1` env var — enables `--deep` session-wide (works in Ralph).
 - Default review behavior (no flags) is unchanged.
 
 ## Workflow
@@ -123,6 +127,7 @@ Parse $ARGUMENTS for:
 - `--base <commit>` → `BASE_COMMIT` (if provided, use for scoped diff)
 - `--no-triage` → set `TRIAGE_DISABLED=1` (skip trivial-diff pre-check)
 - `--validate` → set `VALIDATE=true` (fn-32.1 validator pass on NEEDS_WORK)
+- `--deep` / `--deep=<passes>` → set `DEEP=true` + optional `DEEP_PASSES` CSV (fn-32.2)
 - First positional arg matching `fn-*` → `TASK_ID`
 - Remaining args → focus areas
 
@@ -147,6 +152,51 @@ fi
 
 `VALIDATE` gates the validator pass in workflow.md. When false (default),
 behavior is unchanged.
+
+**Deep flag + env var:**
+
+```bash
+DEEP=false
+DEEP_PASSES=""  # optional CSV: "adversarial,security"
+for arg in $ARGUMENTS; do
+  case "$arg" in
+    --deep) DEEP=true ;;
+    --deep=*) DEEP=true; DEEP_PASSES="${arg#--deep=}" ;;
+  esac
+done
+
+# Env opt-in (Ralph-friendly)
+if [[ "${FLOW_REVIEW_DEEP:-}" == "1" ]]; then
+  DEEP=true
+fi
+```
+
+`DEEP` gates the deep-pass phase in workflow.md. When false (default),
+behavior is unchanged.
+
+**Pass selection (when DEEP=true):**
+
+```bash
+# If explicit CSV provided, use those passes verbatim.
+# Otherwise: adversarial always + security/performance auto-enabled by
+# changed-file globs via `flowctl review-deep-auto`.
+if [[ -n "$DEEP_PASSES" ]]; then
+  SELECTED_PASSES="${DEEP_PASSES//,/ }"
+else
+  # Determine changed files for auto-enable heuristic
+  if [[ -n "$BASE_COMMIT" ]]; then
+    CHANGED="$(git diff --name-only "$BASE_COMMIT"..HEAD)"
+  else
+    DIFF_BASE=main; git rev-parse main >/dev/null 2>&1 || DIFF_BASE=master
+    CHANGED="$(git diff --name-only "$DIFF_BASE"..HEAD)"
+  fi
+  SELECTED_PASSES="$(printf '%s\n' "$CHANGED" | $FLOWCTL review-deep-auto)"
+fi
+echo "Deep passes selected: $SELECTED_PASSES"
+```
+
+See [deep-passes.md](deep-passes.md) for the pass prompt templates, the
+auto-enable globs, and merge/promotion rules.
 
 ### Step 0.5: Trivial-diff triage (fn-29.6)
 
@@ -244,6 +294,13 @@ The workflow covers:
 
 If verdict is NEEDS_WORK, loop internally until SHIP:
 
+0. **Deep-pass phase (only if `DEEP=true`)** — see [workflow.md](workflow.md) "Deep-Pass Phase" section.
+   - After primary review completes (any verdict) and before validator,
+     run each selected pass via
+     `$FLOWCTL <backend> deep-pass --pass <name> --receipt ... --primary-findings ...`.
+   - Passes merge into receipt via fingerprint dedup + cross-pass promotion.
+   - Deep may upgrade `SHIP → NEEDS_WORK` if it surfaces new blocking findings;
+     it never downgrades `NEEDS_WORK → SHIP`.
 1. **Validator pass (only if `VALIDATE=true`)** — see [workflow.md](workflow.md) "Validator Pass" section.
    - Extract findings JSON-lines, dispatch `$FLOWCTL <backend> validate --findings-file ... --receipt ...`
    - If all findings drop → verdict upgrades to SHIP automatically (exit fix loop)
