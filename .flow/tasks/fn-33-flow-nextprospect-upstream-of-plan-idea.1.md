@@ -61,7 +61,8 @@ This task is the **early proof point** for the epic — if grounding can't produ
 - [ ] Manual smoke on the flow-next repo itself: `prospect DX` produces a readable grounding snapshot.
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Skeleton for /flow-next:prospect skill landed: slash-command entry, thin SKILL.md (no `context: fork`, AskUserQuestion-allowed), and workflow.md carrying Phase 0 (resume check with stdlib-Python frontmatter classifier — active / corrupt / stale / archived), Phase 1 (grounding snapshot with graceful per-source degradation across git log, open epics, CHANGELOG, memory, memory audit), and the Ralph-block guard (exit 2 under REVIEW_RECEIPT_PATH or FLOW_RALPH=1). Manual smoke against the flow-next repo produces a readable ~30-line snapshot; smoke_test.sh still 125/125. Phases 2-6 are stubbed out for tasks 2-3.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 7b7c1cd83865d5686df99089ebcb3bc49c40be27
+- Tests: plugins/flow-next/scripts/smoke_test.sh (125/125 pass), manual: Phase 1 grounding against flow-next repo produced ~30-line snapshot listing 11 open epics, 335 modified files, recent CHANGELOG entries, manual: Ralph-block verified - normal proceeds (exit 0), FLOW_RALPH=1 exits 2, REVIEW_RECEIPT_PATH set exits 2, manual: Phase 0 stdlib python parser classified 4 fixture artifacts correctly (active / corrupt-no-frontmatter / corrupt-missing-survivors / stale)
+- PRs:

@@ -25,8 +25,8 @@ satisfies: [R6, R14, R20]
    - If `N in promoted_ideas` and no `--force`: exit 2 with message `"Idea #N already promoted to <epic-id>. Use --force to create another epic from the same idea."`
    - Track the epic-id of prior promotes in a parallel frontmatter field `promoted_to: {N: epic_id}` so the error message can reference the specific epic.
 3. **Extract survivor:**
-   - `_extract_survivor(artifact_body, N)` parses the `## Survivors` section, finds `#### <N>. <title>`, extracts `title`, `summary`, `leverage`, `size`, `next_step` fields.
-   - Parser tolerates bucket subsection headings (`### High leverage (1-3)` etc.).
+   - `_extract_survivor(artifact_body, N)` parses the `## Survivors` section, finds `#### <N>. <title>`, extracts `title`, `summary`, `leverage`, `size` fields. `next_step` is a hard-coded body line (`**Next step:** /flow-next:interview`), not a data field — promote ignores it. Optional body fields `affected_areas`, `risk_notes`, `persona` may be present (from Phase 4's RANKED join, per task 3); parser tolerates their absence cleanly. <!-- Updated by plan-sync: task 2 landed Phase 4 RANKED with affected_areas / risk_notes / persona joined from Phase 2 candidate; next_step is template-only -->
+   - Parser tolerates bucket subsection headings (`### High leverage (1-3)` / `### Worth considering (4-7)` / `### If you have the time (8+)`).
 4. **Create epic:**
    - Call existing `cmd_epic_create(title=epic_title or survivor.title)` — reuses slug derivation, directory allocation, skeleton generation.
    - Capture new epic-id.

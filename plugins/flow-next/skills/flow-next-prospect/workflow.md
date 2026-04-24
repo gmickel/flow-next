@@ -678,6 +678,184 @@ Materialize `RANKED` — the parsed ranking with each survivor's full candidate 
 
 ---
 
-## Phases 5-6 — deferred
+## Phase 5: Write artifact (R4, R13)
 
-Phase 5 (atomic artifact write to `.flow/prospects/<slug>-<date>.md`) and Phase 6 (handoff prompt for promote / interview / skip) are implemented in task 3 of fn-33. The Phase 4 output (`RANKED` + `DROPS`) is the cross-task contract — Phase 5 consumes both verbatim to populate the `## Survivors` (with bucket headings) and `## Rejected` sections of the artifact.
+**Goal:** atomically write a single markdown artifact to `.flow/prospects/<slug>-<date>.md` so it survives Ctrl-C, concurrent runs, and resume on the next session. **Artifact lands on disk before Phase 6 fires.** Never gate the write on the handoff prompt.
+
+### 5.1 — Inputs assembled
+
+- `FOCUS_TEXT` — Phase 1's focus expansion (the literal text that goes under `## Focus`). When the user gave no hint, set this to `"_(open-ended)_"`.
+- `GROUNDING_SNAPSHOT` — Phase 1's structured 30-50 line snapshot, verbatim.
+- `RANKED` — Phase 4 §4.3 output. Three buckets: `high_leverage`, `worth_considering`, `if_you_have_the_time`. Each survivor entry carries `position, title, summary, leverage, size`, plus optional `affected_areas, risk_notes, persona` (Phase 2 candidate fields surface unchanged when present; the writer renders only what's there — never invents defaults).
+- `DROPS` — Phase 3 §3.3 rejected list. Each carries `title, taxonomy, reason`.
+- `VOLUME` — count of candidates fed into Phase 3 (pre-critique).
+- `REJECTION_RATE` — `len(DROPS) / VOLUME` rounded to two decimals.
+- Optional flags from upstream phases — written **only when set**:
+  - `floor_violation: true` — Phase 3 set this when the user picked `loosen-floor` / `ship-anyway` on a rejection-floor miss.
+  - `generation_under_volume: true` — Phase 2 set this when validated candidates fell below `floor(GENERATION_TARGET_MIN * 0.7)`.
+
+### 5.2 — Slug + artifact id allocation (R13)
+
+Use the bundled helpers — both are stdlib-only and concurrency-safe:
+
+```bash
+python3 - "$PROSPECTS_DIR" "$FOCUS_HINT" "$TODAY" <<'PY'
+import importlib.util, os, sys
+from pathlib import Path
+
+# Load flowctl module without invoking the CLI.
+flowctl_py = os.environ.get("FLOWCTL_PY") or (
+    Path(os.environ.get("DROID_PLUGIN_ROOT") or os.environ["CLAUDE_PLUGIN_ROOT"])
+    / "scripts" / "flowctl.py"
+)
+spec = importlib.util.spec_from_file_location("fc", str(flowctl_py))
+fc = importlib.util.module_from_spec(spec); spec.loader.exec_module(fc)
+
+prospects_dir, focus_hint, today = sys.argv[1], sys.argv[2], sys.argv[3]
+base_slug = fc._prospect_slug(focus_hint or None)
+artifact_id = fc._prospect_next_id(Path(prospects_dir), base_slug, today)
+print(artifact_id)
+PY
+```
+
+- First slot is `<base_slug>-<TODAY>` (e.g. `dx-improvements-2026-04-25`).
+- Same-day collisions append `-2`, `-3`, ... — the base slug stays stable so `flowctl prospect promote` lookup remains keyable on the artifact id.
+- Path-style hints (e.g. `plugins/flow-next/skills/`) collapse `/`, `\`, `.` to separators inside `_prospect_slug` so they slugify cleanly.
+- Empty / non-ASCII-only / pure-punctuation hints fall back to `open-ended`.
+
+### 5.3 — Build frontmatter + body, then atomic write
+
+Body rendering and frontmatter validation are bundled — do **not** hand-roll YAML or template strings in the skill. Use `flowctl.render_prospect_body` and `flowctl.write_prospect_artifact`:
+
+```python
+ranked = {                                  # from Phase 4 §4.3
+    "high_leverage":         [{...}, {...}],
+    "worth_considering":     [{...}, ...],
+    "if_you_have_the_time":  [{...}, ...],
+}
+drops = [{"title": ..., "taxonomy": ..., "reason": ...}, ...]
+body = fc.render_prospect_body(focus_text, grounding_snapshot, ranked, drops)
+
+frontmatter = {
+    "title": <focus or "Open-ended prospect">,
+    "date": today_iso,                       # quoted as a string by the writer
+    "focus_hint": focus_hint or "",
+    "volume": volume,                        # int
+    "survivor_count": survivor_count,        # int
+    "rejected_count": rejected_count,        # int
+    "rejection_rate": rejection_rate,        # float, two decimals
+    "artifact_id": artifact_id,
+    "promoted_ideas": [],                    # task 5 (promote) appends here
+    "status": "active",
+}
+# Optional flags — set ONLY when upstream phases provided them.
+if phase3_floor_violation:
+    frontmatter["floor_violation"] = True
+if phase2_generation_under_volume:
+    frontmatter["generation_under_volume"] = True
+
+target = Path(prospects_dir) / f"{artifact_id}.md"
+fc.write_prospect_artifact(target, frontmatter, body)
+```
+
+Atomic semantics (R4 anchor):
+
+- Writer renders the whole document in memory before touching disk.
+- A per-pid temp file (`.tmp.<pid>.<artifact-id>.md`) is created alongside the target, then `os.link()`'d onto the final path. `link()` is atomic on POSIX and **fails on existing target** (`FileExistsError`) — guarantees a Ctrl-C mid-write never leaves a half-written artifact and that two concurrent runners can't silently clobber one another.
+- On filesystems without hard-link support, the writer falls back to `os.replace()` after re-checking existence.
+- The temp file is unlinked in `finally` — no `.tmp.*` files leak on success or failure.
+
+### 5.4 — Validation safety net
+
+`write_prospect_artifact` validates the frontmatter before writing. If a required field is missing, status is invalid, or `promoted_ideas` is not a list, it raises `ValueError` and the artifact is **not** written. Surface the error to the user as a normal failure; do not retry blindly.
+
+### 5.5 — Body section ordering (frozen)
+
+The writer emits body sections in this exact order:
+
+```
+## Focus
+## Grounding snapshot
+## Survivors
+  ### High leverage (1-3)
+  ### Worth considering (4-7)
+  ### If you have the time (8+)
+## Rejected
+```
+
+Each survivor block:
+
+```
+#### <position>. <title>
+**Summary:** <one line>
+**Leverage:** Small-diff lever because <X>; impact lands on <Y>.
+**Size:** <S|M|L|XL>
+**Affected areas:** <comma-joined list>      # only when present
+**Risk notes:** <one line>                   # only when present
+**Persona:** <senior-maintainer | first-time-user | adversarial-reviewer>   # only when present
+**Next step:** /flow-next:interview
+```
+
+`**Next step:**` is a hard-coded template line — not a candidate field. It always points at `/flow-next:interview` because the user's first move on a survivor is almost always to refine it before promoting.
+
+Empty buckets render `_(none)_`. Empty `## Rejected` renders `_(none)_`.
+
+---
+
+## Phase 6: Handoff prompt (R9, R19)
+
+**Goal:** offer the user a one-keystroke path from "artifact saved" to either an epic (via `flowctl prospect promote`), an interview (via `/flow-next:interview`), or a clean exit. The artifact already exists on disk by the time this phase fires — Ctrl-C here loses nothing.
+
+### 6.1 — Pick the blocking-question tool
+
+| Platform     | Tool                | Notes                                           |
+|--------------|---------------------|-------------------------------------------------|
+| Claude Code  | `AskUserQuestion`   | Deferred — load via `ToolSearch select:AskUserQuestion` if not already in scope |
+| Codex        | `request_user_input`| Native                                          |
+| Gemini       | `ask_user`          | Native                                          |
+| Pi           | `ask_user`          | Requires `pi-ask-user` extension                |
+| Fallback     | _frozen string_     | Print the exact format below; read user reply from chat |
+
+If the platform tool is available, use it with these labelled choices (one per survivor + skip + interview):
+
+- `Promote #1: <title>`
+- `Promote #2: <title>`
+- ... (one per survivor across all buckets)
+- `Skip`
+- `Interview instead`
+
+The tool's free-text `description` field gets the artifact path so the user has it visible while choosing.
+
+### 6.2 — Frozen numbered-options fallback (R19)
+
+When no blocking tool is reachable (or the platform tool errors), print this **exact** string format. Do not paraphrase, re-order, or add commentary — the smoke test in task 6 grep-checks this format:
+
+```
+Saved: .flow/prospects/<artifact-id>.md
+
+Promote a survivor to an epic?
+  1) Promote #1: <title>
+  2) Promote #2: <title>
+  ...
+  N) Skip
+  i) Interview (ask /flow-next:interview what to refine)
+
+Enter choice [1-N|i|skip]:
+```
+
+Number the survivors 1-N in the same order they appear in the artifact (high_leverage first, then worth_considering, then if_you_have_the_time). `Skip` is the last numeric option (`N`); `i` is the alphabetic interview shortcut.
+
+### 6.3 — Reply parsing
+
+Normalize the reply (strip whitespace, lowercase). Route by exact match:
+
+| Reply | Action |
+|-------|--------|
+| `1`, `2`, ..., `N-1` (where `N` is the Skip slot) | Run `flowctl prospect promote <artifact-id> --idea <reply>`. Echo the new epic id and exit. |
+| `N`, `skip`, empty string | Print `Skipped. Artifact saved at .flow/prospects/<artifact-id>.md` and exit. |
+| `i`, `interview` | Print suggestion: `Run /flow-next:interview <epic-or-task-id> to refine. Artifact saved at .flow/prospects/<artifact-id>.md`. **Do not auto-invoke** — the user picks the target id. |
+| anything else | Reprint the menu once with `Unrecognized choice: <reply>`. On second invalid reply, print `Skipped (no valid choice). Artifact saved at .flow/prospects/<artifact-id>.md` and exit cleanly. |
+
+### 6.4 — Exit cleanly regardless
+
+The artifact is on disk. Phase 6 does not retry, does not extend, does not delete. If `flowctl prospect promote` errors (task 5 lands the command), surface its stderr verbatim and exit non-zero — the user can re-run promote manually with the artifact id printed in the saved-to line.

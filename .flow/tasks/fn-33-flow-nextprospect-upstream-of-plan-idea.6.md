@@ -26,7 +26,7 @@ Shell-level smoke test, pattern matches `impl-review_smoke_test.sh` (fn-32.5) â€
    - `--all` lists all three with correct `status` markers.
    - Corrupt artifact has `status: corrupt` and a reason note.
 
-4. **Artifact writer (R4, R13).** Call `write_prospect_artifact` directly (via a thin Python harness) twice on the same day with the same slug. Assert: first writes `dx-2026-04-24.md`; second suffixes to `dx-2026-04-24-2.md`. Both atomic (no `.tmp.*` leftovers). Frontmatter round-trips via `_prospect_parse_frontmatter`.
+4. **Artifact writer (R4, R13).** Call `write_prospect_artifact` directly (via a thin Python harness) twice on the same day with the same slug. Assert: first writes `dx-2026-04-24.md`; second suffixes to `dx-2026-04-24-2.md`. Both atomic (no `.tmp.*` leftovers). Frontmatter round-trips via `_prospect_parse_frontmatter`, including optional Phase 2/3 flags `floor_violation: true` and `generation_under_volume: true` when present (task 3 must preserve both keys across the read/write cycle). <!-- Updated by plan-sync: task 2 landed the two optional frontmatter flags -->
 
 5. **Graceful degradation (R17).** Phase 1 grounding harness run against:
    - An ungitted temp dir â†’ snapshot includes `scanned: none (no git)` for the git section.

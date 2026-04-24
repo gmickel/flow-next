@@ -40,8 +40,10 @@ satisfies: [R5, R7, R15, R16]
   - `"missing-required-section:<name>"` — `## Grounding snapshot` or `## Survivors` absent
   - `"missing-frontmatter-field:<name>"` — required field absent
   - `"empty"` — zero-byte file or whitespace only
+  - `"unreadable"` — `OSError` on `open()` (matches the inline Phase 0 parser's behaviour)
 - Used by both `list` (marks corrupt artifacts) and resume check (never offers corrupt for extension).
 - Reuses existing YAML parser from memory subsystem (`_parse_inline_yaml` or similar — pick whichever is used by `validate_memory_frontmatter`).
+- <!-- Updated by plan-sync: task 2 shipped an inline stdlib classifier in Phase 0 (skills/flow-next-prospect/workflow.md §0.2) emitting reason strings `"no frontmatter block" | "unparseable date" | "missing Grounding snapshot section" | "missing Survivors section" | "unreadable"`. This helper must either (a) replace the inline classifier — update workflow.md §0.2 to shell out to `flowctl prospect _detect-corruption` or import the helper — OR (b) match those exact reason strings byte-for-byte so R16's single-source-of-truth holds. Preferred path: land the helper here, then adapt Phase 0 in a follow-on touch-up commit (same task) to call it; reason-string contract must be identical across both call sites. -->
 
 ## Investigation targets
 

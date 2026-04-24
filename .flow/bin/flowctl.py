@@ -3955,6 +3955,328 @@ def write_memory_entry(path: Path, frontmatter: dict[str, Any], body: str) -> No
     atomic_write(path, content)
 
 
+# ---------- Prospect artifact helpers (fn-33 task 3) ---------------------
+
+# Frontmatter fields written by `write_prospect_artifact`. Order matters for
+# stable diffs across runs — required first, optional flags last. Optional
+# Phase 2/3 flags (`floor_violation`, `generation_under_volume`) are only
+# written when upstream sets them; the writer never invents defaults.
+PROSPECT_REQUIRED_FIELDS: frozenset[str] = frozenset(
+    {
+        "title",
+        "date",
+        "focus_hint",
+        "volume",
+        "survivor_count",
+        "rejected_count",
+        "rejection_rate",
+        "artifact_id",
+        "promoted_ideas",
+        "status",
+    }
+)
+PROSPECT_OPTIONAL_FIELDS: frozenset[str] = frozenset(
+    {"floor_violation", "generation_under_volume"}
+)
+PROSPECT_STATUS_VALUES: frozenset[str] = frozenset(
+    {"active", "corrupt", "stale", "archived"}
+)
+PROSPECT_FIELD_ORDER: list[str] = [
+    "title",
+    "date",
+    "focus_hint",
+    "volume",
+    "survivor_count",
+    "rejected_count",
+    "rejection_rate",
+    "artifact_id",
+    "promoted_ideas",
+    "status",
+    "floor_violation",
+    "generation_under_volume",
+]
+# Date strings round-trip as quoted scalars (PyYAML would coerce to date).
+_PROSPECT_QUOTED_STRING_FIELDS: frozenset[str] = frozenset({"date"})
+
+
+def _prospect_frontmatter_sort_key(field: str) -> tuple[int, str]:
+    try:
+        return (PROSPECT_FIELD_ORDER.index(field), field)
+    except ValueError:
+        return (len(PROSPECT_FIELD_ORDER), field)
+
+
+def _format_prospect_list_item(item: Any) -> str:
+    """Render a list item for prospect inline lists.
+
+    Preserves int / float / bool natively (YAML round-trips them) so
+    `promoted_ideas: [1, 3]` survives as ints, not as quoted strings.
+    Strings fall through to the standard quoting logic.
+    """
+    if isinstance(item, bool):
+        return "true" if item else "false"
+    if isinstance(item, (int, float)):
+        return str(item)
+    if item is None:
+        return '"null"'
+    text = str(item)
+    if _yaml_scalar_needs_quoting(text):
+        return _quote_yaml_scalar(text)
+    return text
+
+
+def _format_prospect_yaml_value(value: Any, key: Optional[str] = None) -> str:
+    """Render a prospect frontmatter value to YAML scalar / inline list.
+
+    Mirrors `_format_yaml_value` but uses the prospect-quoted-string list so
+    the writer is independent of memory-field policy. Lists render inline
+    (`[1, 2]`); int / float / bool scalars render natively (no string
+    coercion); strings quote when YAML would otherwise coerce them.
+    """
+    if isinstance(value, list):
+        inner = ", ".join(_format_prospect_list_item(item) for item in value)
+        return f"[{inner}]"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if value is None:
+        return ""
+    text = str(value)
+    if key in _PROSPECT_QUOTED_STRING_FIELDS:
+        return _quote_yaml_scalar(text)
+    if _yaml_scalar_needs_quoting(text):
+        return _quote_yaml_scalar(text)
+    return text
+
+
+def validate_prospect_frontmatter(frontmatter: dict[str, Any]) -> list[str]:
+    """Return validation errors for prospect frontmatter (empty = valid)."""
+    errors: list[str] = []
+    if not isinstance(frontmatter, dict):
+        return ["frontmatter must be a dict"]
+
+    missing = PROSPECT_REQUIRED_FIELDS - set(frontmatter.keys())
+    if missing:
+        errors.append(
+            f"missing required fields: {', '.join(sorted(missing))}"
+        )
+
+    allowed = PROSPECT_REQUIRED_FIELDS | PROSPECT_OPTIONAL_FIELDS
+    unknown = set(frontmatter.keys()) - allowed
+    if unknown:
+        errors.append(f"unknown fields: {', '.join(sorted(unknown))}")
+
+    status = frontmatter.get("status")
+    if status is not None and status not in PROSPECT_STATUS_VALUES:
+        errors.append(
+            f"invalid status '{status}' "
+            f"(valid: {', '.join(sorted(PROSPECT_STATUS_VALUES))})"
+        )
+
+    promoted = frontmatter.get("promoted_ideas")
+    if promoted is not None and not isinstance(promoted, list):
+        errors.append("promoted_ideas must be a list")
+
+    return errors
+
+
+def _prospect_slug(focus_hint: Optional[str]) -> str:
+    """Derive a base slug for a prospect artifact.
+
+    Falls back to `open-ended` when no hint or the hint slugifies to empty.
+    Slug excludes the date suffix — `_prospect_next_id` joins them.
+
+    Path-style hints (e.g. `plugins/flow-next/skills/`) are normalized so
+    `/`, `\\`, and `.` act as word separators rather than dropped chars.
+    """
+    if focus_hint:
+        normalized = re.sub(r"[\\/.]+", " ", str(focus_hint))
+        candidate = slugify(normalized, max_length=40)
+        if candidate:
+            return candidate
+    return "open-ended"
+
+
+def _prospect_artifact_filename(artifact_id: str) -> str:
+    """Filename for an artifact id (artifact id == filename stem)."""
+    return f"{artifact_id}.md"
+
+
+def _prospect_next_id(
+    prospects_dir: Path, base_slug: str, today_iso: str
+) -> str:
+    """Return the next free artifact id for `<base_slug>-<today_iso>` family.
+
+    First slot: `<base>-<date>`. Same-day collisions append `-2`, `-3`, ...
+    Existence is checked deterministically against the prospects directory
+    (no recursion into `_archive/`). Returns just the artifact id (no `.md`);
+    `write_prospect_artifact` is responsible for the final `O_EXCL` create.
+    """
+    prospects_dir.mkdir(parents=True, exist_ok=True)
+    base_id = f"{base_slug}-{today_iso}"
+    candidate = base_id
+    suffix = 2
+    while (prospects_dir / _prospect_artifact_filename(candidate)).exists():
+        candidate = f"{base_id}-{suffix}"
+        suffix += 1
+        # Defensive ceiling — well past any realistic same-day rerun.
+        if suffix > 1000:
+            raise RuntimeError(
+                f"too many same-day prospect collisions for base '{base_id}'"
+            )
+    return candidate
+
+
+def write_prospect_artifact(
+    path: Path, frontmatter: dict[str, Any], body: str
+) -> None:
+    """Atomically write a prospect artifact at `path`.
+
+    Pattern: write a per-pid temp file alongside the target, then `os.link`
+    onto the final path (POSIX atomic, fails-on-exists). On EEXIST the
+    caller raises — `_prospect_next_id` is the collision-allocation point;
+    this writer only enforces the final create-must-not-clobber invariant.
+
+    Raises ValueError on invalid frontmatter; FileExistsError if the target
+    already exists when link fires (concurrent-runner race past the
+    `_prospect_next_id` check).
+    """
+    errors = validate_prospect_frontmatter(frontmatter)
+    if errors:
+        raise ValueError("; ".join(errors))
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    lines = ["---"]
+    for key in sorted(frontmatter.keys(), key=_prospect_frontmatter_sort_key):
+        rendered = _format_prospect_yaml_value(frontmatter[key], key)
+        lines.append(f"{key}: {rendered}")
+    lines.append("---")
+    lines.append("")
+    body_text = body.rstrip("\n") + "\n" if body else ""
+    content = "\n".join(lines) + "\n" + body_text
+
+    # Per-pid + path-stem keeps the tmp name unique even with multiple
+    # in-flight writes on the same prospects dir.
+    tmp_name = f".tmp.{os.getpid()}.{path.name}"
+    tmp_path = path.parent / tmp_name
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        # `os.link` is atomic and fails on EEXIST — guarantees the target
+        # is never partially written even on a Ctrl-C mid-write.
+        try:
+            os.link(tmp_path, path)
+        except FileExistsError:
+            raise
+        except OSError:
+            # Filesystems without hard-link support fall through to rename.
+            # rename() on POSIX is atomic but overwrites — re-check existence
+            # to keep the contract.
+            if path.exists():
+                raise FileExistsError(str(path))
+            os.replace(tmp_path, path)
+            return
+    finally:
+        try:
+            if tmp_path.exists():
+                os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
+def render_prospect_body(
+    focus_text: str,
+    grounding_snapshot: str,
+    ranked: dict[str, list[dict[str, Any]]],
+    drops: list[dict[str, Any]],
+) -> str:
+    """Render the markdown body for a prospect artifact.
+
+    Inputs come from Phase 1 (focus_text + grounding_snapshot) and Phase 4
+    (`ranked` with `high_leverage` / `worth_considering` /
+    `if_you_have_the_time` keys; each entry has `position`, `title`,
+    `summary`, `leverage`, `size`, plus optional `affected_areas`,
+    `risk_notes`, `persona`). `drops` is Phase 3's rejected list with
+    `title` + `taxonomy` + `reason` per entry.
+
+    `## Survivors` body uses the frozen bucket headings from the epic spec
+    (R4): `### High leverage (1-3)`, `### Worth considering (4-7)`,
+    `### If you have the time (8+)`. Each survivor gets a `#### <N>. <title>`
+    block with `**Summary:**`, `**Leverage:**`, `**Size:**`, optional
+    body fields if present, and a hard-coded `**Next step:** /flow-next:interview`.
+    """
+    out: list[str] = []
+    out.append("## Focus")
+    out.append("")
+    out.append(focus_text.rstrip("\n") if focus_text else "_(open-ended)_")
+    out.append("")
+    out.append("## Grounding snapshot")
+    out.append("")
+    out.append(
+        grounding_snapshot.rstrip("\n")
+        if grounding_snapshot
+        else "_(no grounding snapshot recorded)_"
+    )
+    out.append("")
+    out.append("## Survivors")
+    out.append("")
+
+    bucket_order = [
+        ("high_leverage", "### High leverage (1-3)"),
+        ("worth_considering", "### Worth considering (4-7)"),
+        ("if_you_have_the_time", "### If you have the time (8+)"),
+    ]
+    for bucket_key, bucket_heading in bucket_order:
+        out.append(bucket_heading)
+        out.append("")
+        entries = ranked.get(bucket_key, []) or []
+        if not entries:
+            out.append("_(none)_")
+            out.append("")
+            continue
+        for entry in entries:
+            position = entry.get("position", "?")
+            title = entry.get("title", "(untitled)")
+            out.append(f"#### {position}. {title}")
+            out.append(f"**Summary:** {entry.get('summary', '').strip()}")
+            leverage = (entry.get("leverage") or "").strip()
+            out.append(f"**Leverage:** {leverage}")
+            out.append(f"**Size:** {entry.get('size', '?')}")
+            affected = entry.get("affected_areas")
+            if affected:
+                if isinstance(affected, list):
+                    affected_text = ", ".join(str(a) for a in affected)
+                else:
+                    affected_text = str(affected)
+                out.append(f"**Affected areas:** {affected_text}")
+            risk = entry.get("risk_notes")
+            if risk:
+                out.append(f"**Risk notes:** {str(risk).strip()}")
+            persona = entry.get("persona")
+            if persona:
+                out.append(f"**Persona:** {persona}")
+            out.append("**Next step:** /flow-next:interview")
+            out.append("")
+
+    out.append("## Rejected")
+    out.append("")
+    if not drops:
+        out.append("_(none)_")
+    else:
+        for d in drops:
+            title = d.get("title", "(untitled)")
+            taxonomy = d.get("taxonomy") or "other"
+            reason = (d.get("reason") or "").strip()
+            if reason:
+                out.append(f"- {title} — {taxonomy}: {reason}")
+            else:
+                out.append(f"- {title} — {taxonomy}")
+    out.append("")
+    return "\n".join(out)
+
+
 def validate_memory_frontmatter(frontmatter: dict[str, Any]) -> list[str]:
     """Return a list of validation errors (empty = valid).
 

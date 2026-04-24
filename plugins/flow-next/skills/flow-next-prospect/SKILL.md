@@ -56,10 +56,10 @@ Execute the phases in [workflow.md](workflow.md) in order:
 2. **Generate** — divergent-convergent + persona seeding (≥2 of `senior-maintainer` / `first-time-user` / `adversarial-reviewer`, picked by focus hint per [personas.md](personas.md)). One divergent prompt; no self-judging.
 3. **Critique** — separate prompt pass that does NOT see the focus hint or persona texts; rejection floor ≥40% (≥60% under `raise the bar`); fixed taxonomy (`duplicates-open-epic | out-of-scope | insufficient-signal | too-large | backward-incompat | other`); floor violation surfaces blocking question with frozen options `regenerate | loosen-floor | ship-anyway`.
 4. **Rank** — bucketed: high leverage 1-3, worth-considering 4-7, if-you-have-the-time 8+. Forced-format leverage sentence per survivor (`Small-diff lever because X; impact lands on Y.`); no numeric scores.
-5. **Write artifact** _(task 3)_ — atomic write-then-rename to `.flow/prospects/<slug>-<date>.md`.
-6. **Handoff** _(task 3)_ — blocking prompt for promote / interview / skip.
+5. **Write artifact** — atomic write-then-rename to `.flow/prospects/<slug>-<date>.md` via `flowctl.write_prospect_artifact`. Same-day collisions suffix with `-2`, `-3`. Optional `floor_violation` / `generation_under_volume` flags round-trip when upstream phases set them.
+6. **Handoff** — blocking prompt for promote / interview / skip via the platform's question tool; frozen numbered-options fallback when no blocking tool is available.
 
-Phases 0-4 are implemented; Phases 5-6 land in task 3.
+Phases 0-6 are implemented. Promote command + list/read/archive land in tasks 4-5.
 
 ## Pre-check: local setup version
 
