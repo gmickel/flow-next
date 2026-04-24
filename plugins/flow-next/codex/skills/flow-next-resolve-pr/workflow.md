@@ -313,7 +313,12 @@ Per unit:
 | `review_body` | `gh pr comment $PR_NUMBER --body "<reply_text>"` | (none) |
 
 ```bash
-for VERDICT in $VERDICTS; do
+# Iterate verdicts as compact JSON objects (one per line). Plain `for VERDICT
+# in $VERDICTS` performs shell word-splitting and breaks any time reply_text
+# contains spaces or newlines — which is the common case for human-facing
+# replies. Read line-by-line instead so each loop body receives one complete
+# verdict object.
+jq -c '.[]' <<<"$VERDICTS_JSON" | while IFS= read -r VERDICT; do
   FB_TYPE=$(jq -r .feedback_type <<<"$VERDICT")
   FB_ID=$(jq -r .feedback_id <<<"$VERDICT")
   REPLY=$(jq -r .reply_text <<<"$VERDICT")
@@ -330,6 +335,10 @@ for VERDICT in $VERDICTS; do
   esac
 done
 ```
+
+`$VERDICTS_JSON` is the full array of verdict objects as a single JSON string
+(as produced in Phase 6). `jq -c '.[]'` emits one compact JSON object per
+line; `while read -r` keeps each object intact through the pipe.
 
 Reply body already carries `> quoted feedback\n\n<response>` from the resolver — the orchestrator does not rewrap.
 
