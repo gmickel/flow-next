@@ -51,13 +51,22 @@ Ralph (autonomous loop):
 - `config.env` accepts spec form on `PLAN_REVIEW` / `WORK_REVIEW` / `COMPLETION_REVIEW` (e.g. `WORK_REVIEW=codex:gpt-5.4:xhigh`). `ralph.sh` exports the full spec via `FLOW_REVIEW_BACKEND` and derives `PLAN_REVIEW_BACKEND` / `WORK_REVIEW_BACKEND` / `COMPLETION_REVIEW_BACKEND` (bare backend, via `${VAR%%:*}`) for prompt-level branching.
 - Runbooks: `plans/ralph-e2e-notes.md`, `plans/ralph-getting-started.md`.
 
-Memory system (opt-in):
+Memory system (categorized — v0.33.0+):
 - Config in `.flow/config.json` (NOT Ralph's `config.env`)
+- Tree under `.flow/memory/`: `bug/<category>/*.md` + `knowledge/<category>/*.md` (one entry per file)
+- YAML frontmatter: `title`, `date`, `track`, `category`, `module`, `tags`, plus track-specific fields (`problem_type` / `root_cause` / `resolution_type` for bug; `applies_when` for knowledge)
 - Enable: `flowctl config set memory.enabled true`
 - Init: `flowctl memory init`
-- Add: `flowctl memory add --type <pitfall|convention|decision> "content"`
-- Query: `flowctl memory list`, `flowctl memory search "pattern"`
-- Auto-capture: NEEDS_WORK reviews → pitfalls.md (in Ralph mode)
+- Add: `flowctl memory add --track <bug|knowledge> --category <c> --title "..." [--module <m>] [--tags "a,b"] [--body-file <f>]`
+- Query: `flowctl memory list [--track T] [--category C] [--status active|stale|all]`, `flowctl memory search <q> [--module <m>] [--tags "a,b"] [--limit N]`
+- Read: `flowctl memory read <id>` — accepts full id (`bug/runtime-errors/slug-YYYY-MM-DD`), slug+date, slug-only (latest wins), or legacy forms (`legacy/pitfalls.md`, `legacy/pitfalls#N`)
+- Migrate legacy: `flowctl memory migrate --dry-run` then `--yes` (classifier auto-selects codex/copilot; override with `FLOW_MEMORY_CLASSIFIER_BACKEND=codex|copilot|none` + `FLOW_MEMORY_CLASSIFIER_MODEL` / `FLOW_MEMORY_CLASSIFIER_EFFORT`). JSON mode refuses writes without `--yes`.
+- Surface in AGENTS.md / CLAUDE.md: `flowctl memory discoverability-patch [--target auto|agents|claude] [--strategy listing|append] [--apply|--dry-run]` (JSON callers must pass `--apply` explicitly)
+- Overlap detection on add: high overlap updates existing in place; moderate creates new with `related_to: [existing-id]`
+- Auto-capture: Ralph worker writes bug-track entries on NEEDS_WORK → SHIP via `memory add --track bug --category <c>`
+- `memory-scout` is category-aware: returns track/category-tagged results, prioritizing module matches
+- Backcompat: `memory add --type pitfall|convention|decision` auto-maps to new flags with a deprecation warning; removed in 0.36.0
+- Legacy flat files (`.flow/memory/pitfalls.md` etc.) continue to work until `memory migrate` runs; `search` surfaces legacy hits as `track: "legacy"` synthetic entries
 
 ### flow
 Original plugin with optional Beads integration. Plan files in `plans/`.

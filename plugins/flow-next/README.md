@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.32.1-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.33.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -1205,34 +1205,158 @@ When enabled, plan-sync also checks other open epics for stale references. Usefu
 
 Manual sync ignores `planSync.enabled` config—if you run it, you want it. Works with any source task status (not just done).
 
-### Memory System (Opt-in)
+### Memory System (Opt-in, categorized — v0.33.0+)
 
-Persistent learnings that survive context compaction.
+Persistent learnings that survive context compaction. One entry per file, YAML frontmatter, two tracks.
 
-```bash
-# Enable
-flowctl config set memory.enabled true
-flowctl memory init
+**Directory tree:**
 
-# Manual entries
-flowctl memory add --type pitfall "Always use flowctl rp wrappers"
-flowctl memory add --type convention "Tests in __tests__ dirs"
-flowctl memory add --type decision "SQLite over Postgres for simplicity"
-
-# Query
-flowctl memory list
-flowctl memory search "flowctl"
-flowctl memory read --type pitfalls
+```
+.flow/memory/
+├── bug/
+│   ├── build-errors/
+│   ├── test-failures/
+│   ├── runtime-errors/
+│   ├── performance/
+│   ├── security/
+│   ├── integration/
+│   ├── data/
+│   └── ui/
+└── knowledge/
+    ├── architecture-patterns/
+    ├── conventions/
+    ├── tooling-decisions/
+    ├── workflow/
+    └── best-practices/
 ```
 
-When enabled:
-- **Planning**: `memory-scout` runs in parallel with other scouts
-- **Work**: worker reads memory files directly during re-anchor
-- **Ralph only**: NEEDS_WORK reviews auto-capture to `pitfalls.md`
+**Frontmatter schema (bug track):**
 
-Memory retrieval works in both manual and Ralph modes. Auto-capture from reviews only happens in Ralph mode (via hooks). Use `flowctl memory add` for manual entries.
+```yaml
+---
+title: SQLite locked under concurrent writes
+date: 2026-04-24
+track: bug
+category: runtime-errors
+module: storage/sqlite
+tags: [sqlite, concurrency, locking]
+problem_type: race
+root_cause: missing WAL mode
+resolution_type: config-fix
+---
+```
+
+**Frontmatter schema (knowledge track):**
+
+```yaml
+---
+title: Prefer flowctl rp wrappers over direct rp-cli
+date: 2026-04-24
+track: knowledge
+category: conventions
+module: scripts/ralph
+tags: [rp, ralph, review]
+applies_when: writing Ralph loop scripts or review shims
+---
+```
+
+**Enable + init:**
+
+```bash
+flowctl config set memory.enabled true
+flowctl memory init   # creates directory tree
+```
+
+**Add (new categorized API):**
+
+```bash
+flowctl memory add \
+  --track bug \
+  --category runtime-errors \
+  --title "SQLite locked under concurrent writes" \
+  --module storage/sqlite \
+  --tags "sqlite,concurrency" \
+  --body-file /tmp/writeup.md
+
+flowctl memory add \
+  --track knowledge \
+  --category conventions \
+  --title "Prefer flowctl rp wrappers" \
+  --module scripts/ralph \
+  --tags "rp,ralph"
+```
+
+`--type pitfall|convention|decision` (the old API) still works but emits a deprecation warning. Removed in 0.36.0.
+
+**Overlap detection** runs on every `add`. The command scans existing entries in the target category; high overlap updates the existing entry in place, moderate overlap creates a new entry with `related_to: [existing-id]` in its frontmatter. Prevents silent duplication drift.
+
+**Query:**
+
+```bash
+flowctl memory list                                # default: active only
+flowctl memory list --track bug                    # filter by track
+flowctl memory list --category runtime-errors      # filter by category
+flowctl memory list --status all                   # include stale entries
+
+flowctl memory search "sqlite locked"              # weighted token overlap
+flowctl memory search "rp wrappers" \
+  --module scripts/ralph \
+  --tags "rp,ralph" \
+  --limit 5
+
+flowctl memory read bug/runtime-errors/sqlite-locked-2026-04-24   # full id
+flowctl memory read sqlite-locked-2026-04-24                       # slug+date
+flowctl memory read sqlite-locked                                  # slug only (latest date)
+flowctl memory read legacy/pitfalls.md                             # legacy flat file
+flowctl memory read legacy/pitfalls#3                              # legacy entry (1-based)
+```
+
+Search scoring is weighted: title 5×, tags 3×, body 1.5×, misc 1×. Legacy hits surface as synthetic entries with `track: "legacy"`.
+
+**Migrate legacy → categorized:**
+
+```bash
+flowctl memory migrate --dry-run      # print plan
+flowctl memory migrate --yes          # apply
+flowctl memory migrate --no-llm       # mechanical category defaults (no model call)
+```
+
+The classifier auto-selects `codex` (default `gpt-5.4-mini`) or `copilot` (default `claude-haiku-4.5`). Override via env:
+
+```bash
+FLOW_MEMORY_CLASSIFIER_BACKEND=codex|copilot|none
+FLOW_MEMORY_CLASSIFIER_MODEL=<model>
+FLOW_MEMORY_CLASSIFIER_EFFORT=<effort>
+```
+
+`migrate` is idempotent — re-running after legacy files are archived prints `No legacy files to migrate.` JSON mode refuses writes without `--yes` as a safety guard.
+
+**Surface the store in AGENTS.md / CLAUDE.md:**
+
+```bash
+flowctl memory discoverability-patch              # auto-detect target, dry-run
+flowctl memory discoverability-patch --apply      # write
+flowctl memory discoverability-patch --target agents --strategy listing --apply
+```
+
+Two strategies: `listing` (injects `.flow/memory/` into an existing `.flow/` fenced code block) and `append` (adds a `## Memory / Learnings` section). Auto-detect prefers AGENTS.md when both are substantive; handles `@AGENTS.md` / `@CLAUDE.md` shims and symlinks. JSON callers must pass `--apply` explicitly — the command refuses destructive auto-writes.
+
+**When enabled:**
+
+- **Planning**: category-aware `memory-scout` runs in parallel with other scouts, returns track/category-tagged hits and prioritizes module matches.
+- **Work**: worker reads relevant entries during re-anchor.
+- **Ralph**: worker writes structured bug-track entries via `memory add --track bug --category <c>` on NEEDS_WORK → SHIP. Overlap detection handles duplicates.
 
 Config lives in `.flow/config.json`, separate from Ralph's `scripts/ralph/config.env`.
+
+**Upgrading from 0.32.x:**
+
+1. `git pull && (reinstall plugin)`.
+2. `flowctl memory migrate --dry-run` to preview.
+3. `flowctl memory migrate --yes` to apply. Legacy files move to `.flow/memory/legacy/`; migration is idempotent.
+4. Optional: `flowctl memory discoverability-patch --apply` to surface the tree in AGENTS.md.
+
+Until migration runs, legacy flat files continue to work; `list` / `read` / `search` read both.
 
 ---
 
@@ -1574,10 +1698,23 @@ flowchart TD
 │   ├── fn-1-add-oauth.1.json    # Task metadata (id, status, priority, deps, assignee)
 │   ├── fn-1-add-oauth.1.md      # Task spec (description, acceptance, done summary)
 │   └── ...
-└── memory/                # Persistent learnings (opt-in)
-    ├── pitfalls.md        # Lessons from NEEDS_WORK reviews
-    ├── conventions.md     # Project patterns
-    └── decisions.md       # Architectural choices
+└── memory/                # Persistent learnings (opt-in, categorized — v0.33.0+)
+    ├── bug/               # Track: failures / defects
+    │   ├── build-errors/
+    │   ├── test-failures/
+    │   ├── runtime-errors/
+    │   ├── performance/
+    │   ├── security/
+    │   ├── integration/
+    │   ├── data/
+    │   └── ui/
+    ├── knowledge/         # Track: patterns / decisions / conventions
+    │   ├── architecture-patterns/
+    │   ├── conventions/
+    │   ├── tooling-decisions/
+    │   ├── workflow/
+    │   └── best-practices/
+    └── legacy/            # (optional) archived flat files after migrate
 ```
 
 Flowctl accepts schema v1 and v2; new fields are optional and defaulted.

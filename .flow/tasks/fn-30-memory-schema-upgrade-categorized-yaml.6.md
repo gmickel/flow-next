@@ -113,7 +113,8 @@ User-triggered. Ralph does not invoke this. Zero impact on autonomous loops.
 - Supporting arbitrary project docs (only AGENTS.md / CLAUDE.md).
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Added `flowctl memory discoverability-patch` — a user-triggered command that patches the project's AGENTS.md or CLAUDE.md with a one-line `.flow/memory/` reference so agents without flow-next skills loaded still discover the learnings store. Auto-detects the substantive file (handles `@AGENTS.md`/`@CLAUDE.md` shims and symlinks), supports two insertion strategies (listing-line injection into `.flow/` code blocks, or `## Memory / Learnings` section append), and is idempotent, atomic, and dry-run / JSON friendly.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 0c0cf713571b8b4005700e40d791e51a7d07bcfc
+- Tests: plugins/flow-next/scripts/smoke_test.sh (99 pass, 0 fail)
+- PRs:

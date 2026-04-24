@@ -152,7 +152,18 @@ Helpers landed in `flowctl.py` that this task can reuse instead of rolling its o
 
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
+memory migrate + fast-model classifier shipped.
 
+- `flowctl memory migrate` converts legacy flat files to categorized entries.
+- Entries split on `\n---\n` separators per legacy-file convention.
+- Fast-model classifier (codex/copilot, auto-detected via FLOW_MEMORY_CLASSIFIER_BACKEND, gpt-5.4-mini/claude-haiku-4.5 defaults) routes each entry to a specific category; failures fall back to mechanical map.
+- Mechanical map: pitfalls→bug/build-errors, conventions→knowledge/conventions, decisions→knowledge/tooling-decisions.
+- `--dry-run` prints plan, `--yes` skips confirmation, `--no-llm` forces mechanical.
+- Legacy files archived to `.flow/memory/_legacy/` after migrate.
+- Idempotent.
+
+Smoke: 95/95 pass (was 94).
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 6950f64
+- Tests: plugins/flow-next/scripts/smoke_test.sh memory migrate block (dry-run, real, idempotency)
+- PRs:

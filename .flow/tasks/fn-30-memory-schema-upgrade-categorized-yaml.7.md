@@ -28,7 +28,7 @@ New entry:
 ### Added
 - **Categorized memory schema.** `.flow/memory/` is now a tree under `bug/` (build-errors, test-failures, runtime-errors, performance, security, integration, data, ui) and `knowledge/` (architecture-patterns, conventions, tooling-decisions, workflow, best-practices). Each entry has YAML frontmatter with title, date, track, category, module, tags, and track-specific fields (problem_type/root_cause/resolution_type for bug; applies_when for knowledge).
 - **Overlap detection on `memory add`.** Scans existing entries in the target category; high overlap updates existing in place, moderate creates new with `related_to: [existing-id]` reference. Prevents silent duplication drift.
-- **`flowctl memory migrate`.** Converts legacy `.flow/memory/pitfalls.md` / `conventions.md` / `decisions.md` into categorized entries via fast-model classification. `--dry-run` prints plan; `--yes` skips confirmation; `--no-llm` uses mechanical defaults.
+- **`flowctl memory migrate`.** Converts legacy `.flow/memory/pitfalls.md` / `conventions.md` / `decisions.md` into categorized entries via fast-model classification. `--dry-run` prints plan; `--yes` skips confirmation; `--no-llm` uses mechanical defaults. Classifier auto-selects `codex` (default `gpt-5.4-mini`) or `copilot` (default `claude-haiku-4.5`) — override via `FLOW_MEMORY_CLASSIFIER_BACKEND` (`codex|copilot|none`), `FLOW_MEMORY_CLASSIFIER_MODEL`, `FLOW_MEMORY_CLASSIFIER_EFFORT`. Idempotent (re-run reports "No legacy files to migrate."). JSON mode refuses to write without `--yes` as a safety guard; per-entry JSON shape is `{source, source_entry, target, target_path, method, model}` and top-level adds `moved_legacy`, `count`, `dry_run`, `legacy_moved_to`.
 - **`flowctl memory discoverability-patch`.** Optional command that adds a one-line reference to `.flow/memory/` in the project's AGENTS.md / CLAUDE.md so agents without flow-next loaded discover the store.
 - **Ralph auto-capture rewrite.** Worker agent writes structured bug-track entries via `memory add --track bug --category <c>` on NEEDS_WORK → SHIP. Overlap detection handles duplicates.
 - **Category-aware memory-scout.** Scout returns track/category-tagged results, prioritizing module-matched entries.
@@ -43,6 +43,8 @@ New entry:
 - JSON output shapes: `list` returns `{entries, legacy, count, status}`; `search` returns `{query, matches, count}`; `read` returns `{entry_id, path, frontmatter, body}` (categorized) or `{entry_id, path, legacy: true, body, index?}` (legacy).
 
 <!-- Updated by plan-sync: fn-30.3 landed list/read/search with richer filter flags and concrete JSON shapes; CHANGELOG should enumerate them. -->
+<!-- Updated by plan-sync: fn-30.4 ships FLOW_MEMORY_CLASSIFIER_BACKEND/MODEL/EFFORT env knobs (codex/copilot auto-detect, gpt-5.4-mini / claude-haiku-4.5 defaults), idempotency, and a JSON shape that differs from the original spec (adds moved_legacy/count/dry_run/target_path/model; refuses JSON writes without --yes). CLAUDE.md + plugin README should mention the env vars alongside the command form. -->
+<!-- Updated by plan-sync: fn-30.6 shipped `discoverability-patch` with two explicit strategies (`listing` injects `.flow/memory/` into an existing `.flow/` fenced code block; `append` adds a `## Memory / Learnings` section), richer JSON shape `{target, action, reason, notes, strategy, diff, message}` where `action ∈ {exists, applied, dry-run, skipped}`, auto-target detection (handles `@AGENTS.md`/`@CLAUDE.md` shims, symlinks, prefers AGENTS.md when both substantive), `--apply` and `--dry-run` mutually exclusive (exit 2), and JSON callers must pass `--apply` explicitly (refuses destructive auto-write). README / CHANGELOG should mention the two strategies and `--target {auto,agents,claude}` default. -->
 
 
 ### Deprecated
@@ -74,7 +76,7 @@ Replace the current memory bullets with:
 - Enable: `flowctl memory init`
 - Add: `flowctl memory add --track <bug|knowledge> --category <c> --title "..." [--module <m>] [--tags "a,b"] [--body-file <f>]`
 - Query: `flowctl memory list [--track T] [--category C]`, `flowctl memory search <q>`
-- Migrate legacy: `flowctl memory migrate --dry-run` then `--yes`
+- Migrate legacy: `flowctl memory migrate --dry-run` then `--yes` (classifier auto-selects codex/copilot; override with `FLOW_MEMORY_CLASSIFIER_BACKEND=codex|copilot|none` + `FLOW_MEMORY_CLASSIFIER_MODEL` / `FLOW_MEMORY_CLASSIFIER_EFFORT`)
 - Surface in AGENTS.md: `flowctl memory discoverability-patch`
 - Overlap detection on add — high overlap updates existing; moderate creates with `related_to`
 - Auto-capture: Ralph worker writes bug-track entries on NEEDS_WORK → SHIP

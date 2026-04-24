@@ -2,6 +2,32 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.33.0] - 2026-04-24
+
+### Added
+- **Categorized memory schema.** `.flow/memory/` is now a tree under `bug/` (build-errors, test-failures, runtime-errors, performance, security, integration, data, ui) and `knowledge/` (architecture-patterns, conventions, tooling-decisions, workflow, best-practices). Each entry is a single file with YAML frontmatter (`title`, `date`, `track`, `category`, `module`, `tags`, plus track-specific fields: `problem_type` / `root_cause` / `resolution_type` for bug; `applies_when` for knowledge). Entry IDs are `<track>/<category>/<slug>-<date>` matching filepath.
+- **Overlap detection on `memory add`.** Scans existing entries in the target category. High overlap updates the existing entry in place; moderate overlap creates a new entry with `related_to: [existing-id]` in its frontmatter. Prevents silent duplication drift.
+- **`flowctl memory migrate`.** Converts legacy `.flow/memory/pitfalls.md` / `conventions.md` / `decisions.md` into categorized entries via fast-model classification. `--dry-run` prints plan; `--yes` applies; `--no-llm` uses mechanical defaults. Classifier auto-selects `codex` (default `gpt-5.4-mini`) or `copilot` (default `claude-haiku-4.5`); override via `FLOW_MEMORY_CLASSIFIER_BACKEND=codex|copilot|none`, `FLOW_MEMORY_CLASSIFIER_MODEL`, `FLOW_MEMORY_CLASSIFIER_EFFORT`. Idempotent (re-run reports "No legacy files to migrate."). JSON mode refuses writes without `--yes` as a safety guard. Per-entry JSON shape: `{source, source_entry, target, target_path, method, model}`; top-level adds `moved_legacy`, `count`, `dry_run`, `legacy_moved_to`.
+- **`flowctl memory discoverability-patch`.** Optional command that adds a `.flow/memory/` reference to the project's AGENTS.md / CLAUDE.md so agents without flow-next loaded can discover the store. Two strategies: `listing` (injects into an existing `.flow/` fenced code block) and `append` (adds a `## Memory / Learnings` section). Auto-target detection prefers AGENTS.md when both are substantive; handles `@AGENTS.md` / `@CLAUDE.md` shims and symlinks. JSON shape: `{target, action, reason, notes, strategy, diff, message}` where `action ∈ {exists, applied, dry-run, skipped}`. `--apply` and `--dry-run` are mutually exclusive (exit 2). JSON callers must pass `--apply` explicitly — the command refuses destructive auto-writes.
+- **Ralph auto-capture rewrite.** Worker agent writes structured bug-track entries via `memory add --track bug --category <c>` on NEEDS_WORK → SHIP. Overlap detection handles duplicates automatically.
+- **Category-aware memory-scout.** Scout returns track/category-tagged results, prioritizing module-matched entries.
+
+### Changed
+- `memory list` / `read` / `search` gain `--track` and `--category` filter flags; still read legacy flat files until migration runs.
+- `memory list` also gains `--status active|stale|all` (default: `active`) — stale entries hidden unless asked.
+- `memory search` also gains `--module <m>`, `--tags "a,b"`, `--limit <N>` filters plus weighted token-overlap scoring (title 5×, tags 3×, body 1.5×, misc 1×).
+- `memory read` accepts three id forms — full (`bug/runtime-errors/slug-YYYY-MM-DD`), slug+date (unique lookup), and slug-only (latest date wins) — plus legacy forms (`legacy/pitfalls.md`, `legacy/pitfalls#N`).
+- Legacy hits in `search` surface as synthetic entries with `track: "legacy"` and `entry_id` like `legacy/pitfalls#3` (1-based).
+- JSON output shapes: `list` returns `{entries, legacy, count, status}`; `search` returns `{query, matches, count}`; `read` returns `{entry_id, path, frontmatter, body}` (categorized) or `{entry_id, path, legacy: true, body, index?}` (legacy).
+
+### Deprecated
+- `memory add --type pitfall|convention|decision` maps to new `--track/--category` flags with a deprecation warning. Will be removed in 0.36.0.
+
+### Notes
+- Backward compatible: legacy `.flow/memory/*.md` flat files continue to work until `memory migrate` runs; `list` / `read` / `search` read both.
+- Opt-in remains the default — `flowctl init` does not create memory; run `flowctl config set memory.enabled true` and `flowctl memory init` to opt in.
+- Smoke suite: 99 tests pass (adds memory migrate + discoverability-patch coverage).
+
 ## [flow-next 0.32.1] - 2026-04-24
 
 ### Added

@@ -134,7 +134,8 @@ Verify a synthetic NEEDS_WORK → SHIP cycle produces a valid new-schema entry.
 - fn-30-memory-schema-upgrade.3 (memory list/read/search)
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Rewrote worker.md NEEDS_WORK auto-capture to emit structured `flowctl memory add --track bug --category X` entries (with skip conditions + category-inference rubric) and refactored memory-scout.md to query via `flowctl memory list|search|read` with track/category-aware output. Codex mirror regenerated; smoke tests green (95 flowctl + 15 ralph).
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 770d88fb7ff4a60a2bbf98529815729d26a80e15
+- Tests: plugins/flow-next/scripts/smoke_test.sh (95 passed), plugins/flow-next/scripts/ralph_smoke_test.sh (15 passed)
+- PRs:
