@@ -76,9 +76,10 @@ Validation result (bun test / pnpm test / cargo test / etc.) appears when code c
 ## Platform detection
 
 - **Claude Code** → has `Agent` / `Task` tool with `subagent_type` — dispatch resolver units in parallel via `Task` with `subagent_type: pr-comment-resolver`, respecting file-overlap avoidance.
-- **Codex / Copilot / Droid** → no parallel subagent dispatch — loop serially over units.
+- **Codex** (0.102.0+) → native multi-agent role support. `pr-comment-resolver.toml` installs into `~/.codex/agents/` via `scripts/install-codex.sh`. Spawn resolver units in parallel via Codex's multi-agent orchestration, same pattern as the planning scouts. Respect the same file-overlap avoidance.
+- **Copilot / Droid** → no parallel subagent dispatch — loop serially over units.
 
-Detect by checking for the `Task` tool with subagent support. Default to serial when in doubt (correct output, slightly slower).
+Detect by checking for the `Task` tool with subagent support (Claude Code) or `~/.codex/agents/pr-comment-resolver.toml` (Codex). Default to serial when in doubt (correct output, slightly slower).
 
 ## Bounds
 

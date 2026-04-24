@@ -2,6 +2,11 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.35.1] - 2026-04-24
+
+### Changed
+- **`/flow-next:resolve-pr` now parallel-dispatches on Codex.** Codex 0.102.0+ ships native multi-agent role support and `pr-comment-resolver.toml` installs into `~/.codex/agents/` via `scripts/install-codex.sh` — the skill and workflow now instruct parallel spawn on Codex using the same file-overlap wave pattern used on Claude Code. Copilot and Droid stay serial (no native parallel dispatch). Previous docs were stale — the machinery was already in place via fn-24 but the resolve-pr skill defaulted Codex to serial.
+
 ## [flow-next 0.35.0] - 2026-04-24
 
 ### Added

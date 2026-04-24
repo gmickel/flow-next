@@ -232,20 +232,23 @@ fi
 
 ### Platform detection
 
-Claude Code exposes the `Task` tool with `subagent_type` parameter → parallel dispatch.
+- **Claude Code** exposes the `Task` tool with `subagent_type` parameter → parallel dispatch.
+- **Codex** (0.102.0+) ships native multi-agent role support. `pr-comment-resolver.toml` installs into `~/.codex/agents/` via `scripts/install-codex.sh`; spawn in parallel using Codex's multi-agent orchestration (same pattern as planning scouts).
+- **Copilot / Droid** → serial loop (execute resolver steps inline, one unit at a time).
 
-Other platforms (Codex, Copilot, Droid) → serial loop (execute resolver steps inline, one unit at a time).
-
-### Claude Code — parallel with file-overlap avoidance
+### Parallel dispatch (Claude Code + Codex) — with file-overlap avoidance
 
 1. Build file sets per unit (cluster file lists + individual thread paths).
 2. Pair overlap: two units overlap if their file sets intersect.
 3. Topological-style serialization: units with no overlap run in the same wave; overlapping units wait for their predecessor.
 4. Batch size per wave: **4 units** max (applies when many units have empty file sets — e.g. pr_comments).
-5. Dispatch each wave via parallel `Task` calls with `subagent_type: pr-comment-resolver`, passing the inputs documented in `agents/pr-comment-resolver.md`.
+5. Dispatch each wave:
+   - Claude Code → parallel `Task` calls with `subagent_type: pr-comment-resolver`.
+   - Codex → parallel spawn of the `pr-comment-resolver` role via Codex's multi-agent orchestration.
+   Pass the inputs documented in `agents/pr-comment-resolver.md`.
 6. Collect all verdict JSONs.
 
-### Serial (other platforms)
+### Serial (Copilot / Droid)
 
 Loop over `UNITS` in cluster-first order (clusters carry higher leverage). For each unit, perform the resolver steps inline — read code, decide verdict, compose reply, apply any edits — following `agents/pr-comment-resolver.md`. Append the verdict JSON to `VERDICTS`.
 

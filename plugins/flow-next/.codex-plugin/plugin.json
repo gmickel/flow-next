@@ -1,6 +1,6 @@
 {
   "name": "flow-next",
-  "version": "0.35.0",
+  "version": "0.35.1",
   "description": "Zero-dependency planning + execution with .flow/ task tracking and Ralph autonomous mode. Worker subagent per task for context isolation. Compatible with Codex, Claude Code, and Factory Droid.",
   "author": {
     "name": "Gordon Mickel",
