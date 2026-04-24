@@ -327,6 +327,46 @@ Report untraced changes but don't auto-reject. UNDOCUMENTED_ADDITION is a flag f
 - Performance (impl-review covers this)
 - Legitimate refactoring needed to implement requirements (flag as LEGITIMATE_SUPPORT but don't block)
 
+## Requirements coverage (if epic spec has R-IDs)
+
+If the epic spec numbers its acceptance criteria like `- **R1:** ...`, `- **R2:** ...`,
+produce a per-R-ID coverage table. Read the epic spec's `## Acceptance` section
+(or the legacy `## Acceptance criteria` heading — reviewer MUST tolerate both).
+If no R-IDs are present, skip this block entirely — Phase 2 and Phase 3 above
+still apply.
+
+This forward coverage (spec → code) is **additive to Phase 3 reverse coverage
+(code → spec)**. Both phases feed the final verdict.
+
+For each R-ID, classify status:
+
+| Status | Meaning |
+|--------|---------|
+| met | Implementation delivers the requirement with appropriate tests/evidence |
+| partial | Implementation advances the requirement but leaves gaps |
+| not-addressed | Implementation does not advance this requirement at all |
+| deferred | Spec explicitly defers this requirement to a later epic/PR |
+
+Report as a markdown table in the review output:
+
+| R-ID | Status | Evidence |
+|------|--------|----------|
+| R1 | met | src/auth.ts:42 + tests/auth.test.ts:17 |
+| R2 | partial | implementation exists but no error-path tests |
+| R3 | not-addressed | — |
+
+After the table, emit one line listing every `not-addressed` R-ID that is NOT
+explicitly deferred in the spec:
+
+> Unaddressed R-IDs: [R3, R5]
+
+If there are zero unaddressed R-IDs, emit `Unaddressed R-IDs: []` or omit the
+line entirely. Deferred R-IDs are never listed here.
+
+**Verdict gate:** any `not-addressed` R-ID that is NOT marked `deferred` in the
+spec MUST flip the verdict to `NEEDS_WORK`, regardless of reverse-coverage
+findings.
+
 ## Confidence calibration
 
 Rate each gap on exactly one of these 5 discrete anchors. Do not use interpolated values (no 33, 80, 90).
@@ -413,6 +453,7 @@ For each untraced change:
 (Note: the reverse-coverage `Classification` uses untraced-change labels, distinct from the `introduced` / `pre_existing` per-gap classification above.)
 
 After the findings list, emit:
+- The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the epic spec uses R-IDs; otherwise skip).
 - A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
 - A `Classification counts:` line tallying `introduced` vs `pre_existing` gaps, e.g. `Classification counts: 1 introduced, 0 pre_existing.`.
 - A `Protected-path filter:` line tallying gaps dropped by the protected-path filter (omit when nothing was dropped).
@@ -420,8 +461,8 @@ After the findings list, emit:
 **REQUIRED**: You MUST end your response with exactly one verdict tag. This is mandatory:
 `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`
 
-- SHIP: All `introduced` spec requirements are implemented (pre-existing gaps do not block)
-- NEEDS_WORK: One or more `introduced` requirements are missing, partial, or wrong
+- SHIP: All `introduced` spec requirements are implemented and every R-ID is `met` or `deferred` (pre-existing gaps do not block)
+- NEEDS_WORK: One or more `introduced` requirements are missing, partial, or wrong — or any non-deferred R-ID is `not-addressed`
 
 Do NOT skip this tag. The automation depends on it.
 EOF
@@ -511,12 +552,41 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
     fi
   fi
 
+  # Optional: capture unaddressed R-IDs (fn-29.2).
+  # Reviewer emits `Unaddressed R-IDs: [R3, R5]` (or `[]` / `none` for empty).
+  # Absent line => epic spec has no R-IDs — leave field off the receipt entirely.
+  UNADDRESSED_JSON=""
+  UNADDRESSED_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
+    | grep -iE '^[>*_` ]*unaddressed([[:space:]]+r[-_ ]?ids?)?[ *_`]*:' \
+    | head -n 1 \
+    | sed -E 's/^[^:]+:[[:space:]]*//; s/[[:space:]]*$//; s/\.$//')"
+  if [[ -n "$UNADDRESSED_LINE" ]]; then
+    normalized="$(printf '%s' "$UNADDRESSED_LINE" | sed -E 's/^[[:space:]]*\[|\][[:space:]]*$//g; s/[[:space:]]+//g')"
+    lower="$(printf '%s' "$normalized" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$lower" == "none" || "$lower" == "n/a" || -z "$lower" ]]; then
+      UNADDRESSED_JSON="[]"
+    else
+      rids="$(printf '%s' "$UNADDRESSED_LINE" \
+        | grep -oE '\bR[0-9]+\b' \
+        | awk '!seen[$0]++')"
+      if [[ -z "$rids" ]]; then
+        UNADDRESSED_JSON="[]"
+      else
+        UNADDRESSED_JSON="$(printf '%s' "$rids" \
+          | awk 'BEGIN{printf "["} {printf (NR>1?",":"") "\"" $0 "\""} END{printf "]"}')"
+      fi
+    fi
+  fi
+
   EXTRA_FIELDS=""
   if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
     EXTRA_FIELDS+=",\"suppressed_count\":$SUPPRESSED_JSON"
   fi
   if [[ -n "$INTRODUCED_COUNT" && -n "$PRE_EXISTING_COUNT" ]]; then
     EXTRA_FIELDS+=",\"introduced_count\":$INTRODUCED_COUNT,\"pre_existing_count\":$PRE_EXISTING_COUNT"
+  fi
+  if [[ -n "$UNADDRESSED_JSON" ]]; then
+    EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
   fi
 
   cat > "$REVIEW_RECEIPT_PATH" <<EOF

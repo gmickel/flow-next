@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.32.0-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.32.1-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -1075,6 +1075,88 @@ flowctl task show-backend fn-5.2 --json   # per-task raw + resolved + field-leve
 | Ralph overnight runs | Any works; RP auto-opens with --create (1.5.68+); Copilot/Codex need no window |
 
 Without a backend configured, reviews fail with a clear error. Run `/flow-next:setup` or pass `--review=X`.
+
+### Review Rigor (v0.32.1+)
+
+Five prompt-level + minimal-flowctl improvements that raise review signal and cut review cost. All three backends (rp, codex, copilot) benefit equally. Zero breaking changes — receipt additions are additive.
+
+**1. Requirement-ID traceability (R-IDs).** Epic specs emit numbered acceptance criteria:
+
+```markdown
+## Acceptance criteria
+- **R1:** OAuth login works for Google provider
+- **R2:** Session persists across page reloads
+- **R3:** Logout clears session tokens
+```
+
+Task specs optionally reference them via frontmatter:
+
+```yaml
+---
+satisfies: [R1, R3]
+---
+```
+
+Rules:
+- Plain markdown prose, not YAML — keeps specs human-editable.
+- **Renumber-forbidden** after the first review cycle. Deletions leave gaps (`R1, R3, R5` stays that way); new criteria take the next unused number.
+- Plan skill writes R-IDs on creation; plan-sync preserves them through drift updates.
+- Impl-review and epic-review emit a per-R-ID coverage table (met / partial / not-addressed / deferred).
+- Any unaddressed R-ID flips verdict to `NEEDS_WORK`; receipt carries an `unaddressed: ["R2", "R5"]` array so the fix loop has targeted work.
+
+**2. Confidence anchors (0 / 25 / 50 / 75 / 100).** Reviewers score every finding on exactly five discrete values:
+
+| Anchor | Meaning |
+|--------|---------|
+| 100 | Verifiable from code alone, zero interpretation. |
+| 75 | Full execution path traced — input → branch → wrong output. |
+| 50 | Depends on conditions visible but not fully confirmable. |
+| 25 | Requires runtime conditions with no direct evidence. |
+| 0 | Speculative. |
+
+**Suppression gate:** after dedup, findings below 75 are dropped. Exception: P0 findings at 50+ survive. Reviews report `suppressed_count` by anchor; receipt optionally carries it as `{"50": 3, "25": 7, "0": 2}`.
+
+**3. Introduced vs pre-existing.** Each finding is classified:
+- `introduced: true` — caused by this branch's diff.
+- `pre_existing: true` — broken on the base branch.
+
+Verdict gate considers only `introduced` findings. Pre-existing issues surface in a separate non-blocking "Pre-existing issues" section. Receipt carries `introduced_count` + `pre_existing_count` so Ralph stops fighting bugs it didn't introduce.
+
+**4. Protected artifacts.** Review prompts carry a hardcoded never-flag list — findings recommending deletion or gitignore of these paths are discarded during synthesis:
+
+- `.flow/*` (specs, tasks, memory, state)
+- `.flow/bin/*` (bundled flowctl)
+- `.flow/memory/*` (learnings store)
+- `docs/plans/*`, `docs/solutions/*` (when the project uses them)
+- `scripts/ralph/*` (Ralph harness)
+
+Prevents cross-model reviewers unfamiliar with flow-next conventions from proposing destructive cleanups.
+
+**5. Trivial-diff skip.** `flowctl triage-skip --base <ref>` runs a deterministic whitelist (lockfile-only / docs-only / release-chore / generated-file-only) and returns `VERDICT=SHIP` without invoking the configured backend. Receipt is written with `mode: triage_skip`, `source: deterministic`, and a one-line reason.
+
+```bash
+flowctl triage-skip --base main
+# VERDICT=SHIP
+# reason=lockfile-only (bun.lock)
+# source=deterministic
+```
+
+Optional LLM layer (gpt-5-mini / claude-haiku-4.5) for ambiguous diffs is gated behind `FLOW_TRIAGE_LLM=1`. On by default in Ralph mode; opt-out via `--no-triage` or `FLOW_RALPH_NO_TRIAGE=1`. Saves rp / codex / copilot calls on trivial commits.
+
+**Receipt schema (additive only).** All review receipts may carry these optional fields; existing consumers that read by key ignore unknowns:
+
+```json
+{
+  "mode": "codex",
+  "verdict": "NEEDS_WORK",
+  "unaddressed": ["R2", "R5"],
+  "suppressed_count": {"50": 3, "25": 7, "0": 2},
+  "introduced_count": 2,
+  "pre_existing_count": 4
+}
+```
+
+See [CHANGELOG — flow-next 0.32.1](../../CHANGELOG.md#flow-next-0321---2026-04-24) for the full list.
 
 ### Dependency Graphs
 

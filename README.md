@@ -3,7 +3,7 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v0.32.0-green)](plugins/flow-next/)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v0.32.1-green)](plugins/flow-next/)
 [![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -25,7 +25,7 @@ Flow-Next is an AI agent orchestration plugin. Bundled task tracking, dependency
 
 Works on **Claude Code**, **OpenAI Codex** (CLI + Desktop), **Factory Droid**, and **OpenCode**.
 
-> 🆕 **v0.30.0 — GitHub Copilot CLI review backend.** Third cross-model review option alongside RepoPrompt and Codex. Works on Linux/Windows/CI via a GitHub Copilot subscription. [Setup](plugins/flow-next/README.md#cross-model-reviews).
+> 🆕 **v0.32.1 — Review rigor bundle.** Requirement-ID traceability (R-IDs), confidence anchors (0/25/50/75/100), introduced-vs-pre-existing classification, protected-artifact list, and `flowctl triage-skip` for trivial diffs. All three review backends benefit equally. [Details](CHANGELOG.md).
 
 ---
 

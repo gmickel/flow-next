@@ -83,6 +83,82 @@ Per-task `review` (set via `flowctl task set-backend`) overrides env.
 
 ---
 
+## Phase 0.5: Trivial-diff triage (fn-29.6)
+
+A cheap pre-check that short-circuits lockfile-only, docs-only, release-chore,
+and generated-file diffs. Runs before the configured backend — when it returns
+SKIP, the receipt is written with `mode: "triage_skip"` / `verdict: "SHIP"`
+and no expensive backend review is invoked.
+
+**Default behavior:** deterministic whitelist only (no LLM call). Ambiguous
+diffs default to REVIEW. Opt-in to LLM judge with `FLOW_TRIAGE_LLM=1`.
+
+**Opt-out:**
+- `--no-triage` argument on the skill
+- `FLOW_RALPH_NO_TRIAGE=1` env var (Ralph runs)
+
+**Invocation (from SKILL.md):**
+
+```bash
+if [[ -z "${TRIAGE_DISABLED:-}" && -z "${FLOW_RALPH_NO_TRIAGE:-}" ]]; then
+  RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
+  TRIAGE_ARGS=(triage-skip --receipt "$RECEIPT_PATH" --json)
+  [[ -n "$BASE_COMMIT" ]] && TRIAGE_ARGS+=(--base "$BASE_COMMIT")
+  [[ -n "$TASK_ID" ]] && TRIAGE_ARGS+=(--task "$TASK_ID")
+  [[ -z "${FLOW_TRIAGE_LLM:-}" ]] && TRIAGE_ARGS+=(--no-llm)
+
+  if TRIAGE_OUT=$($FLOWCTL "${TRIAGE_ARGS[@]}" 2>/dev/null); then
+    SKIP_REASON=$(echo "$TRIAGE_OUT" | jq -r '.reason // "trivial diff"' 2>/dev/null)
+    echo "Triage-skip: $SKIP_REASON"
+    echo "VERDICT=SHIP"
+    exit 0
+  fi
+fi
+```
+
+**Exit codes:**
+- `0` → SKIP (verdict=SHIP, receipt written, skill exits early)
+- `1` → proceed to full review (normal fallthrough to backend)
+- `>=2` → error (falls through to full review — never fail closed)
+
+**Receipt shape on SKIP:**
+
+```json
+{
+  "type": "impl_review",
+  "id": "fn-29.6",
+  "mode": "triage_skip",
+  "base": "main",
+  "verdict": "SHIP",
+  "reason": "lockfile-only (bun.lock)",
+  "source": "deterministic",
+  "changed_file_count": 1,
+  "timestamp": "2026-04-24T10:00:00Z"
+}
+```
+
+Ralph reads `verdict` — `SHIP` satisfies the gate regardless of `mode`. No
+Ralph-script changes required.
+
+**Triage rules (deterministic layer):**
+
+| Shape | Action |
+|-------|--------|
+| Any code file (`.py`, `.ts`, `.go`, `.sh`, ...) present | REVIEW (AC9) |
+| Any `.flow/specs/*.md` / `.flow/tasks/*.md` / `.flow/epics/*.json` | REVIEW |
+| All files are lockfiles (`package-lock.json`, `bun.lock`, ...) | SKIP |
+| All files are docs (`.md`, `.mdx`, `.txt`, `.rst`, `.adoc`) | SKIP |
+| All files are under generated paths (`codex/`, `vendor/`, `node_modules/`, ...) | SKIP |
+| Release-chore: `plugin.json` / `package.json` / `Cargo.toml` / `pyproject.toml` + optional `CHANGELOG.md` | SKIP |
+| Lockfile + manifest combo | SKIP |
+| Anything else | REVIEW (conservative fallthrough) |
+
+When `FLOW_TRIAGE_LLM=1`, ambiguous diffs get a one-shot fast-model call
+(`gpt-5-mini` for codex backend, `claude-haiku-4.5` for copilot backend).
+Malformed LLM output falls through to REVIEW.
+
+---
+
 ## Codex Backend Workflow
 
 Use when `BACKEND="codex"`.
@@ -329,6 +405,44 @@ Walk through these scenarios mentally for any new/modified code paths:
 
 Only flag issues that apply to the **changed code** - not pre-existing patterns.
 
+## Requirements coverage (if spec has R-IDs)
+
+If the task spec references an epic spec with numbered acceptance criteria like
+`- **R1:** ...`, `- **R2:** ...`, produce a per-R-ID coverage table. Read the
+epic spec's `## Acceptance` section (or the legacy `## Acceptance criteria`
+heading — reviewer MUST tolerate both). If no R-IDs are present anywhere, skip
+this block entirely — the rest of the review is unchanged.
+
+For each R-ID, classify status:
+
+| Status | Meaning |
+|--------|---------|
+| met | Diff clearly implements the requirement with appropriate tests/evidence |
+| partial | Diff advances the requirement but leaves gaps (missing tests, missing edge case, missing integration point) |
+| not-addressed | Diff does not advance this requirement at all |
+| deferred | Spec explicitly defers this requirement to a later task/PR |
+
+Report as a markdown table in the review output:
+
+| R-ID | Status | Evidence |
+|------|--------|----------|
+| R1 | met | src/auth.ts:42 + tests/auth.test.ts:17 |
+| R2 | partial | implementation exists but no error-path tests |
+| R3 | not-addressed | — |
+
+After the table, emit one line listing every `not-addressed` R-ID that is NOT
+explicitly deferred in the spec:
+
+> Unaddressed R-IDs: [R3, R5]
+
+If there are zero unaddressed R-IDs, emit `Unaddressed R-IDs: []` or omit the
+line entirely — both forms are valid. Deferred R-IDs are never listed here.
+
+**Verdict gate:** any `not-addressed` R-ID that is NOT marked `deferred` in the
+spec MUST flip the verdict to `NEEDS_WORK`. A clean coverage table (all `met`
+or `deferred`) does not by itself force SHIP — the other review gates still
+apply.
+
 ## Confidence calibration
 
 Rate each finding on exactly one of these 5 discrete anchors. Do not use interpolated values (no 33, 80, 90).
@@ -409,12 +523,13 @@ For each surviving `introduced` finding:
 Then list each `pre_existing` finding under a separate `## Pre-existing issues (not blocking this verdict)` heading using the compact form `[severity, confidence N, introduced=false] file:line — summary`.
 
 After the findings list, emit:
+- The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the spec uses R-IDs; otherwise skip).
 - A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
 - A `Classification counts:` line tallying `introduced` vs `pre_existing` survivors, e.g. `Classification counts: 2 introduced, 4 pre_existing.`.
 - A `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
 
 **REQUIRED**: You MUST end your response with exactly one verdict tag. This is mandatory:
-`<verdict>SHIP</verdict>` (no blocking `introduced` findings) or `<verdict>NEEDS_WORK</verdict>` (introduced findings to fix) or `<verdict>MAJOR_RETHINK</verdict>`
+`<verdict>SHIP</verdict>` (no blocking `introduced` findings, all R-IDs met or deferred) or `<verdict>NEEDS_WORK</verdict>` (introduced findings or unaddressed R-IDs to fix) or `<verdict>MAJOR_RETHINK</verdict>`
 
 Do NOT skip this tag. The automation depends on it.
 EOF
@@ -497,13 +612,44 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
     fi
   fi
 
-  # Build receipt; inject optional fn-29.3/fn-29.4 signals only when present
+  # Optional: capture unaddressed R-IDs (fn-29.2).
+  # Reviewer emits `Unaddressed R-IDs: [R3, R5]` (or `[]` / `none` for empty).
+  # Absent line => legacy spec (no R-IDs) — leave field off the receipt entirely.
+  UNADDRESSED_JSON=""
+  UNADDRESSED_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
+    | grep -iE '^[>*_` ]*unaddressed([[:space:]]+r[-_ ]?ids?)?[ *_`]*:' \
+    | head -n 1 \
+    | sed -E 's/^[^:]+:[[:space:]]*//; s/[[:space:]]*$//; s/\.$//')"
+  if [[ -n "$UNADDRESSED_LINE" ]]; then
+    # Strip surrounding brackets/quotes; treat "none"/"n/a"/"" as empty list.
+    normalized="$(printf '%s' "$UNADDRESSED_LINE" | sed -E 's/^[[:space:]]*\[|\][[:space:]]*$//g; s/[[:space:]]+//g')"
+    lower="$(printf '%s' "$normalized" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$lower" == "none" || "$lower" == "n/a" || -z "$lower" ]]; then
+      UNADDRESSED_JSON="[]"
+    else
+      # Extract R-ID tokens (R followed by digits), de-dup preserving order.
+      rids="$(printf '%s' "$UNADDRESSED_LINE" \
+        | grep -oE '\bR[0-9]+\b' \
+        | awk '!seen[$0]++')"
+      if [[ -z "$rids" ]]; then
+        UNADDRESSED_JSON="[]"
+      else
+        UNADDRESSED_JSON="$(printf '%s' "$rids" \
+          | awk 'BEGIN{printf "["} {printf (NR>1?",":"") "\"" $0 "\""} END{printf "]"}')"
+      fi
+    fi
+  fi
+
+  # Build receipt; inject optional fn-29.2/fn-29.3/fn-29.4 signals only when present
   EXTRA_FIELDS=""
   if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
     EXTRA_FIELDS+=",\"suppressed_count\":$SUPPRESSED_JSON"
   fi
   if [[ -n "$INTRODUCED_COUNT" && -n "$PRE_EXISTING_COUNT" ]]; then
     EXTRA_FIELDS+=",\"introduced_count\":$INTRODUCED_COUNT,\"pre_existing_count\":$PRE_EXISTING_COUNT"
+  fi
+  if [[ -n "$UNADDRESSED_JSON" ]]; then
+    EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
   fi
 
   cat > "$REVIEW_RECEIPT_PATH" <<EOF
