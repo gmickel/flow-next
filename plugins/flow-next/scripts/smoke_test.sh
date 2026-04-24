@@ -609,12 +609,142 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# fn-30.3: list / read / search with categorized tree.
+list_json="$(scripts/flowctl memory list --json)"
+"$PYTHON_BIN" - <<'PY' "$list_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["success"] is True
+entries = data.get("entries", [])
+assert len(entries) >= 1, f"expected at least one entry, got {data}"
+tracks = {e["track"] for e in entries}
+assert "bug" in tracks, f"bug track missing from {tracks}"
+# Filter application.
+for e in entries:
+    assert e["status"] == "active", f"expected active filter, saw {e}"
+PY
+echo -e "${GREEN}✓${NC} memory list returns categorized entries (default --status active)"
+PASS=$((PASS + 1))
+
+list_json="$(scripts/flowctl memory list --track knowledge --json)"
+"$PYTHON_BIN" - <<'PY' "$list_json"
+import json, sys
+data = json.loads(sys.argv[1])
+entries = data["entries"]
+assert all(e["track"] == "knowledge" for e in entries), f"--track filter failed: {entries}"
+PY
+echo -e "${GREEN}✓${NC} memory list --track knowledge filters to knowledge only"
+PASS=$((PASS + 1))
+
+# Seed a stale entry and verify --status stale picks it up.
+mkdir -p .flow/memory/knowledge/workflow
+cat > .flow/memory/knowledge/workflow/stale-example-2026-01-01.md <<'EOF'
+---
+title: "Stale example"
+date: "2026-01-01"
+track: knowledge
+category: workflow
+status: stale
+stale_reason: "obsoleted by migration"
+stale_date: "2026-04-24"
+applies_when: "never"
+---
+
+Body.
+EOF
+stale_json="$(scripts/flowctl memory list --status stale --json)"
+"$PYTHON_BIN" - <<'PY' "$stale_json"
+import json, sys
+data = json.loads(sys.argv[1])
+ids = [e["entry_id"] for e in data["entries"]]
+assert "knowledge/workflow/stale-example-2026-01-01" in ids, f"stale not listed: {ids}"
+assert all(e["status"] == "stale" for e in data["entries"])
+PY
+echo -e "${GREEN}✓${NC} memory list --status stale surfaces stale entries"
+PASS=$((PASS + 1))
+
+# Read by full id.
+read_json="$(scripts/flowctl memory read knowledge/workflow/stale-example-2026-01-01 --json)"
+"$PYTHON_BIN" - <<'PY' "$read_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["entry_id"] == "knowledge/workflow/stale-example-2026-01-01"
+assert data["frontmatter"]["track"] == "knowledge"
+PY
+echo -e "${GREEN}✓${NC} memory read accepts full entry-id"
+PASS=$((PASS + 1))
+
+# Read by slug+date.
+read_json="$(scripts/flowctl memory read stale-example-2026-01-01 --json)"
+"$PYTHON_BIN" - <<'PY' "$read_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["entry_id"].endswith("stale-example-2026-01-01")
+PY
+echo -e "${GREEN}✓${NC} memory read accepts slug+date"
+PASS=$((PASS + 1))
+
+# Read by slug only (latest date).
+read_json="$(scripts/flowctl memory read stale-example --json)"
+"$PYTHON_BIN" - <<'PY' "$read_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["entry_id"].endswith("stale-example-2026-01-01")
+PY
+echo -e "${GREEN}✓${NC} memory read accepts bare slug (latest date wins)"
+PASS=$((PASS + 1))
+
+# Unknown id -> exit non-zero.
+set +e
+scripts/flowctl memory read does-not-exist --json >/dev/null 2>&1
+rc=$?
+set -e
+if [[ $rc -ne 0 ]]; then
+  echo -e "${GREEN}✓${NC} memory read unknown id returns non-zero exit"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} memory read unknown id (expected non-zero, got $rc)"
+  FAIL=$((FAIL + 1))
+fi
+
+# Search with token overlap.
+search_json="$(scripts/flowctl memory search 'stale example' --json)"
+"$PYTHON_BIN" - <<'PY' "$search_json"
+import json, sys
+data = json.loads(sys.argv[1])
+matches = data["matches"]
+assert matches, f"expected matches, got {data}"
+top = matches[0]
+assert top["entry_id"].endswith("stale-example-2026-01-01"), top
+assert top["score"] > 0
+PY
+echo -e "${GREEN}✓${NC} memory search ranks by token overlap"
+PASS=$((PASS + 1))
+
+# Search --track filter.
+search_json="$(scripts/flowctl memory search 'stale example' --track bug --json)"
+"$PYTHON_BIN" - <<'PY' "$search_json"
+import json, sys
+data = json.loads(sys.argv[1])
+# No bug-track entry mentions "stale example" → expect no matches.
+assert data["matches"] == [], f"--track filter leaked: {data}"
+PY
+echo -e "${GREEN}✓${NC} memory search --track narrows scope"
+PASS=$((PASS + 1))
+
+rm -rf .flow/memory/knowledge/workflow/stale-example-2026-01-01.md
+
 # Legacy detection hint: seed a flat pitfalls.md and re-init.
 cat > .flow/memory/pitfalls.md <<'EOF'
 # Pitfalls
 
 ## 2026-01-01 manual [pitfall]
-legacy entry
+legacy entry about null deref in auth
+
+---
+
+## 2026-02-01 manual [pitfall]
+another legacy pitfall
 EOF
 hint_json="$(scripts/flowctl memory init --json)"
 "$PYTHON_BIN" - <<'PY' "$hint_json"
@@ -626,6 +756,53 @@ assert "migrate" in data.get("hint", ""), f"migration hint missing: {data}"
 PY
 echo -e "${GREEN}✓${NC} memory init detects legacy files and emits hint"
 PASS=$((PASS + 1))
+
+# Legacy list includes the file.
+list_json="$(scripts/flowctl memory list --json)"
+"$PYTHON_BIN" - <<'PY' "$list_json"
+import json, sys
+data = json.loads(sys.argv[1])
+legacy = data.get("legacy", [])
+names = [l["filename"] for l in legacy]
+assert "pitfalls.md" in names, f"legacy missing from list: {legacy}"
+PY
+echo -e "${GREEN}✓${NC} memory list reports legacy files as synthetic entries"
+PASS=$((PASS + 1))
+
+# Legacy read by path.
+read_json="$(scripts/flowctl memory read legacy/pitfalls --json)"
+"$PYTHON_BIN" - <<'PY' "$read_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["legacy"] is True
+assert "null deref" in data["body"]
+PY
+echo -e "${GREEN}✓${NC} memory read legacy/pitfalls returns whole file"
+PASS=$((PASS + 1))
+
+# Legacy read by entry index.
+read_json="$(scripts/flowctl memory read legacy/pitfalls#2 --json)"
+"$PYTHON_BIN" - <<'PY' "$read_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["legacy"] is True
+assert data["index"] == 2
+assert "another legacy" in data["body"]
+PY
+echo -e "${GREEN}✓${NC} memory read legacy/pitfalls#2 returns the 2nd entry"
+PASS=$((PASS + 1))
+
+# Search covers legacy file.
+search_json="$(scripts/flowctl memory search 'null deref' --json)"
+"$PYTHON_BIN" - <<'PY' "$search_json"
+import json, sys
+data = json.loads(sys.argv[1])
+ids = [m["entry_id"] for m in data["matches"]]
+assert any(mid.startswith("legacy/") for mid in ids), f"legacy not in search: {ids}"
+PY
+echo -e "${GREEN}✓${NC} memory search covers legacy files (substring)"
+PASS=$((PASS + 1))
+
 rm -f .flow/memory/pitfalls.md
 
 echo -e "${YELLOW}--- schema v1 validate ---${NC}"

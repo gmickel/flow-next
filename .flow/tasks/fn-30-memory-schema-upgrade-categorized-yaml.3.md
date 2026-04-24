@@ -119,6 +119,20 @@ JSON output: array of `{entry_id, title, track, category, score, snippet, path}`
 
 - fn-30-memory-schema-upgrade.1 (schema + frontmatter helpers)
 
+## Notes from fn-30.2 (plan-sync)
+
+Helpers already in `flowctl.py` that list/read/search can reuse:
+
+- `parse_memory_frontmatter(path)` — round-trip-safe YAML frontmatter reader (PyYAML when available, inline fallback otherwise).
+- `_memory_parse_entry_filename(path)` — splits `<slug>-YYYY-MM-DD.md` into `(slug, date)`; returns `("", "")` when the stem doesn't match.
+- `_memory_entry_id(track, category, slug, date)` — canonical id form `<track>/<category>/<slug>-<date>` (matches the filesystem path).
+- `MEMORY_TRACKS`, `MEMORY_CATEGORIES`, `MEMORY_LEGACY_FILES` constants are the source of truth; use them instead of hard-coding category lists in the list/search walkers.
+
+The current `cmd_memory_read` / `cmd_memory_list` / `cmd_memory_search` in flowctl.py still operate on legacy flat files only — this task is the rewrite. Preserve their current behavior for files whose names match `MEMORY_LEGACY_FILES` so backward compat holds until migration runs.
+
+<!-- Updated by plan-sync: fn-30.2 added parse_memory_frontmatter / _memory_parse_entry_filename / _memory_entry_id helpers; list/read/search should reuse them. -->
+
+
 ## Done summary
 _(populated by /flow-next:work upon completion)_
 

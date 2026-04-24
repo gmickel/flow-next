@@ -4713,12 +4713,278 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
         print(f"{verb} {entry_id} at {target_path}")
 
 
+_LEGACY_TYPE_FOR_FILE: dict[str, str] = {
+    "pitfalls.md": "pitfall",
+    "conventions.md": "convention",
+    "decisions.md": "decision",
+}
+
+
+def _memory_iter_entries(
+    memory_dir: Path,
+    track: Optional[str] = None,
+    category: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    """Walk the categorized tree and return entry descriptors.
+
+    Each descriptor: {entry_id, track, category, slug, date, path,
+    frontmatter, title, module, tags, status}. Entries with malformed
+    filenames or missing/invalid frontmatter are skipped. Filters
+    `--track` / `--category` narrow the scan. Status filtering is left
+    to the caller (defaults live in `cmd_memory_list`).
+    """
+    entries: list[dict[str, Any]] = []
+    tracks = [track] if track else list(MEMORY_TRACKS)
+    for t in tracks:
+        categories = [category] if category else list(MEMORY_CATEGORIES.get(t, []))
+        if track is None and category is not None:
+            # Caller asked for a specific category without a track — only
+            # include it if it belongs to this track's enum.
+            if category not in MEMORY_CATEGORIES.get(t, []):
+                continue
+            categories = [category]
+        for cat in categories:
+            cat_dir = memory_dir / t / cat
+            if not cat_dir.is_dir():
+                continue
+            for entry_path in sorted(cat_dir.iterdir()):
+                if entry_path.name.startswith("."):
+                    continue
+                if entry_path.suffix != ".md":
+                    continue
+                slug, date = _memory_parse_entry_filename(entry_path)
+                if not slug or not date:
+                    continue
+                data = _memory_read_entry(entry_path)
+                fm = data["frontmatter"]
+                if not fm:
+                    continue
+                tags_raw = fm.get("tags", []) or []
+                if isinstance(tags_raw, str):
+                    tags_list = [tags_raw]
+                elif isinstance(tags_raw, list):
+                    tags_list = [str(tt) for tt in tags_raw]
+                else:
+                    tags_list = []
+                entries.append(
+                    {
+                        "entry_id": _memory_entry_id(t, cat, slug, date),
+                        "track": t,
+                        "category": cat,
+                        "slug": slug,
+                        "date": date,
+                        "path": str(entry_path),
+                        "frontmatter": fm,
+                        "body": data["body"],
+                        "title": str(fm.get("title", "")),
+                        "module": str(fm.get("module", "") or ""),
+                        "tags": tags_list,
+                        "status": str(fm.get("status", "active") or "active"),
+                    }
+                )
+    return entries
+
+
+def _memory_legacy_entry_count(path: Path) -> int:
+    """Count `---`-separated entries in a legacy flat file.
+
+    The pre-fn-30 format used `---` as an inter-entry delimiter. Empty
+    segments are ignored. Returns 0 if the file can't be read.
+    """
+    if not path.exists():
+        return 0
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return 0
+    segments = [seg.strip() for seg in text.split("\n---\n")]
+    return sum(1 for seg in segments if seg)
+
+
+def _memory_legacy_entry_segments(path: Path) -> list[str]:
+    """Return non-empty `---`-separated segments from a legacy flat file."""
+    if not path.exists():
+        return []
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    return [seg.strip() for seg in text.split("\n---\n") if seg.strip()]
+
+
+def _memory_resolve_read_target(
+    memory_dir: Path, entry_id: str
+) -> Optional[dict[str, Any]]:
+    """Resolve a read target from an id.
+
+    Accepted forms:
+      - `<track>/<category>/<slug>-<date>` — exact id
+      - `<slug>-<date>` — unique lookup across all categories
+      - `<slug>` — latest date wins across all categories
+      - `legacy/<pitfalls|conventions|decisions>.md` — whole legacy file
+      - `legacy/<pitfalls|conventions|decisions>#<N>` — 1-based legacy entry
+
+    Returns:
+      Categorized: {"kind": "categorized", "entry": <descriptor>}
+      Legacy whole: {"kind": "legacy_file", "filename": str, "text": str}
+      Legacy entry: {"kind": "legacy_entry", "filename": str, "index": int,
+                     "text": str}
+      None if nothing resolves.
+    """
+    # Legacy forms.
+    if entry_id.startswith("legacy/"):
+        rest = entry_id[len("legacy/") :]
+        filename: str
+        index: Optional[int] = None
+        if "#" in rest:
+            base, _, idx_str = rest.partition("#")
+            filename = base if base.endswith(".md") else f"{base}.md"
+            try:
+                index = int(idx_str)
+            except ValueError:
+                return None
+            if index < 1:
+                return None
+        else:
+            filename = rest if rest.endswith(".md") else f"{rest}.md"
+        if filename not in MEMORY_LEGACY_FILES:
+            return None
+        legacy_path = memory_dir / filename
+        if not legacy_path.exists():
+            return None
+        if index is None:
+            try:
+                text = legacy_path.read_text(encoding="utf-8")
+            except OSError:
+                return None
+            return {"kind": "legacy_file", "filename": filename, "text": text}
+        segments = _memory_legacy_entry_segments(legacy_path)
+        if index > len(segments):
+            return None
+        return {
+            "kind": "legacy_entry",
+            "filename": filename,
+            "index": index,
+            "text": segments[index - 1],
+        }
+
+    all_entries = _memory_iter_entries(memory_dir)
+    # Full id form.
+    if entry_id.count("/") == 2:
+        for entry in all_entries:
+            if entry["entry_id"] == entry_id:
+                return {"kind": "categorized", "entry": entry}
+        return None
+
+    # slug[-date] form.
+    m = re.match(r"^(.+)-(\d{4}-\d{2}-\d{2})$", entry_id)
+    if m:
+        slug, date = m.group(1), m.group(2)
+        matches = [e for e in all_entries if e["slug"] == slug and e["date"] == date]
+        if len(matches) == 1:
+            return {"kind": "categorized", "entry": matches[0]}
+        if len(matches) > 1:
+            # Ambiguous — surface for error message.
+            return {"kind": "ambiguous", "matches": matches}
+        return None
+
+    # Slug only — pick latest date across all categories.
+    slug_matches = [e for e in all_entries if e["slug"] == entry_id]
+    if not slug_matches:
+        return None
+    slug_matches.sort(key=lambda e: e["date"], reverse=True)
+    return {"kind": "categorized", "entry": slug_matches[0]}
+
+
 def cmd_memory_read(args: argparse.Namespace) -> None:
-    """Read memory entries."""
+    """Read memory entries.
+
+    Preferred form (fn-30 task 3): `memory read <entry-id>`.
+    Entry-id forms:
+      - full: `bug/runtime-errors/null-deref-2026-05-01`
+      - slug+date: `null-deref-2026-05-01`
+      - slug only: `null-deref` (latest date wins)
+      - legacy file: `legacy/pitfalls.md` (or `legacy/pitfalls`)
+      - legacy entry: `legacy/pitfalls#3` (1-based index within a file)
+
+    Legacy form (backward-compat): `memory read --type pitfall|convention|decision`
+    reads whole legacy flat files and also scans any categorized entries
+    that were auto-mapped from that legacy type.
+    """
     memory_dir = require_memory_enabled(args)
 
-    # Determine which files to read
-    if args.type:
+    entry_id = getattr(args, "entry_id", None)
+    legacy_type = getattr(args, "type", None)
+
+    if entry_id:
+        resolved = _memory_resolve_read_target(memory_dir, entry_id)
+        if resolved is None:
+            error_exit(
+                f"entry '{entry_id}' not found. "
+                f"Use `flowctl memory list` to see valid ids.",
+                use_json=args.json,
+            )
+        if resolved["kind"] == "ambiguous":
+            ids = ", ".join(m["entry_id"] for m in resolved["matches"])
+            error_exit(
+                f"entry '{entry_id}' is ambiguous; candidates: {ids}",
+                use_json=args.json,
+            )
+        if resolved["kind"] == "categorized":
+            entry = resolved["entry"]
+            path_obj = Path(entry["path"])
+            try:
+                raw = path_obj.read_text(encoding="utf-8")
+            except OSError as exc:
+                error_exit(
+                    f"failed to read {entry['path']}: {exc}",
+                    use_json=args.json,
+                )
+            if args.json:
+                json_output(
+                    {
+                        "entry_id": entry["entry_id"],
+                        "path": entry["path"],
+                        "frontmatter": entry["frontmatter"],
+                        "body": entry["body"],
+                    }
+                )
+            else:
+                print(raw, end="" if raw.endswith("\n") else "\n")
+            return
+        if resolved["kind"] == "legacy_file":
+            if args.json:
+                json_output(
+                    {
+                        "entry_id": f"legacy/{resolved['filename']}",
+                        "path": str(memory_dir / resolved["filename"]),
+                        "legacy": True,
+                        "body": resolved["text"],
+                    }
+                )
+            else:
+                print(resolved["text"], end="" if resolved["text"].endswith("\n") else "\n")
+            return
+        if resolved["kind"] == "legacy_entry":
+            if args.json:
+                json_output(
+                    {
+                        "entry_id": f"legacy/{Path(resolved['filename']).stem}"
+                        f"#{resolved['index']}",
+                        "path": str(memory_dir / resolved["filename"]),
+                        "legacy": True,
+                        "index": resolved["index"],
+                        "body": resolved["text"],
+                    }
+                )
+            else:
+                print(resolved["text"])
+            return
+        # Unknown kind — defensive.
+        error_exit(f"unexpected resolve result for '{entry_id}'", use_json=args.json)
+
+    # Legacy --type path: preserve pre-fn-30 behavior (dump whole flat file).
+    if legacy_type:
         type_map = {
             "pitfall": "pitfalls.md",
             "pitfalls": "pitfalls.md",
@@ -4727,24 +4993,31 @@ def cmd_memory_read(args: argparse.Namespace) -> None:
             "decision": "decisions.md",
             "decisions": "decisions.md",
         }
-        filename = type_map.get(args.type.lower())
+        filename = type_map.get(legacy_type.lower())
         if not filename:
             error_exit(
-                f"Invalid type '{args.type}'. Use: pitfalls, conventions, or decisions",
+                f"Invalid type '{legacy_type}'. Use: pitfalls, conventions, or decisions",
                 use_json=args.json,
             )
-        files = [filename]
-    else:
-        files = ["pitfalls.md", "conventions.md", "decisions.md"]
-
-    content = {}
-    for filename in files:
         filepath = memory_dir / filename
+        text = ""
         if filepath.exists():
-            content[filename] = filepath.read_text(encoding="utf-8")
+            text = filepath.read_text(encoding="utf-8")
+        if args.json:
+            json_output({"files": {filename: text}})
         else:
-            content[filename] = ""
+            if text.strip():
+                print(f"=== {filename} ===")
+                print(text)
+                print()
+        return
 
+    # Neither entry-id nor --type: dump all legacy files (backward-compat
+    # for callers that ran `memory read` with no args pre-fn-30).
+    content: dict[str, str] = {}
+    for filename in MEMORY_LEGACY_FILES:
+        filepath = memory_dir / filename
+        content[filename] = filepath.read_text(encoding="utf-8") if filepath.exists() else ""
     if args.json:
         json_output({"files": content})
     else:
@@ -4756,70 +5029,353 @@ def cmd_memory_read(args: argparse.Namespace) -> None:
 
 
 def cmd_memory_list(args: argparse.Namespace) -> None:
-    """List memory entry counts."""
+    """List memory entries grouped by track/category.
+
+    Filters:
+      --track bug|knowledge
+      --category <cat>
+      --status active|stale|all   (default: active)
+
+    Legacy flat files are reported as synthetic entries when present.
+    """
     memory_dir = require_memory_enabled(args)
 
-    counts = {}
-    for filename in ["pitfalls.md", "conventions.md", "decisions.md"]:
-        filepath = memory_dir / filename
-        if filepath.exists():
-            text = filepath.read_text(encoding="utf-8")
-            # Count ## entries (each entry starts with ## date)
-            entries = len(re.findall(r"^## \d{4}-\d{2}-\d{2}", text, re.MULTILINE))
-            counts[filename] = entries
-        else:
-            counts[filename] = 0
+    track = getattr(args, "track", None)
+    category = getattr(args, "category", None)
+    status_filter = getattr(args, "status", "active") or "active"
+    if status_filter not in ("active", "stale", "all"):
+        error_exit(
+            f"invalid --status '{status_filter}' (valid: active, stale, all)",
+            use_json=args.json,
+        )
+
+    if track and track not in MEMORY_TRACKS:
+        error_exit(
+            f"invalid --track '{track}' (valid: {', '.join(MEMORY_TRACKS)})",
+            use_json=args.json,
+        )
+    if track and category and category not in MEMORY_CATEGORIES.get(track, []):
+        error_exit(
+            f"invalid --category '{category}' for track '{track}' "
+            f"(valid: {', '.join(MEMORY_CATEGORIES[track])})",
+            use_json=args.json,
+        )
+
+    entries = _memory_iter_entries(memory_dir, track=track, category=category)
+
+    # Apply status filter.
+    if status_filter == "active":
+        filtered = [e for e in entries if e["status"] != "stale"]
+    elif status_filter == "stale":
+        filtered = [e for e in entries if e["status"] == "stale"]
+    else:
+        filtered = list(entries)
+
+    # Legacy files — only report when no track filter (legacy has no track)
+    # and no explicit category filter (legacy has no category).
+    legacy_info: list[dict[str, Any]] = []
+    if track is None and category is None:
+        for filename in MEMORY_LEGACY_FILES:
+            path = memory_dir / filename
+            if not path.exists():
+                continue
+            count = _memory_legacy_entry_count(path)
+            legacy_info.append(
+                {
+                    "filename": filename,
+                    "path": str(path),
+                    "entries": count,
+                    "legacy_type": _LEGACY_TYPE_FOR_FILE.get(filename, ""),
+                }
+            )
 
     if args.json:
-        json_output({"counts": counts, "total": sum(counts.values())})
-    else:
-        total = 0
-        for filename, count in counts.items():
-            print(f"  {filename}: {count} entries")
-            total += count
-        print(f"  Total: {total} entries")
+        payload_entries = [
+            {
+                "entry_id": e["entry_id"],
+                "title": e["title"],
+                "track": e["track"],
+                "category": e["category"],
+                "module": e["module"],
+                "tags": e["tags"],
+                "date": e["date"],
+                "status": e["status"],
+                "path": e["path"],
+            }
+            for e in filtered
+        ]
+        json_output(
+            {
+                "entries": payload_entries,
+                "legacy": legacy_info,
+                "count": len(payload_entries),
+                "status": status_filter,
+            }
+        )
+        return
+
+    # Human output: group by track/category.
+    if not filtered and not legacy_info:
+        print("No memory entries.")
+        if status_filter == "active":
+            print("  (run with --status all to include stale entries)")
+        return
+
+    from collections import defaultdict
+
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for e in filtered:
+        grouped[(e["track"], e["category"])].append(e)
+
+    for (t, cat) in sorted(grouped.keys()):
+        print(f"{t}/{cat}/")
+        for e in sorted(grouped[(t, cat)], key=lambda x: (x["date"], x["slug"])):
+            title = e["title"] or "(no title)"
+            suffix = ""
+            if e["module"]:
+                suffix = f" (module: {e['module']})"
+            if e["status"] == "stale":
+                suffix += " [stale]"
+            print(
+                f"  {e['slug']}-{e['date']} — \"{title}\"{suffix}"
+            )
+        print()
+
+    if legacy_info:
+        print("legacy/")
+        for info in legacy_info:
+            plural = "entry" if info["entries"] == 1 else "entries"
+            print(
+                f"  {info['filename']} ({info['entries']} {plural} — "
+                f"run `flowctl memory migrate`)"
+            )
+
+
+_MEMORY_SEARCH_WORD_RE = re.compile(r"[A-Za-z0-9_]+")
+
+
+def _memory_search_tokens(text: str) -> list[str]:
+    """Lowercase alphanumeric tokens used by the search scorer."""
+    if not text:
+        return []
+    return [tok.lower() for tok in _MEMORY_SEARCH_WORD_RE.findall(text)]
+
+
+def _memory_search_snippet(body: str, query_tokens: set[str], width: int = 140) -> str:
+    """Return a single-line snippet around the first token hit."""
+    if not body:
+        return ""
+    lowered = body.lower()
+    first_idx = -1
+    for tok in query_tokens:
+        idx = lowered.find(tok)
+        if idx >= 0 and (first_idx < 0 or idx < first_idx):
+            first_idx = idx
+    if first_idx < 0:
+        # No direct hit — return the first non-empty line truncated.
+        for line in body.splitlines():
+            stripped = line.strip()
+            if stripped:
+                return stripped[:width] + ("..." if len(stripped) > width else "")
+        return ""
+    start = max(0, first_idx - width // 3)
+    end = min(len(body), first_idx + (width - width // 3))
+    snippet = body[start:end].replace("\n", " ").strip()
+    prefix = "..." if start > 0 else ""
+    suffix = "..." if end < len(body) else ""
+    return f"{prefix}{snippet}{suffix}"
+
+
+def _memory_score_search(
+    query_tokens: list[str],
+    entry_tokens: dict[str, list[str]],
+) -> float:
+    """Weighted token-overlap score across entry fields.
+
+    Weights (tuned for expected corpus of tens-to-low-hundreds of entries):
+      - title: 5.0
+      - tags:  3.0
+      - body:  1.5
+      - frontmatter misc (module, symptoms, root_cause, applies_when): 1.0
+
+    Each query token counts at most once per field (prevents spammy body
+    matches from dominating).
+    """
+    if not query_tokens:
+        return 0.0
+    q_set = set(query_tokens)
+    score = 0.0
+    field_weights = {
+        "title": 5.0,
+        "tags": 3.0,
+        "body": 1.5,
+        "misc": 1.0,
+    }
+    for field, weight in field_weights.items():
+        tokens = entry_tokens.get(field, [])
+        if not tokens:
+            continue
+        token_set = set(tokens)
+        hits = q_set & token_set
+        score += weight * len(hits)
+    return score
 
 
 def cmd_memory_search(args: argparse.Namespace) -> None:
-    """Search memory entries."""
+    """Search memory entries via weighted token overlap.
+
+    Searches categorized entries and legacy flat files. Legacy hits use
+    substring match on the entry body (no scoring — they sort after
+    categorized results). Filters narrow the categorized scan.
+    """
     memory_dir = require_memory_enabled(args)
 
-    pattern = args.pattern
+    query = args.query
+    if not query or not query.strip():
+        error_exit("search query is empty", use_json=args.json)
 
-    # Validate regex pattern
-    try:
-        re.compile(pattern)
-    except re.error as e:
-        error_exit(f"Invalid regex pattern: {e}", use_json=args.json)
+    track = getattr(args, "track", None)
+    category = getattr(args, "category", None)
+    module_filter = getattr(args, "module", None)
+    tags_filter_raw = getattr(args, "tags", None)
+    limit = getattr(args, "limit", None)
 
-    matches = []
+    if track and track not in MEMORY_TRACKS:
+        error_exit(
+            f"invalid --track '{track}' (valid: {', '.join(MEMORY_TRACKS)})",
+            use_json=args.json,
+        )
+    if track and category and category not in MEMORY_CATEGORIES.get(track, []):
+        error_exit(
+            f"invalid --category '{category}' for track '{track}' "
+            f"(valid: {', '.join(MEMORY_CATEGORIES[track])})",
+            use_json=args.json,
+        )
 
-    for filename in ["pitfalls.md", "conventions.md", "decisions.md"]:
-        filepath = memory_dir / filename
-        if not filepath.exists():
+    tag_filter_set: set[str] = set()
+    if tags_filter_raw:
+        tag_filter_set = {
+            t.strip().lower() for t in tags_filter_raw.split(",") if t.strip()
+        }
+
+    query_tokens = _memory_search_tokens(query)
+    query_lower = query.lower()
+
+    # Categorized walk.
+    entries = _memory_iter_entries(memory_dir, track=track, category=category)
+    if module_filter:
+        entries = [e for e in entries if e["module"] == module_filter]
+    if tag_filter_set:
+        entries = [
+            e
+            for e in entries
+            if tag_filter_set & {t.lower() for t in e["tags"]}
+        ]
+
+    results: list[dict[str, Any]] = []
+    for e in entries:
+        fm = e["frontmatter"]
+        misc_parts = [
+            str(fm.get("module", "") or ""),
+            str(fm.get("symptoms", "") or ""),
+            str(fm.get("root_cause", "") or ""),
+            str(fm.get("applies_when", "") or ""),
+            str(fm.get("problem_type", "") or ""),
+            str(fm.get("resolution_type", "") or ""),
+        ]
+        entry_tokens = {
+            "title": _memory_search_tokens(e["title"]),
+            "tags": [t.lower() for t in e["tags"]],
+            "body": _memory_search_tokens(e["body"]),
+            "misc": _memory_search_tokens(" ".join(misc_parts)),
+        }
+        score = _memory_score_search(query_tokens, entry_tokens)
+        if score <= 0:
             continue
+        snippet = _memory_search_snippet(e["body"], set(query_tokens))
+        results.append(
+            {
+                "entry_id": e["entry_id"],
+                "title": e["title"],
+                "track": e["track"],
+                "category": e["category"],
+                "module": e["module"],
+                "tags": e["tags"],
+                "score": round(score, 2),
+                "snippet": snippet,
+                "path": e["path"],
+            }
+        )
 
-        text = filepath.read_text(encoding="utf-8")
-        # Split into entries
-        entries = re.split(r"(?=^## \d{4}-\d{2}-\d{2})", text, flags=re.MULTILINE)
+    results.sort(key=lambda r: r["score"], reverse=True)
 
-        for entry in entries:
-            if not entry.strip():
+    # Legacy substring search — only when no track/category filter
+    # (legacy has no track/category metadata).
+    legacy_results: list[dict[str, Any]] = []
+    if track is None and category is None and not tag_filter_set and not module_filter:
+        for filename in MEMORY_LEGACY_FILES:
+            path = memory_dir / filename
+            if not path.exists():
                 continue
-            if re.search(pattern, entry, re.IGNORECASE):
-                matches.append({"file": filename, "entry": entry.strip()})
+            segments = _memory_legacy_entry_segments(path)
+            for idx, seg in enumerate(segments, start=1):
+                if query_lower in seg.lower():
+                    snippet = _memory_search_snippet(seg, set(query_tokens))
+                    legacy_results.append(
+                        {
+                            "entry_id": f"legacy/{Path(filename).stem}#{idx}",
+                            "title": f"(legacy {filename} entry #{idx})",
+                            "track": "legacy",
+                            "category": _LEGACY_TYPE_FOR_FILE.get(filename, ""),
+                            "module": "",
+                            "tags": [],
+                            "score": 0.0,
+                            "snippet": snippet,
+                            "path": str(path),
+                            "legacy": True,
+                        }
+                    )
+
+    combined = results + legacy_results
+
+    if limit is not None and limit > 0:
+        combined = combined[:limit]
 
     if args.json:
-        json_output({"pattern": pattern, "matches": matches, "count": len(matches)})
-    else:
-        if matches:
-            for m in matches:
-                print(f"=== {m['file']} ===")
-                print(m["entry"])
-                print()
-            print(f"Found {len(matches)} matches")
+        json_output(
+            {
+                "query": query,
+                "matches": combined,
+                "count": len(combined),
+            }
+        )
+        return
+
+    if not combined:
+        print(f"No matches for '{query}'")
+        return
+
+    for r in combined:
+        if r.get("legacy"):
+            _, _, idx_str = r["entry_id"].partition("#")
+            print(
+                f"[legacy/{Path(r['path']).name}] entry #{idx_str}"
+                if idx_str
+                else f"[legacy/{Path(r['path']).name}]"
+            )
         else:
-            print(f"No matches for '{pattern}'")
+            print(
+                f"[{r['track']}/{r['category']}] {r['entry_id'].rsplit('/', 1)[-1]} "
+                f"(score: {r['score']})"
+            )
+            if r["title"]:
+                print(f'  "{r["title"]}"')
+            if r["module"]:
+                print(f"  module: {r['module']}")
+        if r["snippet"]:
+            print(f"  > {r['snippet']}")
+        print()
+    print(f"Found {len(combined)} matches")
 
 
 def cmd_epic_create(args: argparse.Namespace) -> None:
@@ -10827,19 +11383,65 @@ def main() -> None:
     p_memory_add.add_argument("--json", action="store_true", help="JSON output")
     p_memory_add.set_defaults(func=cmd_memory_add)
 
-    p_memory_read = memory_sub.add_parser("read", help="Read memory entries")
+    p_memory_read = memory_sub.add_parser(
+        "read",
+        help="Read a memory entry (categorized or legacy)",
+    )
     p_memory_read.add_argument(
-        "--type", help="Filter by type: pitfalls, conventions, or decisions"
+        "entry_id",
+        nargs="?",
+        help=(
+            "Entry id: full (<track>/<cat>/<slug>-<date>), slug+date, slug alone, "
+            "or legacy/<pitfalls|conventions|decisions>[#N]"
+        ),
+    )
+    p_memory_read.add_argument(
+        "--type",
+        help="DEPRECATED: filter by legacy type (pitfalls | conventions | decisions)",
     )
     p_memory_read.add_argument("--json", action="store_true", help="JSON output")
     p_memory_read.set_defaults(func=cmd_memory_read)
 
-    p_memory_list = memory_sub.add_parser("list", help="List memory entry counts")
+    p_memory_list = memory_sub.add_parser(
+        "list",
+        help="List memory entries grouped by track/category",
+    )
+    p_memory_list.add_argument(
+        "--track",
+        choices=list(MEMORY_TRACKS),
+        help="Filter by track",
+    )
+    p_memory_list.add_argument("--category", help="Filter by category")
+    p_memory_list.add_argument(
+        "--status",
+        choices=["active", "stale", "all"],
+        default="active",
+        help="Filter by status (default: active)",
+    )
     p_memory_list.add_argument("--json", action="store_true", help="JSON output")
     p_memory_list.set_defaults(func=cmd_memory_list)
 
-    p_memory_search = memory_sub.add_parser("search", help="Search memory entries")
-    p_memory_search.add_argument("pattern", help="Search pattern (regex)")
+    p_memory_search = memory_sub.add_parser(
+        "search",
+        help="Search memory entries (weighted token overlap + legacy substring)",
+    )
+    p_memory_search.add_argument("query", help="Search query (token-based)")
+    p_memory_search.add_argument(
+        "--track",
+        choices=list(MEMORY_TRACKS),
+        help="Filter by track",
+    )
+    p_memory_search.add_argument("--category", help="Filter by category")
+    p_memory_search.add_argument("--module", help="Filter by module value")
+    p_memory_search.add_argument(
+        "--tags",
+        help='Comma-separated tag filter (e.g. "webpack,oom"); any tag matches',
+    )
+    p_memory_search.add_argument(
+        "--limit",
+        type=int,
+        help="Max results to return (default: unlimited)",
+    )
     p_memory_search.add_argument("--json", action="store_true", help="JSON output")
     p_memory_search.set_defaults(func=cmd_memory_search)
 
