@@ -68,11 +68,11 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 FLOW_REVIEW_BACKEND=codex $FLOWCTL codex impl-review "$TASK_ID" --receipt "$RECEIPT_PATH"
 
 # Full spec — model + effort resolved automatically
-FLOW_REVIEW_BACKEND=codex:gpt-5.4:xhigh $FLOWCTL codex impl-review "$TASK_ID" --receipt "$RECEIPT_PATH"
+FLOW_REVIEW_BACKEND=codex:gpt-5.5:xhigh $FLOWCTL codex impl-review "$TASK_ID" --receipt "$RECEIPT_PATH"
 FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5 $FLOWCTL copilot impl-review "$TASK_ID" --receipt "$RECEIPT_PATH"
 
 # Or pass spec directly (preferred for one-offs, avoids env pollution):
-$FLOWCTL codex impl-review "$TASK_ID" --spec "codex:gpt-5.4:xhigh" --receipt "$RECEIPT_PATH"
+$FLOWCTL codex impl-review "$TASK_ID" --spec "codex:gpt-5.5:xhigh" --receipt "$RECEIPT_PATH"
 ```
 
 Per-task `review` (set via `flowctl task set-backend`) overrides env.

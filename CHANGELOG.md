@@ -2,6 +2,24 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.32.0] - 2026-04-24
+
+### Added
+- **Codex default model: `gpt-5.5 + high`.** GPT-5.5 is now the codex backend default for cross-model reviews. Live-probed: codex CLI 0.124.0 accepts `--model gpt-5.5` with `-c 'model_reasoning_effort="high"'` (verdict=SHIP returned cleanly). Added to `BACKEND_REGISTRY["codex"]["models"]`; previous `gpt-5.4` still valid for anyone who wants to pin explicitly via `--review=codex:gpt-5.4:high` or `FLOW_CODEX_MODEL=gpt-5.4`. Registry default flipped from `gpt-5.4` → `gpt-5.5`. All docs (README catalog table, skill `(default ...)` prose, workflow spec-form examples) updated to match.
+
+### Changed
+- **Codex-only: `@browser` → `@agent-browser`** to avoid collision with OpenAI's bundled **Browser Use** plugin (Codex desktop v0.124+). The two tools have non-overlapping scope:
+  - **Browser Use** (OpenAI bundled, Codex desktop only) — in-app browser widget for `localhost`, `127.0.0.1`, `::1`, `file://`, or the current in-app tab. No cookies, no auth, no extensions, no production sites, no Electron apps.
+  - **`@agent-browser`** (this skill, Codex + CLI + all hosts) — full Chrome-via-CDP browser. Cookies, saved sessions, production sites, authenticated flows, Electron desktop apps (VS Code / Slack / Figma / etc), iOS Simulator, proxies, video recording, visual diff.
+
+  Claude Code and Factory Droid continue to expose the skill as `@browser` (no OpenAI collision there, no muscle-memory break). The rename is Codex-mirror-only — performed by `scripts/sync-codex.sh` during regeneration.
+- Codex version of the skill now carries a **prose-based delegation preface** explaining when to hand off to Browser Use vs use this skill. Written for the model, not the user — prose invocation ("Use the Browser Use plugin to open http://localhost:3000") rather than `@`-autocomplete (LLMs can't interactively pick from menus). Explicit CLI fallback: Browser Use doesn't exist in Codex CLI, so always use this skill there.
+
+### Notes
+- 112 unit tests pass (6 updated to expect `gpt-5.5` as the codex default).
+- 67 smoke tests pass.
+- No changes to Claude Code / Droid skill source — only the Codex mirror is renamed.
+
 ## [flow-next 0.31.0] - 2026-04-22
 
 ### Added

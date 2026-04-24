@@ -38,10 +38,10 @@ echo "Review backend: $BACKEND"
 **Spec-form env var (optional):** `FLOW_REVIEW_BACKEND` accepts bare or full spec:
 
 ```bash
-FLOW_REVIEW_BACKEND=codex:gpt-5.4:xhigh $FLOWCTL codex completion-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
+FLOW_REVIEW_BACKEND=codex:gpt-5.5:xhigh $FLOWCTL codex completion-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
 FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5 $FLOWCTL copilot completion-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
 # Or pass spec directly:
-$FLOWCTL codex completion-review "$EPIC_ID" --spec "codex:gpt-5.4:xhigh" --receipt "$RECEIPT_PATH"
+$FLOWCTL codex completion-review "$EPIC_ID" --spec "codex:gpt-5.5:xhigh" --receipt "$RECEIPT_PATH"
 ```
 
 Per-epic `default_review` (set via `flowctl epic set-backend`) overrides env.

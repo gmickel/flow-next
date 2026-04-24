@@ -124,6 +124,33 @@ for skill_dir in "$SRC_SKILLS"/*/; do
   skill_count=$((skill_count + 1))
 done
 
+# --- RENAME: 'browser' → 'agent-browser' in Codex mirror only ────────────────
+# OpenAI ships a bundled @browser skill in Codex desktop (in-app browser for
+# localhost / file:// previews). Renaming ours to @agent-browser prevents the
+# collision. Claude Code and Droid keep 'browser' unchanged (no collision
+# there).
+if [ -d "$CODEX_DIR/skills/browser" ]; then
+  mv "$CODEX_DIR/skills/browser" "$CODEX_DIR/skills/agent-browser"
+  browser_skill="$CODEX_DIR/skills/agent-browser/SKILL.md"
+
+  # Patch frontmatter name
+  sed -i.bak -e 's/^name: browser$/name: agent-browser/' "$browser_skill"
+  rm -f "${browser_skill}.bak"
+
+  # Insert Codex-specific preface after the frontmatter block.
+  # Explains when to use @browser (OpenAI iab) vs @agent-browser (ours).
+  awk '
+    /^---$/ { fm++; print; next }
+    fm == 2 && !inserted {
+      print ""
+      print "> **Codex note — Browser Use vs this skill:** Codex **desktop** (v0.124+) bundles a **Browser Use** plugin (invoke `$browser-use <task>`) controlling its in-app browser. Scope is narrow: `localhost`, `127.0.0.1`, `::1`, `file://`, current in-app tab. No cookies, no auth, no extensions, no production sites, no Electron apps, no mobile sims. For those narrow cases, delegate: use `$browser-use` directly, or just describe the task in prose (Codex routes natural-language plugin calls). Use **this skill** (`$agent-browser` or prose triggers listed above) for everything outside that scope — production sites, authenticated flows, cookies/saved sessions, Electron apps (VS Code / Slack / Figma / etc), iOS Simulator, proxies, headed browsers, video recording, visual diff. In **Codex CLI** (no desktop app, no in-app browser), always use this skill — Browser Use is not available there."
+      print ""
+      inserted = 1
+    }
+    { print }
+  ' "$browser_skill" > "${browser_skill}.tmp" && mv "${browser_skill}.tmp" "$browser_skill"
+fi
+
 # --- PATH patches (all .md files) ---
 find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   # Add $HOME/.codex fallback to FLOWCTL assignment
