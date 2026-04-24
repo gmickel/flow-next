@@ -37,17 +37,37 @@ for arg in $ARGUMENTS; do
 done
 ```
 
-Detect mode from `TARGET`:
+Detect mode from `TARGET`. Regex matches are authoritative — do not relax:
 
-| TARGET shape | Mode |
-|---|---|
-| empty | full, detect PR from current branch |
-| `^\d+$` (pure number) | full, that PR |
-| `https://github.com/.../pull/\d+$` | full, parse PR number |
-| `https://github.com/.../pull/\d+#discussion_r\d+` | targeted (review-thread comment) |
-| `https://github.com/.../pull/\d+#issuecomment-\d+` | targeted (pr_comment) |
+| TARGET shape | Regex | Mode | TARGETED_TYPE |
+|---|---|---|---|
+| empty | — | full, detect PR from current branch | — |
+| pure number | `^[0-9]+$` | full, that PR | — |
+| PR URL | `^https://github\.com/.+/pull/[0-9]+$` | full, parse PR number | — |
+| review-thread comment URL | `^https://github\.com/.+/pull/[0-9]+#discussion_r[0-9]+$` | targeted | `review_thread` |
+| top-level PR comment URL | `^https://github\.com/.+/pull/[0-9]+#issuecomment-[0-9]+$` | targeted | `pr_comment` |
 
-For targeted mode, set `COMMENT_URL="$TARGET"` and extract `PR_NUMBER` + comment id from the URL before Phase 1.
+Set `MODE=full` or `MODE=targeted` based on the match; for targeted also set `TARGETED_TYPE` and extract `OWNER`, `REPO`, `PR_NUMBER`, and `COMMENT_REST_ID` from the URL via regex capture.
+
+```bash
+MODE=full
+TARGETED_TYPE=""
+if [[ "$TARGET" =~ ^https://github\.com/([^/]+)/([^/]+)/pull/([0-9]+)#discussion_r([0-9]+)$ ]]; then
+  MODE=targeted; TARGETED_TYPE=review_thread
+  OWNER="${BASH_REMATCH[1]}"; REPO="${BASH_REMATCH[2]}"
+  PR_NUMBER="${BASH_REMATCH[3]}"; COMMENT_REST_ID="${BASH_REMATCH[4]}"
+elif [[ "$TARGET" =~ ^https://github\.com/([^/]+)/([^/]+)/pull/([0-9]+)#issuecomment-([0-9]+)$ ]]; then
+  MODE=targeted; TARGETED_TYPE=pr_comment
+  OWNER="${BASH_REMATCH[1]}"; REPO="${BASH_REMATCH[2]}"
+  PR_NUMBER="${BASH_REMATCH[3]}"; COMMENT_REST_ID="${BASH_REMATCH[4]}"
+elif [[ "$TARGET" =~ ^https://github\.com/([^/]+)/([^/]+)/pull/([0-9]+)$ ]]; then
+  OWNER="${BASH_REMATCH[1]}"; REPO="${BASH_REMATCH[2]}"; PR_NUMBER="${BASH_REMATCH[3]}"
+elif [[ "$TARGET" =~ ^[0-9]+$ ]]; then
+  PR_NUMBER="$TARGET"
+fi
+```
+
+Any non-empty `TARGET` that matches none of the above → error out: "Unrecognized target. Expected PR number, PR URL, or comment URL (#discussion_rN or #issuecomment-N)."
 
 ---
 
@@ -77,11 +97,36 @@ FEEDBACK_JSON=$(bash "$SCRIPTS/get-pr-comments" "$PR_NUMBER")
 }
 ```
 
-**Targeted mode only:** extract the comment node ID from the URL (use `gh api repos/{owner}/{repo}/pulls/comments/{rest-id} --jq .node_id` for `discussion_r...` URLs), then call `get-thread-for-comment`:
+**Targeted mode** — narrow `FEEDBACK_JSON` to the single item identified by the URL.
+
+For `TARGETED_TYPE=review_thread` (inline review comment):
 
 ```bash
-THREAD_JSON=$(bash "$SCRIPTS/get-thread-for-comment" "$PR_NUMBER" "$COMMENT_NODE_ID")
-# Filter FEEDBACK_JSON's review_threads to only that thread id; drop pr_comments + review_bodies.
+COMMENT_NODE_ID=$(gh api "repos/$OWNER/$REPO/pulls/comments/$COMMENT_REST_ID" --jq .node_id)
+THREAD_JSON=$(bash "$SCRIPTS/get-thread-for-comment" "$PR_NUMBER" "$COMMENT_NODE_ID" "$OWNER/$REPO")
+THREAD_ID=$(jq -r .id <<<"$THREAD_JSON")
+# Keep only the matching thread; drop pr_comments + review_bodies; zero cross-invocation signal.
+FEEDBACK_JSON=$(jq --arg tid "$THREAD_ID" '
+  .review_threads |= map(select(.id == $tid))
+  | .pr_comments = []
+  | .review_bodies = []
+  | .cross_invocation = {signal: false, resolved_threads: []}
+' <<<"$FEEDBACK_JSON")
+```
+
+For `TARGETED_TYPE=pr_comment` (top-level PR comment) — bypass thread lookup entirely, fetch the single comment via REST and build a minimal feedback payload:
+
+```bash
+PR_COMMENT_JSON=$(gh api "repos/$OWNER/$REPO/issues/comments/$COMMENT_REST_ID" \
+  --jq '{id: .node_id, author: .user.login, body: .body, createdAt: .created_at}')
+FEEDBACK_JSON=$(jq --argjson c "$PR_COMMENT_JSON" --arg pr "$PR_NUMBER" '
+  {
+    pr_number: ($pr | tonumber),
+    review_threads: [],
+    pr_comments: [$c],
+    review_bodies: [],
+    cross_invocation: {signal: false, resolved_threads: []}
+  }' <<<'{}')
 ```
 
 If `FEEDBACK_JSON` is empty (`review_threads=[]`, `pr_comments=[]`, `review_bodies=[]`), skip to Phase 10 with "no open feedback" message.
@@ -89,6 +134,17 @@ If `FEEDBACK_JSON` is empty (`review_threads=[]`, `pr_comments=[]`, `review_bodi
 ---
 
 ## Phase 2: Triage — new vs pending vs dropped
+
+**Targeted mode skips this phase entirely** — the user explicitly asked for that one item, treat it as `new` regardless of triage heuristics:
+
+```bash
+if [[ "$MODE" == "targeted" ]]; then
+  echo "Triage: skipped (targeted mode — single item)."
+  # Fall through to Phase 3 with the single item marked new.
+fi
+```
+
+Full-mode triage rules below.
 
 For each `review_thread`:
 
@@ -124,7 +180,16 @@ If `N == 0`, skip to Phase 10 (summary) with a "nothing new to address" message.
 
 Read [cluster-analysis.md](cluster-analysis.md) for full gate logic and dispatch rules.
 
-Gate (both must pass):
+**Targeted mode skips this phase entirely** — single-item dispatch, no cluster surface:
+
+```bash
+if [[ "$MODE" == "targeted" ]]; then
+  echo "Cluster analysis: skipped (targeted mode — single item)."
+  # Skip to Phase 4 with the single item as its own unit.
+fi
+```
+
+Full-mode gate (both must pass):
 
 1. `FEEDBACK_JSON.cross_invocation.signal == true` (≥1 resolved thread exists).
 2. Spatial-overlap precheck — ≥1 new `review_thread` shares a file path or directory subtree with a resolved thread.
