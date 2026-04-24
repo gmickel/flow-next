@@ -634,6 +634,128 @@ If no verdict tag in response, output `<promise>RETRY</promise>` and stop.
 
 ---
 
+## Validator Pass (fn-32.1 --validate) — all backends
+
+When `VALIDATE=true` AND the primary review verdict is `NEEDS_WORK`, run a
+validator pass before the fix loop. The validator re-checks each finding
+against the current code and drops clear false positives. If all findings
+drop, the verdict upgrades to `SHIP` automatically.
+
+**Preserved by default:** when `VALIDATE=false` (or `--validate` not passed
+and `FLOW_VALIDATE_REVIEW` unset), this entire section is skipped — the
+primary-review Carmack flow is unchanged.
+
+### Step V.1: Extract findings from the primary review
+
+Parse the primary review output into a JSON-lines `findings-file`. Required
+key: `id`. Recommended keys: `severity`, `confidence`, `classification`,
+`file`, `line`, `title`, `suggested_fix`. One JSON object per line.
+
+The primary review output uses the shared format from earlier in this doc
+(Severity / Confidence / File:Line / Problem / Suggestion per finding). Map
+each entry to a line in `/tmp/review-findings.jsonl` — use the finding's
+index-in-report (`f1`, `f2`, ...) as the id when the reviewer didn't supply
+one. Example:
+
+```jsonl
+{"id":"f1","severity":"P0","confidence":75,"classification":"introduced","file":"src/auth.ts","line":42,"title":"null deref in middleware","suggested_fix":"guard req.user before use"}
+{"id":"f2","severity":"P1","confidence":50,"classification":"introduced","file":"src/db.ts","line":10,"title":"unchecked result","suggested_fix":"await err check"}
+```
+
+If the primary review produced zero findings (shouldn't happen on
+`NEEDS_WORK` — a sign of a parse miss), skip the validator and treat as a
+parse error; fall through to normal fix loop.
+
+### Step V.2: Dispatch the validator pass
+
+```bash
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
+FINDINGS_FILE="/tmp/review-findings.jsonl"
+
+case "$BACKEND" in
+  codex)
+    VALIDATOR_JSON="$($FLOWCTL codex validate \
+      --findings-file "$FINDINGS_FILE" \
+      --receipt "$RECEIPT_PATH" \
+      --json 2>&1)"
+    ;;
+  copilot)
+    VALIDATOR_JSON="$($FLOWCTL copilot validate \
+      --findings-file "$FINDINGS_FILE" \
+      --receipt "$RECEIPT_PATH" \
+      --json 2>&1)"
+    ;;
+  rp)
+    # RP: same-chat session continuity is automatic. Build a validator prompt
+    # from validate-pass.md and send it via `rp chat-send` (NO --new-chat).
+    # Parse the response lines with the same regex flowctl uses:
+    #   `<id>: validated: <true|false> -- <reason>`
+    # Then recompute dropped/kept counts and merge into the receipt by hand
+    # (or via a shared helper). See validate-pass.md for the template.
+    cat /path/to/validate-pass.md | sed 's|<!-- FINDINGS_BLOCK -->|'"$(cat render_findings.md)"'|' > /tmp/validator.md
+    VALIDATOR_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/validator.md)"
+    # Parse lines matching /^[>*_` ]*<id>[\s*_`]*:[\s*_`]*validated[\s*_`]*:[\s*_`]*(true|false)/
+    # and update receipt's validator block accordingly.
+    ;;
+esac
+```
+
+### Step V.3: Re-compute verdict from validator result
+
+The `codex validate` and `copilot validate` subcommands already merge the
+validator result into the receipt and upgrade verdict to SHIP if all
+findings dropped. Read the updated receipt to pick up the new verdict:
+
+```bash
+NEW_VERDICT="$(jq -r '.verdict' "$RECEIPT_PATH" 2>/dev/null || echo NEEDS_WORK)"
+DROPPED="$(jq -r '.validator.dropped // 0' "$RECEIPT_PATH" 2>/dev/null || echo 0)"
+KEPT="$(jq -r '.validator.kept // 0' "$RECEIPT_PATH" 2>/dev/null || echo 0)"
+
+echo "Validator: dropped=$DROPPED kept=$KEPT verdict=$NEW_VERDICT"
+
+if [[ "$NEW_VERDICT" == "SHIP" ]]; then
+  # All findings dropped — verdict upgraded. Done, no fix loop.
+  exit 0
+fi
+
+# NEEDS_WORK remains — surviving findings go into the fix loop below,
+# limited to those the validator kept.
+```
+
+### Step V.4: Receipt contract (unchanged shape, new fields)
+
+After the validator pass, the receipt carries an additional `validator`
+object and (when upgraded) a `verdict_before_validate` field:
+
+```json
+{
+  "type": "impl_review",
+  "id": "fn-32.1",
+  "mode": "codex",
+  "verdict": "SHIP",
+  "verdict_before_validate": "NEEDS_WORK",
+  "session_id": "019ba...",
+  "validator": {
+    "dispatched": 3,
+    "dropped": 3,
+    "kept": 0,
+    "reasons": [
+      {"id": "f1", "file": "src/x.ts", "line": 42, "reason": "null check already at line 40"},
+      {"id": "f2", "file": "src/y.ts", "line": 10, "reason": "error is propagated via ? operator"},
+      {"id": "f3", "file": "src/z.ts", "line": 5,  "reason": "suggested fix misreads TS narrowing"}
+    ]
+  },
+  "validator_timestamp": "2026-04-24T10:05:00Z"
+}
+```
+
+All fields are **additive** — existing Ralph scripts and receipt consumers
+that don't know about `validator` read `verdict` as before and ignore the
+new keys. Verdict never downgrades; the validator only drops findings,
+never invents them.
+
+---
+
 ## Fix Loop (RP)
 
 **CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is production-grade world-class software and architecture. Never use AskUserQuestion in this loop.**

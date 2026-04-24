@@ -91,15 +91,22 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 ## Input
 
 Arguments: $ARGUMENTS
-Format: `[task ID] [--base <commit>] [focus areas]`
+Format: `[task ID] [--base <commit>] [--validate] [focus areas]`
 
 - `--base <commit>` - Compare against this commit instead of main/master (for task-scoped reviews)
+- `--validate` - After NEEDS_WORK verdict, run a validator pass that drops false-positive findings (fn-32.1, opt-in)
 - Task ID - Optional, for context and receipt tracking
 - Focus areas - Optional, specific areas to examine
 
 **Scope behavior:**
 - With `--base`: Reviews only changes since that commit (task-scoped)
 - Without `--base`: Reviews entire branch vs main/master (full branch review)
+
+**Opt-in flags (fn-32):**
+- `--validate` — adds a validator pass on NEEDS_WORK that re-checks each finding
+  for false positives. All findings dropping upgrades verdict to SHIP.
+- `FLOW_VALIDATE_REVIEW=1` env var — enables `--validate` session-wide (works in Ralph).
+- Default review behavior (no flags) is unchanged.
 
 ## Workflow
 
@@ -115,10 +122,31 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 Parse $ARGUMENTS for:
 - `--base <commit>` → `BASE_COMMIT` (if provided, use for scoped diff)
 - `--no-triage` → set `TRIAGE_DISABLED=1` (skip trivial-diff pre-check)
+- `--validate` → set `VALIDATE=true` (fn-32.1 validator pass on NEEDS_WORK)
 - First positional arg matching `fn-*` → `TASK_ID`
 - Remaining args → focus areas
 
 If `--base` not provided, `BASE_COMMIT` stays empty (will fall back to main/master).
+
+**Validate flag + env var:**
+
+```bash
+VALIDATE=false
+# Parse --validate from $ARGUMENTS (same pattern as --base)
+for arg in $ARGUMENTS; do
+  case "$arg" in
+    --validate) VALIDATE=true ;;
+  esac
+done
+
+# Env opt-in (Ralph-friendly)
+if [[ "${FLOW_VALIDATE_REVIEW:-}" == "1" ]]; then
+  VALIDATE=true
+fi
+```
+
+`VALIDATE` gates the validator pass in workflow.md. When false (default),
+behavior is unchanged.
 
 ### Step 0.5: Trivial-diff triage (fn-29.6)
 
@@ -216,13 +244,17 @@ The workflow covers:
 
 If verdict is NEEDS_WORK, loop internally until SHIP:
 
-1. **Parse issues** from reviewer feedback (Critical → Major → Minor)
-2. **Fix code** and run tests/lints
-3. **Commit fixes** (mandatory before re-review)
-4. **Re-review**:
+1. **Validator pass (only if `VALIDATE=true`)** — see [workflow.md](workflow.md) "Validator Pass" section.
+   - Extract findings JSON-lines, dispatch `$FLOWCTL <backend> validate --findings-file ... --receipt ...`
+   - If all findings drop → verdict upgrades to SHIP automatically (exit fix loop)
+   - Else → only surviving (kept) findings enter the fix loop in step 2
+2. **Parse issues** from reviewer feedback (Critical → Major → Minor)
+3. **Fix code** and run tests/lints
+4. **Commit fixes** (mandatory before re-review)
+5. **Re-review**:
    - **Codex**: Re-run `flowctl codex impl-review` (receipt enables context)
    - **Copilot**: Re-run `flowctl copilot impl-review` (receipt enables context; must be `mode == "copilot"` to resume)
    - **RP**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md` (NO `--new-chat`)
-5. **Repeat** until `<verdict>SHIP</verdict>`
+6. **Repeat** until `<verdict>SHIP</verdict>`
 
 **CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.

@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-24T08:29:33.986839Z",
+  "depends_on": [],
+  "epic": "fn-32-opt-in-review-flags-validate-deep",
+  "id": "fn-32-opt-in-review-flags-validate-deep.3",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-32-opt-in-review-flags-validate-deep.3.md",
+  "status": "todo",
+  "title": "--interactive flag: per-finding walkthrough + Ralph-block + deferred-findings sink",
+  "updated_at": "2026-04-24T08:33:17.381325Z"
+}

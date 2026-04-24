@@ -9816,6 +9816,475 @@ Be critical. Find real issues.
 """
 
 
+# --- Validator pass (fn-32.1 --validate) ---
+#
+# Conservative false-positive drop on NEEDS_WORK review findings. Used by
+# `flowctl codex validate` and `flowctl copilot validate`. Shares the prompt
+# template (skills/flow-next-impl-review/validate-pass.md) and output parser
+# across both backends so receipt shape is identical.
+#
+# Design note: re-uses the existing backend session via ``session_id`` read
+# from the receipt — the validator continues the chat so the model already
+# has the diff + primary findings in context. A fresh session would force
+# re-embedding the diff (wasteful) and lose the primary-review framing that
+# makes the "drop if clearly wrong" judgment calibrated.
+
+VALIDATOR_TEMPLATE_REL = (
+    "plugins/flow-next/skills/flow-next-impl-review/validate-pass.md"
+)
+
+# Fallback template body if the on-disk file is missing (global installs, Codex
+# mirror, or stripped-down deployments). Keep in sync with validate-pass.md.
+VALIDATOR_TEMPLATE_FALLBACK = """# Validator prompt (fn-32.1 --validate)
+
+You are validating review findings for false positives. For each finding below,
+independently re-check it against the **current code** and decide whether the
+finding is actually valid.
+
+**Conservative bias — only drop findings that are clearly wrong.** When
+uncertain, keep the finding. A kept false-positive is cheap; a dropped real bug
+is expensive.
+
+For each finding: open the cited file, read ±20 lines around the cited line,
+check whether the claimed issue is actually present, and look for guards /
+handlers / assumptions that address the concern elsewhere.
+
+Do **not** re-score confidence, re-classify severity, or invent new findings.
+
+Return exactly one line per finding in this strict format:
+
+```
+<finding-id>: validated: <true|false> -- <one-sentence reason>
+```
+
+Rules:
+- One line per finding id. Missing ids default to `validated: true`.
+- Use the literal tokens `validated: true` or `validated: false`.
+
+## Findings to validate
+
+<!-- FINDINGS_BLOCK -->
+"""
+
+
+def load_validator_template() -> str:
+    """Load validate-pass.md template, falling back to the embedded copy."""
+    # Try repo-root plugin path first (dev / local install).
+    try:
+        repo_root = get_repo_root()
+        candidate = repo_root / VALIDATOR_TEMPLATE_REL
+        if candidate.exists():
+            return candidate.read_text(encoding="utf-8")
+    except Exception:
+        pass
+    # Try CLAUDE_PLUGIN_ROOT / DROID_PLUGIN_ROOT (installed plugin).
+    for env_var in ("CLAUDE_PLUGIN_ROOT", "DROID_PLUGIN_ROOT"):
+        root = os.environ.get(env_var)
+        if not root:
+            continue
+        candidate = Path(root) / "skills" / "flow-next-impl-review" / "validate-pass.md"
+        if candidate.exists():
+            try:
+                return candidate.read_text(encoding="utf-8")
+            except OSError:
+                pass
+    # Last resort: embedded fallback.
+    return VALIDATOR_TEMPLATE_FALLBACK
+
+
+def load_findings(findings_file: Optional[str]) -> list[dict]:
+    """Load findings from a JSON-lines file.
+
+    Each line is a JSON object with at least ``id``. Other fields commonly
+    present: ``severity``, ``confidence``, ``classification``, ``file``,
+    ``line``, ``title``, ``suggested_fix``. We pass everything through so
+    the validator prompt has full context — but only ``id`` is required.
+
+    An empty file or ``None`` returns ``[]``. Malformed lines are skipped
+    with a stderr warning (conservative: one bad finding shouldn't nuke
+    the whole pass).
+    """
+    if not findings_file:
+        return []
+    path = Path(findings_file)
+    if not path.exists():
+        return []
+    findings: list[dict] = []
+    for i, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        try:
+            obj = json.loads(stripped)
+        except json.JSONDecodeError as e:
+            print(
+                f"warning: skipping malformed finding at line {i}: {e}",
+                file=sys.stderr,
+            )
+            continue
+        if not isinstance(obj, dict):
+            print(
+                f"warning: skipping non-object finding at line {i}",
+                file=sys.stderr,
+            )
+            continue
+        # Auto-assign a stable id if missing — f1/f2/... in file order.
+        if "id" not in obj or not obj["id"]:
+            obj["id"] = f"f{len(findings) + 1}"
+        findings.append(obj)
+    return findings
+
+
+def render_findings_block(findings: list[dict]) -> str:
+    """Render findings list as a markdown block for the validator prompt."""
+    if not findings:
+        return "_(no findings supplied)_"
+    lines: list[str] = []
+    for f in findings:
+        fid = f.get("id", "?")
+        sev = f.get("severity", "")
+        conf = f.get("confidence", "")
+        cls = f.get("classification", "")
+        loc = ""
+        if f.get("file"):
+            loc = f["file"]
+            if f.get("line"):
+                loc = f"{loc}:{f['line']}"
+        title = f.get("title", f.get("problem", ""))
+        suggestion = f.get("suggested_fix", f.get("suggestion", ""))
+
+        header_bits = [f"**{fid}**"]
+        if sev:
+            header_bits.append(f"severity={sev}")
+        if conf != "":
+            header_bits.append(f"confidence={conf}")
+        if cls:
+            header_bits.append(f"classification={cls}")
+        lines.append(f"### " + " | ".join(header_bits))
+        if loc:
+            lines.append(f"- location: `{loc}`")
+        if title:
+            lines.append(f"- issue: {title}")
+        if suggestion:
+            lines.append(f"- suggested fix: {suggestion}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+# Match lines like: "f1: validated: true -- reason here"
+# Tolerant of bold markers, leading bullets, and minor whitespace variance.
+_VALIDATOR_LINE_RE = re.compile(
+    r"""^[\s>*_`\-]*                      # optional bullet / markdown noise
+         (?P<id>[A-Za-z0-9_\.\-]+)        # finding id
+         [\s*_`]*:[\s*_`]*
+         validated[\s*_`]*:[\s*_`]*
+         (?P<flag>true|false|yes|no)
+         [\s*_`]*
+         (?:--|—|-\s|:)\s*
+         (?P<reason>.+?)
+         \s*$""",
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def parse_validator_output(output: str, findings: list[dict]) -> dict:
+    """Parse validator LLM output into a decision map.
+
+    Returns a dict:
+      {
+        "decisions": {<fid>: {"validated": bool, "reason": str}},
+        "dispatched": int,  # how many findings were sent to the validator
+        "dropped":    int,  # how many came back validated=false
+        "kept":       int,  # how many survived (validated=true OR missing)
+        "reasons":    [{"id": fid, "file": ..., "line": ..., "reason": ...}, ...]
+      }
+
+    Unknown ids and missing responses default to kept (conservative bias).
+    """
+    valid_ids = {f.get("id") for f in findings if f.get("id")}
+    decisions: dict[str, dict] = {}
+
+    for raw_line in output.splitlines():
+        m = _VALIDATOR_LINE_RE.match(raw_line)
+        if not m:
+            continue
+        fid = m.group("id").strip()
+        if fid not in valid_ids:
+            continue
+        flag_raw = m.group("flag").lower()
+        validated = flag_raw in {"true", "yes"}
+        reason = m.group("reason").strip()
+        # First match wins — validator shouldn't double-declare but be defensive.
+        if fid not in decisions:
+            decisions[fid] = {"validated": validated, "reason": reason}
+
+    # Conservative default for missing ids: keep (validated=true).
+    for f in findings:
+        fid = f.get("id")
+        if fid and fid not in decisions:
+            decisions[fid] = {
+                "validated": True,
+                "reason": "no explicit validator decision — kept by default",
+            }
+
+    dropped_reasons: list[dict] = []
+    dropped = 0
+    kept = 0
+    for f in findings:
+        fid = f.get("id")
+        if not fid:
+            continue
+        d = decisions.get(fid, {"validated": True, "reason": ""})
+        if d["validated"]:
+            kept += 1
+        else:
+            dropped += 1
+            entry: dict = {"id": fid, "reason": d["reason"]}
+            if f.get("file"):
+                entry["file"] = f["file"]
+            if f.get("line") is not None:
+                entry["line"] = f["line"]
+            dropped_reasons.append(entry)
+
+    return {
+        "decisions": decisions,
+        "dispatched": len(findings),
+        "dropped": dropped,
+        "kept": kept,
+        "reasons": dropped_reasons,
+    }
+
+
+def _apply_validator_to_receipt(
+    receipt_path: str,
+    validator_result: dict,
+    prior_verdict: Optional[str],
+) -> dict:
+    """Merge validator result into the receipt at ``receipt_path``.
+
+    Returns the updated receipt dict. Responsibilities:
+      - Attach the ``validator`` object (dispatched/dropped/kept/reasons).
+      - Upgrade verdict to SHIP when all findings dropped (kept == 0 and
+        dispatched > 0) AND the prior verdict was NEEDS_WORK. We never
+        downgrade; MAJOR_RETHINK and SHIP verdicts stay as-is.
+      - Record ``verdict_before_validate`` so downstream consumers can see
+        the upgrade happened.
+      - Leave all other fields untouched.
+
+    If the receipt file is missing, an empty dict is seeded so the caller
+    can still persist validator metadata (useful in dry-run testing).
+    """
+    path = Path(receipt_path)
+    try:
+        receipt = (
+            json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        )
+    except (json.JSONDecodeError, OSError):
+        receipt = {}
+
+    receipt["validator"] = {
+        "dispatched": validator_result["dispatched"],
+        "dropped": validator_result["dropped"],
+        "kept": validator_result["kept"],
+        "reasons": validator_result["reasons"],
+    }
+
+    # Verdict upgrade: all findings dropped → SHIP (only from NEEDS_WORK).
+    if (
+        validator_result["dispatched"] > 0
+        and validator_result["kept"] == 0
+        and prior_verdict == "NEEDS_WORK"
+    ):
+        receipt["verdict_before_validate"] = prior_verdict
+        receipt["verdict"] = "SHIP"
+
+    receipt["validator_timestamp"] = now_iso()
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    return receipt
+
+
+def _run_validator_pass(
+    backend: str,
+    findings_file: Optional[str],
+    receipt_path: str,
+    spec_arg: Optional[str],
+    use_json: bool,
+) -> None:
+    """Execute a validator pass against ``backend`` (codex|copilot).
+
+    Reads findings + prior session from receipt, invokes the backend with
+    session continuity, parses validator output, merges into receipt. This
+    is the shared spine for ``cmd_codex_validate`` and
+    ``cmd_copilot_validate``.
+    """
+    # Load prior receipt to get session_id + verdict context.
+    receipt_file = Path(receipt_path)
+    prior_session_id: Optional[str] = None
+    prior_verdict: Optional[str] = None
+    prior_mode: Optional[str] = None
+    if receipt_file.exists():
+        try:
+            prior = json.loads(receipt_file.read_text(encoding="utf-8"))
+            prior_session_id = prior.get("session_id")
+            prior_verdict = prior.get("verdict")
+            prior_mode = prior.get("mode")
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    if not prior_session_id:
+        error_exit(
+            f"No session_id in receipt at {receipt_path} — run impl-review first",
+            use_json=use_json,
+            code=2,
+        )
+
+    # Session continuity guard: refuse to cross backends silently.
+    if prior_mode and prior_mode != backend:
+        error_exit(
+            f"Receipt mode is {prior_mode!r}; cannot validate with {backend!r}. "
+            "Validator must run with the same backend as the primary review.",
+            use_json=use_json,
+            code=2,
+        )
+
+    findings = load_findings(findings_file)
+    if not findings:
+        # No findings to validate — write an empty validator block and exit
+        # cleanly. Verdict unchanged (no dispatch, no drop).
+        empty = {"dispatched": 0, "dropped": 0, "kept": 0, "reasons": []}
+        _apply_validator_to_receipt(receipt_path, empty, prior_verdict)
+        if use_json:
+            json_output(
+                {
+                    "type": "impl_review_validate",
+                    "mode": backend,
+                    "dispatched": 0,
+                    "dropped": 0,
+                    "kept": 0,
+                    "verdict": prior_verdict,
+                    "reasons": [],
+                }
+            )
+        else:
+            print("Validator: no findings to validate")
+            print(f"VERDICT={prior_verdict or 'UNKNOWN'}")
+        return
+
+    # Render prompt.
+    template = load_validator_template()
+    findings_block = render_findings_block(findings)
+    prompt = template.replace("<!-- FINDINGS_BLOCK -->", findings_block)
+
+    # Dispatch to backend (session-continuing).
+    if backend == "codex":
+        if spec_arg:
+            try:
+                spec = BackendSpec.parse(spec_arg).resolve()
+            except ValueError as e:
+                error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
+        else:
+            spec = resolve_review_spec("codex", None)
+        try:
+            sandbox = resolve_codex_sandbox("auto")
+        except ValueError as e:
+            error_exit(str(e), use_json=use_json, code=2)
+        output, _tid, exit_code, stderr = run_codex_exec(
+            prompt, session_id=prior_session_id, sandbox=sandbox, spec=spec
+        )
+        if exit_code != 0:
+            error_exit(
+                f"codex validator pass failed: {(stderr or output or '').strip()}",
+                use_json=use_json,
+                code=2,
+            )
+    elif backend == "copilot":
+        if spec_arg:
+            try:
+                spec = BackendSpec.parse(spec_arg).resolve()
+            except ValueError as e:
+                error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
+        else:
+            spec = resolve_review_spec("copilot", None)
+        repo_root = get_repo_root()
+        output, _sid, exit_code, stderr = run_copilot_exec(
+            prompt, session_id=prior_session_id, repo_root=repo_root, spec=spec
+        )
+        if exit_code != 0:
+            error_exit(
+                f"copilot validator pass failed: {(stderr or output or '').strip()}",
+                use_json=use_json,
+                code=2,
+            )
+    else:
+        error_exit(
+            f"Unknown validator backend: {backend}",
+            use_json=use_json,
+            code=2,
+        )
+
+    # Parse validator decisions.
+    result = parse_validator_output(output, findings)
+
+    # Merge into receipt (may upgrade verdict to SHIP).
+    updated_receipt = _apply_validator_to_receipt(
+        receipt_path, result, prior_verdict
+    )
+    new_verdict = updated_receipt.get("verdict", prior_verdict)
+
+    if use_json:
+        json_output(
+            {
+                "type": "impl_review_validate",
+                "mode": backend,
+                "dispatched": result["dispatched"],
+                "dropped": result["dropped"],
+                "kept": result["kept"],
+                "verdict": new_verdict,
+                "verdict_before_validate": updated_receipt.get(
+                    "verdict_before_validate"
+                ),
+                "reasons": result["reasons"],
+                "receipt": receipt_path,
+            }
+        )
+    else:
+        print(output)
+        print(
+            f"\nValidator: dispatched={result['dispatched']} "
+            f"dropped={result['dropped']} kept={result['kept']}"
+        )
+        if updated_receipt.get("verdict_before_validate"):
+            print(
+                f"Verdict upgraded: "
+                f"{updated_receipt['verdict_before_validate']} → {new_verdict}"
+            )
+        print(f"VERDICT={new_verdict or 'UNKNOWN'}")
+
+
+def cmd_codex_validate(args: argparse.Namespace) -> None:
+    """Dispatch a codex validator pass over findings from a prior review."""
+    _run_validator_pass(
+        backend="codex",
+        findings_file=getattr(args, "findings_file", None),
+        receipt_path=args.receipt,
+        spec_arg=getattr(args, "spec", None),
+        use_json=args.json,
+    )
+
+
+def cmd_copilot_validate(args: argparse.Namespace) -> None:
+    """Dispatch a copilot validator pass over findings from a prior review."""
+    _run_validator_pass(
+        backend="copilot",
+        findings_file=getattr(args, "findings_file", None),
+        receipt_path=args.receipt,
+        spec_arg=getattr(args, "spec", None),
+        use_json=args.json,
+    )
+
+
 def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     """Run implementation review via codex exec."""
     task_id = args.task
@@ -13235,6 +13704,29 @@ def main() -> None:
     )
     p_codex_completion.set_defaults(func=cmd_codex_completion_review)
 
+    p_codex_validate = codex_sub.add_parser(
+        "validate",
+        help="Validator pass over prior review findings (fn-32.1 --validate)",
+    )
+    p_codex_validate.add_argument(
+        "--findings-file",
+        dest="findings_file",
+        help="JSON-lines file with findings to validate (one object per line, "
+        "with at least `id`). Empty or missing => no-op.",
+    )
+    p_codex_validate.add_argument(
+        "--receipt",
+        required=True,
+        help="Receipt file from prior impl-review (required; provides session_id).",
+    )
+    p_codex_validate.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'codex:gpt-5.4:xhigh'). "
+        "Defaults to env/config resolution.",
+    )
+    p_codex_validate.add_argument("--json", action="store_true", help="JSON output")
+    p_codex_validate.set_defaults(func=cmd_codex_validate)
+
     # copilot (GitHub Copilot CLI helpers). Subcommand surface mirrors codex;
     # review subcommands (impl-review/plan-review/completion-review) are
     # added in task fn-27-copilot-review-backend.3.
@@ -13313,6 +13805,29 @@ def main() -> None:
         "Overrides env/config resolution. Strict parse.",
     )
     p_copilot_completion.set_defaults(func=cmd_copilot_completion_review)
+
+    p_copilot_validate = copilot_sub.add_parser(
+        "validate",
+        help="Validator pass over prior review findings (fn-32.1 --validate)",
+    )
+    p_copilot_validate.add_argument(
+        "--findings-file",
+        dest="findings_file",
+        help="JSON-lines file with findings to validate (one object per line, "
+        "with at least `id`). Empty or missing => no-op.",
+    )
+    p_copilot_validate.add_argument(
+        "--receipt",
+        required=True,
+        help="Receipt file from prior impl-review (required; provides session_id).",
+    )
+    p_copilot_validate.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'copilot:claude-opus-4.5:xhigh'). "
+        "Defaults to env/config resolution.",
+    )
+    p_copilot_validate.add_argument("--json", action="store_true", help="JSON output")
+    p_copilot_validate.set_defaults(func=cmd_copilot_validate)
 
     args = parser.parse_args()
     args.func(args)

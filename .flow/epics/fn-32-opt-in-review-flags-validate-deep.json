@@ -1,0 +1,15 @@
+{
+  "branch_name": "fn-32-opt-in-review-flags-validate-deep",
+  "created_at": "2026-04-24T08:09:41.547263Z",
+  "depends_on_epics": [
+    "fn-29-review-rigor-bundle-r-ids-confidence"
+  ],
+  "id": "fn-32-opt-in-review-flags-validate-deep",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-32-opt-in-review-flags-validate-deep.md",
+  "status": "open",
+  "title": "Opt-in review flags: --validate, --deep, --interactive for impl-review",
+  "updated_at": "2026-04-24T08:29:33.621370Z"
+}

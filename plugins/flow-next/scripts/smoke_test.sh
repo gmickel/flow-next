@@ -2103,6 +2103,82 @@ PASS=$((PASS + 1))
 echo -e "${GREEN}✓${NC} memory discoverability-patch: --apply + --dry-run rejected with exit 2"
 PASS=$((PASS + 1))
 
+# --- validator pass subcommands (fn-32.1 --validate) ---
+echo -e "${YELLOW}--- validator pass (fn-32.1) ---${NC}"
+
+VALIDATE_TEST_DIR="$(mktemp -d)"
+trap 'rm -rf "$VALIDATE_TEST_DIR"' EXIT
+
+# Test: codex validate and copilot validate --help surfaces discoverable.
+(
+  cd "$VALIDATE_TEST_DIR"
+  "$SCRIPT_DIR/flowctl" codex validate --help > /dev/null \
+    || { echo "FAIL: codex validate --help"; exit 1; }
+  "$SCRIPT_DIR/flowctl" copilot validate --help > /dev/null \
+    || { echo "FAIL: copilot validate --help"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} validate subcommands (codex + copilot): --help available"
+PASS=$((PASS + 1))
+
+# Test: no-findings no-op path writes validator block + preserves verdict.
+(
+  cd "$VALIDATE_TEST_DIR"
+  RPATH="$VALIDATE_TEST_DIR/receipt.json"
+  cat > "$RPATH" <<'EOF'
+{"type":"impl_review","id":"fn-32.1","mode":"codex","verdict":"NEEDS_WORK","session_id":"sess-noop"}
+EOF
+  out=$("$SCRIPT_DIR/flowctl" codex validate --receipt "$RPATH" --json 2>&1) \
+    || { echo "FAIL: codex validate no-op"; echo "$out"; exit 1; }
+  echo "$out" | grep -q '"dispatched": 0' \
+    || { echo "FAIL: expected dispatched=0"; echo "$out"; exit 1; }
+  grep -q '"validator"' "$RPATH" \
+    || { echo "FAIL: validator block missing"; cat "$RPATH"; exit 1; }
+  grep -q '"verdict": "NEEDS_WORK"' "$RPATH" \
+    || { echo "FAIL: verdict changed unexpectedly"; cat "$RPATH"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} codex validate: no-findings no-op writes validator block, preserves verdict"
+PASS=$((PASS + 1))
+
+# Test: missing session_id → error exit 2.
+(
+  cd "$VALIDATE_TEST_DIR"
+  RPATH="$VALIDATE_TEST_DIR/receipt-nosession.json"
+  echo '{"mode":"codex","verdict":"NEEDS_WORK"}' > "$RPATH"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" codex validate --receipt "$RPATH" --json 2>&1) || rc=$?
+  [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2 for missing session_id, got $rc"; echo "$out"; exit 1; }
+  echo "$out" | grep -q "No session_id" \
+    || { echo "FAIL: expected 'No session_id' in error"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} codex validate: missing session_id exits 2 with clear error"
+PASS=$((PASS + 1))
+
+# Test: cross-backend guard — codex receipt, copilot validate → error.
+(
+  cd "$VALIDATE_TEST_DIR"
+  RPATH="$VALIDATE_TEST_DIR/receipt-codex.json"
+  echo '{"mode":"codex","verdict":"NEEDS_WORK","session_id":"sess-xback"}' > "$RPATH"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" copilot validate --receipt "$RPATH" --json 2>&1) || rc=$?
+  [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2 for cross-backend, got $rc"; echo "$out"; exit 1; }
+  echo "$out" | grep -qi "same backend" \
+    || { echo "FAIL: expected cross-backend error"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} copilot validate: cross-backend receipt rejected with exit 2"
+PASS=$((PASS + 1))
+
+# Test: --receipt is required (argparse enforcement).
+(
+  cd "$VALIDATE_TEST_DIR"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" codex validate 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || { echo "FAIL: expected nonzero exit when --receipt missing"; echo "$out"; exit 1; }
+  echo "$out" | grep -qi "receipt" \
+    || { echo "FAIL: expected error mentioning --receipt"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} validate: --receipt required (argparse rejection)"
+PASS=$((PASS + 1))
+
 echo ""
 echo -e "${YELLOW}=== Results ===${NC}"
 echo -e "Passed: ${GREEN}$PASS${NC}"
