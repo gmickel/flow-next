@@ -1,6 +1,6 @@
 {
   "name": "flow-next",
-  "version": "0.33.0",
+  "version": "0.34.0",
   "description": "Zero-dependency planning + execution with .flow/ task tracking and Ralph autonomous mode. Worker subagent per task for context isolation. Compatible with Codex, Claude Code, and Factory Droid.",
   "author": {
     "name": "Gordon Mickel",
@@ -21,7 +21,7 @@
   "interface": {
     "displayName": "Flow-Next",
     "shortDescription": "Plan-first workflow with subagent execution",
-    "longDescription": "Structured plan-first workflow engine. Tracks epics and tasks in .flow/ directory. Spawns isolated worker subagents per task to prevent context bleed. Ralph mode enables fully autonomous execution with multi-model review gates. Prime command assesses 8 pillars (48 criteria) for agent readiness. 20 subagents, 16 skills.",
+    "longDescription": "Structured plan-first workflow engine. Tracks epics and tasks in .flow/ directory. Spawns isolated worker subagents per task to prevent context bleed. Ralph mode enables fully autonomous execution with multi-model review gates. Prime command assesses 8 pillars (48 criteria) for agent readiness. 21 subagents, 17 skills.",
     "developerName": "Gordon Mickel",
     "category": "Productivity",
     "capabilities": [

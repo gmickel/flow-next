@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PR_NUMBER="${1:?Usage: $0 PR_NUMBER}"
+OWNER_REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+OWNER="${OWNER_REPO%/*}"
+REPO="${OWNER_REPO#*/}"
+
+# Fetch unresolved review threads, PR comments, review bodies in one GraphQL call.
+# Also fetch last N resolved threads for cross-invocation signal.
+#
+# Pagination strategy:
+#   - reviewThreads: paginated via cursor; large PRs with >100 threads are
+#     handled across multiple requests.
+#   - comments per thread: paginated within the same loop when the initial
+#     page (first: 100) is not exhausted; prevents dropping replies on long
+#     threads which would break `get-thread-for-comment` targeted mode too.
+#   - pr_comments + reviews: capped at first 100 / 50 respectively — review
+#     rounds on any single PR almost never reach those limits and adding
+#     pagination here costs far more than it saves.
+
+fetch_page() {
+  local cursor_arg=""
+  if [ -n "${1:-}" ]; then
+    cursor_arg="-F cursor=$1"
+  fi
+  # shellcheck disable=SC2086
+  gh api graphql \
+    -F owner="$OWNER" \
+    -F repo="$REPO" \
+    -F pr="$PR_NUMBER" \
+    $cursor_arg \
+    -f query='
+    query($owner: String!, $repo: String!, $pr: Int!, $cursor: String) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $pr) {
+          author { login }
+          reviewThreads(first: 100, after: $cursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              id
+              isResolved
+              isOutdated
+              path
+              line
+              originalLine
+              startLine
+              originalStartLine
+              comments(first: 100) {
+                pageInfo { hasNextPage endCursor }
+                nodes {
+                  id
+                  author { login }
+                  body
+                  createdAt
+                }
+              }
+            }
+          }
+          comments(first: 100) {
+            nodes {
+              id
+              author { login }
+              body
+              createdAt
+            }
+          }
+          reviews(first: 50) {
+            nodes {
+              id
+              author { login }
+              body
+              state
+              submittedAt
+            }
+          }
+        }
+      }
+    }'
+}
+
+fetch_thread_comments() {
+  local thread_id="$1"
+  local cursor_arg=""
+  if [ -n "${2:-}" ]; then
+    cursor_arg="-F cursor=$2"
+  fi
+  # shellcheck disable=SC2086
+  gh api graphql \
+    -F thread="$thread_id" \
+    $cursor_arg \
+    -f query='
+    query($thread: ID!, $cursor: String) {
+      node(id: $thread) {
+        ... on PullRequestReviewThread {
+          comments(first: 100, after: $cursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              id
+              author { login }
+              body
+              createdAt
+            }
+          }
+        }
+      }
+    }'
+}
+
+# Walk reviewThreads pages and collect raw nodes + static surfaces (author,
+# pr_comments, review_bodies) from the first page.
+first_page="$(fetch_page "")"
+author="$(echo "$first_page" | jq -r '.data.repository.pullRequest.author.login')"
+pr_comments="$(echo "$first_page" | jq '.data.repository.pullRequest.comments.nodes')"
+review_bodies="$(echo "$first_page" | jq '.data.repository.pullRequest.reviews.nodes')"
+
+threads="$(echo "$first_page" | jq '.data.repository.pullRequest.reviewThreads.nodes')"
+has_next="$(echo "$first_page" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage')"
+cursor="$(echo "$first_page" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.endCursor')"
+
+while [ "$has_next" = "true" ]; do
+  next="$(fetch_page "$cursor")"
+  next_nodes="$(echo "$next" | jq '.data.repository.pullRequest.reviewThreads.nodes')"
+  threads="$(jq -s '.[0] + .[1]' <(echo "$threads") <(echo "$next_nodes"))"
+  has_next="$(echo "$next" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage')"
+  cursor="$(echo "$next" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.endCursor')"
+done
+
+# Fetch additional thread-comments pages when any thread's initial page is
+# not exhausted. Mutates $threads in place.
+thread_count="$(echo "$threads" | jq 'length')"
+i=0
+while [ "$i" -lt "$thread_count" ]; do
+  tid="$(echo "$threads" | jq -r ".[$i].id")"
+  chas_next="$(echo "$threads" | jq -r ".[$i].comments.pageInfo.hasNextPage")"
+  ccursor="$(echo "$threads" | jq -r ".[$i].comments.pageInfo.endCursor")"
+  while [ "$chas_next" = "true" ]; do
+    page="$(fetch_thread_comments "$tid" "$ccursor")"
+    more_nodes="$(echo "$page" | jq '.data.node.comments.nodes')"
+    threads="$(echo "$threads" | jq --argjson idx "$i" --argjson more "$more_nodes" '
+      .[$idx].comments.nodes = (.[$idx].comments.nodes + $more)
+    ')"
+    chas_next="$(echo "$page" | jq -r '.data.node.comments.pageInfo.hasNextPage')"
+    ccursor="$(echo "$page" | jq -r '.data.node.comments.pageInfo.endCursor')"
+  done
+  i=$((i + 1))
+done
+
+# Shape the final payload.
+jq -n \
+  --arg pr "$PR_NUMBER" \
+  --arg author "$author" \
+  --argjson threads "$threads" \
+  --argjson prc "$pr_comments" \
+  --argjson rvb "$review_bodies" \
+  '{
+    pr_number: ($pr | tonumber),
+    review_threads: [
+      $threads[]
+      | select(.isResolved == false)
+      | {id, isOutdated, path, line, originalLine, startLine, originalStartLine, comments: .comments.nodes}
+    ],
+    pr_comments: [
+      $prc[]
+      | select(.author.login != $author)
+      | select(.body != null and .body != "")
+      | {id, author: .author.login, body, createdAt}
+    ],
+    review_bodies: [
+      $rvb[]
+      | select(.author.login != $author)
+      | select(.body != null and .body != "")
+      | {id, author: .author.login, body, state, submittedAt}
+    ],
+    cross_invocation: {
+      signal: ([$threads[] | select(.isResolved == true)] | length > 0),
+      resolved_threads: [
+        $threads[]
+        | select(.isResolved == true)
+        | {id, path, line: (.line // .originalLine)}
+      ]
+    }
+  }'

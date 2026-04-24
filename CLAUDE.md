@@ -22,6 +22,7 @@ Commands:
 - `/flow-next:interview` → deep spec refinement
 - `/flow-next:plan-review` → Carmack-level plan review (rp-cli, Codex CLI, or Copilot CLI)
 - `/flow-next:impl-review` → Carmack-level impl review of current branch (rp-cli, Codex CLI, or Copilot CLI)
+- `/flow-next:resolve-pr [PR# | comment URL]` → resolve GitHub PR review threads (fetch → triage → dispatch resolver agents → validate → commit → reply → resolve via GraphQL). User-triggered only; Ralph does not invoke. Flags: `--dry-run`, `--no-cluster`. Parallel dispatch on Claude Code, serial on Codex/Copilot/Droid. Zero runtime deps beyond `gh` + `jq`. Added in 0.34.0.
 
 Review backend spec grammar (v0.31.0+):
 - `backend[:model[:effort]]` — colon-delimited, trailing parts optional

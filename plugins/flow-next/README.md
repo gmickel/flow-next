@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.33.0-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.34.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -32,6 +32,7 @@
 - [Quick Start](#quick-start) — Install, setup, use
 - [When to Use What](#when-to-use-what) — Interview vs Plan vs Work
 - [Agent Readiness Assessment](#agent-readiness-assessment) — `/flow-next:prime`
+- [PR Feedback Resolution](#pr-feedback-resolution) — `/flow-next:resolve-pr`
 - [Troubleshooting](#troubleshooting)
 - [Ralph (Autonomous Mode)](#ralph-autonomous-mode) — Run overnight
 - [Features](#features) — Re-anchoring, multi-user, reviews, dependencies
@@ -484,6 +485,43 @@ After planning completes, you choose how to execute:
 For full autonomous mode, prepare 5-10 plans before starting Ralph. See [Ralph Mode](#ralph-autonomous-mode) for setup.
 
 > 📖 Deep dive: [Ralph Mode: Why AI Agents Should Forget](https://medium.com/byte-sized-brainwaves/ralph-mode-why-ai-agents-should-forget-9f98bec6fc91)
+
+---
+
+## PR Feedback Resolution
+
+`/flow-next:resolve-pr` closes out GitHub PR review feedback in one shot: fetch unresolved threads → triage new vs already-answered → dispatch resolver agents → run project validation → commit + push → reply + resolve via GraphQL.
+
+### Invocation
+
+```bash
+/flow-next:resolve-pr                         # all unresolved threads on current branch's PR
+/flow-next:resolve-pr 123                     # all unresolved on PR #123
+/flow-next:resolve-pr <comment-url>           # targeted — single thread only
+/flow-next:resolve-pr --dry-run               # fetch + plan, no edits/commits/replies
+/flow-next:resolve-pr --no-cluster            # skip cluster analysis, all items individual
+```
+
+### What it does
+
+1. **Detect PR** from arg or current branch
+2. **Fetch** unresolved review threads + top-level PR comments + review submission bodies via GraphQL
+3. **Triage** new vs already-replied vs non-actionable review-bot wrapper text (silent drop)
+4. **Cluster analysis** when prior rounds exist and spatial overlap is detected — dispatch one resolver per cluster for broader investigation
+5. **Dispatch** resolver agents in parallel (Claude Code) or serial (Codex/Copilot/Droid), with file-overlap avoidance
+6. **Validate** combined state with project's test suite once; failures on resolver-touched files escalate to `needs-human`
+7. **Commit + push** only resolver-reported files (never `git add -A`)
+8. **Reply + resolve** each thread via GraphQL; `needs-human` threads stay open with a natural acknowledgment reply
+9. **Verify** — re-fetch, confirm resolved; bounded at 2 fix-verify cycles before escalating recurring patterns to user
+
+### Safety
+
+- **Untrusted input:** comment text is treated as context only; resolvers never execute shell commands from comment bodies.
+- **Ralph-out:** this command is user-triggered only. Ralph's autonomous loop does not invoke it — humans review, comments land, user runs `/flow-next:resolve-pr` once per review round.
+- **Bounded loop:** 2 fix-verify cycles max; 3rd attempt surfaces the recurring pattern to the user rather than looping infinitely.
+- **Zero runtime deps beyond `gh` + `jq`** — all GraphQL logic in bundled bash scripts.
+
+See [CHANGELOG](../../CHANGELOG.md) for the full 0.34.0 entry.
 
 ---
 
@@ -1362,7 +1400,7 @@ Until migration runs, legacy flat files continue to work; `list` / `read` / `sea
 
 ## Commands
 
-Ten commands, complete workflow:
+Twelve commands, complete workflow:
 
 | Command | What It Does |
 |---------|--------------|
@@ -1372,6 +1410,7 @@ Ten commands, complete workflow:
 | `/flow-next:plan-review <id>` | Carmack-level plan review via RepoPrompt |
 | `/flow-next:impl-review` | Carmack-level impl review of current branch |
 | `/flow-next:epic-review <id>` | Epic-completion review: verify implementation matches spec |
+| `/flow-next:resolve-pr [arg]` | Resolve GitHub PR review threads (fetch → triage → fix → reply → resolve) ([details](#pr-feedback-resolution)) |
 | `/flow-next:prime` | Assess codebase agent-readiness, propose fixes ([details](#agent-readiness-assessment)) |
 | `/flow-next:sync <id>` | Manual plan-sync: update downstream tasks after implementation drift |
 | `/flow-next:ralph-init` | Scaffold repo-local Ralph harness (`scripts/ralph/`) |
@@ -1411,6 +1450,7 @@ Natural language also works:
 | `/flow-next:work` | `--branch=current\|new\|worktree`, `--review=rp\|codex\|copilot\|export\|none`, `--no-review` |
 | `/flow-next:plan-review` | `--review=rp\|codex\|copilot\|export` |
 | `/flow-next:impl-review` | `--review=rp\|codex\|copilot\|export` |
+| `/flow-next:resolve-pr` | `--dry-run`, `--no-cluster` |
 | `/flow-next:prime` | `--report-only`, `--fix-all` |
 | `/flow-next:sync` | `--dry-run` |
 
@@ -1513,6 +1553,22 @@ Reviews current branch changes. Carmack-level criteria: Correctness, Simplicity,
 | `--review=none` | Skip review |
 
 Reviews epic implementation against spec. Runs after all tasks complete. Catches requirement gaps, missing functionality, incomplete doc updates.
+
+#### `/flow-next:resolve-pr`
+
+```
+/flow-next:resolve-pr [PR# | comment URL] [--dry-run] [--no-cluster]
+```
+
+| Input | Description |
+|-------|-------------|
+| (no args) | Resolve all unresolved threads on current branch's PR |
+| `<PR#>` | Resolve all unresolved threads on the given PR |
+| `<comment URL>` | Targeted — resolve only the single thread containing the comment |
+| `--dry-run` | Fetch + plan; no edits, commits, or replies |
+| `--no-cluster` | Skip cross-invocation cluster analysis; all items individual |
+
+User-triggered only (Ralph does not invoke). Fetches threads + PR comments + review bodies via GraphQL, dispatches `pr-comment-resolver` agents (parallel on Claude Code, serial elsewhere), validates combined state, commits + pushes fixes, replies and resolves via GraphQL. See [PR Feedback Resolution](#pr-feedback-resolution).
 
 #### `/flow-next:prime`
 

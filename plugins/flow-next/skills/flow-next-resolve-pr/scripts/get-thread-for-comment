@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PR_NUMBER="${1:?Usage: $0 PR_NUMBER COMMENT_NODE_ID [OWNER/REPO]}"
+COMMENT_NODE_ID="${2:?Usage: $0 PR_NUMBER COMMENT_NODE_ID [OWNER/REPO]}"
+OWNER_REPO="${3:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}"
+OWNER="${OWNER_REPO%/*}"
+REPO="${OWNER_REPO#*/}"
+
+# Minimal thread listing (IDs + comment IDs only, no bodies) to find the
+# matching thread for a given comment node id. Paginates reviewThreads AND
+# per-thread comments — long threads can exceed 100 comments; if we stopped
+# at the first page, targeted mode would silently fail for comments posted
+# later in a long review.
+
+fetch_threads_page() {
+  local cursor_arg=""
+  if [ -n "${1:-}" ]; then
+    cursor_arg="-F cursor=$1"
+  fi
+  # shellcheck disable=SC2086
+  gh api graphql \
+    -F owner="$OWNER" \
+    -F repo="$REPO" \
+    -F pr="$PR_NUMBER" \
+    $cursor_arg \
+    -f query='
+    query($owner: String!, $repo: String!, $pr: Int!, $cursor: String) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $pr) {
+          reviewThreads(first: 100, after: $cursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              id
+              isResolved
+              path
+              line
+              originalLine
+              comments(first: 100) {
+                pageInfo { hasNextPage endCursor }
+                nodes { id }
+              }
+            }
+          }
+        }
+      }
+    }'
+}
+
+fetch_thread_comments_page() {
+  local thread_id="$1"
+  local cursor_arg=""
+  if [ -n "${2:-}" ]; then
+    cursor_arg="-F cursor=$2"
+  fi
+  # shellcheck disable=SC2086
+  gh api graphql \
+    -F thread="$thread_id" \
+    $cursor_arg \
+    -f query='
+    query($thread: ID!, $cursor: String) {
+      node(id: $thread) {
+        ... on PullRequestReviewThread {
+          comments(first: 100, after: $cursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes { id }
+          }
+        }
+      }
+    }'
+}
+
+# Short-circuits on first match: walk pages; for each thread check first page
+# of comments; on miss, page through remaining comments; if found, print and
+# exit. Avoids fetching all threads when the target is early.
+
+check_thread() {
+  # Takes a thread JSON blob; returns 0 + prints the match when found.
+  local thread="$1"
+  local tid thas_next tcursor
+  tid="$(echo "$thread" | jq -r '.id')"
+
+  # First page of comments (already fetched).
+  if echo "$thread" | jq -e --arg cid "$COMMENT_NODE_ID" \
+      '.comments.nodes | map(.id) | index($cid)' >/dev/null; then
+    echo "$thread" | jq '{id, path, line: (.line // .originalLine), isResolved}'
+    return 0
+  fi
+
+  thas_next="$(echo "$thread" | jq -r '.comments.pageInfo.hasNextPage')"
+  tcursor="$(echo "$thread" | jq -r '.comments.pageInfo.endCursor')"
+  while [ "$thas_next" = "true" ]; do
+    local page
+    page="$(fetch_thread_comments_page "$tid" "$tcursor")"
+    if echo "$page" | jq -e --arg cid "$COMMENT_NODE_ID" \
+        '.data.node.comments.nodes | map(.id) | index($cid)' >/dev/null; then
+      echo "$thread" | jq '{id, path, line: (.line // .originalLine), isResolved}'
+      return 0
+    fi
+    thas_next="$(echo "$page" | jq -r '.data.node.comments.pageInfo.hasNextPage')"
+    tcursor="$(echo "$page" | jq -r '.data.node.comments.pageInfo.endCursor')"
+  done
+  return 1
+}
+
+cursor=""
+has_next="true"
+while [ "$has_next" = "true" ]; do
+  page="$(fetch_threads_page "$cursor")"
+  count="$(echo "$page" | jq '.data.repository.pullRequest.reviewThreads.nodes | length')"
+  i=0
+  while [ "$i" -lt "$count" ]; do
+    thread="$(echo "$page" | jq ".data.repository.pullRequest.reviewThreads.nodes[$i]")"
+    if check_thread "$thread"; then
+      exit 0
+    fi
+    i=$((i + 1))
+  done
+  has_next="$(echo "$page" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage')"
+  cursor="$(echo "$page" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.endCursor')"
+done
+# No match — silent exit 0, caller checks output empty.

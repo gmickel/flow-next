@@ -3,7 +3,7 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v0.33.0-green)](plugins/flow-next/)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v0.34.0-green)](plugins/flow-next/)
 [![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -100,6 +100,7 @@ droid plugin marketplace add \
 | `/flow-next:impl-review` | Cross-model implementation review |
 | `/flow-next:plan-review` | Cross-model plan review |
 | `/flow-next:epic-review` | Epic-completion review gate |
+| `/flow-next:resolve-pr` | Resolve GitHub PR review threads (fetch → triage → fix → reply → resolve) |
 | `/flow-next:prime` | Assess codebase agent-readiness |
 | `/flow-next:ralph-init` | Scaffold autonomous loop |
 
