@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+THREAD_ID="${1:?Usage: echo REPLY_TEXT | $0 THREAD_ID}"
+REPLY_TEXT=$(cat)
+
+if [ -z "$REPLY_TEXT" ]; then
+  echo "Empty reply text on stdin; aborting" >&2
+  exit 1
+fi
+
+gh api graphql -F threadId="$THREAD_ID" -F body="$REPLY_TEXT" -f query='
+mutation($threadId: ID!, $body: String!) {
+  addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $threadId, body: $body}) {
+    comment { id url }
+  }
+}'

@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PR_NUMBER="${1:?Usage: $0 PR_NUMBER}"
+OWNER_REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+OWNER="${OWNER_REPO%/*}"
+REPO="${OWNER_REPO#*/}"
+
+# Fetch unresolved review threads, PR comments, review bodies in one GraphQL call.
+# Also fetch last N resolved threads for cross-invocation signal.
+gh api graphql -F owner="$OWNER" -F repo="$REPO" -F pr="$PR_NUMBER" -f query='
+query($owner: String!, $repo: String!, $pr: Int!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $pr) {
+      author { login }
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          isOutdated
+          path
+          line
+          originalLine
+          startLine
+          originalStartLine
+          comments(first: 50) {
+            nodes {
+              id
+              author { login }
+              body
+              createdAt
+            }
+          }
+        }
+      }
+      comments(first: 100) {
+        nodes {
+          id
+          author { login }
+          body
+          createdAt
+        }
+      }
+      reviews(first: 50) {
+        nodes {
+          id
+          author { login }
+          body
+          state
+          submittedAt
+        }
+      }
+    }
+  }
+}' | jq --arg pr "$PR_NUMBER" '
+  .data.repository.pullRequest as $p
+  | ($p.author.login) as $author
+  | {
+      pr_number: ($pr | tonumber),
+      review_threads: [
+        $p.reviewThreads.nodes[]
+        | select(.isResolved == false)
+        | {id, isOutdated, path, line, originalLine, startLine, originalStartLine, comments: .comments.nodes}
+      ],
+      pr_comments: [
+        $p.comments.nodes[]
+        | select(.author.login != $author)
+        | select(.body != null and .body != "")
+        | {id, author: .author.login, body, createdAt}
+      ],
+      review_bodies: [
+        $p.reviews.nodes[]
+        | select(.author.login != $author)
+        | select(.body != null and .body != "")
+        | {id, author: .author.login, body, state, submittedAt}
+      ],
+      cross_invocation: {
+        signal: ([$p.reviewThreads.nodes[] | select(.isResolved == true)] | length > 0),
+        resolved_threads: [
+          $p.reviewThreads.nodes[]
+          | select(.isResolved == true)
+          | {id, path, line: (.line // .originalLine)}
+        ]
+      }
+    }
+'

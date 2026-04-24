@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+THREAD_ID="${1:?Usage: $0 THREAD_ID}"
+
+gh api graphql -F threadId="$THREAD_ID" -f query='
+mutation($threadId: ID!) {
+  resolveReviewThread(input: {threadId: $threadId}) {
+    thread { id isResolved }
+  }
+}'
