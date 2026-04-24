@@ -92,7 +92,8 @@ Free-form confidence language ("probably", "might be", "definitely") produces fu
 - Cross-reviewer agreement promotion (requires multi-persona; see Epic 4 `--deep`).
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Added 5-anchor confidence rubric (0/25/50/75/100) + suppression gate to impl-review, epic-review, and standalone review prompts across rp/codex/copilot backends; quality-auditor agent mirrors the same rubric. Receipts now optionally carry `suppressed_count` (parsed via `parse_suppressed_count` helper in flowctl.py + awk splice in RP workflow.md files); smoke suite gains targeted regression coverage.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: cdfd42c403e6c936dda74a8a88714c98632f282c
+- Tests: plugins/flow-next/scripts/smoke_test.sh (68 passed, 0 failed)
+- PRs:

@@ -665,6 +665,17 @@ assert "Confidence calibration" in impl_prompt
 assert "Suppression gate" in impl_prompt
 assert "0 / 25 / 50 / 75 / 100" in impl_prompt
 assert "Suppressed findings" in impl_prompt
+
+# fn-29.4: introduced vs pre_existing classification baked into impl prompt
+assert "Introduced vs pre-existing classification" in impl_prompt
+assert "introduced" in impl_prompt
+assert "pre_existing" in impl_prompt
+assert "Pre-existing issues (not blocking this verdict)" in impl_prompt
+assert "Classification counts" in impl_prompt
+assert "Verdict gate" in impl_prompt
+
+# fn-29.4: plan review does NOT need classification (plans don't have diffs to classify against)
+assert "Introduced vs pre-existing classification" not in plan_prompt
 PY
 echo -e "${GREEN}✓${NC} build_review_prompt has full criteria"
 PASS=$((PASS + 1))
@@ -699,6 +710,51 @@ r = parse_suppressed_count("Suppressed findings: 5 at anchor 100, 2 at anchor 75
 assert r == {"100": 5, "75": 2}, r
 PY
 echo -e "${GREEN}✓${NC} parse_suppressed_count handles canonical + edge cases"
+PASS=$((PASS + 1))
+
+echo -e "${YELLOW}--- parse_classification_counts (fn-29.4) ---${NC}"
+"$PYTHON_BIN" - "$SCRIPT_DIR" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+from flowctl import parse_classification_counts
+
+# Canonical summary line
+r = parse_classification_counts("blah\nClassification counts: 2 introduced, 4 pre_existing.\n")
+assert r == {"introduced": 2, "pre_existing": 4}, r
+
+# Blockquote prefix + reversed order
+r = parse_classification_counts("> Classification counts: 3 pre_existing, 1 introduced")
+assert r == {"introduced": 1, "pre_existing": 3}, r
+
+# Bold markdown wrappers
+r = parse_classification_counts("**Classification counts:** 0 introduced, 5 pre-existing.")
+assert r == {"introduced": 0, "pre_existing": 5}, r
+
+# Summary with only one bucket → missing bucket defaults to 0
+r = parse_classification_counts("Classification counts: 3 introduced.")
+assert r == {"introduced": 3, "pre_existing": 0}, r
+
+# Fallback: count per-finding Classification: lines when no summary
+body = """Some review
+**Classification**: introduced
+blah
+Classification: pre_existing
+more
+**Classification:** introduced
+"""
+r = parse_classification_counts(body)
+assert r == {"introduced": 2, "pre_existing": 1}, r
+
+# Fallback: inline introduced=true/false markers
+body = "[P1, confidence 75, introduced=false] foo\n[P0, confidence 100, introduced=true] bar"
+r = parse_classification_counts(body)
+assert r == {"introduced": 1, "pre_existing": 1}, r
+
+# Empty → None
+assert parse_classification_counts("no classification anywhere") is None
+assert parse_classification_counts("") is None
+PY
+echo -e "${GREEN}✓${NC} parse_classification_counts handles summary + per-finding fallback"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- parse_receipt_path ---${NC}"

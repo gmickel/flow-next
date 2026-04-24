@@ -1693,6 +1693,75 @@ def parse_suppressed_count(output: str) -> Optional[dict[str, int]]:
     return counts or None
 
 
+def parse_classification_counts(output: str) -> Optional[dict[str, int]]:
+    """Extract introduced/pre_existing tallies from review output (fn-29.4).
+
+    Primary signal: a summary line the reviewer is asked to emit, e.g.
+        Classification counts: 2 introduced, 4 pre_existing.
+
+    Fallback: count `Classification: introduced | pre_existing` fragments in
+    per-finding blocks. Either path returns `{"introduced": int, "pre_existing": int}`
+    with zero counts preserved when the other bucket is non-zero — so callers
+    can compute a verdict gate from `introduced_count`. Returns None when no
+    classification signal is present at all (legacy reviews, pre-migration).
+    """
+    if not output:
+        return None
+
+    # Canonical summary line (preferred — reviewer reports tallies directly).
+    summary_match = re.search(
+        r"(?im)^[\s>*_`]*classification\s+counts[\s*_`]*:\s*(.+?)\s*$",
+        output,
+    )
+    if summary_match:
+        payload = summary_match.group(1).strip().rstrip(".")
+        if payload and payload.lower() not in {"none", "n/a"}:
+            found: dict[str, int] = {}
+            for frag_match in re.finditer(
+                r"(\d+)\s*(introduced|pre[-_ ]existing)",
+                payload,
+                re.IGNORECASE,
+            ):
+                raw_bucket = frag_match.group(2).lower().replace("-", "_").replace(
+                    " ", "_"
+                )
+                bucket = "pre_existing" if "pre" in raw_bucket else "introduced"
+                try:
+                    found[bucket] = found.get(bucket, 0) + int(frag_match.group(1))
+                except ValueError:
+                    continue
+            if found:
+                # Fill missing bucket with 0 so downstream always has both keys.
+                found.setdefault("introduced", 0)
+                found.setdefault("pre_existing", 0)
+                return found
+
+    # Fallback: tally per-finding Classification: lines.
+    per_finding: dict[str, int] = {"introduced": 0, "pre_existing": 0}
+    saw_any = False
+    for frag_match in re.finditer(
+        r"(?im)classification[\s*_`]*[:=][\s*_`]*(introduced|pre[-_ ]existing)",
+        output,
+    ):
+        raw_bucket = frag_match.group(1).lower().replace("-", "_").replace(" ", "_")
+        bucket = "pre_existing" if "pre" in raw_bucket else "introduced"
+        per_finding[bucket] += 1
+        saw_any = True
+
+    # Also catch the inline `[..., introduced=false]` / `introduced=true` markers
+    # that appear in the pre-existing-issues report format.
+    for frag_match in re.finditer(
+        r"introduced\s*=\s*(true|false)",
+        output,
+        re.IGNORECASE,
+    ):
+        bucket = "introduced" if frag_match.group(1).lower() == "true" else "pre_existing"
+        per_finding[bucket] += 1
+        saw_any = True
+
+    return per_finding if saw_any else None
+
+
 def is_sandbox_failure(exit_code: int, stdout: str, stderr: str) -> bool:
     """Detect if codex failure is due to sandbox restrictions.
 
@@ -2274,6 +2343,43 @@ Each surviving finding carries a `Confidence: <N>` field alongside severity, fil
 """
 
 
+# --- Introduced-vs-pre_existing classification (fn-29.4) ---
+#
+# Shared classification rubric injected alongside CONFIDENCE_RUBRIC_BLOCK. Only
+# `introduced` findings gate the verdict; `pre_existing` surface in a separate
+# non-blocking section. Keep synchronized with the RP workflow.md files.
+
+CLASSIFICATION_RUBRIC_BLOCK = """## Introduced vs pre-existing classification
+
+For each finding, classify whether this branch's diff caused it:
+
+- **introduced** — this branch caused the issue (new code, or a pre-existing bug that this diff amplified/exposed in a way that now matters)
+- **pre_existing** — the issue was already present on the base branch; this diff did not touch it
+
+Evidence methods (use whatever is cheapest for this diff):
+- `git blame <file> <line>` to see when the line was last touched
+- Read the base-branch version of the file directly
+- Infer from diff context: a finding on an unchanged line in an unchanged file is `pre_existing` by default
+
+**Verdict gate:** only `introduced` findings affect the verdict. A review whose only surviving findings are all `pre_existing` ships.
+
+Report pre-existing findings in a dedicated non-blocking section:
+
+```
+## Pre-existing issues (not blocking this verdict)
+
+- [P1, confidence 75, introduced=false] src/legacy.ts:102 — null dereference on empty array
+- ...
+```
+
+Never delete pre-existing findings from the report — they stay visible for future prioritization. After the lists, emit a `Classification counts:` line tallying both buckets, e.g.:
+
+> Classification counts: 2 introduced, 4 pre_existing.
+
+Each surviving finding carries a `Classification: introduced | pre_existing` field alongside severity, confidence, file, and line.
+"""
+
+
 def build_review_prompt(
     review_type: str,
     spec_content: str,
@@ -2389,23 +2495,32 @@ You MAY mention these as "FYI" observations without affecting the verdict.
 
 """
             + CONFIDENCE_RUBRIC_BLOCK
+            + "\n"
+            + CLASSIFICATION_RUBRIC_BLOCK
             + """
 ## Output Format
 
-For each surviving finding:
+For each surviving `introduced` finding:
 - **Severity**: Critical / Major / Minor / Nitpick (P0 / P1 / P2 / P3 accepted)
 - **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
+- **Classification**: introduced
 - **File:Line**: Exact location
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
-After the findings list, emit a `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
+Then, under a separate `## Pre-existing issues (not blocking this verdict)` heading, list each `pre_existing` finding using the compact form `[severity, confidence N, introduced=false] file:line — summary`. Never silently drop pre-existing findings.
+
+After the findings list, emit:
+- A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
+- A `Classification counts:` line tallying `introduced` vs `pre_existing` survivors, e.g. `Classification counts: 2 introduced, 4 pre_existing.`.
 
 Be critical. Find real issues.
 
+**Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship.
+
 **REQUIRED**: End your response with exactly one verdict tag:
-<verdict>SHIP</verdict> - Ready to merge
-<verdict>NEEDS_WORK</verdict> - Has issues that must be fixed
+<verdict>SHIP</verdict> - Ready to merge (no blocking `introduced` findings)
+<verdict>NEEDS_WORK</verdict> - `introduced` issues must be fixed
 <verdict>MAJOR_RETHINK</verdict> - Fundamental approach problems
 
 Do NOT skip this tag. The automation depends on it."""
@@ -6878,22 +6993,30 @@ Do NOT mark NEEDS_WORK for:
 You MAY mention these as "FYI" observations without affecting the verdict.
 
 {CONFIDENCE_RUBRIC_BLOCK}
+{CLASSIFICATION_RUBRIC_BLOCK}
 ## Output Format
 
-For each surviving finding:
+For each surviving `introduced` finding:
 - **Severity**: Critical / Major / Minor / Nitpick (P0 / P1 / P2 / P3 accepted)
 - **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
+- **Classification**: introduced
 - **File:Line**: Exact location
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
-After the findings list, emit a `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
+Then, under a separate `## Pre-existing issues (not blocking this verdict)` heading, list each `pre_existing` finding as `[severity, confidence N, introduced=false] file:line — summary`. Never silently drop pre-existing findings.
+
+After the findings list, emit:
+- A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
+- A `Classification counts:` line tallying `introduced` vs `pre_existing` survivors, e.g. `Classification counts: 2 introduced, 4 pre_existing.`.
 
 Be critical. Find real issues.
 
+**Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship.
+
 **REQUIRED**: End your response with exactly one verdict tag:
-- `<verdict>SHIP</verdict>` - Ready to merge
-- `<verdict>NEEDS_WORK</verdict>` - Issues must be fixed first
+- `<verdict>SHIP</verdict>` - Ready to merge (no blocking `introduced` findings)
+- `<verdict>NEEDS_WORK</verdict>` - `introduced` issues must be fixed first
 - `<verdict>MAJOR_RETHINK</verdict>` - Fundamental problems, reconsider approach
 """
 
@@ -7084,8 +7207,9 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     # Determine review id (task_id for task reviews, "branch" for standalone)
     review_id = task_id if task_id else "branch"
 
-    # Parse optional review-rigor signals from output (fn-29.3)
+    # Parse optional review-rigor signals from output (fn-29.3, fn-29.4)
     suppressed_count = parse_suppressed_count(output)
+    classification_counts = parse_classification_counts(output)
 
     # Write receipt if path provided (Ralph-compatible schema)
     if receipt_path:
@@ -7113,6 +7237,9 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
             receipt_data["focus"] = focus
         if suppressed_count:
             receipt_data["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            receipt_data["introduced_count"] = classification_counts["introduced"]
+            receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
@@ -7133,6 +7260,9 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
         }
         if suppressed_count:
             json_payload["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            json_payload["introduced_count"] = classification_counts["introduced"]
+            json_payload["pre_existing_count"] = classification_counts["pre_existing"]
         json_output(
             json_payload
         )
@@ -7473,6 +7603,8 @@ For EACH requirement from Phase 1:
 
 """
         + CONFIDENCE_RUBRIC_BLOCK
+        + "\n"
+        + CLASSIFICATION_RUBRIC_BLOCK
         + """
 ## Output Format
 
@@ -7491,10 +7623,14 @@ For EACH requirement from Phase 1:
 
 ## Gaps Found
 
-[For each GAP, describe what's missing and suggest fix. Include `Confidence: <0|25|50|75|100>`.]
+[For each GAP, describe what's missing and suggest fix. Include `Confidence: <0|25|50|75|100>` and `Classification: introduced | pre_existing` — `pre_existing` means the gap existed before this epic's branch touched the code and is therefore not blocking.]
 ```
 
-After the findings list, emit a `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
+Pre-existing gaps (code smells or missing features that predate this epic's branch) go under a separate `## Pre-existing issues (not blocking this verdict)` heading and do not gate the verdict.
+
+After the findings list, emit:
+- A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
+- A `Classification counts:` line tallying `introduced` vs `pre_existing` gaps, e.g. `Classification counts: 1 introduced, 0 pre_existing.`.
 
 ## Verdict
 
@@ -7706,8 +7842,9 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
     # Preserve session_id for continuity (avoid clobbering on resumed sessions)
     session_id_to_write = thread_id or session_id
 
-    # Parse optional review-rigor signals from output (fn-29.3)
+    # Parse optional review-rigor signals from output (fn-29.3, fn-29.4)
     suppressed_count = parse_suppressed_count(output)
+    classification_counts = parse_classification_counts(output)
 
     # Write receipt if path provided (Ralph-compatible schema)
     if receipt_path:
@@ -7733,6 +7870,9 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
                 pass
         if suppressed_count:
             receipt_data["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            receipt_data["introduced_count"] = classification_counts["introduced"]
+            receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
@@ -7753,6 +7893,9 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
         }
         if suppressed_count:
             json_payload["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            json_payload["introduced_count"] = classification_counts["introduced"]
+            json_payload["pre_existing_count"] = classification_counts["pre_existing"]
         json_output(json_payload)
     else:
         print(output)
@@ -7951,8 +8094,9 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
 
     review_id = task_id if task_id else "branch"
 
-    # Parse optional review-rigor signals from output (fn-29.3)
+    # Parse optional review-rigor signals from output (fn-29.3, fn-29.4)
     suppressed_count = parse_suppressed_count(output)
+    classification_counts = parse_classification_counts(output)
 
     if receipt_path:
         receipt_data = {
@@ -7978,6 +8122,9 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
             receipt_data["focus"] = focus
         if suppressed_count:
             receipt_data["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            receipt_data["introduced_count"] = classification_counts["introduced"]
+            receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
@@ -7997,6 +8144,9 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
         }
         if suppressed_count:
             json_payload["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            json_payload["introduced_count"] = classification_counts["introduced"]
+            json_payload["pre_existing_count"] = classification_counts["pre_existing"]
         json_output(json_payload)
     else:
         print(output)
@@ -8328,8 +8478,9 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
     # Preserve session_id for continuity (avoid clobbering on resumed sessions)
     session_id_to_write = returned_session_id or session_id
 
-    # Parse optional review-rigor signals from output (fn-29.3)
+    # Parse optional review-rigor signals from output (fn-29.3, fn-29.4)
     suppressed_count = parse_suppressed_count(output)
+    classification_counts = parse_classification_counts(output)
 
     if receipt_path:
         receipt_data = {
@@ -8353,6 +8504,9 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
                 pass
         if suppressed_count:
             receipt_data["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            receipt_data["introduced_count"] = classification_counts["introduced"]
+            receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
         Path(receipt_path).write_text(
             json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
         )
@@ -8372,6 +8526,9 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
         }
         if suppressed_count:
             json_payload["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            json_payload["introduced_count"] = classification_counts["introduced"]
+            json_payload["pre_existing_count"] = classification_counts["pre_existing"]
         json_output(json_payload)
     else:
         print(output)
