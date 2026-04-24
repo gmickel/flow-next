@@ -10704,12 +10704,38 @@ def _apply_deep_passes_to_receipt(
     except (json.JSONDecodeError, OSError):
         receipt = {}
 
-    receipt["deep_passes"] = list(passes_run)
-    receipt["deep_findings_count"] = {
-        p: merge_result["counts"].get(p, 0) for p in passes_run
-    }
-    if merge_result["promotions"]:
-        receipt["cross_pass_promotions"] = merge_result["promotions"]
+    # Accumulate across sequential deep-pass calls. The workflow runs one
+    # pass per `flowctl <backend> deep-pass` invocation (adversarial →
+    # security → performance), so rewriting these fields on each call would
+    # erase prior pass data. Merge instead: union pass names (order-preserving),
+    # merge counts per pass, and append new promotions while deduping by id.
+    prior_passes = receipt.get("deep_passes") or []
+    prior_counts = receipt.get("deep_findings_count") or {}
+    prior_promotions = receipt.get("cross_pass_promotions") or []
+
+    merged_passes: list[str] = list(prior_passes)
+    for p in passes_run:
+        if p not in merged_passes:
+            merged_passes.append(p)
+
+    merged_counts = dict(prior_counts)
+    for p in passes_run:
+        merged_counts[p] = merge_result["counts"].get(p, 0)
+
+    merged_promotions: list[dict[str, Any]] = list(prior_promotions)
+    seen_promotion_ids = {p.get("id") for p in merged_promotions if p.get("id")}
+    for promotion in merge_result["promotions"]:
+        pid = promotion.get("id")
+        if pid and pid in seen_promotion_ids:
+            continue
+        merged_promotions.append(promotion)
+        if pid:
+            seen_promotion_ids.add(pid)
+
+    receipt["deep_passes"] = merged_passes
+    receipt["deep_findings_count"] = merged_counts
+    if merged_promotions:
+        receipt["cross_pass_promotions"] = merged_promotions
 
     # Verdict upgrade: new blocking introduced findings from deep-pass flip
     # SHIP → NEEDS_WORK. Never downgrade NEEDS_WORK → SHIP.
@@ -10942,16 +10968,22 @@ def cmd_copilot_deep_pass(args: argparse.Namespace) -> None:
 # --- Auto-enable heuristics for --deep (exposed for skill layer) ---
 
 SECURITY_PATTERNS = [
-    r"(^|/)auth[^/]*$",
-    r"(^|/)Auth[^/]*$",
-    r"(^|/)permissions?[^/]*$",
-    r"(^|/)Permissions?[^/]*$",
+    # Match auth/permissions/middleware/session as a directory segment OR as
+    # the start of a leaf filename. The prior `$`-anchored form only matched
+    # paths whose final segment started with the keyword (e.g. `auth.py`),
+    # missing `src/auth/service.py`. Using a non-letter follow-set (`/`, `.`,
+    # `_`, `-`, end-of-string) matches both the directory and filename cases
+    # while rejecting compound words like `author.py`.
+    r"(^|/)auth([^a-zA-Z]|$)",
+    r"(^|/)Auth([^a-zA-Z]|$)",
+    r"(^|/)permissions?([^a-zA-Z]|$)",
+    r"(^|/)Permissions?([^a-zA-Z]|$)",
     r"(^|/)routes?/",
     r"(^|/)routers?/",
     r"Controller\.(rb|py|ts|js|tsx|jsx|go|java|cs)$",
-    r"(^|/)middlewares?[^/]*",
-    r"(^|/)sessions?[^/]*",
-    r"(^|/)Sessions?[^/]*",
+    r"(^|/)middlewares?([^a-zA-Z]|$)",
+    r"(^|/)sessions?([^a-zA-Z]|$)",
+    r"(^|/)Sessions?([^a-zA-Z]|$)",
     r"[Tt]oken",
     r"(^|/)api/",
     r"\.env",
