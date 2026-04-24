@@ -91,11 +91,12 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 ## Input
 
 Arguments: $ARGUMENTS
-Format: `[task ID] [--base <commit>] [--validate] [--deep[=passes]] [focus areas]`
+Format: `[task ID] [--base <commit>] [--validate] [--deep[=passes]] [--interactive] [focus areas]`
 
 - `--base <commit>` - Compare against this commit instead of main/master (for task-scoped reviews)
 - `--validate` - After NEEDS_WORK verdict, run a validator pass that drops false-positive findings (fn-32.1, opt-in)
 - `--deep` / `--deep=<passes>` - Run additional specialized passes (adversarial / security / performance) after primary review (fn-32.2, opt-in)
+- `--interactive` - On NEEDS_WORK, walk through each finding with the user (Apply/Defer/Skip/Acknowledge) (fn-32.3, opt-in, Ralph-incompatible)
 - Task ID - Optional, for context and receipt tracking
 - Focus areas - Optional, specific areas to examine
 
@@ -110,6 +111,9 @@ Format: `[task ID] [--base <commit>] [--validate] [--deep[=passes]] [focus areas
 - `--deep` — adds adversarial pass always + security/performance auto-enabled
   per diff paths. `--deep=adversarial,security` restricts to listed passes.
 - `FLOW_REVIEW_DEEP=1` env var — enables `--deep` session-wide (works in Ralph).
+- `--interactive` — per-finding walkthrough on NEEDS_WORK. **No env var form** —
+  per-invocation only, always hard-errors in Ralph mode (`REVIEW_RECEIPT_PATH` or
+  `FLOW_RALPH=1`) to prevent accidental autonomous engagement.
 - Default review behavior (no flags) is unchanged.
 
 ## Workflow
@@ -128,6 +132,7 @@ Parse $ARGUMENTS for:
 - `--no-triage` → set `TRIAGE_DISABLED=1` (skip trivial-diff pre-check)
 - `--validate` → set `VALIDATE=true` (fn-32.1 validator pass on NEEDS_WORK)
 - `--deep` / `--deep=<passes>` → set `DEEP=true` + optional `DEEP_PASSES` CSV (fn-32.2)
+- `--interactive` → set `INTERACTIVE=true` (fn-32.3 per-finding walkthrough on NEEDS_WORK; Ralph-blocked)
 - First positional arg matching `fn-*` → `TASK_ID`
 - Remaining args → focus areas
 
@@ -197,6 +202,33 @@ echo "Deep passes selected: $SELECTED_PASSES"
 
 See [deep-passes.md](deep-passes.md) for the pass prompt templates, the
 auto-enable globs, and merge/promotion rules.
+
+**Interactive flag + Ralph-block (fn-32.3):**
+
+```bash
+INTERACTIVE=false
+for arg in $ARGUMENTS; do
+  case "$arg" in
+    --interactive) INTERACTIVE=true ;;
+  esac
+done
+
+# No env var form — per-invocation only. Ralph must never engage interactive.
+if [[ "$INTERACTIVE" == "true" ]]; then
+  if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
+    echo "Error: --interactive requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
+    exit 2
+  fi
+fi
+```
+
+`INTERACTIVE` gates the walkthrough phase in [walkthrough.md](walkthrough.md).
+When false (default), behavior is unchanged. When true + verdict is
+NEEDS_WORK, the skill walks each finding with the user via the platform's
+blocking question tool (Apply / Defer / Skip / Acknowledge / LFG-rest).
+
+See [walkthrough.md](walkthrough.md) for the full per-finding flow and
+deferred-findings sink contract.
 
 ### Step 0.5: Trivial-diff triage (fn-29.6)
 
@@ -305,13 +337,19 @@ If verdict is NEEDS_WORK, loop internally until SHIP:
    - Extract findings JSON-lines, dispatch `$FLOWCTL <backend> validate --findings-file ... --receipt ...`
    - If all findings drop → verdict upgrades to SHIP automatically (exit fix loop)
    - Else → only surviving (kept) findings enter the fix loop in step 2
-2. **Parse issues** from reviewer feedback (Critical → Major → Minor)
-3. **Fix code** and run tests/lints
-4. **Commit fixes** (mandatory before re-review)
-5. **Re-review**:
+2. **Interactive walkthrough (only if `INTERACTIVE=true` AND verdict still NEEDS_WORK)** — see [walkthrough.md](walkthrough.md).
+   - For each surviving finding, ask user via platform blocking question tool: Apply / Defer / Skip / Acknowledge / LFG-rest.
+   - Deferred findings appended to `.flow/review-deferred/<branch-slug>.md`.
+   - Skip / Acknowledge are no-ops beyond receipt logging.
+   - Apply list restricts the fix loop below to just those findings.
+   - Receipt gains `walkthrough: {applied, deferred, skipped, acknowledged}`.
+3. **Parse issues** from reviewer feedback (Critical → Major → Minor)
+4. **Fix code** and run tests/lints
+5. **Commit fixes** (mandatory before re-review)
+6. **Re-review**:
    - **Codex**: Re-run `flowctl codex impl-review` (receipt enables context)
    - **Copilot**: Re-run `flowctl copilot impl-review` (receipt enables context; must be `mode == "copilot"` to resume)
    - **RP**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md` (NO `--new-chat`)
-6. **Repeat** until `<verdict>SHIP</verdict>`
+7. **Repeat** until `<verdict>SHIP</verdict>`
 
 **CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.

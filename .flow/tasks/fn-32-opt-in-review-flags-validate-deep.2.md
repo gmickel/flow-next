@@ -215,7 +215,8 @@ Print auto-enable decisions in the skill output:
 - Depends on fn-32-opt-in-review-flags.1 (flag parsing infrastructure; tasks can land in either order but share workflow.md edits)
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Implemented fn-32.2 --deep flag: three specialized passes (adversarial always, security/performance auto-enabled by diff globs or explicit --deep=csv) layered on top of the primary Carmack review. Each pass continues the primary backend session via receipt session_id; findings merge into the receipt via fingerprint dedup with primary+deep agreement promoting confidence one anchor step (50→75, 75→100, ceiling 100). Cross-deep collisions dedup but don't promote (avoids double-counting correlated passes). SHIP→NEEDS_WORK upgrade fires when deep surfaces new blocking findings; verdict never downgrades. Added codex/copilot deep-pass subcommands, review-deep-auto heuristic helper, deep-passes.md prompt templates + auto-enable glob list, SKILL.md flag parsing + FLOW_REVIEW_DEEP env, workflow.md Deep-Pass Phase section, 9 new smoke tests (113 total pass). Receipt extensions (deep_passes, deep_findings_count, cross_pass_promotions, verdict_before_deep, deep_timestamp) are additive — existing Ralph scripts unaffected.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 017d32f10fccc2c3c73dfc7243e62b4d1bb4e2f5
+- Tests: bash plugins/flow-next/scripts/smoke_test.sh (113 passed, 0 failed); python3 unit tests for fingerprint, promote_confidence, merge_deep_findings, auto_enabled_passes, parse_deep_findings, load_deep_pass_template, _apply_deep_passes_to_receipt (10 assertions all OK)
+- PRs:

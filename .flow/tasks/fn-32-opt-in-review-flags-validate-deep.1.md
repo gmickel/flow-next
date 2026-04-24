@@ -138,7 +138,8 @@ Update receipt `verdict` field if upgraded.
 - Depends on Epic fn-29 (confidence anchors + pre-existing classification shape findings for validator to work against)
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Implemented fn-32.1 --validate flag and flowctl codex/copilot validate subcommands. Validator pass resumes the prior review session, re-checks each finding against current code with conservative bias ("keep if uncertain"), drops clear false positives, and auto-upgrades verdict to SHIP when all findings drop (never downgrades). Added SKILL.md flag parsing + FLOW_VALIDATE_REVIEW env var, workflow.md Validator Pass section, validate-pass.md prompt template, and 5 smoke-test cases (104 total pass). Receipt extensions (validator, verdict_before_validate, validator_timestamp) are additive — existing Ralph scripts unaffected. Default behavior unchanged when flag off.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: 987c1c295ebda5e04182d7c5f2491152b8cd6a7f
+- Tests: bash plugins/flow-next/scripts/smoke_test.sh (104 passed, 0 failed), python3 /tmp/test_validator.py (10 unit tests for parse_validator_output, conservative-default, render_findings_block, receipt-merge upgrade/no-upgrade/no-downgrade, load_findings, load_validator_template, unknown-id, empty-findings — all OK)
+- PRs:

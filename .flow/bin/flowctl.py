@@ -11011,6 +11011,238 @@ def cmd_deep_auto_enable(args: argparse.Namespace) -> None:
         print(" ".join(selected))
 
 
+# --- Interactive walkthrough (fn-32.3 --interactive) ---
+#
+# The walkthrough loop itself runs in the skill (it needs the platform's
+# blocking question tool — AskUserQuestion / request_user_input / ask_user).
+# flowctl provides two helpers the skill calls after the loop:
+#
+#   1. ``review-walkthrough-defer``: append deferred findings to the
+#      branch-specific sink ``.flow/review-deferred/<branch-slug>.md``.
+#      Append-only — existing sessions stay intact.
+#
+#   2. ``review-walkthrough-record``: stamp the receipt with the bucket
+#      counts {applied, deferred, skipped, acknowledged}.
+#
+# Both are deliberately simple: no backend dispatch, no session_id
+# requirement (unlike validate / deep-pass, which call the LLM). Walkthrough
+# never changes the verdict — it only sorts findings.
+
+DEFER_SINK_DIR_REL = ".flow/review-deferred"
+
+
+def _branch_slug(branch: Optional[str] = None) -> str:
+    """Derive a filesystem-safe slug from the current (or supplied) branch.
+
+    Same rule the skill uses in bash:
+      tr '/' '-' | tr -cd 'a-zA-Z0-9-_.'
+    Empty / detached-HEAD falls back to ``HEAD``.
+    """
+    name = branch
+    if not name:
+        try:
+            result = subprocess.run(
+                ["git", "branch", "--show-current"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            name = (result.stdout or "").strip()
+        except (OSError, subprocess.SubprocessError):
+            name = ""
+    if not name:
+        name = "HEAD"
+    # Normalize slashes, then keep only safe characters.
+    dashed = name.replace("/", "-")
+    slug = "".join(ch for ch in dashed if ch.isalnum() or ch in "-_.")
+    return slug or "HEAD"
+
+
+def _format_deferred_finding(finding: dict) -> str:
+    """Render one deferred finding as markdown bullets for the sink."""
+    severity = finding.get("severity", "?")
+    confidence = finding.get("confidence", "?")
+    classification = finding.get("classification", "?")
+    file_ = finding.get("file", "?")
+    line = finding.get("line", "?")
+    title = finding.get("title", "(no title)")
+    suggested = finding.get("suggested_fix") or finding.get("suggestion") or ""
+    reason = finding.get("deferred_reason") or "deferred by user"
+
+    head = (
+        f"- [{severity}, confidence {confidence}, {classification}] "
+        f"{file_}:{line} — {title}"
+    )
+    lines = [head]
+    if suggested:
+        lines.append(f"  - Suggested: {suggested}")
+    lines.append(f"  - Deferred reason: {reason}")
+    return "\n".join(lines)
+
+
+def append_deferred_findings(
+    findings: list[dict],
+    branch_slug: str,
+    session_header: str,
+    sink_root: Optional[Path] = None,
+) -> Path:
+    """Append deferred findings to ``.flow/review-deferred/<slug>.md``.
+
+    Returns the absolute path of the sink file. Creates the directory if
+    absent; preserves any existing content (append-only). Empty ``findings``
+    is a no-op that still creates the directory but doesn't touch the file.
+    """
+    root = sink_root if sink_root is not None else get_repo_root()
+    sink_dir = root / DEFER_SINK_DIR_REL
+    sink_dir.mkdir(parents=True, exist_ok=True)
+    sink_file = sink_dir / f"{branch_slug}.md"
+
+    if not findings:
+        # No findings to append — return the path so caller can still echo it.
+        # We don't create an empty file; the directory exists either way.
+        return sink_file
+
+    # Header — only add the top-level `#` once (first write to this file).
+    header_lines: list[str] = []
+    if not sink_file.exists():
+        header_lines.append(f"# Deferred review findings — {branch_slug}\n")
+
+    # Session section — always a new `##` with timestamp + receipt id/session.
+    section = [f"\n## {session_header}\n"]
+    for f in findings:
+        section.append(_format_deferred_finding(f))
+        section.append("")  # blank line between findings
+
+    body = "\n".join(header_lines) + "\n".join(section).rstrip() + "\n"
+
+    # Append-only. Use 'a' so we never clobber user-added prose between runs.
+    with sink_file.open("a", encoding="utf-8") as fh:
+        fh.write(body)
+
+    return sink_file
+
+
+def cmd_review_walkthrough_defer(args: argparse.Namespace) -> None:
+    """Append deferred findings to the branch-specific sink file.
+
+    Consumes a JSON-Lines findings file (same shape as validator /
+    deep-pass: id, severity, confidence, classification, file, line,
+    title, suggested_fix). Optional per-finding ``deferred_reason`` field
+    overrides the default "deferred by user" line.
+
+    Derives branch slug via ``git branch --show-current`` (or ``--branch``
+    override). Creates ``.flow/review-deferred/`` if absent. Append-only —
+    never rewrites existing content.
+
+    Receipt path is read (if provided) to stamp the session header with
+    ``id`` / ``session_id`` for cross-referencing, but no receipt writes
+    happen here (use ``review-walkthrough-record`` for that).
+    """
+    findings_path = getattr(args, "findings_file", None)
+    findings = load_findings(findings_path)
+
+    # Read receipt (optional) for session header context.
+    receipt_id = ""
+    session_id = ""
+    if args.receipt:
+        receipt_file = Path(args.receipt)
+        if receipt_file.exists():
+            try:
+                receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
+                receipt_id = receipt_data.get("id") or ""
+                session_id = receipt_data.get("session_id") or ""
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    # Compose session header: "<YYYY-MM-DD HH:MM> — review session <id> (<sess>)"
+    ts_pretty = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    parts = [ts_pretty, "—", "review session"]
+    if receipt_id:
+        parts.append(receipt_id)
+    if session_id:
+        parts.append(f"({session_id})")
+    session_header = " ".join(parts)
+
+    branch_slug = _branch_slug(getattr(args, "branch", None))
+    sink_path = append_deferred_findings(findings, branch_slug, session_header)
+
+    result = {
+        "type": "review_walkthrough_defer",
+        "branch_slug": branch_slug,
+        "sink_path": str(sink_path),
+        "appended": len(findings),
+        "session_header": session_header,
+        "timestamp": now_iso(),
+    }
+    if args.json:
+        json_output(result)
+    else:
+        if findings:
+            print(f"Appended {len(findings)} deferred finding(s) to {sink_path}")
+        else:
+            print(f"No findings to defer; sink path: {sink_path}")
+
+
+def cmd_review_walkthrough_record(args: argparse.Namespace) -> None:
+    """Stamp the receipt with walkthrough bucket counts.
+
+    Additive — writes a ``walkthrough`` object and
+    ``walkthrough_timestamp`` alongside existing receipt fields. Never
+    changes the verdict; walkthrough is a sorting / routing step, not a
+    verdict-forming one.
+
+    Creates an empty receipt if the target path doesn't exist, so the
+    caller always has a complete record (useful in tests / dry-runs).
+    """
+    path = Path(args.receipt)
+    try:
+        receipt = (
+            json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        )
+    except (json.JSONDecodeError, OSError):
+        receipt = {}
+
+    applied = max(0, int(args.applied or 0))
+    deferred = max(0, int(args.deferred or 0))
+    skipped = max(0, int(args.skipped or 0))
+    acknowledged = max(0, int(args.acknowledged or 0))
+
+    lfg_raw = getattr(args, "lfg_rest", None)
+    if isinstance(lfg_raw, str):
+        lfg_used = lfg_raw.lower() in ("true", "1", "yes", "y")
+    else:
+        lfg_used = bool(lfg_raw) if lfg_raw is not None else False
+
+    walkthrough = {
+        "applied": applied,
+        "deferred": deferred,
+        "skipped": skipped,
+        "acknowledged": acknowledged,
+        "lfg_rest": lfg_used,
+    }
+    receipt["walkthrough"] = walkthrough
+    receipt["walkthrough_timestamp"] = now_iso()
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+
+    result = {
+        "type": "review_walkthrough_record",
+        "receipt": str(path),
+        "walkthrough": walkthrough,
+        "verdict": receipt.get("verdict"),  # unchanged; echo for sanity
+    }
+    if args.json:
+        json_output(result)
+    else:
+        total = applied + deferred + skipped + acknowledged
+        print(
+            f"Walkthrough recorded: applied={applied} deferred={deferred} "
+            f"skipped={skipped} acknowledged={acknowledged} "
+            f"(lfg_rest={lfg_used}, total={total})"
+        )
+
+
 def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     """Run implementation review via codex exec."""
     task_id = args.task
@@ -14628,6 +14860,98 @@ def main() -> None:
     )
     p_review.add_argument("--json", action="store_true", help="JSON output")
     p_review.set_defaults(func=cmd_deep_auto_enable)
+
+    # --- Interactive walkthrough helpers (fn-32.3 --interactive) ---
+    # Walkthrough loop itself lives in the skill (needs the platform's
+    # blocking question tool). These two helpers handle the post-loop
+    # bookkeeping: defer sink append + receipt record.
+    p_walk_defer = subparsers.add_parser(
+        "review-walkthrough-defer",
+        help=(
+            "Append deferred findings to .flow/review-deferred/<branch>.md "
+            "(fn-32.3). Append-only; creates the directory if absent."
+        ),
+    )
+    p_walk_defer.add_argument(
+        "--findings-file",
+        dest="findings_file",
+        required=True,
+        help=(
+            "JSON-Lines path (one finding per line). Same shape as validator "
+            "pass: id, severity, confidence, classification, file, line, "
+            "title, suggested_fix. Optional per-finding 'deferred_reason' "
+            "overrides the default 'deferred by user' label."
+        ),
+    )
+    p_walk_defer.add_argument(
+        "--receipt",
+        help=(
+            "Optional receipt path — reads 'id' and 'session_id' to stamp "
+            "the session header. Never writes to the receipt (use "
+            "review-walkthrough-record for receipt writes)."
+        ),
+    )
+    p_walk_defer.add_argument(
+        "--branch",
+        help=(
+            "Override branch name for slug derivation (default: git branch "
+            "--show-current, falls back to 'HEAD' on detached)."
+        ),
+    )
+    p_walk_defer.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_walk_defer.set_defaults(func=cmd_review_walkthrough_defer)
+
+    p_walk_record = subparsers.add_parser(
+        "review-walkthrough-record",
+        help=(
+            "Stamp the receipt with walkthrough bucket counts (fn-32.3). "
+            "Additive — never changes verdict."
+        ),
+    )
+    p_walk_record.add_argument(
+        "--receipt",
+        required=True,
+        help="Path to the review receipt (will be created if missing).",
+    )
+    p_walk_record.add_argument(
+        "--applied",
+        type=int,
+        default=0,
+        help="Count of findings the user chose to Apply (fixer will run).",
+    )
+    p_walk_record.add_argument(
+        "--deferred",
+        type=int,
+        default=0,
+        help="Count of findings the user chose to Defer (in sink file).",
+    )
+    p_walk_record.add_argument(
+        "--skipped",
+        type=int,
+        default=0,
+        help="Count of findings the user chose to Skip (no action).",
+    )
+    p_walk_record.add_argument(
+        "--acknowledged",
+        type=int,
+        default=0,
+        help="Count of findings the user chose to Acknowledge (noted only).",
+    )
+    p_walk_record.add_argument(
+        "--lfg-rest",
+        dest="lfg_rest",
+        default="false",
+        help=(
+            "Whether the user chose 'LFG the rest' to auto-classify "
+            "remaining findings (true|false; default false)."
+        ),
+    )
+    p_walk_record.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_walk_record.set_defaults(func=cmd_review_walkthrough_record)
 
     args = parser.parse_args()
     args.func(args)

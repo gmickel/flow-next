@@ -44,10 +44,13 @@ Receipt fields accumulate: each phase writes its own block without disturbing ot
 
 ## Receipt schema stability test
 
+<!-- Updated by plan-sync: fn-32.1 added `kept`, `verdict_before_validate`, and `validator_timestamp` fields alongside the validator block. Upgrade path only runs NEEDS_WORK → SHIP; never downgrades. -->
+<!-- Updated by plan-sync: fn-32.2 added `cross_pass_promotions`, `verdict_before_deep`, and `deep_timestamp` alongside `deep_passes`/`deep_findings_count`. Deep-pass verdict path is SHIP → NEEDS_WORK only (upgrade in stringency); never downgrades. -->
+
 Add a schema check (or unit test) that verifies:
 
 1. Default review (no flags) produces receipt with only base fields (no validator, deep_passes, walkthrough).
-2. Each flag adds exactly its own field without mutating others.
+2. Each flag adds exactly its own field without mutating others. The `--validate` path also writes `validator_timestamp` (always) and `verdict_before_validate` (only when the verdict was upgraded from NEEDS_WORK → SHIP). The `--deep` path also writes `deep_timestamp` (always), `deep_findings_count` (per-pass dict), `cross_pass_promotions` (list of `{id, from, to, pass}`), and `verdict_before_deep` (only when the verdict was upgraded from SHIP → NEEDS_WORK by deep-pass findings).
 3. All combinations produce receipts that pass existing Ralph gate logic (which reads `verdict`, `mode`, `session_id`).
 
 Test pattern:
@@ -63,12 +66,40 @@ def test_receipt_default():
 def test_receipt_with_validate():
     receipt = run_review_with_flags(["--validate"])
     assert "validator" in receipt
+    # validator block carries dispatched/dropped/kept/reasons (kept added in fn-32.1)
+    assert set(receipt["validator"].keys()) >= {"dispatched", "dropped", "kept", "reasons"}
+    assert "validator_timestamp" in receipt
     assert "deep_passes" not in receipt
+
+def test_receipt_with_validate_all_dropped_upgrade():
+    # When all findings drop and prior verdict was NEEDS_WORK, verdict upgrades to SHIP
+    # and `verdict_before_validate` is recorded.
+    receipt = run_review_with_flags(["--validate"], force_all_dropped=True)
+    assert receipt["verdict"] == "SHIP"
+    assert receipt["verdict_before_validate"] == "NEEDS_WORK"
+
+def test_receipt_with_deep():
+    receipt = run_review_with_flags(["--deep"])
+    assert "deep_passes" in receipt
+    assert "deep_findings_count" in receipt
+    assert "cross_pass_promotions" in receipt  # list (may be empty)
+    assert "deep_timestamp" in receipt
+    assert "validator" not in receipt
+
+def test_receipt_with_deep_ship_to_needs_work_upgrade():
+    # When primary verdict is SHIP but deep-pass surfaces a new blocking
+    # `introduced` finding, verdict upgrades SHIP → NEEDS_WORK and
+    # `verdict_before_deep` is recorded. Deep never downgrades the verdict.
+    receipt = run_review_with_flags(["--deep"], force_deep_blocking=True)
+    assert receipt["verdict"] == "NEEDS_WORK"
+    assert receipt["verdict_before_deep"] == "SHIP"
 
 def test_receipt_all_flags():
     receipt = run_review_with_flags(["--validate", "--deep"])  # --interactive not auto-testable
     assert "validator" in receipt
     assert "deep_passes" in receipt
+    assert "deep_findings_count" in receipt
+    assert "cross_pass_promotions" in receipt
     assert "verdict" in receipt
 ```
 
@@ -87,10 +118,15 @@ Verify:
 
 ## Edge cases
 
-- **--validate with no primary findings**: skip validator (nothing to validate); receipt omits `validator` field
-- **--deep with no applicable passes (no auto-match + no explicit list)**: runs adversarial only
+- **--validate with no primary findings**: validator still writes a validator block with `dispatched=0, dropped=0, kept=0, reasons=[]` plus `validator_timestamp`; verdict unchanged. (Implementation writes the empty block rather than omitting the field — keeps receipt shape deterministic for consumers.)
+- **--validate with no session_id in receipt**: validator errors with exit 2 (cannot resume session).
+- **--validate across backends (e.g. codex primary, copilot validator)**: validator errors with exit 2 (session continuity guard — receipt `mode` must match validator backend).
+- **--validate with unknown finding ids in validator output**: treated as `kept` (conservative default).
+- **--deep with no applicable passes (no auto-match + no explicit list)**: runs adversarial only (adversarial is always selected when `--deep` is set; skill uses `flowctl review-deep-auto` against the changed-file list to add security/performance when they match globs).
+- **--deep with primary SHIP + new blocking deep finding**: verdict upgrades SHIP → NEEDS_WORK; `verdict_before_deep == "SHIP"` recorded. Deep never downgrades (no NEEDS_WORK → SHIP path).
+- **--deep with primary finding and deep finding sharing a fingerprint**: primary wins (deep drops) and primary's confidence is promoted one anchor step (0→25→50→75→100; ceiling 100). Promotion is recorded in `cross_pass_promotions` as `{id, from, to, pass}`. Cross-deep collisions dedup without promotion (avoids double-counting correlated passes).
 - **--interactive with only pre-existing findings**: walk through still happens but Apply list is likely empty (pre-existing usually Skipped)
-- **--validate drops all findings**: verdict upgrades to SHIP; `validator.dropped == dispatched`
+- **--validate drops all findings**: verdict upgrades to SHIP only when prior verdict was `NEEDS_WORK` (never downgrades from SHIP or MAJOR_RETHINK); `validator.kept == 0`, `validator.dropped == dispatched`, `verdict_before_validate == "NEEDS_WORK"` recorded.
 - **Combination with --no-triage (from fn-29)**: triage-skip doesn't interact; if triage returns SKIP, none of these flags fire
 
 ## Acceptance

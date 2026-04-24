@@ -38,7 +38,9 @@ fi
 
 Active only when: NEEDS_WORK verdict + `--interactive` flag set + not in Ralph mode.
 
-For each finding in the primary review output (or merged set if `--deep` also set, or validated set if `--validate` also set):
+<!-- Updated by plan-sync: fn-32.2 merged set includes deep-pass findings tagged `pass: adversarial|security|performance` with fingerprint-deduped primary+deep collisions (primary wins, confidence promoted one anchor step). Walkthrough consumes the merged set from the receipt / findings output without caring about which pass produced each finding. -->
+
+For each finding in the primary review output (or merged set if `--deep` also set — see fn-32.2 fingerprint merge + cross-pass promotion, or validated set if `--validate` also set):
 
 1. Pre-load platform blocking question tool (Claude Code only): `ToolSearch select:AskUserQuestion` if not loaded.
 2. Present question:
