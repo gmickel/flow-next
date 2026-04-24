@@ -1,0 +1,18 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-24T08:29:34.112447Z",
+  "depends_on": [
+    "fn-32-opt-in-review-flags-validate-deep.1",
+    "fn-32-opt-in-review-flags-validate-deep.2",
+    "fn-32-opt-in-review-flags-validate-deep.3"
+  ],
+  "epic": "fn-32-opt-in-review-flags-validate-deep",
+  "id": "fn-32-opt-in-review-flags-validate-deep.4",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-32-opt-in-review-flags-validate-deep.4.md",
+  "status": "todo",
+  "title": "Flag-combination interaction + receipt schema stability",
+  "updated_at": "2026-04-24T08:33:18.050965Z"
+}

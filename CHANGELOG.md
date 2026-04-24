@@ -2,6 +2,25 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.35.0] - 2026-04-24
+
+### Added
+- **`--validate` flag on `/flow-next:impl-review`.** After a `NEEDS_WORK` verdict, dispatches a validator pass (same backend session, receipt-driven session resume) that independently re-checks each finding against the current code and drops false-positives with logged reasons. If all findings drop, the verdict upgrades `NEEDS_WORK → SHIP` (never downgrades from `SHIP` or `MAJOR_RETHINK`); `verdict_before_validate` is recorded on upgrade. Receipt carries `validator: {dispatched, dropped, kept, reasons}` plus `validator_timestamp`. Env opt-in: `FLOW_VALIDATE_REVIEW=1` (works in Ralph). Conservative bias — "only drop if clearly wrong; when uncertain, keep" (findings missing from validator output default to kept). New `flowctl codex validate` / `flowctl copilot validate` subcommands invoke the pass in the same chat session.
+- **`--deep` flag on `/flow-next:impl-review`.** Layers specialized deep-dive passes on top of the primary Carmack-level review in the same backend session: adversarial (always), security + performance (auto-enabled based on changed-file globs via `flowctl review-deep-auto`). Findings tagged `pass: <name>`; merged with primary via fingerprint dedup (primary wins on collision); primary+deep cross-pass agreement promotes the primary finding's confidence one anchor step (0→25→50→75→100, ceiling 100). Cross-deep collisions dedup without promotion (avoids double-counting correlated passes). Explicit pass selection: `--deep=adversarial,security`. Env opt-in: `FLOW_REVIEW_DEEP=1` (works in Ralph). Receipt carries `deep_passes` array, `deep_findings_count` per-pass dict, `cross_pass_promotions` list of `{id, from, to, pass}`, and `deep_timestamp`. Deep may upgrade verdict `SHIP → NEEDS_WORK` when it surfaces new blocking `introduced` findings (records `verdict_before_deep`); deep never downgrades. New `flowctl codex deep-pass` / `flowctl copilot deep-pass` subcommands; new `flowctl review-deep-auto` helper reads changed files from stdin and emits the auto-enabled pass list.
+- **`--interactive` flag on `/flow-next:impl-review`.** Per-finding walkthrough via the platform's blocking question tool (AskUserQuestion / request_user_input / ask_user). Four actions per finding: Apply / Defer / Skip / Acknowledge. "LFG the rest" escape hatch auto-classifies the remainder: `P0/P1` at confidence ≥ 75 → Apply; otherwise → Defer (mirrors the primary-review suppression gate). Deferred findings append to `.flow/review-deferred/<branch-slug>.md` (append-only; each review session gets a new `## <timestamp> — review session <receipt-id>` section; branch slug allows `a-zA-Z0-9-_.`). **Ralph-incompatible by design** — hard-errors when `REVIEW_RECEIPT_PATH` or `FLOW_RALPH=1` is set. Receipt carries `walkthrough: {applied, deferred, skipped, acknowledged, lfg_rest}` + `walkthrough_timestamp`. Walkthrough never flips the verdict. New helpers: `flowctl review-walkthrough-defer` (appends to the sink atomically) and `flowctl review-walkthrough-record` (stamps walkthrough counts + timestamp into the receipt).
+
+### Changed
+- Review workflow documents the phase ordering for flag combinations: **primary → deep → validate → interactive → verdict**.
+- Receipt schema gains optional fields: `validator`, `validator_timestamp`, `verdict_before_validate` (validate); `deep_passes`, `deep_findings_count`, `cross_pass_promotions`, `verdict_before_deep`, `deep_timestamp` (deep); `walkthrough` (with `lfg_rest`), `walkthrough_timestamp` (interactive). All additive — existing Ralph scripts read by key and ignore unknowns.
+- **Copilot backend model catalog + defaults refreshed.** Added `claude-opus-4.7`, `claude-opus-4.6`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex` to the registered model set (verified live against copilot CLI 1.0.36 via `copilot -p "/model"`). Default bumped `gpt-5.2` → `gpt-5.5`; `high` effort retained (confirmed `gpt-5.5` honors `--effort {low,medium,high,xhigh}`). Older rows stay listed — copilot itself still accepts them. Use `flowctl config set review.backend copilot:<model>:<effort>` to pin a different model.
+
+### Notes
+- **Default review is unchanged.** These flags are opt-in. The Carmack-level single-chat primary review remains the baseline and the primary. Flags add structure, validation, and deep-dives **on top** — they do not replace.
+- `--deep` in same backend session means context carry-over (cheaper per pass); parallel multi-agent dispatch intentionally not adopted to preserve rp/codex/copilot parity.
+- `--interactive` has no env var; per-invocation only to prevent accidental Ralph engagement.
+- Depends on flow-next 0.32.1+ (confidence anchors, pre-existing classification) for flag semantics.
+- Smoke suite: 217 unit tests pass; `impl-review_smoke_test.sh` covers the 7-case flag-combination matrix (74 assertions, ~58s wall-clock including 4-config parallel Ralph sweep).
+
 ## [flow-next 0.34.0] - 2026-04-24
 
 ### Added

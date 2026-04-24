@@ -2103,6 +2103,515 @@ PASS=$((PASS + 1))
 echo -e "${GREEN}✓${NC} memory discoverability-patch: --apply + --dry-run rejected with exit 2"
 PASS=$((PASS + 1))
 
+# --- validator pass subcommands (fn-32.1 --validate) ---
+echo -e "${YELLOW}--- validator pass (fn-32.1) ---${NC}"
+
+VALIDATE_TEST_DIR="$(mktemp -d)"
+trap 'rm -rf "$VALIDATE_TEST_DIR"' EXIT
+
+# Test: codex validate and copilot validate --help surfaces discoverable.
+(
+  cd "$VALIDATE_TEST_DIR"
+  "$SCRIPT_DIR/flowctl" codex validate --help > /dev/null \
+    || { echo "FAIL: codex validate --help"; exit 1; }
+  "$SCRIPT_DIR/flowctl" copilot validate --help > /dev/null \
+    || { echo "FAIL: copilot validate --help"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} validate subcommands (codex + copilot): --help available"
+PASS=$((PASS + 1))
+
+# Test: no-findings no-op path writes validator block + preserves verdict.
+(
+  cd "$VALIDATE_TEST_DIR"
+  RPATH="$VALIDATE_TEST_DIR/receipt.json"
+  cat > "$RPATH" <<'EOF'
+{"type":"impl_review","id":"fn-32.1","mode":"codex","verdict":"NEEDS_WORK","session_id":"sess-noop"}
+EOF
+  out=$("$SCRIPT_DIR/flowctl" codex validate --receipt "$RPATH" --json 2>&1) \
+    || { echo "FAIL: codex validate no-op"; echo "$out"; exit 1; }
+  echo "$out" | grep -q '"dispatched": 0' \
+    || { echo "FAIL: expected dispatched=0"; echo "$out"; exit 1; }
+  grep -q '"validator"' "$RPATH" \
+    || { echo "FAIL: validator block missing"; cat "$RPATH"; exit 1; }
+  grep -q '"verdict": "NEEDS_WORK"' "$RPATH" \
+    || { echo "FAIL: verdict changed unexpectedly"; cat "$RPATH"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} codex validate: no-findings no-op writes validator block, preserves verdict"
+PASS=$((PASS + 1))
+
+# Test: missing session_id → error exit 2.
+(
+  cd "$VALIDATE_TEST_DIR"
+  RPATH="$VALIDATE_TEST_DIR/receipt-nosession.json"
+  echo '{"mode":"codex","verdict":"NEEDS_WORK"}' > "$RPATH"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" codex validate --receipt "$RPATH" --json 2>&1) || rc=$?
+  [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2 for missing session_id, got $rc"; echo "$out"; exit 1; }
+  echo "$out" | grep -q "No session_id" \
+    || { echo "FAIL: expected 'No session_id' in error"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} codex validate: missing session_id exits 2 with clear error"
+PASS=$((PASS + 1))
+
+# Test: cross-backend guard — codex receipt, copilot validate → error.
+(
+  cd "$VALIDATE_TEST_DIR"
+  RPATH="$VALIDATE_TEST_DIR/receipt-codex.json"
+  echo '{"mode":"codex","verdict":"NEEDS_WORK","session_id":"sess-xback"}' > "$RPATH"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" copilot validate --receipt "$RPATH" --json 2>&1) || rc=$?
+  [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2 for cross-backend, got $rc"; echo "$out"; exit 1; }
+  echo "$out" | grep -qi "same backend" \
+    || { echo "FAIL: expected cross-backend error"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} copilot validate: cross-backend receipt rejected with exit 2"
+PASS=$((PASS + 1))
+
+# Test: --receipt is required (argparse enforcement).
+(
+  cd "$VALIDATE_TEST_DIR"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" codex validate 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || { echo "FAIL: expected nonzero exit when --receipt missing"; echo "$out"; exit 1; }
+  echo "$out" | grep -qi "receipt" \
+    || { echo "FAIL: expected error mentioning --receipt"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} validate: --receipt required (argparse rejection)"
+PASS=$((PASS + 1))
+
+# --- deep-pass subcommands (fn-32.2 --deep) ---
+echo -e "${YELLOW}--- deep-pass (fn-32.2) ---${NC}"
+
+DEEP_TEST_DIR="$(mktemp -d)"
+
+# Test: codex deep-pass and copilot deep-pass --help surfaces discoverable.
+(
+  cd "$DEEP_TEST_DIR"
+  "$SCRIPT_DIR/flowctl" codex deep-pass --help > /dev/null \
+    || { echo "FAIL: codex deep-pass --help"; exit 1; }
+  "$SCRIPT_DIR/flowctl" copilot deep-pass --help > /dev/null \
+    || { echo "FAIL: copilot deep-pass --help"; exit 1; }
+  "$SCRIPT_DIR/flowctl" review-deep-auto --help > /dev/null \
+    || { echo "FAIL: review-deep-auto --help"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} deep-pass subcommands + review-deep-auto: --help available"
+PASS=$((PASS + 1))
+
+# Test: review-deep-auto — security glob matches produce adversarial + security.
+(
+  cd "$DEEP_TEST_DIR"
+  out=$("$SCRIPT_DIR/flowctl" review-deep-auto --files "src/auth.ts,README.md" --json) \
+    || { echo "FAIL: review-deep-auto security"; exit 1; }
+  echo "$out" | grep -q '"security"' \
+    || { echo "FAIL: expected security in auto_enabled"; echo "$out"; exit 1; }
+  echo "$out" | grep -q '"adversarial"' \
+    || { echo "FAIL: expected adversarial in selected"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} review-deep-auto: security glob triggers security pass"
+PASS=$((PASS + 1))
+
+# Test: review-deep-auto — performance glob.
+(
+  cd "$DEEP_TEST_DIR"
+  out=$("$SCRIPT_DIR/flowctl" review-deep-auto --files "db/migrations/001.sql" --json) \
+    || { echo "FAIL: review-deep-auto perf"; exit 1; }
+  echo "$out" | grep -q '"performance"' \
+    || { echo "FAIL: expected performance in auto_enabled"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} review-deep-auto: migration glob triggers performance pass"
+PASS=$((PASS + 1))
+
+# Test: review-deep-auto — non-matching paths yield adversarial only.
+(
+  cd "$DEEP_TEST_DIR"
+  out=$("$SCRIPT_DIR/flowctl" review-deep-auto --files "src/utils/date.ts" --json) \
+    || { echo "FAIL: review-deep-auto no-match"; exit 1; }
+  echo "$out" | grep -q '"auto_enabled": \[\]' \
+    || { echo "FAIL: expected empty auto_enabled"; echo "$out"; exit 1; }
+  echo "$out" | grep -q '"adversarial"' \
+    || { echo "FAIL: expected adversarial always-on"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} review-deep-auto: no-match paths yield adversarial only"
+PASS=$((PASS + 1))
+
+# Test: deep-pass requires --pass.
+(
+  cd "$DEEP_TEST_DIR"
+  RPATH="$DEEP_TEST_DIR/receipt.json"
+  printf '%s\n' '{"mode":"codex","verdict":"NEEDS_WORK","session_id":"s-dp"}' > "$RPATH"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" codex deep-pass --receipt "$RPATH" --json 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || { echo "FAIL: expected nonzero exit when --pass missing"; echo "$out"; exit 1; }
+  echo "$out" | grep -qi "pass" \
+    || { echo "FAIL: expected error mentioning --pass"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} deep-pass: --pass required (argparse rejection)"
+PASS=$((PASS + 1))
+
+# Test: deep-pass --pass only accepts valid values.
+(
+  cd "$DEEP_TEST_DIR"
+  RPATH="$DEEP_TEST_DIR/receipt.json"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" codex deep-pass --pass bogus --receipt "$RPATH" --json 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || { echo "FAIL: expected nonzero exit for bogus pass"; echo "$out"; exit 1; }
+  echo "$out" | grep -qi "invalid choice" \
+    || { echo "FAIL: expected 'invalid choice' error"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} deep-pass: --pass rejects invalid values"
+PASS=$((PASS + 1))
+
+# Test: deep-pass requires session_id in receipt.
+(
+  cd "$DEEP_TEST_DIR"
+  RPATH="$DEEP_TEST_DIR/receipt-nosess.json"
+  printf '%s\n' '{"mode":"codex","verdict":"NEEDS_WORK"}' > "$RPATH"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" codex deep-pass --pass adversarial --receipt "$RPATH" --json 2>&1) || rc=$?
+  [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2 for missing session_id, got $rc"; echo "$out"; exit 1; }
+  echo "$out" | grep -q "No session_id" \
+    || { echo "FAIL: expected 'No session_id' in error"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} deep-pass: missing session_id exits 2 with clear error"
+PASS=$((PASS + 1))
+
+# Test: cross-backend guard — codex receipt, copilot deep-pass → error.
+(
+  cd "$DEEP_TEST_DIR"
+  RPATH="$DEEP_TEST_DIR/receipt-codex.json"
+  printf '%s\n' '{"mode":"codex","verdict":"SHIP","session_id":"s-xbdp"}' > "$RPATH"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" copilot deep-pass --pass adversarial --receipt "$RPATH" --json 2>&1) || rc=$?
+  [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2 for cross-backend, got $rc"; echo "$out"; exit 1; }
+  echo "$out" | grep -qi "same backend" \
+    || { echo "FAIL: expected cross-backend error"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} deep-pass: cross-backend receipt rejected with exit 2"
+PASS=$((PASS + 1))
+
+# Test: helper functions — fingerprint/merge/promotion unit tests.
+(
+  cd "$DEEP_TEST_DIR"
+  "$PYTHON_BIN" - "$SCRIPT_DIR/flowctl.py" <<'PYEOF' || { echo "FAIL: helper unit tests"; exit 1; }
+import sys, importlib.util
+spec = importlib.util.spec_from_file_location("flowctl", sys.argv[1])
+mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+
+# fingerprint: same file + near-line + same title
+f1 = {"file":"src/auth.ts","line":42,"title":"null deref"}
+f2 = {"file":"./src/auth.ts","line":45,"title":"Null Deref"}
+assert mod.finding_fingerprint(f1) == mod.finding_fingerprint(f2), "near-line dedup fail"
+
+# promotion anchors
+for before, after in [(0,25),(25,50),(50,75),(75,100),(100,100)]:
+    assert mod.promote_confidence(before) == after, f"promote({before}) != {after}"
+
+# merge: primary+deep agreement promotes; cross-deep only dedups
+primary = [{"id":"f1","file":"src/auth.ts","line":42,"title":"null deref","confidence":50,"severity":"P1","classification":"introduced"}]
+deep = {
+  "adversarial": [{"id":"a1","file":"src/auth.ts","line":40,"title":"Null Deref","confidence":75,"pass":"adversarial"}],
+  "security":    [{"id":"s1","file":"src/auth.ts","line":42,"title":"null deref","confidence":75,"pass":"security"}],
+}
+r = mod.merge_deep_findings(primary, deep)
+# primary f1 should be promoted TWICE (once per agreeing deep pass) → 50 → 75 → 100
+assert len(r["promotions"]) == 2, f"expected 2 promotions, got {r['promotions']}"
+f1m = next(x for x in r["merged"] if x["id"] == "f1")
+assert f1m["confidence"] == 100, f"expected f1 promoted to 100, got {f1m['confidence']}"
+# No deep-pass findings should survive (both match primary)
+assert len(r["merged"]) == 1, f"expected only primary in merged, got {r['merged']}"
+
+# auto-enable heuristic
+assert mod.auto_enabled_passes(["src/auth.ts"]) == ["security"]
+assert mod.auto_enabled_passes(["db/migrations/001.sql"]) == ["performance"]
+assert mod.auto_enabled_passes(["src/utils/date.ts"]) == []
+
+print("helpers OK")
+PYEOF
+)
+echo -e "${GREEN}✓${NC} deep-pass helpers: fingerprint/promote/merge/auto-enable"
+PASS=$((PASS + 1))
+
+# Cleanup deep-pass test dir (use trash when available, fallback to rmdir tree)
+trash "$DEEP_TEST_DIR" 2>/dev/null || true
+
+# --- interactive walkthrough helpers (fn-32.3 --interactive) ---
+echo -e "${YELLOW}--- interactive walkthrough (fn-32.3) ---${NC}"
+
+WALK_TEST_DIR="$(mktemp -d)"
+
+# Test: both walkthrough subcommands surface help.
+(
+  cd "$WALK_TEST_DIR"
+  "$SCRIPT_DIR/flowctl" review-walkthrough-defer --help > /dev/null \
+    || { echo "FAIL: review-walkthrough-defer --help"; exit 1; }
+  "$SCRIPT_DIR/flowctl" review-walkthrough-record --help > /dev/null \
+    || { echo "FAIL: review-walkthrough-record --help"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} walkthrough subcommands: --help available"
+PASS=$((PASS + 1))
+
+# Test: --findings-file required on defer helper.
+(
+  cd "$WALK_TEST_DIR"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" review-walkthrough-defer --json 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || { echo "FAIL: expected error without --findings-file"; echo "$out"; exit 1; }
+  echo "$out" | grep -qi "findings-file" \
+    || { echo "FAIL: expected error mentioning --findings-file"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} review-walkthrough-defer: --findings-file required"
+PASS=$((PASS + 1))
+
+# Test: --receipt required on record helper.
+(
+  cd "$WALK_TEST_DIR"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" review-walkthrough-record --applied 1 --json 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || { echo "FAIL: expected error without --receipt"; echo "$out"; exit 1; }
+  echo "$out" | grep -qi "receipt" \
+    || { echo "FAIL: expected error mentioning --receipt"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} review-walkthrough-record: --receipt required"
+PASS=$((PASS + 1))
+
+# Test: defer helper — append to sink, stamps session header, creates dir.
+(
+  cd "$WALK_TEST_DIR"
+  git init -q
+  git config user.email test@example.com
+  git config user.name test
+  git checkout -q -b feature/fn-32-walkthrough
+
+  cat > findings.jsonl <<'EOF'
+{"id":"f1","severity":"P1","confidence":75,"classification":"introduced","file":"src/auth.ts","line":42,"title":"null deref","suggested_fix":"guard before use"}
+{"id":"f2","severity":"P2","confidence":50,"classification":"introduced","file":"src/cart.ts","line":88,"title":"off-by-one","suggested_fix":"use >= 1","deferred_reason":"needs product decision"}
+EOF
+
+  cat > receipt.json <<'EOF'
+{"type":"impl_review","id":"fn-32.3","mode":"codex","verdict":"NEEDS_WORK","session_id":"sess-abc"}
+EOF
+
+  out=$("$SCRIPT_DIR/flowctl" review-walkthrough-defer \
+      --findings-file findings.jsonl --receipt receipt.json --json 2>&1) \
+    || { echo "FAIL: defer dispatch"; echo "$out"; exit 1; }
+
+  # Branch slug: feature/fn-32-walkthrough → feature-fn-32-walkthrough
+  SINK=".flow/review-deferred/feature-fn-32-walkthrough.md"
+  [ -f "$SINK" ] || { echo "FAIL: sink file missing at $SINK"; exit 1; }
+
+  # Must contain top-level header once, session header once, both findings
+  grep -qc "# Deferred review findings" "$SINK" || { echo "FAIL: missing top header"; exit 1; }
+  grep -q "review session fn-32.3 (sess-abc)" "$SINK" || { echo "FAIL: missing session header with receipt ids"; cat "$SINK"; exit 1; }
+  grep -q "null deref" "$SINK" || { echo "FAIL: f1 missing from sink"; exit 1; }
+  grep -q "off-by-one" "$SINK" || { echo "FAIL: f2 missing from sink"; exit 1; }
+  # Per-finding deferred_reason override must win over default
+  grep -q "needs product decision" "$SINK" || { echo "FAIL: per-finding reason missing"; exit 1; }
+  grep -q "deferred by user" "$SINK" || { echo "FAIL: default reason missing for f1"; exit 1; }
+
+  echo "$out" | grep -q '"appended": 2' || { echo "FAIL: appended count wrong"; echo "$out"; exit 1; }
+  echo "$out" | grep -q '"branch_slug": "feature-fn-32-walkthrough"' \
+    || { echo "FAIL: branch slug wrong"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} review-walkthrough-defer: creates sink + stamps session + preserves per-finding reasons"
+PASS=$((PASS + 1))
+
+# Test: defer helper is append-only across sessions.
+(
+  cd "$WALK_TEST_DIR"
+  cat > findings2.jsonl <<'EOF'
+{"id":"f3","severity":"P1","confidence":75,"classification":"introduced","file":"src/new.ts","line":1,"title":"second session finding"}
+EOF
+
+  "$SCRIPT_DIR/flowctl" review-walkthrough-defer \
+      --findings-file findings2.jsonl --json > /dev/null \
+    || { echo "FAIL: second defer"; exit 1; }
+
+  SINK=".flow/review-deferred/feature-fn-32-walkthrough.md"
+  # Exactly one top-level header
+  hcount=$(grep -c '^# Deferred review findings' "$SINK")
+  [ "$hcount" = "1" ] || { echo "FAIL: expected 1 top header, got $hcount"; cat "$SINK"; exit 1; }
+  # Exactly 2 session sections
+  scount=$(grep -c '^## ' "$SINK")
+  [ "$scount" = "2" ] || { echo "FAIL: expected 2 session sections, got $scount"; cat "$SINK"; exit 1; }
+  # First session content must still be there
+  grep -q "null deref" "$SINK" || { echo "FAIL: first session content lost"; exit 1; }
+  grep -q "second session finding" "$SINK" || { echo "FAIL: second session not appended"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} review-walkthrough-defer: append-only (multi-session preserves prior content)"
+PASS=$((PASS + 1))
+
+# Test: defer helper — empty findings file is a no-op that still succeeds.
+(
+  cd "$WALK_TEST_DIR"
+  : > empty.jsonl
+  out=$("$SCRIPT_DIR/flowctl" review-walkthrough-defer \
+      --findings-file empty.jsonl --json 2>&1) \
+    || { echo "FAIL: empty findings should not error"; echo "$out"; exit 1; }
+  echo "$out" | grep -q '"appended": 0' \
+    || { echo "FAIL: expected appended=0"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} review-walkthrough-defer: empty findings file no-op"
+PASS=$((PASS + 1))
+
+# Test: --branch override works when not in a git repo.
+(
+  cd "$WALK_TEST_DIR"
+  mkdir -p nogit
+  cd nogit
+  cat > findings.jsonl <<'EOF'
+{"id":"f1","severity":"P1","confidence":75,"classification":"introduced","file":"a.ts","line":1,"title":"test"}
+EOF
+  out=$("$SCRIPT_DIR/flowctl" review-walkthrough-defer \
+      --findings-file findings.jsonl --branch custom/slash-branch --json 2>&1) \
+    || { echo "FAIL: --branch override"; echo "$out"; exit 1; }
+  echo "$out" | grep -q '"branch_slug": "custom-slash-branch"' \
+    || { echo "FAIL: expected sanitized branch slug"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} review-walkthrough-defer: --branch override sanitizes slug"
+PASS=$((PASS + 1))
+
+# Test: record helper — stamps walkthrough block, preserves verdict.
+(
+  cd "$WALK_TEST_DIR"
+  RPATH="record-receipt.json"
+  cat > "$RPATH" <<'EOF'
+{"type":"impl_review","id":"fn-32.3","mode":"codex","verdict":"NEEDS_WORK","session_id":"sess-r1"}
+EOF
+  out=$("$SCRIPT_DIR/flowctl" review-walkthrough-record \
+      --receipt "$RPATH" \
+      --applied 3 --deferred 2 --skipped 1 --acknowledged 0 --lfg-rest true \
+      --json 2>&1) \
+    || { echo "FAIL: record dispatch"; echo "$out"; exit 1; }
+
+  # Receipt must retain verdict + session_id and gain walkthrough block
+  grep -q '"verdict": "NEEDS_WORK"' "$RPATH" || { echo "FAIL: verdict changed"; cat "$RPATH"; exit 1; }
+  grep -q '"session_id": "sess-r1"' "$RPATH" || { echo "FAIL: session_id lost"; cat "$RPATH"; exit 1; }
+  grep -q '"walkthrough"' "$RPATH" || { echo "FAIL: walkthrough block missing"; cat "$RPATH"; exit 1; }
+  grep -q '"applied": 3' "$RPATH" || { echo "FAIL: applied count wrong"; cat "$RPATH"; exit 1; }
+  grep -q '"lfg_rest": true' "$RPATH" || { echo "FAIL: lfg_rest wrong"; cat "$RPATH"; exit 1; }
+  grep -q '"walkthrough_timestamp"' "$RPATH" || { echo "FAIL: walkthrough_timestamp missing"; cat "$RPATH"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} review-walkthrough-record: stamps block, preserves verdict + session_id"
+PASS=$((PASS + 1))
+
+# Test: record helper — creates receipt file when missing.
+(
+  cd "$WALK_TEST_DIR"
+  RPATH="new-receipt.json"
+  [ -f "$RPATH" ] && rm -- "$RPATH"
+  out=$("$SCRIPT_DIR/flowctl" review-walkthrough-record \
+      --receipt "$RPATH" --applied 0 --deferred 5 --json 2>&1) \
+    || { echo "FAIL: record with missing receipt"; echo "$out"; exit 1; }
+  [ -f "$RPATH" ] || { echo "FAIL: receipt not created"; exit 1; }
+  grep -q '"deferred": 5' "$RPATH" || { echo "FAIL: deferred count wrong"; cat "$RPATH"; exit 1; }
+  grep -q '"lfg_rest": false' "$RPATH" || { echo "FAIL: lfg_rest default wrong"; cat "$RPATH"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} review-walkthrough-record: creates receipt when missing, lfg_rest defaults false"
+PASS=$((PASS + 1))
+
+# Test: record helper — never flips verdict (walkthrough is additive).
+(
+  cd "$WALK_TEST_DIR"
+  RPATH="ship-receipt.json"
+  echo '{"type":"impl_review","id":"fn-32.3","mode":"codex","verdict":"SHIP","session_id":"sess-ship"}' > "$RPATH"
+  "$SCRIPT_DIR/flowctl" review-walkthrough-record \
+      --receipt "$RPATH" --applied 5 --json > /dev/null \
+    || { echo "FAIL: record on SHIP"; exit 1; }
+  grep -q '"verdict": "SHIP"' "$RPATH" || { echo "FAIL: verdict flipped from SHIP"; cat "$RPATH"; exit 1; }
+
+  # Same on MAJOR_RETHINK
+  echo '{"type":"impl_review","id":"fn-32.3","mode":"codex","verdict":"MAJOR_RETHINK"}' > "$RPATH"
+  "$SCRIPT_DIR/flowctl" review-walkthrough-record \
+      --receipt "$RPATH" --applied 0 --deferred 7 --json > /dev/null
+  grep -q '"verdict": "MAJOR_RETHINK"' "$RPATH" || { echo "FAIL: verdict flipped from MAJOR_RETHINK"; cat "$RPATH"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} review-walkthrough-record: never flips verdict"
+PASS=$((PASS + 1))
+
+# Test: lfg-rest accepts true/false/yes/1/0 (case-insensitive truthy).
+(
+  cd "$WALK_TEST_DIR"
+  RPATH="lfg-receipt.json"
+  for val in true TRUE yes 1; do
+    echo '{"verdict":"NEEDS_WORK"}' > "$RPATH"
+    "$SCRIPT_DIR/flowctl" review-walkthrough-record \
+        --receipt "$RPATH" --lfg-rest "$val" --json > /dev/null
+    grep -q '"lfg_rest": true' "$RPATH" \
+      || { echo "FAIL: lfg-rest=$val should parse true"; cat "$RPATH"; exit 1; }
+  done
+  for val in false FALSE no 0 anything; do
+    echo '{"verdict":"NEEDS_WORK"}' > "$RPATH"
+    "$SCRIPT_DIR/flowctl" review-walkthrough-record \
+        --receipt "$RPATH" --lfg-rest "$val" --json > /dev/null
+    grep -q '"lfg_rest": false' "$RPATH" \
+      || { echo "FAIL: lfg-rest=$val should parse false"; cat "$RPATH"; exit 1; }
+  done
+)
+echo -e "${GREEN}✓${NC} review-walkthrough-record: --lfg-rest parses truthy forms (true/TRUE/yes/1) vs everything else"
+PASS=$((PASS + 1))
+
+# Test: Ralph-block enforced by SKILL.md bash snippet (simulate invocation).
+(
+  cd "$WALK_TEST_DIR"
+  # Case A: REVIEW_RECEIPT_PATH set + --interactive → exit 2
+  rc=0
+  REVIEW_RECEIPT_PATH=/tmp/r.json bash -c '
+ARGUMENTS="--interactive"
+INTERACTIVE=false
+for arg in $ARGUMENTS; do
+  case "$arg" in --interactive) INTERACTIVE=true ;; esac
+done
+if [[ "$INTERACTIVE" == "true" ]]; then
+  if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
+    echo "Error: --interactive blocked" >&2
+    exit 2
+  fi
+fi
+exit 0
+' 2>/tmp/walkstderr || rc=$?
+  [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2 under REVIEW_RECEIPT_PATH, got $rc"; cat /tmp/walkstderr; exit 1; }
+  grep -qi "blocked" /tmp/walkstderr || { echo "FAIL: missing block message"; cat /tmp/walkstderr; exit 1; }
+
+  # Case B: FLOW_RALPH=1 + --interactive → exit 2
+  rc=0
+  FLOW_RALPH=1 bash -c '
+ARGUMENTS="fn-32.3 --validate --interactive"
+INTERACTIVE=false
+for arg in $ARGUMENTS; do
+  case "$arg" in --interactive) INTERACTIVE=true ;; esac
+done
+if [[ "$INTERACTIVE" == "true" ]]; then
+  if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
+    exit 2
+  fi
+fi
+exit 0
+' || rc=$?
+  [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2 under FLOW_RALPH=1, got $rc"; exit 1; }
+
+  # Case C: No --interactive in Ralph env → exit 0 (no block)
+  rc=0
+  REVIEW_RECEIPT_PATH=/tmp/r.json bash -c '
+ARGUMENTS="fn-32.3 --validate"
+INTERACTIVE=false
+for arg in $ARGUMENTS; do
+  case "$arg" in --interactive) INTERACTIVE=true ;; esac
+done
+if [[ "$INTERACTIVE" == "true" ]]; then
+  if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
+    exit 2
+  fi
+fi
+exit 0
+' || rc=$?
+  [ "$rc" -eq 0 ] || { echo "FAIL: Ralph env without --interactive should pass, got $rc"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} SKILL.md Ralph-block: blocks --interactive under REVIEW_RECEIPT_PATH / FLOW_RALPH, passes without"
+PASS=$((PASS + 1))
+
+# Cleanup walkthrough test dir
+trash "$WALK_TEST_DIR" 2>/dev/null || true
+
 echo ""
 echo -e "${YELLOW}=== Results ===${NC}"
 echo -e "Passed: ${GREEN}$PASS${NC}"

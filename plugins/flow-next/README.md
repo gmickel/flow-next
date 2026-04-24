@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.34.0-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.35.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -1080,7 +1080,7 @@ Invalid specs are rejected at `set-backend` time with a helpful error listing va
 |---------|------------------|-------------------|---------------|----------------|
 | `rp` | _(bare only — model set via window/session)_ | _(n/a)_ | _n/a_ | _n/a_ |
 | `codex` | `gpt-5.5`, `gpt-5.4`, `gpt-5.2`, `gpt-5`, `gpt-5-mini`, `gpt-5-codex` | `none`, `minimal`, `low`, `medium`, `high`, `xhigh` | `gpt-5.5` | `high` |
-| `copilot` | `claude-sonnet-4.5`, `claude-haiku-4.5`, `claude-opus-4.5`, `claude-sonnet-4`, `gpt-5.2`, `gpt-5.2-codex`, `gpt-5-mini`, `gpt-4.1` | `low`, `medium`, `high`, `xhigh` | `gpt-5.2` | `high` |
+| `copilot` | `claude-sonnet-4.5`, `claude-haiku-4.5`, `claude-opus-4.7`, `claude-opus-4.6`, `claude-opus-4.5`, `claude-sonnet-4`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`, `gpt-5.2`, `gpt-5.2-codex`, `gpt-5-mini`, `gpt-4.1` | `low`, `medium`, `high`, `xhigh` | `gpt-5.5` | `high` |
 | `none` | _(explicit opt-out)_ | _(n/a)_ | _n/a_ | _n/a_ |
 
 Notes:
@@ -1113,6 +1113,71 @@ flowctl task show-backend fn-5.2 --json   # per-task raw + resolved + field-leve
 | Ralph overnight runs | Any works; RP auto-opens with --create (1.5.68+); Copilot/Codex need no window |
 
 Without a backend configured, reviews fail with a clear error. Run `/flow-next:setup` or pass `--review=X`.
+
+### Opt-in Review Flags (v0.35.0+)
+
+Three opt-in flags on `/flow-next:impl-review` layer extra capability **on top** of the default Carmack-level single-chat review. All three are off by default; the default review shape is unchanged. Receipt extensions are additive — existing Ralph scripts ignore unknowns.
+
+Phase ordering when flags combine: **primary → deep → validate → interactive → verdict**.
+
+**`--validate` — drop false-positive findings.** On a `NEEDS_WORK` verdict, dispatches a validator pass in the same backend chat session (session resume via receipt). Each finding is independently re-checked against the current code; confirmed false-positives are dropped with logged reasons. If all drop, the verdict upgrades `NEEDS_WORK → SHIP` (never downgrades from `SHIP` or `MAJOR_RETHINK`). Conservative bias — "only drop if clearly wrong; when uncertain, keep" (missing ids in validator output default to kept).
+
+```bash
+/flow-next:impl-review --validate
+FLOW_VALIDATE_REVIEW=1 /flow-next:impl-review  # env opt-in (Ralph-compatible)
+```
+
+Receipt fields: `validator: {dispatched, dropped, kept, reasons}`, `validator_timestamp`, `verdict_before_validate` (on upgrade).
+
+**`--deep` — additional specialized passes on top of primary.** Runs the primary Carmack-level review first, then layers deep passes in the same backend session:
+
+- **Adversarial** — always when `--deep`.
+- **Security** — auto-enabled when the diff touches auth / authz / secrets / permission boundaries; force via `--deep=security`.
+- **Performance** — auto-enabled when the diff touches perf-sensitive paths; force via `--deep=performance`.
+
+Findings tagged `pass: <name>`; merged with primary via fingerprint dedup (primary wins on collision). Cross-pass agreement (primary + deep-pass flag the same finding) promotes the primary's confidence one anchor step (`0→25→50→75→100`, ceiling 100). Cross-deep collisions dedup without promotion. Deep may upgrade verdict `SHIP → NEEDS_WORK` when it surfaces new blocking `introduced` findings (records `verdict_before_deep`); deep never downgrades.
+
+```bash
+/flow-next:impl-review --deep                            # adversarial + auto-enabled passes
+/flow-next:impl-review --deep=adversarial,security       # explicit pass selection
+FLOW_REVIEW_DEEP=1 /flow-next:impl-review                # env opt-in (Ralph-compatible)
+echo '<changed-files>' | flowctl review-deep-auto        # inspect auto-enabled passes
+```
+
+Receipt fields: `deep_passes`, `deep_findings_count` (per-pass dict), `cross_pass_promotions: [{id, from, to, pass}]`, `deep_timestamp`, `verdict_before_deep` (on upgrade).
+
+**`--interactive` — per-finding walkthrough.** Presents a blocking question for each finding with four actions (Apply / Defer / Skip / Acknowledge) plus "LFG the rest" escape hatch. LFG auto-classifier: `P0/P1` at confidence ≥ 75 → Apply; otherwise → Defer. Deferred findings append to `.flow/review-deferred/<branch-slug>.md` (append-only; each review session gets a new `## <timestamp> — review session <receipt-id>` section). Walkthrough never flips the verdict.
+
+**Ralph-incompatible by design** — the flag hard-errors when `REVIEW_RECEIPT_PATH` or `FLOW_RALPH=1` is set, with a clear "not compatible with Ralph mode" message. No env var form; per-invocation only.
+
+```bash
+/flow-next:impl-review --interactive
+```
+
+Receipt fields: `walkthrough: {applied, deferred, skipped, acknowledged, lfg_rest}`, `walkthrough_timestamp`.
+
+**Flag combination matrix:**
+
+| Combo | Behavior |
+|-------|----------|
+| `--validate` alone | Primary → validate on `NEEDS_WORK` → drop confirmed false-positives |
+| `--deep` alone | Primary + deep passes → merged findings → standard verdict |
+| `--interactive` alone | Primary → walk through findings on `NEEDS_WORK` |
+| `--validate --deep` | Primary + deep → validate the merged `NEEDS_WORK` |
+| `--validate --interactive` | Primary + validate → walk through validated findings only |
+| `--deep --interactive` | Primary + deep → walk through merged findings |
+| `--validate --deep --interactive` | Full stack — maximum signal + human control |
+| No flags (default) | Unchanged — Carmack-level single-chat primary review |
+
+**Ralph compatibility summary:**
+
+| Flag | Default in Ralph | Env opt-in |
+|------|------------------|------------|
+| `--validate` | off | `FLOW_VALIDATE_REVIEW=1` |
+| `--deep` | off | `FLOW_REVIEW_DEEP=1` |
+| `--interactive` | **blocked** (hard error) | none |
+
+See [CHANGELOG — flow-next 0.35.0](../../CHANGELOG.md#flow-next-0350---2026-04-24) for the full entry.
 
 ### Review Rigor (v0.32.1+)
 

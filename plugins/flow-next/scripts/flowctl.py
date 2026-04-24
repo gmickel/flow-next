@@ -1951,12 +1951,21 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         "default_effort": "high",
     },
     "copilot": {
-        # Verified via ``copilot --help`` + live probe (fn-27 §Model Catalog).
+        # Verified via live probe against copilot CLI 1.0.36 — asked the CLI
+        # itself for the exact set of ``--model`` strings it accepts. Keep
+        # this list synced with ``copilot -p "/model"`` output; GitHub ships
+        # new rows without changelog.
         "models": {
             "claude-sonnet-4.5",
             "claude-haiku-4.5",
+            "claude-opus-4.7",
+            "claude-opus-4.6",
             "claude-opus-4.5",
             "claude-sonnet-4",
+            "gpt-5.5",
+            "gpt-5.4",
+            "gpt-5.4-mini",
+            "gpt-5.3-codex",
             "gpt-5.2",
             "gpt-5.2-codex",
             "gpt-5-mini",
@@ -1967,7 +1976,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ``run_copilot_exec`` handles by dropping the flag when model starts
         # with ``claude-``.
         "efforts": {"low", "medium", "high", "xhigh"},
-        "default_model": "gpt-5.2",
+        "default_model": "gpt-5.5",
         "default_effort": "high",
     },
     "none": {
@@ -9816,6 +9825,1465 @@ Be critical. Find real issues.
 """
 
 
+# --- Validator pass (fn-32.1 --validate) ---
+#
+# Conservative false-positive drop on NEEDS_WORK review findings. Used by
+# `flowctl codex validate` and `flowctl copilot validate`. Shares the prompt
+# template (skills/flow-next-impl-review/validate-pass.md) and output parser
+# across both backends so receipt shape is identical.
+#
+# Design note: re-uses the existing backend session via ``session_id`` read
+# from the receipt — the validator continues the chat so the model already
+# has the diff + primary findings in context. A fresh session would force
+# re-embedding the diff (wasteful) and lose the primary-review framing that
+# makes the "drop if clearly wrong" judgment calibrated.
+
+VALIDATOR_TEMPLATE_REL = (
+    "plugins/flow-next/skills/flow-next-impl-review/validate-pass.md"
+)
+
+# Fallback template body if the on-disk file is missing (global installs, Codex
+# mirror, or stripped-down deployments). Keep in sync with validate-pass.md.
+VALIDATOR_TEMPLATE_FALLBACK = """# Validator prompt (fn-32.1 --validate)
+
+You are validating review findings for false positives. For each finding below,
+independently re-check it against the **current code** and decide whether the
+finding is actually valid.
+
+**Conservative bias — only drop findings that are clearly wrong.** When
+uncertain, keep the finding. A kept false-positive is cheap; a dropped real bug
+is expensive.
+
+For each finding: open the cited file, read ±20 lines around the cited line,
+check whether the claimed issue is actually present, and look for guards /
+handlers / assumptions that address the concern elsewhere.
+
+Do **not** re-score confidence, re-classify severity, or invent new findings.
+
+Return exactly one line per finding in this strict format:
+
+```
+<finding-id>: validated: <true|false> -- <one-sentence reason>
+```
+
+Rules:
+- One line per finding id. Missing ids default to `validated: true`.
+- Use the literal tokens `validated: true` or `validated: false`.
+
+## Findings to validate
+
+<!-- FINDINGS_BLOCK -->
+"""
+
+
+def load_validator_template() -> str:
+    """Load validate-pass.md template, falling back to the embedded copy."""
+    # Try repo-root plugin path first (dev / local install).
+    try:
+        repo_root = get_repo_root()
+        candidate = repo_root / VALIDATOR_TEMPLATE_REL
+        if candidate.exists():
+            return candidate.read_text(encoding="utf-8")
+    except Exception:
+        pass
+    # Try CLAUDE_PLUGIN_ROOT / DROID_PLUGIN_ROOT (installed plugin).
+    for env_var in ("CLAUDE_PLUGIN_ROOT", "DROID_PLUGIN_ROOT"):
+        root = os.environ.get(env_var)
+        if not root:
+            continue
+        candidate = Path(root) / "skills" / "flow-next-impl-review" / "validate-pass.md"
+        if candidate.exists():
+            try:
+                return candidate.read_text(encoding="utf-8")
+            except OSError:
+                pass
+    # Last resort: embedded fallback.
+    return VALIDATOR_TEMPLATE_FALLBACK
+
+
+def load_findings(findings_file: Optional[str]) -> list[dict]:
+    """Load findings from a JSON-lines file.
+
+    Each line is a JSON object with at least ``id``. Other fields commonly
+    present: ``severity``, ``confidence``, ``classification``, ``file``,
+    ``line``, ``title``, ``suggested_fix``. We pass everything through so
+    the validator prompt has full context — but only ``id`` is required.
+
+    An empty file or ``None`` returns ``[]``. Malformed lines are skipped
+    with a stderr warning (conservative: one bad finding shouldn't nuke
+    the whole pass).
+    """
+    if not findings_file:
+        return []
+    path = Path(findings_file)
+    if not path.exists():
+        return []
+    findings: list[dict] = []
+    for i, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        try:
+            obj = json.loads(stripped)
+        except json.JSONDecodeError as e:
+            print(
+                f"warning: skipping malformed finding at line {i}: {e}",
+                file=sys.stderr,
+            )
+            continue
+        if not isinstance(obj, dict):
+            print(
+                f"warning: skipping non-object finding at line {i}",
+                file=sys.stderr,
+            )
+            continue
+        # Auto-assign a stable id if missing — f1/f2/... in file order.
+        if "id" not in obj or not obj["id"]:
+            obj["id"] = f"f{len(findings) + 1}"
+        findings.append(obj)
+    return findings
+
+
+def render_findings_block(findings: list[dict]) -> str:
+    """Render findings list as a markdown block for the validator prompt."""
+    if not findings:
+        return "_(no findings supplied)_"
+    lines: list[str] = []
+    for f in findings:
+        fid = f.get("id", "?")
+        sev = f.get("severity", "")
+        conf = f.get("confidence", "")
+        cls = f.get("classification", "")
+        loc = ""
+        if f.get("file"):
+            loc = f["file"]
+            if f.get("line"):
+                loc = f"{loc}:{f['line']}"
+        title = f.get("title", f.get("problem", ""))
+        suggestion = f.get("suggested_fix", f.get("suggestion", ""))
+
+        header_bits = [f"**{fid}**"]
+        if sev:
+            header_bits.append(f"severity={sev}")
+        if conf != "":
+            header_bits.append(f"confidence={conf}")
+        if cls:
+            header_bits.append(f"classification={cls}")
+        lines.append(f"### " + " | ".join(header_bits))
+        if loc:
+            lines.append(f"- location: `{loc}`")
+        if title:
+            lines.append(f"- issue: {title}")
+        if suggestion:
+            lines.append(f"- suggested fix: {suggestion}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+# Match lines like: "f1: validated: true -- reason here"
+# Tolerant of bold markers, leading bullets, and minor whitespace variance.
+_VALIDATOR_LINE_RE = re.compile(
+    r"""^[\s>*_`\-]*                      # optional bullet / markdown noise
+         (?P<id>[A-Za-z0-9_\.\-]+)        # finding id
+         [\s*_`]*:[\s*_`]*
+         validated[\s*_`]*:[\s*_`]*
+         (?P<flag>true|false|yes|no)
+         [\s*_`]*
+         (?:--|—|-\s|:)\s*
+         (?P<reason>.+?)
+         \s*$""",
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def parse_validator_output(output: str, findings: list[dict]) -> dict:
+    """Parse validator LLM output into a decision map.
+
+    Returns a dict:
+      {
+        "decisions": {<fid>: {"validated": bool, "reason": str}},
+        "dispatched": int,  # how many findings were sent to the validator
+        "dropped":    int,  # how many came back validated=false
+        "kept":       int,  # how many survived (validated=true OR missing)
+        "reasons":    [{"id": fid, "file": ..., "line": ..., "reason": ...}, ...]
+      }
+
+    Unknown ids and missing responses default to kept (conservative bias).
+    """
+    valid_ids = {f.get("id") for f in findings if f.get("id")}
+    decisions: dict[str, dict] = {}
+
+    for raw_line in output.splitlines():
+        m = _VALIDATOR_LINE_RE.match(raw_line)
+        if not m:
+            continue
+        fid = m.group("id").strip()
+        if fid not in valid_ids:
+            continue
+        flag_raw = m.group("flag").lower()
+        validated = flag_raw in {"true", "yes"}
+        reason = m.group("reason").strip()
+        # First match wins — validator shouldn't double-declare but be defensive.
+        if fid not in decisions:
+            decisions[fid] = {"validated": validated, "reason": reason}
+
+    # Conservative default for missing ids: keep (validated=true).
+    for f in findings:
+        fid = f.get("id")
+        if fid and fid not in decisions:
+            decisions[fid] = {
+                "validated": True,
+                "reason": "no explicit validator decision — kept by default",
+            }
+
+    dropped_reasons: list[dict] = []
+    dropped = 0
+    kept = 0
+    for f in findings:
+        fid = f.get("id")
+        if not fid:
+            continue
+        d = decisions.get(fid, {"validated": True, "reason": ""})
+        if d["validated"]:
+            kept += 1
+        else:
+            dropped += 1
+            entry: dict = {"id": fid, "reason": d["reason"]}
+            if f.get("file"):
+                entry["file"] = f["file"]
+            if f.get("line") is not None:
+                entry["line"] = f["line"]
+            dropped_reasons.append(entry)
+
+    return {
+        "decisions": decisions,
+        "dispatched": len(findings),
+        "dropped": dropped,
+        "kept": kept,
+        "reasons": dropped_reasons,
+    }
+
+
+def _apply_validator_to_receipt(
+    receipt_path: str,
+    validator_result: dict,
+    prior_verdict: Optional[str],
+) -> dict:
+    """Merge validator result into the receipt at ``receipt_path``.
+
+    Returns the updated receipt dict. Responsibilities:
+      - Attach the ``validator`` object (dispatched/dropped/kept/reasons).
+      - Upgrade verdict to SHIP when all findings dropped (kept == 0 and
+        dispatched > 0) AND the prior verdict was NEEDS_WORK. We never
+        downgrade; MAJOR_RETHINK and SHIP verdicts stay as-is.
+      - Record ``verdict_before_validate`` so downstream consumers can see
+        the upgrade happened.
+      - Leave all other fields untouched.
+
+    If the receipt file is missing, an empty dict is seeded so the caller
+    can still persist validator metadata (useful in dry-run testing).
+    """
+    path = Path(receipt_path)
+    try:
+        receipt = (
+            json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        )
+    except (json.JSONDecodeError, OSError):
+        receipt = {}
+
+    receipt["validator"] = {
+        "dispatched": validator_result["dispatched"],
+        "dropped": validator_result["dropped"],
+        "kept": validator_result["kept"],
+        "reasons": validator_result["reasons"],
+    }
+
+    # Verdict upgrade: all findings dropped → SHIP (only from NEEDS_WORK).
+    if (
+        validator_result["dispatched"] > 0
+        and validator_result["kept"] == 0
+        and prior_verdict == "NEEDS_WORK"
+    ):
+        receipt["verdict_before_validate"] = prior_verdict
+        receipt["verdict"] = "SHIP"
+
+    receipt["validator_timestamp"] = now_iso()
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    return receipt
+
+
+def _run_validator_pass(
+    backend: str,
+    findings_file: Optional[str],
+    receipt_path: str,
+    spec_arg: Optional[str],
+    use_json: bool,
+) -> None:
+    """Execute a validator pass against ``backend`` (codex|copilot).
+
+    Reads findings + prior session from receipt, invokes the backend with
+    session continuity, parses validator output, merges into receipt. This
+    is the shared spine for ``cmd_codex_validate`` and
+    ``cmd_copilot_validate``.
+    """
+    # Load prior receipt to get session_id + verdict context.
+    receipt_file = Path(receipt_path)
+    prior_session_id: Optional[str] = None
+    prior_verdict: Optional[str] = None
+    prior_mode: Optional[str] = None
+    if receipt_file.exists():
+        try:
+            prior = json.loads(receipt_file.read_text(encoding="utf-8"))
+            prior_session_id = prior.get("session_id")
+            prior_verdict = prior.get("verdict")
+            prior_mode = prior.get("mode")
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    if not prior_session_id:
+        error_exit(
+            f"No session_id in receipt at {receipt_path} — run impl-review first",
+            use_json=use_json,
+            code=2,
+        )
+
+    # Session continuity guard: refuse to cross backends silently.
+    if prior_mode and prior_mode != backend:
+        error_exit(
+            f"Receipt mode is {prior_mode!r}; cannot validate with {backend!r}. "
+            "Validator must run with the same backend as the primary review.",
+            use_json=use_json,
+            code=2,
+        )
+
+    findings = load_findings(findings_file)
+    if not findings:
+        # No findings to validate — write an empty validator block and exit
+        # cleanly. Verdict unchanged (no dispatch, no drop).
+        empty = {"dispatched": 0, "dropped": 0, "kept": 0, "reasons": []}
+        _apply_validator_to_receipt(receipt_path, empty, prior_verdict)
+        if use_json:
+            json_output(
+                {
+                    "type": "impl_review_validate",
+                    "mode": backend,
+                    "dispatched": 0,
+                    "dropped": 0,
+                    "kept": 0,
+                    "verdict": prior_verdict,
+                    "reasons": [],
+                }
+            )
+        else:
+            print("Validator: no findings to validate")
+            print(f"VERDICT={prior_verdict or 'UNKNOWN'}")
+        return
+
+    # Render prompt.
+    template = load_validator_template()
+    findings_block = render_findings_block(findings)
+    prompt = template.replace("<!-- FINDINGS_BLOCK -->", findings_block)
+
+    # Dispatch to backend (session-continuing).
+    if backend == "codex":
+        if spec_arg:
+            try:
+                spec = BackendSpec.parse(spec_arg).resolve()
+            except ValueError as e:
+                error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
+        else:
+            spec = resolve_review_spec("codex", None)
+        try:
+            sandbox = resolve_codex_sandbox("auto")
+        except ValueError as e:
+            error_exit(str(e), use_json=use_json, code=2)
+        output, _tid, exit_code, stderr = run_codex_exec(
+            prompt, session_id=prior_session_id, sandbox=sandbox, spec=spec
+        )
+        if exit_code != 0:
+            error_exit(
+                f"codex validator pass failed: {(stderr or output or '').strip()}",
+                use_json=use_json,
+                code=2,
+            )
+    elif backend == "copilot":
+        if spec_arg:
+            try:
+                spec = BackendSpec.parse(spec_arg).resolve()
+            except ValueError as e:
+                error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
+        else:
+            spec = resolve_review_spec("copilot", None)
+        repo_root = get_repo_root()
+        output, _sid, exit_code, stderr = run_copilot_exec(
+            prompt, session_id=prior_session_id, repo_root=repo_root, spec=spec
+        )
+        if exit_code != 0:
+            error_exit(
+                f"copilot validator pass failed: {(stderr or output or '').strip()}",
+                use_json=use_json,
+                code=2,
+            )
+    else:
+        error_exit(
+            f"Unknown validator backend: {backend}",
+            use_json=use_json,
+            code=2,
+        )
+
+    # Parse validator decisions.
+    result = parse_validator_output(output, findings)
+
+    # Merge into receipt (may upgrade verdict to SHIP).
+    updated_receipt = _apply_validator_to_receipt(
+        receipt_path, result, prior_verdict
+    )
+    new_verdict = updated_receipt.get("verdict", prior_verdict)
+
+    if use_json:
+        json_output(
+            {
+                "type": "impl_review_validate",
+                "mode": backend,
+                "dispatched": result["dispatched"],
+                "dropped": result["dropped"],
+                "kept": result["kept"],
+                "verdict": new_verdict,
+                "verdict_before_validate": updated_receipt.get(
+                    "verdict_before_validate"
+                ),
+                "reasons": result["reasons"],
+                "receipt": receipt_path,
+            }
+        )
+    else:
+        print(output)
+        print(
+            f"\nValidator: dispatched={result['dispatched']} "
+            f"dropped={result['dropped']} kept={result['kept']}"
+        )
+        if updated_receipt.get("verdict_before_validate"):
+            print(
+                f"Verdict upgraded: "
+                f"{updated_receipt['verdict_before_validate']} → {new_verdict}"
+            )
+        print(f"VERDICT={new_verdict or 'UNKNOWN'}")
+
+
+def cmd_codex_validate(args: argparse.Namespace) -> None:
+    """Dispatch a codex validator pass over findings from a prior review."""
+    _run_validator_pass(
+        backend="codex",
+        findings_file=getattr(args, "findings_file", None),
+        receipt_path=args.receipt,
+        spec_arg=getattr(args, "spec", None),
+        use_json=args.json,
+    )
+
+
+def cmd_copilot_validate(args: argparse.Namespace) -> None:
+    """Dispatch a copilot validator pass over findings from a prior review."""
+    _run_validator_pass(
+        backend="copilot",
+        findings_file=getattr(args, "findings_file", None),
+        receipt_path=args.receipt,
+        spec_arg=getattr(args, "spec", None),
+        use_json=args.json,
+    )
+
+
+# --- Deep-pass (fn-32.2 --deep) ---
+#
+# Additional specialized passes (adversarial / security / performance) that
+# layer on top of the primary Carmack-level review. Run in the same backend
+# session as the primary review via ``session_id`` continuity so the model
+# already has diff + primary findings in context.
+#
+# Findings are tagged with ``pass: <name>`` and merged with primary findings
+# via fingerprint dedup. Cross-pass agreement (same fingerprint in primary +
+# deep) promotes confidence one anchor step.
+#
+# Auto-enable heuristics live in the skill layer — flowctl just runs whichever
+# pass name the caller requests. Pass name must be one of the canonical three.
+
+DEEP_PASSES = ("adversarial", "security", "performance")
+
+DEEP_PASSES_TEMPLATE_REL = (
+    "plugins/flow-next/skills/flow-next-impl-review/deep-passes.md"
+)
+
+# Fallback templates if the on-disk file is missing (global installs, Codex
+# mirror, stripped-down deployments). Keep in sync with deep-passes.md.
+DEEP_PASSES_FALLBACK: dict[str, str] = {
+    "adversarial": """# Adversarial pass
+
+You've already reviewed this diff. Switch modes: construct specific scenarios
+that break this implementation. Think in sequences — "if X then Y then Z."
+
+Techniques:
+1. Assumption violation — data shapes, timing, ordering, value ranges.
+2. Composition failures — contract mismatches, shared state, ordering.
+3. Cascade construction — multi-step failure chains.
+4. Abuse cases — malicious or naive caller scenarios.
+
+Do not re-surface primary findings. Probe for what wasn't caught.
+
+Output format: severity, confidence anchor (0/25/50/75/100), classification
+(introduced/pre_existing), file:line, suggested fix. Prefix ids with `a`.
+Tag findings `pass: adversarial`. Suppress <75 except P0 @ 50+.
+
+## Primary findings (for context; do NOT re-flag)
+
+<!-- PRIMARY_FINDINGS_BLOCK -->
+""",
+    "security": """# Security pass
+
+Specialized security review. Primary findings are context — do not re-flag.
+
+Focus: authN gaps, authZ gaps (IDOR, privilege escalation), input handling
+(injection, XSS, SSRF, path traversal), secrets handling, permission
+boundaries (TOCTOU, race conditions).
+
+Output format: same as primary. Prefix ids with `s`. Tag findings
+`pass: security`. Suppress <75 except P0 @ 50+.
+
+## Primary findings (for context; do NOT re-flag)
+
+<!-- PRIMARY_FINDINGS_BLOCK -->
+""",
+    "performance": """# Performance pass
+
+Specialized performance review. Primary findings are context — do not re-flag.
+
+Focus: database (N+1, missing indexes, large scans), algorithmic (O(n²)
+where O(n) suffices, unbounded loops), I/O (sequential parallelizable,
+sync-in-hot-path, missing cache), memory (unbounded growth, GC pressure),
+concurrency (contention, lock ordering).
+
+Output format: same as primary. Prefix ids with `p`. Tag findings
+`pass: performance`. Suppress <75 except P0 @ 50+.
+
+## Primary findings (for context; do NOT re-flag)
+
+<!-- PRIMARY_FINDINGS_BLOCK -->
+""",
+}
+
+# Confidence anchor order for cross-pass promotion.
+CONFIDENCE_ANCHORS = (0, 25, 50, 75, 100)
+
+
+def load_deep_pass_template(pass_name: str) -> str:
+    """Load the per-pass prompt template from deep-passes.md.
+
+    Extracts the block between ``<!-- <NAME>_TEMPLATE -->`` marker and the
+    next ``---`` horizontal rule (or the next template marker). Falls back
+    to the embedded copy if the file is missing or markers absent.
+
+    Conservative by design: unknown pass names raise ValueError so the CLI
+    surface can reject early with a helpful error.
+    """
+    if pass_name not in DEEP_PASSES:
+        raise ValueError(
+            f"Unknown deep pass: {pass_name!r} (expected one of {DEEP_PASSES})"
+        )
+
+    # Try repo-root plugin path first (dev / local install).
+    template_path: Optional[Path] = None
+    try:
+        repo_root = get_repo_root()
+        candidate = repo_root / DEEP_PASSES_TEMPLATE_REL
+        if candidate.exists():
+            template_path = candidate
+    except Exception:
+        pass
+    # Try CLAUDE_PLUGIN_ROOT / DROID_PLUGIN_ROOT (installed plugin).
+    if template_path is None:
+        for env_var in ("CLAUDE_PLUGIN_ROOT", "DROID_PLUGIN_ROOT"):
+            root = os.environ.get(env_var)
+            if not root:
+                continue
+            candidate = (
+                Path(root) / "skills" / "flow-next-impl-review" / "deep-passes.md"
+            )
+            if candidate.exists():
+                template_path = candidate
+                break
+
+    if template_path is None:
+        return DEEP_PASSES_FALLBACK[pass_name]
+
+    try:
+        body = template_path.read_text(encoding="utf-8")
+    except OSError:
+        return DEEP_PASSES_FALLBACK[pass_name]
+
+    marker = f"<!-- {pass_name.upper()}_TEMPLATE -->"
+    marker_idx = body.find(marker)
+    if marker_idx < 0:
+        return DEEP_PASSES_FALLBACK[pass_name]
+
+    # Extract between first ```markdown fence after marker and its closing ```.
+    fence_open = body.find("```markdown", marker_idx)
+    if fence_open < 0:
+        return DEEP_PASSES_FALLBACK[pass_name]
+    body_start = body.find("\n", fence_open) + 1
+    fence_close = body.find("\n```", body_start)
+    if fence_close < 0:
+        return DEEP_PASSES_FALLBACK[pass_name]
+    return body[body_start:fence_close]
+
+
+def _normalize_path(path: str) -> str:
+    """Lower-case + strip leading ./ for fingerprint stability."""
+    if not path:
+        return ""
+    p = path.strip()
+    if p.startswith("./"):
+        p = p[2:]
+    return p.lower()
+
+
+def _line_bucket(line: Any, bucket: int = 10) -> int:
+    """Bucket line numbers so near-duplicates collide on fingerprint."""
+    try:
+        n = int(line)
+    except (TypeError, ValueError):
+        return -1
+    if n < 1:
+        return -1
+    return (n // bucket) * bucket
+
+
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _slug(text: str, limit: int = 60) -> str:
+    """Slugify title for fingerprint: lower, strip punctuation, truncate."""
+    if not text:
+        return ""
+    s = _SLUG_RE.sub("-", text.lower()).strip("-")
+    return s[:limit]
+
+
+def finding_fingerprint(finding: dict) -> tuple:
+    """Stable 3-tuple fingerprint used for cross-pass dedup + promotion."""
+    file_ = _normalize_path(str(finding.get("file", "")))
+    bucket = _line_bucket(finding.get("line"))
+    title = finding.get("title") or finding.get("problem") or ""
+    return (file_, bucket, _slug(str(title)))
+
+
+def promote_confidence(current: Any) -> int:
+    """Promote confidence one anchor step. Ceiling at 100. Unknown → 75."""
+    try:
+        c = int(current)
+    except (TypeError, ValueError):
+        return 75
+    best = 75
+    for anchor in CONFIDENCE_ANCHORS:
+        if anchor <= c:
+            best = anchor
+    idx = CONFIDENCE_ANCHORS.index(best) if best in CONFIDENCE_ANCHORS else -1
+    if idx < 0 or idx == len(CONFIDENCE_ANCHORS) - 1:
+        return CONFIDENCE_ANCHORS[-1]
+    return CONFIDENCE_ANCHORS[idx + 1]
+
+
+# Match lines like: "**a1** | severity=P1 | confidence=75 | ..."
+# Tolerant of various markdown header shapes the reviewer may emit.
+_DEEP_FINDING_HEADER_RE = re.compile(
+    r"""^[\s#>*_`\-]*                       # leading markdown noise
+         \*{0,2}(?P<id>[a-z]\d+)\*{0,2}     # id like a1, s2, p3 (bold optional)
+         \s*[|:]\s*
+         (?P<rest>.+)$                      # rest of header line (severity=, etc.)
+    """,
+    re.VERBOSE | re.IGNORECASE,
+)
+
+
+def parse_deep_findings(output: str, pass_name: str) -> list[dict]:
+    """Parse deep-pass LLM output into a list of finding dicts.
+
+    Best-effort parser that recognizes the structured-header form from the
+    deep-pass prompt templates. Unrecognized blocks are skipped. Returns an
+    empty list if no findings are found (valid outcome — the pass may have
+    genuinely found nothing new).
+
+    Each finding dict carries at minimum:
+      ``id``, ``pass``, ``confidence``, ``severity``, ``classification``,
+      ``file``, ``line``, ``title``, ``suggested_fix``.
+    """
+    findings: list[dict] = []
+    current: Optional[dict] = None
+
+    def _flush() -> None:
+        nonlocal current
+        if current is not None:
+            # Require at minimum an id + either title or file to be useful.
+            if current.get("id") and (current.get("title") or current.get("file")):
+                findings.append(current)
+        current = None
+
+    for raw_line in output.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+
+        # Header match → start new finding.
+        m = _DEEP_FINDING_HEADER_RE.match(stripped)
+        if m:
+            _flush()
+            fid = m.group("id").lower()
+            current = {
+                "id": fid,
+                "pass": pass_name,
+                "severity": "",
+                "confidence": "",
+                "classification": "introduced",
+                "file": "",
+                "line": None,
+                "title": "",
+                "suggested_fix": "",
+            }
+            rest = m.group("rest")
+            # Parse key=value pairs separated by | (severity, confidence, etc.)
+            for pair in rest.split("|"):
+                if "=" not in pair:
+                    continue
+                k, v = pair.split("=", 1)
+                k = k.strip().lower()
+                v = v.strip().strip("`").strip()
+                if k == "severity":
+                    current["severity"] = v
+                elif k in ("confidence", "conf"):
+                    try:
+                        current["confidence"] = int(v)
+                    except ValueError:
+                        current["confidence"] = v
+                elif k in ("classification", "class"):
+                    current["classification"] = v or "introduced"
+                elif k == "pass":
+                    current["pass"] = v or pass_name
+            continue
+
+        # Sub-field parsing (only when inside a finding).
+        if current is None:
+            continue
+
+        # Match "- key: value" or "* key: value" forms.
+        sub = re.match(
+            r"^[\s>*_`\-]+\s*(?P<key>[A-Za-z][A-Za-z0-9 _\-]*?)\s*:\s*(?P<val>.+)$",
+            line,
+        )
+        if not sub:
+            # Blank line → potential end of finding; flush when next header arrives.
+            continue
+        key = sub.group("key").strip().lower()
+        val = sub.group("val").strip().strip("`").strip()
+        if key == "location":
+            # Parse file:line; tolerate `file:line` or `file` only.
+            loc = val.strip("`").strip()
+            if ":" in loc:
+                file_part, _, line_part = loc.rpartition(":")
+                current["file"] = file_part.strip()
+                try:
+                    current["line"] = int(line_part.strip())
+                except ValueError:
+                    current["line"] = None
+            else:
+                current["file"] = loc
+        elif key in ("issue", "problem"):
+            current["title"] = val
+        elif key in ("suggested fix", "suggestion", "fix"):
+            current["suggested_fix"] = val
+        elif key == "severity":
+            current["severity"] = val
+        elif key in ("confidence", "conf"):
+            try:
+                current["confidence"] = int(val)
+            except ValueError:
+                current["confidence"] = val
+        elif key in ("classification", "class"):
+            current["classification"] = val or "introduced"
+
+    _flush()
+    return findings
+
+
+def merge_deep_findings(
+    primary: list[dict],
+    deep_by_pass: dict[str, list[dict]],
+) -> dict:
+    """Merge primary findings with deep-pass findings.
+
+    Dedup rules:
+      - Deep-pass finding with same fingerprint as a **primary** finding →
+        dropped; primary's confidence promoted one anchor step
+        (cross-pass agreement — the only place promotion fires).
+      - Deep-pass finding with same fingerprint as an earlier deep-pass
+        finding → dropped (simple dedup). No promotion — promoting on
+        cross-deep-pass overlap would double-count correlated failure
+        modes from the same session.
+      - First-seen deep-pass finding with a novel fingerprint → included.
+
+    Returns a dict:
+      {
+        "merged":  list of surviving findings (primary + non-dup deep),
+        "promotions": list of {id, from, to, pass} for telemetry,
+        "counts": {"primary": N, "adversarial": N, "security": N, "performance": N},
+      }
+    """
+    # Index primary findings by fingerprint (source of promotion targets).
+    primary_by_fp: dict[tuple, dict] = {}
+    for f in primary:
+        fp = finding_fingerprint(f)
+        primary_by_fp.setdefault(fp, f)
+
+    # Track deep-pass fingerprints separately so cross-deep collisions
+    # dedup without triggering promotion.
+    deep_seen_fps: set[tuple] = set()
+
+    merged: list[dict] = list(primary)
+    promotions: list[dict] = []
+    counts: dict[str, int] = {"primary": len(primary)}
+
+    for pass_name, pass_findings in deep_by_pass.items():
+        counts[pass_name] = 0
+        for df in pass_findings:
+            fp = finding_fingerprint(df)
+            if fp in primary_by_fp:
+                # Primary + deep agreement → promote primary confidence.
+                target = primary_by_fp[fp]
+                before = target.get("confidence")
+                after = promote_confidence(before)
+                if after != before:
+                    target["confidence"] = after
+                    promotions.append(
+                        {
+                            "id": target.get("id"),
+                            "from": before,
+                            "to": after,
+                            "pass": pass_name,
+                        }
+                    )
+                # Deep-pass finding is dropped (dedup).
+                continue
+            if fp in deep_seen_fps:
+                # Cross-deep collision → dedup, but no promotion.
+                continue
+            deep_seen_fps.add(fp)
+            merged.append(df)
+            counts[pass_name] += 1
+
+    return {"merged": merged, "promotions": promotions, "counts": counts}
+
+
+def _apply_deep_passes_to_receipt(
+    receipt_path: str,
+    passes_run: list[str],
+    deep_by_pass: dict[str, list[dict]],
+    merge_result: dict,
+    prior_verdict: Optional[str],
+) -> dict:
+    """Merge deep-pass result into the receipt at ``receipt_path``.
+
+    Adds ``deep_passes``, ``deep_findings_count``, ``cross_pass_promotions``
+    fields. Recomputes verdict based on merged findings: any introduced
+    finding at confidence ≥ 75 (or P0 ≥ 50) flips verdict to NEEDS_WORK.
+    Primary-SHIP only downgrades to NEEDS_WORK when deep-pass introduces
+    new blocking findings. We never silently flip NEEDS_WORK → SHIP via
+    deep-pass (that is the validator's job).
+    """
+    path = Path(receipt_path)
+    try:
+        receipt = (
+            json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        )
+    except (json.JSONDecodeError, OSError):
+        receipt = {}
+
+    # Accumulate across sequential deep-pass calls. The workflow runs one
+    # pass per `flowctl <backend> deep-pass` invocation (adversarial →
+    # security → performance), so rewriting these fields on each call would
+    # erase prior pass data. Merge instead: union pass names (order-preserving),
+    # merge counts per pass, and append new promotions while deduping by id.
+    prior_passes = receipt.get("deep_passes") or []
+    prior_counts = receipt.get("deep_findings_count") or {}
+    prior_promotions = receipt.get("cross_pass_promotions") or []
+
+    merged_passes: list[str] = list(prior_passes)
+    for p in passes_run:
+        if p not in merged_passes:
+            merged_passes.append(p)
+
+    merged_counts = dict(prior_counts)
+    for p in passes_run:
+        merged_counts[p] = merge_result["counts"].get(p, 0)
+
+    merged_promotions: list[dict[str, Any]] = list(prior_promotions)
+    seen_promotion_ids = {p.get("id") for p in merged_promotions if p.get("id")}
+    for promotion in merge_result["promotions"]:
+        pid = promotion.get("id")
+        if pid and pid in seen_promotion_ids:
+            continue
+        merged_promotions.append(promotion)
+        if pid:
+            seen_promotion_ids.add(pid)
+
+    receipt["deep_passes"] = merged_passes
+    receipt["deep_findings_count"] = merged_counts
+    if merged_promotions:
+        receipt["cross_pass_promotions"] = merged_promotions
+
+    # Verdict upgrade: new blocking introduced findings from deep-pass flip
+    # SHIP → NEEDS_WORK. Never downgrade NEEDS_WORK → SHIP.
+    def _is_blocking(f: dict) -> bool:
+        if str(f.get("classification", "introduced")).lower() != "introduced":
+            return False
+        sev = str(f.get("severity", "")).upper()
+        try:
+            conf = int(f.get("confidence") or 0)
+        except (TypeError, ValueError):
+            conf = 0
+        if sev in ("P0", "CRITICAL") and conf >= 50:
+            return True
+        if conf >= 75:
+            return True
+        return False
+
+    # Only deep-pass findings contribute to verdict upgrade. Primary findings
+    # were already scored by primary — their verdict is the `prior_verdict`.
+    deep_blocking = any(
+        _is_blocking(f)
+        for findings in deep_by_pass.values()
+        for f in findings
+    )
+    if prior_verdict == "SHIP" and deep_blocking:
+        receipt["verdict_before_deep"] = prior_verdict
+        receipt["verdict"] = "NEEDS_WORK"
+
+    receipt["deep_timestamp"] = now_iso()
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    return receipt
+
+
+def _load_primary_findings(findings_file: Optional[str]) -> list[dict]:
+    """Load primary findings (JSON-lines, one object per line)."""
+    return load_findings(findings_file)
+
+
+def _render_primary_findings_block(findings: list[dict]) -> str:
+    """Render primary findings as markdown context for deep-pass prompts."""
+    if not findings:
+        return "_(no primary findings supplied — probe freely but avoid common false positives)_"
+    return render_findings_block(findings)
+
+
+def _run_deep_pass(
+    backend: str,
+    pass_name: str,
+    primary_findings_file: Optional[str],
+    receipt_path: str,
+    spec_arg: Optional[str],
+    use_json: bool,
+) -> None:
+    """Execute one deep pass against ``backend`` (codex|copilot).
+
+    Reads prior session from receipt, invokes backend with session
+    continuity, parses output, merges findings into receipt. Each call
+    appends to the receipt's ``deep_passes`` list so multiple calls (one
+    per pass) compose cleanly.
+    """
+    if pass_name not in DEEP_PASSES:
+        error_exit(
+            f"Unknown --pass value: {pass_name!r} (expected one of {', '.join(DEEP_PASSES)})",
+            use_json=use_json,
+            code=2,
+        )
+
+    # Load prior receipt for session_id + mode + verdict.
+    receipt_file = Path(receipt_path)
+    prior_session_id: Optional[str] = None
+    prior_verdict: Optional[str] = None
+    prior_mode: Optional[str] = None
+    prior_passes: list[str] = []
+    if receipt_file.exists():
+        try:
+            prior = json.loads(receipt_file.read_text(encoding="utf-8"))
+            prior_session_id = prior.get("session_id")
+            prior_verdict = prior.get("verdict")
+            prior_mode = prior.get("mode")
+            if isinstance(prior.get("deep_passes"), list):
+                prior_passes = list(prior["deep_passes"])
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    if not prior_session_id:
+        error_exit(
+            f"No session_id in receipt at {receipt_path} — run impl-review first",
+            use_json=use_json,
+            code=2,
+        )
+
+    if prior_mode and prior_mode != backend:
+        error_exit(
+            f"Receipt mode is {prior_mode!r}; cannot run deep-pass with {backend!r}. "
+            "Deep-pass must run with the same backend as the primary review.",
+            use_json=use_json,
+            code=2,
+        )
+
+    # Build prompt.
+    template = load_deep_pass_template(pass_name)
+    primary_findings = _load_primary_findings(primary_findings_file)
+    primary_block = _render_primary_findings_block(primary_findings)
+    prompt = template.replace("<!-- PRIMARY_FINDINGS_BLOCK -->", primary_block)
+
+    # Dispatch to backend.
+    if backend == "codex":
+        if spec_arg:
+            try:
+                spec = BackendSpec.parse(spec_arg).resolve()
+            except ValueError as e:
+                error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
+        else:
+            spec = resolve_review_spec("codex", None)
+        try:
+            sandbox = resolve_codex_sandbox("auto")
+        except ValueError as e:
+            error_exit(str(e), use_json=use_json, code=2)
+        output, _tid, exit_code, stderr = run_codex_exec(
+            prompt, session_id=prior_session_id, sandbox=sandbox, spec=spec
+        )
+        if exit_code != 0:
+            error_exit(
+                f"codex deep-pass ({pass_name}) failed: {(stderr or output or '').strip()}",
+                use_json=use_json,
+                code=2,
+            )
+    elif backend == "copilot":
+        if spec_arg:
+            try:
+                spec = BackendSpec.parse(spec_arg).resolve()
+            except ValueError as e:
+                error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
+        else:
+            spec = resolve_review_spec("copilot", None)
+        repo_root = get_repo_root()
+        output, _sid, exit_code, stderr = run_copilot_exec(
+            prompt, session_id=prior_session_id, repo_root=repo_root, spec=spec
+        )
+        if exit_code != 0:
+            error_exit(
+                f"copilot deep-pass ({pass_name}) failed: {(stderr or output or '').strip()}",
+                use_json=use_json,
+                code=2,
+            )
+    else:
+        error_exit(
+            f"Unknown deep-pass backend: {backend}",
+            use_json=use_json,
+            code=2,
+        )
+
+    # Parse deep-pass findings from output.
+    deep_findings = parse_deep_findings(output, pass_name)
+
+    # Merge with primary (this pass only for the per-call receipt update).
+    merge_result = merge_deep_findings(primary_findings, {pass_name: deep_findings})
+
+    # Append this pass to prior_passes (de-dup while preserving order).
+    passes_run = list(prior_passes)
+    if pass_name not in passes_run:
+        passes_run.append(pass_name)
+
+    # Build per-pass map from the receipt-stored counts so repeated calls
+    # accumulate. (The merge above only reflects this single call.)
+    deep_by_pass = {pass_name: deep_findings}
+    updated_receipt = _apply_deep_passes_to_receipt(
+        receipt_path,
+        passes_run,
+        deep_by_pass,
+        merge_result,
+        prior_verdict,
+    )
+    new_verdict = updated_receipt.get("verdict", prior_verdict)
+
+    if use_json:
+        json_output(
+            {
+                "type": "impl_review_deep_pass",
+                "mode": backend,
+                "pass": pass_name,
+                "findings_count": len(deep_findings),
+                "promotions": merge_result["promotions"],
+                "passes_run": passes_run,
+                "verdict": new_verdict,
+                "verdict_before_deep": updated_receipt.get("verdict_before_deep"),
+                "receipt": receipt_path,
+            }
+        )
+    else:
+        print(output)
+        print(
+            f"\nDeep-pass ({pass_name}): new_findings={len(deep_findings)} "
+            f"promotions={len(merge_result['promotions'])}"
+        )
+        if updated_receipt.get("verdict_before_deep"):
+            print(
+                f"Verdict flipped: "
+                f"{updated_receipt['verdict_before_deep']} → {new_verdict}"
+            )
+        print(f"VERDICT={new_verdict or 'UNKNOWN'}")
+
+
+def cmd_codex_deep_pass(args: argparse.Namespace) -> None:
+    """Dispatch one codex deep-pass (adversarial|security|performance)."""
+    _run_deep_pass(
+        backend="codex",
+        pass_name=args.pass_name,
+        primary_findings_file=getattr(args, "primary_findings", None),
+        receipt_path=args.receipt,
+        spec_arg=getattr(args, "spec", None),
+        use_json=args.json,
+    )
+
+
+def cmd_copilot_deep_pass(args: argparse.Namespace) -> None:
+    """Dispatch one copilot deep-pass (adversarial|security|performance)."""
+    _run_deep_pass(
+        backend="copilot",
+        pass_name=args.pass_name,
+        primary_findings_file=getattr(args, "primary_findings", None),
+        receipt_path=args.receipt,
+        spec_arg=getattr(args, "spec", None),
+        use_json=args.json,
+    )
+
+
+# --- Auto-enable heuristics for --deep (exposed for skill layer) ---
+
+SECURITY_PATTERNS = [
+    # Match auth/permissions/middleware/session as a directory segment OR as
+    # the start of a leaf filename. The prior `$`-anchored form only matched
+    # paths whose final segment started with the keyword (e.g. `auth.py`),
+    # missing `src/auth/service.py`. Using a non-letter follow-set (`/`, `.`,
+    # `_`, `-`, end-of-string) matches both the directory and filename cases
+    # while rejecting compound words like `author.py`.
+    r"(^|/)auth([^a-zA-Z]|$)",
+    r"(^|/)Auth([^a-zA-Z]|$)",
+    r"(^|/)permissions?([^a-zA-Z]|$)",
+    r"(^|/)Permissions?([^a-zA-Z]|$)",
+    r"(^|/)routes?/",
+    r"(^|/)routers?/",
+    r"Controller\.(rb|py|ts|js|tsx|jsx|go|java|cs)$",
+    r"(^|/)middlewares?([^a-zA-Z]|$)",
+    r"(^|/)sessions?([^a-zA-Z]|$)",
+    r"(^|/)Sessions?([^a-zA-Z]|$)",
+    r"[Tt]oken",
+    r"(^|/)api/",
+    r"\.env",
+    r"^\.github/workflows/",
+]
+
+PERFORMANCE_PATTERNS = [
+    r"(^|/)migrations?/",
+    r"(^|/)migrate/",
+    r"(^|/)db/schema\.rb$",
+    r"\.sql$",
+    r"(^|/)cache[^/]*",
+    r"(^|/)redis[^/]*",
+    r"(^|/)memcache[^/]*",
+    r"(^|/)jobs?/",
+    r"(^|/)workers?/",
+]
+
+
+def _match_any(patterns: list[str], paths: list[str]) -> bool:
+    compiled = [re.compile(p) for p in patterns]
+    for path in paths:
+        for rx in compiled:
+            if rx.search(path):
+                return True
+    return False
+
+
+def auto_enabled_passes(changed_files: list[str]) -> list[str]:
+    """Return list of passes that auto-enable given a changed-file list.
+
+    Adversarial is NOT included — it's always run when --deep is set.
+    Skill layer appends 'adversarial' before invoking.
+    """
+    enabled: list[str] = []
+    if _match_any(SECURITY_PATTERNS, changed_files):
+        enabled.append("security")
+    if _match_any(PERFORMANCE_PATTERNS, changed_files):
+        enabled.append("performance")
+    return enabled
+
+
+def cmd_deep_auto_enable(args: argparse.Namespace) -> None:
+    """Print which deep passes auto-enable for a given changed-file list.
+
+    Skill layer calls this to avoid re-implementing glob heuristics in bash.
+    Reads file list from stdin (one path per line) or ``--files`` arg.
+    """
+    if args.files:
+        paths = [p.strip() for p in args.files.split(",") if p.strip()]
+    else:
+        paths = [ln.strip() for ln in sys.stdin.read().splitlines() if ln.strip()]
+    auto = auto_enabled_passes(paths)
+    # Adversarial is always on when --deep set — include in output for
+    # convenience so the skill can emit one canonical list.
+    selected = ["adversarial"] + auto
+    if args.json:
+        json_output(
+            {
+                "auto_enabled": auto,
+                "selected": selected,
+                "changed_file_count": len(paths),
+            }
+        )
+    else:
+        print(" ".join(selected))
+
+
+# --- Interactive walkthrough (fn-32.3 --interactive) ---
+#
+# The walkthrough loop itself runs in the skill (it needs the platform's
+# blocking question tool — AskUserQuestion / request_user_input / ask_user).
+# flowctl provides two helpers the skill calls after the loop:
+#
+#   1. ``review-walkthrough-defer``: append deferred findings to the
+#      branch-specific sink ``.flow/review-deferred/<branch-slug>.md``.
+#      Append-only — existing sessions stay intact.
+#
+#   2. ``review-walkthrough-record``: stamp the receipt with the bucket
+#      counts {applied, deferred, skipped, acknowledged}.
+#
+# Both are deliberately simple: no backend dispatch, no session_id
+# requirement (unlike validate / deep-pass, which call the LLM). Walkthrough
+# never changes the verdict — it only sorts findings.
+
+DEFER_SINK_DIR_REL = ".flow/review-deferred"
+
+
+def _branch_slug(branch: Optional[str] = None) -> str:
+    """Derive a filesystem-safe slug from the current (or supplied) branch.
+
+    Same rule the skill uses in bash:
+      tr '/' '-' | tr -cd 'a-zA-Z0-9-_.'
+    Empty / detached-HEAD falls back to ``HEAD``.
+    """
+    name = branch
+    if not name:
+        try:
+            result = subprocess.run(
+                ["git", "branch", "--show-current"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            name = (result.stdout or "").strip()
+        except (OSError, subprocess.SubprocessError):
+            name = ""
+    if not name:
+        name = "HEAD"
+    # Normalize slashes, then keep only safe characters.
+    dashed = name.replace("/", "-")
+    slug = "".join(ch for ch in dashed if ch.isalnum() or ch in "-_.")
+    return slug or "HEAD"
+
+
+def _format_deferred_finding(finding: dict) -> str:
+    """Render one deferred finding as markdown bullets for the sink."""
+    severity = finding.get("severity", "?")
+    confidence = finding.get("confidence", "?")
+    classification = finding.get("classification", "?")
+    file_ = finding.get("file", "?")
+    line = finding.get("line", "?")
+    title = finding.get("title", "(no title)")
+    suggested = finding.get("suggested_fix") or finding.get("suggestion") or ""
+    reason = finding.get("deferred_reason") or "deferred by user"
+
+    head = (
+        f"- [{severity}, confidence {confidence}, {classification}] "
+        f"{file_}:{line} — {title}"
+    )
+    lines = [head]
+    if suggested:
+        lines.append(f"  - Suggested: {suggested}")
+    lines.append(f"  - Deferred reason: {reason}")
+    return "\n".join(lines)
+
+
+def append_deferred_findings(
+    findings: list[dict],
+    branch_slug: str,
+    session_header: str,
+    sink_root: Optional[Path] = None,
+) -> Path:
+    """Append deferred findings to ``.flow/review-deferred/<slug>.md``.
+
+    Returns the absolute path of the sink file. Creates the directory if
+    absent; preserves any existing content (append-only). Empty ``findings``
+    is a no-op that still creates the directory but doesn't touch the file.
+    """
+    root = sink_root if sink_root is not None else get_repo_root()
+    sink_dir = root / DEFER_SINK_DIR_REL
+    sink_dir.mkdir(parents=True, exist_ok=True)
+    sink_file = sink_dir / f"{branch_slug}.md"
+
+    if not findings:
+        # No findings to append — return the path so caller can still echo it.
+        # We don't create an empty file; the directory exists either way.
+        return sink_file
+
+    # Header — only add the top-level `#` once (first write to this file).
+    header_lines: list[str] = []
+    if not sink_file.exists():
+        header_lines.append(f"# Deferred review findings — {branch_slug}\n")
+
+    # Session section — always a new `##` with timestamp + receipt id/session.
+    section = [f"\n## {session_header}\n"]
+    for f in findings:
+        section.append(_format_deferred_finding(f))
+        section.append("")  # blank line between findings
+
+    body = "\n".join(header_lines) + "\n".join(section).rstrip() + "\n"
+
+    # Append-only. Use 'a' so we never clobber user-added prose between runs.
+    with sink_file.open("a", encoding="utf-8") as fh:
+        fh.write(body)
+
+    return sink_file
+
+
+def cmd_review_walkthrough_defer(args: argparse.Namespace) -> None:
+    """Append deferred findings to the branch-specific sink file.
+
+    Consumes a JSON-Lines findings file (same shape as validator /
+    deep-pass: id, severity, confidence, classification, file, line,
+    title, suggested_fix). Optional per-finding ``deferred_reason`` field
+    overrides the default "deferred by user" line.
+
+    Derives branch slug via ``git branch --show-current`` (or ``--branch``
+    override). Creates ``.flow/review-deferred/`` if absent. Append-only —
+    never rewrites existing content.
+
+    Receipt path is read (if provided) to stamp the session header with
+    ``id`` / ``session_id`` for cross-referencing, but no receipt writes
+    happen here (use ``review-walkthrough-record`` for that).
+    """
+    findings_path = getattr(args, "findings_file", None)
+    findings = load_findings(findings_path)
+
+    # Read receipt (optional) for session header context.
+    receipt_id = ""
+    session_id = ""
+    if args.receipt:
+        receipt_file = Path(args.receipt)
+        if receipt_file.exists():
+            try:
+                receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
+                receipt_id = receipt_data.get("id") or ""
+                session_id = receipt_data.get("session_id") or ""
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    # Compose session header: "<YYYY-MM-DD HH:MM> — review session <id> (<sess>)"
+    ts_pretty = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    parts = [ts_pretty, "—", "review session"]
+    if receipt_id:
+        parts.append(receipt_id)
+    if session_id:
+        parts.append(f"({session_id})")
+    session_header = " ".join(parts)
+
+    branch_slug = _branch_slug(getattr(args, "branch", None))
+    sink_path = append_deferred_findings(findings, branch_slug, session_header)
+
+    result = {
+        "type": "review_walkthrough_defer",
+        "branch_slug": branch_slug,
+        "sink_path": str(sink_path),
+        "appended": len(findings),
+        "session_header": session_header,
+        "timestamp": now_iso(),
+    }
+    if args.json:
+        json_output(result)
+    else:
+        if findings:
+            print(f"Appended {len(findings)} deferred finding(s) to {sink_path}")
+        else:
+            print(f"No findings to defer; sink path: {sink_path}")
+
+
+def cmd_review_walkthrough_record(args: argparse.Namespace) -> None:
+    """Stamp the receipt with walkthrough bucket counts.
+
+    Additive — writes a ``walkthrough`` object and
+    ``walkthrough_timestamp`` alongside existing receipt fields. Never
+    changes the verdict; walkthrough is a sorting / routing step, not a
+    verdict-forming one.
+
+    Creates an empty receipt if the target path doesn't exist, so the
+    caller always has a complete record (useful in tests / dry-runs).
+    """
+    path = Path(args.receipt)
+    try:
+        receipt = (
+            json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        )
+    except (json.JSONDecodeError, OSError):
+        receipt = {}
+
+    applied = max(0, int(args.applied or 0))
+    deferred = max(0, int(args.deferred or 0))
+    skipped = max(0, int(args.skipped or 0))
+    acknowledged = max(0, int(args.acknowledged or 0))
+
+    lfg_raw = getattr(args, "lfg_rest", None)
+    if isinstance(lfg_raw, str):
+        lfg_used = lfg_raw.lower() in ("true", "1", "yes", "y")
+    else:
+        lfg_used = bool(lfg_raw) if lfg_raw is not None else False
+
+    walkthrough = {
+        "applied": applied,
+        "deferred": deferred,
+        "skipped": skipped,
+        "acknowledged": acknowledged,
+        "lfg_rest": lfg_used,
+    }
+    receipt["walkthrough"] = walkthrough
+    receipt["walkthrough_timestamp"] = now_iso()
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+
+    result = {
+        "type": "review_walkthrough_record",
+        "receipt": str(path),
+        "walkthrough": walkthrough,
+        "verdict": receipt.get("verdict"),  # unchanged; echo for sanity
+    }
+    if args.json:
+        json_output(result)
+    else:
+        total = applied + deferred + skipped + acknowledged
+        print(
+            f"Walkthrough recorded: applied={applied} deferred={deferred} "
+            f"skipped={skipped} acknowledged={acknowledged} "
+            f"(lfg_rest={lfg_used}, total={total})"
+        )
+
+
 def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     """Run implementation review via codex exec."""
     task_id = args.task
@@ -13235,6 +14703,59 @@ def main() -> None:
     )
     p_codex_completion.set_defaults(func=cmd_codex_completion_review)
 
+    p_codex_validate = codex_sub.add_parser(
+        "validate",
+        help="Validator pass over prior review findings (fn-32.1 --validate)",
+    )
+    p_codex_validate.add_argument(
+        "--findings-file",
+        dest="findings_file",
+        help="JSON-lines file with findings to validate (one object per line, "
+        "with at least `id`). Empty or missing => no-op.",
+    )
+    p_codex_validate.add_argument(
+        "--receipt",
+        required=True,
+        help="Receipt file from prior impl-review (required; provides session_id).",
+    )
+    p_codex_validate.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'codex:gpt-5.4:xhigh'). "
+        "Defaults to env/config resolution.",
+    )
+    p_codex_validate.add_argument("--json", action="store_true", help="JSON output")
+    p_codex_validate.set_defaults(func=cmd_codex_validate)
+
+    p_codex_deep = codex_sub.add_parser(
+        "deep-pass",
+        help="Deep-pass review (adversarial|security|performance) — fn-32.2 --deep",
+    )
+    p_codex_deep.add_argument(
+        "--pass",
+        dest="pass_name",
+        required=True,
+        choices=list(DEEP_PASSES),
+        help="Which specialized pass to run.",
+    )
+    p_codex_deep.add_argument(
+        "--primary-findings",
+        dest="primary_findings",
+        help="JSON-lines file with primary review findings (provides context; "
+        "also used for cross-pass agreement / dedup).",
+    )
+    p_codex_deep.add_argument(
+        "--receipt",
+        required=True,
+        help="Receipt file from prior impl-review (required; provides session_id).",
+    )
+    p_codex_deep.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'codex:gpt-5.4:xhigh'). "
+        "Defaults to env/config resolution.",
+    )
+    p_codex_deep.add_argument("--json", action="store_true", help="JSON output")
+    p_codex_deep.set_defaults(func=cmd_codex_deep_pass)
+
     # copilot (GitHub Copilot CLI helpers). Subcommand surface mirrors codex;
     # review subcommands (impl-review/plan-review/completion-review) are
     # added in task fn-27-copilot-review-backend.3.
@@ -13313,6 +14834,165 @@ def main() -> None:
         "Overrides env/config resolution. Strict parse.",
     )
     p_copilot_completion.set_defaults(func=cmd_copilot_completion_review)
+
+    p_copilot_validate = copilot_sub.add_parser(
+        "validate",
+        help="Validator pass over prior review findings (fn-32.1 --validate)",
+    )
+    p_copilot_validate.add_argument(
+        "--findings-file",
+        dest="findings_file",
+        help="JSON-lines file with findings to validate (one object per line, "
+        "with at least `id`). Empty or missing => no-op.",
+    )
+    p_copilot_validate.add_argument(
+        "--receipt",
+        required=True,
+        help="Receipt file from prior impl-review (required; provides session_id).",
+    )
+    p_copilot_validate.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'copilot:claude-opus-4.5:xhigh'). "
+        "Defaults to env/config resolution.",
+    )
+    p_copilot_validate.add_argument("--json", action="store_true", help="JSON output")
+    p_copilot_validate.set_defaults(func=cmd_copilot_validate)
+
+    p_copilot_deep = copilot_sub.add_parser(
+        "deep-pass",
+        help="Deep-pass review (adversarial|security|performance) — fn-32.2 --deep",
+    )
+    p_copilot_deep.add_argument(
+        "--pass",
+        dest="pass_name",
+        required=True,
+        choices=list(DEEP_PASSES),
+        help="Which specialized pass to run.",
+    )
+    p_copilot_deep.add_argument(
+        "--primary-findings",
+        dest="primary_findings",
+        help="JSON-lines file with primary review findings (provides context; "
+        "also used for cross-pass agreement / dedup).",
+    )
+    p_copilot_deep.add_argument(
+        "--receipt",
+        required=True,
+        help="Receipt file from prior impl-review (required; provides session_id).",
+    )
+    p_copilot_deep.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'copilot:claude-opus-4.5:xhigh'). "
+        "Defaults to env/config resolution.",
+    )
+    p_copilot_deep.add_argument("--json", action="store_true", help="JSON output")
+    p_copilot_deep.set_defaults(func=cmd_copilot_deep_pass)
+
+    # Review auto-enable heuristic (fn-32.2 --deep). Skill layer calls this
+    # to determine which deep passes auto-enable for a given changed-file
+    # list without re-implementing glob heuristics in bash.
+    p_review = subparsers.add_parser(
+        "review-deep-auto",
+        help="Print deep passes that auto-enable for a changed-file list (fn-32.2)",
+    )
+    p_review.add_argument(
+        "--files",
+        help="Comma-separated changed-file paths (else reads stdin, one per line).",
+    )
+    p_review.add_argument("--json", action="store_true", help="JSON output")
+    p_review.set_defaults(func=cmd_deep_auto_enable)
+
+    # --- Interactive walkthrough helpers (fn-32.3 --interactive) ---
+    # Walkthrough loop itself lives in the skill (needs the platform's
+    # blocking question tool). These two helpers handle the post-loop
+    # bookkeeping: defer sink append + receipt record.
+    p_walk_defer = subparsers.add_parser(
+        "review-walkthrough-defer",
+        help=(
+            "Append deferred findings to .flow/review-deferred/<branch>.md "
+            "(fn-32.3). Append-only; creates the directory if absent."
+        ),
+    )
+    p_walk_defer.add_argument(
+        "--findings-file",
+        dest="findings_file",
+        required=True,
+        help=(
+            "JSON-Lines path (one finding per line). Same shape as validator "
+            "pass: id, severity, confidence, classification, file, line, "
+            "title, suggested_fix. Optional per-finding 'deferred_reason' "
+            "overrides the default 'deferred by user' label."
+        ),
+    )
+    p_walk_defer.add_argument(
+        "--receipt",
+        help=(
+            "Optional receipt path — reads 'id' and 'session_id' to stamp "
+            "the session header. Never writes to the receipt (use "
+            "review-walkthrough-record for receipt writes)."
+        ),
+    )
+    p_walk_defer.add_argument(
+        "--branch",
+        help=(
+            "Override branch name for slug derivation (default: git branch "
+            "--show-current, falls back to 'HEAD' on detached)."
+        ),
+    )
+    p_walk_defer.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_walk_defer.set_defaults(func=cmd_review_walkthrough_defer)
+
+    p_walk_record = subparsers.add_parser(
+        "review-walkthrough-record",
+        help=(
+            "Stamp the receipt with walkthrough bucket counts (fn-32.3). "
+            "Additive — never changes verdict."
+        ),
+    )
+    p_walk_record.add_argument(
+        "--receipt",
+        required=True,
+        help="Path to the review receipt (will be created if missing).",
+    )
+    p_walk_record.add_argument(
+        "--applied",
+        type=int,
+        default=0,
+        help="Count of findings the user chose to Apply (fixer will run).",
+    )
+    p_walk_record.add_argument(
+        "--deferred",
+        type=int,
+        default=0,
+        help="Count of findings the user chose to Defer (in sink file).",
+    )
+    p_walk_record.add_argument(
+        "--skipped",
+        type=int,
+        default=0,
+        help="Count of findings the user chose to Skip (no action).",
+    )
+    p_walk_record.add_argument(
+        "--acknowledged",
+        type=int,
+        default=0,
+        help="Count of findings the user chose to Acknowledge (noted only).",
+    )
+    p_walk_record.add_argument(
+        "--lfg-rest",
+        dest="lfg_rest",
+        default="false",
+        help=(
+            "Whether the user chose 'LFG the rest' to auto-classify "
+            "remaining findings (true|false; default false)."
+        ),
+    )
+    p_walk_record.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_walk_record.set_defaults(func=cmd_review_walkthrough_record)
 
     args = parser.parse_args()
     args.func(args)
