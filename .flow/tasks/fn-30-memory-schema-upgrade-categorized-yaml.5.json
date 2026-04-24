@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-24T08:17:36.559462Z",
+  "depends_on": [
+    "fn-30-memory-schema-upgrade-categorized-yaml.2",
+    "fn-30-memory-schema-upgrade-categorized-yaml.3"
+  ],
+  "epic": "fn-30-memory-schema-upgrade-categorized-yaml",
+  "id": "fn-30-memory-schema-upgrade-categorized-yaml.5",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-30-memory-schema-upgrade-categorized-yaml.5.md",
+  "status": "todo",
+  "title": "Ralph worker auto-capture rewrite + memory-scout category awareness",
+  "updated_at": "2026-04-24T08:21:46.021906Z"
+}

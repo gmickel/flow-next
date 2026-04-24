@@ -1,0 +1,21 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-24T08:17:36.790617Z",
+  "depends_on": [
+    "fn-30-memory-schema-upgrade-categorized-yaml.1",
+    "fn-30-memory-schema-upgrade-categorized-yaml.2",
+    "fn-30-memory-schema-upgrade-categorized-yaml.3",
+    "fn-30-memory-schema-upgrade-categorized-yaml.4",
+    "fn-30-memory-schema-upgrade-categorized-yaml.5",
+    "fn-30-memory-schema-upgrade-categorized-yaml.6"
+  ],
+  "epic": "fn-30-memory-schema-upgrade-categorized-yaml",
+  "id": "fn-30-memory-schema-upgrade-categorized-yaml.7",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-30-memory-schema-upgrade-categorized-yaml.7.md",
+  "status": "todo",
+  "title": "Docs, website, codex mirror, version bump",
+  "updated_at": "2026-04-24T08:21:46.255094Z"
+}

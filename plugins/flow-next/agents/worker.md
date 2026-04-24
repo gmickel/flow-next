@@ -36,13 +36,16 @@ git log -5 --oneline
 <FLOWCTL> config get memory.enabled --json
 ```
 
-**If memory.enabled is true**, read relevant memory:
+**If memory.enabled is true**, query relevant memory via the CLI (not by reading files directly — it handles both the categorized tree and legacy flat files):
 ```bash
-cat .flow/memory/pitfalls.md 2>/dev/null || true
-cat .flow/memory/conventions.md 2>/dev/null || true
-cat .flow/memory/decisions.md 2>/dev/null || true
+<FLOWCTL> memory list --json          # full index, track/category metadata
+<FLOWCTL> memory search "<keyword>" --json   # by task keyword / module / tag
 ```
-Look for entries relevant to your task's technology/domain.
+Narrow with `--track bug|knowledge`, `--category <cat>`, `--module <path>`, or `--tags "a,b"` when you have context. Read individual entries with `<FLOWCTL> memory read <entry-id>`.
+
+Legacy `.flow/memory/pitfalls.md` / `conventions.md` / `decisions.md` still surface via `memory list` / `search` (track=`legacy`) until `flowctl memory migrate` has run.
+
+Look for entries relevant to your task's technology/domain/module.
 
 Parse the spec carefully. Identify:
 - Acceptance criteria
@@ -156,6 +159,75 @@ If NEEDS_WORK:
 3. Re-invoke the skill: `/flow-next:impl-review <TASK_ID> --base $BASE_COMMIT`
 
 Continue until SHIP verdict.
+
+## Phase 4.5: Auto-capture on successful fix (after NEEDS_WORK → SHIP)
+
+Only runs when **all** are true:
+- `memory.enabled` is true (checked in Phase 1)
+- The review cycle went through at least one NEEDS_WORK → SHIP transition (a clean first-pass SHIP captures nothing)
+- The fix was non-trivial
+
+**Skip capture when:**
+- Review was a triage-skip fast-path (`receipt.mode == "triage_skip"`)
+- Fix was mechanical (lockfile bump, typo, formatting-only)
+- Same fingerprint (title + module + primary tag) was already captured in this session — `flowctl memory add` handles duplicate detection, but skip the call entirely if you know it's a repeat
+
+Otherwise, synthesize a bug-track entry from the NEEDS_WORK findings + the fix you applied:
+
+```bash
+FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+
+cat > /tmp/memory-body.md <<'EOF'
+## Problem
+<one-paragraph on what went wrong — surfaced by the review>
+
+## What Didn't Work
+<first attempt / naive approach, if relevant>
+
+## Solution
+<what actually fixed it — cite file:line when possible>
+
+## Prevention
+<what would catch this earlier — pre-commit check, test pattern, lint rule>
+EOF
+
+$FLOWCTL memory add \
+  --track bug \
+  --category <inferred> \
+  --title "<one-line summary, <=80 chars>" \
+  --module "<primary-affected-file-or-module>" \
+  --tags "<tag1>,<tag2>" \
+  --symptoms "<one-line — what went wrong>" \
+  --root-cause "<one-line — what caused it>" \
+  --body-file /tmp/memory-body.md
+```
+
+The overlap-detection in `memory add` handles duplicates automatically — high overlap updates the existing entry in place, moderate overlap creates a new entry with `related_to` cross-reference. No dedup burden on the worker.
+
+Optional flags with sensible defaults (omit unless you need to override):
+- `--problem-type` — derived from `--category` (`runtime-errors` → `runtime-error`, `build-errors` → `build-error`, `test-failures` → `test-failure`; other categories default to `build-error`). Pass explicitly only when the derived default is wrong.
+- `--resolution-type` — defaults to `fix` (alternatives: `workaround`, `documentation`, `refactor`).
+- `--symptoms` — defaults to the title.
+- `--root-cause` — defaults to `(unspecified)`; populate it for useful entries.
+
+### Inferring category
+
+Map the review's primary issue to one of the 8 bug-track categories:
+
+| Review signal | Category |
+|---|---|
+| build failed, import missing, compile error | `build-errors` |
+| test suite failures, assertion mismatch | `test-failures` |
+| null deref, wrong value, crash at runtime | `runtime-errors` |
+| N+1 query, slow request, memory leak | `performance` |
+| auth bypass, SQL injection, secret leak | `security` |
+| API contract mismatch, schema drift, wire format | `integration` |
+| data corruption, partial write, migration error | `data` |
+| layout broken, wrong color, a11y | `ui` |
+
+When ambiguous, pick the most specific that fits. If truly none fit, default to `build-errors` (the migration classifier does the same). Overlap detection will merge with a similar past entry if one exists.
+
+If capture fails (memory disabled mid-run, flowctl error, etc.), log and continue — never block task completion on memory capture.
 
 ## Phase 5: Complete
 

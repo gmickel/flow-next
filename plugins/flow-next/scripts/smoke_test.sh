@@ -427,38 +427,383 @@ PASS=$((PASS + 1))
 echo -e "${YELLOW}--- memory commands ---${NC}"
 scripts/flowctl config set memory.enabled true --json >/dev/null
 scripts/flowctl memory init --json >/dev/null
-if [[ -f ".flow/memory/pitfalls.md" ]]; then
-  echo -e "${GREEN}✓${NC} memory init creates files"
+# fn-30 task 1: init creates categorized tree + README, not legacy flat files.
+if [[ -f ".flow/memory/README.md" && -d ".flow/memory/bug/build-errors" && -d ".flow/memory/knowledge/conventions" ]]; then
+  echo -e "${GREEN}✓${NC} memory init creates categorized tree"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} memory init creates files"
+  echo -e "${RED}✗${NC} memory init creates categorized tree (missing README or tree dirs)"
   FAIL=$((FAIL + 1))
 fi
 
-scripts/flowctl memory add --type pitfall "Test pitfall entry" --json >/dev/null
-if grep -q "Test pitfall entry" .flow/memory/pitfalls.md; then
-  echo -e "${GREEN}✓${NC} memory add pitfall"
+# All 8 bug categories + 5 knowledge categories present, each with .gitkeep.
+bug_count=$(find .flow/memory/bug -mindepth 2 -name .gitkeep 2>/dev/null | wc -l | tr -d ' ')
+kn_count=$(find .flow/memory/knowledge -mindepth 2 -name .gitkeep 2>/dev/null | wc -l | tr -d ' ')
+if [[ "$bug_count" == "8" && "$kn_count" == "5" ]]; then
+  echo -e "${GREEN}✓${NC} memory init creates 8 bug + 5 knowledge .gitkeep placeholders"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} memory add pitfall"
+  echo -e "${RED}✗${NC} memory init placeholders (bug=$bug_count expected 8, knowledge=$kn_count expected 5)"
   FAIL=$((FAIL + 1))
 fi
 
-scripts/flowctl memory add --type convention "Test convention" --json >/dev/null
-scripts/flowctl memory add --type decision "Test decision" --json >/dev/null
+# fn-30 task 2: --type legacy backcompat auto-maps to --track/--category with stderr warning.
+add_json="$(scripts/flowctl memory add --type pitfall "Test pitfall entry" --json 2>/dev/null)"
+"$PYTHON_BIN" - <<'PY' "$add_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["success"] is True
+assert data["action"] == "created"
+assert data["entry_id"].startswith("bug/build-errors/"), data
+assert data["path"].endswith(".md"), data
+assert data["overlap_level"] == "low"
+# Warning surfaces in the JSON payload.
+warnings = data.get("warnings", [])
+assert any("deprecated" in w for w in warnings), warnings
+PY
+echo -e "${GREEN}✓${NC} memory add --type pitfall auto-maps to bug/build-errors with deprecation warning"
+PASS=$((PASS + 1))
+
+# FLOW_NO_DEPRECATION=1 suppresses stderr but keeps the JSON warning.
+stderr_out="$(FLOW_NO_DEPRECATION=1 scripts/flowctl memory add --type convention "Silenced" --json 2>&1 >/dev/null)"
+if [[ -z "$stderr_out" ]]; then
+  echo -e "${GREEN}✓${NC} FLOW_NO_DEPRECATION=1 suppresses stderr warning"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} FLOW_NO_DEPRECATION=1 did not suppress stderr (got: $stderr_out)"
+  FAIL=$((FAIL + 1))
+fi
+
+# New schema: --track bug --category runtime-errors creates categorized entry.
+add_json="$(scripts/flowctl memory add \
+  --track bug --category runtime-errors \
+  --title "Null deref in auth middleware" \
+  --module "src/auth.ts" \
+  --tags "auth,nullcheck" \
+  --problem-type runtime-error \
+  --symptoms "TypeError on missing session" \
+  --root-cause "Missing optional chaining" \
+  --resolution-type fix \
+  --json 2>/dev/null)"
+"$PYTHON_BIN" - <<'PY' "$add_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["success"] is True
+assert data["action"] == "created"
+assert data["entry_id"].startswith("bug/runtime-errors/null-deref"), data
+assert data["overlap_level"] == "low"
+assert data["warnings"] == []
+PY
+echo -e "${GREEN}✓${NC} memory add --track bug --category runtime-errors (new schema)"
+PASS=$((PASS + 1))
+
+# Overlap detection: adding a similar entry (same title+tags+module) should update in place.
+add_json="$(scripts/flowctl memory add \
+  --track bug --category runtime-errors \
+  --title "Null deref auth middleware" \
+  --module "src/auth.ts" \
+  --tags "auth,nullcheck" \
+  --problem-type runtime-error \
+  --json 2>/dev/null)"
+"$PYTHON_BIN" - <<'PY' "$add_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["success"] is True, data
+assert data["action"] == "updated", data
+assert data["overlap_level"] == "high", data
+PY
+echo -e "${GREEN}✓${NC} memory add high overlap updates existing entry"
+PASS=$((PASS + 1))
+
+# Overlap detection: --no-overlap-check always creates new.
+add_json="$(scripts/flowctl memory add \
+  --track bug --category runtime-errors \
+  --title "Null deref auth middleware again" \
+  --module "src/auth.ts" \
+  --tags "auth,nullcheck" \
+  --no-overlap-check \
+  --json 2>/dev/null)"
+"$PYTHON_BIN" - <<'PY' "$add_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["success"] is True, data
+assert data["action"] == "created", data
+assert data["overlap_level"] == "low", data
+PY
+echo -e "${GREEN}✓${NC} memory add --no-overlap-check bypasses detection"
+PASS=$((PASS + 1))
+
+# Moderate overlap: different title but shared tag (2 dimensions -> moderate).
+add_json="$(scripts/flowctl memory add \
+  --track knowledge --category conventions \
+  --title "Prefer pnpm over npm" \
+  --tags "pnpm,tooling" \
+  --applies-when "choosing package manager" \
+  --json 2>/dev/null)"
+"$PYTHON_BIN" - <<'PY' "$add_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["action"] == "created"
+assert data["overlap_level"] == "low"
+PY
+add_json="$(scripts/flowctl memory add \
+  --track knowledge --category conventions \
+  --title "Lockfile discipline for pnpm workspaces" \
+  --tags "pnpm,workspace" \
+  --json 2>/dev/null)"
+"$PYTHON_BIN" - <<'PY' "$add_json"
+import json, sys
+data = json.loads(sys.argv[1])
+# Shared tag pnpm + same category = score 2 (moderate).
+assert data["action"] == "created"
+assert data["overlap_level"] == "moderate", data
+assert len(data["related_to"]) >= 1, data
+PY
+echo -e "${GREEN}✓${NC} memory add moderate overlap sets related_to reference"
+PASS=$((PASS + 1))
+
+# Invalid category returns exit code 2 with list of valid categories.
+set +e
+err_out="$(scripts/flowctl memory add --track bug --category nonsense --title "x" --json 2>&1)"
+rc=$?
+set -e
+if [[ $rc -ne 0 ]] && echo "$err_out" | grep -q "build-errors"; then
+  echo -e "${GREEN}✓${NC} memory add rejects invalid category with list of valid options"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} memory add invalid category (rc=$rc, err=$err_out)"
+  FAIL=$((FAIL + 1))
+fi
+
+# Missing --title returns exit code 2.
+set +e
+scripts/flowctl memory add --track bug --category build-errors --json >/dev/null 2>&1
+rc=$?
+set -e
+if [[ $rc -eq 2 ]]; then
+  echo -e "${GREEN}✓${NC} memory add missing --title returns exit code 2"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} memory add missing --title exit code (got $rc, expected 2)"
+  FAIL=$((FAIL + 1))
+fi
+
+# Body via stdin (--body-file -).
+add_json="$(printf 'Body from stdin\n' | scripts/flowctl memory add \
+  --track knowledge --category workflow \
+  --title "Entry with stdin body" \
+  --body-file - \
+  --applies-when "always" \
+  --json 2>/dev/null)"
+"$PYTHON_BIN" - <<'PY' "$add_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["action"] == "created", data
+PY
+stdin_path=$(echo "$add_json" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["path"])')
+if grep -q "Body from stdin" "$stdin_path"; then
+  echo -e "${GREEN}✓${NC} memory add --body-file - reads body from stdin"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} memory add --body-file - (body not written)"
+  FAIL=$((FAIL + 1))
+fi
+
+# fn-30.3: list / read / search with categorized tree.
 list_json="$(scripts/flowctl memory list --json)"
 "$PYTHON_BIN" - <<'PY' "$list_json"
 import json, sys
 data = json.loads(sys.argv[1])
-assert data["success"] == True
-counts = data["counts"]
-assert counts["pitfalls.md"] >= 1
-assert counts["conventions.md"] >= 1
-assert counts["decisions.md"] >= 1
-assert data["total"] >= 3
+assert data["success"] is True
+entries = data.get("entries", [])
+assert len(entries) >= 1, f"expected at least one entry, got {data}"
+tracks = {e["track"] for e in entries}
+assert "bug" in tracks, f"bug track missing from {tracks}"
+# Filter application.
+for e in entries:
+    assert e["status"] == "active", f"expected active filter, saw {e}"
 PY
-echo -e "${GREEN}✓${NC} memory list"
+echo -e "${GREEN}✓${NC} memory list returns categorized entries (default --status active)"
 PASS=$((PASS + 1))
+
+list_json="$(scripts/flowctl memory list --track knowledge --json)"
+"$PYTHON_BIN" - <<'PY' "$list_json"
+import json, sys
+data = json.loads(sys.argv[1])
+entries = data["entries"]
+assert all(e["track"] == "knowledge" for e in entries), f"--track filter failed: {entries}"
+PY
+echo -e "${GREEN}✓${NC} memory list --track knowledge filters to knowledge only"
+PASS=$((PASS + 1))
+
+# Seed a stale entry and verify --status stale picks it up.
+mkdir -p .flow/memory/knowledge/workflow
+cat > .flow/memory/knowledge/workflow/stale-example-2026-01-01.md <<'EOF'
+---
+title: "Stale example"
+date: "2026-01-01"
+track: knowledge
+category: workflow
+status: stale
+stale_reason: "obsoleted by migration"
+stale_date: "2026-04-24"
+applies_when: "never"
+---
+
+Body.
+EOF
+stale_json="$(scripts/flowctl memory list --status stale --json)"
+"$PYTHON_BIN" - <<'PY' "$stale_json"
+import json, sys
+data = json.loads(sys.argv[1])
+ids = [e["entry_id"] for e in data["entries"]]
+assert "knowledge/workflow/stale-example-2026-01-01" in ids, f"stale not listed: {ids}"
+assert all(e["status"] == "stale" for e in data["entries"])
+PY
+echo -e "${GREEN}✓${NC} memory list --status stale surfaces stale entries"
+PASS=$((PASS + 1))
+
+# Read by full id.
+read_json="$(scripts/flowctl memory read knowledge/workflow/stale-example-2026-01-01 --json)"
+"$PYTHON_BIN" - <<'PY' "$read_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["entry_id"] == "knowledge/workflow/stale-example-2026-01-01"
+assert data["frontmatter"]["track"] == "knowledge"
+PY
+echo -e "${GREEN}✓${NC} memory read accepts full entry-id"
+PASS=$((PASS + 1))
+
+# Read by slug+date.
+read_json="$(scripts/flowctl memory read stale-example-2026-01-01 --json)"
+"$PYTHON_BIN" - <<'PY' "$read_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["entry_id"].endswith("stale-example-2026-01-01")
+PY
+echo -e "${GREEN}✓${NC} memory read accepts slug+date"
+PASS=$((PASS + 1))
+
+# Read by slug only (latest date).
+read_json="$(scripts/flowctl memory read stale-example --json)"
+"$PYTHON_BIN" - <<'PY' "$read_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["entry_id"].endswith("stale-example-2026-01-01")
+PY
+echo -e "${GREEN}✓${NC} memory read accepts bare slug (latest date wins)"
+PASS=$((PASS + 1))
+
+# Unknown id -> exit non-zero.
+set +e
+scripts/flowctl memory read does-not-exist --json >/dev/null 2>&1
+rc=$?
+set -e
+if [[ $rc -ne 0 ]]; then
+  echo -e "${GREEN}✓${NC} memory read unknown id returns non-zero exit"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} memory read unknown id (expected non-zero, got $rc)"
+  FAIL=$((FAIL + 1))
+fi
+
+# Search with token overlap.
+search_json="$(scripts/flowctl memory search 'stale example' --json)"
+"$PYTHON_BIN" - <<'PY' "$search_json"
+import json, sys
+data = json.loads(sys.argv[1])
+matches = data["matches"]
+assert matches, f"expected matches, got {data}"
+top = matches[0]
+assert top["entry_id"].endswith("stale-example-2026-01-01"), top
+assert top["score"] > 0
+PY
+echo -e "${GREEN}✓${NC} memory search ranks by token overlap"
+PASS=$((PASS + 1))
+
+# Search --track filter.
+search_json="$(scripts/flowctl memory search 'stale example' --track bug --json)"
+"$PYTHON_BIN" - <<'PY' "$search_json"
+import json, sys
+data = json.loads(sys.argv[1])
+# No bug-track entry mentions "stale example" → expect no matches.
+assert data["matches"] == [], f"--track filter leaked: {data}"
+PY
+echo -e "${GREEN}✓${NC} memory search --track narrows scope"
+PASS=$((PASS + 1))
+
+rm -rf .flow/memory/knowledge/workflow/stale-example-2026-01-01.md
+
+# Legacy detection hint: seed a flat pitfalls.md and re-init.
+cat > .flow/memory/pitfalls.md <<'EOF'
+# Pitfalls
+
+## 2026-01-01 manual [pitfall]
+legacy entry about null deref in auth
+
+---
+
+## 2026-02-01 manual [pitfall]
+another legacy pitfall
+EOF
+hint_json="$(scripts/flowctl memory init --json)"
+"$PYTHON_BIN" - <<'PY' "$hint_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["success"] is True
+assert "pitfalls.md" in data.get("legacy", []), f"legacy not detected: {data}"
+assert "migrate" in data.get("hint", ""), f"migration hint missing: {data}"
+PY
+echo -e "${GREEN}✓${NC} memory init detects legacy files and emits hint"
+PASS=$((PASS + 1))
+
+# Legacy list includes the file.
+list_json="$(scripts/flowctl memory list --json)"
+"$PYTHON_BIN" - <<'PY' "$list_json"
+import json, sys
+data = json.loads(sys.argv[1])
+legacy = data.get("legacy", [])
+names = [l["filename"] for l in legacy]
+assert "pitfalls.md" in names, f"legacy missing from list: {legacy}"
+PY
+echo -e "${GREEN}✓${NC} memory list reports legacy files as synthetic entries"
+PASS=$((PASS + 1))
+
+# Legacy read by path.
+read_json="$(scripts/flowctl memory read legacy/pitfalls --json)"
+"$PYTHON_BIN" - <<'PY' "$read_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["legacy"] is True
+assert "null deref" in data["body"]
+PY
+echo -e "${GREEN}✓${NC} memory read legacy/pitfalls returns whole file"
+PASS=$((PASS + 1))
+
+# Legacy read by entry index.
+read_json="$(scripts/flowctl memory read legacy/pitfalls#2 --json)"
+"$PYTHON_BIN" - <<'PY' "$read_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["legacy"] is True
+assert data["index"] == 2
+assert "another legacy" in data["body"]
+PY
+echo -e "${GREEN}✓${NC} memory read legacy/pitfalls#2 returns the 2nd entry"
+PASS=$((PASS + 1))
+
+# Search covers legacy file.
+search_json="$(scripts/flowctl memory search 'null deref' --json)"
+"$PYTHON_BIN" - <<'PY' "$search_json"
+import json, sys
+data = json.loads(sys.argv[1])
+ids = [m["entry_id"] for m in data["matches"]]
+assert any(mid.startswith("legacy/") for mid in ids), f"legacy not in search: {ids}"
+PY
+echo -e "${GREEN}✓${NC} memory search covers legacy files (substring)"
+PASS=$((PASS + 1))
+
+rm -f .flow/memory/pitfalls.md
 
 echo -e "${YELLOW}--- schema v1 validate ---${NC}"
 "$PYTHON_BIN" - <<'PY'
@@ -1567,6 +1912,196 @@ else
   echo -e "${RED}✗${NC} epic set-backend didn't reject unknown backend: $epic_invalid"
   FAIL=$((FAIL + 1))
 fi
+
+echo -e "${YELLOW}--- memory migrate (fn-30.4) ---${NC}"
+MIG_TEST_DIR="$TEST_DIR/memory-migrate"
+rm -rf "$MIG_TEST_DIR"
+mkdir -p "$MIG_TEST_DIR"
+(
+  cd "$MIG_TEST_DIR"
+  git init -q
+  git config user.email t@t
+  git config user.name t
+  mkdir -p .flow/memory
+  cat > .flow/memory/pitfalls.md <<'LEGEOF'
+# Pitfalls
+
+## 2026-03-01 Race condition
+Worker race.
+
+---
+
+## 2026-03-15 Null crash
+Crash on empty payload.
+LEGEOF
+  cat > .flow/memory/conventions.md <<'LEGEOF'
+# Conventions
+
+## Use pnpm
+Project standard.
+LEGEOF
+  cat > .flow/memory/decisions.md <<'LEGEOF'
+# Decisions
+
+## 2026-02-01 Chose Postgres
+Replication story.
+LEGEOF
+
+  "$SCRIPT_DIR/flowctl" memory init --json >/dev/null
+
+  # Dry-run must not write anything.
+  dry_out=$("$SCRIPT_DIR/flowctl" memory migrate --dry-run --no-llm --json 2>&1)
+  dry_count=$(echo "$dry_out" | jq '.migrated | length')
+  [ "$dry_count" = "4" ] || { echo "FAIL: dry-run expected 4 migrated entries, got $dry_count"; echo "$dry_out"; exit 1; }
+  [ ! -d .flow/memory/_legacy ] || { echo "FAIL: dry-run must not move legacy files"; exit 1; }
+  [ -f .flow/memory/pitfalls.md ] || { echo "FAIL: dry-run removed pitfalls.md"; exit 1; }
+
+  # Real migrate.
+  real_out=$("$SCRIPT_DIR/flowctl" memory migrate --yes --no-llm --json 2>&1)
+  real_count=$(echo "$real_out" | jq '.migrated | length')
+  [ "$real_count" = "4" ] || { echo "FAIL: real migrate expected 4, got $real_count"; echo "$real_out"; exit 1; }
+
+  # Legacy files moved to _legacy/
+  [ -f .flow/memory/_legacy/pitfalls.md ] || { echo "FAIL: pitfalls.md not archived to _legacy"; exit 1; }
+  [ ! -f .flow/memory/pitfalls.md ] || { echo "FAIL: pitfalls.md should have been moved"; exit 1; }
+
+  # Categorized entries created.
+  bug_count=$(find .flow/memory/bug -type f -name "*.md" ! -name "README.md" | wc -l | tr -d ' ')
+  know_count=$(find .flow/memory/knowledge -type f -name "*.md" ! -name "README.md" | wc -l | tr -d ' ')
+  [ "$bug_count" = "2" ] || { echo "FAIL: expected 2 bug entries, got $bug_count"; exit 1; }
+  [ "$know_count" = "2" ] || { echo "FAIL: expected 2 knowledge entries, got $know_count"; exit 1; }
+
+  # Entry carries YAML frontmatter with track + category.
+  sample=$(find .flow/memory/bug -type f -name "race-condition*.md" | head -1)
+  [ -n "$sample" ] || { echo "FAIL: race-condition entry missing"; exit 1; }
+  grep -q "^track: bug$" "$sample" || { echo "FAIL: entry missing track frontmatter"; cat "$sample"; exit 1; }
+  grep -q "^category:" "$sample" || { echo "FAIL: entry missing category frontmatter"; cat "$sample"; exit 1; }
+
+  # Idempotent: re-running finds nothing to migrate.
+  rerun=$("$SCRIPT_DIR/flowctl" memory migrate --yes --no-llm --json 2>&1)
+  rerun_count=$(echo "$rerun" | jq '.migrated | length')
+  [ "$rerun_count" = "0" ] || { echo "FAIL: second migrate found $rerun_count (expected 0 — idempotent)"; echo "$rerun"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} memory migrate: dry-run, real, 3 legacy files → 4 entries, idempotent"
+PASS=$((PASS + 1))
+
+echo -e "${YELLOW}--- memory discoverability-patch (fn-30.6) ---${NC}"
+DISC_TEST_DIR="$TEST_DIR/memory-disc"
+rm -rf "$DISC_TEST_DIR"
+mkdir -p "$DISC_TEST_DIR"
+(
+  cd "$DISC_TEST_DIR"
+  git init -q
+  git config user.email t@t
+  git config user.name t
+  "$SCRIPT_DIR/flowctl" init --json >/dev/null
+
+  # Case 1: no instruction files → clear error, exit 1.
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --json 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || { echo "FAIL: missing files should exit nonzero"; echo "$out"; exit 1; }
+  echo "$out" | jq -e '.success == false and (.error | contains("AGENTS.md"))' >/dev/null \
+    || { echo "FAIL: missing-files error JSON shape"; echo "$out"; exit 1; }
+
+  # Case 2: AGENTS.md present, dry-run does not write.
+  cat > AGENTS.md <<'DISCEOF'
+# Project
+
+## Overview
+
+Some project.
+DISCEOF
+  before=$(cat AGENTS.md)
+  dry=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --dry-run --json)
+  echo "$dry" | jq -e '.action == "dry-run" and .strategy == "append" and (.diff | length) > 0' >/dev/null \
+    || { echo "FAIL: dry-run JSON shape"; echo "$dry"; exit 1; }
+  after=$(cat AGENTS.md)
+  [ "$before" = "$after" ] || { echo "FAIL: dry-run modified AGENTS.md"; exit 1; }
+
+  # Case 3: --apply writes the section.
+  apply=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --apply --json)
+  echo "$apply" | jq -e '.action == "applied" and .target == "AGENTS.md" and .strategy == "append"' >/dev/null \
+    || { echo "FAIL: apply JSON shape"; echo "$apply"; exit 1; }
+  grep -q ".flow/memory/" AGENTS.md || { echo "FAIL: apply did not write reference"; cat AGENTS.md; exit 1; }
+
+  # Case 4: idempotent — second apply reports action=exists.
+  second=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --apply --json)
+  echo "$second" | jq -e '.action == "exists" and .success == true' >/dev/null \
+    || { echo "FAIL: idempotent rerun should report exists"; echo "$second"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} memory discoverability-patch: missing files, dry-run, apply, idempotent"
+PASS=$((PASS + 1))
+
+# Shim detection: CLAUDE.md = @AGENTS.md shim → patches AGENTS.md.
+DISC_SHIM_DIR="$TEST_DIR/memory-disc-shim"
+rm -rf "$DISC_SHIM_DIR"
+mkdir -p "$DISC_SHIM_DIR"
+(
+  cd "$DISC_SHIM_DIR"
+  git init -q
+  git config user.email t@t
+  git config user.name t
+  "$SCRIPT_DIR/flowctl" init --json >/dev/null
+  cat > AGENTS.md <<'DISCEOF2'
+# Substantive
+
+## Tooling
+
+Real.
+DISCEOF2
+  printf '@AGENTS.md\n' > CLAUDE.md
+  out=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --apply --json)
+  echo "$out" | jq -e '.target == "AGENTS.md" and (.reason | contains("shim"))' >/dev/null \
+    || { echo "FAIL: shim detection should patch AGENTS.md"; echo "$out"; exit 1; }
+  grep -q ".flow/memory/" AGENTS.md || { echo "FAIL: AGENTS.md not patched"; exit 1; }
+  grep -q ".flow/memory/" CLAUDE.md && { echo "FAIL: CLAUDE.md shim should not be patched"; exit 1; } || true
+)
+echo -e "${GREEN}✓${NC} memory discoverability-patch: shim detection (CLAUDE.md=@AGENTS.md → patch AGENTS.md)"
+PASS=$((PASS + 1))
+
+# Listing strategy: fenced code block with .flow/ paths gets an inline line.
+DISC_LIST_DIR="$TEST_DIR/memory-disc-list"
+rm -rf "$DISC_LIST_DIR"
+mkdir -p "$DISC_LIST_DIR"
+(
+  cd "$DISC_LIST_DIR"
+  git init -q
+  git config user.email t@t
+  git config user.name t
+  "$SCRIPT_DIR/flowctl" init --json >/dev/null
+  cat > AGENTS.md <<'DISCEOF3'
+# Listing project
+
+## Layout
+
+```
+.flow/specs/       # epic specs
+.flow/tasks/       # task specs
+```
+
+## Other
+
+Body.
+DISCEOF3
+  out=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --apply --json)
+  echo "$out" | jq -e '.strategy == "listing" and .action == "applied"' >/dev/null \
+    || { echo "FAIL: expected listing strategy"; echo "$out"; exit 1; }
+  # Inline line must sit inside the code block (between ``` fences).
+  awk '/^```/{f=!f; next} f' AGENTS.md | grep -q ".flow/memory/" \
+    || { echo "FAIL: memory line not inside code block"; cat AGENTS.md; exit 1; }
+)
+echo -e "${GREEN}✓${NC} memory discoverability-patch: listing strategy (injects into .flow/ code block)"
+PASS=$((PASS + 1))
+
+# --apply + --dry-run mutually exclusive.
+(
+  cd "$DISC_TEST_DIR"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --apply --dry-run --json 2>&1) || rc=$?
+  [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2 for conflicting flags, got $rc"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} memory discoverability-patch: --apply + --dry-run rejected with exit 2"
+PASS=$((PASS + 1))
 
 echo ""
 echo -e "${YELLOW}=== Results ===${NC}"
