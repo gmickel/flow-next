@@ -114,10 +114,47 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 Parse $ARGUMENTS for:
 - `--base <commit>` → `BASE_COMMIT` (if provided, use for scoped diff)
+- `--no-triage` → set `TRIAGE_DISABLED=1` (skip trivial-diff pre-check)
 - First positional arg matching `fn-*` → `TASK_ID`
 - Remaining args → focus areas
 
 If `--base` not provided, `BASE_COMMIT` stays empty (will fall back to main/master).
+
+### Step 0.5: Trivial-diff triage (fn-29.6)
+
+Before invoking the configured backend, run a fast pre-check that short-circuits
+lockfile-only, docs-only, release-chore, and generated-file diffs. On SKIP, the
+receipt is written with `mode: "triage_skip"` / `verdict: "SHIP"` and the
+expensive backend call is skipped entirely.
+
+Opt-out: `--no-triage` argument or `FLOW_RALPH_NO_TRIAGE=1` env var.
+
+```bash
+if [[ -z "${TRIAGE_DISABLED:-}" && -z "${FLOW_RALPH_NO_TRIAGE:-}" ]]; then
+  RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
+  TRIAGE_ARGS=(triage-skip --receipt "$RECEIPT_PATH" --json)
+  [[ -n "$BASE_COMMIT" ]] && TRIAGE_ARGS+=(--base "$BASE_COMMIT")
+  [[ -n "$TASK_ID" ]] && TRIAGE_ARGS+=(--task "$TASK_ID")
+  # Deterministic-only by default; set FLOW_TRIAGE_LLM=1 to enable LLM judge
+  # for ambiguous diffs. Deterministic is conservative — ambiguous → REVIEW.
+  [[ -z "${FLOW_TRIAGE_LLM:-}" ]] && TRIAGE_ARGS+=(--no-llm)
+
+  if TRIAGE_OUT=$($FLOWCTL "${TRIAGE_ARGS[@]}" 2>/dev/null); then
+    # Exit 0 = SKIP. Receipt already written by flowctl.
+    SKIP_REASON=$(echo "$TRIAGE_OUT" | jq -r '.reason // "trivial diff"' 2>/dev/null || echo "trivial diff")
+    echo "Triage-skip: $SKIP_REASON"
+    echo "VERDICT=SHIP"
+    exit 0
+  fi
+  # Exit 1 = proceed to full review (normal path). Exit >=2 = error, also falls
+  # through so impl-review proceeds safely rather than failing on triage.
+fi
+```
+
+**Opt-out note:** Pass `--no-triage` to force the full backend review (useful
+when explicitly validating a suspicious chore diff, or when the deterministic
+whitelist misclassifies). `FLOW_RALPH_NO_TRIAGE=1` has the same effect for
+Ralph runs.
 
 ### Step 1: Detect Backend
 

@@ -8578,6 +8578,597 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
 
 
+# --- Trivial-diff triage (fn-29.6) ---
+#
+# Fast pre-check before full impl-review: judges whether the diff is worth
+# a Carmack-level review. Saves rp/codex/copilot calls on lockfile-only /
+# release-chore / docs-only / generated-only commits. Conservative:
+# "when in doubt, REVIEW" — false SKIPs are strictly worse than false REVIEWs.
+#
+# Strategy (hybrid, deterministic-first):
+#   1. Deterministic REVIEW-override: any file that matches a code path
+#      (src/, flowctl.py, *.py/.ts/.js/.go/.rs/.sh/..., etc.) forces REVIEW
+#      without an LLM call. This is AC9.
+#   2. Deterministic SKIP whitelist: lockfile-only / docs-only / release-
+#      chore / generated-only diffs. Tight, narrow match — everything else
+#      falls through.
+#   3. Optional LLM judge (`--backend codex|copilot`) for ambiguous diffs.
+#      When tooling is unavailable, falls through to REVIEW (exit 1).
+#
+# Exit codes:
+#   0  SKIP (verdict=SHIP)
+#   1  proceed to full review (verdict not set by triage)
+#   2+ error (bad args, tooling unavailable when required, malformed output)
+
+TRIAGE_LOCKFILES: frozenset[str] = frozenset({
+    # Exact basenames only; matching is case-sensitive on basename.
+    "package-lock.json",
+    "bun.lock",
+    "bun.lockb",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "Gemfile.lock",
+    "poetry.lock",
+    "Cargo.lock",
+    "uv.lock",
+    "composer.lock",
+    "mix.lock",
+    "go.sum",
+})
+
+TRIAGE_RELEASE_CHORE_BASENAMES: frozenset[str] = frozenset({
+    "plugin.json",
+    "package.json",
+    "Cargo.toml",
+    "pyproject.toml",
+    "CHANGELOG.md",
+})
+
+# Generated / vendored path prefixes. Matched against POSIX-normalized path
+# substrings. Keep this list tight — overly broad matches silently skip real
+# review work.
+TRIAGE_GENERATED_PREFIXES: tuple[str, ...] = (
+    "plugins/flow-next/codex/",
+    "node_modules/",
+    "vendor/",
+    "third_party/",
+    "dist/",
+    "build/",
+    ".next/",
+)
+
+# Extensions treated as executable code. A single match forces REVIEW.
+# Keep synchronized with common code files the reviewer actually needs to see.
+TRIAGE_CODE_EXTS: frozenset[str] = frozenset({
+    ".py",
+    ".pyi",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs",
+    ".ts",
+    ".tsx",
+    ".go",
+    ".rs",
+    ".rb",
+    ".java",
+    ".kt",
+    ".scala",
+    ".swift",
+    ".cs",
+    ".c",
+    ".cc",
+    ".cpp",
+    ".cxx",
+    ".h",
+    ".hh",
+    ".hpp",
+    ".hxx",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".fish",
+    ".lua",
+    ".pl",
+    ".php",
+    ".ex",
+    ".exs",
+    ".erl",
+    ".elm",
+    ".clj",
+    ".sql",
+})
+
+# Docs-only extensions. A diff of only these (outside .flow/specs or
+# .flow/tasks — those are artifacts, not pure docs) may SKIP.
+TRIAGE_DOC_EXTS: frozenset[str] = frozenset({
+    ".md",
+    ".mdx",
+    ".txt",
+    ".rst",
+    ".adoc",
+})
+
+# Paths that are artifacts (not code, not docs). Changes here can be
+# semantically important (task status etc.) — conservative: treat as REVIEW
+# when present without other SKIP-category files.
+TRIAGE_ARTIFACT_PREFIXES: tuple[str, ...] = (
+    ".flow/specs/",
+    ".flow/tasks/",
+    ".flow/epics/",
+)
+
+
+def _classify_triage_path(path: str) -> str:
+    """Classify a changed file into one triage bucket.
+
+    Returns one of:
+      - ``code``      — forces REVIEW
+      - ``lockfile``  — SKIP candidate
+      - ``docs``      — SKIP candidate
+      - ``chore``     — release-chore SKIP candidate
+      - ``generated`` — SKIP candidate
+      - ``artifact``  — flow state spec/task (do not SKIP on these alone)
+      - ``other``     — unknown; forces REVIEW by fallthrough
+    """
+    # Normalize to POSIX for stable prefix matching even on Windows checkouts.
+    p = path.replace("\\", "/").strip()
+    if not p:
+        return "other"
+
+    # Generated / vendored wins over extension match — e.g. a .ts file under
+    # node_modules/ is still "generated" for our purposes.
+    for prefix in TRIAGE_GENERATED_PREFIXES:
+        if p.startswith(prefix) or f"/{prefix}" in f"/{p}":
+            return "generated"
+
+    base = p.rsplit("/", 1)[-1]
+    if base in TRIAGE_LOCKFILES:
+        return "lockfile"
+
+    # Artifacts (flow state) before release-chore — plugin.json inside
+    # .flow/epics/ isn't a chore.
+    for prefix in TRIAGE_ARTIFACT_PREFIXES:
+        if p.startswith(prefix):
+            return "artifact"
+
+    if base in TRIAGE_RELEASE_CHORE_BASENAMES:
+        return "chore"
+
+    # Extension-based classification. ``os.path.splitext`` handles multi-dot
+    # filenames (``foo.test.ts`` → ``.ts``).
+    ext = ""
+    dot = base.rfind(".")
+    if dot > 0:
+        ext = base[dot:].lower()
+
+    if ext in TRIAGE_CODE_EXTS:
+        return "code"
+    if ext in TRIAGE_DOC_EXTS:
+        return "docs"
+
+    return "other"
+
+
+def _triage_deterministic(changed_files: list[str]) -> tuple[Optional[str], str]:
+    """Run the deterministic layer of triage.
+
+    Returns ``(verdict_or_none, reason)``:
+      - ``("SKIP", reason)`` — whitelist match, safe to skip
+      - ``("REVIEW", reason)`` — hard override (code change, empty diff, etc.)
+      - ``(None, reason)`` — ambiguous; caller may run LLM judge or default REVIEW
+
+    ``reason`` is always a one-line human-readable string.
+    """
+    if not changed_files:
+        # No diff at all — nothing to review. Conservative: REVIEW so the
+        # caller sees this as an odd case (empty diff usually means bad base).
+        return "REVIEW", "no changed files (empty diff — refusing to skip)"
+
+    buckets: dict[str, list[str]] = {}
+    for f in changed_files:
+        kind = _classify_triage_path(f)
+        buckets.setdefault(kind, []).append(f)
+
+    # Any code file → REVIEW (AC9: src/, flowctl.py always reviewed).
+    if "code" in buckets:
+        example = buckets["code"][0]
+        return "REVIEW", f"code change detected: {example}"
+
+    # Any artifact file → REVIEW (flow state can carry semantic intent).
+    if "artifact" in buckets:
+        example = buckets["artifact"][0]
+        return "REVIEW", f"flow artifact change detected: {example}"
+
+    # Any unknown/other file → REVIEW (conservative fallthrough).
+    if "other" in buckets:
+        example = buckets["other"][0]
+        return "REVIEW", f"unclassified path: {example}"
+
+    # At this point every file is in {lockfile, docs, chore, generated}.
+    kinds = set(buckets.keys())
+
+    if kinds == {"lockfile"}:
+        if len(changed_files) == 1:
+            return "SKIP", f"lockfile-only ({changed_files[0]})"
+        return "SKIP", f"lockfile-only ({len(changed_files)} lock files)"
+
+    if kinds == {"docs"}:
+        if len(changed_files) == 1:
+            return "SKIP", f"docs-only ({changed_files[0]})"
+        return "SKIP", f"docs-only ({len(changed_files)} files)"
+
+    if kinds == {"generated"}:
+        if len(changed_files) == 1:
+            return "SKIP", f"generated-only ({changed_files[0]})"
+        return "SKIP", f"generated-only ({len(changed_files)} files)"
+
+    if kinds <= {"chore"}:
+        # pure manifest-only — allow (version bumps without CHANGELOG still count)
+        return "SKIP", f"release-chore ({len(changed_files)} manifest files)"
+
+    if kinds <= {"chore", "docs"}:
+        # Release chore with CHANGELOG + version bumps. Keep a tight cap so
+        # "one line of chore + a whole docs rewrite" doesn't silently slip.
+        chore_files = buckets.get("chore", [])
+        doc_files = buckets.get("docs", [])
+        # Only allow SKIP when the manifest file(s) look like version bumps —
+        # we trust the basename whitelist here and rely on the conservative
+        # default.
+        return (
+            "SKIP",
+            f"release-chore ({len(chore_files)} manifest + {len(doc_files)} doc file(s))",
+        )
+
+    if kinds <= {"lockfile", "chore"}:
+        # dep update that also bumps package.json — common shape, safe.
+        return (
+            "SKIP",
+            f"dep-update ({len(buckets.get('lockfile', []))} lock + "
+            f"{len(buckets.get('chore', []))} manifest file(s))",
+        )
+
+    if kinds <= {"lockfile", "generated"}:
+        return (
+            "SKIP",
+            f"lockfile+generated ({len(changed_files)} files)",
+        )
+
+    # Anything else — mixed or unknown combo — fall through to LLM / default REVIEW.
+    return None, f"mixed non-code categories: {sorted(kinds)}"
+
+
+def _triage_build_llm_prompt(
+    diff_stat: str, changed_files: list[str]
+) -> str:
+    """Build the one-shot triage prompt for fast-model judgment."""
+    # Cap the file list + stat to keep the prompt cheap.
+    files_preview = "\n".join(changed_files[:50])
+    if len(changed_files) > 50:
+        files_preview += f"\n... ({len(changed_files) - 50} more)"
+    stat = diff_stat.strip() or "(diff stat unavailable)"
+    return f"""Diff summary:
+{stat}
+
+Changed files:
+{files_preview}
+
+Is this diff worth a full code review?
+
+Answer SKIP only if the diff matches one of:
+- Lockfile-only bumps: package-lock.json, bun.lock, pnpm-lock.yaml, yarn.lock, Gemfile.lock, poetry.lock, Cargo.lock, uv.lock (and nothing else)
+- Pure release chore: version bump in plugin.json / package.json / Cargo.toml + CHANGELOG entry, no other code
+- Pure documentation: only *.md files changed, no executable code
+- Pure generated-file regeneration: plugins/flow-next/codex/ (from sync-codex.sh), or other clearly-generated paths
+- Pure vendored-asset changes: files under /vendor/, /third_party/, or similarly designated paths
+
+When in doubt, answer REVIEW. A missed review is worse than a skipped chore.
+
+Output exactly one line:
+SKIP: <one-line reason>
+or
+REVIEW: <one-line reason>
+"""
+
+
+def _triage_parse_llm_output(text: str) -> tuple[Optional[str], str]:
+    """Parse SKIP/REVIEW line from LLM output. Conservative on malformed."""
+    if not text:
+        return None, "empty LLM response"
+    # Prefer the last matching line so trailing reasoning doesn't win.
+    verdict: Optional[str] = None
+    reason: str = ""
+    for raw in text.splitlines():
+        line = raw.strip().lstrip(">*_ `").rstrip()
+        if not line:
+            continue
+        m = re.match(r"^(SKIP|REVIEW)\s*:\s*(.+?)\s*$", line, re.IGNORECASE)
+        if m:
+            verdict = m.group(1).upper()
+            reason = m.group(2).strip()
+    if verdict is None:
+        return None, "malformed LLM response (no SKIP:/REVIEW: line)"
+    return verdict, reason
+
+
+def _triage_run_codex_judge(
+    prompt: str, model: Optional[str], effort: Optional[str]
+) -> tuple[Optional[str], str, Optional[str]]:
+    """Invoke codex as the triage judge. Returns (verdict, reason, model_used).
+
+    verdict is ``SKIP`` / ``REVIEW`` / ``None`` (on tooling failure or malformed).
+    """
+    codex = shutil.which("codex")
+    if not codex:
+        return None, "codex CLI not available for triage", None
+    effective_model = model or "gpt-5-mini"
+    effective_effort = effort or "low"
+    cmd = [
+        codex,
+        "exec",
+        "--model",
+        effective_model,
+        "-c",
+        f'model_reasoning_effort="{effective_effort}"',
+        "--sandbox",
+        "read-only" if os.name != "nt" else "danger-full-access",
+        "--skip-git-repo-check",
+        "-",
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return None, "codex triage timed out (120s)", effective_model
+    except OSError as e:
+        return None, f"codex triage OS error: {e}", effective_model
+    if result.returncode != 0:
+        msg = (result.stderr or "codex triage exited non-zero").strip().splitlines()[-1]
+        return None, f"codex triage failed: {msg}", effective_model
+    verdict, reason = _triage_parse_llm_output(result.stdout)
+    return verdict, reason, effective_model
+
+
+def _triage_run_copilot_judge(
+    prompt: str, model: Optional[str], effort: Optional[str]
+) -> tuple[Optional[str], str, Optional[str]]:
+    """Invoke copilot as the triage judge."""
+    copilot = shutil.which("copilot")
+    if not copilot:
+        return None, "copilot CLI not available for triage", None
+    effective_model = model or "claude-haiku-4.5"
+    effective_effort = effort or "low"
+    repo_root = get_repo_root()
+    cmd = [
+        copilot,
+        "-p",
+        prompt,
+        f"--resume={uuid.uuid4()}",
+        "--output-format",
+        "text",
+        "-s",
+        "--no-ask-user",
+        "--allow-all-tools",
+        "--add-dir",
+        str(repo_root),
+        "--disable-builtin-mcps",
+        "--no-custom-instructions",
+        "--log-level",
+        "error",
+        "--no-auto-update",
+        "--model",
+        effective_model,
+    ]
+    if not effective_model.startswith("claude-"):
+        cmd += ["--effort", effective_effort]
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return None, "copilot triage timed out (120s)", effective_model
+    except OSError as e:
+        return None, f"copilot triage OS error: {e}", effective_model
+    if result.returncode != 0:
+        msg = (result.stderr or "copilot triage exited non-zero").strip().splitlines()[-1]
+        return None, f"copilot triage failed: {msg}", effective_model
+    verdict, reason = _triage_parse_llm_output(result.stdout)
+    return verdict, reason, effective_model
+
+
+def cmd_triage_skip(args: argparse.Namespace) -> None:
+    """Trivial-diff triage pre-check.
+
+    Decides whether the diff between ``--base`` and HEAD is worth a full
+    Carmack-level review. Uses a deterministic whitelist first (lockfiles,
+    docs-only, generated, release-chore) and an optional LLM judge only for
+    ambiguous cases. When in doubt, falls through to exit 1 (proceed to
+    full review) — false SKIPs are strictly worse than false REVIEWs.
+
+    Exit codes:
+        0   SKIP (verdict=SHIP, receipt written if --receipt)
+        1   proceed to full review
+        2+  error (invalid arguments, malformed state)
+    """
+    base = args.base or "main"
+    # Resolve 'main' vs 'master' when caller didn't specify --base.
+    if not args.base:
+        repo_root = get_repo_root()
+        try:
+            subprocess.run(
+                ["git", "rev-parse", "--verify", "main"],
+                capture_output=True,
+                check=True,
+                cwd=repo_root,
+            )
+        except (subprocess.CalledProcessError, OSError):
+            try:
+                subprocess.run(
+                    ["git", "rev-parse", "--verify", "master"],
+                    capture_output=True,
+                    check=True,
+                    cwd=repo_root,
+                )
+                base = "master"
+            except (subprocess.CalledProcessError, OSError):
+                # Leave base="main"; git diff will fail below and we'll surface
+                # that as an error exit.
+                pass
+
+    repo_root = get_repo_root()
+    # Gather changed file list.
+    try:
+        proc = subprocess.run(
+            ["git", "diff", "--name-only", f"{base}..HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=repo_root,
+        )
+    except OSError as e:
+        error_exit(f"git diff failed: {e}", use_json=args.json, code=2)
+    if proc.returncode != 0:
+        stderr = (proc.stderr or "").strip()
+        error_exit(
+            f"git diff --name-only {base}..HEAD failed: {stderr}",
+            use_json=args.json,
+            code=2,
+        )
+    changed_files = [
+        line.strip() for line in proc.stdout.splitlines() if line.strip()
+    ]
+
+    # Gather --stat for the LLM prompt (best-effort).
+    diff_stat = ""
+    try:
+        stat_proc = subprocess.run(
+            ["git", "diff", "--stat", f"{base}..HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=repo_root,
+        )
+        if stat_proc.returncode == 0:
+            diff_stat = stat_proc.stdout.strip()
+    except OSError:
+        pass
+
+    # Deterministic layer.
+    det_verdict, det_reason = _triage_deterministic(changed_files)
+
+    verdict: Optional[str] = det_verdict
+    reason: str = det_reason
+    model_used: Optional[str] = None
+    judge_source = "deterministic"
+
+    # Optional LLM judge for ambiguous cases. ``--no-llm`` skips the call and
+    # defaults to REVIEW so tests / offline runs remain deterministic.
+    if det_verdict is None and not args.no_llm:
+        backend = (args.backend or "codex").strip().lower()
+        if backend == "codex":
+            v, r, m = _triage_run_codex_judge(
+                _triage_build_llm_prompt(diff_stat, changed_files),
+                args.model,
+                args.effort,
+            )
+        elif backend == "copilot":
+            v, r, m = _triage_run_copilot_judge(
+                _triage_build_llm_prompt(diff_stat, changed_files),
+                args.model,
+                args.effort,
+            )
+        else:
+            error_exit(
+                f"Unknown triage backend: {backend!r}. Valid: codex, copilot",
+                use_json=args.json,
+                code=2,
+            )
+        model_used = m
+        judge_source = f"{backend}-judge"
+        if v is None:
+            # Judge failed or malformed — conservative fallthrough to REVIEW.
+            verdict = "REVIEW"
+            reason = f"{r} (defaulting to REVIEW)"
+        else:
+            verdict = v
+            reason = r
+    elif det_verdict is None:
+        # No LLM path and deterministic was ambiguous → REVIEW (conservative).
+        verdict = "REVIEW"
+        reason = f"{det_reason} (no LLM, defaulting to REVIEW)"
+
+    # Write receipt on SKIP (only when requested). REVIEW path leaves receipt
+    # untouched so the downstream impl-review can write its own receipt.
+    receipt_written: Optional[str] = None
+    if verdict == "SKIP" and args.receipt:
+        receipt_data = {
+            "type": "impl_review",
+            "id": args.task or "branch",
+            "mode": "triage_skip",
+            "base": base,
+            "verdict": "SHIP",
+            "reason": reason,
+            "source": judge_source,
+            "changed_file_count": len(changed_files),
+            "timestamp": now_iso(),
+        }
+        if model_used:
+            receipt_data["model"] = model_used
+        ralph_iter = os.environ.get("RALPH_ITERATION")
+        if ralph_iter:
+            try:
+                receipt_data["iteration"] = int(ralph_iter)
+            except ValueError:
+                pass
+        try:
+            Path(args.receipt).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.receipt).write_text(
+                json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
+            )
+            receipt_written = args.receipt
+        except OSError as e:
+            error_exit(
+                f"failed to write receipt {args.receipt}: {e}",
+                use_json=args.json,
+                code=2,
+            )
+
+    # Output + exit.
+    if args.json:
+        payload = {
+            "verdict": "SHIP" if verdict == "SKIP" else "REVIEW",
+            "mode": "triage_skip" if verdict == "SKIP" else "triage_review",
+            "reason": reason,
+            "source": judge_source,
+            "base": base,
+            "changed_file_count": len(changed_files),
+        }
+        if model_used:
+            payload["model"] = model_used
+        if receipt_written:
+            payload["receipt"] = receipt_written
+        json_output(payload)
+    else:
+        if verdict == "SKIP":
+            print(f"SKIP: {reason}")
+            if receipt_written:
+                print(f"REVIEW_RECEIPT_WRITTEN: {receipt_written}")
+        else:
+            print(f"REVIEW: {reason}")
+
+    sys.exit(0 if verdict == "SKIP" else 1)
+
+
 # --- Checkpoint commands ---
 
 
@@ -9321,6 +9912,43 @@ def main() -> None:
     )
     p_validate.add_argument("--json", action="store_true", help="JSON output")
     p_validate.set_defaults(func=cmd_validate)
+
+    # triage-skip (fn-29.6)
+    p_triage = subparsers.add_parser(
+        "triage-skip",
+        help="Trivial-diff triage pre-check (exit 0=SKIP, 1=REVIEW, 2+=error)",
+    )
+    p_triage.add_argument(
+        "--base", help="Base ref to diff against (default: main, fallback master)"
+    )
+    p_triage.add_argument(
+        "--task", help="Task ID for receipt id field (default: 'branch')"
+    )
+    p_triage.add_argument(
+        "--backend",
+        choices=["codex", "copilot"],
+        default="codex",
+        help="LLM judge backend for ambiguous diffs (default: codex)",
+    )
+    p_triage.add_argument(
+        "--model",
+        help="Fast model override (default: gpt-5-mini for codex, claude-haiku-4.5 for copilot)",
+    )
+    p_triage.add_argument(
+        "--effort",
+        help="Reasoning effort for LLM judge (default: low)",
+    )
+    p_triage.add_argument(
+        "--receipt",
+        help="Path to write triage-skip receipt (only on SKIP verdict)",
+    )
+    p_triage.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="Skip LLM judge; rely on deterministic whitelist only (ambiguous → REVIEW)",
+    )
+    p_triage.add_argument("--json", action="store_true", help="JSON output")
+    p_triage.set_defaults(func=cmd_triage_skip)
 
     # checkpoint
     p_checkpoint = subparsers.add_parser("checkpoint", help="Checkpoint commands")

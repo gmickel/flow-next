@@ -757,6 +757,128 @@ PY
 echo -e "${GREEN}✓${NC} parse_classification_counts handles summary + per-finding fallback"
 PASS=$((PASS + 1))
 
+echo -e "${YELLOW}--- triage-skip classifier (fn-29.6) ---${NC}"
+"$PYTHON_BIN" - "$SCRIPT_DIR" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+from flowctl import _classify_triage_path, _triage_deterministic, _triage_parse_llm_output
+
+# Path classification
+assert _classify_triage_path("bun.lock") == "lockfile"
+assert _classify_triage_path("package-lock.json") == "lockfile"
+assert _classify_triage_path("Cargo.lock") == "lockfile"
+assert _classify_triage_path("src/main.py") == "code"
+assert _classify_triage_path("plugins/flow-next/scripts/flowctl.py") == "code"
+assert _classify_triage_path("README.md") == "docs"
+assert _classify_triage_path("docs/guide.md") == "docs"
+assert _classify_triage_path("plugins/flow-next/codex/hooks.json") == "generated"
+assert _classify_triage_path("node_modules/pkg/index.js") == "generated"
+assert _classify_triage_path("vendor/lib.go") == "generated"
+assert _classify_triage_path("plugin/plugin.json") == "chore"
+assert _classify_triage_path("CHANGELOG.md") == "chore"
+assert _classify_triage_path("pyproject.toml") == "chore"
+assert _classify_triage_path(".flow/specs/fn-1.md") == "artifact"
+assert _classify_triage_path(".flow/tasks/fn-1.1.md") == "artifact"
+assert _classify_triage_path("random.xyz") == "other"
+
+# AC6: lockfile-only → SKIP
+v, r = _triage_deterministic(["bun.lock"])
+assert v == "SKIP" and "lockfile" in r.lower(), (v, r)
+
+# AC7: version bump + CHANGELOG → SKIP
+v, r = _triage_deterministic(["plugin/plugin.json", "CHANGELOG.md"])
+assert v == "SKIP", (v, r)
+
+# AC8: docs-only → SKIP
+v, r = _triage_deterministic(["README.md", "docs/guide.md"])
+assert v == "SKIP" and "docs" in r.lower(), (v, r)
+
+# AC9: any code → REVIEW (even alone)
+v, r = _triage_deterministic(["plugins/flow-next/scripts/flowctl.py"])
+assert v == "REVIEW", (v, r)
+v, r = _triage_deterministic(["src/main.ts", "README.md"])
+assert v == "REVIEW", (v, r)
+
+# Empty diff → REVIEW (conservative)
+v, r = _triage_deterministic([])
+assert v == "REVIEW", (v, r)
+
+# Generated-only → SKIP
+v, r = _triage_deterministic(["plugins/flow-next/codex/skills/x.md", "plugins/flow-next/codex/hooks.json"])
+assert v == "SKIP", (v, r)
+
+# Artifact alone → REVIEW (conservative — flow state carries intent)
+v, r = _triage_deterministic([".flow/specs/fn-29.md"])
+assert v == "REVIEW", (v, r)
+
+# Lockfile + manifest combo → SKIP
+v, r = _triage_deterministic(["bun.lock", "package.json"])
+assert v == "SKIP", (v, r)
+
+# Lockfile + generated → SKIP
+v, r = _triage_deterministic(["bun.lock", "node_modules/x.js"])
+assert v == "SKIP", (v, r)
+
+# LLM output parser
+v, r = _triage_parse_llm_output("SKIP: lockfile only")
+assert v == "SKIP" and r == "lockfile only"
+v, r = _triage_parse_llm_output("REVIEW: touches auth logic")
+assert v == "REVIEW"
+v, r = _triage_parse_llm_output("> **SKIP: docs only**")
+assert v == "SKIP"
+v, r = _triage_parse_llm_output("reasoning blah\nSKIP: trivial")
+assert v == "SKIP" and r == "trivial"
+v, r = _triage_parse_llm_output("no verdict here")
+assert v is None
+v, r = _triage_parse_llm_output("")
+assert v is None
+PY
+echo -e "${GREEN}✓${NC} triage-skip classifier + deterministic layer + LLM parser"
+PASS=$((PASS + 1))
+
+echo -e "${YELLOW}--- triage-skip e2e (fn-29.6) ---${NC}"
+# End-to-end: tiny git repo, three scenarios (SKIP, REVIEW, receipt).
+TRIAGE_TEST_DIR="$TEST_DIR/triage-e2e"
+rm -rf "$TRIAGE_TEST_DIR"
+mkdir -p "$TRIAGE_TEST_DIR"
+(
+  cd "$TRIAGE_TEST_DIR"
+  git init -q
+  git config user.email test@test.com
+  git config user.name test
+  echo "base" > base.txt
+  git add base.txt
+  git commit -qm init
+  git checkout -qb feature
+
+  # AC6: lockfile-only → SKIP exit 0, receipt written
+  echo "{}" > bun.lock
+  git add bun.lock
+  git commit -qm "dep bump"
+  RECEIPT="$TRIAGE_TEST_DIR/r1.json"
+  "$PYTHON_BIN" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --receipt "$RECEIPT" --task fn-9-test.1 --json > "$TRIAGE_TEST_DIR/out1.json"
+  EXIT1=$?
+  [ "$EXIT1" = "0" ] || { echo "FAIL: expected exit 0 on lockfile SKIP, got $EXIT1"; exit 1; }
+  grep -q '"mode": "triage_skip"' "$RECEIPT" || { echo "FAIL: receipt missing triage_skip mode"; cat "$RECEIPT"; exit 1; }
+  grep -q '"verdict": "SHIP"' "$RECEIPT" || { echo "FAIL: receipt missing SHIP verdict"; cat "$RECEIPT"; exit 1; }
+  grep -q '"id": "fn-9-test.1"' "$RECEIPT" || { echo "FAIL: receipt missing task id"; cat "$RECEIPT"; exit 1; }
+
+  # AC9: add code → REVIEW exit 1, no receipt overwrite
+  echo "print('x')" > script.py
+  git add script.py
+  git commit -qm "add script"
+  RECEIPT2="$TRIAGE_TEST_DIR/r2.json"
+  set +e
+  "$PYTHON_BIN" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --receipt "$RECEIPT2" --json > "$TRIAGE_TEST_DIR/out2.json"
+  EXIT2=$?
+  set -e
+  [ "$EXIT2" = "1" ] || { echo "FAIL: expected exit 1 on code REVIEW, got $EXIT2"; exit 1; }
+  [ ! -f "$RECEIPT2" ] || { echo "FAIL: receipt should not exist on REVIEW"; exit 1; }
+  grep -q '"verdict": "REVIEW"' "$TRIAGE_TEST_DIR/out2.json" || { echo "FAIL: REVIEW verdict missing from json"; cat "$TRIAGE_TEST_DIR/out2.json"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} triage-skip e2e: lockfile→SKIP+receipt, code→REVIEW+no-receipt"
+PASS=$((PASS + 1))
+
 echo -e "${YELLOW}--- parse_receipt_path ---${NC}"
 # Test receipt path parsing for Ralph gating (both legacy and new fn-N-xxx formats)
 "$PYTHON_BIN" - "$SCRIPT_DIR/hooks" <<'PY'

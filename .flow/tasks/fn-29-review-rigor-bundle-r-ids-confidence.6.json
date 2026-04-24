@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-24T08:11:56.100338Z",
+  "depends_on": [],
+  "epic": "fn-29-review-rigor-bundle-r-ids-confidence",
+  "id": "fn-29-review-rigor-bundle-r-ids-confidence.6",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-29-review-rigor-bundle-r-ids-confidence.6.md",
+  "status": "todo",
+  "title": "Trivial-diff skip pre-check (flowctl helper + impl-review integration)",
+  "updated_at": "2026-04-24T08:15:42.770327Z"
+}
