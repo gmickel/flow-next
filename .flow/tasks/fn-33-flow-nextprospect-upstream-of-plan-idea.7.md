@@ -94,7 +94,8 @@ Mechanical rollup following the pattern used by fn-29.7, fn-30.7, fn-31.7, fn-32
 - [ ] No references to compound-engineering or other plugins in shipped docs.
 
 ## Done summary
-_(populated by /flow-next:work upon completion)_
-
+Bumped flow-next 0.35.1 → 0.36.0 (minor) for the new `/flow-next:prospect` skill and `flowctl prospect` subcommands. Updated CHANGELOG, READMEs, CLAUDE.md, .flow/usage.md, plugin manifests (17→18 skills, 12→13 commands), and the website page. Regenerated Codex mirror (sync is idempotent — second run is no-op). All smoke suites + unit tests + website lint/typecheck pass.
 ## Evidence
-_(populated by /flow-next:work upon completion)_
+- Commits: a70834009a50136563f4cd5d25e05ff35045d020, 588b6ff89e805e5d1b97c178710e15eb0de966fb
+- Tests: plugins/flow-next/scripts/smoke_test.sh (125 PASS), plugins/flow-next/scripts/prospect_smoke_test.sh (94 PASS), python3 -m unittest discover -s plugins/flow-next/tests (308 OK), scripts/sync-codex.sh (idempotent: 2nd run zero diff), pnpm lint app/apps/flow-next/page.tsx (mickel.tech, biome OK)
+- PRs:
