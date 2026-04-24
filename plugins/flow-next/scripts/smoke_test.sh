@@ -1985,6 +1985,124 @@ LEGEOF
 echo -e "${GREEN}✓${NC} memory migrate: dry-run, real, 3 legacy files → 4 entries, idempotent"
 PASS=$((PASS + 1))
 
+echo -e "${YELLOW}--- memory discoverability-patch (fn-30.6) ---${NC}"
+DISC_TEST_DIR="$TEST_DIR/memory-disc"
+rm -rf "$DISC_TEST_DIR"
+mkdir -p "$DISC_TEST_DIR"
+(
+  cd "$DISC_TEST_DIR"
+  git init -q
+  git config user.email t@t
+  git config user.name t
+  "$SCRIPT_DIR/flowctl" init --json >/dev/null
+
+  # Case 1: no instruction files → clear error, exit 1.
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --json 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || { echo "FAIL: missing files should exit nonzero"; echo "$out"; exit 1; }
+  echo "$out" | jq -e '.success == false and (.error | contains("AGENTS.md"))' >/dev/null \
+    || { echo "FAIL: missing-files error JSON shape"; echo "$out"; exit 1; }
+
+  # Case 2: AGENTS.md present, dry-run does not write.
+  cat > AGENTS.md <<'DISCEOF'
+# Project
+
+## Overview
+
+Some project.
+DISCEOF
+  before=$(cat AGENTS.md)
+  dry=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --dry-run --json)
+  echo "$dry" | jq -e '.action == "dry-run" and .strategy == "append" and (.diff | length) > 0' >/dev/null \
+    || { echo "FAIL: dry-run JSON shape"; echo "$dry"; exit 1; }
+  after=$(cat AGENTS.md)
+  [ "$before" = "$after" ] || { echo "FAIL: dry-run modified AGENTS.md"; exit 1; }
+
+  # Case 3: --apply writes the section.
+  apply=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --apply --json)
+  echo "$apply" | jq -e '.action == "applied" and .target == "AGENTS.md" and .strategy == "append"' >/dev/null \
+    || { echo "FAIL: apply JSON shape"; echo "$apply"; exit 1; }
+  grep -q ".flow/memory/" AGENTS.md || { echo "FAIL: apply did not write reference"; cat AGENTS.md; exit 1; }
+
+  # Case 4: idempotent — second apply reports action=exists.
+  second=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --apply --json)
+  echo "$second" | jq -e '.action == "exists" and .success == true' >/dev/null \
+    || { echo "FAIL: idempotent rerun should report exists"; echo "$second"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} memory discoverability-patch: missing files, dry-run, apply, idempotent"
+PASS=$((PASS + 1))
+
+# Shim detection: CLAUDE.md = @AGENTS.md shim → patches AGENTS.md.
+DISC_SHIM_DIR="$TEST_DIR/memory-disc-shim"
+rm -rf "$DISC_SHIM_DIR"
+mkdir -p "$DISC_SHIM_DIR"
+(
+  cd "$DISC_SHIM_DIR"
+  git init -q
+  git config user.email t@t
+  git config user.name t
+  "$SCRIPT_DIR/flowctl" init --json >/dev/null
+  cat > AGENTS.md <<'DISCEOF2'
+# Substantive
+
+## Tooling
+
+Real.
+DISCEOF2
+  printf '@AGENTS.md\n' > CLAUDE.md
+  out=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --apply --json)
+  echo "$out" | jq -e '.target == "AGENTS.md" and (.reason | contains("shim"))' >/dev/null \
+    || { echo "FAIL: shim detection should patch AGENTS.md"; echo "$out"; exit 1; }
+  grep -q ".flow/memory/" AGENTS.md || { echo "FAIL: AGENTS.md not patched"; exit 1; }
+  grep -q ".flow/memory/" CLAUDE.md && { echo "FAIL: CLAUDE.md shim should not be patched"; exit 1; } || true
+)
+echo -e "${GREEN}✓${NC} memory discoverability-patch: shim detection (CLAUDE.md=@AGENTS.md → patch AGENTS.md)"
+PASS=$((PASS + 1))
+
+# Listing strategy: fenced code block with .flow/ paths gets an inline line.
+DISC_LIST_DIR="$TEST_DIR/memory-disc-list"
+rm -rf "$DISC_LIST_DIR"
+mkdir -p "$DISC_LIST_DIR"
+(
+  cd "$DISC_LIST_DIR"
+  git init -q
+  git config user.email t@t
+  git config user.name t
+  "$SCRIPT_DIR/flowctl" init --json >/dev/null
+  cat > AGENTS.md <<'DISCEOF3'
+# Listing project
+
+## Layout
+
+```
+.flow/specs/       # epic specs
+.flow/tasks/       # task specs
+```
+
+## Other
+
+Body.
+DISCEOF3
+  out=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --apply --json)
+  echo "$out" | jq -e '.strategy == "listing" and .action == "applied"' >/dev/null \
+    || { echo "FAIL: expected listing strategy"; echo "$out"; exit 1; }
+  # Inline line must sit inside the code block (between ``` fences).
+  awk '/^```/{f=!f; next} f' AGENTS.md | grep -q ".flow/memory/" \
+    || { echo "FAIL: memory line not inside code block"; cat AGENTS.md; exit 1; }
+)
+echo -e "${GREEN}✓${NC} memory discoverability-patch: listing strategy (injects into .flow/ code block)"
+PASS=$((PASS + 1))
+
+# --apply + --dry-run mutually exclusive.
+(
+  cd "$DISC_TEST_DIR"
+  rc=0
+  out=$("$SCRIPT_DIR/flowctl" memory discoverability-patch --apply --dry-run --json 2>&1) || rc=$?
+  [ "$rc" -eq 2 ] || { echo "FAIL: expected exit 2 for conflicting flags, got $rc"; echo "$out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} memory discoverability-patch: --apply + --dry-run rejected with exit 2"
+PASS=$((PASS + 1))
+
 echo ""
 echo -e "${YELLOW}=== Results ===${NC}"
 echo -e "Passed: ${GREEN}$PASS${NC}"

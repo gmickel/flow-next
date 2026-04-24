@@ -7,6 +7,7 @@ Agents must use flowctl for all writes - never edit .flow/* directly.
 """
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -6169,6 +6170,355 @@ def cmd_memory_migrate(args: argparse.Namespace) -> None:
                 print(f"  warning: {w}")
 
 
+# ---------- fn-30.6: memory discoverability-patch ---------------------------
+
+MEMORY_DISCOVERABILITY_MARKERS = (
+    ".flow/memory/",
+    "flowctl memory",
+)
+
+MEMORY_DISCOVERABILITY_SECTION = (
+    "## Memory / Learnings\n"
+    "\n"
+    "`.flow/memory/` — categorized learnings store (bug + knowledge tracks). "
+    "Relevant when implementing or debugging in documented areas.\n"
+    "\n"
+    "Commands:\n"
+    "- `flowctl memory search <query>` — find entries\n"
+    "- `flowctl memory list --category <cat>` — list by category\n"
+)
+
+MEMORY_DISCOVERABILITY_LISTING_LINE = (
+    ".flow/memory/       # categorized learnings (flowctl memory search)\n"
+)
+
+
+def _discoverability_read(path: Path) -> Optional[str]:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def _discoverability_is_shim(path: Path, content: str) -> bool:
+    """Return True when the file is a one-line shim pointing elsewhere.
+
+    Covers two common shapes:
+      - `@AGENTS.md` / `@CLAUDE.md` single-line includes
+      - symlinks to the sibling file (handled via path.is_symlink() elsewhere)
+
+    Blank/whitespace-only files also count as shims (nothing substantive).
+    """
+    stripped = content.strip()
+    if not stripped:
+        return True
+    # Single @include line (allow trailing comment / whitespace).
+    lines = [ln for ln in stripped.splitlines() if ln.strip()]
+    if len(lines) == 1 and re.match(r"^@[A-Za-z0-9_.-]+\.md\s*$", lines[0].strip()):
+        return True
+    return False
+
+
+def _discoverability_pick_target(
+    repo_root: Path, requested: str
+) -> tuple[Optional[Path], str, list[str]]:
+    """Identify the instruction file to patch.
+
+    Returns (path, reason, notes). `path` is None when no suitable file exists.
+
+    Resolution rules:
+      - requested='agents' or 'claude' forces that file (if present).
+      - requested='auto' (default):
+          * If AGENTS.md is a symlink to CLAUDE.md → substantive is CLAUDE.md.
+          * If CLAUDE.md is a shim (`@AGENTS.md` or empty) and AGENTS.md has
+            real content → substantive is AGENTS.md.
+          * If AGENTS.md is a shim and CLAUDE.md has real content →
+            substantive is CLAUDE.md.
+          * Both substantive → prefer AGENTS.md (industry default).
+          * Only one exists → that file.
+    """
+    agents = repo_root / "AGENTS.md"
+    claude = repo_root / "CLAUDE.md"
+    notes: list[str] = []
+
+    def _exists(path: Path) -> bool:
+        return path.exists() or path.is_symlink()
+
+    if requested == "agents":
+        if not _exists(agents):
+            return (None, "AGENTS.md not found", notes)
+        return (agents, "forced AGENTS.md (--target agents)", notes)
+    if requested == "claude":
+        if not _exists(claude):
+            return (None, "CLAUDE.md not found", notes)
+        return (claude, "forced CLAUDE.md (--target claude)", notes)
+
+    # auto
+    agents_exists = _exists(agents)
+    claude_exists = _exists(claude)
+    if not agents_exists and not claude_exists:
+        return (None, "neither AGENTS.md nor CLAUDE.md at repo root", notes)
+
+    # Symlink detection — the link itself is a shim; the target is substantive.
+    if agents_exists and agents.is_symlink():
+        try:
+            resolved = agents.resolve()
+            if resolved.name == "CLAUDE.md" and _exists(claude):
+                notes.append("AGENTS.md is a symlink to CLAUDE.md")
+                return (claude, "AGENTS.md is a symlink → patching CLAUDE.md", notes)
+        except OSError:
+            pass
+    if claude_exists and claude.is_symlink():
+        try:
+            resolved = claude.resolve()
+            if resolved.name == "AGENTS.md" and _exists(agents):
+                notes.append("CLAUDE.md is a symlink to AGENTS.md")
+                return (agents, "CLAUDE.md is a symlink → patching AGENTS.md", notes)
+        except OSError:
+            pass
+
+    agents_content = _discoverability_read(agents) if agents_exists else None
+    claude_content = _discoverability_read(claude) if claude_exists else None
+
+    agents_shim = (
+        agents_content is not None
+        and _discoverability_is_shim(agents, agents_content)
+    )
+    claude_shim = (
+        claude_content is not None
+        and _discoverability_is_shim(claude, claude_content)
+    )
+
+    if agents_exists and claude_exists:
+        if claude_shim and not agents_shim:
+            notes.append("CLAUDE.md is a shim")
+            return (agents, "CLAUDE.md is a shim → patching AGENTS.md", notes)
+        if agents_shim and not claude_shim:
+            notes.append("AGENTS.md is a shim")
+            return (claude, "AGENTS.md is a shim → patching CLAUDE.md", notes)
+        # Both substantive (or both shims, unusual) — prefer AGENTS.md.
+        return (agents, "both present → preferring AGENTS.md", notes)
+
+    if agents_exists:
+        return (agents, "only AGENTS.md present", notes)
+    return (claude, "only CLAUDE.md present", notes)
+
+
+def _discoverability_already_present(content: str) -> bool:
+    lowered = content.lower()
+    return any(marker.lower() in lowered for marker in MEMORY_DISCOVERABILITY_MARKERS)
+
+
+def _discoverability_plan_edit(content: str) -> tuple[str, str]:
+    """Return (new_content, strategy).
+
+    Strategies:
+      - 'listing': inject single `.flow/memory/` line into an existing
+        `.flow/` directory listing inside a fenced code block.
+      - 'append': append a new `## Memory / Learnings` section at EOF.
+    """
+    # Look for a fenced code block whose body references `.flow/` paths —
+    # treat it as a project directory listing and slot the memory line in.
+    fence_re = re.compile(r"(^|\n)```[^\n]*\n(.*?)\n```", re.DOTALL)
+    for match in fence_re.finditer(content):
+        block = match.group(2)
+        block_lines = block.splitlines()
+        flow_line_idxs = [
+            i
+            for i, line in enumerate(block_lines)
+            if re.match(r"\s*\.flow/[A-Za-z0-9_.-]+/?", line)
+        ]
+        if not flow_line_idxs:
+            continue
+        if any(".flow/memory/" in line for line in block_lines):
+            # Shouldn't hit here (caller checks already-present), but guard anyway.
+            continue
+        # Insert after the last `.flow/` line, matching its indent.
+        insert_after = flow_line_idxs[-1]
+        sample = block_lines[insert_after]
+        indent_match = re.match(r"^(\s*)", sample)
+        indent = indent_match.group(1) if indent_match else ""
+        new_line = f"{indent}.flow/memory/       # categorized learnings (flowctl memory search)"
+        new_block_lines = (
+            block_lines[: insert_after + 1] + [new_line] + block_lines[insert_after + 1 :]
+        )
+        new_block = "\n".join(new_block_lines)
+        # Rebuild content with the block swapped in.
+        start, end = match.span(2)
+        new_content = content[:start] + new_block + content[end:]
+        return (new_content, "listing")
+
+    # Append strategy — ensure exactly one blank line before the new section.
+    if content and not content.endswith("\n"):
+        content = content + "\n"
+    sep = "" if content.endswith("\n\n") or content == "" else "\n"
+    new_content = content + sep + MEMORY_DISCOVERABILITY_SECTION
+    if not new_content.endswith("\n"):
+        new_content += "\n"
+    return (new_content, "append")
+
+
+def _discoverability_unified_diff(
+    old: str, new: str, rel_path: str
+) -> str:
+    diff = difflib.unified_diff(
+        old.splitlines(keepends=True),
+        new.splitlines(keepends=True),
+        fromfile=f"a/{rel_path}",
+        tofile=f"b/{rel_path}",
+        n=3,
+    )
+    return "".join(diff)
+
+
+def cmd_memory_discoverability_patch(args: argparse.Namespace) -> None:
+    """Patch project AGENTS.md / CLAUDE.md with a `.flow/memory/` reference.
+
+    Default: interactive confirmation. Flags:
+      --apply        write without prompting (non-interactive)
+      --dry-run      print proposed diff, never write
+      --target       auto | agents | claude (default: auto)
+      --json         machine-readable output
+    """
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.",
+            use_json=bool(getattr(args, "json", False)),
+        )
+
+    is_json = bool(getattr(args, "json", False))
+    apply_flag = bool(getattr(args, "apply", False))
+    dry_run = bool(getattr(args, "dry_run", False))
+    target_choice = getattr(args, "target", "auto") or "auto"
+
+    if apply_flag and dry_run:
+        if is_json:
+            json_output(
+                {"error": "--apply and --dry-run are mutually exclusive"},
+                success=False,
+            )
+        else:
+            print("Error: --apply and --dry-run are mutually exclusive.", file=sys.stderr)
+        sys.exit(2)
+
+    repo_root = get_repo_root()
+    target_path, reason, notes = _discoverability_pick_target(repo_root, target_choice)
+    if target_path is None:
+        msg = (
+            "No AGENTS.md or CLAUDE.md at repo root. "
+            "Create one first, then re-run."
+            if target_choice == "auto"
+            else reason
+        )
+        if is_json:
+            json_output({"error": msg, "target": None}, success=False)
+        else:
+            print(msg)
+        sys.exit(1)
+
+    rel_path = str(target_path.relative_to(repo_root))
+    content = _discoverability_read(target_path)
+    if content is None:
+        msg = f"Could not read {rel_path}"
+        if is_json:
+            json_output({"error": msg, "target": rel_path}, success=False)
+        else:
+            print(f"Error: {msg}", file=sys.stderr)
+        sys.exit(1)
+
+    if _discoverability_already_present(content):
+        message = (
+            f"Discoverability already present in {rel_path}. No changes needed."
+        )
+        if is_json:
+            json_output(
+                {
+                    "target": rel_path,
+                    "action": "exists",
+                    "reason": reason,
+                    "notes": notes,
+                    "diff": "",
+                    "message": message,
+                }
+            )
+        else:
+            print(message)
+        return
+
+    new_content, strategy = _discoverability_plan_edit(content)
+    diff_text = _discoverability_unified_diff(content, new_content, rel_path)
+
+    if not is_json:
+        print(f"Target: {rel_path} ({reason})")
+        for note in notes:
+            print(f"  note: {note}")
+        print(f"Strategy: {strategy}\n")
+        print(diff_text if diff_text else "(no diff)")
+
+    if dry_run:
+        message = f"Dry run — {rel_path} not modified."
+        if is_json:
+            json_output(
+                {
+                    "target": rel_path,
+                    "action": "dry-run",
+                    "reason": reason,
+                    "notes": notes,
+                    "strategy": strategy,
+                    "diff": diff_text,
+                    "message": message,
+                }
+            )
+        else:
+            print(f"\n{message}")
+        return
+
+    if not apply_flag:
+        if is_json:
+            # JSON callers must opt in explicitly — avoid destructive auto-apply.
+            json_output(
+                {
+                    "error": (
+                        "Refusing to patch without --apply (or interactive "
+                        "confirmation). Re-run with --apply or --dry-run."
+                    ),
+                    "target": rel_path,
+                    "action": "skipped",
+                    "reason": reason,
+                    "notes": notes,
+                    "strategy": strategy,
+                    "diff": diff_text,
+                },
+                success=False,
+            )
+            sys.exit(1)
+        try:
+            answer = input("\nApply? [y/N] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print("\nAborted.")
+            sys.exit(1)
+        if answer not in ("y", "yes"):
+            print("Aborted — no changes written.")
+            sys.exit(1)
+
+    atomic_write(target_path, new_content)
+
+    if is_json:
+        json_output(
+            {
+                "target": rel_path,
+                "action": "applied",
+                "reason": reason,
+                "notes": notes,
+                "strategy": strategy,
+                "diff": diff_text,
+                "message": f"Patched {rel_path} ({strategy}).",
+            }
+        )
+    else:
+        print(f"\nPatched {rel_path}.")
+
+
 def cmd_epic_create(args: argparse.Namespace) -> None:
     """Create a new epic."""
     if not ensure_flow_exists():
@@ -12259,6 +12609,35 @@ def main() -> None:
     )
     p_memory_migrate.add_argument("--json", action="store_true", help="JSON output")
     p_memory_migrate.set_defaults(func=cmd_memory_migrate)
+
+    # memory discoverability-patch (fn-30.6)
+    p_memory_disc = memory_sub.add_parser(
+        "discoverability-patch",
+        help=(
+            "Patch the project's AGENTS.md / CLAUDE.md with a one-line "
+            "reference to .flow/memory/ so agents without flow-next skills "
+            "can still discover the learnings store."
+        ),
+    )
+    p_memory_disc.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write the change without prompting (non-interactive)",
+    )
+    p_memory_disc.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        help="Print proposed diff without writing",
+    )
+    p_memory_disc.add_argument(
+        "--target",
+        choices=["auto", "agents", "claude"],
+        default="auto",
+        help="Which file to patch (default: auto — picks substantive file)",
+    )
+    p_memory_disc.add_argument("--json", action="store_true", help="JSON output")
+    p_memory_disc.set_defaults(func=cmd_memory_discoverability_patch)
 
     # epic create
     p_epic = subparsers.add_parser("epic", help="Epic commands")
