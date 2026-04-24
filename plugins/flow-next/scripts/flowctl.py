@@ -3636,30 +3636,401 @@ def cmd_review_backend(args: argparse.Namespace) -> None:
         print(spec.backend)
 
 
-MEMORY_TEMPLATES = {
-    "pitfalls.md": """# Pitfalls
+# --- Memory schema (fn-30) ---
+#
+# Categorized learnings store. Two tracks (bug + knowledge), category enums
+# scoped per-track, YAML frontmatter on each entry. See
+# `plugins/flow-next/templates/memory/README.md.tpl` for user-facing docs.
 
-Lessons learned from NEEDS_WORK feedback. Things models tend to miss.
+MEMORY_TRACKS: tuple[str, ...] = ("bug", "knowledge")
 
-<!-- Entries added automatically by hooks or manually via `flowctl memory add` -->
-""",
-    "conventions.md": """# Conventions
-
-Project patterns discovered during work. Not in CLAUDE.md but important.
-
-<!-- Entries added manually via `flowctl memory add` -->
-""",
-    "decisions.md": """# Decisions
-
-Architectural choices with rationale. Why we chose X over Y.
-
-<!-- Entries added manually via `flowctl memory add` -->
-""",
+MEMORY_CATEGORIES: dict[str, list[str]] = {
+    "bug": [
+        "build-errors",
+        "test-failures",
+        "runtime-errors",
+        "performance",
+        "security",
+        "integration",
+        "data",
+        "ui",
+    ],
+    "knowledge": [
+        "architecture-patterns",
+        "conventions",
+        "tooling-decisions",
+        "workflow",
+        "best-practices",
+    ],
 }
+
+MEMORY_REQUIRED_FIELDS: frozenset[str] = frozenset(
+    {"title", "date", "track", "category"}
+)
+MEMORY_OPTIONAL_FIELDS: frozenset[str] = frozenset(
+    {
+        "module",
+        "tags",
+        "status",
+        "stale_reason",
+        "stale_date",
+        "last_updated",
+        "related_to",
+    }
+)
+MEMORY_BUG_FIELDS: frozenset[str] = frozenset(
+    {"problem_type", "symptoms", "root_cause", "resolution_type"}
+)
+MEMORY_KNOWLEDGE_FIELDS: frozenset[str] = frozenset({"applies_when"})
+
+MEMORY_PROBLEM_TYPES: tuple[str, ...] = (
+    "build-error",
+    "test-failure",
+    "runtime-error",
+    "performance",
+    "security",
+    "integration",
+    "data",
+    "ui",
+)
+
+MEMORY_RESOLUTION_TYPES: tuple[str, ...] = (
+    "fix",
+    "workaround",
+    "documentation",
+    "refactor",
+)
+
+MEMORY_STATUS: tuple[str, ...] = ("active", "stale")
+
+# Deterministic field order for write — required first, track-specific next,
+# optional last. Anything not in this list is emitted alphabetically after.
+MEMORY_FIELD_ORDER: tuple[str, ...] = (
+    "title",
+    "date",
+    "track",
+    "category",
+    "module",
+    "tags",
+    "problem_type",
+    "symptoms",
+    "root_cause",
+    "resolution_type",
+    "applies_when",
+    "status",
+    "stale_reason",
+    "stale_date",
+    "last_updated",
+    "related_to",
+)
+
+# Legacy flat files (pre-fn-30). Preserved on init with a migration hint.
+MEMORY_LEGACY_FILES: tuple[str, ...] = ("pitfalls.md", "conventions.md", "decisions.md")
+
+
+# --- Frontmatter parsing / writing ---
+
+
+def _memory_yaml_available() -> bool:
+    """Detect PyYAML for optional round-trip parse. Zero-dep by default."""
+    try:
+        import yaml  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def _parse_inline_yaml(text: str) -> dict[str, Any]:
+    """Minimal inline YAML parser for flat `key: value` frontmatter.
+
+    Handles:
+      - scalar strings / numbers / booleans
+      - inline flow-style lists: `tags: [a, b, c]`
+      - empty string values
+    Returns {} on any malformation.
+
+    This is intentionally not a full YAML parser. Frontmatter written by
+    `write_memory_entry` is always parseable by this function (round-trip).
+    """
+    result: dict[str, Any] = {}
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        if not line.strip():
+            continue
+        if line.lstrip().startswith("#"):
+            continue
+        if ":" not in line:
+            # Malformed — reject everything.
+            return {}
+        key, _, value = line.partition(":")
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            return {}
+        # Strip matched surrounding quotes on scalars.
+        if (
+            len(value) >= 2
+            and value[0] == value[-1]
+            and value[0] in ('"', "'")
+        ):
+            value = value[1:-1]
+            result[key] = value
+            continue
+        # Inline list: [a, b, c]
+        if value.startswith("[") and value.endswith("]"):
+            inner = value[1:-1].strip()
+            if not inner:
+                result[key] = []
+            else:
+                items = [item.strip() for item in inner.split(",")]
+                # Strip quotes from individual items.
+                cleaned = []
+                for item in items:
+                    if (
+                        len(item) >= 2
+                        and item[0] == item[-1]
+                        and item[0] in ('"', "'")
+                    ):
+                        item = item[1:-1]
+                    cleaned.append(item)
+                result[key] = cleaned
+            continue
+        # Booleans / null / numbers — keep strings for determinism.
+        # (Memory entries don't need typed scalars; readers treat as strings.)
+        result[key] = value
+    return result
+
+
+def parse_memory_frontmatter(path: Path) -> dict[str, Any]:
+    """Parse YAML frontmatter from a memory entry file.
+
+    Returns an empty dict if:
+      - file doesn't exist
+      - file doesn't start with a `---` delimiter
+      - frontmatter is malformed
+
+    PyYAML is used when available (round-trip-safe); otherwise the inline
+    parser runs. Both produce the same shape for entries we write.
+    """
+    if not path.exists():
+        return {}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    if not text.startswith("---"):
+        return {}
+    # Split into (delim, frontmatter, delim, body).
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return {}
+    fm_text = parts[1]
+    # Prefer PyYAML when available.
+    try:
+        import yaml  # type: ignore[import-not-found]
+
+        try:
+            parsed = yaml.safe_load(fm_text)
+        except yaml.YAMLError:
+            return {}
+        if not isinstance(parsed, dict):
+            return {}
+        return parsed
+    except ImportError:
+        return _parse_inline_yaml(fm_text)
+
+
+# Fields that PyYAML would auto-coerce to typed scalars (datetime.date,
+# bool, int). We always emit these quoted so the parser round-trips them
+# as plain strings. Memory readers treat every scalar as a string.
+_MEMORY_QUOTED_STRING_FIELDS: frozenset[str] = frozenset(
+    {"date", "stale_date", "last_updated"}
+)
+
+
+def _format_yaml_value(value: Any, key: Optional[str] = None) -> str:
+    """Render a frontmatter value back to a YAML scalar or inline list."""
+    if isinstance(value, list):
+        inner = ", ".join(str(item) for item in value)
+        return f"[{inner}]"
+    if value is None:
+        return ""
+    text = str(value)
+    if key in _MEMORY_QUOTED_STRING_FIELDS:
+        # Escape embedded double quotes defensively; dates don't carry them
+        # in practice, but keep the writer robust.
+        escaped = text.replace('"', '\\"')
+        return f'"{escaped}"'
+    return text
+
+
+def _frontmatter_sort_key(field: str) -> tuple[int, str]:
+    """Sort frontmatter keys by MEMORY_FIELD_ORDER, then alphabetically."""
+    try:
+        return (MEMORY_FIELD_ORDER.index(field), field)
+    except ValueError:
+        return (len(MEMORY_FIELD_ORDER), field)
+
+
+def write_memory_entry(path: Path, frontmatter: dict[str, Any], body: str) -> None:
+    """Write a memory entry with deterministic field order.
+
+    Validates required fields before writing. Raises ValueError on invalid
+    frontmatter so callers can surface a clean error.
+    """
+    errors = validate_memory_frontmatter(frontmatter)
+    if errors:
+        raise ValueError("; ".join(errors))
+
+    lines = ["---"]
+    for key in sorted(frontmatter.keys(), key=_frontmatter_sort_key):
+        rendered = _format_yaml_value(frontmatter[key], key)
+        lines.append(f"{key}: {rendered}")
+    lines.append("---")
+    lines.append("")
+    # Body gets a trailing newline to keep round-trip clean.
+    body_text = body.rstrip("\n") + "\n" if body else ""
+    content = "\n".join(lines) + "\n" + body_text
+    atomic_write(path, content)
+
+
+def validate_memory_frontmatter(frontmatter: dict[str, Any]) -> list[str]:
+    """Return a list of validation errors (empty = valid).
+
+    Checks:
+      - all required fields present
+      - track value in MEMORY_TRACKS
+      - category value in MEMORY_CATEGORIES[track]
+      - track-specific required fields present
+      - no unknown top-level fields
+      - enum values for problem_type / resolution_type / status
+    """
+    errors: list[str] = []
+
+    if not isinstance(frontmatter, dict):
+        return ["frontmatter must be a dict"]
+
+    missing = MEMORY_REQUIRED_FIELDS - set(frontmatter.keys())
+    if missing:
+        errors.append(
+            f"missing required fields: {', '.join(sorted(missing))}"
+        )
+
+    track = frontmatter.get("track")
+    if track is not None and track not in MEMORY_TRACKS:
+        errors.append(
+            f"invalid track '{track}' (valid: {', '.join(MEMORY_TRACKS)})"
+        )
+
+    category = frontmatter.get("category")
+    if track in MEMORY_CATEGORIES:
+        if category is not None and category not in MEMORY_CATEGORIES[track]:
+            errors.append(
+                f"invalid category '{category}' for track '{track}' "
+                f"(valid: {', '.join(MEMORY_CATEGORIES[track])})"
+            )
+
+    # Track-specific required fields.
+    if track == "bug":
+        missing_bug = MEMORY_BUG_FIELDS - set(frontmatter.keys())
+        if missing_bug:
+            errors.append(
+                "missing bug-track fields: " + ", ".join(sorted(missing_bug))
+            )
+    elif track == "knowledge":
+        missing_knowledge = MEMORY_KNOWLEDGE_FIELDS - set(frontmatter.keys())
+        if missing_knowledge:
+            errors.append(
+                "missing knowledge-track fields: "
+                + ", ".join(sorted(missing_knowledge))
+            )
+
+    allowed = (
+        MEMORY_REQUIRED_FIELDS
+        | MEMORY_OPTIONAL_FIELDS
+        | MEMORY_BUG_FIELDS
+        | MEMORY_KNOWLEDGE_FIELDS
+    )
+    unknown = set(frontmatter.keys()) - allowed
+    if unknown:
+        errors.append(f"unknown fields: {', '.join(sorted(unknown))}")
+
+    problem_type = frontmatter.get("problem_type")
+    if problem_type is not None and problem_type not in MEMORY_PROBLEM_TYPES:
+        errors.append(
+            f"invalid problem_type '{problem_type}' "
+            f"(valid: {', '.join(MEMORY_PROBLEM_TYPES)})"
+        )
+
+    resolution_type = frontmatter.get("resolution_type")
+    if (
+        resolution_type is not None
+        and resolution_type not in MEMORY_RESOLUTION_TYPES
+    ):
+        errors.append(
+            f"invalid resolution_type '{resolution_type}' "
+            f"(valid: {', '.join(MEMORY_RESOLUTION_TYPES)})"
+        )
+
+    status = frontmatter.get("status")
+    if status is not None and status not in MEMORY_STATUS:
+        errors.append(
+            f"invalid status '{status}' (valid: {', '.join(MEMORY_STATUS)})"
+        )
+
+    return errors
+
+
+def _memory_template_path(name: str) -> Optional[Path]:
+    """Find template shipped with the plugin.
+
+    Looks alongside flowctl.py (`plugins/flow-next/templates/memory/`) first.
+    Returns None if not found — init tolerates a missing template rather
+    than hard-failing, since the mirror copy under `.flow/bin/` has no
+    sibling templates directory.
+    """
+    here = Path(__file__).resolve().parent
+    # Primary location: plugins/flow-next/templates/memory/<name>
+    primary = here.parent / "templates" / "memory" / name
+    if primary.is_file():
+        return primary
+    # Fallback: repo-local templates next to flowctl.py (.flow/bin mirror case)
+    fallback = here / "templates" / "memory" / name
+    if fallback.is_file():
+        return fallback
+    return None
+
+
+def _read_memory_template(name: str, default: str = "") -> str:
+    """Read a template file. Returns default when missing."""
+    path = _memory_template_path(name)
+    if path is None:
+        return default
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return default
+
+
+def _default_memory_readme() -> str:
+    """Fallback README content if the template file is missing."""
+    return (
+        "# .flow/memory/\n\n"
+        "Categorized project memory. See flow-next docs for schema.\n"
+    )
 
 
 def cmd_memory_init(args: argparse.Namespace) -> None:
-    """Initialize memory directory with templates."""
+    """Initialize categorized memory directory tree.
+
+    Creates:
+      .flow/memory/README.md
+      .flow/memory/bug/<category>/.gitkeep (8 categories)
+      .flow/memory/knowledge/<category>/.gitkeep (5 categories)
+
+    Preserves any legacy flat files (pitfalls.md, conventions.md, decisions.md)
+    and prints a one-line migration hint when detected.
+    """
     if not ensure_flow_exists():
         error_exit(
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
@@ -3681,27 +4052,52 @@ def cmd_memory_init(args: argparse.Namespace) -> None:
 
     flow_dir = get_flow_dir()
     memory_dir = flow_dir / MEMORY_DIR
-
-    # Create memory dir if missing
     memory_dir.mkdir(parents=True, exist_ok=True)
 
-    created = []
-    for filename, content in MEMORY_TEMPLATES.items():
-        filepath = memory_dir / filename
-        if not filepath.exists():
-            atomic_write(filepath, content)
-            created.append(filename)
+    created: list[str] = []
+
+    # README — regenerate only when missing (don't clobber user edits).
+    readme_path = memory_dir / "README.md"
+    if not readme_path.exists():
+        readme_content = _read_memory_template(
+            "README.md.tpl", _default_memory_readme()
+        )
+        atomic_write(readme_path, readme_content)
+        created.append("README.md")
+
+    # Category tree.
+    for track, categories in MEMORY_CATEGORIES.items():
+        for category in categories:
+            cat_dir = memory_dir / track / category
+            cat_dir.mkdir(parents=True, exist_ok=True)
+            gitkeep = cat_dir / ".gitkeep"
+            if not gitkeep.exists():
+                atomic_write(gitkeep, "")
+                created.append(f"{track}/{category}/.gitkeep")
+
+    # Legacy detection — preserve files, emit one-line hint.
+    legacy_present = [
+        name for name in MEMORY_LEGACY_FILES if (memory_dir / name).exists()
+    ]
+
+    message = "Memory initialized" if created else "Memory already initialized"
+    hint = (
+        "Legacy memory files detected. Run `flowctl memory migrate` to convert "
+        "to the new categorized schema."
+        if legacy_present
+        else None
+    )
 
     if args.json:
-        json_output(
-            {
-                "path": str(memory_dir),
-                "created": created,
-                "message": "Memory initialized"
-                if created
-                else "Memory already initialized",
-            }
-        )
+        payload: dict[str, Any] = {
+            "path": str(memory_dir),
+            "created": created,
+            "message": message,
+            "legacy": legacy_present,
+        }
+        if hint:
+            payload["hint"] = hint
+        json_output(payload)
     else:
         if created:
             print(f"Memory initialized at {memory_dir}")
@@ -3709,6 +4105,8 @@ def cmd_memory_init(args: argparse.Namespace) -> None:
                 print(f"  Created: {f}")
         else:
             print(f"Memory already initialized at {memory_dir}")
+        if hint:
+            print(hint)
 
 
 def require_memory_enabled(args) -> Path:
@@ -3732,9 +4130,25 @@ def require_memory_enabled(args) -> Path:
         sys.exit(1)
 
     memory_dir = get_flow_dir() / MEMORY_DIR
-    required_files = ["pitfalls.md", "conventions.md", "decisions.md"]
-    missing = [f for f in required_files if not (memory_dir / f).exists()]
-    if missing:
+    # fn-30: initialization = memory dir exists with either the new tree
+    # (bug/ + knowledge/) or any legacy flat file. Legacy-only repos stay
+    # readable until migration; fresh inits only have the tree.
+    if not memory_dir.exists():
+        if args.json:
+            json_output(
+                {"error": "Memory not initialized. Run: flowctl memory init"},
+                success=False,
+            )
+        else:
+            print("Error: Memory not initialized.")
+            print("Run: flowctl memory init")
+        sys.exit(1)
+
+    has_tree = (memory_dir / "bug").is_dir() or (memory_dir / "knowledge").is_dir()
+    has_legacy = any(
+        (memory_dir / name).exists() for name in MEMORY_LEGACY_FILES
+    )
+    if not (has_tree or has_legacy):
         if args.json:
             json_output(
                 {"error": "Memory not initialized. Run: flowctl memory init"},
@@ -3770,15 +4184,18 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
         )
 
     filepath = memory_dir / filename
+    # fn-30 task 1: tree-first init no longer creates legacy files. Seed the
+    # flat file on demand so legacy `--type pitfall|convention|decision`
+    # keeps working until task 2 rewrites this command around the new tree.
     if not filepath.exists():
-        error_exit(
-            f"Memory file {filename} not found. Run: flowctl memory init",
-            use_json=args.json,
-        )
+        legacy_headers = {
+            "pitfalls.md": "# Pitfalls\n\nLessons learned from NEEDS_WORK feedback.\n",
+            "conventions.md": "# Conventions\n\nProject patterns discovered during work.\n",
+            "decisions.md": "# Decisions\n\nArchitectural choices with rationale.\n",
+        }
+        atomic_write(filepath, legacy_headers.get(filename, ""))
 
     # Format entry
-    from datetime import datetime
-
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # Normalize type name

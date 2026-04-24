@@ -1,0 +1,13 @@
+{
+  "branch_name": "fn-30-memory-schema-upgrade-categorized-yaml",
+  "created_at": "2026-04-24T08:09:41.308773Z",
+  "depends_on_epics": [],
+  "id": "fn-30-memory-schema-upgrade-categorized-yaml",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-30-memory-schema-upgrade-categorized-yaml.md",
+  "status": "open",
+  "title": "Memory schema upgrade: categorized YAML-frontmatter learnings with overlap detection and Ralph auto-capture rewrite",
+  "updated_at": "2026-04-24T08:17:27.199405Z"
+}

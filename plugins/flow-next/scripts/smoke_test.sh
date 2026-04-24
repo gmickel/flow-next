@@ -427,22 +427,47 @@ PASS=$((PASS + 1))
 echo -e "${YELLOW}--- memory commands ---${NC}"
 scripts/flowctl config set memory.enabled true --json >/dev/null
 scripts/flowctl memory init --json >/dev/null
-if [[ -f ".flow/memory/pitfalls.md" ]]; then
-  echo -e "${GREEN}✓${NC} memory init creates files"
+# fn-30 task 1: init creates categorized tree + README, not legacy flat files.
+if [[ -f ".flow/memory/README.md" && -d ".flow/memory/bug/build-errors" && -d ".flow/memory/knowledge/conventions" ]]; then
+  echo -e "${GREEN}✓${NC} memory init creates categorized tree"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} memory init creates files"
+  echo -e "${RED}✗${NC} memory init creates categorized tree (missing README or tree dirs)"
   FAIL=$((FAIL + 1))
 fi
 
-scripts/flowctl memory add --type pitfall "Test pitfall entry" --json >/dev/null
-if grep -q "Test pitfall entry" .flow/memory/pitfalls.md; then
-  echo -e "${GREEN}✓${NC} memory add pitfall"
+# All 8 bug categories + 5 knowledge categories present, each with .gitkeep.
+bug_count=$(find .flow/memory/bug -mindepth 2 -name .gitkeep 2>/dev/null | wc -l | tr -d ' ')
+kn_count=$(find .flow/memory/knowledge -mindepth 2 -name .gitkeep 2>/dev/null | wc -l | tr -d ' ')
+if [[ "$bug_count" == "8" && "$kn_count" == "5" ]]; then
+  echo -e "${GREEN}✓${NC} memory init creates 8 bug + 5 knowledge .gitkeep placeholders"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} memory add pitfall"
+  echo -e "${RED}✗${NC} memory init placeholders (bug=$bug_count expected 8, knowledge=$kn_count expected 5)"
   FAIL=$((FAIL + 1))
 fi
+
+# Legacy backcompat: --type pitfall still appends to pitfalls.md (task 2 rewrites this).
+scripts/flowctl memory add --type pitfall "Test pitfall entry" --json >/dev/null
+if grep -q "Test pitfall entry" .flow/memory/pitfalls.md; then
+  echo -e "${GREEN}✓${NC} memory add pitfall (legacy backcompat)"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} memory add pitfall (legacy backcompat)"
+  FAIL=$((FAIL + 1))
+fi
+
+# Re-run init with legacy present — hint should surface.
+hint_json="$(scripts/flowctl memory init --json)"
+"$PYTHON_BIN" - <<'PY' "$hint_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["success"] is True
+assert "pitfalls.md" in data.get("legacy", []), f"legacy not detected: {data}"
+assert "migrate" in data.get("hint", ""), f"migration hint missing: {data}"
+PY
+echo -e "${GREEN}✓${NC} memory init detects legacy files and emits hint"
+PASS=$((PASS + 1))
 
 scripts/flowctl memory add --type convention "Test convention" --json >/dev/null
 scripts/flowctl memory add --type decision "Test decision" --json >/dev/null
@@ -457,7 +482,7 @@ assert counts["conventions.md"] >= 1
 assert counts["decisions.md"] >= 1
 assert data["total"] >= 3
 PY
-echo -e "${GREEN}✓${NC} memory list"
+echo -e "${GREEN}✓${NC} memory list (legacy backcompat)"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- schema v1 validate ---${NC}"
