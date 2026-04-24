@@ -130,6 +130,79 @@ Malformed LLM output falls through to REVIEW.
 
 ---
 
+## Phase ordering & flag-combination matrix (fn-32.4)
+
+The opt-in flags (`--validate`, `--deep`, `--interactive`) layer on top of the
+primary review. When multiple are set, phases run in a fixed order:
+
+```
+1. Primary review (always)
+2. If --deep:        run deep passes in same session → merge findings into receipt
+3. If --validate:    validator re-checks merged findings → drops false positives
+4. If --interactive: user walks surviving findings → Apply/Defer/Skip/Acknowledge
+5. Verdict           computed over surviving findings (deep may upgrade SHIP→NEEDS_WORK;
+                     validate may upgrade NEEDS_WORK→SHIP; walkthrough never flips)
+6. Receipt           each phase writes its own additive block without disturbing others
+```
+
+**Why this order:**
+- Deep runs before validate: deep expands the finding superset; validator
+  filters the (larger) merged set in a single pass — cheaper than running
+  validator twice (once for primary, once for deep).
+- Validate runs before interactive: the user walks only validated findings,
+  reducing decision burden and keeping per-finding quality high.
+- Interactive is always last: it consumes the fully-merged, fully-validated
+  set; it never flips the verdict, only sorts findings into Apply / Defer /
+  Skip / Acknowledge buckets.
+
+**Flag combination matrix:**
+
+| Combo                              | Phases executed          |
+|------------------------------------|--------------------------|
+| (default, no flags)                | 1 → 5 → 6                |
+| `--validate`                       | 1 → 3 → 5 → 6            |
+| `--deep`                           | 1 → 2 → 5 → 6            |
+| `--interactive`                    | 1 → 4 → 5 → 6            |
+| `--validate --deep`                | 1 → 2 → 3 → 5 → 6        |
+| `--validate --interactive`         | 1 → 3 → 4 → 5 → 6        |
+| `--deep --interactive`             | 1 → 2 → 4 → 5 → 6        |
+| `--validate --deep --interactive`  | 1 → 2 → 3 → 4 → 5 → 6    |
+
+**Receipt composition:** each phase appends its own block to the receipt
+without mutating any other block. The receipt schema is additive — old
+Ralph scripts read `verdict` / `mode` / `session_id` and ignore unknown
+keys.
+
+| Phase | Receipt keys written | Verdict effect |
+|-------|----------------------|----------------|
+| 1. Primary   | `type`, `id`, `mode`, `verdict`, `session_id`, `timestamp`, `model`, `effort`, `spec` | Sets `verdict` |
+| 2. Deep      | `deep_passes`, `deep_findings_count`, `cross_pass_promotions`, `deep_timestamp`, optional `verdict_before_deep` | SHIP → NEEDS_WORK (upgrade only; never downgrades) |
+| 3. Validator | `validator: {dispatched, dropped, kept, reasons}`, `validator_timestamp`, optional `verdict_before_validate` | NEEDS_WORK → SHIP (upgrade only when all drop; never downgrades) |
+| 4. Walkthrough | `walkthrough: {applied, deferred, skipped, acknowledged, lfg_rest}`, `walkthrough_timestamp` | None — walkthrough never flips verdict |
+
+**Empty-block invariants:**
+- When no `--validate`, the receipt has **no** `validator` key, **no**
+  `validator_timestamp`, and **no** `verdict_before_validate`.
+- When no `--deep`, the receipt has **no** `deep_passes`, **no**
+  `deep_findings_count`, **no** `cross_pass_promotions`, **no**
+  `deep_timestamp`, and **no** `verdict_before_deep`.
+- When no `--interactive`, the receipt has **no** `walkthrough` and
+  **no** `walkthrough_timestamp`.
+- When `--validate` ran with zero dispatched findings, an empty validator
+  block (`{dispatched: 0, dropped: 0, kept: 0, reasons: []}`) + its
+  timestamp are still written — this keeps the receipt shape deterministic
+  for consumers.
+- `verdict_before_validate` / `verdict_before_deep` are only written when
+  their phase actually upgraded the verdict; otherwise absent.
+
+**Ralph compatibility:** the receipt-gate logic reads `verdict`, `mode`,
+and `session_id`. All new fields are optional and ignored by older Ralph
+scripts. `FLOW_VALIDATE_REVIEW=1` and `FLOW_REVIEW_DEEP=1` are the only
+env opt-ins; `--interactive` hard-errors in Ralph mode (see SKILL.md
+Step 0).
+
+---
+
 ## Codex Backend Workflow
 
 Use when `BACKEND="codex"`.

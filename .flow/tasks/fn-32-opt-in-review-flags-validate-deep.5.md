@@ -55,10 +55,14 @@ Run `impl-review --deep=performance` on non-perf-sensitive diff. Verify:
 
 ### Case 5: --interactive Ralph-block
 
+<!-- Updated by plan-sync: fn-32.3 also ships two flowctl helpers (`review-walkthrough-defer`, `review-walkthrough-record`) plus a walkthrough receipt shape `{applied, deferred, skipped, acknowledged, lfg_rest}` + `walkthrough_timestamp`. Smoke test additionally should verify Ralph-block via `REVIEW_RECEIPT_PATH` set (not just `FLOW_RALPH=1`) — either env triggers the hard-error. The 12 walkthrough unit smoke tests in fn-32.3 already cover helper correctness; this case stays focused on the skill-level Ralph-block. -->
+
 Set `FLOW_RALPH=1`; run `impl-review --interactive`. Verify:
 - Exits with code 2
 - Error message mentions Ralph incompatibility
 - No review invoked
+
+Also verify with `REVIEW_RECEIPT_PATH=/tmp/x.json` (no `FLOW_RALPH`): same hard-error (either env var triggers the block).
 
 ### Case 6: combination (--validate --deep)
 

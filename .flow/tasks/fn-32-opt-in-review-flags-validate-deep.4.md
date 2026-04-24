@@ -46,11 +46,12 @@ Receipt fields accumulate: each phase writes its own block without disturbing ot
 
 <!-- Updated by plan-sync: fn-32.1 added `kept`, `verdict_before_validate`, and `validator_timestamp` fields alongside the validator block. Upgrade path only runs NEEDS_WORK → SHIP; never downgrades. -->
 <!-- Updated by plan-sync: fn-32.2 added `cross_pass_promotions`, `verdict_before_deep`, and `deep_timestamp` alongside `deep_passes`/`deep_findings_count`. Deep-pass verdict path is SHIP → NEEDS_WORK only (upgrade in stringency); never downgrades. -->
+<!-- Updated by plan-sync: fn-32.3 walkthrough block also carries `lfg_rest` (bool) alongside `applied/deferred/skipped/acknowledged`; receipt also gains `walkthrough_timestamp`. Walkthrough never flips verdict — sorts findings only. New helpers `flowctl review-walkthrough-defer` (appends to `.flow/review-deferred/<branch-slug>.md`) and `flowctl review-walkthrough-record` (stamps receipt counts) do the I/O. Branch slug keeps `_` and `.` in addition to `a-zA-Z0-9-`. -->
 
 Add a schema check (or unit test) that verifies:
 
 1. Default review (no flags) produces receipt with only base fields (no validator, deep_passes, walkthrough).
-2. Each flag adds exactly its own field without mutating others. The `--validate` path also writes `validator_timestamp` (always) and `verdict_before_validate` (only when the verdict was upgraded from NEEDS_WORK → SHIP). The `--deep` path also writes `deep_timestamp` (always), `deep_findings_count` (per-pass dict), `cross_pass_promotions` (list of `{id, from, to, pass}`), and `verdict_before_deep` (only when the verdict was upgraded from SHIP → NEEDS_WORK by deep-pass findings).
+2. Each flag adds exactly its own field without mutating others. The `--validate` path also writes `validator_timestamp` (always) and `verdict_before_validate` (only when the verdict was upgraded from NEEDS_WORK → SHIP). The `--deep` path also writes `deep_timestamp` (always), `deep_findings_count` (per-pass dict), `cross_pass_promotions` (list of `{id, from, to, pass}`), and `verdict_before_deep` (only when the verdict was upgraded from SHIP → NEEDS_WORK by deep-pass findings). The `--interactive` path writes `walkthrough: {applied, deferred, skipped, acknowledged, lfg_rest}` + `walkthrough_timestamp`; verdict is never flipped by walkthrough.
 3. All combinations produce receipts that pass existing Ralph gate logic (which reads `verdict`, `mode`, `session_id`).
 
 Test pattern:
@@ -101,6 +102,15 @@ def test_receipt_all_flags():
     assert "deep_findings_count" in receipt
     assert "cross_pass_promotions" in receipt
     assert "verdict" in receipt
+
+def test_receipt_with_walkthrough_shape():
+    # --interactive can't be fully auto-tested (needs blocking tool), but the
+    # receipt shape written by `flowctl review-walkthrough-record` is stable:
+    # walkthrough carries applied/deferred/skipped/acknowledged/lfg_rest + a
+    # walkthrough_timestamp, and verdict is never flipped by walkthrough.
+    receipt = simulate_walkthrough_record(applied=2, deferred=1, skipped=0, acknowledged=0, lfg_rest=False)
+    assert set(receipt["walkthrough"].keys()) == {"applied", "deferred", "skipped", "acknowledged", "lfg_rest"}
+    assert "walkthrough_timestamp" in receipt
 ```
 
 ## Ralph compat test
