@@ -44,9 +44,9 @@ If found, use that backend and skip all other detection.
 BACKEND=$($FLOWCTL review-backend)
 
 if [[ "$BACKEND" == "ASK" ]]; then
-  echo "Error: No review backend configured."
-  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
-  exit 1
+ echo "Error: No review backend configured."
+ echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
+ exit 1
 fi
 
 echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
@@ -107,14 +107,14 @@ Format: `[task ID] [--base <commit>] [--validate] [--deep[=passes]] [--interacti
 
 **Opt-in flags (fn-32):**
 - `--validate` — adds a validator pass on NEEDS_WORK that re-checks each finding
-  for false positives. All findings dropping upgrades verdict to SHIP.
+ for false positives. All findings dropping upgrades verdict to SHIP.
 - `FLOW_VALIDATE_REVIEW=1` env var — enables `--validate` session-wide (works in Ralph).
 - `--deep` — adds adversarial pass always + security/performance auto-enabled
-  per diff paths. `--deep=adversarial,security` restricts to listed passes.
+ per diff paths. `--deep=adversarial,security` restricts to listed passes.
 - `FLOW_REVIEW_DEEP=1` env var — enables `--deep` session-wide (works in Ralph).
 - `--interactive` — per-finding walkthrough on NEEDS_WORK. **No env var form** —
-  per-invocation only, always hard-errors in Ralph mode (`REVIEW_RECEIPT_PATH` or
-  `FLOW_RALPH=1`) to prevent accidental autonomous engagement.
+ per-invocation only, always hard-errors in Ralph mode (`REVIEW_RECEIPT_PATH` or
+ `FLOW_RALPH=1`) to prevent accidental autonomous engagement.
 - Default review behavior (no flags) is unchanged.
 
 ## Workflow
@@ -145,14 +145,14 @@ If `--base` not provided, `BASE_COMMIT` stays empty (will fall back to main/mast
 VALIDATE=false
 # Parse --validate from $ARGUMENTS (same pattern as --base)
 for arg in $ARGUMENTS; do
-  case "$arg" in
-    --validate) VALIDATE=true ;;
-  esac
+ case "$arg" in
+ --validate) VALIDATE=true ;;
+ esac
 done
 
 # Env opt-in (Ralph-friendly)
 if [[ "${FLOW_VALIDATE_REVIEW:-}" == "1" ]]; then
-  VALIDATE=true
+ VALIDATE=true
 fi
 ```
 
@@ -163,17 +163,17 @@ behavior is unchanged.
 
 ```bash
 DEEP=false
-DEEP_PASSES=""  # optional CSV: "adversarial,security"
+DEEP_PASSES="" # optional CSV: "adversarial,security"
 for arg in $ARGUMENTS; do
-  case "$arg" in
-    --deep) DEEP=true ;;
-    --deep=*) DEEP=true; DEEP_PASSES="${arg#--deep=}" ;;
-  esac
+ case "$arg" in
+ --deep) DEEP=true ;;
+ --deep=*) DEEP=true; DEEP_PASSES="${arg#--deep=}" ;;
+ esac
 done
 
 # Env opt-in (Ralph-friendly)
 if [[ "${FLOW_REVIEW_DEEP:-}" == "1" ]]; then
-  DEEP=true
+ DEEP=true
 fi
 ```
 
@@ -187,16 +187,16 @@ behavior is unchanged.
 # Otherwise: adversarial always + security/performance auto-enabled by
 # changed-file globs via `flowctl review-deep-auto`.
 if [[ -n "$DEEP_PASSES" ]]; then
-  SELECTED_PASSES="${DEEP_PASSES//,/ }"
+ SELECTED_PASSES="${DEEP_PASSES//,/ }"
 else
-  # Determine changed files for auto-enable heuristic
-  if [[ -n "$BASE_COMMIT" ]]; then
-    CHANGED="$(git diff --name-only "$BASE_COMMIT"..HEAD)"
-  else
-    DIFF_BASE=main; git rev-parse main >/dev/null 2>&1 || DIFF_BASE=master
-    CHANGED="$(git diff --name-only "$DIFF_BASE"..HEAD)"
-  fi
-  SELECTED_PASSES="$(printf '%s\n' "$CHANGED" | $FLOWCTL review-deep-auto)"
+ # Determine changed files for auto-enable heuristic
+ if [[ -n "$BASE_COMMIT" ]]; then
+ CHANGED="$(git diff --name-only "$BASE_COMMIT"..HEAD)"
+ else
+ DIFF_BASE=main; git rev-parse main >/dev/null 2>&1 || DIFF_BASE=master
+ CHANGED="$(git diff --name-only "$DIFF_BASE"..HEAD)"
+ fi
+ SELECTED_PASSES="$(printf '%s\n' "$CHANGED" | $FLOWCTL review-deep-auto)"
 fi
 echo "Deep passes selected: $SELECTED_PASSES"
 ```
@@ -209,17 +209,17 @@ auto-enable globs, and merge/promotion rules.
 ```bash
 INTERACTIVE=false
 for arg in $ARGUMENTS; do
-  case "$arg" in
-    --interactive) INTERACTIVE=true ;;
-  esac
+ case "$arg" in
+ --interactive) INTERACTIVE=true ;;
+ esac
 done
 
 # No env var form — per-invocation only. Ralph must never engage interactive.
 if [[ "$INTERACTIVE" == "true" ]]; then
-  if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
-    echo "Error: --interactive requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
-    exit 2
-  fi
+ if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
+ echo "Error: --interactive requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
+ exit 2
+ fi
 fi
 ```
 
@@ -242,23 +242,23 @@ Opt-out: `--no-triage` argument or `FLOW_RALPH_NO_TRIAGE=1` env var.
 
 ```bash
 if [[ -z "${TRIAGE_DISABLED:-}" && -z "${FLOW_RALPH_NO_TRIAGE:-}" ]]; then
-  RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
-  TRIAGE_ARGS=(triage-skip --receipt "$RECEIPT_PATH" --json)
-  [[ -n "$BASE_COMMIT" ]] && TRIAGE_ARGS+=(--base "$BASE_COMMIT")
-  [[ -n "$TASK_ID" ]] && TRIAGE_ARGS+=(--task "$TASK_ID")
-  # Deterministic-only by default; set FLOW_TRIAGE_LLM=1 to enable LLM judge
-  # for ambiguous diffs. Deterministic is conservative — ambiguous → REVIEW.
-  [[ -z "${FLOW_TRIAGE_LLM:-}" ]] && TRIAGE_ARGS+=(--no-llm)
+ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
+ TRIAGE_ARGS=(triage-skip --receipt "$RECEIPT_PATH" --json)
+ [[ -n "$BASE_COMMIT" ]] && TRIAGE_ARGS+=(--base "$BASE_COMMIT")
+ [[ -n "$TASK_ID" ]] && TRIAGE_ARGS+=(--task "$TASK_ID")
+ # Deterministic-only by default; set FLOW_TRIAGE_LLM=1 to enable LLM judge
+ # for ambiguous diffs. Deterministic is conservative — ambiguous → REVIEW.
+ [[ -z "${FLOW_TRIAGE_LLM:-}" ]] && TRIAGE_ARGS+=(--no-llm)
 
-  if TRIAGE_OUT=$($FLOWCTL "${TRIAGE_ARGS[@]}" 2>/dev/null); then
-    # Exit 0 = SKIP. Receipt already written by flowctl.
-    SKIP_REASON=$(echo "$TRIAGE_OUT" | jq -r '.reason // "trivial diff"' 2>/dev/null || echo "trivial diff")
-    echo "Triage-skip: $SKIP_REASON"
-    echo "VERDICT=SHIP"
-    exit 0
-  fi
-  # Exit 1 = proceed to full review (normal path). Exit >=2 = error, also falls
-  # through so impl-review proceeds safely rather than failing on triage.
+ if TRIAGE_OUT=$($FLOWCTL "${TRIAGE_ARGS[@]}" 2>/dev/null); then
+ # Exit 0 = SKIP. Receipt already written by flowctl.
+ SKIP_REASON=$(echo "$TRIAGE_OUT" | jq -r '.reason // "trivial diff"' 2>/dev/null || echo "trivial diff")
+ echo "Triage-skip: $SKIP_REASON"
+ echo "VERDICT=SHIP"
+ exit 0
+ fi
+ # Exit 1 = proceed to full review (normal path). Exit >=2 = error, also falls
+ # through so impl-review proceeds safely rather than failing on triage.
 fi
 ```
 
@@ -278,9 +278,9 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
 
 # Use BASE_COMMIT if provided, else fall back to main
 if [[ -n "$BASE_COMMIT" ]]; then
-  $FLOWCTL codex impl-review "$TASK_ID" --base "$BASE_COMMIT" --receipt "$RECEIPT_PATH"
+ $FLOWCTL codex impl-review "$TASK_ID" --base "$BASE_COMMIT" --receipt "$RECEIPT_PATH"
 else
-  $FLOWCTL codex impl-review "$TASK_ID" --base main --receipt "$RECEIPT_PATH"
+ $FLOWCTL codex impl-review "$TASK_ID" --base main --receipt "$RECEIPT_PATH"
 fi
 # Output includes VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK
 ```
@@ -293,14 +293,14 @@ On NEEDS_WORK: fix code, commit, re-run (receipt enables session continuity).
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
 
 # Override model + effort (pick one):
-#   --spec copilot:claude-opus-4.5:xhigh   (preferred, explicit)
-#   FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5:xhigh  (env, cascades through `review-backend`)
-#   FLOW_COPILOT_MODEL=gpt-5.2 FLOW_COPILOT_EFFORT=high  (env per-field; fills only missing)
+# --spec copilot:claude-opus-4.5:xhigh (preferred, explicit)
+# FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5:xhigh (env, cascades through `review-backend`)
+# FLOW_COPILOT_MODEL=gpt-5.2 FLOW_COPILOT_EFFORT=high (env per-field; fills only missing)
 
 if [[ -n "$BASE_COMMIT" ]]; then
-  $FLOWCTL copilot impl-review "$TASK_ID" --base "$BASE_COMMIT" --receipt "$RECEIPT_PATH"
+ $FLOWCTL copilot impl-review "$TASK_ID" --base "$BASE_COMMIT" --receipt "$RECEIPT_PATH"
 else
-  $FLOWCTL copilot impl-review "$TASK_ID" --base main --receipt "$RECEIPT_PATH"
+ $FLOWCTL copilot impl-review "$TASK_ID" --base main --receipt "$RECEIPT_PATH"
 fi
 # Output includes VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK
 ```
@@ -323,34 +323,34 @@ The workflow covers:
 
 ## Fix Loop (INTERNAL - do not exit to Ralph)
 
-**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is production-grade world-class software and architecture. Never use AskUserQuestion in this loop.**
+**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is production-grade world-class software and architecture. Never use request_user_input in this loop.**
 
 If verdict is NEEDS_WORK, loop internally until SHIP:
 
 0. **Deep-pass phase (only if `DEEP=true`)** — see [workflow.md](workflow.md) "Deep-Pass Phase" section.
-   - After primary review completes (any verdict) and before validator,
-     run each selected pass via
-     `$FLOWCTL <backend> deep-pass --pass <name> --receipt ... --primary-findings ...`.
-   - Passes merge into receipt via fingerprint dedup + cross-pass promotion.
-   - Deep may upgrade `SHIP → NEEDS_WORK` if it surfaces new blocking findings;
-     it never downgrades `NEEDS_WORK → SHIP`.
+ - After primary review completes (any verdict) and before validator,
+ run each selected pass via
+ `$FLOWCTL <backend> deep-pass --pass <name> --receipt ... --primary-findings ...`.
+ - Passes merge into receipt via fingerprint dedup + cross-pass promotion.
+ - Deep may upgrade `SHIP → NEEDS_WORK` if it surfaces new blocking findings;
+ it never downgrades `NEEDS_WORK → SHIP`.
 1. **Validator pass (only if `VALIDATE=true`)** — see [workflow.md](workflow.md) "Validator Pass" section.
-   - Extract findings JSON-lines, dispatch `$FLOWCTL <backend> validate --findings-file ... --receipt ...`
-   - If all findings drop → verdict upgrades to SHIP automatically (exit fix loop)
-   - Else → only surviving (kept) findings enter the fix loop in step 2
+ - Extract findings JSON-lines, dispatch `$FLOWCTL <backend> validate --findings-file ... --receipt ...`
+ - If all findings drop → verdict upgrades to SHIP automatically (exit fix loop)
+ - Else → only surviving (kept) findings enter the fix loop in step 2
 2. **Interactive walkthrough (only if `INTERACTIVE=true` AND verdict still NEEDS_WORK)** — see [walkthrough.md](walkthrough.md).
-   - For each surviving finding, ask user via platform blocking question tool: Apply / Defer / Skip / Acknowledge / LFG-rest.
-   - Deferred findings appended to `.flow/review-deferred/<branch-slug>.md`.
-   - Skip / Acknowledge are no-ops beyond receipt logging.
-   - Apply list restricts the fix loop below to just those findings.
-   - Receipt gains `walkthrough: {applied, deferred, skipped, acknowledged}`.
+ - For each surviving finding, ask user via platform blocking question tool: Apply / Defer / Skip / Acknowledge / LFG-rest.
+ - Deferred findings appended to `.flow/review-deferred/<branch-slug>.md`.
+ - Skip / Acknowledge are no-ops beyond receipt logging.
+ - Apply list restricts the fix loop below to just those findings.
+ - Receipt gains `walkthrough: {applied, deferred, skipped, acknowledged}`.
 3. **Parse issues** from reviewer feedback (Critical → Major → Minor)
 4. **Fix code** and run tests/lints
 5. **Commit fixes** (mandatory before re-review)
 6. **Re-review**:
-   - **Codex**: Re-run `flowctl codex impl-review` (receipt enables context)
-   - **Copilot**: Re-run `flowctl copilot impl-review` (receipt enables context; must be `mode == "copilot"` to resume)
-   - **RP**: `$FLOWCTL rp chat-send (2-10 min, DO NOT RETRY) --window "$W" --tab "$T" --message-file /tmp/re-review.md` (NO `--new-chat`)
+ - **Codex**: Re-run `flowctl codex impl-review` (receipt enables context)
+ - **Copilot**: Re-run `flowctl copilot impl-review` (receipt enables context; must be `mode == "copilot"` to resume)
+ - **RP**: `$FLOWCTL rp chat-send (2-10 min, DO NOT RETRY) --window "$W" --tab "$T" --message-file /tmp/re-review.md` (NO `--new-chat`)
 7. **Repeat** until `<verdict>SHIP</verdict>`
 
 **CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.

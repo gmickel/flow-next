@@ -13,20 +13,20 @@ Run all 9 scouts in parallel (Codex spawns them as multi-agent threads):
 ### Agent Readiness Scouts (Pillars 1-5)
 
 ```
-Use the tooling_scout agent    # linters, formatters, pre-commit, type checking
-Use the agents_md_scout agent  # CLAUDE.md/AGENTS.md quality
-Use the env_scout agent        # .env.example, docker, devcontainer
-Use the testing_scout agent    # test framework, coverage, commands
-Use the build_scout agent      # build system, scripts, CI
-Use the docs_gap_scout agent   # README, ADRs, architecture docs
+Use the tooling_scout agent # linters, formatters, pre-commit, type checking
+Use the agents_md_scout agent # CLAUDE.md/AGENTS.md quality
+Use the env_scout agent # .env.example, docker, devcontainer
+Use the testing_scout agent # test framework, coverage, commands
+Use the build_scout agent # build system, scripts, CI
+Use the docs_gap_scout agent # README, ADRs, architecture docs
 ```
 
 ### Production Readiness Scouts (Pillars 6-8)
 
 ```
-Use the observability_scout agent  # logging, tracing, metrics, health
-Use the security_scout agent       # branch protection, CODEOWNERS, secrets
-Use the workflow_scout agent       # CI/CD, templates, automation
+Use the observability_scout agent # logging, tracing, metrics, health
+Use the security_scout agent # branch protection, CODEOWNERS, secrets
+Use the workflow_scout agent # CI/CD, templates, automation
 ```
 
 **Important**: Launch all 9 scout agents in parallel for speed (~15-20 seconds total).
@@ -191,9 +191,9 @@ Informational only. No fixes offered — address independently if desired.
 
 **If `--fix-all`**: Skip to Phase 6, apply all recommendations from Pillars 1-5.
 
-**CRITICAL**: You MUST use the `AskUserQuestion` tool for consent. Do NOT just print questions as text.
+**CRITICAL**: You MUST use the `request_user_input` tool for consent. Do NOT just print questions as text.
 
-### Using AskUserQuestion Correctly
+### Using request_user_input correctly
 
 The tool provides an interactive UI. Each question should:
 - Have a clear header (max 12 chars)
@@ -209,21 +209,21 @@ Ask ONE question per category that has recommendations. Skip categories with no 
 
 ```json
 {
-  "questions": [{
-    "question": "Which documentation improvements should I create? These help agents understand your project without guessing.",
-    "header": "Docs",
-    "multiSelect": true,
-    "options": [
-      {
-        "label": "Create CLAUDE.md (Recommended)",
-        "description": "Agent instruction file with commands, conventions, and project structure. Critical for agents to work effectively."
-      },
-      {
-        "label": "Create .env.example",
-        "description": "Template with [N] detected env vars. Prevents agents from guessing required configuration."
-      }
-    ]
-  }]
+ "questions": [{
+ "question": "Which documentation improvements should I create? These help agents understand your project without guessing.",
+ "header": "Docs",
+ "multiSelect": true,
+ "options": [
+ {
+ "label": "Create CLAUDE.md (Recommended)",
+ "description": "Agent instruction file with commands, conventions, and project structure. Critical for agents to work effectively."
+ },
+ {
+ "label": "Create .env.example",
+ "description": "Template with [N] detected env vars. Prevents agents from guessing required configuration."
+ }
+ ]
+ }]
 }
 ```
 
@@ -231,29 +231,29 @@ Ask ONE question per category that has recommendations. Skip categories with no 
 
 ```json
 {
-  "questions": [{
-    "question": "Which tooling improvements should I add? These give agents instant feedback instead of waiting for CI.",
-    "header": "Tooling",
-    "multiSelect": true,
-    "options": [
-      {
-        "label": "Add pre-commit hooks (Recommended)",
-        "description": "Husky + lint-staged for instant lint/format feedback. Catches errors in 5 seconds instead of 10 minutes."
-      },
-      {
-        "label": "Add linter config",
-        "description": "[Tool] configuration for code quality checks. Agents can run lint to verify their changes."
-      },
-      {
-        "label": "Add formatter config",
-        "description": "[Tool] configuration for consistent code style. Prevents style drift across agent sessions."
-      },
-      {
-        "label": "Add runtime version file",
-        "description": "Pin [runtime] version. Ensures consistent environment across machines."
-      }
-    ]
-  }]
+ "questions": [{
+ "question": "Which tooling improvements should I add? These give agents instant feedback instead of waiting for CI.",
+ "header": "Tooling",
+ "multiSelect": true,
+ "options": [
+ {
+ "label": "Add pre-commit hooks (Recommended)",
+ "description": "Husky + lint-staged for instant lint/format feedback. Catches errors in 5 seconds instead of 10 minutes."
+ },
+ {
+ "label": "Add linter config",
+ "description": "[Tool] configuration for code quality checks. Agents can run lint to verify their changes."
+ },
+ {
+ "label": "Add formatter config",
+ "description": "[Tool] configuration for consistent code style. Prevents style drift across agent sessions."
+ },
+ {
+ "label": "Add runtime version file",
+ "description": "Pin [runtime] version. Ensures consistent environment across machines."
+ }
+ ]
+ }]
 }
 ```
 
@@ -261,21 +261,21 @@ Ask ONE question per category that has recommendations. Skip categories with no 
 
 ```json
 {
-  "questions": [{
-    "question": "Which testing improvements should I add? These let agents verify their work.",
-    "header": "Testing",
-    "multiSelect": true,
-    "options": [
-      {
-        "label": "Add test config (Recommended)",
-        "description": "[Framework] configuration file. Enables test command for agents to verify changes."
-      },
-      {
-        "label": "Add test script",
-        "description": "Adds 'test' command that agents can discover and run."
-      }
-    ]
-  }]
+ "questions": [{
+ "question": "Which testing improvements should I add? These let agents verify their work.",
+ "header": "Testing",
+ "multiSelect": true,
+ "options": [
+ {
+ "label": "Add test config (Recommended)",
+ "description": "[Framework] configuration file. Enables test command for agents to verify changes."
+ },
+ {
+ "label": "Add test script",
+ "description": "Adds 'test' command that agents can discover and run."
+ }
+ ]
+ }]
 }
 ```
 
@@ -283,27 +283,27 @@ Ask ONE question per category that has recommendations. Skip categories with no 
 
 ```json
 {
-  "questions": [{
-    "question": "Which environment improvements should I add?",
-    "header": "Environment",
-    "multiSelect": true,
-    "options": [
-      {
-        "label": "Add .gitignore entries (Recommended)",
-        "description": "Ignore .env, build outputs, node_modules. Prevents accidental commits of sensitive data."
-      },
-      {
-        "label": "Create devcontainer (Bonus)",
-        "description": "VS Code devcontainer config for reproducible environment. Nice-to-have, not essential for agents."
-      }
-    ]
-  }]
+ "questions": [{
+ "question": "Which environment improvements should I add?",
+ "header": "Environment",
+ "multiSelect": true,
+ "options": [
+ {
+ "label": "Add .gitignore entries (Recommended)",
+ "description": "Ignore .env, build outputs, node_modules. Prevents accidental commits of sensitive data."
+ },
+ {
+ "label": "Create devcontainer (Bonus)",
+ "description": "VS Code devcontainer config for reproducible environment. Nice-to-have, not essential for agents."
+ }
+ ]
+ }]
 }
 ```
 
 ### Rules for Questions
 
-1. **MUST use AskUserQuestion tool** — Never just print questions
+1. **MUST use `request_user_input` tool** — Never just print questions as text
 2. **Mark recommended items** — Add "(Recommended)" to high-impact options
 3. **Mark bonus items** — Add "(Bonus)" to nice-to-have options
 4. **Explain agent benefit** — Each description should say WHY it helps agents
@@ -320,8 +320,8 @@ For each approved fix:
 2. Detect project conventions (indent style, quote style, etc.)
 3. Adapt template to match conventions
 4. Check if target file exists:
-   - **New file**: Create it
-   - **Existing file**: Show diff and ask before modifying
+ - **New file**: Create it
+ - **Existing file**: Show diff and ask before modifying
 5. Report what was created/modified
 
 **Non-destructive rules:**

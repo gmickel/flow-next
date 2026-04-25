@@ -45,9 +45,9 @@ If found, use that backend and skip all other detection.
 BACKEND=$($FLOWCTL review-backend)
 
 if [[ "$BACKEND" == "ASK" ]]; then
-  echo "Error: No review backend configured."
-  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
-  exit 1
+ echo "Error: No review backend configured."
+ echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
+ exit 1
 fi
 
 echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
@@ -123,7 +123,7 @@ $FLOWCTL checkpoint save --epic "$EPIC_ID" --json
 # Example: epic touches auth → pass existing auth files for context
 #
 # Dynamic approach (if epic mentions specific paths):
-#   CODE_FILES=$(grep -oE 'src/[^ ]+\.(ts|py|js)' .flow/specs/${EPIC_ID}.md | sort -u | paste -sd,)
+# CODE_FILES=$(grep -oE 'src/[^ ]+\.(ts|py|js)' .flow/specs/${EPIC_ID}.md | sort -u | paste -sd,)
 # Or list key files manually:
 CODE_FILES="src/main.py,src/config.py"
 
@@ -149,9 +149,9 @@ $FLOWCTL checkpoint save --epic "$EPIC_ID" --json
 CODE_FILES="src/main.py,src/config.py"
 
 # Override model + effort (pick one):
-#   --spec copilot:claude-opus-4.5:xhigh   (preferred)
-#   FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5:xhigh
-#   FLOW_COPILOT_MODEL=gpt-5.2 FLOW_COPILOT_EFFORT=high
+# --spec copilot:claude-opus-4.5:xhigh (preferred)
+# FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5:xhigh
+# FLOW_COPILOT_MODEL=gpt-5.2 FLOW_COPILOT_EFFORT=high
 
 $FLOWCTL copilot plan-review "$EPIC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
 # Output includes VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK
@@ -177,37 +177,37 @@ The workflow covers:
 
 ## Fix Loop (INTERNAL - do not exit to Ralph)
 
-**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is production-grade world-class software and architecture. Never use AskUserQuestion in this loop.**
+**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is production-grade world-class software and architecture. Never use request_user_input in this loop.**
 
 If verdict is NEEDS_WORK, loop internally until SHIP:
 
 1. **Parse issues** from reviewer feedback
 2. **Fix epic spec** (stdin preferred, temp file if content has single quotes):
-   ```bash
-   # Preferred: stdin heredoc
-   $FLOWCTL epic set-plan <EPIC_ID> --file - --json <<'EOF'
-   <updated epic spec content>
-   EOF
+ ```bash
+ # Preferred: stdin heredoc
+ $FLOWCTL epic set-plan <EPIC_ID> --file - --json <<'EOF'
+ <updated epic spec content>
+ EOF
 
-   # Or temp file
-   $FLOWCTL epic set-plan <EPIC_ID> --file /tmp/updated-plan.md --json
-   ```
+ # Or temp file
+ $FLOWCTL epic set-plan <EPIC_ID> --file /tmp/updated-plan.md --json
+ ```
 3. **Sync affected task specs** - If epic changes affect task specs, update them:
-   ```bash
-   $FLOWCTL task set-spec <TASK_ID> --file - --json <<'EOF'
-   <updated task spec content>
-   EOF
-   ```
-   Task specs need updating when epic changes affect:
-   - State/enum values referenced in tasks
-   - Acceptance criteria that tasks implement
-   - Approach/design decisions tasks depend on
-   - Lock/retry/error handling semantics
-   - API signatures or type definitions
+ ```bash
+ $FLOWCTL task set-spec <TASK_ID> --file - --json <<'EOF'
+ <updated task spec content>
+ EOF
+ ```
+ Task specs need updating when epic changes affect:
+ - State/enum values referenced in tasks
+ - Acceptance criteria that tasks implement
+ - Approach/design decisions tasks depend on
+ - Lock/retry/error handling semantics
+ - API signatures or type definitions
 4. **Re-review**:
-   - **Codex**: Re-run `flowctl codex plan-review` (receipt enables context)
-   - **Copilot**: Re-run `flowctl copilot plan-review` (receipt enables context; must be `mode == "copilot"` to resume)
-   - **RP**: `$FLOWCTL rp chat-send (2-10 min, DO NOT RETRY) --window "$W" --tab "$T" --message-file /tmp/re-review.md` (NO `--new-chat`)
+ - **Codex**: Re-run `flowctl codex plan-review` (receipt enables context)
+ - **Copilot**: Re-run `flowctl copilot plan-review` (receipt enables context; must be `mode == "copilot"` to resume)
+ - **RP**: `$FLOWCTL rp chat-send (2-10 min, DO NOT RETRY) --window "$W" --tab "$T" --message-file /tmp/re-review.md` (NO `--new-chat`)
 5. **Repeat** until `<verdict>SHIP</verdict>`
 
 **Recovery**: If context compaction occurred during review, restore from checkpoint:

@@ -21,8 +21,8 @@ TODAY="$(date -u +%Y-%m-%d)"
 
 ```bash
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
-  echo "Error: /flow-next:prospect requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
-  exit 2
+ echo "Error: /flow-next:prospect requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
+ exit 2
 fi
 ```
 
@@ -71,62 +71,62 @@ out = []
 FRONT_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 
 def parse_frontmatter(text):
-    m = FRONT_RE.match(text)
-    if not m:
-        return None
-    fm = {}
-    for line in m.group(1).splitlines():
-        if ":" not in line:
-            continue
-        k, _, v = line.partition(":")
-        fm[k.strip()] = v.strip().strip('"').strip("'")
-    return fm
+ m = FRONT_RE.match(text)
+ if not m:
+ return None
+ fm = {}
+ for line in m.group(1).splitlines():
+ if ":" not in line:
+ continue
+ k, _, v = line.partition(":")
+ fm[k.strip()] = v.strip().strip('"').strip("'")
+ return fm
 
 for name in sorted(os.listdir(prospects_dir)):
-    if not name.endswith(".md") or name.startswith("_"):
-        continue
-    path = os.path.join(prospects_dir, name)
-    if not os.path.isfile(path):
-        continue
-    try:
-        text = open(path, encoding="utf-8").read()
-    except OSError:
-        out.append({"file": name, "status": "corrupt", "reason": "unreadable"})
-        continue
-    fm = parse_frontmatter(text)
-    status = "active"
-    reason = ""
-    age_days = None
-    artifact_id = None
-    if fm is None:
-        status, reason = "corrupt", "no frontmatter block"
-    else:
-        artifact_id = fm.get("artifact_id") or name[:-3]
-        try:
-            d = date.fromisoformat(fm.get("date", ""))
-            age_days = (today - d).days
-        except ValueError:
-            status, reason = "corrupt", "unparseable date"
-        if status == "active":
-            if "## Grounding snapshot" not in text:
-                status, reason = "corrupt", "missing Grounding snapshot section"
-            elif "## Survivors" not in text:
-                status, reason = "corrupt", "missing Survivors section"
-        if status == "active":
-            fm_status = (fm.get("status") or "active").lower()
-            if fm_status == "archived":
-                status = "archived"
-            elif age_days is not None and age_days > 30:
-                status = "stale"
-    out.append({
-        "file": name,
-        "artifact_id": artifact_id,
-        "status": status,
-        "reason": reason,
-        "age_days": age_days,
-        "title": fm.get("title") if fm else None,
-        "focus_hint": fm.get("focus_hint") if fm else None,
-    })
+ if not name.endswith(".md") or name.startswith("_"):
+ continue
+ path = os.path.join(prospects_dir, name)
+ if not os.path.isfile(path):
+ continue
+ try:
+ text = open(path, encoding="utf-8").read()
+ except OSError:
+ out.append({"file": name, "status": "corrupt", "reason": "unreadable"})
+ continue
+ fm = parse_frontmatter(text)
+ status = "active"
+ reason = ""
+ age_days = None
+ artifact_id = None
+ if fm is None:
+ status, reason = "corrupt", "no frontmatter block"
+ else:
+ artifact_id = fm.get("artifact_id") or name[:-3]
+ try:
+ d = date.fromisoformat(fm.get("date", ""))
+ age_days = (today - d).days
+ except ValueError:
+ status, reason = "corrupt", "unparseable date"
+ if status == "active":
+ if "## Grounding snapshot" not in text:
+ status, reason = "corrupt", "missing Grounding snapshot section"
+ elif "## Survivors" not in text:
+ status, reason = "corrupt", "missing Survivors section"
+ if status == "active":
+ fm_status = (fm.get("status") or "active").lower()
+ if fm_status == "archived":
+ status = "archived"
+ elif age_days is not None and age_days > 30:
+ status = "stale"
+ out.append({
+ "file": name,
+ "artifact_id": artifact_id,
+ "status": status,
+ "reason": reason,
+ "age_days": age_days,
+ "title": fm.get("title") if fm else None,
+ "focus_hint": fm.get("focus_hint") if fm else None,
+ })
 
 print(json.dumps(out))
 PY
@@ -152,14 +152,14 @@ If `RESUMABLE_COUNT == 0` (only corrupt artifacts), skip to Phase 1 — nothing 
 
 ### 0.4 — Blocking question
 
-Present the resumable list in a deterministic numbered format and ask the user to choose a path. Use the platform's blocking question tool (`AskUserQuestion` on Claude Code, `request_user_input` on Codex, `ask_user` on Gemini/Pi); fall back to printing the numbered list and reading a typed reply when no blocking tool is available.
+Present the resumable list in a deterministic numbered format and ask the user to choose a path. Use `request_user_input`; fall back to printing the numbered list and reading a typed reply if the tool is unreachable.
 
 Frozen option strings (R19 anchor — must match exactly across backends):
 
 ```
-fresh         — start a new prospect artifact (Phase 1)
-extend N      — append a new dated section to artifact #N (resumable list above)
-open N        — print the path to artifact #N and exit Phase 0
+fresh — start a new prospect artifact (Phase 1)
+extend N — append a new dated section to artifact #N (resumable list above)
+open N — print the path to artifact #N and exit Phase 0
 ```
 
 `extend` and `open` indices reference the **resumable** list only — never the corrupt list. Validate the index; reject `extend 0`, out-of-range numbers, or selecting a non-resumable artifact.
@@ -182,7 +182,7 @@ The `extend` / `open` paths are the same across this task and downstream tasks; 
 
 ```bash
 FOCUS_HINT="${ARGUMENTS:-}"
-FOCUS_KIND="open-ended"   # one of: open-ended | concept | path | constraint | volume
+FOCUS_KIND="open-ended" # one of: open-ended | concept | path | constraint | volume
 FOCUS_PATH=""
 ```
 
@@ -203,15 +203,15 @@ Each subsection writes a small structured block into a single snapshot buffer. E
 
 ```bash
 if [[ -d "$REPO_ROOT/.git" ]] && command -v git >/dev/null 2>&1; then
-  GIT_FILES=$(git -C "$REPO_ROOT" log --since="30 days ago" --name-only --pretty=format: 2>/dev/null \
-    | grep -v '^$' | sort -u)
-  GIT_COUNT=$(printf "%s\n" "$GIT_FILES" | grep -c .)
-  GIT_TOP=$(printf "%s\n" "$GIT_FILES" | head -10)
-  GIT_BLOCK="git_log_30d: ${GIT_COUNT} files modified
+ GIT_FILES=$(git -C "$REPO_ROOT" log --since="30 days ago" --name-only --pretty=format: 2>/dev/null \
+ | grep -v '^$' | sort -u)
+ GIT_COUNT=$(printf "%s\n" "$GIT_FILES" | grep -c .)
+ GIT_TOP=$(printf "%s\n" "$GIT_FILES" | head -10)
+ GIT_BLOCK="git_log_30d: ${GIT_COUNT} files modified
 top:
-$(printf "%s\n" "$GIT_TOP" | sed 's/^/  - /')"
+$(printf "%s\n" "$GIT_TOP" | sed 's/^/ - /')"
 else
-  GIT_BLOCK="git_log_30d: scanned: none (no git repo)"
+ GIT_BLOCK="git_log_30d: scanned: none (no git repo)"
 fi
 ```
 
@@ -222,10 +222,10 @@ EPICS_JSON=$("$FLOWCTL" epics --json 2>/dev/null || echo '{"epics":[]}')
 OPEN_EPICS=$(jq '[.epics[] | select(.status == "open")]' <<< "$EPICS_JSON" 2>/dev/null || echo '[]')
 EPICS_COUNT=$(jq 'length' <<< "$OPEN_EPICS" 2>/dev/null || echo 0)
 if [[ "$EPICS_COUNT" -gt 0 ]]; then
-  EPICS_BLOCK="open_epics: ${EPICS_COUNT}
-$(jq -r '.[] | "  - \(.id): \(.title)"' <<< "$OPEN_EPICS")"
+ EPICS_BLOCK="open_epics: ${EPICS_COUNT}
+$(jq -r '.[] | " - \(.id): \(.title)"' <<< "$OPEN_EPICS")"
 else
-  EPICS_BLOCK="open_epics: scanned: none (no open epics)"
+ EPICS_BLOCK="open_epics: scanned: none (no open epics)"
 fi
 ```
 
@@ -237,14 +237,14 @@ The Phase 2 prompt uses this list as anti-duplication grounding — candidates t
 
 ```bash
 if [[ -f "$REPO_ROOT/CHANGELOG.md" ]]; then
-  CHANGELOG_HEAD=$(head -50 "$REPO_ROOT/CHANGELOG.md")
-  # distill: keep only entry headers (lines starting with ##) + first bullet under each
-  CHANGELOG_BLOCK="changelog_recent:
+ CHANGELOG_HEAD=$(head -50 "$REPO_ROOT/CHANGELOG.md")
+ # distill: keep only entry headers (lines starting with ##) + first bullet under each
+ CHANGELOG_BLOCK="changelog_recent:
 $(printf "%s\n" "$CHANGELOG_HEAD" | awk '
-  /^## / { print "  " $0; getline; while ($0 == "" && (getline) > 0); if ($0 ~ /^[-*]/) print "    " $0; next
-  }')"
+ /^## / { print " " $0; getline; while ($0 == "" && (getline) > 0); if ($0 ~ /^[-*]/) print " " $0; next
+ }')"
 else
-  CHANGELOG_BLOCK="changelog_recent: scanned: none (no CHANGELOG.md)"
+ CHANGELOG_BLOCK="changelog_recent: scanned: none (no CHANGELOG.md)"
 fi
 ```
 
@@ -254,33 +254,33 @@ Distillation keeps version headers + first bullet per entry — recent-shipped s
 
 ```bash
 MEMORY_ENABLED=$("$FLOWCTL" config get memory.enabled --json 2>/dev/null \
-  | jq -r '.value // false')
+ | jq -r '.value // false')
 
 if [[ "$MEMORY_ENABLED" == "true" && "$FOCUS_KIND" == "concept" && -n "$FOCUS_HINT" ]]; then
-  # memory search writes its error JSON to stdout AND exits non-zero when memory
-  # isn't initialised — so the response is the source of truth, not the exit code.
-  MEMORY_RESP=$("$FLOWCTL" memory search "$FOCUS_HINT" --limit 5 --json 2>/dev/null \
-    || true)
-  # `memory search --json` returns {"success": false, "error": "..."} on
-  # uninitialised memory. Bare `.success // true` returns true for false (jq's
-  # `//` only substitutes null/false), so probe `has("error")` instead.
-  MEMORY_BAD=$(jq -r 'has("error")' <<< "$MEMORY_RESP" 2>/dev/null || echo true)
-  if [[ "$MEMORY_BAD" == "true" ]]; then
-    MEMORY_BLOCK="memory_matches: scanned: none (memory not initialised)"
-  else
-    HITS_COUNT=$(jq '(.matches // []) | length' <<< "$MEMORY_RESP" 2>/dev/null \
-      || echo 0)
-    if [[ "$HITS_COUNT" -gt 0 ]]; then
-      MEMORY_BLOCK="memory_matches: ${HITS_COUNT}
-$(jq -r '.matches[] | "  - [\(.track)/\(.category)] \(.title) — tags: \((.tags // []) | join(","))"' <<< "$MEMORY_RESP")"
-    else
-      MEMORY_BLOCK="memory_matches: scanned: none (no hits for \"$FOCUS_HINT\")"
-    fi
-  fi
+ # memory search writes its error JSON to stdout AND exits non-zero when memory
+ # isn't initialised — so the response is the source of truth, not the exit code.
+ MEMORY_RESP=$("$FLOWCTL" memory search "$FOCUS_HINT" --limit 5 --json 2>/dev/null \
+ || true)
+ # `memory search --json` returns {"success": false, "error": "..."} on
+ # uninitialised memory. Bare `.success // true` returns true for false (jq's
+ # `//` only substitutes null/false), so probe `has("error")` instead.
+ MEMORY_BAD=$(jq -r 'has("error")' <<< "$MEMORY_RESP" 2>/dev/null || echo true)
+ if [[ "$MEMORY_BAD" == "true" ]]; then
+ MEMORY_BLOCK="memory_matches: scanned: none (memory not initialised)"
+ else
+ HITS_COUNT=$(jq '(.matches // []) | length' <<< "$MEMORY_RESP" 2>/dev/null \
+ || echo 0)
+ if [[ "$HITS_COUNT" -gt 0 ]]; then
+ MEMORY_BLOCK="memory_matches: ${HITS_COUNT}
+$(jq -r '.matches[] | " - [\(.track)/\(.category)] \(.title) — tags: \((.tags // []) | join(","))"' <<< "$MEMORY_RESP")"
+ else
+ MEMORY_BLOCK="memory_matches: scanned: none (no hits for \"$FOCUS_HINT\")"
+ fi
+ fi
 elif [[ "$MEMORY_ENABLED" == "true" ]]; then
-  MEMORY_BLOCK="memory_matches: scanned: skipped (no concept focus)"
+ MEMORY_BLOCK="memory_matches: scanned: skipped (no concept focus)"
 else
-  MEMORY_BLOCK="memory_matches: scanned: none (memory disabled)"
+ MEMORY_BLOCK="memory_matches: scanned: none (memory disabled)"
 fi
 ```
 
@@ -291,21 +291,21 @@ Title + tags only. Never paste memory bodies — that's exactly the kind of grou
 ```bash
 AUDIT_DIR="$REPO_ROOT/.flow/memory/_audit"
 if [[ -d "$AUDIT_DIR" ]]; then
-  LATEST_AUDIT=$(ls -1t "$AUDIT_DIR"/*.md 2>/dev/null | head -1)
-  if [[ -n "$LATEST_AUDIT" ]]; then
-    # Read only the stale-flagged section if present; cap at 20 lines.
-    AUDIT_EXCERPT=$(awk '/^## Stale/,/^## /' "$LATEST_AUDIT" | head -20)
-    if [[ -n "$AUDIT_EXCERPT" ]]; then
-      AUDIT_BLOCK="memory_audit_stale:
-$(printf "%s\n" "$AUDIT_EXCERPT" | sed 's/^/  /')"
-    else
-      AUDIT_BLOCK="memory_audit_stale: scanned: none (no stale entries flagged)"
-    fi
-  else
-    AUDIT_BLOCK="memory_audit_stale: scanned: none (no audit reports)"
-  fi
+ LATEST_AUDIT=$(ls -1t "$AUDIT_DIR"/*.md 2>/dev/null | head -1)
+ if [[ -n "$LATEST_AUDIT" ]]; then
+ # Read only the stale-flagged section if present; cap at 20 lines.
+ AUDIT_EXCERPT=$(awk '/^## Stale/,/^## /' "$LATEST_AUDIT" | head -20)
+ if [[ -n "$AUDIT_EXCERPT" ]]; then
+ AUDIT_BLOCK="memory_audit_stale:
+$(printf "%s\n" "$AUDIT_EXCERPT" | sed 's/^/ /')"
+ else
+ AUDIT_BLOCK="memory_audit_stale: scanned: none (no stale entries flagged)"
+ fi
+ else
+ AUDIT_BLOCK="memory_audit_stale: scanned: none (no audit reports)"
+ fi
 else
-  AUDIT_BLOCK="memory_audit_stale: scanned: none (audit not run)"
+ AUDIT_BLOCK="memory_audit_stale: scanned: none (audit not run)"
 fi
 ```
 
@@ -354,7 +354,7 @@ Volume comes from `FOCUS_HINT` (Phase 1 §1.1). Default if no hint:
 ```bash
 VOLUME_TARGET_MIN=15
 VOLUME_TARGET_MAX=25
-REJECTION_FLOOR=0.40   # Phase 3 default
+REJECTION_FLOOR=0.40 # Phase 3 default
 ```
 
 Hint patterns (case-insensitive, leading/trailing whitespace tolerated):
@@ -371,8 +371,8 @@ Hint patterns (case-insensitive, leading/trailing whitespace tolerated):
 Stash the resolved settings in shell:
 
 ```bash
-GENERATION_TARGET="${VOLUME_TARGET_MIN}-${VOLUME_TARGET_MAX}"   # display-only string
-SURVIVOR_TARGET=""                                              # set only when "top N" hint
+GENERATION_TARGET="${VOLUME_TARGET_MIN}-${VOLUME_TARGET_MAX}" # display-only string
+SURVIVOR_TARGET="" # set only when "top N" hint
 ```
 
 ### 2.2 — Pick personas
@@ -420,15 +420,15 @@ Emit a flat YAML list. **One item per candidate.** No nesting, no preamble, no c
 
 ```yaml
 candidates:
-  - title: <short title, ≤80 chars>
-    summary: <one-line summary, ≤120 chars>
-    affected_areas:
-      - <path or subsystem>
-      - <path or subsystem>
-    size: <S | M | L | XL>
-    risk_notes: <one-line risk / unknown / caveat — ≤120 chars>
-    persona: <senior-maintainer | first-time-user | adversarial-reviewer>
-  - title: ...
+ - title: <short title, ≤80 chars>
+ summary: <one-line summary, ≤120 chars>
+ affected_areas:
+ - <path or subsystem>
+ - <path or subsystem>
+ size: <S | M | L | XL>
+ risk_notes: <one-line risk / unknown / caveat — ≤120 chars>
+ persona: <senior-maintainer | first-time-user | adversarial-reviewer>
+ - title: ...
 ```
 
 Constraints:
@@ -455,7 +455,7 @@ Parse the model output. The skill must accept output the model wraps in ```yaml 
 
 ```bash
 python3 - <<'PY'
-import sys, re, yaml  # PyYAML may not be installed — fall back to a stdlib loader if needed.
+import sys, re, yaml # PyYAML may not be installed — fall back to a stdlib loader if needed.
 text = sys.stdin.read()
 m = re.search(r"```yaml\s*\n(.*?)\n```", text, re.DOTALL)
 body = m.group(1) if m else text
@@ -471,9 +471,9 @@ If fewer than `floor(GENERATION_TARGET_MIN * 0.7)` valid candidates survive vali
 
 ```
 Phase 2 produced only K valid candidates (target was M-N). Options:
-  retry      — re-run Phase 2 with the same prompt
-  loosen     — proceed with K candidates anyway (Phase 3 floor still applies)
-  abort      — exit; no artifact written
+ retry — re-run Phase 2 with the same prompt
+ loosen — proceed with K candidates anyway (Phase 3 floor still applies)
+ abort — exit; no artifact written
 ```
 
 The `loosen` path keeps the run going but flags the under-volume in the eventual artifact frontmatter (`generation_under_volume: true`) so downstream readers know the spread was narrow.
@@ -491,12 +491,12 @@ Inputs: `CANDIDATES_YAML` (Phase 2 §2.4) + the Phase 1 grounding snapshot. **Ex
 Rejection taxonomy (R3 anchor — frozen string list):
 
 ```
-duplicates-open-epic   — material overlap with an open epic in the grounding snapshot
-out-of-scope           — outside what this codebase / the focus area should tackle
-insufficient-signal    — speculative without evidence in grounding snapshot
-too-large              — XL or undermined by size; should be split or deferred
-backward-incompat      — would break public contracts / users without strong justification
-other                  — explain in `reason` field; use sparingly
+duplicates-open-epic — material overlap with an open epic in the grounding snapshot
+out-of-scope — outside what this codebase / the focus area should tackle
+insufficient-signal — speculative without evidence in grounding snapshot
+too-large — XL or undermined by size; should be split or deferred
+backward-incompat — would break public contracts / users without strong justification
+other — explain in `reason` field; use sparingly
 ```
 
 Prompt template:
@@ -533,12 +533,12 @@ Target rejection rate: **[REJECTION_FLOOR_PCT]%**. Below that floor, the run wil
 
 ```yaml
 critiques:
-  - index: 0       # zero-indexed position in the input list
-    verdict: keep | drop
-    taxonomy: null | duplicates-open-epic | out-of-scope | insufficient-signal | too-large | backward-incompat | other
-    reason: <one specific sentence>
-  - index: 1
-    ...
+ - index: 0 # zero-indexed position in the input list
+ verdict: keep | drop
+ taxonomy: null | duplicates-open-epic | out-of-scope | insufficient-signal | too-large | backward-incompat | other
+ reason: <one specific sentence>
+ - index: 1
+ ...
 ```
 
 Emit one entry per candidate, in order. No preamble, no commentary outside YAML.
@@ -558,12 +558,12 @@ If `rejection_rate < REJECTION_FLOOR`, surface a **blocking question** with the 
 
 ```
 Critique rejected only X% (below the ≥Y% floor). Options:
-  regenerate    — re-run Phase 2 + Phase 3 from scratch (new candidates)
-  loosen-floor  — accept this critique result; ship survivors as-is
-  ship-anyway   — same as loosen-floor; preserved for clarity in transcripts
+ regenerate — re-run Phase 2 + Phase 3 from scratch (new candidates)
+ loosen-floor — accept this critique result; ship survivors as-is
+ ship-anyway — same as loosen-floor; preserved for clarity in transcripts
 ```
 
-Frozen string format (R12 anchor — must match across backends): `regenerate | loosen-floor | ship-anyway`. Use the platform's blocking question tool (`AskUserQuestion` / `request_user_input` / `ask_user`); fall back to numbered-options when no blocking tool is available. Validate the choice; reject anything outside the three options.
+Frozen string format (R12 anchor — must match across backends): `regenerate | loosen-floor | ship-anyway`. Use `request_user_input`; fall back to numbered-options when the tool is unreachable. Validate the choice; reject anything outside the three options.
 
 - `regenerate` → loop back to Phase 2 §2.3 with a fresh prompt invocation. Cap at **1 regeneration**; a second floor violation auto-routes to `loosen-floor` with a printed warning (avoids infinite loops on a model that genuinely can't reject).
 - `loosen-floor` / `ship-anyway` → continue to Phase 4. Record `floor_violation: true` in the eventual artifact frontmatter.
@@ -579,8 +579,8 @@ If `len(SURVIVORS) == 0`, surface a blocking question:
 
 ```
 Critique rejected every candidate. Options:
-  regenerate    — re-run Phase 2 + Phase 3 with a fresh prompt
-  abort         — exit; no artifact written
+ regenerate — re-run Phase 2 + Phase 3 with a fresh prompt
+ abort — exit; no artifact written
 ```
 
 No third option here — shipping zero survivors produces a useless artifact.
@@ -598,9 +598,9 @@ Inputs: `SURVIVORS` (Phase 3 §3.3) + the Phase 1 grounding snapshot. Personas a
 Buckets (R2 / R4 anchor — frozen labels):
 
 ```
-High leverage (1-3)            — small-diff, large-impact wins; top-3 cap
-Worth considering (4-7)        — solid mid-leverage; positions 4-7
-If you have the time (8+)      — lower priority; positions 8 and beyond
+High leverage (1-3) — small-diff, large-impact wins; top-3 cap
+Worth considering (4-7) — solid mid-leverage; positions 4-7
+If you have the time (8+) — lower priority; positions 8 and beyond
 ```
 
 Prompt template:
@@ -634,22 +634,22 @@ Do **not** emit numeric scores, percentage estimates, "leverage values", or rank
 
 ```yaml
 ranking:
-  high_leverage:           # 0-3 entries
-    - position: 1
-      original_index: <int>   # the index from the Phase 3 SURVIVORS list
-      leverage: "Small-diff lever because ...; impact lands on ..."
-    - position: 2
-      ...
-  worth_considering:       # 0-N entries
-    - position: 4
-      original_index: <int>
-      leverage: "..."
-    ...
-  if_you_have_the_time:    # 0-N entries
-    - position: 8
-      original_index: <int>
-      leverage: "..."
-    ...
+ high_leverage: # 0-3 entries
+ - position: 1
+ original_index: <int> # the index from the Phase 3 SURVIVORS list
+ leverage: "Small-diff lever because ...; impact lands on ..."
+ - position: 2
+ ...
+ worth_considering: # 0-N entries
+ - position: 4
+ original_index: <int>
+ leverage: "..."
+ ...
+ if_you_have_the_time: # 0-N entries
+ - position: 8
+ original_index: <int>
+ leverage: "..."
+ ...
 ```
 
 Position numbers run 1-indexed, sequential, and stable across the buckets (positions 1-3 in High leverage, 4-7 in Worth considering, 8+ in If you have the time). Skip positions if a bucket is shorter than its slot — e.g., if High leverage has only 2 entries, Worth considering still starts at position 4. Buckets may be empty.
@@ -692,8 +692,8 @@ Materialize `RANKED` — the parsed ranking with each survivor's full candidate 
 - `VOLUME` — count of candidates fed into Phase 3 (pre-critique).
 - `REJECTION_RATE` — `len(DROPS) / VOLUME` rounded to two decimals.
 - Optional flags from upstream phases — written **only when set**:
-  - `floor_violation: true` — Phase 3 set this when the user picked `loosen-floor` / `ship-anyway` on a rejection-floor miss.
-  - `generation_under_volume: true` — Phase 2 set this when validated candidates fell below `floor(GENERATION_TARGET_MIN * 0.7)`.
+ - `floor_violation: true` — Phase 3 set this when the user picked `loosen-floor` / `ship-anyway` on a rejection-floor miss.
+ - `generation_under_volume: true` — Phase 2 set this when validated candidates fell below `floor(GENERATION_TARGET_MIN * 0.7)`.
 
 ### 5.2 — Slug + artifact id allocation (R13)
 
@@ -706,8 +706,8 @@ from pathlib import Path
 
 # Load flowctl module without invoking the CLI.
 flowctl_py = os.environ.get("FLOWCTL_PY") or (
-    Path(os.environ.get("DROID_PLUGIN_ROOT") or os.environ["CLAUDE_PLUGIN_ROOT"])
-    / "scripts" / "flowctl.py"
+ Path(os.environ.get("DROID_PLUGIN_ROOT") or os.environ["CLAUDE_PLUGIN_ROOT"])
+ / "scripts" / "flowctl.py"
 )
 spec = importlib.util.spec_from_file_location("fc", str(flowctl_py))
 fc = importlib.util.module_from_spec(spec); spec.loader.exec_module(fc)
@@ -729,31 +729,31 @@ PY
 Body rendering and frontmatter validation are bundled — do **not** hand-roll YAML or template strings in the skill. Use `flowctl.render_prospect_body` and `flowctl.write_prospect_artifact`:
 
 ```python
-ranked = {                                  # from Phase 4 §4.3
-    "high_leverage":         [{...}, {...}],
-    "worth_considering":     [{...}, ...],
-    "if_you_have_the_time":  [{...}, ...],
+ranked = { # from Phase 4 §4.3
+ "high_leverage": [{...}, {...}],
+ "worth_considering": [{...}, ...],
+ "if_you_have_the_time": [{...}, ...],
 }
 drops = [{"title": ..., "taxonomy": ..., "reason": ...}, ...]
 body = fc.render_prospect_body(focus_text, grounding_snapshot, ranked, drops)
 
 frontmatter = {
-    "title": <focus or "Open-ended prospect">,
-    "date": today_iso,                       # quoted as a string by the writer
-    "focus_hint": focus_hint or "",
-    "volume": volume,                        # int
-    "survivor_count": survivor_count,        # int
-    "rejected_count": rejected_count,        # int
-    "rejection_rate": rejection_rate,        # float, two decimals
-    "artifact_id": artifact_id,
-    "promoted_ideas": [],                    # task 5 (promote) appends here
-    "status": "active",
+ "title": <focus or "Open-ended prospect">,
+ "date": today_iso, # quoted as a string by the writer
+ "focus_hint": focus_hint or "",
+ "volume": volume, # int
+ "survivor_count": survivor_count, # int
+ "rejected_count": rejected_count, # int
+ "rejection_rate": rejection_rate, # float, two decimals
+ "artifact_id": artifact_id,
+ "promoted_ideas": [], # task 5 (promote) appends here
+ "status": "active",
 }
 # Optional flags — set ONLY when upstream phases provided them.
 if phase3_floor_violation:
-    frontmatter["floor_violation"] = True
+ frontmatter["floor_violation"] = True
 if phase2_generation_under_volume:
-    frontmatter["generation_under_volume"] = True
+ frontmatter["generation_under_volume"] = True
 
 target = Path(prospects_dir) / f"{artifact_id}.md"
 fc.write_prospect_artifact(target, frontmatter, body)
@@ -778,9 +778,9 @@ The writer emits body sections in this exact order:
 ## Focus
 ## Grounding snapshot
 ## Survivors
-  ### High leverage (1-3)
-  ### Worth considering (4-7)
-  ### If you have the time (8+)
+ ### High leverage (1-3)
+ ### Worth considering (4-7)
+ ### If you have the time (8+)
 ## Rejected
 ```
 
@@ -791,9 +791,9 @@ Each survivor block:
 **Summary:** <one line>
 **Leverage:** Small-diff lever because <X>; impact lands on <Y>.
 **Size:** <S|M|L|XL>
-**Affected areas:** <comma-joined list>      # only when present
-**Risk notes:** <one line>                   # only when present
-**Persona:** <senior-maintainer | first-time-user | adversarial-reviewer>   # only when present
+**Affected areas:** <comma-joined list> # only when present
+**Risk notes:** <one line> # only when present
+**Persona:** <senior-maintainer | first-time-user | adversarial-reviewer> # only when present
 **Next step:** /flow-next:interview
 ```
 
@@ -807,17 +807,11 @@ Empty buckets render `_(none)_`. Empty `## Rejected` renders `_(none)_`.
 
 **Goal:** offer the user a one-keystroke path from "artifact saved" to either an epic (via `flowctl prospect promote`), an interview (via `/flow-next:interview`), or a clean exit. The artifact already exists on disk by the time this phase fires — Ctrl-C here loses nothing.
 
-### 6.1 — Pick the blocking-question tool
+### 6.1 — Use the blocking-question tool
 
-| Platform     | Tool                | Notes                                           |
-|--------------|---------------------|-------------------------------------------------|
-| Claude Code  | `AskUserQuestion`   | Deferred — load via `ToolSearch select:AskUserQuestion` if not already in scope |
-| Codex        | `request_user_input`| Native                                          |
-| Gemini       | `ask_user`          | Native                                          |
-| Pi           | `ask_user`          | Requires `pi-ask-user` extension                |
-| Fallback     | _frozen string_     | Print the exact format below; read user reply from chat |
+Use `request_user_input`. If the tool is unreachable, print the frozen-string format below and read the user's reply from chat.
 
-If the platform tool is available, use it with these labelled choices (one per survivor + skip + interview):
+If the tool is available, use it with these labelled choices (one per survivor + skip + interview):
 
 - `Promote #1: <title>`
 - `Promote #2: <title>`
@@ -835,11 +829,11 @@ When no blocking tool is reachable (or the platform tool errors), print this **e
 Saved: .flow/prospects/<artifact-id>.md
 
 Promote a survivor to an epic?
-  1) Promote #1: <title>
-  2) Promote #2: <title>
-  ...
-  N) Skip
-  i) Interview (ask /flow-next:interview what to refine)
+ 1) Promote #1: <title>
+ 2) Promote #2: <title>
+ ...
+ N) Skip
+ i) Interview (ask /flow-next:interview what to refine)
 
 Enter choice [1-N|i|skip]:
 ```

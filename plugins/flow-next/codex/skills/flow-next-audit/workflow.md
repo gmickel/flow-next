@@ -47,9 +47,9 @@ If the entry's `status` is `stale` already, surface it in the report under "Alre
 ```bash
 LEGACY_FILES=()
 for legacy in pitfalls.md conventions.md decisions.md; do
-  if [[ -f "$MEMORY_DIR/$legacy" ]]; then
-    LEGACY_FILES+=("$legacy")
-  fi
+ if [[ -f "$MEMORY_DIR/$legacy" ]]; then
+ LEGACY_FILES+=("$legacy")
+ fi
 done
 LEGACY_COUNT=$(( ${#LEGACY_FILES[@]} ))
 ```
@@ -58,7 +58,7 @@ If `LEGACY_COUNT > 0`, count entries inside (each legacy file is `---`-delimited
 
 ```bash
 LEGACY_ENTRY_COUNT=$("$FLOWCTL" memory list --json 2>/dev/null \
-  | jq '[.legacy[]?.entries] | add // 0' 2>/dev/null || echo 0)
+ | jq '[.legacy[]?.entries] | add // 0' 2>/dev/null || echo 0)
 ```
 
 **Skip them.** Auditing legacy entries is half-broken: no frontmatter to write `status: stale` to, no track / category for scoping, references too dense to verify mechanically. The report will print:
@@ -114,9 +114,9 @@ The auth/runtime-errors cluster has 5 entries cross-referencing each other —
 3 reference files that no longer exist on disk. Highest staleness signal.
 
 Options:
-  1. Start with auth/runtime-errors (recommended)
-  2. Pick a different cluster
-  3. Audit everything (will take longer)
+ 1. Start with auth/runtime-errors (recommended)
+ 2. Pick a different cluster
+ 3. Audit everything (will take longer)
 ```
 
 **Autofix:** process all clusters in impact order (highest first). Print the queue order so the report shows what got prioritized.
@@ -172,11 +172,11 @@ entry_id: bug/runtime-errors/oauth-callback-2025-08-12
 recommendation: Update | Keep | Consolidate | Replace | Delete
 confidence: low | medium | high
 evidence:
-  - "file `src/auth/callback.ts` renamed to `src/auth/oauth/callback.ts` (git log shows move 2025-11-03)"
-  - "function signature unchanged — solution still applies"
-  - "no successor entry found"
+ - "file `src/auth/callback.ts` renamed to `src/auth/oauth/callback.ts` (git log shows move 2025-11-03)"
+ - "function signature unchanged — solution still applies"
+ - "no successor entry found"
 open_questions:
-  - "should this be consolidated with bug/runtime-errors/oauth-token-2025-09-04?"
+ - "should this be consolidated with bug/runtime-errors/oauth-token-2025-09-04?"
 ```
 
 When spawning subagents, include this directive in the task prompt:
@@ -320,15 +320,7 @@ Bundle the easy ones, isolate the hard ones:
 
 ### 3.2 — Question style
 
-Use the platform's blocking-question tool:
-
-| Platform | Tool |
-|----------|------|
-| Claude Code | `AskUserQuestion` (deferred — load via `ToolSearch select:AskUserQuestion` if not yet in scope) |
-| Codex | `request_user_input` |
-| Gemini | `ask_user` |
-| Droid | `ask_user` or platform-equivalent |
-| Fallback | Print numbered list, read typed reply |
+Use `request_user_input`. If the tool is unreachable, fall back to printing a numbered list and reading a typed reply.
 
 Rules:
 
@@ -342,15 +334,15 @@ Example question shape (single entry):
 ```
 Entry: bug/runtime-errors/oauth-callback-2025-08-12
 Evidence:
-  - module `src/auth/callback.ts` renamed to `src/auth/oauth/callback.ts`
-  - function signature unchanged
-  - no successor entry found
+ - module `src/auth/callback.ts` renamed to `src/auth/oauth/callback.ts`
+ - function signature unchanged
+ - no successor entry found
 Recommendation: Update (rename references)
 
 Options:
-  1. Update (recommended)
-  2. Skip for now
-  3. Mark stale
+ 1. Update (recommended)
+ 2. Skip for now
+ 3. Mark stale
 ```
 
 ### 3.3 — Skip discoverability check until Phase 6
@@ -412,10 +404,10 @@ Process Replace candidates **one at a time, sequentially.** Each replacement may
 When evidence is sufficient (Phase 2 check):
 
 1. Spawn a single subagent (sequential) to write the replacement entry. Pass:
-   - The old entry's full content.
-   - A summary of investigation evidence (what changed, what current code does, why old guidance misleads).
-   - The target track + category (same as old entry unless category itself drifted).
-   - The memory schema reference: required fields = `title`, `date`, `track`, `category`. Track-specific = `problem_type` / `symptoms` / `root_cause` / `resolution_type` for bug; `applies_when` for knowledge. Optional = `module`, `tags`, `related_to`. (See `MEMORY_REQUIRED_FIELDS` / `MEMORY_BUG_FIELDS` / `MEMORY_KNOWLEDGE_FIELDS` / `MEMORY_OPTIONAL_FIELDS` constants in `flowctl.py:3679-3696`.)
+ - The old entry's full content.
+ - A summary of investigation evidence (what changed, what current code does, why old guidance misleads).
+ - The target track + category (same as old entry unless category itself drifted).
+ - The memory schema reference: required fields = `title`, `date`, `track`, `category`. Track-specific = `problem_type` / `symptoms` / `root_cause` / `resolution_type` for bug; `applies_when` for knowledge. Optional = `module`, `tags`, `related_to`. (See `MEMORY_REQUIRED_FIELDS` / `MEMORY_BUG_FIELDS` / `MEMORY_KNOWLEDGE_FIELDS` / `MEMORY_OPTIONAL_FIELDS` constants in `flowctl.py:3679-3696`.)
 2. The subagent uses the Write tool OR `flowctl memory add --track <t> --category <c> --title "..." --body-file <path>` to land the file. Either works — flowctl `add` enforces schema validation; direct Write requires the subagent to emit valid frontmatter.
 3. After the subagent completes, the orchestrator `git rm`'s the old entry. Optionally include `related_to: [<old-id>]` in the new entry's frontmatter for traceability.
 
@@ -439,8 +431,8 @@ Only execute Delete when ALL auto-Delete criteria hold (Phase 2 §Auto-Delete). 
 
 ```bash
 "$FLOWCTL" memory mark-stale "$ENTRY_ID" \
-  --reason "<one-line ambiguity description>" \
-  --audited-by "/flow-next:audit"
+ --reason "<one-line ambiguity description>" \
+ --audited-by "/flow-next:audit"
 ```
 
 The helper sets `status: stale`, stamps `last_audited` (today's date), records `audit_notes` from `--reason`. Atomic via existing `write_memory_entry` — preserves unknown frontmatter fields.
@@ -469,7 +461,7 @@ Skipped legacy: <LEGACY_ENTRY_COUNT> (run `/flow-next:memory-migrate` first to m
 
 Kept: <X>
 Updated: <Y>
-Consolidated: <C>  (clusters: <K>)
+Consolidated: <C> (clusters: <K>)
 Replaced: <Z>
 Deleted: <W>
 Marked stale: <S>
@@ -480,13 +472,13 @@ Then per-entry detail (one block each):
 
 ```
 - <entry_id>
-  Classification: <Keep|Update|Consolidate|Replace|Delete|Stale>
-  Evidence:
-    - <bullet>
-    - <bullet>
-  Action: <what was done — file edits, deletions, mark-stale calls>
-  [Consolidate only] Canonical: <entry_id>; merged: [<list>]; deleted: [<list>]
-  [Replace only] Old guidance: <one-line>; New entry: <new_id>
+ Classification: <Keep|Update|Consolidate|Replace|Delete|Stale>
+ Evidence:
+ - <bullet>
+ - <bullet>
+ Action: <what was done — file edits, deletions, mark-stale calls>
+ [Consolidate only] Canonical: <entry_id>; merged: [<list>]; deleted: [<list>]
+ [Replace only] Old guidance: <one-line>; New entry: <new_id>
 ```
 
 For **Keep** outcomes, group under a "Reviewed without edits" subsection so the result is visible without git churn.
@@ -506,7 +498,7 @@ If all writes succeed, Recommended is empty. If no writes succeed (read-only inv
 GIT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")
 GIT_DIRTY=$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null | grep -v "^??" | wc -l | tr -d ' ')
 GIT_DEFAULT=$(git -C "$REPO_ROOT" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null \
-  | sed 's|^origin/||' || echo "main")
+ | sed 's|^origin/||' || echo "main")
 ```
 
 Skip Phase 5 commit logic if no files were modified (all Keep, all writes failed).
@@ -517,7 +509,7 @@ If `GIT_BRANCH` matches `main` / `master` / `$GIT_DEFAULT`:
 
 ```
 1. Create a branch + commit + open PR (recommended)
-   Branch: docs/audit-memory-<date>  (or topic-specific if scope was narrow)
+ Branch: docs/audit-memory-<date> (or topic-specific if scope was narrow)
 2. Commit directly to <GIT_BRANCH>
 3. Don't commit — I'll handle it
 ```
@@ -616,7 +608,7 @@ When the spirit isn't met, draft the smallest addition that communicates the thr
 When there's an existing directory listing or architecture section, add a line:
 
 ```
-.flow/memory/  # categorized learnings (bug/<category>/, knowledge/<category>/) — YAML frontmatter (track, category, module, tags, status); search via `flowctl memory search <q>`; relevant when implementing or debugging in documented modules
+.flow/memory/ # categorized learnings (bug/<category>/, knowledge/<category>/) — YAML frontmatter (track, category, module, tags, status); search via `flowctl memory search <q>`; relevant when implementing or debugging in documented modules
 ```
 
 When nothing in the file is a natural fit, a small headed section is appropriate:
@@ -648,9 +640,9 @@ Proposed addition (under <section name>):
 <draft text>
 
 Options:
-  1. Apply addition (recommended)
-  2. Edit the draft first
-  3. Skip — I'll handle it
+ 1. Apply addition (recommended)
+ 2. Edit the draft first
+ 3. Skip — I'll handle it
 ```
 
 If the user picks Apply:

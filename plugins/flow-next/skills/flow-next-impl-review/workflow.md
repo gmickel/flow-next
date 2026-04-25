@@ -949,9 +949,9 @@ never invents them.
 When `INTERACTIVE=true` AND the primary review verdict is `NEEDS_WORK`
 (still NEEDS_WORK after validator if `--validate` also set), walk through
 each finding with the user before entering the fix loop. The skill-side
-loop in [walkthrough.md](walkthrough.md) drives the platform's blocking
-question tool (`AskUserQuestion` / `request_user_input` / `ask_user`);
-flowctl provides helpers for the defer sink + receipt merge.
+loop in [walkthrough.md](walkthrough.md) drives `AskUserQuestion` (sync-codex.sh
+rewrites to `request_user_input` in the Codex mirror); flowctl provides
+helpers for the defer sink + receipt merge.
 
 **Preserved by default:** when `INTERACTIVE=false`, this entire section is
 skipped — the fix loop runs against all surviving findings as before.

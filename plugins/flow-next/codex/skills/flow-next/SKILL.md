@@ -21,7 +21,7 @@ Then run commands with `$FLOWCTL <command>`.
 **Discover all commands/options:**
 ```bash
 $FLOWCTL --help
-$FLOWCTL <command> --help   # e.g., $FLOWCTL task --help
+$FLOWCTL <command> --help # e.g., $FLOWCTL task --help
 ```
 
 ## Quick Reference
@@ -46,11 +46,11 @@ $FLOWCTL tasks --status todo --json
 
 # View epic with all tasks
 $FLOWCTL show fn-1-add-oauth --json
-$FLOWCTL cat fn-1-add-oauth              # Spec markdown
+$FLOWCTL cat fn-1-add-oauth # Spec markdown
 
 # View single task
 $FLOWCTL show fn-1-add-oauth.2 --json
-$FLOWCTL cat fn-1-add-oauth.2            # Task spec
+$FLOWCTL cat fn-1-add-oauth.2 # Task spec
 
 # What's ready to work on?
 $FLOWCTL ready --epic fn-1-add-oauth --json
@@ -84,34 +84,34 @@ $FLOWCTL validate --all --json
 ### "Add a task for X"
 
 1. Find relevant epic:
-   ```bash
-   # List all epics
-   $FLOWCTL epics --json
+ ```bash
+ # List all epics
+ $FLOWCTL epics --json
 
-   # Or show a specific epic to check its scope
-   $FLOWCTL show fn-1 --json
-   ```
+ # Or show a specific epic to check its scope
+ $FLOWCTL show fn-1 --json
+ ```
 
 2. Create task:
-   ```bash
-   $FLOWCTL task create --epic fn-N --title "Short title" --json
-   ```
+ ```bash
+ $FLOWCTL task create --epic fn-N --title "Short title" --json
+ ```
 
 3. Add description + acceptance (combined):
-   ```bash
-   cat > /tmp/desc.md << 'EOF'
-   **Bug/Feature:** Brief description
+ ```bash
+ cat > /tmp/desc.md << 'EOF'
+ **Bug/Feature:** Brief description
 
-   **Details:**
-   - Point 1
-   - Point 2
-   EOF
-   cat > /tmp/accept.md << 'EOF'
-   - [ ] Criterion 1
-   - [ ] Criterion 2
-   EOF
-   $FLOWCTL task set-spec fn-N.M --description /tmp/desc.md --acceptance /tmp/accept.md --json
-   ```
+ **Details:**
+ - Point 1
+ - Point 2
+ EOF
+ cat > /tmp/accept.md << 'EOF'
+ - [ ] Criterion 1
+ - [ ] Criterion 2
+ EOF
+ $FLOWCTL task set-spec fn-N.M --description /tmp/desc.md --acceptance /tmp/accept.md --json
+ ```
 
 ### "What tasks are there?"
 
@@ -132,8 +132,8 @@ $FLOWCTL ready --epic fn-1-add-oauth --json
 ### "Show me task X"
 
 ```bash
-$FLOWCTL show fn-1-add-oauth.2 --json   # Metadata
-$FLOWCTL cat fn-1-add-oauth.2           # Full spec
+$FLOWCTL show fn-1-add-oauth.2 --json # Metadata
+$FLOWCTL cat fn-1-add-oauth.2 # Full spec
 ```
 
 (Legacy `fn-1.2` / `fn-1-xxx.2` still works.)

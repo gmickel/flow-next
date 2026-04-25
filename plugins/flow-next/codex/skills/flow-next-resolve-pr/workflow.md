@@ -30,11 +30,11 @@ NO_CLUSTER=0
 TARGET=""
 
 for arg in $ARGUMENTS; do
-  case "$arg" in
-    --dry-run) DRY_RUN=1 ;;
-    --no-cluster) NO_CLUSTER=1 ;;
-    *) TARGET="$arg" ;;
-  esac
+ case "$arg" in
+ --dry-run) DRY_RUN=1 ;;
+ --no-cluster) NO_CLUSTER=1 ;;
+ *) TARGET="$arg" ;;
+ esac
 done
 ```
 
@@ -54,17 +54,17 @@ Set `MODE=full` or `MODE=targeted` based on the match; for targeted also set `TA
 MODE=full
 TARGETED_TYPE=""
 if [[ "$TARGET" =~ ^https://github\.com/([^/]+)/([^/]+)/pull/([0-9]+)#discussion_r([0-9]+)$ ]]; then
-  MODE=targeted; TARGETED_TYPE=review_thread
-  OWNER="${BASH_REMATCH[1]}"; REPO="${BASH_REMATCH[2]}"
-  PR_NUMBER="${BASH_REMATCH[3]}"; COMMENT_REST_ID="${BASH_REMATCH[4]}"
+ MODE=targeted; TARGETED_TYPE=review_thread
+ OWNER="${BASH_REMATCH[1]}"; REPO="${BASH_REMATCH[2]}"
+ PR_NUMBER="${BASH_REMATCH[3]}"; COMMENT_REST_ID="${BASH_REMATCH[4]}"
 elif [[ "$TARGET" =~ ^https://github\.com/([^/]+)/([^/]+)/pull/([0-9]+)#issuecomment-([0-9]+)$ ]]; then
-  MODE=targeted; TARGETED_TYPE=pr_comment
-  OWNER="${BASH_REMATCH[1]}"; REPO="${BASH_REMATCH[2]}"
-  PR_NUMBER="${BASH_REMATCH[3]}"; COMMENT_REST_ID="${BASH_REMATCH[4]}"
+ MODE=targeted; TARGETED_TYPE=pr_comment
+ OWNER="${BASH_REMATCH[1]}"; REPO="${BASH_REMATCH[2]}"
+ PR_NUMBER="${BASH_REMATCH[3]}"; COMMENT_REST_ID="${BASH_REMATCH[4]}"
 elif [[ "$TARGET" =~ ^https://github\.com/([^/]+)/([^/]+)/pull/([0-9]+)$ ]]; then
-  OWNER="${BASH_REMATCH[1]}"; REPO="${BASH_REMATCH[2]}"; PR_NUMBER="${BASH_REMATCH[3]}"
+ OWNER="${BASH_REMATCH[1]}"; REPO="${BASH_REMATCH[2]}"; PR_NUMBER="${BASH_REMATCH[3]}"
 elif [[ "$TARGET" =~ ^[0-9]+$ ]]; then
-  PR_NUMBER="$TARGET"
+ PR_NUMBER="$TARGET"
 fi
 ```
 
@@ -76,11 +76,11 @@ Any non-empty `TARGET` that matches none of the above → error out: "Unrecogniz
 
 ```bash
 if [[ -z "$PR_NUMBER" ]]; then
-  PR_NUMBER=$(gh pr view --json number --jq .number 2>/dev/null || true)
-  if [[ -z "$PR_NUMBER" ]]; then
-    echo "No open PR on current branch. Provide PR number, PR URL, or comment URL."
-    exit 1
-  fi
+ PR_NUMBER=$(gh pr view --json number --jq .number 2>/dev/null || true)
+ if [[ -z "$PR_NUMBER" ]]; then
+ echo "No open PR on current branch. Provide PR number, PR URL, or comment URL."
+ exit 1
+ fi
 fi
 
 FEEDBACK_JSON=$(bash "$SCRIPTS/get-pr-comments" "$PR_NUMBER")
@@ -90,11 +90,11 @@ FEEDBACK_JSON=$(bash "$SCRIPTS/get-pr-comments" "$PR_NUMBER")
 
 ```json
 {
-  "pr_number": 123,
-  "review_threads": [{"id": "PRRT_...", "isOutdated": false, "path": "...", "line": 42, "originalLine": 40, "startLine": null, "originalStartLine": null, "comments": [...]}],
-  "pr_comments": [{"id": "IC_...", "author": "...", "body": "...", "createdAt": "..."}],
-  "review_bodies": [{"id": "PRR_...", "author": "...", "body": "...", "state": "COMMENTED", "submittedAt": "..."}],
-  "cross_invocation": {"signal": true|false, "resolved_threads": [{"id": "...", "path": "...", "line": 42}]}
+ "pr_number": 123,
+ "review_threads": [{"id": "PRRT_...", "isOutdated": false, "path": "...", "line": 42, "originalLine": 40, "startLine": null, "originalStartLine": null, "comments": [...]}],
+ "pr_comments": [{"id": "IC_...", "author": "...", "body": "...", "createdAt": "..."}],
+ "review_bodies": [{"id": "PRR_...", "author": "...", "body": "...", "state": "COMMENTED", "submittedAt": "..."}],
+ "cross_invocation": {"signal": true|false, "resolved_threads": [{"id": "...", "path": "...", "line": 42}]}
 }
 ```
 
@@ -108,10 +108,10 @@ THREAD_JSON=$(bash "$SCRIPTS/get-thread-for-comment" "$PR_NUMBER" "$COMMENT_NODE
 THREAD_ID=$(jq -r .id <<<"$THREAD_JSON")
 # Keep only the matching thread; drop pr_comments + review_bodies; zero cross-invocation signal.
 FEEDBACK_JSON=$(jq --arg tid "$THREAD_ID" '
-  .review_threads |= map(select(.id == $tid))
-  | .pr_comments = []
-  | .review_bodies = []
-  | .cross_invocation = {signal: false, resolved_threads: []}
+ .review_threads |= map(select(.id == $tid))
+ | .pr_comments = []
+ | .review_bodies = []
+ | .cross_invocation = {signal: false, resolved_threads: []}
 ' <<<"$FEEDBACK_JSON")
 ```
 
@@ -119,15 +119,15 @@ For `TARGETED_TYPE=pr_comment` (top-level PR comment) — bypass thread lookup e
 
 ```bash
 PR_COMMENT_JSON=$(gh api "repos/$OWNER/$REPO/issues/comments/$COMMENT_REST_ID" \
-  --jq '{id: .node_id, author: .user.login, body: .body, createdAt: .created_at}')
+ --jq '{id: .node_id, author: .user.login, body: .body, createdAt: .created_at}')
 FEEDBACK_JSON=$(jq --argjson c "$PR_COMMENT_JSON" --arg pr "$PR_NUMBER" '
-  {
-    pr_number: ($pr | tonumber),
-    review_threads: [],
-    pr_comments: [$c],
-    review_bodies: [],
-    cross_invocation: {signal: false, resolved_threads: []}
-  }' <<<'{}')
+ {
+ pr_number: ($pr | tonumber),
+ review_threads: [],
+ pr_comments: [$c],
+ review_bodies: [],
+ cross_invocation: {signal: false, resolved_threads: []}
+ }' <<<'{}')
 ```
 
 If `FEEDBACK_JSON` is empty (`review_threads=[]`, `pr_comments=[]`, `review_bodies=[]`), skip to Phase 10 with "no open feedback" message.
@@ -140,8 +140,8 @@ If `FEEDBACK_JSON` is empty (`review_threads=[]`, `pr_comments=[]`, `review_bodi
 
 ```bash
 if [[ "$MODE" == "targeted" ]]; then
-  echo "Triage: skipped (targeted mode — single item)."
-  # Fall through to Phase 3 with the single item marked new.
+ echo "Triage: skipped (targeted mode — single item)."
+ # Fall through to Phase 3 with the single item marked new.
 fi
 ```
 
@@ -159,13 +159,13 @@ For each `pr_comment` / `review_body`:
 Apply two filters in order:
 
 1. **Actionability filter (silent drop — never mention in summary):**
-   - Review-wrapper boilerplate: "Here are some automated review suggestions...", "Reviewed by CodeRabbit", coderabbitai summary tables, copilot review-wrapper headers, etc.
-   - Approvals with no body text beyond "LGTM" / "Approved" / a single checkmark.
-   - CI summary posts: status badges, deploy previews, test coverage reports, codecov summaries.
-   - Bot-generated wrapper headers of automated review tools (e.g., "Claude Code review", "CodeRabbit summary", "PR description updated by bot").
+ - Review-wrapper boilerplate: "Here are some automated review suggestions...", "Reviewed by CodeRabbit", coderabbitai summary tables, copilot review-wrapper headers, etc.
+ - Approvals with no body text beyond "LGTM" / "Approved" / a single checkmark.
+ - CI summary posts: status badges, deploy previews, test coverage reports, codecov summaries.
+ - Bot-generated wrapper headers of automated review tools (e.g., "Claude Code review", "CodeRabbit summary", "PR description updated by bot").
 2. **Already-replied filter (skip, don't drop silently):**
-   - Scan the PR's conversation for a reply quoting this feedback (`> `-prefixed line matching substring of the feedback body).
-   - If a matching quoted reply exists → skip with "still pending" note.
+ - Scan the PR's conversation for a reply quoting this feedback (`> `-prefixed line matching substring of the feedback body).
+ - If a matching quoted reply exists → skip with "still pending" note.
 
 Counts to announce:
 
@@ -185,8 +185,8 @@ Read [cluster-analysis.md](cluster-analysis.md) for full gate logic and dispatch
 
 ```bash
 if [[ "$MODE" == "targeted" ]]; then
-  echo "Cluster analysis: skipped (targeted mode — single item)."
-  # Skip to Phase 4 with the single item as its own unit.
+ echo "Cluster analysis: skipped (targeted mode — single item)."
+ # Skip to Phase 4 with the single item as its own unit.
 fi
 ```
 
@@ -220,10 +220,10 @@ Per unit, record:
 
 ```bash
 if [[ "$DRY_RUN" == "1" ]]; then
-  echo "Plan:"
-  echo "$UNITS" | jq .
-  echo "Exiting (--dry-run)."
-  exit 0
+ echo "Plan:"
+ echo "$UNITS" | jq .
+ echo "Exiting (--dry-run)."
+ exit 0
 fi
 ```
 
@@ -244,9 +244,9 @@ fi
 3. Topological-style serialization: units with no overlap run in the same wave; overlapping units wait for their predecessor.
 4. Batch size per wave: **4 units** max (applies when many units have empty file sets — e.g. pr_comments).
 5. Dispatch each wave:
-   - Claude Code → parallel `Task` calls with `subagent_type: pr-comment-resolver`.
-   - Codex → parallel spawn of the `pr-comment-resolver` role via Codex's multi-agent orchestration.
-   Pass the inputs documented in `agents/pr-comment-resolver.md`.
+ - Claude Code → parallel `Task` calls with `subagent_type: pr-comment-resolver`.
+ - Codex → parallel spawn of the `pr-comment-resolver` role via Codex's multi-agent orchestration.
+ Pass the inputs documented in `agents/pr-comment-resolver.md`.
 6. Collect all verdict JSONs.
 
 ### Serial (Copilot / Droid)
@@ -265,14 +265,14 @@ See `agents/pr-comment-resolver.md` — fields: `verdict`, `feedback_id`, `feedb
 CHANGED_FILES=$(echo "$VERDICTS" | jq -r '[.[] | .files_changed[]] | unique | .[]')
 
 if [[ -z "$CHANGED_FILES" ]]; then
-  echo "No code changes — skipping validation."
+ echo "No code changes — skipping validation."
 else
-  # Project's validation command, typically in AGENTS.md / CLAUDE.md.
-  # Common: bun test | pnpm test | npm test | cargo test | go test ./... | pytest
-  # Read the project's preferred command; run once.
-  echo "Running project validation..."
-  PROJECT_TEST_CMD="$(... read from project docs ...)"
-  $PROJECT_TEST_CMD
+ # Project's validation command, typically in AGENTS.md / CLAUDE.md.
+ # Common: bun test | pnpm test | npm test | cargo test | go test ./... | pytest
+ # Read the project's preferred command; run once.
+ echo "Running project validation..."
+ PROJECT_TEST_CMD="$(... read from project docs ...)"
+ $PROJECT_TEST_CMD
 fi
 ```
 
@@ -291,7 +291,7 @@ Only when at least one unit has non-empty `files_changed` and wasn't demoted to 
 ```bash
 # Stage only files resolvers explicitly reported. NEVER git add -A / git add .
 while IFS= read -r file; do
-  [[ -n "$file" ]] && git add -- "$file"
+ [[ -n "$file" ]] && git add -- "$file"
 done <<< "$CHANGED_FILES"
 
 # Commit message: one-line subject + bullet per change + PR reference.
@@ -322,20 +322,20 @@ Per unit:
 # replies. Read line-by-line instead so each loop body receives one complete
 # verdict object.
 jq -c '.[]' <<<"$VERDICTS_JSON" | while IFS= read -r VERDICT; do
-  FB_TYPE=$(jq -r .feedback_type <<<"$VERDICT")
-  FB_ID=$(jq -r .feedback_id <<<"$VERDICT")
-  REPLY=$(jq -r .reply_text <<<"$VERDICT")
-  V=$(jq -r .verdict <<<"$VERDICT")
+ FB_TYPE=$(jq -r .feedback_type <<<"$VERDICT")
+ FB_ID=$(jq -r .feedback_id <<<"$VERDICT")
+ REPLY=$(jq -r .reply_text <<<"$VERDICT")
+ V=$(jq -r .verdict <<<"$VERDICT")
 
-  case "$FB_TYPE" in
-    review_thread)
-      echo "$REPLY" | bash "$SCRIPTS/reply-to-pr-thread" "$FB_ID"
-      [[ "$V" != "needs-human" ]] && bash "$SCRIPTS/resolve-pr-thread" "$FB_ID"
-      ;;
-    pr_comment|review_body)
-      gh pr comment "$PR_NUMBER" --body "$REPLY"
-      ;;
-  esac
+ case "$FB_TYPE" in
+ review_thread)
+ echo "$REPLY" | bash "$SCRIPTS/reply-to-pr-thread" "$FB_ID"
+ [[ "$V" != "needs-human" ]] && bash "$SCRIPTS/resolve-pr-thread" "$FB_ID"
+ ;;
+ pr_comment|review_body)
+ gh pr comment "$PR_NUMBER" --body "$REPLY"
+ ;;
+ esac
 done
 ```
 
@@ -357,12 +357,12 @@ If `REMAINING > 0` **and** some of those threads aren't in the `needs-human` set
 
 - **Cycles < 2** → loop to Phase 2.
 - **Cycles >= 2** (this would be the 3rd pass) → stop. Surface a pattern summary:
-  ```
-  Multiple rounds on <dominant theme> suggest a deeper issue.
-  Fixed across cycles: <list>
-  Recurring theme: <common category / file / concern>
-  Suggest addressing at the architecture level before continuing.
-  ```
+ ```
+ Multiple rounds on <dominant theme> suggest a deeper issue.
+ Fixed across cycles: <list>
+ Recurring theme: <common category / file / concern>
+ Suggest addressing at the architecture level before continuing.
+ ```
 
 ---
 
@@ -379,19 +379,19 @@ Not addressing (count): <bullet list from `not-addressing`>
 Validation: <"bun test 893/893 passed" | "skipped (no code changes)" | "pre-existing failure in <path>">
 
 Cluster investigations (count):
-  1. <theme> in <area>: <cluster_assessment>
+ 1. <theme> in <area>: <cluster_assessment>
 
 Needs your input (count):
-  1. <decision_context.why_needs_decision from the agent>
-     Options: <options[].action — comma-separated>
-     Lean: <decision_context.lean>
+ 1. <decision_context.why_needs_decision from the agent>
+ Options: <options[].action — comma-separated>
+ Lean: <decision_context.lean>
 
 Still pending from a previous run (count):
-  1. <thread path:line> — <brief>
-     Previous reply: <comment URL>
+ 1. <thread path:line> — <brief>
+ Previous reply: <comment URL>
 ```
 
-For `needs-human` entries **and** "still pending" entries where the user might want to weigh in: invoke the platform's blocking-question primitive (`AskUserQuestion` on Claude Code, `request_user_input` on Codex, `ask_user` on Copilot). Wait for response; apply decisions; loop back to Phase 5 for any newly actionable items.
+For `needs-human` entries **and** "still pending" entries where the user might want to weigh in: invoke `request_user_input`. Wait for response; apply decisions; loop back to Phase 5 for any newly actionable items.
 
 If none block, exit 0 with the printed summary.
 

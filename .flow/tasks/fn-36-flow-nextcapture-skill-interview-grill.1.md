@@ -225,7 +225,7 @@ fi
 - [ ] Phase 0 idempotency documented: `--rewrite <id>` required to overwrite existing epic spec. (R8)
 - [ ] Must-ask cases (R9) documented in phases.md: ambiguous title / untestable acceptance / scope-conflict.
 - [ ] Forbidden behaviors (R10) documented: no tech-stack, no invented acceptance, no code/file paths, no silent overwrite.
-- [ ] Phase 4 read-back uses platform's blocking-question tool with cross-platform variants documented: `AskUserQuestion` (Claude, with `ToolSearch select:AskUserQuestion` fallback for schema loading) / `request_user_input` (Codex) / `ask_user` (Gemini, Droid). Plain-text numbered options as last-resort fallback. (R7)
+- [ ] Phase 4 read-back uses `AskUserQuestion` (Claude-native; sync-codex.sh rewrites to `request_user_input` for Codex mirror per repo convention). Schema-load via `ToolSearch select:AskUserQuestion` if needed. Plain-text numbered options as fallback when tool unreachable. NO inline cross-platform table in the canonical skill text. (R7)
 - [ ] When Phase 2 emits 8+ acceptance criteria, Phase 4 read-back includes a "consider splitting into multiple epics?" option — never auto-action. User decides. (R11)
 - [ ] Cross-platform subagent dispatch (R12) documented in workflow.md mirroring `flow-next-audit/workflow.md:158-183`.
 - [ ] Ralph-block (R13) documented + verified in SKILL.md (exits 2 under `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH`).

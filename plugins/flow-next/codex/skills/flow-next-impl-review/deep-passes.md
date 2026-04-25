@@ -63,11 +63,11 @@ that happens, which causes this to fail."
 Techniques:
 
 1. **Assumption violation** — what assumptions does this code make? (data
-   shapes, timing, ordering, value ranges) Where is each violable?
+ shapes, timing, ordering, value ranges) Where is each violable?
 2. **Composition failures** — where do components interact? Contract mismatches,
-   shared state mutations, ordering across boundaries, error-type divergence.
+ shared state mutations, ordering across boundaries, error-type divergence.
 3. **Cascade construction** — build multi-step failure chains: A causes B causes
-   C. Do not stop at a single failure if a chain is visible.
+ C. Do not stop at a single failure if a chain is visible.
 4. **Abuse cases** — how would a malicious or naive user/caller break this?
 
 Do not re-surface findings you already flagged in the primary review. **Probe
@@ -83,10 +83,10 @@ finding with `pass: adversarial`.
 
 Example:
 
-    **a1** | severity=P1 | confidence=75 | classification=introduced | pass=adversarial
-    - location: `src/auth.ts:42`
-    - issue: cascade — if upstream rate-limiter resets mid-request, middleware reuses stale token
-    - suggested fix: re-validate token after any upstream transition
+ **a1** | severity=P1 | confidence=75 | classification=introduced | pass=adversarial
+ - location: `src/auth.ts:42`
+ - issue: cascade — if upstream rate-limiter resets mid-request, middleware reuses stale token
+ - suggested fix: re-validate token after any upstream transition
 
 ## Suppression gate
 
@@ -111,15 +111,15 @@ re-flag issues already listed there.
 Focus areas:
 
 - **Authentication gaps** — missing auth checks on endpoints, session handling
-  flaws, credential rotation issues.
+ flaws, credential rotation issues.
 - **Authorization gaps** — missing ownership checks, IDOR patterns, privilege
-  escalation, tenant-boundary violations.
+ escalation, tenant-boundary violations.
 - **Input handling** — injection (SQL, command, template, LDAP), deserialization
-  issues, XSS, SSRF, path traversal.
+ issues, XSS, SSRF, path traversal.
 - **Secrets handling** — hardcoded credentials, token leakage in logs,
-  insecure storage, secret sprawl.
+ insecure storage, secret sprawl.
 - **Permission boundaries** — TOCTOU, race conditions on auth state, trust
-  boundaries crossed, client-side-only checks.
+ boundaries crossed, client-side-only checks.
 
 Probe for specific security patterns the primary review's generalist framing
 may have missed. If you find nothing new, say so.
@@ -151,15 +151,15 @@ Specialized performance review.
 Focus areas:
 
 - **Database** — N+1 queries, missing indexes, large scans, transaction scope
-  too wide, lock contention.
+ too wide, lock contention.
 - **Algorithmic** — O(n²) where O(n) suffices, unbounded loops, repeated
-  computations of pure results, recursive calls that could memoize.
+ computations of pure results, recursive calls that could memoize.
 - **I/O** — sequential calls that could parallelize, sync calls in hot paths,
-  missing cache, chatty protocols, large payloads.
+ missing cache, chatty protocols, large payloads.
 - **Memory** — unbounded growth, reference leaks, large-object allocations in
-  loops, GC-pressure patterns.
+ loops, GC-pressure patterns.
 - **Concurrency** — contention, lock ordering, async-over-sync anti-patterns,
-  missing backpressure.
+ missing backpressure.
 
 Do not re-flag issues already in primary findings. Probe for specific
 performance patterns the primary's generalist framing may have missed.
@@ -190,12 +190,12 @@ fingerprint = (normalize(file), line_bucket(line, bucket=10), slug(title[:60]))
 ```
 
 - `line_bucket` groups adjacent findings on lines within 10 of each other so
-  near-duplicates collapse.
+ near-duplicates collapse.
 - `slug` lower-cases, strips punctuation, truncates to 60 chars.
 - Primary finding wins when a collision is detected (deep-pass drops).
 - When a deep-pass finding shares a fingerprint with a primary finding, the
-  primary's confidence is promoted one anchor step (0→25→50→75→100). 100 is
-  the ceiling.
+ primary's confidence is promoted one anchor step (0→25→50→75→100). 100 is
+ the ceiling.
 
 Promotions are recorded in the receipt under `cross_pass_promotions` as a list
 of `{id, from, to}` entries.

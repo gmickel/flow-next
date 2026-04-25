@@ -21,7 +21,7 @@ There is no Python classifier subprocess, no `codex`/`copilot` dispatch, no fast
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — `AskUserQuestion` and the Codex / Gemini / Droid equivalents must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 1 (Classify) needs user choice on ambiguous entries in interactive mode; Phase 4 (Cleanup) needs consent before renaming originals.
+**Inline skill (no `context: fork`)** — `AskUserQuestion` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 1 (Classify) needs user choice on ambiguous entries in interactive mode; Phase 4 (Cleanup) needs consent before renaming originals. (sync-codex.sh rewrites `AskUserQuestion` to `request_user_input` in the Codex mirror.)
 
 ## Mode Detection
 
@@ -59,7 +59,7 @@ In autofix mode, skip user questions entirely and apply the rules above.
 
 In interactive mode, follow these principles:
 
-- Ask **one question at a time**. Use the platform's blocking-question tool: `AskUserQuestion` on Claude Code (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded), `request_user_input` on Codex, `ask_user` on Gemini / Droid. Fall back to numbered options in plain text only when no blocking tool is reachable or the call errors. Never silently skip the question.
+- Ask **one question at a time** via `AskUserQuestion` (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). Fall back to numbered options in plain text only if the tool is unreachable or errors. Never silently skip the question.
 - Prefer **multiple choice** when natural options exist.
 - Lead with the **recommended option** (always the mechanical default unless the body warrants otherwise) and a one-sentence rationale.
 - Do **not** ask the user to make decisions before the entry has been read — Phase 1 reads first, asks second.

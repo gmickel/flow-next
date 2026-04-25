@@ -8,9 +8,9 @@ For each legacy entry, classify it into exactly one `(track, category)` pair. Ca
 
 | Legacy filename | Default `(track, category)` |
 |-----------------|-----------------------------|
-| `pitfalls.md`   | `bug/build-errors`          |
-| `conventions.md`| `knowledge/conventions`     |
-| `decisions.md`  | `knowledge/tooling-decisions` |
+| `pitfalls.md` | `bug/build-errors` |
+| `conventions.md`| `knowledge/conventions` |
+| `decisions.md` | `knowledge/tooling-decisions` |
 
 This is what `flowctl memory list-legacy --json` emits as `mechanical_track` + `mechanical_category` per file. Take this default unless the entry's title + body unambiguously points at a different category.
 
@@ -100,8 +100,8 @@ Before classifying anything from a legacy file, check whether it's already been 
 
 ```bash
 if [[ -f "$MEMORY_DIR/_migrated/${filename}.bak" ]]; then
-    # Skip this file — Phase 4 already renamed it on a prior run.
-    # Surface in report as "Skipped (already migrated): <filename>"
+ # Skip this file — Phase 4 already renamed it on a prior run.
+ # Surface in report as "Skipped (already migrated): <filename>"
 fi
 ```
 
@@ -141,25 +141,25 @@ Re-running after Phase 4 was declined (originals still in place):
 ```
 For each legacy entry:
 
-  Read title + body + tags + source filename.
+ Read title + body + tags + source filename.
 
-  Set default = (mechanical_track, mechanical_category)  # from list-legacy
+ Set default = (mechanical_track, mechanical_category) # from list-legacy
 
-  Scan body for override signals (catalog above):
-    - Strong evidence for a different category?
-        yes → override + log rationale
-        no  → continue
+ Scan body for override signals (catalog above):
+ - Strong evidence for a different category?
+ yes → override + log rationale
+ no → continue
 
-  Validate (track, category) against schema:
-    - In MEMORY_CATEGORIES[track]?
-        yes → ready to write
-        no  → fall back to mechanical default + log as needs-review
+ Validate (track, category) against schema:
+ - In MEMORY_CATEGORIES[track]?
+ yes → ready to write
+ no → fall back to mechanical default + log as needs-review
 
-  Ambiguous (could plausibly be A or B)?
-    interactive → ask via blocking-question tool
-    autofix     → take mechanical default + log as needs-review
+ Ambiguous (could plausibly be A or B)?
+ interactive → ask via blocking-question tool
+ autofix → take mechanical default + log as needs-review
 
-  Phase 2: flowctl memory add --track <t> --category <c> --title "..." --body-file <tmp>
+ Phase 2: flowctl memory add --track <t> --category <c> --title "..." --body-file <tmp>
 ```
 
 ---

@@ -37,23 +37,11 @@ appear. If neither, all primary findings appear.
 Before the walkthrough loop, the skill must have access to a **blocking
 question tool** (a tool that pauses the agent until the user answers):
 
-| Platform | Tool name | Notes |
-|----------|-----------|-------|
-| Claude Code | `AskUserQuestion` | Deferred tool — load via `ToolSearch select:AskUserQuestion` if not already loaded |
-| Codex | `request_user_input` | Native |
-| Gemini | `ask_user` | Native |
-| Pi | `ask_user` | Requires `pi-ask-user` extension |
-| Fallback | _none_ | Numbered list in chat; user must type choice. Only use if no blocking tool exists. |
+Use `AskUserQuestion`. It's a deferred tool — call `ToolSearch select:AskUserQuestion` first to load its schema if it isn't already in scope. (sync-codex.sh rewrites `AskUserQuestion` to `request_user_input` in the Codex mirror.)
 
-On Claude Code, check ToolSearch availability and load the schema:
-
-```
-ToolSearch select:AskUserQuestion
-```
-
-If the load fails, fall through to the chat-prompt fallback (print the
-question, wait for the user's next message). The fallback is less reliable
-— prefer the blocking tool wherever available.
+If the tool is unreachable, fall through to a chat-prompt fallback (print
+the question, wait for the user's next message). The fallback is less
+reliable — prefer the blocking tool wherever available.
 
 ## Per-finding flow
 

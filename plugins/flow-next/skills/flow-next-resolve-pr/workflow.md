@@ -390,7 +390,7 @@ Still pending from a previous run (count):
      Previous reply: <comment URL>
 ```
 
-For `needs-human` entries **and** "still pending" entries where the user might want to weigh in: invoke the platform's blocking-question primitive (`AskUserQuestion` on Claude Code, `request_user_input` on Codex, `ask_user` on Copilot). Wait for response; apply decisions; loop back to Phase 5 for any newly actionable items.
+For `needs-human` entries **and** "still pending" entries where the user might want to weigh in: invoke `AskUserQuestion` (sync-codex.sh rewrites to `request_user_input` in the Codex mirror). Wait for response; apply decisions; loop back to Phase 5 for any newly actionable items.
 
 If none block, exit 0 with the printed summary.
 

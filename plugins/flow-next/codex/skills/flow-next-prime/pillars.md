@@ -216,7 +216,7 @@ Informational only. Reported for awareness.
 
 | Pillars | Category | Remediation |
 |---------|----------|-------------|
-| 1-5 | Agent Readiness | ✅ Fixes offered via AskUserQuestion |
+| 1-5 | Agent Readiness | ✅ Fixes offered via request_user_input |
 | 6-8 | Production Readiness | ❌ Reported only, address independently |
 
 **Level 3 (Standardized)** is the target for agent readiness. It means agents can handle routine work: bug fixes, tests, docs, dependency updates.

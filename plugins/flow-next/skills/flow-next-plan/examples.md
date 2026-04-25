@@ -61,7 +61,7 @@ export function getBackend(name: string): WorkerBackend {
 # Backend Abstraction
 
 ## Overview
-Abstract worker spawning so any CLI (claude, codex, gemini) can run workers.
+Abstract worker spawning so any CLI (claude, codex, droid) can run workers.
 
 ## Approach
 - Define `WorkerBackend` interface with spawn/isAlive/kill methods

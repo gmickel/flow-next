@@ -74,7 +74,7 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 2. **Verification** — Verify test commands actually work
 3. **Score & Synthesize** — Calculate scores, determine maturity level
 4. **Present Report** — Full report with all 8 pillars
-5. **Interactive Remediation** — AskUserQuestion for agent readiness fixes only
+5. **Interactive Remediation** — `request_user_input` for agent readiness fixes only
 6. **Apply Fixes** — Create/modify files based on selections
 7. **Summary** — Show what was changed
 
@@ -94,7 +94,7 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 
 | Pillars | Category | Remediation |
 |---------|----------|-------------|
-| 1-5 | Agent Readiness | ✅ Fixes offered via AskUserQuestion |
+| 1-5 | Agent Readiness | ✅ Fixes offered via request_user_input |
 | 6-8 | Production Readiness | ❌ Reported only, address independently |
 
 ## Guardrails
@@ -106,7 +106,7 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 - Respect .gitignore patterns
 
 ### User Consent
-- **MUST use AskUserQuestion tool** for consent — never just print questions as text
+- **MUST use `request_user_input` tool** for consent. Never just print questions as text.
 - Always ask before modifying existing files
 - Don't add dependencies without consent
 

@@ -191,9 +191,9 @@ Informational only. No fixes offered — address independently if desired.
 
 **If `--fix-all`**: Skip to Phase 6, apply all recommendations from Pillars 1-5.
 
-**CRITICAL**: You MUST use the `AskUserQuestion` tool for consent. Do NOT just print questions as text.
+**CRITICAL**: You MUST use the `AskUserQuestion` tool for consent. Do NOT just print questions as text. (Call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded. sync-codex.sh rewrites this to `request_user_input` in the Codex mirror.)
 
-### Using AskUserQuestion Correctly
+### Using AskUserQuestion correctly
 
 The tool provides an interactive UI. Each question should:
 - Have a clear header (max 12 chars)
@@ -303,7 +303,7 @@ Ask ONE question per category that has recommendations. Skip categories with no 
 
 ### Rules for Questions
 
-1. **MUST use AskUserQuestion tool** — Never just print questions
+1. **MUST use `AskUserQuestion` tool** — Never just print questions as text
 2. **Mark recommended items** — Add "(Recommended)" to high-impact options
 3. **Mark bonus items** — Add "(Bonus)" to nice-to-have options
 4. **Explain agent benefit** — Each description should say WHY it helps agents

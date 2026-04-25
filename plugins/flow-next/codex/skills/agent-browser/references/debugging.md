@@ -17,10 +17,10 @@ agent-browser --headed click @e1
 View browser console output and page errors:
 
 ```bash
-agent-browser console          # View console messages
-agent-browser console --clear  # Clear console log
-agent-browser errors           # View page errors
-agent-browser errors --clear   # Clear error log
+agent-browser console # View console messages
+agent-browser console --clear # Clear console log
+agent-browser errors # View page errors
+agent-browser errors --clear # Clear error log
 ```
 
 ## Highlight Elements
@@ -37,9 +37,9 @@ agent-browser highlight "#selector"
 Record browser traces for detailed debugging:
 
 ```bash
-agent-browser trace start           # Start recording
+agent-browser trace start # Start recording
 # ... do interactions ...
-agent-browser trace stop trace.zip  # Save trace file
+agent-browser trace stop trace.zip # Save trace file
 ```
 
 Open traces in Playwright Trace Viewer: `npx playwright show-trace trace.zip`
@@ -70,10 +70,10 @@ agent-browser record restart ./take2.webm
 - Use descriptive filenames: `login-flow-2024-01-15.webm`
 - Combine with screenshots for key frames
 - Always stop recording on error:
-  ```bash
-  cleanup() { agent-browser record stop 2>/dev/null || true; }
-  trap cleanup EXIT
-  ```
+ ```bash
+ cleanup() { agent-browser record stop 2>/dev/null || true; }
+ trap cleanup EXIT
+ ```
 
 **Output format:** WebM (VP8/VP9 codec), compatible with all modern browsers.
 
@@ -123,9 +123,9 @@ agent-browser --debug click @e1
 Verify element state before interacting:
 
 ```bash
-agent-browser is visible @e1    # Returns true/false
-agent-browser is enabled @e1    # Check if interactive
-agent-browser is checked @e1    # Checkbox state
+agent-browser is visible @e1 # Returns true/false
+agent-browser is enabled @e1 # Check if interactive
+agent-browser is checked @e1 # Checkbox state
 ```
 
 With JSON output:

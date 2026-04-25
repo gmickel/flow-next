@@ -36,22 +36,22 @@ Output shape (Task 2 ships this subcommand):
 
 ```json
 {
-  "files": [
-    {
-      "filename": "pitfalls.md",
-      "path": ".flow/memory/pitfalls.md",
-      "mechanical_track": "bug",
-      "mechanical_category": "build-errors",
-      "entries": [
-        {
-          "title": "OAuth callback drops state on retry",
-          "body": "...",
-          "tags": ["auth", "oauth"],
-          "date": "2025-08-12"
-        }
-      ]
-    }
-  ]
+ "files": [
+ {
+ "filename": "pitfalls.md",
+ "path": ".flow/memory/pitfalls.md",
+ "mechanical_track": "bug",
+ "mechanical_category": "build-errors",
+ "entries": [
+ {
+ "title": "OAuth callback drops state on retry",
+ "body": "...",
+ "tags": ["auth", "oauth"],
+ "date": "2025-08-12"
+ }
+ ]
+ }
+ ]
 }
 ```
 
@@ -71,9 +71,9 @@ For each file in the list-legacy output, check whether a Phase 4 backup already 
 ```bash
 ALREADY_MIGRATED=()
 for filename in $(jq -r '.files[].filename' /tmp/memory-migrate-legacy.json); do
-  if [[ -f "$MIGRATED_DIR/${filename}.bak" ]]; then
-    ALREADY_MIGRATED+=("$filename")
-  fi
+ if [[ -f "$MIGRATED_DIR/${filename}.bak" ]]; then
+ ALREADY_MIGRATED+=("$filename")
+ fi
 done
 ```
 
@@ -119,9 +119,9 @@ Interactive: ask via blocking-question tool before starting Phase 1:
 Found <M> entries across <N> legacy files. Mechanical defaults will apply unless content
 warrants otherwise. Proceed?
 
-  1. Migrate all (recommended)
-  2. Pick a single file
-  3. Abort
+ 1. Migrate all (recommended)
+ 2. Pick a single file
+ 3. Abort
 ```
 
 If user picks "Pick a single file", ask which one (multiple choice from in-scope filenames) and narrow scope.
@@ -149,9 +149,9 @@ For each entry in `WORKING_SET`:
 ```python
 # Pseudocode — actual loop is over the list-legacy JSON.
 for file in working_set:
-    for entry in file.entries:
-        # one iteration = one entry = one decision
-        classify_entry(entry, file.mechanical_track, file.mechanical_category)
+ for entry in file.entries:
+ # one iteration = one entry = one decision
+ classify_entry(entry, file.mechanical_track, file.mechanical_category)
 ```
 
 ### 1.2 — Per-entry classification steps
@@ -161,28 +161,28 @@ For each entry:
 1. **Read** the entry's title, body, tags, source filename.
 2. **Set the default** to `(file.mechanical_track, file.mechanical_category)` from the list-legacy output.
 3. **Scan for override signals** in the title + body. See [phases.md](phases.md) §When to override for the catalog. Common overrides:
-   - Title or body mentions race conditions, deadlocks, leaks, hangs → `bug/runtime-errors`
-   - References to build/CI/compile failures → `bug/build-errors` (already the default for `pitfalls.md`)
-   - Tooling decisions ("use pnpm not npm", "switch from Jest to Vitest") → `knowledge/tooling-decisions`
-   - Architectural patterns ("we model X as a state machine", "every service registers via Y") → `knowledge/architecture-patterns`
-   - Test-failure post-mortems → `bug/test-failures`
-   - Performance fixes → `bug/performance`
-   - Security incidents → `bug/security`
-   - UI / a11y bugs → `bug/ui`
-   - Data corruption / migration issues → `bug/data`
-   - Integration / API contract issues → `bug/integration`
-   - Workflow conventions ("PRs are squash-merged", "feature branches off main") → `knowledge/workflow`
+ - Title or body mentions race conditions, deadlocks, leaks, hangs → `bug/runtime-errors`
+ - References to build/CI/compile failures → `bug/build-errors` (already the default for `pitfalls.md`)
+ - Tooling decisions ("use pnpm not npm", "switch from Jest to Vitest") → `knowledge/tooling-decisions`
+ - Architectural patterns ("we model X as a state machine", "every service registers via Y") → `knowledge/architecture-patterns`
+ - Test-failure post-mortems → `bug/test-failures`
+ - Performance fixes → `bug/performance`
+ - Security incidents → `bug/security`
+ - UI / a11y bugs → `bug/ui`
+ - Data corruption / migration issues → `bug/data`
+ - Integration / API contract issues → `bug/integration`
+ - Workflow conventions ("PRs are squash-merged", "feature branches off main") → `knowledge/workflow`
 4. **Decide:**
-   - **Strong evidence for override** (the body unambiguously points at a different category) → use override; log `override` with one-line rationale.
-   - **Weak / no signal** → take mechanical default; log `mechanical-default`.
-   - **Ambiguous** (could plausibly be A or B; insufficient body context to pick) → see 1.3 below.
+ - **Strong evidence for override** (the body unambiguously points at a different category) → use override; log `override` with one-line rationale.
+ - **Weak / no signal** → take mechanical default; log `mechanical-default`.
+ - **Ambiguous** (could plausibly be A or B; insufficient body context to pick) → see 1.3 below.
 5. **Validate** the chosen `(track, category)` against the schema. The valid set is pinned in [phases.md](phases.md) §Valid track/category pairs. `flowctl memory add` validates again via `validate_memory_frontmatter`.
 
 ### 1.3 — Ambiguity handling
 
 **Interactive mode:**
 
-Use the platform's blocking-question tool (`AskUserQuestion` on Claude Code, `request_user_input` on Codex, `ask_user` on Gemini / Droid). Lead with the mechanical default as the recommendation:
+Use `request_user_input`. Lead with the mechanical default as the recommendation:
 
 ```
 Entry: "Auth token refresh race during logout" (from pitfalls.md)
@@ -190,12 +190,12 @@ Mechanical default: bug/build-errors
 The body describes a runtime race condition, which suggests bug/runtime-errors.
 
 Options:
-  1. bug/runtime-errors (recommended override)
-  2. bug/build-errors (mechanical default)
-  3. Skip this entry — mark as needs-review
+ 1. bug/runtime-errors (recommended override)
+ 2. bug/build-errors (mechanical default)
+ 3. Skip this entry — mark as needs-review
 ```
 
-One question at a time. If `AskUserQuestion`'s schema isn't loaded on Claude Code, call `ToolSearch` with `select:AskUserQuestion` first.
+One question at a time. If `request_user_input`'s schema isn't loaded on Claude Code,
 
 **Autofix mode:**
 
@@ -210,7 +210,7 @@ source_file: pitfalls.md
 title: "OAuth callback drops state on retry"
 mechanical_default: [bug, build-errors]
 final_classification: [bug, runtime-errors]
-decision_kind: override   # or "mechanical-default" or "needs-review"
+decision_kind: override # or "mechanical-default" or "needs-review"
 rationale: "Body describes async state-loss between callback retries — runtime concurrency, not build failure."
 body: "..."
 tags: ["auth", "oauth"]
@@ -242,12 +242,12 @@ TMPFILE=$(mktemp -t memory-migrate-body.XXXXXX.md)
 printf '%s\n' "$ENTRY_BODY" > "$TMPFILE"
 
 "$FLOWCTL" memory add \
-  --track "$TRACK" \
-  --category "$CATEGORY" \
-  --title "$TITLE" \
-  --body-file "$TMPFILE" \
-  --tags "$(printf '%s,' "${TAGS[@]}" | sed 's/,$//')" \
-  --json
+ --track "$TRACK" \
+ --category "$CATEGORY" \
+ --title "$TITLE" \
+ --body-file "$TMPFILE" \
+ --tags "$(printf '%s,' "${TAGS[@]}" | sed 's/,$//')" \
+ --json
 ```
 
 - **Tags**: forward tags from the legacy entry verbatim. Don't invent new ones.
@@ -305,7 +305,7 @@ Print to stdout as markdown:
 ```text
 Memory Migration Summary
 ========================
-Legacy files processed: <N>   (skipped: <K> already migrated)
+Legacy files processed: <N> (skipped: <K> already migrated)
 Entries migrated: <M>
 Overrides (mechanical → agent-decided): <P>
 Needs review (ambiguous, took mechanical default): <Q>
@@ -317,14 +317,14 @@ Then per-file detail:
 
 ```
 - pitfalls.md (7 entries → 7 migrated)
-  Mechanical default: bug/build-errors
-  Overrides: 2
-    - "Auth token refresh race during logout" → bug/runtime-errors
-      (Body describes async state-loss between callback retries)
-    - "Build slow after monorepo restructure" → bug/performance
-      (Body recounts build-time perf regression, not a build failure)
-  Needs review: 1
-    - "Generic logging guidance" — body too abstract to pick build-errors vs best-practices
+ Mechanical default: bug/build-errors
+ Overrides: 2
+ - "Auth token refresh race during logout" → bug/runtime-errors
+ (Body describes async state-loss between callback retries)
+ - "Build slow after monorepo restructure" → bug/performance
+ (Body recounts build-time perf regression, not a build failure)
+ Needs review: 1
+ - "Generic logging guidance" — body too abstract to pick build-errors vs best-practices
 ```
 
 For each migrated entry, the per-entry id is available in the JSON dump but doesn't need to be enumerated unless the user asked for verbose output.
@@ -347,10 +347,10 @@ Migration complete. <M> entries written.
 
 Phase 4 — optional cleanup. The original flat files are still in place. Options:
 
-  1. Rename originals to .flow/memory/_migrated/<filename>.bak (recommended)
-     Self-ignoring directory: a `.gitignore: *` is added on first cleanup.
-  2. Leave originals in place
-  3. Show me the new entries first (re-print summary then ask again)
+ 1. Rename originals to .flow/memory/_migrated/<filename>.bak (recommended)
+ Self-ignoring directory: a `.gitignore: *` is added on first cleanup.
+ 2. Leave originals in place
+ 3. Show me the new entries first (re-print summary then ask again)
 ```
 
 Autofix: skip the gate; default-decline cleanup; surface as a recommendation in the report.
@@ -382,7 +382,7 @@ mkdir -p "$MIGRATED_DIR"
 # Avoids requiring the user to update the top-level .gitignore.
 GITIGNORE_PATH="$MIGRATED_DIR/.gitignore"
 if [[ ! -f "$GITIGNORE_PATH" ]]; then
-  printf '*\n' > "$GITIGNORE_PATH"
+ printf '*\n' > "$GITIGNORE_PATH"
 fi
 ```
 

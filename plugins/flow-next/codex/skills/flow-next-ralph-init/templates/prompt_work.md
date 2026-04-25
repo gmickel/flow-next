@@ -3,8 +3,8 @@ You are running one Ralph work iteration.
 Inputs:
 - TASK_ID={{TASK_ID}}
 - BRANCH_MODE={{BRANCH_MODE_EFFECTIVE}}
-- WORK_REVIEW={{WORK_REVIEW}}                  (may be spec form, e.g. `codex:gpt-5.4:xhigh`)
-- WORK_REVIEW_BACKEND={{WORK_REVIEW_BACKEND}}  (bare backend name — use this for `--review`)
+- WORK_REVIEW={{WORK_REVIEW}} (may be spec form, e.g. `codex:gpt-5.4:xhigh`)
+- WORK_REVIEW_BACKEND={{WORK_REVIEW_BACKEND}} (bare backend name — use this for `--review`)
 
 The full spec is also exported as `FLOW_REVIEW_BACKEND` for flowctl to resolve model + effort.
 

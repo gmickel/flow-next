@@ -2,7 +2,7 @@
 name: flow-next-memory-migrate
 description: Migrate pre-fn-30 legacy flat memory files (`.flow/memory/pitfalls.md`, `conventions.md`, `decisions.md`) into the categorized YAML schema. Triggers on /flow-next:memory-migrate, "migrate memory", "convert legacy memory", "lift pitfalls into categorized schema", "convert old memory format". Optional `mode:autofix` token in arguments runs without questions and accepts mechanical defaults for ambiguous classifications. Optional scope hint after the mode token narrows the migration to a specific legacy file (e.g. `pitfalls.md`).
 user-invocable: false
-allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
+allowed-tools: request_user_input, Read, Bash, Grep, Glob, Write, Edit, Task
 ---
 
 # /flow-next:memory-migrate — agent-native legacy migration
@@ -22,7 +22,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — `AskUserQuestion` and the Codex / Gemini / Droid equivalents must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 1 (Classify) needs user choice on ambiguous entries in interactive mode; Phase 4 (Cleanup) needs consent before renaming originals.
+**Inline skill (no `context: fork`)** — `request_user_input` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 1 (Classify) needs user choice on ambiguous entries in interactive mode; Phase 4 (Cleanup) needs consent before renaming originals.
 
 ## Mode Detection
 
@@ -32,11 +32,11 @@ Parse `$ARGUMENTS` for the literal token `mode:autofix`. If present, strip it fr
 RAW_ARGS="$ARGUMENTS"
 MODE="interactive"
 if [[ "$RAW_ARGS" == *"mode:autofix"* ]]; then
-  MODE="autofix"
-  # Strip token, collapse whitespace, trim.
-  SCOPE_HINT=$(printf "%s" "$RAW_ARGS" | sed 's/mode:autofix//' | tr -s ' ' | sed 's/^ //;s/ $//')
+ MODE="autofix"
+ # Strip token, collapse whitespace, trim.
+ SCOPE_HINT=$(printf "%s" "$RAW_ARGS" | sed 's/mode:autofix//' | tr -s ' ' | sed 's/^ //;s/ $//')
 else
-  SCOPE_HINT="$RAW_ARGS"
+ SCOPE_HINT="$RAW_ARGS"
 fi
 ```
 
@@ -60,7 +60,7 @@ In autofix mode, skip user questions entirely and apply the rules above.
 
 In interactive mode, follow these principles:
 
-- Ask **one question at a time**. Use the platform's blocking-question tool: `AskUserQuestion` on Claude Code (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded), `request_user_input` on Codex, `ask_user` on Gemini / Droid. Fall back to numbered options in plain text only when no blocking tool is reachable or the call errors. Never silently skip the question.
+- Ask **one question at a time** via `request_user_input`. Fall back to numbered options in plain text only if the tool is unreachable or errors. Never silently skip the question.
 - Prefer **multiple choice** when natural options exist.
 - Lead with the **recommended option** (always the mechanical default unless the body warrants otherwise) and a one-sentence rationale.
 - Do **not** ask the user to make decisions before the entry has been read — Phase 1 reads first, asks second.
@@ -88,13 +88,13 @@ Same pattern as `/flow-next:plan` and `/flow-next:audit` — non-blocking notice
 
 ```bash
 if [[ -f .flow/meta.json ]]; then
-  SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
-  PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-plugin/plugin.json"
-  [[ -f "$PLUGIN_JSON" ]] || PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
-  PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
-  if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
-    echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})." >&2
-  fi
+ SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
+ PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-plugin/plugin.json"
+ [[ -f "$PLUGIN_JSON" ]] || PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
+ PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
+ if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
+ echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})." >&2
+ fi
 fi
 ```
 
@@ -117,7 +117,7 @@ Report structure (see [workflow.md](workflow.md) §3 for full schema):
 ```text
 Memory Migration Summary
 ========================
-Legacy files processed: <N>   (skipped: <K> already migrated)
+Legacy files processed: <N> (skipped: <K> already migrated)
 Entries migrated: <M>
 Overrides (mechanical → agent-decided): <P>
 Needs review (ambiguous, took mechanical default): <Q>

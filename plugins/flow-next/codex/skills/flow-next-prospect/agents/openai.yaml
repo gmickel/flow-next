@@ -1,0 +1,7 @@
+interface:
+  display_name: "Flow Prospect"
+  short_description: "Generate ranked candidate ideas grounded in the repo"
+  brand_color: "#3B82F6"
+  default_prompt: "What should we build next? "
+policy:
+  allow_implicit_invocation: false

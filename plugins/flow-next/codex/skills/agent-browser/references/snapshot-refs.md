@@ -40,21 +40,21 @@ Page: Example Site - Home
 URL: https://example.com
 
 @e1 [header]
-  @e2 [nav]
-    @e3 [a] "Home"
-    @e4 [a] "Products"
-    @e5 [a] "About"
-  @e6 [button] "Sign In"
+ @e2 [nav]
+ @e3 [a] "Home"
+ @e4 [a] "Products"
+ @e5 [a] "About"
+ @e6 [button] "Sign In"
 
 @e7 [main]
-  @e8 [h1] "Welcome"
-  @e9 [form]
-    @e10 [input type="email"] placeholder="Email"
-    @e11 [input type="password"] placeholder="Password"
-    @e12 [button type="submit"] "Log In"
+ @e8 [h1] "Welcome"
+ @e9 [form]
+ @e10 [input type="email"] placeholder="Email"
+ @e11 [input type="password"] placeholder="Password"
+ @e12 [button type="submit"] "Log In"
 
 @e13 [footer]
-  @e14 [a] "Privacy Policy"
+ @e14 [a] "Privacy Policy"
 ```
 
 ## Using Refs
@@ -62,10 +62,10 @@ URL: https://example.com
 Once you have refs, interact directly:
 
 ```bash
-agent-browser click @e6              # Click "Sign In"
+agent-browser click @e6 # Click "Sign In"
 agent-browser fill @e10 "user@example.com"
 agent-browser fill @e11 "password123"
-agent-browser click @e12             # Submit form
+agent-browser click @e12 # Submit form
 ```
 
 ## Ref Lifecycle
@@ -76,11 +76,11 @@ agent-browser click @e12             # Submit form
 agent-browser snapshot -i
 # @e1 [button] "Next"
 
-agent-browser click @e1              # Triggers page change
+agent-browser click @e1 # Triggers page change
 
 # MUST re-snapshot to get new refs!
 agent-browser snapshot -i
-# @e1 [h1] "Page 2"  ← Different element now!
+# @e1 [h1] "Page 2" ← Different element now!
 ```
 
 ### When to Re-Snapshot
@@ -96,27 +96,27 @@ Always re-snapshot after:
 
 ```
 @e1 [tag type="value"] "text content" placeholder="hint"
-│    │   │             │               │
-│    │   │             │               └─ Additional attributes
-│    │   │             └─ Visible text
-│    │   └─ Key attributes shown
-│    └─ HTML tag name
+│ │ │ │ │
+│ │ │ │ └─ Additional attributes
+│ │ │ └─ Visible text
+│ │ └─ Key attributes shown
+│ └─ HTML tag name
 └─ Unique ref ID
 ```
 
 ### Common Patterns
 
 ```
-@e1 [button] "Submit"                    # Button with text
-@e2 [input type="email"]                 # Email input
-@e3 [input type="password"]              # Password input
-@e4 [a href="/page"] "Link Text"         # Anchor link
-@e5 [select]                             # Dropdown
-@e6 [textarea] placeholder="Message"     # Text area
-@e7 [div class="modal"]                  # Container
-@e8 [img alt="Logo"]                     # Image
-@e9 [checkbox] checked                   # Checked checkbox
-@e10 [radio] selected                    # Selected radio
+@e1 [button] "Submit" # Button with text
+@e2 [input type="email"] # Email input
+@e3 [input type="password"] # Password input
+@e4 [a href="/page"] "Link Text" # Anchor link
+@e5 [select] # Dropdown
+@e6 [textarea] placeholder="Message" # Text area
+@e7 [div class="modal"] # Container
+@e8 [img alt="Logo"] # Image
+@e9 [checkbox] checked # Checked checkbox
+@e10 [radio] selected # Selected radio
 ```
 
 ## Best Practices
@@ -131,7 +131,7 @@ agent-browser click @e1
 
 # WRONG
 agent-browser open https://example.com
-agent-browser click @e1  # Ref doesn't exist yet!
+agent-browser click @e1 # Ref doesn't exist yet!
 ```
 
 ### 2. Snapshot Specific Regions
@@ -140,7 +140,7 @@ For complex pages, scope the snapshot:
 
 ```bash
 agent-browser snapshot -s "#main"
-agent-browser snapshot @e9  # Snapshot within element
+agent-browser snapshot @e9 # Snapshot within element
 ```
 
 ### 3. Use Annotated Screenshots for Visual Elements

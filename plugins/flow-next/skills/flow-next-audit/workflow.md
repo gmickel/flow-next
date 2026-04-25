@@ -319,15 +319,7 @@ Bundle the easy ones, isolate the hard ones:
 
 ### 3.2 — Question style
 
-Use the platform's blocking-question tool:
-
-| Platform | Tool |
-|----------|------|
-| Claude Code | `AskUserQuestion` (deferred — load via `ToolSearch select:AskUserQuestion` if not yet in scope) |
-| Codex | `request_user_input` |
-| Gemini | `ask_user` |
-| Droid | `ask_user` or platform-equivalent |
-| Fallback | Print numbered list, read typed reply |
+Use `AskUserQuestion` (deferred — load via `ToolSearch select:AskUserQuestion` if its schema isn't yet in scope). If the tool is unreachable, fall back to printing a numbered list and reading a typed reply. (sync-codex.sh rewrites `AskUserQuestion` to `request_user_input` for the Codex mirror.)
 
 Rules:
 

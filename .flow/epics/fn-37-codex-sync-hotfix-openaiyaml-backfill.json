@@ -1,0 +1,18 @@
+{
+  "branch_name": "fn-37-codex-hotfix",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-04-25T12:15:02.374378Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-37-codex-sync-hotfix-openaiyaml-backfill",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-37-codex-sync-hotfix-openaiyaml-backfill.md",
+  "status": "open",
+  "title": "Codex sync hotfix: openai.yaml backfill + cross-platform AskUserQuestion in prime/setup + CLAUDE.md adding-skill checklist \u2014 0.37.1",
+  "updated_at": "2026-04-25T12:15:39.038734Z"
+}

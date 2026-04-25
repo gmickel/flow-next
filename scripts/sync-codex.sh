@@ -357,6 +357,139 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   rm -f "${f}.bak"
 done
 
+# --- TOOL NAMES: AskUserQuestion → request_user_input (Codex native) ---
+# Canonical skills use Claude-native tool names; this transforms them for the
+# Codex mirror. Order:
+#   1. Strip maintainer breadcrumbs (any form — parens, bare sentence)
+#   2. Strip ToolSearch references (Claude-only schema-load mechanism)
+#   3. Rewrite AskUserQuestion → request_user_input
+find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
+  # 1. Strip maintainer breadcrumbs in their original (canonical) form,
+  #    BEFORE the AskUserQuestion → request_user_input rewrite happens.
+  #    Use python for multi-form matching (sed gets unwieldy here).
+  python3 - "$f" <<'PYEOF'
+import re, sys
+path = sys.argv[1]
+with open(path) as fp:
+    text = fp.read()
+
+# Strip parenthetical breadcrumbs.
+text = re.sub(
+    r' *\(sync-codex\.sh rewrites[^)]*Codex mirror\.?\)',
+    '',
+    text,
+)
+# Strip non-parenthetical sentence breadcrumbs (any leading space, the
+# sentence, optional period).
+text = re.sub(
+    r' *sync-codex\.sh rewrites[^.\n]*Codex mirror\.?',
+    '',
+    text,
+)
+
+with open(path, 'w') as fp:
+    fp.write(text)
+PYEOF
+
+  # 2. Strip ToolSearch references — Codex doesn't use ToolSearch.
+  #    Run case-insensitively. Cover parenthetical, bare-sentence,
+  #    multi-line bullet, and standalone-backtick variants.
+  python3 - "$f" <<'PYEOF'
+import re, sys
+path = sys.argv[1]
+with open(path) as fp:
+    text = fp.read()
+
+# Strip parenthetical ToolSearch fallback notes (case-insensitive on the verb).
+text = re.sub(
+    r' *\([Cc]all `ToolSearch`[^)]*\)',
+    '',
+    text,
+)
+text = re.sub(
+    r' *\([Cc]all `ToolSearch select:[^`]+`[^)]*\)',
+    '',
+    text,
+)
+text = re.sub(
+    r' *\(deferred — load via `ToolSearch select:[^`]+`[^)]*\)',
+    '',
+    text,
+)
+# Strip "Call/call `ToolSearch` with ..." sentences (case-insensitive).
+text = re.sub(
+    r'(?:^|(?<=[.\s]))[Cc]all `ToolSearch`[^.\n]*\.',
+    '',
+    text,
+    flags=re.MULTILINE,
+)
+# Strip "If <X>'s schema isn't loaded ..., call `ToolSearch` ..." sentences.
+text = re.sub(
+    r"If `[^`]+`'s schema isn'?t loaded on Claude Code, call `ToolSearch`[^.\n]*\.",
+    '',
+    text,
+)
+# Strip standalone ToolSearch backtick refs in line items.
+text = re.sub(
+    r'`ToolSearch select:[^`]+`',
+    '',
+    text,
+)
+# Strip multi-line bullet items that mention ToolSearch with a Claude-only
+# anti-pattern flavor — these don't apply on Codex.
+# Pattern: dash-bullet where any line contains ToolSearch (multi-line aware).
+# Match the bullet from "- **...**" through to the end of the bullet (next
+# blank line OR next dash-bullet at same indent).
+def strip_toolsearch_bullets(text):
+    lines = text.split('\n')
+    out = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        # Detect start of a top-level bullet that contains ToolSearch in
+        # the bullet body (line + continuation lines until next blank or
+        # next bullet).
+        if re.match(r'^- \*\*', line):
+            # Collect bullet content
+            bullet = [line]
+            j = i + 1
+            while j < len(lines) and (lines[j].startswith('  ') or lines[j] == ''):
+                if lines[j] == '' and j + 1 < len(lines) and not lines[j + 1].startswith('  '):
+                    break
+                bullet.append(lines[j])
+                j += 1
+            bullet_text = '\n'.join(bullet)
+            if 'ToolSearch' in bullet_text:
+                # Skip — strip this bullet from output
+                i = j
+                continue
+        out.append(line)
+        i += 1
+    return '\n'.join(out)
+
+text = strip_toolsearch_bullets(text)
+
+# Collapse double spaces that result from strips.
+text = re.sub(r'  +', ' ', text)
+# Collapse blank-line runs to max 2.
+text = re.sub(r'\n{3,}', '\n\n', text)
+# Trim trailing whitespace per line.
+text = '\n'.join(line.rstrip() for line in text.split('\n'))
+
+with open(path, 'w') as fp:
+    fp.write(text)
+PYEOF
+
+  # 3. Rewrite tool names.
+  sed -i.bak \
+    -e 's/`AskUserQuestion`/`request_user_input`/g' \
+    -e 's/AskUserQuestion tool/request_user_input primitive/g' \
+    -e 's/AskUserQuestion/request_user_input/g' \
+    "$f"
+
+  rm -f "${f}.bak"
+done
+
 # Remove .DS_Store and other cruft
 find "$CODEX_DIR" -name ".DS_Store" -delete 2>/dev/null || true
 
@@ -382,15 +515,39 @@ generate_openai_yaml "flow-next-plan"      "Flow Plan"      "Create structured b
 generate_openai_yaml "flow-next-work"      "Flow Work"      "Execute planned tasks with worker subagents"          "#3B82F6" false "Work on: "
 generate_openai_yaml "flow-next-interview" "Flow Interview" "Deep Q&A to refine specs and requirements"            "#3B82F6" false
 generate_openai_yaml "flow-next-setup"     "Flow Setup"     "Initialize flow-next in current project"              "#3B82F6" false
+generate_openai_yaml "flow-next-prospect"  "Flow Prospect"  "Generate ranked candidate ideas grounded in the repo" "#3B82F6" false "What should we build next? "
+generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory/ entries against current code"   "#3B82F6" false
+generate_openai_yaml "flow-next-memory-migrate" "Flow Memory Migrate" "Migrate legacy flat memory files to categorized YAML schema" "#3B82F6" false
 
 # Review skills (red, explicit)
 generate_openai_yaml "flow-next-impl-review" "Flow Implementation Review" "Carmack-level code review via RepoPrompt"  "#EF4444" false
 generate_openai_yaml "flow-next-plan-review" "Flow Plan Review"           "Carmack-level plan review via RepoPrompt"  "#EF4444" false
 generate_openai_yaml "flow-next-epic-review" "Flow Epic Review"           "Verify epic implementation matches spec"   "#EF4444" false
+generate_openai_yaml "flow-next-resolve-pr"  "Flow Resolve PR"            "Resolve PR review feedback via GraphQL"    "#EF4444" false "Resolve PR "
 
 # Utility skills (blue/amber, implicit allowed)
 generate_openai_yaml "flow-next"       "Flow Tasks" "Manage .flow/ tasks and epics"                           "#3B82F6" true
 generate_openai_yaml "flow-next-prime" "Flow Prime" "Comprehensive codebase assessment for agent readiness"    "#F59E0B" false
+
+# REQUIRED list — every user-facing slash-command skill MUST have an
+# openai.yaml entry above. When you add a new skill, add it here AND add
+# a generate_openai_yaml call. Validation will fail otherwise.
+# See CLAUDE.md > "Adding a new user-facing skill" for the full checklist.
+REQUIRED_OPENAI_YAML_SKILLS=(
+  "flow-next-plan"
+  "flow-next-work"
+  "flow-next-interview"
+  "flow-next-setup"
+  "flow-next-prospect"
+  "flow-next-audit"
+  "flow-next-memory-migrate"
+  "flow-next-impl-review"
+  "flow-next-plan-review"
+  "flow-next-epic-review"
+  "flow-next-resolve-pr"
+  "flow-next"
+  "flow-next-prime"
+)
 
 openai_yaml_count=$(find "$CODEX_DIR/skills" -name "openai.yaml" | wc -l | tr -d ' ')
 echo -e "  ${GREEN}✓${NC} $openai_yaml_count openai.yaml metadata files generated"
@@ -598,13 +755,36 @@ else
   echo -e "  ${GREEN}✓${NC} No 'Task flow-next:' refs"
 fi
 
-# Validate openai.yaml files
-yaml_count=$(find "$CODEX_DIR/skills" -name "openai.yaml" | wc -l | tr -d ' ')
-if [ "$yaml_count" -ge 9 ]; then
-  echo -e "  ${GREEN}✓${NC} $yaml_count openai.yaml files"
-else
-  echo -e "  ${RED}✗${NC} Expected >= 9 openai.yaml files, found $yaml_count"
+# Check no "AskUserQuestion" or "ToolSearch select:AskUserQuestion" in codex
+# skill prose — should all have been rewritten to request_user_input. Bare
+# AskUserQuestion in the Codex skill prose is a sync bug.
+# Exclude templates/ subdirs (those are user-script templates, not skill prose
+# that the agent reads — e.g., ralph-init/templates/watch-filter.py uses the
+# tool name as a dict key for hook event emoji mapping, which is intentional).
+askq_refs=$( { grep -rE 'AskUserQuestion|ToolSearch select:AskUserQuestion' "$CODEX_DIR/skills/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | wc -l | tr -d ' ')
+if [ "$askq_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $askq_refs Claude-native tool refs (AskUserQuestion / ToolSearch) remain in codex skill prose — extend sync transforms"
   errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No Claude-native tool refs in Codex skill prose"
+fi
+
+# Validate openai.yaml files — every skill in REQUIRED_OPENAI_YAML_SKILLS
+# MUST have one. Missing entries fail CI. Extras are fine (utility skills
+# may opt in later).
+yaml_missing=0
+for required_skill in "${REQUIRED_OPENAI_YAML_SKILLS[@]}"; do
+  yf="$CODEX_DIR/skills/$required_skill/agents/openai.yaml"
+  if [ ! -f "$yf" ]; then
+    echo -e "  ${RED}✗${NC} REQUIRED $required_skill/agents/openai.yaml missing — add a generate_openai_yaml call (see CLAUDE.md > Adding a new user-facing skill)"
+    yaml_missing=$((yaml_missing + 1))
+  fi
+done
+if [ "$yaml_missing" -eq 0 ]; then
+  yaml_count=$(find "$CODEX_DIR/skills" -name "openai.yaml" | wc -l | tr -d ' ')
+  echo -e "  ${GREEN}✓${NC} All ${#REQUIRED_OPENAI_YAML_SKILLS[@]} required skills have openai.yaml ($yaml_count total)"
+else
+  errors=$((errors + yaml_missing))
 fi
 
 # Validate openai.yaml content (each must have interface + policy keys)

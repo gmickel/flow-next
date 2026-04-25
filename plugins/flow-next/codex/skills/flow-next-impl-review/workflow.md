@@ -11,11 +11,11 @@
 2. **`chat-send` takes 2-10 MINUTES** - It waits for the LLM to generate a full review. This is NORMAL. Do NOT assume it is stuck.
 
 3. **Run commands directly and WAIT** - Do NOT use background jobs. Just run the command and wait:
-   ```bash
-   # Run setup-review - takes 5-15 minutes, just wait
-   $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "..."
-   # You will see file paths printed as it indexes - this is progress, not errors
-   ```
+ ```bash
+ # Run setup-review - takes 5-15 minutes, just wait
+ $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "..."
+ # You will see file paths printed as it indexes - this is progress, not errors
+ ```
 
 4. **Output is progress, not errors** - The context builder prints file paths as it indexes. Seeing many lines of output is NORMAL. Do not interpret this as an error loop.
 
@@ -26,7 +26,6 @@
 **If a command has been running for less than 15 minutes, WAIT. Do not retry. Do not output <promise>RETRY</promise>.**
 
 ---
-
 
 ## Philosophy
 
@@ -53,9 +52,9 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 BACKEND=$($FLOWCTL review-backend)
 
 if [[ "$BACKEND" == "ASK" ]]; then
-  echo "Error: No review backend configured."
-  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
-  exit 1
+ echo "Error: No review backend configured."
+ echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
+ exit 1
 fi
 
 echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
@@ -101,18 +100,18 @@ diffs default to REVIEW. Opt-in to LLM judge with `FLOW_TRIAGE_LLM=1`.
 
 ```bash
 if [[ -z "${TRIAGE_DISABLED:-}" && -z "${FLOW_RALPH_NO_TRIAGE:-}" ]]; then
-  RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
-  TRIAGE_ARGS=(triage-skip --receipt "$RECEIPT_PATH" --json)
-  [[ -n "$BASE_COMMIT" ]] && TRIAGE_ARGS+=(--base "$BASE_COMMIT")
-  [[ -n "$TASK_ID" ]] && TRIAGE_ARGS+=(--task "$TASK_ID")
-  [[ -z "${FLOW_TRIAGE_LLM:-}" ]] && TRIAGE_ARGS+=(--no-llm)
+ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
+ TRIAGE_ARGS=(triage-skip --receipt "$RECEIPT_PATH" --json)
+ [[ -n "$BASE_COMMIT" ]] && TRIAGE_ARGS+=(--base "$BASE_COMMIT")
+ [[ -n "$TASK_ID" ]] && TRIAGE_ARGS+=(--task "$TASK_ID")
+ [[ -z "${FLOW_TRIAGE_LLM:-}" ]] && TRIAGE_ARGS+=(--no-llm)
 
-  if TRIAGE_OUT=$($FLOWCTL "${TRIAGE_ARGS[@]}" 2>/dev/null); then
-    SKIP_REASON=$(echo "$TRIAGE_OUT" | jq -r '.reason // "trivial diff"' 2>/dev/null)
-    echo "Triage-skip: $SKIP_REASON"
-    echo "VERDICT=SHIP"
-    exit 0
-  fi
+ if TRIAGE_OUT=$($FLOWCTL "${TRIAGE_ARGS[@]}" 2>/dev/null); then
+ SKIP_REASON=$(echo "$TRIAGE_OUT" | jq -r '.reason // "trivial diff"' 2>/dev/null)
+ echo "Triage-skip: $SKIP_REASON"
+ echo "VERDICT=SHIP"
+ exit 0
+ fi
 fi
 ```
 
@@ -125,15 +124,15 @@ fi
 
 ```json
 {
-  "type": "impl_review",
-  "id": "fn-29.6",
-  "mode": "triage_skip",
-  "base": "main",
-  "verdict": "SHIP",
-  "reason": "lockfile-only (bun.lock)",
-  "source": "deterministic",
-  "changed_file_count": 1,
-  "timestamp": "2026-04-24T10:00:00Z"
+ "type": "impl_review",
+ "id": "fn-29.6",
+ "mode": "triage_skip",
+ "base": "main",
+ "verdict": "SHIP",
+ "reason": "lockfile-only (bun.lock)",
+ "source": "deterministic",
+ "changed_file_count": 1,
+ "timestamp": "2026-04-24T10:00:00Z"
 }
 ```
 
@@ -166,36 +165,36 @@ primary review. When multiple are set, phases run in a fixed order:
 
 ```
 1. Primary review (always)
-2. If --deep:        run deep passes in same session → merge findings into receipt
-3. If --validate:    validator re-checks merged findings → drops false positives
+2. If --deep: run deep passes in same session → merge findings into receipt
+3. If --validate: validator re-checks merged findings → drops false positives
 4. If --interactive: user walks surviving findings → Apply/Defer/Skip/Acknowledge
-5. Verdict           computed over surviving findings (deep may upgrade SHIP→NEEDS_WORK;
-                     validate may upgrade NEEDS_WORK→SHIP; walkthrough never flips)
-6. Receipt           each phase writes its own additive block without disturbing others
+5. Verdict computed over surviving findings (deep may upgrade SHIP→NEEDS_WORK;
+ validate may upgrade NEEDS_WORK→SHIP; walkthrough never flips)
+6. Receipt each phase writes its own additive block without disturbing others
 ```
 
 **Why this order:**
 - Deep runs before validate: deep expands the finding superset; validator
-  filters the (larger) merged set in a single pass — cheaper than running
-  validator twice (once for primary, once for deep).
+ filters the (larger) merged set in a single pass — cheaper than running
+ validator twice (once for primary, once for deep).
 - Validate runs before interactive: the user walks only validated findings,
-  reducing decision burden and keeping per-finding quality high.
+ reducing decision burden and keeping per-finding quality high.
 - Interactive is always last: it consumes the fully-merged, fully-validated
-  set; it never flips the verdict, only sorts findings into Apply / Defer /
-  Skip / Acknowledge buckets.
+ set; it never flips the verdict, only sorts findings into Apply / Defer /
+ Skip / Acknowledge buckets.
 
 **Flag combination matrix:**
 
-| Combo                              | Phases executed          |
+| Combo | Phases executed |
 |------------------------------------|--------------------------|
-| (default, no flags)                | 1 → 5 → 6                |
-| `--validate`                       | 1 → 3 → 5 → 6            |
-| `--deep`                           | 1 → 2 → 5 → 6            |
-| `--interactive`                    | 1 → 4 → 5 → 6            |
-| `--validate --deep`                | 1 → 2 → 3 → 5 → 6        |
-| `--validate --interactive`         | 1 → 3 → 4 → 5 → 6        |
-| `--deep --interactive`             | 1 → 2 → 4 → 5 → 6        |
-| `--validate --deep --interactive`  | 1 → 2 → 3 → 4 → 5 → 6    |
+| (default, no flags) | 1 → 5 → 6 |
+| `--validate` | 1 → 3 → 5 → 6 |
+| `--deep` | 1 → 2 → 5 → 6 |
+| `--interactive` | 1 → 4 → 5 → 6 |
+| `--validate --deep` | 1 → 2 → 3 → 5 → 6 |
+| `--validate --interactive` | 1 → 3 → 4 → 5 → 6 |
+| `--deep --interactive` | 1 → 2 → 4 → 5 → 6 |
+| `--validate --deep --interactive` | 1 → 2 → 3 → 4 → 5 → 6 |
 
 **Receipt composition:** each phase appends its own block to the receipt
 without mutating any other block. The receipt schema is additive — old
@@ -204,25 +203,25 @@ keys.
 
 | Phase | Receipt keys written | Verdict effect |
 |-------|----------------------|----------------|
-| 1. Primary   | `type`, `id`, `mode`, `verdict`, `session_id`, `timestamp`, `model`, `effort`, `spec` | Sets `verdict` |
-| 2. Deep      | `deep_passes`, `deep_findings_count`, `cross_pass_promotions`, `deep_timestamp`, optional `verdict_before_deep` | SHIP → NEEDS_WORK (upgrade only; never downgrades) |
+| 1. Primary | `type`, `id`, `mode`, `verdict`, `session_id`, `timestamp`, `model`, `effort`, `spec` | Sets `verdict` |
+| 2. Deep | `deep_passes`, `deep_findings_count`, `cross_pass_promotions`, `deep_timestamp`, optional `verdict_before_deep` | SHIP → NEEDS_WORK (upgrade only; never downgrades) |
 | 3. Validator | `validator: {dispatched, dropped, kept, reasons}`, `validator_timestamp`, optional `verdict_before_validate` | NEEDS_WORK → SHIP (upgrade only when all drop; never downgrades) |
 | 4. Walkthrough | `walkthrough: {applied, deferred, skipped, acknowledged, lfg_rest}`, `walkthrough_timestamp` | None — walkthrough never flips verdict |
 
 **Empty-block invariants:**
 - When no `--validate`, the receipt has **no** `validator` key, **no**
-  `validator_timestamp`, and **no** `verdict_before_validate`.
+ `validator_timestamp`, and **no** `verdict_before_validate`.
 - When no `--deep`, the receipt has **no** `deep_passes`, **no**
-  `deep_findings_count`, **no** `cross_pass_promotions`, **no**
-  `deep_timestamp`, and **no** `verdict_before_deep`.
+ `deep_findings_count`, **no** `cross_pass_promotions`, **no**
+ `deep_timestamp`, and **no** `verdict_before_deep`.
 - When no `--interactive`, the receipt has **no** `walkthrough` and
-  **no** `walkthrough_timestamp`.
+ **no** `walkthrough_timestamp`.
 - When `--validate` ran with zero dispatched findings, an empty validator
-  block (`{dispatched: 0, dropped: 0, kept: 0, reasons: []}`) + its
-  timestamp are still written — this keeps the receipt shape deterministic
-  for consumers.
+ block (`{dispatched: 0, dropped: 0, kept: 0, reasons: []}`) + its
+ timestamp are still written — this keeps the receipt shape deterministic
+ for consumers.
 - `verdict_before_validate` / `verdict_before_deep` are only written when
-  their phase actually upgraded the verdict; otherwise absent.
+ their phase actually upgraded the verdict; otherwise absent.
 
 **Ralph compatibility:** the receipt-gate logic reads `verdict`, `mode`,
 and `session_id`. All new fields are optional and ignored by older Ralph
@@ -244,10 +243,10 @@ BRANCH="$(git branch --show-current)"
 # Use BASE_COMMIT from arguments if provided (task-scoped review)
 # Otherwise fall back to main/master (full branch review)
 if [[ -z "$BASE_COMMIT" ]]; then
-  DIFF_BASE="main"
-  git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
+ DIFF_BASE="main"
+ git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
 else
-  DIFF_BASE="$BASE_COMMIT"
+ DIFF_BASE="$BASE_COMMIT"
 fi
 
 git log ${DIFF_BASE}..HEAD --oneline
@@ -291,10 +290,10 @@ BRANCH="$(git branch --show-current)"
 # Use BASE_COMMIT from arguments if provided (task-scoped review)
 # Otherwise fall back to main/master (full branch review)
 if [[ -z "$BASE_COMMIT" ]]; then
-  DIFF_BASE="main"
-  git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
+ DIFF_BASE="main"
+ git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
 else
-  DIFF_BASE="$BASE_COMMIT"
+ DIFF_BASE="$BASE_COMMIT"
 fi
 
 git log ${DIFF_BASE}..HEAD --oneline
@@ -306,11 +305,11 @@ git log ${DIFF_BASE}..HEAD --oneline
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
 
 # Runtime config:
-#   --spec <spec>           full spec (backend:model:effort), highest priority
-#   FLOW_REVIEW_BACKEND     env (spec-form ok: copilot:claude-opus-4.5:xhigh)
-#   FLOW_COPILOT_MODEL      env (fills missing model only; default gpt-5.2)
-#   FLOW_COPILOT_EFFORT     env (fills missing effort only; default high)
-#   per-task stored review  via `flowctl task set-backend` (highest if set)
+# --spec <spec> full spec (backend:model:effort), highest priority
+# FLOW_REVIEW_BACKEND env (spec-form ok: copilot:claude-opus-4.5:xhigh)
+# FLOW_COPILOT_MODEL env (fills missing model only; default gpt-5.2)
+# FLOW_COPILOT_EFFORT env (fills missing effort only; default high)
+# per-task stored review via `flowctl task set-backend` (highest if set)
 
 $FLOWCTL copilot impl-review "$TASK_ID" --base "$DIFF_BASE" --receipt "$RECEIPT_PATH"
 ```
@@ -351,10 +350,10 @@ BRANCH="$(git branch --show-current)"
 # Use BASE_COMMIT from arguments if provided (task-scoped review)
 # Otherwise fall back to main/master (full branch review)
 if [[ -z "$BASE_COMMIT" ]]; then
-  DIFF_BASE="main"
-  git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
+ DIFF_BASE="main"
+ git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
 else
-  DIFF_BASE="$BASE_COMMIT"
+ DIFF_BASE="$BASE_COMMIT"
 fi
 
 git log ${DIFF_BASE}..HEAD --oneline
@@ -382,8 +381,8 @@ eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "$REVIEW_SUM
 
 # Verify we have W and T
 if [[ -z "${W:-}" || -z "${T:-}" ]]; then
-  echo "<promise>RETRY</promise>"
-  exit 0
+ echo "<promise>RETRY</promise>"
+ exit 0
 fi
 
 echo "Setup complete: W=$W T=$T"
@@ -404,7 +403,7 @@ $FLOWCTL rp select-get --window "$W" --tab "$T"
 
 # Add ALL changed files
 for f in $CHANGED_FILES; do
-  $FLOWCTL rp select-add --window "$W" --tab "$T" "$f"
+ $FLOWCTL rp select-add --window "$W" --tab "$T" "$f"
 done
 
 # Add task spec if known
@@ -615,15 +614,15 @@ REVIEW_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file
 echo "$REVIEW_RESPONSE"
 
 VERDICT="$(echo "$REVIEW_RESPONSE" \
-  | tr -d '\r' \
-  | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>' \
-  | tail -n 1 \
-  | sed -E 's#</?verdict>##g')"
+ | tr -d '\r' \
+ | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>' \
+ | tail -n 1 \
+ | sed -E 's#</?verdict>##g')"
 
 if [[ -z "$VERDICT" ]]; then
-  echo "No verdict tag found in response"
-  echo "<promise>RETRY</promise>"
-  exit 0
+ echo "No verdict tag found in response"
+ echo "<promise>RETRY</promise>"
+ exit 0
 fi
 ```
 
@@ -637,98 +636,98 @@ fi
 
 ```bash
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
-  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
+ ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+ mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
 
-  # Optional: capture suppression-gate tally (fn-29.3).
-  # Reviewer emits a line like "Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0."
-  SUPPRESSED_JSON="$(printf '%s' "$REVIEW_RESPONSE" \
-    | grep -iE '^[>*_` ]*suppressed findings[ *_`]*:' \
-    | head -n 1 \
-    | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//' \
-    | awk '
-      BEGIN { first=1; printf "{" }
-      {
-        n=split($0, parts, /,[[:space:]]*/)
-        for (i=1; i<=n; i++) {
-          if (match(parts[i], /([0-9]+)[[:space:]]+at[[:space:]]+anchor[[:space:]]+(0|25|50|75|100)/, m)) {
-            if (!first) printf ","
-            printf "\"%s\":%s", m[2], m[1]
-            first=0
-          }
-        }
-      }
-      END { printf "}" }')"
+ # Optional: capture suppression-gate tally (fn-29.3).
+ # Reviewer emits a line like "Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0."
+ SUPPRESSED_JSON="$(printf '%s' "$REVIEW_RESPONSE" \
+ | grep -iE '^[>*_` ]*suppressed findings[ *_`]*:' \
+ | head -n 1 \
+ | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//' \
+ | awk '
+ BEGIN { first=1; printf "{" }
+ {
+ n=split($0, parts, /,[[:space:]]*/)
+ for (i=1; i<=n; i++) {
+ if (match(parts[i], /([0-9]+)[[:space:]]+at[[:space:]]+anchor[[:space:]]+(0|25|50|75|100)/, m)) {
+ if (!first) printf ","
+ printf "\"%s\":%s", m[2], m[1]
+ first=0
+ }
+ }
+ }
+ END { printf "}" }')"
 
-  # Optional: capture introduced vs pre_existing classification tally (fn-29.4).
-  # Reviewer emits a line like "Classification counts: 2 introduced, 4 pre_existing."
-  # Uses portable grep -Eio so this works on BSD awk / mawk / gawk alike.
-  CLASSIFICATION_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
-    | grep -iE '^[>*_` ]*classification counts[ *_`]*:' \
-    | head -n 1 \
-    | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//')"
-  INTRODUCED_COUNT=""
-  PRE_EXISTING_COUNT=""
-  if [[ -n "$CLASSIFICATION_LINE" ]]; then
-    INTRODUCED_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
-      | grep -Eio '[0-9]+[[:space:]]+introduced' \
-      | head -n 1 \
-      | grep -Eo '^[0-9]+')"
-    PRE_EXISTING_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
-      | grep -Eio '[0-9]+[[:space:]]+pre[-_ ]?existing' \
-      | head -n 1 \
-      | grep -Eo '^[0-9]+')"
-    # Default the missing bucket to 0 when the other is present
-    if [[ -n "$INTRODUCED_COUNT" || -n "$PRE_EXISTING_COUNT" ]]; then
-      INTRODUCED_COUNT="${INTRODUCED_COUNT:-0}"
-      PRE_EXISTING_COUNT="${PRE_EXISTING_COUNT:-0}"
-    fi
-  fi
+ # Optional: capture introduced vs pre_existing classification tally (fn-29.4).
+ # Reviewer emits a line like "Classification counts: 2 introduced, 4 pre_existing."
+ # Uses portable grep -Eio so this works on BSD awk / mawk / gawk alike.
+ CLASSIFICATION_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
+ | grep -iE '^[>*_` ]*classification counts[ *_`]*:' \
+ | head -n 1 \
+ | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//')"
+ INTRODUCED_COUNT=""
+ PRE_EXISTING_COUNT=""
+ if [[ -n "$CLASSIFICATION_LINE" ]]; then
+ INTRODUCED_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
+ | grep -Eio '[0-9]+[[:space:]]+introduced' \
+ | head -n 1 \
+ | grep -Eo '^[0-9]+')"
+ PRE_EXISTING_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
+ | grep -Eio '[0-9]+[[:space:]]+pre[-_ ]?existing' \
+ | head -n 1 \
+ | grep -Eo '^[0-9]+')"
+ # Default the missing bucket to 0 when the other is present
+ if [[ -n "$INTRODUCED_COUNT" || -n "$PRE_EXISTING_COUNT" ]]; then
+ INTRODUCED_COUNT="${INTRODUCED_COUNT:-0}"
+ PRE_EXISTING_COUNT="${PRE_EXISTING_COUNT:-0}"
+ fi
+ fi
 
-  # Optional: capture unaddressed R-IDs (fn-29.2).
-  # Reviewer emits `Unaddressed R-IDs: [R3, R5]` (or `[]` / `none` for empty).
-  # Absent line => legacy spec (no R-IDs) — leave field off the receipt entirely.
-  UNADDRESSED_JSON=""
-  UNADDRESSED_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
-    | grep -iE '^[>*_` ]*unaddressed([[:space:]]+r[-_ ]?ids?)?[ *_`]*:' \
-    | head -n 1 \
-    | sed -E 's/^[^:]+:[[:space:]]*//; s/[[:space:]]*$//; s/\.$//')"
-  if [[ -n "$UNADDRESSED_LINE" ]]; then
-    # Strip surrounding brackets/quotes; treat "none"/"n/a"/"" as empty list.
-    normalized="$(printf '%s' "$UNADDRESSED_LINE" | sed -E 's/^[[:space:]]*\[|\][[:space:]]*$//g; s/[[:space:]]+//g')"
-    lower="$(printf '%s' "$normalized" | tr '[:upper:]' '[:lower:]')"
-    if [[ "$lower" == "none" || "$lower" == "n/a" || -z "$lower" ]]; then
-      UNADDRESSED_JSON="[]"
-    else
-      # Extract R-ID tokens (R followed by digits), de-dup preserving order.
-      rids="$(printf '%s' "$UNADDRESSED_LINE" \
-        | grep -oE '\bR[0-9]+\b' \
-        | awk '!seen[$0]++')"
-      if [[ -z "$rids" ]]; then
-        UNADDRESSED_JSON="[]"
-      else
-        UNADDRESSED_JSON="$(printf '%s' "$rids" \
-          | awk 'BEGIN{printf "["} {printf (NR>1?",":"") "\"" $0 "\""} END{printf "]"}')"
-      fi
-    fi
-  fi
+ # Optional: capture unaddressed R-IDs (fn-29.2).
+ # Reviewer emits `Unaddressed R-IDs: [R3, R5]` (or `[]` / `none` for empty).
+ # Absent line => legacy spec (no R-IDs) — leave field off the receipt entirely.
+ UNADDRESSED_JSON=""
+ UNADDRESSED_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
+ | grep -iE '^[>*_` ]*unaddressed([[:space:]]+r[-_ ]?ids?)?[ *_`]*:' \
+ | head -n 1 \
+ | sed -E 's/^[^:]+:[[:space:]]*//; s/[[:space:]]*$//; s/\.$//')"
+ if [[ -n "$UNADDRESSED_LINE" ]]; then
+ # Strip surrounding brackets/quotes; treat "none"/"n/a"/"" as empty list.
+ normalized="$(printf '%s' "$UNADDRESSED_LINE" | sed -E 's/^[[:space:]]*\[|\][[:space:]]*$//g; s/[[:space:]]+//g')"
+ lower="$(printf '%s' "$normalized" | tr '[:upper:]' '[:lower:]')"
+ if [[ "$lower" == "none" || "$lower" == "n/a" || -z "$lower" ]]; then
+ UNADDRESSED_JSON="[]"
+ else
+ # Extract R-ID tokens (R followed by digits), de-dup preserving order.
+ rids="$(printf '%s' "$UNADDRESSED_LINE" \
+ | grep -oE '\bR[0-9]+\b' \
+ | awk '!seen[$0]++')"
+ if [[ -z "$rids" ]]; then
+ UNADDRESSED_JSON="[]"
+ else
+ UNADDRESSED_JSON="$(printf '%s' "$rids" \
+ | awk 'BEGIN{printf "["} {printf (NR>1?",":"") "\"" $0 "\""} END{printf "]"}')"
+ fi
+ fi
+ fi
 
-  # Build receipt; inject optional fn-29.2/fn-29.3/fn-29.4 signals only when present
-  EXTRA_FIELDS=""
-  if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
-    EXTRA_FIELDS+=",\"suppressed_count\":$SUPPRESSED_JSON"
-  fi
-  if [[ -n "$INTRODUCED_COUNT" && -n "$PRE_EXISTING_COUNT" ]]; then
-    EXTRA_FIELDS+=",\"introduced_count\":$INTRODUCED_COUNT,\"pre_existing_count\":$PRE_EXISTING_COUNT"
-  fi
-  if [[ -n "$UNADDRESSED_JSON" ]]; then
-    EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
-  fi
+ # Build receipt; inject optional fn-29.2/fn-29.3/fn-29.4 signals only when present
+ EXTRA_FIELDS=""
+ if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
+ EXTRA_FIELDS+=",\"suppressed_count\":$SUPPRESSED_JSON"
+ fi
+ if [[ -n "$INTRODUCED_COUNT" && -n "$PRE_EXISTING_COUNT" ]]; then
+ EXTRA_FIELDS+=",\"introduced_count\":$INTRODUCED_COUNT,\"pre_existing_count\":$PRE_EXISTING_COUNT"
+ fi
+ if [[ -n "$UNADDRESSED_JSON" ]]; then
+ EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
+ fi
 
-  cat > "$REVIEW_RECEIPT_PATH" <<EOF
+ cat > "$REVIEW_RECEIPT_PATH" <<EOF
 {"type":"impl_review","id":"<TASK_ID>","mode":"rp","verdict":"$VERDICT"$EXTRA_FIELDS,"timestamp":"$ts"}
 EOF
-  echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
+ echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi
 ```
 
@@ -776,31 +775,31 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
 PRIMARY_FINDINGS="/tmp/primary-findings.jsonl"
 
 for pass in $SELECTED_PASSES; do
-  case "$BACKEND" in
-    codex)
-      $FLOWCTL codex deep-pass \
-        --pass "$pass" \
-        --primary-findings "$PRIMARY_FINDINGS" \
-        --receipt "$RECEIPT_PATH" \
-        --json
-      ;;
-    copilot)
-      $FLOWCTL copilot deep-pass \
-        --pass "$pass" \
-        --primary-findings "$PRIMARY_FINDINGS" \
-        --receipt "$RECEIPT_PATH" \
-        --json
-      ;;
-    rp)
-      # RP: same-chat session continuity is automatic. Render the
-      # pass-specific prompt from deep-passes.md (inject primary
-      # findings block), send via `rp chat-send` (NO --new-chat),
-      # parse findings with the same header regex flowctl uses,
-      # merge into receipt manually (or via a shared helper).
-      # See deep-passes.md for template markers.
-      :
-      ;;
-  esac
+ case "$BACKEND" in
+ codex)
+ $FLOWCTL codex deep-pass \
+ --pass "$pass" \
+ --primary-findings "$PRIMARY_FINDINGS" \
+ --receipt "$RECEIPT_PATH" \
+ --json
+ ;;
+ copilot)
+ $FLOWCTL copilot deep-pass \
+ --pass "$pass" \
+ --primary-findings "$PRIMARY_FINDINGS" \
+ --receipt "$RECEIPT_PATH" \
+ --json
+ ;;
+ rp)
+ # RP: same-chat session continuity is automatic. Render the
+ # pass-specific prompt from deep-passes.md (inject primary
+ # findings block), send via `rp chat-send` (NO --new-chat),
+ # parse findings with the same header regex flowctl uses,
+ # merge into receipt manually (or via a shared helper).
+ # See deep-passes.md for template markers.
+ :
+ ;;
+ esac
 done
 ```
 
@@ -830,18 +829,18 @@ After deep passes run, the receipt carries:
 
 ```json
 {
-  "type": "impl_review",
-  "id": "fn-32.2",
-  "mode": "codex",
-  "verdict": "NEEDS_WORK",
-  "verdict_before_deep": "SHIP",
-  "session_id": "019ba...",
-  "deep_passes": ["adversarial", "security"],
-  "deep_findings_count": {"adversarial": 2, "security": 1},
-  "cross_pass_promotions": [
-    {"id": "f1", "from": 50, "to": 75, "pass": "adversarial"}
-  ],
-  "deep_timestamp": "2026-04-24T10:10:00Z"
+ "type": "impl_review",
+ "id": "fn-32.2",
+ "mode": "codex",
+ "verdict": "NEEDS_WORK",
+ "verdict_before_deep": "SHIP",
+ "session_id": "019ba...",
+ "deep_passes": ["adversarial", "security"],
+ "deep_findings_count": {"adversarial": 2, "security": 1},
+ "cross_pass_promotions": [
+ {"id": "f1", "from": 50, "to": 75, "pass": "adversarial"}
+ ],
+ "deep_timestamp": "2026-04-24T10:10:00Z"
 }
 ```
 
@@ -890,30 +889,30 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
 FINDINGS_FILE="/tmp/review-findings.jsonl"
 
 case "$BACKEND" in
-  codex)
-    VALIDATOR_JSON="$($FLOWCTL codex validate \
-      --findings-file "$FINDINGS_FILE" \
-      --receipt "$RECEIPT_PATH" \
-      --json 2>&1)"
-    ;;
-  copilot)
-    VALIDATOR_JSON="$($FLOWCTL copilot validate \
-      --findings-file "$FINDINGS_FILE" \
-      --receipt "$RECEIPT_PATH" \
-      --json 2>&1)"
-    ;;
-  rp)
-    # RP: same-chat session continuity is automatic. Build a validator prompt
-    # from validate-pass.md and send it via `rp chat-send` (NO --new-chat).
-    # Parse the response lines with the same regex flowctl uses:
-    #   `<id>: validated: <true|false> -- <reason>`
-    # Then recompute dropped/kept counts and merge into the receipt by hand
-    # (or via a shared helper). See validate-pass.md for the template.
-    cat /path/to/validate-pass.md | sed 's|<!-- FINDINGS_BLOCK -->|'"$(cat render_findings.md)"'|' > /tmp/validator.md
-    VALIDATOR_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/validator.md)"
-    # Parse lines matching /^[>*_` ]*<id>[\s*_`]*:[\s*_`]*validated[\s*_`]*:[\s*_`]*(true|false)/
-    # and update receipt's validator block accordingly.
-    ;;
+ codex)
+ VALIDATOR_JSON="$($FLOWCTL codex validate \
+ --findings-file "$FINDINGS_FILE" \
+ --receipt "$RECEIPT_PATH" \
+ --json 2>&1)"
+ ;;
+ copilot)
+ VALIDATOR_JSON="$($FLOWCTL copilot validate \
+ --findings-file "$FINDINGS_FILE" \
+ --receipt "$RECEIPT_PATH" \
+ --json 2>&1)"
+ ;;
+ rp)
+ # RP: same-chat session continuity is automatic. Build a validator prompt
+ # from validate-pass.md and send it via `rp chat-send` (NO --new-chat).
+ # Parse the response lines with the same regex flowctl uses:
+ # `<id>: validated: <true|false> -- <reason>`
+ # Then recompute dropped/kept counts and merge into the receipt by hand
+ # (or via a shared helper). See validate-pass.md for the template.
+ cat /path/to/validate-pass.md | sed 's|<!-- FINDINGS_BLOCK -->|'"$(cat render_findings.md)"'|' > /tmp/validator.md
+ VALIDATOR_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/validator.md)"
+ # Parse lines matching /^[>*_` ]*<id>[\s*_`]*:[\s*_`]*validated[\s*_`]*:[\s*_`]*(true|false)/
+ # and update receipt's validator block accordingly.
+ ;;
 esac
 ```
 
@@ -931,8 +930,8 @@ KEPT="$(jq -r '.validator.kept // 0' "$RECEIPT_PATH" 2>/dev/null || echo 0)"
 echo "Validator: dropped=$DROPPED kept=$KEPT verdict=$NEW_VERDICT"
 
 if [[ "$NEW_VERDICT" == "SHIP" ]]; then
-  # All findings dropped — verdict upgraded. Done, no fix loop.
-  exit 0
+ # All findings dropped — verdict upgraded. Done, no fix loop.
+ exit 0
 fi
 
 # NEEDS_WORK remains — surviving findings go into the fix loop below,
@@ -946,23 +945,23 @@ object and (when upgraded) a `verdict_before_validate` field:
 
 ```json
 {
-  "type": "impl_review",
-  "id": "fn-32.1",
-  "mode": "codex",
-  "verdict": "SHIP",
-  "verdict_before_validate": "NEEDS_WORK",
-  "session_id": "019ba...",
-  "validator": {
-    "dispatched": 3,
-    "dropped": 3,
-    "kept": 0,
-    "reasons": [
-      {"id": "f1", "file": "src/x.ts", "line": 42, "reason": "null check already at line 40"},
-      {"id": "f2", "file": "src/y.ts", "line": 10, "reason": "error is propagated via ? operator"},
-      {"id": "f3", "file": "src/z.ts", "line": 5,  "reason": "suggested fix misreads TS narrowing"}
-    ]
-  },
-  "validator_timestamp": "2026-04-24T10:05:00Z"
+ "type": "impl_review",
+ "id": "fn-32.1",
+ "mode": "codex",
+ "verdict": "SHIP",
+ "verdict_before_validate": "NEEDS_WORK",
+ "session_id": "019ba...",
+ "validator": {
+ "dispatched": 3,
+ "dropped": 3,
+ "kept": 0,
+ "reasons": [
+ {"id": "f1", "file": "src/x.ts", "line": 42, "reason": "null check already at line 40"},
+ {"id": "f2", "file": "src/y.ts", "line": 10, "reason": "error is propagated via ? operator"},
+ {"id": "f3", "file": "src/z.ts", "line": 5, "reason": "suggested fix misreads TS narrowing"}
+ ]
+ },
+ "validator_timestamp": "2026-04-24T10:05:00Z"
 }
 ```
 
@@ -978,9 +977,9 @@ never invents them.
 When `INTERACTIVE=true` AND the primary review verdict is `NEEDS_WORK`
 (still NEEDS_WORK after validator if `--validate` also set), walk through
 each finding with the user before entering the fix loop. The skill-side
-loop in [walkthrough.md](walkthrough.md) drives the platform's blocking
-question tool (`AskUserQuestion` / `request_user_input` / `ask_user`);
-flowctl provides helpers for the defer sink + receipt merge.
+loop in [walkthrough.md](walkthrough.md) drives `request_user_input` (sync-codex.sh
+rewrites to `request_user_input` in the Codex mirror); flowctl provides
+helpers for the defer sink + receipt merge.
 
 **Preserved by default:** when `INTERACTIVE=false`, this entire section is
 skipped — the fix loop runs against all surviving findings as before.
@@ -1025,10 +1024,10 @@ otherwise → Defer.
 ```bash
 DEFER_COUNT=$(wc -l < /tmp/walkthrough-defer.jsonl 2>/dev/null || echo 0)
 if [[ "$DEFER_COUNT" -gt 0 ]]; then
-  $FLOWCTL review-walkthrough-defer \
-    --findings-file /tmp/walkthrough-defer.jsonl \
-    --receipt "$RECEIPT_PATH" \
-    --json
+ $FLOWCTL review-walkthrough-defer \
+ --findings-file /tmp/walkthrough-defer.jsonl \
+ --receipt "$RECEIPT_PATH" \
+ --json
 fi
 ```
 
@@ -1040,27 +1039,27 @@ section to `.flow/review-deferred/<branch-slug>.md`.
 
 ```bash
 $FLOWCTL review-walkthrough-record \
-  --receipt "$RECEIPT_PATH" \
-  --applied  "$(wc -l < /tmp/walkthrough-apply.jsonl 2>/dev/null || echo 0)" \
-  --deferred "$(wc -l < /tmp/walkthrough-defer.jsonl 2>/dev/null || echo 0)" \
-  --skipped  "$(wc -l < /tmp/walkthrough-skip.jsonl  2>/dev/null || echo 0)" \
-  --acknowledged "$(wc -l < /tmp/walkthrough-ack.jsonl 2>/dev/null || echo 0)" \
-  --lfg-rest "${LFG_USED:-false}" \
-  --json
+ --receipt "$RECEIPT_PATH" \
+ --applied "$(wc -l < /tmp/walkthrough-apply.jsonl 2>/dev/null || echo 0)" \
+ --deferred "$(wc -l < /tmp/walkthrough-defer.jsonl 2>/dev/null || echo 0)" \
+ --skipped "$(wc -l < /tmp/walkthrough-skip.jsonl 2>/dev/null || echo 0)" \
+ --acknowledged "$(wc -l < /tmp/walkthrough-ack.jsonl 2>/dev/null || echo 0)" \
+ --lfg-rest "${LFG_USED:-false}" \
+ --json
 ```
 
 Receipt gains:
 
 ```json
 {
-  "walkthrough": {
-    "applied": 3,
-    "deferred": 2,
-    "skipped": 1,
-    "acknowledged": 0,
-    "lfg_rest": false
-  },
-  "walkthrough_timestamp": "2026-04-24T18:42:00Z"
+ "walkthrough": {
+ "applied": 3,
+ "deferred": 2,
+ "skipped": 1,
+ "acknowledged": 0,
+ "lfg_rest": false
+ },
+ "walkthrough_timestamp": "2026-04-24T18:42:00Z"
 }
 ```
 
@@ -1082,7 +1081,7 @@ deferred items for later revisit.
 
 ## Fix Loop (RP)
 
-**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is production-grade world-class software and architecture. Never use AskUserQuestion in this loop.**
+**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is production-grade world-class software and architecture. Never use request_user_input in this loop.**
 
 **CRITICAL: You MUST fix the code BEFORE re-reviewing. Never re-review without making changes.**
 
@@ -1094,36 +1093,36 @@ If verdict is NEEDS_WORK:
 2. **Fix the code** - Address each issue in order
 3. **Run tests/lints** - Verify fixes don't break anything
 4. **Commit fixes** (MANDATORY before re-review):
-   ```bash
-   git add -A
-   git commit -m "fix: address review feedback"
-   ```
-   **If you skip this and re-review without committing changes, reviewer will return NEEDS_WORK again.**
+ ```bash
+ git add -A
+ git commit -m "fix: address review feedback"
+ ```
+ **If you skip this and re-review without committing changes, reviewer will return NEEDS_WORK again.**
 
 5. **Request re-review** (only AFTER step 4):
 
-   **IMPORTANT**: Do NOT re-add files already in the selection. RepoPrompt auto-refreshes
-   file contents on every message. Only use `select-add` for NEW files created during fixes:
-   ```bash
-   # Only if fixes created new files not in original selection
-   if [[ -n "$NEW_FILES" ]]; then
-     $FLOWCTL rp select-add --window "$W" --tab "$T" $NEW_FILES
-   fi
-   ```
+ **IMPORTANT**: Do NOT re-add files already in the selection. RepoPrompt auto-refreshes
+ file contents on every message. Only use `select-add` for NEW files created during fixes:
+ ```bash
+ # Only if fixes created new files not in original selection
+ if [[ -n "$NEW_FILES" ]]; then
+ $FLOWCTL rp select-add --window "$W" --tab "$T" $NEW_FILES
+ fi
+ ```
 
-   Then send re-review request (NO --new-chat, stay in same chat).
+ Then send re-review request (NO --new-chat, stay in same chat).
 
-   **CRITICAL: Do NOT summarize fixes.** RP auto-refreshes file contents - reviewer sees your changes automatically. Just request re-review. Any summary wastes tokens and duplicates what reviewer already sees.
+ **CRITICAL: Do NOT summarize fixes.** RP auto-refreshes file contents - reviewer sees your changes automatically. Just request re-review. Any summary wastes tokens and duplicates what reviewer already sees.
 
-   ```bash
-   cat > /tmp/re-review.md << 'EOF'
-   Issues addressed. Please re-review.
+ ```bash
+ cat > /tmp/re-review.md << 'EOF'
+ Issues addressed. Please re-review.
 
-   **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>`
-   EOF
+ **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>`
+ EOF
 
-   $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md
-   ```
+ $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md
+ ```
 6. **Repeat** until Ship
 
 **Anti-pattern**: Re-adding already-selected files before re-review. RP auto-refreshes; re-adding can cause issues.

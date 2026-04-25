@@ -47,18 +47,18 @@ export NO_PROXY="localhost,127.0.0.1,.internal.company.com"
 
 ```bash
 PROXIES=(
-    "http://us-proxy.example.com:8080"
-    "http://eu-proxy.example.com:8080"
-    "http://asia-proxy.example.com:8080"
+ "http://us-proxy.example.com:8080"
+ "http://eu-proxy.example.com:8080"
+ "http://asia-proxy.example.com:8080"
 )
 
 for proxy in "${PROXIES[@]}"; do
-    export HTTP_PROXY="$proxy"
-    export HTTPS_PROXY="$proxy"
-    region=$(echo "$proxy" | grep -oP '^\w+-\w+')
-    agent-browser --session "$region" open https://example.com
-    agent-browser --session "$region" screenshot "./screenshots/$region.png"
-    agent-browser --session "$region" close
+ export HTTP_PROXY="$proxy"
+ export HTTPS_PROXY="$proxy"
+ region=$(echo "$proxy" | grep -oP '^\w+-\w+')
+ agent-browser --session "$region" open https://example.com
+ agent-browser --session "$region" screenshot "./screenshots/$region.png"
+ agent-browser --session "$region" close
 done
 ```
 
@@ -66,19 +66,19 @@ done
 
 ```bash
 PROXY_LIST=(
-    "http://proxy1.example.com:8080"
-    "http://proxy2.example.com:8080"
-    "http://proxy3.example.com:8080"
+ "http://proxy1.example.com:8080"
+ "http://proxy2.example.com:8080"
+ "http://proxy3.example.com:8080"
 )
 
 for i in "${!URLS[@]}"; do
-    proxy_index=$((i % ${#PROXY_LIST[@]}))
-    export HTTP_PROXY="${PROXY_LIST[$proxy_index]}"
-    export HTTPS_PROXY="${PROXY_LIST[$proxy_index]}"
-    agent-browser open "${URLS[$i]}"
-    agent-browser get text body > "output-$i.txt"
-    agent-browser close
-    sleep 1
+ proxy_index=$((i % ${#PROXY_LIST[@]}))
+ export HTTP_PROXY="${PROXY_LIST[$proxy_index]}"
+ export HTTPS_PROXY="${PROXY_LIST[$proxy_index]}"
+ agent-browser open "${URLS[$i]}"
+ agent-browser get text body > "output-$i.txt"
+ agent-browser close
+ sleep 1
 done
 ```
 
@@ -89,15 +89,15 @@ export HTTP_PROXY="http://corpproxy.company.com:8080"
 export HTTPS_PROXY="http://corpproxy.company.com:8080"
 export NO_PROXY="localhost,127.0.0.1,.company.com"
 
-agent-browser open https://external-vendor.com   # Via proxy
-agent-browser open https://intranet.company.com  # Direct (bypassed)
+agent-browser open https://external-vendor.com # Via proxy
+agent-browser open https://intranet.company.com # Direct (bypassed)
 ```
 
 ## Verifying Proxy
 
 ```bash
 agent-browser open https://httpbin.org/ip
-agent-browser get text body  # Should show proxy's IP
+agent-browser get text body # Should show proxy's IP
 ```
 
 ## Troubleshooting

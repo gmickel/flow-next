@@ -22,14 +22,9 @@ Add a new sub-section after the existing "USE AskUserQuestion" block:
 ```markdown
 ### Question Format: Lead with Recommendation
 
-Every blocking question must include the agent's recommended option AND a confidence tier. Use the platform's blocking-question tool (mirror `flow-next-audit/SKILL.md:62`):
+Every `AskUserQuestion` body must include the agent's recommended option AND a confidence tier. Canonical skill text uses Claude-native tool name (mirror `flow-next-audit/SKILL.md:62`); sync-codex.sh rewrites to `request_user_input` in the Codex mirror per repo convention. Call `ToolSearch select:AskUserQuestion` first if the schema isn't loaded. Fallback: numbered options in plain text only when the tool is unreachable.
 
-- Claude Code: `AskUserQuestion` (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded)
-- Codex: `request_user_input`
-- Gemini / Droid: `ask_user` (Pi requires the `pi-ask-user` extension)
-- Fallback: numbered options in plain text only when no blocking tool is reachable
-
-Pattern (applies across all variants):
+Pattern:
 
 - `question.body`: "<options summary>. Recommended: <X> — <one-sentence rationale>. Confidence: [high | judgment-call | your-call]."
 - `question.options`: neutral labels (no "(recommended)" markers — the recommendation goes in the body, anchoring is reduced when options stay neutral)

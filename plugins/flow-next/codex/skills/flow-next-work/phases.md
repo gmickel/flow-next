@@ -65,10 +65,10 @@ Based on user's answer from setup questions:
 
 - **Worktree**: use `skill: flow-next-worktree-kit`
 - **New branch**:
-  ```bash
-  git checkout main && git pull origin main
-  git checkout -b <branch>
-  ```
+ ```bash
+ git checkout main && git pull origin main
+ git checkout -b <branch>
+ ```
 - **Current branch**: proceed (user already confirmed)
 
 ## Phase 3: Task Loop
@@ -111,7 +111,6 @@ RALPH_MODE: true|false
 Follow your phases exactly."
 
 **Worker returns**: Summary of implementation, files changed, test results, review verdict.
-
 
 ### 3d. Verify Completion
 
@@ -192,13 +191,13 @@ $FLOWCTL show <epic-id> --json | jq -r '.completion_review_status'
 **If review needed:**
 
 1. Invoke `/flow-next:epic-review <epic-id>` skill
-   - Pass `--review=<backend>` matching the work review backend
-   - Skill handles rp/codex backend dispatch
-   - Skill runs fix loop internally until SHIP verdict
+ - Pass `--review=<backend>` matching the work review backend
+ - Skill handles rp/codex backend dispatch
+ - Skill runs fix loop internally until SHIP verdict
 
 2. After skill returns with SHIP:
-   - Set status: `$FLOWCTL epic set-completion-review-status <epic-id> --status ship --json`
-   - Go to Phase 4 (Quality)
+ - Set status: `$FLOWCTL epic set-completion-review-status <epic-id> --status ship --json`
+ - Go to Phase 4 (Quality)
 
 **Note:** The epic-review skill gets SHIP from the reviewer but does NOT set the status itself. The caller (work skill or Ralph) sets `completion_review_status=ship` after successful review.
 
@@ -232,7 +231,7 @@ After all tasks complete (or periodically for large epics):
 - Run relevant tests
 - Run lint/format per repo
 - If change is large/risky, run the quality_auditor agent:
-  - Use the quality_auditor agent("Review recent changes")
+ - Use the quality_auditor agent("Review recent changes")
 - Fix critical issues
 
 ## Phase 5: Ship
@@ -270,12 +269,12 @@ Confirm before ship:
 
 ```
 Phase 1 (resolve) → Phase 2 (branch) → Phase 3:
-  ├─ 3a-c: find task → start → run worker agent
-  ├─ 3d: verify done
-  ├─ 3e: plan-sync (if enabled + downstream tasks exist)
-  ├─ 3f: EPIC_MODE? → loop to 3a | SINGLE_TASK_MODE? → Phase 4
-  ├─ no more tasks → 3g: check completion_review_status
-  │   ├─ status != ship → invoke /flow-next:epic-review → fix loop until SHIP → set status=ship
-  │   └─ status = ship → Phase 4
-  └─ Phase 4 (quality) → Phase 5 (ship)
+ ├─ 3a-c: find task → start → run worker agent
+ ├─ 3d: verify done
+ ├─ 3e: plan-sync (if enabled + downstream tasks exist)
+ ├─ 3f: EPIC_MODE? → loop to 3a | SINGLE_TASK_MODE? → Phase 4
+ ├─ no more tasks → 3g: check completion_review_status
+ │ ├─ status != ship → invoke /flow-next:epic-review → fix loop until SHIP → set status=ship
+ │ └─ status = ship → Phase 4
+ └─ Phase 4 (quality) → Phase 5 (ship)
 ```

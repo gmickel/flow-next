@@ -1,0 +1,7 @@
+interface:
+  display_name: "Flow Resolve PR"
+  short_description: "Resolve PR review feedback via GraphQL"
+  brand_color: "#EF4444"
+  default_prompt: "Resolve PR "
+policy:
+  allow_implicit_invocation: false
