@@ -1,0 +1,18 @@
+{
+  "branch_name": "fn-36-capture-interview",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-04-25T11:43:00.346103Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-36-flow-nextcapture-skill-interview-grill",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-36-flow-nextcapture-skill-interview-grill.md",
+  "status": "open",
+  "title": "/flow-next:capture skill + interview grill-me enhancements",
+  "updated_at": "2026-04-25T11:45:18.952594Z"
+}

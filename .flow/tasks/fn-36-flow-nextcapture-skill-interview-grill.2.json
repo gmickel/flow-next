@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-25T11:45:19.227245Z",
+  "depends_on": [
+    "fn-36-flow-nextcapture-skill-interview-grill.1"
+  ],
+  "epic": "fn-36-flow-nextcapture-skill-interview-grill",
+  "id": "fn-36-flow-nextcapture-skill-interview-grill.2",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-36-flow-nextcapture-skill-interview-grill.2.md",
+  "status": "todo",
+  "title": "Interview enhancements \u2014 lead-with-recommendation, codebase-before-asking, dependency-ordered branches",
+  "updated_at": "2026-04-25T11:49:05.489052Z"
+}
