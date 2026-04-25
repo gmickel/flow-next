@@ -65,7 +65,7 @@ LEGACY_ENTRY_COUNT=$("$FLOWCTL" memory list --json 2>/dev/null \
 
 ```
 Skipped legacy: <LEGACY_ENTRY_COUNT> entries across <files>.
-Run `flowctl memory migrate` first to make these auditable.
+Run `/flow-next:memory-migrate` first to make these auditable (or `flowctl memory migrate --yes` for deterministic mechanical-only conversion).
 ```
 
 `<files>` is the comma-joined list (`pitfalls.md, conventions.md`). Continue with categorized entries only.
@@ -465,7 +465,7 @@ Print to stdout as markdown. The report is the deliverable — do not summarize 
 Memory Audit Summary
 ====================
 Scanned: <TOTAL> entries
-Skipped legacy: <LEGACY_ENTRY_COUNT> (run `flowctl memory migrate` first to make these auditable)
+Skipped legacy: <LEGACY_ENTRY_COUNT> (run `/flow-next:memory-migrate` first to make these auditable)
 
 Kept: <X>
 Updated: <Y>

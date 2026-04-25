@@ -81,6 +81,9 @@ Task tracking for AI agents. All state lives in `.flow/`.
 .flow/bin/flowctl memory read <id>                       # full entry
 .flow/bin/flowctl memory mark-stale <id> --reason "..."  # flag stale (v0.37.0+)
 .flow/bin/flowctl memory mark-fresh <id>                 # clear stale flag (v0.37.0+)
+.flow/bin/flowctl memory list-legacy                     # list legacy entries with mechanical defaults (v0.37.0+)
+.flow/bin/flowctl memory list-legacy --json              # used by /flow-next:memory-migrate skill
+.flow/bin/flowctl memory migrate [--yes] [--json]        # deterministic-only legacy migration (use /flow-next:memory-migrate for agent-native classification)
 ```
 
 ## Workflow

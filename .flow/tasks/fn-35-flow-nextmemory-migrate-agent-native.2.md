@@ -194,9 +194,8 @@ Include in commit.
 
 
 ## Done summary
-
-(populated when task completes)
-
+Added `flowctl memory list-legacy [--json]` (wraps `_memory_parse_legacy_entries` with mechanical-default labels per entry), removed the six classifier subprocess functions (~225 LoC) plus their `FLOW_MEMORY_CLASSIFIER_*` env-var dispatch, and collapsed `cmd_memory_migrate` to mechanical-only with TTY-only one-time deprecation hints — JSON receipt shape preserved (`method: "mechanical"`, `model: null`) and `--no-llm` kept accepted-but-noop for backcompat.
 ## Evidence
-
-(populated when task completes)
+- Commits: f40815287d915a3975a964697e8b8bd8f6bf8861
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -v (341 passed), manual smoke: flowctl memory list-legacy text+json+empty; flowctl memory migrate --yes --json verifies method=mechanical/model=null; existing smoke migrate-equivalent block reproduced inline (4 entries, 2 bug + 2 knowledge, idempotent)
+- PRs:

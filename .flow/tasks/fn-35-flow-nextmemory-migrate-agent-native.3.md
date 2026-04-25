@@ -54,7 +54,9 @@ Cases:
 
 Run mode: subshell with isolated `TEST_DIR/list-legacy/`, `git init -q`, seed legacy files, assert.
 
-Verify hint-string assertion at `smoke_test.sh:766` still passes after migrate's deprecation message landed. If the assertion targets a different string, update.
+Verify hint-string assertion at `smoke_test.sh:766` still passes after migrate's deprecation message landed. If the assertion targets a different string, update. (Note: line 766 asserts on `flowctl memory init`'s `hint` field, not migrate's deprecation stderr — orthogonal to fn-35.2's changes, so should already pass unchanged.) <!-- Updated by plan-sync: fn-35.2 confirmed line 766 targets init's hint, not migrate's deprecation hint -->
+
+<!-- Updated by plan-sync: fn-35.2 also gates the migrate deprecation hint + dead-env-var warning on `FLOW_NO_DEPRECATION=1` (in addition to the spec'd TTY check). No smoke-side action required — CI is non-TTY anyway — but worth noting for any future smoke that tries to assert the hint *did* fire. -->
 
 ### Amend `[flow-next 0.37.0]` CHANGELOG (R14)
 

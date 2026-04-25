@@ -69,7 +69,7 @@ The goal is automated maintenance with human oversight on judgment calls — not
 
 ## Forbidden
 
-- **Auditing legacy flat files** (`.flow/memory/pitfalls.md`, `conventions.md`, `decisions.md` at the memory root). Skip with a warning that recommends `flowctl memory migrate` first. Report includes the skipped count.
+- **Auditing legacy flat files** (`.flow/memory/pitfalls.md`, `conventions.md`, `decisions.md` at the memory root). Skip with a warning that recommends `/flow-next:memory-migrate` first. Report includes the skipped count.
 - **Auditing under `_audit/`, `_review/`, or any other `_*` directory** under `.flow/memory/`.
 - **Deleting silently.** Delete is reserved for unambiguous cases (code gone AND problem domain gone). Default to Replace or Consolidate when there's still value to preserve.
 - **Inventing flowctl subcommands** beyond what Task 2 ships (`memory mark-stale`, `memory mark-fresh`, `memory search --status`). Use Write tool + git for moves and deletes.
@@ -116,7 +116,7 @@ Report structure (see [workflow.md](workflow.md) §5 for full schema):
 Memory Audit Summary
 ====================
 Scanned: N entries
-Skipped legacy: M (run `flowctl memory migrate` first to make these auditable)
+Skipped legacy: M (run `/flow-next:memory-migrate` first to make these auditable)
 
 Kept: X
 Updated: Y

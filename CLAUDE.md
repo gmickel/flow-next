@@ -69,9 +69,11 @@ Memory system (categorized — v0.33.0+):
 - Add: `flowctl memory add --track <bug|knowledge> --category <c> --title "..." [--module <m>] [--tags "a,b"] [--body-file <f>]`
 - Query: `flowctl memory list [--track T] [--category C] [--status active|stale|all]`, `flowctl memory search <q> [--module <m>] [--tags "a,b"] [--limit N]`
 - Read: `flowctl memory read <id>` — accepts full id (`bug/runtime-errors/slug-YYYY-MM-DD`), slug+date, slug-only (latest wins), or legacy forms (`legacy/pitfalls.md`, `legacy/pitfalls#N`)
-- Migrate legacy: `flowctl memory migrate --dry-run` then `--yes` (classifier auto-selects codex/copilot; override with `FLOW_MEMORY_CLASSIFIER_BACKEND=codex|copilot|none` + `FLOW_MEMORY_CLASSIFIER_MODEL` / `FLOW_MEMORY_CLASSIFIER_EFFORT`). JSON mode refuses writes without `--yes`.
+- Migrate legacy (skill, v0.37.0+): `/flow-next:memory-migrate [mode:autofix] [scope hint]` — agent-native, host agent classifies each entry into the right `(track, category)` with full repo context. Recommended path. Interactive (asks via blocking-question tool on ambiguous) or autofix (mechanical default + logs as needs-review). Optional scope hint narrows to a single legacy file (e.g. `pitfalls.md`).
+- Migrate legacy (deterministic, automation): `flowctl memory migrate --dry-run` then `--yes` (mechanical-only since v0.37.0; subprocess classifier dispatch removed; `--no-llm` accepted-but-noop). JSON mode refuses writes without `--yes`. Stderr deprecation hint points at `/flow-next:memory-migrate` for accurate classification (suppress via `FLOW_NO_DEPRECATION=1`). Removed env vars: `FLOW_MEMORY_CLASSIFIER_BACKEND` / `_MODEL` / `_EFFORT` (setting them now triggers a one-time stderr warning).
+- List legacy entries (parsing helper, v0.37.0+): `flowctl memory list-legacy [--json]` — emits parsed segments with mechanical default `(track, category)` per entry. Used by `/flow-next:memory-migrate` skill; also useful for ad-hoc inspection.
 - Surface in AGENTS.md / CLAUDE.md: `flowctl memory discoverability-patch [--target auto|agents|claude] [--strategy listing|append] [--apply|--dry-run]` (JSON callers must pass `--apply` explicitly)
-- Audit (skill, v0.37.0+): `/flow-next:audit [mode:autofix] [scope hint]` — agent-native skill that reviews entries against current code and decides Keep/Update/Consolidate/Replace/Delete per entry. Interactive (asks via blocking-question tool) or autofix (applies unambiguous, marks ambiguous as stale). Skips legacy flat files (run `memory migrate` first).
+- Audit (skill, v0.37.0+): `/flow-next:audit [mode:autofix] [scope hint]` — agent-native skill that reviews entries against current code and decides Keep/Update/Consolidate/Replace/Delete per entry. Interactive (asks via blocking-question tool) or autofix (applies unambiguous, marks ambiguous as stale). Skips legacy flat files (run `/flow-next:memory-migrate` first).
 - Mark stale: `flowctl memory mark-stale <id> --reason "..." [--audited-by "..."] [--json]` — sets `status: stale`, stamps `last_audited`, records `audit_notes`. Used by `/flow-next:audit`; also callable directly. Idempotent.
 - Mark fresh: `flowctl memory mark-fresh <id>` — clears stale flag, stamps `last_audited`.
 - Search status filter: `flowctl memory search <q> --status active|stale|all` (default `active`, v0.37.0+). Stale entries excluded from default search results so audit-flagged advice stops polluting `memory-scout` output.
@@ -79,7 +81,7 @@ Memory system (categorized — v0.33.0+):
 - Auto-capture: Ralph worker writes bug-track entries on NEEDS_WORK → SHIP via `memory add --track bug --category <c>`
 - `memory-scout` is category-aware: returns track/category-tagged results, prioritizing module matches
 - Backcompat: `memory add --type pitfall|convention|decision` auto-maps to new flags with a deprecation warning; removed in 0.36.0
-- Legacy flat files (`.flow/memory/pitfalls.md` etc.) continue to work until `memory migrate` runs; `search` surfaces legacy hits as `track: "legacy"` synthetic entries
+- Legacy flat files (`.flow/memory/pitfalls.md` etc.) continue to work until `/flow-next:memory-migrate` runs (or `flowctl memory migrate --yes` for automation); `search` surfaces legacy hits as `track: "legacy"` synthetic entries
 
 Prospecting (v0.36.0+):
 - New skill `/flow-next:prospect [focus hint]` — upstream of `interview`/`plan` for "what should I build?" phase. Generates many candidates grounded in repo (recent files, open epics, memory, CHANGELOG), critiques every one with rejection taxonomy (`duplicates-open-epic | out-of-scope | insufficient-signal | too-large | backward-incompat | other`), ranks survivors into buckets (`High leverage 1-3` / `Worth considering 4-7` / `If you have the time 8+`).
@@ -140,7 +142,7 @@ A workflow that:
 
 → **Build it as a skill.** The host agent reads the skill workflow file, executes it using its existing Read/Grep/Glob/Edit/Write tools, dispatches subagents via the platform primitive (`Agent` in Claude, `spawn_agent` in Codex), asks via `AskUserQuestion`/`request_user_input`/`ask_user`. Examples: `/flow-next:audit` (fn-34), `/flow-next:prospect` (fn-33), `/flow-next:resolve-pr` (fn-31), `/flow-next:plan`, `/flow-next:work`.
 
-**Do not spawn `codex` / `copilot` / other LLMs via subprocess from inside flowctl when invoked from a skill.** The host agent is already an LLM running the skill — there is no need for a second one. fn-34 originally violated this and was rewritten; fn-30's `memory migrate` is the next refactor target (tracked as fn-35).
+**Do not spawn `codex` / `copilot` / other LLMs via subprocess from inside flowctl when invoked from a skill.** The host agent is already an LLM running the skill — there is no need for a second one. fn-34 originally violated this and was rewritten; fn-30's `memory migrate` was the next refactor target — both shipped in 0.37.0 as `/flow-next:audit` and `/flow-next:memory-migrate`.
 
 ### When to use DETERMINISTIC flowctl Python
 
