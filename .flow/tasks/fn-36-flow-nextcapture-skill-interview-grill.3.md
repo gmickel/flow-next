@@ -189,9 +189,8 @@ Tag triggers GitHub Actions release + Discord. Don't tag without pushing.
 
 
 ## Done summary
-
-(populated when task completes)
-
+Rollup ships /flow-next:capture + interview grill-me enhancements as 0.38.0: CHANGELOG block, root + plugin README updated (commands tables, workflow ladder pathways, mermaid diagram extended with capture node, new Capture section, "Prospect vs ..." explainer extended, interview subsection extended), CLAUDE.md updated (commands list + "Creating a spec" two-paths preamble), website (mickel.tech) updated separately (commands array, lede 11→12 verbs, FAQ rewritten, version 0.38.0). sync-codex.sh extended with flow-next-capture openai.yaml entry + REQUIRED list bumped to 14; Codex mirror regenerated cleanly. All 3 manifests at 0.38.0; four smoke suites green.
 ## Evidence
-
-(populated when task completes)
+- Commits: 2a5685a26972a8d6bc0f20f58ae6b4bcd63e698d, 4e8cfa1994c1515c48e74b18a5c9d1921bceb0bb
+- Tests: bash plugins/flow-next/scripts/smoke_test.sh (129/0), bash plugins/flow-next/scripts/audit_smoke_test.sh (41/0), bash plugins/flow-next/scripts/prospect_smoke_test.sh (94/0), bash plugins/flow-next/scripts/ralph_smoke_test.sh (15/0), scripts/sync-codex.sh (14 openai.yaml, 21 skills, 21 agents — zero errors), jq -r .version on .claude-plugin/marketplace.json + plugins/flow-next/.claude-plugin/plugin.json + plugins/flow-next/.codex-plugin/plugin.json (all 0.38.0)
+- PRs:
