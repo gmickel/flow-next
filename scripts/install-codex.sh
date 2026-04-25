@@ -199,20 +199,39 @@ if grep -q "^max_threads" "$CONFIG" 2>/dev/null; then
     rm -f "${CONFIG}.bak"
 fi
 
-# Clean old [features] section we may have written
+# Migration: clean up legacy standalone [features] block (pre-fix versions
+# of this script wrote a duplicate [features] table, which TOML rejects)
 if grep -q "# --- flow-next features" "$CONFIG" 2>/dev/null; then
     sed -i.bak '/# --- flow-next features/,/# --- end flow-next features ---/d' "$CONFIG"
     rm -f "${CONFIG}.bak"
 fi
 
-# Generate agent + feature entries
+# Merge codex_hooks = true into [features] (TOML disallows duplicate tables)
+if ! grep -q '^codex_hooks = true' "$CONFIG"; then
+    if grep -q '^\[features\]' "$CONFIG"; then
+        # Existing [features] block — insert key after header (portable awk)
+        awk '
+          /^\[features\]/ && !inserted {
+            print
+            print "codex_hooks = true  # flow-next"
+            inserted = 1
+            next
+          }
+          { print }
+        ' "$CONFIG" > "${CONFIG}.new" && mv "${CONFIG}.new" "$CONFIG"
+    else
+        # No [features] block yet — create one
+        {
+            echo ""
+            echo "[features]"
+            echo "codex_hooks = true  # flow-next"
+        } >> "$CONFIG"
+    fi
+fi
+
+# Generate agent entries
 CODEX_MAX_THREADS="${CODEX_MAX_THREADS:-12}"
 {
-    echo ""
-    echo "# --- flow-next features (auto-generated) ---"
-    echo "[features]"
-    echo "codex_hooks = true"
-    echo "# --- end flow-next features ---"
     echo ""
     echo "# --- flow-next multi-agent roles (auto-generated) ---"
     echo "# Re-run install-codex.sh to regenerate"

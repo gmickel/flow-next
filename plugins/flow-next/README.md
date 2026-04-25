@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.38.0-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.38.1-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -151,36 +151,30 @@ Two models catch what one misses.
 /plugin install flow-next
 ```
 
-#### OpenAI Codex (Native Plugin)
+#### OpenAI Codex
 
-Clone this repo and open Codex — the plugin appears in `/plugins`:
+Clone the repo and run the install script:
 
 ```bash
 git clone https://github.com/gmickel/flow-next.git
 cd flow-next
-codex  # → /plugins → install Flow-Next
+./scripts/install-codex.sh flow-next
 ```
 
-Then run `$flow-next-setup` in your project.
+Then run `/flow-next:setup` in your project.
+
+**Why a script and not Codex's `/plugins` install?** Codex's plugin protocol (as of April 2026) only registers `skills` declared in `plugin.json` — there's no `agents` or `hooks` field in the manifest schema yet. Installing flow-next via `/plugins` gives you the slash commands, but the bundled `.toml` agents (worker, scouts, plan-sync, pr-comment-resolver — 21 total) and Ralph hooks aren't wired into `~/.codex/config.toml`. That breaks subagent isolation (per-role model tiers, `disallowed_tools` enforcement) and the autonomous Ralph mode. `install-codex.sh` writes the agent and feature entries directly into your config, copies skills + agents + hooks + flowctl into `~/.codex/`, and gives you the full multi-agent experience. We'll switch back to `/plugins` once Codex's manifest supports `agents` + `hooks`.
 
 #### OpenAI Codex (Update)
 
-Codex caches plugins on install. To update to a new version:
+Re-run the install script after pulling:
 
 ```bash
-cd flow-next && git pull   # get latest
-codex                       # open Codex in the repo
-# /plugins → uninstall Flow-Next → install Flow-Next
+cd flow-next && git pull
+./scripts/install-codex.sh flow-next
 ```
 
-Reinstalling from within the repo directory picks up the local version. Verify with `$flow-next-setup` in your project — it shows the installed version.
-
-#### OpenAI Codex (Global Install)
-
-```bash
-git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-install \
-  && /tmp/flow-next-install/scripts/install-codex.sh flow-next
-```
+The script is idempotent: it cleans its own previous entries before re-writing, so running it on every update is safe and required to pick up new skills, agents, or hook changes.
 
 ### 2. Setup (Recommended)
 
@@ -1151,7 +1145,7 @@ Reviews block progress until `<verdict>SHIP</verdict>`. Fix → re-review cycles
 
 #### Codex (Cross-Platform Alternative)
 
-OpenAI Codex CLI works on any platform (macOS, Linux, Windows). Flow-Next is also a [native Codex plugin](#openai-codex) — install via `/plugins` or `install-codex.sh`.
+OpenAI Codex CLI works on any platform (macOS, Linux, Windows). Flow-Next is also a [native Codex plugin](#openai-codex) — install via `install-codex.sh` (clone the repo, run the script).
 
 **Why use Codex:**
 - Cross-platform (no macOS requirement)
@@ -2301,24 +2295,13 @@ Flow-Next is a **native Codex plugin** with near-parity to Claude Code. Pre-buil
 
 #### Install
 
-**Option A — Native plugin** (recommended):
-
-Clone this repo and open Codex. The plugin appears in `/plugins`:
-
 ```bash
 git clone https://github.com/gmickel/flow-next.git
 cd flow-next
-codex  # → /plugins → install Flow-Next
+./scripts/install-codex.sh flow-next
 ```
 
-**Option B — Global install** (copies to `~/.codex/`):
-
-```bash
-git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-install \
-  && /tmp/flow-next-install/scripts/install-codex.sh flow-next
-```
-
-> The install script (257 lines) copies pre-built files from `codex/` to `~/.codex/` and merges agent entries into `config.toml`. Delete the clone after install; re-clone to update.
+The script copies pre-built files from `codex/` to `~/.codex/` (skills, 21 `.toml` agents, hooks, flowctl, prompts, ralph templates) and merges agent + feature entries into `config.toml`. Idempotent — re-run after `git pull` to update. The native `/plugins` install path isn't used because Codex's plugin manifest only declares `skills`, not custom agents or hooks; until that changes, the script is the only way to get the full multi-agent experience.
 
 #### Skill invocation
 

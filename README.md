@@ -3,7 +3,7 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v0.38.0-green)](plugins/flow-next/)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v0.38.1-green)](plugins/flow-next/)
 [![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -54,9 +54,9 @@ First-class on **Claude Code**, **OpenAI Codex** (CLI + Desktop), and **Factory 
 
 ```bash
 git clone https://github.com/gmickel/flow-next.git
-cd flow-next && codex
-# /plugins → install Flow-Next
-# then: $flow-next-setup
+cd flow-next
+./scripts/install-codex.sh flow-next
+# then: /flow-next:setup
 ```
 
 </td>
@@ -72,7 +72,9 @@ droid plugin marketplace add \
 </tr>
 </table>
 
-**Update Codex:** `cd flow-next && git pull`, then `/plugins` → uninstall → install.
+**Why a script for Codex?** Codex's plugin protocol currently only registers `skills` from `plugin.json` — not custom `.toml` agents or hooks. The `/plugins` install gives you slash commands, but no subagent isolation (worker model tier, `disallowed_tools`) and no Ralph hooks. `install-codex.sh` merges all 21 agents + hooks directly into `~/.codex/config.toml` so you get the full multi-agent + Ralph experience. We'll switch to `/plugins` once Codex's manifest supports `agents` and `hooks` fields.
+
+**Update Codex:** `cd flow-next && git pull && ./scripts/install-codex.sh flow-next`. The script is idempotent — safe to re-run on every update.
 
 📖 **[Full docs](plugins/flow-next/README.md)** · **[Codex install guide](plugins/flow-next/README.md#openai-codex)** · **[OpenCode port](https://github.com/gmickel/flow-next-opencode)**
 

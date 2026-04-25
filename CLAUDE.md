@@ -385,31 +385,26 @@ Skip rules: pure internal refactors with no user-visible surface skip README + w
 
 ## Codex Installation
 
-Flow-Next is a native Codex plugin. Two install methods:
+Single install path: clone the repo + run `install-codex.sh`. The script is idempotent — re-run on every update.
 
-**Option A — Native plugin** (recommended):
 ```bash
 git clone https://github.com/gmickel/flow-next.git
 cd flow-next
-codex  # → /plugins → install Flow-Next
+./scripts/install-codex.sh flow-next
 ```
 
-Then run `$flow-next-setup` in your project.
+Update path: `cd flow-next && git pull && ./scripts/install-codex.sh flow-next`.
 
-**Option B — Global install** (copies to `~/.codex/`):
-```bash
-git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-install \
-  && /tmp/flow-next-install/scripts/install-codex.sh flow-next
-```
+**Why not Codex's `/plugins` install?** Codex's plugin protocol (as of 2026-04-25) only registers `skills` declared in `plugin.json` — there's no `agents`, `hooks`, or `commands` field in the manifest schema. Verified empirically: both paths (`cd flow-next && codex` → `/plugins` install via local marketplace, AND `codex plugin marketplace add gmickel/flow-next` → `/plugins` install via git source) write `[plugins."flow-next@flow-next-marketplace"] enabled = true` and resolve skills via `"skills": "./codex/skills/"`, but neither merges `[agents.*]` or `[hooks.*]` entries into `~/.codex/config.toml`. That breaks subagent isolation (worker model tier, `disallowed_tools` enforcement) and Ralph hooks. The script writes those entries directly. **Recheck on every Codex changelog bump that mentions plugin manifest fields or app-server plugin management** — once `agents` + `hooks` land in the schema, drop the script and document `codex plugin marketplace add gmickel/flow-next` instead.
 
-**What gets installed (global):**
+**What gets installed:**
 - `~/.codex/scripts/flowctl` + `flowctl.py` — CLI tool
-- `~/.codex/skills/` — Skill definitions (patched for Codex paths)
-- `~/.codex/agents/*.toml` — Multi-agent role configs (20 roles)
-- `~/.codex/config.toml` — Agent entries merged (descriptions + config_file refs)
-- `~/.codex/prompts/` — Command prompts
-- `~/.codex/scripts/` — Helper scripts (worktree.sh)
-- `~/.codex/templates/` — Ralph/setup templates
+- `~/.codex/skills/` — 21 skill definitions
+- `~/.codex/agents/*.toml` — 21 multi-agent role configs
+- `~/.codex/hooks.json` — Ralph guard hooks
+- `~/.codex/prompts/` — 16 command prompts
+- `~/.codex/templates/` — Ralph init templates
+- `~/.codex/config.toml` — `multi_agent = true`, `[features].codex_hooks = true` merged into existing `[features]` block, `[agents.*]` entries appended (between markers `# --- flow-next multi-agent roles (auto-generated) ---` and `# --- end flow-next roles ---`)
 
 **Native plugin structure:**
 - `.codex-plugin/plugin.json` — Codex plugin manifest
@@ -425,7 +420,7 @@ git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-inst
 | `claude-sonnet-4-6` (fast) | `gpt-5.4-mini` | build-scout, env-scout, testing-scout, tooling-scout, observability-scout, security-scout, workflow-scout, memory-scout |
 | `inherit` | inherited from parent | worker, plan-sync |
 
-Override defaults (global install):
+Override defaults:
 ```bash
 CODEX_MODEL_INTELLIGENT=gpt-5.4 \
 CODEX_MODEL_FAST=gpt-5.4-mini \
@@ -434,15 +429,15 @@ CODEX_MAX_THREADS=12 \
 ./scripts/install-codex.sh flow-next
 ```
 
-**Hooks (experimental):** Codex now supports hooks. Pre-built `codex/hooks.json` includes Ralph guard for `Bash|Execute` + `Stop`. Limitation: hooks only intercept Bash (not Edit/Write), no `SubagentStop`.
+**Hooks:** Pre-built `codex/hooks.json` includes Ralph guard for `Bash|Execute` + `Stop` (enabled via `[features].codex_hooks = true` merged by the install script). Limitation: hooks only intercept Bash (not Edit/Write), no `SubagentStop`.
 
 **Usage in Codex:**
 ```bash
-# Native plugin: commands use $ prefix
-$flow-next-plan Add a contact form
-$flow-next-work fn-1
+# Skills are invocable two ways after install:
+$flow-next-plan Add a contact form        # via $ dropdown (skill UI)
+/flow-next:plan Add a contact form         # via slash command (prompts/)
 
-# Global install: add to PATH
+# flowctl on PATH (optional):
 export PATH="$HOME/.codex/scripts:$PATH"
 ~/.codex/scripts/flowctl --help
 ```

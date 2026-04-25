@@ -2,6 +2,18 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.38.1] - 2026-04-25
+
+### Fixed
+- **`scripts/install-codex.sh` no longer writes a duplicate `[features]` TOML table.** Pre-fix versions appended a standalone `[features]\ncodex_hooks = true` block to `~/.codex/config.toml` even when an existing `[features]` table was already present (Codex's own defaults ship one). TOML disallows duplicate tables — Codex 0.125.0 hard-errors on parse with `duplicate key`, breaking every Codex invocation post-install. Script now uses a portable awk merge: detects existing `[features]` block, inserts `codex_hooks = true  # flow-next` after the header (idempotent — skipped if already present); falls back to creating a fresh block when none exists. Migration: legacy `# --- flow-next features ---` markers are still cleaned before the merge, so re-running the new script over a previously-broken config heals it in one pass.
+
+### Changed
+- **Codex install: single documented path is now `git clone + ./scripts/install-codex.sh flow-next`.** The native `/plugins` install (both `cd flow-next && codex` → `/plugins` and `codex plugin marketplace add gmickel/flow-next` → `/plugins`) is no longer documented because Codex's plugin manifest schema (as of April 2026) supports `skills`, `mcpServers`, `apps` but not `agents`, `hooks`, or `commands`. Both `/plugins` paths register the slash commands but skip the bundled 21 `.toml` agents and `hooks.json` — breaking subagent isolation (worker model tier, `disallowed_tools` enforcement) and Ralph hooks. The script merges everything into `~/.codex/config.toml` directly. Idempotent — re-run after every `git pull` to update.
+- **README.md (root, plugin), CLAUDE.md** rewritten to reflect single-path Codex install with rationale paragraph. Recheck note in `CLAUDE.md` ties the docs decision to a concrete trigger: revisit when Codex changelog mentions plugin manifest fields or app-server plugin management; once `agents` + `hooks` land in the schema, drop the script and document `codex plugin marketplace add gmickel/flow-next` instead.
+
+### Notes
+- No skill, agent, command, or flowctl behavior changes. Pure install-path + script-bug fix.
+
 ## [flow-next 0.38.0] - 2026-04-25
 
 ### Added
