@@ -5954,9 +5954,17 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
     results.sort(key=lambda r: r["score"], reverse=True)
 
     # Legacy substring search — only when no track/category filter
-    # (legacy has no track/category metadata).
+    # (legacy has no track/category metadata). Legacy entries have no
+    # `status` field; treat them as implicitly active. Skip entirely on
+    # --status stale (audit-flag query); include on active (default) + all.
     legacy_results: list[dict[str, Any]] = []
-    if track is None and category is None and not tag_filter_set and not module_filter:
+    if (
+        track is None
+        and category is None
+        and not tag_filter_set
+        and not module_filter
+        and status_filter != "stale"
+    ):
         for filename in MEMORY_LEGACY_FILES:
             path = memory_dir / filename
             if not path.exists():

@@ -814,6 +814,30 @@ PY
 echo -e "${GREEN}✓${NC} memory search covers legacy files (substring)"
 PASS=$((PASS + 1))
 
+# fn-34/fn-35: search --status stale must NOT include legacy hits
+# (legacy entries have no status field; treating them as implicit-active means
+# excluding from --status stale queries — Codex P2 finding on PR #120).
+stale_json="$(scripts/flowctl memory search 'null deref' --status stale --json)"
+"$PYTHON_BIN" - <<'PY' "$stale_json"
+import json, sys
+data = json.loads(sys.argv[1])
+legacy = [m for m in data["matches"] if m.get("legacy")]
+assert not legacy, f"legacy leaked into --status stale: {legacy}"
+PY
+echo -e "${GREEN}✓${NC} memory search --status stale excludes legacy hits"
+PASS=$((PASS + 1))
+
+# --status all should include legacy back in.
+all_json="$(scripts/flowctl memory search 'null deref' --status all --json)"
+"$PYTHON_BIN" - <<'PY' "$all_json"
+import json, sys
+data = json.loads(sys.argv[1])
+legacy = [m for m in data["matches"] if m.get("legacy")]
+assert legacy, f"legacy missing from --status all: {data['matches']}"
+PY
+echo -e "${GREEN}✓${NC} memory search --status all includes legacy hits"
+PASS=$((PASS + 1))
+
 rm -f .flow/memory/pitfalls.md
 
 echo -e "${YELLOW}--- schema v1 validate ---${NC}"
