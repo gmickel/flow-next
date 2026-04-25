@@ -12,7 +12,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-37-codex-sync-hotfix-openaiyaml-backfill.md",
-  "status": "open",
+  "status": "done",
   "title": "Codex sync hotfix: openai.yaml backfill + cross-platform AskUserQuestion in prime/setup + CLAUDE.md adding-skill checklist \u2014 0.37.1",
-  "updated_at": "2026-04-25T12:15:39.038734Z"
+  "updated_at": "2026-04-25T12:38:51.617273Z"
 }
