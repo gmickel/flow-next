@@ -14,7 +14,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-35-flow-nextmemory-migrate-agent-native.md",
-  "status": "open",
+  "status": "done",
   "title": "/flow-next:memory-migrate \u2014 agent-native legacy migration (replaces subprocess dispatch)",
-  "updated_at": "2026-04-25T07:17:50.143714Z"
+  "updated_at": "2026-04-25T08:13:53.710768Z"
 }

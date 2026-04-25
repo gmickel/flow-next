@@ -12,7 +12,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-34-flow-nextaudit-agent-native-memory.md",
-  "status": "open",
+  "status": "done",
   "title": "/flow-next:audit \u2014 agent-native memory staleness review",
-  "updated_at": "2026-04-25T05:54:55.857735Z"
+  "updated_at": "2026-04-25T08:13:53.506706Z"
 }
