@@ -179,9 +179,10 @@ Depth tracking in the question metadata; cap enforced before generating next que
 
 ### Rollup (fn-36.3)
 
-- **R20:** Docs updated:
+- **R20:** Docs updated. **All workflow-pathway-mentioning surfaces** must reflect the spec's ASCII diagram pathways (free-form → capture, prospect → capture, prospect → plan-direct via promote, capture → interview, capture → plan, capture → interview → plan, all terminating at work):
+  - `README.md` (root) — commands table includes `/flow-next:capture`; workflow-sequence prose mentions reflect the new pathways
   - `CHANGELOG.md` — new `[flow-next 0.38.0]` block above 0.37.0 with Added/Changed/Notes covering capture skill + interview enhancements
-  - `plugins/flow-next/README.md` — count update (Fifteen → Sixteen commands, line ~1620); commands table row for capture (line ~1624, workflow-ordered after interview); flags table (line ~1669); interview subsection extension (lines ~1726-1739) for grill-me enhancements; workflow ladder update (lines ~280-298); mermaid lifecycle diagram update (lines ~826-851)
+  - `plugins/flow-next/README.md` — count update (Fifteen → Sixteen commands, line ~1620); commands table row for capture (line ~1624, workflow-ordered after interview); flags table (line ~1669); interview subsection extension (lines ~1726-1739) for grill-me enhancements; **"Choose Your Flow" workflow ladder table** (lines ~280-298) extended to cover all spec-diagram pathways; **"Prospect vs Spec vs Interview vs Plan" explainer** extended with a Capture entry; **mermaid lifecycle diagram** (lines ~826-851) extended with capture node showing all three entry points and both downstream branches
   - `CLAUDE.md` — commands list (line ~27, after audit); "Creating a spec" section (lines ~431-466) — add capture as automated alternative to manual heredoc
   - `.flow/usage.md` — no update needed (capture adds no flowctl subcommands; interview enhancements have no flowctl surface)
 - **R21:** Website: `~/work/mickel.tech/app/apps/flow-next/page.tsx` — `commands` array entry for capture (after interview, line ~566); `lede` count update (Eleven → Twelve verbs, line ~1034); FAQ lifecycle update (lines ~128-130) covering prospect → capture → interview/plan flow

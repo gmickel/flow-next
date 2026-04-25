@@ -36,16 +36,39 @@ Insert at line ~5 (above existing `## [flow-next 0.37.0] - 2026-04-25` block):
 - Workflow ladder is now: free-form discussion (or `/flow-next:prospect`) → `/flow-next:capture` → `/flow-next:interview` (refine) AND/OR `/flow-next:plan` (break out tasks) → `/flow-next:work` (execute).
 ```
 
+### Root README.md (top-level)
+
+The root `README.md` (~148 lines) is the project's GitHub landing page. It includes a commands table at lines ~95-105 and brief workflow descriptions throughout.
+
+1. **Commands table** — insert `/flow-next:capture` row near the upstream-of-implementation cluster (after prospect, before interview/plan):
+   ```
+   | `/flow-next:capture` | Synthesize conversation context into a flow-next epic spec |
+   ```
+2. **Anywhere a workflow sequence is mentioned** in prose — update to reflect capture as a path. The expected sequences (mirror the spec's ASCII diagram on `## Workflow ladder positioning`):
+   - `prospect → plan` (direct, via promote)
+   - `prospect → capture → plan` (synthesize a richer spec from prospect-output discussion before planning)
+   - `free-form discussion → capture → plan` (no prospect)
+   - `free-form discussion → capture → interview → plan` (capture, then refine)
+   - All paths terminate at `work`
+3. If the README has any **pithy workflow tagline / lifecycle description** in the lede or "How it works" section, update it so users find capture as a first-class option (not a deep-link in the docs).
+
 ### plugins/flow-next/README.md
 
-Per docs-gap-scout findings:
+Per docs-gap-scout findings + explicit pathway coverage:
 
 1. **Line ~1620** — count update: "Fifteen commands" → "Sixteen commands"
 2. **Line ~1624** (commands table) — insert `/flow-next:capture` row. Workflow-ordered placement: after `/flow-next:interview` (line 1627) since capture is the same upstream-of-implementation cluster. (Table is not strictly alphabetical; verify before placing.)
 3. **Line ~1669** (flags table) — add capture row with `mode:autofix` / `--rewrite <id>` / `--from-compacted-ok` / `--yes` flags
 4. **Lines ~1726-1739** (interview subsection) — add the three grill-me enhancements as bullets
-5. **Lines ~280-298** (workflow ladder / "Choose Your Flow") — add capture to the lifecycle description; line 285 table row; line 293 bullet list
-6. **Lines ~826-851** (mermaid diagram) — capture slots between `prospect promote` output and the `interview` optional node (around line 832)
+5. **Lines ~280-298** ("Choose Your Flow" workflow ladder table) — extend the table to cover capture pathways. The current table has rows like "No target yet — Prospect → Interview/Plan → Work" / "New feature, want solid spec first → Spec → Interview/Plan → Work". Add/update rows so ALL the pathways from the spec's ASCII diagram appear:
+   - "No target yet, want ranked candidates" → `Prospect → Capture → Interview/Plan → Work` (or `Prospect → Plan` direct if user accepts a candidate as-is)
+   - "Conversation already in flight" → `Capture → Interview/Plan → Work`
+   - "Vague idea / rough notes" → `Interview → Plan → Work` (existing)
+   - "Detailed spec/PRD" → `Plan → Interview → Work` (existing)
+   - "Well-understood, needs task splitting" → `Plan → Work` (existing)
+   - "Small single-task, spec complete" → `Work directly` (existing)
+6. **"Prospect vs Spec vs Interview vs Plan" explainer** (under the table at line ~298+) — add a "Capture" entry between Prospect and Spec. Frame it as: "Capture (`/flow-next:capture`) synthesizes conversation context into an epic spec — the automated alternative to manual `flowctl epic create + epic set-plan`. Use after prospect-promotion or after a free-form design discussion. Mandatory read-back loop; never silently invents requirements."
+7. **Lines ~826-851** (mermaid lifecycle diagram) — add capture as a node between prospect's promote output and the interview/plan branches. The diagram should show all the spec-ASCII-diagram pathways: prospect can branch directly to plan (existing) OR through capture; free-form discussion enters via capture; capture branches to interview AND/OR plan; both terminate at work.
 
 Verify each line ref before editing — README has shifted across recent changes.
 
@@ -148,7 +171,11 @@ Tag triggers GitHub Actions release + Discord. Don't tag without pushing.
 ## Acceptance
 
 - [ ] `CHANGELOG.md` has new `[flow-next 0.38.0]` block above 0.37.0 with Added/Changed/Notes covering capture skill + interview enhancements + workflow ladder update. (R20)
-- [ ] `plugins/flow-next/README.md` updated: commands count (Fifteen → Sixteen), commands table row for capture, flags table row, interview subsection extended with grill-me enhancements, workflow ladder updated, mermaid lifecycle diagram updated. (R20)
+- [ ] **Root `README.md`** updated: commands table includes `/flow-next:capture`; any workflow-sequence prose mentions reflect the new pathways (prospect → capture, free-form → capture, capture → interview/plan); pithy lifecycle tagline (if present) makes capture discoverable. (R20)
+- [ ] `plugins/flow-next/README.md` updated: commands count (Fifteen → Sixteen), commands table row for capture, flags table row, interview subsection extended with grill-me enhancements. (R20)
+- [ ] `plugins/flow-next/README.md` "Choose Your Flow" workflow ladder table covers ALL pathways from the spec's ASCII diagram: prospect→plan (direct), prospect→capture→interview/plan, free-form→capture→interview/plan, plus the existing rows. (R20)
+- [ ] `plugins/flow-next/README.md` "Prospect vs Spec vs Interview vs Plan" explainer extended with a Capture entry positioning it as the automated alternative to manual `flowctl epic create + set-plan`, with read-back guarantees. (R20)
+- [ ] `plugins/flow-next/README.md` mermaid lifecycle diagram extended with capture node showing all three entry points (prospect-promote, free-form, direct) and both downstream branches (interview, plan). Visually matches the spec's ASCII diagram pathways. (R20)
 - [ ] `CLAUDE.md` updated: commands list (line ~27) includes capture, "Creating a spec" section adds capture as automated alternative to manual heredoc. (R20)
 - [ ] `.flow/usage.md` checked; updated only if it has a skills section listing slash commands. (R20)
 - [ ] `~/work/mickel.tech/app/apps/flow-next/page.tsx` updated: commands array entry for capture (after interview), lede count (Eleven → Twelve), FAQ lifecycle updated. (R21)
