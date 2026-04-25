@@ -151,9 +151,8 @@ Investigation subagents are **read-only** (no Edit/Write/Bash), return structure
 
 
 ## Done summary
-
-(populated when task completes)
-
+Created /flow-next:audit skill (markdown-only, agent-native): SKILL.md with mode detection + interaction principles, workflow.md covering phases 0-6 with Done-when criteria and cross-platform subagent dispatch, phases.md with the 5-outcomes lookup, plus a minimal slash-command pass-through. Forward-references flowctl helpers Task 2 will land.
 ## Evidence
-
-(populated when task completes)
+- Commits: f9eacd9c431b181b35ee2f459ff51c02a002f3c5
+- Tests: jq legacy entry count smoke check via flowctl memory list --json (2 entries surfaced from synthetic pitfalls.md)
+- PRs:

@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.36.0-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.37.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -1527,7 +1527,9 @@ flowctl memory list --track bug                    # filter by track
 flowctl memory list --category runtime-errors      # filter by category
 flowctl memory list --status all                   # include stale entries
 
-flowctl memory search "sqlite locked"              # weighted token overlap
+flowctl memory search "sqlite locked"              # default: --status active
+flowctl memory search "sqlite locked" --status stale  # only stale entries
+flowctl memory search "sqlite locked" --status all    # active + stale
 flowctl memory search "rp wrappers" \
   --module scripts/ralph \
   --tags "rp,ralph" \
@@ -1540,25 +1542,49 @@ flowctl memory read legacy/pitfalls.md                             # legacy flat
 flowctl memory read legacy/pitfalls#3                              # legacy entry (1-based)
 ```
 
-Search scoring is weighted: title 5×, tags 3×, body 1.5×, misc 1×. Legacy hits surface as synthetic entries with `track: "legacy"`.
+Search scoring is weighted: title 5×, tags 3×, body 1.5×, misc 1×. Legacy hits surface as synthetic entries with `track: "legacy"`. Default `--status active` excludes stale entries (audit-flagged advice stops polluting `memory-scout` output); pass `--status stale` or `--status all` to include them.
 
-**Migrate legacy → categorized:**
+**Audit lifecycle (v0.37.0+):**
 
-```bash
-flowctl memory migrate --dry-run      # print plan
-flowctl memory migrate --yes          # apply
-flowctl memory migrate --no-llm       # mechanical category defaults (no model call)
-```
+`/flow-next:audit [mode:autofix] [scope hint]` walks `.flow/memory/`, reviews each entry against the current codebase, and decides per entry whether to **Keep / Update / Consolidate / Replace / Delete**. Interactive mode (default) asks via the platform's blocking-question tool; autofix mode applies unambiguous actions and marks ambiguous entries as stale. The skill is agent-native — host agent reads the workflow markdown and executes it directly using its own Read/Grep/Glob tools (no Python audit engine, no codex/copilot subprocess dispatch). Legacy flat files are skipped with a warning.
 
-The classifier auto-selects `codex` (default `gpt-5.4-mini`) or `copilot` (default `claude-haiku-4.5`). Override via env:
+Two flowctl helpers back the audit lifecycle (also callable directly):
 
 ```bash
-FLOW_MEMORY_CLASSIFIER_BACKEND=codex|copilot|none
-FLOW_MEMORY_CLASSIFIER_MODEL=<model>
-FLOW_MEMORY_CLASSIFIER_EFFORT=<effort>
+# Mark an entry stale (used by /flow-next:audit, also callable directly)
+flowctl memory mark-stale <id> --reason "module renamed in PR #123"
+flowctl memory mark-stale <id> --reason "..." --audited-by "/flow-next:audit"
+flowctl memory mark-stale <id> --reason "..." --json
+
+# Clear stale flag
+flowctl memory mark-fresh <id>
 ```
+
+`mark-stale` sets `status: stale`, stamps `last_audited` (UTC), records `audit_notes` from `--reason`. Body is never modified. Idempotent — re-marking replaces `audit_notes` and re-stamps the date. `mark-fresh` drops the stale fields and stamps `last_audited`.
+
+**Migrate legacy → categorized (v0.37.0+):**
+
+`/flow-next:memory-migrate [mode:autofix] [scope hint]` is the recommended path. Agent-native skill — host agent reads each legacy entry, classifies it into the right `(track, category)` pair using its own intelligence + repo context, writes a categorized entry via `flowctl memory add`. Interactive mode (default) asks via the platform's blocking-question tool on ambiguous entries; autofix mode accepts mechanical defaults and logs ambiguous as `needs-review`. Optional scope hint narrows to a single legacy file (e.g. `/flow-next:memory-migrate pitfalls.md`). Phase 4 cleanup writes a self-ignoring `.flow/memory/_migrated/.gitignore` and renames originals on user consent (autofix declines by default; never auto-deletes).
+
+```bash
+flowctl memory list-legacy            # text mode: filename + entry count + mechanical default per entry
+flowctl memory list-legacy --json     # {files: [{filename, entry_count, entries: [...]}]}
+```
+
+`memory list-legacy` is the parsing helper the skill consumes; also useful for ad-hoc inspection. Each entry carries `mechanical_track` / `mechanical_category` derived from the source filename so the agent has a sane default to override only when content warrants.
+
+**Automation / CI fallback:**
+
+```bash
+flowctl memory migrate --dry-run      # print plan (mechanical-only)
+flowctl memory migrate --yes          # apply (mechanical-only)
+```
+
+`flowctl memory migrate` is **deterministic-only** since v0.37.0 — uses the mechanical filename → `(track, category)` heuristic. The `--no-llm` flag is accepted-but-noop (kept for back-compat with scripted callers). For accurate per-entry classification, run the `/flow-next:memory-migrate` skill instead.
 
 `migrate` is idempotent — re-running after legacy files are archived prints `No legacy files to migrate.` JSON mode refuses writes without `--yes` as a safety guard.
+
+> **Removed in v0.37.0:** `FLOW_MEMORY_CLASSIFIER_BACKEND`, `FLOW_MEMORY_CLASSIFIER_MODEL`, `FLOW_MEMORY_CLASSIFIER_EFFORT` env vars are no longer consumed (subprocess classifier dispatch removed). Setting them now triggers a one-time stderr warning. Suppress via `FLOW_NO_DEPRECATION=1`.
 
 **Surface the store in AGENTS.md / CLAUDE.md:**
 
@@ -1581,8 +1607,8 @@ Config lives in `.flow/config.json`, separate from Ralph's `scripts/ralph/config
 **Upgrading from 0.32.x:**
 
 1. `git pull && (reinstall plugin)`.
-2. `flowctl memory migrate --dry-run` to preview.
-3. `flowctl memory migrate --yes` to apply. Legacy files move to `.flow/memory/legacy/`; migration is idempotent.
+2. **Recommended:** run `/flow-next:memory-migrate` for agent-native per-entry classification (host agent reads each legacy entry and picks the right `(track, category)` with full repo context). Or `/flow-next:memory-migrate mode:autofix` to accept mechanical defaults without prompts.
+3. **Automation alternative:** `flowctl memory migrate --dry-run` then `flowctl memory migrate --yes` for deterministic mechanical-only classification (legacy files move to `.flow/memory/_legacy/`; migration is idempotent).
 4. Optional: `flowctl memory discoverability-patch --apply` to surface the tree in AGENTS.md.
 
 Until migration runs, legacy flat files continue to work; `list` / `read` / `search` read both.
@@ -1591,7 +1617,7 @@ Until migration runs, legacy flat files continue to work; `list` / `read` / `sea
 
 ## Commands
 
-Thirteen commands, complete workflow:
+Fifteen commands, complete workflow:
 
 | Command | What It Does |
 |---------|--------------|
@@ -1603,6 +1629,8 @@ Thirteen commands, complete workflow:
 | `/flow-next:impl-review` | Carmack-level impl review of current branch |
 | `/flow-next:epic-review <id>` | Epic-completion review: verify implementation matches spec |
 | `/flow-next:resolve-pr [arg]` | Resolve GitHub PR review threads (fetch → triage → fix → reply → resolve) ([details](#pr-feedback-resolution)) |
+| `/flow-next:audit [mode:autofix] [hint]` | Review `.flow/memory/` against current code, decide Keep/Update/Consolidate/Replace/Delete per entry ([details](#memory-system)) |
+| `/flow-next:memory-migrate [mode:autofix] [hint]` | Convert pre-fn-30 legacy memory files into the categorized schema; agent classifies each entry ([details](#memory-system)) |
 | `/flow-next:prime` | Assess codebase agent-readiness, propose fixes ([details](#agent-readiness-assessment)) |
 | `/flow-next:sync <id>` | Manual plan-sync: update downstream tasks after implementation drift |
 | `/flow-next:ralph-init` | Scaffold repo-local Ralph harness (`scripts/ralph/`) |

@@ -47,7 +47,8 @@ Case 2: mark-stale with --audited-by
 
 Case 3: mark-stale --json output shape
   flowctl memory mark-stale <id> --reason "X" --json
-  → assert success: true, id present, last_audited present
+  → assert id, path, status="stale", last_audited, audit_notes all present
+  <!-- Updated by plan-sync: fn-34.2 ships JSON shape {id, path, status, last_audited, audit_notes} (no `success` key) -->
 
 Case 4: mark-stale missing --reason errors
   flowctl memory mark-stale <id>  (no --reason)
@@ -246,9 +247,8 @@ Mickel.tech commit lands separately in that repo, terse conventional-commit styl
 
 
 ## Done summary
-
-(populated when task completes)
-
+Shipped fn-34 rollup: audit_smoke_test.sh (13 cases / 41 assertions covering mark-stale + mark-fresh + search --status plumbing) plus CHANGELOG/README/CLAUDE.md/.flow/usage.md docs and version bump 0.36.0 → 0.37.0 (manifests + codex mirror regenerated). Patched smoke_test.sh memory search assertion to match fn-34.2's new --status active default. All four smoke suites + unit tests green.
 ## Evidence
-
-(populated when task completes)
+- Commits: f0cda1eb807378c29e92aa5309fb8d0b4620ba49
+- Tests: plugins/flow-next/scripts/audit_smoke_test.sh (13 cases / 41 assertions), plugins/flow-next/scripts/smoke_test.sh (126 assertions), plugins/flow-next/scripts/prospect_smoke_test.sh (94 assertions), plugins/flow-next/scripts/ralph_smoke_test.sh (15 assertions), python3 -m unittest discover -s plugins/flow-next/tests (331/331 green)
+- PRs:

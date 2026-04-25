@@ -3,7 +3,7 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v0.36.0-green)](plugins/flow-next/)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v0.37.0-green)](plugins/flow-next/)
 [![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)

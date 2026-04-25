@@ -707,8 +707,9 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# Search with token overlap.
-search_json="$(scripts/flowctl memory search 'stale example' --json)"
+# Search with token overlap. Pass --status all because the seeded entry
+# carries `status: stale` and fn-34.2 default-excludes stale from search.
+search_json="$(scripts/flowctl memory search 'stale example' --status all --json)"
 "$PYTHON_BIN" - <<'PY' "$search_json"
 import json, sys
 data = json.loads(sys.argv[1])
@@ -721,8 +722,18 @@ PY
 echo -e "${GREEN}✓${NC} memory search ranks by token overlap"
 PASS=$((PASS + 1))
 
+# Search default (no --status) excludes stale entries — fn-34.2 contract.
+search_json="$(scripts/flowctl memory search 'stale example' --json)"
+"$PYTHON_BIN" - <<'PY' "$search_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["matches"] == [], f"default search leaked stale entry: {data}"
+PY
+echo -e "${GREEN}✓${NC} memory search default --status active excludes stale (fn-34.2)"
+PASS=$((PASS + 1))
+
 # Search --track filter.
-search_json="$(scripts/flowctl memory search 'stale example' --track bug --json)"
+search_json="$(scripts/flowctl memory search 'stale example' --track bug --status all --json)"
 "$PYTHON_BIN" - <<'PY' "$search_json"
 import json, sys
 data = json.loads(sys.argv[1])
@@ -801,6 +812,30 @@ ids = [m["entry_id"] for m in data["matches"]]
 assert any(mid.startswith("legacy/") for mid in ids), f"legacy not in search: {ids}"
 PY
 echo -e "${GREEN}✓${NC} memory search covers legacy files (substring)"
+PASS=$((PASS + 1))
+
+# fn-34/fn-35: search --status stale must NOT include legacy hits
+# (legacy entries have no status field; treating them as implicit-active means
+# excluding from --status stale queries — Codex P2 finding on PR #120).
+stale_json="$(scripts/flowctl memory search 'null deref' --status stale --json)"
+"$PYTHON_BIN" - <<'PY' "$stale_json"
+import json, sys
+data = json.loads(sys.argv[1])
+legacy = [m for m in data["matches"] if m.get("legacy")]
+assert not legacy, f"legacy leaked into --status stale: {legacy}"
+PY
+echo -e "${GREEN}✓${NC} memory search --status stale excludes legacy hits"
+PASS=$((PASS + 1))
+
+# --status all should include legacy back in.
+all_json="$(scripts/flowctl memory search 'null deref' --status all --json)"
+"$PYTHON_BIN" - <<'PY' "$all_json"
+import json, sys
+data = json.loads(sys.argv[1])
+legacy = [m for m in data["matches"] if m.get("legacy")]
+assert legacy, f"legacy missing from --status all: {data['matches']}"
+PY
+echo -e "${GREEN}✓${NC} memory search --status all includes legacy hits"
 PASS=$((PASS + 1))
 
 rm -f .flow/memory/pitfalls.md
@@ -1983,6 +2018,64 @@ LEGEOF
   [ "$rerun_count" = "0" ] || { echo "FAIL: second migrate found $rerun_count (expected 0 — idempotent)"; echo "$rerun"; exit 1; }
 )
 echo -e "${GREEN}✓${NC} memory migrate: dry-run, real, 3 legacy files → 4 entries, idempotent"
+PASS=$((PASS + 1))
+
+echo -e "${YELLOW}--- memory list-legacy (fn-35) ---${NC}"
+LL_TEST_DIR="$TEST_DIR/list-legacy"
+rm -rf "$LL_TEST_DIR"
+mkdir -p "$LL_TEST_DIR"
+(
+  cd "$LL_TEST_DIR"
+  git init -q
+  git config user.email t@t
+  git config user.name t
+  mkdir -p .flow/memory
+  "$SCRIPT_DIR/flowctl" memory init --json >/dev/null
+
+  # Case 1: empty memory dir (no legacy files) — JSON returns {files: []}, rc=0.
+  empty_json=$("$SCRIPT_DIR/flowctl" memory list-legacy --json 2>&1)
+  empty_count=$(echo "$empty_json" | jq '.files | length')
+  [ "$empty_count" = "0" ] || { echo "FAIL: empty list-legacy expected 0 files, got $empty_count"; echo "$empty_json"; exit 1; }
+
+  # Seed two-entry pitfalls.md (matches migrate smoke shape).
+  cat > .flow/memory/pitfalls.md <<'LEGEOF'
+# Pitfalls
+
+## 2026-03-01 Race condition
+Worker race.
+
+---
+
+## 2026-03-15 Null crash
+Crash on empty payload.
+LEGEOF
+
+  # Case 2: two-entry parse — JSON shape correct + entry_count=2.
+  ll_json=$("$SCRIPT_DIR/flowctl" memory list-legacy --json 2>&1)
+  files_count=$(echo "$ll_json" | jq '.files | length')
+  [ "$files_count" = "1" ] || { echo "FAIL: expected 1 file, got $files_count"; echo "$ll_json"; exit 1; }
+  pit_filename=$(echo "$ll_json" | jq -r '.files[0].filename')
+  [ "$pit_filename" = "pitfalls.md" ] || { echo "FAIL: expected pitfalls.md, got $pit_filename"; exit 1; }
+  pit_count=$(echo "$ll_json" | jq '.files[0].entry_count')
+  [ "$pit_count" = "2" ] || { echo "FAIL: expected entry_count=2, got $pit_count"; echo "$ll_json"; exit 1; }
+  pit_entries=$(echo "$ll_json" | jq '.files[0].entries | length')
+  [ "$pit_entries" = "2" ] || { echo "FAIL: expected 2 entries array, got $pit_entries"; exit 1; }
+
+  # Case 3: mechanical defaults present per entry — bug/build-errors for pitfalls.md.
+  m_track=$(echo "$ll_json" | jq -r '.files[0].entries[0].mechanical_track')
+  m_cat=$(echo "$ll_json" | jq -r '.files[0].entries[0].mechanical_category')
+  [ "$m_track" = "bug" ] || { echo "FAIL: expected mechanical_track=bug, got $m_track"; exit 1; }
+  [ "$m_cat" = "build-errors" ] || { echo "FAIL: expected mechanical_category=build-errors, got $m_cat"; exit 1; }
+  # Second entry also carries the same mechanical default.
+  m_track2=$(echo "$ll_json" | jq -r '.files[0].entries[1].mechanical_track')
+  [ "$m_track2" = "bug" ] || { echo "FAIL: expected mechanical_track=bug on entry 2, got $m_track2"; exit 1; }
+
+  # Case 4: text mode — human-readable output includes filename + count + a default.
+  text_out=$("$SCRIPT_DIR/flowctl" memory list-legacy 2>&1)
+  echo "$text_out" | grep -q "pitfalls.md (2 entries):" || { echo "FAIL: text mode missing 'pitfalls.md (2 entries):' header"; echo "$text_out"; exit 1; }
+  echo "$text_out" | grep -q "default bug/build-errors" || { echo "FAIL: text mode missing mechanical default suffix"; echo "$text_out"; exit 1; }
+)
+echo -e "${GREEN}✓${NC} memory list-legacy: empty dir, two-entry parse, mechanical defaults, text mode"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- memory discoverability-patch (fn-30.6) ---${NC}"

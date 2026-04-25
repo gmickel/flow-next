@@ -3687,6 +3687,8 @@ MEMORY_OPTIONAL_FIELDS: frozenset[str] = frozenset(
         "stale_reason",
         "stale_date",
         "last_updated",
+        "last_audited",
+        "audit_notes",
         "related_to",
     }
 )
@@ -3733,6 +3735,8 @@ MEMORY_FIELD_ORDER: tuple[str, ...] = (
     "stale_reason",
     "stale_date",
     "last_updated",
+    "last_audited",
+    "audit_notes",
     "related_to",
 )
 
@@ -3927,7 +3931,7 @@ def parse_memory_frontmatter(path: Path) -> dict[str, Any]:
 # bool, int). We always emit these quoted so the parser round-trips them
 # as plain strings. Memory readers treat every scalar as a string.
 _MEMORY_QUOTED_STRING_FIELDS: frozenset[str] = frozenset(
-    {"date", "stale_date", "last_updated"}
+    {"date", "stale_date", "last_updated", "last_audited"}
 )
 
 
@@ -5866,6 +5870,7 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
     module_filter = getattr(args, "module", None)
     tags_filter_raw = getattr(args, "tags", None)
     limit = getattr(args, "limit", None)
+    status_filter = getattr(args, "status", "active") or "active"
 
     if track and track not in MEMORY_TRACKS:
         error_exit(
@@ -5876,6 +5881,11 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
         error_exit(
             f"invalid --category '{category}' for track '{track}' "
             f"(valid: {', '.join(MEMORY_CATEGORIES[track])})",
+            use_json=args.json,
+        )
+    if status_filter not in ("active", "stale", "all"):
+        error_exit(
+            f"invalid --status '{status_filter}' (valid: active, stale, all)",
             use_json=args.json,
         )
 
@@ -5898,6 +5908,13 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
             for e in entries
             if tag_filter_set & {t.lower() for t in e["tags"]}
         ]
+    # Status filter — mirrors cmd_memory_list. Default `active` excludes
+    # stale-flagged entries from search results so the audit lifecycle
+    # actually keeps stale advice out of memory-scout / agent context.
+    if status_filter == "active":
+        entries = [e for e in entries if e["status"] != "stale"]
+    elif status_filter == "stale":
+        entries = [e for e in entries if e["status"] == "stale"]
 
     results: list[dict[str, Any]] = []
     for e in entries:
@@ -5937,9 +5954,17 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
     results.sort(key=lambda r: r["score"], reverse=True)
 
     # Legacy substring search — only when no track/category filter
-    # (legacy has no track/category metadata).
+    # (legacy has no track/category metadata). Legacy entries have no
+    # `status` field; treat them as implicitly active. Skip entirely on
+    # --status stale (audit-flag query); include on active (default) + all.
     legacy_results: list[dict[str, Any]] = []
-    if track is None and category is None and not tag_filter_set and not module_filter:
+    if (
+        track is None
+        and category is None
+        and not tag_filter_set
+        and not module_filter
+        and status_filter != "stale"
+    ):
         for filename in MEMORY_LEGACY_FILES:
             path = memory_dir / filename
             if not path.exists():
@@ -6003,6 +6028,171 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
             print(f"  > {r['snippet']}")
         print()
     print(f"Found {len(combined)} matches")
+
+
+# --- Audit lifecycle (fn-34 task 2) ---
+#
+# Thin persistence helpers for the /flow-next:audit skill. The skill walks
+# `.flow/memory/`, judges each entry against the current codebase, and calls
+# these helpers to flag stale advice or clear a previous flag. Pure
+# frontmatter mutation — body is never touched.
+
+
+def _memory_resolve_categorized_entry(
+    memory_dir: Path, entry_id: str, *, use_json: bool, command: str
+) -> dict[str, Any]:
+    """Resolve `entry_id` to a categorized memory entry descriptor.
+
+    Errors out on unknown ids, ambiguous slug-only matches, and legacy ids
+    (mark-stale / mark-fresh only operate on categorized entries — legacy
+    flat files have no per-entry frontmatter to mutate).
+    """
+    resolved = _memory_resolve_read_target(memory_dir, entry_id)
+    if resolved is None:
+        error_exit(
+            f"entry '{entry_id}' not found. "
+            f"Use `flowctl memory list` to see valid ids.",
+            use_json=use_json,
+        )
+    kind = resolved["kind"]
+    if kind == "ambiguous":
+        ids = ", ".join(m["entry_id"] for m in resolved["matches"])
+        error_exit(
+            f"entry '{entry_id}' is ambiguous; candidates: {ids}",
+            use_json=use_json,
+        )
+    if kind in ("legacy_file", "legacy_entry"):
+        error_exit(
+            f"`memory {command}` does not support legacy entries — run "
+            f"`flowctl memory migrate` first to convert them.",
+            use_json=use_json,
+        )
+    if kind != "categorized":
+        error_exit(
+            f"unexpected resolve result for '{entry_id}'", use_json=use_json
+        )
+    return resolved["entry"]
+
+
+def cmd_memory_mark_stale(args: argparse.Namespace) -> None:
+    """Flag a memory entry as stale.
+
+    Sets `status: stale`, stamps `last_audited` (today, UTC), records
+    `audit_notes` from `--reason` (and an optional `(audited-by: …)`
+    suffix). Body preserved. Atomic via `write_memory_entry`.
+
+    Idempotent: re-marking a stale entry updates `last_audited` +
+    `audit_notes` (the new reason replaces the old). No error.
+    """
+    memory_dir = require_memory_enabled(args)
+
+    entry_id = args.id
+    reason = (args.reason or "").strip()
+    if not reason:
+        error_exit(
+            "--reason is required (one-line justification for the stale flag)",
+            code=2,
+            use_json=args.json,
+        )
+    audited_by = (getattr(args, "audited_by", None) or "").strip()
+
+    entry = _memory_resolve_categorized_entry(
+        memory_dir, entry_id, use_json=args.json, command="mark-stale"
+    )
+
+    path = Path(entry["path"])
+    data = _memory_read_entry(path)
+    fm = dict(data["frontmatter"])
+    body = data["body"]
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    audit_notes = reason
+    if audited_by:
+        audit_notes = f"{reason} (audited-by: {audited_by})"
+
+    fm["status"] = "stale"
+    fm["last_audited"] = today
+    fm["audit_notes"] = audit_notes
+
+    try:
+        write_memory_entry(path, fm, body)
+    except ValueError as exc:
+        error_exit(f"failed to write entry: {exc}", use_json=args.json)
+
+    if args.json:
+        json_output(
+            {
+                "id": entry["entry_id"],
+                "path": str(path),
+                "status": "stale",
+                "last_audited": today,
+                "audit_notes": audit_notes,
+            }
+        )
+        return
+
+    print(f"Flagged stale: {entry['entry_id']}")
+    print(f"  path: {path}")
+    print(f"  last_audited: {today}")
+    print(f"  audit_notes: {audit_notes}")
+
+
+def cmd_memory_mark_fresh(args: argparse.Namespace) -> None:
+    """Clear stale flag on a memory entry.
+
+    Resets `status` to active (default — field is removed from
+    frontmatter), clears `audit_notes`, stamps `last_audited` (today, UTC).
+    Idempotent: marking a non-stale entry just stamps `last_audited`.
+    """
+    memory_dir = require_memory_enabled(args)
+
+    entry_id = args.id
+    audited_by = (getattr(args, "audited_by", None) or "").strip()
+
+    entry = _memory_resolve_categorized_entry(
+        memory_dir, entry_id, use_json=args.json, command="mark-fresh"
+    )
+
+    path = Path(entry["path"])
+    data = _memory_read_entry(path)
+    fm = dict(data["frontmatter"])
+    body = data["body"]
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # Reset to active default — drop optional stale fields entirely so the
+    # frontmatter stays minimal. `status: active` is the implicit default,
+    # so we omit it from the file rather than write it explicitly.
+    for key in ("status", "stale_reason", "stale_date", "audit_notes"):
+        fm.pop(key, None)
+    if audited_by:
+        # Audited-by on mark-fresh is just a breadcrumb; keep it concise.
+        fm["audit_notes"] = f"marked fresh (audited-by: {audited_by})"
+    fm["last_audited"] = today
+
+    try:
+        write_memory_entry(path, fm, body)
+    except ValueError as exc:
+        error_exit(f"failed to write entry: {exc}", use_json=args.json)
+
+    if args.json:
+        json_output(
+            {
+                "id": entry["entry_id"],
+                "path": str(path),
+                "status": "active",
+                "last_audited": today,
+                "audit_notes": fm.get("audit_notes", ""),
+            }
+        )
+        return
+
+    print(f"Cleared stale flag: {entry['entry_id']}")
+    print(f"  path: {path}")
+    print(f"  last_audited: {today}")
+    if fm.get("audit_notes"):
+        print(f"  audit_notes: {fm['audit_notes']}")
 
 
 # --- Migration (fn-30 task 4) ---
@@ -6218,235 +6408,6 @@ def _memory_classify_mechanical(legacy_filename: str) -> tuple[str, str]:
     return mapped
 
 
-def _memory_classify_build_prompt(
-    title: str, body: str, source_filename: str
-) -> str:
-    """Build the one-shot classifier prompt sent to the fast model."""
-    bug_cats = ", ".join(MEMORY_CATEGORIES["bug"])
-    knowledge_cats = ", ".join(MEMORY_CATEGORIES["knowledge"])
-    body_preview = body.strip()
-    if len(body_preview) > 1200:
-        body_preview = body_preview[:1200] + "..."
-    return f"""Classify a project-memory entry into a track + category.
-
-Tracks:
-  bug         — bugs, regressions, gotchas, things that broke
-  knowledge   — conventions, decisions, architecture patterns, workflow tips
-
-Bug categories: {bug_cats}
-Knowledge categories: {knowledge_cats}
-
-Source file: {source_filename}
-Entry title: {title}
-Entry body:
-{body_preview}
-
-Output exactly one line in the form:
-track/category
-
-Examples:
-bug/runtime-errors
-knowledge/conventions
-knowledge/tooling-decisions
-
-Pick the single best fit. If unsure, default to the source file's natural
-track (pitfalls→bug, conventions→knowledge/conventions, decisions→
-knowledge/tooling-decisions).
-"""
-
-
-def _memory_classify_parse_response(text: str) -> Optional[tuple[str, str]]:
-    """Extract `track/category` from the classifier's reply, validating enums."""
-    if not text:
-        return None
-    candidates: list[str] = []
-    for raw in text.splitlines():
-        line = raw.strip().strip("`*_> ").rstrip(".,;")
-        if not line:
-            continue
-        # Tolerate "Answer: bug/runtime-errors" prefixes.
-        if ":" in line and line.lower().startswith(("answer", "verdict", "result", "category", "track")):
-            line = line.split(":", 1)[1].strip()
-        candidates.append(line)
-    # Prefer the last bare line — many models trail with reasoning.
-    for cand in reversed(candidates):
-        m = re.match(r"^([a-z]+)\s*/\s*([a-z][a-z0-9-]*)$", cand)
-        if not m:
-            continue
-        track = m.group(1)
-        category = m.group(2)
-        if track not in MEMORY_TRACKS:
-            continue
-        if category not in MEMORY_CATEGORIES.get(track, []):
-            continue
-        return (track, category)
-    return None
-
-
-def _memory_classify_run_codex(
-    prompt: str, model: Optional[str], effort: Optional[str]
-) -> tuple[Optional[tuple[str, str]], Optional[str], Optional[str]]:
-    """Invoke codex CLI as classifier. Returns (result, error, model_used)."""
-    codex = shutil.which("codex")
-    if not codex:
-        return None, "codex CLI not on PATH", None
-    effective_model = model or "gpt-5-mini"
-    effective_effort = effort or "low"
-    cmd = [
-        codex,
-        "exec",
-        "--model",
-        effective_model,
-        "-c",
-        f'model_reasoning_effort="{effective_effort}"',
-        "--sandbox",
-        "read-only" if os.name != "nt" else "danger-full-access",
-        "--skip-git-repo-check",
-        "-",
-    ]
-    try:
-        result = subprocess.run(
-            cmd,
-            input=prompt,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=60,
-        )
-    except subprocess.TimeoutExpired:
-        return None, "codex classifier timed out (60s)", effective_model
-    except OSError as exc:
-        return None, f"codex classifier OS error: {exc}", effective_model
-    if result.returncode != 0:
-        msg = (result.stderr or "codex classifier exited non-zero").strip().splitlines()[-1]
-        return None, f"codex classifier failed: {msg}", effective_model
-    parsed = _memory_classify_parse_response(result.stdout)
-    if parsed is None:
-        return None, "codex classifier returned malformed output", effective_model
-    return parsed, None, effective_model
-
-
-def _memory_classify_run_copilot(
-    prompt: str, model: Optional[str], effort: Optional[str]
-) -> tuple[Optional[tuple[str, str]], Optional[str], Optional[str]]:
-    """Invoke copilot CLI as classifier."""
-    copilot = shutil.which("copilot")
-    if not copilot:
-        return None, "copilot CLI not on PATH", None
-    effective_model = model or "claude-haiku-4.5"
-    effective_effort = effort or "low"
-    repo_root = get_repo_root()
-    cmd = [
-        copilot,
-        "-p",
-        prompt,
-        f"--resume={uuid.uuid4()}",
-        "--output-format",
-        "text",
-        "-s",
-        "--no-ask-user",
-        "--allow-all-tools",
-        "--add-dir",
-        str(repo_root),
-        "--disable-builtin-mcps",
-        "--no-custom-instructions",
-        "--log-level",
-        "error",
-        "--no-auto-update",
-        "--model",
-        effective_model,
-    ]
-    if not effective_model.startswith("claude-"):
-        cmd += ["--effort", effective_effort]
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=60,
-        )
-    except subprocess.TimeoutExpired:
-        return None, "copilot classifier timed out (60s)", effective_model
-    except OSError as exc:
-        return None, f"copilot classifier OS error: {exc}", effective_model
-    if result.returncode != 0:
-        msg = (result.stderr or "copilot classifier exited non-zero").strip().splitlines()[-1]
-        return None, f"copilot classifier failed: {msg}", effective_model
-    parsed = _memory_classify_parse_response(result.stdout)
-    if parsed is None:
-        return None, "copilot classifier returned malformed output", effective_model
-    return parsed, None, effective_model
-
-
-def _memory_classify_select_backend() -> tuple[str, Optional[str], Optional[str]]:
-    """Pick a classifier backend.
-
-    Resolution order:
-      1. FLOW_MEMORY_CLASSIFIER_BACKEND env (codex | copilot | none)
-      2. codex CLI on PATH
-      3. copilot CLI on PATH
-      4. ("none", None, None) — caller falls back to mechanical
-
-    Model + effort respect FLOW_MEMORY_CLASSIFIER_MODEL /
-    FLOW_MEMORY_CLASSIFIER_EFFORT when set.
-    """
-    forced = (os.environ.get("FLOW_MEMORY_CLASSIFIER_BACKEND") or "").strip().lower()
-    model = os.environ.get("FLOW_MEMORY_CLASSIFIER_MODEL") or None
-    effort = os.environ.get("FLOW_MEMORY_CLASSIFIER_EFFORT") or None
-    if forced == "none":
-        return ("none", model, effort)
-    if forced in ("codex", "copilot"):
-        return (forced, model, effort)
-    if shutil.which("codex"):
-        return ("codex", model, effort)
-    if shutil.which("copilot"):
-        return ("copilot", model, effort)
-    return ("none", model, effort)
-
-
-def _memory_classify_entry(
-    title: str,
-    body: str,
-    source_filename: str,
-    backend: str,
-    model: Optional[str],
-    effort: Optional[str],
-) -> tuple[tuple[str, str], str, Optional[str], Optional[str]]:
-    """Classify a single entry. Returns ((track, category), method, model, error).
-
-    method ∈ {"llm", "mechanical"}.
-    error is set when the LLM was attempted but failed (caller can record).
-    """
-    if backend == "none":
-        return (
-            _memory_classify_mechanical(source_filename),
-            "mechanical",
-            None,
-            None,
-        )
-    prompt = _memory_classify_build_prompt(title, body, source_filename)
-    if backend == "codex":
-        result, err, used_model = _memory_classify_run_codex(prompt, model, effort)
-    elif backend == "copilot":
-        result, err, used_model = _memory_classify_run_copilot(prompt, model, effort)
-    else:
-        return (
-            _memory_classify_mechanical(source_filename),
-            "mechanical",
-            None,
-            f"unknown backend '{backend}'",
-        )
-    if result is None:
-        return (
-            _memory_classify_mechanical(source_filename),
-            "mechanical",
-            used_model,
-            err,
-        )
-    return (result, "llm", used_model, None)
-
-
 def _memory_migrate_build_frontmatter(
     *,
     title: str,
@@ -6535,20 +6496,156 @@ def _memory_migrate_target_path(
         n += 1
 
 
+# fn-35.2: deprecation hints for the LLM-dispatch removal. Module-level
+# guards keep the messages to one print per process even when migrate
+# runs across many entries.
+_MIGRATE_DEPRECATION_PRINTED = False
+_CLASSIFIER_ENV_DEPRECATION_PRINTED = False
+_DEAD_CLASSIFIER_ENV_VARS = (
+    "FLOW_MEMORY_CLASSIFIER_BACKEND",
+    "FLOW_MEMORY_CLASSIFIER_MODEL",
+    "FLOW_MEMORY_CLASSIFIER_EFFORT",
+)
+
+
+def _emit_migrate_deprecation_hint() -> None:
+    """One-time stderr hint pointing users at the agent-native skill.
+
+    Suppressed when stderr isn't a TTY (so `--json` pipelines stay clean)
+    or when `FLOW_NO_DEPRECATION=1` is set.
+    """
+    global _MIGRATE_DEPRECATION_PRINTED
+    if _MIGRATE_DEPRECATION_PRINTED:
+        return
+    if os.environ.get("FLOW_NO_DEPRECATION") == "1":
+        return
+    if not sys.stderr.isatty():
+        return
+    print(
+        "[DEPRECATED] Subprocess-based classification removed. "
+        "Now mechanical-only by default.\n"
+        "For agent-native classification, use: /flow-next:memory-migrate",
+        file=sys.stderr,
+    )
+    _MIGRATE_DEPRECATION_PRINTED = True
+
+
+def _check_dead_classifier_env_vars() -> None:
+    """One-time stderr warning if any dead FLOW_MEMORY_CLASSIFIER_* env is set."""
+    global _CLASSIFIER_ENV_DEPRECATION_PRINTED
+    if _CLASSIFIER_ENV_DEPRECATION_PRINTED:
+        return
+    if os.environ.get("FLOW_NO_DEPRECATION") == "1":
+        return
+    if not sys.stderr.isatty():
+        return
+    dead = [v for v in _DEAD_CLASSIFIER_ENV_VARS if os.environ.get(v)]
+    if not dead:
+        return
+    print(
+        f"[DEPRECATED] {', '.join(dead)} no longer used; "
+        "classification now runs in-skill (/flow-next:memory-migrate).",
+        file=sys.stderr,
+    )
+    _CLASSIFIER_ENV_DEPRECATION_PRINTED = True
+
+
+def cmd_memory_list_legacy(args: argparse.Namespace) -> None:
+    """List legacy flat-file memory entries with mechanical default labels.
+
+    Used by `/flow-next:memory-migrate` to enumerate entries before the
+    host agent classifies them into the categorized schema. Each entry
+    carries a `mechanical_track` / `mechanical_category` derived from the
+    legacy filename (`_memory_classify_mechanical`) so the agent has a
+    sane default to override only when context warrants.
+
+    Output:
+      text mode: one block per legacy file
+      --json:   {"files": [{"filename", "entry_count", "entries": [...]}]}
+    """
+    memory_dir = require_memory_enabled(args)
+    is_json = bool(getattr(args, "json", False))
+
+    files_payload: list[dict[str, Any]] = []
+    for name in MEMORY_LEGACY_FILES:
+        path = memory_dir / name
+        if not (path.exists() and path.is_file()):
+            continue
+        entries = _memory_parse_legacy_entries(path)
+        track, category = _memory_classify_mechanical(name)
+        enriched: list[dict[str, Any]] = []
+        for entry in entries:
+            enriched.append(
+                {
+                    "title": entry["title"],
+                    "body": entry["body"],
+                    "tags": entry["tags"],
+                    "date": entry["date"],
+                    "mechanical_track": track,
+                    "mechanical_category": category,
+                }
+            )
+        files_payload.append(
+            {
+                "filename": name,
+                "entry_count": len(enriched),
+                "entries": enriched,
+            }
+        )
+
+    if is_json:
+        json_output({"files": files_payload})
+        return
+
+    if not files_payload:
+        print("No legacy files found.")
+        return
+
+    for f in files_payload:
+        print(
+            f"{f['filename']} ({f['entry_count']} "
+            f"{'entry' if f['entry_count'] == 1 else 'entries'}):"
+        )
+        for e in f["entries"]:
+            tag_suffix = f"  [{', '.join(e['tags'])}]" if e["tags"] else ""
+            date_prefix = f"{e['date']}  " if e["date"] else ""
+            print(
+                f"  - {date_prefix}{e['title']}  "
+                f"-> default {e['mechanical_track']}/{e['mechanical_category']}"
+                f"{tag_suffix}"
+            )
+        print()
+
+
 def cmd_memory_migrate(args: argparse.Namespace) -> None:
     """Convert legacy flat memory files into categorized YAML entries.
+
+    Mechanical-only after fn-35: classification uses the deterministic
+    filename heuristic (`_memory_classify_mechanical`). For accurate
+    per-entry classification, run the `/flow-next:memory-migrate` skill
+    instead — it lets the host agent classify each entry in-context.
+
+    JSON receipt shape preserves `method` (always `"mechanical"`) and
+    `model` (always `null`) keys for backcompat with pre-fn-35 callers.
 
     Default: interactive. Flags:
       --dry-run   plan only, no writes
       --yes       skip the y/N prompt
-      --no-llm    skip LLM classification, mechanical only
+      --no-llm    accepted-but-noop (kept for backcompat)
       --json      machine-readable output
     """
     memory_dir = require_memory_enabled(args)
     is_json = bool(getattr(args, "json", False))
     dry_run = bool(getattr(args, "dry_run", False))
     assume_yes = bool(getattr(args, "yes", False))
-    no_llm = bool(getattr(args, "no_llm", False))
+    # `no_llm` is read off args for back-compat but is now a no-op:
+    # mechanical classification is always used.
+    _ = bool(getattr(args, "no_llm", False))
+
+    # Surface the deprecation + dead-env-var warnings once per process.
+    # Both helpers self-suppress in non-TTY (so `--json` pipelines stay clean).
+    _emit_migrate_deprecation_hint()
+    _check_dead_classifier_env_vars()
 
     # 1. Detect legacy files.
     legacy_paths: list[tuple[str, Path]] = []
@@ -6571,20 +6668,13 @@ def cmd_memory_migrate(args: argparse.Namespace) -> None:
             print("No legacy files to migrate.")
         return
 
-    # 2. Pick classifier backend.
-    if no_llm:
-        backend, model, effort = ("none", None, None)
-    else:
-        backend, model, effort = _memory_classify_select_backend()
-
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    # 3. Build per-entry plan: parse + classify + compute target path.
+    # 2. Build per-entry plan: parse + mechanical-classify + compute target path.
     used_slugs: set[str] = set()
     plan: list[dict[str, Any]] = []
     warnings: list[str] = []
 
-    backend_failed_once = False
     for filename, path in legacy_paths:
         entries = _memory_parse_legacy_entries(path)
         if not entries:
@@ -6592,25 +6682,8 @@ def cmd_memory_migrate(args: argparse.Namespace) -> None:
                 f"{filename}: no parseable entries (file kept in place; nothing to migrate)"
             )
             continue
+        track, category = _memory_classify_mechanical(filename)
         for idx, entry in enumerate(entries, start=1):
-            (track, category), method, model_used, err = _memory_classify_entry(
-                entry["title"],
-                entry["body"],
-                filename,
-                backend,
-                model,
-                effort,
-            )
-            if err and not backend_failed_once:
-                # Surface the first failure once; subsequent calls would
-                # spam if the CLI is missing/auth-broken.
-                warnings.append(
-                    f"LLM classifier unavailable ({err}). Falling back to mechanical "
-                    "mapping for remaining entries. Re-run with `--no-llm` to suppress."
-                )
-                backend_failed_once = True
-                # Force mechanical for the rest of this run.
-                backend = "none"
             entry_date = entry["date"] or today
             target_path, slug = _memory_migrate_target_path(
                 memory_dir, track, category, entry["title"], entry_date, used_slugs
@@ -6622,8 +6695,8 @@ def cmd_memory_migrate(args: argparse.Namespace) -> None:
                     "source_entry": idx,
                     "target": entry_id,
                     "target_path": str(target_path),
-                    "method": method,
-                    "model": model_used,
+                    "method": "mechanical",
+                    "model": None,
                     "track": track,
                     "category": category,
                     "title": entry["title"],
@@ -15662,8 +15735,62 @@ def main() -> None:
         type=int,
         help="Max results to return (default: unlimited)",
     )
+    p_memory_search.add_argument(
+        "--status",
+        choices=["active", "stale", "all"],
+        default="active",
+        help="Filter by status (default: active)",
+    )
     p_memory_search.add_argument("--json", action="store_true", help="JSON output")
     p_memory_search.set_defaults(func=cmd_memory_search)
+
+    # memory mark-stale / mark-fresh (fn-34 task 2)
+    p_memory_mark_stale = memory_sub.add_parser(
+        "mark-stale",
+        help="Flag a memory entry as stale (sets status, last_audited, audit_notes)",
+    )
+    p_memory_mark_stale.add_argument(
+        "id",
+        help=(
+            "Entry id — full (track/category/slug-date), slug+date, or slug "
+            "(latest date wins). Legacy ids are not supported."
+        ),
+    )
+    p_memory_mark_stale.add_argument(
+        "--reason",
+        required=True,
+        help="One-line justification for the stale flag (lands in audit_notes)",
+    )
+    p_memory_mark_stale.add_argument(
+        "--audited-by",
+        dest="audited_by",
+        help="Optional auditor identifier appended to audit_notes",
+    )
+    p_memory_mark_stale.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_memory_mark_stale.set_defaults(func=cmd_memory_mark_stale)
+
+    p_memory_mark_fresh = memory_sub.add_parser(
+        "mark-fresh",
+        help="Clear the stale flag on a memory entry (resets to active)",
+    )
+    p_memory_mark_fresh.add_argument(
+        "id",
+        help=(
+            "Entry id — full (track/category/slug-date), slug+date, or slug "
+            "(latest date wins). Legacy ids are not supported."
+        ),
+    )
+    p_memory_mark_fresh.add_argument(
+        "--audited-by",
+        dest="audited_by",
+        help="Optional auditor identifier (records 'marked fresh by X' in audit_notes)",
+    )
+    p_memory_mark_fresh.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_memory_mark_fresh.set_defaults(func=cmd_memory_mark_fresh)
 
     p_memory_migrate = memory_sub.add_parser(
         "migrate",
@@ -15684,10 +15811,22 @@ def main() -> None:
         "--no-llm",
         dest="no_llm",
         action="store_true",
-        help="Skip LLM classifier; use mechanical mapping only",
+        help="Accepted but no-op since fn-35 (classification is now mechanical-only; use /flow-next:memory-migrate for agent-native).",
     )
     p_memory_migrate.add_argument("--json", action="store_true", help="JSON output")
     p_memory_migrate.set_defaults(func=cmd_memory_migrate)
+
+    # memory list-legacy (fn-35.2) — wraps _memory_parse_legacy_entries
+    # for each MEMORY_LEGACY_FILES file, augmenting each with mechanical
+    # default (track, category). Consumed by /flow-next:memory-migrate.
+    p_memory_list_legacy = memory_sub.add_parser(
+        "list-legacy",
+        help="List legacy flat-file memory entries with mechanical default (track, category) per entry",
+    )
+    p_memory_list_legacy.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_memory_list_legacy.set_defaults(func=cmd_memory_list_legacy)
 
     # memory discoverability-patch (fn-30.6)
     p_memory_disc = memory_sub.add_parser(
