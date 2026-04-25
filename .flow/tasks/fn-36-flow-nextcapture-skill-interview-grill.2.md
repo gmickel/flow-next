@@ -148,9 +148,8 @@ These three rules are additive enhancements to **how** questions are asked, not 
 
 
 ## Done summary
-
-(populated when task completes)
-
+Folded three upstream `grill-me` patterns into `/flow-next:interview` — lead-with-recommendation + confidence tiers (`[high]`/`[judgment-call]`/`[your-call]`), codebase-vs-user pre-question taxonomy with optional `## Resolved via Codebase` spec section, and dependency-ordered branch walk (cap depth 4, discover-as-you-go, surface abandoned branches). 76 lines added across `flow-next-interview/SKILL.md` + `questions.md`; no flowctl subcommands; no breaking changes.
 ## Evidence
-
-(populated when task completes)
+- Commits: 7c9673a879ca30f0f2c8233b6a69a831bbfe9c14
+- Tests: git diff --stat plugins/flow-next/skills/flow-next-interview/, grep -c AskUserQuestion plugins/flow-next/skills/flow-next-interview/SKILL.md plugins/flow-next/skills/flow-next-interview/questions.md
+- PRs:

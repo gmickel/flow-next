@@ -25,6 +25,8 @@ Commands:
 - `/flow-next:impl-review` → Carmack-level impl review of current branch (rp-cli, Codex CLI, or Copilot CLI)
 - `/flow-next:resolve-pr [PR# | comment URL]` → resolve GitHub PR review threads (fetch → triage → dispatch resolver agents → validate → commit → reply → resolve via GraphQL). User-triggered only; Ralph does not invoke. Flags: `--dry-run`, `--no-cluster`. Parallel dispatch on Claude Code, serial on Codex/Copilot/Droid. Zero runtime deps beyond `gh` + `jq`. Added in 0.34.0.
 - `/flow-next:audit [mode:autofix] [scope hint]` → agent-native memory staleness review. Walks `.flow/memory/`, reviews each entry against current code, decides per entry: Keep / Update / Consolidate / Replace / Delete. Interactive (asks via blocking-question tool) or autofix (applies unambiguous, marks ambiguous as stale). Skips legacy flat files. The skill IS the agent — no Python engine, no subprocess dispatch. Added in 0.37.0.
+- `/flow-next:capture [mode:autofix] [--rewrite <id>] [--from-compacted-ok] [--yes]` → agent-native skill that synthesizes conversation context into a flow-next epic spec at `.flow/specs/<epic-id>.md` via existing `flowctl epic create + epic set-plan` (no new flowctl subcommands). Sits between free-form discussion / prospect-promotion and the formal plan/interview phase — the automated alternative to the manual `flowctl epic create + epic set-plan` heredoc. Hard guardrails: source-tagged criteria (`[user]` / `[paraphrase]` / `[inferred]`), mandatory read-back loop with `[inferred]` count, duplicate-epic detection (Phase 0 scans `.flow/epics/` + `flowctl memory search`), compaction detection (refuses without `--from-compacted-ok`), idempotency-via-`--rewrite`, must-ask cases for ambiguous title / untestable acceptance / scope-conflict, suggest-split at 8+ acceptance criteria (never auto-splits). Ralph-blocked. Added in 0.38.0.
+- `/flow-next:interview` (enhanced in 0.38.0) folds three patterns from upstream `grill-me`: (a) lead-with-recommendation — every `AskUserQuestion` body includes options summary, recommended option, one-sentence rationale, confidence tier (`[high]` / `[judgment-call]` / `[your-call]`); (b) codebase-before-asking — pre-question taxonomy splits codebase-answerable ("what exists") from user-judgment-required ("what should"); codebase-answerable questions are investigated via Read/Grep/Glob and logged to a `## Resolved via Codebase` spec section; (c) dependency-ordered branches — depth cap 4, discover-as-you-go, surface abandoned branches.
 
 Review backend spec grammar (v0.31.0+):
 - `backend[:model[:effort]]` — colon-delimited, trailing parts optional
@@ -465,6 +467,10 @@ This project uses Flow-Next for task tracking. Use `.flow/bin/flowctl` instead o
 
 A spec = an epic. Create one directly — do NOT use `/flow-next:plan` (that breaks specs into tasks).
 
+**Two paths:**
+- **Automated** (recommended for any spec emerging from conversation): `/flow-next:capture` — host agent synthesizes the spec from conversation context, source-tags every acceptance criterion (`[user]` / `[paraphrase]` / `[inferred]`), and shows the full draft via mandatory read-back before writing. Output goes to the same `.flow/specs/<epic-id>.md` location, via the same `flowctl epic create + epic set-plan` plumbing — but with conversation context preserved as `## Conversation Evidence` and an audit trail of which criteria came from the user. Added in 0.38.0.
+- **Manual** (for direct flowctl scripting): the `flowctl epic create + epic set-plan` heredoc shown below.
+
 ```bash
 .flow/bin/flowctl epic create --title "Short title" --json
 .flow/bin/flowctl epic set-plan <epic-id> --file - --json <<'EOF'
@@ -497,6 +503,7 @@ EOF
 After creating a spec, choose next step:
 - `/flow-next:plan <epic-id>` — research + break into tasks
 - `/flow-next:interview <epic-id>` — deep Q&A to refine the spec
+- `/flow-next:capture --rewrite <epic-id>` — re-synthesize from updated conversation context
 
 **Rules:**
 - Use `.flow/bin/flowctl` for ALL task tracking
