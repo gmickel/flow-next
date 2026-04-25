@@ -3687,6 +3687,8 @@ MEMORY_OPTIONAL_FIELDS: frozenset[str] = frozenset(
         "stale_reason",
         "stale_date",
         "last_updated",
+        "last_audited",
+        "audit_notes",
         "related_to",
     }
 )
@@ -3733,6 +3735,8 @@ MEMORY_FIELD_ORDER: tuple[str, ...] = (
     "stale_reason",
     "stale_date",
     "last_updated",
+    "last_audited",
+    "audit_notes",
     "related_to",
 )
 
@@ -3927,7 +3931,7 @@ def parse_memory_frontmatter(path: Path) -> dict[str, Any]:
 # bool, int). We always emit these quoted so the parser round-trips them
 # as plain strings. Memory readers treat every scalar as a string.
 _MEMORY_QUOTED_STRING_FIELDS: frozenset[str] = frozenset(
-    {"date", "stale_date", "last_updated"}
+    {"date", "stale_date", "last_updated", "last_audited"}
 )
 
 
@@ -5866,6 +5870,7 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
     module_filter = getattr(args, "module", None)
     tags_filter_raw = getattr(args, "tags", None)
     limit = getattr(args, "limit", None)
+    status_filter = getattr(args, "status", "active") or "active"
 
     if track and track not in MEMORY_TRACKS:
         error_exit(
@@ -5876,6 +5881,11 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
         error_exit(
             f"invalid --category '{category}' for track '{track}' "
             f"(valid: {', '.join(MEMORY_CATEGORIES[track])})",
+            use_json=args.json,
+        )
+    if status_filter not in ("active", "stale", "all"):
+        error_exit(
+            f"invalid --status '{status_filter}' (valid: active, stale, all)",
             use_json=args.json,
         )
 
@@ -5898,6 +5908,13 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
             for e in entries
             if tag_filter_set & {t.lower() for t in e["tags"]}
         ]
+    # Status filter — mirrors cmd_memory_list. Default `active` excludes
+    # stale-flagged entries from search results so the audit lifecycle
+    # actually keeps stale advice out of memory-scout / agent context.
+    if status_filter == "active":
+        entries = [e for e in entries if e["status"] != "stale"]
+    elif status_filter == "stale":
+        entries = [e for e in entries if e["status"] == "stale"]
 
     results: list[dict[str, Any]] = []
     for e in entries:
@@ -6003,6 +6020,171 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
             print(f"  > {r['snippet']}")
         print()
     print(f"Found {len(combined)} matches")
+
+
+# --- Audit lifecycle (fn-34 task 2) ---
+#
+# Thin persistence helpers for the /flow-next:audit skill. The skill walks
+# `.flow/memory/`, judges each entry against the current codebase, and calls
+# these helpers to flag stale advice or clear a previous flag. Pure
+# frontmatter mutation — body is never touched.
+
+
+def _memory_resolve_categorized_entry(
+    memory_dir: Path, entry_id: str, *, use_json: bool, command: str
+) -> dict[str, Any]:
+    """Resolve `entry_id` to a categorized memory entry descriptor.
+
+    Errors out on unknown ids, ambiguous slug-only matches, and legacy ids
+    (mark-stale / mark-fresh only operate on categorized entries — legacy
+    flat files have no per-entry frontmatter to mutate).
+    """
+    resolved = _memory_resolve_read_target(memory_dir, entry_id)
+    if resolved is None:
+        error_exit(
+            f"entry '{entry_id}' not found. "
+            f"Use `flowctl memory list` to see valid ids.",
+            use_json=use_json,
+        )
+    kind = resolved["kind"]
+    if kind == "ambiguous":
+        ids = ", ".join(m["entry_id"] for m in resolved["matches"])
+        error_exit(
+            f"entry '{entry_id}' is ambiguous; candidates: {ids}",
+            use_json=use_json,
+        )
+    if kind in ("legacy_file", "legacy_entry"):
+        error_exit(
+            f"`memory {command}` does not support legacy entries — run "
+            f"`flowctl memory migrate` first to convert them.",
+            use_json=use_json,
+        )
+    if kind != "categorized":
+        error_exit(
+            f"unexpected resolve result for '{entry_id}'", use_json=use_json
+        )
+    return resolved["entry"]
+
+
+def cmd_memory_mark_stale(args: argparse.Namespace) -> None:
+    """Flag a memory entry as stale.
+
+    Sets `status: stale`, stamps `last_audited` (today, UTC), records
+    `audit_notes` from `--reason` (and an optional `(audited-by: …)`
+    suffix). Body preserved. Atomic via `write_memory_entry`.
+
+    Idempotent: re-marking a stale entry updates `last_audited` +
+    `audit_notes` (the new reason replaces the old). No error.
+    """
+    memory_dir = require_memory_enabled(args)
+
+    entry_id = args.id
+    reason = (args.reason or "").strip()
+    if not reason:
+        error_exit(
+            "--reason is required (one-line justification for the stale flag)",
+            code=2,
+            use_json=args.json,
+        )
+    audited_by = (getattr(args, "audited_by", None) or "").strip()
+
+    entry = _memory_resolve_categorized_entry(
+        memory_dir, entry_id, use_json=args.json, command="mark-stale"
+    )
+
+    path = Path(entry["path"])
+    data = _memory_read_entry(path)
+    fm = dict(data["frontmatter"])
+    body = data["body"]
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    audit_notes = reason
+    if audited_by:
+        audit_notes = f"{reason} (audited-by: {audited_by})"
+
+    fm["status"] = "stale"
+    fm["last_audited"] = today
+    fm["audit_notes"] = audit_notes
+
+    try:
+        write_memory_entry(path, fm, body)
+    except ValueError as exc:
+        error_exit(f"failed to write entry: {exc}", use_json=args.json)
+
+    if args.json:
+        json_output(
+            {
+                "id": entry["entry_id"],
+                "path": str(path),
+                "status": "stale",
+                "last_audited": today,
+                "audit_notes": audit_notes,
+            }
+        )
+        return
+
+    print(f"Flagged stale: {entry['entry_id']}")
+    print(f"  path: {path}")
+    print(f"  last_audited: {today}")
+    print(f"  audit_notes: {audit_notes}")
+
+
+def cmd_memory_mark_fresh(args: argparse.Namespace) -> None:
+    """Clear stale flag on a memory entry.
+
+    Resets `status` to active (default — field is removed from
+    frontmatter), clears `audit_notes`, stamps `last_audited` (today, UTC).
+    Idempotent: marking a non-stale entry just stamps `last_audited`.
+    """
+    memory_dir = require_memory_enabled(args)
+
+    entry_id = args.id
+    audited_by = (getattr(args, "audited_by", None) or "").strip()
+
+    entry = _memory_resolve_categorized_entry(
+        memory_dir, entry_id, use_json=args.json, command="mark-fresh"
+    )
+
+    path = Path(entry["path"])
+    data = _memory_read_entry(path)
+    fm = dict(data["frontmatter"])
+    body = data["body"]
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # Reset to active default — drop optional stale fields entirely so the
+    # frontmatter stays minimal. `status: active` is the implicit default,
+    # so we omit it from the file rather than write it explicitly.
+    for key in ("status", "stale_reason", "stale_date", "audit_notes"):
+        fm.pop(key, None)
+    if audited_by:
+        # Audited-by on mark-fresh is just a breadcrumb; keep it concise.
+        fm["audit_notes"] = f"marked fresh (audited-by: {audited_by})"
+    fm["last_audited"] = today
+
+    try:
+        write_memory_entry(path, fm, body)
+    except ValueError as exc:
+        error_exit(f"failed to write entry: {exc}", use_json=args.json)
+
+    if args.json:
+        json_output(
+            {
+                "id": entry["entry_id"],
+                "path": str(path),
+                "status": "active",
+                "last_audited": today,
+                "audit_notes": fm.get("audit_notes", ""),
+            }
+        )
+        return
+
+    print(f"Cleared stale flag: {entry['entry_id']}")
+    print(f"  path: {path}")
+    print(f"  last_audited: {today}")
+    if fm.get("audit_notes"):
+        print(f"  audit_notes: {fm['audit_notes']}")
 
 
 # --- Migration (fn-30 task 4) ---
@@ -15662,8 +15844,62 @@ def main() -> None:
         type=int,
         help="Max results to return (default: unlimited)",
     )
+    p_memory_search.add_argument(
+        "--status",
+        choices=["active", "stale", "all"],
+        default="active",
+        help="Filter by status (default: active)",
+    )
     p_memory_search.add_argument("--json", action="store_true", help="JSON output")
     p_memory_search.set_defaults(func=cmd_memory_search)
+
+    # memory mark-stale / mark-fresh (fn-34 task 2)
+    p_memory_mark_stale = memory_sub.add_parser(
+        "mark-stale",
+        help="Flag a memory entry as stale (sets status, last_audited, audit_notes)",
+    )
+    p_memory_mark_stale.add_argument(
+        "id",
+        help=(
+            "Entry id — full (track/category/slug-date), slug+date, or slug "
+            "(latest date wins). Legacy ids are not supported."
+        ),
+    )
+    p_memory_mark_stale.add_argument(
+        "--reason",
+        required=True,
+        help="One-line justification for the stale flag (lands in audit_notes)",
+    )
+    p_memory_mark_stale.add_argument(
+        "--audited-by",
+        dest="audited_by",
+        help="Optional auditor identifier appended to audit_notes",
+    )
+    p_memory_mark_stale.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_memory_mark_stale.set_defaults(func=cmd_memory_mark_stale)
+
+    p_memory_mark_fresh = memory_sub.add_parser(
+        "mark-fresh",
+        help="Clear the stale flag on a memory entry (resets to active)",
+    )
+    p_memory_mark_fresh.add_argument(
+        "id",
+        help=(
+            "Entry id — full (track/category/slug-date), slug+date, or slug "
+            "(latest date wins). Legacy ids are not supported."
+        ),
+    )
+    p_memory_mark_fresh.add_argument(
+        "--audited-by",
+        dest="audited_by",
+        help="Optional auditor identifier (records 'marked fresh by X' in audit_notes)",
+    )
+    p_memory_mark_fresh.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_memory_mark_fresh.set_defaults(func=cmd_memory_mark_fresh)
 
     p_memory_migrate = memory_sub.add_parser(
         "migrate",

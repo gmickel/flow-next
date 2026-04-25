@@ -293,6 +293,28 @@ class TestValidateFrontmatter(unittest.TestCase):
         errors = flowctl.validate_memory_frontmatter(fm)
         self.assertEqual(errors, [])
 
+    def test_audit_fields_accepted(self) -> None:
+        """fn-34: last_audited + audit_notes validate without raising."""
+        fm = _valid_knowledge_frontmatter()
+        fm["status"] = "stale"
+        fm["last_audited"] = "2026-04-25"
+        fm["audit_notes"] = "module renamed in PR #42"
+        errors = flowctl.validate_memory_frontmatter(fm)
+        self.assertEqual(errors, [])
+
+    def test_audit_fields_in_optional_set(self) -> None:
+        """fn-34: schema constants include the two new audit fields."""
+        self.assertIn("last_audited", flowctl.MEMORY_OPTIONAL_FIELDS)
+        self.assertIn("audit_notes", flowctl.MEMORY_OPTIONAL_FIELDS)
+        # Field order: last_audited / audit_notes appear before related_to.
+        order = flowctl.MEMORY_FIELD_ORDER
+        self.assertIn("last_audited", order)
+        self.assertIn("audit_notes", order)
+        self.assertLess(order.index("last_audited"), order.index("related_to"))
+        self.assertLess(order.index("audit_notes"), order.index("related_to"))
+        # last_audited is in the quoted-string set so PyYAML doesn't coerce it.
+        self.assertIn("last_audited", flowctl._MEMORY_QUOTED_STRING_FIELDS)
+
     def test_non_dict_rejected(self) -> None:
         errors = flowctl.validate_memory_frontmatter("a string")  # type: ignore[arg-type]
         self.assertTrue(any("must be a dict" in e for e in errors))
@@ -325,6 +347,17 @@ class TestFrontmatterRoundTrip(unittest.TestCase):
         parsed = self._round_trip(fm)
         for key, value in fm.items():
             self.assertEqual(parsed.get(key), value, f"mismatch on {key}")
+
+    def test_round_trip_audit_fields(self) -> None:
+        """fn-34: last_audited stays a string after round-trip (not date)."""
+        fm = _valid_bug_frontmatter()
+        fm["status"] = "stale"
+        fm["last_audited"] = "2026-04-25"
+        fm["audit_notes"] = "module path moved"
+        parsed = self._round_trip(fm)
+        self.assertEqual(parsed["last_audited"], "2026-04-25")
+        self.assertEqual(parsed["audit_notes"], "module path moved")
+        self.assertEqual(parsed["status"], "stale")
 
     def test_write_rejects_invalid(self) -> None:
         fm = _valid_bug_frontmatter()
