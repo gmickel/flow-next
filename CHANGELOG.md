@@ -2,6 +2,21 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.37.1] - 2026-04-25
+
+### Fixed
+- **Codex `openai.yaml` UI metadata backfilled for 4 user-facing skills.** Since 0.34.0, every new slash-command skill (`/flow-next:resolve-pr`, `/flow-next:prospect`, `/flow-next:audit`, `/flow-next:memory-migrate`) silently shipped to Codex without UI metadata — raw slug names in the desktop UI, no display name / brand color / default prompt. `scripts/sync-codex.sh` now generates `agents/openai.yaml` for all 13 user-facing skills and uses an explicit `REQUIRED_OPENAI_YAML_SKILLS` array as validation; CI fails when a future skill is added without the matching call.
+- **Cross-platform tool-name handling moved into the sync script.** Canonical skill files now use Claude-native tool names (`AskUserQuestion`); `sync-codex.sh` rewrites them to `request_user_input` in the Codex mirror and strips Claude-only `ToolSearch` schema-load fallbacks. Several skills (audit, prospect, memory-migrate, resolve-pr, impl-review walkthrough, prime, setup) had previously documented all platform variants inline (`AskUserQuestion / request_user_input / ask_user`), which polluted the agent's context with abstraction noise. Cleaner: each platform's mirror sees only its native tool name.
+- **`flow-next-prime` and `flow-next-setup`** previously had bare `AskUserQuestion` mandates with no Codex / Droid path documented. Now use the canonical pattern (Claude-native tool name, sync-rewritten for Codex mirror) along with the rest of the skills.
+
+### Changed
+- **`scripts/sync-codex.sh`** validation block extended: required-skills list (instead of a `>= 9` count threshold) catches missing entries by name; new check that no `AskUserQuestion` or `ToolSearch` references remain in the Codex skill prose post-rewrite.
+- **Gemini removed from supported-platform documentation.** flow-next supports Claude Code, Codex, and Factory Droid as first-class targets. Gemini was incidental documentation that crept in.
+
+### Notes
+- `CLAUDE.md` `## Cross-platform patterns` section rewritten: explicit architectural rule that canonical files use Claude-native tool names and the sync script handles platform-specific rewrites. New `### Adding a new user-facing skill` checklist documents every step required when shipping a new `/flow-next:<name>` skill (canonical content, slash command, `generate_openai_yaml` call, `REQUIRED_OPENAI_YAML_SKILLS` entry, sync-codex.sh re-run, commands list updates, CHANGELOG, smoke). Captures the lessons from the 0.34.0 → 0.37.0 silent-degradation era.
+- Droid mirror infrastructure (similar to Codex) is a future hotfix; for now Droid users see canonical Claude-native names.
+
 ## [flow-next 0.37.0] - 2026-04-25
 
 ### Added

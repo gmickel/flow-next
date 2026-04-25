@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-25T12:15:39.177445Z",
+  "depends_on": [],
+  "epic": "fn-37-codex-sync-hotfix-openaiyaml-backfill",
+  "id": "fn-37-codex-sync-hotfix-openaiyaml-backfill.1",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-37-codex-sync-hotfix-openaiyaml-backfill.1.md",
+  "status": "todo",
+  "title": "Codex hotfix: openai.yaml backfill + prime/setup cross-platform + CLAUDE.md guidance + bump 0.37.1",
+  "updated_at": "2026-04-25T12:15:39.314687Z"
+}

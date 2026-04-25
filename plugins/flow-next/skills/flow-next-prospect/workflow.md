@@ -151,7 +151,7 @@ If `RESUMABLE_COUNT == 0` (only corrupt artifacts), skip to Phase 1 — nothing 
 
 ### 0.4 — Blocking question
 
-Present the resumable list in a deterministic numbered format and ask the user to choose a path. Use the platform's blocking question tool (`AskUserQuestion` on Claude Code, `request_user_input` on Codex, `ask_user` on Gemini/Pi); fall back to printing the numbered list and reading a typed reply when no blocking tool is available.
+Present the resumable list in a deterministic numbered format and ask the user to choose a path. Use `AskUserQuestion`; fall back to printing the numbered list and reading a typed reply if the tool is unreachable.
 
 Frozen option strings (R19 anchor — must match exactly across backends):
 
@@ -562,7 +562,7 @@ Critique rejected only X% (below the ≥Y% floor). Options:
   ship-anyway   — same as loosen-floor; preserved for clarity in transcripts
 ```
 
-Frozen string format (R12 anchor — must match across backends): `regenerate | loosen-floor | ship-anyway`. Use the platform's blocking question tool (`AskUserQuestion` / `request_user_input` / `ask_user`); fall back to numbered-options when no blocking tool is available. Validate the choice; reject anything outside the three options.
+Frozen string format (R12 anchor — must match across backends): `regenerate | loosen-floor | ship-anyway`. Use `AskUserQuestion`; fall back to numbered-options when the tool is unreachable. Validate the choice; reject anything outside the three options.
 
 - `regenerate` → loop back to Phase 2 §2.3 with a fresh prompt invocation. Cap at **1 regeneration**; a second floor violation auto-routes to `loosen-floor` with a printed warning (avoids infinite loops on a model that genuinely can't reject).
 - `loosen-floor` / `ship-anyway` → continue to Phase 4. Record `floor_violation: true` in the eventual artifact frontmatter.
@@ -806,17 +806,11 @@ Empty buckets render `_(none)_`. Empty `## Rejected` renders `_(none)_`.
 
 **Goal:** offer the user a one-keystroke path from "artifact saved" to either an epic (via `flowctl prospect promote`), an interview (via `/flow-next:interview`), or a clean exit. The artifact already exists on disk by the time this phase fires — Ctrl-C here loses nothing.
 
-### 6.1 — Pick the blocking-question tool
+### 6.1 — Use the blocking-question tool
 
-| Platform     | Tool                | Notes                                           |
-|--------------|---------------------|-------------------------------------------------|
-| Claude Code  | `AskUserQuestion`   | Deferred — load via `ToolSearch select:AskUserQuestion` if not already in scope |
-| Codex        | `request_user_input`| Native                                          |
-| Gemini       | `ask_user`          | Native                                          |
-| Pi           | `ask_user`          | Requires `pi-ask-user` extension                |
-| Fallback     | _frozen string_     | Print the exact format below; read user reply from chat |
+Use `AskUserQuestion` (deferred — load via `ToolSearch select:AskUserQuestion` if its schema isn't yet in scope). If the tool is unreachable, print the frozen-string format below and read the user's reply from chat. (sync-codex.sh rewrites `AskUserQuestion` to `request_user_input` in the Codex mirror.)
 
-If the platform tool is available, use it with these labelled choices (one per survivor + skip + interview):
+If the tool is available, use it with these labelled choices (one per survivor + skip + interview):
 
 - `Promote #1: <title>`
 - `Promote #2: <title>`

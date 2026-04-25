@@ -19,7 +19,7 @@ Generate many candidate ideas grounded in the repo, critique every one with expl
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — keeps `AskUserQuestion` (and the Codex / Gemini / Pi equivalents) available throughout. Subagents can't call blocking question tools (Claude Code issues #12890, #34592), and Phases 0 + 6 both require user choice.
+**Inline skill (no `context: fork`)** — keeps `AskUserQuestion` available throughout. Subagents can't call blocking question tools (Claude Code issues #12890, #34592), and Phases 0 + 6 both require user choice. (sync-codex.sh rewrites `AskUserQuestion` to `request_user_input` in the Codex mirror.)
 
 ## Input
 

@@ -16,9 +16,9 @@ For each finding:
 1. Open the cited file and read around the cited line (±20 lines of context).
 2. Check whether the claimed issue is actually present in the current code.
 3. Look for guards, handlers, or assumptions that address the concern elsewhere
-   in the call chain (the primary reviewer may have missed them).
+ in the call chain (the primary reviewer may have missed them).
 4. Consider whether the finding is factually correct about the language /
-   framework / library semantics.
+ framework / library semantics.
 
 Do **not** re-score confidence, re-classify severity, or invent new findings.
 Decide only: is this finding a real issue in the current code, or not?
@@ -42,7 +42,7 @@ f4: validated: false -- suggested fix misunderstands TypeScript narrowing
 
 Rules:
 - One line per finding id. Missing ids are treated as `validated: true`
-  (conservative — when you say nothing, the finding stays).
+ (conservative — when you say nothing, the finding stays).
 - Reason must fit on one line (≤200 chars is a good cap).
 - Use the literal tokens `validated: true` or `validated: false`. No synonyms.
 - Emit the lines anywhere in your response — the parser finds them by regex.

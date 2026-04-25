@@ -43,9 +43,9 @@ If found, use that backend and skip all other detection.
 BACKEND=$($FLOWCTL review-backend)
 
 if [[ "$BACKEND" == "ASK" ]]; then
-  echo "Error: No review backend configured."
-  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
-  exit 1
+ echo "Error: No review backend configured."
+ echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
+ exit 1
 fi
 
 echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
@@ -133,9 +133,9 @@ On NEEDS_WORK: fix code, commit, re-run (receipt enables session continuity).
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt.json}"
 
 # Override model + effort (pick one):
-#   --spec copilot:claude-opus-4.5:xhigh   (preferred)
-#   FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5:xhigh
-#   FLOW_COPILOT_MODEL=gpt-5.2 FLOW_COPILOT_EFFORT=high
+# --spec copilot:claude-opus-4.5:xhigh (preferred)
+# FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5:xhigh
+# FLOW_COPILOT_MODEL=gpt-5.2 FLOW_COPILOT_EFFORT=high
 
 $FLOWCTL copilot completion-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
 # Output includes VERDICT=SHIP|NEEDS_WORK
@@ -159,7 +159,7 @@ The workflow covers:
 
 ## Fix Loop (INTERNAL - do not exit to Ralph)
 
-**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is complete spec compliance. Never use AskUserQuestion in this loop.**
+**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is complete spec compliance. Never use request_user_input in this loop.**
 
 If verdict is NEEDS_WORK, loop internally until SHIP:
 
@@ -167,9 +167,9 @@ If verdict is NEEDS_WORK, loop internally until SHIP:
 2. **Fix code** and run tests/lints
 3. **Commit fixes** (mandatory before re-review)
 4. **Re-review**:
-   - **Codex**: Re-run `flowctl codex completion-review` (receipt enables context)
-   - **Copilot**: Re-run `flowctl copilot completion-review` (receipt enables context; must be `mode == "copilot"` to resume)
-   - **RP**: `$FLOWCTL rp chat-send (2-10 min, DO NOT RETRY) --window "$W" --tab "$T" --message-file /tmp/re-review.md` (NO `--new-chat`)
+ - **Codex**: Re-run `flowctl codex completion-review` (receipt enables context)
+ - **Copilot**: Re-run `flowctl copilot completion-review` (receipt enables context; must be `mode == "copilot"` to resume)
+ - **RP**: `$FLOWCTL rp chat-send (2-10 min, DO NOT RETRY) --window "$W" --tab "$T" --message-file /tmp/re-review.md` (NO `--new-chat`)
 5. **Repeat** until `<verdict>SHIP</verdict>`
 
 **CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.

@@ -2,7 +2,7 @@
 name: flow-next-prospect
 description: Generate ranked candidate ideas grounded in the repo, upstream of /flow-next:plan. Triggers on /flow-next:prospect with an optional focus hint (concept, path, constraint, or volume).
 user-invocable: false
-allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
+allowed-tools: request_user_input, Read, Bash, Grep, Glob, Write, Edit, Task
 ---
 
 # Prospect — upstream-of-plan idea generation
@@ -20,7 +20,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — keeps `AskUserQuestion` (and the Codex / Gemini / Pi equivalents) available throughout. Subagents can't call blocking question tools (Claude Code issues #12890, #34592), and Phases 0 + 6 both require user choice.
+**Inline skill (no `context: fork`)** — keeps `request_user_input` available throughout. Subagents can't call blocking question tools (Claude Code issues #12890, #34592), and Phases 0 + 6 both require user choice.
 
 ## Input
 
@@ -41,8 +41,8 @@ If empty, the skill picks its own coverage targets (15-25 candidates → 5-8 sur
 
 ```bash
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
-  echo "Error: /flow-next:prospect requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
-  exit 2
+ echo "Error: /flow-next:prospect requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
+ exit 2
 fi
 ```
 
@@ -68,13 +68,13 @@ Same pattern as `/flow-next:plan` — non-blocking notice when `.flow/meta.json`
 
 ```bash
 if [[ -f .flow/meta.json ]]; then
-  SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
-  PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-plugin/plugin.json"
-  [[ -f "$PLUGIN_JSON" ]] || PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
-  PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
-  if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
-    echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})." >&2
-  fi
+ SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
+ PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-plugin/plugin.json"
+ [[ -f "$PLUGIN_JSON" ]] || PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
+ PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
+ if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
+ echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})." >&2
+ fi
 fi
 ```
 

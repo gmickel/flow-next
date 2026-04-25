@@ -181,7 +181,7 @@ For each entry:
 
 **Interactive mode:**
 
-Use the platform's blocking-question tool (`AskUserQuestion` on Claude Code, `request_user_input` on Codex, `ask_user` on Gemini / Droid). Lead with the mechanical default as the recommendation:
+Use `AskUserQuestion` (sync-codex.sh rewrites to `request_user_input` in the Codex mirror). Lead with the mechanical default as the recommendation:
 
 ```
 Entry: "Auth token refresh race during logout" (from pitfalls.md)

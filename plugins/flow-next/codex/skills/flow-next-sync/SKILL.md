@@ -83,9 +83,9 @@ $FLOWCTL tasks --epic "<epic-id>" --json
 ```
 
 1. First, find a **source task** to anchor drift detection (agent requires `COMPLETED_TASK_ID`):
-   - Prefer most recently updated task with `status: done`
-   - Else: most recently updated task with `status: in_progress`
-   - Else: error "No completed or in-progress tasks to sync from. Complete a task first."
+ - Prefer most recently updated task with `status: done`
+ - Else: most recently updated task with `status: in_progress`
+ - Else: error "No completed or in-progress tasks to sync from. Complete a task first."
 
 2. Then filter remaining tasks to `status: todo` or `status: blocked` (these are downstream).
 

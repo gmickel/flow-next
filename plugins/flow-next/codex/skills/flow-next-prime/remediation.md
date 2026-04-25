@@ -98,14 +98,14 @@ If husky not installed, add to package.json devDependencies:
 
 ```json
 {
-  "devDependencies": {
-    "husky": "^9.0.0",
-    "lint-staged": "^15.0.0"
-  },
-  "lint-staged": {
-    "*.{js,ts,tsx}": ["eslint --fix", "prettier --write"],
-    "*.{json,md}": ["prettier --write"]
-  }
+ "devDependencies": {
+ "husky": "^9.0.0",
+ "lint-staged": "^15.0.0"
+ },
+ "lint-staged": {
+ "*.{js,ts,tsx}": ["eslint --fix", "prettier --write"],
+ "*.{json,md}": ["prettier --write"]
+ }
 }
 ```
 
@@ -121,20 +121,20 @@ Create `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-      - id: check-added-large-files
+ - repo: https://github.com/pre-commit/pre-commit-hooks
+ rev: v4.5.0
+ hooks:
+ - id: trailing-whitespace
+ - id: end-of-file-fixer
+ - id: check-yaml
+ - id: check-added-large-files
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.3.0
-    hooks:
-      - id: ruff
-        args: [--fix]
-      - id: ruff-format
+ - repo: https://github.com/astral-sh/ruff-pre-commit
+ rev: v0.3.0
+ hooks:
+ - id: ruff
+ args: [--fix]
+ - id: ruff-format
 ```
 
 ### Add Linter Config (if NO linter detected)
@@ -153,7 +153,7 @@ Example ESLint - `eslint.config.js`:
 import js from '@eslint/js';
 
 export default [
-  js.configs.recommended,
+ js.configs.recommended,
 ];
 ```
 
@@ -161,9 +161,9 @@ Example Biome - `biome.json`:
 
 ```json
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "linter": { "enabled": true },
-  "formatter": { "enabled": true }
+ "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+ "linter": { "enabled": true },
+ "formatter": { "enabled": true }
 }
 ```
 
@@ -175,9 +175,9 @@ Example Prettier - `.prettierrc`:
 
 ```json
 {
-  "semi": true,
-  "singleQuote": true,
-  "tabWidth": 2
+ "semi": true,
+ "singleQuote": true,
+ "tabWidth": 2
 }
 ```
 
@@ -231,8 +231,8 @@ Jest - create `jest.config.js`:
 ```javascript
 /** @type {import('jest').Config} */
 const config = {
-  testEnvironment: 'node',
-  testMatch: ['**/*.test.js', '**/*.test.ts'],
+ testEnvironment: 'node',
+ testMatch: ['**/*.test.js', '**/*.test.ts'],
 };
 
 module.exports = config;
@@ -244,10 +244,10 @@ Vitest - create `vitest.config.ts`:
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  test: {
-    globals: true,
-    environment: 'node',
-  },
+ test: {
+ globals: true,
+ environment: 'node',
+ },
 });
 ```
 
@@ -273,10 +273,10 @@ Create `.devcontainer/devcontainer.json`:
 
 ```json
 {
-  "name": "[Project Name]",
-  "image": "mcr.microsoft.com/devcontainers/[language]:latest",
-  "features": {},
-  "postCreateCommand": "[install command]"
+ "name": "[Project Name]",
+ "image": "mcr.microsoft.com/devcontainers/[language]:latest",
+ "features": {},
+ "postCreateCommand": "[install command]"
 }
 ```
 
@@ -290,24 +290,24 @@ Create `.github/workflows/ci.yml`:
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+ push:
+ branches: [main]
+ pull_request:
+ branches: [main]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup [runtime]
-        uses: actions/setup-[runtime]@v4
-      - name: Install
-        run: [install command]
-      - name: Lint
-        run: [lint command]
-      - name: Test
-        run: [test command]
+ build:
+ runs-on: ubuntu-latest
+ steps:
+ - uses: actions/checkout@v4
+ - name: Setup [runtime]
+ uses: actions/setup-[runtime]@v4
+ - name: Install
+ run: [install command]
+ - name: Lint
+ run: [lint command]
+ - name: Test
+ run: [test command]
 ```
 
 ---

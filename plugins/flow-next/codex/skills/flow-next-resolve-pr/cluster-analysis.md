@@ -64,15 +64,15 @@ Synthesize one brief per cluster. The brief is passed verbatim to the resolver a
 
 ```xml
 <cluster-brief>
-  <theme>[concern category]</theme>
-  <area>[common directory path or file]</area>
-  <files>[comma-separated file paths]</files>
-  <threads>[comma-separated new thread IDs]</threads>
-  <hypothesis>[one sentence: what the recurring feedback across rounds suggests about a deeper issue]</hypothesis>
-  <prior-resolutions>
-    <thread id="PRRT_..." path="..." category="..."/>
-    <thread id="PRRT_..." path="..." category="..."/>
-  </prior-resolutions>
+ <theme>[concern category]</theme>
+ <area>[common directory path or file]</area>
+ <files>[comma-separated file paths]</files>
+ <threads>[comma-separated new thread IDs]</threads>
+ <hypothesis>[one sentence: what the recurring feedback across rounds suggests about a deeper issue]</hypothesis>
+ <prior-resolutions>
+ <thread id="PRRT_..." path="..." category="..."/>
+ <thread id="PRRT_..." path="..." category="..."/>
+ </prior-resolutions>
 </cluster-brief>
 ```
 

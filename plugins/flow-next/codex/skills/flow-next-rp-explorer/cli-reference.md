@@ -5,10 +5,10 @@
 ## Basic Usage
 
 ```bash
-rp-cli -e '<command>'                  # Run single command
-rp-cli -e '<cmd1> && <cmd2>'           # Chain commands
-rp-cli -w <id> -e '<command>'          # Target specific window
-rp-cli -w <id> -t <tab> -e '<cmd>'     # Target window + tab (v1.5.62+)
+rp-cli -e '<command>' # Run single command
+rp-cli -e '<cmd1> && <cmd2>' # Chain commands
+rp-cli -w <id> -e '<command>' # Target specific window
+rp-cli -w <id> -t <tab> -e '<cmd>' # Target window + tab (v1.5.62+)
 ```
 
 ## Core Commands
@@ -27,17 +27,17 @@ rp-cli -w <id> -t <tab> -e '<cmd>'     # Target window + tab (v1.5.62+)
 ## File Tree
 
 ```bash
-rp-cli -e 'tree'                    # Full tree
-rp-cli -e 'tree --folders'          # Folders only
-rp-cli -e 'tree --mode selected'    # Selected files only
+rp-cli -e 'tree' # Full tree
+rp-cli -e 'tree --folders' # Folders only
+rp-cli -e 'tree --mode selected' # Selected files only
 ```
 
 ## Code Structure (TOKEN EFFICIENT)
 
 ```bash
-rp-cli -e 'structure src/'          # Signatures for path
-rp-cli -e 'structure .'             # Whole project
-rp-cli -e 'structure --scope selected'  # Selected files only
+rp-cli -e 'structure src/' # Signatures for path
+rp-cli -e 'structure .' # Whole project
+rp-cli -e 'structure --scope selected' # Selected files only
 ```
 
 ## Search
@@ -53,25 +53,25 @@ rp-cli -e 'search "function" --max-results 20'
 
 ```bash
 rp-cli -e 'read path/to/file.ts'
-rp-cli -e 'read file.ts --start-line 50 --limit 30'  # Slice
-rp-cli -e 'read file.ts --start-line -20'            # Last 20 lines
+rp-cli -e 'read file.ts --start-line 50 --limit 30' # Slice
+rp-cli -e 'read file.ts --start-line -20' # Last 20 lines
 ```
 
 ## Selection Management
 
 ```bash
-rp-cli -e 'select add src/'         # Add to selection
-rp-cli -e 'select set src/ lib/'    # Replace selection
-rp-cli -e 'select clear'            # Clear selection
-rp-cli -e 'select get'              # View selection
+rp-cli -e 'select add src/' # Add to selection
+rp-cli -e 'select set src/ lib/' # Replace selection
+rp-cli -e 'select clear' # Clear selection
+rp-cli -e 'select get' # View selection
 ```
 
 ## Context Export
 
 ```bash
-rp-cli -e 'context'                 # Full context
+rp-cli -e 'context' # Full context
 rp-cli -e 'context --include prompt,selection,tree'
-rp-cli -e 'context --all > output.md'  # Export to file
+rp-cli -e 'context --all > output.md' # Export to file
 ```
 
 ## Prompt Export (v1.5.61+)
@@ -93,7 +93,7 @@ rp-cli -e 'builder "find API endpoints" --type plan'
 ```bash
 rp-cli -e 'chat "How does auth work?"'
 rp-cli -e 'chat "Design new feature" --mode plan'
-rp-cli -e 'newchat "Start fresh discussion"'  # New chat
+rp-cli -e 'newchat "Start fresh discussion"' # New chat
 ```
 
 Note: Chats are bound to compose tabs. Use `workspace tab` to bind to a specific tab before chatting.
@@ -101,9 +101,9 @@ Note: Chats are bound to compose tabs. Use `workspace tab` to bind to a specific
 ## Workspaces & Tabs
 
 ```bash
-rp-cli -e 'workspace list'          # List workspaces
+rp-cli -e 'workspace list' # List workspaces
 rp-cli -e 'workspace switch "Name"' # Switch workspace
-rp-cli -e 'workspace tabs'          # List tabs
+rp-cli -e 'workspace tabs' # List tabs
 rp-cli -e 'workspace tab "TabName"' # Bind to tab (for chat isolation)
 ```
 

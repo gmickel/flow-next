@@ -29,7 +29,7 @@ PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-pl
 [[ -f "$PLUGIN_JSON" ]] || PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
 PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
 if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" ]]; then
-  [[ "$SETUP_VER" = "$PLUGIN_VER" ]] || echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})."
+ [[ "$SETUP_VER" = "$PLUGIN_VER" ]] || echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})."
 fi
 ```
 Continue regardless (non-blocking).
@@ -115,25 +115,25 @@ b) No, repo-scout (faster)
 (Tip: --depth=short|standard|deep, --review=rp|codex|none)
 ```
 
-**If REVIEW_BACKEND is ASK** (not configured): Ask all questions (do NOT use AskUserQuestion tool):
+**If REVIEW_BACKEND is ASK** (not configured): Ask all questions (do NOT use request_user_input primitive):
 
 ```
 Quick setup before planning:
 
 1. **Plan depth** — How detailed?
-   a) Short — problem, acceptance, key context only
-   b) Standard (default) — + approach, risks, test notes
-   c) Deep — + phases, alternatives, rollout plan
+ a) Short — problem, acceptance, key context only
+ b) Standard (default) — + approach, risks, test notes
+ c) Deep — + phases, alternatives, rollout plan
 
 2. **Research** — Use RepoPrompt for deeper context?
-   a) Yes, context-scout (slower, thorough)
-   b) No, repo-scout (faster)
+ a) Yes, context-scout (slower, thorough)
+ b) No, repo-scout (faster)
 
 3. **Review** — Run Carmack-level review after?
-   a) Codex CLI
-   b) RepoPrompt
-   c) Export for external LLM
-   d) None (configure later)
+ a) Codex CLI
+ b) RepoPrompt
+ c) Export for external LLM
+ d) None (configure later)
 
 (Reply: "1a 2b 3d", or just tell me naturally)
 ```

@@ -313,7 +313,7 @@ For **Claude Code / Droid**:
 }
 ```
 
-Use `AskUserQuestion` with the built questions array.
+Use `AskUserQuestion` with the built questions array (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). sync-codex.sh rewrites this to `request_user_input` in the Codex mirror.
 
 **Note:** If docs are already current, adjust the Docs question description to mention "(already up to date)" or skip that question entirely.
 

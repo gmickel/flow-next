@@ -19,17 +19,17 @@ Plans describe WHAT to build and WHERE to look — not HOW to implement.
 
 \`\`\`typescript
 interface WorkerBackend {
-  name: string;
-  spawn(opts: SpawnOpts): Promise<WorkerHandle>;
-  isAlive(handle: WorkerHandle): Promise<boolean>;
-  kill(handle: WorkerHandle): Promise<void>;
+ name: string;
+ spawn(opts: SpawnOpts): Promise<WorkerHandle>;
+ isAlive(handle: WorkerHandle): Promise<boolean>;
+ kill(handle: WorkerHandle): Promise<void>;
 }
 
 interface SpawnOpts {
-  prompt: string;
-  cwd: string;
-  logFile: string;
-  env?: Record<string, string>;
+ prompt: string;
+ cwd: string;
+ logFile: string;
+ env?: Record<string, string>;
 }
 \`\`\`
 
@@ -39,13 +39,13 @@ interface SpawnOpts {
 const backends = new Map<string, WorkerBackend>();
 
 export function registerBackend(backend: WorkerBackend): void {
-  backends.set(backend.name, backend);
+ backends.set(backend.name, backend);
 }
 
 export function getBackend(name: string): WorkerBackend {
-  const backend = backends.get(name);
-  if (!backend) throw new Error(\`Unknown backend: \${name}\`);
-  return backend;
+ const backend = backends.get(name);
+ if (!backend) throw new Error(\`Unknown backend: \${name}\`);
+ return backend;
 }
 \`\`\`
 ```
@@ -61,7 +61,7 @@ export function getBackend(name: string): WorkerBackend {
 # Backend Abstraction
 
 ## Overview
-Abstract worker spawning so any CLI (claude, codex, gemini) can run workers.
+Abstract worker spawning so any CLI (claude, codex, droid) can run workers.
 
 ## Approach
 - Define `WorkerBackend` interface with spawn/isAlive/kill methods
@@ -105,30 +105,30 @@ Create claude backend in `src/lib/backends/claude.ts`:
 
 \`\`\`typescript
 export const claudeBackend: WorkerBackend = {
-  name: 'claude',
+ name: 'claude',
 
-  async spawn({ prompt, cwd, logFile, env }) {
-    const proc = Bun.spawn(['claude', '-p', prompt], {
-      cwd,
-      stdout: Bun.file(logFile),
-      stderr: 'inherit',
-      env: { ...process.env, ...env },
-    });
-    return { pid: proc.pid, logFile };
-  },
+ async spawn({ prompt, cwd, logFile, env }) {
+ const proc = Bun.spawn(['claude', '-p', prompt], {
+ cwd,
+ stdout: Bun.file(logFile),
+ stderr: 'inherit',
+ env: { ...process.env, ...env },
+ });
+ return { pid: proc.pid, logFile };
+ },
 
-  async isAlive({ pid }) {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
-  },
+ async isAlive({ pid }) {
+ try {
+ process.kill(pid, 0);
+ return true;
+ } catch {
+ return false;
+ }
+ },
 
-  async kill({ pid }) {
-    process.kill(pid, 'SIGTERM');
-  },
+ async kill({ pid }) {
+ process.kill(pid, 'SIGTERM');
+ },
 };
 \`\`\`
 
@@ -311,14 +311,14 @@ Include a mermaid diagram when the change involves:
 
 \`\`\`mermaid
 erDiagram
-    User ||--o{ Session : has
-    User ||--o{ OAuthToken : has
-    OAuthToken {
-        string provider
-        string access_token
-        string refresh_token
-        datetime expires_at
-    }
+ User ||--o{ Session : has
+ User ||--o{ OAuthToken : has
+ OAuthToken {
+ string provider
+ string access_token
+ string refresh_token
+ datetime expires_at
+ }
 \`\`\`
 ```
 
@@ -329,10 +329,10 @@ erDiagram
 
 \`\`\`mermaid
 flowchart LR
-    Client --> API
-    API --> AuthService
-    AuthService --> Google[Google OAuth]
-    AuthService --> DB[(Database)]
+ Client --> API
+ API --> AuthService
+ AuthService --> Google[Google OAuth]
+ AuthService --> DB[(Database)]
 \`\`\`
 ```
 
@@ -394,10 +394,10 @@ flowchart LR
 
 | Req | Description | Task(s) | Gap justification |
 |-----|-------------|---------|-------------------|
-| R1  | OAuth login flow | fn-1-add-oauth.1, fn-1-add-oauth.2 | — |
-| R2  | Session persistence | fn-1-add-oauth.3 | — |
-| R3  | Admin dashboard | — | Deferred to fn-2-admin-panel |
-| R4  | Logout clears tokens | fn-1-add-oauth.2 | — |
+| R1 | OAuth login flow | fn-1-add-oauth.1, fn-1-add-oauth.2 | — |
+| R2 | Session persistence | fn-1-add-oauth.3 | — |
+| R3 | Admin dashboard | — | Deferred to fn-2-admin-panel |
+| R4 | Logout clears tokens | fn-1-add-oauth.2 | — |
 ```
 
 **Why this works:**

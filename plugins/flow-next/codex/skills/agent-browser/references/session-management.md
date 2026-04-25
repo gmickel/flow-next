@@ -27,7 +27,7 @@ Each session has independent: cookies, localStorage, sessionStorage, IndexedDB, 
 # Auto-save/restore cookies and localStorage across browser restarts
 agent-browser --session-name myapp open https://app.example.com/login
 # ... login flow ...
-agent-browser close  # State auto-saved to ~/.agent-browser/sessions/
+agent-browser close # State auto-saved to ~/.agent-browser/sessions/
 
 # Next time: state auto-loaded
 agent-browser --session-name myapp open https://app.example.com/dashboard
@@ -43,12 +43,12 @@ agent-browser --session-name secure open https://app.example.com
 ### Manual State Management
 
 ```bash
-agent-browser state save auth.json     # Save cookies, storage, auth state
-agent-browser state load auth.json     # Restore saved state
-agent-browser state list               # List saved states
-agent-browser state show name.json     # Show state contents
-agent-browser state clear name         # Clear saved state
-agent-browser state clean --older-than 7  # Clean old states
+agent-browser state save auth.json # Save cookies, storage, auth state
+agent-browser state load auth.json # Restore saved state
+agent-browser state list # List saved states
+agent-browser state show name.json # Show state contents
+agent-browser state clear name # Clear saved state
+agent-browser state clean --older-than 7 # Clean old states
 ```
 
 ## Common Patterns
@@ -59,16 +59,16 @@ agent-browser state clean --older-than 7  # Clean old states
 STATE_FILE="/tmp/auth-state.json"
 
 if [[ -f "$STATE_FILE" ]]; then
-    agent-browser state load "$STATE_FILE"
-    agent-browser open https://app.example.com/dashboard
+ agent-browser state load "$STATE_FILE"
+ agent-browser open https://app.example.com/dashboard
 else
-    agent-browser open https://app.example.com/login
-    agent-browser snapshot -i
-    agent-browser fill @e1 "$USERNAME"
-    agent-browser fill @e2 "$PASSWORD"
-    agent-browser click @e3
-    agent-browser wait --load networkidle
-    agent-browser state save "$STATE_FILE"
+ agent-browser open https://app.example.com/login
+ agent-browser snapshot -i
+ agent-browser fill @e1 "$USERNAME"
+ agent-browser fill @e2 "$PASSWORD"
+ agent-browser click @e3
+ agent-browser wait --load networkidle
+ agent-browser state save "$STATE_FILE"
 fi
 ```
 
@@ -108,15 +108,15 @@ When `--session` is omitted, commands use the default session:
 ```bash
 agent-browser open https://example.com
 agent-browser snapshot -i
-agent-browser close  # Closes default session
+agent-browser close # Closes default session
 ```
 
 ## Session Cleanup
 
 ```bash
-agent-browser --session auth close     # Close specific session
-agent-browser session list             # List active sessions
-agent-browser close                    # Close default session
+agent-browser --session auth close # Close specific session
+agent-browser session list # List active sessions
+agent-browser close # Close default session
 ```
 
 Always close sessions when done to avoid leaked processes. If a previous session wasn't closed properly, `agent-browser close` cleans it up.

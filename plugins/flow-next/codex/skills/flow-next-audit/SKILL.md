@@ -2,7 +2,7 @@
 name: flow-next-audit
 description: Audit `.flow/memory/` entries against the current codebase and decide Keep / Update / Consolidate / Replace / Delete per entry. Triggers on /flow-next:audit, "audit memory", "review memory", "refresh learnings", "sweep stale memory", "consolidate overlapping memory entries". Optional `mode:autofix` token in arguments runs without questions and marks ambiguous as stale. Optional scope hint after the mode token (concept, category, module, or path) narrows what gets audited.
 user-invocable: false
-allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
+allowed-tools: request_user_input, Read, Bash, Grep, Glob, Write, Edit, Task
 ---
 
 # /flow-next:audit — agent-native memory staleness review
@@ -22,7 +22,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — `AskUserQuestion` and the Codex / Gemini / Droid equivalents must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 3 (Ask) and Phase 6 (Discoverability check) both require user choice in interactive mode.
+**Inline skill (no `context: fork`)** — `request_user_input` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 3 (Ask) and Phase 6 (Discoverability check) both require user choice in interactive mode.
 
 ## Mode Detection
 
@@ -32,11 +32,11 @@ Parse `$ARGUMENTS` for the literal token `mode:autofix`. If present, strip it fr
 RAW_ARGS="$ARGUMENTS"
 MODE="interactive"
 if [[ "$RAW_ARGS" == *"mode:autofix"* ]]; then
-  MODE="autofix"
-  # Strip token, collapse whitespace, trim.
-  SCOPE_HINT=$(printf "%s" "$RAW_ARGS" | sed 's/mode:autofix//' | tr -s ' ' | sed 's/^ //;s/ $//')
+ MODE="autofix"
+ # Strip token, collapse whitespace, trim.
+ SCOPE_HINT=$(printf "%s" "$RAW_ARGS" | sed 's/mode:autofix//' | tr -s ' ' | sed 's/^ //;s/ $//')
 else
-  SCOPE_HINT="$RAW_ARGS"
+ SCOPE_HINT="$RAW_ARGS"
 fi
 ```
 
@@ -60,7 +60,7 @@ In autofix mode, skip user questions entirely and apply the rules above.
 
 In interactive mode, follow these principles:
 
-- Ask **one question at a time**. Use the platform's blocking-question tool: `AskUserQuestion` on Claude Code (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded), `request_user_input` on Codex, `ask_user` on Gemini / Droid. Fall back to numbered options in plain text only when no blocking tool is reachable or the call errors. Never silently skip the question.
+- Ask **one question at a time** via `request_user_input`. Fall back to numbered options in plain text only if the tool is unreachable or errors. Never silently skip the question.
 - Prefer **multiple choice** when natural options exist.
 - Lead with the **recommended option** and a one-sentence rationale.
 - Do **not** ask the user to make decisions before evidence is gathered — Phase 1 investigates first, Phase 3 asks.
@@ -84,13 +84,13 @@ Same pattern as `/flow-next:plan` and `/flow-next:prospect` — non-blocking not
 
 ```bash
 if [[ -f .flow/meta.json ]]; then
-  SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
-  PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-plugin/plugin.json"
-  [[ -f "$PLUGIN_JSON" ]] || PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
-  PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
-  if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
-    echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})." >&2
-  fi
+ SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
+ PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-plugin/plugin.json"
+ [[ -f "$PLUGIN_JSON" ]] || PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
+ PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
+ if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
+ echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})." >&2
+ fi
 fi
 ```
 

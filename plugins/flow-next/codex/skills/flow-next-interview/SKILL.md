@@ -27,7 +27,7 @@ PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-pl
 [[ -f "$PLUGIN_JSON" ]] || PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
 PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
 if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" ]]; then
-  [[ "$SETUP_VER" = "$PLUGIN_VER" ]] || echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})."
+ [[ "$SETUP_VER" = "$PLUGIN_VER" ]] || echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})."
 fi
 ```
 Continue regardless (non-blocking).
@@ -62,25 +62,25 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 ## Detect Input Type
 
 1. **Flow epic ID pattern**: matches `fn-\d+(-[a-z0-9-]+)?` (e.g., fn-1-add-oauth, fn-12, fn-2-fix-login-bug)
-   - Fetch: `$FLOWCTL show <id> --json`
-   - Read spec: `$FLOWCTL cat <id>`
+ - Fetch: `$FLOWCTL show <id> --json`
+ - Read spec: `$FLOWCTL cat <id>`
 
 2. **Flow task ID pattern**: matches `fn-\d+(-[a-z0-9-]+)?\.\d+` (e.g., fn-1-add-oauth.3, fn-12.5)
-   - Fetch: `$FLOWCTL show <id> --json`
-   - Read spec: `$FLOWCTL cat <id>`
-   - Also get epic context: `$FLOWCTL cat <epic-id>`
+ - Fetch: `$FLOWCTL show <id> --json`
+ - Read spec: `$FLOWCTL cat <id>`
+ - Also get epic context: `$FLOWCTL cat <epic-id>`
 
 3. **File path**: anything else with a path-like structure or .md extension
-   - Read file contents
-   - If file doesn't exist, ask user to provide valid path
+ - Read file contents
+ - If file doesn't exist, ask user to provide valid path
 
 ## Interview Process
 
-**CRITICAL REQUIREMENT**: You MUST use the `AskUserQuestion` tool for every question.
+**CRITICAL REQUIREMENT**: You MUST use the `request_user_input` tool for every question.
 
 - DO NOT output questions as text
 - DO NOT list questions in your response
-- ONLY ask questions via AskUserQuestion tool calls
+- ONLY ask questions via request_user_input primitive calls
 - Group 2-4 related questions per tool call
 - Expect 40+ questions total for complex specs
 
@@ -90,7 +90,7 @@ Question 1: What database should we use?
 Options: a) PostgreSQL b) SQLite c) MongoDB
 ```
 
-**Correct pattern**: Call AskUserQuestion tool with question and options.
+**Correct pattern**: Call request_user_input primitive with question and options.
 
 ## Question Categories
 
@@ -183,10 +183,10 @@ $FLOWCTL cat <id>
 **If task has substantial planning content** (description with file refs, sizing, approach):
 - **Do NOT overwrite** — planning detail would be lost
 - Only ADD new acceptance criteria discovered in interview:
-  ```bash
-  # Read existing acceptance, append new criteria
-  $FLOWCTL task set-acceptance <id> --file /tmp/acc.md --json
-  ```
+ ```bash
+ # Read existing acceptance, append new criteria
+ $FLOWCTL task set-acceptance <id> --file /tmp/acc.md --json
+ ```
 - Or suggest interviewing the epic instead: `/flow-next:interview <epic-id>`
 
 **If task is minimal** (just title, empty or stub description):

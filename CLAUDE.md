@@ -140,7 +140,7 @@ A workflow that:
 - Asks the user for input on ambiguous cases
 - Could reasonably be invoked via `/flow-next:<command>` slash command
 
-→ **Build it as a skill.** The host agent reads the skill workflow file, executes it using its existing Read/Grep/Glob/Edit/Write tools, dispatches subagents via the platform primitive (`Agent` in Claude, `spawn_agent` in Codex), asks via `AskUserQuestion`/`request_user_input`/`ask_user`. Examples: `/flow-next:audit` (fn-34), `/flow-next:prospect` (fn-33), `/flow-next:resolve-pr` (fn-31), `/flow-next:plan`, `/flow-next:work`.
+→ **Build it as a skill.** The host agent reads the skill workflow file, executes it using its existing Read/Grep/Glob/Edit/Write tools, dispatches subagents via the platform primitive (`Agent`/`Task` in Claude, `spawn_agent` in Codex), asks the user via `AskUserQuestion`. Canonical skill files always use Claude-native tool names; `sync-codex.sh` rewrites them in the Codex mirror (`AskUserQuestion` → `request_user_input`, etc.). Examples: `/flow-next:audit` (fn-34), `/flow-next:prospect` (fn-33), `/flow-next:resolve-pr` (fn-31), `/flow-next:plan`, `/flow-next:work`.
 
 **Do not spawn `codex` / `copilot` / other LLMs via subprocess from inside flowctl when invoked from a skill.** The host agent is already an LLM running the skill — there is no need for a second one. fn-34 originally violated this and was rewritten; fn-30's `memory migrate` was the next refactor target — both shipped in 0.37.0 as `/flow-next:audit` and `/flow-next:memory-migrate`.
 
@@ -182,9 +182,9 @@ If three or more of these apply, stop and convert to a skill. The deterministic 
 
 `compound-engineering`'s `ce-compound-refresh` skill is a working reference for the agent-native pattern. The entire "audit my docs against the codebase" workflow is a markdown skill file the host agent reads + executes. No Python, no subprocess, no engine. flow-next's `/flow-next:audit` (fn-34) is modeled on this.
 
-## Cross-platform patterns (Claude Code + Factory Droid)
+## Cross-platform patterns (Claude Code + Codex + Factory Droid)
 
-flow-next supports both Claude Code and Factory Droid. Follow these patterns:
+flow-next is a first-class citizen on Claude Code, Codex, and Factory Droid. **Architectural rule: canonical skill files use Claude-native tool names. `sync-codex.sh` rewrites them in the Codex mirror.** This keeps skill prose concrete (the agent always sees a literal tool name it recognizes), avoids fragile "platform abstraction" reasoning, and keeps cross-platform maintenance centralized in one place — the sync script.
 
 **Variable references** — use bash fallback:
 ```bash
@@ -211,6 +211,39 @@ disallowedTools: Edit, Write, Task
 PLUGIN_JSON="${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json"
 [[ -f "$PLUGIN_JSON" ]] || PLUGIN_JSON="${CLAUDE_PLUGIN_ROOT}/.factory-plugin/plugin.json"
 ```
+
+**Blocking-question tool** — every interactive skill that asks the user MUST reach for the platform's blocking-question primitive (NOT a plain-text prompt). Canonical skill files write the literal Claude-native name; the sync script does the rewriting.
+
+| Source (canonical Claude) | After `sync-codex.sh` (Codex mirror) | Droid |
+|---------------------------|---------------------------------------|-------|
+| `AskUserQuestion` | `request_user_input` | `ask_user` (currently no Droid mirror — Droid users see canonical; Droid mirror is a future hotfix) |
+| `ToolSearch select:AskUserQuestion` (schema-load fallback) | _stripped_ — Codex doesn't use ToolSearch | n/a |
+| Plain-text fallback ("if tool unreachable, print numbered list") | preserved verbatim | preserved |
+
+Canonical phrasing reference: `flow-next-audit/SKILL.md:62`. **Always use bare `AskUserQuestion` in canonical files.** Do NOT write inline cross-platform tables in the skill prose — they pollute the agent's context with abstraction noise. The single exception: a parenthetical breadcrumb noting "sync-codex.sh rewrites this to `request_user_input` in the Codex mirror" is fine for maintainer clarity (sync-codex.sh strips this line in the Codex output too).
+
+**Subagent dispatch** — when a skill spawns a parallel investigation or worker, write the Claude-native primitive in canonical (`Task` with `subagent_type: Explore`); sync-codex.sh rewrites to `spawn_agent` for the Codex mirror. Read-only enforcement via `disallowedTools: Edit, Write, Task` (canonical) → `disallowed_tools` (Codex `.toml`).
+
+Canonical reference: `flow-next-audit/workflow.md:158-183` (post-cleanup — the inline cross-platform table there has been removed; the canonical now uses Claude-native names with a sync-rewrites breadcrumb).
+
+### Adding a new user-facing skill (checklist)
+
+When adding a new `/flow-next:<name>` skill, every step below MUST be done. Skipping any creates silent Codex degradation that won't surface for releases.
+
+1. **Canonical skill** at `plugins/flow-next/skills/flow-next-<name>/SKILL.md` (+ `workflow.md` / `phases.md` as needed). Frontmatter: `name`, `description`, `user-invocable: false` (default for slash-only skills), `allowed-tools`.
+2. **Slash command** at `plugins/flow-next/commands/flow-next/<name>.md` (mirror existing `audit.md` / `prospect.md` shape).
+3. **Tool names in canonical = Claude-native** — write `AskUserQuestion`, `Task`, etc. directly. NO inline cross-platform tables. If you reference these tools, optionally add a parenthetical "(sync-codex.sh rewrites to `request_user_input` for Codex)" for maintainer clarity — sync strips it from the Codex mirror.
+4. **`scripts/sync-codex.sh` `generate_openai_yaml` call** added in the appropriate section (workflow blue `#3B82F6`, review red `#EF4444`, utility amber `#F59E0B`). Include display name, short description, brand color, explicit `false` for `allow_implicit_invocation`, optional default prompt.
+5. **`scripts/sync-codex.sh` `REQUIRED_OPENAI_YAML_SKILLS` array** updated to include the new skill name. Validation will fail otherwise.
+6. **Run `./scripts/sync-codex.sh`** — verify zero errors, all REQUIRED skills have `agents/openai.yaml`, and the Codex mirror has the rewritten tool names (`request_user_input`, etc.). Commit the regenerated `plugins/flow-next/codex/` directory.
+7. **Commands list** updated in:
+   - `CLAUDE.md` line ~19-27 (Plugins > Commands)
+   - `plugins/flow-next/README.md` (skills/commands table + count)
+   - `~/work/mickel.tech/app/apps/flow-next/page.tsx` (commands array + lede count + FAQ if applicable) — **maintainer-only; external contributors skip per "Contributing / Development" section**
+8. **CHANGELOG entry** under the appropriate `[flow-next X.Y.Z]` block describing what the skill does.
+9. **Smoke test** if the skill has any flowctl plumbing (atomic file writes, schema additions). Pure-skill additions (markdown-only) get verified by manual invocation in a real session.
+
+Reference: this checklist captures the lessons from the 0.34.0 → 0.37.0 era when (a) 4 user-facing skills (resolve-pr, prospect, audit, memory-migrate) silently shipped to Codex without UI metadata, and (b) several skills shipped with inline cross-platform tables (`AskUserQuestion` / `request_user_input` / `ask_user`) that polluted the agent's context. Both fixed in 0.37.1. Don't repeat them.
 
 ## Agent workflow (Ralph + RP)
 

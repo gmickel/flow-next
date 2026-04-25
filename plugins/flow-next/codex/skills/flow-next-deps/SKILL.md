@@ -28,13 +28,13 @@ epic_ids=$($FLOWCTL epics --json | jq -r '.epics[].id')
 
 # For each epic, get full details including dependencies
 for id in $epic_ids; do
-  $FLOWCTL show "$id" --json | jq -c '{
-    id: .id,
-    title: .title,
-    status: .status,
-    plan_review: .plan_review_status,
-    deps: (.depends_on_epics // [])
-  }'
+ $FLOWCTL show "$id" --json | jq -c '{
+ id: .id,
+ title: .title,
+ status: .status,
+ plan_review: .plan_review_status,
+ deps: (.depends_on_epics // [])
+ }'
 done
 ```
 
@@ -47,26 +47,26 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 
 # Collect all epic data with deps
 epics_json=$($FLOWCTL epics --json | jq -r '.epics[].id' | while read id; do
-  $FLOWCTL show "$id" --json | jq -c '{id: .id, title: .title, status: .status, deps: (.depends_on_epics // [])}'
+ $FLOWCTL show "$id" --json | jq -c '{id: .id, title: .title, status: .status, deps: (.depends_on_epics // [])}'
 done | jq -s '.')
 
 # Compute blocking status
 echo "$epics_json" | jq -r '
-  # Build status lookup
-  (map({(.id): .status}) | add // {}) as $status |
+ # Build status lookup
+ (map({(.id): .status}) | add // {}) as $status |
 
-  # Check each non-done epic
-  .[] | select(.status != "done") |
-  .id as $id | .title as $title |
+ # Check each non-done epic
+ .[] | select(.status != "done") |
+ .id as $id | .title as $title |
 
-  # Find deps that are not done
-  ([.deps[] | select($status[.] != "done")] | join(", ")) as $blocked_by |
+ # Find deps that are not done
+ ([.deps[] | select($status[.] != "done")] | join(", ")) as $blocked_by |
 
-  if ($blocked_by | length) == 0 then
-    "READY: \($id) - \($title)"
-  else
-    "BLOCKED: \($id) - \($title) (by: \($blocked_by))"
-  end
+ if ($blocked_by | length) == 0 then
+ "READY: \($id) - \($title)"
+ else
+ "BLOCKED: \($id) - \($title) (by: \($blocked_by))"
+ end
 '
 ```
 
@@ -79,36 +79,36 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 
 # Collect all epic data
 epics_json=$($FLOWCTL epics --json | jq -r '.epics[].id' | while read id; do
-  $FLOWCTL show "$id" --json | jq -c '{id: .id, title: .title, status: .status, deps: (.depends_on_epics // [])}'
+ $FLOWCTL show "$id" --json | jq -c '{id: .id, title: .title, status: .status, deps: (.depends_on_epics // [])}'
 done | jq -s '.')
 
 # Phase assignment algorithm (run in jq for reliability)
 echo "$epics_json" | jq '
-  # Build status lookup
-  (map({(.id): .status}) | add // {}) as $status |
+ # Build status lookup
+ (map({(.id): .status}) | add // {}) as $status |
 
-  # Filter to non-done epics
-  [.[] | select(.status != "done")] as $open |
+ # Filter to non-done epics
+ [.[] | select(.status != "done")] as $open |
 
-  # Assign phases iteratively
-  reduce range(10) as $phase (
-    {assigned: [], result: [], open: $open};
+ # Assign phases iteratively
+ reduce range(10) as $phase (
+ {assigned: [], result: [], open: $open};
 
-    .assigned as $assigned |
-    .open as $remaining |
+ .assigned as $assigned |
+ .open as $remaining |
 
-    # Find epics not yet assigned whose deps are all done or in earlier phases
-    ([.open[] | select(
-      ([.id] | inside($assigned) | not) and
-      ((.deps // []) | all(. as $d | $status[$d] == "done" or ($assigned | index($d))))
-    )] | map(.id)) as $ready |
+ # Find epics not yet assigned whose deps are all done or in earlier phases
+ ([.open[] | select(
+ ([.id] | inside($assigned) | not) and
+ ((.deps // []) | all(. as $d | $status[$d] == "done" or ($assigned | index($d))))
+ )] | map(.id)) as $ready |
 
-    if ($ready | length) > 0 then
-      .result += [{phase: ($phase + 1), epics: [.open[] | select(.id | IN($ready[]))]}] |
-      .assigned += $ready
-    else . end
-  ) |
-  .result
+ if ($ready | length) > 0 then
+ .result += [{phase: ($phase + 1), epics: [.open[] | select(.id | IN($ready[]))]}] |
+ .assigned += $ready
+ else . end
+ ) |
+ .result
 '
 ```
 

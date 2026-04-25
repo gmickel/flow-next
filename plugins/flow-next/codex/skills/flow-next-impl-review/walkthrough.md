@@ -37,23 +37,11 @@ appear. If neither, all primary findings appear.
 Before the walkthrough loop, the skill must have access to a **blocking
 question tool** (a tool that pauses the agent until the user answers):
 
-| Platform | Tool name | Notes |
-|----------|-----------|-------|
-| Claude Code | `AskUserQuestion` | Deferred tool — load via `ToolSearch select:AskUserQuestion` if not already loaded |
-| Codex | `request_user_input` | Native |
-| Gemini | `ask_user` | Native |
-| Pi | `ask_user` | Requires `pi-ask-user` extension |
-| Fallback | _none_ | Numbered list in chat; user must type choice. Only use if no blocking tool exists. |
+Use `request_user_input`. It's a deferred tool — call first to load its schema if it isn't already in scope.
 
-On Claude Code, check ToolSearch availability and load the schema:
-
-```
-ToolSearch select:AskUserQuestion
-```
-
-If the load fails, fall through to the chat-prompt fallback (print the
-question, wait for the user's next message). The fallback is less reliable
-— prefer the blocking tool wherever available.
+If the tool is unreachable, fall through to a chat-prompt fallback (print
+the question, wait for the user's next message). The fallback is less
+reliable — prefer the blocking tool wherever available.
 
 ## Per-finding flow
 
@@ -61,44 +49,44 @@ For each finding in the merged set:
 
 1. Render the finding block:
 
-   ```
-   Finding N/M:
-   [P1, confidence 75, introduced] src/auth.ts:42 — null deref in middleware
+ ```
+ Finding N/M:
+ [P1, confidence 75, introduced] src/auth.ts:42 — null deref in middleware
 
-   Detail: Accessing user.role without a guard leads to undefined when the
-   session cookie is missing. The middleware runs before any authentication
-   resolver, so undefined propagates into permission checks.
+ Detail: Accessing user.role without a guard leads to undefined when the
+ session cookie is missing. The middleware runs before any authentication
+ resolver, so undefined propagates into permission checks.
 
-   Suggested fix: Add a current_user guard before line 42.
+ Suggested fix: Add a current_user guard before line 42.
 
-   What should the agent do?
-     1. Apply — implement the suggested fix
-     2. Defer — leave unresolved; record in .flow/review-deferred/<branch>.md
-     3. Skip — ignore this finding entirely
-     4. Acknowledge — note it but take no action (not a bug, or intentional)
-     5. LFG the rest — apply recommended action for this + all remaining findings
-   ```
+ What should the agent do?
+ 1. Apply — implement the suggested fix
+ 2. Defer — leave unresolved; record in .flow/review-deferred/<branch>.md
+ 3. Skip — ignore this finding entirely
+ 4. Acknowledge — note it but take no action (not a bug, or intentional)
+ 5. LFG the rest — apply recommended action for this + all remaining findings
+ ```
 
 2. Present via the platform blocking question tool with five labelled choices:
-   `Apply`, `Defer`, `Skip`, `Acknowledge`, `LFG the rest`.
+ `Apply`, `Defer`, `Skip`, `Acknowledge`, `LFG the rest`.
 
 3. Record the user's decision. Accumulate into four lists:
-   - **Apply list** — findings to fix via fixer dispatch
-   - **Defer list** — findings to record in the defer sink
-   - **Skip list** — findings to log only
-   - **Acknowledge list** — findings noted but not actioned
+ - **Apply list** — findings to fix via fixer dispatch
+ - **Defer list** — findings to record in the defer sink
+ - **Skip list** — findings to log only
+ - **Acknowledge list** — findings noted but not actioned
 
 4. If the user picked **LFG the rest**, exit the loop and auto-classify every
-   remaining finding:
+ remaining finding:
 
-   | Finding shape | Auto-action |
-   |---------------|-------------|
-   | P0 or P1 @ confidence ≥ 75 | Apply |
-   | Everything else | Defer |
+ | Finding shape | Auto-action |
+ |---------------|-------------|
+ | P0 or P1 @ confidence ≥ 75 | Apply |
+ | Everything else | Defer |
 
-   (The simple P0/P1@75 rule mirrors the suppression gate used in the primary
-   review: anything worth surviving the gate is worth applying; lower-signal
-   survivors default to Defer so the user can revisit them later.)
+ (The simple P0/P1@75 rule mirrors the suppression gate used in the primary
+ review: anything worth surviving the gate is worth applying; lower-signal
+ survivors default to Defer so the user can revisit them later.)
 
 ## Branch slug + defer sink
 
@@ -121,9 +109,9 @@ Use the helper subcommand (handles the append atomically):
 
 ```bash
 $FLOWCTL review-walkthrough-defer \
-  --findings-file /tmp/walkthrough-defer.jsonl \
-  --receipt "$RECEIPT_PATH" \
-  --json
+ --findings-file /tmp/walkthrough-defer.jsonl \
+ --receipt "$RECEIPT_PATH" \
+ --json
 ```
 
 The subcommand:
@@ -141,12 +129,12 @@ Sink format:
 ## 2026-04-24 18:42 — review session fn-32.3 (sess-abc)
 
 - [P1, confidence 75, introduced] src/auth.ts:42 — null deref in middleware
-  - Suggested: Add current_user guard before line 42
-  - Deferred reason: deferred by user
+ - Suggested: Add current_user guard before line 42
+ - Deferred reason: deferred by user
 
 - [P2, confidence 50, introduced] src/cart.ts:88 — off-by-one on empty cart
-  - Suggested: Use >= 1 instead of > 0
-  - Deferred reason: deferred by user
+ - Suggested: Use >= 1 instead of > 0
+ - Deferred reason: deferred by user
 ```
 
 (Users may add prose between sessions; the helper always appends after the
@@ -166,7 +154,7 @@ cat > /tmp/walkthrough-apply.md <<EOF
 The user reviewed the findings below and chose Apply. Implement fixes for
 these findings only. Do not address Defer / Skip / Acknowledge items.
 
-$(cat /tmp/walkthrough-apply.jsonl | jq -r '"- [\(.severity), confidence \(.confidence)] \(.file):\(.line) — \(.title)\n  Fix: \(.suggested_fix)"')
+$(cat /tmp/walkthrough-apply.jsonl | jq -r '"- [\(.severity), confidence \(.confidence)] \(.file):\(.line) — \(.title)\n Fix: \(.suggested_fix)"')
 EOF
 ```
 
@@ -187,32 +175,32 @@ The record subcommand stamps the receipt atomically:
 
 ```bash
 $FLOWCTL review-walkthrough-record \
-  --receipt "$RECEIPT_PATH" \
-  --applied "${#APPLY_LIST[@]}" \
-  --deferred "${#DEFER_LIST[@]}" \
-  --skipped "${#SKIP_LIST[@]}" \
-  --acknowledged "${#ACK_LIST[@]}" \
-  --lfg-rest "${LFG_USED:-false}" \
-  --json
+ --receipt "$RECEIPT_PATH" \
+ --applied "${#APPLY_LIST[@]}" \
+ --deferred "${#DEFER_LIST[@]}" \
+ --skipped "${#SKIP_LIST[@]}" \
+ --acknowledged "${#ACK_LIST[@]}" \
+ --lfg-rest "${LFG_USED:-false}" \
+ --json
 ```
 
 Receipt extension:
 
 ```json
 {
-  "type": "impl_review",
-  "id": "fn-32.3",
-  "mode": "codex",
-  "verdict": "NEEDS_WORK",
-  "session_id": "sess-abc",
-  "walkthrough": {
-    "applied": 3,
-    "deferred": 2,
-    "skipped": 1,
-    "acknowledged": 0,
-    "lfg_rest": false
-  },
-  "walkthrough_timestamp": "2026-04-24T18:42:00Z"
+ "type": "impl_review",
+ "id": "fn-32.3",
+ "mode": "codex",
+ "verdict": "NEEDS_WORK",
+ "session_id": "sess-abc",
+ "walkthrough": {
+ "applied": 3,
+ "deferred": 2,
+ "skipped": 1,
+ "acknowledged": 0,
+ "lfg_rest": false
+ },
+ "walkthrough_timestamp": "2026-04-24T18:42:00Z"
 }
 ```
 
@@ -223,11 +211,11 @@ never sees this block because `--interactive` hard-errors in Ralph mode.)
 ## Verdict after walkthrough
 
 - **Apply list empty** → verdict stays NEEDS_WORK (no fixer dispatch). The
-  user explicitly chose not to fix anything this session. Exit.
+ user explicitly chose not to fix anything this session. Exit.
 - **Apply list non-empty** → fixer runs, commits fixes, exits. Re-review is
-  a separate `/flow-next:impl-review --interactive` invocation (or without
-  `--interactive` — receipt carries session_id so the primary review
-  continues its chat).
+ a separate `/flow-next:impl-review --interactive` invocation (or without
+ `--interactive` — receipt carries session_id so the primary review
+ continues its chat).
 
 Walkthrough never flips the verdict itself. The verdict was set by the
 primary review (or validator); walkthrough only sorts findings into buckets
@@ -244,17 +232,14 @@ and records decisions.
 ## Anti-patterns
 
 - **Running walkthrough in Ralph mode** — hard error at skill entry; never
-  silently downgrade to non-interactive.
-- **Skipping the blocking tool load** — on Claude Code, `ToolSearch
-  select:AskUserQuestion` MUST succeed before the loop or the fallback
-  chat-prompt path is used. Do not simulate decisions.
+ silently downgrade to non-interactive.
 - **Rewriting the defer file** — append-only. Users may have added manual
-  context between sessions.
+ context between sessions.
 - **Committing before the user chooses "Apply"** — the fixer runs only for
-  Apply-list findings. Do not auto-commit from a Defer/Skip/Acknowledge
-  decision.
+ Apply-list findings. Do not auto-commit from a Defer/Skip/Acknowledge
+ decision.
 - **Running the loop on a SHIP verdict** — walkthrough only makes sense on
-  NEEDS_WORK (or still-NEEDS_WORK after validator). On SHIP, the skill
-  exits cleanly without asking anything.
+ NEEDS_WORK (or still-NEEDS_WORK after validator). On SHIP, the skill
+ exits cleanly without asking anything.
 - **Re-entering the walkthrough within the same session** — after fixer
-  dispatch + commit, exit. Re-review is a fresh invocation by the user.
+ dispatch + commit, exit. Re-review is a fresh invocation by the user.

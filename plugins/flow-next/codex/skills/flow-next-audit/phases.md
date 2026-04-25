@@ -111,10 +111,10 @@ For **autofix mode** ambiguity: mark as stale via `flowctl memory mark-stale` in
 1. **Confirm canonical entry** — most recent date, broadest module scope, highest-confidence Phase 1 recommendation, cleanest body.
 2. **Extract unique content** from subsumed entries — diff against canonical body. Edge cases, alternative approaches, extra prevention rules.
 3. **Merge into canonical:**
-   - Integrate unique content where it logically belongs (don't blindly append).
-   - Combine `tags` arrays (dedupe).
-   - Preserve canonical's `module`, `track`, `category` — those are the canonical key.
-   - Optional: append `related_to: [<subsumed_id>, ...]` for traceability (git history also captures this).
+ - Integrate unique content where it logically belongs (don't blindly append).
+ - Combine `tags` arrays (dedupe).
+ - Preserve canonical's `module`, `track`, `category` — those are the canonical key.
+ - Optional: append `related_to: [<subsumed_id>, ...]` for traceability (git history also captures this).
 4. **Update other entries' `related_to`** — if any other entries cross-reference the subsumed entries, re-point to canonical.
 5. **`git rm` subsumed entries.** No archival, no redirect metadata. Git history preserves them; recovery via `git log --diff-filter=D -- .flow/memory/`.
 
@@ -153,9 +153,9 @@ By the time you identify a Replace candidate, Phase 1 investigation gathered evi
 
 - **Sufficient evidence** — you understand both old recommendation AND current approach. New file locations, current pattern, why old guidance misleads. → proceed to Replace flow.
 - **Insufficient evidence** — drift is so fundamental you can't confidently document the current approach. Entire subsystem replaced; new architecture too complex to summarize from a file scan. → mark stale instead:
-  - `flowctl memory mark-stale <id> --reason "<what was found, what's missing>" --audited-by "/flow-next:audit"`
-  - Report what evidence was found and what's missing.
-  - Recommend the user run a domain-specific solve afterward to capture fresh context.
+ - `flowctl memory mark-stale <id> --reason "<what was found, what's missing>" --audited-by "/flow-next:audit"`
+ - Report what evidence was found and what's missing.
+ - Recommend the user run a domain-specific solve afterward to capture fresh context.
 
 In autofix mode, "insufficient evidence" always routes to mark-stale, never a half-baked Replace.
 
@@ -164,14 +164,14 @@ In autofix mode, "insufficient evidence" always routes to mark-stale, never a ha
 Process Replace candidates **one at a time, sequentially.** Each replacement may need significant code investigation; parallel runs risk orchestrator context exhaustion.
 
 1. **Spawn a single subagent** (sequential) to write the replacement. Pass:
-   - Old entry's full content.
-   - Investigation evidence summary (what changed, current pattern, why old misleads).
-   - Target track + category. Same as old unless the category itself drifted (e.g. a `bug/integration` entry whose problem domain morphed into a `knowledge/architecture-patterns` issue — agent decides).
-   - Memory schema reference (`flowctl.py:3679-3737`):
-     - Required: `title`, `date`, `track`, `category`.
-     - Track-specific bug: `problem_type`, `symptoms`, `root_cause`, `resolution_type`.
-     - Track-specific knowledge: `applies_when`.
-     - Optional: `module`, `tags`, `related_to`, `status`.
+ - Old entry's full content.
+ - Investigation evidence summary (what changed, current pattern, why old misleads).
+ - Target track + category. Same as old unless the category itself drifted (e.g. a `bug/integration` entry whose problem domain morphed into a `knowledge/architecture-patterns` issue — agent decides).
+ - Memory schema reference (`flowctl.py:3679-3737`):
+ - Required: `title`, `date`, `track`, `category`.
+ - Track-specific bug: `problem_type`, `symptoms`, `root_cause`, `resolution_type`.
+ - Track-specific knowledge: `applies_when`.
+ - Optional: `module`, `tags`, `related_to`, `status`.
 2. **Subagent writes the new entry** via Write tool OR `flowctl memory add --track <t> --category <c> --title "..." --module <m> --tags "a,b" --body-file <path>`. flowctl `add` enforces schema validation; direct Write requires the subagent to emit valid frontmatter.
 3. **Optional traceability** — new entry's frontmatter may include `related_to: [<old-id>]`. Git history also captures the relationship.
 4. **Orchestrator `git rm`'s the old entry** after the subagent completes.
@@ -240,8 +240,8 @@ That's it. No archive directory, no metadata flag. Git history preserves the fil
 
 ```bash
 "$FLOWCTL" memory mark-stale "$ENTRY_ID" \
-  --reason "<one-line ambiguity description>" \
-  --audited-by "/flow-next:audit"
+ --reason "<one-line ambiguity description>" \
+ --audited-by "/flow-next:audit"
 ```
 
 The helper sets `status: stale`, stamps `last_audited` (today's date), records `audit_notes` from `--reason`. Atomic — preserves unknown frontmatter fields.
@@ -260,22 +260,22 @@ Re-mark-stale on an already-stale entry updates `last_audited` + `audit_notes`. 
 
 ```
 Is the entry's referenced code AND problem domain both gone?
-  yes → Delete (auto-applicable when ALL auto-Delete criteria hold)
-  no  → continue
+ yes → Delete (auto-applicable when ALL auto-Delete criteria hold)
+ no → continue
 
 Does another entry in the same module/category overlap heavily?
-  yes → Consolidate (canonical = newer/broader; subsumed → merged + git rm)
-  no  → continue
+ yes → Consolidate (canonical = newer/broader; subsumed → merged + git rm)
+ no → continue
 
 Does the body's recommended solution conflict with current code?
-  yes → enough evidence to write successor?
-        yes → Replace (sequential subagent writes new; orchestrator deletes old)
-        no  → mark stale (autofix) or ask user (interactive)
-  no  → continue
+ yes → enough evidence to write successor?
+ yes → Replace (sequential subagent writes new; orchestrator deletes old)
+ no → mark stale (autofix) or ask user (interactive)
+ no → continue
 
 Are there reference drifts (paths, modules, links, snippets)?
-  yes → Update (write tool; preserve unknown frontmatter)
-  no  → Keep (no edit; report under "Reviewed without edits")
+ yes → Update (write tool; preserve unknown frontmatter)
+ no → Keep (no edit; report under "Reviewed without edits")
 ```
 
 In autofix mode, replace any "ask user" branch with mark-stale.

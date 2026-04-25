@@ -16,11 +16,11 @@ Detect which platform is running:
 
 ```bash
 if [ -n "${DROID_PLUGIN_ROOT:-}" ]; then
-  PLATFORM="droid"
+ PLATFORM="droid"
 elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
-  PLATFORM="claude-code"
+ PLATFORM="claude-code"
 else
-  PLATFORM="codex"
+ PLATFORM="codex"
 fi
 ```
 
@@ -55,8 +55,8 @@ Check whichever matches `PLATFORM`. Fall back to `.claude-plugin/plugin.json` if
 
 **If `setup_version` exists (already set up):**
 - If **same version**: tell user "Already set up with v<VERSION>. Re-run to update docs only? (y/n)"
-  - If yes: skip to Step 6 (docs)
-  - If no: done
+ - If yes: skip to Step 6 (docs)
+ - If no: done
 - If **older version**: tell user "Updating from v<OLD> to v<NEW>" and continue
 
 **If no `setup_version`:** continue (first-time setup)
@@ -95,11 +95,11 @@ AGENTS_SRC="${PLUGIN_ROOT}/codex/agents"
 [ -d "$AGENTS_SRC" ] || AGENTS_SRC="$HOME/.codex/agents"
 
 if [ -d "$AGENTS_SRC" ]; then
-  mkdir -p .codex/agents
-  cp "$AGENTS_SRC"/*.toml .codex/agents/
-  echo "Copied $(ls .codex/agents/*.toml 2>/dev/null | wc -l | tr -d ' ') agent configs to .codex/agents/"
+ mkdir -p .codex/agents
+ cp "$AGENTS_SRC"/*.toml .codex/agents/
+ echo "Copied $(ls .codex/agents/*.toml 2>/dev/null | wc -l | tr -d ' ') agent configs to .codex/agents/"
 else
-  echo "Warning: No agent .toml files found at ${PLUGIN_ROOT}/codex/agents/ or ~/.codex/agents/"
+ echo "Warning: No agent .toml files found at ${PLUGIN_ROOT}/codex/agents/ or ~/.codex/agents/"
 fi
 ```
 
@@ -110,11 +110,11 @@ HOOKS_SRC="${PLUGIN_ROOT}/codex/hooks.json"
 [ -f "$HOOKS_SRC" ] || HOOKS_SRC="$HOME/.codex/hooks.json"
 
 if [ -f "$HOOKS_SRC" ]; then
-  mkdir -p .codex
-  cp "$HOOKS_SRC" .codex/hooks.json
-  echo "Copied hooks.json to .codex/hooks.json"
+ mkdir -p .codex
+ cp "$HOOKS_SRC" .codex/hooks.json
+ echo "Copied hooks.json to .codex/hooks.json"
 else
-  echo "Warning: No hooks.json found at ${PLUGIN_ROOT}/codex/hooks.json or ~/.codex/hooks.json"
+ echo "Warning: No hooks.json found at ${PLUGIN_ROOT}/codex/hooks.json or ~/.codex/hooks.json"
 fi
 ```
 
@@ -122,10 +122,10 @@ fi
 
 ```bash
 if [ -f .codex/config.toml ]; then
-  if ! grep -q 'codex_hooks' .codex/config.toml 2>/dev/null; then
-    echo -e '\n[features]\ncodex_hooks = true' >> .codex/config.toml
-    echo "Enabled codex_hooks in .codex/config.toml"
-  fi
+ if ! grep -q 'codex_hooks' .codex/config.toml 2>/dev/null; then
+ echo -e '\n[features]\ncodex_hooks = true' >> .codex/config.toml
+ echo "Enabled codex_hooks in .codex/config.toml"
+ fi
 fi
 ```
 
@@ -135,8 +135,8 @@ Read current `.flow/meta.json`, add/update these fields (preserve all others):
 
 ```json
 {
-  "setup_version": "<PLUGIN_VERSION>",
-  "setup_date": "<ISO_DATE>"
+ "setup_version": "<PLUGIN_VERSION>",
+ "setup_date": "<ISO_DATE>"
 }
 ```
 
@@ -202,67 +202,67 @@ Available questions (include only if corresponding config is unset):
 **Memory question** (include if CURRENT_MEMORY is empty):
 ```json
 {
-  "header": "Memory",
-  "question": "Enable memory system? (Auto-captures learnings from NEEDS_WORK reviews)",
-  "options": [
-    {"label": "Yes (Recommended)", "description": "Auto-capture pitfalls and conventions from review feedback"},
-    {"label": "No", "description": "Disable with: flowctl config set memory.enabled false"}
-  ],
-  "multiSelect": false
+ "header": "Memory",
+ "question": "Enable memory system? (Auto-captures learnings from NEEDS_WORK reviews)",
+ "options": [
+ {"label": "Yes (Recommended)", "description": "Auto-capture pitfalls and conventions from review feedback"},
+ {"label": "No", "description": "Disable with: flowctl config set memory.enabled false"}
+ ],
+ "multiSelect": false
 }
 ```
 
 **Plan-Sync question** (include if CURRENT_PLANSYNC is empty):
 ```json
 {
-  "header": "Plan-Sync",
-  "question": "Enable plan-sync? (Updates downstream task specs after implementation drift)",
-  "options": [
-    {"label": "Yes (Recommended)", "description": "Sync task specs when implementation differs from original plan"},
-    {"label": "No", "description": "Disable with: flowctl config set planSync.enabled false"}
-  ],
-  "multiSelect": false
+ "header": "Plan-Sync",
+ "question": "Enable plan-sync? (Updates downstream task specs after implementation drift)",
+ "options": [
+ {"label": "Yes (Recommended)", "description": "Sync task specs when implementation differs from original plan"},
+ {"label": "No", "description": "Disable with: flowctl config set planSync.enabled false"}
+ ],
+ "multiSelect": false
 }
 ```
 
 **Plan-Sync cross-epic question** (include if CURRENT_PLANSYNC is "true" AND CURRENT_CROSSEPIC is empty):
 ```json
 {
-  "header": "Cross-Epic",
-  "question": "Enable cross-epic plan-sync? (Also checks other open epics for stale references)",
-  "options": [
-    {"label": "No (Recommended)", "description": "Only sync within current epic. Faster, avoids long Ralph loops."},
-    {"label": "Yes", "description": "Also update tasks in other epics that reference changed APIs/patterns."}
-  ],
-  "multiSelect": false
+ "header": "Cross-Epic",
+ "question": "Enable cross-epic plan-sync? (Also checks other open epics for stale references)",
+ "options": [
+ {"label": "No (Recommended)", "description": "Only sync within current epic. Faster, avoids long Ralph loops."},
+ {"label": "Yes", "description": "Also update tasks in other epics that reference changed APIs/patterns."}
+ ],
+ "multiSelect": false
 }
 ```
 
 **GitHub Scout question** (include if CURRENT_GITHUB_SCOUT is empty):
 ```json
 {
-  "header": "GitHub Scout",
-  "question": "Enable GitHub scout? (Searches public/private repos for patterns during planning, requires gh CLI)",
-  "options": [
-    {"label": "No (Recommended)", "description": "Skip cross-repo search. Faster plans, no gh CLI needed."},
-    {"label": "Yes", "description": "Search GitHub repos for patterns/examples during /flow-next:plan"}
-  ],
-  "multiSelect": false
+ "header": "GitHub Scout",
+ "question": "Enable GitHub scout? (Searches public/private repos for patterns during planning, requires gh CLI)",
+ "options": [
+ {"label": "No (Recommended)", "description": "Skip cross-repo search. Faster plans, no gh CLI needed."},
+ {"label": "Yes", "description": "Search GitHub repos for patterns/examples during /flow-next:plan"}
+ ],
+ "multiSelect": false
 }
 ```
 
 **Review question** (include if CURRENT_BACKEND is empty):
 ```json
 {
-  "header": "Review",
-  "question": "Which review backend for Carmack-level reviews?",
-  "options": [
-    {"label": "Codex CLI", "description": "Cross-platform, uses GPT 5.2 High for reviews. Simple setup, works everywhere. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
-    {"label": "Copilot CLI", "description": "Cross-platform, routes to Claude (Sonnet/Opus/Haiku 4.5) or GPT-5.2 via GitHub Copilot. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
-    {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, ~65% fewer tokens than traditional approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
-    {"label": "None", "description": "Skip reviews, can configure later with --review flag"}
-  ],
-  "multiSelect": false
+ "header": "Review",
+ "question": "Which review backend for Carmack-level reviews?",
+ "options": [
+ {"label": "Codex CLI", "description": "Cross-platform, uses GPT 5.2 High for reviews. Simple setup, works everywhere. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
+ {"label": "Copilot CLI", "description": "Cross-platform, routes to Claude (Sonnet/Opus/Haiku 4.5) or GPT-5.2 via GitHub Copilot. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
+ {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, ~65% fewer tokens than traditional approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
+ {"label": "None", "description": "Skip reviews, can configure later with --review flag"}
+ ],
+ "multiSelect": false
 }
 ```
 
@@ -273,47 +273,47 @@ Stored value is a bare backend name by default. Power users can also write a ful
 For **Codex** (`PLATFORM=codex`):
 ```json
 {
-  "header": "Docs",
-  "question": "Update project documentation with Flow-Next instructions?",
-  "options": [
-    {"label": "AGENTS.md only (Recommended)", "description": "Add flow-next section to AGENTS.md (Codex reads this)"},
-    {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
-    {"label": "Both", "description": "Add flow-next section to both files"},
-    {"label": "Skip", "description": "Don't update documentation"}
-  ],
-  "multiSelect": false
+ "header": "Docs",
+ "question": "Update project documentation with Flow-Next instructions?",
+ "options": [
+ {"label": "AGENTS.md only (Recommended)", "description": "Add flow-next section to AGENTS.md (Codex reads this)"},
+ {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
+ {"label": "Both", "description": "Add flow-next section to both files"},
+ {"label": "Skip", "description": "Don't update documentation"}
+ ],
+ "multiSelect": false
 }
 ```
 
 For **Claude Code / Droid**:
 ```json
 {
-  "header": "Docs",
-  "question": "Update project documentation with Flow-Next instructions?",
-  "options": [
-    {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
-    {"label": "AGENTS.md only", "description": "Add flow-next section to AGENTS.md"},
-    {"label": "Both", "description": "Add flow-next section to both files"},
-    {"label": "Skip", "description": "Don't update documentation"}
-  ],
-  "multiSelect": false
+ "header": "Docs",
+ "question": "Update project documentation with Flow-Next instructions?",
+ "options": [
+ {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
+ {"label": "AGENTS.md only", "description": "Add flow-next section to AGENTS.md"},
+ {"label": "Both", "description": "Add flow-next section to both files"},
+ {"label": "Skip", "description": "Don't update documentation"}
+ ],
+ "multiSelect": false
 }
 ```
 
 **Star question** (always include):
 ```json
 {
-  "header": "Star",
-  "question": "Flow-Next is free and open source. Star the repo on GitHub?",
-  "options": [
-    {"label": "Yes, star it", "description": "Uses gh CLI if available, otherwise shows link"},
-    {"label": "No thanks", "description": "Skip starring"}
-  ],
-  "multiSelect": false
+ "header": "Star",
+ "question": "Flow-Next is free and open source. Star the repo on GitHub?",
+ "options": [
+ {"label": "Yes, star it", "description": "Uses gh CLI if available, otherwise shows link"},
+ {"label": "No thanks", "description": "Skip starring"}
+ ],
+ "multiSelect": false
 }
 ```
 
-Use `AskUserQuestion` with the built questions array.
+Use `request_user_input` with the built questions array.
 
 **Note:** If docs are already current, adjust the Docs question description to mention "(already up to date)" or skip that question entirely.
 
@@ -345,10 +345,10 @@ Map user's answer to config value and persist:
 ```bash
 # Determine backend from answer
 case "$review_answer" in
-  "Codex"*) REVIEW_BACKEND="codex" ;;
-  "Copilot"*|"copilot"*) REVIEW_BACKEND="copilot" ;;
-  "RepoPrompt"*) REVIEW_BACKEND="rp" ;;
-  *) REVIEW_BACKEND="none" ;;
+ "Codex"*) REVIEW_BACKEND="codex" ;;
+ "Copilot"*|"copilot"*) REVIEW_BACKEND="copilot" ;;
+ "RepoPrompt"*) REVIEW_BACKEND="rp" ;;
+ *) REVIEW_BACKEND="none" ;;
 esac
 
 "${PLUGIN_ROOT}/scripts/flowctl" config set review.backend "$REVIEW_BACKEND" --json
@@ -367,9 +367,9 @@ Use the correct template based on **target file** and **platform**:
 
 **Star:**
 - If "Yes, star it":
-  1. Check if `gh` CLI is available: `which gh`
-  2. If available, run: `gh api -X PUT /user/starred/gmickel/flow-next`
-  3. If `gh` not available or command fails, show: `Star manually: https://github.com/gmickel/flow-next`
+ 1. Check if `gh` CLI is available: `which gh`
+ 2. If available, run: `gh api -X PUT /user/starred/gmickel/flow-next`
+ 3. If `gh` not available or command fails, show: `Star manually: https://github.com/gmickel/flow-next`
 
 ## Step 8: Print Summary
 
@@ -394,8 +394,8 @@ Codex project setup:
 **Then always show:**
 ```
 To use from command line:
-  export PATH=".flow/bin:$PATH"
-  flowctl --help
+ export PATH=".flow/bin:$PATH"
+ flowctl --help
 
 Configuration (use flowctl config set to change):
 - Memory: <enabled|disabled>
