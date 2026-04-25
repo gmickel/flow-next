@@ -328,6 +328,21 @@ claude plugins uninstall flow
 
 Global installs take precedence over `--plugin-dir`, causing tests to use stale cached versions instead of your local changes.
 
+### What's in scope for a PR vs. maintainer-only
+
+When planning an epic or opening a PR, include doc updates as acceptance criteria:
+
+- **In scope for any contributor (always):**
+  - `CHANGELOG.md` — new entry under the relevant version block
+  - `plugins/<plugin>/README.md` — relevant sections + commands/skills tables
+  - `CLAUDE.md` — feature description in the relevant subsection
+  - `.flow/usage.md` — when listed commands change
+
+- **Maintainer-only (Gordon handles post-merge):**
+  - `~/work/mickel.tech/app/apps/flow-next/page.tsx` — feature card on the public marketing site. External contributors **do not** need to update this; lives in a separate private repo. PRs from non-maintainers should skip the website task entirely; Gordon adds the corresponding feature card during release.
+
+Skip rules: pure internal refactors with no user-visible surface skip README + website; bug fixes with no doc impact get a CHANGELOG entry only. When in doubt, include the doc update.
+
 ## Repo metadata
 - Author: Gordon Mickel (gordon@mickel.tech)
 - Homepage: https://mickel.tech
