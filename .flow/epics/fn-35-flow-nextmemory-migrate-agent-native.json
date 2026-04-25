@@ -1,6 +1,11 @@
 {
-  "branch_name": "fn-35-flow-nextmemory-migrate-agent-native",
+  "branch_name": "fn-34-audit-skill",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-04-25T05:58:38.619904Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [
     "fn-34-flow-nextaudit-agent-native-memory"
   ],
@@ -11,5 +16,5 @@
   "spec_path": ".flow/specs/fn-35-flow-nextmemory-migrate-agent-native.md",
   "status": "open",
   "title": "/flow-next:memory-migrate \u2014 agent-native legacy migration (replaces subprocess dispatch)",
-  "updated_at": "2026-04-25T05:59:41.063139Z"
+  "updated_at": "2026-04-25T07:17:50.143714Z"
 }

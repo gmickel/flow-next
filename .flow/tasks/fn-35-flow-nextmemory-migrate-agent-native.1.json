@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-25T07:17:50.271843Z",
+  "depends_on": [],
+  "epic": "fn-35-flow-nextmemory-migrate-agent-native",
+  "id": "fn-35-flow-nextmemory-migrate-agent-native.1",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-35-flow-nextmemory-migrate-agent-native.1.md",
+  "status": "todo",
+  "title": "Skill files + slash command (flow-next-memory-migrate)",
+  "updated_at": "2026-04-25T07:21:00.449610Z"
+}
