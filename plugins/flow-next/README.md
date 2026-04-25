@@ -21,18 +21,25 @@
 
 🌐 **Prefer a visual overview?** See the [Flow-Next app page](https://mickel.tech/apps/flow-next) for diagrams and examples.
 
-> **New: Codex Review Backend.** Cross-model reviews now work on Linux/Windows via OpenAI Codex CLI. Same Carmack-level criteria as RepoPrompt. See [Cross-Model Reviews](#cross-model-reviews) for setup.
+> **What's new in 0.38.0:** `/flow-next:capture` synthesizes free-form discussion into a flow-next epic spec with source-tagged criteria + mandatory read-back. `/flow-next:interview` enhanced with lead-with-recommendation + confidence tiers + codebase-first investigation + dependency-ordered question branches. Cross-platform tool handling moved into the Codex sync script; canonical skills stay Claude-native, sync rewrites for Codex mirror. [Full changelog](../../CHANGELOG.md).
+>
+> Recent highlights: agent-native [memory audit](#memory-system) (0.37.0), [memory migrate skill](#memory-system) (0.37.0), [PR feedback resolver](#pr-feedback-resolution) (0.34.0), [prospect skill](#prospecting) for ranked candidate ideation (0.36.0), [opt-in review flags](#cross-model-reviews) `--validate` / `--deep` / `--interactive` (0.35.0).
 
 ---
 
 ## Table of Contents
 
 - [What Is This?](#what-is-this)
+- [The Workflow](#the-workflow-ladder) — Idea → spec → tasks → ship → maintain
 - [Why It Works](#why-it-works)
 - [Quick Start](#quick-start) — Install, setup, use
-- [When to Use What](#when-to-use-what) — Interview vs Plan vs Work
+- [When to Use What](#when-to-use-what) — Prospect / Capture / Interview / Plan
+- [Prospecting](#prospecting) — `/flow-next:prospect`
+- [Capture](#capture) — `/flow-next:capture`
+- [Memory System](#memory-system) — `/flow-next:audit` + `/flow-next:memory-migrate`
 - [Agent Readiness Assessment](#agent-readiness-assessment) — `/flow-next:prime`
 - [PR Feedback Resolution](#pr-feedback-resolution) — `/flow-next:resolve-pr`
+- [Cross-Model Reviews](#cross-model-reviews) — RepoPrompt / Codex / Copilot
 - [Troubleshooting](#troubleshooting)
 - [Ralph (Autonomous Mode)](#ralph-autonomous-mode) — Run overnight
 - [Features](#features) — Re-anchoring, multi-user, reviews, dependencies
@@ -46,9 +53,11 @@
 
 ## What Is This?
 
-Flow-Next is a Claude Code plugin for plan-first orchestration. Bundled task tracking, dependency graphs, re-anchoring, and cross-model reviews.
+Flow-Next is a plugin for **agent-native AI orchestration**. Sixteen slash commands cover the full lifecycle: idea generation (`prospect`) → spec creation (`capture`) → refinement (`interview`) → planning (`plan`) → execution (`work`) → review (`impl-review` + `epic-review`) → PR feedback resolution (`resolve-pr`) → maintenance (`audit` + `memory-migrate`) → autonomous mode (`ralph-init`). Bundled task tracking, dependency graphs, re-anchoring, and cross-model reviews.
 
 Everything lives in your repo. No external services. No global config. Uninstall: delete `.flow/` (and `scripts/ralph/` if enabled).
+
+First-class on **Claude Code**, **OpenAI Codex** (CLI + Desktop), and **Factory Droid**. Canonical skills are Claude-native; `sync-codex.sh` rewrites for Codex mirror — both platforms see their own native tool names.
 
 <table>
 <tr>
