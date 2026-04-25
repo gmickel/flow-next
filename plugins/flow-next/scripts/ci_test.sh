@@ -175,8 +175,8 @@ flowctl memory add --type pitfall "Never use sync IO in async handlers" --json >
 flowctl memory add --type convention "Use snake_case for functions" --json >/dev/null && pass "memory add convention" || fail "memory add convention"
 
 MEM_LIST="$(flowctl memory list --json)"
-# memory list returns {counts: {pitfalls.md: N, conventions.md: M, ...}, total: X}
-MEM_TOTAL="$("$PYTHON_BIN" -c "import json,sys; d=json.load(sys.stdin); print(d.get('total', 0))" <<< "$MEM_LIST")"
+# memory list returns {success: true, entries: [...], legacy: [...], count: N, status: "active"}
+MEM_TOTAL="$("$PYTHON_BIN" -c "import json,sys; d=json.load(sys.stdin); print(d.get('count', 0))" <<< "$MEM_LIST")"
 [[ "$MEM_TOTAL" -ge 2 ]] && pass "memory list ($MEM_TOTAL total)" || fail "memory list (got $MEM_TOTAL)"
 
 # ─────────────────────────────────────────────────────────────────────────────
