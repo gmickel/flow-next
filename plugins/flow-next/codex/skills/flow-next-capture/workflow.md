@@ -139,8 +139,19 @@ Exit 2.
 
 If `REWRITE_TARGET` is set:
 
-- Validate the target exists: `"$FLOWCTL" show "$REWRITE_TARGET" --json` must return success.
-- If the target does not exist, exit 2 with: `Error: --rewrite target <id> does not exist. Drop --rewrite to create a new epic, or pick an existing epic id.`
+- Validate the target exists **and is an epic** (not a task — `flowctl show` accepts both, but capture only writes specs to epic IDs):
+
+ ```bash
+ out=$("$FLOWCTL" show "$REWRITE_TARGET" --json) || { echo "Error: --rewrite target $REWRITE_TARGET does not exist. Drop --rewrite to create a new epic, or pick an existing epic id." >&2; exit 2; }
+ if echo "$out" | jq -e '.tasks' >/dev/null 2>&1; then
+ : # epic — has .tasks array
+ else
+ echo "Error: --rewrite target $REWRITE_TARGET is a task, not an epic. Pass an epic id (fn-N-slug, no .M suffix)." >&2
+ exit 2
+ fi
+ ```
+
+- If the target is missing or is a task, exit 2 with the appropriate error message above.
 - Read the existing spec. Phase 4 read-back will show a diff (existing → proposed) before write.
 
 If `REWRITE_TARGET` is empty, also scan the visible conversation for prior-capture artifact references — patterns like `Spec captured at .flow/specs/<id>.md` from earlier turns. If found:
@@ -179,18 +190,9 @@ Rules:
 
 ### 1.2 — Optional codebase verification (subagent dispatch — R12)
 
-When the conversation references repo files or modules whose state matters for the spec ("the auth module needs X", "we already have a rate limiter at..."), spawn a **read-only investigation subagent** to verify. This is optional — for clean conversations with no file references, skip this step.
+When the conversation references repo files or modules whose state matters for the spec ("the auth module needs X", "we already have a rate limiter at..."), spawn a **read-only investigation subagent** via the `Task` tool with `subagent_type: Explore` (or `general-purpose` when Explore is unavailable). For clean conversations with no file references, skip this step. ( per repo cross-platform convention.)
 
-Pick the primitive that exists in the host harness:
-
-| Platform | Primitive | Subagent type |
-|----------|-----------|---------------|
-| Claude Code | `Task` tool with `subagent_type: Explore` (read-only investigation) or `general-purpose` (when Explore unavailable) | Explore preferred — read-only enforced |
-| Codex | `spawn_agent` with `agent_type: explorer` | Read-only by Codex contract |
-| Droid | `spawn_agent` or platform-equivalent (verify tool name in current Droid docs) | Read-only |
-| Fallback | Main thread Read / Grep / Glob | Use when no subagent primitive is available |
-
-Investigation subagents are **read-only**. They must not Edit, Write, Bash beyond Read / Grep / Glob, or git-mutate. Each returns:
+Investigation subagents are **read-only**. They must not Edit, Write, Bash beyond Read / Grep / Glob, or git-mutate. Pass `disallowedTools: Edit, Write, Task` when dispatching. Each returns:
 
 ```yaml
 references_verified:
