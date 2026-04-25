@@ -93,9 +93,9 @@ Work task-by-task with full review cycles for maximum control. Or throw the whol
 /flow-next:work fn-1
 ```
 
-Both get: re-anchoring before each task, evidence recording, cross-model review (if rp-cli available).
+Both get: re-anchoring before each task, evidence recording, cross-model review (if a review backend is configured — RepoPrompt, Codex CLI, or GitHub Copilot CLI).
 
-**Review timing**: The RepoPrompt review runs once at the end of the work package—after a single task if you specified `fn-N.M`, or after all tasks if you specified `fn-N`. For tighter review loops on large epics, work task-by-task.
+**Review timing**: The review runs once at the end of the work package—after a single task if you specified `fn-N.M`, or after all tasks if you specified `fn-N`. For tighter review loops on large epics, work task-by-task.
 
 ### No Context Length Worries
 
@@ -111,7 +111,7 @@ Never worry about context window limits again.
 If drift happens despite re-anchoring, a different model catches it before it compounds:
 
 1. Claude implements task
-2. GPT reviews via RepoPrompt (sees full files, not diffs)
+2. A different model reviews via the configured backend — RepoPrompt (full-file context), Codex CLI, or GitHub Copilot CLI
 3. Reviews block until `SHIP` verdict
 4. Fix → re-review cycles continue until approved
 
@@ -180,7 +180,7 @@ git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-inst
 ```
 
 This is technically optional but **highly recommended**. It:
-- **Configures review backend** (RepoPrompt, Codex, or none) — required for cross-model reviews
+- **Configures review backend** (RepoPrompt, Codex, Copilot, or none) — required for cross-model reviews
 - Copies `flowctl` to `.flow/bin/` for direct CLI access
 - Adds flow-next instructions to CLAUDE.md/AGENTS.md (helps other AI tools understand your project)
 - Creates `.flow/usage.md` with full CLI reference
@@ -540,7 +540,7 @@ Prime evaluates your codebase across eight pillars (48 criteria total):
 
 ### How It Works
 
-1. **Parallel Assessment** — 9 haiku scouts run in parallel (~15-20 seconds):
+1. **Parallel Assessment** — 9 sonnet scouts run in parallel (~15-20 seconds):
 
    Agent Readiness scouts:
    - `tooling-scout` — linters, formatters, pre-commit, type checking
@@ -1694,7 +1694,7 @@ Sixteen commands, complete workflow:
 | `/flow-next:plan <idea>` | Research the codebase, create epic with dependency-ordered tasks |
 | `/flow-next:work <id\|file>` | Execute epic, task, or spec file, re-anchoring before each |
 | `/flow-next:interview <id>` | Deep interview to flesh out a spec before planning |
-| `/flow-next:plan-review <id>` | Carmack-level plan review via RepoPrompt |
+| `/flow-next:plan-review <id>` | Carmack-level plan review (RepoPrompt, Codex, or Copilot) |
 | `/flow-next:impl-review` | Carmack-level impl review of current branch |
 | `/flow-next:epic-review <id>` | Epic-completion review: verify implementation matches spec |
 | `/flow-next:resolve-pr [arg]` | Resolve GitHub PR review threads (fetch → triage → fix → reply → resolve) ([details](#pr-feedback-resolution)) |
@@ -1988,7 +1988,7 @@ Override via flags or `scripts/ralph/config.env`.
 2. **Execute**: Implement using existing patterns
 3. **Test**: Verify acceptance criteria
 4. **Record**: `flowctl done` adds summary + evidence to the task spec
-5. **Review** (optional): `/flow-next:impl-review` via RepoPrompt
+5. **Review** (optional): `/flow-next:impl-review` via RepoPrompt, Codex, or Copilot
 6. **Loop**: Next ready task → repeat until no ready tasks. Close epic manually (`flowctl epic close fn-N`) or let Ralph close at loop end.
 
 ---
@@ -2035,9 +2035,9 @@ Run scripts from terminal (not inside Claude Code). `ralph_once.sh` runs one ite
 
 This forces Ralph to run `/flow-next:plan-review` until the epic plan is approved before starting tasks.
 
-**Tip:** If you don't have `rp-cli` installed, keep `REQUIRE_PLAN_REVIEW=0` or Ralph may repeatedly select the plan gate and make no progress.
+**Tip:** If you don't have a review backend installed (`rp-cli`, `codex`, or `copilot`), keep `REQUIRE_PLAN_REVIEW=0` or Ralph may repeatedly select the plan gate and make no progress.
 
-Ralph verifies RepoPrompt reviews via receipt JSON files in `scripts/ralph/runs/<run>/receipts/` (plan + impl).
+Ralph verifies reviews via receipt JSON files in `scripts/ralph/runs/<run>/receipts/` (plan + impl). Receipts are backend-agnostic — RepoPrompt, Codex, and Copilot all write the same shape.
 
 ### Ralph loop (one iteration)
 
