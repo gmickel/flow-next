@@ -2,6 +2,24 @@
 
 Ask NON-OBVIOUS questions only. Expect 40+ questions for complex specs.
 
+## Pre-Question Taxonomy
+
+Before asking any question, classify it:
+
+| Category | Who answers | Examples |
+|----------|-------------|----------|
+| **Codebase-answerable** | Agent (Read / Grep / Glob) | "What persistence layer is used?" / "Where do existing routes live?" / "What's the test framework?" |
+| **User-judgment-required** | User (`AskUserQuestion`) | "Should we add caching?" / "What's the priority for offline support?" / "Is performance or simplicity more important here?" |
+
+**Rule of thumb:**
+
+- "What exists / how is it wired / what conventions live here" → agent investigates, doesn't ask.
+- "What should exist / what tradeoff to make / what priority" → user decides, agent asks.
+
+**If you find yourself answering a "should" question via grep, that's the bug.** Stop and ask the user.
+
+**Audit trail:** every question the agent answered via codebase exploration goes into the spec's `## Resolved via Codebase` section (separate from items the user answered). Cite file:line evidence so reviewers can spot-check assumptions later — especially important when the agent's "I checked" turns out to be "I assumed."
+
 ## Technical Implementation
 
 - Data structures and algorithms

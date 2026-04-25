@@ -91,6 +91,56 @@ Options: a) PostgreSQL b) SQLite c) MongoDB
 
 **Correct pattern**: Call AskUserQuestion tool with question and options.
 
+### Question Format: Lead with Recommendation
+
+Every `AskUserQuestion` body must include the agent's recommended option AND a confidence tier. Mirrors the canonical phrasing in `flow-next-audit/SKILL.md:64` ("Lead with the recommended option and a one-sentence rationale"). Call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded. Fall back to numbered options in plain text only when the tool is unreachable.
+
+Pattern:
+
+- `question.body`: "<options summary>. Recommended: <X> — <one-sentence rationale>. Confidence: [high | judgment-call | your-call]."
+- `question.options`: neutral labels (no "(recommended)" markers — recommendation goes in the body; neutral options reduce anchoring)
+
+Confidence tiers (mandatory — pick one per question):
+
+- `[high]` — strong codebase signal or convention match. Recommendation is load-bearing; user can usually accept.
+- `[judgment-call]` — slight lean but reasonable people disagree. User's call carries weight.
+- `[your-call]` — agent has no signal. "I genuinely don't know — your priority / domain knowledge / preference."
+
+The `[your-call]` tier is **mandatory** when the agent has no basis for a recommendation. Skills that always recommend train users to defer (RLHF imitation of human bravado). Say so explicitly.
+
+Examples (one per tier):
+
+- `[high]`: "Where should the new validator live? Recommended: `src/utils/validation.ts` — three sibling validators (`validateEmail`, `validatePhone`, `validateUrl`) already live there and the test suite imports from that module. Confidence: [high]." Options: `src/utils/validation.ts`, `src/validators/`, `new module`.
+- `[judgment-call]`: "Cache TTL for the rate-limiter? Recommended: 60s — short enough that drift stays bounded, long enough that the cache earns its keep. Confidence: [judgment-call]." Options: `30s`, `60s`, `300s`, `no cache`.
+- `[your-call]`: "What error code should we return when the upstream API times out? Recommended: none — this depends on what callers expect and I don't see existing convention to copy. Confidence: [your-call]." Options: `502`, `503`, `504`, `408`.
+
+### Question Order: Walk the Decision Tree
+
+Walk down branches of the decision tree in dependency order. Don't ask about implementation details before establishing whether they're needed.
+
+Concrete rules:
+
+1. **Cap branch depth at 4.** Research shows >4 prior turns rarely improves question quality — drop deeper threads, ask about something else. Heuristic; revisit if too restrictive in real use.
+2. **Discover-as-you-go**, not pre-compute. Adapt the next question based on prior answers. Don't lock a tree before you start.
+3. **Surface abandoned branches.** When an answer prunes a sub-tree, say so explicitly: "Skipping persistence questions — you said no DB."
+4. **One `AskUserQuestion` call per turn**, period — never queue multiple tool calls back-to-back. Within that single call you may bundle 2-4 closely-related sub-questions per the existing batching rule above; do NOT pad with loosely-related questions just to hit four. The intent: one focused checkpoint per turn so the user isn't barraged with unrelated decisions in parallel. Use multi-select within a sub-question when options are non-exclusive.
+
+Example flow:
+
+> Q: "Does this feature need persistence?"
+> A: "No, ephemeral state is fine."
+> [agent prunes the {DB choice, schema design, migration plan} sub-tree]
+> Q: "Skipped DB questions — you said ephemeral. Next: how should this state survive page reloads?"
+
+### Investigate Codebase Before Asking
+
+Before every question, classify it via the [questions.md](questions.md) **Pre-Question Taxonomy**:
+
+- **Codebase-answerable** ("what exists / how it's wired / what conventions live here") → use Read / Grep / Glob to answer; log to spec's `## Resolved via Codebase` section with file:line evidence.
+- **User-judgment-required** ("what should exist / what tradeoff to make / what priority") → ask via `AskUserQuestion`.
+
+If you find yourself answering a "should" question via grep, that's the bug. Stop and ask the user.
+
 ## Question Categories
 
 Read [questions.md](questions.md) for all question categories and interview guidelines.
@@ -127,6 +177,10 @@ Decisions made during interview (e.g., "Use OAuth not SAML", "Support mobile + w
 - Edge case 1
 - Edge case 2
 
+## Resolved via Codebase
+(optional — omit if nothing was resolved this way during the interview)
+Items the agent answered via Read / Grep / Glob, with file:line evidence. Separate from items the user answered. Lets reviewers spot-check assumptions later.
+
 ## Open Questions
 Unresolved items that need research during planning
 
@@ -162,6 +216,10 @@ Decisions made during interview
 ## Edge Cases
 - Edge case 1
 - Edge case 2
+
+## Resolved via Codebase
+(optional — omit if nothing was resolved this way during the interview)
+Items the agent answered via Read / Grep / Glob, with file:line evidence. Separate from items the user answered.
 
 ## Open Questions
 Unresolved items

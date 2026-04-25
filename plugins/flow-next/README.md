@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.37.1-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.38.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -21,18 +21,25 @@
 
 🌐 **Prefer a visual overview?** See the [Flow-Next app page](https://mickel.tech/apps/flow-next) for diagrams and examples.
 
-> **New: Codex Review Backend.** Cross-model reviews now work on Linux/Windows via OpenAI Codex CLI. Same Carmack-level criteria as RepoPrompt. See [Cross-Model Reviews](#cross-model-reviews) for setup.
+> **What's new in 0.38.0:** `/flow-next:capture` synthesizes free-form discussion into a flow-next epic spec with source-tagged criteria + mandatory read-back. `/flow-next:interview` enhanced with lead-with-recommendation + confidence tiers + codebase-first investigation + dependency-ordered question branches. Cross-platform tool handling moved into the Codex sync script; canonical skills stay Claude-native, sync rewrites for Codex mirror. [Full changelog](../../CHANGELOG.md).
+>
+> Recent highlights: agent-native [memory audit](#memory-system) (0.37.0), [memory migrate skill](#memory-system) (0.37.0), [PR feedback resolver](#pr-feedback-resolution) (0.34.0), [prospect skill](#prospecting) for ranked candidate ideation (0.36.0), [opt-in review flags](#cross-model-reviews) `--validate` / `--deep` / `--interactive` (0.35.0).
 
 ---
 
 ## Table of Contents
 
 - [What Is This?](#what-is-this)
+- [The Workflow](#the-workflow-ladder) — Idea → spec → tasks → ship → maintain
 - [Why It Works](#why-it-works)
 - [Quick Start](#quick-start) — Install, setup, use
-- [When to Use What](#when-to-use-what) — Interview vs Plan vs Work
+- [When to Use What](#when-to-use-what) — Prospect / Capture / Interview / Plan
+- [Prospecting](#prospecting) — `/flow-next:prospect`
+- [Capture](#capture) — `/flow-next:capture`
+- [Memory System](#memory-system) — `/flow-next:audit` + `/flow-next:memory-migrate`
 - [Agent Readiness Assessment](#agent-readiness-assessment) — `/flow-next:prime`
 - [PR Feedback Resolution](#pr-feedback-resolution) — `/flow-next:resolve-pr`
+- [Cross-Model Reviews](#cross-model-reviews) — RepoPrompt / Codex / Copilot
 - [Troubleshooting](#troubleshooting)
 - [Ralph (Autonomous Mode)](#ralph-autonomous-mode) — Run overnight
 - [Features](#features) — Re-anchoring, multi-user, reviews, dependencies
@@ -46,9 +53,11 @@
 
 ## What Is This?
 
-Flow-Next is a Claude Code plugin for plan-first orchestration. Bundled task tracking, dependency graphs, re-anchoring, and cross-model reviews.
+Flow-Next is a plugin for **agent-native AI orchestration**. Sixteen slash commands cover the full lifecycle: idea generation (`prospect`) → spec creation (`capture`) → refinement (`interview`) → planning (`plan`) → execution (`work`) → review (`impl-review` + `epic-review`) → PR feedback resolution (`resolve-pr`) → maintenance (`audit` + `memory-migrate`) → autonomous mode (`ralph-init`). Bundled task tracking, dependency graphs, re-anchoring, and cross-model reviews.
 
 Everything lives in your repo. No external services. No global config. Uninstall: delete `.flow/` (and `scripts/ralph/` if enabled).
+
+First-class on **Claude Code**, **OpenAI Codex** (CLI + Desktop), and **Factory Droid**. Canonical skills are Claude-native; `sync-codex.sh` rewrites for Codex mirror — both platforms see their own native tool names.
 
 <table>
 <tr>
@@ -93,9 +102,9 @@ Work task-by-task with full review cycles for maximum control. Or throw the whol
 /flow-next:work fn-1
 ```
 
-Both get: re-anchoring before each task, evidence recording, cross-model review (if rp-cli available).
+Both get: re-anchoring before each task, evidence recording, cross-model review (if a review backend is configured — RepoPrompt, Codex CLI, or GitHub Copilot CLI).
 
-**Review timing**: The RepoPrompt review runs once at the end of the work package—after a single task if you specified `fn-N.M`, or after all tasks if you specified `fn-N`. For tighter review loops on large epics, work task-by-task.
+**Review timing**: The review runs once at the end of the work package—after a single task if you specified `fn-N.M`, or after all tasks if you specified `fn-N`. For tighter review loops on large epics, work task-by-task.
 
 ### No Context Length Worries
 
@@ -111,7 +120,7 @@ Never worry about context window limits again.
 If drift happens despite re-anchoring, a different model catches it before it compounds:
 
 1. Claude implements task
-2. GPT reviews via RepoPrompt (sees full files, not diffs)
+2. A different model reviews via the configured backend — RepoPrompt (full-file context), Codex CLI, or GitHub Copilot CLI
 3. Reviews block until `SHIP` verdict
 4. Fix → re-review cycles continue until approved
 
@@ -180,7 +189,7 @@ git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-inst
 ```
 
 This is technically optional but **highly recommended**. It:
-- **Configures review backend** (RepoPrompt, Codex, or none) — required for cross-model reviews
+- **Configures review backend** (RepoPrompt, Codex, Copilot, or none) — required for cross-model reviews
 - Copies `flowctl` to `.flow/bin/` for direct CLI access
 - Adds flow-next instructions to CLAUDE.md/AGENTS.md (helps other AI tools understand your project)
 - Creates `.flow/usage.md` with full CLI reference
@@ -282,16 +291,20 @@ Best for: bug fixes, small features, well-scoped changes that don't need task sp
 
 | Starting point | Recommended sequence |
 |----------------|---------------------|
-| No target yet — "what should I build?" | Prospect → Interview/Plan → Work ([details](#prospecting)) |
+| No target yet, want ranked candidates | Prospect → (promote) → Plan → Work ([details](#prospecting)) |
+| Prospect survivor needs richer spec | Prospect → Capture → Interview/Plan → Work |
+| Conversation already in flight | Capture → Interview/Plan → Work |
+| Free-form discussion, lock it down | Capture → Plan → Work |
 | New feature, want solid spec first | Spec → Interview/Plan → Work |
 | Vague idea, rough notes | Interview → Plan → Work |
 | Detailed spec/PRD | Plan → Interview → Work |
 | Well-understood, needs task splitting | Plan → Work |
 | Small single-task, spec complete | Work directly (creates 1 epic + 1 task) |
 
-**Prospect vs Spec vs Interview vs Plan:**
-- **Prospect** (`/flow-next:prospect [hint]`) generates many candidate ideas, critiques each one, and writes a ranked artifact under `.flow/prospects/`. Use when you don't have a target yet. Promote a survivor to an epic via `flowctl prospect promote`.
-- **Spec** (just ask "create a spec") creates an epic with structured requirements (goal, architecture, API contracts, edge cases, acceptance criteria, boundaries). No tasks, no codebase research.
+**Prospect vs Capture vs Spec vs Interview vs Plan:**
+- **Prospect** (`/flow-next:prospect [hint]`) generates many candidate ideas, critiques each one, and writes a ranked artifact under `.flow/prospects/`. Use when you don't have a target yet. Promote a survivor to an epic via `flowctl prospect promote` (direct path to plan), or hand the survivor to `/flow-next:capture` for a richer conversation-driven spec.
+- **Capture** (`/flow-next:capture`) synthesizes conversation context into an epic spec — the automated alternative to manual `flowctl epic create + epic set-plan`. Use after prospect-promotion or after a free-form design discussion. Source-tags every acceptance criterion (`[user]` / `[paraphrase]` / `[inferred]`); mandatory read-back loop; never silently invents requirements. Output goes to `.flow/specs/<epic-id>.md`.
+- **Spec** (just ask "create a spec") creates an epic with structured requirements (goal, architecture, API contracts, edge cases, acceptance criteria, boundaries). Same destination as capture, but the manual heredoc path — useful for scripted callers.
 - **Interview** refines an epic via deep Q&A (40+ questions). Writes back to the epic spec only — no tasks.
 - **Plan** researches best practices, analyzes existing patterns, and creates sized tasks with dependencies.
 
@@ -417,6 +430,63 @@ Optional flags `floor_violation`, `generation_under_volume` are omitted when uns
 
 ---
 
+## Capture
+
+`/flow-next:capture` synthesizes the current conversation context into an epic spec. The automated alternative to the manual `flowctl epic create + epic set-plan` heredoc documented in `CLAUDE.md` — same destination (`.flow/specs/<epic-id>.md`), same template, but the host agent does the synthesis with full conversation context.
+
+### When to use it
+
+- A free-form design discussion has produced enough material for an epic spec — lock it down before the context decays.
+- A `/flow-next:prospect` survivor needs a richer conversation-driven spec than the direct `flowctl prospect promote` skeleton provides.
+- You want an audit trail of which acceptance criteria came from the user vs which the agent inferred — capture's source-tagging makes this visible.
+
+If you already have a written spec or a clear feature description, skip capture and go straight to `/flow-next:plan` or `/flow-next:interview`.
+
+### Quick start
+
+```bash
+# Interactive (default) — agent shows full draft via AskUserQuestion before writing
+/flow-next:capture
+
+# Autofix — print the draft to stdout; --yes required to commit
+/flow-next:capture mode:autofix --yes
+
+# Overwrite an existing epic spec (refused without this flag)
+/flow-next:capture --rewrite fn-42-add-rate-limiting
+
+# Override compaction-detection refusal (use only when you trust recent turns)
+/flow-next:capture --from-compacted-ok
+```
+
+### How it works
+
+Six phases, single chat (no subagent dispatch by default):
+
+1. **Pre-flight** — duplicate detection (scan `.flow/epics/` + `flowctl memory search` on extracted keywords); compaction detection (refuse without `--from-compacted-ok` when conversation has truncation markers); idempotency guard (refuse without `--rewrite <id>` when target epic already exists).
+2. **Conversation evidence** — extract a verbatim `## Conversation Evidence` block (raw user turns) into the spec FIRST, then draft other sections referencing it. Mitigates hallucinated requirements.
+3. **Source-tagged synthesis** — draft spec sections; tag every acceptance criterion + decision-context line with `[user]` (verbatim from conversation), `[paraphrase]` (user intent restated), or `[inferred]` (agent fill-in, most-scrutinized at read-back). At 8+ acceptance criteria, surface a "consider splitting?" suggestion at read-back — never auto-split.
+4. **Must-ask cases** — hard-error if any of these are unresolved without asking: (a) epic title genuinely ambiguous, (b) acceptance criterion can't be made testable without user judgment, (c) scope conflicts with existing epic.
+5. **Read-back loop (mandatory, even in autofix)** — show full draft + `[inferred]` count via `AskUserQuestion`. User confirms / edits / aborts. Autofix prints to stdout; `--yes` required to commit.
+6. **Write via flowctl** — `flowctl epic create --title "<extracted>" --json` → returns epic-id → `flowctl epic set-plan <epic-id> --file - --json <<EOF` (heredoc with rendered template). Optional `flowctl epic set-branch`.
+
+### Forbidden behaviors
+
+- **No tech-stack mentions unless the user stated them** (defer to `/flow-next:plan` per spec-kit convention).
+- **No invented acceptance criteria** (must mark `[inferred]` and confirm at read-back).
+- **No silent overwrite** (idempotency guard; `--rewrite` required to overwrite an existing spec).
+- **No code snippets or specific file paths** (those belong in `/flow-next:plan`).
+
+### Spec template
+
+Capture writes the **CLAUDE.md richer template**: `## Goal & Context` / `## Architecture & Data Models` / `## API Contracts` / `## Edge Cases & Constraints` / `## Acceptance Criteria` / `## Boundaries` / `## Decision Context`. Acceptance criteria use R-IDs (`- **R1:** ...`) per repo convention. Spec footer prints "Suggested next step: `/flow-next:plan <epic-id>` (break into tasks) or `/flow-next:interview <epic-id>` (refine via Q&A)."
+
+**Exit codes:**
+- Ralph-block (`REVIEW_RECEIPT_PATH` or `FLOW_RALPH=1`) → exit **2**.
+- Compaction detected without `--from-compacted-ok` → exit **2** with stderr hint.
+- Existing epic without `--rewrite <id>` → triggers Phase 0 duplicate-detection branch (extend / supersede / proceed-anyway).
+
+---
+
 ## Agent Readiness Assessment
 
 > Inspired by [Factory.ai's Agent Readiness framework](https://factory.ai/news/agent-readiness)
@@ -479,7 +549,7 @@ Prime evaluates your codebase across eight pillars (48 criteria total):
 
 ### How It Works
 
-1. **Parallel Assessment** — 9 haiku scouts run in parallel (~15-20 seconds):
+1. **Parallel Assessment** — 9 sonnet scouts run in parallel (~15-20 seconds):
 
    Agent Readiness scouts:
    - `tooling-scout` — linters, formatters, pre-commit, type checking
@@ -826,8 +896,14 @@ flowchart TD
   A0{Have a target?} -- no --> A1[/flow-next:prospect hint/<br/>generate ranked candidates]
   A1 --> A2[.flow/prospects/<br/>ranked artifact]
   A2 --> A3[flowctl prospect promote --idea N<br/>creates epic from survivor]
-  A3 --> A
-  A0 -- yes --> A
+  A3 --> AC{Need richer<br/>conversation-driven spec?}
+  AC -- yes --> AK
+  AC -- no --> A
+  A0 -- yes --> AS{Already discussing<br/>in conversation?}
+  AS -- yes --> AK[/flow-next:capture/<br/>synthesize conversation → spec<br/>source-tagged + read-back]
+  AS -- no --> A
+  AK --> AKS[.flow/specs/&lt;epic-id&gt;.md]
+  AKS --> A
   A[Idea or short spec<br/>prompt or doc] --> B{Need deeper spec?}
   B -- yes --> C[Optional: /flow-next:interview fn-N or spec.md<br/>40+ deep questions to refine spec]
   C --> D[Refined spec]
@@ -860,11 +936,12 @@ flowchart TD
   X -- yes --> U[Close epic]
   V -- no --> U
   classDef optional stroke-dasharray: 6 4,stroke:#999;
-  class C,J,S,W,A1,A2,A3 optional;
+  class C,J,S,W,A1,A2,A3,AC,AS,AK,AKS optional;
 ```
 
 Notes:
-- `/flow-next:prospect` accepts an optional focus hint (concept / path / constraint / volume) and writes a ranked artifact under `.flow/prospects/` — see [Prospecting](#prospecting)
+- `/flow-next:prospect` accepts an optional focus hint (concept / path / constraint / volume) and writes a ranked artifact under `.flow/prospects/` — see [Prospecting](#prospecting). Two downstream paths from a survivor: **direct** (`flowctl prospect promote --idea N` → ready epic, jump to plan) or **through capture** (hand the survivor to `/flow-next:capture` for a richer conversation-driven spec).
+- `/flow-next:capture` synthesizes the current conversation (free-form discussion or post-prospect refinement) into an epic spec at `.flow/specs/<epic-id>.md` via existing `flowctl epic create + epic set-plan`. Mandatory read-back; source-tagged criteria. Ralph-blocked.
 - `/flow-next:interview` accepts Flow IDs or spec file paths and writes refinements back
 - `/flow-next:plan` accepts new ideas or an existing Flow ID to update the plan
 
@@ -1617,15 +1694,16 @@ Until migration runs, legacy flat files continue to work; `list` / `read` / `sea
 
 ## Commands
 
-Fifteen commands, complete workflow:
+Sixteen commands, complete workflow:
 
 | Command | What It Does |
 |---------|--------------|
-| `/flow-next:prospect [hint]` | Generate ranked candidate ideas grounded in the repo, upstream of `interview`/`plan` ([details](#prospecting)) |
+| `/flow-next:prospect [hint]` | Generate ranked candidate ideas grounded in the repo, upstream of `capture`/`interview`/`plan` ([details](#prospecting)) |
+| `/flow-next:capture [flags]` | Synthesize conversation context into an epic spec; source-tagged + mandatory read-back ([details](#capture)) |
 | `/flow-next:plan <idea>` | Research the codebase, create epic with dependency-ordered tasks |
 | `/flow-next:work <id\|file>` | Execute epic, task, or spec file, re-anchoring before each |
 | `/flow-next:interview <id>` | Deep interview to flesh out a spec before planning |
-| `/flow-next:plan-review <id>` | Carmack-level plan review via RepoPrompt |
+| `/flow-next:plan-review <id>` | Carmack-level plan review (RepoPrompt, Codex, or Copilot) |
 | `/flow-next:impl-review` | Carmack-level impl review of current branch |
 | `/flow-next:epic-review <id>` | Epic-completion review: verify implementation matches spec |
 | `/flow-next:resolve-pr [arg]` | Resolve GitHub PR review threads (fetch → triage → fix → reply → resolve) ([details](#pr-feedback-resolution)) |
@@ -1667,6 +1745,7 @@ Natural language also works:
 | Command | Available Flags |
 |---------|-----------------|
 | `/flow-next:prospect` | `[focus hint]` (positional) — concept / path / constraint / volume |
+| `/flow-next:capture` | `mode:autofix` (positional), `--rewrite <epic-id>`, `--from-compacted-ok`, `--yes` |
 | `/flow-next:plan` | `--research=rp\|grep`, `--review=rp\|codex\|copilot\|export\|none`, `--no-review` |
 | `/flow-next:work` | `--branch=current\|new\|worktree`, `--review=rp\|codex\|copilot\|export\|none`, `--no-review` |
 | `/flow-next:plan-review` | `--review=rp\|codex\|copilot\|export` |
@@ -1690,6 +1769,21 @@ Detailed input documentation for each command.
 | `[focus hint]` | Optional freeform single string. Concept (`DX improvements`), path (`plugins/flow-next/skills/`), constraint (`quick wins under 200 LOC`), or volume hint (`top 3` / `50 ideas` / `raise the bar`). Empty = open-ended (15-25 candidates → 5-8 survivors). |
 
 Output: `.flow/prospects/<slug>-<date>.md` (atomic write, same-day collisions suffixed `-2`/`-3`). Promote a survivor with `flowctl prospect promote <id> --idea N`. Hard-errors with exit 2 under Ralph (`REVIEW_RECEIPT_PATH` or `FLOW_RALPH=1`). See [Prospecting](#prospecting) for full phase details.
+
+#### `/flow-next:capture`
+
+```
+/flow-next:capture [mode:autofix] [--rewrite <epic-id>] [--from-compacted-ok] [--yes]
+```
+
+| Input | Description |
+|-------|-------------|
+| `mode:autofix` | Optional positional. Skip per-question prompts; print full draft to stdout. Requires `--yes` to actually commit. |
+| `--rewrite <epic-id>` | Overwrite an existing epic spec. Without this flag, a duplicate-epic detection refuses or asks: extend / supersede / proceed-anyway. |
+| `--from-compacted-ok` | Override the compaction-detection refusal when the conversation has truncation markers. Use only when you trust the recent turns. |
+| `--yes` | Required in autofix mode to actually commit (mirrors `flowctl memory migrate --yes`). |
+
+Output: `.flow/specs/<epic-id>.md` via `flowctl epic create + epic set-plan` (no new flowctl subcommands). Acceptance criteria source-tagged (`[user]` / `[paraphrase]` / `[inferred]`); mandatory read-back surfaces `[inferred]` count via `AskUserQuestion`. Hard-errors with exit 2 under Ralph (`REVIEW_RECEIPT_PATH` or `FLOW_RALPH=1`) — capture requires conversation context + user confirmation, both unavailable in autonomous loops.
 
 #### `/flow-next:plan`
 
@@ -1737,6 +1831,21 @@ Output: `.flow/prospects/<slug>-<date>.md` (atomic write, same-day collisions su
 | `"rough idea"` | Interview about a new idea (creates epic) |
 
 Deep questioning (40+ questions) to surface requirements, edge cases, and decisions.
+
+**Three behavioral patterns from upstream `grill-me` (0.38.0+):**
+
+- **Lead-with-recommendation** — every `AskUserQuestion` body includes options summary, recommended option, one-sentence rationale, and a confidence tier:
+  - `[high]` — strong codebase signal or convention match; the recommendation is load-bearing.
+  - `[judgment-call]` — slight lean but reasonable people disagree; user's call carries weight.
+  - `[your-call]` — agent has no signal; "I genuinely don't know — your priority / domain knowledge / preference."
+  The third tier prevents the always-recommend habit that trains users to defer.
+- **Codebase-before-asking** — pre-question taxonomy classifies each candidate question:
+  - **Codebase-answerable** ("what exists / how wired / what conventions") → investigated via Read/Grep/Glob, logged to a new `## Resolved via Codebase` audit-trail section in the refined spec.
+  - **User-judgment-required** ("what should / what tradeoff / what priority") → asked via `AskUserQuestion`.
+  Eliminates wasteful "should we use PostgreSQL?" questions when grep can answer "is there already a DB layer?". If the agent finds itself answering a "should" question via grep, that's the bug.
+- **Dependency-ordered branches** — depth cap of 4; discover-as-you-go (not pre-compute); abandoned branches are surfaced ("Skipping persistence questions — you said no DB"). One-question-per-turn invariant reaffirmed.
+
+These three patterns are additive enhancements to **how** questions are asked, not what gets asked. Existing 40+ question coverage is unchanged.
 
 #### `/flow-next:plan-review`
 
@@ -1888,7 +1997,7 @@ Override via flags or `scripts/ralph/config.env`.
 2. **Execute**: Implement using existing patterns
 3. **Test**: Verify acceptance criteria
 4. **Record**: `flowctl done` adds summary + evidence to the task spec
-5. **Review** (optional): `/flow-next:impl-review` via RepoPrompt
+5. **Review** (optional): `/flow-next:impl-review` via RepoPrompt, Codex, or Copilot
 6. **Loop**: Next ready task → repeat until no ready tasks. Close epic manually (`flowctl epic close fn-N`) or let Ralph close at loop end.
 
 ---
@@ -1935,9 +2044,9 @@ Run scripts from terminal (not inside Claude Code). `ralph_once.sh` runs one ite
 
 This forces Ralph to run `/flow-next:plan-review` until the epic plan is approved before starting tasks.
 
-**Tip:** If you don't have `rp-cli` installed, keep `REQUIRE_PLAN_REVIEW=0` or Ralph may repeatedly select the plan gate and make no progress.
+**Tip:** If you don't have a review backend installed (`rp-cli`, `codex`, or `copilot`), keep `REQUIRE_PLAN_REVIEW=0` or Ralph may repeatedly select the plan gate and make no progress.
 
-Ralph verifies RepoPrompt reviews via receipt JSON files in `scripts/ralph/runs/<run>/receipts/` (plan + impl).
+Ralph verifies reviews via receipt JSON files in `scripts/ralph/runs/<run>/receipts/` (plan + impl). Receipts are backend-agnostic — RepoPrompt, Codex, and Copilot all write the same shape.
 
 ### Ralph loop (one iteration)
 
@@ -2222,6 +2331,7 @@ In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setu
 | Claude Code | Codex (dropdown) | Codex (direct) |
 |-------------|-------------------|----------------|
 | `/flow-next:prospect` | Flow Prospect | `$flow-next-prospect` |
+| `/flow-next:capture` | Flow Capture | `$flow-next-capture` |
 | `/flow-next:plan` | Flow Plan | `$flow-next-plan` |
 | `/flow-next:work` | Flow Work | `$flow-next-work` |
 | `/flow-next:impl-review` | Flow Implementation Review | `$flow-next-impl-review` |

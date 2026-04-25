@@ -237,9 +237,8 @@ fi
 
 
 ## Done summary
-
-(populated when task completes)
-
+Shipped /flow-next:capture skill + slash command — four markdown files (SKILL.md, workflow.md, phases.md, capture.md) implementing agent-native conversation→epic synthesis. Phase 0 pre-flight (duplicate/compaction/idempotency), Phase 1 verbatim Conversation Evidence block, Phase 2 per-line source tags ([user]/[paraphrase]/[inferred]), Phase 3 must-ask cases, Phase 4 mandatory read-back, Phase 5 atomic flowctl epic create + set-plan, Phase 6 next-step footer. Ralph-blocked, autofix mode requires --yes to commit. No new flowctl subcommands.
 ## Evidence
-
-(populated when task completes)
+- Commits: fad575f7f5147dc06a48a362276ae611cc3e09b5
+- Tests: python3 frontmatter parse smoke (SKILL.md + capture.md)
+- PRs:

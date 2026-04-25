@@ -70,7 +70,7 @@ Examples:
 Read [workflow.md](workflow.md) and execute each phase in order.
 
 **Key phases:**
-1. **Parallel Assessment** — 9 haiku scouts run in parallel (~15-20 seconds)
+1. **Parallel Assessment** — 9 sonnet scouts run in parallel (~15-20 seconds)
 2. **Verification** — Verify test commands actually work
 3. **Score & Synthesize** — Calculate scores, determine maturity level
 4. **Present Report** — Full report with all 8 pillars
