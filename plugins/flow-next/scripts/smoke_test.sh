@@ -707,8 +707,9 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# Search with token overlap.
-search_json="$(scripts/flowctl memory search 'stale example' --json)"
+# Search with token overlap. Pass --status all because the seeded entry
+# carries `status: stale` and fn-34.2 default-excludes stale from search.
+search_json="$(scripts/flowctl memory search 'stale example' --status all --json)"
 "$PYTHON_BIN" - <<'PY' "$search_json"
 import json, sys
 data = json.loads(sys.argv[1])
@@ -721,8 +722,18 @@ PY
 echo -e "${GREEN}✓${NC} memory search ranks by token overlap"
 PASS=$((PASS + 1))
 
+# Search default (no --status) excludes stale entries — fn-34.2 contract.
+search_json="$(scripts/flowctl memory search 'stale example' --json)"
+"$PYTHON_BIN" - <<'PY' "$search_json"
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["matches"] == [], f"default search leaked stale entry: {data}"
+PY
+echo -e "${GREEN}✓${NC} memory search default --status active excludes stale (fn-34.2)"
+PASS=$((PASS + 1))
+
 # Search --track filter.
-search_json="$(scripts/flowctl memory search 'stale example' --track bug --json)"
+search_json="$(scripts/flowctl memory search 'stale example' --track bug --status all --json)"
 "$PYTHON_BIN" - <<'PY' "$search_json"
 import json, sys
 data = json.loads(sys.argv[1])

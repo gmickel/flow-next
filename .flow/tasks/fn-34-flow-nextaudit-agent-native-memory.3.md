@@ -47,7 +47,8 @@ Case 2: mark-stale with --audited-by
 
 Case 3: mark-stale --json output shape
   flowctl memory mark-stale <id> --reason "X" --json
-  → assert success: true, id present, last_audited present
+  → assert id, path, status="stale", last_audited, audit_notes all present
+  <!-- Updated by plan-sync: fn-34.2 ships JSON shape {id, path, status, last_audited, audit_notes} (no `success` key) -->
 
 Case 4: mark-stale missing --reason errors
   flowctl memory mark-stale <id>  (no --reason)

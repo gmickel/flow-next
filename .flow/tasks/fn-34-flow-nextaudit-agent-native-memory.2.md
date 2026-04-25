@@ -171,9 +171,8 @@ Include in commit. Run smoke tests against both paths if possible.
 
 
 ## Done summary
-
-(populated when task completes)
-
+flowctl plumbing for /flow-next:audit shipped — extended memory schema with last_audited + audit_notes (optional fields, MEMORY_FIELD_ORDER updated, last_audited quoted to survive PyYAML date coercion), added `flowctl memory mark-stale` and `mark-fresh` subcommands, patched `memory search` with --status active|stale|all (default active) so audit-flagged stale entries stop polluting scout output. 20 new unit tests; 331/331 green; .flow/bin/flowctl.py mirrored.
 ## Evidence
-
-(populated when task completes)
+- Commits: ee4b61308841d3f6091795ae76c03dd5e7445d3f
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (331/331 green; 20 new tests across test_memory_mark_stale.py, test_memory_mark_fresh.py, test_memory_search_status.py; test_memory_schema.py extended for last_audited+audit_notes), End-to-end CLI smoke: memory add then mark-stale then search default (excludes stale) then search --status stale (finds it) then mark-fresh (clears status/audit_notes, stamps last_audited)
+- PRs:

@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.36.0-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.37.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -1527,7 +1527,9 @@ flowctl memory list --track bug                    # filter by track
 flowctl memory list --category runtime-errors      # filter by category
 flowctl memory list --status all                   # include stale entries
 
-flowctl memory search "sqlite locked"              # weighted token overlap
+flowctl memory search "sqlite locked"              # default: --status active
+flowctl memory search "sqlite locked" --status stale  # only stale entries
+flowctl memory search "sqlite locked" --status all    # active + stale
 flowctl memory search "rp wrappers" \
   --module scripts/ralph \
   --tags "rp,ralph" \
@@ -1540,7 +1542,25 @@ flowctl memory read legacy/pitfalls.md                             # legacy flat
 flowctl memory read legacy/pitfalls#3                              # legacy entry (1-based)
 ```
 
-Search scoring is weighted: title 5×, tags 3×, body 1.5×, misc 1×. Legacy hits surface as synthetic entries with `track: "legacy"`.
+Search scoring is weighted: title 5×, tags 3×, body 1.5×, misc 1×. Legacy hits surface as synthetic entries with `track: "legacy"`. Default `--status active` excludes stale entries (audit-flagged advice stops polluting `memory-scout` output); pass `--status stale` or `--status all` to include them.
+
+**Audit lifecycle (v0.37.0+):**
+
+`/flow-next:audit [mode:autofix] [scope hint]` walks `.flow/memory/`, reviews each entry against the current codebase, and decides per entry whether to **Keep / Update / Consolidate / Replace / Delete**. Interactive mode (default) asks via the platform's blocking-question tool; autofix mode applies unambiguous actions and marks ambiguous entries as stale. The skill is agent-native — host agent reads the workflow markdown and executes it directly using its own Read/Grep/Glob tools (no Python audit engine, no codex/copilot subprocess dispatch). Legacy flat files are skipped with a warning.
+
+Two flowctl helpers back the audit lifecycle (also callable directly):
+
+```bash
+# Mark an entry stale (used by /flow-next:audit, also callable directly)
+flowctl memory mark-stale <id> --reason "module renamed in PR #123"
+flowctl memory mark-stale <id> --reason "..." --audited-by "/flow-next:audit"
+flowctl memory mark-stale <id> --reason "..." --json
+
+# Clear stale flag
+flowctl memory mark-fresh <id>
+```
+
+`mark-stale` sets `status: stale`, stamps `last_audited` (UTC), records `audit_notes` from `--reason`. Body is never modified. Idempotent — re-marking replaces `audit_notes` and re-stamps the date. `mark-fresh` drops the stale fields and stamps `last_audited`.
 
 **Migrate legacy → categorized:**
 
@@ -1591,7 +1611,7 @@ Until migration runs, legacy flat files continue to work; `list` / `read` / `sea
 
 ## Commands
 
-Thirteen commands, complete workflow:
+Fourteen commands, complete workflow:
 
 | Command | What It Does |
 |---------|--------------|
@@ -1603,6 +1623,7 @@ Thirteen commands, complete workflow:
 | `/flow-next:impl-review` | Carmack-level impl review of current branch |
 | `/flow-next:epic-review <id>` | Epic-completion review: verify implementation matches spec |
 | `/flow-next:resolve-pr [arg]` | Resolve GitHub PR review threads (fetch → triage → fix → reply → resolve) ([details](#pr-feedback-resolution)) |
+| `/flow-next:audit [mode:autofix] [hint]` | Review `.flow/memory/` against current code, decide Keep/Update/Consolidate/Replace/Delete per entry ([details](#memory-system)) |
 | `/flow-next:prime` | Assess codebase agent-readiness, propose fixes ([details](#agent-readiness-assessment)) |
 | `/flow-next:sync <id>` | Manual plan-sync: update downstream tasks after implementation drift |
 | `/flow-next:ralph-init` | Scaffold repo-local Ralph harness (`scripts/ralph/`) |

@@ -24,6 +24,7 @@ Commands:
 - `/flow-next:plan-review` → Carmack-level plan review (rp-cli, Codex CLI, or Copilot CLI)
 - `/flow-next:impl-review` → Carmack-level impl review of current branch (rp-cli, Codex CLI, or Copilot CLI)
 - `/flow-next:resolve-pr [PR# | comment URL]` → resolve GitHub PR review threads (fetch → triage → dispatch resolver agents → validate → commit → reply → resolve via GraphQL). User-triggered only; Ralph does not invoke. Flags: `--dry-run`, `--no-cluster`. Parallel dispatch on Claude Code, serial on Codex/Copilot/Droid. Zero runtime deps beyond `gh` + `jq`. Added in 0.34.0.
+- `/flow-next:audit [mode:autofix] [scope hint]` → agent-native memory staleness review. Walks `.flow/memory/`, reviews each entry against current code, decides per entry: Keep / Update / Consolidate / Replace / Delete. Interactive (asks via blocking-question tool) or autofix (applies unambiguous, marks ambiguous as stale). Skips legacy flat files. The skill IS the agent — no Python engine, no subprocess dispatch. Added in 0.37.0.
 
 Review backend spec grammar (v0.31.0+):
 - `backend[:model[:effort]]` — colon-delimited, trailing parts optional
@@ -70,6 +71,10 @@ Memory system (categorized — v0.33.0+):
 - Read: `flowctl memory read <id>` — accepts full id (`bug/runtime-errors/slug-YYYY-MM-DD`), slug+date, slug-only (latest wins), or legacy forms (`legacy/pitfalls.md`, `legacy/pitfalls#N`)
 - Migrate legacy: `flowctl memory migrate --dry-run` then `--yes` (classifier auto-selects codex/copilot; override with `FLOW_MEMORY_CLASSIFIER_BACKEND=codex|copilot|none` + `FLOW_MEMORY_CLASSIFIER_MODEL` / `FLOW_MEMORY_CLASSIFIER_EFFORT`). JSON mode refuses writes without `--yes`.
 - Surface in AGENTS.md / CLAUDE.md: `flowctl memory discoverability-patch [--target auto|agents|claude] [--strategy listing|append] [--apply|--dry-run]` (JSON callers must pass `--apply` explicitly)
+- Audit (skill, v0.37.0+): `/flow-next:audit [mode:autofix] [scope hint]` — agent-native skill that reviews entries against current code and decides Keep/Update/Consolidate/Replace/Delete per entry. Interactive (asks via blocking-question tool) or autofix (applies unambiguous, marks ambiguous as stale). Skips legacy flat files (run `memory migrate` first).
+- Mark stale: `flowctl memory mark-stale <id> --reason "..." [--audited-by "..."] [--json]` — sets `status: stale`, stamps `last_audited`, records `audit_notes`. Used by `/flow-next:audit`; also callable directly. Idempotent.
+- Mark fresh: `flowctl memory mark-fresh <id>` — clears stale flag, stamps `last_audited`.
+- Search status filter: `flowctl memory search <q> --status active|stale|all` (default `active`, v0.37.0+). Stale entries excluded from default search results so audit-flagged advice stops polluting `memory-scout` output.
 - Overlap detection on add: high overlap updates existing in place; moderate creates new with `related_to: [existing-id]`
 - Auto-capture: Ralph worker writes bug-track entries on NEEDS_WORK → SHIP via `memory add --track bug --category <c>`
 - `memory-scout` is category-aware: returns track/category-tagged results, prioritizing module matches

@@ -2,6 +2,27 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.37.0] - 2026-04-25
+
+### Added
+- **`/flow-next:audit [mode:autofix] [scope hint]` — agent-native memory staleness review.** New skill that walks `.flow/memory/`, reviews each entry against the current codebase using the host agent's own Read/Grep/Glob tools, and decides per entry whether to **Keep / Update / Consolidate / Replace / Delete**. Inspired by upstream `compound-engineering`'s `ce-compound-refresh` skill — adapted for the categorized memory schema shipped in 0.33.0. The audit IS the agent: no Python audit engine, no codex/copilot subprocess dispatch, no deterministic scorer. The host agent reads the workflow markdown and executes it directly. Subagent dispatch documented for Claude Code (`Agent` + Explore), Codex (`spawn_agent` + explorer), and Droid; orchestrator falls back to main-thread investigation when subagent primitives are unavailable.
+- **Two modes:** **Interactive** (default) — agent asks decisions per entry via the platform's blocking-question tool (`AskUserQuestion` / `request_user_input` / `ask_user`). **Autofix** (`mode:autofix` token) — applies unambiguous Keep/Update/Consolidate/Replace/Delete actions and marks ambiguous entries as stale via `flowctl memory mark-stale`; this is the Ralph-safe path. Scope hint follows the mode token (`/flow-next:audit mode:autofix runtime-errors`).
+- **`flowctl memory mark-stale <id> --reason "..." [--audited-by "..."] [--json]`** — sets `status: stale`, stamps `last_audited` (UTC date), records `audit_notes` from `--reason`. Atomic via existing `write_memory_entry`; body untouched. Idempotent: re-mark replaces `audit_notes` and re-stamps `last_audited`. Used by `/flow-next:audit`, also callable directly. JSON shape: `{success, id, path, status, last_audited, audit_notes}`.
+- **`flowctl memory mark-fresh <id> [--audited-by "..."] [--json]`** — clears stale flag (drops `status`, `audit_notes`), stamps `last_audited`. Idempotent on already-active entries.
+- **`flowctl memory search --status active|stale|all`** — mirrors `memory list`'s `--status` flag (default `active`). Stale entries are excluded from default search results so audit-flagged advice stops polluting `memory-scout` output. Existing `memory list --status` behavior unchanged.
+- **Schema extension:** `MEMORY_OPTIONAL_FIELDS` extended with `last_audited` and `audit_notes`. `MEMORY_FIELD_ORDER` updated; `_MEMORY_QUOTED_STRING_FIELDS` includes `last_audited` (date string survives PyYAML date coercion). Validator picks up additions automatically via the allowed-fields union.
+
+### Changed
+- README + website lifecycle text now mentions `/flow-next:audit` alongside the categorized memory schema. CLAUDE.md memory-system block adds audit + mark-stale + mark-fresh + search-status bullets.
+- `smoke_test.sh` memory section: `memory search 'stale example'` now passes `--status all` (default-active is the new contract); a complementary assertion verifies the default-active behavior.
+
+### Notes
+- **Legacy entries skipped.** Pre-fn-30 flat files (`pitfalls.md`, `conventions.md`, `decisions.md`) have no per-entry frontmatter to mutate, so `/flow-next:audit` skips them with a warning recommending `flowctl memory migrate` first. The skipped count surfaces in the audit report.
+- **No silent deletes.** The `Delete` outcome is reserved for unambiguous cases (code gone AND problem domain gone). Ambiguous cases default to mark-stale; the entry stays on disk and shows up under `--status stale` until a future audit confirms removal.
+- **Why agent-native, not flowctl Python?** flow-next runs inside an agentic environment (Claude Code / Codex / Droid). The host agent already reads files, runs grep, judges relevance, and writes updates with its own tools. Spawning a second LLM via subprocess is wasteful (cost + latency) and adds machinery — subprocess timeouts, structured-verdict parsers, drift guards — that disappears in the agent-native architecture. Upstream's `ce-compound-refresh` is the working reference.
+- **Why thin flowctl plumbing instead of skill-only?** The skill needs deterministic atomic frontmatter writes (`mark-stale` / `mark-fresh`), schema-validated round-trip, and consistent search filtering. Those are pure persistence concerns where flowctl shines. Split rule: flowctl owns "set this field on this entry"; skill owns "should this entry be flagged."
+- Smoke suite: dedicated `plugins/flow-next/scripts/audit_smoke_test.sh` (13 cases, 41 assertions, ~5s runtime, zero LLM calls — covers Task 2 plumbing only since skills aren't unit-testable). `smoke_test.sh` (126), `prospect_smoke_test.sh` (94), `ralph_smoke_test.sh` (15) all stay green.
+
 ## [flow-next 0.36.0] - 2026-04-24
 
 ### Added
