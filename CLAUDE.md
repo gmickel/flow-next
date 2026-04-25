@@ -120,6 +120,61 @@ Commands:
 - Avoid feature flags or backwards-compatibility scaffolding (plugins are pre-release).
 - Do not add extra commands/agents/skills unless explicitly requested.
 
+## Architecture: agentic vs deterministic (READ THIS BEFORE PLANNING NEW FEATURES)
+
+flow-next is a **skill-driven plugin that runs inside an agentic coding environment** (Claude Code, Codex, Factory Droid). The host agent IS the intelligence. When designing new features, default to skill-based architecture and only reach for deterministic Python in flowctl when there's a real reason.
+
+### When to use a SKILL (the default)
+
+A workflow that:
+- Walks files, makes per-item judgments, applies engineering decisions
+- Investigates code (reads, greps, traces references) and forms conclusions
+- Composes multi-step actions where each step depends on context from prior steps
+- Asks the user for input on ambiguous cases
+- Could reasonably be invoked via `/flow-next:<command>` slash command
+
+→ **Build it as a skill.** The host agent reads the skill workflow file, executes it using its existing Read/Grep/Glob/Edit/Write tools, dispatches subagents via the platform primitive (`Agent` in Claude, `spawn_agent` in Codex), asks via `AskUserQuestion`/`request_user_input`/`ask_user`. Examples: `/flow-next:audit` (fn-34), `/flow-next:prospect` (fn-33), `/flow-next:resolve-pr` (fn-31), `/flow-next:plan`, `/flow-next:work`.
+
+**Do not spawn `codex` / `copilot` / other LLMs via subprocess from inside flowctl when invoked from a skill.** The host agent is already an LLM running the skill — there is no need for a second one. fn-34 originally violated this and was rewritten; fn-30's `memory migrate` is the next refactor target (tracked as fn-35).
+
+### When to use DETERMINISTIC flowctl Python
+
+Mechanical operations that need to work without an agent in the loop:
+- Ralph hooks (PreToolUse, Stop, SubagentStop matchers) — fire from non-agent contexts
+- Receipts (review receipts, walkthrough receipts, ralph_blocked receipts) — file format read by Ralph scripts that may not have an agent
+- Schema validation (`validate_memory_frontmatter`, `validate_prospect_frontmatter`) — pure invariant check, must be fast and predictable
+- Atomic writes (`write_memory_entry`, `write_prospect_artifact`) — file-system operations, no judgment involved
+- Git plumbing (PR comment threading, GraphQL fetches, status checks)
+- Triage skip whitelist (lockfile-only / docs-only / generated-file diffs) — fast deterministic path before Ralph would otherwise run a review
+- Backend dispatch for review subsystem (`flowctl rp`, `flowctl review-backend`) — reviews need a fresh second-opinion LLM, separate from the host agent. This is the one legitimate "shell out to another LLM" pattern in the codebase.
+
+→ **Build it in flowctl Python.** Pure plumbing with no intelligence required.
+
+### When to use a SKILL + thin flowctl plumbing (the common pattern)
+
+Most flow-next features look like this. Skill drives the workflow; flowctl provides atomic helpers the skill calls:
+- `/flow-next:prospect` skill + `flowctl prospect list/read/promote/archive` (atomic artifact CRUD)
+- `/flow-next:audit` skill + `flowctl memory mark-stale/mark-fresh` + `memory search --status` (frontmatter writes + filter)
+- `/flow-next:work` skill + `flowctl task start/done/show` (state transitions)
+
+**Split rule:** flowctl owns "set this field" / "validate this schema" / "atomic-write this file" / "list these things." Skill owns "read this and judge whether to act" / "compose multi-step decision flow" / "ask user when unsure" / "dispatch subagents for parallel investigation."
+
+### How to spot a mistake
+
+Symptoms that suggest you're building deterministic when you should build skill-based:
+- You're writing regex to extract "code references" from prose → host agent can read prose
+- You're building a stoplist of common English words → host agent knows English
+- You're spawning `codex --exec` or `copilot exec` to make judgments → host agent makes judgments
+- You're parsing structured-verdict YAML from an LLM response → host agent's own structured output
+- You're building a deterministic "fallback" engine in case LLM unavailable → host agent is always available when invoked from a slash command
+- You're writing weighted scoring math to substitute for "is this still relevant?" → host agent answers that directly
+
+If three or more of these apply, stop and convert to a skill. The deterministic path is harder to maintain, more brittle, and provides worse output than the agent does directly.
+
+### Reference: what the upstream `compound-engineering` plugin does
+
+`compound-engineering`'s `ce-compound-refresh` skill is a working reference for the agent-native pattern. The entire "audit my docs against the codebase" workflow is a markdown skill file the host agent reads + executes. No Python, no subprocess, no engine. flow-next's `/flow-next:audit` (fn-34) is modeled on this.
+
 ## Cross-platform patterns (Claude Code + Factory Droid)
 
 flow-next supports both Claude Code and Factory Droid. Follow these patterns:

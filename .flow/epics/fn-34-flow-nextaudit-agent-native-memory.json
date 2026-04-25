@@ -1,0 +1,18 @@
+{
+  "branch_name": "fn-34-audit-skill",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-04-24T20:58:09.406217Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-34-flow-nextaudit-agent-native-memory",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-34-flow-nextaudit-agent-native-memory.md",
+  "status": "open",
+  "title": "/flow-next:audit \u2014 agent-native memory staleness review",
+  "updated_at": "2026-04-25T05:54:55.857735Z"
+}

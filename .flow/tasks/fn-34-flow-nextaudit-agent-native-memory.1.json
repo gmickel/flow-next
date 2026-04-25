@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-25T05:54:56.043242Z",
+  "depends_on": [],
+  "epic": "fn-34-flow-nextaudit-agent-native-memory",
+  "id": "fn-34-flow-nextaudit-agent-native-memory.1",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-34-flow-nextaudit-agent-native-memory.1.md",
+  "status": "todo",
+  "title": "Skill files + slash command (flow-next-audit)",
+  "updated_at": "2026-04-25T05:58:33.458298Z"
+}

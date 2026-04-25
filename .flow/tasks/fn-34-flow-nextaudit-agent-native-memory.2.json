@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-25T05:54:56.186774Z",
+  "depends_on": [
+    "fn-34-flow-nextaudit-agent-native-memory.1"
+  ],
+  "epic": "fn-34-flow-nextaudit-agent-native-memory",
+  "id": "fn-34-flow-nextaudit-agent-native-memory.2",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-34-flow-nextaudit-agent-native-memory.2.md",
+  "status": "todo",
+  "title": "flowctl plumbing \u2014 mark-stale, mark-fresh, search --status, schema extension",
+  "updated_at": "2026-04-25T05:58:33.593917Z"
+}
