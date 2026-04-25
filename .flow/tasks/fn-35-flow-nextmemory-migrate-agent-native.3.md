@@ -177,9 +177,8 @@ Verify post-sync:
 
 
 ## Done summary
-
-(populated when task completes)
-
+Rolled up fn-35 (memory-migrate agent-native): updated fn-34 audit Phase 0 warnings to recommend `/flow-next:memory-migrate` (4 instances), added 4-case `memory list-legacy` smoke (smoke_test.sh now 127/0), amended `[flow-next 0.37.0]` CHANGELOG with skill + list-legacy + deterministic-only migrate + removed env vars, rewrote README memory section (skill leads, deterministic demoted to automation), updated CLAUDE.md (4 lines) and `.flow/usage.md`, regenerated codex mirror (20 skills now), and updated mickel.tech website memory feature card in a separate commit. No version bump — 0.37.0 stays.
 ## Evidence
-
-(populated when task completes)
+- Commits: b04de3efdc4c3bed668c61325386c98aa6eb571b, d777fb8 (mickel.tech)
+- Tests: plugins/flow-next/scripts/smoke_test.sh (127/0), plugins/flow-next/scripts/audit_smoke_test.sh (41/0), plugins/flow-next/scripts/prospect_smoke_test.sh (94/0), plugins/flow-next/scripts/ralph_smoke_test.sh (15/0), python3 -m unittest discover -s plugins/flow-next/tests (341 passed)
+- PRs:
