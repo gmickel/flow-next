@@ -6400,235 +6400,6 @@ def _memory_classify_mechanical(legacy_filename: str) -> tuple[str, str]:
     return mapped
 
 
-def _memory_classify_build_prompt(
-    title: str, body: str, source_filename: str
-) -> str:
-    """Build the one-shot classifier prompt sent to the fast model."""
-    bug_cats = ", ".join(MEMORY_CATEGORIES["bug"])
-    knowledge_cats = ", ".join(MEMORY_CATEGORIES["knowledge"])
-    body_preview = body.strip()
-    if len(body_preview) > 1200:
-        body_preview = body_preview[:1200] + "..."
-    return f"""Classify a project-memory entry into a track + category.
-
-Tracks:
-  bug         — bugs, regressions, gotchas, things that broke
-  knowledge   — conventions, decisions, architecture patterns, workflow tips
-
-Bug categories: {bug_cats}
-Knowledge categories: {knowledge_cats}
-
-Source file: {source_filename}
-Entry title: {title}
-Entry body:
-{body_preview}
-
-Output exactly one line in the form:
-track/category
-
-Examples:
-bug/runtime-errors
-knowledge/conventions
-knowledge/tooling-decisions
-
-Pick the single best fit. If unsure, default to the source file's natural
-track (pitfalls→bug, conventions→knowledge/conventions, decisions→
-knowledge/tooling-decisions).
-"""
-
-
-def _memory_classify_parse_response(text: str) -> Optional[tuple[str, str]]:
-    """Extract `track/category` from the classifier's reply, validating enums."""
-    if not text:
-        return None
-    candidates: list[str] = []
-    for raw in text.splitlines():
-        line = raw.strip().strip("`*_> ").rstrip(".,;")
-        if not line:
-            continue
-        # Tolerate "Answer: bug/runtime-errors" prefixes.
-        if ":" in line and line.lower().startswith(("answer", "verdict", "result", "category", "track")):
-            line = line.split(":", 1)[1].strip()
-        candidates.append(line)
-    # Prefer the last bare line — many models trail with reasoning.
-    for cand in reversed(candidates):
-        m = re.match(r"^([a-z]+)\s*/\s*([a-z][a-z0-9-]*)$", cand)
-        if not m:
-            continue
-        track = m.group(1)
-        category = m.group(2)
-        if track not in MEMORY_TRACKS:
-            continue
-        if category not in MEMORY_CATEGORIES.get(track, []):
-            continue
-        return (track, category)
-    return None
-
-
-def _memory_classify_run_codex(
-    prompt: str, model: Optional[str], effort: Optional[str]
-) -> tuple[Optional[tuple[str, str]], Optional[str], Optional[str]]:
-    """Invoke codex CLI as classifier. Returns (result, error, model_used)."""
-    codex = shutil.which("codex")
-    if not codex:
-        return None, "codex CLI not on PATH", None
-    effective_model = model or "gpt-5-mini"
-    effective_effort = effort or "low"
-    cmd = [
-        codex,
-        "exec",
-        "--model",
-        effective_model,
-        "-c",
-        f'model_reasoning_effort="{effective_effort}"',
-        "--sandbox",
-        "read-only" if os.name != "nt" else "danger-full-access",
-        "--skip-git-repo-check",
-        "-",
-    ]
-    try:
-        result = subprocess.run(
-            cmd,
-            input=prompt,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=60,
-        )
-    except subprocess.TimeoutExpired:
-        return None, "codex classifier timed out (60s)", effective_model
-    except OSError as exc:
-        return None, f"codex classifier OS error: {exc}", effective_model
-    if result.returncode != 0:
-        msg = (result.stderr or "codex classifier exited non-zero").strip().splitlines()[-1]
-        return None, f"codex classifier failed: {msg}", effective_model
-    parsed = _memory_classify_parse_response(result.stdout)
-    if parsed is None:
-        return None, "codex classifier returned malformed output", effective_model
-    return parsed, None, effective_model
-
-
-def _memory_classify_run_copilot(
-    prompt: str, model: Optional[str], effort: Optional[str]
-) -> tuple[Optional[tuple[str, str]], Optional[str], Optional[str]]:
-    """Invoke copilot CLI as classifier."""
-    copilot = shutil.which("copilot")
-    if not copilot:
-        return None, "copilot CLI not on PATH", None
-    effective_model = model or "claude-haiku-4.5"
-    effective_effort = effort or "low"
-    repo_root = get_repo_root()
-    cmd = [
-        copilot,
-        "-p",
-        prompt,
-        f"--resume={uuid.uuid4()}",
-        "--output-format",
-        "text",
-        "-s",
-        "--no-ask-user",
-        "--allow-all-tools",
-        "--add-dir",
-        str(repo_root),
-        "--disable-builtin-mcps",
-        "--no-custom-instructions",
-        "--log-level",
-        "error",
-        "--no-auto-update",
-        "--model",
-        effective_model,
-    ]
-    if not effective_model.startswith("claude-"):
-        cmd += ["--effort", effective_effort]
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=60,
-        )
-    except subprocess.TimeoutExpired:
-        return None, "copilot classifier timed out (60s)", effective_model
-    except OSError as exc:
-        return None, f"copilot classifier OS error: {exc}", effective_model
-    if result.returncode != 0:
-        msg = (result.stderr or "copilot classifier exited non-zero").strip().splitlines()[-1]
-        return None, f"copilot classifier failed: {msg}", effective_model
-    parsed = _memory_classify_parse_response(result.stdout)
-    if parsed is None:
-        return None, "copilot classifier returned malformed output", effective_model
-    return parsed, None, effective_model
-
-
-def _memory_classify_select_backend() -> tuple[str, Optional[str], Optional[str]]:
-    """Pick a classifier backend.
-
-    Resolution order:
-      1. FLOW_MEMORY_CLASSIFIER_BACKEND env (codex | copilot | none)
-      2. codex CLI on PATH
-      3. copilot CLI on PATH
-      4. ("none", None, None) — caller falls back to mechanical
-
-    Model + effort respect FLOW_MEMORY_CLASSIFIER_MODEL /
-    FLOW_MEMORY_CLASSIFIER_EFFORT when set.
-    """
-    forced = (os.environ.get("FLOW_MEMORY_CLASSIFIER_BACKEND") or "").strip().lower()
-    model = os.environ.get("FLOW_MEMORY_CLASSIFIER_MODEL") or None
-    effort = os.environ.get("FLOW_MEMORY_CLASSIFIER_EFFORT") or None
-    if forced == "none":
-        return ("none", model, effort)
-    if forced in ("codex", "copilot"):
-        return (forced, model, effort)
-    if shutil.which("codex"):
-        return ("codex", model, effort)
-    if shutil.which("copilot"):
-        return ("copilot", model, effort)
-    return ("none", model, effort)
-
-
-def _memory_classify_entry(
-    title: str,
-    body: str,
-    source_filename: str,
-    backend: str,
-    model: Optional[str],
-    effort: Optional[str],
-) -> tuple[tuple[str, str], str, Optional[str], Optional[str]]:
-    """Classify a single entry. Returns ((track, category), method, model, error).
-
-    method ∈ {"llm", "mechanical"}.
-    error is set when the LLM was attempted but failed (caller can record).
-    """
-    if backend == "none":
-        return (
-            _memory_classify_mechanical(source_filename),
-            "mechanical",
-            None,
-            None,
-        )
-    prompt = _memory_classify_build_prompt(title, body, source_filename)
-    if backend == "codex":
-        result, err, used_model = _memory_classify_run_codex(prompt, model, effort)
-    elif backend == "copilot":
-        result, err, used_model = _memory_classify_run_copilot(prompt, model, effort)
-    else:
-        return (
-            _memory_classify_mechanical(source_filename),
-            "mechanical",
-            None,
-            f"unknown backend '{backend}'",
-        )
-    if result is None:
-        return (
-            _memory_classify_mechanical(source_filename),
-            "mechanical",
-            used_model,
-            err,
-        )
-    return (result, "llm", used_model, None)
-
-
 def _memory_migrate_build_frontmatter(
     *,
     title: str,
@@ -6717,20 +6488,156 @@ def _memory_migrate_target_path(
         n += 1
 
 
+# fn-35.2: deprecation hints for the LLM-dispatch removal. Module-level
+# guards keep the messages to one print per process even when migrate
+# runs across many entries.
+_MIGRATE_DEPRECATION_PRINTED = False
+_CLASSIFIER_ENV_DEPRECATION_PRINTED = False
+_DEAD_CLASSIFIER_ENV_VARS = (
+    "FLOW_MEMORY_CLASSIFIER_BACKEND",
+    "FLOW_MEMORY_CLASSIFIER_MODEL",
+    "FLOW_MEMORY_CLASSIFIER_EFFORT",
+)
+
+
+def _emit_migrate_deprecation_hint() -> None:
+    """One-time stderr hint pointing users at the agent-native skill.
+
+    Suppressed when stderr isn't a TTY (so `--json` pipelines stay clean)
+    or when `FLOW_NO_DEPRECATION=1` is set.
+    """
+    global _MIGRATE_DEPRECATION_PRINTED
+    if _MIGRATE_DEPRECATION_PRINTED:
+        return
+    if os.environ.get("FLOW_NO_DEPRECATION") == "1":
+        return
+    if not sys.stderr.isatty():
+        return
+    print(
+        "[DEPRECATED] Subprocess-based classification removed. "
+        "Now mechanical-only by default.\n"
+        "For agent-native classification, use: /flow-next:memory-migrate",
+        file=sys.stderr,
+    )
+    _MIGRATE_DEPRECATION_PRINTED = True
+
+
+def _check_dead_classifier_env_vars() -> None:
+    """One-time stderr warning if any dead FLOW_MEMORY_CLASSIFIER_* env is set."""
+    global _CLASSIFIER_ENV_DEPRECATION_PRINTED
+    if _CLASSIFIER_ENV_DEPRECATION_PRINTED:
+        return
+    if os.environ.get("FLOW_NO_DEPRECATION") == "1":
+        return
+    if not sys.stderr.isatty():
+        return
+    dead = [v for v in _DEAD_CLASSIFIER_ENV_VARS if os.environ.get(v)]
+    if not dead:
+        return
+    print(
+        f"[DEPRECATED] {', '.join(dead)} no longer used; "
+        "classification now runs in-skill (/flow-next:memory-migrate).",
+        file=sys.stderr,
+    )
+    _CLASSIFIER_ENV_DEPRECATION_PRINTED = True
+
+
+def cmd_memory_list_legacy(args: argparse.Namespace) -> None:
+    """List legacy flat-file memory entries with mechanical default labels.
+
+    Used by `/flow-next:memory-migrate` to enumerate entries before the
+    host agent classifies them into the categorized schema. Each entry
+    carries a `mechanical_track` / `mechanical_category` derived from the
+    legacy filename (`_memory_classify_mechanical`) so the agent has a
+    sane default to override only when context warrants.
+
+    Output:
+      text mode: one block per legacy file
+      --json:   {"files": [{"filename", "entry_count", "entries": [...]}]}
+    """
+    memory_dir = require_memory_enabled(args)
+    is_json = bool(getattr(args, "json", False))
+
+    files_payload: list[dict[str, Any]] = []
+    for name in MEMORY_LEGACY_FILES:
+        path = memory_dir / name
+        if not (path.exists() and path.is_file()):
+            continue
+        entries = _memory_parse_legacy_entries(path)
+        track, category = _memory_classify_mechanical(name)
+        enriched: list[dict[str, Any]] = []
+        for entry in entries:
+            enriched.append(
+                {
+                    "title": entry["title"],
+                    "body": entry["body"],
+                    "tags": entry["tags"],
+                    "date": entry["date"],
+                    "mechanical_track": track,
+                    "mechanical_category": category,
+                }
+            )
+        files_payload.append(
+            {
+                "filename": name,
+                "entry_count": len(enriched),
+                "entries": enriched,
+            }
+        )
+
+    if is_json:
+        json_output({"files": files_payload})
+        return
+
+    if not files_payload:
+        print("No legacy files found.")
+        return
+
+    for f in files_payload:
+        print(
+            f"{f['filename']} ({f['entry_count']} "
+            f"{'entry' if f['entry_count'] == 1 else 'entries'}):"
+        )
+        for e in f["entries"]:
+            tag_suffix = f"  [{', '.join(e['tags'])}]" if e["tags"] else ""
+            date_prefix = f"{e['date']}  " if e["date"] else ""
+            print(
+                f"  - {date_prefix}{e['title']}  "
+                f"-> default {e['mechanical_track']}/{e['mechanical_category']}"
+                f"{tag_suffix}"
+            )
+        print()
+
+
 def cmd_memory_migrate(args: argparse.Namespace) -> None:
     """Convert legacy flat memory files into categorized YAML entries.
+
+    Mechanical-only after fn-35: classification uses the deterministic
+    filename heuristic (`_memory_classify_mechanical`). For accurate
+    per-entry classification, run the `/flow-next:memory-migrate` skill
+    instead — it lets the host agent classify each entry in-context.
+
+    JSON receipt shape preserves `method` (always `"mechanical"`) and
+    `model` (always `null`) keys for backcompat with pre-fn-35 callers.
 
     Default: interactive. Flags:
       --dry-run   plan only, no writes
       --yes       skip the y/N prompt
-      --no-llm    skip LLM classification, mechanical only
+      --no-llm    accepted-but-noop (kept for backcompat)
       --json      machine-readable output
     """
     memory_dir = require_memory_enabled(args)
     is_json = bool(getattr(args, "json", False))
     dry_run = bool(getattr(args, "dry_run", False))
     assume_yes = bool(getattr(args, "yes", False))
-    no_llm = bool(getattr(args, "no_llm", False))
+    # `no_llm` is read off args for back-compat but is now a no-op:
+    # mechanical classification is always used.
+    _ = bool(getattr(args, "no_llm", False))
+
+    # Surface the deprecation + dead-env-var warnings once per process.
+    # Both helpers self-suppress in non-TTY (so `--json` pipelines stay clean).
+    _emit_migrate_deprecation_hint()
+    _check_dead_classifier_env_vars()
 
     # 1. Detect legacy files.
     legacy_paths: list[tuple[str, Path]] = []
@@ -6753,20 +6660,13 @@ def cmd_memory_migrate(args: argparse.Namespace) -> None:
             print("No legacy files to migrate.")
         return
 
-    # 2. Pick classifier backend.
-    if no_llm:
-        backend, model, effort = ("none", None, None)
-    else:
-        backend, model, effort = _memory_classify_select_backend()
-
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    # 3. Build per-entry plan: parse + classify + compute target path.
+    # 2. Build per-entry plan: parse + mechanical-classify + compute target path.
     used_slugs: set[str] = set()
     plan: list[dict[str, Any]] = []
     warnings: list[str] = []
 
-    backend_failed_once = False
     for filename, path in legacy_paths:
         entries = _memory_parse_legacy_entries(path)
         if not entries:
@@ -6774,25 +6674,8 @@ def cmd_memory_migrate(args: argparse.Namespace) -> None:
                 f"{filename}: no parseable entries (file kept in place; nothing to migrate)"
             )
             continue
+        track, category = _memory_classify_mechanical(filename)
         for idx, entry in enumerate(entries, start=1):
-            (track, category), method, model_used, err = _memory_classify_entry(
-                entry["title"],
-                entry["body"],
-                filename,
-                backend,
-                model,
-                effort,
-            )
-            if err and not backend_failed_once:
-                # Surface the first failure once; subsequent calls would
-                # spam if the CLI is missing/auth-broken.
-                warnings.append(
-                    f"LLM classifier unavailable ({err}). Falling back to mechanical "
-                    "mapping for remaining entries. Re-run with `--no-llm` to suppress."
-                )
-                backend_failed_once = True
-                # Force mechanical for the rest of this run.
-                backend = "none"
             entry_date = entry["date"] or today
             target_path, slug = _memory_migrate_target_path(
                 memory_dir, track, category, entry["title"], entry_date, used_slugs
@@ -6804,8 +6687,8 @@ def cmd_memory_migrate(args: argparse.Namespace) -> None:
                     "source_entry": idx,
                     "target": entry_id,
                     "target_path": str(target_path),
-                    "method": method,
-                    "model": model_used,
+                    "method": "mechanical",
+                    "model": None,
                     "track": track,
                     "category": category,
                     "title": entry["title"],
@@ -15920,10 +15803,22 @@ def main() -> None:
         "--no-llm",
         dest="no_llm",
         action="store_true",
-        help="Skip LLM classifier; use mechanical mapping only",
+        help="Accepted but no-op since fn-35 (classification is now mechanical-only; use /flow-next:memory-migrate for agent-native).",
     )
     p_memory_migrate.add_argument("--json", action="store_true", help="JSON output")
     p_memory_migrate.set_defaults(func=cmd_memory_migrate)
+
+    # memory list-legacy (fn-35.2) — wraps _memory_parse_legacy_entries
+    # for each MEMORY_LEGACY_FILES file, augmenting each with mechanical
+    # default (track, category). Consumed by /flow-next:memory-migrate.
+    p_memory_list_legacy = memory_sub.add_parser(
+        "list-legacy",
+        help="List legacy flat-file memory entries with mechanical default (track, category) per entry",
+    )
+    p_memory_list_legacy.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_memory_list_legacy.set_defaults(func=cmd_memory_list_legacy)
 
     # memory discoverability-patch (fn-30.6)
     p_memory_disc = memory_sub.add_parser(

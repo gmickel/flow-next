@@ -49,7 +49,7 @@ Append to `plugins/flow-next/scripts/smoke_test.sh` near the existing `--- memor
 Cases:
 1. **Empty memory dir** — `flowctl memory list-legacy --json` returns `{files: []}`, rc=0
 2. **Two entries in pitfalls.md** — seed file with two `---`-delimited entries, `list-legacy --json` returns `{files: [{filename: "pitfalls.md", entry_count: 2, entries: [...]}]}`
-3. **Mechanical defaults present** — each entry in JSON output has `mechanical_track: "bug"` and `mechanical_category: "general"` for pitfalls.md
+3. **Mechanical defaults present** — each entry in JSON output has `mechanical_track: "bug"` and `mechanical_category: "build-errors"` for pitfalls.md (matches `_DEPRECATED_TYPE_MAP` at flowctl.py:4918) <!-- Updated by plan-sync: fn-35.1 phases.md uses bug/build-errors per `_memory_classify_mechanical` source of truth, not the placeholder `bug/general` originally specced -->
 4. **Text mode** — `flowctl memory list-legacy` (no flags) outputs human-readable list including filename + entry count
 
 Run mode: subshell with isolated `TEST_DIR/list-legacy/`, `git init -q`, seed legacy files, assert.

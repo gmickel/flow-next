@@ -138,9 +138,8 @@ Phase 4 writes `.flow/memory/_migrated/.gitignore` with content `*` on first cle
 
 
 ## Done summary
-
-(populated when task completes)
-
+Created the four skill artifacts for /flow-next:memory-migrate (SKILL.md, workflow.md, phases.md + slash command), mirroring fn-34's flow-next-audit shape exactly. Skill is markdown-only — Phase 0 detects legacy files via `flowctl memory list-legacy --json` (forward reference to Task 2), Phase 1 enforces "one entry per tool call" with mechanical-default-first classification, Phase 2 writes via existing `flowctl memory add`, Phase 4 uses self-ignoring `_migrated/.gitignore: *` pattern with `.bak` idempotency check.
 ## Evidence
-
-(populated when task completes)
+- Commits: d45089506d2916e57abe03e9057b4fb6bbda5190
+- Tests: manual: grep verified frontmatter, mode:autofix block, FLOWCTL fallback, list-legacy + memory add references, one-entry-per-tool-call rule, _migrated/.gitignore self-ignoring pattern, idempotency .bak skip
+- PRs:
