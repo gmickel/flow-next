@@ -2,6 +2,14 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.38.2] - 2026-04-27
+
+### Fixed
+- **`flowctl.py` subprocess calls now pin `encoding="utf-8"` instead of defaulting to the system locale.** On Windows, `subprocess.run(input=prompt, text=True, ...)` decodes through `locale.getencoding()` — which is **cp1252** by default — so any prompt containing characters outside the cp1252 range (Unicode in git diffs, prototype/documentation files, non-ASCII commit messages) raised `UnicodeEncodeError: 'charmap' codec can't encode characters ...`. Setting `PYTHONIOENCODING=utf-8` did not help because `subprocess.run` ignores stdio encoding env vars. Fixed by adding `encoding="utf-8"` to all 25 `text=True` subprocess invocations in `flowctl.py`, covering `run_codex_exec()`, `run_copilot_exec()`, `run_rp_cli()`, every git plumbing call (`git diff`, `git rev-parse`, `git config`), and review-backend dispatch. No-op on macOS/Linux (already UTF-8 by default); fixes Windows. Smoke (129) green.
+
+### Notes
+- Thanks to @evansmith-everag (Evan Smith) for the detailed report ([#123](https://github.com/gmickel/flow-next/issues/123)) — root-caused, reproducer, fix, AND flagged the broader class of issue ("other subprocess calls in the file may have the same issue if they ever receive Unicode input") in one shot.
+
 ## [flow-next 0.38.1] - 2026-04-25
 
 ### Fixed

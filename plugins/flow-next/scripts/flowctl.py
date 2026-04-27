@@ -90,7 +90,7 @@ def get_repo_root() -> Path:
         result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=True,
         )
         return Path(result.stdout.strip())
@@ -126,7 +126,7 @@ def get_state_dir() -> Path:
         result = subprocess.run(
             ["git", "rev-parse", "--git-common-dir", "--path-format=absolute"],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=True,
         )
         common = result.stdout.strip()
@@ -413,7 +413,7 @@ def run_rp_cli(
     cmd = [rp] + args
     try:
         return subprocess.run(
-            cmd, capture_output=True, text=True, check=True, timeout=timeout
+            cmd, capture_output=True, text=True, encoding="utf-8", check=True, timeout=timeout
         )
     except subprocess.TimeoutExpired:
         error_exit(f"rp-cli timed out after {timeout}s", use_json=False, code=3)
@@ -435,7 +435,7 @@ def run_rp_cli_unchecked(
     rp = require_rp_cli()
     cmd = [rp] + args
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
     except subprocess.TimeoutExpired:
         error_exit(f"rp-cli timed out after {timeout}s", use_json=False, code=3)
 
@@ -454,7 +454,7 @@ def try_run_rp_cli(
     cmd = [rp] + args
     try:
         return subprocess.run(
-            cmd, capture_output=True, text=True, check=True, timeout=timeout
+            cmd, capture_output=True, text=True, encoding="utf-8", check=True, timeout=timeout
         )
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
         return None
@@ -1000,7 +1000,7 @@ def get_changed_files(base_branch: str) -> list[str]:
         result = subprocess.run(
             ["git", "diff", "--name-only", f"{base_branch}..HEAD"],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=True,
             cwd=get_repo_root(),
         )
@@ -1393,7 +1393,7 @@ def find_references(
                 "*.cs",
             ],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             cwd=repo_root,
         )
         refs = []
@@ -1484,7 +1484,7 @@ def get_codex_version() -> Optional[str]:
         result = subprocess.run(
             [codex, "--version"],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=True,
         )
         # Parse version from output like "codex 0.1.2" or "0.1.2"
@@ -1578,7 +1578,7 @@ def run_codex_exec(
                 cmd,
                 input=prompt,
                 capture_output=True,
-                text=True,
+                text=True, encoding="utf-8",
                 check=True,
                 timeout=600,
             )
@@ -1613,7 +1613,7 @@ def run_codex_exec(
             cmd,
             input=prompt,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=False,  # Don't raise on non-zero exit
             timeout=600,
         )
@@ -2285,7 +2285,7 @@ def get_copilot_version() -> Optional[str]:
         result = subprocess.run(
             [copilot, "--version"],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=True,
         )
         # Parse version from output like "GitHub Copilot CLI 1.0.34." or "1.0.34"
@@ -2393,7 +2393,7 @@ def run_copilot_exec(
             result = subprocess.run(
                 cmd,
                 capture_output=True,
-                text=True,
+                text=True, encoding="utf-8",
                 check=False,  # Don't raise on non-zero exit; caller inspects
                 timeout=600,
             )
@@ -2926,7 +2926,7 @@ def get_actor() -> str:
     # 2. git config user.email (preferred)
     try:
         result = subprocess.run(
-            ["git", "config", "user.email"], capture_output=True, text=True, check=True
+            ["git", "config", "user.email"], capture_output=True, text=True, encoding="utf-8", check=True
         )
         if email := result.stdout.strip():
             return email
@@ -2936,7 +2936,7 @@ def get_actor() -> str:
     # 3. git config user.name
     try:
         result = subprocess.run(
-            ["git", "config", "user.name"], capture_output=True, text=True, check=True
+            ["git", "config", "user.name"], capture_output=True, text=True, encoding="utf-8", check=True
         )
         if name := result.stdout.strip():
             return name
@@ -11360,7 +11360,7 @@ def cmd_copilot_check(args: argparse.Namespace) -> None:
             result = subprocess.run(
                 cmd,
                 capture_output=True,
-                text=True,
+                text=True, encoding="utf-8",
                 check=False,
                 timeout=60,
             )
@@ -12769,7 +12769,7 @@ def _branch_slug(branch: Optional[str] = None) -> str:
             result = subprocess.run(
                 ["git", "branch", "--show-current"],
                 capture_output=True,
-                text=True,
+                text=True, encoding="utf-8",
                 check=False,
             )
             name = (result.stdout or "").strip()
@@ -13001,7 +13001,7 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
         diff_result = subprocess.run(
             ["git", "diff", "--stat", f"{base_branch}..HEAD"],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             cwd=get_repo_root(),
         )
         if diff_result.returncode == 0:
@@ -13666,7 +13666,7 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
         diff_result = subprocess.run(
             ["git", "diff", "--stat", f"{base_branch}..HEAD"],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             cwd=get_repo_root(),
         )
         if diff_result.returncode == 0:
@@ -13927,7 +13927,7 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
         diff_result = subprocess.run(
             ["git", "diff", "--stat", f"{base_branch}..HEAD"],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             cwd=get_repo_root(),
         )
         if diff_result.returncode == 0:
@@ -14332,7 +14332,7 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
         diff_result = subprocess.run(
             ["git", "diff", "--stat", f"{base_branch}..HEAD"],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             cwd=get_repo_root(),
         )
         if diff_result.returncode == 0:
@@ -14710,7 +14710,7 @@ def _triage_chore_is_version_only(
         proc = subprocess.run(
             ["git", "diff", "--unified=0", f"{base}..HEAD", "--", path],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=False,
             cwd=repo_root,
         )
@@ -14937,7 +14937,7 @@ def _triage_run_codex_judge(
             cmd,
             input=prompt,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=False,
             timeout=120,
         )
@@ -14988,7 +14988,7 @@ def _triage_run_copilot_judge(
         result = subprocess.run(
             cmd,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=False,
             timeout=120,
         )
@@ -15048,7 +15048,7 @@ def cmd_triage_skip(args: argparse.Namespace) -> None:
         proc = subprocess.run(
             ["git", "diff", "--name-only", f"{base}..HEAD"],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=False,
             cwd=repo_root,
         )
@@ -15071,7 +15071,7 @@ def cmd_triage_skip(args: argparse.Namespace) -> None:
         stat_proc = subprocess.run(
             ["git", "diff", "--stat", f"{base}..HEAD"],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8",
             check=False,
             cwd=repo_root,
         )
