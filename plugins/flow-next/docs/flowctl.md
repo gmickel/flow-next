@@ -7,7 +7,12 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 ## Available Commands
 
 ```
-init, detect, epic, task, dep, show, epics, tasks, list, cat, ready, next, start, done, block, validate, config, memory, prep-chat, rp, codex, checkpoint, status, state-path, migrate-state
+init, detect, status, config, review-backend, memory, prospect,
+epic, task, dep, show, epics, tasks, list, cat, ready, next, start, done, block,
+state-path, migrate-state, validate, triage-skip,
+checkpoint, prep-chat,
+ralph, rp, codex, copilot,
+review-deep-auto, review-walkthrough-defer, review-walkthrough-record
 ```
 
 ## Multi-User Safety
@@ -477,26 +482,156 @@ Priority: `--review=...` argument > `FLOW_REVIEW_BACKEND` env > `.flow/config.js
 
 No auto-detect. Run `/flow-next:setup` (or `flowctl config set review.backend ...`) to configure.
 
-### memory
+### review-backend
 
-Manage persistent learnings in `.flow/memory/`.
+Resolve the active review backend spec (used by skills + Ralph). Reads `--spec` / per-task / per-epic / `FLOW_REVIEW_BACKEND` / `.flow/config.json` / backend-specific env / registry default in that order.
 
 ```bash
-# Initialize memory directory
-flowctl memory init [--json]
-
-# Add entries
-flowctl memory add --type pitfall "Always use flowctl rp wrappers" [--json]
-flowctl memory add --type convention "Tests in __tests__ dirs" [--json]
-flowctl memory add --type decision "SQLite for simplicity" [--json]
-
-# Query
-flowctl memory list [--json]
-flowctl memory search "pattern" [--json]
-flowctl memory read --type pitfalls [--json]
+flowctl review-backend [--json]
 ```
 
-Types: `pitfall`, `convention`, `decision`
+Text output prints the bare backend name (e.g. `codex`) for skill grep back-compat. JSON output:
+
+```json
+{"backend": "codex", "spec": "codex:gpt-5.4:high", "model": "gpt-5.4", "effort": "high", "source": "env"}
+```
+
+Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5:high`. RP is bare only (model set via window config); `none` is an explicit opt-out.
+
+### memory
+
+Manage persistent learnings under `.flow/memory/`.
+
+**Schema (v0.33.0+):** Categorized YAML — one entry per file under `bug/<category>/*.md` or `knowledge/<category>/*.md`. Frontmatter: `title`, `date`, `track`, `category`, `module`, `tags`, plus track-specific fields (`problem_type` / `root_cause` / `resolution_type` for `bug`; `applies_when` for `knowledge`). Optional `status: active|stale`, `last_audited`, `audit_notes`.
+
+Enable: `flowctl config set memory.enabled true`. Then `flowctl memory init`.
+
+```bash
+# Initialize tree + templates
+flowctl memory init [--json]
+
+# Add entry — bug track
+flowctl memory add --track bug --category runtime-errors \
+  --title "subprocess UnicodeEncodeError on Windows cp1252" \
+  --module flowctl.py --tags "windows,subprocess,unicode" \
+  --problem-type runtime-error --root-cause "..." \
+  --resolution-type fix --body-file body.md [--json]
+
+# Add entry — knowledge track
+flowctl memory add --track knowledge --category conventions \
+  --title "Use flowctl rp wrappers (not direct rp-cli)" \
+  --module ralph --tags "rp,review" \
+  --applies-when "any review-backend dispatch" \
+  --body-file body.md [--json]
+
+# Query
+flowctl memory list [--track bug] [--category runtime-errors] [--status active|stale|all] [--json]
+flowctl memory search "windows subprocess" [--track bug] [--module flowctl.py] [--tags "unicode"] [--limit 10] [--status active|stale|all] [--json]
+flowctl memory read <id> [--json]
+```
+
+`memory read` accepts: full id (`bug/runtime-errors/slug-YYYY-MM-DD`), `slug+date`, `slug` (latest date wins), or legacy forms (`legacy/pitfalls.md`, `legacy/pitfalls#N`).
+
+`--status` defaults to `active`. Stale entries are excluded from default `search` results so audit-flagged advice stops polluting `memory-scout` output.
+
+#### memory mark-stale
+
+Flag an entry as stale (sets `status: stale`, stamps `last_audited`, records `audit_notes`).
+
+```bash
+flowctl memory mark-stale <id> --reason "no longer accurate after fn-37 refactor" \
+  [--audited-by "audit-2026-04"] [--json]
+```
+
+Idempotent — re-marking replaces `audit_notes` and re-stamps `last_audited`. Body untouched. Used by `/flow-next:audit`; also callable directly.
+
+#### memory mark-fresh
+
+Clear the stale flag (drops `status` and `audit_notes`, stamps `last_audited`).
+
+```bash
+flowctl memory mark-fresh <id> [--audited-by "audit-2026-04"] [--json]
+```
+
+Idempotent on already-active entries.
+
+#### memory migrate (deprecated path)
+
+Migrate legacy flat files (`.flow/memory/{pitfalls,conventions,decisions}.md`) into the categorized schema using a deterministic filename → `(track, category)` mechanical heuristic.
+
+```bash
+flowctl memory migrate --dry-run [--json]
+flowctl memory migrate --yes [--json]
+```
+
+`--no-llm` is accepted-but-noop since 0.37.0 (classification is mechanical-only). For accurate per-entry classification with full repo context, use the agent-native `/flow-next:memory-migrate` skill — host agent classifies in-context.
+
+Stderr emits a one-time deprecation hint pointing at the skill (TTY only; suppress via `FLOW_NO_DEPRECATION=1`).
+
+#### memory list-legacy
+
+Parse legacy flat-files into structured entries with mechanical default `(track, category)` per entry.
+
+```bash
+flowctl memory list-legacy [--json]
+```
+
+Returns `{files: []}` (rc=0) when no legacy files exist. Used by `/flow-next:memory-migrate` skill; also useful for ad-hoc inspection.
+
+#### memory discoverability-patch
+
+Patch the project's `AGENTS.md` / `CLAUDE.md` with a one-line reference to `.flow/memory/` so agents without flow-next skills can still discover the learnings store.
+
+```bash
+flowctl memory discoverability-patch [--target auto|agents|claude] [--apply] [--dry-run] [--json]
+```
+
+Defaults to `--target auto` (picks the substantive file when one is a symlink). JSON callers must pass `--apply` explicitly to write — JSON mode refuses dry-run-by-default.
+
+### prospect
+
+Manage prospect artifacts produced by `/flow-next:prospect` under `.flow/prospects/`.
+
+```bash
+# List active artifacts (<30 days, status=active)
+flowctl prospect list [--all] [--json]
+
+# Read a full artifact or a single section
+flowctl prospect read <artifact-id> [--section focus|grounding|survivors|rejected] [--json]
+
+# Promote a survivor to a new epic with pre-filled spec skeleton
+flowctl prospect promote <artifact-id> --idea N [--epic-title "..."] [--force] [--json]
+
+# Archive a prospect (move to .flow/prospects/_archive/)
+flowctl prospect archive <artifact-id> [--json]
+```
+
+`<artifact-id>` accepts full form (`dx-improvements-2026-04-24`) or slug-only (latest date wins).
+
+`promote` allocates an epic via the same scan-based logic as `epic create`, inlining the spec write so the prospect-context spec lands on disk from the first byte. Idempotency guard: refuses if `promoted_to` already includes the target idea — pass `--force` to override.
+
+Exit codes: corrupt artifact on `read`/`promote` → 3 (stderr `[ARTIFACT CORRUPT: <reason>]`); duplicate idea on `promote` without `--force` → 2; Ralph-block (`REVIEW_RECEIPT_PATH` / `FLOW_RALPH=1`) on `/flow-next:prospect` → 2.
+
+### triage-skip
+
+Trivial-diff fast path that bypasses the configured review backend on whitelisted diffs (lockfile-only, docs-only, release-chore, generated-file-only). Returns `VERDICT=SHIP` deterministically.
+
+```bash
+flowctl triage-skip --base main [--task fn-1.2] [--receipt /tmp/triage.json] [--json]
+
+# With LLM judge for ambiguous diffs (gated behind FLOW_TRIAGE_LLM=1 in Ralph)
+flowctl triage-skip --base main --backend codex --model gpt-5-mini --effort low [--json]
+
+# Whitelist-only mode (ambiguous → REVIEW)
+flowctl triage-skip --base main --no-llm [--json]
+```
+
+Exit codes: `0` SKIP, `1` REVIEW, `2+` error. On by default in Ralph mode; opt-out via `--no-triage` or `FLOW_RALPH_NO_TRIAGE=1`.
+
+Receipt schema (only on SKIP):
+```json
+{"type": "triage_skip", "id": "fn-1.2", "mode": "triage_skip", "verdict": "SHIP", "timestamp": "..."}
+```
 
 ### prep-chat
 
@@ -663,6 +798,105 @@ Completion review receipt:
 **Windows users:** Codex CLI's `read-only` sandbox blocks ALL shell commands on Windows (including reads). Use `--sandbox auto` or `--sandbox danger-full-access` for Windows compatibility.
 
 **Note:** After plugin update, re-run `/flow-next:setup` or `/flow-next:ralph-init` to get sandbox fixes.
+
+#### codex validate
+
+Validator pass over prior review findings (`fn-32.1 --validate`). Drops confirmed false-positives in the same chat session.
+
+```bash
+flowctl codex validate --findings-file findings.jsonl --receipt /tmp/impl-fn-1.3.json [--spec codex:gpt-5.4:high] [--json]
+```
+
+`--findings-file` is JSON-Lines (one finding per line, with at least `id`). Empty/missing → no-op. Receipt drives session resume via `session_id`.
+
+#### codex deep-pass
+
+Specialized deep-review pass (`fn-32.2 --deep`). Runs after primary review in the same chat session.
+
+```bash
+flowctl codex deep-pass --pass adversarial --receipt /tmp/impl-fn-1.3.json [--primary-findings primary.jsonl] [--spec codex:gpt-5.4:high] [--json]
+flowctl codex deep-pass --pass security    --receipt /tmp/impl-fn-1.3.json --primary-findings primary.jsonl
+flowctl codex deep-pass --pass performance --receipt /tmp/impl-fn-1.3.json --primary-findings primary.jsonl
+```
+
+Pass options: `adversarial`, `security`, `performance`. Primary findings JSONL provides cross-pass agreement / dedup context. Receipt is required (provides `session_id` for resume).
+
+### copilot
+
+GitHub Copilot CLI wrappers — alternative review backend, parallel to codex. Same review criteria (Carmack-level, 7 each for plan/impl), same receipt schema, same session-resume model.
+
+```bash
+# Verify copilot availability + auth
+flowctl copilot check [--json]
+
+# Implementation review
+flowctl copilot impl-review <task-id> --base <branch> [--receipt <path>] [--spec copilot:claude-opus-4.5:high] [--json]
+
+# Plan review
+flowctl copilot plan-review <epic-id> --files <file1,file2,...> [--receipt <path>] [--spec ...] [--json]
+
+# Completion review
+flowctl copilot completion-review <epic-id> [--receipt <path>] [--spec ...] [--json]
+
+# Validator pass (fn-32.1 --validate)
+flowctl copilot validate --findings-file findings.jsonl --receipt /tmp/impl-fn-1.3.json [--spec ...] [--json]
+
+# Deep-pass review (fn-32.2 --deep)
+flowctl copilot deep-pass --pass adversarial|security|performance \
+  --receipt /tmp/impl-fn-1.3.json [--primary-findings primary.jsonl] [--spec ...] [--json]
+```
+
+Spec form: `copilot[:model[:effort]]`. Default model resolved via env (`FLOW_COPILOT_MODEL`) / config / registry. Receipt fields mirror codex: `mode: "copilot"`, `session_id` for resume.
+
+### ralph
+
+Ralph autonomous-loop run control. Reads/writes the run-state file at `scripts/ralph/runs/<run>/state.json`.
+
+```bash
+flowctl ralph status   [--json]   # Show active runs + their state
+flowctl ralph pause              # Pause a Ralph run (worker checks between iterations)
+flowctl ralph resume             # Resume a paused run
+flowctl ralph stop               # Request a Ralph run to stop gracefully
+```
+
+Used by humans to pause/stop a long-running Ralph loop without `kill -9`. Worker scripts poll the state file at iteration boundaries and act accordingly.
+
+### review-deep-auto
+
+Print the deep-pass set that auto-enables for a changed-file list (`fn-32.2`). Used by `--deep` (without explicit list) to derive `security` / `performance` based on file globs (Dockerfiles → security; large refactors / hot paths → performance).
+
+```bash
+flowctl review-deep-auto --files "src/auth.ts,src/handlers.ts" [--json]
+flowctl review-deep-auto < changed-files.txt   # one path per line
+```
+
+Output (text): comma-separated pass names (e.g. `adversarial,security`). JSON: `{"passes": ["adversarial", "security"]}`.
+
+### review-walkthrough-defer
+
+Append deferred findings to `.flow/review-deferred/<branch>.md` (`fn-32.3 --interactive`). Append-only; creates the directory if absent.
+
+```bash
+flowctl review-walkthrough-defer --findings-file deferred.jsonl \
+  [--receipt /tmp/impl-fn-1.3.json] [--branch fn-1-add-auth] [--json]
+```
+
+`--findings-file`: JSON-Lines (one finding per line: `id`, `severity`, `confidence`, `classification`, `file`, `line`, `title`, `suggested_fix`; optional `deferred_reason` overrides default label). `--receipt` adds session header. `--branch` overrides slug derivation (default: `git branch --show-current`, falls back to `HEAD` on detached).
+
+### review-walkthrough-record
+
+Stamp the receipt with walkthrough bucket counts (`fn-32.3 --interactive`). Additive — never changes verdict.
+
+```bash
+flowctl review-walkthrough-record --receipt /tmp/impl-fn-1.3.json \
+  --applied 3 --deferred 5 --skipped 2 --acknowledged 1 --lfg-rest false [--json]
+```
+
+Receipt gets a `walkthrough` block:
+```json
+{"walkthrough": {"applied": 3, "deferred": 5, "skipped": 2, "acknowledged": 1, "lfg_rest": false},
+ "walkthrough_timestamp": "2026-04-28T..."}
+```
 
 ### checkpoint
 

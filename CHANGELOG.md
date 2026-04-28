@@ -2,6 +2,11 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.38.3] - 2026-04-28
+
+### Changed
+- **`plugins/flow-next/docs/flowctl.md` refreshed.** Authoritative CLI reference (linked from `.flow/usage.md`) had drifted since 0.33.0 — missing entire subcommand families introduced across 0.33–0.38. Added sections: `review-backend` (0.31.0+ spec grammar), `prospect` family (`list` / `read` / `promote` / `archive`, 0.36.0), `triage-skip` (0.35.0), `ralph` run control (`pause` / `resume` / `stop` / `status`), `copilot` review backend (parallel to `codex`), `codex deep-pass` + `codex validate` (fn-32.1/2), `review-deep-auto`, `review-walkthrough-defer`, `review-walkthrough-record` (fn-32.3 helpers). Memory section rewritten for the categorized YAML schema (0.33.0+): `--track bug|knowledge --category C` syntax, track-specific fields, `--status active|stale|all` filter, plus new subcommands `mark-stale`, `mark-fresh`, `migrate` (with deprecation pointer to `/flow-next:memory-migrate`), `list-legacy`, `discoverability-patch`. Updated available-commands list at the top of the file. Pure docs — no behavior change.
+
 ## [flow-next 0.38.2] - 2026-04-27
 
 ### Fixed
