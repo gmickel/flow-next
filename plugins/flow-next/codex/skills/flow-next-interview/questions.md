@@ -4,21 +4,27 @@ Ask NON-OBVIOUS questions only. Expect 40+ questions for complex specs.
 
 ## Pre-Question Taxonomy
 
-Before asking any question, classify it:
+Before asking any question, classify it on three axes:
 
 | Category | Who answers | Examples |
 |----------|-------------|----------|
 | **Codebase-answerable** | Agent (Read / Grep / Glob) | "What persistence layer is used?" / "Where do existing routes live?" / "What's the test framework?" |
+| **Glossary-lookup-answerable** (`DOC_AWARE=1` only) | Agent (`flowctl glossary read`) | "What does this project mean by 'worker'?" / "Is 'session' the canonical term here, or is it 'connection'?" |
 | **User-judgment-required** | User (`request_user_input`) | "Should we add caching?" / "What's the priority for offline support?" / "Is performance or simplicity more important here?" |
 
-**Rule of thumb:**
+**Rules of thumb:**
 
-- "What exists / how is it wired / what conventions live here" → agent investigates, doesn't ask.
+- "What exists / how is it wired / what conventions live here" → agent investigates the codebase, doesn't ask.
+- "What does the project's canonical vocabulary call this?" → agent looks up the nearest-ancestor `GLOSSARY.md` (when `DOC_AWARE=1`), surfaces only when (a) no canonical entry exists and the term is overloaded (behavior (b) — fuzzy-term sharpening), or (b) the user's wording conflicts with canonical AND the term is load-bearing (behavior (a) — phase-zero scan).
 - "What should exist / what tradeoff to make / what priority" → user decides, agent asks.
 
 **If you find yourself answering a "should" question via grep, that's the bug.** Stop and ask the user.
 
-**Audit trail:** every question the agent answered via codebase exploration goes into the spec's `## Resolved via Codebase` section (separate from items the user answered). Cite file:line evidence so reviewers can spot-check assumptions later — especially important when the agent's "I checked" turns out to be "I assumed."
+**Audit trail:**
+
+- Codebase-resolved items → `## Resolved via Codebase` section with file:line evidence.
+- Glossary-conflict-resolved items (when behavior (a) fired) → `## Glossary Conflicts` section with the user-wording, canonical term, and resolution.
+- Both sections are separate from items the user answered. Cite evidence so reviewers can spot-check assumptions later — especially important when the agent's "I checked" turns out to be "I assumed."
 
 ## Technical Implementation
 
