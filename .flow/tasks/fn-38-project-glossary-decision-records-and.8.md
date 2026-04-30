@@ -20,7 +20,7 @@ Per `docs-gap-scout` findings (gathered during planning), update in this order:
 
 1. **CHANGELOG.md** — new `## [flow-next 0.39.0] - YYYY-MM-DD` block above 0.38.2. Sections:
    - `### Added`: GLOSSARY.md artifact + flowctl glossary subcommands; knowledge/decisions/ category + frontmatter fields; /flow-next:interview --docs/--no-docs autodetect; doc-aware behaviors (a/b/c/d).
-   - `### Changed`: docs-gap-scout extends scan; /flow-next:audit walks glossary terms + decisions; /flow-next:sync detects glossary renames + decision overrides; R17 grep guard added.
+   - `### Changed`: docs-gap-scout extends scan; /flow-next:audit walks glossary terms + decisions; /flow-next:sync detects glossary renames AND surfaces decision overrides read-only (never auto-supersedes; husks + superseded entries skipped); R17 grep guard added. <!-- Updated by plan-sync: fn-38.6 shipped Phase 3b with explicit read-only contract for decisions + husk-skip rule (file_count==0 OR total_terms==0) -->
    - `### Notes`: closed-epic foundations (fn-30 / fn-34 / fn-36 / fn-15-96t); explicitly call out R18 (uninstall survival) since it's a tenet-driven design choice.
 
 2. **CLAUDE.md** (lines 19-27, 65-86, ~97):
@@ -35,7 +35,7 @@ Per `docs-gap-scout` findings (gathered during planning), update in this order:
    - Frontmatter schema: add decision-specific optional fields.
    - **New** Project Glossary section after Memory System.
    - Audit lifecycle: extended (glossary + decisions walks).
-   - Plan-sync: extended (glossary renames + decision overrides).
+   - Plan-sync: extended (glossary renames replace `_Avoid_` aliases with canonical terms via Phase 3b.1 with `<!-- Updated by plan-sync: glossary rename ... -->` breadcrumb; decision overrides surfaced read-only via Phase 3b.2 under "Decision overrides flagged for review" heading — never auto-supersedes). <!-- Updated by plan-sync: fn-38.6 actual Phase 3b structure + breadcrumb format + heading text -->
    - Planning Phase docs-gap-scout bullet: extended scan list.
 
 4. **README.md (root)** — what's-new callout (lines 28-32) updated to v0.39.0 with one-line summary (glossary + decisions + doc-aware interview).

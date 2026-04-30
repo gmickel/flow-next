@@ -90,5 +90,8 @@ The grep guard runs in <1s per scan. T7 must ship AFTER T3 (skill prose changes)
 - [ ] CI passes after this task lands (entire epic-touched canonical + mirror is clean)
 
 ## Done summary
-
+T7 ships the two-tier R17 grep guard: ci_test.sh scans canonical (skills/, agents/, commands/, flowctl.py) for DDD forbidden vocabulary + R4 meta-file refs (file:line on hit); sync-codex.sh validation block scans the Codex mirror with the same patterns (count + remediation hint on hit). Verified by fixture-injection that both tiers fire and that the current epic-touched canonical + mirror are clean.
 ## Evidence
+- Commits: b872b2b5f19402130e024c02be8b516613b55684
+- Tests: plugins/flow-next/scripts/ci_test.sh (56 pass / 0 fail incl. new R17 + R4 guards), scripts/sync-codex.sh (validation green: R17 mirror + R4 mirror added), fixture-injection verification: canonical fired with file:line; mirror fired with 3 R17 + 1 R4 hit, exit 1
+- PRs:
