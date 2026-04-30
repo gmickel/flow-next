@@ -41,7 +41,19 @@ ls -la adr/ adrs/ decisions/ architecture/ 2>/dev/null
 
 # Generated docs
 ls -la typedoc.json jsdoc.json mkdocs.yml 2>/dev/null
+
+# Project glossary (root + subdirs) — prefer flowctl when present
+# Returns {groups: [{path, entries, count}], file_count, total_terms}
+.flow/bin/flowctl glossary list --json 2>/dev/null \\
+  || find . -name GLOSSARY.md -not -path './node_modules/*' -not -path './.git/*' 2>/dev/null
+
+# Decision records (flow-next memory category)
+ls -la .flow/memory/knowledge/decisions/ 2>/dev/null
 ```
+
+Notes on the glossary scan:
+- Prefer `flowctl glossary list --json` — it walks ancestors and groups by file. Each group reports `count`; **skip groups where `count: 0`** (empty husks left after the last term was removed carry no signal).
+- Fall back to raw `find` only when flowctl is unavailable.
 
 ### 2. Categorize what exists
 
@@ -52,6 +64,8 @@ Build a map:
 - **Architecture**: ADRs, design docs
 - **Design system**: DESIGN.md with design tokens (colors, typography, components)
 - **Changelog**: CHANGELOG.md or similar
+- **Glossary**: `GLOSSARY.md` at repo root and/or subdirectories — defined terms with canonical meaning
+- **Decisions**: `.flow/memory/knowledge/decisions/` — recorded choices with `Consequences` sections
 
 ### 3. Match request to docs
 
@@ -67,6 +81,8 @@ Based on the REQUEST, identify which docs likely need updates:
 | Architectural decision | ADR |
 | CLI change | README CLI section, --help text |
 | Design tokens/theming | DESIGN.md color, typography, component sections |
+| Glossary term touched | When the planned diff modifies code that uses a term defined in any `GLOSSARY.md`, flag the glossary entry (file + term name) for review |
+| Decision constraint | When the planned diff touches a file referenced in a decision entry's `Consequences` section, flag the decision entry (id + title) for review |
 
 ### 4. Check current doc state
 
@@ -90,6 +106,8 @@ For identified docs, quick scan to understand structure:
 - **README.md**: Update usage section for new feature
 - **CHANGELOG.md**: Add entry under "Added"
 - **openapi.yaml**: Add new /auth endpoint spec
+- **GLOSSARY.md** (root): Term `Session` touched — diff changes session-cookie semantics
+- **`.flow/memory/knowledge/decisions/use-jwt-2026-04-12.md`**: Consequences reference auth middleware which this diff modifies
 
 ### No Updates Expected
 - DESIGN.md (no design token changes)
