@@ -95,7 +95,24 @@ No downstream tasks to sync (all done or none exist).
 ```
 Stop here (success, nothing to do).
 
-### Step 5: Spawn Plan-Sync Agent
+### Step 5: Gather glossary + decisions context
+
+Two extra context types help the agent catch drift the spec text alone can't reveal: project-glossary terms (renames where the old spec used a term whose `_Avoid_` alias now appears in code) and active decision constraints (current code may touch files mentioned in a decision's `Consequences` section).
+
+```bash
+GLOSSARY_JSON="$("$FLOWCTL" glossary list --json 2>/dev/null \
+ || echo '{"groups":[],"file_count":0,"total_terms":0}')"
+DECISIONS_JSON="$("$FLOWCTL" memory list --track knowledge --category decisions --json 2>/dev/null \
+ || echo '{"entries":[],"legacy":[],"count":0,"status":"active"}')"
+```
+
+Both calls are best-effort — empty defaults keep the agent prompt valid when flowctl returns nothing or fails.
+
+When `GLOSSARY_JSON` reports `file_count == 0` AND `DECISIONS_JSON` reports `count == 0`, skip the extra context (pass the empty defaults — the agent treats them as a no-op signal).
+
+When `GLOSSARY_JSON.total_terms == 0` but `file_count > 0`, every group is a husk. Husks carry no signal for drift detection — pass the JSON through untouched and let the agent skip them.
+
+### Step 6: Spawn Plan-Sync Agent
 
 Build context and spawn via Task tool:
 
@@ -108,16 +125,19 @@ EPIC_ID: <epic id>
 DOWNSTREAM_TASK_IDS: <comma-separated list from step 4>
 DRY_RUN: <true|false>
 
+GLOSSARY_JSON: <output of `flowctl glossary list --json` from step 5>
+DECISIONS_JSON: <output of `flowctl memory list --track knowledge --category decisions --json` from step 5>
+
 <if DRY_RUN is true>
 DRY RUN MODE: Report what would change but do NOT use Edit tool. Only analyze and report drift.
 </if>
 ```
 
-Use Task tool with `subagent_type: flow-next:plan-sync`
+Use Task tool with `subagent_type: flow-next:plan-sync`.
 
 **Note:** `COMPLETED_TASK_ID` is always provided - for task-mode it's the input task, for epic-mode it's the source task selected in Step 4.
 
-### Step 6: Report Results
+### Step 7: Report Results
 
 After agent returns, format output:
 
