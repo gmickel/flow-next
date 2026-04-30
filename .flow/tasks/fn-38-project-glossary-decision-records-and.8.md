@@ -75,5 +75,8 @@ Per `docs-gap-scout` findings (gathered during planning), update in this order:
 - [ ] Version bump considered: this epic adds skill behavior (interview), so a version bump (likely 0.39.0) is warranted per CLAUDE.md versioning rules. The bump itself is the release-handoff step, not part of this task's acceptance — but the CHANGELOG entry must use the agreed version.
 
 ## Done summary
-
+Documentation rollup for fn-38: added [flow-next 0.39.0] CHANGELOG block, extended CLAUDE.md commands list + memory block + new Glossary section, updated root README + plugins/flow-next/README.md (version badges, what's-new callouts, memory tree adds decisions/, frontmatter schema for decision-specific fields, new Project Glossary section, audit + sync + scout extension notes, interview doc-aware mode + Glossary Conflicts template), added Glossary section to .flow/usage.md, extended plugins/flow-next/docs/flowctl.md with new ### glossary subcommand reference + decisions in memory categories, fixed memory-scout decisions enumeration drift (T1) and epic spec husk-aware autodetect example (T2). Two-tier R17 + R4 grep guards stay green; ci_test (56), smoke (130), glossary smoke (80), sync-codex all pass; mickel.tech website skipped per CLAUDE.md maintainer-only convention.
 ## Evidence
+- Commits: a5ff6e46e343f33fb57a37eb632190209b05beb7
+- Tests: plugins/flow-next/scripts/ci_test.sh (56 pass), plugins/flow-next/scripts/smoke_test.sh (130 pass), plugins/flow-next/scripts/glossary_smoke_test.sh (80 pass), scripts/sync-codex.sh (21 skills + 21 agents validated; R17 + R4 mirror green)
+- PRs:
