@@ -84,6 +84,17 @@ Task tracking for AI agents. All state lives in `.flow/`.
 .flow/bin/flowctl memory list-legacy                     # list legacy entries with mechanical defaults (v0.37.0+)
 .flow/bin/flowctl memory list-legacy --json              # used by /flow-next:memory-migrate skill
 .flow/bin/flowctl memory migrate [--yes] [--json]        # deterministic-only legacy migration (use /flow-next:memory-migrate for agent-native classification)
+
+# Glossary (project-canonical terms at repo root, v0.39.0+ — survives `rm -rf .flow/`)
+.flow/bin/flowctl glossary add <term> --definition "..."           # upsert single-line term
+.flow/bin/flowctl glossary add <term> --definition-file body.md    # multi-line definition from file
+.flow/bin/flowctl glossary add <term> --definition-file -          # multi-line from stdin
+.flow/bin/flowctl glossary add <term> --avoid "alt1,alt2" --relates-to "x,y"
+.flow/bin/flowctl glossary list                                    # text mode: grouped by file (nearest first)
+.flow/bin/flowctl glossary list --json                             # {groups, file_count, total_terms}
+.flow/bin/flowctl glossary read <term>                             # nearest-ancestor walk; first match wins
+.flow/bin/flowctl glossary read <term> --json                      # {path, term, definition, avoid, relates_to}
+.flow/bin/flowctl glossary remove <term>                           # last-term remove leaves `# Glossary` husk (R18)
 ```
 
 ## Workflow

@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.38.3-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.39.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -21,9 +21,9 @@
 
 🌐 **Prefer a visual overview?** See the [Flow-Next app page](https://mickel.tech/apps/flow-next) for diagrams and examples.
 
-> **What's new in 0.38.0:** `/flow-next:capture` synthesizes free-form discussion into a flow-next epic spec with source-tagged criteria + mandatory read-back. `/flow-next:interview` enhanced with lead-with-recommendation + confidence tiers + codebase-first investigation + dependency-ordered question branches. Cross-platform tool handling moved into the Codex sync script; canonical skills stay Claude-native, sync rewrites for Codex mirror. [Full changelog](../../CHANGELOG.md).
+> **What's new in 0.39.0:** Project glossary + decision records + doc-aware interview. New `GLOSSARY.md` artifact at the repo root (survives `rm -rf .flow/`) with `flowctl glossary add/list/read/remove` and nearest-ancestor walk. New `knowledge/decisions/` memory category with `decision_status` lifecycle. `/flow-next:interview` autodetects doc-aware mode (`--docs` / `--no-docs` to override) — looks up canonical terms before asking, surfaces conflicts to a `## Glossary Conflicts` spec section, prompts for decision records on load-bearing choices. `/flow-next:audit` walks glossary + decisions; `/flow-next:sync` flags decision overrides read-only (never auto-supersedes). Two-tier R17 + R4 grep guard added in CI. [Full changelog](../../CHANGELOG.md).
 >
-> Recent highlights: agent-native [memory audit](#memory-system) (0.37.0), [memory migrate skill](#memory-system) (0.37.0), [PR feedback resolver](#pr-feedback-resolution) (0.34.0), [prospect skill](#prospecting) for ranked candidate ideation (0.36.0), [opt-in review flags](#cross-model-reviews) `--validate` / `--deep` / `--interactive` (0.35.0).
+> Recent highlights: [capture skill](#capture) for conversation-to-spec synthesis (0.38.0), [interview grill-me patterns](#flow-nextinterview) (0.38.0), agent-native [memory audit](#memory-system) (0.37.0), [memory migrate skill](#memory-system) (0.37.0), [PR feedback resolver](#pr-feedback-resolution) (0.34.0), [prospect skill](#prospecting) for ranked candidate ideation (0.36.0).
 
 ---
 
@@ -37,6 +37,7 @@
 - [Prospecting](#prospecting) — `/flow-next:prospect`
 - [Capture](#capture) — `/flow-next:capture`
 - [Memory System](#memory-system) — `/flow-next:audit` + `/flow-next:memory-migrate`
+- [Project Glossary](#project-glossary) — `flowctl glossary` + doc-aware interview
 - [Agent Readiness Assessment](#agent-readiness-assessment) — `/flow-next:prime`
 - [PR Feedback Resolution](#pr-feedback-resolution) — `/flow-next:resolve-pr`
 - [Cross-Model Reviews](#cross-model-reviews) — RepoPrompt / Codex / Copilot
@@ -1505,6 +1506,8 @@ When enabled, plan-sync also checks other open epics for stale references. Usefu
 
 Manual sync ignores `planSync.enabled` config—if you run it, you want it. Works with any source task status (not just done).
 
+**Sync extensions (v0.39.0+):** Phase 3b extends the drift sweep with two additions. **3b.1 glossary renames** replace `_Avoid_` aliases with the canonical term across downstream task specs (additive — old wording is replaced inline with a `<!-- Updated by plan-sync: glossary rename ... -->` breadcrumb). **3b.2 decision overrides** are surfaced read-only under a `Decision overrides flagged for review` heading in affected task specs — sync **never auto-supersedes** decision records, since superseding is a human-judgment / audit-driven action. Husk and superseded entries are skipped (no work to do; the `file_count == 0` OR `total_terms == 0` short-circuit prevents false positives on empty husks). The read-only contract on decisions matches the broader principle that automated drift sweeps should not silently rewrite explicit historical choices.
+
 ### Memory System (Opt-in, categorized — v0.33.0+)
 
 Persistent learnings that survive context compaction. One entry per file, YAML frontmatter, two tracks.
@@ -1527,7 +1530,8 @@ Persistent learnings that survive context compaction. One entry per file, YAML f
     ├── conventions/
     ├── tooling-decisions/
     ├── workflow/
-    └── best-practices/
+    ├── best-practices/
+    └── decisions/                          # v0.39.0+ — load-bearing architectural choices
 ```
 
 **Frontmatter schema (bug track):**
@@ -1559,6 +1563,26 @@ tags: [rp, ralph, review]
 applies_when: writing Ralph loop scripts or review shims
 ---
 ```
+
+**Frontmatter schema (decisions — knowledge track, v0.39.0+):**
+
+```yaml
+---
+title: Use nearest-ancestor walk for GLOSSARY.md resolution
+date: 2026-04-30
+track: knowledge
+category: decisions
+module: glossary
+tags: [glossary, resolution, walk]
+decision_status: accepted          # proposed | accepted | superseded
+alternatives_considered: |
+  - always-root: simpler, but loses subdir flexibility
+  - explicit-path: makes resolution opaque to skills
+superseded_by: null                 # set when decision_status = superseded
+---
+```
+
+Decision body convention: 1–3 sentence floor describing trade-offs, irreversibility, and surprise factor. The three decision-specific fields (`decision_status`, `superseded_by`, `alternatives_considered`) are permitted on any knowledge entry but specifically intended for the `decisions/` subtree. Constants `MEMORY_DECISION_FIELDS` / `MEMORY_DECISION_STATUSES` (alongside `MEMORY_KNOWLEDGE_FIELDS` / `MEMORY_STATUS`).
 
 **Enable + init:**
 
@@ -1618,6 +1642,8 @@ Search scoring is weighted: title 5×, tags 3×, body 1.5×, misc 1×. Legacy hi
 **Audit lifecycle (v0.37.0+):**
 
 `/flow-next:audit [mode:autofix] [scope hint]` walks `.flow/memory/`, reviews each entry against the current codebase, and decides per entry whether to **Keep / Update / Consolidate / Replace / Delete**. Interactive mode (default) asks via the platform's blocking-question tool; autofix mode applies unambiguous actions and marks ambiguous entries as stale. The skill is agent-native — host agent reads the workflow markdown and executes it directly using its own Read/Grep/Glob tools (no Python audit engine, no codex/copilot subprocess dispatch). Legacy flat files are skipped with a warning.
+
+**Audit extensions (v0.39.0+):** Phase 0.5 (new) reads every `GLOSSARY.md` on the ancestor chain and audits each term against the current code (any references intact? renamed? gone?). Phase 0.1 (extended) auto-walks `knowledge/decisions/` alongside other categories. **Replace outcomes for decision entries are supersede-not-delete** — the audit writes a new entry with `decision_status: accepted` and sets the old entry's `decision_status: superseded` + `superseded_by: <new-id>`, preserving the historical trail. Other categories keep the existing Replace semantics.
 
 Two flowctl helpers back the audit lifecycle (also callable directly):
 
@@ -1686,6 +1712,50 @@ Until migration runs, legacy flat files continue to work; `list` / `read` / `sea
 
 ---
 
+## Project Glossary
+
+`GLOSSARY.md` is a human-readable, project-canonical terminology file shipped in v0.39.0. Lives at the **repo root** (and optionally subdirectories), NOT inside `.flow/`. Survives `rm -rf .flow/` — terminology is the project's, not flow-next's.
+
+**Format:** H2-per-term markdown aligned with `open-gitops/documents` and `glossarify-md` so generic markdown tooling reads it cleanly. Optional `_Avoid_:` and `_Relates to_:` italic lines surface aliases and cross-references. Multi-line definitions are supported; fenced code blocks inside definitions are masked during parse so example terms in code don't get parsed as headings.
+
+**Resolution:** Nearest-ancestor walk from cwd up to repo root, first match wins (same shape as `tsconfig.json` / EditorConfig). Capped at 32 levels with cycle detection.
+
+**Subcommands:**
+
+```bash
+# Add or update a term — single-line, file, or stdin
+flowctl glossary add <term> --definition "Short definition."
+flowctl glossary add <term> --definition-file body.md
+flowctl glossary add <term> --definition-file -
+
+# Optional alias / relates-to flags
+flowctl glossary add <term> --definition "..." --avoid "alt1,alt2" --relates-to "x,y"
+
+# List defined terms (grouped by file, nearest first)
+flowctl glossary list                # text mode
+flowctl glossary list --json         # {groups, file_count, total_terms}
+
+# Read a term — walks ancestors, first match wins
+flowctl glossary read <term>
+flowctl glossary read <term> --json  # {path, term, definition, avoid, relates_to}
+
+# Remove a term — last-term remove leaves an `# Glossary` H1 husk on disk
+flowctl glossary remove <term>
+```
+
+**Husk semantics:** Last-term `remove` leaves a `# Glossary` H1 husk on disk — the file is **never** deleted. R18 (survives uninstall) covers both the file living outside `.flow/` AND the file persisting after the last term is removed. Doc-aware autodetect should branch on `total_terms > 0`, not on `[[ -f GLOSSARY.md ]]` — the latter would falsely activate doc-aware mode on an empty husk.
+
+**How the rest of flow-next uses it:**
+
+- **`/flow-next:interview`** doc-aware mode (autodetect when `total_terms > 0` or `knowledge/decisions/` is non-empty): looks up canonical wording before terminology questions; surfaces user-vs-canonical conflicts to a `## Glossary Conflicts` spec section; writes new terms via `flowctl glossary add` when the user picks update-glossary; prompts for `knowledge/decisions/` entries on load-bearing choices.
+- **`/flow-next:audit`** Phase 0.5: walks every `GLOSSARY.md` on the ancestor chain and audits each term against the current code (any references intact? renamed? gone?).
+- **`/flow-next:sync`** Phase 3b.1: glossary renames replace `_Avoid_` aliases with the canonical term inline across downstream task specs, with a `<!-- Updated by plan-sync: glossary rename ... -->` breadcrumb.
+- **`docs-gap-scout`** in the planning phase: reads `GLOSSARY.md` on the ancestor chain to surface canonical terminology in the planning context; flags terminology mismatches between the proposed feature description and the glossary.
+
+**Forbidden vocabulary (R17):** A small list of jargon terms is grep-guarded out of canonical skill / agent / command / flowctl prose by `ci_test.sh` section 5c (canonical scan, prints `file:line` on hit), and out of the Codex mirror by `scripts/sync-codex.sh` validation block (mirror scan, prints count + remediation hint). The forbidden list is enumerated only inside the grep pattern itself; documentation refers to "the R17 forbidden list" without re-enumeration to avoid teaching the very vocabulary it's meant to suppress.
+
+---
+
 ## Commands
 
 Sixteen commands, complete workflow:
@@ -1696,7 +1766,7 @@ Sixteen commands, complete workflow:
 | `/flow-next:capture [flags]` | Synthesize conversation context into an epic spec; source-tagged + mandatory read-back ([details](#capture)) |
 | `/flow-next:plan <idea>` | Research the codebase, create epic with dependency-ordered tasks |
 | `/flow-next:work <id\|file>` | Execute epic, task, or spec file, re-anchoring before each |
-| `/flow-next:interview <id>` | Deep interview to flesh out a spec before planning |
+| `/flow-next:interview <id>` | Deep interview to flesh out a spec before planning; doc-aware mode (autodetect + `--docs` / `--no-docs`) looks up canonical terms, surfaces conflicts to a `## Glossary Conflicts` spec section, prompts for decision records on load-bearing choices ([details](#flow-nextinterview)) |
 | `/flow-next:plan-review <id>` | Carmack-level plan review (RepoPrompt, Codex, or Copilot) |
 | `/flow-next:impl-review` | Carmack-level impl review of current branch |
 | `/flow-next:epic-review <id>` | Epic-completion review: verify implementation matches spec |
@@ -1740,6 +1810,7 @@ Natural language also works:
 |---------|-----------------|
 | `/flow-next:prospect` | `[focus hint]` (positional) — concept / path / constraint / volume |
 | `/flow-next:capture` | `mode:autofix` (positional), `--rewrite <epic-id>`, `--from-compacted-ok`, `--yes` |
+| `/flow-next:interview` | `--docs` / `--no-docs` (override doc-aware autodetect, v0.39.0+) |
 | `/flow-next:plan` | `--research=rp\|grep`, `--review=rp\|codex\|copilot\|export\|none`, `--no-review` |
 | `/flow-next:work` | `--branch=current\|new\|worktree`, `--review=rp\|codex\|copilot\|export\|none`, `--no-review` |
 | `/flow-next:plan-review` | `--review=rp\|codex\|copilot\|export` |
@@ -1840,6 +1911,24 @@ Deep questioning (40+ questions) to surface requirements, edge cases, and decisi
 - **Dependency-ordered branches** — depth cap of 4; discover-as-you-go (not pre-compute); abandoned branches are surfaced ("Skipping persistence questions — you said no DB"). One-question-per-turn invariant reaffirmed.
 
 These three patterns are additive enhancements to **how** questions are asked, not what gets asked. Existing 40+ question coverage is unchanged.
+
+**Doc-aware mode (0.39.0+):**
+
+Autodetects when `GLOSSARY.md` has at least one term (husks ignored — branches on `flowctl glossary list --json | jq '.total_terms > 0'`, NOT plain file existence) or `knowledge/decisions/` has at least one entry. Override via:
+
+| Flag | Description |
+|------|-------------|
+| `--docs` | Force doc-aware mode on (even if autodetect says off) |
+| `--no-docs` | Force doc-aware mode off (skip glossary lookup + decision-record prompts) |
+
+Four behaviors when active:
+
+- **(a) Glossary lookup before terminology questions** — fetch nearest-ancestor canonical wording via `flowctl glossary read` before asking the user about terminology. If user wording diverges from canonical, surface the conflict in a new `## Glossary Conflicts` section in the refined spec — sits next to `## Resolved via Codebase` as the audit trail for canonical-vs-user wording resolutions. Resolution outcome (use-canonical / update-glossary / accept-divergence) is recorded inline.
+- **(b) Inline glossary write on resolution** — when the user picks `update-glossary`, `flowctl glossary add` is invoked immediately, recording the new canonical term with the user's chosen definition. The added term flows into downstream tasks via `docs-gap-scout` on the next planning pass.
+- **(c) Decision-record awareness** — when a load-bearing architectural choice is made during the interview, prompt the user (via `AskUserQuestion`) to write a `knowledge/decisions/` entry. Three-criteria gate: hard-to-reverse / surprising / load-bearing trade-off. Read-back loop before write so the user can correct trade-off framing.
+- **(d) Code/spec contradiction surfaced** — when an interview answer conflicts with an active decision record, the contradiction is surfaced in the refined spec (under `## Glossary Conflicts` or a similarly-named section) rather than silently overwriting either side. The user picks: revise the spec, supersede the decision, or accept divergence with rationale.
+
+Both `NEW-IDEA` and `EXISTING-EPIC` interview templates emit the `## Glossary Conflicts` section when behavior (a) or (d) fires.
 
 #### `/flow-next:plan-review`
 
@@ -1978,7 +2067,7 @@ Override via flags or `scripts/ralph/config.env`.
 
 ### Planning Phase
 
-1. **Research (parallel subagents)**: `repo-scout` (or `context-scout` if rp-cli) + `practice-scout` + `docs-scout` + `github-scout` + `epic-scout` + `docs-gap-scout`
+1. **Research (parallel subagents)**: `repo-scout` (or `context-scout` if rp-cli) + `practice-scout` + `docs-scout` + `github-scout` + `epic-scout` + `docs-gap-scout` (v0.39.0+: also reads `GLOSSARY.md` on the ancestor chain + `knowledge/decisions/` to surface canonical terminology + prior load-bearing choices in the planning context)
 2. **Gap analysis**: `flow-gap-analyst` finds edge cases + missing requirements
 3. **Epic creation**: Writes spec to `.flow/specs/fn-N.md`, sets epic dependencies from `epic-scout` findings
 4. **Task breakdown**: Creates tasks + explicit dependencies in `.flow/tasks/`, adds doc update acceptance criteria from `docs-gap-scout`

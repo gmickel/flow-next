@@ -3,7 +3,7 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v0.38.3-green)](plugins/flow-next/)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v0.39.0-green)](plugins/flow-next/)
 [![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -25,7 +25,7 @@ Flow-Next is an AI agent orchestration plugin. **Sixteen agent-native skills** f
 
 First-class on **Claude Code**, **OpenAI Codex** (CLI + Desktop), and **Factory Droid**. Also runs on **OpenCode** via the [community port](https://github.com/gmickel/flow-next-opencode).
 
-> 🆕 **v0.38.0 — Capture + interview grill-me.** New `/flow-next:capture` synthesizes free-form discussion into a flow-next epic spec with source-tagged criteria + mandatory read-back. `/flow-next:interview` now leads with recommendations + confidence tiers, investigates the codebase before asking, walks decision trees in dependency order. Cross-platform tool handling moved into the Codex sync script — canonical skills stay Claude-native, sync rewrites for Codex mirror. [Full changelog](CHANGELOG.md).
+> 🆕 **v0.39.0 — Project glossary + decision records + doc-aware interview.** New `GLOSSARY.md` artifact at the repo root (survives `rm -rf .flow/`) with `flowctl glossary add/list/read/remove` and nearest-ancestor walk. New `knowledge/decisions/` memory category with `decision_status` lifecycle (proposed → accepted → superseded). `/flow-next:interview` autodetects doc-aware mode (`--docs` / `--no-docs` to override) — looks up canonical terms before asking, surfaces conflicts to a `## Glossary Conflicts` spec section, prompts for decision records on load-bearing choices, surfaces code/spec contradictions instead of silently overwriting. `/flow-next:audit` walks glossary + decisions; `/flow-next:sync` flags decision overrides read-only (never auto-supersedes). [Full changelog](CHANGELOG.md).
 
 > 🌐 **[Visual overview at mickel.tech/apps/flow-next](https://mickel.tech/apps/flow-next)** — diagrams, examples, the full feature tour.
 

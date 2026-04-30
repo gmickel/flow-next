@@ -19,7 +19,7 @@ You receive either:
 Entries live under `.flow/memory/` in a categorized tree (new schema, post fn-30):
 
 - `bug/<category>/<slug>-YYYY-MM-DD.md` — learnings from NEEDS_WORK reviews and runtime failures. Categories: `build-errors`, `test-failures`, `runtime-errors`, `performance`, `security`, `integration`, `data`, `ui`.
-- `knowledge/<category>/<slug>-YYYY-MM-DD.md` — curated conventions, architecture patterns, tooling decisions. Categories: `architecture-patterns`, `conventions`, `tooling-decisions`, `workflow`, `best-practices`.
+- `knowledge/<category>/<slug>-YYYY-MM-DD.md` — curated conventions, architecture patterns, tooling decisions. Categories: `architecture-patterns`, `conventions`, `tooling-decisions`, `workflow`, `best-practices`, `decisions`.
 
 Legacy flat files (pre-migration) may still exist:
 - `pitfalls.md` / `conventions.md` / `decisions.md` — readable via the same CLI (reported as `track: "legacy"`).

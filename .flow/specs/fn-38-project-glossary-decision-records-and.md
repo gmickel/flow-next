@@ -235,7 +235,10 @@ plugins/flow-next/scripts/glossary_smoke_test.sh
   --body "Hard to reverse: clients depend on resolution behavior. Surprising: not the obvious 'always-root' default. Trade-off: subdir flexibility vs single-source-of-truth simplicity."
 
 # Doc-aware autodetect (T3 ships this)
-[[ -f GLOSSARY.md ]] && echo "doc-aware would activate"
+# T2 leaves an `# Glossary` H1 husk on disk after the last term is removed (R18 — never deletes
+# the file), so a plain `[[ -f GLOSSARY.md ]]` would falsely activate doc-aware mode on a husk.
+# Use the JSON shape from T2: `total_terms > 0` ignores empty husks deterministically.
+.flow/bin/flowctl glossary list --json | jq '.total_terms > 0'
 .flow/bin/flowctl memory list --track knowledge --category decisions --json | jq '.entries | length'
 
 # R17 terminology guard (T7 ships this)

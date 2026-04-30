@@ -20,7 +20,7 @@ Per `docs-gap-scout` findings (gathered during planning), update in this order:
 
 1. **CHANGELOG.md** — new `## [flow-next 0.39.0] - YYYY-MM-DD` block above 0.38.2. Sections:
    - `### Added`: GLOSSARY.md artifact + flowctl glossary subcommands; knowledge/decisions/ category + frontmatter fields; /flow-next:interview --docs/--no-docs autodetect; doc-aware behaviors (a/b/c/d).
-   - `### Changed`: docs-gap-scout extends scan; /flow-next:audit walks glossary terms + decisions; /flow-next:sync detects glossary renames AND surfaces decision overrides read-only (never auto-supersedes; husks + superseded entries skipped); R17 grep guard added. <!-- Updated by plan-sync: fn-38.6 shipped Phase 3b with explicit read-only contract for decisions + husk-skip rule (file_count==0 OR total_terms==0) -->
+   - `### Changed`: docs-gap-scout extends scan; /flow-next:audit walks glossary terms + decisions; /flow-next:sync detects glossary renames AND surfaces decision overrides read-only (never auto-supersedes; husks + superseded entries skipped); two-tier R17 + R4 grep guard added (canonical `ci_test.sh` section 5c scans skills/agents/commands/flowctl.py with file:line on hit; mirror `sync-codex.sh` validation block scans `plugins/flow-next/codex/` with count + remediation hint). <!-- Updated by plan-sync: fn-38.6 shipped Phase 3b with explicit read-only contract for decisions + husk-skip rule (file_count==0 OR total_terms==0); fn-38.7 shipped two-tier guard covering both R17 vocab AND R4 meta-file refs -->
    - `### Notes`: closed-epic foundations (fn-30 / fn-34 / fn-36 / fn-15-96t); explicitly call out R18 (uninstall survival) since it's a tenet-driven design choice.
 
 2. **CLAUDE.md** (lines 19-27, 65-86, ~97):

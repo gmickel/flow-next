@@ -7,7 +7,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 ## Available Commands
 
 ```
-init, detect, status, config, review-backend, memory, prospect,
+init, detect, status, config, review-backend, memory, prospect, glossary,
 epic, task, dep, show, epics, tasks, list, cat, ready, next, start, done, block,
 state-path, migrate-state, validate, triage-skip,
 checkpoint, prep-chat,
@@ -504,6 +504,10 @@ Manage persistent learnings under `.flow/memory/`.
 
 **Schema (v0.33.0+):** Categorized YAML — one entry per file under `bug/<category>/*.md` or `knowledge/<category>/*.md`. Frontmatter: `title`, `date`, `track`, `category`, `module`, `tags`, plus track-specific fields (`problem_type` / `root_cause` / `resolution_type` for `bug`; `applies_when` for `knowledge`). Optional `status: active|stale`, `last_audited`, `audit_notes`.
 
+**Knowledge categories:** `architecture-patterns`, `conventions`, `tooling-decisions`, `workflow`, `best-practices`, `decisions` (the last shipped in 0.39.0 for load-bearing architectural choices). Decision entries may add three optional fields: `decision_status` (enum: `proposed | accepted | superseded`), `superseded_by` (id reference), `alternatives_considered` (free-form prose). Body convention: 1–3 sentence floor describing trade-offs, irreversibility, and surprise factor.
+
+**Bug categories:** `build-errors`, `test-failures`, `runtime-errors`, `performance`, `security`, `integration`, `data`, `ui`.
+
 Enable: `flowctl config set memory.enabled true`. Then `flowctl memory init`.
 
 ```bash
@@ -611,6 +615,62 @@ flowctl prospect archive <artifact-id> [--json]
 `promote` allocates an epic via the same scan-based logic as `epic create`, inlining the spec write so the prospect-context spec lands on disk from the first byte. Idempotency guard: refuses if `promoted_to` already includes the target idea — pass `--force` to override.
 
 Exit codes: corrupt artifact on `read`/`promote` → 3 (stderr `[ARTIFACT CORRUPT: <reason>]`); duplicate idea on `promote` without `--force` → 2; Ralph-block (`REVIEW_RECEIPT_PATH` / `FLOW_RALPH=1`) on `/flow-next:prospect` → 2.
+
+### glossary
+
+Manage `GLOSSARY.md` — the project's canonical terminology file. Lives at the **repo root** (and optionally subdirectories), NOT inside `.flow/`. Survives `rm -rf .flow/` (R18 — terminology is the project's, not flow-next's).
+
+**Format:** H2-per-term markdown aligned with `open-gitops/documents` and `glossarify-md` so generic markdown tooling reads it cleanly.
+
+**Resolution:** Nearest-ancestor walk from cwd up to repo root, first match wins (same shape as `tsconfig.json` / EditorConfig). Cap 32 levels with cycle detection (constant: `GLOSSARY_WALK_MAX_DEPTH`). Fenced code blocks inside definitions are masked during parse so example terms in code don't get parsed as headings.
+
+```bash
+# Add or update a term — single-line definition
+flowctl glossary add <term> --definition "Short definition." [--json]
+
+# Add or update a term — multi-line definition from a file
+flowctl glossary add <term> --definition-file body.md [--json]
+
+# Add or update a term — multi-line definition from stdin
+flowctl glossary add <term> --definition-file - [--json]
+
+# Optional alias / cross-reference flags (comma-separated)
+flowctl glossary add <term> --definition "..." \
+  --avoid "alt1,alt2"          # rendered as `_Avoid_:` italic line
+  --relates-to "x,y"           # rendered as `_Relates to_:` italic line
+
+# List defined terms across every GLOSSARY.md on the ancestor chain (nearest first)
+flowctl glossary list [--json]
+
+# Read a term — walks ancestors, first match wins
+flowctl glossary read <term> [--json]
+
+# Remove a term — last-term remove leaves an `# Glossary` H1 husk on disk (R18)
+flowctl glossary remove <term> [--json]
+```
+
+**JSON shapes:**
+
+`glossary list --json`:
+```json
+{
+  "success": true,
+  "groups": [
+    {"path": "GLOSSARY.md", "entries": [{"term": "Epic", "definition": "...", "avoid": [], "relates_to": []}], "count": 1}
+  ],
+  "file_count": 1,
+  "total_terms": 1
+}
+```
+
+`glossary read --json`:
+```json
+{"success": true, "path": "GLOSSARY.md", "term": "Epic", "definition": "...", "avoid": [], "relates_to": []}
+```
+
+**Husk semantics:** Last-term `remove` leaves a `# Glossary` H1 husk — the file is never deleted (R18). Doc-aware autodetect should branch on `total_terms > 0` (or `file_count > 0` and any group's `count > 0`), not on `[[ -f GLOSSARY.md ]]` — the latter would falsely activate doc-aware mode on an empty husk.
+
+**Helpers (Python imports):** Downstream skills should call the subcommands rather than reimplementing parsing, but the building blocks are exposed for ad-hoc reuse: `find_nearest_glossary` / `find_all_glossaries` / `parse_glossary_file` / `render_glossary_file` / `validate_glossary_entry` / `_glossary_term_matches` / `_glossary_strip_fenced_code`. Constants: `GLOSSARY_FILE` (`"GLOSSARY.md"`), `GLOSSARY_WALK_MAX_DEPTH` (`32`).
 
 ### triage-skip
 
