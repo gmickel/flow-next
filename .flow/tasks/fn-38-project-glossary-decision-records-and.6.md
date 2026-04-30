@@ -37,5 +37,8 @@ Extend `/flow-next:sync` (plan-sync) drift detection to catch glossary-term rena
 - [ ] Manual smoke: run `/flow-next:sync` on a branch with a glossary-term rename in code; verify spec updates land. Run on a branch that violates a decision constraint; verify the decision id surfaces in the report.
 
 ## Done summary
-
+Extended `/flow-next:sync` and the `plan-sync` agent to surface drift signals from project glossaries and active decision records. Sync skill now gathers `flowctl glossary list --json` + `flowctl memory list --track knowledge --category decisions --json` and passes both as `GLOSSARY_JSON`/`DECISIONS_JSON` to the agent; plan-sync gains Phase 3b which (a) renames `_Avoid_` aliases in downstream specs to canonical terms with a breadcrumb when the completed task's code uses the canonical, and (b) flags decision ids whose `Consequences`-referenced files were touched contradictorily — read-only, no auto-supersession. Husks and superseded decisions skipped. Codex mirror regenerated; R17 clean; all six smoke suites green (477/477 combined).
 ## Evidence
+- Commits: 43db08b955a23d9205b9da636e508d4814eeb8ac
+- Tests: scripts/sync-codex.sh (clean, 21 skills + 21 agents + hooks), grep -RnE 'ubiquitous language|bounded context|domain expert|aggregate root' across plugins/flow-next/{skills,agents,commands,scripts/flowctl.py} (R17 PASS), plugins/flow-next/scripts/smoke_test.sh (130/130 pass), plugins/flow-next/scripts/glossary_smoke_test.sh (80/80 pass), plugins/flow-next/scripts/audit_smoke_test.sh (41/41 pass), plugins/flow-next/scripts/prospect_smoke_test.sh (94/94 pass), plugins/flow-next/scripts/resolve-pr_smoke_test.sh (58/58 pass), plugins/flow-next/scripts/impl-review_smoke_test.sh (74/74 pass)
+- PRs:
