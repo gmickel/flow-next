@@ -12,6 +12,8 @@ For each entry, classify into exactly one outcome. Calibration below is specific
 
 For **autofix mode** ambiguity: mark as stale via `flowctl memory mark-stale` instead of guessing.
 
+The 5 outcomes apply to every categorized entry, including the `knowledge/decisions/` category (fn-38 schema extension). Decision entries reuse the same classifier with a tighter judging question and a different shape for `Replace` — see the [Decision-entry calibration](#decision-entry-calibration) section below.
+
 ---
 
 ## Keep
@@ -227,6 +229,81 @@ That's it. No archive directory, no metadata flag. Git history preserves the fil
 
 ---
 
+## Decision-entry calibration
+
+Entries under `knowledge/decisions/` (fn-38 schema) document forward-looking choices: the project picked approach X, considered Y and Z, and committed to a constraint. The 5 outcomes still apply, but the per-entry judging question changes — and `Replace` means **supersede**, not rewrite-in-place.
+
+### Per-entry judging question
+
+For non-decision entries, Phase 1 asks "is this still relevant?". For decision entries, ask:
+
+> **Does the constraint that motivated this decision still hold?**
+
+The constraint is whatever made the decision hard-to-reverse, surprising-without-context, and a real trade-off when it was made. If the constraint is still in force, the decision is still active. If the constraint has dissolved (the trade-off no longer exists, the surprising context is now the obvious default, the codebase changed shape so reversal is now cheap), the decision is a candidate for supersession.
+
+### Decision-specific frontmatter
+
+Decision entries may carry these optional fields (see `MEMORY_DECISION_FIELDS` in `flowctl.py`):
+
+- `decision_status`: one of `proposed`, `accepted`, `superseded` (`MEMORY_DECISION_STATUSES`)
+- `superseded_by`: id of the successor entry that replaced this one
+- `alternatives_considered`: list of options that were rejected when the decision was made
+
+When auditing, treat `decision_status: superseded` as already-handled — the entry is historical record. Audit the `superseded_by` target instead. If `superseded_by` points at a missing entry, that's an Update (broken cross-reference) on this entry.
+
+### Outcome calibration for decisions
+
+| Outcome | Meaning for a decision entry | Action |
+|---------|------------------------------|--------|
+| **Keep** | Constraint still holds; rejected alternatives are still rejected for the same reasons | No edit |
+| **Update** | Constraint holds; only references / `alternatives_considered` text / cross-refs drifted | Edit in place; `decision_status` unchanged |
+| **Consolidate** | Two decision entries cover the same choice (rare — usually means a rushed double-write) | Merge into canonical, `git rm` subsumed |
+| **Replace** | Constraint no longer holds; a different choice is now in force | **Supersede** — see flow below |
+| **Delete** | The entire problem area is gone (the system that needed the decision was removed) | `git rm` (prefer Replace + supersede when problem domain still exists) |
+
+### Replace = supersede
+
+For non-decision entries, `Replace` means write a successor and `git rm` the old. For decision entries, the old entry stays — it's part of the history of why the project arrived where it is. Replace becomes a two-step supersession:
+
+1. **Write the new decision entry** — a fresh `knowledge/decisions/<slug>-<date>.md` describing the current choice, what changed in the constraint, and why the prior decision no longer applies. Optionally include `alternatives_considered` listing both the original alternatives and the prior decision itself (now also rejected). Include `related_to: [<old-id>]` for traceability.
+2. **Mark the old entry superseded** — Edit the old entry's frontmatter to set `decision_status: superseded` and `superseded_by: <new-entry-id>`. Body untouched. Do **not** `git rm` — the historical record stays on disk.
+
+When autofix evidence is insufficient to write the successor decision (the constraint clearly dissolved but the new approach is too unstable to commit to), mark the old entry stale via `flowctl memory mark-stale` instead of half-shipping a supersession. The user (or a follow-up audit) can revisit when the new approach has settled.
+
+### Edge cases
+
+- A decision whose `decision_status` is `proposed` but never reached `accepted` (the project never committed) → if no code reflects the proposal, classify Delete; if partial implementation exists, mark stale and surface in the report.
+- A decision that references a constraint visible only in external context (a contract, a partner integration, a regulatory rule) → audit cannot verify the constraint from code alone. Skip with a "cannot mechanically verify" note in the report; do not auto-Delete.
+- A decision pointing at `superseded_by: <id>` where the successor itself is now superseded → walk the chain; the audit target is the head of the chain.
+
+---
+
+## Glossary scan (parallel to memory audit)
+
+Glossary terms are not memory entries — they live in `GLOSSARY.md` files at the repo root and (optionally) under subdirectories. The audit walks them in [Phase 0.5](workflow.md) of the workflow. The 5-outcomes table doesn't apply directly; the per-term decisions are simpler:
+
+| Outcome | Meaning for a glossary term | Action |
+|---------|-----------------------------|--------|
+| **Keep** | Term has hits in tracked code (case-insensitive whole-word match) | No edit |
+| **Mark stale** | Zero hits for the term AND zero hits for any `_Avoid_` alias | Edit tool: append `<!-- stale: <reason> -->` HTML comment after the term heading |
+| **Alias-creep** | An `_Avoid_` alias has hits in code | Phase 3 question (interactive) or stale-flag note (autofix) — propose renaming code uses to the canonical term, or moving the alias out of `_Avoid_` |
+
+There is no `flowctl glossary mark-stale` subcommand. Stale-marking is an Edit-tool operation only. The agent must **never delete** the term entry on stale-detection — deletion is the operator's call, surfaced as a recommendation in the report.
+
+### Husk awareness
+
+A glossary file with `count: 0` from `flowctl glossary list --json` is a husk — `# Glossary` H1 with no terms after the last term was removed. Husks have no terms to audit; skip the walk for that file and surface a single advisory in Phase 5:
+
+```
+GLOSSARY.md at <path> is an empty husk (no terms defined).
+Remove the file manually if it's no longer needed; flow-next keeps it as
+project state per fn-38 R18.
+```
+
+The audit never deletes the file. Removing it is a project decision, not a memory-audit decision.
+
+---
+
 ## Mark stale (autofix ambiguous + Replace-insufficient)
 
 **Not** one of the 5 outcomes — it's the autofix-mode escape hatch and the Replace-insufficient-evidence fallback. Surface in the report under "Marked stale" with the reason.
@@ -259,6 +336,12 @@ Re-mark-stale on an already-stale entry updates `last_audited` + `audit_notes`. 
 ## Decision tree (quick reference)
 
 ```
+Is the entry under knowledge/decisions/?
+ yes → use the Decision-entry calibration block above
+ (judging question = "does the constraint still hold?";
+ Replace = supersede, not git rm)
+ no → continue with the standard tree below
+
 Is the entry's referenced code AND problem domain both gone?
  yes → Delete (auto-applicable when ALL auto-Delete criteria hold)
  no → continue
@@ -279,3 +362,5 @@ Are there reference drifts (paths, modules, links, snippets)?
 ```
 
 In autofix mode, replace any "ask user" branch with mark-stale.
+
+For glossary terms (separate from memory entries — see [Glossary scan](#glossary-scan-parallel-to-memory-audit) above): the tree is `code-hit? → Keep`; `no code-hit AND no alias-hit? → mark stale via Edit tool`; `alias hit in code? → Phase 3 question (interactive) or stale-flag note (autofix)`.

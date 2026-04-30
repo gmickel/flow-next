@@ -42,6 +42,8 @@ For each kept path, read the frontmatter (parser pattern from `prospect/workflow
 
 If the entry's `status` is `stale` already, surface it in the report under "Already stale" and skip investigation in autofix mode (mark-stale is idempotent — re-marking adds noise). In interactive mode, offer to refresh-investigate (rare path; user-driven).
 
+**Decisions are auto-walked.** `MEMORY_CATEGORIES["knowledge"]` includes `decisions` (fn-38 schema extension), so the glob in §0.1 picks up `.flow/memory/knowledge/decisions/*.md` automatically — no separate phase. Decision entries get a calibrated judging question and a different `Replace` shape; see [phases.md](phases.md) §Decision-entry calibration. Decision-specific frontmatter (`decision_status`, `superseded_by`, `alternatives_considered`) is captured into the entry record for Phase 1 to use; entries with `decision_status: superseded` are surfaced as historical record and skipped (the audit target is the successor, not the superseded entry).
+
 ### 0.2 — Detect legacy flat files
 
 ```bash
@@ -126,6 +128,155 @@ Options:
 - `ENTRIES` (the in-memory list) is finalized for this run.
 - Legacy skip count is captured for the eventual report.
 - `MODE` × `TOTAL` × `SCOPE` resolution is clear (route picked).
+
+---
+
+## Phase 0.5: Glossary scan
+
+**Goal:** for every glossary file on the ancestor chain, verify each term has at least one usage in tracked code (term itself or any `_Avoid_` alias). Mark stale on absence; surface alias-creep as a Phase 3 signal.
+
+This phase runs in parallel concept to the memory walk — same audit invocation, separate scope. Glossary files are project state (not flow-next bookkeeping; see fn-38 R18). Skip the phase entirely when `flowctl glossary list --json` reports zero files.
+
+### 0.5.1 — Enumerate glossaries
+
+Use the flowctl helper as the single source of truth:
+
+```bash
+GLOSSARY_JSON="$("$FLOWCTL" glossary list --json 2>/dev/null || echo '{"groups":[],"file_count":0,"total_terms":0}')"
+```
+
+JSON shape (fn-38 task 2):
+
+```json
+{
+ "groups": [
+ {
+ "path": "/abs/path/GLOSSARY.md",
+ "entries": [
+ {
+ "term": "<canonical>",
+ "definition": "<one-line>",
+ "avoid": ["<alias-1>", "<alias-2>"],
+ "relates_to": ["<other-term>"]
+ }
+ ],
+ "count": 1
+ }
+ ],
+ "file_count": 1,
+ "total_terms": 1
+}
+```
+
+When `file_count == 0`, skip Phase 0.5 entirely. When `total_terms == 0` but `file_count > 0`, every group is a husk (see §0.5.4).
+
+### 0.5.2 — Per-term code search
+
+For each `(group, entry)` where `count > 0`:
+
+1. **Build the search corpus** — tracked source files only. Use `git ls-files` to honor `.gitignore`; exclude `.flow/`, the glossary file itself, and known build artifacts:
+
+ ```bash
+ git -C "$REPO_ROOT" ls-files -z \
+ | grep -zvE '^\.flow/|/GLOSSARY\.md$|^GLOSSARY\.md$|/node_modules/|/\.git/' \
+ > /tmp/glossary-corpus.zlist
+ ```
+
+ On platforms where Bash file ops gate behind permissions, the host agent should fall back to Glob with the equivalent exclusion pattern.
+
+2. **Search for the term** — case-insensitive, whole-word match (matches T2's `_glossary_term_matches` invariant). Normalize whitespace in the term first (collapse runs of whitespace to a single space), then anchor with `\b`:
+
+ ```bash
+ TERM_NORM="$(printf '%s' "$term" | tr -s '[:space:]' ' ')"
+ TERM_HITS=$(xargs -0 grep -liEw -- "$(printf '%s' "$TERM_NORM" | sed 's/[][\.*^$\/]/\\&/g')" \
+ < /tmp/glossary-corpus.zlist 2>/dev/null | wc -l | tr -d ' ')
+ ```
+
+ The agent may also use the Grep tool directly with an equivalent pattern; either path is fine.
+
+3. **Search for each `_Avoid_` alias** — same matching rule. Aggregate alias hits per-alias so the report can name the offending alias.
+
+4. **Decide:**
+
+ | Term hits | Any alias hits | Outcome |
+ |-----------|----------------|---------|
+ | ≥1 | (n/a) | **Keep** — record reviewed-without-change |
+ | 0 | 0 | **Mark stale** — Edit tool, append HTML comment after the term heading |
+ | 0 | ≥1 | **Mark stale + alias-creep flag** — same Edit, plus surface to Phase 3 (interactive) or report (autofix) |
+ | ≥1 | ≥1 | **Alias-creep flag only** — term is alive but an alias is being used in code; do not mark stale |
+
+### 0.5.3 — Stale-marking via Edit tool
+
+There is no `flowctl glossary mark-stale` subcommand. fn-38 task 2 shipped only `add / list / read / remove`; stale-marking is an Edit-tool operation on the glossary file directly.
+
+The Edit appends an HTML comment immediately after the term heading line (preserves the body untouched, never deletes the entry). The comment lives between the heading and the definition paragraph so a casual reader sees it and `flowctl glossary list` still parses cleanly:
+
+```text
+## <Term>
+
+<!-- stale: zero hits in tracked code on <YYYY-MM-DD> (audited-by: /flow-next:audit) -->
+
+<one-line definition>
+
+_Avoid_: alias-1, alias-2
+```
+
+Idempotency: when the heading already has a `<!-- stale: ... -->` comment immediately following, replace the comment in place rather than stacking. Use `Edit` with `old_string` matching the existing comment line.
+
+**The agent must not delete the term entry on stale-detection.** Deletion is the operator's call. The audit surfaces it as a Phase 5 recommendation:
+
+```
+Recommended manual review: GLOSSARY.md term "<term>" has no code hits.
+Stale comment added; consider `flowctl glossary remove <term>` if the concept is gone.
+```
+
+### 0.5.4 — Husk awareness
+
+A glossary file with `count: 0` (the file is `# Glossary` H1 followed by no term entries — left intact after the last term was removed; see fn-38 task 2 R18) skips the per-term walk. Surface a single Phase 5 advisory per husk:
+
+```
+GLOSSARY.md at <relative path> is an empty husk (no terms defined).
+flow-next keeps it as project state per fn-38 R18 — remove it manually if no
+longer needed.
+```
+
+The audit never deletes the file.
+
+### 0.5.5 — Alias-creep handling
+
+When a term has alias hits in code (whether or not the canonical term also has hits):
+
+- **Interactive (Phase 3):** present per alias as a question. Lead with the recommendation:
+
+ ```
+ Glossary term: "<term>" (defined in <relative path>)
+ _Avoid_ alias "<alias>" appears in tracked code at <file:line> (and N other locations).
+
+ Options:
+ 1. Rename the code uses to "<term>" (recommended)
+ 2. Drop "<alias>" from the _Avoid_ list (alias is now acceptable)
+ 3. Skip — surface in report only
+ ```
+
+ Option 1 is a code-edit recommendation only — the audit reports the locations; the operator handles the rename. (Mass-renaming code from a memory audit is out of scope.)
+ Option 2 is an Edit on the glossary file: remove the alias from the `_Avoid_` list while preserving the rest of the entry.
+
+- **Autofix:** never auto-rename code. Surface the alias-creep finding in the report under "Recommended" with file:line locations. The agent does not Edit the glossary unless the term itself is also stale (in which case the stale comment captures the alias-creep too).
+
+### 0.5.6 — Carry into Phase 5 report
+
+Capture the per-term outcomes into a glossary section of the report (see §5.1 below). Counts:
+
+- `glossary_kept` — terms with code hits.
+- `glossary_marked_stale` — terms with zero code hits and zero alias hits, stale comment applied.
+- `glossary_alias_creep` — terms whose `_Avoid_` aliases hit code (regardless of canonical hit count).
+- `glossary_husks` — files with `count: 0`.
+
+### Done when
+
+- Every glossary group with `count > 0` has every term decided (Keep / mark stale / alias-creep).
+- Every husk file has a queued advisory.
+- The orchestrator has a glossary-side decision map alongside the memory-side investigation map.
 
 ---
 
@@ -417,6 +568,25 @@ When evidence is insufficient:
 2. Report what evidence was found and what's missing.
 3. Recommend the user run a domain-specific solve afterwards to capture fresh context.
 
+**Replace flow for `knowledge/decisions/` entries** — the old entry is **not** `git rm`'d. Decision history stays on disk. Two-step supersession:
+
+1. Subagent (or orchestrator on the main thread for short successors) writes the new decision entry under `.flow/memory/knowledge/decisions/<slug>-<date>.md`. Include `related_to: [<old-id>]` and, when known, `alternatives_considered` listing both the original alternatives and the prior decision (now also rejected).
+2. Orchestrator edits the old entry's frontmatter via Write tool: set `decision_status: superseded` and `superseded_by: <new-entry-id>`. Body untouched. Other frontmatter fields preserved (round-trip rules from §4.2 apply).
+
+Insufficient evidence on a decision Replace routes to mark-stale on the old entry — same path as non-decision Replace, but the operator's follow-up is "draft the new decision when the constraint settles" rather than "research the new code shape."
+
+### 4.4.1 — Glossary stale-marking (Phase 0.5 outcomes)
+
+For each glossary term flagged "Mark stale" in Phase 0.5, the orchestrator applies the Edit on the main thread (no subagent — short, focused edits):
+
+1. Open the glossary file via Read.
+2. Edit the line immediately after the `## <Term>` heading. If a `<!-- stale: ... -->` comment already exists there, replace it (idempotent re-mark). Otherwise insert it as a new line above the definition paragraph.
+3. The comment text is `<!-- stale: zero hits in tracked code on <YYYY-MM-DD> (audited-by: /flow-next:audit) -->`.
+
+Glossary edits stage in the same git context as memory edits (Phase 5 picks the commit strategy uniformly across both).
+
+For alias-creep findings without a stale-flag (term has hits, but `_Avoid_` alias also has hits), the orchestrator does **not** edit the glossary in autofix mode. Interactive mode may edit only if the user picks "Drop the alias from `_Avoid_`" in Phase 3. Code renames are out of scope — the audit reports file:line locations and stops there.
+
 ### 4.5 — Delete flow
 
 ```bash
@@ -466,6 +636,14 @@ Replaced: <Z>
 Deleted: <W>
 Marked stale: <S>
 Skipped (no decision): <U>
+
+Glossary
+--------
+Files scanned: <file_count> (<husk_count> husks)
+Terms scanned: <total_terms>
+Kept: <glossary_kept>
+Marked stale: <glossary_marked_stale>
+Alias-creep flagged: <glossary_alias_creep>
 ```
 
 Then per-entry detail (one block each):
@@ -479,9 +657,22 @@ Then per-entry detail (one block each):
  Action: <what was done — file edits, deletions, mark-stale calls>
  [Consolidate only] Canonical: <entry_id>; merged: [<list>]; deleted: [<list>]
  [Replace only] Old guidance: <one-line>; New entry: <new_id>
+ [Decision Replace] Successor: <new_id>; old marked decision_status=superseded (NOT git-rm'd)
 ```
 
 For **Keep** outcomes, group under a "Reviewed without edits" subsection so the result is visible without git churn.
+
+Then per-glossary-term detail (only for stale + alias-creep cases — Keep is silent):
+
+```
+- <relative-path>:<term>
+ Outcome: <Marked stale|Alias-creep|Marked stale + alias-creep>
+ Term hits: <N>
+ Alias hits: <alias-1>: <N1>, <alias-2>: <N2>
+ Action: <Edit applied|None — recommendation only>
+```
+
+Husk advisories (one per file with `count: 0`) follow under a "Glossary husks" subsection.
 
 ### 5.2 — Autofix two-section split
 
@@ -686,14 +877,15 @@ If step 6.4 produced an instruction-file edit AND Phase 5 already committed audi
 
 The skill itself is markdown — there's no unit-test surface. The validation is invoking `/flow-next:audit` in a real session. Expected behavior:
 
-- Phase 0 walks `.flow/memory/`, lists per-cluster counts, reports legacy skip count if `pitfalls.md` etc. exist.
+- Phase 0 walks `.flow/memory/`, lists per-cluster counts, reports legacy skip count if `pitfalls.md` etc. exist. Decision entries (`knowledge/decisions/`) are picked up automatically once the schema extension lands (fn-38 task 1).
+- Phase 0.5 walks every `GLOSSARY.md` on the ancestor chain via `flowctl glossary list --json`, greps tracked code per-term + per-`_Avoid_` alias, marks zero-hit terms stale via Edit tool with `<!-- stale: ... -->`, surfaces alias-creep, advises on husks.
 - Phase 1 produces evidence per entry. For 3+ entries, parallel investigation subagents run.
-- Phase 2 classifies; Replace candidates with insufficient evidence reclassify as mark-stale.
-- Phase 3 (interactive) groups Keeps / Updates for batched confirmation; presents Consolidate / Replace / Delete individually via blocking-question tool.
-- Phase 4 executes via Write / `flowctl memory mark-stale` / `git rm`.
-- Phase 5 prints the report; offers commit options based on git context.
+- Phase 2 classifies; Replace candidates with insufficient evidence reclassify as mark-stale. Decision entries use the calibrated judging question and the supersede shape for Replace.
+- Phase 3 (interactive) groups Keeps / Updates for batched confirmation; presents Consolidate / Replace / Delete and glossary alias-creep individually via blocking-question tool.
+- Phase 4 executes via Write / `flowctl memory mark-stale` / `git rm`. Decision Replace = supersede (write new + edit old's `decision_status` + `superseded_by`; never `git rm`). Glossary stale = Edit comment after term heading.
+- Phase 5 prints the report (memory section + glossary section + husk advisories); offers commit options based on git context.
 - Phase 6 checks CLAUDE.md / AGENTS.md for `.flow/memory/` mention; offers minimal addition if missing.
 
-In autofix mode (`/flow-next:audit mode:autofix`), Phase 3 is skipped, ambiguous entries are marked stale, and the report is the sole deliverable.
+In autofix mode (`/flow-next:audit mode:autofix`), Phase 3 is skipped, ambiguous entries are marked stale, glossary alias-creep surfaces as a recommendation only, and the report is the sole deliverable.
 
-If Phase 0 produces nothing (no categorized entries, only legacy), the skill exits cleanly with the legacy-skip count.
+If Phase 0 produces nothing (no categorized entries, only legacy) AND Phase 0.5 produces nothing (no glossary files), the skill exits cleanly with the legacy-skip count.

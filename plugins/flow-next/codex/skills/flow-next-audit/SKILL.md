@@ -11,6 +11,8 @@ Memory entries decay. A `.flow/memory/bug/runtime-errors/` entry logged six mont
 
 This skill IS the audit. The host agent (Claude Code / Codex / Droid) walks `.flow/memory/`, reads each entry, uses Read/Grep/Glob/git to verify references against the current codebase, applies engineering judgment, and decides per entry whether to **Keep / Update / Consolidate / Replace / Delete**. Optional autofix mode applies unambiguous actions and marks ambiguous as stale.
 
+Decision entries (`.flow/memory/knowledge/decisions/`) and glossary terms (`GLOSSARY.md` files at the repo root and on the ancestor chain) are walked alongside the rest of memory. Decisions get a calibrated judging question — "does the constraint that motivated this choice still hold?" — and Replace becomes a two-step supersession (write successor, mark old `decision_status: superseded`, never `git rm`). Glossary terms are scanned for code usage; zero-hit terms get a `<!-- stale: ... -->` HTML comment via Edit tool (no `flowctl glossary mark-stale` exists), `_Avoid_` aliases appearing in code surface as alias-creep findings.
+
 There is no Python audit-engine, no codex/copilot subprocess dispatch, no deterministic scorer. The host agent is already an LLM and does the work directly. flowctl provides only thin persistence plumbing (`memory mark-stale`, `memory mark-fresh`, `memory search --status`) — landed by Task 2 of this epic.
 
 **Read [workflow.md](workflow.md) for the full phase-by-phase execution. Read [phases.md](phases.md) for the 5-outcomes lookup with memory-schema-specific calibration.**
@@ -73,7 +75,10 @@ The goal is automated maintenance with human oversight on judgment calls — not
 - **Auditing legacy flat files** (`.flow/memory/pitfalls.md`, `conventions.md`, `decisions.md` at the memory root). Skip with a warning that recommends `/flow-next:memory-migrate` first. Report includes the skipped count.
 - **Auditing under `_audit/`, `_review/`, or any other `_*` directory** under `.flow/memory/`.
 - **Deleting silently.** Delete is reserved for unambiguous cases (code gone AND problem domain gone). Default to Replace or Consolidate when there's still value to preserve.
-- **Inventing flowctl subcommands** beyond what Task 2 ships (`memory mark-stale`, `memory mark-fresh`, `memory search --status`). Use Write tool + git for moves and deletes.
+- **`git rm` on superseded decision entries.** Decision history stays on disk. Replace for `knowledge/decisions/` entries means write a new entry and mark the old `decision_status: superseded` with `superseded_by: <new-id>` — never delete the old file.
+- **Deleting glossary terms.** When a term has zero code hits, mark stale via Edit-tool HTML comment. Removing the term entry is the operator's call, surfaced in the report.
+- **Inventing flowctl subcommands** beyond what fn-34 task 2 ships (`memory mark-stale`, `memory mark-fresh`, `memory search --status`). fn-38 task 2 ships only `glossary {add,list,read,remove}` — there is no `flowctl glossary mark-stale`; use Edit tool. Use Write tool + git for moves and deletes.
+- **Mass-renaming code from a glossary alias-creep finding.** The audit reports file:line locations and stops there; code rename is the operator's call.
 - **Auto-committing without user awareness in interactive mode.** Phase 5 detects git context and asks. Autofix uses sensible defaults.
 - **Setting `context: fork`** — blocking-question tools must stay reachable.
 - **Running parallel replacement subagents.** Investigation subagents can run in parallel for 3+ independent entries; replacement subagents run sequentially to protect orchestrator context.
@@ -98,13 +103,14 @@ fi
 
 Execute the phases in [workflow.md](workflow.md) in order:
 
-0. **Discover & Triage** — walk `.flow/memory/{bug,knowledge}/<category>/`, group by module / category, count, choose interaction path (focused / batch / broad), skip legacy + `_*` directories with a counted warning.
-1. **Investigate** — per entry: read frontmatter + body, verify referenced files / symbols / modules against current code via Read / Grep / Glob, check git log in the area, form Keep / Update / Consolidate / Replace / Delete recommendation with 2-4 evidence bullets and confidence. For 3+ independent entries, dispatch parallel investigation subagents (read-only).
+0. **Discover & Triage** — walk `.flow/memory/{bug,knowledge}/<category>/`, group by module / category, count, choose interaction path (focused / batch / broad), skip legacy + `_*` directories with a counted warning. `knowledge/decisions/` entries are picked up automatically by the same glob.
+0.5 **Glossary scan** — enumerate `GLOSSARY.md` files via `flowctl glossary list --json`; per term, grep tracked code for the term and each `_Avoid_` alias (case-insensitive whole-word, normalized whitespace); zero hits + zero alias hits → mark stale via Edit tool (HTML comment after the term heading); alias hits → surface as alias-creep finding for Phase 3 (interactive) or report (autofix); skip husk files (`count: 0`) with a single advisory.
+1. **Investigate** — per entry: read frontmatter + body, verify referenced files / symbols / modules against current code via Read / Grep / Glob, check git log in the area, form Keep / Update / Consolidate / Replace / Delete recommendation with 2-4 evidence bullets and confidence. For 3+ independent entries, dispatch parallel investigation subagents (read-only). Decision entries use the calibrated judging question — "does the constraint still hold?" — see [phases.md](phases.md) §Decision-entry calibration.
 1.75 **Cross-doc analysis** — compare entries sharing module / category for overlap (problem, solution, root cause, files), supersession (newer canonical entry covers older narrower precursor), contradictions.
-2. **Classify** — apply [phases.md](phases.md) decision criteria. For Replace, verify evidence is sufficient to write a trustworthy successor; mark stale otherwise.
-3. **Ask** — interactive only; autofix skips. Group obvious Keeps + Updates → confirm batch. Present Consolidate / Replace / non-auto-Delete individually. Lead with recommendation. One question at a time.
-4. **Execute** — Keep: no edit. Update: agent edits frontmatter / body via Write tool, preserving unknown fields. Consolidate: merge unique content into canonical, `git rm` subsumed. Replace: write new entry, `git rm` old. Delete: `git rm` (only when code AND problem domain both gone). Ambiguous in autofix: `flowctl memory mark-stale`.
-5. **Report + Commit** — print Kept / Updated / Consolidated / Replaced / Deleted / Marked-stale / Skipped counts plus per-entry detail. Detect git context (current branch, dirty tree). Interactive: ask commit options. Autofix: branch-and-PR on main, commit on feature branch, stage only audit-modified files.
+2. **Classify** — apply [phases.md](phases.md) decision criteria. For Replace, verify evidence is sufficient to write a trustworthy successor; mark stale otherwise. For decision entries, Replace = supersede (write new entry; mark old `decision_status: superseded`, `superseded_by: <new-id>`; never `git rm` the old).
+3. **Ask** — interactive only; autofix skips. Group obvious Keeps + Updates → confirm batch. Present Consolidate / Replace / non-auto-Delete individually. Surface glossary alias-creep findings per alias. Lead with recommendation. One question at a time.
+4. **Execute** — Keep: no edit. Update: agent edits frontmatter / body via Write tool, preserving unknown fields. Consolidate: merge unique content into canonical, `git rm` subsumed. Replace: write new entry, `git rm` old (decisions: write new + edit old's frontmatter to mark superseded, never `git rm`). Delete: `git rm` (only when code AND problem domain both gone). Glossary stale: Edit comment after term heading. Ambiguous in autofix: `flowctl memory mark-stale`.
+5. **Report + Commit** — print Kept / Updated / Consolidated / Replaced / Deleted / Marked-stale / Skipped counts plus per-entry detail and a Glossary section (Kept / Marked stale / Alias-creep / Husks). Detect git context (current branch, dirty tree). Interactive: ask commit options. Autofix: branch-and-PR on main, commit on feature branch, stage only audit-modified files.
 6. **Discoverability check** — verify the substantive CLAUDE.md / AGENTS.md (the one not just `@`-including the other) mentions `.flow/memory/` with schema basics (track / category / module / tags / status) and when to consult. Add a minimal line if missing — interactive asks consent, autofix surfaces as recommendation.
 
 ## Output rules
@@ -125,8 +131,16 @@ Consolidated: C
 Replaced: Z
 Deleted: W
 Marked stale: S
+
+Glossary
+--------
+Files scanned: F (H husks)
+Terms scanned: T
+Kept: K_g
+Marked stale: S_g
+Alias-creep flagged: A_g
 ```
 
-Then per-entry detail (id, classification, evidence, action taken). For Consolidate: which entry was canonical, what unique content was merged, what was deleted. For Replace: what the old entry recommended vs what current code does, path to successor. For Marked stale: why ambiguous.
+Then per-entry detail (id, classification, evidence, action taken). For Consolidate: which entry was canonical, what unique content was merged, what was deleted. For Replace: what the old entry recommended vs what current code does, path to successor (decision Replace also notes the old entry now carries `decision_status: superseded`). For Marked stale: why ambiguous. For glossary terms: only stale + alias-creep cases get per-term lines (Keep is silent); husks get a one-line advisory each.
 
 Autofix mode splits actions into **Applied** (writes succeeded) and **Recommended** (writes failed — e.g. permission denied). The structure is the same; only the bucket differs.
