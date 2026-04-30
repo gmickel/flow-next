@@ -37,5 +37,8 @@ Extend the `docs-gap-scout` agent to scan `GLOSSARY.md` (root + subdirectories) 
 - [ ] Manual smoke: invoke `docs-gap-scout` on a planned change touching a glossary-defined term; verify glossary entry surfaces in scout output
 
 ## Done summary
-
+Extended `docs-gap-scout` to scan `GLOSSARY.md` (root + subdirs via `flowctl glossary list --json` with raw `find` fallback, skipping husks where `count: 0`) and `.flow/memory/knowledge/decisions/`, plus added "Glossary term touched" and "Decision constraint" rows to the change-type → doc-update mapping. Codex mirror regenerated via `sync-codex.sh` (clean), R17 grep clean (no DDD jargon).
 ## Evidence
+- Commits: d1823b60f7f4e1775ad47562328b2037891c5221
+- Tests: scripts/sync-codex.sh (21 skills, 21 agents, hooks.json — clean), plugins/flow-next/scripts/smoke_test.sh from /tmp dir (130/130 pass), grep -RnE 'ubiquitous language|bounded context|domain expert|aggregate root' across plugins/flow-next/{skills,scripts/flowctl.py,agents,commands,codex} → PASS (no matches)
+- PRs:

@@ -30,7 +30,7 @@ Per `docs-gap-scout` findings (gathered during planning), update in this order:
 
 3. **plugins/flow-next/README.md** (lines 24, 56, 1499, 1508, 1549, 1618, 1687, 1691, 1814, 1979, 2093):
    - What's-new callout (line ~24): v0.39.0 one-liner.
-   - Commands table interview row: doc-aware mode mentioned.
+   - Commands table interview row: doc-aware mode mentioned (autodetect + `--docs`/`--no-docs` flags + four behaviors a-d). Note the new `## Glossary Conflicts` spec section that NEW-IDEA / EXISTING-EPIC interview templates now emit when behavior (a) fires — sits next to `## Resolved via Codebase` as the audit trail for canonical-vs-user wording resolutions. <!-- Updated by plan-sync: fn-38.3 added this template section -->
    - Memory system directory tree (line ~1525): add `decisions/`.
    - Frontmatter schema: add decision-specific optional fields.
    - **New** Project Glossary section after Memory System.
