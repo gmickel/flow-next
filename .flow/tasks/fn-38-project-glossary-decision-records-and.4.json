@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-30T07:57:54.144809Z",
+  "depends_on": [
+    "fn-38-project-glossary-decision-records-and.1",
+    "fn-38-project-glossary-decision-records-and.2"
+  ],
+  "epic": "fn-38-project-glossary-decision-records-and",
+  "id": "fn-38-project-glossary-decision-records-and.4",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-38-project-glossary-decision-records-and.4.md",
+  "status": "todo",
+  "title": "docs-gap-scout extends scan to GLOSSARY.md + decisions/",
+  "updated_at": "2026-04-30T08:04:43.468189Z"
+}

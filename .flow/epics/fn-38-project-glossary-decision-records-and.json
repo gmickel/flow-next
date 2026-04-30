@@ -1,0 +1,13 @@
+{
+  "branch_name": "fn-38-project-glossary-decision-records-and",
+  "created_at": "2026-04-30T07:30:25.356337Z",
+  "depends_on_epics": [],
+  "id": "fn-38-project-glossary-decision-records-and",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-38-project-glossary-decision-records-and.md",
+  "status": "open",
+  "title": "Project glossary, decision records, and doc-aware interview",
+  "updated_at": "2026-04-30T07:57:35.789561Z"
+}

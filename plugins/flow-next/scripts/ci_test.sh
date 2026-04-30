@@ -171,6 +171,13 @@ echo -e "\n${YELLOW}--- Memory System ---${NC}"
 
 flowctl memory init --json >/dev/null && pass "memory init" || fail "memory init"
 
+# fn-38 T1: lazy-dir-create — `flowctl memory init` must materialize
+# `.flow/memory/knowledge/decisions/.gitkeep` (the directory loop walks
+# MEMORY_CATEGORIES, so the new `decisions` slot is auto-created).
+[[ -f "$TEST_DIR/.flow/memory/knowledge/decisions/.gitkeep" ]] && \
+  pass "memory init lazy-creates decisions/.gitkeep" || \
+  fail "memory init missing decisions/.gitkeep"
+
 flowctl memory add --type pitfall "Never use sync IO in async handlers" --json >/dev/null && pass "memory add pitfall" || fail "memory add pitfall"
 flowctl memory add --type convention "Use snake_case for functions" --json >/dev/null && pass "memory add convention" || fail "memory add convention"
 
@@ -178,6 +185,167 @@ MEM_LIST="$(flowctl memory list --json)"
 # memory list returns {success: true, entries: [...], legacy: [...], count: N, status: "active"}
 MEM_TOTAL="$("$PYTHON_BIN" -c "import json,sys; d=json.load(sys.stdin); print(d.get('count', 0))" <<< "$MEM_LIST")"
 [[ "$MEM_TOTAL" -ge 2 ]] && pass "memory list ($MEM_TOTAL total)" || fail "memory list (got $MEM_TOTAL)"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5b. Memory: decisions track (fn-38 task 1)
+# ─────────────────────────────────────────────────────────────────────────────
+echo -e "\n${YELLOW}--- Memory: decisions track ---${NC}"
+
+# (1) round-trip write→read of all three optional fields
+DEC_JSON="$(flowctl memory add \
+  --track knowledge --category decisions \
+  --title "Use nearest-ancestor for glossary lookup" \
+  --module flowctl \
+  --tags "glossary,resolution" \
+  --decision-status accepted \
+  --superseded-by "knowledge/decisions/foo-2026-04-30" \
+  --alternatives-considered "always-root,explicit-config,meta-file" \
+  --json)"
+DEC_ID="$("$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['entry_id'])" <<< "$DEC_JSON")"
+[[ -n "$DEC_ID" ]] && pass "memory add decisions ($DEC_ID)" || fail "memory add decisions"
+
+DEC_PATH="$("$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['path'])" <<< "$DEC_JSON")"
+[[ -f "$DEC_PATH" ]] && pass "decisions entry written to disk" || fail "decisions entry missing on disk"
+
+# Round-trip: parse the file we wrote, verify all three optional fields survived.
+"$PYTHON_BIN" - "$DEC_PATH" << 'PYTEST'
+import sys
+from pathlib import Path
+text = Path(sys.argv[1]).read_text(encoding="utf-8")
+# Crude frontmatter splitter — the schema writes flat `key: value` so a
+# line-by-line scan is enough for the round-trip assertion.
+fm: dict[str, str] = {}
+in_fm = False
+for line in text.splitlines():
+    if line.strip() == "---":
+        if in_fm:
+            break
+        in_fm = True
+        continue
+    if not in_fm or ":" not in line:
+        continue
+    k, _, v = line.partition(":")
+    fm[k.strip()] = v.strip()
+
+errors = []
+if fm.get("decision_status") != "accepted":
+    errors.append(f"decision_status round-trip: got {fm.get('decision_status')!r}")
+if fm.get("superseded_by") != "knowledge/decisions/foo-2026-04-30":
+    errors.append(f"superseded_by round-trip: got {fm.get('superseded_by')!r}")
+alts = fm.get("alternatives_considered") or ""
+if not (alts.startswith("[") and alts.endswith("]")):
+    errors.append(f"alternatives_considered should be inline-list flow style, got {alts!r}")
+elif "always-root" not in alts or "explicit-config" not in alts or "meta-file" not in alts:
+    errors.append(f"alternatives_considered missing items: {alts!r}")
+
+if errors:
+    for e in errors:
+        print("  -", e)
+    sys.exit(1)
+print("decisions round-trip OK")
+PYTEST
+[[ $? -eq 0 ]] && pass "decisions optional fields round-trip" || fail "decisions optional fields round-trip"
+
+# (3) deterministic write order across repeated read+write cycles. Capture the
+# first frontmatter block, parse + write_memory_entry the same dict, compare
+# byte-for-byte. Field order is anchored by MEMORY_FIELD_ORDER; rerunning
+# write_memory_entry on the same dict must produce the same bytes.
+"$PYTHON_BIN" - "$TEST_DIR" "$DEC_PATH" << 'PYTEST'
+import importlib.util
+import sys
+from pathlib import Path
+
+test_dir = Path(sys.argv[1])
+dec_path = Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location("flowctl", test_dir / "scripts/flowctl.py")
+flowctl = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(flowctl)
+
+parsed = flowctl.parse_memory_frontmatter(dec_path)
+# parse → re-write → compare. write_memory_entry must produce identical
+# bytes across repeated cycles (deterministic field order anchored by
+# MEMORY_FIELD_ORDER). Body is empty for this fixture.
+body = ""
+
+# Round-trip 1
+flowctl.write_memory_entry(dec_path, parsed, body)
+pass1 = dec_path.read_text(encoding="utf-8")
+
+# Round-trip 2 — re-parse what we just wrote, write again. Idempotency check.
+parsed2 = flowctl.parse_memory_frontmatter(dec_path)
+flowctl.write_memory_entry(dec_path, parsed2, body)
+pass2 = dec_path.read_text(encoding="utf-8")
+
+errors = []
+if pass1 != pass2:
+    errors.append("write_memory_entry produced different bytes across repeated cycles")
+# Sanity: the optional-field block must appear in MEMORY_FIELD_ORDER order
+# (decision_status before superseded_by before alternatives_considered).
+ds = pass2.find("decision_status:")
+sb = pass2.find("superseded_by:")
+ac = pass2.find("alternatives_considered:")
+if not (0 <= ds < sb < ac):
+    errors.append(
+        f"decision-fields out of order: ds={ds} sb={sb} ac={ac}"
+    )
+
+if errors:
+    for e in errors:
+        print("  -", e)
+    sys.exit(1)
+print("decisions deterministic write order OK")
+PYTEST
+[[ $? -eq 0 ]] && pass "decisions deterministic write order" || fail "decisions deterministic write order"
+
+# (2) negative case — `decision_status` outside the enum must be rejected.
+# argparse enforces `choices`, so this is a usage-error (rc=2) caught before
+# cmd_memory_add runs. Belt + braces: the validator also enum-checks, so we
+# verify a hand-crafted dict is rejected by validate_memory_frontmatter.
+set +e
+flowctl memory add --track knowledge --category decisions \
+  --title "Bad status" --decision-status pending --json >/dev/null 2>&1
+BAD_RC=$?
+set -e
+[[ $BAD_RC -ne 0 ]] && pass "decision_status rejects out-of-enum (cli)" || fail "decision_status should reject 'pending'"
+
+"$PYTHON_BIN" - "$TEST_DIR" << 'PYTEST'
+import importlib.util
+import sys
+from pathlib import Path
+
+test_dir = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("flowctl", test_dir / "scripts/flowctl.py")
+flowctl = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(flowctl)
+
+errors = flowctl.validate_memory_frontmatter({
+    "title": "Bad",
+    "date": "2026-04-30",
+    "track": "knowledge",
+    "category": "decisions",
+    "applies_when": "Bad",
+    "decision_status": "pending",
+})
+if not any("decision_status" in e for e in errors):
+    print(f"validator should reject decision_status='pending', got {errors!r}")
+    sys.exit(1)
+
+# Sanity: valid status passes.
+errors = flowctl.validate_memory_frontmatter({
+    "title": "Good",
+    "date": "2026-04-30",
+    "track": "knowledge",
+    "category": "decisions",
+    "applies_when": "Good",
+    "decision_status": "proposed",
+})
+if errors:
+    print(f"validator should accept decision_status='proposed', got {errors!r}")
+    sys.exit(1)
+
+print("decision_status enum validation OK")
+PYTEST
+[[ $? -eq 0 ]] && pass "decision_status enum validator" || fail "decision_status enum validator"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Symbol Extraction

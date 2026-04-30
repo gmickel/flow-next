@@ -1,0 +1,21 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-30T07:57:54.738972Z",
+  "depends_on": [
+    "fn-38-project-glossary-decision-records-and.1",
+    "fn-38-project-glossary-decision-records-and.2",
+    "fn-38-project-glossary-decision-records-and.3",
+    "fn-38-project-glossary-decision-records-and.4",
+    "fn-38-project-glossary-decision-records-and.5",
+    "fn-38-project-glossary-decision-records-and.6"
+  ],
+  "epic": "fn-38-project-glossary-decision-records-and",
+  "id": "fn-38-project-glossary-decision-records-and.8",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-38-project-glossary-decision-records-and.8.md",
+  "status": "todo",
+  "title": "Documentation rollup (CLAUDE.md, README, CHANGELOG, usage, flowctl docs)",
+  "updated_at": "2026-04-30T08:04:44.087354Z"
+}

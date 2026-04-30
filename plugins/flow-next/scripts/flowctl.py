@@ -3673,6 +3673,7 @@ MEMORY_CATEGORIES: dict[str, list[str]] = {
         "tooling-decisions",
         "workflow",
         "best-practices",
+        "decisions",
     ],
 }
 
@@ -3696,6 +3697,12 @@ MEMORY_BUG_FIELDS: frozenset[str] = frozenset(
     {"problem_type", "symptoms", "root_cause", "resolution_type"}
 )
 MEMORY_KNOWLEDGE_FIELDS: frozenset[str] = frozenset({"applies_when"})
+# Decision-specific optional fields. Layered onto knowledge-track entries in the
+# `decisions` category; permitted (but not required) on any knowledge entry so
+# the schema stays additive. See fn-38 task 1 (R2 + R16).
+MEMORY_DECISION_FIELDS: frozenset[str] = frozenset(
+    {"decision_status", "superseded_by", "alternatives_considered"}
+)
 
 MEMORY_PROBLEM_TYPES: tuple[str, ...] = (
     "build-error",
@@ -3717,6 +3724,9 @@ MEMORY_RESOLUTION_TYPES: tuple[str, ...] = (
 
 MEMORY_STATUS: tuple[str, ...] = ("active", "stale")
 
+# Decision lifecycle for `decisions` category entries (fn-38 task 1).
+MEMORY_DECISION_STATUSES: tuple[str, ...] = ("proposed", "accepted", "superseded")
+
 # Deterministic field order for write — required first, track-specific next,
 # optional last. Anything not in this list is emitted alphabetically after.
 MEMORY_FIELD_ORDER: tuple[str, ...] = (
@@ -3731,6 +3741,9 @@ MEMORY_FIELD_ORDER: tuple[str, ...] = (
     "root_cause",
     "resolution_type",
     "applies_when",
+    "decision_status",
+    "superseded_by",
+    "alternatives_considered",
     "status",
     "stale_reason",
     "stale_date",
@@ -4624,6 +4637,7 @@ def validate_memory_frontmatter(frontmatter: dict[str, Any]) -> list[str]:
         | MEMORY_OPTIONAL_FIELDS
         | MEMORY_BUG_FIELDS
         | MEMORY_KNOWLEDGE_FIELDS
+        | MEMORY_DECISION_FIELDS
     )
     unknown = set(frontmatter.keys()) - allowed
     if unknown:
@@ -4650,6 +4664,16 @@ def validate_memory_frontmatter(frontmatter: dict[str, Any]) -> list[str]:
     if status is not None and status not in MEMORY_STATUS:
         errors.append(
             f"invalid status '{status}' (valid: {', '.join(MEMORY_STATUS)})"
+        )
+
+    decision_status = frontmatter.get("decision_status")
+    if (
+        decision_status is not None
+        and decision_status not in MEMORY_DECISION_STATUSES
+    ):
+        errors.append(
+            f"invalid decision_status '{decision_status}' "
+            f"(valid: {', '.join(MEMORY_DECISION_STATUSES)})"
         )
 
     return errors
@@ -5251,6 +5275,25 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
         if not applies_when:
             applies_when = title
 
+    # Decision-specific optional fields (knowledge track, `decisions` category).
+    # Permitted on any knowledge entry (additive); only meaningful when the
+    # category is `decisions`. Validation enforces enum on decision_status.
+    decision_status = getattr(args, "decision_status", None)
+    superseded_by = getattr(args, "superseded_by", None)
+    alternatives_considered_raw = (
+        getattr(args, "alternatives_considered", None) or ""
+    )
+    alternatives_considered = [
+        a.strip() for a in alternatives_considered_raw.split(",") if a.strip()
+    ]
+    if decision_status is not None and decision_status not in MEMORY_DECISION_STATUSES:
+        error_exit(
+            f"Invalid --decision-status '{decision_status}'. Valid: "
+            f"{', '.join(MEMORY_DECISION_STATUSES)}.",
+            code=2,
+            use_json=args.json,
+        )
+
     # --- Overlap detection ---
     no_overlap = bool(getattr(args, "no_overlap_check", False))
     overlap = (
@@ -5279,6 +5322,12 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
         frontmatter["resolution_type"] = resolution_type
     else:
         frontmatter["applies_when"] = applies_when
+        if decision_status is not None:
+            frontmatter["decision_status"] = decision_status
+        if superseded_by:
+            frontmatter["superseded_by"] = superseded_by
+        if alternatives_considered:
+            frontmatter["alternatives_considered"] = alternatives_considered
 
     related_to: list[str] = []
     action: str
@@ -15657,6 +15706,23 @@ def main() -> None:
         "--applies-when",
         dest="applies_when",
         help="Knowledge track: situations this guidance applies to",
+    )
+    # Decision-specific optional fields (knowledge / decisions category).
+    p_memory_add.add_argument(
+        "--decision-status",
+        dest="decision_status",
+        choices=list(MEMORY_DECISION_STATUSES),
+        help="Decisions category: lifecycle (proposed | accepted | superseded)",
+    )
+    p_memory_add.add_argument(
+        "--superseded-by",
+        dest="superseded_by",
+        help="Decisions category: entry id that supersedes this decision",
+    )
+    p_memory_add.add_argument(
+        "--alternatives-considered",
+        dest="alternatives_considered",
+        help="Decisions category: comma-separated list of rejected alternatives",
     )
     # Overlap detection.
     p_memory_add.add_argument(

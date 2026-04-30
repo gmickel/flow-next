@@ -21,6 +21,7 @@ Structure:
     tooling-decisions/
     workflow/
     best-practices/
+    decisions/
 ```
 
 Each entry is a markdown file with YAML frontmatter. Filename convention:
@@ -37,6 +38,7 @@ Each entry is a markdown file with YAML frontmatter. Filename convention:
 Required (all tracks): `title`, `date`, `track`, `category`.
 Bug track adds: `problem_type`, `symptoms`, `root_cause`, `resolution_type`.
 Knowledge track adds: `applies_when`.
+Decisions category (knowledge) adds optional: `decision_status` (proposed | accepted | superseded), `superseded_by`, `alternatives_considered`.
 Optional: `module`, `tags`, `status`, `stale_reason`, `stale_date`, `last_updated`, `related_to`.
 
 ## Commands

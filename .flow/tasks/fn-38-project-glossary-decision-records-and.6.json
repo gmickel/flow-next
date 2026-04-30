@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-04-30T07:57:54.439279Z",
+  "depends_on": [
+    "fn-38-project-glossary-decision-records-and.1",
+    "fn-38-project-glossary-decision-records-and.2"
+  ],
+  "epic": "fn-38-project-glossary-decision-records-and",
+  "id": "fn-38-project-glossary-decision-records-and.6",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-38-project-glossary-decision-records-and.6.md",
+  "status": "todo",
+  "title": "/flow-next:sync detects glossary renames + decision overrides",
+  "updated_at": "2026-04-30T08:04:43.779395Z"
+}

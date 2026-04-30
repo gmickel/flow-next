@@ -436,14 +436,24 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# All 8 bug categories + 5 knowledge categories present, each with .gitkeep.
+# All 8 bug categories + 6 knowledge categories present, each with .gitkeep.
+# Knowledge: architecture-patterns, conventions, tooling-decisions, workflow,
+# best-practices, decisions (fn-38 T1 added the last).
 bug_count=$(find .flow/memory/bug -mindepth 2 -name .gitkeep 2>/dev/null | wc -l | tr -d ' ')
 kn_count=$(find .flow/memory/knowledge -mindepth 2 -name .gitkeep 2>/dev/null | wc -l | tr -d ' ')
-if [[ "$bug_count" == "8" && "$kn_count" == "5" ]]; then
-  echo -e "${GREEN}✓${NC} memory init creates 8 bug + 5 knowledge .gitkeep placeholders"
+if [[ "$bug_count" == "8" && "$kn_count" == "6" ]]; then
+  echo -e "${GREEN}✓${NC} memory init creates 8 bug + 6 knowledge .gitkeep placeholders"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} memory init placeholders (bug=$bug_count expected 8, knowledge=$kn_count expected 5)"
+  echo -e "${RED}✗${NC} memory init placeholders (bug=$bug_count expected 8, knowledge=$kn_count expected 6)"
+  FAIL=$((FAIL + 1))
+fi
+# fn-38 T1 explicit lazy-dir-create assertion: decisions/.gitkeep must exist.
+if [[ -f ".flow/memory/knowledge/decisions/.gitkeep" ]]; then
+  echo -e "${GREEN}✓${NC} memory init lazy-creates knowledge/decisions/.gitkeep"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} memory init missing knowledge/decisions/.gitkeep"
   FAIL=$((FAIL + 1))
 fi
 
