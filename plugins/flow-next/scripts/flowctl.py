@@ -9905,6 +9905,41 @@ def cmd_ready(args: argparse.Namespace) -> None:
     # MU-2: Get current actor for display (marks your tasks)
     current_actor = get_actor()
 
+    # Check epic-level dependencies before inspecting tasks
+    epic_data = normalize_epic(
+        load_json_or_exit(epic_path, f"Epic {args.epic}", use_json=args.json)
+    )
+    epic_blocked_by: list[str] = []
+    for dep in epic_data.get("depends_on_epics", []) or []:
+        if dep == args.epic:
+            continue
+        dep_path = flow_dir / EPICS_DIR / f"{dep}.json"
+        if not dep_path.exists():
+            epic_blocked_by.append(dep)
+            continue
+        dep_data = normalize_epic(
+            load_json_or_exit(dep_path, f"Epic {dep}", use_json=args.json)
+        )
+        if dep_data.get("status") != "done":
+            epic_blocked_by.append(dep)
+    if epic_blocked_by:
+        if args.json:
+            json_output(
+                {
+                    "epic": args.epic,
+                    "actor": current_actor,
+                    "ready": [],
+                    "in_progress": [],
+                    "blocked": [],
+                    "epic_blocked_by": epic_blocked_by,
+                }
+            )
+        else:
+            print(
+                f"Epic {args.epic} is blocked by: {', '.join(epic_blocked_by)}"
+            )
+        return
+
     # Get all tasks for epic (with merged runtime state)
     tasks_dir = flow_dir / TASKS_DIR
     if not tasks_dir.exists():
