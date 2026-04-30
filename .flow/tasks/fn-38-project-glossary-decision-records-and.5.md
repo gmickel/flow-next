@@ -48,5 +48,8 @@ Extend `/flow-next:audit` to walk glossary terms (grep code for term + `_Avoid_`
 - [ ] Manual smoke: run `/flow-next:audit` on a project with stale glossary term + outdated decision; both surface in the report
 
 ## Done summary
-
+Extended `/flow-next:audit` to walk glossary terms (new Phase 0.5: `flowctl glossary list --json` enumeration, code-grep per term + `_Avoid_` aliases, Edit-tool stale comment on absence, alias-creep surfacing, husk awareness) and decision entries (automatic via T1's `MEMORY_CATEGORIES["knowledge"]` extension, with calibrated judging question and supersede-not-delete Replace flow). Pure prose changes across `SKILL.md`, `workflow.md`, `phases.md`; Codex mirror regenerated; sync-codex.sh + audit_smoke_test.sh (41/41) + glossary_smoke_test.sh (80/80) + R17 grep guard all green.
 ## Evidence
+- Commits: ffd9535094cb4216232d2a0b69dea2405250ecd8
+- Tests: ./scripts/sync-codex.sh (clean: 21 skills, 21 agents, hooks.json), plugins/flow-next/scripts/audit_smoke_test.sh (41/41 PASS), plugins/flow-next/scripts/glossary_smoke_test.sh (80/80 PASS), grep -RnE 'ubiquitous language|bounded context|domain expert|aggregate root' across plugins/flow-next/{skills,agents,commands,codex} + flowctl.py → RC=1 (no matches, R17 clean)
+- PRs:
