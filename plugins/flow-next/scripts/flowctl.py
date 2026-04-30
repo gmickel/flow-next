@@ -59,6 +59,10 @@ PROSPECTS_DIR = "prospects"
 PROSPECTS_ARCHIVE_DIR = "_archive"
 CONFIG_FILE = "config.json"
 
+# Glossary (fn-38.2): repo-root + nearest-ancestor markdown file.
+GLOSSARY_FILE = "GLOSSARY.md"
+GLOSSARY_WALK_MAX_DEPTH = 32  # Defensive cap against pathological symlinks.
+
 EPIC_STATUS = ["open", "done"]
 TASK_STATUS = ["todo", "in_progress", "blocked", "done"]
 
@@ -107,6 +111,298 @@ def get_flow_dir() -> Path:
 def ensure_flow_exists() -> bool:
     """Check if .flow/ exists."""
     return get_flow_dir().exists()
+
+
+# --- Glossary helpers (fn-38.2) ---
+#
+# `GLOSSARY.md` is a plain markdown file with H2-per-term sections. It lives
+# at the repo root (project state, not flow-next bookkeeping — survives a
+# `rm -rf .flow/`). Subdirectory `GLOSSARY.md` files are supported via
+# nearest-ancestor resolution (tsconfig pattern, bounded at the git repo
+# root per gitignore convention).
+#
+# File shape:
+#
+#     # Glossary
+#
+#     ## Term Name
+#     One or more paragraphs of definition.
+#
+#     _Avoid_: alias one, alias two
+#
+#     _Relates to_: [Other Term](#other-term)
+#
+# Parser invariants:
+#   - Fenced code blocks are stripped before heading scan (so `## not a heading`
+#     inside a fence is not picked up).
+#   - CRLF normalized to LF on parse.
+#   - H2 lines (`^## term$`) anchor each entry; everything between this H2
+#     and the next H2 (or EOF) is the entry body.
+#   - `_Avoid_:` italic line inside an entry yields the alias list.
+#   - `_Relates to_:` italic line yields the relationships list (raw lines
+#     preserved verbatim — anchor links survive a roundtrip).
+#   - Last-term-removal leaves a `# Glossary` husk; never delete the file
+#     (Constraints: project state).
+
+
+def find_nearest_glossary(start: Optional[Path] = None) -> Optional[Path]:
+    """Return the nearest-ancestor `GLOSSARY.md` from `start` (default: cwd).
+
+    Walks `start` → `start.parent` → ... until either:
+      * a `GLOSSARY.md` file exists in the current directory (return it), or
+      * the git repo root is reached (check the root, then stop), or
+      * the filesystem `st_dev` changes (boundary crossed, stop), or
+      * `GLOSSARY_WALK_MAX_DEPTH` levels traversed (defensive cap).
+
+    Symlinks are NOT manually followed: `Path.parent` is purely lexical;
+    the kernel handles `ELOOP` if the caller has resolved a path through
+    symlinks. Walks via `Path.parent` only (no `.resolve()` per step) so
+    we don't accidentally chase symlinks across the filesystem.
+    """
+    cwd = (start or Path.cwd()).resolve()
+
+    # Anchor: where the walk must terminate.
+    try:
+        repo_root = get_repo_root().resolve()
+    except Exception:
+        repo_root = cwd  # No git → walk a single dir then stop.
+
+    try:
+        start_dev = cwd.stat().st_dev
+    except OSError:
+        return None
+
+    current = cwd
+    for _ in range(GLOSSARY_WALK_MAX_DEPTH):
+        candidate = current / GLOSSARY_FILE
+        try:
+            if candidate.is_file():
+                return candidate
+        except OSError:
+            pass
+
+        # Reached repo root: check the root file (already done above) and stop.
+        if current == repo_root:
+            return None
+
+        # Don't ascend past the git repo root.
+        try:
+            if repo_root not in current.parents:
+                return None
+        except Exception:
+            return None
+
+        parent = current.parent
+        if parent == current:
+            return None  # Filesystem root.
+
+        # Boundary check: don't cross filesystems.
+        try:
+            if parent.stat().st_dev != start_dev:
+                return None
+        except OSError:
+            return None
+
+        current = parent
+
+    return None  # Hit the depth cap — defensive, treat as "not found".
+
+
+def find_all_glossaries(start: Optional[Path] = None) -> list[Path]:
+    """Return every `GLOSSARY.md` on the ancestor chain (nearest first).
+
+    Used by `glossary list` to group by file when multiple glossaries are
+    present. Bounded the same way as `find_nearest_glossary` (repo root,
+    `st_dev`, depth cap).
+    """
+    cwd = (start or Path.cwd()).resolve()
+    try:
+        repo_root = get_repo_root().resolve()
+    except Exception:
+        repo_root = cwd
+
+    try:
+        start_dev = cwd.stat().st_dev
+    except OSError:
+        return []
+
+    found: list[Path] = []
+    current = cwd
+    for _ in range(GLOSSARY_WALK_MAX_DEPTH):
+        candidate = current / GLOSSARY_FILE
+        try:
+            if candidate.is_file():
+                found.append(candidate)
+        except OSError:
+            pass
+
+        if current == repo_root:
+            break
+        try:
+            if repo_root not in current.parents:
+                break
+        except Exception:
+            break
+        parent = current.parent
+        if parent == current:
+            break
+        try:
+            if parent.stat().st_dev != start_dev:
+                break
+        except OSError:
+            break
+        current = parent
+    return found
+
+
+# --- Glossary parse / render ---
+
+_GLOSSARY_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
+_GLOSSARY_HEADING_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
+_GLOSSARY_AVOID_RE = re.compile(r"^_Avoid_:\s*(.+?)\s*$", re.MULTILINE)
+_GLOSSARY_RELATES_RE = re.compile(r"^_Relates to_:\s*(.+?)\s*$", re.MULTILINE)
+
+
+def _glossary_strip_fenced_code(text: str) -> str:
+    """Mask each fenced code block byte-for-byte so heading-scan offsets stay
+    aligned with the original text.
+
+    Each non-newline byte inside a fence becomes a space; newlines are kept
+    so line numbers don't shift. This means an `^##\\s+...` line *inside*
+    a fence has its leading `##` blanked, so it is not picked up by the
+    heading regex, while the masked string remains the same length as the
+    original (we slice the original text using offsets from the masked
+    text).
+    """
+    def _blank_replace(m: re.Match) -> str:
+        return "".join("\n" if c == "\n" else " " for c in m.group(0))
+    return _GLOSSARY_FENCE_RE.sub(_blank_replace, text)
+
+
+def parse_glossary_file(text: str) -> list[dict[str, Any]]:
+    """Parse a `GLOSSARY.md` body into a list of term entries.
+
+    Returns a list of dicts with keys:
+      - `term`     : str  — heading text (verbatim, trimmed)
+      - `definition`: str — body text after the heading, before optional
+                           `_Avoid_:` / `_Relates to_:` italic lines
+      - `avoid`    : list[str] — comma-split aliases (empty list if none)
+      - `relates_to`: list[str] — raw `_Relates to_:` line content split on
+                           ", " (empty list if none)
+
+    CRLF normalized; fenced code blocks blanked before heading scan so
+    `## not a heading` inside a fence is not picked up.
+    """
+    if not text:
+        return []
+    # Normalize line endings.
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    masked = _glossary_strip_fenced_code(text)
+
+    headings = list(_GLOSSARY_HEADING_RE.finditer(masked))
+    entries: list[dict[str, Any]] = []
+    for i, m in enumerate(headings):
+        term = m.group(1).strip()
+        body_start = m.end()
+        body_end = headings[i + 1].start() if i + 1 < len(headings) else len(text)
+        body = text[body_start:body_end]
+
+        avoid_match = _GLOSSARY_AVOID_RE.search(body)
+        relates_match = _GLOSSARY_RELATES_RE.search(body)
+
+        # Strip avoid/relates lines from the definition slice.
+        def_text = body
+        for stripped_match in (avoid_match, relates_match):
+            if stripped_match is not None:
+                def_text = (
+                    def_text[: stripped_match.start()]
+                    + def_text[stripped_match.end() :]
+                )
+
+        avoid: list[str] = []
+        if avoid_match is not None:
+            raw = avoid_match.group(1).strip()
+            avoid = [a.strip() for a in raw.split(",") if a.strip()]
+
+        relates_to: list[str] = []
+        if relates_match is not None:
+            raw = relates_match.group(1).strip()
+            relates_to = [r.strip() for r in raw.split(",") if r.strip()]
+
+        entries.append(
+            {
+                "term": term,
+                "definition": def_text.strip("\n").rstrip(),
+                "avoid": avoid,
+                "relates_to": relates_to,
+            }
+        )
+
+    return entries
+
+
+def render_glossary_file(entries: list[dict[str, Any]]) -> str:
+    """Render a glossary entry list back to markdown.
+
+    Always emits a leading `# Glossary` H1 husk so an emptied file
+    (last-term-removal) is still recognizably a glossary file (Constraints
+    R18: never delete the file).
+
+    Entry order is preserved (caller controls ordering — `add` appends or
+    updates in place; `remove` deletes by term name).
+    """
+    parts: list[str] = ["# Glossary", ""]
+    for entry in entries:
+        term = entry["term"].strip()
+        parts.append(f"## {term}")
+        parts.append("")
+        definition = (entry.get("definition") or "").strip("\n").rstrip()
+        if definition:
+            parts.append(definition)
+            parts.append("")
+        avoid = entry.get("avoid") or []
+        if avoid:
+            parts.append(f"_Avoid_: {', '.join(avoid)}")
+            parts.append("")
+        relates_to = entry.get("relates_to") or []
+        if relates_to:
+            parts.append(f"_Relates to_: {', '.join(relates_to)}")
+            parts.append("")
+
+    # Single trailing newline; never two.
+    out = "\n".join(parts).rstrip("\n") + "\n"
+    return out
+
+
+def validate_glossary_entry(entry: dict[str, Any]) -> list[str]:
+    """Return validation errors for a single glossary entry (empty = valid).
+
+    Required: `term` (non-empty), `definition` (non-empty).
+    Optional: `avoid` (list[str]), `relates_to` (list[str]).
+    """
+    errors: list[str] = []
+    if not isinstance(entry, dict):
+        return ["entry must be a dict"]
+    term = entry.get("term")
+    if not isinstance(term, str) or not term.strip():
+        errors.append("term must be a non-empty string")
+    definition = entry.get("definition")
+    if not isinstance(definition, str) or not definition.strip():
+        errors.append("definition must be a non-empty string")
+    avoid = entry.get("avoid", [])
+    if avoid is not None and not isinstance(avoid, list):
+        errors.append("avoid must be a list")
+    relates_to = entry.get("relates_to", [])
+    if relates_to is not None and not isinstance(relates_to, list):
+        errors.append("relates_to must be a list")
+    return errors
+
+
+def _glossary_term_matches(a: str, b: str) -> bool:
+    """Case-insensitive whitespace-collapsed term comparison."""
+    return re.sub(r"\s+", " ", a.strip().lower()) == re.sub(
+        r"\s+", " ", b.strip().lower()
+    )
 
 
 def get_state_dir() -> Path:
@@ -8261,6 +8557,261 @@ def cmd_prospect_promote(args: argparse.Namespace) -> None:
             print(f"  WARNING: {artifact_warning}", file=sys.stderr)
 
 
+# --- Glossary subcommands (fn-38.2) ---
+
+
+def _glossary_load(path: Path) -> list[dict[str, Any]]:
+    """Read + parse a `GLOSSARY.md` file. Returns [] if file missing."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return []
+    return parse_glossary_file(text)
+
+
+def _glossary_resolve_target_for_add(use_json: bool) -> Path:
+    """Pick the write target for `glossary add`.
+
+    Rule: write to nearest-ancestor `GLOSSARY.md` (matches read resolution).
+    To force a subdirectory glossary, drop an empty `GLOSSARY.md` first;
+    nearest-ancestor will then resolve to it. If no ancestor file exists,
+    create one at the repo root.
+    """
+    target = find_nearest_glossary()
+    if target is not None:
+        return target
+    return get_repo_root() / GLOSSARY_FILE
+
+
+def cmd_glossary_add(args: argparse.Namespace) -> None:
+    """Append or update a term entry.
+
+    Resolution: writes to nearest-ancestor `GLOSSARY.md` (creates one at
+    repo root if no ancestor exists). Multi-line definitions accepted via
+    `--definition-file <path>` or `--definition-file -` (stdin).
+
+    Update semantics: case-insensitive term match. Existing entry replaced
+    in full (definition + avoid + relates_to all overwritten). New entries
+    appended at the end so insertion order is stable across sessions.
+    """
+    use_json = bool(getattr(args, "json", False))
+
+    term_raw = (getattr(args, "term", "") or "").strip()
+    if not term_raw:
+        error_exit("term must be non-empty", use_json=use_json)
+
+    # Definition source: --definition (single-line) or --definition-file (multi-line).
+    definition_inline = getattr(args, "definition", None)
+    definition_file = getattr(args, "definition_file", None)
+    if definition_inline is not None and definition_file is not None:
+        error_exit(
+            "--definition and --definition-file are mutually exclusive",
+            use_json=use_json,
+        )
+    if definition_inline is None and definition_file is None:
+        error_exit(
+            "--definition or --definition-file required",
+            use_json=use_json,
+        )
+
+    if definition_file is not None:
+        if definition_file == "-":
+            definition_text = sys.stdin.read()
+        else:
+            try:
+                definition_text = Path(definition_file).read_text(encoding="utf-8")
+            except OSError as exc:
+                error_exit(
+                    f"failed to read --definition-file: {exc}",
+                    use_json=use_json,
+                )
+                return
+    else:
+        definition_text = definition_inline or ""
+
+    # Strip a single trailing newline (common when piping from heredoc /
+    # editor). Internal newlines preserved.
+    definition_text = definition_text.rstrip("\n")
+    if not definition_text.strip():
+        error_exit("definition must be non-empty", use_json=use_json)
+
+    avoid_raw = getattr(args, "avoid", None) or ""
+    avoid_list = [a.strip() for a in avoid_raw.split(",") if a.strip()]
+
+    relates_raw = getattr(args, "relates_to", None) or ""
+    relates_list = [r.strip() for r in relates_raw.split(",") if r.strip()]
+
+    new_entry: dict[str, Any] = {
+        "term": term_raw,
+        "definition": definition_text,
+        "avoid": avoid_list,
+        "relates_to": relates_list,
+    }
+
+    errors = validate_glossary_entry(new_entry)
+    if errors:
+        error_exit("; ".join(errors), use_json=use_json)
+
+    target = _glossary_resolve_target_for_add(use_json)
+    entries = _glossary_load(target)
+
+    # Case-insensitive update if term already exists; else append.
+    updated = False
+    for i, entry in enumerate(entries):
+        if _glossary_term_matches(entry["term"], term_raw):
+            entries[i] = new_entry
+            updated = True
+            break
+    if not updated:
+        entries.append(new_entry)
+
+    rendered = render_glossary_file(entries)
+    atomic_write(target, rendered)
+
+    if use_json:
+        json_output(
+            {
+                "path": str(target),
+                "term": term_raw,
+                "action": "updated" if updated else "created",
+                "entry_count": len(entries),
+            }
+        )
+    else:
+        action = "updated" if updated else "added"
+        print(f"{action} '{term_raw}' in {target}")
+
+
+def cmd_glossary_list(args: argparse.Namespace) -> None:
+    """List defined terms across every `GLOSSARY.md` on the ancestor chain.
+
+    Multiple files are grouped by file (nearest first). Empty husks
+    (file with only a `# Glossary` header) emit no terms but still
+    appear as a group with `entries: []`.
+    """
+    use_json = bool(getattr(args, "json", False))
+    paths = find_all_glossaries()
+
+    groups: list[dict[str, Any]] = []
+    for path in paths:
+        entries = _glossary_load(path)
+        groups.append(
+            {
+                "path": str(path),
+                "entries": entries,
+                "count": len(entries),
+            }
+        )
+
+    if use_json:
+        total = sum(g["count"] for g in groups)
+        json_output(
+            {
+                "groups": groups,
+                "file_count": len(groups),
+                "total_terms": total,
+            }
+        )
+        return
+
+    if not groups:
+        print("No GLOSSARY.md found on the ancestor chain.")
+        print(f"  (looked from cwd up to repo root, max {GLOSSARY_WALK_MAX_DEPTH} levels)")
+        return
+
+    for g in groups:
+        print(f"# {g['path']}  ({g['count']} term{'s' if g['count'] != 1 else ''})")
+        for entry in g["entries"]:
+            avoid = entry.get("avoid") or []
+            avoid_disp = f" [avoid: {', '.join(avoid)}]" if avoid else ""
+            # First line of definition only for compact output.
+            first_line = (entry.get("definition") or "").splitlines()[0] \
+                if entry.get("definition") else ""
+            print(f"  {entry['term']}: {first_line}{avoid_disp}")
+        if not g["entries"]:
+            print("  (no terms — empty husk)")
+        print()
+
+
+def cmd_glossary_read(args: argparse.Namespace) -> None:
+    """Print the entry for a term using nearest-ancestor resolution.
+
+    Matches case-insensitively on term name. Searches every glossary on
+    the ancestor chain (nearest first); the first hit wins (R3).
+    """
+    use_json = bool(getattr(args, "json", False))
+    term = (getattr(args, "term", "") or "").strip()
+    if not term:
+        error_exit("term required", use_json=use_json)
+
+    for path in find_all_glossaries():
+        entries = _glossary_load(path)
+        for entry in entries:
+            if _glossary_term_matches(entry["term"], term):
+                if use_json:
+                    json_output(
+                        {
+                            "path": str(path),
+                            "term": entry["term"],
+                            "definition": entry.get("definition", ""),
+                            "avoid": entry.get("avoid") or [],
+                            "relates_to": entry.get("relates_to") or [],
+                        }
+                    )
+                else:
+                    print(f"# {entry['term']}  ({path})")
+                    print()
+                    if entry.get("definition"):
+                        print(entry["definition"])
+                    if entry.get("avoid"):
+                        print()
+                        print(f"_Avoid_: {', '.join(entry['avoid'])}")
+                    if entry.get("relates_to"):
+                        print()
+                        print(f"_Relates to_: {', '.join(entry['relates_to'])}")
+                return
+
+    error_exit(f"term '{term}' not found", use_json=use_json, code=1)
+
+
+def cmd_glossary_remove(args: argparse.Namespace) -> None:
+    """Delete an entry from the glossary file that defines it.
+
+    Searches every glossary on the ancestor chain (nearest first) and
+    removes the term from the first file that defines it. Last-term
+    removal leaves a `# Glossary` husk on disk (Constraints: never delete
+    the file).
+    """
+    use_json = bool(getattr(args, "json", False))
+    term = (getattr(args, "term", "") or "").strip()
+    if not term:
+        error_exit("term required", use_json=use_json)
+
+    for path in find_all_glossaries():
+        entries = _glossary_load(path)
+        for i, entry in enumerate(entries):
+            if _glossary_term_matches(entry["term"], term):
+                removed = entries.pop(i)
+                rendered = render_glossary_file(entries)
+                atomic_write(path, rendered)
+                if use_json:
+                    json_output(
+                        {
+                            "path": str(path),
+                            "removed_term": removed["term"],
+                            "entry_count": len(entries),
+                            "husk": len(entries) == 0,
+                        }
+                    )
+                else:
+                    print(f"removed '{removed['term']}' from {path}")
+                    if len(entries) == 0:
+                        print("  (file kept as empty '# Glossary' husk)")
+                return
+
+    error_exit(f"term '{term}' not found", use_json=use_json, code=1)
+
+
 def cmd_epic_create(args: argparse.Namespace) -> None:
     """Create a new epic."""
     if not ensure_flow_exists():
@@ -15992,6 +16543,83 @@ def main() -> None:
         "--json", action="store_true", help="JSON output"
     )
     p_prospect_promote.set_defaults(func=cmd_prospect_promote)
+
+    # glossary add / list / read / remove (fn-38.2)
+    p_glossary = subparsers.add_parser(
+        "glossary",
+        help=(
+            "Project glossary commands (GLOSSARY.md at repo root or nearest "
+            "ancestor). Lives outside .flow/ so it survives flow-next removal."
+        ),
+    )
+    glossary_sub = p_glossary.add_subparsers(dest="glossary_cmd", required=True)
+
+    p_glossary_add = glossary_sub.add_parser(
+        "add",
+        help=(
+            "Add or update a term entry in the nearest-ancestor GLOSSARY.md "
+            "(creates one at repo root if no ancestor exists)"
+        ),
+    )
+    p_glossary_add.add_argument("term", help="Term name (used as H2 heading)")
+    p_glossary_add.add_argument(
+        "--definition",
+        help="Single-line definition (use --definition-file for multi-line)",
+    )
+    p_glossary_add.add_argument(
+        "--definition-file",
+        dest="definition_file",
+        help=(
+            "Read multi-line definition from file path or '-' for stdin "
+            "(mutually exclusive with --definition)"
+        ),
+    )
+    p_glossary_add.add_argument(
+        "--avoid",
+        help=(
+            "Comma-separated alternative terms to avoid in favor of this one "
+            "(rendered as a `_Avoid_:` italic line)"
+        ),
+    )
+    p_glossary_add.add_argument(
+        "--relates-to",
+        dest="relates_to",
+        help=(
+            "Comma-separated related terms / anchor links "
+            "(rendered as a `_Relates to_:` italic line)"
+        ),
+    )
+    p_glossary_add.add_argument("--json", action="store_true", help="JSON output")
+    p_glossary_add.set_defaults(func=cmd_glossary_add)
+
+    p_glossary_list = glossary_sub.add_parser(
+        "list",
+        help=(
+            "List defined terms across every GLOSSARY.md on the ancestor chain "
+            "(nearest first)"
+        ),
+    )
+    p_glossary_list.add_argument("--json", action="store_true", help="JSON output")
+    p_glossary_list.set_defaults(func=cmd_glossary_list)
+
+    p_glossary_read = glossary_sub.add_parser(
+        "read",
+        help=(
+            "Print a term entry. Resolution walks ancestors from cwd; "
+            "first match wins"
+        ),
+    )
+    p_glossary_read.add_argument("term", help="Term name (case-insensitive match)")
+    p_glossary_read.add_argument("--json", action="store_true", help="JSON output")
+    p_glossary_read.set_defaults(func=cmd_glossary_read)
+
+    p_glossary_remove = glossary_sub.add_parser(
+        "remove",
+        help="Remove a term entry from the file that defines it",
+    )
+    p_glossary_remove.add_argument("term", help="Term name (case-insensitive match)")
+    p_glossary_remove.add_argument("--json", action="store_true", help="JSON output")
+    p_glossary_remove.set_defaults(func=cmd_glossary_remove)
 
     # epic create
     p_epic = subparsers.add_parser("epic", help="Epic commands")

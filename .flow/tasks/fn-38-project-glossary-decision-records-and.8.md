@@ -10,6 +10,9 @@ Update all in-scope contributor docs to reflect the new glossary, decisions cate
 - `README.md` (root — what's-new callout)
 - `.flow/usage.md` (new Glossary section)
 - `plugins/flow-next/docs/flowctl.md` (memory category list, new glossary subcommand reference section)
+- `plugins/flow-next/agents/memory-scout.md` (knowledge-category list at line ~22 enumerates 5 categories in prose; add `decisions`) <!-- Updated by plan-sync: T1 surfaced this enumeration that the original T8 spec missed -->
+
+<!-- Updated by plan-sync: T1 added two parallel constants downstream tasks may want to reference: `MEMORY_DECISION_FIELDS` (frozenset of optional decision fields) and `MEMORY_DECISION_STATUSES` (proposed | accepted | superseded enum). Both live alongside `MEMORY_KNOWLEDGE_FIELDS` / `MEMORY_STATUS` in flowctl.py:3699-3728. -->
 
 ## Approach
 
@@ -41,8 +44,10 @@ Per `docs-gap-scout` findings (gathered during planning), update in this order:
 
 6. **plugins/flow-next/docs/flowctl.md** — memory category list (line ~505) adds `decisions`; new `### glossary` section at end (after the `prospect` section ~line 591) documenting all four subcommands + `--definition-file` variant.
 
-7. **R17 compliance**: no DDD jargon in any updated docs (manual review; T7 grep guard catches regressions).
-8. **No website changes** — `~/work/mickel.tech/app/apps/flow-next/page.tsx` is maintainer-only per CLAUDE.md convention. Skip.
+7. **plugins/flow-next/agents/memory-scout.md** (line ~22) — knowledge-track category list in agent prose currently enumerates 5 categories (`architecture-patterns`, `conventions`, `tooling-decisions`, `workflow`, `best-practices`). Add `decisions`. Surfaced by T1 worker. <!-- Updated by plan-sync: T1 used MEMORY_CATEGORIES extension; this prose enumeration drifted from the schema and needs an explicit add -->
+
+8. **R17 compliance**: no DDD jargon in any updated docs (manual review; T7 grep guard catches regressions).
+9. **No website changes** — `~/work/mickel.tech/app/apps/flow-next/page.tsx` is maintainer-only per CLAUDE.md convention. Skip.
 
 ## Investigation targets
 
@@ -62,6 +67,7 @@ Per `docs-gap-scout` findings (gathered during planning), update in this order:
 - [ ] Root README.md what's-new callout updated to v0.39.0
 - [ ] .flow/usage.md gains Glossary section
 - [ ] plugins/flow-next/docs/flowctl.md adds `decisions` to memory categories list + new glossary subcommand reference section
+- [ ] plugins/flow-next/agents/memory-scout.md knowledge-category list (line ~22) includes `decisions`
 - [ ] No DDD terminology in any updated docs (R17 — manually verify; T7 grep guard catches future regressions)
 - [ ] Maintainer-only website (mickel.tech) NOT updated in this task (per CLAUDE.md convention)
 - [ ] Version bump considered: this epic adds skill behavior (interview), so a version bump (likely 0.39.0) is warranted per CLAUDE.md versioning rules. The bump itself is the release-handoff step, not part of this task's acceptance — but the CHANGELOG entry must use the agreed version.

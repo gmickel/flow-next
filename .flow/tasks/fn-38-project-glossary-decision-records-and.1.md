@@ -40,5 +40,8 @@ Extend the categorized memory schema with a `decisions` knowledge category and d
 - [ ] `ci_test.sh` decisions-track assertion passes
 
 ## Done summary
-
+Extended categorized memory schema with knowledge/decisions category + decision-specific optional fields (decision_status enum, superseded_by, alternatives_considered); flowctl memory init lazy-creates the directory via the existing loop, MEMORY_FIELD_ORDER carries explicit slots for deterministic write order, and validate_memory_frontmatter enum-checks decision_status. ci_test.sh gains a decisions-track section covering round-trip, negative enum, deterministic order, and lazy-dir-create; smoke_test.sh placeholder count updated 5 to 6 + explicit decisions/.gitkeep check.
 ## Evidence
+- Commits: 1cdf606f1a1ccf57d6187f7573de5adca7a97717
+- Tests: bash plugins/flow-next/scripts/ci_test.sh (54/54 pass), bash plugins/flow-next/scripts/smoke_test.sh (130/130 pass)
+- PRs:
