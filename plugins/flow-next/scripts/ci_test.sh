@@ -348,6 +348,46 @@ PYTEST
 [[ $? -eq 0 ]] && pass "decision_status enum validator" || fail "decision_status enum validator"
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 5c. Plugin-source hygiene — R17 forbidden vocabulary + R4 meta-file leaks
+#     (fn-38 task 7). Two-tier guard mirrors the existing
+#     AskUserQuestion / ToolSearch split: this canonical scan covers
+#     skills/, agents/, commands/, and flowctl.py; the codex mirror scan
+#     lives in scripts/sync-codex.sh validation block.
+# ─────────────────────────────────────────────────────────────────────────────
+echo -e "\n${YELLOW}--- Plugin-source hygiene (R17 + R4) ---${NC}"
+
+# R17: DDD vocabulary guard. Listed inline only inside the grep pattern;
+# documentation refers to "the R17 forbidden list" without enumeration.
+set +e
+DDD_HITS="$(grep -RnE 'ubiquitous language|bounded context|domain expert|aggregate root' \
+  "$PLUGIN_ROOT/skills" \
+  "$PLUGIN_ROOT/scripts/flowctl.py" \
+  "$PLUGIN_ROOT/agents" \
+  "$PLUGIN_ROOT/commands" 2>/dev/null)"
+set -e
+if [[ -n "$DDD_HITS" ]]; then
+  fail "R17 DDD vocabulary in canonical:"
+  echo "$DDD_HITS" | sed 's/^/    /'
+else
+  pass "R17: no DDD vocabulary in canonical"
+fi
+
+# R4: no meta-file precedent leaks (early-design naming) into canonical prose.
+set +e
+META_HITS="$(grep -RnE 'GLOSSARY-MAP\.md|CONTEXT-MAP\.md' \
+  "$PLUGIN_ROOT/skills" \
+  "$PLUGIN_ROOT/scripts/flowctl.py" \
+  "$PLUGIN_ROOT/agents" \
+  "$PLUGIN_ROOT/commands" 2>/dev/null)"
+set -e
+if [[ -n "$META_HITS" ]]; then
+  fail "R4 meta-file refs in canonical:"
+  echo "$META_HITS" | sed 's/^/    /'
+else
+  pass "R4: no meta-file refs in canonical"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 6. Symbol Extraction
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "\n${YELLOW}--- Symbol Extraction ---${NC}"

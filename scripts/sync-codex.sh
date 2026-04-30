@@ -771,6 +771,27 @@ else
   echo -e "  ${GREEN}✓${NC} No Claude-native tool refs in Codex skill prose"
 fi
 
+# R17 mirror scan — DDD vocabulary guard for the Codex mirror (fn-38 task 7).
+# Canonical clean + mechanical rewrite should keep mirror clean, but a derived
+# artifact deserves its own validation. Pattern strings are the authoritative
+# forbidden list — see CLAUDE.md / fn-38 spec for rationale.
+ddd_refs=$( { grep -rE 'ubiquitous language|bounded context|domain expert|aggregate root' "$CODEX_DIR/skills/" "$CODEX_DIR/agents/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | wc -l | tr -d ' ')
+if [ "$ddd_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $ddd_refs R17 forbidden-vocabulary refs in codex mirror — clean canonical first, then re-run sync"
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No R17 forbidden vocabulary in Codex mirror"
+fi
+
+# R4 mirror scan — no early-design meta-file references leaked into mirror.
+meta_refs=$( { grep -rE 'GLOSSARY-MAP\.md|CONTEXT-MAP\.md' "$CODEX_DIR/skills/" "$CODEX_DIR/agents/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | wc -l | tr -d ' ')
+if [ "$meta_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $meta_refs R4 meta-file refs in codex mirror — clean canonical first, then re-run sync"
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No R4 meta-file refs in Codex mirror"
+fi
+
 # Validate openai.yaml files — every skill in REQUIRED_OPENAI_YAML_SKILLS
 # MUST have one. Missing entries fail CI. Extras are fine (utility skills
 # may opt in later).
