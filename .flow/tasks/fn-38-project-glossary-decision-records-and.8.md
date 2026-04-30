@@ -42,7 +42,9 @@ Per `docs-gap-scout` findings (gathered during planning), update in this order:
 
 5. **.flow/usage.md** — new `# Glossary (v0.39.0+)` section after memory commands block (line ~86), one-liner per `flowctl glossary` subcommand.
 
-6. **plugins/flow-next/docs/flowctl.md** — memory category list (line ~505) adds `decisions`; new `### glossary` section at end (after the `prospect` section ~line 591) documenting all four subcommands + `--definition-file` variant.
+6. **plugins/flow-next/docs/flowctl.md** — memory category list (line ~505) adds `decisions`; new `### glossary` section at end (after the `prospect` section ~line 591) documenting the four subcommands shipped in fn-38.2 (`add`, `list`, `read`, `remove`) + `--definition-file` variant on `add`. Note (per fn-38.2 implementation): `add` supports `--avoid`/`--relates-to` (comma-separated), upserts case-insensitively; `list --json` shape is `{groups: [{path, entries, count}], file_count, total_terms}`; `read --json` shape is `{path, term, definition, avoid, relates_to}`; last-term `remove` leaves a `# Glossary` H1 husk on disk (R18 — never deletes the file). No `mark-stale` subcommand was shipped in T2 — `/flow-next:audit` uses Edit-tool stale-marking. <!-- Updated by plan-sync: fn-38.2 actual subcommand surface + JSON shapes -->
+   <!-- Updated by plan-sync: fn-38.2 also exposes constants `GLOSSARY_FILE` / `GLOSSARY_WALK_MAX_DEPTH` and helper functions `find_nearest_glossary` / `find_all_glossaries` / `parse_glossary_file` / `render_glossary_file` / `validate_glossary_entry` / `_glossary_term_matches` / `_glossary_strip_fenced_code`; downstream skills should reuse these via flowctl subcommands rather than reimplement. -->
+
 
 7. **plugins/flow-next/agents/memory-scout.md** (line ~22) — knowledge-track category list in agent prose currently enumerates 5 categories (`architecture-patterns`, `conventions`, `tooling-decisions`, `workflow`, `best-practices`). Add `decisions`. Surfaced by T1 worker. <!-- Updated by plan-sync: T1 used MEMORY_CATEGORIES extension; this prose enumeration drifted from the schema and needs an explicit add -->
 

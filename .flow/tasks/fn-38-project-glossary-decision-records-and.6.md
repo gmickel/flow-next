@@ -12,10 +12,10 @@ Extend `/flow-next:sync` (plan-sync) drift detection to catch glossary-term rena
 ## Approach
 
 - **Sync skill (`flow-next-sync/SKILL.md:97-117`)** — extend Step 5 (Spawn Plan-Sync Agent) to pass two new context types to the agent:
-  1. **Glossary state**: `flowctl glossary list --json` output (all defined terms, root + subdirs)
+  1. **Glossary state**: `flowctl glossary list --json` output (all defined terms, root + subdirs). JSON shape (per fn-38.2): `{groups: [{path, entries: [{term, definition, avoid, relates_to}], count}], file_count, total_terms}`. Empty husks (`count: 0`) carry no signal — skip them. <!-- Updated by plan-sync: fn-38.2 shipped this exact shape -->
   2. **Decision constraints**: `flowctl memory list --track knowledge --category decisions --json` output (all active decisions with their `Consequences` sections)
 - **Plan-sync agent (`agents/plan-sync.md:85-103`)** — extend drift-detection prose:
-  - **Glossary-term renames**: when an old task spec or epic spec references a term, but the current code uses a different term (matching one of the old term's `_Avoid_` aliases), flag the spec for update. Update downstream task spec wording to use the canonical term.
+  - **Glossary-term renames**: when an old task spec or epic spec references a term, but the current code uses a different term (matching one of the old term's `_Avoid_` aliases — `entries[].avoid` is a `list[str]` per fn-38.2's parser), flag the spec for update. Update downstream task spec wording to use the canonical term. Term match uses the same case-insensitive whitespace-collapsed rule as `_glossary_term_matches` in flowctl.py — do NOT reinvent.
   - **Decision overrides**: when current code touches files referenced in an active decision's `Consequences` section in a way that contradicts the decision (e.g. decision says "we use REST not GraphQL" + current code introduces a `/graphql` endpoint), flag the decision id in the sync report. Do NOT auto-supersede; surface for user review.
 - Run `scripts/sync-codex.sh` to regenerate `plugins/flow-next/codex/agents/plan-sync.toml`.
 - **R17 compliance**: no DDD jargon in skill or agent prose.

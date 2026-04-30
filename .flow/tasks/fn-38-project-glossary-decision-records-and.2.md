@@ -49,5 +49,8 @@ Implement the glossary plumbing: `GLOSSARY.md` file format, nearest-ancestor res
 - [ ] `glossary_smoke_test.sh` passes (covers all the above + parse roundtrip + fenced-code stripping + last-term-removal hygiene)
 
 ## Done summary
-
+Implemented `flowctl glossary {add,list,read,remove}` with `find_nearest_glossary` (cwd → git root, bounded by filesystem boundary + 32-level cap), byte-aligned fenced-code stripping in the parser (so headings inside ``` blocks aren't picked up), atomic whole-file rewrite, and a 25-case / 80-assertion `glossary_smoke_test.sh` covering nearest-ancestor walk, atomic-write crash simulation, multi-line stdin round-trip, parse roundtrip, _Avoid_ + _Relates to_ preservation, husk hygiene on last-term removal, and R18 (.flow/ removal preserves GLOSSARY.md). Early proof point landed cleanly — file format + walk algorithm + atomic writes round-trip; downstream T3-T6 unblocked.
 ## Evidence
+- Commits: 9921ace0b82d24290b55ec40dbe44b0485b80bcc
+- Tests: bash plugins/flow-next/scripts/glossary_smoke_test.sh (80/80 pass), bash plugins/flow-next/scripts/smoke_test.sh (130/130 pass), bash plugins/flow-next/scripts/audit_smoke_test.sh (41/41 pass), bash plugins/flow-next/scripts/prospect_smoke_test.sh (94/94 pass), bash plugins/flow-next/scripts/ci_test.sh (54/54 pass)
+- PRs:

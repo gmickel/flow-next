@@ -12,8 +12,8 @@ Extend the `docs-gap-scout` agent to scan `GLOSSARY.md` (root + subdirectories) 
 ## Approach
 
 - Update the doc-location scan list at `docs-gap-scout.md:39` to include:
-  - `GLOSSARY.md` (root) — direct check
-  - Subdirectory `GLOSSARY.md` — `find . -name GLOSSARY.md -not -path './node_modules/*' -not -path './.git/*'`
+  - `GLOSSARY.md` (root) — direct check; prefer `flowctl glossary list --json` (JSON shape per fn-38.2: `{groups: [{path, entries, count}], file_count, total_terms}`) since it walks ancestors and respects gitignore conventions; raw `find` only as fallback. Empty husks (`count: 0` after last-term-removal — fn-38.2 keeps the file per R18) carry no terms — skip them, don't flag as drift signal. <!-- Updated by plan-sync: fn-38.2 shipped `glossary list --json` + husk semantics -->
+  - Subdirectory `GLOSSARY.md` — covered by `glossary list --json` (walks ancestors); raw fallback `find . -name GLOSSARY.md -not -path './node_modules/*' -not -path './.git/*'`
   - `.flow/memory/knowledge/decisions/` — direct directory check
 - Extend the change-type → doc-update mapping (`docs-gap-scout.md:59-68`) with two new rows:
   - **"Glossary term touched"** — when the planned-change diff modifies code that uses a term defined in any `GLOSSARY.md`, flag the glossary entry (file + term name) for review
