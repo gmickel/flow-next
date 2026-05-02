@@ -9029,6 +9029,13 @@ def cmd_glossary_add(args: argparse.Namespace) -> None:
     else:
         definition_text = definition_inline or ""
 
+    # Normalize CRLF / CR to LF before any further processing. Bash on
+    # Windows (Git Bash / MSYS) writes CRLF to pipes by default; Python's
+    # text-mode stdin universal-newlines doesn't always translate when the
+    # pipe was opened in binary mode by the parent process. Defensive
+    # universal-newlines normalization keeps the stored definition LF-only
+    # regardless of caller's platform.
+    definition_text = definition_text.replace("\r\n", "\n").replace("\r", "\n")
     # Strip a single trailing newline (common when piping from heredoc /
     # editor). Internal newlines preserved.
     definition_text = definition_text.rstrip("\n")
