@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-TEST_DIR="/tmp/ralph-smoke-$$"
+TEST_DIR="${TEST_DIR:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/ralph-smoke-$$}"
 
 # Python detection: prefer python3, fallback to python (Windows support, GH-35)
 pick_python() {

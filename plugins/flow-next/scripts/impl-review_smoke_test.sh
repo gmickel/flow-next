@@ -32,7 +32,7 @@ if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-n
   exit 1
 fi
 
-TEST_DIR="/tmp/impl-review-smoke-$$"
+TEST_DIR="${TEST_DIR:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/impl-review-smoke-$$}"
 PASS=0
 FAIL=0
 

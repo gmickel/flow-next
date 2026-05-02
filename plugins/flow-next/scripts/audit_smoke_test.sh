@@ -48,7 +48,7 @@ if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-n
   exit 1
 fi
 
-TEST_DIR="/tmp/audit-smoke-$$"
+TEST_DIR="${TEST_DIR:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/audit-smoke-$$}"
 PASS=0
 FAIL=0
 
@@ -83,7 +83,7 @@ assert_rc() {
 
 assert_grep() {
   local needle="$1" haystack="$2" label="$3"
-  if printf '%s\n' "$haystack" | grep -qF -- "$needle"; then
+  if grep -qF -- "$needle" <<< "$haystack"; then
     ok "$label  (found: '$needle')"
   else
     fail "$label  (missing: '$needle')"

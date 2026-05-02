@@ -5119,6 +5119,22 @@ def _prospect_parse_frontmatter(text: str) -> Optional[dict[str, Any]]:
         # whether the block contained any non-blank lines.
         if not result and any(line.strip() for line in fm_text.splitlines()):
             return None
+        # `_parse_inline_yaml` keeps booleans as strings ("memory entries don't
+        # need typed scalars" per its docstring), but prospect frontmatter ships
+        # typed booleans (`floor_violation`, `generation_under_volume`) that
+        # `validate_prospect_frontmatter` and the Phase 2/3 ranker treat as
+        # `bool`. Coerce here so the fallback path round-trips equivalently to
+        # PyYAML — without this, runners without PyYAML installed see
+        # `parsed["floor_violation"] is True` evaluate False even when the
+        # serialized value was `floor_violation: true`.
+        for _bool_key in ("floor_violation", "generation_under_volume"):
+            _v = result.get(_bool_key)
+            if isinstance(_v, str):
+                _norm = _v.strip().lower()
+                if _norm in ("true", "yes", "on"):
+                    result[_bool_key] = True
+                elif _norm in ("false", "no", "off"):
+                    result[_bool_key] = False
         return result
 
 
