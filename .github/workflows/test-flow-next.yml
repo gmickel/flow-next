@@ -16,9 +16,13 @@ on:
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash # Git Bash on Windows; bash on Linux/macOS — unifies the matrix.
 
     steps:
       - uses: actions/checkout@v4
@@ -28,27 +32,59 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Check flowctl.py syntax
+      # ──────────── Static checks (cheap, fail fast) ────────────
+
+      - name: Syntax check — flowctl.py
         run: python -m py_compile plugins/flow-next/scripts/flowctl.py
 
-      - name: Check ralph.sh syntax (Unix)
-        if: runner.os != 'Windows'
+      - name: Syntax check — ralph.sh
         run: bash -n plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh
 
-      - name: Check ralph.sh syntax (Windows Git Bash)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: bash -n plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh
+      # ──────────── Functional smokes (ordered cheap-first) ────────────
+      # All smokes refuse to run from the main plugin repo, so cd into the
+      # runner's temp dir before invoking. $RUNNER_TEMP is set on every
+      # GitHub-hosted runner (ubuntu/macos/windows).
 
-      - name: Run comprehensive tests (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          cd /tmp
-          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/ci_test.sh"
-
-      - name: Run comprehensive tests (Windows)
-        if: runner.os == 'Windows'
-        shell: bash
+      - name: ci_test.sh (flowctl integration, 57 cases)
         run: |
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/ci_test.sh"
+
+      - name: resolve-pr_smoke_test.sh (58 cases, ~1s)
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/resolve-pr_smoke_test.sh"
+
+      - name: strategy_smoke_test.sh (62 cases, ~5s)
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/strategy_smoke_test.sh"
+
+      - name: audit_smoke_test.sh (41 cases, ~6s)
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/audit_smoke_test.sh"
+
+      - name: glossary_smoke_test.sh (80 cases, ~7s)
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/glossary_smoke_test.sh"
+
+      - name: prospect_smoke_test.sh (94 cases, ~60s)
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/prospect_smoke_test.sh"
+
+      - name: impl-review_smoke_test.sh (74 cases, ~70s)
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/impl-review_smoke_test.sh"
+
+      - name: smoke_test.sh (130 cases, ~100s)
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/smoke_test.sh"
+
+      # Smokes intentionally skipped (require external CLIs not on GitHub runners):
+      #   - ralph_smoke_test.sh / ralph_smoke_rp.sh — need claude / codex / rp-cli
+      #   - plan_review_prompt_smoke.sh — needs rp-cli
