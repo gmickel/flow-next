@@ -1468,11 +1468,19 @@ def is_supported_schema(version: Any) -> bool:
 
 
 def atomic_write(path: Path, content: str) -> None:
-    """Write file atomically via temp + rename."""
+    """Write file atomically via temp + rename.
+
+    `newline=""` preserves whatever line endings are in `content` exactly
+    (no LF→CRLF translation on Windows). flow-next writes content with
+    explicit `\\n` line endings; the LF→CRLF translation in Python's text
+    mode is a long-standing source of platform-divergent behavior — files
+    look "modified" in git diffs across OSes, and round-trip comparisons
+    in tests get spurious mismatches.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
             f.write(content)
         os.replace(tmp_path, path)
     except Exception:

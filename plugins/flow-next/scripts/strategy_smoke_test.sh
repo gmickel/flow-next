@@ -326,6 +326,8 @@ T1_PATH="$(json_get "$T1_STATUS" "d['file_path']")"
 # Normalize Windows backslashes (Python's pathlib returns native form on Windows)
 T1_PATH="${T1_PATH//\\//}"
 T1_PATH_REAL="$( "$PYTHON_BIN" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$REPO/STRATEGY.md" )"
+# Normalize Windows backslashes so the comparison matches T1_PATH (also normalized).
+T1_PATH_REAL="${T1_PATH_REAL//\\//}"
 [[ "$T1_PATH" == "$T1_PATH_REAL" ]] \
   && ok "T1" "file_path resolves to repo-root STRATEGY.md ($T1_PATH)" \
   || fail "T1" "file_path expected '$T1_PATH_REAL', got '$T1_PATH'"
