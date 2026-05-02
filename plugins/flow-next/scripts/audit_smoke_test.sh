@@ -117,7 +117,7 @@ assert_grep_re() {
 # JSON value extraction via python.
 json_get() {
   local file="$1" expr="$2"
-  "$PYTHON_BIN" -c "import json; d=json.load(open('$file')); print($expr)" 2>&1 || true
+  "$PYTHON_BIN" -c "import json; d=json.load(open(r'$file')); print($expr)" 2>&1 | tr -d '\r' || true
 }
 
 assert_eq_jq() {
