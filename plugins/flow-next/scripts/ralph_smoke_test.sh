@@ -4,6 +4,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TEST_DIR="${TEST_DIR:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/ralph-smoke-$$}"
+# Normalize Windows backslashes from $RUNNER_TEMP to forward slashes
+# so paths interpolated into `python -c "..."` source code are not
+# corrupted by Python escape parsing (e.g. `D:\a\_temp` → `D:<bell>...`).
+# Windows accepts forward-slash paths natively; no-op on Linux/macOS.
+TEST_DIR="${TEST_DIR//\\//}"
 
 # Python detection: prefer python3, fallback to python (Windows support, GH-35)
 pick_python() {

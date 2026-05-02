@@ -32,6 +32,12 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Configure git identity (smoke tests create commits)
+        run: |
+          git config --global user.email "ci@flow-next.test"
+          git config --global user.name "flow-next CI"
+          git config --global init.defaultBranch main
+
       # ──────────── Static checks (cheap, fail fast) ────────────
 
       - name: Syntax check — flowctl.py

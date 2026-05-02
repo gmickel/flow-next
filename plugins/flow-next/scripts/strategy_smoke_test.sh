@@ -67,6 +67,11 @@ if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-n
 fi
 
 TEST_DIR="${TEST_DIR:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/strategy-smoke-$$}"
+# Normalize Windows backslashes from $RUNNER_TEMP to forward slashes
+# so paths interpolated into `python -c "..."` source code are not
+# corrupted by Python escape parsing (e.g. `D:\a\_temp` → `D:<bell>...`).
+# Windows accepts forward-slash paths natively; no-op on Linux/macOS.
+TEST_DIR="${TEST_DIR//\\//}"
 PASS=0
 FAIL=0
 
