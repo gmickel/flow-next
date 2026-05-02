@@ -44,7 +44,21 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Convert Git Bash style /d/a/... to Windows-friendly D:/a/... so paths
+# interpolated into native-Windows Python (sys.path / argv / file_path
+# comparisons) resolve. `cygpath -m` produces forward-slash Windows paths
+# that Python accepts and that match Python's pathlib output.
+# No-op on Linux/macOS where cygpath is absent.
+to_winpath() {
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -m "$1"
+  else
+    printf '%s' "$1"
+  fi
+}
+SCRIPT_DIR="$(to_winpath "$SCRIPT_DIR")"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PLUGIN_ROOT="$(to_winpath "$PLUGIN_ROOT")"
 FLOWCTL="$SCRIPT_DIR/flowctl"
 
 pick_python() {
@@ -404,7 +418,7 @@ T3B_NAME="$(json_get "$T3B_READ"   "d['name']")"
 
 # Resolve the canonical repo-root path the same way the production code does
 # so we compare apples-to-apples on macOS where /tmp is a symlink to /private/tmp.
-T3B_EXPECTED_PATH="$( cd "$SUB_LOCAL_REPO" && pwd -P )/STRATEGY.md"
+T3B_EXPECTED_PATH="$(to_winpath "$( cd "$SUB_LOCAL_REPO" && pwd -P )")/STRATEGY.md"
 [[ "$T3B_PATH" == "$T3B_EXPECTED_PATH" ]] \
   && ok "T3b" "subdir invocation IGNORES local STRATEGY.md, picks repo root ($T3B_PATH)" \
   || fail "T3b" "expected repo-root path '$T3B_EXPECTED_PATH', got '$T3B_PATH' (nearest-ancestor regression)"

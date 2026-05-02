@@ -2,7 +2,21 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Convert Git Bash style /d/a/... to Windows-friendly D:/a/... so paths
+# interpolated into native-Windows Python (sys.path / argv / file_path
+# comparisons) resolve. `cygpath -m` produces forward-slash Windows paths
+# that Python accepts and that match Python's pathlib output.
+# No-op on Linux/macOS where cygpath is absent.
+to_winpath() {
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -m "$1"
+  else
+    printf '%s' "$1"
+  fi
+}
+SCRIPT_DIR="$(to_winpath "$SCRIPT_DIR")"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PLUGIN_ROOT="$(to_winpath "$PLUGIN_ROOT")"
 
 # Python detection: prefer python3, fallback to python (Windows support, GH-35)
 pick_python() {

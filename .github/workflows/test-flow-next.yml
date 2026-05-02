@@ -52,41 +52,49 @@ jobs:
       # GitHub-hosted runner (ubuntu/macos/windows).
 
       - name: ci_test.sh (flowctl integration, 57 cases)
+        if: always()
         run: |
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/ci_test.sh"
 
       - name: resolve-pr_smoke_test.sh (58 cases, ~1s)
+        if: always()
         run: |
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/resolve-pr_smoke_test.sh"
 
       - name: strategy_smoke_test.sh (62 cases, ~5s)
+        if: always()
         run: |
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/strategy_smoke_test.sh"
 
       - name: audit_smoke_test.sh (41 cases, ~6s)
+        if: always()
         run: |
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/audit_smoke_test.sh"
 
       - name: glossary_smoke_test.sh (80 cases, ~7s)
+        if: always()
         run: |
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/glossary_smoke_test.sh"
 
       - name: prospect_smoke_test.sh (94 cases, ~60s)
+        if: always()
         run: |
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/prospect_smoke_test.sh"
 
       - name: impl-review_smoke_test.sh (74 cases, ~70s)
+        if: always()
         run: |
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/impl-review_smoke_test.sh"
 
       - name: smoke_test.sh (130 cases, ~100s)
+        if: always()
         run: |
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/smoke_test.sh"
