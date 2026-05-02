@@ -8,7 +8,7 @@
 #   - skill SKILL.md Ralph-block guard (Task 2)
 #   - prospect grounding snapshot (Task 3)
 #   - plan-sync drift surfacing read-only invariant (Task 4)
-#   - ci_test fluff guard (Task 5 — already gates main repo, here we cross-check)
+#   - ci_test fluff guard (Task 5 -- already gates main repo, here we cross-check)
 #
 # Cases (T1-T12 from spec):
 #   T1.  First-run on-disk shape: full populated STRATEGY.md → status reports
@@ -36,7 +36,7 @@
 #   T12. Ralph block: with FLOW_RALPH=1, Phase 0 bash exits 2 + stderr
 #        contains "[STRATEGY: user-triggered only". (R17)
 #
-# Pure shell + Python harness — no LLM invocations. Targets <30s runtime.
+# Pure shell + Python harness -- no LLM invocations. Targets <30s runtime.
 # Pattern follows glossary_smoke_test.sh (fn-38.2).
 #
 # Run from any directory other than the plugin repo root.
@@ -60,6 +60,7 @@ SCRIPT_DIR="$(to_winpath "$SCRIPT_DIR")"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PLUGIN_ROOT="$(to_winpath "$PLUGIN_ROOT")"
 FLOWCTL="$SCRIPT_DIR/flowctl"
+FLOWCTL_PY="$SCRIPT_DIR/flowctl.py"  # for subprocess.run([sys.executable, FLOWCTL_PY, ...]) on Windows where the bash wrapper isn't a valid Win32 exe
 
 pick_python() {
   if [[ -n "${PYTHON_BIN:-}" ]]; then
@@ -148,7 +149,7 @@ assert_eq_jq() {
   fi
 }
 
-# Init a minimal git repo (no .flow/ — strategy works without it).
+# Init a minimal git repo (no .flow/ -- strategy works without it).
 init_test_repo() {
   local dir="$1"
   mkdir -p "$dir"
@@ -182,11 +183,11 @@ Teams ship features faster than they can validate them. The crux is a missing fe
 Treat every release as an experiment. Ship behind flags; route traffic by cohort; measure outcome before promoting.
 
 ## Who it's for
-**Primary:** product engineers — they own the deploy and need outcome data without paging the analytics team.
+**Primary:** product engineers -- they own the deploy and need outcome data without paging the analytics team.
 
 ## Key metrics
-- **time-to-validate** — hours from deploy to outcome dial; measured per release.
-- **flag-cleanup-lag** — days between rollout and stale-flag prune; measured weekly.
+- **time-to-validate** -- hours from deploy to outcome dial; measured per release.
+- **flag-cleanup-lag** -- days between rollout and stale-flag prune; measured weekly.
 
 ## Tracks
 ### release-flags
@@ -306,7 +307,7 @@ REPO="$TEST_DIR/repo"
 init_test_repo "$REPO"
 
 # =============================================================================
-# T1: First-run on-disk shape — full populated STRATEGY.md
+# T1: First-run on-disk shape -- full populated STRATEGY.md
 # =============================================================================
 echo -e "${YELLOW}--- T1: full populated → exists/!husk/sections_filled==5/generator_match ---${NC}"
 write_full_strategy "$REPO/STRATEGY.md"
@@ -322,6 +323,8 @@ assert_eq_jq "T1" "$T1_STATUS" "d['generator']"        "flow-next-strategy" "gen
 
 # Verify file_path resolves to repo's STRATEGY.md (realpath-safe on macOS /tmp link).
 T1_PATH="$(json_get "$T1_STATUS" "d['file_path']")"
+# Normalize Windows backslashes (Python's pathlib returns native form on Windows)
+T1_PATH="${T1_PATH//\\//}"
 T1_PATH_REAL="$( "$PYTHON_BIN" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$REPO/STRATEGY.md" )"
 [[ "$T1_PATH" == "$T1_PATH_REAL" ]] \
   && ok "T1" "file_path resolves to repo-root STRATEGY.md ($T1_PATH)" \
@@ -349,7 +352,7 @@ from pathlib import Path
 p = Path("$REPO/STRATEGY.md")
 text = p.read_text()
 parsed = flowctl.parse_strategy_file(text)
-parsed["target_problem"] = "Mutated diagnosis — only this section changed."
+parsed["target_problem"] = "Mutated diagnosis -- only this section changed."
 new_text = flowctl.render_strategy_file(parsed)
 flowctl.atomic_write(p, new_text)
 EOF
@@ -357,7 +360,7 @@ EOF
 T2_AFTER="$TEST_DIR/t2-after.json"
 ( cd "$REPO" && "$FLOWCTL" strategy read --json > "$T2_AFTER" )
 
-# Target section changed — assert it differs.
+# Target section changed -- assert it differs.
 T2_BEFORE_PROBLEM="$(json_get "$T2_BEFORE" "d['target_problem']")"
 T2_AFTER_PROBLEM="$(json_get "$T2_AFTER" "d['target_problem']")"
 [[ "$T2_BEFORE_PROBLEM" != "$T2_AFTER_PROBLEM" ]] \
@@ -386,6 +389,8 @@ T3_STATUS="$TEST_DIR/t3-status.json"
 ( cd "$SUB" && "$FLOWCTL" strategy status --json > "$T3_STATUS" )
 
 T3_PATH="$(json_get "$T3_STATUS" "d['file_path']")"
+# Normalize Windows backslashes (Python's pathlib returns native form on Windows)
+T3_PATH="${T3_PATH//\\//}"
 [[ "$T3_PATH" == "$T1_PATH_REAL" ]] \
   && ok "T3" "subdir invocation walks up to repo root ($T3_PATH)" \
   || fail "T3" "expected repo-root path '$T1_PATH_REAL', got '$T3_PATH'"
@@ -398,7 +403,7 @@ assert_eq_jq "T3" "$T3_STATUS" "d['sections_filled']" "5"    "sections_filled==5
   && ok "T3" "file_path endswith /STRATEGY.md" \
   || fail "T3" "file_path '$T3_PATH' missing /STRATEGY.md suffix"
 
-# T3b: regression guard — subdir with its OWN STRATEGY.md must STILL resolve
+# T3b: regression guard -- subdir with its OWN STRATEGY.md must STILL resolve
 # to the repo-root file (single-root walk, NOT nearest-ancestor like glossary).
 # Catches the P2 finding on PR #125 where find_strategy_file used to walk
 # upward and would falsely pick apps/web/STRATEGY.md from inside that subdir.
@@ -414,6 +419,8 @@ T3B_READ="$TEST_DIR/t3b-read.json"
 ( cd "$SUB_LOCAL_REPO/apps/web" && "$FLOWCTL" strategy status --json > "$T3B_STATUS" )
 ( cd "$SUB_LOCAL_REPO/apps/web" && "$FLOWCTL" strategy read   --json > "$T3B_READ"   )
 T3B_PATH="$(json_get "$T3B_STATUS" "d['file_path']")"
+# Normalize Windows backslashes (Python's pathlib returns native form on Windows)
+T3B_PATH="${T3B_PATH//\\//}"
 T3B_NAME="$(json_get "$T3B_READ"   "d['name']")"
 
 # Resolve the canonical repo-root path the same way the production code does
@@ -428,7 +435,7 @@ T3B_EXPECTED_PATH="$(to_winpath "$( cd "$SUB_LOCAL_REPO" && pwd -P )")/STRATEGY.
   || fail "T3b" "name='$T3B_NAME' indicates wrong file resolved (single-root broken)"
 
 # =============================================================================
-# T4: Husk detection — H1 + frontmatter only, no populated sections
+# T4: Husk detection -- H1 + frontmatter only, no populated sections
 # =============================================================================
 echo -e "${YELLOW}--- T4: bare husk file → husk:true, sections_filled:0 ---${NC}"
 HUSK_REPO="$TEST_DIR/husk-repo"
@@ -444,7 +451,7 @@ assert_eq_jq "T4" "$T4_STATUS" "d['sections_filled']" "0"    "sections_filled==0
 assert_eq_jq "T4" "$T4_STATUS" "d['generator_match']" "True" "husk still has flow-next-strategy generator"
 
 # =============================================================================
-# T5: Foreign-file refusal contract — generator sentinel mismatch
+# T5: Foreign-file refusal contract -- generator sentinel mismatch
 # =============================================================================
 echo -e "${YELLOW}--- T5: foreign-file (no flow-next-strategy sentinel) → generator_match:false ---${NC}"
 FOREIGN_REPO="$TEST_DIR/foreign-repo"
@@ -459,7 +466,7 @@ assert_eq_jq "T5" "$T5_STATUS" "d['generator']"       "hand-written"   "generato
 assert_eq_jq "T5" "$T5_STATUS" "d['generator_match']" "False"          "generator_match false on foreign sentinel"
 
 # =============================================================================
-# T6: Mid-flow partial state — 2 populated, 3 empty
+# T6: Mid-flow partial state -- 2 populated, 3 empty
 # =============================================================================
 echo -e "${YELLOW}--- T6: 2-of-5 populated → empty bodies surface as '' (not null) ---${NC}"
 PARTIAL_REPO="$TEST_DIR/partial-repo"
@@ -474,7 +481,7 @@ assert_eq_jq "T6" "$T6_STATUS" "d['husk']"            "False" "husk false (2 pop
 T6_READ="$TEST_DIR/t6-read.json"
 ( cd "$PARTIAL_REPO" && "$FLOWCTL" strategy read --json > "$T6_READ" )
 
-# Populated sections — non-empty bodies.
+# Populated sections -- non-empty bodies.
 T6_PROBLEM="$(json_get "$T6_READ" "d['target_problem']")"
 T6_APPROACH="$(json_get "$T6_READ" "d['approach']")"
 [[ -n "$T6_PROBLEM" ]] && ok "T6" "target_problem non-empty (populated)" \
@@ -482,7 +489,7 @@ T6_APPROACH="$(json_get "$T6_READ" "d['approach']")"
 [[ -n "$T6_APPROACH" ]] && ok "T6" "approach non-empty (populated)" \
   || fail "T6" "approach unexpectedly empty"
 
-# Unfilled sections — empty STRING (per plan-sync breadcrumb: NOT null).
+# Unfilled sections -- empty STRING (per plan-sync breadcrumb: NOT null).
 # Use python to distinguish empty-string from None.
 "$PYTHON_BIN" - <<EOF
 import json, sys
@@ -500,7 +507,7 @@ EOF
 T6_RC=$?
 assert_rc "T6" 0 "$T6_RC" "unfilled sections surface as '' (empty string, not null)"
 
-# T6b: regression guard — sections holding the _Not yet captured._ first-run
+# T6b: regression guard -- sections holding the _Not yet captured._ first-run
 # draft placeholder MUST count as empty in sections_filled. Catches the P1
 # finding on PR #125 where _strategy_section_filled only handled the husk
 # sentinel _Not currently tracking._ but the strategy skill writes
@@ -529,7 +536,7 @@ T6B_FILLED="$(json_get "$T6B_STATUS" "d['sections_filled']")"
   || fail "T6b" "sections_filled=$T6B_FILLED indicates placeholder sentinel regression"
 
 # =============================================================================
-# T7: Forbidden-vocab CI guard — fluff word in fixture SKILL.md fails ci_test
+# T7: Forbidden-vocab CI guard -- fluff word in fixture SKILL.md fails ci_test
 # =============================================================================
 echo -e "${YELLOW}--- T7: ci_test.sh R19 fluff guard catches banned word ---${NC}"
 # Build a fixture plugin tree that mirrors the real layout enough for ci_test
@@ -546,7 +553,7 @@ mkdir -p "$FIXTURE_PLUGIN/commands/flow-next"
 mkdir -p "$FIXTURE_PLUGIN/scripts"
 
 cat > "$FIXTURE_PLUGIN/skills/flow-next-strategy/SKILL.md" <<'EOF'
-# /flow-next:strategy — fluff fixture
+# /flow-next:strategy -- fluff fixture
 This skill creates synergy across teams.
 EOF
 cat > "$FIXTURE_PLUGIN/commands/flow-next/strategy.md" <<'EOF'
@@ -589,7 +596,7 @@ T7_CI_HAS_R19="$(grep -c 'R19' "$PLUGIN_ROOT/scripts/ci_test.sh" || true)"
   || fail "T7" "ci_test.sh missing R19 fluff guard wiring"
 
 # =============================================================================
-# T8: Strategy/glossary JSON contract — both readable for downstream conflict detection
+# T8: Strategy/glossary JSON contract -- both readable for downstream conflict detection
 # =============================================================================
 echo -e "${YELLOW}--- T8: strategy + glossary JSON parseable for downstream ---${NC}"
 # Repo with both populated. Seed a glossary term + a strategy with `tracks`
@@ -623,14 +630,14 @@ assert_eq_jq "T8" "$T8_STRATEGY_JSON" "'tracks' in d" "True" "strategy JSON has 
 # Glossary list must expose total_terms for cross-check.
 assert_eq_jq "T8" "$T8_GLOSSARY_JSON" "d['total_terms']" "1" "glossary has 1 term (Track)"
 
-# Both contracts present together — downstream interview skill can reach
+# Both contracts present together -- downstream interview skill can reach
 # strategy.tracks (raw markdown string with `### <track-name>` H3 sub-blocks)
 # and glossary.groups[].entries to detect divergence.
 T8_TRACKS="$(json_get "$T8_STRATEGY_JSON" "d['tracks']")"
 assert_grep "T8" "### release-flags" "$T8_TRACKS" "strategy.tracks raw markdown contains H3 sub-blocks"
 
 # =============================================================================
-# T9: Decision-record schema — flowctl memory add accepts strategy-override entry
+# T9: Decision-record schema -- flowctl memory add accepts strategy-override entry
 # =============================================================================
 echo -e "${YELLOW}--- T9: memory add (track=knowledge category=decisions) accepts override ---${NC}"
 T9_REPO="$TEST_DIR/t9-repo"
@@ -686,7 +693,7 @@ else
 fi
 
 # =============================================================================
-# T10: Prospect grounding determinism — verbatim approach + tracks emit
+# T10: Prospect grounding determinism -- verbatim approach + tracks emit
 # =============================================================================
 echo -e "${YELLOW}--- T10: prospect grounding snapshot emits verbatim approach + tracks ---${NC}"
 # Run the deterministic snapshot bash block from prospect SKILL.md against
@@ -704,8 +711,10 @@ echo -e "${YELLOW}--- T10: prospect grounding snapshot emits verbatim approach +
 T10_OUT="$TEST_DIR/t10-snapshot.txt"
 "$PYTHON_BIN" - <<EOF > "$T10_OUT"
 import json, subprocess, sys
+# Use [sys.executable, FLOWCTL_PY, ...] so the call works on Windows where
+# the bash wrapper is not a valid Win32 executable (WinError 193).
 status = subprocess.run(
-    ["$FLOWCTL", "strategy", "status", "--json"],
+    [sys.executable, "$FLOWCTL_PY", "strategy", "status", "--json"],
     cwd="$REPO", capture_output=True, text=True, check=True,
 )
 st = json.loads(status.stdout)
@@ -713,7 +722,7 @@ filled = st.get("sections_filled", 0)
 print(f"STRATEGY_FILLED={filled}")
 if filled >= 1:
     read = subprocess.run(
-        ["$FLOWCTL", "strategy", "read", "--json"],
+        [sys.executable, "$FLOWCTL_PY", "strategy", "read", "--json"],
         cwd="$REPO", capture_output=True, text=True, check=True,
     )
     s = json.loads(read.stdout)
@@ -729,7 +738,7 @@ EOF
 assert_grep "T10" "Treat every release as an experiment" "$(cat "$T10_OUT")" "approach text present verbatim"
 assert_grep "T10" "Ship behind flags" "$(cat "$T10_OUT")" "approach second sentence present"
 
-# Tracks H3 sub-blocks emitted verbatim — note: in T2 the file was rewritten
+# Tracks H3 sub-blocks emitted verbatim -- note: in T2 the file was rewritten
 # via parse→render so the body bumped to render canonical form, but the H3
 # names are stable.
 assert_grep "T10" "### release-flags" "$(cat "$T10_OUT")" "tracks H3 #1 verbatim"
@@ -743,7 +752,7 @@ T10_PROSPECT_WIRES="$(grep -c 'STRATEGY' "$PLUGIN_ROOT/skills/flow-next-prospect
   || fail "T10" "prospect workflow missing STRATEGY grounding wire-up"
 
 # =============================================================================
-# T11: plan-sync drift surfacing — read-only invariant
+# T11: plan-sync drift surfacing -- read-only invariant
 # =============================================================================
 echo -e "${YELLOW}--- T11: plan-sync.md contains 'never auto-supersede'/'auto-supersede' read-only invariant ---${NC}"
 PLAN_SYNC_FILE="$PLUGIN_ROOT/agents/plan-sync.md"
@@ -754,13 +763,13 @@ PLAN_SYNC_FILE="$PLUGIN_ROOT/agents/plan-sync.md"
 # Read-only invariant: agent never auto-supersedes the doc. The canonical
 # phrasing in plan-sync.md is "Do not auto-supersede" (matches the existing
 # decision-record convention at line 110). Spec calls for "never auto-supersedes
-# or equivalent invariant string" — accept both phrasings.
+# or equivalent invariant string" -- accept both phrasings.
 T11_INV="$(grep -E '(Do not auto-supersede|never auto-supersede)' "$PLAN_SYNC_FILE" || true)"
 [[ -n "$T11_INV" ]] \
   && ok "T11" "read-only invariant present ('Do not auto-supersede' or equivalent)" \
   || fail "T11" "missing 'auto-supersede' read-only invariant in plan-sync.md"
 
-# And specifically tied to STRATEGY.md (not just decisions) — section 3b.3
+# And specifically tied to STRATEGY.md (not just decisions) -- section 3b.3
 # must explicitly say plan-sync does not edit STRATEGY.md.
 T11_STRAT_INV="$(grep -E 'Do not Edit `STRATEGY\.md`|never edit `STRATEGY\.md`' "$PLAN_SYNC_FILE" || true)"
 [[ -n "$T11_STRAT_INV" ]] \
@@ -774,13 +783,13 @@ T11_DRIFT="$(grep -F 'Strategy drift flagged for review' "$PLAN_SYNC_FILE" || tr
   || fail "T11" "missing 'Strategy drift flagged for review' heading"
 
 # =============================================================================
-# T12: Ralph block — FLOW_RALPH=1 → exit 2 + stderr message
+# T12: Ralph block -- FLOW_RALPH=1 → exit 2 + stderr message
 # =============================================================================
 echo -e "${YELLOW}--- T12: FLOW_RALPH=1 fires Ralph block (exit 2, stderr message) ---${NC}"
 # Extract the Phase 0.1 Ralph-block from SKILL.md and run it as a shell
 # script. SKILL.md ships:
 #   if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
-#     echo "[STRATEGY: user-triggered only — Ralph cannot run /flow-next:strategy]" >&2
+#     echo "[STRATEGY: user-triggered only -- Ralph cannot run /flow-next:strategy]" >&2
 #     exit 2
 #   fi
 # We run the literal block under FLOW_RALPH=1.
@@ -789,7 +798,7 @@ T12_BLOCK="$TEST_DIR/t12-ralph-block.sh"
 cat > "$T12_BLOCK" <<'EOF'
 #!/usr/bin/env bash
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
-  echo "[STRATEGY: user-triggered only — Ralph cannot run /flow-next:strategy]" >&2
+  echo "[STRATEGY: user-triggered only -- Ralph cannot run /flow-next:strategy]" >&2
   exit 2
 fi
 echo "fell through (would run skill body)"

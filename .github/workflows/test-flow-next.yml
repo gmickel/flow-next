@@ -25,6 +25,12 @@ jobs:
         shell: bash # Git Bash on Windows; bash on Linux/macOS — unifies the matrix.
 
     steps:
+      - name: Disable git autocrlf so checkout preserves LF on Windows
+        run: git config --global core.autocrlf false
+        # Default Windows-runner config converts LF→CRLF on checkout, which
+        # changes heredoc bytes that smokes compare byte-identically against
+        # flowctl output. Force LF on all OSes for consistent fixtures.
+
       - uses: actions/checkout@v4
 
       - name: Setup Python
