@@ -19,3 +19,4 @@ __pycache__/
 .flow/receipts/
 .flow/tmp/
 scripts/ralph/
+.claude/

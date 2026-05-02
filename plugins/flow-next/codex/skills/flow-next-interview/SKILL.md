@@ -59,13 +59,16 @@ If empty, ask: "What should I interview you about? Give me a Flow ID (e.g., fn-1
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowctl"
 ```
 
-### Parse `--docs` / `--no-docs` flags
+### Parse `--docs` / `--no-docs` / `--strategy` / `--no-strategy` flags
 
-Strip `--docs` / `--no-docs` from `$ARGUMENTS` before input-type detection so they don't get confused for a Flow ID or path:
+Strip the four doc-aware override flags from `$ARGUMENTS` before input-type detection so they don't get confused for a Flow ID or path:
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
-DOC_AWARE_FORCE="" # "" = autodetect, "on" = forced on, "off" = forced off
+DOC_AWARE_FORCE="" # "" = autodetect, "on" = forced on, "off" = forced off (controls glossary + decisions)
+STRATEGY_AWARE_FORCE="" # "" = autodetect, "on" = forced on, "off" = forced off (controls strategy independently)
+
+# Glossary + decisions: --docs / --no-docs (mutually exclusive; --no-docs wins)
 if [[ "$RAW_ARGS" == *"--no-docs"* ]]; then
  DOC_AWARE_FORCE="off"
  RAW_ARGS="${RAW_ARGS//--no-docs/}"
@@ -73,21 +76,47 @@ elif [[ "$RAW_ARGS" == *"--docs"* ]]; then
  DOC_AWARE_FORCE="on"
  RAW_ARGS="${RAW_ARGS//--docs/}"
 fi
+
+# Strategy: explicit --strategy / --no-strategy always wins. Otherwise --docs / --no-docs cascades.
+# Order: explicit pair first (mutually exclusive; --no-strategy wins on conflict), then docs cascade.
+if [[ "$RAW_ARGS" == *"--no-strategy"* ]]; then
+ STRATEGY_AWARE_FORCE="off"
+ RAW_ARGS="${RAW_ARGS//--no-strategy/}"
+elif [[ "$RAW_ARGS" == *"--strategy"* ]]; then
+ STRATEGY_AWARE_FORCE="on"
+ RAW_ARGS="${RAW_ARGS//--strategy/}"
+elif [[ "$DOC_AWARE_FORCE" == "off" ]]; then
+ # --no-docs alone cascades to strategy: matrix row 3 says all three off.
+ STRATEGY_AWARE_FORCE="off"
+elif [[ "$DOC_AWARE_FORCE" == "on" ]]; then
+ # --docs alone cascades to strategy: matrix row 2 says all three on.
+ STRATEGY_AWARE_FORCE="on"
+fi
+
 RAW_ARGS=$(printf "%s" "$RAW_ARGS" | tr -s ' ' | sed 's/^ //;s/ $//')
 # RAW_ARGS now contains the Flow ID / file path / empty.
 ```
 
-`--docs` and `--no-docs` are mutually exclusive; if the user passes both, `--no-docs` wins (the `if/elif` checks `--no-docs` first). The `--docs` token gets left in the residual `RAW_ARGS` after stripping, which surfaces downstream as an unrecognized argument — loud failure beats silent acceptance of conflicting state.
+Each pair is mutually exclusive (the `if/elif` checks the negation first so it wins on conflict). The `--docs` / `--strategy` tokens get left in the residual `RAW_ARGS` after stripping, which surfaces downstream as an unrecognized argument — loud failure beats silent acceptance of conflicting state.
+
+**Flag matrix** — five rows, all explicit:
+
+| Flags | Glossary | Decisions | Strategy |
+|-------|----------|-----------|----------|
+| (default) | autodetect | autodetect | autodetect |
+| `--docs` | on | on | on |
+| `--no-docs` | off | off | off |
+| `--no-docs --strategy` | off | off | on |
+| `--docs --no-strategy` | on | on | off |
+
+`--docs` / `--no-docs` cascade to strategy when no explicit `--strategy` / `--no-strategy` is passed (matrix rows 2 + 3). Explicit `--strategy` / `--no-strategy` always wins (matrix rows 4 + 5) and is the only way to drive a different value into strategy than into glossary + decisions. The matrix is the contract.
 
 ### Doc-aware autodetect
 
-Decide whether doc-aware mode (behaviors a-d below) activates. Three paths:
-
-1. **Forced on** (`--docs` flag): `DOC_AWARE=1`. Lazy-creates root `GLOSSARY.md` on first term resolution via `flowctl glossary add` (writes to nearest-ancestor or repo root when no ancestor exists).
-2. **Forced off** (`--no-docs` flag): `DOC_AWARE=0`. Skip behaviors a-d entirely, even if artifacts exist.
-3. **Autodetect** (no flag): activate when `GLOSSARY.md` has at least one defined term OR any decision entry exists.
+Decide whether doc-aware mode (behaviors a-e below) activates. `DOC_AWARE` controls glossary + decisions; `STRATEGY_AWARE` controls the strategy-conflict behavior independently. Each has three paths (forced-on / forced-off / autodetect) per the flag matrix above.
 
 ```bash
+# DOC_AWARE: glossary + decisions
 DOC_AWARE=0
 if [[ "$DOC_AWARE_FORCE" == "on" ]]; then
  DOC_AWARE=1
@@ -100,11 +129,26 @@ else
  DOC_AWARE=1
  fi
 fi
+
+# STRATEGY_AWARE: strategy (independent of DOC_AWARE — autodetects on its own signal)
+STRATEGY_AWARE=0
+if [[ "$STRATEGY_AWARE_FORCE" == "on" ]]; then
+ STRATEGY_AWARE=1
+elif [[ "$STRATEGY_AWARE_FORCE" == "off" ]]; then
+ STRATEGY_AWARE=0
+else
+ STRAT_FILLED=$("$FLOWCTL" strategy status --json 2>/dev/null | jq -r '.sections_filled // 0')
+ if [[ "${STRAT_FILLED:-0}" -ge 1 ]]; then
+ STRATEGY_AWARE=1
+ fi
+fi
 ```
 
-**Why `total_terms > 0` rather than `[[ -f GLOSSARY.md ]]`:** `flowctl glossary remove` leaves a `# Glossary` H1 husk on disk after the last term is removed (the file is project state, intentionally retained). A presence-only check would false-positive on an empty husk and surface phantom doc-aware questions when no canonical vocabulary is actually defined. `glossary list --json` walks the file and counts populated entries; `total_terms == 0` for a husk.
+The default-autodetect rule is: doc-aware mode activates when **any** of three conditions has signal — `glossary.total_terms > 0` (a) OR a decision entry exists (b) OR `strategy.sections_filled >= 1` (c). The two flag pairs (`--docs` / `--no-docs` and `--strategy` / `--no-strategy`) override (a)+(b) and (c) independently per the matrix above.
 
-When `DOC_AWARE=1`, the four behaviors below layer onto the standard interview workflow. When `DOC_AWARE=0`, the interview proceeds exactly as today.
+**Why `total_terms > 0` and `sections_filled >= 1` rather than `[[ -f <file> ]]`:** `flowctl glossary remove` leaves a `# Glossary` H1 husk after the last term is removed; `flowctl strategy` leaves a frontmatter-plus-H1 husk under the same R18 invariant. Both files are project state, intentionally retained. A presence-only check would false-positive on an empty husk and surface phantom doc-aware questions when no canonical vocabulary / strategic intent is actually defined. `glossary list --json` and `strategy status --json` walk the file and count populated entries; both report zero for a husk.
+
+When `DOC_AWARE=1`, behaviors (a)-(d) below layer onto the standard interview workflow. When `STRATEGY_AWARE=1`, behavior (e) layers on. When both are 0, the interview proceeds exactly as today.
 
 ## Detect Input Type
 
@@ -202,9 +246,14 @@ Confidence tier: `[high]` when grep evidence is unambiguous (file does not exist
 
 The bar for surfacing: a meaningful contradiction that affects spec correctness. If the user says "the validator returns boolean" and grep shows it returns `Result<bool, Error>`, surface. If the user paraphrases a function's role and grep shows the role matches but the implementation differs in unrelated detail, log under `## Resolved via Codebase` and move on.
 
-## Doc-aware behaviors (`DOC_AWARE=1` only)
+## Doc-aware behaviors
 
-When `DOC_AWARE=1`, four behaviors layer onto the standard interview workflow. When `DOC_AWARE=0`, skip this entire section.
+Five behaviors layer onto the standard interview workflow when their respective gate is open:
+
+- Behaviors (a)-(d) are gated on `DOC_AWARE=1` (glossary + decisions signal). When `DOC_AWARE=0`, skip them.
+- Behavior (e) is gated on `STRATEGY_AWARE=1` (strategy signal). When `STRATEGY_AWARE=0`, skip it.
+
+The two gates are independent (see flag matrix above) — `DOC_AWARE` and `STRATEGY_AWARE` may differ within the same interview session.
 
 ### Behavior (a) — Phase-zero glossary scan
 
@@ -324,6 +373,48 @@ When all three hold:
 
 **At most one decision write per interview turn.** Even if multiple gate-passing decisions surface, ask one at a time; subsequent asks adapt to the user's energy level for read-back.
 
+### Behavior (e) — Code-versus-strategy contradiction (`STRATEGY_AWARE=1` only)
+
+Parallel structure to behavior (a) — Phase-zero glossary scan. Before drafting the first question batch in a `STRATEGY_AWARE=1` session, run a strategy scan against the user's request.
+
+```bash
+"$FLOWCTL" strategy read --json
+```
+
+JSON shape (selected fields used here):
+
+```json
+{
+ "name": "<product-name>",
+ "target_problem": "...",
+ "approach": "...",
+ "tracks": "### track-a\nOne line on track A.\n_Why it serves the approach:_ ...\n\n### track-b\n...",
+ "last_updated": "2026-05-01",
+ "path": "STRATEGY.md"
+}
+```
+
+`tracks` is a **raw markdown string** — H3 sub-blocks of the form `### <track-name>` followed by a one-line description and a `_Why it serves the approach:_` line. Parse the H3 names locally. Empty section bodies (any of `target_problem`, `approach`, `tracks`) surface as `""` (empty string), not null — `(.field // "")` style fallbacks keep parsing well-formed when an optional section is missing.
+
+Walk the user's request looking for two patterns:
+
+1. **Track-name mismatch** — the user uses a noun-phrase that names a track-like investment area, but the wording diverges from a canonical track in `STRATEGY.md` (e.g. user says "Initiative" but `tracks` defines "### Track"). Treat the user's wording as a candidate alias for the closest canonical track and surface as a question if load-bearing for the spec.
+2. **Direction conflict** — the user describes a goal or constraint that contradicts the `approach` or one of the active tracks (e.g. approach says "we ship CLI tools, not SaaS" but the user is asking the spec to add a managed dashboard service).
+
+For each hit, evaluate the same load-bearing filter as behavior (a): casual passing mention does not trigger; mention that defines behavior or shapes acceptance does.
+
+When a hit passes the filter, surface via `request_user_input`:
+
+- **header**: `Strategy mismatch?`
+- **body**: `You said "<user-wording>"; STRATEGY.md (<path>) <track|approach> says "<canonical-wording>". Recommended: <align-with-strategy | flag-as-drift | this-is-different>. Confidence: [<tier>].`
+- **options**: frozen — `align-with-strategy` (the user meant the existing track / honors the approach; spec uses canonical wording), `flag-as-drift` (the spec is intentionally pushing back on the strategy; capture in `## Strategy Conflicts` and proceed), `this-is-different` (the words collide but the concepts differ; spec uses a fresh disambiguating term — also capture in `## Strategy Conflicts`).
+
+Confidence tier: `[high]` when the strategy entry is recent and the user's wording cleanly maps to a canonical track or directly contradicts the verbatim approach; `[judgment-call]` when meaning could plausibly have drifted; `[your-call]` when the strategic direction sits in user-domain territory the agent has no purchase on.
+
+**Throttle:** at most one strategy-conflict question per interview turn (parallel to behavior (a)'s glossary throttle). If multiple strategy mismatches hit, surface the most load-bearing one first; the rest fold into the natural conversation flow as they come up. Bombarding the user with strategy-alignment questions before the core spec questions is the failure mode this throttle prevents. Combined with the (a) and (d) throttles, the per-turn doc-aware question budget is **3 max** (1 glossary + 1 decision-record + 1 strategy).
+
+The output of behavior (e) lands in a new spec section, `## Strategy Conflicts`, parallel to `## Glossary Conflicts`. Format: per-line entries with user-wording / canonical-strategy-wording / STRATEGY.md path / resolution-chosen. Lets reviewers see where the spec aligns or pushes back on strategic intent. Strategy conflicts are read-only signal for `/flow-next:sync`'s plan-sync agent — the interview never edits `STRATEGY.md`.
+
 ## Question Categories
 
 Read [questions.md](questions.md) for all question categories and interview guidelines.
@@ -368,6 +459,10 @@ Items the agent answered via Read / Grep / Glob, with file:line evidence. Separa
 (optional — only when DOC_AWARE=1 surfaced behavior-(a) hits during the interview)
 Per-term: user-wording vs. canonical term, the resolution chosen (use-canonical / redefine / this-is-different), file:line of the canonical entry. Lets reviewers see where vocabulary tightened.
 
+## Strategy Conflicts
+(optional — only when STRATEGY_AWARE=1 surfaced behavior-(e) hits during the interview)
+Per-line: user-wording vs. canonical-strategy-wording (track name or approach), STRATEGY.md path, resolution chosen (align-with-strategy / flag-as-drift / this-is-different). Lets reviewers see where the spec aligns or pushes back on strategic intent. Read-only signal for plan-sync — the interview never edits STRATEGY.md.
+
 ## Open Questions
 Unresolved items that need research during planning
 
@@ -411,6 +506,10 @@ Items the agent answered via Read / Grep / Glob, with file:line evidence. Separa
 ## Glossary Conflicts
 (optional — only when DOC_AWARE=1 surfaced behavior-(a) hits during the interview)
 Per-term: user-wording vs. canonical term, the resolution chosen, file:line of the canonical entry.
+
+## Strategy Conflicts
+(optional — only when STRATEGY_AWARE=1 surfaced behavior-(e) hits during the interview)
+Per-line: user-wording vs. canonical-strategy-wording, STRATEGY.md path, resolution chosen.
 
 ## Open Questions
 Unresolved items
@@ -469,6 +568,7 @@ Show summary:
 - Key decisions captured
 - What was written (Flow ID updated / file rewritten)
 - Doc-aware mode (when `DOC_AWARE=1` was active): glossary terms added/updated via `flowctl glossary add`, decision entries written via `flowctl memory add --track knowledge --category decisions`, glossary conflicts captured under `## Glossary Conflicts`
+- Strategy-aware mode (when `STRATEGY_AWARE=1` was active): strategy conflicts captured under `## Strategy Conflicts` (read-only — interview never edits STRATEGY.md)
 
 Suggest next step based on input type:
 - New idea / epic without tasks → `/flow-next:plan fn-N`

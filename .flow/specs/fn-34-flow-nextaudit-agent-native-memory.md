@@ -127,7 +127,7 @@ After the audit completes, agent verifies CLAUDE.md / AGENTS.md (whichever holds
 
 ## Early proof point
 
-Task fn-34.1 ships the skill files. Validates the workflow shape against upstream's `ce-compound-refresh` (we have a known-working reference). If the skill phases don't compose cleanly with the existing fn-30 memory schema (`status: active|stale`, frontmatter fields, track/category structure), revisit before fn-34.2 (flowctl plumbing).
+Task fn-34.1 ships the skill files. Validates the workflow shape against the agent-native pattern (host agent reads + judges + writes directly, no subprocess LLM dispatch). If the skill phases don't compose cleanly with the existing fn-30 memory schema (`status: active|stale`, frontmatter fields, track/category structure), revisit before fn-34.2 (flowctl plumbing).
 
 ## Risks
 
@@ -145,12 +145,12 @@ Task fn-34.1 ships the skill files. Validates the workflow shape against upstrea
 - **Not** building a Python audit engine. The agent reads + judges directly.
 - **Not** dispatching codex/copilot via subprocess. Host agent is the intelligence.
 - **Not** auditing legacy flat files. Skip with warning; user runs `memory migrate` first.
-- **Not** auto-committing without user awareness. Skill commits in Phase 5 with descriptive message; interactive mode confirms; autofix uses sensible branch defaults (per upstream `ce-compound-refresh` Phase 5 logic).
+- **Not** auto-committing without user awareness. Skill commits in Phase 5 with descriptive message; interactive mode confirms; autofix uses sensible branch defaults.
 - **Not** deleting silently. Delete reserved for unambiguous cases (code gone + problem domain gone). Default to Replace or Consolidate when there's still value to preserve.
 
 ## Decision context
 
-**Why skill-based, not flowctl Python subcommand?** This plugin always runs inside an agentic environment (Claude Code / Codex / Droid). The host agent can read files, run grep, judge relevance, and write updates directly using its own tools. Spawning a second LLM via codex/copilot subprocess is wasteful (cost + latency) and adds machinery (subprocess timeouts, structured-verdict parsers, drift guards) that disappears in the agent-native architecture. Upstream's `ce-compound-refresh` skill is a working reference for this pattern.
+**Why skill-based, not flowctl Python subcommand?** This plugin always runs inside an agentic environment (Claude Code / Codex / Droid). The host agent can read files, run grep, judge relevance, and write updates directly using its own tools. Spawning a second LLM via codex/copilot subprocess is wasteful (cost + latency) and adds machinery (subprocess timeouts, structured-verdict parsers, drift guards) that disappears in the agent-native architecture.
 
 **Why thin flowctl plumbing instead of skill-only?** The skill needs deterministic operations for atomic frontmatter writes (`mark-stale` / `mark-fresh`), schema-validated round-trip, and consistent search filtering. Those are pure persistence concerns where flowctl's existing helpers shine. The split is: flowctl owns "set this field on this entry"; skill owns "should this entry be flagged."
 

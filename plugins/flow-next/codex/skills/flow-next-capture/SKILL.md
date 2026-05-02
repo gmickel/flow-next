@@ -1,6 +1,6 @@
 ---
 name: flow-next-capture
-description: Synthesize the current conversation context into a flow-next epic spec at `.flow/specs/<epic-id>.md` via `flowctl epic create + epic set-plan` — agent-native, source-tagged, with mandatory read-back before write. Triggers on /flow-next:capture, "capture spec", "lock down what we discussed", "make a spec from this conversation", "convert conversation to epic". Optional `mode:autofix` token runs without questions and requires `--yes` to commit. Optional `--rewrite <epic-id>` overwrites an existing epic spec; `--from-compacted-ok` overrides the compaction-detection refusal.
+description: Synthesize the current conversation context into a flow-next epic spec at `.flow/specs/<epic-id>.md` via `flowctl epic create + epic set-plan` — agent-native, source-tagged, with mandatory read-back before write. Triggers on /flow-next:capture, "capture spec", "lock down what we discussed", "make a spec from this conversation", "convert conversation to epic". Optional `mode:autofix` token runs without questions and requires `--yes` to commit. Optional `--rewrite <epic-id>` overwrites an existing epic spec; `--from-compacted-ok` overrides the compaction-detection refusal; `--override-strategy` proceeds despite a contradiction with an active STRATEGY.md track (and prompts to record the override as a decision).
 user-invocable: false
 allowed-tools: request_user_input, Read, Bash, Grep, Glob, Write, Edit, Task
 ---
@@ -26,7 +26,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 
 ## Mode Detection
 
-Parse `$ARGUMENTS` for the literal token `mode:autofix` and the flags `--rewrite <epic-id>`, `--from-compacted-ok`, `--yes`. Strip recognized tokens; whatever remains is treated as freeform context (ignored — the conversation is the input, not `$ARGUMENTS`).
+Parse `$ARGUMENTS` for the literal token `mode:autofix` and the flags `--rewrite <epic-id>`, `--from-compacted-ok`, `--yes`, `--override-strategy`. Strip recognized tokens; whatever remains is treated as freeform context (ignored — the conversation is the input, not `$ARGUMENTS`).
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
@@ -34,6 +34,7 @@ MODE="interactive"
 REWRITE_TARGET=""
 FROM_COMPACTED_OK=0
 COMMIT_YES=0
+OVERRIDE_STRATEGY=0
 
 # Mode token
 if [[ "$RAW_ARGS" == *"mode:autofix"* ]]; then
@@ -57,6 +58,12 @@ fi
 if [[ "$RAW_ARGS" == *"--yes"* ]]; then
  COMMIT_YES=1
  RAW_ARGS="${RAW_ARGS//--yes/}"
+fi
+
+# --override-strategy (Phase 5.0 strategy-contradiction override)
+if [[ "$RAW_ARGS" == *"--override-strategy"* ]]; then
+ OVERRIDE_STRATEGY=1
+ RAW_ARGS="${RAW_ARGS//--override-strategy/}"
 fi
 ```
 

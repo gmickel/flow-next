@@ -63,6 +63,49 @@ CONFIG_FILE = "config.json"
 GLOSSARY_FILE = "GLOSSARY.md"
 GLOSSARY_WALK_MAX_DEPTH = 32  # Defensive cap against pathological symlinks.
 
+# Strategy (fn-39.1): repo-root single-root markdown file. Unlike glossary
+# (which cascades nearest-ancestor for vocab locality), strategy is repo-wide
+# by Rumelt's definition — one diagnosis, one guiding policy. Single root only.
+STRATEGY_FILE = "STRATEGY.md"
+STRATEGY_GENERATOR = "flow-next-strategy"
+STRATEGY_WALK_MAX_DEPTH = 32  # Defensive cap (parallel to GLOSSARY_WALK_MAX_DEPTH).
+# Locked section structure: 5 required + 2 optional. Order maps onto Rumelt's
+# strategy kernel (diagnosis / guiding policy / coherent action) extended with
+# persona + metrics for repo-doc utility. A Marketing section was considered
+# and dropped — over-rotated for OSS-tools repos. Section name is the H2
+# heading text; key is the dict key returned by parse_strategy_file.
+STRATEGY_REQUIRED_SECTIONS: tuple[tuple[str, str], ...] = (
+    ("Target problem", "target_problem"),
+    ("Our approach", "approach"),
+    ("Who it's for", "personas"),
+    ("Key metrics", "metrics"),
+    ("Tracks", "tracks"),
+)
+STRATEGY_OPTIONAL_SECTIONS: tuple[tuple[str, str], ...] = (
+    ("Milestones", "milestones"),
+    ("Not working on", "not_working_on"),
+)
+# Husk sentinel: section body when user explicitly wants a section deleted
+# but R-ID locked structure requires the heading to remain. _strategy_section_filled
+# treats this body as empty (sections_filled count excludes it).
+STRATEGY_HUSK_SENTINEL = "_Not currently tracking._"
+# First-run partial-save placeholder: the strategy skill writes this into every
+# unfilled required section during atomic per-section writes so a husk file is
+# always renderable. _strategy_section_filled treats it as empty so mid-flow
+# abandonment correctly reports `sections_filled == <answered count>`.
+STRATEGY_DRAFT_PLACEHOLDER = "_Not yet captured._"
+# Combined empty-body sentinels. Add new placeholders here only — keep
+# _strategy_section_filled's contract unified across all "looks present
+# on disk but means empty" markers.
+STRATEGY_EMPTY_SENTINELS: frozenset[str] = frozenset(
+    {STRATEGY_HUSK_SENTINEL, STRATEGY_DRAFT_PLACEHOLDER}
+)
+# Frontmatter contract: exactly these three keys. Refuse unknown keys to keep
+# the audit story simple (single-source-of-truth invariant).
+STRATEGY_FRONTMATTER_FIELDS: frozenset[str] = frozenset(
+    {"name", "last_updated", "generator"}
+)
+
 EPIC_STATUS = ["open", "done"]
 TASK_STATUS = ["todo", "in_progress", "blocked", "done"]
 
@@ -403,6 +446,339 @@ def _glossary_term_matches(a: str, b: str) -> bool:
     return re.sub(r"\s+", " ", a.strip().lower()) == re.sub(
         r"\s+", " ", b.strip().lower()
     )
+
+
+# --- Strategy helpers (fn-39.1) ---
+#
+# Shape on disk:
+#   ---
+#   name: <product-name>
+#   last_updated: 2026-05-01
+#   generator: flow-next-strategy
+#   ---
+#
+#   # <product-name> Strategy
+#
+#   ## Target problem
+#   ...
+#
+# Parse contract:
+#   - Frontmatter is mandatory; missing or malformed → returns empty dict
+#     so callers can detect (caller checks `parsed.get("name")`).
+#   - H2 heading text is matched case-sensitively against the locked section
+#     list (`STRATEGY_REQUIRED_SECTIONS + STRATEGY_OPTIONAL_SECTIONS`).
+#   - Unknown H2 sections are dropped silently — the file may carry sections
+#     we don't recognize (forward-compat with future CE additions); they
+#     simply don't surface in the parsed dict.
+#   - Fenced code blocks are masked during heading scan via
+#     `_glossary_strip_fenced_code` so an `## Example heading` inside a
+#     fence is not picked up.
+#   - CRLF normalized.
+#
+# Single-root walk: `find_strategy_file` walks UP from cwd to first
+# STRATEGY.md, capped at git repo root via `get_repo_root()`. NOT
+# nearest-ancestor like glossary — strategy is repo-wide.
+
+# Section-name lookup (case-insensitive H2 heading → dict key).
+# Accepts both the H2 heading text ("Our approach") and the dict key
+# ("approach" / "our_approach") for CLI ergonomics — downstream skills
+# read JSON with the dict-key shape, so accepting the same form for
+# `--section` saves one rename in skill prose.
+_STRATEGY_SECTION_KEYS: dict[str, str] = {}
+for _name, _key in STRATEGY_REQUIRED_SECTIONS + STRATEGY_OPTIONAL_SECTIONS:
+    _STRATEGY_SECTION_KEYS[_name.lower()] = _key
+    # Also accept the dict-key form (with underscores) directly.
+    _STRATEGY_SECTION_KEYS[_key.lower()] = _key
+    # And the heading-text-with-spaces lowercased for case-insensitive use.
+del _name, _key
+# All valid section names (lowercase) for `read --section` validation.
+_STRATEGY_SECTION_NAMES_LOWER: frozenset[str] = frozenset(_STRATEGY_SECTION_KEYS.keys())
+
+_STRATEGY_HEADING_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
+# YYYY-MM-DD ISO date for last_updated validation.
+_STRATEGY_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# HTML comment matcher used by _strategy_section_filled.
+_STRATEGY_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+
+
+def find_strategy_file(start: Optional[Path] = None) -> tuple[Optional[Path], Path]:
+    """Return `(strategy_path, repo_root)` for the single-root strategy file.
+
+    Resolves the git repo root from `start` (default cwd) and checks for
+    `STRATEGY.md` ONLY at that root. Single-root semantics — strategy is
+    repo-wide by Rumelt's definition. Intentionally does NOT walk upward
+    from `start`; an `apps/web/STRATEGY.md` (intentional or accidental) is
+    ignored, and the repo-root file is the only one downstream skills
+    consume regardless of cwd.
+
+    Returns:
+      `(repo_root / STRATEGY.md, repo_root)` if the repo-root file exists.
+      `(None, repo_root)` if absent — caller can decide whether to refuse
+        or guide the user to `/flow-next:strategy`.
+
+    Outside-a-repo behavior: git lookup falls back to `start` itself so
+    the check degenerates to "is there a STRATEGY.md in start?" — used by
+    `cmd_strategy_status` to return `{exists: false, file_path: null}`
+    cleanly without traceback when invoked outside any repository.
+
+    Implementation note: when an explicit `start` is passed, we resolve
+    repo_root by running `git rev-parse --show-toplevel` from `start`'s
+    directory rather than the process's cwd. This makes the function safe
+    to call from any context (subprocess tests, importing module). The
+    function deliberately ignores `STRATEGY_WALK_MAX_DEPTH` — kept as a
+    constant only for backward compatibility with any downstream caller
+    that imported it; it has no effect on resolution semantics.
+    """
+    cwd = (start or Path.cwd()).resolve()
+    # Resolve git repo root RELATIVE to `start` — not the process's cwd.
+    # Otherwise, calling `find_strategy_file(start=/tmp/test-repo)` from
+    # within an outer git repo would falsely anchor at the outer repo's
+    # root.
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=cwd,
+            capture_output=True,
+            text=True, encoding="utf-8",
+            check=True,
+        )
+        repo_root = Path(result.stdout.strip()).resolve()
+    except (subprocess.CalledProcessError, OSError):
+        # Fallback to start (no git, or unreadable).
+        repo_root = cwd
+
+    candidate = repo_root / STRATEGY_FILE
+    try:
+        if candidate.is_file():
+            return candidate, repo_root
+    except OSError:
+        pass
+    return None, repo_root
+
+
+def _strategy_section_filled(body: str) -> bool:
+    """Return True when a section has at least one prose line.
+
+    False for: empty body, body containing only HTML comments, body
+    containing only any sentinel in `STRATEGY_EMPTY_SENTINELS` (the husk
+    sentinel `_Not currently tracking._` or the first-run draft placeholder
+    `_Not yet captured._`), or body containing only whitespace.
+
+    Used by `cmd_strategy_status` to compute `sections_filled`. Both
+    sentinels exist so the skill can mark sections "intentionally empty"
+    (husk) or "not yet captured during partial save" (draft) without
+    triggering `_strategy_section_filled` and falsely activating
+    downstream strategy-aware grounding.
+    """
+    if not body:
+        return False
+    # Strip HTML comments first so a section that's only a TODO comment
+    # doesn't count as filled.
+    stripped = _STRATEGY_HTML_COMMENT_RE.sub("", body)
+    # Now check whether anything non-whitespace / non-sentinel remains.
+    text = stripped.strip()
+    if not text:
+        return False
+    if text in STRATEGY_EMPTY_SENTINELS:
+        return False
+    return True
+
+
+def parse_strategy_file(text: str) -> dict[str, Any]:
+    """Parse a STRATEGY.md body into a structured dict.
+
+    Returns dict with keys:
+      - `name`         : str | None — from frontmatter
+      - `last_updated` : str | None — from frontmatter (ISO YYYY-MM-DD)
+      - `generator`    : str | None — from frontmatter sentinel
+      - `target_problem` : str — body text under `## Target problem` (or "")
+      - `approach`     : str — body text under `## Our approach`
+      - `personas`     : str — body text under `## Who it's for`
+      - `metrics`      : str — body text under `## Key metrics`
+      - `tracks`       : str — body text under `## Tracks`
+      - `milestones`   : str — body text under `## Milestones` (optional)
+      - `not_working_on` : str — body text under `## Not working on`
+      - `_section_filled` : dict[str, bool] — per-section filled flag
+                            (used by cmd_strategy_status to count populated)
+
+    Empty input → returns dict with frontmatter-None and all section keys
+    present-but-empty so callers can rely on the schema.
+
+    CRLF normalized; fenced code blocks masked during heading scan via
+    `_glossary_strip_fenced_code` (heading-only — section bodies retain
+    their fences verbatim).
+    """
+    # Initialize result with all known keys empty so callers can rely on
+    # the schema regardless of input.
+    result: dict[str, Any] = {
+        "name": None,
+        "last_updated": None,
+        "generator": None,
+    }
+    for _name, key in STRATEGY_REQUIRED_SECTIONS + STRATEGY_OPTIONAL_SECTIONS:
+        result[key] = ""
+    section_filled: dict[str, bool] = {}
+
+    if not text:
+        result["_section_filled"] = section_filled
+        return result
+
+    # Normalize line endings.
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # --- Frontmatter ---
+    body_text = text
+    if text.startswith("---"):
+        parts = text.split("---", 2)
+        if len(parts) >= 3:
+            fm_text = parts[1]
+            try:
+                import yaml  # type: ignore[import-not-found]
+                try:
+                    parsed_fm = yaml.safe_load(fm_text)
+                except yaml.YAMLError:
+                    parsed_fm = None
+                if not isinstance(parsed_fm, dict):
+                    parsed_fm = {}
+            except ImportError:
+                parsed_fm = _parse_inline_yaml(fm_text)
+            for key in ("name", "last_updated", "generator"):
+                if key in parsed_fm:
+                    val = parsed_fm[key]
+                    # PyYAML may parse last_updated as datetime.date — coerce
+                    # to ISO string so JSON output round-trips cleanly.
+                    if isinstance(val, date) and not isinstance(val, datetime):
+                        result[key] = val.isoformat()
+                    else:
+                        result[key] = str(val) if val is not None else None
+            body_text = parts[2]
+            # Skip leading newline after the closing `---`.
+            if body_text.startswith("\n"):
+                body_text = body_text[1:]
+
+    # --- Section scan (after frontmatter) ---
+    masked = _glossary_strip_fenced_code(body_text)
+    headings = list(_STRATEGY_HEADING_RE.finditer(masked))
+    for i, m in enumerate(headings):
+        heading_text = m.group(1).strip()
+        key = _STRATEGY_SECTION_KEYS.get(heading_text.lower())
+        if key is None:
+            # Unknown section — skip silently (forward-compat).
+            continue
+        body_start = m.end()
+        body_end = headings[i + 1].start() if i + 1 < len(headings) else len(body_text)
+        section_body = body_text[body_start:body_end]
+        # Trim leading/trailing newlines but preserve internal whitespace.
+        section_body = section_body.strip("\n").rstrip()
+        result[key] = section_body
+        section_filled[key] = _strategy_section_filled(section_body)
+
+    # Sections that never appeared in the file get a False fill flag (we
+    # do this last so explicit empty-section headers override).
+    for _name, key in STRATEGY_REQUIRED_SECTIONS + STRATEGY_OPTIONAL_SECTIONS:
+        section_filled.setdefault(key, False)
+
+    result["_section_filled"] = section_filled
+    return result
+
+
+def render_strategy_file(parsed: dict[str, Any]) -> str:
+    """Render a parsed strategy dict back to markdown.
+
+    Round-trip contract: `parse → render → parse` produces semantically
+    equivalent output; section bodies preserved (whitespace stripping
+    only at section boundaries). Frontmatter always written; H1 always
+    written (`# <name> Strategy`); required sections always written
+    (empty bodies allowed for husk semantics); optional sections only
+    written when their body is non-empty (per R2: "Optional sections
+    deleted entirely if unused; never left as empty headers").
+
+    Frontmatter key order: name, last_updated, generator (deterministic
+    diffs).
+
+    Husk render (R23 invariant): when all sections are empty, output is
+    H1 + frontmatter only; file is never deleted.
+    """
+    name = parsed.get("name") or "Untitled"
+    last_updated = parsed.get("last_updated") or date.today().isoformat()
+    generator = parsed.get("generator") or STRATEGY_GENERATOR
+
+    lines: list[str] = ["---"]
+    # Locked field order — never sort alphabetically.
+    lines.append(f"name: {_format_yaml_value(name, 'name')}")
+    # last_updated quoted as string so PyYAML doesn't coerce back to date.
+    lines.append(f"last_updated: {_quote_yaml_scalar(last_updated)}")
+    lines.append(f"generator: {_format_yaml_value(generator, 'generator')}")
+    lines.append("---")
+    lines.append("")
+    lines.append(f"# {name} Strategy")
+    lines.append("")
+
+    # Required sections — always emitted, even when empty (husk semantics).
+    for section_name, key in STRATEGY_REQUIRED_SECTIONS:
+        body = (parsed.get(key) or "").strip("\n").rstrip()
+        lines.append(f"## {section_name}")
+        lines.append("")
+        if body:
+            lines.append(body)
+            lines.append("")
+
+    # Optional sections — only emitted when body has content.
+    for section_name, key in STRATEGY_OPTIONAL_SECTIONS:
+        body = (parsed.get(key) or "").strip("\n").rstrip()
+        if body:
+            lines.append(f"## {section_name}")
+            lines.append("")
+            lines.append(body)
+            lines.append("")
+
+    out = "\n".join(lines).rstrip("\n") + "\n"
+    return out
+
+
+def validate_strategy_frontmatter(fm: dict[str, Any]) -> list[str]:
+    """Return validation errors for STRATEGY.md frontmatter (empty = valid).
+
+    Required: `name` (non-empty str), `last_updated` (ISO YYYY-MM-DD),
+              `generator` (must equal `flow-next-strategy`).
+    Refuses: unknown keys (single-source-of-truth invariant).
+    """
+    errors: list[str] = []
+    if not isinstance(fm, dict):
+        return ["frontmatter must be a dict"]
+
+    missing = STRATEGY_FRONTMATTER_FIELDS - set(fm.keys())
+    if missing:
+        errors.append(f"missing required fields: {', '.join(sorted(missing))}")
+
+    name = fm.get("name")
+    if name is not None and (not isinstance(name, str) or not name.strip()):
+        errors.append("name must be a non-empty string")
+
+    last_updated = fm.get("last_updated")
+    if last_updated is not None:
+        if isinstance(last_updated, date) and not isinstance(last_updated, datetime):
+            # PyYAML coerced to a date — that's fine for validation purposes;
+            # the renderer will quote it back to ISO string.
+            pass
+        elif not isinstance(last_updated, str):
+            errors.append("last_updated must be a string (YYYY-MM-DD)")
+        elif not _STRATEGY_ISO_DATE_RE.match(last_updated):
+            errors.append(
+                f"last_updated '{last_updated}' is not ISO YYYY-MM-DD"
+            )
+
+    generator = fm.get("generator")
+    if generator is not None and generator != STRATEGY_GENERATOR:
+        errors.append(
+            f"generator must be '{STRATEGY_GENERATOR}' (got '{generator}')"
+        )
+
+    unknown = set(fm.keys()) - STRATEGY_FRONTMATTER_FIELDS
+    if unknown:
+        errors.append(f"unknown fields: {', '.join(sorted(unknown))}")
+
+    return errors
 
 
 def get_state_dir() -> Path:
@@ -8812,6 +9188,240 @@ def cmd_glossary_remove(args: argparse.Namespace) -> None:
     error_exit(f"term '{term}' not found", use_json=use_json, code=1)
 
 
+# --- Strategy subcommands (fn-39.1) ---
+
+
+def _strategy_load(path: Path) -> dict[str, Any]:
+    """Read + parse STRATEGY.md. Returns empty schema dict if file missing."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return parse_strategy_file("")
+    except OSError:
+        return parse_strategy_file("")
+    return parse_strategy_file(text)
+
+
+def _strategy_count_total_sections(parsed: dict[str, Any]) -> int:
+    """Count required + populated-optional sections.
+
+    Required sections always count (5). Optional sections count only when
+    populated. Range: 5..7. This is the denominator for `sections_filled /
+    total_sections` in `cmd_strategy_status`.
+    """
+    total = len(STRATEGY_REQUIRED_SECTIONS)
+    section_filled = parsed.get("_section_filled", {})
+    for _name, key in STRATEGY_OPTIONAL_SECTIONS:
+        if section_filled.get(key, False):
+            total += 1
+    return total
+
+
+def cmd_strategy_status(args: argparse.Namespace) -> None:
+    """Report strategy file presence and population.
+
+    Returns JSON `{exists, husk, sections_filled, total_sections,
+    last_updated, file_path, generator, generator_match}`.
+
+    - `exists` — True iff a STRATEGY.md was found (single-root walk).
+    - `husk` — True iff `exists AND sections_filled == 0`. Used by
+      doc-aware autodetect (rule: `sections_filled >= 1`, NOT
+      `[[ -f STRATEGY.md ]]` — same trap glossary fell into in 0.39.0).
+    - `sections_filled` — count of required+optional sections with
+      non-empty bodies (excludes husk sentinel + comment-only bodies).
+    - `total_sections` — denominator (5 required + populated optional, 5..7).
+    - `last_updated` — ISO date from frontmatter or null.
+    - `file_path` — absolute path string or null.
+    - `generator` — frontmatter generator value or null. Used by skill to
+      gate migrate/keep/rewrite question on foreign files.
+    - `generator_match` — True iff `generator == flow-next-strategy`.
+
+    Outside-a-repo behavior: returns `{exists: false, file_path: null}`
+    cleanly (no traceback) — `find_strategy_file` falls back to cwd.
+    """
+    use_json = bool(getattr(args, "json", False))
+    path, _repo_root = find_strategy_file()
+
+    if path is None:
+        payload = {
+            "exists": False,
+            "husk": False,
+            "sections_filled": 0,
+            "total_sections": len(STRATEGY_REQUIRED_SECTIONS),
+            "last_updated": None,
+            "file_path": None,
+            "generator": None,
+            "generator_match": False,
+        }
+        if use_json:
+            json_output(payload)
+        else:
+            print("No STRATEGY.md found.")
+            print("  (looked from cwd up to repo root via single-root walk)")
+        return
+
+    parsed = _strategy_load(path)
+    section_filled = parsed.get("_section_filled", {})
+    sections_filled = sum(1 for v in section_filled.values() if v)
+    total_sections = _strategy_count_total_sections(parsed)
+    generator = parsed.get("generator")
+    generator_match = generator == STRATEGY_GENERATOR
+
+    payload = {
+        "exists": True,
+        "husk": sections_filled == 0,
+        "sections_filled": sections_filled,
+        "total_sections": total_sections,
+        "last_updated": parsed.get("last_updated"),
+        "file_path": str(path),
+        "generator": generator,
+        "generator_match": generator_match,
+    }
+    if use_json:
+        json_output(payload)
+        return
+
+    print(f"# {path}")
+    print(f"  generator: {generator or '(none)'}"
+          f"{'' if generator_match else '  [MISMATCH]'}")
+    print(f"  last_updated: {parsed.get('last_updated') or '(none)'}")
+    print(f"  sections: {sections_filled} / {total_sections}")
+    if sections_filled == 0:
+        print("  (husk — file present but no populated sections)")
+
+
+def cmd_strategy_read(args: argparse.Namespace) -> None:
+    """Print parsed strategy. With --section, filter to one section body.
+
+    Walks single-root via `find_strategy_file`. Refuses unknown section
+    names with non-zero exit. Section name matched case-insensitively
+    against the locked required+optional list.
+    """
+    use_json = bool(getattr(args, "json", False))
+    section = getattr(args, "section", None)
+
+    path, _repo_root = find_strategy_file()
+    if path is None:
+        error_exit("no STRATEGY.md found", use_json=use_json, code=1)
+
+    parsed = _strategy_load(path)
+
+    if section is not None:
+        section_lower = section.strip().lower()
+        if section_lower not in _STRATEGY_SECTION_NAMES_LOWER:
+            valid = ", ".join(
+                name for name, _ in (
+                    STRATEGY_REQUIRED_SECTIONS + STRATEGY_OPTIONAL_SECTIONS
+                )
+            )
+            error_exit(
+                f"unknown section '{section}' (valid: {valid})",
+                use_json=use_json,
+                code=1,
+            )
+        key = _STRATEGY_SECTION_KEYS[section_lower]
+        body = parsed.get(key, "") or ""
+        if use_json:
+            json_output(
+                {
+                    "path": str(path),
+                    "section": section,
+                    "key": key,
+                    "body": body,
+                    "filled": parsed.get("_section_filled", {}).get(key, False),
+                }
+            )
+        else:
+            print(body if body else "(empty)")
+        return
+
+    # Full read.
+    if use_json:
+        # Strip the internal _section_filled key from the public payload.
+        payload = {k: v for k, v in parsed.items() if not k.startswith("_")}
+        payload["path"] = str(path)
+        json_output(payload)
+        return
+
+    # Text mode: H1 + frontmatter summary + each section.
+    print(f"# {parsed.get('name') or '(unnamed)'} Strategy  ({path})")
+    print(f"  last_updated: {parsed.get('last_updated') or '(none)'}")
+    print(f"  generator: {parsed.get('generator') or '(none)'}")
+    print()
+    for section_name, key in STRATEGY_REQUIRED_SECTIONS + STRATEGY_OPTIONAL_SECTIONS:
+        body = parsed.get(key) or ""
+        if not body and key in {k for _, k in STRATEGY_OPTIONAL_SECTIONS}:
+            continue  # Skip empty optional sections in text mode.
+        print(f"## {section_name}")
+        print()
+        if body:
+            print(body)
+        else:
+            print("(empty)")
+        print()
+
+
+def cmd_strategy_list(args: argparse.Namespace) -> None:
+    """List strategy files (single-root, degenerate single-element group).
+
+    Kept for parallel symmetry with `cmd_glossary_list` so downstream
+    skills can iterate `groups` generically. v1: 0 or 1 element.
+    """
+    use_json = bool(getattr(args, "json", False))
+    path, _repo_root = find_strategy_file()
+
+    groups: list[dict[str, Any]] = []
+    if path is not None:
+        parsed = _strategy_load(path)
+        section_filled = parsed.get("_section_filled", {})
+        # Build sections list (name + filled flag) for display.
+        sections = []
+        for section_name, key in (
+            STRATEGY_REQUIRED_SECTIONS + STRATEGY_OPTIONAL_SECTIONS
+        ):
+            sections.append(
+                {
+                    "name": section_name,
+                    "key": key,
+                    "filled": section_filled.get(key, False),
+                }
+            )
+        count = sum(1 for s in sections if s["filled"])
+        groups.append(
+            {
+                "path": str(path),
+                "sections": sections,
+                "count": count,
+            }
+        )
+
+    if use_json:
+        total = sum(g["count"] for g in groups)
+        json_output(
+            {
+                "groups": groups,
+                "file_count": len(groups),
+                "total_sections": total,
+            }
+        )
+        return
+
+    if not groups:
+        print("No STRATEGY.md found (single-root walk to repo root).")
+        return
+
+    for g in groups:
+        print(
+            f"# {g['path']}  "
+            f"({g['count']} populated section"
+            f"{'s' if g['count'] != 1 else ''})"
+        )
+        for section in g["sections"]:
+            mark = "x" if section["filled"] else " "
+            print(f"  [{mark}] {section['name']}")
+        print()
+
+
 def cmd_epic_create(args: argparse.Namespace) -> None:
     """Create a new epic."""
     if not ensure_flow_exists():
@@ -16620,6 +17230,58 @@ def main() -> None:
     p_glossary_remove.add_argument("term", help="Term name (case-insensitive match)")
     p_glossary_remove.add_argument("--json", action="store_true", help="JSON output")
     p_glossary_remove.set_defaults(func=cmd_glossary_remove)
+
+    # strategy status / read / list (fn-39.1)
+    # Read-only plumbing. The skill (`/flow-next:strategy`) writes the file
+    # via the host agent's Write tool — strategy is too prose-heavy for
+    # atomic field-set CLI plumbing. No add/edit/remove subcommands.
+    p_strategy = subparsers.add_parser(
+        "strategy",
+        help=(
+            "Project strategy commands (STRATEGY.md at repo root, "
+            "single-root). Lives outside .flow/ so it survives flow-next "
+            "removal. Read-only plumbing — the skill writes the file."
+        ),
+    )
+    strategy_sub = p_strategy.add_subparsers(dest="strategy_cmd", required=True)
+
+    p_strategy_status = strategy_sub.add_parser(
+        "status",
+        help=(
+            "Report STRATEGY.md presence + populated section count "
+            "(used by doc-aware autodetect)"
+        ),
+    )
+    p_strategy_status.add_argument("--json", action="store_true", help="JSON output")
+    p_strategy_status.set_defaults(func=cmd_strategy_status)
+
+    p_strategy_read = strategy_sub.add_parser(
+        "read",
+        help=(
+            "Print parsed STRATEGY.md. With --section, filter to one "
+            "section body."
+        ),
+    )
+    p_strategy_read.add_argument(
+        "--section",
+        help=(
+            "Print just one section body (case-insensitive match against "
+            "the locked section list: target problem, our approach, "
+            "who it's for, key metrics, tracks, milestones, not working on)"
+        ),
+    )
+    p_strategy_read.add_argument("--json", action="store_true", help="JSON output")
+    p_strategy_read.set_defaults(func=cmd_strategy_read)
+
+    p_strategy_list = strategy_sub.add_parser(
+        "list",
+        help=(
+            "List STRATEGY.md (degenerate single-root group, kept for "
+            "symmetry with `glossary list`)"
+        ),
+    )
+    p_strategy_list.add_argument("--json", action="store_true", help="JSON output")
+    p_strategy_list.set_defaults(func=cmd_strategy_list)
 
     # epic create
     p_epic = subparsers.add_parser("epic", help="Epic commands")

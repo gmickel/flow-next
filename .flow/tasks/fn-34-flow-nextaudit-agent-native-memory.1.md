@@ -22,7 +22,7 @@ This is the **Phase-0 task**: lays down the skill structure and workflow. Tasks 
 Mirror `plugins/flow-next/skills/flow-next-prospect/SKILL.md` (most recent reference of an interactive skill) for structure. Frontmatter required fields: `name: flow-next-audit`, `description: <one paragraph triggering this skill on phrases like "audit memory", "review memory", "refresh learnings", "/flow-next:audit">`. 
 
 Body sections:
-1. **Mode Detection** — parse `$ARGUMENTS` for `mode:autofix` token. Strip and use remainder as scope hint. Same pattern as upstream `ce-compound-refresh:10-27`.
+1. **Mode Detection** — parse `$ARGUMENTS` for `mode:autofix` token. Strip and use remainder as scope hint.
 2. **Interaction Principles** — interactive uses blocking-question tool (`AskUserQuestion` Claude / `request_user_input` Codex / `ask_user` Droid); fallback to numbered options when tool unavailable; one question at a time; lead with recommendation.
 3. **Reference to workflow.md** — main loop lives there.
 4. **Reference to phases.md** — outcomes lookup.
@@ -90,7 +90,7 @@ Document the 6 phases. Each phase ends with a "Done when" criterion so the agent
 
 ### `phases.md` shape
 
-The 5 outcomes lookup. Each section: meaning + when to use + when NOT to use + action steps + edge cases. Lift heavily from upstream `ce-compound-refresh:285-372` with naming swap (`learning` → `memory entry`, `docs/solutions/` → `.flow/memory/`).
+The 5 outcomes lookup. Each section: meaning + when to use + when NOT to use + action steps + edge cases. Adapt the staleness-audit pattern (Keep / Update / Consolidate / Replace / Delete classification) to the categorized memory schema (`learning` → `memory entry`, `docs/solutions/` → `.flow/memory/`).
 
 Specific calibration for memory schema:
 - **Update**: edit frontmatter `module` field, edit body code refs, fix related-doc paths. Preserve all other frontmatter (`title`, `date`, `track`, `category`, `tags`, etc).
@@ -115,7 +115,6 @@ Investigation subagents are **read-only** (no Edit/Write/Bash), return structure
 ## Investigation targets
 
 **Required:**
-- `/tmp/compound-engineering-plugin/plugins/compound-engineering/skills/ce-compound-refresh/SKILL.md` — upstream reference (the working pattern we're adapting)
 - `plugins/flow-next/skills/flow-next-prospect/SKILL.md` — most recent in-repo skill reference for shape (prospect ships frontmatter, mode handling, blocking-question tool call)
 - `plugins/flow-next/skills/flow-next-prospect/workflow.md` — workflow.md shape reference
 - `plugins/flow-next/commands/flow-next/prospect.md` — slash command pass-through pattern
@@ -124,7 +123,7 @@ Investigation subagents are **read-only** (no Edit/Write/Bash), return structure
 - CLAUDE.md memory-system block at lines 62-77 (schema reference)
 
 **Optional:**
-- `/tmp/compound-engineering-plugin/plugins/compound-engineering/skills/ce-compound-refresh/references/` — extra references upstream uses (for inspiration only; we don't need separate references file unless workflow gets complex)
+- `plugins/flow-next/skills/flow-next-audit/references/` (if shipped) — flow-next-specific references that this task may seed; not required for the initial pass.
 
 ## Key context
 

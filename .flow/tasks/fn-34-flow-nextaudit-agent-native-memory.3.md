@@ -100,7 +100,7 @@ Target runtime: <30s end-to-end.
 ## [flow-next 0.37.0] - 2026-04-XX
 
 ### Added
-- `/flow-next:audit` — agent-native skill that walks `.flow/memory/`, reviews each entry against the current codebase, and decides per entry whether to Keep / Update / Consolidate / Replace / Delete. Interactive mode (default) asks via blocking-question tool; autofix mode (`mode:autofix` argument) applies unambiguous actions and marks ambiguous entries as stale. Inspired by upstream `ce-compound-refresh` skill — adapted for the categorized memory schema shipped in 0.33.0.
+- `/flow-next:audit` — agent-native skill that walks `.flow/memory/`, reviews each entry against the current codebase, and decides per entry whether to Keep / Update / Consolidate / Replace / Delete. Interactive mode (default) asks via blocking-question tool; autofix mode (`mode:autofix` argument) applies unambiguous actions and marks ambiguous entries as stale. Adapted to the categorized memory schema shipped in 0.33.0.
 - `flowctl memory mark-stale <id> --reason "..."` — sets `status: stale`, stamps `last_audited`, records `audit_notes`. Atomic via existing `write_memory_entry`. Body never modified.
 - `flowctl memory mark-fresh <id>` — clears stale flag, stamps `last_audited`. Idempotent on already-active entries.
 - `flowctl memory search` accepts `--status active|stale|all` (default `active`), mirroring `memory list`. Stale entries flagged by audit are excluded from default search results.

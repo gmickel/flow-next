@@ -95,6 +95,16 @@ Task tracking for AI agents. All state lives in `.flow/`.
 .flow/bin/flowctl glossary read <term>                             # nearest-ancestor walk; first match wins
 .flow/bin/flowctl glossary read <term> --json                      # {path, term, definition, avoid, relates_to}
 .flow/bin/flowctl glossary remove <term>                           # last-term remove leaves `# Glossary` husk (R18)
+
+# Strategy (project-canonical strategic intent at repo root, v0.40.0+ — survives `rm -rf .flow/`)
+.flow/bin/flowctl strategy status                                  # text mode: husk / sections_filled / total_sections / last_updated
+.flow/bin/flowctl strategy status --json                           # {exists, husk, sections_filled, total_sections, last_updated, file_path}
+.flow/bin/flowctl strategy read                                    # full STRATEGY.md (single-root walk from cwd up to repo root)
+.flow/bin/flowctl strategy read --section approach                 # one section only (target_problem / approach / personas / metrics / tracks / milestones / not_working_on)
+.flow/bin/flowctl strategy read --json                             # {path, name, last_updated, target_problem, approach, personas, metrics, tracks, milestones, not_working_on}
+.flow/bin/flowctl strategy list --json                             # {groups, file_count, total_sections} — parallel to glossary list
+
+# /flow-next:strategy skill writes STRATEGY.md directly (no flowctl strategy add — too prose-heavy for atomic CLI).
 ```
 
 ## Workflow

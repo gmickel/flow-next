@@ -112,7 +112,7 @@ Phase 4 writes `.flow/memory/_migrated/.gitignore` with content `*` on first cle
 
 **Optional:**
 - `plugins/flow-next/skills/flow-next-prospect/SKILL.md` — additional skill reference for shape
-- `/tmp/compound-engineering-plugin/plugins/compound-engineering/skills/ce-compound-refresh/SKILL.md` — upstream reference (different feature but similar agent-native pattern)
+- `plugins/flow-next/skills/flow-next-audit/SKILL.md` — sibling agent-native skill (shares the same "host agent reads + judges + writes" architecture)
 
 ## Key context
 

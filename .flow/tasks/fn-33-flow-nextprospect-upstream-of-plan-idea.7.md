@@ -79,7 +79,7 @@ Mechanical rollup following the pattern used by fn-29.7, fn-30.7, fn-31.7, fn-32
 
 - Website repo is separate from the plugin repo — commit + push to `~/work/mickel.tech` in a distinct commit.
 - `scripts/sync-codex.sh` must run AFTER skill files are authored — any drift flags an incomplete earlier task.
-- Don't cross-reference compound-engineering or any external plugin in the final docs; prose should frame prospect in terms of flow-next's own lifecycle.
+- Don't cross-reference any external plugin in the final docs; prose should frame prospect in terms of flow-next's own lifecycle.
 
 ## Acceptance
 
@@ -91,7 +91,7 @@ Mechanical rollup following the pattern used by fn-29.7, fn-30.7, fn-31.7, fn-32
 - [ ] Website `page.tsx` updated: version, commands, coreFeatures/optInFeatures card, FAQ; committed + pushed.
 - [ ] `scripts/sync-codex.sh` regenerates Codex mirror; second run is no-op (zero drift).
 - [ ] Both smoke suites (`smoke_test.sh`, `prospect_smoke_test.sh`) + unit tests pass. <!-- Updated by plan-sync: fn-33-…6 shipped prospect_smoke_test.sh as a dedicated standalone script (764 lines, 94 assertions, ~58s) instead of extending smoke_test.sh; there are two smoke suites, not three. -->
-- [ ] No references to compound-engineering or other plugins in shipped docs.
+- [ ] No references to external plugins in shipped docs.
 
 ## Done summary
 Bumped flow-next 0.35.1 → 0.36.0 (minor) for the new `/flow-next:prospect` skill and `flowctl prospect` subcommands. Updated CHANGELOG, READMEs, CLAUDE.md, .flow/usage.md, plugin manifests (17→18 skills, 12→13 commands), and the website page. Regenerated Codex mirror (sync is idempotent — second run is no-op). All smoke suites + unit tests + website lint/typecheck pass.

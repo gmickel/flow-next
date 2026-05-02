@@ -80,6 +80,26 @@ $FLOWCTL config get memory.enabled --json
 $FLOWCTL config get scouts.github --json
 ```
 
+**Check for STRATEGY.md (husk-vs-presence — uses `sections_filled >= 1`, NOT `[[ -f STRATEGY.md ]]`):**
+```bash
+STRATEGY_STATUS_JSON=$($FLOWCTL strategy status --json 2>/dev/null || echo '{"exists":false,"sections_filled":0}')
+STRATEGY_FILLED=$(jq -r '.sections_filled // 0' <<< "$STRATEGY_STATUS_JSON" 2>/dev/null || echo 0)
+
+if [[ "$STRATEGY_FILLED" -ge 1 ]]; then
+  STRATEGY_JSON=$($FLOWCTL strategy read --json 2>/dev/null || echo '{}')
+  # Pass the parsed STRATEGY.md content into plan-prompt context alongside research findings.
+  # `tracks` is a raw markdown string (### <track-name> H3 sub-blocks); empty section bodies
+  # are "" not null. The plan prompt sees `name`, `target_problem`, `approach`, `tracks`,
+  # `last_updated` verbatim — no paraphrasing. Active tracks shape the Strategy Alignment
+  # section in Step 5; conflicts with active tracks surface as drift in Step 5.
+  STRATEGY_PRESENT=true
+else
+  STRATEGY_PRESENT=false
+fi
+```
+
+When `STRATEGY_PRESENT=true`, the scouts and the plan-prompt see the strategy content. When `STRATEGY_PRESENT=false` (no STRATEGY.md or husk), the plan skips the `## Strategy Alignment` section and any drift-surfacing entirely (Step 5) — absence is fine, no signal to align to.
+
 **Based on user's choice in SKILL.md setup:**
 
 ---
@@ -211,6 +231,8 @@ Default to standard unless complexity demands more or less.
    ```bash
    # Include: Overview, Scope, Approach, Quick commands (REQUIRED), Acceptance,
    # Early proof point, Requirement coverage, References
+   # Conditional sections: ## Strategy Alignment (when STRATEGY_PRESENT=true from Step 1),
+   # ## Strategy drift flagged for review (when plan scope conflicts with an active track)
    # Add mermaid diagram if data model or architecture changes
    $FLOWCTL epic set-plan <epic-id> --file - --json <<'EOF'
    # Epic Title
@@ -222,6 +244,32 @@ Default to standard unless complexity demands more or less.
    ```bash
    # At least one smoke test command
    ```
+
+   ## Boundaries / non-goals
+   - <what this epic explicitly does NOT cover>
+
+   ## Strategy Alignment
+   <!-- Include this section ONLY when STRATEGY_PRESENT=true from Step 1.
+        When STRATEGY_PRESENT=false (no STRATEGY.md or husk: sections_filled == 0),
+        skip this section entirely. -->
+
+   Active tracks served by this plan:
+   - **<track-name>** — <one line on how this plan advances the track>
+   - **<track-name>** — <one line>
+
+   <!-- If the plan serves no active strategy track, replace the bulleted list with: -->
+   _No active strategy track served — review for drift._
+
+   ## Strategy drift flagged for review
+   <!-- Include this block ONLY when the plan scope conflicts with an active track.
+        Mirrors plan-sync's "Decision overrides flagged for review" convention
+        (agents/plan-sync.md). Read-only — the plan skill never auto-supersedes
+        STRATEGY.md; the user (or `/flow-next:strategy`) decides whether to revise. -->
+
+   - **<track-name>**: <one line on how this plan diverges from the track's stated direction>. Review for revision via `/flow-next:strategy`.
+
+   ## Decision context
+   - <why this approach over alternatives>
 
    ## Acceptance
    - **R1:** <testable criterion>
@@ -241,6 +289,18 @@ Default to standard unless complexity demands more or less.
    | R3  | <deferred item> | — | Deferred to fn-M-slug |
    EOF
    ```
+
+   **`## Strategy Alignment` rules (active iff STRATEGY_PRESENT=true from Step 1):**
+   - Section sits between `## Boundaries / non-goals` and `## Decision context` in the template above.
+   - List active tracks (`### <track-name>` blocks parsed from the strategy snapshot's `tracks` raw markdown string) that this plan advances.
+   - When the plan serves NO active track, render the placeholder `_No active strategy track served — review for drift._` literally — do not omit the section.
+   - Skip the entire section when STRATEGY_PRESENT=false. Husk-vs-presence: gated on `sections_filled >= 1`, NOT `[[ -f STRATEGY.md ]]`.
+
+   **`## Strategy drift flagged for review` rules (conditional on conflict detection):**
+   - Mirrors plan-sync's "Decision overrides flagged for review" surface (`agents/plan-sync.md` Phase 6 summary).
+   - Bulleted list with track name + plan-decision divergence + `Review for revision via /flow-next:strategy.` line per item.
+   - Read-only — the plan skill never edits STRATEGY.md, never marks a track superseded, never auto-supersedes anything. Surface for human review only.
+   - Omit the heading entirely when no drift detected. Empty drift block is silent, not `_(none)_`.
 
    **Early proof point rules:**
    - Identify which task proves the fundamental approach works

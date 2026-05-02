@@ -1,0 +1,19 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-01T16:44:02.480573Z",
+  "depends_on": [
+    "fn-39-project-strategy-strategymd-anchor.1",
+    "fn-39-project-strategy-strategymd-anchor.2",
+    "fn-39-project-strategy-strategymd-anchor.3",
+    "fn-39-project-strategy-strategymd-anchor.4"
+  ],
+  "epic": "fn-39-project-strategy-strategymd-anchor",
+  "id": "fn-39-project-strategy-strategymd-anchor.6",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-39-project-strategy-strategymd-anchor.6.md",
+  "status": "todo",
+  "title": "strategy_smoke_test.sh (T1-T12)",
+  "updated_at": "2026-05-01T16:44:02.621733Z"
+}

@@ -517,6 +517,7 @@ generate_openai_yaml "flow-next-interview" "Flow Interview" "Deep Q&A to refine 
 generate_openai_yaml "flow-next-setup"     "Flow Setup"     "Initialize flow-next in current project"              "#3B82F6" false
 generate_openai_yaml "flow-next-prospect"  "Flow Prospect"  "Generate ranked candidate ideas grounded in the repo" "#3B82F6" false "What should we build next? "
 generate_openai_yaml "flow-next-capture"   "Flow Capture"   "Synthesize conversation context into a flow-next epic spec" "#3B82F6" false "Capture this as a spec: "
+generate_openai_yaml "flow-next-strategy"  "Flow Strategy"  "Generate or update repo-root STRATEGY.md (problem, approach, personas, metrics, tracks)" "#3B82F6" false
 generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory/ entries against current code"   "#3B82F6" false
 generate_openai_yaml "flow-next-memory-migrate" "Flow Memory Migrate" "Migrate legacy flat memory files to categorized YAML schema" "#3B82F6" false
 
@@ -541,6 +542,7 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-setup"
   "flow-next-prospect"
   "flow-next-capture"
+  "flow-next-strategy"
   "flow-next-audit"
   "flow-next-memory-migrate"
   "flow-next-impl-review"
@@ -790,6 +792,18 @@ if [ "$meta_refs" != "0" ]; then
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} No R4 meta-file refs in Codex mirror"
+fi
+
+# R19 mirror scan — strategy-doc fluff guard for the Codex mirror (fn-39 task 5).
+# Tier 1 jargon only — Rumelt's "fluff" hallmarks. Scope is the Codex mirror
+# of the strategy skill; references/interview.md is excluded (must describe
+# anti-patterns to push back on them — same exemption as the canonical guard).
+fluff_refs=$( { grep -rEi '\bsynergy\b|\bpivot\b|\bdisrupt\b|thought[ -]leadership|best-in-class|world-class|\b10x\b' "$CODEX_DIR/skills/flow-next-strategy/" 2>/dev/null || true; } | { grep -v '/references/interview\.md' || true; } | wc -l | tr -d ' ')
+if [ "$fluff_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $fluff_refs R19 strategy-doc fluff refs in codex mirror — clean canonical first, then re-run sync"
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No R19 strategy-doc fluff in Codex mirror"
 fi
 
 # Validate openai.yaml files — every skill in REQUIRED_OPENAI_YAML_SKILLS

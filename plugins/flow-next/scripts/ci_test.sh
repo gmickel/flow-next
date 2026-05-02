@@ -388,6 +388,34 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 5d. Strategy-doc fluff guard — R19 (fn-39 task 5).
+#     This is the strategy-doc fluff guard, NOT R17 (DDD vocabulary).
+#     Each grep block has one purpose; do not merge with section 5c.
+#     Tier 1 jargon only (Rumelt's "fluff" hallmarks): synergy / pivot /
+#     disrupt / thought-leadership / best-in-class / world-class / 10x.
+#     Scope: flow-next-strategy skill + cmd_strategy_* in flowctl.py +
+#     strategy.md command file. The references/interview.md file is
+#     EXCLUDED from this guard — it must describe these anti-patterns
+#     to push back on them (same exemption pattern as glossary references).
+# ─────────────────────────────────────────────────────────────────────────────
+echo -e "\n${YELLOW}--- Strategy-doc fluff guard (R19) ---${NC}"
+
+set +e
+FLUFF_HITS="$(grep -RnEi '\bsynergy\b|\bpivot\b|\bdisrupt\b|thought[ -]leadership|best-in-class|world-class|\b10x\b' \
+  "$PLUGIN_ROOT/skills/flow-next-strategy/SKILL.md" \
+  "$PLUGIN_ROOT/commands/flow-next/strategy.md" 2>/dev/null \
+  ; awk '/^def cmd_strategy_/,/^def [^_]/' "$PLUGIN_ROOT/scripts/flowctl.py" 2>/dev/null \
+    | grep -nEi '\bsynergy\b|\bpivot\b|\bdisrupt\b|thought[ -]leadership|best-in-class|world-class|\b10x\b' \
+    | sed 's|^|flowctl.py(cmd_strategy_*):|')"
+set -e
+if [[ -n "$FLUFF_HITS" ]]; then
+  fail "R19 strategy-doc fluff vocabulary in canonical:"
+  echo "$FLUFF_HITS" | sed 's/^/    /'
+else
+  pass "R19: no strategy-doc fluff vocabulary in canonical"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 6. Symbol Extraction
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "\n${YELLOW}--- Symbol Extraction ---${NC}"

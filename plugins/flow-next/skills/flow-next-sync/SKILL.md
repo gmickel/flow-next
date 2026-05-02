@@ -94,20 +94,27 @@ No downstream tasks to sync (all done or none exist).
 ```
 Stop here (success, nothing to do).
 
-### Step 5: Gather glossary + decisions context
+### Step 5: Gather glossary + decisions + strategy context
 
-Two extra context types help the agent catch drift the spec text alone can't reveal: project-glossary terms (renames where the old spec used a term whose `_Avoid_` alias now appears in code) and active decision constraints (current code may touch files mentioned in a decision's `Consequences` section).
+Three extra context types help the agent catch drift the spec text alone can't reveal: project-glossary terms (renames where the old spec used a term whose `_Avoid_` alias now appears in code), active decision constraints (current code may touch files mentioned in a decision's `Consequences` section), and strategic-intent drift (completed task contradicts an active `STRATEGY.md` track or approach).
 
 ```bash
 GLOSSARY_JSON="$("$FLOWCTL" glossary list --json 2>/dev/null \
   || echo '{"groups":[],"file_count":0,"total_terms":0}')"
 DECISIONS_JSON="$("$FLOWCTL" memory list --track knowledge --category decisions --json 2>/dev/null \
   || echo '{"entries":[],"legacy":[],"count":0,"status":"active"}')"
+STRATEGY_CONTENT="$("$FLOWCTL" strategy read --json 2>/dev/null || echo '{}')"
 ```
 
-Both calls are best-effort — empty defaults keep the agent prompt valid when flowctl returns nothing or fails.
+All three calls are best-effort — empty defaults keep the agent prompt valid when flowctl returns nothing or fails.
 
-When `GLOSSARY_JSON` reports `file_count == 0` AND `DECISIONS_JSON` reports `count == 0`, skip the extra context (pass the empty defaults — the agent treats them as a no-op signal).
+**Husk short-circuit** — when ALL three of the following hold, skip the extra context entirely (pass the empty defaults; the agent's husk short-circuit at the top of Phase 3b will skip the whole section):
+
+- `GLOSSARY_JSON.total_terms == 0` (glossary missing or husk)
+- `DECISIONS_JSON.count == 0` (no decision entries)
+- `STRATEGY_CONTENT.sections_filled == 0` OR `STRATEGY_CONTENT == {}` (no STRATEGY.md or husk — verify with `flowctl strategy status --json | jq '.sections_filled // 0'`)
+
+When ANY of the three has signal, pass through all three (untouched) and let the agent run the matching subsection (3b.1 / 3b.2 / 3b.3) and skip the empty ones.
 
 When `GLOSSARY_JSON.total_terms == 0` but `file_count > 0`, every group is a husk. Husks carry no signal for drift detection — pass the JSON through untouched and let the agent skip them.
 
@@ -126,6 +133,7 @@ DRY_RUN: <true|false>
 
 GLOSSARY_JSON: <output of `flowctl glossary list --json` from step 5>
 DECISIONS_JSON: <output of `flowctl memory list --track knowledge --category decisions --json` from step 5>
+STRATEGY_CONTENT: <output of `flowctl strategy read --json` from step 5>
 
 <if DRY_RUN is true>
 DRY RUN MODE: Report what would change but do NOT use Edit tool. Only analyze and report drift.

@@ -308,9 +308,40 @@ else
 fi
 ```
 
+#### Strategy snapshot (optional, present iff STRATEGY.md has at least one populated section)
+
+Verbatim emit pattern (mirrors CE-ideate's "emit approach and active tracks verbatim"). Pulls the `name`, `target_problem`, `approach`, `tracks` (raw markdown — `### <track-name>` H3 sub-blocks; downstream prompt context handles parsing), and `last_updated` from `flowctl strategy read --json`. Husk-vs-presence gate uses `sections_filled >= 1` from `flowctl strategy status --json`, NOT `[[ -f STRATEGY.md ]]`.
+
+```bash
+STRATEGY_STATUS_JSON=$("$FLOWCTL" strategy status --json 2>/dev/null || echo '{"exists":false,"sections_filled":0}')
+STRATEGY_FILLED=$(jq -r '.sections_filled // 0' <<< "$STRATEGY_STATUS_JSON" 2>/dev/null || echo 0)
+
+if [[ "$STRATEGY_FILLED" -ge 1 ]]; then
+  STRATEGY_JSON=$("$FLOWCTL" strategy read --json 2>/dev/null || echo '{}')
+  STRATEGY_NAME=$(jq -r '.name // "(unnamed)"' <<< "$STRATEGY_JSON")
+  STRATEGY_PROBLEM=$(jq -r '.target_problem // ""' <<< "$STRATEGY_JSON")
+  STRATEGY_APPROACH=$(jq -r '.approach // ""' <<< "$STRATEGY_JSON")
+  STRATEGY_TRACKS=$(jq -r '.tracks // ""' <<< "$STRATEGY_JSON")
+  STRATEGY_UPDATED=$(jq -r '.last_updated // "(unknown)"' <<< "$STRATEGY_JSON")
+  STRATEGY_BLOCK="strategy:
+  name: ${STRATEGY_NAME}
+  last_updated: ${STRATEGY_UPDATED}
+  target_problem: |
+$(printf "%s\n" "$STRATEGY_PROBLEM" | sed 's/^/    /')
+  approach: |
+$(printf "%s\n" "$STRATEGY_APPROACH" | sed 's/^/    /')
+  tracks: |
+$(printf "%s\n" "$STRATEGY_TRACKS" | sed 's/^/    /')"
+else
+  STRATEGY_BLOCK="strategy: scanned: none (no STRATEGY.md signal)"
+fi
+```
+
+The `target_problem`, `approach`, and `tracks` strings are emitted **verbatim** — no paraphrasing, no field-extraction. `tracks` is a raw markdown string with `### <track-name>` H3 sub-blocks; downstream prompt context (Phase 2 generation, Phase 3 critique) handles the parsing. Empty section bodies surface as `""` (empty string), not null — `(.field // "")` style fallbacks keep the snapshot well-formed even when an optional section is missing.
+
 ### 1.3 — Emit snapshot
 
-Concatenate the blocks under a single `## Grounding snapshot` heading. Order is fixed (git log → open epics → changelog → memory → memory audit) so the snapshot is comparable across runs. Cap each block by line-count so total output stays in the 30-50 line target window.
+Concatenate the blocks under a single `## Grounding snapshot` heading. Order is fixed (git log → open epics → changelog → memory → memory audit → strategy) so the snapshot is comparable across runs. Cap each block by line-count so total output stays in the 30-50 line target window.
 
 The snapshot is the input to Phase 2's generation prompt (task 2). For this task, the snapshot is printed to stdout for manual inspection — Phase 2's prompt scaffolding lands later.
 
@@ -331,6 +362,8 @@ $CHANGELOG_BLOCK
 $MEMORY_BLOCK
 
 $AUDIT_BLOCK
+
+$STRATEGY_BLOCK
 EOF
 ```
 
@@ -490,13 +523,16 @@ Inputs: `CANDIDATES_YAML` (Phase 2 §2.4) + the Phase 1 grounding snapshot. **Ex
 Rejection taxonomy (R3 anchor — frozen string list):
 
 ```
-duplicates-open-epic   — material overlap with an open epic in the grounding snapshot
-out-of-scope           — outside what this codebase / the focus area should tackle
-insufficient-signal    — speculative without evidence in grounding snapshot
-too-large              — XL or undermined by size; should be split or deferred
-backward-incompat      — would break public contracts / users without strong justification
-other                  — explain in `reason` field; use sparingly
+duplicates-open-epic       — material overlap with an open epic in the grounding snapshot
+out-of-scope               — outside what this codebase / the focus area should tackle
+out-of-scope-vs-strategy   — contradicts an active track in the strategy snapshot (advisory only — user can override at promote time)
+insufficient-signal        — speculative without evidence in grounding snapshot
+too-large                  — XL or undermined by size; should be split or deferred
+backward-incompat          — would break public contracts / users without strong justification
+other                      — explain in `reason` field; use sparingly
 ```
+
+`out-of-scope-vs-strategy` is **advisory only**. It fires when a candidate's direction contradicts an active track from the strategy snapshot (Phase 1 §1.2). The rejection cites the violated track verbatim: `Rejected: [out-of-scope-vs-strategy] — contradicts active track "<track-name>"`. The user can `flowctl prospect promote <id> --idea N --force` to override (existing flag, no new plumbing). When the strategy snapshot scanned `none`, this category is unreachable — Phase 3 will not emit it.
 
 Prompt template:
 
@@ -519,6 +555,7 @@ For each candidate, emit a verdict: `keep` or `drop`. If `drop`, the `taxonomy` 
 
 - `duplicates-open-epic` — same direction as a listed open epic
 - `out-of-scope` — not aligned with this codebase or the focus area
+- `out-of-scope-vs-strategy` — contradicts an active track in the strategy snapshot; cite the violated track name verbatim in `reason` (advisory — user can override)
 - `insufficient-signal` — no grounding evidence supports this being worth doing now
 - `too-large` — XL size or scope creep without commensurate payoff
 - `backward-incompat` — breaks contracts / users without strong justification
@@ -534,7 +571,7 @@ Target rejection rate: **[REJECTION_FLOOR_PCT]%**. Below that floor, the run wil
 critiques:
   - index: 0       # zero-indexed position in the input list
     verdict: keep | drop
-    taxonomy: null | duplicates-open-epic | out-of-scope | insufficient-signal | too-large | backward-incompat | other
+    taxonomy: null | duplicates-open-epic | out-of-scope | out-of-scope-vs-strategy | insufficient-signal | too-large | backward-incompat | other
     reason: <one specific sentence>
   - index: 1
     ...

@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.39.0-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.40.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -21,16 +21,16 @@
 
 🌐 **Prefer a visual overview?** See the [Flow-Next app page](https://mickel.tech/apps/flow-next) for diagrams and examples.
 
-> **What's new in 0.39.0:** Project glossary + decision records + doc-aware interview. New `GLOSSARY.md` artifact at the repo root (survives `rm -rf .flow/`) with `flowctl glossary add/list/read/remove` and nearest-ancestor walk. New `knowledge/decisions/` memory category with `decision_status` lifecycle. `/flow-next:interview` autodetects doc-aware mode (`--docs` / `--no-docs` to override) — looks up canonical terms before asking, surfaces conflicts to a `## Glossary Conflicts` spec section, prompts for decision records on load-bearing choices. `/flow-next:audit` walks glossary + decisions; `/flow-next:sync` flags decision overrides read-only (never auto-supersedes). Two-tier R17 + R4 grep guard added in CI. [Full changelog](../../CHANGELOG.md).
+> **What's new in 0.40.0:** Project strategy anchor. New `/flow-next:strategy` skill writes/maintains a repo-root `STRATEGY.md` (peer of `GLOSSARY.md` / `README.md`, never under `.flow/` — survives `rm -rf .flow/`) with 5 required sections (`Target problem` / `Our approach` / `Who it's for` / `Key metrics` / `Tracks`) + 2 optional (`Milestones` / `Not working on`). Structure derived from Richard Rumelt's strategy kernel (diagnosis / guiding policy / coherent action). `flowctl strategy status / read / list` plumbing (read-only — the skill IS the editor for prose). Single-root resolution at repo root only (NOT nearest-ancestor like glossary — strategy is repo-wide by Rumelt's definition). Doc-aware autodetect extended with a third condition (`strategy.sections_filled >= 1`); 5-row flag matrix where `--docs` / `--no-docs` cascade to all three categories and explicit `--strategy` / `--no-strategy` always wins over the cascade. Downstream skills (`/flow-next:prospect` / `:plan` / `:interview` / `:capture` / `:sync`) consume `STRATEGY.md` read-only — `## Strategy Alignment`, `## Strategy Conflicts`, `## Strategy drift flagged for review` spec sections; `[strategy:<track>]` source-tag in capture; never auto-supersedes. Tier 1 fluff guard (R19): `synergy / pivot / disrupt / thought-leadership / best-in-class / world-class / 10x` blocked in canonical + Codex mirror via two-tier grep (separate block from R17 DDD). Ralph-blocked. [Full changelog](../../CHANGELOG.md).
 >
-> Recent highlights: [capture skill](#capture) for conversation-to-spec synthesis (0.38.0), [interview grill-me patterns](#flow-nextinterview) (0.38.0), agent-native [memory audit](#memory-system) (0.37.0), [memory migrate skill](#memory-system) (0.37.0), [PR feedback resolver](#pr-feedback-resolution) (0.34.0), [prospect skill](#prospecting) for ranked candidate ideation (0.36.0).
+> Recent highlights: [project glossary + decision records + doc-aware interview](#project-glossary) (0.39.0), [capture skill](#capture) for conversation-to-spec synthesis (0.38.0), [interview grill-me patterns](#flow-nextinterview) (0.38.0), agent-native [memory audit](#memory-system) (0.37.0), [memory migrate skill](#memory-system) (0.37.0), [PR feedback resolver](#pr-feedback-resolution) (0.34.0), [prospect skill](#prospecting) for ranked candidate ideation (0.36.0).
 
 ---
 
 ## Table of Contents
 
 - [What Is This?](#what-is-this)
-- [The Workflow](#the-workflow-ladder) — Idea → spec → tasks → ship → maintain
+- [The Workflow](#the-workflow) — Strategy → idea → spec → tasks → ship → maintain
 - [Why It Works](#why-it-works)
 - [Quick Start](#quick-start) — Install, setup, use
 - [When to Use What](#when-to-use-what) — Prospect / Capture / Interview / Plan
@@ -38,6 +38,7 @@
 - [Capture](#capture) — `/flow-next:capture`
 - [Memory System](#memory-system) — `/flow-next:audit` + `/flow-next:memory-migrate`
 - [Project Glossary](#project-glossary) — `flowctl glossary` + doc-aware interview
+- [Project Strategy](#project-strategy) — `/flow-next:strategy` + `flowctl strategy` + downstream grounding
 - [Agent Readiness Assessment](#agent-readiness-assessment) — `/flow-next:prime`
 - [PR Feedback Resolution](#pr-feedback-resolution) — `/flow-next:resolve-pr`
 - [Cross-Model Reviews](#cross-model-reviews) — RepoPrompt / Codex / Copilot
@@ -54,7 +55,7 @@
 
 ## What Is This?
 
-Flow-Next is a plugin for **agent-native AI orchestration**. Sixteen slash commands cover the full lifecycle: idea generation (`prospect`) → spec creation (`capture`) → refinement (`interview`) → planning (`plan`) → execution (`work`) → review (`impl-review` + `epic-review`) → PR feedback resolution (`resolve-pr`) → maintenance (`audit` + `memory-migrate`) → autonomous mode (`ralph-init`). Bundled task tracking, dependency graphs, re-anchoring, and cross-model reviews.
+Flow-Next is a plugin for **agent-native AI orchestration**. Seventeen slash commands cover the full lifecycle: strategic anchor (`strategy`) → idea generation (`prospect`) → spec creation (`capture`) → refinement (`interview`) → planning (`plan`) → execution (`work`) → review (`impl-review` + `epic-review`) → PR feedback resolution (`resolve-pr`) → maintenance (`audit` + `memory-migrate`) → autonomous mode (`ralph-init`). Bundled task tracking, dependency graphs, re-anchoring, and cross-model reviews.
 
 Everything lives in your repo. No external services. No global config. Uninstall: delete `.flow/` (and `scripts/ralph/` if enabled).
 
@@ -203,8 +204,11 @@ flowctl ready --epic fn-1    # What's ready to work on
 ### 3. Use
 
 ```bash
-# Spec: "create a spec for X" — writes epic with structured requirements
-# Then plan or interview to refine
+# (Optional) Strategy: anchor problem/approach/tracks for downstream grounding
+/flow-next:strategy
+
+# (Optional) Prospect: rank candidate ideas grounded in repo + strategy
+/flow-next:prospect
 
 # Plan: research, create epic with tasks
 /flow-next:plan Add a contact form with validation
@@ -217,6 +221,8 @@ flowctl ready --epic fn-1    # What's ready to work on
 ```
 
 That's it. Flow-Next handles research, task ordering, reviews, and audit trails.
+
+**Already know what you want to build?** Skip strategy and prospect — go straight to plan or work. Strategy and prospect are upstream grounding tools, not gates. See [When to Use What](#when-to-use-what) for the full route map.
 
 ### When to Use What
 
@@ -286,8 +292,9 @@ Best for: bug fixes, small features, well-scoped changes that don't need task sp
 
 | Starting point | Recommended sequence |
 |----------------|---------------------|
-| No target yet, want ranked candidates | Prospect → (promote) → Plan → Work ([details](#prospecting)) |
-| Prospect survivor needs richer spec | Prospect → Capture → Interview/Plan → Work |
+| Want a strategic anchor for the whole repo | Strategy → (everything below grounds against it) ([details](#project-strategy)) |
+| No target yet, want ranked candidates | (Strategy) → Prospect → (promote) → Plan → Work ([details](#prospecting)) |
+| Prospect survivor needs richer spec | (Strategy) → Prospect → Capture → Interview/Plan → Work |
 | Conversation already in flight | Capture → Interview/Plan → Work |
 | Free-form discussion, lock it down | Capture → Plan → Work |
 | New feature, want solid spec first | Spec → Interview/Plan → Work |
@@ -296,12 +303,21 @@ Best for: bug fixes, small features, well-scoped changes that don't need task sp
 | Well-understood, needs task splitting | Plan → Work |
 | Small single-task, spec complete | Work directly (creates 1 epic + 1 task) |
 
-**Prospect vs Capture vs Spec vs Interview vs Plan:**
+Strategy is **upstream of every route** — set it once, every downstream skill (prospect / plan / interview / capture / sync) reads `STRATEGY.md` as advisory grounding. Skip it if you don't want a strategic anchor; everything still works the same way as before 0.40.0. See [Project Strategy](#project-strategy) for details.
+
+**Glossary and decisions build incrementally** as a side effect of any route — run `/flow-next:interview <epic-id> --docs` (or just rely on the autodetect once you have one term or one decision on file) and:
+- Terminology conflicts surface as a `## Glossary Conflicts` spec section; resolving with `update-glossary` writes the canonical term inline via `flowctl glossary add`
+- Load-bearing choices (hard-to-reverse / surprising-without-context / real-trade-off) trigger a three-criteria gate that writes a decision record to `knowledge/decisions/` after a mandatory read-back
+
+You don't need a dedicated "build my glossary" or "build my decisions" route — these doc-aware artifacts accumulate naturally through interview-driven spec refinement. Hand-write `GLOSSARY.md` directly or use `flowctl glossary add` if you prefer; same destination. See [Project Glossary](#project-glossary) for the full mechanic.
+
+**Strategy vs Prospect vs Capture vs Spec vs Interview vs Plan:**
+- **Strategy** (`/flow-next:strategy`) writes/maintains a repo-root `STRATEGY.md` (target problem, approach, personas, key metrics, tracks). Run once early, revisit per-section as direction shifts. Downstream skills read it as advisory grounding (never auto-supersedes). Optional — skip if your repo has no strategic intent worth recording.
 - **Prospect** (`/flow-next:prospect [hint]`) generates many candidate ideas, critiques each one, and writes a ranked artifact under `.flow/prospects/`. Use when you don't have a target yet. Promote a survivor to an epic via `flowctl prospect promote` (direct path to plan), or hand the survivor to `/flow-next:capture` for a richer conversation-driven spec.
-- **Capture** (`/flow-next:capture`) synthesizes conversation context into an epic spec — the automated alternative to manual `flowctl epic create + epic set-plan`. Use after prospect-promotion or after a free-form design discussion. Source-tags every acceptance criterion (`[user]` / `[paraphrase]` / `[inferred]`); mandatory read-back loop; never silently invents requirements. Output goes to `.flow/specs/<epic-id>.md`.
+- **Capture** (`/flow-next:capture`) synthesizes conversation context into an epic spec — the automated alternative to manual `flowctl epic create + epic set-plan`. Use after prospect-promotion or after a free-form design discussion. Source-tags every acceptance criterion (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`); mandatory read-back loop; never silently invents requirements. Output goes to `.flow/specs/<epic-id>.md`.
 - **Spec** (just ask "create a spec") creates an epic with structured requirements (goal, architecture, API contracts, edge cases, acceptance criteria, boundaries). Same destination as capture, but the manual heredoc path — useful for scripted callers.
-- **Interview** refines an epic via deep Q&A (40+ questions). Writes back to the epic spec only — no tasks.
-- **Plan** researches best practices, analyzes existing patterns, and creates sized tasks with dependencies.
+- **Interview** refines an epic via deep Q&A (40+ questions). Doc-aware mode reads glossary + decisions + strategy and surfaces conflicts. Writes back to the epic spec only — no tasks.
+- **Plan** researches best practices, analyzes existing patterns, and creates sized tasks with dependencies. Reads strategy if present and emits a `## Strategy Alignment` section listing which active tracks the plan serves.
 
 You can always run interview again after planning to catch anything missed. Interview writes back to the epic spec only — it won't modify existing tasks.
 
@@ -1756,12 +1772,57 @@ flowctl glossary remove <term>
 
 ---
 
+## Project Strategy
+
+`STRATEGY.md` is a project-canonical strategic-intent file shipped in v0.40.0. Lives at the **repo root** (peer of `GLOSSARY.md` / `README.md`), NOT inside `.flow/`. Survives `rm -rf .flow/` — strategic intent is the project's, not flow-next's (R1 / R22, mirrors the glossary R18 invariant). Section structure derived from Richard Rumelt's strategy kernel (*Good Strategy Bad Strategy*: diagnosis / guiding policy / coherent action), extended with persona + metrics for repo-doc utility. `/flow-next:strategy` is the skill that writes/maintains it — no `flowctl strategy add/edit` plumbing because strategy is too prose-heavy for atomic field-set CLI; the skill IS the editor.
+
+**Format:** Plain GFM markdown. Frontmatter contains 3 keys only — `name`, `last_updated` (ISO date), `generator: flow-next-strategy`. The generator key is the foreign-file sentinel. 5 required sections (`Target problem` / `Our approach` / `Who it's for` / `Key metrics` / `Tracks`) + 2 optional (`Milestones` / `Not working on`). CE's `Marketing` section explicitly NOT included — over-rotated for OSS-tools repos. Optional sections deleted entirely if unused; never left as empty headers.
+
+**Resolution:** Single-root walk from cwd UP to first `STRATEGY.md` found, capped at repo root via `git rev-parse --show-toplevel`. NOT nearest-ancestor like glossary — strategy is repo-wide by Rumelt's definition (one diagnosis, one guiding policy, coherent action). Subdirectory invocation surfaces `Using repo-root STRATEGY.md at <path>` before any interview question fires; does NOT create per-subdirectory STRATEGY.md files.
+
+**Subcommands:**
+
+```bash
+# Status — exists / husk / sections_filled / total_sections / last_updated
+flowctl strategy status
+flowctl strategy status --json   # {exists, husk, sections_filled, total_sections, last_updated, file_path}
+
+# Read — single-root walk; full file or one section
+flowctl strategy read
+flowctl strategy read --section approach
+flowctl strategy read --json     # {path, name, last_updated, target_problem, approach, personas, metrics, tracks, milestones, not_working_on}
+
+# List — parallel to flowctl glossary list (degenerate single-element group for v1)
+flowctl strategy list --json     # {groups, file_count, total_sections}
+```
+
+NO `flowctl strategy add/edit/remove`. Strategy editing happens via `/flow-next:strategy` — the skill running the interview IS the LLM that should write the file (per the agentic-vs-deterministic architecture rule). Atomic CLI plumbing fits term-list / decision-record / memory shape but not prose-heavy strategy shape.
+
+**Husk semantics:** A file with H1 + frontmatter only and no populated H2 sections returns `{exists: true, husk: true, sections_filled: 0}` from `flowctl strategy status`. Last-section deletion leaves a husk on disk — the file is **never** deleted (R23, mirrors `render_glossary_file`). Doc-aware autodetect should branch on `flowctl strategy status --json | jq '.sections_filled >= 1'`, NOT on `[[ -f STRATEGY.md ]]` — same trap glossary fell into.
+
+**How the rest of flow-next uses it:**
+
+- **`/flow-next:prospect`** Phase 0 grounding scan reads `STRATEGY.md` when `sections_filled >= 1`. Injects approach + active tracks verbatim into candidate-generation prompt (mirrors CE-ideate's "emit approach and active tracks verbatim" pattern). Adds `out-of-scope-vs-strategy` to the rejection taxonomy. Surfaced as advisory at prospect phase — never auto-rejects.
+- **`/flow-next:plan`** research scan reads `STRATEGY.md`. Plan emits a `## Strategy Alignment` spec section listing which active tracks the plan serves. Drift surfaced as a `## Strategy drift flagged for review` block (read-only — never auto-supersedes; mirrors decision-record convention).
+- **`/flow-next:interview`** doc-aware mode reads `STRATEGY.md` before terminology questions. Surfaces conflicts in a `## Strategy Conflicts` spec section parallel to `## Glossary Conflicts`. Throttle: ≤1 strategy-conflict question per interview turn (parallel to existing glossary-question throttle). Behavior (e) — code-versus-strategy contradiction.
+- **`/flow-next:capture`** Phase 0 reads `STRATEGY.md` as input. Source-tags strategy-derived acceptance criteria as `[strategy:<track-name>]` (joins existing `[user]` / `[paraphrase]` / `[inferred]` tags). Refuses to write spec contradicting an active track without `--override-strategy` flag. On flag fire: prompts user via `AskUserQuestion` to record a decision via `flowctl memory add --track knowledge --category decisions ...` (recommendation: yes; user can decline). Audit trail captured for future review.
+- **`/flow-next:sync`** (plan-sync agent) Step 5 reads `STRATEGY.md`. Surfaces drift in a `## Strategy drift flagged for review` heading parallel to existing "Decision overrides flagged for review". NEVER auto-supersedes — read-only surface only. Track renames replace inline with a `<!-- Updated by plan-sync: track rename ... -->` breadcrumb mirroring the glossary rename pattern.
+
+**Foreign-file refusal in v1:** A `STRATEGY.md` without `generator: flow-next-strategy` frontmatter (or with a different generator value) routes via `AskUserQuestion` (migrate / keep / rewrite?). On "keep" — exits without writing. On "rewrite" — confirms via second prompt before destructive overwrite. Multi-format migration (CE-format / hand-written) explicitly deferred to v2; v1 ships the sentinel + refusal pattern, lets early adopters delete-or-rename to bootstrap.
+
+**Forbidden vocabulary (R19, separate from R17 DDD):** Tier 1 jargon only — Rumelt's "fluff" hallmarks: `synergy / pivot / disrupt / thought-leadership / best-in-class / world-class / 10x`. Two-tier guard: canonical scan in `ci_test.sh` (separate block from R17 — comment specifies "strategy-doc fluff guard, NOT R17"; never merge them) covers `flow-next-strategy/SKILL.md` + `cmd_strategy_*` regions in `flowctl.py` + `commands/flow-next/strategy.md`; mirror scan in `scripts/sync-codex.sh` validation block covers `plugins/flow-next/codex/skills/flow-next-strategy/`. The `references/interview.md` file is excluded — it must describe these anti-patterns to push back on them (same exemption as glossary references).
+
+**Why no migration in v1:** CE-format and hand-written `STRATEGY.md` files have ambiguous section mappings. Multi-format migration is a v2 problem. v1 ships the `generator: flow-next-strategy` sentinel + refusal pattern, documents the limitation, lets early adopters delete-or-rename to bootstrap. The skill prompts before any destructive overwrite.
+
+---
+
 ## Commands
 
-Sixteen commands, complete workflow:
+Seventeen commands, complete workflow:
 
 | Command | What It Does |
 |---------|--------------|
+| `/flow-next:strategy [section]` | Generate or update repo-root `STRATEGY.md` (problem / approach / personas / metrics / tracks); read-only consumed by prospect/plan/interview/capture/sync ([details](#project-strategy)) |
 | `/flow-next:prospect [hint]` | Generate ranked candidate ideas grounded in the repo, upstream of `capture`/`interview`/`plan` ([details](#prospecting)) |
 | `/flow-next:capture [flags]` | Synthesize conversation context into an epic spec; source-tagged + mandatory read-back ([details](#capture)) |
 | `/flow-next:plan <idea>` | Research the codebase, create epic with dependency-ordered tasks |
@@ -1810,7 +1871,8 @@ Natural language also works:
 |---------|-----------------|
 | `/flow-next:prospect` | `[focus hint]` (positional) — concept / path / constraint / volume |
 | `/flow-next:capture` | `mode:autofix` (positional), `--rewrite <epic-id>`, `--from-compacted-ok`, `--yes` |
-| `/flow-next:interview` | `--docs` / `--no-docs` (override doc-aware autodetect, v0.39.0+) |
+| `/flow-next:strategy` | `[section to revisit]` (positional) — empty = full interview; section name = re-run that section only |
+| `/flow-next:interview` | `--docs` / `--no-docs` (override doc-aware autodetect, v0.39.0+); `--strategy` / `--no-strategy` (independent override for strategy signal, v0.40.0+; 5-row flag matrix) |
 | `/flow-next:plan` | `--research=rp\|grep`, `--review=rp\|codex\|copilot\|export\|none`, `--no-review` |
 | `/flow-next:work` | `--branch=current\|new\|worktree`, `--review=rp\|codex\|copilot\|export\|none`, `--no-review` |
 | `/flow-next:plan-review` | `--review=rp\|codex\|copilot\|export` |
@@ -1912,23 +1974,36 @@ Deep questioning (40+ questions) to surface requirements, edge cases, and decisi
 
 These three patterns are additive enhancements to **how** questions are asked, not what gets asked. Existing 40+ question coverage is unchanged.
 
-**Doc-aware mode (0.39.0+):**
+**Doc-aware mode (0.39.0+, extended in 0.40.0):**
 
-Autodetects when `GLOSSARY.md` has at least one term (husks ignored — branches on `flowctl glossary list --json | jq '.total_terms > 0'`, NOT plain file existence) or `knowledge/decisions/` has at least one entry. Override via:
+Autodetects when ANY of three conditions has signal: `GLOSSARY.md` has at least one term (husks ignored — branches on `flowctl glossary list --json | jq '.total_terms > 0'`, NOT plain file existence) OR `knowledge/decisions/` has at least one entry OR `STRATEGY.md` has `sections_filled >= 1` (branches on `flowctl strategy status --json | jq '.sections_filled >= 1'`, NOT plain file existence — same husk trap). Override via two flag pairs:
 
 | Flag | Description |
 |------|-------------|
-| `--docs` | Force doc-aware mode on (even if autodetect says off) |
-| `--no-docs` | Force doc-aware mode off (skip glossary lookup + decision-record prompts) |
+| `--docs` | Force doc-aware mode on; cascades to all three (glossary + decisions + strategy) unless `--no-strategy` is also passed |
+| `--no-docs` | Force doc-aware mode off; cascades to all three (glossary + decisions + strategy) unless `--strategy` is also passed |
+| `--strategy` | Force strategy-aware mode on. Always wins over the `--docs` / `--no-docs` cascade for strategy. |
+| `--no-strategy` | Force strategy-aware mode off (skip strategy scan + `## Strategy Conflicts` section). Always wins over the `--docs` / `--no-docs` cascade for strategy. |
 
-Four behaviors when active:
+5-row flag matrix — `--docs` / `--no-docs` cascade to strategy when no explicit `--strategy` / `--no-strategy` is passed; the explicit pair always wins when present:
+
+| Invocation | Glossary | Decisions | Strategy |
+|------------|----------|-----------|----------|
+| `(default)` | autodetect | autodetect | autodetect |
+| `--docs` | on | on | on |
+| `--no-docs` | off | off | off |
+| `--no-docs --strategy` | off | off | on |
+| `--docs --no-strategy` | on | on | off |
+
+Five behaviors when active:
 
 - **(a) Glossary lookup before terminology questions** — fetch nearest-ancestor canonical wording via `flowctl glossary read` before asking the user about terminology. If user wording diverges from canonical, surface the conflict in a new `## Glossary Conflicts` section in the refined spec — sits next to `## Resolved via Codebase` as the audit trail for canonical-vs-user wording resolutions. Resolution outcome (use-canonical / update-glossary / accept-divergence) is recorded inline.
 - **(b) Inline glossary write on resolution** — when the user picks `update-glossary`, `flowctl glossary add` is invoked immediately, recording the new canonical term with the user's chosen definition. The added term flows into downstream tasks via `docs-gap-scout` on the next planning pass.
 - **(c) Decision-record awareness** — when a load-bearing architectural choice is made during the interview, prompt the user (via `AskUserQuestion`) to write a `knowledge/decisions/` entry. Three-criteria gate: hard-to-reverse / surprising / load-bearing trade-off. Read-back loop before write so the user can correct trade-off framing.
 - **(d) Code/spec contradiction surfaced** — when an interview answer conflicts with an active decision record, the contradiction is surfaced in the refined spec (under `## Glossary Conflicts` or a similarly-named section) rather than silently overwriting either side. The user picks: revise the spec, supersede the decision, or accept divergence with rationale.
+- **(e) Strategy-conflict surfacing (0.40.0+, gated on `STRATEGY_AWARE=1`)** — Phase-zero strategy scan reads active tracks via `flowctl strategy read --json` before drafting the first question batch. When the user's request conflicts with an active track, surface the conflict in a new `## Strategy Conflicts` section parallel to `## Glossary Conflicts`. Throttle: ≤1 strategy-conflict question per interview turn (parallel to existing glossary-question throttle).
 
-Both `NEW-IDEA` and `EXISTING-EPIC` interview templates emit the `## Glossary Conflicts` section when behavior (a) or (d) fires.
+Both `NEW-IDEA` and `EXISTING-EPIC` interview templates emit the `## Glossary Conflicts` and `## Strategy Conflicts` sections when behaviors (a)/(d)/(e) fire.
 
 #### `/flow-next:plan-review`
 
@@ -2065,9 +2140,34 @@ Flow-Next uses the same defaults in manual and Ralph runs. Ralph bypasses prompt
 
 Override via flags or `scripts/ralph/config.env`.
 
+### Strategy Phase (optional, upstream of everything)
+
+Run once early or whenever direction shifts. Sets a repo-wide strategic anchor that downstream skills read as advisory grounding.
+
+1. **Run** `/flow-next:strategy` — interview-driven Q&A populates 5 required sections (Target problem / Our approach / Who it's for / Key metrics / Tracks) + 2 optional (Milestones / Not working on). 2-round pushback per section against fluff / vanity / feature-list answers
+2. **Re-run anytime** with section name (e.g., `/flow-next:strategy metrics`) to revisit one block — preserves the rest byte-identical, bumps `last_updated`
+3. **Downstream consumers** auto-detect and ground against `STRATEGY.md`:
+   - Prospect — Phase 0 grounding scan emits approach + tracks verbatim into the candidate-generation prompt; adds `out-of-scope-vs-strategy` to the rejection taxonomy
+   - Plan — research scan reads strategy; epic spec gets a `## Strategy Alignment` section listing tracks served + read-only `## Strategy drift flagged for review` block on conflict
+   - Interview — doc-aware mode adds a `## Strategy Conflicts` section parallel to `## Glossary Conflicts`; throttled to ≤1 strategy question per turn
+   - Capture — Phase 0 reads strategy; tags strategy-derived acceptance criteria as `[strategy:<track-name>]`; refuses to write contradicting specs without `--override-strategy` (which prompts for a decision-record write)
+   - Plan-sync — surfaces strategy drift read-only; renames update inline with breadcrumb; never auto-supersedes
+
+Skip this phase entirely if your repo has no strategic intent worth recording. All downstream skills run identically when `STRATEGY.md` is absent or empty (husk).
+
+**Glossary and decisions accumulate alongside strategy as a side effect of `/flow-next:interview --docs`** (or just `interview` once one glossary term or one decision is on file — autodetect takes over). Conflict resolution writes canonical terms to `GLOSSARY.md` via `flowctl glossary add`; the three-criteria gate writes decision records to `knowledge/decisions/`. No separate "build glossary" or "build decisions" phase — these populate through normal spec refinement. See [Project Glossary](#project-glossary) and [Memory System](#memory-system) for direct CLI paths if you prefer.
+
+### Prospecting Phase (optional, when no target yet)
+
+Run when you don't know what to build next. Generates ranked candidates grounded in repo + strategy + memory + open epics.
+
+1. **Run** `/flow-next:prospect [focus hint]` — generates 15-25 candidates, critiques each, writes ranked artifact to `.flow/prospects/<slug>-<date>.md`
+2. **Promote** a survivor: `flowctl prospect promote <id> --idea N` allocates an epic with prospect-context spec inlined
+3. **Continue** with Capture / Interview / Plan as appropriate (see [When to Use What](#when-to-use-what))
+
 ### Planning Phase
 
-1. **Research (parallel subagents)**: `repo-scout` (or `context-scout` if rp-cli) + `practice-scout` + `docs-scout` + `github-scout` + `epic-scout` + `docs-gap-scout` (v0.39.0+: also reads `GLOSSARY.md` on the ancestor chain + `knowledge/decisions/` to surface canonical terminology + prior load-bearing choices in the planning context)
+1. **Research (parallel subagents)**: `repo-scout` (or `context-scout` if rp-cli) + `practice-scout` + `docs-scout` + `github-scout` + `epic-scout` + `docs-gap-scout` (v0.39.0+: also reads `GLOSSARY.md` on the ancestor chain + `knowledge/decisions/` to surface canonical terminology + prior load-bearing choices in the planning context; v0.40.0+: also reads `STRATEGY.md` when present and writes `## Strategy Alignment` listing tracks served)
 2. **Gap analysis**: `flow-gap-analyst` finds edge cases + missing requirements
 3. **Epic creation**: Writes spec to `.flow/specs/fn-N.md`, sets epic dependencies from `epic-scout` findings
 4. **Task breakdown**: Creates tasks + explicit dependencies in `.flow/tasks/`, adds doc update acceptance criteria from `docs-gap-scout`
@@ -2082,6 +2182,12 @@ Override via flags or `scripts/ralph/config.env`.
 4. **Record**: `flowctl done` adds summary + evidence to the task spec
 5. **Review** (optional): `/flow-next:impl-review` via RepoPrompt, Codex, or Copilot
 6. **Loop**: Next ready task → repeat until no ready tasks. Close epic manually (`flowctl epic close fn-N`) or let Ralph close at loop end.
+
+### Maintenance Phase (optional, ongoing)
+
+- `/flow-next:audit [mode:autofix] [scope hint]` — review `.flow/memory/` entries against current code, decide Keep / Update / Consolidate / Replace / Delete per entry
+- `/flow-next:memory-migrate` — one-time migration from legacy flat memory files (pre-0.33.0)
+- `/flow-next:resolve-pr [PR# | comment URL]` — fetch unresolved PR review threads, dispatch resolver agents, validate, commit, reply, resolve via GraphQL
 
 ---
 

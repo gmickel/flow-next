@@ -71,6 +71,41 @@ Memory hits are advisory — they signal "you may have prior art on this topic" 
 
 If memory is not initialized (`memory list` returns the `Memory not initialized` error), skip this step silently. Memory search is a quality-of-life signal; absence is not blocking.
 
+### 0.3b — Strategy snapshot (advisory grounding input)
+
+Read `STRATEGY.md` (when populated) so Phase 2's source-tagging can apply `[strategy:<track>]` to acceptance criteria that follow directly from strategic intent. Husk-vs-presence gate uses `sections_filled >= 1` from `flowctl strategy status --json`, NOT `[[ -f STRATEGY.md ]]`.
+
+```bash
+STRATEGY_STATUS_JSON=$("$FLOWCTL" strategy status --json 2>/dev/null || echo '{"exists":false,"sections_filled":0}')
+STRATEGY_FILLED=$(jq -r '.sections_filled // 0' <<< "$STRATEGY_STATUS_JSON" 2>/dev/null || echo 0)
+
+if [[ "$STRATEGY_FILLED" -ge 1 ]]; then
+ STRATEGY_JSON=$("$FLOWCTL" strategy read --json 2>/dev/null || echo '{}')
+ STRATEGY_PRESENT=true
+ STRATEGY_NAME=$(jq -r '.name // "(unnamed)"' <<< "$STRATEGY_JSON")
+ STRATEGY_PROBLEM=$(jq -r '.target_problem // ""' <<< "$STRATEGY_JSON")
+ STRATEGY_APPROACH=$(jq -r '.approach // ""' <<< "$STRATEGY_JSON")
+ STRATEGY_TRACKS_RAW=$(jq -r '.tracks // ""' <<< "$STRATEGY_JSON")
+ STRATEGY_PATH=$(jq -r '.path // "STRATEGY.md"' <<< "$STRATEGY_JSON")
+else
+ STRATEGY_PRESENT=false
+fi
+```
+
+Surface as a "Strategic context:" footnote — 3-5 lines total — when the agent presents Phase 0 results to the user. Format:
+
+```
+Strategic context (STRATEGY.md, last updated 2026-04-30):
+ Approach: <verbatim approach line, capped to 1-2 sentences>
+ Active tracks: <track-name-1>, <track-name-2>, <track-name-3>
+```
+
+`STRATEGY_TRACKS_RAW` is a **raw markdown string** with `### <track-name>` H3 sub-blocks. Parse the H3 names locally for the active-tracks list. Empty section bodies (any of `target_problem`, `approach`, `tracks`) surface as `""` — `(.field // "")` style fallbacks in the jq queries above keep parsing well-formed when an optional section is missing.
+
+The strategy snapshot is **input**, not gating: even when `STRATEGY_PRESENT=true`, capture proceeds. Phase 2's source-tagging uses the snapshot to assign `[strategy:<track-name>]` to criteria that quote / paraphrase strategy content. Phase 5 uses it to detect contradictions (see §5.0 below) and refuse the write without `--override-strategy`.
+
+When `STRATEGY_PRESENT=false`, Phase 2 emits no `[strategy:*]` tags and Phase 5's contradiction check is skipped entirely — there is no signal to align to.
+
 ### 0.4 — Compaction detection (R6)
 
 Scan the visible conversation for any of:
@@ -246,6 +281,7 @@ Every acceptance criterion line, every decision-context line, and every scope-bo
 | `[user]` | Verbatim from conversation evidence (exact quote or close paraphrase preserving meaning) | `- **R1:** Rate limit must reject ≥3 requests/sec from a single client. [user] (turn 4)` |
 | `[paraphrase]` | User intent restated in spec language (semantic equivalence; no new constraints introduced) | `- **R2:** Spec body is written via heredoc, atomic write. [paraphrase]` |
 | `[inferred]` | Agent fill-in (most-scrutinized; user must confirm at read-back) | `- **R7:** Errors include the request id for trace correlation. [inferred]` |
+| `[strategy:<track>]` | Derived from `STRATEGY.md` content (verbatim or near-verbatim from `approach` or a `### <track-name>` H3 sub-block); track name lives literally in the tag | `- **R9:** Service-level objective: 99.95% uptime measured monthly. [strategy:Reliability]` |
 
 Pure prose sections (Goal & Context narrative, Architecture overview) do not need per-line tags — but the **whole section** carries a section-level tag in a frontmatter-style note: e.g. `<!-- Goal & Context: 70% [user], 30% [inferred] -->`. Phase 4 read-back surfaces this.
 
@@ -360,13 +396,18 @@ Construct the full draft including:
 2. The `## Conversation Evidence` block (Phase 1).
 3. Every section drafted in Phase 2, with source tags visible.
 4. The `## Acceptance Criteria` R-ID list — bulleted, source tags shown.
-5. **`[inferred]` tally** — total count across the spec, with per-section breakdown:
+5. **Source-tag tally** — total count across the spec, with per-tag breakdown. Format:
+ ```
+ Source: [user] N · [paraphrase] M · [strategy] K · [inferred] L
+ ```
+ Followed by the per-section `[inferred]` breakdown (the most-scrutinized class):
  ```
  [inferred] count: 7 total
  - Architecture & Data Models: 3
  - API Contracts: 2
  - Boundaries: 2
  ```
+ The `[strategy]` count aggregates all `[strategy:<track>]` lines regardless of track. When Phase 0 strategy snapshot scanned `none` (`STRATEGY_PRESENT=false`), `[strategy] K` reads `[strategy] 0` (or the field is omitted entirely — equivalent in practice).
 6. **8+ acceptance-criterion suggestion** (if Phase 2.5 fired):
  ```
  This spec has 11 acceptance criteria — consider splitting into multiple
@@ -434,6 +475,93 @@ Autofix never offers `edit` — there's no user to ask. The print-then-rerun-wit
 ## Phase 5: Write via flowctl (R14, R15, R16)
 
 **Goal:** atomic write of the new (or rewritten) epic via existing flowctl plumbing.
+
+### 5.0 — Strategy contradiction check (gate; runs before any write)
+
+When the Phase 0 strategy snapshot was populated (`STRATEGY_PRESENT=true`), scan the drafted spec body for contradictions against the active tracks. A contradiction exists when:
+
+1. The spec body has at least one `[strategy:<track>]` line AND the surrounding criterion / decision-context line negates the corresponding track body. Example: track `### CLI-only` says "we ship CLI tools, not SaaS"; spec criterion `[strategy:CLI-only]` reads "ship a managed dashboard service" — direct contradiction.
+2. The spec body proposes an investment area that contradicts `approach` directly. Example: approach says "OSS-tools repo, no commercial SaaS"; spec body adds "stripe billing integration as a core feature" without `[strategy:*]` tagging — semantic contradiction even without a tag.
+
+When a contradiction is detected AND `OVERRIDE_STRATEGY` is `0`:
+
+```text
+Error: spec contradicts active track "<track>" — pass --override-strategy to proceed.
+
+Detected contradiction:
+ Track: <track-name> (STRATEGY.md)
+ Track says: "<canonical wording>"
+ Spec says: "<conflicting wording>"
+
+Re-run with --override-strategy to write the spec anyway. You'll be prompted to
+record the override as a decision entry (the override is exactly the kind of
+load-bearing architectural choice the decisions track exists for).
+```
+
+In **interactive** mode, refuse with the message above (exit 2) — do NOT prompt the user to override here; require the explicit flag re-run so the override is intentional.
+
+In **autofix** mode, refuse identically (exit 2). Autofix cannot resolve a strategy override.
+
+When `OVERRIDE_STRATEGY=1` AND the snapshot is populated, capture proceeds with the write **AND** prompts the user to record the override as a decision entry. Pattern (mirrors `/flow-next:interview` behavior (d) — three-criteria decision-record gate):
+
+```bash
+# Interactive only — autofix never reaches this branch (5.0 exits 2 above when OVERRIDE_STRATEGY=0,
+# and OVERRIDE_STRATEGY=1 in autofix is treated as "user already chose to override; record audit
+# trail to stderr but don't prompt" — see logging branch below).
+```
+
+Use `request_user_input` (lead-with-recommendation, `[high]` toward yes):
+
+- **header**: `Record override?`
+- **body**: `Override strategy track "<track>" — record as a decision? Recommended: yes — override decisions belong in the decisions track (load-bearing architectural choice). Confidence: [high].`
+- **options**: frozen — `yes` (write decision entry), `no` (proceed without recording; audit trail logged to stderr only).
+
+On `yes`, invoke `flowctl memory add` with the override rationale piped via `--body-file -` stdin:
+
+```bash
+"$FLOWCTL" memory add \
+ --track knowledge \
+ --category decisions \
+ --title "Override strategy: <track-name>" \
+ --module strategy \
+ --tags strategy-override \
+ --body-file - <<EOF
+## Problem
+Spec for epic <epic-id> contradicts active track "<track-name>" in STRATEGY.md.
+
+## What was chosen
+<concise summary of the override decision>
+
+## Why
+<rationale — why the override is the right call given current context>
+
+## Track being overridden
+- **<track-name>** (STRATEGY.md): "<canonical track wording>"
+- **Spec direction:** "<contradicting wording>"
+
+## Considered alternatives
+- Aligning with the strategy track (rejected because: <reason>)
+- Updating STRATEGY.md instead of overriding here (rejected because: <reason>)
+
+## Consequences
+- This epic ships in tension with track "<track-name>".
+- A future `/flow-next:strategy` run should re-evaluate the track; this decision feeds that conversation.
+EOF
+```
+
+On `no`, proceed without writing the decision. Log an audit-trail line to stderr:
+
+```bash
+# On no:
+echo "[STRATEGY OVERRIDE]: track=\"<track-name>\" decision-not-recorded epic=<epic-id>" >&2
+
+# On yes (decision was recorded):
+echo "[STRATEGY OVERRIDE]: track=\"<track-name>\" decision-recorded=<entry-id> epic=<epic-id>" >&2
+```
+
+The audit trail line appears in both interactive (after the user picks) and autofix (when `OVERRIDE_STRATEGY=1` was passed) — it is the minimum durable record that an override happened, surfaceable in CI logs / git hook output later. In autofix mode (where the request_user_input is unreachable), the decision-not-recorded variant fires unconditionally.
+
+When `STRATEGY_PRESENT=false`, this entire section is a no-op — there's no strategy snapshot to contradict.
 
 ### 5.1 — Build the spec body
 

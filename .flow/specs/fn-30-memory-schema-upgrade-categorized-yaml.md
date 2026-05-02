@@ -85,7 +85,7 @@ applies_when: <one-line — situations this guidance applies to>
 Optional fields (both tracks):
 
 ```yaml
-status: active | stale   # ce-compound-refresh maintenance marker
+status: active | stale   # staleness audit marker (consumed by /flow-next:audit)
 stale_reason: <reason>    # only when status: stale
 stale_date: YYYY-MM-DD    # only when status: stale
 last_updated: YYYY-MM-DD
@@ -165,7 +165,7 @@ flowctl memory list [--track <bug|knowledge>] [--category <cat>] [--json]
 flowctl memory read <entry-id> [--json]
 flowctl memory search <query> [--track <bug|knowledge>] [--category <cat>] [--json]
 flowctl memory migrate [--dry-run] [--yes]
-flowctl memory refresh [--dry-run]              # future: ce-compound-refresh-style maintenance (separate follow-up)
+flowctl memory refresh [--dry-run]              # future: staleness-audit maintenance (separate follow-up)
 ```
 
 Entry ID format: `<track>/<category>/<slug>-<date>` (matches filepath).
@@ -248,7 +248,7 @@ Ralph's receipt contract is unchanged. Memory is a separate surface.
 ## Boundaries
 
 - Not adding vector search (BM25-grep is sufficient for expected corpus size).
-- Not adding ce-compound-refresh drift maintenance in this epic (deferred to follow-up).
+- Not adding staleness-audit drift maintenance in this epic (deferred to follow-up — eventually shipped as `/flow-next:audit`).
 - Not changing the 3-type `--type` API entirely — backward compat is part of the contract.
 - Not auto-running `discoverability-patch` on `memory init` — it's a separate opt-in command.
 - Not introducing a centralized memory registry across projects (memory stays per-project).
@@ -284,6 +284,6 @@ Ralph's receipt contract is unchanged. Memory is a separate surface.
 
 ## Follow-ups (not in this epic)
 
-- `flowctl memory refresh` — MergeFoundry-upstream-style ce-compound-refresh: Keep/Update/Consolidate/Replace/Delete classification against current code; autofix mode marks stale entries
+- `flowctl memory refresh` — staleness audit: Keep/Update/Consolidate/Replace/Delete classification against current code; autofix mode marks stale entries
 - Cross-project memory sharing (if demand surfaces)
 - TUI memory browser (if flow-next-tui matures)

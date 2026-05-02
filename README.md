@@ -3,7 +3,7 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v0.39.0-green)](plugins/flow-next/)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v0.40.0-green)](plugins/flow-next/)
 [![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -25,7 +25,7 @@ Flow-Next is an AI agent orchestration plugin. **Sixteen agent-native skills** f
 
 First-class on **Claude Code**, **OpenAI Codex** (CLI + Desktop), and **Factory Droid**. Also runs on **OpenCode** via the [community port](https://github.com/gmickel/flow-next-opencode).
 
-> 🆕 **v0.39.0 — Project glossary + decision records + doc-aware interview.** New `GLOSSARY.md` artifact at the repo root (survives `rm -rf .flow/`) with `flowctl glossary add/list/read/remove` and nearest-ancestor walk. New `knowledge/decisions/` memory category with `decision_status` lifecycle (proposed → accepted → superseded). `/flow-next:interview` autodetects doc-aware mode (`--docs` / `--no-docs` to override) — looks up canonical terms before asking, surfaces conflicts to a `## Glossary Conflicts` spec section, prompts for decision records on load-bearing choices, surfaces code/spec contradictions instead of silently overwriting. `/flow-next:audit` walks glossary + decisions; `/flow-next:sync` flags decision overrides read-only (never auto-supersedes). [Full changelog](CHANGELOG.md).
+> 🆕 **v0.40.0 — Project strategy anchor.** New `/flow-next:strategy` skill writes/maintains a repo-root `STRATEGY.md` (peer of `GLOSSARY.md` / `README.md`, never under `.flow/` — survives `rm -rf .flow/`). Section structure derived from Richard Rumelt's strategy kernel (diagnosis / guiding policy / coherent action): 5 required sections (`Target problem` / `Our approach` / `Who it's for` / `Key metrics` / `Tracks`) + 2 optional (`Milestones` / `Not working on`). `flowctl strategy status / read / list` plumbing; the skill IS the editor (no `add/edit` subcommands — strategy is too prose-heavy for atomic CLI). Single-root resolution at repo root only (NOT nearest-ancestor like glossary — strategy is repo-wide by Rumelt's definition). Doc-aware autodetect extended with a third condition (`strategy.sections_filled >= 1`); 5-row flag matrix where `--docs` / `--no-docs` cascade to all three categories and explicit `--strategy` / `--no-strategy` always wins over the cascade. Downstream `/flow-next:prospect` / `:plan` / `:interview` / `:capture` / `:sync` all consume `STRATEGY.md` read-only. Tier 1 fluff guard (R19) added in CI canonical + Codex mirror. Ralph-blocked. [Full changelog](CHANGELOG.md).
 
 > 🌐 **[Visual overview at mickel.tech/apps/flow-next](https://mickel.tech/apps/flow-next)** — diagrams, examples, the full feature tour.
 
