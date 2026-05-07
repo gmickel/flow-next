@@ -209,8 +209,26 @@ EOF
 
     # GLOSSARY.md (base term only on main)
     "$FLOWCTL" glossary add "BaseTerm" --definition "A baseline term defined on main." --json >/dev/null
+
+    # Seed a public-export file on main so the feature branch can delete it
+    # and exercise `_export_detect_public_exports` deletion handling.
+    mkdir -p src/legacy_pkg
+    cat > src/legacy_pkg/__init__.py <<'EOF'
+"""Legacy package public surface — deleted on feature branch for smoke test."""
+
+def legacy_one():
+    return 1
+
+
+def legacy_two():
+    return 2
+
+
+class LegacyClass:
+    pass
+EOF
     git add -A
-    git commit -m "main: seed STRATEGY + GLOSSARY base term" -q
+    git commit -m "main: seed STRATEGY + GLOSSARY base term + legacy_pkg surface" -q
 
     # Capture base SHA for the diff calculation
     git tag fixture-base
@@ -423,6 +441,12 @@ EOF
       --definition "A term added on the feature branch for diff signal." --json >/dev/null
     git add -A
     git commit -m "docs: add FixtureTerm to GLOSSARY.md" -q >/dev/null
+
+    # Delete the seeded public-export file so the diff exercises the
+    # `+++ /dev/null` deletion path in `_export_detect_public_exports`.
+    git rm -q src/legacy_pkg/__init__.py
+    rmdir src/legacy_pkg 2>/dev/null || true
+    git commit -m "feat: drop legacy_pkg public surface" -q >/dev/null
 
     # Deferred review finding
     EPIC_BRANCH="$("$FLOWCTL" show "$EPIC_ID" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin).get("branch_name") or "")')"
@@ -747,6 +771,34 @@ if [[ -f "$MERMAID_RULES" ]]; then
   assert_grep "T11" "3 diagrams" "$M_TEXT" "mermaid-rules.md documents 3-diagram cap"
 else
   skip "T11" "mermaid-rules.md not on disk (Task 5 not landed)"
+fi
+
+# =============================================================================
+# T12: Deleted public-export files surface in public_exports_changed
+# =============================================================================
+echo -e "${YELLOW}--- T12: deleted __init__.py removed-exports surface ---${NC}"
+# The feature branch deletes src/legacy_pkg/__init__.py. Its `def legacy_one`,
+# `def legacy_two`, and `class LegacyClass` should all show up in
+# public_exports_changed[].removed for that file. Regression guard for
+# the case where `+++ /dev/null` would otherwise drop the deleted file's
+# `-def`/`-class` lines on the floor (PR #131 review).
+
+T12_DEL_FOUND="$(json_get "$T1_OUT" "any(e['file'] == 'src/legacy_pkg/__init__.py' for e in d['diff_summary']['public_exports_changed'])")"
+[[ "$T12_DEL_FOUND" == "True" ]] \
+  && ok "T12" "src/legacy_pkg/__init__.py present in public_exports_changed" \
+  || fail "T12" "deleted src/legacy_pkg/__init__.py missing from public_exports_changed"
+
+if [[ "$T12_DEL_FOUND" == "True" ]]; then
+  T12_REMOVED="$(json_get "$T1_OUT" "sorted(next(e['removed'] for e in d['diff_summary']['public_exports_changed'] if e['file']=='src/legacy_pkg/__init__.py'))")"
+  T12_EXPECTED="['LegacyClass', 'legacy_one', 'legacy_two']"
+  [[ "$T12_REMOVED" == "$T12_EXPECTED" ]] \
+    && ok "T12" "removed[] contains legacy_one, legacy_two, LegacyClass" \
+    || fail "T12" "removed[] mismatch — expected $T12_EXPECTED, got $T12_REMOVED"
+
+  T12_ADDED="$(json_get "$T1_OUT" "next(e['added'] for e in d['diff_summary']['public_exports_changed'] if e['file']=='src/legacy_pkg/__init__.py')")"
+  [[ "$T12_ADDED" == "[]" ]] \
+    && ok "T12" "added[] empty for deleted file" \
+    || fail "T12" "added[] should be [] for deleted file, got $T12_ADDED"
 fi
 
 # =============================================================================

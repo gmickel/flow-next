@@ -11215,23 +11215,46 @@ def _export_detect_public_exports(unified_diff: str) -> list[dict[str, Any]]:
     per_file: dict[str, dict[str, list[str]]] = {}
     current_path: Optional[str] = None
     is_export_file = False
+    pending_removed_path: Optional[str] = None
 
     for line in unified_diff.splitlines():
+        # New diff stanza — reset any pending `--- a/<path>` candidate so
+        # state from the prior file does not leak into this one.
+        if line.startswith("diff --git "):
+            pending_removed_path = None
+            continue
+        # `--- a/<path>` precedes `+++ b/<path>` (or `+++ /dev/null` for
+        # deletions). Stash the old-side path so we can fall back to it
+        # when the new side is /dev/null (deleted-file case).
+        if line.startswith("--- a/"):
+            pending_removed_path = line[len("--- a/") :].strip() or None
+            continue
+        if line.startswith("--- "):
+            # `--- /dev/null` (added file) or other non-`a/` form — no
+            # deleted-side path to remember.
+            pending_removed_path = None
+            continue
         if line.startswith("+++ b/"):
             current_path = line[len("+++ b/") :].strip()
             is_export_file = bool(
                 current_path and _PUBLIC_EXPORT_FILES_RE.search(current_path)
             )
+            pending_removed_path = None
             continue
-        if line.startswith("--- ") or line.startswith("@@"):
+        if line.startswith("+++ /dev/null"):
+            # Deleted file — use the path captured from `--- a/<path>`.
+            current_path = pending_removed_path
+            is_export_file = bool(
+                current_path and _PUBLIC_EXPORT_FILES_RE.search(current_path)
+            )
+            pending_removed_path = None
+            continue
+        if line.startswith("+++ ") or line.startswith("@@"):
             continue
         if not is_export_file or not current_path:
             continue
         sign = line[:1] if line else ""
         if sign not in ("+", "-"):
-            continue
-        # Skip the file-header `+++` / `---` lines themselves.
-        if line.startswith("+++") or line.startswith("---"):
             continue
         body = line[1:].lstrip()
         for regex in _PUBLIC_EXPORT_LINE_RES:
