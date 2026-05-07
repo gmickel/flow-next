@@ -17,7 +17,7 @@ Phase 4: push branch + `gh pr create` + flag handling. Includes the spec-amendme
   trap 'rm -f "$BODY_FILE"' EXIT
   # Write rendered body to BODY_FILE via host agent's Write tool
 
-  # Push branch
+  # Push branch (push-ack received before next step proceeds)
   git push -u origin HEAD 2>/dev/null || true
   sleep 1   # GitHub API eventual-consistency lag (cli/cli #2691)
 
@@ -29,8 +29,24 @@ Phase 4: push branch + `gh pr create` + flag handling. Includes the spec-amendme
   if [[ "$FORCE_READY" == "1" ]]; then DRAFT_FLAG=""; fi
   if [[ "$FORCE_DRAFT" == "1" ]]; then DRAFT_FLAG="--draft"; fi
 
-  # Create PR
-  PR_URL=$(gh pr create --title "$PR_TITLE" --body-file "$BODY_FILE" $DRAFT_FLAG --base "$BASE_REF" --head "$HEAD_BRANCH")
+  # Create PR with retry-on-Head-sha-eventual-consistency
+  # Empirically validated during fn-42 spike: even after push-ack succeeds,
+  # `gh pr create` can fail with "Head sha can't be blank, Base sha can't be blank,
+  # No commits between main and X" while the GitHub API is still propagating the push.
+  # `sleep 1` alone is the cheap fix; the retry loop is the robust one.
+  PR_URL=""
+  for attempt in 1 2 3; do
+    OUT=$(gh pr create --title "$PR_TITLE" --body-file "$BODY_FILE" $DRAFT_FLAG --base "$BASE_REF" --head "$HEAD_BRANCH" 2>&1) && { PR_URL="$OUT"; break; }
+    # Retry only on the eventual-consistency error class. Other errors (auth, body too long,
+    # PR already exists) should fail fast — re-raise them.
+    if [[ "$OUT" == *"Head sha can't be blank"* ]] || [[ "$OUT" == *"No commits between"* ]]; then
+      sleep $((attempt * 2))   # 2s, 4s, 6s
+      continue
+    fi
+    echo "$OUT" >&2
+    exit 1
+  done
+  [[ -z "$PR_URL" ]] && { echo "gh pr create failed after 3 retries on eventual-consistency error" >&2; exit 1; }
   echo "$PR_URL"
   ```
   - `gh pr create` has NO `--json` flag (verified by docs-scout). PR URL on stdout single-line. Capture via `PR_URL=$(...)`.
@@ -72,7 +88,7 @@ Phase 4: push branch + `gh pr create` + flag handling. Includes the spec-amendme
 ## Acceptance
 
 - [ ] Phase 4 prose documents `--body-file` invocation (mktemp + cleanup trap + `gh pr create --body-file "$BODY_FILE"`). Heredoc approach explicitly documented as anti-pattern with citation to cli/cli #29619.
-- [ ] `git push -u origin HEAD` followed by `sleep 1` documented with cli/cli #2691 reference. Alternative: retry-on-`Head sha can't be blank` error if `sleep` is too crude.
+- [ ] `git push -u origin HEAD` followed by `sleep 1` AND a 3-attempt retry loop on the eventual-consistency error class (`Head sha can't be blank` / `No commits between main and X`) — both validated empirically during fn-42 spike. Backoff `2s, 4s, 6s` between retries. Other errors (auth, body too long, PR already exists) fail fast — do NOT retry.
 - [ ] `DRAFT_FLAG` matrix documented: open items > 0 → draft; Ralph mode → draft; `--ready` overrides; `--draft` overrides.
 - [ ] `--dry-run` skips Phase 4 entirely, prints body to stdout, exits 0. Smoke test (Task 7) covers this.
 - [ ] `--memory` writes idempotent `knowledge/architecture-patterns/` entry. Documented body shape (epic title + Goal & Context first sentence + R-IDs + modules_touched + decisions + impact).
