@@ -11331,36 +11331,92 @@ def _export_find_glossaries_downward(repo_root: Path) -> list[Path]:
     return found
 
 
+def _export_find_glossaries_at_base(merge_base_sha: str, repo_root: Path) -> list[str]:
+    """Enumerate `GLOSSARY.md` paths that existed at the merge base.
+
+    Uses `git ls-tree -r <merge_base_sha> --name-only` to surface every
+    glossary path that existed at base, including ones the feature branch
+    deleted entirely (which the HEAD-only walk in
+    `_export_find_glossaries_downward` cannot see). Combined with the HEAD
+    walk to form the union over which `_export_glossary_diff` iterates.
+
+    Skips the same vendored / generated prefixes the HEAD walk skips so a
+    base-only `node_modules/.../GLOSSARY.md` doesn't sneak in. Returns
+    repo-relative POSIX paths sorted; empty list on git failure.
+    """
+    rc, out, _ = _export_run_git(
+        ["ls-tree", "-r", merge_base_sha, "--name-only"],
+        cwd=repo_root,
+    )
+    if rc != 0:
+        return []
+    skip_dirs = {".git", "node_modules", "vendor", "third_party", "dist", "build", ".next"}
+    found: list[str] = []
+    for line in out.splitlines():
+        rel = line.strip()
+        if not rel:
+            continue
+        # Filename must be GLOSSARY.md (root or any subdir).
+        if not (rel == GLOSSARY_FILE or rel.endswith("/" + GLOSSARY_FILE)):
+            continue
+        parts = rel.split("/")
+        # Depth cap mirrors the HEAD walk (parts include filename).
+        if len(parts) - 1 > GLOSSARY_WALK_MAX_DEPTH:
+            continue
+        if any(part in skip_dirs for part in parts[:-1]):
+            continue
+        if rel.startswith("plugins/flow-next/codex/"):
+            continue
+        if rel.startswith(".flow/memory/"):
+            continue
+        found.append(rel)
+    found.sort()
+    return found
+
+
 def _export_glossary_diff(base_ref: str, merge_base_sha: str, repo_root: Path) -> dict[str, Any]:
     """Compute glossary added/removed terms vs the merge base.
 
-    Walks every `GLOSSARY.md` within the repo (downward via
-    `_export_find_glossaries_downward`), diffs the head text vs
-    `git show <merge_base>:<rel_path>` (when the file existed at base).
-    Empty diff or missing files → `{"added": [], "removed": [],
-    "renamed": []}`.
+    Iterates the **union** of (HEAD-walk glossaries via
+    `_export_find_glossaries_downward`) and (base-tree glossaries via
+    `_export_find_glossaries_at_base`). For each repo-relative path:
+    reads HEAD text (empty if path doesn't exist in HEAD — covers
+    whole-file deletion), reads base text via `git show
+    <merge_base>:<rel_path>` (empty if path didn't exist at base — covers
+    new files), then diffs term sets. Empty diff or missing files →
+    `{"added": [], "removed": [], "renamed": []}`.
     """
     result: dict[str, Any] = {"added": [], "removed": [], "renamed": []}
-    glossaries = _export_find_glossaries_downward(repo_root)
-    if not glossaries:
-        return result
 
-    for glossary_path in glossaries:
+    # Build union of HEAD-walk and base-tree glossary paths (repo-relative POSIX).
+    head_glossaries = _export_find_glossaries_downward(repo_root)
+    head_rel_paths: dict[str, Path] = {}
+    for p in head_glossaries:
         try:
-            head_text = glossary_path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        try:
-            rel_path = glossary_path.relative_to(repo_root)
+            head_rel_paths[p.relative_to(repo_root).as_posix()] = p
         except ValueError:
             continue
+    base_rel_paths = _export_find_glossaries_at_base(merge_base_sha, repo_root)
+    union_rel = sorted(set(head_rel_paths.keys()) | set(base_rel_paths))
+    if not union_rel:
+        return result
 
-        # Try to read the file at the merge-base.
+    for rel_posix in union_rel:
+        # HEAD content: read from disk if present; empty for whole-file deletion.
+        head_text = ""
+        head_path = head_rel_paths.get(rel_posix)
+        if head_path is not None:
+            try:
+                head_text = head_path.read_text(encoding="utf-8")
+            except OSError:
+                head_text = ""
+
+        # Base content: empty for files added on the feature branch.
         rc, base_text, _ = _export_run_git(
-            ["show", f"{merge_base_sha}:{rel_path.as_posix()}"],
+            ["show", f"{merge_base_sha}:{rel_posix}"],
             cwd=repo_root,
         )
-        head_entries = parse_glossary_file(head_text)
+        head_entries = parse_glossary_file(head_text) if head_text else []
         base_entries = parse_glossary_file(base_text) if rc == 0 else []
 
         head_terms = {

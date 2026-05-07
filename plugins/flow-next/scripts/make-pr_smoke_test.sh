@@ -210,6 +210,18 @@ EOF
     # GLOSSARY.md (base term only on main)
     "$FLOWCTL" glossary add "BaseTerm" --definition "A baseline term defined on main." --json >/dev/null
 
+    # Seed a SECOND glossary file at a subdir on main so the feature branch
+    # can delete it whole-file (PR #131 follow-up reproducer T14): glossary
+    # deletions vs base must surface in `glossary_changes.removed[]`.
+    mkdir -p apps/legacy
+    cat > apps/legacy/GLOSSARY.md <<'EOF'
+# Glossary
+
+## LegacyGlossaryTerm
+
+A term defined only at base in apps/legacy; the feature branch deletes the whole file.
+EOF
+
     # Seed a public-export file on main so the feature branch can delete it
     # and exercise `_export_detect_public_exports` deletion handling.
     mkdir -p src/legacy_pkg
@@ -457,6 +469,15 @@ EOF
     git add -A
     git commit -m "docs: add apps/web/GLOSSARY.md (nested glossary)" -q >/dev/null
 
+    # Delete the base-only glossary file at apps/legacy/GLOSSARY.md so the
+    # diff exercises the whole-file glossary deletion path (PR #131 T14).
+    # Pre-fix: HEAD walk skips deleted files entirely, so `LegacyGlossaryTerm`
+    # never lands in `removed[]`. Post-fix: union with `git ls-tree` at
+    # merge-base surfaces the deletion.
+    git rm -q apps/legacy/GLOSSARY.md
+    rmdir apps/legacy 2>/dev/null || true
+    git commit -m "docs: delete apps/legacy/GLOSSARY.md (whole-file glossary deletion)" -q >/dev/null
+
     # Delete the seeded public-export file so the diff exercises the
     # `+++ /dev/null` deletion path in `_export_detect_public_exports`.
     git rm -q src/legacy_pkg/__init__.py
@@ -618,8 +639,9 @@ T5_HAS_FIXTURETERM="$(json_get "$T1_OUT" "any('FixtureTerm' in (a.get('term') or
   && ok "T5" "'FixtureTerm' present in glossary_changes.added" \
   || fail "T5" "'FixtureTerm' missing from glossary_changes.added"
 
-# removed[] empty (we didn't remove anything)
-assert_eq_jq "T5" "$T1_OUT" "len(d['glossary_changes']['removed'])" "0" "glossary_changes.removed empty"
+# removed[] has exactly 1 entry — the deleted apps/legacy/GLOSSARY.md
+# `LegacyGlossaryTerm` (T14 reproducer). No other removals expected.
+assert_eq_jq "T5" "$T1_OUT" "len(d['glossary_changes']['removed'])" "1" "glossary_changes.removed has exactly 1 entry (LegacyGlossaryTerm)"
 
 # =============================================================================
 # T6: strategy_alignment.tracks_served[] populated when STRATEGY.md present
@@ -849,6 +871,29 @@ T13_HAS_NESTED="$(json_get "$T1_OUT" "any('NestedTerm' in (a.get('term') or '') 
 [[ "$T13_HAS_NESTED" == "True" ]] \
   && ok "T13" "'NestedTerm' from apps/web/GLOSSARY.md present in glossary_changes.added" \
   || fail "T13" "'NestedTerm' missing — nested subdir glossary not diffed"
+
+# =============================================================================
+# T14: Whole-file glossary deletion vs base surfaces in glossary_changes.removed
+# =============================================================================
+echo -e "${YELLOW}--- T14: deleted apps/legacy/GLOSSARY.md surfaces in glossary_changes.removed ---${NC}"
+# Fixture seeds `apps/legacy/GLOSSARY.md` with `LegacyGlossaryTerm` on main,
+# then deletes the whole file on the feature branch. Pre-fix:
+# `_export_find_glossaries_downward(repo_root)` only walks HEAD, so the
+# deleted-file's terms never enter the diff and `removed[]` stays empty.
+# Post-fix: union with `_export_find_glossaries_at_base` (via `git ls-tree`)
+# picks up the base path; HEAD content reads as empty → `LegacyGlossaryTerm`
+# surfaces in `removed[]` with no matching `added[]` entry.
+
+T14_HAS_REMOVED="$(json_get "$T1_OUT" "'LegacyGlossaryTerm' in d['glossary_changes']['removed']")"
+[[ "$T14_HAS_REMOVED" == "True" ]] \
+  && ok "T14" "'LegacyGlossaryTerm' from deleted apps/legacy/GLOSSARY.md present in glossary_changes.removed" \
+  || fail "T14" "'LegacyGlossaryTerm' missing — whole-file glossary deletion not detected vs base"
+
+# Sanity: deleted term must NOT also appear in added[] (would indicate diffing logic is wrong).
+T14_NOT_ADDED="$(json_get "$T1_OUT" "not any('LegacyGlossaryTerm' in (a.get('term') or '') for a in d['glossary_changes']['added'])")"
+[[ "$T14_NOT_ADDED" == "True" ]] \
+  && ok "T14" "'LegacyGlossaryTerm' correctly absent from glossary_changes.added" \
+  || fail "T14" "'LegacyGlossaryTerm' incorrectly listed in added[] — diff polarity inverted"
 
 # =============================================================================
 # Sanity: verify nothing leaked outside $TEST_DIR.
