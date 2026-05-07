@@ -64,6 +64,12 @@ Task tracking for AI agents. All state lives in `.flow/`.
 .flow/bin/flowctl start fn-1-add-oauth.2        # Claim task
 .flow/bin/flowctl done fn-1-add-oauth.2 --summary-file s.md --evidence-json e.json
 
+# Epic cognitive-aid export (used by /flow-next:make-pr, v0.42.0+)
+.flow/bin/flowctl epic export-cognitive-aid fn-1-add-oauth                  # text mode summary
+.flow/bin/flowctl epic export-cognitive-aid fn-1-add-oauth --json           # full structured payload
+.flow/bin/flowctl epic export-cognitive-aid fn-1-add-oauth --base main      # diff against base ref
+.flow/bin/flowctl epic export-cognitive-aid fn-1-add-oauth --section coverage --json  # one section only
+
 # Prospect (ideation artifacts under .flow/prospects/, v0.36.0+)
 .flow/bin/flowctl prospect list                          # active artifacts (<30d)
 .flow/bin/flowctl prospect list --all --json             # everything
