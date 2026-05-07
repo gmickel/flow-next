@@ -148,7 +148,7 @@ fi
 
 ### 0.4 — Branch validity
 
-HEAD must be a real commit, distinct from base, and ahead of base by at least one commit.
+HEAD must be a real commit, distinct from base, share a merge-base with base, and have at least one commit since that merge-base. **The base is NOT required to be an ancestor of HEAD** — feature branches commonly fork from older `main` while `origin/main` advances; `gh pr create` happily handles this case (GitHub computes the diff against the merge-base, not against `BASE_REF` head). The strict-ancestor check would falsely reject the everyday "branch is behind base on linear history but has its own commits" scenario.
 
 ```bash
 HEAD_SHA=$(git -C "$REPO_ROOT" rev-parse --verify HEAD 2>/dev/null) || {
@@ -161,16 +161,18 @@ if [[ "$HEAD_SHA" == "$BASE_SHA" ]]; then
  exit 1
 fi
 
-# Verify HEAD is ahead of base (base is an ancestor of HEAD).
-if ! git -C "$REPO_ROOT" merge-base --is-ancestor "$BASE_REF" HEAD; then
- echo "Error: base ($BASE_REF) is not an ancestor of HEAD. Rebase or pick a different --base." >&2
- exit 1
-fi
+# Resolve the merge-base. Required for a valid PR — without one the branches
+# are unrelated histories and gh pr create will fail.
+MERGE_BASE=$(git -C "$REPO_ROOT" merge-base "$BASE_REF" HEAD 2>/dev/null) || {
+ echo "Error: HEAD and base ($BASE_REF) share no merge-base — unrelated histories. Pick a different --base." >&2
+ exit 1; }
 
-# Confirm at least one commit exists on the branch ahead of base.
-COMMITS_AHEAD=$(git -C "$REPO_ROOT" rev-list --count "$BASE_REF..HEAD")
+# Confirm at least one commit exists on the branch since the merge-base.
+# Use <merge-base>..HEAD (NOT <BASE_REF>..HEAD) so a branch that's behind base
+# on linear history is still accepted as long as it has its own commits.
+COMMITS_AHEAD=$(git -C "$REPO_ROOT" rev-list --count "$MERGE_BASE..HEAD")
 if [[ "$COMMITS_AHEAD" -lt 1 ]]; then
- echo "Error: HEAD is 0 commits ahead of $BASE_REF. Nothing to PR." >&2
+ echo "Error: HEAD has 0 commits since merge-base with $BASE_REF. Nothing to PR." >&2
  exit 1
 fi
 ```
@@ -1172,14 +1174,27 @@ fi
 
 `--draft` and `--ready` in the same invocation is handled by SKILL.md mode-detection's "last-flag-wins" rule — `DRAFT_FORCE` ends up as whichever flag appeared last in `$ARGUMENTS`. The conflict isn't a hard error.
 
-**OPEN_ITEMS_COUNT derivation** (from Phase 1's payload):
+**OPEN_ITEMS_COUNT derivation** (combines Phase 1's payload with the separate epic-review status from §2.11 Source C):
 
 ```bash
-OPEN_ITEMS_COUNT=$(printf '%s' "$EXPORT_PAYLOAD" | jq '
+# Sources A + B come from EXPORT_PAYLOAD (spec open_questions + deferred_findings).
+PAYLOAD_OPEN=$(printf '%s' "$EXPORT_PAYLOAD" | jq '
  ( (.epic.spec_sections.open_questions // []) | length ) +
- ( ([(.deferred_findings // [])[] | (.items // [])[]] | length) ) +
- ( if (.review_receipts.completion_review_status // "unknown") == "needs_work" then 1 else 0 end )
+ ( ([(.deferred_findings // [])[] | (.items // [])[]] | length) )
 ')
+
+# Source C — epic-review verdict. Read directly from the epic JSON; the
+# export-cognitive-aid payload v1 emits review_receipts as a list ([]) — NOT
+# an object — so indexing it with a key like .completion_review_status would
+# throw "Cannot index array with string" under `set -e` and abort the skill.
+# Reuse the same flowctl path §2.11 Source C uses.
+EPIC_REVIEW_STATUS=$("$FLOWCTL" show "$EPIC_ID" --json | jq -r '.completion_review_status // "unknown"')
+EPIC_REVIEW_OPEN=0
+if [[ "$EPIC_REVIEW_STATUS" == "needs_work" ]]; then
+ EPIC_REVIEW_OPEN=1
+fi
+
+OPEN_ITEMS_COUNT=$(( PAYLOAD_OPEN + EPIC_REVIEW_OPEN ))
 ```
 
 This same count drives both the §2.11 Open items section bullet count and the draft-flag layer 2 default. Single source of truth — no recompute risk.
@@ -1282,6 +1297,14 @@ fi
 
 sleep 1 # GitHub API eventual-consistency lag (cli/cli #2691)
 
+# `gh pr create --base` expects a BRANCH name, not a remote-tracking ref —
+# passing `origin/main` opens the PR against a branch literally named
+# `origin/main` and fails. Phase 0.3's cascade prefers `origin/main` (then
+# `main`, etc.) for the local git work (merge-base, diff, rev-list) — those
+# all accept remote-tracking refs and benefit from the freshness of the
+# remote tip. Strip the `origin/` prefix only at the gh boundary.
+BASE_BRANCH="${BASE_REF#origin/}"
+
 # Retry loop. Only retry on the eventual-consistency error class. Other errors
 # fail fast — re-running gh pr create after a 422 (body too long) or 401 (auth)
 # just produces the same error.
@@ -1291,7 +1314,7 @@ for attempt in 1 2 3; do
  --title "$PR_TITLE" \
  --body-file "$BODY_FILE" \
  $DRAFT_FLAG \
- --base "$BASE_REF" \
+ --base "$BASE_BRANCH" \
  --head "$HEAD_BRANCH" 2>&1) && { PR_URL="$CREATE_OUT"; break; }
 
  # Eventual-consistency error class — retry. Empirically validated during fn-42 spike:

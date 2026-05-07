@@ -23,7 +23,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 - [ ] `EPIC_ID` validated via `flowctl show <epic-id> --json` (epic exists).
 - [ ] `BASE_REF` resolved through cascade (`--base` → `origin/main` → `main` → `origin/master` → `master` → ask / Ralph exit 2).
 - [ ] `BASE_REF` validated via `git rev-parse --verify --quiet`.
-- [ ] HEAD resolves; HEAD ≠ BASE; `git merge-base --is-ancestor BASE HEAD`; `git rev-list --count BASE..HEAD >= 1`.
+- [ ] HEAD resolves; HEAD ≠ BASE; `git merge-base BASE HEAD` succeeds (shared history); `git rev-list --count <merge-base>..HEAD >= 1` (at least one commit since the merge-base — base does NOT need to be an ancestor of HEAD).
 - [ ] Tasks-done check (silent / warn under `--dry-run` / Ralph exit 2 / interactive ask).
 - [ ] Existing-PR refusal check: `gh pr view --json url,state,number | jq -r 'select(.state == "OPEN") | .url'` returns empty.
 - [ ] `PHASE0_CONTEXT` JSON built with epic / base / head / branch / commits_ahead / open_tasks / flags / draft_force.
@@ -36,8 +36,8 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 - Base not resolved + Ralph → exit 2.
 - Base ref invalid → exit 1.
 - HEAD == BASE → exit 1.
-- HEAD not descendant of BASE → exit 1.
-- 0 commits ahead → exit 1.
+- HEAD shares no merge-base with BASE (unrelated histories) → exit 1.
+- 0 commits since merge-base → exit 1.
 - Open tasks + Ralph → exit 2.
 - OPEN PR exists → exit 1 + `/flow-next:resolve-pr` hint.
 
@@ -128,7 +128,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 - [ ] After §4.5 clears (or Ralph skips it): `git push -u origin HEAD` runs first (§4.6); on failure, exit 1 with the `git push` error to stderr.
 - [ ] After push, `sleep 1` before `gh pr create` (cli/cli #2691 — GitHub API eventual-consistency lag).
 - [ ] 3-attempt retry loop on the eventual-consistency error class (`Head sha can't be blank` / `No commits between`). Backoff `2s, 4s, 6s`. Other errors fail fast — auth (401/403), body-too-long (422), PR-already-exists (409) do NOT retry.
-- [ ] `gh pr create --title --body-file --base --head [--draft]` invoked. PR URL captured from stdout (single line; `gh pr create` has no `--json` flag — verified).
+- [ ] `gh pr create --title --body-file --base --head [--draft]` invoked with `--base "${BASE_REF#origin/}"` (strip remote-tracking prefix — `gh pr create --base` expects a branch name, not `origin/main`). PR URL captured from stdout (single line; `gh pr create` has no `--json` flag — verified).
 - [ ] Failure recovery hints printed to stderr per error class (§4.7): eventual-consistency exhaustion, body-too-long, PR-already-exists, authentication.
 
 ---
