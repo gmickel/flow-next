@@ -100,12 +100,15 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 **Done when:**
 
-- [ ] `--no-mermaid` short-circuits before any generation.
-- [ ] Trigger evaluation: ≥1 of (module-boundary crossings, public interface changes, new top-level dir, fan-out epic) fires → continue. Zero triggers → omit `## Structural changes` section entirely.
-- [ ] Diagrams capped: max 3 per PR, max 12 nodes per diagram, max 25 edges, max 12K chars per codefence.
-- [ ] Fallback prose paragraph above each diagram describes the structural change in plain language.
-- [ ] Mermaid syntax avoids reserved words as node IDs and quotes special characters in labels.
-- [ ] `mermaid-rules.md` ref file written.
+- [ ] `--no-mermaid` short-circuits before any trigger evaluation; body has no `## Structural changes` heading and no standalone prose summaries (workflow.md §3.0).
+- [ ] Trigger evaluation walks the 5 conditions: (1) `cross_module_changes[]` non-empty, (2) `public_exports_changed[]` non-empty, (3) new top-level dir, (4) removed top-level dir, (5) >15 files in >3 modules. ≥1 fires → emit section; zero fire → omit entirely.
+- [ ] Skip rules engage when applicable: pure additive within one module + <50 LOC; repo has no detectable module structure (no `src/`/`plugins/`/`app/`/etc.); stderr breadcrumb `Phase 3 skipped: <reason>` emitted.
+- [ ] Hard caps enforced: max 3 diagrams per PR (collapse to `graph TB` overview when exceeded), max 12 nodes per diagram (group by module/abstraction when exceeded — `scouts (5)` not five sibling nodes), max 25 edges, max 12K chars per codefence.
+- [ ] Shape selection picks from 4 shapes: `flowchart LR` (default for trigger 1, function-shape exports), `classDiagram` (class-shape exports — composition / inheritance), `sequenceDiagram` (route handlers / protocol flows), `graph TB` (default for trigger 5, default when collapsing 4+ to 1).
+- [ ] Prose-summary-precedes-diagram rule (R13) honored: every codefence preceded by 3-5 sentence plain-language paragraph anchored to `diff_summary.files[]` paths. Self-contained — diagram-removable without losing structural-change signal.
+- [ ] Pre-emission validation runs `mermaid-rules.md` §6 checklist (8 rules: quotes balanced, no reserved-word bare ids, no emoji, no MathJax, no relative click links, no inheritance cycles, arrow-char preference, ≤12K chars). Re-render loop on any failure — never emit known-broken codefence.
+- [ ] Hallucination guardrails honored: no invented modules / edges / symbols; "fewer nodes, more honest" over "context nodes for clarity"; every node and edge traces to `diff_summary.modules_touched[]` / `diff_summary.files[]` / `cross_module_changes[]` / `public_exports_changed[]`.
+- [ ] `mermaid-rules.md` ref file exists with: §1 reserved words (10 entries), §2 special-character escapes + HTML-entity fallback (decimal codes only), §3 shape decision matrix (4 examples — flowchart LR, classDiagram, sequenceDiagram, graph TB), §4 hard caps recap, §5 prose-summary rule, §6 8-item validation checklist.
 
 ---
 

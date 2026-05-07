@@ -806,7 +806,186 @@ The one exception is the §2.4 Critical changes "Limited churn" fallback bullet 
 
 ## Phase 3: Mermaid generation (fn-42.5)
 
-Trigger gating, hard caps, fallback prose. Filled in fn-42.5. The `mermaid-rules.md` ref file (R10-R14) is also written in fn-42.5.
+**Goal:** when the diff signals warrant it, emit a `## Structural changes` section with one to three mermaid codefences, each preceded by a one-paragraph prose summary in plain language. The diagrams are supplementary; the prose is load-bearing — forges that don't render mermaid still convey the change. When triggers don't fire OR `--no-mermaid` is set, the section is omitted entirely (never an empty placeholder).
+
+The host agent reads `mermaid-rules.md` (sibling file in this skill) before emitting any codefence and validates each rendered diagram against the §6 checklist there. **No deterministic Python renderer.** flowctl's `epic export-cognitive-aid` payload provides the structured signals (`cross_module_changes`, `public_exports_changed`, `modules_touched`, `diff_summary.files`); the agent picks shape, picks nodes, emits codefence, validates.
+
+### 3.0 — `--no-mermaid` short-circuit
+
+Phase 3 is bypassed entirely when `$NO_MERMAID == 1`. **No diagrams emitted.** Prose summaries are also skipped — Phase 3's whole job is the diagram + prose pair, and emitting prose without diagrams under `--no-mermaid` produces a degenerate section that confuses the reader ("why is there structural-change prose with no structural diagram?").
+
+```bash
+if [[ "$NO_MERMAID" == "1" ]]; then
+  : "skip Phase 3 entirely; the rendered body has no ## Structural changes heading"
+  return 0  # or equivalent skip control in the host agent's render loop
+fi
+```
+
+R14 invariant: `--no-mermaid` produces a body with NO `## Structural changes` section, regardless of how many trigger conditions would have fired.
+
+### 3.1 — Trigger evaluation (5 conditions, ANY fires → emit section)
+
+The host agent evaluates the five trigger conditions below against the export payload. If **any** fires, Phase 3 produces a `## Structural changes` section. If **none** fire, the section is omitted (no heading, no prose, no diagrams).
+
+| # | Trigger | Source field | Default shape (if this is the only trigger) |
+|---|---------|--------------|---------------------------------------------|
+| 1 | `cross_module_changes[]` non-empty (new dependency edges between modules) | `diff_summary.cross_module_changes[]` | `flowchart LR` |
+| 2 | `public_exports_changed[]` non-empty (added or removed public symbols) | `diff_summary.public_exports_changed[]` | `flowchart LR` if function-shaped; `classDiagram` if class-shaped; `sequenceDiagram` if route-handler-shaped |
+| 3 | New top-level directory (file added in path that didn't exist on `base_ref`) | `diff_summary.modules_touched[]` cross-checked against `git ls-tree $BASE_REF --name-only` | `graph TB` |
+| 4 | Removed top-level directory (all files of dir in `--diff-filter=D`) | `diff_summary.files[]` filtered to `status == "D"` and grouped by top-level dir | `graph TB` |
+| 5 | High-fan-out epic — `>15 files in >3 distinct modules` | `len(diff_summary.files) > 15 AND len(diff_summary.modules_touched) > 3` | `graph TB` |
+
+When **multiple triggers fire**, the host agent picks shape per the diagram (one diagram per logical concern) but stays under the §3.2 caps. Triggers 1+2 commonly co-occur (a refactor that adds a new module and exports new functions from it) — the agent emits one `flowchart LR` showing both the new module and its imports.
+
+### 3.1a — Skip rules (within trigger evaluation)
+
+Even when a trigger fires, Phase 3 is **skipped** (section omitted, no diagrams, no prose) when any of these apply:
+
+- **Pure additive within one module + <50 LOC.** Tiny additions get a critical-changes bullet, not a diagram. Heuristic: `len(diff_summary.modules_touched) == 1 AND lines_added < 50 AND lines_removed == 0`.
+- **Repo has no detectable module structure.** Flat-layout repos (no `src/`, `plugins/`, `app/`, `lib/`, `pkg/`, `cmd/`, `internal/`, `cli/`, `routes/`, `commands/`, `skills/`, `agents/`) — diagrams of "the whole repo" are noise. Heuristic: `diff_summary.modules_touched[]` contains only the empty-string root or only single-segment paths that aren't in the known-module-prefix list.
+- **No-mermaid override.** The `--no-mermaid` flag short-circuited at §3.0 — covered there but recapped here for completeness.
+
+When skip rules engage, the host agent emits a stderr breadcrumb: `Phase 3 skipped: <reason>`. Useful for the user to debug "why didn't I get a diagram?" without re-running.
+
+### 3.2 — Hard caps (enforce on every diagram)
+
+| Cap | Value | Enforced where |
+|-----|-------|----------------|
+| Diagrams per PR | 3 | When more than 3 triggers would emit, collapse to **one** `graph TB` overview |
+| Nodes per diagram | 12 | When a diagram would exceed, group by module/abstraction (`scouts (5)` instead of five sibling nodes) |
+| Edges per diagram | 25 | Same readability cliff as nodes; group when exceeded |
+| Characters per codefence | 12,000 | Count chars between opening ` ```mermaid ` and closing ` ``` `; collapse / split when above |
+
+**Allocation rule when triggers exceed 3 diagrams:**
+
+```
+Triggers 1+2 fire (cross-module + public exports) → emit 1 flowchart LR combining both
+Triggers 3+4 fire (new dir + removed dir) → emit 1 graph TB showing both as additions/removals
+Trigger 5 fires alone → emit 1 graph TB overview
+Triggers 1+2+3 fire → 1 flowchart LR + 1 graph TB (still under cap)
+Triggers 1+2+3+5 fire → 1 graph TB overview only (cap collapses 4 candidate diagrams to one)
+```
+
+The collapse-to-one rule prefers `graph TB` when the alternative is more than 3 separate diagrams — overview beats fragmented detail.
+
+**Node-cap grouping rule:** when a flowchart or classDiagram would have >12 nodes, group siblings by abstraction. `flowchart LR` example:
+
+````
+Bad (15 nodes):
+  skill --> agent_A
+  skill --> agent_B
+  skill --> agent_C
+  skill --> agent_D
+  skill --> agent_E
+  ... (11 more)
+
+Good (3 nodes):
+  skill --> scouts["scouts (5)"]
+  skill --> workers["workers (3)"]
+  skill --> validators["validators (2)"]
+````
+
+The grouped label keeps the fan-out signal without burying it in 15 visually-similar nodes.
+
+### 3.3 — Shape selection per diagram
+
+The host agent picks shape from the four documented in `mermaid-rules.md` §3:
+
+| Shape | When |
+|-------|------|
+| `flowchart LR` | Module-level dependency changes (default for trigger 1). Function-shape additions in `public_exports_changed[]`. |
+| `classDiagram` | Type / class additions or removals (when `public_exports_changed[]` includes class symbols — e.g. `class Foo`, `class Bar(Base)`). |
+| `sequenceDiagram` | New API endpoint or protocol flow (route handlers added — paths in `diff_summary.files[]` matching `routes/`, `handlers/`, `api/`, route-definition keywords in changed-file content). |
+| `graph TB` | High-level "epic touches these N areas" overview (default for trigger 5; default when collapsing 4+ diagrams to one). |
+
+**Rule of thumb:** if you can't decide between `flowchart LR` and `graph TB`, pick `flowchart LR` for "A depends on B" stories and `graph TB` for "epic touched these areas" stories. The reader's mental model is different — left-to-right reads as flow, top-to-bottom reads as decomposition.
+
+### 3.4 — Prose-summary-precedes-diagram rule (R13, load-bearing)
+
+**Every** mermaid codefence is preceded by a one-paragraph prose summary in plain language, three to five sentences, anchored to file paths from `diff_summary.files[]`. The diagram is supplementary; the prose is load-bearing.
+
+This serves two readers:
+
+1. **Forges that don't render mermaid** (older self-hosted Gitea / Bitbucket / GitHub Enterprise). The prose preserves the structural-change signal even when the codefence renders as a code block.
+2. **Reviewers who skim diagrams.** A diagram is a glance, not a read. The prose tells the reviewer what they're looking at and why.
+
+**Pattern:**
+
+```markdown
+## Structural changes
+
+[Paragraph 1: 3-5 sentences in plain language describing what changed structurally
+and why it matters. Anchored to file paths from `diff_summary.files[]`. No jargon.]
+
+​```mermaid
+[diagram 1]
+​```
+
+[Paragraph 2 (only if more than one diagram): same shape — plain-language structural
+description, anchored to paths.]
+
+​```mermaid
+[diagram 2]
+​```
+```
+
+**Prose rules:**
+
+- **Three to five sentences.** Shorter = doesn't justify a diagram; longer = the diagram itself becomes redundant.
+- **Plain language.** No jargon ("the IoC container ratifies the dependency injection contract" — no). The reader includes reviewers who didn't write the spec.
+- **Anchored.** Every file path mentioned in the prose appears in `diff_summary.files[]`. Same hallucination guardrail as Critical changes (rule 1 of §2.5).
+- **Self-contained.** If you removed the diagram, the prose alone should still convey the structural change.
+- **Not a caption.** Don't write "Figure 1: Module dependencies." Write the explanation directly.
+- **Never quote diff content.** Same rule as the rest of the body — paths, churn, modules; no code.
+
+When `--no-mermaid` is set the section is omitted entirely (R14, §3.0); prose summaries are NOT emitted standalone — they exist to frame the diagrams, not replace them. (See §3.0 for the rationale.)
+
+### 3.5 — Pre-emission validation (each codefence)
+
+Before committing a codefence to the body, the host agent runs the `mermaid-rules.md` §6 validation checklist on the rendered output. **If any check fails, re-render with the issue corrected.** Do NOT emit a known-broken diagram and hope the reviewer catches it — mermaid breaks silently (the codefence renders as code, not as a diagram), so the reviewer's "the diagram looks weird" feedback is the only signal.
+
+The `mermaid-rules.md` §6 checklist (full text in the ref file — recapped here):
+
+1. Quotes balanced.
+2. No bare reserved word (`end`, `default`, `subgraph`, `class`, `state`, `direction`, `click`, `style`, `o`, `x`) as a node id.
+3. No emoji in labels.
+4. No MathJax / LaTeX syntax.
+5. No relative or internal-anchor links in `click` directives.
+6. classDiagram: no inheritance cycles.
+7. flowchart: arrow-character preference (`-->` / `-.->` / `==>` over `--o` / `--x`).
+8. Total chars ≤12K per codefence.
+
+**Re-render loop:** if validation fails, the agent identifies which rule failed, applies the fix from the ref file (e.g. rule 1 says "quote labels containing parens" — agent re-renders with `A["Label with (parens)"]` instead of `A(Label with parens)`), then re-runs the checklist. Loop until all 8 rules pass. **Do not emit a partial fix and proceed.**
+
+### 3.6 — Section omission
+
+When zero triggers fire (§3.1) OR a skip rule engages (§3.1a) OR `--no-mermaid` is set (§3.0), the entire `## Structural changes` heading is omitted. **Never an empty heading.** This is the same §2.6 omission rule the rest of the body honors — empty headings train reviewers to skip future headings.
+
+Phase 3 has no fallback bullet equivalent to Critical changes' "Limited churn" line. Critical changes always renders because the section is mandatory; Structural changes is optional. The signal of "no diagram" is the absence of the heading; reviewers who notice the absence infer correctly: no module-boundary, no public-interface, no fan-out — the diff is structurally local.
+
+### 3.7 — Hallucination guardrails (Phase 3 specifics)
+
+The §2.5 hallucination guardrails apply to Phase 3 with these specific reinforcements:
+
+- **No invented modules.** Every node in a diagram representing a module must correspond to a path in `diff_summary.modules_touched[]` or to a path in `diff_summary.files[]`. **Never** invent a "Helper module" that doesn't appear in the diff.
+- **No invented edges.** Every edge in `flowchart`/`classDiagram` must correspond to a real signal: an entry in `cross_module_changes[]` (for "A imports B"), or a real composition relationship visible in `public_exports_changed[]` content, or a route → handler relationship visible in the diff. **Never** infer a `A --> B` edge from "it would make sense if A used B."
+- **No invented symbol names.** Class members in `classDiagram` come from `public_exports_changed[].added[]` only. Never derive from spec language.
+- **No "for clarity" embellishment.** If a diagram has 6 real nodes and the agent thinks "adding 2 more would explain it better" — don't. The 6 are what changed. Adding context nodes that didn't change in this diff dilutes the signal.
+
+When in doubt: **fewer nodes, fewer edges, more honest.** A diagram with 4 nodes and 3 edges that all trace to the diff is a better cognitive aid than one with 12 nodes where 6 of them are inferred context.
+
+### Done when
+
+- `--no-mermaid` short-circuits before any trigger evaluation; the body has no `## Structural changes` heading.
+- Trigger evaluation walks the 5 conditions and the 3 skip rules; emits Phase 3 only when ≥1 trigger fires AND no skip rule applies.
+- Hard caps enforced (max 3 diagrams, max 12 nodes, max 25 edges, max 12K chars per codefence). Excess collapses to a `graph TB` overview; node excess groups by module/abstraction.
+- Shape selection picks from the 4 documented shapes (`flowchart LR` / `classDiagram` / `sequenceDiagram` / `graph TB`) per the §3.3 rules.
+- Every codefence is preceded by a 3-5 sentence plain-language prose summary anchored to `diff_summary.files[]` paths. The diagram is supplementary; prose is load-bearing.
+- Each codefence passes the `mermaid-rules.md` §6 validation checklist (8 rules) before being emitted. Re-render loop on any failure.
+- Section omission honored: zero triggers OR skip rule OR `--no-mermaid` → no `## Structural changes` heading at all.
+- Hallucination guardrails honored: no invented modules / edges / symbols; "fewer nodes, more honest" over "context nodes for clarity."
+
+---
 
 ## Phase 4: Push + create PR (fn-42.6)
 
