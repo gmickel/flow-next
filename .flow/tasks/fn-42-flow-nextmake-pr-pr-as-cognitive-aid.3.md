@@ -56,9 +56,8 @@ Phase 2 body-header rendering: TL;DR (3-5 bullets), R-ID coverage table (every R
 - [ ] No code snippets in workflow.md that would actually generate the body (the host agent does that). Workflow tells the agent WHAT to render and WHAT NOT to fabricate; doesn't write the renderer.
 
 ## Done summary
-
-_(populated by /flow-next:work after task completes)_
-
+Phase 2 body-header rendering specced in `workflow.md` §2.0–2.7 and mirrored in `phases.md` Done-when. Locked section order, exact R-ID coverage table format with 120-char ellipsis + ⚠️ uncovered handling, 5-tier Critical changes priority with 7-bullet cap and `public_exports_changed[].removed[]` no-weakening rule, 10 hallucination guardrails as load-bearing rules, section-omission rule, and abort conditions for empty TL;DR / empty R-ID coverage. Workflow describes WHAT the host agent renders from the export-cognitive-aid payload — no code snippets that would generate the body.
 ## Evidence
-
-_(populated by /flow-next:work after task completes)_
+- Commits: 080345550fdef39ebea3f6a8d694915f4c6419ec
+- Tests: plugins/flow-next/scripts/ci_test.sh (57/57 pass)
+- PRs:
