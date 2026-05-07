@@ -114,18 +114,20 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 ## Phase 4: Push + create PR (fn-42.6)
 
+**Sub-section ordering is load-bearing.** The interactive preview gate (§4.5) MUST come before push + `gh pr create` (§4.6). New layout: 4.0 dry-run short-circuit → 4.1 PR title → 4.2 draft flag → 4.3 body-file persistence → 4.4 length cap → 4.5 preview gate → 4.6 push + retry loop → 4.7 failure hints.
+
 **Done when:**
 
-- [ ] `--dry-run` short-circuits before any state change: body printed to stdout via `cat "$BODY_FILE"`, no `git push`, no `gh pr create`, no `--memory` write. Exit 0.
-- [ ] Body delivery via `--body-file` (mktemp + `trap … EXIT` cleanup). Heredoc form documented as anti-pattern (§4.1) with cli/cli #29619 citation.
-- [ ] Body length cap (65,000 chars target, ~65,536 GitHub limit) enforced via §4.2 truncation cascade: drop file list → trim TL;DR → collapse mermaid to overview-only → spill to `.flow/pr-bodies/<epic-id>.md` + commit + replace body with link.
-- [ ] `git push -u origin HEAD` runs first; on failure, exit 1 with the `git push` error to stderr.
+- [ ] `--dry-run` short-circuits (§4.0) before any state change: in-memory body printed to stdout, no body persisted, no `git push`, no `gh pr create`, no `--memory` write. Exit 0.
+- [ ] PR title computed (§4.1) via priority: epic title verbatim if `len <= 72` → first sentence of `goal_and_context` truncated to 70 + `…` → epic id fallback. NO automatic Conventional-Commits prefix injection.
+- [ ] `DRAFT_FLAG` matrix (§4.2) computed via four layers: Ralph forces draft → open items > 0 default draft → `--draft` forces draft → `--ready` forces ready (Ralph layer 1 always wins). Conflict surfaced via stderr note when `--ready` ignored under Ralph.
+- [ ] `OPEN_ITEMS_COUNT` derived once from Phase 1 payload as `len(open_questions) + sum(deferred_findings.items) + (completion_review_status == "needs_work" ? 1 : 0)`. Same source feeds §2.11 Open items count and §4.2 layer 2.
+- [ ] Body delivery via `--body-file` (§4.3) — mktemp + `trap … EXIT` cleanup. Heredoc form documented as anti-pattern with cli/cli #29619 citation.
+- [ ] Body length cap (65,000 chars target, ~65,536 GitHub limit) enforced (§4.4) via truncation cascade: drop file list → trim TL;DR → collapse mermaid to overview-only → spill to `.flow/pr-bodies/<epic-id>.md` + commit + replace body with link.
+- [ ] Interactive preview (§4.5) via `request_user_input`: 4 options (`create` recommended / `dry-run` / `edit-body` / `abort`). `edit-body` opens `${EDITOR:-vim}` then re-prompts. Skipped entirely under Ralph. **Runs BEFORE any `git push` or `gh pr create` so the user can abort/edit before the PR opens.**
+- [ ] After §4.5 clears (or Ralph skips it): `git push -u origin HEAD` runs first (§4.6); on failure, exit 1 with the `git push` error to stderr.
 - [ ] After push, `sleep 1` before `gh pr create` (cli/cli #2691 — GitHub API eventual-consistency lag).
 - [ ] 3-attempt retry loop on the eventual-consistency error class (`Head sha can't be blank` / `No commits between`). Backoff `2s, 4s, 6s`. Other errors fail fast — auth (401/403), body-too-long (422), PR-already-exists (409) do NOT retry.
-- [ ] PR title computed via §4.4 priority: epic title verbatim if `len <= 72` → first sentence of `goal_and_context` truncated to 70 + `…` → epic id fallback. NO automatic Conventional-Commits prefix injection.
-- [ ] `DRAFT_FLAG` matrix (§4.5) computed via four layers: Ralph forces draft → open items > 0 default draft → `--draft` forces draft → `--ready` forces ready (Ralph layer 1 always wins). Conflict surfaced via stderr note when `--ready` ignored under Ralph.
-- [ ] `OPEN_ITEMS_COUNT` derived once from Phase 1 payload as `len(open_questions) + sum(deferred_findings.items) + (completion_review_status == "needs_work" ? 1 : 0)`. Same source feeds §2.11 Open items count and §4.5 layer 2.
-- [ ] Interactive preview via `request_user_input`: 4 options (`create` recommended / `dry-run` / `edit-body` / `abort`). `edit-body` opens `${EDITOR:-vim}` then re-prompts. Skipped entirely under Ralph.
 - [ ] `gh pr create --title --body-file --base --head [--draft]` invoked. PR URL captured from stdout (single line; `gh pr create` has no `--json` flag — verified).
 - [ ] Failure recovery hints printed to stderr per error class (§4.7): eventual-consistency exhaustion, body-too-long, PR-already-exists, authentication.
 

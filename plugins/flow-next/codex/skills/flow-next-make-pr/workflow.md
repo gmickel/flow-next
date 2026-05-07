@@ -852,7 +852,7 @@ Field rules:
 - **No truncation, no abbreviation.** The breadcrumb is one line. If the values would exceed 80 chars combined, that's still acceptable — visibility beats brevity.
 - **No `Phase 4 dry-run: ...` qualifier under `--dry-run`** — the breadcrumb is identical regardless of whether `gh pr create` ran. The body content IS the artefact; whether it lands on stdout or in a PR doesn't change its provenance.
 
-The breadcrumb is rendered during Phase 2 so it survives all downstream phases (mermaid generation, push, PR create) without a re-render. It also survives `--dry-run` (covered in §4.0) — the dry-run output includes the breadcrumb because the body is rendered identically whether or not the PR is opened.
+The breadcrumb is rendered during Phase 2 so it survives all downstream phases (mermaid generation, push, PR create) without a re-render. It also survives `--dry-run` (covered in §4.0) — the dry-run output emits the in-memory body string, which already contains the breadcrumb because Phase 2 rendered it before Phase 4 ran.
 
 ### 2.14 — Honest-empty-state escape hatch
 
@@ -1060,140 +1060,41 @@ When in doubt: **fewer nodes, fewer edges, more honest.** A diagram with 4 nodes
 
 ## Phase 4: Push + create PR (fn-42.6)
 
-**Goal:** turn the rendered body into an open PR. Push the branch, run `gh pr create` with the rendered body delivered via `--body-file` (NOT a heredoc), and resolve draft-vs-ready against the matrix below. `--dry-run` short-circuits the entire phase. `--memory` is deferred to Phase 5.
+**Goal:** turn the rendered body into an open PR. Compute title + draft flag, persist the body to disk, gate on the interactive preview (skipped under Ralph), then push the branch and run `gh pr create` with the body delivered via `--body-file` (NOT a heredoc). `--dry-run` short-circuits before any state change. `--memory` is deferred to Phase 5.
 
-The host agent owns the body string at this point — Phases 2/3 produced it. Phase 4 takes that string, writes it to a tempfile, and hands it to `gh`. **No code in this phase rewrites body content.** If the body is too long for `gh pr create`, the truncation policy in §4.6 fires before invocation.
+The host agent owns the body string at this point — Phases 2/3 produced it. Phase 4 takes that string, writes it to a tempfile, decides title + draft, asks the user for confirmation in interactive mode, then hands the file to `gh`. **No code in this phase rewrites body content.** If the body is too long for `gh pr create`, the truncation policy in §4.4 fires before invocation.
+
+**Sub-section ordering is load-bearing.** The interactive preview gate (§4.5) MUST come before push + `gh pr create` (§4.6). Reordering would let a host agent following the workflow top-to-bottom open the PR before the user can choose `dry-run` / `edit-body` / `abort`, violating the safety gate documented in SKILL.md. Phase 4 layout:
+
+1. **§4.0** — `--dry-run` short-circuit (R22) — earliest exit; no state change at all.
+2. **§4.1** — PR title format (R21) — compute `PR_TITLE` from epic.
+3. **§4.2** — Draft-vs-ready matrix (R24) — compute `DRAFT_FLAG` from Ralph context + open items + force flags.
+4. **§4.3** — Body delivery via `--body-file` (R20) — persist rendered body to tempfile.
+5. **§4.4** — Body length cap + truncation policy — enforce 65K cap before invoking `gh`.
+6. **§4.5** — Interactive preview (skipped under Ralph) — `request_user_input` gate; user picks `create / dry-run / edit-body / abort`.
+7. **§4.6** — Push branch + `gh pr create` retry loop — only runs after the user picks `create` (or Ralph skips the gate).
+8. **§4.7** — Failure recovery hints — stderr text per error class on `gh pr create` failure.
 
 ### 4.0 — `--dry-run` short-circuit (R22)
 
-When `$DRY_RUN == 1`, Phase 4 emits the body to stdout and exits 0. **No `git push`, no `gh pr create`, no `--memory` side effect.** This makes the skill safe to compose with `pbcopy` / inspection / smoke tests.
+When `$DRY_RUN == 1`, Phase 4 emits the rendered body to stdout and exits 0. **No `git push`, no `gh pr create`, no `--memory` side effect.** This makes the skill safe to compose with `pbcopy` / inspection / smoke tests.
+
+The body string is owned by the host agent at this point — Phases 2/3 produced it. The dry-run path emits the in-memory body directly without persisting to disk; subsequent sub-sections (§4.3 onwards) are skipped.
 
 ```bash
 if [[ "$DRY_RUN" == "1" ]]; then
- cat "$BODY_FILE"
+ printf '%s\n' "$BODY_CONTENT"
  echo "" >&2
  echo "Dry-run: body written to stdout. No push, no PR created, no memory entry written." >&2
- rm -f "$BODY_FILE"
  exit 0
 fi
 ```
 
 `--dry-run` is the exclusive output for Phase 4 — `--memory` does NOT fire under `--dry-run` (writing memory for a PR that wasn't opened produces orphan entries that pollute future `memory-scout` results). The footer breadcrumb still appears in the dry-run output because it's part of the body Phase 2 already rendered.
 
-### 4.1 — Body delivery via `--body-file` (R20 refinement)
+### 4.1 — PR title format (R21)
 
-The body lands on disk via the host agent's `Write` tool, then `gh pr create` reads it via `--body-file`. This refines the original spec R20 ("heredoc invocation of `gh pr create --body`") because **heredoc input does not survive LLM-generated content cleanly**: backticks, `$`, and quote characters get re-interpreted by the shell on the way to `gh`. Practice-scout finding cli/cli #29619 documents the same failure mode for Claude Code shell invocations; `--body-file` sidesteps it entirely.
-
-```bash
-BODY_FILE=$(mktemp -t make-pr-body-XXXXXX.md)
-trap 'rm -f "$BODY_FILE"' EXIT
-
-# Host agent's Write tool emits the rendered body string into "$BODY_FILE".
-# (Phase 2/3 produced the body content; this is the persistence step.)
-# Cross-platform note: sync-codex.sh leaves Write as Write — same tool on Codex.
-```
-
-After the Write call, validate the file is non-empty before invoking `gh`:
-
-```bash
-if [[ ! -s "$BODY_FILE" ]]; then
- echo "Error: rendered body is empty. Phase 2/3 produced no content — re-check abort conditions (§2.7)." >&2
- exit 1
-fi
-```
-
-**Anti-pattern (do not do this):**
-
-```bash
-# DO NOT — heredoc content leaks shell metacharacters
-gh pr create --body "$(cat <<EOF
-$BODY_CONTENT
-EOF
-)"
-```
-
-The heredoc form survives simple bodies but fails on (a) backtick-wrapped code refs (the shell tries to execute), (b) `$variable` substitution (literal `$module_name` in markdown becomes empty), (c) escaped quotes inside markdown tables. `--body-file` is the only reliable form.
-
-### 4.2 — Body length cap + truncation policy
-
-`gh pr create` accepts up to ~65,536 characters in `--body-file` (GitHub PR API limit; `gh` surfaces it as a 422). Our internal soft cap is **65,000 chars** to leave headroom for the footer breadcrumb. When the rendered body exceeds the cap, truncate in this priority order (most-droppable first):
-
-1. **Drop the full file list** in `## Where to look` if present — replace with `(file list elided; see diff)`.
-2. **Trim TL;DR** to 3 bullets if currently 4-5 — keep only the top-priority headline + top 2 task-derived bullets.
-3. **Collapse mermaid section** to overview-only — replace multi-diagram structure with one `graph TB` overview + the lead prose paragraph.
-4. **Last resort: spill to `.flow/pr-bodies/<epic-id>.md`** — write the full body to that path, replace PR body with: `# <epic-title>\n\nFull cognitive-aid body exceeds 65K char limit. Read at \`.flow/pr-bodies/<epic-id>.md\` (committed alongside this PR).` Then `git add .flow/pr-bodies/ && git commit -m "chore: spill PR body for <epic-id>"` before push.
-
-```bash
-BODY_BYTES=$(wc -c < "$BODY_FILE" | tr -d ' ')
-if [[ "$BODY_BYTES" -gt 65000 ]]; then
- : "host agent runs the truncation cascade above"
- : "(1) drop file list (2) trim TL;DR (3) collapse mermaid (4) spill to .flow/pr-bodies/"
-fi
-```
-
-In practice the cap rarely trips — a typical cognitive-aid body is 4-12K chars. The cap exists for the pathological "20-task epic with 50-row R-ID coverage table + 3 mermaid diagrams + 30 deferred findings" case. For any normal flow-next epic, this section is unreachable. Document it so the failure mode is visible, not so the path is hot.
-
-### 4.3 — Push branch + eventual-consistency retry (R20 refinement)
-
-`git push -u origin HEAD` first; **then** wait one second (cli/cli #2691 — GitHub's API trails the git protocol push by tens to hundreds of milliseconds, with the worst observed lag in single-digit seconds). After the sleep, run `gh pr create` inside a 3-attempt retry loop that catches **only** the eventual-consistency error class. Other errors (auth, body too long, PR already exists) fail fast.
-
-```bash
-# Push branch. We don't pre-check `git rev-parse @{push}` — the cost of a redundant
-# push (zero-byte upload) is much smaller than the bug surface of a "skipped because
-# we thought it was already pushed but it actually wasn't" path.
-PUSH_OUT=$(git push -u origin HEAD 2>&1)
-PUSH_RC=$?
-if [[ "$PUSH_RC" -ne 0 ]]; then
- echo "Error: git push failed:" >&2
- echo "$PUSH_OUT" >&2
- exit 1
-fi
-
-sleep 1 # GitHub API eventual-consistency lag (cli/cli #2691)
-
-# Retry loop. Only retry on the eventual-consistency error class. Other errors
-# fail fast — re-running gh pr create after a 422 (body too long) or 401 (auth)
-# just produces the same error.
-PR_URL=""
-for attempt in 1 2 3; do
- CREATE_OUT=$(gh pr create \
- --title "$PR_TITLE" \
- --body-file "$BODY_FILE" \
- $DRAFT_FLAG \
- --base "$BASE_REF" \
- --head "$HEAD_BRANCH" 2>&1) && { PR_URL="$CREATE_OUT"; break; }
-
- # Eventual-consistency error class — retry. Empirically validated during fn-42 spike:
- # even after `git push` returns 0 and `sleep 1` elapses, gh pr create can fail with
- # "Head sha can't be blank, Base sha can't be blank, No commits between main and X"
- # while the GitHub API still propagates the push.
- case "$CREATE_OUT" in
- *"Head sha can't be blank"*|*"No commits between"*)
- sleep $((attempt * 2)) # 2s, 4s, 6s — total worst-case 12s before bailing
- continue
- ;;
- esac
-
- # Any other error: fail fast.
- echo "Error: gh pr create failed:" >&2
- echo "$CREATE_OUT" >&2
- exit 1
-done
-
-if [[ -z "$PR_URL" ]]; then
- echo "Error: gh pr create failed after 3 retries on eventual-consistency error." >&2
- echo "Manual recovery: wait 30s and re-run /flow-next:make-pr (skill detects the existing branch and re-tries)." >&2
- exit 1
-fi
-```
-
-**`gh pr create` has NO `--json` flag** (verified by docs-scout and the `gh pr create --help` output). The PR URL lands on stdout as a single line; capture via `PR_URL=$(...)`. Don't try to pipe through `jq`.
-
-`HEAD_BRANCH` resolves to the value of `git -C "$REPO_ROOT" branch --show-current` captured during Phase 0 (`PHASE0_CONTEXT.branch`). Passing `--head` explicitly is defensive — `gh` defaults to the current branch when `--head` is omitted, but explicit beats implicit when the worktree might be in detached-HEAD or the user ran the skill from inside a git submodule.
-
-### 4.4 — PR title format (R21)
-
-The PR title comes from the epic in this exact priority:
+Compute the PR title from the epic before any preview or push so the §4.5 prompt can show it to the user. Priority:
 
 1. **Epic title verbatim** if `len(epic.title) <= 72`.
 2. **First sentence of `epic.spec_sections.goal_and_context`** truncated to 70 chars + `…` (single Unicode ellipsis) when epic title is empty OR exceeds 72.
@@ -1219,9 +1120,9 @@ fi
 
 If the epic title contains characters problematic for shell quoting (single-quotes, backticks), they survive intact through `--title` because we pass the variable directly without re-interpreting. `gh` itself accepts the title argument as one shell token — no escaping needed.
 
-### 4.5 — Draft-vs-ready matrix (R24)
+### 4.2 — Draft-vs-ready matrix (R24)
 
-The `DRAFT_FLAG` is computed from a four-input matrix: `OPEN_ITEMS_COUNT`, Ralph context, `--draft` force flag, `--ready` force flag. **Resolution order: explicit force flags win over context-derived defaults.**
+Compute `DRAFT_FLAG` from a four-input matrix: `OPEN_ITEMS_COUNT`, Ralph context, `--draft` force flag, `--ready` force flag. **Resolution order: explicit force flags win over context-derived defaults.** Computed before §4.5 so the preview prompt can tell the user whether the PR will open as draft or ready.
 
 ```bash
 # Default state — neither flag forced; let context decide.
@@ -1283,9 +1184,62 @@ OPEN_ITEMS_COUNT=$(printf '%s' "$EXPORT_PAYLOAD" | jq '
 
 This same count drives both the §2.11 Open items section bullet count and the draft-flag layer 2 default. Single source of truth — no recompute risk.
 
-### 4.6 — Interactive preview (skipped under Ralph)
+### 4.3 — Body delivery via `--body-file` (R20 refinement)
 
-Before push, the skill asks the user via `request_user_input`:
+Persist the rendered body to a tempfile so §4.5 can preview it (and let the user `edit-body` it) and §4.6 can hand it to `gh pr create --body-file`. This refines the original spec R20 ("heredoc invocation of `gh pr create --body`") because **heredoc input does not survive LLM-generated content cleanly**: backticks, `$`, and quote characters get re-interpreted by the shell on the way to `gh`. Practice-scout finding cli/cli #29619 documents the same failure mode for Claude Code shell invocations; `--body-file` sidesteps it entirely.
+
+```bash
+BODY_FILE=$(mktemp -t make-pr-body-XXXXXX.md)
+trap 'rm -f "$BODY_FILE"' EXIT
+
+# Host agent's Write tool emits the rendered body string into "$BODY_FILE".
+# (Phase 2/3 produced the body content; this is the persistence step.)
+# Cross-platform note: sync-codex.sh leaves Write as Write — same tool on Codex.
+```
+
+After the Write call, validate the file is non-empty before proceeding to the preview gate:
+
+```bash
+if [[ ! -s "$BODY_FILE" ]]; then
+ echo "Error: rendered body is empty. Phase 2/3 produced no content — re-check abort conditions (§2.7)." >&2
+ exit 1
+fi
+```
+
+**Anti-pattern (do not do this):**
+
+```bash
+# DO NOT — heredoc content leaks shell metacharacters
+gh pr create --body "$(cat <<EOF
+$BODY_CONTENT
+EOF
+)"
+```
+
+The heredoc form survives simple bodies but fails on (a) backtick-wrapped code refs (the shell tries to execute), (b) `$variable` substitution (literal `$module_name` in markdown becomes empty), (c) escaped quotes inside markdown tables. `--body-file` is the only reliable form.
+
+### 4.4 — Body length cap + truncation policy
+
+`gh pr create` accepts up to ~65,536 characters in `--body-file` (GitHub PR API limit; `gh` surfaces it as a 422). Our internal soft cap is **65,000 chars** to leave headroom for the footer breadcrumb. When the rendered body exceeds the cap, truncate in this priority order (most-droppable first):
+
+1. **Drop the full file list** in `## Where to look` if present — replace with `(file list elided; see diff)`.
+2. **Trim TL;DR** to 3 bullets if currently 4-5 — keep only the top-priority headline + top 2 task-derived bullets.
+3. **Collapse mermaid section** to overview-only — replace multi-diagram structure with one `graph TB` overview + the lead prose paragraph.
+4. **Last resort: spill to `.flow/pr-bodies/<epic-id>.md`** — write the full body to that path, replace PR body with: `# <epic-title>\n\nFull cognitive-aid body exceeds 65K char limit. Read at \`.flow/pr-bodies/<epic-id>.md\` (committed alongside this PR).` Then `git add .flow/pr-bodies/ && git commit -m "chore: spill PR body for <epic-id>"` before push.
+
+```bash
+BODY_BYTES=$(wc -c < "$BODY_FILE" | tr -d ' ')
+if [[ "$BODY_BYTES" -gt 65000 ]]; then
+ : "host agent runs the truncation cascade above"
+ : "(1) drop file list (2) trim TL;DR (3) collapse mermaid (4) spill to .flow/pr-bodies/"
+fi
+```
+
+In practice the cap rarely trips — a typical cognitive-aid body is 4-12K chars. The cap exists for the pathological "20-task epic with 50-row R-ID coverage table + 3 mermaid diagrams + 30 deferred findings" case. For any normal flow-next epic, this section is unreachable. Document it so the failure mode is visible, not so the path is hot.
+
+### 4.5 — Interactive preview (skipped under Ralph)
+
+**This is the safety gate.** Before push + `gh pr create`, the skill MUST ask the user via `request_user_input` in interactive mode. Ralph skips the gate entirely (autonomous loops have no human in the loop to answer). The preview runs after title + draft are computed (§4.1, §4.2) and after the body is persisted to disk (§4.3, §4.4) so all four pieces of information are visible to the user before they decide.
 
 > Body rendered for `<epic-id>` against `<base-ref>` (<N> chars, <draft|ready>). Action?
 >
@@ -1301,34 +1255,92 @@ The `edit-body` option opens the tempfile in `${EDITOR:-vim}`, and on save re-ru
 ```bash
 if [[ "$RALPH" != "1" ]]; then
  : "request_user_input: 4 options as above"
- : "On 'create' — proceed with §4.3"
+ : "On 'create' — fall through to §4.6 (push + gh pr create)"
  : "On 'dry-run' — emit body to stdout, exit 0"
  : "On 'edit-body' — \${EDITOR:-vim} \"$BODY_FILE\", then re-prompt"
  : "On 'abort' — exit 1"
 fi
 ```
 
-**Ralph mode skips the preview entirely.** The autonomous loop terminus opens the draft PR for human review without prompting — the human review IS the prompt. R24 invariant: under Ralph, the body goes from `BODY_FILE` straight to `gh pr create`.
+**Ralph mode skips the preview entirely.** The autonomous loop terminus opens the draft PR for human review without prompting — the human review IS the prompt. R24 invariant: under Ralph, control flows from §4.4 directly into §4.6 without an `request_user_input` call.
+
+### 4.6 — Push branch + `gh pr create` retry loop (R20 refinement)
+
+Reached only after the §4.5 gate cleared (user picked `create`, or Ralph skipped the gate). `git push -u origin HEAD` first; **then** wait one second (cli/cli #2691 — GitHub's API trails the git protocol push by tens to hundreds of milliseconds, with the worst observed lag in single-digit seconds). After the sleep, run `gh pr create` inside a 3-attempt retry loop that catches **only** the eventual-consistency error class. Other errors (auth, body too long, PR already exists) fail fast.
+
+```bash
+# Push branch. We don't pre-check `git rev-parse @{push}` — the cost of a redundant
+# push (zero-byte upload) is much smaller than the bug surface of a "skipped because
+# we thought it was already pushed but it actually wasn't" path.
+PUSH_OUT=$(git push -u origin HEAD 2>&1)
+PUSH_RC=$?
+if [[ "$PUSH_RC" -ne 0 ]]; then
+ echo "Error: git push failed:" >&2
+ echo "$PUSH_OUT" >&2
+ exit 1
+fi
+
+sleep 1 # GitHub API eventual-consistency lag (cli/cli #2691)
+
+# Retry loop. Only retry on the eventual-consistency error class. Other errors
+# fail fast — re-running gh pr create after a 422 (body too long) or 401 (auth)
+# just produces the same error.
+PR_URL=""
+for attempt in 1 2 3; do
+ CREATE_OUT=$(gh pr create \
+ --title "$PR_TITLE" \
+ --body-file "$BODY_FILE" \
+ $DRAFT_FLAG \
+ --base "$BASE_REF" \
+ --head "$HEAD_BRANCH" 2>&1) && { PR_URL="$CREATE_OUT"; break; }
+
+ # Eventual-consistency error class — retry. Empirically validated during fn-42 spike:
+ # even after `git push` returns 0 and `sleep 1` elapses, gh pr create can fail with
+ # "Head sha can't be blank, Base sha can't be blank, No commits between main and X"
+ # while the GitHub API still propagates the push.
+ case "$CREATE_OUT" in
+ *"Head sha can't be blank"*|*"No commits between"*)
+ sleep $((attempt * 2)) # 2s, 4s, 6s — total worst-case 12s before bailing
+ continue
+ ;;
+ esac
+
+ # Any other error: fail fast.
+ echo "Error: gh pr create failed:" >&2
+ echo "$CREATE_OUT" >&2
+ exit 1
+done
+
+if [[ -z "$PR_URL" ]]; then
+ echo "Error: gh pr create failed after 3 retries on eventual-consistency error." >&2
+ echo "Manual recovery: wait 30s and re-run /flow-next:make-pr (skill detects the existing branch and re-tries)." >&2
+ exit 1
+fi
+```
+
+**`gh pr create` has NO `--json` flag** (verified by docs-scout and the `gh pr create --help` output). The PR URL lands on stdout as a single line; capture via `PR_URL=$(...)`. Don't try to pipe through `jq`.
+
+`HEAD_BRANCH` resolves to the value of `git -C "$REPO_ROOT" branch --show-current` captured during Phase 0 (`PHASE0_CONTEXT.branch`). Passing `--head` explicitly is defensive — `gh` defaults to the current branch when `--head` is omitted, but explicit beats implicit when the worktree might be in detached-HEAD or the user ran the skill from inside a git submodule.
 
 ### 4.7 — Failure recovery hints
 
 When `gh pr create` fails after the retry loop is exhausted, the skill emits manual-recovery instructions to stderr before exiting:
 
 - **Eventual-consistency exhaustion** (3 retries): `Manual recovery: wait 30s and re-run /flow-next:make-pr (skill detects the existing branch and re-tries).` The branch is already pushed — only the PR creation step needs re-running.
-- **Body too long (422)**: `Manual recovery: re-run with --no-mermaid (saves ~3-8K chars) or wait for the truncation policy to spill to .flow/pr-bodies/.` Should not happen because §4.2 truncation runs before invocation; if it does, the cap heuristic underestimated the body.
+- **Body too long (422)**: `Manual recovery: re-run with --no-mermaid (saves ~3-8K chars) or wait for the truncation policy to spill to .flow/pr-bodies/.` Should not happen because §4.4 truncation runs before invocation; if it does, the cap heuristic underestimated the body.
 - **PR already exists (409)**: `An OPEN PR exists. /flow-next:resolve-pr addresses review feedback on the existing PR. To replace it, close the open one first via gh pr close.` Phase 0.6 should have caught this; if it slipped through, the user hit a race between Phase 0 check and Phase 4 push.
 - **Authentication (401/403)**: `Run 'gh auth status' and 'gh auth login --hostname github.com' to re-authenticate.` Phase 0.1 should have caught this; if it slipped through, the token expired between Phase 0 and Phase 4.
 
 ### Done when
 
-- `--dry-run` short-circuits before any state change (no push, no PR, no memory). Body lands on stdout. Exit 0.
-- Body delivered via `--body-file` (mktemp + cleanup trap). Heredoc form documented as anti-pattern with cli/cli #29619 citation.
-- Body length cap (65,000 chars target) enforced via the §4.2 truncation cascade: drop file list → trim TL;DR → collapse mermaid → spill to `.flow/pr-bodies/`.
-- `git push -u origin HEAD`, then `sleep 1`, then 3-attempt retry loop on eventual-consistency error class (`Head sha can't be blank` / `No commits between`). Backoff `2s, 4s, 6s`. Other errors fail fast.
-- PR title computed via §4.4 priority: epic title (≤72) → first sentence of `goal_and_context` (≤70 + `…`) → epic id fallback. No Conventional-Commits prefix injection.
-- Draft flag computed via §4.5 matrix layers (Ralph → open items → `--draft` → `--ready`). `--ready` ignored under Ralph; conflict surfaced via stderr note.
-- Interactive `request_user_input` preview offers `create / dry-run / edit-body / abort`. Skipped under Ralph.
-- Failure recovery hints printed to stderr before exit on each error class.
+- `--dry-run` short-circuits (§4.0) before any state change (no body persisted, no push, no PR, no memory). Body lands on stdout from the in-memory string. Exit 0.
+- PR title computed (§4.1) via priority: epic title (≤72) → first sentence of `goal_and_context` (≤70 + `…`) → epic id fallback. No Conventional-Commits prefix injection.
+- Draft flag computed (§4.2) via matrix layers (Ralph → open items → `--draft` → `--ready`). `--ready` ignored under Ralph; conflict surfaced via stderr note.
+- Body delivered via `--body-file` (§4.3) — mktemp + cleanup trap. Heredoc form documented as anti-pattern with cli/cli #29619 citation.
+- Body length cap (65,000 chars target) enforced (§4.4) via truncation cascade: drop file list → trim TL;DR → collapse mermaid → spill to `.flow/pr-bodies/`.
+- Interactive `request_user_input` preview (§4.5) offers `create / dry-run / edit-body / abort` BEFORE any push or `gh pr create`. Skipped under Ralph.
+- After the §4.5 gate clears (or Ralph skips it): `git push -u origin HEAD`, then `sleep 1`, then 3-attempt retry loop on eventual-consistency error class (`Head sha can't be blank` / `No commits between`). Backoff `2s, 4s, 6s`. Other errors fail fast.
+- Failure recovery hints (§4.7) printed to stderr before exit on each error class.
 
 ---
 
@@ -1376,7 +1388,7 @@ fi
 
 The idempotency key is the `epic-<EPIC_ID>` tag, NOT a frontmatter `epic_id` field. The memory frontmatter validator (`validate_memory_frontmatter`) rejects unknown top-level fields — adding `epic_id` would produce a validation error. Tags are the canonical extension point.
 
-`--memory` does not fire under `--dry-run` (covered in §4.0). It also does not fire when `gh pr create` failed — Phase 5 only runs after a successful PR creation, so this is a natural sequence guarantee.
+`--memory` does not fire under `--dry-run` (covered in §4.0). It also does not fire when `gh pr create` failed — Phase 5 only runs after a successful PR creation in §4.6, so this is a natural sequence guarantee.
 
 ### 5.2 — Memory entry body shape
 
@@ -1487,7 +1499,7 @@ R24 invariant: under Ralph the PR URL is the **sole stdout artefact** in machine
 
 ### 5.5 — Cleanup
 
-`trap 'rm -f "$BODY_FILE"' EXIT` from §4.1 fires automatically when the script exits (success or failure). The memory body file is added to the trap when `--memory` fires (§5.3). No explicit cleanup needed; trap discipline handles both files.
+`trap 'rm -f "$BODY_FILE"' EXIT` from §4.3 fires automatically when the script exits (success or failure). The memory body file is added to the trap when `--memory` fires (§5.3). No explicit cleanup needed; trap discipline handles both files.
 
 The PR body file ends up in `/tmp/`, OS-cleaned on reboot even when trap doesn't fire (e.g. `kill -9`). No persistent on-disk artefact survives a make-pr invocation, with the single exception of the `--memory` side effect (which writes a permanent entry under `.flow/memory/knowledge/architecture-patterns/`).
 
@@ -1516,7 +1528,7 @@ This skill is the autonomous-loop terminus, which means it's also the most-tempt
 
 5. **Inflating scope claims beyond what the diff supports.** Hallucination guardrail rule 6 (§2.5). Every TL;DR / Critical-changes / Where-to-look claim must trace to a payload field. "We also improved overall reliability" with no concrete trace = drop.
 
-6. **Heredoc body delivery.** §4.1 — `--body-file` is the only reliable form when LLM-generated content contains backticks, `$`, or escaped quotes. v2 alternative ("just escape the bad characters") is a strict downgrade; don't reintroduce the heredoc form even with quoting.
+6. **Heredoc body delivery.** §4.3 — `--body-file` is the only reliable form when LLM-generated content contains backticks, `$`, or escaped quotes. v2 alternative ("just escape the bad characters") is a strict downgrade; don't reintroduce the heredoc form even with quoting.
 
 7. **Silent fallback to `git push` + manual `curl` to GitHub API.** When `gh` is missing, the skill exits with install instructions (§0.1). Don't try to be clever — half-baked PR creation produces broken PRs that the user has to clean up manually.
 
