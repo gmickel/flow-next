@@ -11562,9 +11562,19 @@ def _export_review_receipts(
             if stripped.startswith("- [") and "]" in stripped:
                 items.append({"raw": stripped})
         if items:
+            # Emit repo-relative POSIX path so the breadcrumb in the rendered
+            # PR body doesn't leak machine-specific absolute paths and stays
+            # readable for remote reviewers across platforms.
+            try:
+                rel_path = sink_path.relative_to(repo_root).as_posix()
+            except ValueError:
+                # Sink lives outside repo_root (shouldn't happen in practice
+                # since we constructed it from repo_root above, but stay
+                # defensive). Fall back to the bare filename.
+                rel_path = sink_path.name
             deferred_findings.append(
                 {
-                    "path": str(sink_path),
+                    "path": rel_path,
                     "items": items,
                 }
             )

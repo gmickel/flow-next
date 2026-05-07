@@ -700,6 +700,25 @@ assert_eq_jq "T8" "$T7_OUT" "len(d['glossary_changes']['removed'])" "0" "no glos
 assert_eq_jq "T8" "$T7_OUT" "len(d['strategy_alignment']['tracks_served'])" "0" "no STRATEGY.md: tracks_served[] empty"
 assert_eq_jq "T8" "$T7_OUT" "len(d['deferred_findings'])" "0" "no deferred review: deferred_findings[] empty"
 
+# T8 (cont.): full-fixture deferred_findings[].path is repo-relative POSIX,
+# not absolute, so the breadcrumb stays usable for remote PR reviewers and
+# doesn't leak machine-specific filesystem paths into the rendered body.
+assert_eq_jq "T8" "$T1_OUT" "len(d['deferred_findings']) >= 1" "True" \
+  "fixture deferred_findings[] non-empty"
+T8_DEFER_PATH="$(json_get "$T1_OUT" "d['deferred_findings'][0]['path']")"
+case "$T8_DEFER_PATH" in
+  /*) fail "T8" "deferred_findings[0].path is absolute (got: $T8_DEFER_PATH)" ;;
+  [A-Za-z]:[/\\]*) fail "T8" "deferred_findings[0].path is Windows-absolute (got: $T8_DEFER_PATH)" ;;
+  "") fail "T8" "deferred_findings[0].path is empty" ;;
+  *) ok "T8" "deferred_findings[0].path is repo-relative ($T8_DEFER_PATH)" ;;
+esac
+case "$T8_DEFER_PATH" in
+  *\\*) fail "T8" "deferred_findings[0].path contains backslash — must be POSIX (got: $T8_DEFER_PATH)" ;;
+  *) ok "T8" "deferred_findings[0].path uses POSIX separators (no backslashes)" ;;
+esac
+assert_grep "T8" ".flow/review-deferred/" "$T8_DEFER_PATH" \
+  "deferred_findings[0].path under .flow/review-deferred/"
+
 # =============================================================================
 # T9: Branch-no-commits-ahead — diff_summary.files: []
 # =============================================================================
