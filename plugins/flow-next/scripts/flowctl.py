@@ -10605,6 +10605,1242 @@ def cmd_epic_set_backend(args: argparse.Namespace) -> None:
         print(f"Epic {args.id} backend specs updated: {', '.join(updated)}")
 
 
+# --- epic export-cognitive-aid (fn-42.1) ---
+#
+# Aggregates nine input streams into one structured JSON payload the
+# `/flow-next:make-pr` skill consumes:
+#   1. Epic spec (with R-IDs parsed from `## Acceptance Criteria`)
+#   2. Per-task done_summary + evidence
+#   3. Decisions memory (knowledge/decisions/*)
+#   4. Bug-track memory (bug/*/*)
+#   5. Architecture-patterns memory (knowledge/architecture-patterns/*)
+#   6. Glossary diff vs base (added/removed terms)
+#   7. Strategy alignment (active tracks)
+#   8. Diff stats (per-file churn + module signals)
+#   9. Review receipts + deferred findings (when present)
+#
+# Pure deterministic plumbing — no LLM judgment in the export step itself.
+# Body-rendering happens in the skill (host agent reasoning over this payload).
+
+# Section names accepted by --section filter (R6).
+EXPORT_COGNITIVE_AID_SECTIONS: tuple[str, ...] = (
+    "epic",
+    "tasks",
+    "memory",
+    "glossary",
+    "strategy",
+    "diff",
+    "reviews",
+)
+
+# Top-level keys in the full payload (used by --section filter).
+_EXPORT_COGNITIVE_AID_SECTION_KEYS: dict[str, tuple[str, ...]] = {
+    "epic": ("epic",),
+    "tasks": ("tasks", "tasks_summary"),
+    "memory": ("memory_during_epic",),
+    "glossary": ("glossary_changes",),
+    "strategy": ("strategy_alignment",),
+    "diff": ("diff_summary",),
+    "reviews": ("review_receipts", "deferred_findings"),
+}
+
+# Hardcoded list — high-signal paths that warrant explicit reviewer focus.
+# Match against any path component (case-insensitive); also check filename
+# for secret/token/credential/key substrings + `.pem` suffix.
+SECURITY_SENSITIVE_PATH_PARTS: tuple[str, ...] = (
+    "auth",
+    "crypto",
+    "secrets",
+    "credentials",
+)
+SECURITY_SENSITIVE_DIR_PREFIXES: tuple[str, ...] = (
+    ".github/workflows",
+    "scripts/hooks",
+    ".flow/hooks",
+    "plugins/flow-next/hooks",
+)
+SECURITY_SENSITIVE_FILENAME_SUBSTRINGS: tuple[str, ...] = (
+    "secret",
+    "token",
+    "credential",
+    # `key` is too noisy as a substring (matches keyword, keys, hotkey, etc.).
+    # Caller checks `*.pem` separately + matches `apikey` / `privkey` via the
+    # explicit substrings below.
+    "apikey",
+    "privkey",
+    "id_rsa",
+    "id_ed25519",
+)
+SECURITY_SENSITIVE_SUFFIXES: tuple[str, ...] = (
+    ".pem",
+    ".key",
+    ".p12",
+    ".pfx",
+)
+
+# Public-export marker patterns — files where added/removed exports flag a
+# potentially breaking change.
+_PUBLIC_EXPORT_FILES_RE = re.compile(
+    r"(?:^|/)(?:index\.(?:ts|tsx|js|mjs|cjs)|__init__\.py|mod\.rs|lib\.rs)$"
+)
+# Source lines that count as "public exports" for our crude detection.
+_PUBLIC_EXPORT_LINE_RES: tuple[re.Pattern, ...] = (
+    re.compile(r"^export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var|interface|type|enum)\s+(\w+)"),
+    re.compile(r"^export\s*\{\s*([^}]+)\s*\}"),
+    re.compile(r"^def\s+(\w+)\s*\("),
+    re.compile(r"^class\s+(\w+)"),
+    re.compile(r"^pub\s+(?:fn|struct|enum|trait|mod)\s+(\w+)"),
+)
+# Crude module-derivation: keep first 2 path components when present.
+# Lone-file paths (e.g. README.md) get module = "<root>".
+
+
+def _export_path_module(path: str) -> str:
+    """Derive a module label for a path (first 2 components or `<root>`)."""
+    parts = [p for p in path.split("/") if p]
+    if not parts:
+        return "<root>"
+    if len(parts) == 1:
+        return "<root>"
+    return "/".join(parts[:2])
+
+
+def _export_path_is_security_sensitive(path: str) -> bool:
+    """Return True if this path warrants security-review attention."""
+    if not path:
+        return False
+    lowered = path.lower()
+    # Suffix match (e.g. `.pem`, `.key`).
+    for suffix in SECURITY_SENSITIVE_SUFFIXES:
+        if lowered.endswith(suffix):
+            return True
+    # Directory-prefix match.
+    for prefix in SECURITY_SENSITIVE_DIR_PREFIXES:
+        if lowered.startswith(prefix.lower() + "/") or lowered == prefix.lower():
+            return True
+    # Path-component match (auth/, crypto/, etc.).
+    parts = lowered.split("/")
+    for part in parts:
+        if part in SECURITY_SENSITIVE_PATH_PARTS:
+            return True
+    # Filename substring match (secret*, *token*, *credential*, *apikey*).
+    base = parts[-1] if parts else ""
+    for sub in SECURITY_SENSITIVE_FILENAME_SUBSTRINGS:
+        if sub in base:
+            return True
+    return False
+
+
+def _export_run_git(args: list[str], cwd: Optional[Path] = None) -> tuple[int, str, str]:
+    """Run a git command, return (returncode, stdout, stderr).
+
+    Never raises — caller decides how to handle non-zero exit codes. Used
+    for diff-related commands that may legitimately fail (e.g. invalid
+    --base ref, no commits ahead).
+    """
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=str(cwd) if cwd else None,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        return (result.returncode, result.stdout or "", result.stderr or "")
+    except (OSError, subprocess.SubprocessError) as exc:
+        return (1, "", str(exc))
+
+
+def _export_resolve_merge_base(base_ref: str) -> Optional[str]:
+    """Return the merge-base sha for `base_ref..HEAD`, or None on failure."""
+    rc, out, _err = _export_run_git(["merge-base", base_ref, "HEAD"])
+    if rc != 0:
+        return None
+    sha = out.strip()
+    return sha if sha else None
+
+
+def _export_parse_acceptance_criteria(spec_text: str) -> list[dict[str, Any]]:
+    """Extract R-ID acceptance criteria from an epic spec.
+
+    Looks for the `## Acceptance Criteria` (or `## Acceptance criteria`)
+    section and parses bullets matching `- **R<N>:** <text>`. Source-tag
+    suffixes like `[user]` / `[paraphrase]` / `[inferred]` / `[strategy:track]`
+    are extracted into the `tag` field (last `[...]` token in the bullet).
+
+    Returns list of `{"id": "R1", "text": "...", "tag": "..."}`. Empty list
+    if no acceptance section or no R-IDs.
+    """
+    if not spec_text:
+        return []
+
+    # Find the section heading. Tolerate both casings.
+    heading_re = re.compile(
+        r"^##\s+Acceptance\s+[Cc]riteria\s*$",
+        re.MULTILINE,
+    )
+    m = heading_re.search(spec_text)
+    if not m:
+        return []
+    body_start = m.end()
+    # Section ends at the next H2 or end-of-file.
+    next_h2 = re.search(r"^##\s+", spec_text[body_start:], re.MULTILINE)
+    if next_h2:
+        body_end = body_start + next_h2.start()
+    else:
+        body_end = len(spec_text)
+    body = spec_text[body_start:body_end]
+
+    # Bullet pattern: `- **R<N>:** <text>`. Tolerate optional whitespace
+    # between the bullet marker and the bold token.
+    bullet_re = re.compile(
+        r"^[-*]\s+\*\*(R\d+)\:?\*\*\s*:?\s*(.+?)$",
+        re.MULTILINE,
+    )
+    tag_re = re.compile(r"\[([^\]]+)\]\s*$")
+    entries: list[dict[str, Any]] = []
+    for bm in bullet_re.finditer(body):
+        rid = bm.group(1)
+        text_raw = bm.group(2).strip()
+        tag = ""
+        tm = tag_re.search(text_raw)
+        if tm:
+            tag = tm.group(1).strip()
+            # Trim the trailing tag from text.
+            text_raw = text_raw[: tm.start()].rstrip()
+        entries.append({"id": rid, "text": text_raw, "tag": tag})
+    return entries
+
+
+def _export_parse_spec_section(spec_text: str, heading_re: re.Pattern) -> str:
+    """Return the body text under a single H2 heading (stripped)."""
+    m = heading_re.search(spec_text or "")
+    if not m:
+        return ""
+    body_start = m.end()
+    next_h2 = re.search(r"^##\s+", spec_text[body_start:], re.MULTILINE)
+    body_end = body_start + next_h2.start() if next_h2 else len(spec_text)
+    return spec_text[body_start:body_end].strip()
+
+
+def _export_parse_boundaries(spec_text: str) -> list[str]:
+    """Extract bullet items from `## Boundaries` (one bullet per line)."""
+    body = _export_parse_spec_section(
+        spec_text,
+        re.compile(r"^##\s+Boundaries\s*$", re.MULTILINE),
+    )
+    if not body:
+        return []
+    bullets: list[str] = []
+    for line in body.splitlines():
+        line = line.strip()
+        if line.startswith("- ") or line.startswith("* "):
+            bullets.append(line[2:].strip())
+    return bullets
+
+
+def _export_parse_open_questions(spec_text: str) -> list[str]:
+    """Extract bullet items from `## Open Questions` if present."""
+    body = _export_parse_spec_section(
+        spec_text,
+        re.compile(r"^##\s+Open\s+[Qq]uestions\s*$", re.MULTILINE),
+    )
+    if not body:
+        return []
+    items: list[str] = []
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- ") or stripped.startswith("* "):
+            items.append(stripped[2:].strip())
+    return items
+
+
+def _export_parse_task_satisfies(spec_text: str) -> list[str]:
+    """Extract `satisfies: [R1, R3]` from a task spec's frontmatter."""
+    if not spec_text or not spec_text.startswith("---"):
+        return []
+    parts = spec_text.split("---", 2)
+    if len(parts) < 3:
+        return []
+    fm_text = parts[1]
+    # Try inline parser first (deterministic, zero-dep).
+    parsed: dict[str, Any] = {}
+    try:
+        import yaml  # type: ignore[import-not-found]
+        try:
+            loaded = yaml.safe_load(fm_text)
+            if isinstance(loaded, dict):
+                parsed = loaded
+        except yaml.YAMLError:
+            parsed = _parse_inline_yaml(fm_text)
+    except ImportError:
+        parsed = _parse_inline_yaml(fm_text)
+    raw = parsed.get("satisfies")
+    if isinstance(raw, list):
+        return [str(x).strip() for x in raw if str(x).strip()]
+    if isinstance(raw, str):
+        # Could be "[R1, R3]" or "R1, R3" depending on parser.
+        cleaned = raw.strip().strip("[]")
+        return [t.strip() for t in cleaned.split(",") if t.strip()]
+    return []
+
+
+def _export_first_sentence(text: str, max_chars: int = 240) -> str:
+    """Return the first prose sentence of `text` (trimmed at `max_chars`).
+
+    Skips leading markdown structural lines (headings `#`, blank lines,
+    HTML comments) so memory bodies that open with `## Problem` surface
+    the first sentence of the actual content rather than the heading.
+    """
+    if not text:
+        return ""
+    # Walk lines: skip blank, heading, and HTML-comment lines until we hit
+    # the first content line. Then capture from there.
+    content_lines: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            if content_lines:
+                # Hit a blank line after starting collection — paragraph break.
+                break
+            continue
+        if stripped.startswith("#"):
+            # Heading. Skip if we haven't started; break otherwise.
+            if content_lines:
+                break
+            continue
+        if stripped.startswith("<!--") and stripped.endswith("-->"):
+            continue
+        content_lines.append(stripped)
+    cleaned = " ".join(content_lines).strip()
+    if not cleaned:
+        return ""
+    # Take everything up to the first `. ` or `.\n` or `\n\n`.
+    cutoff = len(cleaned)
+    for delim in (". ", ".\n"):
+        idx = cleaned.find(delim)
+        if idx != -1 and idx < cutoff:
+            cutoff = idx + 1
+    snippet = cleaned[:cutoff].strip()
+    if len(snippet) > max_chars:
+        snippet = snippet[: max_chars - 1].rstrip() + "…"
+    return snippet
+
+
+def _export_diff_summary(
+    base_ref: str,
+    merge_base_sha: str,
+    repo_root: Path,
+) -> dict[str, Any]:
+    """Build the diff_summary block from git diff output.
+
+    Uses `git diff --numstat -M --diff-filter=AMRD <merge_base>..HEAD` for
+    per-file additions/deletions, `--name-status -M` for status (A/M/R/D),
+    and a unified-diff scan for added export lines.
+    """
+    head_sha_rc, head_sha_out, _ = _export_run_git(["rev-parse", "HEAD"], cwd=repo_root)
+    head_sha = head_sha_out.strip() if head_sha_rc == 0 else ""
+
+    # numstat: per-file additions/deletions. Renames render as a tab-separated
+    # `old\tnew` path on the third column (or `{old => new}` brace form when
+    # `-M` matches a rename).
+    rc_n, out_n, _ = _export_run_git(
+        [
+            "diff",
+            "--numstat",
+            "-M",
+            "--diff-filter=AMRD",
+            f"{merge_base_sha}..HEAD",
+        ],
+        cwd=repo_root,
+    )
+    files_numstat: dict[str, dict[str, Any]] = {}
+    if rc_n == 0:
+        for line in out_n.splitlines():
+            parts = line.split("\t")
+            if len(parts) < 3:
+                continue
+            adds_raw, dels_raw, path_raw = parts[0], parts[1], "\t".join(parts[2:])
+            # Binary files render as `-` for additions/deletions.
+            try:
+                adds = int(adds_raw) if adds_raw != "-" else 0
+            except ValueError:
+                adds = 0
+            try:
+                dels = int(dels_raw) if dels_raw != "-" else 0
+            except ValueError:
+                dels = 0
+            # Rename forms:
+            #   old\tnew (when --numstat sees a rename)
+            #   {old => new} (less common but possible)
+            path = path_raw
+            if "{" in path_raw and " => " in path_raw and "}" in path_raw:
+                # `dir/{old => new}/sub` → `dir/new/sub`
+                path = re.sub(r"\{[^}]+ => ([^}]+)\}", r"\1", path_raw)
+            elif "\t" in path_raw:
+                # numstat may emit `old\tnew\t` for moved files; take new.
+                pieces = path_raw.split("\t")
+                path = pieces[-1] if pieces else path_raw
+            files_numstat[path] = {
+                "path": path,
+                "additions": adds,
+                "deletions": dels,
+            }
+
+    # name-status: A/M/D/R. Renames appear as `R<score>\told\tnew`.
+    rc_s, out_s, _ = _export_run_git(
+        [
+            "diff",
+            "--name-status",
+            "-M",
+            f"{merge_base_sha}..HEAD",
+        ],
+        cwd=repo_root,
+    )
+    file_status: dict[str, str] = {}
+    if rc_s == 0:
+        for line in out_s.splitlines():
+            parts = line.split("\t")
+            if len(parts) < 2:
+                continue
+            status_raw = parts[0]
+            # `R100\told\tnew` — keep first letter; new path is parts[2].
+            status_letter = status_raw[0] if status_raw else "M"
+            if status_letter == "R" and len(parts) >= 3:
+                file_status[parts[2]] = "R"
+            elif status_letter == "C" and len(parts) >= 3:
+                file_status[parts[2]] = "C"
+            else:
+                file_status[parts[1]] = status_letter
+
+    # Build files[] with derived module + status.
+    files: list[dict[str, Any]] = []
+    for path, info in files_numstat.items():
+        module = _export_path_module(path)
+        status = file_status.get(path, "M")
+        files.append(
+            {
+                "path": path,
+                "status": status,
+                "additions": info["additions"],
+                "deletions": info["deletions"],
+                "module": module,
+            }
+        )
+    files.sort(key=lambda f: f["path"])
+
+    files_changed = len(files)
+    lines_added = sum(f["additions"] for f in files)
+    lines_removed = sum(f["deletions"] for f in files)
+
+    modules_touched = sorted({f["module"] for f in files})
+
+    # Top-5 high-churn files.
+    high_churn = sorted(
+        files,
+        key=lambda f: (f["additions"] + f["deletions"]),
+        reverse=True,
+    )[:5]
+    high_churn_files = [
+        {
+            "path": f["path"],
+            "additions": f["additions"],
+            "deletions": f["deletions"],
+        }
+        for f in high_churn
+    ]
+
+    # Security-sensitive paths.
+    security_sensitive_paths = sorted(
+        {f["path"] for f in files if _export_path_is_security_sensitive(f["path"])}
+    )
+
+    # Cross-module-changes detection: scan unified diff for new
+    # import/from/use/require lines, derive `(adding_module, target_module)`
+    # pairs, surface only when target_module != adding_module.
+    cross_module_changes: list[str] = []
+    rc_u, out_u, _ = _export_run_git(
+        [
+            "diff",
+            "-M",
+            "--unified=0",
+            f"{merge_base_sha}..HEAD",
+        ],
+        cwd=repo_root,
+    )
+    if rc_u == 0:
+        cross_module_changes = _export_detect_cross_module(out_u, files)
+
+    # Public-exports-changed detection: parse +/- lines in index/__init__/lib
+    # files to compute added/removed exports.
+    public_exports_changed: list[dict[str, Any]] = []
+    if rc_u == 0:
+        public_exports_changed = _export_detect_public_exports(out_u)
+
+    return {
+        "base_ref": base_ref,
+        "head_ref": "HEAD",
+        "head_sha": head_sha,
+        "merge_base_sha": merge_base_sha,
+        "files_changed": files_changed,
+        "lines_added": lines_added,
+        "lines_removed": lines_removed,
+        "files": files,
+        "modules_touched": modules_touched,
+        "cross_module_changes": cross_module_changes,
+        "public_exports_changed": public_exports_changed,
+        "high_churn_files": high_churn_files,
+        "security_sensitive_paths": security_sensitive_paths,
+    }
+
+
+# Source-file extensions that can carry real import edges. Anything not in
+# this set (e.g. .md / .json / .yaml) gets skipped — those files mention
+# paths in prose, not import statements.
+_EXPORT_SOURCE_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".py", ".pyi",
+        ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
+        ".rs", ".go", ".rb", ".java", ".kt", ".swift",
+        ".c", ".h", ".cc", ".cpp", ".hpp", ".m", ".mm",
+        ".sh", ".bash", ".zsh",
+    }
+)
+
+
+def _export_detect_cross_module(unified_diff: str, files: list[dict[str, Any]]) -> list[str]:
+    """Surface new dependency edges across modules from a unified diff.
+
+    Heuristic: scan added (`+`) lines in *source files* for actual
+    `import` / `from ... import` / `use` / JS-`require()` / TS-`import ...
+    from "..."` patterns. Quoted-string scanning is gated on the line also
+    containing one of those keywords — a bare quoted path in prose
+    (markdown / JSON / YAML) does not count as an import edge.
+
+    Returned shape: unique `<module-A> imports <module-B> (new)` strings,
+    capped at 12. Both endpoints must be modules that actually changed in
+    this diff (otherwise a fresh `import os` would surface).
+    """
+    if not unified_diff:
+        return []
+
+    diff_modules: set[str] = {f["module"] for f in files}
+    if len(diff_modules) < 2:
+        return []
+
+    # Track which file we're currently inside (header `+++ b/<path>`).
+    current_path: Optional[str] = None
+    current_module: Optional[str] = None
+    current_is_source = False
+    edges: set[tuple[str, str]] = set()
+
+    # Strict patterns — keyword required at line start (after whitespace).
+    py_from_re = re.compile(r"^from\s+([a-zA-Z0-9_.]+)\s+import\b")
+    py_import_re = re.compile(r"^import\s+([a-zA-Z0-9_.]+)")
+    rust_use_re = re.compile(r"^use\s+([a-zA-Z0-9_:]+)")
+    # JS/TS: `import ... from "..."` / `import "..."` / `require("...")` /
+    # `export ... from "..."`.
+    js_import_re = re.compile(
+        r'^(?:import|export)(?:\s+[^"\']+)?\s+from\s+["\']([^"\']+)["\']'
+    )
+    js_bare_import_re = re.compile(r'^import\s+["\']([^"\']+)["\']')
+    js_require_re = re.compile(r'\brequire\s*\(\s*["\']([^"\']+)["\']\s*\)')
+    sh_source_re = re.compile(r"^(?:source|\.)\s+([./a-zA-Z0-9_-]+)")
+    go_import_re = re.compile(r'^import\s+["\']([^"\']+)["\']')
+
+    for line in unified_diff.splitlines():
+        if line.startswith("+++ b/"):
+            current_path = line[len("+++ b/") :].strip()
+            current_module = (
+                _export_path_module(current_path) if current_path else None
+            )
+            current_is_source = False
+            if current_path:
+                idx = current_path.rfind(".")
+                if idx != -1:
+                    ext = current_path[idx:].lower()
+                    if ext in _EXPORT_SOURCE_EXTENSIONS:
+                        current_is_source = True
+            continue
+        if line.startswith("--- ") or line.startswith("@@"):
+            continue
+        if not line.startswith("+") or line.startswith("+++"):
+            continue
+        if current_module is None or not current_is_source:
+            continue
+        body = line[1:].lstrip()
+        candidates: list[str] = []
+        for regex in (py_from_re, py_import_re, rust_use_re):
+            mm = regex.match(body)
+            if mm:
+                candidates.append(
+                    mm.group(1).replace(".", "/").replace("::", "/")
+                )
+        for regex in (js_import_re, js_bare_import_re, go_import_re):
+            mm = regex.match(body)
+            if mm:
+                candidates.append(mm.group(1))
+        for mm in js_require_re.finditer(body):
+            candidates.append(mm.group(1))
+        mm = sh_source_re.match(body)
+        if mm:
+            candidates.append(mm.group(1))
+        for cand in candidates:
+            # Only consider candidates that look like project paths —
+            # bare module names like `os`, `react` are skipped.
+            if "/" not in cand:
+                continue
+            target_module = _export_path_module(cand.lstrip("./"))
+            if target_module == current_module:
+                continue
+            if target_module not in diff_modules:
+                continue
+            edges.add((current_module, target_module))
+
+    return sorted(f"{src} imports {dst} (new)" for src, dst in edges)[:12]
+
+
+def _export_detect_public_exports(unified_diff: str) -> list[dict[str, Any]]:
+    """Detect added/removed exports in `index.*`, `__init__.py`, `lib.rs`, etc.
+
+    For each matching file in the diff, scan added (`+`) and removed (`-`)
+    lines for `export ...` / `def ...` / `class ...` / `pub ...` patterns
+    and emit `{"file": ..., "added": [...], "removed": [...]}`. Skips files
+    without any export-shaped changes.
+    """
+    if not unified_diff:
+        return []
+
+    per_file: dict[str, dict[str, list[str]]] = {}
+    current_path: Optional[str] = None
+    is_export_file = False
+
+    for line in unified_diff.splitlines():
+        if line.startswith("+++ b/"):
+            current_path = line[len("+++ b/") :].strip()
+            is_export_file = bool(
+                current_path and _PUBLIC_EXPORT_FILES_RE.search(current_path)
+            )
+            continue
+        if line.startswith("--- ") or line.startswith("@@"):
+            continue
+        if not is_export_file or not current_path:
+            continue
+        sign = line[:1] if line else ""
+        if sign not in ("+", "-"):
+            continue
+        # Skip the file-header `+++` / `---` lines themselves.
+        if line.startswith("+++") or line.startswith("---"):
+            continue
+        body = line[1:].lstrip()
+        for regex in _PUBLIC_EXPORT_LINE_RES:
+            mm = regex.match(body)
+            if not mm:
+                continue
+            symbol = mm.group(1).strip()
+            # Some patterns capture a comma-separated `{a, b}` block.
+            symbols = [s.strip().split(" as ")[0] for s in symbol.split(",")]
+            for sym in symbols:
+                if not sym:
+                    continue
+                bucket = per_file.setdefault(
+                    current_path, {"added": [], "removed": []}
+                )
+                target = "added" if sign == "+" else "removed"
+                if sym not in bucket[target]:
+                    bucket[target].append(sym)
+            break
+
+    return [
+        {"file": path, "added": data["added"], "removed": data["removed"]}
+        for path, data in sorted(per_file.items())
+        if data["added"] or data["removed"]
+    ]
+
+
+def _export_glossary_diff(base_ref: str, merge_base_sha: str, repo_root: Path) -> dict[str, Any]:
+    """Compute glossary added/removed terms vs the merge base.
+
+    Walks every `GLOSSARY.md` reachable from cwd via `find_all_glossaries`,
+    diffs the head text vs `git show <merge_base>:<rel_path>` (when the
+    file existed at base). Empty diff or missing files → `{"added": [],
+    "removed": [], "renamed": []}`.
+    """
+    result: dict[str, Any] = {"added": [], "removed": [], "renamed": []}
+    glossaries = find_all_glossaries(repo_root)
+    if not glossaries:
+        return result
+
+    for glossary_path in glossaries:
+        try:
+            head_text = glossary_path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        try:
+            rel_path = glossary_path.relative_to(repo_root)
+        except ValueError:
+            continue
+
+        # Try to read the file at the merge-base.
+        rc, base_text, _ = _export_run_git(
+            ["show", f"{merge_base_sha}:{rel_path.as_posix()}"],
+            cwd=repo_root,
+        )
+        head_entries = parse_glossary_file(head_text)
+        base_entries = parse_glossary_file(base_text) if rc == 0 else []
+
+        head_terms = {
+            re.sub(r"\s+", " ", e["term"].strip().lower()): e
+            for e in head_entries
+        }
+        base_terms = {
+            re.sub(r"\s+", " ", e["term"].strip().lower()): e
+            for e in base_entries
+        }
+
+        added_keys = sorted(head_terms.keys() - base_terms.keys())
+        removed_keys = sorted(base_terms.keys() - head_terms.keys())
+
+        for key in added_keys:
+            entry = head_terms[key]
+            result["added"].append(
+                {
+                    "term": entry["term"],
+                    "definition_first_sentence": _export_first_sentence(
+                        entry.get("definition", "")
+                    ),
+                }
+            )
+        for key in removed_keys:
+            entry = base_terms[key]
+            result["removed"].append(entry["term"])
+        # `renamed` detection (heuristic on definition similarity) is a
+        # 2026-Q2 stretch goal per the spec; v1 emits an empty list.
+
+    return result
+
+
+def _export_strategy_alignment(
+    spec_text: str,
+    sync_drift_text: Optional[str] = None,
+) -> dict[str, Any]:
+    """Build the strategy_alignment block.
+
+    `tracks_served` is parsed from the spec's `## Strategy Alignment` (or
+    similar) section if present. `drift_flagged` reads any
+    `## Strategy drift flagged for review` block (in spec OR in a sync
+    output). Missing strategy → empty arrays per graceful-degradation
+    contract.
+    """
+    result: dict[str, Any] = {"tracks_served": [], "drift_flagged": []}
+
+    # Verify a STRATEGY.md exists at the repo root; otherwise return empty.
+    strategy_path, _repo_root = find_strategy_file()
+    if strategy_path is None:
+        return result
+
+    # Tracks-served: scan the epic spec for a `## Strategy Alignment` (or
+    # case-equivalent) section and pull out `- <track>` bullets.
+    body = _export_parse_spec_section(
+        spec_text or "",
+        re.compile(r"^##\s+Strategy\s+Alignment\s*$", re.MULTILINE | re.IGNORECASE),
+    )
+    if body:
+        for line in body.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("- ") or stripped.startswith("* "):
+                track = stripped[2:].strip()
+                # Strip backticks / bold markers.
+                track = track.strip("`").strip("*").strip()
+                if track:
+                    result["tracks_served"].append(track)
+
+    # Drift-flagged: from the spec OR from a passed-in sync output.
+    drift_sources = [spec_text or "", sync_drift_text or ""]
+    drift_re = re.compile(
+        r"^##\s+Strategy\s+drift\s+flagged\s+for\s+review\s*$",
+        re.MULTILINE | re.IGNORECASE,
+    )
+    for source in drift_sources:
+        body = _export_parse_spec_section(source, drift_re)
+        if not body:
+            continue
+        for line in body.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("- ") or stripped.startswith("* "):
+                # Format: `- <track>: <reason>` if present.
+                content = stripped[2:].strip()
+                track, _, reason = content.partition(":")
+                result["drift_flagged"].append(
+                    {"track": track.strip(), "reason": reason.strip()}
+                )
+
+    return result
+
+
+def _export_memory_during_epic(
+    memory_dir: Path,
+    epic_created_at: Optional[str],
+) -> dict[str, Any]:
+    """Aggregate memory entries written during the epic window.
+
+    Filters by `date >= epic_created_at` (YYYY-MM-DD prefix). Falls back
+    to "all entries in scoped categories" when `epic_created_at` is
+    missing — better than empty under the graceful-degradation contract.
+    """
+    result: dict[str, Any] = {
+        "decisions": [],
+        "bugs": [],
+        "architecture_patterns": [],
+    }
+
+    if not memory_dir.is_dir():
+        return result
+
+    # Date threshold.
+    threshold = ""
+    if epic_created_at:
+        # Accept full ISO timestamp or just YYYY-MM-DD prefix.
+        threshold = epic_created_at[:10]
+
+    def _within_window(date_str: str) -> bool:
+        if not threshold:
+            return True
+        return (date_str or "") >= threshold
+
+    # Decisions: knowledge/decisions/*
+    for entry in _memory_iter_entries(
+        memory_dir, track="knowledge", category="decisions"
+    ):
+        if not _within_window(entry["date"]):
+            continue
+        body_first = _export_first_sentence(entry.get("body", ""))
+        fm = entry.get("frontmatter", {}) or {}
+        result["decisions"].append(
+            {
+                "id": entry["entry_id"],
+                "title": entry["title"],
+                "first_sentence": body_first,
+                "alternatives_considered": str(
+                    fm.get("alternatives_considered", "") or ""
+                ),
+                "decision_status": str(fm.get("decision_status", "") or ""),
+            }
+        )
+
+    # Bugs: every bug-track category.
+    for entry in _memory_iter_entries(memory_dir, track="bug"):
+        if not _within_window(entry["date"]):
+            continue
+        body_first = _export_first_sentence(entry.get("body", ""))
+        result["bugs"].append(
+            {
+                "id": entry["entry_id"],
+                "title": entry["title"],
+                "module": entry.get("module", ""),
+                "winning_hypothesis_first_sentence": body_first,
+            }
+        )
+
+    # Architecture-patterns: knowledge/architecture-patterns/*
+    for entry in _memory_iter_entries(
+        memory_dir, track="knowledge", category="architecture-patterns"
+    ):
+        if not _within_window(entry["date"]):
+            continue
+        body_first = _export_first_sentence(entry.get("body", ""))
+        result["architecture_patterns"].append(
+            {
+                "id": entry["entry_id"],
+                "title": entry["title"],
+                "first_sentence": body_first,
+            }
+        )
+
+    return result
+
+
+def _export_review_receipts(
+    repo_root: Path,
+    branch_slug: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Read review receipts + deferred findings sink (when present).
+
+    Returns (review_receipts, deferred_findings). v1: review_receipts is
+    always empty (per-task review receipts aren't stored in a stable
+    location flowctl owns yet — added when the receipt-store lands).
+    deferred_findings checks `.flow/review-deferred/<branch-slug>.md` for
+    presence + count of `- [` bullets (one per finding).
+    """
+    review_receipts: list[dict[str, Any]] = []
+    deferred_findings: list[dict[str, Any]] = []
+
+    sink_path = repo_root / DEFER_SINK_DIR_REL / f"{branch_slug}.md"
+    if sink_path.is_file():
+        try:
+            text = sink_path.read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        # Each finding is a top-level `- [` bullet.
+        items: list[dict[str, Any]] = []
+        for line in text.splitlines():
+            stripped = line.lstrip()
+            if stripped.startswith("- [") and "]" in stripped:
+                items.append({"raw": stripped})
+        if items:
+            deferred_findings.append(
+                {
+                    "path": str(sink_path),
+                    "items": items,
+                }
+            )
+
+    return review_receipts, deferred_findings
+
+
+def _export_filter_section(payload: dict[str, Any], section: str) -> dict[str, Any]:
+    """Return a subset of the payload limited to the keys for `section`."""
+    keys = _EXPORT_COGNITIVE_AID_SECTION_KEYS[section]
+    return {k: payload[k] for k in keys if k in payload}
+
+
+def cmd_epic_export_cognitive_aid(args: argparse.Namespace) -> None:
+    """Aggregate epic + tasks + memory + glossary + strategy + diff + reviews
+    into one structured JSON payload for /flow-next:make-pr (R4-R6).
+
+    Heavy-lifting is mechanical (file walks, git plumbing, frontmatter
+    parsing). Body-rendering happens in the skill — this command emits
+    the structured payload only. Per the architecture rule, no LLM
+    judgment lives here.
+
+    Exit codes:
+      1: missing epic / generic failure
+      2: invalid args (unrecognized --section, missing --base, etc.)
+      3: corrupt epic JSON
+    """
+    use_json = bool(getattr(args, "json", False))
+
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.",
+            use_json=use_json,
+            code=1,
+        )
+
+    epic_id = getattr(args, "id", None)
+    if not epic_id or not is_epic_id(epic_id):
+        error_exit(
+            f"Invalid epic ID: {epic_id}. Expected format: fn-N or fn-N-slug "
+            f"(e.g., fn-1, fn-1-add-auth)",
+            use_json=use_json,
+            code=2,
+        )
+
+    base_ref = getattr(args, "base", None)
+    if not base_ref:
+        error_exit(
+            "--base is required (e.g., --base origin/main)",
+            use_json=use_json,
+            code=2,
+        )
+
+    section = getattr(args, "section", None)
+    if section is not None and section not in EXPORT_COGNITIVE_AID_SECTIONS:
+        error_exit(
+            f"invalid --section '{section}' (valid: "
+            f"{', '.join(EXPORT_COGNITIVE_AID_SECTIONS)})",
+            use_json=use_json,
+            code=2,
+        )
+
+    flow_dir = get_flow_dir()
+    epic_path = flow_dir / EPICS_DIR / f"{epic_id}.json"
+    if not epic_path.exists():
+        error_exit(
+            f"Epic {epic_id} not found at {epic_path}",
+            use_json=use_json,
+            code=1,
+        )
+
+    # Load epic JSON. load_json_or_exit handles JSON-decode errors with
+    # its own error path — but we want a corrupt-epic exit code of 3
+    # (distinct from "missing"), so do the read ourselves first.
+    try:
+        raw_epic = json.loads(epic_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        error_exit(
+            f"Corrupt epic JSON at {epic_path}: {exc}",
+            use_json=use_json,
+            code=3,
+        )
+    except OSError as exc:
+        error_exit(
+            f"Failed to read epic JSON at {epic_path}: {exc}",
+            use_json=use_json,
+            code=1,
+        )
+    if not isinstance(raw_epic, dict):
+        error_exit(
+            f"Corrupt epic JSON at {epic_path}: expected object, got "
+            f"{type(raw_epic).__name__}",
+            use_json=use_json,
+            code=3,
+        )
+    epic_data = normalize_epic(raw_epic)
+
+    # Resolve merge base.
+    merge_base_sha = _export_resolve_merge_base(base_ref)
+    if merge_base_sha is None:
+        error_exit(
+            f"Could not resolve merge-base for '{base_ref}'. Pass a valid "
+            f"--base ref (e.g., origin/main).",
+            use_json=use_json,
+            code=1,
+        )
+
+    repo_root = get_repo_root()
+
+    # --- Epic spec parsing ---
+    spec_path = flow_dir / SPECS_DIR / f"{epic_id}.md"
+    spec_text = ""
+    if spec_path.exists():
+        try:
+            spec_text = spec_path.read_text(encoding="utf-8")
+        except OSError:
+            spec_text = ""
+
+    acceptance_criteria = _export_parse_acceptance_criteria(spec_text)
+    goal_and_context = _export_parse_spec_section(
+        spec_text,
+        re.compile(r"^##\s+Goal\s+&?\s*[Cc]ontext\s*$", re.MULTILINE),
+    )
+    architecture_overview_full = _export_parse_spec_section(
+        spec_text,
+        re.compile(
+            r"^##\s+Architecture\s*(?:&\s*Data\s+Models)?\s*$",
+            re.MULTILINE | re.IGNORECASE,
+        ),
+    )
+    # Cap architecture_overview at 500 chars (per spec).
+    architecture_overview = (
+        architecture_overview_full[:500].rstrip()
+        + ("…" if len(architecture_overview_full) > 500 else "")
+    )
+    boundaries = _export_parse_boundaries(spec_text)
+    open_questions = _export_parse_open_questions(spec_text)
+
+    # decision_context is harder to schematize; surface as raw bullet list
+    # under the `## Decision Context` heading. Each bullet becomes
+    # {"question": "<bold prefix or first sentence>", "answer": "<rest>",
+    # "tag": "<source-tag>"}.
+    decision_context: list[dict[str, Any]] = []
+    decision_body = _export_parse_spec_section(
+        spec_text,
+        re.compile(r"^##\s+Decision\s+Context\s*$", re.MULTILINE),
+    )
+    if decision_body:
+        bullet_re = re.compile(r"^[-*]\s+(.+?)$", re.MULTILINE)
+        tag_re = re.compile(r"\[([^\]]+)\]\s*$")
+        bold_q_re = re.compile(r"^\*\*([^*]+)\*\*\s*(.*)$")
+        for bm in bullet_re.finditer(decision_body):
+            text = bm.group(1).strip()
+            tag = ""
+            tm = tag_re.search(text)
+            if tm:
+                tag = tm.group(1).strip()
+                text = text[: tm.start()].rstrip()
+            qm = bold_q_re.match(text)
+            if qm:
+                question = qm.group(1).strip()
+                answer = qm.group(2).strip()
+            else:
+                question = ""
+                answer = text
+            decision_context.append(
+                {"question": question, "answer": answer, "tag": tag}
+            )
+
+    epic_section: dict[str, Any] = {
+        "id": epic_data["id"],
+        "title": epic_data.get("title", ""),
+        "status": epic_data.get("status", ""),
+        "branch_name": epic_data.get("branch_name") or "",
+        "spec_path": epic_data.get("spec_path", ""),
+        "created_at": epic_data.get("created_at", ""),
+        "spec_sections": {
+            "goal_and_context": goal_and_context,
+            "architecture_overview": architecture_overview,
+            "acceptance_criteria": acceptance_criteria,
+            "boundaries": boundaries,
+            "decision_context": decision_context,
+            "open_questions": open_questions,
+        },
+    }
+
+    # --- Tasks ---
+    tasks_dir = flow_dir / TASKS_DIR
+    task_entries: list[dict[str, Any]] = []
+    if tasks_dir.exists():
+        for task_file in sorted(tasks_dir.glob(f"{epic_id}.*.json")):
+            task_id = task_file.stem
+            if not is_task_id(task_id):
+                continue
+            try:
+                task_data = load_task_with_state(task_id, use_json=use_json)
+            except SystemExit:
+                # load_task_with_state may exit on its own — re-raise.
+                raise
+            if "id" not in task_data:
+                continue
+
+            # Read the task spec markdown to get satisfies + done_summary.
+            task_spec_path = tasks_dir / f"{task_id}.md"
+            task_spec_text = ""
+            if task_spec_path.exists():
+                try:
+                    task_spec_text = task_spec_path.read_text(encoding="utf-8")
+                except OSError:
+                    task_spec_text = ""
+            satisfies = _export_parse_task_satisfies(task_spec_text)
+            done_summary = get_task_section(task_spec_text, "## Done summary")
+            evidence_runtime = task_data.get("evidence") or {}
+            commits_raw = evidence_runtime.get("commits") or []
+            tests_raw = evidence_runtime.get("tests") or []
+            files_touched_raw = evidence_runtime.get("files_touched") or []
+            evidence_block = {
+                "commits": [str(x) for x in commits_raw if x],
+                "tests": [str(x) for x in tests_raw if x],
+                "files_touched": [str(x) for x in files_touched_raw if x],
+            }
+
+            task_entries.append(
+                {
+                    "id": task_data["id"],
+                    "status": task_data.get("status", "todo"),
+                    "title": task_data.get("title", ""),
+                    "satisfies": satisfies,
+                    "done_summary": done_summary,
+                    "evidence": evidence_block,
+                }
+            )
+
+    # Sort tasks by numeric suffix.
+    def _task_sort_key(t: dict[str, Any]) -> int:
+        _, num = parse_id(t["id"])
+        return num if num is not None else 0
+
+    task_entries.sort(key=_task_sort_key)
+
+    # tasks_summary
+    total = len(task_entries)
+    done_count = sum(1 for t in task_entries if t["status"] == "done")
+    open_count = total - done_count
+    covered_rids: set[str] = set()
+    for t in task_entries:
+        if t["status"] == "done":
+            for rid in t.get("satisfies", []):
+                covered_rids.add(rid)
+    spec_rids = [c["id"] for c in acceptance_criteria]
+    uncovered = [rid for rid in spec_rids if rid not in covered_rids]
+    tasks_summary = {
+        "total": total,
+        "done": done_count,
+        "open": open_count,
+        "uncovered_r_ids": uncovered,
+    }
+
+    # --- Memory during epic ---
+    memory_dir = flow_dir / MEMORY_DIR
+    memory_during_epic = _export_memory_during_epic(
+        memory_dir, epic_data.get("created_at")
+    )
+
+    # --- Glossary diff ---
+    glossary_changes = _export_glossary_diff(base_ref, merge_base_sha, repo_root)
+
+    # --- Strategy alignment ---
+    strategy_alignment = _export_strategy_alignment(spec_text)
+
+    # --- Diff summary ---
+    diff_summary = _export_diff_summary(base_ref, merge_base_sha, repo_root)
+
+    # --- Review receipts + deferred findings ---
+    branch_slug = _branch_slug(epic_data.get("branch_name") or None)
+    review_receipts, deferred_findings = _export_review_receipts(
+        repo_root, branch_slug
+    )
+
+    payload: dict[str, Any] = {
+        "epic": epic_section,
+        "tasks": task_entries,
+        "tasks_summary": tasks_summary,
+        "memory_during_epic": memory_during_epic,
+        "glossary_changes": glossary_changes,
+        "strategy_alignment": strategy_alignment,
+        "diff_summary": diff_summary,
+        "review_receipts": review_receipts,
+        "deferred_findings": deferred_findings,
+    }
+
+    if section is not None:
+        payload = _export_filter_section(payload, section)
+
+    if use_json:
+        json_output(payload)
+        return
+
+    # Text mode: compact summary so humans can sanity-check the aggregate
+    # without piping through `jq`.
+    print(f"Epic: {epic_id}")
+    if "epic" in payload:
+        print(f"  Title: {epic_section['title']}")
+        print(f"  Status: {epic_section['status']}")
+        print(
+            f"  R-IDs: {len(acceptance_criteria)} "
+            f"({len(uncovered)} uncovered)"
+        )
+    if "tasks" in payload:
+        print(
+            f"Tasks: {tasks_summary['total']} total, "
+            f"{tasks_summary['done']} done, {tasks_summary['open']} open"
+        )
+        if uncovered:
+            print(f"  Uncovered R-IDs: {', '.join(uncovered)}")
+    if "memory_during_epic" in payload:
+        print(
+            f"Memory during epic: "
+            f"{len(memory_during_epic['decisions'])} decisions, "
+            f"{len(memory_during_epic['bugs'])} bugs, "
+            f"{len(memory_during_epic['architecture_patterns'])} patterns"
+        )
+    if "glossary_changes" in payload:
+        print(
+            f"Glossary: +{len(glossary_changes['added'])} added, "
+            f"-{len(glossary_changes['removed'])} removed"
+        )
+    if "strategy_alignment" in payload:
+        print(
+            f"Strategy: {len(strategy_alignment['tracks_served'])} tracks, "
+            f"{len(strategy_alignment['drift_flagged'])} drift"
+        )
+    if "diff_summary" in payload:
+        print(
+            f"Diff: {diff_summary['files_changed']} files, "
+            f"+{diff_summary['lines_added']}/-{diff_summary['lines_removed']} "
+            f"across {len(diff_summary['modules_touched'])} modules"
+        )
+        if diff_summary["security_sensitive_paths"]:
+            print(
+                f"  Security-sensitive: "
+                f"{len(diff_summary['security_sensitive_paths'])} path(s)"
+            )
+    if "deferred_findings" in payload:
+        total_deferred = sum(len(d.get("items", [])) for d in deferred_findings)
+        if total_deferred:
+            print(f"Deferred review findings: {total_deferred}")
+
+
 def cmd_task_set_backend(args: argparse.Namespace) -> None:
     """Set task backend specs for impl/review/sync."""
     if not ensure_flow_exists():
@@ -17402,6 +18638,36 @@ def main() -> None:
     )
     p_epic_set_backend.add_argument("--json", action="store_true", help="JSON output")
     p_epic_set_backend.set_defaults(func=cmd_epic_set_backend)
+
+    # epic export-cognitive-aid (fn-42.1)
+    p_epic_export_cognitive_aid = epic_sub.add_parser(
+        "export-cognitive-aid",
+        help=(
+            "Aggregate epic spec, tasks, memory, glossary diff, strategy "
+            "alignment, diff stats, and review receipts into one structured "
+            "payload (consumed by /flow-next:make-pr)."
+        ),
+    )
+    p_epic_export_cognitive_aid.add_argument(
+        "id", help="Epic ID (e.g., fn-1, fn-1-add-auth)"
+    )
+    p_epic_export_cognitive_aid.add_argument(
+        "--base",
+        required=True,
+        help="Base ref to diff against (e.g., origin/main, main)",
+    )
+    p_epic_export_cognitive_aid.add_argument(
+        "--section",
+        choices=list(EXPORT_COGNITIVE_AID_SECTIONS),
+        help=(
+            "Filter output to one section (epic|tasks|memory|glossary|"
+            "strategy|diff|reviews). Without --section returns the full payload."
+        ),
+    )
+    p_epic_export_cognitive_aid.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_epic_export_cognitive_aid.set_defaults(func=cmd_epic_export_cognitive_aid)
 
     # task create
     p_task = subparsers.add_parser("task", help="Task commands")
