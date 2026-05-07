@@ -61,9 +61,8 @@ This is the early proof point: if the aggregator can't be cleanly assembled from
 - [ ] No regressions in existing flowctl smoke (`ci_test.sh`, `prospect_smoke_test.sh`, etc.).
 
 ## Done summary
-
-_(populated by /flow-next:work after task completes)_
-
+Added `flowctl epic export-cognitive-aid <epic-id> --base <ref> [--section <name>] [--json]` subcommand that aggregates 9 input streams (epic spec with R-IDs, per-task done_summary+evidence, decisions/bug/architecture-patterns memory, glossary diff, strategy alignment, diff stats with cross-module + public-export + security-sensitive detection, review receipts + deferred findings) into one structured JSON payload for `/flow-next:make-pr` to consume. Pure deterministic plumbing per the architecture rule. All 364 smoke-test cases pass; exit codes 1/2/3 verified for missing/invalid/corrupt cases; graceful degradation works in fresh repos.
 ## Evidence
-
-_(populated by /flow-next:work after task completes)_
+- Commits: 35eb2d719d3bc53ed9813306d95020b959b6de67
+- Tests: plugins/flow-next/scripts/ci_test.sh (57 passed), cd /tmp && plugins/flow-next/scripts/smoke_test.sh (130 passed), cd /tmp && plugins/flow-next/scripts/audit_smoke_test.sh (41 passed), cd /tmp && plugins/flow-next/scripts/strategy_smoke_test.sh (62 passed), cd /tmp && plugins/flow-next/scripts/glossary_smoke_test.sh (80 passed), cd /tmp && plugins/flow-next/scripts/prospect_smoke_test.sh (94 passed), manual: flowctl epic export-cognitive-aid fn-42-... --base main --json (full payload, 9 top-level keys), manual: --section diff/memory/epic/etc filters work, manual: exit codes verified - 1 missing epic, 2 invalid args, 3 corrupt JSON, manual: graceful degradation in fresh repo with no STRATEGY/GLOSSARY/memory
+- PRs:
