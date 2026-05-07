@@ -403,6 +403,55 @@ This is the one section that doesn't honor the §2.6 omission rule — even a ti
 
 **File path rule.** Every path in a Critical changes bullet must appear in `diff_summary.files[]`. The agent never invents paths from the spec or from imagined structure. If a tier wants to surface a file that isn't in `diff_summary.files[]`, that bullet is dropped — not approximated.
 
+### 2.4b — Linkable file references (load-bearing — applies to Critical changes, Where to look, R-ID coverage, anywhere a path appears)
+
+**Validated empirically on PR #131 during fn-42 dogfood.** Bare-code-span paths (`` `plugins/flow-next/scripts/flowctl.py` ``) are NOT auto-linked by GitHub in PR descriptions — they render as inline code only. A reviewer who wants to inspect the file has to open a new tab and navigate manually. Make every file reference a real link.
+
+**Required wrapping for any file path in the body:**
+
+| What you have | How to render it |
+|---------------|------------------|
+| Bare path (`<path>`) | `` [`<path>`](<path>) `` — e.g. `` [`plugins/flow-next/scripts/flowctl.py`](plugins/flow-next/scripts/flowctl.py) `` |
+| Path + line number | `` [`<path>:L<n>`](https://github.com/<owner>/<repo>/blob/<head-branch>/<path>#L<n>) `` |
+| Path + line range | `` [`<path>:L<a>-L<b>`](https://github.com/<owner>/<repo>/blob/<head-branch>/<path>#L<a>-L<b>) `` |
+
+**Why:** GitHub auto-resolves *relative paths* in PR description markdown to the repo's default branch (the head branch in PR context). So `` [`x.md`](path/to/x.md) `` works without absolute URL. For **line refs**, relative paths can't carry a `#L<n>` anchor that GitHub recognizes — full `https://github.com/<owner>/<repo>/blob/<branch>/<path>#L<n>` is the only form that works.
+
+**Owner/repo and head branch lookup (the host agent runs this once per PR):**
+
+```bash
+GH_NAMEWITHOWNER=$(gh repo view --json nameWithOwner --jq .nameWithOwner) # "owner/repo"
+GH_HEAD_BRANCH=$(git branch --show-current) # head ref name
+BLOB_BASE="https://github.com/${GH_NAMEWITHOWNER}/blob/${GH_HEAD_BRANCH}"
+# Then: any line ref → ${BLOB_BASE}/${path}#L${n}
+```
+
+If `gh repo view` fails (no remote, missing auth), the agent **omits line numbers** (drops `:L<n>` from the reference) rather than emit a broken link. Bare relative path links still work.
+
+**Where this applies:**
+
+- **§2.3 R-ID coverage table** — task ids already linked; commit SHAs already linked; the *file path column* (when present in evidence) follows this rule.
+- **§2.4 Critical changes** — every path in a bullet is wrapped. `` `<path>` `` alone is forbidden in this section.
+- **§2.12 Where to look** (fn-42.4) — every file:line reference uses the blob URL form.
+- **Decisions made** (fn-42.4) — every memory entry id already linked; if the entry references a code path, that path follows this rule.
+- **Mermaid prose summary** (§3 / fn-42.5) — paths in the prose paragraph above each codefence follow this rule. Mermaid node labels themselves CANNOT carry markdown links (mermaid renders labels as plain text), so paths inside diagrams stay bare.
+
+**One bare exception:** plain `path` strings inside the structured-input citations like `diff_summary.files[]` or `epic.spec_sections.acceptance_criteria` are JSON field references, not user-facing paths. Those stay as inline code (`` `diff_summary.files[]` ``) without linking.
+
+**Anti-pattern (caught on PR #131 dogfood):**
+
+```markdown
+- **Architecture:** `plugins/flow-next/scripts/flowctl.py` `cmd_epic_export_cognitive_aid` (~line 11508) — Does the schema cover...
+```
+
+The path renders as inline code with no link; the reviewer copies and pastes into a new tab. Correct form:
+
+```markdown
+- **Architecture:** [`plugins/flow-next/scripts/flowctl.py:L11508`](https://github.com/owner/repo/blob/branch/plugins/flow-next/scripts/flowctl.py#L11508) `cmd_epic_export_cognitive_aid` — Does the schema cover...
+```
+
+One click takes the reviewer to the exact line.
+
 ### 2.5 — Hallucination guardrails (load-bearing for fn-42.3)
 
 Phase 2 body rendering is the surface where hallucination risk peaks: the agent has rich structured input AND open-ended natural-language output, which is exactly the shape that produces fluent-sounding fabrication. These rules are load-bearing — every claim in the rendered body must trace back to a structured field in the export payload. **Honest "unclear" / "uncovered" beats plausible "wrong".**
