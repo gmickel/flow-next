@@ -11301,31 +11301,44 @@ def _export_find_glossaries_downward(repo_root: Path) -> list[Path]:
     found: list[Path] = []
     skip_dirs = {".git", "node_modules", "vendor", "third_party", "dist", "build", ".next"}
     repo_root_resolved = repo_root.resolve()
+    repo_root_str = str(repo_root_resolved)
 
-    for path in repo_root_resolved.rglob(GLOSSARY_FILE):
+    # Use os.walk with in-place dirnames pruning so massive vendored trees
+    # (node_modules, vendor, etc.) are never descended into. rglob() would
+    # walk the entire subtree before the post-filter could reject matches —
+    # O(N) on the full repo even when 99% of N is junk in monorepos.
+    for dirpath, dirnames, filenames in os.walk(repo_root_str, topdown=True):
+        # Compute depth of current dir relative to repo root.
         try:
-            rel_parts = path.relative_to(repo_root_resolved).parts
+            rel_dir = Path(dirpath).relative_to(repo_root_resolved)
         except ValueError:
+            dirnames[:] = []
             continue
-        # Depth cap: relative parts include the filename, so directories ==
-        # len(parts) - 1.
-        if len(rel_parts) - 1 > GLOSSARY_WALK_MAX_DEPTH:
+        rel_dir_parts = rel_dir.parts if rel_dir != Path(".") else ()
+        depth = len(rel_dir_parts)
+
+        # Depth cap: don't descend further than GLOSSARY_WALK_MAX_DEPTH dirs deep.
+        if depth >= GLOSSARY_WALK_MAX_DEPTH:
+            dirnames[:] = []
             continue
-        # Skip vendored / generated dirs anywhere in the path.
-        if any(part in skip_dirs for part in rel_parts[:-1]):
-            continue
-        # Skip the codex mirror (generated; same glossary content as canonical).
-        rel_posix = "/".join(rel_parts)
-        if rel_posix.startswith("plugins/flow-next/codex/"):
-            continue
-        # Skip .flow/memory (has its own export channel).
-        if rel_posix.startswith(".flow/memory/"):
-            continue
-        try:
-            if path.is_file():
-                found.append(path)
-        except OSError:
-            continue
+
+        # Prune skip_dirs in place so os.walk never recurses into them.
+        dirnames[:] = [d for d in dirnames if d not in skip_dirs]
+
+        # Prune codex mirror and .flow/memory subtrees by exact prefix match.
+        rel_dir_posix = rel_dir.as_posix() if rel_dir != Path(".") else ""
+        if rel_dir_posix == "plugins/flow-next" and "codex" in dirnames:
+            dirnames.remove("codex")
+        if rel_dir_posix == ".flow" and "memory" in dirnames:
+            dirnames.remove("memory")
+
+        if GLOSSARY_FILE in filenames:
+            candidate = Path(dirpath) / GLOSSARY_FILE
+            try:
+                if candidate.is_file():
+                    found.append(candidate)
+            except OSError:
+                continue
 
     found.sort()
     return found
