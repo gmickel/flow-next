@@ -64,9 +64,8 @@ Can run early (depends only on Task 1). Body-rendering assertions can be skipped
 - [ ] Test registered in `ci_test.sh` matrix or equivalent so CI catches regressions.
 
 ## Done summary
-
-_(populated by /flow-next:work after task completes)_
-
+Added `plugins/flow-next/scripts/make-pr_smoke_test.sh` with 11 test cases (67 assertions, ~7s runtime) covering `flowctl epic export-cognitive-aid` aggregator (Task 1) plus skill body-rendering / `--dry-run` markers (Tasks 3-6 — already on disk). Fixture builds a real git repo with cross-module imports, decision/bug/architecture-patterns memory entries, GLOSSARY.md diff (BaseTerm vs FixtureTerm), populated STRATEGY.md, and a deferred-review-finding sink. Registered in `.github/workflows/test-flow-next.yml` matrix (ubuntu/macos/windows). All assertions pass.
 ## Evidence
-
-_(populated by /flow-next:work after task completes)_
+- Commits: aaac62f21ed40c969b8de62ee45210a536030451
+- Tests: bash plugins/flow-next/scripts/make-pr_smoke_test.sh (67 assertions, ~7s), python3 -m py_compile plugins/flow-next/scripts/flowctl.py
+- PRs:
