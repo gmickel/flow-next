@@ -1285,6 +1285,17 @@ fi
 Reached only after the §4.5 gate cleared (user picked `create`, or Ralph skipped the gate). `git push -u origin HEAD` first; **then** wait one second (cli/cli #2691 — GitHub's API trails the git protocol push by tens to hundreds of milliseconds, with the worst observed lag in single-digit seconds). After the sleep, run `gh pr create` inside a 3-attempt retry loop that catches **only** the eventual-consistency error class. Other errors (auth, body too long, PR already exists) fail fast.
 
 ```bash
+# Resolve current branch BEFORE push. `gh pr create --head` needs an explicit
+# branch name (Phase 0's PHASE0_CONTEXT.branch is JSON-only and not exported as
+# a shell var here), and a detached HEAD has no branch to push or open a PR
+# against — fail fast with a clear message rather than letting `gh` produce a
+# cryptic "Head sha can't be blank" error after the push.
+HEAD_BRANCH=$(git branch --show-current)
+if [[ -z "$HEAD_BRANCH" ]]; then
+  echo "Error: detached HEAD or empty branch name; cannot create PR. Check out a branch first." >&2
+  exit 1
+fi
+
 # Push branch. We don't pre-check `git rev-parse @{push}` — the cost of a redundant
 # push (zero-byte upload) is much smaller than the bug surface of a "skipped because
 # we thought it was already pushed but it actually wasn't" path.
@@ -1344,7 +1355,7 @@ fi
 
 **`gh pr create` has NO `--json` flag** (verified by docs-scout and the `gh pr create --help` output). The PR URL lands on stdout as a single line; capture via `PR_URL=$(...)`. Don't try to pipe through `jq`.
 
-`HEAD_BRANCH` resolves to the value of `git -C "$REPO_ROOT" branch --show-current` captured during Phase 0 (`PHASE0_CONTEXT.branch`). Passing `--head` explicitly is defensive — `gh` defaults to the current branch when `--head` is omitted, but explicit beats implicit when the worktree might be in detached-HEAD or the user ran the skill from inside a git submodule.
+`HEAD_BRANCH` is assigned at the top of §4.6 via `git branch --show-current` and validated non-empty before the push (matches the value of `PHASE0_CONTEXT.branch` from Phase 0, but resolved fresh in shell scope so the snippet is self-contained — `PHASE0_CONTEXT` is JSON, not exported as a shell var). Passing `--head` explicitly is defensive — `gh` defaults to the current branch when `--head` is omitted, but explicit beats implicit when the worktree might be in detached-HEAD or the user ran the skill from inside a git submodule. The detached-HEAD validation runs before push so the failure mode is "no branch, no push" rather than "push, then fail at gh pr create with a cryptic empty-`--head` error."
 
 ### 4.7 — Failure recovery hints
 
@@ -1363,7 +1374,7 @@ When `gh pr create` fails after the retry loop is exhausted, the skill emits man
 - Body delivered via `--body-file` (§4.3) — mktemp + cleanup trap. Heredoc form documented as anti-pattern with cli/cli #29619 citation.
 - Body length cap (65,000 chars target) enforced (§4.4) via truncation cascade: drop file list → trim TL;DR → collapse mermaid → spill to `.flow/pr-bodies/`.
 - Interactive `AskUserQuestion` preview (§4.5) offers `create / dry-run / edit-body / abort` BEFORE any push or `gh pr create`. Skipped under Ralph.
-- After the §4.5 gate clears (or Ralph skips it): `git push -u origin HEAD`, then `sleep 1`, then 3-attempt retry loop on eventual-consistency error class (`Head sha can't be blank` / `No commits between`). Backoff `2s, 4s, 6s`. Other errors fail fast.
+- After the §4.5 gate clears (or Ralph skips it): `HEAD_BRANCH=$(git branch --show-current)` resolved + validated non-empty (rejects detached HEAD), then `git push -u origin HEAD`, then `sleep 1`, then 3-attempt retry loop on eventual-consistency error class (`Head sha can't be blank` / `No commits between`). Backoff `2s, 4s, 6s`. Other errors fail fast.
 - Failure recovery hints (§4.7) printed to stderr before exit on each error class.
 
 ---
