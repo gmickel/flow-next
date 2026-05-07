@@ -54,9 +54,8 @@ Phase 2 body context-section rendering: Decisions made, Memory left behind, Glos
 - [ ] No code snippets in workflow.md that would actually generate sections — prose tells host agent WHAT to render.
 
 ## Done summary
-
-_(populated by /flow-next:work after task completes)_
-
+Wrote Phase 2 (cont) body context-section prose for /flow-next:make-pr — five sections (Decisions / Memory / Glossary-strategy / Open items / Where to look) as read-only mirrors of the export-cognitive-aid payload fields, each with explicit field-name references, omission rules, and "What this section MUST NOT do" callouts. Where-to-look uses questions (not labels) across 5 reviewer-focus categories per practice-scout finding.
 ## Evidence
-
-_(populated by /flow-next:work after task completes)_
+- Commits: 0bbe8c1dd83b151d21fb8350fe1bc01a2ded491d
+- Tests: python3 sanity check on workflow.md section ordering (15 sections 2.0-2.14, sorted, no dupes), balanced code fences in workflow.md (28 blocks) and phases.md (0), R17 DDD vocabulary guard (clean), R19 strategy-doc fluff guard (clean), no canonical-leak of request_user_input/spawn_agent/ask_user in skill prose
+- PRs:
