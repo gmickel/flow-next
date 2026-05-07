@@ -1,0 +1,18 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-07T11:11:32.057821Z",
+  "depends_on": [
+    "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.3",
+    "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.4",
+    "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.5"
+  ],
+  "epic": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid",
+  "id": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.6",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-42-flow-nextmake-pr-pr-as-cognitive-aid.6.md",
+  "status": "todo",
+  "title": "Phase 4 push + gh pr create + flag handling (--draft / --ready / --dry-run / --memory / Ralph)",
+  "updated_at": "2026-05-07T11:16:22.211670Z"
+}

@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-07T11:11:31.260111Z",
+  "depends_on": [],
+  "epic": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid",
+  "id": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.1",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-42-flow-nextmake-pr-pr-as-cognitive-aid.1.md",
+  "status": "todo",
+  "title": "flowctl epic export-cognitive-aid plumbing (deterministic Python aggregator)",
+  "updated_at": "2026-05-07T11:12:31.676571Z"
+}

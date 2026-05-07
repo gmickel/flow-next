@@ -459,32 +459,32 @@ No schema changes. No new memory categories. No new agent definitions.
 
 | R-ID | Task |
 |------|------|
-| R1  | fn-42.M (TBD — populate via /flow-next:plan) |
-| R2  | fn-42.M (TBD) |
-| R3  | fn-42.M (TBD) |
-| R4  | fn-42.M (TBD) |
-| R5  | fn-42.M (TBD) |
-| R6  | fn-42.M (TBD) |
-| R7  | fn-42.M (TBD) |
-| R8  | fn-42.M (TBD) |
-| R9  | fn-42.M (TBD) |
-| R10 | fn-42.M (TBD) |
-| R11 | fn-42.M (TBD) |
-| R12 | fn-42.M (TBD) |
-| R13 | fn-42.M (TBD) |
-| R14 | fn-42.M (TBD) |
-| R15 | fn-42.M (TBD) |
-| R16 | fn-42.M (TBD) |
-| R17 | fn-42.M (TBD) |
-| R18 | fn-42.M (TBD) |
-| R19 | fn-42.M (TBD) |
-| R20 | fn-42.M (TBD) |
-| R21 | fn-42.M (TBD) |
-| R22 | fn-42.M (TBD) |
-| R23 | fn-42.M (TBD) |
-| R24 | fn-42.M (TBD) |
-| R25 | fn-42.M (TBD) |
-| R26 | fn-42.M (TBD) |
-| R27 | fn-42.M (TBD) |
-| R28 | fn-42.M (TBD) |
-| R29 | fn-42.M (TBD) |
+| R1  | fn-42.2 (skill scaffold + Phase 0) |
+| R2  | fn-42.2 |
+| R3  | fn-42.2 |
+| R4  | fn-42.1 (flowctl plumbing — early proof point) |
+| R5  | fn-42.1 |
+| R6  | fn-42.1 |
+| R7  | fn-42.3 (body header sections) |
+| R8  | fn-42.3 |
+| R9  | fn-42.3 |
+| R10 | fn-42.5 (mermaid generation + ref file) |
+| R11 | fn-42.5 |
+| R12 | fn-42.5 |
+| R13 | fn-42.5 |
+| R14 | fn-42.5 |
+| R15 | fn-42.4 (body context sections) |
+| R16 | fn-42.4 |
+| R17 | fn-42.4 |
+| R18 | fn-42.4 |
+| R19 | fn-42.4 |
+| R20 | fn-42.6 (push + create + flag handling) |
+| R21 | fn-42.6 |
+| R22 | fn-42.6 |
+| R23 | fn-42.6 |
+| R24 | fn-42.6 |
+| R25 | fn-42.6 |
+| R26 | fn-42.8 (cross-platform sync) |
+| R27 | fn-42.2 |
+| R28 | fn-42.9 (documentation) |
+| R29 | fn-42.7 (smoke test) |

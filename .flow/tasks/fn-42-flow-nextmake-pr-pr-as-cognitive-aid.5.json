@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-07T11:11:31.902608Z",
+  "depends_on": [
+    "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.2"
+  ],
+  "epic": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid",
+  "id": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.5",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-42-flow-nextmake-pr-pr-as-cognitive-aid.5.md",
+  "status": "todo",
+  "title": "Phase 3 mermaid generation + mermaid-rules.md ref file",
+  "updated_at": "2026-05-07T11:15:29.425918Z"
+}

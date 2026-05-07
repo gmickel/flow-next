@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-07T11:11:31.744422Z",
+  "depends_on": [
+    "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.2"
+  ],
+  "epic": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid",
+  "id": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.4",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-42-flow-nextmake-pr-pr-as-cognitive-aid.4.md",
+  "status": "todo",
+  "title": "Phase 2 body context sections: Decisions, Memory, Glossary/strategy, Open items, Where to look",
+  "updated_at": "2026-05-07T11:14:48.395093Z"
+}

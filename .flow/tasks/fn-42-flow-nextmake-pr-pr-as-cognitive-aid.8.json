@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-07T11:11:32.377958Z",
+  "depends_on": [
+    "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.6"
+  ],
+  "epic": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid",
+  "id": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.8",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-42-flow-nextmake-pr-pr-as-cognitive-aid.8.md",
+  "status": "todo",
+  "title": "Cross-platform sync: scripts/sync-codex.sh entry + REQUIRED_OPENAI_YAML_SKILLS + regenerate codex/",
+  "updated_at": "2026-05-07T11:17:43.875565Z"
+}
