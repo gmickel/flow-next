@@ -56,9 +56,8 @@ Scaffold the new skill at `plugins/flow-next/skills/flow-next-make-pr/` (4 files
 - [ ] Skill prose includes the explicit hallucination-guardrail callout (10 mitigations from practice-scout findings — folded into Task 3 spec for the body-rendering side, but Phase 0 prose includes the meta-rule: "every claim in the body must trace to a structured field in the export-cognitive-aid payload — never fabricate file paths, SHAs, R-ID attributions, or 'why' reasoning").
 
 ## Done summary
-
-_(populated by /flow-next:work after task completes)_
-
+Scaffolded the `/flow-next:make-pr` skill (SKILL.md + workflow.md + phases.md) plus the slash command file, with Phase 0 pre-flight fully specified: gh install/auth check, epic resolution from arg or `.flow/epics/*.json` `branch_name` match, base-branch detection cascade, HEAD-ahead-of-base validation, all-tasks-done check, and existing-PR refusal filtered on `.state == "OPEN"` via jq. Skill is explicitly NOT Ralph-blocked per spec R24 — Ralph context is detected once in Phase 0.0 and downstream phases force `--draft` and skip the interactive preview, making this skill the autonomous-loop terminus.
 ## Evidence
-
-_(populated by /flow-next:work after task completes)_
+- Commits: 35eb2d719d3bc53ed9813306d95020b959b6de67
+- Tests: plugins/flow-next/scripts/ci_test.sh (57 passed), cd /tmp && plugins/flow-next/scripts/smoke_test.sh (130 passed), cd /tmp && plugins/flow-next/scripts/audit_smoke_test.sh (41 passed), cd /tmp && plugins/flow-next/scripts/strategy_smoke_test.sh (62 passed), cd /tmp && plugins/flow-next/scripts/glossary_smoke_test.sh (80 passed), cd /tmp && plugins/flow-next/scripts/prospect_smoke_test.sh (94 passed), manual: flowctl epic export-cognitive-aid fn-42-... --base main --json (full payload, 9 top-level keys), manual: --section diff/memory/epic/etc filters work, manual: exit codes verified - 1 missing epic, 2 invalid args, 3 corrupt JSON, manual: graceful degradation in fresh repo with no STRATEGY/GLOSSARY/memory
+- PRs:
