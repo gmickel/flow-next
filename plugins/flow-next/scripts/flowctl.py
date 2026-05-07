@@ -11282,16 +11282,66 @@ def _export_detect_public_exports(unified_diff: str) -> list[dict[str, Any]]:
     ]
 
 
+def _export_find_glossaries_downward(repo_root: Path) -> list[Path]:
+    """Find every `GLOSSARY.md` within the repo (downward walk).
+
+    The flow-next glossary model supports glossaries at the repo root **and
+    in any subdirectory** (CLAUDE.md "Project glossary" section). For PR
+    export, we need the full set so subdirectory-glossary deltas (e.g.
+    `apps/web/GLOSSARY.md`) surface in `glossary_changes`. The ancestor-walk
+    helper `find_all_glossaries(repo_root)` only returns the root file —
+    not what we want here.
+
+    Skips the same vendored / generated prefixes the triage classifier
+    skips (`node_modules/`, `vendor/`, `third_party/`, `dist/`, `build/`,
+    `.next/`, plugins/flow-next/codex/), plus `.git/` and `.flow/memory/`
+    (memory has its own export channel). Capped at
+    `GLOSSARY_WALK_MAX_DEPTH` levels deep as a defensive bound.
+    """
+    found: list[Path] = []
+    skip_dirs = {".git", "node_modules", "vendor", "third_party", "dist", "build", ".next"}
+    repo_root_resolved = repo_root.resolve()
+
+    for path in repo_root_resolved.rglob(GLOSSARY_FILE):
+        try:
+            rel_parts = path.relative_to(repo_root_resolved).parts
+        except ValueError:
+            continue
+        # Depth cap: relative parts include the filename, so directories ==
+        # len(parts) - 1.
+        if len(rel_parts) - 1 > GLOSSARY_WALK_MAX_DEPTH:
+            continue
+        # Skip vendored / generated dirs anywhere in the path.
+        if any(part in skip_dirs for part in rel_parts[:-1]):
+            continue
+        # Skip the codex mirror (generated; same glossary content as canonical).
+        rel_posix = "/".join(rel_parts)
+        if rel_posix.startswith("plugins/flow-next/codex/"):
+            continue
+        # Skip .flow/memory (has its own export channel).
+        if rel_posix.startswith(".flow/memory/"):
+            continue
+        try:
+            if path.is_file():
+                found.append(path)
+        except OSError:
+            continue
+
+    found.sort()
+    return found
+
+
 def _export_glossary_diff(base_ref: str, merge_base_sha: str, repo_root: Path) -> dict[str, Any]:
     """Compute glossary added/removed terms vs the merge base.
 
-    Walks every `GLOSSARY.md` reachable from cwd via `find_all_glossaries`,
-    diffs the head text vs `git show <merge_base>:<rel_path>` (when the
-    file existed at base). Empty diff or missing files → `{"added": [],
-    "removed": [], "renamed": []}`.
+    Walks every `GLOSSARY.md` within the repo (downward via
+    `_export_find_glossaries_downward`), diffs the head text vs
+    `git show <merge_base>:<rel_path>` (when the file existed at base).
+    Empty diff or missing files → `{"added": [], "removed": [],
+    "renamed": []}`.
     """
     result: dict[str, Any] = {"added": [], "removed": [], "renamed": []}
-    glossaries = find_all_glossaries(repo_root)
+    glossaries = _export_find_glossaries_downward(repo_root)
     if not glossaries:
         return result
 

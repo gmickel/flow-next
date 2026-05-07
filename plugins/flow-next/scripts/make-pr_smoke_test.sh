@@ -442,6 +442,21 @@ EOF
     git add -A
     git commit -m "docs: add FixtureTerm to GLOSSARY.md" -q >/dev/null
 
+    # Nested subdirectory glossary added entirely on the feature branch
+    # (PR #131 review reproducer): subdir glossary deltas must surface in
+    # `glossary_changes.added[]` — `find_all_glossaries(repo_root)` walks
+    # ancestors of repo_root and returns just the root, missing this file.
+    mkdir -p apps/web
+    cat > apps/web/GLOSSARY.md <<'EOF'
+# Glossary
+
+## NestedTerm
+
+A term defined only in the apps/web subdirectory glossary.
+EOF
+    git add -A
+    git commit -m "docs: add apps/web/GLOSSARY.md (nested glossary)" -q >/dev/null
+
     # Delete the seeded public-export file so the diff exercises the
     # `+++ /dev/null` deletion path in `_export_detect_public_exports`.
     git rm -q src/legacy_pkg/__init__.py
@@ -800,6 +815,21 @@ if [[ "$T12_DEL_FOUND" == "True" ]]; then
     && ok "T12" "added[] empty for deleted file" \
     || fail "T12" "added[] should be [] for deleted file, got $T12_ADDED"
 fi
+
+# =============================================================================
+# T13: Nested-subdir glossary deltas surface in glossary_changes
+# =============================================================================
+echo -e "${YELLOW}--- T13: nested apps/web/GLOSSARY.md surfaces in glossary_changes.added ---${NC}"
+# The feature branch adds `apps/web/GLOSSARY.md` (with `NestedTerm`) entirely
+# after the base commit. Pre-fix: `find_all_glossaries(repo_root)` only walks
+# ancestors of repo_root and returns the root file, so the nested glossary's
+# new term is silently dropped. Post-fix: downward repo walk picks up every
+# `GLOSSARY.md` and `NestedTerm` shows up in `glossary_changes.added[]`.
+
+T13_HAS_NESTED="$(json_get "$T1_OUT" "any('NestedTerm' in (a.get('term') or '') for a in d['glossary_changes']['added'])")"
+[[ "$T13_HAS_NESTED" == "True" ]] \
+  && ok "T13" "'NestedTerm' from apps/web/GLOSSARY.md present in glossary_changes.added" \
+  || fail "T13" "'NestedTerm' missing — nested subdir glossary not diffed"
 
 # =============================================================================
 # Sanity: verify nothing leaked outside $TEST_DIR.
