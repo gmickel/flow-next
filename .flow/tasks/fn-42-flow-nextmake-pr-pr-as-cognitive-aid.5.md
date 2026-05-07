@@ -70,9 +70,8 @@ Phase 3 mermaid generation: trigger conditions, shape selection, hard caps, pros
 - [ ] Section omitted entirely when zero triggers fire — never an empty `## Structural changes` heading.
 
 ## Done summary
-
-_(populated by /flow-next:work after task completes)_
-
+Filled in Phase 3 (mermaid generation) of the `/flow-next:make-pr` skill: created the new `mermaid-rules.md` ref file (10 reserved words, 9 special-char escapes + decimal HTML-entity fallback, 4 shape examples, 8-item pre-emission validation checklist) and expanded `workflow.md` Phase 3 prose with the 5 trigger conditions, 3 skip rules, hard caps with collapse/group rules, shape selection per trigger, prose-summary-precedes-diagram rule (R13), pre-emission validation loop, and Phase 3-specific hallucination guardrails. Updated `phases.md` Done-when checklist and added a `mermaid-rules.md` reference to `SKILL.md`.
 ## Evidence
-
-_(populated by /flow-next:work after task completes)_
+- Commits: 0bbe8c1dd83b151d21fb8350fe1bc01a2ded491d
+- Tests: python3 sanity check on workflow.md section ordering (15 sections 2.0-2.14, sorted, no dupes), balanced code fences in workflow.md (28 blocks) and phases.md (0), R17 DDD vocabulary guard (clean), R19 strategy-doc fluff guard (clean), no canonical-leak of request_user_input/spawn_agent/ask_user in skill prose
+- PRs:
