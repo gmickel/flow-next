@@ -15,6 +15,8 @@
 
 </div>
 
+> 📖 **[Read the full docs →](plugins/flow-next/README.md)** — the main documentation. All 18 commands with reference, lifecycle workflow with mermaid diagrams, install + setup on every platform, Ralph autonomous mode, Codex / Droid / OpenCode notes, complete `flowctl` CLI reference, project glossary + strategy + decision records, memory system. **Start there if you want depth — this root page is the marketing TL;DR.**
+
 > 💬 **[Join the Discord](https://discord.gg/f3DYq8AAm5)** — discussions, updates, feature requests, bug reports
 
 ---
