@@ -57,10 +57,19 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 **fn-42.3 done when:**
 
-- [ ] PR title computed (epic title if ≤72 chars, else first sentence of Goal & Context truncated to 70 + ellipsis).
-- [ ] TL;DR rendered (≤4 bullets, derived from epic spec + done summaries).
-- [ ] R-ID coverage table renders every R-ID with: satisfying task(s), evidence commit SHA(s), ⚠️ flag if uncovered.
-- [ ] Critical changes section: ≤7 bullets, prioritized by churn / cross-module / public-interface / security-sensitive / behavior-visible. No raw code snippets.
+- [ ] Body section order locked: H1 title + summary block + TL;DR + R-ID coverage + Critical changes + (Structural changes from .5) + (Decisions / Memory / Glossary-strategy / Open items / Where to look from .4) + footer breadcrumb. Sections never reorder.
+- [ ] Title + summary block renders epic id link, branch / base, task counts, R-ID coverage ratio. Optional 2-line natural-language summary derived from `epic.spec_sections.goal_and_context` first paragraph (truncated to ≈240 chars at sentence boundary).
+- [ ] TL;DR renders 3-5 plain-language bullets sourced from `goal_and_context` first sentence + top 5 tasks by churn (their `done_summary` first sentences). Never includes R-IDs. Never quotes raw diff content. Never pads if fewer than 4 substantive changes shipped.
+- [ ] R-ID coverage table renders every R-ID from `epic.spec_sections.acceptance_criteria` in spec order (R-ID gaps preserved verbatim — never renumber). Columns exactly: `R-ID | Acceptance criterion | Task | Evidence`. Criterion text truncated to 120 chars + `…`. Task column derives ONLY from `tasks[].satisfies[]` — never inferred from titles or commit messages. Evidence column emits `[\`<sha7>\`](../../commit/<sha40>)` per commit in `tasks[].evidence.commits[]`. Uncovered → `⚠️ uncovered` + `—` evidence.
+- [ ] When `tasks_summary.uncovered_r_ids` is non-empty, table is followed by an italic explanatory sentence: `⚠️ **<N> uncovered acceptance criterion(a):** R<i>, R<j>, R<k>. Reviewer should confirm these are intentional gaps before merge.`
+- [ ] Critical changes section renders ≤7 bullets in 5-tier priority order: (1) high-churn from `diff_summary.high_churn_files[]`, (2) cross-module from `diff_summary.cross_module_changes[]`, (3) public-interface from `diff_summary.public_exports_changed[]` with `removed[]` items emitted FIRST within tier 3, (4) security-sensitive from `diff_summary.security_sensitive_paths[]`, (5) behavior-visible matching `commands/`, `routes/`, `pages/`, `app/`, `cli/`, `hooks/`, `bin/`. Hard 7-bullet cap.
+- [ ] Limited-churn fallback bullet emitted when `<5` files / `<50` LOC / no module-boundary signal / no public-export signal — Critical changes section never omitted entirely.
+- [ ] No-weakening rule honored: every `public_exports_changed[].removed` entry surfaced as "potentially breaking" / `removes \`<sym>\``. NEVER paraphrased as "non-breaking", "internal-only", "minor", or "trivial".
+- [ ] No fabricated paths: every `<path>` in body comes from `diff_summary.files[]`. No fabricated symbols: every `<symbol>` from `diff_summary.public_exports_changed[]`. No fabricated SHAs: every `<sha>` from `tasks[].evidence.commits[]`.
+- [ ] No raw diff content / code snippets in body — paths, churn, modules only.
+- [ ] All 10 hallucination guardrails (workflow.md §2.5) hold: no fabricated paths/symbols/SHAs, no "non-breaking" weakening, no copy-pasted diff content, no inflated scope, no R-ID misattribution, no stale references, no invented "why" reasoning, every claim traces to a payload field.
+- [ ] Section-omission rule (workflow.md §2.6) honored: empty content → no heading. Never empty placeholder. (Critical changes is the one exception — limited-churn fallback bullet keeps the heading present.)
+- [ ] Abort conditions (workflow.md §2.7) checked before any rendering: empty `goal_and_context` AND every task missing `done_summary` → exit 1; every R-ID uncovered → exit 1. Empty `acceptance_criteria` (zero R-IDs in spec) is NOT an abort — coverage table is omitted, body proceeds with TL;DR + Critical changes pair.
 
 **fn-42.4 done when:**
 
