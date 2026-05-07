@@ -98,9 +98,8 @@ Phase 4: push branch + `gh pr create` + flag handling. Includes the spec-amendme
 - [ ] Body length cap (65,000 chars target) with truncation order documented: drop file list → trim TL;DR → collapse mermaid → write to `.flow/pr-bodies/` + link.
 
 ## Done summary
-
-_(populated by /flow-next:work after task completes)_
-
+Phase 4 (push + gh pr create + flag handling) and Phase 5 (output + footer + --memory) implemented in workflow.md (~490 new lines) and phases.md (~30 new lines), covering --body-file delivery, the eventual-consistency retry loop (cli/cli #2691), draft/ready matrix, --dry-run short-circuit, --memory idempotency via `epic-<id>` tag, Ralph stdout shape (`PR_URL=<url>`), 10 anti-patterns, and the always-emitted footer breadcrumb (section 11 of body order).
 ## Evidence
-
-_(populated by /flow-next:work after task completes)_
+- Commits: 1e5d7f42614a07f80d787b58a2e6d971d2d8982b
+- Tests: plugins/flow-next/scripts/ci_test.sh - 57 passed, 0 failed, grep forbidden-vocab guards (R17/R19) clean across SKILL/workflow/phases
+- PRs:

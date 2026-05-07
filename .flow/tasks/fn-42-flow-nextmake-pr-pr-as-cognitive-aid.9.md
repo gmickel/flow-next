@@ -101,9 +101,8 @@ The website page is a Next.js / React component (`page.tsx`). Updates are TypeSc
 - [ ] Website page TypeScript compiles cleanly (no syntax errors in commands array / FAQS array additions).
 
 ## Done summary
-
-_(populated by /flow-next:work after task completes)_
-
+Documented /flow-next:make-pr across all 5 surfaces. CHANGELOG 0.42.0 entry, plugins/flow-next/README.md (9 update points incl. new ## PR Creation section), CLAUDE.md command list, .flow/usage.md (export-cognitive-aid examples), and ~/work/mickel.tech app/apps/flow-next/page.tsx (commands array, eyebrow 14→15, lede Fourteen→Fifteen, new "What is PR-as-cognitive-aid?" FAQ).
 ## Evidence
-
-_(populated by /flow-next:work after task completes)_
+- Commits: f2632631f2ef766b326028db9ea5f621f2f4f032, 338f59e3353f8f3a6dc756bececc5670db770980
+- Tests: plugins/flow-next/scripts/ci_test.sh, bunx tsc --noEmit (mickel.tech)
+- PRs:

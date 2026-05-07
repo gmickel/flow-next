@@ -17,11 +17,11 @@ Phase 2 body context-section rendering: Decisions made, Memory left behind, Glos
   - Glossary: `**Glossary:** added \`<term>\`, renamed \`<old>\` → \`<new>\` (<N> files), removed \`<term>\`.` Each clause omitted if empty array.
   - Strategy: `**Strategy:** served tracks \`<track-1>\`, \`<track-2>\`. <Drift note if applicable>` from `strategy_alignment.tracks_served[]` + `drift_flagged[]`.
   - Heading omitted entirely if both glossary and strategy contributions empty.
-- **Open items section** (R18): aggregate three sources:
-  - Spec `## Open Questions` block (parsed from epic spec markdown)
-  - Deferred impl-review findings from `deferred_findings[].items[]` per task
-  - Epic-review-flagged items (`epic.completion_review_status == "needs_work"` → flag with breadcrumb)
-  - Each item formatted as markdown checkbox with provenance breadcrumb: `- [ ] <item> — deferred from impl-review of fn-N.M` / `— open question from spec` / `— flagged by epic-review`
+- **Open items section** (R18): aggregate three sources: <!-- Updated by plan-sync: fn-42.1 emits deferred_findings as branch-slug-keyed sink, not per-task; review_receipts is empty in v1 -->
+  - Spec `## Open Questions` block (already parsed into payload at `epic.spec_sections.open_questions`)
+  - Deferred impl-review findings from `deferred_findings[].items[]` (v1 reads one branch-slug sink at `.flow/review-deferred/<branch-slug>.md`; items have no `task_id` attribution — provenance breadcrumb cites the branch / sink path, not a specific task)
+  - Epic-review-flagged items — read directly via `flowctl show <epic-id> --json | jq '.completion_review_status'` (NOT in the export-cognitive-aid payload; v1's `review_receipts: []` is always empty per the implementation comment in flowctl.py)
+  - Each item formatted as markdown checkbox with provenance breadcrumb: `- [ ] <item> — deferred from impl-review (branch sink)` / `— open question from spec` / `— flagged by epic-review`
   - Section omitted if all three sources empty
 - **Where to look section** (R19, refined per practice-scout): explicit reviewer-focus list, formatted as **questions** not labels. Categories:
   - **Architecture:** drawn from spec `decision_context[]`. Format: `**Architecture:** \`<file:line>\` — <one-sentence focus question, e.g. "Does the abstract base class hierarchy hold up if a fourth implementation arrives?">`
@@ -48,15 +48,14 @@ Phase 2 body context-section rendering: Decisions made, Memory left behind, Glos
 
 - [ ] `workflow.md` Phase 2 prose specifies all 5 context sections (Decisions / Memory / Glossary-strategy / Open items / Where to look) with explicit field-name references to the export-cognitive-aid payload.
 - [ ] Each section's omission rule documented: section heading omitted entirely (not left empty) when content is empty.
-- [ ] Open items section aggregates 3 sources (spec `## Open Questions`, deferred findings, epic-review-flagged) with provenance breadcrumb per item.
+- [ ] Open items section aggregates 3 sources (spec `## Open Questions` from `epic.spec_sections.open_questions`, `deferred_findings[].items[]` branch-slug sink, epic-review-flagged via `flowctl show <epic-id> --json` `.completion_review_status` — NOT from `review_receipts` which is empty in v1) with provenance breadcrumb per item.
 - [ ] Where-to-look section uses **questions** not labels for focus prompts. 5 categories documented (Architecture / Security / Business correctness / Performance / Tests). Each category's trigger condition references concrete payload signals.
 - [ ] Each section includes a "What this section MUST NOT do" callout — read-only mirror of source data, no paraphrasing or extending.
 - [ ] No code snippets in workflow.md that would actually generate sections — prose tells host agent WHAT to render.
 
 ## Done summary
-
-_(populated by /flow-next:work after task completes)_
-
+Wrote Phase 2 (cont) body context-section prose for /flow-next:make-pr — five sections (Decisions / Memory / Glossary-strategy / Open items / Where to look) as read-only mirrors of the export-cognitive-aid payload fields, each with explicit field-name references, omission rules, and "What this section MUST NOT do" callouts. Where-to-look uses questions (not labels) across 5 reviewer-focus categories per practice-scout finding.
 ## Evidence
-
-_(populated by /flow-next:work after task completes)_
+- Commits: 0bbe8c1dd83b151d21fb8350fe1bc01a2ded491d
+- Tests: python3 sanity check on workflow.md section ordering (15 sections 2.0-2.14, sorted, no dupes), balanced code fences in workflow.md (28 blocks) and phases.md (0), R17 DDD vocabulary guard (clean), R19 strategy-doc fluff guard (clean), no canonical-leak of request_user_input/spawn_agent/ask_user in skill prose
+- PRs:

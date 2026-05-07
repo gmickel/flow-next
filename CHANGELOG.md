@@ -2,6 +2,21 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 0.42.0] - 2026-05-07
+
+### Added
+- **`/flow-next:make-pr` — PR-as-cognitive-aid skill.** New eighteenth slash command closes the gap between "all tasks done" and "human reviews the PR." Five phases (pre-flight → gather → build body → mermaid → push + create) render a reviewable PR body from rich flow-next state: epic spec with R-IDs, per-task `done_summary` + evidence commits, `decisions` / bug / `architecture-patterns` memory, glossary changes, strategy alignment, deferred review findings, and the diff itself. Body sections include TL;DR, R-ID coverage table (R# → satisfying task → evidence commit), Critical changes (high-churn / cross-module / public-interface / security-sensitive / behavior-visible), Decisions, Memory references, Glossary/strategy deltas, Open items, and Where to look (reviewer-focus list). Default `--draft` if open items > 0 or under Ralph; `--ready` overrides. Uses `gh pr create --body-file` (NOT heredoc — LLM-generated markdown frequently contains characters that break heredocs and shell interpolation). NOT Ralph-blocked — PR creation is the autonomous-loop terminus, and Ralph defaults to `--draft` for human review. NO cross-model review of the PR body — each harness's own model identifies critical changes from the structured input; `/flow-next:impl-review` already covers the *code itself*, so reviewing the description too is double-counting.
+- **Mermaid codefences when diff crosses module boundaries.** Skill emits up to 3 diagrams × 12 nodes (hard caps) when changes touch ≥2 modules. Markdown codefences only — GitHub / GitLab / Gitea render natively, no external rendering pipeline. `mermaid-rules.md` ref file documents reserved words, escape patterns, shape selection, and the pre-emission validation checklist. Disable via `--no-mermaid`.
+- **`flowctl epic export-cognitive-aid <epic-id> --base <ref> --json` plumbing.** New deterministic flowctl subcommand aggregates 9 input streams (epic spec, tasks + done summaries + evidence, R-ID coverage, decisions / bug / architecture-patterns memory, glossary deltas, strategy alignment, deferred review findings, diff stats) into a single structured JSON payload. Reusable from skills + scripts; the skill consumes it as the single source of truth for body rendering.
+- **Smoke test `plugins/flow-next/scripts/make-pr_smoke_test.sh`** covering `export-cognitive-aid` JSON shape + body-rendering invariants + `--dry-run` (no push, no `gh pr create`).
+- **Codex sync regenerated.** New `flow-next-make-pr` `openai.yaml` entry (workflow tier, brand color `#3B82F6`); `REQUIRED_OPENAI_YAML_SKILLS` array updated. Canonical skill files use Claude-native `AskUserQuestion`; `sync-codex.sh` rewrites to `request_user_input` for the Codex mirror per repo convention.
+
+### Notes
+- **Why PR-as-cognitive-aid?** The framing comes from a simple observation: don't ask a human to skim a 10K-line diff — ask the agent to make those 10K lines reviewable. The PR body itself is the artefact that lets a reviewer decide *where to focus* before opening any file. flow-next already collects every input that body needs — this skill stitches them.
+- **Why no cross-model review of the body?** Each harness (Claude Code, Codex, Droid) is competent at "what looks important here?" given the rich structured input. `/flow-next:impl-review` already covers the *code itself*; running a second review on the description would be double-counting and inflate latency for no gain.
+- **Why NOT Ralph-blocked?** PR creation is the natural autonomous-loop terminus — Ralph just opened a draft PR for human review. Ralph defaults to `--draft` (human reviews on their cadence; `/flow-next:resolve-pr` handles the response loop after).
+- **Why `--body-file` not heredoc?** LLM-generated markdown frequently contains backticks, `$`, dollar-paren, and other shell-interpolation characters that mangle heredoc-passed strings. `gh pr create --body-file <path>` reads bytes verbatim from disk.
+
 ## [flow-next 0.41.1] - 2026-05-07
 
 ### Changed

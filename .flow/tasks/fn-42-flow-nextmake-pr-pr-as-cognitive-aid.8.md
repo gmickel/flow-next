@@ -57,9 +57,8 @@ Cross-platform sync: register `flow-next-make-pr` in `scripts/sync-codex.sh` (`g
 - [ ] No regressions in existing Codex mirror — diff vs pre-sync state shows only additions for make-pr (no removed/modified other skills).
 
 ## Done summary
-
-_(populated by /flow-next:work after task completes)_
-
+Registered `flow-next-make-pr` in `scripts/sync-codex.sh` (workflow-blue generate_openai_yaml call + REQUIRED_OPENAI_YAML_SKILLS entry) and regenerated `plugins/flow-next/codex/`. Skill count 22 → 23, all validations pass, Codex mirror has tool-name rewrites and FLOWCTL path patches applied; no other skills touched.
 ## Evidence
-
-_(populated by /flow-next:work after task completes)_
+- Commits: b37523771efc701277b39506d9d4d2e7292d3712
+- Tests: ./scripts/sync-codex.sh
+- PRs:

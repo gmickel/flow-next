@@ -533,6 +533,7 @@ generate_openai_yaml "flow-next-capture"   "Flow Capture"   "Synthesize conversa
 generate_openai_yaml "flow-next-strategy"  "Flow Strategy"  "Generate or update repo-root STRATEGY.md (problem, approach, personas, metrics, tracks)" "#3B82F6" false
 generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory/ entries against current code"   "#3B82F6" false
 generate_openai_yaml "flow-next-memory-migrate" "Flow Memory Migrate" "Migrate legacy flat memory files to categorized YAML schema" "#3B82F6" false
+generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid PR body from flow-next state and open via gh" "#3B82F6" false
 
 # Review skills (red, explicit)
 generate_openai_yaml "flow-next-impl-review" "Flow Implementation Review" "Carmack-level code review via RepoPrompt"  "#EF4444" false
@@ -558,6 +559,7 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-strategy"
   "flow-next-audit"
   "flow-next-memory-migrate"
+  "flow-next-make-pr"
   "flow-next-impl-review"
   "flow-next-plan-review"
   "flow-next-epic-review"

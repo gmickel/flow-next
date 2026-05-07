@@ -93,6 +93,12 @@ jobs:
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/prospect_smoke_test.sh"
 
+      - name: make-pr_smoke_test.sh (67 cases, ~7s)
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/make-pr_smoke_test.sh"
+
       - name: impl-review_smoke_test.sh (74 cases, ~70s)
         if: always()
         run: |

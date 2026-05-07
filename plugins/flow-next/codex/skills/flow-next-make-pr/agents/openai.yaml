@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Make PR"
+  short_description: "Render a cognitive-aid PR body from flow-next state and open via gh"
+  brand_color: "#3B82F6"
+policy:
+  allow_implicit_invocation: false

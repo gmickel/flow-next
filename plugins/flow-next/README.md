@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.41.1-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.42.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -21,9 +21,9 @@
 
 🌐 **Prefer a visual overview?** See the [Flow-Next app page](https://mickel.tech/apps/flow-next) for diagrams and examples.
 
-> **What's new in 0.40.0:** Project strategy anchor. New `/flow-next:strategy` skill writes/maintains a repo-root `STRATEGY.md` (peer of `GLOSSARY.md` / `README.md`, never under `.flow/` — survives `rm -rf .flow/`) with 5 required sections (`Target problem` / `Our approach` / `Who it's for` / `Key metrics` / `Tracks`) + 2 optional (`Milestones` / `Not working on`). Structure derived from Richard Rumelt's strategy kernel (diagnosis / guiding policy / coherent action). `flowctl strategy status / read / list` plumbing (read-only — the skill IS the editor for prose). Single-root resolution at repo root only (NOT nearest-ancestor like glossary — strategy is repo-wide by Rumelt's definition). Doc-aware autodetect extended with a third condition (`strategy.sections_filled >= 1`); 5-row flag matrix where `--docs` / `--no-docs` cascade to all three categories and explicit `--strategy` / `--no-strategy` always wins over the cascade. Downstream skills (`/flow-next:prospect` / `:plan` / `:interview` / `:capture` / `:sync`) consume `STRATEGY.md` read-only — `## Strategy Alignment`, `## Strategy Conflicts`, `## Strategy drift flagged for review` spec sections; `[strategy:<track>]` source-tag in capture; never auto-supersedes. Tier 1 fluff guard (R19): `synergy / pivot / disrupt / thought-leadership / best-in-class / world-class / 10x` blocked in canonical + Codex mirror via two-tier grep (separate block from R17 DDD). Ralph-blocked. [Full changelog](../../CHANGELOG.md).
+> **What's new in 0.42.0:** PR-as-cognitive-aid. New `/flow-next:make-pr` skill closes the gap between "all tasks done" and "human reviews the PR" — renders a reviewable PR body from nine flow-next input streams (epic spec with R-IDs, per-task `done_summary` + evidence commits, decisions / bug / architecture-patterns memory, glossary changes, strategy alignment, deferred review findings, the diff itself). Body sections include TL;DR, R-ID coverage table, Critical changes (high-churn / cross-module / public-interface / security-sensitive / behavior-visible), Decisions, Memory references, Glossary/strategy deltas, Open items, and Where to look (reviewer-focus list). Mermaid codefences when diff crosses module boundaries (max 3 diagrams × 12 nodes; markdown codefence — GitHub / GitLab / Gitea render natively). Default `--draft` if open items > 0 or under Ralph; `--ready` overrides. Uses `gh pr create --body-file` (LLM-markdown safety — heredocs choke on backticks / `$` / dollar-paren). NOT Ralph-blocked — PR creation is the autonomous-loop terminus. NO cross-model review of the body — each harness is competent at "what looks important here?" given the rich structured input; `/flow-next:impl-review` already covers the *code itself*. New `flowctl epic export-cognitive-aid` plumbing aggregates the 9 streams into a single JSON payload. [Full changelog](../../CHANGELOG.md).
 >
-> Recent highlights: [project glossary + decision records + doc-aware interview](#project-glossary) (0.39.0), [capture skill](#capture) for conversation-to-spec synthesis (0.38.0), [interview grill-me patterns](#flow-nextinterview) (0.38.0), agent-native [memory audit](#memory-system) (0.37.0), [memory migrate skill](#memory-system) (0.37.0), [PR feedback resolver](#pr-feedback-resolution) (0.34.0), [prospect skill](#prospecting) for ranked candidate ideation (0.36.0).
+> Recent highlights: [project strategy anchor](#project-strategy) (0.40.0), [project glossary + decision records + doc-aware interview](#project-glossary) (0.39.0), [capture skill](#capture) for conversation-to-spec synthesis (0.38.0), [interview grill-me patterns](#flow-nextinterview) (0.38.0), agent-native [memory audit](#memory-system) (0.37.0), [memory migrate skill](#memory-system) (0.37.0), [PR feedback resolver](#pr-feedback-resolution) (0.34.0), [prospect skill](#prospecting) for ranked candidate ideation (0.36.0).
 
 ---
 
@@ -40,6 +40,7 @@
 - [Project Glossary](#project-glossary) — `flowctl glossary` + doc-aware interview
 - [Project Strategy](#project-strategy) — `/flow-next:strategy` + `flowctl strategy` + downstream grounding
 - [Agent Readiness Assessment](#agent-readiness-assessment) — `/flow-next:prime`
+- [PR Creation](#pr-creation) — `/flow-next:make-pr`
 - [PR Feedback Resolution](#pr-feedback-resolution) — `/flow-next:resolve-pr`
 - [Cross-Model Reviews](#cross-model-reviews) — RepoPrompt / Codex / Copilot
 - [Troubleshooting](#troubleshooting)
@@ -55,7 +56,7 @@
 
 ## What Is This?
 
-Flow-Next is a plugin for **agent-native AI orchestration**. Seventeen slash commands cover the full lifecycle: strategic anchor (`strategy`) → idea generation (`prospect`) → spec creation (`capture`) → refinement (`interview`) → planning (`plan`) → execution (`work`) → review (`impl-review` + `epic-review`) → PR feedback resolution (`resolve-pr`) → maintenance (`audit` + `memory-migrate`) → autonomous mode (`ralph-init`). Bundled task tracking, dependency graphs, re-anchoring, and cross-model reviews.
+Flow-Next is a plugin for **agent-native AI orchestration**. Eighteen slash commands cover the full lifecycle: strategic anchor (`strategy`) → idea generation (`prospect`) → spec creation (`capture`) → refinement (`interview`) → planning (`plan`) → execution (`work`) → review (`impl-review` + `epic-review`) → PR creation (`make-pr`) → PR feedback resolution (`resolve-pr`) → maintenance (`audit` + `memory-migrate`) → autonomous mode (`ralph-init`). Bundled task tracking, dependency graphs, re-anchoring, and cross-model reviews.
 
 Everything lives in your repo. No external services. No global config. Uninstall: delete `.flow/` (and `scripts/ralph/` if enabled).
 
@@ -686,6 +687,63 @@ After planning completes, you choose how to execute:
 For full autonomous mode, prepare 5-10 plans before starting Ralph. See [Ralph Mode](#ralph-autonomous-mode) for setup.
 
 > 📖 Deep dive: [Ralph Mode: Why AI Agents Should Forget](https://medium.com/byte-sized-brainwaves/ralph-mode-why-ai-agents-should-forget-9f98bec6fc91)
+
+---
+
+## PR Creation
+
+`/flow-next:make-pr` closes the gap between "all tasks done" and "human reviews the PR." It renders a *cognitive-aid* PR body — the description itself becomes the artefact that lets a reviewer decide *where to focus* before opening any file — and pushes via `gh pr create`.
+
+### Why it exists
+
+A reviewer faced with a 10K-line diff has two equally bad options: skim and miss things, or read every file and burn out. The skill turns that diff into a structured map: this is what the epic asked for, here's the R-ID coverage, here are the critical changes (high-churn / cross-module / public-interface / security-sensitive / behavior-visible), here are the decisions made along the way, here's where to look first. The agent stitches the body from rich state flow-next already has; the human reviews with a map in hand.
+
+### The 9 input streams
+
+The skill consumes a single JSON payload from `flowctl epic export-cognitive-aid <epic-id> --base <ref> --json` aggregating:
+
+1. **Epic spec** — title, R-IDs (acceptance criteria), goal/context.
+2. **Tasks** — title, status, `done_summary`, dependencies.
+3. **Evidence commits** — per-task `evidence.commits` arrays linking tasks to the SHAs that closed them.
+4. **R-ID coverage** — derived from task `satisfies: [R1, R3]` frontmatter; coverage table maps each R-ID to its satisfying task(s) + commit(s).
+5. **Decisions memory** — `knowledge/decisions/` entries written during the epic (load-bearing architectural choices, three-criteria gate).
+6. **Bug-track memory** — `bug/<category>/` entries auto-captured from review NEEDS_WORK→SHIP transitions during the epic.
+7. **Architecture-patterns memory** — `knowledge/architecture-patterns/` entries written during the epic.
+8. **Glossary deltas** — terms added / renamed (`<!-- Updated by plan-sync: glossary rename ... -->` breadcrumbs).
+9. **Strategy alignment** — active tracks served (from `## Strategy Alignment` spec sections) + drift flags.
+
+Plus the diff itself for module-boundary detection (drives mermaid emission) and deferred review findings from `.flow/review-deferred/<branch-slug>.md` (surface as Open items).
+
+### Invocation
+
+```bash
+/flow-next:make-pr                       # epic auto-detected from current branch
+/flow-next:make-pr fn-N-slug             # explicit epic id
+/flow-next:make-pr --draft               # force draft (Ralph default)
+/flow-next:make-pr --ready               # force ready-for-review (override draft default)
+/flow-next:make-pr --no-mermaid          # skip mermaid codefences
+/flow-next:make-pr --base origin/develop # PR base branch (default: main)
+/flow-next:make-pr --memory              # include memory-references section in full
+/flow-next:make-pr --dry-run             # render body, print to stdout, no push, no PR
+```
+
+### What it does
+
+1. **Pre-flight** — verify `gh` available + authenticated; resolve epic (positional arg or current-branch match); detect base ref; refuse if PR already exists for the branch (hard error — re-running rewrites would clobber human edits).
+2. **Gather** — call `flowctl epic export-cognitive-aid <epic-id> --base <ref> --json`; parse the payload as the single source of truth for body rendering.
+3. **Build body** — render TL;DR, R-ID coverage table, Critical changes, Decisions, Memory, Glossary/strategy, Open items, Where to look. Every claim must trace to a structured field in the export payload — never fabricate file paths, SHAs, R-ID attributions, or "why" reasoning. Unknown attribution is honest ("uncovered" / "unclear") rather than invented.
+4. **Mermaid** — if diff crosses module boundaries (≥2 modules), emit up to 3 diagrams × 12 nodes. Markdown codefence (` ```mermaid `) only — GitHub / GitLab / Gitea render natively, no external pipeline. `mermaid-rules.md` ref file documents reserved words, escape patterns, shape selection, pre-emission validation. Disable via `--no-mermaid`.
+5. **Push + create** — preview via `AskUserQuestion` (`create / dry-run / edit-body / abort`); on `create`, push branch then `gh pr create --body-file <path>`. **`--body-file` not heredoc** — LLM-generated markdown frequently contains backticks, `$`, dollar-paren that break heredoc-passed strings.
+
+### Safety
+
+- **Default `--draft`** — when open items > 0 (deferred review findings, unfinished tasks) or under Ralph (`REVIEW_RECEIPT_PATH` / `FLOW_RALPH=1`). `--ready` overrides.
+- **NOT Ralph-blocked** — PR creation is the autonomous-loop terminus; Ralph just opened a draft PR for human review. (Cf. `/flow-next:prospect` / `/flow-next:capture` / `/flow-next:strategy` which *are* Ralph-blocked because autonomous loops have no business deciding what to build / strategize.)
+- **Existing-PR refusal** — if a PR already exists for the current branch, the skill hard-errors. Re-running would clobber human edits to the description.
+- **No cross-model review of the body** — each harness's own model identifies critical changes from the structured input; running a second review on the description would be double-counting (`/flow-next:impl-review` already covers the code itself).
+- **Honest attribution** — every body claim traces to a field in the export payload. The skill never invents file paths, SHAs, or R-ID coverage.
+
+See [CHANGELOG](../../CHANGELOG.md) for the full 0.42.0 entry.
 
 ---
 
@@ -1818,7 +1876,7 @@ NO `flowctl strategy add/edit/remove`. Strategy editing happens via `/flow-next:
 
 ## Commands
 
-Seventeen commands, complete workflow:
+Eighteen commands, complete workflow:
 
 | Command | What It Does |
 |---------|--------------|
@@ -1831,6 +1889,7 @@ Seventeen commands, complete workflow:
 | `/flow-next:plan-review <id>` | Carmack-level plan review (RepoPrompt, Codex, or Copilot) |
 | `/flow-next:impl-review` | Carmack-level impl review of current branch |
 | `/flow-next:epic-review <id>` | Epic-completion review: verify implementation matches spec |
+| `/flow-next:make-pr [<epic-id>] [flags]` | Render a cognitive-aid PR body from flow-next state (R-ID coverage, critical changes, decisions, deferred findings, mermaid) and open the PR via `gh pr create` ([details](#pr-creation)) |
 | `/flow-next:resolve-pr [arg]` | Resolve GitHub PR review threads (fetch → triage → fix → reply → resolve) ([details](#pr-feedback-resolution)) |
 | `/flow-next:audit [mode:autofix] [hint]` | Review `.flow/memory/` against current code, decide Keep/Update/Consolidate/Replace/Delete per entry ([details](#memory-system)) |
 | `/flow-next:memory-migrate [mode:autofix] [hint]` | Convert pre-fn-30 legacy memory files into the categorized schema; agent classifies each entry ([details](#memory-system)) |
@@ -1877,6 +1936,7 @@ Natural language also works:
 | `/flow-next:work` | `--branch=current\|new\|worktree`, `--review=rp\|codex\|copilot\|export\|none`, `--no-review` |
 | `/flow-next:plan-review` | `--review=rp\|codex\|copilot\|export` |
 | `/flow-next:impl-review` | `--review=rp\|codex\|copilot\|export` |
+| `/flow-next:make-pr` | `[<epic-id>]` (positional, auto-detects from current branch), `--draft`, `--ready`, `--no-mermaid`, `--base <ref>`, `--memory`, `--dry-run` |
 | `/flow-next:resolve-pr` | `--dry-run`, `--no-cluster` |
 | `/flow-next:prime` | `--report-only`, `--fix-all` |
 | `/flow-next:sync` | `--dry-run` |
@@ -2053,6 +2113,24 @@ Reviews current branch changes. Carmack-level criteria: Correctness, Simplicity,
 | `--review=none` | Skip review |
 
 Reviews epic implementation against spec. Runs after all tasks complete. Catches requirement gaps, missing functionality, incomplete doc updates.
+
+#### `/flow-next:make-pr`
+
+```
+/flow-next:make-pr [<epic-id>] [--draft|--ready] [--no-mermaid] [--base <ref>] [--memory] [--dry-run]
+```
+
+| Input | Description |
+|-------|-------------|
+| `[<epic-id>]` | Optional epic id (e.g., `fn-1-add-oauth`). When omitted, the skill auto-detects from the current branch name. |
+| `--draft` | Force draft PR (default when open items > 0 or under Ralph) |
+| `--ready` | Force ready-for-review (overrides the draft default) |
+| `--no-mermaid` | Skip mermaid codefences entirely (default: emit when diff crosses ≥2 modules, capped at 3 diagrams × 12 nodes) |
+| `--base <ref>` | PR base branch (default: `main`) |
+| `--memory` | Include the full memory-references section (decisions / bug-track / architecture-patterns) — default is a summary count with links |
+| `--dry-run` | Render body, print to stdout; no push, no `gh pr create` |
+
+Renders a *cognitive-aid* PR body from nine flow-next input streams (epic spec with R-IDs, per-task `done_summary` + evidence commits, decisions / bug / architecture-patterns memory, glossary changes, strategy alignment, deferred review findings, the diff itself). Body sections: TL;DR, R-ID coverage table, Critical changes, Decisions, Memory, Glossary/strategy, Open items, Where to look. NOT Ralph-blocked — autonomous-loop terminus, defaults to `--draft` for human review. NO cross-model review of the body — `/flow-next:impl-review` already covers the *code itself*; doing it again on the description is double-counting. Uses `gh pr create --body-file` (not heredoc — LLM-markdown safety). Hard-errors when a PR already exists for the current branch. See [PR Creation](#pr-creation).
 
 #### `/flow-next:resolve-pr`
 
@@ -2515,6 +2593,7 @@ In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setu
 | `/flow-next:impl-review` | Flow Implementation Review | `$flow-next-impl-review` |
 | `/flow-next:plan-review` | Flow Plan Review | `$flow-next-plan-review` |
 | `/flow-next:epic-review` | Flow Epic Review | `$flow-next-epic-review` |
+| `/flow-next:make-pr` | Flow Make PR | `$flow-next-make-pr` |
 | `/flow-next:interview` | Flow Interview | `$flow-next-interview` |
 | `/flow-next:prime` | Flow Prime | `$flow-next-prime` |
 | `/flow-next:setup` | Flow Setup | `$flow-next-setup` |
