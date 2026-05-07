@@ -73,11 +73,26 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 **fn-42.4 done when:**
 
-- [ ] Decisions made section: per-entry summary from `memory.decisions[]`. "No decisions for this epic" line if empty.
-- [ ] Memory left behind section: bug + pattern entries with id + 1-line synopsis + path.
-- [ ] Glossary/strategy notes: glossary changes table (term / status / rationale); strategy alignment block verbatim.
-- [ ] Open items: deferred review findings, uncovered R-IDs, follow-up tasks.
-- [ ] Where to look: top files by churn + reviewer focus list.
+- [ ] Decisions made section (workflow.md §2.8): one bullet per `memory_during_epic.decisions[]` entry — `**<title>** ([<id>](.flow/memory/<id>.md)) — <first_sentence>. Alternatives considered: <parsed alternatives>.` Section omitted entirely when array empty (no sentinel "No decisions" line per §2.14). `alternatives_considered` parsed from the stringified-Python-list shape (`"['a', 'b']"` → `a, b`); empty / `"[]"` → trailing clause omitted; plain prose → emitted verbatim.
+- [ ] Memory left behind section (workflow.md §2.9): renders when `memory_during_epic.bugs[]` OR `memory_during_epic.architecture_patterns[]` non-empty. Two sub-lists with bold preambles ("**Bugs captured during this epic:**" / "**Architecture patterns captured during this epic:**") when both populated; one sub-list when only one. Each bullet: ``` `<id>` — <first_sentence> ```. Section omitted when both empty.
+- [ ] Glossary / strategy notes section (workflow.md §2.10): renders when `glossary_changes` has any non-empty array OR `strategy_alignment.tracks_served[]` non-empty OR `strategy_alignment.drift_flagged[]` non-empty. Glossary line: `**Glossary:** added \`<term>\`; renamed \`<old>\` → \`<new>\` (<N> files); removed \`<term>\`.` (clauses omitted per empty source array; rename clause documented but always empty in v1 per export `_export_glossary_diff` docstring). Strategy lines: `**Strategy:** served tracks \`<track-1>\`, ...` and/or `**Strategy drift:** \`<track>\` — <reason>; ...`. Section heading omitted when all contributions empty.
+- [ ] Open items section (workflow.md §2.11): aggregates 3 sources with provenance breadcrumbs:
+  - Source A — `epic.spec_sections.open_questions[]` → `- [ ] <question> — open question from spec`
+  - Source B — `deferred_findings[].items[]` (branch-slug sink, no per-task attribution) → `- [ ] <stripped raw> — deferred from impl-review (\`<sink-relpath>\`)`
+  - Source C — `flowctl show <epic-id> --json | jq '.completion_review_status'` returns `needs_work` → `- [ ] Epic-review verdict was \`needs_work\` (last reviewed <ts>) — flagged by epic-review`
+  - Section omitted when all three sources empty. Source order A → B → C.
+- [ ] Where to look section (workflow.md §2.12): 5 categories, **questions not labels**:
+  - Architecture (≤3 bullets) from `epic.spec_sections.decision_context[]` — anchored to a `diff_summary.files[]` path; bullet dropped when no anchor.
+  - Security (≤3 bullets) from `diff_summary.security_sensitive_paths[]` — question whitelist by path heuristic (`auth/`/`crypto/` → trust boundary; `.github/workflows/` → CI scope; `scripts/hooks/` → bypass; `*.pem`/`secret`/`token`/`credential` → safe-to-commit; default → trust boundary).
+  - Business correctness (≤2 bullets) when `diff_summary.files[].path` matches `commands/`/`routes/`/`pages/`/`app/`/`cli/`/`hooks/`/`bin/` (same prefixes as Critical changes tier 5).
+  - Performance (≤2 bullets) when host agent identifies hot-path heuristics (loops, DB queries, render-body calls) in source-extension files.
+  - Tests (1 bullet) when zero `*.test.*` / `*_test.*` / `tests/` / `__tests__/` / `spec/` files in diff. Suppressed when diff is docs-only OR `files_changed < 3 AND lines_added+removed < 30`.
+  - Section-level cap: 8 bullets total, trim in reverse-category order (Tests → Performance → Business → Security; Architecture never trimmed).
+  - Section omitted when no category fires. Every focus prompt ends with `?`.
+- [ ] Each of the 5 sections includes a "What this section MUST NOT do" callout (echo-chamber risk mitigation). Read-only mirror of source data — no paraphrasing, no extending, no inventing rationale to fill gaps.
+- [ ] §2.14 honest-empty-state rule honored: NO sentinel "*No decisions for this epic*" / "*No open items*" lines emitted. Absence of section IS the signal.
+- [ ] §2.13 section-omission table covers all five context sections.
+- [ ] No code snippets in workflow.md prose that would actually generate sections — the prose tells the host agent WHAT to render, not HOW to render programmatically.
 
 ---
 

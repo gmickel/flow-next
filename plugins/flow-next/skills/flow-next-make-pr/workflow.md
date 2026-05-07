@@ -471,7 +471,338 @@ These are guard conditions, not warnings — a body with empty TL;DR or empty R-
 
 ## Phase 2 (cont): Render body context sections (fn-42.4)
 
-Decisions, Memory, Glossary/strategy, Open items, Where to look. Filled in fn-42.4.
+**Goal:** turn the structured payload from Phase 1 into the **context half** of the PR body — the sections a reviewer reads *after* deciding where to focus, to anchor judgment in the surrounding intent. Context half = Decisions made + Memory left behind + Glossary / strategy notes + Open items + Where to look. The header half (TL;DR / R-ID coverage / Critical changes) lands in fn-42.3 §Phase 2; the mermaid section lands in fn-42.5 §Phase 3.
+
+These five sections are **read-only mirrors of structured fields**. The host agent never paraphrases, never extends, never narrates a plausible-sounding rationale to fill a gap. The §2.5 hallucination guardrails (esp. rule 9 "no invented why" and rule 10 "trace every claim") apply here with extra force: the context sections are the surface where fluent fabrication is most tempting, because the underlying data (decisions, memory entries, open questions) is already prose-shaped. Treat them as text to reformat, not text to embellish.
+
+### 2.8 — Decisions made section (R15)
+
+Render `## Decisions made` when `memory_during_epic.decisions[]` is non-empty. Each entry from the array becomes one bullet; bullet shape is fixed:
+
+```markdown
+- **<title>** ([<id>](.flow/memory/<id>.md)) — <first_sentence>. Alternatives considered: <alternatives_considered>.
+```
+
+Field rules:
+
+- **`<title>`** — `decisions[].title` verbatim. No editing, no truncation.
+- **`<id>`** — `decisions[].id` verbatim (e.g. `knowledge/decisions/use-deterministic-export-2026-05-07`). Memory IDs are file-path-shaped.
+- **Link target** — `.flow/memory/<id>.md`. The `id` already contains the track/category prefix; concatenating with `.flow/memory/` gives a relative path the forge will resolve.
+- **`<first_sentence>`** — `decisions[].first_sentence` verbatim. flowctl already extracted this via `_export_first_sentence`. Never re-extract, never paraphrase.
+- **`<alternatives_considered>`** — `decisions[].alternatives_considered` from the export. **Caveat: this field arrives as a stringified Python list** (e.g. `"['option-a', 'option-b']"`) because flowctl wraps the frontmatter list with `str()` during export. The host agent renders it readably:
+  - String matches `^\[.*\]$` and is non-empty → strip the brackets + quotes, emit as a comma-separated phrase: `option-a, option-b`.
+  - String is empty (`""`) or literally `"[]"` → omit the trailing `Alternatives considered: …` clause entirely (don't emit the label with no content).
+  - String is plain prose (legacy entries that wrote a sentence rather than a list) → emit verbatim.
+- **No truncation.** Decision entries are by-design prose-heavy; reviewer needs the full alternatives list to weigh the choice.
+
+If `memory_during_epic.decisions[]` is empty, the section heading is omitted entirely per §2.6. **No fallback "no decisions" line.** Section either has bullets or doesn't appear.
+
+**What this section MUST NOT do:**
+
+- MUST NOT paraphrase, extend, or rewrite `first_sentence`. Read-only mirror.
+- MUST NOT invent decision context for changes that have no memory entry. If a change in the diff lacks a `knowledge/decisions/` entry, the body says nothing about its rationale — the reviewer surfaces it in PR comments if needed.
+- MUST NOT add commentary like "this is a good decision" / "the team weighed alternatives carefully". The bullet is `title + id + first_sentence + alternatives` — nothing else.
+- MUST NOT include `decision_status` (proposed / accepted / superseded) — v1 keeps the bullet shape narrow. Future enhancement if reviewer feedback wants it.
+
+### 2.9 — Memory left behind section (R16)
+
+Render `## Memory left behind` when `memory_during_epic.bugs[]` OR `memory_during_epic.architecture_patterns[]` is non-empty. Two sub-lists when both are populated; one sub-list when only one is. Heading omitted entirely if both are empty.
+
+Sub-list structure:
+
+```markdown
+**Bugs captured during this epic:**
+
+- `<id>` — <winning_hypothesis_first_sentence>
+- `<id>` — <winning_hypothesis_first_sentence>
+
+**Architecture patterns captured during this epic:**
+
+- `<id>` — <first_sentence>
+```
+
+Field rules:
+
+- **`<id>`** — `bugs[].id` or `architecture_patterns[].id` verbatim, formatted as inline code (so the path is visually distinct from the description and easy to copy for `flowctl memory read <id>`).
+- **`<winning_hypothesis_first_sentence>`** — `bugs[].winning_hypothesis_first_sentence` verbatim.
+- **`<first_sentence>`** — `architecture_patterns[].first_sentence` verbatim.
+- **No file links** — unlike the Decisions section, memory entries here don't link to file paths. Reviewer who wants more reads via `flowctl memory read <id>` (the id is already copy-pasteable). This keeps the section visually scannable; the Decisions section uses links because alternatives-considered context is harder to find without one.
+- **No truncation.** First-sentence shapes are already pre-bounded by the `_export_first_sentence` helper.
+
+If only one sub-array is populated, emit only that sub-list with its bold preamble. The bold preambles are load-bearing — they tell the reviewer **why** these entries appear in the PR body (not "look at all the memory we wrote" but "future debuggers searching for these symptoms will find this PR").
+
+**Section purpose framing** — this section answers the methodology's question "what did this epic teach?" Memory entries written during an epic are the most discoverable record of pitfalls, conventions, and patterns established by the work. Surfacing them in the PR body lets the reviewer (a) verify the captured insight is accurate and (b) find the entries later via `memory-scout` without reconstructing the epic from commit history.
+
+**What this section MUST NOT do:**
+
+- MUST NOT paraphrase or expand `winning_hypothesis_first_sentence` / `first_sentence`. Read-only mirror.
+- MUST NOT invent memory entries that aren't in the export payload (rule 7 of §2.5 — no fictitious memory IDs).
+- MUST NOT include legacy-track entries (`legacy/pitfalls#N`) — those surface in `memory list` but `_export_memory_during_epic` deliberately excludes them. v1 only renders bugs + architecture_patterns from the categorized tree.
+- MUST NOT recommend memory-store cleanup ("consider deleting these entries"). That's the job of `/flow-next:audit`, not the PR body.
+
+### 2.10 — Glossary / strategy notes section (R17)
+
+Render `## Glossary / strategy notes` when `glossary_changes` has any non-empty array OR `strategy_alignment.tracks_served[]` is non-empty OR `strategy_alignment.drift_flagged[]` is non-empty. Heading omitted entirely if every contribution is empty.
+
+The section combines two distinct signals (glossary mutation + strategy alignment) under one heading because (a) both are repo-doc plumbing the reviewer typically skims, (b) each is usually 1-3 lines, and (c) two separate empty-most-of-the-time headings train reviewers to stop looking. One combined heading keeps the signal density per heading high.
+
+#### Glossary clauses
+
+Each non-empty array becomes one bold-prefix line:
+
+```markdown
+**Glossary:** added `<term>`, `<term>`; renamed `<old>` → `<new>` (<N> files); removed `<term>`.
+```
+
+Field rules:
+
+- **`added`** — `glossary_changes.added[]` is an array of `{term, definition_first_sentence}`. Surface only the term (the first-sentence is reserved for `flowctl glossary read <term>`); render as backticked terms, comma-separated.
+- **`renamed`** — `glossary_changes.renamed[]` is reserved for v2 per the `_export_glossary_diff` docstring (`renamed detection (heuristic on definition similarity) is a 2026-Q2 stretch goal per the spec; v1 emits an empty list`). v1 will always have an empty rename array; the clause never emits in v1. **Keep the rename clause in skill prose** so v2 doesn't have to re-document the shape — when the export starts populating `renamed[]`, the skill renders without code changes. (Defer-by-prose, not defer-by-omission.)
+- **`removed`** — `glossary_changes.removed[]` is an array of strings (term names). Render as backticked terms, comma-separated.
+- **Clause omission** — each of the three clauses (added / renamed / removed) is dropped if its source array is empty. The line emits whatever non-empty clauses remain, joined by `;`. If the line would be empty, no glossary line emits.
+
+#### Strategy clauses
+
+Strategy gets one or two lines depending on populated arrays:
+
+```markdown
+**Strategy:** served tracks `<track-1>`, `<track-2>`, `<track-3>`.
+**Strategy drift:** `<track>` — <reason>; `<track>` — <reason>.
+```
+
+Field rules:
+
+- **`tracks_served`** — `strategy_alignment.tracks_served[]` array of strings. Render backticked, comma-separated. If empty array, the served-tracks line is omitted.
+- **`drift_flagged`** — `strategy_alignment.drift_flagged[]` is an array of `{track, reason}`. Each entry → `\`<track>\` — <reason>`, joined by `;`. If empty array, the drift line is omitted.
+- **Heading-level interaction** — if neither glossary nor strategy contributions emit any line, the entire `## Glossary / strategy notes` heading is omitted. If only one of glossary/strategy emits content, the heading still appears with whatever content there is.
+
+**Section purpose framing** — the methodology's "shared vocabulary survives the team" principle: glossary changes are ratifications of (or departures from) the project's canonical wording, and strategy alignment is the explicit anchor between this epic's work and the repo-wide direction. Reviewer scans this section to catch (a) accidental glossary drift (a renamed term that downstream specs still use), (b) strategy misalignment (an active-track epic that surfaced `## Strategy drift flagged for review` during sync). Both are easy to fix at PR time, much harder to retrofit later.
+
+**What this section MUST NOT do:**
+
+- MUST NOT invent glossary terms not in `glossary_changes`.
+- MUST NOT paraphrase `drift_flagged[].reason` — already prose-shaped by sync output / spec authoring.
+- MUST NOT recommend strategy edits ("consider revising STRATEGY.md to add this track"). v1 surfaces drift as read-only. The reviewer / user runs `/flow-next:strategy` if they want to act.
+- MUST NOT cite STRATEGY.md verbatim — `tracks_served` is the parsed signal; the full strategy doc is not part of the export payload by design (would inflate body for low signal).
+
+### 2.11 — Open items section (R18)
+
+Render `## Open items` when ANY of the three sources below produce content. Section omitted only when ALL are empty.
+
+Three sources, in order — each surfaces in the same checkbox bullet list with provenance breadcrumbs distinguishing origin:
+
+#### Source A — Spec open questions
+
+`epic.spec_sections.open_questions[]` from the export payload (already parsed via `_export_parse_open_questions` in flowctl). Each entry → one bullet:
+
+```markdown
+- [ ] <question text> — open question from spec
+```
+
+Field rules:
+
+- **`<question text>`** — array entry verbatim (the export already strips `- ` prefix and trailing whitespace).
+- **Provenance breadcrumb** — exact phrase ` — open question from spec` appended after the question. The em-dash is significant; reviewer's eye learns the breadcrumb shape.
+
+#### Source B — Deferred impl-review findings (branch-slug sink)
+
+`deferred_findings[]` from the export payload. v1 schema has at most one element with shape `{path: ".flow/review-deferred/<branch-slug>.md", items: [{raw: "- [ ] ..."}]}`. The `items[]` carries no per-task attribution — flowctl wrote the sink keyed by branch slug, not task id. Each `items[].raw` is a verbatim deferred-finding bullet.
+
+Each entry → one bullet:
+
+```markdown
+- [ ] <stripped item text> — deferred from impl-review (`<sink-relpath>`)
+```
+
+Field rules:
+
+- **`<stripped item text>`** — `items[].raw` with the leading `- [ ] ` (or `- [x] `) marker stripped, so the renderer can re-emit a `- [ ]` checkbox at body level. If `raw` already starts with `- [` then strip that prefix; otherwise emit `raw` verbatim. (The export captures `raw` with its original prefix per the `_export_review_receipts` implementation.)
+- **`<sink-relpath>`** — `deferred_findings[0].path` rendered as backticked relative path (e.g. `\`.flow/review-deferred/fn-42-foo.md\``).
+- **Provenance breadcrumb** — exact phrase ` — deferred from impl-review (<sink-relpath>)`. Branch-slug sink is the provenance because v1 has no per-task attribution; surfacing the sink path lets the reviewer drill in.
+- **Multiple sinks** — schema allows the array to grow if v2 splits per-task, but v1 only ever returns at most one element. Loop over `deferred_findings[]` regardless to be forward-compatible.
+
+#### Source C — Epic-review-flagged items
+
+NOT in the export-cognitive-aid payload (`review_receipts` is empty in v1 per the implementation comment). Read directly from the epic JSON via flowctl:
+
+```bash
+EPIC_REVIEW_STATUS=$("$FLOWCTL" show "$EPIC_ID" --json | jq -r '.completion_review_status // "unknown"')
+EPIC_REVIEW_AT=$("$FLOWCTL" show "$EPIC_ID" --json | jq -r '.completion_reviewed_at // empty')
+```
+
+If `EPIC_REVIEW_STATUS == "needs_work"`, emit a single bullet:
+
+```markdown
+- [ ] Epic-review verdict was `needs_work` (last reviewed <EPIC_REVIEW_AT>) — flagged by epic-review
+```
+
+Field rules:
+
+- **Provenance breadcrumb** — exact phrase ` — flagged by epic-review`.
+- **Findings detail** — v1 surfaces only the verdict + timestamp. The granular findings live in the `/flow-next:epic-review` receipt; reviewer drills in via that surface. v2 may aggregate findings into the bullet once the receipt format is stable.
+- **`unknown` / `passed` status** — no bullet emitted. This source contributes content only when the epic-review explicitly flagged needs-work.
+
+#### Section ordering + omission
+
+Bullets emit in source order: A (spec open questions) → B (deferred review findings) → C (epic-review flag). Within each source, preserve the array's natural order (no re-sorting). If all three sources are empty, the heading is omitted entirely per §2.6 — never an empty `## Open items` placeholder.
+
+**Section purpose framing** — the methodology's "explicit deferral over silent omission" principle: things flagged but not yet resolved deserve checkbox visibility, not burial in the spec / sink / receipt. Reviewer scans this section to decide whether the PR is mergeable as-is or whether a follow-up epic / task captures the remaining work. Each provenance breadcrumb tells the reviewer where to dig if they want context.
+
+**What this section MUST NOT do:**
+
+- MUST NOT invent open items not present in the three sources. The body is read-only mirroring.
+- MUST NOT collapse multiple deferred findings into a single bullet ("3 deferred findings — see sink"). Each finding gets its own checkbox so reviewers can track resolution per item.
+- MUST NOT paraphrase question text. Open questions are already prose-shaped by the spec author; rephrasing introduces drift.
+- MUST NOT include findings the reviewer already accepted via `/flow-next:impl-review --interactive` "Acknowledge" — the interactive walkthrough records those separately and they don't appear in the deferred sink.
+
+### 2.12 — Where to look section (R19, refined per practice-scout)
+
+Render `## Where to look` when ANY of the five categories below fire. Heading omitted entirely if no category fires.
+
+This section IS the methodology #4 handover artefact: an explicit reviewer-focus list pointing at the high-leverage decisions the host agent **cannot self-verify**. Where the rest of the body says "here is what changed", Where to look says "here is what *you* should pay attention to, because we cannot judge it from inside".
+
+**Format rule (load-bearing):** every focus prompt is a **question**, not a label. Practice-scout finding: questions activate reviewer cognition more than labels. "**Performance:** `app/server.ts` — Is the new code path on a hot path?" beats "**Performance:** `app/server.ts` — hot path candidate" by a clear margin in reader engagement studies. Skill prose enforces the question-shape across all five categories.
+
+#### Category 1: Architecture
+
+**Trigger:** `epic.spec_sections.decision_context[]` is non-empty (architectural decisions captured in the spec). **Source field:** `decision_context[].question` (the `**bold-prefix**` from the `## Decision Context` bullet) and `decision_context[].answer` (the rest of the bullet).
+
+Bullet shape:
+
+```markdown
+- **Architecture:** `<file:line>` — <focus question>
+```
+
+Field rules:
+
+- **`<file:line>`** — chosen by the host agent from `diff_summary.files[]` whose path the architectural decision plausibly applies to. If the decision is general (no clear file anchor), emit just the file name without `:line`. If the host can't anchor the decision to a file in the diff, **drop the bullet** rather than invent a path (rule 1 of §2.5).
+- **`<focus question>`** — synthesized from the `decision_context[].question` (or the answer's first sentence if question is empty). Must be question-shaped (ends with `?`). Examples: "Does the abstract base class hierarchy hold up if a fourth implementation arrives?", "Is the chosen serialization format forward-compatible with the v2 schema?". Keep one-sentence; never quote the full decision body.
+- **Cap** — at most 3 architecture bullets (top-3 most load-bearing decisions, host agent's call). More than 3 buries the signal.
+
+#### Category 2: Security
+
+**Trigger:** `diff_summary.security_sensitive_paths[]` is non-empty.
+
+Bullet shape:
+
+```markdown
+- **Security:** `<path>` — Was the trust boundary preserved here?
+```
+
+Field rules:
+
+- **`<path>`** — verbatim from `security_sensitive_paths[]`.
+- **Question variants permitted** — the host agent picks from a small whitelist of security focus questions based on the path heuristic:
+  - Path contains `auth/` / `crypto/` → "Was the trust boundary preserved here?"
+  - Path contains `.github/workflows/` → "Does this CI step run with appropriate scope (secrets / permissions)?"
+  - Path contains `scripts/hooks/` → "Could this hook be bypassed or made non-executable?"
+  - Path contains `*.pem` / `secret` / `token` / `credential` filename patterns → "Is this file safe to commit, or did a real secret leak in?"
+  - Default fallback → "Was the trust boundary preserved here?"
+- **Cap** — at most 3 security bullets. If more than 3 paths fire, host agent picks the highest-stakes (auth > crypto > workflows > hooks > *.pem).
+
+#### Category 3: Business correctness
+
+**Trigger:** any `diff_summary.files[].path` matches one of the user-facing surface prefixes: `commands/`, `routes/`, `pages/`, `app/`, `cli/`, `hooks/`, `bin/`. (Same prefix list as the Critical changes tier 5 in §2.4, kept identical for consistency.)
+
+Bullet shape:
+
+```markdown
+- **Business correctness:** `<path>` — Does this still match the intended user-facing behavior?
+```
+
+Field rules:
+
+- **`<path>`** — verbatim from `diff_summary.files[]`.
+- **Question variants permitted** — host agent may swap to "Does the user-facing wording / API contract still match the spec?" when the change is in `commands/` / `cli/` (more contract-shaped) vs the default phrasing for `routes/` / `pages/` (more behavior-shaped).
+- **Cap** — at most 2 business-correctness bullets (top-2 highest-churn user-facing files). Reviewer doesn't need a list of every touched route; they need 1-2 anchors to start verification from.
+
+#### Category 4: Performance
+
+**Trigger:** any `diff_summary.files[].path` matches hot-path heuristics. Hot-path heuristics in v1:
+
+- File extension matches `.py`/`.ts`/`.tsx`/`.js`/`.jsx`/`.go`/`.rs` AND
+- Diff content (host agent's reading of the unified diff for that file) shows new/modified `for`/`while` loops, new SQL/DB-query call sites, new function calls inside React render bodies, new hot-path framework primitives (e.g. `useEffect`/`useMemo` in TSX, `tokio::spawn` in Rust, `goroutine` in Go).
+
+Bullet shape:
+
+```markdown
+- **Performance:** `<path>` — Is the new code path on a hot path?
+```
+
+Field rules:
+
+- **`<path>`** — verbatim from `diff_summary.files[]`.
+- **Question variants permitted** — host agent may sharpen to "Is the new loop bound by a user-controllable input?" when the loop is unbounded; or "Does the new query path introduce an N+1 pattern?" when SQL/DB call sites change.
+- **Heuristic scope** — host agent's call. If the diff is small (`< 50 LOC` per the §2.4 limited-churn bullet condition) the heuristic almost never fires; that's intentional. False-positive performance flags are noise.
+- **Cap** — at most 2 performance bullets.
+
+#### Category 5: Tests (refined per practice-scout)
+
+**Trigger:** test coverage is thin in the diff. Specifically: `diff_summary.files[]` contains zero files matching `*.test.*` / `*_test.*` / `tests/` / `__tests__/` / `spec/`.
+
+Bullet shape:
+
+```markdown
+- **Tests:** No new tests in this PR — what behavior assertion would catch a regression?
+```
+
+Field rules:
+
+- **One bullet only** — the trigger is binary (any test files vs none); no per-file enumeration.
+- **Question phrasing fixed** — the question is identical regardless of the diff specifics. Reviewer's job is to decide whether the missing-tests fact is acceptable for the change at hand; the skill flags it, the reviewer judges it.
+- **Suppress when** — the diff is purely documentation-only (every file in `diff_summary.files[]` matches `*.md` / `docs/`). No tests are expected for docs-only PRs; emitting the bullet is noise.
+- **Suppress when** — `diff_summary.files_changed < 3` AND `diff_summary.lines_added + diff_summary.lines_removed < 30`. Trivial-diff PRs (lockfile bump, typo, formatting) don't need test bullets.
+
+#### Category ordering + omission
+
+Bullets emit in category order: Architecture → Security → Business correctness → Performance → Tests. Within each category, preserve the source array's natural order. If no category fires, the heading is omitted entirely per §2.6.
+
+Section-level cap: **at most 8 bullets total across all 5 categories** (3+3+2+2+1 = 11 worst case; 8 keeps the section skim-readable). When the cap would be exceeded, drop bullets in reverse-category order (Tests first if multiple Tests bullets exist — though v1 only emits 1; then Performance; then Business correctness; then Security; finally Architecture). Architecture is the highest-value reviewer-focus signal and never trimmed.
+
+**Section purpose framing** — the methodology's "the agent cannot self-verify high-leverage decisions" principle. Architecture, security boundaries, business contracts, hot-path performance, and test-coverage adequacy are all judgments that require whole-codebase visibility, deployment context, runtime understanding, or organizational knowledge the agent does not have. Surfacing them as questions (not labels) primes the reviewer to actually engage rather than rubber-stamp.
+
+**What this section MUST NOT do:**
+
+- MUST NOT use labels instead of questions. Every focus prompt ends with `?`.
+- MUST NOT invent file paths or line numbers (rule 1 of §2.5). Every `<path>` must appear in `diff_summary.files[]`.
+- MUST NOT add categories beyond the 5 documented (Architecture / Security / Business correctness / Performance / Tests). v1 keeps the surface narrow; v2 may add Documentation, Migration, Observability if reviewer feedback wants them.
+- MUST NOT pre-judge the answer to its own questions ("**Performance:** `app/server.ts` — Is the new code path on a hot path? **Probably not.**"). The agent doesn't have the visibility to judge; the reviewer does.
+- MUST NOT cap bullets by guessing at importance — use the documented per-category caps + section-level cap. Determinism beats intuition for body-rendering.
+
+### 2.13 — Section-omission rule (extended for context sections)
+
+The §2.6 omission rule extends to all five context sections. Recap with the additions:
+
+| Section | Emitted when | Omitted when |
+|---------|--------------|--------------|
+| Decisions made | `memory_during_epic.decisions[]` non-empty | Empty array |
+| Memory left behind | `memory_during_epic.bugs[]` OR `architecture_patterns[]` non-empty | Both empty |
+| Glossary / strategy notes | `glossary_changes` has any non-empty array OR `strategy_alignment.tracks_served` non-empty OR `strategy_alignment.drift_flagged` non-empty | All empty |
+| Open items | spec `open_questions` non-empty OR `deferred_findings` non-empty OR `completion_review_status == "needs_work"` | All empty |
+| Where to look | ≥1 of the 5 categories fires | None fire |
+
+The rule preserves skim-readability: a heading with no content trains the reviewer to ignore future headings. One real signal per heading.
+
+### 2.14 — Honest-empty-state escape hatch
+
+The §2.5 rule 9 ("no invented why") means the agent never narrates rationale to fill empty Decisions / Open items / Where to look. But the user might still want to know why a section is missing. The skill handles this by **never emitting an honest-empty-state line in the body** — the body is silent on missing sections, and the reviewer who notices an absent section infers correctly: no decisions captured (run `/flow-next:audit` to verify), no open items flagged, no high-leverage focus signals fired.
+
+This is the explicit choice the §2.5 hallucination guardrails force. Body content is structured-mirror only; the absence of a section is itself the signal. **Do not emit sentinel lines like "*No decisions for this epic*" or "*No open items*"** — those clutter the body without adding signal, and create the misleading impression that the skill ran some search and confirmed empty (when it just read empty arrays).
+
+The one exception is the §2.4 Critical changes "Limited churn" fallback bullet — that one stays because Critical changes always renders (so there's no omission to infer from), and the bullet tells the reviewer where to look instead.
+
+### Done when
+
+- `## Decisions made` renders one bullet per `memory_during_epic.decisions[]` entry, with title + memory link + first sentence + alternatives-considered (parsed from stringified-list shape). Section omitted entirely when array empty.
+- `## Memory left behind` renders bug + architecture-pattern sub-lists with bold preamble per sub-list. Section omitted when both arrays empty. One sub-list shown when only one populated.
+- `## Glossary / strategy notes` renders glossary clauses (added / renamed-deferred-to-v2 / removed) and strategy clauses (tracks served / drift flagged). Each clause omits when its source array is empty; section heading omits when all contributions empty.
+- `## Open items` aggregates spec open questions + branch-slug-sink deferred findings + epic-review needs-work flag, each as a checkbox bullet with provenance breadcrumb. Section omitted when all three sources empty.
+- `## Where to look` renders questions (not labels) across 5 categories: Architecture / Security / Business correctness / Performance / Tests. Each category's trigger condition references concrete payload signals. Per-category cap (3/3/2/2/1) + section-level cap (8) enforced. Section omitted when no category fires.
+- All five sections honor the §2.5 hallucination guardrails: no invented file paths, no fabricated decisions, no synthesized open items, no editorialized rationale.
+- Each section has its "What this section MUST NOT do" callout in the rendered prose. Echo-chamber risk mitigated via explicit boundaries.
+- §2.14 honest-empty-state rule honored: no sentinel "*No decisions*" / "*No open items*" lines emitted. Absence of section IS the signal.
+
+---
 
 ## Phase 3: Mermaid generation (fn-42.5)
 
