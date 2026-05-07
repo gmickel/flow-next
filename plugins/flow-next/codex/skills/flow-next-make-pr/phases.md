@@ -18,7 +18,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 **Done when:**
 
 - [ ] Ralph context detected (`RALPH=1` if `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set).
-- [ ] `gh` installed AND `gh auth status --hostname github.com` succeeds.
+- [ ] When `DRY_RUN != 1`: `gh` installed AND `gh auth status --hostname github.com` succeeds. Skipped under `--dry-run` (Phase 4.0 short-circuits before any `gh pr create`, so requiring `gh` to be installed/authed there blocks the documented inspection path on machines / CI jobs that only render the body).
 - [ ] `EPIC_ID` resolved (positional arg → branch-match against `.flow/epics/*.json` `branch_name` → interactive prompt / Ralph exit 2).
 - [ ] `EPIC_ID` validated via `flowctl show <epic-id> --json` (epic exists).
 - [ ] `BASE_REF` resolved through cascade (`--base` → `origin/main` → `main` → `origin/master` → `master` → ask / Ralph exit 2).
@@ -30,8 +30,8 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 **Failure modes:**
 
-- gh missing → exit 1 + install instructions.
-- gh unauthenticated → exit 1 + `gh auth login` instructions.
+- gh missing → exit 1 + install instructions (skipped under `--dry-run`).
+- gh unauthenticated → exit 1 + `gh auth login` instructions (skipped under `--dry-run`).
 - Epic not resolved + Ralph → exit 2.
 - Base not resolved + Ralph → exit 2.
 - Base ref invalid → exit 1.

@@ -46,8 +46,11 @@ There is no `FLOW_MAKE_PR_ALLOW_QUESTIONS_IN_RALPH` opt-in. Ralph is determinist
 
 `gh` is the only PR-creation primitive the skill supports — no manual `git push` fallback for missing `gh`.
 
+Skip both checks under `--dry-run`. Rationale: dry-run renders the PR body to stdout and exits before any `git push` / `gh pr create` (Phase 4.0), so requiring `gh` to be installed + authed there blocks the documented inspection path on machines / CI jobs that only want to preview the body. The same checks fire on the real path because Phase 4.6 invokes `gh pr create` unconditionally.
+
 ```bash
-if ! command -v gh >/dev/null 2>&1; then
+if [[ "$DRY_RUN" != "1" ]]; then
+ if ! command -v gh >/dev/null 2>&1; then
  cat <<'EOF' >&2
 Error: gh CLI not installed. /flow-next:make-pr requires gh for PR creation.
 
@@ -60,9 +63,9 @@ Then authenticate:
  gh auth login --hostname github.com
 EOF
  exit 1
-fi
+ fi
 
-if ! gh auth status --hostname github.com >/dev/null 2>&1; then
+ if ! gh auth status --hostname github.com >/dev/null 2>&1; then
  cat <<'EOF' >&2
 Error: gh CLI not authenticated for github.com. Run:
 
@@ -71,6 +74,7 @@ Error: gh CLI not authenticated for github.com. Run:
 If you already authed and this still fails, check `gh auth status` for hostname mismatches.
 EOF
  exit 1
+ fi
 fi
 ```
 
