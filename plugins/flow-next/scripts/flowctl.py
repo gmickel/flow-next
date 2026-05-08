@@ -14208,12 +14208,14 @@ def cmd_migrate_rename(args: argparse.Namespace) -> None:
     flow_dir = get_flow_dir()
     sentinel = flow_dir / FLOW_VERSION_SENTINEL
 
-    # Fast-path idempotency check (advisory). The authoritative check happens
-    # AFTER the lock so two parallel migrate-rename --yes invocations don't
-    # both re-migrate (TOCTOU between the unlocked sentinel probe and the
-    # lock-acquire). The fast-path keeps single-process invocations cheap by
-    # avoiding the (small) cost of a probe + mkdir + rmdir on a no-op.
-    if sentinel.exists() and dry_run:
+    # Fast-path idempotency check (advisory). Fires for BOTH dry-run and
+    # --yes — an already-migrated repo is a no-op regardless of mode, and
+    # this branch must run BEFORE the read-only writability check so a
+    # post-migration repo on a read-only `.flow/` (e.g. archived branch
+    # build, frozen worktree) doesn't fail the "re-running --yes on a 1.0
+    # repo is a no-op" acceptance criterion. The authoritative check still
+    # runs post-lock to close the TOCTOU between two parallel --yes peers.
+    if sentinel.exists():
         if is_json:
             json_output({
                 "migrated": False,
@@ -14226,8 +14228,10 @@ def cmd_migrate_rename(args: argparse.Namespace) -> None:
         return
 
     # Read-only filesystem refusal: an explicit `--yes` against a read-only
-    # `.flow/` must fail loudly (T4's banner-only path is non-blocking; T3 is
-    # the explicit user-driven path and must surface the error).
+    # `.flow/` that NEEDS migration must fail loudly (T4's banner-only path
+    # is non-blocking; T3 is the explicit user-driven path and must surface
+    # the error). The sentinel-check above already short-circuited the
+    # already-migrated case, so reaching this point means we'd need to write.
     if not dry_run and not _migrate_writable(flow_dir):
         error_exit(
             "migrate-rename: .flow/ is read-only; migration cannot proceed. "
