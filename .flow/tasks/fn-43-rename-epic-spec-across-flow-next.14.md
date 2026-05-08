@@ -73,6 +73,8 @@ Rewire all smoke tests to assert the new `flowctl spec *` surface. Add a separat
 - [ ] `migration_smoke.sh` covers all 13 scenarios above (10 originally + 3 added per T3 implementation: 11 atomic sentinel write, 12 SHA256 task-drift detection, 13 mid-migration contamination wipe); passes on Linux + macOS (Windows lockfile coverage in T3 acceptance). <!-- Updated by plan-sync: scenario count expanded from 10 -> 13 to match T3's actual surface -->
 - [ ] `ci_test.sh` has a new section guarding against `flowctl epic` references in canonical (excludes deprecation-context comments via grep -v pattern).
 - [ ] `FLOW_NO_DEPRECATION=1` smoke: alias_smoke.sh asserts banner suppressed when env var set.
+- [ ] Banner-suppression smoke (T4): `migration_smoke.sh` (or a new `banner_smoke.sh`) asserts each of `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH=/tmp/x`, `FLOW_NO_AUTO_MIGRATE=1`, sentinel-present, and `.banner-acknowledged < 7d` independently suppress the 6-line banner on stderr; pre-1.0 fixture without any of those emits the full 6-line banner verbatim and `--json` stdout still parses cleanly with `jq`. <!-- Updated by plan-sync: T4 ships banner suppression matrix that smoke should cover end-to-end -->
+- [ ] Future-version banner smoke (T4): seed `.flow/.flow_version` to `2.0.0`; assert `flowctl <verb>` emits the one-line "newer flow-next" warning to stderr and the subcommand's exit code is preserved (NOT forced to non-zero). v1.x sentinel (`1.5.2`) is silent. <!-- Updated by plan-sync: T4 forward-compat path on major >= 2 -->
 - [ ] Top-level `flowctl show fn-X` smoke confirms NO new `flowctl spec show` subcommand was introduced.
 
 ## Done summary

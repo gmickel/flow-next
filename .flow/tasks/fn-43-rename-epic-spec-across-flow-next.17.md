@@ -59,11 +59,20 @@ Helpers landed in T2 that downstream tests should target: `_emit_rename_deprecat
   - 0.x `.flow/` (no sentinel, has epics dir) -> writes to `.flow/epics/`.
   - 1.0 `.flow/` (sentinel present) -> writes to `.flow/specs/`.
   - Read-path fallback: stage `.flow/epics/fn-X.json` only -> read finds it; stage `.flow/specs/fn-X.json` only -> read finds it.
-- **`test_banner.py`** — covers R7 + R9 + R24 + R34 + R35:
+- **`test_banner.py`** — covers R7 + R9 + R24 + R34 + R35: <!-- Updated by plan-sync: T4 shipped richer banner surface than original spec captured -->
   - Pre-1.0 -> banner emits to stderr; subcommand exit code preserved.
   - `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH`, `FLOW_NO_AUTO_MIGRATE=1`, sentinel present, `.banner-acknowledged` < 7d -> banner suppressed.
-  - Future-version (`.flow_version > 1.x`) -> warning printed, exit code preserved (NOT forced).
+  - Future-version sentinel (`.flow/.flow_version` major >= 2, e.g. `2.0.0`) -> one-line warning to stderr, subcommand exit code preserved (NOT forced); v1.x sentinel is silent (already-migrated). <!-- Updated by plan-sync: T4 keys future-version on major >= 2; v1.x silent because _migrate_sentinel_state validates 1.x as already migrated -->
   - `.banner-acknowledged` written ONLY by `migrate-rename --dry-run` (or setup defer) — bare `flowctl <verb>` invocations DO NOT write it.
+  - Process-level dedup — module-level `_MIGRATION_BANNER_EMITTED` flag flips to `True` on first emission within a single `flowctl` invocation; second `_check_migration_banner` call in same process is a no-op. <!-- Updated by plan-sync: T4 ships process-level dedup flag not previously specified -->
+  - Defensive ack-file parsing — empty / garbage / future-dated `.banner-acknowledged` timestamp falls through to banner emission (treated as un-acknowledged). <!-- Updated by plan-sync: T4 ships defensive timestamp parsing -->
+  - Re-nudge cadence — 8-day-old ack timestamp re-fires the banner once on next invocation; the ack timestamp is NOT auto-refreshed (user must run `migrate-rename --dry-run` again or migrate). <!-- Updated by plan-sync: T4 done summary made the no-auto-refresh contract explicit -->
+  - stderr-only — banner output never lands on stdout; `flowctl <verb> --json` stdout parses cleanly with `json.load` even with banner active. <!-- Updated by plan-sync: T4 acceptance and done summary explicit on this -->
+  - Helper `_banner_ack_within_renudge_window(flow_dir)` covered as a separate unit (returns False on missing/empty/garbage/future-dated/expired; True on within-window). <!-- Updated by plan-sync: T4 ships as a separately-testable helper -->
+  - No `.flow/` at all — banner silent; `flowctl init` still works. <!-- Updated by plan-sync: T4 manual test confirmed -->
+  - Banner exception path — `_check_migration_banner` swallows internal exceptions silently; main() wraps the call in a try/except so a hostile `get_flow_dir` failure cannot block subcommand dispatch. <!-- Updated by plan-sync: T4 main() shipped a defensive try/except around the banner call -->
+
+  Implementation surface to target in tests (helpers + constants from T4, all module-level in flowctl.py): `_check_migration_banner(flow_dir)`, `_banner_ack_within_renudge_window(flow_dir)`, `_MIGRATION_BANNER_EMITTED` module flag, `BANNER_ACK_FILE = ".banner-acknowledged"`, `BANNER_RENUDGE_DAYS = 7`. Tests should reset `_MIGRATION_BANNER_EMITTED` between cases (monkeypatch the module attribute) since the dedup flag persists across calls within a process.
 
 ## Investigation targets
 
@@ -85,7 +94,11 @@ Helpers landed in T2 that downstream tests should target: `_emit_rename_deprecat
 - [ ] `pytest plugins/flow-next/tests/test_lockfile.py` passes; lockfile contention + stale-PID reclaim verified across BOTH POSIX `os.kill` and Windows `OpenProcess` ctypes branches; PID-grace window honored. <!-- Updated by plan-sync: T3 ships separate POSIX and Windows PID-liveness paths -->
 - [ ] `pytest plugins/flow-next/tests/test_read_compat.py` passes; dual-emit + read-fallback for all 4 field categories.
 - [ ] `pytest plugins/flow-next/tests/test_write_location.py` passes; three layouts (fresh / 0.x-unmigrated / 1.0-migrated) verified.
-- [ ] `pytest plugins/flow-next/tests/test_banner.py` passes; suppression matrix + ack-write semantics verified.
+- [ ] `pytest plugins/flow-next/tests/test_banner.py` passes; covers all 9 scenarios listed above (4 originally + 5 added per T4's actual surface — process-level dedup, defensive ack parsing, re-nudge no-auto-refresh, stderr-only invariant, ack-window helper as separate unit, no-`.flow/`-silent path, banner exception swallowing). <!-- Updated by plan-sync: scenario count expanded from 4 -> 9 to match T4 implementation -->
+- [ ] Test fixtures reset `_MIGRATION_BANNER_EMITTED` between cases via monkeypatch; verify the dedup flag actually flips on first emit and prevents double emission within one process. <!-- Updated by plan-sync: T4 module-level flag persists across calls -->
+- [ ] `--json` stdout invariant — at least one `test_banner.py` case asserts `flowctl <verb> --json` stdout parses cleanly with `json.load` while banner is active on stderr. <!-- Updated by plan-sync: T4 stderr-only acceptance criterion -->
+- [ ] Future-version path keyed on major >= 2 (semver match `^\d+\.\d+\.\d+$` then `int(major) >= 2`); test 1.5.2 and 1.99.99 are silent (validated as 1.x via `_migrate_sentinel_state`); 2.0.0 + 3.1.0 emit warning. <!-- Updated by plan-sync: T4 forward-compat path uses major >= 2, not major > 1 -->
+- [ ] `_banner_ack_within_renudge_window` direct unit coverage — missing file, empty body, garbage body, future-dated timestamp, exactly 7d boundary, 8d expired all match expected return values. <!-- Updated by plan-sync: T4 ships as separate helper -->
 - [ ] CI integration: the Python unit tests run alongside existing pytest invocations on Linux + macOS + Windows.
 
 ## Done summary
