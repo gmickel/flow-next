@@ -127,7 +127,7 @@ Sync task specs from <source> to downstream tasks.
 
 COMPLETED_TASK_ID: <source task id - the input task, or selected source for epic mode>
 FLOWCTL: ${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl
-EPIC_ID: <epic id>
+SPEC_ID: <spec id>
 DOWNSTREAM_TASK_IDS: <comma-separated list from step 4>
 DRY_RUN: <true|false>
 

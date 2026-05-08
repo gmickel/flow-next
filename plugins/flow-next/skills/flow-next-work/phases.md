@@ -105,7 +105,7 @@ Pass config values only. Worker reads worker.md for phases. Do NOT paraphrase or
 Implement flow-next task.
 
 TASK_ID: fn-X.Y
-EPIC_ID: fn-X
+SPEC_ID: fn-X
 FLOWCTL: /path/to/flowctl
 REVIEW_MODE: none|rp|codex
 RALPH_MODE: true|false
@@ -161,7 +161,7 @@ Use the Task tool to spawn the `plan-sync` subagent with this prompt:
 Sync downstream tasks after implementation.
 
 COMPLETED_TASK_ID: fn-X.Y
-EPIC_ID: fn-X
+SPEC_ID: fn-X
 FLOWCTL: /path/to/flowctl
 DOWNSTREAM_TASK_IDS: fn-X.3,fn-X.4,fn-X.5
 

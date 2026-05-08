@@ -223,7 +223,7 @@ Use the **worker** agent role to implement the task. The worker gets fresh conte
 "Use the worker agent to implement this task:
 
 TASK_ID: fn-X.Y
-EPIC_ID: fn-X
+SPEC_ID: fn-X
 FLOWCTL: $FLOWCTL
 REVIEW_MODE: none|rp|codex
 RALPH_MODE: true|false
