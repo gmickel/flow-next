@@ -1,13 +1,18 @@
 {
   "branch_name": "fn-43-rename-epic-spec-across-flow-next",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-05-08T19:25:54.305870Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-43-rename-epic-spec-across-flow-next",
   "next_task": 1,
-  "plan_review_status": "unknown",
-  "plan_reviewed_at": null,
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-05-08T20:57:37.594222Z",
   "spec_path": ".flow/specs/fn-43-rename-epic-spec-across-flow-next.md",
   "status": "open",
   "title": "Rename epic --> spec across flow-next; release as 1.0.0 with full backward compat",
-  "updated_at": "2026-05-08T19:27:52.831493Z"
+  "updated_at": "2026-05-08T20:57:37.594381Z"
 }
