@@ -12,29 +12,28 @@ Layer deprecation warnings and read-compatibility on top of T1's canonical surfa
 ## Approach
 
 - Add `_emit_rename_deprecation(legacy_form, canonical_form)` helper modeled on `_memory_emit_deprecation` at `flowctl.py:5655-5666`. Suppress via `FLOW_NO_DEPRECATION=1`.
-- Wrap proxy registrations from T1 for ALL 11 sub-subcommands plus `flowctl epics`. Each invokes the helper before dispatching.
+- T1 landed parallel `p_spec` and `p_epic` subparsers via the shared `_add_spec_subparsers(parent_sub, noun=...)` helper at `flowctl.py:18960-19123`. Both subparsers `set_defaults(func=cmd_spec_*)` directly — there are no separate proxy wrappers; the `cmd_epic_*` symbols are Python module-level aliases pointing at the same `cmd_spec_*` function objects. T2 layers deprecation either by (a) wrapping the alias entries inside `_add_spec_subparsers` so the `epic` branch sets `func=` to a deprecation-emitting wrapper that calls the canonical handler, or (b) inspecting `args.command == "epic"` (or `args.epics_alias`) in `main()` and emitting before dispatch. Pick whichever keeps the dispatch cleaner. <!-- Updated by plan-sync: T1 used parallel-subparser registration not proxy wrappers -->
 - `--epic <id>` flag aliases on ALL handlers: `task create`, `tasks`, `ready`, `validate`, `checkpoint save`, `checkpoint restore`. Each emits the warning.
 - `--epics-file` -> `--specs-file` rename on `flowctl next`. Alias kept.
 - `--section epic` value on `flowctl spec export-cognitive-aid` aliased to `--section spec` with stderr deprecation.
 - **Persisted JSON write**: writes canonical `task["spec"] = ...` and `task.pop("epic", None)`. Same for `task["spec_id"] = ...` / `task.pop("epic_id", None)` if any field uses the `_id` suffix form. On-disk task JSON files contain only canonical names.
 - **CLI `--json` output dual-emit (R31)**: command output assembly duplicates EVERY `epic`-named key into the legacy alias position. Apply at every site where `output["spec"] = ...` or `output["specs"] = ...` or `output["spec_id"] = ...` is written -- mirror to `output["epic"]` / `output["epics"]` / `output["epic_id"]`. The full list is determined at implementation time via `grep -n '"\(epic\|epic_id\|epics\)":' plugins/flow-next/scripts/flowctl.py` over output-construction sites. 2.0 drops the alias keys.
-- **JSON read-compat**: at the ~15 read sites, replace `task.get("epic")` with `task.get("spec") or task.get("epic")`. Same for `epic_id` -> `task.get("spec_id") or task.get("epic_id")`. Same for `meta.get("next_epic")` -> `meta.get("next_spec") or meta.get("next_epic")`.
-- Read-path filesystem fallback: helper `_resolve_spec_json_path(flow_dir, spec_id) -> Path`.
-- Write-location helper from T1 finalized.
+- **JSON read-compat**: at the ~15 read sites, replace `task.get("epic")` with `task.get("spec") or task.get("epic")`. Same for `epic_id` -> `task.get("spec_id") or task.get("epic_id")`. Same for `meta.get("next_epic")` -> `meta.get("next_spec") or meta.get("next_epic")`. T1 partially shipped read-compat in places (e.g. `cmd_tasks` already does `task_data.get("spec") or task_data.get("epic")`); T2 sweeps the remaining sites.
+- Read-path filesystem fallback: T1 already shipped `find_spec_json_path(flow_dir, spec_id) -> Path` at `flowctl.py:3713-3732` (probes specs/ first, falls back to epics/). T2 verifies all read call-sites use it (no raw `flow_dir / EPICS_DIR / f"{id}.json"` constructions outside the helper). <!-- Updated by plan-sync: T1 shipped helper as find_spec_json_path not _resolve_spec_json_path -->
+- Write-location helper from T1 finalized — `get_specs_json_write_dir(flow_dir)` at `flowctl.py:3692-3710`.
 - Ralph plumbing: `EPICS_FILE` -> `SPECS_FILE`; `--epics-file` -> `--specs-file`. Alias deprecation on first read.
 - **`flowctl next --json` reason-code compat**: emit BOTH `reason: "blocked_by_spec_deps"` AND `legacy_reason: "blocked_by_epic_deps"`.
 
 ## Investigation targets
 
 **Required:**
-- `plugins/flow-next/scripts/flowctl.py:5655-5666` -- existing `_memory_emit_deprecation` pattern.
-- `plugins/flow-next/scripts/flowctl.py:7256-7283` -- second instance.
-- `plugins/flow-next/scripts/flowctl.py:5827-5870` -- `cmd_memory_add` legacy alias mapping.
-- `plugins/flow-next/scripts/flowctl.py:18829, 19026, 18960` -- `--epic`/`--epics-file` flag handlers.
-- `plugins/flow-next/scripts/flowctl.py:9897-9938, 12523-12545, 12656-12693, 18039-18041` -- handlers consuming `args.epic`.
-- `plugins/flow-next/scripts/flowctl.py:11660` -- `cmd_epic_export_cognitive_aid` (T1 renamed; T2 adds `--section epic` value alias warning).
-- All sites matching `grep -n '"\(epic\|epic_id\|epics\)":' plugins/flow-next/scripts/flowctl.py` -- write paths get dual-emit; read paths get fallback.
-- Checkpoint subcommand parser.
+- `plugins/flow-next/scripts/flowctl.py` -- existing `_memory_emit_deprecation` pattern (search for the function definition; T1's adds shifted line numbers — grep `def _memory_emit_deprecation`).
+- `plugins/flow-next/scripts/flowctl.py` -- `cmd_memory_add` legacy alias mapping (grep `def cmd_memory_add`).
+- `plugins/flow-next/scripts/flowctl.py` -- `--epic`/`--epics-file` flag handlers (grep `dest="epic"` and `--epics-file`; canonical `--spec` flags landed in T1's argparse block at `_add_spec_subparsers` and `p_validate` / `p_checkpoint_*` / `p_task_create`).
+- `plugins/flow-next/scripts/flowctl.py` -- handlers consuming `args.epic` (grep `args.epic` / `getattr(args, "epic"`); T1 added `resolve_spec_arg(args)` at `flowctl.py:3735-3744` which centralizes this — T2 makes sure call sites use it).
+- `plugins/flow-next/scripts/flowctl.py` -- `cmd_spec_export_cognitive_aid` is canonical (T1 rename); `cmd_epic_export_cognitive_aid` is the Python module-level alias at `flowctl.py:12219`. T2 adds the `--section epic` value alias warning (T1 already accepts both silently in `EXPORT_COGNITIVE_AID_SECTIONS` at `flowctl.py:10840-10851`). <!-- Updated by plan-sync: T1 renamed function; line numbers shifted -->
+- All sites matching `grep -n '"\(epic\|epic_id\|epics\)":' plugins/flow-next/scripts/flowctl.py` -- write paths get dual-emit; read paths get fallback. T1 already shipped dual-emit for `cmd_specs` (`specs`/`epics`), `cmd_validate` (`spec`/`epic` + `specs`/`epics`), `cmd_tasks` (`spec`/`epic` per-task), and `cmd_spec_export_cognitive_aid` payload top-level (`spec`/`epic`). T2 sweeps remaining sites.
+- Checkpoint subcommand parser at `flowctl.py:19402-19440` (canonical `--spec` + alias `--epic` registered in T1).
 - `cmd_next` reason-code emission paths.
 
 ## Key context
@@ -54,7 +53,7 @@ Layer deprecation warnings and read-compatibility on top of T1's canonical surfa
 - [ ] **Persisted task JSON file contains canonical names only** -- `"spec":` not `"epic":`; `"spec_id":` not `"epic_id":` (where applicable). Reading a 0.x task JSON (with legacy field names) succeeds.
 - [ ] **CLI `--json` output dual-emits all R31 key categories**: `flowctl tasks --json` returns each task with both `"spec":` and `"epic":` (same value); `flowctl specs --json` returns both `"specs":` and `"epics":` (same array); any `--json` output containing `"spec_id":` also contains `"epic_id":` (same value).
 - [ ] **`flowctl next --json` reason-code dual-emit**: `{"reason": "blocked_by_spec_deps", "legacy_reason": "blocked_by_epic_deps", ...}` through 1.x.
-- [ ] Read-path fallback: stage `.flow/epics/fn-X.json` and no `.flow/specs/fn-X.json` -- top-level `flowctl show fn-X` finds it via `_resolve_spec_json_path`.
+- [ ] Read-path fallback: stage `.flow/epics/fn-X.json` and no `.flow/specs/fn-X.json` -- top-level `flowctl show fn-X` finds it via `find_spec_json_path`.
 - [ ] Write-location: on an unmigrated 0.x repo, `flowctl spec create --title "..."` writes to `.flow/epics/<id>.json`.
 - [ ] Ralph: `EPICS_FILE=epics.txt flowctl next` works AND emits deprecation; `SPECS_FILE=epics.txt flowctl next` is silent.
 - [ ] `meta.json` `next_epic` field read-compat: 0.x meta with only `next_epic` key reads correctly; new writes emit `next_spec` (T1 rule for fresh init; T3 migration handles existing meta).

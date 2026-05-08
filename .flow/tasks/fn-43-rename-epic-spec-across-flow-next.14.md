@@ -24,6 +24,7 @@ Rewire all smoke tests to assert the new `flowctl spec *` surface. Add a separat
 ## Approach
 
 - Rewire pattern: factor existing smoke tests into a shared assertion function `assert_spec_workflow()` parameterized by verb. Run the full suite with `verb=spec` (canonical). The alias layer is verified separately, not by doubling the suite.
+- **T1 follow-up — hardcoded `.flow/epics/<id>.json` paths.** `smoke_test.sh` and `prospect_smoke_test.sh` contain ~7 direct filesystem reads of `.flow/epics/<id>.json` that bypass the flowctl CLI. T1 surfaced these as a known follow-up. Rewrite each to either (a) read via `flowctl show <id> --json` / `flowctl specs --json`, or (b) probe via `find_spec_json_path`-equivalent shell logic (`.flow/specs/<id>.json` first, fall back to `.flow/epics/<id>.json`) so the assertions work post-migration AND on alias-mode 0.x repos. <!-- Updated by plan-sync: T1 noted hardcoded epics/ filesystem paths in smoke tests as T14 follow-up -->
 - New `alias_smoke.sh` covers high-value alias paths:
   1. `flowctl epic create` -> `cmd_spec_create` dispatch + stderr deprecation present.
   2. `flowctl epics --json` payload contains BOTH `"specs":` and `"epics":` keys (same array, R31 dual-emit).
@@ -60,6 +61,7 @@ Rewire all smoke tests to assert the new `flowctl spec *` surface. Add a separat
 ## Acceptance
 
 - [ ] All listed smoke scripts updated; existing test coverage maintained.
+- [ ] `smoke_test.sh` + `prospect_smoke_test.sh` no longer read `.flow/epics/<id>.json` paths directly; assertions go through `flowctl` or probe both legacy + canonical paths.
 - [ ] `alias_smoke.sh` covers all 7 high-value alias paths above; passes in CI.
 - [ ] `migration_smoke.sh` covers all 10 scenarios above; passes on Linux + macOS (Windows lockfile coverage in T3 acceptance).
 - [ ] `ci_test.sh` has a new section guarding against `flowctl epic` references in canonical (excludes deprecation-context comments via grep -v pattern).

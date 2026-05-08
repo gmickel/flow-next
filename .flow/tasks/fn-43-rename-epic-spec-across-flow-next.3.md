@@ -44,8 +44,9 @@ Implement the deterministic CLI migration path: `flowctl migrate-rename` (dry-ru
 **Required:**
 - `plugins/flow-next/scripts/flowctl.py:13151-13218` -- existing `cmd_migrate_state` pattern.
 - `plugins/flow-next/scripts/flowctl.py:7365` -- `cmd_memory_migrate`.
-- `plugins/flow-next/scripts/flowctl.py:50` -- `SCHEMA_VERSION` (post-T1 should be 3; T3 verifies and reads).
-- `plugins/flow-next/scripts/flowctl.py:3972` -- `meta = {"schema_version": SCHEMA_VERSION, "next_epic": 1}` -- post-T1 this writes `next_spec` for fresh inits; T3 migrates existing meta files.
+- `plugins/flow-next/scripts/flowctl.py:50` -- `SCHEMA_VERSION = 3` (T1 landed; T3 verifies and reads).
+- `plugins/flow-next/scripts/flowctl.py:4086` -- `meta = {"schema_version": SCHEMA_VERSION, "next_spec": 1}` (T1 already writes `next_spec` for fresh inits; T3 migrates existing 0.x meta files that still have `next_epic`). <!-- Updated by plan-sync: line numbers shifted post-T1 -->
+- `plugins/flow-next/scripts/flowctl.py:3692-3768` -- `get_specs_json_write_dir` + `find_spec_json_path` + `iter_spec_json_files` helpers from T1 (read/write resolution rules).
 
 ## Key context
 
