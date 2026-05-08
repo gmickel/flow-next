@@ -23,7 +23,7 @@ import uuid
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, ContextManager, Optional
 
@@ -95,6 +95,20 @@ MIGRATE_LOCK_POLL_SECS = 0.5
 # the stale lock. After this many seconds with the lock dir present and no
 # pid file, treat the lock as crashed and reclaim it.
 MIGRATE_LOCK_PID_GRACE_SECS = 5
+
+# fn-43.4 — auto-detect migration banner.
+# Banner-acknowledged marker: `.flow/.banner-acknowledged` with an ISO timestamp
+# inside. Written ONLY by explicit user action (currently `migrate-rename
+# --dry-run`; T9/.10 add `/flow-next:setup` defer). Bare `flowctl <verb>` reads
+# the file but never writes it — passive banner display does not constitute
+# acknowledgement.
+BANNER_ACK_FILE = ".banner-acknowledged"
+# Re-nudge cadence: after explicit ack, suppress the banner for this many days.
+# After expiry, banner re-emits once per process; the ack timestamp is NOT
+# auto-refreshed — user must run `migrate-rename --dry-run` again or migrate
+# (per fn-43.4 acceptance: "the `.banner-acknowledged` timestamp is NOT
+# auto-updated").
+BANNER_RENUDGE_DAYS = 7
 
 # Glossary (fn-38.2): repo-root + nearest-ancestor markdown file.
 GLOSSARY_FILE = "GLOSSARY.md"
@@ -13641,6 +13655,142 @@ def _migrate_pre_1_0_layout_present(flow_dir: Path) -> bool:
     return (flow_dir / EPICS_DIR).exists()
 
 
+# fn-43.4 — Migration banner emission.
+#
+# Process-level dedup flag. Set to True after the first banner emission in this
+# process; subsequent calls in the same `flowctl` invocation are no-ops. Multi-
+# process invocations DO re-emit (once each) — there is no cross-process dedup.
+# The 7-day suppression is via `.flow/.banner-acknowledged`, written only on
+# explicit user action.
+_MIGRATION_BANNER_EMITTED = False
+
+
+def _banner_ack_within_renudge_window(flow_dir: Path) -> bool:
+    """True iff `.banner-acknowledged` exists with timestamp within renudge window.
+
+    File payload is an ISO timestamp written by `now_iso()`. A missing file,
+    unreadable file, unparseable timestamp, or future-dated timestamp all
+    return False (fall through to banner emission). A timestamp older than
+    `BANNER_RENUDGE_DAYS` also returns False — re-nudge fires once on next
+    invocation (per fn-43.4 acceptance: "After 7 days: banner re-emits once
+    on next invocation; the `.banner-acknowledged` timestamp is NOT auto-
+    updated").
+    """
+    ack_path = flow_dir / BANNER_ACK_FILE
+    if not ack_path.exists():
+        return False
+    try:
+        raw = ack_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return False
+    if not raw:
+        return False
+    try:
+        # `now_iso` writes `...Z`; fromisoformat (Python 3.11+) handles `Z`,
+        # but be defensive and also accept the explicit `+00:00` form.
+        normalized = raw.replace("Z", "+00:00")
+        ack_dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        return False
+    if ack_dt.tzinfo is None:
+        ack_dt = ack_dt.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    age = now - ack_dt
+    if age < timedelta(0):
+        # Future-dated ack (clock skew, deliberate manipulation). Treat as
+        # un-acknowledged — banner fires.
+        return False
+    return age < timedelta(days=BANNER_RENUDGE_DAYS)
+
+
+def _check_migration_banner(flow_dir: Path) -> None:
+    """Emit pre-1.0 migration banner / future-version warning to stderr.
+
+    Called once early in `main()` after argparse dispatch resolves. Never
+    raises — any IO/parse error is swallowed silently because the banner is
+    informational only and must not affect subcommand execution.
+
+    Banner suppression matrix (any one true → silent return):
+      - `FLOW_RALPH=1`             — autonomous loop, no human reads stderr.
+      - `REVIEW_RECEIPT_PATH` set  — review subprocess; agent doesn't see stderr.
+      - `FLOW_NO_AUTO_MIGRATE=1`   — user-opt-out env knob.
+      - process-level dedup flag   — already emitted in this invocation.
+      - sentinel valid (≤ 1.x)     — already migrated.
+      - banner-acknowledged < 7d   — user actively engaged with migration UX.
+
+    Future-version handling: sentinel payload parses as semver `>=2.x` →
+    one-line stderr warning, then return. Subcommand runs normally with its
+    own exit code; we never override exit status.
+
+    Pre-1.0 detection: `.flow/epics/` exists and no valid sentinel → emit the
+    6-line banner block (verbatim per fn-43.4 spec) to stderr. Does NOT write
+    `.banner-acknowledged` — passive display is not acknowledgement.
+    """
+    global _MIGRATION_BANNER_EMITTED
+
+    if _MIGRATION_BANNER_EMITTED:
+        return
+
+    # Suppression env knobs. Cheap checks first; never touch the filesystem
+    # before confirming the user wants the banner machinery to run at all.
+    if os.environ.get("FLOW_RALPH") == "1":
+        return
+    if os.environ.get("REVIEW_RECEIPT_PATH"):
+        return
+    if os.environ.get("FLOW_NO_AUTO_MIGRATE") == "1":
+        return
+
+    try:
+        if not flow_dir.exists():
+            return
+
+        valid, payload = _migrate_sentinel_state(flow_dir)
+        if valid:
+            # Sentinel valid. Check for future version (semver major > 1) —
+            # downgrade-safety warning. Subcommand still runs; exit code
+            # preserved.
+            if payload:
+                m = re.match(r"^(\d+)\.\d+\.\d+$", payload)
+                if m and int(m.group(1)) >= 2:
+                    print(
+                        f"Warning: .flow/ was migrated by a newer flow-next "
+                        f"({payload}); some features may be unavailable.",
+                        file=sys.stderr,
+                    )
+                    _MIGRATION_BANNER_EMITTED = True
+            # Already migrated at <= 1.x — silent.
+            return
+
+        # No valid sentinel. Pre-1.0 only fires if `.flow/epics/` is present.
+        # Without epics/ + without sentinel = ambiguous (fresh repo, post-init
+        # before first epic, etc.) — silent. fn-43.3 spec step 3 says exactly
+        # the same: "if neither, exit 0".
+        if not (flow_dir / EPICS_DIR).exists():
+            return
+
+        # Pre-1.0 layout confirmed. Honor 7-day ack window.
+        if _banner_ack_within_renudge_window(flow_dir):
+            return
+
+        # Emit the 6-line banner verbatim per fn-43.4 spec.
+        banner_lines = (
+            "flow-next 1.0 renamed `flowctl epic` -> `flowctl spec`.",
+            "Your `.flow/epics/` directory is from 0.x; alias mode keeps everything working.",
+            "Migrate to unlock future flow-swarm compatibility:",
+            "  Interactive:  /flow-next:setup",
+            "  Deterministic: flowctl migrate-rename --yes",
+            "Suppress this banner: FLOW_NO_AUTO_MIGRATE=1 (alias keeps working)",
+        )
+        for line in banner_lines:
+            print(line, file=sys.stderr)
+        _MIGRATION_BANNER_EMITTED = True
+    except Exception:
+        # Banner is informational only; never let it disrupt the host command.
+        # Catch broadly because this runs on EVERY flowctl invocation and a
+        # crash here would block `flowctl --help`, `flowctl init`, etc.
+        return
+
+
 def _migrate_sentinel_state(flow_dir: Path) -> tuple[bool, Optional[str]]:
     """Return (valid, payload) for the .flow_version sentinel.
 
@@ -13907,7 +14057,7 @@ def _migrate_copy_tree_to_backup(flow_dir: Path, backup_dir: Path) -> None:
     excluded = {
         MIGRATE_BACKUP_DIR,
         MIGRATE_MANIFEST_FILE,
-        ".banner-acknowledged",
+        BANNER_ACK_FILE,
         MIGRATE_LOCK_DIR,
     }
     for entry in flow_dir.iterdir():
@@ -13947,7 +14097,7 @@ def _migrate_recover_from_complete_backup(flow_dir: Path, backup_dir: Path) -> N
     # to decide we're in this recovery branch, and step 5 of cmd_migrate_rename
     # would clean it up anyway. Wiping it here lets step 4 produce a clean
     # fresh-backup snapshot below.
-    preserve = {MIGRATE_BACKUP_DIR, MIGRATE_LOCK_DIR, ".banner-acknowledged"}
+    preserve = {MIGRATE_BACKUP_DIR, MIGRATE_LOCK_DIR, BANNER_ACK_FILE}
     for entry in flow_dir.iterdir():
         if entry.name in preserve:
             continue
@@ -14345,6 +14495,21 @@ def cmd_migrate_rename(args: argparse.Namespace) -> None:
 
         if dry_run:
             full_plan = [backup_summary] + description + [sentinel_summary]
+            # fn-43.4: dry-run is one of the two explicit user-acknowledgement
+            # paths for the migration banner (the other is `/flow-next:setup`
+            # interactive defer in T9/.10). The user has actively engaged with
+            # the migration UX by inspecting the plan, so the 7-day re-nudge
+            # window starts now. Bare `flowctl <verb>` invocations DO NOT
+            # write this file — passive banner display is not acknowledgement.
+            try:
+                atomic_write(flow_dir / BANNER_ACK_FILE, now_iso() + "\n")
+            except OSError:
+                # Best-effort. A read-only `.flow/` (already short-circuited
+                # earlier for non-dry runs) can still reach this branch in
+                # dry-run mode; failing the ack write must not fail the dry-
+                # run plan output. The user sees the plan; banner re-emits
+                # next invocation, which is acceptable degraded behavior.
+                pass
             if is_json:
                 json_output({
                     "migrated": False,
@@ -21406,6 +21571,18 @@ def main() -> None:
     p_walk_record.set_defaults(func=cmd_review_walkthrough_record)
 
     args = parser.parse_args()
+    # fn-43.4: emit pre-1.0 migration banner / future-version warning to stderr
+    # before the subcommand runs. Process-level dedup; never mutates state
+    # except for the dedup flag; never overrides the subcommand's exit code.
+    # Suppression matrix lives in `_check_migration_banner` (FLOW_RALPH,
+    # REVIEW_RECEIPT_PATH, FLOW_NO_AUTO_MIGRATE, sentinel-present, ack < 7d).
+    try:
+        _check_migration_banner(get_flow_dir())
+    except Exception:
+        # Defense in depth — _check_migration_banner already swallows internally,
+        # but a `get_flow_dir` exception (e.g. exotic git failure) must not
+        # block subcommand dispatch.
+        pass
     # fn-43.2: emit deprecation for legacy `flowctl epic *` / `flowctl epics`
     # invocations once per process. The `epic` parent + `epics` list-alias
     # both dispatch to the same canonical handlers (`cmd_spec_*` / `cmd_specs`)
