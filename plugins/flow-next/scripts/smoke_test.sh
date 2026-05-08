@@ -1705,16 +1705,25 @@ data["depends_on_epics"] = [base_id]
 path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 PY
 printf '{"epics":["%s"]}\n' "$DEP_CHILD_ID" > "$TEST_DIR/epics.json"
-blocked_json="$(scripts/flowctl next --epics-file "$TEST_DIR/epics.json" --json)"
+# fn-43.2: --epics-file emits a deprecation on stderr; suppress so the
+# assertion below isn't fed deprecation output. Canonical --specs-file is
+# silent (verified separately in T14 alias-smoke).
+blocked_json="$(FLOW_NO_DEPRECATION=1 scripts/flowctl next --epics-file "$TEST_DIR/epics.json" --json)"
 "$PYTHON_BIN" - "$DEP_CHILD_ID" "$blocked_json" <<'PY'
 import json, sys
 child_id = sys.argv[1]
 data = json.loads(sys.argv[2])
 assert data["status"] == "none"
-assert data["reason"] == "blocked_by_epic_deps"
+# fn-43.2 R31: reason is canonical (`blocked_by_spec_deps`); legacy
+# `blocked_by_epic_deps` is co-emitted under `legacy_reason` through 1.x
+# (consumers can grep either key during the transition; `legacy_reason`
+# drops in 2.0).
+assert data["reason"] == "blocked_by_spec_deps"
+assert data["legacy_reason"] == "blocked_by_epic_deps"
+assert child_id in data.get("blocked_specs", {})
 assert child_id in data.get("blocked_epics", {})
 PY
-echo -e "${GREEN}✓${NC} depends_on_epics blocks"
+echo -e "${GREEN}✓${NC} depends_on_specs blocks (R31 dual-emit)"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- stdin support ---${NC}"

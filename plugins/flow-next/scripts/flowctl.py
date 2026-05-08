@@ -968,6 +968,8 @@ def save_task_definition(task_id: str, definition: dict) -> None:
     def_path = flow_dir / TASKS_DIR / f"{task_id}.json"
     # Filter out runtime fields
     clean_def = {k: v for k, v in definition.items() if k not in RUNTIME_FIELDS}
+    # fn-43.2: ensure persisted JSON uses canonical "spec" key only.
+    canonicalize_task_for_write(clean_def)
     atomic_write_json(def_path, clean_def)
 
 
@@ -1637,6 +1639,13 @@ def normalize_task(task_data: dict) -> dict:
     # Migrate legacy 'deps' key to 'depends_on'
     if "depends_on" not in task_data:
         task_data["depends_on"] = task_data.get("deps", [])
+    # fn-43.2: migrate legacy 'epic' key to canonical 'spec' (read side).
+    # Persisted writes go through canonicalize_task_for_write() which strips
+    # 'epic' entirely; this branch handles 0.x task JSON files that haven't
+    # been rewritten yet — first read promotes the value to 'spec' so all
+    # downstream code can read a single canonical key.
+    if "spec" not in task_data and "epic" in task_data:
+        task_data["spec"] = task_data["epic"]
     # Backend spec defaults (for orchestration products like flow-swarm)
     if "impl" not in task_data:
         task_data["impl"] = None
@@ -1644,6 +1653,23 @@ def normalize_task(task_data: dict) -> dict:
         task_data["review"] = None
     if "sync" not in task_data:
         task_data["sync"] = None
+    return task_data
+
+
+def canonicalize_task_for_write(task_data: dict) -> dict:
+    """Strip legacy 'epic' key and ensure canonical 'spec' is set.
+
+    Mutates and returns `task_data`. Call before every persisted task JSON
+    write so 1.x repos converge on canonical key names regardless of the
+    on-disk shape they were loaded from. Idempotent.
+    """
+    if "spec" not in task_data and "epic" in task_data:
+        task_data["spec"] = task_data["epic"]
+    task_data.pop("epic", None)
+    # Same shape for the historic _id form (very few callers use it; cheap to handle).
+    if "spec_id" not in task_data and "epic_id" in task_data:
+        task_data["spec_id"] = task_data["epic_id"]
+    task_data.pop("epic_id", None)
     return task_data
 
 
@@ -3735,13 +3761,43 @@ def find_spec_json_path(flow_dir: Path, spec_id: str) -> Path:
 def resolve_spec_arg(args: argparse.Namespace) -> Optional[str]:
     """Resolve the spec id from --spec or --epic on parsed args.
 
-    Both flags exist as silent aliases through T1 (T2 adds the deprecation
-    warning to --epic). Canonical --spec wins when both are passed.
+    Canonical --spec wins when both are passed. When only --epic is set, T2
+    emits a one-shot stderr deprecation warning (per process per legacy form)
+    via `_emit_rename_deprecation`. Suppressed when `FLOW_NO_DEPRECATION=1`.
     """
     spec = getattr(args, "spec", None)
     if spec:
         return spec
-    return getattr(args, "epic", None)
+    legacy = getattr(args, "epic", None)
+    if legacy:
+        _emit_rename_deprecation("--epic", "--spec")
+    return legacy
+
+
+# Track which legacy forms have already emitted a deprecation warning in this
+# process. One warning per legacy form keeps Ralph logs / pipelines clean
+# while still surfacing the rename path on first contact.
+_RENAME_DEPRECATION_EMITTED: set[str] = set()
+
+
+def _emit_rename_deprecation(legacy_form: str, canonical_form: str) -> None:
+    """Print a one-shot stderr deprecation for a legacy `epic`-named surface.
+
+    Suppress with `FLOW_NO_DEPRECATION=1`. Mirrors the `_memory_emit_deprecation`
+    pattern but is keyed on a `legacy_form` string so a single process emits
+    each warning at most once (the rename touches enough call-sites that
+    per-call emission would spam Ralph logs).
+    """
+    if legacy_form in _RENAME_DEPRECATION_EMITTED:
+        return
+    _RENAME_DEPRECATION_EMITTED.add(legacy_form)
+    if os.environ.get("FLOW_NO_DEPRECATION") == "1":
+        return
+    print(
+        f"Warning: {legacy_form} is deprecated; use {canonical_form}. "
+        f"(Suppress with FLOW_NO_DEPRECATION=1.)",
+        file=sys.stderr,
+    )
 
 
 def iter_spec_json_files(flow_dir: Path):
@@ -4212,16 +4268,20 @@ def cmd_status(args: argparse.Namespace) -> None:
     active_runs = find_active_runs()
 
     if args.json:
+        # fn-43.2 R31: co-emit canonical "specs" + legacy "epics" alias.
+        # Same shape for `current_spec`/`current_epic` on each active run.
         json_output(
             {
                 "success": True,
                 "flow_exists": flow_exists,
+                "specs": epic_counts,
                 "epics": epic_counts,
                 "tasks": task_counts,
                 "runs": [
                     {
                         "id": r["id"],
                         "iteration": r["iteration"],
+                        "current_spec": r["current_epic"],
                         "current_epic": r["current_epic"],
                         "current_task": r["current_task"],
                         "paused": r["paused"],
@@ -4322,11 +4382,13 @@ def cmd_ralph_status(args: argparse.Namespace) -> None:
             current_task = task_match.group(1)
 
     if args.json:
+        # fn-43.2 R31: co-emit canonical "current_spec" + legacy "current_epic" alias.
         json_output(
             {
                 "success": True,
                 "run": run_id,
                 "iteration": iteration,
+                "current_spec": current_epic,
                 "current_epic": current_epic,
                 "current_task": current_task,
                 "paused": paused,
@@ -9064,8 +9126,12 @@ def cmd_prospect_promote(args: argparse.Namespace) -> None:
     source_link = f".flow/prospects/{descriptor['artifact_id']}.md#idea-{idea_n}"
 
     if args.json:
+        # fn-43.2 R31: co-emit canonical "spec_id"/"spec_title" + legacy
+        # "epic_id"/"epic_title" alias keys.
         payload: dict[str, Any] = {
+            "spec_id": epic_id,
             "epic_id": epic_id,
+            "spec_title": epic_title,
             "epic_title": epic_title,
             "idea": idea_n,
             "artifact_id": descriptor["artifact_id"],
@@ -9726,12 +9792,12 @@ def cmd_task_create(args: argparse.Namespace) -> None:
             Path(args.acceptance_file), "Acceptance file", use_json=args.json
         )
 
-    # Create task JSON (MU-2: includes soft-claim fields). The "epic" field
-    # name is preserved on disk for back-compat through 1.x; T2 adds
-    # read-compat for "spec" alongside.
+    # fn-43.2: persisted task JSON uses canonical "spec" key only. Read paths
+    # accept legacy "epic" via normalize_task() for 0.x task files that
+    # haven't been rewritten yet.
     task_data = {
         "id": task_id,
-        "epic": spec_id,
+        "spec": spec_id,
         "title": args.title,
         "status": "todo",
         "priority": args.priority,
@@ -9808,6 +9874,7 @@ def cmd_dep_add(args: argparse.Namespace) -> None:
     if args.depends_on not in task_data["depends_on"]:
         task_data["depends_on"].append(args.depends_on)
         task_data["updated_at"] = now_iso()
+        canonicalize_task_for_write(task_data)
         atomic_write_json(task_path, task_data)
 
     if args.json:
@@ -9874,6 +9941,7 @@ def cmd_task_set_deps(args: argparse.Namespace) -> None:
 
     if added:
         task_data["updated_at"] = now_iso()
+        canonicalize_task_for_write(task_data)
         atomic_write_json(task_path, task_data)
 
     if args.json:
@@ -9955,12 +10023,20 @@ def cmd_show(args: argparse.Namespace) -> None:
     elif is_task_id(args.id):
         # Load task with merged runtime state
         task_data = load_task_with_state(args.id, use_json=args.json)
+        # fn-43.2 R31: co-emit canonical "spec" + legacy "epic" alias on
+        # task --json output. normalize_task() already promotes 0.x "epic"
+        # to "spec" on read, so spec_value is always populated even for
+        # legacy task JSON files.
+        spec_value = task_data.get("spec") or task_data.get("epic")
+        if spec_value is not None:
+            task_data["spec"] = spec_value
+            task_data["epic"] = spec_value
 
         if args.json:
             json_output(task_data)
         else:
             print(f"Task: {task_data['id']}")
-            print(f"Epic: {task_data['epic']}")
+            print(f"Epic: {spec_value}")
             print(f"Title: {task_data['title']}")
             print(f"Status: {task_data['status']}")
             print(f"Depends on: {', '.join(task_data['depends_on']) or 'none'}")
@@ -10537,7 +10613,9 @@ def cmd_spec_set_title(args: argparse.Namespace) -> None:
         if task_path.exists():
             task_data = normalize_task(load_json(task_path))
             task_data["id"] = new_task_id
-            task_data["epic"] = new_id
+            # fn-43.2: write canonical "spec" key; canonicalize_task_for_write
+            # below strips any residual "epic" key from the loaded JSON.
+            task_data["spec"] = new_id
             task_data["spec_path"] = f"{FLOW_DIR}/{TASKS_DIR}/{new_task_id}.md"
             # Update depends_on references within same spec
             if task_data.get("depends_on"):
@@ -10545,6 +10623,7 @@ def cmd_spec_set_title(args: argparse.Namespace) -> None:
                     task_id_map.get(dep, dep) for dep in task_data["depends_on"]
                 ]
             task_data["updated_at"] = now_iso()
+            canonicalize_task_for_write(task_data)
             atomic_write_json(task_path, task_data)
 
     # Update depends_on_epics in other specs that reference this one — walk both layouts.
@@ -11925,6 +12004,11 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
             use_json=use_json,
             code=2,
         )
+    # fn-43.2: legacy `--section epic` is silently aliased in T1 (it filters
+    # to the same payload keys as `--section spec`). T2 surfaces the rename
+    # path on first use.
+    if section == "epic":
+        _emit_rename_deprecation("--section epic", "--section spec")
 
     flow_dir = get_flow_dir()
     spec_json_path = find_spec_json_path(flow_dir, spec_id)
@@ -12275,6 +12359,7 @@ def cmd_task_set_backend(args: argparse.Namespace) -> None:
         task_data["sync"] = args.sync if args.sync else None
         updated.append(f"sync={args.sync or 'null'}")
 
+    canonicalize_task_for_write(task_data)
     atomic_write_json(task_path, task_data)
 
     if args.json:
@@ -12419,9 +12504,11 @@ def cmd_task_show_backend(args: argparse.Namespace) -> None:
     sync_field = resolve_field(sync_raw, sync_source)
 
     if args.json:
+        # fn-43.2 R31: co-emit canonical "spec" + legacy "epic" alias.
         json_output(
             {
                 "id": task_id,
+                "spec": epic_id,
                 "epic": epic_id,
                 "impl": impl_field,
                 "review": review_field,
@@ -12521,6 +12608,7 @@ def cmd_task_set_spec(args: argparse.Namespace) -> None:
         content = read_file_or_stdin(args.file, "Spec file", use_json=args.json)
         atomic_write(task_spec_path, content)
         task_data["updated_at"] = now_iso()
+        canonicalize_task_for_write(task_data)
         atomic_write_json(task_json_path, task_data)
 
         if args.json:
@@ -12559,6 +12647,7 @@ def cmd_task_set_spec(args: argparse.Namespace) -> None:
     # Single atomic write for spec, single for JSON
     atomic_write(task_spec_path, updated_spec)
     task_data["updated_at"] = now_iso()
+    canonicalize_task_for_write(task_data)
     atomic_write_json(task_json_path, task_data)
 
     if args.json:
@@ -12636,6 +12725,7 @@ def cmd_task_reset(args: argparse.Namespace) -> None:
     def_data.pop("evidence", None)
     def_data["status"] = "todo"  # Keep in sync for backward compat
     def_data["updated_at"] = now_iso()
+    canonicalize_task_for_write(def_data)
     atomic_write_json(task_json_path, def_data)
 
     # Clear evidence section from spec markdown
@@ -12672,6 +12762,7 @@ def cmd_task_reset(args: argparse.Namespace) -> None:
             dep_def.pop("evidence", None)
             dep_def["status"] = "todo"
             dep_def["updated_at"] = now_iso()
+            canonicalize_task_for_write(dep_def)
             atomic_write_json(dep_path, dep_def)
 
             clear_task_evidence(dep_id)
@@ -12725,6 +12816,7 @@ def _task_set_section(
     # Write spec then JSON (both validated above)
     atomic_write(task_spec_path, updated_spec)
     task_data["updated_at"] = now_iso()
+    canonicalize_task_for_write(task_data)
     atomic_write_json(task_json_path, task_data)
 
     if use_json:
@@ -12880,10 +12972,15 @@ def cmd_next(args: argparse.Namespace) -> None:
 
     flow_dir = get_flow_dir()
 
-    # Resolve specs list. T1: --epics-file alias kept (T2 layers warning);
-    # --specs-file is the canonical name (added below in argparse). The skill
-    # tooling currently passes --epics-file; both flags route here.
-    specs_file = getattr(args, "specs_file", None) or getattr(args, "epics_file", None)
+    # Resolve specs list. T2 layers a one-shot stderr deprecation when only
+    # the legacy --epics-file flag is set; --specs-file (canonical) is silent.
+    # The skill tooling has historically passed --epics-file; both flags route
+    # here and the canonical wins when both are passed.
+    canonical_specs_file = getattr(args, "specs_file", None)
+    legacy_specs_file = getattr(args, "epics_file", None)
+    specs_file = canonical_specs_file or legacy_specs_file
+    if not canonical_specs_file and legacy_specs_file:
+        _emit_rename_deprecation("--epics-file", "--specs-file")
     epic_ids: list[str] = []
     if specs_file:
         data = load_json_or_exit(
@@ -12952,9 +13049,11 @@ def cmd_next(args: argparse.Namespace) -> None:
 
         if args.require_plan_review and epic_data.get("plan_review_status") != "ship":
             if args.json:
+                # fn-43.2 R31: co-emit canonical "spec" + legacy "epic" alias.
                 json_output(
                     {
                         "status": "plan",
+                        "spec": epic_id,
                         "epic": epic_id,
                         "task": None,
                         "reason": "needs_plan_review",
@@ -12992,9 +13091,11 @@ def cmd_next(args: argparse.Namespace) -> None:
         if in_progress:
             task_id = in_progress[0]["id"]
             if args.json:
+                # fn-43.2 R31: co-emit canonical "spec" + legacy "epic" alias.
                 json_output(
                     {
                         "status": "work",
+                        "spec": epic_id,
                         "epic": epic_id,
                         "task": task_id,
                         "reason": "resume_in_progress",
@@ -13024,9 +13125,11 @@ def cmd_next(args: argparse.Namespace) -> None:
         if ready:
             task_id = ready[0]["id"]
             if args.json:
+                # fn-43.2 R31: co-emit canonical "spec" + legacy "epic" alias.
                 json_output(
                     {
                         "status": "work",
+                        "spec": epic_id,
                         "epic": epic_id,
                         "task": task_id,
                         "reason": "ready_task",
@@ -13044,9 +13147,11 @@ def cmd_next(args: argparse.Namespace) -> None:
             and epic_data.get("completion_review_status") != "ship"
         ):
             if args.json:
+                # fn-43.2 R31: co-emit canonical "spec" + legacy "epic" alias.
                 json_output(
                     {
                         "status": "completion_review",
+                        "spec": epic_id,
                         "epic": epic_id,
                         "task": None,
                         "reason": "needs_completion_review",
@@ -13057,14 +13162,26 @@ def cmd_next(args: argparse.Namespace) -> None:
             return
 
     if args.json:
-        payload = {"status": "none", "epic": None, "task": None, "reason": "none"}
+        # fn-43.2 R31: co-emit canonical "spec" key + legacy "epic" alias.
+        # Reason codes also dual-emit: canonical `reason: "blocked_by_spec_deps"`
+        # alongside legacy `reason: "blocked_by_epic_deps"` carried as
+        # `legacy_reason` (existing 1.x consumers grep for "blocked_by_epic_deps").
+        payload = {
+            "status": "none",
+            "spec": None,
+            "epic": None,
+            "task": None,
+            "reason": "none",
+        }
         if blocked_epics:
-            payload["reason"] = "blocked_by_epic_deps"
+            payload["reason"] = "blocked_by_spec_deps"
+            payload["legacy_reason"] = "blocked_by_epic_deps"
+            payload["blocked_specs"] = blocked_epics
             payload["blocked_epics"] = blocked_epics
         json_output(payload)
     else:
         if blocked_epics:
-            print("none blocked_by_epic_deps")
+            print("none blocked_by_spec_deps")
             for epic_id, deps in blocked_epics.items():
                 print(f"  {epic_id}: {', '.join(deps)}")
         else:
@@ -13431,6 +13548,7 @@ def cmd_migrate_state(args: argparse.Namespace) -> None:
         # Optionally clean definition file (only with --clean flag)
         if args.clean:
             clean_def = {k: v for k, v in definition.items() if k not in RUNTIME_FIELDS}
+            canonicalize_task_for_write(clean_def)
             atomic_write_json(task_file, clean_def)
 
     if args.json:
@@ -18119,12 +18237,14 @@ def cmd_checkpoint_save(args: argparse.Namespace) -> None:
                 "runtime": runtime_state,  # May be None if no state file
             })
 
-    # Build checkpoint
+    # Build checkpoint. fn-43.2: persist canonical "spec_id"/"spec" keys;
+    # `cmd_checkpoint_restore` accepts either form for back-compat with
+    # checkpoints saved by 0.x flowctl.
     checkpoint = {
         "schema_version": 2,  # Bumped for runtime state support
         "created_at": now_iso(),
-        "epic_id": epic_id,
-        "epic": {
+        "spec_id": epic_id,
+        "spec": {
             "data": epic_data,
             "spec": epic_spec,
         },
@@ -18136,7 +18256,9 @@ def cmd_checkpoint_save(args: argparse.Namespace) -> None:
     atomic_write_json(checkpoint_path, checkpoint)
 
     if args.json:
+        # fn-43.2 R31: co-emit canonical "spec_id" + legacy "epic_id" alias.
         json_output({
+            "spec_id": epic_id,
             "epic_id": epic_id,
             "checkpoint_path": str(checkpoint_path),
             "task_count": len(tasks),
@@ -18175,9 +18297,14 @@ def cmd_checkpoint_restore(args: argparse.Namespace) -> None:
         checkpoint_path, f"Checkpoint {epic_id}", use_json=args.json
     )
 
-    # Validate checkpoint structure
-    if "epic" not in checkpoint or "tasks" not in checkpoint:
+    # Validate checkpoint structure. fn-43.2: accept canonical "spec" key
+    # (1.0+ checkpoints) or legacy "epic" key (0.x checkpoints).
+    if (
+        ("spec" not in checkpoint and "epic" not in checkpoint)
+        or "tasks" not in checkpoint
+    ):
         error_exit("Invalid checkpoint format", use_json=args.json)
+    checkpoint_spec_block = checkpoint.get("spec") or checkpoint.get("epic")
 
     # Restore spec — write back to where the JSON lives (legacy or canonical).
     # If there's no existing JSON anywhere, fall back to write resolver.
@@ -18193,12 +18320,12 @@ def cmd_checkpoint_restore(args: argparse.Namespace) -> None:
     spec_path = flow_dir / SPECS_DIR / f"{epic_id}.md"
     spec_path.parent.mkdir(parents=True, exist_ok=True)
 
-    epic_data = checkpoint["epic"]["data"]
+    epic_data = checkpoint_spec_block["data"]
     epic_data["updated_at"] = now_iso()
     atomic_write_json(epic_path, epic_data)
 
-    if checkpoint["epic"]["spec"]:
-        atomic_write(spec_path, checkpoint["epic"]["spec"])
+    if checkpoint_spec_block.get("spec"):
+        atomic_write(spec_path, checkpoint_spec_block["spec"])
 
     # Restore tasks (including runtime state)
     tasks_dir = flow_dir / TASKS_DIR
@@ -18211,6 +18338,7 @@ def cmd_checkpoint_restore(args: argparse.Namespace) -> None:
 
         task_data = task["data"]
         task_data["updated_at"] = now_iso()
+        canonicalize_task_for_write(task_data)
         atomic_write_json(task_json_path, task_data)
 
         if task["spec"]:
@@ -18229,7 +18357,9 @@ def cmd_checkpoint_restore(args: argparse.Namespace) -> None:
         restored_tasks.append(task_id)
 
     if args.json:
+        # fn-43.2 R31: co-emit canonical "spec_id" + legacy "epic_id" alias.
         json_output({
+            "spec_id": epic_id,
             "epic_id": epic_id,
             "checkpoint_created_at": checkpoint.get("created_at"),
             "tasks_restored": restored_tasks,
@@ -18259,7 +18389,9 @@ def cmd_checkpoint_delete(args: argparse.Namespace) -> None:
 
     if not checkpoint_path.exists():
         if args.json:
+            # fn-43.2 R31: co-emit canonical "spec_id" + legacy "epic_id" alias.
             json_output({
+                "spec_id": epic_id,
                 "epic_id": epic_id,
                 "deleted": False,
                 "message": f"No checkpoint found for {epic_id}",
@@ -18271,7 +18403,9 @@ def cmd_checkpoint_delete(args: argparse.Namespace) -> None:
     checkpoint_path.unlink()
 
     if args.json:
+        # fn-43.2 R31: co-emit canonical "spec_id" + legacy "epic_id" alias.
         json_output({
+            "spec_id": epic_id,
             "epic_id": epic_id,
             "deleted": True,
             "message": f"Deleted checkpoint for {epic_id}",
@@ -18813,10 +18947,19 @@ def main() -> None:
         type=int,
         help="Survivor position number (1-based) to promote",
     )
+    # fn-43.2: --spec-title is canonical post-1.0; --epic-title kept as a
+    # silent alias (the prospect-promote skill is internal enough that an
+    # explicit deprecation would just spam Ralph; the verb-level
+    # `flowctl epic *` deprecation already surfaces the rename path).
+    p_prospect_promote.add_argument(
+        "--spec-title",
+        dest="epic_title",
+        help="Override the spec title (defaults to the survivor's title)",
+    )
     p_prospect_promote.add_argument(
         "--epic-title",
         dest="epic_title",
-        help="Override the epic title (defaults to the survivor's title)",
+        help="Override the spec title (alias for --spec-title; removed in 2.0)",
     )
     p_prospect_promote.add_argument(
         "--force",
@@ -19967,6 +20110,16 @@ def main() -> None:
     p_walk_record.set_defaults(func=cmd_review_walkthrough_record)
 
     args = parser.parse_args()
+    # fn-43.2: emit deprecation for legacy `flowctl epic *` / `flowctl epics`
+    # invocations once per process. The `epic` parent + `epics` list-alias
+    # both dispatch to the same canonical handlers (`cmd_spec_*` / `cmd_specs`)
+    # via parallel-subparser registration; this is the single chokepoint that
+    # fires the warning regardless of which sub-subcommand was selected.
+    cmd = getattr(args, "command", None)
+    if cmd == "epic":
+        _emit_rename_deprecation("flowctl epic", "flowctl spec")
+    elif cmd == "epics":
+        _emit_rename_deprecation("flowctl epics", "flowctl specs")
     args.func(args)
 
 
