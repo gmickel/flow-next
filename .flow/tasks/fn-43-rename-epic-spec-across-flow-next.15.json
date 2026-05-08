@@ -1,0 +1,30 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-08T20:00:21.217629Z",
+  "depends_on": [
+    "fn-43-rename-epic-spec-across-flow-next.1",
+    "fn-43-rename-epic-spec-across-flow-next.2",
+    "fn-43-rename-epic-spec-across-flow-next.3",
+    "fn-43-rename-epic-spec-across-flow-next.4",
+    "fn-43-rename-epic-spec-across-flow-next.5",
+    "fn-43-rename-epic-spec-across-flow-next.6",
+    "fn-43-rename-epic-spec-across-flow-next.7",
+    "fn-43-rename-epic-spec-across-flow-next.8",
+    "fn-43-rename-epic-spec-across-flow-next.9",
+    "fn-43-rename-epic-spec-across-flow-next.10",
+    "fn-43-rename-epic-spec-across-flow-next.11",
+    "fn-43-rename-epic-spec-across-flow-next.12",
+    "fn-43-rename-epic-spec-across-flow-next.13",
+    "fn-43-rename-epic-spec-across-flow-next.14",
+    "fn-43-rename-epic-spec-across-flow-next.17"
+  ],
+  "epic": "fn-43-rename-epic-spec-across-flow-next",
+  "id": "fn-43-rename-epic-spec-across-flow-next.15",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-43-rename-epic-spec-across-flow-next.15.md",
+  "status": "todo",
+  "title": "Manifests + version 1.0.0 bump + CHANGELOG migration guide + sync-codex.sh + Codex regen",
+  "updated_at": "2026-05-08T20:43:06.567828Z"
+}

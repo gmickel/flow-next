@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-08T19:54:00.209873Z",
+  "depends_on": [
+    "fn-43-rename-epic-spec-across-flow-next.1"
+  ],
+  "epic": "fn-43-rename-epic-spec-across-flow-next",
+  "id": "fn-43-rename-epic-spec-across-flow-next.2",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-43-rename-epic-spec-across-flow-next.2.md",
+  "status": "todo",
+  "title": "flowctl.py: deprecation alias layer + JSON read-compat + read-path fallback",
+  "updated_at": "2026-05-08T20:30:24.229507Z"
+}

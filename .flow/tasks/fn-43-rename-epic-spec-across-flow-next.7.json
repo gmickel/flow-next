@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-08T19:56:50.562938Z",
+  "depends_on": [
+    "fn-43-rename-epic-spec-across-flow-next.2"
+  ],
+  "epic": "fn-43-rename-epic-spec-across-flow-next",
+  "id": "fn-43-rename-epic-spec-across-flow-next.7",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-43-rename-epic-spec-across-flow-next.7.md",
+  "status": "todo",
+  "title": "Rewrite flow-next-make-pr skill prose for spec vocabulary + R31 payload key updates",
+  "updated_at": "2026-05-08T19:56:50.710201Z"
+}

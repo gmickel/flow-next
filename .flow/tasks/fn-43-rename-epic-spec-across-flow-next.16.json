@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-08T20:01:15.860343Z",
+  "depends_on": [
+    "fn-43-rename-epic-spec-across-flow-next.15"
+  ],
+  "epic": "fn-43-rename-epic-spec-across-flow-next",
+  "id": "fn-43-rename-epic-spec-across-flow-next.16",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-43-rename-epic-spec-across-flow-next.16.md",
+  "status": "todo",
+  "title": "External: mickel.tech site update + AI-x-SDLC-Starter-Kit cross-references (maintainer-only post-merge)",
+  "updated_at": "2026-05-08T20:30:24.083664Z"
+}

@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-08T19:56:07.371911Z",
+  "depends_on": [
+    "fn-43-rename-epic-spec-across-flow-next.2"
+  ],
+  "epic": "fn-43-rename-epic-spec-across-flow-next",
+  "id": "fn-43-rename-epic-spec-across-flow-next.5",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-43-rename-epic-spec-across-flow-next.5.md",
+  "status": "todo",
+  "title": "Rename epic-scout agent to spec-scout + plan-sync dispatcher updates",
+  "updated_at": "2026-05-08T19:56:07.530187Z"
+}

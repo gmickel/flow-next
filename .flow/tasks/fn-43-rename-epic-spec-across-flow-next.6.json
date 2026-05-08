@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-08T19:56:07.690382Z",
+  "depends_on": [
+    "fn-43-rename-epic-spec-across-flow-next.2",
+    "fn-43-rename-epic-spec-across-flow-next.5"
+  ],
+  "epic": "fn-43-rename-epic-spec-across-flow-next",
+  "id": "fn-43-rename-epic-spec-across-flow-next.6",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-43-rename-epic-spec-across-flow-next.6.md",
+  "status": "todo",
+  "title": "Rename /flow-next:epic-review to /flow-next:spec-completion-review (skill + command + redirect)",
+  "updated_at": "2026-05-08T20:13:12.409893Z"
+}

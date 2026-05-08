@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-08T19:58:33.342703Z",
+  "depends_on": [
+    "fn-43-rename-epic-spec-across-flow-next.2"
+  ],
+  "epic": "fn-43-rename-epic-spec-across-flow-next",
+  "id": "fn-43-rename-epic-spec-across-flow-next.13",
+  "priority": null,
+  "spec_path": ".flow/tasks/fn-43-rename-epic-spec-across-flow-next.13.md",
+  "status": "todo",
+  "title": "Update internal docs: docs/teams.md + docs/ralph.md + docs/flowctl.md",
+  "updated_at": "2026-05-08T19:58:33.500051Z"
+}
