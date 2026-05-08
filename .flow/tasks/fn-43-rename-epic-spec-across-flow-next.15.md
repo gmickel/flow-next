@@ -12,7 +12,7 @@ Final assembly: bump versions, update plugin manifests, write the CHANGELOG `[fl
 - `plugins/flow-next/.claude-plugin/plugin.json` (version + longDescription)
 - `plugins/flow-next/.codex-plugin/plugin.json` (version + longDescription)
 - `CHANGELOG.md` (NEW `[flow-next 1.0.0]` block)
-- `scripts/sync-codex.sh` (lines 31, 98, 281, 348, 532, 541, 545, 565 + new R19 validation block)
+- `scripts/sync-codex.sh` (lines 31, 98, 226, 281, 348, 532, 541, 545, 565 + new R19 validation block) <!-- Updated by plan-sync: T5 already updated lines 31/98/281 (epic-scout -> spec-scout) and line 226 (worker heredoc EPIC_ID -> SPEC_ID); T15 owns the remaining sites + R19 validation block -->
 - `plugins/flow-next/codex/` (full regeneration -- many files)
 - `plugins/flow-next/scripts/flowctl.py` (optional `flowctl migrate-docs` helper)
 
@@ -28,7 +28,7 @@ Final assembly: bump versions, update plugin manifests, write the CHANGELOG `[fl
   - **Alias removal timeline.** Soft deadline at 2.0.0; telemetry-driven.
   - **Rollback.** `flowctl migrate-rollback` restores `.flow/.backup-pre-1.0/`.
   - **Known issue.** Anthropic plugin auto-update bug (anthropics/claude-code#52218) -- users may need a manual `/plugin update` to pick up bundled hook changes.
-- `scripts/sync-codex.sh` self-edits at lines 31, 98, 281, 348, 532, 541, 545, 565 (per repo-scout); add new R19 validation block scanning canonical for `flowctl epic` references except deprecation context.
+- `scripts/sync-codex.sh` self-edits at lines 31, 98, 281, 348, 532, 541, 545, 565 (per repo-scout) — T5 already shipped lines 31/98/281 (epic-scout -> spec-scout) and line 226 (worker template heredoc EPIC_ID -> SPEC_ID); T15 owns the remaining sites; add new R19 validation block scanning canonical for `flowctl epic` references except deprecation context. <!-- Updated by plan-sync: T5 partially edited sync-codex.sh; T15 picks up the rest -->
 - Run `./scripts/sync-codex.sh` once -- regenerates `plugins/flow-next/codex/` from post-rename canonical state.
 - OPTIONAL `flowctl migrate-docs --dry-run` helper: rewrites `flowctl epic` -> `flowctl spec` in user's CLAUDE.md / AGENTS.md after showing diff. Default `--dry-run`; `--yes` to commit. Defer if scope tight.
 

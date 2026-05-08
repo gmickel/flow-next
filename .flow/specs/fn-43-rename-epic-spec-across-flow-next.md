@@ -308,7 +308,7 @@ Task fn-43.1 (canonical `flowctl spec *` subcommands + Python rename) validates 
 | R10 | JSON read-compat (`epic`/`spec` field names) | fn-43-rename-epic-spec-across-flow-next.2 | -- |
 | R11 | `epic-scout` -> `spec-scout` | fn-43-rename-epic-spec-across-flow-next.5 | -- |
 | R12 | All canonical skills updated | fn-43-rename-epic-spec-across-flow-next.6, .7, .8, .9, .10 | -- |
-| R13 | All canonical agents updated | fn-43-rename-epic-spec-across-flow-next.5 | -- |
+| R13 | All canonical agents updated | fn-43-rename-epic-spec-across-flow-next.5, .10 | T5 = file rename + agent prose `epic` -> `spec` rewrite; T10 picks up the CLI-verb rewrite in agent prose (T5 reverted to legacy alias form per codex-reviewer hallucination, punted to T10 worker context) <!-- Updated by plan-sync: T5 done summary punted CLI-verb rewrite to T10 --> |
 | R14 | All command markdown files updated | fn-43-rename-epic-spec-across-flow-next.11 | -- |
 | R15 | Plugin README + root README + CLAUDE.md | fn-43-rename-epic-spec-across-flow-next.12 | -- |
 | R16 | docs/teams.md + docs/ralph.md + docs/flowctl.md | fn-43-rename-epic-spec-across-flow-next.13 | -- |
