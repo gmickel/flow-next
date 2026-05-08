@@ -19,7 +19,7 @@ You receive:
 ### 1. List open specs
 
 ```bash
-<FLOWCTL> specs --json
+<FLOWCTL> epics --json
 ```
 
 Filter to `status: "open"` specs only. Skip done specs.
@@ -60,7 +60,7 @@ Compare the new REQUEST against each spec's scope. Look for:
 For specs with potential relationships:
 
 ```bash
-<FLOWCTL> tasks --spec <spec-id> --json
+<FLOWCTL> tasks --epic <spec-id> --json
 ```
 
 Look at in_progress and todo tasks for specific overlaps.

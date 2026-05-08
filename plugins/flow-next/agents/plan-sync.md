@@ -164,7 +164,7 @@ Flag tasks that need updates.
 
 List all open specs:
 ```bash
-<FLOWCTL> specs --json
+<FLOWCTL> epics --json
 ```
 
 For each open spec (excluding current SPEC_ID):
