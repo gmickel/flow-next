@@ -13895,20 +13895,38 @@ def _migrate_clear_partial_backup(backup_dir: Path) -> None:
 def _migrate_recover_from_complete_backup(flow_dir: Path, backup_dir: Path) -> None:
     """Restore `.flow/` contents from a complete backup (mid-migration crash).
 
-    Copies (does NOT move) backup contents back over `.flow/` so the backup
-    remains intact for a subsequent rollback. Conservative: anything in
-    `.flow/` that wasn't in the backup is left in place; the rollback path
-    handles full reset.
+    Two phases:
+      1. WIPE all `.flow/` contents except the backup itself, the lock dir, and
+         the banner-acknowledged marker. Files the migration created mid-flight
+         (e.g. specs/fn-1.json moved from epics/, or task JSONs already
+         rewritten) MUST go away — without this, the next snapshot would
+         capture a contaminated tree where post-migration artefacts survive
+         a "restore from pre-migration backup". (fn-43.3 codex review F8.)
+      2. COPY everything from the backup back over the now-empty tree. The
+         backup itself is left intact for rollback repeatability; we only
+         wipe the foreground state.
     """
+    # Phase 1: wipe migration-created state. Preserve only the backup itself
+    # (immutable), the active lock dir (we're inside the lock), and the
+    # banner-acknowledged marker (user-state, not migration-state). The
+    # `.migration-manifest` does NOT need preserving — caller already read it
+    # to decide we're in this recovery branch, and step 5 of cmd_migrate_rename
+    # would clean it up anyway. Wiping it here lets step 4 produce a clean
+    # fresh-backup snapshot below.
+    preserve = {MIGRATE_BACKUP_DIR, MIGRATE_LOCK_DIR, ".banner-acknowledged"}
+    for entry in flow_dir.iterdir():
+        if entry.name in preserve:
+            continue
+        if entry.is_dir():
+            shutil.rmtree(entry)
+        else:
+            entry.unlink()
+
+    # Phase 2: copy backup contents back to `.flow/` (excluding `.complete`).
     for entry in backup_dir.iterdir():
         if entry.name == MIGRATE_BACKUP_COMPLETE_MARKER:
             continue
         target = flow_dir / entry.name
-        if target.exists():
-            if target.is_dir():
-                shutil.rmtree(target)
-            else:
-                target.unlink()
         if entry.is_dir():
             shutil.copytree(entry, target, symlinks=True)
         else:
