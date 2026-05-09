@@ -57,11 +57,23 @@ jobs:
       # runner's temp dir before invoking. $RUNNER_TEMP is set on every
       # GitHub-hosted runner (ubuntu/macos/windows).
 
-      - name: ci_test.sh (flowctl integration, 57 cases)
+      - name: ci_test.sh (flowctl integration, 58 cases)
         if: always()
         run: |
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/ci_test.sh"
+
+      - name: alias_smoke.sh (deprecation alias paths, 20 cases, ~5s)
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/alias_smoke.sh"
+
+      - name: migration_smoke.sh (migrate-rename + rollback + banner, 41 cases, ~30s)
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/migration_smoke.sh"
 
       - name: resolve-pr_smoke_test.sh (58 cases, ~1s)
         if: always()

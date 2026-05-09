@@ -379,7 +379,7 @@ echo -e "${YELLOW}--- Scenario 7: --force-overwrite-post-migration-changes ---${
 # ─────────────────────────────────────────────────────────────────────────────
 # Scenario 8: Concurrency — second migrate-rename waits; stale-lock reclaim
 # ─────────────────────────────────────────────────────────────────────────────
-echo -e "${YELLOW}--- Scenario 8: concurrency + stale-lock reclaim ---${NC}"
+echo -e "${YELLOW}--- Scenario 8: concurrency (real parallel + stale-lock reclaim) ---${NC}"
 (
   # 8a: Stale-lock reclaim. Write a lock dir with a stale pid (definitely
   # dead — pid=1 is init on POSIX, never a stale `flowctl` worker; we use
@@ -403,6 +403,97 @@ echo -e "${YELLOW}--- Scenario 8: concurrency + stale-lock reclaim ---${NC}"
     ok "Scenario 8a: stale-lock reclaim succeeded (rc=0)"
   else
     ko "Scenario 8a: stale-lock reclaim failed (rc=$rc): $RECLAIM_OUT"
+  fi
+)
+
+(
+  # 8b: Real parallel migration. Spawn TWO live `flowctl migrate-rename
+  # --yes` processes concurrently. The lock acquisition is a `mkdir`
+  # (atomic on POSIX). One MUST acquire and complete; the second MUST
+  # either:
+  #   - wait + observe the completed state via authoritative idempotency
+  #     check (returns migrated:false / reason: "already migrated"), OR
+  #   - acquire after the first releases and observe nothing to do.
+  # Both must exit 0; the on-disk state must be correctly migrated.
+  R8B="$TEST_DIR/scen8b"
+  make_pre10_fixture "$R8B"
+  cd "$R8B"
+
+  OUT1="$TEST_DIR/scen8b-a.out"
+  OUT2="$TEST_DIR/scen8b-b.out"
+  RC1F="$TEST_DIR/scen8b-a.rc"
+  RC2F="$TEST_DIR/scen8b-b.rc"
+
+  # Launch both in background; capture rc per process via wrapper.
+  (
+    scripts/flowctl migrate-rename --yes --json >"$OUT1" 2>&1
+    echo $? > "$RC1F"
+  ) &
+  P1=$!
+  (
+    scripts/flowctl migrate-rename --yes --json >"$OUT2" 2>&1
+    echo $? > "$RC2F"
+  ) &
+  P2=$!
+
+  # Bounded wait — lock window is at most MIGRATE_LOCK_WAIT_SECS (30s).
+  wait "$P1" 2>/dev/null || true
+  wait "$P2" 2>/dev/null || true
+  RC1="$(cat "$RC1F" 2>/dev/null || echo 1)"
+  RC2="$(cat "$RC2F" 2>/dev/null || echo 1)"
+
+  if [[ "$RC1" -eq 0 && "$RC2" -eq 0 ]]; then
+    ok "Scenario 8b: both parallel migrate-rename invocations exited 0"
+  else
+    ko "Scenario 8b: parallel rc mismatch — RC1=$RC1 RC2=$RC2"
+    echo "  --- proc1 ---" >&2
+    cat "$OUT1" >&2 2>/dev/null || true
+    echo "  --- proc2 ---" >&2
+    cat "$OUT2" >&2 2>/dev/null || true
+  fi
+
+  # Exactly one process must report migrated:true; the other must report
+  # the no-op idempotent skip (migrated:false / reason: "already migrated").
+  TRUE_COUNT=0
+  IDEMPOTENT_COUNT=0
+  for OUT in "$OUT1" "$OUT2"; do
+    # Outputs may carry preceding banner text on stderr-merged streams; we
+    # redirected 2>&1 above, so locate the JSON body via python.
+    "$PYTHON_BIN" - "$OUT" <<'PY' || true
+import json, re, sys
+text = open(sys.argv[1]).read()
+match = re.search(r'(\{[\s\S]*\})', text)
+if not match:
+    sys.exit(2)
+try:
+    data = json.loads(match.group(1))
+except Exception:
+    sys.exit(3)
+if data.get("migrated") is True:
+    print("MIGRATED")
+elif data.get("migrated") is False and data.get("reason") == "already migrated":
+    print("IDEMPOTENT")
+else:
+    print("OTHER:" + json.dumps(data))
+PY
+  done > "$TEST_DIR/scen8b-summary.txt"
+
+  TRUE_COUNT=$(grep -c '^MIGRATED$' "$TEST_DIR/scen8b-summary.txt" 2>/dev/null || echo 0)
+  IDEMPOTENT_COUNT=$(grep -c '^IDEMPOTENT$' "$TEST_DIR/scen8b-summary.txt" 2>/dev/null || echo 0)
+
+  if [[ "$TRUE_COUNT" -eq 1 && "$IDEMPOTENT_COUNT" -eq 1 ]]; then
+    ok "Scenario 8b: exactly one process migrated; the other observed idempotent skip"
+  else
+    ko "Scenario 8b: contention shape wrong (migrated=$TRUE_COUNT, idempotent=$IDEMPOTENT_COUNT)"
+    echo "  --- summary ---" >&2
+    cat "$TEST_DIR/scen8b-summary.txt" >&2
+  fi
+
+  # On-disk state must be a single, complete migration.
+  if [[ -f .flow/.flow_version && -f .flow/.backup-pre-1.0/.complete && -f .flow/.migration-manifest && ! -d .flow/.migrating ]]; then
+    ok "Scenario 8b: post-contention state is fully migrated; lock released"
+  else
+    ko "Scenario 8b: post-contention disk state is incomplete"
   fi
 )
 
@@ -569,41 +660,94 @@ print("OK")
 # Scenario 11: Atomic sentinel write — partial-byte sentinel triggers
 # crash recovery (treated as no valid sentinel, NOT idempotent skip).
 # ─────────────────────────────────────────────────────────────────────────────
-echo -e "${YELLOW}--- Scenario 11: atomic sentinel + payload validation ---${NC}"
+echo -e "${YELLOW}--- Scenario 11: atomic sentinel + crash-during-step-11 ---${NC}"
 (
   R11="$TEST_DIR/scen11"
   make_pre10_fixture "$R11"
   cd "$R11"
+
+  # 11a: Crash BEFORE step 11 (sentinel write). Simulate by kill -KILL
+  # mid-migration from a wrapper that sets up state then signals itself.
+  # Since shelling out a real kill on the right Python frame is brittle,
+  # we directly construct the post-mid-migration state on disk and verify
+  # the recovery path picks up cleanly:
+  #
+  #   - backup .complete present + manifest present + sentinel ABSENT
+  #     => mid-migration crash; restart restores from backup (by COPY) + retries.
+  #
+  # This is exactly the "kill during step 11" scenario: between step 10
+  # (manifest write) and step 11 (sentinel write).
   scripts/flowctl migrate-rename --yes --json 2>/dev/null >/dev/null
-
-  # Confirm sentinel was written via atomic_write (no transient .tmp files
-  # left behind). Verifies the atomic-write contract.
-  if [[ ! -f .flow/.flow_version.tmp ]] && [[ -f .flow/.flow_version ]]; then
-    ok "Scenario 11a: sentinel written without leaving .tmp artifacts"
+  if [[ ! -f .flow/.flow_version ]]; then
+    ko "Scenario 11a: pre-condition: initial migration must succeed"
   else
-    ko "Scenario 11a: sentinel write left transient .tmp file"
+    # Confirm atomic_write left no .tmp shadow.
+    SHADOW_COUNT="$(find .flow -maxdepth 2 -name '.flow_version.tmp*' 2>/dev/null | wc -l | tr -d '[:space:]')"
+    if [[ "$SHADOW_COUNT" -eq 0 ]]; then
+      ok "Scenario 11a: atomic_write left no .flow_version.tmp shadow file"
+    else
+      ko "Scenario 11a: atomic_write left transient .tmp file (count=$SHADOW_COUNT)"
+    fi
+
+    # Now simulate crash mid-step-11: remove the sentinel after the
+    # manifest + backup .complete are in place (matches the kill window
+    # between step 10 and step 11). Restart MUST recover.
+    rm -f .flow/.flow_version
+    # Sanity: confirm we're in the mid-migration crash state.
+    if [[ ! -f .flow/.flow_version && -f .flow/.backup-pre-1.0/.complete && -f .flow/.migration-manifest ]]; then
+      set +e
+      RETRY_OUT="$(scripts/flowctl migrate-rename --yes --json 2>/dev/null)"
+      rc=$?
+      set -e
+      if [[ "$rc" -eq 0 && -f .flow/.flow_version ]]; then
+        payload="$(cat .flow/.flow_version | tr -d '[:space:]')"
+        if [[ "$payload" == "1.0.0" ]]; then
+          ok "Scenario 11a-recover: mid-step-11 crash → restart writes valid sentinel"
+        else
+          ko "Scenario 11a-recover: sentinel payload wrong after recovery: '$payload'"
+        fi
+      else
+        ko "Scenario 11a-recover: mid-step-11 restart failed (rc=$rc, output=$RETRY_OUT)"
+      fi
+    else
+      ko "Scenario 11a-recover: pre-condition for mid-migration crash not established"
+    fi
   fi
 
-  # Empty / garbage sentinel must NOT be treated as 'already migrated' by
-  # the fast-path idempotency check. Without that contract, a crashed write
-  # mid-sentinel would silently skip recovery on the next run.
+  # 11b: Empty / garbage sentinel must NOT be treated as 'already migrated'
+  # by the fast-path idempotency check. atomic_write guarantees the file
+  # is either fully written or absent on POSIX, but a hostile filesystem
+  # could leave a partial file from a non-atomic write — the validator
+  # must reject it. (Simulated by manually writing an empty sentinel
+  # then triggering the fast-path check via a no-op `flowctl status`.)
   echo "" > .flow/.flow_version
-  STDOUT="$(scripts/flowctl migrate-rename --yes --json 2>/dev/null)"
-  if echo "$STDOUT" | "$PYTHON_BIN" -c '
-import json, sys
-data = json.load(sys.stdin)
-# The empty sentinel must NOT be reported as "already migrated"; either
-# the recovery / no-op branch fires.
-assert data.get("reason") != "already migrated", "empty sentinel was treated as already-migrated"
-print("OK")
-' >/dev/null; then
-    ok "Scenario 11b: empty sentinel rejected by idempotency fast-path"
+  # Verify _migrate_sentinel_state rejects empty payload by checking that
+  # the migration banner fires (it only fires when sentinel is invalid).
+  # We turn FLOW_NO_AUTO_MIGRATE off temporarily for this assertion.
+  STDERR_FILE="$TEST_DIR/scen11b-stderr.txt"
+  unset FLOW_NO_AUTO_MIGRATE
+  scripts/flowctl status --json 2>"$STDERR_FILE" >/dev/null || true
+  export FLOW_NO_AUTO_MIGRATE=1
+  if grep -q 'flow-next 1.0 renamed' "$STDERR_FILE"; then
+    ok "Scenario 11b: empty sentinel triggers banner (treated as not-migrated)"
   else
-    ko "Scenario 11b: empty sentinel was treated as already-migrated"
+    # The banner only fires when .flow/epics/ is also present. Restore the
+    # legacy dir so the banner code path activates.
+    mkdir -p .flow/epics
+    : > "$STDERR_FILE"
+    unset FLOW_NO_AUTO_MIGRATE
+    scripts/flowctl status --json 2>"$STDERR_FILE" >/dev/null || true
+    export FLOW_NO_AUTO_MIGRATE=1
+    if grep -q 'flow-next 1.0 renamed' "$STDERR_FILE"; then
+      ok "Scenario 11b: empty sentinel triggers banner (after epics/ restored)"
+    else
+      ko "Scenario 11b: empty sentinel did not trigger banner; payload validation may be missing"
+    fi
   fi
 
-  # Forward-compat semver payload (1.1.0) — recognized as already migrated.
-  # The fast-path skips the migration cleanly without recovery noise.
+  # 11c: Forward-compat semver payload (1.1.0) — accepted as already
+  # migrated; idempotency fast-path returns no-op cleanly.
+  rm -rf .flow/epics 2>/dev/null || true
   echo "1.1.0" > .flow/.flow_version
   set +e
   STDOUT="$(scripts/flowctl migrate-rename --yes --json 2>/dev/null)"
