@@ -52,6 +52,36 @@ jobs:
       - name: Syntax check — ralph.sh
         run: bash -n plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh
 
+      # ──────────── Python unit tests (sub-second, fail fast) ────────────
+      # fn-43.17 — fast invariants for migrate-rename, lockfile, read-compat,
+      # banner suppression, and write-location selector. Runs the migrate +
+      # lockfile + read-compat + write-location + banner suites explicitly so
+      # an unrelated pre-existing failure in a sibling test file doesn't gate
+      # this signal.
+
+      - name: Python unit tests — fn-43 invariants
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_migrate_rename.py" \
+            -v
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_lockfile.py" \
+            -v
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_read_compat.py" \
+            -v
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_write_location.py" \
+            -v
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_banner.py" \
+            -v
+
       # ──────────── Functional smokes (ordered cheap-first) ────────────
       # All smokes refuse to run from the main plugin repo, so cd into the
       # runner's temp dir before invoking. $RUNNER_TEMP is set on every
