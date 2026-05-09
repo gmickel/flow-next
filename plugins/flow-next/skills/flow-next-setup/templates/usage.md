@@ -19,8 +19,12 @@ Task tracking for AI agents. All state lives in `.flow/`.
 ├── tasks/fn-N-slug.M.json  # Task metadata (e.g., fn-1-add-oauth.1.json)
 ├── tasks/fn-N-slug.M.md    # Task specifications
 ├── memory/                 # Context memory
+├── .flow_version           # 1.0.0 sentinel — written after migration; tracked
+├── .gitignore              # Auto-managed by flowctl (1.0+) — excludes transients
 └── meta.json               # Project metadata
 ```
+
+`.flow/.gitignore` is auto-written so `git add -A` doesn't accidentally commit per-developer state (`.checkpoint-*.json`, `receipts/`, `tmp/`) or migration transients (`.backup-pre-1.0/`, `.banner-acknowledged`, `.migrating`, `.migration-manifest`). Idempotent on re-init / re-migrate; user patterns added below the auto-managed footer are preserved.
 
 ## IDs
 

@@ -70,6 +70,24 @@ Initialize `.flow/` directory.
 flowctl init [--json]
 ```
 
+Idempotent. Creates the canonical 1.0 layout on a fresh repo (`.flow/specs/`, `.flow/tasks/`, `.flow/memory/`, `meta.json` with `schema_version: 3` + `next_spec: 1`, `config.json`). Skips anything that already exists; upgrades existing `config.json` by merging in any new default keys. Re-running on a 1.0 repo reports "already up to date".
+
+**Auto-managed `.flow/.gitignore`** (since 1.0.0). Both `flowctl init` and `flowctl migrate-rename` write `.flow/.gitignore` with the auto-managed pattern set so users don't accidentally commit migration transients or per-run state on `git add -A`:
+
+```gitignore
+# Auto-managed by flowctl — do not edit above this marker.
+.checkpoint-*.json
+receipts/
+tmp/
+.backup-pre-1.0/
+.banner-acknowledged
+.migrating
+.migration-manifest
+# End of auto-managed block. User patterns below this line are preserved.
+```
+
+Idempotent: the auto-block is only written if absent. User patterns added below the footer survive subsequent `flowctl init` / `flowctl migrate-rename` runs. Existing user `.flow/.gitignore` files are migrated in-place by prepending the auto-block. **`.flow/.flow_version` is intentionally NOT in the block** — it's the post-migration schema sentinel and should be tracked per repo so multiple devs share the same migrated state (semantics like `Cargo.lock`).
+
 ### detect
 
 Check if `.flow/` exists and is valid.

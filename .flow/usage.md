@@ -21,10 +21,13 @@ Task tracking for AI agents. All state lives in `.flow/`.
 ├── memory/                      # Context memory (categorized bug/ + knowledge/)
 ├── prospects/<slug>-<date>.md   # Ideation artifacts (v0.36.0+)
 ├── .flow_version                # 1.0.0 sentinel — written after layout migration
+├── .gitignore                   # Auto-managed by flowctl (1.0+) — excludes migration transients
 └── meta.json                    # Project metadata
 ```
 
 `.flow/epics/` is the pre-1.0 sidecar location. Repos created on 1.0+ never have it; pre-1.0 repos keep working via the alias layer until you run `flowctl migrate-rename --yes` (or `/flow-next:setup`'s upgrade branch).
+
+`.flow/.gitignore` is auto-written by `flowctl init` and `flowctl migrate-rename` so `git add -A` doesn't accidentally commit per-developer state (`.checkpoint-*.json`, `receipts/`, `tmp/`) or migration transients (`.backup-pre-1.0/`, `.banner-acknowledged`, `.migrating`, `.migration-manifest`). Idempotent; user patterns added below the auto-managed footer are preserved on update.
 
 ## IDs
 

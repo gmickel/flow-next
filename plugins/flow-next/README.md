@@ -2379,6 +2379,7 @@ flowchart TD
 ├── meta.json              # Schema version (1.0+ uses `next_spec`; reads `next_epic` for back-compat)
 ├── config.json            # Project settings (memory enabled, etc.)
 ├── .flow_version          # 1.0.0 sentinel — written after `flowctl migrate-rename`
+├── .gitignore             # Auto-managed by flowctl (1.0+) — excludes migration transients
 ├── specs/
 │   ├── fn-1-add-oauth.md        # Spec content (plan, scope, acceptance)
 │   └── fn-1-add-oauth.json      # Spec metadata (id, title, status, deps) — colocated with the markdown in 1.0+
@@ -2406,6 +2407,8 @@ flowchart TD
 ```
 
 Pre-1.0 repos have `.flow/epics/<id>.json` instead of `.flow/specs/<id>.json`; the alias layer keeps reads working until you run `flowctl migrate-rename --yes` (or `/flow-next:setup`'s upgrade branch).
+
+The auto-managed `.flow/.gitignore` (written by `flowctl init` and `flowctl migrate-rename` since 1.0.0) excludes per-run state (`.checkpoint-*.json`, `receipts/`, `tmp/`) and migration transients (`.backup-pre-1.0/`, `.banner-acknowledged`, `.migrating`, `.migration-manifest`) so users don't accidentally commit a multi-megabyte backup directory or a per-developer banner-ack timestamp on `git add -A`. User patterns added below the auto-managed footer are preserved on subsequent runs. `.flow/.flow_version` is intentionally tracked (schema sentinel; semantics like `Cargo.lock`).
 
 Flowctl accepts schema v1 and v2; new fields are optional and defaulted.
 
