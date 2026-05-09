@@ -28,7 +28,7 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 # Scouts that need full intelligence (reasoning/judgment, not just scanning)
-INTELLIGENT_SCOUTS="epic-scout agents-md-scout docs-gap-scout"
+INTELLIGENT_SCOUTS="spec-scout agents-md-scout docs-gap-scout"
 # Agents that use opus in Claude Code
 OPUS_AGENTS="quality-auditor flow-gap-analyst context-scout docs-scout github-scout practice-scout repo-scout plan-sync"
 
@@ -95,7 +95,7 @@ nicknames_for() {
     docs-gap-scout)       echo '["Inspector", "Reviewer", "Auditor"]' ;;
     docs-scout)           echo '["Scholar", "Researcher", "Curator"]' ;;
     env-scout)            echo '["Provisioner", "Configurer", "Warden"]' ;;
-    epic-scout)           echo '["Strategist", "Planner", "Coordinator"]' ;;
+    spec-scout)           echo '["Strategist", "Planner", "Coordinator"]' ;;
     github-scout)         echo '["Tracker", "Monitor", "Watcher"]' ;;
     memory-scout)         echo '["Chronicler", "Historian", "Recorder"]' ;;
     observability-scout)  echo '["Sentinel", "Observer", "Beacon"]' ;;
@@ -223,7 +223,7 @@ Use the **worker** agent role to implement the task. The worker gets fresh conte
 "Use the worker agent to implement this task:
 
 TASK_ID: fn-X.Y
-EPIC_ID: fn-X
+SPEC_ID: fn-X
 FLOWCTL: $FLOWCTL
 REVIEW_MODE: none|rp|codex
 RALPH_MODE: true|false
@@ -278,7 +278,7 @@ if [ -f "$plan_steps" ]; then
     -e 's|`flow-next:docs-scout`|the `docs_scout` agent|g' \
     -e 's|`flow-next:github-scout`|the `github_scout` agent|g' \
     -e 's|`flow-next:memory-scout`|the `memory_scout` agent|g' \
-    -e 's|`flow-next:epic-scout`|the `epic_scout` agent|g' \
+    -e 's|`flow-next:spec-scout`|the `spec_scout` agent|g' \
     -e 's|`flow-next:docs-gap-scout`|the `docs_gap_scout` agent|g' \
     -e 's|`flow-next:flow-gap-analyst`|the `flow_gap_analyst` agent|g' \
     -e 's|Task flow-next:flow-gap-analyst|Use the flow_gap_analyst agent|g' \
@@ -345,7 +345,7 @@ RP_WARNING='
 ---
 '
 
-for skill in flow-next-impl-review flow-next-plan-review flow-next-epic-review; do
+for skill in flow-next-impl-review flow-next-plan-review flow-next-spec-completion-review; do
   wf="$CODEX_DIR/skills/$skill/workflow.md"
   if [ -f "$wf" ]; then
     { head -1 "$wf"; echo "$RP_WARNING"; tail -n +2 "$wf"; } > "${wf}.tmp"
@@ -529,7 +529,7 @@ generate_openai_yaml "flow-next-work"      "Flow Work"      "Execute planned tas
 generate_openai_yaml "flow-next-interview" "Flow Interview" "Deep Q&A to refine specs and requirements"            "#3B82F6" false
 generate_openai_yaml "flow-next-setup"     "Flow Setup"     "Initialize flow-next in current project"              "#3B82F6" false
 generate_openai_yaml "flow-next-prospect"  "Flow Prospect"  "Generate ranked candidate ideas grounded in the repo" "#3B82F6" false "What should we build next? "
-generate_openai_yaml "flow-next-capture"   "Flow Capture"   "Synthesize conversation context into a flow-next epic spec" "#3B82F6" false "Capture this as a spec: "
+generate_openai_yaml "flow-next-capture"   "Flow Capture"   "Synthesize conversation context into a flow-next spec" "#3B82F6" false "Capture this as a spec: "
 generate_openai_yaml "flow-next-strategy"  "Flow Strategy"  "Generate or update repo-root STRATEGY.md (problem, approach, personas, metrics, tracks)" "#3B82F6" false
 generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory/ entries against current code"   "#3B82F6" false
 generate_openai_yaml "flow-next-memory-migrate" "Flow Memory Migrate" "Migrate legacy flat memory files to categorized YAML schema" "#3B82F6" false
@@ -538,12 +538,49 @@ generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid 
 # Review skills (red, explicit)
 generate_openai_yaml "flow-next-impl-review" "Flow Implementation Review" "Carmack-level code review via RepoPrompt"  "#EF4444" false
 generate_openai_yaml "flow-next-plan-review" "Flow Plan Review"           "Carmack-level plan review via RepoPrompt"  "#EF4444" false
-generate_openai_yaml "flow-next-epic-review" "Flow Epic Review"           "Verify epic implementation matches spec"   "#EF4444" false
+generate_openai_yaml "flow-next-spec-completion-review" "Flow Spec Completion Review" "Verify spec implementation matches the spec" "#EF4444" false
 generate_openai_yaml "flow-next-resolve-pr"  "Flow Resolve PR"            "Resolve PR review feedback via GraphQL"    "#EF4444" false "Resolve PR "
 
 # Utility skills (blue/amber, implicit allowed)
-generate_openai_yaml "flow-next"       "Flow Tasks" "Manage .flow/ tasks and epics"                           "#3B82F6" true
+generate_openai_yaml "flow-next"       "Flow Tasks" "Manage .flow/ tasks and specs"                           "#3B82F6" true
 generate_openai_yaml "flow-next-prime" "Flow Prime" "Comprehensive codebase assessment for agent readiness"    "#F59E0B" false
+
+# --- Deprecation redirect skills (1.0 alias surface, removed in 2.0) ---
+# Codex resolves `$flow-next-<name>` and bare-skill-name lookups via the
+# skills/ mirror — the Claude Code slash-command redirect file at
+# `commands/flow-next/<name>.md` doesn't help the Codex skill lookup. Mirror
+# the redirect as a thin skill so users invoking the legacy alias on Codex
+# get a redirect, not a "skill not found" error. Removed alongside the
+# `flowctl epic *` aliases in 2.0 per fn-43 spec R3 / R28.
+generate_redirect_skill() {
+  local old="$1" new="$2" display="$3"
+  local dir="$CODEX_DIR/skills/$old"
+  mkdir -p "$dir/agents"
+  cat > "$dir/SKILL.md" <<EOF
+---
+name: $old
+description: "[deprecated alias] Renamed to $new in flow-next 1.0 — invoke the new skill. Removed in 2.0."
+user-invocable: false
+---
+
+# \`$old\` is renamed to \`$new\`
+
+This skill name is a deprecation alias from the flow-next 1.0 epic→spec rename. The legacy alias still resolves so existing muscle memory doesn't break, but it will be removed in 2.0.
+
+Invoke the \`$new\` skill instead. Forward any arguments to it. Do not run the workflow yourself; the new skill handles backend dispatch and the fix loop.
+EOF
+  cat > "$dir/agents/openai.yaml" <<EOF
+interface:
+  display_name: "$display [deprecated]"
+  short_description: "Deprecated alias — use $new"
+  brand_color: "#9CA3AF"
+policy:
+  allow_implicit_invocation: false
+EOF
+  skill_count=$((skill_count + 1))
+}
+
+generate_redirect_skill "flow-next-epic-review" "flow-next-spec-completion-review" "Flow Epic Review"
 
 # REQUIRED list — every user-facing slash-command skill MUST have an
 # openai.yaml entry above. When you add a new skill, add it here AND add
@@ -562,7 +599,7 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-make-pr"
   "flow-next-impl-review"
   "flow-next-plan-review"
-  "flow-next-epic-review"
+  "flow-next-spec-completion-review"
   "flow-next-resolve-pr"
   "flow-next"
   "flow-next-prime"
@@ -819,6 +856,19 @@ if [ "$fluff_refs" != "0" ]; then
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} No R19 strategy-doc fluff in Codex mirror"
+fi
+
+# R30 mirror scan — alias-vocabulary guard for the Codex mirror (fn-43 task 14).
+# Catch fresh prose that uses the legacy `flowctl epic*` CLI surface instead
+# of canonical 1.0 `flowctl spec*`. Lines describing deprecation / alias /
+# legacy semantics are excluded — these legitimately reference the legacy
+# form. references/ files are also excluded (anti-pattern documentation).
+alias_refs=$( { grep -rE 'flowctl epic\b|flowctl epics\b|--epic\b|--epics-file\b|--section epic\b|\bEPICS_FILE\b' "$CODEX_DIR/skills/" "$CODEX_DIR/agents/" 2>/dev/null || true; } | { grep -vE '/references/' || true; } | { grep -vE 'deprecat|legacy|alias|_emit_rename_|removed in 2\.0|flow-next 1\.0 renamed|R31|R30|fn-43|\bT[0-9]+\b' || true; } | { grep -vE '^[^:]+:[0-9]+:[[:space:]]+"--(epic|epics-file|epic-title)",?[[:space:]]*$' || true; } | wc -l | tr -d ' ')
+if [ "$alias_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $alias_refs R30 legacy CLI vocabulary refs in codex mirror — clean canonical first, then re-run sync"
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No R30 legacy CLI vocabulary in Codex mirror"
 fi
 
 # Validate openai.yaml files — every skill in REQUIRED_OPENAI_YAML_SKILLS

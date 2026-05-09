@@ -91,8 +91,8 @@ cp "$PLUGIN_ROOT/skills/flow-next-setup/templates/usage.md" .flow/usage.md
 cat "$PLUGIN_ROOT/skills/flow-next-setup/templates/claude-md-snippet.md" > CLAUDE.md
 echo -e "${GREEN}✓${NC} Setup mirrored"
 
-scripts/ralph/flowctl epic create --title "Add function" --json >/dev/null
-scripts/ralph/flowctl epic create --title "Add docs" --json >/dev/null
+scripts/ralph/flowctl spec create --title "Add function" --json >/dev/null
+scripts/ralph/flowctl spec create --title "Add docs" --json >/dev/null
 
 # MINIMAL epic spec - one clear deliverable, no room for task expansion
 cat > "$TEST_DIR/epic1.md" <<'EOF'
@@ -118,9 +118,9 @@ Add one-line note to README.md stating this is a tiny math library.
 ONE task only.
 EOF
 
-scripts/ralph/flowctl epic set-plan fn-1 --file "$TEST_DIR/epic1.md" --json >/dev/null
-scripts/ralph/flowctl epic set-plan fn-2 --file "$TEST_DIR/epic2.md" --json >/dev/null
-scripts/ralph/flowctl epic set-plan-review-status fn-2 --status ship --json >/dev/null
+scripts/ralph/flowctl spec set-plan fn-1 --file "$TEST_DIR/epic1.md" --json >/dev/null
+scripts/ralph/flowctl spec set-plan fn-2 --file "$TEST_DIR/epic2.md" --json >/dev/null
+scripts/ralph/flowctl spec set-plan-review-status fn-2 --status ship --json >/dev/null
 
 cat > "$TEST_DIR/accept1.md" <<'EOF'
 - [ ] `add(a: number, b: number): number` exported
@@ -131,8 +131,8 @@ cat > "$TEST_DIR/accept2.md" <<'EOF'
 - [ ] README mentions "tiny math library"
 EOF
 
-scripts/ralph/flowctl task create --epic fn-1 --title "Add add() function" --acceptance-file "$TEST_DIR/accept1.md" --json >/dev/null
-scripts/ralph/flowctl task create --epic fn-2 --title "Add README note" --acceptance-file "$TEST_DIR/accept2.md" --json >/dev/null
+scripts/ralph/flowctl task create --spec fn-1 --title "Add add() function" --acceptance-file "$TEST_DIR/accept1.md" --json >/dev/null
+scripts/ralph/flowctl task create --spec fn-2 --title "Add README note" --acceptance-file "$TEST_DIR/accept2.md" --json >/dev/null
 
 mkdir -p "$TEST_DIR/bin"
 PLUGINS_DIR="$(dirname "$PLUGIN_ROOT")"

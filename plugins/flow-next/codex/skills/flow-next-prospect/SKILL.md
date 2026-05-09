@@ -53,7 +53,7 @@ No env-var opt-in. Ralph never decides direction.
 Execute the phases in [workflow.md](workflow.md) in order:
 
 0. **Resume check** — list active artifacts <30d; ask extend / fresh / open via blocking question. Corrupt artifacts surfaced but never offered for extension.
-1. **Ground** — scan repo with graceful degradation: git log (30d), open epics, CHANGELOG top, memory matches, memory audit (if present), strategy snapshot (verbatim `name` / `target_problem` / `approach` / `tracks` / `last_updated` from `flowctl strategy read --json` when `sections_filled >= 1`; husk-vs-presence gate uses `sections_filled`, NOT `[[ -f STRATEGY.md ]]`). Emit a structured 30-50 line snapshot — titles + tags only, never raw bodies.
+1. **Ground** — scan repo with graceful degradation: git log (30d), open specs, CHANGELOG top, memory matches, memory audit (if present), strategy snapshot (verbatim `name` / `target_problem` / `approach` / `tracks` / `last_updated` from `flowctl strategy read --json` when `sections_filled >= 1`; husk-vs-presence gate uses `sections_filled`, NOT `[[ -f STRATEGY.md ]]`). Emit a structured 30-50 line snapshot — titles + tags only, never raw bodies.
 2. **Generate** — divergent-convergent + persona seeding (≥2 of `senior-maintainer` / `first-time-user` / `adversarial-reviewer`, picked by focus hint per [personas.md](personas.md)). One divergent prompt; no self-judging.
 3. **Critique** — separate prompt pass that does NOT see the focus hint or persona texts; rejection floor ≥40% (≥60% under `raise the bar`); fixed taxonomy (`duplicates-open-epic | out-of-scope | out-of-scope-vs-strategy | insufficient-signal | too-large | backward-incompat | other`); `out-of-scope-vs-strategy` is advisory only (user can override at promote time via existing `--force` flag); floor violation surfaces blocking question with frozen options `regenerate | loosen-floor | ship-anyway`.
 4. **Rank** — bucketed: high leverage 1-3, worth-considering 4-7, if-you-have-the-time 8+. Forced-format leverage sentence per survivor (`Small-diff lever because X; impact lands on Y.`); no numeric scores.
@@ -83,6 +83,6 @@ fi
 - Running under Ralph — hard-block via the guard above.
 - Setting `context: fork` — blocking question tools must stay reachable.
 - Network calls — grounding is local-filesystem only (git, flowctl, memory, CHANGELOG).
-- Writing to `.flow/epics/` directly — only `flowctl prospect promote` may do that.
+- Writing to `.flow/specs/` directly — only `flowctl prospect promote` may do that.
 - Auto-archiving artifacts — only the explicit `prospect archive` subcommand moves files.
 - Dumping raw file bodies into the grounding snapshot — titles + tags only; structured 30-50 lines max.

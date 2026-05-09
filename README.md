@@ -3,7 +3,7 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v0.42.0-green)](plugins/flow-next/)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v1.0.0-green)](plugins/flow-next/)
 [![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -15,7 +15,7 @@
 
 </div>
 
-> 📖 **[Read the full docs →](plugins/flow-next/README.md)** — the main documentation. All 18 commands with reference, lifecycle workflow with mermaid diagrams, install + setup on every platform, Ralph autonomous mode, Codex / Droid / OpenCode notes, complete `flowctl` CLI reference, project glossary + strategy + decision records, memory system. **Start there if you want depth — this root page is the marketing TL;DR.**
+> 📖 **[Read the full docs →](plugins/flow-next/README.md)** — the main documentation. All 19 commands with reference, lifecycle workflow with mermaid diagrams, install + setup on every platform, Ralph autonomous mode, Codex / Droid / OpenCode notes, complete `flowctl` CLI reference, project glossary + strategy + decision records, memory system. **Start there if you want depth — this root page is the marketing TL;DR.**
 
 > 👥 **[Adopting in a team? Read the teams + spec-driven-development guide →](plugins/flow-next/docs/teams.md)** — maps each SDLC stage to a Flow-Next command, names the six handover objects in the agentic lifecycle, and walks through Spec-as-PR, parallel work from one spec, R-ID frozen-at-handover, the symmetric interview pattern, and the Week 1 / Month 1 / Quarter 1 adoption ladder. Cross-links to the [AI-x-SDLC-Starter-Kit methodology guide](https://github.com/gmickel/AI-x-SDLC-Starter-Kit/blob/main/guides/methodology.md) for the underlying theory.
 
@@ -25,11 +25,11 @@
 
 ## What Is This?
 
-Flow-Next is an AI agent orchestration plugin. **Eighteen agent-native skills** for the full lifecycle: idea → spec → tasks → review → ship → maintain. Bundled task tracking, dependency graphs, re-anchoring, multi-model reviews, decay-aware project memory, GitHub PR creation + resolution, agent-readiness audits. Everything lives in your repo — no external services, no global config. Uninstall: delete `.flow/`.
+Flow-Next is an AI agent orchestration plugin. **Twenty-three agent-native skills** for the full lifecycle: idea → spec → tasks → review → ship → maintain. Bundled task tracking, dependency graphs, re-anchoring, multi-model reviews, decay-aware project memory, GitHub PR creation + resolution, agent-readiness audits. Everything lives in your repo — no external services, no global config. Uninstall: delete `.flow/`.
 
 First-class on **Claude Code**, **OpenAI Codex** (CLI + Desktop), and **Factory Droid**. Also runs on **OpenCode** via the [community port](https://github.com/gmickel/flow-next-opencode).
 
-> 🆕 **v0.42.0 — PR-as-cognitive-aid.** New `/flow-next:make-pr` skill closes the gap between "all tasks done" and "human reviews the PR" — renders a reviewable PR body from nine flow-next input streams (epic spec with R-IDs, per-task `done_summary` + evidence commits, decisions / bug / architecture-patterns memory, glossary changes, strategy alignment, deferred review findings, the diff itself). Body sections include TL;DR, R-ID coverage table (R# → satisfying task → evidence commit), Critical changes (high-churn / cross-module / public-interface / security-sensitive / behavior-visible), Decisions, Memory, Glossary/strategy deltas, Open items, Where to look (reviewer-focus list). Mermaid codefences when the diff crosses ≥2 modules (max 3 diagrams × 12 nodes; markdown codefence — GitHub / GitLab / Gitea render natively). Default `--draft` if open items > 0 or under Ralph; `--ready` overrides. Uses `gh pr create --body-file` not heredoc (LLM-markdown safety — heredocs choke on backticks / `$` / dollar-paren). Backed by `flowctl epic export-cognitive-aid` plumbing (deterministic 9-stream JSON aggregation, reusable from any future skill / script). NOT Ralph-blocked — PR creation is the autonomous-loop terminus, Ralph defaults to `--draft` for human review. NO cross-model review of the body — each harness identifies critical changes from the structured input; `/flow-next:impl-review` already covers the *code itself*. [Full changelog](CHANGELOG.md).
+> 🆕 **v1.0.0 — `flowctl epic` → `flowctl spec`.** The 1.0 release renames the canonical primitive: `flowctl epic` becomes `flowctl spec`, `.flow/epics/` becomes `.flow/specs/`, `epic-scout` becomes `spec-scout`, `/flow-next:epic-review` becomes `/flow-next:spec-completion-review`. **All 0.x scripts and CLAUDE.md examples keep working** — the legacy CLI is preserved as a deprecation alias layer through all of 1.x; JSON read responses dual-emit `spec_id` *and* `epic_id`; on read, `.flow/epics/` is auto-fallback when `.flow/specs/` is absent. Two migration paths: interactive via `/flow-next:setup` (recommended) or deterministic via `flowctl migrate-rename --yes` (transactional backup at `.flow/.backup-pre-1.0/`, lockfile-guarded, sentinel-anchored). Rollback supported via `flowctl migrate-rollback --yes`. Suppress the auto-detect banner with `FLOW_NO_AUTO_MIGRATE=1`. Soft alias-removal target is 2.0.0 (telemetry-driven, not calendar-driven). [Full changelog](CHANGELOG.md).
 
 > 🌐 **[Visual overview at mickel.tech/apps/flow-next](https://mickel.tech/apps/flow-next)** — diagrams, examples, the full feature tour.
 
@@ -130,13 +130,13 @@ Idea → spec → tasks → ship. Branch in, branch out — pick the entry point
 | Command | What It Does |
 |---------|--------------|
 | `/flow-next:prospect` | Generate ranked candidate ideas grounded in the repo, upstream of `capture`/`interview`/`plan` |
-| `/flow-next:capture` | Synthesize conversation context into an epic spec (source-tagged, mandatory read-back) |
+| `/flow-next:capture` | Synthesize conversation context into a spec (source-tagged, mandatory read-back) |
 | `/flow-next:interview` | Deep spec refinement with lead-with-recommendation + confidence tiers + codebase-first investigation |
-| `/flow-next:plan` | Research codebase, create epic + dependency-ordered tasks |
+| `/flow-next:plan` | Research codebase, create spec + dependency-ordered tasks |
 | `/flow-next:work` | Execute tasks with re-anchoring + worker subagents + review gates |
 | `/flow-next:impl-review` | Cross-model implementation review (RepoPrompt, Codex, or Copilot) |
 | `/flow-next:plan-review` | Cross-model plan review |
-| `/flow-next:epic-review` | Epic-completion review gate — verify combined implementation matches spec |
+| `/flow-next:spec-completion-review` | Spec-completion review gate — verify combined implementation matches the spec (renamed from `/flow-next:epic-review` in 1.0.0; soft-removal target 2.0.0, telemetry-driven) |
 | `/flow-next:resolve-pr` | Resolve GitHub PR review threads (fetch → triage → fix → reply → resolve via GraphQL) |
 | `/flow-next:audit` | Agent-native review of `.flow/memory/` entries against current code (Keep / Update / Consolidate / Replace / Delete) |
 | `/flow-next:memory-migrate` | Lift legacy flat memory files into the categorized schema; agent classifies each entry |

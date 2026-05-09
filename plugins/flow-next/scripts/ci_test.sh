@@ -70,15 +70,15 @@ echo -e "\n${YELLOW}--- Basic Commands ---${NC}"
 
 flowctl init --json >/dev/null && pass "init" || fail "init"
 
-EPIC_JSON="$(flowctl epic create --title "Test Epic" --json)"
+EPIC_JSON="$(flowctl spec create --title "Test Epic" --json)"
 EPIC_ID="$("$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['id'])" <<< "$EPIC_JSON")"
 [[ -n "$EPIC_ID" ]] && pass "epic create ($EPIC_ID)" || fail "epic create"
 
-TASK1_JSON="$(flowctl task create --epic "$EPIC_ID" --title "Task One" --priority 2 --json)"
+TASK1_JSON="$(flowctl task create --spec "$EPIC_ID" --title "Task One" --priority 2 --json)"
 TASK1_ID="$("$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['id'])" <<< "$TASK1_JSON")"
 [[ -n "$TASK1_ID" ]] && pass "task create ($TASK1_ID)" || fail "task create"
 
-TASK2_JSON="$(flowctl task create --epic "$EPIC_ID" --title "Task Two" --priority 1 --json)"
+TASK2_JSON="$(flowctl task create --spec "$EPIC_ID" --title "Task Two" --priority 1 --json)"
 TASK2_ID="$("$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['id'])" <<< "$TASK2_JSON")"
 
 flowctl list --json >/dev/null && pass "list" || fail "list"
@@ -96,7 +96,7 @@ STATUS="$("$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['status'
 [[ "$STATUS" == "plan" ]] && pass "next returns plan" || fail "next returns plan (got $STATUS)"
 
 # set plan review status
-flowctl epic set-plan-review-status "$EPIC_ID" --status ship --json >/dev/null && pass "set-plan-review-status" || fail "set-plan-review-status"
+flowctl spec set-plan-review-status "$EPIC_ID" --status ship --json >/dev/null && pass "set-plan-review-status" || fail "set-plan-review-status"
 
 # next should now return work with higher priority task (Task Two, priority 1)
 NEXT_JSON="$(flowctl next --json)"
@@ -413,6 +413,46 @@ if [[ -n "$FLUFF_HITS" ]]; then
   echo "$FLUFF_HITS" | sed 's/^/    /'
 else
   pass "R19: no strategy-doc fluff vocabulary in canonical"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5e. Alias-vocabulary guard — R30 (fn-43 task 14).
+#     Catch fresh prose that uses the legacy `flowctl epic` CLI surface
+#     instead of the canonical 1.0 `flowctl spec`. Mirrors the R17 / R19
+#     two-tier guard pattern (canonical scan here + Codex-mirror scan in
+#     scripts/sync-codex.sh validation block).
+#
+#     Lines that legitimately reference the legacy form survive when they
+#     describe deprecation / alias / legacy semantics — e.g. the migration
+#     banner string, dispatcher comments, the `_emit_rename_deprecation`
+#     helper itself. Excluded markers: `deprecat`, `legacy`, `alias`,
+#     `_emit_rename_`, `removed in 2.0`. references/ files are excluded
+#     so anti-pattern documentation can describe the legacy form.
+# ─────────────────────────────────────────────────────────────────────────────
+echo -e "\n${YELLOW}--- Alias-vocabulary guard (R30) ---${NC}"
+
+# Patterns: legacy verb (`flowctl epic*` / `flowctl epics`), legacy CLI flag
+# (`--epic`), legacy section filter (`--section epic`), legacy env var
+# (`EPICS_FILE`). Each must be absent from canonical prose unless the line
+# describes deprecation / alias / legacy semantics. Argparse declarations
+# of the legacy alias flags themselves (`"--epic-title",` / `"--epics-file",`
+# as the first arg of an `add_argument(...)` call) are excluded — those are
+# the alias entry points, not fresh prose using them.
+set +e
+ALIAS_HITS="$(grep -RnE 'flowctl epic\b|flowctl epics\b|--epic\b|--epics-file\b|--section epic\b|\bEPICS_FILE\b' \
+  "$PLUGIN_ROOT/skills" \
+  "$PLUGIN_ROOT/scripts/flowctl.py" \
+  "$PLUGIN_ROOT/agents" \
+  "$PLUGIN_ROOT/commands" 2>/dev/null \
+  | grep -vE '/references/' \
+  | grep -vE 'deprecat|legacy|alias|_emit_rename_|removed in 2\.0|flow-next 1\.0 renamed|R31|R30|fn-43|\bT[0-9]+\b' \
+  | grep -vE '^[^:]+:[0-9]+:[[:space:]]+"--(epic|epics-file|epic-title)",?[[:space:]]*$')"
+set -e
+if [[ -n "$ALIAS_HITS" ]]; then
+  fail "R30 legacy CLI vocabulary in canonical (use 'flowctl spec' / '--spec' / 'SPECS_FILE'):"
+  echo "$ALIAS_HITS" | sed 's/^/    /'
+else
+  pass "R30: no legacy CLI vocabulary in canonical (alias context excluded)"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1106,8 +1146,8 @@ flowctl ralph stop --run test-run >/dev/null
 rm -rf scripts/ralph/runs/test-run
 
 # Test task reset
-RESET_EPIC="$(flowctl epic create --title "Reset test" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-RESET_TASK="$(flowctl task create --epic "$RESET_EPIC" --title "Test task" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+RESET_EPIC="$(flowctl spec create --title "Reset test" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+RESET_TASK="$(flowctl task create --spec "$RESET_EPIC" --title "Test task" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 
 flowctl start "$RESET_TASK" --json >/dev/null
 flowctl done "$RESET_TASK" --json >/dev/null
@@ -1124,14 +1164,14 @@ set -e
 [[ $RESET_RC -ne 0 ]] && pass "task reset rejects in_progress" || fail "task reset should reject in_progress"
 
 # Test epic add-dep/rm-dep
-DEP_BASE="$(flowctl epic create --title "Dep base" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-DEP_CHILD="$(flowctl epic create --title "Dep child" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+DEP_BASE="$(flowctl spec create --title "Dep base" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+DEP_CHILD="$(flowctl spec create --title "Dep child" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 
-flowctl epic add-dep "$DEP_CHILD" "$DEP_BASE" --json >/dev/null
+flowctl spec add-dep "$DEP_CHILD" "$DEP_BASE" --json >/dev/null
 DEPS="$(flowctl show "$DEP_CHILD" --json | "$PYTHON_BIN" -c 'import json,sys; print(",".join(json.load(sys.stdin).get("depends_on_epics",[])))')"
 [[ "$DEPS" == "$DEP_BASE" ]] && pass "epic add-dep" || fail "epic add-dep: deps=$DEPS"
 
-flowctl epic rm-dep "$DEP_CHILD" "$DEP_BASE" --json >/dev/null
+flowctl spec rm-dep "$DEP_CHILD" "$DEP_BASE" --json >/dev/null
 DEPS="$(flowctl show "$DEP_CHILD" --json | "$PYTHON_BIN" -c 'import json,sys; print(",".join(json.load(sys.stdin).get("depends_on_epics",[])))')"
 [[ -z "$DEPS" ]] && pass "epic rm-dep" || fail "epic rm-dep: deps=$DEPS"
 
@@ -1167,9 +1207,9 @@ ACTIVE_COUNT="$(flowctl status --json | "$PYTHON_BIN" -c 'import json,sys; d=jso
 rm -rf scripts/ralph/runs/completed-test
 
 # Test task reset --cascade
-CASCADE_EPIC="$(flowctl epic create --title "Cascade test" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-CASCADE_T1="$(flowctl task create --epic "$CASCADE_EPIC" --title "Base task" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-CASCADE_T2="$(flowctl task create --epic "$CASCADE_EPIC" --title "Dependent task" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+CASCADE_EPIC="$(flowctl spec create --title "Cascade test" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+CASCADE_T1="$(flowctl task create --spec "$CASCADE_EPIC" --title "Base task" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+CASCADE_T2="$(flowctl task create --spec "$CASCADE_EPIC" --title "Dependent task" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 flowctl dep add "$CASCADE_T2" "$CASCADE_T1" --json >/dev/null  # T2 depends on T1
 flowctl start "$CASCADE_T1" >/dev/null && flowctl done "$CASCADE_T1" >/dev/null
 flowctl start "$CASCADE_T2" >/dev/null && flowctl done "$CASCADE_T2" >/dev/null

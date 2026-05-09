@@ -57,8 +57,8 @@ Add canonical `flowctl spec *` subcommands as primary verbs; rename internal Pyt
 - [ ] Checkpoint JSON schema unchanged per spec Boundaries.
 
 ## Done summary
-
+T1 of fn-43 — registered canonical `flowctl spec *` subcommands as primary verbs with `flowctl epic *` aliased silently to the same handlers (T2 layers deprecation). Bumped schema 2→3, fresh `flowctl init` writes `.flow/specs/` only with `next_spec` field; alias-mode 0.x repos (epics/ present, no sentinel) keep writing JSON to epics/ via the write-location resolver. Read paths probe specs/ then fall back to epics/. Cognitive-aid + specs/tasks/ready/list/validate JSON payloads co-emit canonical "spec/specs" alongside legacy "epic/epics" keys (R31). Codex impl-review caught a directory-validation slip (epics/ alone was treated as satisfying the requirement, but markdown always lives in specs/) — fixed in the second commit; SHIP after one NEEDS_WORK→SHIP cycle. Captured the bug as `bug/build-errors/detectvalidate-must-require-specs-dir-2026-05-08`.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0da87907642704fc707123532a8beab3ab8996a6, a491eae653fa2ab52af7fed3ac6df6a655a4e91d
+- Tests: python3 -c 'import py_compile; py_compile.compile("plugins/flow-next/scripts/flowctl.py", doraise=True)', manual smoke: flowctl init -> specs/+meta.json with schema_version 3 + next_spec, no epics/, manual smoke: flowctl spec create + flowctl epic create both write fn-N-* with same handler, manual smoke: flowctl specs --json + flowctl epics --json co-emit specs/epics keys, manual smoke: flowctl spec export-cognitive-aid --section spec / --section epic both succeed, manual smoke: alias-mode (no sentinel + epics/) writes JSON to epics/, markdown to specs/, manual smoke: 1.0+ canonical (no epics/) writes both md+json to specs/, manual smoke: flowctl detect rejects broken layout (epics/ but no specs/), plugins/flow-next/scripts/glossary_smoke_test.sh PASS 80/0, plugins/flow-next/scripts/ci_test.sh PASS 57/0, codex impl-review (codex:gpt-5.5:high) verdict SHIP after one NEEDS_WORK -> SHIP cycle
 - PRs:

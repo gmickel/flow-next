@@ -47,8 +47,8 @@ Update top-level user-facing documentation surfaces with spec vocabulary. The se
 - [ ] `.flow/usage.md` (the working-copy in this repo) uses spec vocabulary (R17).
 
 ## Done summary
-
+User-facing docs sweep for the epic→spec rename: root README (4 refs), plugin README (133 refs — heaviest doc), root CLAUDE.md Flow-Next subsection, and `.flow/usage.md` (R17 working-copy half) all rewritten to spec vocabulary. Plugin README gains a "Deprecation timeline (1.0.0)" subsection near install, an updated commands table row for `/flow-next:spec-completion-review`, and a refreshed `/flow-next:spec-completion-review` Command Reference section; the legacy `epic-review` redirect command keeps the count at 18. Filesystem-path examples updated (`.flow/epics/<id>.json` → `.flow/specs/<id>.json` for sidecar metadata) and CLI-verb examples updated wholesale (`flowctl epic create` → `flowctl spec create`, etc.). All `flowctl epic *` references retained only in deprecation/back-compat callouts (acceptance criterion exempts those). Codex `gpt-5.5:high` reviewed the change and returned SHIP with 0 findings; triage-skip also classified the diff as docs-only SHIP. Satisfies R15 and R17 working-copy half.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 445a4ef92dbc09f52b898635f05428eaff5dec7e
+- Tests: flowctl validate --all (no new errors), flowctl review-backend (rp configured), flowctl triage-skip --base 7a1a8e2... → SHIP (docs-only, 4 files), flowctl codex impl-review --spec codex:gpt-5.5:high → SHIP (R15 + R17 met, 0 findings)
 - PRs:

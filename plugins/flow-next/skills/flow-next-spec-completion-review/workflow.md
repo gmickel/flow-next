@@ -1,35 +1,8 @@
-# Epic Completion Review Workflow
-
----
-
-## CRITICAL: RepoPrompt Commands Are SLOW - DO NOT RETRY
-
-**READ THIS BEFORE RUNNING ANY COMMANDS:**
-
-1. **`setup-review` takes 5-15 MINUTES** - It runs the RepoPrompt context builder which indexes files. This is NORMAL. Do NOT assume it is stuck.
-
-2. **`chat-send` takes 2-10 MINUTES** - It waits for the LLM to generate a full review. This is NORMAL. Do NOT assume it is stuck.
-
-3. **Run commands directly and WAIT** - Do NOT use background jobs. Just run the command and wait:
- ```bash
- # Run setup-review - takes 5-15 minutes, just wait
- $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "..."
- # You will see file paths printed as it indexes - this is progress, not errors
- ```
-
-4. **Output is progress, not errors** - The context builder prints file paths as it indexes. Seeing many lines of output is NORMAL. Do not interpret this as an error loop.
-
-5. **NEVER retry these commands** - If you run them again, you will create duplicate reviews and waste time. Run ONCE and WAIT.
-
-6. **Exit code 0 = success** - When the command finishes, check the exit code. If it is 0, it worked.
-
-**If a command has been running for less than 15 minutes, WAIT. Do not retry. Do not output <promise>RETRY</promise>.**
-
----
+# Spec Completion Review Workflow
 
 ## Philosophy
 
-Epic completion review verifies spec compliance, NOT code quality. impl-review handles code quality per-task. This review catches:
+Spec completion review verifies spec compliance, NOT code quality. impl-review handles code quality per-task. This review catches:
 - Requirements that never became tasks (decomposition gaps)
 - Requirements partially implemented across tasks (cross-task gaps)
 - Scope drift (task marked done without fully addressing spec intent)
@@ -45,8 +18,7 @@ Epic completion review verifies spec compliance, NOT code quality. impl-review h
 
 ```bash
 set -e
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowctl"
-[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 # Priority: --review flag > env > config (flag parsed in SKILL.md)
@@ -55,9 +27,9 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 BACKEND=$($FLOWCTL review-backend)
 
 if [[ "$BACKEND" == "ASK" ]]; then
- echo "Error: No review backend configured."
- echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
- exit 1
+  echo "Error: No review backend configured."
+  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
+  exit 1
 fi
 
 echo "Review backend: $BACKEND"
@@ -66,13 +38,13 @@ echo "Review backend: $BACKEND"
 **Spec-form env var (optional):** `FLOW_REVIEW_BACKEND` accepts bare or full spec:
 
 ```bash
-FLOW_REVIEW_BACKEND=codex:gpt-5.5:xhigh $FLOWCTL codex completion-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
-FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5 $FLOWCTL copilot completion-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
+FLOW_REVIEW_BACKEND=codex:gpt-5.5:xhigh $FLOWCTL codex completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
+FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5 $FLOWCTL copilot completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 # Or pass spec directly:
-$FLOWCTL codex completion-review "$EPIC_ID" --spec "codex:gpt-5.5:xhigh" --receipt "$RECEIPT_PATH"
+$FLOWCTL codex completion-review "$SPEC_ID" --spec "codex:gpt-5.5:xhigh" --receipt "$RECEIPT_PATH"
 ```
 
-Per-epic `default_review` (set via `flowctl epic set-backend`) overrides env.
+Per-spec `default_review` (set via `flowctl spec set-backend`) overrides env.
 
 **If backend is "none"**: Skip review, inform user, and exit cleanly (no error).
 
@@ -84,11 +56,11 @@ Per-epic `default_review` (set via `flowctl epic set-backend`) overrides env.
 
 Use when `BACKEND="codex"`.
 
-### Step 1: Identify Epic
+### Step 1: Identify Spec
 
 ```bash
-# EPIC_ID from arguments (e.g., fn-1, fn-22-53k)
-$FLOWCTL show "$EPIC_ID" --json
+# SPEC_ID from arguments (e.g., fn-1, fn-22-53k)
+$FLOWCTL show "$SPEC_ID" --json
 ```
 
 ### Step 2: Execute Review
@@ -96,7 +68,7 @@ $FLOWCTL show "$EPIC_ID" --json
 ```bash
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt.json}"
 
-$FLOWCTL codex completion-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
+$FLOWCTL codex completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 ```
 
 **Output includes `VERDICT=SHIP|NEEDS_WORK`.**
@@ -113,7 +85,7 @@ If `VERDICT=NEEDS_WORK`:
 ### Step 4: Receipt
 
 Receipt is written automatically by `flowctl codex completion-review` when `--receipt` provided.
-Format: `{"type":"completion_review","id":"<epic-id>","mode":"codex","verdict":"<verdict>","session_id":"<thread_id>","timestamp":"..."}`
+Format: `{"type":"completion_review","id":"<spec-id>","mode":"codex","verdict":"<verdict>","session_id":"<thread_id>","timestamp":"..."}`
 
 ---
 
@@ -121,11 +93,11 @@ Format: `{"type":"completion_review","id":"<epic-id>","mode":"codex","verdict":"
 
 Use when `BACKEND="copilot"`.
 
-### Step 1: Identify Epic
+### Step 1: Identify Spec
 
 ```bash
-# EPIC_ID from arguments (e.g., fn-1, fn-22-53k)
-$FLOWCTL show "$EPIC_ID" --json
+# SPEC_ID from arguments (e.g., fn-1, fn-22-53k)
+$FLOWCTL show "$SPEC_ID" --json
 ```
 
 ### Step 2: Execute Review
@@ -134,12 +106,12 @@ $FLOWCTL show "$EPIC_ID" --json
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt.json}"
 
 # Runtime config:
-# --spec <spec> full spec (backend:model:effort), highest priority
-# FLOW_REVIEW_BACKEND spec-form ok: copilot:claude-opus-4.5:xhigh
-# FLOW_COPILOT_MODEL fills missing model only (default gpt-5.2)
-# FLOW_COPILOT_EFFORT fills missing effort only (default high)
+#   --spec <spec>           full spec (backend:model:effort), highest priority
+#   FLOW_REVIEW_BACKEND     spec-form ok: copilot:claude-opus-4.5:xhigh
+#   FLOW_COPILOT_MODEL      fills missing model only (default gpt-5.2)
+#   FLOW_COPILOT_EFFORT     fills missing effort only (default high)
 
-$FLOWCTL copilot completion-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
+$FLOWCTL copilot completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 ```
 
 **Output includes `VERDICT=SHIP|NEEDS_WORK`.**
@@ -156,7 +128,7 @@ If `VERDICT=NEEDS_WORK`:
 ### Step 4: Receipt
 
 Receipt is written automatically by `flowctl copilot completion-review` when `--receipt` provided.
-Format: `{"type":"completion_review","id":"<epic-id>","mode":"copilot","verdict":"<verdict>","session_id":"<uuid>","model":"<model>","effort":"<effort>","spec":"copilot:<model>:<effort>","timestamp":"..."}`
+Format: `{"type":"completion_review","id":"<spec-id>","mode":"copilot","verdict":"<verdict>","session_id":"<uuid>","model":"<model>","effort":"<effort>","spec":"copilot:<model>:<effort>","timestamp":"..."}`
 
 The `spec` field is the canonical round-trippable form (added in fn-28.3). `model` + `effort` remain for backward compatibility.
 
@@ -175,9 +147,9 @@ Use when `BACKEND="rp"`.
 ```bash
 BRANCH="$(git branch --show-current)"
 
-# Get epic spec and task list
-EPIC_SPEC="$($FLOWCTL cat "$EPIC_ID")"
-TASKS_JSON="$($FLOWCTL tasks --epic "$EPIC_ID" --json)"
+# Get spec and task list
+SPEC="$($FLOWCTL cat "$SPEC_ID")"
+TASKS_JSON="$($FLOWCTL tasks --spec "$SPEC_ID" --json)"
 
 # Get changed files on branch
 DIFF_BASE="main"
@@ -188,7 +160,7 @@ git diff ${DIFF_BASE}..HEAD --stat
 ```
 
 Save:
-- Epic ID and spec
+- Spec ID and spec body
 - Task list (IDs and titles)
 - Branch name
 - Changed files list
@@ -207,8 +179,8 @@ eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "$REVIEW_SUM
 
 # Verify we have W and T
 if [[ -z "${W:-}" || -z "${T:-}" ]]; then
- echo "<promise>RETRY</promise>"
- exit 0
+  echo "<promise>RETRY</promise>"
+  exit 0
 fi
 
 echo "Setup complete: W=$W T=$T"
@@ -227,17 +199,17 @@ Builder selects context automatically. Review and add must-haves:
 # See what builder selected
 $FLOWCTL rp select-get --window "$W" --tab "$T"
 
-# Add epic spec
-$FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/specs/$EPIC_ID.md"
+# Add spec
+$FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/specs/$SPEC_ID.md"
 
 # Add all task specs
 for task_id in $(echo "$TASKS_JSON" | jq -r '.[].id'); do
- $FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/tasks/$task_id.md"
+  $FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/tasks/$task_id.md"
 done
 
 # Add ALL changed files
 for f in $CHANGED_FILES; do
- $FLOWCTL rp select-add --window "$W" --tab "$T" "$f"
+  $FLOWCTL rp select-add --window "$W" --tab "$T" "$f"
 done
 ```
 
@@ -269,13 +241,13 @@ RepoPrompt includes the actual source code of selected files in a `<file_content
 
 If you cannot find `<file_contents>`, ask for the files to be re-attached before proceeding.
 
-## Epic Under Review
-Epic: [EPIC_ID]
+## Spec Under Review
+Spec: [SPEC_ID]
 Branch: [BRANCH_NAME]
 Tasks: [LIST TASK IDs]
 
-## Epic Spec
-[PASTE EPIC SPEC]
+## Spec Body
+[PASTE SPEC]
 
 ## Review Focus: Spec Compliance
 
@@ -286,7 +258,7 @@ Your job: Verify the combined implementation delivers everything the spec requir
 ### Three-Phase Approach
 
 **Phase 1: Extract Requirements**
-Read the epic spec and list ALL explicit requirements as bullets:
+Read the spec and list ALL explicit requirements as bullets:
 - Features/functionality to implement
 - Docs to update (README, API docs, etc.)
 - Tests to add
@@ -301,15 +273,15 @@ For each requirement from Phase 1:
 
 **Phase 3: Reverse Coverage (Code → Spec)**
 For each new/modified file in the changed files list:
-- Identify which epic requirement it serves
+- Identify which spec requirement it serves
 - Flag any file that doesn't trace to a spec requirement
 
-If the epic spec has a `## Requirement coverage` traceability table, use it as the primary reference for mapping files to requirements.
+If the spec has a `## Requirement coverage` traceability table, use it as the primary reference for mapping files to requirements.
 
 Classification for untraced changes:
 - `UNDOCUMENTED_ADDITION` — new functionality not in spec (scope creep)
 - `LEGITIMATE_SUPPORT` — refactoring/infrastructure needed to implement a requirement (OK)
-- `UNRELATED_CHANGE` — changes outside epic scope (may be accidental)
+- `UNRELATED_CHANGE` — changes outside spec scope (may be accidental)
 
 Report untraced changes but don't auto-reject. UNDOCUMENTED_ADDITION is a flag for acknowledgment, not automatic NEEDS_WORK.
 
@@ -326,10 +298,10 @@ Report untraced changes but don't auto-reject. UNDOCUMENTED_ADDITION is a flag f
 - Performance (impl-review covers this)
 - Legitimate refactoring needed to implement requirements (flag as LEGITIMATE_SUPPORT but don't block)
 
-## Requirements coverage (if epic spec has R-IDs)
+## Requirements coverage (if spec has R-IDs)
 
-If the epic spec numbers its acceptance criteria like `- **R1:** ...`, `- **R2:** ...`,
-produce a per-R-ID coverage table. Read the epic spec's `## Acceptance` section
+If the spec numbers its acceptance criteria like `- **R1:** ...`, `- **R2:** ...`,
+produce a per-R-ID coverage table. Read the spec's `## Acceptance` section
 (or the legacy `## Acceptance criteria` heading — reviewer MUST tolerate both).
 If no R-IDs are present, skip this block entirely — Phase 2 and Phase 3 above
 still apply.
@@ -344,7 +316,7 @@ For each R-ID, classify status:
 | met | Implementation delivers the requirement with appropriate tests/evidence |
 | partial | Implementation advances the requirement but leaves gaps |
 | not-addressed | Implementation does not advance this requirement at all |
-| deferred | Spec explicitly defers this requirement to a later epic/PR |
+| deferred | Spec explicitly defers this requirement to a later spec/PR |
 
 Report as a markdown table in the review output:
 
@@ -393,22 +365,22 @@ Example:
 
 For each gap, classify whether this branch's diff caused it:
 
-- **introduced** — this epic's branch is responsible for the gap (new requirement not implemented, or a requirement this epic was supposed to satisfy and did not)
-- **pre_existing** — the gap predates this epic's branch (the requirement was already not satisfied on the base branch; this epic did not touch the relevant code). Pre-existing gaps do not block this verdict.
+- **introduced** — this spec's branch is responsible for the gap (new requirement not implemented, or a requirement this spec was supposed to satisfy and did not)
+- **pre_existing** — the gap predates this spec's branch (the requirement was already not satisfied on the base branch; this spec did not touch the relevant code). Pre-existing gaps do not block this verdict.
 
 Evidence methods:
 - `git blame <file> <line>` to see when the line was last touched
 - Read the base-branch version of the file directly
-- Check the epic scope: a gap about an area this epic never claimed to touch is `pre_existing`
+- Check the spec scope: a gap about an area this spec never claimed to touch is `pre_existing`
 
-**Verdict gate:** only `introduced` gaps affect the verdict. An epic-review whose sole surviving gaps are all `pre_existing` MUST ship.
+**Verdict gate:** only `introduced` gaps affect the verdict. A spec-completion-review whose sole surviving gaps are all `pre_existing` MUST ship.
 
 Pre-existing gaps go under a separate `## Pre-existing issues (not blocking this verdict)` heading:
 
 ```
 ## Pre-existing issues (not blocking this verdict)
 
-- [confidence 75, introduced=false] missing migration docs in README — predates this epic
+- [confidence 75, introduced=false] missing migration docs in README — predates this spec
 ```
 
 Never delete pre-existing gaps from the report — they stay visible for future prioritization.
@@ -417,10 +389,10 @@ Never delete pre-existing gaps from the report — they stay visible for future 
 
 The following paths are flow-next / project-pipeline artifacts. Any gap/finding recommending their deletion, gitignore, or removal MUST be discarded during synthesis. Do not flag these paths for cleanup under any circumstances:
 
-- `.flow/*` — flow-next state, specs, tasks, epics, runtime
+- `.flow/*` — flow-next state, specs, tasks, runtime
 - `.flow/bin/*` — bundled flowctl
 - `.flow/memory/*` — learnings store (pitfalls, conventions, decisions)
-- `.flow/specs/*.md` — epic specs (decision artifacts)
+- `.flow/specs/*.md` — specs (decision artifacts)
 - `.flow/tasks/*.md` — task specs (decision artifacts)
 - `docs/plans/*` — plan artifacts (if project uses this convention)
 - `docs/solutions/*` — solutions artifacts (if project uses this convention)
@@ -452,7 +424,7 @@ For each untraced change:
 (Note: the reverse-coverage `Classification` uses untraced-change labels, distinct from the `introduced` / `pre_existing` per-gap classification above.)
 
 After the findings list, emit:
-- The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the epic spec uses R-IDs; otherwise skip).
+- The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the spec uses R-IDs; otherwise skip).
 - A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
 - A `Classification counts:` line tallying `introduced` vs `pre_existing` gaps, e.g. `Classification counts: 1 introduced, 0 pre_existing.`.
 - A `Protected-path filter:` line tallying gaps dropped by the protected-path filter (omit when nothing was dropped).
@@ -467,26 +439,26 @@ Do NOT skip this tag. The automation depends on it.
 EOF
 ```
 
-**Note:** Replace bracket placeholders (`[EPIC_ID]`, `[BRANCH_NAME]`, etc.) with actual values before sending.
+**Note:** Replace bracket placeholders (`[SPEC_ID]`, `[BRANCH_NAME]`, etc.) with actual values before sending.
 
 ### Send to RepoPrompt and Parse Verdict
 
 ```bash
 # Send review and capture response
-REVIEW_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/completion-review-prompt.md --new-chat --chat-name "Epic Review: $EPIC_ID")"
+REVIEW_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/completion-review-prompt.md --new-chat --chat-name "Spec Completion Review: $SPEC_ID")"
 echo "$REVIEW_RESPONSE"
 
 # Extract verdict tag from response
 VERDICT="$(echo "$REVIEW_RESPONSE" \
- | tr -d '\r' \
- | grep -oE '<verdict>(SHIP|NEEDS_WORK)</verdict>' \
- | tail -n 1 \
- | sed -E 's#</?verdict>##g')"
+  | tr -d '\r' \
+  | grep -oE '<verdict>(SHIP|NEEDS_WORK)</verdict>' \
+  | tail -n 1 \
+  | sed -E 's#</?verdict>##g')"
 
 if [[ -z "$VERDICT" ]]; then
- echo "No verdict tag found in response"
- echo "<promise>RETRY</promise>"
- exit 0
+  echo "No verdict tag found in response"
+  echo "<promise>RETRY</promise>"
+  exit 0
 fi
 
 echo "VERDICT=$VERDICT"
@@ -504,94 +476,94 @@ Receipt written after SHIP verdict (not on NEEDS_WORK):
 
 ```bash
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
- ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
- mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
 
- # Optional: capture suppression-gate tally (fn-29.3).
- # Reviewer emits a line like "Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0."
- SUPPRESSED_JSON="$(printf '%s' "$REVIEW_RESPONSE" \
- | grep -iE '^[>*_` ]*suppressed findings[ *_`]*:' \
- | head -n 1 \
- | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//' \
- | awk '
- BEGIN { first=1; printf "{" }
- {
- n=split($0, parts, /,[[:space:]]*/)
- for (i=1; i<=n; i++) {
- if (match(parts[i], /([0-9]+)[[:space:]]+at[[:space:]]+anchor[[:space:]]+(0|25|50|75|100)/, m)) {
- if (!first) printf ","
- printf "\"%s\":%s", m[2], m[1]
- first=0
- }
- }
- }
- END { printf "}" }')"
+  # Optional: capture suppression-gate tally (fn-29.3).
+  # Reviewer emits a line like "Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0."
+  SUPPRESSED_JSON="$(printf '%s' "$REVIEW_RESPONSE" \
+    | grep -iE '^[>*_` ]*suppressed findings[ *_`]*:' \
+    | head -n 1 \
+    | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//' \
+    | awk '
+      BEGIN { first=1; printf "{" }
+      {
+        n=split($0, parts, /,[[:space:]]*/)
+        for (i=1; i<=n; i++) {
+          if (match(parts[i], /([0-9]+)[[:space:]]+at[[:space:]]+anchor[[:space:]]+(0|25|50|75|100)/, m)) {
+            if (!first) printf ","
+            printf "\"%s\":%s", m[2], m[1]
+            first=0
+          }
+        }
+      }
+      END { printf "}" }')"
 
- # Optional: capture introduced vs pre_existing classification tally (fn-29.4).
- # Reviewer emits a line like "Classification counts: 1 introduced, 0 pre_existing."
- # Uses portable grep -Eio so this works on BSD awk / mawk / gawk alike.
- CLASSIFICATION_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
- | grep -iE '^[>*_` ]*classification counts[ *_`]*:' \
- | head -n 1 \
- | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//')"
- INTRODUCED_COUNT=""
- PRE_EXISTING_COUNT=""
- if [[ -n "$CLASSIFICATION_LINE" ]]; then
- INTRODUCED_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
- | grep -Eio '[0-9]+[[:space:]]+introduced' \
- | head -n 1 \
- | grep -Eo '^[0-9]+')"
- PRE_EXISTING_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
- | grep -Eio '[0-9]+[[:space:]]+pre[-_ ]?existing' \
- | head -n 1 \
- | grep -Eo '^[0-9]+')"
- if [[ -n "$INTRODUCED_COUNT" || -n "$PRE_EXISTING_COUNT" ]]; then
- INTRODUCED_COUNT="${INTRODUCED_COUNT:-0}"
- PRE_EXISTING_COUNT="${PRE_EXISTING_COUNT:-0}"
- fi
- fi
+  # Optional: capture introduced vs pre_existing classification tally (fn-29.4).
+  # Reviewer emits a line like "Classification counts: 1 introduced, 0 pre_existing."
+  # Uses portable grep -Eio so this works on BSD awk / mawk / gawk alike.
+  CLASSIFICATION_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
+    | grep -iE '^[>*_` ]*classification counts[ *_`]*:' \
+    | head -n 1 \
+    | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//')"
+  INTRODUCED_COUNT=""
+  PRE_EXISTING_COUNT=""
+  if [[ -n "$CLASSIFICATION_LINE" ]]; then
+    INTRODUCED_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
+      | grep -Eio '[0-9]+[[:space:]]+introduced' \
+      | head -n 1 \
+      | grep -Eo '^[0-9]+')"
+    PRE_EXISTING_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
+      | grep -Eio '[0-9]+[[:space:]]+pre[-_ ]?existing' \
+      | head -n 1 \
+      | grep -Eo '^[0-9]+')"
+    if [[ -n "$INTRODUCED_COUNT" || -n "$PRE_EXISTING_COUNT" ]]; then
+      INTRODUCED_COUNT="${INTRODUCED_COUNT:-0}"
+      PRE_EXISTING_COUNT="${PRE_EXISTING_COUNT:-0}"
+    fi
+  fi
 
- # Optional: capture unaddressed R-IDs (fn-29.2).
- # Reviewer emits `Unaddressed R-IDs: [R3, R5]` (or `[]` / `none` for empty).
- # Absent line => epic spec has no R-IDs — leave field off the receipt entirely.
- UNADDRESSED_JSON=""
- UNADDRESSED_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
- | grep -iE '^[>*_` ]*unaddressed([[:space:]]+r[-_ ]?ids?)?[ *_`]*:' \
- | head -n 1 \
- | sed -E 's/^[^:]+:[[:space:]]*//; s/[[:space:]]*$//; s/\.$//')"
- if [[ -n "$UNADDRESSED_LINE" ]]; then
- normalized="$(printf '%s' "$UNADDRESSED_LINE" | sed -E 's/^[[:space:]]*\[|\][[:space:]]*$//g; s/[[:space:]]+//g')"
- lower="$(printf '%s' "$normalized" | tr '[:upper:]' '[:lower:]')"
- if [[ "$lower" == "none" || "$lower" == "n/a" || -z "$lower" ]]; then
- UNADDRESSED_JSON="[]"
- else
- rids="$(printf '%s' "$UNADDRESSED_LINE" \
- | grep -oE '\bR[0-9]+\b' \
- | awk '!seen[$0]++')"
- if [[ -z "$rids" ]]; then
- UNADDRESSED_JSON="[]"
- else
- UNADDRESSED_JSON="$(printf '%s' "$rids" \
- | awk 'BEGIN{printf "["} {printf (NR>1?",":"") "\"" $0 "\""} END{printf "]"}')"
- fi
- fi
- fi
+  # Optional: capture unaddressed R-IDs (fn-29.2).
+  # Reviewer emits `Unaddressed R-IDs: [R3, R5]` (or `[]` / `none` for empty).
+  # Absent line => spec has no R-IDs — leave field off the receipt entirely.
+  UNADDRESSED_JSON=""
+  UNADDRESSED_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
+    | grep -iE '^[>*_` ]*unaddressed([[:space:]]+r[-_ ]?ids?)?[ *_`]*:' \
+    | head -n 1 \
+    | sed -E 's/^[^:]+:[[:space:]]*//; s/[[:space:]]*$//; s/\.$//')"
+  if [[ -n "$UNADDRESSED_LINE" ]]; then
+    normalized="$(printf '%s' "$UNADDRESSED_LINE" | sed -E 's/^[[:space:]]*\[|\][[:space:]]*$//g; s/[[:space:]]+//g')"
+    lower="$(printf '%s' "$normalized" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$lower" == "none" || "$lower" == "n/a" || -z "$lower" ]]; then
+      UNADDRESSED_JSON="[]"
+    else
+      rids="$(printf '%s' "$UNADDRESSED_LINE" \
+        | grep -oE '\bR[0-9]+\b' \
+        | awk '!seen[$0]++')"
+      if [[ -z "$rids" ]]; then
+        UNADDRESSED_JSON="[]"
+      else
+        UNADDRESSED_JSON="$(printf '%s' "$rids" \
+          | awk 'BEGIN{printf "["} {printf (NR>1?",":"") "\"" $0 "\""} END{printf "]"}')"
+      fi
+    fi
+  fi
 
- EXTRA_FIELDS=""
- if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
- EXTRA_FIELDS+=",\"suppressed_count\":$SUPPRESSED_JSON"
- fi
- if [[ -n "$INTRODUCED_COUNT" && -n "$PRE_EXISTING_COUNT" ]]; then
- EXTRA_FIELDS+=",\"introduced_count\":$INTRODUCED_COUNT,\"pre_existing_count\":$PRE_EXISTING_COUNT"
- fi
- if [[ -n "$UNADDRESSED_JSON" ]]; then
- EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
- fi
+  EXTRA_FIELDS=""
+  if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
+    EXTRA_FIELDS+=",\"suppressed_count\":$SUPPRESSED_JSON"
+  fi
+  if [[ -n "$INTRODUCED_COUNT" && -n "$PRE_EXISTING_COUNT" ]]; then
+    EXTRA_FIELDS+=",\"introduced_count\":$INTRODUCED_COUNT,\"pre_existing_count\":$PRE_EXISTING_COUNT"
+  fi
+  if [[ -n "$UNADDRESSED_JSON" ]]; then
+    EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
+  fi
 
- cat > "$REVIEW_RECEIPT_PATH" <<EOF
-{"type":"completion_review","id":"$EPIC_ID","mode":"rp","verdict":"SHIP"$EXTRA_FIELDS,"timestamp":"$ts"}
+  cat > "$REVIEW_RECEIPT_PATH" <<EOF
+{"type":"completion_review","id":"$SPEC_ID","mode":"rp","verdict":"SHIP"$EXTRA_FIELDS,"timestamp":"$ts"}
 EOF
- echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
+  echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi
 ```
 
@@ -599,7 +571,7 @@ fi
 
 ## Fix Loop (RP)
 
-**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is complete spec compliance. Never use request_user_input in this loop.**
+**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is complete spec compliance. Never use AskUserQuestion in this loop.**
 
 **CRITICAL: You MUST fix the code BEFORE re-reviewing. Never re-review without making changes.**
 
@@ -611,36 +583,36 @@ If verdict is NEEDS_WORK:
 2. **Fix the code** - Implement missing functionality
 3. **Run tests/lints** - Verify fixes don't break anything
 4. **Commit fixes** (MANDATORY before re-review):
- ```bash
- git add -A
- git commit -m "fix: address completion review gaps"
- ```
- **If you skip this and re-review without committing changes, reviewer will return NEEDS_WORK again.**
+   ```bash
+   git add -A
+   git commit -m "fix: address completion review gaps"
+   ```
+   **If you skip this and re-review without committing changes, reviewer will return NEEDS_WORK again.**
 
 5. **Request re-review** (only AFTER step 4):
 
- **IMPORTANT**: Do NOT re-add files already in the selection. RepoPrompt auto-refreshes
- file contents on every message. Only use `select-add` for NEW files created during fixes:
- ```bash
- # Only if fixes created new files not in original selection
- if [[ -n "$NEW_FILES" ]]; then
- $FLOWCTL rp select-add --window "$W" --tab "$T" $NEW_FILES
- fi
- ```
+   **IMPORTANT**: Do NOT re-add files already in the selection. RepoPrompt auto-refreshes
+   file contents on every message. Only use `select-add` for NEW files created during fixes:
+   ```bash
+   # Only if fixes created new files not in original selection
+   if [[ -n "$NEW_FILES" ]]; then
+     $FLOWCTL rp select-add --window "$W" --tab "$T" $NEW_FILES
+   fi
+   ```
 
- Then send re-review request (NO --new-chat, stay in same chat).
+   Then send re-review request (NO --new-chat, stay in same chat).
 
- **CRITICAL: Do NOT summarize fixes.** RP auto-refreshes file contents - reviewer sees your changes automatically. Just request re-review. Any summary wastes tokens and duplicates what reviewer already sees.
+   **CRITICAL: Do NOT summarize fixes.** RP auto-refreshes file contents - reviewer sees your changes automatically. Just request re-review. Any summary wastes tokens and duplicates what reviewer already sees.
 
- ```bash
- cat > /tmp/re-review.md << 'EOF'
- Gaps addressed. Please re-review for spec compliance.
+   ```bash
+   cat > /tmp/re-review.md << 'EOF'
+   Gaps addressed. Please re-review for spec compliance.
 
- **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`
- EOF
+   **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`
+   EOF
 
- $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md
- ```
+   $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md
+   ```
 6. **Repeat** until SHIP
 
 **Anti-pattern**: Re-adding already-selected files before re-review. RP auto-refreshes; re-adding can cause issues.

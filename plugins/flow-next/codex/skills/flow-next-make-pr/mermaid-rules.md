@@ -75,7 +75,7 @@ flowchart LR
  skill["flow-next-make-pr<br/>skill"] --> flowctl["scripts/flowctl"]
  skill --> gh["gh CLI"]
  flowctl --> mem[".flow/memory/"]
- flowctl --> epic[".flow/epics/"]
+ flowctl --> specs[".flow/specs/"]
 ```
 ````
 
@@ -91,16 +91,16 @@ flowchart LR
 ```mermaid
 classDiagram
  class CognitiveAidPayload {
- +epic: EpicMeta
+ +spec: SpecMeta
  +tasks: Task[]
  +diff_summary: DiffSummary
- +memory_during_epic: MemorySnapshot
+ +memory_during_spec: MemorySnapshot
  }
- class EpicMeta {
+ class SpecMeta {
  +id: string
  +acceptance_criteria: AcceptanceCriterion[]
  }
- CognitiveAidPayload *-- EpicMeta
+ CognitiveAidPayload *-- SpecMeta
 ```
 ````
 
@@ -120,7 +120,7 @@ sequenceDiagram
  participant F as flowctl
  participant G as gh CLI
  U->>S: invoke
- S->>F: epic export-cognitive-aid
+ S->>F: spec export-cognitive-aid
  F-->>S: payload (JSON)
  S->>S: render body
  S->>G: gh pr create
@@ -130,7 +130,7 @@ sequenceDiagram
 
 **Notes:** `participant X as "Display name"` aliases for readability. `->>` is solid arrow (request); `-->>` is dashed arrow (response). Self-arrows (`S->>S`) document internal state changes.
 
-### 3d. `graph TB` — high-level "epic touches these N areas" overview
+### 3d. `graph TB` — high-level "spec touches these N areas" overview
 
 **When:** trigger 5 fires (>15 files in >3 distinct modules). The diagram is structural overview, not dependency map — show *what* changed, not *how* things connect.
 
@@ -139,16 +139,16 @@ sequenceDiagram
 ````markdown
 ```mermaid
 graph TB
- epic["fn-42 make-pr"]
- epic --> skill["plugins/flow-next/skills/flow-next-make-pr/"]
- epic --> flowctl["plugins/flow-next/scripts/flowctl.py"]
- epic --> tests["plugins/flow-next/scripts/make-pr_smoke_test.sh"]
- epic --> docs["docs (CHANGELOG, README, CLAUDE.md)"]
- epic --> sync["scripts/sync-codex.sh"]
+ spec["fn-42 make-pr"]
+ spec --> skill["plugins/flow-next/skills/flow-next-make-pr/"]
+ spec --> flowctl["plugins/flow-next/scripts/flowctl.py"]
+ spec --> tests["plugins/flow-next/scripts/make-pr_smoke_test.sh"]
+ spec --> docs["docs (CHANGELOG, README, CLAUDE.md)"]
+ spec --> sync["scripts/sync-codex.sh"]
 ```
 ````
 
-**Notes:** `TB` (top-to-bottom) reads naturally for "epic → areas". Group by module, not by file — a leaf labeled `skill (4 files)` beats five sibling leaves. Group-when-it-helps; don't merge if grouping loses load-bearing detail.
+**Notes:** `TB` (top-to-bottom) reads naturally for "spec → areas". Group by module, not by file — a leaf labeled `skill (4 files)` beats five sibling leaves. Group-when-it-helps; don't merge if grouping loses load-bearing detail.
 
 ---
 

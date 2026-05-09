@@ -24,7 +24,7 @@ The Ralph-block (SKILL.md) runs before this preamble. Phase 0 starts after the R
 
 ## Phase 0: Pre-flight (R5, R6, R8)
 
-**Goal:** catch the three conditions that make capture unsafe BEFORE drafting a spec — duplicate epics, compacted conversation, idempotency conflict. Each has its own decision branch.
+**Goal:** catch the three conditions that make capture unsafe BEFORE drafting a spec — duplicate specs, compacted conversation, idempotency conflict. Each has its own decision branch.
 
 ### 0.1 — Extract candidate keywords from conversation
 
@@ -35,19 +35,21 @@ Capture's input is the conversation, not `$ARGUMENTS`. Walk the visible user tur
 - **Domain-specific terms** — multi-word phrases the user repeated (e.g. "rate limiter", "OAuth callback", "review walkthrough").
 - **Quoted phrases** — anything the user put in `"..."` or `\`...\`` while describing the feature.
 
-Cap the candidate keyword list at the top **10** by frequency. These feed both 0.2 (epic title overlap) and 0.3 (memory search). Strip ordinary English connectors (`the`, `a`, `and`, `or`, `to`, `for`, `with`, `via`).
+Cap the candidate keyword list at the top **10** by frequency. These feed both 0.2 (spec title overlap) and 0.3 (memory search). Strip ordinary English connectors (`the`, `a`, `and`, `or`, `to`, `for`, `with`, `via`).
 
-### 0.2 — Duplicate detection: epic title overlap
+### 0.2 — Duplicate detection: spec title overlap
+
+Scan both `.flow/specs/*.json` (post-1.0 canonical) and `.flow/epics/*.json` (legacy alias dir on unmigrated 0.x repos). Both paths are walked because `flowctl init` (post-1.0) writes only `.flow/specs/`, but pre-migration repos still keep their JSON metadata under `.flow/epics/` until `flowctl migrate-rename` runs.
 
 ```bash
 shopt -s nullglob
-EPIC_FILES=( "$EPICS_DIR"/*.json )
+SPEC_FILES=( "$SPECS_DIR"/*.json "$EPICS_DIR"/*.json )
 shopt -u nullglob
 ```
 
-For each epic JSON, read `id` + `title` + `status`. Skip closed epics (`status: closed`).
+For each spec JSON, read `id` + `title` + `status`. Skip closed specs (`status: closed`).
 
-For each remaining epic, compute keyword overlap with the conversation keywords. Count **strong matches** — proper nouns / file paths / multi-word phrases that appear in both. Common single English words are not strong matches.
+For each remaining spec, compute keyword overlap with the conversation keywords. Count **strong matches** — proper nouns / file paths / multi-word phrases that appear in both. Common single English words are not strong matches.
 
 | Strong matches | Action |
 |----------------|--------|
@@ -55,7 +57,7 @@ For each remaining epic, compute keyword overlap with the conversation keywords.
 | 2 | **Potential** duplicate — surface at Phase 0.5 with `proceed-anyway` recommended |
 | 3+ | **Likely** duplicate — surface at Phase 0.5 with `extend` (or `supersede`) recommended |
 
-Record the matched epic ids + their titles for the Phase 0.5 question.
+Record the matched spec ids + their titles for the Phase 0.5 question.
 
 ### 0.3 — Duplicate detection: memory search cross-check
 
@@ -67,7 +69,7 @@ If `flowctl memory list --json` reports memory is initialized, run a cross-check
 "$FLOWCTL" memory search "<keyword-3>" --json --limit 5 2>/dev/null
 ```
 
-Memory hits are advisory — they signal "you may have prior art on this topic" without blocking. Aggregate hit ids + titles for the Phase 4 read-back's "Related context" footnote (when ≥1 hits land). They do **not** trigger the duplicate-detection branch on their own; only epic-title overlap (0.2) does.
+Memory hits are advisory — they signal "you may have prior art on this topic" without blocking. Aggregate hit ids + titles for the Phase 4 read-back's "Related context" footnote (when ≥1 hits land). They do **not** trigger the duplicate-detection branch on their own; only spec-title overlap (0.2) does.
 
 If memory is not initialized (`memory list` returns the `Memory not initialized` error), skip this step silently. Memory search is a quality-of-life signal; absence is not blocking.
 
@@ -139,11 +141,11 @@ When 0.2 detected ≥2 strong matches AND `REWRITE_TARGET` is empty:
 Format the question via `request_user_input`:
 
 - **header**: `Duplicate?`
-- **body**: `Found <N> potentially overlapping epic(s): <epic-1> "<title-1>", <epic-2> "<title-2>". Recommended: <extend|proceed-anyway> — <one-sentence rationale>. Confidence: [<tier>].`
+- **body**: `Found <N> potentially overlapping spec(s): <spec-1> "<title-1>", <spec-2> "<title-2>". Recommended: <extend|proceed-anyway> — <one-sentence rationale>. Confidence: [<tier>].`
 - **options** (frozen labels, no recommendation marker on the option itself):
- - `extend <epic-id>` — add criteria to the existing epic (capture exits; skill suggests `--rewrite <id>` rerun)
- - `supersede <epic-id>` — close the old epic and capture this one fresh (capture proceeds; the user closes the old one manually after capture lands)
- - `proceed-anyway` — accept that two epics will live alongside each other (capture proceeds)
+ - `extend <spec-id>` — add criteria to the existing spec (capture exits; skill suggests `--rewrite <id>` rerun)
+ - `supersede <spec-id>` — close the old spec and capture this one fresh (capture proceeds; the user closes the old one manually after capture lands)
+ - `proceed-anyway` — accept that two specs will live alongside each other (capture proceeds)
  - `abort` — exit cleanly, no write
 
 Recommendation logic:
@@ -153,18 +155,18 @@ Recommendation logic:
 | 3+ | `extend <strongest-id>` | `[high]` |
 | 2 | `proceed-anyway` | `[judgment-call]` |
 
-If the user picks `extend`, exit 0 with: `Re-run with --rewrite <epic-id> to overwrite the existing spec, or invoke /flow-next:interview <epic-id> to refine via Q&A.`
+If the user picks `extend`, exit 0 with: `Re-run with --rewrite <spec-id> to overwrite the existing spec, or invoke /flow-next:interview <spec-id> to refine via Q&A.`
 
 If `supersede` or `proceed-anyway`, store the choice and continue to Phase 1.
 
 In **autofix mode**, when 0.2 detected ≥2 strong matches AND `REWRITE_TARGET` is empty:
 
 ```text
-Error: <N> potentially overlapping epic(s) detected: <epic-1>, <epic-2>.
+Error: <N> potentially overlapping spec(s) detected: <spec-1>, <spec-2>.
 Capture cannot resolve duplicates in autofix mode.
 
 Options:
- - Re-run with --rewrite <epic-id> to overwrite a specific epic.
+ - Re-run with --rewrite <spec-id> to overwrite a specific spec.
  - Re-run interactively (drop mode:autofix) to choose extend / supersede / proceed-anyway.
 ```
 
@@ -174,14 +176,14 @@ Exit 2.
 
 If `REWRITE_TARGET` is set:
 
-- Validate the target exists **and is an epic** (not a task — `flowctl show` accepts both, but capture only writes specs to epic IDs):
+- Validate the target exists **and is a spec** (not a task — `flowctl show` accepts both, but capture only writes specs to spec IDs):
 
  ```bash
- out=$("$FLOWCTL" show "$REWRITE_TARGET" --json) || { echo "Error: --rewrite target $REWRITE_TARGET does not exist. Drop --rewrite to create a new epic, or pick an existing epic id." >&2; exit 2; }
+ out=$("$FLOWCTL" show "$REWRITE_TARGET" --json) || { echo "Error: --rewrite target $REWRITE_TARGET does not exist. Drop --rewrite to create a new spec, or pick an existing spec id." >&2; exit 2; }
  if echo "$out" | jq -e '.tasks' >/dev/null 2>&1; then
- : # epic — has .tasks array
+ : # spec — has .tasks array
  else
- echo "Error: --rewrite target $REWRITE_TARGET is a task, not an epic. Pass an epic id (fn-N-slug, no .M suffix)." >&2
+ echo "Error: --rewrite target $REWRITE_TARGET is a task, not a spec. Pass a spec id (fn-N-slug, no .M suffix)." >&2
  exit 2
  fi
  ```
@@ -191,13 +193,13 @@ If `REWRITE_TARGET` is set:
 
 If `REWRITE_TARGET` is empty, also scan the visible conversation for prior-capture artifact references — patterns like `Spec captured at .flow/specs/<id>.md` from earlier turns. If found:
 
-- **Interactive:** ask via `request_user_input` whether the user wants to (a) `--rewrite <id>` (re-run with the flag), (b) `proceed` (create a new epic anyway, accepting that two specs result), (c) `abort`.
+- **Interactive:** ask via `request_user_input` whether the user wants to (a) `--rewrite <id>` (re-run with the flag), (b) `proceed` (create a new spec anyway, accepting that two specs result), (c) `abort`.
 - **Autofix:** exit 2 with: `Error: prior capture artifact <id> detected in conversation. Re-run with --rewrite <id> to overwrite, or interactively to choose. Pass --yes only after picking a path.`
 
 ### Done when
 
 - Conversation keywords are extracted (top-10).
-- Epic-title overlap scan ran; matches recorded.
+- Spec-title overlap scan ran (`.flow/specs/` + legacy `.flow/epics/`); matches recorded.
 - Memory cross-check ran (if memory initialized) and aggregated.
 - Compaction check passed (or `--from-compacted-ok` overrode it).
 - Idempotency resolution is clear: either `REWRITE_TARGET` is set + validated, or no prior-capture artifact conflict, or the user chose proceed/supersede.
@@ -252,10 +254,10 @@ For 1-2 file references, investigate on the main thread — no subagent overhead
 
 ### 1.3 — Initial title extraction
 
-From the conversation, draft a candidate epic title. Heuristic:
+From the conversation, draft a candidate spec title. Heuristic:
 
 - The shortest noun phrase that captures the goal (e.g. "Rate limit OAuth callbacks", "Audit memory entries", "Capture conversation as spec").
-- Avoid verbs at the front (Linear / GitHub epic convention prefers noun phrases).
+- Avoid verbs at the front (Linear / GitHub convention prefers noun phrases).
 - 60 chars max.
 
 The title may be `[inferred]` if the conversation never named one explicitly. Phase 3's must-ask case (a) fires when the title is genuinely ambiguous from conversation — multiple plausible titles, none load-bearing.
@@ -264,7 +266,7 @@ The title may be `[inferred]` if the conversation never named one explicitly. Ph
 
 - The `## Conversation Evidence` block is drafted (≤30 lines verbatim user quotes).
 - Optional subagent investigation completed; references_verified / missing recorded.
-- A candidate epic title is drafted (with confidence — high if user used the phrase, low if agent invented it).
+- A candidate spec title is drafted (with confidence — high if user used the phrase, low if agent invented it).
 
 ---
 
@@ -293,18 +295,18 @@ Draft these sections in order. The first section after frontmatter is **always**
 - `## Architecture & Data Models` — system design, data flow, key components. **File / component refs are `[inferred]` unless the user explicitly named them in conversation.** If Phase 1.2 verified a reference, tag `[paraphrase]`.
 - `## API Contracts` — endpoints, interfaces, input/output shapes. Often `[inferred]` because conversation rarely specifies wire formats. Mark accordingly.
 - `## Edge Cases & Constraints` — failure modes, limits, performance reqs. Mix of `[user]` and `[inferred]`.
-- `## Acceptance Criteria` — testable; R-IDs (`- **R1:** ...`); each tagged. **R-IDs allocate sequentially from R1** — capture creates fresh epics, no renumber concern.
+- `## Acceptance Criteria` — testable; R-IDs (`- **R1:** ...`); each tagged. **R-IDs allocate sequentially from R1** — capture creates fresh specs, no renumber concern.
 - `## Boundaries` — explicit out-of-scope. Often `[inferred]` from what the user did NOT say. Surface at read-back as agent-decided defaults.
 - `## Decision Context` — why this approach over alternatives. Preserve any rejected alternatives the user mentioned (Linear-pattern: rejected options live in spec history, not flow off-screen).
 
 Followed by:
 
-- `## Requirement coverage` — table mapping each R-ID to "fn-N.M (TBD — populate via /flow-next:plan)" placeholder. Capture ships unbroken-down epics; `/flow-next:plan` does the breakdown later.
+- `## Requirement coverage` — table mapping each R-ID to "fn-N.M (TBD — populate via /flow-next:plan)" placeholder. Capture ships unbroken-down specs; `/flow-next:plan` does the breakdown later.
 
 ### 2.3 — R-ID allocation rules (R15)
 
 - Use the prose prefix format: `- **R1:** ...`, `- **R2:** ...`, etc.
-- Allocate sequentially from R1 in creation order. Capture-created epics have never been reviewed → no renumber concern (the renumber-forbidden rule from `flow-next-plan/steps.md:227-262` only applies after a review cycle).
+- Allocate sequentially from R1 in creation order. Capture-created specs have never been reviewed → no renumber concern (the renumber-forbidden rule from `flow-next-plan/steps.md:227-262` only applies after a review cycle).
 - R-IDs in `## Acceptance Criteria` and `## Requirement coverage` must match.
 - Plain markdown prose, not YAML.
 
@@ -323,7 +325,7 @@ Track `[inferred]` count across all sections (especially in `## Acceptance Crite
 
 If Phase 2 produces **8 or more acceptance criteria**, Phase 4 read-back includes a `consider splitting?` option. The skill **never auto-splits**. The user decides:
 
-- Accept the larger epic.
+- Accept the larger spec.
 - Edit (drop / reword criteria).
 - Approve and run `/flow-next:plan <id>` afterward — plan can break it into multiple stages.
 
@@ -349,7 +351,7 @@ The must-ask cases are listed in [phases.md](phases.md) with examples. Summary h
 |------|---------|----------------------|---------|
 | **(a) Ambiguous title** | Multiple plausible titles, none load-bearing in conversation | Ask user to pick title from candidates + offer custom | exit 2 |
 | **(b) Untestable acceptance** | Phase 2.4 flagged ≥1 criterion that can't be made testable | Ask per-criterion: drop / reword / clarify | exit 2 |
-| **(c) Scope-conflict** | Phase 0.5 went `supersede` or `proceed-anyway`, but the new epic's scope still overlaps the old one's | Ask user how to disambiguate boundaries | exit 2 |
+| **(c) Scope-conflict** | Phase 0.5 went `supersede` or `proceed-anyway`, but the new spec's scope still overlaps the old one's | Ask user how to disambiguate boundaries | exit 2 |
 
 ### 3.1 — Interactive question shape
 
@@ -411,7 +413,7 @@ Construct the full draft including:
 6. **8+ acceptance-criterion suggestion** (if Phase 2.5 fired):
  ```
  This spec has 11 acceptance criteria — consider splitting into multiple
- epics? You can: approve as-is, edit (drop some), or accept and split via
+ specs? You can: approve as-is, edit (drop some), or accept and split via
  /flow-next:plan after capture lands.
  ```
 7. **Related context** footnote (if Phase 0.3 found memory hits):
@@ -461,7 +463,7 @@ Autofix never offers `edit` — there's no user to ask. The print-then-rerun-wit
 ### 4.5 — Forbidden in Phase 4
 
 - **Never silently skip the read-back.** Even if `[inferred]` count is 0, show the draft. The user might still want to reject for reasons unrelated to inference.
-- **Never auto-split.** The `consider-split` option exits 0 and lets the user decide; it does not call `flowctl epic create` twice.
+- **Never auto-split.** The `consider-split` option exits 0 and lets the user decide; it does not call `flowctl spec create` twice.
 - **Never edit `--rewrite` target without showing the diff.** The diff is non-optional in rewrite mode.
 
 ### Done when
@@ -474,7 +476,7 @@ Autofix never offers `edit` — there's no user to ask. The print-then-rerun-wit
 
 ## Phase 5: Write via flowctl (R14, R15, R16)
 
-**Goal:** atomic write of the new (or rewritten) epic via existing flowctl plumbing.
+**Goal:** atomic write of the new (or rewritten) spec via existing flowctl plumbing.
 
 ### 5.0 — Strategy contradiction check (gate; runs before any write)
 
@@ -527,7 +529,7 @@ On `yes`, invoke `flowctl memory add` with the override rationale piped via `--b
  --tags strategy-override \
  --body-file - <<EOF
 ## Problem
-Spec for epic <epic-id> contradicts active track "<track-name>" in STRATEGY.md.
+Spec <spec-id> contradicts active track "<track-name>" in STRATEGY.md.
 
 ## What was chosen
 <concise summary of the override decision>
@@ -544,7 +546,7 @@ Spec for epic <epic-id> contradicts active track "<track-name>" in STRATEGY.md.
 - Updating STRATEGY.md instead of overriding here (rejected because: <reason>)
 
 ## Consequences
-- This epic ships in tension with track "<track-name>".
+- This spec ships in tension with track "<track-name>".
 - A future `/flow-next:strategy` run should re-evaluate the track; this decision feeds that conversation.
 EOF
 ```
@@ -553,10 +555,10 @@ On `no`, proceed without writing the decision. Log an audit-trail line to stderr
 
 ```bash
 # On no:
-echo "[STRATEGY OVERRIDE]: track=\"<track-name>\" decision-not-recorded epic=<epic-id>" >&2
+echo "[STRATEGY OVERRIDE]: track=\"<track-name>\" decision-not-recorded spec=<spec-id>" >&2
 
 # On yes (decision was recorded):
-echo "[STRATEGY OVERRIDE]: track=\"<track-name>\" decision-recorded=<entry-id> epic=<epic-id>" >&2
+echo "[STRATEGY OVERRIDE]: track=\"<track-name>\" decision-recorded=<entry-id> spec=<spec-id>" >&2
 ```
 
 The audit trail line appears in both interactive (after the user picks) and autofix (when `OVERRIDE_STRATEGY=1` was passed) — it is the minimum durable record that an override happened, surfaceable in CI logs / git hook output later. In autofix mode (where the request_user_input is unreachable), the decision-not-recorded variant fires unconditionally.
@@ -565,26 +567,26 @@ When `STRATEGY_PRESENT=false`, this entire section is a no-op — there's no str
 
 ### 5.1 — Build the spec body
 
-The spec body assembled in Phase 2 + revised in Phase 4 edit cycles is the input to `flowctl epic set-plan`. Source tags **stay in the spec body** — they are part of the audit trail and survive into the on-disk spec at `.flow/specs/<id>.md`. Future readers (including `/flow-next:plan` and `/flow-next:interview`) see the tags and can scrutinize.
+The spec body assembled in Phase 2 + revised in Phase 4 edit cycles is the input to `flowctl spec set-plan`. Source tags **stay in the spec body** — they are part of the audit trail and survive into the on-disk spec at `.flow/specs/<id>.md`. Future readers (including `/flow-next:plan` and `/flow-next:interview`) see the tags and can scrutinize.
 
-The frontmatter top of the spec is whatever `flowctl epic create` writes (it generates a placeholder via `create_epic_spec`). `epic set-plan` overwrites the placeholder with the captured body — so the captured body should NOT include a duplicate `# <title>` heading; `set-plan` accepts the body as-is and atomic-writes to `.flow/specs/<id>.md`.
+The frontmatter top of the spec is whatever `flowctl spec create` writes (it generates a placeholder via the spec-create plumbing). `spec set-plan` overwrites the placeholder with the captured body — so the captured body should NOT include a duplicate `# <title>` heading; `set-plan` accepts the body as-is and atomic-writes to `.flow/specs/<id>.md`.
 
-### 5.2 — New-epic branch
+### 5.2 — New-spec branch
 
 ```bash
-EPIC_TITLE="<chosen title from Phase 3 or Phase 1.3>"
+SPEC_TITLE="<chosen title from Phase 3 or Phase 1.3>"
 
-# Create the epic — captures the JSON to extract the allocated id.
-EPIC_OUTPUT=$("$FLOWCTL" epic create --title "$EPIC_TITLE" --json)
-EPIC_ID=$(printf '%s' "$EPIC_OUTPUT" | jq -r '.id')
+# Create the spec — captures the JSON to extract the allocated id.
+SPEC_OUTPUT=$("$FLOWCTL" spec create --title "$SPEC_TITLE" --json)
+SPEC_ID=$(printf '%s' "$SPEC_OUTPUT" | jq -r '.id')
 
-if [[ -z "$EPIC_ID" || "$EPIC_ID" == "null" ]]; then
- echo "Error: epic create failed: $EPIC_OUTPUT" >&2
+if [[ -z "$SPEC_ID" || "$SPEC_ID" == "null" ]]; then
+ echo "Error: spec create failed: $SPEC_OUTPUT" >&2
  exit 1
 fi
 
 # Write the spec body via heredoc.
-"$FLOWCTL" epic set-plan "$EPIC_ID" --file - --json <<EOF
+"$FLOWCTL" spec set-plan "$SPEC_ID" --file - --json <<EOF
 $SPEC_BODY
 EOF
 ```
@@ -596,10 +598,10 @@ Use a real heredoc (not `printf`) so embedded markdown formatting and newlines r
 When `REWRITE_TARGET` is set:
 
 ```bash
-EPIC_ID="$REWRITE_TARGET"
+SPEC_ID="$REWRITE_TARGET"
 
-# Skip epic create — the epic already exists. Just overwrite the spec.
-"$FLOWCTL" epic set-plan "$EPIC_ID" --file - --json <<EOF
+# Skip spec create — the spec already exists. Just overwrite the spec body.
+"$FLOWCTL" spec set-plan "$SPEC_ID" --file - --json <<EOF
 $SPEC_BODY
 EOF
 ```
@@ -609,21 +611,22 @@ EOF
 If the user named a feature branch in conversation (e.g. "let's call this branch `oauth-rate-limit`"), set it:
 
 ```bash
-"$FLOWCTL" epic set-branch "$EPIC_ID" --branch "<slug>" --json
+"$FLOWCTL" spec set-branch "$SPEC_ID" --branch "<slug>" --json
 ```
 
-Skip silently if no branch was named — `epic create` already populated `branch_name` with the epic id, which is a fine default.
+Skip silently if no branch was named — `spec create` already populated `branch_name` with the spec id, which is a fine default.
 
 ### 5.5 — Capture write failures
 
-If `epic create` fails (e.g. `.flow/` corrupted, disk full): exit 1 with the error. The user has not yet committed anything.
+If `spec create` fails (e.g. `.flow/` corrupted, disk full): exit 1 with the error. The user has not yet committed anything.
 
-If `epic set-plan` fails: the epic JSON exists but the spec is the placeholder. Surface the failure and the rollback option:
+If `spec set-plan` fails: the spec JSON sidecar exists but the markdown body is the placeholder. Surface the failure and the rollback option:
 
 ```text
-Error: epic set-plan failed for <id>. The epic JSON was created but the spec
-write failed. To roll back: rm .flow/epics/<id>.json .flow/specs/<id>.md
-(if it exists). Or re-run capture with --rewrite <id> to retry the spec write.
+Error: spec set-plan failed for <id>. The spec JSON sidecar was created but the
+markdown body write failed. To roll back: rm .flow/specs/<id>.json .flow/specs/<id>.md
+(or .flow/epics/<id>.json on alias-mode 0.x repos). Or re-run capture with
+--rewrite <id> to retry the body write.
 ```
 
 This mirrors the failure semantics in other flowctl commands — partial-state recovery is on the user, but the error is loud.
@@ -641,8 +644,8 @@ If a future enhancement adds a `--commit` flag, Phase 5 would gain a "stage + co
 
 ### Done when
 
-- The new (or rewritten) epic spec is on disk at `.flow/specs/<id>.md`.
-- `EPIC_ID` is known for Phase 6.
+- The new (or rewritten) spec is on disk at `.flow/specs/<id>.md`.
+- `SPEC_ID` is known for Phase 6.
 - Optional branch-name is set if user named one.
 
 ---
@@ -652,18 +655,18 @@ If a future enhancement adds a `--commit` flag, Phase 5 would gain a "stage + co
 **Goal:** print the suggested next step. The deliverable is the new spec; this footer tells the user what to do with it.
 
 ```text
-Spec captured at .flow/specs/<EPIC_ID>.md.
+Spec captured at .flow/specs/<SPEC_ID>.md.
 
 Next:
- /flow-next:plan <EPIC_ID> → research + break into tasks
- /flow-next:interview <EPIC_ID> → refine via Q&A
+ /flow-next:plan <SPEC_ID> → research + break into tasks
+ /flow-next:interview <SPEC_ID> → refine via Q&A
 ```
 
 If Phase 4 surfaced 8+ acceptance criteria AND the user picked `approve` (not `consider-split`), append:
 
 ```text
-Note: this epic has <N> acceptance criteria — /flow-next:plan can stage the
-breakdown into multiple sub-epics if needed.
+Note: this spec has <N> acceptance criteria — /flow-next:plan can stage the
+breakdown into multiple sub-specs if needed.
 ```
 
 If Phase 0.3 found memory hits, append the related-context footer:
@@ -676,12 +679,12 @@ Consider reviewing before /flow-next:plan to avoid re-solving documented problem
 If `REWRITE_TARGET` was set, the footer prefix changes:
 
 ```text
-Spec rewritten at .flow/specs/<EPIC_ID>.md.
+Spec rewritten at .flow/specs/<SPEC_ID>.md.
 
 Next:
- /flow-next:plan <EPIC_ID> → re-plan tasks (existing tasks under the epic
+ /flow-next:plan <SPEC_ID> → re-plan tasks (existing tasks under the spec
  may need /flow-next:sync to align)
- /flow-next:interview <EPIC_ID> → refine via Q&A
+ /flow-next:interview <SPEC_ID> → refine via Q&A
 ```
 
 ### Done when
@@ -695,15 +698,15 @@ Next:
 
 The skill itself is markdown — there's no unit-test surface. The validation is invoking `/flow-next:capture` in a real session. Expected behavior:
 
-- Phase 0 walks `.flow/epics/`, runs memory search if memory is initialized, detects compaction, applies idempotency. Branches into duplicate-detection question if ≥2 strong matches; exits cleanly on `abort`.
+- Phase 0 walks `.flow/specs/` and the legacy `.flow/epics/` alias dir, runs memory search if memory is initialized, detects compaction, applies idempotency. Branches into duplicate-detection question if ≥2 strong matches; exits cleanly on `abort`.
 - Phase 1 emits a `## Conversation Evidence` block with verbatim user quotes (≤30 lines).
 - Phase 2 produces a draft with per-line source tags. Every acceptance criterion has one of `[user]` / `[paraphrase]` / `[inferred]`.
 - Phase 3 fires must-ask cases only when (a) title is genuinely ambiguous, (b) acceptance is untestable, (c) scope-conflict persists. Optional ambiguities are deferred to Phase 4.
 - Phase 4 read-back surfaces `[inferred]` count, 8+ split note (if applicable), related-memory footer (if applicable). Interactive: user picks approve / edit / abort. Autofix: print + require `--yes`.
-- Phase 5 calls `flowctl epic create` + `epic set-plan` via heredoc.
+- Phase 5 calls `flowctl spec create` + `spec set-plan` via heredoc.
 - Phase 6 prints the next-step footer.
 
-In autofix without `--yes`, the draft prints and the skill exits 0 — no write, no epic allocated.
+In autofix without `--yes`, the draft prints and the skill exits 0 — no write, no spec allocated.
 In autofix with `--yes`, Phase 4 still prints the draft (substituting for read-back) before Phase 5 writes.
 
 The Ralph-block (SKILL.md) ensures this skill never runs under `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` — capture requires a user at the terminal.

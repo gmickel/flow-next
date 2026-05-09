@@ -7,13 +7,15 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 ## Available Commands
 
 ```
-init, detect, status, config, review-backend, memory, prospect, glossary,
-epic, task, dep, show, epics, tasks, list, cat, ready, next, start, done, block,
-state-path, migrate-state, validate, triage-skip,
+init, detect, status, config, review-backend, memory, prospect, glossary, strategy,
+spec, task, dep, show, specs, tasks, list, cat, ready, next, start, done, block,
+state-path, migrate-state, migrate-rename, migrate-rollback, validate, triage-skip,
 checkpoint, prep-chat,
 ralph, rp, codex, copilot,
 review-deep-auto, review-walkthrough-defer, review-walkthrough-record
 ```
+
+> **Renamed in 1.0.0:** `epic` → `spec`, `epics` → `specs`, `--epic` flag → `--spec`. Legacy forms continue to work as thin aliases with one-line stderr deprecation warnings (suppress via `FLOW_NO_DEPRECATION=1`); soft-removal target is 2.0.0, telemetry-driven (R28 forbids hard-coded sunset dates). See [Deprecated aliases](#deprecated-aliases) below.
 
 ## Multi-User Safety
 
@@ -30,27 +32,30 @@ Works out of the box for parallel branches. No setup required.
 
 ```
 .flow/
-├── meta.json               # {schema_version, next_epic}
-├── epics/fn-N-slug.json    # Epic state (e.g., fn-1-add-oauth.json)
-├── specs/fn-N-slug.md      # Epic spec (markdown)
-├── tasks/fn-N-slug.M.json  # Task state (e.g., fn-1-add-oauth.1.json)
-├── tasks/fn-N-slug.M.md    # Task spec (markdown)
-├── memory/                 # Agent memory (reserved)
-├── bin/                    # (optional) Local flowctl install via /flow-next:setup
+├── meta.json                  # {schema_version, next_spec}
+├── .flow_version              # 1.0.0 sentinel — written after `flowctl migrate-rename`
+├── specs/fn-N-slug.json       # Spec state (e.g., fn-1-add-oauth.json) — colocated with .md in 1.0+
+├── specs/fn-N-slug.md         # Spec markdown
+├── tasks/fn-N-slug.M.json     # Task state (e.g., fn-1-add-oauth.1.json)
+├── tasks/fn-N-slug.M.md       # Task spec (markdown)
+├── memory/                    # Agent memory (reserved)
+├── bin/                       # (optional) Local flowctl install via /flow-next:setup
 │   ├── flowctl
 │   └── flowctl.py
-└── usage.md                # (optional) CLI reference via /flow-next:setup
+└── usage.md                   # (optional) CLI reference via /flow-next:setup
 ```
 
-Flowctl accepts schema v1 and v2; new fields are optional and defaulted.
+Pre-1.0 layout had spec JSON sidecars at `.flow/epics/fn-N-slug.json` (the markdown was already at `.flow/specs/fn-N-slug.md`). The alias layer keeps reads working until you run `flowctl migrate-rename --yes` (or `/flow-next:setup`'s upgrade branch).
+
+Flowctl accepts schema v1 and v2 (and v3 post-migration); new fields are optional and defaulted.
 
 New fields:
-- Epic JSON: `plan_review_status`, `plan_reviewed_at`, `completion_review_status`, `completion_reviewed_at`, `depends_on_epics`, `branch_name`, `default_impl`, `default_review`, `default_sync`
+- Spec JSON: `plan_review_status`, `plan_reviewed_at`, `completion_review_status`, `completion_reviewed_at`, `depends_on_epics` (JSON field name preserved for back-compat; reads accept both keys), `branch_name`, `default_impl`, `default_review`, `default_sync`
 - Task JSON: `priority`, `impl`, `review`, `sync`
 
 ## ID Format
 
-- **Epic**: `fn-N-slug` where `slug` is derived from the title (e.g., `fn-1-add-oauth`, `fn-2-fix-login-bug`)
+- **Spec**: `fn-N-slug` where `slug` is derived from the title (e.g., `fn-1-add-oauth`, `fn-2-fix-login-bug`)
 - **Task**: `fn-N-slug.M` (e.g., `fn-1-add-oauth.1`, `fn-2-fix-login-bug.2`)
 
 **Backwards compatibility**: Legacy formats `fn-N` (no suffix) and `fn-N-xxx` (random 3-char suffix) are still supported.
@@ -65,6 +70,24 @@ Initialize `.flow/` directory.
 flowctl init [--json]
 ```
 
+Idempotent. Creates the canonical 1.0 layout on a fresh repo (`.flow/specs/`, `.flow/tasks/`, `.flow/memory/`, `meta.json` with `schema_version: 3` + `next_spec: 1`, `config.json`). Skips anything that already exists; upgrades existing `config.json` by merging in any new default keys. Re-running on a 1.0 repo reports "already up to date".
+
+**Auto-managed `.flow/.gitignore`** (since 1.0.0). Both `flowctl init` and `flowctl migrate-rename` write `.flow/.gitignore` with the auto-managed pattern set so users don't accidentally commit migration transients or per-run state on `git add -A`:
+
+```gitignore
+# Auto-managed by flowctl — do not edit above this marker.
+.checkpoint-*.json
+receipts/
+tmp/
+.backup-pre-1.0/
+.banner-acknowledged
+.migrating
+.migration-manifest
+# End of auto-managed block. User patterns below this line are preserved.
+```
+
+Idempotent: the auto-block is only written if absent. User patterns added below the footer survive subsequent `flowctl init` / `flowctl migrate-rename` runs. Existing user `.flow/.gitignore` files are migrated in-place by prepending the auto-block. **`.flow/.flow_version` is intentionally NOT in the block** — it's the post-migration schema sentinel and should be tracked per repo so multiple devs share the same migrated state (semantics like `Cargo.lock`).
+
 ### detect
 
 Check if `.flow/` exists and is valid.
@@ -78,67 +101,84 @@ Output:
 {"success": true, "exists": true, "valid": true, "path": "/repo/.flow"}
 ```
 
-### epic create
+### spec create
 
-Create new epic.
+Create new spec.
 
 ```bash
-flowctl epic create --title "Epic title" [--branch "fn-1-epic-title"] [--json]
+flowctl spec create --title "Spec title" [--branch "fn-1-spec-title"] [--json]
 ```
 
 Output:
 ```json
-{"success": true, "id": "fn-1-epic-title", "title": "Epic title", "spec_path": ".flow/specs/fn-1-epic-title.md"}
+{"success": true, "id": "fn-1-spec-title", "title": "Spec title", "spec_path": ".flow/specs/fn-1-spec-title.md"}
 ```
 
-### epic set-plan
+### spec set-plan
 
-Overwrite epic spec from file.
+Overwrite spec markdown from file.
 
 ```bash
-flowctl epic set-plan fn-1 --file plan.md [--json]
+flowctl spec set-plan fn-1 --file plan.md [--json]
 ```
 
-### epic set-plan-review-status
+### spec set-plan-review-status
 
 Set plan review status and timestamp.
 
 ```bash
-flowctl epic set-plan-review-status fn-1 --status ship|needs_work|unknown [--json]
+flowctl spec set-plan-review-status fn-1 --status ship|needs_work|unknown [--json]
 ```
 
-### epic set-completion-review-status
+### spec set-completion-review-status
 
 Set completion review status and timestamp.
 
 ```bash
-flowctl epic set-completion-review-status fn-1 --status ship|needs_work|unknown [--json]
+flowctl spec set-completion-review-status fn-1 --status ship|needs_work|unknown [--json]
 ```
 
-### epic set-branch
+### spec set-branch
 
-Set epic branch_name.
+Set spec branch_name.
 
 ```bash
-flowctl epic set-branch fn-1 --branch "fn-1-epic" [--json]
+flowctl spec set-branch fn-1 --branch "fn-1-spec" [--json]
 ```
 
-### epic close
+### spec set-title
 
-Close epic (requires all tasks done).
+Rename a spec by setting a new title (slug + filenames update; the JSON sidecar's `id` field follows).
 
 ```bash
-flowctl epic close fn-1 [--json]
+flowctl spec set-title fn-1 --title "New title" [--json]
 ```
 
-### epic set-backend
+### spec close
+
+Close spec (requires all tasks done).
+
+```bash
+flowctl spec close fn-1 [--json]
+```
+
+### spec add-dep / spec rm-dep
+
+Manage spec-level dependencies (one spec depends on another).
+
+```bash
+flowctl spec add-dep fn-2 fn-1 [--json]   # fn-2 now depends on fn-1
+flowctl spec rm-dep  fn-2 fn-1 [--json]   # remove the dependency
+```
+
+### spec set-backend
 
 Set default backend specs for impl/review/sync workers. Used by orchestration products (e.g., flow-swarm).
 
 ```bash
-flowctl epic set-backend fn-1 --impl codex:gpt-5.4 [--json]
-flowctl epic set-backend fn-1 --impl codex:gpt-5.4-high --review claude:opus [--json]
-flowctl epic set-backend fn-1 --impl "" [--json]  # Clear impl (inherit from config)
+flowctl spec set-backend fn-1 --impl codex:gpt-5.4 [--json]
+flowctl spec set-backend fn-1 --impl codex:gpt-5.4-high --review claude:opus [--json]
+flowctl spec set-backend fn-1 --impl "" [--json]  # Clear impl (inherit from config)
 ```
 
 Options:
@@ -148,17 +188,25 @@ Options:
 
 Format: `backend:model` where backend is a CLI name and model is backend-specific.
 
-### task create
+### spec export-cognitive-aid
 
-Create task under epic.
+Aggregate spec markdown, tasks, memory, glossary diff, strategy alignment, diff stats, and review receipts into one structured payload (consumed by `/flow-next:make-pr`).
 
 ```bash
-flowctl task create --epic fn-1 --title "Task title" [--deps fn-1.2,fn-1.3] [--acceptance-file accept.md] [--priority 10] [--json]
+flowctl spec export-cognitive-aid fn-1 --base origin/main [--section spec|tasks|memory|glossary|strategy|diff|reviews] [--json]
+```
+
+### task create
+
+Create task under spec.
+
+```bash
+flowctl task create --spec fn-1 --title "Task title" [--deps fn-1.2,fn-1.3] [--acceptance-file accept.md] [--priority 10] [--json]
 ```
 
 Output:
 ```json
-{"success": true, "id": "fn-1.4", "epic": "fn-1", "title": "Task title", "depends_on": ["fn-1.2", "fn-1.3"]}
+{"success": true, "id": "fn-1.4", "spec": "fn-1", "title": "Task title", "depends_on": ["fn-1.2", "fn-1.3"]}
 ```
 
 ### task set-description
@@ -195,7 +243,7 @@ Reset task to `todo` status, clearing assignee and completion data.
 flowctl task reset fn-1.2 [--cascade] [--json]
 ```
 
-Use `--cascade` to also reset dependent tasks within the same epic.
+Use `--cascade` to also reset dependent tasks within the same spec.
 
 ### task set-backend
 
@@ -204,7 +252,7 @@ Set backend specs for impl/review/sync workers. Used by orchestration products (
 ```bash
 flowctl task set-backend fn-1.1 --impl codex:gpt-5.4-high [--json]
 flowctl task set-backend fn-1.1 --impl codex:gpt-5.4-high --review claude:opus [--json]
-flowctl task set-backend fn-1.1 --impl "" [--json]  # Clear impl (inherit from epic/config)
+flowctl task set-backend fn-1.1 --impl "" [--json]  # Clear impl (inherit from spec/config)
 ```
 
 Options:
@@ -216,7 +264,7 @@ Format: `backend:model` where backend is a CLI name and model is backend-specifi
 
 ### task show-backend
 
-Show effective backend specs for a task. Reports task-level and epic-level specs only (config-level resolution happens in flow-swarm).
+Show effective backend specs for a task. Reports task-level and spec-level specs only (config-level resolution happens in flow-swarm).
 
 ```bash
 flowctl task show-backend fn-1.1 [--json]
@@ -225,7 +273,7 @@ flowctl task show-backend fn-1.1 [--json]
 Output (text):
 ```
 impl: codex:gpt-5.4-high (task)
-review: claude:opus (epic)
+review: claude:opus (spec)
 sync: null
 ```
 
@@ -234,9 +282,9 @@ Output (json):
 {
   "success": true,
   "id": "fn-1.1",
-  "epic": "fn-1",
+  "spec": "fn-1",
   "impl": {"spec": "codex:gpt-5.4-high", "source": "task"},
-  "review": {"spec": "claude:opus", "source": "epic"},
+  "review": {"spec": "claude:opus", "source": "spec"},
   "sync": {"spec": null, "source": null}
 }
 ```
@@ -249,7 +297,7 @@ Add single dependency to task.
 flowctl dep add fn-1.3 fn-1.2 [--json]
 ```
 
-Dependencies must be within same epic.
+Dependencies must be within same spec.
 
 ### task set-deps
 
@@ -259,30 +307,30 @@ Set multiple dependencies for a task (convenience command).
 flowctl task set-deps fn-1.3 --deps fn-1.1,fn-1.2 [--json]
 ```
 
-Equivalent to multiple `dep add` calls. Dependencies must be within same epic.
+Equivalent to multiple `dep add` calls. Dependencies must be within same spec.
 
 ### show
 
-Show epic or task details.
+Show spec or task details.
 
 ```bash
-flowctl show fn-1 [--json]     # Epic with tasks
+flowctl show fn-1 [--json]     # Spec with tasks
 flowctl show fn-1.2 [--json]   # Task only
 ```
 
-Epic output includes `tasks` array with id/title/status/priority/depends_on.
+Spec output includes `tasks` array with id/title/status/priority/depends_on.
 
-### epics
+### specs
 
-List all epics.
+List all specs.
 
 ```bash
-flowctl epics [--json]
+flowctl specs [--json]
 ```
 
 Output:
 ```json
-{"success": true, "epics": [{"id": "fn-1", "title": "...", "status": "open", "tasks": 5, "done": 2}], "count": 1}
+{"success": true, "specs": [{"id": "fn-1", "title": "...", "status": "open", "tasks": 5, "done": 2}], "count": 1}
 ```
 
 Human-readable output shows progress: `[open] fn-1: Title (2/5 tasks done)`
@@ -293,21 +341,21 @@ List tasks, optionally filtered.
 
 ```bash
 flowctl tasks [--json]                    # All tasks
-flowctl tasks --epic fn-1 [--json]        # Tasks for specific epic
+flowctl tasks --spec fn-1 [--json]        # Tasks for specific spec
 flowctl tasks --status todo [--json]      # Filter by status
-flowctl tasks --epic fn-1 --status done   # Combine filters
+flowctl tasks --spec fn-1 --status done   # Combine filters
 ```
 
 Status options: `todo`, `in_progress`, `blocked`, `done`
 
 Output:
 ```json
-{"success": true, "tasks": [{"id": "fn-1.1", "epic": "fn-1", "title": "...", "status": "todo", "priority": null, "depends_on": []}], "count": 1}
+{"success": true, "tasks": [{"id": "fn-1.1", "spec": "fn-1", "title": "...", "status": "todo", "priority": null, "depends_on": []}], "count": 1}
 ```
 
 ### list
 
-List all epics with their tasks grouped together.
+List all specs with their tasks grouped together.
 
 ```bash
 flowctl list [--json]
@@ -315,7 +363,7 @@ flowctl list [--json]
 
 Human-readable output:
 ```
-Flow Status: 2 epics, 5 tasks (2 done)
+Flow Status: 2 specs, 5 tasks (2 done)
 
 [open] fn-1: Add auth system (1/3 done)
     [done] fn-1.1: Create user model
@@ -329,7 +377,7 @@ Flow Status: 2 epics, 5 tasks (2 done)
 
 JSON output:
 ```json
-{"success": true, "epics": [...], "tasks": [...], "epic_count": 2, "task_count": 5}
+{"success": true, "specs": [...], "tasks": [...], "spec_count": 2, "task_count": 5}
 ```
 
 ### cat
@@ -337,7 +385,7 @@ JSON output:
 Print spec markdown (no JSON mode).
 
 ```bash
-flowctl cat fn-1      # Epic spec
+flowctl cat fn-1      # Spec markdown
 flowctl cat fn-1.2    # Task spec
 ```
 
@@ -346,14 +394,14 @@ flowctl cat fn-1.2    # Task spec
 List tasks ready to start, in progress, and blocked.
 
 ```bash
-flowctl ready --epic fn-1 [--json]
+flowctl ready --spec fn-1 [--json]
 ```
 
 Output:
 ```json
 {
   "success": true,
-  "epic": "fn-1",
+  "spec": "fn-1",
   "actor": "user@example.com",
   "ready": [{"id": "fn-1.3", "title": "...", "depends_on": []}],
   "in_progress": [{"id": "fn-1.1", "title": "...", "assignee": "user@example.com"}],
@@ -366,15 +414,15 @@ Output:
 Select next plan/work unit.
 
 ```bash
-flowctl next [--epics-file epics.json] [--require-plan-review] [--require-completion-review] [--json]
+flowctl next [--specs-file specs.json] [--require-plan-review] [--require-completion-review] [--json]
 ```
 
 Output:
 ```json
-{"status":"plan|work|completion_review|none","epic":"fn-12","task":"fn-12.3","reason":"needs_plan_review|needs_completion_review|resume_in_progress|ready_task|none|blocked_by_epic_deps","blocked_epics":{"fn-12":["fn-3"]}}
+{"status":"plan|work|completion_review|none","spec":"fn-12","task":"fn-12.3","reason":"needs_plan_review|needs_completion_review|resume_in_progress|ready_task|none|blocked_by_spec_deps","blocked_specs":{"fn-12":["fn-3"]}}
 ```
 
-The `--require-completion-review` flag gates epic closure on completion review. When all tasks are done but `completion_review_status != ship`, returns `status: completion_review`.
+The `--require-completion-review` flag gates spec closure on completion review. When all tasks are done but `completion_review_status != ship`, returns `status: completion_review`.
 
 ### start
 
@@ -418,35 +466,35 @@ flowctl block fn-1.2 --reason-file reason.md [--json]
 
 ### validate
 
-Validate epic structure (specs, deps, cycles).
+Validate spec structure (specs, deps, cycles).
 
 ```bash
-flowctl validate --epic fn-1 [--json]
+flowctl validate --spec fn-1 [--json]
 flowctl validate --all [--json]
 ```
 
-Single epic output:
+Single spec output:
 ```json
-{"success": false, "epic": "fn-1", "valid": false, "errors": ["..."], "warnings": [], "task_count": 5}
+{"success": false, "spec": "fn-1", "valid": false, "errors": ["..."], "warnings": [], "task_count": 5}
 ```
 
-All epics output:
+All specs output:
 ```json
 {
   "success": false,
   "valid": false,
-  "epics": [{"epic": "fn-1", "valid": true, ...}],
-  "total_epics": 2,
+  "specs": [{"spec": "fn-1", "valid": true, ...}],
+  "total_specs": 2,
   "total_tasks": 10,
   "total_errors": 1
 }
 ```
 
 Checks:
-- Epic/task specs exist
+- Spec/task markdown exists
 - Task specs have required headings
 - Task statuses are valid (`todo`, `in_progress`, `blocked`, `done`)
-- Dependencies exist and are within epic
+- Dependencies exist and are within same spec
 - No dependency cycles
 - Done status consistency
 
@@ -484,7 +532,7 @@ No auto-detect. Run `/flow-next:setup` (or `flowctl config set review.backend ..
 
 ### review-backend
 
-Resolve the active review backend spec (used by skills + Ralph). Reads `--spec` / per-task / per-epic / `FLOW_REVIEW_BACKEND` / `.flow/config.json` / backend-specific env / registry default in that order.
+Resolve the active review backend spec (used by skills + Ralph). Reads `--spec` / per-task / per-spec / `FLOW_REVIEW_BACKEND` / `.flow/config.json` / backend-specific env / registry default in that order.
 
 ```bash
 flowctl review-backend [--json]
@@ -603,8 +651,8 @@ flowctl prospect list [--all] [--json]
 # Read a full artifact or a single section
 flowctl prospect read <artifact-id> [--section focus|grounding|survivors|rejected] [--json]
 
-# Promote a survivor to a new epic with pre-filled spec skeleton
-flowctl prospect promote <artifact-id> --idea N [--epic-title "..."] [--force] [--json]
+# Promote a survivor to a new spec with pre-filled spec skeleton
+flowctl prospect promote <artifact-id> --idea N [--spec-title "..."] [--force] [--json]
 
 # Archive a prospect (move to .flow/prospects/_archive/)
 flowctl prospect archive <artifact-id> [--json]
@@ -612,7 +660,7 @@ flowctl prospect archive <artifact-id> [--json]
 
 `<artifact-id>` accepts full form (`dx-improvements-2026-04-24`) or slug-only (latest date wins).
 
-`promote` allocates an epic via the same scan-based logic as `epic create`, inlining the spec write so the prospect-context spec lands on disk from the first byte. Idempotency guard: refuses if `promoted_to` already includes the target idea — pass `--force` to override.
+`promote` allocates a spec via the same scan-based logic as `spec create`, inlining the spec write so the prospect-context spec lands on disk from the first byte. Idempotency guard: refuses if `promoted_to` already includes the target idea — pass `--force` to override.
 
 Exit codes: corrupt artifact on `read`/`promote` → 3 (stderr `[ARTIFACT CORRUPT: <reason>]`); duplicate idea on `promote` without `--force` → 2; Ralph-block (`REVIEW_RECEIPT_PATH` / `FLOW_RALPH=1`) on `/flow-next:prospect` → 2.
 
@@ -656,7 +704,7 @@ flowctl glossary remove <term> [--json]
 {
   "success": true,
   "groups": [
-    {"path": "GLOSSARY.md", "entries": [{"term": "Epic", "definition": "...", "avoid": [], "relates_to": []}], "count": 1}
+    {"path": "GLOSSARY.md", "entries": [{"term": "Spec", "definition": "...", "avoid": [], "relates_to": []}], "count": 1}
   ],
   "file_count": 1,
   "total_terms": 1
@@ -665,7 +713,7 @@ flowctl glossary remove <term> [--json]
 
 `glossary read --json`:
 ```json
-{"success": true, "path": "GLOSSARY.md", "term": "Epic", "definition": "...", "avoid": [], "relates_to": []}
+{"success": true, "path": "GLOSSARY.md", "term": "Spec", "definition": "...", "avoid": [], "relates_to": []}
 ```
 
 **Husk semantics:** Last-term `remove` leaves a `# Glossary` H1 husk — the file is never deleted (R18). Doc-aware autodetect should branch on `total_terms > 0` (or `file_count > 0` and any group's `count > 0`), not on `[[ -f GLOSSARY.md ]]` — the latter would falsely activate doc-aware mode on an empty husk.
@@ -696,7 +744,7 @@ Receipt schema (only on SKIP):
 ### prep-chat
 
 Generate properly escaped JSON for RepoPrompt chat. Avoids shell escaping issues with complex prompts.
-Optional legacy positional arg is ignored; do not pass epic/task IDs.
+Optional legacy positional arg is ignored; do not pass spec/task IDs.
 
 ```bash
 # Write message to file (avoids escaping issues)
@@ -786,13 +834,13 @@ flowctl codex check [--json]
 flowctl codex impl-review <task-id> --base <branch> [--sandbox <mode>] [--receipt <path>] [--json]
 # Example: flowctl codex impl-review fn-1.3 --base main --sandbox auto --receipt /tmp/impl-fn-1.3.json
 
-# Plan review (reviews epic spec before implementation)
-flowctl codex plan-review <epic-id> --files <file1,file2,...> [--sandbox <mode>] [--receipt <path>] [--json]
+# Plan review (reviews spec before implementation)
+flowctl codex plan-review <spec-id> --files <file1,file2,...> [--sandbox <mode>] [--receipt <path>] [--json]
 # Example: flowctl codex plan-review fn-1 --files "src/auth.ts,src/config.ts" --sandbox auto --receipt /tmp/plan-fn-1.json
-# Note: Epic/task specs are included automatically; --files should be CODE files for repository context.
+# Note: Spec/task markdown is included automatically; --files should be CODE files for repository context.
 
-# Completion review (reviews epic implementation against spec)
-flowctl codex completion-review <epic-id> [--sandbox <mode>] [--receipt <path>] [--json]
+# Completion review (reviews spec implementation against acceptance criteria)
+flowctl codex completion-review <spec-id> [--sandbox <mode>] [--receipt <path>] [--json]
 # Example: flowctl codex completion-review fn-1 --sandbox auto --receipt /tmp/completion-fn-1.json
 # Runs after all tasks done; verifies implementation matches spec requirements
 ```
@@ -893,10 +941,10 @@ flowctl copilot check [--json]
 flowctl copilot impl-review <task-id> --base <branch> [--receipt <path>] [--spec copilot:claude-opus-4.5:high] [--json]
 
 # Plan review
-flowctl copilot plan-review <epic-id> --files <file1,file2,...> [--receipt <path>] [--spec ...] [--json]
+flowctl copilot plan-review <spec-id> --files <file1,file2,...> [--receipt <path>] [--spec ...] [--json]
 
 # Completion review
-flowctl copilot completion-review <epic-id> [--receipt <path>] [--spec ...] [--json]
+flowctl copilot completion-review <spec-id> [--receipt <path>] [--spec ...] [--json]
 
 # Validator pass (fn-32.1 --validate)
 flowctl copilot validate --findings-file findings.jsonl --receipt /tmp/impl-fn-1.3.json [--spec ...] [--json]
@@ -960,20 +1008,20 @@ Receipt gets a `walkthrough` block:
 
 ### checkpoint
 
-Save and restore epic state (used during review-fix cycles).
+Save and restore spec state (used during review-fix cycles).
 
 ```bash
-# Save epic state to .flow/.checkpoint-fn-1.json
-flowctl checkpoint save --epic fn-1 [--json]
+# Save spec state to .flow/.checkpoint-fn-1.json
+flowctl checkpoint save --spec fn-1 [--json]
 
-# Restore epic state from checkpoint
-flowctl checkpoint restore --epic fn-1 [--json]
+# Restore spec state from checkpoint
+flowctl checkpoint restore --spec fn-1 [--json]
 
 # Delete checkpoint
-flowctl checkpoint delete --epic fn-1 [--json]
+flowctl checkpoint delete --spec fn-1 [--json]
 ```
 
-Checkpoints preserve full epic + task state. Useful when compaction occurs during plan-review cycles.
+Checkpoints preserve full spec + task state. Useful when compaction occurs during plan-review cycles.
 
 ### status
 
@@ -985,10 +1033,10 @@ flowctl status [--json]
 
 Output:
 ```json
-{"success": true, "epic_count": 2, "task_count": 5, "done_count": 2, "active_runs": []}
+{"success": true, "spec_count": 2, "task_count": 5, "done_count": 2, "active_runs": []}
 ```
 
-Human-readable output shows epic/task counts and any active Ralph runs.
+Human-readable output shows spec/task counts and any active Ralph runs.
 
 ### state-path
 
@@ -1030,6 +1078,175 @@ What it does:
 
 **Not required** for normal operation — the merged read path handles backward compatibility automatically.
 
+### migrate-rename
+
+Migrate the on-disk `.flow/` layout from pre-1.0 (`.flow/epics/`) to canonical 1.0 (`.flow/specs/`). Writes a complete pre-migration snapshot to `.flow/.backup-pre-1.0/` and a structured manifest at `.flow/.migration-manifest`; stamps `.flow/.flow_version = 1.0.0` LAST so a crash mid-migration is recoverable on the next run.
+
+```bash
+flowctl migrate-rename [--dry-run] [--yes] [--json]
+```
+
+Default mode is `--dry-run`: prints the plan without writing anything (except the `.flow/.banner-acknowledged` marker — see below). Pass `--yes` to apply. Passing both `--dry-run` and `--yes` is a hard error (exit code 2) so a CI-set `--yes` cannot silently become a no-op when a CLI default flips.
+
+`--json` output requires `--yes` for write operations (refuses dry-run-by-default to avoid ambiguity).
+
+**What it does (when applied):**
+
+1. Acquire `.flow/.migrating/` lockfile (cross-platform `os.mkdir` atomicity; PID written inside for stale-detection).
+2. Snapshot `.flow/` → `.flow/.backup-pre-1.0/`; write `.complete` marker only after the copy finishes.
+3. Initialize `.flow/.migration-manifest` with the planned entries.
+4. Move JSON sidecars from `.flow/epics/` to `.flow/specs/`; rewrite `meta.json` (`schema_version` → 3, `next_epic` → `next_spec`); rewrite task JSON `epic` field → `spec`; remove the now-empty `.flow/epics/`.
+5. Atomically write `.flow/.flow_version = "1.0.0"` (LAST — sentinel-based idempotency anchor).
+6. Release the lockfile.
+
+The backup directory is retained after a successful migration. Use `flowctl migrate-rollback --yes` to undo.
+
+**Crash-recovery decision tree** (executed on every invocation, before any new writes):
+
+| State on disk | Interpretation | Action |
+|---------------|----------------|--------|
+| Sentinel valid (`.flow_version = 1.0.0`) | Already migrated | Idempotent skip; works on read-only `.flow/` (the idempotency check runs BEFORE the read-only refusal so archived-branch builds and frozen worktrees pass through cleanly). |
+| Sentinel absent + backup `.complete` marker present | Mid-migration crash; backup intact | Copy backup contents back over `.flow/`, then restart at step 4 (fresh attempt). |
+| Sentinel absent + backup dir present + no `.complete` marker | Backup mid-copy crashed | Wipe the partial backup; restart at step 4. |
+| Sentinel absent + no backup + no `.flow/epics/` | Neither pre-1.0 nor migrated (e.g. fresh init) | No-op exit 0; refuses to mutate state speculatively. |
+| Sentinel absent + `.flow/epics/` present | Pre-1.0 layout confirmed | Migrate. |
+
+**Cross-platform lockfile + PID-liveness reclaim:** `os.mkdir` is atomic on POSIX and Windows. The PID written inside is checked against the running process table on both platforms (POSIX `kill(pid, 0)`, Windows `OpenProcess`/`GetExitCodeProcess`). If the holder is dead, the lock is reclaimed. A `MIGRATE_LOCK_PID_GRACE_SECS` window covers the race between `mkdir` and the PID write so a crash between the two steps doesn't leave the next invocation waiting the full `MIGRATE_LOCK_WAIT_SECS` before reclaim.
+
+**SHA256 task-drift detection:** the manifest records SHA256 of every task JSON the migration touched. `migrate-rollback` re-hashes those files on disk and refuses to roll back if any drifted (unless `--force-overwrite-post-migration-changes` is passed) — protects against the "Ralph wrote new tasks under the migrated layout, then someone tried to undo the migration" footgun.
+
+**Banner acknowledgement:** `--dry-run` writes `.flow/.banner-acknowledged` with an ISO timestamp. The migration auto-detect banner uses this marker to suppress the 6-line stderr nudge for 7 days. Bare `flowctl <verb>` invocations DO NOT write this marker — passive banner display is not acknowledgement. See [Migration banner](#migration-banner).
+
+**Read-only filesystem ordering:** the idempotency check runs FIRST so already-migrated repos on read-only `.flow/` are no-ops, NOT failures. Only an explicit `--yes` against an unmigrated read-only `.flow/` errors out (pre-1.0 layout that genuinely needs writing).
+
+**JSON output (success path):**
+
+```json
+{"migrated": true, "dry_run": false, "plan": ["backup .flow/ -> .backup-pre-1.0/...", "..."],
+ "entries": [{"from": ".flow/epics/fn-1.json", "to": ".flow/specs/fn-1.json", "sha256": "..."}],
+ "manifest_path": ".flow/.migration-manifest", "sentinel_path": ".flow/.flow_version",
+ "backup_path": ".flow/.backup-pre-1.0"}
+```
+
+### migrate-rollback
+
+Restore the pre-1.0 layout from `.flow/.backup-pre-1.0/`. Refuses by default if the manifest is missing or any post-migration spec/task file exists outside the manifest (drift detection).
+
+```bash
+flowctl migrate-rollback [--yes] [--force-overwrite-post-migration-changes] [--json]
+```
+
+`--yes` is required for any rollback. Without it, prints the safety-check summary and exits 1.
+
+**Manifest-safety contract:**
+
+- Refuses if `.flow/.backup-pre-1.0/.complete` is missing (no complete backup exists).
+- Refuses if `.flow/.migration-manifest` is missing or unreadable (cannot detect post-migration writes safely).
+- Refuses if any post-migration spec/task file exists that the manifest doesn't cover (`unexpected paths`). Pass `--force-overwrite-post-migration-changes` to discard them.
+- Refuses on read-only `.flow/` (same shape as `migrate-rename`).
+- Acquires the same `.flow/.migrating/` lockfile so rollback can't race a parallel `migrate-rename`.
+
+**Rollback-deletes-manifest invariant:** rollback removes the sentinel + manifest from `.flow/`, leaving the backup directory intact. This is what makes the migrate → rollback cycle repeatable (run `migrate-rename --yes` again immediately after rollback and it does the right thing). The backup is NOT deleted by rollback — `migrate-rename` re-snapshots on the next run.
+
+**JSON output (success path):**
+
+```json
+{"rolled_back": true, "actions": ["restored specs/fn-1.json from backup", "removed .flow_version", "removed .migration-manifest"],
+ "post_migration_writes_overridden": false, "unexpected_paths": [], "backup_path": ".flow/.backup-pre-1.0"}
+```
+
+## Migration banner
+
+flowctl emits a one-time stderr banner when it detects a pre-1.0 `.flow/` layout. The banner is informational only — it never affects subcommand exit codes or behavior. It runs once per process (process-level dedup flag); it never auto-applies the migration.
+
+**The 6-line copy (verbatim):**
+
+```
+flow-next 1.0 renamed `flowctl epic` -> `flowctl spec`.
+Your `.flow/epics/` directory is from 0.x; alias mode keeps everything working.
+Migrate to unlock future flow-swarm compatibility:
+  Interactive:  /flow-next:setup
+  Deterministic: flowctl migrate-rename --yes
+Suppress this banner: FLOW_NO_AUTO_MIGRATE=1 (alias keeps working)
+```
+
+**Suppression matrix** (any one true → silent return):
+
+| Suppressor | Reason |
+|------------|--------|
+| `FLOW_RALPH=1` | Autonomous loop; no human reads stderr. |
+| `REVIEW_RECEIPT_PATH` set | Review subprocess; agent doesn't see stderr. |
+| `FLOW_NO_AUTO_MIGRATE=1` | User opt-out env knob. |
+| Process-level dedup flag | Already emitted in this invocation. |
+| Sentinel valid (≤ 1.x) | Already migrated. |
+| `.banner-acknowledged` < 7 days old | User actively engaged with migration UX. |
+
+**`.flow/.banner-acknowledged` lifecycle:**
+
+- Written by `flowctl migrate-rename --dry-run` (the user inspected the plan — that's acknowledgement).
+- Written by `/flow-next:setup` when the user defers the upgrade interactively (T9/.10).
+- **Never** written by bare `flowctl <verb>` invocations (banner emission is passive display, not acknowledgement).
+- File payload is an ISO-8601 UTC timestamp. Missing / empty / unparseable / future-dated timestamps all fall through to banner emission (defensive read).
+
+**7-day re-nudge cadence:** after acknowledgement, the banner is suppressed for `BANNER_RENUDGE_DAYS = 7` days. After expiry the banner re-emits ONCE on the next invocation; the timestamp is NOT auto-refreshed — the user must run `migrate-rename --dry-run` again (or migrate) to extend the suppression window.
+
+**Future-version downgrade-safety warning:** if the sentinel parses as semver `>=2.x` (e.g. someone migrated with a newer flowctl, then a teammate runs an older flowctl on the same repo), the banner subsystem emits a one-line warning to stderr — *"Warning: .flow/ was migrated by a newer flow-next (X.Y.Z); some features may be unavailable."* — and lets the subcommand proceed normally with its own exit code. The pre-1.0 banner is NOT shown in this case (mutually exclusive paths).
+
+**Process-level dedup:** the banner emits at most once per `flowctl` invocation. Multi-process invocations (e.g. a Ralph loop spawning many `flowctl` calls) DO each emit the banner once if their suppressors don't match — there is no cross-process dedup. The expected pattern is for Ralph to set `FLOW_RALPH=1` and absorb the suppression that way.
+
+## Deprecated aliases
+
+flow-next 1.0.0 renamed the spec surface from `epic` to `spec`. Every legacy form continues to work in 1.x as a thin alias; each alias emits a one-line stderr deprecation warning. Suppress all such warnings via `FLOW_NO_DEPRECATION=1`. **Soft-removal target is 2.0.0 — telemetry-driven, NOT calendar-driven.** R28 explicitly forbids hard-coded sunset dates; if real-world `flowctl epic` invocations stay common, the alias layer stays past 2.0.0.
+
+**Verb / parent subcommand aliases:**
+
+| Legacy form | Canonical 1.0 form |
+|-------------|---------------------|
+| `flowctl epic create` | `flowctl spec create` |
+| `flowctl epic set-plan` | `flowctl spec set-plan` |
+| `flowctl epic set-plan-review-status` | `flowctl spec set-plan-review-status` |
+| `flowctl epic set-completion-review-status` | `flowctl spec set-completion-review-status` |
+| `flowctl epic set-branch` | `flowctl spec set-branch` |
+| `flowctl epic set-title` | `flowctl spec set-title` |
+| `flowctl epic close` | `flowctl spec close` |
+| `flowctl epic add-dep` | `flowctl spec add-dep` |
+| `flowctl epic rm-dep` | `flowctl spec rm-dep` |
+| `flowctl epic set-backend` | `flowctl spec set-backend` |
+| `flowctl epic export-cognitive-aid` | `flowctl spec export-cognitive-aid` |
+| `flowctl epics` | `flowctl specs` |
+
+**Flag aliases:**
+
+| Legacy flag | Canonical 1.0 flag | Used on |
+|-------------|---------------------|---------|
+| `--epic` | `--spec` | `task create`, `tasks`, `ready`, `validate`, `checkpoint save/restore/delete` |
+| `--epic-title` | `--spec-title` | `prospect promote` (silent alias — no deprecation warning, since the prospect-promote skill is internal enough that a warning would just spam Ralph; the verb-level `flowctl epic *` deprecation already surfaces the rename path) |
+| `--epics-file` | `--specs-file` | `next` |
+
+**Filesystem aliases:**
+
+| Legacy path | Canonical 1.0 path |
+|-------------|---------------------|
+| `.flow/epics/<id>.json` | `.flow/specs/<id>.json` |
+
+The markdown was already at `.flow/specs/<id>.md` pre-1.0; only the JSON sidecar moved. The alias layer keeps reads working until you run `flowctl migrate-rename --yes`.
+
+**Slash-command alias:**
+
+| Legacy command | Canonical 1.0 command |
+|----------------|------------------------|
+| `/flow-next:epic-review` | `/flow-next:spec-completion-review` |
+
+The old slash command stays as a thin redirect.
+
+**Suppression env var:**
+
+```bash
+export FLOW_NO_DEPRECATION=1   # silence per-process
+```
+
+The same env var also silences the legacy `FLOW_MEMORY_CLASSIFIER_*` warning surface (removed in 0.37.0).
+
 ## Ralph Receipts
 
 RepoPrompt review receipts are written by the review skills (not flowctl commands). Codex review receipts are written by `flowctl codex impl-review` and `flowctl codex completion-review` when `--receipt` is provided. Ralph sets `REVIEW_RECEIPT_PATH` to coordinate both.
@@ -1050,7 +1267,7 @@ Exit codes: 0=success, 1=general error, 2=tool/parse error, 3=sandbox configurat
 ## Error Handling
 
 - Missing `.flow/`: "Run 'flowctl init' first"
-- Invalid ID format: "Expected format: fn-N (epic) or fn-N.M (task)"
-- File conflicts: Refuses to overwrite existing epics/tasks
-- Dependency violations: Same-epic only, must exist, no cycles
+- Invalid ID format: "Expected format: fn-N (spec) or fn-N.M (task)"
+- File conflicts: Refuses to overwrite existing specs/tasks
+- Dependency violations: Same-spec only, must exist, no cycles
 - Status violations: Can't start non-todo, can't close with incomplete tasks

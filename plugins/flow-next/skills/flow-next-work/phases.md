@@ -9,7 +9,7 @@
 
 **STOP** and instead:
 - create/update tasks in `.flow/` using `flowctl`,
-- record details in the epic/task spec markdown.
+- record details in the spec/task markdown.
 
 ## Setup
 
@@ -24,9 +24,9 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 Detect input type in this order (first match wins):
 
 1. **Flow task ID** `fn-N-slug.M` (e.g., fn-1-add-oauth.3) or legacy `fn-N.M`/`fn-N-xxx.M` → **SINGLE_TASK_MODE**
-2. **Flow epic ID** `fn-N-slug` (e.g., fn-1-add-oauth) or legacy `fn-N`/`fn-N-xxx` → **EPIC_MODE**
-3. **Spec file** `.md` path that exists on disk → **EPIC_MODE**
-4. **Idea text** everything else → **EPIC_MODE**
+2. **Flow spec ID** `fn-N-slug` (e.g., fn-1-add-oauth) or legacy `fn-N`/`fn-N-xxx` → **SPEC_MODE**
+3. **Spec file** `.md` path that exists on disk → **SPEC_MODE**
+4. **Idea text** everything else → **SPEC_MODE**
 
 **Track the mode** — it controls looping in Phase 3.
 
@@ -35,28 +35,28 @@ Detect input type in this order (first match wins):
 **Flow task ID (fn-N-slug.M or legacy fn-N.M/fn-N-xxx.M)** → SINGLE_TASK_MODE:
 - Read task: `$FLOWCTL show <id> --json`
 - Read spec: `$FLOWCTL cat <id>`
-- Get epic from task data for context: `$FLOWCTL show <epic-id> --json && $FLOWCTL cat <epic-id>`
+- Get parent spec from task data for context: `$FLOWCTL show <spec-id> --json && $FLOWCTL cat <spec-id>`
 - **This is the only task to execute** — no loop to next task
 
-**Flow epic ID (fn-N-slug or legacy fn-N/fn-N-xxx)** → EPIC_MODE:
-- Read epic: `$FLOWCTL show <id> --json`
-- Read spec: `$FLOWCTL cat <id>`
-- Get first ready task: `$FLOWCTL ready --epic <id> --json`
+**Flow spec ID (fn-N-slug or legacy fn-N/fn-N-xxx)** → SPEC_MODE:
+- Read spec metadata: `$FLOWCTL show <id> --json`
+- Read spec markdown: `$FLOWCTL cat <id>`
+- Get first ready task: `$FLOWCTL ready --spec <id> --json`
 
 **Spec file start (.md path that exists)**:
 1. Check file exists: `test -f "<path>"` — if not, treat as idea text
 2. Initialize: `$FLOWCTL init --json`
 3. Read file and extract title from first `# Heading` or use filename
-4. Create epic: `$FLOWCTL epic create --title "<extracted-title>" --json`
-5. Set spec from file: `$FLOWCTL epic set-plan <epic-id> --file <path> --json`
-6. Create single task: `$FLOWCTL task create --epic <epic-id> --title "Implement <title>" --json`
-7. Continue with epic-id
+4. Create spec: `$FLOWCTL spec create --title "<extracted-title>" --json`
+5. Set spec from file: `$FLOWCTL spec set-plan <spec-id> --file <path> --json`
+6. Create single task: `$FLOWCTL task create --spec <spec-id> --title "Implement <title>" --json`
+7. Continue with spec-id
 
 **Spec-less start (idea text)**:
 1. Initialize: `$FLOWCTL init --json`
-2. Create epic: `$FLOWCTL epic create --title "<idea>" --json`
-3. Create single task: `$FLOWCTL task create --epic <epic-id> --title "Implement <idea>" --json`
-4. Continue with epic-id
+2. Create spec: `$FLOWCTL spec create --title "<idea>" --json`
+3. Create single task: `$FLOWCTL task create --spec <spec-id> --title "Implement <idea>" --json`
+4. Continue with spec-id
 
 ## Phase 2: Apply Branch Choice
 
@@ -77,7 +77,7 @@ Based on user's answer from setup questions:
 ### 3a. Find Next Task
 
 ```bash
-$FLOWCTL ready --epic <epic-id> --json
+$FLOWCTL ready --spec <spec-id> --json
 ```
 
 If no ready tasks, check for completion review gate (see 3g below).
@@ -105,7 +105,7 @@ Pass config values only. Worker reads worker.md for phases. Do NOT paraphrase or
 Implement flow-next task.
 
 TASK_ID: fn-X.Y
-EPIC_ID: fn-X
+SPEC_ID: fn-X
 FLOWCTL: /path/to/flowctl
 REVIEW_MODE: none|rp|codex
 RALPH_MODE: true|false
@@ -127,7 +127,7 @@ If status is not `done`, the worker failed. Check output and retry or investigat
 
 ### 3e. Plan Sync (if enabled) — BOTH MODES
 
-**Runs in SINGLE_TASK_MODE and EPIC_MODE.** Only the loop-back in 3f differs by mode.
+**Runs in SINGLE_TASK_MODE and SPEC_MODE.** Only the loop-back in 3f differs by mode.
 
 Only run plan-sync if the task status is `done` (from step 3d). If not `done`, skip plan-sync and investigate/retry.
 
@@ -142,7 +142,7 @@ Skip unless planSync.enabled is explicitly `true` (null/false/missing = skip).
 Get remaining tasks (todo status = not started yet):
 
 ```bash
-$FLOWCTL tasks --epic <epic-id> --status todo --json
+$FLOWCTL tasks --spec <spec-id> --status todo --json
 ```
 
 Skip if empty (no downstream tasks to update).
@@ -150,7 +150,7 @@ Skip if empty (no downstream tasks to update).
 Extract downstream task IDs:
 
 ```bash
-DOWNSTREAM=$($FLOWCTL tasks --epic <epic-id> --status todo --json | jq -r '[.[].id] | join(",")')
+DOWNSTREAM=$($FLOWCTL tasks --spec <spec-id> --status todo --json | jq -r '[.[].id] | join(",")')
 ```
 
 Note: Only sync to `todo` tasks. `in_progress` tasks are already being worked on - updating them mid-flight could cause confusion.
@@ -161,7 +161,7 @@ Use the Task tool to spawn the `plan-sync` subagent with this prompt:
 Sync downstream tasks after implementation.
 
 COMPLETED_TASK_ID: fn-X.Y
-EPIC_ID: fn-X
+SPEC_ID: fn-X
 FLOWCTL: /path/to/flowctl
 DOWNSTREAM_TASK_IDS: fn-X.3,fn-X.4,fn-X.5
 
@@ -176,16 +176,16 @@ Plan-sync returns summary. Log it but don't block - task updates are best-effort
 
 **SINGLE_TASK_MODE**: After 3d→3e, go to Phase 4 (Quality). No loop.
 
-**EPIC_MODE**: After 3d→3e, return to 3a for next task.
+**SPEC_MODE**: After 3d→3e, return to 3a for next task.
 
-### 3g. Completion Review Gate (EPIC_MODE only)
+### 3g. Completion Review Gate (SPEC_MODE only)
 
 When 3a finds no ready tasks, check if completion review is required.
 
-**Check epic's completion review status directly:**
+**Check spec's completion review status directly:**
 
 ```bash
-$FLOWCTL show <epic-id> --json | jq -r '.completion_review_status'
+$FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
 ```
 
 - If `ship` → review already passed, go to Phase 4
@@ -193,16 +193,16 @@ $FLOWCTL show <epic-id> --json | jq -r '.completion_review_status'
 
 **If review needed:**
 
-1. Invoke `/flow-next:epic-review <epic-id>` skill
+1. Invoke `/flow-next:spec-completion-review <spec-id>` skill
    - Pass `--review=<backend>` matching the work review backend
    - Skill handles rp/codex backend dispatch
    - Skill runs fix loop internally until SHIP verdict
 
 2. After skill returns with SHIP:
-   - Set status: `$FLOWCTL epic set-completion-review-status <epic-id> --status ship --json`
+   - Set status: `$FLOWCTL spec set-completion-review-status <spec-id> --status ship --json`
    - Go to Phase 4 (Quality)
 
-**Note:** The epic-review skill gets SHIP from the reviewer but does NOT set the status itself. The caller (work skill or Ralph) sets `completion_review_status=ship` after successful review.
+**Note:** The spec-completion-review skill gets SHIP from the reviewer but does NOT set the status itself. The caller (work skill or Ralph) sets `completion_review_status=ship` after successful review.
 
 **Fix loop behavior**: Same as impl-review. If reviewer returns NEEDS_WORK:
 1. Skill parses issues
@@ -229,7 +229,7 @@ Context optimization. Each task gets fresh context:
 
 ## Phase 4: Quality
 
-After all tasks complete (or periodically for large epics):
+After all tasks complete (or periodically for large specs):
 
 - Run relevant tests
 - Run lint/format per repo
@@ -241,8 +241,8 @@ After all tasks complete (or periodically for large epics):
 
 **Verify all tasks done**:
 ```bash
-$FLOWCTL show <epic-id> --json
-$FLOWCTL validate --epic <epic-id> --json
+$FLOWCTL show <spec-id> --json
+$FLOWCTL validate --spec <spec-id> --json
 ```
 
 **Final commit** (if any uncommitted changes):
@@ -253,8 +253,8 @@ git diff --staged
 git commit -m "<final summary>"
 ```
 
-**Do NOT close the epic here** unless the user explicitly asked.
-Ralph closes done epics at the end of the loop.
+**Do NOT close the spec here** unless the user explicitly asked.
+Ralph closes done specs at the end of the loop.
 
 Then push + open PR if user wants.
 
@@ -262,7 +262,7 @@ Then push + open PR if user wants.
 
 Confirm before ship:
 - All tasks have status "done"
-- `$FLOWCTL validate --epic <id>` passes
+- `$FLOWCTL validate --spec <id>` passes
 - Tests pass
 - Lint/format pass
 - Docs updated if needed
@@ -275,9 +275,9 @@ Phase 1 (resolve) → Phase 2 (branch) → Phase 3:
   ├─ 3a-c: find task → start → spawn worker
   ├─ 3d: verify done
   ├─ 3e: plan-sync (if enabled + downstream tasks exist)
-  ├─ 3f: EPIC_MODE? → loop to 3a | SINGLE_TASK_MODE? → Phase 4
+  ├─ 3f: SPEC_MODE? → loop to 3a | SINGLE_TASK_MODE? → Phase 4
   ├─ no more tasks → 3g: check completion_review_status
-  │   ├─ status != ship → invoke /flow-next:epic-review → fix loop until SHIP → set status=ship
+  │   ├─ status != ship → invoke /flow-next:spec-completion-review → fix loop until SHIP → set status=ship
   │   └─ status = ship → Phase 4
   └─ Phase 4 (quality) → Phase 5 (ship)
 ```

@@ -14,18 +14,24 @@ Task tracking for AI agents. All state lives in `.flow/`.
 ```
 .flow/
 ├── bin/flowctl                  # CLI (this install)
-├── epics/fn-N-slug.json         # Epic metadata (e.g., fn-1-add-oauth.json)
-├── specs/fn-N-slug.md           # Epic specifications
+├── specs/fn-N-slug.md           # Spec content (canonical)
+├── specs/fn-N-slug.json         # Spec metadata (1.0+ — colocated with the markdown)
 ├── tasks/fn-N-slug.M.json       # Task metadata (e.g., fn-1-add-oauth.1.json)
 ├── tasks/fn-N-slug.M.md         # Task specifications
 ├── memory/                      # Context memory (categorized bug/ + knowledge/)
 ├── prospects/<slug>-<date>.md   # Ideation artifacts (v0.36.0+)
+├── .flow_version                # 1.0.0 sentinel — written after layout migration
+├── .gitignore                   # Auto-managed by flowctl (1.0+) — excludes migration transients
 └── meta.json                    # Project metadata
 ```
 
+`.flow/epics/` is the pre-1.0 sidecar location. Repos created on 1.0+ never have it; pre-1.0 repos keep working via the alias layer until you run `flowctl migrate-rename --yes` (or `/flow-next:setup`'s upgrade branch).
+
+`.flow/.gitignore` is auto-written by `flowctl init` and `flowctl migrate-rename` so `git add -A` doesn't accidentally commit per-developer state (`.checkpoint-*.json`, `receipts/`, `tmp/`) or migration transients (`.backup-pre-1.0/`, `.banner-acknowledged`, `.migrating`, `.migration-manifest`). Idempotent; user patterns added below the auto-managed footer are preserved on update.
+
 ## IDs
 
-- Epics: `fn-N-slug` where slug is derived from title (e.g., fn-1-add-oauth, fn-2-fix-login-bug)
+- Specs: `fn-N-slug` where slug is derived from title (e.g., fn-1-add-oauth, fn-2-fix-login-bug)
 - Tasks: `fn-N-slug.M` (e.g., fn-1-add-oauth.1, fn-2-fix-login-bug.2)
 
 **Backwards compatibility**: Legacy formats `fn-N`, `fn-N-xxx`, `fn-N.M`, and `fn-N-xxx.M` still work.
@@ -34,27 +40,27 @@ Task tracking for AI agents. All state lives in `.flow/`.
 
 ```bash
 # List
-.flow/bin/flowctl list                          # All epics + tasks grouped
-.flow/bin/flowctl epics                         # All epics with progress
+.flow/bin/flowctl list                          # All specs + tasks grouped
+.flow/bin/flowctl specs                         # All specs with progress
 .flow/bin/flowctl tasks                         # All tasks
-.flow/bin/flowctl tasks --epic fn-1-add-oauth   # Tasks for epic
+.flow/bin/flowctl tasks --spec fn-1-add-oauth   # Tasks for spec
 .flow/bin/flowctl tasks --status todo           # Filter by status
 
 # View
-.flow/bin/flowctl show fn-1-add-oauth           # Epic with all tasks
+.flow/bin/flowctl show fn-1-add-oauth           # Spec with all tasks
 .flow/bin/flowctl show fn-1-add-oauth.2         # Single task
-.flow/bin/flowctl cat fn-1-add-oauth            # Epic spec (markdown)
+.flow/bin/flowctl cat fn-1-add-oauth            # Spec markdown
 .flow/bin/flowctl cat fn-1-add-oauth.2          # Task spec (markdown)
 
 # Status
-.flow/bin/flowctl ready --epic fn-1-add-oauth   # What's ready to work on
+.flow/bin/flowctl ready --spec fn-1-add-oauth   # What's ready to work on
 .flow/bin/flowctl validate --all                # Check structure
 .flow/bin/flowctl state-path                    # Show state directory (for worktrees)
 
 # Create
-.flow/bin/flowctl epic create --title "..."
-.flow/bin/flowctl task create --epic fn-1-add-oauth --title "..."
-.flow/bin/flowctl task create --epic fn-1-add-oauth --title "..." --deps fn-1-add-oauth.1,fn-1-add-oauth.2
+.flow/bin/flowctl spec create --title "..."
+.flow/bin/flowctl task create --spec fn-1-add-oauth --title "..."
+.flow/bin/flowctl task create --spec fn-1-add-oauth --title "..." --deps fn-1-add-oauth.1,fn-1-add-oauth.2
 
 # Dependencies
 .flow/bin/flowctl task set-deps fn-1-add-oauth.3 --deps fn-1-add-oauth.1,fn-1-add-oauth.2
@@ -64,18 +70,18 @@ Task tracking for AI agents. All state lives in `.flow/`.
 .flow/bin/flowctl start fn-1-add-oauth.2        # Claim task
 .flow/bin/flowctl done fn-1-add-oauth.2 --summary-file s.md --evidence-json e.json
 
-# Epic cognitive-aid export (used by /flow-next:make-pr, v0.42.0+)
-.flow/bin/flowctl epic export-cognitive-aid fn-1-add-oauth                  # text mode summary
-.flow/bin/flowctl epic export-cognitive-aid fn-1-add-oauth --json           # full structured payload
-.flow/bin/flowctl epic export-cognitive-aid fn-1-add-oauth --base main      # diff against base ref
-.flow/bin/flowctl epic export-cognitive-aid fn-1-add-oauth --section coverage --json  # one section only
+# Spec cognitive-aid export (used by /flow-next:make-pr, v0.42.0+)
+.flow/bin/flowctl spec export-cognitive-aid fn-1-add-oauth                  # text mode summary
+.flow/bin/flowctl spec export-cognitive-aid fn-1-add-oauth --json           # full structured payload
+.flow/bin/flowctl spec export-cognitive-aid fn-1-add-oauth --base main      # diff against base ref
+.flow/bin/flowctl spec export-cognitive-aid fn-1-add-oauth --section coverage --json  # one section only
 
 # Prospect (ideation artifacts under .flow/prospects/, v0.36.0+)
 .flow/bin/flowctl prospect list                          # active artifacts (<30d)
 .flow/bin/flowctl prospect list --all --json             # everything
 .flow/bin/flowctl prospect read <id>                     # full body
 .flow/bin/flowctl prospect read <id> --section survivors # focus|grounding|survivors|rejected
-.flow/bin/flowctl prospect promote <id> --idea N         # idea N → new epic
+.flow/bin/flowctl prospect promote <id> --idea N         # idea N → new spec
 .flow/bin/flowctl prospect promote <id> --idea N --force # override idempotency guard
 .flow/bin/flowctl prospect archive <id>                  # → .flow/prospects/_archive/
 
@@ -115,8 +121,8 @@ Task tracking for AI agents. All state lives in `.flow/`.
 
 ## Workflow
 
-1. `.flow/bin/flowctl epics` - list all epics
-2. `.flow/bin/flowctl ready --epic fn-N-slug` - find available tasks
+1. `.flow/bin/flowctl specs` - list all specs
+2. `.flow/bin/flowctl ready --spec fn-N-slug` - find available tasks
 3. `.flow/bin/flowctl start fn-N-slug.M` - claim task
 4. Implement the task
 5. `.flow/bin/flowctl done fn-N-slug.M --summary-file ... --evidence-json ...` - complete
@@ -138,6 +144,17 @@ Runtime state (status, assignee, etc.) is stored in `.git/flow-state/`, shared a
 ```
 
 Migration is optional — existing repos work without changes.
+
+## Deprecation: legacy `flowctl epic *` aliases
+
+flow-next 1.0.0 renamed the spec surface from `epic` to `spec`. The legacy `flowctl epic *` subcommands continue to work in 1.x as thin aliases that dispatch to the new `flowctl spec *` handlers; each invocation emits a one-line stderr deprecation warning. Suppress via `FLOW_NO_DEPRECATION=1`. Aliases are removed in 2.0.
+
+A pre-1.0 `.flow/` directory keeps working via the alias layer (no auto-migration). To migrate to the canonical 1.0+ layout, run either:
+
+- `/flow-next:setup` (interactive, prompts before writing) — recommended in human-driven sessions.
+- `flowctl migrate-rename --yes` (deterministic) — recommended for scripts and CI.
+
+`FLOW_NO_AUTO_MIGRATE=1` suppresses the migration banner entirely; alias mode keeps working.
 
 ## More Info
 

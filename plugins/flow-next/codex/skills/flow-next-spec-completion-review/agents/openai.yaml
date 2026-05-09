@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Spec Completion Review"
+  short_description: "Verify spec implementation matches the spec"
+  brand_color: "#EF4444"
+policy:
+  allow_implicit_invocation: false

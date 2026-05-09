@@ -51,8 +51,8 @@ Detect pre-1.0 `.flow/` layout on every flowctl invocation. Print a one-time-per
 - [ ] Banner stderr does not pollute `--json` stdout: top-level `flowctl show fn-X --json | jq .id` parses cleanly.
 
 ## Done summary
-
+Added `_check_migration_banner(flow_dir)` to flowctl.py — fires once early in `main()` after argparse, emits the 6-line stderr banner verbatim on pre-1.0 layout (FLOW_RALPH/REVIEW_RECEIPT_PATH/FLOW_NO_AUTO_MIGRATE/sentinel/ack-within-7d suppression matrix), one-line future-version warning when sentinel major >= 2 (subcommand exit code preserved), and `migrate-rename --dry-run` now writes `.flow/.banner-acknowledged` as the explicit-ack path. Banner is stderr-only — `--json` stdout stays clean.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 01d5aba7f0fa6c341e4b6e8f5591fb6327b0d323
+- Tests: python3 -m py_compile plugins/flow-next/scripts/flowctl.py, manual: 6-line banner verbatim on pre-1.0 layout (.flow/epics/ + no sentinel), manual: FLOW_NO_AUTO_MIGRATE=1 / FLOW_RALPH=1 / REVIEW_RECEIPT_PATH=... all suppress banner, manual: --json stdout uncontaminated (json.load parses cleanly), manual: migrate-rename --dry-run writes .flow/.banner-acknowledged with now_iso() timestamp, manual: ack within 7 days suppresses banner; 8-day-old ack re-fires once and timestamp is NOT auto-refreshed, manual: empty/garbage/future-dated ack file falls through to banner (defensive parse), manual: post-migration sentinel (1.0.0, 1.5.2) → silent; future sentinel (2.0.0) → one-line warning, subcommand still runs, exit code 0, manual: no .flow/ at all → silent; flowctl init still works
 - PRs:

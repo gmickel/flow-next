@@ -144,7 +144,7 @@ Ralph-script changes required.
 | Shape | Action |
 |-------|--------|
 | Any code file (`.py`, `.ts`, `.go`, `.sh`, ...) present | REVIEW (AC9) |
-| Any `.flow/specs/*.md` / `.flow/tasks/*.md` / `.flow/epics/*.json` | REVIEW |
+| Any `.flow/specs/*.md` / `.flow/specs/*.json` / `.flow/tasks/*.md` / legacy `.flow/epics/*.json` | REVIEW |
 | All files are lockfiles (`package-lock.json`, `bun.lock`, ...) | SKIP |
 | All files are docs (`.md`, `.mdx`, `.txt`, `.rst`, `.adoc`) | SKIP |
 | All files are under generated paths (`codex/`, `vendor/`, `node_modules/`, ...) | SKIP |
@@ -479,9 +479,9 @@ Only flag issues that apply to the **changed code** - not pre-existing patterns.
 
 ## Requirements coverage (if spec has R-IDs)
 
-If the task spec references an epic spec with numbered acceptance criteria like
+If the task spec references a parent spec with numbered acceptance criteria like
 `- **R1:** ...`, `- **R2:** ...`, produce a per-R-ID coverage table. Read the
-epic spec's `## Acceptance` section (or the legacy `## Acceptance criteria`
+parent spec's `## Acceptance` section (or the legacy `## Acceptance criteria`
 heading — reviewer MUST tolerate both). If no R-IDs are present anywhere, skip
 this block entirely — the rest of the review is unchanged.
 
@@ -567,10 +567,10 @@ Never delete pre-existing findings from the report — they stay visible for fut
 
 The following paths are flow-next / project-pipeline artifacts. Any finding recommending their deletion, gitignore, or removal MUST be discarded during synthesis. Do not flag these paths for cleanup under any circumstances:
 
-- `.flow/*` — flow-next state, specs, tasks, epics, runtime
+- `.flow/*` — flow-next state, specs, tasks, runtime
 - `.flow/bin/*` — bundled flowctl
 - `.flow/memory/*` — learnings store (pitfalls, conventions, decisions)
-- `.flow/specs/*.md` — epic specs (decision artifacts)
+- `.flow/specs/*.md` — specs (decision artifacts)
 - `.flow/tasks/*.md` — task specs (decision artifacts)
 - `docs/plans/*` — plan artifacts (if project uses this convention)
 - `docs/solutions/*` — solutions artifacts (if project uses this convention)

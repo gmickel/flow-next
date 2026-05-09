@@ -99,10 +99,10 @@ This project uses Flow-Next for task tracking. Use `.flow/bin/flowctl` instead o
 
 **Quick commands:**
 ```bash
-.flow/bin/flowctl list                # List all epics + tasks
-.flow/bin/flowctl epics               # List all epics
-.flow/bin/flowctl tasks --epic fn-N   # List tasks for epic
-.flow/bin/flowctl ready --epic fn-N   # What's ready
+.flow/bin/flowctl list                # List all specs + tasks
+.flow/bin/flowctl specs               # List all specs
+.flow/bin/flowctl tasks --spec fn-N   # List tasks for spec
+.flow/bin/flowctl ready --spec fn-N   # What's ready
 .flow/bin/flowctl show fn-N.M         # View task
 .flow/bin/flowctl start fn-N.M        # Claim task
 .flow/bin/flowctl done fn-N.M --summary-file s.md --evidence-json e.json
@@ -110,15 +110,15 @@ This project uses Flow-Next for task tracking. Use `.flow/bin/flowctl` instead o
 
 **Creating a spec** ("create a spec", "spec out X", "write a spec for X"):
 
-A spec = an epic. Create one directly — do NOT use `/flow-next:plan` (that breaks specs into tasks).
+The spec is the load-bearing artefact in flow-next — `.flow/specs/<id>.md` carries goal, architecture, R-IDs, boundaries. Create one directly — do NOT use `/flow-next:plan` (that breaks specs into tasks).
 
 **Two paths:**
-- **Automated** (recommended for any spec emerging from conversation): `/flow-next:capture` — host agent synthesizes the spec from conversation context, source-tags every acceptance criterion (`[user]` / `[paraphrase]` / `[inferred]`), and shows the full draft via mandatory read-back before writing. Output goes to the same `.flow/specs/<epic-id>.md` location, via the same `flowctl epic create + epic set-plan` plumbing — but with conversation context preserved as `## Conversation Evidence` and an audit trail of which criteria came from the user. Added in 0.38.0.
-- **Manual** (for direct flowctl scripting): the `flowctl epic create + epic set-plan` heredoc shown below.
+- **Automated** (recommended for any spec emerging from conversation): `/flow-next:capture` — host agent synthesizes the spec from conversation context, source-tags every acceptance criterion (`[user]` / `[paraphrase]` / `[inferred]`), and shows the full draft via mandatory read-back before writing. Output goes to `.flow/specs/<spec-id>.md`, via `flowctl spec create + spec set-plan` plumbing — but with conversation context preserved as `## Conversation Evidence` and an audit trail of which criteria came from the user. Added in 0.38.0.
+- **Manual** (for direct flowctl scripting): the `flowctl spec create + spec set-plan` heredoc shown below.
 
 ```bash
-.flow/bin/flowctl epic create --title "Short title" --json
-.flow/bin/flowctl epic set-plan <epic-id> --file - --json <<'EOF'
+.flow/bin/flowctl spec create --title "Short title" --json
+.flow/bin/flowctl spec set-plan <spec-id> --file - --json <<'EOF'
 # Title
 
 ## Goal & Context
@@ -134,8 +134,8 @@ Endpoints, interfaces, input/output shapes.
 Failure modes, limits, performance requirements.
 
 ## Acceptance Criteria
-- [ ] Testable criterion 1
-- [ ] Testable criterion 2
+- **R1:** Testable criterion 1
+- **R2:** Testable criterion 2
 
 ## Boundaries
 What's explicitly out of scope.
@@ -146,14 +146,15 @@ EOF
 ```
 
 After creating a spec, choose next step:
-- `/flow-next:plan <epic-id>` — research + break into tasks
-- `/flow-next:interview <epic-id>` — deep Q&A to refine the spec
-- `/flow-next:capture --rewrite <epic-id>` — re-synthesize from updated conversation context
+- `/flow-next:plan <spec-id>` — research + break into tasks
+- `/flow-next:interview <spec-id>` — deep Q&A to refine the spec
+- `/flow-next:capture --rewrite <spec-id>` — re-synthesize from updated conversation context
 
 **Rules:**
 - Use `.flow/bin/flowctl` for ALL task tracking
 - Do NOT create markdown TODOs or use TodoWrite
 - Re-anchor (re-read spec + status) before every task
+- The legacy `flowctl epic *` aliases continue to work in 1.x with a one-line stderr deprecation warning (suppress via `FLOW_NO_DEPRECATION=1`); aliases are removed in 2.0.
 
 **More info:** `.flow/bin/flowctl --help` or read `.flow/usage.md`
 <!-- END FLOW-NEXT -->

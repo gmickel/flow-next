@@ -98,7 +98,7 @@ Example:
 
 The following paths are flow-next / project-pipeline artifacts. Never recommend their deletion, gitignore, or removal:
 
-- `.flow/*` — flow-next state, specs, tasks, epics, runtime
+- `.flow/*` — flow-next state, specs, tasks, runtime
 - `.flow/bin/*` — bundled flowctl
 - `.flow/memory/*` — learnings store
 - `.flow/specs/*.md`, `.flow/tasks/*.md` — decision artifacts

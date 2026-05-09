@@ -56,8 +56,8 @@ Rename the completion-review slash command, skill directory, and all dispatchers
 - [ ] All in-repo dispatchers (`flow-next-work/phases.md`, ralph-init `prompt_completion.md`) reference the new name.
 
 ## Done summary
-
+Renamed /flow-next:epic-review slash command + flow-next-epic-review skill directory to /flow-next:spec-completion-review + flow-next-spec-completion-review. Old command path retains a thin redirect; canonical content lives at the new path. Skill prose rewritten (epic→spec, EPIC_ID→SPEC_ID); CLI verbs kept as legacy alias form per T5 convention. sync-codex.sh entries updated at lines 348/541/565. Dispatchers updated: flow-next-work, flow-next-ralph-init prompt_completion template, scripts/hooks/ralph-guard.py. Codex mirror regen deferred to T15. Codex impl-review SHIP first pass with 0 introduced findings. Satisfies R12, R14, R21.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d1e0ce73451daec0f79e69fed361058294aa97e3
+- Tests: bash scripts/sync-codex.sh, flowctl codex impl-review --base 5a09956066a587ac3ae623b642249d1015e556e0 --spec codex:gpt-5.5:high
 - PRs:

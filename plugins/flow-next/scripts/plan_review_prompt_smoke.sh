@@ -12,7 +12,10 @@ fi
 
 TEST_DIR="${TEST_DIR:-/tmp/flow-next-plan-review-smoke-rp-$$}"
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
-EPIC_ID="${EPIC_ID:-fn-1}"
+# SPEC_ID is captured from `flowctl spec create --json` below — fn-43 slugs
+# titles into the id (e.g. fn-1-tiny-lib), so a hard-coded `fn-1` doesn't
+# work. The env var still overrides for callers who control the title.
+SPEC_ID="${EPIC_ID:-${SPEC_ID:-}}"
 
 fail() { echo "plan_review_prompt_smoke: $*" >&2; exit 1; }
 
@@ -64,7 +67,15 @@ chmod +x scripts/ralph/flowctl
 
 FLOWCTL="scripts/ralph/flowctl"
 $FLOWCTL init --json >/dev/null
-$FLOWCTL epic create --title "Tiny lib" --json >/dev/null
+# Capture the slug-stamped spec id from create's JSON output. fn-43+
+# stamps the title into the id (e.g. "Tiny lib" -> fn-1-tiny-lib); a
+# hard-coded fn-1 would no longer match.
+if [[ -z "$SPEC_ID" ]]; then
+  SPEC_ID=$($FLOWCTL spec create --title "Tiny lib" --json | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+else
+  $FLOWCTL spec create --title "Tiny lib" --json >/dev/null
+fi
+EPIC_ID="$SPEC_ID"  # back-compat for callers reading the var name
 
 cat > "$TEST_DIR/epic.md" <<'EOF'
 # fn-1 Tiny lib
@@ -105,7 +116,7 @@ Edit src/index.ts and README.md only. Repo is source-only (no build step).
 - None
 EOF
 
-$FLOWCTL epic set-plan "$EPIC_ID" --file "$TEST_DIR/epic.md" --json >/dev/null
+$FLOWCTL spec set-plan "$EPIC_ID" --file "$TEST_DIR/epic.md" --json >/dev/null
 
 RUN_DIR="scripts/ralph/runs/smoke-plan-review"
 RECEIPT_PATH="$RUN_DIR/receipts/plan-$EPIC_ID.json"
@@ -121,7 +132,7 @@ out = Path(sys.argv[2])
 epic = sys.argv[3]
 receipt = sys.argv[4]
 
-text = tpl.replace("{{EPIC_ID}}", epic)
+text = tpl.replace("{{SPEC_ID}}", epic)
 text = text.replace("{{PLAN_REVIEW}}", "rp")
 text = text.replace("{{REQUIRE_PLAN_REVIEW}}", "1")
 text = text.replace("{{REVIEW_RECEIPT_PATH}}", receipt)

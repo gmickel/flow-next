@@ -44,9 +44,9 @@ flowchart LR
     PlanReview --> Plan[/flow-next:plan/]
     Plan --> Work[/flow-next:work/]
     Work --> ImplReview[/flow-next:impl-review/]
-    ImplReview -->|SHIP| EpicReview[/flow-next:epic-review/]
+    ImplReview -->|SHIP| SpecCompletionReview[/flow-next:spec-completion-review/]
     ImplReview -->|NEEDS_WORK| Work
-    EpicReview --> MakePR[/flow-next:make-pr/]
+    SpecCompletionReview --> MakePR[/flow-next:make-pr/]
     MakePR --> ResolvePR[/flow-next:resolve-pr/]
     ResolvePR --> Merged([🚀 Merged])
 
@@ -64,11 +64,11 @@ The methodology calls a *handover object* a named, reviewable artefact that carr
 
 | # | Handover | Flow-Next artefact path | Produced by | Verified by |
 |---|----------|-------------------------|-------------|-------------|
-| 1 | Business spec (PO → tech lead) | `.flow/specs/<epic-id>.md` | `/flow-next:capture` or `/flow-next:interview` | `/flow-next:plan-review` |
-| 2 | Full spec (tech lead → developer) | `.flow/specs/<epic-id>.md` (after `--strategy --docs` interview pass) | `/flow-next:interview` | `/flow-next:plan-review` |
-| 3 | Implementation plan (spec → tasks) | `.flow/tasks/<epic-id>.M.md` | `/flow-next:plan` | `/flow-next:plan-review` |
+| 1 | Business spec (PO → tech lead) | `.flow/specs/<spec-id>.md` | `/flow-next:capture` or `/flow-next:interview` | `/flow-next:plan-review` |
+| 2 | Full spec (tech lead → developer) | `.flow/specs/<spec-id>.md` (after `--strategy --docs` interview pass) | `/flow-next:interview` | `/flow-next:plan-review` |
+| 3 | Implementation plan (spec → tasks) | `.flow/tasks/<spec-id>.M.md` | `/flow-next:plan` | `/flow-next:plan-review` |
 | 4 | Working implementation (tasks → code) | task `done_summary` + evidence commits | `/flow-next:work` (worker subagent) | `/flow-next:impl-review` |
-| 5 | Cross-model code review | `.flow/review-receipts/<branch>.json` | `/flow-next:impl-review` | `/flow-next:epic-review` |
+| 5 | Cross-model code review | `.flow/review-receipts/<branch>.json` | `/flow-next:impl-review` | `/flow-next:spec-completion-review` |
 | 6 | PR-as-cognitive-aid | rendered PR body (9 input streams) | `/flow-next:make-pr` | human reviewer + `/flow-next:resolve-pr` |
 
 All six properties of a real handover object hold:
@@ -104,10 +104,10 @@ In a *one-pizza pod* (3–5 people), one human can carry several roles simultane
 
 Two entry points:
 
-- **`/flow-next:prospect [focus hint]`** — generates ranked candidate ideas grounded in the repo (recent files, open epics, memory, CHANGELOG, `STRATEGY.md`). Use when there is no specific idea yet, only a focus hint. See [main README — Prospecting](../README.md#prospecting).
+- **`/flow-next:prospect [focus hint]`** — generates ranked candidate ideas grounded in the repo (recent files, open specs, memory, CHANGELOG, `STRATEGY.md`). Use when there is no specific idea yet, only a focus hint. See [main README — Prospecting](../README.md#prospecting).
 - **`/flow-next:capture`** — synthesizes a free-form discussion into a spec. Use when the idea has already taken shape in conversation (often after `prospect promote`).
 
-Both produce an epic spec at `.flow/specs/<id>.md`. Survives `rm -rf .flow/` only if `STRATEGY.md` / `GLOSSARY.md` / `knowledge/decisions/` already capture the rationale; otherwise the rationale lives in the spec body.
+Both produce a spec at `.flow/specs/<id>.md`. Survives `rm -rf .flow/` only if `STRATEGY.md` / `GLOSSARY.md` / `knowledge/decisions/` already capture the rationale; otherwise the rationale lives in the spec body.
 
 ### [2] Business-layer spec — Handover #1
 
@@ -119,15 +119,15 @@ Hand the spec off to the tech lead by linking it. (For *Spec-as-PR*, see [Team p
 
 ### [3] Full spec — Handover #2
 
-The tech lead runs `/flow-next:interview <epic-id> --strategy --docs`. This is the **same skill** as the business-layer interview — same tool, same structure, same review loop. The only thing that changes is the layer being completed. (See [Symmetric interview](#symmetric-interview).)
+The tech lead runs `/flow-next:interview <spec-id> --strategy --docs`. This is the **same skill** as the business-layer interview — same tool, same structure, same review loop. The only thing that changes is the layer being completed. (See [Symmetric interview](#symmetric-interview).)
 
 The `--strategy --docs` flags activate doc-aware mode: the interview pulls from `STRATEGY.md` (active tracks), `GLOSSARY.md` (canonical vocabulary), and `knowledge/decisions/` (load-bearing past choices). When the user's wording diverges from the canonical glossary term, the interview surfaces the conflict in a `## Glossary Conflicts` spec section rather than silently rewriting. Same shape for strategy: a `## Strategy Conflicts` section parallel to glossary, ≤1 strategy-conflict question per turn.
 
-Run `/flow-next:plan-review <epic-id>` before handover. A different model (RepoPrompt / Codex / Copilot) reads the full spec and reports gaps, ambiguities, and hidden assumptions. The disagreement surface between the writing model and the review model is where the gaps live.
+Run `/flow-next:plan-review <spec-id>` before handover. A different model (RepoPrompt / Codex / Copilot) reads the full spec and reports gaps, ambiguities, and hidden assumptions. The disagreement surface between the writing model and the review model is where the gaps live.
 
 ### [4] Implementation plan — Handover #3
 
-`/flow-next:plan <epic-id>` reads the spec, scans the codebase via parallel scouts (repo-scout, context-scout, docs-scout, practice-scout, github-scout, ...), and decomposes the epic into ordered tasks with explicit dependencies.
+`/flow-next:plan <spec-id>` reads the spec, scans the codebase via parallel scouts (repo-scout, context-scout, docs-scout, practice-scout, github-scout, ...), and decomposes the spec into ordered tasks with explicit dependencies.
 
 Tasks are sized to fit one `/flow-next:work` iteration (~100k tokens of fresh context). If a task wouldn't fit, the planner splits it. R-IDs from the spec are propagated into per-task `satisfies: [R1, R3]` frontmatter — a task says exactly which acceptance criteria it advances.
 
@@ -135,7 +135,7 @@ Run `/flow-next:plan-review` again on the plan itself. The plan is a separate ha
 
 ### [5] Working implementation — Handover #4
 
-`/flow-next:work <epic-id>` loops over ready tasks. Each task runs in a **worker subagent with fresh context** (no token bleed from prior tasks). Before each task, the worker re-anchors: re-reads the spec, the task, and `git log` since branch base.
+`/flow-next:work <spec-id>` loops over ready tasks. Each task runs in a **worker subagent with fresh context** (no token bleed from prior tasks). Before each task, the worker re-anchors: re-reads the spec, the task, and `git log` since branch base.
 
 Per-task output: an evidence record (commits, tests, files touched) plus a `done_summary` block. The summary is the conversation the worker had with itself about *why* it made the choices it made — load-bearing for `/make-pr` to write the Decisions section without confabulating.
 
@@ -143,9 +143,9 @@ Branch strategy is a per-team choice:
 
 | Choice | Best for | Trade-off |
 |--------|----------|-----------|
-| `--branch=current` | One epic at a time, single dev | No isolation between epics |
-| `--branch=new` (default) | Multiple in-flight epics, single dev | One PR per epic |
-| `--branch=worktree` | Parallel epics + parallel workers | Disk overhead; CI parallelism |
+| `--branch=current` | One spec at a time, single dev | No isolation between specs |
+| `--branch=new` (default) | Multiple in-flight specs, single dev | One PR per spec |
+| `--branch=worktree` | Parallel specs + parallel workers | Disk overhead; CI parallelism |
 
 ### [6] Cross-model code review — Handover #5
 
@@ -159,21 +159,21 @@ Opt-in flags for hardened review: `--validate` (validator pass on `NEEDS_WORK` t
 
 ### [7] Drift audit
 
-`/flow-next:epic-review <epic-id>` is the closing gate at end-of-epic. It verifies the *combined* implementation (across all tasks) satisfies the spec — was anything dropped? Were R-IDs left uncovered? Did the plan diverge from the spec along the way?
+`/flow-next:spec-completion-review <spec-id>` is the closing gate at end-of-spec. It verifies the *combined* implementation (across all tasks) satisfies the spec — was anything dropped? Were R-IDs left uncovered? Did the plan diverge from the spec along the way?
 
-Configure as a required gate via `--require-completion-review` (in `flowctl next`). The work skill blocks epic-close until epic-review returns SHIP. The fix loop happens internally — the skill keeps iterating until it passes or escalates.
+Configure as a required gate via `--require-completion-review` (in `flowctl next`). The work skill blocks spec-close until spec-completion-review returns SHIP. The fix loop happens internally — the skill keeps iterating until it passes or escalates.
 
 ### [8] PR-as-cognitive-aid — Handover #6
 
-`/flow-next:make-pr <epic-id>` synthesizes nine input streams into a structured PR body:
+`/flow-next:make-pr <spec-id>` synthesizes nine input streams into a structured PR body:
 
-1. Epic spec with R-IDs
+1. Spec with R-IDs
 2. Per-task `done_summary` + evidence commits
-3. `decisions/` memory (architectural choices made during the epic)
+3. `decisions/` memory (architectural choices made during the spec)
 4. `bug/` memory (workarounds + reasoning)
 5. `architecture-patterns/` memory (new conventions)
 6. Glossary changes (terms added/renamed)
-7. Strategy alignment (which active tracks the epic served)
+7. Strategy alignment (which active tracks the spec served)
 8. Deferred review findings (`.flow/review-deferred/<branch>.md`)
 9. The `git diff` itself
 
@@ -232,14 +232,14 @@ The strongest pattern emerging across teams running spec-driven development:
 2. Run /flow-next:capture or /flow-next:interview to write .flow/specs/<id>.md
 3. Open PR with ONLY the spec — no code yet
 4. Team reviews the spec (PM, eng, design)
-5. Address comments, iterate via /flow-next:interview <epic-id>
+5. Address comments, iterate via /flow-next:interview <spec-id>
 6. Merge spec PR (spec is now frozen on main)
 7. Implementation PRs reference the merged spec
 ```
 
 **Why review the spec before code?** Reviewing a 50-line spec is higher-leverage than reviewing a 500-line implementation. Catching a wrong requirement at spec time costs minutes; in code review it costs hours; post-merge it costs days. (Vocabulary: see [methodology guide — Spec-as-PR](https://github.com/gmickel/AI-x-SDLC-Starter-Kit/blob/main/guides/methodology.md#spec-as-pr-the-team-review-workflow).)
 
-Use `/flow-next:plan-review <epic-id>` to run a cross-model review *before* opening the PR — surface the gaps the writing model missed before human reviewers spend time on them.
+Use `/flow-next:plan-review <spec-id>` to run a cross-model review *before* opening the PR — surface the gaps the writing model missed before human reviewers spend time on them.
 
 ### Parallel work from one spec
 
@@ -252,7 +252,7 @@ When the spec decomposes into independent tasks, multiple agents (or humans + ag
 | Cross-task evidence | Per-task `done_summary` is the breadcrumb the next task reads to re-anchor. No standup needed. |
 | Worktree-per-cluster | `/flow-next:work --branch=worktree` isolates clusters at the filesystem level. Each cluster's worker has its own checkout — no merge conflicts during the build. |
 
-The anti-pattern is two agents working on overlapping files from the same spec without coordination. The fix is **clearer boundaries in the spec itself**, not better merge conflict resolution. If the boundaries are unclear, run `/flow-next:interview <epic-id>` to add them.
+The anti-pattern is two agents working on overlapping files from the same spec without coordination. The fix is **clearer boundaries in the spec itself**, not better merge conflict resolution. If the boundaries are unclear, run `/flow-next:interview <spec-id>` to add them.
 
 ### Frozen-at-handover
 
@@ -305,7 +305,7 @@ When a load-bearing architectural choice is made during `/work` or `/interview`,
 
 Decision records survive `rm -rf .flow/` because they live in the same memory tree as bug entries — they are the project's, not flow-next's. See [main README — Memory System](../README.md#memory-system).
 
-`/flow-next:make-pr` reads decision records during the epic and surfaces them in the PR body's Decisions section. Reviewers read decisions *first*, before the diff — that is the highest-leverage section for catching architectural drift.
+`/flow-next:make-pr` reads decision records during the spec lifecycle and surfaces them in the PR body's Decisions section. Reviewers read decisions *first*, before the diff — that is the highest-leverage section for catching architectural drift.
 
 ### Strategy alignment
 
@@ -317,7 +317,7 @@ Active tracks become an *advisory* signal flowing into downstream skills:
 - `/flow-next:plan` emits a `## Strategy Alignment` spec section listing which active tracks the plan serves; drift surfaces as a `## Strategy drift flagged for review` block.
 - `/flow-next:interview` surfaces conflicts in a `## Strategy Conflicts` spec section parallel to `## Glossary Conflicts`.
 - `/flow-next:capture` source-tags strategy-derived acceptance criteria as `[strategy:<track-name>]`; refuses to write a spec contradicting an active track without `--override-strategy` (which prompts for a decision record).
-- `/flow-next:sync` plan-sync surfaces drift in a `## Strategy drift flagged for review` heading.
+- `/flow-next:sync` plan-sync surfaces drift in a `## Strategy drift flagged for review` heading; `/flow-next:make-pr` surfaces a `## Strategy Alignment` block in the PR body.
 
 **Read-only and advisory.** Downstream skills *never auto-supersede* an active track. They surface conflicts and ask the human. See [main README — Project Strategy](../README.md#project-strategy).
 
@@ -327,28 +327,28 @@ Active tracks become an *advisory* signal flowing into downstream skills:
 
 What `.flow/` looks like with N developers in parallel:
 
-- **Epic-level isolation.** Each epic is `fn-<N>-<slug>` with its own spec at `.flow/specs/fn-<N>-<slug>.md` and its own task tree under `.flow/tasks/fn-<N>-<slug>.M.json|md`. Two devs working on `fn-12` and `fn-15` never touch each other's files.
-- **Task-level dependencies.** Within an epic, `requires: [task-ids]` frontmatter is the contract. A task is *ready* when all its requires have status `done`. `flowctl ready --epic fn-12` lists ready tasks.
-- **Branch strategy.** Per-epic branch is the default (`--branch=new`). Worktrees scale to several epics in flight (`--branch=worktree`). Current-branch is for solo, single-epic work.
+- **Spec-level isolation.** Each spec is `fn-<N>-<slug>` with its markdown at `.flow/specs/fn-<N>-<slug>.md`, sidecar JSON at `.flow/specs/fn-<N>-<slug>.json`, and its own task tree under `.flow/tasks/fn-<N>-<slug>.M.json|md`. Two devs working on `fn-12-...` and `fn-15-...` never touch each other's files.
+- **Task-level dependencies.** Within a spec, `requires: [task-ids]` frontmatter is the contract. A task is *ready* when all its requires have status `done`. `flowctl ready --spec fn-12-...` lists ready tasks.
+- **Branch strategy.** Per-spec branch is the default (`--branch=new`). Worktrees scale to several specs in flight (`--branch=worktree`). Current-branch is for solo, single-spec work.
 - **Worker isolation.** Each task runs in a worker subagent with fresh context. The worker reads only what it needs — it does not see the conversation in the spawning session, and it does not see the other tasks. This is what enables N tasks to run in parallel without context-bleed.
 - **Memory tree as shared state.** `.flow/memory/` is the only multi-writer surface. The convention: bug entries are auto-written by Ralph on review-loop iteration; knowledge entries (`decisions/`, `architecture-patterns/`, `conventions/`) are written by humans or by `/work` with explicit confirmation. `/flow-next:audit` reconciles drift periodically.
 - **`.flow/` lives in the repo.** Commit it. Code review it. The spec PRs and implementation PRs both touch `.flow/` — that's intentional. The team's `.flow/` evolves alongside the code.
 
-**Conflict resolution:** when two epics evolve overlapping memory entries (same `<slug>` under `bug/runtime-errors/`, for example), the second writer creates the entry with a `related_to: [first-id]` frontmatter pointer rather than overwriting. `/flow-next:audit` later surfaces the pair for Consolidate.
+**Conflict resolution:** when two specs evolve overlapping memory entries (same `<slug>` under `bug/runtime-errors/`, for example), the second writer creates the entry with a `related_to: [first-id]` frontmatter pointer rather than overwriting. `/flow-next:audit` later surfaces the pair for Consolidate.
 
 ---
 
 ## Autonomous mode (Ralph) in a team
 
-Ralph is the *factory of agents* mode — the loop runs overnight against a queued epic, with cross-model review gates and receipt-based proof-of-work. See [docs/ralph.md](ralph.md).
+Ralph is the *factory of agents* mode — the loop runs overnight against a queued spec, with cross-model review gates and receipt-based proof-of-work. See [docs/ralph.md](ralph.md).
 
 In a team setting:
 
-- **Ralph runs against one epic at a time** on its own branch (typically a worktree to avoid touching the dev's working tree).
+- **Ralph runs against one spec at a time** on its own branch (typically a worktree to avoid touching the dev's working tree).
 - **`/flow-next:make-pr` is the terminus.** Ralph defaults to `--draft` so the human owns the merge decision. The PR body is the morning-review surface — read the cognitive-aid sections, scan the diff, merge or comment.
-- **Ralph is *not* Spec-as-PR.** The spec must already exist (frozen, reviewed, merged) before Ralph runs against the epic. Otherwise Ralph drifts on every iteration as the spec moves under it.
-- **Ralph is *not* a replacement for `/work`.** Use Ralph for well-scoped, mechanical-feeling epics (refactors, test backfills, lint cleanup, mechanical migrations). Use `/work` for design-heavy or architectural epics where the human stays in the loop.
-- **Ralph fits the methodology's iterative-loop *vs* factory-of-agents distinction.** Iterative-loop = `/work` with a human at the keyboard. Factory = Ralph. The choice is per-epic, not per-team.
+- **Ralph is *not* Spec-as-PR.** The spec must already exist (frozen, reviewed, merged) before Ralph runs against it. Otherwise Ralph drifts on every iteration as the spec moves under it.
+- **Ralph is *not* a replacement for `/work`.** Use Ralph for well-scoped, mechanical-feeling specs (refactors, test backfills, lint cleanup, mechanical migrations). Use `/work` for design-heavy or architectural specs where the human stays in the loop.
+- **Ralph fits the methodology's iterative-loop *vs* factory-of-agents distinction.** Iterative-loop = `/work` with a human at the keyboard. Factory = Ralph. The choice is per-spec, not per-team.
 
 Ralph emits run logs to `scripts/ralph/runs/<run>/` — receipts, verbose logs, the Claude session jsonl. The morning-review workflow lives in [ralph.md — Morning Review Workflow](ralph.md#morning-review-workflow).
 
@@ -363,7 +363,7 @@ To be clear about scope:
 - **Stakeholders** still review and redirect. The PR body makes review fast; it does not make stakeholders unnecessary.
 - **Junior developers** still exist. Their growth path changes (curation and verification, not generation), but Flow-Next does not replace mentorship or pairing.
 - **Prioritization meetings.** *Which spec do we work on next?* — humans. `/prospect` ranks candidates; humans pick.
-- **Architectural meetings.** Load-bearing tradeoffs that span multiple epics. `/strategy` and `knowledge/decisions/` are the *artefact*; the discussion still happens between humans.
+- **Architectural meetings.** Load-bearing tradeoffs that span multiple specs. `/strategy` and `knowledge/decisions/` are the *artefact*; the discussion still happens between humans.
 - **Incident response.** When something breaks in production, the loop is human-led with the agent as a tool. `/flow-next:diagnose` (when it ships) will be a structured aid, not a replacement.
 - **Customer conversations.** Specs come from customer pain. Flow-Next is downstream of that.
 
@@ -377,13 +377,13 @@ Don't try to roll out all 18 commands at once. Layer them in.
 
 ### Week 1: Prove it works
 
-Turn on three commands. Use them on one epic.
+Turn on three commands. Use them on one spec.
 
 - `/flow-next:capture` — write the spec from a discussion the team had this week.
 - `/flow-next:plan` — break the spec into tasks.
 - `/flow-next:work` — implement.
 
-Skip review for the first epic. Skip Ralph. The goal is to feel the lifecycle on a real piece of work.
+Skip review for the first spec. Skip Ralph. The goal is to feel the lifecycle on a real piece of work.
 
 ### Month 1: Establish the pattern
 
@@ -394,18 +394,18 @@ Add cross-model review and the PR-as-cognitive-aid surface.
 - Run `/flow-next:impl-review` after every `/work` task. Use the SHIP/NEEDS_WORK gate to drive iteration.
 - Use `/flow-next:make-pr` for every PR. The team gets used to reading the cognitive-aid body before the diff.
 
-By the end of month 1, every epic has been through the full handover chain at least once.
+By the end of month 1, every spec has been through the full handover chain at least once.
 
 ### Quarter 1: Scale the model
 
-Add the patterns that scale across multiple in-flight epics + multiple developers.
+Add the patterns that scale across multiple in-flight specs + multiple developers.
 
 - Adopt **Spec-as-PR** as the team norm — every spec gets reviewed and merged before any code lands.
 - Adopt **R-ID frozen-at-handover** as the team norm — never renumber, always reference, always trace.
 - Run `/flow-next:strategy` and write the repo's `STRATEGY.md`. Let the active tracks flow into `/prospect`, `/plan`, and `/interview`.
 - Start writing **decision records** under `knowledge/decisions/` for load-bearing choices. The PR body's Decisions section gets richer; review velocity goes up.
 - Schedule periodic `/flow-next:audit` runs against `.flow/memory/`. Once a month is plenty for most teams.
-- Pilot **Ralph** on a single mechanical epic (test backfill, lint migration, dependency bump). Watch the morning review. Decide whether to expand.
+- Pilot **Ralph** on a single mechanical spec (test backfill, lint migration, dependency bump). Watch the morning review. Decide whether to expand.
 
 By the end of quarter 1, the team has crossed from *using a tool* to *running a methodology*.
 

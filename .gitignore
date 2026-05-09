@@ -20,3 +20,9 @@ __pycache__/
 .flow/tmp/
 scripts/ralph/
 .claude/
+
+# fn-43 v1.0 migration transients (flowctl migrate-rename + banner)
+.flow/.backup-pre-1.0/
+.flow/.banner-acknowledged
+.flow/.migrating
+.flow/.migration-manifest

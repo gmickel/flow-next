@@ -13,7 +13,7 @@ Use `AskUserQuestion` to confirm:
 
 If cancel → stop.
 
-**Question 2:** "Keep your .flow/ tasks and epics?"
+**Question 2:** "Keep your .flow/ tasks and specs?"
 - "Yes, keep tasks" → partial uninstall
 - "No, remove everything" → full uninstall
 

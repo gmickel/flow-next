@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # fn-42-flow-nextmake-pr-pr-as-cognitive-aid.7
-# Smoke tests for `flowctl epic export-cognitive-aid` aggregator (Task 1)
+# Smoke tests for `flowctl spec export-cognitive-aid` aggregator (Task 1)
 # and the /flow-next:make-pr skill body-rendering / --dry-run plumbing.
 #
 # This is the LATE PROOF POINT for fn-42. Tasks 1-6 land the flowctl
@@ -8,7 +8,7 @@
 # the export plumbing and (where applicable) the skill scaffold are wired.
 #
 # Cases (T1-T11 from spec R29):
-#   T1.  `flowctl epic export-cognitive-aid <epic> --base main --json` returns
+#   T1.  `flowctl spec export-cognitive-aid <epic> --base main --json` returns
 #        valid JSON with all top-level keys.
 #   T2.  `--section diff` returns only the diff slice; full payload reachable
 #        without flag.
@@ -250,7 +250,7 @@ EOF
     git checkout -b fixture-feature -q
 
     # Create epic + spec
-    EPIC_RAW="$("$FLOWCTL" epic create --title "Smoke fixture epic" --json)"
+    EPIC_RAW="$("$FLOWCTL" spec create --title "Smoke fixture epic" --json)"
     EPIC_ID="$(echo "$EPIC_RAW" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
     echo "$EPIC_ID" > "$repo/.epic_id"
 
@@ -283,11 +283,11 @@ A small two-module fixture with a cross-module import.
 
 - Out of scope: actually shipping anything.
 EOF
-    "$FLOWCTL" epic set-plan "$EPIC_ID" --file /tmp/make-pr-smoke-spec.md --json >/dev/null
+    "$FLOWCTL" spec set-plan "$EPIC_ID" --file /tmp/make-pr-smoke-spec.md --json >/dev/null
     rm -f /tmp/make-pr-smoke-spec.md
 
     # Create + complete 2 tasks (each with one real evidence commit)
-    T1_RAW="$("$FLOWCTL" task create --epic "$EPIC_ID" --title "First task" --json)"
+    T1_RAW="$("$FLOWCTL" task create --spec "$EPIC_ID" --title "First task" --json)"
     T1_ID="$(echo "$T1_RAW" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 
     # Create cross-module changes via two new files in different module roots.
@@ -348,7 +348,7 @@ PYEOF
     fi
 
     # T2 — second task, second commit
-    T2_RAW="$("$FLOWCTL" task create --epic "$EPIC_ID" --title "Second task" --json)"
+    T2_RAW="$("$FLOWCTL" task create --spec "$EPIC_ID" --title "Second task" --json)"
     T2_ID="$(echo "$T2_RAW" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
     cat > src/mod_a/baz.py <<'EOF'
 """Module A baz file."""
@@ -519,7 +519,7 @@ echo
 echo -e "${YELLOW}--- T1: full payload — top-level keys + valid JSON ---${NC}"
 T1_OUT="$TEST_DIR/t1-full.json"
 set +e
-( cd "$REPO" && "$FLOWCTL" epic export-cognitive-aid "$EPIC_ID" --base main --json > "$T1_OUT" )
+( cd "$REPO" && "$FLOWCTL" spec export-cognitive-aid "$EPIC_ID" --base main --json > "$T1_OUT" )
 T1_RC=$?
 set -e
 assert_rc "T1" 0 "$T1_RC" "export-cognitive-aid full payload exits 0"
@@ -529,17 +529,19 @@ assert_rc "T1" 0 "$T1_RC" "export-cognitive-aid full payload exits 0"
   && ok "T1" "stdout is valid JSON" \
   || fail "T1" "stdout is NOT valid JSON"
 
-# Top-level key presence: required by spec architecture
-for key in epic tasks tasks_summary memory_during_epic glossary_changes \
+# Top-level key presence: required by spec architecture (canonical "spec" key
+# from fn-43.2 R31 dual-emit; legacy "epic" co-emit is verified separately
+# in alias_smoke.sh Case 4).
+for key in spec tasks tasks_summary memory_during_epic glossary_changes \
            strategy_alignment diff_summary review_receipts deferred_findings; do
   assert_eq_jq "T1" "$T1_OUT" "'$key' in d" "True" "top-level key '$key' present"
 done
 
-# epic.id matches the fixture
-T1_EPIC_ID="$(json_get "$T1_OUT" "d['epic']['id']")"
+# spec.id matches the fixture
+T1_EPIC_ID="$(json_get "$T1_OUT" "d['spec']['id']")"
 [[ "$T1_EPIC_ID" == "$EPIC_ID" ]] \
-  && ok "T1" "epic.id roundtrips ($T1_EPIC_ID)" \
-  || fail "T1" "epic.id expected $EPIC_ID, got $T1_EPIC_ID"
+  && ok "T1" "spec.id roundtrips ($T1_EPIC_ID)" \
+  || fail "T1" "spec.id expected $EPIC_ID, got $T1_EPIC_ID"
 
 # tasks_summary correct: 2 done, 0 open
 assert_eq_jq "T1" "$T1_OUT" "d['tasks_summary']['total']" "2" "tasks_summary.total == 2"
@@ -552,14 +554,14 @@ assert_eq_jq "T1" "$T1_OUT" "d['tasks_summary']['open']"  "0" "tasks_summary.ope
 echo -e "${YELLOW}--- T2: --section diff returns only diff slice ---${NC}"
 T2_OUT="$TEST_DIR/t2-section-diff.json"
 set +e
-( cd "$REPO" && "$FLOWCTL" epic export-cognitive-aid "$EPIC_ID" --base main --section diff --json > "$T2_OUT" )
+( cd "$REPO" && "$FLOWCTL" spec export-cognitive-aid "$EPIC_ID" --base main --section diff --json > "$T2_OUT" )
 T2_RC=$?
 set -e
 assert_rc "T2" 0 "$T2_RC" "--section diff exits 0"
 
 # Section-filtered payload contains diff_summary, not other top-level keys
 assert_eq_jq "T2" "$T2_OUT" "'diff_summary' in d" "True"  "section=diff: diff_summary present"
-assert_eq_jq "T2" "$T2_OUT" "'epic' in d"         "False" "section=diff: epic NOT present"
+assert_eq_jq "T2" "$T2_OUT" "'spec' in d"         "False" "section=diff: spec NOT present"
 assert_eq_jq "T2" "$T2_OUT" "'tasks' in d"        "False" "section=diff: tasks NOT present"
 assert_eq_jq "T2" "$T2_OUT" "'memory_during_epic' in d" "False" "section=diff: memory_during_epic NOT present"
 
@@ -675,7 +677,7 @@ mkdir -p "$EMPTY_REPO"
   git commit --allow-empty -m "init" -q
   "$FLOWCTL" init --json >/dev/null
 
-  EPIC_RAW="$("$FLOWCTL" epic create --title "Empty epic" --json)"
+  EPIC_RAW="$("$FLOWCTL" spec create --title "Empty epic" --json)"
   EPIC_ID_E="$(echo "$EPIC_RAW" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
   echo "$EPIC_ID_E" > .epic_id
 
@@ -689,14 +691,14 @@ No tasks yet.
 ## Acceptance Criteria
 - **R1:** Will be added later. [paraphrase]
 EOF
-  "$FLOWCTL" epic set-plan "$EPIC_ID_E" --file /tmp/empty-spec.md --json >/dev/null
+  "$FLOWCTL" spec set-plan "$EPIC_ID_E" --file /tmp/empty-spec.md --json >/dev/null
   rm -f /tmp/empty-spec.md
 )
 EMPTY_EPIC_ID="$(cat "$EMPTY_REPO/.epic_id")"
 
 T7_OUT="$TEST_DIR/t7-empty.json"
 set +e
-( cd "$EMPTY_REPO" && "$FLOWCTL" epic export-cognitive-aid "$EMPTY_EPIC_ID" --base main --json > "$T7_OUT" )
+( cd "$EMPTY_REPO" && "$FLOWCTL" spec export-cognitive-aid "$EMPTY_EPIC_ID" --base main --json > "$T7_OUT" )
 T7_RC=$?
 set -e
 assert_rc "T7" 0 "$T7_RC" "empty epic export exits 0"
@@ -755,14 +757,14 @@ mkdir -p "$NOAHEAD_REPO"
   git checkout -b main >/dev/null 2>&1 || git branch -m main >/dev/null 2>&1 || true
   git commit --allow-empty -m "init" -q
   "$FLOWCTL" init --json >/dev/null
-  EPIC_RAW="$("$FLOWCTL" epic create --title "No-ahead epic" --json)"
+  EPIC_RAW="$("$FLOWCTL" spec create --title "No-ahead epic" --json)"
   echo "$EPIC_RAW" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])' > .epic_id
 )
 NOAHEAD_EPIC_ID="$(cat "$NOAHEAD_REPO/.epic_id")"
 
 T9_OUT="$TEST_DIR/t9-noahead.json"
 set +e
-( cd "$NOAHEAD_REPO" && "$FLOWCTL" epic export-cognitive-aid "$NOAHEAD_EPIC_ID" --base main --json > "$T9_OUT" )
+( cd "$NOAHEAD_REPO" && "$FLOWCTL" spec export-cognitive-aid "$NOAHEAD_EPIC_ID" --base main --json > "$T9_OUT" )
 T9_RC=$?
 set -e
 assert_rc "T9" 0 "$T9_RC" "no-commits-ahead exits 0 (graceful)"

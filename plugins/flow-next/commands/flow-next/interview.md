@@ -1,7 +1,7 @@
 ---
 name: flow-next:interview
-description: Interview & refine an epic, task, or spec file in-depth
-argument-hint: "[epic ID, task ID, or file path] [--docs | --no-docs]"
+description: Interview & refine a spec, task, or spec file in-depth
+argument-hint: "[spec ID, task ID, or file path] [--docs | --no-docs]"
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-interview`

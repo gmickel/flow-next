@@ -660,8 +660,8 @@ def handle_stop(data: dict) -> None:
                 skill = "/flow-next:impl-review"
                 skill_desc = "implementation review"
             elif receipt_type == "completion_review":
-                skill = "/flow-next:epic-review"
-                skill_desc = "epic completion review"
+                skill = "/flow-next:spec-completion-review"
+                skill_desc = "spec completion review"
             else:
                 skill = "/flow-next:plan-review"
                 skill_desc = "plan review"

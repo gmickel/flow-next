@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-0.42.0-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.0.0-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -23,9 +23,9 @@
 
 👥 **Adopting in a team?** See the [Teams + Spec-Driven Development guide](docs/teams.md) — maps the agentic SDLC to Flow-Next commands, names the six handover objects, walks through Spec-as-PR, parallel work from one spec, R-ID frozen-at-handover, the symmetric interview pattern, and the Week 1 / Month 1 / Quarter 1 adoption ladder.
 
-> **What's new in 0.42.0:** PR-as-cognitive-aid. New `/flow-next:make-pr` skill closes the gap between "all tasks done" and "human reviews the PR" — renders a reviewable PR body from nine flow-next input streams (epic spec with R-IDs, per-task `done_summary` + evidence commits, decisions / bug / architecture-patterns memory, glossary changes, strategy alignment, deferred review findings, the diff itself). Body sections include TL;DR, R-ID coverage table, Critical changes (high-churn / cross-module / public-interface / security-sensitive / behavior-visible), Decisions, Memory references, Glossary/strategy deltas, Open items, and Where to look (reviewer-focus list). Mermaid codefences when diff crosses module boundaries (max 3 diagrams × 12 nodes; markdown codefence — GitHub / GitLab / Gitea render natively). Default `--draft` if open items > 0 or under Ralph; `--ready` overrides. Uses `gh pr create --body-file` (LLM-markdown safety — heredocs choke on backticks / `$` / dollar-paren). NOT Ralph-blocked — PR creation is the autonomous-loop terminus. NO cross-model review of the body — each harness is competent at "what looks important here?" given the rich structured input; `/flow-next:impl-review` already covers the *code itself*. New `flowctl epic export-cognitive-aid` plumbing aggregates the 9 streams into a single JSON payload. [Full changelog](../../CHANGELOG.md).
+> **What's new in 1.0.0:** `flowctl epic` is now `flowctl spec`. Two years of "epic spec" prose collapsed into one word — `spec` — across the entire flow-next surface. `.flow/epics/` becomes `.flow/specs/`; `epic-scout` becomes `spec-scout`; `/flow-next:epic-review` becomes `/flow-next:spec-completion-review`. **All 0.x scripts and CLAUDE.md examples keep working** through the alias deprecation layer (`flowctl epic*`, `--epic` flags, `EPIC_ID` heredoc fields, `EPICS_FILE` env var, `.flow/epics/` directory all auto-fallback). JSON read responses dual-emit `spec_id` *and* `epic_id` so existing pipelines keep working unchanged. Two migration paths: interactive via `/flow-next:setup` or deterministic via `flowctl migrate-rename --yes` (transactional backup at `.flow/.backup-pre-1.0/`, lockfile-guarded). Rollback via `flowctl migrate-rollback --yes`. Soft alias-removal target is 2.0.0 — telemetry-driven, not calendar-driven. Suppress the auto-detect banner with `FLOW_NO_AUTO_MIGRATE=1`. Suppress alias deprecation hints with `FLOW_NO_DEPRECATION=1`. [Full changelog](../../CHANGELOG.md).
 >
-> Recent highlights: [PR-as-cognitive-aid skill](#pr-creation) (0.42.0), [project strategy anchor](#project-strategy) (0.40.0), [project glossary + decision records + doc-aware interview](#project-glossary) (0.39.0), [capture skill](#capture) for conversation-to-spec synthesis (0.38.0), [interview grill-me patterns](#flow-nextinterview) (0.38.0), agent-native [memory audit](#memory-system) (0.37.0), [memory migrate skill](#memory-system) (0.37.0), [PR feedback resolver](#pr-feedback-resolution) (0.34.0), [prospect skill](#prospecting) for ranked candidate ideation (0.36.0).
+> Recent highlights: [epic→spec rename + alias layer](../../CHANGELOG.md) (1.0.0), [PR-as-cognitive-aid skill](#pr-creation) (0.42.0), [project strategy anchor](#project-strategy) (0.40.0), [project glossary + decision records + doc-aware interview](#project-glossary) (0.39.0), [capture skill](#capture) for conversation-to-spec synthesis (0.38.0), [interview grill-me patterns](#flow-nextinterview) (0.38.0), agent-native [memory audit](#memory-system) (0.37.0), [memory migrate skill](#memory-system) (0.37.0), [PR feedback resolver](#pr-feedback-resolution) (0.34.0), [prospect skill](#prospecting) for ranked candidate ideation (0.36.0).
 
 ---
 
@@ -59,7 +59,7 @@
 
 ## What Is This?
 
-Flow-Next is a plugin for **agent-native AI orchestration**. Eighteen slash commands cover the full lifecycle: strategic anchor (`strategy`) → idea generation (`prospect`) → spec creation (`capture`) → refinement (`interview`) → planning (`plan`) → execution (`work`) → review (`impl-review` + `epic-review`) → PR creation (`make-pr`) → PR feedback resolution (`resolve-pr`) → maintenance (`audit` + `memory-migrate`) → autonomous mode (`ralph-init`). Bundled task tracking, dependency graphs, re-anchoring, and cross-model reviews.
+Flow-Next is a plugin for **agent-native AI orchestration**. Nineteen slash commands cover the full lifecycle: strategic anchor (`strategy`) → idea generation (`prospect`) → spec creation (`capture`) → refinement (`interview`) → planning (`plan`) → execution (`work`) → review (`impl-review` + `spec-completion-review`) → PR creation (`make-pr`) → PR feedback resolution (`resolve-pr`) → maintenance (`audit` + `memory-migrate`) → autonomous mode (`ralph-init`). Bundled task tracking, dependency graphs, re-anchoring, and cross-model reviews. (The 19th command is `/flow-next:epic-review`, a deprecation alias kept through 1.x for the renamed `spec-completion-review`.)
 
 Everything lives in your repo. No external services. No global config. Uninstall: delete `.flow/` (and `scripts/ralph/` if enabled).
 
@@ -78,19 +78,19 @@ First-class on **Claude Code**, **OpenAI Codex** (CLI + Desktop), and **Factory 
 
 ---
 
-## Epic-first task model
+## Spec-first task model
 
 Flow-Next does not support standalone tasks.
 
-Every unit of work belongs to an epic fn-N (even if it's a single task).
+Every unit of work belongs to a spec fn-N (even if it's a single task).
 
-Tasks are always fn-N.M and inherit context from the epic spec.
+Tasks are always fn-N.M and inherit context from the parent spec.
 
-Flow-Next always creates an epic container (even for one-offs) so every task has a durable home for context, re-anchoring, and automation. You never have to think about it.
+Flow-Next always creates a spec container (even for one-offs) so every task has a durable home for context, re-anchoring, and automation. You never have to think about it.
 
 Rationale: keeps the system simple, improves re-anchoring, makes automation (Ralph) reliable.
 
-"One-off request" -> epic with one task.
+"One-off request" -> spec with one task.
 
 ---
 
@@ -98,19 +98,19 @@ Rationale: keeps the system simple, improves re-anchoring, makes automation (Ral
 
 ### You Control the Granularity
 
-Work task-by-task with full review cycles for maximum control. Or throw the whole epic at it and let Flow-Next handle everything. Same guarantees either way.
+Work task-by-task with full review cycles for maximum control. Or throw the whole spec at it and let Flow-Next handle everything. Same guarantees either way.
 
 ```bash
 # One task at a time (review after each)
 /flow-next:work fn-1.1
 
-# Entire epic (review after all tasks complete)
+# Entire spec (review after all tasks complete)
 /flow-next:work fn-1
 ```
 
 Both get: re-anchoring before each task, evidence recording, cross-model review (if a review backend is configured — RepoPrompt, Codex CLI, or GitHub Copilot CLI).
 
-**Review timing**: The review runs once at the end of the work package—after a single task if you specified `fn-N.M`, or after all tasks if you specified `fn-N`. For tighter review loops on large epics, work task-by-task.
+**Review timing**: The review runs once at the end of the work package—after a single task if you specified `fn-N.M`, or after all tasks if you specified `fn-N`. For tighter review loops on large specs, work task-by-task.
 
 ### No Context Length Worries
 
@@ -200,10 +200,29 @@ After setup:
 ```bash
 export PATH=".flow/bin:$PATH"
 flowctl --help
-flowctl epics                # List all epics
-flowctl tasks --epic fn-1    # List tasks for epic
-flowctl ready --epic fn-1    # What's ready to work on
+flowctl specs               # List all specs
+flowctl tasks --spec fn-1   # List tasks for spec
+flowctl ready --spec fn-1   # What's ready to work on
 ```
+
+### Deprecation timeline (1.0.0)
+
+flow-next 1.0.0 renamed the spec surface from `epic` to `spec`. The legacy verbs continue to work in 1.x as thin aliases:
+
+- `flowctl epic *` → `flowctl spec *` (every `create` / `set-plan` / `set-branch` / `add-dep` / `rm-dep` / `close` / `export-cognitive-aid` / etc. has a one-to-one canonical form).
+- `flowctl epics` → `flowctl specs`.
+- `--epic` flag → `--spec` flag on `tasks` / `ready` / `task create` / `validate` / `checkpoint`.
+- `/flow-next:epic-review` slash command → `/flow-next:spec-completion-review`. The old slash command stays as a thin redirect.
+- `.flow/epics/<id>.json` sidecar → `.flow/specs/<id>.json` (markdown was already at `.flow/specs/<id>.md`).
+
+Each legacy invocation emits a one-line stderr deprecation warning. Suppress via `FLOW_NO_DEPRECATION=1`. **Aliases have a soft-removal target of 2.0.0 — telemetry-driven, not calendar-driven.** R28 explicitly forbids hard-coded sunset dates; if real-world `flowctl epic` invocations stay common, the alias layer stays.
+
+A pre-1.0 `.flow/` directory keeps working in alias mode without migrating. To upgrade to the canonical 1.0+ layout (and unlock future flow-swarm compatibility), pick one path:
+
+- `/flow-next:setup` — interactive upgrade branch; prompts before writing.
+- `flowctl migrate-rename --yes` — deterministic; recommended for scripts and CI.
+
+`FLOW_NO_AUTO_MIGRATE=1` suppresses the migration banner entirely; alias mode keeps working.
 
 ### 3. Use
 
@@ -214,13 +233,13 @@ flowctl ready --epic fn-1    # What's ready to work on
 # (Optional) Prospect: rank candidate ideas grounded in repo + strategy
 /flow-next:prospect
 
-# Plan: research, create epic with tasks
+# Plan: research, create spec with tasks
 /flow-next:plan Add a contact form with validation
 
 # Work: execute tasks in dependency order
 /flow-next:work fn-1
 
-# Or work directly from a spec file (creates epic automatically)
+# Or work directly from a spec file (creates a spec automatically)
 /flow-next:work docs/my-feature-spec.md
 ```
 
@@ -240,7 +259,7 @@ Flow-next is flexible. There's no single "correct" order — the right sequence 
 Create spec → Interview or Plan → Work
 ```
 
-1. **Create spec** — ask Claude to "create a spec for X". This creates an epic with a structured spec (goal, architecture, API contracts, edge cases, acceptance criteria, boundaries, decision context) — no tasks yet
+1. **Create spec** — ask Claude to "create a spec for X". This creates a flow-next spec (goal, architecture, API contracts, edge cases, acceptance criteria, boundaries, decision context) — no tasks yet
 2. **Refine or plan**:
    - `/flow-next:interview fn-1` — deep Q&A to pressure-test the spec, surface gaps
    - `/flow-next:plan fn-1` — research best practices + break into tasks
@@ -264,7 +283,7 @@ Interview → Plan → Work
 Plan → Interview → Work
 ```
 
-1. **Plan first** — `/flow-next:plan specs/my-feature.md` researches best practices and current patterns, then breaks your spec into epic + tasks
+1. **Plan first** — `/flow-next:plan specs/my-feature.md` researches best practices and current patterns, then breaks your spec into spec + tasks (the source spec becomes the parent flow-next spec; tasks attach as `fn-N.M`)
 2. **Interview after** — `/flow-next:interview fn-1` runs deep questions against the plan to catch edge cases, missing requirements, or assumptions
 3. **Work** — `/flow-next:work fn-1` executes
 
@@ -286,7 +305,7 @@ Work directly
 /flow-next:work specs/small-fix.md
 ```
 
-For small, self-contained changes where you already have a complete spec. Creates an epic with **one task** and executes immediately. You get flow tracking, re-anchoring, and optional review — without full planning overhead.
+For small, self-contained changes where you already have a complete spec. Creates a spec with **one task** and executes immediately. You get flow tracking, re-anchoring, and optional review — without full planning overhead.
 
 Best for: bug fixes, small features, well-scoped changes that don't need task splitting.
 
@@ -305,11 +324,11 @@ Best for: bug fixes, small features, well-scoped changes that don't need task sp
 | Vague idea, rough notes | Interview → Plan → Work |
 | Detailed spec/PRD | Plan → Interview → Work |
 | Well-understood, needs task splitting | Plan → Work |
-| Small single-task, spec complete | Work directly (creates 1 epic + 1 task) |
+| Small single-task, spec complete | Work directly (creates 1 spec + 1 task) |
 
 Strategy is **upstream of every route** — set it once, every downstream skill (prospect / plan / interview / capture / sync) reads `STRATEGY.md` as advisory grounding. Skip it if you don't want a strategic anchor; everything still works the same way as before 0.40.0. See [Project Strategy](#project-strategy) for details.
 
-**Glossary and decisions build incrementally** as a side effect of any route — run `/flow-next:interview <epic-id> --docs` (or just rely on the autodetect once you have one term or one decision on file) and:
+**Glossary and decisions build incrementally** as a side effect of any route — run `/flow-next:interview <spec-id> --docs` (or just rely on the autodetect once you have one term or one decision on file) and:
 - Terminology conflicts surface as a `## Glossary Conflicts` spec section; resolving with `update-glossary` writes the canonical term inline via `flowctl glossary add`
 - Load-bearing choices (hard-to-reverse / surprising-without-context / real-trade-off) trigger a three-criteria gate that writes a decision record to `knowledge/decisions/` after a mandatory read-back
 
@@ -317,19 +336,19 @@ You don't need a dedicated "build my glossary" or "build my decisions" route —
 
 **Strategy vs Prospect vs Capture vs Spec vs Interview vs Plan:**
 - **Strategy** (`/flow-next:strategy`) writes/maintains a repo-root `STRATEGY.md` (target problem, approach, personas, key metrics, tracks). Run once early, revisit per-section as direction shifts. Downstream skills read it as advisory grounding (never auto-supersedes). Optional — skip if your repo has no strategic intent worth recording.
-- **Prospect** (`/flow-next:prospect [hint]`) generates many candidate ideas, critiques each one, and writes a ranked artifact under `.flow/prospects/`. Use when you don't have a target yet. Promote a survivor to an epic via `flowctl prospect promote` (direct path to plan), or hand the survivor to `/flow-next:capture` for a richer conversation-driven spec.
-- **Capture** (`/flow-next:capture`) synthesizes conversation context into an epic spec — the automated alternative to manual `flowctl epic create + epic set-plan`. Use after prospect-promotion or after a free-form design discussion. Source-tags every acceptance criterion (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`); mandatory read-back loop; never silently invents requirements. Output goes to `.flow/specs/<epic-id>.md`.
-- **Spec** (just ask "create a spec") creates an epic with structured requirements (goal, architecture, API contracts, edge cases, acceptance criteria, boundaries). Same destination as capture, but the manual heredoc path — useful for scripted callers.
-- **Interview** refines an epic via deep Q&A (40+ questions). Doc-aware mode reads glossary + decisions + strategy and surfaces conflicts. Writes back to the epic spec only — no tasks.
+- **Prospect** (`/flow-next:prospect [hint]`) generates many candidate ideas, critiques each one, and writes a ranked artifact under `.flow/prospects/`. Use when you don't have a target yet. Promote a survivor to a spec via `flowctl prospect promote` (direct path to plan), or hand the survivor to `/flow-next:capture` for a richer conversation-driven spec.
+- **Capture** (`/flow-next:capture`) synthesizes conversation context into a spec — the automated alternative to manual `flowctl spec create + spec set-plan`. Use after prospect-promotion or after a free-form design discussion. Source-tags every acceptance criterion (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`); mandatory read-back loop; never silently invents requirements. Output goes to `.flow/specs/<spec-id>.md`.
+- **Spec** (just ask "create a spec") creates a spec with structured requirements (goal, architecture, API contracts, edge cases, acceptance criteria, boundaries). Same destination as capture, but the manual heredoc path — useful for scripted callers.
+- **Interview** refines a spec via deep Q&A (40+ questions). Doc-aware mode reads glossary + decisions + strategy and surfaces conflicts. Writes back to the spec only — no tasks.
 - **Plan** researches best practices, analyzes existing patterns, and creates sized tasks with dependencies. Reads strategy if present and emits a `## Strategy Alignment` section listing which active tracks the plan serves.
 
-You can always run interview again after planning to catch anything missed. Interview writes back to the epic spec only — it won't modify existing tasks.
+You can always run interview again after planning to catch anything missed. Interview writes back to the spec only — it won't modify existing tasks.
 
 ---
 
 ## Prospecting
 
-`/flow-next:prospect [focus hint]` fills the "what should I build?" gap above `interview` and `plan`. Generates many candidate ideas grounded in the repo, critiques every one with explicit rejection reasons, and surfaces only the survivors bucketed by leverage. Output is a ranked artifact under `.flow/prospects/<slug>-<date>.md` that promotes directly into an epic via `flowctl prospect promote`.
+`/flow-next:prospect [focus hint]` fills the "what should I build?" gap above `interview` and `plan`. Generates many candidate ideas grounded in the repo, critiques every one with explicit rejection reasons, and surfaces only the survivors bucketed by leverage. Output is a ranked artifact under `.flow/prospects/<slug>-<date>.md` that promotes directly into a spec via `flowctl prospect promote`.
 
 ### When to use it
 
@@ -365,27 +384,27 @@ If you already have a target, skip prospect and go straight to `/flow-next:inter
 Six phases, single chat (no subagent dispatch):
 
 1. **Resume check** — artifacts <30 days old offered for extension; corrupt artifacts surface but never extend.
-2. **Ground** — recent files (git log, 30 days), open epics, memory entries matching the hint, recent CHANGELOG. Records `scanned: none (reason)` for missing inputs.
+2. **Ground** — recent files (git log, 30 days), open specs, memory entries matching the hint, recent CHANGELOG. Records `scanned: none (reason)` for missing inputs.
 3. **Generate (persona-seeded, divergent)** — 15-25 candidates by default, using ≥2 personas (`senior-maintainer` / `first-time-user` / `adversarial-reviewer`) to counter mode collapse.
-4. **Critique (separate prompt, second pass)** — every candidate gets `keep`/`drop` with a taxonomy reason (`duplicates-open-epic | out-of-scope | insufficient-signal | too-large | backward-incompat | other`). Floor: ≥40% rejection (or 60-70% under `raise the bar`); on floor violation the skill asks whether to regenerate, loosen, or ship anyway.
+4. **Critique (separate prompt, second pass)** — every candidate gets `keep`/`drop` with a taxonomy reason (`duplicates-open-spec | out-of-scope | insufficient-signal | too-large | backward-incompat | other`). Floor: ≥40% rejection (or 60-70% under `raise the bar`); on floor violation the skill asks whether to regenerate, loosen, or ship anyway.
 5. **Rank survivors (bucketed)** — `High leverage (1-3)` / `Worth considering (4-7)` / `If you have the time (8+)`. Prose-only forced-format leverage sentence per survivor; no numeric scores.
 6. **Write + handoff** — atomic write of the artifact, then a frozen-format prompt `1`|`2`|`...`|`skip`|`interview` to promote a survivor or refine via interview.
 
-### Promote → epic
+### Promote → spec
 
 ```bash
 # Read the artifact
 flowctl prospect read <artifact-id>
 
-# Promote idea #2 to a new epic
+# Promote idea #2 to a new spec
 flowctl prospect promote <artifact-id> --idea 2 --json
-# -> Promoted idea #2 ("<title>") to <epic-id>. Next: /flow-next:interview <epic-id>
+# -> Promoted idea #2 ("<title>") to <spec-id>. Next: /flow-next:interview <spec-id>
 
-# Refine the new epic
-/flow-next:interview <epic-id>
+# Refine the new spec
+/flow-next:interview <spec-id>
 ```
 
-The new epic ships with a pre-filled spec skeleton: original idea summary, leverage reasoning, suggested size, and a `## Source` section linking back to `.flow/prospects/<artifact-id>.md#idea-N`. Promote is idempotent — if you try to promote the same idea twice, it refuses with exit 2 and a message referencing the prior epic-id; pass `--force` to override.
+The new spec ships with a pre-filled spec skeleton: original idea summary, leverage reasoning, suggested size, and a `## Source` section linking back to `.flow/prospects/<artifact-id>.md#idea-N`. Promote is idempotent — if you try to promote the same idea twice, it refuses with exit 2 and a message referencing the prior spec-id; pass `--force` to override.
 
 ### flowctl prospect cheat sheet
 
@@ -401,9 +420,9 @@ flowctl prospect read <id> --section grounding
 flowctl prospect read <id> --section survivors
 flowctl prospect read <id> --section rejected
 
-# Promote a survivor to a new epic
+# Promote a survivor to a new spec
 flowctl prospect promote <id> --idea N
-flowctl prospect promote <id> --idea N --epic-title "Custom title"
+flowctl prospect promote <id> --idea N --spec-title "Custom title"
 flowctl prospect promote <id> --idea N --force --json
 
 # Archive (move to .flow/prospects/_archive/)
@@ -414,7 +433,7 @@ ID forms: full id (`<slug>-<date>`), slug-only (latest date wins), or filepath. 
 
 **Exit codes:**
 - `read` / `promote` on a corrupt artifact → exit **3** (stderr marker `[ARTIFACT CORRUPT: <reason>]`).
-- `promote` on a duplicate idea without `--force` → exit **2** with the prior epic-id.
+- `promote` on a duplicate idea without `--force` → exit **2** with the prior spec-id.
 - Ralph-block (`REVIEW_RECEIPT_PATH` or `FLOW_RALPH=1` set when running `/flow-next:prospect`) → exit **2**.
 
 ### Artifact schema
@@ -429,7 +448,7 @@ survivor_count: 6
 rejected_count: 16
 rejection_rate: 0.73
 artifact_id: dx-improvements-2026-04-24
-promoted_to: {2: [fn-37-dx-faster-resume]}    # numeric idea positions → epic ids
+promoted_to: {2: [fn-37-dx-faster-resume]}    # numeric idea positions → spec ids
 status: active                                  # active | corrupt | stale | archived
 ---
 ```
@@ -447,11 +466,11 @@ Optional flags `floor_violation`, `generation_under_volume` are omitted when uns
 
 ## Capture
 
-`/flow-next:capture` synthesizes the current conversation context into an epic spec. The automated alternative to the manual `flowctl epic create + epic set-plan` heredoc documented in `CLAUDE.md` — same destination (`.flow/specs/<epic-id>.md`), same template, but the host agent does the synthesis with full conversation context.
+`/flow-next:capture` synthesizes the current conversation context into a spec. The automated alternative to the manual `flowctl spec create + spec set-plan` heredoc documented in `CLAUDE.md` — same destination (`.flow/specs/<spec-id>.md`), same template, but the host agent does the synthesis with full conversation context.
 
 ### When to use it
 
-- A free-form design discussion has produced enough material for an epic spec — lock it down before the context decays.
+- A free-form design discussion has produced enough material for a spec — lock it down before the context decays.
 - A `/flow-next:prospect` survivor needs a richer conversation-driven spec than the direct `flowctl prospect promote` skeleton provides.
 - You want an audit trail of which acceptance criteria came from the user vs which the agent inferred — capture's source-tagging makes this visible.
 
@@ -466,7 +485,7 @@ If you already have a written spec or a clear feature description, skip capture 
 # Autofix — print the draft to stdout; --yes required to commit
 /flow-next:capture mode:autofix --yes
 
-# Overwrite an existing epic spec (refused without this flag)
+# Overwrite an existing spec (refused without this flag)
 /flow-next:capture --rewrite fn-42-add-rate-limiting
 
 # Override compaction-detection refusal (use only when you trust recent turns)
@@ -477,12 +496,12 @@ If you already have a written spec or a clear feature description, skip capture 
 
 Six phases, single chat (no subagent dispatch by default):
 
-1. **Pre-flight** — duplicate detection (scan `.flow/epics/` + `flowctl memory search` on extracted keywords); compaction detection (refuse without `--from-compacted-ok` when conversation has truncation markers); idempotency guard (refuse without `--rewrite <id>` when target epic already exists).
+1. **Pre-flight** — duplicate detection (scan `.flow/specs/` + `flowctl memory search` on extracted keywords); compaction detection (refuse without `--from-compacted-ok` when conversation has truncation markers); idempotency guard (refuse without `--rewrite <id>` when target spec already exists).
 2. **Conversation evidence** — extract a verbatim `## Conversation Evidence` block (raw user turns) into the spec FIRST, then draft other sections referencing it. Mitigates hallucinated requirements.
 3. **Source-tagged synthesis** — draft spec sections; tag every acceptance criterion + decision-context line with `[user]` (verbatim from conversation), `[paraphrase]` (user intent restated), or `[inferred]` (agent fill-in, most-scrutinized at read-back). At 8+ acceptance criteria, surface a "consider splitting?" suggestion at read-back — never auto-split.
-4. **Must-ask cases** — hard-error if any of these are unresolved without asking: (a) epic title genuinely ambiguous, (b) acceptance criterion can't be made testable without user judgment, (c) scope conflicts with existing epic.
+4. **Must-ask cases** — hard-error if any of these are unresolved without asking: (a) spec title genuinely ambiguous, (b) acceptance criterion can't be made testable without user judgment, (c) scope conflicts with existing spec.
 5. **Read-back loop (mandatory, even in autofix)** — show full draft + `[inferred]` count via `AskUserQuestion`. User confirms / edits / aborts. Autofix prints to stdout; `--yes` required to commit.
-6. **Write via flowctl** — `flowctl epic create --title "<extracted>" --json` → returns epic-id → `flowctl epic set-plan <epic-id> --file - --json <<EOF` (heredoc with rendered template). Optional `flowctl epic set-branch`.
+6. **Write via flowctl** — `flowctl spec create --title "<extracted>" --json` → returns spec-id → `flowctl spec set-plan <spec-id> --file - --json <<EOF` (heredoc with rendered template). Optional `flowctl spec set-branch`.
 
 ### Forbidden behaviors
 
@@ -493,12 +512,12 @@ Six phases, single chat (no subagent dispatch by default):
 
 ### Spec template
 
-Capture writes the **CLAUDE.md richer template**: `## Goal & Context` / `## Architecture & Data Models` / `## API Contracts` / `## Edge Cases & Constraints` / `## Acceptance Criteria` / `## Boundaries` / `## Decision Context`. Acceptance criteria use R-IDs (`- **R1:** ...`) per repo convention. Spec footer prints "Suggested next step: `/flow-next:plan <epic-id>` (break into tasks) or `/flow-next:interview <epic-id>` (refine via Q&A)."
+Capture writes the **CLAUDE.md richer template**: `## Goal & Context` / `## Architecture & Data Models` / `## API Contracts` / `## Edge Cases & Constraints` / `## Acceptance Criteria` / `## Boundaries` / `## Decision Context`. Acceptance criteria use R-IDs (`- **R1:** ...`) per repo convention. Spec footer prints "Suggested next step: `/flow-next:plan <spec-id>` (break into tasks) or `/flow-next:interview <spec-id>` (refine via Q&A)."
 
 **Exit codes:**
 - Ralph-block (`REVIEW_RECEIPT_PATH` or `FLOW_RALPH=1`) → exit **2**.
 - Compaction detected without `--from-compacted-ok` → exit **2** with stderr hint.
-- Existing epic without `--rewrite <id>` → triggers Phase 0 duplicate-detection branch (extend / supersede / proceed-anyway).
+- Existing spec without `--rewrite <id>` → triggers Phase 0 duplicate-detection branch (extend / supersede / proceed-anyway).
 
 ---
 
@@ -699,19 +718,19 @@ For full autonomous mode, prepare 5-10 plans before starting Ralph. See [Ralph M
 
 ### Why it exists
 
-A reviewer faced with a 10K-line diff has two equally bad options: skim and miss things, or read every file and burn out. The skill turns that diff into a structured map: this is what the epic asked for, here's the R-ID coverage, here are the critical changes (high-churn / cross-module / public-interface / security-sensitive / behavior-visible), here are the decisions made along the way, here's where to look first. The agent stitches the body from rich state flow-next already has; the human reviews with a map in hand.
+A reviewer faced with a 10K-line diff has two equally bad options: skim and miss things, or read every file and burn out. The skill turns that diff into a structured map: this is what the spec asked for, here's the R-ID coverage, here are the critical changes (high-churn / cross-module / public-interface / security-sensitive / behavior-visible), here are the decisions made along the way, here's where to look first. The agent stitches the body from rich state flow-next already has; the human reviews with a map in hand.
 
 ### The 9 input streams
 
-The skill consumes a single JSON payload from `flowctl epic export-cognitive-aid <epic-id> --base <ref> --json` aggregating:
+The skill consumes a single JSON payload from `flowctl spec export-cognitive-aid <spec-id> --base <ref> --json` aggregating:
 
-1. **Epic spec** — title, R-IDs (acceptance criteria), goal/context.
+1. **Spec** — title, R-IDs (acceptance criteria), goal/context.
 2. **Tasks** — title, status, `done_summary`, dependencies.
 3. **Evidence commits** — per-task `evidence.commits` arrays linking tasks to the SHAs that closed them.
 4. **R-ID coverage** — derived from task `satisfies: [R1, R3]` frontmatter; coverage table maps each R-ID to its satisfying task(s) + commit(s).
-5. **Decisions memory** — `knowledge/decisions/` entries written during the epic (load-bearing architectural choices, three-criteria gate).
-6. **Bug-track memory** — `bug/<category>/` entries auto-captured from review NEEDS_WORK→SHIP transitions during the epic.
-7. **Architecture-patterns memory** — `knowledge/architecture-patterns/` entries written during the epic.
+5. **Decisions memory** — `knowledge/decisions/` entries written during the spec lifetime (load-bearing architectural choices, three-criteria gate).
+6. **Bug-track memory** — `bug/<category>/` entries auto-captured from review NEEDS_WORK→SHIP transitions during the spec lifetime.
+7. **Architecture-patterns memory** — `knowledge/architecture-patterns/` entries written during the spec lifetime.
 8. **Glossary deltas** — terms added / renamed (`<!-- Updated by plan-sync: glossary rename ... -->` breadcrumbs).
 9. **Strategy alignment** — active tracks served (from `## Strategy Alignment` spec sections) + drift flags.
 
@@ -720,8 +739,8 @@ Plus the diff itself for module-boundary detection (drives mermaid emission) and
 ### Invocation
 
 ```bash
-/flow-next:make-pr                       # epic auto-detected from current branch
-/flow-next:make-pr fn-N-slug             # explicit epic id
+/flow-next:make-pr                       # spec auto-detected from current branch
+/flow-next:make-pr fn-N-slug             # explicit spec id
 /flow-next:make-pr --draft               # force draft (Ralph default)
 /flow-next:make-pr --ready               # force ready-for-review (override draft default)
 /flow-next:make-pr --no-mermaid          # skip mermaid codefences
@@ -732,8 +751,8 @@ Plus the diff itself for module-boundary detection (drives mermaid emission) and
 
 ### What it does
 
-1. **Pre-flight** — verify `gh` available + authenticated; resolve epic (positional arg or current-branch match); detect base ref; refuse if PR already exists for the branch (hard error — re-running rewrites would clobber human edits).
-2. **Gather** — call `flowctl epic export-cognitive-aid <epic-id> --base <ref> --json`; parse the payload as the single source of truth for body rendering.
+1. **Pre-flight** — verify `gh` available + authenticated; resolve spec (positional arg or current-branch match); detect base ref; refuse if PR already exists for the branch (hard error — re-running rewrites would clobber human edits).
+2. **Gather** — call `flowctl spec export-cognitive-aid <spec-id> --base <ref> --json`; parse the payload as the single source of truth for body rendering.
 3. **Build body** — render TL;DR, R-ID coverage table, Critical changes, Decisions, Memory, Glossary/strategy, Open items, Where to look. Every claim must trace to a structured field in the export payload — never fabricate file paths, SHAs, R-ID attributions, or "why" reasoning. Unknown attribution is honest ("uncovered" / "unclear") rather than invented.
 4. **Mermaid** — if diff crosses module boundaries (≥2 modules), emit up to 3 diagrams × 12 nodes. Markdown codefence (` ```mermaid `) only — GitHub / GitLab / Gitea render natively, no external pipeline. `mermaid-rules.md` ref file documents reserved words, escape patterns, shape selection, pre-emission validation. Disable via `--no-mermaid`.
 5. **Push + create** — preview via `AskUserQuestion` (`create / dry-run / edit-body / abort`); on `create`, push branch then `gh pr create --body-file <path>`. **`--body-file` not heredoc** — LLM-generated markdown frequently contains backticks, `$`, dollar-paren that break heredoc-passed strings.
@@ -746,7 +765,7 @@ Plus the diff itself for module-boundary detection (drives mermaid emission) and
 - **No cross-model review of the body** — each harness's own model identifies critical changes from the structured input; running a second review on the description would be double-counting (`/flow-next:impl-review` already covers the code itself).
 - **Honest attribution** — every body claim traces to a field in the export payload. The skill never invents file paths, SHAs, or R-ID coverage.
 
-See [CHANGELOG](../../CHANGELOG.md) for the full 0.42.0 entry.
+See [CHANGELOG](../../CHANGELOG.md) for the full 0.42.0 entry (and 1.0.0 rename release notes).
 
 ---
 
@@ -798,7 +817,7 @@ flowctl show fn-1.2 --json
 # Reset to todo (from done/blocked)
 flowctl task reset fn-1.2
 
-# Reset + dependents in same epic
+# Reset + dependents in same spec
 flowctl task reset fn-1.2 --cascade
 ```
 
@@ -923,7 +942,7 @@ External agents (Clawdbot, GitHub Actions, etc.) can pause/resume/stop Ralph run
 **CLI commands:**
 ```bash
 # Check status
-flowctl status                    # Epic/task counts + active runs
+flowctl status                    # Spec/task counts + active runs
 flowctl status --json             # JSON for automation
 
 # Control active run
@@ -953,7 +972,7 @@ Ralph checks sentinels at iteration boundaries (after Claude returns, before nex
 # Reset completed/blocked task to todo
 flowctl task reset fn-1-add-oauth.3
 
-# Reset + cascade to dependent tasks (same epic)
+# Reset + cascade to dependent tasks (same spec)
 flowctl task reset fn-1-add-oauth.2 --cascade
 ```
 
@@ -967,14 +986,14 @@ Default flow when you drive manually:
 flowchart TD
   A0{Have a target?} -- no --> A1[/flow-next:prospect hint/<br/>generate ranked candidates]
   A1 --> A2[.flow/prospects/<br/>ranked artifact]
-  A2 --> A3[flowctl prospect promote --idea N<br/>creates epic from survivor]
+  A2 --> A3[flowctl prospect promote --idea N<br/>creates spec from survivor]
   A3 --> AC{Need richer<br/>conversation-driven spec?}
   AC -- yes --> AK
   AC -- no --> A
   A0 -- yes --> AS{Already discussing<br/>in conversation?}
   AS -- yes --> AK[/flow-next:capture/<br/>synthesize conversation → spec<br/>source-tagged + read-back]
   AS -- no --> A
-  AK --> AKS[.flow/specs/&lt;epic-id&gt;.md]
+  AK --> AKS[.flow/specs/&lt;spec-id&gt;.md]
   AKS --> A
   A[Idea or short spec<br/>prompt or doc] --> B{Need deeper spec?}
   B -- yes --> C[Optional: /flow-next:interview fn-N or spec.md<br/>40+ deep questions to refine spec]
@@ -983,7 +1002,7 @@ flowchart TD
   D --> E[/flow-next:plan idea or fn-N/]
   E --> F[Parallel subagents: repo patterns + online docs + best practices]
   F --> G[flow-gap-analyst: edge cases + missing reqs]
-  G --> H[Writes .flow/ epic + tasks + deps]
+  G --> H[Writes .flow/ spec + tasks + deps]
   H --> I{Plan review?}
   I -- yes --> J[/flow-next:plan-review fn-N/]
   J --> K{Plan passes review?}
@@ -1000,20 +1019,20 @@ flowchart TD
   S --> T{Next ready task?}
   R -- no --> T
   T -- yes --> N
-  T -- no --> V{Epic review?}
-  V -- yes --> W[/flow-next:epic-review fn-N/]
-  W --> X{Epic passes review?}
+  T -- no --> V{Spec-completion review?}
+  V -- yes --> W[/flow-next:spec-completion-review fn-N/]
+  W --> X{Spec passes review?}
   X -- no --> Y[Fix gaps inline]
   Y --> W
-  X -- yes --> U[Close epic]
+  X -- yes --> U[Close spec]
   V -- no --> U
   classDef optional stroke-dasharray: 6 4,stroke:#999;
   class C,J,S,W,A1,A2,A3,AC,AS,AK,AKS optional;
 ```
 
 Notes:
-- `/flow-next:prospect` accepts an optional focus hint (concept / path / constraint / volume) and writes a ranked artifact under `.flow/prospects/` — see [Prospecting](#prospecting). Two downstream paths from a survivor: **direct** (`flowctl prospect promote --idea N` → ready epic, jump to plan) or **through capture** (hand the survivor to `/flow-next:capture` for a richer conversation-driven spec).
-- `/flow-next:capture` synthesizes the current conversation (free-form discussion or post-prospect refinement) into an epic spec at `.flow/specs/<epic-id>.md` via existing `flowctl epic create + epic set-plan`. Mandatory read-back; source-tagged criteria. Ralph-blocked.
+- `/flow-next:prospect` accepts an optional focus hint (concept / path / constraint / volume) and writes a ranked artifact under `.flow/prospects/` — see [Prospecting](#prospecting). Two downstream paths from a survivor: **direct** (`flowctl prospect promote --idea N` → ready spec, jump to plan) or **through capture** (hand the survivor to `/flow-next:capture` for a richer conversation-driven spec).
+- `/flow-next:capture` synthesizes the current conversation (free-form discussion or post-prospect refinement) into a spec at `.flow/specs/<spec-id>.md` via existing `flowctl spec create + spec set-plan`. Mandatory read-back; source-tagged criteria. Ralph-blocked.
 - `/flow-next:interview` accepts Flow IDs or spec file paths and writes refinements back
 - `/flow-next:plan` accepts new ideas or an existing Flow ID to update the plan
 
@@ -1028,14 +1047,14 @@ Built for reliability. These are the guardrails.
 
 **Re-anchoring prevents drift**
 
-Before EVERY task, Flow-Next re-reads the epic spec, task spec, and git state from `.flow/`. This forces Claude back to the source of truth - no hallucinated scope creep, no forgotten requirements. In Ralph mode, this happens automatically each iteration.
+Before EVERY task, Flow-Next re-reads the parent spec, task spec, and git state from `.flow/`. This forces Claude back to the source of truth - no hallucinated scope creep, no forgotten requirements. In Ralph mode, this happens automatically each iteration.
 
 Unlike agents that carry accumulated context (where early mistakes compound), re-anchoring gives each task a fresh, accurate starting point.
 
 ### Re-anchoring
 
 Before EVERY task, Flow-Next re-reads:
-- Epic spec and task spec from `.flow/`
+- Parent spec and task spec from `.flow/`
 - Current git status and recent commits
 - Validation state
 
@@ -1128,7 +1147,7 @@ Exits 1 on errors. Drop into pre-commit hooks or GitHub Actions. See `docs/ci-wo
 
 ### One File Per Task
 
-Each epic and task gets its own JSON + markdown file pair. Merge conflicts are rare and easy to resolve.
+Each spec and task gets its own JSON + markdown file pair. Merge conflicts are rare and easy to resolve.
 
 ### Investigation Targets
 
@@ -1136,7 +1155,7 @@ Plan writes explicit investigation targets into each task spec — files the wor
 
 ### Requirement Traceability
 
-Epic specs include a requirement coverage table mapping each requirement to its implementing task(s). Plan-sync maintains the table as implementation drifts. Epic-review uses it for bidirectional coverage checking — spec→code (missed requirements) and code→spec (scope creep detection).
+Specs include a requirement coverage table mapping each requirement to its implementing task(s). Plan-sync maintains the table as implementation drifts. Spec-completion review uses it for bidirectional coverage checking — spec→code (missed requirements) and code→spec (scope creep detection).
 
 ### Typed Escalation
 
@@ -1170,7 +1189,7 @@ Two models catch what one misses. Reviews use a second model (via RepoPrompt, Co
 **Three review types:**
 - **Plan reviews** — Verify architecture before coding starts
 - **Impl reviews** — Verify each task implementation
-- **Completion reviews** — Verify epic delivers all spec requirements before closing
+- **Completion reviews** — Verify the spec's combined implementation delivers all R-IDs before closing
 
 **Review criteria (Carmack-level, identical for all backends):**
 
@@ -1332,16 +1351,16 @@ flowctl config set review.backend copilot:claude-opus-4.5   # backend + model, d
 # Per-session (environment variable) — same grammar as config key
 export FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5:xhigh
 
-# Per-task / per-epic pinning (stored in .flow/tasks/<id>.json / .flow/epics/<id>.json)
+# Per-task / per-spec pinning (stored in .flow/tasks/<id>.json / .flow/specs/<id>.json)
 flowctl task set-backend fn-5.2 --review "codex:gpt-5.2"
-flowctl epic set-backend fn-5   --review "copilot:claude-sonnet-4.5:high"
+flowctl spec set-backend fn-5   --review "copilot:claude-sonnet-4.5:high"
 ```
 
 **Priority cascade** (first match wins):
 
 1. `--spec backend:model:effort` CLI flag on review commands
 2. Per-task `review` field (`.flow/tasks/<id>.json`)
-3. Per-epic `default_review` field (`.flow/epics/<id>.json`)
+3. Per-spec `default_review` field (`.flow/specs/<id>.json`)
 4. `FLOW_REVIEW_BACKEND` env var (full spec accepted)
 5. `.flow/config.json` `review.backend`
 6. Backend-specific env vars fill missing fields only: `FLOW_CODEX_MODEL`, `FLOW_CODEX_EFFORT`, `FLOW_COPILOT_MODEL`, `FLOW_COPILOT_EFFORT`
@@ -1458,7 +1477,7 @@ See [CHANGELOG — flow-next 0.35.0](../../CHANGELOG.md#flow-next-0350---2026-04
 
 Five prompt-level + minimal-flowctl improvements that raise review signal and cut review cost. All three backends (rp, codex, copilot) benefit equally. Zero breaking changes — receipt additions are additive.
 
-**1. Requirement-ID traceability (R-IDs).** Epic specs emit numbered acceptance criteria:
+**1. Requirement-ID traceability (R-IDs).** Specs emit numbered acceptance criteria:
 
 ```markdown
 ## Acceptance criteria
@@ -1479,7 +1498,7 @@ Rules:
 - Plain markdown prose, not YAML — keeps specs human-editable.
 - **Renumber-forbidden** after the first review cycle. Deletions leave gaps (`R1, R3, R5` stays that way); new criteria take the next unused number.
 - Plan skill writes R-IDs on creation; plan-sync preserves them through drift updates.
-- Impl-review and epic-review emit a per-R-ID coverage table (met / partial / not-addressed / deferred).
+- Impl-review and spec-completion review emit a per-R-ID coverage table (met / partial / not-addressed / deferred).
 - Any unaddressed R-ID flips verdict to `NEEDS_WORK`; receipt carries an `unaddressed: ["R2", "R5"]` array so the fix loop has targeted work.
 
 **2. Confidence anchors (0 / 25 / 50 / 75 / 100).** Reviewers score every finding on exactly five discrete values:
@@ -1540,7 +1559,7 @@ See [CHANGELOG — flow-next 0.32.1](../../CHANGELOG.md#flow-next-0321---2026-04
 
 Tasks declare their blockers. `flowctl ready` shows what can start. Nothing executes until dependencies resolve.
 
-**Epic-level dependencies**: During planning, `epic-scout` runs in parallel with other research scouts to find relationships with existing open epics. If the new plan depends on APIs/patterns from another epic, dependencies are auto-set via `flowctl epic add-dep`. Findings reported at end of planning—no prompts needed.
+**Spec-level dependencies**: During planning, `spec-scout` runs in parallel with other research scouts to find relationships with existing open specs. If the new plan depends on APIs/patterns from another spec, dependencies are auto-set via `flowctl spec add-dep`. Findings reported at end of planning—no prompts needed.
 
 ### Auto-Block Stuck Tasks
 
@@ -1567,17 +1586,17 @@ When enabled, after each task completes, a plan-sync agent:
 
 Skip conditions: disabled (default), task failed, no downstream tasks.
 
-**Cross-epic sync (opt-in, default false):**
+**Cross-spec sync (opt-in, default false):**
 ```bash
 flowctl config set planSync.crossEpic true
 ```
 
-When enabled, plan-sync also checks other open epics for stale references. Useful when multiple epics share APIs/patterns, but increases sync time. Disabled by default to avoid long Ralph loops.
+When enabled, plan-sync also checks other open specs for stale references. Useful when multiple specs share APIs/patterns, but increases sync time. Disabled by default to avoid long Ralph loops. *(Config key name `crossEpic` remains in 1.x for back-compat; the surface concept is "cross-spec.")*
 
 **Manual trigger:**
 ```bash
 /flow-next:sync fn-1.2              # Sync from specific task
-/flow-next:sync fn-1                # Scan whole epic for drift
+/flow-next:sync fn-1                # Scan whole spec for drift
 /flow-next:sync fn-1.2 --dry-run    # Preview changes without writing
 ```
 
@@ -1879,20 +1898,21 @@ NO `flowctl strategy add/edit/remove`. Strategy editing happens via `/flow-next:
 
 ## Commands
 
-Eighteen commands, complete workflow:
+Nineteen commands, complete workflow:
 
 | Command | What It Does |
 |---------|--------------|
 | `/flow-next:strategy [section]` | Generate or update repo-root `STRATEGY.md` (problem / approach / personas / metrics / tracks); read-only consumed by prospect/plan/interview/capture/sync ([details](#project-strategy)) |
 | `/flow-next:prospect [hint]` | Generate ranked candidate ideas grounded in the repo, upstream of `capture`/`interview`/`plan` ([details](#prospecting)) |
-| `/flow-next:capture [flags]` | Synthesize conversation context into an epic spec; source-tagged + mandatory read-back ([details](#capture)) |
-| `/flow-next:plan <idea>` | Research the codebase, create epic with dependency-ordered tasks |
-| `/flow-next:work <id\|file>` | Execute epic, task, or spec file, re-anchoring before each |
+| `/flow-next:capture [flags]` | Synthesize conversation context into a spec; source-tagged + mandatory read-back ([details](#capture)) |
+| `/flow-next:plan <idea>` | Research the codebase, create spec with dependency-ordered tasks |
+| `/flow-next:work <id\|file>` | Execute spec, task, or spec file, re-anchoring before each |
 | `/flow-next:interview <id>` | Deep interview to flesh out a spec before planning; doc-aware mode (autodetect + `--docs` / `--no-docs`) looks up canonical terms, surfaces conflicts to a `## Glossary Conflicts` spec section, prompts for decision records on load-bearing choices ([details](#flow-nextinterview)) |
 | `/flow-next:plan-review <id>` | Carmack-level plan review (RepoPrompt, Codex, or Copilot) |
 | `/flow-next:impl-review` | Carmack-level impl review of current branch |
-| `/flow-next:epic-review <id>` | Epic-completion review: verify implementation matches spec |
-| `/flow-next:make-pr [<epic-id>] [flags]` | Render a cognitive-aid PR body from flow-next state (R-ID coverage, critical changes, decisions, deferred findings, mermaid) and open the PR via `gh pr create` ([details](#pr-creation)) |
+| `/flow-next:spec-completion-review <id>` | Spec-completion review: verify the spec's combined implementation matches all R-IDs (renamed from `/flow-next:epic-review` in 1.0.0; soft-removal target 2.0.0, telemetry-driven) |
+| `/flow-next:epic-review <id>` | **Deprecation alias** — thin redirect to `/flow-next:spec-completion-review`. Kept through 1.x for backward compatibility; suppresses deprecation hint with `FLOW_NO_DEPRECATION=1` |
+| `/flow-next:make-pr [<spec-id>] [flags]` | Render a cognitive-aid PR body from flow-next state (R-ID coverage, critical changes, decisions, deferred findings, mermaid) and open the PR via `gh pr create` ([details](#pr-creation)) |
 | `/flow-next:resolve-pr [arg]` | Resolve GitHub PR review threads (fetch → triage → fix → reply → resolve) ([details](#pr-feedback-resolution)) |
 | `/flow-next:audit [mode:autofix] [hint]` | Review `.flow/memory/` against current code, decide Keep/Update/Consolidate/Replace/Delete per entry ([details](#memory-system)) |
 | `/flow-next:memory-migrate [mode:autofix] [hint]` | Convert pre-fn-30 legacy memory files into the categorized schema; agent classifies each entry ([details](#memory-system)) |
@@ -1902,7 +1922,7 @@ Eighteen commands, complete workflow:
 | `/flow-next:setup` | Optional: install flowctl locally + add docs (for power users) |
 | `/flow-next:uninstall` | Remove flow-next from project (keeps tasks if desired) |
 
-Work accepts an epic (`fn-N`), task (`fn-N.M`), or markdown spec file (`.md`). Spec files auto-create an epic with one task.
+Work accepts a spec (`fn-N`), task (`fn-N.M`), or markdown spec file (`.md`). Spec files auto-create a spec with one task.
 
 ### Autonomous Mode (Flags)
 
@@ -1932,14 +1952,14 @@ Natural language also works:
 | Command | Available Flags |
 |---------|-----------------|
 | `/flow-next:prospect` | `[focus hint]` (positional) — concept / path / constraint / volume |
-| `/flow-next:capture` | `mode:autofix` (positional), `--rewrite <epic-id>`, `--from-compacted-ok`, `--yes` |
+| `/flow-next:capture` | `mode:autofix` (positional), `--rewrite <spec-id>`, `--from-compacted-ok`, `--yes` |
 | `/flow-next:strategy` | `[section to revisit]` (positional) — empty = full interview; section name = re-run that section only |
 | `/flow-next:interview` | `--docs` / `--no-docs` (override doc-aware autodetect, v0.39.0+); `--strategy` / `--no-strategy` (independent override for strategy signal, v0.40.0+; 5-row flag matrix) |
 | `/flow-next:plan` | `--research=rp\|grep`, `--review=rp\|codex\|copilot\|export\|none`, `--no-review` |
 | `/flow-next:work` | `--branch=current\|new\|worktree`, `--review=rp\|codex\|copilot\|export\|none`, `--no-review` |
 | `/flow-next:plan-review` | `--review=rp\|codex\|copilot\|export` |
 | `/flow-next:impl-review` | `--review=rp\|codex\|copilot\|export` |
-| `/flow-next:make-pr` | `[<epic-id>]` (positional, auto-detects from current branch), `--draft`, `--ready`, `--no-mermaid`, `--base <ref>`, `--memory`, `--dry-run` |
+| `/flow-next:make-pr` | `[<spec-id>]` (positional, auto-detects from current branch), `--draft`, `--ready`, `--no-mermaid`, `--base <ref>`, `--memory`, `--dry-run` |
 | `/flow-next:resolve-pr` | `--dry-run`, `--no-cluster` |
 | `/flow-next:prime` | `--report-only`, `--fix-all` |
 | `/flow-next:sync` | `--dry-run` |
@@ -1963,17 +1983,17 @@ Output: `.flow/prospects/<slug>-<date>.md` (atomic write, same-day collisions su
 #### `/flow-next:capture`
 
 ```
-/flow-next:capture [mode:autofix] [--rewrite <epic-id>] [--from-compacted-ok] [--yes]
+/flow-next:capture [mode:autofix] [--rewrite <spec-id>] [--from-compacted-ok] [--yes]
 ```
 
 | Input | Description |
 |-------|-------------|
 | `mode:autofix` | Optional positional. Skip per-question prompts; print full draft to stdout. Requires `--yes` to actually commit. |
-| `--rewrite <epic-id>` | Overwrite an existing epic spec. Without this flag, a duplicate-epic detection refuses or asks: extend / supersede / proceed-anyway. |
+| `--rewrite <spec-id>` | Overwrite an existing spec. Without this flag, a duplicate-spec detection refuses or asks: extend / supersede / proceed-anyway. |
 | `--from-compacted-ok` | Override the compaction-detection refusal when the conversation has truncation markers. Use only when you trust the recent turns. |
 | `--yes` | Required in autofix mode to actually commit (mirrors `flowctl memory migrate --yes`). |
 
-Output: `.flow/specs/<epic-id>.md` via `flowctl epic create + epic set-plan` (no new flowctl subcommands). Acceptance criteria source-tagged (`[user]` / `[paraphrase]` / `[inferred]`); mandatory read-back surfaces `[inferred]` count via `AskUserQuestion`. Hard-errors with exit 2 under Ralph (`REVIEW_RECEIPT_PATH` or `FLOW_RALPH=1`) — capture requires conversation context + user confirmation, both unavailable in autonomous loops.
+Output: `.flow/specs/<spec-id>.md` via `flowctl spec create + spec set-plan` (no new flowctl subcommands). Acceptance criteria source-tagged (`[user]` / `[paraphrase]` / `[inferred]`); mandatory read-back surfaces `[inferred]` count via `AskUserQuestion`. Hard-errors with exit 2 under Ralph (`REVIEW_RECEIPT_PATH` or `FLOW_RALPH=1`) — capture requires conversation context + user confirmation, both unavailable in autonomous loops.
 
 #### `/flow-next:plan`
 
@@ -1984,7 +2004,7 @@ Output: `.flow/specs/<epic-id>.md` via `flowctl epic create + epic set-plan` (no
 | Input | Description |
 |-------|-------------|
 | `<idea>` | Free-form feature description ("Add user authentication with OAuth") |
-| `fn-N` | Existing epic ID to update the plan |
+| `fn-N` | Existing spec ID to update the plan |
 | `--research=rp` | Use RepoPrompt context-scout for deeper codebase discovery |
 | `--research=grep` | Use grep-based repo-scout (default, faster) |
 | `--review=rp\|codex\|copilot\|export\|none` | Review backend after planning |
@@ -1998,9 +2018,9 @@ Output: `.flow/specs/<epic-id>.md` via `flowctl epic create + epic set-plan` (no
 
 | Input | Description |
 |-------|-------------|
-| `fn-N` | Execute entire epic (all tasks in dependency order) |
+| `fn-N` | Execute entire spec (all tasks in dependency order) |
 | `fn-N.M` | Execute single task |
-| `path/to/spec.md` | Create epic from spec file, execute immediately |
+| `path/to/spec.md` | Create a spec from spec file, execute immediately |
 | `--branch=current` | Work on current branch |
 | `--branch=new` | Create new branch `fn-N-slug` (default) |
 | `--branch=worktree` | Create git worktree for isolated work |
@@ -2015,10 +2035,10 @@ Output: `.flow/specs/<epic-id>.md` via `flowctl epic create + epic set-plan` (no
 
 | Input | Description |
 |-------|-------------|
-| `fn-N` | Interview about epic to refine requirements |
+| `fn-N` | Interview about spec to refine requirements |
 | `fn-N.M` | Interview about specific task |
 | `path/to/spec.md` | Interview about spec file |
-| `"rough idea"` | Interview about a new idea (creates epic) |
+| `"rough idea"` | Interview about a new idea (creates a spec) |
 
 Deep questioning (40+ questions) to surface requirements, edge cases, and decisions.
 
@@ -2066,7 +2086,7 @@ Five behaviors when active:
 - **(d) Code/spec contradiction surfaced** — when an interview answer conflicts with an active decision record, the contradiction is surfaced in the refined spec (under `## Glossary Conflicts` or a similarly-named section) rather than silently overwriting either side. The user picks: revise the spec, supersede the decision, or accept divergence with rationale.
 - **(e) Strategy-conflict surfacing (0.40.0+, gated on `STRATEGY_AWARE=1`)** — Phase-zero strategy scan reads active tracks via `flowctl strategy read --json` before drafting the first question batch. When the user's request conflicts with an active track, surface the conflict in a new `## Strategy Conflicts` section parallel to `## Glossary Conflicts`. Throttle: ≤1 strategy-conflict question per interview turn (parallel to existing glossary-question throttle).
 
-Both `NEW-IDEA` and `EXISTING-EPIC` interview templates emit the `## Glossary Conflicts` and `## Strategy Conflicts` sections when behaviors (a)/(d)/(e) fire.
+Both `NEW-IDEA` and `EXISTING-SPEC` interview templates emit the `## Glossary Conflicts` and `## Strategy Conflicts` sections when behaviors (a)/(d)/(e) fire.
 
 #### `/flow-next:plan-review`
 
@@ -2076,7 +2096,7 @@ Both `NEW-IDEA` and `EXISTING-EPIC` interview templates emit the `## Glossary Co
 
 | Input | Description |
 |-------|-------------|
-| `fn-N` | Epic ID to review |
+| `fn-N` | Spec ID to review |
 | `--review=rp` | Use RepoPrompt (macOS, visual builder) |
 | `--review=codex` | Use OpenAI Codex CLI (cross-platform) |
 | `--review=copilot` | Use GitHub Copilot CLI (cross-platform) |
@@ -2101,31 +2121,31 @@ Carmack-level criteria: Completeness, Feasibility, Clarity, Architecture, Risks,
 
 Reviews current branch changes. Carmack-level criteria: Correctness, Simplicity, DRY, Architecture, Edge Cases, Tests, Security.
 
-#### `/flow-next:epic-review`
+#### `/flow-next:spec-completion-review`
 
 ```
-/flow-next:epic-review <fn-N> [--review=rp|codex|copilot|none]
+/flow-next:spec-completion-review <fn-N> [--review=rp|codex|copilot|none]
 ```
 
 | Input | Description |
 |-------|-------------|
-| `fn-N` | Epic ID to review |
+| `fn-N` | Spec ID to review |
 | `--review=rp` | Use RepoPrompt (macOS, visual builder) |
 | `--review=codex` | Use OpenAI Codex CLI (cross-platform) |
 | `--review=copilot` | Use GitHub Copilot CLI (cross-platform) |
 | `--review=none` | Skip review |
 
-Reviews epic implementation against spec. Runs after all tasks complete. Catches requirement gaps, missing functionality, incomplete doc updates.
+Reviews the spec's combined implementation against its R-IDs. Runs after all tasks complete. Catches requirement gaps, missing functionality, incomplete doc updates. The legacy `/flow-next:epic-review` slash command stays as a thin redirect through 1.x; soft-removal target 2.0.0, telemetry-driven.
 
 #### `/flow-next:make-pr`
 
 ```
-/flow-next:make-pr [<epic-id>] [--draft|--ready] [--no-mermaid] [--base <ref>] [--memory] [--dry-run]
+/flow-next:make-pr [<spec-id>] [--draft|--ready] [--no-mermaid] [--base <ref>] [--memory] [--dry-run]
 ```
 
 | Input | Description |
 |-------|-------------|
-| `[<epic-id>]` | Optional epic id (e.g., `fn-1-add-oauth`). When omitted, the skill auto-detects from the current branch name. |
+| `[<spec-id>]` | Optional spec id (e.g., `fn-1-add-oauth`). When omitted, the skill auto-detects from the current branch name. |
 | `--draft` | Force draft PR (default when open items > 0 or under Ralph) |
 | `--ready` | Force ready-for-review (overrides the draft default) |
 | `--no-mermaid` | Skip mermaid codefences entirely (default: emit when diff crosses ≥2 modules, capped at 3 diagrams × 12 nodes) |
@@ -2133,7 +2153,7 @@ Reviews epic implementation against spec. Runs after all tasks complete. Catches
 | `--memory` | Include the full memory-references section (decisions / bug-track / architecture-patterns) — default is a summary count with links |
 | `--dry-run` | Render body, print to stdout; no push, no `gh pr create` |
 
-Renders a *cognitive-aid* PR body from nine flow-next input streams (epic spec with R-IDs, per-task `done_summary` + evidence commits, decisions / bug / architecture-patterns memory, glossary changes, strategy alignment, deferred review findings, the diff itself). Body sections: TL;DR, R-ID coverage table, Critical changes, Decisions, Memory, Glossary/strategy, Open items, Where to look. NOT Ralph-blocked — autonomous-loop terminus, defaults to `--draft` for human review. NO cross-model review of the body — `/flow-next:impl-review` already covers the *code itself*; doing it again on the description is double-counting. Uses `gh pr create --body-file` (not heredoc — LLM-markdown safety). Hard-errors when a PR already exists for the current branch. See [PR Creation](#pr-creation).
+Renders a *cognitive-aid* PR body from nine flow-next input streams (spec with R-IDs, per-task `done_summary` + evidence commits, decisions / bug / architecture-patterns memory, glossary changes, strategy alignment, deferred review findings, the diff itself). Body sections: TL;DR, R-ID coverage table, Critical changes, Decisions, Memory, Glossary/strategy, Open items, Where to look. NOT Ralph-blocked — autonomous-loop terminus, defaults to `--draft` for human review. NO cross-model review of the body — `/flow-next:impl-review` already covers the *code itself*; doing it again on the description is double-counting. Uses `gh pr create --body-file` (not heredoc — LLM-markdown safety). Hard-errors when a PR already exists for the current branch. See [PR Creation](#pr-creation).
 
 #### `/flow-next:resolve-pr`
 
@@ -2174,7 +2194,7 @@ See [Agent Readiness Assessment](#agent-readiness-assessment) for details.
 
 | Input | Description |
 |-------|-------------|
-| `fn-N` | Sync entire epic's downstream tasks |
+| `fn-N` | Sync entire spec's downstream tasks |
 | `fn-N.M` | Sync from specific task |
 | `--dry-run` | Preview changes without writing |
 
@@ -2229,7 +2249,7 @@ Run once early or whenever direction shifts. Sets a repo-wide strategic anchor t
 2. **Re-run anytime** with section name (e.g., `/flow-next:strategy metrics`) to revisit one block — preserves the rest byte-identical, bumps `last_updated`
 3. **Downstream consumers** auto-detect and ground against `STRATEGY.md`:
    - Prospect — Phase 0 grounding scan emits approach + tracks verbatim into the candidate-generation prompt; adds `out-of-scope-vs-strategy` to the rejection taxonomy
-   - Plan — research scan reads strategy; epic spec gets a `## Strategy Alignment` section listing tracks served + read-only `## Strategy drift flagged for review` block on conflict
+   - Plan — research scan reads strategy; the spec gets a `## Strategy Alignment` section listing tracks served + read-only `## Strategy drift flagged for review` block on conflict
    - Interview — doc-aware mode adds a `## Strategy Conflicts` section parallel to `## Glossary Conflicts`; throttled to ≤1 strategy question per turn
    - Capture — Phase 0 reads strategy; tags strategy-derived acceptance criteria as `[strategy:<track-name>]`; refuses to write contradicting specs without `--override-strategy` (which prompts for a decision-record write)
    - Plan-sync — surfaces strategy drift read-only; renames update inline with breadcrumb; never auto-supersedes
@@ -2240,29 +2260,29 @@ Skip this phase entirely if your repo has no strategic intent worth recording. A
 
 ### Prospecting Phase (optional, when no target yet)
 
-Run when you don't know what to build next. Generates ranked candidates grounded in repo + strategy + memory + open epics.
+Run when you don't know what to build next. Generates ranked candidates grounded in repo + strategy + memory + open specs.
 
 1. **Run** `/flow-next:prospect [focus hint]` — generates 15-25 candidates, critiques each, writes ranked artifact to `.flow/prospects/<slug>-<date>.md`
-2. **Promote** a survivor: `flowctl prospect promote <id> --idea N` allocates an epic with prospect-context spec inlined
+2. **Promote** a survivor: `flowctl prospect promote <id> --idea N` allocates a spec with prospect-context inlined
 3. **Continue** with Capture / Interview / Plan as appropriate (see [When to Use What](#when-to-use-what))
 
 ### Planning Phase
 
-1. **Research (parallel subagents)**: `repo-scout` (or `context-scout` if rp-cli) + `practice-scout` + `docs-scout` + `github-scout` + `epic-scout` + `docs-gap-scout` (v0.39.0+: also reads `GLOSSARY.md` on the ancestor chain + `knowledge/decisions/` to surface canonical terminology + prior load-bearing choices in the planning context; v0.40.0+: also reads `STRATEGY.md` when present and writes `## Strategy Alignment` listing tracks served)
+1. **Research (parallel subagents)**: `repo-scout` (or `context-scout` if rp-cli) + `practice-scout` + `docs-scout` + `github-scout` + `spec-scout` + `docs-gap-scout` (v0.39.0+: also reads `GLOSSARY.md` on the ancestor chain + `knowledge/decisions/` to surface canonical terminology + prior load-bearing choices in the planning context; v0.40.0+: also reads `STRATEGY.md` when present and writes `## Strategy Alignment` listing tracks served)
 2. **Gap analysis**: `flow-gap-analyst` finds edge cases + missing requirements
-3. **Epic creation**: Writes spec to `.flow/specs/fn-N.md`, sets epic dependencies from `epic-scout` findings
+3. **Spec creation**: Writes spec to `.flow/specs/fn-N.md`, sets spec dependencies from `spec-scout` findings
 4. **Task breakdown**: Creates tasks + explicit dependencies in `.flow/tasks/`, adds doc update acceptance criteria from `docs-gap-scout`
-5. **Validate**: `flowctl validate --epic fn-N`
+5. **Validate**: `flowctl validate --spec fn-N`
 6. **Review** (optional): `/flow-next:plan-review fn-N` with re-anchor + fix loop until "Ship"
 
 ### Work Phase
 
-1. **Re-anchor**: Re-read epic + task specs + git state (EVERY task)
+1. **Re-anchor**: Re-read parent spec + task specs + git state (EVERY task)
 2. **Execute**: Implement using existing patterns
 3. **Test**: Verify acceptance criteria
 4. **Record**: `flowctl done` adds summary + evidence to the task spec
 5. **Review** (optional): `/flow-next:impl-review` via RepoPrompt, Codex, or Copilot
-6. **Loop**: Next ready task → repeat until no ready tasks. Close epic manually (`flowctl epic close fn-N`) or let Ralph close at loop end.
+6. **Loop**: Next ready task → repeat until no ready tasks. Close the spec manually (`flowctl spec close fn-N`) or let Ralph close at loop end.
 
 ### Maintenance Phase (optional, ongoing)
 
@@ -2281,7 +2301,7 @@ What it automates (one unit per iteration, fresh context each time):
 - Selector chooses plan vs work unit (`flowctl next`)
 - Plan gate = plan review loop until Ship (if enabled)
 - Work gate = one task until pass (tests + validate + optional impl review)
- - Single run branch: all epics work on one `ralph-<run-id>` branch (cherry-pick/revert friendly)
+ - Single run branch: all specs work on one `ralph-<run-id>` branch (cherry-pick/revert friendly)
 
 Enable:
 ```bash
@@ -2312,7 +2332,7 @@ Run scripts from terminal (not inside Claude Code). `ralph_once.sh` runs one ite
 * `REQUIRE_PLAN_REVIEW=1`
 * `PLAN_REVIEW=rp`
 
-This forces Ralph to run `/flow-next:plan-review` until the epic plan is approved before starting tasks.
+This forces Ralph to run `/flow-next:plan-review` until the plan is approved before starting tasks.
 
 **Tip:** If you don't have a review backend installed (`rp-cli`, `codex`, or `copilot`), keep `REQUIRE_PLAN_REVIEW=0` or Ralph may repeatedly select the plan gate and make no progress.
 
@@ -2324,7 +2344,7 @@ Ralph verifies reviews via receipt JSON files in `scripts/ralph/runs/<run>/recei
 flowchart TD
   A[ralph.sh iteration] --> B[flowctl next]
   B -->|status=plan| C[/flow-next:plan-review fn-N/]
-  C -->|verdict=SHIP| D[flowctl epic set-plan-review-status=ship]
+  C -->|verdict=SHIP| D[flowctl spec set-plan-review-status=ship]
   C -->|verdict!=SHIP| A
 
   B -->|status=work| E[/flow-next:work fn-N.M/]
@@ -2339,12 +2359,12 @@ flowchart TD
 
   G --> A
 
-  B -->|status=completion_review| CR[/flow-next:epic-review fn-N/]
-  CR -->|verdict=SHIP| CRD[flowctl epic set-completion-review-status=ship]
+  B -->|status=completion_review| CR[/flow-next:spec-completion-review fn-N/]
+  CR -->|verdict=SHIP| CRD[flowctl spec set-completion-review-status=ship]
   CR -->|verdict!=SHIP| A
   CRD --> A
 
-  B -->|status=none| H[close done epics]
+  B -->|status=none| H[close done specs]
   H --> I[<promise>COMPLETE</promise>]
 ```
 
@@ -2356,14 +2376,15 @@ flowchart TD
 
 ```
 .flow/
-├── meta.json              # Schema version
+├── meta.json              # Schema version (1.0+ uses `next_spec`; reads `next_epic` for back-compat)
 ├── config.json            # Project settings (memory enabled, etc.)
-├── epics/
-│   └── fn-1-add-oauth.json      # Epic metadata (id, title, status, deps)
+├── .flow_version          # 1.0.0 sentinel — written after `flowctl migrate-rename`
+├── .gitignore             # Auto-managed by flowctl (1.0+) — excludes migration transients
 ├── specs/
-│   └── fn-1-add-oauth.md        # Epic spec (plan, scope, acceptance)
+│   ├── fn-1-add-oauth.md        # Spec content (plan, scope, acceptance)
+│   └── fn-1-add-oauth.json      # Spec metadata (id, title, status, deps) — colocated with the markdown in 1.0+
 ├── tasks/
-│   ├── fn-1-add-oauth.1.json    # Task metadata (id, status, priority, deps, assignee)
+│   ├── fn-1-add-oauth.1.json    # Task metadata (id, status, priority, deps, assignee, `spec` field)
 │   ├── fn-1-add-oauth.1.md      # Task spec (description, acceptance, done summary)
 │   └── ...
 └── memory/                # Persistent learnings (opt-in, categorized — v0.33.0+)
@@ -2385,22 +2406,26 @@ flowchart TD
     └── legacy/            # (optional) archived flat files after migrate
 ```
 
+Pre-1.0 repos have `.flow/epics/<id>.json` instead of `.flow/specs/<id>.json`; the alias layer keeps reads working until you run `flowctl migrate-rename --yes` (or `/flow-next:setup`'s upgrade branch).
+
+The auto-managed `.flow/.gitignore` (written by `flowctl init` and `flowctl migrate-rename` since 1.0.0) excludes per-run state (`.checkpoint-*.json`, `receipts/`, `tmp/`) and migration transients (`.backup-pre-1.0/`, `.banner-acknowledged`, `.migrating`, `.migration-manifest`) so users don't accidentally commit a multi-megabyte backup directory or a per-developer banner-ack timestamp on `git add -A`. User patterns added below the auto-managed footer are preserved on subsequent runs. `.flow/.flow_version` is intentionally tracked (schema sentinel; semantics like `Cargo.lock`).
+
 Flowctl accepts schema v1 and v2; new fields are optional and defaulted.
 
 New fields:
-- Epic JSON: `plan_review_status`, `plan_reviewed_at`, `completion_review_status`, `completion_reviewed_at`, `depends_on_epics`, `branch_name`
-- Task JSON: `priority`
+- Spec JSON: `plan_review_status`, `plan_reviewed_at`, `completion_review_status`, `completion_reviewed_at`, `depends_on_specs` (1.0+ canonical; `depends_on_epics` accepted on read), `branch_name`
+- Task JSON: `priority`. The 1.0+ canonical field name for the parent reference is `spec`; `epic` is accepted on read for back-compat through 1.x and emitted on write only by pre-1.0 callers.
 
 ### ID Format
 
-- **Epic**: `fn-N-slug` where `slug` is derived from the epic title (e.g., `fn-1-add-oauth`, `fn-2-fix-login-bug`)
+- **Spec**: `fn-N-slug` where `slug` is derived from the spec title (e.g., `fn-1-add-oauth`, `fn-2-fix-login-bug`)
 - **Task**: `fn-N-slug.M` (e.g., `fn-1-add-oauth.1`, `fn-2-fix-login-bug.2`)
 
-The slug is automatically generated from the epic title (lowercase, hyphens for spaces, max 40 chars). This makes IDs human-readable and self-documenting.
+The slug is automatically generated from the spec title (lowercase, hyphens for spaces, max 40 chars). This makes IDs human-readable and self-documenting.
 
-**Backwards compatibility**: Legacy formats `fn-N` (no suffix) and `fn-N-xxx` (random 3-char suffix) are still fully supported. Existing epics don't need migration.
+**Backwards compatibility**: Legacy formats `fn-N` (no suffix) and `fn-N-xxx` (random 3-char suffix) are still fully supported. Existing specs don't need migration.
 
-There are no task IDs outside an epic. If you want a single task, create an epic with one task.
+There are no task IDs outside a spec. If you want a single task, create a spec with one task.
 
 ### Separation of Concerns
 
@@ -2411,28 +2436,28 @@ There are no task IDs outside an epic. If you want a single task, create an epic
 
 ## flowctl CLI
 
-Bundled Python script for managing `.flow/`. Flow-Next's commands handle epic/task creation automatically—use `flowctl` for direct inspection, fixes, or advanced workflows:
+Bundled Python script for managing `.flow/`. Flow-Next's commands handle spec/task creation automatically—use `flowctl` for direct inspection, fixes, or advanced workflows:
 
 ```bash
 # Setup
 flowctl init                              # Create .flow/ structure
 flowctl detect                            # Check if .flow/ exists
 
-# Epics
-flowctl epic create --title "..."         # Create epic
-flowctl epic create --title "..." --branch "fn-1-epic"
-flowctl epic set-plan fn-1 --file spec.md # Set epic spec from file
-flowctl epic set-plan-review-status fn-1 --status ship
-flowctl epic close fn-1                   # Close epic (requires all tasks done)
+# Specs
+flowctl spec create --title "..."         # Create spec
+flowctl spec create --title "..." --branch "fn-1-feature-branch"
+flowctl spec set-plan fn-1 --file spec.md # Set spec markdown from file
+flowctl spec set-plan-review-status fn-1 --status ship
+flowctl spec close fn-1                   # Close spec (requires all tasks done)
 
-# Epic export — single deterministic JSON aggregator for /flow-next:make-pr
+# Spec export — single deterministic JSON aggregator for /flow-next:make-pr
 # (also reusable from any skill / script that wants the cognitive-aid payload)
-flowctl epic export-cognitive-aid fn-1 --base origin/main          # text summary
-flowctl epic export-cognitive-aid fn-1 --base origin/main --json   # full payload (9 streams)
-flowctl epic export-cognitive-aid fn-1 --base origin/main --section diff --json  # one slice
+flowctl spec export-cognitive-aid fn-1 --base origin/main          # text summary
+flowctl spec export-cognitive-aid fn-1 --base origin/main --json   # full payload (9 streams)
+flowctl spec export-cognitive-aid fn-1 --base origin/main --section diff --json  # one slice
 
 # Tasks
-flowctl task create --epic fn-1 --title "..." --deps fn-1.2,fn-1.3 --priority 10
+flowctl task create --spec fn-1 --title "..." --deps fn-1.2,fn-1.3 --priority 10
 flowctl task set-description fn-1.1 --file desc.md
 flowctl task set-acceptance fn-1.1 --file accept.md
 
@@ -2440,18 +2465,18 @@ flowctl task set-acceptance fn-1.1 --file accept.md
 flowctl dep add fn-1.3 fn-1.2             # fn-1.3 depends on fn-1.2
 
 # Workflow
-flowctl ready --epic fn-1                 # Show ready/in_progress/blocked
+flowctl ready --spec fn-1                 # Show ready/in_progress/blocked
 flowctl next                              # Select next plan/work unit
 flowctl start fn-1.1                      # Claim and start task
 flowctl done fn-1.1 --summary-file s.md --evidence-json e.json
 flowctl block fn-1.2 --reason-file r.md
 
 # Queries
-flowctl show fn-1 --json                  # Epic with all tasks
-flowctl cat fn-1                          # Print epic spec
+flowctl show fn-1 --json                  # Spec with all tasks
+flowctl cat fn-1                          # Print spec markdown
 
 # Validation
-flowctl validate --epic fn-1              # Validate single epic
+flowctl validate --spec fn-1              # Validate single spec
 flowctl validate --all                    # Validate everything (for CI)
 
 # Review helpers
@@ -2463,10 +2488,12 @@ flowctl prospect list                          # active artifacts (<30d)
 flowctl prospect list --all --json             # everything
 flowctl prospect read <id>                     # full body
 flowctl prospect read <id> --section survivors # focus|grounding|survivors|rejected
-flowctl prospect promote <id> --idea N         # idea N → new epic
+flowctl prospect promote <id> --idea N         # idea N → new spec
 flowctl prospect promote <id> --idea N --force # override idempotency guard
 flowctl prospect archive <id>                  # → .flow/prospects/_archive/
 ```
+
+> **Legacy aliases:** every `flowctl epic *` / `flowctl epics` / `--epic` form continues to work in 1.x via thin alias dispatch and a one-line stderr deprecation warning (suppress via `FLOW_NO_DEPRECATION=1`). Soft-removal target is 2.0.0, telemetry-driven (R28 forbids hard-coded sunset dates).
 
 📖 **[Full CLI reference](docs/flowctl.md)**  
 🤖 **[Ralph deep dive](docs/ralph.md)**
@@ -2601,7 +2628,7 @@ In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setu
 | `/flow-next:work` | Flow Work | `$flow-next-work` |
 | `/flow-next:impl-review` | Flow Implementation Review | `$flow-next-impl-review` |
 | `/flow-next:plan-review` | Flow Plan Review | `$flow-next-plan-review` |
-| `/flow-next:epic-review` | Flow Epic Review | `$flow-next-epic-review` |
+| `/flow-next:spec-completion-review` | Flow Spec Completion Review | `$flow-next-spec-completion-review` |
 | `/flow-next:make-pr` | Flow Make PR | `$flow-next-make-pr` |
 | `/flow-next:interview` | Flow Interview | `$flow-next-interview` |
 | `/flow-next:prime` | Flow Prime | `$flow-next-prime` |
@@ -2621,7 +2648,7 @@ In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setu
 | Tier | Codex Model | Reasoning | Agents |
 |------|-------------|-----------|--------|
 | Review-shaped | `gpt-5.5` | `high` | quality-auditor |
-| Scout / editorial | `gpt-5.5` | `medium` | flow-gap-analyst, context-scout, docs-scout, github-scout, practice-scout, repo-scout, plan-sync, epic-scout, agents-md-scout, docs-gap-scout |
+| Scout / editorial | `gpt-5.5` | `medium` | flow-gap-analyst, context-scout, docs-scout, github-scout, practice-scout, repo-scout, plan-sync, spec-scout, agents-md-scout, docs-gap-scout |
 | Fast scouts | `gpt-5.4-mini` | n/a | build, env, testing, tooling, observability, security, workflow, memory scouts |
 | Inherited | parent model | parent | worker, pr-comment-resolver |
 

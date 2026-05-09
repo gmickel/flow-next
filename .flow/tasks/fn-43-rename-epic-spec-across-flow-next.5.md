@@ -42,8 +42,8 @@ Rename the `epic-scout` agent to `spec-scout` (file move + prose rewrite) and up
 - [ ] Frontmatter `name:` field updated; `description:` field updated where it mentions epic.
 
 ## Done summary
-
+Renamed epic-scout agent to spec-scout via git mv (preserves history); rewrote frontmatter, body prose, and dispatcher refs in plan-sync.md / worker.md / quality-auditor.md / flow-next-plan steps.md / scripts/sync-codex.sh (3 sites). Reviewer also caught a critical worker/plan-sync dispatch-contract mismatch (EPIC_ID -> SPEC_ID); fixed by updating phases.md (2 templates), flow-next-sync/SKILL.md, and sync-codex.sh:226 worker-template heredoc. Reverted flowctl CLI verbs in agent prose to legacy alias form (flowctl epics, tasks --epic) per T10 scope split — codex reviewer cannot verify alias availability outside diff.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 225dc94, e73ad82, ab16f6d
+- Tests: grep -rn 'epic-scout' plugins/flow-next/agents plugins/flow-next/skills scripts/sync-codex.sh, grep -rn 'EPIC_ID' plugins/flow-next/skills/flow-next-work plugins/flow-next/skills/flow-next-sync, flowctl codex impl-review fn-43-rename-epic-spec-across-flow-next.5 --base 1ab92af
 - PRs:

@@ -175,7 +175,7 @@ cfg.write_text(text)
 PY
 
 scripts/ralph/flowctl init --json >/dev/null
-scripts/ralph/flowctl epic create --title "Tiny lib" --json >/dev/null
+scripts/ralph/flowctl spec create --title "Tiny lib" --json >/dev/null
 
 cat > "$TEST_DIR/epic.md" <<'EOF'
 # fn-1 Tiny lib
@@ -216,7 +216,7 @@ Edit src/index.ts and README.md only. Repo is source-only (no build step).
 - None
 EOF
 
-scripts/ralph/flowctl epic set-plan fn-1 --file "$TEST_DIR/epic.md" --json >/dev/null
+scripts/ralph/flowctl spec set-plan fn-1 --file "$TEST_DIR/epic.md" --json >/dev/null
 
 cat > "$TEST_DIR/accept.md" <<'EOF'
 - [ ] Add JSDoc for add() (params + return)
@@ -224,7 +224,7 @@ cat > "$TEST_DIR/accept.md" <<'EOF'
 - [ ] README notes TS tooling required
 EOF
 
-scripts/ralph/flowctl task create --epic fn-1 --title "Add docs" --acceptance-file "$TEST_DIR/accept.md" --json >/dev/null
+scripts/ralph/flowctl task create --spec fn-1 --title "Add docs" --acceptance-file "$TEST_DIR/accept.md" --json >/dev/null
 
 mkdir -p "$TEST_DIR/bin"
 PLUGINS_DIR="$(dirname "$PLUGIN_ROOT")"

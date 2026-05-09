@@ -38,9 +38,64 @@ Use flowctl init (idempotent - safe to re-run, handles upgrades):
 ```
 
 This creates/upgrades:
-- `.flow/` directory structure (epics/, specs/, tasks/, memory/)
+- `.flow/` directory structure (specs/, tasks/, memory/; legacy `epics/` is preserved when present, see Step 1b for migration)
 - `meta.json` with schema version
 - `config.json` with defaults (merges new keys on upgrade)
+
+## Step 1b: Pre-1.0 layout detection (interactive migration arm)
+
+Detect the pre-1.0 `.flow/` layout (epic-named directories from the 0.x era). When detected, prompt the user to migrate now, defer, or suppress the auto-detect banner permanently. This is the **interactive arm** of the consented-migrate design — the deterministic arm is `flowctl migrate-rename --yes`.
+
+Detection rule:
+- `.flow/epics/` exists AND `.flow/.flow_version` (the post-migration sentinel) is absent → pre-1.0 layout, prompt the user.
+- `.flow/.flow_version` present → already migrated, skip this step entirely.
+- `.flow/epics/` absent → fresh-install repo, skip this step entirely.
+
+```bash
+PRE_1_0_LAYOUT=0
+if [[ -d .flow/epics && ! -f .flow/.flow_version ]]; then
+ PRE_1_0_LAYOUT=1
+fi
+```
+
+When `PRE_1_0_LAYOUT=1`, prompt via `request_user_input` ( in T15):
+
+- **header**: `Migrate .flow/?`
+- **body**: `Detected pre-1.0 .flow/ layout (.flow/epics/ present, no .flow/.flow_version sentinel). flow-next 1.0 renames .flow/epics/ to .flow/specs/ on disk; alias mode keeps the old layout working but new tooling (flow-swarm, future specs) targets the canonical layout. Recommended: Migrate now — backup is automatic and rollback is one command. Confidence: [high].`
+- **options**:
+ - `Migrate now` — apply migration via `flowctl migrate-rename --yes`. Safe (backup written to `.flow/.backup-pre-1.0/`, rollback via `flowctl migrate-rollback`).
+ - `Defer` — keep alias mode, suppress the auto-detect banner for 7 days. Re-prompted on the next `flowctl` invocation after the window expires.
+ - `Suppress permanently` — keep alias mode, never auto-prompt. Print instructions for the `FLOW_NO_AUTO_MIGRATE=1` env var so the user can suppress the banner across the whole machine.
+
+### Routing the answer
+
+**Migrate now** (recommended):
+```bash
+"${PLUGIN_ROOT}/scripts/flowctl" migrate-rename --yes --json
+```
+Surface the JSON output to the user (renamed entries + sentinel write). On error, print stderr verbatim and continue to Step 2 — the user can re-run setup or use `flowctl migrate-rollback` if needed. Migration failure is non-fatal for the rest of setup.
+
+**Defer** (suppress banner 7 days):
+```bash
+# migrate-rename --dry-run writes .flow/.banner-acknowledged with an ISO-8601 UTC
+# timestamp ending in `Z` as a side effect (T4's banner ack contract). It also
+# prints the migration plan to stdout, which is value-add for the defer experience.
+"${PLUGIN_ROOT}/scripts/flowctl" migrate-rename --dry-run --json
+```
+The dry-run output shows the user exactly what would change if they reconsidered, and the side-effect ack-file write is the canonical way to start the 7-day re-nudge window. Do NOT hand-roll the timestamp via `Edit` / `Write` — the format must match `now_iso()` exactly (`2026-05-08T14:23:11.123456Z`).
+
+**Suppress permanently**:
+Print the user-facing instructions verbatim:
+```
+To suppress the migration banner permanently, set FLOW_NO_AUTO_MIGRATE=1 in your shell profile:
+
+ export FLOW_NO_AUTO_MIGRATE=1 # ~/.bashrc / ~/.zshrc / ~/.profile
+
+Alias mode keeps your existing .flow/epics/ layout working indefinitely.
+You can still migrate later via: flowctl migrate-rename --yes
+```
+
+**Continue to Step 2 regardless of answer.** Migration choice is independent of the rest of setup.
 
 ## Step 2: Check existing setup
 
@@ -186,7 +241,7 @@ If ANY config values are already set, print a notice before asking questions:
 Current configuration:
 - Memory: <enabled|disabled> (change with: flowctl config set memory.enabled <true|false>)
 - Plan-Sync: <enabled|disabled> (change with: flowctl config set planSync.enabled <true|false>)
-- Plan-Sync cross-epic: <enabled|disabled> (change with: flowctl config set planSync.crossEpic <true|false>)
+- Plan-Sync cross-spec: <enabled|disabled> (change with: flowctl config set planSync.crossEpic <true|false>)
 - Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|rp|copilot|none OR spec form like codex:gpt-5.4:xhigh>)
 - GitHub scout: <enabled|disabled> (change with: flowctl config set scouts.github <true|false>)
 ```
@@ -225,14 +280,14 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-**Plan-Sync cross-epic question** (include if CURRENT_PLANSYNC is "true" AND CURRENT_CROSSEPIC is empty):
+**Plan-Sync cross-spec question** (include if CURRENT_PLANSYNC is "true" AND CURRENT_CROSSEPIC is empty; the underlying config key is `planSync.crossEpic` for back-compat):
 ```json
 {
- "header": "Cross-Epic",
- "question": "Enable cross-epic plan-sync? (Also checks other open epics for stale references)",
+ "header": "Cross-Spec",
+ "question": "Enable cross-spec plan-sync? (Also checks other open specs for stale references)",
  "options": [
- {"label": "No (Recommended)", "description": "Only sync within current epic. Faster, avoids long Ralph loops."},
- {"label": "Yes", "description": "Also update tasks in other epics that reference changed APIs/patterns."}
+ {"label": "No (Recommended)", "description": "Only sync within current spec. Faster, avoids long Ralph loops."},
+ {"label": "Yes", "description": "Also update tasks in other specs that reference changed APIs/patterns."}
  ],
  "multiSelect": false
 }
@@ -331,7 +386,7 @@ Only process answers for questions that were asked (config values that were unse
 - If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.enabled true --json`
 - If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.enabled false --json`
 
-**Plan-Sync cross-epic** (if question was asked):
+**Plan-Sync cross-spec** (if question was asked; config key is `planSync.crossEpic` for back-compat):
 - If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.crossEpic true --json`
 - If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.crossEpic false --json`
 
@@ -400,7 +455,7 @@ To use from command line:
 Configuration (use flowctl config set to change):
 - Memory: <enabled|disabled>
 - Plan-Sync: <enabled|disabled>
-- Plan-Sync cross-epic: <enabled|disabled>
+- Plan-Sync cross-spec: <enabled|disabled>
 - GitHub scout: <enabled|disabled>
 - Review backend: <codex|rp|none>
 

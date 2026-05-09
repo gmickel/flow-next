@@ -133,7 +133,7 @@ flowchart TD
   C --> D[/flow-next:plan-review/]
   B -->|work needed| E[/flow-next:work/]
   E --> F[/flow-next:impl-review/]
-  B -->|completion review needed| K[/flow-next:epic-review/]
+  B -->|completion review needed| K[/flow-next:spec-completion-review/]
   D --> G{Receipt valid?}
   F --> G
   K --> G
@@ -192,7 +192,7 @@ Two review types:
 
 ### Plan Review Gate
 
-The plan review gate ensures epics are architecturally sound before any implementation begins. This catches design issues early when they're cheap to fix.
+The plan review gate ensures specs are architecturally sound before any implementation begins. This catches design issues early when they're cheap to fix.
 
 #### How It Works
 
@@ -200,12 +200,12 @@ The plan review gate ensures epics are architecturally sound before any implemen
 ┌─────────────────────────────────────────────────────────────┐
 │  flowctl next --require-plan-review                         │
 │  ┌────────────────────────────────────────────────────────┐ │
-│  │  1. Find epics with plan_review_status = unknown       │ │
-│  │  2. Return status=plan, epic=fn-1                      │ │
+│  │  1. Find specs with plan_review_status = unknown       │ │
+│  │  2. Return status=plan, spec=fn-1                      │ │
 │  │  3. Ralph invokes /flow-next:plan-review fn-1          │ │
 │  │  4. Skill loops until <verdict>SHIP</verdict>          │ │
-│  │  5. flowctl epic set-plan-review-status fn-1 --status ship │
-│  │  6. Next iteration: epic unlocked for work             │ │
+│  │  5. flowctl spec set-plan-review-status fn-1 --status ship │
+│  │  6. Next iteration: spec unlocked for work             │ │
 │  └────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -228,15 +228,15 @@ PLAN_REVIEW=codex       # Backend: rp, codex, or export
 | `1` | `export` | Context exported for manual review |
 | `1` | `none` | **Blocked forever** — no backend to review |
 
-> **Common mistake:** Setting `REQUIRE_PLAN_REVIEW=1` without a `PLAN_REVIEW` backend. Ralph will block on every epic with no way to proceed.
+> **Common mistake:** Setting `REQUIRE_PLAN_REVIEW=1` without a `PLAN_REVIEW` backend. Ralph will block on every spec with no way to proceed.
 
 #### The Review Cycle
 
 When `flowctl next` returns `status=plan`:
 
-1. **Checkpoint** — Save epic state before review
+1. **Checkpoint** — Save spec state before review
    ```bash
-   flowctl checkpoint save --epic fn-1 --json
+   flowctl checkpoint save --spec fn-1 --json
    ```
 
 2. **Review** — Invoke the plan review skill
@@ -246,7 +246,7 @@ When `flowctl next` returns `status=plan`:
 
 3. **Fix loop** — If `NEEDS_WORK`:
    - Parse reviewer feedback
-   - Update epic spec via `flowctl epic set-plan`
+   - Update spec via `flowctl spec set-plan`
    - Sync affected task specs via `flowctl task set-spec`
    - Re-review (same chat for RP, receipt continuity for Codex)
    - Repeat until `SHIP`
@@ -258,7 +258,7 @@ When `flowctl next` returns `status=plan`:
 
 5. **Unlock** — Set status to ship
    ```bash
-   flowctl epic set-plan-review-status fn-1 --status ship
+   flowctl spec set-plan-review-status fn-1 --status ship
    ```
 
 #### Recovery
@@ -266,21 +266,21 @@ When `flowctl next` returns `status=plan`:
 If context compacts during review cycles:
 
 ```bash
-flowctl checkpoint restore --epic fn-1 --json
+flowctl checkpoint restore --spec fn-1 --json
 ```
 
-This restores the epic/task state from before the review started.
+This restores the spec/task state from before the review started.
 
 #### Inspecting Plan Review Status
 
 ```bash
-# Check all epics
-flowctl epics --json | jq '.epics[] | {id, plan_review_status}'
+# Check all specs
+flowctl specs --json | jq '.specs[] | {id, plan_review_status}'
 
-# Check specific epic
+# Check specific spec
 flowctl show fn-1 --json | jq '.plan_review_status'
 
-# Find epics needing review
+# Find specs needing review
 flowctl next --require-plan-review --json
 ```
 
@@ -289,14 +289,14 @@ flowctl next --require-plan-review --json
 | Aspect | Plan Review | Impl Review |
 |--------|-------------|-------------|
 | **When** | Before coding | After coding |
-| **Reviews** | Epic + task specs | Code changes |
-| **Blocks** | All tasks in epic | Single task |
+| **Reviews** | Spec + task markdown | Code changes |
+| **Blocks** | All tasks in spec | Single task |
 | **Focus** | Architecture, feasibility, scope | Correctness, security, tests |
 | **Config** | `PLAN_REVIEW` + `REQUIRE_PLAN_REVIEW` | `WORK_REVIEW` |
 
-### Epic-Completion Review Gate
+### Spec-Completion Review Gate
 
-The epic-completion review gate ensures implementation matches the spec before closing an epic. Runs after all tasks complete, checking for requirement gaps.
+The spec-completion review gate ensures implementation matches the spec before closing it. Runs after all tasks complete, checking for requirement gaps.
 
 #### How It Works
 
@@ -305,11 +305,11 @@ The epic-completion review gate ensures implementation matches the spec before c
 │  flowctl next --require-completion-review                    │
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │  1. All tasks done, completion_review_status != ship   │ │
-│  │  2. Return status=completion_review, epic=fn-1         │ │
-│  │  3. Ralph invokes /flow-next:epic-review fn-1          │ │
+│  │  2. Return status=completion_review, spec=fn-1         │ │
+│  │  3. Ralph invokes /flow-next:spec-completion-review fn-1 │ │
 │  │  4. Skill loops until <verdict>SHIP</verdict>          │ │
-│  │  5. flowctl epic set-completion-review-status fn-1 --status ship │
-│  │  6. Next iteration: epic can close                     │ │
+│  │  5. flowctl spec set-completion-review-status fn-1 --status ship │
+│  │  6. Next iteration: spec can close                     │ │
 │  └────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -327,15 +327,15 @@ When `COMPLETION_REVIEW != none`, Ralph passes `--require-completion-review` to 
 |---------------------|----------|
 | `rp` | Completion reviewed via RepoPrompt |
 | `codex` | Completion reviewed via Codex CLI |
-| `none` | No completion review, epics close immediately |
+| `none` | No completion review, specs close immediately |
 
 #### The Review Cycle
 
 When `flowctl next` returns `status=completion_review`:
 
-1. **Review** — Invoke the epic-review skill
+1. **Review** — Invoke the spec-completion-review skill
    ```bash
-   /flow-next:epic-review fn-1 --review=codex
+   /flow-next:spec-completion-review fn-1 --review=codex
    ```
 
 2. **Fix loop** — If `NEEDS_WORK`:
@@ -351,10 +351,10 @@ When `flowctl next` returns `status=completion_review`:
 
 4. **Unlock** — Set status to ship
    ```bash
-   flowctl epic set-completion-review-status fn-1 --status ship
+   flowctl spec set-completion-review-status fn-1 --status ship
    ```
 
-5. **Close** — Epic can now close normally
+5. **Close** — Spec can now close normally
 
 #### What Completion Review Catches
 
@@ -370,7 +370,7 @@ When `flowctl next` returns `status=completion_review`:
 | Aspect | Impl Review | Completion Review |
 |--------|-------------|-------------------|
 | **When** | After each task | After all tasks done |
-| **Scope** | Single task acceptance | Entire epic spec |
+| **Scope** | Single task acceptance | Entire spec |
 | **Checks** | Code quality, tests | Spec compliance |
 | **Focus** | "Is this task done right?" | "Did we deliver everything?" |
 | **Config** | `WORK_REVIEW` | `COMPLETION_REVIEW` |
@@ -466,7 +466,20 @@ Edit `scripts/ralph/config.env`:
 
 | Variable | Example | Description |
 |----------|---------|-------------|
-| `EPICS` | `fn-1,fn-2` | Limit to specific epics (empty = all) |
+| `SPECS` | `fn-1,fn-2` | Limit to specific specs (empty = all). Legacy `EPICS=` is also accepted; the template resolves `SPECS_FILE`/`EPICS_FILE` and `SPECS`/`EPICS` in cascade so existing `config.env` files keep working. |
+
+#### `EPICS_FILE` → `SPECS_FILE` (1.0 rename)
+
+flow-next 1.0 renamed the config-env knob `EPICS_FILE` to `SPECS_FILE` (and the matching `EPICS` list to `SPECS`). The Ralph init template (`scripts/ralph/config.env`) writes `SPECS_FILE=` / `SPECS=` for fresh installs.
+
+For existing repos with `config.env` files written by older templates, both names continue to work. `ralph.sh` resolves the canonical name first and falls back to the legacy name:
+
+```bash
+SPECS_FILE="${SPECS_FILE:-${EPICS_FILE:-}}"
+SPECS="${SPECS:-${EPICS:-}}"
+```
+
+Externally-set env vars are preserved (the resolver does not clobber `SPECS_FILE` if the user/script set it explicitly). The aliases follow the same telemetry-driven contract as the `flowctl epic` → `flowctl spec` rename: soft-removal target 2.0.0, NOT a hard sunset (R28). To migrate, edit `scripts/ralph/config.env` and rename the keys; no other action is required.
 
 ### Permissions
 
@@ -557,7 +570,7 @@ scripts/ralph/runs/<run-id>/
 ### CLI Commands
 
 ```bash
-flowctl status                    # Epic/task counts + active runs
+flowctl status                    # Spec/task counts + active runs
 flowctl ralph pause               # Pause run
 flowctl ralph resume              # Resume run
 flowctl ralph stop                # Graceful stop
@@ -679,7 +692,7 @@ curl -fsSL "https://raw.githubusercontent.com/Dicklesworthstone/destructive_comm
 
 **Compatibility:** DCG uses fail-open design — timeouts allow commands. Flow-next uses safe git patterns and quoted heredocs that DCG handles correctly.
 
-> **Note:** DCG will block `rm -rf .flow/` and `rm -rf scripts/ralph/` — this is correct behavior. Uninstall commands should be run manually, not via AI agents. Your epics and tasks are protected.
+> **Note:** DCG will block `rm -rf .flow/` and `rm -rf scripts/ralph/` — this is correct behavior. Uninstall commands should be run manually, not via AI agents. Your specs and tasks are protected.
 
 **Verify:**
 
@@ -729,7 +742,7 @@ plugins/flow-next/
 
 ### Plan Review Never Starts
 
-**Symptoms:** Ralph exits with `NO_WORK` but epics have `plan_review_status: unknown`.
+**Symptoms:** Ralph exits with `NO_WORK` but specs have `plan_review_status: unknown`.
 
 **Check config:**
 
@@ -751,7 +764,7 @@ grep -E "REQUIRE_PLAN_REVIEW|PLAN_REVIEW" scripts/ralph/config.env
 flowctl next --require-plan-review --json
 ```
 
-Should return `status: "plan"` if epics need review.
+Should return `status: "plan"` if specs need review.
 
 ### Plan Review Blocked Forever
 
@@ -760,7 +773,7 @@ Should return `status: "plan"` if epics need review.
 **Check:**
 
 ```bash
-# What's the epic status?
+# What's the spec status?
 flowctl show fn-1 --json | jq '.plan_review_status'
 
 # Is there a receipt?
@@ -785,9 +798,9 @@ PLAN_REVIEW=codex
 REQUIRE_PLAN_REVIEW=0
 ```
 
-### Dependent Epics Not Starting
+### Dependent Specs Not Starting
 
-**Symptoms:** Epic A completes, but Epic B (depends on A) never starts.
+**Symptoms:** Spec A completes, but Spec B (depends on A) never starts.
 
 **Check:**
 
@@ -796,16 +809,16 @@ REQUIRE_PLAN_REVIEW=0
 flowctl show fn-1 --json | jq '.status'
 
 # Does B depend on A?
-flowctl show fn-2 --json | jq '.depends_on_epics'
+flowctl show fn-2 --json | jq '.depends_on_specs'
 ```
 
-**Common cause:** Race condition — selector runs before `maybe_close_epics()`. Fixed in v0.18.23+.
+**Common cause:** Race condition — selector runs before `maybe_close_specs()`. Fixed in v0.18.23+.
 
 **Workaround for older versions:**
 
 ```bash
-# Manually close the epic
-flowctl epic close fn-1 --json
+# Manually close the spec
+flowctl spec close fn-1 --json
 
 # Re-run Ralph
 scripts/ralph/ralph.sh
@@ -927,7 +940,7 @@ ls scripts/ralph/runs/*/receipts/
 git log --oneline
 ```
 
-### 3. Review by Epic
+### 3. Review by Spec
 
 Commits include task IDs (`feat(fn-1.1): ...`):
 
@@ -946,7 +959,7 @@ git merge ralph-<run-id>
 # Or: gh pr create
 ```
 
-**One epic is bad — cherry-pick good ones:**
+**One spec is bad — cherry-pick good ones:**
 
 ```bash
 git checkout main
@@ -955,7 +968,7 @@ git cherry-pick <fn-2-commits>
 # Skip fn-3
 ```
 
-**One epic is bad — revert and merge:**
+**One spec is bad — revert and merge:**
 
 ```bash
 git checkout ralph-<run-id>

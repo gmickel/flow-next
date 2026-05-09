@@ -47,8 +47,8 @@ Rewrite all Ralph init templates to use `flowctl spec *` verbs and the new `SPEC
 - [ ] An existing user `config.env` with `EPICS_FILE=epics.txt` continues to work (validated in T12 alias smoke test).
 
 ## Done summary
-
+Rewrote all Ralph init templates (ralph.sh, four prompt templates, config.env) for spec vocabulary: epic_id → spec_id, EPIC_ID → SPEC_ID, flowctl epic * → flowctl spec *, --epics-file → --specs-file, EPICS_FILE → SPECS_FILE, function names (epic_all_tasks_done → spec_all_tasks_done, list_open_epics → list_open_specs, maybe_close_epics → maybe_close_specs), reason code blocked_by_epic_deps → blocked_by_spec_deps, /flow-next:epic-review → /flow-next:spec-completion-review. Existing user installs continue to work via T2's alias permanence guarantee plus an in-script env-var cascade (SPECS_FILE > EPICS_FILE > SPECS list > EPICS list). get_progress now scans both .flow/specs/ (canonical post-1.0) and legacy .flow/epics/ with canonical winning on conflict.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 4fa2b9aaa, c107e67, 3e8709e, 468bfb9
+- Tests: bash -n templates/ralph.sh (syntax check), python3 get_progress smoke (fresh / legacy / both-present layouts) -- all expected outputs, bash /tmp/test-cascade.sh (env-var cascade: SPECS_FILE > EPICS_FILE > SPECS list > EPICS list), flowctl codex impl-review --base f008c34 (NEEDS_WORK -> NEEDS_WORK -> SHIP)
 - PRs:

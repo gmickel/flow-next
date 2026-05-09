@@ -149,9 +149,9 @@ fi
 
 if [[ "$prompt" == *"Ralph plan gate iteration"* ]]; then
   # Extract epic ID with optional suffix (fn-N or fn-N-xxx)
-  epic_id="$(printf '%s\n' "$prompt" | sed -n 's/^- EPIC_ID=//p' | head -n1)"
+  epic_id="$(printf '%s\n' "$prompt" | sed -n 's/^- SPEC_ID=//p' | head -n1)"
   if [[ -n "$epic_id" ]]; then
-    scripts/ralph/flowctl epic set-plan-review-status "$epic_id" --status ship --json >/dev/null
+    scripts/ralph/flowctl spec set-plan-review-status "$epic_id" --status ship --json >/dev/null
   fi
   if [[ "$write_plan" == "1" && -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
     ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -189,10 +189,10 @@ EOF_RECEIPT
   exit "$exit_code"
 fi
 
-if [[ "$prompt" == *"Ralph epic completion review iteration"* ]]; then
-  epic_id="$(printf '%s\n' "$prompt" | sed -n 's/^- EPIC_ID=//p' | head -n1)"
+if [[ "$prompt" == *"Ralph spec completion review iteration"* ]]; then
+  epic_id="$(printf '%s\n' "$prompt" | sed -n 's/^- SPEC_ID=//p' | head -n1)"
   if [[ -n "$epic_id" ]]; then
-    scripts/ralph/flowctl epic set-completion-review-status "$epic_id" --status ship --json >/dev/null
+    scripts/ralph/flowctl spec set-completion-review-status "$epic_id" --status ship --json >/dev/null
   fi
   if [[ "$write_completion" == "1" && -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
     ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -218,22 +218,22 @@ latest_run_dir() {
 }
 
 echo -e "${YELLOW}--- ralph_once ---${NC}"
-EPIC1_JSON="$(scripts/ralph/flowctl epic create --title "Ralph Epic" --json)"
+EPIC1_JSON="$(scripts/ralph/flowctl spec create --title "Ralph Epic" --json)"
 EPIC1="$(echo "$EPIC1_JSON" | extract_id)"
-scripts/ralph/flowctl task create --epic "$EPIC1" --title "Ralph Task" --json >/dev/null
+scripts/ralph/flowctl task create --spec "$EPIC1" --title "Ralph Task" --json >/dev/null
 write_config "none" "none" "none" "0" "new" "3" "5" "2"
 CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph_once.sh >/dev/null
 # Mark plan review done so it doesn't block later tests when REQUIRE_PLAN_REVIEW=1
-scripts/ralph/flowctl epic set-plan-review-status "$EPIC1" --status ship --json >/dev/null
+scripts/ralph/flowctl spec set-plan-review-status "$EPIC1" --status ship --json >/dev/null
 echo -e "${GREEN}✓${NC} ralph_once runs"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- ralph.sh completes epic ---${NC}"
-EPIC2_JSON="$(scripts/ralph/flowctl epic create --title "Ralph Epic 2" --json)"
+EPIC2_JSON="$(scripts/ralph/flowctl spec create --title "Ralph Epic 2" --json)"
 EPIC2="$(echo "$EPIC2_JSON" | extract_id)"
-TASK2_1_JSON="$(scripts/ralph/flowctl task create --epic "$EPIC2" --title "Task 1" --json)"
+TASK2_1_JSON="$(scripts/ralph/flowctl task create --spec "$EPIC2" --title "Task 1" --json)"
 TASK2_1="$(echo "$TASK2_1_JSON" | extract_id)"
-TASK2_2_JSON="$(scripts/ralph/flowctl task create --epic "$EPIC2" --title "Task 2" --json)"
+TASK2_2_JSON="$(scripts/ralph/flowctl task create --spec "$EPIC2" --title "Task 2" --json)"
 TASK2_2="$(echo "$TASK2_2_JSON" | extract_id)"
 # Use rp for all gates to test verdict-bearing receipt generation.
 write_config "rp" "rp" "rp" "1" "new" "6" "5" "2"
@@ -294,9 +294,9 @@ else
 fi
 
 echo -e "${YELLOW}--- UI output verification ---${NC}"
-EPIC3_JSON="$(scripts/ralph/flowctl epic create --title "UI Test Epic" --json)"
+EPIC3_JSON="$(scripts/ralph/flowctl spec create --title "UI Test Epic" --json)"
 EPIC3="$(echo "$EPIC3_JSON" | extract_id)"
-scripts/ralph/flowctl task create --epic "$EPIC3" --title "UI Test Task" --json >/dev/null
+scripts/ralph/flowctl task create --spec "$EPIC3" --title "UI Test Task" --json >/dev/null
 write_config "none" "none" "none" "0" "new" "3" "5" "2"
 ui_output="$(STUB_MODE=success CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh 2>&1)"
 
@@ -309,8 +309,8 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# Check progress counter (Epic X/Y * Task X/Y)
-if echo "$ui_output" | grep -qE 'Epic [0-9]+/[0-9]+.*Task [0-9]+/[0-9]+'; then
+# Check progress counter (Spec X/Y * Task X/Y; was "Epic X/Y" in 0.x)
+if echo "$ui_output" | grep -qE 'Spec [0-9]+/[0-9]+.*Task [0-9]+/[0-9]+'; then
   echo -e "${GREEN}✓${NC} progress counter shown"
   PASS=$((PASS + 1))
 else
@@ -346,9 +346,9 @@ else
 fi
 
 echo -e "${YELLOW}--- ralph.sh backstop ---${NC}"
-EPIC4_JSON="$(scripts/ralph/flowctl epic create --title "Ralph Epic 4" --json)"
+EPIC4_JSON="$(scripts/ralph/flowctl spec create --title "Ralph Epic 4" --json)"
 EPIC4="$(echo "$EPIC4_JSON" | extract_id)"
-TASK4_1_JSON="$(scripts/ralph/flowctl task create --epic "$EPIC4" --title "Stuck Task" --json)"
+TASK4_1_JSON="$(scripts/ralph/flowctl task create --spec "$EPIC4" --title "Stuck Task" --json)"
 TASK4_1="$(echo "$TASK4_1_JSON" | extract_id)"
 write_config "none" "none" "none" "0" "new" "3" "5" "2"
 STUB_MODE=retry CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh >/dev/null
@@ -361,9 +361,9 @@ echo -e "${GREEN}✓${NC} blocks after attempts"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- missing receipt forces retry ---${NC}"
-EPIC5_JSON="$(scripts/ralph/flowctl epic create --title "Ralph Epic 5" --json)"
+EPIC5_JSON="$(scripts/ralph/flowctl spec create --title "Ralph Epic 5" --json)"
 EPIC5="$(echo "$EPIC5_JSON" | extract_id)"
-TASK5_1_JSON="$(scripts/ralph/flowctl task create --epic "$EPIC5" --title "Receipt Task" --json)"
+TASK5_1_JSON="$(scripts/ralph/flowctl task create --spec "$EPIC5" --title "Receipt Task" --json)"
 TASK5_1="$(echo "$TASK5_1_JSON" | extract_id)"
 write_config "none" "rp" "none" "0" "new" "3" "5" "1"
 set +e
@@ -394,9 +394,9 @@ fi
 echo -e "${YELLOW}--- non-zero exit code handling (#11) ---${NC}"
 # Test 1: task done + non-zero exit -> should NOT fail
 # This validates fix for issue #11 where transient errors caused false failures
-EPIC6_JSON="$(scripts/ralph/flowctl epic create --title "Exit Code Epic 1" --json)"
+EPIC6_JSON="$(scripts/ralph/flowctl spec create --title "Exit Code Epic 1" --json)"
 EPIC6="$(echo "$EPIC6_JSON" | extract_id)"
-TASK6_1_JSON="$(scripts/ralph/flowctl task create --epic "$EPIC6" --title "Done but exit 1" --json)"
+TASK6_1_JSON="$(scripts/ralph/flowctl task create --spec "$EPIC6" --title "Done but exit 1" --json)"
 TASK6_1="$(echo "$TASK6_1_JSON" | extract_id)"
 write_config "none" "none" "none" "0" "new" "3" "5" "2"
 set +e
@@ -413,9 +413,9 @@ else
 fi
 
 # Test 2: task NOT done + non-zero exit -> should fail/block
-EPIC7_JSON="$(scripts/ralph/flowctl epic create --title "Exit Code Epic 2" --json)"
+EPIC7_JSON="$(scripts/ralph/flowctl spec create --title "Exit Code Epic 2" --json)"
 EPIC7="$(echo "$EPIC7_JSON" | extract_id)"
-TASK7_1_JSON="$(scripts/ralph/flowctl task create --epic "$EPIC7" --title "Not done and exit 1" --json)"
+TASK7_1_JSON="$(scripts/ralph/flowctl task create --spec "$EPIC7" --title "Not done and exit 1" --json)"
 TASK7_1="$(echo "$TASK7_1_JSON" | extract_id)"
 write_config "none" "none" "none" "0" "new" "3" "5" "1"
 set +e

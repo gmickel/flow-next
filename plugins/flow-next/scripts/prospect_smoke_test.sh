@@ -440,7 +440,7 @@ echo -e "${YELLOW}--- Case 5: graceful degradation (R17) ---${NC}"
 WF_TEXT="$(cat "$WORKFLOW_FILE")"
 # Match the literals shipped in workflow.md §1.1-1.3 (canonical phrasing).
 assert_grep "scanned: none (no git repo)"      "$WF_TEXT" "Case 5: workflow.md documents 'scanned: none (no git repo)'"
-assert_grep "scanned: none (no open epics)"    "$WF_TEXT" "Case 5: workflow.md documents 'scanned: none (no open epics)'"
+assert_grep "scanned: none (no open specs)"    "$WF_TEXT" "Case 5: workflow.md documents 'scanned: none (no open specs)'"
 assert_grep "scanned: none (no CHANGELOG.md)"  "$WF_TEXT" "Case 5: workflow.md documents 'scanned: none (no CHANGELOG.md)'"
 
 # Behaviour: synthesize the three degradation cases and assert the writer
@@ -497,10 +497,18 @@ assert_eq_jq "$PROMOTE_JSON" "d['artifact_updated']" "True" "Case 6: artifact_up
 EPIC_ID="$(json_get "$PROMOTE_JSON" "d['epic_id']")"
 assert_grep_re '^fn-[0-9]+-' "$EPIC_ID" "Case 6: epic_id matches fn-N-slug shape"
 
-# Epic JSON written
-EPIC_JSON_PATH="$CASE6_REPO/.flow/epics/$EPIC_ID.json"
-[[ -f "$EPIC_JSON_PATH" ]] && ok "Case 6: epic JSON exists at $EPIC_JSON_PATH" \
-                          || fail "Case 6: epic JSON missing"
+# Spec JSON written. Probe canonical .flow/specs/<id>.json then legacy
+# .flow/epics/<id>.json so the assertion works on fresh post-1.0 repos AND
+# on alias-mode 0.x repos that still write JSON sidecars to .flow/epics/.
+if [[ -f "$CASE6_REPO/.flow/specs/$EPIC_ID.json" ]]; then
+  EPIC_JSON_PATH="$CASE6_REPO/.flow/specs/$EPIC_ID.json"
+  ok "Case 6: spec JSON exists at $EPIC_JSON_PATH (canonical)"
+elif [[ -f "$CASE6_REPO/.flow/epics/$EPIC_ID.json" ]]; then
+  EPIC_JSON_PATH="$CASE6_REPO/.flow/epics/$EPIC_ID.json"
+  ok "Case 6: spec JSON exists at $EPIC_JSON_PATH (legacy alias mode)"
+else
+  fail "Case 6: spec JSON missing in both .flow/specs/ and .flow/epics/"
+fi
 
 # Epic spec written with ## Source block linking back to the artifact
 EPIC_SPEC_PATH="$CASE6_REPO/.flow/specs/$EPIC_ID.md"
@@ -697,7 +705,7 @@ echo -e "${YELLOW}--- Case 10: numbered-options fallback (R19) ---${NC}"
 # Workflow.md must carry the literal frozen-format strings the smoke greps.
 # Spec §6.2 freezes the format; this is the smoke contract.
 assert_grep "Saved: .flow/prospects/<artifact-id>.md"   "$WF_TEXT" "Case 10: 'Saved: …' literal present in workflow.md"
-assert_grep "Promote a survivor to an epic?"           "$WF_TEXT" "Case 10: 'Promote a survivor to an epic?' literal present"
+assert_grep "Promote a survivor to a spec?"           "$WF_TEXT" "Case 10: 'Promote a survivor to a spec?' literal present"
 assert_grep "Enter choice [1-N|i|skip]:"               "$WF_TEXT" "Case 10: 'Enter choice [1-N|i|skip]:' literal present"
 assert_grep "i) Interview"                             "$WF_TEXT" "Case 10: interview alphabetic shortcut present"
 assert_grep "N) Skip"                                  "$WF_TEXT" "Case 10: numeric Skip slot present"

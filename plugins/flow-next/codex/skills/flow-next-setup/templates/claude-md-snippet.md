@@ -5,10 +5,10 @@ This project uses Flow-Next for task tracking. Use `.flow/bin/flowctl` instead o
 
 **Quick commands:**
 ```bash
-.flow/bin/flowctl list # List all epics + tasks
-.flow/bin/flowctl epics # List all epics
-.flow/bin/flowctl tasks --epic fn-N # List tasks for epic
-.flow/bin/flowctl ready --epic fn-N # What's ready
+.flow/bin/flowctl list # List all specs + tasks
+.flow/bin/flowctl specs # List all specs
+.flow/bin/flowctl tasks --spec fn-N # List tasks for spec
+.flow/bin/flowctl ready --spec fn-N # What's ready
 .flow/bin/flowctl show fn-N.M # View task
 .flow/bin/flowctl start fn-N.M # Claim task
 .flow/bin/flowctl done fn-N.M --summary-file s.md --evidence-json e.json
@@ -16,11 +16,11 @@ This project uses Flow-Next for task tracking. Use `.flow/bin/flowctl` instead o
 
 **Creating a spec** ("create a spec", "spec out X", "write a spec for X"):
 
-A spec = an epic. Create one directly — do NOT use `/flow-next:plan` (that breaks specs into tasks).
+Create one directly — do NOT use `/flow-next:plan` (that breaks specs into tasks).
 
 ```bash
-.flow/bin/flowctl epic create --title "Short title" --json
-.flow/bin/flowctl epic set-plan <epic-id> --file - --json <<'EOF'
+.flow/bin/flowctl spec create --title "Short title" --json
+.flow/bin/flowctl spec set-plan <spec-id> --file - --json <<'EOF'
 # Title
 
 ## Goal & Context
@@ -48,8 +48,8 @@ EOF
 ```
 
 After creating a spec, choose next step:
-- `/flow-next:plan <epic-id>` — research + break into tasks
-- `/flow-next:interview <epic-id>` — deep Q&A to refine the spec
+- `/flow-next:plan <spec-id>` — research + break into tasks
+- `/flow-next:interview <spec-id>` — deep Q&A to refine the spec
 
 **Rules:**
 - Use `.flow/bin/flowctl` for ALL task tracking

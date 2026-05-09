@@ -48,7 +48,9 @@ class TestMemorySchemaConstants(unittest.TestCase):
         self.assertEqual(len(flowctl.MEMORY_CATEGORIES["bug"]), 8)
 
     def test_knowledge_categories_count(self) -> None:
-        self.assertEqual(len(flowctl.MEMORY_CATEGORIES["knowledge"]), 5)
+        # 6 knowledge categories since 0.39.0 (added "decisions" per
+        # plugins/flow-next/docs/teams.md decision-records discussion).
+        self.assertEqual(len(flowctl.MEMORY_CATEGORIES["knowledge"]), 6)
 
     def test_bug_categories_content(self) -> None:
         self.assertIn("build-errors", flowctl.MEMORY_CATEGORIES["bug"])

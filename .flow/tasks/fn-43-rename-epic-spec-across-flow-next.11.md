@@ -30,8 +30,8 @@ Update the slash-command prompt files under `plugins/flow-next/commands/flow-nex
 - [ ] Frontmatter `description:` field updated where it mentions epic.
 
 ## Done summary
-
+Rewrote slash-command markdown files (`capture.md`, `interview.md`, `make-pr.md`, `uninstall.md`) for spec vocabulary: 8 epic refs replaced (frontmatter `description` / `argument-hint` + body prose). T6 redirect (`epic-review.md`) and T6 canonical (`spec-completion-review.md`) intentionally untouched. Codex mirror regen deferred to T15.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 47d6e02df08283cd274c86070c6fd9c2e39dcc99
+- Tests: grep -nE '(epic|Epic|EPIC)' commands/flow-next/{capture,interview,make-pr,uninstall}.md  -> 0 matches, grep -nE 'flowctl epic' same files -> 0 matches, grep -nE '<epic-id>' same files -> 0 matches, flowctl triage-skip --base 99e1684d --task fn-43-rename-epic-spec-across-flow-next.11 -> SHIP (docs-only, 4 files)
 - PRs:

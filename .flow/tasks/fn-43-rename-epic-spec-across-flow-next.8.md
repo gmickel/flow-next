@@ -43,8 +43,8 @@ Rewrite the capture skill (93 epic refs across 3 files) to use spec vocabulary. 
 - [ ] Source-tag taxonomy section unchanged.
 
 ## Done summary
-
+Rewrote the flow-next-capture skill (SKILL.md + workflow.md + phases.md) to use spec vocabulary throughout: prose epic to spec, CLI examples flowctl epic create + epic set-plan to flowctl spec create + spec set-plan, shell variable names EPIC_ID to SPEC_ID, while preserving legitimate `.flow/epics/` legacy-path references for alias-mode 0.x repo backward compat. Source-tag taxonomy and mode-detection logic untouched. Codex impl-review triage-skipped as docs-only (SHIP).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 440ace0f804174a293fef2cca67545575363d156
+- Tests: docs-only triage-skip (no tests/lints; pure prose changes to 3 skill markdown files)
 - PRs:

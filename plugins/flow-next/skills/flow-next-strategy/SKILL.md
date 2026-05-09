@@ -27,7 +27,7 @@ Interpret any argument as an optional focus: a section name to revisit (`metrics
 
 ## Core Principles
 
-1. **Anchor, not plan.** Strategy is what the product is and why. Features belong in `/flow-next:prospect`; tasks belong in epics and `/flow-next:plan`. Do not let either creep into the doc.
+1. **Anchor, not plan.** Strategy is what the product is and why. Features belong in `/flow-next:prospect`; tasks belong in specs and `/flow-next:plan`. Do not let either creep into the doc.
 2. **Rigor in the questions, not the headings.** The section headers are plain English. The interview questions enforce strategy discipline (`references/interview.md`).
 3. **Short is a feature.** The template is constrained. Adding sections costs more than it looks like. Push back on expansion.
 4. **Durable across runs.** This skill is rerunnable. On a second run it updates in place, preserves what is working, and only challenges sections that look stale or weak.
@@ -228,14 +228,14 @@ After a section is updated, return to the routing question — user can revisit 
 
 After writing (first-run or update), surface the file's role to the user in one paragraph:
 
-- If `.flow/epics/` is empty AND `.flow/prospects/` is empty: `Strategy doc written. Next, /flow-next:prospect [optional focus] generates ranked candidate ideas grounded in the strategy you just captured.`
+- If `.flow/specs/` is empty (and any legacy `.flow/epics/` is also empty) AND `.flow/prospects/` is empty: `Strategy doc written. Next, /flow-next:prospect [optional focus] generates ranked candidate ideas grounded in the strategy you just captured.`
 - If `.flow/` is populated: `Strategy doc written. Downstream skills (/flow-next:prospect, /flow-next:plan, /flow-next:interview, /flow-next:capture, /flow-next:sync) will read STRATEGY.md as grounding on next invocation.`
 
 One paragraph max. No follow-up questions.
 
 ## What this skill does not do
 
-- Does not update the issue tracker or reconcile in-flight work. Strategy is the doc; execution lives in epics, tasks, and `/flow-next:plan`.
+- Does not update the issue tracker or reconcile in-flight work. Strategy is the doc; execution lives in specs, tasks, and `/flow-next:plan`.
 - Does not write product requirements or implementation plans — those are `/flow-next:capture` and `/flow-next:plan`.
 - Does not compute metric values. It records *which* metrics matter and where they live, not what they read today.
 - Does not create per-subdirectory STRATEGY.md files. Strategy is repo-wide by Rumelt's definition; cascading strategies re-introduce the "is for everyone, is for no one" problem.

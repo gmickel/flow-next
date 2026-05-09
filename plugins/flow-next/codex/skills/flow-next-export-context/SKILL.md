@@ -22,7 +22,7 @@ Arguments: $ARGUMENTS
 Format: `<type> <target> [focus areas]`
 
 Types:
-- `plan <epic-id>` - Export plan review context
+- `plan <spec-id>` - Export plan review context
 - `impl` - Export implementation review context (current branch)
 
 Examples:
@@ -46,8 +46,8 @@ Parse arguments to determine if this is a plan or impl export.
 
 **For plan export:**
 ```bash
-$FLOWCTL show <epic-id> --json
-$FLOWCTL cat <epic-id>
+$FLOWCTL show <spec-id> --json
+$FLOWCTL cat <spec-id>
 ```
 
 **For impl export:**

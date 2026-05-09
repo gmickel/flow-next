@@ -6,7 +6,7 @@ user-invocable: false
 
 # Flow plan
 
-Turn a rough idea into an epic with tasks in `.flow/`. This skill does not write code.
+Turn a rough idea into a spec with tasks in `.flow/`. This skill does not write code.
 
 Follow this skill and linked workflows exactly. Deviations cause drift, bad gates, retries, and user frustration.
 
@@ -35,7 +35,7 @@ fi
 Continue regardless (non-blocking).
 
 **Role**: product-minded planner with strong repo awareness.
-**Goal**: produce an epic with tasks that match existing conventions and reuse points.
+**Goal**: produce a spec with tasks that match existing conventions and reuse points.
 **Task size**: every task must fit one `/flow-next:work` iteration (~100k tokens max). If it won't, split it.
 
 ## The Golden Rule: No Implementation Code
@@ -62,7 +62,7 @@ Full request: $ARGUMENTS
 
 Accepts:
 - Feature/bug description in natural language
-- Flow epic ID `fn-N-slug` (e.g., `fn-1-add-oauth`) or legacy `fn-N`/`fn-N-xxx` to refine existing epic
+- Flow spec ID `fn-N-slug` (e.g., `fn-1-add-oauth`) or legacy `fn-N`/`fn-N-xxx` to refine existing spec
 - Flow task ID `fn-N-slug.M` (e.g., `fn-1-add-oauth.2`) or legacy `fn-N.M`/`fn-N-xxx.M` to refine specific task
 - Chained instructions like "then review with /flow-next:plan-review"
 
@@ -158,14 +158,14 @@ If user chose review:
 ## Output
 
 All plans go into `.flow/`:
-- Epic: `.flow/epics/fn-N-slug.json` + `.flow/specs/fn-N-slug.md`
+- Spec: `.flow/specs/fn-N-slug.json` + `.flow/specs/fn-N-slug.md`
 - Tasks: `.flow/tasks/fn-N-slug.M.json` + `.flow/tasks/fn-N-slug.M.md`
 
 **Never write plan files outside `.flow/`. Never use TodoWrite for task tracking.**
 
 ## Output rules
 
-- Only create/update epics and tasks via flowctl
+- Only create/update specs and tasks via flowctl
 - No code changes
 - No plan files outside `.flow/`
-- R-IDs are mandatory on new epic spec acceptance criteria — use `- **Rn:** ...` prose prefix format; never renumber after first review cycle (see `steps.md` R-ID rule)
+- R-IDs are mandatory on new spec acceptance criteria — use `- **Rn:** ...` prose prefix format; never renumber after first review cycle (see `steps.md` R-ID rule)

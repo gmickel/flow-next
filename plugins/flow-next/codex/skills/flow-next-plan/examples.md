@@ -404,7 +404,7 @@ flowchart LR
 - One row per acceptance criterion — nothing slips through
 - Every requirement maps to task(s) or has explicit gap justification
 - R3 is intentionally deferred — called out, not silently dropped
-- Simple Req IDs (R1, R2...) — local to this epic, no global numbering
+- Simple Req IDs (R1, R2...) — local to this spec, no global numbering
 
 ---
 

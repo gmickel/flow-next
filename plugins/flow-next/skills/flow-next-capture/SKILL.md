@@ -1,17 +1,17 @@
 ---
 name: flow-next-capture
-description: Synthesize the current conversation context into a flow-next epic spec at `.flow/specs/<epic-id>.md` via `flowctl epic create + epic set-plan` — agent-native, source-tagged, with mandatory read-back before write. Triggers on /flow-next:capture, "capture spec", "lock down what we discussed", "make a spec from this conversation", "convert conversation to epic". Optional `mode:autofix` token runs without questions and requires `--yes` to commit. Optional `--rewrite <epic-id>` overwrites an existing epic spec; `--from-compacted-ok` overrides the compaction-detection refusal; `--override-strategy` proceeds despite a contradiction with an active STRATEGY.md track (and prompts to record the override as a decision).
+description: Synthesize the current conversation context into a flow-next spec at `.flow/specs/<spec-id>.md` via `flowctl spec create + spec set-plan` — agent-native, source-tagged, with mandatory read-back before write. Triggers on /flow-next:capture, "capture spec", "lock down what we discussed", "make a spec from this conversation", "convert conversation to spec". Optional `mode:autofix` token runs without questions and requires `--yes` to commit. Optional `--rewrite <spec-id>` overwrites an existing spec; `--from-compacted-ok` overrides the compaction-detection refusal; `--override-strategy` proceeds despite a contradiction with an active STRATEGY.md track (and prompts to record the override as a decision).
 user-invocable: false
 allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
 ---
 
-# /flow-next:capture — agent-native conversation → epic spec
+# /flow-next:capture — agent-native conversation → spec
 
-A free-form discussion (or a `/flow-next:prospect` survivor) frequently produces enough material for a complete epic spec, but stops short of the formal `flowctl epic create` + `epic set-plan` heredoc documented in `CLAUDE.md`. Without an explicit synthesis step, that context decays — the next session loses the conversation, the spec never lands, and the user re-explains the same idea to `/flow-next:plan`.
+A free-form discussion (or a `/flow-next:prospect` survivor) frequently produces enough material for a complete spec, but stops short of the formal `flowctl spec create` + `spec set-plan` heredoc documented in `CLAUDE.md`. Without an explicit synthesis step, that context decays — the next session loses the conversation, the spec never lands, and the user re-explains the same idea to `/flow-next:plan`.
 
-This skill IS the synthesis. The host agent (Claude Code / Codex / Droid) extracts the recent user turns, drafts a CLAUDE.md-shaped spec with **per-line source tags** (`[user]` / `[paraphrase]` / `[inferred]`), shows the full draft back via `AskUserQuestion`, and only then writes the epic via existing flowctl plumbing. There is no Python synthesizer, no codex / copilot subprocess, no fast-model classifier. The host agent is already an LLM and does the work directly.
+This skill IS the synthesis. The host agent (Claude Code / Codex / Droid) extracts the recent user turns, drafts a CLAUDE.md-shaped spec with **per-line source tags** (`[user]` / `[paraphrase]` / `[inferred]`), shows the full draft back via `AskUserQuestion`, and only then writes the spec via existing flowctl plumbing. There is no Python synthesizer, no codex / copilot subprocess, no fast-model classifier. The host agent is already an LLM and does the work directly.
 
-flowctl provides only thin epic plumbing (`epic create`, `epic set-plan`, optional `epic set-branch`, `memory search` for duplicate detection). No new flowctl subcommands.
+flowctl provides only thin spec plumbing (`spec create`, `spec set-plan`, optional `spec set-branch`, `memory search` for duplicate detection). No new flowctl subcommands.
 
 **Read [workflow.md](workflow.md) for the full phase-by-phase execution. Read [phases.md](phases.md) for the must-ask cases lookup, source-tag taxonomy, confidence tiers, and forbidden-behaviors list.**
 
@@ -25,7 +25,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 
 ## Mode Detection
 
-Parse `$ARGUMENTS` for the literal token `mode:autofix` and the flags `--rewrite <epic-id>`, `--from-compacted-ok`, `--yes`, `--override-strategy`. Strip recognized tokens; whatever remains is treated as freeform context (ignored — the conversation is the input, not `$ARGUMENTS`).
+Parse `$ARGUMENTS` for the literal token `mode:autofix` and the flags `--rewrite <spec-id>`, `--from-compacted-ok`, `--yes`, `--override-strategy`. Strip recognized tokens; whatever remains is treated as freeform context (ignored — the conversation is the input, not `$ARGUMENTS`).
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
@@ -74,8 +74,8 @@ fi
 ### Autofix mode rules
 
 - **No user questions.** Never call the blocking-question tool.
-- **Phase 0 hard-errors:** duplicate detected → list overlapping epic IDs to stderr, exit 2 unless `--rewrite <id>` was passed; compaction detected → exit 2 unless `--from-compacted-ok` was passed.
-- **Phase 3 must-ask hard-errors:** ambiguous title / untestable acceptance / scope-conflict-with-existing-epic → exit 2 with which case fired and why. Autofix cannot resolve must-ask cases.
+- **Phase 0 hard-errors:** duplicate detected → list overlapping spec IDs to stderr, exit 2 unless `--rewrite <id>` was passed; compaction detected → exit 2 unless `--from-compacted-ok` was passed.
+- **Phase 3 must-ask hard-errors:** ambiguous title / untestable acceptance / scope-conflict-with-existing-spec → exit 2 with which case fired and why. Autofix cannot resolve must-ask cases.
 - **Phase 4 print-only.** Full draft printed to stdout (frontmatter + all sections + R-IDs + `[inferred]` tally + 8+ acceptance suggestion if applicable). Without `--yes`, exit 0 with the "rerun with --yes" hint. With `--yes`, proceed to Phase 5 write.
 - **Phase 5 commits identically to interactive once it runs.**
 
@@ -109,12 +109,12 @@ The goal is automated synthesis with human oversight on judgment calls — not a
 
 - **Tech-stack mentions the user did not state.** "Needs persistence" is fine; "uses PostgreSQL" needs the user to have said PostgreSQL. Defer technology choices to `/flow-next:plan` (spec-kit convention — capture writes intent, plan writes implementation).
 - **Inventing acceptance criteria not in conversation.** Every acceptance criterion must be source-tagged; pure `[inferred]` criteria must surface at Phase 4 read-back so the user can reject them.
-- **Code snippets or specific file paths in the spec body.** Those belong in `/flow-next:plan` task specs after research lands. Capture's output is a high-level epic spec, not an implementation guide.
-- **Silent overwrite of an existing epic spec.** Idempotency requires `--rewrite <epic-id>` (R8). Without it, Phase 0 conflict-detection branches into extend / supersede / proceed-anyway.
-- **Auto-splitting an epic that has 8+ acceptance criteria.** Phase 4 surfaces the option to split; the user decides. Never auto-action a split.
+- **Code snippets or specific file paths in the spec body.** Those belong in `/flow-next:plan` task specs after research lands. Capture's output is a high-level spec, not an implementation guide.
+- **Silent overwrite of an existing spec.** Idempotency requires `--rewrite <spec-id>` (R8). Without it, Phase 0 conflict-detection branches into extend / supersede / proceed-anyway.
+- **Auto-splitting a spec that has 8+ acceptance criteria.** Phase 4 surfaces the option to split; the user decides. Never auto-action a split.
 - **Setting `context: fork`** — blocking-question tools must stay reachable.
-- **Calling `flowctl epic create` before Phase 4 approval.** Phase 5 is the only write phase.
-- **Using `git add -A` from this skill.** When committing the new spec, stage only `.flow/epics/<id>.json` + `.flow/specs/<id>.md` (and `.flow/meta.json` if `next_epic` mutated). Other working-tree changes are not capture's concern.
+- **Calling `flowctl spec create` before Phase 4 approval.** Phase 5 is the only write phase.
+- **Using `git add -A` from this skill.** When committing the new spec, stage only the JSON sidecar (`.flow/specs/<id>.json` post-1.0; `.flow/epics/<id>.json` on alias-mode 0.x repos that haven't migrated yet) + `.flow/specs/<id>.md` (and `.flow/meta.json` if the next-id counter mutated). Other working-tree changes are not capture's concern.
 
 ## Pre-check: local setup version
 
@@ -136,20 +136,20 @@ fi
 
 Execute the phases in [workflow.md](workflow.md) in order:
 
-0. **Pre-flight** — duplicate detection (scan `.flow/epics/` + `flowctl memory search` on extracted keywords); compaction detection (scan transcript for truncation markers); idempotency (refuse silent overwrite without `--rewrite`).
+0. **Pre-flight** — duplicate detection (scan `.flow/specs/` + `.flow/epics/` for legacy alias-mode repos + `flowctl memory search` on extracted keywords); compaction detection (scan transcript for truncation markers); idempotency (refuse silent overwrite without `--rewrite`).
 1. **Extract conversation evidence** — build a verbatim `## Conversation Evidence` block FIRST (raw quotes from recent user turns, capped ~30 lines). Spec sections refer to it by line, not from agent memory.
 2. **Source-tagged synthesis** — draft each section with per-line tags (`[user]` / `[paraphrase]` / `[inferred]`). Apply the CLAUDE.md richer template (Goal & Context / Architecture & Data Models / API Contracts / Edge Cases & Constraints / Acceptance Criteria with R-IDs / Boundaries / Decision Context).
 3. **Must-ask cases (R9)** — interactive only; autofix exits 2 if any fire. Hard-error conditions: ambiguous title / untestable acceptance / scope-conflict. Optional ambiguities use lead-with-recommendation + confidence tier.
 4. **Read-back loop (mandatory, even in autofix)** — show full draft + R-ID list + `[inferred]` tally via `AskUserQuestion` (interactive) or print to stdout (autofix). Interactive: `approve` / `edit` / `abort`. When 8+ acceptance criteria: include `consider splitting?` as an option (R11). Autofix: requires `--yes` to commit.
-5. **Write via flowctl** — `flowctl epic create --title "..." --json` → parse `id` → `flowctl epic set-plan <id> --file - --json <<heredoc>`. Optional `flowctl epic set-branch` if user named one. Capture creates fresh epics; allocate R-IDs sequentially from R1.
+5. **Write via flowctl** — `flowctl spec create --title "..." --json` → parse `id` → `flowctl spec set-plan <id> --file - --json <<heredoc>`. Optional `flowctl spec set-branch` if user named one. Capture creates fresh specs; allocate R-IDs sequentially from R1.
 6. **Suggested next step** — print `Spec captured at .flow/specs/<id>.md.` plus `/flow-next:plan <id>` and `/flow-next:interview <id>` next-step hints.
 
 ## Output rules
 
-The new epic spec is the deliverable — it lives in `.flow/specs/<epic-id>.md` after Phase 5. Standard output also receives:
+The new spec is the deliverable — it lives in `.flow/specs/<spec-id>.md` after Phase 5. Standard output also receives:
 
 - The full draft (Phase 4) — interactive shows it inside the read-back; autofix prints it as the report.
-- The created epic id + spec path (Phase 5).
+- The created spec id + spec path (Phase 5).
 - The next-step footer (Phase 6).
 
-Autofix mode without `--yes` produces a draft + the "rerun with --yes" hint and exits 0 — no write happens, no epic is allocated.
+Autofix mode without `--yes` produces a draft + the "rerun with --yes" hint and exits 0 — no write happens, no spec is allocated.

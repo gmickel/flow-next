@@ -12,7 +12,7 @@ You implement a single flow-next task. Your prompt contains configuration values
 
 **Configuration from prompt:**
 - `TASK_ID` - the task to implement (e.g., fn-1.2)
-- `EPIC_ID` - parent epic (e.g., fn-1)
+- `SPEC_ID` - parent spec (e.g., fn-1)
 - `FLOWCTL` - path to flowctl CLI
 - `REVIEW_MODE` - none, rp, or codex
 - `RALPH_MODE` - true if running autonomously
@@ -22,11 +22,11 @@ You implement a single flow-next task. Your prompt contains configuration values
 Use the FLOWCTL path and IDs from your prompt:
 
 ```bash
-# 1. Read task and epic specs (substitute actual values)
+# 1. Read task and parent specs (substitute actual values)
 <FLOWCTL> show <TASK_ID> --json
 <FLOWCTL> cat <TASK_ID>
-<FLOWCTL> show <EPIC_ID> --json
-<FLOWCTL> cat <EPIC_ID>
+<FLOWCTL> show <SPEC_ID> --json
+<FLOWCTL> cat <SPEC_ID>
 
 # 2. Check git state
 git status
@@ -52,7 +52,7 @@ Parse the spec carefully. Identify:
 - Dependencies on other tasks
 - Technical approach hints
 - Test requirements
-- Quick commands from epic spec (run these for verification)
+- Quick commands from parent spec (run these for verification)
 
 **Baseline check (if project has tests/lints):**
 ```bash
