@@ -53,8 +53,18 @@ Other guides reference flow-next via slash-command names (which do NOT change). 
 - [ ] PR URLs for both drafts recorded; merge timing is on Gordon's separate cadence (not gating this task).
 
 ## Done summary
+External T16 maintainer-only task: drafted both PRs for the post-merge external repo updates.
 
+mickel.tech: rebranded the public flow-next product page for 1.0 -- collapsed `epic` vocabulary to `spec` across hero, FAQ, scouts, phases, features, commands, Ralph + storage sections; renamed `/flow-next:epic-review` -> `/flow-next:spec-completion-review` and `epic-scout` -> `spec-scout`; corrected the `.flow/` directory tree (spec markdown + JSON sidecar colocate under `.flow/specs/`); added a new "What does spec-driven development mean for flow-next?" FAQ; reframed hero subtitle, metadata title/description, OpenGraph + Twitter to lead with spec-driven development; bumped page version 0.40.0 -> 1.0.0; verified clean via biome + tsc + `bun run build`.
+
+AI-x-SDLC-Starter-Kit: targeted edit at `guides/methodology.md:546` (the [8] PR-AS-COGNITIVE-AID callout) -- "epic spec with R-IDs" -> "spec with R-IDs" and `flowctl epic export-cognitive-aid` -> `flowctl spec export-cognitive-aid`. Other guides (slash-command references) intentionally not touched per fn-43 boundaries.
+
+Both PRs are DRAFT per the task acceptance ("drafts pushed, NOT merged"). Merge timing on Gordon's separate cadence -- this task does NOT gate fn-43 epic close.
+
+Drafts:
+- mickel.tech: https://github.com/gmickel/mickel.tech/pull/5
+- AI-x-SDLC-Starter-Kit: https://github.com/gmickel/AI-x-SDLC-Starter-Kit/pull/3
 ## Evidence
-- Commits:
-- Tests:
-- PRs:
+- Commits: mickel.tech@1e241db: feat(flow-next): rename to spec-driven vocabulary + 1.0 framing, AI-x-SDLC-Starter-Kit@c5537c2: docs(methodology): rename flow-next epic refs to spec for 1.0
+- Tests: mickel.tech: bun x biome check app/apps/flow-next/page.tsx -- clean, mickel.tech: bun x tsc --noEmit -- clean, mickel.tech: bun run build -- compiled successfully, AI-x-SDLC-Starter-Kit: grep -n 'flowctl epic\|epic spec with R-IDs' guides/methodology.md -- no matches
+- PRs: https://github.com/gmickel/mickel.tech/pull/5 (draft), https://github.com/gmickel/AI-x-SDLC-Starter-Kit/pull/3 (draft)
