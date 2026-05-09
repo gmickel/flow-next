@@ -5,8 +5,8 @@
     "url": "https://github.com/gmickel"
   },
   "metadata": {
-    "description": "Plan-first workflows for Claude Code and Factory Droid. Two plugins: flow-next (recommended, zero-dep, Ralph autonomous mode) and flow (Beads integration).",
-    "version": "1.0.0"
+    "description": "Plan-first workflows for Claude Code and Factory Droid. Ships flow-next: zero-dep, spec-driven, Ralph autonomous mode.",
+    "version": "1.0.1"
   },
   "plugins": [
     {
@@ -27,25 +27,6 @@
         "execution"
       ],
       "source": "./plugins/flow-next"
-    },
-    {
-      "name": "flow",
-      "description": "Two-step planning + execution workflow with optional Beads integration. Includes 6 subagents, 5 commands, 7 skills.",
-      "version": "0.8.4",
-      "author": {
-        "name": "Gordon Mickel",
-        "email": "gordon@mickel.tech",
-        "url": "https://mickel.tech"
-      },
-      "homepage": "https://mickel.tech/apps/flow",
-      "tags": [
-        "claude-code",
-        "plugin",
-        "workflow",
-        "planning",
-        "execution"
-      ],
-      "source": "./plugins/flow"
     }
   ]
 }

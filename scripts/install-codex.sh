@@ -3,10 +3,14 @@
 #
 # One-liner install (no manual clone needed):
 #   git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-install \
-#     && /tmp/flow-next-install/scripts/install-codex.sh flow-next \
+#     && /tmp/flow-next-install/scripts/install-codex.sh \
 #     && trash /tmp/flow-next-install
 #
-# Usage: ./scripts/install-codex.sh <flow|flow-next>
+# Usage: ./scripts/install-codex.sh [flow-next]
+#
+# (The plugin name is optional and defaults to flow-next — kept for backward
+# compatibility with older one-liners. The legacy `flow` plugin was removed
+# in flow-next 1.0.1.)
 #
 # What gets installed (from pre-built codex/ directory):
 #   - Skills:    codex/skills/             → ~/.codex/skills/
@@ -37,23 +41,13 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Parse argument
-PLUGIN="${1:-}"
-if [ -z "$PLUGIN" ]; then
-    echo -e "${RED}Error: Plugin name required${NC}"
-    echo "Usage: $0 <flow|flow-next>"
-    exit 1
-fi
-
-if [ "$PLUGIN" = "flow" ]; then
-    echo -e "${RED}Error: 'flow' plugin does not have pre-built Codex files.${NC}"
-    echo "Use 'flow-next' instead."
-    exit 1
-fi
-
+# Plugin is fixed to flow-next; the optional positional arg is accepted for
+# backward compatibility with old one-liners that passed `flow-next` explicitly.
+PLUGIN="${1:-flow-next}"
 if [ "$PLUGIN" != "flow-next" ]; then
-    echo -e "${RED}Error: Invalid plugin '$PLUGIN'${NC}"
-    echo "Usage: $0 <flow|flow-next>"
+    echo -e "${RED}Error: only 'flow-next' is supported${NC}"
+    echo "The legacy 'flow' plugin was removed in flow-next 1.0.1."
+    echo "Usage: $0 [flow-next]"
     exit 1
 fi
 
