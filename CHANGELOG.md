@@ -2,6 +2,47 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.0.0] - 2026-05-09
+
+### What changed
+- **`flowctl epic` renamed to `flowctl spec`; `.flow/epics/` renamed to `.flow/specs/`; `epic-scout` renamed to `spec-scout`; `/flow-next:epic-review` renamed to `/flow-next:spec-completion-review`.** Two years of "epic spec" prose collapsed into one word — `spec` — across the entire flow-next surface. The plugin now ships epic-free: skills, commands, agents, slash-command markdown, smoke tests, internal docs, root README + plugin README + CLAUDE.md + `.flow/usage.md`, Ralph init templates, and the Codex mirror all use spec vocabulary as canonical. Worker-prompt heredoc fields renamed `EPIC_ID → SPEC_ID`; Ralph init template variable `EPICS_FILE → SPECS_FILE`; cognitive-aid payload key `epic_id → spec_id` (both surface in dual-emit during the alias window). Why now? Two reasons: (1) "epic" overloaded "release-train epic" in user vocabulary and produced cross-team friction every time a new contributor read flow-next prose; (2) flow-swarm — the planned multi-agent orchestrator — needs the `spec` lexicon as its canonical primitive, and shipping the rename in 1.0 closes the last design ambiguity before flow-swarm's first cut.
+
+### What still works
+- **All 0.x scripts and CLAUDE.md examples keep working through 1.x.** The `flowctl epic*` CLI surface stays as a deprecation alias layer that calls into canonical `cmd_specs_*` / `cmd_spec_*` entry points. `--epic` argparse flags remain accepted (alongside new `--spec`); JSON read responses dual-emit `spec_id` *and* `epic_id` so existing pipelines see both keys; on read, `.flow/epics/` is auto-fallback when `.flow/specs/` is absent. The legacy `EPIC_ID` heredoc field is still parsed by the worker prompt; the legacy `EPICS_FILE` variable is still recognized by Ralph init. Every alias path emits a one-time stderr deprecation hint pointing at the canonical CLI; suppress with `FLOW_NO_DEPRECATION=1` (mirrors the existing `flowctl memory migrate` precedent). End result: copy-pasted CLAUDE.md examples from 0.x repos run unchanged on 1.0.0; existing `.flow/epics/` directories require zero immediate action.
+
+### Two migration paths
+- **Interactive (recommended):** `/flow-next:setup` — host agent walks the user through the migration, shows the dry-run plan, prompts for confirmation, and runs `flowctl migrate-rename --yes` on consent.
+- **Deterministic (automation):** `flowctl migrate-rename --dry-run` first to preview the plan; then `flowctl migrate-rename --yes` to apply. The migration is transactional — atomic backup at `.flow/.backup-pre-1.0/`, lockfile-guarded against concurrent runs, sentinel `.flow/.migration-manifest` for idempotency, crash-recovery decision tree on every invocation. Migrates `.flow/epics/<id>.md` → `.flow/specs/<id>.md`, rewrites `epic:` → `spec:` keys in JSON state files, leaves the canonical filesystem layout under `.flow/specs/`.
+
+### Optional cleanup
+- **Refresh your CLAUDE.md / AGENTS.md prose.** Aliases keep examples working forever, but the deprecation banner stops nagging once your prose uses `flowctl spec` everywhere. Quick `sed` snippet:
+  ```bash
+  # In-place rewrite (BSD sed — macOS); GNU sed users drop the empty -i argument.
+  sed -i '' \
+    -e 's|flowctl epic create|flowctl spec create|g' \
+    -e 's|flowctl epic set-plan|flowctl spec set-plan|g' \
+    -e 's|flowctl epics|flowctl specs|g' \
+    -e 's|flowctl epic |flowctl spec |g' \
+    -e 's|--epic |--spec |g' \
+    -e 's|\.flow/epics/|.flow/specs/|g' \
+    CLAUDE.md AGENTS.md
+  ```
+  Always commit your CLAUDE.md / AGENTS.md before running this; review the diff and tweak edge cases (deprecation context, fenced-code examples that intentionally show the legacy form). A future `flowctl migrate-docs --dry-run` helper will automate this with diff-preview semantics — deferred from 1.0.0 to keep the release surface tight.
+
+### Alias removal timeline
+- **Aliases are not deprecated forever.** The current contract: aliases keep working through all of 1.x, with stderr deprecation hints (suppressible via `FLOW_NO_DEPRECATION=1`). Soft removal target is 2.0.0 — telemetry-driven, NOT calendar-driven. We'll watch the deprecation-hint stderr counts (and direct user feedback) for the duration of 1.x; if real-world `flowctl epic` invocations have effectively zeroed out, 2.0.0 drops the alias layer. If usage stays high, the alias layer stays. R28 explicitly forbids hard-coded sunset dates — a flag day with no escape hatch is a footgun on a tool that runs in production loops.
+
+### Rollback
+- **`flowctl migrate-rollback --yes` restores the pre-1.0 layout.** The migration writes a transactional backup to `.flow/.backup-pre-1.0/` before touching anything; rollback restores from that backup, deletes `.flow/specs/` + `.flow/.migration-manifest`, and re-asserts `.flow/epics/`. Post-migration writes (new specs / task updates / done summaries authored after migrate-rename) are detected and rollback refuses by default — pass `--force-overwrite-post-migration-changes` to discard them explicitly. Lockfile-guarded so a peer migrate-rename + migrate-rollback can't race.
+
+### Known issue (anthropics/claude-code#52218)
+- **Claude Code's plugin auto-update may stale on bundled hook changes.** When a flow-next release ships hook-file changes (Ralph guard hooks, PreToolUse matchers), Claude Code's plugin auto-update path occasionally serves the cached pre-update hook bundle even after the manifest version bumps. Symptom: `flowctl` CLI reports 1.0.0 but Ralph guard hooks behave like 0.42.0. Workaround: run `/plugin update flow-next` manually once after upgrading; this forces a hot-reload of the bundled hook bundle. Tracking upstream: anthropics/claude-code#52218. Codex (`scripts/install-codex.sh flow-next`) and Factory Droid plugin paths are unaffected — only the Claude Code marketplace auto-update path exhibits this behavior.
+
+### Notes
+- **Why `spec` and not `epic-spec` / `feature-spec` / `plan`?** Single-word primitives compose better in CLI grammar. `flowctl spec create` reads cleanly; `flowctl epic-spec create` reads as if there's an unspoken `epic` parent. The shorter form also matches GitHub's `gh pr create` / `gh issue create` cadence — the rename brings flow-next in line with the existing CLI lexicon users already have in muscle memory.
+- **Why a major bump?** Renaming the canonical CLI surface and the on-disk directory layout is a breaking-change-shaped event even when aliases preserve every behavior. Semver says: don't surprise people. 1.0.0 is also a deliberate signal — flow-next has been production-stable since the 0.30.0 era; the version number was holding the ecosystem back from treating it as a 1.x dependency. Both motivations align.
+- **Why dual-emit JSON instead of a hard cutover?** Dual-emit lets downstream tooling (the future flow-swarm orchestrator, third-party integrators reading flowctl JSON output) migrate at their own cadence inside the 1.x window. JSON consumers reading `epic_id` keep working; consumers reading `spec_id` see the new canonical key from day one. The dual-emit overhead is two extra dictionary entries per response — measured cost, not theoretical.
+
 ## [flow-next 0.42.0] - 2026-05-07
 
 ### Added

@@ -1,6 +1,6 @@
 interface:
   display_name: "Flow Capture"
-  short_description: "Synthesize conversation context into a flow-next epic spec"
+  short_description: "Synthesize conversation context into a flow-next spec"
   brand_color: "#3B82F6"
   default_prompt: "Capture this as a spec: "
 policy:
