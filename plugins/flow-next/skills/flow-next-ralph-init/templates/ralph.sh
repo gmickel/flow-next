@@ -125,7 +125,7 @@ ui() {
   echo -e "$*"
 }
 
-# Get title from epic/task JSON
+# Get title from spec/task JSON
 get_title() {
   local json="$1"
   "$PYTHON_BIN" - "$json" <<'PY'
@@ -138,50 +138,66 @@ except:
 PY
 }
 
-# Count progress (done/total tasks for scoped epics)
+# Count progress (done/total tasks for scoped specs).
+# Scans .flow/specs/ (canonical post-1.0) AND .flow/epics/ (legacy 0.x); fn-43.2
+# alias-mode keeps both layouts on disk for back-compat.
 get_progress() {
-  "$PYTHON_BIN" - "$ROOT_DIR" "${EPICS_FILE:-}" <<'PY'
+  "$PYTHON_BIN" - "$ROOT_DIR" "${SPECS_FILE:-}" <<'PY'
 import json, sys
 from pathlib import Path
 root = Path(sys.argv[1])
-epics_file = sys.argv[2] if len(sys.argv) > 2 else ""
+specs_file = sys.argv[2] if len(sys.argv) > 2 else ""
 flow_dir = root / ".flow"
 
-# Get scoped epics or all
+# Get scoped specs or all. Accept either "specs" (canonical) or "epics" (legacy)
+# top-level key in the run scope file.
 scoped = []
-if epics_file:
+if specs_file:
     try:
-        scoped = json.load(open(epics_file))["epics"]
+        data = json.load(open(specs_file))
+        scoped = data.get("specs") or data.get("epics") or []
     except:
         pass
 
-epics_dir = flow_dir / "epics"
+# fn-43.2: read from BOTH canonical specs/ (1.0+) and legacy epics/ (0.x repos
+# in alias mode). Earlier hits win — canonical first, legacy fills gaps.
+specs_dirs = [d for d in (flow_dir / "specs", flow_dir / "epics") if d.exists()]
 tasks_dir = flow_dir / "tasks"
-if not epics_dir.exists():
+if not specs_dirs:
     print("0|0|0|0")
     sys.exit(0)
 
-epic_ids = []
-for f in sorted(epics_dir.glob("fn-*.json")):
-    eid = f.stem
-    if not scoped or eid in scoped:
-        epic_ids.append(eid)
+spec_meta = {}  # id -> Path to JSON sidecar
+for d in specs_dirs:
+    for f in sorted(d.glob("fn-*.json")):
+        sid = f.stem
+        if sid not in spec_meta:
+            spec_meta[sid] = f
 
-epics_done = sum(1 for e in epic_ids if json.load(open(epics_dir / f"{e}.json")).get("status") == "done")
+spec_ids = [sid for sid in sorted(spec_meta) if not scoped or sid in scoped]
+
+specs_done = 0
+for sid in spec_ids:
+    try:
+        if json.load(open(spec_meta[sid])).get("status") == "done":
+            specs_done += 1
+    except:
+        pass
+
 tasks_total = 0
 tasks_done = 0
 if tasks_dir.exists():
     for tf in tasks_dir.glob("*.json"):
         try:
             t = json.load(open(tf))
-            epic_id = tf.stem.rsplit(".", 1)[0]
-            if not scoped or epic_id in scoped:
+            spec_id = tf.stem.rsplit(".", 1)[0]
+            if not scoped or spec_id in scoped:
                 tasks_total += 1
                 if t.get("status") == "done":
                     tasks_done += 1
         except:
             pass
-print(f"{epics_done}|{len(epic_ids)}|{tasks_done}|{tasks_total}")
+print(f"{specs_done}|{len(spec_ids)}|{tasks_done}|{tasks_total}")
 PY
 }
 
@@ -215,14 +231,14 @@ ui_header() {
 }
 
 ui_config() {
-  local git_branch progress_info epics_done epics_total tasks_done tasks_total
+  local git_branch progress_info specs_done specs_total tasks_done tasks_total
   git_branch="$(git -C "$ROOT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")"
   progress_info="$(get_progress)"
-  IFS='|' read -r epics_done epics_total tasks_done tasks_total <<< "$progress_info"
+  IFS='|' read -r specs_done specs_total tasks_done tasks_total <<< "$progress_info"
 
   ui ""
   ui "${C_DIM}   Branch:${C_RESET} ${C_BOLD}$git_branch${C_RESET}"
-  ui "${C_DIM}   Progress:${C_RESET} Epic ${epics_done}/${epics_total} ${C_DIM}•${C_RESET} Task ${tasks_done}/${tasks_total}"
+  ui "${C_DIM}   Progress:${C_RESET} Spec ${specs_done}/${specs_total} ${C_DIM}•${C_RESET} Task ${tasks_done}/${tasks_total}"
 
   # Show the full spec (so Ralph operators see the model / effort they picked);
   # map the bare-backend name to a pretty label.
@@ -243,7 +259,7 @@ ui_config() {
     copilot) completion_display="Copilot${COMPLETION_REVIEW#copilot}" ;;
   esac
   ui "${C_DIM}   Reviews:${C_RESET} Plan=$plan_display ${C_DIM}•${C_RESET} Work=$work_display ${C_DIM}•${C_RESET} Completion=$completion_display"
-  [[ -n "${EPICS:-}" ]] && ui "${C_DIM}   Scope:${C_RESET} $EPICS"
+  [[ -n "${SPECS:-}" ]] && ui "${C_DIM}   Scope:${C_RESET} $SPECS"
   ui ""
 }
 
@@ -262,15 +278,15 @@ ui_version_check() {
 }
 
 ui_iteration() {
-  local iter="$1" status="$2" epic="${3:-}" task="${4:-}" title="" item_json=""
+  local iter="$1" status="$2" spec="${3:-}" task="${4:-}" title="" item_json=""
   local elapsed
   elapsed="$(elapsed_time)"
   ui ""
   ui "${C_BOLD}${C_CYAN}🔄 Iteration $iter${C_RESET}                                              ${C_DIM}[${elapsed}]${C_RESET}"
   if [[ "$status" == "plan" ]]; then
-    item_json="$("$FLOWCTL" show "$epic" --json 2>/dev/null || true)"
+    item_json="$("$FLOWCTL" show "$spec" --json 2>/dev/null || true)"
     title="$(get_title "$item_json")"
-    ui "   ${C_DIM}Epic:${C_RESET} ${C_BOLD}$epic${C_RESET} ${C_DIM}\"$title\"${C_RESET}"
+    ui "   ${C_DIM}Spec:${C_RESET} ${C_BOLD}$spec${C_RESET} ${C_DIM}\"$title\"${C_RESET}"
     ui "   ${C_DIM}Phase:${C_RESET} ${C_YELLOW}Planning${C_RESET}"
   elif [[ "$status" == "work" ]]; then
     item_json="$("$FLOWCTL" show "$task" --json 2>/dev/null || true)"
@@ -278,15 +294,15 @@ ui_iteration() {
     ui "   ${C_DIM}Task:${C_RESET} ${C_BOLD}$task${C_RESET} ${C_DIM}\"$title\"${C_RESET}"
     ui "   ${C_DIM}Phase:${C_RESET} ${C_MAGENTA}Implementation${C_RESET}"
   elif [[ "$status" == "completion_review" ]]; then
-    item_json="$("$FLOWCTL" show "$epic" --json 2>/dev/null || true)"
+    item_json="$("$FLOWCTL" show "$spec" --json 2>/dev/null || true)"
     title="$(get_title "$item_json")"
-    ui "   ${C_DIM}Epic:${C_RESET} ${C_BOLD}$epic${C_RESET} ${C_DIM}\"$title\"${C_RESET}"
+    ui "   ${C_DIM}Spec:${C_RESET} ${C_BOLD}$spec${C_RESET} ${C_DIM}\"$title\"${C_RESET}"
     ui "   ${C_DIM}Phase:${C_RESET} ${C_GREEN}Completion Review${C_RESET}"
   fi
 }
 
 ui_plan_review() {
-  local mode="$1" epic="$2"
+  local mode="$1" spec="$2"
   if [[ "$mode" == "rp" ]]; then
     ui ""
     ui "   ${C_YELLOW}📝 Plan Review${C_RESET}"
@@ -320,18 +336,18 @@ ui_impl_review() {
 }
 
 ui_completion_review() {
-  local mode="$1" epic="$2"
+  local mode="$1" spec="$2"
   if [[ "$mode" == "rp" ]]; then
     ui ""
-    ui "   ${C_GREEN}✅ Epic Completion Review${C_RESET}"
+    ui "   ${C_GREEN}✅ Spec Completion Review${C_RESET}"
     ui "      ${C_DIM}Verifying spec compliance via RepoPrompt...${C_RESET}"
   elif [[ "$mode" == "codex" ]]; then
     ui ""
-    ui "   ${C_GREEN}✅ Epic Completion Review${C_RESET}"
+    ui "   ${C_GREEN}✅ Spec Completion Review${C_RESET}"
     ui "      ${C_DIM}Verifying spec compliance via Codex...${C_RESET}"
   elif [[ "$mode" == "copilot" ]]; then
     ui ""
-    ui "   ${C_GREEN}✅ Epic Completion Review${C_RESET}"
+    ui "   ${C_GREEN}✅ Spec Completion Review${C_RESET}"
     ui "      ${C_DIM}Verifying spec compliance via Copilot...${C_RESET}"
   fi
 }
@@ -361,16 +377,16 @@ ui_blocked() {
 }
 
 ui_complete() {
-  local elapsed progress_info epics_done epics_total tasks_done tasks_total
+  local elapsed progress_info specs_done specs_total tasks_done tasks_total
   elapsed="$(elapsed_time)"
   progress_info="$(get_progress)"
-  IFS='|' read -r epics_done epics_total tasks_done tasks_total <<< "$progress_info"
+  IFS='|' read -r specs_done specs_total tasks_done tasks_total <<< "$progress_info"
 
   ui ""
   ui "${C_BOLD}${C_GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
   ui "${C_BOLD}${C_GREEN}  ✅ Ralph Complete${C_RESET}                                        ${C_DIM}[${elapsed}]${C_RESET}"
   ui ""
-  ui "   ${C_DIM}Tasks:${C_RESET} ${tasks_done}/${tasks_total} ${C_DIM}•${C_RESET} ${C_DIM}Epics:${C_RESET} ${epics_done}/${epics_total}"
+  ui "   ${C_DIM}Tasks:${C_RESET} ${tasks_done}/${tasks_total} ${C_DIM}•${C_RESET} ${C_DIM}Specs:${C_RESET} ${specs_done}/${specs_total}"
   ui "${C_BOLD}${C_GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
   ui ""
 }
@@ -415,7 +431,10 @@ COMPLETION_REVIEW_BACKEND="${COMPLETION_REVIEW%%:*}"
 CODEX_SANDBOX="${CODEX_SANDBOX:-auto}"  # Codex sandbox mode; flowctl reads this env var
 REQUIRE_PLAN_REVIEW="${REQUIRE_PLAN_REVIEW:-0}"
 YOLO="${YOLO:-0}"
-EPICS="${EPICS:-}"
+# Spec scope: prefer canonical SPECS; legacy EPICS still accepted (T2 alias).
+# Existing user config.env files with EPICS=... continue to work unchanged.
+SPECS="${SPECS:-${EPICS:-}}"
+EPICS="$SPECS"  # mirror so any downstream reader using legacy name keeps working
 export CODEX_SANDBOX  # Ensure available to Claude worker for flowctl codex commands
 
 # Copilot runtime config (env-cascade resolver reads these). Only export when
@@ -450,7 +469,8 @@ while [[ $# -gt 0 ]]; do
       echo "  --help, -h       Show this help"
       echo ""
       echo "Environment variables:"
-      echo "  EPICS            Comma/space-separated epic IDs to work on"
+      echo "  SPECS            Comma/space-separated spec IDs to work on"
+      echo "                   (alias EPICS still accepted for back-compat)"
       echo "  MAX_ITERATIONS   Max loop iterations (default: 25)"
       echo "  YOLO             Set to 1 to skip permissions (required for unattended)"
       echo ""
@@ -529,7 +549,7 @@ render_template() {
 import os, sys
 path = sys.argv[1]
 text = open(path, encoding="utf-8").read()
-keys = ["EPIC_ID","TASK_ID","PLAN_REVIEW","WORK_REVIEW","COMPLETION_REVIEW","PLAN_REVIEW_BACKEND","WORK_REVIEW_BACKEND","COMPLETION_REVIEW_BACKEND","BRANCH_MODE","BRANCH_MODE_EFFECTIVE","REQUIRE_PLAN_REVIEW","REVIEW_RECEIPT_PATH","RALPH_ITERATION"]
+keys = ["SPEC_ID","TASK_ID","PLAN_REVIEW","WORK_REVIEW","COMPLETION_REVIEW","PLAN_REVIEW_BACKEND","WORK_REVIEW_BACKEND","COMPLETION_REVIEW_BACKEND","BRANCH_MODE","BRANCH_MODE_EFFECTIVE","REQUIRE_PLAN_REVIEW","REVIEW_RECEIPT_PATH","RALPH_ITERATION"]
 for k in keys:
     text = text.replace("{{%s}}" % k, os.environ.get(k, ""))
 print(text)
@@ -573,12 +593,15 @@ print(count)
 PY
 }
 
-write_epics_file() {
+write_specs_file() {
   "$PYTHON_BIN" - "$1" <<'PY'
 import json, sys
 raw = sys.argv[1]
 parts = [p.strip() for p in raw.replace(",", " ").split() if p.strip()]
-print(json.dumps({"epics": parts}, indent=2, sort_keys=True))
+# fn-43.2 / fn-43.9: dual-emit canonical "specs" + legacy "epics" key. flowctl
+# `cmd_next` prefers "specs" but falls back to "epics" — emitting both keeps
+# downstream consumers (older flowctl, third-party tooling) from breaking.
+print(json.dumps({"specs": parts, "epics": parts}, indent=2, sort_keys=True))
 PY
 }
 
@@ -654,7 +677,7 @@ append_progress() {
   fi
   {
     echo "## $(date -u +%Y-%m-%dT%H:%M:%SZ) - iter $iter"
-    echo "status=$status epic=${epic_id:-} task=${task_id:-} reason=${reason:-}"
+    echo "status=$status spec=${spec_id:-} task=${task_id:-} reason=${reason:-}"
     echo "claude_rc=$claude_rc"
     echo "verdict=${verdict:-}"
     echo "promise=${promise:-}"
@@ -762,8 +785,8 @@ with open(path, "w", encoding="utf-8") as f:
 PY
 }
 
-list_epics_from_file() {
-  "$PYTHON_BIN" - "$EPICS_FILE" <<'PY'
+list_specs_from_file() {
+  "$PYTHON_BIN" - "$SPECS_FILE" <<'PY'
 import json, sys
 path = sys.argv[1]
 if not path:
@@ -772,12 +795,13 @@ try:
     data = json.load(open(path, encoding="utf-8"))
 except FileNotFoundError:
     sys.exit(0)
-epics = data.get("epics", []) or []
-print(" ".join(epics))
+# Accept either canonical "specs" or legacy "epics" key.
+specs = data.get("specs") or data.get("epics") or []
+print(" ".join(specs))
 PY
 }
 
-epic_all_tasks_done() {
+spec_all_tasks_done() {
   "$PYTHON_BIN" - "$1" <<'PY'
 import json, sys
 try:
@@ -797,17 +821,20 @@ print("1")
 PY
 }
 
-# Get list of open (non-done) epic IDs from flowctl epics --json
-list_open_epics() {
+# Get list of open (non-done) spec IDs from `flowctl specs --json`.
+# `flowctl specs` is canonical post-1.0; `flowctl epics` remains as alias (T2).
+list_open_specs() {
   local tmpfile
   tmpfile="$(mktemp)"
-  "$FLOWCTL" epics --json 2>/dev/null > "$tmpfile"
+  "$FLOWCTL" specs --json 2>/dev/null > "$tmpfile"
   "$PYTHON_BIN" - "$tmpfile" <<'PY'
 import sys, json
 try:
     with open(sys.argv[1]) as f:
         data = json.load(f)
-    for e in data.get('epics', []):
+    # `flowctl specs --json` dual-emits "specs" + "epics" keys; prefer canonical.
+    items = data.get('specs') or data.get('epics') or []
+    for e in items:
         if e.get('status') != 'done':
             print(e.get('id', ''))
 except: pass
@@ -815,22 +842,22 @@ PY
   rm -f "$tmpfile"
 }
 
-maybe_close_epics() {
-  local epics json status all_done review_status
-  if [[ -n "$EPICS_FILE" ]]; then
-    # Scoped run: use epic list from file
-    epics="$(list_epics_from_file)"
+maybe_close_specs() {
+  local specs json status all_done review_status
+  if [[ -n "$SPECS_FILE" ]]; then
+    # Scoped run: use spec list from file
+    specs="$(list_specs_from_file)"
   else
-    # Unscoped run: get all open epics from flowctl
-    epics="$(list_open_epics)"
+    # Unscoped run: get all open specs from flowctl
+    specs="$(list_open_specs)"
   fi
-  [[ -z "$epics" ]] && return 0
-  for epic in $epics; do
-    json="$("$FLOWCTL" show "$epic" --json 2>/dev/null || true)"
+  [[ -z "$specs" ]] && return 0
+  for spec in $specs; do
+    json="$("$FLOWCTL" show "$spec" --json 2>/dev/null || true)"
     [[ -z "$json" ]] && continue
     status="$(json_get status "$json")"
     [[ "$status" == "done" ]] && continue
-    all_done="$(epic_all_tasks_done "$json")"
+    all_done="$(spec_all_tasks_done "$json")"
     if [[ "$all_done" == "1" ]]; then
       # Gate on completion review if enabled (bare backend check — spec form OK)
       if [[ "$COMPLETION_REVIEW_BACKEND" != "none" ]]; then
@@ -840,11 +867,11 @@ maybe_close_epics() {
           continue
         fi
         # Also verify receipt exists (ralph.sh enforces, not just guard)
-        if ! verify_receipt "$RECEIPTS_DIR/completion-${epic}.json" "completion_review" "$epic"; then
+        if ! verify_receipt "$RECEIPTS_DIR/completion-${spec}.json" "completion_review" "$spec"; then
           continue
         fi
       fi
-      "$FLOWCTL" epic close "$epic" --json >/dev/null 2>&1 || true
+      "$FLOWCTL" spec close "$spec" --json >/dev/null 2>&1 || true
     fi
   done
 }
@@ -904,10 +931,12 @@ ensure_run_branch() {
   git -C "$ROOT_DIR" checkout -b "$branch" >/dev/null 2>&1
 }
 
-EPICS_FILE=""
-if [[ -n "${EPICS// }" ]]; then
-  EPICS_FILE="$RUN_DIR/run.json"
-  write_epics_file "$EPICS" > "$EPICS_FILE"
+SPECS_FILE=""
+EPICS_FILE=""  # legacy alias — kept in scope for any inherited shell function
+if [[ -n "${SPECS// }" ]]; then
+  SPECS_FILE="$RUN_DIR/run.json"
+  EPICS_FILE="$SPECS_FILE"
+  write_specs_file "$SPECS" > "$SPECS_FILE"
 fi
 
 ui_header
@@ -924,29 +953,37 @@ while (( iter <= MAX_ITERATIONS )); do
   # Check for pause/stop at start of iteration (before work selection)
   check_sentinels
 
-  # Close any epics with all tasks done BEFORE calling selector
-  # This ensures dependent epics become unblocked in the same iteration
-  maybe_close_epics
+  # Close any specs with all tasks done BEFORE calling selector
+  # This ensures dependent specs become unblocked in the same iteration
+  maybe_close_specs
 
   selector_args=("$FLOWCTL" next --json)
-  [[ -n "$EPICS_FILE" ]] && selector_args+=(--epics-file "$EPICS_FILE")
+  # Pass canonical --specs-file (T2 keeps --epics-file as alias). Older flowctl
+  # in alias mode accepts both flags; the JSON file dual-emits "specs"+"epics"
+  # keys so older readers continue to work.
+  [[ -n "$SPECS_FILE" ]] && selector_args+=(--specs-file "$SPECS_FILE")
   [[ "$REQUIRE_PLAN_REVIEW" == "1" ]] && selector_args+=(--require-plan-review)
   [[ "$COMPLETION_REVIEW_BACKEND" != "none" ]] && selector_args+=(--require-completion-review)
 
   selector_json="$("${selector_args[@]}")"
   status="$(json_get status "$selector_json")"
-  epic_id="$(json_get epic "$selector_json")"
+  # `flowctl next --json` dual-emits both "spec" + "epic" keys for back-compat.
+  spec_id="$(json_get spec "$selector_json")"
+  [[ -z "$spec_id" ]] && spec_id="$(json_get epic "$selector_json")"
   task_id="$(json_get task "$selector_json")"
   reason="$(json_get reason "$selector_json")"
 
-  log "iter $iter status=$status epic=${epic_id:-} task=${task_id:-} reason=${reason:-}"
-  ui_iteration "$iter" "$status" "${epic_id:-}" "${task_id:-}"
+  log "iter $iter status=$status spec=${spec_id:-} task=${task_id:-} reason=${reason:-}"
+  ui_iteration "$iter" "$status" "${spec_id:-}" "${task_id:-}"
 
   if [[ "$status" == "none" ]]; then
-    if [[ "$reason" == "blocked_by_epic_deps" ]]; then
-      log "blocked by epic deps"
+    # T2 dual-emits canonical `blocked_by_spec_deps` alongside legacy
+    # `blocked_by_epic_deps` (kept under `legacy_reason`). Match canonical only;
+    # legacy form is preserved by flowctl for older readers.
+    if [[ "$reason" == "blocked_by_spec_deps" ]]; then
+      log "blocked by spec deps"
     fi
-    # maybe_close_epics already called at start of iteration
+    # maybe_close_specs already called at start of iteration
     ui_complete
     write_completion_marker "NO_WORK"
     exit 0
@@ -956,7 +993,7 @@ while (( iter <= MAX_ITERATIONS )); do
   export RALPH_ITERATION="$iter"
 
   if [[ "$status" == "plan" ]]; then
-    export EPIC_ID="$epic_id"
+    export SPEC_ID="$spec_id"
     export PLAN_REVIEW
     export PLAN_REVIEW_BACKEND  # bare backend name (extracted from spec)
     export REQUIRE_PLAN_REVIEW
@@ -964,15 +1001,15 @@ while (( iter <= MAX_ITERATIONS )); do
     # resolves model + effort via BackendSpec.parse / resolve.
     export FLOW_REVIEW_BACKEND="$PLAN_REVIEW"
     if [[ "$PLAN_REVIEW_BACKEND" != "none" ]]; then
-      export REVIEW_RECEIPT_PATH="$RECEIPTS_DIR/plan-${epic_id}.json"
+      export REVIEW_RECEIPT_PATH="$RECEIPTS_DIR/plan-${spec_id}.json"
     else
       unset REVIEW_RECEIPT_PATH
     fi
-    log "plan epic=$epic_id review=$PLAN_REVIEW (backend=$PLAN_REVIEW_BACKEND) receipt=${REVIEW_RECEIPT_PATH:-} require=$REQUIRE_PLAN_REVIEW"
-    ui_plan_review "$PLAN_REVIEW_BACKEND" "$epic_id"
+    log "plan spec=$spec_id review=$PLAN_REVIEW (backend=$PLAN_REVIEW_BACKEND) receipt=${REVIEW_RECEIPT_PATH:-} require=$REQUIRE_PLAN_REVIEW"
+    ui_plan_review "$PLAN_REVIEW_BACKEND" "$spec_id"
     prompt="$(render_template "$SCRIPT_DIR/prompt_plan.md")"
   elif [[ "$status" == "work" ]]; then
-    epic_id="${task_id%%.*}"
+    spec_id="${task_id%%.*}"
     export TASK_ID="$task_id"
     BRANCH_MODE_EFFECTIVE="$BRANCH_MODE"
     if [[ "$BRANCH_MODE" == "new" ]]; then
@@ -991,17 +1028,17 @@ while (( iter <= MAX_ITERATIONS )); do
     ui_impl_review "$WORK_REVIEW_BACKEND" "$task_id"
     prompt="$(render_template "$SCRIPT_DIR/prompt_work.md")"
   elif [[ "$status" == "completion_review" ]]; then
-    export EPIC_ID="$epic_id"
+    export SPEC_ID="$spec_id"
     export COMPLETION_REVIEW
     export COMPLETION_REVIEW_BACKEND  # bare backend name (extracted from spec)
     export FLOW_REVIEW_BACKEND="$COMPLETION_REVIEW"  # full spec
     if [[ "$COMPLETION_REVIEW_BACKEND" != "none" ]]; then
-      export REVIEW_RECEIPT_PATH="$RECEIPTS_DIR/completion-${epic_id}.json"
+      export REVIEW_RECEIPT_PATH="$RECEIPTS_DIR/completion-${spec_id}.json"
     else
       unset REVIEW_RECEIPT_PATH
     fi
-    log "completion_review epic=$epic_id review=$COMPLETION_REVIEW (backend=$COMPLETION_REVIEW_BACKEND) receipt=${REVIEW_RECEIPT_PATH:-}"
-    ui_completion_review "$COMPLETION_REVIEW_BACKEND" "$epic_id"
+    log "completion_review spec=$spec_id review=$COMPLETION_REVIEW (backend=$COMPLETION_REVIEW_BACKEND) receipt=${REVIEW_RECEIPT_PATH:-}"
+    ui_completion_review "$COMPLETION_REVIEW_BACKEND" "$spec_id"
     prompt="$(render_template "$SCRIPT_DIR/prompt_completion.md")"
   else
     fail "invalid selector status: $status"
@@ -1085,7 +1122,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
   # Handle timeout (exit code 124 from timeout command)
   worker_timeout=0
   if [[ -n "$TIMEOUT_CMD" && "$claude_rc" -eq 124 ]]; then
-    timeout_id="${task_id:-$epic_id}"
+    timeout_id="${task_id:-$spec_id}"
     echo "ralph: worker timed out after ${WORKER_TIMEOUT}s (phase=$status id=$timeout_id iter=$iter)" >> "$iter_log"
     echo "ralph: hint: increase WORKER_TIMEOUT in config.env (current=${WORKER_TIMEOUT}s, try 3600 for complex tasks)" >> "$iter_log"
     log "worker timeout after ${WORKER_TIMEOUT}s phase=$status id=$timeout_id iter=$iter"
@@ -1100,38 +1137,38 @@ Violations break automation and leave the user with incomplete work. Be precise,
   impl_receipt_ok="1"
   # Gate on BARE backend name (spec form like codex:gpt-5.4:xhigh resolves to codex).
   if [[ "$status" == "plan" && ( "$PLAN_REVIEW_BACKEND" == "rp" || "$PLAN_REVIEW_BACKEND" == "codex" || "$PLAN_REVIEW_BACKEND" == "copilot" ) ]]; then
-    if ! verify_receipt "$REVIEW_RECEIPT_PATH" "plan_review" "$epic_id"; then
+    if ! verify_receipt "$REVIEW_RECEIPT_PATH" "plan_review" "$spec_id"; then
       echo "ralph: missing plan review receipt; forcing retry" >> "$iter_log"
       log "missing plan receipt; forcing retry"
       # Delete corrupted/partial receipt so next attempt starts clean
       rm -f "$REVIEW_RECEIPT_PATH" 2>/dev/null || true
-      "$FLOWCTL" epic set-plan-review-status "$epic_id" --status needs_work --json >/dev/null 2>&1 || true
+      "$FLOWCTL" spec set-plan-review-status "$spec_id" --status needs_work --json >/dev/null 2>&1 || true
       force_retry=1
     fi
-    epic_json="$("$FLOWCTL" show "$epic_id" --json 2>/dev/null || true)"
-    plan_review_status="$(json_get plan_review_status "$epic_json")"
+    spec_json="$("$FLOWCTL" show "$spec_id" --json 2>/dev/null || true)"
+    plan_review_status="$(json_get plan_review_status "$spec_json")"
   fi
   completion_review_status=""
   completion_receipt_ok="1"
   if [[ "$status" == "completion_review" && ( "$COMPLETION_REVIEW_BACKEND" == "rp" || "$COMPLETION_REVIEW_BACKEND" == "codex" || "$COMPLETION_REVIEW_BACKEND" == "copilot" ) ]]; then
-    if ! verify_receipt "$REVIEW_RECEIPT_PATH" "completion_review" "$epic_id"; then
+    if ! verify_receipt "$REVIEW_RECEIPT_PATH" "completion_review" "$spec_id"; then
       echo "ralph: missing completion review receipt; forcing retry" >> "$iter_log"
       log "missing completion receipt; forcing retry"
       completion_receipt_ok="0"
       # Delete corrupted/partial receipt so next attempt starts clean
       rm -f "$REVIEW_RECEIPT_PATH" 2>/dev/null || true
-      "$FLOWCTL" epic set-completion-review-status "$epic_id" --status needs_work --json >/dev/null 2>&1 || true
+      "$FLOWCTL" spec set-completion-review-status "$spec_id" --status needs_work --json >/dev/null 2>&1 || true
       force_retry=1
     fi
-    epic_json="$("$FLOWCTL" show "$epic_id" --json 2>/dev/null || true)"
-    completion_review_status="$(json_get completion_review_status "$epic_json")"
+    spec_json="$("$FLOWCTL" show "$spec_id" --json 2>/dev/null || true)"
+    completion_review_status="$(json_get completion_review_status "$spec_json")"
     if [[ "$completion_review_status" == "ship" && "$completion_receipt_ok" == "1" ]]; then
-      # Completion review passed - epic can now be closed by maybe_close_epics next iteration
-      log "completion_review epic=$epic_id SHIP (will close next iteration)"
+      # Completion review passed - spec can now be closed by maybe_close_specs next iteration
+      log "completion_review spec=$spec_id SHIP (will close next iteration)"
       force_retry=0
     elif [[ "$completion_review_status" == "needs_work" ]]; then
       # Review found gaps - skill should have handled fix loop but if we get here, retry
-      log "completion_review epic=$epic_id NEEDS_WORK; forcing retry"
+      log "completion_review spec=$spec_id NEEDS_WORK; forcing retry"
       force_retry=1
     fi
   fi

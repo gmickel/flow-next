@@ -47,9 +47,9 @@ For copilot mode, receipt is written automatically by `flowctl copilot impl-revi
 **CRITICAL: Copy the command EXACTLY. The `"id":"{{TASK_ID}}"` and `"verdict":"SHIP"` fields are REQUIRED.**
 Ralph verifies receipts match this exact schema. Missing id/verdict = verification fails = forced retry.
 
-**Step 4: Validate epic**
+**Step 4: Validate spec**
 ```bash
-scripts/ralph/flowctl validate --epic $(echo {{TASK_ID}} | sed 's/\.[0-9]*$//') --json
+scripts/ralph/flowctl validate --spec $(echo {{TASK_ID}} | sed 's/\.[0-9]*$//') --json
 ```
 
 **Step 5: On hard failure** → output `<promise>FAIL</promise>` and stop.
