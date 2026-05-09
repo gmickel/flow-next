@@ -227,7 +227,10 @@ class TestFileSha256(unittest.TestCase):
     def test_known_content_hash(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "f.txt"
-            p.write_text("hello\n", encoding="utf-8")
+            # write_bytes (not write_text) to avoid Windows CRLF translation —
+            # _migrate_file_sha256 hashes on-disk bytes verbatim, and the
+            # default text-mode write on Windows would expand `\n` to `\r\n`.
+            p.write_bytes(b"hello\n")
             # `echo -n hello | sha256sum` — but with the LF
             import hashlib
 
