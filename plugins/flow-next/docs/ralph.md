@@ -479,7 +479,7 @@ SPECS_FILE="${SPECS_FILE:-${EPICS_FILE:-}}"
 SPECS="${SPECS:-${EPICS:-}}"
 ```
 
-Externally-set env vars are preserved (the resolver does not clobber `SPECS_FILE` if the user/script set it explicitly). The aliases follow the same permanence guarantee as the `flowctl epic` → `flowctl spec` rename: removed in 2.0.0. To migrate, edit `scripts/ralph/config.env` and rename the keys; no other action is required.
+Externally-set env vars are preserved (the resolver does not clobber `SPECS_FILE` if the user/script set it explicitly). The aliases follow the same telemetry-driven contract as the `flowctl epic` → `flowctl spec` rename: soft-removal target 2.0.0, NOT a hard sunset (R28). To migrate, edit `scripts/ralph/config.env` and rename the keys; no other action is required.
 
 ### Permissions
 

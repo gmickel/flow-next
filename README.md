@@ -136,7 +136,7 @@ Idea → spec → tasks → ship. Branch in, branch out — pick the entry point
 | `/flow-next:work` | Execute tasks with re-anchoring + worker subagents + review gates |
 | `/flow-next:impl-review` | Cross-model implementation review (RepoPrompt, Codex, or Copilot) |
 | `/flow-next:plan-review` | Cross-model plan review |
-| `/flow-next:spec-completion-review` | Spec-completion review gate — verify combined implementation matches the spec (renamed from `/flow-next:epic-review` in 1.0.0; alias removed in 2.0.0) |
+| `/flow-next:spec-completion-review` | Spec-completion review gate — verify combined implementation matches the spec (renamed from `/flow-next:epic-review` in 1.0.0; soft-removal target 2.0.0, telemetry-driven) |
 | `/flow-next:resolve-pr` | Resolve GitHub PR review threads (fetch → triage → fix → reply → resolve via GraphQL) |
 | `/flow-next:audit` | Agent-native review of `.flow/memory/` entries against current code (Keep / Update / Consolidate / Replace / Delete) |
 | `/flow-next:memory-migrate` | Lift legacy flat memory files into the categorized schema; agent classifies each entry |

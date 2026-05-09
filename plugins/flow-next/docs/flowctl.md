@@ -15,7 +15,7 @@ ralph, rp, codex, copilot,
 review-deep-auto, review-walkthrough-defer, review-walkthrough-record
 ```
 
-> **Renamed in 1.0.0:** `epic` → `spec`, `epics` → `specs`, `--epic` flag → `--spec`. Legacy forms continue to work as thin aliases with one-line stderr deprecation warnings (suppress via `FLOW_NO_DEPRECATION=1`); aliases are removed in 2.0.0. See [Deprecated aliases](#deprecated-aliases) below.
+> **Renamed in 1.0.0:** `epic` → `spec`, `epics` → `specs`, `--epic` flag → `--spec`. Legacy forms continue to work as thin aliases with one-line stderr deprecation warnings (suppress via `FLOW_NO_DEPRECATION=1`); soft-removal target is 2.0.0, telemetry-driven (R28 forbids hard-coded sunset dates). See [Deprecated aliases](#deprecated-aliases) below.
 
 ## Multi-User Safety
 
@@ -1178,7 +1178,7 @@ Suppress this banner: FLOW_NO_AUTO_MIGRATE=1 (alias keeps working)
 
 ## Deprecated aliases
 
-flow-next 1.0.0 renamed the spec surface from `epic` to `spec`. Every legacy form continues to work in 1.x as a thin alias; each alias emits a one-line stderr deprecation warning. Suppress all such warnings via `FLOW_NO_DEPRECATION=1`. **Aliases are removed in 2.0.0.**
+flow-next 1.0.0 renamed the spec surface from `epic` to `spec`. Every legacy form continues to work in 1.x as a thin alias; each alias emits a one-line stderr deprecation warning. Suppress all such warnings via `FLOW_NO_DEPRECATION=1`. **Soft-removal target is 2.0.0 — telemetry-driven, NOT calendar-driven.** R28 explicitly forbids hard-coded sunset dates; if real-world `flowctl epic` invocations stay common, the alias layer stays past 2.0.0.
 
 **Verb / parent subcommand aliases:**
 

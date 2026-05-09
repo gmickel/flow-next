@@ -59,7 +59,7 @@
 
 ## What Is This?
 
-Flow-Next is a plugin for **agent-native AI orchestration**. Eighteen slash commands cover the full lifecycle: strategic anchor (`strategy`) → idea generation (`prospect`) → spec creation (`capture`) → refinement (`interview`) → planning (`plan`) → execution (`work`) → review (`impl-review` + `spec-completion-review`) → PR creation (`make-pr`) → PR feedback resolution (`resolve-pr`) → maintenance (`audit` + `memory-migrate`) → autonomous mode (`ralph-init`). Bundled task tracking, dependency graphs, re-anchoring, and cross-model reviews.
+Flow-Next is a plugin for **agent-native AI orchestration**. Nineteen slash commands cover the full lifecycle: strategic anchor (`strategy`) → idea generation (`prospect`) → spec creation (`capture`) → refinement (`interview`) → planning (`plan`) → execution (`work`) → review (`impl-review` + `spec-completion-review`) → PR creation (`make-pr`) → PR feedback resolution (`resolve-pr`) → maintenance (`audit` + `memory-migrate`) → autonomous mode (`ralph-init`). Bundled task tracking, dependency graphs, re-anchoring, and cross-model reviews. (The 19th command is `/flow-next:epic-review`, a deprecation alias kept through 1.x for the renamed `spec-completion-review`.)
 
 Everything lives in your repo. No external services. No global config. Uninstall: delete `.flow/` (and `scripts/ralph/` if enabled).
 
@@ -215,7 +215,7 @@ flow-next 1.0.0 renamed the spec surface from `epic` to `spec`. The legacy verbs
 - `/flow-next:epic-review` slash command → `/flow-next:spec-completion-review`. The old slash command stays as a thin redirect.
 - `.flow/epics/<id>.json` sidecar → `.flow/specs/<id>.json` (markdown was already at `.flow/specs/<id>.md`).
 
-Each legacy invocation emits a one-line stderr deprecation warning. Suppress via `FLOW_NO_DEPRECATION=1`. **Aliases are removed in 2.0.0.**
+Each legacy invocation emits a one-line stderr deprecation warning. Suppress via `FLOW_NO_DEPRECATION=1`. **Aliases have a soft-removal target of 2.0.0 — telemetry-driven, not calendar-driven.** R28 explicitly forbids hard-coded sunset dates; if real-world `flowctl epic` invocations stay common, the alias layer stays.
 
 A pre-1.0 `.flow/` directory keeps working in alias mode without migrating. To upgrade to the canonical 1.0+ layout (and unlock future flow-swarm compatibility), pick one path:
 
@@ -1910,7 +1910,8 @@ Nineteen commands, complete workflow:
 | `/flow-next:interview <id>` | Deep interview to flesh out a spec before planning; doc-aware mode (autodetect + `--docs` / `--no-docs`) looks up canonical terms, surfaces conflicts to a `## Glossary Conflicts` spec section, prompts for decision records on load-bearing choices ([details](#flow-nextinterview)) |
 | `/flow-next:plan-review <id>` | Carmack-level plan review (RepoPrompt, Codex, or Copilot) |
 | `/flow-next:impl-review` | Carmack-level impl review of current branch |
-| `/flow-next:spec-completion-review <id>` | Spec-completion review: verify the spec's combined implementation matches all R-IDs (renamed from `/flow-next:epic-review` in 1.0.0; alias removed in 2.0.0) |
+| `/flow-next:spec-completion-review <id>` | Spec-completion review: verify the spec's combined implementation matches all R-IDs (renamed from `/flow-next:epic-review` in 1.0.0; soft-removal target 2.0.0, telemetry-driven) |
+| `/flow-next:epic-review <id>` | **Deprecation alias** — thin redirect to `/flow-next:spec-completion-review`. Kept through 1.x for backward compatibility; suppresses deprecation hint with `FLOW_NO_DEPRECATION=1` |
 | `/flow-next:make-pr [<spec-id>] [flags]` | Render a cognitive-aid PR body from flow-next state (R-ID coverage, critical changes, decisions, deferred findings, mermaid) and open the PR via `gh pr create` ([details](#pr-creation)) |
 | `/flow-next:resolve-pr [arg]` | Resolve GitHub PR review threads (fetch → triage → fix → reply → resolve) ([details](#pr-feedback-resolution)) |
 | `/flow-next:audit [mode:autofix] [hint]` | Review `.flow/memory/` against current code, decide Keep/Update/Consolidate/Replace/Delete per entry ([details](#memory-system)) |
@@ -2134,7 +2135,7 @@ Reviews current branch changes. Carmack-level criteria: Correctness, Simplicity,
 | `--review=copilot` | Use GitHub Copilot CLI (cross-platform) |
 | `--review=none` | Skip review |
 
-Reviews the spec's combined implementation against its R-IDs. Runs after all tasks complete. Catches requirement gaps, missing functionality, incomplete doc updates. The legacy `/flow-next:epic-review` slash command stays as a thin redirect in 1.x; aliases removed in 2.0.0.
+Reviews the spec's combined implementation against its R-IDs. Runs after all tasks complete. Catches requirement gaps, missing functionality, incomplete doc updates. The legacy `/flow-next:epic-review` slash command stays as a thin redirect through 1.x; soft-removal target 2.0.0, telemetry-driven.
 
 #### `/flow-next:make-pr`
 
@@ -2489,7 +2490,7 @@ flowctl prospect promote <id> --idea N --force # override idempotency guard
 flowctl prospect archive <id>                  # → .flow/prospects/_archive/
 ```
 
-> **Legacy aliases:** every `flowctl epic *` / `flowctl epics` / `--epic` form continues to work in 1.x via thin alias dispatch and a one-line stderr deprecation warning (suppress via `FLOW_NO_DEPRECATION=1`). Aliases are removed in 2.0.0.
+> **Legacy aliases:** every `flowctl epic *` / `flowctl epics` / `--epic` form continues to work in 1.x via thin alias dispatch and a one-line stderr deprecation warning (suppress via `FLOW_NO_DEPRECATION=1`). Soft-removal target is 2.0.0, telemetry-driven (R28 forbids hard-coded sunset dates).
 
 📖 **[Full CLI reference](docs/flowctl.md)**  
 🤖 **[Ralph deep dive](docs/ralph.md)**
