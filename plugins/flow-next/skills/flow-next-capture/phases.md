@@ -8,12 +8,12 @@ This file is the lookup-and-calibration companion to [workflow.md](workflow.md).
 
 | Phase | Goal | Done-when |
 |-------|------|-----------|
-| **0 — Pre-flight** | Detect duplicates, compaction, idempotency conflict before drafting | Conversation keywords extracted; epic-title overlap scanned; memory cross-check (if memory initialized); compaction passed (or `--from-compacted-ok`); idempotency resolved (`REWRITE_TARGET` validated, or no prior-capture artifact, or user picked supersede/proceed) |
+| **0 — Pre-flight** | Detect duplicates, compaction, idempotency conflict before drafting | Conversation keywords extracted; spec-title overlap scanned (`.flow/specs/` + legacy `.flow/epics/`); memory cross-check (if memory initialized); compaction passed (or `--from-compacted-ok`); idempotency resolved (`REWRITE_TARGET` validated, or no prior-capture artifact, or user picked supersede/proceed) |
 | **1 — Extract conversation evidence** | Build verbatim `## Conversation Evidence` block FIRST | ≤30-line block of `> user (turn N): "..."` lines drafted; optional file-reference subagent results merged; candidate title proposed |
 | **2 — Source-tagged synthesis** | Draft spec sections with per-line tags using CLAUDE.md richer template | Every section drafted; R-IDs allocated sequentially from R1; `[inferred]` count computed; 8+ acceptance flag set if applicable; untestable criteria flagged for Phase 3 |
 | **3 — Must-ask cases** | Resolve ambiguous-title / untestable-acceptance / scope-conflict | Interactive: user resolved each fired case; autofix: exit 2 with which case fired |
 | **4 — Read-back loop** | Show full draft + `[inferred]` tally; obtain approval | Interactive: `approve` / `consider-split` / `abort`; autofix `--yes`: payload printed; autofix without `--yes`: payload printed + exit 0 |
-| **5 — Write via flowctl** | Atomic write of new (or rewritten) epic | `.flow/specs/<id>.md` exists; `EPIC_ID` known |
+| **5 — Write via flowctl** | Atomic write of new (or rewritten) spec | `.flow/specs/<id>.md` exists; `SPEC_ID` known |
 | **6 — Suggested next step** | Print footer with `/flow-next:plan` and `/flow-next:interview` hints | Footer printed; skill exits 0 |
 
 ---
@@ -26,7 +26,7 @@ The three hard-error conditions that fire in Phase 3. Interactive asks; autofix 
 
 **Trigger:** Phase 1.3 candidate title is `[inferred]` AND the conversation supports multiple plausible titles, none load-bearing.
 
-**Why hard-error:** an ambiguous title leads to bad epic ids, bad branch names, bad git history. The cost of asking is one question; the cost of guessing wrong is renaming the epic later.
+**Why hard-error:** an ambiguous title leads to bad spec ids, bad branch names, bad git history. The cost of asking is one question; the cost of guessing wrong is renaming the spec later.
 
 **Examples:**
 
@@ -39,7 +39,7 @@ The three hard-error conditions that fire in Phase 3. Interactive asks; autofix 
 - body: `Conversation supports multiple titles. Recommended: <X> — <one-sentence rationale>. Confidence: [<tier>]. (Other plausible: <Y>, <Z>.)`
 - options: `<X>`, `<Y>`, `<Z>`, `custom`
 
-**Autofix:** exit 2 with: `Must-ask (a): epic title genuinely ambiguous from conversation. Candidates: <X>, <Y>, <Z>. Re-run interactively to choose.`
+**Autofix:** exit 2 with: `Must-ask (a): spec title genuinely ambiguous from conversation. Candidates: <X>, <Y>, <Z>. Re-run interactively to choose.`
 
 ### Case (b) — Untestable acceptance
 
@@ -64,24 +64,24 @@ If user picks `clarify`, follow-up question accepts free text → re-run testabi
 
 **Autofix:** exit 2 with: `Must-ask (b): <N> criteria failed testability check: <list>. Re-run interactively to reword or drop.`
 
-### Case (c) — Scope-conflict with existing epic
+### Case (c) — Scope-conflict with existing spec
 
-**Trigger:** Phase 0.5 went `supersede` or `proceed-anyway` (user accepted a duplicate-ish epic), AND the new epic's drafted scope (Phase 2) still substantively overlaps the existing epic's scope on a load-bearing axis (same module + same problem domain, even if framed differently).
+**Trigger:** Phase 0.5 went `supersede` or `proceed-anyway` (user accepted a duplicate-ish spec), AND the new spec's drafted scope (Phase 2) still substantively overlaps the existing spec's scope on a load-bearing axis (same module + same problem domain, even if framed differently).
 
-**Why hard-error:** if the new epic is "in addition to" the old one, the boundaries between them must be explicit. Otherwise the next time someone runs `/flow-next:plan`, both epics fight over the same tasks.
+**Why hard-error:** if the new spec is "in addition to" the old one, the boundaries between them must be explicit. Otherwise the next time someone runs `/flow-next:plan`, both specs fight over the same tasks.
 
 **Examples:**
 
-- Old epic: `OAuth callback rate limiter` (in progress, 2 tasks done). New conversation: "we need rate limiting on the API". User picks `proceed-anyway`. New scope drafted as "all API endpoints" — explicit superset of old. → must-ask: how do the two epics carve up the rate-limit space?
-- Old epic: `OAuth callback rate limiter`. New conversation: "we need rate limiting on the GraphQL endpoint". New scope: GraphQL only. → no must-ask. Boundaries are clear.
+- Old spec: `OAuth callback rate limiter` (in progress, 2 tasks done). New conversation: "we need rate limiting on the API". User picks `proceed-anyway`. New scope drafted as "all API endpoints" — explicit superset of old. → must-ask: how do the two specs carve up the rate-limit space?
+- Old spec: `OAuth callback rate limiter`. New conversation: "we need rate limiting on the GraphQL endpoint". New scope: GraphQL only. → no must-ask. Boundaries are clear.
 
 **Interactive question shape:**
 
 - header: `Boundary?`
-- body: `Old epic <id> "<title>" overlaps new epic on <axis>. Recommended: <X> (carve out <bound>) — <rationale>. Confidence: [<tier>].`
+- body: `Old spec <id> "<title>" overlaps new spec on <axis>. Recommended: <X> (carve out <bound>) — <rationale>. Confidence: [<tier>].`
 - options: `carve-by-module`, `carve-by-feature`, `mark-old-as-subsumed`, `keep-overlap-and-let-plan-resolve`
 
-**Autofix:** exit 2 with: `Must-ask (c): scope conflict with existing epic <id>. Re-run interactively to disambiguate.`
+**Autofix:** exit 2 with: `Must-ask (c): scope conflict with existing spec <id>. Re-run interactively to disambiguate.`
 
 ---
 
@@ -139,7 +139,7 @@ Used in Phase 3 (must-ask) and Phase 4 (read-back) recommendation bodies. The bo
 | Tier | When to use | Example body |
 |------|-------------|--------------|
 | `[high]` | Agent has strong codebase signal or convention match; recommendation is load-bearing | `Recommended: extend fn-12-oauth-callback — strong title overlap (3 strong matches) + same module. Confidence: [high].` |
-| `[judgment-call]` | Slight lean but reasonable people disagree; user's call carries weight | `Recommended: proceed-anyway — overlap is moderate (2 matches), epics may legitimately co-exist. Confidence: [judgment-call].` |
+| `[judgment-call]` | Slight lean but reasonable people disagree; user's call carries weight | `Recommended: proceed-anyway — overlap is moderate (2 matches), specs may legitimately co-exist. Confidence: [judgment-call].` |
 | `[your-call]` | Agent has no signal; user's domain knowledge / priority / preference decides | `Recommended: <none> — I don't have enough context to recommend. Pick what fits your priority. Confidence: [your-call].` |
 
 The `[your-call]` tier exists deliberately. Always recommending trains users to defer; sometimes the honest answer is "I don't know — you pick". Don't hide that under `[judgment-call]`.
@@ -167,11 +167,11 @@ The full list lives in [SKILL.md](SKILL.md). Quick reference:
 | Tech-stack mentions the user did not state | Capture writes intent; `/flow-next:plan` writes implementation. Spec-kit convention. |
 | Inventing acceptance criteria not in conversation | Source-tagging exists to make this visible. Pure `[inferred]` acceptance must surface at read-back for explicit user confirmation. |
 | Code snippets / specific file paths in spec body | Those belong in `/flow-next:plan` task specs after research lands. Capture's output is high-level. |
-| Silent overwrite of existing epic | Idempotency requires `--rewrite <id>`. Without it, Phase 0 conflict-detection branches into extend / supersede / proceed-anyway. |
-| Auto-splitting an 8+ acceptance epic | Phase 4 surfaces the option; the user decides. Capture never auto-actions a split. |
+| Silent overwrite of existing spec | Idempotency requires `--rewrite <id>`. Without it, Phase 0 conflict-detection branches into extend / supersede / proceed-anyway. |
+| Auto-splitting an 8+ acceptance spec | Phase 4 surfaces the option; the user decides. Capture never auto-actions a split. |
 | Setting `context: fork` | Blocking-question tools must stay reachable. |
-| Calling `flowctl epic create` before Phase 4 approval | Phase 5 is the only write phase. |
-| `git add -A` from this skill | Stage only `.flow/epics/<id>.json` + `.flow/specs/<id>.md` (and `.flow/meta.json` if mutated). Capture does NOT commit by default — user owns staging. |
+| Calling `flowctl spec create` before Phase 4 approval | Phase 5 is the only write phase. |
+| `git add -A` from this skill | Stage only the JSON sidecar (`.flow/specs/<id>.json` post-1.0; `.flow/epics/<id>.json` on alias-mode 0.x repos) + `.flow/specs/<id>.md` (and `.flow/meta.json` if mutated). Capture does NOT commit by default — user owns staging. |
 
 ---
 
@@ -186,7 +186,7 @@ Compaction detected without --from-compacted-ok?
   yes → refuse with overrides hint (interactive); exit 2 (autofix)
   no  → continue
 
-Duplicate detection: ≥2 strong epic-title matches AND --rewrite not set?
+Duplicate detection: ≥2 strong spec-title matches AND --rewrite not set?
   yes → ask: extend / supersede / proceed-anyway / abort (interactive); exit 2 (autofix)
   no  → continue
 
@@ -209,7 +209,7 @@ Read-back: show full draft + [inferred] tally + 8+ note + diff (if rewrite).
   autofix --yes: print and proceed
   autofix without --yes: print and exit 0
 
-Approved? Write via flowctl epic create + epic set-plan.
+Approved? Write via flowctl spec create + spec set-plan.
 
 Print next-step footer. Done.
 ```
