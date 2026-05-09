@@ -9,7 +9,7 @@
 
 **STOP** and instead:
 - create/update tasks in `.flow/` using `flowctl`,
-- record details in the epic/task spec markdown.
+- record details in the spec/task markdown.
 
 ## Success criteria
 
@@ -196,10 +196,10 @@ Default to standard unless complexity demands more or less.
 
 **Route A - Input was an existing Flow ID**:
 
-1. If epic ID (fn-N-slug or legacy fn-N/fn-N-xxx):
+1. If spec ID (fn-N-slug or legacy fn-N/fn-N-xxx):
    ```bash
    # Use stdin heredoc (no temp file needed)
-   $FLOWCTL epic set-plan <id> --file - --json <<'EOF'
+   $FLOWCTL spec set-plan <id> --file - --json <<'EOF'
    <plan content here>
    EOF
    ```
@@ -214,28 +214,28 @@ Default to standard unless complexity demands more or less.
 
 **Route B - Input was text (new idea)**:
 
-1. Create epic:
+1. Create spec:
    ```bash
-   $FLOWCTL epic create --title "<Short title>" --json
+   $FLOWCTL spec create --title "<Short title>" --json
    ```
-   This returns the epic ID (e.g., fn-1-add-oauth).
+   This returns the spec ID (e.g., fn-1-add-oauth).
 
-2. Set epic branch_name (deterministic):
-   - Default: use epic ID (e.g., fn-1-add-oauth)
+2. Set spec branch_name (deterministic):
+   - Default: use spec ID (e.g., fn-1-add-oauth)
    ```bash
-   $FLOWCTL epic set-branch <epic-id> --branch "<epic-id>" --json
+   $FLOWCTL spec set-branch <spec-id> --branch "<spec-id>" --json
    ```
    - If user specified a branch, use that instead.
 
-3. Write epic spec (use stdin heredoc):
+3. Write spec (use stdin heredoc):
    ```bash
    # Include: Overview, Scope, Approach, Quick commands (REQUIRED), Acceptance,
    # Early proof point, Requirement coverage, References
    # Conditional sections: ## Strategy Alignment (when STRATEGY_PRESENT=true from Step 1),
    # ## Strategy drift flagged for review (when plan scope conflicts with an active track)
    # Add mermaid diagram if data model or architecture changes
-   $FLOWCTL epic set-plan <epic-id> --file - --json <<'EOF'
-   # Epic Title
+   $FLOWCTL spec set-plan <spec-id> --file - --json <<'EOF'
+   # Spec Title
 
    ## Overview
    ...
@@ -246,7 +246,7 @@ Default to standard unless complexity demands more or less.
    ```
 
    ## Boundaries / non-goals
-   - <what this epic explicitly does NOT cover>
+   - <what this spec explicitly does NOT cover>
 
    ## Strategy Alignment
    <!-- Include this section ONLY when STRATEGY_PRESENT=true from Step 1.
@@ -309,12 +309,12 @@ Default to standard unless complexity demands more or less.
    - Usually the first task in dependency order, but not always
 
    **Requirement coverage rules:**
-   - One row per acceptance criterion or distinct requirement from the epic spec
+   - One row per acceptance criterion or distinct requirement from the spec
    - Every requirement must map to at least one task OR have a gap justification
-   - Table goes at the bottom of the epic spec (after Acceptance + Early proof point)
-   - Keep Req IDs simple (R1, R2...) — they're local to this epic
+   - Table goes at the bottom of the spec (after Acceptance + Early proof point)
+   - Keep Req IDs simple (R1, R2...) — they're local to this spec
 
-   **R-ID rule (MANDATORY for new epic specs):**
+   **R-ID rule (MANDATORY for new specs):**
    - Number acceptance criteria as `R1`, `R2`, `R3`, ... in creation order using the `- **Rn:** ...` prose prefix format shown in the template above.
    - Once a review cycle has run against an R-ID, **never renumber**. Reordering is fine (R1, R3, R5 after R2/R4 deletion is correct).
    - New criteria take the next unused number. Gaps are fine — do not compact.
@@ -326,7 +326,7 @@ Default to standard unless complexity demands more or less.
    If spec-scout found dependencies, set them automatically:
    ```bash
    # For each dependency found by spec-scout:
-   $FLOWCTL epic add-dep <new-epic-id> <dependency-epic-id> --json
+   $FLOWCTL spec add-dep <new-spec-id> <dependency-spec-id> --json
    ```
 
    Report findings at end of planning (no user prompt needed):
@@ -339,10 +339,10 @@ Default to standard unless complexity demands more or less.
 5. Create child tasks:
    ```bash
    # Task with no dependencies:
-   $FLOWCTL task create --epic <epic-id> --title "<Task title>" --json
+   $FLOWCTL task create --spec <spec-id> --title "<Task title>" --json
 
    # Task with dependencies (use --deps for inline dependency declaration):
-   $FLOWCTL task create --epic <epic-id> --title "<Task title>" --deps <dep1>,<dep2> --json
+   $FLOWCTL task create --spec <spec-id> --title "<Task title>" --deps <dep1>,<dep2> --json
    ```
 
    **TIP**: Use `--deps` to declare dependencies inline when creating tasks. Tasks must exist before being referenced, so create in dependency order.
@@ -427,7 +427,7 @@ Default to standard unless complexity demands more or less.
    - Targets come from repo-scout/context-scout findings in Step 1
 
    **`satisfies` frontmatter rules (optional, additive):**
-   - Populate `satisfies: [R1, R3]` only when the task obviously advances specific R-IDs from the epic's `## Acceptance` section.
+   - Populate `satisfies: [R1, R3]` only when the task obviously advances specific R-IDs from the spec's `## Acceptance` section.
    - Tasks that do infrastructure, refactoring, shared plumbing, or docs-only work may legitimately have **no** `satisfies` entry — omit the frontmatter entirely.
    - Use bare R-ID tokens (`[R1, R3]`), not quoted strings.
    - Frontmatter is additive — tasks created without it parse unchanged.
@@ -447,14 +447,14 @@ Default to standard unless complexity demands more or less.
 
 8. Output current state:
    ```bash
-   $FLOWCTL show <epic-id> --json
-   $FLOWCTL cat <epic-id>
+   $FLOWCTL show <spec-id> --json
+   $FLOWCTL cat <spec-id>
    ```
 
 ## Step 6: Validate
 
 ```bash
-$FLOWCTL validate --epic <epic-id> --json
+$FLOWCTL validate --spec <spec-id> --json
 ```
 
 Fix any errors before proceeding.
@@ -462,12 +462,12 @@ Fix any errors before proceeding.
 ## Step 7: Review (if chosen at start)
 
 If user chose "Yes" to review in SKILL.md setup question:
-1. Invoke `/flow-next:plan-review` with the epic ID
+1. Invoke `/flow-next:plan-review` with the spec ID
 2. If review returns "Needs Work" or "Major Rethink":
    - **Re-anchor EVERY iteration** (do not skip):
      ```bash
-     $FLOWCTL show <epic-id> --json
-     $FLOWCTL cat <epic-id>
+     $FLOWCTL show <spec-id> --json
+     $FLOWCTL cat <spec-id>
      ```
    - **Immediately fix the issues** (do NOT ask for confirmation — user already consented)
    - Re-run `/flow-next:plan-review`
@@ -479,10 +479,10 @@ If user chose "Yes" to review in SKILL.md setup question:
 
 ## Step 8: Offer next steps
 
-Show epic summary with size breakdown and offer options:
+Show spec summary with size breakdown and offer options:
 
 ```
-Epic fn-N-slug created: "<title>"
+Spec fn-N-slug created: "<title>"
 Tasks: M total | Sizes: Ns S, Nm M
 
 Next steps:

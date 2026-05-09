@@ -1,6 +1,6 @@
 ---
 name: flow-next-interview
-description: Interview user in-depth about an epic, task, or spec file to extract complete implementation details. Use when user wants to flesh out a spec, refine requirements, or clarify a feature before building. Triggers on /flow-next:interview with Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2, fn-1-xxx, fn-1-xxx.2) or file paths.
+description: Interview user in-depth about a spec, task, or spec file to extract complete implementation details. Use when user wants to flesh out a spec, refine requirements, or clarify a feature before building. Triggers on /flow-next:interview with Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2, fn-1-xxx, fn-1-xxx.2) or file paths.
 user-invocable: false
 ---
 
@@ -39,7 +39,7 @@ Continue regardless (non-blocking).
 Full request: $ARGUMENTS
 
 Accepts:
-- **Flow epic ID** `fn-N-slug` (e.g., `fn-1-add-oauth`) or legacy `fn-N`/`fn-N-xxx`: Fetch with `flowctl show`, write back with `flowctl epic set-plan`
+- **Flow spec ID** `fn-N-slug` (e.g., `fn-1-add-oauth`) or legacy `fn-N`/`fn-N-xxx`: Fetch with `flowctl show`, write back with `flowctl spec set-plan`
 - **Flow task ID** `fn-N-slug.M` (e.g., `fn-1-add-oauth.2`) or legacy `fn-N.M`/`fn-N-xxx.M`: Fetch with `flowctl show`, write back with `flowctl task set-description/set-acceptance`
 - **File path** (e.g., `docs/spec.md`): Read file, interview, rewrite file
 - **Empty**: Prompt for target
@@ -151,14 +151,14 @@ When `DOC_AWARE=1`, behaviors (a)-(d) below layer onto the standard interview wo
 
 ## Detect Input Type
 
-1. **Flow epic ID pattern**: matches `fn-\d+(-[a-z0-9-]+)?` (e.g., fn-1-add-oauth, fn-12, fn-2-fix-login-bug)
+1. **Flow spec ID pattern**: matches `fn-\d+(-[a-z0-9-]+)?` (e.g., fn-1-add-oauth, fn-12, fn-2-fix-login-bug)
    - Fetch: `$FLOWCTL show <id> --json`
    - Read spec: `$FLOWCTL cat <id>`
 
 2. **Flow task ID pattern**: matches `fn-\d+(-[a-z0-9-]+)?\.\d+` (e.g., fn-1-add-oauth.3, fn-12.5)
    - Fetch: `$FLOWCTL show <id> --json`
    - Read spec: `$FLOWCTL cat <id>`
-   - Also get epic context: `$FLOWCTL cat <epic-id>`
+   - Also get parent spec context: `$FLOWCTL cat <spec-id>`
 
 3. **File path**: anything else with a path-like structure or .md extension
    - Read file contents
@@ -364,7 +364,7 @@ When all three hold:
    EOF
    ```
 
-   The `decisions` category is registered in flowctl's memory schema (Task 1 of this epic). Optional fields `--decision-status` (default `accepted`), `--superseded-by`, and `--alternatives-considered` are available; pass them when the conversation supplies them and skip otherwise.
+   The `decisions` category is registered in flowctl's memory schema (Task 1 of the original decisions epic). Optional fields `--decision-status` (default `accepted`), `--superseded-by`, and `--alternatives-considered` are available; pass them when the conversation supplies them and skip otherwise.
 
 4. **On `edit`**, ask one follow-up `AskUserQuestion` for which field changes (title / body / module / tags), capture the revision, re-show the draft, loop. Hard cap at 2 edit cycles before defaulting to `approve` / `skip`.
 
@@ -433,12 +433,12 @@ After interview complete, write everything back — **scope depends on input typ
 
 ### For NEW IDEA (text input, no Flow ID)
 
-Create epic with interview output. **DO NOT create tasks** — that's `/flow-next:plan`'s job.
+Create spec with interview output. **DO NOT create tasks** — that's `/flow-next:plan`'s job.
 
 ```bash
-$FLOWCTL epic create --title "..." --json
-$FLOWCTL epic set-plan <id> --file - --json <<'EOF'
-# Epic Title
+$FLOWCTL spec create --title "..." --json
+$FLOWCTL spec set-plan <id> --file - --json <<'EOF'
+# Spec Title
 
 ## Problem
 Clear problem statement
@@ -473,20 +473,20 @@ EOF
 
 Then suggest: "Run `/flow-next:plan fn-N` to research best practices and create tasks."
 
-### For EXISTING EPIC (fn-N that already has tasks)
+### For EXISTING SPEC (fn-N that already has tasks)
 
 **First check if tasks exist:**
 ```bash
-$FLOWCTL tasks --epic <id> --json
+$FLOWCTL tasks --spec <id> --json
 ```
 
-**If tasks exist:** Only update the epic spec (add edge cases, clarify requirements). **Do NOT touch task specs** — plan already created them.
+**If tasks exist:** Only update the spec (add edge cases, clarify requirements). **Do NOT touch task specs** — plan already created them.
 
-**If no tasks:** Update epic spec, then suggest `/flow-next:plan`.
+**If no tasks:** Update spec, then suggest `/flow-next:plan`.
 
 ```bash
-$FLOWCTL epic set-plan <id> --file - --json <<'EOF'
-# Epic Title
+$FLOWCTL spec set-plan <id> --file - --json <<'EOF'
+# Spec Title
 
 ## Problem
 Clear problem statement
@@ -533,7 +533,7 @@ $FLOWCTL cat <id>
   # Read existing acceptance, append new criteria
   $FLOWCTL task set-acceptance <id> --file /tmp/acc.md --json
   ```
-- Or suggest interviewing the epic instead: `/flow-next:interview <epic-id>`
+- Or suggest interviewing the spec instead: `/flow-next:interview <spec-id>`
 
 **If task is minimal** (just title, empty or stub description):
 - Update task with interview findings
@@ -558,7 +558,7 @@ Rewrite the file with refined spec:
 - Include edge cases, acceptance criteria
 - Keep it requirements-focused (what, not how)
 
-This is typically a pre-epic doc. After interview, suggest `/flow-next:plan <file>` to create epic + tasks.
+This is typically a pre-spec doc. After interview, suggest `/flow-next:plan <file>` to create spec + tasks.
 
 ## Completion
 
@@ -570,8 +570,8 @@ Show summary:
 - Strategy-aware mode (when `STRATEGY_AWARE=1` was active): strategy conflicts captured under `## Strategy Conflicts` (read-only — interview never edits STRATEGY.md)
 
 Suggest next step based on input type:
-- New idea / epic without tasks → `/flow-next:plan fn-N`
-- Epic with tasks → `/flow-next:work fn-N` (or more interview on specific tasks)
+- New idea / spec without tasks → `/flow-next:plan fn-N`
+- Spec with tasks → `/flow-next:work fn-N` (or more interview on specific tasks)
 - Task → `/flow-next:work fn-N.M`
 - File → `/flow-next:plan <file>`
 

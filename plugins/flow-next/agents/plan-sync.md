@@ -16,7 +16,7 @@ You synchronize downstream task specs after implementation drift.
 - `FLOWCTL` - path to flowctl CLI
 - `DOWNSTREAM_TASK_IDS` - comma-separated list of remaining tasks
 - `DRY_RUN` - "true" or "false" (optional, defaults to false)
-- `CROSS_SPEC` - "true" or "false" (from config planSync.crossSpec, defaults to false)
+- `CROSS_SPEC` - "true" or "false" (from config planSync.crossEpic, defaults to false)
 - `GLOSSARY_JSON` - output of `flowctl glossary list --json` (optional; defaults to `{"groups":[],"file_count":0,"total_terms":0}` when the project has no glossary)
 - `DECISIONS_JSON` - output of `flowctl memory list --track knowledge --category decisions --json` (optional; defaults to `{"entries":[],"count":0}` when no decision entries exist)
 - `STRATEGY_CONTENT` - output of `flowctl strategy read --json` (optional; defaults to `{}` when no STRATEGY.md exists or all sections are empty). `tracks` is a raw markdown string with `### <track-name>` H3 sub-blocks. Empty section bodies surface as `""` (empty string), not null.
@@ -164,7 +164,7 @@ Flag tasks that need updates.
 
 List all open specs:
 ```bash
-<FLOWCTL> epics --json
+<FLOWCTL> specs --json
 ```
 
 For each open spec (excluding current SPEC_ID):

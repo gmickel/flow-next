@@ -1,6 +1,6 @@
 ---
 name: flow-next-work
-description: Execute a Flow epic or task systematically with git setup, task tracking, quality checks, and commit workflow. Use when implementing a plan or working through a spec. Triggers on /flow-next:work with Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2, fn-1-xxx, fn-1-xxx.2).
+description: Execute a Flow spec or task systematically with git setup, task tracking, quality checks, and commit workflow. Use when implementing a plan or working through a spec. Triggers on /flow-next:work with Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2, fn-1-xxx, fn-1-xxx.2).
 user-invocable: false
 ---
 
@@ -39,10 +39,10 @@ If `REVIEW_RECEIPT_PATH` is set or `FLOW_RALPH=1`:
 Full request: $ARGUMENTS
 
 Accepts:
-- Flow epic ID `fn-N-slug` (e.g., `fn-1-add-oauth`) or legacy `fn-N`/`fn-N-xxx` to work through all tasks
+- Flow spec ID `fn-N-slug` (e.g., `fn-1-add-oauth`) or legacy `fn-N`/`fn-N-xxx` to work through all tasks
 - Flow task ID `fn-N-slug.M` (e.g., `fn-1-add-oauth.2`) or legacy `fn-N.M`/`fn-N-xxx.M` to work on single task
-- Markdown spec file path (creates epic from file, then executes)
-- Idea text (creates minimal epic + single task, then executes)
+- Markdown spec file path (creates spec from file, then executes)
+- Idea text (creates minimal spec + single task, then executes)
 - Chained instructions like "then review with /flow-next:impl-review"
 
 Examples:
@@ -130,7 +130,7 @@ If user chose review, pass the review mode to the worker. The worker invokes `/f
 ## Guardrails
 
 - Don't start without asking branch question
-- Don't start without plan/epic
+- Don't start without plan/spec
 - Don't skip tests
 - Don't leave tasks half-done
 - Never use TodoWrite for task tracking

@@ -214,23 +214,23 @@ else
 fi
 ```
 
-#### Open epics
+#### Open specs
 
 ```bash
-EPICS_JSON=$("$FLOWCTL" epics --json 2>/dev/null || echo '{"epics":[]}')
-OPEN_EPICS=$(jq '[.epics[] | select(.status == "open")]' <<< "$EPICS_JSON" 2>/dev/null || echo '[]')
-EPICS_COUNT=$(jq 'length' <<< "$OPEN_EPICS" 2>/dev/null || echo 0)
-if [[ "$EPICS_COUNT" -gt 0 ]]; then
-  EPICS_BLOCK="open_epics: ${EPICS_COUNT}
-$(jq -r '.[] | "  - \(.id): \(.title)"' <<< "$OPEN_EPICS")"
+SPECS_JSON=$("$FLOWCTL" specs --json 2>/dev/null || echo '{"specs":[]}')
+OPEN_SPECS=$(jq '[.specs[] | select(.status == "open")]' <<< "$SPECS_JSON" 2>/dev/null || echo '[]')
+SPECS_COUNT=$(jq 'length' <<< "$OPEN_SPECS" 2>/dev/null || echo 0)
+if [[ "$SPECS_COUNT" -gt 0 ]]; then
+  SPECS_BLOCK="open_specs: ${SPECS_COUNT}
+$(jq -r '.[] | "  - \(.id): \(.title)"' <<< "$OPEN_SPECS")"
 else
-  EPICS_BLOCK="open_epics: scanned: none (no open epics)"
+  SPECS_BLOCK="open_specs: scanned: none (no open specs)"
 fi
 ```
 
-`flowctl epics --json` returns all epics; filter by `status == "open"` via jq. Status values used by flowctl are `open` and `done` (sometimes `closed`); the filter can be widened to `status != "done"` if `closed` shows up.
+`flowctl specs --json` returns all specs; filter by `status == "open"` via jq. Status values used by flowctl are `open` and `done` (sometimes `closed`); the filter can be widened to `status != "done"` if `closed` shows up.
 
-The Phase 2 prompt uses this list as anti-duplication grounding — candidates that overlap an open epic must surface in Phase 3 critique under `duplicates-open-epic`.
+The Phase 2 prompt uses this list as anti-duplication grounding — candidates that overlap an open spec must surface in Phase 3 critique under `duplicates-open-epic` (frozen taxonomy slug, kept stable for artifact round-trip; the prose semantics now read "duplicates-open-spec").
 
 #### CHANGELOG (top 50 lines)
 
@@ -341,7 +341,7 @@ The `target_problem`, `approach`, and `tracks` strings are emitted **verbatim** 
 
 ### 1.3 — Emit snapshot
 
-Concatenate the blocks under a single `## Grounding snapshot` heading. Order is fixed (git log → open epics → changelog → memory → memory audit → strategy) so the snapshot is comparable across runs. Cap each block by line-count so total output stays in the 30-50 line target window.
+Concatenate the blocks under a single `## Grounding snapshot` heading. Order is fixed (git log → open specs → changelog → memory → memory audit → strategy) so the snapshot is comparable across runs. Cap each block by line-count so total output stays in the 30-50 line target window.
 
 The snapshot is the input to Phase 2's generation prompt (task 2). For this task, the snapshot is printed to stdout for manual inspection — Phase 2's prompt scaffolding lands later.
 
@@ -355,7 +355,7 @@ $( [[ -n "$FOCUS_PATH" ]] && echo "focus_path: $FOCUS_PATH" )
 
 $GIT_BLOCK
 
-$EPICS_BLOCK
+$SPECS_BLOCK
 
 $CHANGELOG_BLOCK
 
@@ -369,7 +369,7 @@ EOF
 
 ### 1.4 — Manual smoke (acceptance R1, R17)
 
-In the flow-next plugin repo: `prospect DX` should produce a readable snapshot listing recently-modified files, open epics (e.g. fn-33 itself), CHANGELOG entries from the last few releases, memory hits if memory is initialised, and `scanned: none (...)` lines for any absent source. The snapshot must fit in roughly 30-50 lines of output and must not contain raw file bodies.
+In the flow-next plugin repo: `prospect DX` should produce a readable snapshot listing recently-modified files, open specs (e.g. fn-33 itself), CHANGELOG entries from the last few releases, memory hits if memory is initialised, and `scanned: none (...)` lines for any absent source. The snapshot must fit in roughly 30-50 lines of output and must not contain raw file bodies.
 
 If grounding can't produce a useful snapshot from a real repo (too noisy / too sparse / too slow), this is the early-proof-point gate — re-evaluate scanning strategy before building Phases 2-5.
 
@@ -434,7 +434,7 @@ focus_kind: [FOCUS_KIND]
 
 ## Grounding snapshot
 
-[Phase 1 snapshot verbatim — git log, open epics, CHANGELOG, memory, audit]
+[Phase 1 snapshot verbatim — git log, open specs, CHANGELOG, memory, audit]
 
 ## Personas
 
@@ -523,7 +523,7 @@ Inputs: `CANDIDATES_YAML` (Phase 2 §2.4) + the Phase 1 grounding snapshot. **Ex
 Rejection taxonomy (R3 anchor — frozen string list):
 
 ```
-duplicates-open-epic       — material overlap with an open epic in the grounding snapshot
+duplicates-open-epic       — material overlap with an open spec in the grounding snapshot (slug kept stable for artifact round-trip; semantics now read "duplicates-open-spec")
 out-of-scope               — outside what this codebase / the focus area should tackle
 out-of-scope-vs-strategy   — contradicts an active track in the strategy snapshot (advisory only — user can override at promote time)
 insufficient-signal        — speculative without evidence in grounding snapshot
@@ -553,7 +553,7 @@ Evaluate each candidate against the grounding snapshot. Reject aggressively. "Co
 
 For each candidate, emit a verdict: `keep` or `drop`. If `drop`, the `taxonomy` field must be one of:
 
-- `duplicates-open-epic` — same direction as a listed open epic
+- `duplicates-open-epic` — same direction as a listed open spec (slug kept stable for artifact round-trip)
 - `out-of-scope` — not aligned with this codebase or the focus area
 - `out-of-scope-vs-strategy` — contradicts an active track in the strategy snapshot; cite the violated track name verbatim in `reason` (advisory — user can override)
 - `insufficient-signal` — no grounding evidence supports this being worth doing now
@@ -841,7 +841,7 @@ Empty buckets render `_(none)_`. Empty `## Rejected` renders `_(none)_`.
 
 ## Phase 6: Handoff prompt (R9, R19)
 
-**Goal:** offer the user a one-keystroke path from "artifact saved" to either an epic (via `flowctl prospect promote`), an interview (via `/flow-next:interview`), or a clean exit. The artifact already exists on disk by the time this phase fires — Ctrl-C here loses nothing.
+**Goal:** offer the user a one-keystroke path from "artifact saved" to either a spec (via `flowctl prospect promote`), an interview (via `/flow-next:interview`), or a clean exit. The artifact already exists on disk by the time this phase fires — Ctrl-C here loses nothing.
 
 ### 6.1 — Use the blocking-question tool
 
@@ -864,7 +864,7 @@ When no blocking tool is reachable (or the platform tool errors), print this **e
 ```
 Saved: .flow/prospects/<artifact-id>.md
 
-Promote a survivor to an epic?
+Promote a survivor to a spec?
   1) Promote #1: <title>
   2) Promote #2: <title>
   ...
@@ -882,9 +882,9 @@ Normalize the reply (strip whitespace, lowercase). Route by exact match:
 
 | Reply | Action |
 |-------|--------|
-| `1`, `2`, ..., `N-1` (where `N` is the Skip slot) | Run `flowctl prospect promote <artifact-id> --idea <reply>`. Echo the new epic id and exit. |
+| `1`, `2`, ..., `N-1` (where `N` is the Skip slot) | Run `flowctl prospect promote <artifact-id> --idea <reply>`. Echo the new spec id and exit. |
 | `N`, `skip`, empty string | Print `Skipped. Artifact saved at .flow/prospects/<artifact-id>.md` and exit. |
-| `i`, `interview` | Print suggestion: `Run /flow-next:interview <epic-or-task-id> to refine. Artifact saved at .flow/prospects/<artifact-id>.md`. **Do not auto-invoke** — the user picks the target id. |
+| `i`, `interview` | Print suggestion: `Run /flow-next:interview <spec-or-task-id> to refine. Artifact saved at .flow/prospects/<artifact-id>.md`. **Do not auto-invoke** — the user picks the target id. |
 | anything else | Reprint the menu once with `Unrecognized choice: <reply>`. On second invalid reply, print `Skipped (no valid choice). Artifact saved at .flow/prospects/<artifact-id>.md` and exit cleanly. |
 
 ### 6.4 — Exit cleanly regardless

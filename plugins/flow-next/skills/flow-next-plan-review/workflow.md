@@ -34,13 +34,13 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 **Spec-form env var (optional):** `FLOW_REVIEW_BACKEND` accepts bare or full spec:
 
 ```bash
-FLOW_REVIEW_BACKEND=codex:gpt-5.5:xhigh $FLOWCTL codex plan-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
-FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5 $FLOWCTL copilot plan-review "$EPIC_ID" --receipt "$RECEIPT_PATH"
+FLOW_REVIEW_BACKEND=codex:gpt-5.5:xhigh $FLOWCTL codex plan-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
+FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5 $FLOWCTL copilot plan-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 # Or pass spec directly:
-$FLOWCTL codex plan-review "$EPIC_ID" --spec "codex:gpt-5.5:xhigh" --receipt "$RECEIPT_PATH"
+$FLOWCTL codex plan-review "$SPEC_ID" --spec "codex:gpt-5.5:xhigh" --receipt "$RECEIPT_PATH"
 ```
 
-Per-epic `default_review` (set via `flowctl epic set-backend`) overrides env.
+Per-spec `default_review` (set via `flowctl spec set-backend`) overrides env.
 
 **If backend is "none"**: Skip review, inform user, and exit cleanly (no error).
 
@@ -56,8 +56,8 @@ Use when `BACKEND="codex"`.
 
 **Before review** (protects against context compaction):
 ```bash
-EPIC_ID="${1:-}"
-$FLOWCTL checkpoint save --epic "$EPIC_ID" --json
+SPEC_ID="${1:-}"
+$FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 ```
 
 ### Step 1: Execute Review
@@ -66,11 +66,11 @@ $FLOWCTL checkpoint save --epic "$EPIC_ID" --json
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
 
 # --files: comma-separated CODE files for reviewer context
-# Epic/task specs are auto-included; pass files the plan will CREATE or MODIFY
-# Read epic spec to identify affected paths, then list key files
-CODE_FILES="src/main.py,src/config.py"  # Customize per epic
+# Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
+# Read spec to identify affected paths, then list key files
+CODE_FILES="src/main.py,src/config.py"  # Customize per spec
 
-$FLOWCTL codex plan-review "$EPIC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
+$FLOWCTL codex plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
 ```
 
 **Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`.**
@@ -79,23 +79,23 @@ $FLOWCTL codex plan-review "$EPIC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_
 
 ```bash
 # Based on verdict
-$FLOWCTL epic set-plan-review-status "$EPIC_ID" --status ship --json
+$FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship --json
 # OR
-$FLOWCTL epic set-plan-review-status "$EPIC_ID" --status needs_work --json
+$FLOWCTL spec set-plan-review-status "$SPEC_ID" --status needs_work --json
 ```
 
 ### Step 3: Handle Verdict
 
 If `VERDICT=NEEDS_WORK`:
 1. Parse issues from output
-2. Fix plan via `$FLOWCTL epic set-plan`
+2. Fix plan via `$FLOWCTL spec set-plan`
 3. Re-run step 1 (receipt enables session continuity)
 4. Repeat until SHIP
 
 ### Step 4: Receipt
 
 Receipt is written automatically by `flowctl codex plan-review` when `--receipt` provided.
-Format: `{"mode":"codex","epic":"<id>","verdict":"<verdict>","session_id":"<thread_id>","timestamp":"..."}`
+Format: `{"type":"plan_review","id":"<spec-id>","mode":"codex","verdict":"<verdict>","session_id":"<thread_id>","timestamp":"..."}`
 
 ---
 
@@ -107,8 +107,8 @@ Use when `BACKEND="copilot"`.
 
 **Before review** (protects against context compaction):
 ```bash
-EPIC_ID="${1:-}"
-$FLOWCTL checkpoint save --epic "$EPIC_ID" --json
+SPEC_ID="${1:-}"
+$FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 ```
 
 ### Step 1: Execute Review
@@ -117,8 +117,8 @@ $FLOWCTL checkpoint save --epic "$EPIC_ID" --json
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
 
 # --files: comma-separated CODE files for reviewer context
-# Epic/task specs are auto-included; pass files the plan will CREATE or MODIFY
-CODE_FILES="src/main.py,src/config.py"  # Customize per epic
+# Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
+CODE_FILES="src/main.py,src/config.py"  # Customize per spec
 
 # Runtime config:
 #   --spec <spec>           full spec (backend:model:effort), highest priority
@@ -126,7 +126,7 @@ CODE_FILES="src/main.py,src/config.py"  # Customize per epic
 #   FLOW_COPILOT_MODEL      fills missing model only (default gpt-5.2)
 #   FLOW_COPILOT_EFFORT     fills missing effort only (default high)
 
-$FLOWCTL copilot plan-review "$EPIC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
+$FLOWCTL copilot plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
 ```
 
 **Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`.**
@@ -135,23 +135,23 @@ $FLOWCTL copilot plan-review "$EPIC_ID" --files "$CODE_FILES" --receipt "$RECEIP
 
 ```bash
 # Based on verdict
-$FLOWCTL epic set-plan-review-status "$EPIC_ID" --status ship --json
+$FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship --json
 # OR
-$FLOWCTL epic set-plan-review-status "$EPIC_ID" --status needs_work --json
+$FLOWCTL spec set-plan-review-status "$SPEC_ID" --status needs_work --json
 ```
 
 ### Step 3: Handle Verdict
 
 If `VERDICT=NEEDS_WORK`:
 1. Parse issues from output
-2. Fix plan via `$FLOWCTL epic set-plan`
+2. Fix plan via `$FLOWCTL spec set-plan`
 3. Re-run step 1 (receipt enables session continuity when `mode == "copilot"`)
 4. Repeat until SHIP
 
 ### Step 4: Receipt
 
 Receipt is written automatically by `flowctl copilot plan-review` when `--receipt` provided.
-Format: `{"type":"plan_review","id":"<epic-id>","mode":"copilot","verdict":"<verdict>","session_id":"<uuid>","model":"<model>","effort":"<effort>","spec":"copilot:<model>:<effort>","timestamp":"..."}`
+Format: `{"type":"plan_review","id":"<spec-id>","mode":"copilot","verdict":"<verdict>","session_id":"<uuid>","model":"<model>","effort":"<effort>","spec":"copilot:<model>:<effort>","timestamp":"..."}`
 
 The `spec` field is the canonical round-trippable form (added in fn-28.3). `model` + `effort` remain for backward compatibility.
 
@@ -177,9 +177,9 @@ Save output for inclusion in review prompt. Compose a 1-2 sentence `REVIEW_SUMMA
 
 **Save checkpoint** (protects against context compaction during review):
 ```bash
-$FLOWCTL checkpoint save --epic <id> --json
+$FLOWCTL checkpoint save --spec <id> --json
 ```
-This creates `.flow/.checkpoint-<id>.json` with full state. If compaction occurs during review-fix cycles, restore with `$FLOWCTL checkpoint restore --epic <id>`.
+This creates `.flow/.checkpoint-<id>.json` with full state. If compaction occurs during review-fix cycles, restore with `$FLOWCTL checkpoint restore --spec <id>`.
 
 ---
 
@@ -213,11 +213,11 @@ Builder selects context automatically. Review and add must-haves:
 # See what builder selected
 $FLOWCTL rp select-get --window "$W" --tab "$T"
 
-# Always add the epic spec
-$FLOWCTL rp select-add --window "$W" --tab "$T" .flow/specs/<epic-id>.md
+# Always add the spec
+$FLOWCTL rp select-add --window "$W" --tab "$T" .flow/specs/<spec-id>.md
 
-# Always add ALL task specs for this epic
-for task_spec in .flow/tasks/${EPIC_ID}.*.md; do
+# Always add ALL task specs for this spec
+for task_spec in .flow/tasks/${SPEC_ID}.*.md; do
   [[ -f "$task_spec" ]] && $FLOWCTL rp select-add --window "$W" --tab "$T" "$task_spec"
 done
 
@@ -225,7 +225,7 @@ done
 $FLOWCTL rp select-add --window "$W" --tab "$T" docs/prd.md
 ```
 
-**Why this matters:** Chat only sees selected files. Reviewer needs both epic spec AND task specs to check for consistency.
+**Why this matters:** Chat only sees selected files. Reviewer needs both spec AND task specs to check for consistency.
 
 ---
 
@@ -262,14 +262,14 @@ If you cannot find `<file_contents>`, ask for the files to be re-attached before
 ## Review Scope
 
 You are reviewing:
-1. **Epic spec** - The high-level plan
+1. **Spec** - The high-level plan
 2. **Task specs** - Individual task breakdowns
 
-**CRITICAL**: Check for consistency between epic and tasks. Flag if:
-- Task specs contradict or miss epic requirements
-- Task acceptance criteria don't align with epic acceptance criteria
-- Task approaches would need to change based on epic design decisions
-- Epic mentions states/enums/types that tasks don't account for
+**CRITICAL**: Check for consistency between spec and tasks. Flag if:
+- Task specs contradict or miss spec requirements
+- Task acceptance criteria don't align with spec acceptance criteria
+- Task approaches would need to change based on spec design decisions
+- Spec mentions states/enums/types that tasks don't account for
 
 ## Review Criteria
 
@@ -284,16 +284,16 @@ Conduct a John Carmack-level review:
 7. **Scope** - Right-sized? Over/under-engineering?
 8. **Task sizing** - M tasks preferred. Flag over-splitting: 7+ tasks? Sequential S tasks that should be combined?
 9. **Testability** - How will we verify this works?
-10. **Consistency** - Do task specs align with epic spec?
+10. **Consistency** - Do task specs align with spec?
 
 ## Protected artifacts
 
 The following paths are flow-next / project-pipeline artifacts. Any finding recommending their deletion, gitignore, or removal MUST be discarded during synthesis. Do not flag these paths for cleanup under any circumstances:
 
-- `.flow/*` — flow-next state, specs, tasks, epics, runtime
+- `.flow/*` — flow-next state, specs, tasks, runtime
 - `.flow/bin/*` — bundled flowctl
 - `.flow/memory/*` — learnings store (pitfalls, conventions, decisions)
-- `.flow/specs/*.md` — epic specs (decision artifacts)
+- `.flow/specs/*.md` — specs (decision artifacts)
 - `.flow/tasks/*.md` — task specs (decision artifacts)
 - `docs/plans/*` — plan artifacts (if project uses this convention)
 - `docs/solutions/*` — solutions artifacts (if project uses this convention)
@@ -309,7 +309,7 @@ If you notice genuine issues with content INSIDE these files (e.g., a spec that 
 
 For each issue:
 - **Severity**: Critical / Major / Minor / Nitpick
-- **Location**: Which task or section (e.g., "fn-1.3 Description" or "Epic Acceptance #2")
+- **Location**: Which task or section (e.g., "fn-1.3 Description" or "Spec Acceptance #2")
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
@@ -325,7 +325,7 @@ EOF
 ### Send to RepoPrompt
 
 ```bash
-REVIEW_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/review-prompt.md --new-chat --chat-name "Plan Review: <EPIC_ID>")"
+REVIEW_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/review-prompt.md --new-chat --chat-name "Plan Review: <SPEC_ID>")"
 echo "$REVIEW_RESPONSE"
 
 VERDICT="$(echo "$REVIEW_RESPONSE" \
@@ -354,7 +354,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
   cat > "$REVIEW_RECEIPT_PATH" <<EOF
-{"type":"plan_review","id":"<EPIC_ID>","mode":"rp","verdict":"$VERDICT","timestamp":"$ts"}
+{"type":"plan_review","id":"<SPEC_ID>","mode":"rp","verdict":"$VERDICT","timestamp":"$ts"}
 EOF
   echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi
@@ -364,10 +364,10 @@ fi
 
 ```bash
 # If SHIP
-$FLOWCTL epic set-plan-review-status <EPIC_ID> --status ship --json
+$FLOWCTL spec set-plan-review-status <SPEC_ID> --status ship --json
 
 # If NEEDS_WORK or MAJOR_RETHINK
-$FLOWCTL epic set-plan-review-status <EPIC_ID> --status needs_work --json
+$FLOWCTL spec set-plan-review-status <SPEC_ID> --status needs_work --json
 ```
 
 If no verdict tag, output `<promise>RETRY</promise>` and stop.
@@ -383,31 +383,31 @@ If no verdict tag, output `<promise>RETRY</promise>` and stop.
 If verdict is NEEDS_WORK:
 
 1. **Parse issues** - Extract ALL issues by severity (Critical → Major → Minor)
-2. **Fix the epic spec** - Address each issue.
-3. **Update epic spec in flowctl** (MANDATORY before re-review):
+2. **Fix the spec** - Address each issue.
+3. **Update spec in flowctl** (MANDATORY before re-review):
    ```bash
    # Option A: stdin heredoc (preferred, no temp file)
-   $FLOWCTL epic set-plan <EPIC_ID> --file - --json <<'EOF'
-   <updated epic spec content>
+   $FLOWCTL spec set-plan <SPEC_ID> --file - --json <<'EOF'
+   <updated spec content>
    EOF
 
    # Option B: temp file (if content has single quotes)
-   $FLOWCTL epic set-plan <EPIC_ID> --file /tmp/updated-plan.md --json
+   $FLOWCTL spec set-plan <SPEC_ID> --file /tmp/updated-plan.md --json
    ```
    **If you skip this step and re-review with same content, reviewer will return NEEDS_WORK again.**
 
    **Recovery**: If context compaction occurred, restore from checkpoint first:
    ```bash
-   $FLOWCTL checkpoint restore --epic <EPIC_ID> --json
+   $FLOWCTL checkpoint restore --spec <SPEC_ID> --json
    ```
 
-4. **Sync affected task specs** - If epic changes affect task specs, update them:
+4. **Sync affected task specs** - If spec changes affect task specs, update them:
    ```bash
    $FLOWCTL task set-spec <TASK_ID> --file - --json <<'EOF'
    <updated task spec content>
    EOF
    ```
-   Task specs need updating when epic changes affect:
+   Task specs need updating when spec changes affect:
    - State/enum values referenced in tasks
    - Acceptance criteria that tasks implement
    - Approach/design decisions tasks depend on
@@ -442,9 +442,9 @@ If verdict is NEEDS_WORK:
 
 **Anti-pattern**: Re-adding already-selected files before re-review. RP auto-refreshes; re-adding can cause issues.
 
-**Anti-pattern**: Re-reviewing without calling `epic set-plan` first. This wastes reviewer time and loops forever.
+**Anti-pattern**: Re-reviewing without calling `spec set-plan` first. This wastes reviewer time and loops forever.
 
-**Anti-pattern**: Updating epic spec without syncing affected task specs. Causes reviewer to flag consistency issues again.
+**Anti-pattern**: Updating spec without syncing affected task specs. Causes reviewer to flag consistency issues again.
 
 ---
 

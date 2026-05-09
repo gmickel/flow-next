@@ -18,7 +18,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 Arguments: $ARGUMENTS
 Format: `<id> [--dry-run]`
 
-- `<id>` - task ID `fn-N-slug.M` (or legacy `fn-N.M`, `fn-N-xxx.M`) or epic ID `fn-N-slug` (or legacy `fn-N`, `fn-N-xxx`)
+- `<id>` - task ID `fn-N-slug.M` (or legacy `fn-N.M`, `fn-N-xxx.M`) or spec ID `fn-N-slug` (or legacy `fn-N`, `fn-N-xxx`)
 - `--dry-run` - show changes without writing
 
 ## Workflow
@@ -37,11 +37,11 @@ Parse $ARGUMENTS for:
 **Validate ID format first:**
 - Must start with `fn-`
 - If no ID provided: "Usage: /flow-next:sync <id> [--dry-run]"
-- If doesn't match `fn-*` pattern: "Invalid ID format. Use fn-N-slug (epic) or fn-N-slug.M (task). Legacy fn-N, fn-N-xxx also work."
+- If doesn't match `fn-*` pattern: "Invalid ID format. Use fn-N-slug (spec) or fn-N-slug.M (task). Legacy fn-N, fn-N-xxx also work."
 
 Detect ID type:
 - Contains `.` (e.g., fn-1.2 or fn-1-add-oauth.2) -> task ID
-- No `.` (e.g., fn-1 or fn-1-add-oauth) -> epic ID
+- No `.` (e.g., fn-1 or fn-1-add-oauth) -> spec ID
 
 ### Step 2: Validate Environment
 
@@ -59,7 +59,7 @@ $FLOWCTL show <ID> --json
 
 If command fails:
 - For task ID: "Task <id> not found. Run `flowctl list` to see available."
-- For epic ID: "Epic <id> not found. Run `flowctl epics` to see available."
+- For spec ID: "Spec <id> not found. Run `flowctl specs` to see available."
 
 Stop on failure.
 
@@ -67,18 +67,18 @@ Stop on failure.
 
 **For task ID input:**
 ```bash
-# Extract epic from task ID (remove .N suffix)
-EPIC=$(echo "<task-id>" | sed 's/\.[0-9]*$//')
+# Extract spec from task ID (remove .N suffix)
+SPEC=$(echo "<task-id>" | sed 's/\.[0-9]*$//')
 
-# Get all tasks in epic
-$FLOWCTL tasks --epic "$EPIC" --json
+# Get all tasks in spec
+$FLOWCTL tasks --spec "$SPEC" --json
 ```
 
 Filter to `status: todo` or `status: blocked`. Exclude the source task itself.
 
-**For epic ID input:**
+**For spec ID input:**
 ```bash
-$FLOWCTL tasks --epic "<epic-id>" --json
+$FLOWCTL tasks --spec "<spec-id>" --json
 ```
 
 1. First, find a **source task** to anchor drift detection (agent requires `COMPLETED_TASK_ID`):
@@ -125,7 +125,7 @@ Build context and spawn via Task tool:
 ```
 Sync task specs from <source> to downstream tasks.
 
-COMPLETED_TASK_ID: <source task id - the input task, or selected source for epic mode>
+COMPLETED_TASK_ID: <source task id - the input task, or selected source for spec mode>
 FLOWCTL: ${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl
 SPEC_ID: <spec id>
 DOWNSTREAM_TASK_IDS: <comma-separated list from step 4>
@@ -142,7 +142,7 @@ DRY RUN MODE: Report what would change but do NOT use Edit tool. Only analyze an
 
 Use Task tool with `subagent_type: flow-next:plan-sync` (sync-codex.sh rewrites `Task` to `spawn_agent` for the Codex mirror).
 
-**Note:** `COMPLETED_TASK_ID` is always provided - for task-mode it's the input task, for epic-mode it's the source task selected in Step 4.
+**Note:** `COMPLETED_TASK_ID` is always provided - for task-mode it's the input task, for spec-mode it's the source task selected in Step 4.
 
 ### Step 7: Report Results
 
@@ -171,10 +171,10 @@ No files modified.
 |------|---------|
 | No ID provided | "Usage: /flow-next:sync <id> [--dry-run]" |
 | No `.flow/` | "No .flow/ found. Run `flowctl init` first." |
-| Invalid format | "Invalid ID format. Use fn-N-slug (epic) or fn-N-slug.M (task). Legacy fn-N, fn-N-xxx also work." |
+| Invalid format | "Invalid ID format. Use fn-N-slug (spec) or fn-N-slug.M (task). Legacy fn-N, fn-N-xxx also work." |
 | Task not found | "Task <id> not found. Run `flowctl list` to see available." |
-| Epic not found | "Epic <id> not found. Run `flowctl list` to see available." |
-| No source (epic mode) | "No completed or in-progress tasks to sync from. Complete a task first." |
+| Spec not found | "Spec <id> not found. Run `flowctl list` to see available." |
+| No source (spec mode) | "No completed or in-progress tasks to sync from. Complete a task first." |
 | No downstream | "No downstream tasks to sync (all done or none exist)." |
 
 ## Rules

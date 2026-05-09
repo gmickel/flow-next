@@ -42,7 +42,7 @@ flowctl rp prompt-export --window "$W" --tab "$T" --out ~/Desktop/export.md
 ## Common Mistakes
 
 - `--message "text"` → WRONG, use `--message-file /path/to/file`
-- `setup-review <epic-id>` → WRONG, use `setup-review --repo-root ... --summary ...`
+- `setup-review <spec-id>` → WRONG, use `setup-review --repo-root ... --summary ...`
 - `select-add --paths ...` → WRONG, use `select-add --window "$W" --tab "$T" <path>`
 - `chat-send --json` → WRONG, suppresses review text; if you see `{"chat": null}` you used --json incorrectly
 
