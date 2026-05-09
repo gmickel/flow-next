@@ -24,13 +24,13 @@ Sweep the medium- and low-density skills (everything not covered by T7a, T7b, T8
 - `plugins/flow-next/skills/flow-next-memory-migrate/` (1 ref)
 - `plugins/flow-next/agents/spec-scout.md` (CLI verbs in legacy-alias mode post-T5; rewrite to canonical) <!-- Updated by plan-sync: T5 punted CLI-verb rewrite to T10 -->
 - `plugins/flow-next/agents/plan-sync.md` (CLI verbs in legacy-alias mode post-T5) <!-- Updated by plan-sync: T5 punted CLI-verb rewrite to T10 -->
-- `plugins/flow-next/agents/worker.md` (CLI verbs in legacy-alias mode post-T5) <!-- Updated by plan-sync: T5 punted CLI-verb rewrite to T10 -->
-- `plugins/flow-next/agents/quality-auditor.md` (CLI verbs in legacy-alias mode post-T5) <!-- Updated by plan-sync: T5 punted CLI-verb rewrite to T10 -->
+- `plugins/flow-next/agents/worker.md` <!-- Updated by plan-sync (T10): grep verified zero `epic`/`--epic`/`EPIC_ID` refs at fn-43.10 implementation time; T5 commit 225dc94 already shipped a clean SPEC_ID-aware version. No diff change required. -->
+- `plugins/flow-next/agents/quality-auditor.md` <!-- Updated by plan-sync (T10): grep verified zero epic refs; quality-auditor reviews diffs and never references the artifact-type word. No diff change required. -->
 
 ## Approach
 
 - Per-skill prose pass: "epic" -> "spec" where it refers to the flow-next artefact; CLI verbs `flowctl epic *` -> `flowctl spec *`; `--epic <id>` flag -> `--spec <id>` in help/prose.
-- **Agent-prose CLI verbs (T5 carryover).** T5 reverted CLI verbs in `plugins/flow-next/agents/{spec-scout,plan-sync,worker,quality-auditor}.md` to legacy alias form (`flowctl epics`, `tasks --epic`) because the codex impl-reviewer hallucinated about CLI verb availability. T10 owns the rewrite of those agent prose files to canonical `flowctl specs` / `tasks --spec` once the worker can hold proper context (T1+T2 ship the verbs). Scope: 4 agent files under `plugins/flow-next/agents/`. <!-- Updated by plan-sync: T5 done summary explicitly punted CLI-verb rewrite in agent prose to T10 -->
+- **Agent-prose CLI verbs (T5 carryover).** T5 reverted CLI verbs in `plugins/flow-next/agents/{spec-scout,plan-sync,worker,quality-auditor}.md` to legacy alias form (`flowctl epics`, `tasks --epic`) because the codex impl-reviewer hallucinated about CLI verb availability. T10 owns the rewrite of those agent prose files to canonical `flowctl specs` / `tasks --spec` once the worker can hold proper context (T1+T2 ship the verbs). Scope was originally 4 agent files under `plugins/flow-next/agents/`. <!-- Updated by plan-sync (T10): re-verified scope at impl time — `worker.md` and `quality-auditor.md` were already cleaned by T5's commit 225dc94 (zero `epic`/`--epic`/`EPIC_ID` grep hits). Active rewrite scope is `spec-scout.md` + `plan-sync.md` only. The "4 files" wording in this paragraph is preserved as historical context per R-ID-stability rule. -->
 
 - Specifically watch for:
   - flow-next-plan/steps.md: 33 refs, includes Step 5 epic spec creation (`flowctl epic create + set-plan` heredoc).
@@ -53,7 +53,7 @@ Sweep the medium- and low-density skills (everything not covered by T7a, T7b, T8
 - `plugins/flow-next/skills/flow-next-plan-review/` (60 refs across SKILL.md + workflow.md).
 - `plugins/flow-next/skills/flow-next-setup/templates/usage.md, agents-md-snippet.md, claude-md-snippet.md`.
 - `plugins/flow-next/skills/flow-next-setup/workflow.md` (add upgrade-detection branch).
-- `plugins/flow-next/agents/{spec-scout,plan-sync,worker,quality-auditor}.md` (CLI verbs in legacy-alias mode post-T5; rewrite to canonical). <!-- Updated by plan-sync: T5 punted CLI-verb rewrite to T10 -->
+- `plugins/flow-next/agents/{spec-scout,plan-sync,worker,quality-auditor}.md` (CLI verbs in legacy-alias mode post-T5; rewrite to canonical). <!-- Updated by plan-sync (T10): worker + quality-auditor verified clean at impl time (T5 commit 225dc94 already shipped them spec-aware); active rewrite landed in spec-scout + plan-sync only. -->
 
 ## Key context
 
@@ -63,7 +63,7 @@ Sweep the medium- and low-density skills (everything not covered by T7a, T7b, T8
 ## Acceptance
 
 - [ ] All 14 skill directories scanned and updated; zero remaining `flowctl epic` or `--epic <id>` references in user-facing prose.
-- [ ] `plugins/flow-next/agents/{spec-scout,plan-sync,worker,quality-auditor}.md` CLI verbs rewritten from legacy-alias form (`flowctl epics`, `tasks --epic`) to canonical (`flowctl specs`, `tasks --spec`). T5 punted this rewrite. <!-- Updated by plan-sync: T5 done summary explicitly punted CLI-verb rewrite to T10 -->
+- [ ] `plugins/flow-next/agents/{spec-scout,plan-sync,worker,quality-auditor}.md` CLI verbs rewritten from legacy-alias form (`flowctl epics`, `tasks --epic`) to canonical (`flowctl specs`, `tasks --spec`). T5 punted this rewrite. <!-- Updated by plan-sync (T10): grep at impl time showed `worker.md` + `quality-auditor.md` already canonical (zero `epic`/`--epic`/`EPIC_ID` refs); active rewrite landed in `spec-scout.md` + `plan-sync.md` only. Acceptance satisfied for all four files (two via prior T5 work, two via T10 commit). -->
 - [ ] flow-next-plan/steps.md Step 5 uses `flowctl spec create + spec set-plan` heredoc.
 - [ ] flow-next-setup workflow.md has an "upgrade detected" branch that prompts via `AskUserQuestion` with three options (migrate / defer / suppress) and dispatches to `flowctl migrate-rename --yes` on user accept.
 - [ ] flow-next-setup template files (usage.md, agents-md-snippet.md, claude-md-snippet.md) use spec vocabulary -- new user repos get clean prose. (R17 setup templates).
