@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-12.2"
   ],
-  "epic": "fn-12",
   "evidence": {
     "commits": [
       "4891cb9a6deb193c4d9d5345e4f839757f8d2dea"
@@ -18,6 +17,7 @@
   },
   "id": "fn-12.6",
   "priority": null,
+  "spec": "fn-12",
   "spec_path": ".flow/tasks/fn-12.6.md",
   "status": "done",
   "title": "Update TUI runs.ts ID patterns",

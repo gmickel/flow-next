@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.2"
   ],
-  "epic": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid",
   "id": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.3",
   "priority": null,
+  "spec": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid",
   "spec_path": ".flow/tasks/fn-42-flow-nextmake-pr-pr-as-cognitive-aid.3.md",
   "status": "todo",
   "title": "Phase 2 body header sections: TL;DR, R-ID coverage table, Critical changes",

@@ -9,9 +9,9 @@
     "fn-31-pr-feedback-resolver-flow-nextresolve.4",
     "fn-31-pr-feedback-resolver-flow-nextresolve.5"
   ],
-  "epic": "fn-31-pr-feedback-resolver-flow-nextresolve",
   "id": "fn-31-pr-feedback-resolver-flow-nextresolve.6",
   "priority": null,
+  "spec": "fn-31-pr-feedback-resolver-flow-nextresolve",
   "spec_path": ".flow/tasks/fn-31-pr-feedback-resolver-flow-nextresolve.6.md",
   "status": "todo",
   "title": "Smoke test scripts + Ralph-isolation verification",

@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-26-designmd-aware-orchestration.1"
   ],
-  "epic": "fn-26-designmd-aware-orchestration",
   "id": "fn-26-designmd-aware-orchestration.2",
   "priority": null,
+  "spec": "fn-26-designmd-aware-orchestration",
   "spec_path": ".flow/tasks/fn-26-designmd-aware-orchestration.2.md",
   "status": "todo",
   "title": "Worker: read DESIGN.md in Phase 1.5 when design context present",

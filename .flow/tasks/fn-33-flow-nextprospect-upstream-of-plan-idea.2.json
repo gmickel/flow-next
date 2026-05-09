@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-33-flow-nextprospect-upstream-of-plan-idea.1"
   ],
-  "epic": "fn-33-flow-nextprospect-upstream-of-plan-idea",
   "id": "fn-33-flow-nextprospect-upstream-of-plan-idea.2",
   "priority": null,
+  "spec": "fn-33-flow-nextprospect-upstream-of-plan-idea",
   "spec_path": ".flow/tasks/fn-33-flow-nextprospect-upstream-of-plan-idea.2.md",
   "status": "todo",
   "title": "Phases 2-4: persona-seeded generate, two-pass critique with rejection floor, bucketed rank",

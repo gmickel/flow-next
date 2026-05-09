@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-31-pr-feedback-resolver-flow-nextresolve.3"
   ],
-  "epic": "fn-31-pr-feedback-resolver-flow-nextresolve",
   "id": "fn-31-pr-feedback-resolver-flow-nextresolve.4",
   "priority": null,
+  "spec": "fn-31-pr-feedback-resolver-flow-nextresolve",
   "spec_path": ".flow/tasks/fn-31-pr-feedback-resolver-flow-nextresolve.4.md",
   "status": "todo",
   "title": "Cross-invocation cluster analysis (cluster-analysis.md + skill integration)",

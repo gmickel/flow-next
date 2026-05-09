@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-30-memory-schema-upgrade-categorized-yaml.1"
   ],
-  "epic": "fn-30-memory-schema-upgrade-categorized-yaml",
   "id": "fn-30-memory-schema-upgrade-categorized-yaml.6",
   "priority": null,
+  "spec": "fn-30-memory-schema-upgrade-categorized-yaml",
   "spec_path": ".flow/tasks/fn-30-memory-schema-upgrade-categorized-yaml.6.md",
   "status": "todo",
   "title": "flowctl memory discoverability-patch command",

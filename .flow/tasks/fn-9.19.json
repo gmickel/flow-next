@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-9.15"
   ],
-  "epic": "fn-9",
   "evidence": {
     "commits": [
       "7b6b4c01005343565440bea14ea99fcc28400f75"
@@ -18,6 +17,7 @@
   },
   "id": "fn-9.19",
   "priority": null,
+  "spec": "fn-9",
   "spec_path": ".flow/tasks/fn-9.19.md",
   "status": "done",
   "title": "README and usage docs",

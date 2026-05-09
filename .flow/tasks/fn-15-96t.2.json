@@ -4,7 +4,6 @@
   "claimed_at": "2026-01-15T22:54:23.024902Z",
   "created_at": "2026-01-15T22:50:56.378586Z",
   "depends_on": [],
-  "epic": "fn-15-96t",
   "evidence": {
     "commits": [
       "f3ee708efc5bfd2056c6780b78511e8bd63c45bf"
@@ -14,6 +13,7 @@
   },
   "id": "fn-15-96t.2",
   "priority": null,
+  "spec": "fn-15-96t",
   "spec_path": ".flow/tasks/fn-15-96t.2.md",
   "status": "done",
   "title": "Create plan-sync agent",

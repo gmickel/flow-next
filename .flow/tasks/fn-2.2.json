@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-2.1"
   ],
-  "epic": "fn-2",
   "evidence": {
     "commits": [
       "a06f103cab5cbe2950b950cea71a7a3e5302ed14"
@@ -19,6 +18,7 @@
   },
   "id": "fn-2.2",
   "priority": null,
+  "spec": "fn-2",
   "spec_path": ".flow/tasks/fn-2.2.md",
   "status": "done",
   "title": "Add flowctl codex command group",

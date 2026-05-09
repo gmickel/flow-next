@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-28-unified-review-backend-spec-parser.1"
   ],
-  "epic": "fn-28-unified-review-backend-spec-parser",
   "id": "fn-28-unified-review-backend-spec-parser.2",
   "priority": null,
+  "spec": "fn-28-unified-review-backend-spec-parser",
   "spec_path": ".flow/tasks/fn-28-unified-review-backend-spec-parser.2.md",
   "status": "todo",
   "title": "Set-backend validation on store + show-backend resolution with field sources",

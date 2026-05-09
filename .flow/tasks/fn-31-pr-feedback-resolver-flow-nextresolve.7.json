@@ -11,9 +11,9 @@
     "fn-31-pr-feedback-resolver-flow-nextresolve.5",
     "fn-31-pr-feedback-resolver-flow-nextresolve.6"
   ],
-  "epic": "fn-31-pr-feedback-resolver-flow-nextresolve",
   "id": "fn-31-pr-feedback-resolver-flow-nextresolve.7",
   "priority": null,
+  "spec": "fn-31-pr-feedback-resolver-flow-nextresolve",
   "spec_path": ".flow/tasks/fn-31-pr-feedback-resolver-flow-nextresolve.7.md",
   "status": "todo",
   "title": "Docs, website, codex mirror, version bump",

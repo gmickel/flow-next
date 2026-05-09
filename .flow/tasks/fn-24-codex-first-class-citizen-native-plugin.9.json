@@ -7,9 +7,9 @@
     "fn-24-codex-first-class-citizen-native-plugin.4",
     "fn-24-codex-first-class-citizen-native-plugin.8"
   ],
-  "epic": "fn-24-codex-first-class-citizen-native-plugin",
   "id": "fn-24-codex-first-class-citizen-native-plugin.9",
   "priority": null,
+  "spec": "fn-24-codex-first-class-citizen-native-plugin",
   "spec_path": ".flow/tasks/fn-24-codex-first-class-citizen-native-plugin.9.md",
   "status": "todo",
   "title": "End-to-end validation of both platforms",

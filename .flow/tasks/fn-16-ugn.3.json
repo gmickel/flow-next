@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-16-ugn.2"
   ],
-  "epic": "fn-16-ugn",
   "evidence": {
     "commits": [
       "491d8593fd3eaedda39f05438e860b34607f5754"
@@ -18,6 +17,7 @@
   },
   "id": "fn-16-ugn.3",
   "priority": null,
+  "spec": "fn-16-ugn",
   "spec_path": ".flow/tasks/fn-16-ugn.3.md",
   "status": "done",
   "title": "Add smoke test for /flow-next:sync",

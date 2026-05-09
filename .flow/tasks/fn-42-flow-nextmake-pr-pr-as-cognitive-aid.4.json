@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.2"
   ],
-  "epic": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid",
   "id": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.4",
   "priority": null,
+  "spec": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid",
   "spec_path": ".flow/tasks/fn-42-flow-nextmake-pr-pr-as-cognitive-aid.4.md",
   "status": "todo",
   "title": "Phase 2 body context sections: Decisions, Memory, Glossary/strategy, Open items, Where to look",

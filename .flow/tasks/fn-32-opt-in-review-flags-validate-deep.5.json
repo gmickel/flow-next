@@ -9,9 +9,9 @@
     "fn-32-opt-in-review-flags-validate-deep.3",
     "fn-32-opt-in-review-flags-validate-deep.4"
   ],
-  "epic": "fn-32-opt-in-review-flags-validate-deep",
   "id": "fn-32-opt-in-review-flags-validate-deep.5",
   "priority": null,
+  "spec": "fn-32-opt-in-review-flags-validate-deep",
   "spec_path": ".flow/tasks/fn-32-opt-in-review-flags-validate-deep.5.md",
   "status": "todo",
   "title": "Smoke tests + Ralph regression verification",

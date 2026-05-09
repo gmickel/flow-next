@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-12.1"
   ],
-  "epic": "fn-12",
   "evidence": {
     "commits": [
       "75be01ae97efbede5cdf1b0b49e52ad835e5a551"
@@ -18,6 +17,7 @@
   },
   "id": "fn-12.2",
   "priority": null,
+  "spec": "fn-12",
   "spec_path": ".flow/tasks/fn-12.2.md",
   "status": "done",
   "title": "Update parse_id() regex for dual-pattern support",

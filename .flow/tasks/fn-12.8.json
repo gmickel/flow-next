@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-12.6"
   ],
-  "epic": "fn-12",
   "evidence": {
     "commits": [
       "98836eea71c94eee0823b31b8bda2d58afbe3054"
@@ -18,6 +17,7 @@
   },
   "id": "fn-12.8",
   "priority": null,
+  "spec": "fn-12",
   "spec_path": ".flow/tasks/fn-12.8.md",
   "status": "done",
   "title": "Update TUI test fixtures for new format",

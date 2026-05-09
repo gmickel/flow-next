@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.1"
   ],
-  "epic": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid",
   "id": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.2",
   "priority": null,
+  "spec": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid",
   "spec_path": ".flow/tasks/fn-42-flow-nextmake-pr-pr-as-cognitive-aid.2.md",
   "status": "todo",
   "title": "Skill scaffold + Phase 0 pre-flight (epic resolution, base detection, existing-PR refusal)",

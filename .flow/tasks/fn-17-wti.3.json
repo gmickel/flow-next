@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-17-wti.1"
   ],
-  "epic": "fn-17-wti",
   "evidence": {
     "commits": [
       "4fde7a6f6d822f5c4528cd0f0fe0853b496a9c6b"
@@ -18,6 +17,7 @@
   },
   "id": "fn-17-wti.3",
   "priority": null,
+  "spec": "fn-17-wti",
   "spec_path": ".flow/tasks/fn-17-wti.3.md",
   "status": "done",
   "title": "Remove runtime detection from flow-next-impl-review",

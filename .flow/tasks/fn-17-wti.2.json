@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-17-wti.1"
   ],
-  "epic": "fn-17-wti",
   "evidence": {
     "commits": [
       "97f49822c8b4b4f8dc7d3f0baec4b9e6cd58eb0e",
@@ -19,6 +18,7 @@
   },
   "id": "fn-17-wti.2",
   "priority": null,
+  "spec": "fn-17-wti",
   "spec_path": ".flow/tasks/fn-17-wti.2.md",
   "status": "done",
   "title": "Add review backend question to /flow-next:setup",

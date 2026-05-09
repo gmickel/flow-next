@@ -9,7 +9,6 @@
     "fn-9.2",
     "fn-9.18"
   ],
-  "epic": "fn-9",
   "evidence": {
     "commits": [
       "83ac1bc75db3c7e8d5979793f1d4be7e1652dde7"
@@ -21,6 +20,7 @@
   },
   "id": "fn-9.8",
   "priority": null,
+  "spec": "fn-9",
   "spec_path": ".flow/tasks/fn-9.8.md",
   "status": "done",
   "title": "TaskList component",

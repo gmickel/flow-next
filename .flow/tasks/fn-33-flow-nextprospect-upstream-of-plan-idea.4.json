@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-33-flow-nextprospect-upstream-of-plan-idea.3"
   ],
-  "epic": "fn-33-flow-nextprospect-upstream-of-plan-idea",
   "id": "fn-33-flow-nextprospect-upstream-of-plan-idea.4",
   "priority": null,
+  "spec": "fn-33-flow-nextprospect-upstream-of-plan-idea",
   "spec_path": ".flow/tasks/fn-33-flow-nextprospect-upstream-of-plan-idea.4.md",
   "status": "todo",
   "title": "flowctl prospect list / read / archive + malformed artifact detection",

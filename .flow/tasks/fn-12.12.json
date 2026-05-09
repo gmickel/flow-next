@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-12.11"
   ],
-  "epic": "fn-12",
   "evidence": {
     "docs": [
       "CHANGELOG.md 0.6.4 entry",
@@ -15,6 +14,7 @@
   },
   "id": "fn-12.12",
   "priority": null,
+  "spec": "fn-12",
   "spec_path": ".flow/tasks/fn-12.12.md",
   "status": "done",
   "title": "Update CHANGELOG.md with collision-resistant IDs",

@@ -7,9 +7,9 @@
     "fn-27-copilot-review-backend.1",
     "fn-27-copilot-review-backend.2"
   ],
-  "epic": "fn-27-copilot-review-backend",
   "id": "fn-27-copilot-review-backend.3",
   "priority": null,
+  "spec": "fn-27-copilot-review-backend",
   "spec_path": ".flow/tasks/fn-27-copilot-review-backend.3.md",
   "status": "todo",
   "title": "cmd_copilot_{impl,plan,completion}_review with receipts",

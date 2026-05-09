@@ -10,7 +10,6 @@
     "fn-13-pxj.4",
     "fn-13-pxj.8"
   ],
-  "epic": "fn-13-pxj",
   "evidence": {
     "commits": [
       "e297f762e8c921c4c7bb228b564ca32ffa2e3aa0"
@@ -22,6 +21,7 @@
   },
   "id": "fn-13-pxj.5",
   "priority": null,
+  "spec": "fn-13-pxj",
   "spec_path": ".flow/tasks/fn-13-pxj.5.md",
   "status": "done",
   "title": "Add CI tests for async control commands",

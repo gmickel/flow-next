@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-38-project-glossary-decision-records-and.3"
   ],
-  "epic": "fn-38-project-glossary-decision-records-and",
   "id": "fn-38-project-glossary-decision-records-and.7",
   "priority": null,
+  "spec": "fn-38-project-glossary-decision-records-and",
   "spec_path": ".flow/tasks/fn-38-project-glossary-decision-records-and.7.md",
   "status": "todo",
   "title": "R17 terminology grep guard (no DDD jargon)",

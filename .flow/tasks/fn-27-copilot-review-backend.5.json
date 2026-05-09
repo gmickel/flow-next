@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-27-copilot-review-backend.3"
   ],
-  "epic": "fn-27-copilot-review-backend",
   "id": "fn-27-copilot-review-backend.5",
   "priority": null,
+  "spec": "fn-27-copilot-review-backend",
   "spec_path": ".flow/tasks/fn-27-copilot-review-backend.5.md",
   "status": "todo",
   "title": "Ralph integration: ralph-guard.py copilot block + ralph-init templates",

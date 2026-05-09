@@ -7,9 +7,9 @@
     "fn-38-project-glossary-decision-records-and.1",
     "fn-38-project-glossary-decision-records-and.2"
   ],
-  "epic": "fn-38-project-glossary-decision-records-and",
   "id": "fn-38-project-glossary-decision-records-and.5",
   "priority": null,
+  "spec": "fn-38-project-glossary-decision-records-and",
   "spec_path": ".flow/tasks/fn-38-project-glossary-decision-records-and.5.md",
   "status": "todo",
   "title": "/flow-next:audit walks glossary terms + decision entries",

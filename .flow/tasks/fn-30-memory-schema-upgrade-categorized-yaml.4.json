@@ -7,9 +7,9 @@
     "fn-30-memory-schema-upgrade-categorized-yaml.1",
     "fn-30-memory-schema-upgrade-categorized-yaml.2"
   ],
-  "epic": "fn-30-memory-schema-upgrade-categorized-yaml",
   "id": "fn-30-memory-schema-upgrade-categorized-yaml.4",
   "priority": null,
+  "spec": "fn-30-memory-schema-upgrade-categorized-yaml",
   "spec_path": ".flow/tasks/fn-30-memory-schema-upgrade-categorized-yaml.4.md",
   "status": "todo",
   "title": "flowctl memory migrate + fast-model classifier",

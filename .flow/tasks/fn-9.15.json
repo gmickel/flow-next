@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-9.14"
   ],
-  "epic": "fn-9",
   "evidence": {
     "commits": [
       "5b8b6cde99931c6c4fadc5f1d3826c9270f18867"
@@ -18,6 +17,7 @@
   },
   "id": "fn-9.15",
   "priority": null,
+  "spec": "fn-9",
   "spec_path": ".flow/tasks/fn-9.15.md",
   "status": "done",
   "title": "CLI entry point",

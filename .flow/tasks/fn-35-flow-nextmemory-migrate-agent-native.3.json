@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-35-flow-nextmemory-migrate-agent-native.2"
   ],
-  "epic": "fn-35-flow-nextmemory-migrate-agent-native",
   "id": "fn-35-flow-nextmemory-migrate-agent-native.3",
   "priority": null,
+  "spec": "fn-35-flow-nextmemory-migrate-agent-native",
   "spec_path": ".flow/tasks/fn-35-flow-nextmemory-migrate-agent-native.3.md",
   "status": "todo",
   "title": "Update fn-34 audit Phase 0 warning + docs amend + smoke + codex mirror",

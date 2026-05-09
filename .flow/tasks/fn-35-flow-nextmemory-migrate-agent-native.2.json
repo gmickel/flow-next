@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-35-flow-nextmemory-migrate-agent-native.1"
   ],
-  "epic": "fn-35-flow-nextmemory-migrate-agent-native",
   "id": "fn-35-flow-nextmemory-migrate-agent-native.2",
   "priority": null,
+  "spec": "fn-35-flow-nextmemory-migrate-agent-native",
   "spec_path": ".flow/tasks/fn-35-flow-nextmemory-migrate-agent-native.2.md",
   "status": "todo",
   "title": "flowctl plumbing \u2014 list-legacy + drop classifier subprocess chain + migrate deprecation hint",

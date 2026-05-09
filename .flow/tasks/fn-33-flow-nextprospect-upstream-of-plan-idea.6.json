@@ -10,9 +10,9 @@
     "fn-33-flow-nextprospect-upstream-of-plan-idea.4",
     "fn-33-flow-nextprospect-upstream-of-plan-idea.5"
   ],
-  "epic": "fn-33-flow-nextprospect-upstream-of-plan-idea",
   "id": "fn-33-flow-nextprospect-upstream-of-plan-idea.6",
   "priority": null,
+  "spec": "fn-33-flow-nextprospect-upstream-of-plan-idea",
   "spec_path": ".flow/tasks/fn-33-flow-nextprospect-upstream-of-plan-idea.6.md",
   "status": "todo",
   "title": "Smoke tests: generate, promote, idempotency, Ralph-block, edge cases",

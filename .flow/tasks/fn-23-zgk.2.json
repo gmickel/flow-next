@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-23-zgk.1"
   ],
-  "epic": "fn-23-zgk",
   "id": "fn-23-zgk.2",
   "priority": null,
+  "spec": "fn-23-zgk",
   "spec_path": ".flow/tasks/fn-23-zgk.2.md",
   "status": "todo",
   "title": "Update ID regex patterns",

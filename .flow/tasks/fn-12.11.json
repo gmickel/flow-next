@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-12.9"
   ],
-  "epic": "fn-12",
   "evidence": {
     "docs": [
       "README.md ID Format section updated"
@@ -14,6 +13,7 @@
   },
   "id": "fn-12.11",
   "priority": null,
+  "spec": "fn-12",
   "spec_path": ".flow/tasks/fn-12.11.md",
   "status": "done",
   "title": "Update README.md docs for new ID format",

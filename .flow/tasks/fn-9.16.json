@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-9.15"
   ],
-  "epic": "fn-9",
   "evidence": {
     "commits": [
       "d0d735be5a782b3f22180cc8998598bfe986099a"
@@ -19,6 +18,7 @@
   },
   "id": "fn-9.16",
   "priority": null,
+  "spec": "fn-9",
   "spec_path": ".flow/tasks/fn-9.16.md",
   "status": "done",
   "title": "CI/CD workflow",

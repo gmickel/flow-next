@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-9.1"
   ],
-  "epic": "fn-9",
   "evidence": {
     "commits": [
       "2a78dc25c8c99da4c44f83ce1cb6b2d9dfffd829"
@@ -20,6 +19,7 @@
   },
   "id": "fn-9.3",
   "priority": null,
+  "spec": "fn-9",
   "spec_path": ".flow/tasks/fn-9.3.md",
   "status": "done",
   "title": "Types and interfaces",

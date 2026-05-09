@@ -4,7 +4,6 @@
   "claimed_at": "2026-01-15T22:51:41.319512Z",
   "created_at": "2026-01-15T22:50:54.543977Z",
   "depends_on": [],
-  "epic": "fn-15-96t",
   "evidence": {
     "commits": [
       "42dc44f533454e7277e7e62d19e466c2dab284c2"
@@ -17,6 +16,7 @@
   },
   "id": "fn-15-96t.1",
   "priority": null,
+  "spec": "fn-15-96t",
   "spec_path": ".flow/tasks/fn-15-96t.1.md",
   "status": "done",
   "title": "Add planSync.enabled config to flowctl.py",

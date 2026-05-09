@@ -11,9 +11,9 @@
     "fn-29-review-rigor-bundle-r-ids-confidence.5",
     "fn-29-review-rigor-bundle-r-ids-confidence.6"
   ],
-  "epic": "fn-29-review-rigor-bundle-r-ids-confidence",
   "id": "fn-29-review-rigor-bundle-r-ids-confidence.7",
   "priority": null,
+  "spec": "fn-29-review-rigor-bundle-r-ids-confidence",
   "spec_path": ".flow/tasks/fn-29-review-rigor-bundle-r-ids-confidence.7.md",
   "status": "todo",
   "title": "Docs, website, codex mirror, version bump",

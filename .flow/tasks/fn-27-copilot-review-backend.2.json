@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-27-copilot-review-backend.1"
   ],
-  "epic": "fn-27-copilot-review-backend",
   "id": "fn-27-copilot-review-backend.2",
   "priority": null,
+  "spec": "fn-27-copilot-review-backend",
   "spec_path": ".flow/tasks/fn-27-copilot-review-backend.2.md",
   "status": "todo",
   "title": "flowctl copilot argparse group + cmd_copilot_check + cmd_review_backend accepts copilot",

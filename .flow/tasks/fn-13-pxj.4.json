@@ -4,7 +4,6 @@
   "claimed_at": "2026-01-15T00:06:23.188752Z",
   "created_at": "2026-01-14T23:01:20.861039Z",
   "depends_on": [],
-  "epic": "fn-13-pxj",
   "evidence": {
     "commits": [
       "d8fe7a45132450286a9e6777f3bc98e8874c9b1f"
@@ -16,6 +15,7 @@
   },
   "id": "fn-13-pxj.4",
   "priority": null,
+  "spec": "fn-13-pxj",
   "spec_path": ".flow/tasks/fn-13-pxj.4.md",
   "status": "done",
   "title": "Add flowctl task reset command",

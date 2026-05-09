@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-12.1"
   ],
-  "epic": "fn-12",
   "evidence": {
     "commits": [
       "62f1d2637ed58b6776432a17b64d0e5b3936b8d5"
@@ -18,6 +17,7 @@
   },
   "id": "fn-12.3",
   "priority": null,
+  "spec": "fn-12",
   "spec_path": ".flow/tasks/fn-12.3.md",
   "status": "done",
   "title": "Update scan_max_epic_id() to ignore suffix",

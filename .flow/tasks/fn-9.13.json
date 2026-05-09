@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-9.2"
   ],
-  "epic": "fn-9",
   "evidence": {
     "commits": [
       "8ddf481"
@@ -18,6 +17,7 @@
   },
   "id": "fn-9.13",
   "priority": null,
+  "spec": "fn-9",
   "spec_path": ".flow/tasks/fn-9.13.md",
   "status": "done",
   "title": "HelpOverlay component",

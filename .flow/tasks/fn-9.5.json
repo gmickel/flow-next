@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-9.4"
   ],
-  "epic": "fn-9",
   "evidence": {
     "commits": [
       "f2bcbc2e51ad40985f9b7f9bce17b738d9b8a087"
@@ -18,6 +17,7 @@
   },
   "id": "fn-9.5",
   "priority": null,
+  "spec": "fn-9",
   "spec_path": ".flow/tasks/fn-9.5.md",
   "status": "done",
   "title": "Run discovery lib",

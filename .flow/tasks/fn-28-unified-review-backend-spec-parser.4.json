@@ -7,9 +7,9 @@
     "fn-28-unified-review-backend-spec-parser.1",
     "fn-28-unified-review-backend-spec-parser.3"
   ],
-  "epic": "fn-28-unified-review-backend-spec-parser",
   "id": "fn-28-unified-review-backend-spec-parser.4",
   "priority": null,
+  "spec": "fn-28-unified-review-backend-spec-parser",
   "spec_path": ".flow/tasks/fn-28-unified-review-backend-spec-parser.4.md",
   "status": "todo",
   "title": "cmd_review_backend accepts spec form + skills + Ralph templates pass spec through",

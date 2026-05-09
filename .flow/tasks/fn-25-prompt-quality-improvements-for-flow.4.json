@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-25-prompt-quality-improvements-for-flow.1"
   ],
-  "epic": "fn-25-prompt-quality-improvements-for-flow",
   "id": "fn-25-prompt-quality-improvements-for-flow.4",
   "priority": null,
+  "spec": "fn-25-prompt-quality-improvements-for-flow",
   "spec_path": ".flow/tasks/fn-25-prompt-quality-improvements-for-flow.4.md",
   "status": "todo",
   "title": "Plan-sync: maintain traceability table on drift",

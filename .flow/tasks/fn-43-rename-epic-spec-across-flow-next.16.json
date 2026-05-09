@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-43-rename-epic-spec-across-flow-next.15"
   ],
-  "epic": "fn-43-rename-epic-spec-across-flow-next",
   "id": "fn-43-rename-epic-spec-across-flow-next.16",
   "priority": null,
+  "spec": "fn-43-rename-epic-spec-across-flow-next",
   "spec_path": ".flow/tasks/fn-43-rename-epic-spec-across-flow-next.16.md",
   "status": "todo",
   "title": "External: mickel.tech site update + AI-x-SDLC-Starter-Kit cross-references (maintainer-only post-merge)",

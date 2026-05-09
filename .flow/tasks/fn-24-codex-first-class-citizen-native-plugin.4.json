@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-24-codex-first-class-citizen-native-plugin.3"
   ],
-  "epic": "fn-24-codex-first-class-citizen-native-plugin",
   "id": "fn-24-codex-first-class-citizen-native-plugin.4",
   "priority": null,
+  "spec": "fn-24-codex-first-class-citizen-native-plugin",
   "spec_path": ".flow/tasks/fn-24-codex-first-class-citizen-native-plugin.4.md",
   "status": "todo",
   "title": "Add agents/openai.yaml UI metadata to key Codex skills",

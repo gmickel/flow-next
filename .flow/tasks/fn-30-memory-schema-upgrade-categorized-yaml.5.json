@@ -7,9 +7,9 @@
     "fn-30-memory-schema-upgrade-categorized-yaml.2",
     "fn-30-memory-schema-upgrade-categorized-yaml.3"
   ],
-  "epic": "fn-30-memory-schema-upgrade-categorized-yaml",
   "id": "fn-30-memory-schema-upgrade-categorized-yaml.5",
   "priority": null,
+  "spec": "fn-30-memory-schema-upgrade-categorized-yaml",
   "spec_path": ".flow/tasks/fn-30-memory-schema-upgrade-categorized-yaml.5.md",
   "status": "todo",
   "title": "Ralph worker auto-capture rewrite + memory-scout category awareness",

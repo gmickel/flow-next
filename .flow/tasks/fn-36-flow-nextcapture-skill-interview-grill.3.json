@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-36-flow-nextcapture-skill-interview-grill.2"
   ],
-  "epic": "fn-36-flow-nextcapture-skill-interview-grill",
   "id": "fn-36-flow-nextcapture-skill-interview-grill.3",
   "priority": null,
+  "spec": "fn-36-flow-nextcapture-skill-interview-grill",
   "spec_path": ".flow/tasks/fn-36-flow-nextcapture-skill-interview-grill.3.md",
   "status": "todo",
   "title": "Rollup \u2014 docs + website + codex mirror + version bump 0.38.0",

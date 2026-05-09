@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-1.1"
   ],
-  "epic": "fn-1",
   "id": "fn-1.2",
   "priority": null,
+  "spec": "fn-1",
   "spec_path": ".flow/tasks/fn-1.2.md",
   "status": "done",
   "title": "Capture hook (PostToolUse)",

@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-13-pxj.2"
   ],
-  "epic": "fn-13-pxj",
   "evidence": {
     "commits": [
       "784fb1e828e3accc895356e4ec14476d465a42f1"
@@ -18,6 +17,7 @@
   },
   "id": "fn-13-pxj.3",
   "priority": null,
+  "spec": "fn-13-pxj",
   "spec_path": ".flow/tasks/fn-13-pxj.3.md",
   "status": "done",
   "title": "Add flowctl ralph pause/resume/stop/status",

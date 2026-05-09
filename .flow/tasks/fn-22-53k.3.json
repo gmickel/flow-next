@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-22-53k.1"
   ],
-  "epic": "fn-22-53k",
   "id": "fn-22-53k.3",
   "priority": null,
+  "spec": "fn-22-53k",
   "spec_path": ".flow/tasks/fn-22-53k.3.md",
   "status": "todo",
   "title": "flowctl: codex completion-review command",

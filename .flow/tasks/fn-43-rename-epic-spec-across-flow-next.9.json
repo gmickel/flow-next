@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-43-rename-epic-spec-across-flow-next.2"
   ],
-  "epic": "fn-43-rename-epic-spec-across-flow-next",
   "id": "fn-43-rename-epic-spec-across-flow-next.9",
   "priority": null,
+  "spec": "fn-43-rename-epic-spec-across-flow-next",
   "spec_path": ".flow/tasks/fn-43-rename-epic-spec-across-flow-next.9.md",
   "status": "todo",
   "title": "Rewrite Ralph init templates for spec vocabulary + EPICS_FILE -> SPECS_FILE rename",

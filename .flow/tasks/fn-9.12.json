@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-9.2"
   ],
-  "epic": "fn-9",
   "evidence": {
     "commits": [
       "c762230c61f55d475b6db57bedb18fcd3de91f29"
@@ -18,6 +17,7 @@
   },
   "id": "fn-9.12",
   "priority": null,
+  "spec": "fn-9",
   "spec_path": ".flow/tasks/fn-9.12.md",
   "status": "done",
   "title": "StatusBar component",

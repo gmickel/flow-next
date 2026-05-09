@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-9.1"
   ],
-  "epic": "fn-9",
   "evidence": {
     "commits": [
       "55d8d24",
@@ -19,6 +18,7 @@
   },
   "id": "fn-9.2",
   "priority": null,
+  "spec": "fn-9",
   "spec_path": ".flow/tasks/fn-9.2.md",
   "status": "done",
   "title": "Theme system (dark/light)",

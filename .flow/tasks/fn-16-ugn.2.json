@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-16-ugn.1"
   ],
-  "epic": "fn-16-ugn",
   "evidence": {
     "commits": [
       "05e024af578e2d4200923574083e74e56813876b"
@@ -18,6 +17,7 @@
   },
   "id": "fn-16-ugn.2",
   "priority": null,
+  "spec": "fn-16-ugn",
   "spec_path": ".flow/tasks/fn-16-ugn.2.md",
   "status": "done",
   "title": "Update plan-sync agent for dry-run support",

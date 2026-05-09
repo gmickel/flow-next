@@ -8,9 +8,9 @@
     "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.4",
     "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.5"
   ],
-  "epic": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid",
   "id": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid.6",
   "priority": null,
+  "spec": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid",
   "spec_path": ".flow/tasks/fn-42-flow-nextmake-pr-pr-as-cognitive-aid.6.md",
   "status": "todo",
   "title": "Phase 4 push + gh pr create + flag handling (--draft / --ready / --dry-run / --memory / Ralph)",

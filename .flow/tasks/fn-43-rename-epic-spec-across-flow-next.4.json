@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-43-rename-epic-spec-across-flow-next.3"
   ],
-  "epic": "fn-43-rename-epic-spec-across-flow-next",
   "id": "fn-43-rename-epic-spec-across-flow-next.4",
   "priority": null,
+  "spec": "fn-43-rename-epic-spec-across-flow-next",
   "spec_path": ".flow/tasks/fn-43-rename-epic-spec-across-flow-next.4.md",
   "status": "todo",
   "title": "flowctl.py: auto-detect banner with carrot + suppression matrix + downgrade safety",

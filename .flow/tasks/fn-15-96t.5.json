@@ -4,7 +4,6 @@
   "claimed_at": "2026-01-15T23:11:46.836321Z",
   "created_at": "2026-01-15T22:50:59.914598Z",
   "depends_on": [],
-  "epic": "fn-15-96t",
   "evidence": {
     "commits": [
       "53b8d476ef4ddf33900647a1c0a10f0e6f5ab11a"
@@ -16,6 +15,7 @@
   },
   "id": "fn-15-96t.5",
   "priority": null,
+  "spec": "fn-15-96t",
   "spec_path": ".flow/tasks/fn-15-96t.5.md",
   "status": "done",
   "title": "Run smoke tests and verify",

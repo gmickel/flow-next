@@ -20,9 +20,9 @@
     "fn-43-rename-epic-spec-across-flow-next.14",
     "fn-43-rename-epic-spec-across-flow-next.17"
   ],
-  "epic": "fn-43-rename-epic-spec-across-flow-next",
   "id": "fn-43-rename-epic-spec-across-flow-next.15",
   "priority": null,
+  "spec": "fn-43-rename-epic-spec-across-flow-next",
   "spec_path": ".flow/tasks/fn-43-rename-epic-spec-across-flow-next.15.md",
   "status": "todo",
   "title": "Manifests + version 1.0.0 bump + CHANGELOG migration guide + sync-codex.sh + Codex regen",

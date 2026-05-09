@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-13-pxj.5"
   ],
-  "epic": "fn-13-pxj",
   "evidence": {
     "commits": [
       "7b9969e9557088074a5c108c0814d98c182ca67a"
@@ -18,6 +17,7 @@
   },
   "id": "fn-13-pxj.6",
   "priority": null,
+  "spec": "fn-13-pxj",
   "spec_path": ".flow/tasks/fn-13-pxj.6.md",
   "status": "done",
   "title": "Update documentation",

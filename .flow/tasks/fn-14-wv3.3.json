@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-14-wv3.1"
   ],
-  "epic": "fn-14-wv3",
   "id": "fn-14-wv3.3",
   "priority": null,
+  "spec": "fn-14-wv3",
   "spec_path": ".flow/tasks/fn-14-wv3.3.md",
   "status": "todo",
   "title": "Add keybindings for pause/resume/stop",

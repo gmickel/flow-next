@@ -4,7 +4,6 @@
   "claimed_at": "2026-01-16T10:49:46.409877Z",
   "created_at": "2026-01-16T10:25:53.437709Z",
   "depends_on": [],
-  "epic": "fn-17-wti",
   "evidence": {
     "commits": [
       "3a3248c906b97a0ef66dd9ed3b3a41b487f73925"
@@ -18,6 +17,7 @@
   },
   "id": "fn-17-wti.1",
   "priority": null,
+  "spec": "fn-17-wti",
   "spec_path": ".flow/tasks/fn-17-wti.1.md",
   "status": "done",
   "title": "Add review.backend to flowctl default config",

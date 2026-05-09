@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-9.3"
   ],
-  "epic": "fn-9",
   "evidence": {
     "commits": [
       "54a450cc6f6f1d6d2aaa4f46eed3dec2a134d788"
@@ -18,6 +17,7 @@
   },
   "id": "fn-9.4",
   "priority": null,
+  "spec": "fn-9",
   "spec_path": ".flow/tasks/fn-9.4.md",
   "status": "done",
   "title": "flowctl integration lib",

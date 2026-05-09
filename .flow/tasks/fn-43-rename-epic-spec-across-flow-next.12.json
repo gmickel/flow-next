@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-43-rename-epic-spec-across-flow-next.2"
   ],
-  "epic": "fn-43-rename-epic-spec-across-flow-next",
   "id": "fn-43-rename-epic-spec-across-flow-next.12",
   "priority": null,
+  "spec": "fn-43-rename-epic-spec-across-flow-next",
   "spec_path": ".flow/tasks/fn-43-rename-epic-spec-across-flow-next.12.md",
   "status": "todo",
   "title": "Update user-facing docs: root README + plugin README + CLAUDE.md + .flow/usage.md + setup templates",

@@ -7,9 +7,9 @@
     "fn-39-project-strategy-strategymd-anchor.1",
     "fn-39-project-strategy-strategymd-anchor.2"
   ],
-  "epic": "fn-39-project-strategy-strategymd-anchor",
   "id": "fn-39-project-strategy-strategymd-anchor.4",
   "priority": null,
+  "spec": "fn-39-project-strategy-strategymd-anchor",
   "spec_path": ".flow/tasks/fn-39-project-strategy-strategymd-anchor.4.md",
   "status": "todo",
   "title": "Interview + capture + plan-sync grounding (autodetect + Strategy Conflicts + override-strategy + drift)",

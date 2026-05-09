@@ -8,9 +8,9 @@
     "fn-26-designmd-aware-orchestration.3",
     "fn-26-designmd-aware-orchestration.4"
   ],
-  "epic": "fn-26-designmd-aware-orchestration",
   "id": "fn-26-designmd-aware-orchestration.5",
   "priority": null,
+  "spec": "fn-26-designmd-aware-orchestration",
   "spec_path": ".flow/tasks/fn-26-designmd-aware-orchestration.5.md",
   "status": "todo",
   "title": "Docs, CHANGELOG, version bump, codex sync",

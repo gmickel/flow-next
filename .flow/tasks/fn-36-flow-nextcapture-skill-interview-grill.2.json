@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-36-flow-nextcapture-skill-interview-grill.1"
   ],
-  "epic": "fn-36-flow-nextcapture-skill-interview-grill",
   "id": "fn-36-flow-nextcapture-skill-interview-grill.2",
   "priority": null,
+  "spec": "fn-36-flow-nextcapture-skill-interview-grill",
   "spec_path": ".flow/tasks/fn-36-flow-nextcapture-skill-interview-grill.2.md",
   "status": "todo",
   "title": "Interview enhancements \u2014 lead-with-recommendation, codebase-before-asking, dependency-ordered branches",

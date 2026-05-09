@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-1.3"
   ],
-  "epic": "fn-1",
   "id": "fn-1.4",
   "priority": null,
+  "spec": "fn-1",
   "spec_path": ".flow/tasks/fn-1.4.md",
   "status": "done",
   "title": "Memory-scout subagent",

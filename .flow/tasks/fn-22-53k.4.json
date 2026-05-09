@@ -7,9 +7,9 @@
     "fn-22-53k.2",
     "fn-22-53k.3"
   ],
-  "epic": "fn-22-53k",
   "id": "fn-22-53k.4",
   "priority": null,
+  "spec": "fn-22-53k",
   "spec_path": ".flow/tasks/fn-22-53k.4.md",
   "status": "todo",
   "title": "skill: flow-next-epic-review SKILL.md + workflow.md",

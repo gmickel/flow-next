@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-34-flow-nextaudit-agent-native-memory.2"
   ],
-  "epic": "fn-34-flow-nextaudit-agent-native-memory",
   "id": "fn-34-flow-nextaudit-agent-native-memory.3",
   "priority": null,
+  "spec": "fn-34-flow-nextaudit-agent-native-memory",
   "spec_path": ".flow/tasks/fn-34-flow-nextaudit-agent-native-memory.3.md",
   "status": "todo",
   "title": "Smoke + docs + website + codex mirror + version bump 0.37.0",

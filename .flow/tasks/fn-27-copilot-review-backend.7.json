@@ -8,9 +8,9 @@
     "fn-27-copilot-review-backend.5",
     "fn-27-copilot-review-backend.6"
   ],
-  "epic": "fn-27-copilot-review-backend",
   "id": "fn-27-copilot-review-backend.7",
   "priority": null,
+  "spec": "fn-27-copilot-review-backend",
   "spec_path": ".flow/tasks/fn-27-copilot-review-backend.7.md",
   "status": "todo",
   "title": "Docs, sync-codex, version bump",

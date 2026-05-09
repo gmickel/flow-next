@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-2.2"
   ],
-  "epic": "fn-2",
   "evidence": {
     "commits": [
       "4d2b1a5945ec615f37b6b0dbf1b59cfebe729f95"
@@ -18,6 +17,7 @@
   },
   "id": "fn-2.4",
   "priority": null,
+  "spec": "fn-2",
   "spec_path": ".flow/tasks/fn-2.4.md",
   "status": "done",
   "title": "Update plan-review skill for codex backend",

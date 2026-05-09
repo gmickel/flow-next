@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-12.4"
   ],
-  "epic": "fn-12",
   "evidence": {
     "commits": [],
     "prs": [],
@@ -16,6 +15,7 @@
   },
   "id": "fn-12.7",
   "priority": null,
+  "spec": "fn-12",
   "spec_path": ".flow/tasks/fn-12.7.md",
   "status": "done",
   "title": "Update test_flowctl.py with new ID patterns",

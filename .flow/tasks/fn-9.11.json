@@ -8,7 +8,6 @@
     "fn-9.3",
     "fn-9.18"
   ],
-  "epic": "fn-9",
   "evidence": {
     "commits": [
       "4c9b9d7aa2091e5609652c2f0e7e7a364c222b28"
@@ -20,6 +19,7 @@
   },
   "id": "fn-9.11",
   "priority": null,
+  "spec": "fn-9",
   "spec_path": ".flow/tasks/fn-9.11.md",
   "status": "done",
   "title": "Header component",

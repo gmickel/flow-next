@@ -7,7 +7,6 @@
     "fn-9.6",
     "fn-9.2"
   ],
-  "epic": "fn-9",
   "evidence": {
     "commits": [
       "0907671"
@@ -19,6 +18,7 @@
   },
   "id": "fn-9.10",
   "priority": null,
+  "spec": "fn-9",
   "spec_path": ".flow/tasks/fn-9.10.md",
   "status": "done",
   "title": "OutputPanel component",

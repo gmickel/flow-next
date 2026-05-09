@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-12.2"
   ],
-  "epic": "fn-12",
   "evidence": {
     "commits": [
       "e41cf1b992a28021484912b395dbf4f0ca5b1933"
@@ -18,6 +17,7 @@
   },
   "id": "fn-12.5",
   "priority": null,
+  "spec": "fn-12",
   "spec_path": ".flow/tasks/fn-12.5.md",
   "status": "done",
   "title": "Update ralph-guard.py receipt parsing patterns",

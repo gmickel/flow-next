@@ -9,7 +9,6 @@
     "fn-17-wti.5",
     "fn-17-wti.6"
   ],
-  "epic": "fn-17-wti",
   "evidence": {
     "commits": [
       "326f3e3",
@@ -23,6 +22,7 @@
   },
   "id": "fn-17-wti.7",
   "priority": null,
+  "spec": "fn-17-wti",
   "spec_path": ".flow/tasks/fn-17-wti.7.md",
   "status": "done",
   "title": "Run smoke tests and update docs",

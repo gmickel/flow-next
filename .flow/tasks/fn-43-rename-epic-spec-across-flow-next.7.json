@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-43-rename-epic-spec-across-flow-next.2"
   ],
-  "epic": "fn-43-rename-epic-spec-across-flow-next",
   "id": "fn-43-rename-epic-spec-across-flow-next.7",
   "priority": null,
+  "spec": "fn-43-rename-epic-spec-across-flow-next",
   "spec_path": ".flow/tasks/fn-43-rename-epic-spec-across-flow-next.7.md",
   "status": "todo",
   "title": "Rewrite flow-next-make-pr skill prose for spec vocabulary + R31 payload key updates",

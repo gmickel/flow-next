@@ -6,7 +6,6 @@
   "depends_on": [
     "fn-13-pxj.6"
   ],
-  "epic": "fn-13-pxj",
   "evidence": {
     "commits": [
       "466b0c49cf569a23c90828d7d41be793199cec51"
@@ -18,6 +17,7 @@
   },
   "id": "fn-13-pxj.7",
   "priority": null,
+  "spec": "fn-13-pxj",
   "spec_path": ".flow/tasks/fn-13-pxj.7.md",
   "status": "done",
   "title": "Bump version to 0.8.0 and update CHANGELOG",

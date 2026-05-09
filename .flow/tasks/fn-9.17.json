@@ -7,7 +7,6 @@
     "fn-9.4",
     "fn-9.5"
   ],
-  "epic": "fn-9",
   "evidence": {
     "commits": [
       "49e181519aafc7d70070cd354bdddbf1f161565b"
@@ -19,6 +18,7 @@
   },
   "id": "fn-9.17",
   "priority": null,
+  "spec": "fn-9",
   "spec_path": ".flow/tasks/fn-9.17.md",
   "status": "done",
   "title": "Run spawning and detach",

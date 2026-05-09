@@ -7,9 +7,9 @@
     "fn-22-53k.4",
     "fn-22-53k.5"
   ],
-  "epic": "fn-22-53k",
   "id": "fn-22-53k.7",
   "priority": null,
+  "spec": "fn-22-53k",
   "spec_path": ".flow/tasks/fn-22-53k.7.md",
   "status": "todo",
   "title": "docs: update flowctl.md, ralph.md, README.md",

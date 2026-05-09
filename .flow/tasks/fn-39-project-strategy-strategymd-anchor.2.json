@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-39-project-strategy-strategymd-anchor.1"
   ],
-  "epic": "fn-39-project-strategy-strategymd-anchor",
   "id": "fn-39-project-strategy-strategymd-anchor.2",
   "priority": null,
+  "spec": "fn-39-project-strategy-strategymd-anchor",
   "spec_path": ".flow/tasks/fn-39-project-strategy-strategymd-anchor.2.md",
   "status": "todo",
   "title": "flow-next-strategy skill + slash command + references",

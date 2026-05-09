@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-24-codex-first-class-citizen-native-plugin.1"
   ],
-  "epic": "fn-24-codex-first-class-citizen-native-plugin",
   "id": "fn-24-codex-first-class-citizen-native-plugin.2",
   "priority": null,
+  "spec": "fn-24-codex-first-class-citizen-native-plugin",
   "spec_path": ".flow/tasks/fn-24-codex-first-class-citizen-native-plugin.2.md",
   "status": "todo",
   "title": "Create sync-codex.sh build script",

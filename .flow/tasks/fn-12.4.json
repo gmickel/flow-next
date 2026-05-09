@@ -7,7 +7,6 @@
     "fn-12.2",
     "fn-12.3"
   ],
-  "epic": "fn-12",
   "evidence": {
     "commits": [
       "df07feea2d2082f975b51cdf3c721b8fc5c29381"
@@ -19,6 +18,7 @@
   },
   "id": "fn-12.4",
   "priority": null,
+  "spec": "fn-12",
   "spec_path": ".flow/tasks/fn-12.4.md",
   "status": "done",
   "title": "Update epic create to generate fn-N-xxx format",

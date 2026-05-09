@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-22-53k.4"
   ],
-  "epic": "fn-22-53k",
   "id": "fn-22-53k.8",
   "priority": null,
+  "spec": "fn-22-53k",
   "spec_path": ".flow/tasks/fn-22-53k.8.md",
   "status": "todo",
   "title": "skill: update flow-next-work for completion_review status",

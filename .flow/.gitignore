@@ -1,0 +1,9 @@
+# Auto-managed by flowctl — do not edit above this marker.
+.checkpoint-*.json
+receipts/
+tmp/
+.backup-pre-1.0/
+.banner-acknowledged
+.migrating
+.migration-manifest
+# End of auto-managed block. User patterns below this line are preserved.

@@ -12,7 +12,7 @@
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-05-08T20:57:37.594222Z",
   "spec_path": ".flow/specs/fn-43-rename-epic-spec-across-flow-next.md",
-  "status": "open",
+  "status": "done",
   "title": "Rename epic --> spec across flow-next; release as 1.0.0 with full backward compat",
-  "updated_at": "2026-05-09T03:51:49.555271Z"
+  "updated_at": "2026-05-09T11:24:35.836036Z"
 }

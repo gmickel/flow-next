@@ -6,9 +6,9 @@
   "depends_on": [
     "fn-33-flow-nextprospect-upstream-of-plan-idea.2"
   ],
-  "epic": "fn-33-flow-nextprospect-upstream-of-plan-idea",
   "id": "fn-33-flow-nextprospect-upstream-of-plan-idea.3",
   "priority": null,
+  "spec": "fn-33-flow-nextprospect-upstream-of-plan-idea",
   "spec_path": ".flow/tasks/fn-33-flow-nextprospect-upstream-of-plan-idea.3.md",
   "status": "todo",
   "title": "Phases 5-6: atomic artifact writer + frozen-format handoff prompt with fallback",

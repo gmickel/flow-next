@@ -7,7 +7,6 @@
     "fn-9.2",
     "fn-9.18"
   ],
-  "epic": "fn-9",
   "evidence": {
     "commits": [
       "8073ab1d1378824ab736cc4ae74c5645280f24d0"
@@ -19,6 +18,7 @@
   },
   "id": "fn-9.7",
   "priority": null,
+  "spec": "fn-9",
   "spec_path": ".flow/tasks/fn-9.7.md",
   "status": "done",
   "title": "SplitPanel component",

@@ -9,9 +9,9 @@
     "fn-39-project-strategy-strategymd-anchor.3",
     "fn-39-project-strategy-strategymd-anchor.4"
   ],
-  "epic": "fn-39-project-strategy-strategymd-anchor",
   "id": "fn-39-project-strategy-strategymd-anchor.6",
   "priority": null,
+  "spec": "fn-39-project-strategy-strategymd-anchor",
   "spec_path": ".flow/tasks/fn-39-project-strategy-strategymd-anchor.6.md",
   "status": "todo",
   "title": "strategy_smoke_test.sh (T1-T12)",
