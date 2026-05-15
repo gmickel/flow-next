@@ -47,5 +47,8 @@ Canonical user-facing docs sweep. `docs/teams.md` handover-objects table + walkt
 - [ ] `plugins/flow-next/README.md` version badge bumped to 1.1.0; no "two specs" misread surfaces in audit
 
 ## Done summary
-
+Canonical user-facing docs sweep for fn-44: rewrote misleading "Business spec" / "Full spec" noun pairs in docs/teams.md (handover-objects table, walkthrough headers [2]/[3], Roles table, Symmetric-interview subsection + ASCII flowchart) and GLOSSARY.md (Handover-object entry) to make the one-spec-evolving model unambiguous; annotated /flow-next:interview as a scoped operation in the Lifecycle map mermaid; added explicit supplementary-design-docs-are-separate paragraph; bumped plugins/flow-next/README.md version badge from 1.0.2 to 1.1.0. Codex impl-review SHIPed via triage-skip (docs-only, 3 files). sync-codex.sh validates clean.
 ## Evidence
+- Commits: 2d6a0bf7dd303fac4cb51ead0eae0d7be6ae04ca
+- Tests: bash scripts/sync-codex.sh
+- PRs:
