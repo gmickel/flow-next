@@ -302,6 +302,8 @@ The interview runs in one of three scoped modes resolved by `flowctl scope resol
 
 Before writing anything back, build the current-sections-state JSON from the existing spec markdown (or an empty object for new specs) and call `scope write-policy`. The policy result tells you which sections are writable, which are preserved, and how to handle the `## Decision Context` substructure conditional.
 
+**One policy call per pass** — when `SCOPE == both`, compute the biz policy first, run the biz pass, then **recompute** the current-sections state from the post-biz-pass result and compute a fresh technical policy for phase 2. A single pre-edit policy call for `both` cannot correctly decide tech-pass `Decision Context` shape (the biz pass may have promoted FLAT → substructured) or tech-pass placeholder replacement (biz pass may have written `*Pending technical-scope interview pass.*` under empty tech sections that the tech pass must now overwrite).
+
 ```bash
 # Build CURRENT_SECTIONS by inspecting the existing spec markdown:
 # decision_context_has_h3: spec has `### Motivation` / `### Implementation Tradeoffs` under `## Decision Context`
@@ -312,7 +314,19 @@ Before writing anything back, build the current-sections-state JSON from the exi
 # For a brand-new spec (no markdown yet), CURRENT_SECTIONS='{}' is fine.
 CURRENT_SECTIONS='{"decision_context_has_h3": <bool>, "biz_pass_ran": <bool>, "tech_sections_have_content": {"Architecture & Data Models": <bool>, "API Contracts": <bool>, "Edge Cases & Constraints": <bool>}}'
 
+# For SCOPE == business or SCOPE == technical: one call.
 WRITE_POLICY=$(printf '%s' "$CURRENT_SECTIONS" | "$FLOWCTL" scope write-policy "$SCOPE" --current-sections-json -)
+
+# For SCOPE == both: TWO calls — biz first, then recompute state + tech.
+#
+# BIZ_POLICY=$(printf '%s' "$CURRENT_SECTIONS" | "$FLOWCTL" scope write-policy business --current-sections-json -)
+# # ... run biz pass, write biz sections (in memory or to disk) ...
+# # Rebuild CURRENT_SECTIONS_AFTER_BIZ from the post-biz state — biz_pass_ran=true,
+# # decision_context_has_h3 likely true now (Motivation H3 written), placeholder lines
+# # under empty tech sections counted as "no content" for tech-pass overwrite logic:
+# CURRENT_SECTIONS_AFTER_BIZ='{"decision_context_has_h3": true, "biz_pass_ran": true, "tech_sections_have_content": {"Architecture & Data Models": <still-bool>, ...}}'
+# TECH_POLICY=$(printf '%s' "$CURRENT_SECTIONS_AFTER_BIZ" | "$FLOWCTL" scope write-policy technical --current-sections-json -)
+# # ... run tech pass under TECH_POLICY ...
 ```
 
 The policy JSON shape:
@@ -362,7 +376,7 @@ Per-section write behavior (per the write-policy):
  - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == true` (FLAT body exists from a prior tech-only pass): promote the existing flat body byte-for-byte into a new `### Implementation Tradeoffs` H3 (preserve the prose verbatim — same content, just under a new H3), and write the new `### Motivation` H3 as a sibling.
  - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == false` (H3s already exist): preserve `### Implementation Tradeoffs` byte-for-byte; write/refine ONLY `### Motivation`.
 - **`## Acceptance Criteria`**: append outcome-AC R-IDs (R-IDs are append-only across passes per fn-29 rules — never renumber, never replace; take the next unused number).
-- **Auxiliary sections** (`Strategy Alignment` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Codebase`): preserve byte-for-byte. Biz pass adds `Resolved via Project Docs` only.
+- **Auxiliary sections** (`Strategy Alignment` / `Strategy Conflicts` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Codebase`): preserve byte-for-byte. Biz pass adds `Resolved via Project Docs` only.
 
 ### Technical pass (`SCOPE == technical`, default; or second phase of `both`)
 
@@ -379,7 +393,7 @@ Per-section write behavior (per the write-policy):
  - When `shape == "flat"` (no H3s exist, no biz pass has run — default zero-flag-tech case on a fresh/legacy spec): write/refine the flat body in place. Do NOT introduce `### Motivation` / `### Implementation Tradeoffs` H3 substructure. Preserves R22 1.0.2 backward compat.
  - When `shape == "substructured"` (`### Motivation` already exists from a prior biz pass, or the existing spec has the substructure): preserve `### Motivation` body byte-for-byte; write/refine ONLY `### Implementation Tradeoffs`.
 - **`## Acceptance Criteria`**: append verifiable-AC R-IDs (R-IDs are append-only — never renumber).
-- **Auxiliary sections** (`Strategy Alignment` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Project Docs`): preserve byte-for-byte. Tech pass adds `Resolved via Codebase` only.
+- **Auxiliary sections** (`Strategy Alignment` / `Strategy Conflicts` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Project Docs`): preserve byte-for-byte. Tech pass adds `Resolved via Codebase` only.
 
 ### Both pass (`SCOPE == both`)
 
@@ -388,7 +402,7 @@ Runs biz pass first, then tech pass in the same skill invocation. Each phase enf
 1. **Phase 1: biz pass** — runs the full biz-pass workflow above. Writes biz sections; preserves any pre-existing tech sections byte-for-byte (with placeholder lines under empty tech sections).
 2. **Phase 2: tech pass** — runs the full tech-pass workflow above using the just-written biz output as in-memory context. Reads biz sections, cites them in the opener, writes tech sections, preserves biz sections byte-for-byte.
 
-Auxiliary sections (`Strategy Alignment` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Codebase` / `Resolved via Project Docs`) are preserved across both phases — neither phase deletes or rewrites an auxiliary section the other phase wrote.
+Auxiliary sections (`Strategy Alignment` / `Strategy Conflicts` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Codebase` / `Resolved via Project Docs`) are preserved across both phases — neither phase deletes or rewrites an auxiliary section the other phase wrote.
 
 If the user interrupts between phase 1 and phase 2, the biz sections are written but the tech sections retain placeholder lines. Re-running `--scope=technical` later completes the spec.
 
@@ -413,7 +427,7 @@ Classify biz questions via the **Pre-Question Taxonomy** before asking:
 
 If you find yourself asking the user a biz question that README/CHANGELOG/STRATEGY already answers, that's the bug. Stop and resolve from docs. Symmetric form of the existing "if you find yourself answering a 'should' question via grep, that's the bug" rule.
 
-The `## Resolved via Project Docs` section is auxiliary and biz-pass-only (parallel to `## Resolved via Codebase` for the tech pass). Preserved across scope changes (tech pass never deletes or rewrites it).
+The `## Resolved via Project Docs` section is auxiliary and biz-pass-only (parallel to `## Resolved via Codebase` for the tech pass). Preserved across scope changes alongside `Strategy Alignment`, `Strategy Conflicts`, `Glossary Conflicts`, `Conversation Evidence`, and `Resolved via Codebase` — tech pass never deletes or rewrites any auxiliary section the biz pass produced.
 
 ## Doc-aware behaviors
 
@@ -615,30 +629,33 @@ Section-write rules from the scope-aware pass behavior (above) MUST be honored �
 
 Create spec with interview output. **DO NOT create tasks** — that's `/flow-next:plan`'s job.
 
-The canonical section layout is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — start from that structure, then layer the auxiliary interview-audit sections below. The heredoc here is illustrative; the structural canon is the template file.
+The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — `flowctl spec skeleton` emits that scaffold byte-for-byte. Start from it, fill the scope-owned canonical sections per the write-policy above, then append the auxiliary interview-audit sections below the canonical body (the R21 sync-codex drift guard forbids re-embedding the canonical section sequence in any skill markdown — the template file is the only allowed location).
 
 ```bash
 $FLOWCTL spec create --title "..." --json
-$FLOWCTL spec set-plan <id> --file - --json <<'EOF'
-# Spec Title
 
-## Problem
-Clear problem statement
+# Build the spec body in-memory:
+# 1. Start with the canonical scaffold (or fill an existing populated spec):
+# SKELETON=$("$FLOWCTL" spec skeleton)
+# The skeleton contains: title placeholder, canonical sections owned by
+# this scope per the write-policy (Goal & Context, Architecture & Data
+# Models, API Contracts, Edge Cases & Constraints, Acceptance Criteria,
+# Boundaries, Decision Context) — fill bodies from interview answers
+# under your scope's writable sections.
+# 2. Append the auxiliary interview-audit sections (only those that fired):
 
-## Key Decisions
-Decisions made during interview (e.g., "Use OAuth not SAML", "Support mobile + web")
-
-## Edge Cases
-- Edge case 1
-- Edge case 2
+cat > /tmp/spec.md <<'EOF'
+<canonical body from skeleton, with interview-answered prose under each
+ writable section per the write-policy — biz pass fills biz-owned sections,
+ tech pass fills tech-owned, placeholders under empty other-side sections>
 
 ## Resolved via Codebase
-(optional — omit if nothing was resolved this way during the interview)
-Items the agent answered via Read / Grep / Glob, with file:line evidence. Separate from items the user answered. Lets reviewers spot-check assumptions later. Written by the technical pass.
+(optional — written by the technical pass when codebase-investigation resolved items)
+Items the agent answered via Read / Grep / Glob, with file:line evidence. Separate from items the user answered. Lets reviewers spot-check assumptions later.
 
 ## Resolved via Project Docs
-(optional — only when SCOPE=business surfaced project-docs resolutions during the interview, per R26)
-Items the agent answered via README / CHANGELOG / STRATEGY / GLOSSARY / knowledge decisions / .flow specs / docs, with `path` or `path:line` evidence. Separate from items the user answered. Symmetric to `## Resolved via Codebase` but biz-pass-only.
+(optional — written by the business pass per R26 when project-docs investigation resolved items)
+Items the agent answered via README / CHANGELOG / STRATEGY / GLOSSARY / knowledge decisions / .flow specs / docs, with `path` or `path:line` evidence. Symmetric to `## Resolved via Codebase` but biz-pass-only.
 
 ## Glossary Conflicts
 (optional — only when DOC_AWARE=1 surfaced behavior-(a) hits during the interview)
@@ -650,11 +667,9 @@ Per-line: user-wording vs. canonical-strategy-wording (track name or approach), 
 
 ## Open Questions
 Unresolved items that need research during planning
-
-## Acceptance
-- [ ] Criterion 1
-- [ ] Criterion 2
 EOF
+
+$FLOWCTL spec set-plan <id> --file /tmp/spec.md --json
 ```
 
 Then suggest: "Run `/flow-next:plan fn-N` to research best practices and create tasks."
@@ -670,28 +685,27 @@ $FLOWCTL tasks --spec <id> --json
 
 **If no tasks:** Update spec, then suggest `/flow-next:plan`.
 
-The canonical section layout is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md). Layer the auxiliary interview-audit sections below the canonical structure.
+The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md). Read the existing spec, refine sections under your scope per the write-policy (preserving sections owned by the other scope byte-for-byte), and append/update the auxiliary interview-audit sections. The R21 drift guard forbids re-embedding the canonical section sequence in this skill — read the existing body, do not regenerate from a template.
 
 ```bash
-$FLOWCTL spec set-plan <id> --file - --json <<'EOF'
-# Spec Title
+# Read existing spec body:
+EXISTING=$("$FLOWCTL" cat <id>)
 
-## Problem
-Clear problem statement
+# Refine canonical sections under your scope's writable list (per write-policy)
+# while preserving sections owned by the other scope byte-for-byte. Append the
+# auxiliary interview-audit sections (only those that fired):
 
-## Key Decisions
-Decisions made during interview
-
-## Edge Cases
-- Edge case 1
-- Edge case 2
+cat > /tmp/spec.md <<'EOF'
+<merged body: canonical sections from $EXISTING, with this scope's writable
+ sections refined from interview answers, other-scope sections preserved
+ byte-for-byte per the write-policy>
 
 ## Resolved via Codebase
-(optional — omit if nothing was resolved this way during the interview)
-Items the agent answered via Read / Grep / Glob, with file:line evidence. Separate from items the user answered. Written by the technical pass.
+(optional — written by the technical pass when codebase-investigation resolved items)
+Items the agent answered via Read / Grep / Glob, with file:line evidence. Separate from items the user answered.
 
 ## Resolved via Project Docs
-(optional — only when SCOPE=business surfaced project-docs resolutions during the interview, per R26)
+(optional — written by the business pass per R26 when project-docs investigation resolved items)
 Items the agent answered via README / CHANGELOG / STRATEGY / GLOSSARY / knowledge decisions / .flow specs / docs, with `path` or `path:line` evidence.
 
 ## Glossary Conflicts
@@ -704,11 +718,9 @@ Per-line: user-wording vs. canonical-strategy-wording, STRATEGY.md path, resolut
 
 ## Open Questions
 Unresolved items
-
-## Acceptance
-- [ ] Criterion 1
-- [ ] Criterion 2
 EOF
+
+$FLOWCTL spec set-plan <id> --file /tmp/spec.md --json
 ```
 
 ### For Flow Task ID (fn-N.M)
