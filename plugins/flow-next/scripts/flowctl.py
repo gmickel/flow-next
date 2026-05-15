@@ -10234,17 +10234,28 @@ def cmd_scope_suggest(args: argparse.Namespace) -> None:
       - 1 <= count < 3       → fire (sweet spot: user said biz things but underspecified)
       - count >= 3           → no-fire (biz layer reasonably filled)
 
-    Exit code matches the decision (0=fire, 1=no-fire) so shell-only
-    callers can branch on `$?` without parsing output. JSON mode emits a
-    structured payload regardless of the threshold result.
+    Exit semantics differ by output mode:
+      - PLAIN mode (no --json): 0 = fire (take action), 1 = no-fire (no action).
+        Lets shell-only callers branch on `$?` directly. Both states are
+        valid; 1 is informational, not error.
+      - JSON mode (--json): 0 for both fire AND no-fire (standard
+        subprocess success semantics — the JSON payload carries the
+        decision). Reserve non-zero for invalid input (e.g., negative
+        count).
     """
     use_json = bool(getattr(args, "json", False))
     n = args.signal_categories_count
     if n < 0:
-        json_output(
-            {"error": f"--signal-categories-count must be >= 0 (got {n})"},
-            success=False,
-        )
+        if use_json:
+            json_output(
+                {"error": f"--signal-categories-count must be >= 0 (got {n})"},
+                success=False,
+            )
+        else:
+            print(
+                f"Error: --signal-categories-count must be >= 0 (got {n})",
+                file=sys.stderr,
+            )
         sys.exit(2)
 
     fire = (1 <= n < 3)
@@ -10258,9 +10269,13 @@ def cmd_scope_suggest(args: argparse.Namespace) -> None:
     }
     if use_json:
         json_output(payload)
-    else:
-        print(decision)
-    # Exit code: 0 = fire (success / take action); 1 = no-fire (no action).
+        # JSON callers get 0 for valid input regardless of decision —
+        # the JSON body carries the verdict; subprocess semantics stay
+        # standard. Non-zero is reserved for invalid input.
+        sys.exit(0)
+    print(decision)
+    # Plain mode: 0 = fire (take action), 1 = no-fire (no action).
+    # Lets shell callers `if flowctl scope suggest --signal-categories-count $n; then ...`
     sys.exit(0 if fire else 1)
 
 

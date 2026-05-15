@@ -25,7 +25,7 @@ Based on answers, generate the appropriate commands and print them for the user 
 ```
 To complete uninstall, run these commands manually:
 
-rm -rf .flow/bin .flow/usage.md
+rm -rf .flow/bin .flow/templates .flow/usage.md
 ```
 
 **If removing everything:**
