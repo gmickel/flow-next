@@ -3940,9 +3940,13 @@ def require_keys(obj: dict, keys: list[str], what: str, use_json: bool = True) -
 # --- Spec File Operations ---
 
 
-def create_epic_spec(id_str: str, title: str) -> str:
-    """Create epic spec markdown content."""
-    return f"""# {id_str} {title}
+# fn-44.1: canonical fresh-spec skeleton — single source of truth.
+# Printed verbatim by `flowctl spec skeleton`; consumed (with placeholder
+# substitution) by `cmd_spec_create`. Tests assert byte-for-byte parity
+# with the 1.0.2 output by calling `flowctl spec skeleton` and comparing
+# against the legacy snapshot. Do NOT change this string without bumping
+# the R22 backward-compat baseline + updating the snapshot fixture.
+SPEC_SKELETON_TEMPLATE = """# <spec-id> <Title>
 
 ## Overview
 TBD
@@ -3963,6 +3967,28 @@ TBD
 ## References
 - TBD
 """
+
+
+def spec_skeleton_text() -> str:
+    """Return the canonical fresh-spec skeleton (R22 byte-for-byte baseline).
+
+    This is the deterministic source of truth for `flowctl spec skeleton`
+    and `flowctl spec create`. Header line uses placeholder tokens
+    `<spec-id>` and `<Title>`; `cmd_spec_create` substitutes them.
+    """
+    return SPEC_SKELETON_TEMPLATE
+
+
+def create_epic_spec(id_str: str, title: str) -> str:
+    """Create epic spec markdown content.
+
+    Internally renders the canonical skeleton from `spec_skeleton_text()`
+    and substitutes the header placeholders. Single source — no inline
+    skeleton string anywhere else.
+    """
+    return spec_skeleton_text().replace(
+        "<spec-id> <Title>", f"{id_str} {title}", 1
+    )
 
 
 def create_task_spec(id_str: str, title: str, acceptance: Optional[str] = None) -> str:
@@ -9779,6 +9805,451 @@ def cmd_strategy_list(args: argparse.Namespace) -> None:
             mark = "x" if section["filled"] else " "
             print(f"  [{mark}] {section['name']}")
         print()
+
+
+# ─── fn-44.1: scope helpers + spec skeleton ─────────────────────────────────
+#
+# Five deterministic subcommands consumed by `/flow-next:interview` and
+# `/flow-next:capture` at runtime AND by R23 unit tests. Same code path —
+# no drift possible between skill behavior and test fixtures.
+#
+# `scope resolve`        — token-safe parser; resolves --scope / --biz / --tech
+# `scope bank`           — prints question-bank path for a given scope
+# `scope write-policy`   — emits per-section write policy for a given scope
+# `scope suggest`        — emits the capture biz-suggestion fire/no-fire decision
+# `spec skeleton`        — prints the canonical fresh-spec skeleton (R22 baseline)
+
+# Valid scope values + the question-bank filename each maps to.
+_SCOPE_VALUES = ("business", "technical", "both")
+_SCOPE_BANK_FILES = {
+    "business": "questions-business.md",
+    "technical": "questions-technical.md",
+    # `both` runs business first, then technical. Pick the broader file path
+    # consumers care about for routing; both-mode skill code reads both banks.
+    "both": "questions-technical.md",
+}
+
+# Section-write policy per scope.
+# - `writable`  — sections this scope MAY write/refine.
+# - `preserved` — sections this scope MUST leave byte-for-byte unchanged
+#   (other than the `*Pending technical-scope interview pass.*` placeholder
+#   under tech-owned headers, which the tech pass may overwrite).
+# - `decision_context` — H3 handling per fn-44 Edge Cases.
+#
+# Canonical section names (the 7-section spec template):
+#   Goal & Context, Architecture & Data Models, API Contracts,
+#   Edge Cases & Constraints, Acceptance Criteria, Boundaries,
+#   Decision Context.
+_BIZ_SECTIONS = ("Goal & Context", "Boundaries")
+_TECH_SECTIONS = (
+    "Architecture & Data Models",
+    "API Contracts",
+    "Edge Cases & Constraints",
+)
+# Acceptance Criteria is co-authored (append-only R-IDs).
+_BOTH_SECTIONS = ("Acceptance Criteria",)
+
+
+def _scope_write_policy(scope: str, current_sections: dict) -> dict:
+    """Compute per-section write policy for a scope given current spec state.
+
+    `current_sections` is a dict describing the existing spec's section
+    state. Recognized keys:
+      - `decision_context_has_h3` (bool) — whether `## Decision Context`
+        already contains `### Motivation` / `### Implementation Tradeoffs`
+        H3 subsections.
+      - `biz_pass_ran` (bool) — whether a prior `--scope=business` pass
+        has touched this spec (signaled by presence of populated biz
+        sections OR the `### Motivation` H3).
+      - `tech_sections_have_content` (dict) — `{section_name: bool}` for
+        each tech-owned section (`Architecture & Data Models`, etc.).
+        Controls placeholder-vs-leave-alone behavior under a biz pass.
+    All keys optional; defaults are conservative.
+
+    Returns a JSON-shaped dict:
+      {
+        "scope": "<scope>",
+        "writable": [<section names this scope may write>],
+        "preserved": [<sections this scope MUST preserve byte-for-byte>],
+        "decision_context": {
+          "shape": "flat" | "substructured",
+          "writable_h3": [<H3 names this scope may write under DC, if substructured>],
+          "preserved_h3": [<H3 names preserved byte-for-byte>],
+          "promote_flat_to_implementation_tradeoffs": bool
+        },
+        "placeholder_write": [<tech sections under biz pass that should get the placeholder line>]
+      }
+    """
+    has_h3 = bool(current_sections.get("decision_context_has_h3", False))
+    biz_pass_ran = bool(current_sections.get("biz_pass_ran", False))
+    tech_content = current_sections.get("tech_sections_have_content", {}) or {}
+
+    if scope == "technical":
+        writable = list(_TECH_SECTIONS) + list(_BOTH_SECTIONS)
+        preserved = list(_BIZ_SECTIONS)
+        # Decision Context: flat unless biz pass ran or H3s already exist.
+        if has_h3 or biz_pass_ran:
+            shape = "substructured"
+            # Preserve Motivation byte-for-byte; write/refine Tradeoffs.
+            dc = {
+                "shape": shape,
+                "writable_h3": ["Implementation Tradeoffs"],
+                "preserved_h3": ["Motivation"],
+                "promote_flat_to_implementation_tradeoffs": False,
+            }
+        else:
+            shape = "flat"
+            dc = {
+                "shape": shape,
+                "writable_h3": [],
+                "preserved_h3": [],
+                "promote_flat_to_implementation_tradeoffs": False,
+            }
+        # Decision Context is technically tech-writable in flat form
+        # (default zero-flag-tech) or restricted to Tradeoffs in
+        # substructured form. Surface it in `writable` for clarity.
+        writable.append("Decision Context")
+        return {
+            "scope": scope,
+            "writable": writable,
+            "preserved": preserved,
+            "decision_context": dc,
+            "placeholder_write": [],
+        }
+
+    if scope == "business":
+        writable = list(_BIZ_SECTIONS) + list(_BOTH_SECTIONS)
+        preserved = list(_TECH_SECTIONS)
+        # Decision Context:
+        #   if H3s already exist → preserve Tradeoffs, write Motivation only.
+        #   if FLAT (zero-flag-tech 1.0.2 shape) → promote existing flat body
+        #     to ### Implementation Tradeoffs (byte-for-byte) and write the
+        #     new ### Motivation as a sibling H3.
+        if has_h3:
+            dc = {
+                "shape": "substructured",
+                "writable_h3": ["Motivation"],
+                "preserved_h3": ["Implementation Tradeoffs"],
+                "promote_flat_to_implementation_tradeoffs": False,
+            }
+        else:
+            dc = {
+                "shape": "substructured",
+                "writable_h3": ["Motivation"],
+                "preserved_h3": ["Implementation Tradeoffs"],
+                "promote_flat_to_implementation_tradeoffs": True,
+            }
+        writable.append("Decision Context")
+        # Placeholder lines under empty tech sections (biz pass leaves them
+        # visible in read-back).
+        placeholder_write = [
+            name for name in _TECH_SECTIONS if not tech_content.get(name, False)
+        ]
+        return {
+            "scope": scope,
+            "writable": writable,
+            "preserved": preserved,
+            "decision_context": dc,
+            "placeholder_write": placeholder_write,
+        }
+
+    # scope == "both" — biz pass first, then tech pass. Union of biz +
+    # tech writable; nothing is preserved at the scope level (each
+    # internal pass enforces its own preservation against the in-memory
+    # output of the previous one). Decision Context follows the biz
+    # branch (H3 promotion happens if FLAT).
+    writable = (
+        list(_BIZ_SECTIONS)
+        + list(_TECH_SECTIONS)
+        + list(_BOTH_SECTIONS)
+        + ["Decision Context"]
+    )
+    preserved: list[str] = []
+    if has_h3:
+        dc = {
+            "shape": "substructured",
+            "writable_h3": ["Motivation", "Implementation Tradeoffs"],
+            "preserved_h3": [],
+            "promote_flat_to_implementation_tradeoffs": False,
+        }
+    else:
+        dc = {
+            "shape": "substructured",
+            "writable_h3": ["Motivation", "Implementation Tradeoffs"],
+            "preserved_h3": [],
+            "promote_flat_to_implementation_tradeoffs": True,
+        }
+    return {
+        "scope": "both",
+        "writable": writable,
+        "preserved": preserved,
+        "decision_context": dc,
+        "placeholder_write": [],
+    }
+
+
+def cmd_scope_resolve(args: argparse.Namespace) -> None:
+    """Resolve `--scope` / `--biz` / `--tech` flags from a token list.
+
+    Strips scope tokens from the input arg list, preserving every other
+    token in order (Flow IDs, file paths, `--docs`, `--strategy`, etc.).
+
+    Conflict / invalid values → exit non-zero with an explicit message.
+    Default scope when no scope token present: `technical`.
+
+    Examples:
+      flowctl scope resolve fn-1 --docs              -> technical
+      flowctl scope resolve --biz fn-1               -> business
+      flowctl scope resolve --scope=both fn-1        -> both
+      flowctl scope resolve --biz --tech             -> ERROR
+      flowctl scope resolve --scope=foo              -> ERROR
+    """
+    use_json = bool(getattr(args, "json", False))
+    raw_tokens = list(getattr(args, "tokens", None) or [])
+    # Strip the leading `--` separator injected by main() to bypass argparse's
+    # top-level flag consumption. Anything after the first `--` is the user's
+    # token list (Flow IDs / paths / scope + other flags).
+    if raw_tokens and raw_tokens[0] == "--":
+        raw_tokens = raw_tokens[1:]
+
+    scope: Optional[str] = None
+    remaining: list[str] = []
+    conflict_msg: Optional[str] = None
+
+    def _set_scope(new_val: str, source: str) -> None:
+        nonlocal scope, conflict_msg
+        if scope is None:
+            scope = new_val
+        elif scope != new_val:
+            conflict_msg = (
+                f"conflicting scope flags: '{scope}' (already set) vs "
+                f"'{new_val}' (from {source})"
+            )
+
+    for tok in raw_tokens:
+        # Long form: --scope=VALUE
+        if tok.startswith("--scope="):
+            value = tok[len("--scope="):]
+            if value not in _SCOPE_VALUES:
+                msg = (
+                    f"invalid --scope value: {value!r} "
+                    f"(must be one of: business, technical, both)"
+                )
+                if use_json:
+                    json_output({"error": msg}, success=False)
+                else:
+                    print(f"Error: {msg}", file=sys.stderr)
+                sys.exit(2)
+            _set_scope(value, source=tok)
+            continue
+        # Bare `--scope` without `=VALUE` is rejected — explicit only.
+        if tok == "--scope":
+            msg = "--scope requires a value: --scope=business|technical|both"
+            if use_json:
+                json_output({"error": msg}, success=False)
+            else:
+                print(f"Error: {msg}", file=sys.stderr)
+            sys.exit(2)
+        # Short aliases
+        if tok == "--biz":
+            _set_scope("business", source="--biz")
+            continue
+        if tok == "--tech":
+            _set_scope("technical", source="--tech")
+            continue
+        # Anything else: preserve in order (Flow IDs, paths, other flags).
+        remaining.append(tok)
+
+    if conflict_msg:
+        if use_json:
+            json_output({"error": conflict_msg}, success=False)
+        else:
+            print(f"Error: {conflict_msg}", file=sys.stderr)
+        sys.exit(2)
+
+    if scope is None:
+        scope = "technical"
+
+    if use_json:
+        json_output({"scope": scope, "remaining_args": remaining})
+    else:
+        # Plain output: just the resolved scope (single token).
+        print(scope)
+
+
+def cmd_scope_bank(args: argparse.Namespace) -> None:
+    """Print absolute path to the question-bank file for a scope.
+
+    Path resolution order (mirrors `load_validator_template`):
+      1. repo-root plugin path (dev / local install)
+      2. CLAUDE_PLUGIN_ROOT / DROID_PLUGIN_ROOT env vars (installed plugin)
+      3. error if not found
+
+    The actual question-bank files (`questions-business.md`,
+    `questions-technical.md`) land in T3; T1 prints the resolved path
+    even when the file doesn't yet exist so callers can plan against
+    the contract.
+    """
+    use_json = bool(getattr(args, "json", False))
+    scope = args.scope
+    if scope not in _SCOPE_VALUES:
+        msg = (
+            f"invalid scope: {scope!r} "
+            f"(must be one of: business, technical, both)"
+        )
+        if use_json:
+            json_output({"error": msg}, success=False)
+        else:
+            print(f"Error: {msg}", file=sys.stderr)
+        sys.exit(2)
+
+    bank_filename = _SCOPE_BANK_FILES[scope]
+    skill_rel = Path("plugins") / "flow-next" / "skills" / "flow-next-interview"
+
+    candidate: Optional[Path] = None
+    # Repo-root resolution.
+    try:
+        repo_root = get_repo_root()
+        c = repo_root / skill_rel / bank_filename
+        if c.exists():
+            candidate = c
+    except Exception:
+        pass
+    # Plugin-root resolution.
+    if candidate is None:
+        for env_var in ("CLAUDE_PLUGIN_ROOT", "DROID_PLUGIN_ROOT"):
+            root = os.environ.get(env_var)
+            if not root:
+                continue
+            c = (
+                Path(root)
+                / "skills"
+                / "flow-next-interview"
+                / bank_filename
+            )
+            if c.exists():
+                candidate = c
+                break
+    # Fall back to repo-root path even when file doesn't exist (T3 lands the
+    # files; T1 must report the canonical destination for planning).
+    if candidate is None:
+        try:
+            repo_root = get_repo_root()
+            candidate = repo_root / skill_rel / bank_filename
+        except Exception:
+            candidate = Path.cwd() / skill_rel / bank_filename
+
+    abs_path = str(candidate.resolve()) if candidate.exists() else str(candidate)
+    payload = {
+        "scope": scope,
+        "bank_filename": bank_filename,
+        "path": abs_path,
+        "exists": candidate.exists(),
+    }
+    if use_json:
+        json_output(payload)
+    else:
+        print(abs_path)
+
+
+def cmd_scope_write_policy(args: argparse.Namespace) -> None:
+    """Emit the per-section write policy for a scope.
+
+    Reads existing-section-state JSON from `--current-sections-json` (file
+    path or `-` for stdin). Prints the resolved write-policy as JSON.
+
+    The skill calls this before any markdown edit; the result tells it
+    which sections it may write, which it must preserve byte-for-byte,
+    and how to handle the `## Decision Context` H3 conditional.
+    """
+    use_json = bool(getattr(args, "json", False))  # default JSON for write-policy
+    scope = args.scope
+    if scope not in _SCOPE_VALUES:
+        msg = (
+            f"invalid scope: {scope!r} "
+            f"(must be one of: business, technical, both)"
+        )
+        if use_json or True:  # always JSON for this subcommand by default
+            json_output({"error": msg}, success=False)
+        sys.exit(2)
+
+    src = args.current_sections_json
+    try:
+        if src == "-":
+            raw = sys.stdin.read()
+        else:
+            raw = Path(src).read_text(encoding="utf-8")
+        current = json.loads(raw) if raw.strip() else {}
+        if not isinstance(current, dict):
+            raise ValueError("current-sections JSON must be an object")
+    except FileNotFoundError:
+        json_output(
+            {"error": f"current-sections-json file not found: {src}"},
+            success=False,
+        )
+        sys.exit(2)
+    except (json.JSONDecodeError, ValueError) as exc:
+        json_output(
+            {"error": f"invalid current-sections JSON: {exc}"},
+            success=False,
+        )
+        sys.exit(2)
+
+    policy = _scope_write_policy(scope, current)
+    json_output(policy)
+
+
+def cmd_scope_suggest(args: argparse.Namespace) -> None:
+    """Capture biz-suggestion fire/no-fire decision.
+
+    Pure threshold function (R25):
+      - count == 0           → no-fire (R22: no biz signals at all → silence)
+      - 1 <= count < 3       → fire (sweet spot: user said biz things but underspecified)
+      - count >= 3           → no-fire (biz layer reasonably filled)
+
+    Exit code matches the decision (0=fire, 1=no-fire) so shell-only
+    callers can branch on `$?` without parsing output. JSON mode emits a
+    structured payload regardless of the threshold result.
+    """
+    use_json = bool(getattr(args, "json", False))
+    n = args.signal_categories_count
+    if n < 0:
+        json_output(
+            {"error": f"--signal-categories-count must be >= 0 (got {n})"},
+            success=False,
+        )
+        sys.exit(2)
+
+    fire = (1 <= n < 3)
+    decision = "fire" if fire else "no-fire"
+    payload = {
+        "decision": decision,
+        "fire": fire,
+        "signal_categories_count": n,
+        "threshold_min": 1,
+        "threshold_max_exclusive": 3,
+    }
+    if use_json:
+        json_output(payload)
+    else:
+        print(decision)
+    # Exit code: 0 = fire (success / take action); 1 = no-fire (no action).
+    sys.exit(0 if fire else 1)
+
+
+def cmd_spec_skeleton(args: argparse.Namespace) -> None:
+    """Print the canonical fresh-spec skeleton (R22 byte-for-byte baseline).
+
+    Single source of truth — `flowctl spec create` writes the same content
+    (with header placeholders substituted). Tests compare this output
+    against the 1.0.2 snapshot to detect drift.
+    """
+    use_json = bool(getattr(args, "json", False))
+    skeleton = spec_skeleton_text()
+    if use_json:
+        json_output({"skeleton": skeleton})
+    else:
+        sys.stdout.write(skeleton)
 
 
 def cmd_spec_create(args: argparse.Namespace) -> None:
@@ -20786,10 +21257,128 @@ def main() -> None:
         p_export.add_argument("--json", action="store_true", help="JSON output")
         p_export.set_defaults(func=cmd_spec_export_cognitive_aid)
 
+    # fn-44.1: add the `spec skeleton` sub-subcommand (single source of
+    # truth for the canonical fresh-spec skeleton). Lives on the canonical
+    # `spec` parent only — no `epic skeleton` alias (skeleton is a new
+    # surface, not part of the 1.x alias contract).
+    def _add_spec_skeleton(parent_sub) -> None:
+        p_skel = parent_sub.add_parser(
+            "skeleton",
+            help=(
+                "Print the canonical fresh-spec markdown skeleton "
+                "(R22 byte-for-byte baseline; consumed by `spec create`)"
+            ),
+        )
+        p_skel.add_argument("--json", action="store_true", help="JSON output")
+        p_skel.set_defaults(func=cmd_spec_skeleton)
+
     # spec — canonical (post-1.0).
     p_spec = subparsers.add_parser("spec", help="Spec commands (canonical)")
     spec_sub = p_spec.add_subparsers(dest="spec_cmd", required=True)
     _add_spec_subparsers(spec_sub, noun="spec", dest="spec_cmd")
+    _add_spec_skeleton(spec_sub)
+
+    # scope — fn-44.1 helper plumbing. Read-only token-safe parsers
+    # consumed by `/flow-next:interview` (T2) and `/flow-next:capture`
+    # (T5) at runtime AND by R23 unit tests. Skill never re-implements
+    # parse/policy logic inline — it calls these subcommands.
+    p_scope = subparsers.add_parser(
+        "scope",
+        help=(
+            "Scope helpers for --scope=business|technical|both "
+            "(parser + write policy + capture-suggestion threshold)"
+        ),
+    )
+    scope_sub = p_scope.add_subparsers(dest="scope_cmd", required=True)
+
+    p_scope_resolve = scope_sub.add_parser(
+        "resolve",
+        help=(
+            "Token-safe parser: strips --scope / --biz / --tech from "
+            "an arg list and returns the resolved scope plus the "
+            "remaining tokens in order"
+        ),
+    )
+    p_scope_resolve.add_argument(
+        "tokens",
+        nargs=argparse.REMAINDER,
+        help=(
+            "Argument tokens to parse (Flow IDs, paths, other flags "
+            "preserved in order; scope tokens stripped). Default "
+            "scope when no scope token present: technical."
+        ),
+    )
+    p_scope_resolve.add_argument(
+        "--json",
+        action="store_true",
+        help=(
+            "JSON output: {scope, remaining_args}. Plain output: "
+            "single token (the resolved scope name)."
+        ),
+    )
+    p_scope_resolve.set_defaults(func=cmd_scope_resolve)
+
+    p_scope_bank = scope_sub.add_parser(
+        "bank",
+        help=(
+            "Print absolute path to the question-bank file for a "
+            "scope (questions-business.md / questions-technical.md)"
+        ),
+    )
+    p_scope_bank.add_argument(
+        "scope",
+        choices=list(_SCOPE_VALUES),
+        help="Scope: business | technical | both",
+    )
+    p_scope_bank.add_argument("--json", action="store_true", help="JSON output")
+    p_scope_bank.set_defaults(func=cmd_scope_bank)
+
+    p_scope_wp = scope_sub.add_parser(
+        "write-policy",
+        help=(
+            "Emit the per-section write policy for a scope, given "
+            "existing-section-state JSON. Result tells the skill which "
+            "sections it may write and which it must preserve "
+            "byte-for-byte."
+        ),
+    )
+    p_scope_wp.add_argument(
+        "scope",
+        choices=list(_SCOPE_VALUES),
+        help="Scope: business | technical | both",
+    )
+    p_scope_wp.add_argument(
+        "--current-sections-json",
+        required=True,
+        help=(
+            "Path to JSON file describing existing spec section state "
+            "(or '-' for stdin). Keys: decision_context_has_h3, "
+            "biz_pass_ran, tech_sections_have_content."
+        ),
+    )
+    p_scope_wp.set_defaults(func=cmd_scope_write_policy)
+
+    p_scope_suggest = scope_sub.add_parser(
+        "suggest",
+        help=(
+            "Capture biz-suggestion fire/no-fire decision. Threshold: "
+            "fire iff 1 <= count < 3 (R25). Exit 0 on fire, 1 on no-fire."
+        ),
+    )
+    p_scope_suggest.add_argument(
+        "--signal-categories-count",
+        type=int,
+        required=True,
+        help=(
+            "Number of detected business-signal categories (per R24/R25). "
+            "Counts CATEGORIES (target user, problem framing, success "
+            "metric, MVP boundary, etc.) — not markdown destinations."
+        ),
+    )
+    p_scope_suggest.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_scope_suggest.set_defaults(func=cmd_scope_suggest)
 
     # epic — alias (T2 layers stderr deprecation; T1 ships silently).
     p_epic = subparsers.add_parser(
@@ -21677,6 +22266,35 @@ def main() -> None:
         "--json", action="store_true", help="JSON output"
     )
     p_walk_record.set_defaults(func=cmd_review_walkthrough_record)
+
+    # fn-44.1: `scope resolve` accepts a tokens passthrough that may start with
+    # `--` (e.g., `--biz`, `--scope=business`). argparse would consume those at
+    # the top level before REMAINDER kicks in. Inject `--` before the token
+    # list so argparse hands it straight to the subparser's REMAINDER. Pulls
+    # `--json` to the front so it stays as a real flag on the subparser, not
+    # captured into `tokens`.
+    if len(sys.argv) >= 3 and sys.argv[1] == "scope" and sys.argv[2] == "resolve":
+        rest = sys.argv[3:]
+        json_flag = []
+        token_args: list[str] = []
+        i = 0
+        while i < len(rest):
+            tok = rest[i]
+            if tok == "--json":
+                json_flag.append(tok)
+            elif tok == "--":
+                # Caller already used `--`; preserve the rest verbatim and stop.
+                token_args.extend(rest[i + 1 :])
+                break
+            else:
+                token_args.append(tok)
+            i += 1
+        sys.argv = (
+            sys.argv[:3]
+            + json_flag
+            + (["--"] if token_args else [])
+            + token_args
+        )
 
     args = parser.parse_args()
     # fn-43.4: emit pre-1.0 migration banner / future-version warning to stderr

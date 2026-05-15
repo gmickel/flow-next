@@ -16,34 +16,14 @@ This project uses Flow-Next for task tracking. Use `.flow/bin/flowctl` instead o
 
 **Creating a spec** ("create a spec", "spec out X", "write a spec for X"):
 
-Create one directly — do NOT use `/flow-next:plan` (that breaks specs into tasks).
+Create one directly — do NOT use `/flow-next:plan` (that breaks specs into tasks). The canonical 7-section template lives at `plugins/flow-next/templates/spec.md` in the flow-next plugin — read it for the section list, scope ownership, and `## Decision Context` H3 conditional.
 
 ```bash
 .flow/bin/flowctl spec create --title "Short title" --json
 .flow/bin/flowctl spec set-plan <spec-id> --file - --json <<'EOF'
 # Title
 
-## Goal & Context
-Why this exists, what problem it solves.
-
-## Architecture & Data Models
-System design, data flow, key components.
-
-## API Contracts
-Endpoints, interfaces, input/output shapes.
-
-## Edge Cases & Constraints
-Failure modes, limits, performance requirements.
-
-## Acceptance Criteria
-- [ ] Testable criterion 1
-- [ ] Testable criterion 2
-
-## Boundaries
-What's explicitly out of scope.
-
-## Decision Context
-Why this approach over alternatives.
+# ... fill the 7 canonical sections (see plugins/flow-next/templates/spec.md)
 EOF
 ```
 

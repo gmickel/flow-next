@@ -871,6 +871,62 @@ else
   echo -e "  ${GREEN}✓${NC} No R30 legacy CLI vocabulary in Codex mirror"
 fi
 
+# R21 canonical scan — spec-template duplication guard (fn-44 task 1).
+# The canonical spec template at `plugins/flow-next/templates/spec.md` is
+# the single source of truth for the 7-section spec structure. Any other
+# skill markdown file that inline-duplicates the canonical sequence is a
+# drift hazard — the template owns the section list; skills cross-link.
+#
+# Detection: ANY `*.md` under `plugins/flow-next/skills/*/` (not just
+# SKILL.md — also workflow.md, phases.md, steps.md, examples.md, ...)
+# containing `^## Goal & Context` followed within 30 lines by both
+# `^## Architecture & Data Models` AND `^## API Contracts` triggers an
+# error. The template at `plugins/flow-next/templates/spec.md` is the
+# only allowed location for the full canonical sequence.
+#
+# False-positive avoidance: skills that legitimately quote the section
+# names in isolation (e.g., a question bank or a reference file) won't
+# trip the guard because the three headers must co-occur within a 30-line
+# window AND each must be at column 1 (`^## `). Single-mention references
+# pass through fine.
+CANONICAL_SKILLS_DIR="plugins/flow-next/skills"
+spec_template_dup_hits=""
+if [ -d "$CANONICAL_SKILLS_DIR" ]; then
+  # One awk pass per file: scan for `^## Goal & Context`; on a hit, look
+  # ahead 30 lines for both `^## Architecture & Data Models` AND
+  # `^## API Contracts`. If both co-occur in the window, print the file
+  # and the line number of the Goal & Context marker. Single-mention
+  # references won't trip — all three headers must co-occur at column 1.
+  spec_template_dup_hits=$(find "$CANONICAL_SKILLS_DIR" -name "*.md" -type f 2>/dev/null \
+    | xargs -I {} awk '
+        FNR == NR { lines[FNR] = $0; total = FNR }
+        END {
+          for (i = 1; i <= total; i++) {
+            if (lines[i] ~ /^## Goal & Context/) {
+              arch = 0; api = 0
+              for (j = i + 1; j <= i + 30 && j <= total; j++) {
+                if (lines[j] ~ /^## Architecture & Data Models/) arch = 1
+                if (lines[j] ~ /^## API Contracts/) api = 1
+              }
+              if (arch && api) {
+                printf "%s:%d\n", FILENAME, i
+              }
+            }
+          }
+        }
+      ' {} 2>/dev/null)
+fi
+if [ -n "$spec_template_dup_hits" ]; then
+  spec_template_dup_count=$(printf '%s\n' "$spec_template_dup_hits" | wc -l | tr -d ' ')
+  echo -e "  ${RED}✗${NC} $spec_template_dup_count R21 spec-template duplication(s) in canonical skill markdown:"
+  printf '%s\n' "$spec_template_dup_hits" | sed 's/^/    /'
+  echo -e "    Canonical template lives at plugins/flow-next/templates/spec.md."
+  echo -e "    Replace the duplicated section list with a cross-link."
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No R21 spec-template duplication in canonical skill markdown"
+fi
+
 # Validate openai.yaml files — every skill in REQUIRED_OPENAI_YAML_SKILLS
 # MUST have one. Missing entries fail CI. Extras are fine (utility skills
 # may opt in later).

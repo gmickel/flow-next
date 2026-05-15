@@ -58,6 +58,29 @@ If empty, ask: "What should I interview you about? Give me a Flow ID (e.g., fn-1
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 ```
 
+### Parse `--scope=business|technical|both` (fn-44.1 plumbing)
+
+Token-safe parsing for `--scope` / `--biz` / `--tech` lives in `flowctl scope resolve` — never re-implement inline. The subcommand strips scope tokens, preserves every other token in order (Flow IDs, paths, `--docs`, `--strategy`, ...), and emits the resolved scope. Default scope when no scope flag is passed: `technical` (1.0.2 backward-compat).
+
+```bash
+# Run BEFORE the --docs / --strategy strip block. Conflict / invalid value
+# → non-zero exit; SKILL propagates.
+RESOLVED_JSON=$("$FLOWCTL" scope resolve --json $ARGUMENTS)
+SCOPE=$(printf '%s' "$RESOLVED_JSON" | jq -r '.scope')
+ARGUMENTS=$(printf '%s' "$RESOLVED_JSON" | jq -r '.remaining_args | join(" ")')
+```
+
+The section-write policy for the resolved scope is computed by `flowctl scope write-policy`, called BEFORE any markdown edit. It returns which sections the pass MAY write and which it MUST preserve byte-for-byte (per the fn-44 spec Edge Cases merge contract):
+
+```bash
+# Build the current-sections JSON from the existing spec (T2 wires this).
+# `flowctl scope write-policy <scope> --current-sections-json -` then emits
+# {writable, preserved, decision_context, placeholder_write} as JSON.
+WRITE_POLICY=$(echo "$CURRENT_SECTIONS" | "$FLOWCTL" scope write-policy "$SCOPE" --current-sections-json -)
+```
+
+T2 ships the full pass-aware behavior (question-bank selection via `flowctl scope bank`, per-section writes that honor the policy, technical-pass-reads-business-sections-first). T1 lands the plumbing — the skill MUST call these subcommands rather than re-implementing parse/policy logic inline.
+
 ### Parse `--docs` / `--no-docs` / `--strategy` / `--no-strategy` flags
 
 Strip the four doc-aware override flags from `$ARGUMENTS` before input-type detection so they don't get confused for a Flow ID or path:
