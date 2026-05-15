@@ -122,6 +122,8 @@ Overwrite spec markdown from file.
 flowctl spec set-plan fn-1 --file plan.md [--json]
 ```
 
+See [`plugins/flow-next/templates/spec.md`](../templates/spec.md) for the canonical section structure (Goal & Context, Architecture & Data Models, API Contracts, Edge Cases & Constraints, Acceptance Criteria, Boundaries, Decision Context) and scope-owner annotations.
+
 ### spec set-plan-review-status
 
 Set plan review status and timestamp.

@@ -1,6 +1,6 @@
 ---
 name: flow-next
-last_updated: 2026-05-08
+last_updated: 2026-05-16
 generator: flow-next-strategy
 ---
 
@@ -12,7 +12,7 @@ AI agent workflows drift, lose context, and produce uneven quality at scale. Exi
 
 ## Our approach
 
-Spec-driven development with re-anchoring, cross-model review, and zero external dependencies. Six named handover objects between idea and merge — each reviewable on its own, cross-model-verified, and frozen at handover. Skill-driven plugin layered on `flowctl` Python plumbing; the host agent (Claude Code / Codex / Droid / OpenCode) IS the intelligence, and flowctl provides only thin atomic helpers. Everything lives in the repo under `.flow/` — no external services, no global config, no SaaS. Uninstall: delete the directory.
+Spec-driven development with re-anchoring, cross-model review, and zero external dependencies. Six named handover objects between idea and merge — each reviewable on its own, cross-model-verified, and frozen at handover. **Specs are single durable documents that evolve through layers** — `.flow/specs/<id>.md` is the source of truth for goal, architecture, R-IDs, and acceptance, vs alternative split-file approaches (e.g., Kiro's `requirements.md` / `design.md` / `tasks.md`). Skill-driven plugin layered on `flowctl` Python plumbing; the host agent (Claude Code / Codex / Droid / OpenCode) IS the intelligence, and flowctl provides only thin atomic helpers. Everything lives in the repo under `.flow/` — no external services, no global config, no SaaS. Uninstall: delete the directory.
 
 ## Who it's for
 

@@ -229,6 +229,9 @@ Default to standard unless complexity demands more or less.
  - If user specified a branch, use that instead.
 
 3. Write spec (use stdin heredoc):
+
+ The canonical 7-section scaffold (Goal & Context, Architecture & Data Models, API Contracts, Edge Cases & Constraints, Acceptance Criteria, Boundaries, Decision Context) lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md). Read it for section ordering, scope-owner annotations (`<!-- scope: business -->` / `technical` / `both`), and the `## Decision Context` flat-vs-H3 conditional. The plan skill extends that scaffold with the plan-specific sections shown below (Overview, Quick commands, Strategy Alignment, Strategy drift, Early proof point, Requirement coverage).
+
  ```bash
  # Include: Overview, Scope, Approach, Quick commands (REQUIRED), Acceptance,
  # Early proof point, Requirement coverage, References
