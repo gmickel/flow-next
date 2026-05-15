@@ -16,9 +16,12 @@ Add `--scope=business|technical|both` flag (default `technical`) to `/flow-next:
 **SKILL.md MUST NOT parse `--scope` / `--biz` / `--tech` inline.** All token-safe parsing lives in `flowctl scope resolve` (added by T1). SKILL.md calls the subcommand and consumes its JSON output:
 
 ```bash
-RESOLVED_JSON=$($FLOWCTL scope resolve --json "$@")
-SCOPE=$(echo "$RESOLVED_JSON" | jq -r '.scope')
-RAW_ARGS=$(echo "$RESOLVED_JSON" | jq -r '.remaining_args | join(" ")')
+# Use --raw "$ARGUMENTS" so flowctl tokenizes via shlex INSIDE the subcommand —
+# preserves quoted paths with spaces (e.g., `/flow-next:interview --biz "docs/my spec.md"`).
+# Unquoted $ARGUMENTS would word-split into broken tokens. <!-- Updated by plan-sync: fn-44-symmetric-interview.1 used `--raw "$ARGUMENTS"` not `"$@"` -->
+RESOLVED_JSON=$("$FLOWCTL" scope resolve --json --raw "$ARGUMENTS")
+SCOPE=$(printf '%s' "$RESOLVED_JSON" | jq -r '.scope')
+ARGUMENTS=$(printf '%s' "$RESOLVED_JSON" | jq -r '.remaining_args | join(" ")')
 ```
 
 `flowctl scope resolve --json` returns `{ "scope": "business|technical|both", "remaining_args": ["fn-1", "--docs", ...] }` — scope flags stripped, every other token preserved in order. Conflict / invalid-value errors exit non-zero (SKILL.md propagates).
@@ -61,7 +64,7 @@ Pass behavior + merge contract (from fn-44 spec Edge Cases):
 - [ ] `--scope=business|technical|both` flag parsed; default `technical`
 - [ ] `--biz` / `--tech` short aliases resolve correctly
 - [ ] Conflicting flags error cleanly with explicit message
-- [ ] SKILL.md calls `flowctl scope resolve --json "$@"` for scope + remaining_args; no inline token parsing for scope flags. Tests cover `--scope` ordering (before/after spec id, interleaved with `--docs`).
+- [ ] SKILL.md calls `flowctl scope resolve --json --raw "$ARGUMENTS"` for scope + remaining_args; no inline token parsing for scope flags. <!-- Updated by plan-sync: fn-44-symmetric-interview.1 shipped `--raw "$ARGUMENTS"` invocation for shell-quoting safety, not `"$@"` --> Tests cover `--scope` ordering (before/after spec id, interleaved with `--docs`).
 - [ ] Business pass writes biz-owned sections (Goal & Context, Boundaries, `### Motivation`, outcome-AC); FLAT-to-substructured promotion preserves existing flat body byte-for-byte into `### Implementation Tradeoffs`; never alters `### Implementation Tradeoffs` after substructure exists
 - [ ] Business pass preserves existing tech-section bodies byte-for-byte; writes placeholder `*Pending technical-scope interview pass.*` ONLY where tech section is empty; never overwrites populated tech section
 - [ ] Technical pass reads biz sections when populated; cites in opener; silent when absent
