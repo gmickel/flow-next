@@ -94,7 +94,7 @@ The question-bank path for the resolved scope is resolved by `flowctl scope bank
 BANK_PATH=$("$FLOWCTL" scope bank "$SCOPE")
 ```
 
-T2 ships the full pass-aware behavior (loading the resolved bank, per-section writes that honor the policy, technical-pass-reads-business-sections-first). T1 lands the plumbing — the skill MUST call these subcommands rather than re-implementing parse/policy logic inline.
+The full pass-aware behavior (loading the resolved bank, per-section writes that honor the policy, technical-pass-reads-business-sections-first) lives in the "Scope-aware pass behavior" section below. The skill MUST call these subcommands rather than re-implementing parse/policy logic inline.
 
 ### Parse `--docs` / `--no-docs` / `--strategy` / `--no-strategy` flags
 
@@ -136,7 +136,7 @@ RAW_ARGS=$(printf "%s" "$RAW_ARGS" | tr -s ' ' | sed 's/^ //;s/ $//')
 
 Each pair is mutually exclusive (the `if/elif` checks the negation first so it wins on conflict). The `--docs` / `--strategy` tokens get left in the residual `RAW_ARGS` after stripping, which surfaces downstream as an unrecognized argument — loud failure beats silent acceptance of conflicting state.
 
-**Flag matrix** — five rows, all explicit:
+**Flag matrix** — doc-aware flags (rows describe glossary / decisions / strategy gates):
 
 | Flags | Glossary | Decisions | Strategy |
 |-------|----------|-----------|----------|
@@ -147,6 +147,16 @@ Each pair is mutually exclusive (the `if/elif` checks the negation first so it w
 | `--docs --no-strategy` | on | on | off |
 
 `--docs` / `--no-docs` cascade to strategy when no explicit `--strategy` / `--no-strategy` is passed (matrix rows 2 + 3). Explicit `--strategy` / `--no-strategy` always wins (matrix rows 4 + 5) and is the only way to drive a different value into strategy than into glossary + decisions. The matrix is the contract.
+
+**Scope x doc/strategy** — the `--scope` axis is orthogonal to the doc-aware matrix above. Each row of this table is a valid combination:
+
+| Scope | Doc-aware default | Pass behavior |
+|-------|------------------|---------------|
+| `--scope=technical` (default, also `--tech`) | autodetect cascade above runs | tech-owned sections (Architecture / API Contracts / Edge Cases / verifiable AC); preserves biz sections byte-for-byte; reads biz sections when populated, silent when absent |
+| `--scope=business` (also `--biz`) | autodetect cascade still runs; doc-awareness does NOT auto-activate from biz pass alone (`R26` adds project-docs investigation independently) | biz-owned sections (Goal & Context / Boundaries / outcome AC / `### Motivation`); preserves tech sections byte-for-byte; writes placeholder `*Pending technical-scope interview pass.*` ONLY under EMPTY tech sections |
+| `--scope=both` | autodetect cascade runs | runs biz pass first, then tech pass; same merge contract applies in each phase |
+
+R26 project-docs investigation is gated on `SCOPE=business` (and the biz-pass phase of `both`) — runs BEFORE drafting the first biz question, regardless of doc-aware autodetect state.
 
 ### Doc-aware autodetect
 
@@ -282,6 +292,127 @@ When grep / Read reveals the code disagrees with something the user asserted ("w
 Confidence tier: `[high]` when grep evidence is unambiguous (file does not exist, function signature is clearly different); `[judgment-call]` when interpretation is at play (similar names, partial overlap, recent rename). Never silently pick a side — the user owns the resolution.
 
 The bar for surfacing: a meaningful contradiction that affects spec correctness. If the user says "the validator returns boolean" and grep shows it returns `Result<bool, Error>`, surface. If the user paraphrases a function's role and grep shows the role matches but the implementation differs in unrelated detail, log under `## Resolved via Codebase` and move on.
+
+## Scope-aware pass behavior
+
+The interview runs in one of three scoped modes resolved by `flowctl scope resolve` (above). Each scope writes a different set of sections back to the spec and reads a different set as context. The full merge contract — which sections each pass writes, which it preserves byte-for-byte, and how `## Decision Context` H3 promotion works — is computed by `flowctl scope write-policy` (called BEFORE any markdown edit). The structural canon for sections is `plugins/flow-next/templates/spec.md` (per R17 — never re-embed the section list inline; cross-link the template).
+
+### Compute the write policy
+
+Before writing anything back, build the current-sections-state JSON from the existing spec markdown (or an empty object for new specs) and call `scope write-policy`. The policy result tells you which sections are writable, which are preserved, and how to handle the `## Decision Context` substructure conditional.
+
+```bash
+# Build CURRENT_SECTIONS by inspecting the existing spec markdown:
+#   decision_context_has_h3:    spec has `### Motivation` / `### Implementation Tradeoffs` under `## Decision Context`
+#   biz_pass_ran:               spec has populated `## Goal & Context` body OR a `### Motivation` H3
+#   tech_sections_have_content: per-tech-section {name: bool} for whether the body has content
+#                               beyond the placeholder `*Pending technical-scope interview pass.*`
+#
+# For a brand-new spec (no markdown yet), CURRENT_SECTIONS='{}' is fine.
+CURRENT_SECTIONS='{"decision_context_has_h3": <bool>, "biz_pass_ran": <bool>, "tech_sections_have_content": {"Architecture & Data Models": <bool>, "API Contracts": <bool>, "Edge Cases & Constraints": <bool>}}'
+
+WRITE_POLICY=$(printf '%s' "$CURRENT_SECTIONS" | "$FLOWCTL" scope write-policy "$SCOPE" --current-sections-json -)
+```
+
+The policy JSON shape:
+
+```json
+{
+  "scope": "business|technical|both",
+  "writable": ["<section names this scope may write>"],
+  "preserved": ["<sections this scope MUST preserve byte-for-byte>"],
+  "decision_context": {
+    "shape": "flat|substructured",
+    "writable_h3": ["<H3 names writable when substructured>"],
+    "preserved_h3": ["<H3 names preserved byte-for-byte>"],
+    "promote_flat_to_implementation_tradeoffs": <bool>
+  },
+  "placeholder_write": ["<tech sections under biz pass that should get the placeholder line>"]
+}
+```
+
+### Load the right question bank
+
+Resolve the question-bank file path via `flowctl scope bank`:
+
+```bash
+# Resolves to questions-business.md (biz), questions-technical.md (tech), or
+# questions-technical.md (both — the technical bank is loaded for the tech
+# phase; biz phase loads questions-business.md when it runs).
+BANK_PATH=$("$FLOWCTL" scope bank "$SCOPE")
+```
+
+When `$SCOPE` is `business` or `both`, load `questions-business.md` for the biz phase questions. When `$SCOPE` is `technical` or `both`, load `questions-technical.md` for the tech phase. The existing `Pre-Question Taxonomy` and `Interview Guidelines` blocks apply to both banks.
+
+If the bank file does not exist yet (fn-44.3 ships `questions-business.md` and renames `questions.md` → `questions-technical.md`), fall back to `questions.md` for the technical bank. T2 must not block on T3 file existence — graceful degrade keeps the existing 1.0.2 behavior intact for solo devs running `--scope=technical` against a fresh checkout.
+
+### Business pass (`SCOPE == business`, or first phase of `both`)
+
+Run BEFORE the first AskUserQuestion call:
+
+1. **Project-docs investigation (R26)** — see "Investigate Project Docs Before Asking (business pass)" below. Symmetric to the codebase-investigation rule for the tech pass. Items resolved by docs land in `## Resolved via Project Docs`. The user is NOT asked about things the project docs already define.
+2. **Draft only user-judgment-required biz questions** — load `questions-business.md` (when present) for the question taxonomy. Walk problem framing, target user/persona, success metrics, MVP boundary, business constraints, what-not-to-build, prioritization rationale, business risks, UX implications.
+
+Per-section write behavior (per the write-policy):
+
+- **Writable biz sections** (`Goal & Context`, `Boundaries`, outcome-AC, `### Motivation` under `## Decision Context`): write/refine from interview answers.
+- **Preserved tech sections** (`Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`): MUST be preserved byte-for-byte. If a tech section is EMPTY (listed in `placeholder_write`), write the placeholder line `*Pending technical-scope interview pass.*` under its heading so the read-back makes the intentional emptiness visible. If a tech section has content, leave it untouched (refine-mode for a re-run on an already-tech-populated spec).
+- **`## Decision Context`** (per `decision_context` shape):
+  - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == true` (FLAT body exists from a prior tech-only pass): promote the existing flat body byte-for-byte into a new `### Implementation Tradeoffs` H3 (preserve the prose verbatim — same content, just under a new H3), and write the new `### Motivation` H3 as a sibling.
+  - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == false` (H3s already exist): preserve `### Implementation Tradeoffs` byte-for-byte; write/refine ONLY `### Motivation`.
+- **`## Acceptance Criteria`**: append outcome-AC R-IDs (R-IDs are append-only across passes per fn-29 rules — never renumber, never replace; take the next unused number).
+- **Auxiliary sections** (`Strategy Alignment` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Codebase`): preserve byte-for-byte. Biz pass adds `Resolved via Project Docs` only.
+
+### Technical pass (`SCOPE == technical`, default; or second phase of `both`)
+
+Run BEFORE the first AskUserQuestion call:
+
+1. **Read biz sections when populated** — if `## Goal & Context`, `## Boundaries`, `### Motivation` (under `## Decision Context`), or outcome-AC R-IDs are populated, read them as constraint context. Cite them in the interview opener (e.g., "Reading from the existing business layer: target user is X, MVP boundary excludes Y. Tech questions below..."). When biz sections are absent (default solo-dev 1.0.2-shape spec), proceed silently with technical-only questions — no opener about missing biz context.
+2. **Codebase investigation** — existing "Investigate Codebase Before Asking" rule applies unchanged. Items resolved via Read/Grep/Glob land in `## Resolved via Codebase`.
+
+Per-section write behavior (per the write-policy):
+
+- **Writable tech sections** (`Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`, verifiable-AC): write/refine from interview answers. May overwrite `*Pending technical-scope interview pass.*` placeholder strings.
+- **Preserved biz sections** (`Goal & Context`, `Boundaries`): MUST be preserved byte-for-byte.
+- **`## Decision Context`** (per `decision_context` shape):
+  - When `shape == "flat"` (no H3s exist, no biz pass has run — default zero-flag-tech case on a fresh/legacy spec): write/refine the flat body in place. Do NOT introduce `### Motivation` / `### Implementation Tradeoffs` H3 substructure. Preserves R22 1.0.2 backward compat.
+  - When `shape == "substructured"` (`### Motivation` already exists from a prior biz pass, or the existing spec has the substructure): preserve `### Motivation` body byte-for-byte; write/refine ONLY `### Implementation Tradeoffs`.
+- **`## Acceptance Criteria`**: append verifiable-AC R-IDs (R-IDs are append-only — never renumber).
+- **Auxiliary sections** (`Strategy Alignment` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Project Docs`): preserve byte-for-byte. Tech pass adds `Resolved via Codebase` only.
+
+### Both pass (`SCOPE == both`)
+
+Runs biz pass first, then tech pass in the same skill invocation. Each phase enforces its own merge contract:
+
+1. **Phase 1: biz pass** — runs the full biz-pass workflow above. Writes biz sections; preserves any pre-existing tech sections byte-for-byte (with placeholder lines under empty tech sections).
+2. **Phase 2: tech pass** — runs the full tech-pass workflow above using the just-written biz output as in-memory context. Reads biz sections, cites them in the opener, writes tech sections, preserves biz sections byte-for-byte.
+
+Auxiliary sections (`Strategy Alignment` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Codebase` / `Resolved via Project Docs`) are preserved across both phases — neither phase deletes or rewrites an auxiliary section the other phase wrote.
+
+If the user interrupts between phase 1 and phase 2, the biz sections are written but the tech sections retain placeholder lines. Re-running `--scope=technical` later completes the spec.
+
+### Investigate Project Docs Before Asking (business pass — R26)
+
+Symmetric to the "Investigate Codebase Before Asking" rule for the tech pass (above, under "Interview Process"). When `SCOPE == business` (or the biz phase of `both`), the agent MUST investigate project documentation BEFORE drafting any biz question.
+
+Read — in order, with the bounded reads called out so this doesn't balloon into a multi-hour scan:
+
+1. `README.md` (repo root) — full read.
+2. `CHANGELOG.md` (or project-equivalent release notes — `RELEASES.md`, `HISTORY.md`) — full read.
+3. `STRATEGY.md` (repo root) — full read.
+4. `GLOSSARY.md` (repo root) — full read.
+5. `knowledge/decisions/` (or `.flow/memory/knowledge/decisions/` — `flowctl memory list --track knowledge --category decisions --json` enumerates entries) — read the table-of-contents + first paragraph of each of the most-recent 10 entries (NOT full bodies; the first paragraph carries the decision; deeper drill-down is on-demand).
+6. `.flow/specs/` index (`flowctl specs --json` lists open specs) — scan titles + status; full-read only specs whose titles plausibly overlap the current spec's domain.
+7. `docs/` directory (if present at repo root) — scan filenames; full-read only files whose names plausibly overlap.
+
+Classify biz questions via the **Pre-Question Taxonomy** before asking:
+
+- **Project-docs-answerable** ("what does the strategy say / what does CHANGELOG show we've already shipped / what does GLOSSARY define the canonical term as / what decision did we record for X") → resolve from the docs; log to spec's `## Resolved via Project Docs` section with `path:line` evidence (or `path` + section heading when line numbers are noisy).
+- **User-judgment-required** ("what should our success metric be / what's MVP scope / what should we explicitly NOT build") → ask via `AskUserQuestion`.
+
+If you find yourself asking the user a biz question that README/CHANGELOG/STRATEGY already answers, that's the bug. Stop and resolve from docs. Symmetric form of the existing "if you find yourself answering a 'should' question via grep, that's the bug" rule.
+
+The `## Resolved via Project Docs` section is auxiliary and biz-pass-only (parallel to `## Resolved via Codebase` for the tech pass). Preserved across scope changes (tech pass never deletes or rewrites it).
 
 ## Doc-aware behaviors
 
@@ -454,7 +585,13 @@ The output of behavior (e) lands in a new spec section, `## Strategy Conflicts`,
 
 ## Question Categories
 
-Read [questions.md](questions.md) for all question categories and interview guidelines.
+Question banks are scope-resolved via `flowctl scope bank "$SCOPE"`:
+
+- `SCOPE=technical` (default) → load [questions-technical.md](questions-technical.md). Until fn-44.3 renames the file, fall back to [questions.md](questions.md) — same content.
+- `SCOPE=business` → load [questions-business.md](questions-business.md) (shipped by fn-44.3). Covers problem framing, target user/persona, success metrics, MVP boundary, business constraints, what-NOT-to-build, prioritization rationale, business risks, UX implications.
+- `SCOPE=both` → load `questions-business.md` for phase 1 then `questions-technical.md` for phase 2.
+
+Both banks share the `Pre-Question Taxonomy` and `Interview Guidelines` blocks.
 
 ## NOT in scope (defer to /flow-next:plan)
 
@@ -469,9 +606,15 @@ Read [questions.md](questions.md) for all question categories and interview guid
 
 After interview complete, write everything back — **scope depends on input type**.
 
+The canonical spec section structure lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (the single source of truth — never re-embed the section list inline per R17). The templates below show the additional **interview audit sections** that layer onto the canonical structure; the underlying spec sections (`## Goal & Context`, `## Architecture & Data Models`, ...) come from the template.
+
+Section-write rules from the scope-aware pass behavior (above) MUST be honored — the write-policy result from `flowctl scope write-policy` is the source of truth for which sections this scope writes vs preserves. The `## Decision Context` substructure / FLAT-vs-substructured promotion logic is in the write-policy; do not invent inline.
+
 ### For NEW IDEA (text input, no Flow ID)
 
 Create spec with interview output. **DO NOT create tasks** — that's `/flow-next:plan`'s job.
+
+The canonical section layout is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — start from that structure, then layer the auxiliary interview-audit sections below. The heredoc here is illustrative; the structural canon is the template file.
 
 ```bash
 $FLOWCTL spec create --title "..." --json
@@ -490,7 +633,11 @@ Decisions made during interview (e.g., "Use OAuth not SAML", "Support mobile + w
 
 ## Resolved via Codebase
 (optional — omit if nothing was resolved this way during the interview)
-Items the agent answered via Read / Grep / Glob, with file:line evidence. Separate from items the user answered. Lets reviewers spot-check assumptions later.
+Items the agent answered via Read / Grep / Glob, with file:line evidence. Separate from items the user answered. Lets reviewers spot-check assumptions later. Written by the technical pass.
+
+## Resolved via Project Docs
+(optional — only when SCOPE=business surfaced project-docs resolutions during the interview, per R26)
+Items the agent answered via README / CHANGELOG / STRATEGY / GLOSSARY / knowledge decisions / .flow specs / docs, with `path` or `path:line` evidence. Separate from items the user answered. Symmetric to `## Resolved via Codebase` but biz-pass-only.
 
 ## Glossary Conflicts
 (optional — only when DOC_AWARE=1 surfaced behavior-(a) hits during the interview)
@@ -522,6 +669,8 @@ $FLOWCTL tasks --spec <id> --json
 
 **If no tasks:** Update spec, then suggest `/flow-next:plan`.
 
+The canonical section layout is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md). Layer the auxiliary interview-audit sections below the canonical structure.
+
 ```bash
 $FLOWCTL spec set-plan <id> --file - --json <<'EOF'
 # Spec Title
@@ -538,7 +687,11 @@ Decisions made during interview
 
 ## Resolved via Codebase
 (optional — omit if nothing was resolved this way during the interview)
-Items the agent answered via Read / Grep / Glob, with file:line evidence. Separate from items the user answered.
+Items the agent answered via Read / Grep / Glob, with file:line evidence. Separate from items the user answered. Written by the technical pass.
+
+## Resolved via Project Docs
+(optional — only when SCOPE=business surfaced project-docs resolutions during the interview, per R26)
+Items the agent answered via README / CHANGELOG / STRATEGY / GLOSSARY / knowledge decisions / .flow specs / docs, with `path` or `path:line` evidence.
 
 ## Glossary Conflicts
 (optional — only when DOC_AWARE=1 surfaced behavior-(a) hits during the interview)
@@ -604,6 +757,7 @@ Show summary:
 - Number of questions asked
 - Key decisions captured
 - What was written (Flow ID updated / file rewritten)
+- **Scope mode**: which pass(es) ran — biz / tech / both — and which spec sections were written vs preserved byte-for-byte (cite the write-policy result). For `--scope=business`: project-docs resolutions captured under `## Resolved via Project Docs` (R26).
 - Doc-aware mode (when `DOC_AWARE=1` was active): glossary terms added/updated via `flowctl glossary add`, decision entries written via `flowctl memory add --track knowledge --category decisions`, glossary conflicts captured under `## Glossary Conflicts`
 - Strategy-aware mode (when `STRATEGY_AWARE=1` was active): strategy conflicts captured under `## Strategy Conflicts` (read-only — interview never edits STRATEGY.md)
 
