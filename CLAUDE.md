@@ -117,15 +117,12 @@ The spec is the load-bearing artefact in flow-next — `.flow/specs/<id>.md` car
 - **Automated** (recommended for any spec emerging from conversation): `/flow-next:capture` — host agent synthesizes the spec from conversation context, source-tags every acceptance criterion (`[user]` / `[paraphrase]` / `[inferred]`), and shows the full draft via mandatory read-back before writing. Output goes to `.flow/specs/<spec-id>.md`, via `flowctl spec create + spec set-plan` plumbing — but with conversation context preserved as `## Conversation Evidence` and an audit trail of which criteria came from the user. Added in 0.38.0.
 - **Manual** (for direct flowctl scripting): the `flowctl spec create + spec set-plan` heredoc shown below.
 
-The canonical 7-section spec scaffold (Goal & Context, Architecture & Data Models, API Contracts, Edge Cases & Constraints, Acceptance Criteria, Boundaries, Decision Context) — with scope-owner annotations and the `## Decision Context` flat-vs-H3 conditional — lives in [`plugins/flow-next/templates/spec.md`](plugins/flow-next/templates/spec.md). Read it for the section list, scope ownership (`<!-- scope: business -->` / `technical` / `both`), and the H3 substructure rules — that file is the single source of truth.
+Spec scaffold: [`plugins/flow-next/templates/spec.md`](plugins/flow-next/templates/spec.md) is the single source of truth — seven canonical sections (Goal & Context, Architecture & Data Models, API Contracts, Edge Cases & Constraints, Acceptance Criteria, Boundaries, Decision Context), scope-owner annotations (`<!-- scope: business -->` / `technical` / `both`), and the `## Decision Context` flat-vs-H3 conditional. Read the template before authoring; never duplicate the section list inline.
 
 ```bash
 .flow/bin/flowctl spec create --title "Short title" --json
-.flow/bin/flowctl spec set-plan <spec-id> --file - --json <<'EOF'
-# Title
-
-# ... fill the 7 canonical sections (see plugins/flow-next/templates/spec.md)
-EOF
+.flow/bin/flowctl spec set-plan <spec-id> --file - --json < my-spec.md
+# Author my-spec.md against plugins/flow-next/templates/spec.md.
 ```
 
 After creating a spec, choose next step:
