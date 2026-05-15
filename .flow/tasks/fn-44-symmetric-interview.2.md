@@ -78,5 +78,8 @@ Pass behavior + merge contract (from fn-44 spec Edge Cases):
 
 
 ## Done summary
-
+Wired flowctl scope resolve/bank/write-policy/suggest helpers into flow-next-interview SKILL.md with scope-aware pass behavior (biz/tech/both), the byte-for-byte section merge contract from fn-44 Edge Cases, and the R26 project-docs investigation block for the business pass; updated commands/flow-next/interview.md with --scope|--biz|--tech flag docs. Codex SHIP after one NEEDS_WORK round (three Majors: both-pass policy recompute, stale heredoc section names, Strategy Conflicts enum drift).
 ## Evidence
+- Commits: 4aefb2cf3, eb3d6789e, fa85aa0cf
+- Tests: bash plugins/flow-next/scripts/smoke_test.sh (130 passed, 0 failed), bash scripts/sync-codex.sh --check (R21 spec-template duplication guard passed), flowctl scope resolve / bank / write-policy / suggest manual end-to-end verification (all returned expected JSON for biz/tech/both), codex impl-review --spec codex:gpt-5.5:high --base 7cbdccc (NEEDS_WORK pass 1 → SHIP pass 2; all R-IDs met)
+- PRs:
