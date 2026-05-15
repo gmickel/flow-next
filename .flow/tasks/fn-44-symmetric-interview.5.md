@@ -29,7 +29,7 @@ Routing destinations per signal type (fn-44 R24):
 
 Routing happens during Phase 2 source-tagged synthesis (`workflow.md:274-298`). Sections without conversation signal stay absent.
 
-Sparse-layer heuristic for R25 suggestion: count of distinct SIGNAL CATEGORIES (per R24, nine total) with detected content is `>= 1` AND `< 3`. Zero categories → suggestion does NOT fire (preserves R22 — solo dev with no biz signals sees nothing). Three or more → suggestion does NOT fire (biz layer is reasonably filled). When triggered, append the suggestion line to the Phase 4 read-back footer:
+Sparse-layer heuristic for R25 suggestion: count of distinct SIGNAL CATEGORIES (per R24, nine total) with detected content is `>= 1` AND `< 3`. Zero categories → suggestion does NOT fire (preserves R22 — solo dev with no biz signals sees nothing). Three or more → suggestion does NOT fire (biz layer is reasonably filled). The threshold decision is delegated to `flowctl scope suggest --signal-categories-count <N>` (shipped by fn-44.1) — capture passes the count, flowctl returns `fire` / `no-fire` (`--json` exit codes also differ — 0 for fire, non-zero for no-fire — useful for `if "$FLOWCTL" scope suggest ...` shell checks). <!-- Updated by plan-sync: fn-44-symmetric-interview.2 confirmed scope suggest is the canonical threshold helper; capture skill must call it rather than re-implementing the `1 <= count < 3` math inline (skill-vs-flowctl architectural rule). --> When triggered, append the suggestion line to the Phase 4 read-back footer:
 
 > "This conversation has business-requirements signals; consider `/flow-next:interview --scope=business <spec-id>` to deep-refine the business layer."
 
