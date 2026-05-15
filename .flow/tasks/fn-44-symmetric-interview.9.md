@@ -82,5 +82,8 @@ Run `bash scripts/sync-codex.sh` after T1-T3, T5-T7 land. Verify:
 
 
 ## Done summary
-
+T9 final gate: shipped comprehensive R20/R22/R23 test suite (+124 tests over 463 baseline → 587 total, all green) covering scope flag parsing, per-pass write-policy merge contract, R22 deterministic invariants (zero-flag default, bank load, FLAT DC preservation, byte-for-byte skeleton parity), R24 9-row routing-table per-row assertions, R25 threshold runtime, R26 docs-investigation contract, R21 drift-guard semantics, canonical template + scope-owner annotations. Bonus: fixed real production bug surfaced by impl-review — `flowctl scope resolve --raw VALUE` two-token form now fuses to `--raw=VALUE` before argparse, so SKILL.md's `"$FLOWCTL" scope resolve --json --raw "$ARGUMENTS"` survives all $ARGUMENTS shapes (including single-flag values like `--biz`). Codex mirror now ships its own `codex/templates/spec.md` byte-for-byte identical to canonical. mickel.tech gate: T8 evidence records PR #7 (https://github.com/gmickel/mickel.tech/pull/7). fn-44-symmetric-interview epic complete.
 ## Evidence
+- Commits: 6ccb9be, 561adb0, 737d0f6, 1e82fd5
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' — 587 passed (was 463 baseline; +124 new tests), bash scripts/sync-codex.sh — 24 skills, 21 agents, all R-guards green (R4, R17, R19, R21, R30)
+- PRs:
