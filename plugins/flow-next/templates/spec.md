@@ -25,10 +25,17 @@ template_kind: static-scaffold  # no {{var}} substitution; read for structure, w
 ---
 
 <!--
-Scope ownership annotations on each section header below:
-- `<!-- scope: business -->`  — owned by the business pass (PO / product owner)
-- `<!-- scope: technical -->` — owned by the technical pass (tech lead / impl agent)
-- `<!-- scope: both -->`      — co-authored across passes; merge contract preserves the other side byte-for-byte
+Scope ownership annotations on each section header below — each section has
+one of three HTML-comment owner-markers immediately under the heading:
+
+  scope: business   — owned by the business pass (PO / product owner)
+  scope: technical  — owned by the technical pass (tech lead / impl agent)
+  scope: both       — co-authored across passes; merge contract preserves
+                      the other side byte-for-byte
+
+(The literal HTML form is `<!__ scope: business __>` with two hyphens
+on each side; underscores shown here only because HTML comments cannot
+nest — see https://html.spec.whatwg.org/multipage/syntax.html#comments.)
 
 R-IDs in `## Acceptance Criteria` are append-only across passes. Never renumber.
 Never replace existing entries. A later pass appends new criteria with the next
@@ -108,15 +115,17 @@ This section has TWO shapes. Pick exactly one:
     pushed the decision, what we explicitly rejected and why.
 
 (B) SUBSTRUCTURED (after a business pass has run, OR under `--scope=business` /
-    `--scope=both`, OR when an existing spec already has the H3s):
+    `--scope=both`, OR when an existing spec already has the H3s).
 
-    ### Motivation
-    <!-- scope: business -->
+    Two H3 subsections, each carrying its own scope-owner HTML comment
+    (`scope: business` on Motivation, `scope: technical` on Implementation
+    Tradeoffs):
+
+    ### Motivation     [owner: business]
     Why this matters now. Business / product rationale. What outcome we're
     chasing and why this spec is the right vehicle.
 
-    ### Implementation Tradeoffs
-    <!-- scope: technical -->
+    ### Implementation Tradeoffs     [owner: technical]
     Why this technical approach over alternatives. What we rejected and why.
     Constraints that shaped the design.
 -->

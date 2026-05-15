@@ -10187,15 +10187,17 @@ def cmd_scope_write_policy(args: argparse.Namespace) -> None:
     which sections it may write, which it must preserve byte-for-byte,
     and how to handle the `## Decision Context` H3 conditional.
     """
-    use_json = bool(getattr(args, "json", False))  # default JSON for write-policy
+    # write-policy ALWAYS emits a JSON payload as its primary output — the
+    # body is naturally structured (writable/preserved/decision_context).
+    # `--json` is accepted for symmetry with the other scope subcommands
+    # but does not change behavior. Errors emit a JSON error envelope too.
     scope = args.scope
     if scope not in _SCOPE_VALUES:
         msg = (
             f"invalid scope: {scope!r} "
             f"(must be one of: business, technical, both)"
         )
-        if use_json or True:  # always JSON for this subcommand by default
-            json_output({"error": msg}, success=False)
+        json_output({"error": msg}, success=False)
         sys.exit(2)
 
     src = args.current_sections_json
@@ -21361,9 +21363,11 @@ def main() -> None:
             "scope (questions-business.md / questions-technical.md)"
         ),
     )
+    # Validation deferred to cmd_scope_bank so invalid input emits a
+    # structured JSON error rather than argparse text — the helper
+    # contract says all scope subcommands accept --json.
     p_scope_bank.add_argument(
         "scope",
-        choices=list(_SCOPE_VALUES),
         help="Scope: business | technical | both",
     )
     p_scope_bank.add_argument("--json", action="store_true", help="JSON output")
@@ -21378,9 +21382,9 @@ def main() -> None:
             "byte-for-byte."
         ),
     )
+    # Same deferred-validation pattern as `scope bank`.
     p_scope_wp.add_argument(
         "scope",
-        choices=list(_SCOPE_VALUES),
         help="Scope: business | technical | both",
     )
     p_scope_wp.add_argument(
