@@ -54,5 +54,8 @@ Sparse-layer heuristic for R25 suggestion: count of distinct SIGNAL CATEGORIES (
 - [ ] Capture skill files (SKILL.md / workflow.md / phases.md) cross-link `plugins/flow-next/templates/spec.md` when naming section structure (per R17); no inline-duplicated section lists
 
 ## Done summary
-
+Extended `/flow-next:capture` skill (SKILL.md / workflow.md §2.2 + §2.6 + §Manual-smoke + Phase 6 footer / phases.md source-tag taxonomy) to route the nine R24 biz-context SIGNAL CATEGORIES to canonical-template destinations using only `[user]` / `[paraphrase]` tags, with sections receiving no conversation signal staying absent. Phase 6 calls `flowctl scope suggest` (T1 plumbing, never re-implements the `1 <= N < 3` threshold inline) to fire/no-fire the R25 `/flow-next:interview --scope=business` suggestion footer. Cross-linked `plugins/flow-next/templates/spec.md` per R17 instead of re-enumerating canonical sections inline. Codex mirror regen via `sync-codex.sh`; SHIP verdict at `codex:gpt-5.5:high` after one NEEDS_WORK cycle (R17 enforcement beyond the R21 awk drift-guard).
 ## Evidence
+- Commits: 3cbde773732663c8e580af3c8e80723cbf7f4c80, 0ae9d76e58080e3089486f02330c6ce18e21fdf3, 29a0a299e00c1134486a8e8d39e6a4fd3c9b2f24
+- Tests: bash scripts/sync-codex.sh (R21 canonical-section duplication guard + all other validators pass), flowctl scope suggest --signal-categories-count {0,1,2,3} --json (verified fire/no-fire decision matches spec — N=0 no-fire exit 0; N=1,2 fire exit 0; N=3 no-fire exit 0; plain mode: fire→exit 0, no-fire→exit 1), flowctl codex impl-review fn-44-symmetric-interview.5 --base de8f1ec --spec codex:gpt-5.5:high → SHIP after 1 NEEDS_WORK fix cycle
+- PRs:
