@@ -53,5 +53,8 @@ Renamed `questions-technical.md` keeps existing technical buckets unchanged.
 - [ ] No questions in the biz bank ask about technical details (avoid scope leak)
 
 ## Done summary
-
+Split the technical-heavy `questions.md` into scope-specific banks: new `questions-business.md` with 9 biz buckets (problem framing, target user, success metrics, MVP scope, business constraints, what-NOT-to-build, prioritization, business risks, UX expectations), renamed legacy `questions.md` → `questions-technical.md`, and hoisted shared Pre-Question Taxonomy + Interview Guidelines into `questions-shared.md` referenced by both banks. SKILL.md updated; codex mirror regenerated; first-pass SHIP from codex:gpt-5.5:high.
 ## Evidence
+- Commits: d9c691cc54dc4b4a7e6e0d7a8669c488ac01045f
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (463 passed), bash scripts/sync-codex.sh (all R-guards pass), flowctl scope bank business|technical|both → resolves to existing files, codex impl-review SHIP verdict (gpt-5.5:high, 1 pass)
+- PRs:
