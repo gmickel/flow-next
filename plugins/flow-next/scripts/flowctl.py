@@ -10012,6 +10012,31 @@ def cmd_scope_resolve(args: argparse.Namespace) -> None:
     if raw_tokens and raw_tokens[0] == "--":
         raw_tokens = raw_tokens[1:]
 
+    raw_str: Optional[str] = getattr(args, "raw", None)
+    if raw_str is not None:
+        if raw_tokens:
+            msg = (
+                "--raw conflicts with positional tokens; pass exactly one"
+            )
+            if use_json:
+                json_output({"error": msg}, success=False)
+            else:
+                print(f"Error: {msg}", file=sys.stderr)
+            sys.exit(2)
+        # shlex.split preserves quoted segments — `--biz "docs/my spec.md"`
+        # tokenizes to ["--biz", "docs/my spec.md"] (the path stays whole).
+        # POSIX mode is the default; matches bash word-splitting semantics
+        # except quotes are honored.
+        try:
+            raw_tokens = shlex.split(raw_str, posix=True)
+        except ValueError as exc:
+            msg = f"--raw tokenization failed: {exc}"
+            if use_json:
+                json_output({"error": msg}, success=False)
+            else:
+                print(f"Error: {msg}", file=sys.stderr)
+            sys.exit(2)
+
     scope: Optional[str] = None
     remaining: list[str] = []
     conflict_msg: Optional[str] = None
@@ -21316,6 +21341,17 @@ def main() -> None:
             "single token (the resolved scope name)."
         ),
     )
+    p_scope_resolve.add_argument(
+        "--raw",
+        help=(
+            "Pass the raw user-arguments string (e.g., \"$ARGUMENTS\" "
+            "from a skill) to be tokenized internally with shlex. "
+            "Preserves quoted paths with spaces. Conflicts with "
+            "positional tokens. Use this whenever the caller is a "
+            "shell-style skill where bash word-splitting would mangle "
+            "quoted paths."
+        ),
+    )
     p_scope_resolve.set_defaults(func=cmd_scope_resolve)
 
     p_scope_bank = scope_sub.add_parser(
@@ -22279,17 +22315,25 @@ def main() -> None:
     # `--` (e.g., `--biz`, `--scope=business`). argparse would consume those at
     # the top level before REMAINDER kicks in. Inject `--` before the token
     # list so argparse hands it straight to the subparser's REMAINDER. Pulls
-    # `--json` to the front so it stays as a real flag on the subparser, not
-    # captured into `tokens`.
+    # `--json` and `--raw VALUE` to the front so they stay as real flags on the
+    # subparser, not captured into `tokens`.
     if len(sys.argv) >= 3 and sys.argv[1] == "scope" and sys.argv[2] == "resolve":
         rest = sys.argv[3:]
-        json_flag = []
+        front_flags: list[str] = []
         token_args: list[str] = []
         i = 0
         while i < len(rest):
             tok = rest[i]
             if tok == "--json":
-                json_flag.append(tok)
+                front_flags.append(tok)
+            elif tok == "--raw":
+                # --raw takes one value (the user-arguments string).
+                front_flags.append(tok)
+                if i + 1 < len(rest):
+                    front_flags.append(rest[i + 1])
+                    i += 1
+            elif tok.startswith("--raw="):
+                front_flags.append(tok)
             elif tok == "--":
                 # Caller already used `--`; preserve the rest verbatim and stop.
                 token_args.extend(rest[i + 1 :])
@@ -22299,7 +22343,7 @@ def main() -> None:
             i += 1
         sys.argv = (
             sys.argv[:3]
-            + json_flag
+            + front_flags
             + (["--"] if token_args else [])
             + token_args
         )

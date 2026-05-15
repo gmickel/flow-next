@@ -65,8 +65,15 @@ Token-safe parsing for `--scope` / `--biz` / `--tech` lives in `flowctl scope re
 ```bash
 # Run BEFORE the --docs / --strategy strip block. Conflict / invalid value
 # → non-zero exit; SKILL propagates.
-RESOLVED_JSON=$("$FLOWCTL" scope resolve --json $ARGUMENTS)
+#
+# `--raw "$ARGUMENTS"` tokenizes via shlex INSIDE flowctl — preserves quoted
+# paths with spaces (e.g., `/flow-next:interview --biz "docs/my spec.md"`).
+# Unquoted `$ARGUMENTS` would word-split into broken tokens.
+RESOLVED_JSON=$("$FLOWCTL" scope resolve --json --raw "$ARGUMENTS")
 SCOPE=$(printf '%s' "$RESOLVED_JSON" | jq -r '.scope')
+# `remaining_args` is a JSON array of strings. Re-join with single spaces
+# for downstream consumption; downstream code MUST re-tokenize via the
+# same safe path (shlex) if it might re-encounter quoted paths.
 ARGUMENTS=$(printf '%s' "$RESOLVED_JSON" | jq -r '.remaining_args | join(" ")')
 ```
 

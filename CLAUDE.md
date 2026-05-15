@@ -117,32 +117,14 @@ The spec is the load-bearing artefact in flow-next — `.flow/specs/<id>.md` car
 - **Automated** (recommended for any spec emerging from conversation): `/flow-next:capture` — host agent synthesizes the spec from conversation context, source-tags every acceptance criterion (`[user]` / `[paraphrase]` / `[inferred]`), and shows the full draft via mandatory read-back before writing. Output goes to `.flow/specs/<spec-id>.md`, via `flowctl spec create + spec set-plan` plumbing — but with conversation context preserved as `## Conversation Evidence` and an audit trail of which criteria came from the user. Added in 0.38.0.
 - **Manual** (for direct flowctl scripting): the `flowctl spec create + spec set-plan` heredoc shown below.
 
+The canonical 7-section spec scaffold (Goal & Context, Architecture & Data Models, API Contracts, Edge Cases & Constraints, Acceptance Criteria, Boundaries, Decision Context) — with scope-owner annotations and the `## Decision Context` flat-vs-H3 conditional — lives in [`plugins/flow-next/templates/spec.md`](plugins/flow-next/templates/spec.md). Read it for the section list, scope ownership (`<!-- scope: business -->` / `technical` / `both`), and the H3 substructure rules — that file is the single source of truth.
+
 ```bash
 .flow/bin/flowctl spec create --title "Short title" --json
 .flow/bin/flowctl spec set-plan <spec-id> --file - --json <<'EOF'
 # Title
 
-## Goal & Context
-Why this exists, what problem it solves.
-
-## Architecture & Data Models
-System design, data flow, key components.
-
-## API Contracts
-Endpoints, interfaces, input/output shapes.
-
-## Edge Cases & Constraints
-Failure modes, limits, performance requirements.
-
-## Acceptance Criteria
-- **R1:** Testable criterion 1
-- **R2:** Testable criterion 2
-
-## Boundaries
-What's explicitly out of scope.
-
-## Decision Context
-Why this approach over alternatives.
+# ... fill the 7 canonical sections (see plugins/flow-next/templates/spec.md)
 EOF
 ```
 
