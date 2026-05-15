@@ -65,5 +65,8 @@ Keep surrounding context (the "Two paths" framing, capture-recommended note).
 - [ ] Run `bash scripts/bump.sh minor flow-next` (or manual equivalent) — verify all FIVE manifest surfaces aligned at 1.1.0: `plugins/flow-next/.claude-plugin/plugin.json`, `plugins/flow-next/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`, `plugins/flow-next/README.md` badge
 
 ## Done summary
-
+Bumped flow-next from 1.0.2 to 1.1.0 across all 5 manifest surfaces (plugin.json x2, marketplace.json plugins[] + metadata.version, README badges x2) via scripts/bump.sh. Anchored the single-evolving-spec choice in STRATEGY.md "Our approach", added CHANGELOG.md [flow-next 1.1.0] entry covering --scope flag / business question bank / template extraction / capture biz routing / R22 backward-compat / R26 project-docs, and rewired CLAUDE.md "Creating a spec" + plan/steps.md + docs/flowctl.md to point at the canonical templates/spec.md instead of inline-duplicating the section list. Added a sync-codex.sh sed rewrite so the regenerated Codex mirror gets the correct ../../../templates/spec.md relative path. Captured one bug-track memory entry documenting the three review-cycle patterns (scoped-diff false-positives, prose-form scaffold drift past the R21 guard, Codex mirror relative paths).
 ## Evidence
+- Commits: b1672ab, a56b894, 4f5f347, 4024a77, 8bbd86e
+- Tests: bash scripts/sync-codex.sh (passes all 12 validators incl. R21 spec-template duplication guard), bash plugins/flow-next/scripts/ci_test.sh (58 passed, 0 failed), codex impl-review SHIP after 3 NEEDS_WORK -> SHIP cycles (gpt-5.5:high)
+- PRs:
