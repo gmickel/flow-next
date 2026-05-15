@@ -1,6 +1,6 @@
-# Interview Question Categories
+# Shared interview blocks
 
-Ask NON-OBVIOUS questions only. Expect 40+ questions for complex specs.
+These two blocks apply to every scope-resolved question bank — biz and tech alike. Both [questions-business.md](questions-business.md) and [questions-technical.md](questions-technical.md) reference them rather than re-embedding (single source of truth; same Pre-Question Taxonomy and Interview Guidelines across passes).
 
 ## Pre-Question Taxonomy
 
@@ -10,7 +10,7 @@ Before asking any question, classify it on three axes:
 |----------|-------------|----------|
 | **Codebase-answerable** | Agent (Read / Grep / Glob) | "What persistence layer is used?" / "Where do existing routes live?" / "What's the test framework?" |
 | **Glossary-lookup-answerable** (`DOC_AWARE=1` only) | Agent (`flowctl glossary read`) | "What does this project mean by 'worker'?" / "Is 'session' the canonical term here, or is it 'connection'?" |
-| **User-judgment-required** | User (`AskUserQuestion`) | "Should we add caching?" / "What's the priority for offline support?" / "Is performance or simplicity more important here?" |
+| **User-judgment-required** | User (`request_user_input`) | "Should we add caching?" / "What's the priority for offline support?" / "Is performance or simplicity more important here?" |
 
 **Rules of thumb:**
 
@@ -25,78 +25,6 @@ Before asking any question, classify it on three axes:
 - Codebase-resolved items → `## Resolved via Codebase` section with file:line evidence.
 - Glossary-conflict-resolved items (when behavior (a) fired) → `## Glossary Conflicts` section with the user-wording, canonical term, and resolution.
 - Both sections are separate from items the user answered. Cite evidence so reviewers can spot-check assumptions later — especially important when the agent's "I checked" turns out to be "I assumed."
-
-## Technical Implementation
-
-- Data structures and algorithms
-- Edge cases and boundary conditions
-- State management approach
-- Concurrency and race conditions
-
-## Architecture
-
-- Component boundaries and responsibilities
-- Integration points with existing code
-- Dependencies (internal and external)
-- API contracts and interfaces
-- For parallel work: can tasks touch disjoint files? (reduces merge conflicts)
-- For task sizing: can sequential steps be combined into M-sized tasks? (avoid over-splitting)
-
-## Error Handling & Failure Modes
-
-- What can go wrong?
-- Recovery strategies
-- Partial failure handling
-- Timeout and retry logic
-
-## Performance
-
-- Expected load/scale
-- Latency requirements
-- Memory constraints
-- Caching strategy
-
-## Security
-
-- Authentication/authorization
-- Input validation
-- Data sensitivity
-- Attack vectors
-
-## User Experience
-
-- Loading states
-- Error messages
-- Offline behavior
-- Accessibility
-
-## Testing Strategy
-
-- Unit test focus areas
-- Integration test scenarios
-- E2E critical paths
-- Mocking strategy
-
-## Migration & Compatibility
-
-- Breaking changes
-- Data migration
-- Rollback plan
-- Feature flags needed?
-
-## Acceptance Criteria
-
-- What does "done" look like?
-- How to verify correctness?
-- Performance benchmarks
-- Edge cases to explicitly test
-
-## Unknowns & Risks
-
-- What are you most uncertain about?
-- What could derail this?
-- What needs research first?
-- External dependencies
 
 ## Interview Guidelines
 

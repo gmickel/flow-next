@@ -274,7 +274,7 @@ Example flow:
 
 ### Investigate Codebase Before Asking
 
-Before every question, classify it via the [questions.md](questions.md) **Pre-Question Taxonomy**:
+Before every question, classify it via the [questions-shared.md](questions-shared.md) **Pre-Question Taxonomy** (hoisted out of the per-scope banks so both biz and tech reference the same classifier):
 
 - **Codebase-answerable** ("what exists / how it's wired / what conventions live here") → use Read / Grep / Glob to answer; log to spec's `## Resolved via Codebase` section with file:line evidence.
 - **Glossary-lookup-answerable** (`DOC_AWARE=1` only) — terms with a canonical entry in the nearest-ancestor `GLOSSARY.md` → silently resolve from the entry; log to spec's `## Glossary Conflicts` section only when the user's wording diverges from canonical AND the term is load-bearing (see behavior (a) below).
@@ -357,16 +357,14 @@ Resolve the question-bank file path via `flowctl scope bank`:
 BANK_PATH=$("$FLOWCTL" scope bank "$SCOPE")
 ```
 
-When `$SCOPE` is `business` or `both`, load `questions-business.md` for the biz phase questions. When `$SCOPE` is `technical` or `both`, load `questions-technical.md` for the tech phase. The existing `Pre-Question Taxonomy` and `Interview Guidelines` blocks apply to both banks.
-
-If the bank file does not exist yet (fn-44.3 ships `questions-business.md` and renames `questions.md` → `questions-technical.md`), fall back to `questions.md` for the technical bank. T2 must not block on T3 file existence — graceful degrade keeps the existing 1.0.2 behavior intact for solo devs running `--scope=technical` against a fresh checkout.
+When `$SCOPE` is `business` or `both`, load `questions-business.md` for the biz phase questions. When `$SCOPE` is `technical` or `both`, load `questions-technical.md` for the tech phase. Both banks reference `questions-shared.md` for the `Pre-Question Taxonomy` and `Interview Guidelines` blocks — read the shared file first so the classifier applies symmetrically across passes.
 
 ### Business pass (`SCOPE == business`, or first phase of `both`)
 
 Run BEFORE the first request_user_input call:
 
 1. **Project-docs investigation (R26)** — see "Investigate Project Docs Before Asking (business pass)" below. Symmetric to the codebase-investigation rule for the tech pass. Items resolved by docs land in `## Resolved via Project Docs`. The user is NOT asked about things the project docs already define.
-2. **Draft only user-judgment-required biz questions** — load `questions-business.md` (when present) for the question taxonomy. Walk problem framing, target user/persona, success metrics, MVP boundary, business constraints, what-not-to-build, prioritization rationale, business risks, UX implications.
+2. **Draft only user-judgment-required biz questions** — load `questions-business.md` for the question taxonomy. Walk problem framing, target user/persona, success metrics, MVP boundary, business constraints, what-not-to-build, prioritization rationale, business risks, UX expectations.
 
 Per-section write behavior (per the write-policy):
 
@@ -602,11 +600,11 @@ The output of behavior (e) lands in a new spec section, `## Strategy Conflicts`,
 
 Question banks are scope-resolved via `flowctl scope bank "$SCOPE"`:
 
-- `SCOPE=technical` (default) → load [questions-technical.md](questions-technical.md). Until fn-44.3 renames the file, fall back to [questions.md](questions.md) — same content.
-- `SCOPE=business` → load [questions-business.md](questions-business.md) (shipped by fn-44.3). Covers problem framing, target user/persona, success metrics, MVP boundary, business constraints, what-NOT-to-build, prioritization rationale, business risks, UX implications.
+- `SCOPE=technical` (default) → load [questions-technical.md](questions-technical.md).
+- `SCOPE=business` → load [questions-business.md](questions-business.md). Covers problem framing, target user/persona, success metrics, MVP boundary, business constraints, what-NOT-to-build, prioritization rationale, business risks, UX expectations.
 - `SCOPE=both` → load `questions-business.md` for phase 1 then `questions-technical.md` for phase 2.
 
-Both banks share the `Pre-Question Taxonomy` and `Interview Guidelines` blocks.
+Both banks share the `Pre-Question Taxonomy` and `Interview Guidelines` blocks, hoisted to [questions-shared.md](questions-shared.md) — single source of truth referenced by both banks.
 
 ## NOT in scope (defer to /flow-next:plan)
 
