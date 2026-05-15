@@ -14,7 +14,7 @@ A numbered acceptance criterion in a spec, format `**R1:** ...`, `**R2:** ...`. 
 
 ## Handover object
 
-A named, reviewable artefact that carries context across a step in the agentic SDLC. flow-next defines six: business spec (#1), full spec (#2), implementation plan (#3), working implementation (#4), cross-model code review (#5), PR-as-cognitive-aid (#6). Each is reviewable on its own, cross-model-verified, and frozen at handover. The chain of handovers replaces the standups / refinement / design-review touchpoints that pre-agentic Agile relied on.
+A named, reviewable artefact that carries context across a step in the agentic SDLC. flow-next defines six handover states: the spec at business-layer completion (#1) and at full completion (#2) — both the **same** `.flow/specs/<spec-id>.md` file at successive layers, NOT two separate specs — then the implementation plan (#3), the working implementation (#4), the cross-model code review (#5), and the PR-as-cognitive-aid (#6). Each is reviewable on its own, cross-model-verified, and frozen at handover. The chain of handovers replaces the standups / refinement / design-review touchpoints that pre-agentic Agile relied on.
 
 ## Re-anchoring
 

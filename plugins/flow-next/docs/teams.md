@@ -40,6 +40,7 @@ flowchart LR
     Prospect --> Capture[/flow-next:capture/]
     Idea --> Capture
     Capture --> Interview[/flow-next:interview/]
+    Interview -.scoped operation.-> InterviewScope{{"--scope=business · --scope=technical · --scope=both<br/>(default: --scope=technical)"}}
     Interview --> PlanReview[/flow-next:plan-review/]
     PlanReview --> Plan[/flow-next:plan/]
     Plan --> Work[/flow-next:work/]
@@ -54,7 +55,7 @@ flowchart LR
     Audit -.-> Memory[(.flow/memory/)]
 ```
 
-The map is not strictly linear. `/prospect` is optional. `/capture` and `/interview` are interchangeable entry points depending on whether the spec emerged from conversation (`/capture`) or needs structured discovery (`/interview`). The implementation review loop (`/work` ↔ `/impl-review`) iterates until SHIP. Maintenance (`/audit`) runs out-of-band against `.flow/memory/`.
+The map is not strictly linear. `/prospect` is optional. `/capture` and `/interview` are interchangeable entry points depending on whether the spec emerged from conversation (`/capture`) or needs structured discovery (`/interview`). `/flow-next:interview` is a **scoped operation** — one node in the lifecycle, but the same skill runs for the business layer (`--scope=business`) and the technical layer (`--scope=technical`) against the same `.flow/specs/<id>.md` file. Teams adopting the symmetric pattern traverse this node twice; solo devs running the default `--scope=technical` pass through once. The implementation review loop (`/work` ↔ `/impl-review`) iterates until SHIP. Maintenance (`/audit`) runs out-of-band against `.flow/memory/`.
 
 ---
 
@@ -64,8 +65,8 @@ The methodology calls a *handover object* a named, reviewable artefact that carr
 
 | # | Handover | Flow-Next artefact path | Produced by | Verified by |
 |---|----------|-------------------------|-------------|-------------|
-| 1 | Business spec (PO → tech lead) | `.flow/specs/<spec-id>.md` | `/flow-next:capture` or `/flow-next:interview` | `/flow-next:plan-review` |
-| 2 | Full spec (tech lead → developer) | `.flow/specs/<spec-id>.md` (after `--strategy --docs` interview pass) | `/flow-next:interview` | `/flow-next:plan-review` |
+| 1 | Spec — business-layer complete (PO → tech lead) | `.flow/specs/<spec-id>.md` (business sections filled; technical sections may carry `*Pending technical-scope interview pass.*` placeholders) | `/flow-next:capture` or `/flow-next:interview --scope=business` | `/flow-next:plan-review` |
+| 2 | Spec — fully complete (tech lead → developer) | same `.flow/specs/<spec-id>.md` after `/flow-next:interview --scope=technical` fills the technical sections | `/flow-next:interview --scope=technical` | `/flow-next:plan-review` |
 | 3 | Implementation plan (spec → tasks) | `.flow/tasks/<spec-id>.M.md` | `/flow-next:plan` | `/flow-next:plan-review` |
 | 4 | Working implementation (tasks → code) | task `done_summary` + evidence commits | `/flow-next:work` (worker subagent) | `/flow-next:impl-review` |
 | 5 | Cross-model code review | `.flow/review-receipts/<branch>.json` | `/flow-next:impl-review` | `/flow-next:spec-completion-review` |
@@ -86,8 +87,8 @@ The artefact chain is the conversation that did not happen. Pre-agentic Agile re
 
 | Role | Triggers | Reviews | Notes |
 |------|----------|---------|-------|
-| **Product Owner / PM** | `/flow-next:capture`, `/flow-next:interview` (business layer) | `.flow/specs/<id>.md` after capture; `/flow-next:plan-review` output | The PO drafts the spec from a `prospect`-promoted candidate or directly from conversation via `capture`. |
-| **Tech lead / Senior eng** | `/flow-next:interview` (technical layer, `--strategy --docs`), `/flow-next:plan` | Tasks under `.flow/tasks/`; review-backend choice (`flowctl review-backend`) | Owns the technical layer of the spec, the plan, and which review backend gates `/work`. |
+| **Product Owner / PM** | `/flow-next:capture`, `/flow-next:interview --scope=business` | `.flow/specs/<id>.md` after capture; `/flow-next:plan-review` output | The PO drafts the spec from a `prospect`-promoted candidate or directly from conversation via `capture`. |
+| **Tech lead / Senior eng** | `/flow-next:interview --scope=technical` (optionally `--strategy --docs` for doc-aware mode), `/flow-next:plan` | Tasks under `.flow/tasks/`; review-backend choice (`flowctl review-backend`) | Owns the technical layer of the spec, the plan, and which review backend gates `/work`. |
 | **Implementing eng (human or agent)** | `/flow-next:work`, `/flow-next:impl-review` | Per-task `done_summary` + evidence | Re-anchors before each task (re-reads spec + git state). Worker subagent gets fresh context per task. |
 | **Reviewer** | `/flow-next:resolve-pr` (after PR review threads land) | PR body produced by `/flow-next:make-pr`, the diff itself | Reads the cognitive-aid body first; uses R-ID coverage + Critical Changes + Where to Look as the reading order. |
 | **Maintainer / on-call** | `/flow-next:audit`, `/flow-next:memory-migrate` | `.flow/memory/` entries | Periodic review of stale memory; Keep / Update / Consolidate / Replace / Delete per entry. |
@@ -109,21 +110,25 @@ Two entry points:
 
 Both produce a spec at `.flow/specs/<id>.md`. Survives `rm -rf .flow/` only if `STRATEGY.md` / `GLOSSARY.md` / `knowledge/decisions/` already capture the rationale; otherwise the rationale lives in the spec body.
 
-### [2] Business-layer spec — Handover #1
+### [2] Spec, business-layer complete — Handover #1
 
 `/flow-next:capture` source-tags every acceptance criterion as `[user]` (verbatim from the user), `[paraphrase]` (rephrased), or `[inferred]` (the agent inferred it). The mandatory read-back loop shows the full draft + tally before writing — the `[inferred]` count tells the user how much of the spec the agent invented, and they can reject it.
 
-For specs that emerge from a longer back-and-forth, run `/flow-next:interview` instead. The interview focuses on **business requirements** at this stage — the codebase is read-only context, not the subject of questions.
+For specs that emerge from a longer back-and-forth, run `/flow-next:interview <spec-id> --scope=business` instead. The interview focuses on **business requirements** at this stage — problem framing, target user, success metrics, MVP boundary, what-NOT-to-build, business constraints. The codebase is read-only context, not the subject of questions.
+
+The handover is a *state* of the spec, not a second spec. The same `.flow/specs/<spec-id>.md` file evolves through layers — `--scope=business` writes the business sections (and leaves `*Pending technical-scope interview pass.*` placeholders under the technical sections so the read-back shows what is intentionally empty).
 
 Hand the spec off to the tech lead by linking it. (For *Spec-as-PR*, see [Team patterns](#team-patterns) below — open the spec file on a feature branch as a draft PR before any code lands.)
 
-### [3] Full spec — Handover #2
+### [3] Spec, fully complete — Handover #2
 
-The tech lead runs `/flow-next:interview <spec-id> --strategy --docs`. This is the **same skill** as the business-layer interview — same tool, same structure, same review loop. The only thing that changes is the layer being completed. (See [Symmetric interview](#symmetric-interview).)
+The tech lead runs `/flow-next:interview <spec-id> --scope=technical`. This is the **same skill** as the business-layer interview, run on the **same spec file** — same tool, same structure, same review loop. The only thing that changes is the layer being completed. The technical pass reads the business sections first (when populated) and cites them as constraint context before asking any technical question. (See [Symmetric interview](#symmetric-interview).)
 
-The `--strategy --docs` flags activate doc-aware mode: the interview pulls from `STRATEGY.md` (active tracks), `GLOSSARY.md` (canonical vocabulary), and `knowledge/decisions/` (load-bearing past choices). When the user's wording diverges from the canonical glossary term, the interview surfaces the conflict in a `## Glossary Conflicts` spec section rather than silently rewriting. Same shape for strategy: a `## Strategy Conflicts` section parallel to glossary, ≤1 strategy-conflict question per turn.
+`--scope=technical` is the default when no scope flag is passed — solo devs running the single-pass workflow keep their pre-1.1.0 behavior. Teams adopting the symmetric pattern opt in explicitly via `--scope=business` then `--scope=technical` (or `--scope=both` for a single combined pass).
 
-Run `/flow-next:plan-review <spec-id>` before handover. A different model (RepoPrompt / Codex / Copilot) reads the full spec and reports gaps, ambiguities, and hidden assumptions. The disagreement surface between the writing model and the review model is where the gaps live.
+Optional `--strategy --docs` flags activate doc-aware mode (orthogonal to scope): the interview pulls from `STRATEGY.md` (active tracks), `GLOSSARY.md` (canonical vocabulary), and `knowledge/decisions/` (load-bearing past choices). When the user's wording diverges from the canonical glossary term, the interview surfaces the conflict in a `## Glossary Conflicts` spec section rather than silently rewriting. Same shape for strategy: a `## Strategy Conflicts` section parallel to glossary, ≤1 strategy-conflict question per turn.
+
+Run `/flow-next:plan-review <spec-id>` before handover. A different model (RepoPrompt / Codex / Copilot) reads the fully-completed spec and reports gaps, ambiguities, and hidden assumptions. The disagreement surface between the writing model and the review model is where the gaps live.
 
 ### [4] Implementation plan — Handover #3
 
@@ -264,33 +269,63 @@ This is what *frozen at handover* means in practice — the receiving party gets
 
 ### Symmetric interview
 
-`/flow-next:interview` is run by both the PO (business layer) and the tech lead (technical layer, with `--strategy --docs`). Same skill, same shape, same review loop. The only thing that changes is the layer being completed.
+`/flow-next:interview` is run by both the PO (business layer, `--scope=business`) and the tech lead (technical layer, `--scope=technical`, optionally `--strategy --docs` for doc-aware mode). Same skill, same shape, same review loop, **same `.flow/specs/<spec-id>.md` file**. The only thing that changes is the layer being completed.
+
+`--scope=technical` is the **default** when no scope flag is passed. Solo devs running the single-pass workflow keep their pre-1.1.0 behavior — zero new prompts, zero breaking change. Teams adopting the symmetric pattern opt in explicitly:
 
 ```
 IDEA / ROUGH PROSE  (PO scribbles)
         │
         ▼
-/flow-next:interview        ← business layer
-   (full context: business docs, related tickets, prior specs)
+/flow-next:interview --scope=business    ← business layer
+   (problem framing, target user, success metrics,
+    MVP boundary, business constraints, what-NOT-to-build;
+    reads STRATEGY.md / GLOSSARY.md / project docs
+    before drafting questions)
         │
         ▼
-/flow-next:plan-review      ← cross-model review of business spec
+.flow/specs/<spec-id>.md                  ← business sections filled;
+   (technical sections carry                  technical sections carry
+    *Pending technical-scope interview          placeholders awaiting the
+    pass.* placeholders)                       technical pass
         │
         ▼
-HANDOVER #1 — business spec → tech lead
+/flow-next:plan-review                    ← cross-model review of the
+                                              spec at business-layer
+                                              completion
         │
         ▼
-/flow-next:interview --strategy --docs   ← technical layer
-   (codebase + GLOSSARY.md + STRATEGY.md + knowledge/decisions/)
+HANDOVER #1 — spec biz-layer complete → tech lead
+   (same .flow/specs/<spec-id>.md file,
+    just at a different completion state)
         │
         ▼
-/flow-next:plan-review      ← cross-model review of full spec
+/flow-next:interview --scope=technical    ← technical layer
+   (codebase + GLOSSARY.md + STRATEGY.md +
+    knowledge/decisions/; reads the spec's
+    business sections first and cites them
+    as constraint context)
         │
         ▼
-HANDOVER #2 — full spec → developer
+.flow/specs/<spec-id>.md                  ← business sections preserved
+   (now fully populated)                       byte-for-byte; technical
+                                              sections filled; R-IDs
+                                              appended, never renumbered
+        │
+        ▼
+/flow-next:plan-review                    ← cross-model review of the
+                                              fully complete spec
+        │
+        ▼
+HANDOVER #2 — spec fully complete → developer
+   (same .flow/specs/<spec-id>.md file)
 ```
 
-**One pattern to teach.** POs don't learn a "PO tool" and devs a "dev tool". Same prompt, same review loop, same template. Coaching cost halves.
+For a single-invocation variant, `/flow-next:interview <spec-id> --scope=both` runs the business pass first, writes the business sections, then continues seamlessly into the technical pass with the just-written business content as input. Short aliases: `--biz` ≡ `--scope=business`, `--tech` ≡ `--scope=technical`.
+
+**Supplementary design docs are separate artefacts, NOT the spec.** When a topic needs a longer-form treatment than the spec body can carry — an architecture deep-dive, an ADR, a `docs/design/<topic>.md` — write it as a separate file and cross-link from the spec. The spec at `.flow/specs/<spec-id>.md` remains the single source of truth for R-IDs and acceptance; supplementary docs are referenced from it but do not extend it. The "one spec, evolving through layers" rule governs only what lives **inside** `.flow/specs/<spec-id>.md` — supplementary design docs are explicitly out of scope.
+
+**One pattern to teach.** POs don't learn a "PO tool" and devs a "dev tool". Same prompt, same review loop, same template, same file. Coaching cost halves.
 
 (Detailed reasoning + adoption-velocity argument: see [methodology guide — Symmetric Interview](https://github.com/gmickel/AI-x-SDLC-Starter-Kit/blob/main/guides/methodology.md#the-symmetric-interview-pattern).)
 
