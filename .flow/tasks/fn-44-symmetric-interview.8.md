@@ -29,5 +29,8 @@ Open PR against `gmickel/mickel.tech` (separate repo). Title: "Surface --scope f
 - [ ] PR opened against `gmickel/mickel.tech`; URL recorded
 
 ## Done summary
-
+Surfaced fn-44 1.1.0 affordances on the externally-facing flow-next page at mickel.tech: symmetric interview `--scope=business|technical|both` flag + structured business-context capture (nine dimensions, sparse-layer suggestion semantics). Also fixed the "Business spec / Full spec" naming bug (fn-44 R12/R13) — handovers are now described as layer-state ("Spec — business-layer complete" / "Spec — fully complete") of one evolving spec, not two distinct artefacts. Bumped APP_DATA version to 1.1.0. `pnpm lint && pnpm build` green in mickel.tech. PR #7 opened against gmickel/mickel.tech.
 ## Evidence
+- Commits: b097af93a8ac5ced0b9b326ce7eaa96e7d21722b
+- Tests: pnpm lint (mickel.tech) — clean, pnpm build (mickel.tech) — Compiled successfully in 2.2s; 111/111 static pages generated
+- PRs: https://github.com/gmickel/mickel.tech/pull/7
