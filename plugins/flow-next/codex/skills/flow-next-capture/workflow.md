@@ -289,19 +289,22 @@ Pure prose sections (Goal & Context narrative, Architecture overview) do not nee
 
 ### 2.2 — Apply the canonical spec template
 
-The canonical section structure lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (per R17 — never re-embed the section list inline; cross-link the template). Draft sections in the canonical order; the first section after frontmatter is **always** `## Conversation Evidence` (Phase 1 output verbatim). Then follow the template, applying these source-tag conventions:
+The canonical section structure lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — the single source of truth for the section sequence and per-section ownership annotations (per R17 — never re-embed the section list inline; cross-link the template). Walk the template in its declared order and draft each section's body using the source-tag conventions below. Before any template section, prepend `## Conversation Evidence` (Phase 1 output verbatim); after the template, append `## Requirement coverage` (the R-ID → task mapping placeholder).
 
-- **`## Goal & Context`** — why this exists, target user, problem framing, UX expectations. Mostly `[user]` / `[paraphrase]`. Receives biz-context signal categories 1, 2, 9 (and optionally 5, 8 — see §2.6).
-- **`## Architecture & Data Models`** — system design, data flow, key components. **File / component refs are `[inferred]` unless the user explicitly named them in conversation.** If Phase 1.2 verified a reference, tag `[paraphrase]`.
-- **`## API Contracts`** — endpoints, interfaces, input / output shapes. Often `[inferred]` because conversation rarely specifies wire formats. Mark accordingly.
-- **`## Edge Cases & Constraints`** — failure modes, limits, performance reqs. Mix of `[user]` and `[inferred]`.
-- **`## Acceptance Criteria`** — testable; R-IDs (`- **R1:** ...`); each tagged. **R-IDs allocate sequentially from R1** — capture creates fresh specs, no renumber concern. Outcome-AC entries come from biz-context signal category 3 (§2.6).
-- **`## Boundaries`** — explicit out-of-scope. Receives biz-context signal categories 4 and 6 (§2.6). Sections without conversation signal stay absent — do NOT auto-populate from agent assumptions.
-- **`## Decision Context`** — why this approach over alternatives. Preserve any rejected alternatives the user mentioned (Linear-pattern: rejected options live in spec history, not flow off-screen). Substructure (FLAT vs `### Motivation` / `### Implementation Tradeoffs`) is governed by §2.6 — promote to substructured only when biz-context signal categories 3, 5, 7, or 8 carry content.
+Source-tag application is per-tag, not per-section:
 
-Followed by:
+- **`[user]`** dominates where the conversation gave verbatim content (goal framing, user-stated acceptance, named non-goals, rejected alternatives the user surfaced).
+- **`[paraphrase]`** is for spec-language restatements of user intent — preserving meaning, tightening wording.
+- **`[inferred]`** covers agent fill-in for completeness (default conventions: error formats, retry policies, observability hooks, file / component refs the user did NOT name). **Untouched by §2.6 biz-routing** — biz destinations only accept `[user]` / `[paraphrase]`.
+- **`[strategy:<track>]`** activates only when Phase 0 strategy snapshot was populated.
 
-- `## Requirement coverage` — table mapping each R-ID to "fn-N.M (TBD — populate via /flow-next:plan)" placeholder. Capture ships unbroken-down specs; `/flow-next:plan` does the breakdown later.
+Auxiliary section rules layered on the template:
+
+- **Phase 1.2 verified references** — if a subagent verified that a user-named file / component actually exists in the codebase, upgrade the tag from `[inferred]` → `[paraphrase]` for that line.
+- **Sections without conversation signal stay absent.** Do NOT auto-populate a template section from agent assumptions just because the template has a slot for it. Empty-by-default beats fabricated-by-default.
+- **`## Decision Context`** substructure (FLAT vs `### Motivation` / `### Implementation Tradeoffs` per the template's "(A) FLAT" vs "(B) SUBSTRUCTURED" branches) is governed by §2.6 — capture only emits SUBSTRUCTURED when biz-context routing has content for `### Motivation`; otherwise stays FLAT.
+- **`## Acceptance Criteria`** R-IDs allocate sequentially from R1 — capture creates fresh specs, no renumber concern. Outcome-AC entries (user-facing "what success looks like") route via biz-context signal category 3 (§2.6); other criteria stay generic.
+- **`## Requirement coverage`** appended after the template body — table mapping each R-ID to `fn-N.M (TBD — populate via /flow-next:plan)` placeholders. Capture ships unbroken-down specs; `/flow-next:plan` does the breakdown later.
 
 ### 2.3 — R-ID allocation rules (R15)
 
