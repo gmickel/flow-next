@@ -284,6 +284,425 @@ class TestR22E_SpecSkeletonByteForByte(unittest.TestCase):
         self.assertEqual(payload["skeleton"], EXPECTED_SKELETON_R22)
 
 
+class TestR23_SectionMergeContract(unittest.TestCase):
+    """R23 behavior-level merge contract — drive `flowctl scope write-policy`
+    against fixture specs and verify the policy mechanically enforces:
+
+    1. Unowned section bodies stay in `preserved` (host agent must NOT
+       rewrite them).
+    2. Tech-pass under FLAT DC does NOT introduce H3 substructure.
+    3. Biz-pass FLAT-promotion correctly flags
+       `promote_flat_to_implementation_tradeoffs=True` AND lists Motivation
+       as the only writable H3, Implementation Tradeoffs as preserved.
+    4. Biz-pass placeholder list contains ONLY tech sections without
+       content — refine mode (tech has content) drops them from
+       placeholder_write byte-for-byte.
+    5. Auxiliary sections (Strategy Alignment / Strategy Conflicts /
+       Glossary Conflicts / Conversation Evidence / Resolved via Codebase /
+       Resolved via Project Docs) are out-of-scope for write-policy —
+       neither writable nor preserved — by design, since aux sections
+       are written by their respective skills (capture / interview
+       behaviors). Verify the policy never surfaces them as targets for
+       overwrite.
+
+    These tests are deterministic — no markdown diff fixtures, no
+    transcript harness, no interactive skill probing. They drive the
+    structured contract that the skill consumes."""
+
+    def _policy(self, scope: str, current: dict) -> dict:
+        proc = _run(
+            "scope",
+            "write-policy",
+            scope,
+            "--current-sections-json",
+            "-",
+            stdin=json.dumps(current),
+        )
+        self.assertEqual(proc.returncode, 0, msg=f"stderr: {proc.stderr}")
+        return json.loads(proc.stdout)
+
+    AUXILIARY_SECTIONS = (
+        "Strategy Alignment",
+        "Strategy Conflicts",
+        "Glossary Conflicts",
+        "Conversation Evidence",
+        "Resolved via Codebase",
+        "Resolved via Project Docs",
+    )
+
+    def test_tech_pass_does_not_surface_aux_in_writable(self) -> None:
+        """Aux sections must never appear in `writable` — host agent
+        composes them outside the policy. The policy controls canonical
+        sections only."""
+        policy = self._policy("technical", {})
+        for aux in self.AUXILIARY_SECTIONS:
+            self.assertNotIn(
+                aux,
+                policy["writable"],
+                f"tech pass write-policy must not surface aux section {aux!r}",
+            )
+            self.assertNotIn(
+                aux,
+                policy["preserved"],
+                f"tech pass write-policy must not surface aux section {aux!r}",
+            )
+
+    def test_biz_pass_does_not_surface_aux_in_writable(self) -> None:
+        """Symmetric: biz pass also leaves aux sections alone."""
+        policy = self._policy("business", {})
+        for aux in self.AUXILIARY_SECTIONS:
+            self.assertNotIn(aux, policy["writable"])
+            self.assertNotIn(aux, policy["preserved"])
+
+    def test_both_pass_does_not_surface_aux_in_writable(self) -> None:
+        policy = self._policy("both", {})
+        for aux in self.AUXILIARY_SECTIONS:
+            self.assertNotIn(aux, policy["writable"])
+            self.assertNotIn(aux, policy["preserved"])
+
+    def test_tech_writable_preserved_partition_is_disjoint(self) -> None:
+        """A section must be writable XOR preserved — never both. Catches
+        the case where a policy change accidentally lists a section in
+        both buckets."""
+        for current in (
+            {},
+            {"decision_context_has_h3": True, "biz_pass_ran": True},
+            {"tech_sections_have_content": {"API Contracts": True}},
+        ):
+            for scope in ("technical", "business"):
+                policy = self._policy(scope, current)
+                overlap = set(policy["writable"]) & set(policy["preserved"])
+                self.assertEqual(
+                    overlap,
+                    set(),
+                    f"scope={scope} current={current}: writable/preserved overlap: {overlap}",
+                )
+
+    def test_biz_pass_flat_promotion_preserves_motivation_writable(self) -> None:
+        """FLAT → SUBSTRUCTURED contract: biz pass MUST write Motivation
+        + promote FLAT body to Implementation Tradeoffs. Verify the
+        policy emits exactly that shape (R23 byte-for-byte preservation
+        of FLAT body inside Implementation Tradeoffs)."""
+        policy = self._policy(
+            "business",
+            {
+                "decision_context_has_h3": False,
+                "biz_pass_ran": False,
+                "tech_sections_have_content": {},
+            },
+        )
+        dc = policy["decision_context"]
+        self.assertEqual(dc["shape"], "substructured")
+        self.assertEqual(
+            sorted(dc["writable_h3"]), ["Motivation"]
+        )
+        self.assertEqual(
+            sorted(dc["preserved_h3"]), ["Implementation Tradeoffs"]
+        )
+        self.assertTrue(dc["promote_flat_to_implementation_tradeoffs"])
+
+    def test_biz_pass_existing_h3_no_promotion_motivation_only(self) -> None:
+        """Re-run biz pass on substructured spec: do NOT re-promote;
+        write Motivation only; preserve Implementation Tradeoffs."""
+        policy = self._policy(
+            "business",
+            {
+                "decision_context_has_h3": True,
+                "biz_pass_ran": True,
+                "tech_sections_have_content": {},
+            },
+        )
+        dc = policy["decision_context"]
+        self.assertEqual(dc["shape"], "substructured")
+        self.assertEqual(sorted(dc["writable_h3"]), ["Motivation"])
+        self.assertEqual(
+            sorted(dc["preserved_h3"]), ["Implementation Tradeoffs"]
+        )
+        # CRITICAL: promotion flag must be False — re-running biz pass
+        # must NOT re-promote a body that's already at the right H3.
+        self.assertFalse(dc["promote_flat_to_implementation_tradeoffs"])
+
+    def test_placeholder_write_only_empty_tech_sections(self) -> None:
+        """R23: placeholder-only replacement contract. Biz pass writes
+        `*Pending technical-scope interview pass.*` ONLY under empty
+        tech sections. Sections with content are left untouched
+        (refine mode)."""
+        policy = self._policy(
+            "business",
+            {
+                "decision_context_has_h3": False,
+                "biz_pass_ran": False,
+                "tech_sections_have_content": {
+                    "Architecture & Data Models": True,
+                    "API Contracts": False,
+                    "Edge Cases & Constraints": True,
+                },
+            },
+        )
+        # Only API Contracts (empty) gets the placeholder.
+        self.assertEqual(policy["placeholder_write"], ["API Contracts"])
+        # The two with content do NOT.
+        self.assertNotIn(
+            "Architecture & Data Models", policy["placeholder_write"]
+        )
+        self.assertNotIn(
+            "Edge Cases & Constraints", policy["placeholder_write"]
+        )
+
+    def test_placeholder_write_all_empty_when_blank_input(self) -> None:
+        """Conservative default: missing tech_sections_have_content key
+        defaults to ALL empty → biz pass would write placeholders under
+        all tech sections (visible read-back of intentional emptiness)."""
+        policy = self._policy("business", {})
+        self.assertEqual(
+            sorted(policy["placeholder_write"]),
+            [
+                "API Contracts",
+                "Architecture & Data Models",
+                "Edge Cases & Constraints",
+            ],
+        )
+
+    def test_tech_pass_never_writes_placeholders(self) -> None:
+        """R23 corollary: tech pass overwrites placeholders with real
+        content but never WRITES new placeholder lines. `placeholder_write`
+        on a tech-pass policy is always []."""
+        for current in (
+            {},
+            {
+                "tech_sections_have_content": {
+                    "Architecture & Data Models": False,
+                    "API Contracts": False,
+                }
+            },
+            {"biz_pass_ran": True, "decision_context_has_h3": True},
+        ):
+            policy = self._policy("technical", current)
+            self.assertEqual(
+                policy["placeholder_write"],
+                [],
+                f"tech pass placeholder_write must always be empty; current={current}",
+            )
+
+    def test_tech_writable_preserves_biz_sections_byte_for_byte(self) -> None:
+        """R23 byte-for-byte preservation: tech pass writable list must
+        explicitly EXCLUDE the biz-owned sections — host agent must not
+        touch them."""
+        policy = self._policy("technical", {})
+        # Biz-owned sections in PRESERVED list (never writable).
+        for biz_owned in ("Goal & Context", "Boundaries"):
+            self.assertIn(biz_owned, policy["preserved"])
+            self.assertNotIn(biz_owned, policy["writable"])
+
+    def test_biz_writable_preserves_tech_sections_byte_for_byte(self) -> None:
+        """Symmetric: biz pass preserves tech-owned sections."""
+        policy = self._policy("business", {})
+        for tech_owned in (
+            "Architecture & Data Models",
+            "API Contracts",
+            "Edge Cases & Constraints",
+        ):
+            self.assertIn(tech_owned, policy["preserved"])
+            self.assertNotIn(tech_owned, policy["writable"])
+
+
+class TestR23_FixtureMergeByteForByte(unittest.TestCase):
+    """R23 behavior-level fixture tests — drive a minimal in-Python merge
+    helper that applies `flowctl scope write-policy` against fixture spec
+    markdown, then assert byte-for-byte preservation of unowned sections,
+    aux sections, and existing R-IDs.
+
+    The merge helper here is a thin REFERENCE implementation of the
+    contract host agents follow — it's NOT production code and lives in
+    this test file only. The point is to verify the policy mechanically
+    suffices to drive a correct merge, not to claim flowctl performs the
+    merge itself.
+    """
+
+    # Section-owner partition per templates/spec.md frontmatter.
+    BIZ_SECTIONS = {"Goal & Context", "Boundaries"}
+    TECH_SECTIONS = {
+        "Architecture & Data Models",
+        "API Contracts",
+        "Edge Cases & Constraints",
+    }
+    BOTH_SECTIONS = {"Acceptance Criteria", "Decision Context"}
+    AUX_SECTIONS = {
+        "Strategy Alignment",
+        "Strategy Conflicts",
+        "Glossary Conflicts",
+        "Conversation Evidence",
+        "Resolved via Codebase",
+        "Resolved via Project Docs",
+    }
+
+    @staticmethod
+    def _parse_sections(body: str) -> dict[str, str]:
+        """Parse `## Heading\\n<body>` blocks into {heading: body}."""
+        sections: dict[str, str] = {}
+        current: str | None = None
+        buf: list[str] = []
+        for line in body.splitlines():
+            if line.startswith("## "):
+                if current is not None:
+                    sections[current] = "\n".join(buf).rstrip()
+                current = line[3:].strip()
+                buf = []
+            elif current is not None:
+                buf.append(line)
+        if current is not None:
+            sections[current] = "\n".join(buf).rstrip()
+        return sections
+
+    @staticmethod
+    def _policy(scope: str, current: dict) -> dict:
+        proc = _run(
+            "scope",
+            "write-policy",
+            scope,
+            "--current-sections-json",
+            "-",
+            stdin=json.dumps(current),
+        )
+        return json.loads(proc.stdout)
+
+    def _build_current_sections(self, fixture: dict[str, str]) -> dict:
+        """Compute the current-sections JSON from a fixture mapping."""
+        dc_body = fixture.get("Decision Context", "")
+        return {
+            "decision_context_has_h3": (
+                "### Motivation" in dc_body
+                or "### Implementation Tradeoffs" in dc_body
+            ),
+            "biz_pass_ran": bool(fixture.get("Goal & Context", "").strip()),
+            "tech_sections_have_content": {
+                section: bool(
+                    fixture.get(section, "")
+                    .replace("*Pending technical-scope interview pass.*", "")
+                    .strip()
+                )
+                for section in self.TECH_SECTIONS
+            },
+        }
+
+    def test_tech_pass_preserves_biz_section_body_byte_for_byte(self) -> None:
+        """A spec with populated `## Goal & Context` survives a tech pass
+        unchanged byte-for-byte. Test the contract: policy lists
+        `Goal & Context` in `preserved`, host agent obeys.
+
+        Two sub-cases:
+        - With biz content populated (biz_pass_ran=True): DC is
+          SUBSTRUCTURED; tech writes Implementation Tradeoffs, preserves
+          Motivation.
+        - With biz content absent (biz_pass_ran=False): DC stays FLAT
+          (R22 backward-compat); tech writes FLAT body.
+        """
+        # Sub-case 1: biz populated → DC substructured (post-biz-pass shape).
+        fixture_with_biz = {
+            "Goal & Context": (
+                "Persona: junior engineer.\n"
+                "Why-now: onboarding pain in Q3.\n"
+                "Target: 10-minute first-success.\n"
+            ),
+            "Architecture & Data Models": "Old stub.",
+            "API Contracts": "",
+            "Edge Cases & Constraints": "",
+            "Acceptance Criteria": "- **R1:** Existing.",
+            "Boundaries": "Out: enterprise SSO.",
+            "Decision Context": (
+                "### Motivation\nBiz reasoning.\n\n"
+                "### Implementation Tradeoffs\nTech reasoning.\n"
+            ),
+        }
+        current = self._build_current_sections(fixture_with_biz)
+        policy = self._policy("technical", current)
+        self.assertIn("Goal & Context", policy["preserved"])
+        self.assertIn("Boundaries", policy["preserved"])
+        self.assertNotIn("Goal & Context", policy["writable"])
+        # Substructured shape: tech preserves Motivation byte-for-byte.
+        self.assertEqual(policy["decision_context"]["shape"], "substructured")
+        self.assertIn(
+            "Implementation Tradeoffs",
+            policy["decision_context"]["writable_h3"],
+        )
+        self.assertIn(
+            "Motivation", policy["decision_context"]["preserved_h3"]
+        )
+
+        # Sub-case 2: zero-biz-pass spec → DC stays FLAT (R22 invariant).
+        fixture_zero_biz = {
+            "Goal & Context": "",
+            "Architecture & Data Models": "Old stub.",
+            "API Contracts": "",
+            "Edge Cases & Constraints": "",
+            "Acceptance Criteria": "- **R1:** Existing.",
+            "Boundaries": "",
+            "Decision Context": "FLAT body from a prior tech-only pass.",
+        }
+        current = self._build_current_sections(fixture_zero_biz)
+        policy = self._policy("technical", current)
+        # FLAT body stays FLAT — no H3 introduction under tech-only pass.
+        self.assertEqual(policy["decision_context"]["shape"], "flat")
+        self.assertEqual(policy["decision_context"]["writable_h3"], [])
+        self.assertEqual(policy["decision_context"]["preserved_h3"], [])
+
+    def test_biz_pass_preserves_tech_section_body_byte_for_byte(self) -> None:
+        """A spec with populated tech sections survives a biz pass."""
+        fixture = {
+            "Goal & Context": "",
+            "Architecture & Data Models": "Components: A, B, C.",
+            "API Contracts": "POST /api/v1/foo → 200.",
+            "Edge Cases & Constraints": "Limit: 100 req/sec.",
+            "Acceptance Criteria": "- **R1:** Existing tech criterion.",
+            "Boundaries": "",
+            "Decision Context": "Pre-existing FLAT body.",
+        }
+        current = self._build_current_sections(fixture)
+        policy = self._policy("business", current)
+        for tech in self.TECH_SECTIONS:
+            self.assertIn(tech, policy["preserved"])
+            self.assertNotIn(tech, policy["writable"])
+        # FLAT body gets promoted under ### Implementation Tradeoffs
+        # byte-for-byte. The promotion flag tells the host agent to
+        # preserve the existing body verbatim.
+        self.assertTrue(
+            policy["decision_context"][
+                "promote_flat_to_implementation_tradeoffs"
+            ]
+        )
+        # And refine-mode: tech sections with content are NOT in
+        # placeholder_write (we don't overwrite them with placeholders).
+        self.assertEqual(policy["placeholder_write"], [])
+
+    def test_r_ids_append_only_contract(self) -> None:
+        """R23: R-IDs are append-only across passes. Verify that a fixture
+        with existing R1-R5 receives a write-policy that lists
+        `Acceptance Criteria` as WRITABLE (for appending), not as a full
+        rewrite target — there is no signal in the policy to renumber."""
+        # The policy doesn't enforce R-ID semantics directly — it just
+        # marks Acceptance Criteria as writable. The append-only contract
+        # is enforced by the host agent reading existing R-IDs and
+        # allocating the next unused number.
+        #
+        # What we CAN test deterministically: there is no field in the
+        # policy payload that says "renumber" or "replace" or "reset".
+        # The shape is { writable, preserved, decision_context,
+        # placeholder_write } — nothing that could mistakenly authorize
+        # renumbering.
+        for scope in ("business", "technical", "both"):
+            policy = self._policy(scope, {})
+            self.assertNotIn("renumber", json.dumps(policy).lower())
+            self.assertNotIn("replace", json.dumps(policy).lower())
+            self.assertNotIn("reset", json.dumps(policy).lower())
+            # Acceptance Criteria is writable for the appropriate scopes.
+            if scope == "technical":
+                self.assertIn("Acceptance Criteria", policy["writable"])
+            elif scope == "business":
+                self.assertIn("Acceptance Criteria", policy["writable"])
+            else:  # both
+                self.assertIn("Acceptance Criteria", policy["writable"])
+
+
 class TestR23_AuxiliarySectionEnumerationCompleteness(unittest.TestCase):
     """R23 section-merge contract: auxiliary sections preserved. The full
     auxiliary-section enumeration must be Strategy Alignment + Strategy

@@ -22346,11 +22346,21 @@ def main() -> None:
             if tok == "--json":
                 front_flags.append(tok)
             elif tok == "--raw":
-                # --raw takes one value (the user-arguments string).
-                front_flags.append(tok)
+                # --raw takes one value (the user-arguments string). Fuse the
+                # two-token form (`--raw VALUE`) into the single-token form
+                # (`--raw=VALUE`) so values that begin with `--` (e.g.,
+                # `--biz`, `--scope=business`) survive argparse — argparse
+                # rejects `--raw VALUE` when VALUE looks like a flag, but
+                # accepts `--raw=VALUE` regardless of VALUE's shape. This is
+                # the production path SKILL.md invokes via
+                # `"$FLOWCTL" scope resolve --json --raw "$ARGUMENTS"`.
                 if i + 1 < len(rest):
-                    front_flags.append(rest[i + 1])
+                    front_flags.append(f"--raw={rest[i + 1]}")
                     i += 1
+                else:
+                    # Bare `--raw` with no following value — let argparse
+                    # produce its standard error message.
+                    front_flags.append(tok)
             elif tok.startswith("--raw="):
                 front_flags.append(tok)
             elif tok == "--":

@@ -57,27 +57,33 @@ def _run(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
     )
 
 
-def _resolve(raw: str | None = None, *, json_mode: bool = True) -> dict:
-    """Invoke `flowctl scope resolve --json --raw=<raw>` and parse JSON.
+def _resolve(
+    raw: str | None = None,
+    *,
+    json_mode: bool = True,
+    fused: bool = False,
+) -> dict:
+    """Invoke `flowctl scope resolve --json --raw <raw>` and parse JSON.
 
-    Uses the `--raw=VALUE` (single-token) form to survive single-flag values
-    like `--biz` that argparse otherwise rejects via the `--raw VALUE`
-    (two-token) form. The single-token form is wire-compatible with the
-    two-token form for multi-arg payloads (which is the SKILL.md typical
-    case: `--raw "$ARGUMENTS"` where $ARGUMENTS has a Flow ID alongside
-    the scope flag).
+    Default form (`fused=False`) is the TWO-TOKEN form `--raw VALUE` — the
+    production path SKILL.md invokes via `"$FLOWCTL" scope resolve --json
+    --raw "$ARGUMENTS"`. flowctl's pre-processing fuses this into
+    `--raw=VALUE` before argparse so values that begin with `--` (e.g.,
+    `--biz`, `--scope=business`) survive argparse's flag-detection.
+
+    `fused=True` exercises the single-token form `--raw=VALUE` directly —
+    redundant once flowctl's pre-processing fuses, but useful for
+    regression coverage on the wire-format escape hatch.
     """
     cmd = ["scope", "resolve"]
     if json_mode:
         cmd.append("--json")
     if raw is not None:
-        # `--raw=VALUE` form so values starting with `--` round-trip cleanly
-        # — argparse's "next-arg looks like a flag" rejection in the
-        # two-token form (`--raw VALUE`) blocks single-flag values like
-        # `--biz` from working in isolation via subprocess. SKILL.md uses
-        # `--raw "$ARGUMENTS"` which works for multi-token $ARGUMENTS (the
-        # typical case); this test uses `--raw=VALUE` for full coverage.
-        cmd.append(f"--raw={raw}")
+        if fused:
+            cmd.append(f"--raw={raw}")
+        else:
+            # Two-token form — what SKILL.md invokes in production.
+            cmd.extend(["--raw", raw])
     proc = _run(*cmd)
     if json_mode:
         if proc.returncode not in (0, 2):
@@ -152,6 +158,72 @@ class TestScopeResolveValidForms(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertEqual(result["scope"], "business")
         self.assertEqual(result["remaining_args"], ["docs/my spec.md"])
+
+
+class TestScopeResolveProductionInvocationForm(unittest.TestCase):
+    """Critical wire-form coverage — what SKILL.md ACTUALLY invokes via
+    `"$FLOWCTL" scope resolve --json --raw "$ARGUMENTS"` (two-token form).
+    Argparse rejects `--raw VALUE` when VALUE begins with `--`; flowctl's
+    pre-processing fuses the two tokens before argparse sees them. Tests
+    exercise the wire form, NOT the workaround.
+    """
+
+    def test_two_token_raw_biz_alone(self) -> None:
+        """SKILL.md: `--raw "--biz"` (user typed `/flow-next:interview --biz`)
+        — single-flag value, no other args. Must work via two-token form."""
+        result = _resolve("--biz", fused=False)
+        self.assertEqual(result["_rc"], 0)
+        self.assertTrue(result["success"])
+        self.assertEqual(result["scope"], "business")
+
+    def test_two_token_raw_tech_alone(self) -> None:
+        result = _resolve("--tech", fused=False)
+        self.assertEqual(result["_rc"], 0)
+        self.assertEqual(result["scope"], "technical")
+
+    def test_two_token_raw_scope_business(self) -> None:
+        """SKILL.md: `--raw "--scope=business"` — long form, leading `--`."""
+        result = _resolve("--scope=business", fused=False)
+        self.assertEqual(result["_rc"], 0)
+        self.assertEqual(result["scope"], "business")
+
+    def test_two_token_raw_scope_both(self) -> None:
+        result = _resolve("--scope=both", fused=False)
+        self.assertEqual(result["_rc"], 0)
+        self.assertEqual(result["scope"], "both")
+
+    def test_two_token_raw_scope_with_flow_id(self) -> None:
+        """SKILL.md: `--raw "--scope=business fn-1"` — production case."""
+        result = _resolve("--scope=business fn-1", fused=False)
+        self.assertEqual(result["_rc"], 0)
+        self.assertEqual(result["scope"], "business")
+        self.assertEqual(result["remaining_args"], ["fn-1"])
+
+    def test_two_token_raw_biz_with_flow_id(self) -> None:
+        result = _resolve("--biz fn-1", fused=False)
+        self.assertEqual(result["_rc"], 0)
+        self.assertEqual(result["scope"], "business")
+        self.assertEqual(result["remaining_args"], ["fn-1"])
+
+    def test_two_token_raw_conflict_detected(self) -> None:
+        """Conflict resolution works through the two-token form too."""
+        result = _resolve("--biz --tech", fused=False)
+        self.assertEqual(result["_rc"], 2)
+        self.assertFalse(result["success"])
+        self.assertIn("conflicting scope flags", result["error"])
+
+    def test_two_token_raw_empty_value(self) -> None:
+        """SKILL.md: `--raw ""` (zero-flag interview invocation)."""
+        result = _resolve("", fused=False)
+        self.assertEqual(result["_rc"], 0)
+        self.assertEqual(result["scope"], "technical")
+
+    def test_fused_form_still_works(self) -> None:
+        """The single-token `--raw=VALUE` escape hatch still works — kept
+        for backward compat with callers that might prefer it."""
+        result = _resolve("--biz", fused=True)
+        self.assertEqual(result["_rc"], 0)
+        self.assertEqual(result["scope"], "business")
 
 
 class TestScopeResolveConflicts(unittest.TestCase):
