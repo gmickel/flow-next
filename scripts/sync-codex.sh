@@ -282,6 +282,7 @@ if [ -f "$plan_steps" ]; then
     -e 's|`flow-next:docs-gap-scout`|the `docs_gap_scout` agent|g' \
     -e 's|`flow-next:flow-gap-analyst`|the `flow_gap_analyst` agent|g' \
     -e 's|Task flow-next:flow-gap-analyst|Use the flow_gap_analyst agent|g' \
+    -e 's|(\.\./\.\./templates/spec\.md)|(../../../templates/spec.md)|g' \
     "$plan_steps"
   rm -f "${plan_steps}.bak"
 fi
