@@ -62,5 +62,8 @@ New subcommands:
 
 
 ## Done summary
-
+T1 of fn-44 landed: canonical spec template at plugins/flow-next/templates/spec.md (7 sections + YAML frontmatter + scope-owner HTML comments + flat-vs-H3 Decision Context conditional), R21 drift guard in scripts/sync-codex.sh scanning every *.md under plugins/flow-next/skills/*/ for the canonical 7-section sequence, five new flowctl subcommands (scope resolve / bank / write-policy / suggest and spec skeleton) consumed by /flow-next:interview and /flow-next:capture at runtime, refactored cmd_spec_create to source the skeleton from a single helper (R22 byte-for-byte parity preserved), and updated /flow-next:setup to copy the template into .flow/templates/spec.md so downstream snippets resolve. Five rounds of codex impl-review (gpt-5.5 high) hardened the --json-everywhere contract, eliminated nested HTML comments, added --raw for shell-quoting safety, fixed JSON-mode exit-code semantics on scope suggest, and made setup same-version-refresh re-copy files. Final verdict: SHIP.
 ## Evidence
+- Commits: e87292e, 455ed7f, 6b35771, db23eca, 07d3ea5, a490463, e7b99c8
+- Tests: python3 -m unittest discover plugins/flow-next/tests -p test_*.py (463 tests, OK), bash scripts/sync-codex.sh (all 14 validators green, including new R21 spec-template drift guard), smoke: flowctl scope resolve happy + conflict + invalid + --raw paths, smoke: flowctl scope bank happy + invalid scope (JSON error), smoke: flowctl scope write-policy happy + invalid scope (JSON error), smoke: flowctl scope suggest 0/1/2/3/5 in plain + --json mode, exit-code semantics differ correctly, smoke: flowctl spec skeleton byte-for-byte parity vs 1.0.2 baseline (verified by diff), drift-guard validation: temporary 7-section duplicate inserted under skills/, sync-codex.sh caught it; reverted before commit
+- PRs:
