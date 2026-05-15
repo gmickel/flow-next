@@ -1,15 +1,31 @@
+---
+purpose: Canonical spec template — single source of truth for .flow/specs/<id>.md structure
+consumers:
+  - flow-next-capture        # synthesizes a spec from conversation context
+  - flow-next-interview      # refines a spec via Q&A (--scope=business|technical|both)
+  - flow-next-plan           # breaks a spec into tasks
+  - flow-next-work           # implements tasks against the spec
+  - CLAUDE.md                # "Creating a spec" guide cross-links here rather than embedding
+canonical_sections:
+  - Goal & Context           # scope: business
+  - Architecture & Data Models  # scope: technical
+  - API Contracts            # scope: technical
+  - Edge Cases & Constraints  # scope: technical
+  - Acceptance Criteria      # scope: both (co-authored; R-IDs append-only)
+  - Boundaries               # scope: business
+  - Decision Context         # scope: both (conditionally substructured)
+auxiliary_sections:
+  - Strategy Alignment       # written when STRATEGY.md has content
+  - Strategy Conflicts       # written when STRATEGY.md has content
+  - Glossary Conflicts       # written when doc-aware mode detects a vocabulary mismatch
+  - Conversation Evidence    # written by /flow-next:capture (source-tagged AC trail)
+  - Resolved via Codebase    # written by /flow-next:interview --scope=technical
+  - Resolved via Project Docs  # written by /flow-next:interview --scope=business
+template_kind: static-scaffold  # no {{var}} substitution; read for structure, write via flowctl spec set-plan
+---
+
 <!--
-Canonical spec template — single source of truth for `.flow/specs/<id>.md`
-structure across flow-next.
-
-Consumed by:
-- `/flow-next:capture`   — synthesizes a spec from conversation context
-- `/flow-next:interview` — refines a spec via Q&A (`--scope=business|technical|both`)
-- `/flow-next:plan`      — breaks a spec into tasks
-- `/flow-next:work`      — implements tasks against the spec
-- `CLAUDE.md`            — "Creating a spec" guide cross-links here rather than embedding
-
-Scope ownership per section (informs `--scope=business|technical|both`):
+Scope ownership annotations on each section header below:
 - `<!-- scope: business -->`  — owned by the business pass (PO / product owner)
 - `<!-- scope: technical -->` — owned by the technical pass (tech lead / impl agent)
 - `<!-- scope: both -->`      — co-authored across passes; merge contract preserves the other side byte-for-byte
@@ -17,17 +33,6 @@ Scope ownership per section (informs `--scope=business|technical|both`):
 R-IDs in `## Acceptance Criteria` are append-only across passes. Never renumber.
 Never replace existing entries. A later pass appends new criteria with the next
 unused number.
-
-The template is a static markdown scaffold. There is no `{{var}}` substitution.
-Skills read this file to learn the canonical section list and scope ownership;
-they write the spec content directly via `flowctl spec set-plan`.
-
-Auxiliary sections (skill-conditional, not part of the canonical 7):
-- `## Strategy Alignment` / `## Strategy Conflicts` — written when STRATEGY.md has content
-- `## Glossary Conflicts` — written when doc-aware mode detects a vocabulary mismatch
-- `## Conversation Evidence` — written by `/flow-next:capture` (source-tagged AC trail)
-- `## Resolved via Codebase` — written by `/flow-next:interview --scope=technical` (audit trail)
-- `## Resolved via Project Docs` — written by `/flow-next:interview --scope=business` (audit trail)
 -->
 
 # <spec-id> <Title>

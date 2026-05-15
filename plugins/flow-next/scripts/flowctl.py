@@ -21356,6 +21356,14 @@ def main() -> None:
             "biz_pass_ran, tech_sections_have_content."
         ),
     )
+    p_scope_wp.add_argument(
+        "--json",
+        action="store_true",
+        help=(
+            "JSON output (default; the underlying payload is JSON. "
+            "Flag accepted for symmetry with the other scope subcommands.)"
+        ),
+    )
     p_scope_wp.set_defaults(func=cmd_scope_write_policy)
 
     p_scope_suggest = scope_sub.add_parser(

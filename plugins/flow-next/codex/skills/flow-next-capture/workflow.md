@@ -662,6 +662,25 @@ Next:
  /flow-next:interview <SPEC_ID> → refine via Q&A
 ```
 
+### fn-44.1 plumbing: biz-suggestion footer (R25 — fully wired in T5)
+
+When the conversation has business-context signals but the business layer is sparse, append a one-line suggestion to refine via `/flow-next:interview --scope=business`. The fire/no-fire decision is computed by `flowctl scope suggest` — the skill counts signal categories detected in Phase 2 (target user, problem framing, success metric, MVP boundary, business constraints, what-not-to-build, prioritization rationale, business risks, UX expectations — nine total per R24) and dispatches:
+
+```bash
+# T5 wires this fully. T1 lands the plumbing: same code path, host-agent-counted
+# input, deterministic threshold (fire iff 1 <= N < 3; R22 preserves silence when N == 0).
+if "$FLOWCTL" scope suggest --signal-categories-count "$BIZ_SIGNAL_CATEGORIES" >/dev/null; then
+ cat <<EOF
+
+This conversation has business-requirements signals; consider
+\`/flow-next:interview --scope=business $SPEC_ID\` to deep-refine the
+business layer.
+EOF
+fi
+```
+
+The exit-code branch (0 = fire, 1 = no-fire) keeps the shell-only path token-free; `--json` is available when richer output is needed. T1 lands the deterministic helper; T5 wires `$BIZ_SIGNAL_CATEGORIES` from Phase 2's signal-detection output.
+
 If Phase 4 surfaced 8+ acceptance criteria AND the user picked `approve` (not `consider-split`), append:
 
 ```text

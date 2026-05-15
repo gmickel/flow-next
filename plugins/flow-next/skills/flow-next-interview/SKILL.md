@@ -79,7 +79,15 @@ The section-write policy for the resolved scope is computed by `flowctl scope wr
 WRITE_POLICY=$(echo "$CURRENT_SECTIONS" | "$FLOWCTL" scope write-policy "$SCOPE" --current-sections-json -)
 ```
 
-T2 ships the full pass-aware behavior (question-bank selection via `flowctl scope bank`, per-section writes that honor the policy, technical-pass-reads-business-sections-first). T1 lands the plumbing — the skill MUST call these subcommands rather than re-implementing parse/policy logic inline.
+The question-bank path for the resolved scope is resolved by `flowctl scope bank`, called when loading the question taxonomy:
+
+```bash
+# Resolves to questions-business.md, questions-technical.md, or (for `both`)
+# the technical bank path (both-mode reads both banks).
+BANK_PATH=$("$FLOWCTL" scope bank "$SCOPE")
+```
+
+T2 ships the full pass-aware behavior (loading the resolved bank, per-section writes that honor the policy, technical-pass-reads-business-sections-first). T1 lands the plumbing — the skill MUST call these subcommands rather than re-implementing parse/policy logic inline.
 
 ### Parse `--docs` / `--no-docs` / `--strategy` / `--no-strategy` flags
 
