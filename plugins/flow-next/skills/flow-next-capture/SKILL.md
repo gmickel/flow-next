@@ -138,11 +138,11 @@ Execute the phases in [workflow.md](workflow.md) in order:
 
 0. **Pre-flight** — duplicate detection (scan `.flow/specs/` + `.flow/epics/` for legacy alias-mode repos + `flowctl memory search` on extracted keywords); compaction detection (scan transcript for truncation markers); idempotency (refuse silent overwrite without `--rewrite`).
 1. **Extract conversation evidence** — build a verbatim `## Conversation Evidence` block FIRST (raw quotes from recent user turns, capped ~30 lines). Spec sections refer to it by line, not from agent memory.
-2. **Source-tagged synthesis** — draft each section with per-line tags (`[user]` / `[paraphrase]` / `[inferred]`). Apply the CLAUDE.md richer template (Goal & Context / Architecture & Data Models / API Contracts / Edge Cases & Constraints / Acceptance Criteria with R-IDs / Boundaries / Decision Context).
+2. **Source-tagged synthesis** — draft each section with per-line tags (`[user]` / `[paraphrase]` / `[inferred]`). Apply the canonical template at [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (per R17 — cross-link, never re-embed the section list inline). Route explicit biz-context signals (nine SIGNAL CATEGORIES per fn-44 R24, only `[user]` / `[paraphrase]` tags) to their destinations; sections without conversation signal stay absent. Compute `BIZ_SIGNAL_CATEGORIES` (0..9) for Phase 6's R25 dispatch.
 3. **Must-ask cases (R9)** — interactive only; autofix exits 2 if any fire. Hard-error conditions: ambiguous title / untestable acceptance / scope-conflict. Optional ambiguities use lead-with-recommendation + confidence tier.
 4. **Read-back loop (mandatory, even in autofix)** — show full draft + R-ID list + `[inferred]` tally via `AskUserQuestion` (interactive) or print to stdout (autofix). Interactive: `approve` / `edit` / `abort`. When 8+ acceptance criteria: include `consider splitting?` as an option (R11). Autofix: requires `--yes` to commit.
 5. **Write via flowctl** — `flowctl spec create --title "..." --json` → parse `id` → `flowctl spec set-plan <id> --file - --json <<heredoc>`. Optional `flowctl spec set-branch` if user named one. Capture creates fresh specs; allocate R-IDs sequentially from R1.
-6. **Suggested next step** — print `Spec captured at .flow/specs/<id>.md.` plus `/flow-next:plan <id>` and `/flow-next:interview <id>` next-step hints.
+6. **Suggested next step** — print `Spec captured at .flow/specs/<id>.md.` plus `/flow-next:plan <id>` and `/flow-next:interview <id>` next-step hints. When `BIZ_SIGNAL_CATEGORIES` triggers `flowctl scope suggest` (R25 fire/no-fire threshold lives in flowctl — skill never re-implements the math inline), append the `/flow-next:interview --scope=business` suggestion line.
 
 ## Output rules
 

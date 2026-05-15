@@ -287,17 +287,17 @@ Every acceptance criterion line, every decision-context line, and every scope-bo
 
 Pure prose sections (Goal & Context narrative, Architecture overview) do not need per-line tags — but the **whole section** carries a section-level tag in a frontmatter-style note: e.g. `<!-- Goal & Context: 70% [user], 30% [inferred] -->`. Phase 4 read-back surfaces this.
 
-### 2.2 — Apply the CLAUDE.md richer template
+### 2.2 — Apply the canonical spec template
 
-Draft these sections in order. The first section after frontmatter is **always** `## Conversation Evidence` (Phase 1 output verbatim). Then:
+The canonical section structure lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (per R17 — never re-embed the section list inline; cross-link the template). Draft sections in the canonical order; the first section after frontmatter is **always** `## Conversation Evidence` (Phase 1 output verbatim). Then follow the template, applying these source-tag conventions:
 
-- `## Goal & Context` — why this exists, what problem it solves. Mostly `[user]` / `[paraphrase]`.
-- `## Architecture & Data Models` — system design, data flow, key components. **File / component refs are `[inferred]` unless the user explicitly named them in conversation.** If Phase 1.2 verified a reference, tag `[paraphrase]`.
-- `## API Contracts` — endpoints, interfaces, input/output shapes. Often `[inferred]` because conversation rarely specifies wire formats. Mark accordingly.
-- `## Edge Cases & Constraints` — failure modes, limits, performance reqs. Mix of `[user]` and `[inferred]`.
-- `## Acceptance Criteria` — testable; R-IDs (`- **R1:** ...`); each tagged. **R-IDs allocate sequentially from R1** — capture creates fresh specs, no renumber concern.
-- `## Boundaries` — explicit out-of-scope. Often `[inferred]` from what the user did NOT say. Surface at read-back as agent-decided defaults.
-- `## Decision Context` — why this approach over alternatives. Preserve any rejected alternatives the user mentioned (Linear-pattern: rejected options live in spec history, not flow off-screen).
+- **`## Goal & Context`** — why this exists, target user, problem framing, UX expectations. Mostly `[user]` / `[paraphrase]`. Receives biz-context signal categories 1, 2, 9 (and optionally 5, 8 — see §2.6).
+- **`## Architecture & Data Models`** — system design, data flow, key components. **File / component refs are `[inferred]` unless the user explicitly named them in conversation.** If Phase 1.2 verified a reference, tag `[paraphrase]`.
+- **`## API Contracts`** — endpoints, interfaces, input / output shapes. Often `[inferred]` because conversation rarely specifies wire formats. Mark accordingly.
+- **`## Edge Cases & Constraints`** — failure modes, limits, performance reqs. Mix of `[user]` and `[inferred]`.
+- **`## Acceptance Criteria`** — testable; R-IDs (`- **R1:** ...`); each tagged. **R-IDs allocate sequentially from R1** — capture creates fresh specs, no renumber concern. Outcome-AC entries come from biz-context signal category 3 (§2.6).
+- **`## Boundaries`** — explicit out-of-scope. Receives biz-context signal categories 4 and 6 (§2.6). Sections without conversation signal stay absent — do NOT auto-populate from agent assumptions.
+- **`## Decision Context`** — why this approach over alternatives. Preserve any rejected alternatives the user mentioned (Linear-pattern: rejected options live in spec history, not flow off-screen). Substructure (FLAT vs `### Motivation` / `### Implementation Tradeoffs`) is governed by §2.6 — promote to substructured only when biz-context signal categories 3, 5, 7, or 8 carry content.
 
 Followed by:
 
@@ -331,6 +331,57 @@ If Phase 2 produces **8 or more acceptance criteria**, Phase 4 read-back include
 
 Capture's heuristic: ≥8 R-IDs is the trigger. The 8+ count itself goes into the read-back body.
 
+### 2.6 — Biz-context signal routing (R24) + signal-category count for R25
+
+While drafting §2.2's sections, walk the Phase 1 `## Conversation Evidence` block looking for explicit business-context signals across **nine SIGNAL CATEGORIES** (the counting unit for R25's sparse-suggestion heuristic). For each category that has at least one explicit signal in conversation, route the content to its destination using only `[user]` or `[paraphrase]` source tags. The full routing table with example trigger phrasing lives in [phases.md §Biz-context signal routing](phases.md). Summary:
+
+| # | Signal category | Destination(s) |
+|---|-----------------|----------------|
+| 1 | Target user / persona | `Goal & Context` |
+| 2 | Problem framing / why-now | `Goal & Context` |
+| 3 | Success metrics / definition of done | outcome-AC + `## Decision Context > ### Motivation` |
+| 4 | MVP scope / "not doing X yet" | `Boundaries` |
+| 5 | Business constraints (regulatory, deadlines, budget) | `Goal & Context` OR `## Decision Context > ### Motivation` |
+| 6 | What NOT to build / non-goals | `Boundaries` |
+| 7 | Prioritization rationale | `## Decision Context > ### Motivation` |
+| 8 | Business risks | `Goal & Context` OR `## Decision Context > ### Motivation` |
+| 9 | UX expectations | `Goal & Context` |
+
+Rules:
+
+- **Source tags restricted to `[user]` or `[paraphrase]`** for biz-routed content. `[inferred]` never routes to a business destination. If a category has no conversation signal, its destination(s) receive no new content — sections without conversation signal stay absent (no empty-section auto-populate; this is the R22 invariant).
+- **One signal can land in multiple destinations** (e.g., a success metric becomes both an outcome-AC R-ID and a `### Motivation` rationale entry) — that still counts as **one** SIGNAL CATEGORY for the R25 threshold. Counting is over R24's nine categories, not over markdown destinations.
+- **Decision Context substructure** — capture only ever writes fresh specs (never a rewrite of an existing FLAT body), so there is no FLAT→substructured promotion to handle here (that's `/flow-next:interview`'s merge contract). Decision rule for capture: when category 3, 5, 7, or 8 routes content, write `## Decision Context` as SUBSTRUCTURED — emit the `### Motivation` H3 with the routed content. Leave `### Implementation Tradeoffs` absent (do NOT write the `*Pending technical-scope interview pass.*` placeholder; that's `/flow-next:interview --scope=business`'s responsibility on a rewrite, not capture's). When none of categories 3, 5, 7, 8 carry content, write `## Decision Context` as FLAT — preserves R22 (solo dev with zero biz signals sees no Motivation/Implementation Tradeoffs scaffolding) and matches the canonical template's "(A) FLAT (default, R22 backward-compat)" branch.
+- **Constraints / risks (categories 5, 8) pick one destination per signal** — `Goal & Context` when the constraint sets up framing, `### Motivation` when it's the reason behind a trade-off. Don't double-route to both for the same signal.
+
+After §2.2's section drafting completes, compute `BIZ_SIGNAL_CATEGORIES` — the count of distinct categories (out of nine) that received at least one `[user]` or `[paraphrase]` line. This count is Phase 6's input to `flowctl scope suggest`:
+
+```bash
+# Set after drafting §2.2's sections. Range: 0..9. Counts CATEGORIES, not destinations.
+# Example: a conversation that named a target user, an MVP boundary, and rejected a feature
+# (categories 1, 4, 6) sets BIZ_SIGNAL_CATEGORIES=3 even though it touched only two destinations
+# (Goal & Context + Boundaries).
+BIZ_SIGNAL_CATEGORIES=<int>
+```
+
+Worked example — conversation: *"For junior engineers, we need a one-click upgrade flow. MVP is just the install path — no rollback yet. We definitely won't support Windows."*
+
+- Category 1 (target user: "junior engineers") → `Goal & Context` [user]
+- Category 4 (MVP boundary: "MVP is just the install path") → `Boundaries` [user]
+- Category 6 (non-goals: "won't support Windows") → `Boundaries` [paraphrase]
+- `BIZ_SIGNAL_CATEGORIES=3` → R25 suggestion does NOT fire (threshold is `1 <= N < 3`; 3 means the biz layer is adequate). `## Decision Context` stays FLAT (none of categories 3, 5, 7, 8 had content).
+
+Worked example — conversation: *"This is for the ops team. Definitely don't add a UI."*
+
+- Category 1 (target user: "ops team") → `Goal & Context` [user]
+- Category 6 (non-goals: "don't add a UI") → `Boundaries` [paraphrase]
+- `BIZ_SIGNAL_CATEGORIES=2` → R25 suggestion **fires** (sweet spot — biz signals present but underspecified). `## Decision Context` stays FLAT.
+
+Worked example — conversation: *"add timestamps to log lines"* (purely technical, zero biz signals):
+
+- No category carries content → no biz-routed lines written.
+- `BIZ_SIGNAL_CATEGORIES=0` → R25 suggestion does NOT fire (R22 invariant — solo dev who never mentioned biz context sees zero new prompts). `## Decision Context` stays FLAT.
+
 ### Done when
 
 - Every section is drafted with source tags applied.
@@ -338,6 +389,7 @@ Capture's heuristic: ≥8 R-IDs is the trigger. The 8+ count itself goes into th
 - `[inferred]` count is computed.
 - 8+ acceptance count flag set if applicable.
 - Untestable acceptance candidates flagged for Phase 3 must-ask.
+- `BIZ_SIGNAL_CATEGORIES` (0..9) computed for Phase 6 R25 dispatch.
 
 ---
 
@@ -662,13 +714,16 @@ Next:
  /flow-next:interview <SPEC_ID> → refine via Q&A
 ```
 
-### fn-44.1 plumbing: biz-suggestion footer (R25 — fully wired in T5)
+### Biz-suggestion footer (R25)
 
-When the conversation has business-context signals but the business layer is sparse, append a one-line suggestion to refine via `/flow-next:interview --scope=business`. The fire/no-fire decision is computed by `flowctl scope suggest` — the skill counts signal categories detected in Phase 2 (target user, problem framing, success metric, MVP boundary, business constraints, what-not-to-build, prioritization rationale, business risks, UX expectations — nine total per R24) and dispatches:
+When the conversation has business-context signals but the business layer is sparse, append a one-line suggestion to refine via `/flow-next:interview --scope=business`. The fire/no-fire decision is delegated to `flowctl scope suggest` (T1) — the skill MUST NOT re-implement the `1 <= N < 3` threshold math inline (skill-vs-flowctl architectural rule from `CLAUDE.md`). Input is `$BIZ_SIGNAL_CATEGORIES` — the count computed in [§2.6](#26--biz-context-signal-routing-r24--signal-category-count-for-r25) over the nine SIGNAL CATEGORIES from R24 (target user / problem framing / success metric / MVP boundary / business constraints / what-not-to-build / prioritization rationale / business risks / UX expectations). The count is over categories, not over markdown destinations.
 
 ```bash
-# T5 wires this fully. T1 lands the plumbing: same code path, host-agent-counted
-# input, deterministic threshold (fire iff 1 <= N < 3; R22 preserves silence when N == 0).
+# `scope suggest` plain-mode exit codes: 0 = fire, 1 = no-fire. Quiet stdout (`>/dev/null`)
+# keeps the shell branch token-free; `--json` is available when richer output is needed.
+# Threshold (`1 <= N < 3`) lives in flowctl — capture passes the count, flowctl decides.
+# R22 invariant: BIZ_SIGNAL_CATEGORIES=0 → no-fire (exit 1), keeping the solo-dev
+# zero-flag default silent.
 if "$FLOWCTL" scope suggest --signal-categories-count "$BIZ_SIGNAL_CATEGORIES" >/dev/null; then
  cat <<EOF
 
@@ -679,7 +734,7 @@ EOF
 fi
 ```
 
-The exit-code branch (0 = fire, 1 = no-fire) keeps the shell-only path token-free; `--json` is available when richer output is needed. T1 lands the deterministic helper; T5 wires `$BIZ_SIGNAL_CATEGORIES` from Phase 2's signal-detection output.
+The literal suggestion phrasing matches the R25 spec verbatim ("business-requirements signals; consider `/flow-next:interview --scope=business <spec-id>`") so the surface text stays generic — capture does not enumerate which categories triggered the suggestion. Informational only — never a blocking prompt.
 
 If Phase 4 surfaced 8+ acceptance criteria AND the user picked `approve` (not `consider-split`), append:
 
@@ -713,17 +768,17 @@ Next:
 
 ---
 
-## Manual smoke (acceptance R3, R4, R5, R6, R7, R8)
+## Manual smoke (acceptance R3, R4, R5, R6, R7, R8, R24, R25)
 
 The skill itself is markdown — there's no unit-test surface. The validation is invoking `/flow-next:capture` in a real session. Expected behavior:
 
 - Phase 0 walks `.flow/specs/` and the legacy `.flow/epics/` alias dir, runs memory search if memory is initialized, detects compaction, applies idempotency. Branches into duplicate-detection question if ≥2 strong matches; exits cleanly on `abort`.
 - Phase 1 emits a `## Conversation Evidence` block with verbatim user quotes (≤30 lines).
-- Phase 2 produces a draft with per-line source tags. Every acceptance criterion has one of `[user]` / `[paraphrase]` / `[inferred]`.
+- Phase 2 produces a draft with per-line source tags. Every acceptance criterion has one of `[user]` / `[paraphrase]` / `[inferred]`. Biz-context signals (R24) route to their destinations using only `[user]` / `[paraphrase]` tags; categories without conversation signal leave their destinations absent. `BIZ_SIGNAL_CATEGORIES` (0..9) computed for Phase 6.
 - Phase 3 fires must-ask cases only when (a) title is genuinely ambiguous, (b) acceptance is untestable, (c) scope-conflict persists. Optional ambiguities are deferred to Phase 4.
 - Phase 4 read-back surfaces `[inferred]` count, 8+ split note (if applicable), related-memory footer (if applicable). Interactive: user picks approve / edit / abort. Autofix: print + require `--yes`.
 - Phase 5 calls `flowctl spec create` + `spec set-plan` via heredoc.
-- Phase 6 prints the next-step footer.
+- Phase 6 prints the next-step footer. Calls `flowctl scope suggest --signal-categories-count "$BIZ_SIGNAL_CATEGORIES"`; on exit 0 (fire), appends the R25 `/flow-next:interview --scope=business` suggestion line. R22 invariant: `BIZ_SIGNAL_CATEGORIES=0` → no-fire → no suggestion.
 
 In autofix without `--yes`, the draft prints and the skill exits 0 — no write, no spec allocated.
 In autofix with `--yes`, Phase 4 still prints the draft (substituting for read-back) before Phase 5 writes.

@@ -96,6 +96,33 @@ Every acceptance criterion line, every decision-context line, every scope-boundi
 | `[inferred]` | Agent fill-in (most-scrutinized; user must confirm at read-back) | Agent decided this; user did not state it explicitly. May be a reasonable default, may be wrong. |
 | `[strategy:<track>]` | Derived from `STRATEGY.md` content (verbatim or near-verbatim quote of approach / track body) | The criterion follows directly from a populated section in `STRATEGY.md` — the track name appears literal in the tag. Activates only when Phase 0 strategy snapshot is present. |
 
+### Biz-context signal routing (R24)
+
+Section names referenced below are anchors in the canonical template at [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (per R17 — never re-embed the section list inline). Capture routes **explicit** conversation signals — only `[user]` or `[paraphrase]` source tags — across the nine SIGNAL CATEGORIES (the R24/R25 counting unit) onto a smaller set of markdown destinations:
+
+| # | Signal category | Routing destination(s) | Trigger phrasing in conversation |
+|---|-----------------|------------------------|-----------------------------------|
+| 1 | Target user / persona | `Goal & Context` | "for X users", "the operator does Y", "junior devs need…" |
+| 2 | Problem framing / why-now | `Goal & Context` | "the pain is X", "this came up because Y", "we need this because…" |
+| 3 | Success metrics / definition of done | outcome-AC (`Acceptance Criteria`) **and** `## Decision Context > ### Motivation` | "we win if X", "good enough means Y", "the metric is…" |
+| 4 | MVP scope / "not doing X yet" | `Boundaries` | "MVP is just X", "not Y yet", "ship narrow first" |
+| 5 | Business constraints (regulatory, deadlines, budget) | `Goal & Context` OR `## Decision Context > ### Motivation` (pick whichever is most coherent in context — usually `Goal & Context` for context-setting constraints; `Motivation` when the constraint is the reason for the trade-off) | "GDPR requires", "deadline is Q3", "no infra spend", "EU-resident-only" |
+| 6 | What NOT to build / non-goals | `Boundaries` | "definitely NOT X", "out of scope", "don't want Y" |
+| 7 | Prioritization rationale | `## Decision Context > ### Motivation` | "more important than X", "we'd rather Y over Z", "speed beats robustness here" |
+| 8 | Business risks | `Goal & Context` OR `## Decision Context > ### Motivation` (same disambiguation as constraints) | "if this leaks we lose X", "reputational damage", "can't roll back" |
+| 9 | UX expectations | `Goal & Context` | "errors should be friendly", "loading must feel instant", "accessibility floor" |
+
+Rules:
+
+- **Source tags are restricted to `[user]` or `[paraphrase]`** for biz-routed content. `[inferred]` content does NOT route into business sections — capture never fabricates business context. If the conversation provides no signal for a destination, that destination stays absent (no empty-section auto-populate).
+- **One signal can produce multiple destination lines** — e.g., a success metric becomes both an outcome-AC R-ID and a `### Motivation` rationale entry. That still counts as **one** signal category for the R25 sparse-suggestion threshold (the count is over R24's nine categories, not over markdown destinations).
+- **Categories 1, 2, 9 (target user / problem framing / UX) collapse into `Goal & Context` prose.** Per-line tags inside the narrative are not required, but the section-level tag breakdown (e.g., `<!-- Goal & Context: 80% [user], 20% [paraphrase] -->`) must reflect them.
+- **Category 4 ("MVP scope / not doing X yet") and Category 6 ("what NOT to build") both route to `Boundaries`** but stay counted separately for R25 (different signal-source patterns: "MVP is narrow" vs "definitely not X").
+- **Categories 5 and 8 (constraints / risks) each pick exactly one destination** (`Goal & Context` OR `Motivation`) per signal. Don't double-route to both — pick the one that fits the framing of the user's phrasing.
+- **`## Decision Context` may be FLAT or SUBSTRUCTURED** (per the canonical template at `plugins/flow-next/templates/spec.md`). When capture routes content to `### Motivation`, the section MUST be SUBSTRUCTURED (write `### Motivation` and, if no FLAT body existed previously, leave `### Implementation Tradeoffs` empty for a later technical pass — do NOT write an `*Pending technical-scope interview pass.*` placeholder; that's `/flow-next:interview --scope=business`'s job, not capture's). When there are zero biz signals across categories 3, 5, 7, 8 (all the categories that could land in `Motivation`), the section stays FLAT — capture never promotes FLAT → substructured for purely-tech-flavoured conversations (R22 invariant).
+
+Worked routing examples in [workflow.md §2.6](workflow.md). The signal-category count produced here is the `BIZ_SIGNAL_CATEGORIES` value Phase 6 passes to `flowctl scope suggest` for the R25 fire/no-fire decision.
+
 ### Examples
 
 | Conversation evidence | Acceptance line | Tag |
