@@ -137,6 +137,14 @@ for skill_dir in "$SRC_SKILLS"/*/; do
   skill_count=$((skill_count + 1))
 done
 
+# Mirror canonical templates dir (R20: codex picks up templates/spec.md). Skills
+# cross-link `../../templates/spec.md` from `skills/<name>/<file>.md` — after
+# this copy the same relative path resolves to the mirrored copy at
+# `codex/templates/spec.md` (2 levels up from `codex/skills/<name>/`).
+if [ -d "$PLUGIN_DIR/templates" ]; then
+  cp -R "$PLUGIN_DIR/templates" "$CODEX_DIR/"
+fi
+
 # --- RENAME: 'browser' → 'agent-browser' in Codex mirror only ────────────────
 # OpenAI ships a bundled @browser skill in Codex desktop (in-app browser for
 # localhost / file:// previews). Renaming ours to @agent-browser prevents the
@@ -269,6 +277,11 @@ if [ -f "$work_skill" ]; then
 fi
 
 # flow-next-plan: steps.md
+# NOTE: no `../../templates/spec.md` → `../../../templates/spec.md` rewrite —
+# the codex mirror now ships its own `codex/templates/spec.md` (sibling to
+# `codex/skills/`), so `../../templates/spec.md` from `codex/skills/<name>/<file>.md`
+# resolves correctly to the mirrored template. Canonical and mirror use the
+# same relative path string.
 plan_steps="$CODEX_DIR/skills/flow-next-plan/steps.md"
 if [ -f "$plan_steps" ]; then
   sed -i.bak \
@@ -282,7 +295,6 @@ if [ -f "$plan_steps" ]; then
     -e 's|`flow-next:docs-gap-scout`|the `docs_gap_scout` agent|g' \
     -e 's|`flow-next:flow-gap-analyst`|the `flow_gap_analyst` agent|g' \
     -e 's|Task flow-next:flow-gap-analyst|Use the flow_gap_analyst agent|g' \
-    -e 's|(\.\./\.\./templates/spec\.md)|(../../../templates/spec.md)|g' \
     "$plan_steps"
   rm -f "${plan_steps}.bak"
 fi
