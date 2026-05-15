@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## [flow-next 1.1.0] - 2026-05-16
+## [flow-next 1.1.0] - 2026-05-15
 
 ### Added
 
