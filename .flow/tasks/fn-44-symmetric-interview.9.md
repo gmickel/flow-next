@@ -52,7 +52,7 @@ Run `bash scripts/sync-codex.sh` after T1-T3, T5-T7 land. Verify:
 
 **R26 project-docs investigation tests**: parse interview SKILL.md `--scope=business` block; assert it contains explicit instructions to read `README.md`, `CHANGELOG.md`, `STRATEGY.md`, `GLOSSARY.md`, `knowledge/decisions/`, `.flow/specs/` index, `docs/` BEFORE drafting questions; assert it names `## Resolved via Project Docs` as the audit section. Symmetric to the existing codebase-investigation block test (which lives implicitly today).
 
-**Template tests** (per R11, R17, R21): file exists at canonical path; scope-owner HTML comments present; CLAUDE.md links to template (not inline-duplicates); drift guard correctly fails on a temporary skill-markdown-with-canonical-sequence violation.
+**Template tests** (per R11, R17, R21): file exists at canonical path; scope-owner HTML comments present; CLAUDE.md links to template (not inline-duplicates); drift guard correctly fails on a temporary skill-markdown-with-canonical-sequence violation. <!-- Updated by plan-sync: fn-44-symmetric-interview.7 added a sync-codex.sh sed rewrite so the regenerated Codex mirror gets `../../../templates/spec.md` (correct relative depth from `plugins/flow-next/codex/skills/<skill>/`), vs the canonical `plugins/flow-next/templates/spec.md`. Tests that scan codex-mirror skill markdown for template references should expect the rewritten relative path, not the canonical one. The R21 drift guard targets the duplicated section sequence (`## Goal & Context` → `## Architecture & Data Models` → `## API Contracts` within 30 lines), not path references — so the guard test is unaffected, but template-path-presence tests on the codex mirror need to match the rewritten form. -->
 
 ## Investigation targets
 
