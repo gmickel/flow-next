@@ -106,7 +106,7 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 - Respect .gitignore patterns
 
 ### User Consent
-- **MUST use `AskUserQuestion` tool** for consent (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). Never just print questions as text. (sync-codex.sh rewrites this to `request_user_input` for the Codex mirror.)
+- **MUST use `AskUserQuestion` tool** for consent (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). Never just print questions as text. (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.)
 - Always ask before modifying existing files
 - Don't add dependencies without consent
 

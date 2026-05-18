@@ -58,7 +58,7 @@ if [[ -d .flow/epics && ! -f .flow/.flow_version ]]; then
 fi
 ```
 
-When `PRE_1_0_LAYOUT=1`, prompt via `AskUserQuestion` (sync-codex.sh rewrites this to `request_user_input` for the Codex mirror in T15):
+When `PRE_1_0_LAYOUT=1`, prompt via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.):
 
 - **header**: `Migrate .flow/?`
 - **body**: `Detected pre-1.0 .flow/ layout (.flow/epics/ present, no .flow/.flow_version sentinel). flow-next 1.0 renames .flow/epics/ to .flow/specs/ on disk; alias mode keeps the old layout working but new tooling (flow-swarm, future specs) targets the canonical layout. Recommended: Migrate now — backup is automatic and rollback is one command. Confidence: [high].`
@@ -394,7 +394,7 @@ For **Claude Code / Droid**:
 }
 ```
 
-Use `AskUserQuestion` with the built questions array (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). sync-codex.sh rewrites this to `request_user_input` in the Codex mirror.
+Use `AskUserQuestion` with the built questions array (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.
 
 **Note:** If docs are already current, adjust the Docs question description to mention "(already up to date)" or skip that question entirely.
 

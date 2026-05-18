@@ -37,7 +37,7 @@ appear. If neither, all primary findings appear.
 Before the walkthrough loop, the skill must have access to a **blocking
 question tool** (a tool that pauses the agent until the user answers):
 
-Use `AskUserQuestion`. It's a deferred tool — call `ToolSearch select:AskUserQuestion` first to load its schema if it isn't already in scope. (sync-codex.sh rewrites `AskUserQuestion` to `request_user_input` in the Codex mirror.)
+Use `AskUserQuestion`. It's a deferred tool — call `ToolSearch select:AskUserQuestion` first to load its schema if it isn't already in scope. (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.)
 
 If the tool is unreachable, fall through to a chat-prompt fallback (print
 the question, wait for the user's next message). The fallback is less

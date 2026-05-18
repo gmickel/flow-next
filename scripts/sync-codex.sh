@@ -398,7 +398,7 @@ done
 #   3. Rewrite AskUserQuestion → plain-text numbered-prompt instruction
 find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   # 1. Strip maintainer breadcrumbs in their original (canonical) form,
-  #    BEFORE the AskUserQuestion → request_user_input rewrite happens.
+  #    BEFORE the AskUserQuestion → plain-text-numbered-prompt rewrite happens.
   #    Use python for multi-form matching (sed gets unwieldy here).
   python3 - "$f" <<'PYEOF'
 import re, sys

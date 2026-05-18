@@ -191,7 +191,7 @@ Informational only. No fixes offered — address independently if desired.
 
 **If `--fix-all`**: Skip to Phase 6, apply all recommendations from Pillars 1-5.
 
-**CRITICAL**: You MUST use the `AskUserQuestion` tool for consent. Do NOT just print questions as text. (Call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded. sync-codex.sh rewrites this to `request_user_input` in the Codex mirror.)
+**CRITICAL**: You MUST use the `AskUserQuestion` tool for consent. Do NOT just print questions as text. (Call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded. sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.)
 
 ### Using AskUserQuestion correctly
 
