@@ -97,9 +97,11 @@ You can still migrate later via: flowctl migrate-rename --yes
 ```
 
 **abort**:
-Exit 0 immediately — no migration, no banner-ack file write, no Step 2-onward setup changes. Print:
+Exit 0 immediately — no migration, no banner-ack file write, no Step 2-onward setup changes. Step 1's `flowctl init --json` ran before Step 1b, so `.flow/` (meta.json, config.json, directory scaffold) may already have been created or upgraded by `init` — that work is **not** rolled back; `init` is idempotent on re-run. Only the migration + remaining setup phases (Step 2 onward — version pin, file copy, docs update) are skipped. Print:
 ```
-Setup cancelled. No changes made. Re-run /flow-next:setup later to retry.
+Setup cancelled at migration prompt. .flow/ may have been initialized/upgraded
+by Step 1 (idempotent — safe to leave). No migration applied; Step 2 onward
+skipped. Re-run /flow-next:setup later to complete setup.
 ```
 
 **Continue to Step 2 regardless of answer (except `abort`, which exits 0).** Migration choice is otherwise independent of the rest of setup.
