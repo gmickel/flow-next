@@ -68,7 +68,7 @@ When `PRE_1_0_LAYOUT=1`, prompt via `plain-text numbered prompt` ( in T15):
  - `Migrate now` — apply migration via `flowctl migrate-rename --yes`. Safe (backup written to `.flow/.backup-pre-1.0/`, rollback via `flowctl migrate-rollback`).
  - `Defer` — keep alias mode, suppress the auto-detect banner for 7 days. Re-prompted on the next `flowctl` invocation after the window expires.
  - `Suppress permanently` — keep alias mode, never auto-prompt. Print instructions for the `FLOW_NO_AUTO_MIGRATE=1` env var so the user can suppress the banner across the whole machine.
- - `abort` — exit cleanly. No migration, no banner-ack write, no setup changes. Re-run `/flow-next:setup` later to retry.
+ - `abort` — exit cleanly. No migration, no banner-ack write, no Step 2-onward setup changes. Step 1's `flowctl init` may already have run (idempotent — safe to leave). Re-run `/flow-next:setup` later to complete setup.
 
 ### Routing the answer
 
