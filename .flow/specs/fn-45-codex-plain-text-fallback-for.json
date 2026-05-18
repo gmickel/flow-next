@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-45-codex-plain-text-fallback-for",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-05-18T22:11:27.215794Z",
   "created_at": "2026-05-18T19:12:19.095372Z",
   "default_impl": null,
   "default_review": null,
@@ -16,5 +16,5 @@
   "spec_path": ".flow/specs/fn-45-codex-plain-text-fallback-for.md",
   "status": "open",
   "title": "Codex plain-text fallback for AskUserQuestion in sync mirror",
-  "updated_at": "2026-05-18T20:09:58.905445Z"
+  "updated_at": "2026-05-18T22:11:27.215959Z"
 }
