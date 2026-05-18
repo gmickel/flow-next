@@ -51,18 +51,8 @@ Update user-facing docs to reflect the new sync-codex.sh transform contract: `CL
 - [ ] `./scripts/sync-codex.sh` re-run after any canonical doc edits; mirror clean.
 
 ## Done summary
-
-Updated user-facing docs and CHANGELOG for the fn-45 release (1.1.2). `CLAUDE.md:63` "Blocking-question tool" cross-platform row now describes the `sync-codex.sh` plain-text numbered-prompt transform (with `N+1. Other — type your own answer` final option) and explicitly notes the Codex mirror never calls `request_user_input` (Plan-mode-only per openai/codex#10384/#11536/#12694). `agent_docs/adding-skills.md` step 3 parenthetical updated to match. `agent_docs/local-dev.md` gains a "Codex plain-text prompt smoke" subsection after line 59 (before "RP gotchas") with manual verification steps for Codex Desktop Default mode AND Codex CLI — including the explicit 5-option invariant for the setup migration prompt (4 canonical options including `abort` per fn-45.2 + the 5th `Other — type your own answer` added by the fn-45.1 transform), the grep guard, and the regression failure mode. `CHANGELOG.md` gains a `[flow-next 1.1.2]` block above the 1.1.1 entry summarizing the fn-45 release: prose-only `request_user_input` removal (frontmatter `allowed-tools:` listings are intentional residue, out of scope), `flow-next-setup` abort option, and `flow-next-setup` preserve-existing config + repo-custom docs. Version bumped 1.1.1 → 1.1.2 across the 5 manifest surfaces via `scripts/bump.sh patch flow-next`. The actual manual smoke against Codex Desktop + CLI is **DEFERRED** — the implementer (Claude Code) does not have access to Codex Desktop or Codex CLI in this conversation; the procedure is documented in `agent_docs/local-dev.md` for a Codex-equipped operator to execute on the 1.1.2 install. Codex impl-review cycled NEEDS_WORK → SHIP: the first pass caught a smoke-doc invariant drift (Original wording described the rendered prompt as 4 options with `4. abort` final, missing the 5th `Other — type your own answer` from the transform); fix-cycle aligned the smoke invariants and tightened the CHANGELOG `rui_refs` scope claim to prose-only.
-
+Shipped fn-45 release docs + CHANGELOG 1.1.2: CLAUDE.md cross-platform row + adding-skills.md step 3 + local-dev.md "Codex plain-text prompt smoke" subsection (5-option invariant: 4 canonical + `Other` from transform) + CHANGELOG entry summarizing the fn-45 spec (sync transform, abort option, setup preserve-existing). Version bumped 1.1.1 → 1.1.2 across 5 manifest surfaces. Manual Codex Desktop / CLI smoke DEFERRED to a Codex-equipped operator (procedure documented).
 ## Evidence
-
-- Commits: a86c885 (docs + CHANGELOG + bump), cb7c569 (review-fix: align smoke-prompt invariants + tighten CHANGELOG scope)
-- Tests:
-  - `./scripts/bump.sh patch flow-next` — 5 manifest surfaces bumped 1.1.1 → 1.1.2; auto-ran sync-codex.sh; all validation guards passed
-  - `./scripts/sync-codex.sh` — exit 0; all guards pass (`No request_user_input refs in Codex skill prose`)
-  - Idempotency: `find plugins/flow-next/codex -type f -name '*.md' -exec md5sum {} + | sort | md5sum` IDENTICAL across two consecutive sync runs (a0306ce0ef89e59158afd78f654ccad7)
-  - Standalone R6 grep guard: `grep -rE '`request_user_input`|request_user_input tool|request_user_input\(|MUST use `request_user_input`|ONLY ask via `request_user_input`' plugins/flow-next/codex/skills/ | grep -v '/templates/'` returns empty
-  - `bash plugins/flow-next/scripts/smoke_test.sh` — 130/130 pass
-  - Codex impl-review fn-45-codex-plain-text-fallback-for.4 --base 7782a9e: VERDICT=NEEDS_WORK → VERDICT=SHIP (cycle 2, after 1 fix commit)
-- Deferred: manual Codex Desktop Default mode + Codex CLI smoke (R8) — implementer cannot run Codex in this conversation; procedure documented in `agent_docs/local-dev.md` for operator execution post-1.1.2 install
-- PRs: —
+- Commits: a86c885, cb7c569, cdcd9dbf86e23f1e337dacb561cc4b76c835fdbc
+- Tests: ./scripts/bump.sh patch flow-next (5 manifests bumped + sync ran clean), ./scripts/sync-codex.sh (all guards pass, idempotent across two runs), bash plugins/flow-next/scripts/smoke_test.sh (130/130 pass), R6 grep guard (fn-45.1) verified: no forbidden request_user_input prose patterns survive in Codex mirror under plugins/flow-next/codex/skills/ (excluding /templates/), flowctl codex impl-review fn-45-codex-plain-text-fallback-for.4 --base 7782a9e: NEEDS_WORK -> SHIP (cycle 2)
+- PRs:
