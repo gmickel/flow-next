@@ -977,8 +977,6 @@ never invents them.
 When `INTERACTIVE=true` AND the primary review verdict is `NEEDS_WORK`
 (still NEEDS_WORK after validator if `--validate` also set), walk through
 each finding with the user before entering the fix loop. The skill-side
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
 loop in [walkthrough.md](walkthrough.md) drives `plain-text numbered prompt`; flowctl provides
 helpers for the defer sink + receipt merge.
 

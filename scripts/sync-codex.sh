@@ -450,18 +450,30 @@ text = re.sub(
     '',
     text,
 )
+# Strip "If <X>'s schema isn't loaded ..., call `ToolSearch` ..." sentences
+# FIRST — the generic "call `ToolSearch` ..." stripper below would eat the
+# suffix and leave a dangling fragment (e.g. fn-45 review observed
+# `flow-next-memory-migrate/workflow.md` keeping "If <X>'s schema isn't
+# loaded on Claude Code," with no completing clause).
+text = re.sub(
+    r"If `[^`]+`'s schema isn'?t loaded on Claude Code, call `ToolSearch`[^.\n]*\.",
+    '',
+    text,
+)
+# Belt-and-suspenders: any dangling "If <X>'s schema isn't loaded on Claude
+# Code," fragment (no completing clause) left over from an earlier rewrite
+# also gets stripped — keep the mirror prose self-consistent.
+text = re.sub(
+    r"If `[^`]+`'s schema isn'?t loaded on Claude Code,? *\n?",
+    '',
+    text,
+)
 # Strip "Call/call `ToolSearch` with ..." sentences (case-insensitive).
 text = re.sub(
     r'(?:^|(?<=[.\s]))[Cc]all `ToolSearch`[^.\n]*\.',
     '',
     text,
     flags=re.MULTILINE,
-)
-# Strip "If <X>'s schema isn't loaded ..., call `ToolSearch` ..." sentences.
-text = re.sub(
-    r"If `[^`]+`'s schema isn'?t loaded on Claude Code, call `ToolSearch`[^.\n]*\.",
-    '',
-    text,
 )
 # Strip standalone ToolSearch backtick refs in line items.
 text = re.sub(
@@ -678,13 +690,27 @@ INSTRUCTION = (
 )
 
 def is_negative_context(line):
-    """True when 'plain-text numbered prompt' appears only inside a 'Never
-    use ...' / 'do NOT use ...' mandate — auto-fix-loop sites where the
-    R2 instruction would contradict the surrounding prose. Surface as the
-    only-match-on-line check, since these mandates are single-line."""
+    """True when 'plain-text numbered prompt' appears in a context that
+    is NOT a live ask — auto-fix-loop sites, skip/no-prompt prose,
+    reference/checklist bullets about what something IS NOT or what is
+    skipped. Injecting R2 here either contradicts the surrounding prose
+    or pollutes deterministic/Ralph branches."""
+    # Auto-fix-loop hard mandates.
     if 'Never use' in line and 'plain-text numbered prompt' in line:
         return True
     if 'do NOT use' in line and 'plain-text numbered prompt' in line:
+        return True
+    # Skip/no-prompt prose ("skips the ... preview", "no plain-text ...
+    # call", etc.). These describe deterministic branches, not active asks.
+    if re.search(r'\bskips? the `?plain-text numbered prompt`?', line):
+        return True
+    if re.search(r'\bno `?plain-text numbered prompt`? call', line):
+        return True
+    if re.search(r'without (?:a |an |any )?(?:`?plain-text numbered prompt`?|prompt) call', line):
+        return True
+    # Reference-style "It is not / X is not ..." bullets. These describe
+    # what the prompt isn't — not a live ask site.
+    if re.search(r'(?:It|This|That) is not\b', line) and 'plain-text numbered prompt' in line:
         return True
     return False
 
@@ -694,6 +720,30 @@ def is_table_line(line):
     injection anchors."""
     stripped = line.lstrip()
     return stripped.startswith('|') or stripped.startswith('|-')
+
+# Verbs that indicate an active ask / prompt site. The R2 instruction
+# block belongs adjacent to one of these — not in deterministic prose,
+# reference lists, or "what X is not" bullets.
+ACTIVE_ASK_VERBS = re.compile(
+    r'\b('
+    r'[Aa]sk|MUST ask|[Mm]ust use|[Mm]ust ask|MUST use|'
+    r'[Uu]se `?plain-text numbered prompt`?|'
+    r'[Dd]efault to `?plain-text numbered prompt`?|'
+    r'[Ff]ormat the question|'
+    r'[Rr]ender|[Ss]urface|[Ff]ire|[Pp]resent|[Ss]how|'
+    r'[Cc]all `?plain-text numbered prompt`?|'
+    r'[Ii]nvoke `?plain-text numbered prompt`?|'
+    r'via `?plain-text numbered prompt`?'
+    r')\b'
+)
+
+def is_active_ask_anchor(line):
+    """True when the line is a plausible active-ask site for the R2
+    instruction. Anchors should describe ASKING via the prompt, not
+    skipping it or describing what it isn't."""
+    if 'plain-text numbered prompt' not in line:
+        return False
+    return bool(ACTIVE_ASK_VERBS.search(line))
 
 # Inject once per file. Two strategies, in priority order:
 #  1. If a hard-mandate pattern (A/B/C) fired, it left a "described below"
@@ -718,10 +768,22 @@ if 'described below' in text:
     text = '\n'.join(out)
 elif had_ask_in_prose and 'plain-text numbered prompt' in text:
     lines = text.split('\n')
-    # Find the first positive (non-negative, non-table) anchor line.
+    # Track fenced-code-block state so we never inject inside a ``` ... ```
+    # region (would split a working code example). Anchor must be:
+    #   - active-ask shape (verb match in line)
+    #   - not a negative context (skip / Never use / It is not / ...)
+    #   - not a markdown table row or delimiter
+    #   - not inside a fenced code block
+    in_fence = False
     anchor_idx = -1
     for i, line in enumerate(lines):
-        if 'plain-text numbered prompt' not in line:
+        stripped = line.lstrip()
+        if stripped.startswith('```'):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if not is_active_ask_anchor(line):
             continue
         if is_negative_context(line):
             continue

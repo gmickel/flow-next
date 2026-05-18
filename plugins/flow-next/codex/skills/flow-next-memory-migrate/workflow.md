@@ -197,7 +197,7 @@ Options:
  3. Skip this entry — mark as needs-review
 ```
 
-One question at a time. If `plain-text numbered prompt`'s schema isn't loaded on Claude Code,
+One question at a time.
 
 **Autofix mode:**
 

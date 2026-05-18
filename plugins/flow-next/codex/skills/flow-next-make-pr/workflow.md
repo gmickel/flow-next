@@ -36,8 +36,6 @@ fi
 When `RALPH=1`:
 
 - Phase 0 questions hard-error with non-zero exit + a clear stderr message (no user to ask).
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
 - Phase 4 skips the `plain-text numbered prompt` preview entirely.
 - Phase 4 forces `--draft` regardless of `--ready` (Ralph never opens ready-to-merge PRs).
 - Phase 5 emits the PR URL on stdout for the harness to capture.
@@ -1263,6 +1261,8 @@ fi
 In practice the cap rarely trips — a typical cognitive-aid body is 4-12K chars. The cap exists for the pathological "20-task spec with 50-row R-ID coverage table + 3 mermaid diagrams + 30 deferred findings" case. For any normal flow-next spec, this section is unreachable. Document it so the failure mode is visible, not so the path is hot.
 
 ### 4.5 — Interactive preview (skipped under Ralph)
+
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
 **This is the safety gate.** Before push + `gh pr create`, the skill MUST ask the user via `plain-text numbered prompt` in interactive mode. Ralph skips the gate entirely (autonomous loops have no human in the loop to answer). The preview runs after title + draft are computed (§4.1, §4.2) and after the body is persisted to disk (§4.3, §4.4) so all four pieces of information are visible to the user before they decide.
 
