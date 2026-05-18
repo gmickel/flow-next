@@ -11,7 +11,9 @@ A reviewable PR body is itself an artefact: it lets a human decide *where to foc
 
 The host agent (Claude Code / Codex / Droid) reads the structured payload from `flowctl spec export-cognitive-aid` and synthesizes the body directly. **Every claim in the body must trace to a structured field in the export payload — never fabricate file paths, SHAs, R-ID attributions, or "why" reasoning.** Unknown attribution is honest ("uncovered" / "unclear") rather than invented. The host is competent at "what looks important here?" given the rich input; no second-model review pass is needed (the structured payload does the heavy lifting).
 
-flowctl provides only thin plumbing: `flowctl spec export-cognitive-aid <spec-id> --base <ref> --json` aggregates the inputs into a single JSON payload (Task 1 of this spec). The skill renders, previews via `request_user_input`, pushes, and creates the PR.
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+flowctl provides only thin plumbing: `flowctl spec export-cognitive-aid <spec-id> --base <ref> --json` aggregates the inputs into a single JSON payload (Task 1 of this spec). The skill renders, previews via `plain-text numbered prompt`, pushes, and creates the PR.
 
 **Read [workflow.md](workflow.md) for the full phase-by-phase execution. Read [phases.md](phases.md) for the per-phase Done-when checklists. Read [mermaid-rules.md](mermaid-rules.md) before emitting any mermaid codefence — it defines reserved words, escape patterns, shape selection, and the pre-emission validation checklist.**
 
@@ -22,7 +24,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — `request_user_input` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 4 preview asks the user `create / dry-run / edit-body / abort` before pushing.
+**Inline skill (no `context: fork`)** — `plain-text numbered prompt` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 4 preview asks the user `create / dry-run / edit-body / abort` before pushing.
 
 ## Mode Detection
 
@@ -64,11 +66,11 @@ done
 | `--dry-run` | Skip Phase 4 entirely. Render body to stdout. Useful for inspection or `… --dry-run \| pbcopy`. |
 | `--base <ref>` | Override base-branch detection cascade. Useful when the team's default branch is `develop`, etc. |
 
-Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected separately in workflow.md §0.0 — the skill is **not** Ralph-blocked. Under Ralph the skill skips the `request_user_input` preview, forces `--draft`, and emits the PR URL to stdout.
+Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected separately in workflow.md §0.0 — the skill is **not** Ralph-blocked. Under Ralph the skill skips the `plain-text numbered prompt` preview, forces `--draft`, and emits the PR URL to stdout.
 
 ## Interaction Principles
 
-- Ask **one question at a time** via `request_user_input`. Fall back to a numbered options prompt only if the tool is unreachable. Never silently skip the question.
+- Ask **one question at a time** via `plain-text numbered prompt`. Fall back to a numbered options prompt only if the tool is unreachable. Never silently skip the question.
 - Lead with the **recommended option** and a one-sentence rationale.
 - Phase 4's preview is the only mandatory user gate in interactive mode. Phase 0 only asks when something must be resolved (no `--base` and no detection match; tasks not all `done`; no spec detected). Skip questions when context resolves cleanly.
 - **Ralph mode skips all questions.** Detect once at Phase 0 and route deterministically.

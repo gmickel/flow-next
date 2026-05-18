@@ -24,7 +24,9 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — `request_user_input` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 3 (Ask) and Phase 6 (Discoverability check) both require user choice in interactive mode.
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+**Inline skill (no `context: fork`)** — `plain-text numbered prompt` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 3 (Ask) and Phase 6 (Discoverability check) both require user choice in interactive mode.
 
 ## Mode Detection
 
@@ -62,7 +64,7 @@ In autofix mode, skip user questions entirely and apply the rules above.
 
 In interactive mode, follow these principles:
 
-- Ask **one question at a time** via `request_user_input`. Fall back to numbered options in plain text only if the tool is unreachable or errors. Never silently skip the question.
+- Ask **one question at a time** via `plain-text numbered prompt`. Fall back to numbered options in plain text only if the tool is unreachable or errors. Never silently skip the question.
 - Prefer **multiple choice** when natural options exist.
 - Lead with the **recommended option** and a one-sentence rationale.
 - Do **not** ask the user to make decisions before evidence is gathered — Phase 1 investigates first, Phase 3 asks.

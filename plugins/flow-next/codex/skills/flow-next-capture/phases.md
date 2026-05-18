@@ -180,7 +180,9 @@ The `[your-call]` tier exists deliberately. Always recommending trains users to 
 ### What the recommendation IS NOT
 
 - It is not a vote.
-- It is not a binding default that fires if the user doesn't reply within a timeout (capture has no timeout — `request_user_input` is blocking).
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+- It is not a binding default that fires if the user doesn't reply within a timeout (capture has no timeout — `plain-text numbered prompt` is blocking).
 - It is not a marker that should appear ON the option label (anchoring research: F2.1).
 
 ---

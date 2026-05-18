@@ -383,12 +383,19 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   rm -f "${f}.bak"
 done
 
-# --- TOOL NAMES: AskUserQuestion → request_user_input (Codex native) ---
-# Canonical skills use Claude-native tool names; this transforms them for the
-# Codex mirror. Order:
+# --- TOOL NAMES: AskUserQuestion → plain-text numbered prompt (fn-45) ---
+# Canonical skills use Claude-native `AskUserQuestion`. Codex's structured
+# `request_user_input` errors outside Plan mode (openai/codex #10384, #11536,
+# #12694 — closed without resolution as of Feb 2026), so the Codex mirror
+# instead instructs the agent to render a plain-text numbered prompt with a
+# final `N+1. Other — type your own answer` option, then stop and wait for
+# the user's next message. The mirror never mentions `request_user_input` —
+# validation guards below (R6) hard-fail if it leaks in.
+#
+# Order:
 #   1. Strip maintainer breadcrumbs (any form — parens, bare sentence)
 #   2. Strip ToolSearch references (Claude-only schema-load mechanism)
-#   3. Rewrite AskUserQuestion → request_user_input
+#   3. Rewrite AskUserQuestion → plain-text numbered-prompt instruction
 find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   # 1. Strip maintainer breadcrumbs in their original (canonical) form,
   #    BEFORE the AskUserQuestion → request_user_input rewrite happens.
@@ -399,9 +406,10 @@ path = sys.argv[1]
 with open(path) as fp:
     text = fp.read()
 
-# Strip parenthetical breadcrumbs.
+# Strip parenthetical breadcrumbs (allow whitespace incl. newlines inside
+# the parens — canonical authors sometimes wrap them across lines).
 text = re.sub(
-    r' *\(sync-codex\.sh rewrites[^)]*Codex mirror\.?\)',
+    r' *\(sync-codex\.sh\s+rewrites[^)]*Codex mirror\.?\)',
     '',
     text,
 )
@@ -506,14 +514,186 @@ with open(path, 'w') as fp:
     fp.write(text)
 PYEOF
 
-  # 3. Rewrite tool names.
-  sed -i.bak \
-    -e 's/`AskUserQuestion`/`request_user_input`/g' \
-    -e 's/AskUserQuestion tool/request_user_input primitive/g' \
-    -e 's/AskUserQuestion/request_user_input/g' \
-    "$f"
+  # 3. Rewrite AskUserQuestion invocations into a plain-text numbered-prompt
+  #    instruction for the Codex mirror (fn-45). Distinct re.sub calls handle
+  #    the canonical surface forms, longest-most-specific first so bare-token
+  #    rules don't eat structured ones. Hard mandates softened to "MUST ask
+  #    via the plain-text numbered prompt"; auto-fix-loop "Never use" mandates
+  #    preserve semantics (token rewrite only). Frontmatter `allowed-tools:`
+  #    lines keep the legacy `request_user_input` token — Codex reads
+  #    agents/openai.yaml for the actual contract; the frontmatter is residue
+  #    that just needs to clear the askq_refs guard.
+  python3 - "$f" <<'PYEOF'
+import re, sys
+path = sys.argv[1]
+with open(path) as fp:
+    text = fp.read()
 
-  rm -f "${f}.bak"
+# Track whether this file referenced AskUserQuestion in prose (frontmatter
+# only doesn't count — that's harmless residue). We use this flag after
+# substitutions to inject the R2 instruction block exactly once.
+prose_text = re.sub(r'(?ms)\A---\n.*?\n---\n', '', text)
+had_ask_in_prose = bool(re.search(r'\bAskUserQuestion\b', prose_text))
+
+# --- Longest-most-specific patterns first ----------------------------------
+
+# A. Hard mandate "CRITICAL REQUIREMENT: You MUST use the `AskUserQuestion`
+#    tool for every question." → softened mandate (R3). Used by
+#    flow-next-interview/SKILL.md:217.
+text = re.sub(
+    r'\*\*CRITICAL REQUIREMENT\*\*: You MUST use the `AskUserQuestion` tool for every question\.',
+    '**CRITICAL REQUIREMENT**: For every question, you MUST ask via the plain-text numbered prompt described below.',
+    text,
+)
+
+# B. Hard mandate "**CRITICAL**: You MUST use the `AskUserQuestion` tool for
+#    consent." → softened mandate (R3). Used by
+#    flow-next-prime/workflow.md:194.
+text = re.sub(
+    r'\*\*CRITICAL\*\*: You MUST use the `AskUserQuestion` tool for consent\.',
+    '**CRITICAL**: For consent, you MUST ask via the plain-text numbered prompt described below.',
+    text,
+)
+
+# C. "MUST use `AskUserQuestion` tool" bullet / mandate (R3).
+#    Used by flow-next-prime/workflow.md:306, SKILL.md:109 fragment.
+text = re.sub(
+    r'MUST use `AskUserQuestion` tool',
+    'MUST ask via the plain-text numbered prompt described below',
+    text,
+)
+
+# D. "ONLY ask questions via AskUserQuestion tool calls" (R3).
+#    Used by flow-next-interview/SKILL.md:221.
+text = re.sub(
+    r'ONLY ask questions via AskUserQuestion tool calls',
+    'ONLY ask via the plain-text numbered prompt',
+    text,
+)
+
+# E. Anti-mandate "do NOT use AskUserQuestion tool" — used in
+#    flow-next-plan/SKILL.md:117 + flow-next-ralph-init/SKILL.md:37 to tell
+#    the agent "ask in plain text ad-hoc, not via the structured tool". On
+#    Codex there IS no structured tool, so the negation is a tautology.
+#    Strip the parenthetical entirely (along with optional surrounding
+#    whitespace + parens) to keep the prose clean. Also drop the now-empty
+#    leading space.
+text = re.sub(
+    r' *\(do NOT use AskUserQuestion tool\)',
+    '',
+    text,
+)
+# Bare-form fallback (no parens) — leave a soft replacement in case the
+# anti-mandate appears outside a parenthetical somewhere.
+text = re.sub(
+    r'do NOT use AskUserQuestion tool',
+    'ask using plain text instead of any structured prompt tool',
+    text,
+)
+
+# F. Auto-fix-loop mandate "Never use AskUserQuestion in this loop" (R3
+#    boundary — token rewrite only, intent preserved). Used by
+#    impl-review/plan-review/spec-completion-review workflow.md + SKILL.md.
+text = re.sub(
+    r'Never use AskUserQuestion in this loop',
+    'Never use the plain-text numbered prompt in this loop',
+    text,
+)
+
+# G. "Call AskUserQuestion tool with question and options." prose
+#    (flow-next-interview/SKILL.md:231).
+text = re.sub(
+    r'Call AskUserQuestion tool with question and options\.',
+    'Render the question and options as a plain-text numbered prompt (see below).',
+    text,
+)
+
+# H. Frontmatter `allowed-tools: AskUserQuestion, ...` — keep the legacy
+#    token name for the harmless residue line; Codex reads
+#    agents/openai.yaml for the actual contract.
+text = re.sub(
+    r'^(allowed-tools:[^\n]*?)\bAskUserQuestion\b',
+    r'\1request_user_input',
+    text,
+    flags=re.MULTILINE,
+)
+
+# I. Generic backticked invocation: `AskUserQuestion`
+#    → `plain-text numbered prompt` (kept backticked for in-prose readability).
+text = re.sub(
+    r'`AskUserQuestion`',
+    '`plain-text numbered prompt`',
+    text,
+)
+
+# J. Generic "AskUserQuestion tool" (no backticks) → "plain-text numbered
+#    prompt". Catches inline mentions in headings + non-backticked prose.
+text = re.sub(
+    r'AskUserQuestion tool',
+    'plain-text numbered prompt',
+    text,
+)
+
+# K. Bare AskUserQuestion (table cells, headings, residual prose). Catch-all
+#    last so structured patterns above run first.
+text = re.sub(
+    r'\bAskUserQuestion\b',
+    'plain-text numbered prompt',
+    text,
+)
+
+# --- R2 instruction block injection ----------------------------------------
+# Inject the full plain-text numbered-prompt contract once per file. The
+# instruction tells the Codex agent how to render options, how to signal
+# the freeform "Other" affordance, and that it must STOP after printing.
+INSTRUCTION = (
+    '**Ask the user via plain text.** Render the options below as a '
+    'numbered list `1.` … `N.`, followed by a final option '
+    '`N+1. Other — type your own answer`. Print the question, then the '
+    'numbered list, then **stop and wait for the user\'s next message '
+    'before continuing**. Parse the reply as: a bare number `1`–`N+1` → '
+    'that option; the literal text of an option label → that option; free '
+    'text after `Other` → custom answer.'
+)
+
+# Inject once per file. Two strategies, in priority order:
+#  1. If a hard-mandate pattern (A/B/C) fired, it left a "described below"
+#     sentinel. Splice the instruction immediately after that paragraph.
+#  2. Otherwise, if the original file referenced AskUserQuestion in prose,
+#     splice the instruction immediately before the FIRST `plain-text
+#     numbered prompt` token so the substituted noun phrase has a definition
+#     the agent can resolve.
+if 'described below' in text:
+    lines = text.split('\n')
+    out = []
+    injected = False
+    for line in lines:
+        out.append(line)
+        if not injected and 'described below' in line:
+            out.append('')
+            out.append(INSTRUCTION)
+            injected = True
+    text = '\n'.join(out)
+elif had_ask_in_prose and 'plain-text numbered prompt' in text:
+    lines = text.split('\n')
+    out = []
+    injected = False
+    for line in lines:
+        if not injected and 'plain-text numbered prompt' in line:
+            out.append(INSTRUCTION)
+            out.append('')
+            injected = True
+        out.append(line)
+    text = '\n'.join(out)
+
+# Collapse double spaces / blank-line runs left over from substitutions.
+text = re.sub(r'  +', ' ', text)
+text = re.sub(r'\n{3,}', '\n\n', text)
+text = '\n'.join(line.rstrip() for line in text.split('\n'))
+
+with open(path, 'w') as fp:
+    fp.write(text)
+PYEOF
 done
 
 # Remove .DS_Store and other cruft
@@ -825,17 +1005,37 @@ else
 fi
 
 # Check no "AskUserQuestion" or "ToolSearch select:AskUserQuestion" in codex
-# skill prose — should all have been rewritten to request_user_input. Bare
-# AskUserQuestion in the Codex skill prose is a sync bug.
+# skill prose — should all have been rewritten to the plain-text numbered
+# prompt by Stage 3 (fn-45). Bare AskUserQuestion in the Codex skill prose
+# is a sync bug.
 # Exclude templates/ subdirs (those are user-script templates, not skill prose
 # that the agent reads — e.g., ralph-init/templates/watch-filter.py uses the
 # tool name as a dict key for hook event emoji mapping, which is intentional).
 askq_refs=$( { grep -rE 'AskUserQuestion|ToolSearch select:AskUserQuestion' "$CODEX_DIR/skills/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | wc -l | tr -d ' ')
 if [ "$askq_refs" != "0" ]; then
   echo -e "  ${RED}✗${NC} $askq_refs Claude-native tool refs (AskUserQuestion / ToolSearch) remain in codex skill prose — extend sync transforms"
+  { grep -rnE 'AskUserQuestion|ToolSearch select:AskUserQuestion' "$CODEX_DIR/skills/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | head -10
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} No Claude-native tool refs in Codex skill prose"
+fi
+
+# R6 mirror scan — `request_user_input` must NOT leak into the Codex mirror
+# (fn-45). The Codex Default-mode + CLI surface errors on `request_user_input`
+# calls (openai/codex #10384, #11536, #12694). Stage 3 instructs the agent to
+# render a plain-text numbered prompt instead; any surviving reference is a
+# sync bug that would re-introduce the failure. Exclude /templates/ subdirs.
+# Patterns: backticked invocation, "tool" form, function-call form, and the
+# two hard-mandate phrasings that survived the old `request_user_input`
+# rewrite era. The frontmatter `allowed-tools: request_user_input` line is
+# harmless residue and does not match any of these patterns.
+rui_refs=$( { grep -rnE '`request_user_input`|request_user_input tool|request_user_input\(|MUST use `request_user_input`|ONLY ask via `request_user_input`' "$CODEX_DIR/skills/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | wc -l | tr -d ' ')
+if [ "$rui_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $rui_refs request_user_input refs leaked into codex skill prose — Stage 3 (fn-45) should have rewritten these"
+  { grep -rnE '`request_user_input`|request_user_input tool|request_user_input\(|MUST use `request_user_input`|ONLY ask via `request_user_input`' "$CODEX_DIR/skills/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | head -10
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No request_user_input refs in Codex skill prose"
 fi
 
 # R17 mirror scan — DDD vocabulary guard for the Codex mirror (fn-38 task 7).

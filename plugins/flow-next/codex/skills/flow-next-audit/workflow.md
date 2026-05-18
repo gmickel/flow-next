@@ -471,7 +471,9 @@ Bundle the easy ones, isolate the hard ones:
 
 ### 3.2 — Question style
 
-Use `request_user_input`. If the tool is unreachable, fall back to printing a numbered list and reading a typed reply.
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+Use `plain-text numbered prompt`. If the tool is unreachable, fall back to printing a numbered list and reading a typed reply.
 
 Rules:
 

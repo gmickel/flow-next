@@ -182,7 +182,9 @@ For each entry:
 
 **Interactive mode:**
 
-Use `request_user_input`. Lead with the mechanical default as the recommendation:
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+Use `plain-text numbered prompt`. Lead with the mechanical default as the recommendation:
 
 ```
 Entry: "Auth token refresh race during logout" (from pitfalls.md)
@@ -195,7 +197,7 @@ Options:
  3. Skip this entry — mark as needs-review
 ```
 
-One question at a time. If `request_user_input`'s schema isn't loaded on Claude Code,
+One question at a time. If `plain-text numbered prompt`'s schema isn't loaded on Claude Code,
 
 **Autofix mode:**
 

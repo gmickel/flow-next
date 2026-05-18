@@ -216,7 +216,9 @@ Informational only. Reported for awareness.
 
 | Pillars | Category | Remediation |
 |---------|----------|-------------|
-| 1-5 | Agent Readiness | ✅ Fixes offered via request_user_input |
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+| 1-5 | Agent Readiness | ✅ Fixes offered via plain-text numbered prompt |
 | 6-8 | Production Readiness | ❌ Reported only, address independently |
 
 **Level 3 (Standardized)** is the target for agent readiness. It means agents can handle routine work: bug fixes, tests, docs, dependency updates.

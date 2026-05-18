@@ -152,7 +152,9 @@ If `RESUMABLE_COUNT == 0` (only corrupt artifacts), skip to Phase 1 — nothing 
 
 ### 0.4 — Blocking question
 
-Present the resumable list in a deterministic numbered format and ask the user to choose a path. Use `request_user_input`; fall back to printing the numbered list and reading a typed reply if the tool is unreachable.
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+Present the resumable list in a deterministic numbered format and ask the user to choose a path. Use `plain-text numbered prompt`; fall back to printing the numbered list and reading a typed reply if the tool is unreachable.
 
 Frozen option strings (R19 anchor — must match exactly across backends):
 
@@ -600,7 +602,7 @@ Critique rejected only X% (below the ≥Y% floor). Options:
  ship-anyway — same as loosen-floor; preserved for clarity in transcripts
 ```
 
-Frozen string format (R12 anchor — must match across backends): `regenerate | loosen-floor | ship-anyway`. Use `request_user_input`; fall back to numbered-options when the tool is unreachable. Validate the choice; reject anything outside the three options.
+Frozen string format (R12 anchor — must match across backends): `regenerate | loosen-floor | ship-anyway`. Use `plain-text numbered prompt`; fall back to numbered-options when the tool is unreachable. Validate the choice; reject anything outside the three options.
 
 - `regenerate` → loop back to Phase 2 §2.3 with a fresh prompt invocation. Cap at **1 regeneration**; a second floor violation auto-routes to `loosen-floor` with a printed warning (avoids infinite loops on a model that genuinely can't reject).
 - `loosen-floor` / `ship-anyway` → continue to Phase 4. Record `floor_violation: true` in the eventual artifact frontmatter.
@@ -846,7 +848,7 @@ Empty buckets render `_(none)_`. Empty `## Rejected` renders `_(none)_`.
 
 ### 6.1 — Use the blocking-question tool
 
-Use `request_user_input`. If the tool is unreachable, print the frozen-string format below and read the user's reply from chat.
+Use `plain-text numbered prompt`. If the tool is unreachable, print the frozen-string format below and read the user's reply from chat.
 
 If the tool is available, use it with these labelled choices (one per survivor + skip + interview):
 

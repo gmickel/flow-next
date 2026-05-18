@@ -36,7 +36,9 @@ fi
 When `RALPH=1`:
 
 - Phase 0 questions hard-error with non-zero exit + a clear stderr message (no user to ask).
-- Phase 4 skips the `request_user_input` preview entirely.
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+- Phase 4 skips the `plain-text numbered prompt` preview entirely.
 - Phase 4 forces `--draft` regardless of `--ready` (Ralph never opens ready-to-merge PRs).
 - Phase 5 emits the PR URL on stdout for the harness to capture.
 
@@ -108,11 +110,11 @@ if [[ -z "$SPEC_ID" ]]; then
  echo "Error: no spec id supplied and no .flow/specs/*.json or .flow/epics/*.json branch_name matches '$CURRENT_BRANCH'. Ralph cannot prompt — pass an explicit spec id." >&2
  exit 2
  fi
- # Interactive: ask via request_user_input.
+ # Interactive: ask via plain-text numbered prompt.
  # Question: "No spec detected from current branch. Provide a spec id (fn-N-slug) or abort?"
  # Options: 1. Type spec id 2. Abort
  # On "Type spec id" — accept user input, validate via flowctl show.
- : "ask user for SPEC_ID (request_user_input); abort exits 1"
+ : "ask user for SPEC_ID (plain-text numbered prompt); abort exits 1"
 fi
 ```
 
@@ -142,7 +144,7 @@ if [[ -z "$BASE_REF" ]]; then
  echo "Error: no base ref detected (origin/main, main, origin/master, master all missing). Pass --base <ref> explicitly." >&2
  exit 2
  fi
- # Interactive: ask user for the base ref via request_user_input. No frozen options —
+ # Interactive: ask user for the base ref via plain-text numbered prompt. No frozen options —
  # accept a typed branch name; validate via git rev-parse --verify --quiet.
  : "ask user for BASE_REF; on abort exit 1"
 fi
@@ -200,7 +202,7 @@ OPEN_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]? | select(.status != "done
 | `OPEN_COUNT == 0` | Proceed silently. |
 | `OPEN_COUNT > 0` AND `DRY_RUN == 1` | Warn on stderr but proceed (`--dry-run` is for inspection — body should still render). |
 | `OPEN_COUNT > 0` AND `RALPH == 1` | Hard-error with the open-task list. Ralph workers should not open PRs for incomplete specs. |
-| `OPEN_COUNT > 0` AND interactive | Ask via `request_user_input`: "Tasks not done: `<OPEN_TASKS>`. Proceed anyway / abort and run `/flow-next:work` first?" Lead with abort as the recommendation; user can override. |
+| `OPEN_COUNT > 0` AND interactive | Ask via `plain-text numbered prompt`: "Tasks not done: `<OPEN_TASKS>`. Proceed anyway / abort and run `/flow-next:work` first?" Lead with abort as the recommendation; user can override. |
 
 ```bash
 if [[ "$OPEN_COUNT" -gt 0 ]]; then
@@ -210,7 +212,7 @@ if [[ "$OPEN_COUNT" -gt 0 ]]; then
  echo "Error: $OPEN_COUNT task(s) under $SPEC_ID still open ($OPEN_TASKS). Ralph cannot open PRs for incomplete specs." >&2
  exit 2
  else
- : "ask user via request_user_input; on abort exit 1, on proceed continue"
+ : "ask user via plain-text numbered prompt; on abort exit 1, on proceed continue"
  fi
 fi
 ```
@@ -1081,7 +1083,7 @@ The host agent owns the body string at this point — Phases 2/3 produced it. Ph
 3. **§4.2** — Draft-vs-ready matrix (R24) — compute `DRAFT_FLAG` from Ralph context + open items + force flags.
 4. **§4.3** — Body delivery via `--body-file` (R20) — persist rendered body to tempfile.
 5. **§4.4** — Body length cap + truncation policy — enforce 65K cap before invoking `gh`.
-6. **§4.5** — Interactive preview (skipped under Ralph) — `request_user_input` gate; user picks `create / dry-run / edit-body / abort`.
+6. **§4.5** — Interactive preview (skipped under Ralph) — `plain-text numbered prompt` gate; user picks `create / dry-run / edit-body / abort`.
 7. **§4.6** — Push branch + `gh pr create` retry loop — only runs after the user picks `create` (or Ralph skips the gate).
 8. **§4.7** — Failure recovery hints — stderr text per error class on `gh pr create` failure.
 
@@ -1262,7 +1264,7 @@ In practice the cap rarely trips — a typical cognitive-aid body is 4-12K chars
 
 ### 4.5 — Interactive preview (skipped under Ralph)
 
-**This is the safety gate.** Before push + `gh pr create`, the skill MUST ask the user via `request_user_input` in interactive mode. Ralph skips the gate entirely (autonomous loops have no human in the loop to answer). The preview runs after title + draft are computed (§4.1, §4.2) and after the body is persisted to disk (§4.3, §4.4) so all four pieces of information are visible to the user before they decide.
+**This is the safety gate.** Before push + `gh pr create`, the skill MUST ask the user via `plain-text numbered prompt` in interactive mode. Ralph skips the gate entirely (autonomous loops have no human in the loop to answer). The preview runs after title + draft are computed (§4.1, §4.2) and after the body is persisted to disk (§4.3, §4.4) so all four pieces of information are visible to the user before they decide.
 
 > Body rendered for `<spec-id>` against `<base-ref>` (<N> chars, <draft|ready>). Action?
 >
@@ -1277,7 +1279,7 @@ The `edit-body` option opens the tempfile in `${EDITOR:-vim}`, and on save re-ru
 
 ```bash
 if [[ "$RALPH" != "1" ]]; then
- : "request_user_input: 4 options as above"
+ : "plain-text numbered prompt: 4 options as above"
  : "On 'create' — fall through to §4.6 (push + gh pr create)"
  : "On 'dry-run' — emit body to stdout, exit 0"
  : "On 'edit-body' — \${EDITOR:-vim} \"$BODY_FILE\", then re-prompt"
@@ -1285,7 +1287,7 @@ if [[ "$RALPH" != "1" ]]; then
 fi
 ```
 
-**Ralph mode skips the preview entirely.** The autonomous loop terminus opens the draft PR for human review without prompting — the human review IS the prompt. R24 invariant: under Ralph, control flows from §4.4 directly into §4.6 without an `request_user_input` call.
+**Ralph mode skips the preview entirely.** The autonomous loop terminus opens the draft PR for human review without prompting — the human review IS the prompt. R24 invariant: under Ralph, control flows from §4.4 directly into §4.6 without an `plain-text numbered prompt` call.
 
 ### 4.6 — Push branch + `gh pr create` retry loop (R20 refinement)
 
@@ -1380,7 +1382,7 @@ When `gh pr create` fails after the retry loop is exhausted, the skill emits man
 - Draft flag computed (§4.2) via matrix layers (Ralph → open items → `--draft` → `--ready`). `--ready` ignored under Ralph; conflict surfaced via stderr note.
 - Body delivered via `--body-file` (§4.3) — mktemp + cleanup trap. Heredoc form documented as anti-pattern with cli/cli #29619 citation.
 - Body length cap (65,000 chars target) enforced (§4.4) via truncation cascade: drop file list → trim TL;DR → collapse mermaid → spill to `.flow/pr-bodies/`.
-- Interactive `request_user_input` preview (§4.5) offers `create / dry-run / edit-body / abort` BEFORE any push or `gh pr create`. Skipped under Ralph.
+- Interactive `plain-text numbered prompt` preview (§4.5) offers `create / dry-run / edit-body / abort` BEFORE any push or `gh pr create`. Skipped under Ralph.
 - After the §4.5 gate clears (or Ralph skips it): `HEAD_BRANCH=$(git branch --show-current)` resolved + validated non-empty (rejects detached HEAD), then `git push -u origin HEAD`, then `sleep 1`, then 3-attempt retry loop on eventual-consistency error class (`Head sha can't be blank` / `No commits between`). Backoff `2s, 4s, 6s`. Other errors fail fast.
 - Failure recovery hints (§4.7) printed to stderr before exit on each error class.
 
@@ -1591,9 +1593,9 @@ The skill itself is markdown — no unit-test surface. Phase 0 validation is exe
 - `command -v gh` missing → exit 1 with install instructions.
 - `gh auth status` failing → exit 1 with login instructions.
 - `--base <bad-ref>` → exit 1 with `git rev-parse --verify` failure message.
-- Branch with no `branch_name` match in any `.flow/specs/*.json` or `.flow/epics/*.json` AND no positional spec id → interactive `request_user_input`; Ralph hard-errors with exit 2.
-- Tasks not all done + interactive → `request_user_input` proceed/abort; Ralph exits 2; `--dry-run` warns and continues.
+- Branch with no `branch_name` match in any `.flow/specs/*.json` or `.flow/epics/*.json` AND no positional spec id → interactive `plain-text numbered prompt`; Ralph hard-errors with exit 2.
+- Tasks not all done + interactive → `plain-text numbered prompt` proceed/abort; Ralph exits 2; `--dry-run` warns and continues.
 - Branch with an OPEN PR → exit 1 with `/flow-next:resolve-pr` hint.
 - Branch with a CLOSED or MERGED PR (no OPEN) → continues cleanly. **This is the load-bearing check** — fn-42 spike validated empirically that bare `gh pr view --json url` rc=0 for closed/merged PRs would false-positive without the `select(.state == "OPEN")` filter.
 - Branch with no PR history at all (`gh pr view` exits 1) → continues cleanly.
-- Ralph mode (`FLOW_RALPH=1`) → no `request_user_input` calls in Phase 0; deterministic exit codes on missing context.
+- Ralph mode (`FLOW_RALPH=1`) → no `plain-text numbered prompt` calls in Phase 0; deterministic exit codes on missing context.

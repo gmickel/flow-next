@@ -115,7 +115,7 @@ b) No, repo-scout (faster)
 (Tip: --depth=short|standard|deep, --review=rp|codex|none)
 ```
 
-**If REVIEW_BACKEND is ASK** (not configured): Ask all questions (do NOT use request_user_input primitive):
+**If REVIEW_BACKEND is ASK** (not configured): Ask all questions:
 
 ```
 Quick setup before planning:

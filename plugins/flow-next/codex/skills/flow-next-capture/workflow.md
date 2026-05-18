@@ -138,7 +138,9 @@ If no compaction signal is detected, proceed to 0.5.
 
 When 0.2 detected ≥2 strong matches AND `REWRITE_TARGET` is empty:
 
-Format the question via `request_user_input`:
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+Format the question via `plain-text numbered prompt`:
 
 - **header**: `Duplicate?`
 - **body**: `Found <N> potentially overlapping spec(s): <spec-1> "<title-1>", <spec-2> "<title-2>". Recommended: <extend|proceed-anyway> — <one-sentence rationale>. Confidence: [<tier>].`
@@ -193,7 +195,7 @@ If `REWRITE_TARGET` is set:
 
 If `REWRITE_TARGET` is empty, also scan the visible conversation for prior-capture artifact references — patterns like `Spec captured at .flow/specs/<id>.md` from earlier turns. If found:
 
-- **Interactive:** ask via `request_user_input` whether the user wants to (a) `--rewrite <id>` (re-run with the flag), (b) `proceed` (create a new spec anyway, accepting that two specs result), (c) `abort`.
+- **Interactive:** ask via `plain-text numbered prompt` whether the user wants to (a) `--rewrite <id>` (re-run with the flag), (b) `proceed` (create a new spec anyway, accepting that two specs result), (c) `abort`.
 - **Autofix:** exit 2 with: `Error: prior capture artifact <id> detected in conversation. Re-run with --rewrite <id> to overwrite, or interactively to choose. Pass --yes only after picking a path.`
 
 ### Done when
@@ -410,7 +412,7 @@ The must-ask cases are listed in [phases.md](phases.md) with examples. Summary h
 
 ### 3.1 — Interactive question shape
 
-Use `request_user_input` with the lead-with-recommendation pattern:
+Use `plain-text numbered prompt` with the lead-with-recommendation pattern:
 
 - **header**: short tag (`Title?`, `Criterion R3`, `Boundary?`)
 - **body**: `<Context — what's ambiguous and why>. Recommended: <X> — <one-sentence rationale>. Confidence: [<tier>].`
@@ -432,7 +434,7 @@ Phase 3 only fires for the three hard-error cases. Asking too many questions def
 
 ### 3.3 — One question per turn
 
-Even when multiple must-ask cases fire, ask **one at a time**. Subsequent questions adapt based on prior answers. Multi-question violates the `request_user_input` contract and overwhelms users (practice-scout F4.3).
+Even when multiple must-ask cases fire, ask **one at a time**. Subsequent questions adapt based on prior answers. Multi-question violates the `plain-text numbered prompt` contract and overwhelms users (practice-scout F4.3).
 
 ### Done when
 
@@ -479,7 +481,7 @@ Construct the full draft including:
 
 ### 4.2 — Interactive read-back
 
-Use `request_user_input`:
+Use `plain-text numbered prompt`:
 
 - **header**: `Read-back`
 - **body**: `Draft: <inline full draft above>. [N] criteria are [inferred]. <8+ split note if applicable>. Recommended: approve — <one-sentence summary of confidence>. Confidence: [<tier>].`
@@ -567,7 +569,7 @@ When `OVERRIDE_STRATEGY=1` AND the snapshot is populated, capture proceeds with 
 # trail to stderr but don't prompt" — see logging branch below).
 ```
 
-Use `request_user_input` (lead-with-recommendation, `[high]` toward yes):
+Use `plain-text numbered prompt` (lead-with-recommendation, `[high]` toward yes):
 
 - **header**: `Record override?`
 - **body**: `Override strategy track "<track>" — record as a decision? Recommended: yes — override decisions belong in the decisions track (load-bearing architectural choice). Confidence: [high].`
@@ -616,7 +618,7 @@ echo "[STRATEGY OVERRIDE]: track=\"<track-name>\" decision-not-recorded spec=<sp
 echo "[STRATEGY OVERRIDE]: track=\"<track-name>\" decision-recorded=<entry-id> spec=<spec-id>" >&2
 ```
 
-The audit trail line appears in both interactive (after the user picks) and autofix (when `OVERRIDE_STRATEGY=1` was passed) — it is the minimum durable record that an override happened, surfaceable in CI logs / git hook output later. In autofix mode (where the request_user_input is unreachable), the decision-not-recorded variant fires unconditionally.
+The audit trail line appears in both interactive (after the user picks) and autofix (when `OVERRIDE_STRATEGY=1` was passed) — it is the minimum durable record that an override happened, surfaceable in CI logs / git hook output later. In autofix mode (where the plain-text numbered prompt is unreachable), the decision-not-recorded variant fires unconditionally.
 
 When `STRATEGY_PRESENT=false`, this entire section is a no-op — there's no strategy snapshot to contradict.
 
