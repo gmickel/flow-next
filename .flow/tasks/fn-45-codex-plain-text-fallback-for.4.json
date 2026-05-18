@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-18T19:54:09.408599Z",
+  "depends_on": [
+    "fn-45-codex-plain-text-fallback-for.1"
+  ],
+  "id": "fn-45-codex-plain-text-fallback-for.4",
+  "priority": null,
+  "spec": "fn-45-codex-plain-text-fallback-for",
+  "spec_path": ".flow/tasks/fn-45-codex-plain-text-fallback-for.4.md",
+  "status": "todo",
+  "title": "Docs + CHANGELOG: CLAUDE.md cross-platform row, adding-skills.md, local-dev.md Codex smoke entry, CHANGELOG 1.1.2",
+  "updated_at": "2026-05-18T19:56:16.952311Z"
+}
