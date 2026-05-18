@@ -75,15 +75,16 @@ git init -q
 1. Open `/tmp/fn-codex-smoke` in Codex Desktop. Confirm mode shows "Default" (not "Plan").
 2. Run `/flow-next:setup`.
 3. At the migration consent prompt confirm:
-   - Question + 4 numbered options render as plain text in the chat stream (no structured-prompt UI card).
-   - Final option reads `4. abort — exit, leave state as-is for review` (or equivalent abort copy).
+   - Question + 5 numbered options render as plain text in the chat stream (no structured-prompt UI card).
+   - The 4 canonical migration options appear first: `1. Migrate now`, `2. Defer`, `3. Suppress permanently`, `4. abort — exit, leave state as-is for review` (per fn-45.2; `abort` is the destructive-action escape hatch).
+   - Option `5. Other — type your own answer` appears as the final option (added by the sync-codex.sh fn-45.1 transform; simulates `AskUserQuestion`'s freeform-input affordance).
    - The agent stops and waits for the user reply — does not auto-pick or proceed.
    - No `request_user_input is unavailable in code mode` error surfaces.
 
 **Codex CLI:**
 1. `cd /tmp/fn-codex-smoke && codex` (Default mode is the CLI default).
 2. Run `/flow-next:setup`.
-3. Confirm the same four invariants as Desktop Default mode.
+3. Confirm the same five invariants as Desktop Default mode.
 
 **Post-smoke grep guard** (mirrors R6 sync-codex.sh validation):
 
