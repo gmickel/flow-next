@@ -2,6 +2,17 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.1.2] - 2026-05-18
+
+### Fixed
+- **Codex mirror no longer calls `request_user_input`.** `request_user_input` errors outside Codex Plan mode (`request_user_input is unavailable in code mode` — openai/codex#10384, #11536, #12694, all closed without resolution as of Feb 2026 Codex 0.93 / GPT-5.2). fn-37's `sync-codex.sh` `AskUserQuestion` → `request_user_input` rewrite broke every interactive flow-next skill in Codex Default mode AND Codex CLI (the common case). `scripts/sync-codex.sh` Stage 3 (lines 386-517) now transforms canonical `AskUserQuestion` invocations into a plain-text numbered-prompt instruction in the Codex mirror via a Python heredoc — the agent renders options as `1.` … `N.` plus a final `N+1. Other — type your own answer` to simulate the canonical freeform input, then stops and waits for the user's next message. Hard mandates ("MUST use `AskUserQuestion`", "ONLY ask via `AskUserQuestion`") become "MUST ask via the plain-text numbered prompt described above"; auto-fix-loop anti-mandates ("Never use AskUserQuestion in this loop") survive intent-preserved with the token rewritten. Five validation guards (`rui_refs`) hard-fail sync if any `request_user_input` pattern survives into the mirror; behavior is uniform across Codex Default + Plan + CLI with no runtime mode detection. Canonical Claude Code prose unchanged.
+- **`flow-next-setup` migration prompt now offers `abort` as an explicit option.** Pre-1.1.2 the pre-1.0 `.flow/epics/` → `.flow/specs/` migration consent prompt rendered only `Migrate now` / `Defer` / `Suppress permanently` — no clean exit path for users who wanted to inspect state before deciding. fn-45.2 added `abort — exit, leave state as-is for review` as the 4th option with explicit routing copy that acknowledges Step 1's `flowctl init` may have already run (idempotent, not rolled back). All other destructive sites (capture rewrite/supersede/override, make-pr push + PR create, audit cleanup, interview decision-record gate) audited; pre-existing `abort` / `skip` / `Don't commit` / `no` paths confirmed sufficient.
+- **`flow-next-setup` preserves existing config + repo-custom docs.** Step 6d gates each `flowctl config set` on `CURRENT_*` being empty (preserve-existing-config contract documented in prose); Step 4 (`.flow/usage.md`) and Step 7 (CLAUDE.md / AGENTS.md marker blocks) now byte-compare against canonical and prompt `Keep / Overwrite / abort` before replacing customized content — content outside the `BEGIN/END FLOW-NEXT` markers is invariant. No silent clobber on re-run.
+
+### Internal
+- **Docs aligned with the new contract.** `CLAUDE.md` "Blocking-question tool" cross-platform row, `agent_docs/adding-skills.md` step 3 parenthetical, and `scripts/sync-codex.sh` Stage 3 comment block all describe the plain-text numbered-prompt transform. `agent_docs/local-dev.md` gains a "Codex plain-text prompt smoke" subsection with manual verification steps for Codex Desktop Default mode + Codex CLI.
+- **Five manifest surfaces aligned at 1.1.2** via `scripts/bump.sh patch flow-next`.
+
 ## [flow-next 1.1.1] - 2026-05-16
 
 ### Fixed
