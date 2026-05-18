@@ -48,7 +48,7 @@ Execute the phases in [workflow.md](workflow.md) in order:
 7. Commit + push (stage only resolver-reported files).
 8. Reply + resolve per verdict (GraphQL scripts for threads, `gh pr comment` for pr_comments / review_bodies).
 9. Verify + loop — bounded at 2 fix-verify cycles.
-10. Summary output grouped by verdict; surface `needs-human` via blocking question.
+10. Summary output grouped by verdict; surface `needs-human` via plain-text numbered prompt.
 
 ## Output
 
@@ -58,7 +58,7 @@ Summary (after last phase):
 - **Fixed differently (N)** — code changes, alternative approach; reply explains
 - **Replied (N)** — no code change; question answered / design rationale given
 - **Not addressing (N)** — feedback factually wrong; reply cites evidence
-- **Needs your input (N)** — surfaced via blocking question; threads stay open
+- **Needs your input (N)** — surfaced via plain-text numbered prompt; threads stay open
 - **Cluster investigations (N)** — if clustering fired
 - **Still pending from a previous run (N)** — already-replied threads waiting on reviewer
 

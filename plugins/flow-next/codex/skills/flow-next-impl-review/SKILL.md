@@ -226,7 +226,7 @@ fi
 `INTERACTIVE` gates the walkthrough phase in [walkthrough.md](walkthrough.md).
 When false (default), behavior is unchanged. When true + verdict is
 NEEDS_WORK, the skill walks each finding with the user via the platform's
-blocking question tool (Apply / Defer / Skip / Acknowledge / LFG-rest).
+plain-text numbered prompt (Apply / Defer / Skip / Acknowledge / LFG-rest).
 
 See [walkthrough.md](walkthrough.md) for the full per-finding flow and
 deferred-findings sink contract.
@@ -339,7 +339,9 @@ If verdict is NEEDS_WORK, loop internally until SHIP:
  - If all findings drop → verdict upgrades to SHIP automatically (exit fix loop)
  - Else → only surviving (kept) findings enter the fix loop in step 2
 2. **Interactive walkthrough (only if `INTERACTIVE=true` AND verdict still NEEDS_WORK)** — see [walkthrough.md](walkthrough.md).
- - For each surviving finding, ask user via platform blocking question tool: Apply / Defer / Skip / Acknowledge / LFG-rest.
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+ - For each surviving finding, ask user via plain-text numbered prompt: Apply / Defer / Skip / Acknowledge / LFG-rest.
  - Deferred findings appended to `.flow/review-deferred/<branch-slug>.md`.
  - Skip / Acknowledge are no-ops beyond receipt logging.
  - Apply list restricts the fix loop below to just those findings.

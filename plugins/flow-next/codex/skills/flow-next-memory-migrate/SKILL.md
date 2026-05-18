@@ -22,7 +22,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — `plain-text numbered prompt` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 1 (Classify) needs user choice on ambiguous entries in interactive mode; Phase 4 (Cleanup) needs consent before renaming originals.
+**Inline skill (no `context: fork`)** — `plain-text numbered prompt` must stay reachable across phases. Subagents can't call plain-text numbered prompts (Claude Code issues #12890, #34592). Phase 1 (Classify) needs user choice on ambiguous entries in interactive mode; Phase 4 (Cleanup) needs consent before renaming originals.
 
 ## Mode Detection
 
@@ -42,12 +42,12 @@ fi
 
 | Mode | When | Behavior |
 |------|------|----------|
-| **Interactive** (default) | User is at the terminal | Ask via blocking-question tool when an entry's content suggests overriding the mechanical default; confirm Phase 4 cleanup; show triage summary before writes |
+| **Interactive** (default) | User is at the terminal | Ask via plain-text numbered prompt when an entry's content suggests overriding the mechanical default; confirm Phase 4 cleanup; show triage summary before writes |
 | **Autofix** (`mode:autofix` in arguments) | Ralph or batch usage | No user questions. Apply mechanical defaults for every entry. Override only when the agent has high-confidence evidence from the entry body. Mark genuinely ambiguous entries as `needs-review` in the report. Default-decline Phase 4 cleanup. Print full report |
 
 ### Autofix mode rules
 
-- **No user questions.** Never call the blocking-question tool.
+- **No user questions.** Never call the plain-text numbered prompt.
 - **Process every legacy entry in scope.** No scope-narrowing question. If no scope hint was provided, migrate all three legacy files.
 - **Mechanical default wins on borderline.** Override only when the entry body unambiguously points at a different `(track, category)` (e.g. an entry titled "race condition in worker pool" inside `pitfalls.md` clearly warrants `bug/runtime-errors` over the mechanical `bug/build-errors`).
 - **Ambiguous → mechanical default + log as `needs-review`.** Genuine "could be A or B" cases take the mechanical default and surface in the report so the user can re-classify later.
@@ -81,7 +81,7 @@ This skill runs almost entirely on the main thread. Phase 1's "one entry per too
 - **Auto-deleting legacy flat files.** Phase 4 renames originals to `.flow/memory/_migrated/<filename>.bak` for traceability — never `rm`. User can `git rm` later if they want.
 - **Inventing flowctl subcommands** beyond what Task 2 ships (`memory list-legacy`). Phase 2 writes via existing `flowctl memory add`. Mechanical map is documented in phases.md so the agent doesn't need to call a flowctl helper for it.
 - **Batch-classifying multiple entries in a single tool call.** Phase 1 enforces one entry per tool call. Agents under context pressure batch-classify in-prompt and silently skip entries (practice-scout flagged this real failure mode).
-- **Setting `context: fork`** — blocking-question tools must stay reachable.
+- **Setting `context: fork`** — plain-text numbered prompt must stay reachable.
 - **Re-running on already-migrated files.** Phase 0 checks `.flow/memory/_migrated/<filename>.bak` and skips with an "already migrated" log line.
 
 ## Pre-check: local setup version

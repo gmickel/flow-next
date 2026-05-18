@@ -107,7 +107,9 @@ Group entries by `(module, category)` pair. For each cluster:
 
 Compute impact: `cluster_score = entries + 2 * cross_refs + (3 if missing_anchor_file else 0)`. The highest-scoring cluster is the recommended starting area.
 
-**Interactive:** present top cluster + 2 alternatives via blocking question:
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+**Interactive:** present top cluster + 2 alternatives via plain-text numbered prompt:
 
 ```
 Found 24 entries across 6 clusters.
@@ -471,8 +473,6 @@ Bundle the easy ones, isolate the hard ones:
 
 ### 3.2 — Question style
 
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
 Use `plain-text numbered prompt`. If the tool is unreachable, fall back to printing a numbered list and reading a typed reply.
 
 Rules:
@@ -822,7 +822,7 @@ Keep tone informational, not imperative. "Relevant when" beats "always check bef
 
 **Interactive:**
 
-Show the proposed addition + where it would land. Ask via blocking-question tool:
+Show the proposed addition + where it would land. Ask via plain-text numbered prompt:
 
 ```
 CLAUDE.md does not mention .flow/memory/.
@@ -883,7 +883,7 @@ The skill itself is markdown — there's no unit-test surface. The validation is
 - Phase 0.5 walks every `GLOSSARY.md` on the ancestor chain via `flowctl glossary list --json`, greps tracked code per-term + per-`_Avoid_` alias, marks zero-hit terms stale via Edit tool with `<!-- stale: ... -->`, surfaces alias-creep, advises on husks.
 - Phase 1 produces evidence per entry. For 3+ entries, parallel investigation subagents run.
 - Phase 2 classifies; Replace candidates with insufficient evidence reclassify as mark-stale. Decision entries use the calibrated judging question and the supersede shape for Replace.
-- Phase 3 (interactive) groups Keeps / Updates for batched confirmation; presents Consolidate / Replace / Delete and glossary alias-creep individually via blocking-question tool.
+- Phase 3 (interactive) groups Keeps / Updates for batched confirmation; presents Consolidate / Replace / Delete and glossary alias-creep individually via plain-text numbered prompt.
 - Phase 4 executes via Write / `flowctl memory mark-stale` / `git rm`. Decision Replace = supersede (write new + edit old's `decision_status` + `superseded_by`; never `git rm`). Glossary stale = Edit comment after term heading.
 - Phase 5 prints the report (memory section + glossary section + husk advisories); offers commit options based on git context.
 - Phase 6 checks CLAUDE.md / AGENTS.md for `.flow/memory/` mention; offers minimal addition if missing.

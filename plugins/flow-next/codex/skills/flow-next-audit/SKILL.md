@@ -26,7 +26,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
-**Inline skill (no `context: fork`)** — `plain-text numbered prompt` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 3 (Ask) and Phase 6 (Discoverability check) both require user choice in interactive mode.
+**Inline skill (no `context: fork`)** — `plain-text numbered prompt` must stay reachable across phases. Subagents can't call plain-text numbered prompts (Claude Code issues #12890, #34592). Phase 3 (Ask) and Phase 6 (Discoverability check) both require user choice in interactive mode.
 
 ## Mode Detection
 
@@ -46,12 +46,12 @@ fi
 
 | Mode | When | Behavior |
 |------|------|----------|
-| **Interactive** (default) | User is at the terminal | Ask decisions on ambiguous cases via blocking-question tool; confirm batched actions; run discoverability check with consent |
+| **Interactive** (default) | User is at the terminal | Ask decisions on ambiguous cases via plain-text numbered prompt; confirm batched actions; run discoverability check with consent |
 | **Autofix** (`mode:autofix` in arguments) | Ralph or batch usage | No user questions. Apply Keep/Update/Consolidate/auto-Delete/Replace-with-sufficient-evidence directly. Mark ambiguous as stale. Print the full report. Discoverability surfaces as a recommendation, not an edit |
 
 ### Autofix mode rules
 
-- **No user questions.** Never call the blocking-question tool.
+- **No user questions.** Never call the plain-text numbered prompt.
 - **Process all entries in scope.** No scope-narrowing question. If no scope hint was provided, process every categorized entry.
 - **Attempt all safe actions.** Keep (no-op), Update (write tool), Consolidate (merge + `git rm` subsumed), auto-Delete (only when code AND problem domain both gone), Replace (only with sufficient evidence to write a trustworthy successor).
 - **Mark ambiguous as stale.** When classification is genuinely ambiguous (Update vs Replace vs Consolidate vs Delete) or Replace evidence is insufficient, run `flowctl memory mark-stale <id> --reason "..."` instead of guessing. Stale-marking writes are atomic and round-trip safe.
@@ -82,7 +82,7 @@ The goal is automated maintenance with human oversight on judgment calls — not
 - **Inventing flowctl subcommands** beyond what fn-34 task 2 ships (`memory mark-stale`, `memory mark-fresh`, `memory search --status`). fn-38 task 2 ships only `glossary {add,list,read,remove}` — there is no `flowctl glossary mark-stale`; use Edit tool. Use Write tool + git for moves and deletes.
 - **Mass-renaming code from a glossary alias-creep finding.** The audit reports file:line locations and stops there; code rename is the operator's call.
 - **Auto-committing without user awareness in interactive mode.** Phase 5 detects git context and asks. Autofix uses sensible defaults.
-- **Setting `context: fork`** — blocking-question tools must stay reachable.
+- **Setting `context: fork`** — plain-text numbered prompt must stay reachable.
 - **Running parallel replacement subagents.** Investigation subagents can run in parallel for 3+ independent entries; replacement subagents run sequentially to protect orchestrator context.
 
 ## Pre-check: local setup version

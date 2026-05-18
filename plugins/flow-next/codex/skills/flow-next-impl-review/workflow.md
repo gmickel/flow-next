@@ -997,7 +997,7 @@ walkthrough — nothing to ask about. Verdict should already be SHIP.
 
 ### Step W.2: Present each finding + record decision
 
-The skill loops over findings and calls the platform blocking tool (see
+The skill loops over findings and calls the plain-text numbered prompt (see
 walkthrough.md for platform mapping). For each finding, collect one of:
 
 - Apply (implement fix)

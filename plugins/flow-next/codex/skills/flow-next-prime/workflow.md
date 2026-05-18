@@ -200,7 +200,7 @@ Informational only. No fixes offered — address independently if desired.
 Each question should:
 - Have a clear header (max 12 chars)
 - Explain what each option does and WHY it helps agents
-- Use `multiSelect: true` so users can pick multiple items
+- Allow multi-select when options are not exclusive — number the options as `1.` … `N.` and ask the user to reply with the numbers (or labels) of all that apply
 - Include impact description for each option
 
 ### Question Structure

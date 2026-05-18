@@ -675,6 +675,109 @@ text = re.sub(
     text,
 )
 
+# N. Structured-tool API prose — directives that reference fields and
+#    concepts that only exist in Claude's AskUserQuestion JSON contract.
+#    On Codex these become misleading. Translate to plain-text equivalents
+#    that still convey the intent.
+text = re.sub(
+    r'Use `multiSelect: true` so users can pick multiple items',
+    'Allow multi-select when options are not exclusive — number the options as `1.` … `N.` and ask the user to reply with the numbers (or labels) of all that apply',
+    text,
+)
+text = re.sub(
+    r'Build the questions array dynamically',
+    'Build the prompt content (question text + numbered option list) dynamically',
+    text,
+)
+text = re.sub(
+    r'Use `plain-text numbered prompt` with the built questions array\.',
+    'Print the prompt content built above and stop for the user\'s reply.',
+    text,
+)
+text = re.sub(
+    r'platform blocking question tool',
+    'plain-text numbered prompt',
+    text,
+)
+# Handle multi-line bold-wrapped variant like:
+#     **blocking
+#     question tool**
+# (canonical authors sometimes wrap mid-phrase). Collapse to a single
+# inline replacement.
+text = re.sub(
+    r'\*\*blocking\s+question tool\*\*',
+    '**plain-text numbered prompt**',
+    text,
+)
+text = re.sub(
+    r'blocking question tool',
+    'plain-text numbered prompt',
+    text,
+)
+# Hyphenated form: "blocking-question tool" / "blocking-question tools".
+text = re.sub(
+    r'blocking-question tools?',
+    'plain-text numbered prompt',
+    text,
+)
+# "Per-finding blocking question" prose (used in R8 recap line) —
+# rewrite to drop the Claude-blocking-tool framing.
+text = re.sub(
+    r'Per-finding blocking question',
+    'Per-finding plain-text numbered prompt',
+    text,
+)
+# "the blocking tool" / "platform blocking tool" / "blocking-question tool"
+# residual refs.
+text = re.sub(
+    r'\bthe (?:platform )?blocking tool\b',
+    'the plain-text numbered prompt',
+    text,
+)
+# "via blocking question" / "a blocking question" / "blocking prompt"
+# residual refs (Claude-specific framing on Codex).
+text = re.sub(
+    r'\bvia (?:a |the )?blocking question\b',
+    'via plain-text numbered prompt',
+    text,
+)
+text = re.sub(
+    r'\b(a |the )blocking question\b',
+    r'\1plain-text numbered prompt',
+    text,
+)
+text = re.sub(
+    r'\bblocking prompt\b',
+    'plain-text numbered prompt',
+    text,
+)
+# Bare "blocking question" (no article — e.g. "surfaces blocking question
+# with frozen options") and bold-wrapped variants.
+text = re.sub(
+    r'\*\*blocking question\*\*',
+    '**plain-text numbered prompt**',
+    text,
+)
+text = re.sub(
+    r'\bblocking question\b',
+    'plain-text numbered prompt',
+    text,
+)
+# "no blocking tool is available/reachable" — describes a fallback gate.
+# On Codex the "blocking tool" framing doesn't apply.
+text = re.sub(
+    r'\bno blocking tool is (available|reachable)\b',
+    r'plain text is the prompt mechanism',
+    text,
+)
+# "the platform's question tool" — phrasing inherited from canonical;
+# Codex doesn't have a structured question tool.
+text = re.sub(
+    r"\bthe platform'?s question tool\b",
+    'the plain-text numbered prompt',
+    text,
+)
+
 # --- R2 instruction block injection ----------------------------------------
 # Inject the full plain-text numbered-prompt contract once per file. The
 # instruction tells the Codex agent how to render options, how to signal

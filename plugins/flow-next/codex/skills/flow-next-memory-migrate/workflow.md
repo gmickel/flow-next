@@ -113,7 +113,9 @@ Per file in scope:
 
 ### 0.5 — Confirmation gate (interactive only)
 
-Interactive: ask via blocking-question tool before starting Phase 1:
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+Interactive: ask via plain-text numbered prompt before starting Phase 1:
 
 ```
 Found <M> entries across <N> legacy files. Mechanical defaults will apply unless content
@@ -182,8 +184,6 @@ For each entry:
 
 **Interactive mode:**
 
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
 Use `plain-text numbered prompt`. Lead with the mechanical default as the recommendation:
 
 ```
@@ -225,7 +225,7 @@ This record drives Phase 2 writes and the Phase 3 report.
 
 - Every entry in scope has a `final_classification` and a `decision_kind`.
 - All overrides have a one-line rationale captured.
-- Interactive mode has resolved every ambiguous entry via blocking question.
+- Interactive mode has resolved every ambiguous entry via plain-text numbered prompt.
 - Autofix mode has logged ambiguous entries as `needs-review`.
 
 ---

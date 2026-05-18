@@ -255,7 +255,7 @@ Only include lines for config values that are set. If no config is set, skip thi
 
 ### 6d: Build questions list
 
-Build the questions array dynamically. **Only include questions for config values that are NOT already set.**
+Build the prompt content (question text + numbered option list) dynamically. **Only include questions for config values that are NOT already set.**
 
 Available questions (include only if corresponding config is unset):
 
@@ -373,7 +373,7 @@ For **Claude Code / Droid**:
 }
 ```
 
-Use `plain-text numbered prompt` with the built questions array.
+Print the prompt content built above and stop for the user's reply.
 
 **Note:** If docs are already current, adjust the Docs question description to mention "(already up to date)" or skip that question entirely.
 

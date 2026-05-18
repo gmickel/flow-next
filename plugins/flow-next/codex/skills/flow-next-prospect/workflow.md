@@ -195,7 +195,7 @@ Classify the hint by surface:
 - Matches one of `top N`, `N ideas`, `raise the bar` → `FOCUS_KIND=volume`. Volume semantics are interpreted in Phase 2 (task 2); record verbatim here.
 - Anything else → `FOCUS_KIND=concept`. Hint flows to Phase 2 prompts as-is.
 
-If `FOCUS_KIND == path` and `[[ ! -e "$REPO_ROOT/$FOCUS_PATH" ]]`, the hint resolves to nothing on disk. Ask via blocking question whether to (a) continue open-ended, (b) re-enter a different hint, or (c) abort. Do not assume open-ended silently — the user typed a path for a reason.
+If `FOCUS_KIND == path` and `[[ ! -e "$REPO_ROOT/$FOCUS_PATH" ]]`, the hint resolves to nothing on disk. Ask via plain-text numbered prompt whether to (a) continue open-ended, (b) re-enter a different hint, or (c) abort. Do not assume open-ended silently — the user typed a path for a reason.
 
 ### 1.2 — Collect signals (graceful degradation per source)
 
@@ -502,7 +502,7 @@ If PyYAML is unavailable on the host, fall back to the stdlib parser pattern fro
 
 Hand the validated list to Phase 3 as `CANDIDATES_YAML` (canonical form: re-serialize from the parsed object so downstream prompts get a clean shape).
 
-If fewer than `floor(GENERATION_TARGET_MIN * 0.7)` valid candidates survive validation, surface a blocking question:
+If fewer than `floor(GENERATION_TARGET_MIN * 0.7)` valid candidates survive validation, surface a plain-text numbered prompt:
 
 ```
 Phase 2 produced only K valid candidates (target was M-N). Options:
@@ -593,7 +593,7 @@ Pair each critique entry with its candidate by `index`. Compute:
 rejection_rate = drops / total
 ```
 
-If `rejection_rate < REJECTION_FLOOR`, surface a **blocking question** with the frozen options:
+If `rejection_rate < REJECTION_FLOOR`, surface a **plain-text numbered prompt** with the frozen options:
 
 ```
 Critique rejected only X% (below the ≥Y% floor). Options:
@@ -614,7 +614,7 @@ Materialize:
 - `SURVIVORS` — list of `{candidate, critique}` pairs where `critique.verdict == "keep"`. Order preserved from Phase 2.
 - `DROPS` — list of `{candidate, critique}` pairs where `critique.verdict == "drop"`. Used by Phase 5 (task 3) to populate the `## Rejected` section.
 
-If `len(SURVIVORS) == 0`, surface a blocking question:
+If `len(SURVIVORS) == 0`, surface a plain-text numbered prompt:
 
 ```
 Critique rejected every candidate. Options:
@@ -846,7 +846,7 @@ Empty buckets render `_(none)_`. Empty `## Rejected` renders `_(none)_`.
 
 **Goal:** offer the user a one-keystroke path from "artifact saved" to either a spec (via `flowctl prospect promote`), an interview (via `/flow-next:interview`), or a clean exit. The artifact already exists on disk by the time this phase fires — Ctrl-C here loses nothing.
 
-### 6.1 — Use the blocking-question tool
+### 6.1 — Use the plain-text numbered prompt
 
 Use `plain-text numbered prompt`. If the tool is unreachable, print the frozen-string format below and read the user's reply from chat.
 
@@ -862,7 +862,7 @@ The tool's free-text `description` field gets the artifact path so the user has 
 
 ### 6.2 — Frozen numbered-options fallback (R19)
 
-When no blocking tool is reachable (or the platform tool errors), print this **exact** string format. Do not paraphrase, re-order, or add commentary — the smoke test in task 6 grep-checks this format:
+When plain text is the prompt mechanism (or the platform tool errors), print this **exact** string format. Do not paraphrase, re-order, or add commentary — the smoke test in task 6 grep-checks this format:
 
 ```
 Saved: .flow/prospects/<artifact-id>.md

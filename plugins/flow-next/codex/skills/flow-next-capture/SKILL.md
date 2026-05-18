@@ -24,7 +24,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — `plain-text numbered prompt` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 0 (duplicate detection) and Phase 4 (read-back loop) both require user choice in interactive mode.
+**Inline skill (no `context: fork`)** — `plain-text numbered prompt` must stay reachable across phases. Subagents can't call plain-text numbered prompts (Claude Code issues #12890, #34592). Phase 0 (duplicate detection) and Phase 4 (read-back loop) both require user choice in interactive mode.
 
 ## Mode Detection
 
@@ -71,12 +71,12 @@ fi
 
 | Mode | When | Behavior |
 |------|------|----------|
-| **Interactive** (default) | User is at the terminal | Phase 0 asks on duplicate detection; Phase 3 asks on must-ask ambiguities; Phase 4 read-back via blocking-question tool — write only on `approve` |
+| **Interactive** (default) | User is at the terminal | Phase 0 asks on duplicate detection; Phase 3 asks on must-ask ambiguities; Phase 4 read-back via plain-text numbered prompt — write only on `approve` |
 | **Autofix** (`mode:autofix`) | Batch usage from another skill / scripted invocation | No user questions. Phase 0 hard-errors on duplicates / compaction without explicit overrides. Phase 3 must-ask cases hard-error (autofix can't ask). Phase 4 prints full draft + tally to stdout. **Writes ONLY when `--yes` is also passed**; without `--yes`, exit 0 with "draft printed; rerun with --yes to commit" |
 
 ### Autofix mode rules
 
-- **No user questions.** Never call the blocking-question tool.
+- **No user questions.** Never call the plain-text numbered prompt.
 - **Phase 0 hard-errors:** duplicate detected → list overlapping spec IDs to stderr, exit 2 unless `--rewrite <id>` was passed; compaction detected → exit 2 unless `--from-compacted-ok` was passed.
 - **Phase 3 must-ask hard-errors:** ambiguous title / untestable acceptance / scope-conflict-with-existing-spec → exit 2 with which case fired and why. Autofix cannot resolve must-ask cases.
 - **Phase 4 print-only.** Full draft printed to stdout (frontmatter + all sections + R-IDs + `[inferred]` tally + 8+ acceptance suggestion if applicable). Without `--yes`, exit 0 with the "rerun with --yes" hint. With `--yes`, proceed to Phase 5 write.
@@ -115,7 +115,7 @@ The goal is automated synthesis with human oversight on judgment calls — not a
 - **Code snippets or specific file paths in the spec body.** Those belong in `/flow-next:plan` task specs after research lands. Capture's output is a high-level spec, not an implementation guide.
 - **Silent overwrite of an existing spec.** Idempotency requires `--rewrite <spec-id>` (R8). Without it, Phase 0 conflict-detection branches into extend / supersede / proceed-anyway.
 - **Auto-splitting a spec that has 8+ acceptance criteria.** Phase 4 surfaces the option to split; the user decides. Never auto-action a split.
-- **Setting `context: fork`** — blocking-question tools must stay reachable.
+- **Setting `context: fork`** — plain-text numbered prompt must stay reachable.
 - **Calling `flowctl spec create` before Phase 4 approval.** Phase 5 is the only write phase.
 - **Using `git add -A` from this skill.** When committing the new spec, stage only the JSON sidecar (`.flow/specs/<id>.json` post-1.0; `.flow/epics/<id>.json` on alias-mode 0.x repos that haven't migrated yet) + `.flow/specs/<id>.md` (and `.flow/meta.json` if the next-id counter mutated). Other working-tree changes are not capture's concern.
 

@@ -739,7 +739,7 @@ EOF
 fi
 ```
 
-The literal suggestion phrasing matches the R25 spec verbatim ("business-requirements signals; consider `/flow-next:interview --scope=business <spec-id>`") so the surface text stays generic — capture does not enumerate which categories triggered the suggestion. Informational only — never a blocking prompt.
+The literal suggestion phrasing matches the R25 spec verbatim ("business-requirements signals; consider `/flow-next:interview --scope=business <spec-id>`") so the surface text stays generic — capture does not enumerate which categories triggered the suggestion. Informational only — never a plain-text numbered prompt.
 
 If Phase 4 surfaced 8+ acceptance criteria AND the user picked `approve` (not `consider-split`), append:
 
