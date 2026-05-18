@@ -45,9 +45,8 @@ Audit `plugins/flow-next/skills/flow-next-setup/workflow.md` for safe-default be
 - [ ] No regression: `smoke_test.sh` (covers setup-related flowctl init/config behavior) stays green.
 
 ## Done summary
-
-*Populated by /flow-next:work on completion.*
-
+Audited `flow-next-setup/workflow.md` for R5 acceptance: (1) existing config is now explicitly preserved by Step 6d (per-question gating on `CURRENT_*` empty, with the preserve-existing-config contract documented in prose so it's auditable); (2) `.flow/usage.md` (Step 4) and CLAUDE.md / AGENTS.md marker blocks (Step 7) now byte-compare against canonical and `AskUserQuestion` (Keep / Overwrite / abort) before replacing customized content — no silent clobber, and content outside the BEGIN/END FLOW-NEXT markers is explicitly invariant. Codex mirror regenerated cleanly via `./scripts/sync-codex.sh`; all 130 smoke tests pass; codex impl-review SHIP first-pass.
 ## Evidence
-
-*Populated by /flow-next:work on completion.*
+- Commits: be10a081a8aeb5bb36ab65876473b3fbdb208cff
+- Tests: bash plugins/flow-next/scripts/smoke_test.sh (130/130 pass, baseline + post-edit), ./scripts/sync-codex.sh (regenerated codex mirror cleanly; all validation guards pass), sync-codex.sh idempotency (md5sum-twice → IDENTICAL), flowctl codex impl-review fn-45-codex-plain-text-fallback-for.3 --base e536b62 → VERDICT=SHIP (first-pass)
+- PRs:
