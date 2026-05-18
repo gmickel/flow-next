@@ -146,7 +146,19 @@ chmod +x .flow/bin/flowctl
 
 `.flow/templates/spec.md` is the canonical 7-section spec scaffold that the AGENTS.md / CLAUDE.md snippet points downstream agents at. Copying it project-local means the path the snippet references resolves without depending on the plugin install location.
 
-Then read [templates/usage.md](templates/usage.md) and write it to `.flow/usage.md`.
+Then handle `.flow/usage.md` — preserve any repo-customized variant:
+
+1. Read [templates/usage.md](templates/usage.md) (this is the canonical content).
+2. If `.flow/usage.md` does not exist → write the canonical content.
+3. If `.flow/usage.md` exists → compare byte-for-byte with the canonical content:
+   - **Identical**: no-op (skip the write entirely — re-running setup must not bump mtime on unchanged files).
+   - **Customized** (any deviation): do NOT overwrite. Ask the user via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror):
+     - **header**: `Overwrite customized .flow/usage.md?`
+     - **body**: `.flow/usage.md exists and differs from the canonical template shipped with this plugin version. Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/skills/flow-next-setup/templates/usage.md\`).`
+     - **options**:
+       - `Keep mine (Recommended)` — leave `.flow/usage.md` unchanged. Print the path to the canonical template so the user can diff manually.
+       - `Overwrite with canonical` — replace `.flow/usage.md` with the template content. Repo customization is lost.
+       - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, Step 3 mkdir, Step 4 bin/template copies above) may already have run; they are idempotent and safe to leave. No `.flow/usage.md` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
 
 ## Step 4b: Codex-specific project setup (PLATFORM=codex only)
 
@@ -262,7 +274,9 @@ Only include lines for config values that are set. If no config is set, skip thi
 
 ### 6d: Build questions list
 
-Build the questions array dynamically. **Only include questions for config values that are NOT already set.**
+Build the questions array dynamically. **Only include questions for config values that are NOT already set** — existing config is preserved, never overwritten. To change an already-set value, the user runs `flowctl config set <key> <value>` directly (the commands are surfaced in 6c's current-config notice).
+
+Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The grouped single-prompt design (a single `AskUserQuestion` call below, with one questions array containing only the unset entries) means a re-run with all config set produces zero config questions and asks only the always-include Docs + Star questions.
 
 Available questions (include only if corresponding config is unset):
 
@@ -422,15 +436,27 @@ esac
 ```
 
 **Docs:**
-For each chosen file (CLAUDE.md and/or AGENTS.md):
-1. Read the file (create if doesn't exist)
-2. If marker exists: replace everything between `<!-- BEGIN FLOW-NEXT -->` and `<!-- END FLOW-NEXT -->` (inclusive)
-3. If no marker: append the snippet
 
 Use the correct template based on **target file** and **platform**:
 - AGENTS.md on **Codex**: use [templates/agents-md-snippet.md](templates/agents-md-snippet.md) (uses `$flow-next-plan` syntax)
 - AGENTS.md on **Claude Code / Droid**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (uses `/flow-next:plan` syntax)
 - CLAUDE.md (any platform): use [templates/claude-md-snippet.md](templates/claude-md-snippet.md)
+
+For each chosen file (CLAUDE.md and/or AGENTS.md) — preserve repo-custom content; only touch the marker block:
+
+1. Read the file (create if doesn't exist).
+2. **No marker block present** (`<!-- BEGIN FLOW-NEXT -->` absent): append the snippet at the end of the file. All pre-existing content outside the snippet is untouched.
+3. **Marker block present** — compare current marker-block content (everything between `<!-- BEGIN FLOW-NEXT -->` and `<!-- END FLOW-NEXT -->`, inclusive) against the canonical template byte-for-byte:
+   - **Identical**: no-op. Skip the write — re-running setup must not bump mtime on unchanged files.
+   - **Customized** (any deviation, including whitespace): do NOT silently replace. Ask the user via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror):
+     - **header**: `Overwrite customized <FILE>?` (substitute CLAUDE.md or AGENTS.md)
+     - **body**: `<FILE> contains a flow-next marker block that has been customized (differs from the canonical template shipped with this plugin version). Overwriting replaces your customizations within the marker block; pre-existing content outside the markers is untouched either way.`
+     - **options**:
+       - `Keep mine (Recommended)` — leave the marker block unchanged. Print the path to the canonical template so the user can diff manually (`${PLUGIN_ROOT}/skills/flow-next-setup/templates/<snippet>.md`).
+       - `Overwrite with canonical` — replace the marker block with the canonical snippet. Customizations inside the markers are lost; content outside the markers is preserved.
+       - `abort` — exit cleanly. Earlier steps (init, file copies, config writes, prior docs-file decisions for any already-processed file) may already have run; they are idempotent and safe to leave. Remaining docs files and Star step are skipped. Re-run `/flow-next:setup` later to complete setup.
+
+The marker-block boundaries are load-bearing: pre-existing prose outside `<!-- BEGIN FLOW-NEXT -->` … `<!-- END FLOW-NEXT -->` is **never** modified by this step. Only the bytes between (and including) those markers are candidates for replacement.
 
 **Star:**
 - If "Yes, star it":
