@@ -53,9 +53,8 @@ Audit canonical skills for destructive / irreversible / external actions (`.flow
 - [ ] Re-run `./scripts/sync-codex.sh`; mirror regenerates cleanly (no new validation-guard failures introduced by canonical edits).
 
 ## Done summary
-
-*Populated by /flow-next:work on completion.*
-
+Audited destructive-action sites listed in fn-45.2 acceptance R4 across canonical skills (flow-next-setup, flow-next-capture, flow-next-make-pr, flow-next-audit, flow-next-interview, flow-next-resolve-pr) and their post-fn-45.1 Codex mirrors. Found one gap: `flow-next-setup/workflow.md` Step 1b pre-1.0 migration consent prompt lacked an explicit `abort` option (`Migrate now` / `Defer` / `Suppress permanently` only). Added `abort` as the 4th option + explicit exit-path routing that acknowledges Step 1's `flowctl init` may already have run (idempotent — not rolled back); regenerated the Codex mirror via `./scripts/sync-codex.sh`. Codex impl-review cycled through 2 NEEDS_WORK iterations (option-label vs routing-text drift on what "abort" actually preserves vs discards) before SHIP. All other destructive sites (capture Phase 0.5/0.6/4, make-pr Phase 4.5, audit Phase 3/5.4/6, interview decision-record gate) already had abort or abort-equivalent options (`skip`, `Don't commit`, `no`) — no further canonical edits needed.
 ## Evidence
-
-*Populated by /flow-next:work on completion.*
+- Commits: 5b69147, 9adbceb, 28b498a, 041e51c
+- Tests: ./scripts/sync-codex.sh (regenerated codex mirror cleanly; all 12 validation guards passed including the R6 request_user_input guard), grep -rE 'request_user_input(...)' plugins/flow-next/codex/skills/ → PASS (no surviving refs), sync-codex.sh idempotency check (find ... md5sum twice) → IDENTICAL, flowctl codex impl-review fn-45-codex-plain-text-fallback-for.2 --base 5eccbe9 → VERDICT=SHIP (cycle 3, after 2 NEEDS_WORK fixes)
+- PRs:
