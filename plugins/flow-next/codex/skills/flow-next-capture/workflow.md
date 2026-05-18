@@ -115,7 +115,7 @@ Scan the visible conversation for any of:
 - Literal `[compacted]` markers.
 - Truncated tool-result patterns: `<...output too large to include>`, `(output truncated)`, `... (N more lines)`.
 - System-summary blocks (e.g. "Earlier in the conversation, the user...").
-- Suspicious gaps where a tool call shows no output but later turns reference its result.
+- Suspicious gaps where a prompt turn shows no output but later turns reference its result.
 
 If any are detected AND `FROM_COMPACTED_OK` is `0`, refuse:
 

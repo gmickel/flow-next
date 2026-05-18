@@ -720,6 +720,52 @@ text = re.sub(
     'plain-text numbered prompt',
     text,
 )
+# Interview-skill anti-patterns that assumed structured-tool prompts.
+# After fn-45, "output questions as text" IS the contract on Codex —
+# the "DO NOT" bullets directly contradict the plain-text instruction.
+# Strip both bullets and the "Anti-pattern (WRONG)" framing that followed
+# (the literal plain-text example WAS the bad pattern under structured
+# tools, but it IS the correct pattern on plain-text Codex).
+text = re.sub(
+    r'^- DO NOT output questions as text\n',
+    '',
+    text,
+    flags=re.MULTILINE,
+)
+text = re.sub(
+    r'^- DO NOT list questions in your response\n',
+    '',
+    text,
+    flags=re.MULTILINE,
+)
+# "per tool call" → "per prompt turn" — the multi-question batching
+# rule still applies, but framed for plain-text turns rather than
+# structured tool invocations.
+text = re.sub(
+    r'\bper tool call\b',
+    'per prompt turn',
+    text,
+)
+# "tool call" residual mentions in bullet items / inline prose.
+text = re.sub(
+    r'\bin a single tool call\b',
+    'in a single prompt turn',
+    text,
+)
+text = re.sub(
+    r'\btool call(s?)\b',
+    r'prompt turn\1',
+    text,
+)
+# The interview "Anti-pattern (WRONG)" example showed a plain-text
+# numbered question as the wrong pattern under structured tools — on
+# Codex that example IS the correct pattern. Drop the inverted framing
+# block entirely (header + fenced example + "Correct pattern:" line).
+text = re.sub(
+    r'\*\*Anti-pattern \(WRONG\)\*\*:\n```\nQuestion 1:[^`]+```\n\n\*\*Correct pattern\*\*:[^\n]*\n',
+    '',
+    text,
+)
 # "Per-finding blocking question" prose (used in R8 recap line) —
 # rewrite to drop the Claude-blocking-tool framing.
 text = re.sub(

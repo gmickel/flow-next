@@ -72,7 +72,7 @@ The goal is automated migration with human oversight on judgment calls — not a
 
 ## Subagent dispatch (mostly N/A)
 
-This skill runs almost entirely on the main thread. Phase 1's "one entry per tool call" rule means classification iterates serially in the orchestrator — there is no investigation step independent enough to dispatch in parallel. Cross-platform tool naming (`Task` on Claude Code, `spawn_agent` on Codex, platform-equivalent on Droid) is documented here only for the rare case where the agent needs to spawn a focused investigation subagent (e.g. resolving an ambiguous override by reading a referenced file): keep such dispatches read-only (Read / Grep / Glob), do not let subagents call `flowctl memory add` directly, and merge results back on the main thread before Phase 2.
+This skill runs almost entirely on the main thread. Phase 1's "one entry per prompt turn" rule means classification iterates serially in the orchestrator — there is no investigation step independent enough to dispatch in parallel. Cross-platform tool naming (`Task` on Claude Code, `spawn_agent` on Codex, platform-equivalent on Droid) is documented here only for the rare case where the agent needs to spawn a focused investigation subagent (e.g. resolving an ambiguous override by reading a referenced file): keep such dispatches read-only (Read / Grep / Glob), do not let subagents call `flowctl memory add` directly, and merge results back on the main thread before Phase 2.
 
 ## Forbidden
 
@@ -80,7 +80,7 @@ This skill runs almost entirely on the main thread. Phase 1's "one entry per too
 - **Migrating entries inside categorized directories** (`.flow/memory/{bug,knowledge}/<category>/*.md`). Those are already migrated; re-running on them is a bug.
 - **Auto-deleting legacy flat files.** Phase 4 renames originals to `.flow/memory/_migrated/<filename>.bak` for traceability — never `rm`. User can `git rm` later if they want.
 - **Inventing flowctl subcommands** beyond what Task 2 ships (`memory list-legacy`). Phase 2 writes via existing `flowctl memory add`. Mechanical map is documented in phases.md so the agent doesn't need to call a flowctl helper for it.
-- **Batch-classifying multiple entries in a single tool call.** Phase 1 enforces one entry per tool call. Agents under context pressure batch-classify in-prompt and silently skip entries (practice-scout flagged this real failure mode).
+- **Batch-classifying multiple entries in a single prompt turn.** Phase 1 enforces one entry per prompt turn. Agents under context pressure batch-classify in-prompt and silently skip entries (practice-scout flagged this real failure mode).
 - **Setting `context: fork`** — plain-text numbered prompt must stay reachable.
 - **Re-running on already-migrated files.** Phase 0 checks `.flow/memory/_migrated/<filename>.bak` and skips with an "already migrated" log line.
 
@@ -105,7 +105,7 @@ fi
 Execute the phases in [workflow.md](workflow.md) in order:
 
 0. **Detect & enumerate** — run `flowctl memory list-legacy --json`, check `_migrated/` for prior runs, apply scope hint, decide interaction path.
-1. **Classify (one entry per tool call)** — for each entry: read title + body + filename context, default to mechanical `(track, category)`, override only with body-driven evidence. Interactive: ask on ambiguity. Autofix: take mechanical default + log `needs-review`.
+1. **Classify (one entry per prompt turn)** — for each entry: read title + body + filename context, default to mechanical `(track, category)`, override only with body-driven evidence. Interactive: ask on ambiguity. Autofix: take mechanical default + log `needs-review`.
 2. **Write categorized entries** — invoke `flowctl memory add --track <t> --category <c> --title "..." --body-file <tmpfile>` per classified entry. Slug uniqueness handled by existing helper.
 3. **Verify + Report** — re-read newly created entries, print summary (legacy files processed, entries migrated, overrides, needs-review).
 4. **Optional cleanup** — interactive: ask whether to rename originals to `.flow/memory/_migrated/<filename>.bak`. Autofix: default-decline + surface as recommendation. On first cleanup, write `.flow/memory/_migrated/.gitignore` containing `*` (self-ignoring directory pattern). NEVER auto-delete.

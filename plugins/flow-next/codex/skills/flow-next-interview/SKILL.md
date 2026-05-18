@@ -219,19 +219,9 @@ When `DOC_AWARE=1`, behaviors (a)-(d) below layer onto the standard interview wo
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
-- DO NOT output questions as text
-- DO NOT list questions in your response
 - ONLY ask via the plain-text numbered prompt
-- Group 2-4 related questions per tool call
+- Group 2-4 related questions per prompt turn
 - Expect 40+ questions total for complex specs
-
-**Anti-pattern (WRONG)**:
-```
-Question 1: What database should we use?
-Options: a) PostgreSQL b) SQLite c) MongoDB
-```
-
-**Correct pattern**: Render the question and options as a plain-text numbered prompt (see below).
 
 ### Question Format: Lead with Recommendation
 
@@ -265,7 +255,7 @@ Concrete rules:
 1. **Cap branch depth at 4.** Research shows >4 prior turns rarely improves question quality — drop deeper threads, ask about something else. Heuristic; revisit if too restrictive in real use.
 2. **Discover-as-you-go**, not pre-compute. Adapt the next question based on prior answers. Don't lock a tree before you start.
 3. **Surface abandoned branches.** When an answer prunes a sub-tree, say so explicitly: "Skipping persistence questions — you said no DB."
-4. **One `plain-text numbered prompt` call per turn**, period — never queue multiple tool calls back-to-back. Within that single call you may bundle 2-4 closely-related sub-questions per the existing batching rule above; do NOT pad with loosely-related questions just to hit four. The intent: one focused checkpoint per turn so the user isn't barraged with unrelated decisions in parallel. Use multi-select within a sub-question when options are non-exclusive.
+4. **One `plain-text numbered prompt` call per turn**, period — never queue multiple prompt turns back-to-back. Within that single call you may bundle 2-4 closely-related sub-questions per the existing batching rule above; do NOT pad with loosely-related questions just to hit four. The intent: one focused checkpoint per turn so the user isn't barraged with unrelated decisions in parallel. Use multi-select within a sub-question when options are non-exclusive.
 
 Example flow:
 

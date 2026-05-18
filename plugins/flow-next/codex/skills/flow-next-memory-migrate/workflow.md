@@ -138,13 +138,13 @@ Autofix: skip the gate and proceed.
 
 ---
 
-## Phase 1: Classify (one entry per tool call)
+## Phase 1: Classify (one entry per prompt turn)
 
 **Goal:** for each legacy entry, decide the final `(track, category)` pair using mechanical default + body-driven evidence.
 
-### 1.1 — The "one entry per tool call" rule
+### 1.1 — The "one entry per prompt turn" rule
 
-Iterate entries one at a time. **Do not classify multiple entries in a single prompt or tool call.** Practice-scout flagged this as a real failure mode: agents under context pressure batch-classify in-prompt and silently skip entries. One-call-per-entry iteration discipline avoids this and gives clean per-entry verdict logging.
+Iterate entries one at a time. **Do not classify multiple entries in a single prompt or prompt turn.** Practice-scout flagged this as a real failure mode: agents under context pressure batch-classify in-prompt and silently skip entries. One-call-per-entry iteration discipline avoids this and gives clean per-entry verdict logging.
 
 For each entry in `WORKING_SET`:
 
@@ -430,7 +430,7 @@ Created: .flow/memory/_migrated/.gitignore (self-ignoring; first run only)
 The skill itself is markdown — there's no unit-test surface. The validation is invoking `/flow-next:memory-migrate` in a real session. Expected behavior:
 
 - Phase 0 detects legacy files via `flowctl memory list-legacy --json`, skips already-migrated ones, applies scope hint, prints triage summary.
-- Phase 1 iterates entries one per tool call; mechanical defaults applied unless body warrants override; ambiguous entries asked (interactive) or marked needs-review (autofix).
+- Phase 1 iterates entries one per prompt turn; mechanical defaults applied unless body warrants override; ambiguous entries asked (interactive) or marked needs-review (autofix).
 - Phase 2 writes via `flowctl memory add --track <t> --category <c> ...`. Slug uniqueness handled.
 - Phase 3 verifies round-trip + prints report.
 - Phase 4 (optional) renames originals to `_migrated/<filename>.bak`; first-run writes `_migrated/.gitignore: *`.
