@@ -66,8 +66,18 @@ Replace `scripts/sync-codex.sh` Stage 3 (lines 510-514: the 3-line sed block tha
 
 ## Done summary
 
-*Populated by /flow-next:work on completion.*
+Replaced `scripts/sync-codex.sh` Stage 3 sed block (canonical `AskUserQuestion` → `request_user_input`) with a Python heredoc that rewrites canonical Claude `AskUserQuestion` invocations into a plain-text numbered-prompt instruction for the Codex mirror. The mirror never calls `request_user_input` (Plan-mode-only per openai/codex #10384/#11536/#12694). Added R6 validation guards (`rui_refs`) that fail sync if forbidden `request_user_input` patterns survive into the mirror. Stage 1 breadcrumb-strip regex was widened to tolerate multi-line parentheticals; ToolSearch stripper ordering was corrected so Stage 3 sees a clean canonical input. Codex mirror regenerated for all 24 skills; byte-identical idempotency confirmed across two consecutive sync runs.
 
 ## Evidence
 
-*Populated by /flow-next:work on completion.*
+- Commits: 8c286f0 (initial transform), 063b06e (skip neg ctx + table rows + UI prose), 128030c (active-ask anchors + ToolSearch ordering), f584da9 (structured-tool prose rewrites: multiSelect, blocking-question), 05a6ce6 (drop interview anti-pattern contradicting plain-text), 096a325 (capture memory entry)
+- Tests:
+  - `./scripts/sync-codex.sh` exits 0; all validation guards pass
+  - `bash plugins/flow-next/scripts/smoke_test.sh` — 130/130 pass
+  - `bash plugins/flow-next/scripts/audit_smoke_test.sh` — 41/41 pass
+  - `bash plugins/flow-next/scripts/prospect_smoke_test.sh` — 94/94 pass
+  - `bash plugins/flow-next/scripts/ralph_smoke_test.sh` — 15/15 pass
+  - Idempotency: `find codex -type f -name '*.md' -exec md5sum {} + | sort | md5sum` identical across two consecutive sync runs
+  - Standalone R6 guard: `grep -rE '\`request_user_input\`|request_user_input tool|request_user_input\(|MUST use \`request_user_input\`|ONLY ask via \`request_user_input\`' plugins/flow-next/codex/skills/ | grep -v '/templates/'` returns empty
+  - Codex impl-review verdict SHIP (after 4 NEEDS_WORK iterations + fixes)
+- PRs: —
