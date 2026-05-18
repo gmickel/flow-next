@@ -68,6 +68,7 @@ When `PRE_1_0_LAYOUT=1`, prompt via `plain-text numbered prompt` ( in T15):
  - `Migrate now` — apply migration via `flowctl migrate-rename --yes`. Safe (backup written to `.flow/.backup-pre-1.0/`, rollback via `flowctl migrate-rollback`).
  - `Defer` — keep alias mode, suppress the auto-detect banner for 7 days. Re-prompted on the next `flowctl` invocation after the window expires.
  - `Suppress permanently` — keep alias mode, never auto-prompt. Print instructions for the `FLOW_NO_AUTO_MIGRATE=1` env var so the user can suppress the banner across the whole machine.
+ - `abort` — exit cleanly. No migration, no banner-ack write, no setup changes. Re-run `/flow-next:setup` later to retry.
 
 ### Routing the answer
 
@@ -97,7 +98,13 @@ Alias mode keeps your existing .flow/epics/ layout working indefinitely.
 You can still migrate later via: flowctl migrate-rename --yes
 ```
 
-**Continue to Step 2 regardless of answer.** Migration choice is independent of the rest of setup.
+**abort**:
+Exit 0 immediately — no migration, no banner-ack file write, no Step 2-onward setup changes. Print:
+```
+Setup cancelled. No changes made. Re-run /flow-next:setup later to retry.
+```
+
+**Continue to Step 2 regardless of answer (except `abort`, which exits 0).** Migration choice is otherwise independent of the rest of setup.
 
 ## Step 2: Check existing setup
 
