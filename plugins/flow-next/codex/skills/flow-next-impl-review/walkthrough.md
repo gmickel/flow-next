@@ -39,7 +39,7 @@ question tool** (a tool that pauses the agent until the user answers):
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
-Use `plain-text numbered prompt`. It's a deferred tool — call first to load its schema if it isn't already in scope.
+Use `plain-text numbered prompt`.
 
 If the tool is unreachable, fall through to a chat-prompt fallback (print
 the question, wait for the user's next message). The fallback is less

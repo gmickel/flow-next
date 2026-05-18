@@ -10,8 +10,6 @@ Before asking any question, classify it on three axes:
 |----------|-------------|----------|
 | **Codebase-answerable** | Agent (Read / Grep / Glob) | "What persistence layer is used?" / "Where do existing routes live?" / "What's the test framework?" |
 | **Glossary-lookup-answerable** (`DOC_AWARE=1` only) | Agent (`flowctl glossary read`) | "What does this project mean by 'worker'?" / "Is 'session' the canonical term here, or is it 'connection'?" |
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
 | **User-judgment-required** | User (`plain-text numbered prompt`) | "Should we add caching?" / "What's the priority for offline support?" / "Is performance or simplicity more important here?" |
 
 **Rules of thumb:**

@@ -197,7 +197,7 @@ Informational only. No fixes offered — address independently if desired.
 
 ### Using plain-text numbered prompt correctly
 
-The tool provides an interactive UI. Each question should:
+Each question should:
 - Have a clear header (max 12 chars)
 - Explain what each option does and WHY it helps agents
 - Use `multiSelect: true` so users can pick multiple items

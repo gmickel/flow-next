@@ -642,6 +642,27 @@ text = re.sub(
     text,
 )
 
+# L. Strip Claude-only schema-loader prose left over after AskUserQuestion
+#    substitution. Examples (post-substitution):
+#      "Use `plain-text numbered prompt`. It's a deferred tool — call first
+#       to load its schema if it isn't already in scope."
+#    On Codex there is no schema to load — strip the deferred-tool sentence.
+text = re.sub(
+    r" It'?s a deferred tool — call first to load its schema if it isn'?t already in scope\.",
+    '',
+    text,
+)
+
+# M. Strip / soften UI-shape prose that assumes a structured prompt tool.
+#    "The tool provides an interactive UI." → drop the sentence (its
+#    immediate sibling sentences still describe per-question structure
+#    advice that translates fine to plain text).
+text = re.sub(
+    r'The tool provides an interactive UI\. ?',
+    '',
+    text,
+)
+
 # --- R2 instruction block injection ----------------------------------------
 # Inject the full plain-text numbered-prompt contract once per file. The
 # instruction tells the Codex agent how to render options, how to signal
@@ -656,13 +677,34 @@ INSTRUCTION = (
     'text after `Other` → custom answer.'
 )
 
+def is_negative_context(line):
+    """True when 'plain-text numbered prompt' appears only inside a 'Never
+    use ...' / 'do NOT use ...' mandate — auto-fix-loop sites where the
+    R2 instruction would contradict the surrounding prose. Surface as the
+    only-match-on-line check, since these mandates are single-line."""
+    if 'Never use' in line and 'plain-text numbered prompt' in line:
+        return True
+    if 'do NOT use' in line and 'plain-text numbered prompt' in line:
+        return True
+    return False
+
+def is_table_line(line):
+    """True for markdown table rows or delimiter rows. Injecting a
+    paragraph between table rows breaks the table — skip these as
+    injection anchors."""
+    stripped = line.lstrip()
+    return stripped.startswith('|') or stripped.startswith('|-')
+
 # Inject once per file. Two strategies, in priority order:
 #  1. If a hard-mandate pattern (A/B/C) fired, it left a "described below"
 #     sentinel. Splice the instruction immediately after that paragraph.
-#  2. Otherwise, if the original file referenced AskUserQuestion in prose,
-#     splice the instruction immediately before the FIRST `plain-text
-#     numbered prompt` token so the substituted noun phrase has a definition
-#     the agent can resolve.
+#  2. Otherwise, if the original file referenced AskUserQuestion in prose
+#     in an affirmative context, splice the instruction immediately before
+#     the FIRST positive (non-negative, non-table) noun-phrase reference so
+#     the substituted noun phrase has a definition the agent can resolve.
+#     If every remaining reference is a negative mandate or sits inside a
+#     markdown table, skip injection entirely — the surrounding prose is
+#     either contradicting it or structurally fragile.
 if 'described below' in text:
     lines = text.split('\n')
     out = []
@@ -676,15 +718,25 @@ if 'described below' in text:
     text = '\n'.join(out)
 elif had_ask_in_prose and 'plain-text numbered prompt' in text:
     lines = text.split('\n')
-    out = []
-    injected = False
-    for line in lines:
-        if not injected and 'plain-text numbered prompt' in line:
-            out.append(INSTRUCTION)
-            out.append('')
-            injected = True
-        out.append(line)
-    text = '\n'.join(out)
+    # Find the first positive (non-negative, non-table) anchor line.
+    anchor_idx = -1
+    for i, line in enumerate(lines):
+        if 'plain-text numbered prompt' not in line:
+            continue
+        if is_negative_context(line):
+            continue
+        if is_table_line(line):
+            continue
+        anchor_idx = i
+        break
+    if anchor_idx >= 0:
+        out = []
+        for i, line in enumerate(lines):
+            if i == anchor_idx:
+                out.append(INSTRUCTION)
+                out.append('')
+            out.append(line)
+        text = '\n'.join(out)
 
 # Collapse double spaces / blank-line runs left over from substitutions.
 text = re.sub(r'  +', ' ', text)
