@@ -191,7 +191,7 @@ Informational only. No fixes offered — address independently if desired.
 
 **If `--fix-all`**: Skip to Phase 6, apply all recommendations from Pillars 1-5.
 
-**CRITICAL**: For consent, you MUST ask via the plain-text numbered prompt described below. Do NOT just print questions as text.
+**CRITICAL**: For consent, you MUST ask via the plain-text numbered prompt described below.
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
@@ -305,7 +305,7 @@ Ask ONE question per category that has recommendations. Skip categories with no 
 
 ### Rules for Questions
 
-1. **MUST ask via the plain-text numbered prompt described below** — Never just print questions as text
+1. **MUST ask via the plain-text numbered prompt described below**
 2. **Mark recommended items** — Add "(Recommended)" to high-impact options
 3. **Mark bonus items** — Add "(Bonus)" to nice-to-have options
 4. **Explain agent benefit** — Each description should say WHY it helps agents

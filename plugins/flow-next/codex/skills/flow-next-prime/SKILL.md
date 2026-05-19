@@ -106,7 +106,7 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 - Respect .gitignore patterns
 
 ### User Consent
-- **MUST ask via the plain-text numbered prompt described below** for consent. Never just print questions as text.
+- **MUST ask via the plain-text numbered prompt described below** for consent.
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 - Always ask before modifying existing files

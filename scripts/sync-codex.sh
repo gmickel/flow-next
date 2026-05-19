@@ -665,6 +665,29 @@ text = re.sub(
     text,
 )
 
+# L2. Strip the vestigial "Do NOT / Never just print questions as text"
+#     anti-print prose. In canonical (Claude) it correctly means "use the
+#     structured AskUserQuestion tool, not bare prose". After the A-K
+#     rewrites turn the tool reference into the plain-text numbered prompt,
+#     the same sentence becomes a self-contradiction ("ask via plain text
+#     ... but do not print as text"). Drop it in the mirror. Covers:
+#       1. " — Never just print questions as text" (em-dash bullet form,
+#          no trailing period — appears mid-bullet, run FIRST so the
+#          generic rule below doesn't leave a dangling em-dash)
+#       2. " Do NOT just print questions as text." (trailing-sentence form)
+#       3. " Never just print questions as text." (trailing-sentence form,
+#          appears after bullet body in SKILL.md)
+text = re.sub(
+    r' — (?:Do NOT|Never) just print questions as text\.?',
+    '',
+    text,
+)
+text = re.sub(
+    r' (?:Do NOT|Never) just print questions as text\.?',
+    '',
+    text,
+)
+
 # M. Strip / soften UI-shape prose that assumes a structured prompt tool.
 #    "The tool provides an interactive UI." → drop the sentence (its
 #    immediate sibling sentences still describe per-question structure
