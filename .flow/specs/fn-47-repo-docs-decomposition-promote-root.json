@@ -12,7 +12,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-47-repo-docs-decomposition-promote-root.md",
-  "status": "open",
+  "status": "done",
   "title": "Repo docs decomposition: promote root README + flat docs/ + workflow narrative",
-  "updated_at": "2026-05-20T11:45:24.188217Z"
+  "updated_at": "2026-05-20T13:00:00.582338Z"
 }
