@@ -113,7 +113,72 @@ flowchart LR
     A -.-> M[(.flow/memory/)]
 ```
 
-_(The 6-step workflow narrative — Capture/Prospect → Interview → Plan → Work → Make-PR → Resolve-PR — will be populated by a follow-up phase. For the team-oriented walkthrough today see [`docs/teams.md`](plugins/flow-next/docs/teams.md). For visual overview see [flow-next.dev](https://flow-next.dev) or [`mickel.tech/apps/flow-next`](https://mickel.tech/apps/flow-next).)_
+The loop is spec-driven. Each step below maps to one skill; click through to flow-next.dev for the full page.
+
+### 1. Capture or prospect a spec
+
+Either synthesize an existing conversation into a structured spec (source-tagged, mandatory read-back), or — when starting from scratch — generate ranked candidate ideas grounded in the repo. Both land in `.flow/specs/<id>.md`.
+
+```bash
+/flow-next:capture                    # from a conversation
+/flow-next:prospect <focus-hint>      # from a focus hint (concept, path, constraint, volume)
+```
+
+→ [flow-next.dev/skills/capture](https://flow-next.dev/skills/capture) · [flow-next.dev/skills/prospect](https://flow-next.dev/skills/prospect)
+
+### 2. Interview to refine
+
+Deep Q&A pass over a spec or task: lead-with-recommendation, confidence tiers, codebase-first investigation. Use to flesh out an ambiguous spec before breaking it down. `--scope=business|technical|both` symmetrically narrows the pass.
+
+```bash
+/flow-next:interview <spec-id>
+```
+
+→ [flow-next.dev/skills/interview](https://flow-next.dev/skills/interview)
+
+### 3. Plan into dependency-ordered tasks
+
+Research the codebase, then write the spec + tasks together. Tasks `fn-N.M` declare blockers, inherit context from the parent spec, and stay dependency-ordered. This skill does not write code — only the plan.
+
+```bash
+/flow-next:plan <spec-id>             # or <free-form text>
+```
+
+→ [flow-next.dev/skills/plan](https://flow-next.dev/skills/plan)
+
+### 4. Work through the tasks
+
+Execute tasks systematically: each runs in a fresh-context worker subagent, re-anchors against the spec before starting, then implements + commits + records evidence. Cross-model review gates (`impl-review`, `plan-review`) wrap the loop.
+
+```bash
+/flow-next:work <spec-id>             # or <task-id>
+```
+
+→ [flow-next.dev/skills/work](https://flow-next.dev/skills/work)
+
+### 5. Open the PR with a cognitive-aid body
+
+Render a PR body from nine flow-next input streams (spec R-IDs, per-task evidence, memory hits, glossary changes, strategy alignment, deferred review findings, the diff itself). Optional mermaid diagrams on module-boundary changes. Pushes via `gh`.
+
+```bash
+/flow-next:make-pr <spec-id>          # auto-detects from current branch
+```
+
+→ [flow-next.dev/skills/make-pr](https://flow-next.dev/skills/make-pr)
+
+### 6. Resolve PR review feedback
+
+Fetch unresolved threads + top-level comments + review-submission bodies, cluster them, dispatch per-thread resolver agents (parallel on Claude Code, serial elsewhere), validate, commit, then reply + resolve via GraphQL.
+
+```bash
+/flow-next:resolve-pr <PR#>
+```
+
+→ [flow-next.dev/skills/resolve-pr](https://flow-next.dev/skills/resolve-pr)
+
+---
+
+**Going autonomous?** `/flow-next:ralph-init` scaffolds a repo-local Ralph harness under `scripts/ralph/`. Ralph loops the same steps overnight with fresh context per iteration, multi-model review gates, and auto-block on stuck tasks. → [flow-next.dev/ralph](https://flow-next.dev/ralph)
 
 ---
 
