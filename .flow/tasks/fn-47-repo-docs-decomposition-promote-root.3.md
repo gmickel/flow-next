@@ -93,9 +93,8 @@ Fill in the "How the flow works" 6-step narrative in the root `README.md` (Phase
 - [ ] No version bump.
 
 ## Done summary
-
-*Populated by /flow-next:work on completion.*
-
+Filled the "How the flow works" placeholder in root `README.md` with a 6-step workflow narrative (Capture/Prospect -> Interview -> Plan -> Work -> Make-PR -> Resolve-PR + optional Ralph footer), each step ~5-10 lines with verbatim SKILL.md descriptions, invocation snippet, and flow-next.dev deep-link. Audited the Phase-2 "Where to look" table (all 18 rows resolve — no changes needed). Produced an 8-gap handover prompt for the docs-site agent (skills/prospect, capture, interview, audit, prime, make-pr, resolve-pr + top-level memory) and copied it to the macOS clipboard via `pbcopy`. Final README is 314 lines (well under the 400 cap); 612/612 unit + 130/130 smoke green; sync-codex clean; no version bump. flow-next.dev deep-links are intentionally eventual-consistent — they resolve once the docs-site agent lands the 8 gap pages.
 ## Evidence
-
-*Populated by /flow-next:work on completion.*
+- Commits: 8ba6c93d9ba6de21b1d1218d759e65609d2b3426
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests  (612/612 OK), bash plugins/flow-next/scripts/smoke_test.sh  (130/130 from /tmp), ./scripts/sync-codex.sh  (24 skills, 21 agents, all validation guards green)
+- PRs:

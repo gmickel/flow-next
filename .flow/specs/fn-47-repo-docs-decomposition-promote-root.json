@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-47-docs-decomposition",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-05-20T11:45:24.188051Z",
   "created_at": "2026-05-20T10:47:13.539549Z",
   "default_impl": null,
   "default_review": null,
@@ -14,5 +14,5 @@
   "spec_path": ".flow/specs/fn-47-repo-docs-decomposition-promote-root.md",
   "status": "open",
   "title": "Repo docs decomposition: promote root README + flat docs/ + workflow narrative",
-  "updated_at": "2026-05-20T10:59:13.991196Z"
+  "updated_at": "2026-05-20T11:45:24.188217Z"
 }
