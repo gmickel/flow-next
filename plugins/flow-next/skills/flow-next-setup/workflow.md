@@ -146,6 +146,73 @@ chmod +x .flow/bin/flowctl
 
 `.flow/templates/spec.md` is the canonical 7-section spec scaffold that the AGENTS.md / CLAUDE.md snippet points downstream agents at. Copying it project-local means the path the snippet references resolves without depending on the plugin install location.
 
+### Step 4a: Opt-in `<repo_root>/SPEC.md` customization (interactive)
+
+The spec-template discovery cascade prefers a customized scaffold at the repo root over `.flow/templates/spec.md` and the bundled plugin copy. This step lets the user opt into seeding `<repo_root>/SPEC.md` from the canonical template so they can edit it without diving into `.flow/templates/`.
+
+**Detect what's already at the repo root** (case-insensitive FS handling — macOS APFS, Windows NTFS):
+
+```bash
+HITS=$(ls -1 SPEC.md spec.md 2>/dev/null | sort -u | wc -l | tr -d ' ')
+```
+
+Then branch:
+
+**1. `HITS=0` (neither file exists)** — ask the user via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror):
+
+- **header**: `Copy canonical spec template to <repo-root>/SPEC.md?`
+- **body**: `The spec template discovery cascade prefers <repo-root>/SPEC.md over .flow/templates/spec.md, so customizations there apply to every new spec without affecting other projects. The canonical template at ${PLUGIN_ROOT}/templates/spec.md ships with the 7 canonical sections, scope-owner annotations, and the ## Decision Context H3 conditional. Skipping is safe — the cascade falls through to .flow/templates/spec.md (just copied above), so all downstream skills still resolve a template.`
+- **options**:
+  - `Copy template` — write `<repo_root>/SPEC.md` from the bundled template (carries the customization-location top-comment). Print the path so the user knows where to edit.
+  - `Skip` — no write. Cascade falls through to `.flow/templates/spec.md`. Documentation cross-links (CLAUDE.md / AGENTS.md snippets) explain how to opt in later: just copy `.flow/templates/spec.md` to `<repo-root>/SPEC.md`.
+  - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, Step 3 mkdir, Step 4 bin/template copies above) may already have run; they are idempotent and safe to leave. No `<repo_root>/SPEC.md` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
+
+On `Copy template`: write the file via Bash `cp` with absolute paths.
+
+```bash
+cp "${PLUGIN_ROOT}/templates/spec.md" SPEC.md
+```
+
+**2. `HITS=1` (single hit OR case-insensitive FS collapsing both to one)** — use whichever exists (no prompt). Fall through to the byte-compare re-setup gate below.
+
+**3. `HITS=2` (case-sensitive FS with both distinct files)** — prefer uppercase + print a stderr warning, then fall through to the byte-compare gate against `SPEC.md`:
+
+```bash
+echo "warn: both SPEC.md and spec.md exist at repo root; preferring uppercase. Unusual setup likely from cross-platform sync." >&2
+```
+
+**Re-setup byte-compare gate** (when SPEC.md exists from a prior `/flow-next:setup`-`Copy template` and the user may have edited it). Read both sides and normalize before comparing:
+
+```bash
+# Normalize: strip trailing newlines + replace CRLF with LF
+USER_CONTENT=$(cat SPEC.md | tr -d '\r')
+CANONICAL_CONTENT=$(cat "${PLUGIN_ROOT}/templates/spec.md" | tr -d '\r')
+# Strip trailing newlines from both
+USER_NORM=$(printf '%s' "$USER_CONTENT")
+CANONICAL_NORM=$(printf '%s' "$CANONICAL_CONTENT")
+```
+
+Or in Python:
+
+```python
+def normalize(b: bytes) -> bytes:
+    return b.replace(b"\r\n", b"\n").rstrip(b"\n")
+identical = normalize(user_bytes) == normalize(canonical_bytes)
+```
+
+Then:
+
+- **Identical** (after normalization): no-op. Skip the write — re-running setup must not bump mtime on unchanged files.
+- **Customized** (any deviation after normalization): do NOT silently replace. Ask the user via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror):
+  - **header**: `Overwrite customized <repo-root>/SPEC.md?`
+  - **body**: `<repo-root>/SPEC.md exists and differs from the canonical template shipped with this plugin version (CRLF and trailing newlines ignored). Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/templates/spec.md\`).`
+  - **options**:
+    - `Keep mine (Recommended)` — leave `<repo-root>/SPEC.md` unchanged. Print the path to the canonical template so the user can diff manually.
+    - `Overwrite with canonical` — replace `<repo-root>/SPEC.md` with the bundled template content. Repo customization is lost.
+    - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, Step 3 mkdir, Step 4 bin/template copies above) may already have run; they are idempotent and safe to leave. No `<repo-root>/SPEC.md` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
+
+**Note:** Setup writes uppercase `SPEC.md` only. Never write lowercase `spec.md`. The lowercase entry in the cascade is read-only — present only for users who deliberately created lowercase.
+
 Then handle `.flow/usage.md` — preserve any repo-customized variant:
 
 1. Read [templates/usage.md](templates/usage.md) (this is the canonical content).
@@ -482,6 +549,7 @@ Installed:
 - .flow/bin/flowctl.py
 - .flow/templates/spec.md
 - .flow/usage.md
+- <repo-root>/SPEC.md (only if Step 4a "Copy template" was chosen — otherwise omit this line)
 ```
 
 **If PLATFORM=codex, also show:**

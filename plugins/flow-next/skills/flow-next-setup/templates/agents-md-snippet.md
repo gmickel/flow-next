@@ -16,14 +16,14 @@ This project uses Flow-Next for task tracking. Use `.flow/bin/flowctl` instead o
 
 **Creating a spec** ("create a spec", "spec out X", "write a spec for X"):
 
-Create one directly — do NOT use `$flow-next-plan` (that breaks specs into tasks). The canonical 7-section spec scaffold lives at `.flow/templates/spec.md` (copied here by `$flow-next-setup`) — read it for the section list, scope ownership, and `## Decision Context` H3 conditional.
+Create one directly — do NOT use `$flow-next-plan` (that breaks specs into tasks). The canonical 7-section spec scaffold lives at `.flow/templates/spec.md` (copied here by `$flow-next-setup`) — read it for the section list, scope ownership, and `## Decision Context` H3 conditional. To customize the scaffold for this project, copy `.flow/templates/spec.md` to `<repo-root>/SPEC.md` and edit there — the discovery cascade prefers it (first match wins): `<repo_root>/SPEC.md` → `<repo_root>/spec.md` → `.flow/templates/spec.md` → bundled plugin template.
 
 ```bash
 .flow/bin/flowctl spec create --title "Short title" --json
 .flow/bin/flowctl spec set-plan <spec-id> --file - --json <<'EOF'
 # Title
 
-# ... fill the 7 canonical sections (see .flow/templates/spec.md)
+# ... fill the 7 canonical sections (see SPEC.md / .flow/templates/spec.md)
 EOF
 ```
 

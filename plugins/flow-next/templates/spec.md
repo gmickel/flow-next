@@ -4,7 +4,6 @@ consumers:
   - flow-next-capture        # synthesizes a spec from conversation context
   - flow-next-interview      # refines a spec via Q&A (--scope=business|technical|both)
   - flow-next-plan           # breaks a spec into tasks
-  - flow-next-work           # implements tasks against the spec
   - CLAUDE.md                # "Creating a spec" guide cross-links here rather than embedding
 canonical_sections:
   - Goal & Context           # scope: business
@@ -40,6 +39,16 @@ nest — see https://html.spec.whatwg.org/multipage/syntax.html#comments.)
 R-IDs in `## Acceptance Criteria` are append-only across passes. Never renumber.
 Never replace existing entries. A later pass appends new criteria with the next
 unused number.
+-->
+
+<!--
+To customize for your project, copy this file to `<repo-root>/SPEC.md` and edit there.
+
+Discovery cascade (first match wins):
+  1. <repo_root>/SPEC.md           (your customized scaffold — uppercase preferred)
+  2. <repo_root>/spec.md           (lowercase honored when uppercase absent)
+  3. .flow/templates/spec.md       (project-local copy from /flow-next:setup)
+  4. bundled ${PLUGIN_ROOT}/templates/spec.md  (this file — canonical source of truth)
 -->
 
 # <spec-id> <Title>
