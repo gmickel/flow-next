@@ -2,7 +2,7 @@
 
 `STRATEGY.md` is a project-canonical strategic-intent file shipped in v0.40.0. Lives at the **repo root** (peer of `GLOSSARY.md` / `README.md`), NOT inside `.flow/`. Survives `rm -rf .flow/` — strategic intent is the project's, not flow-next's (R1 / R22, mirrors the glossary R18 invariant).
 
-> Canonical example for this repo: [`../../STRATEGY.md`](../../STRATEGY.md).
+> Canonical example for this repo: [`../../../STRATEGY.md`](../../../STRATEGY.md).
 > The skill that writes/maintains it: `plugins/flow-next/skills/flow-next-strategy/` — `/flow-next:strategy` is the editor. NO `flowctl strategy add/edit` plumbing (prose is too heavy for atomic field-set CLI).
 
 ## Format
@@ -56,10 +56,10 @@ A `STRATEGY.md` without `generator: flow-next-strategy` frontmatter (or with a d
 
 ## Forbidden vocabulary (R19, separate from R17 DDD)
 
-Tier 1 jargon only — Rumelt's "fluff" hallmarks: `synergy / pivot / disrupt / thought-leadership / best-in-class / world-class / 10x`. Two-tier guard: canonical scan in `ci_test.sh` (separate block from R17 — never merge them) covers `flow-next-strategy/SKILL.md` + `cmd_strategy_*` regions in `flowctl.py` + `commands/flow-next/strategy.md`; mirror scan in [`../../scripts/sync-codex.sh`](../../scripts/sync-codex.sh) validation block covers `plugins/flow-next/codex/skills/flow-next-strategy/`. The `references/interview.md` file is excluded — it must describe these anti-patterns to push back on them.
+Tier 1 jargon only — Rumelt's "fluff" hallmarks: `synergy / pivot / disrupt / thought-leadership / best-in-class / world-class / 10x`. Two-tier guard: canonical scan in `ci_test.sh` (separate block from R17 — never merge them) covers `flow-next-strategy/SKILL.md` + `cmd_strategy_*` regions in `flowctl.py` + `commands/flow-next/strategy.md`; mirror scan in [`../../../scripts/sync-codex.sh`](../../../scripts/sync-codex.sh) validation block covers `plugins/flow-next/codex/skills/flow-next-strategy/`. The `references/interview.md` file is excluded — it must describe these anti-patterns to push back on them.
 
 ## See also
 
-- [`../../STRATEGY.md`](../../STRATEGY.md) — canonical strategy for this repo.
+- [`../../../STRATEGY.md`](../../../STRATEGY.md) — canonical strategy for this repo.
 - [`glossary.md`](glossary.md) — peer doc for repo-root `GLOSSARY.md`.
 - [`memory-schema.md`](memory-schema.md) — `knowledge/decisions/` subtree pairs naturally with strategy for load-bearing track choices.

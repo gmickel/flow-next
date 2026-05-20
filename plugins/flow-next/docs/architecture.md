@@ -119,4 +119,4 @@ The legacy `flow` plugin was removed in flow-next 1.0.2 (commit `ffc7189`). The 
 - [`memory-schema.md`](memory-schema.md) — categorized `.flow/memory/` schema.
 - [`flowctl.md`](flowctl.md) — full CLI reference.
 - [`../README.md`](../README.md) — plugin overview.
-- [`../../GLOSSARY.md`](../../GLOSSARY.md) — Spec, Task, Handover object, Receipt.
+- [`../../../GLOSSARY.md`](../../../GLOSSARY.md) — Spec, Task, Handover object, Receipt.

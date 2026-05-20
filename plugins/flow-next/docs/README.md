@@ -2,7 +2,7 @@
 
 Reference material for flow-next. Each file is self-contained, terse, and offline-readable. Cross-links use relative repo paths — fork-survivable, no external URLs.
 
-> For the plugin overview, install path, and the 6-step workflow narrative see [`../README.md`](../README.md). For the repo's strategic intent see [`../../STRATEGY.md`](../../STRATEGY.md). For canonical vocabulary see [`../../GLOSSARY.md`](../../GLOSSARY.md).
+> For the plugin overview, install path, and the 6-step workflow narrative see [`../README.md`](../README.md). For the repo's strategic intent see [`../../../STRATEGY.md`](../../../STRATEGY.md). For canonical vocabulary see [`../../../GLOSSARY.md`](../../../GLOSSARY.md).
 
 ## Subsystem references
 
@@ -35,6 +35,6 @@ Reference material for flow-next. Each file is self-contained, terse, and offlin
 ## See also
 
 - [`../README.md`](../README.md) — plugin overview, install, workflow narrative.
-- [`../../STRATEGY.md`](../../STRATEGY.md) — flow-next's strategic intent + active tracks.
-- [`../../GLOSSARY.md`](../../GLOSSARY.md) — canonical vocabulary (Spec, Task, R-ID, ...).
+- [`../../../STRATEGY.md`](../../../STRATEGY.md) — flow-next's strategic intent + active tracks.
+- [`../../../GLOSSARY.md`](../../../GLOSSARY.md) — canonical vocabulary (Spec, Task, R-ID, ...).
 - [`../../CLAUDE.md`](../../CLAUDE.md) — repo-level guide for working in this codebase.

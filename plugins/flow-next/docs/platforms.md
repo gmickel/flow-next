@@ -153,4 +153,4 @@ chmod +x .flow/bin/flowctl
 - [`sync-codex.md`](sync-codex.md) — how the Codex mirror is generated from canonical sources; validation guards.
 - [`troubleshooting.md`](troubleshooting.md) — review-backend conflicts (`rp-cli` custom instructions), receipt validation.
 - [`ralph.md`](ralph.md) — Ralph hook limits on each platform.
-- [`../scripts/install-codex.sh`](../../scripts/install-codex.sh) — canonical install script for Codex.
+- [`../scripts/install-codex.sh`](../../../scripts/install-codex.sh) — canonical install script for Codex.

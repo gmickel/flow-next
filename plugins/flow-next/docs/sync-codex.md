@@ -1,6 +1,6 @@
 # Codex Mirror Generation (`sync-codex.sh`)
 
-[`../../scripts/sync-codex.sh`](../../scripts/sync-codex.sh) generates the pre-built Codex files from canonical `skills/` and `agents/` sources. Output: `plugins/flow-next/codex/{skills/,agents/,hooks.json}` plus a mirrored `templates/` directory. The script is **idempotent** — running twice produces identical output.
+[`../../../scripts/sync-codex.sh`](../../../scripts/sync-codex.sh) generates the pre-built Codex files from canonical `skills/` and `agents/` sources. Output: `plugins/flow-next/codex/{skills/,agents/,hooks.json}` plus a mirrored `templates/` directory. The script is **idempotent** — running twice produces identical output.
 
 > Read the script's top-of-file comments and stage banners for the authoritative behavior. This doc gives the high-level shape and points at the validation guards.
 
@@ -21,7 +21,7 @@ Commit the regenerated `plugins/flow-next/codex/` tree alongside the canonical c
 
 ## Pipeline shape
 
-The script runs in numbered stages (see banners in [`../../scripts/sync-codex.sh`](../../scripts/sync-codex.sh)):
+The script runs in numbered stages (see banners in [`../../../scripts/sync-codex.sh`](../../../scripts/sync-codex.sh)):
 
 1. **Copy & patch skills** — canonical `skills/` copied to `codex/skills/`, then per-stage transforms applied (Claude-native tool names rewritten to Codex equivalents; `request_user_input` → plain-text numbered prompt per fn-45).
 2. **Convert agents** — `agents/*.md` → `codex/agents/*.toml` with per-agent reasoning effort, sandbox mode, model mapping, and nickname candidates.
@@ -55,7 +55,7 @@ Each guard prints `file:line` hits where available so the fix is mechanical: cle
 
 The Codex Default-mode + CLI surface errors on `request_user_input` calls ([openai/codex#10384](https://github.com/openai/codex/issues/10384), [#11536](https://github.com/openai/codex/issues/11536), [#12694](https://github.com/openai/codex/issues/12694)). Stage 3 rewrites canonical `AskUserQuestion` blocks into plain-text numbered prompts in the mirror, appending an `N+1. Other — type your own answer` option so the mirror still offers the freeform-input affordance. The R6 mirror scan re-runs after the rewrite to catch any surviving references.
 
-For the user-facing smoke procedure that validates this transform, see [`../../agent_docs/local-dev.md`](../../agent_docs/local-dev.md) (Codex plain-text smoke section).
+For the user-facing smoke procedure that validates this transform, see [`../../../agent_docs/local-dev.md`](../../../agent_docs/local-dev.md) (Codex plain-text smoke section).
 
 ## R17 cross-link discipline
 
@@ -63,7 +63,7 @@ Memory entry `bug/build-errors/fn-445-review-r17-enforcement-beyond-2026-05-15` 
 
 ## See also
 
-- [`../../scripts/sync-codex.sh`](../../scripts/sync-codex.sh) — canonical pipeline (read the file).
+- [`../../../scripts/sync-codex.sh`](../../../scripts/sync-codex.sh) — canonical pipeline (read the file).
 - [`platforms.md`](platforms.md) — Codex-specific install + caveats.
 - [`spec-template.md`](spec-template.md) — the canonical scaffold the R21 guard protects.
-- [`../../agent_docs/local-dev.md`](../../agent_docs/local-dev.md) — local-dev smoke procedure including the Codex plain-text invariant.
+- [`../../../agent_docs/local-dev.md`](../../../agent_docs/local-dev.md) — local-dev smoke procedure including the Codex plain-text invariant.

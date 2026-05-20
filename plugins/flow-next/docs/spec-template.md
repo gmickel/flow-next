@@ -120,6 +120,6 @@ All review receipts may carry these optional fields; existing consumers that rea
 ## See also
 
 - [`../templates/spec.md`](../templates/spec.md) — the canonical scaffold (section list, scope-owner annotations, flat-vs-substructured Decision Context).
-- [`../../GLOSSARY.md`](../../GLOSSARY.md) — definitions for *Spec*, *Task*, *R-ID*, *Frozen-at-handover*.
+- [`../../../GLOSSARY.md`](../../../GLOSSARY.md) — definitions for *Spec*, *Task*, *R-ID*, *Frozen-at-handover*.
 - [`../skills/flow-next-interview/SKILL.md`](../skills/flow-next-interview/SKILL.md) — 4-tier discovery cascade walker.
 - [`flowctl.md`](flowctl.md) — `flowctl spec create / set-plan / export-cognitive-aid` reference.

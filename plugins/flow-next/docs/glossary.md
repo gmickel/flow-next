@@ -2,7 +2,7 @@
 
 `GLOSSARY.md` is a human-readable, project-canonical terminology file shipped in v0.39.0. Lives at the **repo root** (and optionally subdirectories), NOT inside `.flow/`. Survives `rm -rf .flow/` — terminology is the project's, not flow-next's.
 
-> Canonical vocabulary for this repo: [`../../GLOSSARY.md`](../../GLOSSARY.md).
+> Canonical vocabulary for this repo: [`../../../GLOSSARY.md`](../../../GLOSSARY.md).
 > The skill that writes/maintains glossary files: `plugins/flow-next/skills/flow-next-glossary/` (consumed by `/flow-next:interview`, `/flow-next:audit`, `/flow-next:sync`).
 
 ## Format
@@ -53,6 +53,6 @@ A small list of jargon terms is grep-guarded out of canonical skill / agent / co
 
 ## See also
 
-- [`../../GLOSSARY.md`](../../GLOSSARY.md) — canonical glossary for this repo (Spec, Task, R-ID, Handover object, ...).
+- [`../../../GLOSSARY.md`](../../../GLOSSARY.md) — canonical glossary for this repo (Spec, Task, R-ID, Handover object, ...).
 - [`strategy.md`](strategy.md) — peer doc for the repo-root `STRATEGY.md` file.
 - [`memory-schema.md`](memory-schema.md) — categorized memory schema; the `knowledge/decisions/` subtree pairs naturally with glossary as terminology + load-bearing choices.
