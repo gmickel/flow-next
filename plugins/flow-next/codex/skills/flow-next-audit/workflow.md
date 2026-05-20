@@ -473,7 +473,7 @@ Bundle the easy ones, isolate the hard ones:
 
 ### 3.2 — Question style
 
-Use `plain-text numbered prompt`. If the tool is unreachable, fall back to printing a numbered list and reading a typed reply.
+Use `plain-text numbered prompt`.
 
 Rules:
 

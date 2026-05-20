@@ -225,7 +225,7 @@ When `DOC_AWARE=1`, behaviors (a)-(d) below layer onto the standard interview wo
 
 ### Question Format: Lead with Recommendation
 
-Every `plain-text numbered prompt` body must include the agent's recommended option AND a confidence tier. Mirrors the canonical phrasing in `flow-next-audit/SKILL.md:64` ("Lead with the recommended option and a one-sentence rationale"). Fall back to numbered options in plain text only when the tool is unreachable.
+Every `plain-text numbered prompt` body must include the agent's recommended option AND a confidence tier. Mirrors the canonical phrasing in `flow-next-audit/SKILL.md:64` ("Lead with the recommended option and a one-sentence rationale").
 
 Pattern:
 

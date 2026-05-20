@@ -17,7 +17,7 @@ The document is short and structured on purpose. Good answers to a handful of sh
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
-Default to `plain-text numbered prompt`. Fall back to numbered options in chat only when the tool is unreachable in the harness or the call errors — never silently skip the question.
+Default to `plain-text numbered prompt`. Never silently skip the question.
 
 Ask one question at a time. **Free-form responses for the substantive sections** (Target problem / Our approach / Who it's for / Key metrics / Tracks). **Single-select with lead-with-recommendation only for routing decisions** (which section to revisit, include this optional section, foreign-file resolution).
 

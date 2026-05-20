@@ -40,10 +40,6 @@ Before the walkthrough loop, the skill must have access to a **plain-text number
 
 Use `plain-text numbered prompt`.
 
-If the tool is unreachable, fall through to a chat-prompt fallback (print
-the question, wait for the user's next message). The fallback is less
-reliable — prefer the plain-text numbered prompt wherever available.
-
 ## Per-finding flow
 
 For each finding in the merged set:

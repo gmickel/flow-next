@@ -101,7 +101,7 @@ In autofix mode, skip user questions entirely and apply the rules above.
 
 In interactive mode:
 
-- Ask **one question at a time** via `plain-text numbered prompt`. Fall back to numbered options in plain text only if the tool is unreachable or errors. Never silently skip the question.
+- Ask **one question at a time** via `plain-text numbered prompt`. Never silently skip the question.
 - **Lead with the recommended option** and a one-sentence rationale, followed by a confidence marker — `[high]` / `[judgment-call]` / `[your-call]`. The body carries the recommendation; option labels stay neutral so the user isn't anchored on the option text itself. (See [phases.md](phases.md) §Confidence tiers.)
 - Prefer **multiple choice** when natural options exist (Phase 0 duplicate decision; Phase 4 approve/edit/abort).
 - **Do not ask the user for facts** they already gave you in conversation — Phase 1 extracts evidence first; Phase 3 asks only on the three hard-error must-ask cases plus genuinely missing context that can't be inferred.

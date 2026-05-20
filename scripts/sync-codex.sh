@@ -847,6 +847,91 @@ text = re.sub(
     text,
 )
 
+# O. Strip the stale "Fall back if the tool is unreachable" fallback prose.
+#    In canonical (Claude) the phrasing means: "if the structured
+#    AskUserQuestion tool is unavailable, drop to plain-text numbered list".
+#    After A-N collapse the tool references into the plain-text numbered
+#    prompt itself, the surviving fallback sentences read as if the
+#    plain-text numbered prompt is a tool with a separate "fall back to
+#    plain text" path — which is nonsensical (the plain-text numbered
+#    prompt IS that path) and reintroduces the Codex Default-mode failure
+#    fn-45 was meant to fix by sending the agent looking for a nonexistent
+#    prompt tool. Strip every variant, preserving any non-fallback tail
+#    clauses (e.g. "Never silently skip the question.") that follow the
+#    strip site. Must run AFTER M/N — the multi-line pattern references
+#    "the plain-text numbered prompt", which only exists post-rewrite of
+#    canonical "the blocking tool".
+#
+#    Patterns matched longest-most-specific-first so bare strippers don't
+#    eat the suffix of the longer-tail replacement.
+#
+# b. " Fall back ... — never silently skip the question." → preserve the
+#    never-skip tail (sole site: flow-next-strategy/SKILL.md).
+text = re.sub(
+    r' Fall back to numbered options in chat only when the tool is unreachable in the harness or the call errors — never silently skip the question\.',
+    ' Never silently skip the question.',
+    text,
+)
+# a. " Fall back to numbered options in plain text only if the tool is
+#    unreachable or errors." → strip (capture / memory-migrate / audit).
+text = re.sub(
+    r' Fall back to numbered options in plain text only if the tool is unreachable or errors\.',
+    '',
+    text,
+)
+# c. " Fall back to a numbered options prompt only if the tool is
+#    unreachable." → strip (make-pr).
+text = re.sub(
+    r' Fall back to a numbered options prompt only if the tool is unreachable\.',
+    '',
+    text,
+)
+# d. " Fall back to numbered options in plain text only when the tool is
+#    unreachable." → strip (interview).
+text = re.sub(
+    r' Fall back to numbered options in plain text only when the tool is unreachable\.',
+    '',
+    text,
+)
+# e. "; fall back to printing the numbered list and reading a typed reply
+#    if the tool is unreachable." → "." (prospect:157).
+text = re.sub(
+    r'; fall back to printing the numbered list and reading a typed reply if the tool is unreachable\.',
+    '.',
+    text,
+)
+# f. "; fall back to numbered-options when the tool is unreachable." → "."
+#    (prospect:605).
+text = re.sub(
+    r'; fall back to numbered-options when the tool is unreachable\.',
+    '.',
+    text,
+)
+# g. " If the tool is unreachable, print the frozen-string format below
+#    and read the user's reply from chat." → strip (prospect:851).
+text = re.sub(
+    r" If the tool is unreachable, print the frozen-string format below and read the user'?s reply from chat\.",
+    '',
+    text,
+)
+# h. " If the tool is unreachable, fall back to printing a numbered list
+#    and reading a typed reply." → strip (audit/workflow:476).
+text = re.sub(
+    r' If the tool is unreachable, fall back to printing a numbered list and reading a typed reply\.',
+    '',
+    text,
+)
+# i. Multi-line paragraph (impl-review/walkthrough.md:43-45):
+#       If the tool is unreachable, fall through to a chat-prompt fallback (print
+#       the question, wait for the user's next message). The fallback is less
+#       reliable — prefer the plain-text numbered prompt wherever available.
+#    Strip the whole paragraph.
+text = re.sub(
+    r"If the tool is unreachable, fall through to a chat-prompt fallback \(print\nthe question, wait for the user'?s next message\)\. The fallback is less\nreliable — prefer the plain-text numbered prompt wherever available\.\n",
+    '',
+    text,
+)
+
 # --- R2 instruction block injection ----------------------------------------
 # Inject the full plain-text numbered-prompt contract once per file. The
 # instruction tells the Codex agent how to render options, how to signal

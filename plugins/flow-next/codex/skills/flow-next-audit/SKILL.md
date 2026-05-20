@@ -64,7 +64,7 @@ In autofix mode, skip user questions entirely and apply the rules above.
 
 In interactive mode, follow these principles:
 
-- Ask **one question at a time** via `plain-text numbered prompt`. Fall back to numbered options in plain text only if the tool is unreachable or errors. Never silently skip the question.
+- Ask **one question at a time** via `plain-text numbered prompt`. Never silently skip the question.
 - Prefer **multiple choice** when natural options exist.
 - Lead with the **recommended option** and a one-sentence rationale.
 - Do **not** ask the user to make decisions before evidence is gathered — Phase 1 investigates first, Phase 3 asks.

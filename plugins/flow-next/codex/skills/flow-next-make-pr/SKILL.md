@@ -70,7 +70,7 @@ Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected separately 
 
 ## Interaction Principles
 
-- Ask **one question at a time** via `plain-text numbered prompt`. Fall back to a numbered options prompt only if the tool is unreachable. Never silently skip the question.
+- Ask **one question at a time** via `plain-text numbered prompt`. Never silently skip the question.
 - Lead with the **recommended option** and a one-sentence rationale.
 - Phase 4's preview is the only mandatory user gate in interactive mode. Phase 0 only asks when something must be resolved (no `--base` and no detection match; tasks not all `done`; no spec detected). Skip questions when context resolves cleanly.
 - **Ralph mode skips all questions.** Detect once at Phase 0 and route deterministically.
