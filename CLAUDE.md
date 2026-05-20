@@ -70,6 +70,15 @@ flow-next is a first-class citizen on Claude Code, Codex, and Factory Droid. **A
 - Do not add extra commands / agents / skills unless explicitly requested.
 - For pure docs / agent_docs / README changes, do NOT bump the plugin version.
 
+## flow-next.dev docs site
+
+- Marketing/docs site lives at `~/work/flow-next.dev` (`https://flow-next.dev`).
+- When changing Flow-Next behavior, commands, setup, public vocabulary, README/docs, `teams.md`, `ralph.md`, `flowctl.md`, release notes, or anything user-facing, update `~/work/flow-next.dev` in the same workstream.
+- Keep the site comprehensive: landing page copy, Starlight docs pages, navigation, examples, install instructions, and cross-links should match current Flow-Next reality.
+- Update the docs-site changelog/release page too. If a changelog page does not exist yet, create one before handoff.
+- Run the docs-site gate before handoff: `cd ~/work/flow-next.dev && pnpm build`.
+- Commit docs-site changes separately in the `flow-next.dev` repo unless the user asks for a combined handoff.
+
 ## Where to look
 
 | For | Look at |
