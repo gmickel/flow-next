@@ -1019,10 +1019,18 @@ def get_default_config() -> dict:
     """Return default config structure."""
     return {
         "memory": {"enabled": True},
-        "planSync": {"enabled": True, "crossEpic": False},
+        "planSync": {"enabled": True, "crossSpec": False},
         "review": {"backend": None},
         "scouts": {"github": False},
     }
+
+
+# Canonical mapping for legacy config keys. Reads of a legacy key resolve to the
+# canonical key when present in the raw file; writes always target the canonical.
+# Mirrors the fn-43 epic→spec rename cadence.
+_CONFIG_KEY_ALIASES: dict[str, str] = {
+    "planSync.crossEpic": "planSync.crossSpec",
+}
 
 
 def deep_merge(base: dict, override: dict) -> dict:
@@ -1061,6 +1069,106 @@ def get_config(key: str, default=None):
         if config == {}:
             return default
     return config if config != {} else default
+
+
+_CONFIG_RAW_SENTINEL = object()
+
+
+def _get_config_from_file(key: str):
+    """Probe the raw .flow/config.json for `key` without applying defaults.
+
+    Returns the value if `key` exists in the persisted file, or
+    `_CONFIG_RAW_SENTINEL` when the key is absent (or the file itself
+    is absent / unreadable). The sentinel distinguishes "user explicitly
+    set the key to None / false" from "key never written" — load-bearing
+    for the legacy-alias fallback semantic (see `_CONFIG_KEY_ALIASES`).
+    """
+    config_path = get_flow_dir() / CONFIG_FILE
+    if not config_path.exists():
+        return _CONFIG_RAW_SENTINEL
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, Exception):
+        return _CONFIG_RAW_SENTINEL
+    if not isinstance(data, dict):
+        return _CONFIG_RAW_SENTINEL
+    current = data
+    for part in key.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return _CONFIG_RAW_SENTINEL
+        current = current[part]
+    return current
+
+
+def resolve_config_key_for_read(key: str):
+    """Resolve a config-key read, honoring legacy aliases.
+
+    Returns a 3-tuple ``(effective_key, value, deprecation_legacy_form)``:
+
+    - ``effective_key`` — the key actually used to obtain the value.
+    - ``value`` — the resolved value, honoring "canonical wins over legacy"
+      and "legacy falls back when canonical absent from the raw file."
+    - ``deprecation_legacy_form`` — when non-empty, the caller should emit
+      `_emit_rename_deprecation(deprecation_legacy_form, canonical)`.
+      Populated only when the user typed the legacy alias by name AND the
+      canonical key is absent from the raw file (i.e. the user is reading
+      the surface that's getting removed in 2.0). When the user reads the
+      canonical key, no warning fires even if the legacy key supplied the
+      value via fallback — they're already on the new name.
+
+    Canonical-vs-legacy precedence is identical in both directions:
+    canonical wins when present in the raw file; legacy fills in when
+    canonical is absent. The only thing the input key changes is which
+    label is returned and whether a deprecation fires.
+    """
+    # Identify the canonical/legacy pair regardless of which side the caller
+    # supplied. `key` may be legacy (looked up via `_CONFIG_KEY_ALIASES`) or
+    # canonical (reverse-lookup against alias targets).
+    canonical_from_alias = _CONFIG_KEY_ALIASES.get(key)
+    if canonical_from_alias is not None:
+        # User typed the legacy name.
+        canonical = canonical_from_alias
+        legacy = key
+        user_typed_legacy = True
+    else:
+        # User typed something else; may be canonical for a known alias, or
+        # an unrelated key entirely.
+        legacy_match = next(
+            (lg for lg, cn in _CONFIG_KEY_ALIASES.items() if cn == key), None
+        )
+        if legacy_match is None:
+            # Not part of any alias pair — standard lookup.
+            return key, get_config(key), ""
+        canonical = key
+        legacy = legacy_match
+        user_typed_legacy = False
+
+    canonical_raw = _get_config_from_file(canonical)
+    if canonical_raw is not _CONFIG_RAW_SENTINEL:
+        # Canonical wins; no warning regardless of which key the user typed.
+        return canonical, canonical_raw, ""
+    legacy_raw = _get_config_from_file(legacy)
+    if legacy_raw is not _CONFIG_RAW_SENTINEL:
+        # Legacy supplies the value via fallback. Warn only when the user
+        # typed the legacy form (reading canonical is the migration path).
+        return legacy, legacy_raw, legacy if user_typed_legacy else ""
+    # Neither key set; fall back to merged defaults via the canonical key.
+    return canonical, get_config(canonical), ""
+
+
+def resolve_config_key_for_write(key: str) -> tuple[str, str]:
+    """Resolve a config-key write, redirecting legacy aliases to canonical.
+
+    Returns ``(canonical_key, deprecation_legacy_form)``. When the user wrote
+    a known legacy key, ``deprecation_legacy_form`` is non-empty and the
+    caller should emit a deprecation warning. The actual write must target
+    the canonical key; the legacy entry (if present in the file) is left
+    untouched — it becomes "wins-on-fallback-only" until 2.0.
+    """
+    canonical = _CONFIG_KEY_ALIASES.get(key)
+    if canonical is None:
+        return key, ""
+    return canonical, key
 
 
 def set_config(key: str, value) -> dict:
@@ -3868,22 +3976,30 @@ def resolve_spec_arg(
 _RENAME_DEPRECATION_EMITTED: set[str] = set()
 
 
-def _emit_rename_deprecation(legacy_form: str, canonical_form: str) -> None:
+def _emit_rename_deprecation(
+    legacy_form: str, canonical_form: str, extra: str = ""
+) -> None:
     """Print a one-shot stderr deprecation for a legacy `epic`-named surface.
 
     Suppress with `FLOW_NO_DEPRECATION=1`. Mirrors the `_memory_emit_deprecation`
     pattern but is keyed on a `legacy_form` string so a single process emits
     each warning at most once (the rename touches enough call-sites that
     per-call emission would spam Ralph logs).
+
+    `extra` is an optional trailing fragment appended after the standard
+    deprecation prose (e.g. ``"Removed in 2.0."``). Kept as a parameter so
+    future deprecations can opt into the same suffix without diverging
+    wording across call-sites.
     """
     if legacy_form in _RENAME_DEPRECATION_EMITTED:
         return
     _RENAME_DEPRECATION_EMITTED.add(legacy_form)
     if os.environ.get("FLOW_NO_DEPRECATION") == "1":
         return
+    suffix = f" {extra}" if extra else ""
     print(
         f"Warning: {legacy_form} is deprecated; use {canonical_form}. "
-        f"(Suppress with FLOW_NO_DEPRECATION=1.)",
+        f"(Suppress with FLOW_NO_DEPRECATION=1.){suffix}",
         file=sys.stderr,
     )
 
@@ -4578,7 +4694,11 @@ def cmd_config_get(args: argparse.Namespace) -> None:
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
 
-    value = get_config(args.key)
+    _, value, deprecation_legacy = resolve_config_key_for_read(args.key)
+    if deprecation_legacy:
+        canonical = _CONFIG_KEY_ALIASES[deprecation_legacy]
+        _emit_rename_deprecation(deprecation_legacy, canonical, extra="Removed in 2.0.")
+
     if args.json:
         json_output({"key": args.key, "value": value})
     else:
@@ -4597,13 +4717,21 @@ def cmd_config_set(args: argparse.Namespace) -> None:
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
 
-    set_config(args.key, args.value)
-    new_value = get_config(args.key)
+    canonical_key, deprecation_legacy = resolve_config_key_for_write(args.key)
+    if deprecation_legacy:
+        _emit_rename_deprecation(
+            deprecation_legacy, canonical_key, extra="Removed in 2.0."
+        )
+
+    set_config(canonical_key, args.value)
+    new_value = get_config(canonical_key)
 
     if args.json:
-        json_output({"key": args.key, "value": new_value, "message": f"{args.key} set"})
+        json_output(
+            {"key": canonical_key, "value": new_value, "message": f"{canonical_key} set"}
+        )
     else:
-        print(f"{args.key} set to {new_value}")
+        print(f"{canonical_key} set to {new_value}")
 
 
 def cmd_review_backend(args: argparse.Namespace) -> None:

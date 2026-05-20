@@ -237,7 +237,11 @@ HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
 CURRENT_BACKEND=$("${PLUGIN_ROOT}/scripts/flowctl" config get review.backend --json 2>/dev/null | jq -r '.value // empty')
 CURRENT_MEMORY=$("${PLUGIN_ROOT}/scripts/flowctl" config get memory.enabled --json 2>/dev/null | jq -r '.value // empty')
 CURRENT_PLANSYNC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.enabled --json 2>/dev/null | jq -r '.value // empty')
-CURRENT_CROSSEPIC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.crossEpic --json 2>/dev/null | jq -r '.value // empty')
+# planSync.crossSpec is canonical; planSync.crossEpic is a read-only legacy
+# alias (removed in 2.0). The CLI resolves the alias and emits a one-line
+# stderr deprecation; we silence stderr here because the canonical key
+# returns the legacy value transparently when only the legacy key is set.
+CURRENT_CROSSSPEC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.crossSpec --json 2>/dev/null | jq -r '.value // empty')
 CURRENT_GITHUB_SCOUT=$("${PLUGIN_ROOT}/scripts/flowctl" config get scouts.github --json 2>/dev/null | jq -r '.value // empty')
 ```
 
@@ -267,7 +271,7 @@ If ANY config values are already set, print a notice before asking questions:
 Current configuration:
 - Memory: <enabled|disabled> (change with: flowctl config set memory.enabled <true|false>)
 - Plan-Sync: <enabled|disabled> (change with: flowctl config set planSync.enabled <true|false>)
-- Plan-Sync cross-spec: <enabled|disabled> (change with: flowctl config set planSync.crossEpic <true|false>)
+- Plan-Sync cross-spec: <enabled|disabled> (change with: flowctl config set planSync.crossSpec <true|false>)
 - Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|rp|copilot|none OR spec form like codex:gpt-5.4:xhigh>)
 - GitHub scout: <enabled|disabled> (change with: flowctl config set scouts.github <true|false>)
 ```
@@ -308,7 +312,9 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-**Plan-Sync cross-spec question** (include if CURRENT_PLANSYNC is "true" AND CURRENT_CROSSEPIC is empty; the underlying config key is `planSync.crossEpic` for back-compat):
+**Plan-Sync cross-spec question** (include if CURRENT_PLANSYNC is "true" AND CURRENT_CROSSSPEC is empty)[^crossspec-legacy]:
+
+[^crossspec-legacy]: The canonical config key is `planSync.crossSpec`. The pre-1.1.3 name `planSync.crossEpic` remains readable as a legacy alias (one-line stderr deprecation; removed in 2.0).
 ```json
 {
  "header": "Cross-Spec",
@@ -414,9 +420,9 @@ Only process answers for questions that were asked (config values that were unse
 - If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.enabled true --json`
 - If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.enabled false --json`
 
-**Plan-Sync cross-spec** (if question was asked; config key is `planSync.crossEpic` for back-compat):
-- If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.crossEpic true --json`
-- If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.crossEpic false --json`
+**Plan-Sync cross-spec** (if question was asked; canonical key is `planSync.crossSpec` — the legacy `planSync.crossEpic` alias is read-only and removed in 2.0):
+- If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.crossSpec true --json`
+- If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.crossSpec false --json`
 
 **GitHub Scout** (if question was asked):
 - If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set scouts.github true --json`
