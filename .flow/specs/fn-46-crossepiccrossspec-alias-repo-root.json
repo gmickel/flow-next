@@ -1,0 +1,18 @@
+{
+  "branch_name": "fn-46-crossspec-alias",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-05-20T07:08:10.339860Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-46-crossepiccrossspec-alias-repo-root",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-46-crossepiccrossspec-alias-repo-root.md",
+  "status": "open",
+  "title": "crossEpic\u2192crossSpec alias + repo-root SPEC.md discovery",
+  "updated_at": "2026-05-20T07:18:51.795931Z"
+}
