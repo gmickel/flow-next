@@ -169,11 +169,12 @@ class TestTemplateFrontmatter(unittest.TestCase):
 
     def test_declares_consumers(self) -> None:
         """Consumers list names the skills that read this template."""
+        # fn-46.2 dropped flow-next-work — that skill consumes existing specs,
+        # not the template scaffold.
         for consumer in (
             "flow-next-capture",
             "flow-next-interview",
             "flow-next-plan",
-            "flow-next-work",
         ):
             self.assertIn(consumer, self.frontmatter)
 

@@ -18,6 +18,7 @@ Asserts:
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import io
 import json
@@ -217,6 +218,67 @@ class ConfigAliasTestCase(unittest.TestCase):
         self.assertIs(value, False)
         # Critical: `get_config` would return False either way due to merge.
         self.assertIs(self.flowctl.get_config("planSync.crossSpec"), False)
+
+    # --- CLI-level `flowctl config get --raw --json` ---
+    # Regression coverage for PR #135 cycle 2: without `--raw`, default-false
+    # config keys (planSync.crossSpec, scouts.github) cause /flow-next:setup
+    # to skip first-run prompts because the merge step returns the default.
+    # `--raw` must emit JSON `null` for keys absent from the on-disk file,
+    # `false` for explicit-false, and `true` for explicit-true.
+
+    def _run_config_get_cli(self, key: str, *extra: str) -> dict:
+        """Invoke cmd_config_get via the argparse namespace and capture JSON stdout."""
+        ns = argparse.Namespace(
+            key=key,
+            json=True,
+            raw="--raw" in extra,
+        )
+        import contextlib
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.flowctl.cmd_config_get(ns)
+        return json.loads(buf.getvalue())
+
+    def test_cli_raw_absent_key_returns_null(self) -> None:
+        self._write_config({"planSync": {"enabled": True}})
+        out = self._run_config_get_cli("planSync.crossSpec", "--raw")
+        self.assertIsNone(out["value"])
+        self.assertTrue(out.get("raw"))
+        self.assertTrue(out.get("success"))
+
+    def test_cli_raw_explicit_false_returns_false(self) -> None:
+        self._write_config({"planSync": {"crossSpec": False}})
+        out = self._run_config_get_cli("planSync.crossSpec", "--raw")
+        self.assertIs(out["value"], False)
+        self.assertTrue(out.get("raw"))
+
+    def test_cli_raw_explicit_true_returns_true(self) -> None:
+        self._write_config({"scouts": {"github": True}})
+        out = self._run_config_get_cli("scouts.github", "--raw")
+        self.assertIs(out["value"], True)
+        self.assertTrue(out.get("raw"))
+
+    def test_cli_default_merges_unset_to_default_value(self) -> None:
+        # Without --raw, an absent default-false key returns its default.
+        # This is the behavior the workflow used to rely on incorrectly and
+        # the reason the new setup workflow passes --raw.
+        self._write_config({"planSync": {"enabled": True}})
+        out = self._run_config_get_cli("planSync.crossSpec")
+        self.assertIs(out["value"], False)
+        self.assertNotIn("raw", out)
+
+    def test_cli_raw_legacy_alias_falls_back(self) -> None:
+        # Only legacy crossEpic set; raw read via canonical surfaces legacy.
+        self._write_config({"planSync": {"crossEpic": True}})
+        out = self._run_config_get_cli("planSync.crossSpec", "--raw")
+        self.assertIs(out["value"], True)
+
+    def test_cli_raw_neither_canonical_nor_legacy_returns_null(self) -> None:
+        # Neither key set anywhere → raw must surface null (not the merged default).
+        self._write_config({"planSync": {"enabled": True}})
+        out = self._run_config_get_cli("planSync.crossSpec", "--raw")
+        self.assertIsNone(out["value"])
 
 
 if __name__ == "__main__":

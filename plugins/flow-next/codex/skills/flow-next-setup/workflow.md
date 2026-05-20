@@ -308,19 +308,22 @@ HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
 
 # Read current config values if they exist.
-# NB: `jq -r '.value // empty'` would collapse boolean `false` to "" and re-ask
-# the question on re-runs for users who explicitly set it to false. We map only
-# JSON `null` (truly unset) to "" so that `[[ -z "$CURRENT_*" ]]` distinguishes
-# unset from explicitly-false.
-CURRENT_BACKEND=$("${PLUGIN_ROOT}/scripts/flowctl" config get review.backend --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-CURRENT_MEMORY=$("${PLUGIN_ROOT}/scripts/flowctl" config get memory.enabled --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-CURRENT_PLANSYNC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.enabled --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+# NB: pass `--raw` to bypass merged defaults. Without it, `flowctl config get`
+# returns the built-in default for unset keys (e.g. `planSync.crossSpec` →
+# `false`), and the `[[ -z "$CURRENT_*" ]]` guards below would skip first-run
+# prompts for any default-false option. `--raw` makes `null` mean "absent
+# from .flow/config.json"; we use an explicit `if .value == null` filter
+# (NOT `.value // empty`, which collapses boolean `false` to "" because
+# jq treats `false` as a falsy LHS for `//`). See PR #135 cycle 2.
+CURRENT_BACKEND=$("${PLUGIN_ROOT}/scripts/flowctl" config get review.backend --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+CURRENT_MEMORY=$("${PLUGIN_ROOT}/scripts/flowctl" config get memory.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+CURRENT_PLANSYNC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 # planSync.crossSpec is canonical; planSync.crossEpic is a read-only legacy
-# alias (removed in 2.0). The CLI resolves the alias and emits a one-line
-# stderr deprecation; we silence stderr here because the canonical key
-# returns the legacy value transparently when only the legacy key is set.
-CURRENT_CROSSSPEC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.crossSpec --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-CURRENT_GITHUB_SCOUT=$("${PLUGIN_ROOT}/scripts/flowctl" config get scouts.github --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+# alias (removed in 2.0). The `--raw` probe checks both keys in the on-disk
+# file (canonical wins on presence, legacy fills in on fallback); deprecation
+# fires only when the user typed the legacy alias, which is never here.
+CURRENT_CROSSSPEC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.crossSpec --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+CURRENT_GITHUB_SCOUT=$("${PLUGIN_ROOT}/scripts/flowctl" config get scouts.github --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 ```
 
 Store detection results for use in questions. When showing options, indicate current value if set (e.g., "(current)" after the matching option label).

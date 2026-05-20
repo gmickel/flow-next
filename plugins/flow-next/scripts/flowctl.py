@@ -4688,11 +4688,65 @@ def cmd_ralph_status(args: argparse.Namespace) -> None:
 
 
 def cmd_config_get(args: argparse.Namespace) -> None:
-    """Get a config value."""
+    """Get a config value.
+
+    By default, merges built-in defaults (via `load_flow_config()`) so an
+    unset key like `planSync.crossSpec` returns its default `False`. Setup
+    skills (and any caller that needs to know whether a key is set in the
+    on-disk file) pass `--raw` to bypass the merge and get `null` for
+    truly-absent keys. See fn-46.1: the merge-defaults path was the source
+    of the cycle-1 setup-prompt regression on PR #135.
+    """
     if not ensure_flow_exists():
         error_exit(
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
+
+    raw = getattr(args, "raw", False)
+
+    if raw:
+        # Bypass merge; resolve via the canonical/legacy raw-file probe so
+        # callers see `null` exactly when neither the canonical nor the
+        # legacy key is persisted to .flow/config.json. Deprecation still
+        # fires when the user typed the legacy alias and only legacy is set.
+        canonical_from_alias = _CONFIG_KEY_ALIASES.get(args.key)
+        if canonical_from_alias is not None:
+            canonical = canonical_from_alias
+            legacy = args.key
+            user_typed_legacy = True
+        else:
+            legacy_match = next(
+                (lg for lg, cn in _CONFIG_KEY_ALIASES.items() if cn == args.key),
+                None,
+            )
+            canonical = args.key
+            legacy = legacy_match
+            user_typed_legacy = False
+
+        canonical_raw = _get_config_from_file(canonical)
+        if canonical_raw is not _CONFIG_RAW_SENTINEL:
+            value = canonical_raw
+        elif legacy is not None:
+            legacy_raw = _get_config_from_file(legacy)
+            if legacy_raw is not _CONFIG_RAW_SENTINEL:
+                value = legacy_raw
+                if user_typed_legacy:
+                    _emit_rename_deprecation(legacy, canonical, extra="Removed in 2.0.")
+            else:
+                value = None
+        else:
+            value = None
+
+        if args.json:
+            json_output({"key": args.key, "value": value, "raw": True})
+        else:
+            if value is None:
+                print(f"{args.key}: (not set)")
+            elif isinstance(value, bool):
+                print(f"{args.key}: {'true' if value else 'false'}")
+            else:
+                print(f"{args.key}: {value}")
+        return
 
     _, value, deprecation_legacy = resolve_config_key_for_read(args.key)
     if deprecation_legacy:
@@ -20778,6 +20832,16 @@ def main() -> None:
     p_config_get = config_sub.add_parser("get", help="Get config value")
     p_config_get.add_argument("key", help="Config key (e.g., memory.enabled)")
     p_config_get.add_argument("--json", action="store_true", help="JSON output")
+    p_config_get.add_argument(
+        "--raw",
+        action="store_true",
+        help=(
+            "Bypass merged defaults. Returns null for keys absent from the "
+            "on-disk .flow/config.json (distinguishes unset from "
+            "explicitly-false). Used by /flow-next:setup to detect "
+            "first-run state."
+        ),
+    )
     p_config_get.set_defaults(func=cmd_config_get)
 
     p_config_set = config_sub.add_parser("set", help="Set config value")
