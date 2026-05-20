@@ -16,7 +16,7 @@ When adding a new `/flow-next:<name>` skill, every step below MUST be done. Skip
 
 7. **Commands list** updated in:
    - `CLAUDE.md` (where the `<!-- BEGIN FLOW-NEXT -->` template block lives, OR the project guide's command count)
-   - `plugins/flow-next/README.md` (skills/commands table + count)
+   - Root `README.md` — the "Commands" table is the canonical user-facing surface (plugin `plugins/flow-next/README.md` is now a thin stub pointing at the root)
    - `~/work/mickel.tech/app/apps/flow-next/page.tsx` (commands array + lede count + FAQ if applicable) — **maintainer-only; external contributors skip per the contributing guide**
 
 8. **CHANGELOG entry** under the appropriate `[flow-next X.Y.Z]` block describing what the skill does.

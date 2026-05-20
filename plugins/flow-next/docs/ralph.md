@@ -989,6 +989,6 @@ flowctl show fn-1.1 --json | jq '.evidence.commits'
 ## References
 
 - [flowctl CLI](flowctl.md)
-- [Flow-Next README](../README.md)
+- [Flow-Next README](../../../README.md) (repo root — canonical)
 - [flow-next-tui](../../../flow-next-tui/README.md)
 - Test scripts: `plugins/flow-next/scripts/ralph_e2e_*.sh`

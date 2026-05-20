@@ -1,6 +1,6 @@
 # Claude Code Project Guide
 
-This repo is a Claude Code plugin marketplace. It ships two plugins: **flow** and **flow-next**. flow-next is the recommended workflow: spec-driven, zero-deps, with a bundled `flowctl` Python CLI, autonomous Ralph mode, and first-class support on Claude Code / OpenAI Codex / Factory Droid.
+This repo ships the **flow-next** Claude Code plugin — a spec-driven, zero-dependency workflow for AI-assisted SDLC, with a bundled `flowctl` Python CLI, autonomous Ralph mode, and first-class support on Claude Code / OpenAI Codex / Factory Droid. The repo IS flow-next.
 
 The repo's strategic intent and canonical vocabulary live at the repo root:
 
@@ -83,10 +83,15 @@ flow-next is a first-class citizen on Claude Code, Codex, and Factory Droid. **A
 
 | For | Look at |
 |---|---|
-| Plugin command catalog, install paths, feature deep-dives | [`plugins/flow-next/README.md`](plugins/flow-next/README.md) |
+| Plugin overview + install + 5-command quick start | [`README.md`](README.md) (root) — canonical entry point |
+| Full doc index (subsystem + workflow references) | [`plugins/flow-next/docs/README.md`](plugins/flow-next/docs/README.md) |
 | Spec-driven team workflow + handover objects | [`plugins/flow-next/docs/teams.md`](plugins/flow-next/docs/teams.md) |
 | Ralph autonomous mode internals | [`plugins/flow-next/docs/ralph.md`](plugins/flow-next/docs/ralph.md) |
 | Full `flowctl` CLI reference | [`plugins/flow-next/docs/flowctl.md`](plugins/flow-next/docs/flowctl.md) |
+| `.flow/` directory layout + spec-first task model | [`plugins/flow-next/docs/architecture.md`](plugins/flow-next/docs/architecture.md) |
+| Memory schema (bug/knowledge tracks, audit lifecycle) | [`plugins/flow-next/docs/memory-schema.md`](plugins/flow-next/docs/memory-schema.md) |
+| Cross-platform install matrix (Claude / Codex / Droid / OpenCode) | [`plugins/flow-next/docs/platforms.md`](plugins/flow-next/docs/platforms.md) |
+| Troubleshooting + uninstall | [`plugins/flow-next/docs/troubleshooting.md`](plugins/flow-next/docs/troubleshooting.md) |
 | Adding a new `/flow-next:<name>` skill | [`agent_docs/adding-skills.md`](agent_docs/adding-skills.md) |
 | Cutting a release | [`agent_docs/releasing.md`](agent_docs/releasing.md) |
 | Local plugin dev + smoke tests + Ralph e2e | [`agent_docs/local-dev.md`](agent_docs/local-dev.md) |

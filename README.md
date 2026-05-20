@@ -3,8 +3,8 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v1.1.4-green)](plugins/flow-next/)
-[![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/README.md)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v1.1.4-green)](CHANGELOG.md)
+[![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/docs/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
 [![Twitter](https://img.shields.io/badge/@gmickel-black?logo=x)](https://twitter.com/gmickel)
@@ -15,27 +15,28 @@
 
 </div>
 
-> 📖 **[Read the full docs →](plugins/flow-next/README.md)** — the main documentation. All 19 commands with reference, lifecycle workflow with mermaid diagrams, install + setup on every platform, Ralph autonomous mode, Codex / Droid / OpenCode notes, complete `flowctl` CLI reference, project glossary + strategy + decision records, memory system. **Start there if you want depth — this root page is the marketing TL;DR.**
-
-> 👥 **[Adopting in a team? Read the teams + spec-driven-development guide →](plugins/flow-next/docs/teams.md)** — maps each SDLC stage to a Flow-Next command, names the six handover objects in the agentic lifecycle, and walks through Spec-as-PR, parallel work from one spec, R-ID frozen-at-handover, the symmetric interview pattern, and the Week 1 / Month 1 / Quarter 1 adoption ladder. Cross-links to the [AI-x-SDLC-Starter-Kit methodology guide](https://github.com/gmickel/AI-x-SDLC-Starter-Kit/blob/main/guides/methodology.md) for the underlying theory.
-
-> 💬 **[Join the Discord](https://discord.gg/f3DYq8AAm5)** — discussions, updates, feature requests, bug reports
+> 📖 **[Full doc index →](plugins/flow-next/docs/README.md)** · 🌐 **[flow-next.dev](https://flow-next.dev)** · 👥 **[Teams guide](plugins/flow-next/docs/teams.md)** · 💬 **[Discord](https://discord.gg/f3DYq8AAm5)**
 
 ---
 
-## What Is This?
+## What is this?
 
-Flow-Next is an AI agent orchestration plugin. **Twenty-three agent-native skills** for the full lifecycle: idea → spec → tasks → review → ship → maintain. Bundled task tracking, dependency graphs, re-anchoring, multi-model reviews, decay-aware project memory, GitHub PR creation + resolution, agent-readiness audits. Everything lives in your repo — no external services, no global config. Uninstall: delete `.flow/`.
+Flow-Next is an AI agent orchestration plugin. **Twenty-three agent-native skills** for the full lifecycle: idea → spec → tasks → review → ship → maintain. Bundled task tracking, dependency graphs, re-anchoring before every task, multi-model reviews, decay-aware project memory, GitHub PR creation and resolution, agent-readiness audits. Everything lives in your repo — no external services, no global config. Uninstall: delete `.flow/`.
+
+- **Spec-first.** Every unit of work belongs to a spec `fn-N`. Tasks `fn-N.M` inherit context.
+- **Fresh-context workers.** Each task runs in its own subagent. No token bleed between tasks.
+- **Cross-model reviews.** A different model (RepoPrompt / Codex / Copilot) gates every implementation.
+- **R-IDs frozen at handover.** Acceptance criteria numbered once, never renumbered.
 
 First-class on **Claude Code**, **OpenAI Codex** (CLI + Desktop), and **Factory Droid**. Also runs on **OpenCode** via the [community port](https://github.com/gmickel/flow-next-opencode).
 
-> 🆕 **v1.0.0 — `flowctl epic` → `flowctl spec`.** The 1.0 release renames the canonical primitive: `flowctl epic` becomes `flowctl spec`, `.flow/epics/` becomes `.flow/specs/`, `epic-scout` becomes `spec-scout`, `/flow-next:epic-review` becomes `/flow-next:spec-completion-review`. **All 0.x scripts and CLAUDE.md examples keep working** — the legacy CLI is preserved as a deprecation alias layer through all of 1.x; JSON read responses dual-emit `spec_id` *and* `epic_id`; on read, `.flow/epics/` is auto-fallback when `.flow/specs/` is absent. Two migration paths: interactive via `/flow-next:setup` (recommended) or deterministic via `flowctl migrate-rename --yes` (transactional backup at `.flow/.backup-pre-1.0/`, lockfile-guarded, sentinel-anchored). Rollback supported via `flowctl migrate-rollback --yes`. Suppress the auto-detect banner with `FLOW_NO_AUTO_MIGRATE=1`. Soft alias-removal target is 2.0.0 (telemetry-driven, not calendar-driven). [Full changelog](CHANGELOG.md).
-
-> 🌐 **[Visual overview at mickel.tech/apps/flow-next](https://mickel.tech/apps/flow-next)** — diagrams, examples, the full feature tour.
+> 🆕 **v1.0+ — `flowctl epic` → `flowctl spec`.** The 1.0 release renames the canonical primitive across the entire flow-next surface. **All 0.x scripts and CLAUDE.md examples keep working** — the legacy CLI is preserved as a deprecation alias layer through all of 1.x. See the [CHANGELOG](CHANGELOG.md) for the migration path (interactive via `/flow-next:setup` or deterministic via `flowctl migrate-rename --yes`, both transactional with rollback).
 
 ---
 
-## Install
+## Quick start
+
+### Install
 
 <table>
 <tr>
@@ -76,15 +77,23 @@ droid plugin marketplace add \
 </tr>
 </table>
 
-**Why a script for Codex?** Codex's plugin protocol currently only registers `skills` from `plugin.json` — not custom `.toml` agents or hooks. The `/plugins` install gives you slash commands, but no subagent isolation (worker model tier, `disallowed_tools`) and no Ralph hooks. `install-codex.sh` merges all 21 agents + hooks directly into `~/.codex/config.toml` so you get the full multi-agent + Ralph experience. We'll switch to `/plugins` once Codex's manifest supports `agents` and `hooks` fields.
+**Why a script for Codex?** Codex's plugin protocol only registers `skills` from `plugin.json` — not custom `.toml` agents or hooks. `install-codex.sh` merges all 21 agents + hooks into `~/.codex/config.toml`. Idempotent — safe to re-run. Full platform matrix + community ports in [`docs/platforms.md`](plugins/flow-next/docs/platforms.md).
 
-**Update Codex:** `cd flow-next && git pull && ./scripts/install-codex.sh flow-next`. The script is idempotent — safe to re-run on every update.
+### The 5-command happy path
 
-📖 **[Full docs](plugins/flow-next/README.md)** · **[Codex install guide](plugins/flow-next/README.md#openai-codex)** · **[OpenCode port](https://github.com/gmickel/flow-next-opencode)**
+```bash
+/flow-next:capture                   # 1. Synthesize conversation → .flow/specs/<id>.md
+/flow-next:plan <spec-id>            # 2. Break the spec into dependency-ordered tasks
+/flow-next:work <spec-id>            # 3. Execute tasks in fresh-context worker subagents
+/flow-next:make-pr <spec-id>         # 4. Render a cognitive-aid PR body (9 input streams)
+/flow-next:resolve-pr <PR#>          # 5. Fetch review threads → triage → resolve
+```
+
+That's the inner loop. Branch in (`/flow-next:prospect` for ranked candidates, `/flow-next:interview` for structured discovery), branch out (`/flow-next:ralph-init` for autonomous overnight runs, `/flow-next:audit` for memory garbage collection).
 
 ---
 
-## The Workflow
+## How the flow works
 
 ```mermaid
 flowchart LR
@@ -104,11 +113,11 @@ flowchart LR
     A -.-> M[(.flow/memory/)]
 ```
 
-Idea → spec → tasks → ship. Branch in, branch out — pick the entry point that matches your context.
+_(The 6-step workflow narrative — Capture/Prospect → Interview → Plan → Work → Make-PR → Resolve-PR — will be populated by a follow-up phase. For the team-oriented walkthrough today see [`docs/teams.md`](plugins/flow-next/docs/teams.md). For visual overview see [flow-next.dev](https://flow-next.dev) or [`mickel.tech/apps/flow-next`](https://mickel.tech/apps/flow-next).)_
 
 ---
 
-## Why It Works
+## Why it works
 
 | Problem | Solution |
 |---------|----------|
@@ -127,25 +136,30 @@ Idea → spec → tasks → ship. Branch in, branch out — pick the entry point
 
 ## Commands
 
-| Command | What It Does |
+| Command | What it does |
 |---------|--------------|
+| `/flow-next:strategy` | Write `STRATEGY.md` — target problem, approach, users, metrics, active tracks |
 | `/flow-next:prospect` | Generate ranked candidate ideas grounded in the repo, upstream of `capture`/`interview`/`plan` |
 | `/flow-next:capture` | Synthesize conversation context into a spec (source-tagged, mandatory read-back) |
-| `/flow-next:interview` | Deep spec refinement with lead-with-recommendation + confidence tiers + codebase-first investigation |
+| `/flow-next:interview` | Deep spec refinement with lead-with-recommendation + confidence tiers + codebase-first investigation; `--scope=business\|technical\|both` |
 | `/flow-next:plan` | Research codebase, create spec + dependency-ordered tasks |
 | `/flow-next:work` | Execute tasks with re-anchoring + worker subagents + review gates |
 | `/flow-next:impl-review` | Cross-model implementation review (RepoPrompt, Codex, or Copilot) |
 | `/flow-next:plan-review` | Cross-model plan review |
-| `/flow-next:spec-completion-review` | Spec-completion review gate — verify combined implementation matches the spec (renamed from `/flow-next:epic-review` in 1.0.0; soft-removal target 2.0.0, telemetry-driven) |
+| `/flow-next:spec-completion-review` | Spec-completion review gate — verify combined implementation matches the spec (renamed from `/flow-next:epic-review` in 1.0.0; soft-removal target 2.0.0) |
+| `/flow-next:make-pr` | Render a cognitive-aid PR body (9 input streams) and open via `gh` |
 | `/flow-next:resolve-pr` | Resolve GitHub PR review threads (fetch → triage → fix → reply → resolve via GraphQL) |
 | `/flow-next:audit` | Agent-native review of `.flow/memory/` entries against current code (Keep / Update / Consolidate / Replace / Delete) |
-| `/flow-next:memory-migrate` | Lift legacy flat memory files into the categorized schema; agent classifies each entry |
+| `/flow-next:memory-migrate` | Lift legacy flat memory files into the categorized schema |
 | `/flow-next:prime` | 8-pillar agent-readiness assessment with parallel scouts; remediation via consent prompts |
 | `/flow-next:ralph-init` | Scaffold autonomous loop (`scripts/ralph/`) |
+| `/flow-next:sync` | Manually trigger plan-sync to update downstream task specs after drift |
+
+Full command reference (every flag, every default) in [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md).
 
 ---
 
-## Ralph (Autonomous Mode)
+## Ralph (autonomous mode)
 
 Run overnight. Fresh context per iteration + multi-model review gates + auto-block stuck tasks.
 
@@ -158,24 +172,73 @@ scripts/ralph/ralph.sh          # Run from terminal
 
 ---
 
-## Ecosystem
+## Where to look
 
-| Project | Platform |
-|---------|----------|
-| [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) | OpenCode |
-| [FlowFactory](https://github.com/Gitmaxd/flowfactory) | Factory.ai Droid |
+The repo holds the offline-resilient reference. [flow-next.dev](https://flow-next.dev) holds the narrative, browseable guide. Pick by audience.
+
+| Looking for… | Repo file | Website |
+|---|---|---|
+| 5-minute pitch + install | `README.md` (this page) | [flow-next.dev](https://flow-next.dev) |
+| Adopting in a team, handover objects, Spec-as-PR, adoption ladder | [`docs/teams.md`](plugins/flow-next/docs/teams.md) | [Teams guide](https://flow-next.dev) |
+| Full `flowctl` CLI reference — every command, every flag | [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md) | — |
+| Ralph autonomous mode internals — hooks, receipts, DCG | [`docs/ralph.md`](plugins/flow-next/docs/ralph.md) | — |
+| `.flow/` directory layout, spec-first task model, ID format | [`docs/architecture.md`](plugins/flow-next/docs/architecture.md) | — |
+| Spec template — R-ID rules, confidence anchors, receipt schema | [`docs/spec-template.md`](plugins/flow-next/docs/spec-template.md) · canonical scaffold at [`templates/spec.md`](plugins/flow-next/templates/spec.md) | — |
+| Memory schema — bug / knowledge tracks, frontmatter, audit lifecycle | [`docs/memory-schema.md`](plugins/flow-next/docs/memory-schema.md) | — |
+| Project glossary — `GLOSSARY.md` shape, R17 forbidden-vocabulary guard | [`docs/glossary.md`](plugins/flow-next/docs/glossary.md) · [`GLOSSARY.md`](GLOSSARY.md) | — |
+| Project strategy — `STRATEGY.md` shape, downstream skill grounding | [`docs/strategy.md`](plugins/flow-next/docs/strategy.md) · [`STRATEGY.md`](STRATEGY.md) | — |
+| Cross-platform install matrix + Codex / Droid / OpenCode notes | [`docs/platforms.md`](plugins/flow-next/docs/platforms.md) | — |
+| `scripts/sync-codex.sh` pipeline, plain-text transform, validation guards | [`docs/sync-codex.md`](plugins/flow-next/docs/sync-codex.md) | — |
+| Troubleshooting — stuck tasks, Ralph debug, receipt validation, uninstall | [`docs/troubleshooting.md`](plugins/flow-next/docs/troubleshooting.md) | — |
+| Adding a new `/flow-next:<name>` skill | [`agent_docs/adding-skills.md`](agent_docs/adding-skills.md) | — |
+| Cutting a release | [`agent_docs/releasing.md`](agent_docs/releasing.md) | — |
+| Local plugin dev + smoke tests + Ralph e2e | [`agent_docs/local-dev.md`](agent_docs/local-dev.md) | — |
+| Repo strategic intent + active tracks | [`STRATEGY.md`](STRATEGY.md) | — |
+| Canonical vocabulary | [`GLOSSARY.md`](GLOSSARY.md) | — |
+| Visual overview, diagrams, methodology | — | [`mickel.tech/apps/flow-next`](https://mickel.tech/apps/flow-next) · [`flow-next.dev`](https://flow-next.dev) |
+
+Doc index with one-line descriptions: [`plugins/flow-next/docs/README.md`](plugins/flow-next/docs/README.md).
 
 ---
 
-## Also Check Out
+## Requirements
 
-> **[GNO](https://gno.sh)** — Local hybrid search for your notes, docs, and code. Give Claude Code long-term memory over your files via MCP.
+- **Python 3.8+** — bundled `flowctl` CLI is pure-stdlib.
+- **`jq`** and **`gh`** — required for the review subsystem and PR plumbing.
+- **`bun`** *(optional)* — only needed for the [Ralph TUI](flow-next-tui/).
+
+## Platforms
+
+| Platform | Status |
+|---|---|
+| Claude Code | First-class (canonical surface) |
+| OpenAI Codex (CLI + Desktop) | First-class (mirror at `plugins/flow-next/codex/`, regenerated by `scripts/sync-codex.sh`) |
+| Factory Droid | First-class (regex-OR matchers handle `Execute` ↔ `Bash`) |
+| OpenCode | Community port: [`flow-next-opencode`](https://github.com/gmickel/flow-next-opencode) |
+
+Detailed install + cross-platform patterns in [`docs/platforms.md`](plugins/flow-next/docs/platforms.md).
+
+## Ecosystem
+
+| Project | Platform |
+|---|---|
+| [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) | OpenCode |
+| [FlowFactory](https://github.com/Gitmaxd/flowfactory) | Factory.ai Droid |
+| [Ralph TUI](flow-next-tui/) | Cross-platform TUI for Ralph runs |
+
+## Also check out
+
+> **[GNO](https://gno.sh)** — local hybrid search for your notes, docs, and code. Long-term memory over your files via MCP.
 >
 > ```bash
 > bun install -g @gmickel/gno && gno mcp install --target claude-code
 > ```
 
 ---
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
 
 <div align="center">
 
