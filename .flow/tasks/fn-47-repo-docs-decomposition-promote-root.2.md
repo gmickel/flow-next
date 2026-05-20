@@ -98,9 +98,8 @@ Promote root `README.md` to canonical entry point (~300-350 lines), stub `plugin
 - [ ] No version bump in any manifest (docs-only).
 
 ## Done summary
-
-*Populated by /flow-next:work on completion.*
-
+Promoted root README.md to canonical entry point (249 lines, in 300-350 target band); stubbed plugins/flow-next/README.md to 13 lines with tagline + 6 relative deep links (no symlink); flipped CLAUDE.md:3 to single-plugin reality and retargeted the "Where to look" row 1 + expanded with 4 new docs/ siblings; swept all 16 cross-link sites (root README badge + 2 prose, CLAUDE.md, agent_docs/adding-skills.md, 12 sites in docs/teams.md, 1 in docs/ralph.md) — every retargeted link resolves. 612/612 unit + 130/130 smoke + clean sync-codex.sh. No version bump.
 ## Evidence
-
-*Populated by /flow-next:work on completion.*
+- Commits: 19ae684714d146d918015c360c4b8c56246024fe
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (612/612 passed), cd /tmp && bash plugins/flow-next/scripts/smoke_test.sh (130/130 passed), ./scripts/sync-codex.sh (14/14 validation guards passed, idempotent), grep verification gate: zero live-surface hits for plugins/flow-next/README.md outside stub self-refs + immutable historical .flow/specs/ entries + intentional agent_docs/adding-skills.md mention
+- PRs:
