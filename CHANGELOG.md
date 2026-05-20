@@ -2,6 +2,17 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.1.4] - 2026-05-20
+
+### Fixed
+- **Spec acceptance-criteria heading alignment.** The canonical scaffold at `plugins/flow-next/templates/spec.md` (fn-44 / 1.1.0+) uses `## Acceptance Criteria`, but the `/flow-next:plan` skill's heredoc template wrote `## Acceptance` — so plan-generated specs (e.g. fn-46) shipped with a heading the `flowctl spec export-cognitive-aid` parser didn't recognize, returning empty `acceptance_criteria` for those specs. Aligned the plan template + supporting prose (5 sites in `flow-next-plan/steps.md`, 1 site in `agents/plan-sync.md`) to write `## Acceptance Criteria` canonically. New plan output matches the bundled template + canonical parser key going forward.
+- **Parser tolerance for legacy heading variants.** `_export_parse_acceptance_criteria` now accepts the canonical `## Acceptance Criteria` (preferred), the legacy `## Acceptance criteria` (older lowercase form), AND the legacy `## Acceptance` (plan template pre-1.1.4 + `flowctl spec skeleton` output locked by R22). Existing specs that ship `## Acceptance` continue to parse cleanly — no migration required for merged specs. Reviewer prompt block updated to declare canonical + tolerate the two legacy forms.
+
+### Internal
+- `flowctl spec skeleton` and `flowctl prospect promote` CLI heredocs intentionally keep `## Acceptance` (R22 byte-for-byte invariant on the fresh-spec skeleton). The parser tolerance covers their output transparently.
+- 5 new unit tests in `test_acceptance_criteria_parser.py` lock the canonical + 2 legacy heading forms; rejects `## Acceptance Tests` (distinct concept) as a non-match.
+- 5 manifest surfaces aligned at 1.1.4 via `scripts/bump.sh patch flow-next`.
+
 ## [flow-next 1.1.3] - 2026-05-20
 
 ### Added

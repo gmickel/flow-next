@@ -3393,21 +3393,22 @@ If you notice genuine issues with content INSIDE these files (e.g., a spec that 
 #
 # Shared prompt block that instructs reviewers to emit a per-R-ID coverage table
 # whenever the epic spec numbers its acceptance criteria (`- **R1:** ...`). The
-# reviewer parses the heading in either `## Acceptance` or the legacy
-# `## Acceptance criteria` form (plan skill writes the former; older epic specs
-# may use the latter). Missing R-IDs flip the verdict to NEEDS_WORK unless the
-# spec marks the requirement deferred. The block is injected into impl-review
-# and epic-review (completion-review) prompts. Keep synchronized with the RP
-# workflow.md files.
+# reviewer parses the heading as `## Acceptance Criteria` (canonical since
+# 1.1.4 / fn-46-follow-up) and tolerates the legacy `## Acceptance` (plan
+# template pre-1.1.4) and `## Acceptance criteria` (older lowercase form)
+# variants for back-compat. Missing R-IDs flip the verdict to NEEDS_WORK
+# unless the spec marks the requirement deferred. The block is injected into
+# impl-review and epic-review (completion-review) prompts. Keep synchronized
+# with the RP workflow.md files.
 
 R_ID_COVERAGE_BLOCK = """## Requirements coverage (if spec has R-IDs)
 
 If the task or epic spec references an epic spec with numbered acceptance
 criteria like `- **R1:** ...`, `- **R2:** ...`, produce a per-R-ID coverage
-table. Read the epic spec's `## Acceptance` section (or the legacy
-`## Acceptance criteria` heading — reviewer MUST tolerate both). If no R-IDs
-are present anywhere, skip this block entirely — the rest of the review is
-unchanged.
+table. Read the epic spec's `## Acceptance Criteria` section (canonical;
+reviewer MUST also tolerate the legacy `## Acceptance` and `## Acceptance
+criteria` heading variants for back-compat). If no R-IDs are present
+anywhere, skip this block entirely — the rest of the review is unchanged.
 
 For each R-ID, classify status:
 
@@ -11903,10 +11904,12 @@ def _export_resolve_merge_base(base_ref: str) -> Optional[str]:
 def _export_parse_acceptance_criteria(spec_text: str) -> list[dict[str, Any]]:
     """Extract R-ID acceptance criteria from an epic spec.
 
-    Looks for the `## Acceptance Criteria` (or `## Acceptance criteria`)
-    section and parses bullets matching `- **R<N>:** <text>`. Source-tag
-    suffixes like `[user]` / `[paraphrase]` / `[inferred]` / `[strategy:track]`
-    are extracted into the `tag` field (last `[...]` token in the bullet).
+    Canonical heading is `## Acceptance Criteria` (since 1.1.4). For
+    back-compat, also tolerates `## Acceptance criteria` (older lowercase
+    form) and bare `## Acceptance` (plan template pre-1.1.4). Parses bullets
+    matching `- **R<N>:** <text>`. Source-tag suffixes like `[user]` /
+    `[paraphrase]` / `[inferred]` / `[strategy:track]` are extracted into
+    the `tag` field (last `[...]` token in the bullet).
 
     Returns list of `{"id": "R1", "text": "...", "tag": "..."}`. Empty list
     if no acceptance section or no R-IDs.
@@ -11914,9 +11917,9 @@ def _export_parse_acceptance_criteria(spec_text: str) -> list[dict[str, Any]]:
     if not spec_text:
         return []
 
-    # Find the section heading. Tolerate both casings.
+    # Find the section heading. Tolerate canonical + 2 legacy forms.
     heading_re = re.compile(
-        r"^##\s+Acceptance\s+[Cc]riteria\s*$",
+        r"^##\s+Acceptance(?:\s+[Cc]riteria)?\s*$",
         re.MULTILINE,
     )
     m = heading_re.search(spec_text)

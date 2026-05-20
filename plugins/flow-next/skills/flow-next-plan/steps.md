@@ -232,8 +232,8 @@ Default to standard unless complexity demands more or less.
    The canonical scaffold lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — section list, scope-owner annotations, and the `## Decision Context` flat-vs-H3 conditional. At runtime the template is resolved via the 4-tier discovery cascade (first match wins): `<repo_root>/SPEC.md` → `<repo_root>/spec.md` → `.flow/templates/spec.md` → bundled `${PLUGIN_ROOT}/templates/spec.md`. The bundled file is the canonical source of truth; earlier tiers are user-customized overrides. Read the resolved template before authoring; never duplicate its section list inline. The plan skill extends that scaffold with the plan-specific sections shown below (Overview, Quick commands, Strategy Alignment, Strategy drift, Early proof point, Requirement coverage).
 
    ```bash
-   # Include: Overview, Scope, Approach, Quick commands (REQUIRED), Acceptance,
-   # Early proof point, Requirement coverage, References
+   # Include: Overview, Scope, Approach, Quick commands (REQUIRED),
+   # Acceptance Criteria, Early proof point, Requirement coverage, References
    # Conditional sections: ## Strategy Alignment (when STRATEGY_PRESENT=true from Step 1),
    # ## Strategy drift flagged for review (when plan scope conflicts with an active track)
    # Add mermaid diagram if data model or architecture changes
@@ -274,7 +274,7 @@ Default to standard unless complexity demands more or less.
    ## Decision context
    - <why this approach over alternatives>
 
-   ## Acceptance
+   ## Acceptance Criteria
    - **R1:** <testable criterion>
    - **R2:** <testable criterion>
    - **R3:** <testable criterion>
@@ -287,7 +287,7 @@ Default to standard unless complexity demands more or less.
 
    | Req | Description | Task(s) | Gap justification |
    |-----|-------------|---------|-------------------|
-   | R1  | <criterion from Acceptance> | fn-N-slug.1, fn-N-slug.2 | — |
+   | R1  | <criterion from Acceptance Criteria> | fn-N-slug.1, fn-N-slug.2 | — |
    | R2  | <another criterion> | fn-N-slug.3 | — |
    | R3  | <deferred item> | — | Deferred to fn-M-slug |
    EOF
@@ -314,14 +314,14 @@ Default to standard unless complexity demands more or less.
    **Requirement coverage rules:**
    - One row per acceptance criterion or distinct requirement from the spec
    - Every requirement must map to at least one task OR have a gap justification
-   - Table goes at the bottom of the spec (after Acceptance + Early proof point)
+   - Table goes at the bottom of the spec (after Acceptance Criteria + Early proof point)
    - Keep Req IDs simple (R1, R2...) — they're local to this spec
 
    **R-ID rule (MANDATORY for new specs):**
    - Number acceptance criteria as `R1`, `R2`, `R3`, ... in creation order using the `- **Rn:** ...` prose prefix format shown in the template above.
    - Once a review cycle has run against an R-ID, **never renumber**. Reordering is fine (R1, R3, R5 after R2/R4 deletion is correct).
    - New criteria take the next unused number. Gaps are fine — do not compact.
-   - R-IDs in `## Acceptance` and `## Requirement coverage` must match (same IDs, same meanings).
+   - R-IDs in `## Acceptance Criteria` and `## Requirement coverage` must match (same IDs, same meanings).
    - R-IDs are plain markdown prose, not YAML — the reviewer matches them via LLM reasoning, not strict parsing.
 
 4. Set spec dependencies (from spec-scout findings):
@@ -430,7 +430,7 @@ Default to standard unless complexity demands more or less.
    - Targets come from repo-scout/context-scout findings in Step 1
 
    **`satisfies` frontmatter rules (optional, additive):**
-   - Populate `satisfies: [R1, R3]` only when the task obviously advances specific R-IDs from the spec's `## Acceptance` section.
+   - Populate `satisfies: [R1, R3]` only when the task obviously advances specific R-IDs from the spec's `## Acceptance Criteria` section.
    - Tasks that do infrastructure, refactoring, shared plumbing, or docs-only work may legitimately have **no** `satisfies` entry — omit the frontmatter entirely.
    - Use bare R-ID tokens (`[R1, R3]`), not quoted strings.
    - Frontmatter is additive — tasks created without it parse unchanged.

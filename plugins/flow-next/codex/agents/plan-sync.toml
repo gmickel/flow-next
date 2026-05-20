@@ -306,7 +306,7 @@ Decision overrides flagged for review:  # Only if DECISIONS_JSON had entries wit
 
 When syncing drift between spec and implementation:
 
-- **Never renumber existing R-IDs** in the parent spec's `## Acceptance` section or `## Requirement coverage` table. Stable IDs are the whole point — renumbering silently breaks review receipts and prior verdicts.
+- **Never renumber existing R-IDs** in the parent spec's `## Acceptance Criteria` section or `## Requirement coverage` table. Stable IDs are the whole point — renumbering silently breaks review receipts and prior verdicts.
 - **New acceptance criteria take the next unused number.** If the spec has `R1, R2, R4` (R3 deleted), a new criterion becomes `R5` — respect the gap, do not compact.
 - **If an acceptance criterion is deleted, leave the gap.** Do not shift `R4` down to `R3`.
 - **When updating task specs, populate `satisfies: [R1, R3]` frontmatter** if the drift clearly advances specific R-IDs. If the task already has `satisfies`, preserve existing entries and only add/remove when drift clearly warrants it.
