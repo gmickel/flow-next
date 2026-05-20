@@ -72,9 +72,8 @@ Implement the spec-template discovery cascade across all consumers (`<repo_root>
 - [ ] Manual probe (where feasible): create a `<repo_root>/SPEC.md` and confirm `/flow-next:interview --scope=business` on a NEW IDEA reads from it (cascade tier 1 hit).
 
 ## Done summary
-
-*Populated by /flow-next:work on completion.*
-
+Implemented 4-tier spec-template discovery cascade (`<repo_root>/SPEC.md` → `<repo_root>/spec.md` → `.flow/templates/spec.md` → bundled `${PLUGIN_ROOT}/templates/spec.md`) at the single bash walker site (`flow-next-interview/SKILL.md:639`). Added `/flow-next:setup` Step 4a opt-in copy: `Copy template / Skip / abort` when no root SPEC.md exists; `Keep mine / Overwrite with canonical / abort` byte-compare gate with CRLF + trailing-newline normalization on re-setup. Cross-link prose in capture/SKILL.md, workflow.md, phases.md, plan/steps.md updated to mention the cascade. Snippet templates (`agents-md-snippet.md`, `claude-md-snippet.md`) updated so downstream CLAUDE.md/AGENTS.md readers know how to customize. Bundled `templates/spec.md` drops stale `flow-next-work` consumer entry + carries new customization-location top-comment. Codex mirror regenerated; smoke 130/130 green; sync idempotency confirmed (byte-identical re-run).
 ## Evidence
-
-*Populated by /flow-next:work on completion.*
+- Commits: 404df420651769bfa03e6c39703c6d645cde48a8
+- Tests: cd /tmp && bash plugins/flow-next/scripts/smoke_test.sh (130/130 passed), ./scripts/sync-codex.sh — clean run; all sync validation guards pass, ./scripts/sync-codex.sh — idempotent re-run produces byte-identical output (diff /tmp/sync1.txt /tmp/sync2.txt empty)
+- PRs:
