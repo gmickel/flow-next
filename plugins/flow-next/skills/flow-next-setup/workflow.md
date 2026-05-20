@@ -173,19 +173,26 @@ On `Copy template`: write the file via Bash `cp` with absolute paths.
 cp "${PLUGIN_ROOT}/templates/spec.md" SPEC.md
 ```
 
-**2. `HITS=1` (single hit OR case-insensitive FS collapsing both to one)** — use whichever exists (no prompt). Fall through to the byte-compare re-setup gate below.
+**2. `HITS=1` (single hit OR case-insensitive FS collapsing both to one)** — capture whichever filename actually exists into `EXISTING` (no prompt). Both the read-for-compare and the overwrite target route through `EXISTING` so lowercase `spec.md` repos do not silently fall back to a missing `SPEC.md`:
+
+```bash
+EXISTING=$(ls -1 SPEC.md spec.md 2>/dev/null | head -1)
+```
+
+Fall through to the byte-compare re-setup gate below.
 
 **3. `HITS=2` (case-sensitive FS with both distinct files)** — prefer uppercase + print a stderr warning, then fall through to the byte-compare gate against `SPEC.md`:
 
 ```bash
 echo "warn: both SPEC.md and spec.md exist at repo root; preferring uppercase. Unusual setup likely from cross-platform sync." >&2
+EXISTING=SPEC.md
 ```
 
-**Re-setup byte-compare gate** (when SPEC.md exists from a prior `/flow-next:setup`-`Copy template` and the user may have edited it). Read both sides and normalize before comparing:
+**Re-setup byte-compare gate** (when a repo-root spec file exists from a prior `/flow-next:setup`-`Copy template` and the user may have edited it). Read both sides via `EXISTING` and normalize before comparing:
 
 ```bash
 # Normalize: strip trailing newlines + replace CRLF with LF
-USER_CONTENT=$(cat SPEC.md | tr -d '\r')
+USER_CONTENT=$(cat "$EXISTING" | tr -d '\r')
 CANONICAL_CONTENT=$(cat "${PLUGIN_ROOT}/templates/spec.md" | tr -d '\r')
 # Strip trailing newlines from both
 USER_NORM=$(printf '%s' "$USER_CONTENT")
@@ -204,14 +211,14 @@ Then:
 
 - **Identical** (after normalization): no-op. Skip the write — re-running setup must not bump mtime on unchanged files.
 - **Customized** (any deviation after normalization): do NOT silently replace. Ask the user via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror):
-  - **header**: `Overwrite customized <repo-root>/SPEC.md?`
-  - **body**: `<repo-root>/SPEC.md exists and differs from the canonical template shipped with this plugin version (CRLF and trailing newlines ignored). Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/templates/spec.md\`).`
+  - **header**: `Overwrite customized <repo-root>/$EXISTING?`
+  - **body**: `<repo-root>/$EXISTING exists and differs from the canonical template shipped with this plugin version (CRLF and trailing newlines ignored). Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/templates/spec.md\`).`
   - **options**:
-    - `Keep mine (Recommended)` — leave `<repo-root>/SPEC.md` unchanged. Print the path to the canonical template so the user can diff manually.
-    - `Overwrite with canonical` — replace `<repo-root>/SPEC.md` with the bundled template content. Repo customization is lost.
-    - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, Step 3 mkdir, Step 4 bin/template copies above) may already have run; they are idempotent and safe to leave. No `<repo-root>/SPEC.md` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
+    - `Keep mine (Recommended)` — leave `<repo-root>/$EXISTING` unchanged. Print the path to the canonical template so the user can diff manually.
+    - `Overwrite with canonical` — replace `<repo-root>/$EXISTING` (same filename — do NOT rename lowercase `spec.md` to uppercase `SPEC.md` here; preserve the user's casing) with the bundled template content. Repo customization is lost.
+    - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, Step 3 mkdir, Step 4 bin/template copies above) may already have run; they are idempotent and safe to leave. No `<repo-root>/$EXISTING` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
 
-**Note:** Setup writes uppercase `SPEC.md` only. Never write lowercase `spec.md`. The lowercase entry in the cascade is read-only — present only for users who deliberately created lowercase.
+**Note:** Setup writes uppercase `SPEC.md` only on the **fresh-seed** path (`HITS=0` `Copy template`). Never seed lowercase `spec.md` from scratch. The lowercase entry in the cascade is read-only at discovery time — present only for users who deliberately created lowercase. On the **re-setup overwrite** path above, preserve the user's existing filename casing via `$EXISTING` (so a lowercase `spec.md` stays lowercase after `Overwrite with canonical`).
 
 Then handle `.flow/usage.md` — preserve any repo-customized variant:
 
@@ -298,16 +305,20 @@ HAVE_RP=$(which rp-cli >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
 
-# Read current config values if they exist
-CURRENT_BACKEND=$("${PLUGIN_ROOT}/scripts/flowctl" config get review.backend --json 2>/dev/null | jq -r '.value // empty')
-CURRENT_MEMORY=$("${PLUGIN_ROOT}/scripts/flowctl" config get memory.enabled --json 2>/dev/null | jq -r '.value // empty')
-CURRENT_PLANSYNC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.enabled --json 2>/dev/null | jq -r '.value // empty')
+# Read current config values if they exist.
+# NB: `jq -r '.value // empty'` would collapse boolean `false` to "" and re-ask
+# the question on re-runs for users who explicitly set it to false. We map only
+# JSON `null` (truly unset) to "" so that `[[ -z "$CURRENT_*" ]]` distinguishes
+# unset from explicitly-false.
+CURRENT_BACKEND=$("${PLUGIN_ROOT}/scripts/flowctl" config get review.backend --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+CURRENT_MEMORY=$("${PLUGIN_ROOT}/scripts/flowctl" config get memory.enabled --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+CURRENT_PLANSYNC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.enabled --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 # planSync.crossSpec is canonical; planSync.crossEpic is a read-only legacy
 # alias (removed in 2.0). The CLI resolves the alias and emits a one-line
 # stderr deprecation; we silence stderr here because the canonical key
 # returns the legacy value transparently when only the legacy key is set.
-CURRENT_CROSSSPEC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.crossSpec --json 2>/dev/null | jq -r '.value // empty')
-CURRENT_GITHUB_SCOUT=$("${PLUGIN_ROOT}/scripts/flowctl" config get scouts.github --json 2>/dev/null | jq -r '.value // empty')
+CURRENT_CROSSSPEC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.crossSpec --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+CURRENT_GITHUB_SCOUT=$("${PLUGIN_ROOT}/scripts/flowctl" config get scouts.github --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 ```
 
 Store detection results for use in questions. When showing options, indicate current value if set (e.g., "(current)" after the matching option label).
