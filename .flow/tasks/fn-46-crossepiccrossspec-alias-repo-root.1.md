@@ -61,9 +61,8 @@ Add `planSync.crossSpec` as the canonical config key with `planSync.crossEpic` a
 - [ ] Sync idempotency confirmed: re-running `./scripts/sync-codex.sh` produces byte-identical mirror.
 
 ## Done summary
-
-*Populated by /flow-next:work on completion.*
-
+flowctl `planSync.crossSpec` is now canonical; `planSync.crossEpic` is a read-only legacy alias with one-line stderr deprecation (per-process deduped, `FLOW_NO_DEPRECATION=1` suppresses, removed in 2.0). Alias resolution probes the raw `.flow/config.json` to dodge the `load_flow_config()` deep-merge gotcha. flow-next-setup workflow (4 key-bearing sites + display label retained) and `agents/plan-sync.md` env-var doc now reference the canonical key with legacy footnote. Codex mirror regenerated; sync is idempotent. 14 new unit tests cover defaults, raw-file probe, both-directions read resolution, write redirection, dedup, and env suppression.
 ## Evidence
-
-*Populated by /flow-next:work on completion.*
+- Commits: 5ef184cde0b437bae3a4be3cb7609b9ff7063454
+- Tests: python3 -m unittest plugins.flow-next.tests.test_config_alias -v (14/14 passed), python3 -m unittest discover -s plugins/flow-next/tests (601/601 passed), cd /tmp && bash plugins/flow-next/scripts/smoke_test.sh (130/130 passed), ./scripts/sync-codex.sh — clean run + idempotent re-run (byte-identical mirror), manual acceptance T1-T12: defaults, canonical wins, legacy fallback, FLOW_NO_DEPRECATION=1 suppress, per-process dedup (single warn across 3 calls)
+- PRs:
