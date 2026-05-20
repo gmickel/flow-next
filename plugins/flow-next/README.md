@@ -6,7 +6,7 @@
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet)](https://claude.ai/code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI_Codex-Plugin-10a37f)](https://developers.openai.com/codex/cli/)
 
-[![Version](https://img.shields.io/badge/Version-1.1.2-green)](../../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.1.3-green)](../../CHANGELOG.md)
 
 [![Status](https://img.shields.io/badge/Status-Active_Development-brightgreen)](../../CHANGELOG.md)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
@@ -513,6 +513,8 @@ Six phases, single chat (no subagent dispatch by default):
 ### Spec template
 
 Capture writes the **CLAUDE.md richer template**: `## Goal & Context` / `## Architecture & Data Models` / `## API Contracts` / `## Edge Cases & Constraints` / `## Acceptance Criteria` / `## Boundaries` / `## Decision Context`. Acceptance criteria use R-IDs (`- **R1:** ...`) per repo convention. Spec footer prints "Suggested next step: `/flow-next:plan <spec-id>` (break into tasks) or `/flow-next:interview <spec-id>` (refine via Q&A)."
+
+**Template discovery cascade (v1.1.3+):** capture / interview / plan resolve the scaffold in this order — `<repo_root>/SPEC.md` → `<repo_root>/spec.md` → `.flow/templates/spec.md` → bundled `${PLUGIN_ROOT}/templates/spec.md`. First match wins. To customize for your project, opt in at `/flow-next:setup` (`Copy template / Skip / abort` prompt) — Step 4a copies the canonical template to `<repo_root>/SPEC.md`; re-setup runs use the byte-compare gate (`Keep mine / Overwrite with canonical / abort`) with CRLF + trailing-newline normalization, so customized SPEC.md files are never silently clobbered.
 
 **Exit codes:**
 - Ralph-block (`REVIEW_RECEIPT_PATH` or `FLOW_RALPH=1`) → exit **2**.
@@ -1588,10 +1590,10 @@ Skip conditions: disabled (default), task failed, no downstream tasks.
 
 **Cross-spec sync (opt-in, default false):**
 ```bash
-flowctl config set planSync.crossEpic true
+flowctl config set planSync.crossSpec true
 ```
 
-When enabled, plan-sync also checks other open specs for stale references. Useful when multiple specs share APIs/patterns, but increases sync time. Disabled by default to avoid long Ralph loops. *(Config key name `crossEpic` remains in 1.x for back-compat; the surface concept is "cross-spec.")*
+When enabled, plan-sync also checks other open specs for stale references. Useful when multiple specs share APIs/patterns, but increases sync time. Disabled by default to avoid long Ralph loops. *(`planSync.crossEpic` is the legacy alias — still readable in 1.x with a one-line stderr deprecation warning (suppress via `FLOW_NO_DEPRECATION=1`); removed in 2.0.)*
 
 **Manual trigger:**
 ```bash

@@ -2,6 +2,20 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.1.3] - 2026-05-20
+
+### Added
+- **`planSync.crossSpec` is the canonical cross-spec plan-sync config key.** `flowctl config get / set` now writes `crossSpec` exclusively; `set` never touches the legacy key. `get` prefers `crossSpec` and falls back to `planSync.crossEpic` only when the canonical key is **absent from the raw `.flow/config.json` file** (the `load_flow_config()` deep-merge would otherwise mask a "user has only set legacy" state with the new default of `false`). Default in `get_default_config()` switches to `crossSpec: false`; the legacy key is removed from defaults so its presence in the file signals an explicit legacy set. Reuses `_emit_rename_deprecation` from fn-43 (per-process dedup via `_RENAME_DEPRECATION_EMITTED`; honors `FLOW_NO_DEPRECATION=1`). `flow-next-setup/workflow.md` (5 sites: lines 237, 268, 309, 415, 497) and `agents/plan-sync.md:19` updated to reference the canonical key as source of truth.
+- **Spec template discovery cascade.** `/flow-next:capture`, `/flow-next:interview`, and `/flow-next:plan` resolve the spec scaffold in this order: `<repo_root>/SPEC.md` → `<repo_root>/spec.md` → `.flow/templates/spec.md` → bundled `${PLUGIN_ROOT}/templates/spec.md`. First match wins. The only bash path-resolution site (`flow-next-interview/SKILL.md:639`) becomes the cascade walker; the five cross-link sites in capture / interview / plan prose now reference the cascade. Snippet templates (`agents-md-snippet.md:19`, `claude-md-snippet.md:19`) updated to mention repo-root first. The bundled `templates/spec.md` `consumers:` frontmatter drops the stale `flow-next-work` entry. Case-insensitive filesystems (macOS APFS, Windows NTFS) collide `SPEC.md` / `spec.md` to a single inode — treated as a single tier-1 hit; case-sensitive FS prefers `SPEC.md` and warns when both are present.
+- **`/flow-next:setup` opt-in `SPEC.md` copy step.** Step 4a (immediately after the existing `.flow/templates/spec.md` copy at `workflow.md:145`) prompts `Copy template / Skip / abort` when neither `<repo_root>/SPEC.md` nor `<repo_root>/spec.md` exists. On consent, copies the canonical template to `<repo_root>/SPEC.md` (uppercase) with a top comment noting customization location + the discovery cascade. Re-setup runs use the fn-45.3 byte-compare gate (`Keep mine / Overwrite with canonical / abort`) — with CRLF → LF normalization and trailing-newline strip before compare, since root-level files are explicitly editable.
+
+### Deprecated
+- **`planSync.crossEpic` config key.** Reading the legacy key still works in 1.x with the one-line stderr deprecation hint (suppressible via `FLOW_NO_DEPRECATION=1`). Removed in 2.0 — matches the fn-43 `epic → spec` alias cadence (telemetry-driven, not calendar-driven; R28 forbids hard-coded sunset dates).
+
+### Internal
+- **Docs aligned with the new contract.** `plugins/flow-next/README.md:1589-1594` flips the cross-spec sync example to the canonical key with the legacy alias as a footnote; `plugins/flow-next/README.md:513-515` documents the discovery cascade + opt-in copy step in the spec template section; `plugins/flow-next/docs/flowctl.md` config table gains a `planSync.crossSpec` row with the legacy alias footnote; `CLAUDE.md` "Creating a spec" documents the cascade via `flow-next-setup/templates/claude-md-snippet.md` (propagates to user repos on `/flow-next:setup` re-runs through the fn-45.3 byte-compare gate); `agent_docs/local-dev.md` gains "Config alias smoke" + "Repo-root SPEC.md smoke" subsections with manual verification commands.
+- **Five manifest surfaces aligned at 1.1.3** via `scripts/bump.sh patch flow-next` (auto-runs `sync-codex.sh` per fn-45.4 precedent).
+
 ## [flow-next 1.1.2] - 2026-05-18
 
 ### Fixed

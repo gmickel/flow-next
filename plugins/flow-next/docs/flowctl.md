@@ -525,8 +525,11 @@ flowctl config toggle memory.enabled [--json]
 |-----|------|---------|-------------|
 | `memory.enabled` | bool | `false` | Enable memory system |
 | `planSync.enabled` | bool | `false` | Enable plan-sync after task completion |
+| `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync — scan other open specs for stale references after each task (opt-in; increases sync time)* |
 | `scouts.github` | bool | `false` | Enable github-scout during planning (requires gh CLI) |
 | `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `none`). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
+
+\* `planSync.crossEpic` is the legacy alias — still readable in 1.x with a one-line stderr deprecation warning (suppress via `FLOW_NO_DEPRECATION=1`); removed in 2.0. `set` writes the canonical key only; `get` prefers `crossSpec` and falls back to `crossEpic` only when `crossSpec` is absent from the raw config file.
 
 Priority: `--review=...` argument > `FLOW_REVIEW_BACKEND` env > `.flow/config.json` > error.
 

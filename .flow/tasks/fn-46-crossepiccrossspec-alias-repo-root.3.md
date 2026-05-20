@@ -64,9 +64,8 @@ Ship the 1.1.3 release: docs aligned with new contract (config alias + template 
 - [ ] Smoke green: 130/130 + standalone rui_refs guard returns no hits.
 
 ## Done summary
-
-*Populated by /flow-next:work on completion.*
-
+Shipped flow-next 1.1.3 docs + CHANGELOG + version bump for the fn-46 release. `plugins/flow-next/README.md:1589-1594` flipped to canonical `planSync.crossSpec` with legacy `crossEpic` as footnote; `plugins/flow-next/docs/flowctl.md` config table gained a `planSync.crossSpec` row with the legacy-alias footnote; `plugins/flow-next/README.md:513-515` documents the v1.1.3+ discovery cascade + opt-in `/flow-next:setup` Step 4a copy step (with byte-compare gate on re-setup); `agent_docs/local-dev.md` gains "Config alias smoke" and "Repo-root SPEC.md smoke" subsections with manual verification commands (operator-level smokes for interactive consent prompts noted as deferred); `CHANGELOG.md` `[flow-next 1.1.3]` entry above 1.1.2 covers Added (canonical key, discovery cascade, opt-in copy step), Deprecated (legacy `planSync.crossEpic`, removal in 2.0), and Internal (5 manifest surfaces aligned). `./scripts/bump.sh patch flow-next` ran clean — 5 manifest surfaces all at 1.1.3; auto-ran `sync-codex.sh` clean per fn-45.4 precedent. Snippet templates (`claude-md-snippet.md`, `agents-md-snippet.md`) already carried cascade prose from fn-46.2; repo-root CLAUDE.md propagates via fn-45.3 byte-compare gate on `/flow-next:setup` re-runs (deliberately NOT edited directly). 130/130 smoke pass; standalone rui_refs guard returned zero hits.
 ## Evidence
-
-*Populated by /flow-next:work on completion.*
+- Commits: 8b765a2463fbab86149f03ef63526eeb4fd7c152
+- Tests: cd /tmp && bash /Users/gordon/work/gmickel-claude-marketplace/plugins/flow-next/scripts/smoke_test.sh (130/130 passed), grep -rE '`request_user_input`|request_user_input tool|request_user_input\(|MUST use `request_user_input`|ONLY ask via `request_user_input`' plugins/flow-next/codex/skills/ | grep -v '/templates/' (rui_refs guard returned zero hits), ./scripts/bump.sh patch flow-next (5 manifest surfaces 1.1.2 -> 1.1.3; sync-codex.sh auto-ran clean — 24 skills, 21 agents, 17 openai.yaml, hooks.json valid, all R-validators pass)
+- PRs:

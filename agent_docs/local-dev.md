@@ -96,6 +96,97 @@ grep -rE '`request_user_input`|request_user_input tool|request_user_input\(|MUST
 
 Any deviation (structured UI card appears, `request_user_input` error surfaces, agent auto-proceeds without waiting) is a regression — re-run `./scripts/sync-codex.sh` and diff `plugins/flow-next/codex/skills/flow-next-setup/workflow.md` against the canonical to find the missing transform.
 
+## Config alias smoke (planSync.crossEpic → crossSpec)
+
+Manual verification that the fn-46.1 alias mechanism reads + writes the canonical `planSync.crossSpec` key, falls back to the legacy `planSync.crossEpic` on read when the canonical key is absent from the raw config file, and emits a one-line stderr deprecation hint exactly once per process on legacy read.
+
+Run after any change touching `flowctl config get / set` or `_emit_rename_deprecation` (`plugins/flow-next/scripts/flowctl.py`).
+
+**Setup:** scratch repo with `.flow/` initialised.
+
+```bash
+mkdir -p /tmp/fn-crossspec-smoke && cd /tmp/fn-crossspec-smoke
+.flow/bin/flowctl init   # or run /flow-next:setup once
+```
+
+**Canonical write + read:**
+
+```bash
+.flow/bin/flowctl config set planSync.crossSpec true
+# Expected: writes canonical key only; .flow/config.json contains "crossSpec": true, no "crossEpic" key.
+
+.flow/bin/flowctl config get planSync.crossSpec
+# Expected stdout: true   (no deprecation warning on stderr)
+```
+
+**Legacy read with deprecation:**
+
+```bash
+.flow/bin/flowctl config get planSync.crossEpic
+# Expected stdout: true
+# Expected stderr: one-line deprecation hint mentioning planSync.crossSpec is the canonical key and crossEpic is removed in 2.0.
+```
+
+**Suppression:**
+
+```bash
+FLOW_NO_DEPRECATION=1 .flow/bin/flowctl config get planSync.crossEpic
+# Expected stdout: true
+# Expected stderr: silent (no deprecation hint).
+```
+
+**Per-process dedup (warning fires exactly once):**
+
+```bash
+# In a single Python process (the dedup cache is per-process), three back-to-back legacy reads:
+python3 -c "
+import subprocess
+for _ in range(3):
+    subprocess.run(['.flow/bin/flowctl', 'config', 'get', 'planSync.crossEpic'])
+"
+# Each subprocess is its own process → warning fires 3 times.
+# To verify the per-process dedup contract, invoke the alias path in-process via the flowctl entry point (e.g. via the smoke suite) rather than re-spawning the CLI.
+```
+
+Any deviation (canonical `set` touches `crossEpic`, legacy `get` doesn't emit the deprecation, `FLOW_NO_DEPRECATION=1` still emits) is a regression — inspect `cmd_config_get` / `set_config` / `_emit_rename_deprecation` in `flowctl.py`.
+
+## Repo-root SPEC.md smoke (template discovery cascade)
+
+Manual verification that the fn-46.2 cascade walker resolves `<repo_root>/SPEC.md` before `.flow/templates/spec.md`, and that `/flow-next:setup` emits the opt-in copy step (`Copy template / Skip / abort`) on fresh repos + the byte-compare gate (`Keep mine / Overwrite with canonical / abort`) on re-setup with customized content.
+
+Operator-level smoke: requires a real interactive run of `/flow-next:setup`, `/flow-next:capture`, or `/flow-next:interview` in a scratch repo — automation-only verification is insufficient because the consent prompts surface in the agent UI.
+
+**Opt-in copy on fresh repo:**
+
+```bash
+mkdir -p /tmp/fn-spec-cascade-smoke && cd /tmp/fn-spec-cascade-smoke
+git init -q
+# /flow-next:setup
+# Expected at Step 4a: prompt renders `Copy template / Skip / abort`.
+# Choosing "Copy template" writes <repo_root>/SPEC.md (uppercase) with a top comment noting customization location + the discovery cascade.
+```
+
+**Byte-compare gate on re-setup with customized SPEC.md:**
+
+```bash
+# Customize the SPEC.md (edit a section header, add a comment line, etc.).
+# Re-run /flow-next:setup
+# Expected at Step 4a: byte-compare gate detects user edits → prompt renders `Keep mine / Overwrite with canonical / abort`.
+# CRLF / trailing-newline normalization: editing on Windows or appending a trailing newline must not trigger a false-positive overwrite.
+```
+
+**Cascade hit from repo-root:**
+
+```bash
+# With <repo_root>/SPEC.md present (any of the previous steps), run /flow-next:capture or /flow-next:interview on a NEW IDEA.
+# Expected: the cascade walker resolves the repo-root file (tier-1 hit) before falling back to .flow/templates/spec.md.
+# Add a unique marker comment to SPEC.md (e.g. `<!-- smoke-marker -->`) and verify the spec emitted by capture / interview references the customized scaffold.
+```
+
+**Codex Desktop / CLI variant:** the cascade prose is plain markdown and the Codex mirror inherits the same workflow without platform-specific transforms — repeat the steps in Codex Desktop (Default mode) and Codex CLI. Behavior is uniform; the only mirror-specific check is that `/flow-next:setup` renders the consent prompts as the plain-text numbered-prompt fallback per fn-45 (see *Codex plain-text prompt smoke* above).
+
+Some smokes here require manual probing in a real repo (operator-level); deferred where automation cannot exercise an interactive consent prompt. The procedure is captured so future operators can replicate it byte-for-byte.
+
 ## RP gotchas (must follow)
 
 - Use `flowctl rp` wrappers only (no direct `rp-cli`).
