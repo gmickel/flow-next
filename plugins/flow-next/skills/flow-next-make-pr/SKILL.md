@@ -21,7 +21,7 @@ flowctl provides only thin plumbing: `flowctl spec export-cognitive-aid <spec-id
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — `AskUserQuestion` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 4 preview asks the user `create / dry-run / edit-body / abort` before pushing. (sync-codex.sh rewrites `AskUserQuestion` to `request_user_input` in the Codex mirror.)
+**Inline skill (no `context: fork`)** — `AskUserQuestion` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 4 preview asks the user `create / dry-run / edit-body / abort` before pushing. (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.)
 
 ## Mode Detection
 

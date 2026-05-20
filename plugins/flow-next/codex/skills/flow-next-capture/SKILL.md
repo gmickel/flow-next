@@ -9,7 +9,9 @@ allowed-tools: request_user_input, Read, Bash, Grep, Glob, Write, Edit, Task
 
 A free-form discussion (or a `/flow-next:prospect` survivor) frequently produces enough material for a complete spec, but stops short of the formal `flowctl spec create` + `spec set-plan` heredoc documented in `CLAUDE.md`. Without an explicit synthesis step, that context decays — the next session loses the conversation, the spec never lands, and the user re-explains the same idea to `/flow-next:plan`.
 
-This skill IS the synthesis. The host agent (Claude Code / Codex / Droid) extracts the recent user turns, drafts a CLAUDE.md-shaped spec with **per-line source tags** (`[user]` / `[paraphrase]` / `[inferred]`), shows the full draft back via `request_user_input`, and only then writes the spec via existing flowctl plumbing. There is no Python synthesizer, no codex / copilot subprocess, no fast-model classifier. The host agent is already an LLM and does the work directly.
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+This skill IS the synthesis. The host agent (Claude Code / Codex / Droid) extracts the recent user turns, drafts a CLAUDE.md-shaped spec with **per-line source tags** (`[user]` / `[paraphrase]` / `[inferred]`), shows the full draft back via `plain-text numbered prompt`, and only then writes the spec via existing flowctl plumbing. There is no Python synthesizer, no codex / copilot subprocess, no fast-model classifier. The host agent is already an LLM and does the work directly.
 
 flowctl provides only thin spec plumbing (`spec create`, `spec set-plan`, optional `spec set-branch`, `memory search` for duplicate detection). No new flowctl subcommands.
 
@@ -22,7 +24,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowc
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — `request_user_input` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 0 (duplicate detection) and Phase 4 (read-back loop) both require user choice in interactive mode.
+**Inline skill (no `context: fork`)** — `plain-text numbered prompt` must stay reachable across phases. Subagents can't call plain-text numbered prompts (Claude Code issues #12890, #34592). Phase 0 (duplicate detection) and Phase 4 (read-back loop) both require user choice in interactive mode.
 
 ## Mode Detection
 
@@ -69,12 +71,12 @@ fi
 
 | Mode | When | Behavior |
 |------|------|----------|
-| **Interactive** (default) | User is at the terminal | Phase 0 asks on duplicate detection; Phase 3 asks on must-ask ambiguities; Phase 4 read-back via blocking-question tool — write only on `approve` |
+| **Interactive** (default) | User is at the terminal | Phase 0 asks on duplicate detection; Phase 3 asks on must-ask ambiguities; Phase 4 read-back via plain-text numbered prompt — write only on `approve` |
 | **Autofix** (`mode:autofix`) | Batch usage from another skill / scripted invocation | No user questions. Phase 0 hard-errors on duplicates / compaction without explicit overrides. Phase 3 must-ask cases hard-error (autofix can't ask). Phase 4 prints full draft + tally to stdout. **Writes ONLY when `--yes` is also passed**; without `--yes`, exit 0 with "draft printed; rerun with --yes to commit" |
 
 ### Autofix mode rules
 
-- **No user questions.** Never call the blocking-question tool.
+- **No user questions.** Never call the plain-text numbered prompt.
 - **Phase 0 hard-errors:** duplicate detected → list overlapping spec IDs to stderr, exit 2 unless `--rewrite <id>` was passed; compaction detected → exit 2 unless `--from-compacted-ok` was passed.
 - **Phase 3 must-ask hard-errors:** ambiguous title / untestable acceptance / scope-conflict-with-existing-spec → exit 2 with which case fired and why. Autofix cannot resolve must-ask cases.
 - **Phase 4 print-only.** Full draft printed to stdout (frontmatter + all sections + R-IDs + `[inferred]` tally + 8+ acceptance suggestion if applicable). Without `--yes`, exit 0 with the "rerun with --yes" hint. With `--yes`, proceed to Phase 5 write.
@@ -99,7 +101,7 @@ In autofix mode, skip user questions entirely and apply the rules above.
 
 In interactive mode:
 
-- Ask **one question at a time** via `request_user_input`. Fall back to numbered options in plain text only if the tool is unreachable or errors. Never silently skip the question.
+- Ask **one question at a time** via `plain-text numbered prompt`. Never silently skip the question.
 - **Lead with the recommended option** and a one-sentence rationale, followed by a confidence marker — `[high]` / `[judgment-call]` / `[your-call]`. The body carries the recommendation; option labels stay neutral so the user isn't anchored on the option text itself. (See [phases.md](phases.md) §Confidence tiers.)
 - Prefer **multiple choice** when natural options exist (Phase 0 duplicate decision; Phase 4 approve/edit/abort).
 - **Do not ask the user for facts** they already gave you in conversation — Phase 1 extracts evidence first; Phase 3 asks only on the three hard-error must-ask cases plus genuinely missing context that can't be inferred.
@@ -113,7 +115,7 @@ The goal is automated synthesis with human oversight on judgment calls — not a
 - **Code snippets or specific file paths in the spec body.** Those belong in `/flow-next:plan` task specs after research lands. Capture's output is a high-level spec, not an implementation guide.
 - **Silent overwrite of an existing spec.** Idempotency requires `--rewrite <spec-id>` (R8). Without it, Phase 0 conflict-detection branches into extend / supersede / proceed-anyway.
 - **Auto-splitting a spec that has 8+ acceptance criteria.** Phase 4 surfaces the option to split; the user decides. Never auto-action a split.
-- **Setting `context: fork`** — blocking-question tools must stay reachable.
+- **Setting `context: fork`** — plain-text numbered prompt must stay reachable.
 - **Calling `flowctl spec create` before Phase 4 approval.** Phase 5 is the only write phase.
 - **Using `git add -A` from this skill.** When committing the new spec, stage only the JSON sidecar (`.flow/specs/<id>.json` post-1.0; `.flow/epics/<id>.json` on alias-mode 0.x repos that haven't migrated yet) + `.flow/specs/<id>.md` (and `.flow/meta.json` if the next-id counter mutated). Other working-tree changes are not capture's concern.
 
@@ -141,7 +143,7 @@ Execute the phases in [workflow.md](workflow.md) in order:
 1. **Extract conversation evidence** — build a verbatim `## Conversation Evidence` block FIRST (raw quotes from recent user turns, capped ~30 lines). Spec sections refer to it by line, not from agent memory.
 2. **Source-tagged synthesis** — draft each section with per-line tags (`[user]` / `[paraphrase]` / `[inferred]`). Apply the canonical template at [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (per R17 — cross-link, never re-embed the section list inline). Route explicit biz-context signals (nine SIGNAL CATEGORIES per fn-44 R24, only `[user]` / `[paraphrase]` tags) to their destinations; sections without conversation signal stay absent. Compute `BIZ_SIGNAL_CATEGORIES` (0..9) for Phase 6's R25 dispatch.
 3. **Must-ask cases (R9)** — interactive only; autofix exits 2 if any fire. Hard-error conditions: ambiguous title / untestable acceptance / scope-conflict. Optional ambiguities use lead-with-recommendation + confidence tier.
-4. **Read-back loop (mandatory, even in autofix)** — show full draft + R-ID list + `[inferred]` tally via `request_user_input` (interactive) or print to stdout (autofix). Interactive: `approve` / `edit` / `abort`. When 8+ acceptance criteria: include `consider splitting?` as an option (R11). Autofix: requires `--yes` to commit.
+4. **Read-back loop (mandatory, even in autofix)** — show full draft + R-ID list + `[inferred]` tally via `plain-text numbered prompt` (interactive) or print to stdout (autofix). Interactive: `approve` / `edit` / `abort`. When 8+ acceptance criteria: include `consider splitting?` as an option (R11). Autofix: requires `--yes` to commit.
 5. **Write via flowctl** — `flowctl spec create --title "..." --json` → parse `id` → `flowctl spec set-plan <id> --file - --json <<heredoc>`. Optional `flowctl spec set-branch` if user named one. Capture creates fresh specs; allocate R-IDs sequentially from R1.
 6. **Suggested next step** — print `Spec captured at .flow/specs/<id>.md.` plus `/flow-next:plan <id>` and `/flow-next:interview <id>` next-step hints. When `BIZ_SIGNAL_CATEGORIES` triggers `flowctl scope suggest` (R25 fire/no-fire threshold lives in flowctl — skill never re-implements the math inline), append the `/flow-next:interview --scope=business` suggestion line.
 

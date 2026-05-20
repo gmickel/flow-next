@@ -1284,7 +1284,7 @@ if [[ "$RALPH" != "1" ]]; then
 fi
 ```
 
-(sync-codex.sh rewrites `AskUserQuestion` to `request_user_input` in the Codex mirror.)
+(sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.)
 
 **Ralph mode skips the preview entirely.** The autonomous loop terminus opens the draft PR for human review without prompting — the human review IS the prompt. R24 invariant: under Ralph, control flows from §4.4 directly into §4.6 without an `AskUserQuestion` call.
 

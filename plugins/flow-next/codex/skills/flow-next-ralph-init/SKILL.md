@@ -34,7 +34,7 @@ Scaffold or update repo-local Ralph harness. Opt-in only.
  ```
 
 4. Determine review backend (skip if UPDATE_MODE=1):
- - If MULTIPLE available, ask user (do NOT use request_user_input primitive). Only
+ - If MULTIPLE available, ask user. Only
  show the options whose CLIs were detected:
  ```
  Multiple review backends available. Which one?

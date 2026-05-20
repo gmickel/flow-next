@@ -438,7 +438,7 @@ Default to standard unless complexity demands more or less.
 
 7. Add task dependencies (if not already set via `--deps`):
 
- **Preferred**: Use `--deps` flag during task creation (step 5). This saves tool calls.
+ **Preferred**: Use `--deps` flag during task creation (step 5). This saves prompt turns.
 
  **Alternative**: Use `dep add` to add dependencies after task creation:
  ```bash

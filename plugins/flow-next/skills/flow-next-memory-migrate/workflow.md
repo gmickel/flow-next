@@ -181,7 +181,7 @@ For each entry:
 
 **Interactive mode:**
 
-Use `AskUserQuestion` (sync-codex.sh rewrites to `request_user_input` in the Codex mirror). Lead with the mechanical default as the recommendation:
+Use `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.). Lead with the mechanical default as the recommendation:
 
 ```
 Entry: "Auth token refresh race during logout" (from pitfalls.md)

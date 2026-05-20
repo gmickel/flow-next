@@ -74,7 +74,7 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 2. **Verification** — Verify test commands actually work
 3. **Score & Synthesize** — Calculate scores, determine maturity level
 4. **Present Report** — Full report with all 8 pillars
-5. **Interactive Remediation** — `request_user_input` for agent readiness fixes only
+5. **Interactive Remediation** — `plain-text numbered prompt` for agent readiness fixes only
 6. **Apply Fixes** — Create/modify files based on selections
 7. **Summary** — Show what was changed
 
@@ -94,7 +94,7 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 
 | Pillars | Category | Remediation |
 |---------|----------|-------------|
-| 1-5 | Agent Readiness | ✅ Fixes offered via request_user_input |
+| 1-5 | Agent Readiness | ✅ Fixes offered via plain-text numbered prompt |
 | 6-8 | Production Readiness | ❌ Reported only, address independently |
 
 ## Guardrails
@@ -106,7 +106,9 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 - Respect .gitignore patterns
 
 ### User Consent
-- **MUST use `request_user_input` tool** for consent. Never just print questions as text.
+- **MUST ask via the plain-text numbered prompt described below** for consent.
+
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 - Always ask before modifying existing files
 - Don't add dependencies without consent
 

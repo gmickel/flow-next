@@ -215,25 +215,17 @@ When `DOC_AWARE=1`, behaviors (a)-(d) below layer onto the standard interview wo
 
 ## Interview Process
 
-**CRITICAL REQUIREMENT**: You MUST use the `request_user_input` tool for every question.
+**CRITICAL REQUIREMENT**: For every question, you MUST ask via the plain-text numbered prompt described below.
 
-- DO NOT output questions as text
-- DO NOT list questions in your response
-- ONLY ask questions via request_user_input primitive calls
-- Group 2-4 related questions per tool call
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+- ONLY ask via the plain-text numbered prompt
+- Group 2-4 related questions per prompt turn
 - Expect 40+ questions total for complex specs
-
-**Anti-pattern (WRONG)**:
-```
-Question 1: What database should we use?
-Options: a) PostgreSQL b) SQLite c) MongoDB
-```
-
-**Correct pattern**: Call request_user_input primitive with question and options.
 
 ### Question Format: Lead with Recommendation
 
-Every `request_user_input` body must include the agent's recommended option AND a confidence tier. Mirrors the canonical phrasing in `flow-next-audit/SKILL.md:64` ("Lead with the recommended option and a one-sentence rationale"). Fall back to numbered options in plain text only when the tool is unreachable.
+Every `plain-text numbered prompt` body must include the agent's recommended option AND a confidence tier. Mirrors the canonical phrasing in `flow-next-audit/SKILL.md:64` ("Lead with the recommended option and a one-sentence rationale").
 
 Pattern:
 
@@ -263,7 +255,7 @@ Concrete rules:
 1. **Cap branch depth at 4.** Research shows >4 prior turns rarely improves question quality — drop deeper threads, ask about something else. Heuristic; revisit if too restrictive in real use.
 2. **Discover-as-you-go**, not pre-compute. Adapt the next question based on prior answers. Don't lock a tree before you start.
 3. **Surface abandoned branches.** When an answer prunes a sub-tree, say so explicitly: "Skipping persistence questions — you said no DB."
-4. **One `request_user_input` call per turn**, period — never queue multiple tool calls back-to-back. Within that single call you may bundle 2-4 closely-related sub-questions per the existing batching rule above; do NOT pad with loosely-related questions just to hit four. The intent: one focused checkpoint per turn so the user isn't barraged with unrelated decisions in parallel. Use multi-select within a sub-question when options are non-exclusive.
+4. **One `plain-text numbered prompt` call per turn**, period — never queue multiple prompt turns back-to-back. Within that single call you may bundle 2-4 closely-related sub-questions per the existing batching rule above; do NOT pad with loosely-related questions just to hit four. The intent: one focused checkpoint per turn so the user isn't barraged with unrelated decisions in parallel. Use multi-select within a sub-question when options are non-exclusive.
 
 Example flow:
 
@@ -278,13 +270,13 @@ Before every question, classify it via the [questions-shared.md](questions-share
 
 - **Codebase-answerable** ("what exists / how it's wired / what conventions live here") → use Read / Grep / Glob to answer; log to spec's `## Resolved via Codebase` section with file:line evidence.
 - **Glossary-lookup-answerable** (`DOC_AWARE=1` only) — terms with a canonical entry in the nearest-ancestor `GLOSSARY.md` → silently resolve from the entry; log to spec's `## Glossary Conflicts` section only when the user's wording diverges from canonical AND the term is load-bearing (see behavior (a) below).
-- **User-judgment-required** ("what should exist / what tradeoff to make / what priority") → ask via `request_user_input`.
+- **User-judgment-required** ("what should exist / what tradeoff to make / what priority") → ask via `plain-text numbered prompt`.
 
 If you find yourself answering a "should" question via grep, that's the bug. Stop and ask the user.
 
 #### Code-versus-assertion contradiction (`DOC_AWARE=1` — behavior (c))
 
-When grep / Read reveals the code disagrees with something the user asserted ("we already have X at path Y" but Y is gone, or "the auth flow uses OAuth" but the code uses API keys), do **not** silently log under `## Resolved via Codebase`. Surface the contradiction as an `request_user_input`:
+When grep / Read reveals the code disagrees with something the user asserted ("we already have X at path Y" but Y is gone, or "the auth flow uses OAuth" but the code uses API keys), do **not** silently log under `## Resolved via Codebase`. Surface the contradiction as an `plain-text numbered prompt`:
 
 - **header**: `Code mismatch?`
 - **body**: `Code shows <X> at <file:line>; you said <Y>. Recommended: <treat-code-as-source-of-truth | update-spec-to-match-code | revisit-the-area>. Confidence: [<tier>].`
@@ -361,7 +353,7 @@ When `$SCOPE` is `business` or `both`, load `questions-business.md` for the biz 
 
 ### Business pass (`SCOPE == business`, or first phase of `both`)
 
-Run BEFORE the first request_user_input call:
+Run BEFORE the first plain-text numbered prompt call:
 
 1. **Project-docs investigation (R26)** — see "Investigate Project Docs Before Asking (business pass)" below. Symmetric to the codebase-investigation rule for the tech pass. Items resolved by docs land in `## Resolved via Project Docs`. The user is NOT asked about things the project docs already define.
 2. **Draft only user-judgment-required biz questions** — load `questions-business.md` for the question taxonomy. Walk problem framing, target user/persona, success metrics, MVP boundary, business constraints, what-not-to-build, prioritization rationale, business risks, UX expectations.
@@ -378,7 +370,7 @@ Per-section write behavior (per the write-policy):
 
 ### Technical pass (`SCOPE == technical`, default; or second phase of `both`)
 
-Run BEFORE the first request_user_input call:
+Run BEFORE the first plain-text numbered prompt call:
 
 1. **Read biz sections when populated** — if `## Goal & Context`, `## Boundaries`, `### Motivation` (under `## Decision Context`), or outcome-AC R-IDs are populated, read them as constraint context. Cite them in the interview opener (e.g., "Reading from the existing business layer: target user is X, MVP boundary excludes Y. Tech questions below..."). When biz sections are absent (default solo-dev 1.0.2-shape spec), proceed silently with technical-only questions — no opener about missing biz context.
 2. **Codebase investigation** — existing "Investigate Codebase Before Asking" rule applies unchanged. Items resolved via Read/Grep/Glob land in `## Resolved via Codebase`.
@@ -421,7 +413,7 @@ Read — in order, with the bounded reads called out so this doesn't balloon int
 Classify biz questions via the **Pre-Question Taxonomy** before asking:
 
 - **Project-docs-answerable** ("what does the strategy say / what does CHANGELOG show we've already shipped / what does GLOSSARY define the canonical term as / what decision did we record for X") → resolve from the docs; log to spec's `## Resolved via Project Docs` section with `path:line` evidence (or `path` + section heading when line numbers are noisy).
-- **User-judgment-required** ("what should our success metric be / what's MVP scope / what should we explicitly NOT build") → ask via `request_user_input`.
+- **User-judgment-required** ("what should our success metric be / what's MVP scope / what should we explicitly NOT build") → ask via `plain-text numbered prompt`.
 
 If you find yourself asking the user a biz question that README/CHANGELOG/STRATEGY already answers, that's the bug. Stop and resolve from docs. Symmetric form of the existing "if you find yourself answering a 'should' question via grep, that's the bug" rule.
 
@@ -468,7 +460,7 @@ For each hit, evaluate one filter before surfacing:
 
 - **Is the term load-bearing for this spec?** Casual passing mention does not trigger; mention that defines behavior or shapes acceptance does. The user wrote "the worker fetches the queue" mid-sentence about deployment — passing mention, no question. The user wrote "we need a new kind of worker that processes batches" — load-bearing, surface.
 
-When a hit passes the load-bearing filter AND the user's wording conflicts with canonical (alias used instead of canonical, or definition contradicts), surface as the **first interview question** via `request_user_input`:
+When a hit passes the load-bearing filter AND the user's wording conflicts with canonical (alias used instead of canonical, or definition contradicts), surface as the **first interview question** via `plain-text numbered prompt`:
 
 - **header**: `Term mismatch?`
 - **body**: `You used "<user-wording>"; GLOSSARY.md defines "<canonical>" as "<one-line definition>". Recommended: <use-canonical | redefine | this-is-different>. Confidence: [<tier>].`
@@ -482,7 +474,7 @@ Confidence tier: `[high]` when the canonical entry is recent and the user's word
 
 Across the conversation, watch for overloaded language — words the user keeps using whose meaning could plausibly shift between turns ("workflow", "session", "task" when a Flow `task` already has meaning, etc.). When you spot one:
 
-1. Propose a canonical via `request_user_input`:
+1. Propose a canonical via `plain-text numbered prompt`:
  - **header**: `Sharpen "<term>"?`
  - **body**: `You've used "<term>" in <count> turns. I'm reading it as "<agent's working definition>" but want to lock it in. Recommended: <X> — <one-sentence rationale>. Confidence: [<tier>].`
  - **options**: 2-4 candidate canonical wordings + `none-of-these` (user provides their own).
@@ -525,7 +517,7 @@ When all three hold:
  - **Module** (optional): the file or subsystem the decision shapes.
  - **Tags** (optional): comma-separated, e.g. `glossary,resolution,walk`.
 
-2. **Show the draft via `request_user_input` before writing** — same pattern as `/flow-next:capture` Phase 4 read-back:
+2. **Show the draft via `plain-text numbered prompt` before writing** — same pattern as `/flow-next:capture` Phase 4 read-back:
  - **header**: `Write decision?`
  - **body**: `Drafted decision entry: <title>. Body: <one-line summary>. Recommended: approve — <one-sentence rationale why all three gate criteria hold>. Confidence: [<tier>].`
  - **options**: frozen — `approve` (write), `edit` (user revises title / body / module / tags via follow-up), `skip` (do not write; the choice stays in spec prose only).
@@ -548,7 +540,7 @@ When all three hold:
 
  The `decisions` category is registered in flowctl's memory schema (Task 1 of the original decisions epic). Optional fields `--decision-status` (default `accepted`), `--superseded-by`, and `--alternatives-considered` are available; pass them when the conversation supplies them and skip otherwise.
 
-4. **On `edit`**, ask one follow-up `request_user_input` for which field changes (title / body / module / tags), capture the revision, re-show the draft, loop. Hard cap at 2 edit cycles before defaulting to `approve` / `skip`.
+4. **On `edit`**, ask one follow-up `plain-text numbered prompt` for which field changes (title / body / module / tags), capture the revision, re-show the draft, loop. Hard cap at 2 edit cycles before defaulting to `approve` / `skip`.
 
 5. **On `skip`**, do nothing — the choice still appears in spec prose; only the memory entry is suppressed.
 
@@ -584,7 +576,7 @@ Walk the user's request looking for two patterns:
 
 For each hit, evaluate the same load-bearing filter as behavior (a): casual passing mention does not trigger; mention that defines behavior or shapes acceptance does.
 
-When a hit passes the filter, surface via `request_user_input`:
+When a hit passes the filter, surface via `plain-text numbered prompt`:
 
 - **header**: `Strategy mismatch?`
 - **body**: `You said "<user-wording>"; STRATEGY.md (<path>) <track|approach> says "<canonical-wording>". Recommended: <align-with-strategy | flag-as-drift | this-is-different>. Confidence: [<tier>].`

@@ -391,7 +391,9 @@ Still pending from a previous run (count):
  Previous reply: <comment URL>
 ```
 
-For `needs-human` entries **and** "still pending" entries where the user might want to weigh in: invoke `request_user_input`. Wait for response; apply decisions; loop back to Phase 5 for any newly actionable items.
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+For `needs-human` entries **and** "still pending" entries where the user might want to weigh in: invoke `plain-text numbered prompt`. Wait for response; apply decisions; loop back to Phase 5 for any newly actionable items.
 
 If none block, exit 0 with the printed summary.
 

@@ -10,7 +10,7 @@ Before asking any question, classify it on three axes:
 |----------|-------------|----------|
 | **Codebase-answerable** | Agent (Read / Grep / Glob) | "What persistence layer is used?" / "Where do existing routes live?" / "What's the test framework?" |
 | **Glossary-lookup-answerable** (`DOC_AWARE=1` only) | Agent (`flowctl glossary read`) | "What does this project mean by 'worker'?" / "Is 'session' the canonical term here, or is it 'connection'?" |
-| **User-judgment-required** | User (`request_user_input`) | "Should we add caching?" / "What's the priority for offline support?" / "Is performance or simplicity more important here?" |
+| **User-judgment-required** | User (`plain-text numbered prompt`) | "Should we add caching?" / "What's the priority for offline support?" / "Is performance or simplicity more important here?" |
 
 **Rules of thumb:**
 

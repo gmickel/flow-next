@@ -32,16 +32,13 @@ If `--deep` was used, findings from deep passes retain their `pass` field
 (e.g., `"pass": "adversarial"`). If `--validate` was used, only kept findings
 appear. If neither, all primary findings appear.
 
-## Pre-flight: load blocking question tool
+## Pre-flight: load plain-text numbered prompt
 
-Before the walkthrough loop, the skill must have access to a **blocking
-question tool** (a tool that pauses the agent until the user answers):
+Before the walkthrough loop, the skill must have access to a **plain-text numbered prompt** (a tool that pauses the agent until the user answers):
 
-Use `request_user_input`. It's a deferred tool — call first to load its schema if it isn't already in scope.
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
-If the tool is unreachable, fall through to a chat-prompt fallback (print
-the question, wait for the user's next message). The fallback is less
-reliable — prefer the blocking tool wherever available.
+Use `plain-text numbered prompt`.
 
 ## Per-finding flow
 
@@ -67,7 +64,7 @@ For each finding in the merged set:
  5. LFG the rest — apply recommended action for this + all remaining findings
  ```
 
-2. Present via the platform blocking question tool with five labelled choices:
+2. Present via the plain-text numbered prompt with five labelled choices:
  `Apply`, `Defer`, `Skip`, `Acknowledge`, `LFG the rest`.
 
 3. Record the user's decision. Accumulate into four lists:
@@ -223,7 +220,7 @@ and records decisions.
 
 ## Acceptance criteria coverage (R-IDs from fn-32 epic)
 
-- **R8:** Per-finding blocking question with five options ✓ (§ "Per-finding flow")
+- **R8:** Per-finding plain-text numbered prompt with five options ✓ (§ "Per-finding flow")
 - **R9:** Ralph env detection hard-errors with clear message ✓ (SKILL.md "Interactive flag + Ralph-block")
 - **R10:** `.flow/review-deferred/<branch-slug>.md` as a durable record ✓ (§ "Branch slug + defer sink")
 - **R11:** Apply list dispatches fixer; Skip/Acknowledge logged no-op ✓ (§ "After walkthrough")

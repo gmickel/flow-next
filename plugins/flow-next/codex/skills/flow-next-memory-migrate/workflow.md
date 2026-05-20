@@ -113,7 +113,9 @@ Per file in scope:
 
 ### 0.5 — Confirmation gate (interactive only)
 
-Interactive: ask via blocking-question tool before starting Phase 1:
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+Interactive: ask via plain-text numbered prompt before starting Phase 1:
 
 ```
 Found <M> entries across <N> legacy files. Mechanical defaults will apply unless content
@@ -136,13 +138,13 @@ Autofix: skip the gate and proceed.
 
 ---
 
-## Phase 1: Classify (one entry per tool call)
+## Phase 1: Classify (one entry per prompt turn)
 
 **Goal:** for each legacy entry, decide the final `(track, category)` pair using mechanical default + body-driven evidence.
 
-### 1.1 — The "one entry per tool call" rule
+### 1.1 — The "one entry per prompt turn" rule
 
-Iterate entries one at a time. **Do not classify multiple entries in a single prompt or tool call.** Practice-scout flagged this as a real failure mode: agents under context pressure batch-classify in-prompt and silently skip entries. One-call-per-entry iteration discipline avoids this and gives clean per-entry verdict logging.
+Iterate entries one at a time. **Do not classify multiple entries in a single prompt or prompt turn.** Practice-scout flagged this as a real failure mode: agents under context pressure batch-classify in-prompt and silently skip entries. One-call-per-entry iteration discipline avoids this and gives clean per-entry verdict logging.
 
 For each entry in `WORKING_SET`:
 
@@ -182,7 +184,7 @@ For each entry:
 
 **Interactive mode:**
 
-Use `request_user_input`. Lead with the mechanical default as the recommendation:
+Use `plain-text numbered prompt`. Lead with the mechanical default as the recommendation:
 
 ```
 Entry: "Auth token refresh race during logout" (from pitfalls.md)
@@ -195,7 +197,7 @@ Options:
  3. Skip this entry — mark as needs-review
 ```
 
-One question at a time. If `request_user_input`'s schema isn't loaded on Claude Code,
+One question at a time.
 
 **Autofix mode:**
 
@@ -223,7 +225,7 @@ This record drives Phase 2 writes and the Phase 3 report.
 
 - Every entry in scope has a `final_classification` and a `decision_kind`.
 - All overrides have a one-line rationale captured.
-- Interactive mode has resolved every ambiguous entry via blocking question.
+- Interactive mode has resolved every ambiguous entry via plain-text numbered prompt.
 - Autofix mode has logged ambiguous entries as `needs-review`.
 
 ---
@@ -428,7 +430,7 @@ Created: .flow/memory/_migrated/.gitignore (self-ignoring; first run only)
 The skill itself is markdown — there's no unit-test surface. The validation is invoking `/flow-next:memory-migrate` in a real session. Expected behavior:
 
 - Phase 0 detects legacy files via `flowctl memory list-legacy --json`, skips already-migrated ones, applies scope hint, prints triage summary.
-- Phase 1 iterates entries one per tool call; mechanical defaults applied unless body warrants override; ambiguous entries asked (interactive) or marked needs-review (autofix).
+- Phase 1 iterates entries one per prompt turn; mechanical defaults applied unless body warrants override; ambiguous entries asked (interactive) or marked needs-review (autofix).
 - Phase 2 writes via `flowctl memory add --track <t> --category <c> ...`. Slug uniqueness handled.
 - Phase 3 verifies round-trip + prints report.
 - Phase 4 (optional) renames originals to `_migrated/<filename>.bak`; first-run writes `_migrated/.gitignore: *`.

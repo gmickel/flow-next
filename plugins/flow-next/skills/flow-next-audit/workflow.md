@@ -470,7 +470,7 @@ Bundle the easy ones, isolate the hard ones:
 
 ### 3.2 — Question style
 
-Use `AskUserQuestion` (deferred — load via `ToolSearch select:AskUserQuestion` if its schema isn't yet in scope). If the tool is unreachable, fall back to printing a numbered list and reading a typed reply. (sync-codex.sh rewrites `AskUserQuestion` to `request_user_input` for the Codex mirror.)
+Use `AskUserQuestion` (deferred — load via `ToolSearch select:AskUserQuestion` if its schema isn't yet in scope). If the tool is unreachable, fall back to printing a numbered list and reading a typed reply. (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.)
 
 Rules:
 

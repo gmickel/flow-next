@@ -58,7 +58,9 @@ if [[ -d .flow/epics && ! -f .flow/.flow_version ]]; then
 fi
 ```
 
-When `PRE_1_0_LAYOUT=1`, prompt via `request_user_input` ( in T15):
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+When `PRE_1_0_LAYOUT=1`, prompt via `plain-text numbered prompt`:
 
 - **header**: `Migrate .flow/?`
 - **body**: `Detected pre-1.0 .flow/ layout (.flow/epics/ present, no .flow/.flow_version sentinel). flow-next 1.0 renames .flow/epics/ to .flow/specs/ on disk; alias mode keeps the old layout working but new tooling (flow-swarm, future specs) targets the canonical layout. Recommended: Migrate now — backup is automatic and rollback is one command. Confidence: [high].`
@@ -66,6 +68,7 @@ When `PRE_1_0_LAYOUT=1`, prompt via `request_user_input` ( in T15):
  - `Migrate now` — apply migration via `flowctl migrate-rename --yes`. Safe (backup written to `.flow/.backup-pre-1.0/`, rollback via `flowctl migrate-rollback`).
  - `Defer` — keep alias mode, suppress the auto-detect banner for 7 days. Re-prompted on the next `flowctl` invocation after the window expires.
  - `Suppress permanently` — keep alias mode, never auto-prompt. Print instructions for the `FLOW_NO_AUTO_MIGRATE=1` env var so the user can suppress the banner across the whole machine.
+ - `abort` — exit cleanly. No migration, no banner-ack write, no Step 2-onward setup changes. Step 1's `flowctl init` may already have run (idempotent — safe to leave). Re-run `/flow-next:setup` later to complete setup.
 
 ### Routing the answer
 
@@ -95,7 +98,15 @@ Alias mode keeps your existing .flow/epics/ layout working indefinitely.
 You can still migrate later via: flowctl migrate-rename --yes
 ```
 
-**Continue to Step 2 regardless of answer.** Migration choice is independent of the rest of setup.
+**abort**:
+Exit 0 immediately — no migration, no banner-ack file write, no Step 2-onward setup changes. Step 1's `flowctl init --json` ran before Step 1b, so `.flow/` (meta.json, config.json, directory scaffold) may already have been created or upgraded by `init` — that work is **not** rolled back; `init` is idempotent on re-run. Only the migration + remaining setup phases (Step 2 onward — version pin, file copy, docs update) are skipped. Print:
+```
+Setup cancelled at migration prompt. .flow/ may have been initialized/upgraded
+by Step 1 (idempotent — safe to leave). No migration applied; Step 2 onward
+skipped. Re-run /flow-next:setup later to complete setup.
+```
+
+**Continue to Step 2 regardless of answer (except `abort`, which exits 0).** Migration choice is otherwise independent of the rest of setup.
 
 ## Step 2: Check existing setup
 
@@ -137,7 +148,19 @@ chmod +x .flow/bin/flowctl
 
 `.flow/templates/spec.md` is the canonical 7-section spec scaffold that the AGENTS.md / CLAUDE.md snippet points downstream agents at. Copying it project-local means the path the snippet references resolves without depending on the plugin install location.
 
-Then read [templates/usage.md](templates/usage.md) and write it to `.flow/usage.md`.
+Then handle `.flow/usage.md` — preserve any repo-customized variant:
+
+1. Read [templates/usage.md](templates/usage.md) (this is the canonical content).
+2. If `.flow/usage.md` does not exist → write the canonical content.
+3. If `.flow/usage.md` exists → compare byte-for-byte with the canonical content:
+ - **Identical**: no-op (skip the write entirely — re-running setup must not bump mtime on unchanged files).
+ - **Customized** (any deviation): do NOT overwrite. Ask the user via `plain-text numbered prompt`:
+ - **header**: `Overwrite customized .flow/usage.md?`
+ - **body**: `.flow/usage.md exists and differs from the canonical template shipped with this plugin version. Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/skills/flow-next-setup/templates/usage.md\`).`
+ - **options**:
+ - `Keep mine (Recommended)` — leave `.flow/usage.md` unchanged. Print the path to the canonical template so the user can diff manually.
+ - `Overwrite with canonical` — replace `.flow/usage.md` with the template content. Repo customization is lost.
+ - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, Step 3 mkdir, Step 4 bin/template copies above) may already have run; they are idempotent and safe to leave. No `.flow/usage.md` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
 
 ## Step 4b: Codex-specific project setup (PLATFORM=codex only)
 
@@ -253,7 +276,9 @@ Only include lines for config values that are set. If no config is set, skip thi
 
 ### 6d: Build questions list
 
-Build the questions array dynamically. **Only include questions for config values that are NOT already set.**
+Build the prompt content (question text + numbered option list) dynamically. **Only include questions for config values that are NOT already set** — existing config is preserved, never overwritten. To change an already-set value, the user runs `flowctl config set <key> <value>` directly (the commands are surfaced in 6c's current-config notice).
+
+Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The grouped single-prompt design (a single `plain-text numbered prompt` call below, with one questions array containing only the unset entries) means a re-run with all config set produces zero config questions and asks only the always-include Docs + Star questions.
 
 Available questions (include only if corresponding config is unset):
 
@@ -371,7 +396,7 @@ For **Claude Code / Droid**:
 }
 ```
 
-Use `request_user_input` with the built questions array.
+Print the prompt content built above and stop for the user's reply.
 
 **Note:** If docs are already current, adjust the Docs question description to mention "(already up to date)" or skip that question entirely.
 
@@ -413,15 +438,27 @@ esac
 ```
 
 **Docs:**
-For each chosen file (CLAUDE.md and/or AGENTS.md):
-1. Read the file (create if doesn't exist)
-2. If marker exists: replace everything between `<!-- BEGIN FLOW-NEXT -->` and `<!-- END FLOW-NEXT -->` (inclusive)
-3. If no marker: append the snippet
 
 Use the correct template based on **target file** and **platform**:
 - AGENTS.md on **Codex**: use [templates/agents-md-snippet.md](templates/agents-md-snippet.md) (uses `$flow-next-plan` syntax)
 - AGENTS.md on **Claude Code / Droid**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (uses `/flow-next:plan` syntax)
 - CLAUDE.md (any platform): use [templates/claude-md-snippet.md](templates/claude-md-snippet.md)
+
+For each chosen file (CLAUDE.md and/or AGENTS.md) — preserve repo-custom content; only touch the marker block:
+
+1. Read the file (create if doesn't exist).
+2. **No marker block present** (`<!-- BEGIN FLOW-NEXT -->` absent): append the snippet at the end of the file. All pre-existing content outside the snippet is untouched.
+3. **Marker block present** — compare current marker-block content (everything between `<!-- BEGIN FLOW-NEXT -->` and `<!-- END FLOW-NEXT -->`, inclusive) against the canonical template byte-for-byte:
+ - **Identical**: no-op. Skip the write — re-running setup must not bump mtime on unchanged files.
+ - **Customized** (any deviation, including whitespace): do NOT silently replace. Ask the user via `plain-text numbered prompt`:
+ - **header**: `Overwrite customized <FILE>?` (substitute CLAUDE.md or AGENTS.md)
+ - **body**: `<FILE> contains a flow-next marker block that has been customized (differs from the canonical template shipped with this plugin version). Overwriting replaces your customizations within the marker block; pre-existing content outside the markers is untouched either way.`
+ - **options**:
+ - `Keep mine (Recommended)` — leave the marker block unchanged. Print the path to the canonical template so the user can diff manually (`${PLUGIN_ROOT}/skills/flow-next-setup/templates/<snippet>.md`).
+ - `Overwrite with canonical` — replace the marker block with the canonical snippet. Customizations inside the markers are lost; content outside the markers is preserved.
+ - `abort` — exit cleanly. Earlier steps (init, file copies, config writes, prior docs-file decisions for any already-processed file) may already have run; they are idempotent and safe to leave. Remaining docs files and Star step are skipped. Re-run `/flow-next:setup` later to complete setup.
+
+The marker-block boundaries are load-bearing: pre-existing prose outside `<!-- BEGIN FLOW-NEXT -->` … `<!-- END FLOW-NEXT -->` is **never** modified by this step. Only the bytes between (and including) those markers are candidates for replacement.
 
 **Star:**
 - If "Yes, star it":

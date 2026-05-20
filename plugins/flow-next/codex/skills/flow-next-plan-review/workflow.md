@@ -404,7 +404,7 @@ If no verdict tag, output `<promise>RETRY</promise>` and stop.
 
 ## Fix Loop (RP)
 
-**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is production-grade world-class software and architecture. Never use request_user_input in this loop.**
+**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is production-grade world-class software and architecture. Never use the plain-text numbered prompt in this loop.**
 
 **CRITICAL: You MUST fix the plan BEFORE re-reviewing. Never re-review without making changes.**
 

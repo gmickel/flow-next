@@ -15,7 +15,7 @@ The document is short and structured on purpose. Good answers to a handful of sh
 
 ## Interaction Method
 
-Default to `AskUserQuestion` (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). Fall back to numbered options in chat only when the tool is unreachable in the harness or the call errors — never silently skip the question. (sync-codex.sh rewrites `AskUserQuestion` to `request_user_input` in the Codex mirror.)
+Default to `AskUserQuestion` (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). Fall back to numbered options in chat only when the tool is unreachable in the harness or the call errors — never silently skip the question. (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.)
 
 Ask one question at a time. **Free-form responses for the substantive sections** (Target problem / Our approach / Who it's for / Key metrics / Tracks). **Single-select with lead-with-recommendation only for routing decisions** (which section to revisit, include this optional section, foreign-file resolution).
 

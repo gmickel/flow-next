@@ -977,8 +977,7 @@ never invents them.
 When `INTERACTIVE=true` AND the primary review verdict is `NEEDS_WORK`
 (still NEEDS_WORK after validator if `--validate` also set), walk through
 each finding with the user before entering the fix loop. The skill-side
-loop in [walkthrough.md](walkthrough.md) drives `request_user_input` (sync-codex.sh
-rewrites to `request_user_input` in the Codex mirror); flowctl provides
+loop in [walkthrough.md](walkthrough.md) drives `plain-text numbered prompt`; flowctl provides
 helpers for the defer sink + receipt merge.
 
 **Preserved by default:** when `INTERACTIVE=false`, this entire section is
@@ -998,7 +997,7 @@ walkthrough — nothing to ask about. Verdict should already be SHIP.
 
 ### Step W.2: Present each finding + record decision
 
-The skill loops over findings and calls the platform blocking tool (see
+The skill loops over findings and calls the plain-text numbered prompt (see
 walkthrough.md for platform mapping). For each finding, collect one of:
 
 - Apply (implement fix)
@@ -1081,7 +1080,7 @@ deferred items for later revisit.
 
 ## Fix Loop (RP)
 
-**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is production-grade world-class software and architecture. Never use request_user_input in this loop.**
+**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is production-grade world-class software and architecture. Never use the plain-text numbered prompt in this loop.**
 
 **CRITICAL: You MUST fix the code BEFORE re-reviewing. Never re-review without making changes.**
 

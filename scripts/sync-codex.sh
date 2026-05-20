@@ -383,15 +383,22 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   rm -f "${f}.bak"
 done
 
-# --- TOOL NAMES: AskUserQuestion → request_user_input (Codex native) ---
-# Canonical skills use Claude-native tool names; this transforms them for the
-# Codex mirror. Order:
+# --- TOOL NAMES: AskUserQuestion → plain-text numbered prompt (fn-45) ---
+# Canonical skills use Claude-native `AskUserQuestion`. Codex's structured
+# `request_user_input` errors outside Plan mode (openai/codex #10384, #11536,
+# #12694 — closed without resolution as of Feb 2026), so the Codex mirror
+# instead instructs the agent to render a plain-text numbered prompt with a
+# final `N+1. Other — type your own answer` option, then stop and wait for
+# the user's next message. The mirror never mentions `request_user_input` —
+# validation guards below (R6) hard-fail if it leaks in.
+#
+# Order:
 #   1. Strip maintainer breadcrumbs (any form — parens, bare sentence)
 #   2. Strip ToolSearch references (Claude-only schema-load mechanism)
-#   3. Rewrite AskUserQuestion → request_user_input
+#   3. Rewrite AskUserQuestion → plain-text numbered-prompt instruction
 find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   # 1. Strip maintainer breadcrumbs in their original (canonical) form,
-  #    BEFORE the AskUserQuestion → request_user_input rewrite happens.
+  #    BEFORE the AskUserQuestion → plain-text-numbered-prompt rewrite happens.
   #    Use python for multi-form matching (sed gets unwieldy here).
   python3 - "$f" <<'PYEOF'
 import re, sys
@@ -399,9 +406,10 @@ path = sys.argv[1]
 with open(path) as fp:
     text = fp.read()
 
-# Strip parenthetical breadcrumbs.
+# Strip parenthetical breadcrumbs (allow whitespace incl. newlines inside
+# the parens — canonical authors sometimes wrap them across lines).
 text = re.sub(
-    r' *\(sync-codex\.sh rewrites[^)]*Codex mirror\.?\)',
+    r' *\(sync-codex\.sh\s+rewrites[^)]*Codex mirror\.?\)',
     '',
     text,
 )
@@ -442,18 +450,30 @@ text = re.sub(
     '',
     text,
 )
+# Strip "If <X>'s schema isn't loaded ..., call `ToolSearch` ..." sentences
+# FIRST — the generic "call `ToolSearch` ..." stripper below would eat the
+# suffix and leave a dangling fragment (e.g. fn-45 review observed
+# `flow-next-memory-migrate/workflow.md` keeping "If <X>'s schema isn't
+# loaded on Claude Code," with no completing clause).
+text = re.sub(
+    r"If `[^`]+`'s schema isn'?t loaded on Claude Code, call `ToolSearch`[^.\n]*\.",
+    '',
+    text,
+)
+# Belt-and-suspenders: any dangling "If <X>'s schema isn't loaded on Claude
+# Code," fragment (no completing clause) left over from an earlier rewrite
+# also gets stripped — keep the mirror prose self-consistent.
+text = re.sub(
+    r"If `[^`]+`'s schema isn'?t loaded on Claude Code,? *\n?",
+    '',
+    text,
+)
 # Strip "Call/call `ToolSearch` with ..." sentences (case-insensitive).
 text = re.sub(
     r'(?:^|(?<=[.\s]))[Cc]all `ToolSearch`[^.\n]*\.',
     '',
     text,
     flags=re.MULTILINE,
-)
-# Strip "If <X>'s schema isn't loaded ..., call `ToolSearch` ..." sentences.
-text = re.sub(
-    r"If `[^`]+`'s schema isn'?t loaded on Claude Code, call `ToolSearch`[^.\n]*\.",
-    '',
-    text,
 )
 # Strip standalone ToolSearch backtick refs in line items.
 text = re.sub(
@@ -506,14 +526,545 @@ with open(path, 'w') as fp:
     fp.write(text)
 PYEOF
 
-  # 3. Rewrite tool names.
-  sed -i.bak \
-    -e 's/`AskUserQuestion`/`request_user_input`/g' \
-    -e 's/AskUserQuestion tool/request_user_input primitive/g' \
-    -e 's/AskUserQuestion/request_user_input/g' \
-    "$f"
+  # 3. Rewrite AskUserQuestion invocations into a plain-text numbered-prompt
+  #    instruction for the Codex mirror (fn-45). Distinct re.sub calls handle
+  #    the canonical surface forms, longest-most-specific first so bare-token
+  #    rules don't eat structured ones. Hard mandates softened to "MUST ask
+  #    via the plain-text numbered prompt"; auto-fix-loop "Never use" mandates
+  #    preserve semantics (token rewrite only). Frontmatter `allowed-tools:`
+  #    lines keep the legacy `request_user_input` token — Codex reads
+  #    agents/openai.yaml for the actual contract; the frontmatter is residue
+  #    that just needs to clear the askq_refs guard.
+  python3 - "$f" <<'PYEOF'
+import re, sys
+path = sys.argv[1]
+with open(path) as fp:
+    text = fp.read()
 
-  rm -f "${f}.bak"
+# Track whether this file referenced AskUserQuestion in prose (frontmatter
+# only doesn't count — that's harmless residue). We use this flag after
+# substitutions to inject the R2 instruction block exactly once.
+prose_text = re.sub(r'(?ms)\A---\n.*?\n---\n', '', text)
+had_ask_in_prose = bool(re.search(r'\bAskUserQuestion\b', prose_text))
+
+# --- Longest-most-specific patterns first ----------------------------------
+
+# A. Hard mandate "CRITICAL REQUIREMENT: You MUST use the `AskUserQuestion`
+#    tool for every question." → softened mandate (R3). Used by
+#    flow-next-interview/SKILL.md:217.
+text = re.sub(
+    r'\*\*CRITICAL REQUIREMENT\*\*: You MUST use the `AskUserQuestion` tool for every question\.',
+    '**CRITICAL REQUIREMENT**: For every question, you MUST ask via the plain-text numbered prompt described below.',
+    text,
+)
+
+# B. Hard mandate "**CRITICAL**: You MUST use the `AskUserQuestion` tool for
+#    consent." → softened mandate (R3). Used by
+#    flow-next-prime/workflow.md:194.
+text = re.sub(
+    r'\*\*CRITICAL\*\*: You MUST use the `AskUserQuestion` tool for consent\.',
+    '**CRITICAL**: For consent, you MUST ask via the plain-text numbered prompt described below.',
+    text,
+)
+
+# C. "MUST use `AskUserQuestion` tool" bullet / mandate (R3).
+#    Used by flow-next-prime/workflow.md:306, SKILL.md:109 fragment.
+text = re.sub(
+    r'MUST use `AskUserQuestion` tool',
+    'MUST ask via the plain-text numbered prompt described below',
+    text,
+)
+
+# D. "ONLY ask questions via AskUserQuestion tool calls" (R3).
+#    Used by flow-next-interview/SKILL.md:221.
+text = re.sub(
+    r'ONLY ask questions via AskUserQuestion tool calls',
+    'ONLY ask via the plain-text numbered prompt',
+    text,
+)
+
+# E. Anti-mandate "do NOT use AskUserQuestion tool" — used in
+#    flow-next-plan/SKILL.md:117 + flow-next-ralph-init/SKILL.md:37 to tell
+#    the agent "ask in plain text ad-hoc, not via the structured tool". On
+#    Codex there IS no structured tool, so the negation is a tautology.
+#    Strip the parenthetical entirely (along with optional surrounding
+#    whitespace + parens) to keep the prose clean. Also drop the now-empty
+#    leading space.
+text = re.sub(
+    r' *\(do NOT use AskUserQuestion tool\)',
+    '',
+    text,
+)
+# Bare-form fallback (no parens) — leave a soft replacement in case the
+# anti-mandate appears outside a parenthetical somewhere.
+text = re.sub(
+    r'do NOT use AskUserQuestion tool',
+    'ask using plain text instead of any structured prompt tool',
+    text,
+)
+
+# F. Auto-fix-loop mandate "Never use AskUserQuestion in this loop" (R3
+#    boundary — token rewrite only, intent preserved). Used by
+#    impl-review/plan-review/spec-completion-review workflow.md + SKILL.md.
+text = re.sub(
+    r'Never use AskUserQuestion in this loop',
+    'Never use the plain-text numbered prompt in this loop',
+    text,
+)
+
+# G. "Call AskUserQuestion tool with question and options." prose
+#    (flow-next-interview/SKILL.md:231).
+text = re.sub(
+    r'Call AskUserQuestion tool with question and options\.',
+    'Render the question and options as a plain-text numbered prompt (see below).',
+    text,
+)
+
+# H. Frontmatter `allowed-tools: AskUserQuestion, ...` — keep the legacy
+#    token name for the harmless residue line; Codex reads
+#    agents/openai.yaml for the actual contract.
+text = re.sub(
+    r'^(allowed-tools:[^\n]*?)\bAskUserQuestion\b',
+    r'\1request_user_input',
+    text,
+    flags=re.MULTILINE,
+)
+
+# I. Generic backticked invocation: `AskUserQuestion`
+#    → `plain-text numbered prompt` (kept backticked for in-prose readability).
+text = re.sub(
+    r'`AskUserQuestion`',
+    '`plain-text numbered prompt`',
+    text,
+)
+
+# J. Generic "AskUserQuestion tool" (no backticks) → "plain-text numbered
+#    prompt". Catches inline mentions in headings + non-backticked prose.
+text = re.sub(
+    r'AskUserQuestion tool',
+    'plain-text numbered prompt',
+    text,
+)
+
+# K. Bare AskUserQuestion (table cells, headings, residual prose). Catch-all
+#    last so structured patterns above run first.
+text = re.sub(
+    r'\bAskUserQuestion\b',
+    'plain-text numbered prompt',
+    text,
+)
+
+# L. Strip Claude-only schema-loader prose left over after AskUserQuestion
+#    substitution. Examples (post-substitution):
+#      "Use `plain-text numbered prompt`. It's a deferred tool — call first
+#       to load its schema if it isn't already in scope."
+#    On Codex there is no schema to load — strip the deferred-tool sentence.
+text = re.sub(
+    r" It'?s a deferred tool — call first to load its schema if it isn'?t already in scope\.",
+    '',
+    text,
+)
+
+# L2. Strip the vestigial "Do NOT / Never just print questions as text"
+#     anti-print prose. In canonical (Claude) it correctly means "use the
+#     structured AskUserQuestion tool, not bare prose". After the A-K
+#     rewrites turn the tool reference into the plain-text numbered prompt,
+#     the same sentence becomes a self-contradiction ("ask via plain text
+#     ... but do not print as text"). Drop it in the mirror. Covers:
+#       1. " — Never just print questions as text" (em-dash bullet form,
+#          no trailing period — appears mid-bullet, run FIRST so the
+#          generic rule below doesn't leave a dangling em-dash)
+#       2. " Do NOT just print questions as text." (trailing-sentence form)
+#       3. " Never just print questions as text." (trailing-sentence form,
+#          appears after bullet body in SKILL.md)
+text = re.sub(
+    r' — (?:Do NOT|Never) just print questions as text\.?',
+    '',
+    text,
+)
+text = re.sub(
+    r' (?:Do NOT|Never) just print questions as text\.?',
+    '',
+    text,
+)
+
+# M. Strip / soften UI-shape prose that assumes a structured prompt tool.
+#    "The tool provides an interactive UI." → drop the sentence (its
+#    immediate sibling sentences still describe per-question structure
+#    advice that translates fine to plain text).
+text = re.sub(
+    r'The tool provides an interactive UI\. ?',
+    '',
+    text,
+)
+
+# N. Structured-tool API prose — directives that reference fields and
+#    concepts that only exist in Claude's AskUserQuestion JSON contract.
+#    On Codex these become misleading. Translate to plain-text equivalents
+#    that still convey the intent.
+text = re.sub(
+    r'Use `multiSelect: true` so users can pick multiple items',
+    'Allow multi-select when options are not exclusive — number the options as `1.` … `N.` and ask the user to reply with the numbers (or labels) of all that apply',
+    text,
+)
+text = re.sub(
+    r'Build the questions array dynamically',
+    'Build the prompt content (question text + numbered option list) dynamically',
+    text,
+)
+text = re.sub(
+    r'Use `plain-text numbered prompt` with the built questions array\.',
+    'Print the prompt content built above and stop for the user\'s reply.',
+    text,
+)
+text = re.sub(
+    r'platform blocking question tool',
+    'plain-text numbered prompt',
+    text,
+)
+# Handle multi-line bold-wrapped variant like:
+#     **blocking
+#     question tool**
+# (canonical authors sometimes wrap mid-phrase). Collapse to a single
+# inline replacement.
+text = re.sub(
+    r'\*\*blocking\s+question tool\*\*',
+    '**plain-text numbered prompt**',
+    text,
+)
+text = re.sub(
+    r'blocking question tool',
+    'plain-text numbered prompt',
+    text,
+)
+# Hyphenated form: "blocking-question tool" / "blocking-question tools".
+text = re.sub(
+    r'blocking-question tools?',
+    'plain-text numbered prompt',
+    text,
+)
+# Interview-skill anti-patterns that assumed structured-tool prompts.
+# After fn-45, "output questions as text" IS the contract on Codex —
+# the "DO NOT" bullets directly contradict the plain-text instruction.
+# Strip both bullets and the "Anti-pattern (WRONG)" framing that followed
+# (the literal plain-text example WAS the bad pattern under structured
+# tools, but it IS the correct pattern on plain-text Codex).
+text = re.sub(
+    r'^- DO NOT output questions as text\n',
+    '',
+    text,
+    flags=re.MULTILINE,
+)
+text = re.sub(
+    r'^- DO NOT list questions in your response\n',
+    '',
+    text,
+    flags=re.MULTILINE,
+)
+# "per tool call" → "per prompt turn" — the multi-question batching
+# rule still applies, but framed for plain-text turns rather than
+# structured tool invocations.
+text = re.sub(
+    r'\bper tool call\b',
+    'per prompt turn',
+    text,
+)
+# "tool call" residual mentions in bullet items / inline prose.
+text = re.sub(
+    r'\bin a single tool call\b',
+    'in a single prompt turn',
+    text,
+)
+text = re.sub(
+    r'\btool call(s?)\b',
+    r'prompt turn\1',
+    text,
+)
+# The interview "Anti-pattern (WRONG)" example showed a plain-text
+# numbered question as the wrong pattern under structured tools — on
+# Codex that example IS the correct pattern. Drop the inverted framing
+# block entirely (header + fenced example + "Correct pattern:" line).
+text = re.sub(
+    r'\*\*Anti-pattern \(WRONG\)\*\*:\n```\nQuestion 1:[^`]+```\n\n\*\*Correct pattern\*\*:[^\n]*\n',
+    '',
+    text,
+)
+# "Per-finding blocking question" prose (used in R8 recap line) —
+# rewrite to drop the Claude-blocking-tool framing.
+text = re.sub(
+    r'Per-finding blocking question',
+    'Per-finding plain-text numbered prompt',
+    text,
+)
+# "the blocking tool" / "platform blocking tool" / "blocking-question tool"
+# residual refs.
+text = re.sub(
+    r'\bthe (?:platform )?blocking tool\b',
+    'the plain-text numbered prompt',
+    text,
+)
+# "via blocking question" / "a blocking question" / "blocking prompt"
+# residual refs (Claude-specific framing on Codex).
+text = re.sub(
+    r'\bvia (?:a |the )?blocking question\b',
+    'via plain-text numbered prompt',
+    text,
+)
+text = re.sub(
+    r'\b(a |the )blocking question\b',
+    r'\1plain-text numbered prompt',
+    text,
+)
+text = re.sub(
+    r'\bblocking prompt\b',
+    'plain-text numbered prompt',
+    text,
+)
+# Bare "blocking question" (no article — e.g. "surfaces blocking question
+# with frozen options") and bold-wrapped variants.
+text = re.sub(
+    r'\*\*blocking question\*\*',
+    '**plain-text numbered prompt**',
+    text,
+)
+text = re.sub(
+    r'\bblocking question\b',
+    'plain-text numbered prompt',
+    text,
+)
+# "no blocking tool is available/reachable" — describes a fallback gate.
+# On Codex the "blocking tool" framing doesn't apply.
+text = re.sub(
+    r'\bno blocking tool is (available|reachable)\b',
+    r'plain text is the prompt mechanism',
+    text,
+)
+# "the platform's question tool" — phrasing inherited from canonical;
+# Codex doesn't have a structured question tool.
+text = re.sub(
+    r"\bthe platform'?s question tool\b",
+    'the plain-text numbered prompt',
+    text,
+)
+
+# O. Strip the stale "Fall back if the tool is unreachable" fallback prose.
+#    In canonical (Claude) the phrasing means: "if the structured
+#    AskUserQuestion tool is unavailable, drop to plain-text numbered list".
+#    After A-N collapse the tool references into the plain-text numbered
+#    prompt itself, the surviving fallback sentences read as if the
+#    plain-text numbered prompt is a tool with a separate "fall back to
+#    plain text" path — which is nonsensical (the plain-text numbered
+#    prompt IS that path) and reintroduces the Codex Default-mode failure
+#    fn-45 was meant to fix by sending the agent looking for a nonexistent
+#    prompt tool. Strip every variant, preserving any non-fallback tail
+#    clauses (e.g. "Never silently skip the question.") that follow the
+#    strip site. Must run AFTER M/N — the multi-line pattern references
+#    "the plain-text numbered prompt", which only exists post-rewrite of
+#    canonical "the blocking tool".
+#
+#    Patterns matched longest-most-specific-first so bare strippers don't
+#    eat the suffix of the longer-tail replacement.
+#
+# b. " Fall back ... — never silently skip the question." → preserve the
+#    never-skip tail (sole site: flow-next-strategy/SKILL.md).
+text = re.sub(
+    r' Fall back to numbered options in chat only when the tool is unreachable in the harness or the call errors — never silently skip the question\.',
+    ' Never silently skip the question.',
+    text,
+)
+# a. " Fall back to numbered options in plain text only if the tool is
+#    unreachable or errors." → strip (capture / memory-migrate / audit).
+text = re.sub(
+    r' Fall back to numbered options in plain text only if the tool is unreachable or errors\.',
+    '',
+    text,
+)
+# c. " Fall back to a numbered options prompt only if the tool is
+#    unreachable." → strip (make-pr).
+text = re.sub(
+    r' Fall back to a numbered options prompt only if the tool is unreachable\.',
+    '',
+    text,
+)
+# d. " Fall back to numbered options in plain text only when the tool is
+#    unreachable." → strip (interview).
+text = re.sub(
+    r' Fall back to numbered options in plain text only when the tool is unreachable\.',
+    '',
+    text,
+)
+# e. "; fall back to printing the numbered list and reading a typed reply
+#    if the tool is unreachable." → "." (prospect:157).
+text = re.sub(
+    r'; fall back to printing the numbered list and reading a typed reply if the tool is unreachable\.',
+    '.',
+    text,
+)
+# f. "; fall back to numbered-options when the tool is unreachable." → "."
+#    (prospect:605).
+text = re.sub(
+    r'; fall back to numbered-options when the tool is unreachable\.',
+    '.',
+    text,
+)
+# g. " If the tool is unreachable, print the frozen-string format below
+#    and read the user's reply from chat." → strip (prospect:851).
+text = re.sub(
+    r" If the tool is unreachable, print the frozen-string format below and read the user'?s reply from chat\.",
+    '',
+    text,
+)
+# h. " If the tool is unreachable, fall back to printing a numbered list
+#    and reading a typed reply." → strip (audit/workflow:476).
+text = re.sub(
+    r' If the tool is unreachable, fall back to printing a numbered list and reading a typed reply\.',
+    '',
+    text,
+)
+# i. Multi-line paragraph (impl-review/walkthrough.md:43-45):
+#       If the tool is unreachable, fall through to a chat-prompt fallback (print
+#       the question, wait for the user's next message). The fallback is less
+#       reliable — prefer the plain-text numbered prompt wherever available.
+#    Strip the whole paragraph.
+text = re.sub(
+    r"If the tool is unreachable, fall through to a chat-prompt fallback \(print\nthe question, wait for the user'?s next message\)\. The fallback is less\nreliable — prefer the plain-text numbered prompt wherever available\.\n",
+    '',
+    text,
+)
+
+# --- R2 instruction block injection ----------------------------------------
+# Inject the full plain-text numbered-prompt contract once per file. The
+# instruction tells the Codex agent how to render options, how to signal
+# the freeform "Other" affordance, and that it must STOP after printing.
+INSTRUCTION = (
+    '**Ask the user via plain text.** Render the options below as a '
+    'numbered list `1.` … `N.`, followed by a final option '
+    '`N+1. Other — type your own answer`. Print the question, then the '
+    'numbered list, then **stop and wait for the user\'s next message '
+    'before continuing**. Parse the reply as: a bare number `1`–`N+1` → '
+    'that option; the literal text of an option label → that option; free '
+    'text after `Other` → custom answer.'
+)
+
+def is_negative_context(line):
+    """True when 'plain-text numbered prompt' appears in a context that
+    is NOT a live ask — auto-fix-loop sites, skip/no-prompt prose,
+    reference/checklist bullets about what something IS NOT or what is
+    skipped. Injecting R2 here either contradicts the surrounding prose
+    or pollutes deterministic/Ralph branches."""
+    # Auto-fix-loop hard mandates.
+    if 'Never use' in line and 'plain-text numbered prompt' in line:
+        return True
+    if 'do NOT use' in line and 'plain-text numbered prompt' in line:
+        return True
+    # Skip/no-prompt prose ("skips the ... preview", "no plain-text ...
+    # call", etc.). These describe deterministic branches, not active asks.
+    if re.search(r'\bskips? the `?plain-text numbered prompt`?', line):
+        return True
+    if re.search(r'\bno `?plain-text numbered prompt`? call', line):
+        return True
+    if re.search(r'without (?:a |an |any )?(?:`?plain-text numbered prompt`?|prompt) call', line):
+        return True
+    # Reference-style "It is not / X is not ..." bullets. These describe
+    # what the prompt isn't — not a live ask site.
+    if re.search(r'(?:It|This|That) is not\b', line) and 'plain-text numbered prompt' in line:
+        return True
+    return False
+
+def is_table_line(line):
+    """True for markdown table rows or delimiter rows. Injecting a
+    paragraph between table rows breaks the table — skip these as
+    injection anchors."""
+    stripped = line.lstrip()
+    return stripped.startswith('|') or stripped.startswith('|-')
+
+# Verbs that indicate an active ask / prompt site. The R2 instruction
+# block belongs adjacent to one of these — not in deterministic prose,
+# reference lists, or "what X is not" bullets.
+ACTIVE_ASK_VERBS = re.compile(
+    r'\b('
+    r'[Aa]sk|MUST ask|[Mm]ust use|[Mm]ust ask|MUST use|'
+    r'[Uu]se `?plain-text numbered prompt`?|'
+    r'[Dd]efault to `?plain-text numbered prompt`?|'
+    r'[Ff]ormat the question|'
+    r'[Rr]ender|[Ss]urface|[Ff]ire|[Pp]resent|[Ss]how|'
+    r'[Cc]all `?plain-text numbered prompt`?|'
+    r'[Ii]nvoke `?plain-text numbered prompt`?|'
+    r'via `?plain-text numbered prompt`?'
+    r')\b'
+)
+
+def is_active_ask_anchor(line):
+    """True when the line is a plausible active-ask site for the R2
+    instruction. Anchors should describe ASKING via the prompt, not
+    skipping it or describing what it isn't."""
+    if 'plain-text numbered prompt' not in line:
+        return False
+    return bool(ACTIVE_ASK_VERBS.search(line))
+
+# Inject once per file. Two strategies, in priority order:
+#  1. If a hard-mandate pattern (A/B/C) fired, it left a "described below"
+#     sentinel. Splice the instruction immediately after that paragraph.
+#  2. Otherwise, if the original file referenced AskUserQuestion in prose
+#     in an affirmative context, splice the instruction immediately before
+#     the FIRST positive (non-negative, non-table) noun-phrase reference so
+#     the substituted noun phrase has a definition the agent can resolve.
+#     If every remaining reference is a negative mandate or sits inside a
+#     markdown table, skip injection entirely — the surrounding prose is
+#     either contradicting it or structurally fragile.
+if 'described below' in text:
+    lines = text.split('\n')
+    out = []
+    injected = False
+    for line in lines:
+        out.append(line)
+        if not injected and 'described below' in line:
+            out.append('')
+            out.append(INSTRUCTION)
+            injected = True
+    text = '\n'.join(out)
+elif had_ask_in_prose and 'plain-text numbered prompt' in text:
+    lines = text.split('\n')
+    # Track fenced-code-block state so we never inject inside a ``` ... ```
+    # region (would split a working code example). Anchor must be:
+    #   - active-ask shape (verb match in line)
+    #   - not a negative context (skip / Never use / It is not / ...)
+    #   - not a markdown table row or delimiter
+    #   - not inside a fenced code block
+    in_fence = False
+    anchor_idx = -1
+    for i, line in enumerate(lines):
+        stripped = line.lstrip()
+        if stripped.startswith('```'):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if not is_active_ask_anchor(line):
+            continue
+        if is_negative_context(line):
+            continue
+        if is_table_line(line):
+            continue
+        anchor_idx = i
+        break
+    if anchor_idx >= 0:
+        out = []
+        for i, line in enumerate(lines):
+            if i == anchor_idx:
+                out.append(INSTRUCTION)
+                out.append('')
+            out.append(line)
+        text = '\n'.join(out)
+
+# Collapse double spaces / blank-line runs left over from substitutions.
+text = re.sub(r'  +', ' ', text)
+text = re.sub(r'\n{3,}', '\n\n', text)
+text = '\n'.join(line.rstrip() for line in text.split('\n'))
+
+with open(path, 'w') as fp:
+    fp.write(text)
+PYEOF
 done
 
 # Remove .DS_Store and other cruft
@@ -825,17 +1376,37 @@ else
 fi
 
 # Check no "AskUserQuestion" or "ToolSearch select:AskUserQuestion" in codex
-# skill prose — should all have been rewritten to request_user_input. Bare
-# AskUserQuestion in the Codex skill prose is a sync bug.
+# skill prose — should all have been rewritten to the plain-text numbered
+# prompt by Stage 3 (fn-45). Bare AskUserQuestion in the Codex skill prose
+# is a sync bug.
 # Exclude templates/ subdirs (those are user-script templates, not skill prose
 # that the agent reads — e.g., ralph-init/templates/watch-filter.py uses the
 # tool name as a dict key for hook event emoji mapping, which is intentional).
 askq_refs=$( { grep -rE 'AskUserQuestion|ToolSearch select:AskUserQuestion' "$CODEX_DIR/skills/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | wc -l | tr -d ' ')
 if [ "$askq_refs" != "0" ]; then
   echo -e "  ${RED}✗${NC} $askq_refs Claude-native tool refs (AskUserQuestion / ToolSearch) remain in codex skill prose — extend sync transforms"
+  { grep -rnE 'AskUserQuestion|ToolSearch select:AskUserQuestion' "$CODEX_DIR/skills/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | head -10
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} No Claude-native tool refs in Codex skill prose"
+fi
+
+# R6 mirror scan — `request_user_input` must NOT leak into the Codex mirror
+# (fn-45). The Codex Default-mode + CLI surface errors on `request_user_input`
+# calls (openai/codex #10384, #11536, #12694). Stage 3 instructs the agent to
+# render a plain-text numbered prompt instead; any surviving reference is a
+# sync bug that would re-introduce the failure. Exclude /templates/ subdirs.
+# Patterns: backticked invocation, "tool" form, function-call form, and the
+# two hard-mandate phrasings that survived the old `request_user_input`
+# rewrite era. The frontmatter `allowed-tools: request_user_input` line is
+# harmless residue and does not match any of these patterns.
+rui_refs=$( { grep -rnE '`request_user_input`|request_user_input tool|request_user_input\(|MUST use `request_user_input`|ONLY ask via `request_user_input`' "$CODEX_DIR/skills/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | wc -l | tr -d ' ')
+if [ "$rui_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $rui_refs request_user_input refs leaked into codex skill prose — Stage 3 (fn-45) should have rewritten these"
+  { grep -rnE '`request_user_input`|request_user_input tool|request_user_input\(|MUST use `request_user_input`|ONLY ask via `request_user_input`' "$CODEX_DIR/skills/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | head -10
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No request_user_input refs in Codex skill prose"
 fi
 
 # R17 mirror scan — DDD vocabulary guard for the Codex mirror (fn-38 task 7).

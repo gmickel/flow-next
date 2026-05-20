@@ -156,7 +156,7 @@ For each legacy entry:
  no → fall back to mechanical default + log as needs-review
 
  Ambiguous (could plausibly be A or B)?
- interactive → ask via blocking-question tool
+ interactive → ask via plain-text numbered prompt
  autofix → take mechanical default + log as needs-review
 
  Phase 2: flowctl memory add --track <t> --category <c> --title "..." --body-file <tmp>

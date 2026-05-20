@@ -845,7 +845,7 @@ Empty buckets render `_(none)_`. Empty `## Rejected` renders `_(none)_`.
 
 ### 6.1 — Use the blocking-question tool
 
-Use `AskUserQuestion` (deferred — load via `ToolSearch select:AskUserQuestion` if its schema isn't yet in scope). If the tool is unreachable, print the frozen-string format below and read the user's reply from chat. (sync-codex.sh rewrites `AskUserQuestion` to `request_user_input` in the Codex mirror.)
+Use `AskUserQuestion` (deferred — load via `ToolSearch select:AskUserQuestion` if its schema isn't yet in scope). If the tool is unreachable, print the frozen-string format below and read the user's reply from chat. (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.)
 
 If the tool is available, use it with these labelled choices (one per survivor + skip + interview):
 

@@ -180,7 +180,7 @@ The `[your-call]` tier exists deliberately. Always recommending trains users to 
 ### What the recommendation IS NOT
 
 - It is not a vote.
-- It is not a binding default that fires if the user doesn't reply within a timeout (capture has no timeout — `request_user_input` is blocking).
+- It is not a binding default that fires if the user doesn't reply within a timeout (capture has no timeout — `plain-text numbered prompt` is blocking).
 - It is not a marker that should appear ON the option label (anchoring research: F2.1).
 
 ---

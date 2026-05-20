@@ -950,7 +950,7 @@ When `INTERACTIVE=true` AND the primary review verdict is `NEEDS_WORK`
 (still NEEDS_WORK after validator if `--validate` also set), walk through
 each finding with the user before entering the fix loop. The skill-side
 loop in [walkthrough.md](walkthrough.md) drives `AskUserQuestion` (sync-codex.sh
-rewrites to `request_user_input` in the Codex mirror); flowctl provides
+rewrites to a plain-text numbered prompt in the Codex mirror); flowctl provides
 helpers for the defer sink + receipt merge.
 
 **Preserved by default:** when `INTERACTIVE=false`, this entire section is
