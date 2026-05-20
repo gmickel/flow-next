@@ -5,8 +5,9 @@ Asserts:
   * Defaults dict has `crossSpec`, not `crossEpic`.
   * `resolve_config_key_for_read` returns canonical when present, falls back
     to legacy when canonical absent from the raw file, and reports the
-    deprecation legacy form only when the user typed the legacy alias AND
-    canonical is absent.
+    deprecation legacy form whenever the user typed the legacy alias by
+    name (regardless of whether canonical is also present in the raw
+    file — value precedence is unchanged; only the migration signal fires).
   * `resolve_config_key_for_write` redirects legacy → canonical and reports
     the deprecation legacy form on legacy input.
   * The `extra` parameter on `_emit_rename_deprecation` appends the suffix
@@ -95,7 +96,12 @@ class ConfigAliasTestCase(unittest.TestCase):
         self.assertTrue(value)
         self.assertEqual(dep, "")
 
-    def test_read_legacy_when_canonical_set_no_warn(self) -> None:
+    def test_legacy_read_warns_when_canonical_present(self) -> None:
+        # PR #135 cycle 3: when the user typed the legacy form, the
+        # deprecation must fire even if canonical is also set in the raw
+        # file. Otherwise scripts that ran `set planSync.crossSpec true`
+        # once but keep invoking `get planSync.crossEpic` would stop seeing
+        # any migration signal before 2.0 removes the alias — silent break.
         self._write_config(
             {"planSync": {"crossSpec": True, "crossEpic": False}}
         )
@@ -103,9 +109,12 @@ class ConfigAliasTestCase(unittest.TestCase):
             "planSync.crossEpic"
         )
         self.assertEqual(eff, "planSync.crossSpec")
-        self.assertTrue(value, "Canonical wins even when legacy is also set")
+        self.assertTrue(value, "Canonical wins value precedence")
         self.assertEqual(
-            dep, "", "No warning when canonical is present, regardless of input"
+            dep,
+            "planSync.crossEpic",
+            "Legacy input must still propagate the deprecation, regardless "
+            "of canonical presence",
         )
 
     def test_read_canonical_falls_back_to_legacy_no_warn(self) -> None:

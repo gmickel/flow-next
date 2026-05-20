@@ -1110,11 +1110,14 @@ def resolve_config_key_for_read(key: str):
       and "legacy falls back when canonical absent from the raw file."
     - ``deprecation_legacy_form`` — when non-empty, the caller should emit
       `_emit_rename_deprecation(deprecation_legacy_form, canonical)`.
-      Populated only when the user typed the legacy alias by name AND the
-      canonical key is absent from the raw file (i.e. the user is reading
-      the surface that's getting removed in 2.0). When the user reads the
-      canonical key, no warning fires even if the legacy key supplied the
-      value via fallback — they're already on the new name.
+      Populated whenever the user typed the legacy alias by name, even if
+      canonical is also present in the raw file. Canonical value precedence
+      is unchanged — the deprecation fires on the legacy *input form*, not on
+      where the value came from, so scripts still asking for the legacy key
+      after `set planSync.crossSpec` keep getting the migration signal
+      before 2.0 removes the alias. When the user reads the canonical key,
+      no warning fires even if the legacy key supplied the value via
+      fallback — they're already on the new name.
 
     Canonical-vs-legacy precedence is identical in both directions:
     canonical wins when present in the raw file; legacy fills in when
@@ -1145,8 +1148,9 @@ def resolve_config_key_for_read(key: str):
 
     canonical_raw = _get_config_from_file(canonical)
     if canonical_raw is not _CONFIG_RAW_SENTINEL:
-        # Canonical wins; no warning regardless of which key the user typed.
-        return canonical, canonical_raw, ""
+        # Canonical wins value precedence; warn only when the user typed the
+        # legacy form (canonical reads remain the migration path).
+        return canonical, canonical_raw, legacy if user_typed_legacy else ""
     legacy_raw = _get_config_from_file(legacy)
     if legacy_raw is not _CONFIG_RAW_SENTINEL:
         # Legacy supplies the value via fallback. Warn only when the user
