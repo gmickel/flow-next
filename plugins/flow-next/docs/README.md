@@ -37,4 +37,4 @@ Reference material for flow-next. Each file is self-contained, terse, and offlin
 - [`../README.md`](../README.md) — plugin overview, install, workflow narrative.
 - [`../../../STRATEGY.md`](../../../STRATEGY.md) — flow-next's strategic intent + active tracks.
 - [`../../../GLOSSARY.md`](../../../GLOSSARY.md) — canonical vocabulary (Spec, Task, R-ID, ...).
-- [`../../CLAUDE.md`](../../CLAUDE.md) — repo-level guide for working in this codebase.
+- [`../../../CLAUDE.md`](../../../CLAUDE.md) — repo-level guide for working in this codebase.
