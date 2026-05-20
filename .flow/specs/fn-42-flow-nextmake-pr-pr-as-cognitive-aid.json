@@ -1,13 +1,18 @@
 {
   "branch_name": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid",
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-05-20T10:57:46.091894Z",
   "created_at": "2026-05-07T09:46:03.634695Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-42-flow-nextmake-pr-pr-as-cognitive-aid",
   "next_task": 1,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-42-flow-nextmake-pr-pr-as-cognitive-aid.md",
-  "status": "open",
+  "status": "done",
   "title": "/flow-next:make-pr \u2014 PR-as-cognitive-aid skill with R-ID coverage, decisions, memory, mermaid",
-  "updated_at": "2026-05-07T09:56:16.233930Z"
+  "updated_at": "2026-05-20T10:57:46.466874Z"
 }
