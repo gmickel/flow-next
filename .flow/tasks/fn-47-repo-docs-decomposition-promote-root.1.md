@@ -97,9 +97,8 @@ For `docs/README.md` index:
 - [ ] Each new file renders correctly on GitHub web UI (open in browser, verify all cross-links resolve).
 
 ## Done summary
-
-*Populated by /flow-next:work on completion.*
-
+Phase 1 of fn-47 complete: added 8 new dev-reference docs (architecture, spec-template, memory-schema, glossary, strategy, platforms, sync-codex, troubleshooting) + `docs/README.md` index listing all 12 files in `plugins/flow-next/docs/`. R17 cross-link discipline observed throughout — canonical sources (`templates/spec.md`, `scripts/sync-codex.sh`, `STRATEGY.md`, `GLOSSARY.md`) are linked, never re-embedded. Each doc is a self-contained reference (tables, lists, schemas first; narrative second), not a copy of the plugin README. All cross-links use relative repo paths (no absolute github.com/... URLs for internal refs). Plugin README untouched (Phase 2 stubs it). `agent_docs/local-dev.md` audited — no stale section refs to redirect. Validation: 612/612 unit tests pass, 130/130 smoke pass, `./scripts/sync-codex.sh` idempotent with all guards (R6/R17/R19/R21/R30) passing. No version bump per CLAUDE.md docs-only policy.
 ## Evidence
-
-*Populated by /flow-next:work on completion.*
+- Commits: 4c2e92f12a67d5ccfe97653d0187bd14774cba9c
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (612/612 passed), cd /tmp && bash /Users/gordon/work/gmickel-claude-marketplace/plugins/flow-next/scripts/smoke_test.sh (130/130 passed), ./scripts/sync-codex.sh (idempotent — 24 skills, 21 agents, hooks.json valid; all guards pass: R6 request_user_input, R17 DDD vocab, R19 strategy fluff, R21 spec-template dup, R30 legacy CLI vocab)
+- PRs:
