@@ -1,40 +1,72 @@
 ---
-title: "Rename smoke rewire: variable-form CLI, hermetic env, R30 guard scope"
+title: "Smoke discipline: variable-form CLI, hermetic env, line-level guard scope"
 date: "2026-05-09"
 track: bug
 category: test-failures
-module: plugins/flow-next/scripts
-tags: [fn-43, rename, smoke, migration, review-feedback, env-hermeticity, alias-guard]
+module: "plugins/flow-next/scripts"
+tags: [smoke, env-hermeticity, variable-form-cli, line-level-guard, review-feedback]
 problem_type: test-failure
-symptoms: "smoke tests pass on clean shell, fail under inherited env; R30 guard misses --epic / EPICS_FILE / variable-form"
-root_cause: regex / env-handling / line-level guard scope all assumed too narrow on first pass
+symptoms: "Smoke tests pass on clean shell, fail under inherited env; rename / deprecation guards miss variable-form CLI invocations + flag args + env-var spellings"
+root_cause: "Regex / env-handling / line-level guard scope all assumed too narrow on first pass — variable-form CLI not matched, env-suppression knobs not all unset, multi-line context not respected by line-level grep"
 resolution_type: fix
+audit_refocused_from: "fn-43 epic→spec rename smoke rewrite; refocused 2026-05-21 to extract reusable smoke-test discipline"
 ---
 
-## Problem
-Smoke test rewrite for the fn-43 epic→spec rename surfaced three review cycles of recurring issues:
+## Lesson 1 — Audit BOTH bare and variable-form CLI invocations
 
-1. **`$FLOWCTL` variable-form invocations bypass `\bflowctl` regex.** A bulk sed using `\bflowctl epic` matched the bare-binary form (`scripts/flowctl epic`) but missed `"$FLOWCTL" epic` (variable expansion). 9 lines in make-pr_smoke_test.sh slipped through unrewritten.
+Scripts mix forms interchangeably:
+- `scripts/flowctl verb …` (bare-binary form)
+- `"$FLOWCTL" verb …` (variable expansion)
 
-2. **Hermetic env contracts.** Banner-suppression assertions in migration_smoke.sh inherited the caller's `FLOW_NO_AUTO_MIGRATE` / `FLOW_RALPH` / `REVIEW_RECEIPT_PATH`. Smoke ran green from a clean shell but failed under any of those exports — common in CI / Ralph contexts. `unset VAR; cmd; export VAR=1` only fixed one knob; the other two still suppressed silently.
+A `\bflowctl\b` regex catches the first; misses the second. Any rename / deprecation sweep must run TWO passes:
 
-3. **R30 alias-vocabulary guard scope.** Initial guard caught only `flowctl epic*` verbs. Reviewers found `tasks --epic` / `EPICS_FILE` / `--section epic` references in canonical prose (skill workflow.md, error messages). Widening the regex required matching exclusion regex updates: argparse declarations of the legacy flags themselves (`"--epic-title",` lines) plus task-ref tokens (`T1..T17`) describing rename semantics had to be excluded.
+```bash
+# Pass 1 — bare form
+grep -rE '\bflowctl\s+<verb>\b' …
+# Pass 2 — variable form
+grep -rE '\$FLOWCTL"?\s+<verb>\b' …
+```
 
-## What Didn't Work
-- `\bflowctl epic` regex on bulk sed — assumed all CLI invocations used the bare form.
-- Per-test `unset FLOW_NO_AUTO_MIGRATE` toggle — left FLOW_RALPH and REVIEW_RECEIPT_PATH untouched, so banner stayed silent.
-- Initial R30 guard scoped to `flowctl epic*` only — missed the `--epic` flag, `--section epic` arg, `EPICS_FILE` env var.
+Same applies to deprecation guards: the R30-style alias-vocabulary guard must match both forms or it underreports.
 
-## Solution
-- **Variable-form regex**: separate sed pass using `\$FLOWCTL"?\s+epic\s+<subverb>` to catch `"$FLOWCTL" epic create` and similar.
-- **`env -u VAR1 -u VAR2 -u VAR3` wrapper**: encapsulate banner-unsuppression as a helper function (`unsuppressed_flowctl`) used by every banner-emit assertion. Hermetic across caller envs.
-- **R30 guard widening**: regex covers `flowctl epic|flowctl epics|--epic\b|--epics-file|--section epic|EPICS_FILE`. Exclusions: deprecation/legacy/alias keywords on the SAME line (line-level grep), argparse flag declarations (`^.*:\s+"--(epic|epics-file|epic-title)",?\s*$`), task-rename refs (`\bT[0-9]+\b`).
+## Lesson 2 — Hermetic env contracts
 
-## Prevention
-When implementing rename-style migrations across a CLI test suite:
+When a smoke test asserts behavior that env vars can suppress (deprecation banners, auto-migrate prompts, Ralph blocking, receipt detection), use `env -u VAR1 -u VAR2 -u VAR3` to unset EVERY suppression knob — not just the one you remembered:
 
-- **Audit both bare and variable-form CLI invocations.** Scripts often use `"$FLOWCTL" verb` *or* `scripts/flowctl verb` interchangeably; rename regex must catch both.
-- **Hermetic env contracts.** When asserting unsuppressed behavior, use `env -u VAR1 -u VAR2 ...` to clear EVERY suppression knob, not just the one you remembered. A single missed knob makes the test pass when caller env happens to be clean and silently fail in CI.
-- **Two-tier vocabulary guards have line-level granularity.** Multi-line context (the comment block above a code line) does NOT register; the literal grepped line must contain the exclusion keyword. When adding new alias entry points, immediately add an inline marker comment (`# legacy fallback`, `# alias kept through 1.x`) on the line itself.
-- **Argparse legacy alias declarations are the entry points, not fresh prose.** The R30 grep filter must explicitly exclude `"--<flag-name>",` argument-definition lines for the alias flags themselves.
-- **Recurring scope creep through review cycles.** Plan for 3-4 review cycles when the rename touches 10+ files; each cycle uncovers a layer the regex missed (variable-form, env-var, flag arg, env hermeticity, exclusion gaps).
+```bash
+unsuppressed_flowctl() {
+  env -u FLOW_NO_AUTO_MIGRATE -u FLOW_NO_DEPRECATION -u FLOW_RALPH \
+      -u REVIEW_RECEIPT_PATH "$FLOWCTL" "$@"
+}
+```
+
+A single missed suppression knob makes the test pass when the caller's env happens to be clean (local dev) and silently fail in CI / Ralph contexts where the knob IS exported. Wrap all banner-emit assertions in the helper.
+
+## Lesson 3 — Line-level guard scope
+
+`grep`-based deprecation / vocabulary guards operate one line at a time. Multi-line context (a `# legacy alias` comment ABOVE a code line) does NOT exempt the next line. When adding new alias entry points or intentional uses of deprecated tokens, add the marker comment ON the line itself:
+
+```bash
+"$FLOWCTL" epic create "$title"  # legacy alias kept through 1.x; remove in 2.0
+```
+
+Exclusions to add to any vocabulary-guard regex:
+- Argparse declarations of the deprecated flags themselves: `"--<flag>",` lines.
+- Task-rename refs that mention the deprecated token in prose: `\bT[0-9]+\b` or equivalent.
+- Inline-marker comments: `legacy`, `alias`, `deprecated` on the same line.
+
+## Lesson 4 — Plan for review-cycle scope creep
+
+Rename / deprecation migrations touching 10+ files typically take 3-4 review cycles. Each cycle uncovers a layer the regex missed:
+1. Bare CLI form rewritten; variable form still leaks.
+2. Variable form caught; env-var spelling (`EPICS_FILE` / `EPIC_ID`) still leaks.
+3. Env-var caught; argparse flag declaration still trips the guard.
+4. Flag declaration excluded; prose task-references trip the guard.
+
+Plan for this. Each cycle is normal; the recurrence is the signal that you've found another scope corner, not a sign of bad work.
+
+## See also
+
+- `[[fn-44-review-cycle-lessons]]` — same era + scope-creep pattern
+- `[[test-production-path-not-parallel-construction]]` — related test-discipline lessons (test the production wire form, not the workaround)
+- `plugins/flow-next/scripts/smoke_test.sh` — exemplar smoke test using the `env -u` hermetic pattern
