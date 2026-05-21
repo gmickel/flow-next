@@ -613,6 +613,7 @@ Both banks share the `Pre-Question Taxonomy` and `Interview Guidelines` blocks, 
 - Task sizing (S/M/L)
 - Dependency ordering
 - Phased implementation details
+- **Time estimates, deadlines, durations, sprint cadence, "ship before X" framing.** Agents can't estimate their own work and shouldn't push the user into time-based prioritization debates. If the user volunteers a deadline in answer to another question, acknowledge it without cascading into MVP-Scope or What-NOT-to-Build re-asks driven by the time pressure.
 
 ## Write Refined Spec
 

@@ -30,16 +30,18 @@ Ask NON-OBVIOUS questions only. Expect 40+ questions for complex specs.
 ## MVP Scope
 
 - Smallest version that proves the bet
-- Cuts we'd accept to ship two weeks faster
 - Path-from-MVP for the features we cut
 - Definition of "shippable" for this pass
+- Concrete cuts the PO would accept if scope must shrink (framed by feature value, NOT by time pressure)
 
 ## Business Constraints
 
 - Regulatory / compliance obligations (data residency, retention, audit)
-- Deadlines and what drives them
-- Budget envelope (engineering time, infra cost, vendor spend)
+- Budget envelope (infra cost, vendor spend, licensing) — NOT engineering time / duration
 - Brand / partner / contractual commitments
+- External dependencies that must be honored (third-party APIs, partner releases, regulatory windows)
+
+**Do NOT ask about deadlines, sprint cadence, hours/days/weeks budgets, or "ship before X" timing.** Agents can't estimate their own work, and time-pressure framing collapses the interview into prioritization debates. If the user volunteers a deadline, acknowledge it without chasing it through MVP-Scope and What-NOT-to-Build re-asks.
 
 ## What NOT to Build
 

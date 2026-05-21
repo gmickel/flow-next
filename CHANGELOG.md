@@ -2,6 +2,11 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.1.5] - 2026-05-21
+
+### Fixed
+- **`/flow-next:interview --scope=business` no longer asks about deadlines, time budgets, or duration-based prioritization.** Agents can't estimate their own work, so the previous "Deadlines and what drives them" / "Cuts we'd accept to ship two weeks faster" / "engineering time" framing collapsed the interview into a cascade of brutal-prioritization follow-ups whenever the user mentioned any time pressure (e.g. answering "in 2 hours" to a deadline question would re-trigger MVP-Scope and What-NOT-to-Build re-asks from a time-pressure angle). Removed the time-bearing bullets from `questions-business.md` MVP Scope and Business Constraints; replaced with feature-value framing (concrete cuts the PO would accept if scope must shrink, infra/vendor/licensing budget envelope, external dependencies that must be honored). Added explicit guardrail to `questions-business.md` Business Constraints and to `SKILL.md` "NOT in scope" section: do not ask about deadlines / sprint cadence / "ship before X"; if the user volunteers a deadline in answer to another question, acknowledge it without cascading into prioritization re-asks. 5 manifest surfaces aligned at 1.1.5 via `scripts/bump.sh patch flow-next`.
+
 ## [flow-next 1.1.4] - 2026-05-20
 
 ### Fixed
