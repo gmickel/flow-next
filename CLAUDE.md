@@ -70,6 +70,13 @@ flow-next is a first-class citizen on Claude Code, Codex, and Factory Droid. **A
 - Do not add extra commands / agents / skills unless explicitly requested.
 - For pure docs / agent_docs / README changes, do NOT bump the plugin version.
 
+## PR workflow
+
+- **PRs derived from a flow-next spec** → use `/flow-next:make-pr <spec-id>`. It generates a cognitive-aid PR body (R-ID coverage table, critical-changes summary, decision context, "where to look") from the spec export. Never hand-write a body when a spec exists — the skill carries discipline the manual version drifts away from.
+- **Chore PRs without a spec** (version bumps, small mechanical fixes, CHANGELOG-only changes, third-party-reported regressions) — write the body manually but match the make-pr structure: short summary + What changed + Verification + Version note (or "no version bump per CLAUDE.md docs-only rule" if applicable). Don't open bare-body PRs.
+- **Review feedback on any PR** → `/flow-next:resolve-pr` (auto-detects PR from current branch). Resolves threads via dispatched resolver agents, validates combined state, replies + resolves via GraphQL. Bounded at 2 fix-verify cycles before escalation.
+- **No direct `gh pr merge` from skills.** Merge is a human decision; do it explicitly when the PR is ready.
+
 ## flow-next.dev docs site
 
 - Marketing/docs site lives at `~/work/flow-next.dev` (`https://flow-next.dev`).
