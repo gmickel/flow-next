@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-44-symmetric-interview",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-05-21T14:09:23.537622Z",
   "created_at": "2026-05-15T19:07:42.242824Z",
   "default_impl": null,
   "default_review": null,
@@ -12,7 +12,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-44-symmetric-interview.md",
-  "status": "open",
+  "status": "done",
   "title": "Symmetric interview: --scope=business|technical|both flag",
-  "updated_at": "2026-05-15T20:24:07.144742Z"
+  "updated_at": "2026-05-21T14:09:23.883721Z"
 }
