@@ -2,6 +2,11 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.1.6] - 2026-05-21
+
+### Fixed
+- **`/flow-next:prime` SE1 (branch protection) now detects ruleset-based enforcement, not just classic branch protection.** Reported by Georg Keller (SEMA-CAD) — on GHE Enterprise, repo `main` was correctly protected via Enterprise-level rulesets (2 required reviews, Copilot review required, force-push / deletion blocked, GitFlow naming, file-path restrictions) but `agents/security-scout.md` only probed `GET /repos/{owner}/{repo}/branches/{branch}/protection` (legacy classic-protection endpoint) and treated the 404 as "not protected" — a false negative that surfaced as `SE1 ❌` in the Pillar 7 report and incorrectly recommended adding CODEOWNERS to enforce "Senior Developer" review. Scout now also probes `GET /repos/{owner}/{repo}/rules/branches/{branch}` (rulesets endpoint, covering repo / org / enterprise layers) and marks SE1 ✅ if EITHER endpoint returns enforcement (`pull_request`, `non_fast_forward`, `deletion`, `required_status_checks`, `required_linear_history`, `required_signatures`, `required_deployments`, or `code_scanning` rule types). Output template gains a `Mechanism: classic / rulesets / both` line + ruleset IDs when applicable. Pillar 7 (`pillars.md:151`) SE1 criterion updated to reflect both mechanisms. Classic branch protection is on GitHub's long-term deprecation path; rulesets are the canonical mechanism going forward.
+
 ## [flow-next 1.1.5] - 2026-05-21
 
 ### Fixed

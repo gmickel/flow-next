@@ -148,7 +148,7 @@ Security posture and access controls.
 
 | ID | Criterion | Pass Condition |
 |----|-----------|----------------|
-| SE1 | Branch protection | Main/master branch protected (via `gh api`) |
+| SE1 | Branch protection | Main/master branch protected via classic branch protection OR rulesets (repo / org / enterprise level — any layer counts) |
 | SE2 | Secret scanning | GitHub secret scanning enabled |
 | SE3 | CODEOWNERS | .github/CODEOWNERS file exists |
 | SE4 | Dependency updates | Dependabot or Renovate configured |

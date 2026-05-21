@@ -16,14 +16,34 @@ Security configuration protects the codebase from accidental exposure and unauth
 
 ### Branch Protection (via GitHub API)
 
+GitHub protects branches via two independent mechanisms — **classic branch protection** and **rulesets** (introduced 2023; recommended by GitHub; classic on long-term deprecation path). Either path satisfies SE1; check BOTH before declaring "not protected".
+
 ```bash
 # Check if gh CLI is authenticated
 gh auth status 2>&1 | head -5
 
-# Check branch protection on main/master
+# 1. Classic branch protection (legacy endpoint)
 gh api /repos/{owner}/{repo}/branches/main/protection 2>&1 || \\
 gh api /repos/{owner}/{repo}/branches/master/protection 2>&1
+
+# 2. Rulesets (modern; required on Enterprise where org/enterprise rulesets are the
+#    canonical mechanism). Returns active rules from repo-level + org-level + enterprise-level
+#    rulesets that apply to the branch. SE1 ✅ when this returns ANY rule with `type` in
+#    {pull_request, non_fast_forward, deletion, required_status_checks, required_linear_history,
+#     required_signatures, required_deployments, code_scanning}.
+gh api /repos/{owner}/{repo}/rules/branches/main 2>&1 || \\
+gh api /repos/{owner}/{repo}/rules/branches/master 2>&1
 ```
+
+**SE1 verdict:**
+- ✅ if EITHER endpoint returns enforcement (classic protection JSON OR a non-empty ruleset rules array containing one of the enforcement types above).
+- ❌ only when BOTH endpoints return 404 / empty.
+- ⚠️ when `gh` is unauthenticated or the repo isn't on GitHub.
+
+**Report which mechanism is in effect** in the SE1 details line:
+- `classic` — legacy `branches/{branch}/protection`
+- `rulesets` — modern; cite ruleset IDs if available from the response (`ruleset_id` per rule)
+- `both` — rare but valid (classic + rulesets stacked)
 
 Note: Parse the repo owner/name from `git remote get-url origin` first.
 
@@ -85,7 +105,8 @@ grep -l "trivy\\|grype\\|anchore" .github/workflows/*.yml 2>/dev/null
 
 #### Branch Protection (SE1)
 - Status: ✅ Protected / ❌ Not protected / ⚠️ Unable to check
-- Details: [protection rules if available]
+- Mechanism: classic / rulesets / both — name which one(s) returned enforcement
+- Details: protection rules summary (PR reviews required, force-push blocked, deletion blocked, status checks required, etc.); cite ruleset IDs when applicable
 
 #### Secret Scanning (SE2)
 - Status: ✅ Enabled / ❌ Disabled
