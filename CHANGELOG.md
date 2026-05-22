@@ -2,6 +2,11 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.1.7] - 2026-05-22
+
+### Fixed
+- **`request_user_input` no longer leaks into Codex mirror SKILL.md `allowed-tools:` frontmatter.** fn-45 (v1.1.2) rewrote canonical `AskUserQuestion` to plain-text numbered prompts in mirror prose, but the `allowed-tools:` frontmatter rewrite preserved the tool token on the assumption that Codex reads `agents/openai.yaml` for the contract and treats SKILL.md frontmatter as "harmless residue". In practice the agent reads the frontmatter, trusts the listed tools, and calls `request_user_input` — which errors in Default mode (openai/codex #10384, #11536, #12694), exactly the failure fn-45 was meant to eliminate. Symptom reproduced by a user running `/flow-next:make-pr` from a Codex Desktop Default-mode session: "Preview gate tool unavailable in Default mode". `sync-codex.sh` Stage 3 H now STRIPS `AskUserQuestion` from the mirror's `allowed-tools:` line (cleaning adjacent commas) instead of rewriting it; the R6 mirror-scan guard now also fails sync on any `^allowed-tools:.*\brequest_user_input\b` match so future regressions surface immediately. 6 affected mirror SKILL.md files cleaned: `flow-next-make-pr`, `flow-next-capture`, `flow-next-audit`, `flow-next-strategy`, `flow-next-memory-migrate`, `flow-next-prospect`.
+
 ## [flow-next 1.1.6] - 2026-05-21
 
 ### Fixed

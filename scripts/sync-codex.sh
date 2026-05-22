@@ -620,12 +620,29 @@ text = re.sub(
     text,
 )
 
-# H. Frontmatter `allowed-tools: AskUserQuestion, ...` — keep the legacy
-#    token name for the harmless residue line; Codex reads
-#    agents/openai.yaml for the actual contract.
+# H. Frontmatter `allowed-tools: AskUserQuestion, ...` — STRIP the token
+#    entirely from the mirror. fn-45 originally rewrote it to
+#    `request_user_input` on the assumption that Codex reads
+#    `agents/openai.yaml` for the tool contract and treats SKILL.md
+#    frontmatter as harmless residue. In practice the agent reads
+#    SKILL.md frontmatter, trusts the listed tools, and calls
+#    `request_user_input` — which errors out in Default mode
+#    (openai/codex #10384, #11536, #12694). Stripping the token leaves
+#    only tools the mirror actually uses. Clean up any leading comma or
+#    trailing comma left behind so the list stays well-formed.
+def _strip_aukq(match):
+    head = match.group(1)
+    rest = match.group(2)
+    # Drop the token AND a trailing ", " if present; else drop a leading
+    # ", " if it was the last item.
+    if rest.startswith(', '):
+        return head + rest[2:]
+    if head.endswith(', '):
+        return head[:-2] + rest
+    return head + rest
 text = re.sub(
-    r'^(allowed-tools:[^\n]*?)\bAskUserQuestion\b',
-    r'\1request_user_input',
+    r'^(allowed-tools:[^\n]*?)\bAskUserQuestion\b(.*)$',
+    _strip_aukq,
     text,
     flags=re.MULTILINE,
 )
@@ -1396,14 +1413,16 @@ fi
 # calls (openai/codex #10384, #11536, #12694). Stage 3 instructs the agent to
 # render a plain-text numbered prompt instead; any surviving reference is a
 # sync bug that would re-introduce the failure. Exclude /templates/ subdirs.
-# Patterns: backticked invocation, "tool" form, function-call form, and the
-# two hard-mandate phrasings that survived the old `request_user_input`
-# rewrite era. The frontmatter `allowed-tools: request_user_input` line is
-# harmless residue and does not match any of these patterns.
-rui_refs=$( { grep -rnE '`request_user_input`|request_user_input tool|request_user_input\(|MUST use `request_user_input`|ONLY ask via `request_user_input`' "$CODEX_DIR/skills/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | wc -l | tr -d ' ')
+# Patterns: backticked invocation, "tool" form, function-call form, the two
+# hard-mandate phrasings that survived the old `request_user_input` rewrite
+# era, AND `allowed-tools:` frontmatter listings (v1.1.7 — fn-45 originally
+# exempted these as "harmless residue", but agents trust the frontmatter
+# tool list and call the unavailable tool).
+RUI_PATTERN='`request_user_input`|request_user_input tool|request_user_input\(|MUST use `request_user_input`|ONLY ask via `request_user_input`|^allowed-tools:.*\brequest_user_input\b'
+rui_refs=$( { grep -rnE "$RUI_PATTERN" "$CODEX_DIR/skills/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | wc -l | tr -d ' ')
 if [ "$rui_refs" != "0" ]; then
   echo -e "  ${RED}✗${NC} $rui_refs request_user_input refs leaked into codex skill prose — Stage 3 (fn-45) should have rewritten these"
-  { grep -rnE '`request_user_input`|request_user_input tool|request_user_input\(|MUST use `request_user_input`|ONLY ask via `request_user_input`' "$CODEX_DIR/skills/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | head -10
+  { grep -rnE "$RUI_PATTERN" "$CODEX_DIR/skills/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | head -10
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} No request_user_input refs in Codex skill prose"

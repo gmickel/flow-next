@@ -2,7 +2,7 @@
 name: flow-next-capture
 description: Synthesize the current conversation context into a flow-next spec at `.flow/specs/<spec-id>.md` via `flowctl spec create + spec set-plan` — agent-native, source-tagged, with mandatory read-back before write. Triggers on /flow-next:capture, "capture spec", "lock down what we discussed", "make a spec from this conversation", "convert conversation to spec". Optional `mode:autofix` token runs without questions and requires `--yes` to commit. Optional `--rewrite <spec-id>` overwrites an existing spec; `--from-compacted-ok` overrides the compaction-detection refusal; `--override-strategy` proceeds despite a contradiction with an active STRATEGY.md track (and prompts to record the override as a decision).
 user-invocable: false
-allowed-tools: request_user_input, Read, Bash, Grep, Glob, Write, Edit, Task
+allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 ---
 
 # /flow-next:capture — agent-native conversation → spec

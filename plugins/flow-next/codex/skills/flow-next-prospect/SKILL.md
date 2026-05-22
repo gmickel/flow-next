@@ -2,7 +2,7 @@
 name: flow-next-prospect
 description: Generate ranked candidate ideas grounded in the repo, upstream of /flow-next:plan. Triggers on /flow-next:prospect with an optional focus hint (concept, path, constraint, or volume).
 user-invocable: false
-allowed-tools: request_user_input, Read, Bash, Grep, Glob, Write, Edit, Task
+allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 ---
 
 # Prospect — upstream-of-plan idea generation
