@@ -2,6 +2,17 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.1.8] - 2026-05-22
+
+### Fixed
+- **`flowctl copilot {impl,plan,completion}-review` now fails fast on Windows with an actionable error instead of an opaque `OSError winerror 206`.** Reported by Simon Flauger (SEMA-CAD) — spec-sized review prompts on native Windows + Copilot review backend deterministically blow the Windows `CreateProcessW` 32,767-char command-line cap. Copilot CLI (1.0.51 as of today) offers no `--prompt-file` / `@file` / stdin prompt delivery path, so flow-next has no way to stage the prompt off argv on Windows. The temp-file staging in `run_copilot_exec` is a hygiene scratch buffer, not an alternate delivery — it still reads the file back into argv. New `_copilot_windows_argv_too_long` guard (pure helper) projects the command-line length before `subprocess.run`, and on overflow returns the same `("", session_id, 2, msg)` tuple as the timeout path so callers surface a clean `copilot -p failed: ...` with the actual sizes, the Copilot-CLI cause, and the WSL workaround pointer. macOS / Linux / WSL hosts are unaffected. Tests in `tests/test_copilot_windows_argv_guard.py`.
+
+### Documentation
+- New `docs/troubleshooting.md` section "Copilot review backend fails on Windows" + `docs/platforms.md` section "Windows + Copilot review backend (limitation)" — both explain the cap, the Copilot-CLI cause, and point at WSL as the workaround.
+
+### Upstream
+- Filed a Windows-specific data point on [github/copilot-cli#3398](https://github.com/github/copilot-cli/issues/3398) ("Add a `--prompt-file <path>` flag") requesting first-class off-argv prompt delivery so this stops being a workaround. The real fix lives upstream.
+
 ## [flow-next 1.1.7] - 2026-05-22
 
 ### Fixed

@@ -3180,6 +3180,56 @@ def get_copilot_version() -> Optional[str]:
 # uniformly so behaviour is deterministic across platforms.
 COPILOT_ARGV_PROMPT_MAX = 30000
 
+# Windows CreateProcessW lpCommandLine hard cap (UTF-16 code units). Hitting
+# this surfaces as OSError winerror 206 ("the filename or extension is too
+# long"). Copilot CLI offers no off-argv prompt delivery
+# (no --prompt-file, no @file, no stdin — verified through 1.0.51), so
+# spec-sized review prompts on Windows deterministically blow this cap.
+WINDOWS_CMDLINE_CAP_CHARS = 32767
+# Reserve room for subprocess argv quoting / separators and future non-prompt
+# arg growth. Subprocess on Windows escapes each arg via list2cmdline; the
+# overhead is small but non-zero. 512 chars is more than the current
+# non-prompt argv contributes (≈ 200 chars at typical paths) with comfortable
+# headroom.
+WINDOWS_CMDLINE_SAFETY_MARGIN = 512
+
+
+def _copilot_windows_argv_too_long(cmd: list) -> Optional[str]:
+    """Detect when a Copilot invocation would exceed the Windows argv cap.
+
+    Returns ``None`` on non-Windows hosts or when the projected command line
+    fits within ``WINDOWS_CMDLINE_CAP_CHARS - WINDOWS_CMDLINE_SAFETY_MARGIN``.
+    Otherwise returns an actionable error message naming the cap, the
+    Copilot CLI limitation that forces argv delivery, and the WSL
+    workaround.
+
+    Pure / side-effect-free so it can be unit-tested without spawning copilot
+    or touching the filesystem. Caller is responsible for cleaning up any
+    temp prompt file before returning the error.
+    """
+    if sys.platform != "win32":
+        return None
+    # Subprocess on Windows joins argv via list2cmdline (quotes each arg,
+    # space-separates). A tight upper bound that doesn't depend on
+    # subprocess internals: per-arg = len(arg) + 2 quotes + 1 separator.
+    projected = sum(len(arg) + 3 for arg in cmd)
+    budget = WINDOWS_CMDLINE_CAP_CHARS - WINDOWS_CMDLINE_SAFETY_MARGIN
+    if projected < budget:
+        return None
+    # Identify the prompt-sized arg for the user-facing message.
+    prompt_len = max((len(arg) for arg in cmd), default=0)
+    return (
+        f"Copilot review cannot run on Windows: projected command line is "
+        f"{projected:,} chars (prompt alone is {prompt_len:,} chars), "
+        f"exceeding the Windows CreateProcessW cap of "
+        f"{WINDOWS_CMDLINE_CAP_CHARS:,} chars. Copilot CLI offers no "
+        f"--prompt-file / @file / stdin delivery path, so flow-next cannot "
+        f"stage spec-sized review prompts off the command line on Windows.\n"
+        f"\n"
+        f"Workaround: run flowctl from WSL (Linux argv cap ~2 MB). The "
+        f"upstream fix needs --prompt-file or stdin support in Copilot CLI."
+    )
+
 
 def run_copilot_exec(
     prompt: str,
@@ -3265,6 +3315,19 @@ def run_copilot_exec(
     # is the hot path. GPT-5.x models accept --effort.
     if not effective_model.startswith("claude-"):
         cmd += ["--effort", effective_effort]
+
+    # Windows argv-cap guard (1.1.8). Failing here returns the same
+    # ("", session_id, 2, msg) shape as the timeout branch, so callers
+    # surface a clean "copilot -p failed: <message>" instead of an opaque
+    # OSError winerror 206. No-op on macOS / Linux / WSL.
+    cmdline_error = _copilot_windows_argv_too_long(cmd)
+    if cmdline_error is not None:
+        if tmp_prompt_path is not None:
+            try:
+                tmp_prompt_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return "", session_id, 2, cmdline_error
 
     try:
         try:

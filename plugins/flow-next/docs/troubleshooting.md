@@ -72,6 +72,26 @@ Flow-Next's plan-review and impl-review skills include specific instructions for
 
 **Fix:** Remove or comment out custom rp-cli instructions from your `CLAUDE.md`/`AGENTS.md` when using Flow-Next reviews. The plugin provides complete rp-cli guidance.
 
+## Copilot review backend fails on Windows with "command line too long"
+
+> **Caution**: Copilot CLI on Windows cannot accept spec-sized review prompts. WSL is the only known workaround.
+
+Spec-driven `flowctl copilot impl-review` / `plan-review` / `completion-review` calls on native Windows fail with a clean error from flow-next 1.1.8+:
+
+```
+copilot -p failed: Copilot review cannot run on Windows: projected command
+line is 53,210 chars (prompt alone is 51,847 chars), exceeding the Windows
+CreateProcessW cap of 32,767 chars. ...
+```
+
+**Root cause:** Windows `CreateProcessW` caps the full command line at 32,767 chars. Copilot CLI (1.0.51 as of 2026-05) offers no off-argv prompt delivery — no `--prompt-file`, no `@file`, no stdin — so flow-next must pass the full review prompt through `-p "<text>"`. Spec-sized prompts blow the cap. The temp-file staging in `run_copilot_exec` is a hygiene scratch buffer, not an alternate delivery path.
+
+**Pre-1.1.8 symptom:** the same condition surfaced as an opaque `OSError winerror 206` or `[WinError 206] The filename or extension is too long`.
+
+**Workaround:** Run flowctl from WSL. The Linux argv limit (~2 MB) absorbs spec-sized prompts comfortably. Copilot CLI runs unmodified inside WSL.
+
+**Permanent fix:** lives in Copilot CLI upstream — tracking [github/copilot-cli#3398](https://github.com/github/copilot-cli/issues/3398) (request for first-class `--prompt-file` support).
+
 ## Uninstall
 
 Run manually in terminal (DCG blocks these from AI agents):
