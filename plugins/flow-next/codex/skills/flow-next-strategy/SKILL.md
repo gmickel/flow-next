@@ -2,7 +2,7 @@
 name: flow-next-strategy
 description: "Create or maintain `STRATEGY.md` — the product's target problem, our approach, who it's for, key metrics, and tracks of work. Use when starting a new product, updating direction, or when prompts like 'write our strategy', 'update the roadmap', 'what are we working on', or 'set up the strategy doc' come up. Also fires when `/flow-next:prospect`, `/flow-next:plan`, `/flow-next:interview`, or `/flow-next:capture` need upstream grounding and no strategy doc exists yet."
 user-invocable: false
-allowed-tools: request_user_input, Read, Write, Bash
+allowed-tools: Read, Write, Bash
 ---
 
 # /flow-next:strategy — repo-root STRATEGY.md anchor
