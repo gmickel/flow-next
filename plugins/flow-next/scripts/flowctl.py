@@ -3180,55 +3180,15 @@ def get_copilot_version() -> Optional[str]:
 # uniformly so behaviour is deterministic across platforms.
 COPILOT_ARGV_PROMPT_MAX = 30000
 
-# Windows CreateProcessW lpCommandLine hard cap (UTF-16 code units). Hitting
-# this surfaces as OSError winerror 206 ("the filename or extension is too
-# long"). Copilot CLI offers no off-argv prompt delivery
-# (no --prompt-file, no @file, no stdin — verified through 1.0.51), so
-# spec-sized review prompts on Windows deterministically blow this cap.
-WINDOWS_CMDLINE_CAP_CHARS = 32767
-# Reserve room for subprocess argv quoting / separators and future non-prompt
-# arg growth. Subprocess on Windows escapes each arg via list2cmdline; the
-# overhead is small but non-zero. 512 chars is more than the current
-# non-prompt argv contributes (≈ 200 chars at typical paths) with comfortable
-# headroom.
-WINDOWS_CMDLINE_SAFETY_MARGIN = 512
+def _copilot_session_marker(repo_root: Path, session_id: str) -> Path:
+    """Path to the touch-file that records whether a Copilot session has been
+    created on this host.
 
-
-def _copilot_windows_argv_too_long(cmd: list) -> Optional[str]:
-    """Detect when a Copilot invocation would exceed the Windows argv cap.
-
-    Returns ``None`` on non-Windows hosts or when the projected command line
-    fits within ``WINDOWS_CMDLINE_CAP_CHARS - WINDOWS_CMDLINE_SAFETY_MARGIN``.
-    Otherwise returns an actionable error message naming the cap, the
-    Copilot CLI limitation that forces argv delivery, and the WSL
-    workaround.
-
-    Pure / side-effect-free so it can be unit-tested without spawning copilot
-    or touching the filesystem. Caller is responsible for cleaning up any
-    temp prompt file before returning the error.
+    Used only on the Windows stdin path, where ``--resume=<uuid>`` is
+    resume-only (errors on first call). Caller writes the marker after a
+    successful first invocation so subsequent calls switch to ``--resume``.
     """
-    if sys.platform != "win32":
-        return None
-    # Subprocess on Windows joins argv via list2cmdline (quotes each arg,
-    # space-separates). A tight upper bound that doesn't depend on
-    # subprocess internals: per-arg = len(arg) + 2 quotes + 1 separator.
-    projected = sum(len(arg) + 3 for arg in cmd)
-    budget = WINDOWS_CMDLINE_CAP_CHARS - WINDOWS_CMDLINE_SAFETY_MARGIN
-    if projected < budget:
-        return None
-    # Identify the prompt-sized arg for the user-facing message.
-    prompt_len = max((len(arg) for arg in cmd), default=0)
-    return (
-        f"Copilot review cannot run on Windows: projected command line is "
-        f"{projected:,} chars (prompt alone is {prompt_len:,} chars), "
-        f"exceeding the Windows CreateProcessW cap of "
-        f"{WINDOWS_CMDLINE_CAP_CHARS:,} chars. Copilot CLI offers no "
-        f"--prompt-file / @file / stdin delivery path, so flow-next cannot "
-        f"stage spec-sized review prompts off the command line on Windows.\n"
-        f"\n"
-        f"Workaround: run flowctl from WSL (Linux argv cap ~2 MB). The "
-        f"upstream fix needs --prompt-file or stdin support in Copilot CLI."
-    )
+    return repo_root / ".flow" / "tmp" / "copilot-sessions" / session_id
 
 
 def run_copilot_exec(
@@ -3237,28 +3197,36 @@ def run_copilot_exec(
     repo_root: Path,
     spec: Optional["BackendSpec"] = None,
 ) -> tuple[str, str, int, str]:
-    """Run copilot -p and return (stdout, session_id, exit_code, stderr).
+    """Run copilot and return (stdout, session_id, exit_code, stderr).
 
-    Copilot's ``--resume=<uuid>`` is create-or-resume: the caller always supplies
-    a UUID. First call creates a session with that exact ID; subsequent calls
-    with the same ID resume. We therefore don't need stdout parsing to recover
-    the session ID (unlike Codex).
+    Prompt-delivery path depends on host platform:
 
-    Prompt delivery:
-    - Short prompts (< COPILOT_ARGV_PROMPT_MAX chars): passed directly as argv.
-    - Large prompts: staged via ``.flow/tmp/copilot-prompt-<uuid>.txt`` then
-      read back into a Python string for argv (copilot's ``-p`` has no @file
-      syntax). The temp file is removed in ``finally`` so KeyboardInterrupt,
-      TimeoutExpired, and non-zero exits all clean up.
+    - **POSIX (macOS / Linux / WSL)** — argv path: ``copilot -p <prompt>
+      --resume=<uuid> ...``. ``--resume`` is create-or-resume in this mode,
+      so caller doesn't need to track session existence.
 
-    ``spec``: a resolved ``BackendSpec`` (backend=copilot) whose ``model`` and
-    ``effort`` are used verbatim. Env-var fills happen upstream in
-    ``resolve_review_spec()`` / ``BackendSpec.resolve()``; this function
-    reads ``spec.model`` / ``spec.effort`` directly. When ``spec`` is
-    ``None`` (defensive / non-review callers), fall back to bare-copilot
-    resolution (env + registry defaults).
+    - **Windows** — stdin path: ``copilot --session-id=<uuid> ...`` (or
+      ``--resume=<uuid>`` on continuation) with the prompt piped via
+      ``subprocess.run(input=prompt, ...)``. The argv path would blow the
+      ``CreateProcessW`` 32,767-char cap for spec-sized prompts; Copilot
+      CLI (≥1.0.51) has no ``--prompt-file`` / ``@file`` (tracking
+      github/copilot-cli#3398), but stdin works and bypasses the cap
+      entirely. Stdin mode's ``--resume`` is resume-only (errors with
+      "No session matched" on first call), so we use ``--session-id`` for
+      the first call and ``--resume`` afterwards — tracked via a touch
+      marker under ``.flow/tmp/copilot-sessions/<uuid>``.
 
-    Claude-model effort skip: the ``--effort`` flag is passed unless
+    On POSIX, ``COPILOT_ARGV_PROMPT_MAX`` triggers a temp-file scratch
+    buffer (hygiene only — the temp file is read back into argv). The
+    file is cleaned in ``finally`` so KeyboardInterrupt / TimeoutExpired /
+    non-zero exits all unlink.
+
+    ``spec``: a resolved ``BackendSpec`` (backend=copilot). Env-var fills
+    happen upstream; ``spec.model`` / ``spec.effort`` are read directly.
+    When ``spec`` is ``None`` (defensive / non-review callers), fall back
+    to bare-copilot resolution (env + registry defaults).
+
+    Claude-model effort skip: ``--effort`` is dropped when
     ``effective_model`` starts with ``claude-`` (Copilot rejects
     reasoning-effort on Claude-family models).
 
@@ -3276,25 +3244,10 @@ def run_copilot_exec(
     effective_model = spec.model or "gpt-5.2"
     effective_effort = spec.effort or "high"
 
-    # For large prompts, stage to disk then read back. Copilot has no @file
-    # syntax for -p, so we always end up with the prompt in argv — but the
-    # temp file acts as a scratch buffer that avoids exposing huge strings
-    # in any command-line reconstruction path.
-    tmp_prompt_path: Optional[Path] = None
-    prompt_for_argv = prompt
-    if len(prompt) >= COPILOT_ARGV_PROMPT_MAX:
-        tmp_dir = repo_root / ".flow" / "tmp"
-        tmp_dir.mkdir(parents=True, exist_ok=True)
-        tmp_prompt_path = tmp_dir / f"copilot-prompt-{uuid.uuid4()}.txt"
-        tmp_prompt_path.write_text(prompt, encoding="utf-8")
-        # Read back (copilot has no --prompt-file; argv is the only delivery path)
-        prompt_for_argv = tmp_prompt_path.read_text(encoding="utf-8")
+    use_stdin = sys.platform == "win32"
 
-    cmd = [
-        copilot,
-        "-p",
-        prompt_for_argv,
-        f"--resume={session_id}",
+    # Common args for both delivery paths (everything except prompt + session flag).
+    common_args = [
         "--output-format",
         "text",
         "-s",
@@ -3314,20 +3267,39 @@ def run_copilot_exec(
     # effort configuration"). Default model is claude-opus-4.5, so this branch
     # is the hot path. GPT-5.x models accept --effort.
     if not effective_model.startswith("claude-"):
-        cmd += ["--effort", effective_effort]
+        common_args += ["--effort", effective_effort]
 
-    # Windows argv-cap guard (1.1.8). Failing here returns the same
-    # ("", session_id, 2, msg) shape as the timeout branch, so callers
-    # surface a clean "copilot -p failed: <message>" instead of an opaque
-    # OSError winerror 206. No-op on macOS / Linux / WSL.
-    cmdline_error = _copilot_windows_argv_too_long(cmd)
-    if cmdline_error is not None:
-        if tmp_prompt_path is not None:
-            try:
-                tmp_prompt_path.unlink(missing_ok=True)
-            except OSError:
-                pass
-        return "", session_id, 2, cmdline_error
+    tmp_prompt_path: Optional[Path] = None
+    marker: Optional[Path] = None
+    subprocess_kwargs: dict = {}
+
+    if use_stdin:
+        # Windows stdin path: prompt via subprocess input, session flag picks
+        # create-or-resume based on a touch marker. No -p, no temp scratch.
+        marker = _copilot_session_marker(repo_root, session_id)
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        session_arg = (
+            f"--resume={session_id}" if marker.exists()
+            else f"--session-id={session_id}"
+        )
+        cmd = [copilot, session_arg, *common_args]
+        subprocess_kwargs["input"] = prompt
+    else:
+        # POSIX argv path (unchanged): -p + create-or-resume --resume.
+        prompt_for_argv = prompt
+        if len(prompt) >= COPILOT_ARGV_PROMPT_MAX:
+            tmp_dir = repo_root / ".flow" / "tmp"
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+            tmp_prompt_path = tmp_dir / f"copilot-prompt-{uuid.uuid4()}.txt"
+            tmp_prompt_path.write_text(prompt, encoding="utf-8")
+            prompt_for_argv = tmp_prompt_path.read_text(encoding="utf-8")
+        cmd = [
+            copilot,
+            "-p",
+            prompt_for_argv,
+            f"--resume={session_id}",
+            *common_args,
+        ]
 
     try:
         try:
@@ -3337,10 +3309,16 @@ def run_copilot_exec(
                 text=True, encoding="utf-8",
                 check=False,  # Don't raise on non-zero exit; caller inspects
                 timeout=600,
+                **subprocess_kwargs,
             )
+            # Windows stdin path: record first-call success so subsequent
+            # invocations switch from --session-id to --resume. Touch is
+            # idempotent so repeat calls are safe.
+            if use_stdin and marker is not None and result.returncode == 0:
+                marker.touch(exist_ok=True)
             return result.stdout, session_id, result.returncode, result.stderr
         except subprocess.TimeoutExpired:
-            return "", session_id, 2, "copilot -p timed out (600s)"
+            return "", session_id, 2, "copilot timed out (600s)"
     finally:
         # Clean up temp file on every exit path (success, failure, timeout,
         # KeyboardInterrupt). unlink(missing_ok=True) avoids TOCTOU races.
@@ -19320,8 +19298,8 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
                 Path(receipt_path).unlink(missing_ok=True)
             except OSError:
                 pass
-        msg = (stderr or output or "copilot -p failed").strip()
-        error_exit(f"copilot -p failed: {msg}", use_json=args.json, code=2)
+        msg = (stderr or output or "copilot failed").strip()
+        error_exit(f"copilot failed: {msg}", use_json=args.json, code=2)
 
     # Parse verdict
     verdict = parse_codex_verdict(output)
@@ -19522,8 +19500,8 @@ def cmd_copilot_plan_review(args: argparse.Namespace) -> None:
                 Path(receipt_path).unlink(missing_ok=True)
             except OSError:
                 pass
-        msg = (stderr or output or "copilot -p failed").strip()
-        error_exit(f"copilot -p failed: {msg}", use_json=args.json, code=2)
+        msg = (stderr or output or "copilot failed").strip()
+        error_exit(f"copilot failed: {msg}", use_json=args.json, code=2)
 
     verdict = parse_codex_verdict(output)
 
@@ -19709,8 +19687,8 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
                 Path(receipt_path).unlink(missing_ok=True)
             except OSError:
                 pass
-        msg = (stderr or output or "copilot -p failed").strip()
-        error_exit(f"copilot -p failed: {msg}", use_json=args.json, code=2)
+        msg = (stderr or output or "copilot failed").strip()
+        error_exit(f"copilot failed: {msg}", use_json=args.json, code=2)
 
     verdict = parse_codex_verdict(output)
 

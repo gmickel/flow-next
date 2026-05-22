@@ -82,6 +82,24 @@ jobs:
             -p "test_banner.py" \
             -v
 
+      # ──────────── Copilot stdin path (1.1.9) ────────────
+      # Mocked unit tests run on all three platforms; the real-subprocess
+      # Windows smoke fires only on windows-latest (skipUnless gate). The
+      # smoke validates that subprocess.run(input=prompt) delivers a 60 KB
+      # prompt through CreateProcessW + stdin pipe without hitting the
+      # 32,767-char argv cap — the Simon Flauger / SEMA-CAD failure mode.
+
+      - name: Python unit tests — copilot run-exec (1.1.9 stdin path)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_copilot_run_exec.py" \
+            -v
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_copilot_windows_smoke.py" \
+            -v
+
       # ──────────── Functional smokes (ordered cheap-first) ────────────
       # All smokes refuse to run from the main plugin repo, so cd into the
       # runner's temp dir before invoking. $RUNNER_TEMP is set on every

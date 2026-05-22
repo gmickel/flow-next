@@ -2,6 +2,23 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.1.9] - 2026-05-22
+
+### Fixed
+- **`flowctl copilot {impl,plan,completion}-review` now works on native Windows.** 1.1.8 added a fail-fast guard that pointed Windows users at WSL because Copilot CLI's `-p <text>` argv path collides with the `CreateProcessW` 32,767-char limit for spec-sized prompts. Turns out Copilot CLI (≥1.0.51) DOES accept the prompt via stdin — undocumented in `--help` and surfaced only as a passing mention in [github/copilot-cli#3398](https://github.com/github/copilot-cli/issues/3398) — so flow-next can sidestep the cap entirely. `run_copilot_exec` now branches on `sys.platform == "win32"`: Windows uses `subprocess.run(input=prompt, ...)` with no `-p`, POSIX paths stay on argv. Stdin-mode `--resume=<uuid>` is **resume-only** (errors with "No session matched" on first call, unlike `-p` mode's create-or-resume), so the Windows path uses `--session-id=<uuid>` for the first call and `--resume=<uuid>` afterwards, tracked via a touch marker under `.flow/tmp/copilot-sessions/<uuid>`. Removes the 1.1.8 `_copilot_windows_argv_too_long` guard + constants — the failure mode it caught can't happen anymore.
+
+### Tests
+- New `tests/test_copilot_run_exec.py` — 5 mocked unit tests covering POSIX argv path, Windows first-call `--session-id`, Windows second-call `--resume`, failed-first-call marker absence, Windows path emits no temp prompt files. Cross-platform via `mock.patch.object(sys, "platform", ...)`.
+- New `tests/test_copilot_windows_smoke.py` — Windows-only real-subprocess smoke. Stands up a fake `copilot.bat` shim, prepends to `PATH`, runs `run_copilot_exec` with a 60 KB prompt through real `CreateProcessW` + stdin pipe, validates the child received the exact bytes (SHA-256 round-trip). Skipped on non-Windows; mocked unit tests cover behavior there.
+- CI workflow `.github/workflows/test-flow-next.yml` runs both new test files on the full ubuntu/macos/windows matrix. The Windows smoke fires only on `windows-latest`.
+
+### Documentation
+- `docs/troubleshooting.md` and `docs/platforms.md` rewritten — the 1.1.8 "blocked on Windows, use WSL" sections now document the working Windows stdin path. Pointer to upstream `--prompt-file` request preserved.
+
+### Removed
+- `_copilot_windows_argv_too_long`, `WINDOWS_CMDLINE_CAP_CHARS`, `WINDOWS_CMDLINE_SAFETY_MARGIN` — the 1.1.8 guard is no longer reachable now that Windows uses stdin. Test file `tests/test_copilot_windows_argv_guard.py` removed.
+- Error string "copilot -p failed: ..." → "copilot failed: ..." (the `-p` is path-specific; Windows path omits it).
+
 ## [flow-next 1.1.8] - 2026-05-22
 
 ### Fixed
