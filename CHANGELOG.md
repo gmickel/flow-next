@@ -2,6 +2,14 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.1.10] - 2026-05-22
+
+### Fixed
+- **`/flow-next:setup` template `usage.md` was stale and missing 3 documented CLI surfaces + most of the per-project knobs.** Caught when re-running `/flow-next:setup` on the dev repo bumped its `setup_version` from 0.24.0 to 1.1.9 and the byte-compare gate flagged `.flow/usage.md` as customized. Root cause: the `fn-43.12 user-facing docs sweep` (commit `445a4ef`) updated only the dev repo's `.flow/usage.md` with new prospect / spec export-cognitive-aid / `.flow_version` sentinel content; the canonical template at `plugins/flow-next/skills/flow-next-setup/templates/usage.md` was never backported, so every fresh `/flow-next:setup` from 0.42.0 onward shipped a `.flow/usage.md` missing those sections. Promoted the richer dev-repo version to the canonical template AND extended it with the surfaces neither version covered: `flowctl status`, `config get/set` (all five knobs: review.backend, memory.enabled, planSync.enabled, planSync.crossSpec, scouts.github), per-spec / per-task `set-backend` + `show-backend` + `review-backend`, `checkpoint save/restore/delete`, `ralph pause/resume/stop/status`, `spec set-plan/set-title/set-branch/close/skeleton/add-dep/rm-dep`, `task set-description/set-acceptance/set-spec/reset`, `block --reason-file`. Also corrected the `specs/*.md` vs `specs/*.json` framing (.md is canonical content; .json is metadata — template had them reversed) and expanded the file-structure diagram to mention `templates/spec.md`, `review-receipts/`, `review-deferred/`, the `memory/{bug,knowledge}/<category>/` shape, and `STRATEGY.md` / `GLOSSARY.md` as out-of-`.flow/` canonical files. Template grew 100 → 212 lines.
+
+### Documentation
+- Same canonical content also written to this repo's `.flow/usage.md` so the dev install stays byte-identical to what the setup template ships.
+
 ## [flow-next 1.1.9] - 2026-05-22
 
 ### Fixed

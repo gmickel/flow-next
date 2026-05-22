@@ -1019,10 +1019,18 @@ def get_default_config() -> dict:
     """Return default config structure."""
     return {
         "memory": {"enabled": True},
-        "planSync": {"enabled": True, "crossEpic": False},
+        "planSync": {"enabled": True, "crossSpec": False},
         "review": {"backend": None},
         "scouts": {"github": False},
     }
+
+
+# Canonical mapping for legacy config keys. Reads of a legacy key resolve to the
+# canonical key when present in the raw file; writes always target the canonical.
+# Mirrors the fn-43 epic→spec rename cadence.
+_CONFIG_KEY_ALIASES: dict[str, str] = {
+    "planSync.crossEpic": "planSync.crossSpec",
+}
 
 
 def deep_merge(base: dict, override: dict) -> dict:
@@ -1061,6 +1069,110 @@ def get_config(key: str, default=None):
         if config == {}:
             return default
     return config if config != {} else default
+
+
+_CONFIG_RAW_SENTINEL = object()
+
+
+def _get_config_from_file(key: str):
+    """Probe the raw .flow/config.json for `key` without applying defaults.
+
+    Returns the value if `key` exists in the persisted file, or
+    `_CONFIG_RAW_SENTINEL` when the key is absent (or the file itself
+    is absent / unreadable). The sentinel distinguishes "user explicitly
+    set the key to None / false" from "key never written" — load-bearing
+    for the legacy-alias fallback semantic (see `_CONFIG_KEY_ALIASES`).
+    """
+    config_path = get_flow_dir() / CONFIG_FILE
+    if not config_path.exists():
+        return _CONFIG_RAW_SENTINEL
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, Exception):
+        return _CONFIG_RAW_SENTINEL
+    if not isinstance(data, dict):
+        return _CONFIG_RAW_SENTINEL
+    current = data
+    for part in key.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return _CONFIG_RAW_SENTINEL
+        current = current[part]
+    return current
+
+
+def resolve_config_key_for_read(key: str):
+    """Resolve a config-key read, honoring legacy aliases.
+
+    Returns a 3-tuple ``(effective_key, value, deprecation_legacy_form)``:
+
+    - ``effective_key`` — the key actually used to obtain the value.
+    - ``value`` — the resolved value, honoring "canonical wins over legacy"
+      and "legacy falls back when canonical absent from the raw file."
+    - ``deprecation_legacy_form`` — when non-empty, the caller should emit
+      `_emit_rename_deprecation(deprecation_legacy_form, canonical)`.
+      Populated whenever the user typed the legacy alias by name, even if
+      canonical is also present in the raw file. Canonical value precedence
+      is unchanged — the deprecation fires on the legacy *input form*, not on
+      where the value came from, so scripts still asking for the legacy key
+      after `set planSync.crossSpec` keep getting the migration signal
+      before 2.0 removes the alias. When the user reads the canonical key,
+      no warning fires even if the legacy key supplied the value via
+      fallback — they're already on the new name.
+
+    Canonical-vs-legacy precedence is identical in both directions:
+    canonical wins when present in the raw file; legacy fills in when
+    canonical is absent. The only thing the input key changes is which
+    label is returned and whether a deprecation fires.
+    """
+    # Identify the canonical/legacy pair regardless of which side the caller
+    # supplied. `key` may be legacy (looked up via `_CONFIG_KEY_ALIASES`) or
+    # canonical (reverse-lookup against alias targets).
+    canonical_from_alias = _CONFIG_KEY_ALIASES.get(key)
+    if canonical_from_alias is not None:
+        # User typed the legacy name.
+        canonical = canonical_from_alias
+        legacy = key
+        user_typed_legacy = True
+    else:
+        # User typed something else; may be canonical for a known alias, or
+        # an unrelated key entirely.
+        legacy_match = next(
+            (lg for lg, cn in _CONFIG_KEY_ALIASES.items() if cn == key), None
+        )
+        if legacy_match is None:
+            # Not part of any alias pair — standard lookup.
+            return key, get_config(key), ""
+        canonical = key
+        legacy = legacy_match
+        user_typed_legacy = False
+
+    canonical_raw = _get_config_from_file(canonical)
+    if canonical_raw is not _CONFIG_RAW_SENTINEL:
+        # Canonical wins value precedence; warn only when the user typed the
+        # legacy form (canonical reads remain the migration path).
+        return canonical, canonical_raw, legacy if user_typed_legacy else ""
+    legacy_raw = _get_config_from_file(legacy)
+    if legacy_raw is not _CONFIG_RAW_SENTINEL:
+        # Legacy supplies the value via fallback. Warn only when the user
+        # typed the legacy form (reading canonical is the migration path).
+        return legacy, legacy_raw, legacy if user_typed_legacy else ""
+    # Neither key set; fall back to merged defaults via the canonical key.
+    return canonical, get_config(canonical), ""
+
+
+def resolve_config_key_for_write(key: str) -> tuple[str, str]:
+    """Resolve a config-key write, redirecting legacy aliases to canonical.
+
+    Returns ``(canonical_key, deprecation_legacy_form)``. When the user wrote
+    a known legacy key, ``deprecation_legacy_form`` is non-empty and the
+    caller should emit a deprecation warning. The actual write must target
+    the canonical key; the legacy entry (if present in the file) is left
+    untouched — it becomes "wins-on-fallback-only" until 2.0.
+    """
+    canonical = _CONFIG_KEY_ALIASES.get(key)
+    if canonical is None:
+        return key, ""
+    return canonical, key
 
 
 def set_config(key: str, value) -> dict:
@@ -3068,6 +3180,16 @@ def get_copilot_version() -> Optional[str]:
 # uniformly so behaviour is deterministic across platforms.
 COPILOT_ARGV_PROMPT_MAX = 30000
 
+def _copilot_session_marker(repo_root: Path, session_id: str) -> Path:
+    """Path to the touch-file that records whether a Copilot session has been
+    created on this host.
+
+    Used only on the Windows stdin path, where ``--resume=<uuid>`` is
+    resume-only (errors on first call). Caller writes the marker after a
+    successful first invocation so subsequent calls switch to ``--resume``.
+    """
+    return repo_root / ".flow" / "tmp" / "copilot-sessions" / session_id
+
 
 def run_copilot_exec(
     prompt: str,
@@ -3075,28 +3197,36 @@ def run_copilot_exec(
     repo_root: Path,
     spec: Optional["BackendSpec"] = None,
 ) -> tuple[str, str, int, str]:
-    """Run copilot -p and return (stdout, session_id, exit_code, stderr).
+    """Run copilot and return (stdout, session_id, exit_code, stderr).
 
-    Copilot's ``--resume=<uuid>`` is create-or-resume: the caller always supplies
-    a UUID. First call creates a session with that exact ID; subsequent calls
-    with the same ID resume. We therefore don't need stdout parsing to recover
-    the session ID (unlike Codex).
+    Prompt-delivery path depends on host platform:
 
-    Prompt delivery:
-    - Short prompts (< COPILOT_ARGV_PROMPT_MAX chars): passed directly as argv.
-    - Large prompts: staged via ``.flow/tmp/copilot-prompt-<uuid>.txt`` then
-      read back into a Python string for argv (copilot's ``-p`` has no @file
-      syntax). The temp file is removed in ``finally`` so KeyboardInterrupt,
-      TimeoutExpired, and non-zero exits all clean up.
+    - **POSIX (macOS / Linux / WSL)** — argv path: ``copilot -p <prompt>
+      --resume=<uuid> ...``. ``--resume`` is create-or-resume in this mode,
+      so caller doesn't need to track session existence.
 
-    ``spec``: a resolved ``BackendSpec`` (backend=copilot) whose ``model`` and
-    ``effort`` are used verbatim. Env-var fills happen upstream in
-    ``resolve_review_spec()`` / ``BackendSpec.resolve()``; this function
-    reads ``spec.model`` / ``spec.effort`` directly. When ``spec`` is
-    ``None`` (defensive / non-review callers), fall back to bare-copilot
-    resolution (env + registry defaults).
+    - **Windows** — stdin path: ``copilot --session-id=<uuid> ...`` (or
+      ``--resume=<uuid>`` on continuation) with the prompt piped via
+      ``subprocess.run(input=prompt, ...)``. The argv path would blow the
+      ``CreateProcessW`` 32,767-char cap for spec-sized prompts; Copilot
+      CLI (≥1.0.51) has no ``--prompt-file`` / ``@file`` (tracking
+      github/copilot-cli#3398), but stdin works and bypasses the cap
+      entirely. Stdin mode's ``--resume`` is resume-only (errors with
+      "No session matched" on first call), so we use ``--session-id`` for
+      the first call and ``--resume`` afterwards — tracked via a touch
+      marker under ``.flow/tmp/copilot-sessions/<uuid>``.
 
-    Claude-model effort skip: the ``--effort`` flag is passed unless
+    On POSIX, ``COPILOT_ARGV_PROMPT_MAX`` triggers a temp-file scratch
+    buffer (hygiene only — the temp file is read back into argv). The
+    file is cleaned in ``finally`` so KeyboardInterrupt / TimeoutExpired /
+    non-zero exits all unlink.
+
+    ``spec``: a resolved ``BackendSpec`` (backend=copilot). Env-var fills
+    happen upstream; ``spec.model`` / ``spec.effort`` are read directly.
+    When ``spec`` is ``None`` (defensive / non-review callers), fall back
+    to bare-copilot resolution (env + registry defaults).
+
+    Claude-model effort skip: ``--effort`` is dropped when
     ``effective_model`` starts with ``claude-`` (Copilot rejects
     reasoning-effort on Claude-family models).
 
@@ -3114,25 +3244,10 @@ def run_copilot_exec(
     effective_model = spec.model or "gpt-5.2"
     effective_effort = spec.effort or "high"
 
-    # For large prompts, stage to disk then read back. Copilot has no @file
-    # syntax for -p, so we always end up with the prompt in argv — but the
-    # temp file acts as a scratch buffer that avoids exposing huge strings
-    # in any command-line reconstruction path.
-    tmp_prompt_path: Optional[Path] = None
-    prompt_for_argv = prompt
-    if len(prompt) >= COPILOT_ARGV_PROMPT_MAX:
-        tmp_dir = repo_root / ".flow" / "tmp"
-        tmp_dir.mkdir(parents=True, exist_ok=True)
-        tmp_prompt_path = tmp_dir / f"copilot-prompt-{uuid.uuid4()}.txt"
-        tmp_prompt_path.write_text(prompt, encoding="utf-8")
-        # Read back (copilot has no --prompt-file; argv is the only delivery path)
-        prompt_for_argv = tmp_prompt_path.read_text(encoding="utf-8")
+    use_stdin = sys.platform == "win32"
 
-    cmd = [
-        copilot,
-        "-p",
-        prompt_for_argv,
-        f"--resume={session_id}",
+    # Common args for both delivery paths (everything except prompt + session flag).
+    common_args = [
         "--output-format",
         "text",
         "-s",
@@ -3152,7 +3267,39 @@ def run_copilot_exec(
     # effort configuration"). Default model is claude-opus-4.5, so this branch
     # is the hot path. GPT-5.x models accept --effort.
     if not effective_model.startswith("claude-"):
-        cmd += ["--effort", effective_effort]
+        common_args += ["--effort", effective_effort]
+
+    tmp_prompt_path: Optional[Path] = None
+    marker: Optional[Path] = None
+    subprocess_kwargs: dict = {}
+
+    if use_stdin:
+        # Windows stdin path: prompt via subprocess input, session flag picks
+        # create-or-resume based on a touch marker. No -p, no temp scratch.
+        marker = _copilot_session_marker(repo_root, session_id)
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        session_arg = (
+            f"--resume={session_id}" if marker.exists()
+            else f"--session-id={session_id}"
+        )
+        cmd = [copilot, session_arg, *common_args]
+        subprocess_kwargs["input"] = prompt
+    else:
+        # POSIX argv path (unchanged): -p + create-or-resume --resume.
+        prompt_for_argv = prompt
+        if len(prompt) >= COPILOT_ARGV_PROMPT_MAX:
+            tmp_dir = repo_root / ".flow" / "tmp"
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+            tmp_prompt_path = tmp_dir / f"copilot-prompt-{uuid.uuid4()}.txt"
+            tmp_prompt_path.write_text(prompt, encoding="utf-8")
+            prompt_for_argv = tmp_prompt_path.read_text(encoding="utf-8")
+        cmd = [
+            copilot,
+            "-p",
+            prompt_for_argv,
+            f"--resume={session_id}",
+            *common_args,
+        ]
 
     try:
         try:
@@ -3162,10 +3309,16 @@ def run_copilot_exec(
                 text=True, encoding="utf-8",
                 check=False,  # Don't raise on non-zero exit; caller inspects
                 timeout=600,
+                **subprocess_kwargs,
             )
+            # Windows stdin path: record first-call success so subsequent
+            # invocations switch from --session-id to --resume. Touch is
+            # idempotent so repeat calls are safe.
+            if use_stdin and marker is not None and result.returncode == 0:
+                marker.touch(exist_ok=True)
             return result.stdout, session_id, result.returncode, result.stderr
         except subprocess.TimeoutExpired:
-            return "", session_id, 2, "copilot -p timed out (600s)"
+            return "", session_id, 2, "copilot timed out (600s)"
     finally:
         # Clean up temp file on every exit path (success, failure, timeout,
         # KeyboardInterrupt). unlink(missing_ok=True) avoids TOCTOU races.
@@ -3281,21 +3434,22 @@ If you notice genuine issues with content INSIDE these files (e.g., a spec that 
 #
 # Shared prompt block that instructs reviewers to emit a per-R-ID coverage table
 # whenever the epic spec numbers its acceptance criteria (`- **R1:** ...`). The
-# reviewer parses the heading in either `## Acceptance` or the legacy
-# `## Acceptance criteria` form (plan skill writes the former; older epic specs
-# may use the latter). Missing R-IDs flip the verdict to NEEDS_WORK unless the
-# spec marks the requirement deferred. The block is injected into impl-review
-# and epic-review (completion-review) prompts. Keep synchronized with the RP
-# workflow.md files.
+# reviewer parses the heading as `## Acceptance Criteria` (canonical since
+# 1.1.4 / fn-46-follow-up) and tolerates the legacy `## Acceptance` (plan
+# template pre-1.1.4) and `## Acceptance criteria` (older lowercase form)
+# variants for back-compat. Missing R-IDs flip the verdict to NEEDS_WORK
+# unless the spec marks the requirement deferred. The block is injected into
+# impl-review and epic-review (completion-review) prompts. Keep synchronized
+# with the RP workflow.md files.
 
 R_ID_COVERAGE_BLOCK = """## Requirements coverage (if spec has R-IDs)
 
 If the task or epic spec references an epic spec with numbered acceptance
 criteria like `- **R1:** ...`, `- **R2:** ...`, produce a per-R-ID coverage
-table. Read the epic spec's `## Acceptance` section (or the legacy
-`## Acceptance criteria` heading — reviewer MUST tolerate both). If no R-IDs
-are present anywhere, skip this block entirely — the rest of the review is
-unchanged.
+table. Read the epic spec's `## Acceptance Criteria` section (canonical;
+reviewer MUST also tolerate the legacy `## Acceptance` and `## Acceptance
+criteria` heading variants for back-compat). If no R-IDs are present
+anywhere, skip this block entirely — the rest of the review is unchanged.
 
 For each R-ID, classify status:
 
@@ -3868,22 +4022,30 @@ def resolve_spec_arg(
 _RENAME_DEPRECATION_EMITTED: set[str] = set()
 
 
-def _emit_rename_deprecation(legacy_form: str, canonical_form: str) -> None:
+def _emit_rename_deprecation(
+    legacy_form: str, canonical_form: str, extra: str = ""
+) -> None:
     """Print a one-shot stderr deprecation for a legacy `epic`-named surface.
 
     Suppress with `FLOW_NO_DEPRECATION=1`. Mirrors the `_memory_emit_deprecation`
     pattern but is keyed on a `legacy_form` string so a single process emits
     each warning at most once (the rename touches enough call-sites that
     per-call emission would spam Ralph logs).
+
+    `extra` is an optional trailing fragment appended after the standard
+    deprecation prose (e.g. ``"Removed in 2.0."``). Kept as a parameter so
+    future deprecations can opt into the same suffix without diverging
+    wording across call-sites.
     """
     if legacy_form in _RENAME_DEPRECATION_EMITTED:
         return
     _RENAME_DEPRECATION_EMITTED.add(legacy_form)
     if os.environ.get("FLOW_NO_DEPRECATION") == "1":
         return
+    suffix = f" {extra}" if extra else ""
     print(
         f"Warning: {legacy_form} is deprecated; use {canonical_form}. "
-        f"(Suppress with FLOW_NO_DEPRECATION=1.)",
+        f"(Suppress with FLOW_NO_DEPRECATION=1.){suffix}",
         file=sys.stderr,
     )
 
@@ -4572,13 +4734,71 @@ def cmd_ralph_status(args: argparse.Namespace) -> None:
 
 
 def cmd_config_get(args: argparse.Namespace) -> None:
-    """Get a config value."""
+    """Get a config value.
+
+    By default, merges built-in defaults (via `load_flow_config()`) so an
+    unset key like `planSync.crossSpec` returns its default `False`. Setup
+    skills (and any caller that needs to know whether a key is set in the
+    on-disk file) pass `--raw` to bypass the merge and get `null` for
+    truly-absent keys. See fn-46.1: the merge-defaults path was the source
+    of the cycle-1 setup-prompt regression on PR #135.
+    """
     if not ensure_flow_exists():
         error_exit(
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
 
-    value = get_config(args.key)
+    raw = getattr(args, "raw", False)
+
+    if raw:
+        # Bypass merge; resolve via the canonical/legacy raw-file probe so
+        # callers see `null` exactly when neither the canonical nor the
+        # legacy key is persisted to .flow/config.json. Deprecation still
+        # fires when the user typed the legacy alias and only legacy is set.
+        canonical_from_alias = _CONFIG_KEY_ALIASES.get(args.key)
+        if canonical_from_alias is not None:
+            canonical = canonical_from_alias
+            legacy = args.key
+            user_typed_legacy = True
+        else:
+            legacy_match = next(
+                (lg for lg, cn in _CONFIG_KEY_ALIASES.items() if cn == args.key),
+                None,
+            )
+            canonical = args.key
+            legacy = legacy_match
+            user_typed_legacy = False
+
+        canonical_raw = _get_config_from_file(canonical)
+        if canonical_raw is not _CONFIG_RAW_SENTINEL:
+            value = canonical_raw
+        elif legacy is not None:
+            legacy_raw = _get_config_from_file(legacy)
+            if legacy_raw is not _CONFIG_RAW_SENTINEL:
+                value = legacy_raw
+                if user_typed_legacy:
+                    _emit_rename_deprecation(legacy, canonical, extra="Removed in 2.0.")
+            else:
+                value = None
+        else:
+            value = None
+
+        if args.json:
+            json_output({"key": args.key, "value": value, "raw": True})
+        else:
+            if value is None:
+                print(f"{args.key}: (not set)")
+            elif isinstance(value, bool):
+                print(f"{args.key}: {'true' if value else 'false'}")
+            else:
+                print(f"{args.key}: {value}")
+        return
+
+    _, value, deprecation_legacy = resolve_config_key_for_read(args.key)
+    if deprecation_legacy:
+        canonical = _CONFIG_KEY_ALIASES[deprecation_legacy]
+        _emit_rename_deprecation(deprecation_legacy, canonical, extra="Removed in 2.0.")
+
     if args.json:
         json_output({"key": args.key, "value": value})
     else:
@@ -4597,13 +4817,21 @@ def cmd_config_set(args: argparse.Namespace) -> None:
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
 
-    set_config(args.key, args.value)
-    new_value = get_config(args.key)
+    canonical_key, deprecation_legacy = resolve_config_key_for_write(args.key)
+    if deprecation_legacy:
+        _emit_rename_deprecation(
+            deprecation_legacy, canonical_key, extra="Removed in 2.0."
+        )
+
+    set_config(canonical_key, args.value)
+    new_value = get_config(canonical_key)
 
     if args.json:
-        json_output({"key": args.key, "value": new_value, "message": f"{args.key} set"})
+        json_output(
+            {"key": canonical_key, "value": new_value, "message": f"{canonical_key} set"}
+        )
     else:
-        print(f"{args.key} set to {new_value}")
+        print(f"{canonical_key} set to {new_value}")
 
 
 def cmd_review_backend(args: argparse.Namespace) -> None:
@@ -11717,10 +11945,12 @@ def _export_resolve_merge_base(base_ref: str) -> Optional[str]:
 def _export_parse_acceptance_criteria(spec_text: str) -> list[dict[str, Any]]:
     """Extract R-ID acceptance criteria from an epic spec.
 
-    Looks for the `## Acceptance Criteria` (or `## Acceptance criteria`)
-    section and parses bullets matching `- **R<N>:** <text>`. Source-tag
-    suffixes like `[user]` / `[paraphrase]` / `[inferred]` / `[strategy:track]`
-    are extracted into the `tag` field (last `[...]` token in the bullet).
+    Canonical heading is `## Acceptance Criteria` (since 1.1.4). For
+    back-compat, also tolerates `## Acceptance criteria` (older lowercase
+    form) and bare `## Acceptance` (plan template pre-1.1.4). Parses bullets
+    matching `- **R<N>:** <text>`. Source-tag suffixes like `[user]` /
+    `[paraphrase]` / `[inferred]` / `[strategy:track]` are extracted into
+    the `tag` field (last `[...]` token in the bullet).
 
     Returns list of `{"id": "R1", "text": "...", "tag": "..."}`. Empty list
     if no acceptance section or no R-IDs.
@@ -11728,9 +11958,9 @@ def _export_parse_acceptance_criteria(spec_text: str) -> list[dict[str, Any]]:
     if not spec_text:
         return []
 
-    # Find the section heading. Tolerate both casings.
+    # Find the section heading. Tolerate canonical + 2 legacy forms.
     heading_re = re.compile(
-        r"^##\s+Acceptance\s+[Cc]riteria\s*$",
+        r"^##\s+Acceptance(?:\s+[Cc]riteria)?\s*$",
         re.MULTILINE,
     )
     m = heading_re.search(spec_text)
@@ -19068,8 +19298,8 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
                 Path(receipt_path).unlink(missing_ok=True)
             except OSError:
                 pass
-        msg = (stderr or output or "copilot -p failed").strip()
-        error_exit(f"copilot -p failed: {msg}", use_json=args.json, code=2)
+        msg = (stderr or output or "copilot failed").strip()
+        error_exit(f"copilot failed: {msg}", use_json=args.json, code=2)
 
     # Parse verdict
     verdict = parse_codex_verdict(output)
@@ -19270,8 +19500,8 @@ def cmd_copilot_plan_review(args: argparse.Namespace) -> None:
                 Path(receipt_path).unlink(missing_ok=True)
             except OSError:
                 pass
-        msg = (stderr or output or "copilot -p failed").strip()
-        error_exit(f"copilot -p failed: {msg}", use_json=args.json, code=2)
+        msg = (stderr or output or "copilot failed").strip()
+        error_exit(f"copilot failed: {msg}", use_json=args.json, code=2)
 
     verdict = parse_codex_verdict(output)
 
@@ -19457,8 +19687,8 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
                 Path(receipt_path).unlink(missing_ok=True)
             except OSError:
                 pass
-        msg = (stderr or output or "copilot -p failed").strip()
-        error_exit(f"copilot -p failed: {msg}", use_json=args.json, code=2)
+        msg = (stderr or output or "copilot failed").strip()
+        error_exit(f"copilot failed: {msg}", use_json=args.json, code=2)
 
     verdict = parse_codex_verdict(output)
 
@@ -20650,6 +20880,16 @@ def main() -> None:
     p_config_get = config_sub.add_parser("get", help="Get config value")
     p_config_get.add_argument("key", help="Config key (e.g., memory.enabled)")
     p_config_get.add_argument("--json", action="store_true", help="JSON output")
+    p_config_get.add_argument(
+        "--raw",
+        action="store_true",
+        help=(
+            "Bypass merged defaults. Returns null for keys absent from the "
+            "on-disk .flow/config.json (distinguishes unset from "
+            "explicitly-false). Used by /flow-next:setup to detect "
+            "first-run state."
+        ),
+    )
     p_config_get.set_defaults(func=cmd_config_get)
 
     p_config_set = config_sub.add_parser("set", help="Set config value")

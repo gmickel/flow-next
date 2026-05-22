@@ -14,20 +14,28 @@ Task tracking for AI agents. All state lives in `.flow/`.
 ```
 .flow/
 ├── bin/flowctl                  # CLI (this install)
+├── templates/spec.md            # Canonical 7-section spec scaffold (copied by /flow-next:setup)
 ├── specs/fn-N-slug.md           # Spec content (canonical)
 ├── specs/fn-N-slug.json         # Spec metadata (1.0+ — colocated with the markdown)
-├── tasks/fn-N-slug.M.json       # Task metadata (e.g., fn-1-add-oauth.1.json)
 ├── tasks/fn-N-slug.M.md         # Task specifications
-├── memory/                      # Context memory (categorized bug/ + knowledge/)
+├── tasks/fn-N-slug.M.json       # Task metadata
+├── memory/{bug,knowledge}/<category>/  # Context memory (categorized; bug: build-errors, runtime-errors, test-failures, …; knowledge: architecture-patterns, conventions, …)
 ├── prospects/<slug>-<date>.md   # Ideation artifacts (v0.36.0+)
+├── review-receipts/<branch>.json  # Review verdicts + findings (per branch)
+├── review-deferred/<branch>.md  # Walkthrough deferrals (fn-32.3)
 ├── .flow_version                # 1.0.0 sentinel — written after layout migration
-├── .gitignore                   # Auto-managed by flowctl (1.0+) — excludes migration transients
-└── meta.json                    # Project metadata
+├── .gitignore                   # Auto-managed by flowctl (1.0+) — excludes per-developer state + migration transients
+└── meta.json                    # Project metadata (schema_version, setup_version, setup_date)
 ```
 
 `.flow/epics/` is the pre-1.0 sidecar location. Repos created on 1.0+ never have it; pre-1.0 repos keep working via the alias layer until you run `flowctl migrate-rename --yes` (or `/flow-next:setup`'s upgrade branch).
 
 `.flow/.gitignore` is auto-written by `flowctl init` and `flowctl migrate-rename` so `git add -A` doesn't accidentally commit per-developer state (`.checkpoint-*.json`, `receipts/`, `tmp/`) or migration transients (`.backup-pre-1.0/`, `.banner-acknowledged`, `.migrating`, `.migration-manifest`). Idempotent; user patterns added below the auto-managed footer are preserved on update.
+
+The project's strategic intent and canonical vocabulary live **outside** `.flow/` so they survive `rm -rf .flow/`:
+
+- `STRATEGY.md` (repo root) — target problem, approach, personas, metrics, active tracks (v0.40.0+).
+- `GLOSSARY.md` (repo root or any ancestor) — canonical terms with `_Avoid_` aliases (v0.39.0+).
 
 ## IDs
 
@@ -52,23 +60,38 @@ Task tracking for AI agents. All state lives in `.flow/`.
 .flow/bin/flowctl cat fn-1-add-oauth            # Spec markdown
 .flow/bin/flowctl cat fn-1-add-oauth.2          # Task spec (markdown)
 
-# Status
-.flow/bin/flowctl ready --spec fn-1-add-oauth   # What's ready to work on
+# State
+.flow/bin/flowctl status                        # .flow state + active Ralph runs
+.flow/bin/flowctl ready --spec fn-1-add-oauth   # Tasks ready to work on
 .flow/bin/flowctl validate --all                # Check structure
 .flow/bin/flowctl state-path                    # Show state directory (for worktrees)
 
-# Create
-.flow/bin/flowctl spec create --title "..."
+# Spec lifecycle
+.flow/bin/flowctl spec create --title "..."                    # Create new spec
+.flow/bin/flowctl spec set-plan fn-1-add-oauth --file plan.md  # Replace spec markdown
+.flow/bin/flowctl spec set-title fn-1-add-oauth --title "..."  # Rename (updates slug)
+.flow/bin/flowctl spec set-branch fn-1-add-oauth --branch ...  # Set branch name
+.flow/bin/flowctl spec close fn-1-add-oauth                    # Close spec
+.flow/bin/flowctl spec skeleton                                # Print fresh-spec scaffold
+
+# Task lifecycle
 .flow/bin/flowctl task create --spec fn-1-add-oauth --title "..."
 .flow/bin/flowctl task create --spec fn-1-add-oauth --title "..." --deps fn-1-add-oauth.1,fn-1-add-oauth.2
+.flow/bin/flowctl task set-description <id> --description-file desc.md
+.flow/bin/flowctl task set-acceptance <id> --acceptance-file accept.md
+.flow/bin/flowctl task set-spec <id> --file spec.md            # Full task spec from file
+.flow/bin/flowctl task reset <id>                              # Reset to todo (cascading: --cascade)
 
 # Dependencies
 .flow/bin/flowctl task set-deps fn-1-add-oauth.3 --deps fn-1-add-oauth.1,fn-1-add-oauth.2
 .flow/bin/flowctl dep add fn-1-add-oauth.3 fn-1-add-oauth.1
+.flow/bin/flowctl spec add-dep fn-1-add-oauth --dep fn-2
+.flow/bin/flowctl spec rm-dep fn-1-add-oauth --dep fn-2
 
 # Work
 .flow/bin/flowctl start fn-1-add-oauth.2        # Claim task
 .flow/bin/flowctl done fn-1-add-oauth.2 --summary-file s.md --evidence-json e.json
+.flow/bin/flowctl block fn-1-add-oauth.2 --reason-file reason.md   # Block task with reason
 
 # Spec cognitive-aid export (used by /flow-next:make-pr, v0.42.0+)
 .flow/bin/flowctl spec export-cognitive-aid fn-1-add-oauth                  # text mode summary
@@ -117,6 +140,33 @@ Task tracking for AI agents. All state lives in `.flow/`.
 .flow/bin/flowctl strategy list --json                             # {groups, file_count, total_sections} — parallel to glossary list
 
 # /flow-next:strategy skill writes STRATEGY.md directly (no flowctl strategy add — too prose-heavy for atomic CLI).
+
+# Config (per-project knobs in .flow/config.json — see /flow-next:setup for guided setup)
+.flow/bin/flowctl config get review.backend                        # rp|codex|copilot|none, or spec form like codex:gpt-5.4:high
+.flow/bin/flowctl config get review.backend --raw --json           # bypass merged defaults (null = absent from file)
+.flow/bin/flowctl config set review.backend codex                  # bare backend
+.flow/bin/flowctl config set review.backend codex:gpt-5.4:high     # full spec (backend:model:effort)
+.flow/bin/flowctl config set memory.enabled true                   # auto-capture from NEEDS_WORK reviews
+.flow/bin/flowctl config set planSync.enabled true                 # sync downstream task specs after impl drift
+.flow/bin/flowctl config set planSync.crossSpec false              # also check other open specs (canonical key; legacy alias planSync.crossEpic removed in 2.0)
+.flow/bin/flowctl config set scouts.github false                   # GitHub scout (requires gh CLI)
+
+# Per-spec / per-task backend overrides (override the global review.backend per workstream)
+.flow/bin/flowctl spec set-backend fn-1-add-oauth --review codex:gpt-5.4:high
+.flow/bin/flowctl task set-backend fn-1-add-oauth.3 --impl copilot:claude-opus-4.5
+.flow/bin/flowctl task show-backend fn-1-add-oauth.3                # effective specs (task + spec levels merged)
+.flow/bin/flowctl review-backend                                    # show backend that would run now (ASK if unset)
+
+# Checkpoint (save/restore spec state — useful before destructive edits)
+.flow/bin/flowctl checkpoint save fn-1-add-oauth                    # snapshot spec + tasks
+.flow/bin/flowctl checkpoint restore fn-1-add-oauth                 # restore from snapshot
+.flow/bin/flowctl checkpoint delete fn-1-add-oauth                  # delete snapshot
+
+# Ralph (autonomous mode run control — for /flow-next:ralph-init users)
+.flow/bin/flowctl ralph status                                      # current run state
+.flow/bin/flowctl ralph pause                                       # pause running loop
+.flow/bin/flowctl ralph resume                                      # resume paused loop
+.flow/bin/flowctl ralph stop                                        # request stop after current iteration
 ```
 
 ## Workflow
