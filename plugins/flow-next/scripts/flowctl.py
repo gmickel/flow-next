@@ -4478,6 +4478,23 @@ def cmd_init(args: argparse.Namespace) -> None:
                 raw = {}
         except (json.JSONDecodeError, Exception):
             raw = {}
+        # Pre-merge migration (1.1.11): if user has legacy planSync.crossEpic
+        # and no canonical planSync.crossSpec, mirror the legacy value to
+        # canonical so the new default (False) doesn't silently flip the
+        # user's effective setting. Read precedence (1.1.3+) is "canonical
+        # wins on presence", so without this mirror, every upgrading user
+        # who had crossEpic set lost their cross-spec sync silently. Legacy
+        # key is kept readable through 1.x per the deprecation cadence.
+        ps = raw.get("planSync")
+        if (
+            isinstance(ps, dict)
+            and "crossEpic" in ps
+            and "crossSpec" not in ps
+        ):
+            ps["crossSpec"] = ps["crossEpic"]
+            actions.append(
+                "mirrored legacy planSync.crossEpic → canonical planSync.crossSpec"
+            )
         merged = deep_merge(get_default_config(), raw)
         if merged != raw:
             atomic_write_json(config_path, merged)

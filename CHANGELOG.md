@@ -2,6 +2,14 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.1.11] - 2026-05-22
+
+### Fixed
+- **`flowctl init` no longer silently flips pre-1.1.3 users' `planSync.crossEpic` from on to off.** Caught while auditing `/flow-next:setup` against the dev repo (this fix's sibling 1.1.10 PR surfaced the `.flow/config.json` diff). Pre-1.1.3 users have `planSync.crossEpic: true` (the only key) in their on-disk config. 1.1.3 introduced `planSync.crossSpec: false` as the new canonical default, and the 1.1.3 read precedence is "canonical wins on presence". Without a pre-merge mirror, every upgrading user who'd opted into cross-spec sync lost the setting on the next `flowctl init` (which `/flow-next:setup` runs unconditionally + bundled worker paths). `flowctl init` now detects the legacy-without-canonical state and mirrors `crossEpic` → `crossSpec` before the default-merge so the canonical key reflects the user's intended setting. Legacy key is preserved per the 1.1.3 deprecation cadence (removed in 2.0). Mirror is idempotent — only runs when legacy is set and canonical is absent.
+
+### Tests
+- `tests/test_init_crossspec_mirror.py` — 5 cases: mirrors `True` legacy, mirrors `False` legacy, canonical-present takes precedence (no mirror), neither-set fresh-install (no mirror), idempotent on re-run.
+
 ## [flow-next 1.1.10] - 2026-05-22
 
 ### Fixed
