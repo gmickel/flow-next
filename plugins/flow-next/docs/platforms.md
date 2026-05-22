@@ -141,17 +141,16 @@ chmod +x .flow/bin/flowctl
 - `claude-md-scout` is auto-renamed to `agents-md-scout` (CLAUDE.md → AGENTS.md patching).
 - Global install prompts (`/prompts:*`) are global-only (`~/.codex/prompts/`); native plugin avoids this limitation.
 
-## Windows + Copilot review backend (limitation)
+## Windows + Copilot review backend
 
-When you configure `review.backend = copilot` and run flowctl from native Windows (PowerShell / cmd.exe / Git Bash), spec-sized reviews fail with a "command line too long" error from flowctl 1.1.8+. This is a Windows + Copilot CLI interaction, not a flow-next bug:
+Works natively from flow-next 1.1.9. flow-next picks the prompt-delivery path per host:
 
-- Windows `CreateProcessW` caps `lpCommandLine` at 32,767 chars.
-- Copilot CLI's prompt delivery is argv-only — no `--prompt-file`, no `@file`, no stdin (verified through Copilot CLI 1.0.51).
-- Spec-driven review prompts routinely exceed the cap; flow-next has no off-argv path to give Copilot.
+- **POSIX (macOS / Linux / WSL):** `copilot -p "<prompt>" --resume=<uuid> ...` — argv path, create-or-resume in one call.
+- **Windows:** `copilot --session-id=<uuid> ...` (first call) or `--resume=<uuid>` (continuation), with the prompt piped via stdin. Bypasses the `CreateProcessW` 32,767-char cap that broke the argv path for spec-sized prompts in 1.1.8 and earlier.
 
-**Workaround:** run flowctl from WSL. The Linux argv limit (~2 MB) absorbs spec-sized prompts. Copilot CLI runs unmodified inside WSL.
+No configuration knob — `run_copilot_exec` switches transparently on `sys.platform == "win32"`. Session continuity is tracked via a touch marker under `.flow/tmp/copilot-sessions/<uuid>` (needed because stdin-mode `--resume` is resume-only, unlike `-p` mode's create-or-resume).
 
-All other platforms (macOS, Linux, WSL on Windows) are unaffected. Codex and Claude review backends use different delivery paths and are unaffected on every host. See [`troubleshooting.md`](troubleshooting.md#copilot-review-backend-fails-on-windows-with-command-line-too-long) for the full error message + diagnostic.
+Upstream tracking: [github/copilot-cli#3398](https://github.com/github/copilot-cli/issues/3398) requests a first-class `--prompt-file` flag, which will let both paths converge.
 
 ## Community ports and inspired projects
 
