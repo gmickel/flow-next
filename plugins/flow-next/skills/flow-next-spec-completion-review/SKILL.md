@@ -6,7 +6,13 @@ user-invocable: false
 
 # Spec Completion Review Mode
 
-**Read [workflow.md](workflow.md) for detailed phases and anti-patterns.**
+**Workflow is backend-split. Read [workflow-common.md](workflow-common.md) for Phase 0 (backend detection + philosophy), then read ONLY the file matching your active backend:**
+
+- `BACKEND=codex` → [workflow-codex.md](workflow-codex.md)
+- `BACKEND=copilot` → [workflow-copilot.md](workflow-copilot.md)
+- `BACKEND=rp` → [workflow-rp.md](workflow-rp.md)
+
+Do not load the other two — only the active backend's file is needed.
 
 Verify that the combined implementation of all tasks in a spec satisfies the spec requirements. This is NOT a code quality review (that's impl-review's job) — this confirms spec compliance only.
 
@@ -97,8 +103,6 @@ Format: `<spec-id> [--review=rp|codex|copilot|none]`
 
 ## Workflow
 
-**See [workflow.md](workflow.md) for full details on each backend.**
-
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -111,50 +115,22 @@ Parse $ARGUMENTS for:
 - `--review=<backend>` → backend override
 - Remaining args → focus areas
 
-### Step 1: Detect Backend
+### Step 1: Detect Backend + Load Workflow
 
-Run backend detection from SKILL.md above. Then branch:
+1. Read [workflow-common.md](workflow-common.md) and execute its Phase 0 to resolve `$BACKEND`.
+2. Then read **only** the file for that backend:
 
-### Codex Backend
+| `$BACKEND` | File to read |
+|------------|--------------|
+| `codex`    | [workflow-codex.md](workflow-codex.md) |
+| `copilot`  | [workflow-copilot.md](workflow-copilot.md) |
+| `rp`       | [workflow-rp.md](workflow-rp.md) |
 
-```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt.json}"
+**Do not read the other backend files.** Each is self-contained for its backend; loading the others wastes context.
 
-$FLOWCTL codex completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
-# Output includes VERDICT=SHIP|NEEDS_WORK
-```
+### Step 2: Execute the backend workflow
 
-On NEEDS_WORK: fix code, commit, re-run (receipt enables session continuity).
-
-### Copilot Backend
-
-```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt.json}"
-
-# Override model + effort (pick one):
-#   --spec copilot:claude-opus-4.5:xhigh   (preferred)
-#   FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5:xhigh
-#   FLOW_COPILOT_MODEL=gpt-5.2 FLOW_COPILOT_EFFORT=high
-
-$FLOWCTL copilot completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
-# Output includes VERDICT=SHIP|NEEDS_WORK
-```
-
-On NEEDS_WORK: fix code, commit, re-run. Session resume only when prior receipt has `mode == "copilot"`.
-
-### RepoPrompt Backend
-
-**⚠️ STOP: You MUST read and execute [workflow.md](workflow.md) now.**
-
-Go to the "RepoPrompt Backend Workflow" section in workflow.md and execute those steps. Do not proceed here until workflow.md phases are complete.
-
-The workflow covers:
-1. Gather context (spec, tasks, changed files)
-2. Atomic setup (setup-review) → sets `$W` and `$T`
-3. Augment selection and build review prompt
-4. Send review and parse verdict
-
-**Return here only after workflow.md execution is complete.**
+Follow the phases in the per-backend file end-to-end. Each file owns its own Identify → Execute → Verdict → Receipt steps (and, for RP, the full Phase 1-4 setup-review / chat-send / receipt build).
 
 ## Fix Loop (INTERNAL - do not exit to Ralph)
 

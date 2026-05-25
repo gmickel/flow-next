@@ -1,144 +1,33 @@
-# Spec Completion Review Workflow
-
-## Philosophy
-
-Spec completion review verifies spec compliance, NOT code quality. impl-review handles code quality per-task. This review catches:
-- Requirements that never became tasks (decomposition gaps)
-- Requirements partially implemented across tasks (cross-task gaps)
-- Scope drift (task marked done without fully addressing spec intent)
-- Missing doc updates
+# Spec Completion Review Workflow — RepoPrompt Backend
 
 ---
 
-## Phase 0: Backend Detection
+## CRITICAL: RepoPrompt Commands Are SLOW - DO NOT RETRY
 
-**Run this first. Do not skip.**
+**READ THIS BEFORE RUNNING ANY COMMANDS:**
 
-**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Always use:
+1. **`setup-review` takes 5-15 MINUTES** - It runs the RepoPrompt context builder which indexes files. This is NORMAL. Do NOT assume it is stuck.
 
-```bash
-set -e
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+2. **`chat-send` takes 2-10 MINUTES** - It waits for the LLM to generate a full review. This is NORMAL. Do NOT assume it is stuck.
 
-# Priority: --review flag > env > config (flag parsed in SKILL.md)
-# Text output is bare backend name for back-compat grep. --json returns full
-# resolved spec (backend, spec, model, effort, source).
-BACKEND=$($FLOWCTL review-backend)
+3. **Run commands directly and WAIT** - Do NOT use background jobs. Just run the command and wait:
+ ```bash
+ # Run setup-review - takes 5-15 minutes, just wait
+ $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "..."
+ # You will see file paths printed as it indexes - this is progress, not errors
+ ```
 
-if [[ "$BACKEND" == "ASK" ]]; then
-  echo "Error: No review backend configured."
-  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
-  exit 1
-fi
+4. **Output is progress, not errors** - The context builder prints file paths as it indexes. Seeing many lines of output is NORMAL. Do not interpret this as an error loop.
 
-echo "Review backend: $BACKEND"
-```
+5. **NEVER retry these commands** - If you run them again, you will create duplicate reviews and waste time. Run ONCE and WAIT.
 
-**Spec-form env var (optional):** `FLOW_REVIEW_BACKEND` accepts bare or full spec:
+6. **Exit code 0 = success** - When the command finishes, check the exit code. If it is 0, it worked.
 
-```bash
-FLOW_REVIEW_BACKEND=codex:gpt-5.5:xhigh $FLOWCTL codex completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
-FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5 $FLOWCTL copilot completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
-# Or pass spec directly:
-$FLOWCTL codex completion-review "$SPEC_ID" --spec "codex:gpt-5.5:xhigh" --receipt "$RECEIPT_PATH"
-```
-
-Per-spec `default_review` (set via `flowctl spec set-backend`) overrides env.
-
-**If backend is "none"**: Skip review, inform user, and exit cleanly (no error).
-
-**Then branch to backend-specific workflow below.**
+**If a command has been running for less than 15 minutes, WAIT. Do not retry. Do not output <promise>RETRY</promise>.**
 
 ---
 
-## Codex Backend Workflow
-
-Use when `BACKEND="codex"`.
-
-### Step 1: Identify Spec
-
-```bash
-# SPEC_ID from arguments (e.g., fn-1, fn-22-53k)
-$FLOWCTL show "$SPEC_ID" --json
-```
-
-### Step 2: Execute Review
-
-```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt.json}"
-
-$FLOWCTL codex completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
-```
-
-**Output includes `VERDICT=SHIP|NEEDS_WORK`.**
-
-### Step 3: Handle Verdict
-
-If `VERDICT=NEEDS_WORK`:
-1. Parse issues from output
-2. Fix code and run tests
-3. Commit fixes
-4. Re-run step 2 (receipt enables session continuity)
-5. Repeat until SHIP
-
-### Step 4: Receipt
-
-Receipt is written automatically by `flowctl codex completion-review` when `--receipt` provided.
-Format: `{"type":"completion_review","id":"<spec-id>","mode":"codex","verdict":"<verdict>","session_id":"<thread_id>","timestamp":"..."}`
-
----
-
-## Copilot Backend Workflow
-
-Use when `BACKEND="copilot"`.
-
-### Step 1: Identify Spec
-
-```bash
-# SPEC_ID from arguments (e.g., fn-1, fn-22-53k)
-$FLOWCTL show "$SPEC_ID" --json
-```
-
-### Step 2: Execute Review
-
-```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt.json}"
-
-# Runtime config:
-#   --spec <spec>           full spec (backend:model:effort), highest priority
-#   FLOW_REVIEW_BACKEND     spec-form ok: copilot:claude-opus-4.5:xhigh
-#   FLOW_COPILOT_MODEL      fills missing model only (default gpt-5.2)
-#   FLOW_COPILOT_EFFORT     fills missing effort only (default high)
-
-$FLOWCTL copilot completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
-```
-
-**Output includes `VERDICT=SHIP|NEEDS_WORK`.**
-
-### Step 3: Handle Verdict
-
-If `VERDICT=NEEDS_WORK`:
-1. Parse issues from output
-2. Fix code and run tests
-3. Commit fixes
-4. Re-run step 2 (receipt enables session continuity when `mode == "copilot"`)
-5. Repeat until SHIP
-
-### Step 4: Receipt
-
-Receipt is written automatically by `flowctl copilot completion-review` when `--receipt` provided.
-Format: `{"type":"completion_review","id":"<spec-id>","mode":"copilot","verdict":"<verdict>","session_id":"<uuid>","model":"<model>","effort":"<effort>","spec":"copilot:<model>:<effort>","timestamp":"..."}`
-
-The `spec` field is the canonical round-trippable form (added in fn-28.3). `model` + `effort` remain for backward compatibility.
-
-Session resume guard: re-review only resumes the copilot session when the existing receipt at `$RECEIPT_PATH` has `mode == "copilot"`. Cross-backend switches start a fresh session.
-
----
-
-## RepoPrompt Backend Workflow
-
-Use when `BACKEND="rp"`.
+Use when `BACKEND="rp"`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, `REPO_ROOT`, and `SPEC_ID`.
 
 ## Phase 1: Gather Context (RP)
 
@@ -179,8 +68,8 @@ eval "$($FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "$REVIEW_SUM
 
 # Verify we have W and T
 if [[ -z "${W:-}" || -z "${T:-}" ]]; then
-  echo "<promise>RETRY</promise>"
-  exit 0
+ echo "<promise>RETRY</promise>"
+ exit 0
 fi
 
 echo "Setup complete: W=$W T=$T"
@@ -204,12 +93,12 @@ $FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/specs/$SPEC_ID.md"
 
 # Add all task specs
 for task_id in $(echo "$TASKS_JSON" | jq -r '.[].id'); do
-  $FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/tasks/$task_id.md"
+ $FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/tasks/$task_id.md"
 done
 
 # Add ALL changed files
 for f in $CHANGED_FILES; do
-  $FLOWCTL rp select-add --window "$W" --tab "$T" "$f"
+ $FLOWCTL rp select-add --window "$W" --tab "$T" "$f"
 done
 ```
 
@@ -450,15 +339,15 @@ echo "$REVIEW_RESPONSE"
 
 # Extract verdict tag from response
 VERDICT="$(echo "$REVIEW_RESPONSE" \
-  | tr -d '\r' \
-  | grep -oE '<verdict>(SHIP|NEEDS_WORK)</verdict>' \
-  | tail -n 1 \
-  | sed -E 's#</?verdict>##g')"
+ | tr -d '\r' \
+ | grep -oE '<verdict>(SHIP|NEEDS_WORK)</verdict>' \
+ | tail -n 1 \
+ | sed -E 's#</?verdict>##g')"
 
 if [[ -z "$VERDICT" ]]; then
-  echo "No verdict tag found in response"
-  echo "<promise>RETRY</promise>"
-  exit 0
+ echo "No verdict tag found in response"
+ echo "<promise>RETRY</promise>"
+ exit 0
 fi
 
 echo "VERDICT=$VERDICT"
@@ -476,94 +365,94 @@ Receipt written after SHIP verdict (not on NEEDS_WORK):
 
 ```bash
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
-  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
+ ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+ mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
 
-  # Optional: capture suppression-gate tally (fn-29.3).
-  # Reviewer emits a line like "Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0."
-  SUPPRESSED_JSON="$(printf '%s' "$REVIEW_RESPONSE" \
-    | grep -iE '^[>*_` ]*suppressed findings[ *_`]*:' \
-    | head -n 1 \
-    | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//' \
-    | awk '
-      BEGIN { first=1; printf "{" }
-      {
-        n=split($0, parts, /,[[:space:]]*/)
-        for (i=1; i<=n; i++) {
-          if (match(parts[i], /([0-9]+)[[:space:]]+at[[:space:]]+anchor[[:space:]]+(0|25|50|75|100)/, m)) {
-            if (!first) printf ","
-            printf "\"%s\":%s", m[2], m[1]
-            first=0
-          }
-        }
-      }
-      END { printf "}" }')"
+ # Optional: capture suppression-gate tally (fn-29.3).
+ # Reviewer emits a line like "Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0."
+ SUPPRESSED_JSON="$(printf '%s' "$REVIEW_RESPONSE" \
+ | grep -iE '^[>*_` ]*suppressed findings[ *_`]*:' \
+ | head -n 1 \
+ | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//' \
+ | awk '
+ BEGIN { first=1; printf "{" }
+ {
+ n=split($0, parts, /,[[:space:]]*/)
+ for (i=1; i<=n; i++) {
+ if (match(parts[i], /([0-9]+)[[:space:]]+at[[:space:]]+anchor[[:space:]]+(0|25|50|75|100)/, m)) {
+ if (!first) printf ","
+ printf "\"%s\":%s", m[2], m[1]
+ first=0
+ }
+ }
+ }
+ END { printf "}" }')"
 
-  # Optional: capture introduced vs pre_existing classification tally (fn-29.4).
-  # Reviewer emits a line like "Classification counts: 1 introduced, 0 pre_existing."
-  # Uses portable grep -Eio so this works on BSD awk / mawk / gawk alike.
-  CLASSIFICATION_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
-    | grep -iE '^[>*_` ]*classification counts[ *_`]*:' \
-    | head -n 1 \
-    | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//')"
-  INTRODUCED_COUNT=""
-  PRE_EXISTING_COUNT=""
-  if [[ -n "$CLASSIFICATION_LINE" ]]; then
-    INTRODUCED_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
-      | grep -Eio '[0-9]+[[:space:]]+introduced' \
-      | head -n 1 \
-      | grep -Eo '^[0-9]+')"
-    PRE_EXISTING_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
-      | grep -Eio '[0-9]+[[:space:]]+pre[-_ ]?existing' \
-      | head -n 1 \
-      | grep -Eo '^[0-9]+')"
-    if [[ -n "$INTRODUCED_COUNT" || -n "$PRE_EXISTING_COUNT" ]]; then
-      INTRODUCED_COUNT="${INTRODUCED_COUNT:-0}"
-      PRE_EXISTING_COUNT="${PRE_EXISTING_COUNT:-0}"
-    fi
-  fi
+ # Optional: capture introduced vs pre_existing classification tally (fn-29.4).
+ # Reviewer emits a line like "Classification counts: 1 introduced, 0 pre_existing."
+ # Uses portable grep -Eio so this works on BSD awk / mawk / gawk alike.
+ CLASSIFICATION_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
+ | grep -iE '^[>*_` ]*classification counts[ *_`]*:' \
+ | head -n 1 \
+ | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//')"
+ INTRODUCED_COUNT=""
+ PRE_EXISTING_COUNT=""
+ if [[ -n "$CLASSIFICATION_LINE" ]]; then
+ INTRODUCED_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
+ | grep -Eio '[0-9]+[[:space:]]+introduced' \
+ | head -n 1 \
+ | grep -Eo '^[0-9]+')"
+ PRE_EXISTING_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
+ | grep -Eio '[0-9]+[[:space:]]+pre[-_ ]?existing' \
+ | head -n 1 \
+ | grep -Eo '^[0-9]+')"
+ if [[ -n "$INTRODUCED_COUNT" || -n "$PRE_EXISTING_COUNT" ]]; then
+ INTRODUCED_COUNT="${INTRODUCED_COUNT:-0}"
+ PRE_EXISTING_COUNT="${PRE_EXISTING_COUNT:-0}"
+ fi
+ fi
 
-  # Optional: capture unaddressed R-IDs (fn-29.2).
-  # Reviewer emits `Unaddressed R-IDs: [R3, R5]` (or `[]` / `none` for empty).
-  # Absent line => spec has no R-IDs — leave field off the receipt entirely.
-  UNADDRESSED_JSON=""
-  UNADDRESSED_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
-    | grep -iE '^[>*_` ]*unaddressed([[:space:]]+r[-_ ]?ids?)?[ *_`]*:' \
-    | head -n 1 \
-    | sed -E 's/^[^:]+:[[:space:]]*//; s/[[:space:]]*$//; s/\.$//')"
-  if [[ -n "$UNADDRESSED_LINE" ]]; then
-    normalized="$(printf '%s' "$UNADDRESSED_LINE" | sed -E 's/^[[:space:]]*\[|\][[:space:]]*$//g; s/[[:space:]]+//g')"
-    lower="$(printf '%s' "$normalized" | tr '[:upper:]' '[:lower:]')"
-    if [[ "$lower" == "none" || "$lower" == "n/a" || -z "$lower" ]]; then
-      UNADDRESSED_JSON="[]"
-    else
-      rids="$(printf '%s' "$UNADDRESSED_LINE" \
-        | grep -oE '\bR[0-9]+\b' \
-        | awk '!seen[$0]++')"
-      if [[ -z "$rids" ]]; then
-        UNADDRESSED_JSON="[]"
-      else
-        UNADDRESSED_JSON="$(printf '%s' "$rids" \
-          | awk 'BEGIN{printf "["} {printf (NR>1?",":"") "\"" $0 "\""} END{printf "]"}')"
-      fi
-    fi
-  fi
+ # Optional: capture unaddressed R-IDs (fn-29.2).
+ # Reviewer emits `Unaddressed R-IDs: [R3, R5]` (or `[]` / `none` for empty).
+ # Absent line => spec has no R-IDs — leave field off the receipt entirely.
+ UNADDRESSED_JSON=""
+ UNADDRESSED_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
+ | grep -iE '^[>*_` ]*unaddressed([[:space:]]+r[-_ ]?ids?)?[ *_`]*:' \
+ | head -n 1 \
+ | sed -E 's/^[^:]+:[[:space:]]*//; s/[[:space:]]*$//; s/\.$//')"
+ if [[ -n "$UNADDRESSED_LINE" ]]; then
+ normalized="$(printf '%s' "$UNADDRESSED_LINE" | sed -E 's/^[[:space:]]*\[|\][[:space:]]*$//g; s/[[:space:]]+//g')"
+ lower="$(printf '%s' "$normalized" | tr '[:upper:]' '[:lower:]')"
+ if [[ "$lower" == "none" || "$lower" == "n/a" || -z "$lower" ]]; then
+ UNADDRESSED_JSON="[]"
+ else
+ rids="$(printf '%s' "$UNADDRESSED_LINE" \
+ | grep -oE '\bR[0-9]+\b' \
+ | awk '!seen[$0]++')"
+ if [[ -z "$rids" ]]; then
+ UNADDRESSED_JSON="[]"
+ else
+ UNADDRESSED_JSON="$(printf '%s' "$rids" \
+ | awk 'BEGIN{printf "["} {printf (NR>1?",":"") "\"" $0 "\""} END{printf "]"}')"
+ fi
+ fi
+ fi
 
-  EXTRA_FIELDS=""
-  if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
-    EXTRA_FIELDS+=",\"suppressed_count\":$SUPPRESSED_JSON"
-  fi
-  if [[ -n "$INTRODUCED_COUNT" && -n "$PRE_EXISTING_COUNT" ]]; then
-    EXTRA_FIELDS+=",\"introduced_count\":$INTRODUCED_COUNT,\"pre_existing_count\":$PRE_EXISTING_COUNT"
-  fi
-  if [[ -n "$UNADDRESSED_JSON" ]]; then
-    EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
-  fi
+ EXTRA_FIELDS=""
+ if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
+ EXTRA_FIELDS+=",\"suppressed_count\":$SUPPRESSED_JSON"
+ fi
+ if [[ -n "$INTRODUCED_COUNT" && -n "$PRE_EXISTING_COUNT" ]]; then
+ EXTRA_FIELDS+=",\"introduced_count\":$INTRODUCED_COUNT,\"pre_existing_count\":$PRE_EXISTING_COUNT"
+ fi
+ if [[ -n "$UNADDRESSED_JSON" ]]; then
+ EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
+ fi
 
-  cat > "$REVIEW_RECEIPT_PATH" <<EOF
+ cat > "$REVIEW_RECEIPT_PATH" <<EOF
 {"type":"completion_review","id":"$SPEC_ID","mode":"rp","verdict":"SHIP"$EXTRA_FIELDS,"timestamp":"$ts"}
 EOF
-  echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
+ echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi
 ```
 
@@ -571,7 +460,7 @@ fi
 
 ## Fix Loop (RP)
 
-**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is complete spec compliance. Never use AskUserQuestion in this loop.**
+**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is complete spec compliance. Never use the plain-text numbered prompt in this loop.**
 
 **CRITICAL: You MUST fix the code BEFORE re-reviewing. Never re-review without making changes.**
 
@@ -583,63 +472,45 @@ If verdict is NEEDS_WORK:
 2. **Fix the code** - Implement missing functionality
 3. **Run tests/lints** - Verify fixes don't break anything
 4. **Commit fixes** (MANDATORY before re-review):
-   ```bash
-   git add -A
-   git commit -m "fix: address completion review gaps"
-   ```
-   **If you skip this and re-review without committing changes, reviewer will return NEEDS_WORK again.**
+ ```bash
+ git add -A
+ git commit -m "fix: address completion review gaps"
+ ```
+ **If you skip this and re-review without committing changes, reviewer will return NEEDS_WORK again.**
 
 5. **Request re-review** (only AFTER step 4):
 
-   **IMPORTANT**: Do NOT re-add files already in the selection. RepoPrompt auto-refreshes
-   file contents on every message. Only use `select-add` for NEW files created during fixes:
-   ```bash
-   # Only if fixes created new files not in original selection
-   if [[ -n "$NEW_FILES" ]]; then
-     $FLOWCTL rp select-add --window "$W" --tab "$T" $NEW_FILES
-   fi
-   ```
+ **IMPORTANT**: Do NOT re-add files already in the selection. RepoPrompt auto-refreshes
+ file contents on every message. Only use `select-add` for NEW files created during fixes:
+ ```bash
+ # Only if fixes created new files not in original selection
+ if [[ -n "$NEW_FILES" ]]; then
+ $FLOWCTL rp select-add --window "$W" --tab "$T" $NEW_FILES
+ fi
+ ```
 
-   Then send re-review request (NO --new-chat, stay in same chat).
+ Then send re-review request (NO --new-chat, stay in same chat).
 
-   **CRITICAL: Do NOT summarize fixes.** RP auto-refreshes file contents - reviewer sees your changes automatically. Just request re-review. Any summary wastes tokens and duplicates what reviewer already sees.
+ **CRITICAL: Do NOT summarize fixes.** RP auto-refreshes file contents - reviewer sees your changes automatically. Just request re-review. Any summary wastes tokens and duplicates what reviewer already sees.
 
-   ```bash
-   cat > /tmp/re-review.md << 'EOF'
-   Gaps addressed. Please re-review for spec compliance.
+ ```bash
+ cat > /tmp/re-review.md << 'EOF'
+ Gaps addressed. Please re-review for spec compliance.
 
-   **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`
-   EOF
+ **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`
+ EOF
 
-   $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md
-   ```
+ $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md
+ ```
 6. **Repeat** until SHIP
 
 **Anti-pattern**: Re-adding already-selected files before re-review. RP auto-refreshes; re-adding can cause issues.
 
 ---
 
-## Anti-patterns
+## Anti-patterns (RP backend)
 
-**All backends:**
-- **Reviewing yourself** - You coordinate; the backend reviews
-- **No receipt** - If REVIEW_RECEIPT_PATH is set, you MUST write receipt
-- **Ignoring verdict** - Must extract and act on verdict tag
-- **Mixing backends** - Stick to one backend for the entire review session
-- **Checking code quality** - That's impl-review's job; focus on spec compliance
-
-**RP backend only:**
 - **Calling builder directly** - Must use `setup-review` which wraps it
 - **Skipping setup-review** - Window selection MUST happen via this command
 - **Hard-coding window IDs** - Never write `--window 1`
 - **Missing task specs** - Add ALL task specs to selection
-
-**Codex backend only:**
-- **Using `--last` flag** - Conflicts with parallel usage; use `--receipt` instead
-- **Direct codex calls** - Must use `flowctl codex` wrappers
-
-**Copilot backend only:**
-- **Direct copilot calls** - Must use `flowctl copilot` wrappers
-- **Inventing `--model`/`--effort` CLI flags** - Use `--spec` for a full backend:model:effort value, or `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars to fill individual fields
-- **Using `--continue`** - Conflicts with parallel usage; session resume uses `--resume=<uuid>` under the hood via `--receipt`
-- **Assuming cross-backend session continuity** - Resume only works when prior receipt has `mode == "copilot"`

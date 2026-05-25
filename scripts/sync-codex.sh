@@ -363,7 +363,15 @@ RP_WARNING='
 '
 
 for skill in flow-next-impl-review flow-next-plan-review flow-next-spec-completion-review; do
-  wf="$CODEX_DIR/skills/$skill/workflow.md"
+  # Prefer the backend-split workflow-rp.md (fn-48.3+) — the RP warning only
+  # applies to the RP path. If the skill hasn't been split yet, fall back to
+  # the monolithic workflow.md so unaffected skills keep the warning at the
+  # top of their file.
+  if [ -f "$CODEX_DIR/skills/$skill/workflow-rp.md" ]; then
+    wf="$CODEX_DIR/skills/$skill/workflow-rp.md"
+  else
+    wf="$CODEX_DIR/skills/$skill/workflow.md"
+  fi
   if [ -f "$wf" ]; then
     { head -1 "$wf"; echo "$RP_WARNING"; tail -n +2 "$wf"; } > "${wf}.tmp"
     mv "${wf}.tmp" "$wf"
