@@ -131,7 +131,7 @@ Task **fn-48.1** (Codex mirror prelude drop) validates the core approach (single
 | R2  | impl-review/workflow.md backend-split | fn-48.4 | — |
 | R3  | resolve-pr/workflow.md backend-split | fn-48.5 | — |
 | R4a | Codex mirror prelude — drop dead chain | fn-48.1 | — |
-| R4b | Canonical FLOWCTL prelude consolidation | fn-48.6 | Depends on R8 (fn-48.2) outcome for exact form |
+| R4b | Canonical FLOWCTL prelude consolidation | fn-48.6 | R8 verdict locked (fn-48.2): Path A modified — keep env-var fallback + `Bash|Execute` matcher; drop `.factory-plugin/plugin.json` references. <!-- Updated by plan-sync: fn-48.2 finished --> |
 | R5  | Behavior unchanged across supported backends | fn-48.3, fn-48.4, fn-48.5, fn-48.6 | Verified per-task via smoke |
 | R6  | Codex mirror regenerates cleanly | fn-48.1, fn-48.3, fn-48.4, fn-48.5, fn-48.6 | Verified per-task via sync-codex.sh re-run |
 | R7  | smoke_test.sh green across affected skills | fn-48.1, fn-48.3, fn-48.4, fn-48.5, fn-48.6 | Verified per-task |

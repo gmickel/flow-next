@@ -47,9 +47,8 @@ The decision recorded here is what feeds T6 (fn-48.6). Be explicit: "R4b should 
 - [ ] The decision is unambiguous: T6 can be implemented without re-litigating Droid status.
 
 ## Done summary
-
-_(filled by `/flow-next:work` when the task completes)_
-
+Web-verified Factory Droid platform contract against current factory.ai docs (2026-05-25). R4b verdict: Path A (modified) — keep `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` env-var fallback and `Bash|Execute` matcher (both still required by Droid); drop `.factory-plugin/plugin.json` fallback (redundant — Droid's interop layer auto-translates Claude Code plugin format). Decision recorded in `.flow/memory/knowledge/decisions/factory-droid-platform-status-2026-05-2026-05-25.md`; `docs/platforms.md` and `CLAUDE.md` cross-platform section updated to reflect verified status. T6 (fn-48.6) can proceed without re-litigating Droid status.
 ## Evidence
-
-_(filled by `/flow-next:work` — commit hashes + test commands run)_
+- Commits: 94574ac4c919f42cc75cefda1dcc694ed3a380f6
+- Tests: web research: docs.factory.ai/cli/configuration/plugins, docs.factory.ai/cli/configuration/hooks-guide, docs.factory.ai/reference/hooks-reference, docs.factory.ai/guides/building/building-plugins; gh search code --owner Factory-AI 'DROID_PLUGIN_ROOT'; gh api repos/Factory-AI/factory-plugins/contents inspection
+- PRs:

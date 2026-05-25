@@ -23,7 +23,7 @@ Additionally, as the third backend-split this lands, document the established pa
 - **Update `agent_docs/adding-skills.md`** (small section): "When to split workflow.md by backend — heuristic: ≥50 lines of backend-divergent content makes a split worthwhile. Smaller divergences (a single `case` block on platform name) stay inline." Cite fn-48.3 and fn-48.4 as canonical examples.
 - Regenerate mirror; smoke.
 
-**Note on docs-gap-scout finding**: resolve-pr's workflow.md has a "Copilot / Droid" parenthetical at line 237 (serial-dispatch path). If R8 (fn-48.2) concludes Droid is dead, this becomes "Copilot" only. But that cleanup happens in T6 (fn-48.6 — canonical FLOWCTL prelude consolidation + Droid scaffolding removal), not here. **This task keeps Droid mentions intact** to avoid blocking on T2.
+**Note on docs-gap-scout finding**: resolve-pr's workflow.md has a "Copilot / Droid" parenthetical at line 237 (serial-dispatch path). fn-48.2 (R8) confirmed Droid is still actively supported (Path A modified — env-var fallback + `Execute` matcher preserved). **The "Copilot / Droid" parenthetical stays.** <!-- Updated by plan-sync: fn-48.2 confirmed Droid alive — no Droid-mention cleanup needed here or in T6 -->
 
 ## Investigation targets
 
@@ -42,7 +42,7 @@ Additionally, as the third backend-split this lands, document the established pa
 - [ ] `flow-next-resolve-pr/workflow.md` is restructured so that backend-divergent content does not bloat the load for non-applicable backends. Exact form (per-backend files or inline routing) chosen and documented based on the file's actual divergence profile.
 - [ ] `agent_docs/adding-skills.md` has a new section (≤30 lines) on the backend-split pattern with a clear heuristic for when to apply it.
 - [ ] Mirror regenerates cleanly; smoke green for resolve-pr on all backends.
-- [ ] End-to-end behavior unchanged — parallel dispatch on Claude / Codex; serial on Copilot / Droid (Droid mentions kept until T6 decides).
+- [ ] End-to-end behavior unchanged — parallel dispatch on Claude / Codex; serial on Copilot / Droid (Droid confirmed alive by fn-48.2; mentions preserved). <!-- Updated by plan-sync: fn-48.2 verdict -->
 - [ ] Routing prose in SKILL.md and workflow.md(s) matches reality (per `abort-option-copy-must-reflect` memory entry — re-verify after the refactor).
 
 ## Done summary
