@@ -60,9 +60,8 @@ Consolidation work: prelude is collapsed to once-per-skill (PATH-export at SKILL
 - [ ] `agent_docs/adding-skills.md` has a new prelude-consolidation section sibling to the backend-split heuristic section (lines 26-50) added by fn-48.5. <!-- Updated by plan-sync: fn-48.5 established the heuristics-home pattern -->
 
 ## Done summary
-
-_(filled by `/flow-next:work` when the task completes)_
-
+Consolidated the FLOWCTL prelude to once-per-canonical-file (Path A modified per fn-48.2): each SKILL.md/workflow.md/phases.md/steps.md defines FLOWCTL once in a ## Preamble section; subsequent bash blocks call $FLOWCTL bare. Swept .factory-plugin/plugin.json fallback from 9 canonical sites (Droid's interop layer auto-translates Claude Code plugin format). Extended scripts/sync-codex.sh with rewrite rules for the new $PLUGIN_ROOT/... form; mirror regenerates idempotently and smoke is green. Added sibling "FLOWCTL prelude consolidation (heuristic)" section to agent_docs/adding-skills.md and a CHANGELOG entry covering all of fn-48.
 ## Evidence
-
-_(filled by `/flow-next:work` — commit hashes + test commands run)_
+- Commits: 88ed3d86077ea7ba12824d7c7332c3cfa1c7f53b
+- Tests: ./scripts/sync-codex.sh (idempotent: byte-identical second run), bash plugins/flow-next/scripts/smoke_test.sh (127 pass, 2 pre-existing copilot e2e failures unrelated to this task)
+- PRs:
