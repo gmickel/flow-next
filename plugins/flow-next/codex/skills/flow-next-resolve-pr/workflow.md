@@ -231,11 +231,15 @@ fi
 
 ## Phase 5: Dispatch
 
+This is the only backend-divergent phase in the workflow. All other phases are platform-agnostic shell + GraphQL — kept inline per the backend-split heuristic documented in `agent_docs/adding-skills.md`.
+
 ### Platform detection
 
 - **Claude Code** exposes the `Task` tool with `subagent_type` parameter → parallel dispatch.
 - **Codex** (0.102.0+) ships native multi-agent role support. `pr-comment-resolver.toml` installs into `~/.codex/agents/` via `scripts/install-codex.sh`; spawn in parallel using Codex's multi-agent orchestration (same pattern as planning scouts).
 - **Copilot / Droid** → serial loop (execute resolver steps inline, one unit at a time).
+
+Default to serial when in doubt — output is identical, only throughput differs.
 
 ### Parallel dispatch (Claude Code + Codex) — with file-overlap avoidance
 
@@ -249,7 +253,7 @@ fi
  Pass the inputs documented in `agents/pr-comment-resolver.md`.
 6. Collect all verdict JSONs.
 
-### Serial (Copilot / Droid)
+### Serial dispatch (Copilot / Droid)
 
 Loop over `UNITS` in cluster-first order (clusters carry higher leverage). For each unit, perform the resolver steps inline — read code, decide verdict, compose reply, apply any edits — following `agents/pr-comment-resolver.md`. Append the verdict JSON to `VERDICTS`.
 

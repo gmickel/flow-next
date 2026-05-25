@@ -23,6 +23,32 @@ When adding a new `/flow-next:<name>` skill, every step below MUST be done. Skip
 
 9. **Smoke test** if the skill has any flowctl plumbing (atomic file writes, schema additions). Pure-skill additions (markdown-only) get verified by manual invocation in a real session.
 
+## Backend-split workflow.md (heuristic)
+
+When a skill's `workflow.md` carries backend-specific content (RP / Codex / Copilot, or parallel-vs-serial dispatch), split it so only the active backend's content enters the agent's context per invocation.
+
+**Heuristic — split when divergent content ≥ 50 lines.** Smaller divergences stay inline; extracting them costs more in maintenance (extra files, sync-codex rewrites, link drift) than they save in context.
+
+**Canonical 4-file shape** (when split is warranted):
+
+```
+skills/flow-next-<name>/
+  SKILL.md            # routing table: BACKEND → workflow-<backend>.md
+  workflow-common.md  # backend-detection + shared phases (gated deep/validator/walkthrough if applicable)
+  workflow-rp.md      # RepoPrompt-only
+  workflow-codex.md   # Codex CLI-only
+  workflow-copilot.md # GitHub Copilot CLI-only
+```
+
+SKILL.md routing block (canonical pattern in `flow-next-impl-review/SKILL.md`): `BACKEND=codex` → `workflow-codex.md`, etc., with explicit "Do not load the other two."
+
+**Landed examples** (fn-48):
+- `flow-next-spec-completion-review` (commit `b2f6f0e`) — workflow.md 645 → 4 files; RP-prompt template (~430 lines) isolated to `workflow-rp.md`.
+- `flow-next-impl-review` (commit `06f6e6f`) — workflow.md 1126 → 4 files; `workflow-common.md` 565 LOC (over the ≤500 target, accepted vs duplicating gated phases). Auxiliary `deep-passes.md` / `walkthrough.md` untouched (already cross-backend).
+- `flow-next-resolve-pr` — **inline-kept**: divergence is one ~22-line Phase 5 (parallel-vs-serial dispatch); below threshold.
+
+**sync-codex.sh impact:** the RP-warning injector (line 365-378) auto-prefers `workflow-rp.md` when present, falling back to monolithic `workflow.md`. No sync edits needed unless new tool-name references are introduced (see memory entry `bug/build-errors/sync-codexsh-tool-substitution-needs-2026-05-18`).
+
 ## Reference
 
 This checklist captures the lessons from the 0.34.0 → 0.37.0 era when (a) 4 user-facing skills (resolve-pr, prospect, audit, memory-migrate) silently shipped to Codex without UI metadata, and (b) several skills shipped with inline cross-platform tables (`AskUserQuestion` / `request_user_input` / `ask_user`) that polluted the agent's context. Both fixed in 0.37.1. Don't repeat them.

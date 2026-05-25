@@ -8,7 +8,7 @@ user-invocable: false
 
 **Read [workflow.md](workflow.md) for full phase-by-phase execution. Read [cluster-analysis.md](cluster-analysis.md) for cross-invocation clustering rules.**
 
-Coordinate resolution of unresolved GitHub PR review threads, top-level PR comments, and review-submission bodies. Dispatch per-thread resolver agents (parallel on Claude Code, serial on Codex/Copilot/Droid), validate combined state, commit fixes, reply and resolve via GraphQL.
+Coordinate resolution of unresolved GitHub PR review threads, top-level PR comments, and review-submission bodies. Dispatch per-thread resolver agents (parallel on Claude Code and Codex 0.102.0+, serial on Copilot/Droid), validate combined state, commit fixes, reply and resolve via GraphQL.
 
 **Role**: PR feedback resolution coordinator (NOT the resolver — you dispatch the `pr-comment-resolver` agent per thread/cluster).
 
@@ -42,7 +42,7 @@ Execute the phases in [workflow.md](workflow.md) in order:
 2. Triage → separate new vs pending vs dropped (non-actionable).
 3. Cluster analysis (gated — see [cluster-analysis.md](cluster-analysis.md)).
 4. Plan task list (clusters + individual items).
-5. Dispatch resolver agents — parallel on Claude Code with file-overlap avoidance, serial elsewhere.
+5. Dispatch resolver agents — parallel on Claude Code + Codex (0.102.0+) with file-overlap avoidance, serial on Copilot/Droid.
 6. Validate combined state — run project's test/lint command once if any `files_changed`.
 7. Commit + push (stage only resolver-reported files).
 8. Reply + resolve per verdict (GraphQL scripts for threads, `gh pr comment` for pr_comments / review_bodies).
@@ -79,6 +79,8 @@ Validation result (bun test / pnpm test / cargo test / etc.) appears when code c
 - **Copilot / Droid** → no parallel subagent dispatch — loop serially over units.
 
 Detect by checking for the `Task` tool with subagent support (Claude Code) or `~/.codex/agents/pr-comment-resolver.toml` (Codex). Default to serial when in doubt (correct output, slightly slower).
+
+**Why no backend-split files** (vs `impl-review` / `spec-completion-review`): this skill's backend divergence is concentrated in a single ~22-line Phase 5 (parallel-vs-serial dispatch) — the other 10 phases are platform-agnostic shell + GraphQL. Per the heuristic in `agent_docs/adding-skills.md` (≥50 lines of divergence triggers a split), this skill stays inline.
 
 ## Bounds
 
