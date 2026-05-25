@@ -26,7 +26,7 @@ Split `plugins/flow-next/skills/flow-next-spec-completion-review/workflow.md` (c
 **Required**:
 - `plugins/flow-next/skills/flow-next-spec-completion-review/workflow.md` (full file, 645 lines) — to identify exact split boundaries.
 - `plugins/flow-next/skills/flow-next-spec-completion-review/SKILL.md` — to find the right router-insertion point.
-- `scripts/sync-codex.sh` — to verify file-copy logic handles the new files; line 179 / 202 rewrite rules.
+- `scripts/sync-codex.sh` — to verify file-copy logic handles the new files; line 183 / 198-201 rewrite rules <!-- Updated by plan-sync: fn-48.1 shifted lines; was 179 / 202 -->.
 - Memory entry `bug/build-errors/sync-codexsh-tool-substitution-needs-2026-05-18` — sync-codex.sh Stage 3 pitfalls (sed misses inside code blocks / tables).
 - Memory entry `bug/build-errors/fn-44-review-cycle-lessons-2026-05-21` — relative-path drift / codex-mirror smoke / JSON-contract gotchas.
 

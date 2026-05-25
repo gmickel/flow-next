@@ -30,7 +30,7 @@ The decision recorded here is what feeds T6 (fn-48.6). Be explicit: "R4b should 
 **Required**:
 - `plugins/flow-next/docs/platforms.md:16-37` — current Droid documentation claims.
 - `CLAUDE.md` root, `## Cross-platform patterns` section — the canonical statement of what platforms flow-next supports and how.
-- `scripts/sync-codex.sh:202` — the `.factory-plugin/plugin.json` → `.claude-plugin/plugin.json` rewrite rule (evidence that canonical files reference `.factory-plugin/plugin.json` which doesn't exist).
+- `scripts/sync-codex.sh:206` <!-- Updated by plan-sync: fn-48.1 shifted lines (FLOWCTL prelude block now 175-185); was :202 --> — the `.factory-plugin/plugin.json` → `.claude-plugin/plugin.json` rewrite rule (evidence that canonical files reference `.factory-plugin/plugin.json` which doesn't exist).
 - Commit `103c708` (Feb 3 2026, last Droid-specific commit) — read message + diff to understand original justification.
 
 **Optional**:

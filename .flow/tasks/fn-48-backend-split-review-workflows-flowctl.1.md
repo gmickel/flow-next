@@ -37,9 +37,8 @@ This is the **early proof point** for fn-48 — single-rule edit + regen, valida
 - [ ] The canonical files (`plugins/flow-next/skills/*/`) are NOT modified — this task only touches the mirror's rewrite rule.
 
 ## Done summary
-
-_(filled by `/flow-next:work` when the task completes)_
-
+Replaced the Codex mirror's dead `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowctl` fallback chain with a direct `$HOME/.codex/scripts/flowctl` form via a single rewrite-rule edit in `scripts/sync-codex.sh:179` and regenerated all 30 Codex mirror skill files. Canonical files untouched; smoke baseline preserved (R4a's early proof point for fn-48).
 ## Evidence
-
-_(filled by `/flow-next:work` — commit hashes + test commands run)_
+- Commits: e034be6966bcca7a7b5a1d98e9bcde461d4c379a
+- Tests: ./scripts/sync-codex.sh (regen, all validators green), bash plugins/flow-next/scripts/smoke_test.sh (127 pass, 2 pre-existing unrelated copilot e2e failures unchanged on baseline), grep -rn 'DROID_PLUGIN_ROOT.*scripts/flowctl' plugins/flow-next/codex/skills/ (0 matches)
+- PRs:

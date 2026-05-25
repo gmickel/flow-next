@@ -144,6 +144,6 @@ Task **fn-48.1** (Codex mirror prelude drop) validates the core approach (single
   - `bug/build-errors/sync-codexsh-tool-substitution-needs-2026-05-18` — sync-codex.sh Stage 3 prose-surgery pitfalls
   - `knowledge/workflow/audit-sync-codexsh-during-planning-for-2026-04-30` — standing rule: audit sync-codex.sh during planning when touching skills
   - `bug/build-errors/fn-44-review-cycle-lessons-2026-05-21` — relative-path drift, missing codex-mirror smoke, JSON-contract mismatches
-- `scripts/sync-codex.sh` (especially line 179, the FLOWCTL prelude rewrite rule)
+- `scripts/sync-codex.sh` (especially line 183, the FLOWCTL prelude rewrite rule <!-- Updated by plan-sync: fn-48.1 shifted lines (block now 175-185); was :179 -->)
 - `plugins/flow-next/docs/platforms.md` (current Droid documentation)
 - `CLAUDE.md` root `## Cross-platform patterns` section
