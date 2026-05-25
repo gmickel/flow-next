@@ -43,9 +43,8 @@ Differences:
 - [ ] Routing pattern is structurally identical to fn-48.3 (landed commit `b2f6f0e`): SKILL.md `Step 1: Detect Backend + Load Workflow` table mapping `$BACKEND` → `workflow-{codex,copilot,rp}.md`, plus `workflow-common.md` for Phase 0 / philosophy / routing-table. <!-- Updated by plan-sync: fn-48.3 landed -->
 
 ## Done summary
-
-_(filled by `/flow-next:work` when the task completes)_
-
+Split flow-next-impl-review/workflow.md (1126 lines) into backend-routed files following the fn-48.3 pattern: workflow-common.md (cross-backend phases), workflow-codex.md, workflow-copilot.md, workflow-rp.md. SKILL.md routes via $BACKEND table; sync-codex.sh regenerates cleanly; codex/copilot users now load ~70 lines per invocation instead of 1126.
 ## Evidence
-
-_(filled by `/flow-next:work` — commit hashes + test commands run)_
+- Commits: 06f6e6fecea5784888409881ccaaf5784614fe47
+- Tests: ./scripts/sync-codex.sh, bash plugins/flow-next/scripts/smoke_test.sh (127 pass, 2 pre-existing copilot e2e failures unrelated to this task)
+- PRs:
