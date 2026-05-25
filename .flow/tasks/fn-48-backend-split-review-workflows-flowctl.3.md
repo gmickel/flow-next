@@ -44,9 +44,8 @@ Split `plugins/flow-next/skills/flow-next-spec-completion-review/workflow.md` (c
 - [ ] End-to-end behavior of `/flow-next:spec-completion-review` is unchanged — same verdicts, same receipt format, same fix-loop semantics on each backend.
 
 ## Done summary
-
-_(filled by `/flow-next:work` when the task completes)_
-
+Backend-split flow-next-spec-completion-review/workflow.md (645 LOC) into workflow-common.md (Phase 0 + philosophy + routing), workflow-codex.md (41 LOC), workflow-copilot.md (53 LOC), and workflow-rp.md (489 LOC, dominated by the cohesive RP prompt-template heredoc). SKILL.md routes per backend so codex/copilot users load 41/53 lines instead of 645. Updated scripts/sync-codex.sh RP_WARNING loop to prefer workflow-rp.md when present, falling back to workflow.md for skills not yet split (fn-48.4/.5). Mirror regenerates cleanly, byte-idempotent, smoke green (same 2 unrelated copilot session-id flakes as baseline).
 ## Evidence
-
-_(filled by `/flow-next:work` — commit hashes + test commands run)_
+- Commits: b2f6f0e2bfb3267cf475df105b00dc641f4f000f
+- Tests: ./scripts/sync-codex.sh, bash plugins/flow-next/scripts/smoke_test.sh (127 pass, 2 unrelated pre-existing copilot session-resume flakes), idempotency check via md5sum of codex/**/*.md before/after second sync
+- PRs:

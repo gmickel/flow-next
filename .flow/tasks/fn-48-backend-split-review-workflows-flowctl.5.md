@@ -4,7 +4,7 @@ satisfies: [R3, R5, R6, R7]
 
 ## Description
 
-Split `plugins/flow-next/skills/flow-next-resolve-pr/workflow.md` (currently 411 lines) on the same backend-routing principle as fn-48.3 / fn-48.4. resolve-pr's structure is different — backend logic is *interleaved* with cross-cutting phases (Phase 0 parse args, Phase 1 fetch feedback, Phase 5 dispatch, Phase 8 reply+resolve) rather than three top-level backend sections. The split may take the form of small `workflow-<backend>.md` files capturing only the backend-divergent parts (e.g. parallel-dispatch differs Claude/Codex vs serial Copilot/Droid), with the bulk staying in `workflow-common.md`.
+Split `plugins/flow-next/skills/flow-next-resolve-pr/workflow.md` (currently 411 lines) on the same backend-routing principle as fn-48.3 (landed commit `b2f6f0e`) / fn-48.4. resolve-pr's structure is different — backend logic is *interleaved* with cross-cutting phases (Phase 0 parse args, Phase 1 fetch feedback, Phase 5 dispatch, Phase 8 reply+resolve) rather than three top-level backend sections. The split may take the form of small `workflow-<backend>.md` files capturing only the backend-divergent parts (e.g. parallel-dispatch differs Claude/Codex vs serial Copilot/Droid), with the bulk staying in `workflow-common.md`. <!-- Updated by plan-sync: fn-48.3 landed -->
 
 Additionally, as the third backend-split this lands, document the established pattern in `agent_docs/adding-skills.md` so future skill authors know when to apply backend-split.
 
@@ -20,7 +20,7 @@ Additionally, as the third backend-split this lands, document the established pa
   - **(a) Inline keep**: leave the small backend branches inline; only extract if a divergence block exceeds ~50 lines.
   - **(b) Per-backend file**: extract the dispatch section into `workflow-dispatch-parallel.md` + `workflow-dispatch-serial.md`, source-include from main workflow.md.
   - Implementer picks based on what the file actually looks like. Document the choice in the PR body.
-- **Update `agent_docs/adding-skills.md`** (small section): "When to split workflow.md by backend — heuristic: ≥50 lines of backend-divergent content makes a split worthwhile. Smaller divergences (a single `case` block on platform name) stay inline." Cite fn-48.3 and fn-48.4 as canonical examples.
+- **Update `agent_docs/adding-skills.md`** (small section): "When to split workflow.md by backend — heuristic: ≥50 lines of backend-divergent content makes a split worthwhile. Smaller divergences (a single `case` block on platform name) stay inline." Cite fn-48.3 (commit `b2f6f0e`, landed structure: `workflow-common.md` + `workflow-{codex,copilot,rp}.md` + SKILL.md routing table) and fn-48.4 as canonical examples. <!-- Updated by plan-sync: fn-48.3 landed concrete pattern -->
 - Regenerate mirror; smoke.
 
 **Note on docs-gap-scout finding**: resolve-pr's workflow.md has a "Copilot / Droid" parenthetical at line 237 (serial-dispatch path). fn-48.2 (R8) confirmed Droid is still actively supported (Path A modified — env-var fallback + `Execute` matcher preserved). **The "Copilot / Droid" parenthetical stays.** <!-- Updated by plan-sync: fn-48.2 confirmed Droid alive — no Droid-mention cleanup needed here or in T6 -->
@@ -31,7 +31,7 @@ Additionally, as the third backend-split this lands, document the established pa
 - `plugins/flow-next/skills/flow-next-resolve-pr/workflow.md` (full file, 411 lines).
 - `plugins/flow-next/skills/flow-next-resolve-pr/SKILL.md`.
 - `agent_docs/adding-skills.md` — to identify the right section for the new backend-split guidance.
-- Structures landed by fn-48.3 + fn-48.4 (if done) — for consistency.
+- Structure landed by fn-48.3 (commit `b2f6f0e`): `plugins/flow-next/skills/flow-next-spec-completion-review/{SKILL.md,workflow-common.md,workflow-codex.md,workflow-copilot.md,workflow-rp.md}` — copy SKILL.md routing-table pattern. fn-48.4 structure (if done) — for consistency. <!-- Updated by plan-sync: fn-48.3 landed -->
 - Memory entries: `sync-codexsh-tool-substitution-needs-2026-05-18`, `abort-option-copy-must-reflect-pre-2026-05-18`.
 
 **Optional**:
