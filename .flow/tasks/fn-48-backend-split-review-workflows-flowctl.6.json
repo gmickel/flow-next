@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-25T07:04:50.007344Z",
+  "depends_on": [
+    "fn-48-backend-split-review-workflows-flowctl.2"
+  ],
+  "id": "fn-48-backend-split-review-workflows-flowctl.6",
+  "priority": null,
+  "spec": "fn-48-backend-split-review-workflows-flowctl",
+  "spec_path": ".flow/tasks/fn-48-backend-split-review-workflows-flowctl.6.md",
+  "status": "todo",
+  "title": "Canonical FLOWCTL prelude consolidation across skills",
+  "updated_at": "2026-05-25T07:08:29.975134Z"
+}

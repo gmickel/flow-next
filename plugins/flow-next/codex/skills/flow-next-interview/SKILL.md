@@ -12,7 +12,7 @@ Conduct an extremely thorough interview about a task/spec and write refined deta
 
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Always use:
 ```bash
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowctl"
+FLOWCTL="$HOME/.codex/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 $FLOWCTL <command>
 ```
@@ -56,7 +56,7 @@ If empty, ask: "What should I interview you about? Give me a Flow ID (e.g., fn-1
 ## Setup
 
 ```bash
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowctl"
+FLOWCTL="$HOME/.codex/scripts/flowctl"
 ```
 
 ### Parse `--scope=business|technical|both` (fn-44.1 plumbing)

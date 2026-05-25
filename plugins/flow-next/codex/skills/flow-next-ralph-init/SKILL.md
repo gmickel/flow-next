@@ -64,7 +64,7 @@ Scaffold or update repo-local Ralph harness. Opt-in only.
  cp "~/.codex/templates/flow-next-ralph-init/prompt_work.md" scripts/ralph/
  cp "~/.codex/templates/flow-next-ralph-init/prompt_completion.md" scripts/ralph/
  cp "~/.codex/templates/flow-next-ralph-init/watch-filter.py" scripts/ralph/
- cp "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowctl" "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowctl.py" scripts/ralph/
+ cp "$HOME/.codex/scripts/flowctl" "$HOME/.codex/scripts/flowctl.py" scripts/ralph/
  mkdir -p scripts/ralph/hooks
  cp "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/hooks/ralph-guard.py" scripts/ralph/hooks/
  chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/hooks/ralph-guard.py
@@ -77,7 +77,7 @@ Scaffold or update repo-local Ralph harness. Opt-in only.
  ```bash
  mkdir -p scripts/ralph/runs scripts/ralph/hooks
  cp -R "~/.codex/templates/flow-next-ralph-init/." scripts/ralph/
- cp "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowctl" "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowctl.py" scripts/ralph/
+ cp "$HOME/.codex/scripts/flowctl" "$HOME/.codex/scripts/flowctl.py" scripts/ralph/
  cp "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/hooks/ralph-guard.py" scripts/ralph/hooks/
  chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/hooks/ralph-guard.py
  ```

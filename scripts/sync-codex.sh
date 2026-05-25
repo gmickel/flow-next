@@ -174,9 +174,13 @@ fi
 
 # --- PATH patches (all .md files) ---
 find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
-  # Add $HOME/.codex fallback to FLOWCTL assignment
+  # Rewrite FLOWCTL assignment to the direct $HOME/.codex form.
+  # Inside Codex, neither DROID_PLUGIN_ROOT nor CLAUDE_PLUGIN_ROOT is ever set —
+  # only $HOME/.codex resolves (install-codex.sh's canonical target). The old
+  # `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}` chain was dead
+  # code in the mirror. See fn-48.1 (R4a).
   sed -i.bak \
-    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/scripts/flowctl|g' \
+    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl|$HOME/.codex/scripts/flowctl|g' \
     "$f"
 
   # After every FLOWCTL= line, insert local fallback (if not already present)

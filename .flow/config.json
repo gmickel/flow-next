@@ -4,6 +4,7 @@
   },
   "planSync": {
     "crossEpic": true,
+    "crossSpec": false,
     "enabled": true
   },
   "review": {
