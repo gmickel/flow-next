@@ -7,16 +7,14 @@ description: "Manage .flow/ tasks and specs. Triggers: 'show me my tasks', 'list
 
 Quick task operations in `.flow/`. For planning features use `/flow-next:plan`, for executing use `/flow-next:work`.
 
-## Setup
+## Preamble
 
-**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Always use:
+**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks use `$FLOWCTL`:
 
 ```bash
 FLOWCTL="$HOME/.codex/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
-
-Then run commands with `$FLOWCTL <command>`.
 
 **Discover all commands/options:**
 ```bash

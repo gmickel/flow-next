@@ -19,7 +19,10 @@ Conduct a John Carmack-level review of implementation changes on the current bra
 **Role**: Code Review Coordinator (NOT the reviewer)
 **Backends**: RepoPrompt (rp), Codex CLI (codex), or GitHub Copilot CLI (copilot)
 
-**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Always use:
+## Preamble
+
+**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks (here and in `workflow-*.md`) use `$FLOWCTL`:
+
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 ```
@@ -125,7 +128,6 @@ Format: `[task ID] [--base <commit>] [--validate] [--deep[=passes]] [--interacti
 ## Workflow
 
 ```bash
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ```
 

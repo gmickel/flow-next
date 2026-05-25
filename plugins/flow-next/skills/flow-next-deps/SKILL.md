@@ -7,10 +7,17 @@ description: "Show spec dependency graph and execution order. Use when asking 'w
 
 Visualize spec dependencies, blocking chains, and execution phases.
 
-## Setup
+## Preamble
+
+flowctl is bundled with the plugin (not on PATH). Define once; subsequent blocks use `$FLOWCTL`:
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+```
+
+## Setup
+
+```bash
 $FLOWCTL detect --json | jq -e '.exists' >/dev/null && echo "OK: .flow/ exists" || echo "ERROR: run $FLOWCTL init"
 command -v jq >/dev/null 2>&1 && echo "OK: jq installed" || echo "ERROR: brew install jq"
 ```
@@ -20,8 +27,6 @@ command -v jq >/dev/null 2>&1 && echo "OK: jq installed" || echo "ERROR: brew in
 Build a consolidated view of all specs with their dependencies:
 
 ```bash
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
-
 # Get all spec IDs
 spec_ids=$($FLOWCTL specs --json | jq -r '.specs[].id')
 
@@ -42,8 +47,6 @@ done
 Determine which specs are ready vs blocked (pure jq, works on any shell):
 
 ```bash
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
-
 # Collect all spec data with deps
 specs_json=$($FLOWCTL specs --json | jq -r '.specs[].id' | while read id; do
   $FLOWCTL show "$id" --json | jq -c '{id: .id, title: .title, status: .status, deps: (.depends_on_epics // [])}'
@@ -74,8 +77,6 @@ echo "$specs_json" | jq -r '
 Group specs into parallel execution phases:
 
 ```bash
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
-
 # Collect all spec data
 specs_json=$($FLOWCTL specs --json | jq -r '.specs[].id' | while read id; do
   $FLOWCTL show "$id" --json | jq -c '{id: .id, title: .title, status: .status, deps: (.depends_on_epics // [])}'
@@ -144,7 +145,6 @@ fn-1-add-auth → fn-2-add-oauth → fn-3-user-profile (3 phases)
 For a fast dependency check:
 
 ```bash
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 $FLOWCTL specs --json | jq -r '.specs[] | select(.status != "done") | "\(.id): \(.title) [\(.status)]"'
 ```
 

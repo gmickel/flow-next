@@ -8,7 +8,10 @@ user-invocable: false
 
 Manually trigger plan-sync to update downstream task specs.
 
-**CRITICAL: flowctl is BUNDLED - NOT installed globally.** Always use:
+## Preamble
+
+**CRITICAL: flowctl is BUNDLED - NOT installed globally.** Define once; subsequent blocks use `$FLOWCTL`:
+
 ```bash
 FLOWCTL="$HOME/.codex/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
@@ -27,7 +30,6 @@ Format: `<id> [--dry-run]`
 ### Step 1: Parse Arguments
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ```
 

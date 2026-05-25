@@ -8,12 +8,20 @@ user-invocable: false
 
 Scaffold or update repo-local Ralph harness. Opt-in only.
 
+## Preamble
+
+The plugin root resolves once via the cross-platform env-var fallback (Droid uses `DROID_PLUGIN_ROOT`; Claude Code documents `CLAUDE_PLUGIN_ROOT` as its compat alias). Subsequent blocks use `$PLUGIN_ROOT`:
+
+```bash
+PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
+```
+
 ## Rules
 
 - Only create/update `scripts/ralph/` in the current repo.
 - If `scripts/ralph/` already exists, offer to update (preserves config.env).
 - Copy templates from `templates/` into `scripts/ralph/`.
-- Copy `flowctl` and `flowctl.py` from `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/` into `scripts/ralph/`.
+- Copy `flowctl` and `flowctl.py` from `$PLUGIN_ROOT/scripts/` into `scripts/ralph/`.
 - Set executable bit on `scripts/ralph/ralph.sh`, `scripts/ralph/ralph_once.sh`, and `scripts/ralph/flowctl`.
 
 ## Workflow
@@ -58,15 +66,15 @@ Scaffold or update repo-local Ralph harness. Opt-in only.
    cp scripts/ralph/config.env /tmp/ralph-config-backup.env
 
    # Update templates (preserves runs/)
-   cp "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-ralph-init/templates/ralph.sh" scripts/ralph/
-   cp "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-ralph-init/templates/ralph_once.sh" scripts/ralph/
-   cp "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-ralph-init/templates/prompt_plan.md" scripts/ralph/
-   cp "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-ralph-init/templates/prompt_work.md" scripts/ralph/
-   cp "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-ralph-init/templates/prompt_completion.md" scripts/ralph/
-   cp "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-ralph-init/templates/watch-filter.py" scripts/ralph/
-   cp "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl" "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl.py" scripts/ralph/
+   cp "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/ralph.sh" scripts/ralph/
+   cp "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/ralph_once.sh" scripts/ralph/
+   cp "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/prompt_plan.md" scripts/ralph/
+   cp "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/prompt_work.md" scripts/ralph/
+   cp "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/prompt_completion.md" scripts/ralph/
+   cp "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/watch-filter.py" scripts/ralph/
+   cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.py" scripts/ralph/
    mkdir -p scripts/ralph/hooks
-   cp "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/hooks/ralph-guard.py" scripts/ralph/hooks/
+   cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" scripts/ralph/hooks/
    chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/hooks/ralph-guard.py
 
    # Restore config.env
@@ -76,9 +84,9 @@ Scaffold or update repo-local Ralph harness. Opt-in only.
    **If UPDATE_MODE=0 (fresh install):**
    ```bash
    mkdir -p scripts/ralph/runs scripts/ralph/hooks
-   cp -R "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-ralph-init/templates/." scripts/ralph/
-   cp "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl" "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl.py" scripts/ralph/
-   cp "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/hooks/ralph-guard.py" scripts/ralph/hooks/
+   cp -R "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/." scripts/ralph/
+   cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.py" scripts/ralph/
+   cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" scripts/ralph/hooks/
    chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/hooks/ralph-guard.py
    ```
    Note: `cp -R templates/.` copies all files including dotfiles (.gitignore).

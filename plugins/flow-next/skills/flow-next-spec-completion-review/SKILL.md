@@ -19,7 +19,10 @@ Verify that the combined implementation of all tasks in a spec satisfies the spe
 **Role**: Spec Completion Review Coordinator (NOT the reviewer)
 **Backends**: RepoPrompt (rp), Codex CLI (codex), or GitHub Copilot CLI (copilot)
 
-**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Always use:
+## Preamble
+
+**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks (here and in `workflow-*.md`) use `$FLOWCTL`:
+
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 ```
@@ -104,7 +107,6 @@ Format: `<spec-id> [--review=rp|codex|copilot|none]`
 ## Workflow
 
 ```bash
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ```
 

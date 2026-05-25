@@ -60,14 +60,8 @@ List expected files in each task's `**Files:**` field. If multiple tasks must to
 
 ## Step 0: Initialize .flow
 
-**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Always use:
-
 ```bash
-# Get flowctl path
-FLOWCTL="$HOME/.codex/scripts/flowctl"
-[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-
-# Ensure .flow exists
+# Ensure .flow exists (FLOWCTL defined once in SKILL.md preamble)
 $FLOWCTL init --json
 ```
 

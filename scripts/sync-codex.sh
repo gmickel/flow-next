@@ -183,6 +183,16 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
     -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl|$HOME/.codex/scripts/flowctl|g' \
     "$f"
 
+  # fn-48.6: canonical files now use a once-per-skill `PLUGIN_ROOT` prelude
+  # (e.g. flow-next-ralph-init/SKILL.md) to collapse 10+ inline expansions.
+  # Rewrite the PLUGIN_ROOT assignment to the direct Codex form so subsequent
+  # `$PLUGIN_ROOT/...` references resolve. Then path-remap specific subtrees
+  # that have different on-disk layouts in the Codex install (templates land
+  # at `~/.codex/templates/<skill>` rather than `~/.codex/skills/<skill>/templates`).
+  sed -i.bak \
+    -e 's|PLUGIN_ROOT="\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}"|PLUGIN_ROOT="$HOME/.codex"|g' \
+    "$f"
+
   # After every FLOWCTL= line, insert local fallback (if not already present)
   # Use awk for multi-line insert (sed portability issues on macOS)
   awk '
@@ -194,10 +204,13 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
     { print }
   ' "$f" > "${f}.tmp" && mv "${f}.tmp" "$f"
 
-  # Template/script path patches
+  # Template/script path patches — both legacy inline form and the new
+  # fn-48.6 `$PLUGIN_ROOT/...` consolidated form.
   sed -i.bak \
     -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-ralph-init/templates|~/.codex/templates/flow-next-ralph-init|g' \
     -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-worktree-kit/scripts|~/.codex/scripts|g' \
+    -e 's|\$PLUGIN_ROOT/skills/flow-next-ralph-init/templates|~/.codex/templates/flow-next-ralph-init|g' \
+    -e 's|\$PLUGIN_ROOT/skills/flow-next-worktree-kit/scripts|~/.codex/scripts|g' \
     "$f"
 
   # plugin.json path: primary → .codex-plugin, fallback → .claude-plugin

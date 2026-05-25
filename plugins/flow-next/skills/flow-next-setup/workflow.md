@@ -113,7 +113,7 @@ Read `.flow/meta.json` and check for `setup_version` field.
 Also read plugin version from the platform-specific manifest:
 - Codex: `${PLUGIN_ROOT}/.codex-plugin/plugin.json`
 - Claude Code: `${PLUGIN_ROOT}/.claude-plugin/plugin.json`
-- Factory Droid: `${PLUGIN_ROOT}/.factory-plugin/plugin.json`
+- Factory Droid: `${PLUGIN_ROOT}/.claude-plugin/plugin.json` (Droid's interop layer reads the Claude Code manifest directly for Claude-first plugins like flow-next)
 
 Check whichever matches `PLATFORM`. Fall back to `.claude-plugin/plugin.json` if the platform-specific file doesn't exist.
 
