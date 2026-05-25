@@ -46,9 +46,8 @@ Additionally, as the third backend-split this lands, document the established pa
 - [ ] Routing prose in SKILL.md and workflow.md(s) matches reality (per `abort-option-copy-must-reflect` memory entry — re-verify after the refactor).
 
 ## Done summary
-
-_(filled by `/flow-next:work` when the task completes)_
-
+Inline-kept resolve-pr's workflow.md (backend divergence is one ~22-line Phase 5 — below the ≥50-line split threshold) and added a 27-line backend-split heuristic section to agent_docs/adding-skills.md citing fn-48.3 (b2f6f0e), fn-48.4 (06f6e6f), and fn-48.5. Fixed stale SKILL.md description (Codex 0.102.0+ is parallel, not serial). Codex mirror regenerates cleanly; resolve-pr smoke 58/58, impl-review 74/74.
 ## Evidence
-
-_(filled by `/flow-next:work` — commit hashes + test commands run)_
+- Commits: 4aa65a050f8ab38bd3272834fb7fdeec39b9f056
+- Tests: bash plugins/flow-next/scripts/resolve-pr_smoke_test.sh (58/58 PASS), bash plugins/flow-next/scripts/impl-review_smoke_test.sh (74/74 PASS), bash scripts/sync-codex.sh (zero errors)
+- PRs:

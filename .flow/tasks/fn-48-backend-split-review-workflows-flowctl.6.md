@@ -14,13 +14,13 @@ Consolidate the canonical FLOWCTL prelude so it's no longer re-emitted on every 
 Consolidation work: prelude is collapsed to once-per-skill (PATH-export at SKILL.md preamble, or a shell function, or `.flow/bin/flowctl` wrapper) but **preserves** the `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` fallback logic. Bash blocks call `flowctl` (or `$F`) bare. Separately sweep `.factory-plugin/plugin.json` references from the 9 canonical files that mention it.
 
 **Size:** M (touches many files but each touch is small and mechanical)
-**Files:** all canonical skill files using the prelude (~14 skills × SKILL.md + workflow.md each), `scripts/sync-codex.sh` (rewrite rules), `plugins/flow-next/codex/skills/*` (regenerated mirror), 9 canonical files referencing `.factory-plugin/plugin.json` (sweep).
+**Files:** all canonical skill files using the prelude (~14 skills × SKILL.md + workflow.md each), `scripts/sync-codex.sh` (rewrite rules), `plugins/flow-next/codex/skills/*` (regenerated mirror), 9 canonical files referencing `.factory-plugin/plugin.json` (sweep), `agent_docs/adding-skills.md` (add prelude-consolidation sibling section to the backend-split heuristic added by fn-48.5). <!-- Updated by plan-sync: fn-48.5 added the heuristics-home doc -->
 **Dependencies:** fn-48.2 (R8 outcome — already recorded; verdict locked).
 
 ## Approach
 
 - **First, re-read the decision recorded by fn-48.2** at `.flow/memory/knowledge/decisions/factory-droid-platform-status-2026-05-2026-05-25.md`. R4b form is locked: Path A modified (keep env-var fallback + `Bash|Execute` matcher; drop `.factory-plugin/plugin.json` fallback references only).
-- **Enumerate every bash block in every canonical skill** that contains the FLOWCTL prelude: `grep -rn "DROID_PLUGIN_ROOT" plugins/flow-next/skills/`. This produces the consolidation work list.
+- **Enumerate every bash block in every canonical skill** that contains the FLOWCTL prelude: `grep -rn "DROID_PLUGIN_ROOT" plugins/flow-next/skills/`. This produces the consolidation work list. <!-- Updated by plan-sync: fn-48.5 inline-kept resolve-pr; its prelude already lives once per file in SKILL.md (preamble, lines 18-19) and workflow.md (Preamble, lines 9-10) — already compliant with R4b's once-per-skill model. The grep will surface those occurrences but they are not consolidation candidates; only skills emitting the prelude *per bash block* need work. -->
 - **Enumerate every `.factory-plugin/plugin.json` reference** for the sweep: `grep -rn "\.factory-plugin/plugin\.json" plugins/flow-next/skills/ plugins/flow-next/agents/`. Per the fn-48.2 decision, this is expected to hit ~9 canonical files including `flow-next-capture/SKILL.md:127`, `flow-next-make-pr/SKILL.md:110`, `flow-next-setup/workflow.md:116`, `flow-next-interview/SKILL.md`, `flow-next-plan/SKILL.md`. <!-- Updated by plan-sync: fn-48.2 identified the sweep target list -->
 - **Consolidation mechanism (Path A modified):** At SKILL.md preamble, run once: `FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"; export PATH="$(dirname "$FLOWCTL"):$PATH"`. Subsequent bash blocks call `flowctl` bare. The PATH export is one block per skill, not per bash call. Or: declare a shell function in `phases.md`-style shared content.
 - **Apply mechanically** to all affected skill files. Each file gets the new preamble; each bash block drops the prelude.
@@ -31,6 +31,7 @@ Consolidation work: prelude is collapsed to once-per-skill (PATH-export at SKILL
 - **Regenerate the mirror**: `./scripts/sync-codex.sh`. Diff the mirror — should show systematic preamble changes + bash-block simplifications across every skill.
 - **Smoke**: `bash plugins/flow-next/scripts/smoke_test.sh` for ALL skills, not just the three review skills (this task touches every flowctl-using skill).
 - **CHANGELOG entry** under "Changed": document the prelude consolidation. Note the Droid platform-status re-verification (Path A modified — kept env-var fallback + `Bash|Execute` matcher; dropped `.factory-plugin/plugin.json` references after confirming Droid's interop layer auto-translates Claude Code plugin format).
+- **Cross-link `agent_docs/adding-skills.md`** when documenting the prelude consolidation pattern. fn-48.5 added a backend-split heuristic section (lines 26-50) to that doc; the prelude consolidation deserves a sibling section in the same file rather than duplicating guidance elsewhere. <!-- Updated by plan-sync: fn-48.5 established agent_docs/adding-skills.md as the per-skill engineering-heuristic home -->
 
 ## Investigation targets
 
@@ -56,6 +57,7 @@ Consolidation work: prelude is collapsed to once-per-skill (PATH-export at SKILL
 - [ ] `bash plugins/flow-next/scripts/smoke_test.sh` is green for ALL skills (not just review skills).
 - [ ] End-to-end behavior of every affected skill unchanged on Claude Code, Codex, Copilot, and Droid (fn-48.2 confirmed Droid is still actively supported).
 - [ ] CHANGELOG entry drafted covering the prelude consolidation + Droid platform-status re-verification outcome.
+- [ ] `agent_docs/adding-skills.md` has a new prelude-consolidation section sibling to the backend-split heuristic section (lines 26-50) added by fn-48.5. <!-- Updated by plan-sync: fn-48.5 established the heuristics-home pattern -->
 
 ## Done summary
 
