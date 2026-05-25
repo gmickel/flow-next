@@ -7,7 +7,7 @@ Flow-next is a first-class citizen on Claude Code (canonical), OpenAI Codex (pre
 | Platform | Install command | Plugin file | Notes |
 |----------|-----------------|-------------|-------|
 | Claude Code | `/plugin marketplace add gmickel/flow-next-marketplace && /plugin install flow-next` | `.claude-plugin/plugin.json` | Canonical environment |
-| Factory Droid | `/plugin marketplace add https://github.com/gmickel/flow-next && /plugin install flow-next` (in Droid CLI) | `.factory-plugin/plugin.json` (falls back from Claude file) | Native cross-platform patterns |
+| Factory Droid | `droid plugin marketplace add https://github.com/gmickel/flow-next && droid plugin install flow-next` (in Droid CLI) | `.claude-plugin/plugin.json` (Droid auto-translates Claude Code plugin format) | Native cross-platform patterns |
 | OpenAI Codex | `git clone https://github.com/gmickel/flow-next.git && cd flow-next && ./scripts/install-codex.sh` | `.codex-plugin/plugin.json` | Pre-built mirror under `plugins/flow-next/codex/` |
 | OpenCode | See [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) | n/a | Community port |
 
@@ -15,26 +15,30 @@ Flow-next is a first-class citizen on Claude Code (canonical), OpenAI Codex (pre
 
 ## Factory Droid (native support)
 
-Flow-next works natively in [Factory Droid](https://factory.ai) — no modifications needed.
+Flow-next works natively in [Factory Droid](https://factory.ai) — no modifications needed. flow-next is a **Claude-first plugin**; Droid's documented plugin interop layer translates the format on install.
 
 **Install:**
 ```bash
 # In Droid CLI
-/plugin marketplace add https://github.com/gmickel/flow-next
-/plugin install flow-next
+droid plugin marketplace add https://github.com/gmickel/flow-next
+droid plugin install flow-next
 ```
 
-**Cross-platform patterns used:**
-- Skills use `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` bash fallback.
-- Hooks use `Bash|Execute` regex matcher (Claude Code = `Bash`, Droid = `Execute`).
-- Agents use `disallowedTools` blacklist (not `tools` whitelist — tool names differ between platforms; blacklist works because both understand `Edit`, `Write`, `Task`).
-- Plugin paths check both: `.claude-plugin/plugin.json` falls back to `.factory-plugin/plugin.json`.
+**How interop works** (verified against [Factory docs](https://docs.factory.ai/cli/configuration/plugins) on 2026-05-25):
+
+- **Plugin manifest** — Factory documents: "Droid is compatible with plugins built for Claude Code. If you find a Claude Code plugin you'd like to use, you can install it directly - the plugin format is interoperable." flow-next ships only `.claude-plugin/plugin.json`; Droid reads it directly. The repo deliberately does **not** include a `.factory-plugin/plugin.json` — it would be redundant.
+- **Plugin-root env var** — Droid sets `DROID_PLUGIN_ROOT` (canonical) and exposes `CLAUDE_PLUGIN_ROOT` as an alias (per [Factory hooks-reference](https://docs.factory.ai/reference/hooks-reference): *"`${CLAUDE_PLUGIN_ROOT}` — Alias for `${DROID_PLUGIN_ROOT}` (Claude Code compatibility)"*). flow-next skill bash blocks use the fallback chain `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` — conservative ordering, correct on both platforms.
+- **Hook tool name** — Droid's shell-command tool is named **`Execute`** (not `Bash`); per Factory docs, `Bash` is not a recognized matcher in Droid. flow-next's `hooks.json` uses `"matcher": "Bash|Execute"` (regex OR) so a single hook entry fires on both Claude (`Bash`) and Droid (`Execute`).
+- **Agent permissions** — flow-next uses `disallowedTools` blacklists instead of `tools` whitelists, because tool names diverge (Claude `Bash` vs Droid `Execute`, etc.) but both platforms understand the common deny-list set (`Edit`, `Write`, `Task`).
 
 **Caveats:**
 - Subagents may behave differently (Droid's Task tool implementation).
 - Hook timing may vary slightly.
+- Plugins relying on Droid-specific lifecycle hooks (`SessionStart`, `SessionEnd`) and Droid-only env vars are not portable back to Claude Code — flow-next deliberately stays within the shared subset.
 
 > **Rollback:** If you experience issues, downgrade to v0.20.9 (last pre-Droid version): `claude plugins install flow-next@0.20.9`.
+
+> **Status (last verified 2026-05-25, fn-48.2):** Droid remains divergent on env-var canonical name (`DROID_PLUGIN_ROOT`) and tool name (`Execute`), but Factory's interop layer handles `.claude-plugin/plugin.json` and `CLAUDE_PLUGIN_ROOT` automatically. flow-next preserves the `Bash|Execute` matcher and `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` fallback; the historic `.factory-plugin/plugin.json` fallback was redundant and is being cleaned up in fn-48.6.
 
 ## OpenAI Codex
 
