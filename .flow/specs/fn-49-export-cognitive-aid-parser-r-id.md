@@ -1,3 +1,12 @@
+## Overview
+
+Two scoped bug fixes inside `plugins/flow-next/scripts/flowctl.py`, both surfaced during fn-48's make-pr run (PR #146 carries the workaround prose):
+
+1. **Bug 1 (R1, R2)** — R-ID parser regex extends from `R\d+` → `R\d+[a-z]?`. Capture-driven specs with sub-scoped criteria like `R4a` and `R4b` are currently silently dropped from the parsed acceptance-criteria array.
+2. **Bug 2 (R3, R4)** — `_export_memory_during_spec` falls back deterministically when `spec.created` is null (specs created in the same session as `flowctl init`, or pre-timestamp-population specs). Currently returns empty `[]`; should surface entries via earliest-task-created OR branch-first-commit OR diff-touched-memory detection.
+
+Plus smoke coverage for both (R5) and end-to-end verification that future make-pr runs against fn-48 no longer need the workaround prose (R6).
+
 ## Conversation Evidence
 
 > user (recent turn): "capture the two flowctl spec export-cognitive-aid bugs surfaced during fn-48 make-pr: (1) the R-ID parser silently drops criteria with non-standard suffix forms like R4a/R4b, and (2) the memory_during_spec time-window filter returns zero entries when the spec's created timestamp is null (e.g. specs created via /flow-next:capture in the same session as flowctl init). Both are bug-track, both block honest cognitive-aid rendering when they fire."
@@ -18,7 +27,7 @@ Both bugs were discovered during the fn-48 make-pr execution and worked-around w
 
 Two scoped bug fixes inside `plugins/flow-next/scripts/flowctl.py`:
 
-**Bug 1 — R-ID parser suffix support.** The acceptance-criteria parser in `cmd_spec_export_cognitive_aid` (and its helpers) currently recognizes only `R<digits>` form (regex roughly `\bR\d+\b`). Capture-driven specs that emerge with sub-scoped criteria like `R4a`, `R4b` (semantically different criteria sharing a logical parent) are silently dropped from the parsed acceptance-criteria array. The user-visible symptom: `acceptance_count` is wrong and `uncovered_r_ids` reports `[]` for criteria the spec body actually declares. Fix: extend the regex to `R\d+[a-z]?` (or equivalent suffix-tolerant form). Surface ALL declared R-IDs in `spec.spec_sections.acceptance_criteria[]`.
+**Bug 1 — R-ID parser suffix support.** The acceptance-criteria parser in `cmd_spec_export_cognitive_aid` (and its helpers) currently recognizes only `R<digits>` form (regex roughly `\bR\d+\b`). Capture-driven specs that emerge with sub-scoped criteria like `R4a`, `R4b` (semantically different criteria sharing a logical parent) are silently dropped from the parsed acceptance-criteria array. The user-visible symptom: `acceptance_count` is wrong and `uncovered_r_ids` reports `[]` for criteria the spec body actually declares. Fix: extend the regex to `R\d+[a-z]?` (or equivalent suffix-tolerant form). Surface ALL declared R-IDs in `spec.spec_sections.acceptance_criteria[]`. Lexical sort order must place `R4a` before `R4b` and both after `R4` (if both exist) and before `R5`.
 
 **Bug 2 — memory time-window filter null-safe.** `_export_memory_during_spec` uses `spec.created` as the lower bound of the time-window filter. When `spec.created` is null (specs created in the same session as `flowctl init`, or specs that pre-date the timestamp population), the filter behaves as if no spec timestamp exists — and the implementation currently fails closed (returns 0 entries) rather than falling back. Fix options (implementer chooses): fall back to the earliest `tasks[].created` timestamp; fall back to the earliest commit on the spec's branch via `git log <branch> --reverse --format=%ci -1`; or skip the time-window filter entirely when `spec.created` is null and instead use commit-touched-memory-entry detection (`git diff --name-only <base>..HEAD -- .flow/memory/`).
 
@@ -32,13 +41,14 @@ No public-API or CLI-surface changes — `flowctl spec export-cognitive-aid` kee
 - **Time-window fallback determinism.** Whichever fallback the implementer picks (earliest task, branch first-commit, diff-touched), the choice must be deterministic so that two consecutive `export-cognitive-aid` runs return the same memory entries. No "best-effort" non-determinism.
 - **No upstream `spec.created` backfill.** Out of scope — backfilling timestamps on existing spec JSON metadata is a separate concern (would touch flowctl init / capture / migrate). This spec only fixes the consumer (`export-cognitive-aid`) to be null-safe.
 - **Smoke coverage.** Both bugs need smoke tests that reproduce the pre-fix behavior and confirm the post-fix behavior. Without them, the fix can regress silently.
+- **Prior parser-fragility lessons.** Memory entries `bug/build-errors/fn-44-review-cycle-lessons-2026-05-21`, `bug/build-errors/detectvalidate-must-require-specs-dir-2026-05-08`, and `bug/data/migrationrollback-cli-10-review-cycle-2026-05-08` document parser-contract failures and null/missing-field crash patterns inside flowctl.py — required reading before touching the export parser. Same class of failure mode.
 
 ## Acceptance Criteria
 <!-- Source-tag breakdown: 30% [user], 70% [paraphrase] -->
 
-- **R1:** `flowctl spec export-cognitive-aid <spec-id> --json` recognizes acceptance-criteria R-IDs with single-letter suffixes (e.g. `R4a`, `R4b`) and includes them in `spec.spec_sections.acceptance_criteria[]` and `tasks_summary.uncovered_r_ids` calculations. [paraphrase]
+- **R1:** `flowctl spec export-cognitive-aid <spec-id> --json` recognizes acceptance-criteria R-IDs with single-letter suffixes (e.g. `R4a`, `R4b`) and includes them in `spec.spec_sections.acceptance_criteria[]` and `tasks_summary.uncovered_r_ids` calculations. Sibling R-IDs sort lexically (`R4` < `R4a` < `R4b` < `R5`). [paraphrase]
 - **R2:** Re-running the export against fn-48 (the originally-affected spec) returns `acceptance_count == 9` (was 7 pre-fix) and recognizes R4a + R4b in the parsed list. [user] (turn) / [paraphrase]
-- **R3:** When `spec.created` is null, `memory_during_spec.{decisions,bugs,architecture_patterns}[]` returns entries via a deterministic fallback (earliest-task-created OR branch-first-commit OR diff-touched detection — implementer picks) rather than silently returning `[]`. [user] (turn) / [paraphrase]
+- **R3:** When `spec.created` is null, `memory_during_spec.{decisions,bugs,architecture_patterns}[]` returns entries via a deterministic fallback (earliest-task-created OR branch-first-commit OR diff-touched detection — implementer picks the simplest that works in the test fixture) rather than silently returning `[]`. [user] (turn) / [paraphrase]
 - **R4:** Re-running the export against fn-48 with the null-safe filter active surfaces the `factory-droid-platform-status-2026-05-2026-05-25` decision entry in `memory_during_spec.decisions[]` (was `[]` pre-fix). [paraphrase]
 - **R5:** A smoke test reproduces both pre-fix behaviors against a synthetic spec fixture (one with `R<n><suffix>` criteria, one with `spec.created: null`) and asserts the post-fix outputs match expected. The smoke is added to `plugins/flow-next/scripts/smoke_test.sh` (or a dedicated test file the smoke harness runs). [paraphrase]
 - **R6:** End-to-end `/flow-next:make-pr` against fn-48 (or a synthetic similar spec) no longer requires the "Parser note" / "Export caveat" prose workarounds that PR #146 carries. [paraphrase]
@@ -50,6 +60,7 @@ In scope:
 - The two specific parser bugs identified in PR #146 ([user] turn — "the two bugs").
 - Smoke test coverage that reproduces and verifies each bug fix.
 - The single file `plugins/flow-next/scripts/flowctl.py` (and helpers it imports).
+- Optional: `plugins/flow-next/docs/spec-template.md` note documenting that suffixed R-IDs (R4a, R4b) are now officially supported — implementer decides whether to bless the suffix form as canonical or just tolerate it.
 
 Out of scope:
 - **Backfilling `spec.created`** on existing spec JSON. Separate concern; the fix is consumer-side null-safety, not producer-side timestamp population. [paraphrase]
@@ -57,6 +68,13 @@ Out of scope:
 - **Re-emitting affected PR bodies.** PR #146's honest-note workarounds stay; future PRs benefit from the fix.
 - Changes to `/flow-next:capture`, `/flow-next:plan`, or `/flow-next:make-pr` skill prose — those skills already render whatever the export produces.
 - Changes to the spec-completion-review or impl-review skills (orthogonal to export).
+- Closing fn-48 (status=open despite all tasks done) — separate housekeeping, not blocking fn-49.
+
+## Strategy Alignment
+
+Active tracks served by this plan:
+- **Spec-driven team patterns** — `/flow-next:make-pr` is the methodology's PR-as-cognitive-aid surface; honest rendering depends on the export producing accurate input. Fixing the parser closes a foundational gap.
+- **Cross-platform parity** — pure Python parser fix; benefits Claude Code / Codex / Droid identically. No platform-specific code paths.
 
 ## Decision Context
 
@@ -67,11 +85,9 @@ Prioritization: both bugs are bug-track ([user] — "Both are bug-track"). They 
 
 Both bugs were discovered organically by running real make-pr on a real spec (fn-48); they're not theoretical failure modes. The fact that fn-48 needed BOTH workarounds in a single PR body suggests the failure rate is higher than the pre-PR-#146 visibility implied. [paraphrase]
 
-## Strategy Alignment
+Why two tasks (not one combined): the bugs are independent (one is regex, one is timestamp/fallback logic) and live in different functions inside `flowctl.py`. Splitting allows parallel work and lets either ship independently if the other hits scope creep.
 
-Active tracks served by this spec:
-- **Spec-driven team patterns** — `/flow-next:make-pr` is the methodology's PR-as-cognitive-aid surface; honest rendering depends on the export producing accurate input. Fixing the parser closes a foundational gap.
-- **Cross-platform parity** — neither bug fix is platform-specific; the parser fix benefits Claude Code / Codex / Droid identically.
+Why no separate integration-verification task: R6 (end-to-end make-pr no longer needs workaround prose) is satisfied jointly when both T1 and T2 land. Either task's own end-to-end verification covers half; the joint case is verified at the next make-pr invocation against any spec, which is cheap to spot-check without dedicated task ceremony.
 
 ## Quick commands
 
@@ -86,19 +102,31 @@ Active tracks served by this spec:
   | jq '.memory_during_spec.decisions | length'
 # Expected pre-fix: 0. Post-fix: 1 (the factory-droid-platform-status decision).
 
-# Smoke (after fix):
+# Smoke (after each task):
 bash plugins/flow-next/scripts/smoke_test.sh
 ```
 
----
+## Early proof point
+
+Task **fn-49.1** (R-ID parser suffix support) validates the test-and-fix loop with the simpler of the two bugs (single regex extension + lexical-sort check). If it fails or the smoke pattern doesn't reproduce reliably, re-evaluate the test-fixture strategy before tackling fn-49.2 (which has implementer-choice fallback logic with more design surface).
 
 ## Requirement coverage
 
-| R-ID | Task(s) |
-|------|---------|
-| R1 | fn-N.M (TBD — populate via /flow-next:plan) |
-| R2 | fn-N.M (TBD — populate via /flow-next:plan) |
-| R3 | fn-N.M (TBD — populate via /flow-next:plan) |
-| R4 | fn-N.M (TBD — populate via /flow-next:plan) |
-| R5 | fn-N.M (TBD — populate via /flow-next:plan) |
-| R6 | fn-N.M (TBD — populate via /flow-next:plan) |
+| Req | Description | Task(s) | Gap justification |
+|-----|-------------|---------|-------------------|
+| R1  | R-ID parser recognizes `R\d+[a-z]?` form | fn-49.1 | — |
+| R2  | Re-export fn-48 returns acceptance_count=9 | fn-49.1 | — |
+| R3  | Null-safe memory time-window filter | fn-49.2 | — |
+| R4  | Re-export fn-48 surfaces Droid decision in memory_during_spec | fn-49.2 | — |
+| R5  | Smoke tests for both pre/post-fix behaviors | fn-49.1, fn-49.2 | Each task adds its own smoke fixture |
+| R6  | make-pr against fn-48 no longer needs workaround prose | fn-49.1, fn-49.2 | Verified jointly when both land; spot-checked at next make-pr |
+
+## References
+
+- Source analysis: this session's fn-48 make-pr execution (PR #146 carries the workaround prose).
+- Memory entries (required reading before touching the export parser):
+  - `bug/build-errors/fn-44-review-cycle-lessons-2026-05-21` — parser contract failures from fn-44 / 1.1.4 work; relevant to `_export_parse_acceptance_criteria` heading-variant tolerance
+  - `bug/build-errors/detectvalidate-must-require-specs-dir-2026-05-08` — absent spec fields silently passing validation then crashing on export/cat; same class of bug as `spec.created` null causing time-window filter to fail closed
+  - `bug/data/migrationrollback-cli-10-review-cycle-2026-05-08` — atomic write + spec JSON field handling pitfalls
+- Affected file: `plugins/flow-next/scripts/flowctl.py` (the `cmd_spec_export_cognitive_aid` function and `_export_memory_during_spec` helper)
+- PR #146 (fn-48 merge commit `54269f7`) — the workaround prose this spec removes
