@@ -136,6 +136,83 @@ class TestResolveMemoryThreshold(unittest.TestCase):
         self.assertEqual(threshold, "")
         self.assertEqual(source, "")
 
+    def test_branch_first_commit_returns_root_not_tip(self) -> None:
+        """Regression: multi-commit branch must return the ROOT commit's date,
+        not the tip's.
+
+        Caught by Codex bot review on PR #147 — `git log --reverse --format=%cI
+        --max-count=1` is wrong because ``--max-count`` is a selection option
+        applied BEFORE output ordering. Combined with ``--reverse`` it picks
+        the most recent commit, then "reverses" a 1-element list (no-op),
+        returning the branch TIP date instead of the root commit's date.
+
+        Pre-fix this test would fail because the threshold returned would be
+        2026-05-30 (tip) instead of 2026-05-25 (root). Pre-fix tests passed
+        only because their fixtures had a SINGLE commit where root == tip.
+        """
+        with tempfile.TemporaryDirectory() as repo_tmp:
+            repo = Path(repo_tmp)
+            base_env = {
+                **os.environ,
+                "GIT_COMMITTER_NAME": "fn-49.2 regression",
+                "GIT_COMMITTER_EMAIL": "regression@example.com",
+                "GIT_AUTHOR_NAME": "fn-49.2 regression",
+                "GIT_AUTHOR_EMAIL": "regression@example.com",
+            }
+            subprocess.run(
+                ["git", "init", "-b", "fn-49-multi-commit-branch", "."],
+                cwd=repo, env=base_env, check=True, capture_output=True,
+            )
+            # Commit 1: 2026-05-25 (the ROOT — what we want returned).
+            env_root = {
+                **base_env,
+                "GIT_COMMITTER_DATE": "2026-05-25T12:00:00+00:00",
+                "GIT_AUTHOR_DATE": "2026-05-25T12:00:00+00:00",
+            }
+            (repo / "a.txt").write_text("a", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", "a.txt"],
+                cwd=repo, env=env_root, check=True, capture_output=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "root commit (2026-05-25)"],
+                cwd=repo, env=env_root, check=True, capture_output=True,
+            )
+            # Commit 2: 2026-05-30 (the TIP — what the buggy form would return).
+            env_tip = {
+                **base_env,
+                "GIT_COMMITTER_DATE": "2026-05-30T12:00:00+00:00",
+                "GIT_AUTHOR_DATE": "2026-05-30T12:00:00+00:00",
+            }
+            (repo / "b.txt").write_text("b", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", "b.txt"],
+                cwd=repo, env=env_tip, check=True, capture_output=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "tip commit (2026-05-30)"],
+                cwd=repo, env=env_tip, check=True, capture_output=True,
+            )
+
+            cwd_before = os.getcwd()
+            os.chdir(repo)
+            try:
+                threshold, source = flowctl._export_resolve_memory_threshold(
+                    None,
+                    task_created_ats=[],
+                    branch_name="fn-49-multi-commit-branch",
+                )
+            finally:
+                os.chdir(cwd_before)
+
+        self.assertEqual(source, "branch_first_commit")
+        # ROOT commit date — NOT the tip date. The buggy form would return
+        # "2026-05-30" here, filtering out in-window memory entries dated
+        # 2026-05-25 through 2026-05-29 — the exact regression class fn-49.2
+        # was supposed to prevent.
+        self.assertEqual(threshold, "2026-05-25")
+        self.assertNotEqual(threshold, "2026-05-30")
+
 
 class TestMemoryDuringEpicNullSafe(unittest.TestCase):
     """`_export_memory_during_epic` honors the fallback-resolved threshold."""

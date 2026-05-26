@@ -12762,6 +12762,16 @@ def _export_resolve_memory_threshold(
             return (min(candidates), "earliest_task")
 
     # Step 3: branch first commit (committer date, ISO 8601 strict).
+    #
+    # NOTE: do NOT use ``--max-count=1`` with ``--reverse``. ``--max-count``
+    # is a selection option applied BEFORE output ordering, so combined with
+    # ``--reverse`` it picks the most recent commit and then "reverses" a
+    # 1-element list (no-op) — returning the branch tip date instead of the
+    # root commit's date. Filtering at output time via ``splitlines()[0]``
+    # on the reversed stream is the deterministic way to grab the first
+    # commit. Caught by Codex bot review on PR #147; regression locked by
+    # ``test_branch_first_commit_returns_root_not_tip`` in
+    # ``tests/test_memory_during_spec_null_safe.py``.
     if branch_name:
         rc, out, _err = _export_run_git(
             [
@@ -12769,7 +12779,6 @@ def _export_resolve_memory_threshold(
                 branch_name,
                 "--reverse",
                 "--format=%cI",
-                "--max-count=1",
             ]
         )
         if rc == 0:
