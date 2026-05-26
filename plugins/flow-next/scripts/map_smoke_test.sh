@@ -460,8 +460,11 @@ SOURCE="heuristic"
 EXTRA_PASSTHROUGH=()
 seen_dashdash=0
 
+# Disable globbing so passthrough tokens like `*.py` reach clawpatch verbatim.
+set -f
 # shellcheck disable=SC2086
 set -- $ARGUMENTS
+set +f
 while [[ $# -gt 0 ]]; do
   if [[ "$seen_dashdash" == "1" ]]; then
     EXTRA_PASSTHROUGH+=("$1")
@@ -470,7 +473,14 @@ while [[ $# -gt 0 ]]; do
   fi
   case "$1" in
     --) seen_dashdash=1 ;;
-    --source) SOURCE="$2"; shift ;;
+    --source)
+      if [[ $# -lt 2 || "$2" == "--" ]]; then
+        echo "Error: --source requires a value (one of: heuristic, auto, agent)" >&2
+        exit 2
+      fi
+      SOURCE="$2"
+      shift
+      ;;
     --source=*) SOURCE="${1#--source=}" ;;
     *) EXTRA_PASSTHROUGH+=("$1") ;;
   esac
@@ -519,6 +529,35 @@ rc=0
 err="$(ARGUMENTS="--source nope" bash "$ARG_GUARD" 2>&1)" || rc=$?
 assert_rc 2 "$rc" "Case 7e: invalid --source exits 2"
 assert_grep "must be one of" "$err" "Case 7e: error names valid sources"
+
+# 7f: dangling --source (end of args) → exit 2 cleanly, not crash under set -e
+rc=0
+err="$(ARGUMENTS="--source" bash "$ARG_GUARD" 2>&1)" || rc=$?
+assert_rc 2 "$rc" "Case 7f: dangling --source at end of args exits 2 cleanly"
+assert_grep "requires a value" "$err" "Case 7f: dangling --source emits 'requires a value'"
+
+# 7g: --source followed by passthrough terminator → exit 2 cleanly
+rc=0
+err="$(ARGUMENTS="--source -- --paths src/" bash "$ARG_GUARD" 2>&1)" || rc=$?
+assert_rc 2 "$rc" "Case 7g: --source immediately before -- exits 2 cleanly"
+assert_grep "requires a value" "$err" "Case 7g: --source-before-terminator emits 'requires a value'"
+
+# 7h: glob in passthrough → reaches EXTRA verbatim (not expanded by skill)
+# Stage a file in cwd that *would* match `*.py` if globbing were active;
+# the canonical contract: `*.py` arrives as the literal string, not a list.
+GLOB_DIR="$TEST_DIR/case7h"
+mkdir -p "$GLOB_DIR"
+touch "$GLOB_DIR/a.py" "$GLOB_DIR/b.py"
+rc=0
+out="$(cd "$GLOB_DIR" && ARGUMENTS="-- --paths *.py" bash "$ARG_GUARD" 2>&1)" || rc=$?
+assert_rc 0 "$rc" "Case 7h: glob in passthrough exits 0"
+assert_grep "EXTRA=--paths *.py" "$out" "Case 7h: glob '*.py' reaches EXTRA verbatim (set -f protects)"
+# Negative: must NOT see expanded names a.py / b.py in EXTRA
+if grep -qE 'EXTRA=.*\ba\.py\b' <<< "$out"; then
+  fail "Case 7h: glob was expanded against cwd (a.py present in EXTRA) — set -f protection failed"
+else
+  ok "Case 7h: glob '*.py' was NOT expanded against cwd (set -f effective)"
+fi
 
 # =============================================================================
 # Summary

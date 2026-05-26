@@ -39,16 +39,23 @@ The skill MUST NOT write to `$REVIEW_RECEIPT_PATH` — that's the upstream revie
 
 ### 0.1 — Parse arguments
 
-Default `SOURCE` is `heuristic` (provider-free, deterministic). The `--` terminator splits skill-handled flags from passthrough:
+Default `SOURCE` is `heuristic` (provider-free, deterministic). The `--` terminator splits skill-handled flags from passthrough.
+
+**Passthrough boundary.** The slash-command host delivers `$ARGUMENTS` as a single string; the skill word-splits on whitespace to tokenize. That means **passthrough is token-level (whitespace-separated), not verbatim shell** — arguments containing literal spaces, embedded quotes, or shell metacharacters cannot survive intact. We mitigate by disabling glob expansion (`set -f`) so `*` and `?` reach `clawpatch` unmolested; tokens like `src/foo` or `--paths=src/foo` flow through cleanly. Users needing complex quoting should run `clawpatch map` directly.
 
 ```bash
 SOURCE="heuristic"
 EXTRA_PASSTHROUGH=()
 seen_dashdash=0
 
-# Iterate $ARGUMENTS once. `--` toggles passthrough mode.
+# Disable globbing so passthrough tokens like `*.py` or `src/?` reach
+# clawpatch verbatim instead of being expanded against $PWD. We do NOT
+# claim full shell-verbatim passthrough — tokens are whitespace-split
+# (see "Passthrough boundary" above).
+set -f
 # shellcheck disable=SC2086
 set -- $ARGUMENTS
+set +f
 while [[ $# -gt 0 ]]; do
   if [[ "$seen_dashdash" == "1" ]]; then
     EXTRA_PASSTHROUGH+=("$1")
@@ -57,7 +64,17 @@ while [[ $# -gt 0 ]]; do
   fi
   case "$1" in
     --) seen_dashdash=1 ;;
-    --source) SOURCE="$2"; shift ;;
+    --source)
+      # Guard against `--source` at end-of-args or followed by the
+      # passthrough terminator. Without this, `shift` past end-of-args
+      # crashes under `set -e` with a cryptic shell error.
+      if [[ $# -lt 2 || "$2" == "--" ]]; then
+        echo "Error: --source requires a value (one of: heuristic, auto, agent)" >&2
+        exit 2
+      fi
+      SOURCE="$2"
+      shift
+      ;;
     --source=*) SOURCE="${1#--source=}" ;;
     *) EXTRA_PASSTHROUGH+=("$1") ;;
   esac
