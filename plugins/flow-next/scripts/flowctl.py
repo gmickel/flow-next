@@ -12730,12 +12730,22 @@ def _export_resolve_memory_threshold(
     epic_created_at: Optional[str],
     task_created_ats: Optional[list[str]] = None,
     branch_name: Optional[str] = None,
+    base_ref: Optional[str] = None,
 ) -> tuple[str, str]:
     """Resolve the memory-window lower bound to a YYYY-MM-DD threshold.
 
     Returns ``(threshold, source)`` where ``source`` is one of:
     ``"spec"``, ``"earliest_task"``, ``"branch_first_commit"``, or
     ``""`` (no usable signal — caller falls back to "return all").
+
+    When ``base_ref`` is provided, the branch-first-commit step uses
+    ``git log {base_ref}..{branch_name}`` so only commits unique to the
+    feature branch are walked — without ``base_ref`` the helper would
+    walk the entire inherited mainline history and return the repo root
+    commit's date (Codex bot P2 on PR #147). Without ``base_ref`` the
+    helper falls back to ``git log {branch_name}`` as a best-effort
+    behavior; callers without a base context (e.g. unit tests on
+    detached fixtures) still get a usable threshold.
 
     Fallback chain (fn-49.2):
     1. ``epic_created_at`` — primary signal (spec metadata).
@@ -12763,24 +12773,35 @@ def _export_resolve_memory_threshold(
 
     # Step 3: branch first commit (committer date, ISO 8601 strict).
     #
-    # NOTE: do NOT use ``--max-count=1`` with ``--reverse``. ``--max-count``
+    # NOTE 1: do NOT use ``--max-count=1`` with ``--reverse``. ``--max-count``
     # is a selection option applied BEFORE output ordering, so combined with
     # ``--reverse`` it picks the most recent commit and then "reverses" a
     # 1-element list (no-op) — returning the branch tip date instead of the
     # root commit's date. Filtering at output time via ``splitlines()[0]``
     # on the reversed stream is the deterministic way to grab the first
-    # commit. Caught by Codex bot review on PR #147; regression locked by
+    # commit. Caught by Codex bot P1 review on PR #147; regression locked by
     # ``test_branch_first_commit_returns_root_not_tip`` in
     # ``tests/test_memory_during_spec_null_safe.py``.
+    #
+    # NOTE 2: prefer ``git log {base_ref}..{branch_name}`` when ``base_ref``
+    # is available — without it, ``git log <branch>`` walks ALL commits
+    # reachable from the branch tip including inherited mainline history,
+    # so ``--reverse`` then ``splitlines()[0]`` returns the repository root
+    # commit's date (way too old). Caught by Codex bot P2 review on PR #147;
+    # regression locked by
+    # ``test_branch_first_commit_excludes_base_history`` in
+    # ``tests/test_memory_during_spec_null_safe.py``.
     if branch_name:
-        rc, out, _err = _export_run_git(
-            [
+        if base_ref:
+            git_args = [
                 "log",
-                branch_name,
+                f"{base_ref}..{branch_name}",
                 "--reverse",
                 "--format=%cI",
             ]
-        )
+        else:
+            git_args = ["log", branch_name, "--reverse", "--format=%cI"]
+        rc, out, _err = _export_run_git(git_args)
         if rc == 0:
             first_line = out.strip().splitlines()[0] if out.strip() else ""
             if first_line:
@@ -12794,6 +12815,7 @@ def _export_memory_during_epic(
     epic_created_at: Optional[str],
     task_created_ats: Optional[list[str]] = None,
     branch_name: Optional[str] = None,
+    base_ref: Optional[str] = None,
 ) -> dict[str, Any]:
     """Aggregate memory entries written during the spec window.
 
@@ -12817,7 +12839,7 @@ def _export_memory_during_epic(
         return result
 
     threshold, _source = _export_resolve_memory_threshold(
-        epic_created_at, task_created_ats, branch_name
+        epic_created_at, task_created_ats, branch_name, base_ref
     )
 
     def _within_window(date_str: str) -> bool:
@@ -13202,6 +13224,7 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
         spec_data.get("created_at"),
         task_created_ats=task_created_ats,
         branch_name=spec_data.get("branch_name") or None,
+        base_ref=base_ref,
     )
 
     # --- Glossary diff ---

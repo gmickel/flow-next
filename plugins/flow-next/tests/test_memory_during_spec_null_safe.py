@@ -213,6 +213,121 @@ class TestResolveMemoryThreshold(unittest.TestCase):
         self.assertEqual(threshold, "2026-05-25")
         self.assertNotEqual(threshold, "2026-05-30")
 
+    def test_branch_first_commit_excludes_base_history(self) -> None:
+        """Regression: when ``base_ref`` is provided, the fallback uses
+        ``git log {base_ref}..{branch_name}`` so only commits unique to the
+        feature branch are walked.
+
+        Caught by Codex bot P2 review on PR #147. Without ``base_ref``,
+        ``git log <branch>`` walks ALL commits reachable from the branch
+        tip — including inherited mainline history. ``--reverse`` then
+        ``splitlines()[0]`` returns the REPOSITORY ROOT commit's date
+        (way too old), defeating the purpose of "approximate the spec
+        lifetime".
+
+        Pre-fix this test would fail with threshold == 2026-01-01 (the
+        repo root). Post-fix it returns 2026-05-25 (the feature branch's
+        first commit).
+        """
+        with tempfile.TemporaryDirectory() as repo_tmp:
+            repo = Path(repo_tmp)
+            base_env = {
+                **os.environ,
+                "GIT_COMMITTER_NAME": "fn-49.2 base-history",
+                "GIT_COMMITTER_EMAIL": "base-history@example.com",
+                "GIT_AUTHOR_NAME": "fn-49.2 base-history",
+                "GIT_AUTHOR_EMAIL": "base-history@example.com",
+            }
+            subprocess.run(
+                ["git", "init", "-b", "trunk", "."],
+                cwd=repo, env=base_env, check=True, capture_output=True,
+            )
+            # Trunk commit 1: 2026-01-01 (the REPO ROOT — what the buggy
+            # form would return).
+            env_t1 = {
+                **base_env,
+                "GIT_COMMITTER_DATE": "2026-01-01T12:00:00+00:00",
+                "GIT_AUTHOR_DATE": "2026-01-01T12:00:00+00:00",
+            }
+            (repo / "trunk1.txt").write_text("t1", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", "trunk1.txt"],
+                cwd=repo, env=env_t1, check=True, capture_output=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "trunk root (2026-01-01)"],
+                cwd=repo, env=env_t1, check=True, capture_output=True,
+            )
+            # Trunk commit 2: 2026-04-01 (still on trunk).
+            env_t2 = {
+                **base_env,
+                "GIT_COMMITTER_DATE": "2026-04-01T12:00:00+00:00",
+                "GIT_AUTHOR_DATE": "2026-04-01T12:00:00+00:00",
+            }
+            (repo / "trunk2.txt").write_text("t2", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", "trunk2.txt"],
+                cwd=repo, env=env_t2, check=True, capture_output=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "trunk advanced (2026-04-01)"],
+                cwd=repo, env=env_t2, check=True, capture_output=True,
+            )
+            # Branch off trunk and add a feature commit: 2026-05-25
+            # (the FORK POINT — what the correct form returns).
+            subprocess.run(
+                ["git", "checkout", "-b", "feature-fn-49"],
+                cwd=repo, env=base_env, check=True, capture_output=True,
+            )
+            env_f1 = {
+                **base_env,
+                "GIT_COMMITTER_DATE": "2026-05-25T12:00:00+00:00",
+                "GIT_AUTHOR_DATE": "2026-05-25T12:00:00+00:00",
+            }
+            (repo / "feature.txt").write_text("f", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", "feature.txt"],
+                cwd=repo, env=env_f1, check=True, capture_output=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "feature commit (2026-05-25)"],
+                cwd=repo, env=env_f1, check=True, capture_output=True,
+            )
+
+            cwd_before = os.getcwd()
+            os.chdir(repo)
+            try:
+                # With base_ref — correct: feature commit date.
+                t_with_base, source_with_base = flowctl._export_resolve_memory_threshold(
+                    None,
+                    task_created_ats=[],
+                    branch_name="feature-fn-49",
+                    base_ref="trunk",
+                )
+                # Without base_ref — buggy: repo root date.
+                t_without_base, source_without_base = flowctl._export_resolve_memory_threshold(
+                    None,
+                    task_created_ats=[],
+                    branch_name="feature-fn-49",
+                )
+            finally:
+                os.chdir(cwd_before)
+
+        self.assertEqual(source_with_base, "branch_first_commit")
+        # WITH base_ref: returns the fork-point commit's date (2026-05-25).
+        # This is the correct behavior — narrow window to commits unique to
+        # the feature branch.
+        self.assertEqual(t_with_base, "2026-05-25")
+        # Sanity check: the pre-base-ref behavior is preserved when no
+        # base_ref is supplied (best-effort for callers without a base).
+        # In that case the returned date is the repo root (2026-01-01) —
+        # demonstrably wrong for narrow-window purposes but documented as
+        # the fallback when no base context is available.
+        self.assertEqual(source_without_base, "branch_first_commit")
+        self.assertEqual(t_without_base, "2026-01-01")
+        # And of course the two diverge — that's the whole point.
+        self.assertNotEqual(t_with_base, t_without_base)
+
 
 class TestMemoryDuringEpicNullSafe(unittest.TestCase):
     """`_export_memory_during_epic` honors the fallback-resolved threshold."""
