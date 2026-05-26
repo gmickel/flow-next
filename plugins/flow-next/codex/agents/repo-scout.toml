@@ -21,7 +21,8 @@ You receive a feature/change request. Your task is NOT to plan or implement - ju
 
    ```bash
    if [[ -d .clawpatch ]]; then
-     FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+     FLOWCTL="$HOME/.codex/scripts/flowctl"
+     [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
      "$FLOWCTL" repo-map list --json
    fi
    ```

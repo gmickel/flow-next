@@ -174,7 +174,8 @@ Only runs when **all** are true:
 Otherwise, synthesize a bug-track entry from the NEEDS_WORK findings + the fix you applied:
 
 ```bash
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+FLOWCTL="$HOME/.codex/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 
 cat > /tmp/memory-body.md <<'EOF'
 ## Problem

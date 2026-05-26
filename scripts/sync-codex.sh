@@ -1268,6 +1268,35 @@ for md_file in "$SRC_AGENTS"/*.md; do
     description="Used by /flow-next:prime to analyze AGENTS.md quality and completeness. Do not invoke directly."
   fi
 
+  # FLOWCTL prelude rewrite (fn-50.6): canonical agents use the
+  # `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl` form
+  # (Droid + Claude fallback). In Codex neither env var is set, so the
+  # expansion resolves to `/scripts/flowctl` — broken. Mirror the skill-side
+  # rewrite (line ~183) here so generated `.toml` agent bodies use the direct
+  # Codex form plus the local `.flow/bin/flowctl` fallback. fn-50.3 added the
+  # repo-scout / context-scout `repo-map` probes that surfaced this gap.
+  body="$(echo "$body" | sed -E 's|\$\{DROID_PLUGIN_ROOT:-\$\{CLAUDE_PLUGIN_ROOT\}\}/scripts/flowctl|$HOME/.codex/scripts/flowctl|g')"
+  # Insert the local fallback line after every FLOWCTL= assignment that points
+  # at the Codex path. Matches `FLOWCTL="$HOME/.codex/scripts/flowctl"` with
+  # any leading whitespace; the inserted fallback line preserves that
+  # indentation so embedded bash blocks stay aligned. Uses POSIX awk
+  # (no gawk-only 3-arg match) so macOS / Linux behave identically.
+  body="$(echo "$body" | awk '
+    /^[[:space:]]*FLOWCTL="\$HOME\/\.codex\/scripts\/flowctl"[[:space:]]*$/ {
+      print
+      # Capture leading whitespace by finding where FLOWCTL starts.
+      indent = ""
+      i = 1
+      while (i <= length($0) && substr($0, i, 1) ~ /[[:space:]]/) {
+        indent = indent substr($0, i, 1)
+        i++
+      }
+      printf "%s[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\"\n", indent
+      next
+    }
+    { print }
+  ')"
+
   # Escape backslashes for TOML triple-quoted strings
   body="$(echo "$body" | sed 's/\\/\\\\/g')"
 

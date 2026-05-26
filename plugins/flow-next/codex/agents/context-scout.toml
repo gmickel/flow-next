@@ -101,7 +101,8 @@ If `.clawpatch/` is present, call `flowctl repo-map list --json` first. Use the 
 
 ```bash
 if [[ -d .clawpatch ]]; then
-  FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+  FLOWCTL="$HOME/.codex/scripts/flowctl"
+  [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
   "$FLOWCTL" repo-map list --json
 fi
 ```
