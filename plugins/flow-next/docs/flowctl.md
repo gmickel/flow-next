@@ -10,7 +10,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 init, detect, status, config, review-backend, memory, prospect, glossary, strategy,
 spec, task, dep, show, specs, tasks, list, cat, ready, next, start, done, block,
 state-path, migrate-state, migrate-rename, migrate-rollback, validate, triage-skip,
-checkpoint, prep-chat,
+checkpoint, prep-chat, repo-map,
 ralph, rp, codex, copilot,
 review-deep-auto, review-walkthrough-defer, review-walkthrough-record
 ```
@@ -668,6 +668,61 @@ flowctl prospect archive <artifact-id> [--json]
 `promote` allocates a spec via the same scan-based logic as `spec create`, inlining the spec write so the prospect-context spec lands on disk from the first byte. Idempotency guard: refuses if `promoted_to` already includes the target idea — pass `--force` to override.
 
 Exit codes: corrupt artifact on `read`/`promote` → 3 (stderr `[ARTIFACT CORRUPT: <reason>]`); duplicate idea on `promote` without `--force` → 2; Ralph-block (`REVIEW_RECEIPT_PATH` / `FLOW_RALPH=1`) on `/flow-next:prospect` → 2.
+
+### repo-map
+
+Read clawpatch's `.clawpatch/features/*.json` codebase feature index (`/flow-next:map` skill output; clawpatch is an opt-in convenience — flowctl never imports or requires it).
+
+**Bypasses the `ensure_flow_exists()` guard.** These readers gate on `.clawpatch/` presence instead of `.flow/`. Absent `.clawpatch/` returns `{count: 0, features: [], clawpatch_present: false}` with exit 0 — so `/flow-next:prime`'s DE7 sub-criterion check works without special-casing.
+
+```bash
+# List all parsed features (text table or JSON)
+flowctl repo-map list [--count] [--json]
+
+# Show one feature by featureId
+flowctl repo-map show --feature <id> [--json]
+
+# List features touched since a git ref (overlaps ownedFiles[] / entrypoints[]
+# against `git diff --name-only <ref>..HEAD`)
+flowctl repo-map since-ref <ref> [--json]
+```
+
+**Schema-version guard (R9):** `.clawpatch/features/*.json` carries `schemaVersion: 1` (Zod-validated on write by clawpatch). Mismatch or malformed JSON emits a one-line stderr diagnostic naming the offending path + expected-vs-found and skips the file — `list` never aborts. The skip count surfaces as `parse_skipped` in `list --json` when non-zero.
+
+**`since-ref` failure handling (zero-exit envelope):** `since-ref` returns `{success: false, count: 0, features: [], error: "<kind>"}` with exit 0 — never a non-zero exit — so skill bash can branch on the JSON `success` field rather than the exit code. Error kinds:
+
+- `not-a-git-repo` — cwd has no reachable `.git/`; `list` + `show` still work, only `since-ref` is unavailable.
+- `unknown-ref` — `git rev-parse --verify <ref>^{commit}` failed.
+
+**`list --json` shape:**
+
+```json
+{
+  "success": true,
+  "count": 2,
+  "features": [
+    {
+      "featureId": "auth",
+      "title": "Authentication module",
+      "kind": "module",
+      "confidence": 0.92,
+      "tags": ["security", "auth"],
+      "updatedAt": "2026-05-26T10:00:00Z",
+      "ownedFiles": ["src/auth.ts", "src/auth.test.ts"],
+      "entrypoints": ["src/auth.ts"],
+      "path": ".clawpatch/features/auth.json"
+    }
+  ],
+  "clawpatch_present": true,
+  "parse_skipped": 1
+}
+```
+
+**`show --json` shape:** raw `featureRecord` JSON (passthrough from `.clawpatch/features/<file>.json`) plus top-level `path` (source file location, repo-relative). Exit 3 on `--feature <id>` not resolved or `.clawpatch/` absent (distinct from generic exit 1).
+
+**`since-ref --json` shape:** identical to `list --json` with two extra keys — `ref` (echoed input) and `changed_files` (sorted list of paths returned by `git diff --name-only <ref>..HEAD`).
+
+`--count` (list only) prints just the scalar feature count in plain mode — used by `/flow-next:prime`'s DE7 detection (`flowctl repo-map list --count > 0`). Under `--json`, `--count` is ignored (the JSON `count` field IS the contract).
 
 ### glossary
 

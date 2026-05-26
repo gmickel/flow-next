@@ -9556,6 +9556,458 @@ def cmd_prospect_promote(args: argparse.Namespace) -> None:
             print(f"  WARNING: {artifact_warning}", file=sys.stderr)
 
 
+# --- repo-map readers (fn-50.2) ---
+#
+# `flowctl repo-map list / show / since-ref` parse `.clawpatch/features/*.json`
+# (written by the `clawpatch map` CLI; see openclaw/clawpatch). The parent
+# `/flow-next:map` skill wraps clawpatch. These readers BYPASS
+# `ensure_flow_exists()` — they gate on `.clawpatch/` presence instead, so
+# they remain usable in repos that have clawpatch state but no `.flow/`,
+# and `prime`'s DE7 detection works without special-casing.
+#
+# Schema: `schemaVersion: 1` literal (Zod-validated upstream on write).
+# Per-file parse errors (schemaVersion mismatch OR malformed JSON) emit a
+# one-line stderr diagnostic and skip without aborting the list.
+
+CLAWPATCH_DIR = ".clawpatch"
+CLAWPATCH_FEATURES_DIR = "features"
+CLAWPATCH_SCHEMA_VERSION = 1
+
+
+def _clawpatch_dir() -> Path:
+    """Return the repo's `.clawpatch/` directory (no mkdir)."""
+    return get_repo_root() / CLAWPATCH_DIR
+
+
+def _clawpatch_features_dir() -> Path:
+    """Return the repo's `.clawpatch/features/` directory (no mkdir)."""
+    return _clawpatch_dir() / CLAWPATCH_FEATURES_DIR
+
+
+def _repo_map_load_features(
+    features_dir: Path,
+) -> tuple[list[dict[str, Any]], int]:
+    """Walk `.clawpatch/features/*.json` and return (features, parse_skipped).
+
+    Per-file behaviour:
+      - schemaVersion mismatch  → stderr diagnostic, skip.
+      - malformed JSON          → stderr diagnostic, skip.
+      - non-object payload      → stderr diagnostic, skip (defensive — Zod
+        only ever writes objects, but guard the consumer regardless).
+      - unreadable file (OSError) → stderr diagnostic, skip.
+
+    Each surviving entry is augmented with `_path` (string repo-relative path
+    on disk) so `show` can print the source path. Returns features in
+    filesystem-sorted order for deterministic output.
+    """
+    features: list[dict[str, Any]] = []
+    skipped = 0
+    if not features_dir.is_dir():
+        return features, skipped
+
+    repo_root = get_repo_root()
+    for fp in sorted(features_dir.glob("*.json")):
+        try:
+            text = fp.read_text(encoding="utf-8")
+        except OSError as exc:
+            print(
+                f"[flowctl repo-map] {fp}: skip — read error: {exc}",
+                file=sys.stderr,
+            )
+            skipped += 1
+            continue
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            print(
+                f"[flowctl repo-map] {fp}: skip — invalid JSON",
+                file=sys.stderr,
+            )
+            skipped += 1
+            continue
+        if not isinstance(data, dict):
+            print(
+                f"[flowctl repo-map] {fp}: skip — not a JSON object",
+                file=sys.stderr,
+            )
+            skipped += 1
+            continue
+        found = data.get("schemaVersion")
+        if found != CLAWPATCH_SCHEMA_VERSION:
+            print(
+                f"[flowctl repo-map] {fp}: skip — schemaVersion={found!r}, "
+                f"expected={CLAWPATCH_SCHEMA_VERSION}",
+                file=sys.stderr,
+            )
+            skipped += 1
+            continue
+        try:
+            rel_path = str(fp.relative_to(repo_root))
+        except ValueError:
+            rel_path = str(fp)
+        data["_path"] = rel_path
+        features.append(data)
+    return features, skipped
+
+
+def _repo_map_feature_paths(feature: dict[str, Any]) -> list[str]:
+    """Extract repo-relative path strings from a feature's `ownedFiles[]` +
+    `entrypoints[]` arrays. Both are duck-typed: each list may be missing or
+    contain dicts shaped `{"path": "..."}`. Strings in the list are also
+    accepted for forward-compat. Empty / non-string values dropped.
+    """
+    paths: list[str] = []
+    for key in ("ownedFiles", "entrypoints"):
+        arr = feature.get(key)
+        if not isinstance(arr, list):
+            continue
+        for item in arr:
+            if isinstance(item, str):
+                if item:
+                    paths.append(item)
+            elif isinstance(item, dict):
+                p = item.get("path")
+                if isinstance(p, str) and p:
+                    paths.append(p)
+    return paths
+
+
+def _repo_map_summarize(feature: dict[str, Any]) -> dict[str, Any]:
+    """Return the list-row summary projection of a feature record.
+
+    Picks only the fields scouts + display tables need. Does NOT recreate
+    Zod validation — clawpatch validated on write.
+    """
+    summary = {
+        "featureId": feature.get("featureId"),
+        "title": feature.get("title"),
+        "kind": feature.get("kind"),
+        "confidence": feature.get("confidence"),
+        "tags": feature.get("tags") if isinstance(feature.get("tags"), list) else [],
+        "updatedAt": feature.get("updatedAt"),
+        "ownedFiles": _repo_map_feature_paths(
+            {"ownedFiles": feature.get("ownedFiles"), "entrypoints": []}
+        ),
+        "entrypoints": _repo_map_feature_paths(
+            {"ownedFiles": [], "entrypoints": feature.get("entrypoints")}
+        ),
+        "path": feature.get("_path"),
+    }
+    return summary
+
+
+def cmd_repo_map_list(args: argparse.Namespace) -> None:
+    """List `.clawpatch/features/*.json` entries.
+
+    Bypasses `ensure_flow_exists()`; gates on `.clawpatch/` presence. Absent
+    state → `count: 0` exit 0 (so prime's DE7 detection branches on the
+    count, not on a special exit code).
+
+    `--count` prints just the scalar count (for prime's DE7 sub-criterion).
+    """
+    use_json = bool(getattr(args, "json", False))
+    count_only = bool(getattr(args, "count", False))
+    features_dir = _clawpatch_features_dir()
+    clawpatch_present = _clawpatch_dir().is_dir()
+
+    if not clawpatch_present:
+        if count_only and not use_json:
+            print("0")
+            return
+        if use_json:
+            json_output(
+                {
+                    "count": 0,
+                    "features": [],
+                    "clawpatch_present": False,
+                }
+            )
+            return
+        print("No .clawpatch/ directory — run /flow-next:map to create one.")
+        return
+
+    features, skipped = _repo_map_load_features(features_dir)
+
+    if count_only and not use_json:
+        print(str(len(features)))
+        return
+
+    if use_json:
+        payload: dict[str, Any] = {
+            "count": len(features),
+            "features": [_repo_map_summarize(f) for f in features],
+            "clawpatch_present": True,
+        }
+        if skipped:
+            payload["parse_skipped"] = skipped
+        json_output(payload)
+        return
+
+    if not features:
+        print("No features found in .clawpatch/features/.")
+        if skipped:
+            print(f"  ({skipped} file(s) skipped — see stderr for details)")
+        return
+
+    headers = ["featureId", "kind", "confidence", "title"]
+    rows: list[list[str]] = []
+    for f in features:
+        feature_id = str(f.get("featureId") or "?")
+        kind = str(f.get("kind") or "?")
+        conf = f.get("confidence")
+        conf_disp = (
+            f"{conf:.2f}" if isinstance(conf, (int, float)) else str(conf or "?")
+        )
+        title = str(f.get("title") or "")
+        rows.append([feature_id, kind, conf_disp, title])
+
+    widths = [len(h) for h in headers]
+    for r in rows:
+        for i, cell in enumerate(r):
+            widths[i] = max(widths[i], len(cell))
+
+    line_fmt = "  ".join(f"{{:<{w}}}" for w in widths)
+    print(line_fmt.format(*headers))
+    print(line_fmt.format(*["-" * w for w in widths]))
+    for r in rows:
+        print(line_fmt.format(*r))
+    if skipped:
+        print(f"\n({skipped} file(s) skipped — see stderr for details)")
+
+
+def cmd_repo_map_show(args: argparse.Namespace) -> None:
+    """Show one feature by `featureId`. Bypasses `ensure_flow_exists()`.
+
+    Exit codes:
+      - 0 on success.
+      - 3 when `--feature <id>` does not resolve (distinct from generic 1
+        so callers can branch).
+    """
+    use_json = bool(getattr(args, "json", False))
+    feature_id = getattr(args, "feature", None)
+    if not feature_id:
+        error_exit("--feature <id> required", use_json=use_json)
+
+    if not _clawpatch_dir().is_dir():
+        error_exit(
+            ".clawpatch/ not found — run /flow-next:map first",
+            use_json=use_json,
+            code=3,
+        )
+
+    features, _skipped = _repo_map_load_features(_clawpatch_features_dir())
+    match = next(
+        (f for f in features if str(f.get("featureId")) == feature_id), None
+    )
+    if match is None:
+        error_exit(
+            f"feature '{feature_id}' not found",
+            use_json=use_json,
+            code=3,
+        )
+
+    if use_json:
+        # Strip internal `_path` and surface as top-level `path` for clarity.
+        out = {k: v for k, v in match.items() if k != "_path"}
+        out["path"] = match.get("_path")
+        json_output(out)
+        return
+
+    title = match.get("title") or "(no title)"
+    print(f"{match.get('featureId')}: {title}")
+    print(f"  path:       {match.get('_path')}")
+    print(f"  kind:       {match.get('kind')}")
+    print(f"  confidence: {match.get('confidence')}")
+    print(f"  updatedAt:  {match.get('updatedAt')}")
+    tags = match.get("tags")
+    if isinstance(tags, list) and tags:
+        print(f"  tags:       {', '.join(str(t) for t in tags)}")
+    owned = _repo_map_feature_paths(
+        {"ownedFiles": match.get("ownedFiles"), "entrypoints": []}
+    )
+    if owned:
+        print("  ownedFiles:")
+        for p in owned:
+            print(f"    - {p}")
+    entries = _repo_map_feature_paths(
+        {"ownedFiles": [], "entrypoints": match.get("entrypoints")}
+    )
+    if entries:
+        print("  entrypoints:")
+        for p in entries:
+            print(f"    - {p}")
+
+
+def _repo_map_resolve_ref(ref: str) -> tuple[bool, str]:
+    """Resolve a git ref. Returns (ok, error_kind). Error kinds:
+      - "not-a-git-repo" — no `.git/` reachable from cwd / no rev-parse.
+      - "unknown-ref"    — the ref does not resolve to a commit.
+    """
+    # First check: are we in a git repo at all?
+    try:
+        probe = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            cwd=get_repo_root(),
+        )
+    except (OSError, FileNotFoundError):
+        return False, "not-a-git-repo"
+    if probe.returncode != 0:
+        return False, "not-a-git-repo"
+
+    # Second check: does the ref resolve to a commit?
+    try:
+        rp = subprocess.run(
+            ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            cwd=get_repo_root(),
+        )
+    except (OSError, FileNotFoundError):
+        return False, "unknown-ref"
+    if rp.returncode != 0:
+        return False, "unknown-ref"
+    return True, ""
+
+
+def _repo_map_git_diff_names(ref: str) -> list[str]:
+    """Return repo-relative paths of files changed between `ref` and HEAD.
+
+    Caller MUST validate the ref via `_repo_map_resolve_ref` first. Returns
+    `[]` if `git diff` fails for any reason (treated as no overlap).
+    """
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", f"{ref}..HEAD"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            cwd=get_repo_root(),
+        )
+    except (OSError, FileNotFoundError):
+        return []
+    if result.returncode != 0:
+        return []
+    return [
+        line.strip()
+        for line in result.stdout.splitlines()
+        if line.strip()
+    ]
+
+
+def cmd_repo_map_since_ref(args: argparse.Namespace) -> None:
+    """List features overlapping files touched since `<ref>..HEAD`.
+
+    Failure handling per spec edge cases:
+      - Non-git repo: stderr one-liner, JSON `success:false`,
+        `error:"not-a-git-repo"`, exit 0.
+      - Unknown ref:  stderr one-liner, JSON `success:false`,
+        `error:"unknown-ref"`,  exit 0.
+
+    The 0-exit-on-error contract lets skill bash branch on the JSON
+    `success` field rather than the exit code — same pattern as
+    `flowctl scope suggest` (R22 invariant).
+    """
+    use_json = bool(getattr(args, "json", False))
+    ref = getattr(args, "ref", None)
+    if not ref:
+        error_exit("<ref> required", use_json=use_json)
+
+    if not _clawpatch_dir().is_dir():
+        # Absent .clawpatch/ → same "0 features, success" envelope as `list`.
+        if use_json:
+            json_output(
+                {
+                    "count": 0,
+                    "features": [],
+                    "clawpatch_present": False,
+                    "ref": ref,
+                }
+            )
+            return
+        print("No .clawpatch/ directory — run /flow-next:map to create one.")
+        return
+
+    ok, err_kind = _repo_map_resolve_ref(ref)
+    if not ok:
+        if err_kind == "not-a-git-repo":
+            print(
+                "[flowctl repo-map since-ref] not a git repository — "
+                "since-ref unavailable; use 'list' instead",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"[flowctl repo-map since-ref] unknown ref: {ref}",
+                file=sys.stderr,
+            )
+        if use_json:
+            json_output(
+                {
+                    "count": 0,
+                    "features": [],
+                    "ref": ref,
+                    "error": err_kind,
+                },
+                success=False,
+            )
+            return
+        # Plain mode: messages already on stderr; exit 0 to match JSON contract.
+        return
+
+    changed = set(_repo_map_git_diff_names(ref))
+    features, skipped = _repo_map_load_features(_clawpatch_features_dir())
+
+    overlapping: list[dict[str, Any]] = []
+    for f in features:
+        paths = _repo_map_feature_paths(f)
+        if any(p in changed for p in paths):
+            overlapping.append(f)
+
+    if use_json:
+        payload: dict[str, Any] = {
+            "count": len(overlapping),
+            "features": [_repo_map_summarize(f) for f in overlapping],
+            "ref": ref,
+            "changed_files": sorted(changed),
+            "clawpatch_present": True,
+        }
+        if skipped:
+            payload["parse_skipped"] = skipped
+        json_output(payload)
+        return
+
+    if not overlapping:
+        print(f"No features overlap files changed since {ref}.")
+        if skipped:
+            print(f"  ({skipped} file(s) skipped — see stderr for details)")
+        return
+
+    headers = ["featureId", "kind", "title"]
+    rows = [
+        [
+            str(f.get("featureId") or "?"),
+            str(f.get("kind") or "?"),
+            str(f.get("title") or ""),
+        ]
+        for f in overlapping
+    ]
+    widths = [len(h) for h in headers]
+    for r in rows:
+        for i, cell in enumerate(r):
+            widths[i] = max(widths[i], len(cell))
+    line_fmt = "  ".join(f"{{:<{w}}}" for w in widths)
+    print(line_fmt.format(*headers))
+    print(line_fmt.format(*["-" * w for w in widths]))
+    for r in rows:
+        print(line_fmt.format(*r))
+    if skipped:
+        print(f"\n({skipped} file(s) skipped — see stderr for details)")
+
+
 # --- Glossary subcommands (fn-38.2) ---
 
 
@@ -21386,6 +21838,50 @@ def main() -> None:
         "--json", action="store_true", help="JSON output"
     )
     p_prospect_promote.set_defaults(func=cmd_prospect_promote)
+
+    # repo-map list / show / since-ref (fn-50.2)
+    p_repo_map = subparsers.add_parser(
+        "repo-map",
+        help=(
+            "Read clawpatch's `.clawpatch/features/*.json` feature index. "
+            "Bypasses .flow/ guard — gates on .clawpatch/ presence."
+        ),
+    )
+    repo_map_sub = p_repo_map.add_subparsers(dest="repo_map_cmd", required=True)
+
+    p_repo_map_list = repo_map_sub.add_parser(
+        "list",
+        help="List features parsed from .clawpatch/features/*.json",
+    )
+    p_repo_map_list.add_argument(
+        "--count",
+        action="store_true",
+        help="Print just the scalar feature count (plain mode; ignored under --json)",
+    )
+    p_repo_map_list.add_argument("--json", action="store_true", help="JSON output")
+    p_repo_map_list.set_defaults(func=cmd_repo_map_list)
+
+    p_repo_map_show = repo_map_sub.add_parser(
+        "show",
+        help="Show one feature by featureId",
+    )
+    p_repo_map_show.add_argument(
+        "--feature",
+        required=True,
+        help="featureId to look up",
+    )
+    p_repo_map_show.add_argument("--json", action="store_true", help="JSON output")
+    p_repo_map_show.set_defaults(func=cmd_repo_map_show)
+
+    p_repo_map_since_ref = repo_map_sub.add_parser(
+        "since-ref",
+        help="List features whose owned files / entrypoints changed since <ref>",
+    )
+    p_repo_map_since_ref.add_argument("ref", help="git ref (e.g. origin/main)")
+    p_repo_map_since_ref.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_repo_map_since_ref.set_defaults(func=cmd_repo_map_since_ref)
 
     # glossary add / list / read / remove (fn-38.2)
     p_glossary = subparsers.add_parser(
