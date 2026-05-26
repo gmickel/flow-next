@@ -1,0 +1,16 @@
+{
+  "type": "impl_review",
+  "id": "fn-50-codebase-feature-map-flow-nextmap-skill.6",
+  "mode": "codex",
+  "base": "d3aa86bd282af034e4cdf52e80fbabf487d13aee",
+  "verdict": "SHIP",
+  "session_id": "019e65df-5d19-73f0-8e46-0ec395eefac1",
+  "model": null,
+  "effort": null,
+  "spec": "rp",
+  "timestamp": "2026-05-26T20:17:37.458740Z",
+  "review": "No surviving introduced findings.\n\nThe prior config-state bug is fixed in both canonical and Codex mirror: `flow-next-map/workflow.md` now calls `flowctl config get review.backend --json`, and `map_smoke_test.sh` Case 6a locks that regression.\n\n**Requirements Coverage**\n\n| R-ID | Status | Evidence |\n|---|---:|---|\n| R1 | met | `SKILL.md:75-78`, `workflow.md:144-191`, smoke Case 4 |\n| R2 | met | `workflow.md:235-273`, smoke Case 5 |\n| R3 | met | `flowctl.py:9559`, `flowctl.py:21847`, `test_repo_map.py` |\n| R4 | met | `repo-scout.md:19-30`, `context-scout.md:99-108` |\n| R5 | met | `test_scout_fallback_contract.py`, `scout-fallback.sh` |\n| R6 | met | `CLAUDE.md:110`, setup snippets line 39 |\n| R7 | met | `pillars.md:110`, `workflow.md:182-196` |\n| R8 | met | `platforms.md:165`, `troubleshooting.md:87-110`, CI matrix |\n| R9 | met | `flowctl.py:9638`, `test_repo_map.py` skip diagnostics |\n| R10 | met | `SKILL.md:43`, `workflow.md:195-228`, smoke Case 3 |\n| R11 | met | `workflow.md:160-185`, smoke Case 4b |\n| R12 | met | `workflow.md:93-130`, smoke Case 6/6a |\n| R13 | met | `SKILL.md:55-66`, `workflow.md:23-34`, smoke Case 2 |\n| R14 | met | `sync-codex.sh:1153`, `sync-codex.sh:1196-1214`, command shim exists |\n| R15 | met | plugin descriptions, `README.md:222`, `CHANGELOG.md:5-30`, docs-site map page + nav |\n\nUnaddressed R-IDs: []\n\n**Verification**\n\n- `python3 -m unittest discover -s plugins/flow-next/tests -v`: 681 passed, 2 skipped.\n- `bash plugins/flow-next/tests/scout-fallback.sh`: passed.\n- `bash plugins/flow-next/scripts/map_smoke_test.sh` from temp dir: 75/75 passed.\n- `pnpm build` in `~/work/flow-next.dev`: passed, generated `/skills/map/`.\n- `python3 -m pytest plugins/flow-next/tests/`: not available locally, `pytest` module missing. Full unittest suite is green.\n\nFYI checked the `.flow/bin/flowctl.py` hint: repo-local setup copy is stale and lacks `repo-map`, but setup refresh copies `plugins/flow-next/scripts/flowctl.py` into `.flow/bin`. Source plugin path and shipped setup path are correct, so I\u2019m not gating on that.\n\nSuppressed findings: none.  \nClassification counts: 0 introduced, 0 pre_existing.\n\n<verdict>SHIP</verdict>\n",
+  "introduced_count": 0,
+  "pre_existing_count": 0,
+  "unaddressed": []
+}

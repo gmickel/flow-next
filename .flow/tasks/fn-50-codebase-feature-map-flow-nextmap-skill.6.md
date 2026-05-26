@@ -172,9 +172,8 @@ Final gate before completion:
 - [ ] Manual smoke: `/flow-next:prime` shows DE7 informational; `flowctl repo-map list --json` returns count=0 cleanly
 
 ## Done summary
-
-_To be filled by `/flow-next:work` on completion._
-
+Final-integration task for fn-50: cross-platform parity docs, sync-codex.sh registration, full release plumbing across plugin metadata + CHANGELOG + GLOSSARY + STRATEGY + root README + flow-next.dev docs site. Codex review caught five real bugs in prior tasks during the wider-base re-review (sync-codex agent FLOWCTL gap, .clawpatch/.gitignore directory-level miss, set -e swallowing MAP_EXIT, prime DE7 missing FLOWCTL prelude, flowctl config text-mode false-none) — all fixed in the same task with regression-locking smoke assertions. SHIP after 4 fix cycles; 0 introduced findings remaining.
 ## Evidence
-
-_To be filled by `/flow-next:work` on completion._
+- Commits: 94b34e7, 114ac47, 197f300, 1f43e1e, 747c565, e9ca4e3, 7674ced
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (681 passed, 2 skipped), python3 -m unittest discover -s plugins/flow-next/tests -p test_repo_map.py (21 passed), python3 -m unittest discover -s plugins/flow-next/tests -p test_scout_fallback_contract.py (14 passed), bash plugins/flow-next/tests/scout-fallback.sh (14 passed), cd /tmp && bash plugins/flow-next/scripts/map_smoke_test.sh (75/75 passed), bash scripts/sync-codex.sh (clean, 25 skills, 21 agents, 14 validators green, byte-idempotent), cd ~/work/flow-next.dev && pnpm build (green, 51 pages, /skills/map/ rendered), Manual: flowctl repo-map list --json from /tmp returns count:0 cleanly
+- PRs:
