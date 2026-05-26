@@ -113,12 +113,13 @@ Calculate:
 
 ### Prioritize Recommendations
 
-Generate prioritized recommendations from **Pillars 1-5 only**:
+Generate prioritized recommendations from **Pillars 1-5 only** (excluding informational sub-criteria DC7 and DE7):
 1. Critical first (CLAUDE.md, .env.example)
 2. High impact second (pre-commit hooks, lint commands)
 3. Medium last (build scripts, .gitignore)
 
 **Never offer fixes for Pillars 6-8** — these are informational only.
+**Never offer fixes for DC7/DE7** — informational sub-criteria; surface as suggestions in Top Recommendations only.
 
 ---
 
@@ -177,6 +178,14 @@ Informational only. No fixes offered — address independently if desired.
 1. **[Category]**: [specific action] — [why it helps agents]
 2. **[Category]**: [specific action] — [why it helps agents]
 3. **[Category]**: [specific action] — [why it helps agents]
+
+### Informational suggestions (not scored)
+
+When DE7 fires negative (no `.clawpatch/` or `flowctl repo-map list --count` returns 0), append this line to Top Recommendations:
+
+> Consider: `/flow-next:map` — builds a semantic feature index for richer scope anchoring (optional).
+
+Detection: `[[ -d .clawpatch ]] && [ "$(flowctl repo-map list --count 2>/dev/null)" -gt 0 ]`. DE7 is informational — surface as a suggestion only; do NOT include it in Phase 5 remediation prompts.
 
 ## Production Readiness Notes
 
@@ -310,6 +319,7 @@ Ask ONE question per category that has recommendations. Skip categories with no 
 5. **Skip empty categories** — Don't ask if no recommendations
 6. **Max 4 options per question** — Tool limit, prioritize if more
 7. **Never offer Pillar 6-8 items** — Production readiness is informational only
+8. **Never offer informational sub-criteria (DC7, DE7)** — Surface as suggestions in Top Recommendations only; no auto-run from Phase 5
 
 ---
 
