@@ -2,6 +2,25 @@
 
 All notable changes to the flow-next.
 
+## [Unreleased]
+
+### Added
+- **`/flow-next:map` skill** wrapping [openclaw/clawpatch](https://github.com/openclaw/clawpatch)'s `clawpatch map` CLI to produce a semantic feature index of the repo (~20 languages, persisted at `.clawpatch/features/*.json`, Zod-validated `schemaVersion: 1`) (fn-50). Opt-in convenience — `flowctl` core never imports or requires clawpatch; skill detects install via `command -v clawpatch`, prints `pnpm add -g clawpatch` install instructions verbatim when missing (no auto-install), runs `clawpatch init` when `.clawpatch/` absent + writes a self-contained `.clawpatch/.gitignore` skeleton (repo `.gitignore` untouched). Default invocation is `--source heuristic` (provider-free, zero LLM calls, deterministic mapper); `--source auto|agent` is exposed as passthrough (clawpatch's provider matrix stays orthogonal to flow-next's review backend). Single-source `SUPPORTED_CLAWPATCH=">=0.4.0 <0.5.0"` version pin lives in skill prose; outside-range → one-line stderr warning + degrade, never block. PNPM_HOME PATH detection prints the `pnpm setup` hint when pnpm v11 global bins aren't on PATH. Ralph-block (decline-to-run, no receipt write) under `FLOW_RALPH=1` / `REVIEW_RECEIPT_PATH`.
+- **`flowctl repo-map list / show / since-ref` reader subcommands** parse `.clawpatch/features/*.json` directly — text + `--json` output (fn-50.2). Readers BYPASS `ensure_flow_exists()` and gate on `.clawpatch/` presence instead — return `count: 0` with exit 0 when absent so prime's DE7 detection works without special-casing. `schemaVersion != 1` triggers a one-line stderr diagnostic + skip without aborting the full list. Unparseable JSON gets the same skip-with-diagnostic path. `since-ref` returns `success: false` cleanly on non-git repos or unknown refs (exit 0).
+- **Scout enrichment (`repo-scout` + `context-scout`)** — both agents call `flowctl repo-map list --json` as Step 0 when `.clawpatch/` is present and emit an optional `features_anchored: [...]` field in their structured output, including a `last_mapped` timestamp for staleness awareness (staleness = informational signal, not a block) (fn-50.3). Field is purely additive scout-level enrichment — downstream skills (`/flow-next:plan`, `/flow-next:capture`) consume scout output as-is. Fallback contract is load-bearing: scouts remain useful with the existing grep/glob flow when `.clawpatch/` is absent.
+- **`/flow-next:prime` `DE7` sub-criterion** added under Pillar 5 (Dev Environment) — "Codebase feature map present? — `/flow-next:map` recommended for richer scope anchoring (optional)" (fn-50.5). Detection: `[[ -d .clawpatch ]]` + `flowctl repo-map list --count > 0`. Reporting: soft ❌ (informational, mirrors the DC7 pattern); surfaces `/flow-next:map` as actionable suggestion in `Top Recommendations`. **No auto-run.** Pillar count stays at 8; **scored criteria stay at 48** (DC7 + DE7 both informational, excluded from baseline); **total criteria become 48 → 49** with DE7 added.
+- **`GLOSSARY.md`** entries for "feature map" and "features_anchored" (fn-50.6).
+- **CLAUDE.md + setup-template snippets** (`claude-md-snippet.md` + `agents-md-snippet.md`) gain a one-paragraph optional-add under "Where to look" describing `/flow-next:map` as a discoverability aid (fn-50.4). Setup-template changes propagate to existing user repos via the fn-45.3 byte-compare gate.
+
+### Changed
+- **`STRATEGY.md`** zero-deps track gains an opt-in-skill clarification sentence noting `/flow-next:map` is opt-in convenience; `flowctl` core stays zero-dep (fn-50.6).
+- **Codex mirror registration** — `flow-next-map` added to `scripts/sync-codex.sh` `REQUIRED_OPENAI_YAML_SKILLS` array + `generate_openai_yaml` call (utility amber `#F59E0B`); Codex mirror regenerated under `plugins/flow-next/codex/flow-next-map/` (fn-50.6).
+- **Cross-platform parity** — `plugins/flow-next/docs/platforms.md` gains an "Optional skill requirements" section naming `/flow-next:map` Node 22+ requirement; `plugins/flow-next/docs/troubleshooting.md` gains a clawpatch-failure-modes section (missing binary, PNPM_HOME PATH, version mismatch, Node 20) (fn-50.6).
+- **Plugin description string** — skill count bumped 23 → 24 in `plugins/flow-next/.claude-plugin/plugin.json`, `plugins/flow-next/.codex-plugin/plugin.json`, and `.claude-plugin/marketplace.json` (fn-50.6). Scored-criterion count stays "48" (DE7 informational per fn-50.5).
+
+### Tests
+- **CI matrix coverage** — `.github/workflows/test-flow-next.yml` gains explicit `python -m unittest discover -p "test_repo_map.py"` (fn-50.2, 21 tests) and `python -m unittest discover -p "test_scout_fallback_contract.py"` (fn-50.3, 14 tests) steps so both run on ubuntu / macos / windows. New `map_smoke_test.sh` (fn-50.1, 65 cases — install-detect, version-range, Ralph-block, .gitignore skeleton, config-state echo, argument parsing) wired with the existing `cd "$RUNNER_TEMP" && bash "$GITHUB_WORKSPACE/..."` pattern. Tests use checked-in fixtures at `plugins/flow-next/tests/fixtures/clawpatch-map/` — runners do not need Node 22+ or clawpatch installed.
+
 ## [flow-next 1.2.1] - 2026-05-26
 
 ### Fixed

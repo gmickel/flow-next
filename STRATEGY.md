@@ -14,6 +14,8 @@ AI agent workflows drift, lose context, and produce uneven quality at scale. Exi
 
 Spec-driven development with re-anchoring, cross-model review, and zero external dependencies. Six named handover objects between idea and merge — each reviewable on its own, cross-model-verified, and frozen at handover. **Specs are single durable documents that evolve through layers** — `.flow/specs/<id>.md` is the source of truth for goal, architecture, R-IDs, and acceptance, vs alternative split-file approaches (e.g., Kiro's `requirements.md` / `design.md` / `tasks.md`). Skill-driven plugin layered on `flowctl` Python plumbing; the host agent (Claude Code / Codex / Droid / OpenCode) IS the intelligence, and flowctl provides only thin atomic helpers. Everything lives in the repo under `.flow/` — no external services, no global config, no SaaS. Uninstall: delete the directory.
 
+Opt-in convenience skills (e.g. `/flow-next:map` wrapping `clawpatch`) may carry their own runtime prerequisites, but `flowctl` core never imports or requires them — the zero-dep contract holds for the base install; opt-in skills add nothing to the uninstall path beyond a single self-contained directory.
+
 ## Who it's for
 
 Solo developers running multi-agent loops who need re-anchoring + receipts to keep agents on track overnight. Engineering teams adopting spec-driven development who need an artefact chain that replaces standups / refinement / design-review touchpoints. Platform owners building autonomous agent harnesses (Ralph) who need cross-model review gates and proof-of-work receipts. Also flow-swarm operators (in-progress companion product reading `.flow/specs/` natively).

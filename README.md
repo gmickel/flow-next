@@ -219,6 +219,7 @@ Fetch unresolved threads + top-level comments + review-submission bodies, cluste
 | `/flow-next:prime` | 8-pillar agent-readiness assessment with parallel scouts; remediation via consent prompts |
 | `/flow-next:ralph-init` | Scaffold autonomous loop (`scripts/ralph/`) |
 | `/flow-next:sync` | Manually trigger plan-sync to update downstream task specs after drift |
+| `/flow-next:map` | Optional — wrap [openclaw/clawpatch](https://github.com/openclaw/clawpatch)'s `clawpatch map` for a semantic feature index (`.clawpatch/features/*.json`); scouts read it when present, fall back to grep/glob when absent. Requires Node 22+ + `pnpm add -g clawpatch` |
 
 Full command reference (every flag, every default) in [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md).
 

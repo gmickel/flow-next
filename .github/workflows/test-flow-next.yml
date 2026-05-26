@@ -82,6 +82,25 @@ jobs:
             -p "test_banner.py" \
             -v
 
+      # ──────────── fn-50 (clawpatch wrap) ────────────
+      # New readers + scout-fallback contract land here so they run on the full
+      # ubuntu / macos / windows matrix. Tests use checked-in fixtures (no
+      # clawpatch CLI invocation), so runners do not need Node 22+.
+
+      - name: Python unit tests — repo-map readers (fn-50.2)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_repo_map.py" \
+            -v
+
+      - name: Python unit tests — scout fallback contract (fn-50.3)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_scout_fallback_contract.py" \
+            -v
+
       # ──────────── Copilot stdin path (1.1.9) ────────────
       # Mocked unit tests run on all three platforms; the real-subprocess
       # Windows smoke fires only on windows-latest (skipUnless gate). The
@@ -158,6 +177,12 @@ jobs:
         run: |
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/make-pr_smoke_test.sh"
+
+      - name: map_smoke_test.sh (65 cases, fn-50.1)
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/map_smoke_test.sh"
 
       - name: impl-review_smoke_test.sh (74 cases, ~70s)
         if: always()

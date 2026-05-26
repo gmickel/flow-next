@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Map"
+  short_description: "Wrap clawpatch map for a semantic feature index (opt-in)"
+  brand_color: "#F59E0B"
+policy:
+  allow_implicit_invocation: false

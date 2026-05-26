@@ -1150,6 +1150,7 @@ generate_openai_yaml "flow-next-resolve-pr"  "Flow Resolve PR"            "Resol
 # Utility skills (blue/amber, implicit allowed)
 generate_openai_yaml "flow-next"       "Flow Tasks" "Manage .flow/ tasks and specs"                           "#3B82F6" true
 generate_openai_yaml "flow-next-prime" "Flow Prime" "Comprehensive codebase assessment for agent readiness"    "#F59E0B" false
+generate_openai_yaml "flow-next-map"   "Flow Map"   "Wrap clawpatch map for a semantic feature index (opt-in)" "#F59E0B" false
 
 # --- Deprecation redirect skills (1.0 alias surface, removed in 2.0) ---
 # Codex resolves `$flow-next-<name>` and bare-skill-name lookups via the
@@ -1209,6 +1210,7 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-resolve-pr"
   "flow-next"
   "flow-next-prime"
+  "flow-next-map"
 )
 
 openai_yaml_count=$(find "$CODEX_DIR/skills" -name "openai.yaml" | wc -l | tr -d ' ')

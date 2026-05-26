@@ -95,6 +95,21 @@ rp-cli --chat "How does auth work?"
 
 ## Exploration Workflow
 
+### Step 0: Pre-computed feature index (optional — graceful degrade when absent)
+
+If `.clawpatch/` is present, call `flowctl repo-map list --json` first. Use the returned features to scope the rp-cli builder prompt in Step 2 — anchor builder's discovery on concrete feature boundaries rather than re-deriving them from raw text.
+
+```bash
+if [[ -d .clawpatch ]]; then
+  FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+  "$FLOWCTL" repo-map list --json
+fi
+```
+
+When `.clawpatch/` is absent OR the returned `count` is `0`, skip this step and proceed to Step 1 unchanged. The standard `rp-cli` workflow (and the `Fallback: Standard Tools` path further down) remains the load-bearing entry point — the feature index is a convenience enrichment, not a gate.
+
+**Staleness signal:** if `features[].updatedAt` (newest across all returned features) is more than 7 days old, emit one informational line `[context-scout] feature map last updated N days ago` and continue. Staleness is signal, not a block.
+
 ### Step 1: Get Overview
 
 ```bash
@@ -220,6 +235,22 @@ Return to main conversation with:
 ### Key Files
 - `path/to/file.ts:L10-50` - [what it does] `[VERIFIED]`
 - `path/to/other.ts` - [what it does] `[INFERRED]`
+
+### Features Anchored (omit this section entirely when `.clawpatch/` absent)
+
+Optional pre-computed feature index from `/flow-next:map` (clawpatch). Emit only when Step 0 returned `count > 0`; otherwise omit the section entirely — absence signals "scout ran without map", not "no features matched".
+
+```yaml
+features_anchored:
+  - feature_id: auth             # featureId from clawpatch (snake_case here, camelCase upstream)
+    title: Authentication module
+    kind: service                # one of: cli-command | route | ui-flow | service | job | agent-tool | library | config | release | test-suite | infra | unknown
+    confidence: high             # one of: high | medium | low (clawpatch Zod enum, NOT numeric)
+    owned_files: [src/auth.ts, src/auth.test.ts]
+    last_mapped: 2026-05-26T10:00:00Z   # newest updatedAt across all returned features (ISO8601)
+```
+
+Rank by `confidence` (`high` → `medium` → `low`) when surfacing the most relevant anchors.
 
 ### Code Signatures
 ```typescript
@@ -372,6 +403,8 @@ If rp-cli unavailable or not suited for the task, use standard tools:
 - `Grep` - ripgrep-based search
 - `Glob` - file pattern matching
 - `Read` - file reading
+
+The same graceful-degrade idiom applies to the Step 0 pre-computed feature index: when `.clawpatch/` is absent or `flowctl repo-map list --json` returns `count: 0`, skip the feature-anchor pass and rely on grep / glob / structure discovery instead. The feature index is enrichment, never a precondition.
 
 RepoPrompt excels at:
 - Token-efficient signatures (structure command)
