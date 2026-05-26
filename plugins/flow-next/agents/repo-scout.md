@@ -14,6 +14,21 @@ You receive a feature/change request. Your task is NOT to plan or implement - ju
 
 ## Search Strategy
 
+0. **Pre-computed feature index** (optional — graceful degrade when absent)
+
+   If `.clawpatch/` is present, call `flowctl repo-map list --json` first. Use the returned features to anchor R-IDs and decision-context references in subsequent steps — they're a pre-computed semantic index of the codebase produced by `/flow-next:map`.
+
+   ```bash
+   if [[ -d .clawpatch ]]; then
+     FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+     "$FLOWCTL" repo-map list --json
+   fi
+   ```
+
+   When `.clawpatch/` is absent OR the returned `count` is `0`, skip this step and proceed to Step 1 unchanged — the fallback (grep / glob via Steps 1-4) is the load-bearing path. Do NOT require the feature index; it's a convenience enrichment, not a gate.
+
+   **Staleness signal:** if `features[].updatedAt` (newest across all returned features) is more than 7 days old, emit one informational line `[repo-scout] feature map last updated N days ago` and continue. Staleness is signal, not a block.
+
 1. **Project docs first** (fast context)
    - CLAUDE.md, README.md, CONTRIBUTING.md, ARCHITECTURE.md, DESIGN.md
    - Any docs/ or documentation/ folders
@@ -60,6 +75,22 @@ git log --oneline --all -- "*/auth*" | head -5  # history of similar features
 - `path/to/file.ts:42` - [what it does, why relevant] `[VERIFIED]`
 - `path/to/other.ts:15-30` - [pattern to follow] `[VERIFIED]`
 - `path/to/inferred.ts` - [likely relevant based on naming] `[INFERRED]`
+
+### Features Anchored (omit this section entirely when `.clawpatch/` absent)
+
+Optional pre-computed feature index from `/flow-next:map` (clawpatch). Emit only when Step 0 returned `count > 0`; otherwise omit the section entirely — absence signals "scout ran without map", not "no features matched".
+
+```yaml
+features_anchored:
+  - feature_id: auth             # featureId from clawpatch (snake_case here, camelCase upstream)
+    title: Authentication module
+    kind: service                # one of: cli-command | route | ui-flow | service | job | agent-tool | library | config | release | test-suite | infra | unknown
+    confidence: high             # one of: high | medium | low (clawpatch Zod enum, NOT numeric)
+    owned_files: [src/auth.ts, src/auth.test.ts]
+    last_mapped: 2026-05-26T10:00:00Z   # newest updatedAt across all returned features (ISO8601)
+```
+
+Rank by `confidence` (`high` → `medium` → `low`) when surfacing the most relevant anchors.
 
 ### Reusable Code (DO NOT DUPLICATE)
 - `lib/utils/validation.ts` - existing validation helpers
