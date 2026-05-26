@@ -107,7 +107,9 @@ class RepoMapListPresent(unittest.TestCase):
         self.assertTrue(payload["clawpatch_present"])
         feat = payload["features"][0]
         self.assertEqual(feat["featureId"], "auth")
-        self.assertEqual(feat["kind"], "module")
+        # kind is a member of upstream `featureKinds` (Zod enum); "service"
+        # is one of the canonical values (see clawpatch src/types.ts).
+        self.assertEqual(feat["kind"], "service")
         # Confidence is clawpatch's "high" | "medium" | "low" Zod enum
         # (NOT a numeric score) — locked here so future drift surfaces fast.
         self.assertEqual(feat["confidence"], "high")

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "featureId": "auth",
   "title": "Authentication module",
-  "kind": "module",
+  "kind": "service",
   "confidence": "high",
   "tags": ["security", "auth"],
   "ownedFiles": [

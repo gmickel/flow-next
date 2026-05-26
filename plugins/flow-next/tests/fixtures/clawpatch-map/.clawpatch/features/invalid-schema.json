@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "featureId": "future-feature",
   "title": "Feature from a future clawpatch",
-  "kind": "module",
+  "kind": "service",
   "confidence": "medium",
   "tags": [],
   "ownedFiles": [],
