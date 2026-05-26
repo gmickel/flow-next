@@ -24,6 +24,11 @@ Three independent surfaces, sequenced so Part 1 unlocks Parts 2 and 3:
 - New skill in `plugins/flow-next/skills/flow-next-map/`. Wraps the `clawpatch` CLI via shell-out, similar to how `/flow-next:resolve-pr` wraps `gh`.
 - Install handling: detect via `which clawpatch` + `clawpatch doctor`; if missing, surface `pnpm add -g clawpatch` instructions and exit cleanly. **No auto-install** — Node toolchain is the user's choice.
 - Init handling: if `.clawpatch/` is absent, the skill runs `clawpatch init` first (one less manual step). Writes a `.clawpatch/.gitignore` skeleton (or a `.clawpatch/` entry in repo `.gitignore` — implementer picks) so machine-generated map data isn't accidentally committed.
+- **Default `clawpatch map` invocation is provider-free** (deterministic, zero LLM calls). Per clawpatch's `docs/feature-mapping.md`: *"The default mapper does not call a model. It uses repo conventions and cheap filesystem walks."* The `--source` flag controls behavior:
+  - `--source heuristic` (default) — deterministic mapper only; no provider needed
+  - `--source auto` — runs deterministic first, invokes the provider ONLY when deterministic is weak (no features / only-config features / very low source coverage / 1-2 features for a larger source tree)
+  - `--source agent` — forces provider-backed mapper IN ADDITION to deterministic (appends agent-derived features tagged `source: agent-mapper`)
+- The `/flow-next:map` skill **defaults to `--source heuristic`** so the happy path never spends a provider token. Users with a clawpatch provider configured can opt into `--source auto` or `--source agent` via passthrough flag (e.g. `/flow-next:map --source=auto`). The skill does NOT route through flow-next's review backend config (rp/codex/copilot/none) — clawpatch's provider matrix is orthogonal.
 - New flowctl reader: thin `flowctl repo-map list / show / since-ref` subcommands that parse `.clawpatch/features/*.json` and return structured output for scouts to consume. **No state duplication into `.flow/`** — feature data ages with code, not with flow-next state.
 
 **Part 2 — Scout enrichment + agents.md/CLAUDE.md mention:**
@@ -43,6 +48,7 @@ Cross-platform: clawpatch requires Node 22+ (pnpm-installable). Same matrix as f
 <!-- Source-tag breakdown: 100% [paraphrase] -->
 
 - **Zero-deps STRATEGY.md track preservation.** The wrap is a skill convenience, NOT a flowctl core dependency. flowctl never imports or requires clawpatch. The skill itself is the only surface that touches clawpatch. Uninstall promise stays intact — `rm -rf .flow/` removes flow-next; `rm -rf .clawpatch/` removes the map; nothing entangled.
+- **No provider required for the default path.** `clawpatch init` and `clawpatch map --source heuristic` (the skill's defaults) are fully deterministic — zero LLM calls, zero API spend, zero review-backend dependency. Users get the full Part 2 (scout enrichment) and Part 3 (prime nudge) value without configuring any clawpatch provider. The `--source auto/agent` provider-backed paths exist for users who want richer mapping AND have a provider configured, but they're opt-in within the opt-in. The skill MUST NOT require a clawpatch provider to be configured for the default invocation.
 - **Scout fallback is non-negotiable.** A scout that depends on `.clawpatch/` being present is broken on every project where the user hasn't opted into the map. Fallback paths must be tested explicitly, not assumed.
 - **Upstream maintenance risk.** clawpatch is 11 days old at spec time (created 2026-05-15). The wrap should pin a tested version range in skill prose, surface the version mismatch when `clawpatch --version` returns something outside the range. If clawpatch ever rebrands or goes unmaintained, removing the skill is a clean revert (no flow-next core code depends on it).
 - **`.clawpatch/.gitignore` vs repo `.gitignore`.** Implementer choice — both work. Document the choice in the skill prose so users know where to look if files surprise them.
@@ -53,7 +59,7 @@ Cross-platform: clawpatch requires Node 22+ (pnpm-installable). Same matrix as f
 ## Acceptance Criteria
 <!-- Source-tag breakdown: 40% [user], 60% [paraphrase] -->
 
-- **R1:** New `/flow-next:map` skill exists at `plugins/flow-next/skills/flow-next-map/`. Detects `clawpatch` availability via `which clawpatch` + `clawpatch doctor`. When missing, prints `pnpm add -g clawpatch` install instructions and exits cleanly (no auto-install). [user] (turn — "wrap clawpatch map including the install etc.") / [paraphrase]
+- **R1:** New `/flow-next:map` skill exists at `plugins/flow-next/skills/flow-next-map/`. Detects `clawpatch` availability via `which clawpatch` + `clawpatch doctor`. When missing, prints `pnpm add -g clawpatch` install instructions and exits cleanly (no auto-install). **Default invocation passes `--source heuristic` (provider-free) and works without any clawpatch provider configured**; `--source auto|agent` is exposed as a passthrough flag for users who want provider-backed enrichment. [user] (turn — "wrap clawpatch map including the install etc.") / [paraphrase]
 - **R2:** Skill runs `clawpatch init` automatically when `.clawpatch/` is absent and writes a `.clawpatch/.gitignore` skeleton (or appends a `.clawpatch/` entry to repo `.gitignore` — implementer choice, documented in skill prose). [paraphrase]
 - **R3:** New `flowctl repo-map list / show / since-ref` subcommands read native `.clawpatch/features/*.json` and return structured output (text + `--json`). State location is native `.clawpatch/`; no duplication into `.flow/`. [user] (turn — "thin reader") / [paraphrase]
 - **R4:** `repo-scout` and `context-scout` agents read `.clawpatch/features/` when present and emit an optional `features_anchored: [...]` field in their structured output. Downstream consumers (`/flow-next:plan`, `/flow-next:capture`) read the field if present, ignore it if absent. [user] (turn — "scouts can use the map") / [paraphrase]
@@ -79,6 +85,8 @@ Out of scope (the explicit non-goals):
 - **Memory category for features.** Tempting (`knowledge/features/<name>.md`) but over-engineering. Scouts consume the map ephemerally; no new memory category. [paraphrase]
 - **Multi-mapper abstraction.** Only clawpatch today. If a second mapper appears later (e.g. a Tree-sitter-based native flow-next mapper), the skill can grow a `--provider` flag then. Not now. [paraphrase]
 - **CI/CD integration of `/flow-next:map`.** `clawpatch ci` exists upstream but is the user's CI choice, not flow-next's concern.
+- **Wiring `--source agent` into flow-next's review backend resolution.** clawpatch's provider matrix (codex/acpx/claude/cursor/grok/opencode/pi) is orthogonal to flow-next's review backend config (rp/codex/copilot/none). The skill exposes `--source` as a passthrough flag; users who run `clawpatch map --source agent` configure clawpatch's provider directly via `clawpatch` env vars (`CLAWPATCH_PROVIDER`, `CLAWPATCH_MODEL`) or its own config — flow-next does NOT proxy review-backend settings into clawpatch. Two backend configs, two purposes.
+- **Backfilling existing repos with `--source agent`.** The skill doesn't try to auto-detect when deterministic coverage is "weak enough" to recommend upgrading to `--source auto`; that's clawpatch's own internal heuristic. The skill stays heuristic-by-default and lets users opt up.
 
 ## Decision Context
 
