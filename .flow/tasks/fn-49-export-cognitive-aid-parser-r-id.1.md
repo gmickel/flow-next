@@ -52,9 +52,8 @@ This is the **early proof point** for fn-49 — single regex extension + lexical
 - [ ] CHANGELOG `[unreleased]` entry drafted under `### Fixed` citing fn-48 as surfacing context.
 
 ## Done summary
-
-_(filled by `/flow-next:work` when the task completes)_
-
+Extended `_export_parse_acceptance_criteria` regex from `R\d+` to `R\d+[a-z]?` so sub-scoped sibling R-IDs (R4a, R4b) are no longer silently dropped. Verified against fn-48 spec: post-fix `acceptance_count` is 9 (was 7); lexical sort preserves R4 < R4a < R4b < R5. Added 8 unit tests in `test_acceptance_criteria_parser.py`, documented suffix form in `templates/spec.md`, re-synced Codex mirror, drafted `[unreleased]` CHANGELOG entry. Full test suite (632) and smoke baseline (127/2) both green.
 ## Evidence
-
-_(filled by `/flow-next:work` — commit hashes + test commands run)_
+- Commits: e545ca3736bbbde0d934764c5893b0f88d13d596
+- Tests: python3 -m unittest tests.test_acceptance_criteria_parser -v (13 pass), python3 -m unittest discover -s tests (632 pass, 2 skipped), bash plugins/flow-next/scripts/smoke_test.sh (127 pass / 2 fail = pre-existing copilot-CLI baseline), flowctl spec export-cognitive-aid fn-48-... | jq length returns 9 (was 7)
+- PRs:
