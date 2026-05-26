@@ -21,7 +21,7 @@
 
 ## What is this?
 
-Flow-Next is an AI agent orchestration plugin. **Twenty-three agent-native skills** for the full lifecycle: idea → spec → tasks → review → ship → maintain. Bundled task tracking, dependency graphs, re-anchoring before every task, multi-model reviews, decay-aware project memory, GitHub PR creation and resolution, agent-readiness audits. Everything lives in your repo — no external services, no global config. Uninstall: delete `.flow/`.
+Flow-Next is an AI agent orchestration plugin. **Twenty-four agent-native skills** for the full lifecycle: idea → spec → tasks → review → ship → maintain. Bundled task tracking, dependency graphs, re-anchoring before every task, multi-model reviews, decay-aware project memory, GitHub PR creation and resolution, agent-readiness audits. Everything lives in your repo — no external services, no global config. Uninstall: delete `.flow/`.
 
 - **Spec-first.** Every unit of work belongs to a spec `fn-N`. Tasks `fn-N.M` inherit context.
 - **Fresh-context workers.** Each task runs in its own subagent. No token bleed between tasks.

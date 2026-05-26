@@ -14,7 +14,7 @@ All notable changes to the flow-next.
 
 ### Changed
 - **`STRATEGY.md`** zero-deps track gains an opt-in-skill clarification sentence noting `/flow-next:map` is opt-in convenience; `flowctl` core stays zero-dep (fn-50.6).
-- **Codex mirror registration** — `flow-next-map` added to `scripts/sync-codex.sh` `REQUIRED_OPENAI_YAML_SKILLS` array + `generate_openai_yaml` call (utility amber `#F59E0B`); Codex mirror regenerated under `plugins/flow-next/codex/flow-next-map/` (fn-50.6).
+- **Codex mirror registration** — `flow-next-map` added to `scripts/sync-codex.sh` `REQUIRED_OPENAI_YAML_SKILLS` array + `generate_openai_yaml` call (utility amber `#F59E0B`); Codex mirror regenerated under `plugins/flow-next/codex/skills/flow-next-map/` (fn-50.6).
 - **Cross-platform parity** — `plugins/flow-next/docs/platforms.md` gains an "Optional skill requirements" section naming `/flow-next:map` Node 22+ requirement; `plugins/flow-next/docs/troubleshooting.md` gains a clawpatch-failure-modes section (missing binary, PNPM_HOME PATH, version mismatch, Node 20) (fn-50.6).
 - **Plugin description string** — skill count bumped 23 → 24 in `plugins/flow-next/.claude-plugin/plugin.json`, `plugins/flow-next/.codex-plugin/plugin.json`, and `.claude-plugin/marketplace.json` (fn-50.6). Scored-criterion count stays "48" (DE7 informational per fn-50.5).
 

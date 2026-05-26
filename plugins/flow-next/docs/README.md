@@ -13,7 +13,7 @@ Reference material for flow-next. Each file is self-contained, terse, and offlin
 | [`memory-schema.md`](memory-schema.md) | Categorized memory tree (bug / knowledge tracks), frontmatter schemas, decisions subtree, audit lifecycle, legacy migration |
 | [`glossary.md`](glossary.md) | Repo-root `GLOSSARY.md` shape, resolution walk, subcommands, R17 forbidden-vocabulary guard |
 | [`strategy.md`](strategy.md) | Repo-root `STRATEGY.md` shape, Rumelt sections, foreign-file refusal, R19 fluff guard, how downstream skills consume it |
-| [`platforms.md`](platforms.md) | Install matrix (Claude Code / Codex / Droid / OpenCode), cross-platform patterns, Codex model mapping, community ports |
+| [`platforms.md`](platforms.md) | Install matrix (Claude Code / Codex / Droid / OpenCode), cross-platform patterns, Codex model mapping, community ports, optional skill requirements (`/flow-next:map` Node 22+ + `clawpatch`) |
 | [`sync-codex.md`](sync-codex.md) | `scripts/sync-codex.sh` pipeline shape, validation guards, plain-text transform (fn-45), R17 cross-link discipline |
 | [`troubleshooting.md`](troubleshooting.md) | Reset stuck tasks, `.flow/` cleanup, Ralph debugging, receipt validation, rp-cli conflict resolution, `/flow-next:map` clawpatch failure modes, uninstall |
 
@@ -21,7 +21,7 @@ Reference material for flow-next. Each file is self-contained, terse, and offlin
 
 | Doc | What's in it |
 |-----|--------------|
-| [`flowctl.md`](flowctl.md) | Full `flowctl` CLI reference — every command, every flag, JSON shapes, exit codes |
+| [`flowctl.md`](flowctl.md) | Full `flowctl` CLI reference — every command, every flag, JSON shapes, exit codes (including the [`repo-map`](flowctl.md#repo-map) readers consumed by the `/flow-next:map` opt-in skill) |
 | [`ralph.md`](ralph.md) | Ralph autonomous mode internals — hooks, receipts, iteration cap, DCG setup, sandbox options |
 | [`teams.md`](teams.md) | Spec-driven team workflow — handover objects, Spec-as-PR, parallel work from one spec, symmetric interview, adoption ladder |
 | [`ci-workflow-example.yml`](ci-workflow-example.yml) | Drop-in GitHub Actions example running `flowctl validate --all` |
