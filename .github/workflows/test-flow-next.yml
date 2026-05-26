@@ -178,7 +178,7 @@ jobs:
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/make-pr_smoke_test.sh"
 
-      - name: map_smoke_test.sh (65 cases, fn-50.1)
+      - name: map_smoke_test.sh (74 cases, fn-50.1 + fn-50.6 directory-level ignore guard)
         if: always()
         run: |
           cd "$RUNNER_TEMP"

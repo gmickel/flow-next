@@ -15,7 +15,11 @@
 #      prints `pnpm add -g clawpatch` verbatim and exits 1; PNPM_HOME branch
 #      detects pnpm-installed-but-not-on-PATH and prints the setup hint.
 #   5. .clawpatch/.gitignore skeleton (R2) — replayed bash writes the skeleton
-#      idempotently when .clawpatch/ exists, leaves repo `.gitignore` untouched.
+#      idempotently when .clawpatch/ exists, leaves repo `.gitignore` untouched,
+#      and `git check-ignore` confirms the directory-level ignore contract
+#      (features/*.json, project.json, config.json, .cache/, *.log, *.tmp,
+#      patches/*.tmp all ignored; .clawpatch/.gitignore itself preserved via
+#      `!.gitignore` negation).
 #   6. Config-state echo (R12) — replayed bash emits the four-line block.
 #   7. Argument parsing — `--` terminator, --source heuristic|auto|agent valid;
 #      invalid --source exits 2.
@@ -384,14 +388,16 @@ if [[ ! -f "$GITIGNORE_PATH" ]]; then
   cat > "$GITIGNORE_PATH" <<'EOF'
 # Auto-managed by /flow-next:map — patterns scoped to .clawpatch/.
 # Delete this directory entire to remove data + ignore rules together.
-
-# Provider/agent transient state (clawpatch's own; not flow-next's)
-.cache/
-*.log
-*.tmp
-
-# Per-run patch artifacts (clawpatch patch/apply transients)
-patches/*.tmp
+#
+# Ignore EVERYTHING under .clawpatch/ — features/*.json, project.json,
+# config.json, .cache/, *.log, *.tmp, patches/*.tmp — except this
+# .gitignore file itself. The persisted index is reproducible from
+# `clawpatch map`; checking it into git would create review noise and
+# couple PRs to mapper-output drift. Per the spec edge case
+# "`.clawpatch/` ignored at directory level", this self-contained
+# pattern delivers that contract without touching the repo `.gitignore`.
+*
+!.gitignore
 EOF
 fi
 BASH
@@ -412,8 +418,9 @@ bash "$GITIGNORE_GUARD" "$CASE5_REPO/.clawpatch"
   || fail "Case 5a: .clawpatch/.gitignore NOT written"
 SKEL_TEXT="$(cat "$CASE5_REPO/.clawpatch/.gitignore")"
 assert_grep "Auto-managed by /flow-next:map" "$SKEL_TEXT" "Case 5a: skeleton header present"
-assert_grep ".cache/" "$SKEL_TEXT" "Case 5a: .cache/ pattern present"
-assert_grep "patches/*.tmp" "$SKEL_TEXT" "Case 5a: patches/*.tmp pattern present"
+assert_grep '*' "$SKEL_TEXT" "Case 5a: catch-all '*' pattern present"
+assert_grep '!.gitignore' "$SKEL_TEXT" "Case 5a: negation '!.gitignore' present (preserves self)"
+assert_grep "directory level" "$SKEL_TEXT" "Case 5a: spec contract referenced in comment"
 
 # 5b: Idempotency — second write must not modify (no `if exists` would clobber).
 echo "user-added-pattern" >> "$CASE5_REPO/.clawpatch/.gitignore"
@@ -432,6 +439,52 @@ if [[ "$REPO_GITIGNORE_BEFORE" == "$REPO_GITIGNORE_AFTER" ]]; then
   ok "Case 5c: repo .gitignore unchanged (skeleton is self-contained inside .clawpatch/)"
 else
   fail "Case 5c: repo .gitignore was modified (R2 self-containment violation)"
+fi
+
+# 5d: git check-ignore contract — the skeleton must actually ignore generated
+# state (features/*.json, project.json, config.json) but preserve itself.
+# Skipped when `git` is unavailable; otherwise we build a throwaway repo
+# seeded with the skeleton + plausible clawpatch outputs and probe each path
+# with `git check-ignore`. Counter updates happen in this parent shell.
+if command -v git >/dev/null 2>&1; then
+  CASE5D_REPO="$TEST_DIR/case5d"
+  mkdir -p "$CASE5D_REPO/.clawpatch/features" "$CASE5D_REPO/.clawpatch/.cache" "$CASE5D_REPO/.clawpatch/patches"
+  (
+    cd "$CASE5D_REPO"
+    git init -q
+    bash "$GITIGNORE_GUARD" "$CASE5D_REPO/.clawpatch"
+    echo '{"schemaVersion":1}' > .clawpatch/features/auth.json
+    echo '{"projectName":"smoke"}' > .clawpatch/project.json
+    echo '{"source":"heuristic"}' > .clawpatch/config.json
+    echo "stale" > .clawpatch/.cache/x
+    echo "trace" > .clawpatch/foo.log
+    echo "tmp" > .clawpatch/foo.tmp
+    echo "patchscratch" > .clawpatch/patches/p.tmp
+  ) >/dev/null 2>&1
+
+  # Per-path check (each contributes one PASS/FAIL toward the suite counters).
+  for rel in \
+    .clawpatch/features/auth.json \
+    .clawpatch/project.json \
+    .clawpatch/config.json \
+    .clawpatch/.cache/x \
+    .clawpatch/foo.log \
+    .clawpatch/foo.tmp \
+    .clawpatch/patches/p.tmp; do
+    if (cd "$CASE5D_REPO" && git check-ignore -q "$rel" 2>/dev/null); then
+      ok "Case 5d: $rel is git-ignored (R2 directory-level contract)"
+    else
+      fail "Case 5d: $rel is NOT git-ignored (skeleton too narrow — features/project.json/config.json bug)"
+    fi
+  done
+  # The skeleton itself MUST stay tracked — the `!.gitignore` negation.
+  if (cd "$CASE5D_REPO" && git check-ignore -q .clawpatch/.gitignore 2>/dev/null); then
+    fail "Case 5d: .clawpatch/.gitignore is being ignored (negation broken — uninstall path loses ignore rules with the data)"
+  else
+    ok "Case 5d: .clawpatch/.gitignore is NOT git-ignored (negation preserves the ignore-rule file itself)"
+  fi
+else
+  echo "  (Case 5d skipped — git not on PATH)"
 fi
 
 # =============================================================================

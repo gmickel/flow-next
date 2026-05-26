@@ -251,19 +251,28 @@ if [[ ! -f "$GITIGNORE_PATH" ]]; then
   cat > "$GITIGNORE_PATH" <<'EOF'
 # Auto-managed by /flow-next:map — patterns scoped to .clawpatch/.
 # Delete this directory entire to remove data + ignore rules together.
-
-# Provider/agent transient state (clawpatch's own; not flow-next's)
-.cache/
-*.log
-*.tmp
-
-# Per-run patch artifacts (clawpatch patch/apply transients)
-patches/*.tmp
+#
+# Ignore EVERYTHING under .clawpatch/ — features/*.json, project.json,
+# config.json, .cache/, *.log, *.tmp, patches/*.tmp — except this
+# .gitignore file itself. The persisted index is reproducible from
+# `clawpatch map`; checking it into git would create review noise and
+# couple PRs to mapper-output drift. Per the spec edge case
+# "`.clawpatch/` ignored at directory level", this self-contained
+# pattern delivers that contract without touching the repo `.gitignore`.
+*
+!.gitignore
 EOF
 fi
 ```
 
 Idempotent — only writes when the file doesn't exist. If clawpatch's own future init starts shipping `.gitignore`, we defer to it (leave the upstream file in place).
+
+Verify the contract with `git check-ignore` from inside the repo:
+
+```bash
+git check-ignore -v .clawpatch/features/foo.json   # → .clawpatch/.gitignore:N:*  .clawpatch/features/foo.json
+git check-ignore -v .clawpatch/.gitignore          # → no output, exit 1 (NOT ignored — the negation is intentional)
+```
 
 ---
 
