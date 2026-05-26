@@ -343,10 +343,15 @@ chmod +x "$INSTALL_GUARD"
 
 # 4a: clawpatch absent from PATH → exit 1 + verbatim install instructions
 rc=0
-# Empty PATH suppresses both clawpatch + pnpm so the no-pnpm branch fires.
-# Preserve bash itself by including the bash binary's dir in PATH.
+# Hermetic test PATH: include bash + the standard coreutils directories so the
+# replayed guard script can invoke `cat`, `command`, `dirname`, etc. — but
+# exclude Node-global dirs where the user's real `clawpatch`/`pnpm` would
+# live. (Homebrew bash on macOS lives at /opt/homebrew/bin/bash, which is NOT
+# on the coreutils path — /bin and /usr/bin are. Earlier `PATH=$BASH_DIR`
+# alone broke `cat` lookup on those systems — Codex review catch fn-50.6.)
 BASH_DIR="$(dirname "$(command -v bash)")"
-err="$(env -i PATH="$BASH_DIR" HOME="$HOME" bash "$INSTALL_GUARD" 2>&1)" || rc=$?
+HERMETIC_PATH="$BASH_DIR:/usr/bin:/bin"
+err="$(env -i PATH="$HERMETIC_PATH" HOME="$HOME" bash "$INSTALL_GUARD" 2>&1)" || rc=$?
 assert_rc 1 "$rc" "Case 4a: missing clawpatch → exit 1"
 assert_grep "pnpm add -g clawpatch" "$err" "Case 4a: prints verbatim install instructions"
 assert_grep "Node 22+" "$err" "Case 4a: names Node 22+ requirement"
@@ -366,7 +371,9 @@ EOF
 chmod +x "$PNPM_STUB_DIR/pnpm"
 
 rc=0
-err="$(env -i PATH="$PNPM_STUB_DIR:$BASH_DIR" HOME="$HOME" bash "$INSTALL_GUARD" 2>&1)" || rc=$?
+# Same hermetic PATH as Case 4a, with the pnpm stub directory prepended so
+# `command -v pnpm` resolves to the stub — but real coreutils stays available.
+err="$(env -i PATH="$PNPM_STUB_DIR:$HERMETIC_PATH" HOME="$HOME" bash "$INSTALL_GUARD" 2>&1)" || rc=$?
 assert_rc 1 "$rc" "Case 4b: pnpm-installed + clawpatch-missing → exit 1"
 assert_grep "pnpm add -g clawpatch" "$err" "Case 4b: still prints install instructions"
 assert_grep "pnpm setup" "$err" "Case 4b: PNPM_HOME hint surfaces (pnpm setup)"
