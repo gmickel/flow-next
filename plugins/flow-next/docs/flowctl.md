@@ -705,7 +705,7 @@ flowctl repo-map since-ref <ref> [--json]
       "featureId": "auth",
       "title": "Authentication module",
       "kind": "module",
-      "confidence": 0.92,
+      "confidence": "high",
       "tags": ["security", "auth"],
       "updatedAt": "2026-05-26T10:00:00Z",
       "ownedFiles": ["src/auth.ts", "src/auth.test.ts"],

@@ -108,6 +108,9 @@ class RepoMapListPresent(unittest.TestCase):
         feat = payload["features"][0]
         self.assertEqual(feat["featureId"], "auth")
         self.assertEqual(feat["kind"], "module")
+        # Confidence is clawpatch's "high" | "medium" | "low" Zod enum
+        # (NOT a numeric score) — locked here so future drift surfaces fast.
+        self.assertEqual(feat["confidence"], "high")
         self.assertEqual(
             feat["ownedFiles"], ["src/auth.ts", "src/auth.test.ts"]
         )

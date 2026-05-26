@@ -3,7 +3,7 @@
   "featureId": "auth",
   "title": "Authentication module",
   "kind": "module",
-  "confidence": 0.92,
+  "confidence": "high",
   "tags": ["security", "auth"],
   "ownedFiles": [
     {"path": "src/auth.ts"},

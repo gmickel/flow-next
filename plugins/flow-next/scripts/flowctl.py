@@ -9754,10 +9754,15 @@ def cmd_repo_map_list(args: argparse.Namespace) -> None:
     for f in features:
         feature_id = str(f.get("featureId") or "?")
         kind = str(f.get("kind") or "?")
+        # clawpatch confidence is an enum "high"/"medium"/"low" (Zod-validated
+        # upstream); forward-compat fall-through covers any future numeric form.
         conf = f.get("confidence")
-        conf_disp = (
-            f"{conf:.2f}" if isinstance(conf, (int, float)) else str(conf or "?")
-        )
+        if isinstance(conf, (int, float)):
+            conf_disp = f"{conf:.2f}"
+        elif conf is None:
+            conf_disp = "?"
+        else:
+            conf_disp = str(conf)
         title = str(f.get("title") or "")
         rows.append([feature_id, kind, conf_disp, title])
 

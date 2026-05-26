@@ -3,7 +3,7 @@
   "featureId": "future-feature",
   "title": "Feature from a future clawpatch",
   "kind": "module",
-  "confidence": 0.5,
+  "confidence": "medium",
   "tags": [],
   "ownedFiles": [],
   "entrypoints": [],
