@@ -280,8 +280,14 @@ git check-ignore -v .clawpatch/.gitignore          # → no output, exit 1 (NOT 
 
 ```bash
 echo "Running: clawpatch map --source $SOURCE${EXTRA_PASSTHROUGH[*]:+ ${EXTRA_PASSTHROUGH[*]}}" >&2
+# Disable errexit around the call so we can capture the real exit code
+# in MAP_EXIT — under `set -euo pipefail` (script preamble), a non-zero
+# `clawpatch map` would exit the shell before line 5 runs, making the
+# diagnostic + propagated exit code unreachable.
+set +e
 clawpatch map --source "$SOURCE" "${EXTRA_PASSTHROUGH[@]}"
 MAP_EXIT=$?
+set -e
 
 if [[ "$MAP_EXIT" -ne 0 ]]; then
   echo "Error: 'clawpatch map' exited with code $MAP_EXIT." >&2

@@ -185,7 +185,16 @@ When DE7 fires negative (no `.clawpatch/` or `flowctl repo-map list --count` ret
 
 > Consider: `/flow-next:map` — builds a semantic feature index for richer scope anchoring (optional).
 
-Detection: `[[ -d .clawpatch ]] && [ "$(flowctl repo-map list --count 2>/dev/null)" -gt 0 ]`. DE7 is informational — surface as a suggestion only; do NOT include it in Phase 5 remediation prompts.
+Detection — `flowctl` is **bundled, not on `PATH`** after install, so use the same `FLOWCTL` prelude pattern as the other skills (canonical Droid+Claude fallback; sync-codex.sh rewrites it to `$HOME/.codex/scripts/flowctl` for the Codex mirror):
+
+```bash
+FLOWCTL="$HOME/.codex/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+[[ -d .clawpatch ]] && [ "$("$FLOWCTL" repo-map list --count 2>/dev/null)" -gt 0 ]
+```
+
+DE7 is informational — surface as a suggestion only; do NOT include it in Phase 5 remediation prompts.
 
 ## Production Readiness Notes
 
