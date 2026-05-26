@@ -2,6 +2,14 @@
 
 All notable changes to the flow-next.
 
+## [unreleased]
+
+### Fixed
+- **R-ID parser silently dropped acceptance criteria with single-letter suffixes** (fn-49.1). `_export_parse_acceptance_criteria` regex was `R\d+` — capture-driven specs with sub-scoped sibling criteria like `R4a` / `R4b` (surfaced during fn-48's make-pr against `.flow/specs/fn-48-backend-split-review-workflows-flowctl.md`) were silently excluded from `spec.spec_sections.acceptance_criteria[]` and `tasks_summary.uncovered_r_ids`. Pre-fix: fn-48 export reported `acceptance_count: 7`; post-fix: `9`. Regex extended to `R\d+[a-z]?` (single lowercase suffix only — `R4ab` and `R-4` still reject). Lexical sort preserves `R4 < R4a < R4b < R5` ordering. `plugins/flow-next/templates/spec.md` documents the suffix form for sub-scoped siblings.
+
+### Tests
+- `tests/test_acceptance_criteria_parser.py` extended with 8 R-ID-form cases: all-suffixed, mixed plain+suffixed, R4+R4a+R4b coexistence, lexical sort, and rejection of multi-letter suffix / separator / lowercase forms.
+
 ## [flow-next 1.2.0] - 2026-05-26
 
 ### Changed

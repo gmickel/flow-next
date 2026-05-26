@@ -11992,10 +11992,15 @@ def _export_parse_acceptance_criteria(spec_text: str) -> list[dict[str, Any]]:
         body_end = len(spec_text)
     body = spec_text[body_start:body_end]
 
-    # Bullet pattern: `- **R<N>:** <text>`. Tolerate optional whitespace
-    # between the bullet marker and the bold token.
+    # Bullet pattern: `- **R<N>:** <text>` or `- **R<N><a-z>:** <text>`.
+    # Tolerate optional whitespace between the bullet marker and the bold token.
+    # The single-letter suffix form (`R4a`, `R4b`) lets capture-driven specs
+    # sub-scope criteria sharing a logical parent; siblings sort lexically
+    # (`R4` < `R4a` < `R4b` < `R5`) via Python's default string ordering.
+    # Multi-letter suffixes (`R4ab`) and separators (`R-4`) remain rejected
+    # by design — broader format support waits for a real need.
     bullet_re = re.compile(
-        r"^[-*]\s+\*\*(R\d+)\:?\*\*\s*:?\s*(.+?)$",
+        r"^[-*]\s+\*\*(R\d+[a-z]?)\:?\*\*\s*:?\s*(.+?)$",
         re.MULTILINE,
     )
     tag_re = re.compile(r"\[([^\]]+)\]\s*$")

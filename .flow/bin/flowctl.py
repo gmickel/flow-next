@@ -4478,6 +4478,23 @@ def cmd_init(args: argparse.Namespace) -> None:
                 raw = {}
         except (json.JSONDecodeError, Exception):
             raw = {}
+        # Pre-merge migration (1.1.11): if user has legacy planSync.crossEpic
+        # and no canonical planSync.crossSpec, mirror the legacy value to
+        # canonical so the new default (False) doesn't silently flip the
+        # user's effective setting. Read precedence (1.1.3+) is "canonical
+        # wins on presence", so without this mirror, every upgrading user
+        # who had crossEpic set lost their cross-spec sync silently. Legacy
+        # key is kept readable through 1.x per the deprecation cadence.
+        ps = raw.get("planSync")
+        if (
+            isinstance(ps, dict)
+            and "crossEpic" in ps
+            and "crossSpec" not in ps
+        ):
+            ps["crossSpec"] = ps["crossEpic"]
+            actions.append(
+                "mirrored legacy planSync.crossEpic → canonical planSync.crossSpec"
+            )
         merged = deep_merge(get_default_config(), raw)
         if merged != raw:
             atomic_write_json(config_path, merged)
@@ -11975,10 +11992,15 @@ def _export_parse_acceptance_criteria(spec_text: str) -> list[dict[str, Any]]:
         body_end = len(spec_text)
     body = spec_text[body_start:body_end]
 
-    # Bullet pattern: `- **R<N>:** <text>`. Tolerate optional whitespace
-    # between the bullet marker and the bold token.
+    # Bullet pattern: `- **R<N>:** <text>` or `- **R<N><a-z>:** <text>`.
+    # Tolerate optional whitespace between the bullet marker and the bold token.
+    # The single-letter suffix form (`R4a`, `R4b`) lets capture-driven specs
+    # sub-scope criteria sharing a logical parent; siblings sort lexically
+    # (`R4` < `R4a` < `R4b` < `R5`) via Python's default string ordering.
+    # Multi-letter suffixes (`R4ab`) and separators (`R-4`) remain rejected
+    # by design — broader format support waits for a real need.
     bullet_re = re.compile(
-        r"^[-*]\s+\*\*(R\d+)\:?\*\*\s*:?\s*(.+?)$",
+        r"^[-*]\s+\*\*(R\d+[a-z]?)\:?\*\*\s*:?\s*(.+?)$",
         re.MULTILINE,
     )
     tag_re = re.compile(r"\[([^\]]+)\]\s*$")
