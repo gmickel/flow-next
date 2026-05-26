@@ -20,7 +20,7 @@ Enrich `repo-scout` and `context-scout` agents to call `flowctl repo-map list --
 
 **repo-scout** changes:
 - Insert new Step 0 "Pre-computed feature index" in the `Search Strategy` section (`agents/repo-scout.md:16-37`), before the existing 4 numbered steps. Step 0: *"If `.clawpatch/` present, call `flowctl repo-map list --json` first; use returned features to anchor R-IDs and decision-context references in subsequent steps. If absent or count=0, proceed to Step 1 unchanged."*
-- Add `features_anchored: [...]` to the Output Format block (lines 53-82), positioned between `Related Code` and `Reusable Code`. Schema: `{ feature_id, title, kind, owned_files: [...], last_mapped: ISO8601 }[]`. Omit field entirely when `.clawpatch/` absent (don't emit empty array — absence signals "scout ran without map").
+- Add `features_anchored: [...]` to the Output Format block (lines 53-82), positioned between `Related Code` and `Reusable Code`. Schema: `{ feature_id, title, kind, confidence, owned_files: [...], last_mapped: ISO8601 }[]`. <!-- Updated by plan-sync: fn-50.2 confirmed `kind` is clawpatch's Zod enum (`cli-command|route|ui-flow|service|job|agent-tool|library|config|release|test-suite|infra|unknown`) and `confidence` is the Zod enum `"high"|"medium"|"low"` (NOT a numeric 0..1) — source field names on the flowctl side are camelCase (`featureId`, `ownedFiles`, `updatedAt`); scout-side keys stay snake_case as shown. Surface `confidence` so scouts can rank anchored features. --> Omit field entirely when `.clawpatch/` absent (don't emit empty array — absence signals "scout ran without map").
 - Author the graceful-degrade prose fresh (no existing idiom). Mirror the phrasing from `flow-next-prospect/SKILL.md:57` Phase 1 "Ground" (*"scan repo with graceful degradation"*).
 
 **context-scout** changes:
@@ -40,10 +40,10 @@ Layer 2 — **manual smoke** documented in task spec (NOT a CI test):
 - Run `/flow-next:plan "test scope"` against this repo (no `.clawpatch/`); confirm scout output produced; confirm no `features_anchored` field in output; confirm no agent error about missing feature index.
 - Logged once in the task's Done summary at completion time, not gated as a CI assertion.
 
-Bash test file at `plugins/flow-next/tests/scout-fallback.sh` becomes a thin wrapper that invokes the Python test (so existing test runners pick it up uniformly):
+Bash test file at `plugins/flow-next/tests/scout-fallback.sh` becomes a thin wrapper that invokes the Python test using **unittest** (the repo's runner — pytest is NOT in CI; see `test_repo_map.py` precedent in fn-50.2 and existing `python -m unittest discover` calls in `.github/workflows/test-flow-next.yml`):
 ```bash
 #!/usr/bin/env bash
-exec python3 -m pytest plugins/flow-next/tests/test_scout_fallback_contract.py -v
+exec python3 -m unittest discover -s plugins/flow-next/tests -p "test_scout_fallback_contract.py" -v
 ```
 
 This re-framing follows the codex reviewer's note: "either build a minimal scout harness… or change acceptance to a static contract test plus manual scout smoke." Going with the static-contract + manual-smoke path because building an LLM scout harness in CI is a fn-50.3-bloating side-quest.
@@ -71,7 +71,7 @@ This re-framing follows the codex reviewer's note: "either build a minimal scout
 
 - [ ] R4: `repo-scout.md` Step 0 calls `flowctl repo-map list --json` when `.clawpatch/` present; emits `features_anchored: [...]` with `last_mapped` ISO timestamp in output
 - [ ] R4: `context-scout.md` Step 0 calls `flowctl repo-map list --json` when `.clawpatch/` present; emits `features_anchored: [...]` with `last_mapped` ISO timestamp; updates `Fallback: Standard Tools` to mention `.clawpatch/` absence
-- [ ] R4: Output schema documents the `features_anchored` field (subfields: `feature_id`, `title`, `kind`, `owned_files`, `last_mapped`) in both scout files
+- [ ] R4: Output schema documents the `features_anchored` field (subfields: `feature_id`, `title`, `kind`, `confidence`, `owned_files`, `last_mapped`) in both scout files; `kind` values match clawpatch's Zod enum (`cli-command|route|ui-flow|service|job|agent-tool|library|config|release|test-suite|infra|unknown`); `confidence` values match the Zod enum (`high|medium|low`) <!-- Updated by plan-sync: fn-50.2 caught upstream Zod enum drift (confidence is enum, not numeric); added confidence to scout schema -->
 - [ ] R4: Staleness signal: scout output emits one informational line `[scout] feature map last updated N days ago` when N > 7
 - [ ] R5: Both scouts' agent prose explicitly documents the fallback path when `.clawpatch/` absent; no `MUST/required` language ties them to the feature index
 - [ ] R5: Static contract test `plugins/flow-next/tests/test_scout_fallback_contract.py` asserts (a) `features_anchored` documented in scout Output Format, (b) fallback prose present in both agent files, (c) no `required .clawpatch/` language, (d) `flowctl repo-map list --json` against fixture returns `count:0` clean
@@ -80,9 +80,8 @@ This re-framing follows the codex reviewer's note: "either build a minimal scout
 - [ ] R5: Manual smoke logged in Done summary: run `/flow-next:plan "test scope"` against this repo; scout output produced cleanly with no `features_anchored` field and no agent error about missing feature index
 
 ## Done summary
-
-_To be filled by `/flow-next:work` on completion._
-
+Enriched `repo-scout` and `context-scout` with a `.clawpatch/` Step 0 that calls `flowctl repo-map list --json` and emits a `features_anchored` block (subfields `feature_id|title|kind|confidence|owned_files|last_mapped`, with `kind`/`confidence` enums mirroring clawpatch's upstream Zod `featureRecordSchema`). Added a static + plumbing contract test (`tests/test_scout_fallback_contract.py`, 14 unittest assertions) + bash wrapper + no-clawpatch fixture to lock the two-layer fallback discipline (prose contract + `flowctl repo-map list --json` against a `.clawpatch/`-less fixture returns `count:0` cleanly). Codex impl-review verdict: SHIP after one NEEDS_WORK→SHIP cycle (fixed fallback prose flag drift from `--count` to `--json` to match spec decision lock-in). Manual smoke (Layer 2) deferred to release-cut — repo has no `.clawpatch/`, so any subsequent `/flow-next:plan` invocation on this branch will exercise the fallback path; both scouts' `features_anchored` section is gated behind `count > 0` so absence is the contract.
 ## Evidence
-
-_To be filled by `/flow-next:work` on completion._
+- Commits: 1bc0a7f2365593be8262c7f33e836917aea8a1f2, c39a89305effe48040f8b31d95c1c147b9a06d51
+- Tests: bash plugins/flow-next/tests/scout-fallback.sh (14 tests, all OK), python3 -m unittest discover -s plugins/flow-next/tests -p test_repo_map.py (21 tests, all OK)
+- PRs:

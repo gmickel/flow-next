@@ -12,6 +12,7 @@ Cross-platform parity verification, Codex mirror registration, full release plum
 - `plugins/flow-next/docs/troubleshooting.md` — "clawpatch not found / version mismatch" section (R8)
 - `plugins/flow-next/docs/README.md` — doc index entry for the map skill (R8)
 - `plugins/flow-next/docs/flowctl.md` — verify R3's repo-map group documentation landed; cross-link from index
+- `.github/workflows/test-flow-next.yml` — add two new "Python unit tests" steps for `test_repo_map.py` (fn-50.2) and `test_scout_fallback_contract.py` (fn-50.3) so they run on the full ubuntu/macos/windows matrix; add a `map_smoke_test.sh` entry wiring `plugins/flow-next/scripts/map_smoke_test.sh` (produced by fn-50.1) (R8 + R14) <!-- Updated by plan-sync: fn-50.1 produced map_smoke_test.sh — wiring is now unconditional -->
 - `scripts/sync-codex.sh` — add `flow-next-map` to `REQUIRED_OPENAI_YAML_SKILLS` array (R14)
 - `plugins/flow-next/codex/` — regenerated Codex mirror including flow-next-map (R14)
 - `plugins/flow-next/.claude-plugin/plugin.json` — bump description **skill count `23 → 24`**; scored-criterion count stays "48" (DE7 informational); NO `version` field bump here (release-cut concern) (R15)
@@ -38,6 +39,28 @@ Cross-platform smoke matrix (manual + documented):
 - Pure Windows (cmd.exe / PowerShell host): out of scope; flow-next runs in bash environments within Claude/Codex/Droid
 
 Update `plugins/flow-next/docs/platforms.md` (model the new paragraph on the existing "Windows + Copilot" section at lines 148-157 which documents a conditional requirement). Add an **"Optional skill requirements"** subsection naming `/flow-next:map` + Node 22+ requirement.
+
+**CI matrix coverage (per user directive at work-start time):** the GitHub Actions workflow at `.github/workflows/test-flow-next.yml` already runs the ubuntu / macos / windows matrix on bash + Python 3.11. New tests added by fn-50.2 (`test_repo_map.py`) and fn-50.3 (`test_scout_fallback_contract.py`) MUST be wired into this workflow as additional `python -m unittest discover -p "<file>"` steps so they exercise all three OSes. Drop the new test entries right after the existing "fn-43 invariants" block (lines 62-83). Pattern (verbatim shape):
+
+```yaml
+- name: Python unit tests — repo-map readers (fn-50.2)
+  run: |
+    python -m unittest discover \
+      -s plugins/flow-next/tests \
+      -p "test_repo_map.py" \
+      -v
+
+- name: Python unit tests — scout fallback contract (fn-50.3)
+  run: |
+    python -m unittest discover \
+      -s plugins/flow-next/tests \
+      -p "test_scout_fallback_contract.py" \
+      -v
+```
+
+fn-50.1 produced `plugins/flow-next/scripts/map_smoke_test.sh` (65 cases — install-detect, version-range, Ralph-block, .gitignore skeleton, config-state echo, argument parsing). Add a `map_smoke_test.sh` entry alongside the other smokes, matching the `cd "$RUNNER_TEMP" && bash "$GITHUB_WORKSPACE/..."` pattern at lines 108-172. <!-- Updated by plan-sync: fn-50.1 shipped map_smoke_test.sh — conditional removed -->
+
+**Why this matters:** Python's behavior is consistent across OSes for our usage (json + os.path + subprocess), but the Windows path-separator and PNPM_HOME quirks called out in fn-50.1's edge cases need the windows-latest runner to actually fire the test code to catch regressions. Without explicit workflow entries, new test files sit dormant and break silently when a future change drifts.
 
 **`SUPPORTED_CLAWPATCH` version-range single source.** fn-50.1 defines the range constant in skill prose (`plugins/flow-next/skills/flow-next-map/SKILL.md`). Docs (`platforms.md`, `troubleshooting.md`, the docs-site `map.mdx`) MUST reference the skill prose generically (e.g. *"The skill carries the tested `clawpatch` version range; see `flow-next-map/SKILL.md` for the current pin"*) rather than restating the literal range. This prevents drift when the range bumps for a new clawpatch minor.
 
@@ -129,6 +152,8 @@ Final gate before completion:
 - [ ] R8: `plugins/flow-next/docs/troubleshooting.md` gains clawpatch-failure-modes section (missing binary, version mismatch, Node 20)
 - [ ] R8: `plugins/flow-next/docs/README.md` doc-index lists the map skill
 - [ ] R14: `flow-next-map` added to `scripts/sync-codex.sh` REQUIRED_OPENAI_YAML_SKILLS; `bash scripts/sync-codex.sh` runs cleanly
+- [ ] R8/R14: `.github/workflows/test-flow-next.yml` gains explicit `python -m unittest discover -p "test_repo_map.py"` step AND `python -m unittest discover -p "test_scout_fallback_contract.py"` step so both run on ubuntu/macos/windows matrix
+- [ ] R8/R14: `plugins/flow-next/scripts/map_smoke_test.sh` (shipped by fn-50.1) has a matching workflow step using the existing `cd "$RUNNER_TEMP" && bash "$GITHUB_WORKSPACE/..."` pattern <!-- Updated by plan-sync: fn-50.1 shipped the smoke; entry is now mandatory -->
 - [ ] R14: `plugins/flow-next/codex/flow-next-map/` exists with correct tool-name rewrites + consolidated FLOWCTL prelude
 - [ ] R14: `plugins/flow-next/commands/flow-next/map.md` slash-command shim verified (already created in fn-50.1; verify here)
 - [ ] R15: `plugin.json` description string updated — **skill count 23 → 24**; scored-criterion count stays "48" (DE7 informational per fn-50.5); both `.claude-plugin/` and `.codex-plugin/` mirrors

@@ -65,9 +65,8 @@ DE7 must NOT appear in `workflow.md:190-313` (Phase 5 — remediation `AskUserQu
 - [ ] Manual smoke: after `mkdir -p .clawpatch/features` (empty), DE7 still reports ❌ (count=0); after a real `clawpatch map` run, DE7 reports ✅
 
 ## Done summary
-
-_To be filled by `/flow-next:work` on completion._
-
+Added DE7 informational sub-criterion under Pillar 5 (Dev Environment) of `/flow-next:prime`. Pillar count stays at 8; scored criteria stay at 48 (DC7 + DE7 both informational, excluded from baseline); total criteria 48 → 49. Detection uses `[[ -d .clawpatch ]]` + `flowctl repo-map list --count` > 0; reporting is soft ❌ informational with `/flow-next:map` surfaced in Top Recommendations. DE7 deliberately excluded from Phase 5 remediation prompts per spec R7 "No auto-run." Docs-only diff → triage-skip SHIP via deterministic whitelist (correct: no Python/shell/tests, pure prose edits to `pillars.md` + `workflow.md`).
 ## Evidence
-
-_To be filled by `/flow-next:work` on completion._
+- Commits: b5c4694
+- Tests:
+- PRs:

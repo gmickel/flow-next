@@ -62,9 +62,8 @@ For the AGENTS.md mirror, replace `/flow-next:map` with `$flow-next-map`.
 - [ ] Manual smoke: re-run `/flow-next:setup` against this dev repo — the new paragraph either appends (if absent) or no-ops (if already in sync); no AskUserQuestion fires unless this repo's CLAUDE.md is customized
 
 ## Done summary
-
-_To be filled by `/flow-next:work` on completion._
-
+Added one-paragraph optional-add for `/flow-next:map` to root CLAUDE.md (new "Where to look" row + paragraph below the table) and to both `flow-next-setup/templates/claude-md-snippet.md` and `agents-md-snippet.md` inside the `<!-- BEGIN FLOW-NEXT -->` block. Byte-discipline preserved: diff between the two snippet files shows exactly 3 hunks, all command-syntax-token only (`/flow-next:map` vs `$flow-next-map`, plus the two pre-existing `plan`/`interview`/`setup` token hunks); no whitespace drift, LF line endings, single trailing newline at EOF — fn-45.3 byte-compare gate will propagate cleanly on next `/flow-next:setup` in user repos.
 ## Evidence
-
-_To be filled by `/flow-next:work` on completion._
+- Commits: 4bc3a8a9dfacc2feefc4da40026dbb0fbe4b6f45
+- Tests: diff plugins/flow-next/skills/flow-next-setup/templates/claude-md-snippet.md plugins/flow-next/skills/flow-next-setup/templates/agents-md-snippet.md (only command-syntax-token hunks present), grep -n ' $' on both snippet files (no trailing whitespace), tail -c 20 | xxd (final LF newline at EOF), wc -l (42 lines, both files), flowctl triage-skip --base c39a893... --json (verdict=SHIP, mode=triage_skip, reason=docs-only)
+- PRs:

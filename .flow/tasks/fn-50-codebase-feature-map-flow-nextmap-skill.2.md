@@ -11,7 +11,7 @@ This is the **first flowctl reader for data outside `.flow/`**. The new handlers
 **Size:** M
 **Files:**
 - `plugins/flow-next/scripts/flowctl.py` — new `cmd_repo_map_list/show/since_ref` handlers + argparse subparser registration
-- `plugins/flow-next/tests/test_repo_map.py` (new) — parser, schema-version guard, missing-dir, malformed-JSON paths
+- `plugins/flow-next/tests/test_repo_map.py` (new, **unittest** — match repo convention; `python -m unittest discover -p "test_repo_map.py"` is the CI runner)
 - `plugins/flow-next/tests/fixtures/clawpatch-map/.clawpatch/features/{valid,invalid-schema,malformed}.json` (new) — checked-in fixtures (no clawpatch invocation in CI)
 
 ## Approach
@@ -68,9 +68,8 @@ Tests use checked-in fixtures only — `subprocess.run(["clawpatch", ...])` MUST
 - [ ] `plugins/flow-next/docs/flowctl.md` gains a `repo-map` group entry with flags + output schema
 
 ## Done summary
-
-_To be filled by `/flow-next:work` on completion._
-
+Shipped `flowctl repo-map list/show/since-ref` reader subcommands that parse clawpatch's `.clawpatch/features/*.json` index, the first flowctl reader for data outside `.flow/`. Handlers bypass `ensure_flow_exists()` and gate on `.clawpatch/` presence; absent state returns `count:0` exit 0 so prime's DE7 detection works without special-casing. R9 enforced: `schemaVersion != 1` and malformed JSON each emit one-line stderr diagnostics + skip without aborting `list`, with `parse_skipped` surfacing in `list --json`. `since-ref` returns the zero-exit `{success:false, error:<kind>}` envelope for non-git-repo and unknown-ref cases. New `unittest` suite (`test_repo_map.py`, 21 tests, production-path via subprocess) + checked-in fixtures land cleanly for fn-50.6's CI wiring. Codex impl-review caught one real schema drift (numeric `confidence` vs upstream Zod enum `"high"|"medium"|"low"`); fixed + locked in a test assertion + captured a memory entry on the fixture-must-mirror-upstream-Zod lesson. R3 and R9 met.
 ## Evidence
-
-_To be filled by `/flow-next:work` on completion._
+- Commits: e5b5d0c, 229b61b, 1bfe1a8
+- Tests: python3 -m py_compile plugins/flow-next/scripts/flowctl.py, python3 -m unittest discover -s plugins/flow-next/tests -p "test_repo_map.py" -v  # 21/21 pass, python3 -m unittest discover -s plugins/flow-next/tests -p "test_prospect_cli.py"  # 34/34 pass (adjacent suite — no regression), flowctl codex impl-review fn-50-codebase-feature-map-flow-nextmap-skill.2 --base 4760f732d4adec4c5cd8900bef966bc3d7739586  # NEEDS_WORK (1 finding: confidence enum drift) -> SHIP after fix
+- PRs:

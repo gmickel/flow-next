@@ -70,9 +70,8 @@ Write `.clawpatch/.gitignore` skeleton self-contained inside `.clawpatch/` (deci
 - [ ] Manual smoke: `/flow-next:map` against this repo (where clawpatch is not installed) prints clean install instructions and exits 1
 
 ## Done summary
-
-_To be filled by `/flow-next:work` on completion._
-
+Built the /flow-next:map skill scaffold (SKILL.md + workflow.md), slash-command shim at commands/flow-next/map.md, and a 65-case smoke test wiring the install-detect, version-range, Ralph-block, .gitignore-skeleton, config-state-echo, and argument-parsing branches. Manual smoke against this repo (clawpatch not installed) prints clean install instructions + PNPM_HOME hint and exits 1, validating the early proof point — install detection + map invocation + .clawpatch/.gitignore can all be done cleanly via skill bash with graceful degradation. The opt-in-skill architecture is viable; fn-50.2–6 can proceed.
 ## Evidence
-
-_To be filled by `/flow-next:work` on completion._
+- Commits: 02869a7, 6dee058, 4760f732d4adec4c5cd8900bef966bc3d7739586
+- Tests: bash plugins/flow-next/scripts/map_smoke_test.sh (65/65 cases pass), python3 -m py_compile plugins/flow-next/scripts/flowctl.py, bash -n plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh, manual smoke: replayed install-detect path against this repo (clawpatch absent) → prints clean install instructions + PNPM_HOME hint, exits 1, codex impl-review NEEDS_WORK (2 findings) → fix → SHIP (R1/R2/R10/R11/R12/R13 all met)
+- PRs:
