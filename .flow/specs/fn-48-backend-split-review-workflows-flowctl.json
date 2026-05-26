@@ -12,7 +12,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-48-backend-split-review-workflows-flowctl.md",
-  "status": "open",
+  "status": "done",
   "title": "Backend-split review workflows + FLOWCTL prelude",
-  "updated_at": "2026-05-25T07:04:30.256423Z"
+  "updated_at": "2026-05-26T17:12:57.068061Z"
 }

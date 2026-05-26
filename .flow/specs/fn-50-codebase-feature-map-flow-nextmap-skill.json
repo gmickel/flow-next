@@ -1,13 +1,18 @@
 {
   "branch_name": "fn-50-codebase-feature-map-flow-nextmap-skill",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-05-26T10:50:19.204108Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-50-codebase-feature-map-flow-nextmap-skill",
   "next_task": 1,
-  "plan_review_status": "unknown",
-  "plan_reviewed_at": null,
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-05-26T15:04:11.074824Z",
   "spec_path": ".flow/specs/fn-50-codebase-feature-map-flow-nextmap-skill.md",
   "status": "open",
   "title": "Codebase feature map: /flow-next:map skill + scout enrichment + prime nudge",
-  "updated_at": "2026-05-26T10:50:19.360197Z"
+  "updated_at": "2026-05-26T15:04:11.074947Z"
 }
