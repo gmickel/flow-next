@@ -507,6 +507,13 @@ assert_grep "flow-next review backend:" "$WF_TEXT" "Case 6: workflow.md echo blo
 assert_grep ".clawpatch/ last-mapped:" "$WF_TEXT" "Case 6: workflow.md echo block names .clawpatch/ last-mapped line"
 assert_grep "informational; not proxied" "$WF_TEXT" "Case 6: workflow.md echo block flags backend as informational"
 
+# 6a: review.backend lookup MUST pass --json. Text mode returns
+# `review.backend: <value>` (NOT JSON), so the surrounding grep for
+# `"value":"..."` would always return empty and the field defaulted to
+# "none" regardless of actual config — Codex review catch fn-50.6.
+assert_grep "config get review.backend --json" "$WF_TEXT" \
+  "Case 6a: workflow.md echo block reads review.backend with --json (catches text-mode false-none regression)"
+
 # =============================================================================
 # CASE 7: Argument parsing — `--`, --source validation
 # =============================================================================

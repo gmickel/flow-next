@@ -106,8 +106,11 @@ fi
 # CLAWPATCH_PROVIDER env var (orthogonal to flow-next review backend)
 CP_PROVIDER="${CLAWPATCH_PROVIDER:-none}"
 
-# flow-next review backend (informational only — not proxied to clawpatch)
-FN_REVIEW_BACKEND="$($FLOWCTL config get review.backend 2>/dev/null | grep -oE '"value":[[:space:]]*"[^"]*"' | sed -E 's/.*"value":[[:space:]]*"([^"]*)".*/\1/' || echo "none")"
+# flow-next review backend (informational only — not proxied to clawpatch).
+# Must pass --json: text mode prints `review.backend: <value>`, NOT JSON, so
+# the previous "value":"..." grep returned empty and the field always
+# defaulted to "none" — false config state regardless of what the user set.
+FN_REVIEW_BACKEND="$($FLOWCTL config get review.backend --json 2>/dev/null | grep -oE '"value":[[:space:]]*"[^"]*"' | sed -E 's/.*"value":[[:space:]]*"([^"]*)".*/\1/' || echo "none")"
 FN_REVIEW_BACKEND="${FN_REVIEW_BACKEND:-none}"
 
 # .clawpatch/ last-mapped timestamp (mtime of features/ dir, or "absent")
