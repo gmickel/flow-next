@@ -1,0 +1,13 @@
+{
+  "branch_name": "fn-49-export-cognitive-aid-parser-r-id",
+  "created_at": "2026-05-25T22:57:51.877243Z",
+  "depends_on_epics": [],
+  "id": "fn-49-export-cognitive-aid-parser-r-id",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-49-export-cognitive-aid-parser-r-id.md",
+  "status": "open",
+  "title": "Export-cognitive-aid parser: R-ID suffixes + null timestamps",
+  "updated_at": "2026-05-25T22:57:52.040449Z"
+}
