@@ -12726,15 +12726,77 @@ def _export_strategy_alignment(
     return result
 
 
+def _export_resolve_memory_threshold(
+    epic_created_at: Optional[str],
+    task_created_ats: Optional[list[str]] = None,
+    branch_name: Optional[str] = None,
+) -> tuple[str, str]:
+    """Resolve the memory-window lower bound to a YYYY-MM-DD threshold.
+
+    Returns ``(threshold, source)`` where ``source`` is one of:
+    ``"spec"``, ``"earliest_task"``, ``"branch_first_commit"``, or
+    ``""`` (no usable signal — caller falls back to "return all").
+
+    Fallback chain (fn-49.2):
+    1. ``epic_created_at`` — primary signal (spec metadata).
+    2. Earliest non-empty ``tasks[].created_at`` — deterministic given a
+       fixed task set; covers specs created via ``/flow-next:capture`` in
+       the same session as ``flowctl init`` (R3).
+    3. ``git log <branch_name> --reverse --format=%cI`` first commit —
+       deterministic given a fixed branch + git history; covers specs
+       where neither spec nor tasks carry timestamps.
+    4. ``""`` — caller returns all entries (graceful-degradation contract;
+       same as pre-fn-49.2 behavior for the no-signal case).
+
+    Each step is deterministic and the chain stops at the first success so
+    two consecutive runs against the same repo return the same threshold.
+    """
+    # Step 1: spec metadata.
+    if epic_created_at:
+        return (epic_created_at[:10], "spec")
+
+    # Step 2: earliest task created_at.
+    if task_created_ats:
+        candidates = [t[:10] for t in task_created_ats if t]
+        if candidates:
+            return (min(candidates), "earliest_task")
+
+    # Step 3: branch first commit (committer date, ISO 8601 strict).
+    if branch_name:
+        rc, out, _err = _export_run_git(
+            [
+                "log",
+                branch_name,
+                "--reverse",
+                "--format=%cI",
+                "--max-count=1",
+            ]
+        )
+        if rc == 0:
+            first_line = out.strip().splitlines()[0] if out.strip() else ""
+            if first_line:
+                return (first_line[:10], "branch_first_commit")
+
+    return ("", "")
+
+
 def _export_memory_during_epic(
     memory_dir: Path,
     epic_created_at: Optional[str],
+    task_created_ats: Optional[list[str]] = None,
+    branch_name: Optional[str] = None,
 ) -> dict[str, Any]:
-    """Aggregate memory entries written during the epic window.
+    """Aggregate memory entries written during the spec window.
 
-    Filters by `date >= epic_created_at` (YYYY-MM-DD prefix). Falls back
-    to "all entries in scoped categories" when `epic_created_at` is
-    missing — better than empty under the graceful-degradation contract.
+    Filters by ``date >= threshold`` (YYYY-MM-DD prefix). When
+    ``epic_created_at`` is null, ``_export_resolve_memory_threshold``
+    walks a deterministic fallback chain (earliest task → branch first
+    commit) so the window still approximates the spec lifetime instead
+    of degrading to "all entries ever written".
+
+    Falls back to "all entries in scoped categories" only when every
+    chain signal is missing — preserves the pre-fn-49.2 graceful-
+    degradation contract for the no-signal case.
     """
     result: dict[str, Any] = {
         "decisions": [],
@@ -12745,11 +12807,9 @@ def _export_memory_during_epic(
     if not memory_dir.is_dir():
         return result
 
-    # Date threshold.
-    threshold = ""
-    if epic_created_at:
-        # Accept full ISO timestamp or just YYYY-MM-DD prefix.
-        threshold = epic_created_at[:10]
+    threshold, _source = _export_resolve_memory_threshold(
+        epic_created_at, task_created_ats, branch_name
+    )
 
     def _within_window(date_str: str) -> bool:
         if not threshold:
@@ -13043,6 +13103,12 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
     # --- Tasks ---
     tasks_dir = flow_dir / TASKS_DIR
     task_entries: list[dict[str, Any]] = []
+    # Parallel collection of task `created_at` timestamps for the memory
+    # time-window fallback chain (fn-49.2). Kept separate from
+    # `task_entries` because the public export schema doesn't expose
+    # task creation timestamps directly; the fallback consumer reads
+    # this list and walks for the min.
+    task_created_ats: list[str] = []
     if tasks_dir.exists():
         for task_file in sorted(tasks_dir.glob(f"{spec_id}.*.json")):
             task_id = task_file.stem
@@ -13055,6 +13121,9 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
                 raise
             if "id" not in task_data:
                 continue
+            tc = task_data.get("created_at")
+            if isinstance(tc, str) and tc:
+                task_created_ats.append(tc)
 
             # Read the task spec markdown to get satisfies + done_summary.
             task_spec_path = tasks_dir / f"{task_id}.md"
@@ -13113,9 +13182,17 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
     }
 
     # --- Memory during spec lifecycle ---
+    # fn-49.2: pass earliest-task and branch-name fallback inputs so the
+    # time-window filter approximates the spec lifetime even when
+    # `spec.created_at` is null (e.g. specs created via
+    # `/flow-next:capture` in the same session as `flowctl init`, or
+    # pre-timestamp-population specs).
     memory_dir = flow_dir / MEMORY_DIR
     memory_during_epic = _export_memory_during_epic(
-        memory_dir, spec_data.get("created_at")
+        memory_dir,
+        spec_data.get("created_at"),
+        task_created_ats=task_created_ats,
+        branch_name=spec_data.get("branch_name") or None,
     )
 
     # --- Glossary diff ---
