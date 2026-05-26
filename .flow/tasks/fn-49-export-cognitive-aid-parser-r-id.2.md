@@ -51,9 +51,8 @@ Make `_export_memory_during_spec` in `plugins/flow-next/scripts/flowctl.py` null
 - [ ] CHANGELOG `[unreleased]` entry drafted under `### Fixed` citing fn-48 as surfacing context and naming the chosen fallback mechanism.
 
 ## Done summary
-
-_(filled by `/flow-next:work` when the task completes)_
-
+Made `_export_memory_during_epic` null-safe with a deterministic Option A → B → no-signal fallback chain (earliest `tasks[].created_at` → branch first-commit via `git log` → return-all graceful-degradation). New `_export_resolve_memory_threshold` helper isolates the chain; 12 new tests in `tests/test_memory_during_spec_null_safe.py` cover each step including a synthetic git repo with pinned `GIT_COMMITTER_DATE`. fn-48 re-export confirms the `factory-droid-platform-status-2026-05-2026-05-25` decision surfaces with its title and first_sentence intact.
 ## Evidence
-
-_(filled by `/flow-next:work` — commit hashes + test commands run)_
+- Commits: 2f476f9c1917fbde883964691278af5dbea59852
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (644 pass, 2 skip), bash plugins/flow-next/scripts/smoke_test.sh (127 pass, 2 pre-existing fail), .flow/bin/flowctl spec export-cognitive-aid fn-48-backend-split-review-workflows-flowctl --base origin/main --json | jq '.memory_during_epic.decisions | length' => 1 (factory-droid-platform-status, title intact)
+- PRs:
