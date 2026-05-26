@@ -403,7 +403,7 @@ If rp-cli unavailable or not suited for the task, use standard tools:
 - `Glob` - file pattern matching
 - `Read` - file reading
 
-The same graceful-degrade idiom applies to the Step 0 pre-computed feature index: when `.clawpatch/` is absent or `flowctl repo-map list --count` returns `0`, skip the feature-anchor pass and rely on grep / glob / structure discovery instead. The feature index is enrichment, never a precondition.
+The same graceful-degrade idiom applies to the Step 0 pre-computed feature index: when `.clawpatch/` is absent or `flowctl repo-map list --json` returns `count: 0`, skip the feature-anchor pass and rely on grep / glob / structure discovery instead. The feature index is enrichment, never a precondition.
 
 RepoPrompt excels at:
 - Token-efficient signatures (structure command)
