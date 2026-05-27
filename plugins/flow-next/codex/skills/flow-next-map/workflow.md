@@ -153,16 +153,21 @@ Install (requires Node 22+):
 Then re-run /flow-next:map.
 EOF
 
- # R11 — PNPM_HOME divergence hint
+ # R11 — PNPM_HOME divergence hint. Conditional framing: this branch fires
+ # whenever pnpm is available, BEFORE we know whether the user has actually
+ # installed clawpatch. So phrase it as "if you already installed and still
+ # see this" rather than asserting an install happened — and avoid the
+ # pnpm-v11-specific claim (the PNPM_HOME/PATH wiring step applies to pnpm 10
+ # too; the user's global bin may be ~/.local/share/pnpm, not $PNPM_HOME/bin).
  if command -v pnpm >/dev/null 2>&1 && pnpm bin -g >/dev/null 2>&1; then
  PNPM_GLOBAL_BIN="$(pnpm bin -g 2>/dev/null)"
  cat >&2 <<EOF
 
-Hint: pnpm is installed but \`clawpatch\` is not on PATH. Your pnpm global bin
-is at: $PNPM_GLOBAL_BIN
+Hint: pnpm is available — your pnpm global bin is at: $PNPM_GLOBAL_BIN
 
-pnpm v11 moved global binaries to \$PNPM_HOME/bin/. If you upgraded from pnpm 10
-without running \`pnpm setup\`, install succeeds but PATH is unchanged. Run:
+If you already ran \`pnpm add -g clawpatch\` and still see this, that directory
+is likely not on your PATH. pnpm installs global binaries under \$PNPM_HOME and
+needs a one-time \`pnpm setup\` to wire PATH. Run:
 
  pnpm setup
  # then re-source your shell rc (e.g. source ~/.zshrc) or open a new shell
