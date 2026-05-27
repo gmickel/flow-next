@@ -329,11 +329,11 @@ EOF
     PNPM_GLOBAL_BIN="$(pnpm bin -g 2>/dev/null)"
     cat >&2 <<EOF
 
-Hint: pnpm is installed but \`clawpatch\` is not on PATH. Your pnpm global bin
-is at: $PNPM_GLOBAL_BIN
+Hint: pnpm is available — your pnpm global bin is at: $PNPM_GLOBAL_BIN
 
-pnpm v11 moved global binaries to \$PNPM_HOME/bin/. If you upgraded from pnpm 10
-without running \`pnpm setup\`, install succeeds but PATH is unchanged. Run:
+If you already ran \`pnpm add -g clawpatch\` and still see this, that directory
+is likely not on your PATH. pnpm installs global binaries under \$PNPM_HOME and
+needs a one-time \`pnpm setup\` to wire PATH. Run:
 
     pnpm setup
     # then re-source your shell rc (e.g. source ~/.zshrc) or open a new shell
