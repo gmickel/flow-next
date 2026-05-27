@@ -2,7 +2,7 @@
 name: flow-next-map
 description: Wrap `clawpatch map` to produce a semantic feature index of the repo (~20 languages, persisted at `.clawpatch/features/*.json`). Detects install, runs `clawpatch init` when `.clawpatch/` absent, invokes provider-free `clawpatch map --source heuristic` by default; `--source auto|agent` flows through as passthrough. Opt-in enrichment — scouts and prime read the resulting index, but flowctl never depends on clawpatch.
 user-invocable: false
-allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit
+allowed-tools: Read, Bash, Grep, Glob, Write, Edit
 ---
 
 # /flow-next:map — wrap `clawpatch map` for a semantic feature index
@@ -21,7 +21,7 @@ Wrap the upstream [`clawpatch`](https://github.com/openclaw/clawpatch) CLI's `ma
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — `AskUserQuestion` must stay reachable for any optional follow-up (e.g. "init failed, retry?"). Subagents can't call blocking question tools. (sync-codex.sh rewrites `AskUserQuestion` to a plain-text numbered prompt in the Codex mirror.)
+**Inline skill (no `context: fork`)** — the map skill is fully non-interactive: install detection, version-range guard, `clawpatch init`, `.clawpatch/.gitignore` skeleton, and `clawpatch map` invocation all proceed without prompting the user. No blocking-question tool is required or used.
 
 ## Input
 
@@ -63,7 +63,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
 fi
 ```
 
-**Decline-to-run only.** The skill MUST NOT write anything to `$REVIEW_RECEIPT_PATH` — that file belongs to the upstream review caller; writing there would corrupt unrelated receipts. No `AskUserQuestion` blocks fire under Ralph; install/init prompts are unreachable.
+**Decline-to-run only.** The skill MUST NOT write anything to `$REVIEW_RECEIPT_PATH` — that file belongs to the upstream review caller; writing there would corrupt unrelated receipts. The skill exits at line 1 of the workflow under Ralph; install/init paths are unreachable.
 
 No env-var opt-in. Ralph never installs global tools or accepts interactive consent.
 

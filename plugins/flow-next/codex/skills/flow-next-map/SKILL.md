@@ -22,7 +22,7 @@ FLOWCTL="$HOME/.codex/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — `plain-text numbered prompt` must stay reachable for any optional follow-up (e.g. "init failed, retry?"). Subagents can't call plain-text numbered prompts.
+**Inline skill (no `context: fork`)** — the map skill is fully non-interactive: install detection, version-range guard, `clawpatch init`, `.clawpatch/.gitignore` skeleton, and `clawpatch map` invocation all proceed without prompting the user. No plain-text numbered prompt is required or used.
 
 ## Input
 
@@ -64,9 +64,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
 fi
 ```
 
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
-**Decline-to-run only.** The skill MUST NOT write anything to `$REVIEW_RECEIPT_PATH` — that file belongs to the upstream review caller; writing there would corrupt unrelated receipts. No `plain-text numbered prompt` blocks fire under Ralph; install/init prompts are unreachable.
+**Decline-to-run only.** The skill MUST NOT write anything to `$REVIEW_RECEIPT_PATH` — that file belongs to the upstream review caller; writing there would corrupt unrelated receipts. The skill exits at line 1 of the workflow under Ralph; install/init paths are unreachable.
 
 No env-var opt-in. Ralph never installs global tools or accepts interactive consent.
 
