@@ -2671,7 +2671,12 @@ def parse_unaddressed_rids(output: str) -> Optional[list[str]]:
         """Return R-ID tokens found in ``text`` (de-duped, order-preserving)."""
         seen: set[str] = set()
         ordered: list[str] = []
-        for match in re.finditer(r"\bR(\d+)\b", text):
+        # Match `R<digits>` with an optional single-letter suffix (R4a / R4b).
+        # Keep in lockstep with the spec parser (`_export_parse_acceptance_criteria`,
+        # `R\d+[a-z]?` since fn-49.1) so suffixed R-IDs survive the review-output
+        # path (coverage gate + fix-loop targeting). Bare `R\d+` here silently
+        # dropped `R4a` / `R4b` — fn-49 fixed the spec parser but not this one.
+        for match in re.finditer(r"\bR(\d+[a-z]?)\b", text):
             rid = f"R{match.group(1)}"
             if rid not in seen:
                 seen.add(rid)
@@ -2718,7 +2723,7 @@ def parse_unaddressed_rids(output: str) -> Optional[list[str]]:
         # Header row detection
         if rid_token.lower() in {"r-id", "rid", "r id", "r"}:
             continue
-        rid_match = re.search(r"\bR(\d+)\b", rid_token)
+        rid_match = re.search(r"\bR(\d+[a-z]?)\b", rid_token)
         if not rid_match:
             continue
         rid = f"R{rid_match.group(1)}"

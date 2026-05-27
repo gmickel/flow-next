@@ -101,6 +101,13 @@ jobs:
             -p "test_scout_fallback_contract.py" \
             -v
 
+      - name: Python unit tests — review-output R-ID parser suffix (1.3.4)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_unaddressed_rids_parser.py" \
+            -v
+
       - name: Python unit tests — PNPM_HOME hint prose contract (fn-50.1, Windows-coverage)
         run: |
           python -m unittest discover \

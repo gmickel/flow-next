@@ -2,6 +2,11 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.3.4] - 2026-05-27
+
+### Fixed
+- **Review-output R-ID parser dropped single-letter suffixes (`R4a` / `R4b`)** — `parse_unaddressed_rids` extracted R-IDs from a reviewer's `Unaddressed R-IDs:` summary line (`_extract_rids`) and from the `## Requirements coverage` table fallback with bare `\bR(\d+)\b`. fn-49.1 (1.2.1) taught the *spec* acceptance-criteria parser the `R\d+[a-z]?` suffix form but left this *review-output* path behind, so a reviewer reporting `Unaddressed R-IDs: [R4a, R4b]` parsed to drop the suffixed IDs (`[R4a, R4b, R5]` → `['R5']`) — the R-ID coverage gate and fix-loop targeting silently lost exactly the new form. Both review-output regexes are now `\bR(\d+[a-z]?)\b`, in lockstep with the spec parser; multi-letter suffixes (`R4ab`) and separators (`R-4`) stay rejected. New `test_unaddressed_rids_parser.py` (10 cases: summary-line + coverage-table suffix survival, plain-R-ID back-compat, dedup order, malformed rejection) wired into the ubuntu/macos/windows CI matrix. Surfaced by a live impl-review A/B run in 1.3.x — the current review prompt (no experimental slop rubric) caught it.
+
 ## [flow-next 1.3.3] - 2026-05-27
 
 ### Fixed
