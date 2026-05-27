@@ -4,7 +4,7 @@
 #
 # Cases (mirror task spec acceptance):
 #   1. Skeleton — SKILL.md / workflow.md / slash-command shim exist; frontmatter
-#      shape correct; AskUserQuestion in allowed-tools.
+#      shape correct; AskUserQuestion intentionally absent (non-interactive).
 #   2. Ralph-block (R13) — FLOW_RALPH=1 and REVIEW_RECEIPT_PATH both produce
 #      exit 2 with stderr diagnostic naming the trigger var. NO write to
 #      $REVIEW_RECEIPT_PATH (decline-to-run only).
@@ -143,8 +143,10 @@ if [[ -f "$CMD_FILE" ]]; then
   assert_grep "flow-next-map" "$cmd_content" "Case 1: command invokes flow-next-map skill"
 fi
 
-# SKILL.md frontmatter — must include AskUserQuestion, name=flow-next-map,
-# no `context: fork`.
+# SKILL.md frontmatter — name=flow-next-map, no `context: fork`,
+# AskUserQuestion intentionally absent (skill is non-interactive — Codex
+# bot P2 on PR #148 caught a stray prompt-block injection in the mirror
+# when AskUserQuestion was listed; the map workflow has no question to ask).
 if [[ -f "$SKILL_FILE" ]]; then
   fm_block="$(awk '/^---$/{c++; next} c==1' "$SKILL_FILE" | head -30)"
   if echo "$fm_block" | grep -qE '^context:[[:space:]]*fork'; then
@@ -152,7 +154,11 @@ if [[ -f "$SKILL_FILE" ]]; then
   else
     ok "Case 1: SKILL.md does not set 'context: fork'"
   fi
-  assert_grep "AskUserQuestion" "$fm_block" "Case 1: SKILL.md allowed-tools includes AskUserQuestion"
+  if echo "$fm_block" | grep -qE '^allowed-tools:.*AskUserQuestion'; then
+    fail "Case 1: SKILL.md allowed-tools must NOT include AskUserQuestion (skill is non-interactive; including it triggers sync-codex prompt-block injection that strands Codex agents)"
+  else
+    ok "Case 1: SKILL.md allowed-tools omits AskUserQuestion (skill is non-interactive)"
+  fi
   assert_grep_re '^name:[[:space:]]*flow-next-map' "$fm_block" "Case 1: SKILL.md name == flow-next-map"
 fi
 
