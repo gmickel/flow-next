@@ -95,7 +95,7 @@ POSIX (macOS / Linux / WSL) behavior is unchanged.
 pnpm add -g clawpatch
 ```
 
-**2. pnpm installed `clawpatch` but it's not on PATH.** pnpm v11 moved global binaries to `$PNPM_HOME/bin/`; users upgrading from pnpm 10 without running `pnpm setup` get the install but no PATH entry. Skill detects `pnpm bin -g` exit-0 + `command -v clawpatch` exit non-zero and prints the PNPM_HOME `bin/` hint:
+**2. pnpm installed `clawpatch` but it's not on PATH.** pnpm installs global binaries under `$PNPM_HOME` and needs a one-time `pnpm setup` to wire PATH — without it, the install lands but the binary isn't resolvable. (Exact location varies by pnpm version and OS: `~/.local/share/pnpm` on many setups, `$PNPM_HOME/bin/` on others — `pnpm bin -g` reports yours.) Skill detects `pnpm bin -g` exit-0 + `command -v clawpatch` exit non-zero and prints the PNPM_HOME hint:
 
 ```bash
 pnpm setup            # writes PNPM_HOME + adds it to your shell rc
