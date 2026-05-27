@@ -1281,20 +1281,41 @@ for md_file in "$SRC_AGENTS"/*.md; do
   # any leading whitespace; the inserted fallback line preserves that
   # indentation so embedded bash blocks stay aligned. Uses POSIX awk
   # (no gawk-only 3-arg match) so macOS / Linux behave identically.
+  #
+  # IDEMPOTENT: canonical agent bodies may ALREADY carry the
+  # `[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"` fallback on the line
+  # directly after the FLOWCTL= assignment (fn-50.3 hardening added it to
+  # repo-scout / context-scout for the Claude/Droid path). Only inject when
+  # the next line is NOT already that fallback — otherwise we emit a duplicate.
   body="$(echo "$body" | awk '
+    function flush_pending(   stripped) {
+      if (pending) {
+        stripped = nextline
+        sub(/^[[:space:]]+/, "", stripped)
+        if (stripped != "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\"") {
+          print fallback
+        }
+        pending = 0
+      }
+    }
     /^[[:space:]]*FLOWCTL="\$HOME\/\.codex\/scripts\/flowctl"[[:space:]]*$/ {
       print
-      # Capture leading whitespace by finding where FLOWCTL starts.
       indent = ""
       i = 1
       while (i <= length($0) && substr($0, i, 1) ~ /[[:space:]]/) {
         indent = indent substr($0, i, 1)
         i++
       }
-      printf "%s[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\"\n", indent
+      fallback = indent "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\""
+      pending = 1
       next
     }
-    { print }
+    {
+      nextline = $0
+      flush_pending()
+      print
+    }
+    END { if (pending) print fallback }
   ')"
 
   # Escape backslashes for TOML triple-quoted strings

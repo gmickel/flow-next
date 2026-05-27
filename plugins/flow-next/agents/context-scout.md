@@ -100,12 +100,20 @@ If `.clawpatch/` is present, call `flowctl repo-map list --json` first. Use the 
 
 ```bash
 if [[ -d .clawpatch ]]; then
+  # Subagents may not inherit CLAUDE_PLUGIN_ROOT/DROID_PLUGIN_ROOT, which
+  # would resolve FLOWCTL to a broken `/scripts/flowctl`. Fall back to the
+  # bundled copy a `/flow-next:setup` run installs at `.flow/bin/flowctl`
+  # (carries `repo-map` since 1.3.0). If neither resolves, skip Step 0 and
+  # degrade to standard tools — never hard-fail on the enrichment path.
   FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
-  "$FLOWCTL" repo-map list --json
+  [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+  if [ -x "$FLOWCTL" ]; then
+    "$FLOWCTL" repo-map list --json
+  fi
 fi
 ```
 
-When `.clawpatch/` is absent OR the returned `count` is `0`, skip this step and proceed to Step 1 unchanged. The standard `rp-cli` workflow (and the `Fallback: Standard Tools` path further down) remains the load-bearing entry point — the feature index is a convenience enrichment, not a gate.
+When `.clawpatch/` is absent, no working `flowctl` resolves, OR the returned `count` is `0`, skip this step and proceed to Step 1 unchanged. The standard `rp-cli` workflow (and the `Fallback: Standard Tools` path further down) remains the load-bearing entry point — the feature index is a convenience enrichment, not a gate.
 
 **Staleness signal:** if `features[].updatedAt` (newest across all returned features) is more than 7 days old, emit one informational line `[context-scout] feature map last updated N days ago` and continue. Staleness is signal, not a block.
 

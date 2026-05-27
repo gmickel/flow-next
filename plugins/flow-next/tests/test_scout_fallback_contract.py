@@ -11,12 +11,14 @@ Verifies the two-layer fallback discipline for `repo-scout` and
   and DO NOT carry `MUST`/`required` language tying the agent to the
   feature index.
 
-  Layer 1b — plumbing contract: `flowctl repo-map list --json` against
-  the `tests/fixtures/scout-without-clawpatch/` fixture (a working tree
-  with NO `.clawpatch/`) returns `{success:true, count:0, features:[],
-  clawpatch_present:false}` with exit 0. This proves the production-path
-  the agent prose tells scouts to call gracefully returns the empty
-  envelope.
+  Layer 1b — plumbing contract: `flowctl repo-map list --json` in a
+  throwaway git repo with NO `.clawpatch/` returns `{success:true,
+  count:0, features:[], clawpatch_present:false}` with exit 0. This proves
+  the production-path the agent prose tells scouts to call gracefully
+  returns the empty envelope. (Runs in a temp git repo, not the in-repo
+  `tests/fixtures/scout-without-clawpatch/` fixture — `repo-map` resolves
+  `.clawpatch/` from git toplevel, so a fixture subdir can't isolate from a
+  real `.clawpatch/` that local dogfooding may have created at repo root.)
 
 Layer 2 (manual smoke — run `/flow-next:plan "test scope"` against this
 repo with no `.clawpatch/`, confirm scout output produced cleanly with no
@@ -39,6 +41,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -313,12 +316,21 @@ class PlumbingContract(unittest.TestCase):
                 "contain a .clawpatch/ directory"
             ),
         )
-        res = _run(
-            "repo-map",
-            "list",
-            "--json",
-            cwd=str(FIXTURE_NO_CLAWPATCH),
-        )
+        # HERMETIC plumbing check: `repo-map` resolves `.clawpatch/` via
+        # get_repo_root() (git toplevel), so running with cwd inside the
+        # flow-next repo's own tree would pick up a REAL `.clawpatch/` when a
+        # developer has run `/flow-next:map` locally (it's gitignored — absent
+        # in CI, but present after dogfooding). The in-repo fixture dir cannot
+        # isolate from the repo's git root. Run in a throwaway git repo so the
+        # `.clawpatch/` absence is genuine regardless of the host repo's state.
+        with tempfile.TemporaryDirectory() as td:
+            subprocess.run(
+                ["git", "init", td],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            res = _run("repo-map", "list", "--json", cwd=td)
         self.assertEqual(res.returncode, 0, msg=res.stderr)
         payload = json.loads(res.stdout)
         self.assertTrue(payload["success"])
