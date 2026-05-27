@@ -327,11 +327,38 @@ if [[ -d "$FEATURES_DIR" ]]; then
 
 Mapped: $COUNT feature(s) at $FEATURES_DIR
 Last-mapped: $LAST
+EOF
+
+ # Zero-features-on-heuristic hint. clawpatch's heuristic mapper targets
+ # conventional app/framework layouts (npm bins, Next.js routes, Python
+ # packages, Rails/Laravel/Django, Go/Rust services, JVM, .NET, SwiftPM,
+ # Phoenix). Repos that don't match — CLI tools, plugins, markdown/docs-heavy,
+ # non-standard monorepos — get 0 features and clawpatch flags coverage as
+ # weak (`weak=true`, `agent-skip reason=heuristic` in the map output above).
+ # Surface the next step rather than leaving the user with a silent empty map.
+ if [[ "$COUNT" -eq 0 && "$SOURCE" == "heuristic" ]]; then
+ cat >&2 <<'EOF'
+
+Note: heuristic mapping found 0 features. clawpatch's deterministic mapper
+targets conventional app/framework layouts; if this repo is a CLI tool,
+plugin, or has a non-standard structure, the heuristic detectors may not
+match it (clawpatch flags this as "weak" coverage above). For richer,
+LLM-backed mapping:
+
+ /flow-next:map --source=auto # heuristic first, provider only if weak
+ /flow-next:map --source=agent # always provider-backed
+
+Both require a clawpatch provider configured (CLAWPATCH_PROVIDER, e.g. codex)
+and spend provider tokens — orthogonal to flow-next's review backend.
+EOF
+ fi
+
+ cat <<EOF
 
 Next steps:
- - flowctl repo-map list (lands in fn-50.2)
- - /flow-next:plan <spec-id> (scout consumption lands in fn-50.3)
- - /flow-next:capture (scout consumption lands in fn-50.3)
+ - flowctl repo-map list
+ - /flow-next:plan <spec-id> (scouts read the index when present)
+ - /flow-next:capture (scouts read the index when present)
 EOF
 else
  echo "Warning: clawpatch map exited 0 but .clawpatch/features/ is missing. Inspect $CLAWPATCH_DIR directly." >&2

@@ -29,7 +29,7 @@ Arguments: `$ARGUMENTS`
 
 Format: `[--source <heuristic|auto|agent>] [-- <extra clawpatch args>]`
 
-- **Default** (no args) → `clawpatch map --source heuristic` (provider-free, deterministic).
+- **Default** (no args) → `clawpatch map --source heuristic` (provider-free, deterministic). Heuristic targets conventional app/framework layouts; unconventional repos (CLI tools, plugins, markdown/docs-heavy, non-standard monorepos) may map to 0 features — Phase 5 surfaces a `--source=auto|agent` suggestion when that happens.
 - `--source auto|agent` → passthrough to clawpatch; user must have `CLAWPATCH_PROVIDER` configured for these paths (clawpatch's own concern, not ours).
 - `--` → terminator; tokens after flow to `clawpatch map` (e.g. `--since-ref origin/main`, `--paths src/`).
 

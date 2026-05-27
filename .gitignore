@@ -26,3 +26,11 @@ scripts/ralph/
 .flow/.banner-acknowledged
 .flow/.migrating
 .flow/.migration-manifest
+
+# clawpatch feature-map state (fn-50). The /flow-next:map skill writes a
+# self-contained .clawpatch/.gitignore (`*` + `!.gitignore`) for user repos,
+# but its `!.gitignore` negation leaves that one file trackable — and our
+# `work` skill stages with `git add -A`. Ignore the whole dir at repo root so
+# our own dogfood map (local-only, regenerable via /flow-next:map --source
+# agent) never gets staged into the plugin repo.
+.clawpatch/
