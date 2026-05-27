@@ -1150,6 +1150,7 @@ generate_openai_yaml "flow-next-resolve-pr"  "Flow Resolve PR"            "Resol
 # Utility skills (blue/amber, implicit allowed)
 generate_openai_yaml "flow-next"       "Flow Tasks" "Manage .flow/ tasks and specs"                           "#3B82F6" true
 generate_openai_yaml "flow-next-prime" "Flow Prime" "Comprehensive codebase assessment for agent readiness"    "#F59E0B" false
+generate_openai_yaml "flow-next-map"   "Flow Map"   "Wrap clawpatch map for a semantic feature index (opt-in)" "#F59E0B" false
 
 # --- Deprecation redirect skills (1.0 alias surface, removed in 2.0) ---
 # Codex resolves `$flow-next-<name>` and bare-skill-name lookups via the
@@ -1209,6 +1210,7 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-resolve-pr"
   "flow-next"
   "flow-next-prime"
+  "flow-next-map"
 )
 
 openai_yaml_count=$(find "$CODEX_DIR/skills" -name "openai.yaml" | wc -l | tr -d ' ')
@@ -1265,6 +1267,35 @@ for md_file in "$SRC_AGENTS"/*.md; do
       -e 's/Claude Code/Codex/g')"
     description="Used by /flow-next:prime to analyze AGENTS.md quality and completeness. Do not invoke directly."
   fi
+
+  # FLOWCTL prelude rewrite (fn-50.6): canonical agents use the
+  # `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl` form
+  # (Droid + Claude fallback). In Codex neither env var is set, so the
+  # expansion resolves to `/scripts/flowctl` — broken. Mirror the skill-side
+  # rewrite (line ~183) here so generated `.toml` agent bodies use the direct
+  # Codex form plus the local `.flow/bin/flowctl` fallback. fn-50.3 added the
+  # repo-scout / context-scout `repo-map` probes that surfaced this gap.
+  body="$(echo "$body" | sed -E 's|\$\{DROID_PLUGIN_ROOT:-\$\{CLAUDE_PLUGIN_ROOT\}\}/scripts/flowctl|$HOME/.codex/scripts/flowctl|g')"
+  # Insert the local fallback line after every FLOWCTL= assignment that points
+  # at the Codex path. Matches `FLOWCTL="$HOME/.codex/scripts/flowctl"` with
+  # any leading whitespace; the inserted fallback line preserves that
+  # indentation so embedded bash blocks stay aligned. Uses POSIX awk
+  # (no gawk-only 3-arg match) so macOS / Linux behave identically.
+  body="$(echo "$body" | awk '
+    /^[[:space:]]*FLOWCTL="\$HOME\/\.codex\/scripts\/flowctl"[[:space:]]*$/ {
+      print
+      # Capture leading whitespace by finding where FLOWCTL starts.
+      indent = ""
+      i = 1
+      while (i <= length($0) && substr($0, i, 1) ~ /[[:space:]]/) {
+        indent = indent substr($0, i, 1)
+        i++
+      }
+      printf "%s[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\"\n", indent
+      next
+    }
+    { print }
+  ')"
 
   # Escape backslashes for TOML triple-quoted strings
   body="$(echo "$body" | sed 's/\\/\\\\/g')"

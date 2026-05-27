@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "featureId": "auth",
+  "title": "Authentication module",
+  "kind": "service",
+  "confidence": "high",
+  "tags": ["security", "auth"],
+  "ownedFiles": [
+    {"path": "src/auth.ts"},
+    {"path": "src/auth.test.ts"}
+  ],
+  "entrypoints": [
+    {"path": "src/auth.ts"}
+  ],
+  "updatedAt": "2026-05-26T10:00:00Z"
+}

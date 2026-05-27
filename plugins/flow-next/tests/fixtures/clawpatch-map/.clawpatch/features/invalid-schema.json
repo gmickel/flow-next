@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 2,
+  "featureId": "future-feature",
+  "title": "Feature from a future clawpatch",
+  "kind": "service",
+  "confidence": "medium",
+  "tags": [],
+  "ownedFiles": [],
+  "entrypoints": [],
+  "updatedAt": "2027-01-01T00:00:00Z"
+}

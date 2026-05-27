@@ -107,11 +107,14 @@ Reproducible environment setup.
 | DE4 | Setup script or docs | setup.sh or clear setup instructions |
 | DE5 | Devcontainer available | .devcontainer/ config present |
 | DE6 | Docker available | Dockerfile or docker-compose.yml |
+| DE7 | Codebase feature map present | `[[ -d .clawpatch ]]` + `"$FLOWCTL" repo-map list --count > 0` (informational — not scored; surfaces `/flow-next:map` suggestion in Top Recommendations when missing; `$FLOWCTL` resolved via the bundled Droid+Claude fallback — see `workflow.md` DE7 detection block) |
 
 ### Scoring
 - ✅ 80%+: One-command setup possible
 - ⚠️ 40-79%: Setup mostly documented
 - ❌ <40%: Setup requires tribal knowledge
+
+DE7 is **informational** — like DC7, it is excluded from the Pillar 5 score and the agent-readiness baseline. Scored criteria total **48**; including DE7 the total is **49**.
 
 ---
 

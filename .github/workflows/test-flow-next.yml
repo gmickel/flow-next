@@ -82,6 +82,36 @@ jobs:
             -p "test_banner.py" \
             -v
 
+      # ──────────── fn-50 (clawpatch wrap) ────────────
+      # New readers + scout-fallback contract land here so they run on the full
+      # ubuntu / macos / windows matrix. Tests use checked-in fixtures (no
+      # clawpatch CLI invocation), so runners do not need Node 22+.
+
+      - name: Python unit tests — repo-map readers (fn-50.2)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_repo_map.py" \
+            -v
+
+      - name: Python unit tests — scout fallback contract (fn-50.3)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_scout_fallback_contract.py" \
+            -v
+
+      - name: Python unit tests — PNPM_HOME hint prose contract (fn-50.1, Windows-coverage)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_pnpm_home_hint_prose.py" \
+            -v
+        # map_smoke_test.sh Case 4b skips on Windows (POSIX-only `chmod +x`
+        # pnpm stub). This prose-contract test runs on all three OSes and
+        # locks the PNPM_HOME hint structure — guard, tokens, re-source
+        # instruction — across Claude canonical + Codex mirror.
+
       # ──────────── Copilot stdin path (1.1.9) ────────────
       # Mocked unit tests run on all three platforms; the real-subprocess
       # Windows smoke fires only on windows-latest (skipUnless gate). The
@@ -158,6 +188,12 @@ jobs:
         run: |
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/make-pr_smoke_test.sh"
+
+      - name: map_smoke_test.sh (75 cases, fn-50.1 + fn-50.6 directory-level ignore + config-state --json guards)
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/map_smoke_test.sh"
 
       - name: impl-review_smoke_test.sh (74 cases, ~70s)
         if: always()

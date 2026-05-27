@@ -84,6 +84,33 @@ POSIX (macOS / Linux / WSL) behavior is unchanged.
 
 **Upstream:** [github/copilot-cli#3398](https://github.com/github/copilot-cli/issues/3398) tracks a first-class `--prompt-file` flag. Once that lands, both POSIX and Windows paths will move to the cleaner file-based delivery.
 
+## `/flow-next:map` — clawpatch not found / version mismatch / Node 20
+
+`/flow-next:map` wraps the upstream `clawpatch` CLI. Three common failure modes:
+
+**1. `clawpatch` binary missing.** Skill prints `pnpm add -g clawpatch` install instructions verbatim and exits 1. No auto-install — global npm/pnpm installs are user-consent territory.
+
+```bash
+# Recommended: install globally with pnpm
+pnpm add -g clawpatch
+```
+
+**2. pnpm installed `clawpatch` but it's not on PATH.** pnpm v11 moved global binaries to `$PNPM_HOME/bin/`; users upgrading from pnpm 10 without running `pnpm setup` get the install but no PATH entry. Skill detects `pnpm bin -g` exit-0 + `command -v clawpatch` exit non-zero and prints the PNPM_HOME `bin/` hint:
+
+```bash
+pnpm setup            # writes PNPM_HOME + adds it to your shell rc
+source ~/.zshrc       # or ~/.bashrc — pick up the new PATH entry
+command -v clawpatch  # should now resolve
+```
+
+**3. `clawpatch --version` falls outside the tested range.** The skill carries a single-source `SUPPORTED_CLAWPATCH` version range in its prose; see `plugins/flow-next/skills/flow-next-map/SKILL.md` for the current pin. Outside range emits a one-line stderr warning naming expected vs found and continues (degrades — never blocks). Re-pin lands on each clawpatch minor.
+
+**4. Node 20 with `clawpatch` installed.** clawpatch's `engines.node: ">=22"` triggers its own error; the skill propagates it verbatim. Upgrade Node 22+ (e.g. `nvm install 22 && nvm use 22`) or skip `/flow-next:map` — scouts gracefully fall back to the grep/glob path when `.clawpatch/` is absent.
+
+**5. "Should I commit `.clawpatch/` to the repo?"** No — by default the skill writes a `.clawpatch/.gitignore` with `*` + `!.gitignore`, making the feature index local-per-developer. The map is regenerable from `clawpatch map`, the schema may flip between pre-1.0 minor releases, and committing it creates PR review noise + merge conflicts. See [Sharing contract](../skills/flow-next-map/SKILL.md#sharing-contract--local-only-by-design) in the skill prose, or the full trade-off table at [flow-next.dev/skills/map](https://flow-next.dev/skills/map/). Teams that want shared indexes can customize the skeleton — unsupported, but the skill won't clobber a customized `.gitignore` on re-run.
+
+The skill is **opt-in convenience** — `flowctl` core never imports or requires clawpatch; nothing else in flow-next breaks when the skill can't run.
+
 ## Uninstall
 
 Run manually in terminal (DCG blocks these from AI agents):

@@ -156,6 +156,16 @@ No configuration knob — `run_copilot_exec` switches transparently on `sys.plat
 
 Upstream tracking: [github/copilot-cli#3398](https://github.com/github/copilot-cli/issues/3398) requests a first-class `--prompt-file` flag, which will let both paths converge.
 
+## Optional skill requirements
+
+Most flow-next skills run on the base flowctl install (Python 3.8+, `jq`, `gh`). One opt-in skill carries an extra prerequisite:
+
+| Skill | Requires | Notes |
+|---|---|---|
+| `/flow-next:map` | Node 22+ and `clawpatch` global (`pnpm add -g clawpatch`) | Wraps openclaw/clawpatch's `clawpatch map` to produce `.clawpatch/features/*.json`. Skill works on macOS / Linux / WSL / Git Bash on Windows wherever the host shell can resolve `clawpatch`. Missing binary → skill prints `pnpm add -g clawpatch` install instructions verbatim and exits cleanly (no auto-install). pnpm-installed-but-not-on-PATH → skill prints the PNPM_HOME `bin/` hint (run `pnpm setup`, re-source shell rc). The skill carries the tested `clawpatch` version range (`SUPPORTED_CLAWPATCH`); see `plugins/flow-next/skills/flow-next-map/SKILL.md` for the current pin. Outside-range → skill warns one line to stderr and degrades — never blocks. **Opt-in convenience** — `flowctl` core never imports or requires clawpatch; scouts gracefully fall back to the grep/glob path when `.clawpatch/` is absent. |
+
+Removing the skill is trivial: `rm -rf .clawpatch/` removes both the index and the self-contained `.gitignore` skeleton in one step (the skill does not touch the repo `.gitignore`).
+
 ## Community ports and inspired projects
 
 | Project | Platform | Notes |

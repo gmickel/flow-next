@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-05-26T14:48:53.214743Z",
+  "depends_on": [],
+  "id": "fn-50-codebase-feature-map-flow-nextmap-skill.1",
+  "priority": null,
+  "spec": "fn-50-codebase-feature-map-flow-nextmap-skill",
+  "spec_path": ".flow/tasks/fn-50-codebase-feature-map-flow-nextmap-skill.1.md",
+  "status": "todo",
+  "title": "/flow-next:map skill scaffold + clawpatch detection + init + provider-free map invocation",
+  "updated_at": "2026-05-26T14:52:50.747346Z"
+}
