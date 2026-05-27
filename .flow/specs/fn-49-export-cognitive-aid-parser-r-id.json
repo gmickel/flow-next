@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-49-export-cognitive-aid-parser-r-id.md",
-  "status": "open",
+  "status": "done",
   "title": "Export-cognitive-aid parser: R-ID suffixes + null timestamps",
-  "updated_at": "2026-05-26T11:03:13.862402Z"
+  "updated_at": "2026-05-27T07:00:08.825394Z"
 }

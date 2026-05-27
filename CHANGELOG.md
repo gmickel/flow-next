@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## [Unreleased]
+## [flow-next 1.3.0] - 2026-05-27
 
 ### Added
 - **`/flow-next:map` skill** wrapping [openclaw/clawpatch](https://github.com/openclaw/clawpatch)'s `clawpatch map` CLI to produce a semantic feature index of the repo (~20 languages, persisted at `.clawpatch/features/*.json`, Zod-validated `schemaVersion: 1`) (fn-50). Opt-in convenience — `flowctl` core never imports or requires clawpatch; skill detects install via `command -v clawpatch`, prints `pnpm add -g clawpatch` install instructions verbatim when missing (no auto-install), runs `clawpatch init` when `.clawpatch/` absent + writes a self-contained `.clawpatch/.gitignore` skeleton (repo `.gitignore` untouched). Default invocation is `--source heuristic` (provider-free, zero LLM calls, deterministic mapper); `--source auto|agent` is exposed as passthrough (clawpatch's provider matrix stays orthogonal to flow-next's review backend). Single-source `SUPPORTED_CLAWPATCH=">=0.4.0 <0.5.0"` version pin lives in skill prose; outside-range → one-line stderr warning + degrade, never block. PNPM_HOME PATH detection prints the `pnpm setup` hint when pnpm v11 global bins aren't on PATH. Ralph-block (decline-to-run, no receipt write) under `FLOW_RALPH=1` / `REVIEW_RECEIPT_PATH`.
