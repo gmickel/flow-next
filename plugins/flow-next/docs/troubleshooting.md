@@ -107,6 +107,8 @@ command -v clawpatch  # should now resolve
 
 **4. Node 20 with `clawpatch` installed.** clawpatch's `engines.node: ">=22"` triggers its own error; the skill propagates it verbatim. Upgrade Node 22+ (e.g. `nvm install 22 && nvm use 22`) or skip `/flow-next:map` — scouts gracefully fall back to the grep/glob path when `.clawpatch/` is absent.
 
+**5. "Should I commit `.clawpatch/` to the repo?"** No — by default the skill writes a `.clawpatch/.gitignore` with `*` + `!.gitignore`, making the feature index local-per-developer. The map is regenerable from `clawpatch map`, the schema may flip between pre-1.0 minor releases, and committing it creates PR review noise + merge conflicts. See [Sharing contract](../skills/flow-next-map/SKILL.md#sharing-contract--local-only-by-design) in the skill prose, or the full trade-off table at [flow-next.dev/skills/map](https://flow-next.dev/skills/map/). Teams that want shared indexes can customize the skeleton — unsupported, but the skill won't clobber a customized `.gitignore` on re-run.
+
 The skill is **opt-in convenience** — `flowctl` core never imports or requires clawpatch; nothing else in flow-next breaks when the skill can't run.
 
 ## Uninstall

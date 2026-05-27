@@ -81,6 +81,19 @@ Execute the phases in [workflow.md](workflow.md) in order:
 4. **Map invocation (R1)** — `clawpatch map --source <SOURCE> [extra passthrough]`. Default `<SOURCE>` is `heuristic` (always passed explicitly — never rely on clawpatch's default in case upstream changes it). clawpatch streams stdout live; the skill does not buffer.
 5. **Result summary** — print path to `.clawpatch/features/`, count of feature files, last-mapped timestamp; suggest `flowctl repo-map list` (lands in fn-50.2) and the `/flow-next:plan` / `/flow-next:capture` paths that consume it.
 
+## Sharing contract — local-only by design
+
+The `.clawpatch/.gitignore` skeleton this skill writes is `*` + `!.gitignore` — **everything under `.clawpatch/` is git-ignored; only the `.gitignore` itself is tracked**. The feature index is local-per-developer, not committed.
+
+This is a deliberate design choice for a pre-1.0 mapper:
+
+- **No PR review noise** from regenerated feature data on every `clawpatch map` run.
+- **No merge conflicts** on `features/*.json` when two branches mapped at different SHAs.
+- **No coupling of PR review to mapper-output drift** as clawpatch schema bumps land (weekly minor releases at the time of writing).
+- **Onboarding cost is low** — `--source heuristic` is a fast filesystem walk; new contributors regenerate locally in seconds.
+
+Teams that want a shared, in-repo feature index can edit `.clawpatch/.gitignore` directly (e.g. `!features/`, `!project.json`, ignore only `.cache/` and `*.log`). The skill is idempotent and won't clobber a customized `.gitignore` on re-run. **This is unsupported** — be prepared for review noise and merge conflicts; document the choice in your team's `CLAUDE.md` / `AGENTS.md`. See [flow-next.dev/skills/map](https://flow-next.dev/skills/map/) for the full trade-off table.
+
 ## Forbidden
 
 - **Auto-installing clawpatch.** The skill detects and instructs; users install with their own permission. Global npm installs are user-consent territory.

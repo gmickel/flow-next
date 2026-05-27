@@ -9879,14 +9879,21 @@ def _repo_map_resolve_ref(ref: str) -> tuple[bool, str]:
 
 
 def _repo_map_git_diff_names(ref: str) -> list[str]:
-    """Return repo-relative paths of files changed between `ref` and HEAD.
+    """Return repo-relative paths of files changed on HEAD since branching from `ref`.
 
-    Caller MUST validate the ref via `_repo_map_resolve_ref` first. Returns
-    `[]` if `git diff` fails for any reason (treated as no overlap).
+    Uses three-dot diff (`<ref>...HEAD`) so the result is symmetric-difference-free:
+    only files HEAD changed since diverging from `<ref>` are returned. The previous
+    two-dot form (`<ref>..HEAD` = `git diff <ref> HEAD`) compared the two tip trees
+    and surfaced files changed *only* on `<ref>` after the branch cut (e.g.
+    `origin/main` advancing post-branch), polluting overlap results with false
+    positives. Caught by chatgpt-codex-connector[bot] on PR #148.
+
+    Caller MUST validate the ref via `_repo_map_resolve_ref` first. Returns `[]`
+    if `git diff` fails for any reason (treated as no overlap).
     """
     try:
         result = subprocess.run(
-            ["git", "diff", "--name-only", f"{ref}..HEAD"],
+            ["git", "diff", "--name-only", f"{ref}...HEAD"],
             capture_output=True,
             text=True,
             encoding="utf-8",

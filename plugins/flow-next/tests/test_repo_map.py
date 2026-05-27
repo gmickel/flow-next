@@ -341,6 +341,103 @@ class RepoMapSinceRef(unittest.TestCase):
             self.assertEqual(payload["count"], 0)
             self.assertEqual(payload["features"], [])
 
+    def test_since_ref_excludes_upstream_only_changes(self) -> None:
+        """`since-ref` must use three-dot diff so upstream-only changes don't pollute.
+
+        Regression test for chatgpt-codex-connector[bot] P2 finding on PR #148:
+        the previous two-dot form `git diff <ref>..HEAD` (= `git diff <ref>
+        HEAD`) compared the two tip trees, so files changed *only* on `<ref>`
+        after branch cut showed up as "touched since ref" — false positives in
+        diverged-branch workflows.
+
+        Fixture topology (`F` = the `auth` feature's owned file `src/auth.ts`):
+
+            * upstream tip  (modifies F → would surface as false positive under 2-dot)
+            |
+            |   * branch tip  (modifies G → only this should surface)
+            |  /
+            * /  merge base
+            |/
+            *  init
+
+        Under three-dot semantics (`<upstream>...HEAD`), the result must
+        include G only — the F change is upstream-only and must NOT appear.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            tdp = Path(td)
+            _copy_fixture_clawpatch(tdp)
+            base_sha = self._init_git_repo(tdp)
+            env = {
+                "GIT_AUTHOR_NAME": "t",
+                "GIT_AUTHOR_EMAIL": "t@t.t",
+                "GIT_COMMITTER_NAME": "t",
+                "GIT_COMMITTER_EMAIL": "t@t.t",
+            }
+
+            def git(*args: str) -> None:
+                r = subprocess.run(
+                    ["git", *args], cwd=td, capture_output=True, text=True,
+                    env={**os.environ, **env},
+                )
+                self.assertEqual(r.returncode, 0, msg=f"{args}: {r.stderr}")
+
+            # Branch off the initial commit, then commit G on the branch.
+            git("checkout", "-b", "feature")
+            (tdp / "src").mkdir(parents=True, exist_ok=True)
+            (tdp / "src" / "other.ts").write_text(
+                "// owned by other-feature in fixture? no — just non-auth change\n",
+                encoding="utf-8",
+            )
+            git("add", "src/other.ts")
+            git("commit", "-q", "-m", "branch: add other.ts")
+            branch_sha = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=td, capture_output=True, text=True,
+            ).stdout.strip()
+
+            # Now go back to main and advance it with a change to F
+            # (src/auth.ts — owned by the `auth` fixture feature).
+            # `src/` was created only on the feature branch, so re-create
+            # the dir on main before writing auth.ts.
+            git("checkout", "main")
+            (tdp / "src").mkdir(parents=True, exist_ok=True)
+            (tdp / "src" / "auth.ts").write_text(
+                "// upstream-only change to auth\n",
+                encoding="utf-8",
+            )
+            git("add", "src/auth.ts")
+            git("commit", "-q", "-m", "main: touch auth (upstream-only)")
+            main_advanced_sha = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=td, capture_output=True, text=True,
+            ).stdout.strip()
+
+            # Back to the feature branch (where HEAD never touched auth.ts).
+            git("checkout", "feature")
+            self.assertNotEqual(branch_sha, main_advanced_sha)
+
+            # since-ref against the *advanced* main — under buggy two-dot
+            # semantics this would surface the `auth` feature as a false
+            # positive (because main advanced past the merge-base by
+            # touching src/auth.ts). Three-dot must exclude it.
+            res = _run(
+                "repo-map", "since-ref", "main", "--json", cwd=td
+            )
+            self.assertEqual(res.returncode, 0, msg=res.stderr)
+            payload = json.loads(res.stdout)
+            self.assertTrue(payload["success"])
+            self.assertNotIn(
+                "src/auth.ts",
+                payload.get("changed_files", []),
+                "since-ref must NOT surface upstream-only changes — that "
+                "was the chatgpt-codex-connector[bot] P2 regression on PR #148.",
+            )
+            auth_features = [f for f in payload["features"] if f["featureId"] == "auth"]
+            self.assertEqual(
+                auth_features,
+                [],
+                "auth feature must not surface — its ownedFile (src/auth.ts) "
+                "changed only on upstream, not on this branch",
+            )
+
     def test_since_ref_absent_clawpatch_returns_count_zero(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tdp = Path(td)

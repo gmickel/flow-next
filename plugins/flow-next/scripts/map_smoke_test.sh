@@ -357,9 +357,30 @@ assert_grep "pnpm add -g clawpatch" "$err" "Case 4a: prints verbatim install ins
 assert_grep "Node 22+" "$err" "Case 4a: names Node 22+ requirement"
 
 # 4b: pnpm-on-PATH-but-clawpatch-missing → PNPM_HOME hint surfaces.
-PNPM_STUB_DIR="$TEST_DIR/pnpm-stub"
-mkdir -p "$PNPM_STUB_DIR"
-cat > "$PNPM_STUB_DIR/pnpm" <<'EOF'
+#
+# Windows skip-precondition: this test stubs `pnpm` as a bash-shebang script
+# (no extension) and relies on POSIX `chmod +x` exec bits. On Windows Git
+# Bash, NTFS lacks POSIX exec bits and the MSYS exec layer requires either
+# .exe / .cmd / .bat (per PATHEXT) or a real ACL grant — `chmod +x` is a
+# no-op. So `pnpm bin -g` can't be invoked from the stub on Windows, and
+# the skill's `command -v pnpm && pnpm bin -g` short-circuits before
+# reaching the hint branch.
+#
+# The PNPM_HOME hint logic IS correct on Windows (pnpm v11 stores globals
+# at %LOCALAPPDATA%\pnpm and requires `pnpm setup` to wire PATH — same
+# trap, possibly worse). At real-user runtime on Windows, pnpm ships as
+# `pnpm.cmd` and the skill's check works fine. Cross-platform contract
+# coverage of the hint prose is enforced by the Python prose-contract
+# test at `plugins/flow-next/tests/test_pnpm_home_hint_prose.py` — that
+# test runs on the full ubuntu/macos/windows CI matrix.
+case "${OSTYPE:-}" in
+  msys*|cygwin*|win32*)
+    echo -e "${YELLOW}Case 4b: SKIP on Windows — pnpm stub needs POSIX exec bits; prose contract test covers Windows.${NC}"
+    ;;
+  *)
+    PNPM_STUB_DIR="$TEST_DIR/pnpm-stub"
+    mkdir -p "$PNPM_STUB_DIR"
+    cat > "$PNPM_STUB_DIR/pnpm" <<'EOF'
 #!/usr/bin/env bash
 # Stub: simulate `pnpm bin -g` returning a global-bin path.
 if [[ "$1" == "bin" && "$2" == "-g" ]]; then
@@ -368,17 +389,19 @@ if [[ "$1" == "bin" && "$2" == "-g" ]]; then
 fi
 exit 1
 EOF
-chmod +x "$PNPM_STUB_DIR/pnpm"
+    chmod +x "$PNPM_STUB_DIR/pnpm"
 
-rc=0
-# Same hermetic PATH as Case 4a, with the pnpm stub directory prepended so
-# `command -v pnpm` resolves to the stub — but real coreutils stays available.
-err="$(env -i PATH="$PNPM_STUB_DIR:$HERMETIC_PATH" HOME="$HOME" bash "$INSTALL_GUARD" 2>&1)" || rc=$?
-assert_rc 1 "$rc" "Case 4b: pnpm-installed + clawpatch-missing → exit 1"
-assert_grep "pnpm add -g clawpatch" "$err" "Case 4b: still prints install instructions"
-assert_grep "pnpm setup" "$err" "Case 4b: PNPM_HOME hint surfaces (pnpm setup)"
-assert_grep "PNPM_HOME" "$err" "Case 4b: hint names PNPM_HOME"
-assert_grep "/tmp/fake-pnpm-bin" "$err" "Case 4b: hint surfaces pnpm bin -g output"
+    rc=0
+    # Same hermetic PATH as Case 4a, with the pnpm stub directory prepended so
+    # `command -v pnpm` resolves to the stub — but real coreutils stays available.
+    err="$(env -i PATH="$PNPM_STUB_DIR:$HERMETIC_PATH" HOME="$HOME" bash "$INSTALL_GUARD" 2>&1)" || rc=$?
+    assert_rc 1 "$rc" "Case 4b: pnpm-installed + clawpatch-missing → exit 1"
+    assert_grep "pnpm add -g clawpatch" "$err" "Case 4b: still prints install instructions"
+    assert_grep "pnpm setup" "$err" "Case 4b: PNPM_HOME hint surfaces (pnpm setup)"
+    assert_grep "PNPM_HOME" "$err" "Case 4b: hint names PNPM_HOME"
+    assert_grep "/tmp/fake-pnpm-bin" "$err" "Case 4b: hint surfaces pnpm bin -g output"
+    ;;
+esac
 
 # =============================================================================
 # CASE 5: .clawpatch/.gitignore skeleton (R2) — idempotent, self-contained
