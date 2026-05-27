@@ -93,6 +93,10 @@ predicates ("function Z returns shape W under condition V"). R-IDs are
 append-only across passes — never renumber, never replace; a later pass takes
 the next unused number.
 
+Sub-scoped sibling criteria use single-letter suffixes (`R4a`, `R4b`) when one
+logical parent splits during revision — siblings sort lexically (`R4a` before
+`R4b` before `R5`). Multi-letter suffixes (`R4ab`) are not supported.
+
 - **R1:** <Testable criterion>
 - **R2:** <Testable criterion>
 
