@@ -28,5 +28,8 @@ Every command/flow the old single-driver skill supported must still be reachable
 - [ ] SKILL.md ladder pointer for the default rung resolves to this reference
 
 ## Done summary
-
+Created references/agent-browser.md as the default web-rung entry point — folds the 7 existing agent-browser references into an index and carries forward content that lived only in the old single-driver SKILL.md (command chaining/daemon persistence, --headed daemon-reuse gotcha + pkill/macOS-activate recipes, setup/version check, config file, local files), surfacing the --cdp/--auto-connect path as the Chromium-desktop (Electron/WebView2) CDP driver. Resolved SKILL.md's default-rung pointer to it and dropped the temporary placeholder note. No capability regression: all 44 subcommands + 31 flags from the old skill remain reachable.
 ## Evidence
+- Commits: 559bbe143fcdaf9f823f5c2e71162c4e97caac96
+- Tests: smoke: references/agent-browser.md exists + SKILL.md default-rung pointer resolves to it (SKILL.md line 52 rung-1 cell + line 60 note), smoke: all 7 folded reference links from agent-browser.md resolve, no dangling (the 4 remaining SKILL.md rung links chrome-devtools-mcp/playwright/cursor-ide-browser/computer-use are fn-51.3/.4 scope, not this task), no-regression: 44/44 old-SKILL.md subcommands + 31/31 global flags reachable in new rung surface (agent-browser.md + 7 refs), no-regression: all 19 old-SKILL.md sections + 17 task-required specifics present (re-snapshot rule, --headed daemon-reuse gotcha, pkill recipe, macOS activate, --cdp/--auto-connect Chromium-desktop driver, Electron/WebView2 framing, command chaining, doctor/install, --session-name, encryption, config file, local files, annotate, iOS), verified against installed agent-browser 0.27.0: doctor/install/upgrade/skills-get-core-full/skills-get-electron/--auto-connect all confirmed present
+- PRs:
