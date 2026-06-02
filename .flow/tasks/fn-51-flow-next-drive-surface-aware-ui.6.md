@@ -30,5 +30,8 @@ Final integration: version bump, docs across three surfaces, and the user-facing
 - [ ] No stray `browser` skill references remain in repo docs
 
 ## Done summary
-
+Final integration for fn-51: bumped flow-next 1.3.4 -> 1.4.0 across all four manifests, added the CHANGELOG entry for the browser -> flow-next-drive surface-aware driver ladder (crediting rayfernando-skills, Apache-2.0) plus the migration/uninstall note, verified the README skill count stays 24, and renamed the flow-next.dev docs page + nav/sidebar/changelog + version refs (committed separately, pnpm build green, not pushed).
 ## Evidence
+- Commits: c08904065501502f164f69ec265dec53857fbc54
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (697 passed, 2 skipped), python3 -m py_compile plugins/flow-next/scripts/flowctl.py (OK), jq version assert: all 4 manifests = 1.4.0 (claude+agents marketplace.json, claude+codex plugin.json), grep -ni flow-next-drive CHANGELOG.md (entry present); grep rayfernando CHANGELOG.md (Apache-2.0 credit present), grep -rniE bare-browser sweep README/CHANGELOG/docs (only historical CHANGELOG hits, no dead browser-skill ref), scripts/sync-codex.sh re-sync: 25 skills/21 agents, all validation guards green, codex flow-next-drive present, no agent-browser/browser dir, cd ~/work/flow-next.dev && pnpm build (exit 0, 51 pages, /skills/flow-next-drive built, /skills/browser absent)
+- PRs:
