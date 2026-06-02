@@ -49,7 +49,7 @@ Probe availability top-down and use the **highest rung that passes**; fail soft 
 
 | Rung | Driver | Use when | Reference |
 |------|--------|----------|-----------|
-| 1 (default) | **agent-browser** CLI | Always assumed present. CDP-based, headless-safe, no extra install. Drives web apps; drives Electron / WebView2 over CDP (`--cdp <port>` / `--auto-connect`). | `references/agent-browser.md` *(see note below)* |
+| 1 (default) | **agent-browser** CLI | Always assumed present. CDP-based, headless-safe, no extra install. Drives web apps; drives Electron / WebView2 over CDP (`--cdp <port>` / `--auto-connect`). | `references/agent-browser.md` |
 | 2 | **chrome-devtools-mcp** | You want built-in auto-wait (fewer stale-ref failures), DevTools-grade network/console inspection, Lighthouse, or to **attach to your real signed-in Chrome** (`--browser-url` / `--autoConnect`) so bot defenses don't challenge an automated profile. | `references/chrome-devtools-mcp.md` |
 | 3 | **Playwright** (CLI or MCP) | The repo already has Playwright configured, or you need a headless CI-style run / large cross-browser regression suite. | `references/playwright.md` |
 | 4 | **cursor-ide-browser** MCP | Running inside Cursor with this MCP installed and you want its snapshot YAML + `browser_cdp` control. | `references/cursor-ide-browser.md` |
@@ -57,7 +57,7 @@ Probe availability top-down and use the **highest rung that passes**; fail soft 
 
 **Surface B note:** the SAME ladder drives Electron / WebView2 apps — attach to the app's remote-debugging port (`agent-browser --cdp <port>` / `--auto-connect`; chrome-devtools-mcp `--browser-url=http://127.0.0.1:<port>`). Launch the app with a dedicated debug port and a dedicated user-data-dir; treat the open debug port as a security exposure (any local app can drive that session).
 
-> **agent-browser command detail lives in the rung reference, not here.** The default-rung reference (`references/agent-browser.md`, consolidated in fn-51.2) folds the existing `references/commands.md`, `advanced.md`, `auth.md`, `snapshot-refs.md`, `session-management.md`, `proxy.md`, and `debugging.md`. Until that consolidation lands, read those files directly for command syntax, CDP attach (`advanced.md`), auth/session persistence (`auth.md`, `session-management.md`), and troubleshooting (`debugging.md`).
+> **agent-browser command detail lives in the rung reference, not here.** The default-rung reference [`references/agent-browser.md`](references/agent-browser.md) is the entry point — setup/version check, the universal flow in agent-browser commands, the Chromium-desktop (Electron / WebView2) CDP driver, the `--headed` daemon-reuse gotcha, and an index into the per-topic references it folds: `commands.md`, `advanced.md` (CDP attach), `auth.md`, `snapshot-refs.md`, `session-management.md`, `proxy.md`, `debugging.md`.
 
 ## Step 4 — Native rung (surface C): Computer Use
 
