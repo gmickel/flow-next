@@ -145,31 +145,26 @@ if [ -d "$PLUGIN_DIR/templates" ]; then
   cp -R "$PLUGIN_DIR/templates" "$CODEX_DIR/"
 fi
 
-# --- RENAME: 'browser' → 'agent-browser' in Codex mirror only ────────────────
-# OpenAI ships a bundled @browser skill in Codex desktop (in-app browser for
-# localhost / file:// previews). Renaming ours to @agent-browser prevents the
-# collision. Claude Code and Droid keep 'browser' unchanged (no collision
-# there).
-if [ -d "$CODEX_DIR/skills/browser" ]; then
-  mv "$CODEX_DIR/skills/browser" "$CODEX_DIR/skills/agent-browser"
-  browser_skill="$CODEX_DIR/skills/agent-browser/SKILL.md"
-
-  # Patch frontmatter name
-  sed -i.bak -e 's/^name: browser$/name: agent-browser/' "$browser_skill"
-  rm -f "${browser_skill}.bak"
-
+# --- flow-next-drive: Codex Browser-Use preface ──────────────────────────────
+# The canonical skill is `flow-next-drive` (no `@browser` collision — the old
+# `browser` → `agent-browser` rename is gone; the copy loop above already
+# mirrors the canonical dir name). We still want a Codex-only note: Codex
+# desktop bundles a narrow-scope Browser Use plugin, and users should know when
+# to delegate to it vs. drive with this skill. Inject that preface after the
+# frontmatter; canonical (Claude/Droid) stays unchanged.
+drive_skill="$CODEX_DIR/skills/flow-next-drive/SKILL.md"
+if [ -f "$drive_skill" ]; then
   # Insert Codex-specific preface after the frontmatter block.
-  # Explains when to use @browser (OpenAI iab) vs @agent-browser (ours).
   awk '
     /^---$/ { fm++; print; next }
     fm == 2 && !inserted {
       print ""
-      print "> **Codex note — Browser Use vs this skill:** Codex **desktop** (v0.124+) bundles a **Browser Use** plugin (invoke `$browser-use <task>`) controlling its in-app browser. Scope is narrow: `localhost`, `127.0.0.1`, `::1`, `file://`, current in-app tab. No cookies, no auth, no extensions, no production sites, no Electron apps, no mobile sims. For those narrow cases, delegate: use `$browser-use` directly, or just describe the task in prose (Codex routes natural-language plugin calls). Use **this skill** (`$agent-browser` or prose triggers listed above) for everything outside that scope — production sites, authenticated flows, cookies/saved sessions, Electron apps (VS Code / Slack / Figma / etc), iOS Simulator, proxies, headed browsers, video recording, visual diff. In **Codex CLI** (no desktop app, no in-app browser), always use this skill — Browser Use is not available there."
+      print "> **Codex note — Browser Use vs this skill:** Codex **desktop** (v0.124+) bundles a **Browser Use** plugin (invoke `$browser-use <task>`) controlling its in-app browser. Scope is narrow: `localhost`, `127.0.0.1`, `::1`, `file://`, current in-app tab. No cookies, no auth, no extensions, no production sites, no Electron apps, no mobile sims. For those narrow cases, delegate: use `$browser-use` directly, or just describe the task in prose (Codex routes natural-language plugin calls). Use **this skill** (the prose triggers listed above — `check the page`, `verify UI`, `test this app`, etc.) for everything outside that scope — production sites, authenticated flows, cookies/saved sessions, Electron / native apps, iOS Simulator, proxies, headed browsers, video recording, visual diff. In **Codex CLI** (no desktop app, no in-app browser), always use this skill — Browser Use is not available there."
       print ""
       inserted = 1
     }
     { print }
-  ' "$browser_skill" > "${browser_skill}.tmp" && mv "${browser_skill}.tmp" "$browser_skill"
+  ' "$drive_skill" > "${drive_skill}.tmp" && mv "${drive_skill}.tmp" "$drive_skill"
 fi
 
 # --- PATH patches (all .md files) ---

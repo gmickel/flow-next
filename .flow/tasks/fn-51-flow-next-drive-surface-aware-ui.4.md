@@ -35,5 +35,8 @@ Both share the universal flow (observe -> act -> verify -> capture). Detect avai
 - [ ] SKILL.md native-branch pointer resolves to this reference
 
 ## Done summary
-
+Added references/computer-use.md — the flow-next-drive native rung — resolving the last dangling SKILL.md reference (Step 4). Covers both Computer Use providers (Codex CU + Anthropic Claude CU with its harness requirement), scopes the rung to true-native (AppKit/SwiftUI) + non-CDP webviews while explicitly routing Electron/WebView2 to the web ladder via CDP, and adds the never-a-dependency / never-headless graceful-degradation table with availability/region/permissions/tool-version marked verify-at-build.
 ## Evidence
+- Commits: 42bfe545e10c62a682ad6956c78a175a35d01cf7
+- Tests: grep/test smoke suite: file exists; SKILL.md Step 4 -> references/computer-use.md resolves; zero dangling references/*.md across whole skill (SKILL.md + all rung refs); both providers (Codex CU + Anthropic Claude CU) present; Electron/WebView2 -> web-ladder cross-ref (agent-browser.md --cdp + chrome-devtools-mcp.md --browser-url) present; Claude CU harness note (API loop + display/sandbox or MCP wrapper, not-free-from-host) present; never-a-hard-dependency + never-headless stated; graceful-degradation table present; native+no-CU -> document-and-stop not fail-silently; 8x verify-at-build markers (region/permissions/tool-version); all local md links + both provider doc URLs resolve
+- PRs:
