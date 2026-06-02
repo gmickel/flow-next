@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-02T15:23:06.310157Z",
+  "depends_on": [
+    "fn-51-flow-next-drive-surface-aware-ui.1"
+  ],
+  "id": "fn-51-flow-next-drive-surface-aware-ui.3",
+  "priority": null,
+  "spec": "fn-51-flow-next-drive-surface-aware-ui",
+  "spec_path": ".flow/tasks/fn-51-flow-next-drive-surface-aware-ui.3.md",
+  "status": "todo",
+  "title": "Web ladder rung references: chrome-devtools-mcp, Playwright, cursor-ide-browser",
+  "updated_at": "2026-06-02T15:24:39.417911Z"
+}

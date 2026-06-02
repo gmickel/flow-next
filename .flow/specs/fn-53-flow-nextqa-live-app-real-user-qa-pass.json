@@ -1,7 +1,9 @@
 {
   "branch_name": "fn-53-flow-nextqa-live-app-real-user-qa-pass",
   "created_at": "2026-06-01T13:33:10.484356Z",
-  "depends_on_epics": [],
+  "depends_on_epics": [
+    "fn-51-flow-next-drive-surface-aware-ui"
+  ],
   "id": "fn-53-flow-nextqa-live-app-real-user-qa-pass",
   "next_task": 1,
   "plan_review_status": "unknown",
@@ -9,5 +11,5 @@
   "spec_path": ".flow/specs/fn-53-flow-nextqa-live-app-real-user-qa-pass.md",
   "status": "open",
   "title": "/flow-next:qa \u2014 live-app real-user QA pass derived from the spec",
-  "updated_at": "2026-06-01T13:33:50.887891Z"
+  "updated_at": "2026-06-02T15:23:05.352120Z"
 }
