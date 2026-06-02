@@ -25,5 +25,8 @@ Run a **two-pass rename sweep** (bare `browser` + variable-form) across canonica
 - [ ] `docs/sync-codex.md` updated if the transform rule changed
 
 ## Done summary
-
+Fixed scripts/sync-codex.sh: dropped the dead `browser`→`agent-browser` mv/sed name-rewrite (canonical skill is now `flow-next-drive`; the copy loop mirrors that dir name and the `@browser` collision is gone), and kept + rekeyed the Codex Browser-Use preface to inject into `codex/skills/flow-next-drive/SKILL.md` (dropped the stale `$agent-browser` invocation, points users at the prose triggers). Regenerated the Codex mirror to `flow-next-drive` (`name: flow-next-drive`), verified two-pass grep clean, tables/fenced blocks intact, and byte-stable across re-sync.
 ## Evidence
+- Commits: 44323f326afaa88ea2f2d41687c033da61145f94
+- Tests: bash -n scripts/sync-codex.sh (syntax OK), bash scripts/sync-codex.sh (full sync clean: 25 skills, 21 agents, all 14 validation guards passed), mirror assert: name: flow-next-drive present; no codex/skills/*browser* dir; no name: browser|agent-browser in mirror, two-pass grep: bare browser + variable-form $browser/browser_skill — only legit compounds + OpenAI $browser-use prose remain, table/fence integrity: diff canonical-vs-mirror shows only generic sync normalization, tables byte-identical, fenced blocks balanced, idempotency: md5sum-of-md5sums byte-stable across 2nd sync; post-commit re-sync leaves no drift
+- PRs:
