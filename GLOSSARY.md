@@ -67,3 +67,19 @@ The R-ID invariant. Once a spec has been reviewed once, R5 means the same thing 
 ## flow-swarm
 
 An in-progress companion product to flow-next that reads `.flow/specs/` directly to coordinate parallel agents across worktrees and consume `/flow-next:make-pr` output. The on-disk layout flow-swarm expects is what fn-43 (epic->spec rename) produces. Reference target for the v1.0 migration carrot.
+
+## Tracker
+
+An external issue tracker (Linear first, GitHub Issues next) that flow-next *projects* a spec to via `/flow-next:tracker-sync`. The tracker is a **co-editable mirror** — body, status, and comments sync two-way — but it is **projection, not coordination**: the `.flow/specs/<id>.md` spec stays the source of truth and the quality layer, and the tracker never drives flow state or spawns agents. Distinct from `/flow-next:sync` (plan-sync). Contrast OpenAI Symphony, where the tracker *is* the control plane.
+
+## merge-base snapshot
+
+The common-ancestor body the tracker-sync 3-way merge compares against — a **paired** snapshot taken at the last sync point: both a flow-form body and a tracker-form body, plus content hashes (the echo fence). Stored in the spec-JSON `tracker` block (`mergeBaseFlow` / `mergeBaseTracker` / `baseHashFlow` / `baseHashTracker`) and written atomically as a unit (a one-sided update is rejected, so neither half pins to a stale sync point). Advances with `lastSyncedAt` on a real reconcile, never on a no-op echo.
+
+## discovery ceremony
+
+The detect → surface → ask → never-assume flow `/flow-next:tracker-sync` runs before enabling the bridge. It probes four signals (Linear MCP, `LINEAR_API_KEY`, GitHub auth, a Jira host), surfaces what is present *and* absent, asks the user, and writes `tracker.*` config **only on confirmation**, with provenance. No signal ⇒ nothing written; the bridge stays off. Resolution model is env > config > ask (mirrors `flowctl review-backend`).
+
+## tracker-key handle
+
+A tracker identifier (e.g. `WOR-17`) used as a **resolvable flow id**, the hybrid id model. **Tracker-first** specs are canonically `wor-17-slug` (tasks `wor-17-slug.M`); bare `wor-17` / `wor-17.M` resolve as aliases. **Flow-first** specs keep `fn-NN-slug` and store `WOR-17` in `tracker.identifier` as a resolvable display alias. Resolution is case-insensitive (`show wor-17`, `work wor-17` resolve); the native `fn-` scheme is reserved (`fn-N` allocation counts `fn-*` only); one tracker team per repo; **ids never rename** on link.

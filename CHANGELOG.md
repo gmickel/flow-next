@@ -2,6 +2,22 @@
 
 All notable changes to the flow-next.
 
+## [Unreleased]
+
+> Version + Codex mirror land in fn-52.9; this entry documents the tracker-sync bridge shipped across fn-52.1–.7, .10.
+
+### Added
+- **`/flow-next:tracker-sync` — project a flow-next spec to an external tracker (Linear first, GitHub next) and reconcile body / status / comments two-way** (fn-52). **Projection, not coordination:** the `.flow/specs/<id>.md` spec stays the single source of truth and the quality layer; the tracker is a co-editable mirror that **never drives flow state or spawns agents** (contrast OpenAI Symphony, where the board is the control plane). Distinct from `/flow-next:sync` (plan-sync). New subsystem reference: [`docs/tracker-sync.md`](plugins/flow-next/docs/tracker-sync.md).
+  - **Discovery ceremony** (detect → surface → ask → never-assume): probes Linear MCP / `LINEAR_API_KEY` / GitHub auth / a Jira host, writes `tracker.*` config only on confirmation (env > config > ask, mirroring `flowctl review-backend`). The bridge is **off until explicitly enabled** and active iff `tracker.enabled == true` OR `tracker.type ∈ {linear, github}`.
+  - **Transport ladder** per adapter — Linear: MCP → GraphQL → no-op; GitHub: `gh` (single rung, reduced-fidelity status) → no-op. Transport-blind orchestration (the skill calls a normalized `fetchIssue` / `writeIssue` / `listComments` / `postComment` / `readStatus` / `setStatus` interface); when no transport is reachable the run is a `noop` + receipt note, never a crash.
+  - **Hybrid id model (R16):** tracker-first specs are canonically `wor-17-slug` (tasks `wor-17-slug.M`; bare `wor-17` / `wor-17.M` resolve as aliases); flow-first specs keep `fn-NN` plus a resolvable `tracker.identifier` display alias (`WOR-17`). `show` / `work` / `plan wor-17` resolve case-insensitively; the native `fn-` scheme is reserved (`fn-N` allocation counts `fn-*` only); **one tracker team per repo**; **ids never rename** on link. `flowctl spec create --tracker-first --tracker-identifier WOR-17` keys the spec by the tracker key.
+  - **`flowctl sync` plumbing:** `active` / `get-state` / `set-tracker-id` / `set-last-synced` / `set-merge-base` (paired-snapshot writer — both halves required) / `clear` / `list-unsynced` / `list-stale` / `check-collisions` / `receipt` / `defer`. Per-spec sync state (`tracker` block: id / identifier / url / `lastSyncedAt` / merge-base snapshots + hashes) lives in the `.flow/specs/<id>.json` sidecar.
+  - **Ralph-safe:** every run emits a receipt; genuine conflicts **queue** to the review deferred-findings sink (`.flow/review-deferred/<branch>.md`) rather than block — no `flowctl block` needed. An `always-ask` tiebreak resolves to *queue* in autonomous mode.
+  - Sync-engine shape (discovery ceremony, per-item `lastSyncedAt`, surface-diffs-never-overwrite) adapted from Ray Fernando's [`rayfernando-skills`](https://github.com/RayFernando1337/rayfernando-skills) `running-bug-review-board` `issue-trackers.md` (Apache-2.0). Thank you, Ray.
+
+### Changed
+- **Seven lifecycle skills gain opt-in tracker-sync touchpoints** (fn-52.6) — capture, interview, plan, work (first-claim + done), make-pr, resolve-pr, spec-completion-review. Each `tracker.perEvent.*` leaf defaults `off` (values: `off | pull | push | reconcile | comment`); even `tracker.enabled=true` does nothing until a specific event opts in. The skills value-check `flowctl sync active` so the default (off) path has no transport cost.
+
 ## [flow-next 1.4.0] - 2026-06-02
 
 ### Changed

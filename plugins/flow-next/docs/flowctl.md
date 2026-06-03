@@ -107,12 +107,17 @@ Create new spec.
 
 ```bash
 flowctl spec create --title "Spec title" [--branch "fn-1-spec-title"] [--json]
+
+# Tracker-first: key the spec by its tracker identifier (wor-17-slug) instead of fn-NN
+flowctl spec create --title "Spec title" --tracker-first --tracker-identifier WOR-17 [--json]
 ```
 
 Output:
 ```json
 {"success": true, "id": "fn-1-spec-title", "title": "Spec title", "spec_path": ".flow/specs/fn-1-spec-title.md"}
 ```
+
+`--tracker-first` (requires `--tracker-identifier WOR-17`) keys the spec by the tracker key — canonical id `wor-17-slug`, tasks `wor-17-slug.M`, branch `wor-17-slug`; bare `wor-17` / `wor-17.M` resolve as aliases. Used by the `/flow-next:tracker-sync` "grab issue X and spec it" flow. See [`tracker-sync.md`](tracker-sync.md) for the hybrid id model. No fresh `fn-NN` is allocated; ids never rename.
 
 ### spec set-plan
 
@@ -528,6 +533,13 @@ flowctl config toggle memory.enabled [--json]
 | `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync — scan other open specs for stale references after each task (opt-in; increases sync time)* |
 | `scouts.github` | bool | `false` | Enable github-scout during planning (requires gh CLI) |
 | `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `none`). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
+| `tracker.enabled` | bool | `false` | Enable the tracker-sync bridge (see [`sync`](#sync)). The bridge is active iff raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github}`. |
+| `tracker.type` | string | `null` | Tracker backend: `linear` or `github`. |
+| `tracker.provenance` | string | `null` | Free-form provenance written by the discovery ceremony on confirmation (who/when/signals). |
+| `tracker.perEvent.<event>` | string | `off` | Per-lifecycle-event opt-in. Events: `capture`, `interview`, `plan`, `work.firstClaim`, `work.done`, `makePr`, `resolvePr`, `completionReview`. Leaf values: `off | pull | push | reconcile | comment`. All default `off` — even `enabled=true` does nothing until an event opts in. |
+| `tracker.perTracker.teamId` / `projectId` / `labelMap` / `priorityMap` | mixed | `null` / `{}` | Per-tracker linkage hints (Linear team/project ids; label/priority maps). |
+| `tracker.staleAfterHours` | int | `24` | Staleness threshold (hours) consumed by `sync list-stale`. |
+| `tracker.conflictTiebreak` | string | `always-ask` | Status who-wins tiebreak: `flow-wins | tracker-wins | always-ask`. In Ralph mode `always-ask` resolves to *queue*, not prompt. |
 
 \* `planSync.crossEpic` is the legacy alias — still readable in 1.x with a one-line stderr deprecation warning (suppress via `FLOW_NO_DEPRECATION=1`); removed in 2.0. `set` writes the canonical key only; `get` prefers `crossSpec` and falls back to `crossEpic` only when `crossSpec` is absent from the raw config file.
 
@@ -668,6 +680,39 @@ flowctl prospect archive <artifact-id> [--json]
 `promote` allocates a spec via the same scan-based logic as `spec create`, inlining the spec write so the prospect-context spec lands on disk from the first byte. Idempotency guard: refuses if `promoted_to` already includes the target idea — pass `--force` to override.
 
 Exit codes: corrupt artifact on `read`/`promote` → 3 (stderr `[ARTIFACT CORRUPT: <reason>]`); duplicate idea on `promote` without `--force` → 2; Ralph-block (`REVIEW_RECEIPT_PATH` / `FLOW_RALPH=1`) on `/flow-next:prospect` → 2.
+
+### sync
+
+Tracker-sync plumbing for the `/flow-next:tracker-sync` bridge — atomic, deterministic helpers the skill calls. flowctl owns "set this field / enumerate / atomic-write"; the skill owns the API calls, reconciliation, and asking. Full subsystem reference: [`tracker-sync.md`](tracker-sync.md).
+
+> **`flowctl sync` (this) is NOT `/flow-next:sync`.** `/flow-next:sync` is plan-sync (downstream task specs after drift). `flowctl sync` / `/flow-next:tracker-sync` is the external tracker bridge.
+
+```bash
+# Is the bridge active? (value-checked: enabled OR type ∈ {linear, github})
+flowctl sync active [--json]
+
+# Per-spec sync state
+flowctl sync get-state <spec-id> [--json]
+flowctl sync set-tracker-id <spec-id> <tracker-uuid> [--identifier WOR-17] [--url URL] [--force] [--json]
+flowctl sync set-last-synced <spec-id> [--at ISO] [--json]      # defaults to now
+flowctl sync set-merge-base  <spec-id> --flow|--flow-file F --tracker|--tracker-file F [--json]
+flowctl sync clear <spec-id> [--json]                            # unlink, wipe state atomically
+
+# Enumerate / guard
+flowctl sync list-unsynced [--json]                             # linked-id missing → need first push
+flowctl sync list-stale [--older-than-hours N] [--json]         # default N = tracker.staleAfterHours
+flowctl sync check-collisions [--json]                          # tracker UUIDs shared by >1 spec
+
+# Proof-of-work + Ralph-safe queueing
+flowctl sync receipt <spec-id> --status STATUS [--tracker-id ID] [--transport mcp|graphql|gh|none] [--merges-file F] [--note N] [--json]
+flowctl sync defer   <spec-id> --summary "..." [--suggested "..."] [--reason "..."] [--branch B] [--json]
+```
+
+- **`set-tracker-id`** stores the durable UUID dedupe key + display `--identifier` (`WOR-17`) + url. `--force` overrides the dup-tracker-id collision guard.
+- **`set-merge-base`** is a **paired-snapshot** writer: `--flow`/`--flow-file` AND `--tracker`/`--tracker-file` must come **together** (a partial one-sided write is rejected so the 3-way base never pins one half to a stale sync point).
+- **`receipt --status`** enum: `pushed | pulled | merged | updated | diverged | queued | errored | noop`. When no transport is reachable the run is a `noop` + receipt note, never a crash.
+- **`defer`** queues a genuine conflict to the review deferred-findings sink (`.flow/review-deferred/<branch>.md`) — **never blocks**. In Ralph mode an `always-ask` tiebreak resolves to *queue*, not prompt.
+- The hybrid id model (tracker-first `wor-17-slug` canonical / flow-first `fn-NN` + resolvable `WOR-17` alias) is keyed at create/link time: `flowctl spec create --tracker-first --tracker-identifier WOR-17` (see [`spec create`](#spec-create)). Ids never rename; resolution is case-insensitive. Details in [`tracker-sync.md`](tracker-sync.md) + [`architecture.md`](architecture.md).
 
 ### repo-map
 

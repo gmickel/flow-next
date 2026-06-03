@@ -110,6 +110,8 @@ Two entry points:
 
 Both produce a spec at `.flow/specs/<id>.md`. Survives `rm -rf .flow/` only if `STRATEGY.md` / `GLOSSARY.md` / `knowledge/decisions/` already capture the rationale; otherwise the rationale lives in the spec body.
 
+*(+ optional tracker sync)* — with the bridge enabled and `tracker.perEvent.capture` opted in, capture pushes the new spec to a tracker issue (or pulls a "grab issue X and spec it" tracker-first link). Off by default; see [`tracker-sync.md`](tracker-sync.md).
+
 ### [2] Spec, business-layer complete — Handover #1
 
 `/flow-next:capture` source-tags every acceptance criterion as `[user]` (verbatim from the user), `[paraphrase]` (rephrased), or `[inferred]` (the agent inferred it). The mandatory read-back loop shows the full draft + tally before writing — the `[inferred]` count tells the user how much of the spec the agent invented, and they can reject it.
@@ -138,6 +140,8 @@ Tasks are sized to fit one `/flow-next:work` iteration (~100k tokens of fresh co
 
 Run `/flow-next:plan-review` again on the plan itself. The plan is a separate handover object from the spec; review it as a separate handover.
 
+*(+ optional tracker sync)* — `tracker.perEvent.plan` projects the planned spec to its linked issue. Off by default.
+
 ### [5] Working implementation — Handover #4
 
 `/flow-next:work <spec-id>` loops over ready tasks. Each task runs in a **worker subagent with fresh context** (no token bleed from prior tasks). Before each task, the worker re-anchors: re-reads the spec, the task, and `git log` since branch base.
@@ -151,6 +155,8 @@ Branch strategy is a per-team choice:
 | `--branch=current` | One spec at a time, single dev | No isolation between specs |
 | `--branch=new` (default) | Multiple in-flight specs, single dev | One PR per spec |
 | `--branch=worktree` | Parallel specs + parallel workers | Disk overhead; CI parallelism |
+
+*(+ optional tracker sync)* — `tracker.perEvent.work.firstClaim` flips the linked issue to in-progress on the first task claim; `tracker.perEvent.work.done` reconciles on task completion. Both off by default; conflicts queue (never block) — see [`ralph.md`](ralph.md).
 
 ### [6] Cross-model code review — Handover #5
 
@@ -167,6 +173,8 @@ Opt-in flags for hardened review: `--validate` (validator pass on `NEEDS_WORK` t
 `/flow-next:spec-completion-review <spec-id>` is the closing gate at end-of-spec. It verifies the *combined* implementation (across all tasks) satisfies the spec — was anything dropped? Were R-IDs left uncovered? Did the plan diverge from the spec along the way?
 
 Configure as a required gate via `--require-completion-review` (in `flowctl next`). The work skill blocks spec-close until spec-completion-review returns SHIP. The fix loop happens internally — the skill keeps iterating until it passes or escalates.
+
+*(+ optional tracker sync)* — `tracker.perEvent.completionReview` reconciles the linked issue when the closing gate passes. Off by default.
 
 ### [8] PR-as-cognitive-aid — Handover #6
 
@@ -187,6 +195,8 @@ Body sections: TL;DR · R-ID coverage table · Critical changes (high-churn / cr
 Mermaid codefences emit when the diff crosses ≥2 modules (max 3 diagrams × 12 nodes; markdown codefence — GitHub / GitLab / Gitea render natively). Default `--draft` if open items > 0 or under Ralph; `--ready` overrides.
 
 The PR body is the cognitive-aid handover. **Don't ask a human to skim a 10K-line diff** — ask the agent to produce a body that surfaces *where the human should focus*. See the [root README — Commands](../../../README.md#commands) row for `/flow-next:make-pr`, or [flow-next.dev](https://flow-next.dev) for the narrative walkthrough.
+
+*(+ optional tracker sync)* — `tracker.perEvent.makePr` posts the PR link to the linked issue; `tracker.perEvent.resolvePr` reflects resolved-thread state. Both off by default.
 
 ### [9] Human review + merge
 
@@ -401,6 +411,7 @@ To be clear about scope:
 - **Architectural meetings.** Load-bearing tradeoffs that span multiple specs. `/strategy` and `knowledge/decisions/` are the *artefact*; the discussion still happens between humans.
 - **Incident response.** When something breaks in production, the loop is human-led with the agent as a tool. `/flow-next:diagnose` (when it ships) will be a structured aid, not a replacement.
 - **Customer conversations.** Specs come from customer pain. Flow-Next is downstream of that.
+- **Your tracker (Linear / GitHub Issues).** Flow-Next does not replace it — `/flow-next:tracker-sync` *projects* a spec to it so stakeholders keep their board. **Projection, not coordination:** the spec stays the source of truth and the quality layer; the tracker is a co-editable mirror (body / status / comments sync two-way) that **never drives flow state or spawns agents**. Contrast OpenAI Symphony, where Linear is the canonical state machine that fires agents off a thin per-issue `WORKFLOW.md` — flow-next's pitch is "Symphony, but with real specs + re-anchoring + receipts." A board-triggered per-spec executor is a separable future addition, out of scope today. See [`tracker-sync.md`](tracker-sync.md). (Distinct from `/flow-next:sync`, which is plan-sync.)
 
 The collaboration doesn't disappear. The *ceremony tax* does. Standups, refinement meetings, design reviews — those are replaced by the artefact chain. The conversations that remain are the ones humans should still own.
 
@@ -440,6 +451,7 @@ Add the patterns that scale across multiple in-flight specs + multiple developer
 - Run `/flow-next:strategy` and write the repo's `STRATEGY.md`. Let the active tracks flow into `/prospect`, `/plan`, and `/interview`.
 - Start writing **decision records** under `knowledge/decisions/` for load-bearing choices. The PR body's Decisions section gets richer; review velocity goes up.
 - Schedule periodic `/flow-next:audit` runs against `.flow/memory/`. Once a month is plenty for most teams.
+- **If the team lives in Linear or GitHub Issues, turn on `/flow-next:tracker-sync`.** Run the discovery ceremony, then opt specific lifecycle events into the bridge (`tracker.perEvent.*`, all off by default) — e.g. push on `work.firstClaim`, comment on `makePr`. The spec stays the source of truth; the tracker becomes a co-editable mirror for stakeholder visibility. **Projection, not coordination** — see [`tracker-sync.md`](tracker-sync.md). (Don't confuse it with `/flow-next:sync` plan-sync.)
 - Pilot **Ralph** on a single mechanical spec (test backfill, lint migration, dependency bump). Watch the morning review. Decide whether to expand.
 
 By the end of quarter 1, the team has crossed from *using a tool* to *running a methodology*.

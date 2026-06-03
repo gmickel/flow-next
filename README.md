@@ -218,7 +218,8 @@ Fetch unresolved threads + top-level comments + review-submission bodies, cluste
 | `/flow-next:memory-migrate` | Lift legacy flat memory files into the categorized schema |
 | `/flow-next:prime` | 8-pillar agent-readiness assessment with parallel scouts; remediation via consent prompts |
 | `/flow-next:ralph-init` | Scaffold autonomous loop (`scripts/ralph/`) |
-| `/flow-next:sync` | Manually trigger plan-sync to update downstream task specs after drift |
+| `/flow-next:sync` | **Plan-sync** — update downstream *task* specs after implementation drift inside flow-next |
+| `/flow-next:tracker-sync` | **Tracker bridge** (distinct from `/flow-next:sync`) — project a spec to a Linear/GitHub issue and reconcile body/status/comments two-way; projection, not coordination ([docs](plugins/flow-next/docs/tracker-sync.md)) |
 | `/flow-next:map` | Optional — wrap [openclaw/clawpatch](https://github.com/openclaw/clawpatch)'s `clawpatch map` for a semantic feature index (`.clawpatch/features/*.json`); scouts read it when present, fall back to grep/glob when absent. Requires Node 22+ + `pnpm add -g clawpatch` |
 
 Full command reference (every flag, every default) in [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md).
@@ -251,6 +252,7 @@ The repo holds the offline-resilient reference. [flow-next.dev](https://flow-nex
 | `.flow/` directory layout, spec-first task model, ID format | [`docs/architecture.md`](plugins/flow-next/docs/architecture.md) | — |
 | Spec template — R-ID rules, confidence anchors, receipt schema | [`docs/spec-template.md`](plugins/flow-next/docs/spec-template.md) · canonical scaffold at [`templates/spec.md`](plugins/flow-next/templates/spec.md) | — |
 | Memory schema — bug / knowledge tracks, frontmatter, audit lifecycle | [`docs/memory-schema.md`](plugins/flow-next/docs/memory-schema.md) | — |
+| Tracker-sync bridge — projection model, hybrid id, transport ladder, `/flow-next:tracker-sync` vs `/flow-next:sync` | [`docs/tracker-sync.md`](plugins/flow-next/docs/tracker-sync.md) | — |
 | Project glossary — `GLOSSARY.md` shape, R17 forbidden-vocabulary guard | [`docs/glossary.md`](plugins/flow-next/docs/glossary.md) · [`GLOSSARY.md`](GLOSSARY.md) | — |
 | Project strategy — `STRATEGY.md` shape, downstream skill grounding | [`docs/strategy.md`](plugins/flow-next/docs/strategy.md) · [`STRATEGY.md`](STRATEGY.md) | — |
 | Cross-platform install matrix + Codex / Droid / OpenCode notes | [`docs/platforms.md`](plugins/flow-next/docs/platforms.md) | — |

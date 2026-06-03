@@ -54,6 +54,7 @@ Flowctl accepts schema v1 and v2; new fields are optional and defaulted.
 
 New fields:
 - Spec JSON: `plan_review_status`, `plan_reviewed_at`, `completion_review_status`, `completion_reviewed_at`, `depends_on_specs` (1.0+ canonical; `depends_on_epics` accepted on read), `branch_name`
+- Spec JSON `tracker` block (tracker-sync, defaulted/optional): `tracker.id` (tracker UUID — durable dedupe key), `identifier` (display key `WOR-17`), `url`, `lastSyncedAt` (advances only on a real reconcile), `baseHashFlow` / `baseHashTracker` (echo-fence content hashes), `mergeBaseFlow` / `mergeBaseTracker` (paired body snapshots — the 3-way merge base, written atomically as a unit). Full schema: [`tracker-sync.md`](tracker-sync.md).
 - Task JSON: `priority`. The 1.0+ canonical field name for the parent reference is `spec`; `epic` is accepted on read for back-compat through 1.x and emitted on write only by pre-1.0 callers.
 
 ## ID format
@@ -64,6 +65,8 @@ New fields:
 The slug is automatically generated from the spec title (lowercase, hyphens for spaces, max 40 chars). This makes IDs human-readable and self-documenting.
 
 **Backwards compatibility**: Legacy formats `fn-N` (no suffix) and `fn-N-xxx` (random 3-char suffix) are still fully supported. Existing specs don't need migration.
+
+**Hybrid id model (tracker-sync, R16)**: a tracker-linked spec may be keyed two ways, which coexist with `fn-NN`. A **tracker-first** spec is canonically `wor-17-slug` (tasks `wor-17-slug.M`, branch `wor-17-slug`); bare `wor-17` / `wor-17.M` resolve as aliases. A **flow-first** spec keeps `fn-NN-slug` and stores the tracker key in `tracker.identifier` (display form `WOR-17`) as a resolvable display alias. flowctl widened the **id resolver / canonicalizer** (`is_spec_id` / `expand_bare_spec_id`) so every command inherits **case-insensitive** resolution — `show wor-17`, `work wor-17`, `plan wor-17` all resolve — and the **origin-branched id generator** (`spec create --tracker-first`) keys by the tracker identifier instead of allocating a fresh `fn-NN`. The native `fn-` scheme is reserved; `fn-N` allocation counts `fn-*` only (a `wor-9999` never bumps the next `fn`). **One tracker team per repo**; **ids never rename** on link. Full model: [`tracker-sync.md`](tracker-sync.md).
 
 There are no task IDs outside a spec. If you want a single task, create a spec with one task.
 
