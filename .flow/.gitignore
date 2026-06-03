@@ -6,4 +6,5 @@ tmp/
 .banner-acknowledged
 .migrating
 .migration-manifest
+sync-runs/
 # End of auto-managed block. User patterns below this line are preserved.
