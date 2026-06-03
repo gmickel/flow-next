@@ -35,9 +35,8 @@ flow-next.dev docs pass — **broader than a single page** because R16 introduce
 - [ ] mickel.tech flagged maintainer-only (not done by contributors) [R15]
 
 ## Done summary
-TBD
-
+Documented the tracker-sync bridge and the hybrid id model on flow-next.dev (1.5.0): a new Tracker Sync page (projection-not-coordination, discovery ceremony, transport ladder, opt-in lifecycle points, Ralph-safe queue), a "Spec & task ids" explainer (fn-NN vs tracker key wor-17, case-insensitive, ids-never-rename), cross-page id-referencing edits (introduction, commands, sync skill, teams/collaboration), tracker.* config docs, both nav surfaces (Starlight sidebar + custom navGroups rail), and a strict-format changelog entry with FLOW_NEXT_VERSION + package.json bumped to 1.5.0. Committed separately in the flow-next.dev repo; pnpm build green. Impl-review (rp): NEEDS_WORK → SHIP. mickel.tech flow-next app page left untouched (maintainer-only).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d006857146ecb11d08d18b060197d6960fec4edc, e1d8bf8d514e724314336e56dc7e9e60a220ade6
+- Tests: cd ~/work/flow-next.dev && pnpm build (astro check && astro build) — 0 errors, 52 pages
 - PRs:
