@@ -42,9 +42,8 @@ From the docs-gap matrix:
 - [ ] No version bump in this task (done in .9); docs match the shipped behavior of .1–.7
 
 ## Done summary
-TBD
-
+Documented the fn-52 tracker-sync bridge across the repo docs surface: new `docs/tracker-sync.md` subsystem reference (projection-not-coordination, discovery ceremony, hybrid id model, sync-state schema, transport ladder, lifecycle touchpoints, Ralph-safe conflict queueing), plus edits to flowctl.md (sync subsection + tracker.* config keys + spec create --tracker-first), teams.md (Symphony-contrast bullet + adoption-ladder item + opt-in walkthrough annotations), architecture.md (spec-JSON tracker fields + widened resolver), ralph.md (conflicts queue, never block), root README + .flow/usage.md (distinguish /flow-next:tracker-sync from /flow-next:sync), CLAUDE.md + docs/README.md index rows, GLOSSARY (4 new terms), and an Unreleased CHANGELOG entry. No version bump (fn-52.9) and no flow-next.dev (fn-52.11).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 578b47acde3a7681eec6b1d2ca8d69e5c1775f7c
+- Tests: flowctl triage-skip (docs-only release-chore → SHIP)
 - PRs:
