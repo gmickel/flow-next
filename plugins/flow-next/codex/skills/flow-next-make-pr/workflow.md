@@ -35,9 +35,10 @@ fi
 
 When `RALPH=1`:
 
-- Phase 0 questions hard-error with non-zero exit + a clear stderr message (no user to ask).
-- Phase 4 skips the `plain-text numbered prompt` preview entirely.
-- Phase 4 forces `--draft` regardless of `--ready` (Ralph never opens ready-to-merge PRs).
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+- Phase 0 questions hard-error with non-zero exit + a clear stderr message (no user to ask). (Interactive resolves the same via `plain-text numbered prompt`; both are info prompts, not a confirm gate.)
+- Phase 4 forces `--draft` regardless of `--ready` (Ralph never opens ready-to-merge PRs) — the one Ralph-vs-interactive difference now that the confirm gate is gone for both.
 - Phase 5 emits the PR URL on stdout for the harness to capture.
 
 There is no `FLOW_MAKE_PR_ALLOW_QUESTIONS_IN_RALPH` opt-in. Ralph is deterministic.
@@ -200,20 +201,18 @@ OPEN_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]? | select(.status != "done
 | `OPEN_COUNT == 0` | Proceed silently. |
 | `OPEN_COUNT > 0` AND `DRY_RUN == 1` | Warn on stderr but proceed (`--dry-run` is for inspection — body should still render). |
 | `OPEN_COUNT > 0` AND `RALPH == 1` | Hard-error with the open-task list. Ralph workers should not open PRs for incomplete specs. |
-| `OPEN_COUNT > 0` AND interactive | Ask via `plain-text numbered prompt`: "Tasks not done: `<OPEN_TASKS>`. Proceed anyway / abort and run `/flow-next:work` first?" Lead with abort as the recommendation; user can override. |
+| `OPEN_COUNT > 0` AND interactive | **Warn on stderr and proceed** (no prompt — autonomous create). The open items make the PR a **draft** via the §4.2 heuristic, which is exactly the "open a draft early" workflow; the warning names the open tasks + suggests `/flow-next:work` so the user can finish + flip to `--ready`. |
 
 ```bash
 if [[ "$OPEN_COUNT" -gt 0 ]]; then
- if [[ "$DRY_RUN" == "1" ]]; then
- echo "Warning: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS). Continuing because --dry-run." >&2
- elif [[ "$RALPH" == "1" ]]; then
+ if [[ "$RALPH" == "1" ]]; then
  echo "Error: $OPEN_COUNT task(s) under $SPEC_ID still open ($OPEN_TASKS). Ralph cannot open PRs for incomplete specs." >&2
  exit 2
  else
- : "ask user via plain-text numbered prompt; on abort exit 1, on proceed continue"
+ # Interactive + --dry-run alike: warn, don't block. Open items → draft (§4.2).
+ echo "Note: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS) — opening as a DRAFT. Run /flow-next:work to finish, then mark the PR ready." >&2
  fi
 fi
-```
 
 ### 0.6 — Existing-PR refusal
 
@@ -1079,17 +1078,17 @@ When in doubt: **fewer nodes, fewer edges, more honest.** A diagram with 4 nodes
 
 **Goal:** turn the rendered body into an open PR. Compute title + draft flag, persist the body to disk, gate on the interactive preview (skipped under Ralph), then push the branch and run `gh pr create` with the body delivered via `--body-file` (NOT a heredoc). `--dry-run` short-circuits before any state change. `--memory` is deferred to Phase 5.
 
-The host agent owns the body string at this point — Phases 2/3 produced it. Phase 4 takes that string, writes it to a tempfile, decides title + draft, asks the user for confirmation in interactive mode, then hands the file to `gh`. **No code in this phase rewrites body content.** If the body is too long for `gh pr create`, the truncation policy in §4.4 fires before invocation.
+The host agent owns the body string at this point — Phases 2/3 produced it. Phase 4 takes that string, writes it to a tempfile, decides title + draft, then hands the file to `gh` — **no confirm prompt** (see §4.5). **No code in this phase rewrites body content.** If the body is too long for `gh pr create`, the truncation policy in §4.4 fires before invocation.
 
-**Sub-section ordering is load-bearing.** The interactive preview gate (§4.5) MUST come before push + `gh pr create` (§4.6). Reordering would let a host agent following the workflow top-to-bottom open the PR before the user can choose `dry-run` / `edit-body` / `abort`, violating the safety gate documented in SKILL.md. Phase 4 layout:
+**Sub-section ordering.** `--dry-run` (§4.0) short-circuits before any state change; otherwise the phase flows straight through to push + `gh pr create` (§4.6) with no interactive gate. Phase 4 layout:
 
-1. **§4.0** — `--dry-run` short-circuit (R22) — earliest exit; no state change at all.
+1. **§4.0** — `--dry-run` short-circuit (R22) — earliest exit; no state change at all (the inspection path).
 2. **§4.1** — PR title format (R21) — compute `PR_TITLE` from spec.
 3. **§4.2** — Draft-vs-ready matrix (R24) — compute `DRAFT_FLAG` from Ralph context + open items + force flags.
 4. **§4.3** — Body delivery via `--body-file` (R20) — persist rendered body to tempfile.
 5. **§4.4** — Body length cap + truncation policy — enforce 65K cap before invoking `gh`.
-6. **§4.5** — Interactive preview (skipped under Ralph) — `plain-text numbered prompt` gate; user picks `create / dry-run / edit-body / abort`.
-7. **§4.6** — Push branch + `gh pr create` retry loop — only runs after the user picks `create` (or Ralph skips the gate).
+6. **§4.5** — No confirm gate (autonomous create) — flows straight into §4.6; flags, not a prompt, are the escape hatches.
+7. **§4.6** — Push branch + `gh pr create` retry loop — runs directly after §4.4 (§4.6a links the PR to the tracker issue first).
 8. **§4.7** — Failure recovery hints — stderr text per error class on `gh pr create` failure.
 
 ### 4.0 — `--dry-run` short-circuit (R22)
@@ -1111,7 +1110,7 @@ fi
 
 ### 4.1 — PR title format (R21)
 
-Compute the PR title from the spec before any preview or push so the §4.5 prompt can show it to the user. Priority:
+Compute the PR title from the spec before push so it's ready for `gh pr create` (§4.6). Priority:
 
 1. **Spec title verbatim** if `len(spec.title) <= 72`.
 2. **First sentence of `spec.spec_sections.goal_and_context`** truncated to 70 chars + `…` (single Unicode ellipsis) when spec title is empty OR exceeds 72.
@@ -1139,7 +1138,7 @@ If the spec title contains characters problematic for shell quoting (single-quot
 
 ### 4.2 — Draft-vs-ready matrix (R24)
 
-Compute `DRAFT_FLAG` from a four-input matrix: `OPEN_ITEMS_COUNT`, Ralph context, `--draft` force flag, `--ready` force flag. **Resolution order: explicit force flags win over context-derived defaults.** Computed before §4.5 so the preview prompt can tell the user whether the PR will open as draft or ready.
+Compute `DRAFT_FLAG` from a four-input matrix: `OPEN_ITEMS_COUNT`, Ralph context, `--draft` force flag, `--ready` force flag. **Resolution order: explicit force flags win over context-derived defaults.** This is the smart draft/ready default the autonomous create relies on: draft when `OPEN_ITEMS_COUNT > 0` (or Ralph / `--draft`), ready otherwise (or `--ready`).
 
 ```bash
 # Default state — neither flag forced; let context decide.
@@ -1216,7 +1215,7 @@ This same count drives both the §2.11 Open items section bullet count and the d
 
 ### 4.3 — Body delivery via `--body-file` (R20 refinement)
 
-Persist the rendered body to a tempfile so §4.5 can preview it (and let the user `edit-body` it) and §4.6 can hand it to `gh pr create --body-file`. This refines the original spec R20 ("heredoc invocation of `gh pr create --body`") because **heredoc input does not survive LLM-generated content cleanly**: backticks, `$`, and quote characters get re-interpreted by the shell on the way to `gh`. Practice-scout finding cli/cli #29619 documents the same failure mode for Claude Code shell invocations; `--body-file` sidesteps it entirely.
+Persist the rendered body to a tempfile so §4.6 can hand it to `gh pr create --body-file` (and `--dry-run` at §4.0 can print it for inspection). This refines the original spec R20 ("heredoc invocation of `gh pr create --body`") because **heredoc input does not survive LLM-generated content cleanly**: backticks, `$`, and quote characters get re-interpreted by the shell on the way to `gh`. Practice-scout finding cli/cli #29619 documents the same failure mode for Claude Code shell invocations; `--body-file` sidesteps it entirely.
 
 ```bash
 BODY_FILE=$(mktemp -t make-pr-body-XXXXXX.md)
@@ -1227,7 +1226,7 @@ trap 'rm -f "$BODY_FILE"' EXIT
 # Cross-platform note: sync-codex.sh leaves Write as Write — same tool on Codex.
 ```
 
-After the Write call, validate the file is non-empty before proceeding to the preview gate:
+After the Write call, validate the file is non-empty before proceeding to push + create:
 
 ```bash
 if [[ ! -s "$BODY_FILE" ]]; then
@@ -1267,38 +1266,20 @@ fi
 
 In practice the cap rarely trips — a typical cognitive-aid body is 4-12K chars. The cap exists for the pathological "20-task spec with 50-row R-ID coverage table + 3 mermaid diagrams + 30 deferred findings" case. For any normal flow-next spec, this section is unreachable. Document it so the failure mode is visible, not so the path is hot.
 
-### 4.5 — Interactive preview (skipped under Ralph)
+### 4.5 — No confirm gate — create directly (autonomous)
 
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+**make-pr does not ask the user to confirm before opening the PR.** Invoking `/flow-next:make-pr` IS the intent; the body is deterministically rendered from structured state (low hallucination risk); the default is a **draft** when there are open items (reversible). Asking "create / dry-run / edit / abort" was friction that fought the project's "host agent IS the intelligence, minimize touchpoints" ethos — it is **removed**. Interactive and Ralph now both flow from §4.4 (body persisted) straight into §4.6 (push + create); the only difference is the draft decision (§4.2): interactive uses the smart `OPEN_ITEMS_COUNT` heuristic, Ralph forces `--draft`.
 
-**This is the safety gate.** Before push + `gh pr create`, the skill MUST ask the user via `plain-text numbered prompt` in interactive mode. Ralph skips the gate entirely (autonomous loops have no human in the loop to answer). The preview runs after title + draft are computed (§4.1, §4.2) and after the body is persisted to disk (§4.3, §4.4) so all four pieces of information are visible to the user before they decide.
+The escape hatches are the **flags**, not a prompt:
+- `--dry-run` — render the body to stdout and exit 0 **before** any push / `gh pr create` (the "let me see it first" path; handled at §4.0).
+- `--ready` / `--draft` — override the draft/ready decision.
+- Want to hand-edit the body? `--dry-run | pbcopy`, edit, or edit the PR on GitHub after it opens (it's a draft).
 
-> Body rendered for `<spec-id>` against `<base-ref>` (<N> chars, <draft|ready>). Action?
->
-> **Recommended:** create — body looks complete. (`<O> open items` flagged in body; PR will open as draft.)
->
-> 1. create — push branch + open PR
-> 2. dry-run — print body to stdout, exit 0 (skip push + PR create)
-> 3. edit-body — open `$BODY_FILE` in `$EDITOR` for hand-edit, then re-prompt
-> 4. abort — exit 1, no side effects
-
-The `edit-body` option opens the tempfile in `${EDITOR:-vim}`, and on save re-runs the prompt with the user's edits in place. The `dry-run` option dumps the body to stdout and exits 0 (matches `--dry-run` flag semantics). The `abort` option exits 1 without push.
-
-```bash
-if [[ "$RALPH" != "1" ]]; then
- : "plain-text numbered prompt: 4 options as above"
- : "On 'create' — fall through to §4.6 (push + gh pr create)"
- : "On 'dry-run' — emit body to stdout, exit 0"
- : "On 'edit-body' — \${EDITOR:-vim} \"$BODY_FILE\", then re-prompt"
- : "On 'abort' — exit 1"
-fi
-```
-
-**Ralph mode skips the preview entirely.** The autonomous loop terminus opens the draft PR for human review without prompting — the human review IS the prompt. R24 invariant: under Ralph, control flows from §4.4 directly into §4.6 without an `plain-text numbered prompt` call.
+`plain-text numbered prompt` is still used in **Phase 0** — but only to resolve genuinely-missing info make-pr cannot derive (no base ref and no detection match; no spec detected). Those are *information* prompts, not a confirm gate, and are rare. A spec with not-all-tasks-done no longer blocks on a prompt — it **warns to stderr and proceeds** (the open items make it a draft anyway; §0 / §4.2).
 
 ### 4.6 — Push branch + `gh pr create` retry loop (R20 refinement)
 
-Reached only after the §4.5 gate cleared (user picked `create`, or Ralph skipped the gate). `git push -u origin HEAD` first; **then** wait one second (cli/cli #2691 — GitHub's API trails the git protocol push by tens to hundreds of milliseconds, with the worst observed lag in single-digit seconds). After the sleep, run `gh pr create` inside a 3-attempt retry loop that catches **only** the eventual-consistency error class. Other errors (auth, body too long, PR already exists) fail fast.
+Reached directly after §4.4 (body persisted) — no confirm gate. `git push -u origin HEAD` first; **then** wait one second (cli/cli #2691 — GitHub's API trails the git protocol push by tens to hundreds of milliseconds, with the worst observed lag in single-digit seconds). After the sleep, run `gh pr create` inside a 3-attempt retry loop that catches **only** the eventual-consistency error class. Other errors (auth, body too long, PR already exists) fail fast.
 
 ```bash
 # Resolve current branch BEFORE push. `gh pr create --head` needs an explicit
@@ -1410,8 +1391,8 @@ When `gh pr create` fails after the retry loop is exhausted, the skill emits man
 - Draft flag computed (§4.2) via matrix layers (Ralph → open items → `--draft` → `--ready`). `--ready` ignored under Ralph; conflict surfaced via stderr note.
 - Body delivered via `--body-file` (§4.3) — mktemp + cleanup trap. Heredoc form documented as anti-pattern with cli/cli #29619 citation.
 - Body length cap (65,000 chars target) enforced (§4.4) via truncation cascade: drop file list → trim TL;DR → collapse mermaid → spill to `.flow/pr-bodies/`.
-- Interactive `plain-text numbered prompt` preview (§4.5) offers `create / dry-run / edit-body / abort` BEFORE any push or `gh pr create`. Skipped under Ralph.
-- After the §4.5 gate clears (or Ralph skips it): `HEAD_BRANCH=$(git branch --show-current)` resolved + validated non-empty (rejects detached HEAD), then `git push -u origin HEAD`, then `sleep 1`, then 3-attempt retry loop on eventual-consistency error class (`Head sha can't be blank` / `No commits between`). Backoff `2s, 4s, 6s`. Other errors fail fast.
+- **No interactive confirm gate** — make-pr creates the PR directly (autonomous). `--dry-run` (§4.0) is the inspection escape hatch; `--ready`/`--draft` override the draft decision. Phase 0 may still `plain-text numbered prompt` to resolve genuinely-missing info (base/spec), never to confirm.
+- §4.6: `HEAD_BRANCH=$(git branch --show-current)` resolved + validated non-empty (rejects detached HEAD), then §4.6a links the PR to the tracker issue (if active), then `git push -u origin HEAD`, then `sleep 1`, then 3-attempt retry loop on eventual-consistency error class (`Head sha can't be blank` / `No commits between`). Backoff `2s, 4s, 6s`. Other errors fail fast.
 - Failure recovery hints (§4.7) printed to stderr before exit on each error class.
 
 ---

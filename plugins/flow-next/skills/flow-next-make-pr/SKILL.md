@@ -11,7 +11,7 @@ A reviewable PR body is itself an artefact: it lets a human decide *where to foc
 
 The host agent (Claude Code / Codex / Droid) reads the structured payload from `flowctl spec export-cognitive-aid` and synthesizes the body directly. **Every claim in the body must trace to a structured field in the export payload — never fabricate file paths, SHAs, R-ID attributions, or "why" reasoning.** Unknown attribution is honest ("uncovered" / "unclear") rather than invented. The host is competent at "what looks important here?" given the rich input; no second-model review pass is needed (the structured payload does the heavy lifting).
 
-flowctl provides only thin plumbing: `flowctl spec export-cognitive-aid <spec-id> --base <ref> --json` aggregates the inputs into a single JSON payload (Task 1 of this spec). The skill renders, previews via `AskUserQuestion`, pushes, and creates the PR.
+flowctl provides only thin plumbing: `flowctl spec export-cognitive-aid <spec-id> --base <ref> --json` aggregates the inputs into a single JSON payload (Task 1 of this spec). The skill renders the body, then pushes and creates the PR **directly — no confirm prompt** (invoking make-pr is the intent; the body is deterministic; the default is a reversible draft). `--dry-run` prints the body without creating; `--ready`/`--draft` set draft state.
 
 **Read [workflow.md](workflow.md) for the full phase-by-phase execution. Read [phases.md](phases.md) for the per-phase Done-when checklists. Read [mermaid-rules.md](mermaid-rules.md) before emitting any mermaid codefence — it defines reserved words, escape patterns, shape selection, and the pre-emission validation checklist.**
 
@@ -23,7 +23,7 @@ flowctl provides only thin plumbing: `flowctl spec export-cognitive-aid <spec-id
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — `AskUserQuestion` must stay reachable across phases. Subagents can't call blocking question tools (Claude Code issues #12890, #34592). Phase 4 preview asks the user `create / dry-run / edit-body / abort` before pushing. (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.)
+**Inline skill (no `context: fork`)** — `AskUserQuestion` must stay reachable for the **Phase 0** info prompts (resolve a missing base ref / undetected spec id — never a confirm gate). Subagents can't call blocking question tools (Claude Code issues #12890, #34592). There is **no Phase 4 confirm prompt** — make-pr creates the PR directly. (sync-codex.sh rewrites any remaining `AskUserQuestion` to a plain-text numbered prompt in the Codex mirror.)
 
 ## Mode Detection
 
@@ -65,13 +65,13 @@ done
 | `--dry-run` | Skip Phase 4 entirely. Render body to stdout. Useful for inspection or `… --dry-run \| pbcopy`. |
 | `--base <ref>` | Override base-branch detection cascade. Useful when the team's default branch is `develop`, etc. |
 
-Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected separately in workflow.md §0.0 — the skill is **not** Ralph-blocked. Under Ralph the skill skips the `AskUserQuestion` preview, forces `--draft`, and emits the PR URL to stdout.
+Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected separately in workflow.md §0.0 — the skill is **not** Ralph-blocked. Under Ralph the skill hard-errors instead of asking the Phase 0 info prompts, forces `--draft`, and emits the PR URL to stdout. (The PR is created directly in both modes — the only difference is forced-draft + no Phase 0 prompts under Ralph.)
 
 ## Interaction Principles
 
 - Ask **one question at a time** via `AskUserQuestion` (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). Fall back to a numbered options prompt only if the tool is unreachable. Never silently skip the question.
 - Lead with the **recommended option** and a one-sentence rationale.
-- Phase 4's preview is the only mandatory user gate in interactive mode. Phase 0 only asks when something must be resolved (no `--base` and no detection match; tasks not all `done`; no spec detected). Skip questions when context resolves cleanly.
+- **No confirm gate.** make-pr opens the PR without asking. Phase 0 asks *only* to resolve info it cannot derive (no `--base` and no detection match; no spec detected) — never "do you want to create it?". Not-all-tasks-done warns and proceeds (the open items make it a draft). Skip questions when context resolves cleanly.
 - **Ralph mode skips all questions.** Detect once at Phase 0 and route deterministically.
 
 ## Hallucination guardrails
@@ -93,7 +93,8 @@ When data is missing, the body says so honestly (e.g. `*No decision-track memory
 
 ## Forbidden
 
-- **Ralph-blocking the skill.** This skill IS the autonomous-loop terminus per spec R24. Detect Ralph but proceed (with `--draft` forced and preview skipped). Do NOT add a `FLOW_RALPH`/`REVIEW_RECEIPT_PATH` exit-2 guard at the top of the skill.
+- **Ralph-blocking the skill.** This skill IS the autonomous-loop terminus per spec R24. Detect Ralph but proceed (with `--draft` forced). Do NOT add a `FLOW_RALPH`/`REVIEW_RECEIPT_PATH` exit-2 guard at the top of the skill.
+- **Re-adding a confirm gate.** make-pr creates the PR without prompting; do NOT reintroduce a "create / dry-run / abort" `AskUserQuestion` before push. The escape hatch is `--dry-run`, not a question.
 - **Pushing or creating PRs in `--dry-run` mode.** Phase 4 short-circuits before any `git push` or `gh pr create`. The body lands on stdout only.
 - **Squashing the existing-PR check.** A bare `gh pr view --json url 2>/dev/null` returns rc=0 for CLOSED and MERGED PRs as readily as OPEN. Filter `.state == "OPEN"` via `jq` (validated empirically during fn-42 spike). Closed/merged PRs on a reused branch must NOT trigger refusal.
 - **Manual `git push` workflows when `gh` is missing.** When `gh` isn't installed or authenticated, surface the install / `gh auth login` instructions and exit. Don't try to fall back to half-baked PR creation.
