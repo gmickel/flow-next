@@ -41,9 +41,8 @@ Each touchpoint = an optional, clearly-marked opt-in step that calls the tracker
 - [ ] Skill-side handle recognition: `/flow-next:plan wor-17`, `/flow-next:work wor-17.1`, `/flow-next:interview wor-17`, `/flow-next:sync wor-17` resolve the existing spec/task (routed through `flowctl show`), NOT treated as a new idea; the `fn-`-only checks are removed [R16]
 
 ## Done summary
-TBD
-
+Wired optional, opt-in tracker-sync touchpoints into the seven lifecycle skills (capture/interview/plan/work/make-pr/resolve-pr, with completion-review hooked at the work-skill caller that sets completion_review_status) plus the unlink lifecycle — every touchpoint gated on `flowctl sync active` (value-checked) AND its nested `tracker.perEvent.<key>` leaf (all default `off`), so the no-tracker path is behaviorally unchanged and lifecycle skills only gate + delegate to flow-next-tracker-sync (R10). Widened the work/plan/interview/sync input grammars to route any single-token arg through `flowctl show` (resolving tracker handles like `wor-17`/`wor-17.M` via fn-52.10) before treating it as idea text, removing the hard `fn-`-only checks so handles resolve the existing spec/task instead of creating duplicates (R16).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 2edea075d7d4d122f0f9e7b3699acb7498439078
+- Tests: flowctl validate --spec fn-52-tracker-sync-bridge-project-flow-specs (success, 0 errors), flowctl sync active --json + config get tracker.perEvent.* (verified .active / .value gating shape), impl-review rp backend: SHIP, no introduced findings, R10+R16 satisfied
 - PRs:

@@ -35,9 +35,8 @@ The GitHub transport behind the .2 adapter interface, reusing the .4/.5 reconcil
 - [ ] Error contract: a deleted/404 GitHub issue emits an `errored`/`queued` receipt + prompts/queues unlink — no crash, no state clear, no `lastSyncedAt` advance [R13]
 
 ## Done summary
-TBD
-
+Added the GitHub transport adapter as a skill reference (plugins/flow-next/skills/flow-next-tracker-sync/references/github.md): a gh-based implementation of the fn-52.2 six-method interface — single headless rung (GH_TOKEN) plus terminal no-op, mapping gh JSON to/from the normalized issue/comment/status structs and reusing the fn-52.4/.5 reconcile core unchanged. Documents reduced-fidelity status (normalized mapped DOWN to open/closed + stateReason, full status carried via a status: label; deferred/wontfix surfaced not auto-applied), the R13 transport-blind/cross-tracker parity proof + round-trip spike (live exec deferred to the post-PR smoke phase), and the non-destructive 404/rate-limit error contract; wired into SKILL.md and steps.md alongside the Linear ladder links.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: b8f10214a01e5a445e998d11fd653b0d7ecedc89
+- Tests: impl-review rp backend: triage-skip docs-only -> SHIP (mode: triage_skip), link-integrity: github.md sibling .md links resolve; SKILL.md+steps.md cross-link github.md
 - PRs:
