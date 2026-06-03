@@ -554,6 +554,45 @@ class ResolutionTestCase(unittest.TestCase):
             fh.write(text)
             return fh.name
 
+    # --- validate --all enumeration + whitespace identifier — round-3 -------
+
+    def test_validate_all_sees_tracker_spec(self) -> None:
+        spec_id = self._create_tracker_spec("Fix login", "WOR-17")
+        self._add_task(spec_id, "Step one")
+        self._create_flow_spec("Plain flow")  # fn-1
+        res = self._call(
+            func=self.flowctl.cmd_validate, spec=None, epic=None, all=True
+        )
+        blob = json.dumps(res)
+        # Tracker-key spec is enumerated by `validate --all` (not fn-regex skipped).
+        self.assertIn("wor-17-fix-login", blob)
+        self.assertTrue(res.get("valid", res.get("success")))
+
+    def test_validate_all_native_collision_ignores_tracker(self) -> None:
+        # A tracker spec must never trip the native fn-N collision check.
+        self._create_tracker_spec("Fix login", "WOR-1")  # wor-1-...
+        self._create_flow_spec("Plain")  # fn-1-...
+        res = self._call(
+            func=self.flowctl.cmd_validate, spec=None, epic=None, all=True
+        )
+        # No "Spec ID collision: fn-1" despite a wor-1 + fn-1 coexisting.
+        self.assertNotIn("collision", json.dumps(res).lower())
+
+    def test_link_stores_stripped_identifier(self) -> None:
+        # Quoted whitespace in the identifier must not persist an unresolvable
+        # alias — the stored display is stripped, and the handle still resolves.
+        flow_id = self._create_flow_spec("Plain flow")
+        self._set_tracker(flow_id, "uuid-w", "  WOR-55  ")
+        data = json.loads(
+            self.flowctl.find_spec_json_path(self.flow_dir, flow_id).read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(data["tracker"]["identifier"], "WOR-55")
+        self.assertEqual(
+            self.flowctl.expand_bare_spec_id(self.flow_dir, "wor-55"), flow_id
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

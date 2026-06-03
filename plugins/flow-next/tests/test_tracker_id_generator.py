@@ -170,6 +170,16 @@ class TrackerIdGeneratorTestCase(unittest.TestCase):
         for bad in ("WOR-17-fix", "WOR-17.3", "wor", "WOR-0", "-17", "", None):
             self.assertIsNone(self.flowctl.parse_tracker_identifier(bad), bad)
 
+    def test_create_stores_stripped_identifier(self) -> None:
+        # Quoted whitespace must not persist an unresolvable alias — the stored
+        # display identifier is stripped, and the bare handle still resolves.
+        res = self._create(
+            "Fix login", tracker_first=True, tracker_identifier="  WOR-17  "
+        )
+        self.assertEqual(res["id"], "wor-17-fix-login")
+        data = self._spec_json("wor-17-fix-login")
+        self.assertEqual(data["tracker"]["identifier"], "WOR-17")
+
     def test_tracker_first_branch_override(self) -> None:
         res = self._create(
             "Fix login",

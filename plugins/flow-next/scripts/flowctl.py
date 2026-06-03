@@ -2019,14 +2019,16 @@ def parse_tracker_identifier(
 
 def validate_tracker_identifier(
     identifier: Optional[str], *, required: bool = False, use_json: bool = False
-) -> Optional[tuple[str, int]]:
+) -> Optional[tuple[str, int, str]]:
     """Validate a tracker DISPLAY identifier at link/create time.
 
     Rejects (a) a slugged / suffixed / malformed identifier and (b) the
-    reserved `fn` key (which would shadow the native scheme). Returns the parsed
-    ``(key_lower, number)`` on success. When ``required`` is False and the
-    identifier is None/empty, returns ``None`` without error (link may set other
-    fields without an identifier).
+    reserved `fn` key (which would shadow the native scheme). Returns
+    ``(key_lower, number, display)`` on success, where ``display`` is the
+    STRIPPED display identifier (`WOR-17`) — callers MUST persist this, not the
+    raw input, so quoted whitespace (`" WOR-17 "`) can never store an alias that
+    won't resolve. When ``required`` is False and the identifier is None/empty,
+    returns ``None`` without error (link may set other fields without one).
     """
     if not identifier:
         if required:
@@ -2049,7 +2051,9 @@ def validate_tracker_identifier(
             "tracker key.",
             use_json=use_json,
         )
-    return parsed
+    # Return the canonical STRIPPED display form so callers persist a resolvable
+    # alias regardless of surrounding whitespace in the raw input.
+    return (parsed[0], parsed[1], identifier.strip())
 
 
 def reject_reserved_tracker_key(
@@ -11544,8 +11548,10 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
     if tracker_first:
         # Strict identifier validation: a bare display key (WOR-17) only — a
         # slugged / suffixed / reserved-`fn` identifier is rejected so the
-        # stored alias is always a resolvable bare handle.
-        key, number = validate_tracker_identifier(
+        # stored alias is always a resolvable bare handle. Use the STRIPPED
+        # display form returned by the validator (never the raw input) so
+        # surrounding whitespace can't persist an unresolvable alias.
+        key, number, tracker_identifier = validate_tracker_identifier(
             tracker_identifier, required=True, use_json=args.json
         )
         spec_id = f"{key}-{number}-{suffix}"
@@ -19552,8 +19558,10 @@ def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
     # half of the create-time guard). A slugged / suffixed / reserved-`fn`
     # identifier is rejected so only a resolvable bare handle (WOR-17) is ever
     # stored as an alias. None is allowed (link may set id/url without an
-    # identifier).
-    validate_tracker_identifier(
+    # identifier). The validator returns the STRIPPED display form — persist
+    # that (not the raw input) so quoted whitespace can't store an alias that
+    # won't resolve.
+    validated_identifier = validate_tracker_identifier(
         getattr(args, "identifier", None), required=False, use_json=args.json
     )
 
@@ -19576,8 +19584,9 @@ def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
 
     state = spec_data["tracker"]
     state["id"] = args.tracker_id
-    if args.identifier is not None:
-        state["identifier"] = args.identifier
+    if validated_identifier is not None:
+        # Persist the canonical stripped display form (e.g. "WOR-17").
+        state["identifier"] = validated_identifier[2]
     if args.url is not None:
         state["url"] = args.url
     _write_sync_state(spec_json_path, spec_data)
@@ -22430,26 +22439,27 @@ def cmd_validate(args: argparse.Namespace) -> None:
         # First validate .flow/ root invariants
         root_errors = validate_flow_root(flow_dir)
 
-        # Find all specs across both legacy + canonical layouts.
+        # Find all specs across both legacy + canonical layouts. fn-52.10:
+        # validate every spec-id stem (fn-* AND tracker-key wor-*) — the old
+        # fn-only regex re-filter skipped tracker specs during `validate --all`.
+        # Numeric collision detection stays NATIVE-`fn`-ONLY (parse_id is fn-only;
+        # tracker keys live in their own namespace), so a `wor-N` never trips the
+        # `fn-N` collision check.
         epic_ids = []
-        epic_nums: dict[int, list[str]] = {}  # Track numeric IDs for collision detection
+        epic_nums: dict[int, list[str]] = {}  # Track native fn-N IDs for collision detection
         for spec_file in iter_spec_json_files(flow_dir):
-            match = re.match(
-                r"^fn-(\d+)(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?\.json$",
-                spec_file.name,
-            )
-            if match:
-                spec_id = spec_file.stem
-                epic_ids.append(spec_id)
-                num = int(match.group(1))
-                if num not in epic_nums:
-                    epic_nums[num] = []
-                epic_nums[num].append(spec_id)
+            spec_id = spec_file.stem
+            if not is_spec_id(spec_id):
+                continue
+            epic_ids.append(spec_id)
+            num, _ = parse_id(spec_id)  # fn-only → None for tracker ids
+            if num is not None:
+                epic_nums.setdefault(num, []).append(spec_id)
 
         # Start with root errors
         all_errors = list(root_errors)
 
-        # Detect spec ID collisions (multiple specs with same fn-N prefix)
+        # Detect spec ID collisions (multiple native specs with same fn-N prefix)
         for num, ids in epic_nums.items():
             if len(ids) > 1:
                 all_errors.append(
