@@ -2,6 +2,13 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.5.1] - 2026-06-03
+
+### Fixed
+- **`/flow-next:setup` shipped a `usage.md` with no tracker-sync docs.** fn-52 (1.5.0) added the `flowctl sync` / `--tracker-first` command block to the repo's dogfood `.flow/usage.md` but **not** to the bundled template `/flow-next:setup` actually copies (`plugins/flow-next/skills/flow-next-setup/templates/usage.md`), so every fresh setup on 1.5.0 produced a `usage.md` documenting the whole CLI **except** the tracker-sync bridge that shipped in the same release. The canonical template is now byte-synced to the dogfood copy (Codex mirror regenerated via `sync-codex.sh`).
+  - **Drift guard so it can't recur:** new `test_dogfood_template_parity.py` hard-asserts `.flow/usage.md` ≡ its canonical setup template (and `.flow/templates/spec.md` ≡ `templates/spec.md`), wired into the ubuntu/macos/windows CI matrix with `.flow/usage.md` / `.flow/templates/spec.md` added to the workflow `paths` triggers. Edit the lived-in dogfood copy and forget the template → CI fails instead of consumers getting stale docs.
+- **Flaky Windows CI: `migration_smoke.sh` Scenario 8b (parallel `migrate-rename`).** `_migrate_copy_tree_to_backup` listed `.flow/` via `iterdir()` then `shutil.copy2`'d each entry — but a **concurrent** migrate-rename's writability probe (`_migrate_writable`) drops a transient `.rw-probe-*.tmp` in `.flow/` that can appear in the listing then vanish before the copy opens it (`FileNotFoundError`). Classic TOCTOU; Windows widened the window (slower unlink + file locking) so it flaked there. The backup copy now skips `.rw-probe-*` by prefix and tolerates any entry that disappears mid-copy (the lock dir serialises real pre-1.0 state, so a vanishing file is always a transient).
+
 ## [flow-next 1.5.0] - 2026-06-03
 
 > Tracker-sync bridge (fn-52). Codex mirror + plugin version bump land in fn-52.9; the flow-next.dev docs pass lands in fn-52.11.

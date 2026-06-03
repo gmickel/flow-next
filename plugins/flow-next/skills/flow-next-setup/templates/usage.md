@@ -108,6 +108,22 @@ The project's strategic intent and canonical vocabulary live **outside** `.flow/
 .flow/bin/flowctl prospect promote <id> --idea N --force # override idempotency guard
 .flow/bin/flowctl prospect archive <id>                  # → .flow/prospects/_archive/
 
+# Tracker sync (project a spec to a Linear/GitHub issue — /flow-next:tracker-sync bridge)
+# NOTE: /flow-next:tracker-sync (external tracker bridge) is NOT /flow-next:sync (plan-sync of downstream task specs).
+.flow/bin/flowctl sync active                            # is the bridge active? (enabled OR type ∈ {linear,github})
+.flow/bin/flowctl sync get-state <spec-id>               # per-spec tracker state (id/identifier/url/lastSyncedAt/merge-base)
+.flow/bin/flowctl sync set-tracker-id <spec-id> <uuid> --identifier WOR-17 --url <url>   # link (flow-first alias)
+.flow/bin/flowctl sync set-last-synced <spec-id>         # advance lastSyncedAt (default: now)
+.flow/bin/flowctl sync set-merge-base <spec-id> --flow-file f.md --tracker-file t.md     # paired snapshot (both required)
+.flow/bin/flowctl sync clear <spec-id>                   # unlink, wipe state atomically
+.flow/bin/flowctl sync list-unsynced                     # specs with no tracker id (need first push)
+.flow/bin/flowctl sync list-stale --older-than-hours 24  # linked specs with old/missing lastSyncedAt
+.flow/bin/flowctl sync check-collisions                  # tracker UUIDs shared by >1 spec
+.flow/bin/flowctl sync receipt <spec-id> --status pushed --transport mcp   # proof-of-work (status enum: pushed|pulled|merged|updated|diverged|queued|errored|noop)
+.flow/bin/flowctl sync defer <spec-id> --summary "..."   # queue a genuine conflict (never blocks; → review-deferred sink)
+# Tracker-first spec (keyed by the tracker identifier instead of fn-NN):
+.flow/bin/flowctl spec create --title "..." --tracker-first --tracker-identifier WOR-17  # canonical wor-17-slug
+
 # Memory (categorized learnings under .flow/memory/, v0.33.0+)
 .flow/bin/flowctl memory list                            # default: --status active
 .flow/bin/flowctl memory list --status stale             # stale entries only

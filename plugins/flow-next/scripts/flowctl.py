@@ -16157,11 +16157,25 @@ def _migrate_copy_tree_to_backup(flow_dir: Path, backup_dir: Path) -> None:
     for entry in flow_dir.iterdir():
         if entry.name in excluded:
             continue
+        # Transient writability-probe tempfiles (`.rw-probe-*.tmp` from
+        # `_migrate_writable`) created by a CONCURRENT migrate-rename can surface
+        # in iterdir() then vanish before we open them. Skip them by prefix —
+        # they are scratch, never pre-1.0 state.
+        if entry.name.startswith(".rw-probe-"):
+            continue
         target = backup_dir / entry.name
-        if entry.is_dir():
-            shutil.copytree(entry, target, symlinks=True)
-        else:
-            shutil.copy2(entry, target)
+        try:
+            if entry.is_dir():
+                shutil.copytree(entry, target, symlinks=True)
+            else:
+                shutil.copy2(entry, target)
+        except FileNotFoundError:
+            # TOCTOU: the entry disappeared between iterdir() and copy — a
+            # parallel process cleaned up a transient. Windows widens this
+            # window (slower unlink + file locking), so Scenario 8b of
+            # migration_smoke.sh flaked here. Skipping is safe; a real pre-1.0
+            # file does not vanish mid-migration (the lock dir serialises that).
+            continue
 
 
 def _migrate_clear_partial_backup(backup_dir: Path) -> None:

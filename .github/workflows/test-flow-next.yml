@@ -6,11 +6,16 @@ on:
     paths:
       - "plugins/flow-next/**"
       - ".github/workflows/test-flow-next.yml"
+      # Dogfood copies guarded against template drift (test_dogfood_template_parity).
+      - ".flow/usage.md"
+      - ".flow/templates/spec.md"
   pull_request:
     branches: [main]
     paths:
       - "plugins/flow-next/**"
       - ".github/workflows/test-flow-next.yml"
+      - ".flow/usage.md"
+      - ".flow/templates/spec.md"
   workflow_dispatch:
 
 jobs:
@@ -107,6 +112,16 @@ jobs:
             -s plugins/flow-next/tests \
             -p "test_unaddressed_rids_parser.py" \
             -v
+
+      - name: Python unit tests — dogfood template parity (1.5.1)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_dogfood_template_parity.py" \
+            -v
+        # Guards .flow/usage.md ≡ canonical setup template (and spec.md) so the
+        # fn-52 desync — tracker-sync docs added to the dogfood copy but not the
+        # bundled template — hard-fails CI instead of shipping to consumers.
 
       - name: Python unit tests — PNPM_HOME hint prose contract (fn-50.1, Windows-coverage)
         run: |
