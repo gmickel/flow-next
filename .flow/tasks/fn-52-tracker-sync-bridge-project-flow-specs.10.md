@@ -52,9 +52,8 @@ Tracker-key identity & id resolution — the deterministic flowctl id-format wor
 - [ ] Pytest coverage (`test_tracker_id_resolution.py`, `test_tracker_id_generator.py`) green via the repo runner — covering spec + task + enumeration + mixed-format deps
 
 ## Done summary
-TBD
-
+Made a tracker key (e.g. Linear WOR-17) a first-class, resolvable flow handle in flowctl (R16, hybrid model): tracker-first specs are natively keyed `wor-17-slug` (tasks `wor-17-slug.M`, branch matches), flow-first specs keep `fn-NN` and gain a resolvable `tracker.identifier` alias on push, and ids are never renamed. A tracker-aware id grammar (`parse_any_id`/`id_sort_key`/`id_task_num`, `parse_id` stays fn-only), a candidate-set resolver in `expand_bare_spec_id` (same-UUID dedupe / distinct-UUID ambiguity), central canonicalizers (`resolve_spec_id_arg`/`resolve_task_arg` with case-insensitive `casefold_handle`) wired into the FULL spec/task/sync command surface before any IO, an fn-only native allocator + collision check, widened enumeration (list/specs/tasks/ready/validate/next see tracker specs), a strict `--tracker-identifier` validator, and no-rename `set-title` for linked specs. Reviewed via rp (SHIP after 3 fix rounds, all 12 R16 acceptance items Met); 60 new tests across two files plus full-suite (788) + ci_test (58) green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 1fa3ffa, 5f701cb, a83c19a, fac326a14652a82b34851ad3dc703d8aaf375ddd
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p test_tracker_id_resolution.py (43), python3 -m unittest discover -s plugins/flow-next/tests -p test_tracker_id_generator.py (17), python3 -m unittest discover -s plugins/flow-next/tests -p test_*.py (788, full suite), ci_test.sh (58 integration cases)
 - PRs:

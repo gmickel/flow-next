@@ -61,9 +61,8 @@ Deterministic flowctl plumbing — the foundation every other task builds on. Ad
 - [ ] Every new `cmd_sync_*` supports both text and `--json` output and guards `ensure_flow_exists()`
 
 ## Done summary
-TBD
-
+Implemented the deterministic flowctl tracker-sync plumbing for fn-52 (R1/R4/R5/R11/R12): a value-checked `tracker` config block + activation predicate, per-spec sync state on the `.flow/specs/<id>.json` sidecar (tracker id + lastSyncedAt + paired flow-form/tracker-form merge base + content hashes), a new `flowctl sync` command group (active/get-state/set-tracker-id/set-last-synced/set-merge-base/clear/list-unsynced/list-stale/check-collisions/receipt/defer), a guard-safe sync receipt under `.flow/sync-runs/`, and a Ralph-safe deferral path. 31 unit tests added. Impl-review (rp) returned SHIP after one NEEDS_WORK fix (enforced the paired merge-base snapshot invariant).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 3f7a1a9c, bb1fa893
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (728 passed, 2 skipped), python3 -m unittest plugins.flow-next.tests.test_tracker_config plugins.flow-next.tests.test_tracker_sync_state plugins.flow-next.tests.test_tracker_receipts (31 passed)
 - PRs:
