@@ -1015,6 +1015,94 @@ def save_task_definition(task_id: str, definition: dict) -> None:
     atomic_write_json(def_path, clean_def)
 
 
+# --- Tracker sync (fn-52) ---
+#
+# Activation is EXPLICIT and VALUE-CHECKED, not merely "the block exists":
+# because `load_flow_config()` always merges this default block in, an absent /
+# null / unrelated write must NOT activate the bridge. The bridge is active iff
+# raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github}` (see
+# `tracker_sync_active`). All `perEvent` leaves default `off`, so even a stray
+# `enabled=true` does nothing until a specific event is opted in.
+TRACKER_TYPES = {"linear", "github"}
+TRACKER_PER_EVENT_LEAVES = {"off", "pull", "push", "reconcile", "comment"}
+TRACKER_TIEBREAKS = {"flow-wins", "tracker-wins", "always-ask"}
+# Default staleness threshold (hours) consumed by `sync list-stale`.
+TRACKER_DEFAULT_STALE_HOURS = 24
+# Sync receipt status enum spanning all three sync layers (body / status /
+# comments) — designed against tasks .4 and .5 outputs, not just body.
+TRACKER_RECEIPT_STATES = {
+    "pushed",
+    "pulled",
+    "merged",
+    "updated",
+    "diverged",
+    "queued",
+    "errored",
+    "noop",
+}
+
+
+def get_default_tracker_config() -> dict:
+    """Default `tracker` config block (fn-52, R1).
+
+    Keys under `perEvent` are NESTED (not flat literal `"work.firstClaim"`)
+    so they stay dot-path-safe for `get_config`/`set_config`, which split on
+    `.` — lifecycle hooks read `tracker.perEvent.work.firstClaim` etc.
+    """
+    return {
+        "version": 1,
+        "enabled": False,
+        "type": None,
+        "provenance": None,
+        "perEvent": {
+            "capture": "off",
+            "interview": "off",
+            "plan": "off",
+            "work": {"firstClaim": "off", "done": "off"},
+            "makePr": "off",
+            "resolvePr": "off",
+            "completionReview": "off",
+        },
+        "perTracker": {
+            "teamId": None,
+            "projectId": None,
+            "labelMap": {},
+            "priorityMap": {},
+        },
+        "staleAfterHours": TRACKER_DEFAULT_STALE_HOURS,
+        "conflictTiebreak": "always-ask",
+    }
+
+
+def default_spec_tracker_state() -> dict:
+    """Default per-spec tracker sync state for the `.flow/specs/<id>.json` sidecar (fn-52, R4).
+
+    State location is the existing JSON sidecar (NOT spec frontmatter) — the
+    merge-base body snapshots would bloat the markdown. Merge-base format:
+    BOTH a flow-form body snapshot AND a tracker-form rendered snapshot at
+    last sync, plus content hashes (the echo-fence). 3-way merge needs the
+    base in a form comparable to each side.
+
+    - `id`            — tracker UUID (durable dedupe key; `commentCreate` needs it).
+    - `identifier`    — display key, e.g. "WOR-17".
+    - `url`           — issue URL.
+    - `lastSyncedAt`  — ISO timestamp of last real reconciliation (advances on
+                        a real reconcile, never on a no-op pull / echo).
+    - `baseHashFlow`  / `baseHashTracker`  — content hashes of each base side.
+    - `mergeBaseFlow` / `mergeBaseTracker` — the body snapshots themselves.
+    """
+    return {
+        "id": None,
+        "identifier": None,
+        "url": None,
+        "lastSyncedAt": None,
+        "baseHashFlow": None,
+        "baseHashTracker": None,
+        "mergeBaseFlow": None,
+        "mergeBaseTracker": None,
+    }
+
+
 def get_default_config() -> dict:
     """Return default config structure."""
     return {
@@ -1022,6 +1110,7 @@ def get_default_config() -> dict:
         "planSync": {"enabled": True, "crossSpec": False},
         "review": {"backend": None},
         "scouts": {"github": False},
+        "tracker": get_default_tracker_config(),
     }
 
 
@@ -1206,6 +1295,32 @@ def set_config(key: str, value) -> dict:
     current[parts[-1]] = value
     atomic_write_json(config_path, config)
     return config
+
+
+def tracker_sync_active() -> bool:
+    """Single value-checked activation predicate for the tracker bridge (fn-52, R1).
+
+    The bridge is active iff the RAW (on-disk) config has
+    `tracker.enabled == true` OR `tracker.type ∈ {linear, github}`. It is
+    deliberately raw-config-aware (via `_get_config_from_file`, the same probe
+    `cmd_config_get --raw` uses) so that:
+
+    - an ABSENT `tracker` block ⇒ inactive (no config file / never written),
+    - a default `type: null` persisted by an unrelated `set_config` write ⇒
+      inactive (the merged-defaults block must NOT count as activation),
+    - `type` of "" / null / unknown ⇒ inactive,
+    - only the discovery ceremony's explicit `enabled=true` or a real
+      `type` value flips it on.
+
+    The skill (.6) calls THIS — no caller re-derives the rule.
+    """
+    raw_enabled = _get_config_from_file("tracker.enabled")
+    if raw_enabled is True:
+        return True
+    raw_type = _get_config_from_file("tracker.type")
+    if isinstance(raw_type, str) and raw_type.strip().lower() in TRACKER_TYPES:
+        return True
+    return False
 
 
 def json_output(data: dict, success: bool = True) -> None:
@@ -1783,6 +1898,16 @@ def normalize_epic(epic_data: dict) -> dict:
         epic_data["default_review"] = None
     if "default_sync" not in epic_data:
         epic_data["default_sync"] = None
+    # fn-52.1 (R4): per-spec tracker sync state. Backfill the full block for
+    # specs created before the tracker bridge so reads/setters always see a
+    # complete shape; fill only missing leaves so a partially-written state
+    # survives a read.
+    tracker_state = epic_data.get("tracker")
+    if not isinstance(tracker_state, dict):
+        epic_data["tracker"] = default_spec_tracker_state()
+    else:
+        for key, value in default_spec_tracker_state().items():
+            tracker_state.setdefault(key, value)
     return epic_data
 
 
@@ -11066,6 +11191,13 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
         "depends_on_epics": [],
         "spec_path": f"{FLOW_DIR}/{SPECS_DIR}/{spec_id}.md",
         "next_task": 1,
+        # fn-52.1 (R4): per-item tracker sync state. `id` is the durable UUID
+        # dedupe key; `identifier` the display key (WOR-17); merge-base stored
+        # in BOTH flow-form and tracker-form so the agentic 3-way merge (.4)
+        # has a base comparable to each side, plus content hashes for the
+        # echo-fence (a post-push hash match on the next pull = flow's own
+        # echo, not a real conflict).
+        "tracker": default_spec_tracker_state(),
         "created_at": now_iso(),
         "updated_at": now_iso(),
     }
@@ -18617,6 +18749,14 @@ def cmd_deep_auto_enable(args: argparse.Namespace) -> None:
 
 DEFER_SINK_DIR_REL = ".flow/review-deferred"
 
+# fn-52.1 (R12): sync receipts live in their OWN directory, deliberately NOT
+# under any path matching `receipts/` and NOT pointed to by REVIEW_RECEIPT_PATH.
+# The review-receipt guard (`hooks/ralph-guard.py`) only validates the file in
+# REVIEW_RECEIPT_PATH (verdict enum SHIP/NEEDS_WORK/MAJOR_RETHINK) and pattern-
+# matches shell writes to `…receipts/…json`; a sync receipt with `type: "sync"`
+# and a status enum here is never seen by that validator, so it can't be rejected.
+SYNC_RUNS_DIR_REL = ".flow/sync-runs"
+
 
 def _branch_slug(branch: Optional[str] = None) -> str:
     """Derive a filesystem-safe slug from the current (or supplied) branch.
@@ -18828,6 +18968,453 @@ def cmd_review_walkthrough_record(args: argparse.Namespace) -> None:
             f"skipped={skipped} acknowledged={acknowledged} "
             f"(lfg_rest={lfg_used}, total={total})"
         )
+
+
+# --- Tracker sync plumbing (fn-52.1) ---
+#
+# Deterministic flowctl helpers ONLY: config activation, per-spec sync state
+# setters/getters, enumerate-only list helpers, the sync receipt, and the
+# Ralph-safe deferral path. No tracker API calls — the SKILL (later tasks)
+# performs the actual fetch / merge / reconcile and CALLS these helpers.
+
+
+def _resolve_sync_spec(args: argparse.Namespace) -> tuple[Path, dict]:
+    """Resolve a sync command's spec arg → (spec_json_path, normalized spec_data).
+
+    Honors bare-id expansion (`fn-52` → `fn-52-slug`) and errors out via the
+    standard JSON-aware path when the spec is missing.
+    """
+    flow_dir = get_flow_dir()
+    spec_id = expand_bare_spec_id(flow_dir, args.id, use_json=args.json)
+    args.id = spec_id
+    spec_json_path = find_spec_json_path(flow_dir, spec_id)
+    if not spec_json_path.exists():
+        error_exit(f"Spec {spec_id} not found", use_json=args.json)
+    spec_data = normalize_epic(
+        load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=args.json)
+    )
+    return spec_json_path, spec_data
+
+
+def _write_sync_state(spec_json_path: Path, spec_data: dict) -> None:
+    """Stamp `updated_at` and atomic-write the spec sidecar (set-branch idiom)."""
+    spec_data["updated_at"] = now_iso()
+    atomic_write_json(spec_json_path, spec_data)
+
+
+def _parse_iso_ts(raw: Optional[str]) -> Optional[datetime]:
+    """Parse an ISO timestamp (accepts the `...Z` form `now_iso` writes)."""
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def cmd_sync_get_state(args: argparse.Namespace) -> None:
+    """Print a spec's tracker sync state (R4)."""
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+    if not is_spec_id(args.id):
+        error_exit(f"Invalid spec ID: {args.id}", use_json=args.json)
+
+    _, spec_data = _resolve_sync_spec(args)
+    state = spec_data.get("tracker") or default_spec_tracker_state()
+
+    if args.json:
+        json_output({"id": args.id, "tracker": state})
+    else:
+        print(f"Tracker sync state for {args.id}:")
+        for key in (
+            "id",
+            "identifier",
+            "url",
+            "lastSyncedAt",
+            "baseHashFlow",
+            "baseHashTracker",
+        ):
+            val = state.get(key)
+            print(f"  {key}: {val if val is not None else '(unset)'}")
+
+
+def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
+    """Link a spec to a tracker issue (UUID id + display identifier + url) (R4)."""
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+    if not is_spec_id(args.id):
+        error_exit(f"Invalid spec ID: {args.id}", use_json=args.json)
+
+    spec_json_path, spec_data = _resolve_sync_spec(args)
+
+    # Collision guard (R5): refuse to link two specs to one tracker UUID unless
+    # forced (re-link of the same spec is always fine).
+    flow_dir = get_flow_dir()
+    for owner_id, owner_state in _iter_tracker_states(flow_dir):
+        if owner_id == args.id:
+            continue
+        if owner_state.get("id") and owner_state["id"] == args.tracker_id:
+            if not getattr(args, "force", False):
+                error_exit(
+                    f"Tracker id {args.tracker_id} already linked to spec "
+                    f"{owner_id}. Pass --force to override (rare; usually a "
+                    f"duplicate-issue mistake).",
+                    use_json=args.json,
+                )
+
+    state = spec_data["tracker"]
+    state["id"] = args.tracker_id
+    if args.identifier is not None:
+        state["identifier"] = args.identifier
+    if args.url is not None:
+        state["url"] = args.url
+    _write_sync_state(spec_json_path, spec_data)
+
+    if args.json:
+        json_output({"id": args.id, "tracker": state, "message": "tracker id set"})
+    else:
+        print(f"Spec {args.id} linked to tracker {args.tracker_id}")
+
+
+def cmd_sync_set_last_synced(args: argparse.Namespace) -> None:
+    """Advance `lastSyncedAt` (R4) — caller passes ISO ts or omits for now()."""
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+    if not is_spec_id(args.id):
+        error_exit(f"Invalid spec ID: {args.id}", use_json=args.json)
+
+    spec_json_path, spec_data = _resolve_sync_spec(args)
+    ts = args.at if getattr(args, "at", None) else now_iso()
+    spec_data["tracker"]["lastSyncedAt"] = ts
+    _write_sync_state(spec_json_path, spec_data)
+
+    if args.json:
+        json_output({"id": args.id, "lastSyncedAt": ts, "message": "lastSyncedAt set"})
+    else:
+        print(f"Spec {args.id} lastSyncedAt set to {ts}")
+
+
+def cmd_sync_set_merge_base(args: argparse.Namespace) -> None:
+    """Store the merge-base snapshot in flow-form + tracker-form + hashes (R4).
+
+    The skill (.4) computes the snapshots and passes them in; flowctl just
+    writes them atomically. Content hashes power the echo-fence (a post-push
+    hash match on the next pull = flow's own echo, not a real conflict).
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+    if not is_spec_id(args.id):
+        error_exit(f"Invalid spec ID: {args.id}", use_json=args.json)
+
+    flow_body = _read_optional_arg_or_file(args.flow_file, args.flow)
+    tracker_body = _read_optional_arg_or_file(args.tracker_file, args.tracker)
+
+    spec_json_path, spec_data = _resolve_sync_spec(args)
+    state = spec_data["tracker"]
+    if flow_body is not None:
+        state["mergeBaseFlow"] = flow_body
+        state["baseHashFlow"] = _content_hash(flow_body)
+    if tracker_body is not None:
+        state["mergeBaseTracker"] = tracker_body
+        state["baseHashTracker"] = _content_hash(tracker_body)
+    _write_sync_state(spec_json_path, spec_data)
+
+    if args.json:
+        json_output(
+            {
+                "id": args.id,
+                "baseHashFlow": state["baseHashFlow"],
+                "baseHashTracker": state["baseHashTracker"],
+                "message": "merge base set",
+            }
+        )
+    else:
+        print(f"Spec {args.id} merge base updated")
+
+
+def cmd_sync_clear(args: argparse.Namespace) -> None:
+    """Unlink a spec from its tracker issue — wipe ALL tracker state atomically.
+
+    The skill posts the "detached" comment to the issue (a tracker API call);
+    flowctl just clears the local linkage so a re-link re-seeds the base
+    rather than resurrecting stale state.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+    if not is_spec_id(args.id):
+        error_exit(f"Invalid spec ID: {args.id}", use_json=args.json)
+
+    spec_json_path, spec_data = _resolve_sync_spec(args)
+    spec_data["tracker"] = default_spec_tracker_state()
+    _write_sync_state(spec_json_path, spec_data)
+
+    if args.json:
+        json_output({"id": args.id, "tracker": spec_data["tracker"], "message": "unlinked"})
+    else:
+        print(f"Spec {args.id} unlinked from tracker (state cleared)")
+
+
+def _iter_tracker_states(flow_dir: Path):
+    """Yield (spec_id, tracker_state) for every spec sidecar."""
+    for spec_file in iter_spec_json_files(flow_dir):
+        try:
+            spec_data = normalize_epic(json.loads(spec_file.read_text(encoding="utf-8")))
+        except (json.JSONDecodeError, OSError):
+            continue
+        yield spec_data.get("id", spec_file.stem), spec_data.get(
+            "tracker"
+        ) or default_spec_tracker_state()
+
+
+def cmd_sync_list_unsynced(args: argparse.Namespace) -> None:
+    """Enumerate specs with no tracker id — they need a first push (R5)."""
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+
+    flow_dir = get_flow_dir()
+    unsynced = [
+        spec_id
+        for spec_id, state in _iter_tracker_states(flow_dir)
+        if not state.get("id")
+    ]
+
+    if args.json:
+        json_output({"unsynced": unsynced, "count": len(unsynced)})
+    else:
+        if not unsynced:
+            print("No unsynced specs (all linked).")
+        else:
+            print(f"{len(unsynced)} spec(s) with no tracker id:")
+            for spec_id in unsynced:
+                print(f"  {spec_id}")
+
+
+def cmd_sync_list_stale(args: argparse.Namespace) -> None:
+    """Enumerate linked specs whose `lastSyncedAt` is older than the threshold (R5).
+
+    Threshold = `--older-than-hours N`, defaulting to `tracker.staleAfterHours`.
+    A linked spec with a MISSING `lastSyncedAt` ALWAYS counts as stale.
+    Unlinked specs (no tracker id) are never "stale" — they're "unsynced".
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+
+    hours = getattr(args, "older_than_hours", None)
+    if hours is None:
+        cfg_val = get_config("tracker.staleAfterHours")
+        try:
+            hours = int(cfg_val) if cfg_val is not None else TRACKER_DEFAULT_STALE_HOURS
+        except (TypeError, ValueError):
+            hours = TRACKER_DEFAULT_STALE_HOURS
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    flow_dir = get_flow_dir()
+    stale = []
+    for spec_id, state in _iter_tracker_states(flow_dir):
+        if not state.get("id"):
+            continue  # unlinked → not "stale", just unsynced
+        last = _parse_iso_ts(state.get("lastSyncedAt"))
+        if last is None or last < cutoff:
+            stale.append(
+                {"id": spec_id, "lastSyncedAt": state.get("lastSyncedAt")}
+            )
+
+    if args.json:
+        json_output({"stale": stale, "count": len(stale), "olderThanHours": hours})
+    else:
+        if not stale:
+            print(f"No stale specs (threshold {hours}h).")
+        else:
+            print(f"{len(stale)} stale spec(s) (threshold {hours}h):")
+            for item in stale:
+                last = item["lastSyncedAt"] or "(never synced)"
+                print(f"  {item['id']} — lastSyncedAt: {last}")
+
+
+def cmd_sync_check_collisions(args: argparse.Namespace) -> None:
+    """Flag tracker ids shared by more than one spec (R5 dedupe-key integrity)."""
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+
+    flow_dir = get_flow_dir()
+    by_tracker: dict[str, list[str]] = {}
+    for spec_id, state in _iter_tracker_states(flow_dir):
+        tid = state.get("id")
+        if tid:
+            by_tracker.setdefault(tid, []).append(spec_id)
+
+    collisions = [
+        {"trackerId": tid, "specs": sorted(specs)}
+        for tid, specs in sorted(by_tracker.items())
+        if len(specs) > 1
+    ]
+
+    if args.json:
+        json_output({"collisions": collisions, "count": len(collisions)})
+    else:
+        if not collisions:
+            print("No tracker-id collisions.")
+        else:
+            print(f"{len(collisions)} tracker-id collision(s):")
+            for c in collisions:
+                print(f"  {c['trackerId']} ← {', '.join(c['specs'])}")
+
+
+def cmd_sync_active(args: argparse.Namespace) -> None:
+    """Report whether the tracker bridge is active (value-checked predicate, R1).
+
+    The single source of truth for activation — the skill (.6) calls this so
+    no caller re-derives the rule.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+
+    active = tracker_sync_active()
+    raw_type = _get_config_from_file("tracker.type")
+    # Only surface a `type` when it's a real activating value — a literal
+    # "null" string or unknown type reads as inactive and reports type=null.
+    tracker_type = (
+        raw_type
+        if isinstance(raw_type, str) and raw_type.strip().lower() in TRACKER_TYPES
+        else None
+    )
+
+    if args.json:
+        json_output({"active": active, "type": tracker_type})
+    else:
+        print(
+            f"tracker sync: {'active' if active else 'inactive'}"
+            + (f" (type={tracker_type})" if tracker_type else "")
+        )
+
+
+def _content_hash(text: str) -> str:
+    """Stable content hash for the echo-fence (R12 / edge-case echo suppression)."""
+    import hashlib
+
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _read_optional_arg_or_file(file_arg: Optional[str], inline_arg: Optional[str]) -> Optional[str]:
+    """Return body text from a file/stdin (`-`) arg, else an inline arg, else None."""
+    if file_arg:
+        return read_file_or_stdin(file_arg, "merge-base body", use_json=True)
+    if inline_arg is not None:
+        return inline_arg
+    return None
+
+
+def cmd_sync_receipt(args: argparse.Namespace) -> None:
+    """Write a sync run receipt (R12) at a guard-safe path.
+
+    `type: "sync"` + a status enum {pushed,pulled,merged,updated,diverged,
+    queued,errored,noop}; records each body merge for rollback. Written to
+    `.flow/sync-runs/` (NOT a `receipts/` path, NOT REVIEW_RECEIPT_PATH) so the
+    review-receipt guard never inspects it.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+
+    status = args.status
+    if status not in TRACKER_RECEIPT_STATES:
+        error_exit(
+            f"Invalid sync status '{status}'. "
+            f"Expected one of: {', '.join(sorted(TRACKER_RECEIPT_STATES))}",
+            use_json=args.json,
+        )
+
+    merges: list[dict] = []
+    if getattr(args, "merges_file", None):
+        raw = read_file_or_stdin(args.merges_file, "merges json", use_json=args.json)
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            error_exit(f"merges json invalid: {exc}", use_json=args.json)
+        if isinstance(parsed, list):
+            merges = parsed
+        else:
+            error_exit("merges json must be a list of merge records", use_json=args.json)
+
+    receipt = {
+        "type": "sync",
+        "id": args.id,
+        "tracker_id": getattr(args, "tracker_id", None),
+        "status": status,
+        "transport": getattr(args, "transport", None),
+        "merges": merges,
+        "note": getattr(args, "note", None),
+        "timestamp": now_iso(),
+    }
+
+    repo_root = get_repo_root()
+    receipt_dir = repo_root / SYNC_RUNS_DIR_REL
+    receipt_dir.mkdir(parents=True, exist_ok=True)
+    ts_slug = now_iso().replace(":", "").replace("-", "").replace(".", "")
+    receipt_path = receipt_dir / f"sync-{args.id}-{ts_slug}.json"
+    atomic_write_json(receipt_path, receipt)
+
+    if args.json:
+        json_output(
+            {
+                "receipt": str(receipt_path),
+                "status": status,
+                "merges": len(merges),
+                "type": "sync",
+            }
+        )
+    else:
+        print(f"Sync receipt written ({status}, {len(merges)} merge(s)): {receipt_path}")
+
+
+def cmd_sync_defer(args: argparse.Namespace) -> None:
+    """Queue a genuine sync conflict to the deferred-decisions sink (R11).
+
+    NEVER blocks. In autonomous/Ralph mode, an `always-ask` tiebreak resolves
+    to *queue* (this), not prompt — same policy, surface-dependent delivery.
+    Reuses the review deferred-findings sink so conflicts land where the human
+    already looks for deferred work.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+
+    summary = args.summary
+    finding = {
+        "id": f"sync-conflict-{args.id}",
+        "severity": "conflict",
+        "confidence": "high",
+        "classification": "tracker-sync",
+        "file": spec_md_rel_path(args.id),
+        "line": 0,
+        "title": summary,
+        "suggested_fix": getattr(args, "suggested", None),
+        "deferred_reason": getattr(args, "reason", None)
+        or "genuine tracker-sync conflict — queued for human decision",
+    }
+
+    ts_pretty = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    session_header = f"{ts_pretty} — tracker-sync conflict {args.id}"
+    branch_slug = _branch_slug(getattr(args, "branch", None))
+    sink_path = append_deferred_findings([finding], branch_slug, session_header)
+
+    if args.json:
+        json_output(
+            {
+                "id": args.id,
+                "sink_path": str(sink_path),
+                "queued": True,
+                "message": "conflict queued (never blocks)",
+            }
+        )
+    else:
+        print(f"Queued tracker-sync conflict for {args.id} → {sink_path}")
+
+
+def spec_md_rel_path(spec_id: str) -> str:
+    """Relative path of a spec's markdown body (for the deferred-finding ref)."""
+    return f"{FLOW_DIR}/{SPECS_DIR}/{spec_id}.md"
 
 
 def cmd_codex_impl_review(args: argparse.Namespace) -> None:
@@ -21497,6 +22084,123 @@ def main() -> None:
     p_config_set.add_argument("value", help="Config value")
     p_config_set.add_argument("--json", action="store_true", help="JSON output")
     p_config_set.set_defaults(func=cmd_config_set)
+
+    # sync (tracker bridge plumbing — fn-52.1). Distinct from /flow-next:sync
+    # (plan-sync); this command group is the deterministic tracker-sync substrate.
+    p_sync = subparsers.add_parser(
+        "sync", help="Tracker sync plumbing (config / state / enumerate / receipt)"
+    )
+    sync_sub = p_sync.add_subparsers(dest="sync_cmd", required=True)
+
+    p_sync_active = sync_sub.add_parser(
+        "active", help="Report whether the tracker bridge is active (value-checked)"
+    )
+    p_sync_active.add_argument("--json", action="store_true", help="JSON output")
+    p_sync_active.set_defaults(func=cmd_sync_active)
+
+    p_sync_get = sync_sub.add_parser("get-state", help="Show a spec's tracker sync state")
+    p_sync_get.add_argument("id", help="Spec ID")
+    p_sync_get.add_argument("--json", action="store_true", help="JSON output")
+    p_sync_get.set_defaults(func=cmd_sync_get_state)
+
+    p_sync_set_id = sync_sub.add_parser(
+        "set-tracker-id", help="Link a spec to a tracker issue (UUID + identifier + url)"
+    )
+    p_sync_set_id.add_argument("id", help="Spec ID")
+    p_sync_set_id.add_argument("tracker_id", help="Tracker UUID (durable dedupe key)")
+    p_sync_set_id.add_argument("--identifier", default=None, help="Display key (e.g. WOR-17)")
+    p_sync_set_id.add_argument("--url", default=None, help="Issue URL")
+    p_sync_set_id.add_argument(
+        "--force", action="store_true", help="Override the dup-tracker-id collision guard"
+    )
+    p_sync_set_id.add_argument("--json", action="store_true", help="JSON output")
+    p_sync_set_id.set_defaults(func=cmd_sync_set_tracker_id)
+
+    p_sync_last = sync_sub.add_parser(
+        "set-last-synced", help="Advance lastSyncedAt (defaults to now)"
+    )
+    p_sync_last.add_argument("id", help="Spec ID")
+    p_sync_last.add_argument("--at", default=None, help="ISO timestamp (default: now)")
+    p_sync_last.add_argument("--json", action="store_true", help="JSON output")
+    p_sync_last.set_defaults(func=cmd_sync_set_last_synced)
+
+    p_sync_base = sync_sub.add_parser(
+        "set-merge-base", help="Store merge-base snapshot (flow-form + tracker-form + hashes)"
+    )
+    p_sync_base.add_argument("id", help="Spec ID")
+    p_sync_base.add_argument("--flow", default=None, help="Flow-form body snapshot (inline)")
+    p_sync_base.add_argument(
+        "--flow-file", dest="flow_file", default=None, help="Flow-form body file ('-' for stdin)"
+    )
+    p_sync_base.add_argument("--tracker", default=None, help="Tracker-form body snapshot (inline)")
+    p_sync_base.add_argument(
+        "--tracker-file", dest="tracker_file", default=None, help="Tracker-form body file ('-' for stdin)"
+    )
+    p_sync_base.add_argument("--json", action="store_true", help="JSON output")
+    p_sync_base.set_defaults(func=cmd_sync_set_merge_base)
+
+    p_sync_clear = sync_sub.add_parser(
+        "clear", help="Unlink a spec from its tracker issue (wipe state atomically)"
+    )
+    p_sync_clear.add_argument("id", help="Spec ID")
+    p_sync_clear.add_argument("--json", action="store_true", help="JSON output")
+    p_sync_clear.set_defaults(func=cmd_sync_clear)
+
+    p_sync_unsynced = sync_sub.add_parser(
+        "list-unsynced", help="List specs with no tracker id (need a first push)"
+    )
+    p_sync_unsynced.add_argument("--json", action="store_true", help="JSON output")
+    p_sync_unsynced.set_defaults(func=cmd_sync_list_unsynced)
+
+    p_sync_stale = sync_sub.add_parser(
+        "list-stale", help="List linked specs whose lastSyncedAt is old / missing"
+    )
+    p_sync_stale.add_argument(
+        "--older-than-hours",
+        dest="older_than_hours",
+        type=int,
+        default=None,
+        help="Staleness threshold in hours (default: tracker.staleAfterHours)",
+    )
+    p_sync_stale.add_argument("--json", action="store_true", help="JSON output")
+    p_sync_stale.set_defaults(func=cmd_sync_list_stale)
+
+    p_sync_coll = sync_sub.add_parser(
+        "check-collisions", help="Flag tracker ids shared by more than one spec"
+    )
+    p_sync_coll.add_argument("--json", action="store_true", help="JSON output")
+    p_sync_coll.set_defaults(func=cmd_sync_check_collisions)
+
+    p_sync_receipt = sync_sub.add_parser(
+        "receipt", help="Write a sync run receipt (guard-safe path, type: sync)"
+    )
+    p_sync_receipt.add_argument("id", help="Spec ID")
+    p_sync_receipt.add_argument(
+        "--status",
+        required=True,
+        choices=sorted(TRACKER_RECEIPT_STATES),
+        help="Sync run status",
+    )
+    p_sync_receipt.add_argument("--tracker-id", dest="tracker_id", default=None, help="Tracker UUID")
+    p_sync_receipt.add_argument("--transport", default=None, help="Transport used (mcp|graphql|gh|none)")
+    p_sync_receipt.add_argument(
+        "--merges-file", dest="merges_file", default=None,
+        help="JSON list of body-merge records for rollback ('-' for stdin)",
+    )
+    p_sync_receipt.add_argument("--note", default=None, help="Free-form note")
+    p_sync_receipt.add_argument("--json", action="store_true", help="JSON output")
+    p_sync_receipt.set_defaults(func=cmd_sync_receipt)
+
+    p_sync_defer = sync_sub.add_parser(
+        "defer", help="Queue a genuine sync conflict to the deferred-decisions sink (never blocks)"
+    )
+    p_sync_defer.add_argument("id", help="Spec ID")
+    p_sync_defer.add_argument("--summary", required=True, help="One-line conflict summary")
+    p_sync_defer.add_argument("--suggested", default=None, help="Suggested resolution")
+    p_sync_defer.add_argument("--reason", default=None, help="Deferred reason")
+    p_sync_defer.add_argument("--branch", default=None, help="Branch slug override")
+    p_sync_defer.add_argument("--json", action="store_true", help="JSON output")
+    p_sync_defer.set_defaults(func=cmd_sync_defer)
 
     # review-backend (helper for skills)
     p_review_backend = subparsers.add_parser(
