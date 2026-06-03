@@ -2,9 +2,9 @@
 
 All notable changes to the flow-next.
 
-## [Unreleased]
+## [flow-next 1.5.0] - 2026-06-03
 
-> Version + Codex mirror land in fn-52.9; this entry documents the tracker-sync bridge shipped across fn-52.1–.7, .10.
+> Tracker-sync bridge (fn-52). Codex mirror + plugin version bump land in fn-52.9; the flow-next.dev docs pass lands in fn-52.11.
 
 ### Added
 - **`/flow-next:tracker-sync` — project a flow-next spec to an external tracker (Linear first, GitHub next) and reconcile body / status / comments two-way** (fn-52). **Projection, not coordination:** the `.flow/specs/<id>.md` spec stays the single source of truth and the quality layer; the tracker is a co-editable mirror that **never drives flow state or spawns agents** (contrast OpenAI Symphony, where the board is the control plane). Distinct from `/flow-next:sync` (plan-sync). New subsystem reference: [`docs/tracker-sync.md`](plugins/flow-next/docs/tracker-sync.md).

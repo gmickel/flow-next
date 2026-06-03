@@ -26,8 +26,11 @@ Detect input type in this order (first match wins):
 
 1. **Flow task ID** `fn-N-slug.M` (e.g., fn-1-add-oauth.3) or legacy `fn-N.M`/`fn-N-xxx.M` → **SINGLE_TASK_MODE**
 2. **Flow spec ID** `fn-N-slug` (e.g., fn-1-add-oauth) or legacy `fn-N`/`fn-N-xxx` → **SPEC_MODE**
-3. **Spec file** `.md` path that exists on disk → **SPEC_MODE**
-4. **Idea text** everything else → **SPEC_MODE**
+3. **Resolvable handle** — any single-token arg that `$FLOWCTL show <arg> --json` resolves (including a tracker key like `wor-17` / `wor-17.1`, which flowctl's widened resolver maps to the linked spec/task — fn-52.10/.16). A `.`-containing handle is a task (SINGLE_TASK_MODE); otherwise a spec (SPEC_MODE).
+4. **Spec file** `.md` path that exists on disk → **SPEC_MODE**
+5. **Idea text** everything else → **SPEC_MODE**
+
+**Handle-recognition rule (R16):** do **not** gate on a hard "must start with `fn-`" check. Before treating a single-token arg as idea text, route it through `$FLOWCTL show <arg> --json` — if it resolves (rc 0), it is an existing spec/task (use the canonical id from the JSON), never a new idea. Only a non-resolving token that isn't an `.md` path falls through to idea text. So `work wor-17` / `work wor-17.1` resolve the existing spec/task; they are never re-created.
 
 **Track the mode** — it controls looping in Phase 3.
 
@@ -89,6 +92,24 @@ If no ready tasks, check for completion review gate (see 3g below).
 $FLOWCTL start <task-id> --json
 ```
 
+#### 3b.1 Tracker sync (opt-in) — first claim → In-Progress
+
+**Optional. Runs only when the tracker bridge is active AND `work.firstClaim` is opted in. With no tracker configured this is a no-op — the work flow is unchanged.** Trigger only on the spec's **first** claimed task this run (the issue moves to In-Progress once, not per task).
+
+```bash
+if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
+ && [ "$($FLOWCTL config get tracker.perEvent.work.firstClaim --json | jq -r '.value')" != "off" ] \
+ && [ "$($FLOWCTL config get tracker.perEvent.work.firstClaim --json | jq -r '.value')" != "null" ]; then
+ # Invoke the flow-next-tracker-sync skill: move the linked issue In-Progress.
+ # skill: flow-next-tracker-sync (operation: push <spec-id>, status-only)
+ # The skill no-ops cleanly if this spec has no linked tracker id, if no transport
+ # is reachable, or in Ralph mode it queues/records a receipt — never blocks.
+ :
+fi
+```
+
+Best-effort: a tracker failure must never block the worker. The skill emits its own receipt (`sync receipt`).
+
 ### 3c. Run Worker Agent
 
 Use the **worker** agent role to implement the task. The worker gets fresh context and handles:
@@ -121,6 +142,24 @@ $FLOWCTL show <task-id> --json
 ```
 
 If status is not `done`, the worker agent failed. Check output and retry or investigate.
+
+#### 3d.1 Tracker sync (opt-in) — task done → status comment + evidence
+
+**Optional. Runs only when the tracker bridge is active AND `work.done` is opted in, and only when the task reached `done` (from 3d). With no tracker configured this is a no-op.** Posts a structured status comment + evidence (tests / PR links from the task's evidence) to the linked issue; appends-only (R8), deduped by marker — never a conflict.
+
+```bash
+if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
+ && [ "$($FLOWCTL config get tracker.perEvent.work.done --json | jq -r '.value')" != "off" ] \
+ && [ "$($FLOWCTL config get tracker.perEvent.work.done --json | jq -r '.value')" != "null" ]; then
+ # Invoke the flow-next-tracker-sync skill: append a lifecycle comment to the
+ # linked issue carrying the task's done-summary + evidence (tests / commits / PR).
+ # skill: flow-next-tracker-sync (operation: comment <spec-id>)
+ # No-ops if the spec has no linked tracker id / no transport reachable; Ralph queues.
+ :
+fi
+```
+
+Best-effort — append-only comment sync never blocks the work loop; the skill emits its own receipt.
 
 ### 3e. Plan Sync (if enabled) — BOTH MODES
 
@@ -197,9 +236,23 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
 
 2. After skill returns with SHIP:
  - Set status: `$FLOWCTL spec set-completion-review-status <spec-id> --status ship --json`
+ - **Tracker sync (opt-in) — SHIP → issue Done/verified + verdict:** runs only when the tracker bridge is active AND `completionReview` is opted in. With no tracker configured this is a no-op. Hooked **here at the caller** (not inside the review skill) because this is where `completion_review_status=ship` lands:
+
+ ```bash
+ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
+ && [ "$($FLOWCTL config get tracker.perEvent.completionReview --json | jq -r '.value')" != "off" ] \
+ && [ "$($FLOWCTL config get tracker.perEvent.completionReview --json | jq -r '.value')" != "null" ]; then
+ # Invoke the flow-next-tracker-sync skill: flip the linked issue to Done/verified
+ # (status who-wins — tracker wins `done`/`verified`, R7) and post the verdict +
+ # R-ID coverage as a comment.
+ # skill: flow-next-tracker-sync (operation: push <spec-id>, status + verdict comment)
+ # No-ops if the spec has no linked tracker id / no transport; Ralph queues.
+ :
+ fi
+ ```
  - Go to Phase 4 (Quality)
 
-**Note:** The spec-completion-review skill gets SHIP from the reviewer but does NOT set the status itself. The caller (work skill or Ralph) sets `completion_review_status=ship` after successful review.
+**Note:** The spec-completion-review skill gets SHIP from the reviewer but does NOT set the status itself. The caller (work skill or Ralph) sets `completion_review_status=ship` after successful review — and (when opted in) flips the linked tracker issue Done/verified here. The review skill (`flow-next-spec-completion-review`) is NOT edited; the touchpoint lives at this caller.
 
 **Fix loop behavior**: Same as impl-review. If reviewer returns NEEDS_WORK:
 1. Skill parses issues

@@ -441,6 +441,33 @@ text = re.sub(
     text,
 )
 
+# Strip maintainer-note BULLETS about the Codex mirror generation itself
+# ("- **Codex mirror** ... regenerated in fn-NN — keep this file Claude-native
+# ...", "- Codex mirror is regenerated in fn-NN — keep this file Claude-native
+# ..."). These are author-facing reminders that the canonical file is the
+# source and the mirror is derived; they're meaningless (and self-contradictory)
+# inside the already-rewritten mirror, where they'd tell the Codex agent to
+# "keep this file Claude-native". Run BEFORE the AskUserQuestion rewrite so the
+# `Claude-native` anchor is still present.
+#
+# Two concrete shapes (handle each explicitly — a single lazy regex backtracks
+# unpredictably across the wrapped form):
+#   (a) two-line bullet — "- **Codex mirror** ...\n  Claude-native ...\n"
+#       (line 1 opens the bullet, line 2 is a 2-space-indented continuation
+#       carrying the `Claude-native` anchor).
+text = re.sub(
+    r'(?m)^- (?:\*\*Codex mirror\*\*|Codex mirror)[^\n]*\n  [^\n]*Claude-native[^\n]*\n',
+    '',
+    text,
+)
+#   (b) single-line bullet — "- **Codex mirror** ... Claude-native ...\n"
+#       (both the `Codex mirror` lead and the `Claude-native` anchor on one line).
+text = re.sub(
+    r'(?m)^- (?:\*\*Codex mirror\*\*|Codex mirror)[^\n]*Claude-native[^\n]*\n',
+    '',
+    text,
+)
+
 with open(path, 'w') as fp:
     fp.write(text)
 PYEOF
@@ -1135,6 +1162,7 @@ generate_openai_yaml "flow-next-strategy"  "Flow Strategy"  "Generate or update 
 generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory/ entries against current code"   "#3B82F6" false
 generate_openai_yaml "flow-next-memory-migrate" "Flow Memory Migrate" "Migrate legacy flat memory files to categorized YAML schema" "#3B82F6" false
 generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid PR body from flow-next state and open via gh" "#3B82F6" false
+generate_openai_yaml "flow-next-tracker-sync" "Flow Tracker Sync" "Project a spec to a tracker (Linear/GitHub) and reconcile two-way — NOT plan-sync" "#3B82F6" false
 
 # Review skills (red, explicit)
 generate_openai_yaml "flow-next-impl-review" "Flow Implementation Review" "Carmack-level code review via RepoPrompt"  "#EF4444" false
@@ -1199,6 +1227,7 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-audit"
   "flow-next-memory-migrate"
   "flow-next-make-pr"
+  "flow-next-tracker-sync"
   "flow-next-impl-review"
   "flow-next-plan-review"
   "flow-next-spec-completion-review"

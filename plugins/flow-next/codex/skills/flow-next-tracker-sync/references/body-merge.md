@@ -91,17 +91,17 @@ base / flow-side / tracker-side and produces the merged body. Per section
 (`## Goal & Context`, `## Acceptance Criteria`, …) and per logical unit within it:
 
 1. **Section / unit only one side touched** → take that side's version. (A PM
-   clarified the Goal in Linear; a dev left the Acceptance untouched → keep the
-   dev's Acceptance, take the PM's Goal.) **This is the headline R6 case: two
-   non-conflicting two-sided edits both survive.**
+ clarified the Goal in Linear; a dev left the Acceptance untouched → keep the
+ dev's Acceptance, take the PM's Goal.) **This is the headline R6 case: two
+ non-conflicting two-sided edits both survive.**
 2. **Both sides added different new content to the same section** (additive, not
-   contradictory — e.g. flow added a new acceptance bullet, the tracker added a
-   sentence of context to the same section) → **fold both in**, ordered sensibly.
+ contradictory — e.g. flow added a new acceptance bullet, the tracker added a
+ sentence of context to the same section) → **fold both in**, ordered sensibly.
 3. **Both sides rewrote the same content to mean *different things*** (a genuine
-   semantic contradiction the agent cannot confidently reconcile — e.g. flow
-   narrowed the Goal to "OAuth only" while the tracker broadened it to "OAuth +
-   SAML") → **scoped conflict** (Step 4). Do NOT silently pick a side; do NOT
-   merge incompatible meanings into mush.
+ semantic contradiction the agent cannot confidently reconcile — e.g. flow
+ narrowed the Goal to "OAuth only" while the tracker broadened it to "OAuth +
+ SAML") → **scoped conflict** (Step 4). Do NOT silently pick a side; do NOT
+ merge incompatible meanings into mush.
 
 Judge by **meaning, not by line position.** A two-line diff that says the same
 thing reworded is NOT a conflict; a one-word change that inverts the meaning IS.
@@ -116,35 +116,35 @@ The two sides are in different formats; the merge spans the translation. The age
 ### flow → tracker (render structure into a readable issue)
 
 - Render the structured spec into clean free-form markdown a PM reads comfortably:
-  keep the section headings as plain `##` headings, render acceptance criteria as a
-  checklist, keep links/code spans intact.
+ keep the section headings as plain `##` headings, render acceptance criteria as a
+ checklist, keep links/code spans intact.
 - **R-IDs and source tags are flow-internal scaffolding.** Render them in a way that
-  survives a round-trip without cluttering the issue — keep the `[R6]` suffix on a
-  criterion (it is meaningful provenance the PM may reference) but do NOT surface
-  the `<!-- scope: ... -->` HTML-comment annotations or the source-tag breakdown
-  comment as visible issue text.
+ survives a round-trip without cluttering the issue — keep the `[R6]` suffix on a
+ criterion (it is meaningful provenance the PM may reference) but do NOT surface
+ the `<!-- scope: ... -->` HTML-comment annotations or the source-tag breakdown
+ comment as visible issue text.
 - **Idempotent for unchanged content** — rendering an unchanged flow body must
-  produce a tracker body byte-identical to `mergeBaseTracker` (so flow→tracker→flow
-  is no churn). If the tracker renderer canonicalizes markdown in a stable way
-  (Linear normalizing list markers, collapsing blank lines), record that canonical
-  form as the snapshot so the next reconcile compares like-with-like — see the
-  [linear-ladder.md](linear-ladder.md) round-trip spike, whose whole job is to pin
-  this canonical form *before* this merge runs on top of it.
+ produce a tracker body byte-identical to `mergeBaseTracker` (so flow→tracker→flow
+ is no churn). If the tracker renderer canonicalizes markdown in a stable way
+ (Linear normalizing list markers, collapsing blank lines), record that canonical
+ form as the snapshot so the next reconcile compares like-with-like — see the
+ [linear-ladder.md](linear-ladder.md) round-trip spike, whose whole job is to pin
+ this canonical form *before* this merge runs on top of it.
 
 ### tracker → flow (fold free-text into the right flow sections)
 
 - Fold a tracker-side free-text edit into the **correct flow section** by meaning —
-  a PM rewriting the problem statement folds into `## Goal & Context`; a new
-  acceptance line folds into `## Acceptance Criteria`.
+ a PM rewriting the problem statement folds into `## Goal & Context`; a new
+ acceptance line folds into `## Acceptance Criteria`.
 - **NEVER invent R-IDs or source tags.** A PM literally typing `R17:` in Linear is
-  **prose, not a promoted requirement** — fold it as prose under the right section;
-  do not allocate a new R-ID, do not add a coverage-table row, do not stamp a
-  `[user]`/`[paraphrase]`/`[inferred]` source tag. R-ID allocation and source
-  tagging are flow-authoring acts (capture/interview/plan), not sync acts. The
-  bridge **projects**; it does not author requirements.
+ **prose, not a promoted requirement** — fold it as prose under the right section;
+ do not allocate a new R-ID, do not add a coverage-table row, do not stamp a
+ `[user]`/`[paraphrase]`/`[inferred]` source tag. R-ID allocation and source
+ tagging are flow-authoring acts (capture/interview/plan), not sync acts. The
+ bridge **projects**; it does not author requirements.
 - Tracker free text that matches no existing section folds into the nearest
-  sensible section (or a `## Notes` section) — never dropped, never invented into a
-  fake structured element.
+ sensible section (or a `## Notes` section) — never dropped, never invented into a
+ fake structured element.
 
 ## Step 3.5 — Structural verification gate (before ANY write-back) (R6)
 
@@ -153,22 +153,22 @@ spec. This is the second (and last) deterministic step — it guards the agent's
 output, it does not replace the merge:
 
 - **No section silently dropped.** Every `##` section present in base, flow-side, OR
-  tracker-side must be present in the merged output (unless a side *deliberately and
-  unambiguously* deleted it — a deletion is itself a change the merge reasoned about
-  in Step 2, not a silent drop).
+ tracker-side must be present in the merged output (unless a side *deliberately and
+ unambiguously* deleted it — a deletion is itself a change the merge reasoned about
+ in Step 2, not a silent drop).
 - **Both sides' non-conflicting additions present.** Every additive change the
-  pre-reduction / merge classified as "keep both" (Step 2 cases 1 and 2) appears in
-  the output. A merge that quietly lost the dev's new acceptance bullet fails the
-  gate.
+ pre-reduction / merge classified as "keep both" (Step 2 cases 1 and 2) appears in
+ the output. A merge that quietly lost the dev's new acceptance bullet fails the
+ gate.
 - **No invented structure.** The merged flow body introduces no R-ID / source tag
-  that did not exist in flow-side (Step 3's "never invent" rule, checked).
+ that did not exist in flow-side (Step 3's "never invent" rule, checked).
 
 ```bash
 # The gate is a host-agent self-check (read the merged body, verify the three
 # invariants above against base/flow/tracker). If it FAILS, do NOT write back —
 # emit an errored receipt and re-merge or queue:
 $FLOWCTL sync receipt "$SPEC_ID" --status errored --transport "$TRANSPORT" \
-  --note "structural gate failed: <which invariant> — write-back aborted, base unchanged"
+ --note "structural gate failed: <which invariant> — write-back aborted, base unchanged"
 ```
 
 A gate failure is treated like a transport failure: **no write-back, no state
@@ -183,13 +183,15 @@ silently overwrite.**
 
 ### Interactive mode — confirm before write-back
 
-Show the human the **merged body** (every cleanly-merged section already folded) with the single contradicting section flagged inline, and ask via `AskUserQuestion` (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded):
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+Show the human the **merged body** (every cleanly-merged section already folded) with the single contradicting section flagged inline, and ask via `plain-text numbered prompt`:
 
 - Options scoped to the one section: keep flow's framing · keep the tracker's ·
-  accept a proposed merge of the two · edit by hand.
+ accept a proposed merge of the two · edit by hand.
 - On choice → apply to that section only → re-run the **structural gate** → write
-  back (`writeIssue` + write the spec) → `sync set-merge-base` (BOTH halves) +
-  `sync set-last-synced` → `sync receipt --status merged`.
+ back (`writeIssue` + write the spec) → `sync set-merge-base` (BOTH halves) +
+ `sync set-last-synced` → `sync receipt --status merged`.
 
 The confirmation shows the *whole merged body* (so the human sees the merge is
 correct everywhere else) but the *decision* is scoped to the contradicting section.
@@ -207,11 +209,11 @@ delivery — mirrors fn-51's surface-aware ladder).
 # Ralph (FLOW_RALPH=1 / REVIEW_RECEIPT_PATH set): queue the scoped conflict, write
 # NO body, advance NO state, continue the batch.
 $FLOWCTL sync defer "$SPEC_ID" \
-  --summary "Goal section rewritten on both sides to mean different things (flow: OAuth-only; tracker: OAuth+SAML)" \
-  --suggested "Human picks: keep flow's framing, the tracker's, or a merge of the two" \
-  --reason "genuine-contradiction"
+ --summary "Goal section rewritten on both sides to mean different things (flow: OAuth-only; tracker: OAuth+SAML)" \
+ --suggested "Human picks: keep flow's framing, the tracker's, or a merge of the two" \
+ --reason "genuine-contradiction"
 $FLOWCTL sync receipt "$SPEC_ID" --status diverged --transport "$TRANSPORT" \
-  --note "scoped conflict queued (Goal section); base unchanged"
+ --note "scoped conflict queued (Goal section); base unchanged"
 ```
 
 The conflict-tiebreak default (`flow-wins | tracker-wins | always-ask`, R1) governs
@@ -226,14 +228,14 @@ reconcile + write-back**. This is the no-half-advance invariant:
 
 ```bash
 # 1. write-back (transport + spec) — both must succeed:
-#    writeIssue(merged)            [transport — linear-ladder.md]
-#    write the merged flow body to .flow/specs/<id>.md
+# writeIssue(merged) [transport — linear-ladder.md]
+# write the merged flow body to .flow/specs/<id>.md
 # 2. ONLY THEN advance state — snapshot BOTH forms together (paired invariant):
 $FLOWCTL sync set-merge-base "$SPEC_ID" --flow-file /tmp/merged-flow.md --tracker-file /tmp/merged-tracker.md
 $FLOWCTL sync set-last-synced "$SPEC_ID"
 # 3. receipt records the merge for audit / rollback (--merges-file = the merge log):
 $FLOWCTL sync receipt "$SPEC_ID" --status merged --transport "$TRANSPORT" --merges-file /tmp/merges.json \
-  --note "3-way merge: 2 sections folded, 0 conflicts"
+ --note "3-way merge: 2 sections folded, 0 conflicts"
 ```
 
 **Failure leaves prior state intact.** A failed/errored fetch or write (404,
@@ -252,15 +254,15 @@ reconcile for traceability — minimum useful shape:
 
 ```json
 [
-  {
-    "spec": "fn-42-add-oauth",
-    "trackerId": "uuid-...",
-    "outcome": "merged",
-    "sectionsFolded": ["Goal & Context", "Acceptance Criteria"],
-    "conflicts": [],
-    "baseHashFlowBefore": "…",
-    "baseHashTrackerBefore": "…"
-  }
+ {
+ "spec": "fn-42-add-oauth",
+ "trackerId": "uuid-...",
+ "outcome": "merged",
+ "sectionsFolded": ["Goal & Context", "Acceptance Criteria"],
+ "conflicts": [],
+ "baseHashFlowBefore": "…",
+ "baseHashTrackerBefore": "…"
+ }
 ]
 ```
 
@@ -274,14 +276,14 @@ there is no 3-way ancestor — so **never run Step 2** (it would over-surface th
 whole body as a conflict). Bootstrap by origin:
 
 - **Flow-first push, no base** → pure **projection / fast-forward**: render flow →
-  tracker, `writeIssue`, then snapshot (`set-merge-base` from the rendered pair +
-  `set-last-synced`). Never a conflict — there is nothing on the tracker side to
-  contradict.
+ tracker, `writeIssue`, then snapshot (`set-merge-base` from the rendered pair +
+ `set-last-synced`). Never a conflict — there is nothing on the tracker side to
+ contradict.
 - **Tracker-first link** ("grab issue X and spec it") → **seed the base from the
-  current issue body**, first pass is **pull-only** (fold the issue into the new
-  spec's sections), then snapshot. The seeded base IS the issue, so the next
-  reconcile has a real ancestor and the first sync never surfaces the whole issue as
-  a conflict.
+ current issue body**, first pass is **pull-only** (fold the issue into the new
+ spec's sections), then snapshot. The seeded base IS the issue, so the next
+ reconcile has a real ancestor and the first sync never surfaces the whole issue as
+ a conflict.
 
 The link/unlink ceremony that calls these is in [../steps.md](../steps.md) Phase 2;
 this file supplies the flow-form + tracker-form snapshots `set-merge-base` requires.
@@ -386,18 +388,18 @@ things** (flow excludes SAML; tracker includes it) → Step 4 scoped conflict.
 
 **Oracle (the R9 proof):**
 - The conflict is surfaced **scoped to the `## Goal & Context` section only** — the
-  Acceptance section merged cleanly and is NOT presented as a conflict.
+ Acceptance section merged cleanly and is NOT presented as a conflict.
 - It is **NOT a whole-body diff**: the human (interactive) or the deferred-sink entry
-  (Ralph) references only the Goal contradiction, with the rest already merged.
+ (Ralph) references only the Goal contradiction, with the rest already merged.
 - No silent overwrite: neither Goal version is written until the human picks.
 
 ```bash
 # Ralph proof for Fixture C — exactly ONE scoped conflict queued, no body written:
 $FLOWCTL sync defer "$SPEC_ID" \
-  --summary "Goal contradicts: flow excludes SAML, tracker includes it" \
-  --suggested "Human picks OAuth-only vs OAuth+SAML" --reason "genuine-contradiction"
+ --summary "Goal contradicts: flow excludes SAML, tracker includes it" \
+ --suggested "Human picks OAuth-only vs OAuth+SAML" --reason "genuine-contradiction"
 $FLOWCTL sync receipt "$SPEC_ID" --status diverged --transport none \
-  --note "1 scoped conflict (Goal); Acceptance merged cleanly; base unchanged"
+ --note "1 scoped conflict (Goal); Acceptance merged cleanly; base unchanged"
 ```
 
 PASS iff the conflict names ONLY the Goal section and the Acceptance merge is not
@@ -414,10 +416,10 @@ write).
 
 ```bash
 # Echo detection is a hash compare against the stored fence:
-STATE=$($FLOWCTL sync get-state "$SPEC_ID" --json)   # → .tracker.baseHashTracker
-# pulled_hash == baseHashTracker  ⇒  emit noop, do not reconcile, do not advance state:
+STATE=$($FLOWCTL sync get-state "$SPEC_ID" --json) # → .tracker.baseHashTracker
+# pulled_hash == baseHashTracker ⇒ emit noop, do not reconcile, do not advance state:
 $FLOWCTL sync receipt "$SPEC_ID" --status noop --transport "$TRANSPORT" \
-  --note "post-push pull matched baseHashTracker — flow's own echo, no reconcile"
+ --note "post-push pull matched baseHashTracker — flow's own echo, no reconcile"
 ```
 
 PASS iff the matching-hash pull is a `noop` and state is unchanged.
@@ -425,16 +427,14 @@ PASS iff the matching-hash pull is a `noop` and state is unchanged.
 ## Boundaries
 
 - **This is the merge, not the transport or the status/comment layer.** Transports
-  (`fetchIssue`/`writeIssue`) live in [linear-ladder.md](linear-ladder.md) (fn-52.3)
-  / the GitHub adapter (fn-52.7); status who-wins + comment append are fn-52.5. This
-  file consumes the normalized `issue.body` and produces a merged body.
+ (`fetchIssue`/`writeIssue`) live in [linear-ladder.md](linear-ladder.md) (fn-52.3)
+ / the GitHub adapter (fn-52.7); status who-wins + comment append are fn-52.5. This
+ file consumes the normalized `issue.body` and produces a merged body.
 - **No deterministic fallback merge engine.** The pre-reduction and the structural
-  gate are the only mechanical steps — equality and invariants, not a text merge.
-  The merge itself is the host agent's judgment (CLAUDE.md agentic-vs-deterministic).
+ gate are the only mechanical steps — equality and invariants, not a text merge.
+ The merge itself is the host agent's judgment (CLAUDE.md agentic-vs-deterministic).
 - **State advances only on a fully successful reconcile.** A failure (404, transport
-  error, gate failure, partial batch) leaves the prior base intact + an `errored`
-  receipt; batch sync is item-level.
+ error, gate failure, partial batch) leaves the prior base intact + an `errored`
+ receipt; batch sync is item-level.
 - **Never invent R-IDs / source tags** on a tracker→flow fold — the bridge projects,
-  it does not author requirements.
-- **Codex mirror** (sync-codex.sh) is regenerated in fn-52.9 — keep this file
-  Claude-native (`AskUserQuestion`); no Codex-specific edits here.
+ it does not author requirements.

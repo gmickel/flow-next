@@ -22,7 +22,7 @@ FLOWCTL="$HOME/.codex/scripts/flowctl"
 Arguments: $ARGUMENTS
 Format: `<id> [--dry-run]`
 
-- `<id>` - task ID `fn-N-slug.M` (or legacy `fn-N.M`, `fn-N-xxx.M`) or spec ID `fn-N-slug` (or legacy `fn-N`, `fn-N-xxx`)
+- `<id>` - task ID `fn-N-slug.M` (or legacy `fn-N.M`, `fn-N-xxx.M`) or spec ID `fn-N-slug` (or legacy `fn-N`, `fn-N-xxx`), **or a resolvable tracker handle** (`wor-17` / `wor-17.M`) that `flowctl show` maps to the linked spec/task (fn-52.10, R16)
 - `--dry-run` - show changes without writing
 
 ## Workflow
@@ -37,14 +37,14 @@ Parse $ARGUMENTS for:
 - First positional arg = `ID`
 - `--dry-run` flag = `DRY_RUN` (true/false)
 
-**Validate ID format first:**
-- Must start with `fn-`
+**Validate ID first (handle-recognition rule, R16):**
+- Do NOT gate on a hard "must start with `fn-`" check. Route the arg through `$FLOWCTL show <ID> --json` (Step 3) — flowctl's widened resolver (fn-52.10) maps a tracker key (`wor-17` / `wor-17.M`) to its linked spec/task, so a resolvable handle is the existing spec/task, never a new id. So `/flow-next:sync wor-17` resolves the linked spec.
 - If no ID provided: "Usage: /flow-next:sync <id> [--dry-run]"
-- If doesn't match `fn-*` pattern: "Invalid ID format. Use fn-N-slug (spec) or fn-N-slug.M (task). Legacy fn-N, fn-N-xxx also work."
+- If the arg does NOT resolve via `flowctl show` (Step 3): "Unknown ID. Use fn-N-slug (spec) / fn-N-slug.M (task), a tracker handle (wor-17), or legacy fn-N, fn-N-xxx."
 
-Detect ID type:
-- Contains `.` (e.g., fn-1.2 or fn-1-add-oauth.2) -> task ID
-- No `.` (e.g., fn-1 or fn-1-add-oauth) -> spec ID
+Detect ID type (use the canonical id from `flowctl show`):
+- Contains `.` (e.g., fn-1.2, fn-1-add-oauth.2, wor-17.2) -> task ID
+- No `.` (e.g., fn-1, fn-1-add-oauth, wor-17) -> spec ID
 
 ### Step 2: Validate Environment
 
@@ -174,7 +174,7 @@ No files modified.
 |------|---------|
 | No ID provided | "Usage: /flow-next:sync <id> [--dry-run]" |
 | No `.flow/` | "No .flow/ found. Run `flowctl init` first." |
-| Invalid format | "Invalid ID format. Use fn-N-slug (spec) or fn-N-slug.M (task). Legacy fn-N, fn-N-xxx also work." |
+| Unknown ID (does not resolve) | "Unknown ID. Use fn-N-slug (spec) / fn-N-slug.M (task), a tracker handle (wor-17), or legacy fn-N, fn-N-xxx." |
 | Task not found | "Task <id> not found. Run `flowctl list` to see available." |
 | Spec not found | "Spec <id> not found. Run `flowctl list` to see available." |
 | No source (spec mode) | "No completed or in-progress tasks to sync from. Complete a task first." |

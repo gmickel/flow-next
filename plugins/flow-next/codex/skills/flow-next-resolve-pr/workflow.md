@@ -370,6 +370,27 @@ If `REMAINING > 0` **and** some of those threads aren't in the `needs-human` set
 
 ---
 
+## Phase 9.5: Tracker sync (opt-in) — optional resolution comment
+
+**Optional. Runs only when the tracker bridge is active AND `resolvePr` is opted in, after the resolution pass settles (Phase 9 found nothing left to loop on, or only `needs-human` threads remain). With no tracker configured this is a no-op.** Posts an optional resolution comment to the linked tracker issue summarizing what was addressed on the PR — append-only (R8), conflict-free.
+
+The linked spec id comes from the PR's spec association (the same `SPEC_ID` make-pr used; resolve `flowctl show <spec-id>` from the branch / PR body breadcrumb as elsewhere in this skill).
+
+```bash
+if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
+ && [ "$($FLOWCTL config get tracker.perEvent.resolvePr --json | jq -r '.value')" != "off" ] \
+ && [ "$($FLOWCTL config get tracker.perEvent.resolvePr --json | jq -r '.value')" != "null" ]; then
+ # Invoke the flow-next-tracker-sync skill: append a one-line resolution comment
+ # to the linked issue (e.g. "Addressed N of M review items on PR #<NUMBER>").
+ # skill: flow-next-tracker-sync (operation: comment <spec-id>)
+ # No-ops if the spec has no linked tracker id / no transport reachable.
+ # Best-effort — never blocks the resolve-pr summary.
+ :
+fi
+```
+
+---
+
 ## Phase 10: Summary output
 
 ```
