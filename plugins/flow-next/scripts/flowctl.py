@@ -4944,6 +4944,9 @@ FLOW_GITIGNORE_AUTO_PATTERNS = [
     ".banner-acknowledged",
     ".migrating",
     ".migration-manifest",
+    # fn-52 tracker-sync per-run receipts (proof-of-work; accumulate per sync,
+    # same class as receipts/ — runtime artifacts, not durable repo state)
+    "sync-runs/",
 ]
 
 
@@ -4962,7 +4965,16 @@ def _ensure_flow_gitignore(flow_dir: Path) -> bool:
         return True
     existing = gi_path.read_text(encoding="utf-8")
     if FLOW_GITIGNORE_AUTO_HEADER in existing and FLOW_GITIGNORE_AUTO_FOOTER in existing:
-        return False  # already managed; user content preserved
+        # Already managed — RECONCILE the block to the current canonical pattern
+        # set so a flowctl upgrade that adds a pattern (e.g. sync-runs/) reaches
+        # existing repos, not just freshly-init'd ones. User patterns below the
+        # footer are spliced through untouched; no-op (no write) when current.
+        start = existing.index(FLOW_GITIGNORE_AUTO_HEADER)
+        end = existing.index(FLOW_GITIGNORE_AUTO_FOOTER) + len(FLOW_GITIGNORE_AUTO_FOOTER)
+        if existing[start:end] == auto_block:
+            return False  # block already current; user content preserved
+        gi_path.write_text(existing[:start] + auto_block + existing[end:], encoding="utf-8")
+        return True
     # File exists but isn't managed — prepend the auto block so user content stays.
     gi_path.write_text(auto_block + "\n\n" + existing, encoding="utf-8")
     return True

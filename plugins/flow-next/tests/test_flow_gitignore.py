@@ -74,6 +74,39 @@ class TestEnsureFlowGitignore(unittest.TestCase):
         ]:
             self.assertIn(pattern, flowctl.FLOW_GITIGNORE_AUTO_PATTERNS, pattern)
 
+    def test_sync_runs_in_pattern_set(self) -> None:
+        """fn-52 tracker-sync receipts dir is auto-ignored (proof-of-work, like receipts/)."""
+        self.assertIn("sync-runs/", flowctl.FLOW_GITIGNORE_AUTO_PATTERNS)
+
+    def test_stale_managed_block_is_reconciled(self) -> None:
+        """A pre-existing managed block missing a newer pattern is upgraded in
+        place — the new pattern is added, user content below the footer survives,
+        and the call reports True (changed)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow_dir = Path(tmp) / ".flow"
+            flow_dir.mkdir()
+            # Simulate an older managed block (no sync-runs/) + user content below.
+            stale_block = "\n".join(
+                [
+                    flowctl.FLOW_GITIGNORE_AUTO_HEADER,
+                    ".checkpoint-*.json",
+                    "receipts/",
+                    flowctl.FLOW_GITIGNORE_AUTO_FOOTER,
+                ]
+            )
+            (flow_dir / ".gitignore").write_text(stale_block + "\n\nuser-pattern-Z\n")
+            self.assertTrue(flowctl._ensure_flow_gitignore(flow_dir))
+            content = (flow_dir / ".gitignore").read_text()
+            self.assertIn("sync-runs/", content)
+            self.assertIn("user-pattern-Z", content)  # user content preserved
+            # Footer still precedes user content (block stays at top).
+            self.assertLess(
+                content.index(flowctl.FLOW_GITIGNORE_AUTO_FOOTER),
+                content.index("user-pattern-Z"),
+            )
+            # Second call is now a no-op (block current).
+            self.assertFalse(flowctl._ensure_flow_gitignore(flow_dir))
+
 
 class TestCmdInitWritesGitignore(unittest.TestCase):
     """cmd_init writes .flow/.gitignore on fresh init and reports it."""
