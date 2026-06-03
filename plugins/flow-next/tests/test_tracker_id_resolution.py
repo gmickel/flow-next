@@ -450,6 +450,110 @@ class ResolutionTestCase(unittest.TestCase):
             with redirect_stderr(io.StringIO()):
                 self._set_tracker(flow_id, "uuid-x", "FN-17")
 
+    def test_set_tracker_id_rejects_slugged_identifier(self) -> None:
+        # Round-2: link-time identifier validation is strict (bare key only).
+        flow_id = self._create_flow_spec("Plain flow")
+        with self.assertRaises(SystemExit):
+            with redirect_stderr(io.StringIO()):
+                self._set_tracker(flow_id, "uuid-x", "WOR-17-slugged")
+
+    # --- uppercase spec/task setters — round-2 additions --------------------
+
+    def test_set_title_via_uppercase_handle(self) -> None:
+        # `set-title WOR-17 ...` must reach the no-rename branch (resolve, not
+        # error pre-gate). The spec is tracker-keyed → title-only update.
+        self._create_tracker_spec("Fix login", "WOR-17")
+        res = self._call(
+            func=self.flowctl.cmd_spec_set_title,
+            id="WOR-17",
+            title="New tracker title",
+        )
+        self.assertEqual(res["id"], "wor-17-fix-login")
+        self.assertFalse(res["renamed"])
+
+    def test_set_plan_review_status_via_uppercase_handle(self) -> None:
+        self._create_tracker_spec("Fix login", "WOR-17")
+        res = self._call(
+            func=self.flowctl.cmd_spec_set_plan_review_status,
+            id="WOR-17",
+            status="ship",
+        )
+        self.assertEqual(res["id"], "wor-17-fix-login")
+        self.assertEqual(res["plan_review_status"], "ship")
+
+    def test_set_branch_via_uppercase_handle(self) -> None:
+        self._create_tracker_spec("Fix login", "WOR-17")
+        res = self._call(
+            func=self.flowctl.cmd_spec_set_branch,
+            id="WOR-17",
+            branch="feature/login",
+        )
+        self.assertEqual(res["id"], "wor-17-fix-login")
+        self.assertEqual(res["branch_name"], "feature/login")
+
+    def test_sync_get_state_via_uppercase_handle(self) -> None:
+        self._create_tracker_spec("Fix login", "WOR-17")
+        res = self._call(func=self.flowctl.cmd_sync_get_state, id="WOR-17")
+        self.assertEqual(res["id"], "wor-17-fix-login")
+        # tracker.identifier carries the display form set at create.
+        self.assertEqual(res["tracker"]["identifier"], "WOR-17")
+
+    def test_set_plan_via_uppercase_handle(self, ) -> None:
+        import tempfile as _tf
+        self._create_tracker_spec("Fix login", "WOR-17")
+        with _tf.NamedTemporaryFile("w", suffix=".md", delete=False) as fh:
+            fh.write("# wor-17-fix-login Fix login\n\n## Overview\nbody\n")
+            plan_path = fh.name
+        res = self._call(
+            func=self.flowctl.cmd_spec_set_plan, id="WOR-17", file=plan_path
+        )
+        self.assertEqual(res["id"], "wor-17-fix-login")
+
+    # --- task section setters via alias — round-2 additions -----------------
+
+    def test_task_set_description_via_alias(self) -> None:
+        import tempfile as _tf
+        spec_id = self._create_tracker_spec("Fix login", "WOR-17")
+        self._add_task(spec_id, "Step one")
+        with _tf.NamedTemporaryFile("w", suffix=".md", delete=False) as fh:
+            fh.write("new description body\n")
+            desc_path = fh.name
+        # Alias `wor-17.1` must canonicalize to wor-17-fix-login.1 before IO.
+        res = self._call(
+            func=self.flowctl.cmd_task_set_description,
+            id="wor-17.1",
+            file=desc_path,
+        )
+        self.assertEqual(res["id"], "wor-17-fix-login.1")
+        body = (
+            self.flow_dir / "tasks" / "wor-17-fix-login.1.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("new description body", body)
+
+    def test_task_reset_via_alias(self) -> None:
+        spec_id = self._create_tracker_spec("Fix login", "WOR-17")
+        self._add_task(spec_id, "Step one")
+        self._call(
+            func=self.flowctl.cmd_start, id="wor-17.1", note=None, force=False
+        )
+        self._call(
+            func=self.flowctl.cmd_block,
+            id="wor-17.1",
+            reason_file=self._write_tmp("blocked: needs X"),
+        )
+        res = self._call(
+            func=self.flowctl.cmd_task_reset,
+            task_id="wor-17.1",
+            cascade=False,
+        )
+        self.assertTrue(res["success"])
+
+    def _write_tmp(self, text: str) -> str:
+        import tempfile as _tf
+        with _tf.NamedTemporaryFile("w", suffix=".md", delete=False) as fh:
+            fh.write(text)
+            return fh.name
+
 
 if __name__ == "__main__":
     unittest.main()

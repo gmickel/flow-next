@@ -147,6 +147,29 @@ class TrackerIdGeneratorTestCase(unittest.TestCase):
                     "Bad id", tracker_first=True, tracker_identifier="not-a-key"
                 )
 
+    def test_slugged_identifier_rejected(self) -> None:
+        # `WOR-17-fix` is a canonical-shaped id, NOT a bare display identifier —
+        # strict validation rejects it so only resolvable bare handles persist.
+        with self.assertRaises(SystemExit):
+            with redirect_stderr(io.StringIO()):
+                self._create(
+                    "Slugged", tracker_first=True, tracker_identifier="WOR-17-fix"
+                )
+
+    def test_suffixed_identifier_rejected(self) -> None:
+        with self.assertRaises(SystemExit):
+            with redirect_stderr(io.StringIO()):
+                self._create(
+                    "Suffixed", tracker_first=True, tracker_identifier="WOR-17.3"
+                )
+
+    def test_parse_tracker_identifier_strictness(self) -> None:
+        self.assertEqual(
+            self.flowctl.parse_tracker_identifier("WOR-17"), ("wor", 17)
+        )
+        for bad in ("WOR-17-fix", "WOR-17.3", "wor", "WOR-0", "-17", "", None):
+            self.assertIsNone(self.flowctl.parse_tracker_identifier(bad), bad)
+
     def test_tracker_first_branch_override(self) -> None:
         res = self._create(
             "Fix login",
