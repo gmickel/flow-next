@@ -285,6 +285,43 @@ class TrackerSyncStateTestCase(unittest.TestCase):
         self.assertEqual(res["collisions"][0]["trackerId"], "uuid-coll")
         self.assertEqual(sorted(res["collisions"][0]["specs"]), sorted([s1, s2]))
 
+    # --- GitHub `#N` reference identifiers (fn-52 GitHub round-trip) ---------
+    # A GitHub identifier is a `#N` reference (display-only, used in a
+    # `Refs #N` PR cross-link), NOT a resolvable Linear handle. set-tracker-id
+    # must accept it; the strict Linear-handle validator alone would reject it
+    # and the whole GitHub adapter could never store a link.
+
+    def test_github_reference_identifier_accepted(self) -> None:
+        spec_id = self._create_spec("GH ref link")
+        self._set_id(
+            spec_id,
+            "I_kwDO_nodeid",
+            identifier="#42",
+            url="https://github.com/o/r/issues/42",
+        )
+        state = self._state(spec_id)
+        self.assertEqual(state["id"], "I_kwDO_nodeid")
+        self.assertEqual(state["identifier"], "#42")  # stored display-only, not rejected
+
+    def test_owner_repo_reference_identifier_accepted(self) -> None:
+        spec_id = self._create_spec("GH qualified ref")
+        self._set_id(spec_id, "node-2", identifier="octo/repo#7")
+        self.assertEqual(self._state(spec_id)["identifier"], "octo/repo#7")
+
+    def test_malformed_reference_identifier_still_rejected(self) -> None:
+        # The reference must be `#<digits>` — `#abc` is not a valid identifier.
+        spec_id = self._create_spec("Bad ref")
+        with self.assertRaises(SystemExit):
+            self._set_id(spec_id, "node-3", identifier="#abc")
+        self.assertIsNone(self._state(spec_id)["id"])
+
+    def test_linear_handle_identifier_still_strict(self) -> None:
+        # The Linear handle path is unchanged — a slugged identifier is rejected.
+        spec_id = self._create_spec("Linear strict")
+        with self.assertRaises(SystemExit):
+            self._set_id(spec_id, "uuid-x", identifier="wor-17-slug")
+        self.assertIsNone(self._state(spec_id)["id"])
+
 
 if __name__ == "__main__":
     unittest.main()

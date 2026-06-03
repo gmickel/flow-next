@@ -24,7 +24,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 - [ ] `BASE_REF` resolved through cascade (`--base` → `origin/main` → `main` → `origin/master` → `master` → ask / Ralph exit 2).
 - [ ] `BASE_REF` validated via `git rev-parse --verify --quiet`.
 - [ ] HEAD resolves; HEAD ≠ BASE; `git merge-base BASE HEAD` succeeds (shared history); `git rev-list --count <merge-base>..HEAD >= 1` (at least one commit since the merge-base — base does NOT need to be an ancestor of HEAD).
-- [ ] Tasks-done check (silent / warn under `--dry-run` / Ralph exit 2 / interactive ask).
+- [ ] Tasks-done check (silent when all done / warn + proceed-as-draft interactively and under `--dry-run` / Ralph exit 2). No prompt for open tasks.
 - [ ] Existing-PR refusal check: `gh pr view --json url,state,number | jq -r 'select(.state == "OPEN") | .url'` returns empty.
 - [ ] `PHASE0_CONTEXT` JSON built with spec / base / head / branch / commits_ahead / open_tasks / flags / draft_force.
 

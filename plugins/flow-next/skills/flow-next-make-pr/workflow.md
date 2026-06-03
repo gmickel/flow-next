@@ -269,7 +269,7 @@ Phases 1-5 read `$PHASE0_CONTEXT` rather than re-deriving values.
 - `gh` is installed AND authenticated.
 - `SPEC_ID` resolves to a spec in `.flow/specs/` (or the legacy `.flow/epics/` alias dir).
 - `BASE_REF` resolves to a real git ref AND shares a merge-base with HEAD AND `COMMITS_AHEAD >= 1` since that merge-base. (Base is NOT required to be an ancestor of HEAD — see §0.4 / §0.5.)
-- Open-task validation passed (silently, with warning, or with explicit user override).
+- Open-task validation: silent when all done; otherwise a stderr warning + **proceed as draft** (no prompt). Ralph alone hard-errors (exit 2).
 - No OPEN PR exists on the current branch.
 - Ralph context captured. `PHASE0_CONTEXT` JSON is built and ready for Phase 1.
 
@@ -1319,9 +1319,13 @@ BASE_BRANCH="${BASE_REF#origin/}"
 # `makePr` opt-in: a reference line is zero-cost, side-effect-light hygiene and is
 # the whole point. NON-CLOSING (`Ref`/`Refs`, never `Fixes`/`Closes`) so merge does
 # NOT auto-complete the tracker issue — flow-next owns the lifecycle (R7/R10).
-if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
-  TRK_TYPE=$("$FLOWCTL" config get tracker.type --json | jq -r '.value')
-  TRK_ID=$("$FLOWCTL" sync get-state "$SPEC_ID" --json | jq -r '.tracker.identifier // empty')
+# Every flowctl call here is non-fatal: 2>/dev/null + `|| printf '{}'` so an
+# active bridge with NO linked tracker id (or any flowctl hiccup) is a clean no-op
+# and never aborts the run under `set -e` after the push but before `gh pr create`.
+if [ "$("$FLOWCTL" sync active --json 2>/dev/null | jq -r '.active // empty')" = "true" ]; then
+  TRK_TYPE=$("$FLOWCTL" config get tracker.type --json 2>/dev/null | jq -r '.value // empty')
+  TRK_STATE=$("$FLOWCTL" sync get-state "$SPEC_ID" --json 2>/dev/null || printf '{}')
+  TRK_ID=$(printf '%s' "$TRK_STATE" | jq -r '.tracker.identifier // empty' 2>/dev/null)
   REF=""
   case "$TRK_TYPE" in
     linear) [ -n "$TRK_ID" ] && REF="Ref ${TRK_ID}" ;;      # WOR-N → Linear auto-link + Diffs
@@ -1331,6 +1335,8 @@ if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
   # substring — the cognitive-aid body already mentions the spec path
   # (.flow/specs/wor-17-slug.md), so a substring grep for "WOR-17" would
   # false-positive and silently skip the ref. `-x` whole-line + `-F` fixed-string.
+  # Size: the §4.4 cap targets 65,000 chars (vs GitHub's ~65,536 hard limit), so the
+  # ~25-char ref line fits within the reserved headroom — no re-cap needed.
   if [ -n "$REF" ] && ! grep -qixF "$REF" "$BODY_FILE"; then
     printf '\n\n---\n%s\n' "$REF" >> "$BODY_FILE"
   fi
@@ -1630,7 +1636,7 @@ The skill itself is markdown — no unit-test surface. Phase 0 validation is exe
 - `gh auth status` failing → exit 1 with login instructions.
 - `--base <bad-ref>` → exit 1 with `git rev-parse --verify` failure message.
 - Branch with no `branch_name` match in any `.flow/specs/*.json` or `.flow/epics/*.json` AND no positional spec id → interactive `AskUserQuestion`; Ralph hard-errors with exit 2.
-- Tasks not all done + interactive → `AskUserQuestion` proceed/abort; Ralph exits 2; `--dry-run` warns and continues.
+- Tasks not all done + interactive → warn on stderr + proceed (open items force a draft via §4.2); Ralph exits 2; `--dry-run` warns and continues. No `AskUserQuestion` for open tasks.
 - Branch with an OPEN PR → exit 1 with `/flow-next:resolve-pr` hint.
 - Branch with a CLOSED or MERGED PR (no OPEN) → continues cleanly. **This is the load-bearing check** — fn-42 spike validated empirically that bare `gh pr view --json url` rc=0 for closed/merged PRs would false-positive without the `select(.state == "OPEN")` filter.
 - Branch with no PR history at all (`gh pr view` exits 1) → continues cleanly.

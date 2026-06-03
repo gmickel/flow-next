@@ -2018,7 +2018,11 @@ def parse_tracker_identifier(
 
 
 def validate_tracker_identifier(
-    identifier: Optional[str], *, required: bool = False, use_json: bool = False
+    identifier: Optional[str],
+    *,
+    required: bool = False,
+    use_json: bool = False,
+    allow_reference: bool = False,
 ) -> Optional[tuple[str, int, str]]:
     """Validate a tracker DISPLAY identifier at link/create time.
 
@@ -2029,6 +2033,14 @@ def validate_tracker_identifier(
     raw input, so quoted whitespace (`" WOR-17 "`) can never store an alias that
     won't resolve. When ``required`` is False and the identifier is None/empty,
     returns ``None`` without error (link may set other fields without one).
+
+    ``allow_reference`` (link-time only): also accept a GitHub-style issue
+    reference — ``#123`` or ``owner/repo#123`` — as a **display-only** identifier.
+    It returns ``("", number, display)`` (empty key) — stored + shown + used in a
+    ``Refs #123`` PR cross-link, but NOT a resolvable spec handle (only Linear
+    keys resolve via the hybrid id scheme; you never ``work #123``). Tracker-first
+    canonical-id generation does NOT pass this flag, so a GitHub ref can never
+    become a canonical spec id.
     """
     if not identifier:
         if required:
@@ -2037,6 +2049,11 @@ def validate_tracker_identifier(
                 use_json=use_json,
             )
         return None
+    if allow_reference:
+        ref = re.match(r"^(?:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?#(\d+)$", identifier.strip())
+        if ref:
+            # GitHub-style reference — display-only (empty key = not resolvable).
+            return ("", int(ref.group(1)), identifier.strip())
     parsed = parse_tracker_identifier(identifier)
     if parsed is None:
         error_exit(
@@ -19561,8 +19578,13 @@ def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
     # identifier). The validator returns the STRIPPED display form — persist
     # that (not the raw input) so quoted whitespace can't store an alias that
     # won't resolve.
+    # allow_reference=True: a GitHub identifier is a `#N` reference (display-only),
+    # not a resolvable Linear handle. Linear `WOR-17` still validates strictly.
     validated_identifier = validate_tracker_identifier(
-        getattr(args, "identifier", None), required=False, use_json=args.json
+        getattr(args, "identifier", None),
+        required=False,
+        use_json=args.json,
+        allow_reference=True,
     )
 
     spec_json_path, spec_data = _resolve_sync_spec(args)
