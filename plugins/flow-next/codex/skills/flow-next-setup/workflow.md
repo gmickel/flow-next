@@ -594,6 +594,16 @@ Documentation updated:
 Notes:
 - Re-run /flow-next:setup after plugin updates to refresh scripts
 - Interested in autonomous mode? Run /flow-next:ralph-init
+- Use Linear / GitHub Issues for project management? Run /flow-next:tracker-sync to configure the (opt-in) two-way tracker bridge — it runs a discovery ceremony (detects Linear MCP / LINEAR_API_KEY / gh auth, asks, writes config), then syncs specs ⇄ issues and makes your PRs reviewable as Linear Diffs. Skips cleanly if you don't use a tracker; adds nothing to the base install until enabled.
 - Uninstall (run manually): rm -rf .flow/bin .flow/templates .flow/usage.md and remove <!-- BEGIN/END FLOW-NEXT --> block from docs
 - This setup is optional - plugin works without it
+```
+
+**Tracker-sync proposal (always show, after the Notes block).** Surface the tracker bridge as an explicit optional next step — the discovery ceremony is the bridge's own setup, separate from this skill (which never touches tracker config, keeping the zero-dep base clean):
+
+```
+Optional next step — connect a tracker:
+ If your team lives in Linear or GitHub Issues, run /flow-next:tracker-sync to set up the
+ two-way bridge (spec ⇄ issue, status, comments) and make PRs reviewable as Linear Diffs.
+ Fully opt-in — nothing syncs until you confirm it in the discovery ceremony.
 ```
