@@ -77,7 +77,7 @@ The wire-agnostic shapes the transports produce and reconcile consumes. These ar
 
 `backlog` · `planned` · `in-progress` · `in-review` · `done` · `verified` · `deferred` · `wontfix`
 
-Who-wins (R7, implemented in fn-52.5): tracker wins `done`/`verified`; flow wins `in-progress`; `priority` + `deferred`/`wontfix` surface to the user, never auto-changed.
+Who-wins (R7, implemented in fn-52.5 — [status-sync.md](status-sync.md)): tracker wins `done`/`verified`; flow wins `in-progress`; `priority` + `deferred`/`wontfix` surface to the user, never auto-changed. Comments/evidence two-way append + dedup (R8) is [comments-sync.md](comments-sync.md).
 
 ## Why structs, not byte-copy
 

@@ -96,7 +96,7 @@ are team-specific, so the stable middle is built from `state.type` (`backlog` /
 `unstarted` / `started` / `completed` / `canceled` — Linear's fixed type
 taxonomy) plus an optional config name-override (`tracker.perTracker.statusMap`):
 
-| Linear `state.type` | default normalized | who-wins (fn-52.5) |
+| Linear `state.type` | default normalized | who-wins ([status-sync.md](status-sync.md)) |
 |---|---|---|
 | `backlog` | `backlog` | — |
 | `unstarted` | `planned` | — |
@@ -240,8 +240,10 @@ The failure modes that MUST be non-destructive:
 ## Boundaries
 
 - **This is the transport, not the merge.** The ladder maps wire ↔ normalized and
-  routes rungs. The 3-way body merge (fn-52.4) and status who-wins / comment
-  append (fn-52.5) consume the normalized structs and live in those tasks.
+  routes rungs. The 3-way body merge ([body-merge.md](body-merge.md), fn-52.4),
+  the status who-wins ([status-sync.md](status-sync.md), fn-52.5), and the
+  comments/evidence append + dedup ([comments-sync.md](comments-sync.md), fn-52.5)
+  consume the normalized structs and live in those tasks.
 - **No new hard dependency.** Neither the MCP server nor `LINEAR_API_KEY` is
   required; the terminal rung is a documented no-op. The zero-dep base install is
   untouched (spec Boundaries / STRATEGY opt-in carve-out).

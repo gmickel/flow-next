@@ -39,9 +39,8 @@ The core bet: the agentic 3-way body merge + scoped-conflict surfacing, behind t
 - [ ] Autonomous mode: confident merges proceed; genuine conflict (incl. `always-ask`) queues to the deferred sink; never blocks [R9]
 
 ## Done summary
-TBD
-
+Implemented the agentic 3-way body reconciliation for the flow-next-tracker-sync skill (R6/R9): a new references/body-merge.md with deterministic pre-reduction (echo/byte-identical/one-side-changed auto-cases), an agentic both-sides-diverged merge, flow-structured<->tracker free-form format translation (idempotent; never invents R-IDs/source-tags on a tracker->flow fold), a structural verification gate before write-back, scoped genuine-conflict surfacing (one section, never whole-body — interactive confirm vs Ralph queue), no-base bootstrap, an echo fence, and state-advances-only-on-success with item-level batch failure. steps.md Phase 3/4 + SKILL.md now delegate the reconcile body hooks to it (no lingering [stub -> fn-52.4]). Four worked fixtures (A-D) serve as runnable oracles; the strictly-live Linear round-trip is deferred to the post-PR smoke phase. impl-review (rp): SHIP first pass, 0 introduced findings.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: faa3748f24ad6a9d2f82fbee1216e883031372b6
+- Tests: bash plugins/flow-next/scripts/ci_test.sh (58 passed / 0 failed), python3 -m unittest discover -s plugins/flow-next/tests (788 passed, 2 skipped), flowctl validate --spec fn-52-tracker-sync-bridge-project-flow-specs (valid: True), markdown fence-balance + cross-ref link resolution (0 broken), impl-review rp backend: SHIP (first pass, 0 introduced findings; R6 + R9 covered)
 - PRs:

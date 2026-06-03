@@ -2,7 +2,7 @@
 
 Read [SKILL.md](SKILL.md) first for the architecture, the flowctl-vs-skill split, and the boundaries. This file is the execution detail. `$FLOWCTL` is defined in SKILL.md's Preamble.
 
-This task (fn-52.2) ships the **spine**: discovery ceremony, link/unlink ceremony, grain, identity, and the transport-blind orchestration skeleton with named hooks. The transports (`fetchIssue`/`writeIssue`/… — fn-52.3 Linear, fn-52.7 GitHub) and the reconcile bodies (3-way merge — fn-52.4; status/comments — fn-52.5) plug into the hooks defined here and in [`references/adapter-interface.md`](references/adapter-interface.md). Where a hook is implemented later, this file marks it **[stub → fn-52.N]**.
+This task (fn-52.2) ships the **spine**: discovery ceremony, link/unlink ceremony, grain, identity, and the transport-blind orchestration skeleton with named hooks. The transports (`fetchIssue`/`writeIssue`/… — fn-52.3 Linear, fn-52.7 GitHub) and the reconcile bodies (3-way body merge — fn-52.4 [`references/body-merge.md`](references/body-merge.md); status who-wins — fn-52.5 [`references/status-sync.md`](references/status-sync.md); comments/evidence append — fn-52.5 [`references/comments-sync.md`](references/comments-sync.md)) plug into the hooks defined here and in [`references/adapter-interface.md`](references/adapter-interface.md). Where a hook is implemented later, this file marks it **[stub → fn-52.N]**.
 
 ## Phase 0 — Mode + Ralph awareness
 
@@ -90,14 +90,14 @@ If `set-tracker-id` reports a collision, ask the user (interactive) or queue (`s
 
 ## Phase 3 — Orchestration skeleton (transport-blind)
 
-Route the operation; each layer calls hooks that operate on the normalized structs ([`references/adapter-interface.md`](references/adapter-interface.md)). The skeleton is real; the hook bodies plug in later. The **Linear transport hooks** (`fetchIssue`/`writeIssue`/`listComments`/`postComment`/`readStatus`/`setStatus`) are implemented by the detect-best-available ladder in [`references/linear-ladder.md`](references/linear-ladder.md) (MCP → GraphQL → no-op); GitHub's are fn-52.7. The **body hooks** (`renderFlowToTracker` / `foldTrackerIntoFlow` / `threeWayMergeBody`) are the agentic 3-way merge + format translation in [`references/body-merge.md`](references/body-merge.md) (fn-52.4); status who-wins + comment append are fn-52.5.
+Route the operation; each layer calls hooks that operate on the normalized structs ([`references/adapter-interface.md`](references/adapter-interface.md)). The skeleton is real; the hook bodies plug in later. The **Linear transport hooks** (`fetchIssue`/`writeIssue`/`listComments`/`postComment`/`readStatus`/`setStatus`) are implemented by the detect-best-available ladder in [`references/linear-ladder.md`](references/linear-ladder.md) (MCP → GraphQL → no-op); GitHub's are fn-52.7. The **body hooks** (`renderFlowToTracker` / `foldTrackerIntoFlow` / `threeWayMergeBody`) are the agentic 3-way merge + format translation in [`references/body-merge.md`](references/body-merge.md) (fn-52.4); the **status who-wins** hook (`reconcileStatus`) is [`references/status-sync.md`](references/status-sync.md) and the **comments/evidence append + dedup** hooks (`postLifecycleComment` / `pullCommentsToSyncLog`) are [`references/comments-sync.md`](references/comments-sync.md) (fn-52.5).
 
 ```
 push(spec):
   body    = renderFlowToTracker(spec)            → body-merge.md Step 3 (flow→tracker)
   writeIssue(issue{... body ...})                [stub → fn-52.3/.7]
-  setStatus(map flow status → tracker status)    [stub → fn-52.5]
-  postComment(lifecycle event marker)            [stub → fn-52.5]
+  setStatus(map flow status → tracker status)    → status-sync.md (who-wins)
+  postComment(lifecycle event marker)            → comments-sync.md (append + dedup)
   sync set-merge-base (BOTH halves) + set-last-synced   # snapshot the pushed pair (body-merge.md Step 5)
   receipt: pushed
 
@@ -105,7 +105,7 @@ pull(spec):
   issue   = fetchIssue(trackerId)                [stub → fn-52.3/.7]  → normalized issue
   comments= listComments(trackerId)              [stub → fn-52.3/.7]  → normalized comment[]
   status  = readStatus(trackerId)                [stub → fn-52.3/.7]  → normalized status
-  foldTrackerIntoFlow(spec, issue, status)       → body-merge.md Step 3 (tracker→flow) + fn-52.5 status
+  foldTrackerIntoFlow(spec, issue, status)       → body-merge.md Step 3 (tracker→flow) + status-sync.md (who-wins) + comments-sync.md (pull genuine comments to sync log)
             # echo-fence first: pulled body hash == baseHashTracker ⇒ noop (body-merge.md Step 1 / Fixture D)
   receipt: pulled | noop
 ```
@@ -129,7 +129,7 @@ reconcile(spec):
      Ralph       → sync defer (queue the scoped conflict, never block)   [R9/R11]
      receipt: diverged
   else:
-     writeIssue(merged) + setStatus(who-wins)    [stub → fn-52.3/.7 + fn-52.5]
+     writeIssue(merged) + setStatus(who-wins)    [transport → fn-52.3/.7] + status-sync.md (who-wins)
      sync set-merge-base (BOTH halves) + sync set-last-synced   # body-merge.md Step 5 — ONLY on success
      receipt: merged | updated
   # no-base bootstrap (first link): body-merge.md "First-sync / no-base bootstrap" —
@@ -165,7 +165,7 @@ Unlinking clears tracker id + `lastSyncedAt` + merge-base atomically and posts a
 
 ```bash
 # 1. post the detached comment FIRST (best-effort; a failed comment must not block the unlink)
-postComment(trackerId, "Detached from flow spec <id> on $(date -u +%Y-%m-%d).")   [stub → fn-52.5]
+postComment(trackerId, "Detached from flow spec <id> on $(date -u +%Y-%m-%d).")   [transport → fn-52.3/.7]
 # 2. wipe state atomically
 $FLOWCTL sync clear "$SPEC_ID"
 $FLOWCTL sync receipt "$SPEC_ID" --status updated --note "unlinked from tracker"
