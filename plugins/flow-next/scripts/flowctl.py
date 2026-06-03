@@ -19863,6 +19863,13 @@ def cmd_sync_receipt(args: argparse.Namespace) -> None:
     if not ensure_flow_exists():
         error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
 
+    # fn-52.10 (R16): canonicalize the spec handle BEFORE writing the receipt so
+    # `sync receipt WOR-17 …` records `id: "wor-17-slug"`, not the raw tracker
+    # handle. Matches the casefold→validate→expand the other sync commands apply
+    # via `_resolve_sync_spec`; receipts don't need the loaded spec data, only
+    # the canonical id, so the lighter `resolve_spec_id_arg` is used directly.
+    args.id = resolve_spec_id_arg(get_flow_dir(), args.id, use_json=args.json)
+
     status = args.status
     if status not in TRACKER_RECEIPT_STATES:
         error_exit(
@@ -19924,6 +19931,12 @@ def cmd_sync_defer(args: argparse.Namespace) -> None:
     """
     if not ensure_flow_exists():
         error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+
+    # fn-52.10 (R16): canonicalize the spec handle BEFORE queuing so the
+    # deferred finding's `id` / `file` point at the canonical `wor-17-slug` and
+    # `.flow/specs/wor-17-slug.md`, not the raw tracker handle. Same front door
+    # the other sync commands use.
+    args.id = resolve_spec_id_arg(get_flow_dir(), args.id, use_json=args.json)
 
     summary = args.summary
     finding = {

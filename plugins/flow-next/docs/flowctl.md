@@ -10,7 +10,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 init, detect, status, config, review-backend, memory, prospect, glossary, strategy,
 spec, task, dep, show, specs, tasks, list, cat, ready, next, start, done, block,
 state-path, migrate-state, migrate-rename, migrate-rollback, validate, triage-skip,
-checkpoint, prep-chat, repo-map,
+checkpoint, prep-chat, repo-map, sync,
 ralph, rp, codex, copilot,
 review-deep-auto, review-walkthrough-defer, review-walkthrough-record
 ```

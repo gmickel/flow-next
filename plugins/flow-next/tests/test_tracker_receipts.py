@@ -189,6 +189,60 @@ class TrackerReceiptTestCase(unittest.TestCase):
         self.assertIn("First conflict", body)
         self.assertIn("Second conflict", body)
 
+    # --- tracker-handle canonicalization (fn-52.9 / fn-52.10, R16) -----------
+    # `sync receipt` / `sync defer` must canonicalize a bare/uppercase tracker
+    # handle to the on-disk spec id BEFORE writing the artifact — same front
+    # door (`resolve_spec_id_arg`) the other sync commands use. Without it,
+    # `sync receipt WOR-17` recorded `id: "WOR-17"` and `sync defer WOR-17`
+    # pointed the finding at `.flow/specs/WOR-17.md` (a path that never exists).
+
+    def _make_tracker_spec(self, identifier: str = "WOR-17") -> str:
+        """Create a tracker-first spec; return its canonical id (wor-17-slug)."""
+        return self._call(
+            func=self.flowctl.cmd_spec_create,
+            title="Fix login",
+            branch=None,
+            tracker_first=True,
+            tracker_identifier=identifier,
+        )["id"]
+
+    def test_receipt_canonicalizes_tracker_handle(self) -> None:
+        canonical = self._make_tracker_spec("WOR-17")
+        self.assertTrue(canonical.startswith("wor-17"))
+        # Call with the UPPERCASE bare tracker handle — must resolve to canonical.
+        res = self._call(
+            func=self.flowctl.cmd_sync_receipt,
+            id="WOR-17",
+            status="noop",
+            tracker_id=None,
+            transport=None,
+            merges_file=None,
+            note=None,
+        )
+        data = json.loads(Path(res["receipt"]).read_text(encoding="utf-8"))
+        self.assertEqual(data["id"], canonical)
+        self.assertNotIn("WOR-17", data["id"])
+        # The receipt filename is keyed by the canonical id, not the raw handle.
+        self.assertIn(canonical, Path(res["receipt"]).name)
+
+    def test_defer_canonicalizes_tracker_handle(self) -> None:
+        canonical = self._make_tracker_spec("WOR-17")
+        res = self._call(
+            func=self.flowctl.cmd_sync_defer,
+            id="WOR-17",
+            summary="Both sides rewrote Goal differently",
+            suggested=None,
+            reason=None,
+            branch="feature-z",
+        )
+        self.assertTrue(res["queued"])
+        # The returned id + the sink body reference the canonical spec, never
+        # the raw `WOR-17.md` path that does not exist on disk.
+        self.assertEqual(res["id"], canonical)
+        body = Path(res["sink_path"]).read_text(encoding="utf-8")
+        self.assertIn(f".flow/specs/{canonical}.md", body)
+        self.assertNotIn("WOR-17.md", body)
+
 
 if __name__ == "__main__":
     unittest.main()

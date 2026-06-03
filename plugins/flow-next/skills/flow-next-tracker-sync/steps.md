@@ -2,7 +2,7 @@
 
 Read [SKILL.md](SKILL.md) first for the architecture, the flowctl-vs-skill split, and the boundaries. This file is the execution detail. `$FLOWCTL` is defined in SKILL.md's Preamble.
 
-This task (fn-52.2) ships the **spine**: discovery ceremony, link/unlink ceremony, grain, identity, and the transport-blind orchestration skeleton with named hooks. The transports (`fetchIssue`/`writeIssue`/… — fn-52.3 Linear, fn-52.7 GitHub) and the reconcile bodies (3-way body merge — fn-52.4 [`references/body-merge.md`](references/body-merge.md); status who-wins — fn-52.5 [`references/status-sync.md`](references/status-sync.md); comments/evidence append — fn-52.5 [`references/comments-sync.md`](references/comments-sync.md)) plug into the hooks defined here and in [`references/adapter-interface.md`](references/adapter-interface.md). Where a hook is implemented later, this file marks it **[stub → fn-52.N]**.
+This file is the transport-blind orchestration **spine**: discovery ceremony, link/unlink ceremony, grain, identity, and the push/pull/reconcile skeleton with named hooks. The hook bodies live in dedicated reference files: transports (`fetchIssue`/`writeIssue`/… — Linear [`references/linear-ladder.md`](references/linear-ladder.md), GitHub [`references/github.md`](references/github.md)) and reconcile (3-way body merge [`references/body-merge.md`](references/body-merge.md); status who-wins [`references/status-sync.md`](references/status-sync.md); comments/evidence append [`references/comments-sync.md`](references/comments-sync.md)), all plugging through the contract in [`references/adapter-interface.md`](references/adapter-interface.md). Inline, a hook points at its reference with **[→ ref: <file>]** — read that file for the body; this file owns only the routing.
 
 ## Phase 0 — Mode + Ralph awareness
 
@@ -50,17 +50,17 @@ Attach sync state **on link**. Pick the flow by where the user is starting:
 
 ### 2a — Flow-first (author-in-flow-then-push)
 
-A `fn-NN` spec already exists. Keep the `fn-NN` id (never rename). Push body via the body-sync hook **[stub → fn-52.4]**, which creates the issue via `writeIssue` **[stub → fn-52.3/.7]**, then attach state:
+A `fn-NN` spec already exists. Keep the `fn-NN` id (never rename). Push body via the body-sync hook **[→ ref: body-merge.md]**, which creates the issue via `writeIssue` **[→ ref: linear-ladder.md / github.md]**, then attach state:
 
 ```bash
 $FLOWCTL sync set-tracker-id "$SPEC_ID" "$ISSUE_UUID" --identifier "WOR-17" --url "$ISSUE_URL"
 ```
 
-Write the back-reference into the issue: a `flow:<id>` label and/or a `[<id>]` title prefix (transport call — `writeIssue`/`setStatus` **[stub → fn-52.3/.7]**) so the issue points back at the spec. The tracker key `WOR-17` becomes a resolvable alias for the `fn-NN` spec (`work wor-17` resolves — fn-52.10).
+Write the back-reference into the issue: a `flow:<id>` label and/or a `[<id>]` title prefix (transport call — `writeIssue`/`setStatus` **[→ ref: linear-ladder.md / github.md]**) so the issue points back at the spec. The tracker key `WOR-17` becomes a resolvable alias for the `fn-NN` spec (`work wor-17` resolves — fn-52.10).
 
 ### 2b — Tracker-first (link an existing issue — "grab issue X and spec it")
 
-Fetch the issue via the transport (`fetchIssue` **[stub → fn-52.3/.7]**) → normalized `issue` struct. Create the spec **keyed by the tracker key** so the repo artifact mirrors the board:
+Fetch the issue via the transport (`fetchIssue` **[→ ref: linear-ladder.md / github.md]**) → normalized `issue` struct. Create the spec **keyed by the tracker key** so the repo artifact mirrors the board:
 
 ```bash
 $FLOWCTL spec create --tracker-first --tracker-identifier "WOR-17" --title "<issue title>" --json
@@ -68,7 +68,7 @@ $FLOWCTL spec create --tracker-first --tracker-identifier "WOR-17" --title "<iss
 $FLOWCTL sync set-tracker-id "wor-17-slug" "$ISSUE_UUID" --identifier "WOR-17" --url "$ISSUE_URL"
 ```
 
-Seed the merge base from the **current issue body** so the first sync is pull-only (never surfaces the whole issue as a conflict) — first-link base-seeding is **[stub → fn-52.4]**; the scaffold calls `sync set-merge-base` once .4 produces the flow-form + tracker-form snapshots:
+Seed the merge base from the **current issue body** so the first sync is pull-only (never surfaces the whole issue as a conflict) — first-link base-seeding is in **[→ ref: body-merge.md]**; call `sync set-merge-base` with the flow-form + tracker-form snapshots it produces:
 
 ```bash
 # fn-52.4 produces both body forms; the setter requires BOTH halves together (paired-snapshot invariant):
@@ -95,16 +95,16 @@ Route the operation; each layer calls hooks that operate on the normalized struc
 ```
 push(spec):
   body    = renderFlowToTracker(spec)            → body-merge.md Step 3 (flow→tracker)
-  writeIssue(issue{... body ...})                [stub → fn-52.3/.7]
+  writeIssue(issue{... body ...})                [→ ref: transport]
   setStatus(map flow status → tracker status)    → status-sync.md (who-wins)
   postComment(lifecycle event marker)            → comments-sync.md (append + dedup)
   sync set-merge-base (BOTH halves) + set-last-synced   # snapshot the pushed pair (body-merge.md Step 5)
   receipt: pushed
 
 pull(spec):
-  issue   = fetchIssue(trackerId)                [stub → fn-52.3/.7]  → normalized issue
-  comments= listComments(trackerId)              [stub → fn-52.3/.7]  → normalized comment[]
-  status  = readStatus(trackerId)                [stub → fn-52.3/.7]  → normalized status
+  issue   = fetchIssue(trackerId)                [→ ref: transport]  → normalized issue
+  comments= listComments(trackerId)              [→ ref: transport]  → normalized comment[]
+  status  = readStatus(trackerId)                [→ ref: transport]  → normalized status
   foldTrackerIntoFlow(spec, issue, status)       → body-merge.md Step 3 (tracker→flow) + status-sync.md (who-wins) + comments-sync.md (pull genuine comments to sync log)
             # echo-fence first: pulled body hash == baseHashTracker ⇒ noop (body-merge.md Step 1 / Fixture D)
   receipt: pulled | noop
@@ -120,7 +120,7 @@ conflict) lives in that reference:
 ```
 reconcile(spec):
   base    = sync get-state → merge-base snapshot (BOTH forms: mergeBaseFlow + mergeBaseTracker)
-  issue   = fetchIssue(trackerId)                [stub → fn-52.3/.7]
+  issue   = fetchIssue(trackerId)                [→ ref: transport]
   merged  = threeWayMergeBody(base, flowBody, issue.body)   → body-merge.md
             # Step 1 pre-reduce: echo / byte-identical / only-one-side-changed ⇒ auto (no conflict)
             # Step 2 agentic merge (both diverged) + Step 3 format translation + Step 3.5 structural gate
@@ -187,7 +187,7 @@ For each linked spec, render a line like `wor-17-slug  ↔  WOR-17  (linked, syn
 
 ## Boundaries (repeat — load-bearing for this scaffold)
 
-- Hook bodies marked **[stub → fn-52.N]** are NOT implemented here — define the hook, call it, leave a delegating stub. fn-52.3/.7 fill transports; fn-52.4/.5 fill reconcile.
+- Hook bodies marked **[→ ref: <file>]** are NOT inlined here — this file routes; read the referenced file for the body. Transports live in `linear-ladder.md` / `github.md`; reconcile in `body-merge.md` / `status-sync.md` / `comments-sync.md`.
 - `set-merge-base` always writes BOTH halves (paired-snapshot invariant).
 - Receipts on every run; conflicts queue (`sync defer`), never block (R11).
 - Codex mirror is regenerated in fn-52.9 — keep this file Claude-native (`AskUserQuestion`, `Task`).
