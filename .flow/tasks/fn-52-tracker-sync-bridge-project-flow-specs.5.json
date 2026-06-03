@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-03T07:08:07.018357Z",
+  "depends_on": [
+    "fn-52-tracker-sync-bridge-project-flow-specs.3"
+  ],
+  "id": "fn-52-tracker-sync-bridge-project-flow-specs.5",
+  "priority": null,
+  "spec": "fn-52-tracker-sync-bridge-project-flow-specs",
+  "spec_path": ".flow/tasks/fn-52-tracker-sync-bridge-project-flow-specs.5.md",
+  "status": "todo",
+  "title": "Status/metadata who-wins + comments/evidence two-way append",
+  "updated_at": "2026-06-03T08:00:49.577312Z"
+}

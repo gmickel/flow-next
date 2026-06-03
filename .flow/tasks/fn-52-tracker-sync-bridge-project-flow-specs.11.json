@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-03T08:58:26.052071Z",
+  "depends_on": [
+    "fn-52-tracker-sync-bridge-project-flow-specs.9"
+  ],
+  "id": "fn-52-tracker-sync-bridge-project-flow-specs.11",
+  "priority": null,
+  "spec": "fn-52-tracker-sync-bridge-project-flow-specs",
+  "spec_path": ".flow/tasks/fn-52-tracker-sync-bridge-project-flow-specs.11.md",
+  "status": "todo",
+  "title": "flow-next.dev docs pass: tracker bridge + hybrid id model (handles explainer + cross-page id edits)",
+  "updated_at": "2026-06-03T08:58:26.366377Z"
+}

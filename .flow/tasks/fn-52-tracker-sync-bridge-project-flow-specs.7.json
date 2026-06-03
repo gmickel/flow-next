@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-03T07:08:07.634126Z",
+  "depends_on": [
+    "fn-52-tracker-sync-bridge-project-flow-specs.4",
+    "fn-52-tracker-sync-bridge-project-flow-specs.5"
+  ],
+  "id": "fn-52-tracker-sync-bridge-project-flow-specs.7",
+  "priority": null,
+  "spec": "fn-52-tracker-sync-bridge-project-flow-specs",
+  "spec_path": ".flow/tasks/fn-52-tracker-sync-bridge-project-flow-specs.7.md",
+  "status": "todo",
+  "title": "GitHub adapter via gh (headless-safe, reduced-fidelity status)",
+  "updated_at": "2026-06-03T07:56:11.559341Z"
+}

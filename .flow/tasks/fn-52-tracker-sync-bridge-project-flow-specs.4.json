@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-03T07:05:55.238835Z",
+  "depends_on": [
+    "fn-52-tracker-sync-bridge-project-flow-specs.1",
+    "fn-52-tracker-sync-bridge-project-flow-specs.3"
+  ],
+  "id": "fn-52-tracker-sync-bridge-project-flow-specs.4",
+  "priority": null,
+  "spec": "fn-52-tracker-sync-bridge-project-flow-specs",
+  "spec_path": ".flow/tasks/fn-52-tracker-sync-bridge-project-flow-specs.4.md",
+  "status": "todo",
+  "title": "Agentic body reconciliation: 3-way merge + format translation + scoped conflict",
+  "updated_at": "2026-06-03T07:56:10.892257Z"
+}

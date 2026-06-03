@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-03T08:34:19.740702Z",
+  "depends_on": [
+    "fn-52-tracker-sync-bridge-project-flow-specs.1"
+  ],
+  "id": "fn-52-tracker-sync-bridge-project-flow-specs.10",
+  "priority": null,
+  "spec": "fn-52-tracker-sync-bridge-project-flow-specs",
+  "spec_path": ".flow/tasks/fn-52-tracker-sync-bridge-project-flow-specs.10.md",
+  "status": "todo",
+  "title": "Tracker-key identity & id resolution (hybrid: tracker-first canonical, flow-first alias, no rename)",
+  "updated_at": "2026-06-03T08:55:39.021306Z"
+}

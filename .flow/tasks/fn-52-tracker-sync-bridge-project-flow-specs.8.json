@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-03T07:08:07.942898Z",
+  "depends_on": [
+    "fn-52-tracker-sync-bridge-project-flow-specs.6",
+    "fn-52-tracker-sync-bridge-project-flow-specs.7"
+  ],
+  "id": "fn-52-tracker-sync-bridge-project-flow-specs.8",
+  "priority": null,
+  "spec": "fn-52-tracker-sync-bridge-project-flow-specs",
+  "spec_path": ".flow/tasks/fn-52-tracker-sync-bridge-project-flow-specs.8.md",
+  "status": "todo",
+  "title": "Repo docs + positioning/decision record",
+  "updated_at": "2026-06-03T08:43:14.642767Z"
+}
