@@ -161,11 +161,13 @@ can resolve a normalized status back to a concrete `stateId`:
 
 ```graphql
 query ($team: String!) {
-  workflowStates(filter: { team: { name: { eq: $team } } }) {
+  workflowStates(first: 100, filter: { team: { name: { eq: $team } } }) {
     nodes { id name type }
   }
 }
 # type ∈ backlog | unstarted | started | completed | canceled
+# `first: 100` — workflowStates IS a connection; bound it like every other
+# connection (a team's workflow has far fewer than 100 states, so one page).
 ```
 Fold into `tracker.perTracker.statusMap`. The default `state.type` → normalized
 mapping (shared with the MCP rung) is the status table in

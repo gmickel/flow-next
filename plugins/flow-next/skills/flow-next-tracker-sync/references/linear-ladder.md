@@ -105,7 +105,7 @@ taxonomy) plus an optional config name-override (`tracker.perTracker.statusMap`)
 | `canceled` | `wontfix` (or `deferred` via name-map) | surface to user, never auto-change |
 
 Build the **name/type → `stateId` map once at config time** (MCP:
-`list_issue_statuses`; GraphQL: `workflowStates(filter:{team:…}){ id name type }`)
+`list_issue_statuses`; GraphQL: `workflowStates(first:100, filter:{team:…}){ id name type }`)
 so `setStatus` can resolve a normalized status back to the team's concrete
 `stateId`. Both rungs produce the same normalized `status` struct — that is what
 the parity check verifies.
@@ -124,7 +124,7 @@ the same fields into/out of the normalized structs:
 | `postComment` | `save_comment(issueId, body)` | `commentCreate(issueId:UUID, body)` | same `comment` |
 | `readStatus` | from `get_issue.state` | from `issue.state` | same `status{raw,normalized}` |
 | `setStatus` | `save_issue(id, state)` | `issueUpdate(id, stateId)` | ok / `errored` |
-| status map build | `list_issue_statuses(team)` | `workflowStates(filter:{team}){type}` | same name/type → stateId map |
+| status map build | `list_issue_statuses(team)` | `workflowStates(first:100, filter:{team}){type}` | same name/type → stateId map |
 
 If a field is reachable on one rung but not the other, that is a parity gap —
 fix it in the rung file before relying on reconcile being transport-blind. The
