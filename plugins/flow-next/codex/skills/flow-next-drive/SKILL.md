@@ -11,7 +11,7 @@ Drive any UI surface the way a real user would. Whatever driver the environment 
 
 It orchestrates drivers — it does not reimplement them. The default rung (Vercel's `agent-browser` CLI) is the only driver assumed present; every other rung is detected and optional. A pass must succeed with whatever the environment actually has — most cloud VMs, Linux, and CI have no Computer Use, so it is never a hard dependency and never on a headless/no-display path.
 
-> Driver ladder + universal-flow structure adapted from Ray Fernando's `running-bug-review-board` skill (Apache-2.0) — see CHANGELOG.
+> Driver ladder + universal-flow structure adapted from Ray Fernando's `running-bug-review-board` skill (Apache-2.0).
 
 ## Step 1 — Detect the surface, then branch
 

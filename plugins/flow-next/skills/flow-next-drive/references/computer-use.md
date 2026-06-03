@@ -14,7 +14,7 @@ Computer Use at all. agent-browser stays the only assumed-present driver; this
 rung is detected and optional, and a pass must still complete without it.
 
 > Driver ladder + graceful-degradation structure adapted from Ray Fernando's
-> `running-bug-review-board` skill (Apache-2.0) — see CHANGELOG. This reference
+> `running-bug-review-board` skill (Apache-2.0). This reference
 > extends Ray's single-provider (Codex CU) playbook to **both** Computer Use
 > providers and corrects the "Computer Use is the only way to reach Electron"
 > claim (Electron / WebView2 are Chromium → the web ladder, not this rung).
