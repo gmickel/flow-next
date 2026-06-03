@@ -1857,6 +1857,135 @@ def slugify(text: str, max_length: int = 40) -> Optional[str]:
     return text if text else None
 
 
+# fn-52.10 (R16): tracker-key identity grammar.
+#
+# A tracker key (e.g. "wor" from Linear's WOR-17) is a 1-10 char lowercase
+# alnum token whose first char is a letter, mirroring the manual `wor-2-...`
+# workunits convention. `fn` is RESERVED for the native scheme — it is matched
+# and resolved FIRST everywhere, and a tracker identifier whose lowercased key
+# is `fn` is rejected at link/create time (see `reject_reserved_tracker_key`)
+# so a tracker can never collide with the native id space.
+#
+# Three grammars (each defined + tested):
+#   (a) alias / bare handle     wor-17            ^[a-z][a-z0-9]{0,9}-\d+$
+#   (b) canonical spec id       wor-17-fix-login  ^...-\d+-[a-z0-9-]+$
+#   (c) task handle             wor-17.M          (alias) or wor-17-slug.M (canonical)
+#
+# `parse_id` keeps its int-pair return shape for the native `fn` scheme (callers
+# build `f"fn-{n}-..."` from it, so changing the shape would break them). The
+# tracker-aware surface lives in `parse_any_id` / `id_sort_key`, and the grammar
+# predicates (`is_spec_id` / `is_task_id` / `spec_id_from_task`) route through
+# `parse_any_id` so every command that already calls them inherits resolution.
+NATIVE_SCHEME = "fn"
+RESERVED_TRACKER_KEY = "fn"
+
+# Bare alias: <key>-<n> or <key>-<n>.<m>. Native `fn` excluded so the native
+# scheme is the sole owner of `fn-*` (tried first in parse_any_id).
+_TRACKER_ALIAS_RE = re.compile(r"^([a-z][a-z0-9]{0,9})-(\d+)(?:\.(\d+))?$")
+# Canonical (slug-bearing): <key>-<n>-<slug> or <key>-<n>-<slug>.<m>.
+_TRACKER_CANONICAL_RE = re.compile(
+    r"^([a-z][a-z0-9]{0,9})-(\d+)-[a-z0-9][a-z0-9-]*[a-z0-9]?(?:\.(\d+))?$"
+)
+
+
+def parse_any_id(
+    id_str: Optional[str],
+) -> Optional[tuple[str, str, int, Optional[int]]]:
+    """Parse any spec/task id into ``(scheme, key, number, task_num)``.
+
+    ``scheme`` is ``"fn"`` for the native scheme or ``"tracker"`` for a
+    tracker-key id; ``key`` is the lowercase scheme key (``"fn"`` or the
+    tracker key like ``"wor"``); ``number`` is the spec number; ``task_num``
+    is the task suffix or ``None`` for a spec id.
+
+    The native ``fn`` scheme is matched FIRST. Tracker grammars are tried only
+    on an ``fn`` miss, and a tracker key equal to the reserved ``fn`` is never
+    produced here (the alias/canonical regexes exclude it because `fn-...`
+    already matched the native branch). Returns ``None`` for non-ids.
+    """
+    if not id_str:
+        return None
+    # Native fn scheme — tried first (reserved). Keeps the historic pattern.
+    m = re.match(
+        r"^fn-(\d+)(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?(?:\.(\d+))?$",
+        id_str,
+    )
+    if m:
+        task = int(m.group(2)) if m.group(2) else None
+        return (NATIVE_SCHEME, NATIVE_SCHEME, int(m.group(1)), task)
+    # Canonical (slug-bearing) tracker id is tried before the bare alias so a
+    # `wor-17-foo` resolves as a spec, not as `wor-17` + leftover.
+    m = _TRACKER_CANONICAL_RE.match(id_str)
+    if m and m.group(1) != RESERVED_TRACKER_KEY:
+        task = int(m.group(3)) if m.group(3) else None
+        return ("tracker", m.group(1), int(m.group(2)), task)
+    m = _TRACKER_ALIAS_RE.match(id_str)
+    if m and m.group(1) != RESERVED_TRACKER_KEY:
+        task = int(m.group(3)) if m.group(3) else None
+        return ("tracker", m.group(1), int(m.group(2)), task)
+    return None
+
+
+# Stable scheme rank for mixed-format sorting: native `fn` sorts before tracker
+# keys, then tracker keys sort lexicographically by key, then by number/task.
+_SCHEME_RANK = {NATIVE_SCHEME: 0}
+
+
+def id_sort_key(id_str: str) -> tuple:
+    """Total-orderable sort key across BOTH the native and tracker schemes.
+
+    Returns ``(scheme_rank, key, number, task_num)``. A mixed list of
+    ``fn-*`` and ``wor-*`` ids sorts without the ``None < int`` ``TypeError``
+    that the historic ``parse_id`` int-tuple sort hits on a tracker id (which
+    `parse_id` reports as ``(None, None)``). Unparseable ids sort last under a
+    sentinel rank so directory walks with stray files stay total-ordered.
+    """
+    parsed = parse_any_id(id_str)
+    if parsed is None:
+        # Sentinel rank after every known scheme; fall back to the raw string
+        # so ordering among unparseable ids stays deterministic.
+        return (99, str(id_str), 0, 0)
+    scheme, key, number, task_num = parsed
+    rank = _SCHEME_RANK.get(scheme, 1)
+    return (rank, key, number, task_num if task_num is not None else 0)
+
+
+def id_task_num(id_str: str) -> int:
+    """Return the task suffix of any task id (fn-* or tracker), or 0.
+
+    Tracker-aware companion to ``parse_id(...)[1]`` for sort sites that combine
+    the task number with another key (e.g. priority) and can't route through
+    the full ``id_sort_key`` tuple. ``parse_id`` is fn-only, so it reports
+    ``None`` for a ``wor-17.3`` task — this returns ``3``.
+    """
+    parsed = parse_any_id(id_str)
+    if parsed is None or parsed[3] is None:
+        return 0
+    return parsed[3]
+
+
+def reject_reserved_tracker_key(
+    identifier: Optional[str], *, use_json: bool = False
+) -> None:
+    """Reject a tracker identifier whose key collides with the native `fn` scheme.
+
+    Called at link/create time. A Linear/GitHub identifier like ``FN-17``
+    lowercases to key ``fn`` — accepting it would let a tracker issue mint a
+    ``fn-17-*`` spec that shadows the native allocator. Hard-fails so the
+    reservation holds end-to-end.
+    """
+    if not identifier:
+        return
+    key = identifier.split("-", 1)[0].strip().lower()
+    if key == RESERVED_TRACKER_KEY:
+        error_exit(
+            f"Tracker identifier '{identifier}' uses the reserved key 'fn', "
+            "which collides with flow's native id scheme. Use a different "
+            "tracker key.",
+            use_json=use_json,
+        )
+
+
 def parse_id(id_str: str) -> tuple[Optional[int], Optional[int]]:
     """Parse ID into (epic_num, task_num). Returns (epic, None) for epic IDs.
 
@@ -1864,17 +1993,15 @@ def parse_id(id_str: str) -> tuple[Optional[int], Optional[int]]:
     - Legacy: fn-N, fn-N.M
     - Short suffix: fn-N-xxx, fn-N-xxx.M (3-char random)
     - Slug suffix: fn-N-longer-slug, fn-N-longer-slug.M (slugified title)
+
+    NATIVE-`fn`-ONLY by contract: returns ``(None, None)`` for a tracker-key id
+    so the historic ``f"fn-{n}-..."`` reconstruction callers stay correct.
+    Tracker-aware callers use ``parse_any_id`` / ``id_sort_key`` instead.
     """
-    # Pattern supports: fn-N, fn-N-x (1-3 char), fn-N-xx-yy (multi-segment slug)
-    match = re.match(
-        r"^fn-(\d+)(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?(?:\.(\d+))?$",
-        id_str,
-    )
-    if not match:
+    parsed = parse_any_id(id_str)
+    if parsed is None or parsed[0] != NATIVE_SCHEME:
         return None, None
-    epic = int(match.group(1))
-    task = int(match.group(2)) if match.group(2) else None
-    return epic, task
+    return parsed[2], parsed[3]
 
 
 def normalize_epic(epic_data: dict) -> dict:
@@ -1963,9 +2090,9 @@ def task_priority(task_data: dict) -> int:
 
 
 def is_spec_id(id_str: str) -> bool:
-    """Check if ID is a spec ID (fn-N)."""
-    spec, task = parse_id(id_str)
-    return spec is not None and task is None
+    """Check if ID is a spec ID (fn-N, fn-N-slug, or a tracker key wor-N / wor-N-slug)."""
+    parsed = parse_any_id(id_str)
+    return parsed is not None and parsed[3] is None
 
 
 # Backward-compat alias for is_spec_id (removed in 2.0).
@@ -1973,18 +2100,20 @@ is_epic_id = is_spec_id
 
 
 def is_task_id(id_str: str) -> bool:
-    """Check if ID is a task ID (fn-N.M)."""
-    spec, task = parse_id(id_str)
-    return spec is not None and task is not None
+    """Check if ID is a task ID (fn-N.M, fn-N-slug.M, or tracker wor-N.M / wor-N-slug.M)."""
+    parsed = parse_any_id(id_str)
+    return parsed is not None and parsed[3] is not None
 
 
 def spec_id_from_task(task_id: str) -> str:
     """Extract spec ID from task ID. Raises ValueError if invalid.
 
-    Preserves suffix: fn-5-x7k.3 -> fn-5-x7k
+    Preserves suffix: fn-5-x7k.3 -> fn-5-x7k; wor-17-fix.3 -> wor-17-fix;
+    wor-17.3 -> wor-17 (alias form preserved — canonicalization happens in
+    resolve_task_arg, not here, so the bare alias round-trips for grammar).
     """
-    spec, task = parse_id(task_id)
-    if spec is None or task is None:
+    parsed = parse_any_id(task_id)
+    if parsed is None or parsed[3] is None:
         raise ValueError(f"Invalid task ID: {task_id}")
     # Split on '.' and take spec part (preserves suffix if present)
     return task_id.rsplit(".", 1)[0]
@@ -4001,12 +4130,19 @@ def get_actor() -> str:
     return "unknown"
 
 
-def scan_max_spec_id(flow_dir: Path) -> int:
-    """Scan .flow/epics/ and .flow/specs/ to find max spec number. Returns 0 if none exist.
+def scan_max_native_fn_spec_id(flow_dir: Path) -> int:
+    """Scan .flow/epics/ and .flow/specs/ to find max NATIVE `fn-N` spec number.
 
-    Handles legacy (fn-N.json), short suffix (fn-N-xxx.json), and slug (fn-N-slug.json) formats.
-    Scans both epics/*.json (legacy) and specs/*.json (canonical post-1.0) plus
-    specs/*.md as a safety net for orphaned specs created without flowctl.
+    NATIVE-`fn`-ONLY (fn-52.10): this feeds `fn-N` allocation in
+    `cmd_spec_create`, so tracker-key specs (`wor-9999-foo`) must NOT count —
+    else a high tracker number would push the next flow-first spec to a far
+    higher `fn-N`. Tracker-key specs are still visible to enumeration
+    (`iter_spec_json_files`); they just don't drive the native allocator.
+
+    Handles legacy (fn-N.json), short suffix (fn-N-xxx.json), and slug
+    (fn-N-slug.json) formats. Scans both epics/*.json (legacy) and specs/*.json
+    (canonical post-1.0) plus specs/*.md as a safety net for orphaned specs
+    created without flowctl. Returns 0 if none exist.
     """
     max_n = 0
     pattern = r"^fn-(\d+)(?:-[a-z0-9][a-z0-9-]*[a-z0-9]|-[a-z0-9]{1,3})?\.(json|md)$"
@@ -4037,8 +4173,10 @@ def scan_max_spec_id(flow_dir: Path) -> int:
     return max_n
 
 
-# Backward-compat alias for scan_max_spec_id (removed in 2.0).
-scan_max_epic_id = scan_max_spec_id
+# Old name kept as an alias (call sites that want native-fn allocation should
+# prefer the explicit name). Backward-compat `scan_max_epic_id` preserved too.
+scan_max_spec_id = scan_max_native_fn_spec_id
+scan_max_epic_id = scan_max_native_fn_spec_id
 
 
 def get_specs_json_write_dir(flow_dir: Path) -> Path:
@@ -4084,37 +4222,117 @@ def find_spec_json_path(flow_dir: Path, spec_id: str) -> Path:
     return get_specs_json_write_dir(flow_dir) / f"{spec_id}.json"
 
 
+def _spec_tracker_fields(path: Path) -> tuple[Optional[str], Optional[str]]:
+    """Read ``(tracker.identifier, tracker.id)`` from a spec JSON, lowercasing
+    the identifier. Returns ``(None, None)`` for unparseable / unlinked specs.
+
+    Used to build the alias index for `expand_bare_spec_id`: a flow-first spec
+    (`fn-NN`) that carries `tracker.identifier == "WOR-17"` is a resolution
+    candidate for the bare handle `wor-17`.
+    """
+    try:
+        data = load_json(path)
+    except (json.JSONDecodeError, OSError):
+        return (None, None)
+    tracker = data.get("tracker")
+    if not isinstance(tracker, dict):
+        return (None, None)
+    identifier = tracker.get("identifier")
+    ident_lc = identifier.lower() if isinstance(identifier, str) and identifier else None
+    return (ident_lc, tracker.get("id"))
+
+
 def expand_bare_spec_id(
     flow_dir: Path, spec_id: Optional[str], *, use_json: bool = False
 ) -> Optional[str]:
-    """Expand a bare spec id (fn-N) to its slugged form (fn-N-slug) when no
-    literal `<spec_id>.json` exists. No-op when literal exists, when input is
-    None / empty / not a spec-id format, or when no slugged match is found.
-    Calls error_exit on ambiguous prefix (multiple slugged matches)."""
+    """Expand a bare spec handle to its canonical on-disk id.
+
+    Native `fn-N` → `fn-N-slug` (the historic behavior). Tracker handles
+    (`wor-17`) resolve via a candidate set (fn-52.10, R16): the literal file
+    wins first, else gather ALL candidates from BOTH sources —
+
+    1. canonical-prefix: specs whose id is `<key>-<n>-*` (tracker-first), and
+    2. alias index: ANY spec (incl. flow-first `fn-NN`) whose stored
+       `tracker.identifier` matches the handle case-insensitively.
+
+    Disambiguation of the candidate set:
+      0 → not-found (return unchanged);
+      1 → resolve;
+      >1 sharing the same `tracker.id` UUID → same logical issue, dedupe to one
+          canonical target (prefer a tracker-key canonical id when present);
+      >1 with differing / unknown UUIDs → ambiguous error (never silently pick
+          the canonical and hide an alias — that would be a data-loss footgun).
+
+    No-op when input is None / empty / not a spec-id format. The full-slug
+    canonical (`wor-17-slug`) resolves directly by file lookup like any spec id.
+    """
     if not spec_id or not is_spec_id(spec_id):
         return spec_id
     canonical = flow_dir / SPECS_JSON_DIR / f"{spec_id}.json"
     legacy = flow_dir / EPICS_DIR / f"{spec_id}.json"
     if canonical.exists() or legacy.exists():
         return spec_id
-    matches = sorted(
-        {
-            path.stem
-            for path in list(
-                (flow_dir / SPECS_JSON_DIR).glob(f"{spec_id}-*.json")
+
+    parsed = parse_any_id(spec_id)
+    is_tracker = parsed is not None and parsed[0] == "tracker"
+
+    # 1. Prefix matches (`<id>-*`) in both layouts — native and tracker alike.
+    prefix_matches = {
+        path.stem
+        for path in list((flow_dir / SPECS_JSON_DIR).glob(f"{spec_id}-*.json"))
+        + list((flow_dir / EPICS_DIR).glob(f"{spec_id}-*.json"))
+    }
+
+    if not is_tracker:
+        # Native `fn-N`: prefix-only resolution, unchanged contract.
+        matches = sorted(prefix_matches)
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            error_exit(
+                f"Spec id '{spec_id}' is ambiguous. Matches: {', '.join(matches)}. "
+                "Use the full slug to disambiguate.",
+                use_json=use_json,
             )
-            + list((flow_dir / EPICS_DIR).glob(f"{spec_id}-*.json"))
-        }
+        return spec_id
+
+    # 2. Tracker handle: also gather the alias index (specs carrying a matching
+    #    tracker.identifier — including flow-first `fn-NN`). One spec/path per
+    #    candidate; track each candidate's tracker UUID for UUID-dedupe.
+    handle_lc = spec_id.lower()
+    candidate_uuids: dict[str, Optional[str]] = {}
+    for stem in prefix_matches:
+        path = find_spec_json_path(flow_dir, stem)
+        _, uuid = _spec_tracker_fields(path)
+        candidate_uuids[stem] = uuid
+    for spec_file in iter_spec_json_files(flow_dir):
+        ident_lc, uuid = _spec_tracker_fields(spec_file)
+        if ident_lc == handle_lc:
+            candidate_uuids.setdefault(spec_file.stem, uuid)
+
+    candidates = sorted(candidate_uuids)
+    if len(candidates) == 0:
+        return spec_id
+    if len(candidates) == 1:
+        return candidates[0]
+
+    # >1 candidate. Same NON-NULL UUID across all ⇒ one logical issue ⇒ dedupe.
+    uuids = {candidate_uuids[c] for c in candidates}
+    if len(uuids) == 1 and None not in uuids:
+        # Prefer a tracker-key canonical (`wor-17-slug`) over a flow-first
+        # alias so the resolved target mirrors the board id when present.
+        for c in candidates:
+            p = parse_any_id(c)
+            if p is not None and p[0] == "tracker":
+                return c
+        return candidates[0]
+
+    error_exit(
+        f"Tracker handle '{spec_id}' is ambiguous across {len(candidates)} "
+        f"specs with differing/unknown tracker ids: {', '.join(candidates)}. "
+        "Use the full canonical id to disambiguate.",
+        use_json=use_json,
     )
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
-        error_exit(
-            f"Spec id '{spec_id}' is ambiguous. Matches: {', '.join(matches)}. "
-            "Use the full slug to disambiguate.",
-            use_json=use_json,
-        )
-    return spec_id
 
 
 def resolve_spec_arg(
@@ -4144,6 +4362,35 @@ def resolve_spec_arg(
             flow_dir, spec, use_json=getattr(args, "json", False)
         )
     return spec
+
+
+def resolve_task_arg(
+    flow_dir: Path, task_id: Optional[str], *, use_json: bool = False
+) -> Optional[str]:
+    """Canonicalize a task handle (alias or full) to its on-disk task id.
+
+    Central canonicalizer (fn-52.10, R16): a task alias must resolve to the
+    canonical on-disk id BEFORE any file IO / dep compare / status write /
+    receipt — widening the grammar validators alone is not enough because many
+    commands path directly to `.flow/tasks/<id>.json`. Splits the task into its
+    spec handle + numeric suffix, canonicalizes the spec via `expand_bare_-
+    spec_id` (which owns the candidate-set tracker resolution), then rejoins.
+
+    `wor-17.3` → `wor-17-slug.3`; `fn-52.3` → `fn-52-slug.3`. No-op for None /
+    empty / non-task-id input, or when the literal task file already exists
+    (full canonical task id passed). Aliases are NEVER persisted — callers
+    canonicalize first, then store the result.
+    """
+    if not task_id or not is_task_id(task_id):
+        return task_id
+    # A literal full task file already on disk needs no expansion.
+    if (flow_dir / TASKS_DIR / f"{task_id}.json").exists():
+        return task_id
+    spec_part, _, task_num = task_id.rpartition(".")
+    canonical_spec = expand_bare_spec_id(flow_dir, spec_part, use_json=use_json)
+    if canonical_spec == spec_part:
+        return task_id  # No spec expansion available — return unchanged.
+    return f"{canonical_spec}.{task_num}"
 
 
 # Track which legacy forms have already emitted a deprecation warning in this
@@ -4188,20 +4435,33 @@ def iter_spec_json_files(flow_dir: Path):
     De-duplicates by stem so a spec that exists in both dirs (post-migration
     edge case) is yielded once, with the canonical path winning.
 
-    Yields paths in sorted order by stem (so callers iterating produce stable
-    output without re-sorting).
+    fn-52.10 (R16): yields BOTH native `fn-*` and tracker-key `wor-*` spec
+    JSONs (any stem that parses as a spec id) so `list` / `specs` / `ready` /
+    `validate` see tracker-key specs. Native allocation (`scan_max_native_fn_-
+    spec_id`) is a separate responsibility and stays fn-only.
+
+    Yields paths in a documented, stable total order across the mixed
+    `fn-*` + `wor-*` set: native `fn` first (by number), then tracker keys
+    lexicographically (by key, then number) — via `id_sort_key`.
     """
     seen: dict[str, Path] = {}
-    canonical_dir = flow_dir / SPECS_JSON_DIR
-    if canonical_dir.exists():
-        for spec_file in canonical_dir.glob("fn-*.json"):
-            seen[spec_file.stem] = spec_file
-    legacy_dir = flow_dir / EPICS_DIR
-    if legacy_dir.exists():
-        for spec_file in legacy_dir.glob("fn-*.json"):
-            # Canonical wins on collision (post-migration safety).
-            seen.setdefault(spec_file.stem, spec_file)
-    for stem in sorted(seen):
+
+    def _collect(directory: Path, *, prefer: bool) -> None:
+        if not directory.exists():
+            return
+        for spec_file in directory.glob("*.json"):
+            stem = spec_file.stem
+            if not is_spec_id(stem):
+                continue  # Skip non-spec JSON (e.g. config / sidecars).
+            if prefer:
+                seen[stem] = spec_file
+            else:
+                # Canonical wins on collision (post-migration safety).
+                seen.setdefault(stem, spec_file)
+
+    _collect(flow_dir / SPECS_JSON_DIR, prefer=True)
+    _collect(flow_dir / EPICS_DIR, prefer=False)
+    for stem in sorted(seen, key=id_sort_key):
         yield seen[stem]
 
 
@@ -11144,14 +11404,43 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
     meta_path = flow_dir / META_FILE
     load_json_or_exit(meta_path, "meta.json", use_json=args.json)
 
-    # MU-1: Scan-based allocation for merge safety.
-    # Scan existing specs to determine next ID (don't rely on counter).
-    max_spec = scan_max_spec_id(flow_dir)
-    spec_num = max_spec + 1
+    # fn-52.10 (R16): origin-branched id generator.
+    #   - flow-first (default): native sequential `fn-NN-slug`, allocated from
+    #     `fn-*` specs ONLY (tracker-key specs never bump the native counter).
+    #   - tracker-first (`--tracker-first` + `--tracker-identifier WOR-17`):
+    #     canonical id derived from the LOWERCASE tracker key + number +
+    #     slug → `wor-17-slug`; tasks become `wor-17-slug.M` via the unchanged
+    #     `task_id = spec_id.N`; branch defaults to the same canonical id.
+    tracker_identifier = getattr(args, "tracker_identifier", None)
+    tracker_first = getattr(args, "tracker_first", False)
+    # The reserved `fn` key can never come from a tracker (would shadow native).
+    reject_reserved_tracker_key(tracker_identifier, use_json=args.json)
+
     # Use slugified title as suffix, fallback to random if empty/invalid.
     slug = slugify(args.title)
     suffix = slug if slug else generate_epic_suffix()
-    spec_id = f"fn-{spec_num}-{suffix}"
+
+    if tracker_first:
+        if not tracker_identifier:
+            error_exit(
+                "--tracker-first requires --tracker-identifier (e.g., WOR-17).",
+                use_json=args.json,
+            )
+        parsed = parse_any_id(tracker_identifier.lower())
+        if parsed is None or parsed[0] != "tracker" or parsed[3] is not None:
+            error_exit(
+                f"Invalid --tracker-identifier '{tracker_identifier}'. Expected "
+                "a tracker key like WOR-17 (1-10 char key + number).",
+                use_json=args.json,
+            )
+        _, key, number, _ = parsed
+        spec_id = f"{key}-{number}-{suffix}"
+    else:
+        # MU-1: Scan-based allocation for merge safety. NATIVE-`fn`-ONLY so a
+        # tracker-key spec never pushes the next flow-first spec's number.
+        max_spec = scan_max_native_fn_spec_id(flow_dir)
+        spec_num = max_spec + 1
+        spec_id = f"fn-{spec_num}-{suffix}"
 
     # fn-43.1: Resolve write target. Fresh / migrated repos -> .flow/specs/;
     # alias-mode 0.x repos (no sentinel + epics/ exists) -> .flow/epics/.
@@ -11201,6 +11490,11 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
         "created_at": now_iso(),
         "updated_at": now_iso(),
     }
+    # fn-52.10: tracker-first specs store the DISPLAY identifier (WOR-17) so the
+    # alias index resolves the bare handle. The canonical id already carries the
+    # lowercase key; the full UUID / url land later on link (fn-52.2).
+    if tracker_first and tracker_identifier:
+        spec_data["tracker"]["identifier"] = tracker_identifier
     atomic_write_json(spec_json_path, spec_data)
 
     # Create spec markdown.
@@ -11211,14 +11505,16 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
     # is the source of truth. This reduces merge conflicts.
 
     if args.json:
-        json_output(
-            {
-                "id": spec_id,
-                "title": args.title,
-                "spec_path": spec_data["spec_path"],
-                "message": f"Spec {spec_id} created",
-            }
-        )
+        out = {
+            "id": spec_id,
+            "title": args.title,
+            "spec_path": spec_data["spec_path"],
+            "branch_name": spec_data["branch_name"],
+            "message": f"Spec {spec_id} created",
+        }
+        if tracker_first and tracker_identifier:
+            out["tracker_identifier"] = tracker_identifier
+        json_output(out)
     else:
         print(f"Spec {spec_id} created: {args.title}")
 
@@ -11264,19 +11560,23 @@ def cmd_task_create(args: argparse.Namespace) -> None:
     # Parse dependencies
     deps = []
     if args.deps:
-        deps = [d.strip() for d in args.deps.split(",")]
-        # Validate deps are valid task IDs within same spec
-        for dep in deps:
+        raw_deps = [d.strip() for d in args.deps.split(",")]
+        # Validate deps are valid task IDs within same spec. fn-52.10:
+        # canonicalize each dep alias so `depends_on` persists the canonical id
+        # (never the alias), then enforce the same-spec invariant.
+        for dep in raw_deps:
             if not is_task_id(dep):
                 error_exit(
                     f"Invalid dependency ID: {dep}. Expected format: fn-N.M or fn-N-slug.M (e.g., fn-1.2, fn-1-add-auth.2)",
                     use_json=args.json,
                 )
+            dep = resolve_task_arg(flow_dir, dep, use_json=args.json)
             if spec_id_from_task(dep) != spec_id:
                 error_exit(
                     f"Dependency {dep} must be within the same spec ({spec_id})",
                     use_json=args.json,
                 )
+            deps.append(dep)
 
     # Read acceptance from file if provided
     acceptance = None
@@ -11346,7 +11646,16 @@ def cmd_dep_add(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
 
-    # Validate same spec
+    flow_dir = get_flow_dir()
+    # fn-52.10: canonicalize BOTH the task and its dep alias BEFORE the
+    # same-spec compare + persist. Task deps stay same-spec (existing
+    # invariant); aliasing only means `dep add wor-17.2 wor-17.1` canonicalizes
+    # to `wor-17-slug.2`/`.1`. `depends_on` persists the canonical id, never
+    # the alias.
+    args.task = resolve_task_arg(flow_dir, args.task, use_json=args.json)
+    args.depends_on = resolve_task_arg(flow_dir, args.depends_on, use_json=args.json)
+
+    # Validate same spec (post-canonicalization)
     task_spec = spec_id_from_task(args.task)
     dep_spec = spec_id_from_task(args.depends_on)
     if task_spec != dep_spec:
@@ -11355,7 +11664,6 @@ def cmd_dep_add(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
 
-    flow_dir = get_flow_dir()
     task_path = flow_dir / TASKS_DIR / f"{args.task}.json"
 
     task_data = load_json_or_exit(task_path, f"Task {args.task}", use_json=args.json)
@@ -11491,12 +11799,9 @@ def cmd_show(args: argparse.Namespace) -> None:
                     }
                 )
 
-        # Sort tasks by numeric suffix (safe via parse_id)
-        def task_sort_key(t):
-            _, task_num = parse_id(t["id"])
-            return task_num if task_num is not None else 0
-
-        tasks.sort(key=task_sort_key)
+        # Sort tasks by numeric suffix. fn-52.10: tracker-aware so a wor-* spec's
+        # tasks order by suffix (parse_id is fn-only → None for wor-* tasks).
+        tasks.sort(key=lambda t: id_sort_key(t["id"]))
 
         result = {**epic_data, "tasks": tasks}
 
@@ -11515,6 +11820,9 @@ def cmd_show(args: argparse.Namespace) -> None:
                 print(f"  [{t['status']}] {t['id']}: {t['title']}{deps}")
 
     elif is_task_id(args.id):
+        # fn-52.10: canonicalize a task alias (wor-17.1 → wor-17-slug.1) before
+        # the read so `show`/`cat` of an alias hit the right task file.
+        args.id = resolve_task_arg(flow_dir, args.id, use_json=args.json)
         # Load task with merged runtime state
         task_data = load_task_with_state(args.id, use_json=args.json)
         # fn-43.2 R31: co-emit canonical "spec" + legacy "epic" alias on
@@ -11583,12 +11891,10 @@ def cmd_specs(args: argparse.Namespace) -> None:
             }
         )
 
-    # Sort by spec number
-    def spec_sort_key(e):
-        spec_num, _ = parse_id(e["id"])
-        return spec_num if spec_num is not None else 0
-
-    specs.sort(key=spec_sort_key)
+    # Sort by spec number. fn-52.10: tracker-aware total order across the mixed
+    # fn-* + wor-* set (parse_id reports (None, None) for tracker ids → the old
+    # int-only key would TypeError on a mixed list).
+    specs.sort(key=lambda e: id_sort_key(e["id"]))
 
     if args.json:
         # R31: co-emit canonical "specs" + legacy "epics" alias key (same array).
@@ -11656,15 +11962,9 @@ def cmd_tasks(args: argparse.Namespace) -> None:
                 }
             )
 
-    # Sort tasks by spec number then task number
-    def task_sort_key(t):
-        spec_num, task_num = parse_id(t["id"])
-        return (
-            spec_num if spec_num is not None else 0,
-            task_num if task_num is not None else 0,
-        )
-
-    tasks.sort(key=task_sort_key)
+    # Sort tasks by spec then task number. fn-52.10: tracker-aware total order
+    # across the mixed fn-* + wor-* set.
+    tasks.sort(key=lambda t: id_sort_key(t["id"]))
 
     if args.json:
         json_output({"success": True, "tasks": tasks, "count": len(tasks)})
@@ -11703,18 +12003,15 @@ def cmd_list(args: argparse.Namespace) -> None:
         )
         specs.append(spec_data)
 
-    # Sort specs by number
-    def spec_sort_key(e):
-        spec_num, _ = parse_id(e["id"])
-        return spec_num if spec_num is not None else 0
+    # Sort specs by number. fn-52.10: tracker-aware total order (mixed fn-* + wor-*).
+    specs.sort(key=lambda e: id_sort_key(e["id"]))
 
-    specs.sort(key=spec_sort_key)
-
-    # Load all tasks grouped by spec (with merged runtime state)
+    # Load all tasks grouped by spec (with merged runtime state). fn-52.10:
+    # glob ALL task json (not just fn-*) so tracker-key tasks (wor-17.M) list.
     tasks_by_spec = {}
     all_tasks = []
     if tasks_dir.exists():
-        for task_file in sorted(tasks_dir.glob("fn-*.json")):
+        for task_file in sorted(tasks_dir.glob("*.json"), key=lambda p: id_sort_key(p.stem)):
             task_id = task_file.stem
             if not is_task_id(task_id):
                 continue  # Skip non-task files (e.g., fn-1.2-review.json)
@@ -11742,7 +12039,9 @@ def cmd_list(args: argparse.Namespace) -> None:
 
     # Sort tasks within each spec
     for spec_id in tasks_by_spec:
-        tasks_by_spec[spec_id].sort(key=lambda t: parse_id(t["id"])[1] or 0)
+        # fn-52.10: tracker-aware suffix sort (parse_id is fn-only → None for
+        # wor-* tasks; id_sort_key's task_num element orders both schemes).
+        tasks_by_spec[spec_id].sort(key=lambda t: id_sort_key(t["id"]))
 
     if args.json:
         specs_out = []
@@ -11806,6 +12105,8 @@ def cmd_cat(args: argparse.Namespace) -> None:
         args.id = expand_bare_spec_id(flow_dir, args.id, use_json=False)
         spec_path = flow_dir / SPECS_DIR / f"{args.id}.md"
     elif is_task_id(args.id):
+        # fn-52.10: canonicalize a task alias before the markdown read.
+        args.id = resolve_task_arg(flow_dir, args.id, use_json=False)
         spec_path = flow_dir / TASKS_DIR / f"{args.id}.md"
     else:
         error_exit(
@@ -12013,6 +12314,7 @@ def cmd_spec_set_title(args: argparse.Namespace) -> None:
         )
 
     flow_dir = get_flow_dir()
+    old_id = expand_bare_spec_id(flow_dir, old_id, use_json=args.json)
     old_spec_path = find_spec_json_path(flow_dir, old_id)
 
     if not old_spec_path.exists():
@@ -12026,6 +12328,50 @@ def cmd_spec_set_title(args: argparse.Namespace) -> None:
     spec_data = normalize_epic(
         load_json_or_exit(old_spec_path, f"Spec {old_id}", use_json=args.json)
     )
+
+    # fn-52.10 (R16) — NO-RENAME for tracker-linked specs. A spec is linked if
+    # its canonical id is a tracker key (`wor-*`) OR it carries a stored
+    # `tracker.identifier`. Renaming the slug would desync the tracker linkage /
+    # branch / back-reference, so set-title updates the TITLE (and body H1)
+    # ONLY — never the canonical id, branch, or filenames. Unlinked `fn-*`
+    # specs keep today's rename behavior (the code below).
+    parsed_old = parse_any_id(old_id)
+    is_tracker_id = parsed_old is not None and parsed_old[0] == "tracker"
+    tracker_block = spec_data.get("tracker") or {}
+    has_tracker_identifier = bool(tracker_block.get("identifier"))
+    if is_tracker_id or has_tracker_identifier:
+        spec_data["title"] = args.title
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(old_spec_path, spec_data)
+        # Update only the body H1 (`# <id> <title>`), preserving the id.
+        spec_md_path = flow_dir / SPECS_DIR / f"{old_id}.md"
+        if spec_md_path.exists():
+            try:
+                lines = spec_md_path.read_text(encoding="utf-8").splitlines(
+                    keepends=True
+                )
+                for i, line in enumerate(lines):
+                    if line.startswith("# "):
+                        newline = "\n" if line.endswith("\n") else ""
+                        lines[i] = f"# {old_id} {args.title}{newline}"
+                        break
+                atomic_write(spec_md_path, "".join(lines))
+            except OSError:
+                pass  # Non-critical — JSON title is the source of truth.
+        result = {
+            "id": old_id,
+            "title": args.title,
+            "renamed": False,
+            "message": (
+                f"Spec {old_id} title updated (tracker-linked — id/branch "
+                "not renamed)"
+            ),
+        }
+        if args.json:
+            json_output(result)
+        else:
+            print(result["message"])
+        return
 
     # Extract spec number from old ID
     spec_num, _ = parse_id(old_id)
@@ -14520,12 +14866,12 @@ def cmd_ready(args: argparse.Namespace) -> None:
         else:
             blocked.append({"task": task, "blocked_by": blocking_deps})
 
-    # Sort by numeric suffix
+    # Sort by numeric suffix. fn-52.10: id_task_num is tracker-aware (parse_id
+    # is fn-only → None for wor-* tasks).
     def sort_key(t):
-        _, task_num = parse_id(t["id"])
         return (
             task_priority(t),
-            task_num if task_num is not None else 0,
+            id_task_num(t["id"]),
             t.get("title", ""),
         )
 
@@ -14642,8 +14988,8 @@ def cmd_next(args: argparse.Namespace) -> None:
     current_actor = get_actor()
 
     def sort_key(t: dict) -> tuple[int, int]:
-        _, task_num = parse_id(t["id"])
-        return (task_priority(t), task_num if task_num is not None else 0)
+        # fn-52.10: tracker-aware task suffix (parse_id is fn-only).
+        return (task_priority(t), id_task_num(t["id"]))
 
     blocked_epics: dict[str, list[str]] = {}
 
@@ -14831,6 +15177,10 @@ def cmd_start(args: argparse.Namespace) -> None:
             f"Invalid task ID: {args.id}. Expected format: fn-N.M or fn-N-slug.M (e.g., fn-1.2, fn-1-add-auth.2)", use_json=args.json
         )
 
+    # fn-52.10: canonicalize a task alias (wor-17.3 → wor-17-slug.3) BEFORE any
+    # file IO / status write so the on-disk id is used everywhere downstream.
+    args.id = resolve_task_arg(get_flow_dir(), args.id, use_json=args.json)
+
     # Load task definition for dependency info (outside lock)
     # Normalize to handle legacy "deps" field
     task_def = normalize_task(load_task_definition(args.id, use_json=args.json))
@@ -14940,6 +15290,8 @@ def cmd_done(args: argparse.Namespace) -> None:
         )
 
     flow_dir = get_flow_dir()
+    # fn-52.10: canonicalize a task alias before any path / write / receipt.
+    args.id = resolve_task_arg(flow_dir, args.id, use_json=args.json)
     task_spec_path = flow_dir / TASKS_DIR / f"{args.id}.md"
 
     # Load task with merged runtime state (fail early before any writes)
@@ -15063,6 +15415,8 @@ def cmd_block(args: argparse.Namespace) -> None:
         )
 
     flow_dir = get_flow_dir()
+    # fn-52.10: canonicalize a task alias before any path / write.
+    args.id = resolve_task_arg(flow_dir, args.id, use_json=args.json)
     task_spec_path = flow_dir / TASKS_DIR / f"{args.id}.md"
 
     # Load task with merged runtime state
@@ -22765,6 +23119,19 @@ def main() -> None:
         p_create = parent_sub.add_parser("create", help=f"Create new {noun}")
         p_create.add_argument("--title", required=True, help=f"{noun.capitalize()} title")
         p_create.add_argument("--branch", help=f"Branch name to store on {noun}")
+        # fn-52.10 (R16): tracker-first id generator. With both flags the
+        # canonical id is derived from the tracker key (WOR-17 → wor-17-slug)
+        # instead of the native sequential fn-NN. Default (no flags) is
+        # flow-first fn-NN-slug.
+        p_create.add_argument(
+            "--tracker-first",
+            action="store_true",
+            help="Key the spec by its tracker identifier (wor-17-slug) instead of fn-NN",
+        )
+        p_create.add_argument(
+            "--tracker-identifier",
+            help="Tracker display identifier (e.g., WOR-17); required with --tracker-first",
+        )
         p_create.add_argument("--json", action="store_true", help="JSON output")
         p_create.set_defaults(func=cmd_spec_create)
 
