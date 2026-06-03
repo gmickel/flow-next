@@ -1077,7 +1077,7 @@ When in doubt: **fewer nodes, fewer edges, more honest.** A diagram with 4 nodes
 
 ## Phase 4: Push + create PR (fn-42.6)
 
-**Goal:** turn the rendered body into an open PR. Compute title + draft flag, persist the body to disk, gate on the interactive preview (skipped under Ralph), then push the branch and run `gh pr create` with the body delivered via `--body-file` (NOT a heredoc). `--dry-run` short-circuits before any state change. `--memory` is deferred to Phase 5.
+**Goal:** turn the rendered body into an open PR. Compute title + draft flag, persist the body to disk, then push the branch and run `gh pr create` directly — **no confirm prompt** — with the body delivered via `--body-file` (NOT a heredoc). `--dry-run` is the preview path and short-circuits before any state change. `--memory` is deferred to Phase 5.
 
 The host agent owns the body string at this point — Phases 2/3 produced it. Phase 4 takes that string, writes it to a tempfile, decides title + draft, then hands the file to `gh` — **no confirm prompt** (see §4.5). **No code in this phase rewrites body content.** If the body is too long for `gh pr create`, the truncation policy in §4.4 fires before invocation.
 
@@ -1322,13 +1322,15 @@ BASE_BRANCH="${BASE_REF#origin/}"
 # `makePr` opt-in: a reference line is zero-cost, side-effect-light hygiene and is
 # the whole point. NON-CLOSING (`Ref`/`Refs`, never `Fixes`/`Closes`) so merge does
 # NOT auto-complete the tracker issue — flow-next owns the lifecycle (R7/R10).
-# Every flowctl call here is non-fatal: 2>/dev/null + `|| printf '{}'` so an
-# active bridge with NO linked tracker id (or any flowctl hiccup) is a clean no-op
-# and never aborts the run under `set -e` after the push but before `gh pr create`.
-if [ "$("$FLOWCTL" sync active --json 2>/dev/null | jq -r '.active // empty')" = "true" ]; then
- TRK_TYPE=$("$FLOWCTL" config get tracker.type --json 2>/dev/null | jq -r '.value // empty')
+# Every probe here is fully non-fatal under `set -e`: each flowctl AND each jq is
+# `2>/dev/null` + `|| true`, so an inactive bridge, a bridge with NO linked tracker
+# id, malformed JSON, or a missing jq all degrade to an empty var → clean no-op,
+# never aborting the run after the push but before `gh pr create`.
+TRK_ACTIVE=$("$FLOWCTL" sync active --json 2>/dev/null | jq -r '.active // empty' 2>/dev/null || true)
+if [ "$TRK_ACTIVE" = "true" ]; then
+ TRK_TYPE=$("$FLOWCTL" config get tracker.type --json 2>/dev/null | jq -r '.value // empty' 2>/dev/null || true)
  TRK_STATE=$("$FLOWCTL" sync get-state "$SPEC_ID" --json 2>/dev/null || printf '{}')
- TRK_ID=$(printf '%s' "$TRK_STATE" | jq -r '.tracker.identifier // empty' 2>/dev/null)
+ TRK_ID=$(printf '%s' "$TRK_STATE" | jq -r '.tracker.identifier // empty' 2>/dev/null || true)
  REF=""
  case "$TRK_TYPE" in
  linear) [ -n "$TRK_ID" ] && REF="Ref ${TRK_ID}" ;; # WOR-N → Linear auto-link + Diffs
