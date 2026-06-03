@@ -32,9 +32,8 @@ Status/metadata reconciliation (who-wins) + comments/evidence two-way append, be
 - [ ] Comments/evidence two-way append; dedup via embedded marker + normalized hash + comment id — re-sync posts no duplicates; a human-pasted flow comment is not re-posted [R8]
 
 ## Done summary
-TBD
-
+Implemented status/metadata who-wins (R7) and comments/evidence two-way append (R8) for the flow-next-tracker-sync skill as two new reference files: references/status-sync.md (per-field who-wins — tracker wins terminal, flow wins in-progress, priority/deferred/wontfix surfaced never auto-changed; status deadlock evaluated FIRST and routed to the R1 conflictTiebreak, queuing under always-ask in Ralph; Linear state.type ↔ flow status map with a warn+surface unmapped-state fallback; six worked fixtures S-A..S-F) and references/comments-sync.md (append-only two-way comments/evidence with three-layer dedup — embedded marker, stored posted-id, normalized-text hash that catches a human paste; lifecycle event→comment map; sync-log fold that never promotes to an R-ID; a single opt-in rolling status comment as the sole edit-in-place exception; five fixtures C-A..C-E). Wired the now-implemented reconcile hooks into SKILL.md/steps.md/adapter-interface.md/linear-ladder.md (no lingering fn-52.5 stubs). Strictly-live setStatus/postComment round-trips are deferred to the post-PR smoke phase per the established pattern; all policy/dedup/mapping logic is runnable without a live tracker. impl-review (rp): NEEDS_WORK → SHIP after fixing a deadlock-ordering bug (terminal-wins fired before the deadlock fallback).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0140f67, 6488231, fd49b3c
+- Tests: bash plugins/flow-next/scripts/ci_test.sh (58 passed / 0 failed), cross-ref link resolution on status-sync.md + comments-sync.md (0 broken), markdown fence-balance check (both balanced), flowctl validate --spec fn-52 (valid: true), impl-review rp backend: NEEDS_WORK (1 Major, conf 100) -> fixed -> SHIP (0 introduced findings; R7 + R8 covered)
 - PRs:
