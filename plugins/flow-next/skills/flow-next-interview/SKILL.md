@@ -195,6 +195,8 @@ When `DOC_AWARE=1`, behaviors (a)-(d) below layer onto the standard interview wo
 
 ## Detect Input Type
 
+**Handle-recognition rule (R16):** do NOT gate on a hard "must start with `fn-`" check. Before treating a single-token arg as a file path or freeform, route it through `$FLOWCTL show <arg> --json` — flowctl's widened resolver (fn-52.10) maps a tracker key (`wor-17` / `wor-17.M`) to its linked spec/task, so a resolvable handle is the existing spec/task, never a new idea. Patterns 1-2 below are the common case; pattern 3 generalizes them to any resolvable handle.
+
 1. **Flow spec ID pattern**: matches `fn-\d+(-[a-z0-9-]+)?` (e.g., fn-1-add-oauth, fn-12, fn-2-fix-login-bug)
    - Fetch: `$FLOWCTL show <id> --json`
    - Read spec: `$FLOWCTL cat <id>`
@@ -204,7 +206,9 @@ When `DOC_AWARE=1`, behaviors (a)-(d) below layer onto the standard interview wo
    - Read spec: `$FLOWCTL cat <id>`
    - Also get parent spec context: `$FLOWCTL cat <spec-id>`
 
-3. **File path**: anything else with a path-like structure or .md extension
+3. **Resolvable tracker handle**: any single-token arg (not an `.md` path) that `$FLOWCTL show <arg> --json` resolves — e.g. a Linear key `wor-17` (spec) or `wor-17.3` (task). Use the canonical id from the JSON; a `.`-containing handle is a task (fetch parent spec too), otherwise a spec. Treat exactly like patterns 1-2; never re-create.
+
+4. **File path**: a path-like token / `.md` extension that does NOT resolve via `flowctl show`
    - Read file contents
    - If file doesn't exist, ask user to provide valid path
 
@@ -797,12 +801,31 @@ Rewrite the file with refined spec:
 
 This is typically a pre-spec doc. After interview, suggest `/flow-next:plan <file>` to create spec + tasks.
 
+## Tracker sync (opt-in) — spec push/pull + merge
+
+**Optional. Runs only when the tracker bridge is active AND `interview` is opted in. With no tracker configured this is a no-op — the interview behaves exactly as today.** After the refined spec is written back (`## Write Refined Spec`), project the enrichment to the linked tracker issue and reconcile two-way (R6): interview enrichment done in flow flows back to the tracker; tracker-side edits fold into the right flow sections. (Skip for the file-input case — there is no flow spec yet.)
+
+```bash
+if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
+   && [ "$($FLOWCTL config get tracker.perEvent.interview --json | jq -r '.value')" != "off" ] \
+   && [ "$($FLOWCTL config get tracker.perEvent.interview --json | jq -r '.value')" != "null" ]; then
+  # Invoke the flow-next-tracker-sync skill: push/pull/reconcile the spec body
+  # (operation follows the perEvent leaf — push | pull | reconcile).
+  #   skill: flow-next-tracker-sync   (operation: <leaf> <spec-id>)
+  # No-ops if the spec has no linked tracker id / no transport reachable; genuine
+  # body conflicts surface scoped (interactive) or queue (Ralph). Best-effort — a
+  # tracker failure never blocks the interview write-back.
+  :
+fi
+```
+
 ## Completion
 
 Show summary:
 - Number of questions asked
 - Key decisions captured
 - What was written (Flow ID updated / file rewritten)
+- Tracker sync: when active and `interview` opted in, whether the spec body was pushed/pulled/reconciled to the linked issue (else a silent no-op)
 - **Scope mode**: which pass(es) ran — biz / tech / both — and which spec sections were written vs preserved byte-for-byte (cite the write-policy result). For `--scope=business`: project-docs resolutions captured under `## Resolved via Project Docs` (R26).
 - Doc-aware mode (when `DOC_AWARE=1` was active): glossary terms added/updated via `flowctl glossary add`, decision entries written via `flowctl memory add --track knowledge --category decisions`, glossary conflicts captured under `## Glossary Conflicts`
 - Strategy-aware mode (when `STRATEGY_AWARE=1` was active): strategy conflicts captured under `## Strategy Conflicts` (read-only — interview never edits STRATEGY.md)

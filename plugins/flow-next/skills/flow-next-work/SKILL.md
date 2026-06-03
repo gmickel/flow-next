@@ -129,6 +129,35 @@ If user chose review, pass the review mode to the worker. The worker invokes `/f
 
 **Completion review gate**: When all tasks in a spec are done, if `--require-completion-review` is configured (via `flowctl next`), the work skill invokes `/flow-next:spec-completion-review` before allowing the spec to close. This verifies the combined implementation satisfies the spec. The spec-completion-review skill handles the fix loop internally until SHIP.
 
+## Tracker sync (opt-in, off by default)
+
+**The no-tracker path is the documented default and is behaviorally unchanged.** Every tracker touchpoint below runs ONLY when the bridge is **active** AND the specific event is opted in; otherwise it is a silent no-op (no new steps, no new prerequisites). The bridge is active iff `flowctl sync active --json` reports `active: true` (the single value-checked predicate from fn-52.1: raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear,github}` — NOT merely that a `tracker` block exists, and NOT a stray `type:null`). Each event then reads its own nested `perEvent` leaf (all default `off`):
+
+| Lifecycle event | perEvent key | Effect when opted in |
+|---|---|---|
+| first task claimed (phases.md 3b.1) | `tracker.perEvent.work.firstClaim` | move the linked issue In-Progress |
+| task done (phases.md 3d.1) | `tracker.perEvent.work.done` | post a status comment + evidence (tests / commits / PR) |
+| spec-completion-review SHIP (phases.md 3g) | `tracker.perEvent.completionReview` | flip the issue Done/verified + post verdict / R-ID coverage |
+
+(capture / interview / plan / make-pr / resolve-pr carry their own touchpoints in those skills, gated identically on `tracker.perEvent.{capture,interview,plan,makePr,resolvePr}`.)
+
+**Shared gating predicate** — every touchpoint uses this exact shape (active AND leaf ≠ off/null):
+
+```bash
+LEAF="$($FLOWCTL config get tracker.perEvent.<key> --json | jq -r '.value')"
+if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
+   && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
+  # invoke the flow-next-tracker-sync skill (operation per the leaf / event)
+  :
+fi
+```
+
+The actual tracker work (transport, body merge, status who-wins, comment dedup, receipts) lives entirely in the **`flow-next-tracker-sync` skill** — the lifecycle skills only gate + delegate. Every touchpoint is **best-effort**: a tracker failure (no transport reachable, 404 issue, etc.) never blocks the lifecycle; the tracker-sync skill emits its own `sync receipt` and, under Ralph, queues genuine conflicts (`sync defer`) instead of asking. A spec with **no linked tracker id** no-ops cleanly in every touchpoint.
+
+**Handle recognition (R16):** `/flow-next:work wor-17` / `work wor-17.1` resolve the existing linked spec/task — the Phase 1 input grammar routes any single-token arg through `flowctl show` (which resolves tracker handles via fn-52.10) before treating it as idea text, so a tracker key is never re-created as a new spec.
+
+**Unlink / re-link lifecycle:** detaching a spec from its tracker issue is done via `/flow-next:tracker-sync unlink <id>` — that ceremony (in the tracker-sync skill) clears the tracker id + `lastSyncedAt` + merge-base atomically (`flowctl sync clear`) and posts a one-line "detached" comment to the issue. After unlink, all lifecycle touchpoints above no-op for that spec (no linked id). A later re-link re-seeds the merge base from the current issue body (so re-link does not resurrect stale state). The spec/task ids, branch, and files are NEVER touched by unlink (no rename).
+
 ## Guardrails
 
 - Don't start without asking branch question

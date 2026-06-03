@@ -63,6 +63,7 @@ Accepts:
 - Feature/bug description in natural language
 - Flow spec ID `fn-N-slug` (e.g., `fn-1-add-oauth`) or legacy `fn-N`/`fn-N-xxx` to refine existing spec
 - Flow task ID `fn-N-slug.M` (e.g., `fn-1-add-oauth.2`) or legacy `fn-N.M`/`fn-N-xxx.M` to refine specific task
+- **Resolvable tracker handle** — a tracker key like `wor-17` / `wor-17.2` that `flowctl show` resolves to the linked spec/task (fn-52.10). Treated as the existing spec/task, **never** as a new idea (R16). See the handle-recognition rule in Step 1.
 - Chained instructions like "then review with /flow-next:plan-review"
 
 Examples:

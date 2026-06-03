@@ -69,6 +69,8 @@ $FLOWCTL init --json
 
 **If input is a Flow ID** (fn-N-slug or fn-N-slug.M, including legacy fn-N/fn-N-xxx): First fetch it with `$FLOWCTL show <id> --json` and `$FLOWCTL cat <id>` to get the request context.
 
+**Handle-recognition rule (R16):** do NOT gate the Flow-ID branch on a hard "must start with `fn-`" check. Before treating a single-token arg as a freeform idea, route it through `$FLOWCTL show <arg> --json` — flowctl's widened resolver (fn-52.10) maps a tracker key (`wor-17` / `wor-17.M`) to its linked spec/task. If it resolves (rc 0), use the canonical id from the JSON and take the existing-Flow-ID path (Route A in Step 5); only a non-resolving token becomes a new idea (Route B). So `plan wor-17` refines the linked spec, never creating a duplicate.
+
 **Check if memory and github-scout are enabled:**
 ```bash
 $FLOWCTL config get memory.enabled --json
@@ -456,6 +458,24 @@ $FLOWCTL validate --spec <spec-id> --json
 ```
 
 Fix any errors before proceeding.
+
+## Step 6.5: Tracker sync (opt-in) — NO sub-issues; optional body checklist only
+
+**Optional. Runs only when the tracker bridge is active AND `plan` is opted in. With no tracker configured this is a no-op — planning behaves exactly as today.** When opted in, planning projects the spec to the linked issue but **never auto-creates tracker sub-issues per task** — tasks stay flow-local (R3, Grain). The only optional tracker effect is rendering the new task list as a **checklist inside the issue body** (off by default; a body-format concern owned by the merge engine). Status/comment/sub-issue churn does NOT belong to the plan event.
+
+```bash
+if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
+   && [ "$($FLOWCTL config get tracker.perEvent.plan --json | jq -r '.value')" != "off" ] \
+   && [ "$($FLOWCTL config get tracker.perEvent.plan --json | jq -r '.value')" != "null" ]; then
+  # Invoke the flow-next-tracker-sync skill to push/reconcile the spec body
+  # (which MAY render the task list as a body checklist — never sub-issues).
+  #   skill: flow-next-tracker-sync   (operation: <leaf> <spec-id>)
+  # No-ops if the spec has no linked tracker id / no transport reachable.
+  :
+fi
+```
+
+**Never** create one tracker issue per task. The grain is one spec ↔ one issue; tasks are flow-local. Best-effort — a tracker failure never blocks planning.
 
 ## Step 7: Review (if chosen at start)
 

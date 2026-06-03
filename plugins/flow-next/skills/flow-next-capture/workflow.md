@@ -696,11 +696,31 @@ Two reasons:
 
 If a future enhancement adds a `--commit` flag, Phase 5 would gain a "stage + commit" branch, but the default stays "no commit, user owns the staging".
 
+### 5.7 — Tracker sync (opt-in) — spec push/pull + merge
+
+**Optional. Runs only when the tracker bridge is active AND `capture` is opted in. With no tracker configured this is a no-op — capture behaves exactly as today.** After the spec is on disk, project the captured/enriched body to the linked (or freshly linked) tracker issue and reconcile two-way (R6): a flow-first capture pushes the body out; a tracker-first spec (one already linked) reconciles the new capture content against the issue via the agentic 3-way merge.
+
+```bash
+if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ] \
+   && [ "$("$FLOWCTL" config get tracker.perEvent.capture --json | jq -r '.value')" != "off" ] \
+   && [ "$("$FLOWCTL" config get tracker.perEvent.capture --json | jq -r '.value')" != "null" ]; then
+  # Invoke the flow-next-tracker-sync skill: push/pull/reconcile the spec body
+  # (operation follows the perEvent leaf — push | pull | reconcile).
+  #   skill: flow-next-tracker-sync   (operation: <leaf> <SPEC_ID>)
+  # No-ops cleanly if no transport is reachable; genuine body conflicts surface
+  # scoped (interactive) or queue (Ralph — but capture is Ralph-blocked anyway).
+  :
+fi
+```
+
+Best-effort — a tracker failure never blocks the capture. The skill emits its own receipt.
+
 ### Done when
 
 - The new (or rewritten) spec is on disk at `.flow/specs/<id>.md`.
 - `SPEC_ID` is known for Phase 6.
 - Optional branch-name is set if user named one.
+- When the tracker bridge is active and `capture` is opted in, the spec body was pushed/pulled/reconciled to the linked issue (5.7); otherwise this step was a silent no-op.
 
 ---
 
