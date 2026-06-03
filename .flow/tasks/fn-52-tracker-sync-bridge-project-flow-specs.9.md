@@ -32,9 +32,8 @@ Repo-local finalization: the Codex mirror, the plugin version bump, and the fina
 - [ ] Final impl-review run against `git merge-base HEAD main` (cross-task drift across .1–.8 + .10)
 
 ## Done summary
-TBD
-
+Finalized the fn-52 tracker-sync bridge for the repo: registered the new `flow-next-tracker-sync` skill in `sync-codex.sh` (openai.yaml + REQUIRED list) and added a maintainer-breadcrumb strip rule, regenerated the byte-identical-idempotent Codex mirror (also picking up fn-52.6 lifecycle-skill edits that had never been mirrored), and bumped the plugin version 1.4.0→1.5.0 across all manifests + README + CHANGELOG. The final-integration impl-review (run against `git merge-base HEAD main`) reached SHIP after fixing one Major cross-task drift — `sync receipt`/`sync defer` were writing artifacts from raw tracker handles instead of canonicalizing them — plus stale doc/count fixes.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: cd56b13bfd77f614b52fec6f7b19ac6d88ef9f8e, 3b7d1113cea9ba29fa7ad2b5d80281ac448503b5, b188526393cbe11243b405dbf1fecfdd932ebbd2
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' — 790 pass, 2 skip, bash scripts/sync-codex.sh — all validators green; mirror byte-identical idempotent across 2 runs, flowctl validate --spec fn-52-tracker-sync-bridge-project-flow-specs — valid, 11 tasks, impl-review rp --base $(git merge-base HEAD main) — SHIP (NEEDS_WORK→SHIP, 4 findings fixed)
 - PRs:
