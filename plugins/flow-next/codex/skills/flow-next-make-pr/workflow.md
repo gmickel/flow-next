@@ -321,11 +321,13 @@ This task (fn-42.3) is responsible for steps 1-4. Steps 5-11 are owned by other 
 **Summary block** — a single blockquote directly under the H1, four lines:
 
 ```markdown
-> **Spec:** [<spec-id>](.flow/specs/<spec-id>.md)
+> **Spec:** [<spec-id>](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/specs/<spec-id>.md)
 > **Branch:** `<branch>` → `<base>`
 > **Tasks:** <done> completed (<open> open if any — flagged in Open items)
 > **R-ID coverage:** <covered>/<total> satisfied
 ```
+
+(The spec link is a `.flow/*` artifact → blob, SHA-pinned per §2.4b. Same for every `.flow/tasks/*` / `.flow/memory/*` link below.)
 
 All four values come from the payload directly:
 
@@ -360,8 +362,8 @@ Render `## R-ID coverage` as a markdown table. Exact column order, exact header 
 ```markdown
 | R-ID | Acceptance criterion | Task | Evidence |
 |------|----------------------|------|----------|
-| R1 | <criterion text, ≤120 chars + … if truncated> | [fn-N.M](.flow/tasks/fn-N.M.md) | [`<sha7>`](../../commit/<sha40>) |
-| R2 | <…> | [fn-N.K](.flow/tasks/fn-N.K.md), [fn-N.L](.flow/tasks/fn-N.L.md) | [`<sha7>`](../../commit/<sha40>), [`<sha7>`](../../commit/<sha40>) |
+| R1 | <criterion text, ≤120 chars + … if truncated> | [fn-N.M](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/tasks/fn-N.M.md) | [`<sha7>`](https://github.com/<owner>/<repo>/commit/<sha40>) |
+| R2 | <…> | [fn-N.K](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/tasks/fn-N.K.md), [fn-N.L](…) | [`<sha7>`](https://github.com/<owner>/<repo>/commit/<sha40>), [`<sha7>`](…) |
 | R7 | <…> | ⚠️ uncovered | — |
 ```
 
@@ -369,8 +371,8 @@ Field rules:
 
 - **R-ID column** — every entry from `spec.spec_sections.acceptance_criteria[].id` in spec order. NEVER renumber; gaps in numbering (R1, R3, R5 — R2 deleted post-creation) are preserved verbatim per the R-ID renumber-forbidden rule.
 - **Acceptance criterion column** — `spec.spec_sections.acceptance_criteria[].text` truncated to 120 characters. If truncated, append `…` (single ellipsis character, not three dots). Never edit content; truncation is mechanical at byte boundary respecting word boundaries when feasible.
-- **Task column** — derived ONLY from `tasks[].satisfies[]`. For each R-ID, find every task whose `satisfies` array contains that R-ID. Render as a comma-separated list of links: `[fn-N.M](.flow/tasks/fn-N.M.md)`. **Never infer from task title.** Never infer from commit message text. If `tasks[].satisfies[]` is empty for every task → R-ID is uncovered → render `⚠️ uncovered`.
-- **Evidence column** — for each linked task, emit `[\`<sha7>\`](../../commit/<sha40>)` for every entry in `tasks[].evidence.commits`. SHAs come from the payload only; never invent. If a task has multiple commits, list all of them comma-separated. If the task has no evidence commits but is `done`, emit `—` (em-dash) in that slot. For uncovered R-IDs, emit a single `—`.
+- **Task column** — derived ONLY from `tasks[].satisfies[]`. For each R-ID, find every task whose `satisfies` array contains that R-ID. Render as a comma-separated list of **blob** links (task spec is an artifact to read): `[fn-N.M](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/tasks/fn-N.M.md)` (per §2.4b). **Never infer from task title.** Never infer from commit message text. If `tasks[].satisfies[]` is empty for every task → R-ID is uncovered → render `⚠️ uncovered`.
+- **Evidence column** — for each linked task, emit an absolute whole-commit-diff link `[\`<sha7>\`](https://github.com/<owner>/<repo>/commit/<sha40>)` for every entry in `tasks[].evidence.commits` (per §2.4b — NOT the bare `../../commit/` relative form). SHAs come from the payload only; never invent. If a task has multiple commits, list all of them comma-separated. If the task has no evidence commits but is `done`, emit `—` (em-dash) in that slot. For uncovered R-IDs, emit a single `—`.
 
 After the table, if `tasks_summary.uncovered_r_ids` is non-empty, append a single italic sentence:
 
@@ -413,54 +415,59 @@ This is the one section that doesn't honor the §2.6 omission rule — even a ti
 
 **File path rule.** Every path in a Critical changes bullet must appear in `diff_summary.files[]`. The agent never invents paths from the spec or from imagined structure. If a tier wants to surface a file that isn't in `diff_summary.files[]`, that bullet is dropped — not approximated.
 
-### 2.4b — Linkable file references (load-bearing — applies to Critical changes, Where to look, R-ID coverage, anywhere a path appears)
+### 2.4b — Linkable file references (load-bearing — applies to Critical changes, Where to look, R-ID coverage, Decisions, anywhere a path appears)
 
-**Validated empirically on PR #131 during fn-42 dogfood.** Bare-code-span paths (`` `plugins/flow-next/scripts/flowctl.py` ``) are NOT auto-linked by GitHub in PR descriptions — they render as inline code only. A reviewer who wants to inspect the file has to open a new tab and navigate manually. Make every file reference a real link.
+**Relative links DO NOT work in PR/issue bodies.** GitHub resolves a relative link in a PR *description* against the current **page URL** (`…/pull/<N>/…`) — producing a broken `…/pull/<N>/<relpath>` link, NOT the repo file. (This is the opposite of markdown *files inside the repo*, where relative links resolve against the file's location — which is where the wrong assumption came from. Validated wrong on PR #153.) Bare-code-span paths (`` `path` ``) are also not auto-linked — they render as inline code only.
 
-**Required wrapping for any file path in the body:**
+**Every file/path reference in the body MUST be an absolute `https://github.com/<owner>/<repo>/…` URL.** Pick the URL **by purpose — diff for code, blob for artifacts:**
 
-| What you have | How to render it |
-|---------------|------------------|
-| Bare path (`<path>`) | `` [`<path>`](<path>) `` — e.g. `` [`plugins/flow-next/scripts/flowctl.py`](plugins/flow-next/scripts/flowctl.py) `` |
-| Path + line number | `` [`<path>:L<n>`](https://github.com/<owner>/<repo>/blob/<head-branch>/<path>#L<n>) `` |
-| Path + line range | `` [`<path>:L<a>-L<b>`](https://github.com/<owner>/<repo>/blob/<head-branch>/<path>#L<a>-L<b>) `` |
+| Reference | Render as | Why |
+|-----------|-----------|-----|
+| **Code under review** (Critical changes, Where to look) | `` [`<path>`](https://github.com/<owner>/<repo>/commit/<sha>#<anchor>) `` — per-commit **diff** + file anchor | reviewer wants the *change*; `<sha>` = the commit that changed the file (from `tasks[].evidence.commits[]`); `<anchor>` lands on that file's diff |
+| **Artifact to read** (`.flow/specs/*`, `.flow/tasks/*`, `.flow/memory/*`, a doc cited for context) | `` [`<path>`](https://github.com/<owner>/<repo>/blob/<head-sha>/<path>) `` — **blob**, SHA-pinned | read in full, not as a diff; SHA-pin so links survive branch deletion after merge |
+| **Evidence column** (R-ID table) | `` [`<sha7>`](https://github.com/<owner>/<repo>/commit/<sha>) `` — whole-commit diff | "this commit satisfied the R-ID" |
+| **Line ref** (rare) | `` [`<path>:L<n>`](https://github.com/<owner>/<repo>/blob/<head-sha>/<path>#L<n>) `` — blob + line, SHA-pinned | precise line; deep-links work on fresh load |
 
-**Why:** GitHub auto-resolves *relative paths* in PR description markdown to the repo's default branch (the head branch in PR context). So `` [`x.md`](path/to/x.md) `` works without absolute URL. For **line refs**, relative paths can't carry a `#L<n>` anchor that GitHub recognizes — full `https://github.com/<owner>/<repo>/blob/<branch>/<path>#L<n>` is the only form that works.
-
-**Owner/repo and head branch lookup (the host agent runs this once per PR):**
+**Lookup + the code-diff `<anchor>` (the host agent runs this once per PR).** The anchor is GitHub's per-file diff id: `diff-` + the lowercase SHA-256 hex of the file-path string.
 
 ```bash
-GH_NAMEWITHOWNER=$(gh repo view --json nameWithOwner --jq .nameWithOwner) # "owner/repo"
-GH_HEAD_BRANCH=$(git branch --show-current) # head ref name
-BLOB_BASE="https://github.com/${GH_NAMEWITHOWNER}/blob/${GH_HEAD_BRANCH}"
-# Then: any line ref → ${BLOB_BASE}/${path}#L${n}
+GH_NWO=$(gh repo view --json nameWithOwner --jq .nameWithOwner) # "owner/repo"
+HEAD_SHA=$(git rev-parse HEAD) # SHA-pin blob links (survive branch delete)
+BLOB_BASE="https://github.com/${GH_NWO}/blob/${HEAD_SHA}"
+COMMIT_BASE="https://github.com/${GH_NWO}/commit"
+file_anchor() { printf 'diff-%s' "$(printf '%s' "$1" | shasum -a 256 | cut -d' ' -f1)"; }
+# code ref → ${COMMIT_BASE}/${sha}#$(file_anchor "$path")
+# artifact → ${BLOB_BASE}/${path}
+# evidence → ${COMMIT_BASE}/${sha}
 ```
 
-If `gh repo view` fails (no remote, missing auth), the agent **omits line numbers** (drops `:L<n>` from the reference) rather than emit a broken link. Bare relative path links still work.
+**Anchor caveat (do NOT try to "fix" it).** The `#diff-<hash>` anchor lands on the file's diff on a **fresh page load / new tab (Cmd-click)**; on a plain *same-tab* click GitHub lazy-renders large commit diffs and won't auto-scroll — it still opens the correct commit diff, just without the jump. This is a GitHub limitation. **You cannot force new-tab** — GitHub strips `target="_blank"`/`rel` from PR-body markdown (verified). Reviewers Cmd-click focus links, so keep the anchor; it degrades gracefully to the whole-commit diff.
+
+If `gh repo view` / `git rev-parse` fails (no remote, missing auth), **render paths as bare inline code** (`` `path` ``) rather than emit a broken relative link — an unlinked path beats a 404.
 
 **Where this applies:**
 
-- **§2.3 R-ID coverage table** — task ids already linked; commit SHAs already linked; the *file path column* (when present in evidence) follows this rule.
-- **§2.4 Critical changes** — every path in a bullet is wrapped. `` `<path>` `` alone is forbidden in this section.
-- **§2.12 Where to look** (fn-42.4) — every file:line reference uses the blob URL form.
-- **Decisions made** (fn-42.4) — every memory entry id already linked; if the entry references a code path, that path follows this rule.
-- **Mermaid prose summary** (§3 / fn-42.5) — paths in the prose paragraph above each codefence follow this rule. Mermaid node labels themselves CANNOT carry markdown links (mermaid renders labels as plain text), so paths inside diagrams stay bare.
+- **§2.3 R-ID coverage table** — Task column → blob (artifact); Evidence column → whole-commit diff.
+- **§2.4 Critical changes** — every code path → code-diff link (commit + anchor). Bare `` `<path>` `` or a relative link is forbidden here.
+- **§2.12 Where to look** — every code path → code-diff link (commit + anchor).
+- **§2.8 Decisions made** — the memory-entry id → blob (`.flow/memory/<id>.md`), SHA-pinned. If a decision cites a code path, that path → code-diff link.
+- **Mermaid prose summary** (§3) — paths in the prose follow this rule (absolute). Mermaid node labels CANNOT carry markdown links (plain-text), so paths inside diagrams stay bare.
 
-**One bare exception:** plain `path` strings inside the structured-input citations like `diff_summary.files[]` or `spec.spec_sections.acceptance_criteria` are JSON field references, not user-facing paths. Those stay as inline code (`` `diff_summary.files[]` ``) without linking.
+**One bare exception:** plain `path` strings that are JSON *field references* in the prose (`` `diff_summary.files[]` ``, `` `tasks[].satisfies[]` ``) are not user-facing file paths — leave them as inline code, unlinked.
 
-**Anti-pattern (caught on PR #131 dogfood):**
-
-```markdown
-- **Architecture:** `plugins/flow-next/scripts/flowctl.py` `cmd_spec_export_cognitive_aid` (~line 12001) — Does the schema cover...
-```
-
-The path renders as inline code with no link; the reviewer copies and pastes into a new tab. Correct form:
+**Anti-patterns:**
 
 ```markdown
-- **Architecture:** [`plugins/flow-next/scripts/flowctl.py:L12001`](https://github.com/owner/repo/blob/branch/plugins/flow-next/scripts/flowctl.py#L12001) `cmd_spec_export_cognitive_aid` — Does the schema cover...
+- [`plugins/flow-next/scripts/flowctl.py`](plugins/flow-next/scripts/flowctl.py) ← BROKEN: relative → resolves to /pull/<N>/plugins/... (404)
+- `plugins/flow-next/scripts/flowctl.py` (~line 12001) ← inline code, no link at all
 ```
 
-One click takes the reviewer to the exact line.
+Correct:
+
+```markdown
+- **Where to look:** [`plugins/flow-next/scripts/flowctl.py`](https://github.com/owner/repo/commit/<sha>#diff-<sha256(path)>) — Does the schema cover...
+- **Read:** [`.flow/specs/fn-1-foo.md`](https://github.com/owner/repo/blob/<head-sha>/.flow/specs/fn-1-foo.md)
+```
 
 ### 2.5 — Hallucination guardrails (load-bearing for fn-42.3)
 
@@ -540,14 +547,14 @@ These five sections are **read-only mirrors of structured fields**. The host age
 Render `## Decisions made` when `memory_during_spec.decisions[]` is non-empty. Each entry from the array becomes one bullet; bullet shape is fixed:
 
 ```markdown
-- **<title>** ([<id>](.flow/memory/<id>.md)) — <first_sentence>. Alternatives considered: <alternatives_considered>.
+- **<title>** ([<id>](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/memory/<id>.md)) — <first_sentence>. Alternatives considered: <alternatives_considered>.
 ```
 
 Field rules:
 
 - **`<title>`** — `decisions[].title` verbatim. No editing, no truncation.
 - **`<id>`** — `decisions[].id` verbatim (e.g. `knowledge/decisions/use-deterministic-export-2026-05-07`). Memory IDs are file-path-shaped.
-- **Link target** — `.flow/memory/<id>.md`. The `id` already contains the track/category prefix; concatenating with `.flow/memory/` gives a relative path the forge will resolve.
+- **Link target** — blob, SHA-pinned (per §2.4b — `.flow/memory/<id>.md` is an artifact to read): `https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/memory/<id>.md`. The `id` already contains the track/category prefix; concatenate it after `.flow/memory/`. (A bare relative `.flow/memory/<id>.md` is BROKEN in a PR body — see §2.4b.)
 - **`<first_sentence>`** — `decisions[].first_sentence` verbatim. flowctl already extracted this via `_export_first_sentence`. Never re-extract, never paraphrase.
 - **`<alternatives_considered>`** — `decisions[].alternatives_considered` from the export. **Caveat: this field arrives as a stringified Python list** (e.g. `"['option-a', 'option-b']"`) because flowctl wraps the frontmatter list with `str()` during export. The host agent renders it readably:
  - String matches `^\[.*\]$` and is non-empty → strip the brackets + quotes, emit as a comma-separated phrase: `option-a, option-b`.
@@ -850,7 +857,7 @@ The body's final line is a single italicized provenance breadcrumb. **Always emi
 ```markdown
 ---
 
-*Generated by `/flow-next:make-pr` from [<spec-id>](.flow/specs/<spec-id>.md) against `<base-ref>` on <YYYY-MM-DD>.*
+*Generated by `/flow-next:make-pr` from [<spec-id>](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/specs/<spec-id>.md) against `<base-ref>` on <YYYY-MM-DD>.*
 ```
 
 Field rules:
