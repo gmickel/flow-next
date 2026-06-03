@@ -99,8 +99,10 @@ line. The marker is the canonical dedup key and the back-reference all at once:
 > file's richer HTML-comment form (`<!-- flow-next:sync … -->`) is what is actually
 > *written into the body*; the adapter's `flow-evt:<event>` is the **shorthand it
 > parses out of that line** into `comment.marker`. One marker, two views: the full
-> HTML comment in the body (carries `spec` + `evidence`), the `flow-evt:<event>`
-> token the adapter exposes as `comment.marker`. A comment whose `marker` is
+> HTML comment in the body (carries `issue` + `spec` + `evidence`; `issue` is the
+> linkify-safe match key), the `flow-evt:<event>` token the adapter exposes as
+> `comment.marker`. **On read, normalize tracker mention-markup** (`<issue …>KEY</issue>` →
+> `KEY`) before parsing the line, so a linkified marker still resolves. A comment whose `marker` is
 > non-null is **flow's own** — skip it on pull.
 
 **On pull:** a tracker comment whose `marker` is non-null (the `flow-next:sync`
@@ -264,7 +266,7 @@ oracles for R8, exercisable by the host agent reading them (no live Linear; the 
 
 **Action:** re-run the `work.done` sync for the same spec + same commit.
 
-**Expected:** Layer 1 exact-match (`spec`+`evt`+`evidence`) finds the existing
+**Expected:** Layer 1 exact-match (`issue`+`evt`+`evidence`) finds the existing
 marker → **skip the post**. No second comment.
 
 **Oracle:** the issue still has exactly one `work.done evidence=a1b2c3d` comment;

@@ -210,6 +210,7 @@ if [[ "$OPEN_COUNT" -gt 0 ]]; then
     echo "Note: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS) — opening as a DRAFT. Run /flow-next:work to finish, then mark the PR ready." >&2
   fi
 fi
+```
 
 ### 0.6 — Existing-PR refusal
 
@@ -267,7 +268,7 @@ Phases 1-5 read `$PHASE0_CONTEXT` rather than re-deriving values.
 
 - `gh` is installed AND authenticated.
 - `SPEC_ID` resolves to a spec in `.flow/specs/` (or the legacy `.flow/epics/` alias dir).
-- `BASE_REF` resolves to a real git ref AND is an ancestor of HEAD with `COMMITS_AHEAD >= 1`.
+- `BASE_REF` resolves to a real git ref AND shares a merge-base with HEAD AND `COMMITS_AHEAD >= 1` since that merge-base. (Base is NOT required to be an ancestor of HEAD — see §0.4 / §0.5.)
 - Open-task validation passed (silently, with warning, or with explicit user override).
 - No OPEN PR exists on the current branch.
 - Ralph context captured. `PHASE0_CONTEXT` JSON is built and ready for Phase 1.
@@ -1326,8 +1327,11 @@ if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
     linear) [ -n "$TRK_ID" ] && REF="Ref ${TRK_ID}" ;;      # WOR-N → Linear auto-link + Diffs
     github) [ -n "$TRK_ID" ] && REF="Refs ${TRK_ID}" ;;      # #N → native GitHub cross-reference
   esac
-  # TRK_ID already carries the tracker's display form (WOR-17 / #123); skip if present.
-  if [ -n "$REF" ] && ! grep -qiF "$TRK_ID" "$BODY_FILE"; then
+  # Idempotency: match the exact ref LINE (whole-line, case-insensitive), NOT any
+  # substring — the cognitive-aid body already mentions the spec path
+  # (.flow/specs/wor-17-slug.md), so a substring grep for "WOR-17" would
+  # false-positive and silently skip the ref. `-x` whole-line + `-F` fixed-string.
+  if [ -n "$REF" ] && ! grep -qixF "$REF" "$BODY_FILE"; then
     printf '\n\n---\n%s\n' "$REF" >> "$BODY_FILE"
   fi
 fi
