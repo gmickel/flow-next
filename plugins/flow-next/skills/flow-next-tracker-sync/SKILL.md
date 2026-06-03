@@ -11,10 +11,10 @@ The `.flow/specs/<id>.md` spec is the source of truth and the quality layer; the
 
 This skill is the **spine**: the discovery ceremony, the spec↔issue grain, the identity/naming alias, and a **transport-blind** push/pull/reconcile orchestration skeleton. It does NOT contain transport code or merge logic — those plug in via the interface defined here:
 
-- **Transports** (`fetchIssue` / `writeIssue` / `listComments` / `postComment` / `readStatus` / `setStatus`) are implemented by the Linear adapter (fn-52.3) and GitHub adapter (fn-52.7). This skill calls them through the normalized interface; it never sees a wire shape.
+- **Transports** (`fetchIssue` / `writeIssue` / `listComments` / `postComment` / `readStatus` / `setStatus`) are implemented by the Linear adapter (fn-52.3) and GitHub adapter (fn-52.7). This skill calls them through the normalized interface; it never sees a wire shape. The **Linear adapter is a detect-best-available transport ladder** (MCP → GraphQL → no-op, mirroring fn-51's driver ladder) — see [`references/linear-ladder.md`](references/linear-ladder.md).
 - **Reconcile** (3-way body merge — fn-52.4; status who-wins + comment append — fn-52.5) operates only on the **normalized payload structs** (`issue` / `comment` / `status`) the adapters exchange. Defined in `references/adapter-interface.md`.
 
-**Read [steps.md](steps.md) for the full phase-by-phase execution.** Read [`references/adapter-interface.md`](references/adapter-interface.md) for the transport interface + normalized payload contract, and [`references/identity.md`](references/identity.md) for the hybrid id model (tracker-first canonical vs flow-first alias).
+**Read [steps.md](steps.md) for the full phase-by-phase execution.** Read [`references/adapter-interface.md`](references/adapter-interface.md) for the transport interface + normalized payload contract, [`references/identity.md`](references/identity.md) for the hybrid id model (tracker-first canonical vs flow-first alias), and [`references/linear-ladder.md`](references/linear-ladder.md) (→ [`linear-mcp.md`](references/linear-mcp.md), [`linear-graphql.md`](references/linear-graphql.md)) for the Linear transport ladder.
 
 > Sync engine shape (discovery ceremony, per-item `lastSyncedAt`, surface-diffs-never-overwrite) adapted from Ray Fernando's `running-bug-review-board` `issue-trackers.md` (Apache-2.0) — see CHANGELOG.
 

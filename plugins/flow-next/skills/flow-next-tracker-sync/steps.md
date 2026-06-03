@@ -21,12 +21,16 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
 
 1. **Probe the four signals** (see SKILL.md table). Detection lives here, not flowctl:
    ```bash
-   # Linear MCP: inspect the host's MCP/tool list for a Linear server (e.g. save_issue / save_comment).
-   #   (host-agent introspection — no flowctl call.)
+   # Linear MCP: inspect the host's MCP/tool list for a Linear server (verified upsert
+   #   verbs save_issue / save_comment / list_comments / get_issue / list_issue_statuses —
+   #   see references/linear-mcp.md). Host-agent introspection — no flowctl call.
    LINEAR_API=0; [ -n "${LINEAR_API_KEY:-}" ] && LINEAR_API=1
    GH_OK=0; gh auth status >/dev/null 2>&1 && GH_OK=1
    # Jira: a *.atlassian.net host visible in config/env (surface only — out of scope here).
    ```
+   The Linear transport rung the bridge will use follows from these signals (MCP
+   beats GraphQL when both present): MCP registered → rung 1; else `LINEAR_API_KEY`
+   set → rung 2 (GraphQL); else no-op. See [`references/linear-ladder.md`](references/linear-ladder.md).
 2. **Surface present AND absent.** Tell the user what was found and what wasn't — e.g. "Linear MCP: present. LINEAR_API_KEY: absent. gh: authenticated. Jira: none." Absent signals matter (they explain why a transport is unavailable).
 3. **ASK via `AskUserQuestion`** (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). Lead with the recommended tracker (the strongest present signal) + a one-sentence rationale. Ask: enable the bridge? which tracker (`linear` / `github`)? which lifecycle events to opt in (capture/interview/plan/work.firstClaim/work.done/makePr/resolvePr/completionReview, each `off | pull | push | reconcile | comment`)? Resolution is **env > config > ASK** — don't re-ask anything env/config already decided.
 4. **On confirmation only, write config** (dot-paths are safe):
@@ -86,7 +90,7 @@ If `set-tracker-id` reports a collision, ask the user (interactive) or queue (`s
 
 ## Phase 3 — Orchestration skeleton (transport-blind)
 
-Route the operation; each layer calls hooks that operate on the normalized structs ([`references/adapter-interface.md`](references/adapter-interface.md)). The skeleton is real; the hook bodies plug in later.
+Route the operation; each layer calls hooks that operate on the normalized structs ([`references/adapter-interface.md`](references/adapter-interface.md)). The skeleton is real; the hook bodies plug in later. The **Linear transport hooks** (`fetchIssue`/`writeIssue`/`listComments`/`postComment`/`readStatus`/`setStatus`) are implemented by the detect-best-available ladder in [`references/linear-ladder.md`](references/linear-ladder.md) (MCP → GraphQL → no-op); GitHub's are fn-52.7.
 
 ```
 push(spec):
