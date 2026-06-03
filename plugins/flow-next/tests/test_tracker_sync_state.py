@@ -151,6 +151,57 @@ class TrackerSyncStateTestCase(unittest.TestCase):
         # Distinct content → distinct hashes.
         self.assertNotEqual(state["baseHashFlow"], state["baseHashTracker"])
 
+    def test_merge_base_partial_update_rejected(self) -> None:
+        # The merge base is a PAIRED snapshot at one sync point. A partial
+        # write (only one side) would desync the 3-way merge base, so it must
+        # be rejected and leave state unchanged.
+        spec_id = self._create_spec("Paired base invariant")
+        # Seed a complete paired base.
+        self._call(
+            func=self.flowctl.cmd_sync_set_merge_base,
+            id=spec_id,
+            flow="flow v1",
+            flow_file=None,
+            tracker="tracker v1",
+            tracker_file=None,
+        )
+        before = self._state(spec_id)
+        # Attempt a flow-only update → must error.
+        with self.assertRaises(SystemExit):
+            self._call(
+                func=self.flowctl.cmd_sync_set_merge_base,
+                id=spec_id,
+                flow="flow v2",
+                flow_file=None,
+                tracker=None,
+                tracker_file=None,
+            )
+        # State unchanged — the stale-half pin never happened.
+        after = self._state(spec_id)
+        self.assertEqual(after["mergeBaseFlow"], before["mergeBaseFlow"])
+        self.assertEqual(after["mergeBaseTracker"], before["mergeBaseTracker"])
+        self.assertEqual(after["baseHashFlow"], before["baseHashFlow"])
+        # A tracker-only update is likewise rejected.
+        with self.assertRaises(SystemExit):
+            self._call(
+                func=self.flowctl.cmd_sync_set_merge_base,
+                id=spec_id,
+                flow=None,
+                flow_file=None,
+                tracker="tracker v2",
+                tracker_file=None,
+            )
+        # And a no-arg call is rejected too.
+        with self.assertRaises(SystemExit):
+            self._call(
+                func=self.flowctl.cmd_sync_set_merge_base,
+                id=spec_id,
+                flow=None,
+                flow_file=None,
+                tracker=None,
+                tracker_file=None,
+            )
+
     def test_clear_wipes_state(self) -> None:
         spec_id = self._create_spec("Epsilon tracker state")
         self._set_id(spec_id, "uuid-eps", identifier="WOR-3")

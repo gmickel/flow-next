@@ -19103,6 +19103,12 @@ def cmd_sync_set_merge_base(args: argparse.Namespace) -> None:
     The skill (.4) computes the snapshots and passes them in; flowctl just
     writes them atomically. Content hashes power the echo-fence (a post-push
     hash match on the next pull = flow's own echo, not a real conflict).
+
+    PAIRED INVARIANT: the merge base is the body on BOTH sides at the SAME
+    sync point — the 3-way merge's common ancestor. Both `--flow` and
+    `--tracker` (or their `-file` forms) MUST be supplied together; a partial
+    write would pin one half to a stale sync point and make the agentic merge
+    (.4) compare against mismatched ancestors. A partial call is rejected.
     """
     if not ensure_flow_exists():
         error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
@@ -19112,14 +19118,26 @@ def cmd_sync_set_merge_base(args: argparse.Namespace) -> None:
     flow_body = _read_optional_arg_or_file(args.flow_file, args.flow)
     tracker_body = _read_optional_arg_or_file(args.tracker_file, args.tracker)
 
+    if (flow_body is None) != (tracker_body is None):
+        error_exit(
+            "set-merge-base requires BOTH sides together (a paired snapshot at "
+            "one sync point): supply both --flow/--flow-file AND "
+            "--tracker/--tracker-file. A partial update would desync the "
+            "3-way merge base.",
+            use_json=args.json,
+        )
+    if flow_body is None and tracker_body is None:
+        error_exit(
+            "set-merge-base needs --flow/--flow-file and --tracker/--tracker-file.",
+            use_json=args.json,
+        )
+
     spec_json_path, spec_data = _resolve_sync_spec(args)
     state = spec_data["tracker"]
-    if flow_body is not None:
-        state["mergeBaseFlow"] = flow_body
-        state["baseHashFlow"] = _content_hash(flow_body)
-    if tracker_body is not None:
-        state["mergeBaseTracker"] = tracker_body
-        state["baseHashTracker"] = _content_hash(tracker_body)
+    state["mergeBaseFlow"] = flow_body
+    state["baseHashFlow"] = _content_hash(flow_body)
+    state["mergeBaseTracker"] = tracker_body
+    state["baseHashTracker"] = _content_hash(tracker_body)
     _write_sync_state(spec_json_path, spec_data)
 
     if args.json:
