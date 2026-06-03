@@ -41,9 +41,8 @@ Scaffold the new `flow-next-tracker-sync` skill: the discovery ceremony, the spe
 - [ ] SKILL.md uses `AskUserQuestion` canonically (Codex-mirror-ready)
 
 ## Done summary
-TBD
-
+Scaffolded the `flow-next-tracker-sync` skill spine: discovery ceremony (R2: detect/surface/ask/never-assume + provenance + no-signal-no-write), flexible flow-first/tracker-first entry (R2), one-spec-to-one-issue grain with tasks-flow-local + deferred checklist render (R3), hybrid tracker-key identity via fn-52.10's id layer with never-rename (R16), and a transport-blind push/pull/reconcile orchestration skeleton plus a normalized issue/comment/status adapter-interface contract that fn-52.3/.7 (transports) and fn-52.4/.5 (reconcile) plug into. Added the new `/flow-next:tracker-sync` command (distinct from plan-sync's `/flow-next:sync`). No flowctl.py edits — the skill calls the .1 sync helpers and the .10 tracker-first create/resolver. Canonical files are Claude-native (AskUserQuestion, Task); Codex mirror is regenerated in fn-52.9.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: b423c7e3865aec662acbbd0f8d98c0c3423f9b8e
+- Tests: plugins/flow-next/scripts/ci_test.sh (58 passed / 0 failed), flowctl validate --spec fn-52-tracker-sync-bridge-project-flow-specs (valid), impl-review rp backend: SHIP (0 findings, first pass)
 - PRs:

@@ -36,9 +36,8 @@ The Linear transport behind the .2 adapter interface — a detect-best-available
 - [ ] Error contract: a missing/deleted/404 linked issue emits an `errored`/`queued` receipt and prompts/queues unlink — it does NOT crash, clear state, or advance `lastSyncedAt`; rate-limit (`RATELIMITED`/HTTP-400) backs off rather than failing the run [R13]
 
 ## Done summary
-TBD
-
+Implemented the Linear transport adapter as a detect-best-available ladder (MCP → GraphQL via LINEAR_API_KEY → no-op + receipt; neither a hard dependency) across three new skill references — linear-ladder.md (rung router, normalized-mapping firewall, MCP↔GraphQL parity table, runnable round-trip spike with a diff oracle, and the never-crash error contract for 404/deleted/RATELIMITED), linear-mcp.md (interactive rung with a dated tool-name pin: save_issue/save_comment/list_comments/get_issue/list_issue_statuses upsert verbs verified 2026-06-03), and linear-graphql.md (headless rung: auth-no-Bearer asymmetry, id-vs-identifier, complexity rate limit as HTTP-400 RATELIMITED with backoff) — wired into SKILL.md and steps.md. Live Linear round-trip execution is intentionally deferred to the post-PR smoke phase (no creds in this env); the spike is a complete runnable procedure with an explicit pass/fail oracle.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 631d7e1, 863d712, b0e939b, adf5fa6
+- Tests: flowctl validate --spec fn-52-tracker-sync-bridge-project-flow-specs (Valid: True), markdown fence-balance + cross-ref link resolution checks (all pass), impl-review rp backend: SHIP (2 NEEDS_WORK rounds -> SHIP; sole findings were unbounded GraphQL connections, both fixed; R13 met across all 5 acceptance criteria)
 - PRs:

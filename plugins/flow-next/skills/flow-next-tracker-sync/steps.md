@@ -90,36 +90,50 @@ If `set-tracker-id` reports a collision, ask the user (interactive) or queue (`s
 
 ## Phase 3 — Orchestration skeleton (transport-blind)
 
-Route the operation; each layer calls hooks that operate on the normalized structs ([`references/adapter-interface.md`](references/adapter-interface.md)). The skeleton is real; the hook bodies plug in later. The **Linear transport hooks** (`fetchIssue`/`writeIssue`/`listComments`/`postComment`/`readStatus`/`setStatus`) are implemented by the detect-best-available ladder in [`references/linear-ladder.md`](references/linear-ladder.md) (MCP → GraphQL → no-op); GitHub's are fn-52.7.
+Route the operation; each layer calls hooks that operate on the normalized structs ([`references/adapter-interface.md`](references/adapter-interface.md)). The skeleton is real; the hook bodies plug in later. The **Linear transport hooks** (`fetchIssue`/`writeIssue`/`listComments`/`postComment`/`readStatus`/`setStatus`) are implemented by the detect-best-available ladder in [`references/linear-ladder.md`](references/linear-ladder.md) (MCP → GraphQL → no-op); GitHub's are fn-52.7. The **body hooks** (`renderFlowToTracker` / `foldTrackerIntoFlow` / `threeWayMergeBody`) are the agentic 3-way merge + format translation in [`references/body-merge.md`](references/body-merge.md) (fn-52.4); status who-wins + comment append are fn-52.5.
 
 ```
 push(spec):
-  body    = renderFlowToTracker(spec)            [stub → fn-52.4]   # structured → free-form
+  body    = renderFlowToTracker(spec)            → body-merge.md Step 3 (flow→tracker)
   writeIssue(issue{... body ...})                [stub → fn-52.3/.7]
   setStatus(map flow status → tracker status)    [stub → fn-52.5]
   postComment(lifecycle event marker)            [stub → fn-52.5]
+  sync set-merge-base (BOTH halves) + set-last-synced   # snapshot the pushed pair (body-merge.md Step 5)
   receipt: pushed
 
 pull(spec):
   issue   = fetchIssue(trackerId)                [stub → fn-52.3/.7]  → normalized issue
   comments= listComments(trackerId)              [stub → fn-52.3/.7]  → normalized comment[]
   status  = readStatus(trackerId)                [stub → fn-52.3/.7]  → normalized status
-  foldTrackerIntoFlow(spec, issue, status)       [stub → fn-52.4/.5]  # free-form → right sections
-  receipt: pulled
+  foldTrackerIntoFlow(spec, issue, status)       → body-merge.md Step 3 (tracker→flow) + fn-52.5 status
+            # echo-fence first: pulled body hash == baseHashTracker ⇒ noop (body-merge.md Step 1 / Fixture D)
+  receipt: pulled | noop
+```
 
+For the **reconcile** path, the orchestration delegates the full 3-way merge to
+[`references/body-merge.md`](references/body-merge.md) (fn-52.4) — it is no longer a
+stub. The skeleton's job is to fetch the three inputs, hand them to the merge, and
+route the result to the receipt / defer / write-back; the merge logic (pre-reduction,
+agentic both-sides-diverged judgment, format translation, structural gate, scoped
+conflict) lives in that reference:
+
+```
 reconcile(spec):
-  base    = sync get-state → merge-base snapshot
+  base    = sync get-state → merge-base snapshot (BOTH forms: mergeBaseFlow + mergeBaseTracker)
   issue   = fetchIssue(trackerId)                [stub → fn-52.3/.7]
-  merged  = threeWayMergeBody(base, flowBody, issue.body)   [stub → fn-52.4]
-            # only-one-side-changed ⇒ auto-apply; byte-identical ⇒ no conflict;
-            # both-sides-diverged-same-content ⇒ scoped conflict (never whole-body)
-  if genuine conflict:
-     interactive → show merged body, confirm before write-back (AskUserQuestion)
-     Ralph       → sync defer (queue, never block)            [R9/R11]
+  merged  = threeWayMergeBody(base, flowBody, issue.body)   → body-merge.md
+            # Step 1 pre-reduce: echo / byte-identical / only-one-side-changed ⇒ auto (no conflict)
+            # Step 2 agentic merge (both diverged) + Step 3 format translation + Step 3.5 structural gate
+  if genuine conflict (body-merge.md Step 4):
+     interactive → show merged body, confirm the ONE scoped section before write-back (AskUserQuestion)
+     Ralph       → sync defer (queue the scoped conflict, never block)   [R9/R11]
+     receipt: diverged
   else:
      writeIssue(merged) + setStatus(who-wins)    [stub → fn-52.3/.7 + fn-52.5]
-     sync set-merge-base (BOTH halves) + sync set-last-synced
-  receipt: merged | diverged | queued
+     sync set-merge-base (BOTH halves) + sync set-last-synced   # body-merge.md Step 5 — ONLY on success
+     receipt: merged | updated
+  # no-base bootstrap (first link): body-merge.md "First-sync / no-base bootstrap" —
+  #   flow-first ⇒ fast-forward projection; tracker-first ⇒ seed base, pull-only. Never a conflict.
 ```
 
 **Echo-loop suppression** (constraint): after a push, record the resulting tracker-side content hash; on the next pull a hash match = flow's own echo ⇒ `noop`, never a phantom conflict. `lastSyncedAt` advances only on a real reconciliation, never on a no-op pull. The hash bookkeeping rides on the merge-base snapshot (fn-52.4).
@@ -134,7 +148,7 @@ $FLOWCTL sync receipt "$SPEC_ID" --status pushed --tracker-id "$ISSUE_UUID" --tr
 # --merges-file records body-merge records for audit/rollback (fn-52.4 supplies it)
 ```
 
-## Phase 4 — Genuine conflict (scoped) — [stub → fn-52.4/.5]
+## Phase 4 — Genuine conflict (scoped) — body-merge.md Step 4
 
 Only a genuine semantic contradiction the agent can't confidently resolve is surfaced — **scoped to the section**, never the whole body, never a silent overwrite. Interactive: show the merged body for confirmation before write-back. Ralph/autonomous: queue.
 
@@ -143,7 +157,7 @@ $FLOWCTL sync defer "$SPEC_ID" --summary "Goal section rewritten on both sides t
   --suggested "Human picks: keep flow's framing, the tracker's, or a merge" --reason "genuine-contradiction"
 ```
 
-The decision flow and the structural gate (no section silently dropped; both sides' non-conflicting additions present) live in fn-52.4. The scaffold only wires the `sync defer` queue + the interactive `AskUserQuestion` confirmation entry point.
+The decision flow and the structural gate (no section silently dropped; both sides' non-conflicting additions present) live in [`references/body-merge.md`](references/body-merge.md) (fn-52.4, Steps 3.5 + 4). The skeleton wires the `sync defer` queue + the interactive `AskUserQuestion` confirmation entry point; the merge reference owns the judgment of *what* is a genuine, section-scoped contradiction (vs an additive change both sides keep).
 
 ## Phase 5 — Unlink / teardown
 
