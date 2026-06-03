@@ -336,6 +336,120 @@ class ResolutionTestCase(unittest.TestCase):
         resolved = self.flowctl.expand_bare_spec_id(self.flow_dir, "wor-88")
         self.assertIn(resolved, {a, b})
 
+    # --- Case rule (uppercase handle) — review-cycle additions --------------
+
+    def test_casefold_handle_helper(self) -> None:
+        self.assertEqual(self.flowctl.casefold_handle("WOR-17"), "wor-17")
+        self.assertEqual(self.flowctl.casefold_handle("WOR-17.3"), "wor-17.3")
+        # Native + already-lowercase pass through unchanged.
+        self.assertEqual(self.flowctl.casefold_handle("fn-1"), "fn-1")
+        self.assertEqual(self.flowctl.casefold_handle("wor-17"), "wor-17")
+        self.assertIsNone(self.flowctl.casefold_handle(None))
+
+    def test_show_via_uppercase_handle(self) -> None:
+        canonical = self._create_tracker_spec("Fix login", "WOR-17")
+        res = self._call(func=self.flowctl.cmd_show, id="WOR-17")
+        self.assertEqual(res["id"], canonical)
+
+    def test_start_via_uppercase_task_handle(self) -> None:
+        spec_id = self._create_tracker_spec("Fix login", "WOR-17")
+        self._add_task(spec_id, "Step one")
+        started = self._call(
+            func=self.flowctl.cmd_start, id="WOR-17.1", note=None, force=False
+        )
+        self.assertEqual(started["status"], "in_progress")
+        self.assertEqual(started["id"], "wor-17-fix-login.1")
+
+    def test_expand_bare_spec_id_uppercase(self) -> None:
+        canonical = self._create_tracker_spec("Fix login", "WOR-17")
+        self.assertEqual(
+            self.flowctl.expand_bare_spec_id(self.flow_dir, "WOR-17"), canonical
+        )
+
+    # --- cmd_next / cmd_tasks enumeration — review-cycle additions ----------
+
+    def test_next_sees_tracker_spec(self) -> None:
+        spec_id = self._create_tracker_spec("Fix login", "WOR-17")
+        self._add_task(spec_id, "Step one")
+        res = self._call(
+            func=self.flowctl.cmd_next,
+            specs_file=None,
+            epics_file=None,
+            require_plan_review=False,
+            require_completion_review=False,
+        )
+        # `next` surfaces the tracker spec's task (not filtered out by fn regex).
+        self.assertNotEqual(res.get("status"), "done")
+        blob = json.dumps(res)
+        self.assertIn("wor-17-fix-login", blob)
+
+    def test_tasks_unfiltered_lists_tracker_tasks(self) -> None:
+        spec_id = self._create_tracker_spec("Fix login", "WOR-17")
+        self._add_task(spec_id, "Step one")
+        self._create_flow_spec("Plain flow")  # fn-1
+        # No --spec filter → must include the tracker-key task.
+        res = self._call(
+            func=self.flowctl.cmd_tasks, spec=None, epic=None, status=None
+        )
+        ids = [t["id"] for t in res["tasks"]]
+        self.assertIn("wor-17-fix-login.1", ids)
+
+    def test_tasks_scoped_by_tracker_handle(self) -> None:
+        spec_id = self._create_tracker_spec("Fix login", "WOR-17")
+        self._add_task(spec_id, "Step one")
+        res = self._call(
+            func=self.flowctl.cmd_tasks, spec="wor-17", epic=None, status=None
+        )
+        ids = [t["id"] for t in res["tasks"]]
+        self.assertEqual(ids, ["wor-17-fix-login.1"])
+
+    # --- task set-deps + spec deps via handle — review-cycle additions ------
+
+    def test_task_set_deps_via_aliases(self) -> None:
+        spec_id = self._create_tracker_spec("Fix login", "WOR-17")
+        self._add_task(spec_id, "Step one")
+        self._add_task(spec_id, "Step two")
+        res = self._call(
+            func=self.flowctl.cmd_task_set_deps,
+            task_id="wor-17.2",
+            deps="wor-17.1",
+        )
+        # Canonical task + canonical dep persisted; no alias leakage.
+        self.assertEqual(res["task"], "wor-17-fix-login.2")
+        data = json.loads(
+            (self.flow_dir / "tasks" / "wor-17-fix-login.2.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(data["depends_on"], ["wor-17-fix-login.1"])
+
+    def test_spec_add_dep_cross_spec_via_handle(self) -> None:
+        tracker_id = self._create_tracker_spec("Fix login", "WOR-17")
+        flow_id = self._create_flow_spec("Other work")  # fn-1-other-work
+        # spec add-dep wor-17 fn-1 → resolves both, persists canonical ids.
+        res = self._call(
+            func=self.flowctl.cmd_spec_add_dep,
+            epic="wor-17",
+            depends_on=flow_id,
+        )
+        self.assertEqual(res["id"], tracker_id)
+        self.assertIn(flow_id, res["depends_on_epics"])
+        # rm via handle removes it again.
+        rm = self._call(
+            func=self.flowctl.cmd_spec_rm_dep,
+            epic="wor-17",
+            depends_on=flow_id,
+        )
+        self.assertNotIn(flow_id, rm["depends_on_epics"])
+
+    # --- reserved key rejected at LINK time — review-cycle addition ---------
+
+    def test_set_tracker_id_rejects_reserved_fn_identifier(self) -> None:
+        flow_id = self._create_flow_spec("Plain flow")
+        with self.assertRaises(SystemExit):
+            with redirect_stderr(io.StringIO()):
+                self._set_tracker(flow_id, "uuid-x", "FN-17")
+
 
 if __name__ == "__main__":
     unittest.main()
