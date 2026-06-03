@@ -115,6 +115,7 @@ The two sides are in different formats; the merge spans the translation. The age
 
 ### flow → tracker (render structure into a readable issue)
 
+- **Project the ENTIRE spec — every section, in full.** The render is a *format translation*, NOT a summary: never condense, truncate, abbreviate, or omit a section, an R-ID, or a paragraph. A reader of the issue must see the same content as the spec, just as clean free-form markdown. "Projection, not coordination" also means projection-in-full — a summarized issue is a data-loss bug, and the Step 3.5 structural gate ("no section silently dropped") fails it. The ONLY content intentionally not surfaced is the flow-internal scaffolding called out below (scope HTML comments, source-tag breakdown comment); everything else is rendered.
 - Render the structured spec into clean free-form markdown a PM reads comfortably:
  keep the section headings as plain `##` headings, render acceptance criteria as a
  checklist, keep links/code spans intact.

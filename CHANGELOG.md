@@ -2,6 +2,11 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.5.2] - 2026-06-04
+
+### Fixed
+- **Tracker-sync now projects the ENTIRE spec to the issue body — render guardrail against summarization.** The flow→tracker push (`/flow-next:tracker-sync`) defines `renderFlowToTracker` as a full format-translation of the spec, and the body-merge Step 3.5 structural gate forbids dropping sections — but the *call sites* (`steps.md` Phase 2a + Phase 3 push skeleton) only pointed at the reference, so a host agent under token pressure could improvise a **condensed** issue body instead of mirroring the whole spec (projection is supposed to be projection-in-full). Added explicit "render the COMPLETE spec — every section, in full; never summarize/truncate" guardrails at both call sites and as the leading rule of `references/body-merge.md` Step 3 (flow→tracker), so the full-body requirement is unmissable at the point of action. No behavior change for an agent that already read the reference; closes the gap for one that didn't. Surfaced dogfooding the bridge against flow-next's own specs. Codex mirror regenerated.
+
 ## [flow-next 1.5.1] - 2026-06-03
 
 ### Fixed
