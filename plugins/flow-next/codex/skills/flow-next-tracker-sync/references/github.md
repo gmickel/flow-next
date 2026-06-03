@@ -277,6 +277,19 @@ printf '%s' "$BODY_WITH_MARKER" | gh issue comment "$NUMBER" -R "$REPO" --body-f
 Derived from the `fetchIssue` `state` + `stateReason` + `status:` label — no
 separate call (same as Linear deriving status from `state{name type}`).
 
+## `makePr` — link the PR to the issue (native GitHub, no "Diffs")
+
+When the tracker is **GitHub**, the spec maps to a GitHub *issue* and the PR lives
+in the same repo, so linkage is **native GitHub cross-referencing** — no Linear
+attachment, no Linear Diffs (GitHub has its own PR review UI). make-pr §4.6a's
+Linear branch is GitHub-typed-skipped; instead the GitHub adapter ensures the PR
+body carries a **non-closing** reference to the issue — `Refs #<number>` (NOT
+`Fixes #<number>`, which would auto-close the issue on merge and bypass
+spec-completion-review; flow-next owns the lifecycle, R7/R10). GitHub then renders
+the PR↔issue cross-link automatically. Gate is the same as Linear: bridge **active
+AND tracker.type == github** — no separate `makePr` opt-in. There is no rich-attach
+step (the cross-reference IS the link).
+
 ## Capability parity (GitHub ↔ Linear) — the R13 guarantee
 
 Reconcile is genuinely transport-blind only if the GitHub adapter produces the

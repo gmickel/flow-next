@@ -34,6 +34,18 @@ Supporting tools used during the discovery/link ceremony (not part of the six
 interface methods, but verified present): `list_teams`, `get_team`,
 `list_issue_labels` / `create_issue_label`, `list_projects`, `list_users`.
 
+**`makePr` (PR link → Linear Diffs) on the MCP rung.** The MCP exposes **no
+URL-attach tool** — `create_attachment` / `prepare_attachment_upload` are for
+*file* uploads, not for linking a GitHub PR. So on this rung the PR linkage relies
+entirely on **make-pr §4.6a** putting a non-closing `Ref WOR-N` in the PR body:
+Linear's GitHub integration auto-links the PR on the identifier, which is what
+makes **Linear Diffs** render it inside the issue. (The rich `attachmentLinkURL`
+belt-and-suspenders is GraphQL-rung only — [linear-graphql.md](linear-graphql.md).)
+The MCP *does* expose **read-only diff tools** — `list_diffs`, `get_diff`,
+`get_diff_threads` (resolve by GitHub PR URL) — handy for a future `resolvePr`
+touchpoint that folds Linear review threads back into flow; out of scope for the
+`makePr` link itself.
+
 **Asymmetry to remember vs the GraphQL rung:** MCP accepts the **identifier**
 (`WOR-17`) interchangeably with the UUID on most inputs (`get_issue`,
 `save_comment`'s `issueId`, `save_issue`'s update `id`). The GraphQL rung is

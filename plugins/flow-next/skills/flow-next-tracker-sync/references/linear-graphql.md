@@ -17,7 +17,8 @@ This rung needs **no tool-name pin** (unlike MCP — see
   a personal API key. This is an **asymmetry vs the MCP rung** (and vs OAuth
   access tokens, which DO use `Bearer`). Getting this wrong returns
   `authentication required`.
-- **Mutations:** `issueCreate` / `issueUpdate` / `commentCreate`.
+- **Mutations:** `issueCreate` / `issueUpdate` / `commentCreate`; for the `makePr` event, `attachmentLinkURL`.
+- **PR linkage (`makePr` → Linear Diffs):** attach the PR as a *rich* GitHub attachment with `attachmentLinkURL(issueId: <uuid>, url: <pr-url>)` — Linear auto-detects the GitHub URL and creates a status-syncing attachment. (The dedicated `attachmentLinkGitHubPR(issueId, url)` exists too; `attachmentLinkURL` is the safer public surface.) Do **NOT** use a plain `attachmentCreate` — that makes a dumb link with no status sync / diff. **The diff view itself is rendered by Linear from the GitHub PR — you cannot create a diff via API**; it appears once the PR is auto-linked by identifier (make-pr §4.6a puts a non-closing `Ref WOR-N` in the PR body) AND the workspace has the GitHub integration with code access + the user's personal GitHub connection. The attachment is the belt; the body `Ref` is the suspenders.
 - **id vs identifier:**
   - `issueUpdate(id:…)` and `issue(id:…)` accept **either** the UUID **or** the
     human identifier `WOR-17`.

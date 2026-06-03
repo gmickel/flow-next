@@ -1333,6 +1333,24 @@ sleep 1 # GitHub API eventual-consistency lag (cli/cli #2691)
 # remote tip. Strip the `origin/` prefix only at the gh boundary.
 BASE_BRANCH="${BASE_REF#origin/}"
 
+# 4.6a — Linear-Diffs linkage (LINEAR ONLY). For the PR to render as a reviewable
+# diff inside the Linear issue, GitHub's integration must auto-link it, which
+# happens when the issue identifier (WOR-N) appears in the branch / title / body.
+# We put it in the body here — BEFORE `gh pr create` — so the link forms at
+# creation. Gate is just **bridge active AND tracker.type == linear** — no separate
+# `makePr` opt-in: a `Ref` line is zero-cost, side-effect-light hygiene and is the
+# whole point of the linkage. Use a NON-CLOSING ref ("Ref WOR-N", not "Fixes") — it
+# links the PR (powers Diffs) WITHOUT auto-completing the Linear issue on merge;
+# flow-next owns the lifecycle (spec-completion-review flips it Done, R7/R10). A
+# GitHub tracker uses native `Refs #N` instead (github.md); no-tracker skips this.
+if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ] \
+ && [ "$("$FLOWCTL" config get tracker.type --json | jq -r '.value')" = "linear" ]; then
+ TRK_ID=$("$FLOWCTL" sync get-state "$SPEC_ID" --json | jq -r '.tracker.identifier // empty')
+ if [ -n "$TRK_ID" ] && ! grep -qiE "(ref|refs|part of|related to)[[:space:]]+${TRK_ID}([^0-9]|$)" "$BODY_FILE"; then
+ printf '\n\n---\nRef %s\n' "$TRK_ID" >> "$BODY_FILE" # non-closing → links to Linear, does NOT auto-close on merge
+ fi
+fi
+
 # Retry loop. Only retry on the eventual-consistency error class. Other errors
 # fail fast — re-running gh pr create after a 422 (body too long) or 401 (auth)
 # just produces the same error.
@@ -1548,17 +1566,23 @@ fi
 
 R24 invariant: under Ralph the PR URL is the **sole stdout artefact** in machine-parseable form (`PR_URL=<url>`), so the harness can capture it via `eval "$(/flow-next:make-pr ...)"` or by grep / tail. Everything else (memory write notes, recovery hints, breadcrumbs) routes through stderr where the harness logs it but doesn't parse it.
 
-### 5.6 — Tracker sync (opt-in) — attach the PR link to the issue
+### 5.6 — Tracker sync (opt-in) — link the PR to the issue (Diffs-ready)
 
-**Optional. Runs only when the tracker bridge is active AND `makePr` is opted in, and only after `gh pr create` returned a `$PR_URL` in §4.6 (never under `--dry-run` — Phase 4.0 short-circuits before Phase 5).** Attaches the PR link to the linked tracker issue (R10) — an append-only comment / attachment, conflict-free (R8). **Not Ralph-blocked** (make-pr runs under Ralph; attaching a link is a confident, conflict-free op).
+**Runs whenever the tracker bridge is active, after `gh pr create` returned a `$PR_URL` in §4.6 (never under `--dry-run` — Phase 4.0 short-circuits before Phase 5).** No separate `makePr` opt-in — linking a PR to its issue is zero-/near-zero-cost hygiene and is the whole value (Linear Diffs). Links the PR to the tracker issue (R10), append-only and conflict-free (R8). **Not Ralph-blocked** (attaching a link is a confident, conflict-free op).
+
+The **primary linkage already happened in §4.6a** — the `Ref <identifier>` line in the PR body, which makes the host's tracker integration auto-link the PR. §5.6 is the **enhancement layer** and is **transport- and tracker-type-aware**:
+
+- **Linear (`tracker.type == linear`):** the §4.6a body ref is what makes **Linear Diffs** render the PR inside the issue (Linear's GitHub integration auto-links on the `WOR-N` identifier). On the **GraphQL rung**, additionally create the *rich* GitHub-PR attachment + status sync via `attachmentLinkURL(issueId, $PR_URL)` (Linear auto-detects the GitHub URL; do NOT use `attachmentCreate` — that yields a dumb attachment with no diff/status). On the **MCP rung** there is no URL-attach tool, so it relies entirely on the §4.6a auto-link (sufficient — the integration does the rest). Optionally also post a one-line breadcrumb comment.
+ - *Prereqs are user-side and flow-next can't set them:* the Linear GitHub integration must have **code access**, the user needs a **personal GitHub connection**, and **"Enable code reviews"** must be on. Without these the PR still links (status sync works); only the rendered diff view requires them. (Documented in `docs/tracker-sync.md`.)
+- **GitHub (`tracker.type == github`):** the PR and issue share the repo — use a **native `Refs #N`** (non-closing) reference, handled by the GitHub adapter (`github.md`). No Linear-style attachment, no "Diffs".
 
 ```bash
 if [[ -n "$PR_URL" ]] \
- && [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ] \
- && [ "$("$FLOWCTL" config get tracker.perEvent.makePr --json | jq -r '.value')" != "off" ] \
- && [ "$("$FLOWCTL" config get tracker.perEvent.makePr --json | jq -r '.value')" != "null" ]; then
- # Invoke the flow-next-tracker-sync skill: attach $PR_URL to the linked issue.
- # skill: flow-next-tracker-sync (operation: comment <SPEC_ID>, payload: PR link)
+ && [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
+ # Invoke the flow-next-tracker-sync skill: link $PR_URL to the issue.
+ # linear → rich attachment via attachmentLinkURL (GraphQL rung) + optional breadcrumb comment;
+ # the §4.6a body ref already enabled the auto-link + Diffs.
+ # github → native `Refs #N` (github.md).
  # No-ops if the spec has no linked tracker id / no transport reachable.
  # Best-effort — the PR is already open; a tracker failure must NOT exit non-zero.
  # Under Ralph, framing routes to stderr (keeps the PR_URL=<url> stdout invariant).
@@ -1566,7 +1590,7 @@ if [[ -n "$PR_URL" ]] \
 fi
 ```
 
-The PR is already open before this step; a tracker-attach failure surfaces as a stderr warning and never changes the exit code (same non-fatal discipline as the `--memory` write in §5.1).
+The PR is already open before this step; a tracker failure surfaces as a stderr warning and never changes the exit code (same non-fatal discipline as the `--memory` write in §5.1).
 
 ### 5.5 — Cleanup
 

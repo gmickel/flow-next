@@ -104,6 +104,16 @@ Sync is wired into seven lifecycle skills as **opt-in touchpoints**, off by defa
 
 The lifecycle skills carry an opt-in `(+ optional tracker sync)` touchpoint — they call `flowctl sync active` to short-circuit when the bridge is off, so the default (off) path is a single value-check with no transport cost.
 
+**One exception — PR linkage is unconditional when the bridge is active.** make-pr always links the new PR to its tracker issue when `sync active` and the issue is linked — it does **not** require opting `makePr` in. Linking a PR to its issue is zero-/near-zero-cost hygiene and is the whole value (it powers Linear Diffs, below), so there's no reason to gate it. The `perEvent.makePr` leaf still governs any *extra* make-pr sync (e.g. a status comment).
+
+## Linear Diffs — review the PR inside the issue
+
+[Linear Diffs](https://linear.app/docs/diffs) (GA May 2026) renders a GitHub PR's diff, file changes, checks, and inline review threads directly on the Linear issue, and lets you approve / request changes / merge from Linear. flow-next makes your PRs **Diffs-ready automatically** when `tracker.type == linear`:
+
+- **What flow-next does:** make-pr puts a **non-closing** `Ref WOR-N` line in the PR body (make-pr §4.6a) so Linear's GitHub integration auto-links the PR to the issue — which is exactly what makes the diff render. On the GraphQL transport it also creates the rich PR attachment (`attachmentLinkURL`) for status sync. *Non-closing* (`Ref`, not `Fixes`) is deliberate: the PR links + renders as a diff but does **not** auto-complete the Linear issue on merge — flow-next's spec-completion-review owns the Done transition.
+- **What you must enable (one-time, Linear-side — flow-next can't set these):** the Linear **GitHub integration with code access** to the repo, your **personal GitHub connection**, and **"Enable code reviews"** in Linear settings. Without them the PR still links and status still syncs; only the rendered diff view needs them.
+- **GitHub tracker:** no Linear Diffs — the PR is cross-linked natively (`Refs #N`) in the same repo; review happens on GitHub.
+
 ## Reconciliation — who-wins
 
 - **Body** — agentic host-agent semantic **3-way merge** against the `lastSyncedAt` merge-base snapshot, translating between flow's structured spec and the tracker's free-form issue. Only **genuine contradictions** surface; confident merges proceed.
