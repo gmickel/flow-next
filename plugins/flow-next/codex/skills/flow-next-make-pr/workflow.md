@@ -1333,21 +1333,24 @@ sleep 1 # GitHub API eventual-consistency lag (cli/cli #2691)
 # remote tip. Strip the `origin/` prefix only at the gh boundary.
 BASE_BRANCH="${BASE_REF#origin/}"
 
-# 4.6a — Linear-Diffs linkage (LINEAR ONLY). For the PR to render as a reviewable
-# diff inside the Linear issue, GitHub's integration must auto-link it, which
-# happens when the issue identifier (WOR-N) appears in the branch / title / body.
-# We put it in the body here — BEFORE `gh pr create` — so the link forms at
-# creation. Gate is just **bridge active AND tracker.type == linear** — no separate
-# `makePr` opt-in: a `Ref` line is zero-cost, side-effect-light hygiene and is the
-# whole point of the linkage. Use a NON-CLOSING ref ("Ref WOR-N", not "Fixes") — it
-# links the PR (powers Diffs) WITHOUT auto-completing the Linear issue on merge;
-# flow-next owns the lifecycle (spec-completion-review flips it Done, R7/R10). A
-# GitHub tracker uses native `Refs #N` instead (github.md); no-tracker skips this.
-if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ] \
- && [ "$("$FLOWCTL" config get tracker.type --json | jq -r '.value')" = "linear" ]; then
+# 4.6a — PR↔issue linkage (any tracker). Put a NON-CLOSING reference to the tracker
+# issue in the PR body BEFORE `gh pr create`, so the link forms at creation. This
+# is what makes the integration auto-link the PR — and for Linear, what makes
+# Linear Diffs render the PR inside the issue. Gate is just **bridge active** — no
+# `makePr` opt-in: a reference line is zero-cost, side-effect-light hygiene and is
+# the whole point. NON-CLOSING (`Ref`/`Refs`, never `Fixes`/`Closes`) so merge does
+# NOT auto-complete the tracker issue — flow-next owns the lifecycle (R7/R10).
+if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
+ TRK_TYPE=$("$FLOWCTL" config get tracker.type --json | jq -r '.value')
  TRK_ID=$("$FLOWCTL" sync get-state "$SPEC_ID" --json | jq -r '.tracker.identifier // empty')
- if [ -n "$TRK_ID" ] && ! grep -qiE "(ref|refs|part of|related to)[[:space:]]+${TRK_ID}([^0-9]|$)" "$BODY_FILE"; then
- printf '\n\n---\nRef %s\n' "$TRK_ID" >> "$BODY_FILE" # non-closing → links to Linear, does NOT auto-close on merge
+ REF=""
+ case "$TRK_TYPE" in
+ linear) [ -n "$TRK_ID" ] && REF="Ref ${TRK_ID}" ;; # WOR-N → Linear auto-link + Diffs
+ github) [ -n "$TRK_ID" ] && REF="Refs ${TRK_ID}" ;; # #N → native GitHub cross-reference
+ esac
+ # TRK_ID already carries the tracker's display form (WOR-17 / #123); skip if present.
+ if [ -n "$REF" ] && ! grep -qiF "$TRK_ID" "$BODY_FILE"; then
+ printf '\n\n---\n%s\n' "$REF" >> "$BODY_FILE"
  fi
 fi
 
