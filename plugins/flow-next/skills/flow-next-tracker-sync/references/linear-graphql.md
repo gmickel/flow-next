@@ -172,7 +172,7 @@ query ($team: String!) {
 Fold into `tracker.perTracker.statusMap`. The default `state.type` → normalized
 mapping (shared with the MCP rung) is the status table in
 [linear-ladder.md](linear-ladder.md). Resolve the `teamId` once too
-(`teams(filter:{ key:{ eq:"WOR" } }){ nodes { id } }`) for `issueCreate`.
+(`teams(first: 1, filter:{ key:{ eq:"WOR" } }){ nodes { id } }`) for `issueCreate`.
 
 ## Gotchas
 
