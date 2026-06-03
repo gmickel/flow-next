@@ -31,7 +31,7 @@ A spec authored in flow (capture/interview/plan) keeps its sequential `fn-NN-slu
 $FLOWCTL sync set-tracker-id "fn-42-foo" "$ISSUE_UUID" --identifier "WOR-99" --url "$ISSUE_URL"
 ```
 
-Now `work wor-99`, `show wor-99`, etc. resolve to `fn-42-foo` **without renaming it**. The issue carries the flow id back via a `flow:fn-42-foo` label and/or a `[fn-42-foo]` title prefix.
+Now `work wor-99`, `show wor-99`, etc. resolve to `fn-42-foo` **without renaming it**. The issue carries the flow id back via a **`flow:fn-42-foo` label** — the *primary, linkify-safe* back-reference (label text is never auto-linkified). A `[fn-42-foo]` title prefix is an optional secondary; avoid it when the flow id carries a tracker key (e.g. a tracker-first `wor-21-slug`), since the tracker auto-linkifies the key substring in the title — see the "Linkify hazard" note in [comments-sync.md](comments-sync.md). Body-embedded back-references (HTML comments) suffer the same mangle; the label is the durable form.
 
 ## Resolution (fn-52.10 — the scaffold does NOT reimplement this)
 

@@ -76,11 +76,16 @@ Every flow-posted comment carries a **hidden HTML-comment marker** as its first
 line. The marker is the canonical dedup key and the back-reference all at once:
 
 ```html
-<!-- flow-next:sync spec=<spec-id> evt=<event> evidence=<sha-or-none> -->
+<!-- flow-next:sync issue=<issue-uuid> spec=<spec-id> evt=<event> evidence=<sha-or-none> -->
 ```
 
+- `issue=<issue-uuid>` — the tracker issue's stable UUID. **Primary, linkify-safe
+ dedup key** (a UUID is not an issue-key pattern, so trackers never rewrite it —
+ see "Linkify hazard" below). Match on `issue` + `evt` + `evidence`.
 - `spec=<spec-id>` — the flow spec this comment belongs to (e.g. `fn-42-add-oauth`
- or `wor-17-slug`).
+ or `wor-17-slug`). **For readability + the back-reference only — never the sole
+ match key.** A tracker-first id (`wor-17-slug`) embeds the tracker key, which the
+ tracker auto-linkifies (next note), mangling a literal `spec=` match.
 - `evt=<event>` — the lifecycle event (`work.done`, `makePr`,
  `completionReview`, …) — the **shorthand the adapter surfaces as the normalized
  `comment.marker` (`flow-evt:<event>`)**.
@@ -103,8 +108,27 @@ marker is present) is **flow's own echo** → do **not** import it into the sync
 (it originated in flow). Only `marker == null` comments are genuine tracker-side.
 
 **On post:** before posting a flow comment, `listComments` and check whether a
-comment with the **same `spec` + `evt` + `evidence`** marker already exists → if so,
+comment with the **same `issue` + `evt` + `evidence`** marker already exists → if so,
 **skip the post** (already synced). This is the exact-match fence.
+
+> **Linkify hazard (verified against live Linear, fn-52 smoke).** Linear (and
+> GitHub) **auto-linkify any issue-key substring** (`WOR-17`, case-insensitive)
+> that appears in body / comment markdown — **even inside an HTML comment** —
+> rewriting it to mention markup like
+> `<issue id="<uuid>" href="…/WOR-17">WOR-17</issue>`. So a marker carrying a
+> tracker-first `spec=wor-17-slug` value comes back **mangled** (`spec=<issue …>WOR-17</issue>-slug`),
+> and a literal `spec=` match fails. Mitigations, both applied:
+> 1. **Write:** key the marker on `issue=<uuid>` (UUIDs are never linkified), not
+> on the tracker-key-bearing `spec` value.
+> 2. **Read:** before matching ANY marker, normalize the comment body — strip the
+> tracker's mention markup back to bare text:
+> `s/<issue [^>]*>([^<]*)<\/issue>/$1/g` (GitHub uses `<a …>#123</a>`; strip the
+> same way). Then even an older `spec=`-keyed marker re-matches.
+>
+> The same hazard hits the flow back-reference: write it as a **`flow:<id>` label**
+> (labels are plain text — never linkified), NOT as a body/title-embedded `[<id>]`
+> reference when `<id>` carries a tracker key. The label is the safe primary; a
+> `[<id>]` title prefix is linkify-prone and secondary at best.
 
 ### Layer 2 — the stored posted-comment id (durable)
 
@@ -151,9 +175,9 @@ for c in listComments(trackerId):
  append c to the spec's ## Sync Log # a genuine tracker-side comment
 
 # POST (flow → tracker):
-marker = "<!-- flow-next:sync spec=<id> evt=<event> evidence=<sha|none> -->"
-existing = listComments(trackerId)
-if any(e has marker with same spec+evt+evidence): skip # Layer 1 exact-match: already posted
+marker = "<!-- flow-next:sync issue=<uuid> spec=<id> evt=<event> evidence=<sha|none> -->"
+existing = listComments(trackerId) # normalize each body first: strip <issue …>KEY</issue> → KEY
+if any(e has marker with same issue+evt+evidence): skip # Layer 1 exact-match: already posted
 else:
  body = marker + "\n\n" + <structured comment text>
  posted = postComment(trackerId, body)
@@ -188,7 +212,7 @@ A `work.done` evidence comment renders the flow evidence (tests, PR) into a read
 tracker comment, marker-fenced:
 
 ```markdown
-<!-- flow-next:sync spec=fn-42-add-oauth evt=work.done evidence=a1b2c3d -->
+<!-- flow-next:sync issue=9b1e… spec=fn-42-add-oauth evt=work.done evidence=a1b2c3d -->
 
 **fn-42.3 done** — Status/metadata who-wins implemented.
 
@@ -208,7 +232,7 @@ or a dedicated config flag). It is a single comment per issue, clearly marked, t
 flow **updates in place** (not appends) to show the current spec status at a glance:
 
 ```html
-<!-- flow-next:status spec=<id> rolling -->
+<!-- flow-next:status issue=<uuid> spec=<id> rolling -->
 **flow-next status** — in-progress · 2/4 tasks done · last sync 3h ago
 ```
 
