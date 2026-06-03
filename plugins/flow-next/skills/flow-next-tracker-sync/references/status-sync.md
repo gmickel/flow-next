@@ -79,16 +79,36 @@ auto-changed" guarantee, made mechanical.
 
 ### Applying the table (the reconcile loop)
 
+**Evaluation order matters.** The **deadlock check fires FIRST** — before the
+terminal-wins and in-progress-wins rules — because the canonical deadlock
+(`tracker ∈ {done, verified}` while `flow == in-progress`, or the mirror) satisfies
+*both* of those single-field rules at once. If terminal-wins ran first it would
+silently auto-close the spec and `conflictTiebreak` would never fire — the exact bug
+this ordering prevents. The terminal-vs-active **pair itself is the deadlock
+signal**; it does not depend on any stored prior status (flowctl's sync state stores
+the merge-base *body* + hashes, not a prior status field — so the check reads only
+the two current normalized statuses, which are always available).
+
 ```
 reconcileStatus(spec, issue):
-  flowNorm    = flowToNormalized(spec)            # table above
-  trackerNorm = issue.status.normalized           # adapter already mapped it
+  flowNorm     = flowToNormalized(spec)           # table above
+  trackerNorm  = issue.status.normalized          # adapter already mapped it
 
   if flowNorm == trackerNorm:
      noop (status already agrees) — no setStatus, no spec change
 
-  elif trackerNorm ∈ {done, verified} (terminal):
-     # tracker wins terminal — fold the closure back into flow
+  # ── DEADLOCK CHECK FIRST — terminal on one side, active (in-progress) on the
+  #    other. This pair matches BOTH the terminal-wins and in-progress-wins rules,
+  #    so it MUST be caught before either, or it auto-resolves silently. Routes to
+  #    the R1 conflictTiebreak; never lets a single-field rule win it outright. ──
+  elif (trackerNorm ∈ {done, verified} and flowNorm == in-progress)
+    OR (flowNorm    ∈ {done, verified} and trackerNorm == in-progress):
+     # genuine status deadlock (tracker=done × flow=in-progress, simultaneously) →
+     # R1 conflictTiebreak fallback (next section). NOT a silent auto-close.
+
+  elif trackerNorm ∈ {done, verified} (terminal, flow NOT in-progress):
+     # tracker wins terminal — flow is at backlog/planned/done, so the tracker's
+     # closure folds in cleanly (no live in-progress work to contradict it)
      mark the spec done (+ completion_review_status if the tracker says verified)
      # do NOT call setStatus (tracker already terminal)
 
@@ -99,14 +119,22 @@ reconcileStatus(spec, issue):
   elif trackerNorm ∈ {deferred, wontfix} OR priority differs:
      # surface, never auto-change (interactive ask / Ralph queue) — see below
 
-  elif flowNorm ∈ {done, verified} and trackerNorm ∈ {in-progress, planned}:
-     # flow reached terminal but tracker hasn't — push flow's closure out
+  elif flowNorm ∈ {done, verified} and trackerNorm ∈ {backlog, planned}:
+     # flow reached terminal, tracker still pre-active (not in-progress → not a
+     # deadlock) — push flow's closure out
      setStatus(trackerId, flowNorm)               [transport]
 
   else:
-     # genuine status deadlock (e.g. tracker=done AND flow=in-progress at once) →
+     # any residual incompatibility the rules above didn't resolve →
      # R1 conflictTiebreak fallback (next section)
 ```
+
+The deadlock branch deliberately **subsumes** the `tracker-done × flow-in-progress`
+case that the terminal-wins rule would otherwise grab — that is the whole point of
+putting it first. The `conflictTiebreak` default (`always-ask`) then queues/asks
+rather than silently closing a spec whose agent loop is still live; teams that
+*want* the tracker's closure to win automatically set `tracker.conflictTiebreak:
+tracker-wins`.
 
 A `setStatus` resolves the normalized status → the team's concrete `stateId` via
 the config status map ([linear-ladder.md](linear-ladder.md) — MCP
@@ -118,12 +146,21 @@ body merge.
 ## Status deadlock → R1 `conflictTiebreak` fallback (R7)
 
 A **status deadlock** is the one case the per-field table can't resolve cleanly:
-the two sides assert *incompatible non-terminal-vs-terminal* states at the same
-sync point — the canonical case is **tracker `done` simultaneously with flow
-`in-progress`** (a PM closed the issue while the agent loop is still running, or
-vice versa: flow `done` while the tracker reopened to `in-progress`). The terminal
-rule says "tracker wins terminal" but the in-progress rule says "flow wins
-in-progress" — they collide. This is not a field the bridge silently overwrites.
+the two sides assert *incompatible terminal-vs-active* states at the same sync point
+— the canonical case is **tracker `done` simultaneously with flow `in-progress`** (a
+PM closed the issue while the agent loop is still running, or vice versa: flow `done`
+while the tracker reopened to `in-progress`). The terminal rule says "tracker wins
+terminal" but the in-progress rule says "flow wins in-progress" — they collide. This
+is not a field the bridge silently overwrites.
+
+**Because both single-field rules match a deadlock at once, the reconcile loop
+evaluates the deadlock check FIRST** (see the loop above) — if terminal-wins ran
+before it, the deadlock would be silently auto-closed and `conflictTiebreak` would
+never fire. The terminal-vs-active **pair itself is the signal**; the check needs no
+stored prior status (flowctl persists the merge-base *body* + hashes, not a status
+field), so it reads only the two current normalized statuses. The clean
+tracker-wins-terminal path (Fixture S-A) applies only when flow is NOT `in-progress`
+(flow at `planned`/`backlog`/`done` — no live work to contradict the closure).
 
 Resolution falls back to the **R1 `conflictTiebreak` default**
 (`tracker.conflictTiebreak` ∈ `flow-wins | tracker-wins | always-ask`, default
@@ -220,15 +257,18 @@ Linear; the live `setStatus` is the smoke phase).
 
 ### Fixture S-A — tracker wins terminal (R7 headline)
 
-**Flow:** spec `open`, one task `in_progress` → flow-normalized `in-progress`.
+**Flow:** spec `open`, all tasks still `todo` → flow-normalized `planned` (no live
+in-progress work — so this is NOT a deadlock).
 **Tracker:** `status.normalized = "done"` (PM marked the issue Done).
 
-**Expected:** tracker wins terminal → mark the spec `done`; do **not** call
-`setStatus` (the tracker is already terminal). No `setStatus` to push back.
+**Expected:** the deadlock check fails (flow is `planned`, not `in-progress`) →
+tracker wins terminal → mark the spec `done`; do **not** call `setStatus` (the
+tracker is already terminal). No `setStatus` to push back.
 
 **Oracle:** the spec moves to `done` and **no** `setStatus` call is made. PASS iff
 the tracker's closure folds into flow and flow does not "fight back" by re-opening
-the issue.
+the issue. (Contrast S-E: had flow been `in-progress`, this would be a deadlock, not
+a clean tracker-wins.)
 
 ### Fixture S-B — flow wins in-progress (R7 headline)
 
@@ -268,11 +308,14 @@ cancel intent reaches a human instead of silently killing the spec.
 
 ### Fixture S-E — status deadlock → `conflictTiebreak` (R7)
 
-**Flow:** spec `in-progress` (live agent loop running).
-**Tracker:** `status.normalized = "done"` *and* the same sync also detects flow only
-just moved to in-progress after the last base — both assert at once.
+**Flow:** spec `open` with a task `in_progress` → `in-progress` (live agent loop
+running).
+**Tracker:** `status.normalized = "done"` (the PM closed the issue). Terminal on the
+tracker side, active on the flow side — the canonical deadlock pair.
 
-This is the canonical deadlock (terminal-vs-in-progress collision). Resolve via
+This is the canonical deadlock (terminal-vs-in-progress collision). Because the
+deadlock check fires **first** in the reconcile loop (before terminal-wins), it is
+NOT auto-closed by the tracker-wins-terminal rule — it resolves via
 `tracker.conflictTiebreak`:
 - `always-ask` (default) → **interactive ask** / **Ralph `sync defer`** (queue,
   `diverged` receipt — see the `sync defer` block above). PASS iff exactly one
