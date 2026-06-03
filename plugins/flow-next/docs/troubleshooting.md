@@ -122,6 +122,16 @@ rm -rf scripts/ralph/       # Ralph (if enabled)
 
 Or use `/flow-next:uninstall` which cleans up docs and prints commands to run. `GLOSSARY.md` and `STRATEGY.md` at the repo root are intentionally preserved — they outlive flow-next per the survives-uninstall invariant.
 
+## Renamed skill: `browser` → `flow-next-drive` (1.4.0)
+
+The `browser` skill was renamed `flow-next-drive` in 1.4.0 (surface-aware driver ladder). The invocation is now `/flow-next:flow-next-drive`; the Codex mirror is also `flow-next-drive` (previously `agent-browser`, which collided with the user's global `agent-browser` skill and Codex-native browser skills).
+
+If a cached install still surfaces an orphaned `browser` / `agent-browser` skill after upgrading, it auto-clears within ~7 days as the plugin cache refreshes. To clear it immediately, delete the stale cached marketplace directory under the Claude plugin cache path:
+
+```bash
+rm -rf ~/.claude/plugins/cache/<marketplace>   # then reload Claude Code
+```
+
 ## See also
 
 - [`flowctl.md`](flowctl.md) — full CLI reference (every command, flag, default).

@@ -2,6 +2,22 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.4.0] - 2026-06-02
+
+### Changed
+- **`browser` skill renamed `flow-next-drive` + rebuilt as a surface-aware driver ladder** (fn-51). The skill is no longer hardwired to a single browser driver — it now **detects the UI surface and picks the best available driver, degrading gracefully** when a richer one is absent. Three surfaces: (a) **web app** → web ladder; (b) **Chromium-backed desktop app** (Electron / Windows WebView2) → the *same* web ladder, attaching over CDP to the app's remote-debugging port (`agent-browser --cdp <port>` / `--auto-connect`; chrome-devtools-mcp `--browser-url`); (c) **true-native / non-CDP surface** (macOS AppKit/SwiftUI, or a webview exposing no CDP — e.g. macOS WKWebView / Tauri-on-macOS) → Computer Use. All surfaces share one **universal flow** (`observe / navigate → snapshot → act on fresh refs → capture evidence → release`); only the actuation + the per-rung reference differ.
+  - **Web ladder** (priority order): **agent-browser** (default rung, the only assumed-present driver, CDP-based + headless-safe, no extra install) → **chrome-devtools-mcp** (auto-wait + attach-to-real-signed-in-Chrome) → **Playwright** → **cursor-ide-browser** MCP → **manual** screenshot relay. The same ladder drives Electron / WebView2 over CDP.
+  - **Native rung**: Computer Use, driver-agnostic across what the host offers — **Codex Computer Use** (macOS/Windows) and/or **Anthropic "Claude" Computer Use** (the API `computer` tool, run via its own harness). Detected and optional; **never a hard dependency** and never on a headless/no-display path. When no Computer Use is present, a Chromium-backed app still drives via the web-ladder CDP attach (or its dev-server URL); a genuinely native app documents the limitation rather than fails.
+  - The existing agent-browser references (`commands`, `advanced`, `auth`, `snapshot-refs`, `session-management`, `proxy`, `debugging`) fold into the agent-browser default-rung reference — **no capability regression** for current users.
+  - **Driver ladder + universal-flow structure adapted from Ray Fernando's [`rayfernando-skills`](https://github.com/RayFernando1337/rayfernando-skills) `running-bug-review-board` skill (Apache-2.0).** Thank you, Ray.
+
+### Migration
+- **`/flow-next:browser` is gone — the skill is now `/flow-next:flow-next-drive` (canonical) / `flow-next-drive` on the Codex mirror.** This also fixes the prior Codex-mirror rename to `agent-browser` (see the 1.x "Renamed Codex browser skill" entry below), which collided with the user's global `agent-browser` skill and with Codex-native browser skills — the mirror is now `flow-next-drive` on every platform, no rename.
+- If an older cached install still surfaces an orphaned `browser` / `agent-browser` skill, it auto-clears within ~7 days as the plugin cache refreshes, or immediately by deleting the stale cached marketplace directory under the Claude plugin cache path (`~/.claude/plugins/cache/<marketplace>`).
+
+### Fixed
+- **`/flow-next:make-pr` generated broken file links in PR bodies.** The rendered body used **bare relative paths** (`[\`x\`](plugins/.../x.md)`, `[fn-N.M](.flow/tasks/...)`), but GitHub resolves a relative link in a PR *description* against the page URL (`…/pull/<N>/…`) — producing 404s like `…/pull/153/plugins/...`. (`workflow.md` §2.4b wrongly claimed relative paths resolve to the default branch — true for files *in* the repo, false for PR/issue bodies.) make-pr now emits **absolute URLs chosen by purpose**: code references (Critical changes / Where to look) → per-commit **diff** + file anchor (`…/commit/<sha>#diff-<sha256(path)>`, lands on the file's change); `.flow/*` artifacts (spec / task / memory) → **blob**, SHA-pinned (survive branch deletion after merge); Evidence column → whole-commit diff. Documents the GitHub limitations that the `#diff-<hash>` anchor only auto-scrolls on a fresh load / new tab (plain same-tab clicks don't jump on large diffs) and that `target="_blank"` is stripped from PR-body markdown (new-tab can't be forced). Surfaced dogfooding PR #153.
+
 ## [flow-next 1.3.4] - 2026-05-27
 
 ### Fixed
