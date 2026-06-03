@@ -2,6 +2,11 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.5.3] - 2026-06-04
+
+### Fixed
+- **Tracker-sync receipts (`.flow/sync-runs/`) are now auto-gitignored, and the managed `.flow/.gitignore` block self-upgrades on `flowctl init`.** The bridge writes a proof-of-work receipt per sync run under `.flow/sync-runs/` — the same class of runtime artifact as `receipts/` (already ignored) — but that dir was missing from flowctl's auto-managed `.flow/.gitignore`, so every sync dropped timestamped receipt files into git where they accumulated. Added `sync-runs/` to the managed pattern set. Also fixed `_ensure_flow_gitignore`: it previously **no-op'd whenever any managed block was present**, so a newly-added pattern only ever reached freshly-`init`'d repos — never existing ones; it now **reconciles** the managed block to the current canonical pattern set (user patterns below the footer preserved untouched). Existing repos pick up `sync-runs/` on their next `flowctl init`. New `test_flow_gitignore` cases cover the stale-block reconcile + the `sync-runs/` pattern. Surfaced dogfooding the bridge.
+
 ## [flow-next 1.5.2] - 2026-06-04
 
 ### Fixed
