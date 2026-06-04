@@ -40,7 +40,8 @@ Add the **single value-checked gate** to the work skill (zero default-path bloat
 - [ ] `references/codex-delegation.md` exists with the pre-flight section authored + section stubs for invocation/safety/ralph.
 
 ## Done summary
-_(pending implementation)_
-
+Added the opt-in Codex implementation-delegation gate to /flow-next:work: a single default-path value-check (byte-identical when off — 120 insertions, 0 deletions to the work skill), host-side pre-flight gates (platform / recursion / availability / one-time AskUserQuestion consent / original-input-kind) authored in a new references/codex-delegation.md (invocation/safety/ralph sections stubbed for fn-55.3–.5), plus INPUT_WAS_BARE_PROMPT capture before Phase 1 promotion and worker-flag injection at Phase 3c. A new Python test executes the shipped platform-gate + recursion-guard bash (CODEX_SANDBOX=auto stays eligible — the Ralph case; runtime values like seatbelt trip the guard) and locks the prose contract; wired into CI. Review: rp SHIP after one NEEDS_WORK→SHIP cycle (OpenCode marker gate widened to scan all OPENCODE_* env).
 ## Evidence
-_(pending implementation)_
+- Commits: 0d10b92, cbe8a87, b38740f
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p test_codex_delegation_gates.py (21 tests OK), python3 -m unittest discover -s plugins/flow-next/tests -p test_work_delegate_config.py (19 tests OK, no regression)
+- PRs:
