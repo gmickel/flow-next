@@ -87,6 +87,16 @@ jobs:
             -p "test_banner.py" \
             -v
 
+      - name: Python unit tests — work.delegate config foundation (fn-55.1)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_work_delegate_config.py" \
+            -v
+        # Codex implementation-delegation config defaults + activation
+        # resolution precedence (arg > config > default off; generic
+        # "use codex" is NOT a delegation trigger).
+
       # ──────────── fn-50 (clawpatch wrap) ────────────
       # New readers + scout-fallback contract land here so they run on the full
       # ubuntu / macos / windows matrix. Tests use checked-in fixtures (no

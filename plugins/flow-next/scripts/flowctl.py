@@ -1111,6 +1111,34 @@ def get_default_config() -> dict:
         "review": {"backend": None},
         "scouts": {"github": False},
         "tracker": get_default_tracker_config(),
+        # fn-55.1 — Codex implementation-delegation defaults ("the law,
+        # defined once"). These are the spec's defaults so `config get
+        # work.delegate*` returns them (NOT null) on a fresh repo. The
+        # resolution chain for activation is:
+        #   arg token  `delegate:codex` / `delegate:local`   (highest)
+        #   > flow config `work.delegate`                     (this block)
+        #   > hard default OFF                                (delegate=false)
+        # The generic fuzzy "use codex" is NOT a delegation trigger — it
+        # stays mapped to the review backend; only the explicit
+        # `delegate:codex` / `delegate:local` tokens (and this config)
+        # resolve delegation. Top-level `work.*` is a DISTINCT namespace
+        # from the tracker bridge's `tracker.perEvent.work.*` lifecycle
+        # keys (phases.md:94-101) — no clash.
+        "work": {
+            "delegate": False,
+            "delegateModel": "gpt-5.5",
+            # Effort enum: none|low|medium|high|xhigh (gpt-5.5 supports
+            # `none`, NOT `minimal`). `medium` is the floor default; the
+            # per-batch risk escalation (fn-55.3) floors against it.
+            "delegateEffort": "medium",
+            # Sandbox: yolo (default) | full-auto. Persisted by the
+            # one-time consent gate (fn-55.2).
+            "delegateSandbox": "yolo",
+            "delegateConsent": False,
+            # auto (default) | ask. The auto|ask behavior is implemented in
+            # fn-55.2; this task only sets the default + documents the enum.
+            "delegateDecision": "auto",
+        },
     }
 
 
