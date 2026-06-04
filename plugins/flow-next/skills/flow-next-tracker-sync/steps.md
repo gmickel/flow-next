@@ -50,7 +50,7 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
    $FLOWCTL config set tracker.perTracker.teamId "<team>"           # if the user named one
    $FLOWCTL sync active --json   # confirm active: true
    ```
-   **Never assume — but default-on is not assuming.** No signal / user declines the bridge ⇒ write nothing; `enabled` stays `false`; `sync active` stays `active: false`. Confirming the bridge IS the consent to sync the pipeline. The **config schema default stays `off`** (in `get_default_config()`), so a bare `tracker.enabled=true` set by hand or a script — WITHOUT this ceremony — is still inert; only the ceremony's explicit per-event writes activate the events. Users opt out per event afterward via `flowctl config set tracker.perEvent.<event> off`.
+   **Never assume — but default-on is not assuming.** No signal / user declines the bridge ⇒ write nothing; `enabled` stays `false`; `sync active` stays `active: false`. Confirming the bridge IS the consent to sync the pipeline. The **config schema default stays `off`** (in `get_default_config()`), so a bare `tracker.enabled=true` set by hand or a script — WITHOUT this ceremony — activates **no lifecycle-event sync** (every `perEvent` event stays dormant). The **one exception** is make-pr's PR↔issue link, which is unconditional whenever the bridge is active (no per-event gate, by design — it powers Linear Diffs); only the ceremony's explicit per-event writes activate the events themselves. Users opt out per event afterward via `flowctl config set tracker.perEvent.<event> off`.
 
 ## Phase 2 — Link / create ceremony (R2/R3/R16)
 
