@@ -46,7 +46,7 @@ Never reimplement a flowctl helper inline; never push a merge/judgment decision 
 
 ## Discovery ceremony (R2) — detect / surface / ask / never-assume
 
-The bridge is **off until explicitly enabled**. The ceremony probes four signals, surfaces present AND absent, ASKS, and writes config **only on confirmation** — with provenance. No-signal ⇒ nothing written; `enabled` stays `false`. Never assume.
+The bridge is **off until explicitly enabled**. The ceremony probes four signals, surfaces present AND absent, ASKS, and writes config **only on confirmation** — with provenance. No-signal ⇒ nothing written; `enabled` stays `false`. Never assume. But **once the user confirms, enabling is opt-OUT, not opt-in**: the ceremony activates the whole pipeline (every `perEvent` event) by default — hooking up the bridge means you want it to sync. The user excludes events at ceremony time or turns any off later (`flowctl config set tracker.perEvent.<event> off`). The `get_default_config()` schema default stays `off`, so a bare `enabled=true` set WITHOUT the ceremony is still inert — only the ceremony's explicit writes activate events.
 
 Probe these four signals (detection lives in the skill, not flowctl — same shape as fn-51's driver-ladder detection):
 
@@ -65,8 +65,15 @@ Resolution model is **env > config > ASK**, mirroring `cmd_review_backend` (`flo
 $FLOWCTL config set tracker.enabled true
 $FLOWCTL config set tracker.type linear            # or github
 $FLOWCTL config set tracker.provenance "discovery ceremony 2026-06-03; confirmed by <who>; signals: MCP+API_KEY"
-# then the chosen perEvent opt-ins, e.g.:
+# DEFAULT-ON (opt-out): activate the whole pipeline — skip only what the user excluded.
+$FLOWCTL config set tracker.perEvent.capture reconcile
+$FLOWCTL config set tracker.perEvent.interview reconcile
+$FLOWCTL config set tracker.perEvent.plan reconcile
 $FLOWCTL config set tracker.perEvent.work.firstClaim push
+$FLOWCTL config set tracker.perEvent.work.done comment
+$FLOWCTL config set tracker.perEvent.makePr comment
+$FLOWCTL config set tracker.perEvent.resolvePr comment
+$FLOWCTL config set tracker.perEvent.completionReview reconcile
 ```
 
 Confirm the result with `flowctl sync active --json` (must report `active: true` once enabled/type are set). Negative path: user declines ⇒ write nothing; `sync active` stays `active: false`.

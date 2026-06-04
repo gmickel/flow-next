@@ -565,7 +565,7 @@ scripts/ralph/runs/<run-id>/
 
 ### Tracker-sync conflicts never block
 
-If the optional `/flow-next:tracker-sync` bridge is enabled (`tracker.perEvent.*` opt-ins), a sync run **never blocks the Ralph loop**. Every run emits a receipt (`flowctl sync receipt`); a genuine body/status contradiction is **queued**, not raised. In autonomous mode an `always-ask` tiebreak (`tracker.conflictTiebreak`) resolves to *queue*, not prompt — same policy, surface-dependent delivery. The conflict lands in the **review deferred-findings sink** (`.flow/review-deferred/<branch>.md`), where the morning review already looks for deferred work — so tracker-sync needs **no `flowctl block`** and never stalls the run. Confident merges proceed unattended. See [`tracker-sync.md`](tracker-sync.md).
+If the optional `/flow-next:tracker-sync` bridge is enabled (the discovery ceremony activates `tracker.perEvent.*` by default), a sync run **never blocks the Ralph loop**. Every run emits a receipt (`flowctl sync receipt`); a genuine body/status contradiction is **queued**, not raised. In autonomous mode an `always-ask` tiebreak (`tracker.conflictTiebreak`) resolves to *queue*, not prompt — same policy, surface-dependent delivery. The conflict lands in the **review deferred-findings sink** (`.flow/review-deferred/<branch>.md`), where the morning review already looks for deferred work — so tracker-sync needs **no `flowctl block`** and never stalls the run. Confident merges proceed unattended. See [`tracker-sync.md`](tracker-sync.md).
 
 ---
 

@@ -32,17 +32,25 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
    beats GraphQL when both present): MCP registered → rung 1; else `LINEAR_API_KEY`
    set → rung 2 (GraphQL); else no-op. See [`references/linear-ladder.md`](references/linear-ladder.md).
 2. **Surface present AND absent.** Tell the user what was found and what wasn't — e.g. "Linear MCP: present. LINEAR_API_KEY: absent. gh: authenticated. Jira: none." Absent signals matter (they explain why a transport is unavailable).
-3. **ASK via `AskUserQuestion`** (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). Lead with the recommended tracker (the strongest present signal) + a one-sentence rationale. Ask: enable the bridge? which tracker (`linear` / `github`)? which lifecycle events to opt in (capture/interview/plan/work.firstClaim/work.done/makePr/resolvePr/completionReview, each `off | pull | push | reconcile | comment`)? Resolution is **env > config > ASK** — don't re-ask anything env/config already decided.
-4. **On confirmation only, write config** (dot-paths are safe):
+3. **ASK via `AskUserQuestion`** (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). Lead with the recommended tracker (the strongest present signal) + a one-sentence rationale. Ask: enable the bridge? which tracker (`linear` / `github`)? **Enabling activates the WHOLE pipeline by default (opt-out model)** — tell the user that on confirmation every lifecycle event (capture / interview / plan / work.firstClaim / work.done / makePr / resolvePr / completionReview) starts mirroring to the tracker, because hooking up the bridge means you want it to sync. Offer an **optional opt-out**: any events to exclude now (default: all on); they can also turn any off later via `flowctl config set tracker.perEvent.<event> off`. Resolution is **env > config > ASK** — don't re-ask anything env/config already decided.
+4. **On confirmation, write config** (dot-paths are safe). Activate every lifecycle event to its natural op — **skip only the ones the user explicitly excluded in step 3**:
    ```bash
    $FLOWCTL config set tracker.enabled true
    $FLOWCTL config set tracker.type "$CHOSEN_TYPE"        # linear | github
    $FLOWCTL config set tracker.provenance "discovery ceremony $(date -u +%Y-%m-%d); confirmed by <who>; signals: <list>"
-   $FLOWCTL config set tracker.perEvent.work.firstClaim push   # repeat per opted-in event
-   $FLOWCTL config set tracker.perTracker.teamId "<team>"      # if the user named one
+   # DEFAULT-ON (opt-out): activate the whole pipeline so it mirrors end-to-end.
+   $FLOWCTL config set tracker.perEvent.capture reconcile           # two-way body sync on capture
+   $FLOWCTL config set tracker.perEvent.interview reconcile         # two-way body sync on interview
+   $FLOWCTL config set tracker.perEvent.plan reconcile              # project the planned spec
+   $FLOWCTL config set tracker.perEvent.work.firstClaim push        # move the issue In-Progress
+   $FLOWCTL config set tracker.perEvent.work.done comment           # status comment + evidence
+   $FLOWCTL config set tracker.perEvent.makePr comment              # PR link is unconditional; extra status comment
+   $FLOWCTL config set tracker.perEvent.resolvePr comment           # resolution comment
+   $FLOWCTL config set tracker.perEvent.completionReview reconcile  # flip Done/verified + verdict / R-ID coverage
+   $FLOWCTL config set tracker.perTracker.teamId "<team>"           # if the user named one
    $FLOWCTL sync active --json   # confirm active: true
    ```
-   **Never assume.** No signal / user declines ⇒ write nothing; `enabled` stays `false`; `sync active` stays `active: false`. The bridge does nothing until events are opted in (all `perEvent` leaves default `off`).
+   **Never assume — but default-on is not assuming.** No signal / user declines the bridge ⇒ write nothing; `enabled` stays `false`; `sync active` stays `active: false`. Confirming the bridge IS the consent to sync the pipeline. The **config schema default stays `off`** (in `get_default_config()`), so a bare `tracker.enabled=true` set by hand or a script — WITHOUT this ceremony — is still inert; only the ceremony's explicit per-event writes activate the events. Users opt out per event afterward via `flowctl config set tracker.perEvent.<event> off`.
 
 ## Phase 2 — Link / create ceremony (R2/R3/R16)
 

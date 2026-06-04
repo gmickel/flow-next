@@ -89,22 +89,24 @@ The skill is **transport-blind** — it calls a normalized interface (`fetchIssu
 
 When **no transport is reachable**, the run is a **`noop` + receipt note** — never a crash. The transport actually used (`mcp` / `graphql` / `gh` / `none`) is recorded on every receipt.
 
-## Lifecycle sync points (opt-in)
+## Lifecycle sync points (on by default — opt-out)
 
-Sync is wired into seven lifecycle skills as **opt-in touchpoints**, off by default. Each `tracker.perEvent.*` leaf defaults `off`; even a stray `tracker.enabled=true` does nothing until a specific event is opted in. Leaf values: `off | pull | push | reconcile | comment`.
+Sync is wired into seven lifecycle skills. **When you hook the bridge up via the `/flow-next:tracker-sync` discovery ceremony, the whole pipeline activates by default** — the point of connecting a tracker is to keep it in sync, so you don't opt in event-by-event. You **opt out** instead: exclude events at ceremony time, or turn any off later with `flowctl config set tracker.perEvent.<event> off`. Leaf values: `off | pull | push | reconcile | comment`.
 
-| Event | Config key | Fires when |
-|---|---|---|
-| capture | `tracker.perEvent.capture` | a spec is captured |
-| interview | `tracker.perEvent.interview` | a spec is refined |
-| plan | `tracker.perEvent.plan` | a spec is decomposed into tasks |
-| work (first claim) | `tracker.perEvent.work.firstClaim` | the first task of a spec is claimed |
-| work (done) | `tracker.perEvent.work.done` | a task completes |
-| make-pr | `tracker.perEvent.makePr` | a PR is opened |
-| resolve-pr | `tracker.perEvent.resolvePr` | PR threads are resolved |
-| completion review | `tracker.perEvent.completionReview` | a spec-completion review runs |
+| Event | Config key | Default op | Fires when |
+|---|---|---|---|
+| capture | `tracker.perEvent.capture` | `reconcile` | a spec is captured |
+| interview | `tracker.perEvent.interview` | `reconcile` | a spec is refined |
+| plan | `tracker.perEvent.plan` | `reconcile` | a spec is decomposed into tasks |
+| work (first claim) | `tracker.perEvent.work.firstClaim` | `push` | the first task of a spec is claimed |
+| work (done) | `tracker.perEvent.work.done` | `comment` | a task completes |
+| make-pr | `tracker.perEvent.makePr` | `comment` | a PR is opened |
+| resolve-pr | `tracker.perEvent.resolvePr` | `comment` | PR threads are resolved |
+| completion review | `tracker.perEvent.completionReview` | `reconcile` | a spec-completion review runs |
 
-The lifecycle skills carry an opt-in `(+ optional tracker sync)` touchpoint — they call `flowctl sync active` to short-circuit when the bridge is off, so the default (off) path is a single value-check with no transport cost.
+The lifecycle skills value-check `flowctl sync active` and the specific `perEvent` leaf, short-circuiting cleanly when the bridge is off or an event was opted out — so a no-tracker repo (or an excluded event) costs a single value-check, no transport.
+
+**Activation is ceremony-gated, not flag-gated.** The config *schema* default for every `perEvent` leaf stays `off`, so a bare `tracker.enabled=true` set by hand or a script — without running the discovery ceremony — is still inert. Only the ceremony's explicit per-event writes (or your own `config set`) turn events on. This keeps the accidental-enable guard while making the *intended* path (run the ceremony) sync everything.
 
 **One exception — PR linkage is unconditional when the bridge is active.** make-pr always links the new PR to its tracker issue when `sync active` and the issue is linked — it does **not** require opting `makePr` in. Linking a PR to its issue is zero-/near-zero-cost hygiene and is the whole value (it powers Linear Diffs, below), so there's no reason to gate it. The `perEvent.makePr` leaf still governs any *extra* make-pr sync (e.g. a status comment).
 

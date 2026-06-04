@@ -2,6 +2,13 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.6.0] - 2026-06-04
+
+### Changed
+- **Tracker-sync is now opt-OUT, not opt-in — hooking up the bridge activates the whole pipeline by default.** Previously every `tracker.perEvent.*` lifecycle touchpoint defaulted `off`, so after the discovery ceremony you had to opt each event in individually (fn-52 R1). That inverted the intent — connecting a tracker means you want it kept in sync. Now the `/flow-next:tracker-sync` discovery ceremony, on confirmation, **activates every lifecycle event by default**: capture / interview / plan → `reconcile`, work.firstClaim → `push`, work.done / makePr / resolvePr → `comment`, completionReview → `reconcile`. You exclude events at ceremony time, or turn any off afterward with `flowctl config set tracker.perEvent.<event> off`.
+  - **The accidental-enable guard is preserved.** The `get_default_config()` _schema_ default for each `perEvent` leaf stays `off`, so a bare `tracker.enabled=true` set by hand or a script — **without** running the ceremony — is still inert; only the ceremony's explicit per-event writes (or your own `config set`) activate events. Activation is ceremony-gated, not flag-gated.
+  - **No code/config-schema change** — the ceremony (skill) owns the default-on writes; `get_default_config()` is unchanged, so existing configs and the value-checked activation predicate are untouched. Docs updated across every surface (`tracker-sync.md`, `teams.md`, `flowctl.md`, `ralph.md`, flow-next.dev). Codex mirror regenerated.
+
 ## [flow-next 1.5.3] - 2026-06-04
 
 ### Fixed
