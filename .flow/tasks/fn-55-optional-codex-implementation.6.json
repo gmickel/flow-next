@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-04T22:18:08.868416Z",
+  "depends_on": [
+    "fn-55-optional-codex-implementation.5"
+  ],
+  "id": "fn-55-optional-codex-implementation.6",
+  "priority": null,
+  "spec": "fn-55-optional-codex-implementation",
+  "spec_path": ".flow/tasks/fn-55-optional-codex-implementation.6.md",
+  "status": "todo",
+  "title": "Cross-platform mirror + docs + version bump",
+  "updated_at": "2026-06-04T23:05:38.486818Z"
+}

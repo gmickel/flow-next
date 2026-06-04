@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-04T22:18:07.772652Z",
+  "depends_on": [
+    "fn-55-optional-codex-implementation.2"
+  ],
+  "id": "fn-55-optional-codex-implementation.3",
+  "priority": null,
+  "spec": "fn-55-optional-codex-implementation",
+  "spec_path": ".flow/tasks/fn-55-optional-codex-implementation.3.md",
+  "status": "todo",
+  "title": "codex exec invocation + result schema + bg-launch+poll + per-batch effort",
+  "updated_at": "2026-06-04T22:44:47.592588Z"
+}
