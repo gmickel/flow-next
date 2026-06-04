@@ -19,6 +19,25 @@
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 ```
 
+## Phase 0: Delegation value-check (cheap, single step)
+
+**This is the ONLY step the Codex-delegation feature adds to the default work
+path.** With delegation off (the default), it resolves to a no-op and the rest
+of `phases.md` is byte-identical to before (R1/R3).
+
+```bash
+# Single value-check — same shape as the tracker-sync touchpoints (SKILL.md).
+DELEGATE_CFG="$($FLOWCTL config get work.delegate --json | jq -r '.value')"
+# delegation_active = (arg delegate:codex | DELEGATE_CFG == "codex") && not arg delegate:local
+#   The generic "use codex" is NOT the token — it stays mapped to the review backend.
+```
+
+If `delegation_active` is **false** (the default), do nothing more here and run
+Phase 1 onward exactly as written — no `INPUT_WAS_BARE_PROMPT` capture, no gates,
+no pointer. **If and only if `delegation_active` is true**, ALSO run the
+`INPUT_WAS_BARE_PROMPT` capture inside Phase 1 (below) and Phase 1.5
+(host pre-flight gates). See [references/codex-delegation.md](references/codex-delegation.md).
+
 ## Phase 1: Resolve Input
 
 Detect input type in this order (first match wins):
@@ -32,6 +51,23 @@ Detect input type in this order (first match wins):
 **Handle-recognition rule (R16):** do **not** gate on a hard "must start with `fn-`" check. Before treating a single-token arg as idea text, route it through `$FLOWCTL show <arg> --json` — if it resolves (rc 0), it is an existing spec/task (use the canonical id from the JSON), never a new idea. Only a non-resolving token that isn't an `.md` path falls through to idea text. So `work wor-17` / `work wor-17.1` resolve the existing spec/task; they are never re-created.
 
 **Track the mode** — it controls looping in Phase 3.
+
+**Original-input-kind capture (ONLY when `delegation_active` — Phase 0).** A bare
+idea-text input (match #5 above — not a Flow id, not a resolvable handle, not an
+existing `.md` spec path) gets promoted into a spec+task by the steps below, so
+its original kind must be recorded **before** that promotion. Set the flag here,
+on the ORIGINAL input, immediately after detection and **before** running any
+"Spec file start" / "Spec-less start" promotion step:
+
+```bash
+# Runs ONLY when delegation_active (resolved in Phase 0). On the default
+# (delegation-off) path this step does not exist — Phase 0 already returned.
+if <original input matched #5 idea text>; then
+  INPUT_WAS_BARE_PROMPT=1   # promoted bare prompt → NOT eligible for delegation (Gate 5)
+else
+  INPUT_WAS_BARE_PROMPT=0   # Flow id / resolvable handle / existing .md spec → eligible
+fi
+```
 
 ---
 
@@ -60,6 +96,39 @@ Detect input type in this order (first match wins):
 2. Create spec: `$FLOWCTL spec create --title "<idea>" --json`
 3. Create single task: `$FLOWCTL task create --spec <spec-id> --title "Implement <idea>" --json`
 4. Continue with spec-id
+
+## Phase 1.5: Codex-delegation host pre-flight gates (ONLY when `delegation_active`)
+
+**Skip this entire phase unless `delegation_active` is true (Phase 0).** On the
+default (delegation-off) path this phase does not exist — proceed straight to
+Phase 2.
+
+When `delegation_active`, read [references/codex-delegation.md](references/codex-delegation.md)
+and run its host pre-flight gates + one-time consent **ONCE here**, before the
+Phase 3 per-task loop. Run them in the **host** (this skill) — NOT the worker
+subagent, which cannot call `AskUserQuestion` (#12890/#34592). The reference
+pins the exact probes; the gate sequence is:
+
+1. **Platform gate** — Claude Code only: `CLAUDECODE` present AND
+   `DROID_PLUGIN_ROOT` unset AND no OpenCode marker. NOT keyed on `CODEX_*`
+   (so `CODEX_SANDBOX=auto`, Ralph's review-backend knob, stays eligible).
+2. **Recursion guard** — trips on a Codex-runtime `CODEX_SANDBOX` value (outside
+   the flow-next config set `{read-only,workspace-write,danger-full-access,auto}`)
+   or `CODEX_SANDBOX_NETWORK_DISABLED` — NOT on `CODEX_SANDBOX=auto`.
+3. **Availability** — `command -v codex` resolves.
+4. **One-time consent** — interactive `AskUserQuestion` for the sandbox mode
+   (yolo recommended | full-auto), persisted to `work.delegateConsent` /
+   `work.delegateSandbox`; a second run with consent already `true` does not
+   re-prompt. **Headless (Ralph):** no prompt — proceed only if consent already
+   `true`, else delegation stays silently off.
+5. **Input kind** — `INPUT_WAS_BARE_PROMPT != 1` (a promoted bare prompt is not
+   eligible; decided on the ORIGINAL input, Phase 1).
+
+**Any gate failure → standard in-session mode for the rest of the run** (never
+blocks the worker). When all gates pass, the host resolves the per-task decision
+(`work.delegateDecision`: `auto` delegates every eligible task; `ask` prompts
+before each in interactive mode — headless treats `ask` as `auto` only when
+consent is pre-granted) and carries the resolved flags into Phase 3c.
 
 ## Phase 2: Apply Branch Choice
 
@@ -132,6 +201,22 @@ REVIEW_MODE: none|rp|codex
 RALPH_MODE: true|false
 
 Follow your phases in worker.md exactly.
+```
+
+**Codex-delegation flags (ONLY when `delegation_active` AND Phase 1.5 gates all
+passed AND — for `work.delegateDecision=ask` interactive — the host confirmed
+this task).** Append the resolved flags to the worker prompt; the worker
+delegates its Phase 2 implementation to `codex exec` per
+[references/codex-delegation.md](references/codex-delegation.md). Omit them
+entirely (or pass `DELEGATE: local`) when delegation is off or a gate failed —
+the worker then runs standard in-session implementation, unchanged.
+
+```
+DELEGATE: codex
+DELEGATE_MODEL: <work.delegateModel>          # default gpt-5.5
+DELEGATE_SANDBOX: <yolo|full-auto>            # from consent (work.delegateSandbox)
+DELEGATE_EFFORT_FLOOR: <work.delegateEffort>  # default medium (per-batch escalation floors here)
+DELEGATE_DECISION: <auto|ask>
 ```
 
 **Worker returns**: Summary of implementation, files changed, test results, review verdict.

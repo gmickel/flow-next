@@ -6,7 +6,10 @@ satisfies: [R5, R6, R8]
 Author the orchestration-split + safety mechanics in `references/codex-delegation.md` AND add the deterministic `flowctl codex classify-result` helper that makes classification/rollback testable. The host/worker keep all git; `codex exec` only writes code. The classification, schema-validation, and scoped-rollback-path computation live in flowctl (mechanical, CLAUDE.md split-rule), so CI tests target executable code — not markdown.
 
 **Size:** M
-**Files:** `plugins/flow-next/scripts/flowctl.py` (new `codex classify-result` helper), `plugins/flow-next/skills/flow-next-work/references/codex-delegation.md`, `plugins/flow-next/agents/worker.md` (commit/rollback interplay), `plugins/flow-next/tests/` (classification/rollback tests + mock-codex fixture)
+**Files:** `plugins/flow-next/scripts/flowctl.py` (new `codex classify-result` + `rollback-plan` helpers) **AND its byte-identical dogfood copy `.flow/bin/flowctl.py`** (this repo keeps both in lockstep — editing only the canonical copy makes the live `.flow/bin/flowctl` run stale code; fn-55.1 verified both must move together), `plugins/flow-next/skills/flow-next-work/references/codex-delegation.md`, `plugins/flow-next/agents/worker.md` (commit/rollback interplay), `plugins/flow-next/tests/` (classification/rollback tests + mock-codex fixture)
+<!-- Updated by plan-sync: fn-55.1 confirmed flowctl.py has a byte-identical dogfood copy at .flow/bin/flowctl.py; this task's new `codex classify-result`/`rollback-plan` helpers must land in BOTH or `.flow/bin/flowctl` runs stale code -->
+
+> **Dual-copy invariant (from fn-55.1):** this repo dogfoods a BYTE-IDENTICAL `.flow/bin/flowctl.py` kept in lockstep with the canonical `plugins/flow-next/scripts/flowctl.py`. The new `flowctl codex classify-result` + `rollback-plan` helpers MUST be added to BOTH copies, or the live `.flow/bin/flowctl` (which the work loop + tests invoke) runs stale code and the new subcommands fail. The `work.delegate*` config defaults already resolve with defaults (gpt-5.5/medium/yolo/off) from fn-55.1 — this task consumes them, it does not redefine them.
 
 ## Approach
 - **Deterministic helpers (flowctl):**
@@ -45,6 +48,7 @@ Author the orchestration-split + safety mechanics in `references/codex-delegatio
 - [ ] Non-scratch `.flow/` integrity: a mock Codex that mutates `.flow/tasks/*.md` (outside the scratch dir) triggers restore-from-snapshot + delegation-disable; a write to `.flow/tmp/codex-*` is allowed — covered by a test. `<constraints>` forbid non-scratch `.flow/` writes.
 - [ ] Rollback is scoped to codex-created files only (untracked snapshot pre/post), never bare `git clean`, never a pre-existing untracked file, never a `.flow/**` path — covered by a rollback-scope test.
 - [ ] Rollback reuses the worker `BASE_COMMIT`; no base reset (final-integration spec-wide base preserved).
+- [ ] The new `codex classify-result` + `rollback-plan` helpers land in BOTH `plugins/flow-next/scripts/flowctl.py` AND the dogfood `.flow/bin/flowctl.py` (byte-identical copies — verified by a diff of the two files showing the new helpers present in each); the live `.flow/bin/flowctl codex classify-result --json` resolves the new subcommand.
 - [ ] Test suite green.
 
 ## Done summary

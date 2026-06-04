@@ -97,6 +97,17 @@ jobs:
         # resolution precedence (arg > config > default off; generic
         # "use codex" is NOT a delegation trigger).
 
+      - name: Python unit tests — Codex-delegation pre-flight gates (fn-55.2)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_codex_delegation_gates.py" \
+            -v
+        # Executes the shipped platform-gate + recursion-guard bash from
+        # references/codex-delegation.md (CODEX_SANDBOX=auto stays eligible —
+        # the Ralph case; runtime values like `seatbelt` trip the guard) and
+        # locks the progressive-disclosure + disambiguation prose contract.
+
       # ──────────── fn-50 (clawpatch wrap) ────────────
       # New readers + scout-fallback contract land here so they run on the full
       # ubuntu / macos / windows matrix. Tests use checked-in fixtures (no
