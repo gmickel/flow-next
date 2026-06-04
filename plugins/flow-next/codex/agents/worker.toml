@@ -15,6 +15,7 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `FLOWCTL` - path to flowctl CLI
 - `REVIEW_MODE` - none, rp, or codex
 - `RALPH_MODE` - true if running autonomously
+- `DELEGATE` - codex to delegate Phase 2 implementation to `codex exec`; absent or `local` ⇒ standard in-session (the host only sets this when delegation is active and all pre-flight gates passed). `DELEGATE_MODEL` / `DELEGATE_SANDBOX` / `DELEGATE_EFFORT_FLOOR` / `DELEGATE_DECISION` accompany it — see Phase 2.
 
 ## Phase 1: Re-anchor (CRITICAL - DO NOT SKIP)
 
@@ -110,6 +111,31 @@ BASE_COMMIT=$(git rev-parse HEAD)
 echo "BASE_COMMIT=$BASE_COMMIT"
 ```
 Save this - you'll pass it to impl-review so it only reviews THIS task's changes.
+(It is also the git-ownership anchor for the delegation path below.)
+
+**Delegation hook — ONLY when `DELEGATE: codex` is in your prompt.** If `DELEGATE`
+is absent or `local`, skip this entire hook and implement in-session as usual
+(the rest of Phase 2 is unchanged). When `DELEGATE: codex` is set, the host has
+already run the pre-flight gates and one-time consent — your job is to delegate
+THIS task's implementation to `codex exec`:
+
+1. Read `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-work/references/codex-delegation.md`
+   — the "Invocation / result schema / background-launch+poll / per-batch effort"
+   section is the mechanics; the classification / safety / rollback sections (and
+   the `flowctl codex classify-result` / `rollback-plan` helpers) govern what you
+   do with the result.
+2. Build the scratch dir `.flow/tmp/codex-<task-id>/`, write `result-schema.json`
+   + the XML-tagged `prompt-batch-<n>.md`, pick the per-batch effort (floored at
+   `DELEGATE_EFFORT_FLOOR`), and **launch `codex exec` via the Bash
+   `run_in_background` tool parameter** (NOT shell `&`) using `DELEGATE_MODEL` +
+   the derived `$SANDBOX_FLAG` (from `DELEGATE_SANDBOX`).
+3. **Poll the result file in separate FOREGROUND Bash calls** (non-empty AND
+   `jq -e .` parseable) until DONE, then classify, cross-check, enforce git/`.flow`
+   ownership against `BASE_COMMIT`, and either commit (Phase 3), finish locally,
+   or scoped-rollback per the reference.
+
+Phase 3 commit / Phase 4 review / Phase 5 done are **unchanged** by delegation —
+the orchestrator (you) still owns all git, review, and `flowctl done`.
 
 Read relevant code, implement the feature/fix. Follow existing patterns.
 

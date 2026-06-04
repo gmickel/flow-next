@@ -11,7 +11,9 @@
 This reference is the **host-side** substrate. The pre-flight gates + one-time
 consent run **once, in the host work skill** (the orchestrator), BEFORE the
 per-task loop — NOT in the spawned `worker` subagent. The worker is a subagent
-and cannot call `AskUserQuestion` (Claude Code #12890/#34592), so consent must
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+and cannot call `plain-text numbered prompt` (Claude Code #12890/#34592), so consent must
 live here. The host resolves the gates once, then passes the resolved flags
 (`delegate on/off`, sandbox, effort floor, decision) into each spawned worker's
 prompt where `phases.md` Phase 3c injects worker context.
@@ -33,7 +35,7 @@ review). Delegation must NOT reuse that phrase. Delegation activates ONLY via:
 - the explicit arg token **`delegate:codex`** (off-switch **`delegate:local`**),
 - the flow config **`work.delegate=codex`**,
 - or an unambiguous natural phrase — "use codex **for implementation**" /
-  "delegate implementation to codex".
+ "delegate implementation to codex".
 
 Bare **"use codex"** / **"no codex"** keep their existing review-backend meaning.
 
@@ -45,10 +47,10 @@ the host evaluates with the cheap value-check before reading this file
 
 ```text
 delegation_active =
-    arg == "delegate:codex"                  → true
-    arg == "delegate:local"                  → false
-    arg absent  AND  config == "codex"       → true
-    arg absent  AND  config in (false, null) → false
+ arg == "delegate:codex" → true
+ arg == "delegate:local" → false
+ arg absent AND config == "codex" → true
+ arg absent AND config in (false, null) → false
 # the generic "use codex" string is NOT the token → never activates delegation
 ```
 
@@ -78,9 +80,9 @@ this step — it stays a single `flowctl config get work.delegate` value-check.
 # existing .md spec path) is NOT eligible for delegation, even after Phase 1
 # promotes it to a spec+task.
 if <original input is idea text — none of: Flow id, resolvable handle, existing .md spec path>; then
-  INPUT_WAS_BARE_PROMPT=1
+ INPUT_WAS_BARE_PROMPT=1
 else
-  INPUT_WAS_BARE_PROMPT=0
+ INPUT_WAS_BARE_PROMPT=0
 fi
 ```
 
@@ -91,7 +93,7 @@ Enable delegation ONLY when the orchestrator is **Claude Code**. Pinned probe
 
 - the Claude-Code marker **`CLAUDECODE`** is present, AND
 - **`DROID_PLUGIN_ROOT`** is unset (Droid → off; Droid exposes
-  `CLAUDE_PLUGIN_ROOT` as a *compat alias*, so do NOT key on that), AND
+ `CLAUDE_PLUGIN_ROOT` as a *compat alias*, so do NOT key on that), AND
 - **no OpenCode marker** (`OPENCODE` / `OPENCODE_*`).
 
 **Do NOT exclude on `CODEX_*` env.** `CODEX_SANDBOX=auto` is flow-next's own
@@ -106,14 +108,14 @@ gate on `CODEX_*` would disable delegation in every Ralph run.
 # DROID_PLUGIN_ROOT unset AND no OpenCode marker. NOT keyed on CODEX_* — so
 # CODEX_SANDBOX=auto (Ralph's review-backend knob) leaves delegation ELIGIBLE.
 platform_gate_ok() {
-  [ -n "${CLAUDECODE:-}" ] || return 1            # not Claude Code → off
-  [ -z "${DROID_PLUGIN_ROOT:-}" ] || return 1     # Droid → off (compat alias not keyed)
-  # OpenCode → off. Match the bare `OPENCODE` var AND any `OPENCODE_*` marker
-  # (OPENCODE_BIN, OPENCODE_SESSION, OPENCODE_ROOT, …) — a fixed two-var check
-  # would miss future/unknown markers, contradicting "AND no OpenCode marker".
-  [ -z "${OPENCODE:-}" ] || return 1
-  env | grep -q '^OPENCODE_' && return 1
-  return 0
+ [ -n "${CLAUDECODE:-}" ] || return 1 # not Claude Code → off
+ [ -z "${DROID_PLUGIN_ROOT:-}" ] || return 1 # Droid → off (compat alias not keyed)
+ # OpenCode → off. Match the bare `OPENCODE` var AND any `OPENCODE_*` marker
+ # (OPENCODE_BIN, OPENCODE_SESSION, OPENCODE_ROOT, …) — a fixed two-var check
+ # would miss future/unknown markers, contradicting "AND no OpenCode marker".
+ [ -z "${OPENCODE:-}" ] || return 1
+ env | grep -q '^OPENCODE_' && return 1
+ return 0
 }
 ```
 
@@ -123,13 +125,13 @@ Skip delegation if already running **inside a Codex runtime sandbox** (avoids
 recursion). The guard is **value-aware**, not a bare-presence check:
 
 - `CODEX_SESSION_ID` is **NOT** a real Codex env var (plan research:
-  openai/codex#8923 — unmerged); do not key on it.
+ openai/codex#8923 — unmerged); do not key on it.
 - `CODEX_SANDBOX` is ALSO a flow-next config knob — **Ralph exports
-  `CODEX_SANDBOX=auto`** for the review backend. A bare `-n "$CODEX_SANDBOX"`
-  check would FALSE-trip in every Ralph run and disable delegation (breaks R9).
-  Trip ONLY on a Codex **runtime** value — one **outside** the flow-next config
-  set `{read-only, workspace-write, danger-full-access, auto}`, e.g. `seatbelt`
-  — or on the runtime-only `CODEX_SANDBOX_NETWORK_DISABLED`.
+ `CODEX_SANDBOX=auto`** for the review backend. A bare `-n "$CODEX_SANDBOX"`
+ check would FALSE-trip in every Ralph run and disable delegation (breaks R9).
+ Trip ONLY on a Codex **runtime** value — one **outside** the flow-next config
+ set `{read-only, workspace-write, danger-full-access, auto}`, e.g. `seatbelt`
+ — or on the runtime-only `CODEX_SANDBOX_NETWORK_DISABLED`.
 
 ```bash
 # Gate 2: recursion guard. inside_sandbox=true ONLY when CODEX_SANDBOX holds a
@@ -137,16 +139,16 @@ recursion). The guard is **value-aware**, not a bare-presence check:
 # CODEX_SANDBOX_NETWORK_DISABLED is set. CODEX_SANDBOX=auto (Ralph's
 # review-backend knob) is NOT a sandbox signal → delegation stays eligible.
 not_inside_codex_sandbox() {
-  case "${CODEX_SANDBOX:-}" in
-    ""|read-only|workspace-write|danger-full-access|auto)
-      RUNTIME_SANDBOX=0 ;;   # unset OR a flow-next config knob → NOT a runtime sandbox
-    *)
-      RUNTIME_SANDBOX=1 ;;   # value outside the config set → Codex runtime sandbox
-  esac
-  if [ -n "${CODEX_SANDBOX_NETWORK_DISABLED:-}" ] || [ "${RUNTIME_SANDBOX:-0}" = "1" ]; then
-    return 1                 # inside a Codex sandbox → recursion guard trips → off
-  fi
-  return 0
+ case "${CODEX_SANDBOX:-}" in
+ ""|read-only|workspace-write|danger-full-access|auto)
+ RUNTIME_SANDBOX=0 ;; # unset OR a flow-next config knob → NOT a runtime sandbox
+ *)
+ RUNTIME_SANDBOX=1 ;; # value outside the config set → Codex runtime sandbox
+ esac
+ if [ -n "${CODEX_SANDBOX_NETWORK_DISABLED:-}" ] || [ "${RUNTIME_SANDBOX:-0}" = "1" ]; then
+ return 1 # inside a Codex sandbox → recursion guard trips → off
+ fi
+ return 0
 }
 ```
 
@@ -156,8 +158,8 @@ not_inside_codex_sandbox() {
 # Gate 3: codex CLI must resolve to an absolute path. Verified against
 # codex-cli 0.136.0 at build. Else → standard mode with a one-line hint.
 codex_available() {
-  command -v codex >/dev/null 2>&1 || return 1
-  return 0
+ command -v codex >/dev/null 2>&1 || return 1
+ return 0
 }
 # On failure, surface: "codex not found — install via `npm i -g @openai/codex`;
 # running in standard in-session mode." Then proceed standard (never block).
@@ -166,7 +168,7 @@ codex_available() {
 ### Gate 4 — One-time consent + sandbox mode (HOST skill only)
 
 Consent runs in the **host work skill** (`SKILL.md` / `phases.md`) via
-`AskUserQuestion` — NOT in the worker subagent (it cannot call `AskUserQuestion`,
+`plain-text numbered prompt` — NOT in the worker subagent (it cannot call `plain-text numbered prompt`,
 #12890/#34592). Issue it **once**; persist the result so a second run does not
 re-prompt. Pattern: lead-with-recommendation + persist-on-confirmation (mirrors
 the tracker-sync discovery ceremony).
@@ -185,18 +187,18 @@ do NOT re-ask; use the persisted `work.delegateSandbox`.
 # Gate 4 (interactive): only ask if consent not already granted.
 CONSENT="$($FLOWCTL config get work.delegateConsent --json | jq -r '.value')"
 if [ "$CONSENT" != "true" ]; then
-  # Host calls AskUserQuestion (load its schema first: ToolSearch select:AskUserQuestion).
-  # Lead with the recommendation (yolo), explain the network tradeoff, then on
-  # confirmation persist BOTH keys:
-  $FLOWCTL config set work.delegateConsent true
-  $FLOWCTL config set work.delegateSandbox <yolo|full-auto>   # the chosen mode
-  # If the user declines consent → delegation OFF for this run (standard mode).
+ # Host calls plain-text numbered prompt (load its schema first: ToolSearch select:plain-text numbered prompt).
+ # Lead with the recommendation (yolo), explain the network tradeoff, then on
+ # confirmation persist BOTH keys:
+ $FLOWCTL config set work.delegateConsent true
+ $FLOWCTL config set work.delegateSandbox <yolo|full-auto> # the chosen mode
+ # If the user declines consent → delegation OFF for this run (standard mode).
 fi
 ```
 
 **Headless (Ralph):** there is no prompt path. Proceed only if
 `work.delegateConsent` is already `true` (pre-granted in config); else delegation
-stays **silently off** — no `AskUserQuestion`, never blocks the loop. Headless is
+stays **silently off** — no `plain-text numbered prompt`, never blocks the loop. Headless is
 detected by `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` being set.
 
 ### Gate 5 — Input is a plan/spec/task, not a bare prompt
@@ -205,8 +207,8 @@ detected by `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` being set.
 # Gate 5: a bare-prompt-promoted spec is NOT eligible (decided on the ORIGINAL
 # input via Gate 0's INPUT_WAS_BARE_PROMPT). A real plan/spec/task IS.
 input_kind_ok() {
-  [ "${INPUT_WAS_BARE_PROMPT:-0}" = "1" ] && return 1   # promoted bare prompt → off
-  return 0
+ [ "${INPUT_WAS_BARE_PROMPT:-0}" = "1" ] && return 1 # promoted bare prompt → off
+ return 0
 }
 ```
 
@@ -215,14 +217,14 @@ input_kind_ok() {
 After the gates pass, `work.delegateDecision` controls per-task prompting:
 
 - **`auto`** (default) → delegate every eligible task without a per-task prompt.
-- **`ask`** → in **interactive** mode the host asks (`AskUserQuestion`) before
-  delegating each task. **Headless** has no prompt path, so `ask` is treated as
-  **`auto` only when** `work.delegateConsent` is already `true`; otherwise
-  delegation stays off.
+- **`ask`** → in **interactive** mode the host asks (`plain-text numbered prompt`) before
+ delegating each task. **Headless** has no prompt path, so `ask` is treated as
+ **`auto` only when** `work.delegateConsent` is already `true`; otherwise
+ delegation stays off.
 
 ```bash
 DECISION="$($FLOWCTL config get work.delegateDecision --json | jq -r '.value')"
-# interactive + ask → host AskUserQuestion before each delegated task
+# interactive + ask → host plain-text numbered prompt before each delegated task
 # auto (or headless with consent) → delegate eligible tasks without a prompt
 ```
 
@@ -233,10 +235,10 @@ passes the resolved flags into each spawned worker's prompt (the
 `phases.md` Phase 3c injection point):
 
 ```text
-DELEGATE: codex                # on; absent/`local` ⇒ standard in-session worker
-DELEGATE_MODEL: <work.delegateModel>      # default gpt-5.5
-DELEGATE_SANDBOX: <yolo|full-auto>        # from consent
-DELEGATE_EFFORT_FLOOR: <work.delegateEffort>  # default medium (per-batch escalation floors here)
+DELEGATE: codex # on; absent/`local` ⇒ standard in-session worker
+DELEGATE_MODEL: <work.delegateModel> # default gpt-5.5
+DELEGATE_SANDBOX: <yolo|full-auto> # from consent
+DELEGATE_EFFORT_FLOOR: <work.delegateEffort> # default medium (per-batch escalation floors here)
 DELEGATE_DECISION: <auto|ask>
 ```
 
@@ -263,39 +265,39 @@ deprecated `--full-auto` label** — it is not a valid `codex exec` flag in 0.13
 and warns since 0.130.0; emit `-s workspace-write` for the full-auto mode.
 
 ```bash
-SANDBOX_MODE="<DELEGATE_SANDBOX>"   # yolo | full-auto (from host consent)
+SANDBOX_MODE="<DELEGATE_SANDBOX>" # yolo | full-auto (from host consent)
 if [ "$SANDBOX_MODE" = "full-auto" ]; then
-  SANDBOX_FLAG="-s workspace-write"
+ SANDBOX_FLAG="-s workspace-write"
 else
-  SANDBOX_FLAG="--dangerously-bypass-approvals-and-sandbox"   # yolo (default)
+ SANDBOX_FLAG="--dangerously-bypass-approvals-and-sandbox" # yolo (default)
 fi
 
 FLOW_DELEGATE_CODEX=1 codex exec \
-  --ignore-user-config \
-  -m "<DELEGATE_MODEL>" \
-  -c 'model_reasoning_effort="<effective_effort>"' \
-  $SANDBOX_FLAG \
-  --output-schema "<scratch-dir>/result-schema.json" \
-  -o "<scratch-dir>/result-batch-<n>.json" \
-  - < "<scratch-dir>/prompt-batch-<n>.md"
+ --ignore-user-config \
+ -m "<DELEGATE_MODEL>" \
+ -c 'model_reasoning_effort="<effective_effort>"' \
+ $SANDBOX_FLAG \
+ --output-schema "<scratch-dir>/result-schema.json" \
+ -o "<scratch-dir>/result-batch-<n>.json" \
+ - < "<scratch-dir>/prompt-batch-<n>.md"
 ```
 
 - **`FLOW_DELEGATE_CODEX=1` is an inline env prefix ON the command string** (NOT a
-  pre-exported var). The `ralph-guard.py` PreToolUse hook (fn-55.5) sees only the
-  command text and parses this full shape to allow the invocation; a separately
-  `export`ed var would neither reach the hook nor persist across Bash tool calls.
-  Keep it in the command string verbatim.
+ pre-exported var). The `ralph-guard.py` PreToolUse hook (fn-55.5) sees only the
+ command text and parses this full shape to allow the invocation; a separately
+ `export`ed var would neither reach the hook nor persist across Bash prompt turns.
+ Keep it in the command string verbatim.
 - **`-m` / `-c` are ALWAYS passed explicitly** from `DELEGATE_MODEL`
-  (`work.delegateModel`, default `gpt-5.5`) and the per-batch `effective_effort`
-  (default `medium`, escalated below). **There is NO "defer to `~/.codex/config.toml`"
-  path** — `--ignore-user-config` deliberately skips the user Codex config (MCP
-  isolation wins), so model + effort MUST come from flow config, never the user's
-  codex config.
+ (`work.delegateModel`, default `gpt-5.5`) and the per-batch `effective_effort`
+ (default `medium`, escalated below). **There is NO "defer to `~/.codex/config.toml`"
+ path** — `--ignore-user-config` deliberately skips the user Codex config (MCP
+ isolation wins), so model + effort MUST come from flow config, never the user's
+ codex config.
 - **Cross-check vs. the proven review-path invocation** at
-  `flowctl.py:2841-2853` (same `-m`, same `-c 'model_reasoning_effort="..."'`
-  quoting, same stdin `-`, same `gpt-5.5` default-model fallback). This delegation
-  path ADDS `--output-schema` + `-o` + `--ignore-user-config`, which the review
-  path lacks; everything else matches the battle-tested shape.
+ `flowctl.py:2841-2853` (same `-m`, same `-c 'model_reasoning_effort="..."'`
+ quoting, same stdin `-`, same `gpt-5.5` default-model fallback). This delegation
+ path ADDS `--output-schema` + `-o` + `--ignore-user-config`, which the review
+ path lacks; everything else matches the battle-tested shape.
 - **stdin `-`** carries the prompt (avoids CLI length limits + escaping; GH-35).
 
 ### MCP isolation (load-bearing) — `--ignore-user-config`, #15451
@@ -339,8 +341,8 @@ message lands, so `test -s` alone would accept a partial:
 ```bash
 RESULT_FILE="<scratch-dir>/result-batch-<n>.json"
 for i in $(seq 1 6); do
-  test -s "$RESULT_FILE" && jq -e . "$RESULT_FILE" >/dev/null 2>&1 && echo DONE && exit 0
-  sleep 10
+ test -s "$RESULT_FILE" && jq -e . "$RESULT_FILE" >/dev/null 2>&1 && echo DONE && exit 0
+ sleep 10
 done
 echo "Waiting for Codex..."
 ```
@@ -356,14 +358,14 @@ load-bearing — they make `flowctl codex classify-result` (fn-55.4) determinist
 
 ```json
 { "type": "object",
-  "properties": {
-    "status": { "enum": ["completed", "partial", "failed"] },
-    "files_modified": { "type": "array", "items": { "type": "string" } },
-    "issues": { "type": "array", "items": { "type": "string" } },
-    "summary": { "type": "string" },
-    "verification_summary": { "type": "string" } },
-  "required": ["status", "files_modified", "issues", "summary", "verification_summary"],
-  "additionalProperties": false }
+ "properties": {
+ "status": { "enum": ["completed", "partial", "failed"] },
+ "files_modified": { "type": "array", "items": { "type": "string" } },
+ "issues": { "type": "array", "items": { "type": "string" } },
+ "summary": { "type": "string" },
+ "verification_summary": { "type": "string" } },
+ "required": ["status", "files_modified", "issues", "summary", "verification_summary"],
+ "additionalProperties": false }
 ```
 
 ### Per-batch effort (lifted — proportional to risk, floored at config)
@@ -378,15 +380,15 @@ the host-passed `DELEGATE_EFFORT_FLOOR` (`work.delegateEffort`, default `medium`
 | architectural / cross-cutting changes | `xhigh` |
 
 ```text
-effective_effort = max(picked, DELEGATE_EFFORT_FLOOR)   # by enum ordinality
-# enum order:  none < low < medium < high < xhigh
+effective_effort = max(picked, DELEGATE_EFFORT_FLOOR) # by enum ordinality
+# enum order: none < low < medium < high < xhigh
 ```
 
 - Emit the chosen value as `-c 'model_reasoning_effort="<effective_effort>"'`.
 - **Never emit the literal `"default"`** — it is not a valid effort value; the
-  enum is exactly `none | low | medium | high | xhigh`.
+ enum is exactly `none | low | medium | high | xhigh`.
 - The floor means a per-batch pick BELOW the configured floor is raised to the
-  floor; a pick at/above it is kept.
+ floor; a pick at/above it is kept.
 
 ### Scratch dir
 
