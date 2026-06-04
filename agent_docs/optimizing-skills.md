@@ -18,7 +18,12 @@ eval-driven hill-climbing — a baseline, binary evals, one mutation at a time, 
 
 ## Where experiments live (local conventions, Gordon's machine)
 
-- **Repo under test:** `~/work/gmickel-claude-marketplace` (this repo).
+- **Harness lives in:** `~/work/gmickel-claude-marketplace` (this repo — the `opt/*` branch + `optimization/<target>/`).
+- **What the prompt is tested AGAINST — representative repos, NOT flow-next-on-itself.** A repo-context skill (scout / `plan` / code-aware `capture` / review) does its real job in a *user's* app repo, so evaluate it there:
+  - **Primary:** `~/work/DocIQ-Sphere` (~442k LOC; TS/TSX + Python + XSD schemas + Docker — a conventional multi-stack app).
+  - **+ ≥1 contrasting repo** (different size/stack) for variety — the eval-guide's "varied inputs" rule extends to *repo* variety. flow-next itself can serve as the small/unconventional contrast point.
+  - flow-next-on-itself is acceptable **only** for repo-agnostic output-**format** mutations (relative paths, caps, no code blocks — the repo-scout budget win). It **overfits** for accuracy/coverage evals and prompt-trims: flow-next is one ~24k-LOC `flowctl.py` + markdown skills, not the multi-file app structure a scout actually has to navigate.
+  - **Run mechanic:** dispatch the `Explore` subagent with the target repo as its working context and an absolute path to the prompt-under-test (`…/plugins/flow-next/agents/<target>.md`) — it reads the flow-next prompt but scouts the *other* repo.
 - **Branch:** `opt/<name>` (e.g. `opt/autoresearch-tier1`). **Experimental — NO version bump,
   no release** until a kept mutation is promoted (see bottom).
 - **Harness dir:** `optimization/<target>/` at **repo root** (NOT under `plugins/` — it must not
