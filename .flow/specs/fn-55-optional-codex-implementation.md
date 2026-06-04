@@ -148,6 +148,7 @@ Implementation is the most token-heavy phase of `/flow-next:work`; doing it in t
 **The CLAUDE.md carve-out.** "Don't spawn a second LLM from a skill" targets *judgment* (the host is the intelligence). Delegating heavy *implementation* to a cheaper budget — host-orchestrated, host-reviewed — is a deliberate economics trade-off, not a judgment hand-off. Record as a decision.
 **gpt-5.5 / medium default** balances cost and quality; the proven per-batch escalation bumps risky batches up (overridable), so routine work stays cheap and risky work gets resourced.
 **Progressive disclosure** keeps the zero-bloat default-path contract: a value-check gates a reference that's read only when active — the same pattern as the tracker-sync touchpoints.
+**Interactive AND Ralph — no extra Ralph gating (decided).** Delegation runs in both modes with the **same** consent/sandbox config (incl. `yolo` if pre-consented); there is no Ralph-specific restriction. Ralph only requires consent **pre-granted in config** (no live prompt is possible headless) and leans on Ralph's existing impl-review gate to catch a bad Codex implementation. Chosen to capture the biggest win — overnight unattended runs are where implementation tokens pile up — accepting the unsupervised blast radius because the safety rails (fall-back-to-standard on any failure, scoped rollback, 3-strike circuit breaker, never-blocks-the-loop) contain it.
 
 ## Strategy Alignment
 
