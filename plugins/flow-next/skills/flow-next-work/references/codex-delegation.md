@@ -108,7 +108,11 @@ gate on `CODEX_*` would disable delegation in every Ralph run.
 platform_gate_ok() {
   [ -n "${CLAUDECODE:-}" ] || return 1            # not Claude Code → off
   [ -z "${DROID_PLUGIN_ROOT:-}" ] || return 1     # Droid → off (compat alias not keyed)
-  [ -z "${OPENCODE:-}${OPENCODE_BIN:-}" ] || return 1  # OpenCode → off
+  # OpenCode → off. Match the bare `OPENCODE` var AND any `OPENCODE_*` marker
+  # (OPENCODE_BIN, OPENCODE_SESSION, OPENCODE_ROOT, …) — a fixed two-var check
+  # would miss future/unknown markers, contradicting "AND no OpenCode marker".
+  [ -z "${OPENCODE:-}" ] || return 1
+  env | grep -q '^OPENCODE_' && return 1
   return 0
 }
 ```

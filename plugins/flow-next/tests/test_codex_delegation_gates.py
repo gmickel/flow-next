@@ -113,7 +113,21 @@ class CodexDelegationGateExecution(unittest.TestCase):
             "platform_gate_ok",
             {"CLAUDECODE": "1", "OPENCODE": "1"},
         )
-        self.assertNotEqual(rc, 0, "OpenCode marker → ineligible")
+        self.assertNotEqual(rc, 0, "bare OPENCODE marker → ineligible")
+
+    def test_platform_gate_off_on_prefixed_opencode_markers(self) -> None:
+        # "AND no OpenCode marker" must cover arbitrary OPENCODE_* markers, not
+        # just a fixed two-var check — OPENCODE_SESSION / OPENCODE_ROOT etc.
+        for marker in ("OPENCODE_SESSION", "OPENCODE_ROOT", "OPENCODE_BIN"):
+            with self.subTest(marker=marker):
+                rc = self._run(
+                    self.platform_fn,
+                    "platform_gate_ok",
+                    {"CLAUDECODE": "1", marker: "1"},
+                )
+                self.assertNotEqual(
+                    rc, 0, f"{marker} (OpenCode marker) → ineligible"
+                )
 
     # ── Recursion guard (rc 0 = NOT inside a sandbox = eligible) ────────────
 
