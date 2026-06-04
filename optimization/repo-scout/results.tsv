@@ -1,0 +1,3 @@
+experiment	score	max_score	pass_rate	status	description
+0	10	12	83.3%	baseline	original — Lean fails 2/3 (verbose, absolute /Users paths, code blocks); T1 wrongly omitted features_anchored despite .clawpatch present
+1	12	12	100.0%	keep	added hard Output budget (relative paths, top 3-5/section, one line/finding, no code blocks, omit empty) — Lean 1/3 to 3/3, others held

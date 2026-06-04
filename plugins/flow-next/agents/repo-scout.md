@@ -73,6 +73,13 @@ git log --oneline --all -- "*/auth*" | head -5  # history of similar features
 
 ## Output Format
 
+**Output budget (hard).** Keep the whole findings block **under ~500 tokens**:
+- **Repo-relative paths only** (`plugins/.../x.py:42`) — NEVER absolute `/Users/...` paths.
+- **Top 3–5 items per section**, ranked by relevance; drop the rest.
+- **One line per finding** — no bold sub-headers, no grouping prose between bullets.
+- **No code blocks** — name the signature inline (e.g. `set_config(key, value)`), never paste bodies.
+- **Omit any section that has no findings.**
+
 ```markdown
 ## Repo Scout Findings
 
