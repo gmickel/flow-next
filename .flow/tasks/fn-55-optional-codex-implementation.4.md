@@ -54,7 +54,8 @@ Author the orchestration-split + safety mechanics in `references/codex-delegatio
 - [ ] Test suite green.
 
 ## Done summary
-_(pending implementation)_
-
+Added deterministic `flowctl codex classify-result` (5-row delegation-result classifier; exit!=0 wins, malformed/missing JSON -> task_failure, array-item-type schema validation) and `flowctl codex rollback-plan` (post-minus-pre untracked-snapshot diff with strict path sanitization -- absolute/../empty/./backslash/bare-dir/.flow/** rejected, raw bytes never trimmed or rewritten, --print0 NUL-safe argv + non-empty guard against bare git clean) to BOTH byte-identical flowctl.py copies; authored the orchestration-split/batching/classification/safety section in references/codex-delegation.md + the worker.md HEAD-assertion/scoped-rollback/.flow-integrity mechanics; mock-codex fixture + 58 deterministic tests wired into CI. RP impl-review: SHIP (R5/R6/R8 all met) after three NEEDS_WORK->fix rounds (strip-aliasing, backslash-aliasing, bare-clean guard).
 ## Evidence
-_(pending implementation)_
+- Commits: 47acb5e, e464846, bbff025, 5f179e8, e4be1ae
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p test_codex_delegation_classify.py (58 tests, OK), python3 -m unittest discover -s plugins/flow-next/tests -p test_codex_delegation_gates.py (21 tests, OK), python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (895 tests, OK, 2 skipped), diff -q scripts/flowctl.py .flow/bin/flowctl.py (byte-identical)
+- PRs:
