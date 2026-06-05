@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -88,12 +89,16 @@ def _drive_hook(command: str) -> int:
         "session_id": "test-session",
         "tool_input": {"command": command},
     }
+    # Inherit the real env (PATH + SYSTEMROOT on Windows so the python subprocess
+    # can start) and just activate the guard. A bare {FLOW_RALPH, Unix PATH} env
+    # strips SYSTEMROOT and breaks python on the Windows runner — the guard only
+    # parses the command STRING, so the ambient env is harmless.
     proc = subprocess.run(
         [sys.executable, str(GUARD_PY)],
         input=json.dumps(payload),
         capture_output=True,
         text=True,
-        env={"FLOW_RALPH": "1", "PATH": "/usr/bin:/bin"},
+        env={**os.environ, "FLOW_RALPH": "1"},
     )
     return proc.returncode
 

@@ -355,6 +355,14 @@ echo "Waiting for Codex..."
 Re-run the poll snippet (a fresh foreground Bash call each time) until it prints
 `DONE`; on a long run, the `run_in_background` completion notification also fires.
 
+**Capture `CODEX_EXIT`.** The poll loop only proves the result FILE is ready — it
+does NOT tell you whether `codex exec` itself succeeded. When the background task
+COMPLETES, the harness surfaces its **exit code**; record it as `CODEX_EXIT` and
+pass it to `flowctl codex classify-result --exit "$CODEX_EXIT"`. **Never default
+to `0`** — a non-zero exit (codex crashed / was killed / errored before writing a
+valid result) is exactly the `cli_failure → rollback_and_disable` row, and
+guessing `0` would silently swallow it.
+
 ### Structured result schema (lifted — the proof-of-work contract)
 
 Write this verbatim to `<scratch-dir>/result-schema.json` and pass it to

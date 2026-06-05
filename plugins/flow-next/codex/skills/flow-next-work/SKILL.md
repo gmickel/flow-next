@@ -180,7 +180,13 @@ computes `delegation_active` ONCE, before the per-task loop:
 
 ```bash
 # Default-path bloat = this one value-check. Nothing else runs when off.
-DELEGATE_CFG="$($FLOWCTL config get work.delegate --json | jq -r '.value')"
+# Guard a missing .flow/ (fresh repo / idea or markdown input, not yet `flowctl
+# init`ed) — `config get` errors on an absent .flow/; treat it as delegation OFF.
+if [ -d .flow ]; then
+ DELEGATE_CFG="$($FLOWCTL config get work.delegate --json | jq -r '.value')"
+else
+ DELEGATE_CFG=false
+fi
 # delegation_active = (arg delegate:codex | DELEGATE_CFG == "codex") && not arg delegate:local
 # if delegation_active → read references/codex-delegation.md and run the host
 # pre-flight gates + one-time consent ONCE, before the loop (phases.md Phase 1.5).

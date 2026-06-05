@@ -133,13 +133,19 @@ THIS task's implementation to `codex exec`:
    Inline the literal flag — NOT a `$SANDBOX_FLAG` variable: ralph-guard inspects
    the raw pre-expansion command and only allowlists the literal sandbox flags.
 3. **Poll the result file in separate FOREGROUND Bash calls** (non-empty AND
-   `jq -e .` parseable) until DONE, then classify + cross-check + enforce
-   git/`.flow` ownership against `BASE_COMMIT`, and either commit (Phase 3),
-   finish locally, or scoped-rollback per the reference's "Orchestration split /
-   batching / result classification / safety" section. The concrete mechanics
-   (all deterministic flowctl, never re-derived in prose):
+   `jq -e .` parseable) until DONE. When the background `codex exec` task COMPLETES,
+   **capture its exit code as `CODEX_EXIT`** (the `run_in_background` task surfaces
+   it on completion — the poll-the-result-file loop is only a readiness check). A
+   non-zero `codex exec` exit MUST drive `cli_failure → rollback_and_disable` — so
+   never guess `0`. Then classify + cross-check + enforce git/`.flow` ownership
+   against `BASE_COMMIT`, and either commit (Phase 3), finish locally, or
+   scoped-rollback per the reference's "Orchestration split / batching / result
+   classification / safety" section. The concrete mechanics (all deterministic
+   flowctl, never re-derived in prose):
 
    ```bash
+   # CODEX_EXIT = the background codex exec task's exit code (from the
+   # run_in_background task completion — NOT defaulted to 0). exit≠0 = cli_failure.
    # Classify (the 5-row table — exit≠0 always wins):
    CLASS_JSON="$($FLOWCTL codex classify-result \\
      --result "$SCRATCH/result-batch-1.json" --exit "$CODEX_EXIT" --json)"
