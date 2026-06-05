@@ -24,6 +24,7 @@ Reference material for flow-next. Each file is self-contained, terse, and offlin
 |-----|--------------|
 | [`flowctl.md`](flowctl.md) | Full `flowctl` CLI reference — every command, every flag, JSON shapes, exit codes (including the [`repo-map`](flowctl.md#repo-map) readers consumed by the `/flow-next:map` opt-in skill) |
 | [`ralph.md`](ralph.md) | Ralph autonomous mode internals — hooks, receipts, iteration cap, DCG setup, sandbox options |
+| [`../skills/flow-next-work/references/codex-delegation.md`](../skills/flow-next-work/references/codex-delegation.md) | `/flow-next:work` opt-in Codex implementation-delegation — host pre-flight gates + one-time consent, `codex exec` invocation + result schema, orchestration split / batching / classification / safety, circuit breaker + Ralph-safe + ralph-guard amendment + receipts + attribution. OFF by default. |
 | [`teams.md`](teams.md) | Spec-driven team workflow — handover objects, Spec-as-PR, parallel work from one spec, symmetric interview, adoption ladder |
 | [`ci-workflow-example.yml`](ci-workflow-example.yml) | Drop-in GitHub Actions example running `flowctl validate --all` |
 

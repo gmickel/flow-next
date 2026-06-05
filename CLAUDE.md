@@ -28,6 +28,8 @@ A workflow that walks files, makes per-item judgments, investigates code, compos
 
 **Do not spawn `codex`/`copilot`/other LLMs via subprocess from inside flowctl when invoked from a skill.** The host agent is already an LLM running the skill — there is no need for a second one.
 
+**Narrow carve-out — `/flow-next:work` Codex delegation (fn-55 decision):** the opt-in `work.delegate` / `delegate:codex` mode is **host-orchestrated implementation-offload, not a judgment hand-off**. The host work skill spawns a local `codex exec` to *write code* for a task while the host retains all judgment (gating, classification, git ownership, review, commit). This is the one sanctioned second-LLM spawn — it is OFF by default, consent-gated, never spawned from inside flowctl, and `codex exec` is forbidden from git/decisions. It does **not** license spawning LLMs for judgment from flowctl. See [`skills/flow-next-work/references/codex-delegation.md`](plugins/flow-next/skills/flow-next-work/references/codex-delegation.md).
+
 ### When to use DETERMINISTIC flowctl Python
 
 Mechanical operations needing to work without an agent in the loop: Ralph hooks (PreToolUse / Stop / SubagentStop matchers), receipts (review / walkthrough / ralph_blocked), schema validation, atomic file writes, git plumbing, the triage-skip whitelist, the review-subsystem backend dispatch (`flowctl rp`, `flowctl review-backend`).

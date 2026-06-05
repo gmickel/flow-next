@@ -16,11 +16,12 @@ subagent has no interactive consent path), so consent must live here. The host r
 (`delegate on/off`, sandbox, effort floor, decision) into each spawned worker's
 prompt where `phases.md` Phase 3c injects worker context.
 
-The invocation / result-schema / background-launch+poll / per-batch effort
-sections (filled by fn-55.3), the orchestration-split / batching / classification
-/ safety sections (fn-55.4), and the circuit-breaker / Ralph-safe / attribution
-sections (fn-55.5) are stubbed at the end of this file and authored by those
-tasks. This task (fn-55.2) authors ONLY the pre-flight + consent section.
+This file is the complete host-side substrate for delegation, top to bottom:
+pre-flight gates + one-time consent (below), the `codex exec` invocation /
+result-schema / background-launch+poll / per-batch effort, the orchestration
+split / batching / result-classification / safety, and the circuit-breaker /
+Ralph-safe / ralph-guard amendment / receipts / attribution. Each section is
+self-contained and read in order by `phases.md` once `delegation_active=true`.
 
 ---
 

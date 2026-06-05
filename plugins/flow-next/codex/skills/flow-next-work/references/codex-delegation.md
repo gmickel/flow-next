@@ -16,11 +16,12 @@ subagent has no interactive consent path), so consent must live here. The host r
 (`delegate on/off`, sandbox, effort floor, decision) into each spawned worker's
 prompt where `phases.md` Phase 3c injects worker context.
 
-The invocation / result-schema / background-launch+poll / per-batch effort
-sections (filled by fn-55.3), the orchestration-split / batching / classification
-/ safety sections (fn-55.4), and the circuit-breaker / Ralph-safe / attribution
-sections (fn-55.5) are stubbed at the end of this file and authored by those
-tasks. This task (fn-55.2) authors ONLY the pre-flight + consent section.
+This file is the complete host-side substrate for delegation, top to bottom:
+pre-flight gates + one-time consent (below), the `codex exec` invocation /
+result-schema / background-launch+poll / per-batch effort, the orchestration
+split / batching / result-classification / safety, and the circuit-breaker /
+Ralph-safe / ralph-guard amendment / receipts / attribution. Each section is
+self-contained and read in order by `phases.md` once `delegation_active=true`.
 
 ---
 
@@ -399,8 +400,436 @@ scratch dir is cleaned post-commit (fn-55.4), so never persist a pointer to it i
 
 ## Orchestration split / batching / result classification / safety
 
-_(stub — authored by fn-55.4)_
+> **The classification + scoped-rollback logic is deterministic flowctl, NOT
+> markdown the host re-interprets** (CLAUDE.md agentic-vs-deterministic split).
+> The worker calls `flowctl codex classify-result` / `flowctl codex rollback-plan`
+> and acts on their JSON; the host AGENT keeps the judgment (delegate-or-not,
+> risk→effort, batching). The helpers are pure (no git, no model) so CI tests
+> target executable code, not prose.
+
+### Orchestration split (R5) — who owns what
+
+Claude (the worker, which *is* Claude) owns **plan-reading, review, ALL git ops,
+and decisions**. `codex exec` **only writes code** — it is **forbidden from git**
+(`commit`/`push`/PRs) and repo-scoped. This split is **enforced, not prompt-only**:
+
+- **Git ownership** — Codex is *told* not to commit, but a yolo sandbox CAN run
+ git. The worker captures `BASE_COMMIT` (it already does, `worker.md:109-113`)
+ and **asserts `git rev-parse HEAD == BASE_COMMIT` AFTER `codex exec`**. A
+ committed Codex change is invisible to the `git status` cross-check, so this
+ HEAD assertion is the real guard for "Claude owns all git."
+- **`.flow/` integrity** — because the scoped rollback intentionally never
+ touches `.flow/**` (to preserve plan-sync state), an unauthorized Codex write
+ to a *non-scratch* `.flow/` path would otherwise survive a failed delegation.
+ So the worker snapshots non-scratch `.flow/` BEFORE delegating and re-checks
+ after.
+
+The worker keeps Phase 3 commit, Phase 4 impl-review, Phase 5 done — only the
+spawned `codex exec` is git-forbidden. The worker's existing `BASE_COMMIT` is
+**reused** for rollback scope + the impl-review base (no base reset — preserves
+the spec-wide-base rule for the final integration task).
+
+### Batching (R5) — scoped to ONE flow task
+
+A delegated task's implementation is split into **≤5 units**, where each unit is
+a logical change-set:
+
+- Split at **phase / file boundaries**; **never split a shared-file unit** across
+ batches (concurrent edits to one file would conflict).
+- **Skip delegation entirely if all units are trivial** (a one-line edit is not
+ worth the round-trip — implement in-session).
+- **No cross-task batching in v1** — batching is scoped to the single flow task
+ the worker owns. (Cross-task batching is explicitly out of scope: each flow
+ task is a fresh worker subagent; there is no shared orchestrator to batch
+ across tasks.)
+
+Each batch surfaces a brief **result block** (summary / files / verification /
+issues). In Ralph it routes to the Ralph log / receipt (no human in the loop).
+
+### The prompt template (lifted — 8 XML-tagged sections)
+
+The per-batch prompt (`prompt-batch-<n>.md`) carries exactly these sections:
+
+```
+<task> one-sentence statement of THIS batch's change-set
+<files> the files this batch may touch (repo-relative)
+<patterns> existing patterns to follow (signatures, naming, structure)
+<approach> the technical approach (from the spec / investigation)
+<constraints> the hard rules — see below
+<testing> which test files / commands prove this batch
+<verify> run all test files in ONE process; gate `completed` on green
+<output_contract> emit the result JSON per result-schema.json (verbatim)
+```
+
+`<constraints>` **MUST**:
+- **forbid Codex from `git commit` / `git push` / opening PRs** (the orchestrator
+ owns all git);
+- **restrict modifications to the repo root** and keep scope tight to `<files>`;
+- **explicitly forbid writing anywhere under `.flow/` EXCEPT its own
+ `.flow/tmp/codex-<task-id>/` scratch dir** — `.flow/specs`, `.flow/tasks`,
+ `.flow/config.json`, `.flow/memory`, … are host-owned.
+
+`<verify>` runs **all** test files in one process and **forbids
+`status:"completed"` unless verification passes** — Codex verifies + fixes itself
+before reporting `completed`.
+
+### Result classification (lifted — computed by `classify-result`)
+
+After the bg-launch+poll loop yields a non-empty, JSON-parseable result file,
+classify with:
+
+```bash
+$FLOWCTL codex classify-result \
+ --result "<scratch-dir>/result-batch-<n>.json" \
+ --exit <codex-exit-code> --json
+# → { class, status, action, scoped_paths, valid_schema }
+```
+
+| Signal | `class` | `action` |
+|---|---|---|
+| exit ≠ 0 | `cli_failure` | `rollback_and_disable` — rollback to HEAD; fall back to standard for ALL remaining work |
+| exit 0, result JSON missing / malformed | `task_failure` | `rollback`; `consecutive_failures++` |
+| exit 0, `status:"failed"` | `task_failure` | `rollback`; `consecutive_failures++` |
+| exit 0, `status:"partial"` | `partial` | `finish_locally` — keep diff; finish locally + verify + commit; `consecutive_failures++` |
+| exit 0, `status:"completed"` | `success` | `commit` — cross-check (below) → commit; reset `consecutive_failures=0` |
+
+**A non-zero exit ALWAYS wins** — a CLI failure can leave a stale or
+partially-written result behind, so the helper ignores the result body and
+returns `cli_failure` regardless. The `valid_schema:false` branch (missing /
+empty / unparseable / schema-mismatch on exit 0) is the **backstop**: even if
+`--output-schema` silently degraded (the #15451 MCP-drop the invocation guards
+against), we never commit blind — we roll back.
+
+### Trust cross-check (cheap) — before committing `completed`
+
+Before committing a `completed` result, intersect `git status --porcelain` with
+the result's `files_modified`:
+
+- **claimed-but-untouched** (in `files_modified`, not in `git status`) **or
+ touched-but-unclaimed** (dirty in `git status`, not in `files_modified`) → a
+ mismatch **downgrades** the result to `partial`/`failed` — don't commit blind.
+- This cross-check + an impl-review SHIP gate (`REVIEW_MODE != none`) together
+ are the independent check, so the orchestrator **skips a duplicate test run**.
+ **When `REVIEW_MODE=none`** (worker Phase 4 skipped), there is no independent
+ gate → the worker runs its own **Phase 5 verification** on the delegated diff
+ before `flowctl done` (fix + follow-up commit on failure — never trust
+ `verification_summary` as the sole gate). fn-55.5 owns the `REVIEW_MODE=none`
+ verification wiring.
+
+### Safety — clean-baseline preflight (scoped, EXCLUDES `.flow/`)
+
+The clean-baseline preflight uses **`git status --porcelain`** (catches untracked
+files that `git diff --quiet HEAD` misses), **never auto-stashes**, and is
+**scoped to the code tree — it EXCLUDES host-owned `.flow/`**:
+
+```bash
+# Dirty = any non-.flow working-tree change. /flow-next:work runs plan-sync after
+# each task (phases.md 3e), legitimately leaving uncommitted .flow/tasks/ edits;
+# a whole-tree clean-baseline would false-disable delegation after task 1.
+DIRTY="$(git status --porcelain | grep -v '^.. \.flow/' || true)"
+if [ -n "$DIRTY" ]; then
+ : # non-.flow dirtiness → offer commit / standard-mode; do NOT delegate dirty
+fi
+```
+
+Only **non-`.flow/`** dirtiness counts as "dirty". A multi-task run with
+`planSync.enabled=true` therefore does NOT disable delegation after task 1.
+
+### Safety — git-ownership enforcement (HEAD assertion)
+
+```bash
+# AFTER codex exec (and after poll DONE): assert Claude still owns git.
+if [ "$(git rev-parse HEAD)" != "$BASE_COMMIT" ]; then
+ # Codex committed (yolo sandbox can run git). Un-commit, keep the diff:
+ git reset --soft "$BASE_COMMIT"
+ # → then scoped rollback (below) → classify as failure → DISABLE delegation.
+fi
+```
+
+A committed Codex change is invisible to the `git status` cross-check, so this
+assertion is the real "Claude owns all git" guard.
+
+### Safety — non-scratch `.flow/` integrity (snapshot + restore)
+
+```bash
+# BEFORE delegating: snapshot non-scratch .flow/ (everything under .flow/ EXCEPT
+# .flow/tmp/codex-*). After codex exec: re-check. Any new/changed non-scratch
+# .flow/ path → restore THOSE paths from the snapshot (the one case rollback
+# deliberately touches .flow/, to UNDO Codex's unauthorized edit) → disable.
+```
+
+Because the scoped rollback never touches `.flow/**`, this snapshot/restore is
+the *only* mechanism that reinstates host state after an unauthorized `.flow/`
+write. `<constraints>` already forbid the write; this is the enforcement backstop.
+
+### Safety — scoped rollback (`rollback-plan`, never bare `git clean`)
+
+Snapshot the untracked set **before** delegating and **again after** the run, both
+with `git ls-files --others --exclude-standard -z` (NUL-delimited — odd paths +
+files inside new dirs are listed individually, not collapsed to `?? dir/`):
+
+```bash
+# Pre (BEFORE codex exec):
+git ls-files --others --exclude-standard -z > "$SCRATCH/pre-untracked.txt"
+# … run codex exec, poll, classify …
+# Post (AFTER the run):
+git ls-files --others --exclude-standard -z > "$SCRATCH/post-untracked.txt"
+
+# Compute the SAFE cleanup set (post − pre, sanitized):
+$FLOWCTL codex rollback-plan --repo-root . \
+ --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
+ --post-untracked-file "$SCRATCH/post-untracked.txt" --json > "$SCRATCH/plan.json"
+# → { rollback_paths: [...sanitized repo-relative FILE paths...], rejected: [...] }
+
+# Roll back (only when class is a failure / partial-discard):
+git checkout -- <tracked paths> # tracked-only revert (never untracked)
+
+# MANDATORY non-empty guard — NEVER let `git clean` run with an empty path list.
+# If EVERY new path was rejected (all .flow/**, backslash, absolute, traversal,
+# bare-dir), `rollback_paths` is empty and `git clean -fd --` would degrade into
+# a BARE clean (github/copilot-cli#1675). The guard makes that impossible. Read
+# array via `--print0` (whitespace/newline-safe argv) — never shell-split it.
+N="$(jq '.rollback_paths | length' "$SCRATCH/plan.json")"
+if [ "$N" -gt 0 ]; then
+ # `--print0` emits the sanitized paths NUL-delimited (whitespace/newline-safe
+ # argv) — never shell-split the JSON text. Clean ONLY codex-created FILES:
+ $FLOWCTL codex rollback-plan --repo-root . \
+ --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
+ --post-untracked-file "$SCRATCH/post-untracked.txt" --print0 \
+ | xargs -0 git clean -fd --
+fi
+# N == 0 → there is nothing codex-created to clean → DO NOT call `git clean`.
+# (Belt-and-braces: --print0 emits nothing on an empty set, so even without
+# the count guard, xargs -0 --no-run-if-empty never invokes a bare clean.)
+```
+
+Key guarantees (all enforced by `rollback-plan` + the non-empty guard, all
+covered by tests):
+- The cleanup set is **`post − pre`** — derived from the snapshots, **NOT** from
+ the result's `files_modified` (absent on CLI-failure / missing / malformed, yet
+ Codex may have created untracked files). So cleanup works even with no result.
+- **Never bare `git clean`** — a bare clean has destroyed gigabytes of untracked
+ output in the wild (github/copilot-cli#1675). `git clean` is fed ONLY the
+ sanitized path list, **and only when that list is non-empty** (the `N -gt 0`
+ guard — an all-rejected set must NEVER reach `git clean`).
+- **Never a pre-existing untracked file** (it's in `pre`, so excluded by the diff).
+- **Never a `.flow/**` path** — host-owned (plan-sync, specs, tasks); `.flow/`
+ paths are rejected by `rollback-plan`.
+- Rejected: absolute paths, `..` traversal, empty, `.`, backslash paths, bare
+ directories, `.flow/**`. `git clean -fd <files>` removes the now-empty parent
+ dirs.
+
+### Circuit breaker (host-owned)
+
+The 3-consecutive-failure circuit breaker and the `DELEGATION_RESULT=` /
+`DELEGATION_ACTION=` host signals are authored by **fn-55.5** in the next section.
+This task supplies the per-task `action` (`commit` / `finish_locally` /
+`rollback` / `rollback_and_disable`) that the host loop bridges into the counter.
 
 ## Circuit breaker / Ralph-safe / ralph-guard amendment / receipts / attribution
 
-_(stub — authored by fn-55.5)_
+> **The counter is HOST-owned (R8).** Each flow task is a fresh-context worker
+> subagent, so an in-worker counter would reset every task and never trip. The
+> worker emits a terminal **structured signal**; the host loop (`phases.md` Phase 3)
+> owns the `consecutive_failures` counter and the `delegation_active` flag across
+> tasks. fn-55.4 supplied the per-task `action`
+> (`commit` / `finish_locally` / `rollback` / `rollback_and_disable`) via
+> `flowctl codex classify-result`; this section bridges it into the host counter.
+
+### Worker → host signal (terminal lines + inlined evidence)
+
+On a delegated task, the worker (Phase 5, just before `flowctl done`) does TWO
+things so the host can run the breaker without re-reading the scratch dir:
+
+1. **Inline the result** into `flowctl done --evidence-json` as
+ `evidence.delegation` (NOT a `result_file` pointer — the scratch dir is cleaned
+ post-commit, so a path would dangle):
+
+ ```json
+ {
+ "delegation": {
+ "result": {
+ "status": "completed",
+ "files_modified": ["src/foo.ts"],
+ "issues": [],
+ "summary": "...",
+ "verification_summary": "..."
+ },
+ "model": "gpt-5.5",
+ "effort": "medium",
+ "class": "success"
+ }
+ }
+ ```
+ On a `cli_failure` / missing / malformed result (no result body), inline what
+ IS known — `class` + `model` + `effort` + a minimal `result` (`status:null`,
+ empty arrays, the failure summary) — never omit `evidence.delegation`.
+
+2. **Emit terminal signal lines** as the LAST two lines of its return summary
+ (the host parses them; `class` + `action` both come straight from
+ `classify-result`):
+
+ ```
+ DELEGATION_RESULT=<success|partial|task_failure|cli_failure>
+ DELEGATION_ACTION=<commit|finish_locally|rollback|rollback_and_disable>
+ ```
+
+ When delegation was **not active** for a task (gates failed mid-run, all units
+ trivial, or `DELEGATE: local`), the worker emits NO `DELEGATION_*` lines — the
+ host treats a missing signal as "standard task, counter untouched."
+
+### Host circuit breaker (phases.md Phase 3 — pre-loop init + per-task bridge)
+
+The host initializes the counter ONCE before the per-task loop and updates it
+after each delegated worker returns:
+
+```text
+# Pre-loop (host, once):
+consecutive_failures = 0
+delegation_active = <true after Phase 1.5 gates all passed>
+
+# After each worker returns, parse the terminal DELEGATION_* lines:
+case DELEGATION_ACTION:
+ rollback_and_disable → # a cli_failure
+ delegation_active = false # disable IMMEDIATELY for ALL remaining tasks
+ rollback | finish_locally → # task_failure / partial
+ consecutive_failures += 1
+ if consecutive_failures >= 3:
+ delegation_active = false # 3 strikes → standard mode for the rest
+ commit → # success
+ consecutive_failures = 0 # reset the streak
+# (no DELEGATION_* lines → task ran standard; counter untouched)
+
+# When delegation_active flips false, the host stops appending the DELEGATE:* flags
+# to subsequent worker prompts (phases.md Phase 3c) → remaining tasks run standard.
+```
+
+- **`rollback_and_disable` is immediate** — a CLI failure (`codex` crashed,
+ not-on-PATH mid-run, sandbox refusal) means the tool itself is unhealthy, so we
+ don't burn two more tasks proving it; disable now.
+- **`rollback` / `finish_locally` count toward 3** — a `task_failure`
+ (malformed/failed result) or a `partial` (kept-but-incomplete) is a per-task
+ miss, not a tool death; three in a row trips the breaker.
+- **`commit` resets to 0** — the streak is *consecutive* failures; one success
+ clears it.
+- The counter is **host-owned** precisely because the worker is fresh-context: an
+ in-worker `consecutive_failures` would reset on every task and never reach 3.
+
+### Ralph-safe (autonomous mode)
+
+In Ralph / headless mode, delegation is **non-blocking** and consent-gated:
+
+- **Consent-gated:** delegation proceeds ONLY if `work.delegateConsent` is already
+ `true` (Gate 4 — headless has no `plain-text numbered prompt` path). Otherwise it stays
+ silently off; the loop runs standard-mode, unchanged.
+- **Never blocks the loop:** every delegation failure path
+ (`rollback` / `rollback_and_disable` / `finish_locally`) degrades to standard
+ in-session work — the task still completes, the loop still advances. A forced
+ CLI failure disables delegation for the rest of the run but does NOT halt Ralph.
+- **No human in the loop:** the per-batch result block (summary / files /
+ verification / issues) routes to the **Ralph log / receipt**, not a prompt. The
+ inlined `evidence.delegation` in `flowctl done` IS the durable proof-of-work
+ surface that Ralph's receipt/log machinery picks up.
+- **Multi-cycle confabulation guard (memory `drop-receipt-to-break-codex`):** if a
+ delegated task runs MULTIPLE impl-review fix cycles, drop the review receipt
+ (`rm -f "$REVIEW_RECEIPT_PATH"`) before a re-review so a fresh reviewer thread
+ reads the actual diff instead of reinforcing a prior turn's hallucinated
+ narrative. (This is the impl-review skill's existing receipt-reset discipline;
+ delegation does not change it.)
+
+### ralph-guard amendment (the PreToolUse allowance)
+
+`ralph-guard.py` blocks bare `codex exec` (only `flowctl codex` wrappers passed).
+fn-55.5 amends the PreToolUse Bash matcher to ALSO allow the invocation — but
+**only when the command is exactly ONE codex invocation matching the FULL
+canonical delegation shape**, never the mere presence of the
+`FLOW_DELEGATE_CODEX=1` sentinel (else any Ralph Bash call could bypass the guard
+by prepending it). The allowance (`is_canonical_codex_delegation`) is
+**tokenized, not substring-matched**: it bans shell control operators, parses the
+command with `shlex` (POSIX shell-token semantics), and validates the resulting
+**argv** against a strict allowlist — so required flags cannot be smuggled inside
+a quoted positional prompt while `codex exec` actually receives none of them.
+ALL of the following must hold:
+
+- **a single command** — NO shell control operator (`;` / `&&` / `||` / `|` /
+ `&` / newline / `$(…)` / `${…}` / subshell parens / any `>` output redirect).
+ The hook allowance applies to the WHOLE Bash command, so a trailing
+ `; codex exec --last` or `&& <destructive>` would otherwise inherit it. (`<` is
+ the single permitted redirect — the stdin prompt.);
+- the argv parses cleanly (balanced quotes) and **every token is one the
+ canonical invocation emits** — an unexpected token (a stray positional prompt,
+ an extra flag, a smuggled quoted blob) → block;
+- leading `FLOW_DELEGATE_CODEX=1` env-prefix token, then `codex` `exec` —
+ **exactly one** `codex` token, **never** `resume` / `review`;
+- `--ignore-user-config` as a standalone token (load-bearing — without it MCP
+ servers can re-enable and silently drop `--output-schema`);
+- **`-c` is restricted to the reasoning-effort pair** —
+ `model_reasoning_effort="(none|low|medium|high|xhigh)"` — and may appear at most
+ once. An arbitrary `-c key=value` (e.g. `-c mcp_servers.evil.command=…`) would
+ re-enable MCP and silently defeat `--ignore-user-config`, so any non-effort or
+ duplicate `-c` is non-canonical;
+- an `-o` output target under a `.flow/tmp/codex-<id>/` scratch dir, AND
+ `--output-schema` + the stdin prompt (`- < …`) under the **SAME** scratch dir.
+ Each path must be **exactly** `[./].flow/tmp/codex-<id>/<canonical-basename>`
+ with NO nested subdir, NO `..` traversal, NO absolute/backslash path — the
+ basenames are pinned to `result-batch-<n>.json` / `result-schema.json` /
+ `prompt-batch-<n>.md`. So a path that prefix-matches the scratch dir yet escapes
+ it (`codex-<id>/../../tasks/x.json`) is rejected, and a sibling-prefix dir
+ (`codex-fn-1.2-evil`) is not confused with `codex-fn-1.2`. An inline prompt, or
+ a schema/prompt elsewhere or split across dirs, is non-canonical;
+- a sandbox flag from the allowlist
+ (`--dangerously-bypass-approvals-and-sandbox` | `-s workspace-write` — `-s`
+ must be exactly `workspace-write`);
+- **every singleton appears exactly once** — a duplicate `--ignore-user-config`
+ / `-c` / `--output-schema` / `-o` / sandbox flag / stdin prompt is rejected
+ (no smuggling a second occurrence to undo the first);
+- **`-m` is a single safe model token** (charset `[A-Za-z0-9][A-Za-z0-9._:-]*`, no
+ leading `-`) — so a flag can't be parked as the model value;
+- and **NO `--last`** ANYWHERE — a global token-level reject, so it can't be
+ hidden as a consumed option value (`-m --last`), not just blocked as a
+ standalone flag.
+
+A sentinel-prefixed but otherwise-arbitrary command — e.g.
+`FLOW_DELEGATE_CODEX=1 codex exec --last`, one missing `--ignore-user-config`,
+one with an `-o`/schema/prompt outside (or split across) `.flow/tmp/codex-*`, a
+canonical-looking command with a trailing `; …` second command, or one that
+smuggles the flags inside a quoted positional prompt — STILL falls through to the
+block.
+The copilot block stays intact; `RALPH_GUARD_VERSION` is bumped (→ `0.15.0`) with
+the change. `ralph-guard.py` is a hook (NOT dogfooded into `.flow/bin`), so it is
+single-copy — no dual-copy invariant to maintain.
+
+### `REVIEW_MODE=none` verification backstop
+
+When delegation is active **and `REVIEW_MODE=none`** (worker Phase 4 skipped),
+there is no independent impl-review gate, so `verification_summary` is **not
+trusted as the sole gate**. The worker runs its own **Phase 5 verification** on
+the delegated diff BEFORE `flowctl done` (its existing verify-before-done gate;
+on failure → fix + follow-up commit, never blind-commit). When
+`REVIEW_MODE != none`, the impl-review SHIP gate is the independent check and the
+worker does **not** run a duplicate test pass (the token win holds — fn-55.4's
+trust-boundary contract).
+
+### Mixed-model attribution (concrete trailer strings)
+
+On a **delegated** commit (Codex wrote the code, Claude orchestrated), the worker
+appends two commit-message trailers at **Phase 3** (the commit it owns):
+
+```
+AI-Orchestrator: Claude
+AI-Implementer: codex <model> (<effort>)
+```
+
+- `<model>` is `DELEGATE_MODEL` (e.g. `gpt-5.5`); `<effort>` is the per-batch
+ `effective_effort` (e.g. `medium`) — yielding `AI-Implementer: codex gpt-5.5 (medium)`.
+- Append them as real trailer lines (own paragraph, blank line before the
+ `Task:` trailer block) so `git interpret-trailers` / `make-pr` can read them.
+- **Only on a delegated commit.** A standard in-session commit (no delegation, or
+ a partial finished locally where Claude wrote the remainder) carries no
+ `AI-Implementer` trailer — attribute honestly.
+- The trailers live in the **commit history** the PR carries, so when
+ `/flow-next:make-pr` later runs against the spec, the `AI-Orchestrator: Claude`
+ + `AI-Implementer: codex <model> (<effort>)` attribution travels with the
+ PR's commits — both the orchestrator and the implementer are credited. (make-pr
+ synthesizes its body honestly from spec/commit state; the trailers are the
+ durable, machine-readable attribution surface it draws on.)
