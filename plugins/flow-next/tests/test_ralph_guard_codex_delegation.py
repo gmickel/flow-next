@@ -136,6 +136,20 @@ class CanonicalDelegationHelperTestCase(unittest.TestCase):
         # Even an otherwise-canonical shape with --last is blocked.
         self.assertFalse(self.ok(CANONICAL_YOLO + " --last"))
 
+    def test_last_hidden_as_m_value_blocked(self) -> None:
+        # `-m --last` would swallow --last as the model value, slipping past the
+        # per-option check. The global token-level `--last` reject + the -m model
+        # charset both block it.
+        self.assertFalse(self.ok(CANONICAL_YOLO.replace('-m "gpt-5.5"', "-m --last")))
+
+    def test_m_value_starting_with_dash_blocked(self) -> None:
+        # A model value that starts with `-` (a parked flag) → block.
+        self.assertFalse(self.ok(CANONICAL_YOLO.replace('-m "gpt-5.5"', "-m -evil")))
+
+    def test_last_anywhere_in_tokens_blocked(self) -> None:
+        # --last appearing anywhere (even after the prompt) → global reject.
+        self.assertFalse(self.ok(CANONICAL_YOLO + " --last extra"))
+
     def test_missing_ignore_user_config_blocked(self) -> None:
         self.assertFalse(
             self.ok(CANONICAL_YOLO.replace("--ignore-user-config ", ""))
@@ -556,6 +570,13 @@ class HookEndToEndTestCase(unittest.TestCase):
                     "-o .flow/tmp/codex-fn-1.2/../../tasks/result-batch-1.json",
                 )
             ),
+            self.BLOCKED,
+        )
+
+    def test_last_hidden_as_m_value_blocked_by_hook(self) -> None:
+        # `-m --last` on the production path must STILL be blocked.
+        self.assertEqual(
+            _drive_hook(CANONICAL_YOLO.replace('-m "gpt-5.5"', "-m --last")),
             self.BLOCKED,
         )
 

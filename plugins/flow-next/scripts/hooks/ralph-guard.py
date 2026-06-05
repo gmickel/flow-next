@@ -215,6 +215,11 @@ def is_canonical_codex_delegation(command: str) -> bool:
     # Exactly ONE codex token total (no smuggled second `codex …`).
     if tokens.count("codex") != 1:
         return False
+    # `--last` is forbidden ANYWHERE, including as a consumed option value
+    # (e.g. `-m --last` would otherwise slip past the per-option check by being
+    # swallowed as the `-m` value). A global token-level reject closes that.
+    if "--last" in tokens:
+        return False
 
     # 3. Walk the remaining argv as a strict allowlist. Track required flags +
     #    the scratch dir. ANY unexpected token → block (this is what defeats the
@@ -247,8 +252,12 @@ def is_canonical_codex_delegation(command: str) -> bool:
         if tok == "--ignore-user-config":
             counts["--ignore-user-config"] += 1
             i += 1
-        elif tok == "-m":  # model (any value — pinned from flow config upstream)
-            if _need_value(i) is None:
+        elif tok == "-m":  # model — a single safe model token (pinned upstream)
+            val = _need_value(i)
+            # Must be a real model name, not a swallowed flag. Constrain to a
+            # model charset (alnum + . _ : -) and forbid a leading `-` so an
+            # adversary can't park a flag (e.g. `-m --last`) as the value.
+            if val is None or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]*", val):
                 return False
             counts["-m"] += 1
             i += 2

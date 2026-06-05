@@ -780,7 +780,11 @@ ALL of the following must hold:
 - **every singleton appears exactly once** — a duplicate `--ignore-user-config`
   / `-c` / `--output-schema` / `-o` / sandbox flag / stdin prompt is rejected
   (no smuggling a second occurrence to undo the first);
-- and **NO `--last`** (always blocked, even on an otherwise-canonical shape).
+- **`-m` is a single safe model token** (charset `[A-Za-z0-9][A-Za-z0-9._:-]*`, no
+  leading `-`) — so a flag can't be parked as the model value;
+- and **NO `--last`** ANYWHERE — a global token-level reject, so it can't be
+  hidden as a consumed option value (`-m --last`), not just blocked as a
+  standalone flag.
 
 A sentinel-prefixed but otherwise-arbitrary command — e.g.
 `FLOW_DELEGATE_CODEX=1 codex exec --last`, one missing `--ignore-user-config`,
