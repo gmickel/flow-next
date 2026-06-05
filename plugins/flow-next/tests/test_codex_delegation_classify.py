@@ -262,9 +262,15 @@ class RollbackPlanTestCase(unittest.TestCase):
         self.assertIn("bare directory", plan["rejected"][0])
 
     def test_rejects_dot_and_empty(self) -> None:
-        plan = self.flowctl.rollback_plan(set(), {".", "  "})
+        # Only exact "." and "" are rejected. A whitespace-only name ("  ") is a
+        # DISTINCT legitimate git path and must NOT be trimmed/rejected (review
+        # P1 regression: trimming aliases distinct files onto each other).
+        plan = self.flowctl.rollback_plan(set(), {".", ""})
         self.assertEqual(plan["rollback_paths"], [])
         self.assertEqual(len(plan["rejected"]), 2)
+        # A two-space filename is kept verbatim.
+        plan2 = self.flowctl.rollback_plan(set(), {"  "})
+        self.assertEqual(plan2["rollback_paths"], ["  "])
 
     def test_rejects_flow_paths(self) -> None:
         # .flow/ is host-owned (plan-sync, specs, tasks) — NEVER cleaned.
@@ -283,6 +289,58 @@ class RollbackPlanTestCase(unittest.TestCase):
         # "a..b.txt" contains ".." as a substring but is NOT a traversal segment.
         self.assertEqual(self.flowctl.sanitize_rollback_path("a..b.txt"), "a..b.txt")
         self.assertIsNone(self.flowctl.sanitize_rollback_path("../x"))
+
+    def test_whitespace_path_is_not_trimmed_onto_preexisting(self) -> None:
+        # REGRESSION (review P1/100): a leading/trailing space is part of a
+        # DISTINCT filename. Trimming `" new.py"` → `"new.py"` would alias it
+        # onto a pre-existing untracked `"new.py"` and `git clean` the user's
+        # file. The sanitizer must preserve the raw bytes verbatim.
+        self.assertEqual(self.flowctl.sanitize_rollback_path(" new.py"), " new.py")
+        self.assertEqual(self.flowctl.sanitize_rollback_path("trail.py "), "trail.py ")
+
+    def test_whitespace_path_does_not_collide_in_plan(self) -> None:
+        # pre has the real "new.py"; post adds a DISTINCT " new.py" (leading
+        # space). The cleanup set must contain ONLY " new.py" — never the
+        # pre-existing "new.py".
+        plan = self.flowctl.rollback_plan({"new.py"}, {"new.py", " new.py"})
+        self.assertEqual(plan["rollback_paths"], [" new.py"])
+        self.assertNotIn("new.py", plan["rollback_paths"])
+
+    def test_schema_rejects_non_string_files_modified_items(self) -> None:
+        # REGRESSION (review P2/75): declared schema requires string items.
+        bad = {
+            "status": "completed",
+            "files_modified": [123],
+            "issues": [],
+            "summary": "s",
+            "verification_summary": "v",
+        }
+        self.assertFalse(self.flowctl._result_is_valid_schema(bad))
+
+    def test_schema_rejects_non_string_issues_items(self) -> None:
+        bad = {
+            "status": "partial",
+            "files_modified": ["ok.py"],
+            "issues": [{"not": "a string"}],
+            "summary": "s",
+            "verification_summary": "v",
+        }
+        self.assertFalse(self.flowctl._result_is_valid_schema(bad))
+
+    def test_non_string_items_classify_as_task_failure_on_exit0(self) -> None:
+        # A schema-invalid result on exit 0 must NOT commit — it rolls back.
+        bad = {
+            "status": "completed",
+            "files_modified": [123],
+            "issues": [],
+            "summary": "s",
+            "verification_summary": "v",
+        }
+        valid = self.flowctl._result_is_valid_schema(bad)
+        r = self.flowctl.classify_delegation_result(0, bad, valid)
+        self.assertEqual(r["class"], "task_failure")
+        self.assertEqual(r["action"], "rollback")
+        self.assertFalse(r["valid_schema"])
 
 
 # ── rollback-plan via NUL-delimited snapshots through the live CLI ───────────

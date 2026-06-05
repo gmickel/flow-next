@@ -17966,9 +17966,17 @@ def _result_is_valid_schema(result: Optional[dict]) -> bool:
             return False
     if result.get("status") not in _DELEGATION_STATUS_ENUM:
         return False
-    if not isinstance(result.get("files_modified"), list):
+    # files_modified / issues must be arrays OF STRINGS — the declared
+    # --output-schema requires `items: {type: string}`, so a non-string item
+    # (e.g. files_modified: [123]) is schema-INVALID and must not be trusted
+    # (those entries feed the trust cross-check; non-strings would corrupt it).
+    files_modified = result.get("files_modified")
+    if not isinstance(files_modified, list) or not all(
+        isinstance(x, str) for x in files_modified
+    ):
         return False
-    if not isinstance(result.get("issues"), list):
+    issues = result.get("issues")
+    if not isinstance(issues, list) or not all(isinstance(x, str) for x in issues):
         return False
     if not isinstance(result.get("summary"), str):
         return False
@@ -18051,14 +18059,20 @@ def sanitize_rollback_path(rel: str) -> Optional[str]:
       - bare directory (trailing "/") → `git clean` would recurse; we feed it
         only individual FILES (the -z snapshot lists files inside new dirs)
       - any ".flow/**" path → host-owned, never touched
+
+    The raw path is NEVER trimmed. `git ls-files -z` emits byte-exact paths, and
+    a leading/trailing space is part of a DISTINCT filename — trimming `" new.py"`
+    to `"new.py"` could alias it onto a pre-existing untracked `"new.py"` and
+    `git clean` the user's file (breaks the "never a pre-existing file" guard).
     """
     if rel is None:
         return None
-    s = rel.strip()
+    s = rel
     if s == "" or s == ".":
         return None
     # Normalize separators for the .flow/ + traversal checks (snapshots are
     # POSIX from git, but be defensive about backslashes on odd inputs).
+    # NOTE: separators only — the path bytes themselves are preserved verbatim.
     norm = s.replace("\\", "/")
     if norm.startswith("/") or (len(s) >= 2 and s[1] == ":"):
         # Absolute POSIX path or a Windows drive-letter path.
@@ -18110,7 +18124,7 @@ def _rollback_reject_reason(rel: str) -> str:
     Mirrors the rejection branches so the `rejected` list is self-documenting."""
     if rel is None:
         return "empty"
-    s = rel.strip()
+    s = rel  # raw — never trimmed (mirrors sanitize_rollback_path)
     if s == "" or s == ".":
         return "empty or '.'"
     norm = s.replace("\\", "/")
