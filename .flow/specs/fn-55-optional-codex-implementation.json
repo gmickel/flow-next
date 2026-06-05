@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-55-optional-codex-implementation",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-06-05T02:48:54.980698Z",
   "created_at": "2026-06-04T21:35:42.368673Z",
   "default_impl": null,
   "default_review": null,
@@ -24,5 +24,5 @@
     "mergeBaseTracker": null,
     "url": "https://linear.app/gmickel/issue/FLOW-6"
   },
-  "updated_at": "2026-06-04T23:08:52.147494Z"
+  "updated_at": "2026-06-05T02:48:54.980848Z"
 }
