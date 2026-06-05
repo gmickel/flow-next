@@ -574,6 +574,12 @@ class DualCopyInvariantTestCase(unittest.TestCase):
             self.assertIn("def classify_delegation_result", text, str(path))
             self.assertIn("def rollback_plan", text, str(path))
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "live subcommand-resolution subprocess is Windows-runner fragile; the "
+        "byte-identical + helpers-present checks above cover the dual-copy "
+        "invariant on every platform.",
+    )
     def test_live_bin_resolves_classify_subcommand(self) -> None:
         # `.flow/bin/flowctl codex classify-result --help` must resolve (the
         # live wrapper runs the dogfood copy — proves it is not stale).
@@ -586,6 +592,11 @@ class DualCopyInvariantTestCase(unittest.TestCase):
         self.assertIn("--result", proc.stdout)
         self.assertIn("--exit", proc.stdout)
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "live subcommand-resolution subprocess is Windows-runner fragile; the "
+        "byte-identical + helpers-present checks cover the dual-copy invariant.",
+    )
     def test_live_bin_resolves_rollback_plan_subcommand(self) -> None:
         proc = subprocess.run(
             [sys.executable, str(DOGFOOD_FLOWCTL_PY), "codex", "rollback-plan", "--help"],
@@ -687,6 +698,12 @@ class DelegationProseContractTestCase(unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("bash"), "bash required for predicate")
+@unittest.skipIf(
+    sys.platform == "win32",
+    "executes a `bash -c` predicate; on the Windows runner `bash` resolves to the "
+    "WSL System32 bash.exe (no distro installed) → a UTF-16 banner, not Git-bash. "
+    "The POSIX clean-baseline predicate is covered on macOS + ubuntu.",
+)
 class CleanBaselineExcludesFlowTestCase(unittest.TestCase):
     """Execute the shipped clean-baseline predicate from the reference against
     realistic ``git status --porcelain`` output.

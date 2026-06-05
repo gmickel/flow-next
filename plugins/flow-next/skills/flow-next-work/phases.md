@@ -27,7 +27,15 @@ of `phases.md` is byte-identical to before (R1/R3).
 
 ```bash
 # Single value-check — same shape as the tracker-sync touchpoints (SKILL.md).
-DELEGATE_CFG="$($FLOWCTL config get work.delegate --json | jq -r '.value')"
+# Guard a missing .flow/: a fresh repo / idea-or-markdown input has not been
+# `flowctl init`ed yet (that happens in Phase 1), and `config get` errors on an
+# absent .flow/. Treat missing .flow/ as delegation OFF — a bare-idea input is
+# never delegation-eligible anyway (delegation requires a plan/spec/task input).
+if [ -d .flow ]; then
+  DELEGATE_CFG="$($FLOWCTL config get work.delegate --json | jq -r '.value')"
+else
+  DELEGATE_CFG=false
+fi
 # delegation_active = (arg delegate:codex | DELEGATE_CFG == "codex") && not arg delegate:local
 #   The generic "use codex" is NOT the token — it stays mapped to the review backend.
 ```
