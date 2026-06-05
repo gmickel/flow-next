@@ -392,6 +392,8 @@ Every review produces a receipt JSON:
 
 This is at-least-once delivery. The agent is untrusted; receipts are proof-of-work.
 
+**`/flow-next:qa` emits a `type: qa_verdict` receipt** (live-app QA pass). The Ralph guard validates only `verdict ∈ {SHIP, NEEDS_WORK, MAJOR_RETHINK}`, so the four QA outcomes are carried in a separate `qa_outcome` field while `verdict` holds the enum-compatible projection: `SHIP → SHIP`, `NEEDS_WORK → NEEDS_WORK`, **`BLOCKED → NEEDS_WORK`** (could not verify → no ship claim on a QA basis), **`N/A → SHIP`** (no driveable UI → live QA raises no objection). Written to the caller-supplied `--receipt` / `REVIEW_RECEIPT_PATH`, else `.flow/review-receipts/qa-<spec-id>.json`. In autonomous mode QA proceeds only when target URL + test accounts are configured (it asks the user otherwise) — it always reaches a verdict and always writes a valid receipt; it is **not a hard Ralph receipt-gate in v1** (`parse_receipt_path` is unextended — a `qa-*.json` path validates via the existing verdict-enum check; gating a future board-executor is deferred).
+
 ### 3. Review Loops Until SHIP
 
 Reviews block progress until approved:

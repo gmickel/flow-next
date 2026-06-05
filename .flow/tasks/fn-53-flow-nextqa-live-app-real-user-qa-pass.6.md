@@ -30,9 +30,8 @@ Complete the three-surface docs, the `flowctl.md` config-key documentation, the 
 - [ ] flow-next.dev + mickel.tech flagged as maintainer post-merge (not blocking)
 
 ## Done summary
-
-_(filled on completion)_
-
+Completed the final fn-53 task: documented the new /flow-next:qa skill across all same-PR repo surfaces (docs/README, root README table + workflow diagram + skill-count, CLAUDE.md, .flow/usage.md + setup template, teams.md QA lifecycle stage, platforms.md fn-51 dependency note, ralph.md qa_verdict receipt note, flowctl.md tracker.perEvent.qa config), added the CHANGELOG ### Added entry crediting rayfernando-skills (Apache-2.0), and bumped the plugin minor version to 1.8.0 across all four version surfaces with the Codex mirror re-synced. Final-integration impl-review (rp, base = spec merge-base) returned SHIP after one NEEDS_WORK→fix cycle that corrected stale skill/command counts in the JSON manifests. flow-next.dev + mickel.tech flagged as maintainer post-merge (not edited).
 ## Evidence
-
-_(filled on completion)_
+- Commits: ad4029d036ccbf3d41b58db59d06058528b077f9, d310c7dcc690649776e38c5746da4d1689afa6de, e0b685a0fea97429f8b7ea756e3fba27a6383179
+- Tests: python3 -m unittest plugins.flow-next.tests.test_qa_tracker_event plugins.flow-next.tests.test_dogfood_template_parity plugins.flow-next.tests.test_tracker_config plugins.flow-next.tests.test_qa_receipt plugins.flow-next.tests.test_qa_smoke (33 passed), python3 -m unittest discover -s plugins/flow-next/tests (996 passed, 2 skipped), ./scripts/sync-codex.sh (validates + codex mirror in sync)
+- PRs:

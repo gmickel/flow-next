@@ -38,9 +38,8 @@ Add the findings + verdict half of the skill: structured P0/P1/P2 findings with 
 - [ ] PASS is evidence-gated; source-only PASS is forbidden (R1)
 
 ## Done summary
-
-_(filled on completion)_
-
+Filled the /flow-next:qa skill's Phase 5 (file) and Phase 6 (verdict): structured P0/P1/P2 findings (persona, cold repro, expected-vs-actual, evidence pointers under .flow/tmp/, reproduce-twice) feeding `memory add --track bug` with overlap dedup and a clean no-op when memory is disabled; a `type: qa_verdict` receipt carrying the four-outcome `qa_outcome` (SHIP/NEEDS_WORK/NA/BLOCKED) projected to the ralph-guard verdict enum (BLOCKED->NEEDS_WORK, NA->SHIP), written JSON-safely via python3/json.dump. Added references/bug-filing.md (lean BRB-discipline borrow) and a hermetic, Windows-portable test_qa_receipt.py with four fixtures asserting each outcome projects to a guard-valid verdict (validate_receipt_data + validate_receipt_file). impl-review (RP) SHIP after fixing a heredoc JSON-escaping bug + empty-mode field.
 ## Evidence
-
-_(filled on completion)_
+- Commits: d119e8d, f262f72, 4edaccbcce8ddf9ddc1fb5781da62db562115e9a
+- Tests: python3 -m unittest plugins.flow-next.tests.test_qa_receipt -q (12 tests OK), python3 -m unittest discover -s plugins/flow-next/tests -q (986 tests OK, 2 skipped), end-to-end: workflow Phase 6.3 python3 json.dump writer produces valid JSON for all 4 qa_outcomes incl. hostile blocked_reason (quote+backslash+newline); validates via ralph-guard
+- PRs:

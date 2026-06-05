@@ -35,9 +35,8 @@ Make the skill run interactively AND autonomously (not a hard Ralph-block), degr
 - [ ] `test_qa_tracker_event.py` proves the new leaf round-trips via the production `cmd_config_*` path (hermetic, `"$FLOWCTL"`, Windows-portable)
 
 ## Done summary
-
-_(filled on completion)_
-
+Made /flow-next:qa Ralph-aware-but-not-blocked: filled Phase A (detect-once routing with info-only AskUserQuestion and no exit guard, graceful BLOCKED degradation inheriting fn-51, opt-in tracker verdict post) plus a new references/autonomy.md, and added the additive tracker.perEvent.qa config leaf (default off, comment-only verb) to both byte-identical flowctl copies with a subprocess CLI round-trip test.
 ## Evidence
-
-_(filled on completion)_
+- Commits: 19261e94ace4281e37d80a98fb2a4fc8a56d01e2
+- Tests: python3 -m unittest plugins.flow-next.tests.test_qa_tracker_event -v (6 passed), python3 -m unittest discover -s plugins/flow-next/tests (992 passed, 2 skipped), cmp scripts/flowctl.py .flow/bin/flowctl.py (byte-identical), rp impl-review --base f35081e -> SHIP (R9/R11/R13 met, 0 findings)
+- PRs:

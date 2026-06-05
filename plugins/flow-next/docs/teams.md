@@ -48,7 +48,10 @@ flowchart LR
     Work --> ImplReview[/flow-next:impl-review/]
     ImplReview -->|SHIP| SpecCompletionReview[/flow-next:spec-completion-review/]
     ImplReview -->|NEEDS_WORK| Work
-    SpecCompletionReview --> MakePR[/flow-next:make-pr/]
+    SpecCompletionReview --> QA[/flow-next:qa/]
+    QA -.opt-in live-app QA.-> QAGate{{"live deploy + driver?<br/>YES → drive · NO → BLOCKED · no UI → N/A"}}
+    QA -->|YES or N.A.| MakePR[/flow-next:make-pr/]
+    QA -->|NO| Work
     MakePR --> ResolvePR[/flow-next:resolve-pr/]
     ResolvePR --> Merged([🚀 Merged])
 
@@ -56,7 +59,7 @@ flowchart LR
     Audit -.-> Memory[(.flow/memory/)]
 ```
 
-The map is not strictly linear. `/prospect` is optional. `/capture` and `/interview` are interchangeable entry points depending on whether the spec emerged from conversation (`/capture`) or needs structured discovery (`/interview`). `/flow-next:interview` is a **scoped operation** — one node in the lifecycle, but the same skill runs for the business layer (`--scope=business`) and the technical layer (`--scope=technical`) against the same `.flow/specs/<id>.md` file. Teams adopting the symmetric pattern traverse this node twice; solo devs running the default `--scope=technical` pass through once. The implementation review loop (`/work` ↔ `/impl-review`) iterates until SHIP. Maintenance (`/audit`) runs out-of-band against `.flow/memory/`.
+The map is not strictly linear. `/prospect` is optional. `/capture` and `/interview` are interchangeable entry points depending on whether the spec emerged from conversation (`/capture`) or needs structured discovery (`/interview`). `/flow-next:interview` is a **scoped operation** — one node in the lifecycle, but the same skill runs for the business layer (`--scope=business`) and the technical layer (`--scope=technical`) against the same `.flow/specs/<id>.md` file. Teams adopting the symmetric pattern traverse this node twice; solo devs running the default `--scope=technical` pass through once. The implementation review loop (`/work` ↔ `/impl-review`) iterates until SHIP. `/flow-next:qa` is an **optional live-app QA stage** between spec-completion review and make-pr — it only runs when there's a live deploy + a driver, and a NO verdict (an open P0/P1 confirmed against the running app) sends you back to `/work`. Maintenance (`/audit`) runs out-of-band against `.flow/memory/`.
 
 ---
 
@@ -176,6 +179,18 @@ Opt-in flags for hardened review: `--validate` (validator pass on `NEEDS_WORK` t
 Configure as a required gate via `--require-completion-review` (in `flowctl next`). The work skill blocks spec-close until spec-completion-review returns SHIP. The fix loop happens internally — the skill keeps iterating until it passes or escalates.
 
 *(+ optional tracker sync)* — `tracker.perEvent.completionReview` reconciles the linked issue (flip Done/verified + verdict / R-ID coverage) when the closing gate passes. On by default once the bridge is hooked up (opt-out per event).
+
+### [7.5] Live-app QA — optional, before the PR
+
+`/flow-next:qa <spec-id>` is the **live-app** companion to the static reviews above ([6] impl-review, [7] spec-completion-review). Where those verify the *code* against the spec, QA verifies the *running app* against the spec — it drives the deployed app via [`flow-next-drive`](../skills/flow-next-drive/SKILL.md) like an unforgiving real user. The differentiator vs spec-less QA tools is that flow-next already encodes intent: scenarios are derived **directly from the spec** (acceptance criteria → scenarios, R-IDs → coverage table, boundaries → what NOT to test, decision context → expected behavior).
+
+**The hard rule:** QA is **forbidden from marking PASS (SHIP) by reading source** — the verdict rests on captured evidence from the live app (screenshots, console dumps, observed state), never on agent narration. Findings are structured P0/P1/P2 reports (persona, steps, expected vs actual, evidence) filed to the bug memory track (`track: bug`, dedup via `memory add`'s overlap check) and promotable to fix specs/tasks.
+
+The pass ends with one of four outcomes carried in the `qa_verdict` receipt: **SHIP** (YES), **NEEDS_WORK** (NO — a single open P0 or incomplete R-ID coverage), **N/A** (no driveable UI — e.g. a backend/CLI-only spec), or **BLOCKED** (no live deploy or no driver — could not verify; not a fabricated PASS). It is **opt-in** and **non-blocking**: with no live deploy + driver it surfaces the limitation rather than failing, and adds nothing to the base flow when unused.
+
+*(+ optional tracker sync)* — `tracker.perEvent.qa` (`off | comment`, default `off`) posts the ship verdict as a tracker comment when the bridge is active. `comment` is the only sensible verb for a verdict — `push`/`pull`/`reconcile` operate on the issue body/status and don't apply.
+
+The QA discipline (P0/P1/P2 taxonomy, evidence rules, session hygiene) is a lean borrow from Ray Fernando's `running-bug-review-board` skill (Apache-2.0 — credited).
 
 ### [8] PR-as-cognitive-aid — Handover #6
 

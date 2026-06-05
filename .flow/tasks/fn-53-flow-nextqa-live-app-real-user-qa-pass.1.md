@@ -41,9 +41,8 @@ Stand up the `/flow-next:qa` skill skeleton and the **scenario-derivation** core
 - [ ] **Forbidden: marking PASS from source inspection** is stated as a hard rule in the skill (R1)
 
 ## Done summary
-
-_(filled on completion)_
-
+Stood up the /flow-next:qa skill skeleton (SKILL.md + workflow.md + qa.md command stub) with six disjoint, merge-safe phase anchors (discover/derive/prepare/execute/file/verdict + autonomy) for the serial downstream tasks, plus the working discover and derive phases — spec id resolution (branch_name scan + info prompt), base-ref cascade, and the four spec-as-intent mappings (AC->scenarios, R-IDs->coverage spine, boundaries->exclusions, decision-context->expected). Proved the thesis end-to-end: derived a 13-row coverage spine from a real spec and drove flow-next.dev via the fn-51 read-and-drive contract (agent-browser rung), capturing a real screenshot + console and recording the evidence tuple. Hard rule "PASS forbidden from source inspection" stated in the skill.
 ## Evidence
-
-_(filled on completion)_
+- Commits: 8e663f2, 86d4241, 64ef6cb
+- Tests: bash -n on discover-phase blocks (branch-match + base-detection cascade), spec export-cognitive-aid --section spec round-trip (AC=13/boundaries=6/decision_context=3), end-to-end proof: derive scenarios from real spec + drive flow-next.dev (HTTP 200) via fn-51 agent-browser rung, captured S1-homepage.png + console to .flow/tmp/, recorded evidence tuple in proof-receipt.json, wc -l all three files <=500
+- PRs:

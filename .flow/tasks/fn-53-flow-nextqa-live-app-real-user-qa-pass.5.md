@@ -30,9 +30,8 @@ Register the new skill on the Codex side and regenerate the mirror, then smoke-t
 - [ ] Hermetic skill smoke passes via the production `cmd_*` path (Windows-portable, `"$FLOWCTL"`)
 
 ## Done summary
-
-_(filled on completion)_
-
+Registered the flow-next-qa skill on the Codex side: added the `generate_openai_yaml` call + `REQUIRED_OPENAI_YAML_SKILLS` entry in `scripts/sync-codex.sh`, regenerated and committed the `plugins/flow-next/codex/` mirror, audited the AskUserQuestion→numbered-prompt rewrites (fixing two mirror-prose artifacts caught in review: a mid-sentence R2 injection in qa-discipline.md and a wrong-article rewrite in SKILL.md), and added a hermetic production-cmd-path smoke (`test_qa_smoke.py`) for the skill's three flowctl touchpoints. RP impl-review: SHIP (R10).
 ## Evidence
-
-_(filled on completion)_
+- Commits: e16cc7e, eb05e8a, 538b20e
+- Tests: python3 -m unittest plugins.flow-next.tests.test_qa_smoke, python3 -m unittest plugins.flow-next.tests.test_qa_receipt plugins.flow-next.tests.test_qa_tracker_event, python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (996 tests OK, skipped=2), ./scripts/sync-codex.sh (clean, byte-idempotent)
+- PRs:

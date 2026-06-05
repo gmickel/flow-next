@@ -1171,6 +1171,7 @@ generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory
 generate_openai_yaml "flow-next-memory-migrate" "Flow Memory Migrate" "Migrate legacy flat memory files to categorized YAML schema" "#3B82F6" false
 generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid PR body from flow-next state and open via gh" "#3B82F6" false
 generate_openai_yaml "flow-next-tracker-sync" "Flow Tracker Sync" "Project a spec to a tracker (Linear/GitHub) and reconcile two-way — NOT plan-sync" "#3B82F6" false
+generate_openai_yaml "flow-next-qa" "Flow QA" "Live-app real-user QA pass derived from the spec — drives the running app, files P0/P1/P2 findings, emits a YES/NO verdict" "#3B82F6" false
 
 # Review skills (red, explicit)
 generate_openai_yaml "flow-next-impl-review" "Flow Implementation Review" "Carmack-level code review via RepoPrompt"  "#EF4444" false
@@ -1236,6 +1237,7 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-memory-migrate"
   "flow-next-make-pr"
   "flow-next-tracker-sync"
+  "flow-next-qa"
   "flow-next-impl-review"
   "flow-next-plan-review"
   "flow-next-spec-completion-review"
