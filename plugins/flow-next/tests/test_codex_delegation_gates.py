@@ -75,7 +75,16 @@ class CodexDelegationGateExecution(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.ref_text = REFERENCE_MD.read_text(encoding="utf-8")
+        # Normalize line endings to LF. On Windows the .md checks out CRLF (no
+        # .gitattributes pins it to LF), so the extracted bash function would
+        # carry trailing \r and `bash -c` fails to parse it ("syntax error near
+        # unexpected token `{'") — every gate-execution test then returns
+        # non-zero. Stripping \r makes the extracted predicate pure LF.
+        cls.ref_text = (
+            REFERENCE_MD.read_text(encoding="utf-8")
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+        )
         cls.platform_fn = _extract_bash_func(cls.ref_text, "platform_gate_ok")
         cls.recursion_fn = _extract_bash_func(cls.ref_text, "not_inside_codex_sandbox")
 
