@@ -17858,10 +17858,12 @@ def cmd_codex_check(args: argparse.Namespace) -> None:
 # branch deterministically without a real model or repo mutation.
 
 # The lifted result schema's required keys (codex-delegation.md). A result JSON
-# is "valid_schema" only when it is an object carrying ALL of these keys with a
-# `status` in the status enum. additionalProperties is NOT enforced here (the
-# `--output-schema` contract enforces that at generation time); we only need the
-# keys the classifier reads.
+# is "valid_schema" only when it is an object carrying EXACTLY these keys (the
+# lifted schema is `additionalProperties:false`, R6) with a `status` in the
+# status enum. We enforce additionalProperties:false HERE too — not only at
+# `--output-schema` generation time — as the backstop for a degraded schema run
+# (e.g. MCP re-enabled, #15451): a free-form object with extra fields must read
+# as schema-INVALID → task_failure → rollback, never a blind commit.
 _DELEGATION_RESULT_REQUIRED = (
     "status",
     "files_modified",
@@ -17956,10 +17958,14 @@ def classify_delegation_result(
 
 
 def _result_is_valid_schema(result: Optional[dict]) -> bool:
-    """True iff ``result`` carries every required delegation-result key with a
-    status in the enum. additionalProperties is enforced by `--output-schema`
-    at generation time, not here."""
+    """True iff ``result`` carries EXACTLY the required delegation-result keys
+    (additionalProperties:false, R6) with a status in the enum. The extra-key
+    check is the backstop for a degraded `--output-schema` run — a free-form
+    object with unexpected fields is schema-INVALID, not trusted."""
     if not isinstance(result, dict):
+        return False
+    # additionalProperties:false — any key beyond the declared five → invalid.
+    if set(result) - set(_DELEGATION_RESULT_REQUIRED):
         return False
     for key in _DELEGATION_RESULT_REQUIRED:
         if key not in result:

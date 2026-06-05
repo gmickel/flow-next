@@ -310,11 +310,12 @@ def is_canonical_codex_delegation(command: str) -> bool:
             # a second positional). Non-canonical → block.
             return False
 
-    # 4. Each singleton must appear EXACTLY ONCE (no missing, no duplicate). `-m`
-    #    is the one optional flag (model defaults upstream); cap it at 1 too.
-    if counts["-m"] > 1:
-        return False
-    for key in ("--ignore-user-config", "-c", "--output-schema", "-o", "sandbox", "prompt"):
+    # 4. Each singleton must appear EXACTLY ONCE (no missing, no duplicate).
+    #    `-m` is REQUIRED, not optional: with `--ignore-user-config` a missing
+    #    `-m` falls back to codex's built-in default model (NOT gpt-5.5), which
+    #    violates the "model always passed explicitly from flow config" contract
+    #    (R6/R9). Require exactly one, same as `-c` (effort) and the rest.
+    for key in ("--ignore-user-config", "-m", "-c", "--output-schema", "-o", "sandbox", "prompt"):
         if counts[key] != 1:
             return False
 

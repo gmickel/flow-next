@@ -142,6 +142,12 @@ class CanonicalDelegationHelperTestCase(unittest.TestCase):
         # charset both block it.
         self.assertFalse(self.ok(CANONICAL_YOLO.replace('-m "gpt-5.5"', "-m --last")))
 
+    def test_canonical_missing_model_blocked(self) -> None:
+        # `-m` is REQUIRED, not optional: with --ignore-user-config a missing -m
+        # falls back to codex's built-in default model (NOT gpt-5.5), violating
+        # the "model always passed explicitly from flow config" contract (R6/R9).
+        self.assertFalse(self.ok(CANONICAL_YOLO.replace('-m "gpt-5.5" ', "")))
+
     def test_m_value_starting_with_dash_blocked(self) -> None:
         # A model value that starts with `-` (a parked flag) → block.
         self.assertFalse(self.ok(CANONICAL_YOLO.replace('-m "gpt-5.5"', "-m -evil")))

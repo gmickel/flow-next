@@ -149,6 +149,19 @@ class ClassifyResultPureTestCase(unittest.TestCase):
     def test_schema_validator_accepts_full(self) -> None:
         self.assertTrue(self.flowctl._result_is_valid_schema(self._valid("completed")))
 
+    def test_schema_validator_rejects_extra_key(self) -> None:
+        # additionalProperties:false (R6) — all five required keys PLUS an
+        # unexpected field is schema-INVALID (backstop for a degraded
+        # --output-schema run, e.g. MCP re-enabled #15451). It must NOT read as
+        # valid, and through the classifier routes to task_failure → rollback.
+        extra = self._valid("completed")
+        extra["unexpected_field"] = "x"
+        valid = self.flowctl._result_is_valid_schema(extra)
+        self.assertFalse(valid)
+        r = self.flowctl.classify_delegation_result(0, extra, valid)
+        self.assertEqual(r["class"], "task_failure")
+        self.assertEqual(r["action"], "rollback")
+
 
 # ── classify-result via the mock-codex fixture + live CLI ────────────────────
 
