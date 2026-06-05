@@ -40,14 +40,19 @@ If `.flow/` does not exist, print `No .flow/ directory — /flow-next:qa runs in
 
 ### 1.1 — Resolve the spec id
 
-`SPEC_ID` may arrive from the argument list. When empty, resolve it from the current branch, then fall back to an info prompt:
+`SPEC_ID` may arrive from the argument list. When empty, resolve it from the current branch, then fall back to an info prompt. Match the branch against each spec's stored `branch_name` (NOT against the branch literal — a flow branch name need not equal the spec id), reusing the make-pr pattern (`flow-next-make-pr/workflow.md` §0.2). Scan `.flow/specs/*.json` (canonical) and `.flow/epics/*.json` (legacy alias dir):
 
 ```bash
 if [[ -z "$SPEC_ID" ]]; then
-  BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-  # flow branches are named after the spec id; match it back to a known spec.
-  if [[ -n "$BRANCH" ]] && $FLOWCTL show "$BRANCH" --json >/dev/null 2>&1; then
-    SPEC_ID="$BRANCH"
+  CURRENT_BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")"
+  if [[ -n "$CURRENT_BRANCH" ]]; then
+    SPEC_ID=$(
+      { find "$REPO_ROOT/.flow/specs" -maxdepth 1 -name '*.json' 2>/dev/null
+        find "$REPO_ROOT/.flow/epics" -maxdepth 1 -name '*.json' 2>/dev/null
+      } \
+      | xargs -I{} jq -r --arg b "$CURRENT_BRANCH" \
+          'select(.branch_name == $b) | .id' {} 2>/dev/null \
+      | head -1)
   fi
 fi
 ```
@@ -66,9 +71,23 @@ $FLOWCTL show "$SPEC_ID" --json | jq -e '.tasks != null' >/dev/null \
 `spec export-cognitive-aid` requires a `--base` ref. QA only needs the **spec** section (AC / R-IDs / boundaries / decision context) to derive scenarios — request that section explicitly to keep the payload small:
 
 ```bash
-# Base detection: the spec's branch_name forked from the default branch.
-DEFAULT_BRANCH="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || echo main)"
-BASE_REF="$(git merge-base "$DEFAULT_BRANCH" HEAD 2>/dev/null || echo "$DEFAULT_BRANCH")"
+# Base-branch detection cascade (reuses make-pr §0.3): pick the first ref that
+# actually resolves. `git rev-parse --verify --quiet` is the gate — a bare `sed`
+# pipeline exits 0 even when origin/HEAD is unset, which would leave the base
+# empty and break the merge-base below.
+DEFAULT_BRANCH=""
+for candidate in origin/main main origin/master master; do
+  if git -C "$REPO_ROOT" rev-parse --verify --quiet "$candidate" >/dev/null 2>&1; then
+    DEFAULT_BRANCH="$candidate"; break
+  fi
+done
+if [[ -z "$DEFAULT_BRANCH" ]]; then
+  echo "No base branch found (origin/main, main, origin/master, master all missing). Pass an explicit base or check the clone." >&2
+  exit 1
+fi
+# Diff base = the merge-base, so a branch that's behind the default still gets a
+# stable base. Fall back to the default branch itself if no merge-base exists.
+BASE_REF="$(git -C "$REPO_ROOT" merge-base "$DEFAULT_BRANCH" HEAD 2>/dev/null || echo "$DEFAULT_BRANCH")"
 
 PAYLOAD="$($FLOWCTL spec export-cognitive-aid "$SPEC_ID" --base "$BASE_REF" --section spec --json)"
 ```
