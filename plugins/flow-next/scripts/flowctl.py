@@ -1062,6 +1062,12 @@ def get_default_tracker_config() -> dict:
             "makePr": "off",
             "resolvePr": "off",
             "completionReview": "off",
+            # fn-53.4 (R9) — opt-in QA verdict post. `comment` is the ONLY
+            # sensible verb for a QA verdict (post it as a tracker comment);
+            # `push`/`pull`/`reconcile` make no sense for a verdict, so the
+            # /flow-next:qa skill treats any non-`off` value as `comment`.
+            # Default `off` keeps every existing repo silent until opted in.
+            "qa": "off",
         },
         "perTracker": {
             "teamId": None,

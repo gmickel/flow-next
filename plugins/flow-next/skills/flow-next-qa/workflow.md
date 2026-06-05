@@ -412,7 +412,43 @@ Print the YES/NO call, the `qa_outcome`, the open P0/P1 list (with finding ids +
 
 ## Phase A: autonomy
 
-<!-- OWNER: fn-53.4 — Ralph-aware-not-blocked detect-once; opt-in tracker.perEvent.qa; graceful degradation.
-     Fill the body below. Do NOT edit sibling phase sections. -->
+<!-- OWNER: fn-53.4 — Ralph-aware-not-blocked detect-once; opt-in tracker.perEvent.qa; graceful degradation. -->
 
-**Goal:** detect Ralph once and route deterministically (R11) — autonomous when target URL + test accounts are configured (emits the verdict receipt to the caller-supplied `--receipt`/`REVIEW_RECEIPT_PATH`); asks the user when they are undocumented. **Not a hard Ralph-block** — no `FLOW_RALPH` exit-2 guard. Opt-in tracker verdict post (`tracker.perEvent.qa`) and graceful degradation when no driver is present. *(Skeleton anchor — implemented in fn-53.4.)*
+**Goal:** detect Ralph **once** and route deterministically (R11) — autonomous when the target URL + test accounts are configured (emits the verdict receipt, no prompts); asks the user (info-only) when they are undocumented. The skill is **not a hard Ralph-block** — there is **no** top-of-skill `FLOW_RALPH` exit-2 guard (the make-pr §0.0 precedent; see [SKILL.md](SKILL.md) Forbidden). Phase A also owns the opt-in tracker verdict post (`tracker.perEvent.qa`) and the graceful-degradation contract when no live deploy / driver is present. The full routing table, gating predicate, and degradation matrix live in **[references/autonomy.md](references/autonomy.md)** — read it before any Ralph or tracker step.
+
+### A.1 — Detect Ralph once, route deterministically (R11)
+
+Detect at the top of the run, then route downstream — never re-probe per phase (the make-pr §0.0 pattern):
+
+```bash
+RALPH=0
+if [ -n "${REVIEW_RECEIPT_PATH:-}" ] || [ "${FLOW_RALPH:-}" = "1" ]; then
+  RALPH=1
+fi
+```
+
+- **No top-of-skill exit guard.** `RALPH=1` does **not** abort the skill. QA runs in Ralph; it just routes differently (the make-pr precedent — autonomous loops emitting a QA verdict is the intended use). Do **not** add a `FLOW_RALPH`/`REVIEW_RECEIPT_PATH` exit-2 guard.
+- **`AskUserQuestion` is info-only, never a confirm gate.** It resolves *undocumented* facts (target URL, test accounts — Phases 1.1, 3.1, 3.2), never "shall I run QA? / ship?". Interactive asks; Ralph cannot ask, so an undocumented URL/accounts under Ralph is a **hard limitation → BLOCKED** (Phase 6, `blocked_reason`), not a prompt and not an exit.
+- **Autonomous path:** target URL + test accounts configured (spec / config / env) → derive → drive → file → emit the `qa_verdict` receipt to the caller-supplied `--receipt` / `REVIEW_RECEIPT_PATH` (Phase 6.3), zero prompts. The verdict path is identical to interactive; only the prompt-vs-BLOCKED branch on *undocumented* inputs differs.
+
+### A.2 — Graceful degradation (R13)
+
+No live deploy reachable, OR no driver available (incl. fn-51 degraded to its terminal manual rung per [flow-next-drive/SKILL.md](../flow-next-drive/SKILL.md) "Driver detection & graceful degradation") → surface the limitation as a **BLOCKED** verdict (Phase 6.1 / the §4.2 BLOCKED proof receipt), add **nothing** to the base flow, exit clean. Inherit fn-51's degradation table — do not re-derive it. BLOCKED ≠ FAIL: it is "no ship *claim* on a QA basis," never a fabricated PASS and never a hard error.
+
+### A.3 — Opt-in tracker verdict post (`tracker.perEvent.qa`, R9)
+
+After the Phase 6 verdict is written, optionally post it as a structured tracker comment — gated identically to every other lifecycle touchpoint (fn-52 pattern; see [flow-next-work/SKILL.md](../flow-next-work/SKILL.md) "Shared gating predicate"). Runs ONLY when the bridge is active AND the leaf is opted in; otherwise a silent no-op. **Best-effort** — a tracker failure never blocks the verdict:
+
+```bash
+QA_LEAF="$($FLOWCTL config get tracker.perEvent.qa --json | jq -r '.value')"
+if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
+   && [ "$QA_LEAF" != "off" ] && [ "$QA_LEAF" != "null" ]; then
+  # comment is the ONLY sensible verb for a QA verdict — post it as a tracker
+  # comment via the flow-next-tracker-sync skill. Any non-`off` value (a stray
+  # push/pull/reconcile) is treated as comment, never as a body/status op.
+  # The verdict + qa_outcome + open-P0/P1 list compose the comment body.
+  : # invoke flow-next-tracker-sync (comment op, best-effort — never blocks)
+fi
+```
+
+The leaf accepts `off` | `comment` (default `off`). `comment` is the only verdict-meaningful verb; treat any other non-`off` value as `comment` (never `push`/`pull`/`reconcile`). The actual transport / comment dedup / receipt lives entirely in the **flow-next-tracker-sync** skill — Phase A only gates + delegates.
