@@ -8,6 +8,7 @@ BUMP_TYPE="${1:-}"
 TARGET="${2:-all}"
 
 MARKETPLACE=".claude-plugin/marketplace.json"
+CODEX_MARKETPLACE=".agents/plugins/marketplace.json"
 PLUGIN_FLOW_NEXT="plugins/flow-next/.claude-plugin/plugin.json"
 
 bump_semver() {
@@ -58,6 +59,13 @@ if [[ "$TARGET" == "flow-next" || "$TARGET" == "all" ]]; then
 
   # Update marketplace metadata version to match (required for auto-updates)
   jq --arg v "$NEW" '.metadata.version = $v' "$MARKETPLACE" > tmp.json && mv tmp.json "$MARKETPLACE"
+
+  # Update the Codex marketplace (.agents/plugins/marketplace.json) flow-next
+  # plugin version. It has no metadata.version block — just the plugin entry.
+  if [[ -f "$CODEX_MARKETPLACE" ]]; then
+    jq --arg v "$NEW" '(.plugins[] | select(.name == "flow-next")).version = $v' "$CODEX_MARKETPLACE" > tmp.json && mv tmp.json "$CODEX_MARKETPLACE"
+    echo "flow-next (codex marketplace): $OLD -> $NEW"
+  fi
 
   # Update version badges in READMEs
   sed -i '' "s/Flow--next-v[0-9]*\.[0-9]*\.[0-9]*/Flow--next-v$NEW/" README.md

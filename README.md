@@ -3,7 +3,7 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v1.6.0-green)](CHANGELOG.md)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v1.7.0-green)](CHANGELOG.md)
 [![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/docs/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -208,7 +208,7 @@ Fetch unresolved threads + top-level comments + review-submission bodies, cluste
 | `/flow-next:capture` | Synthesize conversation context into a spec (source-tagged, mandatory read-back) |
 | `/flow-next:interview` | Deep spec refinement with lead-with-recommendation + confidence tiers + codebase-first investigation; `--scope=business\|technical\|both` |
 | `/flow-next:plan` | Research codebase, create spec + dependency-ordered tasks |
-| `/flow-next:work` | Execute tasks with re-anchoring + worker subagents + review gates |
+| `/flow-next:work` | Execute tasks with re-anchoring + worker subagents + review gates. Opt-in: offload implementation to a local `codex exec` with `delegate:codex` (or `work.delegate=codex` config) — OFF by default, consent-gated, host keeps all judgment ([config keys](plugins/flow-next/docs/flowctl.md#config)) |
 | `/flow-next:impl-review` | Cross-model implementation review (RepoPrompt, Codex, or Copilot) |
 | `/flow-next:plan-review` | Cross-model plan review |
 | `/flow-next:spec-completion-review` | Spec-completion review gate — verify combined implementation matches the spec (renamed from `/flow-next:epic-review` in 1.0.0; soft-removal target 2.0.0) |

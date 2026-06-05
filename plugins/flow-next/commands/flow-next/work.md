@@ -1,7 +1,7 @@
 ---
 name: flow-next:work
 description: Execute a plan end-to-end with checks
-argument-hint: "<fn-N or idea> [--branch=current|new|worktree] [--review=rp|export|none]"
+argument-hint: "<fn-N or idea> [--branch=current|new|worktree] [--review=rp|export|none] [delegate:codex|delegate:local]"
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-work`

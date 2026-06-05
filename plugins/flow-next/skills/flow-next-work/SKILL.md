@@ -158,6 +158,47 @@ The actual tracker work (transport, body merge, status who-wins, comment dedup, 
 
 **Unlink / re-link lifecycle:** detaching a spec from its tracker issue is done via `/flow-next:tracker-sync unlink <id>` — that ceremony (in the tracker-sync skill) clears the tracker id + `lastSyncedAt` + merge-base atomically (`flowctl sync clear`) and posts a one-line "detached" comment to the issue. After unlink, all lifecycle touchpoints above no-op for that spec (no linked id). A later re-link re-seeds the merge base from the current issue body (so re-link does not resurrect stale state). The spec/task ids, branch, and files are NEVER touched by unlink (no rename).
 
+## Codex implementation-delegation (opt-in, off by default)
+
+**The in-session path is the documented default and is behaviorally unchanged.**
+With delegation off — the default — the work flow adds exactly ONE cheap
+value-check and nothing else; `/flow-next:work` stays byte-identical to today.
+All delegation mechanics live in [references/codex-delegation.md](references/codex-delegation.md),
+read **only when delegation is active** (progressive disclosure, R3).
+
+**Activation is disambiguated from the review backend.** `/flow-next:work`
+already maps the generic fuzzy "use codex" to the **review backend** (Review-mode
+parsing above). Delegation activates ONLY via the explicit arg token
+`delegate:codex` (off-switch `delegate:local`), the flow config
+`work.delegate=codex`, or an unambiguous "use codex **for implementation**" /
+"delegate implementation to codex" — **never** bare "use codex".
+
+**Resolution chain (precedence):** arg token (`delegate:codex` / `delegate:local`)
+> flow config `work.delegate` > hard default OFF. The single value-check
+computes `delegation_active` ONCE, before the per-task loop:
+
+```bash
+# Default-path bloat = this one value-check. Nothing else runs when off.
+# Guard a missing .flow/ (fresh repo / idea or markdown input, not yet `flowctl
+# init`ed) — `config get` errors on an absent .flow/; treat it as delegation OFF.
+if [ -d .flow ]; then
+  DELEGATE_CFG="$($FLOWCTL config get work.delegate --json | jq -r '.value')"
+else
+  DELEGATE_CFG=false
+fi
+# delegation_active = (arg delegate:codex | DELEGATE_CFG == "codex") && not arg delegate:local
+# if delegation_active → read references/codex-delegation.md and run the host
+#   pre-flight gates + one-time consent ONCE, before the loop (phases.md Phase 1.5).
+# else → standard in-session execution, unchanged, zero new steps.
+```
+
+When `delegation_active`, the host (NOT the worker subagent) reads
+[references/codex-delegation.md](references/codex-delegation.md) and runs its
+pre-flight gates + one-time consent once, then passes the resolved flags into
+each spawned worker. Any gate failure (non-Claude-Code platform, inside a Codex
+sandbox, `codex` missing, no consent, bare-prompt input, dirty tree) → standard
+mode for the rest of the run; delegation never blocks the worker.
+
 ## Guardrails
 
 - Don't start without asking branch question

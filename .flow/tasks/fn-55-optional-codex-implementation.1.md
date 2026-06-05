@@ -35,7 +35,8 @@ Add a `work` block to flowctl's `get_default_config()` so `flowctl config get wo
 - [ ] flowctl test suite green.
 
 ## Done summary
-_(pending implementation)_
-
+Added the work.delegate* Codex-delegation config defaults to flowctl's get_default_config() (delegate=false, model=gpt-5.5, effort=medium, sandbox=yolo, consent=false, decision=auto), mirrored the identical block into the dogfood .flow/bin/flowctl.py, documented the activation resolution chain (arg delegate:codex/delegate:local > config > default off; generic "use codex" stays the review backend), and added a 19-case unit test (defaults + precedence) wired into CI. impl-review (rp): SHIP, zero findings.
 ## Evidence
-_(pending implementation)_
+- Commits: 0962514c7c4cedd7a583b2454219a645c976e020
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (816 tests OK, 2 skipped), python3 -m unittest tests.test_work_delegate_config -v (19 tests OK), live: flowctl config get work.delegate* on fresh repo returns spec defaults; config set work.delegate codex round-trips; tracker.perEvent.work.firstClaim still resolves
+- PRs:

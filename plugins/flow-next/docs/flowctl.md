@@ -540,6 +540,12 @@ flowctl config toggle memory.enabled [--json]
 | `tracker.perTracker.teamId` / `projectId` / `labelMap` / `priorityMap` | mixed | `null` / `{}` | Per-tracker linkage hints (Linear team/project ids; label/priority maps). |
 | `tracker.staleAfterHours` | int | `24` | Staleness threshold (hours) consumed by `sync list-stale`. |
 | `tracker.conflictTiebreak` | string | `always-ask` | Status who-wins tiebreak: `flow-wins | tracker-wins | always-ask`. In Ralph mode `always-ask` resolves to *queue*, not prompt. |
+| `work.delegate` | `codex \| false` | `false` | Opt-in `/flow-next:work` implementation-delegation to a local `codex exec`. **Set the value to the string `codex` to activate** (`flowctl config set work.delegate codex`) — **any other value, including bool `true`, is OFF**; the activation predicate is `value == "codex"`. **OFF by default** — with it off the work flow is byte-identical to today. Resolution: arg token `delegate:codex` / `delegate:local` > this config > hard default OFF. The generic fuzzy "use codex" is NOT a delegation trigger (it stays mapped to the review backend). See [`codex-delegation.md`](../skills/flow-next-work/references/codex-delegation.md). |
+| `work.delegateModel` | string | `gpt-5.5` | Model passed to `codex exec` for delegated implementation. |
+| `work.delegateEffort` | string | `medium` | Reasoning-effort floor (`none | low | medium | high | xhigh`). The per-batch risk escalation floors against this; gpt-5.5 supports `none`, not `minimal`. |
+| `work.delegateSandbox` | string | `yolo` | Codex sandbox mode (`yolo | full-auto`). Persisted by the one-time consent gate. `yolo` has a wider blast radius — the gate surfaces this before first use. |
+| `work.delegateConsent` | bool | `false` | One-time-consent flag, written by the host consent gate after the user opts in. Headless/Ralph requires this pre-set to `true` (no live prompt path). |
+| `work.delegateDecision` | string | `auto` | Per-task delegation decision (`auto | ask`). `auto` delegates every eligible task; `ask` prompts per-task in interactive mode (treated as `auto` in headless only when `delegateConsent=true`). |
 
 \* `planSync.crossEpic` is the legacy alias — still readable in 1.x with a one-line stderr deprecation warning (suppress via `FLOW_NO_DEPRECATION=1`); removed in 2.0. `set` writes the canonical key only; `get` prefers `crossSpec` and falls back to `crossEpic` only when `crossSpec` is absent from the raw config file.
 

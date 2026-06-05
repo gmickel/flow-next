@@ -166,6 +166,7 @@ The project's strategic intent and canonical vocabulary live **outside** `.flow/
 .flow/bin/flowctl config set planSync.enabled true                 # sync downstream task specs after impl drift
 .flow/bin/flowctl config set planSync.crossSpec false              # also check other open specs (canonical key; legacy alias planSync.crossEpic removed in 2.0)
 .flow/bin/flowctl config set scouts.github false                   # GitHub scout (requires gh CLI)
+.flow/bin/flowctl config set work.delegate codex                   # /flow-next:work opt-in: offload impl to local `codex exec` (value MUST be `codex` to activate; OFF by default, consent-gated; arg `delegate:codex` overrides per-run)
 
 # Per-spec / per-task backend overrides (override the global review.backend per workstream)
 .flow/bin/flowctl spec set-backend fn-1-add-oauth --review codex:gpt-5.4:high

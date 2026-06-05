@@ -87,6 +87,57 @@ jobs:
             -p "test_banner.py" \
             -v
 
+      - name: Python unit tests — work.delegate config foundation (fn-55.1)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_work_delegate_config.py" \
+            -v
+        # Codex implementation-delegation config defaults + activation
+        # resolution precedence (arg > config > default off; generic
+        # "use codex" is NOT a delegation trigger).
+
+      - name: Python unit tests — Codex-delegation pre-flight gates (fn-55.2)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_codex_delegation_gates.py" \
+            -v
+        # Executes the shipped platform-gate + recursion-guard bash from
+        # references/codex-delegation.md (CODEX_SANDBOX=auto stays eligible —
+        # the Ralph case; runtime values like `seatbelt` trip the guard) and
+        # locks the progressive-disclosure + disambiguation prose contract.
+
+      - name: Python unit tests — Codex-delegation classify + rollback (fn-55.4)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_codex_delegation_classify.py" \
+            -v
+        # Deterministic `flowctl codex classify-result` (5-row table + malformed/
+        # missing) + `rollback-plan` (post−pre untracked-snapshot diff, path
+        # sanitization, nested-dir, whitespace, .flow/ exclusion) driven by the
+        # mock-codex fixture; dual-copy invariant (both flowctl.py copies carry
+        # the helpers + live .flow/bin/flowctl resolves them); orchestration/
+        # safety prose contract; clean-baseline-excludes-.flow predicate
+        # (multi-task plan-sync stays delegatable after task 1).
+
+      - name: Python unit tests — ralph-guard amendment + circuit breaker (fn-55.5)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_ralph_guard_codex_delegation.py" \
+            -v
+        # ralph-guard.py `is_canonical_codex_delegation` allows ONLY the FULL
+        # canonical delegation shape (sentinel + codex exec + --ignore-user-config
+        # + --output-schema + -o .flow/tmp/codex-* + sandbox flag, NO --last/
+        # resume/review) — a sentinel-prefixed arbitrary command STILL blocks;
+        # copilot + --last blocks stay intact; RALPH_GUARD_VERSION bumped. Drives
+        # the SHIPPED hook end-to-end (PreToolUse Bash, FLOW_RALPH=1). Also locks
+        # the host-owned circuit-breaker + worker DELEGATION_RESULT/ACTION signal
+        # + evidence.delegation inline + attribution trailers + REVIEW_MODE=none
+        # verification-backstop prose contract.
+
       # ──────────── fn-50 (clawpatch wrap) ────────────
       # New readers + scout-fallback contract land here so they run on the full
       # ubuntu / macos / windows matrix. Tests use checked-in fixtures (no

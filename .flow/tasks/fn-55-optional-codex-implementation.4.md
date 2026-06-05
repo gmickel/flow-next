@@ -6,7 +6,10 @@ satisfies: [R5, R6, R8]
 Author the orchestration-split + safety mechanics in `references/codex-delegation.md` AND add the deterministic `flowctl codex classify-result` helper that makes classification/rollback testable. The host/worker keep all git; `codex exec` only writes code. The classification, schema-validation, and scoped-rollback-path computation live in flowctl (mechanical, CLAUDE.md split-rule), so CI tests target executable code — not markdown.
 
 **Size:** M
-**Files:** `plugins/flow-next/scripts/flowctl.py` (new `codex classify-result` helper), `plugins/flow-next/skills/flow-next-work/references/codex-delegation.md`, `plugins/flow-next/agents/worker.md` (commit/rollback interplay), `plugins/flow-next/tests/` (classification/rollback tests + mock-codex fixture)
+**Files:** `plugins/flow-next/scripts/flowctl.py` (new `codex classify-result` + `rollback-plan` helpers) **AND its byte-identical dogfood copy `.flow/bin/flowctl.py`** (this repo keeps both in lockstep — editing only the canonical copy makes the live `.flow/bin/flowctl` run stale code; fn-55.1 verified both must move together), `plugins/flow-next/skills/flow-next-work/references/codex-delegation.md`, `plugins/flow-next/agents/worker.md` (commit/rollback interplay), `plugins/flow-next/tests/` (classification/rollback tests + mock-codex fixture)
+<!-- Updated by plan-sync: fn-55.1 confirmed flowctl.py has a byte-identical dogfood copy at .flow/bin/flowctl.py; this task's new `codex classify-result`/`rollback-plan` helpers must land in BOTH or `.flow/bin/flowctl` runs stale code -->
+
+> **Dual-copy invariant (from fn-55.1):** this repo dogfoods a BYTE-IDENTICAL `.flow/bin/flowctl.py` kept in lockstep with the canonical `plugins/flow-next/scripts/flowctl.py`. The new `flowctl codex classify-result` + `rollback-plan` helpers MUST be added to BOTH copies, or the live `.flow/bin/flowctl` (which the work loop + tests invoke) runs stale code and the new subcommands fail. The `work.delegate*` config defaults already resolve with defaults (gpt-5.5/medium/yolo/off) from fn-55.1 — this task consumes them, it does not redefine them.
 
 ## Approach
 - **Deterministic helpers (flowctl):**
@@ -18,17 +21,19 @@ Author the orchestration-split + safety mechanics in `references/codex-delegatio
 - 5-row classification (computed by the helper): exit≠0 → CLI failure / rollback / fall back for all remaining; missing-or-malformed JSON → task failure; `failed` → task failure; `partial` → keep diff, finish locally + verify + commit; `completed` → cross-check then commit.
 - **Trust cross-check** (cheap): before committing `completed`, intersect `git status --porcelain` with `files_modified`; a mismatch downgrades to partial/failed (don't commit blind). No test re-run when an impl-review gate or worker verification already covers it (fn-55.5 handles the `REVIEW_MODE=none` verification).
 - **Clean-baseline preflight via `git status --porcelain`** (catches untracked files `git diff --quiet HEAD` misses), no auto-stash, **scoped to the code tree — EXCLUDES host-owned `.flow/`**. `/flow-next:work` runs plan-sync after each task (`phases.md` 3e), leaving uncommitted `.flow/tasks/` edits; a whole-tree clean-baseline would false-disable delegation after task 1. Only non-`.flow/` dirtiness counts as "dirty".
-- **Git-ownership enforcement (not prompt-only):** a yolo sandbox can still run git. The worker captures `BASE_COMMIT` (already does, `worker.md:108`) and asserts `git rev-parse HEAD == BASE_COMMIT` AFTER `codex exec`. HEAD moved (Codex committed) → `git reset --soft BASE_COMMIT` (un-commit, keep diff) → scoped rollback → classify failure → disable delegation. A committed change is invisible to the `git status` cross-check, so this assertion is the real "Claude owns all git" guard.
+- **Git-ownership enforcement (not prompt-only):** a yolo sandbox can still run git. The worker captures `BASE_COMMIT` (already does, `worker.md:109-113`) and asserts `git rev-parse HEAD == BASE_COMMIT` AFTER `codex exec`. <!-- Updated by plan-sync: fn-55.3 shifted BASE_COMMIT capture from worker.md:108 to 109-113 -->
+  The fn-55.3 delegation hook (`worker.md:117-139`) already wires "enforce git/`.flow` ownership against `BASE_COMMIT`" into Phase 2 — this task supplies the concrete assertion + rollback mechanics it points to. HEAD moved (Codex committed) → `git reset --soft BASE_COMMIT` (un-commit, keep diff) → scoped rollback → classify failure → disable delegation. A committed change is invisible to the `git status` cross-check, so this assertion is the real "Claude owns all git" guard.
 - **`.flow/` integrity enforcement (not prompt-only):** `<constraints>` forbid Codex writing under `.flow/` except its `.flow/tmp/codex-<task-id>/` scratch dir. Because rollback never touches `.flow/**`, an unauthorized `.flow/` write would otherwise survive. Snapshot non-scratch `.flow/` content (everything under `.flow/` except `.flow/tmp/codex-*`) BEFORE delegating; after `codex exec`, re-check. Any new/changed non-scratch `.flow/` path → restore those paths from the snapshot (the one case rollback touches `.flow/`, to undo Codex's edit) → disable delegation → surface/escalate.
 - **Scoped rollback:** snapshot the untracked set (`git ls-files --others --exclude-standard -z`) BEFORE delegating and again AFTER the run; rollback (tracked-only checkout + `git clean -fd -- <paths>`) feeds `git clean` ONLY the sanitized `post − pre` paths from `flowctl codex rollback-plan` (works even when the result JSON is missing/malformed) — never bare `git clean` (cite github/copilot-cli#1675), never a pre-existing untracked file, **never a `.flow/**` path** (host-owned).
-- Reuse the worker's existing `BASE_COMMIT` (`worker.md:108`) for rollback/review scope — do not reset the base (preserves the spec-wide-base rule for the final integration task).
+- Reuse the worker's existing `BASE_COMMIT` (`worker.md:109-113`) for rollback/review scope — do not reset the base (preserves the spec-wide-base rule for the final integration task). <!-- Updated by plan-sync: fn-55.3 shifted BASE_COMMIT capture from worker.md:108 to 109-113 -->
 - Each batch surfaces a result block (summary/files/verification/issues).
 - **Mock-codex fixture:** a stub emitting canned `result-batch-*.json` for each of the 5 rows → deterministic tests of `classify-result` + the rollback path computation (no real model).
 
 ## Investigation targets
 **Required**:
 - `plugins/flow-next/scripts/flowctl.py:2841-2853` — codex helper area (where `classify-result` slots in alongside existing codex subcommands)
-- `plugins/flow-next/agents/worker.md:106-161` — Phase 2 impl + `BASE_COMMIT`, Phase 3 commit, Phase 4 impl-review (rollback/commit interplay)
+- `plugins/flow-next/agents/worker.md:107-187` — Phase 2 impl + `BASE_COMMIT` (now L109-113) + the fn-55.3 delegation hook (L117-139), Phase 3 commit (L149), Phase 4 impl-review (rollback/commit interplay) <!-- Updated by plan-sync: fn-55.3 inserted the Phase 2 delegation hook into worker.md, shifting line anchors down (BASE_COMMIT 108→109-113) -->
+- `plugins/flow-next/agents/worker.md:117-139` — fn-55.3's Phase 2 delegation hook (the commit/rollback interplay this task extends)
 - `.flow/specs/fn-55-optional-codex-implementation.md` — Result classification table + Safety + Prompt template + classify-helper contract (lift verbatim)
 - `plugins/flow-next/tests/` — existing fixture/test patterns for a stub external command
 **Optional**:
@@ -45,10 +50,12 @@ Author the orchestration-split + safety mechanics in `references/codex-delegatio
 - [ ] Non-scratch `.flow/` integrity: a mock Codex that mutates `.flow/tasks/*.md` (outside the scratch dir) triggers restore-from-snapshot + delegation-disable; a write to `.flow/tmp/codex-*` is allowed — covered by a test. `<constraints>` forbid non-scratch `.flow/` writes.
 - [ ] Rollback is scoped to codex-created files only (untracked snapshot pre/post), never bare `git clean`, never a pre-existing untracked file, never a `.flow/**` path — covered by a rollback-scope test.
 - [ ] Rollback reuses the worker `BASE_COMMIT`; no base reset (final-integration spec-wide base preserved).
+- [ ] The new `codex classify-result` + `rollback-plan` helpers land in BOTH `plugins/flow-next/scripts/flowctl.py` AND the dogfood `.flow/bin/flowctl.py` (byte-identical copies — verified by a diff of the two files showing the new helpers present in each); the live `.flow/bin/flowctl codex classify-result --json` resolves the new subcommand.
 - [ ] Test suite green.
 
 ## Done summary
-_(pending implementation)_
-
+Added deterministic `flowctl codex classify-result` (5-row delegation-result classifier; exit!=0 wins, malformed/missing JSON -> task_failure, array-item-type schema validation) and `flowctl codex rollback-plan` (post-minus-pre untracked-snapshot diff with strict path sanitization -- absolute/../empty/./backslash/bare-dir/.flow/** rejected, raw bytes never trimmed or rewritten, --print0 NUL-safe argv + non-empty guard against bare git clean) to BOTH byte-identical flowctl.py copies; authored the orchestration-split/batching/classification/safety section in references/codex-delegation.md + the worker.md HEAD-assertion/scoped-rollback/.flow-integrity mechanics; mock-codex fixture + 58 deterministic tests wired into CI. RP impl-review: SHIP (R5/R6/R8 all met) after three NEEDS_WORK->fix rounds (strip-aliasing, backslash-aliasing, bare-clean guard).
 ## Evidence
-_(pending implementation)_
+- Commits: 47acb5e, e464846, bbff025, 5f179e8, e4be1ae
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p test_codex_delegation_classify.py (58 tests, OK), python3 -m unittest discover -s plugins/flow-next/tests -p test_codex_delegation_gates.py (21 tests, OK), python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (895 tests, OK, 2 skipped), diff -q scripts/flowctl.py .flow/bin/flowctl.py (byte-identical)
+- PRs:

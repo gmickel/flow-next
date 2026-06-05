@@ -96,6 +96,56 @@ grep -rE '`request_user_input`|request_user_input tool|request_user_input\(|MUST
 
 Any deviation (structured UI card appears, `request_user_input` error surfaces, agent auto-proceeds without waiting) is a regression — re-run `./scripts/sync-codex.sh` and diff `plugins/flow-next/codex/skills/flow-next-setup/workflow.md` against the canonical to find the missing transform.
 
+## Codex delegation early-proof smoke (fn-55.3)
+
+Manual verification that `codex exec --output-schema` (with `--ignore-user-config`
+for MCP isolation) actually drives an implementation and returns a parseable
+result JSON via the `run_in_background`-launch + foreground-poll loop. This is the
+**go/no-go gate** for the rest of fn-55 (`.4`–`.6` do not start until it passes).
+Re-run on any `codex` CLI bump — pin against `codex --version`.
+
+**Verified once against `codex-cli 0.136.0` (2026-06-05).** All four flags
+confirmed present in `codex exec --help`: `--output-schema <FILE>`,
+`-o, --output-last-message <FILE>`, `--ignore-user-config`, and
+`--dangerously-bypass-approvals-and-sandbox`. `--full-auto` is **not** a valid
+`codex exec` flag in 0.136.0 (deprecated since 0.130.0) → emit `-s workspace-write`
+for full-auto mode.
+
+**Procedure** (scratch dir is gitignored via `.flow/.gitignore`'s `tmp/` rule):
+
+```bash
+SCRATCH=.flow/tmp/codex-fn-55.3-smoke && mkdir -p "$SCRATCH"
+# 1. write result-schema.json (the verbatim schema from references/codex-delegation.md)
+# 2. write prompt-batch-1.md — a tiny self-contained impl task with an <output_contract>
+# 3. LAUNCH via the Bash run_in_background PARAMETER (NOT shell &):
+FLOW_DELEGATE_CODEX=1 codex exec --ignore-user-config -m gpt-5.5 \
+  -c 'model_reasoning_effort="medium"' --dangerously-bypass-approvals-and-sandbox \
+  --output-schema "$SCRATCH/result-schema.json" -o "$SCRATCH/result-batch-1.json" \
+  - < "$SCRATCH/prompt-batch-1.md"
+# 4. POLL in separate foreground calls — DONE only when non-empty AND jq-parseable:
+for i in $(seq 1 6); do
+  test -s "$SCRATCH/result-batch-1.json" && jq -e . "$SCRATCH/result-batch-1.json" >/dev/null 2>&1 \
+    && echo DONE && break; sleep 10; done
+```
+
+**Pass invariants:**
+- `result-batch-1.json` is non-empty, `jq`-parseable, and validates against the
+  schema (`status` ∈ enum; all 5 required keys; no extra keys).
+- The files Codex claimed in `files_modified` actually exist and their tests pass
+  when re-run independently (proves a real implementation, not a confabulated JSON).
+- **MCP isolation:** with `[mcp_servers]` configured in `~/.codex/config.toml`, a
+  `codex exec --ignore-user-config` probe (`"List every MCP tool available; if
+  none reply NO_MCP_TOOLS"`) answers `NO_MCP_TOOLS` and emits **no** `hook:` lines
+  (user config — incl. hooks AND `[mcp_servers]` — fully skipped). The same probe
+  WITHOUT `--ignore-user-config` loads user config (hooks fire). Confirm no
+  project-level `.codex/config.toml` exists (`--ignore-user-config` covers
+  `$CODEX_HOME/config.toml`, not necessarily a repo-local one).
+
+If `result-batch-1.json` is empty/unparseable, or the probe shows MCP tools active
+despite `--ignore-user-config`, the structured-output contract is unreliable in
+this environment → **STOP**: the blocker is fixed at build or fn-55 does not ship
+(no `--json` JSONL fallback).
+
 ## Config alias smoke (planSync.crossEpic → crossSpec)
 
 Manual verification that the fn-46.1 alias mechanism reads + writes the canonical `planSync.crossSpec` key, falls back to the legacy `planSync.crossEpic` on read when the canonical key is absent from the raw config file, and emits a one-line stderr deprecation hint exactly once per process on legacy read.

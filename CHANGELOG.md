@@ -2,6 +2,17 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.7.0] - 2026-06-05
+
+### Added
+- **Opt-in Codex implementation-delegation for `/flow-next:work`** (fn-55). `/flow-next:work` can now offload a task's *implementation* to a local `codex exec` (gpt-5.5, `medium` effort floor) while the host work skill retains **all judgment** — gating, batching, result classification, git ownership, review, and commit. **OFF by default**: with delegation off the work flow is byte-identical to today. Activate per-run with the `delegate:codex` arg token, or persistently via `work.delegate=codex` config. New host-side reference: [`skills/flow-next-work/references/codex-delegation.md`](plugins/flow-next/skills/flow-next-work/references/codex-delegation.md).
+  - **Progressive disclosure (R3):** the default path stays a single `flowctl config get work.delegate` value-check; the full delegation mechanics (pre-flight gates, consent, invocation, classification, safety, circuit breaker) load only when `delegation_active=true`.
+  - **Host pre-flight gates, run once pre-loop:** platform gate (orchestrator must be Claude Code — the mirror ships delegation disabled on non-Claude orchestrators by design), recursion guard (not already inside a Codex sandbox), availability (`codex` on PATH), one-time consent + sandbox mode, and an input-kind gate (a plan/spec/task, never a bare prompt). The generic fuzzy "use codex" is **not** a delegation trigger — it stays mapped to the review backend; only the explicit `delegate:codex` / `delegate:local` tokens (and `work.delegate`) resolve delegation.
+  - **Six `work.delegate*` config keys** with defaults + precedence: `work.delegate` (`false`), `work.delegateModel` (`gpt-5.5`), `work.delegateEffort` (`medium`), `work.delegateSandbox` (`yolo`), `work.delegateConsent` (`false`), `work.delegateDecision` (`auto`). Documented in [`flowctl.md`](plugins/flow-next/docs/flowctl.md#config).
+  - **Safety:** `codex exec` is **git-forbidden** (only writes code; the worker asserts `git rev-parse HEAD == BASE_COMMIT` after the run, snapshots + restores non-scratch `.flow/`, and rolls back via a scoped `rollback-plan` — never a bare `git clean`). MCP isolation via `--ignore-user-config`. Background-launch + poll (timeout-free). Structured result schema is the proof-of-work contract; a `REVIEW_MODE=none` run still does independent verification on the delegated diff, so a delegated commit is never trusted on the Codex `verification_summary` alone. Mixed-model commits carry `AI-Orchestrator` / `AI-Implementer` trailers.
+  - **Ralph-safe with pre-consent:** in autonomous mode delegation proceeds **only when `work.delegateConsent` is already `true`** (no live prompt path); every failure path falls back to standard in-session mode without stalling the loop, and a host-owned circuit breaker disables delegation for the rest of a run after repeated failures. `RALPH_GUARD_VERSION` bumped `0.14.0` → `0.15.0` — the PreToolUse guard now allows the strict canonical `codex exec` delegation shape (the prior version blocked every delegation batch in Ralph mode) while still rejecting bare/smuggled invocations.
+  - **`scripts/bump.sh` now also bumps the Codex marketplace** (`.agents/plugins/marketplace.json`), which had gone stale at `1.5.0` while the plugin advanced to `1.6.0`. All four version surfaces (`.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`, both `plugin.json`) now bump together. Codex mirror regenerated.
+
 ## [flow-next 1.6.0] - 2026-06-04
 
 ### Changed

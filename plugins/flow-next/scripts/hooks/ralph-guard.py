@@ -18,11 +18,12 @@ Supports three review backends:
 """
 
 # Version for drift detection (bump when making changes)
-RALPH_GUARD_VERSION = "0.14.0"
+RALPH_GUARD_VERSION = "0.15.0"
 
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -116,6 +117,215 @@ def is_receipt_write_command(command: str, receipt_path: str) -> bool:
 def command_has_json_field(command: str, field: str) -> bool:
     """Best-effort check that a shell command writes a JSON field literally."""
     return bool(re.search(rf"['\"]{re.escape(field)}['\"]\s*:", command))
+
+
+# Sandbox flags allowed in a canonical Codex delegation invocation (R9). Exactly
+# the two the reference emits: yolo (--dangerously-bypass-approvals-and-sandbox)
+# and full-auto (-s workspace-write). Nothing else (no --full-auto, no other -s).
+_DELEGATE_YOLO_FLAG = "--dangerously-bypass-approvals-and-sandbox"
+
+
+# Canonical scratch-file basenames the reference emits (codex-delegation.md). A
+# delegation path must be EXACTLY `[./].flow/tmp/codex-<id>/<one-of-these>` — no
+# extra path segments, no `..` traversal (which would prefix-match the scratch
+# dir yet escape it, e.g. `.flow/tmp/codex-x/../../tasks/y.json`).
+_SCRATCH_BASENAMES = {
+    "schema": r"result-schema\.json",
+    "result": r"result-batch-\d+\.json",
+    "prompt": r"prompt-batch-\d+\.md",
+}
+
+
+def _scratch_dir_of(path: str, kind: str):
+    """Return the `.flow/tmp/codex-<id>` scratch dir of a delegation `path`, or
+    None. STRICT — the path must be exactly
+    ``[./].flow/tmp/codex-<id>/<canonical-basename>`` for the given `kind`
+    (schema | result | prompt). No nested subdirs, no ``..`` traversal, no
+    absolute path, no backslash — so a path that prefix-matches the scratch dir
+    but then escapes it (`codex-x/../../tasks/y.json`) is rejected.
+
+    The `<id>` segment itself is constrained to a flow-id charset
+    (`[A-Za-z0-9._-]+`) so it cannot smuggle a `.` (current-dir) or a slash."""
+    basename = _SCRATCH_BASENAMES[kind]
+    m = re.fullmatch(
+        r"(?:\./)?(\.flow/tmp/codex-[A-Za-z0-9._-]+)/" + basename, path
+    )
+    if not m:
+        return None
+    # Defensive: the id charset allows dots, so explicitly reject any `..` segment
+    # in the captured scratch dir (e.g. a literal `codex-..`).
+    scratch = m.group(1)
+    if any(seg in ("", ".", "..") for seg in scratch.split("/")):
+        return None
+    return scratch
+
+
+def is_canonical_codex_delegation(command: str) -> bool:
+    """Return True ONLY for the FULL canonical Codex implementation-delegation
+    shape that fn-55 teaches (worker.md Phase 2 / codex-delegation.md).
+
+    **Tokenized, not substring-matched.** The command is parsed with ``shlex``
+    (POSIX shell-token semantics) and validated as an ARGV — so required flags
+    cannot be smuggled inside a quoted positional prompt while ``codex exec``
+    actually receives none of them. Every argv token must be one the canonical
+    invocation emits; an unexpected token (a stray prompt arg, an extra flag, a
+    chaining operator that survives tokenization) → block.
+
+    EVERY one of the following must hold:
+
+      * the command tokenizes cleanly and contains NO shell control operator
+        (``;`` ``&&`` ``||`` ``|`` ``&`` ``$(`` backtick ``>`` newline …) — a
+        canonical delegation is exactly ONE command;
+      * leading ``FLOW_DELEGATE_CODEX=1`` env-prefix token, then ``codex``
+        ``exec`` (NOT ``resume`` / ``review``) — exactly ONE ``codex`` token;
+      * ``--ignore-user-config`` as a standalone token (load-bearing — without it
+        MCP servers can re-enable and silently drop ``--output-schema``);
+      * ``-o`` output target under a ``.flow/tmp/codex-<id>/`` scratch dir, AND
+        ``--output-schema`` + the stdin prompt (``- < …``) under the SAME dir;
+      * a sandbox flag from the allowlist (yolo | ``-s workspace-write``);
+      * NO ``--last``; and no token outside the canonical set.
+
+    Any deviation falls through → the normal block path.
+    """
+    # 0. Reject shell control operators BEFORE tokenizing. shlex tokenizes `;`,
+    #    `&&`, `|` as ordinary WORDS (it is not a parser), so it would not catch
+    #    chaining on its own. A literal control char means this is not one
+    #    canonical command. `<` is NOT banned — it is the single permitted stdin
+    #    redirect (`- < <scratch>/prompt…`), validated as a token in the walk
+    #    below. `>` (any output redirect), `;`, `&`, `|`, backtick, newline,
+    #    `$(…)`, `${…}`, and subshell parens ARE banned (none are canonical).
+    #    Quotes/backslashes are fine — shlex handles them; we only ban operators.
+    if re.search(r"[;&|`\n>()]|\$\(|\$\{", command):
+        return False
+
+    # 1. Tokenize with POSIX shell semantics. A `<` stdin redirect tokenizes to a
+    #    standalone `<` word (shlex is not a parser), which we validate in-stream.
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        return False  # unbalanced quotes / parse error → not canonical
+    if not tokens:
+        return False
+
+    # 2. Leading env-prefix token, then `codex exec`.
+    if tokens[0] != "FLOW_DELEGATE_CODEX=1":
+        return False
+    if len(tokens) < 3 or tokens[1] != "codex" or tokens[2] != "exec":
+        return False
+    # Exactly ONE codex token total (no smuggled second `codex …`).
+    if tokens.count("codex") != 1:
+        return False
+    # `--last` is forbidden ANYWHERE, including as a consumed option value
+    # (e.g. `-m --last` would otherwise slip past the per-option check by being
+    # swallowed as the `-m` value). A global token-level reject closes that.
+    if "--last" in tokens:
+        return False
+
+    # 3. Walk the remaining argv as a strict allowlist. Track required flags +
+    #    the scratch dir. ANY unexpected token → block (this is what defeats the
+    #    quoted-prompt-smuggling vector: a stray positional prompt is unexpected).
+    i = 3
+    n = len(tokens)
+    # Each singleton may appear AT MOST ONCE — a duplicate flag (e.g. a second
+    # `-c` smuggling `mcp_servers.evil.command=…` to re-enable MCP and undo the
+    # `--ignore-user-config` isolation) is non-canonical. `counts` enforces it.
+    counts = {
+        "--ignore-user-config": 0,
+        "-m": 0,
+        "-c": 0,
+        "--output-schema": 0,
+        "-o": 0,
+        "sandbox": 0,
+        "prompt": 0,
+    }
+    scratch = None
+    schema_dir = None
+    prompt_dir = None
+
+    def _need_value(idx: int):
+        return tokens[idx + 1] if idx + 1 < n else None
+
+    while i < n:
+        tok = tokens[i]
+        if tok == "--last":
+            return False  # always forbidden
+        if tok == "--ignore-user-config":
+            counts["--ignore-user-config"] += 1
+            i += 1
+        elif tok == "-m":  # model — a single safe model token (pinned upstream)
+            val = _need_value(i)
+            # Must be a real model name, not a swallowed flag. Constrain to a
+            # model charset (alnum + . _ : -) and forbid a leading `-` so an
+            # adversary can't park a flag (e.g. `-m --last`) as the value.
+            if val is None or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]*", val):
+                return False
+            counts["-m"] += 1
+            i += 2
+        elif tok == "-c":  # reasoning-effort pair ONLY
+            val = _need_value(i)
+            # Exactly the effort knob — NOT an arbitrary Codex `-c key=value`
+            # override. An extra `-c mcp_servers.…` would re-enable MCP and
+            # silently defeat --ignore-user-config, so only the effort pair with
+            # an enum value is allowed.
+            if val is None or not re.fullmatch(
+                r'model_reasoning_effort="(none|low|medium|high|xhigh)"', val
+            ):
+                return False
+            counts["-c"] += 1
+            i += 2
+        elif tok == "--output-schema":
+            val = _need_value(i)
+            if val is None:
+                return False
+            counts["--output-schema"] += 1
+            schema_dir = _scratch_dir_of(val, "schema")
+            i += 2
+        elif tok == "-o":
+            val = _need_value(i)
+            if val is None:
+                return False
+            counts["-o"] += 1
+            scratch = _scratch_dir_of(val, "result")
+            i += 2
+        elif tok == _DELEGATE_YOLO_FLAG:
+            counts["sandbox"] += 1
+            i += 1
+        elif tok == "-s":  # full-auto sandbox: -s workspace-write
+            if _need_value(i) != "workspace-write":
+                return False
+            counts["sandbox"] += 1
+            i += 2
+        elif tok == "-":
+            # stdin prompt: `-` then `<` then the prompt path.
+            if _need_value(i) != "<":
+                return False
+            path = tokens[i + 2] if i + 2 < n else None
+            if path is None:
+                return False
+            counts["prompt"] += 1
+            prompt_dir = _scratch_dir_of(path, "prompt")
+            i += 3
+        else:
+            # Unknown / unexpected token (a smuggled prompt, an extra flag,
+            # a second positional). Non-canonical → block.
+            return False
+
+    # 4. Each singleton must appear EXACTLY ONCE (no missing, no duplicate).
+    #    `-m` is REQUIRED, not optional: with `--ignore-user-config` a missing
+    #    `-m` falls back to codex's built-in default model (NOT gpt-5.5), which
+    #    violates the "model always passed explicitly from flow config" contract
+    #    (R6/R9). Require exactly one, same as `-c` (effort) and the rest.
+    for key in ("--ignore-user-config", "-m", "-c", "--output-schema", "-o", "sandbox", "prompt"):
+        if counts[key] != 1:
+            return False
+
+    # 5. The -o / schema / prompt must share ONE valid scratch dir.
+    if scratch is None:
+        return False
+    if schema_dir != scratch or prompt_dir != scratch:
+        return False
+
+    return True
 
 
 def validate_receipt_data(
@@ -251,21 +461,37 @@ def handle_pre_tool_use(data: dict) -> None:
     if re.search(r"\bcodex\b", command):
         # Allow flowctl codex wrappers
         is_wrapper = re.search(r"flowctl\s+codex|FLOWCTL.*codex", command)
-        if not is_wrapper:
+        # Allow the FULL canonical Codex implementation-delegation shape (fn-55).
+        # NOT the mere presence of FLOW_DELEGATE_CODEX=1 — a sentinel-prefixed but
+        # otherwise-arbitrary command (missing --ignore-user-config, carrying
+        # --last, using resume/review, or an -o outside .flow/tmp/codex-*) STILL
+        # falls through to the block path. The canonical shape itself rejects
+        # --last, so an early return here cannot leak a --last invocation.
+        is_delegation = is_canonical_codex_delegation(command)
+        if is_delegation:
+            # Canonical delegation passes the codex section untouched.
+            pass
+        elif not is_wrapper:
             # Block direct codex usage
             if re.search(r"\bcodex\s+exec\b", command):
                 output_block(
                     "BLOCKED: Do not call 'codex exec' directly. "
                     "Use 'flowctl codex impl-review' or 'flowctl codex plan-review' "
-                    "to ensure proper receipt handling and session continuity."
+                    "to ensure proper receipt handling and session continuity. "
+                    "(Implementation-delegation must match the full canonical shape: "
+                    "FLOW_DELEGATE_CODEX=1 codex exec --ignore-user-config "
+                    "--output-schema ... -o .flow/tmp/codex-<task>/... with a sandbox "
+                    "flag and no --last.)"
                 )
             if re.search(r"\bcodex\s+review\b", command):
                 output_block(
                     "BLOCKED: Do not call 'codex review' directly. "
                     "Use 'flowctl codex impl-review' or 'flowctl codex plan-review'."
                 )
-        # Block --last even through wrappers (breaks session continuity)
-        if re.search(r"--last\b", command):
+        # Block --last even through wrappers (breaks session continuity).
+        # Unreachable for the canonical-delegation early-pass (it rejects --last),
+        # so this still guards every wrapper / direct invocation that carries it.
+        if not is_delegation and re.search(r"--last\b", command):
             output_block(
                 "BLOCKED: Do not use '--last' with codex. "
                 "Session continuity is managed via session_id in receipts."
