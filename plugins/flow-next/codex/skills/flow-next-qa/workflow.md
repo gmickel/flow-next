@@ -78,14 +78,49 @@ $FLOWCTL show "$SPEC_ID" --json | jq -e '.tasks != null' >/dev/null \
 # actually resolves. `git rev-parse --verify --quiet` is the gate — a bare `sed`
 # pipeline exits 0 even when origin/HEAD is unset, which would leave the base
 # empty and break the merge-base below.
-DEFAULT_BRANCH=""
-for candidate in origin/main main origin/master master; do
+#
+# Honor a caller-supplied base override first: a `--base <ref>` flag (when the
+# Mode-Detection block parses one) or a `QA_BASE_REF` env var sets DEFAULT_BRANCH
+# before the cascade, so the detection only runs when nothing was passed.
+DEFAULT_BRANCH="${QA_BASE_REF:-}"
+if [[ -z "$DEFAULT_BRANCH" ]]; then
+ for candidate in origin/main main origin/master master; do
  if git -C "$REPO_ROOT" rev-parse --verify --quiet "$candidate" >/dev/null 2>&1; then
  DEFAULT_BRANCH="$candidate"; break
  fi
-done
+ done
+fi
+# Fall back to the repo's ACTUAL default branch when it isn't named main/master
+# (develop, trunk, …). `origin/HEAD` is the remote's recorded default; resolve it
+# to `origin/<branch>` and verify the ref actually exists. `git remote set-head
+# origin -a` repairs an unset symbolic-ref on clones that never recorded one.
 if [[ -z "$DEFAULT_BRANCH" ]]; then
- echo "No base branch found (origin/main, main, origin/master, master all missing). Pass an explicit base or check the clone." >&2
+ ORIGIN_HEAD="$(git -C "$REPO_ROOT" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null \
+ | sed 's#^refs/remotes/##')"
+ if [[ -z "$ORIGIN_HEAD" ]]; then
+ git -C "$REPO_ROOT" remote set-head origin -a >/dev/null 2>&1 || true
+ ORIGIN_HEAD="$(git -C "$REPO_ROOT" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null \
+ | sed 's#^refs/remotes/##')"
+ fi
+ if [[ -n "$ORIGIN_HEAD" ]] && git -C "$REPO_ROOT" rev-parse --verify --quiet "$ORIGIN_HEAD" >/dev/null 2>&1; then
+ DEFAULT_BRANCH="$ORIGIN_HEAD"
+ fi
+fi
+# Still nothing — ask the user for the base (interactive), or hard-error under
+# Ralph. Mirrors make-pr §0.3: never silently exit on an unusual default branch.
+if [[ -z "$DEFAULT_BRANCH" ]]; then
+ if [[ "${RALPH:-0}" == "1" ]]; then
+ echo "No base branch detected (origin/main, main, origin/master, master, origin/HEAD all missing). Pass an explicit base or check the clone." >&2
+ exit 1
+ fi
+ # Interactive: ask for the base ref via plain-text numbered prompt (info prompt — no frozen
+ # options; accept a typed ref). Validate the answer with rev-parse below; on
+ # abort, exit 1. (sync-codex.sh rewrites plain-text numbered prompt to a numbered prompt.)
+ : "ask user for DEFAULT_BRANCH via plain-text numbered prompt; on abort exit 1"
+fi
+# Validate the resolved/typed base actually exists before computing the merge-base.
+if ! git -C "$REPO_ROOT" rev-parse --verify --quiet "$DEFAULT_BRANCH" >/dev/null 2>&1; then
+ echo "Base ref '$DEFAULT_BRANCH' is not a valid git ref. Check with: git rev-parse --verify $DEFAULT_BRANCH" >&2
  exit 1
 fi
 # Diff base = the merge-base, so a branch that's behind the default still gets a

@@ -30,7 +30,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 
 ## Mode Detection
 
-Parse `$ARGUMENTS`. The first non-flag token is the spec id (required). Flags are reserved for downstream tasks (target URL override, viewport selection, autonomy); the skeleton recognizes only the spec id and surfaces an info prompt when it is missing.
+Parse `$ARGUMENTS`. The first non-flag token is the spec id (required). The value-taking caller overrides the downstream phases honor — `--target <url>` (Phase 3.1), `--receipt <path>` (Phase 6.3), and `--base <ref>` (§1.2 base-branch override) — **must consume their operand here** (both `--flag value` and `--flag=value` forms, mirroring make-pr's `--base`), or the operand falls through to the `*)` arm and is mis-assigned as `SPEC_ID` (Phase 1 then rejects the URL/path as "Not a spec"). They populate `QA_TARGET_URL` / `QA_RECEIPT_OVERRIDE` / `QA_BASE_REF` — the exact variables Phases 3.1 / 6.3 / §1.2 read. Other flags (viewport, autonomy) are reserved for later tasks; the skeleton shifts them harmlessly.
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
@@ -39,11 +39,18 @@ SPEC_ID=""
 set -- $RAW_ARGS
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --target)   QA_TARGET_URL="$2"; shift 2 ;;        # Phase 3.1 caller override
+    --target=*) QA_TARGET_URL="${1#--target=}"; shift ;;
+    --receipt)   QA_RECEIPT_OVERRIDE="$2"; shift 2 ;;  # Phase 6.3 receipt path
+    --receipt=*) QA_RECEIPT_OVERRIDE="${1#--receipt=}"; shift ;;
+    --base)      QA_BASE_REF="$2"; shift 2 ;;          # §1.2 base-branch override
+    --base=*)    QA_BASE_REF="${1#--base=}"; shift ;;
     --) shift; break ;;
     -*) echo "Unknown flag: $1 (reserved for a later task)" >&2; shift ;;
     *)  [[ -z "$SPEC_ID" ]] && SPEC_ID="$1"; shift ;;
   esac
 done
+export QA_TARGET_URL QA_RECEIPT_OVERRIDE QA_BASE_REF   # carry the resolved overrides into workflow.md Phases 3.1 / 6.3 / §1.2
 ```
 
 When `SPEC_ID` is empty, the **discover** phase resolves it (branch-match, or by asking the user via `AskUserQuestion` as an info prompt) — never silently default.
