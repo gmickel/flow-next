@@ -17842,6 +17842,315 @@ def cmd_codex_check(args: argparse.Namespace) -> None:
             print("codex not available")
 
 
+# --- Codex implementation-delegation helpers (fn-55.4) ---
+#
+# Two deterministic, pure helpers that make the implementation-delegation path
+# (the `DELEGATE: codex` worker hook) testable. Per the repo's
+# agentic-vs-deterministic split (CLAUDE.md), result-schema validation +
+# the 5-row classification + scoped-rollback path computation are MECHANICAL,
+# so they live here in flowctl — NOT in markdown the host re-interprets (which
+# would be untestable). The host AGENT keeps the judgment (delegate-or-not,
+# risk→effort, batching); these helpers only compute over (exit code, result
+# JSON) and (pre/post untracked snapshots).
+#
+# Both functions are pure (no git invocation, no filesystem mutation beyond
+# reading the snapshot/result inputs), so the mock-codex fixture can drive every
+# branch deterministically without a real model or repo mutation.
+
+# The lifted result schema's required keys (codex-delegation.md). A result JSON
+# is "valid_schema" only when it is an object carrying ALL of these keys with a
+# `status` in the status enum. additionalProperties is NOT enforced here (the
+# `--output-schema` contract enforces that at generation time); we only need the
+# keys the classifier reads.
+_DELEGATION_RESULT_REQUIRED = (
+    "status",
+    "files_modified",
+    "issues",
+    "summary",
+    "verification_summary",
+)
+_DELEGATION_STATUS_ENUM = ("completed", "partial", "failed")
+
+
+def classify_delegation_result(
+    exit_code: int, result: Optional[dict], valid_schema: bool
+) -> dict:
+    """Pure 5-row classifier for a Codex delegation result.
+
+    Maps (exit code, parsed result JSON, schema-validity) to the lifted
+    classification table (codex-delegation.md):
+
+      | Signal                                  | class        | action               |
+      |-----------------------------------------|--------------|----------------------|
+      | exit ≠ 0                                 | cli_failure  | rollback_and_disable |
+      | exit 0, result missing/malformed        | task_failure | rollback             |
+      | exit 0, status:"failed"                  | task_failure | rollback             |
+      | exit 0, status:"partial"                 | partial      | finish_locally       |
+      | exit 0, status:"completed"               | success      | commit               |
+
+    ``result`` is the parsed JSON (or ``None`` when missing/unparseable).
+    ``valid_schema`` is True iff ``result`` carries every required key with a
+    status in the enum.
+
+    A non-zero exit ALWAYS wins (CLI failure → fall back to standard for ALL
+    remaining work), regardless of what landed in the result file — a CLI
+    failure can still leave a partially-written or stale result behind.
+
+    Returns ``{class, status, action, scoped_paths, valid_schema}``.
+    - ``status`` echoes the result's status (or ``None`` when missing/malformed).
+    - ``scoped_paths`` is the result's ``files_modified`` (for context only — the
+      authoritative scoped-rollback set comes from ``rollback_plan`` over the
+      untracked snapshot diff, which works even when the result is absent).
+    """
+    # exit ≠ 0 → CLI failure wins unconditionally. Fall back to standard mode
+    # for ALL remaining work (the host disables delegation immediately).
+    if exit_code != 0:
+        return {
+            "class": "cli_failure",
+            "status": (result or {}).get("status") if valid_schema else None,
+            "action": "rollback_and_disable",
+            "scoped_paths": list((result or {}).get("files_modified") or [])
+            if valid_schema
+            else [],
+            "valid_schema": valid_schema,
+        }
+
+    # exit 0 but result missing / malformed / fails schema → task failure.
+    if result is None or not valid_schema:
+        return {
+            "class": "task_failure",
+            "status": None,
+            "action": "rollback",
+            "scoped_paths": [],
+            "valid_schema": False,
+        }
+
+    status = result.get("status")
+    files_modified = list(result.get("files_modified") or [])
+
+    if status == "failed":
+        return {
+            "class": "task_failure",
+            "status": "failed",
+            "action": "rollback",
+            "scoped_paths": files_modified,
+            "valid_schema": True,
+        }
+    if status == "partial":
+        # Keep the diff; the worker finishes locally + verifies + commits.
+        return {
+            "class": "partial",
+            "status": "partial",
+            "action": "finish_locally",
+            "scoped_paths": files_modified,
+            "valid_schema": True,
+        }
+    # status == "completed" → success → cross-check (host-side) then commit.
+    return {
+        "class": "success",
+        "status": "completed",
+        "action": "commit",
+        "scoped_paths": files_modified,
+        "valid_schema": True,
+    }
+
+
+def _result_is_valid_schema(result: Optional[dict]) -> bool:
+    """True iff ``result`` carries every required delegation-result key with a
+    status in the enum. additionalProperties is enforced by `--output-schema`
+    at generation time, not here."""
+    if not isinstance(result, dict):
+        return False
+    for key in _DELEGATION_RESULT_REQUIRED:
+        if key not in result:
+            return False
+    if result.get("status") not in _DELEGATION_STATUS_ENUM:
+        return False
+    if not isinstance(result.get("files_modified"), list):
+        return False
+    if not isinstance(result.get("issues"), list):
+        return False
+    if not isinstance(result.get("summary"), str):
+        return False
+    if not isinstance(result.get("verification_summary"), str):
+        return False
+    return True
+
+
+def cmd_codex_classify_result(args: argparse.Namespace) -> None:
+    """Classify a Codex delegation result file against the 5-row table.
+
+    Reads ``--result <file>`` (may be missing / empty / malformed) + ``--exit
+    <code>`` and emits ``{class, status, action, scoped_paths, valid_schema}``.
+    Pure function over (exit code, result JSON) → no LLM, no git.
+
+    A missing / empty / non-object / unparseable result file is treated as
+    "malformed" (→ task_failure on exit 0). This is the backstop branch: even
+    when `--output-schema` silently degraded, we never commit blind.
+    """
+    result: Optional[dict] = None
+    valid_schema = False
+    try:
+        raw = Path(args.result).read_text(encoding="utf-8")
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            result = parsed
+            valid_schema = _result_is_valid_schema(parsed)
+    except (OSError, json.JSONDecodeError, ValueError):
+        # Missing / empty / unparseable → malformed → result stays None.
+        result = None
+        valid_schema = False
+
+    classification = classify_delegation_result(args.exit, result, valid_schema)
+
+    if args.json:
+        json_output(classification)
+    else:
+        print(
+            f"class={classification['class']} "
+            f"status={classification['status']} "
+            f"action={classification['action']} "
+            f"valid_schema={classification['valid_schema']}"
+        )
+
+
+def _read_nul_delimited(path: str) -> set:
+    """Read a NUL-delimited snapshot file into a set of repo-relative paths.
+
+    The pre/post untracked snapshots are captured with
+    ``git ls-files --others --exclude-standard -z`` (NUL-delimited — avoids
+    porcelain-v1 quoting of paths with spaces/backslashes/newlines, and
+    enumerates files INSIDE newly-created directories individually rather than
+    collapsing to ``?? dir/``). A missing snapshot file is treated as empty
+    (the pre-snapshot may legitimately be empty on the first delegated task).
+    """
+    try:
+        raw = Path(path).read_bytes()
+    except OSError:
+        return set()
+    if not raw:
+        return set()
+    # Split on NUL; drop the trailing empty element git's -z leaves.
+    parts = raw.split(b"\x00")
+    return {p.decode("utf-8", "surrogateescape") for p in parts if p}
+
+
+def sanitize_rollback_path(rel: str) -> Optional[str]:
+    """Validate a single repo-relative untracked path for `git clean -fd --`.
+
+    Returns the sanitized POSIX path, or ``None`` if it must be rejected.
+    A rejected path NEVER reaches ``git clean`` — feeding `git clean` a bare
+    directory, an absolute path, or a `..` escape risks destroying untracked
+    output outside scope (github/copilot-cli#1675). ``.flow/**`` is host-owned
+    (plan-sync edits, specs, tasks) and is NEVER reverted or cleaned.
+
+    Rejection reasons (mirrors the rollback-plan `rejected` contract):
+      - empty / "." → no concrete file
+      - absolute path → out-of-tree
+      - ".." traversal → escapes the repo root
+      - bare directory (trailing "/") → `git clean` would recurse; we feed it
+        only individual FILES (the -z snapshot lists files inside new dirs)
+      - any ".flow/**" path → host-owned, never touched
+    """
+    if rel is None:
+        return None
+    s = rel.strip()
+    if s == "" or s == ".":
+        return None
+    # Normalize separators for the .flow/ + traversal checks (snapshots are
+    # POSIX from git, but be defensive about backslashes on odd inputs).
+    norm = s.replace("\\", "/")
+    if norm.startswith("/") or (len(s) >= 2 and s[1] == ":"):
+        # Absolute POSIX path or a Windows drive-letter path.
+        return None
+    # Reject any `..` segment (traversal). Checking segments avoids rejecting a
+    # legitimate filename that merely contains ".." as a substring (e.g.
+    # "a..b.txt"), while still catching "../x" and "a/../b".
+    if ".." in norm.split("/"):
+        return None
+    if norm.endswith("/"):
+        # Bare directory — never fed to `git clean` (it would recurse).
+        return None
+    # `.flow/` is host-owned: plan-sync edits, specs, tasks must never be
+    # reverted or cleaned. Reject the dir itself and anything beneath it.
+    if norm == ".flow" or norm.startswith(".flow/"):
+        return None
+    return norm
+
+
+def rollback_plan(pre: set, post: set) -> dict:
+    """Compute the safe scoped-rollback FILE set from pre/post untracked snapshots.
+
+    The cleanup set is ``post − pre`` (newly-created untracked FILES) — derived
+    from the snapshots, NOT from the result's ``files_modified`` (which is absent
+    on a CLI-failure / missing / malformed result, yet Codex may still have
+    created files). Each candidate is run through ``sanitize_rollback_path``;
+    survivors land in ``rollback_paths``, rejects (with a reason) in ``rejected``.
+
+    Returns ``{rollback_paths: [...sorted...], rejected: ["<path>: <reason>"]}``.
+    Sorted output makes the helper deterministic for tests + reproducible runs.
+    """
+    new_paths = post - pre
+    rollback_paths = []
+    rejected = []
+    for rel in sorted(new_paths):
+        sanitized = sanitize_rollback_path(rel)
+        if sanitized is None:
+            rejected.append(f"{rel}: {_rollback_reject_reason(rel)}")
+        else:
+            rollback_paths.append(sanitized)
+    return {
+        "rollback_paths": sorted(rollback_paths),
+        "rejected": rejected,
+    }
+
+
+def _rollback_reject_reason(rel: str) -> str:
+    """Human-readable rejection reason for a path `sanitize_rollback_path` drops.
+    Mirrors the rejection branches so the `rejected` list is self-documenting."""
+    if rel is None:
+        return "empty"
+    s = rel.strip()
+    if s == "" or s == ".":
+        return "empty or '.'"
+    norm = s.replace("\\", "/")
+    if norm.startswith("/") or (len(s) >= 2 and s[1] == ":"):
+        return "absolute path"
+    if ".." in norm.split("/"):
+        return ".. traversal"
+    if norm.endswith("/"):
+        return "bare directory"
+    if norm == ".flow" or norm.startswith(".flow/"):
+        return ".flow/ is host-owned"
+    return "rejected"
+
+
+def cmd_codex_rollback_plan(args: argparse.Namespace) -> None:
+    """Derive the safe scoped-rollback FILE set from pre/post untracked snapshots.
+
+    ``--preexisting-untracked-file`` and ``--post-untracked-file`` are
+    NUL-delimited snapshot files captured with
+    ``git ls-files --others --exclude-standard -z`` BEFORE and AFTER the codex
+    run. The cleanup set = ``post − pre``, sanitized to repo-relative FILE paths
+    (absolute / ``..`` / empty / ``.`` / bare-directory / ``.flow/**`` rejected).
+
+    ``--repo-root`` is accepted for symmetry with the documented contract and
+    future use (e.g. resolving snapshot-relative paths); the computation itself
+    is a pure set diff over the two snapshots, so it does not touch the repo.
+    """
+    pre = _read_nul_delimited(args.preexisting_untracked_file)
+    post = _read_nul_delimited(args.post_untracked_file)
+    plan = rollback_plan(pre, post)
+
+    if args.json:
+        json_output(plan)
+    else:
+        for p in plan["rollback_paths"]:
+            print(p)
+        for r in plan["rejected"]:
+            print(f"REJECTED {r}", file=sys.stderr)
+
+
 # --- Copilot Commands ---
 
 
@@ -24327,6 +24636,54 @@ def main() -> None:
     )
     p_codex_deep.add_argument("--json", action="store_true", help="JSON output")
     p_codex_deep.set_defaults(func=cmd_codex_deep_pass)
+
+    # Implementation-delegation helpers (fn-55.4): deterministic classification
+    # + scoped-rollback path computation for the `DELEGATE: codex` worker hook.
+    p_codex_classify = codex_sub.add_parser(
+        "classify-result",
+        help="Classify a Codex delegation result against the 5-row table",
+    )
+    p_codex_classify.add_argument(
+        "--result",
+        required=True,
+        help="Path to result-batch-<n>.json (may be missing/empty/malformed)",
+    )
+    p_codex_classify.add_argument(
+        "--exit",
+        type=int,
+        required=True,
+        dest="exit",
+        help="Exit code of the codex exec invocation (non-zero → CLI failure)",
+    )
+    p_codex_classify.add_argument("--json", action="store_true", help="JSON output")
+    p_codex_classify.set_defaults(func=cmd_codex_classify_result)
+
+    p_codex_rollback = codex_sub.add_parser(
+        "rollback-plan",
+        help="Compute the safe scoped-rollback FILE set from untracked snapshots",
+    )
+    p_codex_rollback.add_argument(
+        "--repo-root",
+        dest="repo_root",
+        default=".",
+        help="Repo root (accepted for contract symmetry; computation is a pure "
+        "set diff over the two snapshots)",
+    )
+    p_codex_rollback.add_argument(
+        "--preexisting-untracked-file",
+        dest="preexisting_untracked_file",
+        required=True,
+        help="NUL-delimited untracked snapshot captured BEFORE delegation "
+        "(git ls-files --others --exclude-standard -z)",
+    )
+    p_codex_rollback.add_argument(
+        "--post-untracked-file",
+        dest="post_untracked_file",
+        required=True,
+        help="NUL-delimited untracked snapshot captured AFTER the run",
+    )
+    p_codex_rollback.add_argument("--json", action="store_true", help="JSON output")
+    p_codex_rollback.set_defaults(func=cmd_codex_rollback_plan)
 
     # copilot (GitHub Copilot CLI helpers). Subcommand surface mirrors codex;
     # review subcommands (impl-review/plan-review/completion-review) are

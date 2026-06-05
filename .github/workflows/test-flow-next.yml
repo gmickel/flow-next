@@ -108,6 +108,20 @@ jobs:
         # the Ralph case; runtime values like `seatbelt` trip the guard) and
         # locks the progressive-disclosure + disambiguation prose contract.
 
+      - name: Python unit tests — Codex-delegation classify + rollback (fn-55.4)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_codex_delegation_classify.py" \
+            -v
+        # Deterministic `flowctl codex classify-result` (5-row table + malformed/
+        # missing) + `rollback-plan` (post−pre untracked-snapshot diff, path
+        # sanitization, nested-dir, whitespace, .flow/ exclusion) driven by the
+        # mock-codex fixture; dual-copy invariant (both flowctl.py copies carry
+        # the helpers + live .flow/bin/flowctl resolves them); orchestration/
+        # safety prose contract; clean-baseline-excludes-.flow predicate
+        # (multi-task plan-sync stays delegatable after task 1).
+
       # ──────────── fn-50 (clawpatch wrap) ────────────
       # New readers + scout-fallback contract land here so they run on the full
       # ubuntu / macos / windows matrix. Tests use checked-in fixtures (no

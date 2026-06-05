@@ -397,7 +397,211 @@ scratch dir is cleaned post-commit (fn-55.4), so never persist a pointer to it i
 
 ## Orchestration split / batching / result classification / safety
 
-_(stub — authored by fn-55.4)_
+> **The classification + scoped-rollback logic is deterministic flowctl, NOT
+> markdown the host re-interprets** (CLAUDE.md agentic-vs-deterministic split).
+> The worker calls `flowctl codex classify-result` / `flowctl codex rollback-plan`
+> and acts on their JSON; the host AGENT keeps the judgment (delegate-or-not,
+> risk→effort, batching). The helpers are pure (no git, no model) so CI tests
+> target executable code, not prose.
+
+### Orchestration split (R5) — who owns what
+
+Claude (the worker, which *is* Claude) owns **plan-reading, review, ALL git ops,
+and decisions**. `codex exec` **only writes code** — it is **forbidden from git**
+(`commit`/`push`/PRs) and repo-scoped. This split is **enforced, not prompt-only**:
+
+- **Git ownership** — Codex is *told* not to commit, but a yolo sandbox CAN run
+  git. The worker captures `BASE_COMMIT` (it already does, `worker.md:109-113`)
+  and **asserts `git rev-parse HEAD == BASE_COMMIT` AFTER `codex exec`**. A
+  committed Codex change is invisible to the `git status` cross-check, so this
+  HEAD assertion is the real guard for "Claude owns all git."
+- **`.flow/` integrity** — because the scoped rollback intentionally never
+  touches `.flow/**` (to preserve plan-sync state), an unauthorized Codex write
+  to a *non-scratch* `.flow/` path would otherwise survive a failed delegation.
+  So the worker snapshots non-scratch `.flow/` BEFORE delegating and re-checks
+  after.
+
+The worker keeps Phase 3 commit, Phase 4 impl-review, Phase 5 done — only the
+spawned `codex exec` is git-forbidden. The worker's existing `BASE_COMMIT` is
+**reused** for rollback scope + the impl-review base (no base reset — preserves
+the spec-wide-base rule for the final integration task).
+
+### Batching (R5) — scoped to ONE flow task
+
+A delegated task's implementation is split into **≤5 units**, where each unit is
+a logical change-set:
+
+- Split at **phase / file boundaries**; **never split a shared-file unit** across
+  batches (concurrent edits to one file would conflict).
+- **Skip delegation entirely if all units are trivial** (a one-line edit is not
+  worth the round-trip — implement in-session).
+- **No cross-task batching in v1** — batching is scoped to the single flow task
+  the worker owns. (Cross-task batching is explicitly out of scope: each flow
+  task is a fresh worker subagent; there is no shared orchestrator to batch
+  across tasks.)
+
+Each batch surfaces a brief **result block** (summary / files / verification /
+issues). In Ralph it routes to the Ralph log / receipt (no human in the loop).
+
+### The prompt template (lifted — 8 XML-tagged sections)
+
+The per-batch prompt (`prompt-batch-<n>.md`) carries exactly these sections:
+
+```
+<task>            one-sentence statement of THIS batch's change-set
+<files>           the files this batch may touch (repo-relative)
+<patterns>        existing patterns to follow (signatures, naming, structure)
+<approach>        the technical approach (from the spec / investigation)
+<constraints>     the hard rules — see below
+<testing>         which test files / commands prove this batch
+<verify>          run all test files in ONE process; gate `completed` on green
+<output_contract> emit the result JSON per result-schema.json (verbatim)
+```
+
+`<constraints>` **MUST**:
+- **forbid Codex from `git commit` / `git push` / opening PRs** (the orchestrator
+  owns all git);
+- **restrict modifications to the repo root** and keep scope tight to `<files>`;
+- **explicitly forbid writing anywhere under `.flow/` EXCEPT its own
+  `.flow/tmp/codex-<task-id>/` scratch dir** — `.flow/specs`, `.flow/tasks`,
+  `.flow/config.json`, `.flow/memory`, … are host-owned.
+
+`<verify>` runs **all** test files in one process and **forbids
+`status:"completed"` unless verification passes** — Codex verifies + fixes itself
+before reporting `completed`.
+
+### Result classification (lifted — computed by `classify-result`)
+
+After the bg-launch+poll loop yields a non-empty, JSON-parseable result file,
+classify with:
+
+```bash
+$FLOWCTL codex classify-result \
+  --result "<scratch-dir>/result-batch-<n>.json" \
+  --exit <codex-exit-code> --json
+# → { class, status, action, scoped_paths, valid_schema }
+```
+
+| Signal | `class` | `action` |
+|---|---|---|
+| exit ≠ 0 | `cli_failure` | `rollback_and_disable` — rollback to HEAD; fall back to standard for ALL remaining work |
+| exit 0, result JSON missing / malformed | `task_failure` | `rollback`; `consecutive_failures++` |
+| exit 0, `status:"failed"` | `task_failure` | `rollback`; `consecutive_failures++` |
+| exit 0, `status:"partial"` | `partial` | `finish_locally` — keep diff; finish locally + verify + commit; `consecutive_failures++` |
+| exit 0, `status:"completed"` | `success` | `commit` — cross-check (below) → commit; reset `consecutive_failures=0` |
+
+**A non-zero exit ALWAYS wins** — a CLI failure can leave a stale or
+partially-written result behind, so the helper ignores the result body and
+returns `cli_failure` regardless. The `valid_schema:false` branch (missing /
+empty / unparseable / schema-mismatch on exit 0) is the **backstop**: even if
+`--output-schema` silently degraded (the #15451 MCP-drop the invocation guards
+against), we never commit blind — we roll back.
+
+### Trust cross-check (cheap) — before committing `completed`
+
+Before committing a `completed` result, intersect `git status --porcelain` with
+the result's `files_modified`:
+
+- **claimed-but-untouched** (in `files_modified`, not in `git status`) **or
+  touched-but-unclaimed** (dirty in `git status`, not in `files_modified`) → a
+  mismatch **downgrades** the result to `partial`/`failed` — don't commit blind.
+- This cross-check + an impl-review SHIP gate (`REVIEW_MODE != none`) together
+  are the independent check, so the orchestrator **skips a duplicate test run**.
+  **When `REVIEW_MODE=none`** (worker Phase 4 skipped), there is no independent
+  gate → the worker runs its own **Phase 5 verification** on the delegated diff
+  before `flowctl done` (fix + follow-up commit on failure — never trust
+  `verification_summary` as the sole gate). fn-55.5 owns the `REVIEW_MODE=none`
+  verification wiring.
+
+### Safety — clean-baseline preflight (scoped, EXCLUDES `.flow/`)
+
+The clean-baseline preflight uses **`git status --porcelain`** (catches untracked
+files that `git diff --quiet HEAD` misses), **never auto-stashes**, and is
+**scoped to the code tree — it EXCLUDES host-owned `.flow/`**:
+
+```bash
+# Dirty = any non-.flow working-tree change. /flow-next:work runs plan-sync after
+# each task (phases.md 3e), legitimately leaving uncommitted .flow/tasks/ edits;
+# a whole-tree clean-baseline would false-disable delegation after task 1.
+DIRTY="$(git status --porcelain | grep -v '^.. \.flow/' || true)"
+if [ -n "$DIRTY" ]; then
+  : # non-.flow dirtiness → offer commit / standard-mode; do NOT delegate dirty
+fi
+```
+
+Only **non-`.flow/`** dirtiness counts as "dirty". A multi-task run with
+`planSync.enabled=true` therefore does NOT disable delegation after task 1.
+
+### Safety — git-ownership enforcement (HEAD assertion)
+
+```bash
+# AFTER codex exec (and after poll DONE): assert Claude still owns git.
+if [ "$(git rev-parse HEAD)" != "$BASE_COMMIT" ]; then
+  # Codex committed (yolo sandbox can run git). Un-commit, keep the diff:
+  git reset --soft "$BASE_COMMIT"
+  # → then scoped rollback (below) → classify as failure → DISABLE delegation.
+fi
+```
+
+A committed Codex change is invisible to the `git status` cross-check, so this
+assertion is the real "Claude owns all git" guard.
+
+### Safety — non-scratch `.flow/` integrity (snapshot + restore)
+
+```bash
+# BEFORE delegating: snapshot non-scratch .flow/ (everything under .flow/ EXCEPT
+# .flow/tmp/codex-*). After codex exec: re-check. Any new/changed non-scratch
+# .flow/ path → restore THOSE paths from the snapshot (the one case rollback
+# deliberately touches .flow/, to UNDO Codex's unauthorized edit) → disable.
+```
+
+Because the scoped rollback never touches `.flow/**`, this snapshot/restore is
+the *only* mechanism that reinstates host state after an unauthorized `.flow/`
+write. `<constraints>` already forbid the write; this is the enforcement backstop.
+
+### Safety — scoped rollback (`rollback-plan`, never bare `git clean`)
+
+Snapshot the untracked set **before** delegating and **again after** the run, both
+with `git ls-files --others --exclude-standard -z` (NUL-delimited — odd paths +
+files inside new dirs are listed individually, not collapsed to `?? dir/`):
+
+```bash
+# Pre (BEFORE codex exec):
+git ls-files --others --exclude-standard -z > "$SCRATCH/pre-untracked.txt"
+# … run codex exec, poll, classify …
+# Post (AFTER the run):
+git ls-files --others --exclude-standard -z > "$SCRATCH/post-untracked.txt"
+
+# Compute the SAFE cleanup set (post − pre, sanitized):
+$FLOWCTL codex rollback-plan --repo-root . \
+  --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
+  --post-untracked-file "$SCRATCH/post-untracked.txt" --json
+# → { rollback_paths: [...sanitized repo-relative FILE paths...], rejected: [...] }
+
+# Roll back (only when class is a failure / partial-discard):
+git checkout -- <tracked paths>            # tracked-only revert (never untracked)
+git clean -fd -- <rollback_paths>          # ONLY the sanitized post−pre FILES
+```
+
+Key guarantees (all enforced by `rollback-plan`, all covered by tests):
+- The cleanup set is **`post − pre`** — derived from the snapshots, **NOT** from
+  the result's `files_modified` (absent on CLI-failure / missing / malformed, yet
+  Codex may have created untracked files). So cleanup works even with no result.
+- **Never bare `git clean`** — a bare clean has destroyed gigabytes of untracked
+  output in the wild (github/copilot-cli#1675). `git clean` is fed ONLY the
+  sanitized path list.
+- **Never a pre-existing untracked file** (it's in `pre`, so excluded by the diff).
+- **Never a `.flow/**` path** — host-owned (plan-sync, specs, tasks); `.flow/`
+  paths are rejected by `rollback-plan`.
+- Rejected: absolute paths, `..` traversal, empty, `.`, bare directories,
+  `.flow/**`. `git clean -fd <files>` removes the now-empty parent dirs.
+
+### Circuit breaker (host-owned)
+
+The 3-consecutive-failure circuit breaker and the `DELEGATION_RESULT=` /
+`DELEGATION_ACTION=` host signals are authored by **fn-55.5** in the next section.
+This task supplies the per-task `action` (`commit` / `finish_locally` /
+`rollback` / `rollback_and_disable`) that the host loop bridges into the counter.
 
 ## Circuit breaker / Ralph-safe / ralph-guard amendment / receipts / attribution
 

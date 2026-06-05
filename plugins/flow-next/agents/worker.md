@@ -131,9 +131,38 @@ THIS task's implementation to `codex exec`:
    `run_in_background` tool parameter** (NOT shell `&`) using `DELEGATE_MODEL` +
    the derived `$SANDBOX_FLAG` (from `DELEGATE_SANDBOX`).
 3. **Poll the result file in separate FOREGROUND Bash calls** (non-empty AND
-   `jq -e .` parseable) until DONE, then classify, cross-check, enforce git/`.flow`
-   ownership against `BASE_COMMIT`, and either commit (Phase 3), finish locally,
-   or scoped-rollback per the reference.
+   `jq -e .` parseable) until DONE, then classify + cross-check + enforce
+   git/`.flow` ownership against `BASE_COMMIT`, and either commit (Phase 3),
+   finish locally, or scoped-rollback per the reference's "Orchestration split /
+   batching / result classification / safety" section. The concrete mechanics
+   (all deterministic flowctl, never re-derived in prose):
+
+   ```bash
+   # Classify (the 5-row table — exit≠0 always wins):
+   CLASS_JSON="$($FLOWCTL codex classify-result \
+     --result "$SCRATCH/result-batch-1.json" --exit "$CODEX_EXIT" --json)"
+   ACTION="$(printf '%s' "$CLASS_JSON" | jq -r '.action')"
+
+   # Git-ownership assertion — Codex must NOT have committed (yolo can run git):
+   if [ "$(git rev-parse HEAD)" != "$BASE_COMMIT" ]; then
+     git reset --soft "$BASE_COMMIT"   # un-commit, keep the diff; then roll back + disable
+   fi
+
+   # Scoped rollback (on a failure / partial-discard) — NEVER bare `git clean`:
+   $FLOWCTL codex rollback-plan --repo-root . \
+     --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
+     --post-untracked-file "$SCRATCH/post-untracked.txt" --json
+   #   → feed ONLY the sanitized rollback_paths to `git clean -fd -- <paths>`
+   #     (never a pre-existing untracked file, never a `.flow/**` path).
+   ```
+
+   - `pre-untracked.txt` / `post-untracked.txt` are captured with
+     `git ls-files --others --exclude-standard -z` BEFORE and AFTER `codex exec`.
+   - Snapshot non-scratch `.flow/` before delegating; if Codex mutated any
+     non-scratch `.flow/` path, restore those paths from the snapshot + disable
+     delegation (the rollback never touches `.flow/**`, so this is the only undo).
+   - Before committing a `completed` result, run the `git status --porcelain` ∩
+     `files_modified` trust cross-check; a mismatch downgrades to partial/failed.
 
 Phase 3 commit / Phase 4 review / Phase 5 done are **unchanged** by delegation —
 the orchestrator (you) still owns all git, review, and `flowctl done`.
