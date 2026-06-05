@@ -37,7 +37,8 @@ Author the core delegation mechanics in `references/codex-delegation.md` and wir
 - [ ] Background launch uses the `run_in_background` Bash parameter (verified in the reference prose), not shell `&`.
 
 ## Done summary
-_(pending implementation)_
-
+Authored the core Codex implementation-delegation mechanics in references/codex-delegation.md (verbatim-lifted `codex exec --ignore-user-config --output-schema` invocation, strict result schema, run_in_background-launch + jq-parseable foreground-poll loop, risk→effort floor model) and wired a gated delegation hook into worker.md Phase 2 (active only when the host passes `DELEGATE: codex`; default path byte-unchanged). The early-proof gate PASSED live against codex-cli 0.136.0 — a real delegation drove an implementation and returned a schema-valid result-batch JSON via the bg+poll loop, with MCP isolation by --ignore-user-config empirically confirmed (NO_MCP_TOOLS despite 5 configured servers). Go signal for fn-55.4+. Also added an early-proof smoke procedure to agent_docs/local-dev.md, regenerated the Codex mirror, and (in review) fixed a sync-codex.sh R2-injection mis-fire on descriptive 'cannot ask' prose.
 ## Evidence
-_(pending implementation)_
+- Commits: 97241e5a0bd2554df5a96b12471014eb0e093273, a72eedab651ee5ca5976222ac7d22724e287e429
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' → Ran 837 tests, OK (skipped=2), python3 plugins/flow-next/tests/test_codex_delegation_gates.py → 21 tests OK, ./scripts/sync-codex.sh → all validations pass; mirror byte-idempotent on re-run
+- PRs:

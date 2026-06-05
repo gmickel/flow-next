@@ -4,12 +4,12 @@ date: "2026-05-18"
 track: bug
 category: build-errors
 module: scripts/sync-codex.sh
-tags: [sync-codex, codex, mirror, fn-45, AskUserQuestion, tool-rewrites, injection, markdown-tables, fenced-code-blocks, fn-50, FLOWCTL, prelude, agents, scouts, symmetry-gap]
+tags: [sync-codex, codex, mirror, fn-45, AskUserQuestion, tool-rewrites, injection, markdown-tables, fenced-code-blocks, fn-50, FLOWCTL, prelude, agents, scouts, symmetry-gap, R2-injection, is_negative_context, fn-55, plain-text-numbered-prompt, reference-doc]
 problem_type: build-error
 symptoms: "Codex impl-review NEEDS_WORK cycles: injection inside tables/code-blocks, contradictions with auto-fix mandates, structured-tool prose surviving token rewrite, anti-patterns inverted on Codex"
 root_cause: "Token-only AskUserQuestion → plain-text-prompt rewrite leaves Claude-specific structured-tool prose (multiSelect, blocking-question, JSON questions array, deferred-tool schema-loader) intact, and 'first non-negative occurrence' injection lands inside tables, code blocks, and deterministic Ralph branches"
 resolution_type: fix
-last_updated: "2026-05-26"
+last_updated: "2026-06-05"
 ---
 
 ## Problem
@@ -118,3 +118,22 @@ Caught by Codex impl-review run with `--base <branch-from-main>` instead of `--b
 **Validation gap**: add a sync-codex.sh guard that fails if any `plugins/flow-next/codex/agents/*.toml` body still contains `DROID_PLUGIN_ROOT` or `CLAUDE_PLUGIN_ROOT` outside the documented Codex-mirror exception sites. The skill-side has similar guards; agents had none.
 
 **Review-scope discipline**: scoped impl-review (`--base <prior-commit>`) is the default for incremental tasks, but for final-integration tasks like fn-50.6 (release plumbing, cross-cutting changes), re-run with `--base <branch-from-main>` so the reviewer audits the whole feature surface. Otherwise the reviewer can't see whether the canonical sources the mirror depends on actually exist on the branch.
+
+## Update 2026-06-05
+
+## Problem
+When a Codex mirror file is a **host-side reference doc that only *describes* asking** (e.g. "the worker is a subagent and cannot call `AskUserQuestion`"), `sync-codex.sh` mis-fired: it injected the full R2 plain-text-numbered-prompt INSTRUCTION block at that descriptive site, and the generic `` `AskUserQuestion` `` → `` `plain-text numbered prompt` `` rewrite produced nonsense like "cannot call `plain-text numbered prompt`" and a dead `ToolSearch select:plain-text numbered prompt` target. RP impl-review flagged it NEEDS_WORK.
+
+## What Didn't Work
+Rewording the canonical descriptive mention to "blocking question" — that phrase is ALSO rewritten to "plain-text numbered prompt" by sync (lines ~785-895), so it just relocated the nonsense. Multi-line live-ask phrasing ("the host\nasks via `AskUserQuestion`") also split the sentence because the INSTRUCTION block injects BEFORE the verb-bearing anchor LINE, not the sentence.
+
+## Solution
+Two-part fix (scripts/sync-codex.sh + canonical prose):
+1. Extend `is_negative_context()` to treat capability-negation prose ("cannot/can't call|use|ask via X" + "plain-text numbered prompt") as a non-live-ask site, so no R2 injection there.
+2. In the canonical reference, keep `AskUserQuestion` ONLY at genuine live-ask sites (Gate 4 consent, per-task `ask`) and on a SINGLE line so the injection lands cleanly before a complete sentence; reword the descriptive "worker cannot ask" mentions to plain English with no tool token / no "blocking question" phrase.
+Result: mirror has exactly ONE INSTRUCTION block under the Gate 4 consent heading (the real ask site), no stale tokens, byte-idempotent sync.
+
+## Prevention
+- Any markdown that merely *describes* asking (vs. issuing a live ask) is an injection hazard — the R2 anchor heuristic keys on ask-verbs and can't tell "cannot ask" from "ask". When adding such prose to a synced file, run `./scripts/sync-codex.sh` and grep the mirror for: a stray "Ask the user via plain text" block, "cannot ... `plain-text numbered prompt`", and `ToolSearch select:plain-text numbered prompt`.
+- The sync validator greps for literal `AskUserQuestion`/`ToolSearch select:AskUserQuestion` — it has a BLIND SPOT for the post-rewrite `plain-text numbered prompt` nonsense, so a green sync does NOT prove clean mirror prose. Eyeball the mirror around any ask-related prose.
+- Keep live-ask phrasing on one physical line; the INSTRUCTION block injects before the anchor LINE.
