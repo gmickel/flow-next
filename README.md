@@ -3,7 +3,7 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v1.7.1-green)](CHANGELOG.md)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v1.8.0-green)](CHANGELOG.md)
 [![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/docs/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -21,7 +21,7 @@
 
 ## What is this?
 
-Flow-Next is an AI agent orchestration plugin. **Twenty-five agent-native skills** for the full lifecycle: idea → spec → tasks → review → ship → maintain. Bundled task tracking, dependency graphs, re-anchoring before every task, multi-model reviews, decay-aware project memory, GitHub PR creation and resolution, agent-readiness audits. Everything lives in your repo — no external services, no global config. Uninstall: delete `.flow/`.
+Flow-Next is an AI agent orchestration plugin. **Twenty-six agent-native skills** for the full lifecycle: idea → spec → tasks → review → ship → maintain. Bundled task tracking, dependency graphs, re-anchoring before every task, multi-model reviews, decay-aware project memory, GitHub PR creation and resolution, agent-readiness audits. Everything lives in your repo — no external services, no global config. Uninstall: delete `.flow/`.
 
 - **Spec-first.** Every unit of work belongs to a spec `fn-N`. Tasks `fn-N.M` inherit context.
 - **Fresh-context workers.** Each task runs in its own subagent. No token bleed between tasks.
@@ -106,12 +106,16 @@ flowchart LR
     I --> L
     L --> W[/flow-next:work/]
     W --> R[/flow-next:impl-review/]
-    R -->|SHIP| Done([🚀 Ship])
+    R -->|SHIP| Q[/flow-next:qa/]
     R -->|NEEDS_WORK| W
+    Q -->|YES| Done([🚀 Ship])
+    Q -->|NO| W
 
     Done -.maintenance.-> A[/flow-next:audit/]
     A -.-> M[(.flow/memory/)]
 ```
+
+> `/flow-next:qa` is an **opt-in** live-app QA stage (after work / around make-pr) — it drives the deployed app like a real user and only runs when there's a live deploy + a driver; with neither it surfaces the limitation rather than blocking.
 
 The loop is spec-driven. Each step below maps to one skill; click through to flow-next.dev for the full page.
 
@@ -212,6 +216,7 @@ Fetch unresolved threads + top-level comments + review-submission bodies, cluste
 | `/flow-next:impl-review` | Cross-model implementation review (RepoPrompt, Codex, or Copilot) |
 | `/flow-next:plan-review` | Cross-model plan review |
 | `/flow-next:spec-completion-review` | Spec-completion review gate — verify combined implementation matches the spec (renamed from `/flow-next:epic-review` in 1.0.0; soft-removal target 2.0.0) |
+| `/flow-next:qa` | **Live-app real-user QA** — derives scenarios from the spec (AC / R-IDs / boundaries), drives the running app via `flow-next-drive`, files P0/P1/P2 findings with evidence, ends with a YES/NO ship verdict receipt. Forbidden from marking PASS by reading source. Opt-in — needs a live deploy + a driver |
 | `/flow-next:make-pr` | Render a cognitive-aid PR body (9 input streams) and open via `gh` |
 | `/flow-next:resolve-pr` | Resolve GitHub PR review threads (fetch → triage → fix → reply → resolve via GraphQL) |
 | `/flow-next:audit` | Agent-native review of `.flow/memory/` entries against current code (Keep / Update / Consolidate / Replace / Delete) |
@@ -249,6 +254,7 @@ The repo holds the offline-resilient reference. [flow-next.dev](https://flow-nex
 | Adopting in a team, handover objects, Spec-as-PR, adoption ladder | [`docs/teams.md`](plugins/flow-next/docs/teams.md) | [Teams guide](https://flow-next.dev) |
 | Full `flowctl` CLI reference — every command, every flag | [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md) | — |
 | Ralph autonomous mode internals — hooks, receipts, DCG | [`docs/ralph.md`](plugins/flow-next/docs/ralph.md) | — |
+| Live-app QA — `/flow-next:qa`, spec-derived scenarios, P0/P1/P2 findings, `qa_verdict` receipt | [`skills/flow-next-qa/SKILL.md`](plugins/flow-next/skills/flow-next-qa/SKILL.md) | — |
 | `.flow/` directory layout, spec-first task model, ID format | [`docs/architecture.md`](plugins/flow-next/docs/architecture.md) | — |
 | Spec template — R-ID rules, confidence anchors, receipt schema | [`docs/spec-template.md`](plugins/flow-next/docs/spec-template.md) · canonical scaffold at [`templates/spec.md`](plugins/flow-next/templates/spec.md) | — |
 | Memory schema — bug / knowledge tracks, frontmatter, audit lifecycle | [`docs/memory-schema.md`](plugins/flow-next/docs/memory-schema.md) | — |

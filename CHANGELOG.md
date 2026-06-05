@@ -2,6 +2,18 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.8.0] - 2026-06-05
+
+### Added
+- **`/flow-next:qa` — live-app real-user QA pass derived from the spec** (fn-53). Every flow-next review today is static — `impl-review`, `spec-completion-review`, `quality-auditor`, `code-review` all read the *code*. `/flow-next:qa` fills the gap: it drives the *running* app like an unforgiving real user (via the [`flow-next-drive`](plugins/flow-next/skills/flow-next-drive/SKILL.md) surface-aware driver ladder), files structured P0/P1/P2 findings with evidence, and ends with a YES/NO ship verdict emitted as a proof-of-work receipt. New skill: [`skills/flow-next-qa/SKILL.md`](plugins/flow-next/skills/flow-next-qa/SKILL.md).
+  - **Spec-as-intent advantage.** The differentiator vs spec-less QA tools is that flow-next already encodes intent — scenarios are derived **directly from the spec**: acceptance criteria → test scenarios, R-IDs → coverage table (reusing the make-pr R-ID pattern), boundaries → what NOT to test, decision context → expected behavior. No reconstructing app intent from README/landing/phase-docs — the spec is the source of truth.
+  - **The hard rule:** QA is **forbidden from marking PASS (SHIP) by reading source** — the verdict rests on captured evidence from the live app (screenshots, console dumps, observed state), never on agent narration. This is what makes it a real-user QA pass rather than a second static review.
+  - **Four-outcome verdict** carried in a `type: qa_verdict` receipt: `SHIP` (YES) / `NEEDS_WORK` (NO — a single open P0 or incomplete R-ID coverage) / **N/A** (no driveable UI, e.g. a backend/CLI-only spec) / **BLOCKED** (no live deploy or no driver — could not verify, never a fabricated PASS). The `verdict` field is the Ralph-guard enum projection (`BLOCKED → NEEDS_WORK`, `N/A → SHIP`); the four outcomes live in `qa_outcome`. Findings feed the bug memory track (`track: bug`, dedup via `memory add`'s overlap check) and are promotable to fix specs/tasks.
+  - **Opt-in + graceful** (R13). Requires a live deploy + a driver; with neither it surfaces a BLOCKED limitation rather than failing, and adds nothing to the base flow when unused. Runs interactively AND autonomously (autonomous when target URL + test accounts are configured; not a hard Ralph receipt-gate in v1). Lifecycle position: after `/flow-next:work` / spec-completion-review, around / before `make-pr`.
+  - **Opt-in tracker verdict post.** New `tracker.perEvent.qa` config leaf (`off | comment`, default `off`) posts the ship verdict as a tracker comment when the bridge is active — `comment` is the only sensible verb for a verdict. Documented in [`flowctl.md`](plugins/flow-next/docs/flowctl.md#config). Unlike the other lifecycle events, it is **not** switched on by the tracker-sync discovery ceremony's opt-out default-on set — it is QA-specific opt-in.
+  - **Cross-platform** (R10) — canonical Claude-native tool names (`AskUserQuestion` + `Task`/`Explore` subagent dispatch); `sync-codex.sh` rewrites for the Codex mirror, which is regenerated.
+  - **QA discipline lean-borrowed (credited)** — the P0/P1/P2 taxonomy + tie-break, evidence rules (console / screenshot / URL), session-hygiene rules + persona suffixing, and the YES/NO verdict + paste-ready handoff are adapted from Ray Fernando's [`rayfernando-skills`](https://github.com/RayFernando1337/rayfernando-skills) `running-bug-review-board` skill (Apache-2.0). flow-next stays lean (no 18-reference port; the ≤500-line skill cap holds — flow-next already has the bug memory track, receipts, the make-pr R-ID table, and the fn-52 tracker bridge). Thank you, Ray.
+
 ## [flow-next 1.7.1] - 2026-06-05
 
 ### Changed
