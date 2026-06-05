@@ -306,6 +306,23 @@ class RollbackPlanTestCase(unittest.TestCase):
         self.assertEqual(plan["rollback_paths"], [" new.py"])
         self.assertNotIn("new.py", plan["rollback_paths"])
 
+    def test_backslash_path_is_rejected_not_normalized(self) -> None:
+        # REGRESSION (review P1/100 round 2): a literal backslash must be
+        # REJECTED, NEVER rewritten to "/". Rewriting `dir\file.py` → `dir/file.py`
+        # could alias it onto a pre-existing untracked `dir/file.py` and clean
+        # the user's file. The output bytes are never rewritten.
+        self.assertIsNone(self.flowctl.sanitize_rollback_path("dir\\file.py"))
+
+    def test_backslash_path_does_not_collide_in_plan(self) -> None:
+        # pre has "dir/file.py"; post adds a literal-backslash "dir\\file.py".
+        # The backslash path is rejected (never normalized onto the pre file).
+        plan = self.flowctl.rollback_plan(
+            {"dir/file.py"}, {"dir/file.py", "dir\\file.py"}
+        )
+        self.assertEqual(plan["rollback_paths"], [])
+        self.assertEqual(len(plan["rejected"]), 1)
+        self.assertIn("backslash", plan["rejected"][0])
+
     def test_schema_rejects_non_string_files_modified_items(self) -> None:
         # REGRESSION (review P2/75): declared schema requires string items.
         bad = {

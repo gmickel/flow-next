@@ -18056,40 +18056,46 @@ def sanitize_rollback_path(rel: str) -> Optional[str]:
       - empty / "." → no concrete file
       - absolute path → out-of-tree
       - ".." traversal → escapes the repo root
+      - backslash present → ambiguous separator; never normalized (see below)
       - bare directory (trailing "/") → `git clean` would recurse; we feed it
         only individual FILES (the -z snapshot lists files inside new dirs)
       - any ".flow/**" path → host-owned, never touched
 
-    The raw path is NEVER trimmed. `git ls-files -z` emits byte-exact paths, and
-    a leading/trailing space is part of a DISTINCT filename — trimming `" new.py"`
-    to `"new.py"` could alias it onto a pre-existing untracked `"new.py"` and
+    The output bytes are NEVER rewritten — the function returns the raw ``rel``
+    verbatim on success, never a normalized form. `git ls-files -z` emits
+    byte-exact paths; trimming whitespace OR rewriting a literal backslash to
+    `/` could alias a DISTINCT codex-created path (`" new.py"`, `dir\file.py`)
+    onto a pre-existing untracked path (`"new.py"`, `dir/file.py`) and
     `git clean` the user's file (breaks the "never a pre-existing file" guard).
+    A literal backslash is therefore REJECTED outright rather than normalized:
+    on POSIX, git uses `/` separators, so a backslash is an exotic literal
+    filename byte we refuse to risk feeding to `git clean`.
     """
     if rel is None:
         return None
     s = rel
     if s == "" or s == ".":
         return None
-    # Normalize separators for the .flow/ + traversal checks (snapshots are
-    # POSIX from git, but be defensive about backslashes on odd inputs).
-    # NOTE: separators only — the path bytes themselves are preserved verbatim.
-    norm = s.replace("\\", "/")
-    if norm.startswith("/") or (len(s) >= 2 and s[1] == ":"):
+    # Reject literal backslashes outright — NEVER rewrite them to `/` (that would
+    # mutate the output bytes and risk aliasing onto a pre-existing `/` path).
+    if "\\" in s:
+        return None
+    if s.startswith("/") or (len(s) >= 2 and s[1] == ":"):
         # Absolute POSIX path or a Windows drive-letter path.
         return None
     # Reject any `..` segment (traversal). Checking segments avoids rejecting a
     # legitimate filename that merely contains ".." as a substring (e.g.
     # "a..b.txt"), while still catching "../x" and "a/../b".
-    if ".." in norm.split("/"):
+    if ".." in s.split("/"):
         return None
-    if norm.endswith("/"):
+    if s.endswith("/"):
         # Bare directory — never fed to `git clean` (it would recurse).
         return None
     # `.flow/` is host-owned: plan-sync edits, specs, tasks must never be
     # reverted or cleaned. Reject the dir itself and anything beneath it.
-    if norm == ".flow" or norm.startswith(".flow/"):
+    if s == ".flow" or s.startswith(".flow/"):
         return None
-    return norm
+    return s
 
 
 def rollback_plan(pre: set, post: set) -> dict:
@@ -18124,17 +18130,18 @@ def _rollback_reject_reason(rel: str) -> str:
     Mirrors the rejection branches so the `rejected` list is self-documenting."""
     if rel is None:
         return "empty"
-    s = rel  # raw — never trimmed (mirrors sanitize_rollback_path)
+    s = rel  # raw — never trimmed/rewritten (mirrors sanitize_rollback_path)
     if s == "" or s == ".":
         return "empty or '.'"
-    norm = s.replace("\\", "/")
-    if norm.startswith("/") or (len(s) >= 2 and s[1] == ":"):
+    if "\\" in s:
+        return "backslash (ambiguous separator)"
+    if s.startswith("/") or (len(s) >= 2 and s[1] == ":"):
         return "absolute path"
-    if ".." in norm.split("/"):
+    if ".." in s.split("/"):
         return ".. traversal"
-    if norm.endswith("/"):
+    if s.endswith("/"):
         return "bare directory"
-    if norm == ".flow" or norm.startswith(".flow/"):
+    if s == ".flow" or s.startswith(".flow/"):
         return ".flow/ is host-owned"
     return "rejected"
 
