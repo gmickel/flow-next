@@ -280,6 +280,12 @@ FLOW_DELEGATE_CODEX=1 codex exec \
  - < "<scratch-dir>/prompt-batch-<n>.md"
 ```
 
+- **Send it as a SINGLE LINE.** The `\`-continuations above are a reading aid only.
+ `ralph-guard` is a single-command check that rejects ANY raw newline (along with
+ `;` `&` `|` `` ` `` `>` `$(…)` `${…}` subshells) **before** tokenizing — a
+ multi-line command (even `\`-continued) is non-canonical and **blocked** in
+ Ralph. Flatten the invocation to one line before putting it in the
+ `run_in_background` Bash call (only the stdin `<` redirect is permitted).
 - **`FLOW_DELEGATE_CODEX=1` is an inline env prefix ON the command string** (NOT a
  pre-exported var). The `ralph-guard.py` PreToolUse hook (fn-55.5) sees only the
  command text and parses this full shape to allow the invocation; a separately
@@ -569,50 +575,56 @@ write. `<constraints>` already forbid the write; this is the enforcement backsto
 
 ### Safety — scoped rollback (`rollback-plan`, never bare `git clean`)
 
-Snapshot the untracked set **before** delegating and **again after** the run, both
-with `git ls-files --others --exclude-standard -z` (NUL-delimited — odd paths +
-files inside new dirs are listed individually, not collapsed to `?? dir/`):
+Snapshot the untracked set **before** delegating; re-snapshot **after the reset,
+inside the rollback branch**, both with `git ls-files --others --exclude-standard
+-z` (NUL-delimited — odd paths + files inside new dirs are listed individually,
+not collapsed to `?? dir/`). The entire rollback runs ONLY on a rollback action:
 
 ```bash
-# Pre (BEFORE codex exec):
+# Pre-snapshot (BEFORE codex exec) — the untracked baseline:
 git ls-files --others --exclude-standard -z > "$SCRATCH/pre-untracked.txt"
-# … run codex exec, poll, classify …
-# Post (AFTER the run):
-git ls-files --others --exclude-standard -z > "$SCRATCH/post-untracked.txt"
+# … run codex exec, poll, classify (sets ACTION), enforce HEAD-ownership …
 
-# Compute the SAFE cleanup set (post − pre, sanitized):
-$FLOWCTL codex rollback-plan --repo-root . \
+# ROLLBACK — the WHOLE block runs ONLY on a rollback action. A `completed` /
+# `partial` success KEEPS Codex's new files for Phase 3 to commit; cleaning them
+# unconditionally would delete a successful task's output.
+if [ "$ACTION" = rollback ] || [ "$ACTION" = rollback_and_disable ]; then
+ # 1. Tracked revert — AUTHORITATIVELY from BASE_COMMIT, never from the index,
+ # the result JSON, or files_modified (a missing/malformed/non-zero result has
+ # no trustworthy list, yet Codex may have edited tracked files). `--mixed`
+ # un-commits + unstages (so a yolo commit / `git add` can't survive the
+ # index-restore); the tracked checkout reverts the worktree from BASE.
+ # `:(exclude).flow` keeps host-owned .flow/ untouched (its integrity is the
+ # snapshot/restore above).
+ git reset --mixed "$BASE_COMMIT"
+ git checkout -- . ':(exclude).flow'
+
+ # 2. RE-SNAPSHOT untracked AFTER the reset. A file Codex *committed* as an add
+ # only becomes untracked once `--mixed` un-commits it, so capturing post here
+ # (not before the reset) puts it in `post − pre` and gets it cleaned.
+ git ls-files --others --exclude-standard -z > "$SCRATCH/post-untracked.txt"
+
+ # 3. SAFE cleanup set (post − pre, sanitized) → scoped `git clean`:
+ $FLOWCTL codex rollback-plan --repo-root . \
  --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
  --post-untracked-file "$SCRATCH/post-untracked.txt" --json > "$SCRATCH/plan.json"
-# → { rollback_paths: [...sanitized repo-relative FILE paths...], rejected: [...] }
+ # → { rollback_paths: [...sanitized repo-relative FILE paths...], rejected: [...] }
 
-# Roll back (only when class is a failure / partial-discard). Restore TRACKED
-# files AUTHORITATIVELY from BASE_COMMIT — never from the index, the result JSON,
-# or files_modified (a missing/malformed/non-zero result has no trustworthy file
-# list, yet Codex may have edited tracked files). `--mixed` un-commits + unstages
-# (so a yolo commit / `git add` can't survive the index-restore); the tracked
-# checkout then reverts the worktree from the BASE tree. `:(exclude).flow` keeps
-# host-owned .flow/ untouched (its integrity is the snapshot/restore above).
-git reset --mixed "$BASE_COMMIT"
-git checkout -- . ':(exclude).flow' # tracked-only revert from BASE (never untracked)
-
-# MANDATORY non-empty guard — NEVER let `git clean` run with an empty path list.
-# If EVERY new path was rejected (all .flow/**, backslash, absolute, traversal,
-# bare-dir), `rollback_paths` is empty and `git clean -fd --` would degrade into
-# a BARE clean (github/copilot-cli#1675). The guard makes that impossible. Read
-# array via `--print0` (whitespace/newline-safe argv) — never shell-split it.
-N="$(jq '.rollback_paths | length' "$SCRATCH/plan.json")"
-if [ "$N" -gt 0 ]; then
+ # MANDATORY non-empty guard — NEVER let `git clean` run with an empty path list.
+ # If EVERY new path was rejected (all .flow/**, backslash, absolute, traversal,
+ # bare-dir), `rollback_paths` is empty and `git clean -fd --` would degrade into
+ # a BARE clean (github/copilot-cli#1675). The guard makes that impossible.
+ N="$(jq '.rollback_paths | length' "$SCRATCH/plan.json")"
+ if [ "$N" -gt 0 ]; then
  # `--print0` emits the sanitized paths NUL-delimited (whitespace/newline-safe
  # argv) — never shell-split the JSON text. Clean ONLY codex-created FILES:
  $FLOWCTL codex rollback-plan --repo-root . \
  --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
  --post-untracked-file "$SCRATCH/post-untracked.txt" --print0 \
  | xargs -0 git clean -fd --
+ fi
+ # N == 0 → nothing codex-created to clean → DO NOT call `git clean`.
 fi
-# N == 0 → there is nothing codex-created to clean → DO NOT call `git clean`.
-# (Belt-and-braces: --print0 emits nothing on an empty set, so even without
-# the count guard, xargs -0 --no-run-if-empty never invokes a bare clean.)
 ```
 
 Key guarantees (all enforced by `rollback-plan` + the non-empty guard, all

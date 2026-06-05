@@ -168,8 +168,9 @@ class ClassifyResultPureTestCase(unittest.TestCase):
 
 class ClassifyResultViaMockCodexTestCase(unittest.TestCase):
     """Drive classify-result with the mock-codex fixture's canned outputs,
-    invoked through the LIVE ``.flow/bin/flowctl`` (proves the dogfood copy
-    resolves the new subcommand)."""
+    invoked through the dogfood ``.flow/bin/flowctl.py`` via ``sys.executable``
+    (proves the dogfood copy resolves the new subcommand, portably on all
+    platforms — the shell launcher isn't exec'able directly on Windows)."""
 
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp())
@@ -182,7 +183,7 @@ class ClassifyResultViaMockCodexTestCase(unittest.TestCase):
         exit_code = _run_mock_codex("--row", row, "--out", str(out), cwd=self.tmp)
         proc = subprocess.run(
             [
-                str(FLOWCTL_BIN),
+                sys.executable, str(DOGFOOD_FLOWCTL_PY),
                 "codex",
                 "classify-result",
                 "--result",
@@ -399,7 +400,7 @@ class RollbackPlanLiveCliTestCase(unittest.TestCase):
         post = self._snapshot("post.txt", post_paths)
         proc = subprocess.run(
             [
-                str(FLOWCTL_BIN),
+                sys.executable, str(DOGFOOD_FLOWCTL_PY),
                 "codex",
                 "rollback-plan",
                 "--repo-root",
@@ -434,7 +435,7 @@ class RollbackPlanLiveCliTestCase(unittest.TestCase):
         post = self._snapshot("post.txt", post_paths)
         proc = subprocess.run(
             [
-                str(FLOWCTL_BIN),
+                sys.executable, str(DOGFOOD_FLOWCTL_PY),
                 "codex",
                 "rollback-plan",
                 "--repo-root",
@@ -577,7 +578,7 @@ class DualCopyInvariantTestCase(unittest.TestCase):
         # `.flow/bin/flowctl codex classify-result --help` must resolve (the
         # live wrapper runs the dogfood copy — proves it is not stale).
         proc = subprocess.run(
-            [str(FLOWCTL_BIN), "codex", "classify-result", "--help"],
+            [sys.executable, str(DOGFOOD_FLOWCTL_PY), "codex", "classify-result", "--help"],
             capture_output=True,
             text=True,
         )
@@ -587,7 +588,7 @@ class DualCopyInvariantTestCase(unittest.TestCase):
 
     def test_live_bin_resolves_rollback_plan_subcommand(self) -> None:
         proc = subprocess.run(
-            [str(FLOWCTL_BIN), "codex", "rollback-plan", "--help"],
+            [sys.executable, str(DOGFOOD_FLOWCTL_PY), "codex", "rollback-plan", "--help"],
             capture_output=True,
             text=True,
         )

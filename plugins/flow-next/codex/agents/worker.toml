@@ -151,35 +151,42 @@ THIS task's implementation to `codex exec`:
      ACTION=rollback_and_disable
    fi
 
-   # On a rollback action, restore TRACKED files AUTHORITATIVELY from BASE_COMMIT —
-   # never from the index, the result JSON, or files_modified (a missing/malformed
-   # result has none). `--mixed` un-commits AND unstages, so a yolo `git commit` /
-   # `git add` can't survive `checkout`'s index-restore; the tracked checkout then
-   # reverts the worktree from the BASE tree. Excludes host-owned `.flow/`.
+   # ROLLBACK — tracked revert + scoped untracked cleanup. The WHOLE block runs
+   # ONLY on a rollback action: a `completed`/`partial` success KEEPS Codex's new
+   # files for Phase 3 to commit (gating this is load-bearing — an unconditional
+   # clean would delete a successful task's new files).
    if [ "$ACTION" = rollback ] || [ "$ACTION" = rollback_and_disable ]; then
+     # 1. Revert TRACKED files AUTHORITATIVELY from BASE_COMMIT — never from the
+     #    index, the result JSON, or files_modified. `--mixed` un-commits AND
+     #    unstages (a yolo commit / `git add` can't survive `checkout`'s
+     #    index-restore); the tracked checkout reverts the worktree from BASE.
      git reset --mixed "$BASE_COMMIT"
-     git checkout -- . ':(exclude).flow'
-   fi
-
-   # Scoped UNTRACKED cleanup (on a failure / partial-discard) — NEVER bare `git clean`:
-   $FLOWCTL codex rollback-plan --repo-root . \\
-     --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \\
-     --post-untracked-file "$SCRATCH/post-untracked.txt" --json > "$SCRATCH/plan.json"
-   # MANDATORY non-empty guard: if EVERY new path was rejected, rollback_paths is
-   # empty and a bare `git clean -fd --` would wipe ALL untracked output. Guard it.
-   # `--print0` emits the sanitized paths NUL-delimited (whitespace/newline-safe):
-   if [ "$(jq '.rollback_paths | length' "$SCRATCH/plan.json")" -gt 0 ]; then
+     git checkout -- . ':(exclude).flow'                 # excludes host-owned .flow/
+     # 2. RE-SNAPSHOT untracked AFTER the reset. A file Codex *committed* as an add
+     #    only becomes untracked once `--mixed` un-commits it, so the pre-reset
+     #    post-snapshot would miss it. Capturing here includes it in `post − pre`.
+     git ls-files --others --exclude-standard -z > "$SCRATCH/post-untracked.txt"
+     # 3. Scoped UNTRACKED cleanup — NEVER bare `git clean`:
      $FLOWCTL codex rollback-plan --repo-root . \\
        --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \\
-       --post-untracked-file "$SCRATCH/post-untracked.txt" --print0 \\
-       | xargs -0 git clean -fd --
+       --post-untracked-file "$SCRATCH/post-untracked.txt" --json > "$SCRATCH/plan.json"
+     # MANDATORY non-empty guard: an empty rollback_paths would degrade
+     # `git clean -fd --` into a BARE clean wiping ALL untracked output.
+     # `--print0` emits the sanitized paths NUL-delimited (whitespace/newline-safe):
+     if [ "$(jq '.rollback_paths | length' "$SCRATCH/plan.json")" -gt 0 ]; then
+       $FLOWCTL codex rollback-plan --repo-root . \\
+         --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \\
+         --post-untracked-file "$SCRATCH/post-untracked.txt" --print0 \\
+         | xargs -0 git clean -fd --
+     fi
+     #   → feeds ONLY the sanitized rollback_paths (never a pre-existing untracked
+     #     file, never a `.flow/**` path, never an empty/bare `git clean`).
    fi
-   #   → feeds ONLY the sanitized rollback_paths (never a pre-existing untracked
-   #     file, never a `.flow/**` path, never an empty/bare `git clean`).
    ```
 
-   - `pre-untracked.txt` / `post-untracked.txt` are captured with
-     `git ls-files --others --exclude-standard -z` BEFORE and AFTER `codex exec`.
+   - `pre-untracked.txt` is captured with `git ls-files --others --exclude-standard -z`
+     BEFORE `codex exec`; the post snapshot is (re)captured INSIDE the rollback
+     branch AFTER the `--mixed` reset (so a file Codex committed-as-add is seen).
    - Snapshot non-scratch `.flow/` before delegating; if Codex mutated any
      non-scratch `.flow/` path, restore those paths from the snapshot + disable
      delegation (the rollback never touches `.flow/**`, so this is the only undo).
