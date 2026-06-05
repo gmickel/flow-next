@@ -657,7 +657,13 @@ class DelegationProseContractTestCase(unittest.TestCase):
     def test_worker_has_head_unchanged_assertion(self) -> None:
         self.assertIn("BASE_COMMIT", self.worker)
         self.assertIn("git rev-parse HEAD", self.worker)
-        self.assertIn("git reset --soft", self.worker)
+        # REGRESSION (review P1, PR #160): the rollback must revert tracked files
+        # AUTHORITATIVELY from BASE_COMMIT — `--mixed` (un-commit + unstage) then a
+        # scoped tracked checkout. NOT `--soft` (which leaves Codex's diff staged,
+        # so `git checkout` restores it from the index — the forbidden diff survives).
+        self.assertIn("git reset --mixed", self.worker)
+        self.assertNotIn("git reset --soft", self.worker)
+        self.assertIn(":(exclude).flow", self.worker)
 
     def test_worker_has_flow_integrity_and_scoped_rollback(self) -> None:
         self.assertIn("rollback-plan", self.worker)

@@ -21,6 +21,7 @@ import pathlib
 import re
 import shutil
 import subprocess
+import sys
 import unittest
 
 # Gate-relevant env keys the tests control. We SCRUB these from the inherited OS
@@ -70,6 +71,13 @@ def _extract_bash_func(text: str, func_name: str) -> str:
 
 
 @unittest.skipUnless(shutil.which("bash"), "bash required to execute gate predicates")
+@unittest.skipIf(
+    sys.platform == "win32",
+    "POSIX-shell gate predicates: the host agent runs them under Git-bash, but "
+    "executing the extracted multi-line predicate via a Python subprocess + a "
+    "constructed env on the Windows runner tests bash plumbing, not gate logic. "
+    "Fully exercised on macOS + ubuntu; the prose-contract tests run on Windows.",
+)
 class CodexDelegationGateExecution(unittest.TestCase):
     """Execute the shipped gate predicates under controlled env."""
 

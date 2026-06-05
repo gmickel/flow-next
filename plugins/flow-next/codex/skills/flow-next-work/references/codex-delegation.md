@@ -257,26 +257,24 @@ local`) — the worker runs standard in-session implementation, unchanged.
 
 ### The `codex exec` invocation (lifted; gpt-5.5/medium defaults)
 
-The worker derives `$SANDBOX_FLAG` from the host-passed `DELEGATE_SANDBOX`
-(`work.delegateSandbox`): **yolo** → `--dangerously-bypass-approvals-and-sandbox`
-(full access incl. network, needed to run tests / install deps); **full-auto** →
-`-s workspace-write` (tighter blast radius, no network). **Never emit the
-deprecated `--full-auto` label** — it is not a valid `codex exec` flag in 0.136.0
-and warns since 0.130.0; emit `-s workspace-write` for the full-auto mode.
+Pick the sandbox flag from the host-passed `DELEGATE_SANDBOX`
+(`work.delegateSandbox`) and **inline the LITERAL flag into the launched command**
+— do NOT pass a `$SANDBOX_FLAG` variable. The `ralph-guard.py` hook inspects the
+RAW command text *before* shell expansion, so a `$VAR` token reads as
+non-canonical and is BLOCKED; the allowlist only admits the literal sandbox flags:
+- **yolo** (default) → `--dangerously-bypass-approvals-and-sandbox` (full access incl. network, needed to run tests / install deps)
+- **full-auto** → `-s workspace-write` (tighter blast radius, no network)
+
+**Never emit the deprecated `--full-auto` label** — it is not a valid `codex exec`
+flag in 0.136.0 and warns since 0.130.0; emit `-s workspace-write` for full-auto.
 
 ```bash
-SANDBOX_MODE="<DELEGATE_SANDBOX>" # yolo | full-auto (from host consent)
-if [ "$SANDBOX_MODE" = "full-auto" ]; then
- SANDBOX_FLAG="-s workspace-write"
-else
- SANDBOX_FLAG="--dangerously-bypass-approvals-and-sandbox" # yolo (default)
-fi
-
+# yolo (default) — substitute the `-s workspace-write` line for full-auto:
 FLOW_DELEGATE_CODEX=1 codex exec \
  --ignore-user-config \
  -m "<DELEGATE_MODEL>" \
  -c 'model_reasoning_effort="<effective_effort>"' \
- $SANDBOX_FLAG \
+ --dangerously-bypass-approvals-and-sandbox \
  --output-schema "<scratch-dir>/result-schema.json" \
  -o "<scratch-dir>/result-batch-<n>.json" \
  - < "<scratch-dir>/prompt-batch-<n>.md"
@@ -543,14 +541,18 @@ Only **non-`.flow/`** dirtiness counts as "dirty". A multi-task run with
 ```bash
 # AFTER codex exec (and after poll DONE): assert Claude still owns git.
 if [ "$(git rev-parse HEAD)" != "$BASE_COMMIT" ]; then
- # Codex committed (yolo sandbox can run git). Un-commit, keep the diff:
- git reset --soft "$BASE_COMMIT"
- # → then scoped rollback (below) → classify as failure → DISABLE delegation.
+ # Codex committed (yolo sandbox can run git). This is an enforcement failure →
+ # force ACTION=rollback_and_disable, then run the scoped rollback below (which
+ # un-commits with `--mixed` + reverts tracked from BASE) → DISABLE delegation.
+ ACTION=rollback_and_disable
 fi
 ```
 
 A committed Codex change is invisible to the `git status` cross-check, so this
-assertion is the real "Claude owns all git" guard.
+assertion is the real "Claude owns all git" guard. **Do not `git reset --soft`
+here** — `--soft` leaves Codex's diff *staged*, and the tracked rollback's
+`git checkout` restores from the index, so the forbidden diff would survive. The
+scoped rollback below uses `--mixed` + a BASE-tree checkout instead.
 
 ### Safety — non-scratch `.flow/` integrity (snapshot + restore)
 
@@ -584,8 +586,15 @@ $FLOWCTL codex rollback-plan --repo-root . \
  --post-untracked-file "$SCRATCH/post-untracked.txt" --json > "$SCRATCH/plan.json"
 # → { rollback_paths: [...sanitized repo-relative FILE paths...], rejected: [...] }
 
-# Roll back (only when class is a failure / partial-discard):
-git checkout -- <tracked paths> # tracked-only revert (never untracked)
+# Roll back (only when class is a failure / partial-discard). Restore TRACKED
+# files AUTHORITATIVELY from BASE_COMMIT — never from the index, the result JSON,
+# or files_modified (a missing/malformed/non-zero result has no trustworthy file
+# list, yet Codex may have edited tracked files). `--mixed` un-commits + unstages
+# (so a yolo commit / `git add` can't survive the index-restore); the tracked
+# checkout then reverts the worktree from the BASE tree. `:(exclude).flow` keeps
+# host-owned .flow/ untouched (its integrity is the snapshot/restore above).
+git reset --mixed "$BASE_COMMIT"
+git checkout -- . ':(exclude).flow' # tracked-only revert from BASE (never untracked)
 
 # MANDATORY non-empty guard — NEVER let `git clean` run with an empty path list.
 # If EVERY new path was rejected (all .flow/**, backslash, absolute, traversal,

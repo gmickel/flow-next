@@ -129,7 +129,10 @@ THIS task's implementation to `codex exec`:
    + the XML-tagged `prompt-batch-<n>.md`, pick the per-batch effort (floored at
    `DELEGATE_EFFORT_FLOOR`), and **launch `codex exec` via the Bash
    `run_in_background` tool parameter** (NOT shell `&`) using `DELEGATE_MODEL` +
-   the derived `$SANDBOX_FLAG` (from `DELEGATE_SANDBOX`).
+   the **literal** sandbox flag inlined from `DELEGATE_SANDBOX` (yolo →
+   `--dangerously-bypass-approvals-and-sandbox`, full-auto → `-s workspace-write`).
+   Inline the literal flag — NOT a `$SANDBOX_FLAG` variable: ralph-guard inspects
+   the raw pre-expansion command and only allowlists the literal sandbox flags.
 3. **Poll the result file in separate FOREGROUND Bash calls** (non-empty AND
    `jq -e .` parseable) until DONE, then classify + cross-check + enforce
    git/`.flow` ownership against `BASE_COMMIT`, and either commit (Phase 3),
@@ -143,12 +146,23 @@ THIS task's implementation to `codex exec`:
      --result "$SCRATCH/result-batch-1.json" --exit "$CODEX_EXIT" --json)"
    ACTION="$(printf '%s' "$CLASS_JSON" | jq -r '.action')"
 
-   # Git-ownership assertion — Codex must NOT have committed (yolo can run git):
+   # Git-ownership assertion — a moved HEAD means Codex committed (yolo can run
+   # git); that is ALWAYS an enforcement failure → force a rollback + disable.
    if [ "$(git rev-parse HEAD)" != "$BASE_COMMIT" ]; then
-     git reset --soft "$BASE_COMMIT"   # un-commit, keep the diff; then roll back + disable
+     ACTION=rollback_and_disable
    fi
 
-   # Scoped rollback (on a failure / partial-discard) — NEVER bare `git clean`:
+   # On a rollback action, restore TRACKED files AUTHORITATIVELY from BASE_COMMIT —
+   # never from the index, the result JSON, or files_modified (a missing/malformed
+   # result has none). `--mixed` un-commits AND unstages, so a yolo `git commit` /
+   # `git add` can't survive `checkout`'s index-restore; the tracked checkout then
+   # reverts the worktree from the BASE tree. Excludes host-owned `.flow/`.
+   if [ "$ACTION" = rollback ] || [ "$ACTION" = rollback_and_disable ]; then
+     git reset --mixed "$BASE_COMMIT"
+     git checkout -- . ':(exclude).flow'
+   fi
+
+   # Scoped UNTRACKED cleanup (on a failure / partial-discard) — NEVER bare `git clean`:
    $FLOWCTL codex rollback-plan --repo-root . \
      --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
      --post-untracked-file "$SCRATCH/post-untracked.txt" --json > "$SCRATCH/plan.json"
