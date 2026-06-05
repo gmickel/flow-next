@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow QA"
+  short_description: "Live-app real-user QA pass derived from the spec — drives the running app, files P0/P1/P2 findings, emits a YES/NO verdict"
+  brand_color: "#3B82F6"
+policy:
+  allow_implicit_invocation: false

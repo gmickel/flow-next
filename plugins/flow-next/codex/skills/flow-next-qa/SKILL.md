@@ -2,7 +2,7 @@
 name: flow-next-qa
 description: Live-app real-user QA pass derived from the spec. Drives the running app via flow-next-drive, derives scenarios from the spec's AC / R-IDs / boundaries, files structured P0/P1/P2 findings with evidence, and ends with a YES/NO ship verdict receipt. Triggers on /flow-next:qa with a spec id. FORBIDDEN from marking PASS by reading source — the verdict rests on captured evidence from the live app, never on agent narration.
 user-invocable: false
-allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
+allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 ---
 
 # /flow-next:qa — live-app real-user QA pass
@@ -22,11 +22,14 @@ The differentiator vs spec-less QA tools is **the spec is the source of intent**
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks (here and in `workflow.md`) use `$FLOWCTL`. Subagents that run in fresh context fall back to the repo-local copy:
 
 ```bash
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+FLOWCTL="$HOME/.codex/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — runs on the host agent, not a forked subagent, because the **prepare** phase must ask the user for undocumented facts (target URL / test account — info-only, never a confirm gate) and a forked subagent cannot ask the user back (Claude Code issues #12890, #34592). The host asks via `AskUserQuestion`. (sync-codex.sh rewrites any `AskUserQuestion` to a plain-text numbered prompt in the Codex mirror.)
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+**Inline skill (no `context: fork`)** — runs on the host agent, not a forked subagent, because the **prepare** phase must ask the user for undocumented facts (target URL / test account — info-only, never a confirm gate) and a forked subagent cannot ask the user back (Claude Code issues #12890, #34592). The host asks via `plain-text numbered prompt`.
 
 ## Mode Detection
 
@@ -38,15 +41,15 @@ SPEC_ID=""
 
 set -- $RAW_ARGS
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --) shift; break ;;
-    -*) echo "Unknown flag: $1 (reserved for a later task)" >&2; shift ;;
-    *)  [[ -z "$SPEC_ID" ]] && SPEC_ID="$1"; shift ;;
-  esac
+ case "$1" in
+ --) shift; break ;;
+ -*) echo "Unknown flag: $1 (reserved for a later task)" >&2; shift ;;
+ *) [[ -z "$SPEC_ID" ]] && SPEC_ID="$1"; shift ;;
+ esac
 done
 ```
 
-When `SPEC_ID` is empty, the **discover** phase resolves it (branch-match or an `AskUserQuestion` info prompt) — never silently default.
+When `SPEC_ID` is empty, the **discover** phase resolves it (branch-match or an `plain-text numbered prompt` info prompt) — never silently default.
 
 Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected in workflow.md §AUTONOMY — the skill is **aware but not Ralph-blocked** (R11). The deep autonomy routing (autonomous when target URL + accounts are configured; receipt path resolution) is owned by a downstream task; the skeleton only lays the section anchor.
 
