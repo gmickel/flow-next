@@ -45,7 +45,8 @@ Ship the cross-platform mirror, docs, and version bump — the final integration
 - [ ] Full gate green (lint/typecheck/tests including parity + codex-mirror smoke); `~/work/flow-next.dev` updated in the same workstream (work page + docs-site changelog + version bump, `pnpm build` green) and committed separately in that repo.
 
 ## Done summary
-_(pending implementation)_
-
+Shipped fn-55's final integration: regenerated the Codex mirror (worker.toml, phases.md, references/codex-delegation.md — codex exec intact, byte-idempotent), extended scripts/bump.sh to also bump the previously-stale .agents/plugins/marketplace.json, ran the minor version bump to 1.7.0 (all four version surfaces consistent), and documented the opt-in Codex delegation across flowctl.md (6 work.delegate* keys), ralph.md (autonomous-delegation section), CLAUDE.md (carve-out), README, docs/README index, CHANGELOG, work.md argument-hint, and the parity-guarded usage.md pair. RP impl-review (spec-wide base) returned SHIP after one NEEDS_WORK fix correcting the documented activation value (work.delegate=codex, not bool true).
 ## Evidence
-_(pending implementation)_
+- Commits: f4a0e70, 378a57a, c654ff3
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (966 passed, 2 skipped), python3 -m unittest plugins.flow-next.tests.test_dogfood_template_parity plugins.flow-next.tests.test_work_delegate_config, bash scripts/sync-codex.sh (idempotent; md5-of-md5sums stable), bash -n scripts/bump.sh
+- PRs:
