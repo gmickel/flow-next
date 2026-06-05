@@ -158,10 +158,65 @@ Scenarios carry forward to Phase 3 (prepare) and Phase 4 (execute). At least one
 
 ## Phase 3: prepare
 
-<!-- OWNER: fn-53.3 — accounts, session hygiene, device matrix; BRB lean-borrow reference.
-     Fill the body below. Do NOT edit sibling phase sections. -->
+<!-- OWNER: fn-53.3 — accounts, session hygiene, device matrix; BRB lean-borrow reference. -->
 
-**Goal:** make the live app driveable — resolve the target URL / app, test accounts, session hygiene (stale storage, persona suffixing), and the device matrix (viewport set). Ask the user when undocumented (R7). *(Skeleton anchor — implemented in fn-53.3.)*
+**Goal:** make the live app driveable before Phase 4 touches it — resolve the **target URL / app**, **test accounts**, **session hygiene**, and the **device matrix** (one desktop + one mobile viewport). The QA discipline this phase applies (the five hygiene rules, persona suffixing, the write-path-first / one-tab-per-shard caution) is the lean BRB borrow in **[references/qa-discipline.md](references/qa-discipline.md)** — read it before preparing. Ask the user (`AskUserQuestion`, info-only — never a confirm gate) when the URL or accounts are undocumented (R7). Under Ralph, an undocumented URL / accounts is a hard limitation → BLOCKED (Phase A), not a prompt.
+
+**Driving stays fn-51's job.** This phase resolves *what to drive and as whom*; the concrete commands (set viewport, clear storage, save/load auth state) live in fn-51's references — point at them, never duplicate the prose:
+
+- Viewport + screenshot: `flow-next-drive/references/commands.md` (`agent-browser set viewport W H`, `agent-browser screenshot …`)
+- Per-session isolation (`--session`): `flow-next-drive/references/session-management.md`
+- Auth / state persistence (`state save` / `state load`, header auth): `flow-next-drive/references/auth.md`
+
+### 3.1 — Resolve the target URL / app
+
+Find the live target a real user would hit, in this priority order. Stop at the first that resolves; do **not** silently default to `localhost`:
+
+1. **Caller override** — a `--target <url>` flag or a `QA_TARGET_URL` env var, when present.
+2. **Spec signal** — a deploy URL named in `spec.spec_sections.architecture_overview` / `goal_and_context` (Phase 1's payload).
+3. **Repo signal** — a deploy URL in `README`, `.env.example`, or a deploy config (Vercel / Netlify / Cloudflare); or a documented dev-server URL + start command for a localhost run.
+4. **Ask the user** (`AskUserQuestion`, info prompt — *"What URL should I QA — a live deploy or a local dev server?"*). Under Ralph this is a hard limitation → BLOCKED.
+
+A target the driver cannot reach (no live deploy, no localhost app started) is **not** a Phase 3 failure — it carries forward to the Phase 6 **BLOCKED** outcome (R13 graceful surface), never a fabricated PASS.
+
+### 3.2 — Resolve test accounts (ask when undocumented)
+
+Most scenarios beyond the public happy path need credentials. Resolve them before authoring auth-dependent steps:
+
+1. Look for a documented playbook — auth-provider dev mode, a seed script (`scripts/seed-*`, `db/seeds/`, `supabase/seed.sql`), fixtures (`__fixtures__/`, `test-data/`), or a `.env.test.example`.
+2. If none is documented, **ask the user** (`AskUserQuestion`, info prompt): the auth provider / dev-user docs, an admin account (or permission to create one), and the per-run email-suffix convention. Offer to document the convention as part of the pass.
+3. **Never guess credentials**, and never commit a password to the repo — record only the email pattern + role; pass secrets via the existing chat / vault. (Provider fixtures like Clerk's `424242` OTP or Stripe's `4242…` test card are out of this lean borrow's scope — reach for the provider's docs when a flow needs one.)
+
+Generate fresh-user personas with the collision-proof suffix from `qa-discipline.md` — `qa-<persona>+run<MMDD>-<N>@example.com` (`example.com` never sends real mail; bump `N` on every retry).
+
+### 3.3 — Session hygiene (the fresh-user contract)
+
+Apply the **five hygiene rules** from [references/qa-discipline.md](references/qa-discipline.md) — they are the highest-dividend borrow:
+
+1. **Fresh user = fresh storage** — clear `localStorage` + `sessionStorage` **and** cookies before any fresh-user scenario (cookies alone are not enough; storage outlives a logout).
+2. **One session per agent** — isolate via agent-browser `--session <name>`; if isolation can't be guaranteed, run sequentially.
+3. **Cool-down between auth attempts** (~30s; on a 429 → BLOCKED, do not retry-spam).
+4. **Unique persona per scenario** (bump the `+run…-N` suffix on retry — a reused failed email leaves the provider stuck).
+5. **Reset between role changes** — full sign-out + storage clear + tab reset, not just "click sign out".
+
+Run the **pre-scenario hygiene checklist** (qa-discipline.md) for each scenario; the exact storage-clear / auth commands are fn-51's (`auth.md`, `session-management.md`). If, with perfect hygiene, behavior still depends on unpredictable prior session state, **that is the bug** — file it (typically P1), capturing the storage snapshot before clearing as evidence.
+
+### 3.4 — Device matrix (v1 = viewport emulation only)
+
+v1 covers **one desktop + one mobile viewport** via fn-51's web ladder — viewport **emulation**, not real-device / cross-device testing (the spec's planning decision; true device coverage inherits fn-51's surface support later):
+
+| Mode | Reference viewport | Set via (fn-51) |
+|------|--------------------|-----------------|
+| Desktop | `1280 × 800` | `agent-browser set viewport 1280 800` |
+| Mobile | `375 × 812` | `agent-browser set viewport 375 812` |
+
+Lead with the app's **primary** target: take it from the spec; if the spec is silent, ask the user which mode matters most; if the user is unavailable (e.g. Ralph), infer the likely primary from repo signals (responsive CSS / framework defaults / marketing copy) and **note the assumption** in the run notes. Record the chosen viewports against each scenario so Phase 4 drives at the right size and the evidence tuple's `viewport` field is accurate. Layout / overflow / tap-target bugs hide at the breakpoint you skip — run the relevant scenarios at **both** viewports, not just the primary.
+
+### 3.5 — Write-path-first ordering
+
+When a later scenario reads data an earlier scenario creates (a group, org, workspace, invite), order the **write path first** so the artifact exists before any scenario that reads it; record the created IDs / invite URLs in the run notes for reuse. This is the caution in `qa-discipline.md` — v1 runs scenarios sequentially with one host agent, so it is an ordering rule, not a parallel coordinator. For any write path, Phase 4 must verify the **server / DB row or API response** (the write-side-effect evidence in [references/bug-filing.md](references/bug-filing.md)) — never trust the optimistic UI render.
+
+After Phase 3, each scenario carries: its persona (+ suffix), its viewport(s), its fresh-vs-returning storage requirement, and the resolved target URL — everything Phase 4 needs to drive it via the fn-51 read-and-drive contract.
 
 ---
 
