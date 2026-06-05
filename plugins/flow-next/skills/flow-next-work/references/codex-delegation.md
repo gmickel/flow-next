@@ -328,8 +328,11 @@ does not ship.
 
 **Launch as a separate Bash call with the `run_in_background` tool parameter**
 (NOT shell `&`). The `run_in_background` PARAMETER is what removes the 2-minute
-foreground ceiling — `codex exec` on a real task routinely exceeds it. Redirect
-both streams to scratch logs so the background call is self-contained.
+foreground ceiling — `codex exec` on a real task routinely exceeds it. The
+parameter captures the command's stdout/stderr on its own — do **NOT** add a
+shell `>` / `2>&1` redirect: the `ralph-guard` allowlist bans output redirects as
+a smuggling vector (a redirected launch would be blocked in Ralph), and the `-o`
+result file — not stdout — is the proof-of-work contract.
 
 Then **poll the result file in separate FOREGROUND Bash calls** (keeps the turn
 active, so the working tree can't be touched mid-run). DONE only when the file is

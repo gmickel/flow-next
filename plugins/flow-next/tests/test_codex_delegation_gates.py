@@ -16,11 +16,25 @@ disambiguation-from-the-review-backend tokens — across the canonical Claude
 
 from __future__ import annotations
 
+import os
 import pathlib
 import re
 import shutil
 import subprocess
 import unittest
+
+# Gate-relevant env keys the tests control. We SCRUB these from the inherited OS
+# env so only the per-test overrides decide eligibility — while keeping the rest
+# of the env (PATH, and on Windows Git-bash SYSTEMROOT/WINDIR) so bash and the
+# gate's `env | grep` actually run. A bare custom env strips those and breaks
+# bash on Windows (every gate test fails rc=1). `OPENCODE_*` is matched by prefix.
+_GATE_ENV_KEYS = (
+    "CLAUDECODE",
+    "CODEX_SANDBOX",
+    "CODEX_SANDBOX_NETWORK_DISABLED",
+    "DROID_PLUGIN_ROOT",
+    "OPENCODE",
+)
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -69,9 +83,19 @@ class CodexDelegationGateExecution(unittest.TestCase):
         """Source the extracted function, call it, return its exit code."""
         script = f"set -u\n{func_def}\n{call}\n"
         # Start from a clean env so only the keys we set are present.
+        # Inherit the OS env (PATH for bash + env/grep; SYSTEMROOT/WINDIR on
+        # Windows Git-bash) but scrub every gate-relevant key first, then apply
+        # the per-test overrides — so the env stays controlled without stripping
+        # the vars bash needs to start.
+        full_env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in _GATE_ENV_KEYS and not k.startswith("OPENCODE_")
+        }
+        full_env.update(env)
         proc = subprocess.run(
             ["bash", "-c", script],
-            env=env,
+            env=full_env,
             capture_output=True,
             text=True,
         )
