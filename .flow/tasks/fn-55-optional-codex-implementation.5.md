@@ -36,7 +36,8 @@ Make delegation Ralph-safe and close the proof-of-work loop: the host-owned circ
 - [ ] Test suite green.
 
 ## Done summary
-_(pending implementation)_
-
+Made Codex implementation-delegation Ralph-safe and closed the proof-of-work loop for fn-55: amended ralph-guard.py to allow ONLY a strict tokenized (shlex/argv) canonical delegation shape — hardened across a 5-cycle impl-review against shell-chaining, quoted-flag smuggling, arbitrary -c MCP overrides, path traversal, and -m --last bypasses (RALPH_GUARD_VERSION 0.14.0 -> 0.15.0). Wired the host-owned circuit breaker (worker emits terminal DELEGATION_RESULT/ACTION; host counts to 3 / immediate-disable on rollback_and_disable / reset on commit), the REVIEW_MODE=none verification backstop, inline evidence.delegation, and AI-Orchestrator/AI-Implementer commit-trailer attribution into worker.md / phases.md / codex-delegation.md, with a 71-test regression suite wired into CI.
 ## Evidence
-_(pending implementation)_
+- Commits: 5ccf189, 370431c, 66a8c08, 0be0db0, 5097af6, 4d72359
+- Tests: python3 plugins/flow-next/tests/test_ralph_guard_codex_delegation.py (71 tests), python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (966 tests, 2 skipped)
+- PRs:
