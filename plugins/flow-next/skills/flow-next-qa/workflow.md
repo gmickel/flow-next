@@ -298,7 +298,9 @@ QA never emits `MAJOR_RETHINK` — it is a valid enum member the guard accepts, 
 
 ### 6.3 — Write the `qa_verdict` receipt (direct write — the make-pr pattern)
 
-QA has **no review-backend subprocess**, so the receipt is written **directly** (the make-pr / impl-review-RP idiom — `cat > … <<EOF`), **not** via a `flowctl <backend> validate --receipt` path. Resolve the path from the caller (`--receipt` flag or `REVIEW_RECEIPT_PATH`) else default to the committed `.flow/review-receipts/qa-<spec-id>.json`; `mkdir -p` the parent first.
+QA has **no review-backend subprocess**, so the receipt is written **directly** (the make-pr / impl-review-RP precedent — write the JSON yourself, **not** via a `flowctl <backend> validate --receipt` path). Resolve the path from the caller (`--receipt` flag or `REVIEW_RECEIPT_PATH`) else default to the committed `.flow/review-receipts/qa-<spec-id>.json`; `mkdir -p` the parent first.
+
+**Build the JSON with `python3`, not a `cat <<EOF` heredoc.** `blocked_reason` / `na_reason` are free-form strings the agent fills from observed state (e.g. a driver error message) — raw shell interpolation into JSON would emit malformed output (or allow field injection) the moment a reason contains a quote, backslash, or newline. Passing the values as `os.environ` and serializing with `json.dump` escapes them correctly:
 
 ```bash
 # QA_OUTCOME ∈ {SHIP,NEEDS_WORK,NA,BLOCKED} from §6.1; project to the enum (§6.2).
@@ -310,20 +312,36 @@ case "$QA_OUTCOME" in
   *) echo "Internal error: bad qa_outcome '$QA_OUTCOME'" >&2; exit 1 ;;
 esac
 
-# MODE: ralph (REVIEW_RECEIPT_PATH set) | rp (--receipt passed) | interactive (default).
+# MODE describes the run context (informational; the guard does not gate on it):
+#   ralph (REVIEW_RECEIPT_PATH set) | rp (--receipt passed) | interactive (default).
+if   [ -n "${REVIEW_RECEIPT_PATH:-}" ]; then MODE="ralph"
+elif [ -n "${QA_RECEIPT_OVERRIDE:-}" ]; then MODE="rp"
+else MODE="interactive"; fi
+
 RECEIPT_PATH="${QA_RECEIPT_OVERRIDE:-${REVIEW_RECEIPT_PATH:-$REPO_ROOT/.flow/review-receipts/qa-$SPEC_ID.json}}"
 mkdir -p "$(dirname "$RECEIPT_PATH")"
-TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-# OPEN_P0P1 = JSON array of finding ids that are open P0/P1 (from Phase 5); "[]" when none.
-# Optional reason fields: set ONLY for their outcome (BLOCKED → blocked_reason, NA → na_reason).
-EXTRA=""
-[ "$QA_OUTCOME" = "BLOCKED" ] && EXTRA=",\"blocked_reason\":\"$BLOCKED_REASON\""
-[ "$QA_OUTCOME" = "NA" ]      && EXTRA=",\"na_reason\":\"$NA_REASON\""
+# OPEN_P0P1 = JSON array literal of open-P0/P1 finding ids from Phase 5; default "[]".
+# Reason fields are set ONLY for their outcome (BLOCKED → blocked_reason, NA → na_reason);
+# leave the others empty so python omits them.
+export QA_TYPE="qa_verdict" QA_ID="$SPEC_ID" QA_MODE="$MODE" QA_VERDICT="$VERDICT" \
+       QA_OUTCOME OPEN_P0P1="${OPEN_P0P1:-[]}" \
+       BLOCKED_REASON="${BLOCKED_REASON:-}" NA_REASON="${NA_REASON:-}"
 
-cat > "$RECEIPT_PATH" <<EOF
-{"type":"qa_verdict","id":"$SPEC_ID","mode":"$MODE","verdict":"$VERDICT","qa_outcome":"$QA_OUTCOME","open_p0p1":${OPEN_P0P1:-[]}$EXTRA,"timestamp":"$TS"}
-EOF
+python3 - "$RECEIPT_PATH" <<'PY'
+import datetime, json, os, sys
+r = {"type": os.environ["QA_TYPE"], "id": os.environ["QA_ID"],
+     "mode": os.environ["QA_MODE"], "verdict": os.environ["QA_VERDICT"],
+     "qa_outcome": os.environ["QA_OUTCOME"],
+     "open_p0p1": json.loads(os.environ["OPEN_P0P1"] or "[]")}
+if os.environ["QA_OUTCOME"] == "BLOCKED" and os.environ.get("BLOCKED_REASON"):
+    r["blocked_reason"] = os.environ["BLOCKED_REASON"]   # json.dump escapes free-form text
+if os.environ["QA_OUTCOME"] == "NA" and os.environ.get("NA_REASON"):
+    r["na_reason"] = os.environ["NA_REASON"]
+r["timestamp"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+with open(sys.argv[1], "w", encoding="utf-8") as fh:
+    json.dump(r, fh); fh.write("\n")
+PY
 echo "QA_VERDICT_WRITTEN: $RECEIPT_PATH ($QA_OUTCOME → $VERDICT)"
 ```
 
