@@ -1576,7 +1576,8 @@ if [[ -n "$PR_URL" ]] \
   #   linear → rich attachment via attachmentLinkURL (GraphQL rung) + optional breadcrumb comment;
   #            the §4.6a body ref already enabled the auto-link + Diffs.
   #   github → native `Refs #N` (github.md).
-  # No-ops if the spec has no linked tracker id / no transport reachable.
+  # Unlinked spec → flow-first push (create + link) first, then link the PR / Diff
+  # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable.
   # Best-effort — the PR is already open; a tracker failure must NOT exit non-zero.
   # Under Ralph, framing routes to stderr (keeps the PR_URL=<url> stdout invariant).
   :

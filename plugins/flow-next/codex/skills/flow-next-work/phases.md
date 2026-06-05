@@ -212,8 +212,9 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
  && [ "$($FLOWCTL config get tracker.perEvent.work.firstClaim --json | jq -r '.value')" != "null" ]; then
  # Invoke the flow-next-tracker-sync skill: move the linked issue In-Progress.
  # skill: flow-next-tracker-sync (operation: push <spec-id>, status-only)
- # The skill no-ops cleanly if this spec has no linked tracker id, if no transport
- # is reachable, or in Ralph mode it queues/records a receipt — never blocks.
+ # Unlinked spec → the skill flow-first-pushes (creates + links the issue) first,
+ # then moves it In-Progress (tracker-sync §Phase 3 create-if-unlinked). No-op only
+ # if no transport is reachable; in Ralph mode it queues/records a receipt — never blocks.
  :
 fi
 ```
@@ -264,7 +265,8 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
  # Invoke the flow-next-tracker-sync skill: append a lifecycle comment to the
  # linked issue carrying the task's done-summary + evidence (tests / commits / PR).
  # skill: flow-next-tracker-sync (operation: comment <spec-id>)
- # No-ops if the spec has no linked tracker id / no transport reachable; Ralph queues.
+ # Unlinked spec → flow-first push (create + link) first, then comment
+ # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport; Ralph queues.
  :
 fi
 ```
@@ -385,7 +387,8 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
  # (status who-wins — tracker wins `done`/`verified`, R7) and post the verdict +
  # R-ID coverage as a comment.
  # skill: flow-next-tracker-sync (operation: push <spec-id>, status + verdict comment)
- # No-ops if the spec has no linked tracker id / no transport; Ralph queues.
+ # Unlinked spec → flow-first push (create + link) first, then status + verdict
+ # comment (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport; Ralph queues.
  :
  fi
  ```

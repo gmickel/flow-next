@@ -2,6 +2,15 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.9.0] - 2026-06-06
+
+### Added
+- **Cursor local-plugin install support — `./scripts/install-cursor.sh`.** Cursor ships its own plugin namespace (`.cursor-plugin/plugin.json`) and does **not** read Claude Code plugins the way Grok Build does, so flow-next now carries a Cursor-native manifest plus a one-shot installer. The script `rsync`s `plugins/flow-next/` into `~/.cursor/plugins/local/flow-next` as a **real directory** (Cursor's plugin loader rejects symlinks that escape `~/.cursor`), excludes the Codex mirror / tests / `__pycache__` / `*.pyc` / `.DS_Store`, is idempotent (re-run to update), and prints next steps. Verified end-to-end: skills, commands, and **multi-agent scout fan-out** all work; `flowctl` resolves via `.flow/bin/flowctl` (Cursor exposes no plugin-root env var, so the host agent adapts). New manifest: [`plugins/flow-next/.cursor-plugin/plugin.json`](plugins/flow-next/.cursor-plugin/plugin.json) (`commands` path-override points at the nested `./commands/flow-next` dir).
+  - **Documented caveats** (cosmetic + one hard limit): no plugin card in Cursor's plugin list and slash-menu autocomplete under-lists `flow-next:*` skills (both cosmetic — commands run when typed), and **Ralph autonomous mode is unsupported** — Cursor's hook schema (`afterFileEdit` / `beforeShellExecution`) doesn't map to Claude's `PreToolUse` + `Bash|Execute` matchers the Ralph guard relies on. Full matrix + caveats in [`docs/platforms.md`](plugins/flow-next/docs/platforms.md#cursor-local-plugin); README status table updated.
+
+### Fixed
+- **Tracker-sync: a lifecycle event on an *unlinked* spec now flow-first-pushes (create issue + link) before reconciling/commenting, instead of silently no-opping.** When the bridge was active and a user started a spec with `/flow-next:plan` (or any lifecycle touchpoint) on a spec that had no `tracker.id`, the touchpoint no-op'd — so the issue was never created and the spec stayed orphaned from the tracker. Only `capture` flow-first-pushed; everything else (`plan` / `interview` / `work.*` / `makePr` / `resolvePr` / `completionReview`) skipped. Observed dogfooding in both Cursor and Codex: `/flow-next:plan` produced a local spec with no Linear issue. Fixed with a single **create-if-unlinked** rule in the [`flow-next-tracker-sync`](plugins/flow-next/skills/flow-next-tracker-sync/steps.md) skill (Phase 3): any `push` / `reconcile` / `comment` routed for an unlinked spec runs the flow-first link first (`renderFlowToTracker` → create issue → `sync set-tracker-id`), then proceeds. `unlink` remains the only operation that no-ops on an unlinked spec. Every lifecycle touchpoint's prose updated to match (`plan` / `work` / `interview` / `make-pr` / `resolve-pr` + [`tracker-sync.md`](plugins/flow-next/docs/tracker-sync.md)); a touchpoint now no-ops **only** when no transport is reachable. Codex mirror regenerated.
+
 ## [flow-next 1.8.0] - 2026-06-05
 
 ### Added

@@ -1,6 +1,6 @@
 # Other Platforms
 
-Flow-next is a first-class citizen on Claude Code (canonical), OpenAI Codex (pre-built mirror), and Factory Droid (native cross-platform patterns). A community port exists for OpenCode. xAI **Grok Build** reads the Claude Code plugin with zero config — skills load, the `/flow-next:*` commands **run when typed** (hooks fire), and **multi-agent flows work** (a full `/flow-next:plan` fanned out all seven scouts, verified). Grok's UI just under-lists flow-next's commands/agents (cosmetic — they work when invoked); Ralph autonomous mode is the one piece still to validate (see [Grok Build](#grok-build-claude-code-compatibility) below).
+Flow-next is a first-class citizen on Claude Code (canonical), OpenAI Codex (pre-built mirror), and Factory Droid (native cross-platform patterns). A community port exists for OpenCode. xAI **Grok Build** reads the Claude Code plugin with zero config — skills load, the `/flow-next:*` commands **run when typed** (hooks fire), and **multi-agent flows work** (a full `/flow-next:plan` fanned out all seven scouts, verified). Grok's UI just under-lists flow-next's commands/agents (cosmetic — they work when invoked); Ralph autonomous mode is the one piece still to validate (see [Grok Build](#grok-build-claude-code-compatibility) below). **Cursor** runs flow-next too, via its own `.cursor-plugin/` local install (`./scripts/install-cursor.sh`) — skills, commands, and multi-agent flows verified; Ralph unsupported there (hook-schema mismatch). See [Cursor](#cursor-local-plugin) below.
 
 ## Install matrix
 
@@ -10,6 +10,7 @@ Flow-next is a first-class citizen on Claude Code (canonical), OpenAI Codex (pre
 | Factory Droid | `droid plugin marketplace add https://github.com/gmickel/flow-next && droid plugin install flow-next` (in Droid CLI) | `.claude-plugin/plugin.json` (Droid auto-translates Claude Code plugin format) | Native cross-platform patterns |
 | OpenAI Codex | `git clone https://github.com/gmickel/flow-next.git && cd flow-next && ./scripts/install-codex.sh` | `.codex-plugin/plugin.json` | Pre-built mirror under `plugins/flow-next/codex/` |
 | Grok Build (xAI) | Auto-discovered if installed in Claude Code (run `grok inspect`); or add `gmickel/flow-next` as a `[[marketplace.sources]]` entry. **Not** `grok plugin install <repo>`. | `.claude-plugin/plugin.json` (read via Claude Code compat) | **Works incl. multi-agent** (full `/flow-next:plan` scout fan-out verified). UI under-lists commands/agents (cosmetic); Ralph TBD — see below |
+| Cursor | `./scripts/install-cursor.sh` (copies to `~/.cursor/plugins/local/`) | `.cursor-plugin/plugin.json` (Cursor's own namespace — does NOT read `.claude-plugin/`) | **Works incl. multi-agent** (verified). No plugin card + autocomplete under-list (cosmetic); **Ralph unsupported** (hook-schema mismatch) — see below |
 | OpenCode | See [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) | n/a | Community port |
 
 > The canonical install path on Claude Code is the marketplace. Direct `--plugin-dir` (`claude --plugin-dir ./plugins/flow-next`) is the development path.
@@ -171,6 +172,32 @@ chmod +x .flow/bin/flowctl
 - **Ralph autonomous mode — not yet validated.** The verified run was interactive multi-agent work; Ralph's hook-gated `Stop`/`SubagentStop` loop hasn't been exercised under Grok. Hooks load and fire; the autonomous gating specifically is untested.
 
 > **Status (Grok 0.2.27 alpha):** skills load; `/flow-next:*` commands **run when typed** (hooks fire); MCP + `flowctl` resolve; and **multi-agent subagent dispatch works** — a full `/flow-next:plan` fanned out all seven scouts end-to-end. Caveat: Grok's autocomplete + `grok inspect` under-list flow-next's commands/agents (cosmetic — they work when invoked). Ralph autonomous mode is the one piece still to validate.
+
+## Cursor (local plugin)
+
+[Cursor](https://cursor.com) has its own plugin system in the `.cursor-plugin/` namespace and does **not** auto-read Claude Code's `.claude-plugin/` (unlike Grok). flow-next ships a `.cursor-plugin/plugin.json` + a local installer.
+
+### Install
+
+```bash
+git clone https://github.com/gmickel/flow-next.git
+cd flow-next
+./scripts/install-cursor.sh
+```
+
+The script copies the plugin into `~/.cursor/plugins/local/flow-next` as a **real directory** (NOT a symlink — Cursor's plugin loader rejects a symlink whose realpath escapes `~/.cursor/`), with the `.cursor-plugin/plugin.json` manifest (a `commands` path-override points Cursor at the nested `commands/flow-next/`). It excludes the Codex mirror + tests. It's a **snapshot — re-run after `git pull`** to update. Then **fully restart Cursor** (Cmd-Q, reopen — a new local plugin needs a full restart) and run `/flow-next:setup` in your project.
+
+### What works (verified)
+
+flow-next's **skills, commands, and subagents all register and run** on Cursor. A full `/flow-next:plan` run fanned out the scout subagents in parallel (Opus 4.8) and drove `flowctl` to create the spec + tasks end-to-end — the same multi-agent engine as Claude Code. `flowctl` resolves via `.flow/bin/flowctl` after `/flow-next:setup`: Cursor exposes **no plugin-root env var**, so the `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl` path is empty, but the project-local `.flow/bin/flowctl` + the `AGENTS.md` / `.flow/usage.md` instructions are what the agent uses (verified end-to-end).
+
+### Caveats
+
+- **No "plugin" card.** Cursor registers the individual skills/commands/agents (they appear in the `/` menu + skill/command/subagent lists), but flow-next does **not** show as a grouped plugin in the marketplace UI — cosmetic; the components work.
+- **Slash autocomplete under-lists** (same as Grok): `user-invocable: false` skills + the command wrappers don't populate the menu, but **run when typed in full**.
+- **Ralph autonomous mode is NOT supported.** Cursor's hook schema is `afterFileEdit` / `beforeShellExecution`; flow-next's hooks use Claude Code's `PreToolUse` / `Stop` + `Bash|Execute` matchers, which Cursor doesn't recognize — so the Ralph guard never fires. The interactive plan / work / review workflow is unaffected. (A future Cursor-format hook mirror could add it.)
+
+> **Status:** skills + commands + agents register and run; **multi-agent verified**; flowctl resolves post-`/flow-next:setup`. Cosmetic: no plugin card + autocomplete under-lists. Ralph unsupported (hook-schema mismatch).
 
 ## Windows + Copilot review backend
 

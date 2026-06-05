@@ -22,6 +22,7 @@
       "interview": "reconcile",
       "makePr": "comment",
       "plan": "reconcile",
+      "qa": "off",
       "resolvePr": "comment",
       "work": {
         "done": "comment",
