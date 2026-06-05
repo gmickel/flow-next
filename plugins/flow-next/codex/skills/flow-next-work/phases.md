@@ -132,6 +132,13 @@ pins the exact probes; the gate sequence is:
  `true`, else delegation stays silently off.
 5. **Input kind** — `INPUT_WAS_BARE_PROMPT != 1` (a promoted bare prompt is not
  eligible; decided on the ORIGINAL input, Phase 1).
+6. **Clean baseline (code tree)** — `git status --porcelain` shows **no non-`.flow/`
+ worktree changes**. Load-bearing: on a rollback the worker reverts tracked files
+ authoritatively from `BASE_COMMIT` (`git reset --mixed` + `git checkout -- .
+ ':(exclude).flow'`), which would ALSO discard PRE-EXISTING non-`.flow` edits a
+ dirty tree carried in. So a dirty code tree ⇒ delegation OFF (commit/stash first,
+ or run standard mode). Host-owned `.flow/` dirtiness (plan-sync edits, scratch)
+ is excluded and never trips this — only non-`.flow/` changes do.
 
 **Any gate failure → standard in-session mode for the rest of the run** (never
 blocks the worker). When all gates pass, the host resolves the per-task decision

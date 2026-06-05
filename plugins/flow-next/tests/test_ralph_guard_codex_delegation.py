@@ -482,6 +482,14 @@ class CanonicalDelegationHelperTestCase(unittest.TestCase):
 # ── Full hook end-to-end (subprocess — the production path) ───────────────────
 
 
+@unittest.skipIf(
+    sys.platform == "win32",
+    "Drives the shipped ralph-guard hook as a subprocess; the guard writes session "
+    "state to a hardcoded POSIX `/tmp/ralph-guard-*.json` path (a pre-existing "
+    "guard limitation, not fn-55) which errors on Windows → the hook exits 1. The "
+    "canonical-shape LOGIC is covered in-process by CanonicalDelegationHelperTestCase "
+    "on every platform; the end-to-end hook path runs on macOS + ubuntu.",
+)
 class HookEndToEndTestCase(unittest.TestCase):
     """Drive the SHIPPED hook entry point, not just the helper, so the wiring
     (codex section early-pass + the --last / copilot blocks staying intact) is
