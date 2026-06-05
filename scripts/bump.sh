@@ -54,6 +54,13 @@ if [[ "$TARGET" == "flow-next" || "$TARGET" == "all" ]]; then
     echo "flow-next (codex): $OLD -> $NEW"
   fi
 
+  # Update .cursor-plugin/plugin.json if it exists (Cursor local-install manifest)
+  CURSOR_PLUGIN="plugins/flow-next/.cursor-plugin/plugin.json"
+  if [[ -f "$CURSOR_PLUGIN" ]]; then
+    jq --arg v "$NEW" '.version = $v' "$CURSOR_PLUGIN" > tmp.json && mv tmp.json "$CURSOR_PLUGIN"
+    echo "flow-next (cursor): $OLD -> $NEW"
+  fi
+
   # Update marketplace.json flow-next plugin version
   jq --arg v "$NEW" '(.plugins[] | select(.name == "flow-next")).version = $v' "$MARKETPLACE" > tmp.json && mv tmp.json "$MARKETPLACE"
 
