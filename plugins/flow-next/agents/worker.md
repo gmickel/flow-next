@@ -198,11 +198,37 @@ Task: <TASK_ID>"
 
 Use conventional commits. Scope from task context.
 
+**Mixed-model attribution — ONLY on a delegated commit (`DELEGATE: codex` AND
+Codex wrote this commit's code).** Append these two trailers so `/flow-next:make-pr`
+can credit both models. Put them in their own paragraph (blank line before the
+`Task:` trailer) — `<model>` = `DELEGATE_MODEL`, `<effort>` = the per-batch
+`effective_effort` you ran (e.g. `gpt-5.5` / `medium`):
+
+```bash
+git commit -m "feat(<scope>): <description>
+
+- <detail>
+
+AI-Orchestrator: Claude
+AI-Implementer: codex <DELEGATE_MODEL> (<effective_effort>)
+
+Task: <TASK_ID>"
+```
+
+Do this ONLY when delegation actually produced the code. A standard in-session
+commit (no delegation, or a `partial` you finished locally) carries **no**
+`AI-Implementer` trailer — attribute honestly.
+
 ## Phase 4: Review (MANDATORY if REVIEW_MODE != none)
 
-**If REVIEW_MODE is `none`, skip to Phase 5.**
+**If REVIEW_MODE is `none`, skip to Phase 5.** (When `DELEGATE: codex` is also set,
+there is no independent impl-review gate, so Phase 5 below runs its own
+verification on the delegated diff — `verification_summary` from Codex is NOT
+trusted as the sole gate. See Phase 5.)
 
 **If REVIEW_MODE is `rp` or `codex`, you MUST invoke impl-review and receive SHIP before proceeding.**
+(On a delegated task this impl-review SHIP gate IS the independent check — do not
+re-run a duplicate test pass in Phase 5; the impl-review gate already covers it.)
 
 Use the Skill tool to invoke impl-review (NOT flowctl directly):
 
@@ -302,6 +328,14 @@ If capture fails (memory disabled mid-run, flowctl error, etc.), log and continu
 ```
 If verification fails, fix and re-commit before proceeding.
 
+**Delegation verification backstop — `DELEGATE: codex` AND `REVIEW_MODE: none`.**
+When delegation was active AND no impl-review gate ran (Phase 4 skipped), you MUST
+run this verification yourself on the delegated diff before `flowctl done` — do NOT
+trust Codex's `verification_summary` as the sole gate. Run the project's
+tests/lints; on failure, fix + follow-up commit (never blind-commit). When
+`REVIEW_MODE != none`, the impl-review SHIP gate already covered this — skip the
+duplicate run.
+
 Capture the commit hash:
 ```bash
 COMMIT_HASH=$(git rev-parse HEAD)
@@ -313,6 +347,26 @@ cat > /tmp/evidence.json << EOF
 {"commits": ["$COMMIT_HASH"], "tests": ["<actual test commands>"], "prs": []}
 EOF
 ```
+
+**Delegation evidence — ONLY when `DELEGATE: codex` produced this task's code.**
+INLINE the result fields into `evidence.delegation` (NOT a scratch-file pointer —
+the `.flow/tmp/codex-*` dir is cleaned post-commit, so a path would dangle). The
+`status`/`files_modified`/`issues`/`summary`/`verification_summary` come from the
+Codex `result-batch-*.json`; `class` comes from `flowctl codex classify-result`;
+`model`/`effort` are the `DELEGATE_MODEL` + per-batch `effective_effort` you ran:
+
+```bash
+cat > /tmp/evidence.json << EOF
+{"commits": ["$COMMIT_HASH"], "tests": ["<actual test commands>"], "prs": [],
+ "delegation": {
+   "result": {"status": "completed", "files_modified": ["<f>"], "issues": [],
+              "summary": "<codex summary>", "verification_summary": "<codex verify>"},
+   "model": "<DELEGATE_MODEL>", "effort": "<effective_effort>", "class": "success"}}
+EOF
+```
+On a `cli_failure` / missing / malformed result (no result body), still inline
+`evidence.delegation` with the known `class` + `model` + `effort` and a minimal
+`result` (`status: null`, empty arrays, the failure summary) — never omit it.
 
 Write summary file:
 ```bash
@@ -339,6 +393,23 @@ Return a concise summary to the main conversation:
 - Key files changed
 - Tests run (if any)
 - Review verdict (if REVIEW_MODE != none)
+
+**Delegation signal — ONLY when `DELEGATE: codex` was active for this task.** Emit
+these as the **last two lines** of your return summary so the host circuit breaker
+(`phases.md` Phase 3) can update its counter without re-reading the scratch dir.
+Both values come straight from `flowctl codex classify-result` (`.class` /
+`.action`):
+
+```
+DELEGATION_RESULT=<success|partial|task_failure|cli_failure>
+DELEGATION_ACTION=<commit|finish_locally|rollback|rollback_and_disable>
+```
+
+The host bridges them: `rollback_and_disable` → disable delegation IMMEDIATELY for
+all remaining tasks; `rollback`/`finish_locally` → `consecutive_failures++`
+(disable at 3); `commit` → reset to 0. When delegation was NOT active (gates
+failed, all units trivial, or `DELEGATE: local`), emit **no** `DELEGATION_*` lines
+— a missing signal tells the host the counter is untouched.
 
 ## Rules
 

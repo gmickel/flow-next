@@ -146,6 +146,19 @@ Based on user's answer from setup questions:
 
 **For each task**, spawn a worker subagent with fresh context.
 
+**Circuit-breaker counter init (ONLY when `delegation_active` — Phase 0/1.5).**
+The breaker counter is **host-owned**: each task is a fresh-context worker, so an
+in-worker counter would reset every task and never trip. Initialize ONCE here,
+before the per-task loop (skip entirely on the default delegation-off path):
+
+```text
+consecutive_failures = 0
+# delegation_active was resolved by the Phase 1.5 gates (true iff all passed).
+```
+
+After each delegated worker returns, the host bridges the worker's terminal
+`DELEGATION_RESULT=`/`DELEGATION_ACTION=` signal into this counter — see 3d.2.
+
 ### 3a. Find Next Task
 
 ```bash
@@ -248,6 +261,35 @@ fi
 ```
 
 Best-effort — append-only comment sync never blocks the work loop; the skill emits its own receipt.
+
+#### 3d.2 Circuit breaker (ONLY when `delegation_active`) — bridge the worker signal
+
+**Skip unless `delegation_active`.** When a delegated worker returns, parse its
+terminal `DELEGATION_RESULT=<class>` + `DELEGATION_ACTION=<action>` lines (both
+from `flowctl codex classify-result`, fn-55.4) and update the host-owned counter
+(init'd at the top of Phase 3). The worker emits these lines ONLY when delegation
+was active for the task — **a missing signal means the task ran standard and the
+counter is untouched** (e.g. a gate failed mid-run, all units were trivial, or the
+worker fell back to in-session).
+
+```text
+case DELEGATION_ACTION:
+  rollback_and_disable →                       # a cli_failure — tool itself unhealthy
+      delegation_active = false                # disable IMMEDIATELY for ALL remaining tasks
+  rollback | finish_locally →                  # task_failure / partial — a per-task miss
+      consecutive_failures += 1
+      if consecutive_failures >= 3:
+          delegation_active = false            # 3 strikes → standard mode for the rest
+  commit →                                     # success
+      consecutive_failures = 0                 # reset the consecutive streak
+# (no DELEGATION_* lines → standard task → counter untouched)
+```
+
+Once `delegation_active` flips **false**, the host stops appending the
+`DELEGATE:*` flags to subsequent worker prompts (3c) — every remaining task runs
+standard in-session, and the loop **never blocks** (Ralph-safe: failures degrade,
+they don't halt). The inlined `evidence.delegation` the worker wrote into
+`flowctl done` is the durable proof-of-work surface (Ralph log / receipt).
 
 ### 3e. Plan Sync (if enabled) — BOTH MODES
 

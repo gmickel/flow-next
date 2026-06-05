@@ -18,7 +18,7 @@ Supports three review backends:
 """
 
 # Version for drift detection (bump when making changes)
-RALPH_GUARD_VERSION = "0.14.0"
+RALPH_GUARD_VERSION = "0.15.0"
 
 import json
 import os
@@ -116,6 +116,75 @@ def is_receipt_write_command(command: str, receipt_path: str) -> bool:
 def command_has_json_field(command: str, field: str) -> bool:
     """Best-effort check that a shell command writes a JSON field literally."""
     return bool(re.search(rf"['\"]{re.escape(field)}['\"]\s*:", command))
+
+
+# Sandbox flags allowed in a canonical Codex delegation invocation (R9). Exactly
+# the two the reference emits: yolo (--dangerously-bypass-approvals-and-sandbox)
+# and full-auto (-s workspace-write). Nothing else (no --full-auto, no other -s).
+_DELEGATE_SANDBOX_PATTERNS = (
+    r"--dangerously-bypass-approvals-and-sandbox\b",
+    r"(?:^|\s)-s\s+workspace-write\b",
+)
+
+
+def is_canonical_codex_delegation(command: str) -> bool:
+    """Return True ONLY for the FULL canonical Codex implementation-delegation
+    shape that fn-55 teaches (worker.md Phase 2 / codex-delegation.md).
+
+    This is deliberately strict: the inline ``FLOW_DELEGATE_CODEX=1`` sentinel
+    alone is NOT sufficient (else any Ralph Bash call could bypass the guard by
+    prepending it). EVERY one of the following must hold:
+
+      * inline ``FLOW_DELEGATE_CODEX=1`` env prefix (on the command string,
+        positioned before the ``codex`` token — a pre-exported var never reaches
+        this hook anyway, and a trailing/argument occurrence does not count);
+      * the ``codex exec`` subcommand (NOT ``resume`` / ``review`` / ``--last``);
+      * ``--ignore-user-config`` (load-bearing — without it MCP servers can
+        re-enable and silently drop ``--output-schema``);
+      * ``--output-schema`` present;
+      * an ``-o`` output target under ``.flow/tmp/codex-*``;
+      * a sandbox flag from the allowlist (yolo | ``-s workspace-write``);
+      * NO ``--last`` (session-continuity escape hatch — always blocked).
+
+    Any deviation (missing flag, ``--last``, ``resume``/``review``, an ``-o``
+    target outside ``.flow/tmp/codex-*``) falls through → the normal block path.
+    """
+    # 1. Inline FLOW_DELEGATE_CODEX=1 prefix, positioned BEFORE the codex token.
+    #    `re.search` would accept the sentinel anywhere; anchor it as an env-prefix
+    #    assignment that precedes `codex` so a sentinel buried in args won't pass.
+    sentinel = re.search(r"(?<![\w-])FLOW_DELEGATE_CODEX=1\b", command)
+    codex_tok = re.search(r"(?<![\w./-])codex\s+exec\b", command)
+    if not sentinel or not codex_tok:
+        return False
+    if sentinel.start() > codex_tok.start():
+        return False
+
+    # 2. codex exec only — never resume / review (and never --last, below).
+    if re.search(r"(?<![\w./-])codex\s+(?:resume|review)\b", command):
+        return False
+
+    # 3. --last is always forbidden, even on an otherwise-canonical shape.
+    if re.search(r"(?<![\w-])--last\b", command):
+        return False
+
+    # 4. The load-bearing flags must ALL be present.
+    if not re.search(r"(?<![\w-])--ignore-user-config\b", command):
+        return False
+    if not re.search(r"(?<![\w-])--output-schema\b", command):
+        return False
+
+    # 5. -o output target under .flow/tmp/codex-* (the scratch dir).
+    #    Accept optional quotes; require the path to start with .flow/tmp/codex-.
+    if not re.search(
+        r"(?<![\w-])-o\s+['\"]?(?:\./)?\.flow/tmp/codex-[^\s'\"]+", command
+    ):
+        return False
+
+    # 6. A sandbox flag from the allowlist.
+    if not any(re.search(p, command) for p in _DELEGATE_SANDBOX_PATTERNS):
+        return False
+
+    return True
 
 
 def validate_receipt_data(
@@ -251,21 +320,37 @@ def handle_pre_tool_use(data: dict) -> None:
     if re.search(r"\bcodex\b", command):
         # Allow flowctl codex wrappers
         is_wrapper = re.search(r"flowctl\s+codex|FLOWCTL.*codex", command)
-        if not is_wrapper:
+        # Allow the FULL canonical Codex implementation-delegation shape (fn-55).
+        # NOT the mere presence of FLOW_DELEGATE_CODEX=1 — a sentinel-prefixed but
+        # otherwise-arbitrary command (missing --ignore-user-config, carrying
+        # --last, using resume/review, or an -o outside .flow/tmp/codex-*) STILL
+        # falls through to the block path. The canonical shape itself rejects
+        # --last, so an early return here cannot leak a --last invocation.
+        is_delegation = is_canonical_codex_delegation(command)
+        if is_delegation:
+            # Canonical delegation passes the codex section untouched.
+            pass
+        elif not is_wrapper:
             # Block direct codex usage
             if re.search(r"\bcodex\s+exec\b", command):
                 output_block(
                     "BLOCKED: Do not call 'codex exec' directly. "
                     "Use 'flowctl codex impl-review' or 'flowctl codex plan-review' "
-                    "to ensure proper receipt handling and session continuity."
+                    "to ensure proper receipt handling and session continuity. "
+                    "(Implementation-delegation must match the full canonical shape: "
+                    "FLOW_DELEGATE_CODEX=1 codex exec --ignore-user-config "
+                    "--output-schema ... -o .flow/tmp/codex-<task>/... with a sandbox "
+                    "flag and no --last.)"
                 )
             if re.search(r"\bcodex\s+review\b", command):
                 output_block(
                     "BLOCKED: Do not call 'codex review' directly. "
                     "Use 'flowctl codex impl-review' or 'flowctl codex plan-review'."
                 )
-        # Block --last even through wrappers (breaks session continuity)
-        if re.search(r"--last\b", command):
+        # Block --last even through wrappers (breaks session continuity).
+        # Unreachable for the canonical-delegation early-pass (it rejects --last),
+        # so this still guards every wrapper / direct invocation that carries it.
+        if not is_delegation and re.search(r"--last\b", command):
             output_block(
                 "BLOCKED: Do not use '--last' with codex. "
                 "Session continuity is managed via session_id in receipts."

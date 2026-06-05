@@ -625,4 +625,174 @@ This task supplies the per-task `action` (`commit` / `finish_locally` /
 
 ## Circuit breaker / Ralph-safe / ralph-guard amendment / receipts / attribution
 
-_(stub — authored by fn-55.5)_
+> **The counter is HOST-owned (R8).** Each flow task is a fresh-context worker
+> subagent, so an in-worker counter would reset every task and never trip. The
+> worker emits a terminal **structured signal**; the host loop (`phases.md` Phase 3)
+> owns the `consecutive_failures` counter and the `delegation_active` flag across
+> tasks. fn-55.4 supplied the per-task `action`
+> (`commit` / `finish_locally` / `rollback` / `rollback_and_disable`) via
+> `flowctl codex classify-result`; this section bridges it into the host counter.
+
+### Worker → host signal (terminal lines + inlined evidence)
+
+On a delegated task, the worker (Phase 5, just before `flowctl done`) does TWO
+things so the host can run the breaker without re-reading the scratch dir:
+
+1. **Inline the result** into `flowctl done --evidence-json` as
+   `evidence.delegation` (NOT a `result_file` pointer — the scratch dir is cleaned
+   post-commit, so a path would dangle):
+
+   ```json
+   {
+     "delegation": {
+       "result": {
+         "status": "completed",
+         "files_modified": ["src/foo.ts"],
+         "issues": [],
+         "summary": "...",
+         "verification_summary": "..."
+       },
+       "model": "gpt-5.5",
+       "effort": "medium",
+       "class": "success"
+     }
+   }
+   ```
+   On a `cli_failure` / missing / malformed result (no result body), inline what
+   IS known — `class` + `model` + `effort` + a minimal `result` (`status:null`,
+   empty arrays, the failure summary) — never omit `evidence.delegation`.
+
+2. **Emit terminal signal lines** as the LAST two lines of its return summary
+   (the host parses them; `class` + `action` both come straight from
+   `classify-result`):
+
+   ```
+   DELEGATION_RESULT=<success|partial|task_failure|cli_failure>
+   DELEGATION_ACTION=<commit|finish_locally|rollback|rollback_and_disable>
+   ```
+
+   When delegation was **not active** for a task (gates failed mid-run, all units
+   trivial, or `DELEGATE: local`), the worker emits NO `DELEGATION_*` lines — the
+   host treats a missing signal as "standard task, counter untouched."
+
+### Host circuit breaker (phases.md Phase 3 — pre-loop init + per-task bridge)
+
+The host initializes the counter ONCE before the per-task loop and updates it
+after each delegated worker returns:
+
+```text
+# Pre-loop (host, once):
+consecutive_failures = 0
+delegation_active     = <true after Phase 1.5 gates all passed>
+
+# After each worker returns, parse the terminal DELEGATION_* lines:
+case DELEGATION_ACTION:
+  rollback_and_disable →                       # a cli_failure
+      delegation_active = false                # disable IMMEDIATELY for ALL remaining tasks
+  rollback | finish_locally →                  # task_failure / partial
+      consecutive_failures += 1
+      if consecutive_failures >= 3:
+          delegation_active = false            # 3 strikes → standard mode for the rest
+  commit →                                     # success
+      consecutive_failures = 0                 # reset the streak
+# (no DELEGATION_* lines → task ran standard; counter untouched)
+
+# When delegation_active flips false, the host stops appending the DELEGATE:* flags
+# to subsequent worker prompts (phases.md Phase 3c) → remaining tasks run standard.
+```
+
+- **`rollback_and_disable` is immediate** — a CLI failure (`codex` crashed,
+  not-on-PATH mid-run, sandbox refusal) means the tool itself is unhealthy, so we
+  don't burn two more tasks proving it; disable now.
+- **`rollback` / `finish_locally` count toward 3** — a `task_failure`
+  (malformed/failed result) or a `partial` (kept-but-incomplete) is a per-task
+  miss, not a tool death; three in a row trips the breaker.
+- **`commit` resets to 0** — the streak is *consecutive* failures; one success
+  clears it.
+- The counter is **host-owned** precisely because the worker is fresh-context: an
+  in-worker `consecutive_failures` would reset on every task and never reach 3.
+
+### Ralph-safe (autonomous mode)
+
+In Ralph / headless mode, delegation is **non-blocking** and consent-gated:
+
+- **Consent-gated:** delegation proceeds ONLY if `work.delegateConsent` is already
+  `true` (Gate 4 — headless has no `AskUserQuestion` path). Otherwise it stays
+  silently off; the loop runs standard-mode, unchanged.
+- **Never blocks the loop:** every delegation failure path
+  (`rollback` / `rollback_and_disable` / `finish_locally`) degrades to standard
+  in-session work — the task still completes, the loop still advances. A forced
+  CLI failure disables delegation for the rest of the run but does NOT halt Ralph.
+- **No human in the loop:** the per-batch result block (summary / files /
+  verification / issues) routes to the **Ralph log / receipt**, not a prompt. The
+  inlined `evidence.delegation` in `flowctl done` IS the durable proof-of-work
+  surface that Ralph's receipt/log machinery picks up.
+- **Multi-cycle confabulation guard (memory `drop-receipt-to-break-codex`):** if a
+  delegated task runs MULTIPLE impl-review fix cycles, drop the review receipt
+  (`rm -f "$REVIEW_RECEIPT_PATH"`) before a re-review so a fresh reviewer thread
+  reads the actual diff instead of reinforcing a prior turn's hallucinated
+  narrative. (This is the impl-review skill's existing receipt-reset discipline;
+  delegation does not change it.)
+
+### ralph-guard amendment (the PreToolUse allowance)
+
+`ralph-guard.py` blocks bare `codex exec` (only `flowctl codex` wrappers passed).
+fn-55.5 amends the PreToolUse Bash matcher to ALSO allow the invocation — but
+**only when the command matches the FULL canonical delegation shape**, never the
+mere presence of the `FLOW_DELEGATE_CODEX=1` sentinel (else any Ralph Bash call
+could bypass the guard by prepending it). The allowance
+(`is_canonical_codex_delegation`) requires ALL of:
+
+- inline `FLOW_DELEGATE_CODEX=1` env prefix, positioned **before** the `codex`
+  token (a pre-exported var never reaches the hook; a sentinel buried in args
+  does not count);
+- the `codex exec` subcommand — **never** `resume` / `review`;
+- `--ignore-user-config` (load-bearing — without it MCP servers can re-enable and
+  silently drop `--output-schema`);
+- `--output-schema` present;
+- an `-o` output target under `.flow/tmp/codex-*`;
+- a sandbox flag from the allowlist
+  (`--dangerously-bypass-approvals-and-sandbox` | `-s workspace-write`);
+- and **NO `--last`** (always blocked, even on an otherwise-canonical shape).
+
+A sentinel-prefixed but otherwise-arbitrary command — e.g.
+`FLOW_DELEGATE_CODEX=1 codex exec --last`, or one missing `--ignore-user-config`,
+or with an `-o` outside `.flow/tmp/codex-*` — STILL falls through to the block.
+The copilot block stays intact; `RALPH_GUARD_VERSION` is bumped (→ `0.15.0`) with
+the change. `ralph-guard.py` is a hook (NOT dogfooded into `.flow/bin`), so it is
+single-copy — no dual-copy invariant to maintain.
+
+### `REVIEW_MODE=none` verification backstop
+
+When delegation is active **and `REVIEW_MODE=none`** (worker Phase 4 skipped),
+there is no independent impl-review gate, so `verification_summary` is **not
+trusted as the sole gate**. The worker runs its own **Phase 5 verification** on
+the delegated diff BEFORE `flowctl done` (its existing verify-before-done gate;
+on failure → fix + follow-up commit, never blind-commit). When
+`REVIEW_MODE != none`, the impl-review SHIP gate is the independent check and the
+worker does **not** run a duplicate test pass (the token win holds — fn-55.4's
+trust-boundary contract).
+
+### Mixed-model attribution (concrete trailer strings)
+
+On a **delegated** commit (Codex wrote the code, Claude orchestrated), the worker
+appends two commit-message trailers at **Phase 3** (the commit it owns):
+
+```
+AI-Orchestrator: Claude
+AI-Implementer: codex <model> (<effort>)
+```
+
+- `<model>` is `DELEGATE_MODEL` (e.g. `gpt-5.5`); `<effort>` is the per-batch
+  `effective_effort` (e.g. `medium`) — yielding `AI-Implementer: codex gpt-5.5 (medium)`.
+- Append them as real trailer lines (own paragraph, blank line before the
+  `Task:` trailer block) so `git interpret-trailers` / `make-pr` can read them.
+- **Only on a delegated commit.** A standard in-session commit (no delegation, or
+  a partial finished locally where Claude wrote the remainder) carries no
+  `AI-Implementer` trailer — attribute honestly.
+- The trailers live in the **commit history** the PR carries, so when
+  `/flow-next:make-pr` later runs against the spec, the `AI-Orchestrator: Claude`
+  + `AI-Implementer: codex <model> (<effort>)` attribution travels with the
+  PR's commits — both the orchestrator and the implementer are credited. (make-pr
+  synthesizes its body honestly from spec/commit state; the trailers are the
+  durable, machine-readable attribution surface it draws on.)

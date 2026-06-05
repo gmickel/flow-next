@@ -122,6 +122,22 @@ jobs:
         # safety prose contract; clean-baseline-excludes-.flow predicate
         # (multi-task plan-sync stays delegatable after task 1).
 
+      - name: Python unit tests — ralph-guard amendment + circuit breaker (fn-55.5)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_ralph_guard_codex_delegation.py" \
+            -v
+        # ralph-guard.py `is_canonical_codex_delegation` allows ONLY the FULL
+        # canonical delegation shape (sentinel + codex exec + --ignore-user-config
+        # + --output-schema + -o .flow/tmp/codex-* + sandbox flag, NO --last/
+        # resume/review) — a sentinel-prefixed arbitrary command STILL blocks;
+        # copilot + --last blocks stay intact; RALPH_GUARD_VERSION bumped. Drives
+        # the SHIPPED hook end-to-end (PreToolUse Bash, FLOW_RALPH=1). Also locks
+        # the host-owned circuit-breaker + worker DELEGATION_RESULT/ACTION signal
+        # + evidence.delegation inline + attribution trailers + REVIEW_MODE=none
+        # verification-backstop prose contract.
+
       # ──────────── fn-50 (clawpatch wrap) ────────────
       # New readers + scout-fallback contract land here so they run on the full
       # ubuntu / macos / windows matrix. Tests use checked-in fixtures (no
