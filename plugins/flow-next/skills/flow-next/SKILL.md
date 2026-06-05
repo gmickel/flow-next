@@ -13,6 +13,7 @@ Quick task operations in `.flow/`. For planning features use `/flow-next:plan`, 
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
 **Discover all commands/options:**

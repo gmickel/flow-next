@@ -25,6 +25,7 @@ Verify that the combined implementation of all tasks in a spec satisfies the spe
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
 ## Backend Selection

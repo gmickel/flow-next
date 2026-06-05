@@ -190,7 +190,6 @@ Detection — `flowctl` is **bundled, not on `PATH`** after install, so use the 
 ```bash
 FLOWCTL="$HOME/.codex/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 [[ -d .clawpatch ]] && [ "$("$FLOWCTL" repo-map list --count 2>/dev/null)" -gt 0 ]
 ```
 

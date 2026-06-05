@@ -19,6 +19,7 @@ Wrap the upstream [`clawpatch`](https://github.com/openclaw/clawpatch) CLI's `ma
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
 **Inline skill (no `context: fork`)** — the map skill is fully non-interactive: install detection, version-range guard, `clawpatch init`, `.clawpatch/.gitignore` skeleton, and `clawpatch map` invocation all proceed without prompting the user. No blocking-question tool is required or used.

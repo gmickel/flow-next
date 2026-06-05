@@ -13,6 +13,7 @@ flowctl is bundled with the plugin (not on PATH). Define once; subsequent blocks
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
 ## Setup

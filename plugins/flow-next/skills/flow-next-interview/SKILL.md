@@ -16,6 +16,7 @@ Conduct an extremely thorough interview about a task/spec and write refined deta
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
 ## Pre-check: Local setup version

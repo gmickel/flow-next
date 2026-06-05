@@ -6,7 +6,9 @@ This file is the transport-blind orchestration **spine**: discovery ceremony, li
 
 ## Phase 0 — Mode + Ralph awareness
 
-Parse `$ARGUMENTS` for an optional operation token (`push` / `pull` / `reconcile` / `link` / `unlink` / `discover`) and an optional spec id. With none, default to the interactive menu (discover if the bridge is inactive, else offer push/pull/reconcile over `list-unsynced` / `list-stale`).
+Parse `$ARGUMENTS` for an optional operation token (`push` / `pull` / `reconcile` / `comment` / `link` / `unlink` / `discover`) and an optional spec id. With none, default to the interactive menu (discover if the bridge is inactive, else offer push/pull/reconcile over `list-unsynced` / `list-stale`).
+
+`comment <spec-id>` is the lifecycle-event op the host skills invoke for opted-in touchpoints (`work.done` / `resolvePr` / `completionReview` / `qa` set to `comment` — see SKILL.md's perEvent table). It routes to the **comments-sync hook** (`postLifecycleComment` → `postComment` **[→ ref: comments-sync.md]**): append the structured lifecycle comment + evidence, dedup, receipt — it does NOT touch the body or status. Like `push` / `reconcile`, a `comment` op on an unlinked spec triggers the **Phase 3 create-if-unlinked** flow-first link first (create + attach), then posts the comment on the now-linked spec.
 
 **Ralph / autonomous mode** (R11): when `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` is set, the skill still runs — but the discovery ceremony NEVER prompts (it needs a human; if the bridge isn't already configured, no-op + receipt note), and any genuine conflict **queues** (`sync defer`) instead of asking. Confident merges and conflict-free status/comment ops proceed unattended. "Ask the human" resolves to "queue for the human" in autonomous mode — same policy, surface-dependent delivery (mirrors fn-51's surface-aware ladder).
 
@@ -122,6 +124,11 @@ pull(spec):
  foldTrackerIntoFlow(spec, issue, status) → body-merge.md Step 3 (tracker→flow) + status-sync.md (who-wins) + comments-sync.md (pull genuine comments to sync log)
  # echo-fence first: pulled body hash == baseHashTracker ⇒ noop (body-merge.md Step 1 / Fixture D)
  receipt: pulled | noop
+
+comment(spec): # lifecycle touchpoint (work.done / resolvePr / completionReview / qa)
+ postLifecycleComment(spec, event marker + evidence) → comments-sync.md (append + dedup) [→ ref: transport: postComment]
+ # body + status untouched; create-if-unlinked already linked an unlinked spec before we got here
+ receipt: updated | noop
 ```
 
 For the **reconcile** path, the orchestration delegates the full 3-way merge to
