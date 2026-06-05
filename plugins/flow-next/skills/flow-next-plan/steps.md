@@ -461,7 +461,7 @@ Fix any errors before proceeding.
 
 ## Step 6.5: Tracker sync (opt-in) — NO sub-issues; optional body checklist only
 
-**Optional. Runs only when the tracker bridge is active AND `plan` is opted in. With no tracker configured this is a no-op — planning behaves exactly as today.** When opted in, planning projects the spec to the linked issue but **never auto-creates tracker sub-issues per task** — tasks stay flow-local (R3, Grain). The only optional tracker effect is rendering the new task list as a **checklist inside the issue body** (off by default; a body-format concern owned by the merge engine). Status/comment/sub-issue churn does NOT belong to the plan event.
+**Optional. Runs only when the tracker bridge is active AND `plan` is opted in. With no tracker configured this is a no-op — planning behaves exactly as today.** When opted in, planning projects the spec to the tracker issue. **If the spec is not yet linked (e.g. you started straight from `/flow-next:plan`, no `/flow-next:capture`), the tracker-sync skill flow-first-pushes — it creates the issue + links it — then reconciles** (tracker-sync §Phase 3 "create-if-unlinked"); an active bridge therefore never silently leaves a planned spec untracked. Planning **never auto-creates tracker sub-issues per task** — tasks stay flow-local (R3, Grain); the spec ↔ one-issue grain holds. The only optional task-level effect is rendering the task list as a **checklist inside the issue body** (off by default; a body-format concern owned by the merge engine).
 
 ```bash
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
@@ -470,7 +470,8 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
   # Invoke the flow-next-tracker-sync skill to push/reconcile the spec body
   # (which MAY render the task list as a body checklist — never sub-issues).
   #   skill: flow-next-tracker-sync   (operation: <leaf> <spec-id>)
-  # No-ops if the spec has no linked tracker id / no transport reachable.
+  # Unlinked spec → flow-first push (create + link) first, then reconcile
+  # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable.
   :
 fi
 ```

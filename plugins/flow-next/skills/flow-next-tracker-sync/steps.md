@@ -6,7 +6,9 @@ This file is the transport-blind orchestration **spine**: discovery ceremony, li
 
 ## Phase 0 — Mode + Ralph awareness
 
-Parse `$ARGUMENTS` for an optional operation token (`push` / `pull` / `reconcile` / `link` / `unlink` / `discover`) and an optional spec id. With none, default to the interactive menu (discover if the bridge is inactive, else offer push/pull/reconcile over `list-unsynced` / `list-stale`).
+Parse `$ARGUMENTS` for an optional operation token (`push` / `pull` / `reconcile` / `comment` / `link` / `unlink` / `discover`) and an optional spec id. With none, default to the interactive menu (discover if the bridge is inactive, else offer push/pull/reconcile over `list-unsynced` / `list-stale`).
+
+`comment <spec-id>` is the lifecycle-event op the host skills invoke for opted-in touchpoints (`work.done` / `resolvePr` / `completionReview` / `qa` set to `comment` — see SKILL.md's perEvent table). It routes to the **comments-sync hook** (`postLifecycleComment` → `postComment` **[→ ref: comments-sync.md]**): append the structured lifecycle comment + evidence, dedup, receipt — it does NOT touch the body or status. Like `push` / `reconcile`, a `comment` op on an unlinked spec triggers the **Phase 3 create-if-unlinked** flow-first link first (create + attach), then posts the comment on the now-linked spec.
 
 **Ralph / autonomous mode** (R11): when `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` is set, the skill still runs — but the discovery ceremony NEVER prompts (it needs a human; if the bridge isn't already configured, no-op + receipt note), and any genuine conflict **queues** (`sync defer`) instead of asking. Confident merges and conflict-free status/comment ops proceed unattended. "Ask the human" resolves to "queue for the human" in autonomous mode — same policy, surface-dependent delivery (mirrors fn-51's surface-aware ladder).
 
@@ -100,6 +102,8 @@ If `set-tracker-id` reports a collision, ask the user (interactive) or queue (`s
 
 ## Phase 3 — Orchestration skeleton (transport-blind)
 
+**Create-if-unlinked (auto-link on first lifecycle touch).** When a lifecycle event (`capture` / `interview` / `plan` / `work.firstClaim` / `work.done` / `makePr` / `resolvePr` / `completionReview`) routes a `push` / `reconcile` / `comment` operation for a spec that has **no `tracker.id`**, run the **flow-first link first** (Phase 2 § "Author-in-flow-then-push": `renderFlowToTracker` → `writeIssue` *creates* the issue → `sync set-tracker-id` attaches the id / identifier / url + writes the back-reference), **then** proceed with the requested operation on the now-linked spec. This is what makes an **active** bridge actually keep specs in sync — the 1.6.0 opt-out model ("connecting a tracker means you want it kept in sync") means a spec authored in-flow gets its issue **created on the first touchpoint that fires**, not silently left flow-local until someone manually links it. The only operation that no-ops on an unlinked spec is **`unlink`** (nothing to detach). Best-effort as ever: if no transport is reachable the create is skipped (`errored` / `deferred` receipt), never blocking the lifecycle. A `set-tracker-id` collision is handled exactly as the link ceremony (Phase 2): ask the user (interactive) or `sync defer` (Ralph) — never `--force` silently.
+
 Route the operation; each layer calls hooks that operate on the normalized structs ([`references/adapter-interface.md`](references/adapter-interface.md)). The skeleton is real; the hook bodies plug in later. The **Linear transport hooks** (`fetchIssue`/`writeIssue`/`listComments`/`postComment`/`readStatus`/`setStatus`) are implemented by the detect-best-available ladder in [`references/linear-ladder.md`](references/linear-ladder.md) (MCP → GraphQL → no-op); GitHub's are the `gh` transport in [`references/github.md`](references/github.md) (single rung + no-op, reduced-fidelity status — fn-52.7). The **body hooks** (`renderFlowToTracker` / `foldTrackerIntoFlow` / `threeWayMergeBody`) are the agentic 3-way merge + format translation in [`references/body-merge.md`](references/body-merge.md) (fn-52.4); the **status who-wins** hook (`reconcileStatus`) is [`references/status-sync.md`](references/status-sync.md) and the **comments/evidence append + dedup** hooks (`postLifecycleComment` / `pullCommentsToSyncLog`) are [`references/comments-sync.md`](references/comments-sync.md) (fn-52.5).
 
 ```
@@ -118,6 +122,11 @@ pull(spec):
   foldTrackerIntoFlow(spec, issue, status)       → body-merge.md Step 3 (tracker→flow) + status-sync.md (who-wins) + comments-sync.md (pull genuine comments to sync log)
             # echo-fence first: pulled body hash == baseHashTracker ⇒ noop (body-merge.md Step 1 / Fixture D)
   receipt: pulled | noop
+
+comment(spec):                                   # lifecycle touchpoint (work.done / resolvePr / completionReview / qa)
+  postLifecycleComment(spec, event marker + evidence)   → comments-sync.md (append + dedup) [→ ref: transport: postComment]
+            # body + status untouched; create-if-unlinked already linked an unlinked spec before we got here
+  receipt: updated | noop
 ```
 
 For the **reconcile** path, the orchestration delegates the full 3-way merge to

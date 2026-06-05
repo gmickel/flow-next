@@ -7,6 +7,7 @@ Execute these phases in order. Each phase gates on the prior one. Stop on error 
 ```bash
 set -e
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 SCRIPTS="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-resolve-pr/scripts"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ```
@@ -382,7 +383,8 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
   # Invoke the flow-next-tracker-sync skill: append a one-line resolution comment
   # to the linked issue (e.g. "Addressed N of M review items on PR #<NUMBER>").
   #   skill: flow-next-tracker-sync   (operation: comment <spec-id>)
-  # No-ops if the spec has no linked tracker id / no transport reachable.
+  # Unlinked spec → flow-first push (create + link) first, then comment
+  # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable.
   # Best-effort — never blocks the resolve-pr summary.
   :
 fi

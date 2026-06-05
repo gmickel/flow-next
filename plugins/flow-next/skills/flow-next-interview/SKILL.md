@@ -16,6 +16,7 @@ Conduct an extremely thorough interview about a task/spec and write refined deta
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
 ## Pre-check: Local setup version
@@ -812,7 +813,8 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
   # Invoke the flow-next-tracker-sync skill: push/pull/reconcile the spec body
   # (operation follows the perEvent leaf — push | pull | reconcile).
   #   skill: flow-next-tracker-sync   (operation: <leaf> <spec-id>)
-  # No-ops if the spec has no linked tracker id / no transport reachable; genuine
+  # Unlinked spec → flow-first push (create + link) first, then reconcile
+  # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable; genuine
   # body conflicts surface scoped (interactive) or queue (Ralph). Best-effort — a
   # tracker failure never blocks the interview write-back.
   :

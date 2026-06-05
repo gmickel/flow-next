@@ -21,6 +21,7 @@ flowctl provides only thin plumbing: `flowctl spec export-cognitive-aid <spec-id
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
 **Inline skill (no `context: fork`)** — `AskUserQuestion` must stay reachable for the **Phase 0** info prompts (resolve a missing base ref / undetected spec id — never a confirm gate). Subagents can't call blocking question tools (Claude Code issues #12890, #34592). There is **no Phase 4 confirm prompt** — make-pr creates the PR directly. (sync-codex.sh rewrites any remaining `AskUserQuestion` to a plain-text numbered prompt in the Codex mirror.)

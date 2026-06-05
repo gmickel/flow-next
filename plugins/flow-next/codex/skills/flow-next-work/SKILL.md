@@ -153,7 +153,7 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
 fi
 ```
 
-The actual tracker work (transport, body merge, status who-wins, comment dedup, receipts) lives entirely in the **`flow-next-tracker-sync` skill** — the lifecycle skills only gate + delegate. Every touchpoint is **best-effort**: a tracker failure (no transport reachable, 404 issue, etc.) never blocks the lifecycle; the tracker-sync skill emits its own `sync receipt` and, under Ralph, queues genuine conflicts (`sync defer`) instead of asking. A spec with **no linked tracker id** no-ops cleanly in every touchpoint.
+The actual tracker work (transport, body merge, status who-wins, comment dedup, receipts) lives entirely in the **`flow-next-tracker-sync` skill** — the lifecycle skills only gate + delegate. Every touchpoint is **best-effort**: a tracker failure (no transport reachable, 404 issue, etc.) never blocks the lifecycle; the tracker-sync skill emits its own `sync receipt` and, under Ralph, queues genuine conflicts (`sync defer`) instead of asking. A spec with **no linked tracker id** is **flow-first-pushed (issue created + linked) on the first touchpoint that fires**, then reconciled by later ones (tracker-sync §Phase 3 "create-if-unlinked") — an active bridge keeps in-flow-authored specs in sync rather than leaving them untracked. A touchpoint only no-ops when no transport is reachable.
 
 **Handle recognition (R16):** `/flow-next:work wor-17` / `work wor-17.1` resolve the existing linked spec/task — the Phase 1 input grammar routes any single-token arg through `flowctl show` (which resolves tracker handles via fn-52.10) before treating it as idea text, so a tracker key is never re-created as a new spec.
 

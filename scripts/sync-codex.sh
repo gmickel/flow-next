@@ -188,15 +188,37 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
     -e 's|PLUGIN_ROOT="\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}"|PLUGIN_ROOT="$HOME/.codex"|g' \
     "$f"
 
-  # After every FLOWCTL= line, insert local fallback (if not already present)
-  # Use awk for multi-line insert (sed portability issues on macOS)
+  # After every FLOWCTL= line, insert local fallback — IDEMPOTENT.
+  # Canonical skill preambles may ALREADY carry the
+  # `[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"` fallback on the line
+  # directly after the FLOWCTL= assignment (added for the Cursor / env-var-less
+  # path, where neither DROID_PLUGIN_ROOT nor CLAUDE_PLUGIN_ROOT resolves). Only
+  # inject when the next line is NOT already that fallback — otherwise the mirror
+  # gets a duplicate. Mirrors the agents-block guard below. (awk for multi-line
+  # insert: sed portability issues on macOS.)
   awk '
+    function flush_pending(   stripped) {
+      if (pending) {
+        stripped = nextline
+        sub(/^[[:space:]]+/, "", stripped)
+        if (stripped != "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\"") {
+          print fallback
+        }
+        pending = 0
+      }
+    }
     /^FLOWCTL=.*scripts\/flowctl/ && !seen[$0]++ {
       print
-      print "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\""
+      fallback = "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\""
+      pending = 1
       next
     }
-    { print }
+    {
+      nextline = $0
+      flush_pending()
+      print
+    }
+    END { if (pending) print fallback }
   ' "$f" > "${f}.tmp" && mv "${f}.tmp" "$f"
 
   # Template/script path patches — both legacy inline form and the new

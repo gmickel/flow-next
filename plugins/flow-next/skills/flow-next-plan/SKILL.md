@@ -18,6 +18,7 @@ Follow this skill and linked workflows exactly. Deviations cause drift, bad gate
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
 ## Pre-check: Local setup version
