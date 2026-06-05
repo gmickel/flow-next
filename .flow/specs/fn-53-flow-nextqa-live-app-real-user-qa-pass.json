@@ -14,7 +14,7 @@
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-06-05T12:05:59.994832Z",
   "spec_path": ".flow/specs/fn-53-flow-nextqa-live-app-real-user-qa-pass.md",
-  "status": "open",
+  "status": "done",
   "title": "/flow-next:qa \u2014 live-app real-user QA pass derived from the spec",
   "tracker": {
     "baseHashFlow": null,
@@ -26,5 +26,5 @@
     "mergeBaseTracker": null,
     "url": "https://linear.app/gmickel/issue/FLOW-4"
   },
-  "updated_at": "2026-06-05T12:05:59.994994Z"
+  "updated_at": "2026-06-05T14:47:49.854724Z"
 }
