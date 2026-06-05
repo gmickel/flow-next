@@ -760,6 +760,11 @@ ALL of the following must hold:
   **exactly one** `codex` token, **never** `resume` / `review`;
 - `--ignore-user-config` as a standalone token (load-bearing — without it MCP
   servers can re-enable and silently drop `--output-schema`);
+- **`-c` is restricted to the reasoning-effort pair** —
+  `model_reasoning_effort="(none|low|medium|high|xhigh)"` — and may appear at most
+  once. An arbitrary `-c key=value` (e.g. `-c mcp_servers.evil.command=…`) would
+  re-enable MCP and silently defeat `--ignore-user-config`, so any non-effort or
+  duplicate `-c` is non-canonical;
 - an `-o` output target under a `.flow/tmp/codex-<id>/` scratch dir, AND
   `--output-schema` + the stdin prompt (`- < …`) under the **SAME** scratch dir
   (an inline prompt, or a schema/prompt elsewhere or split across dirs, is
@@ -767,6 +772,9 @@ ALL of the following must hold:
 - a sandbox flag from the allowlist
   (`--dangerously-bypass-approvals-and-sandbox` | `-s workspace-write` — `-s`
   must be exactly `workspace-write`);
+- **every singleton appears exactly once** — a duplicate `--ignore-user-config`
+  / `-c` / `--output-schema` / `-o` / sandbox flag / stdin prompt is rejected
+  (no smuggling a second occurrence to undo the first);
 - and **NO `--last`** (always blocked, even on an otherwise-canonical shape).
 
 A sentinel-prefixed but otherwise-arbitrary command — e.g.

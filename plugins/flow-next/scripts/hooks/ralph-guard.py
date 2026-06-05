@@ -195,7 +195,18 @@ def is_canonical_codex_delegation(command: str) -> bool:
     #    quoted-prompt-smuggling vector: a stray positional prompt is unexpected).
     i = 3
     n = len(tokens)
-    seen_ignore = seen_schema = seen_o = seen_prompt = seen_sandbox = False
+    # Each singleton may appear AT MOST ONCE — a duplicate flag (e.g. a second
+    # `-c` smuggling `mcp_servers.evil.command=…` to re-enable MCP and undo the
+    # `--ignore-user-config` isolation) is non-canonical. `counts` enforces it.
+    counts = {
+        "--ignore-user-config": 0,
+        "-m": 0,
+        "-c": 0,
+        "--output-schema": 0,
+        "-o": 0,
+        "sandbox": 0,
+        "prompt": 0,
+    }
     scratch = None
     schema_dir = None
     prompt_dir = None
@@ -208,40 +219,46 @@ def is_canonical_codex_delegation(command: str) -> bool:
         if tok == "--last":
             return False  # always forbidden
         if tok == "--ignore-user-config":
-            seen_ignore = True
+            counts["--ignore-user-config"] += 1
             i += 1
-        elif tok == "-m":  # model
-            val = _need_value(i)
-            if val is None:
+        elif tok == "-m":  # model (any value — pinned from flow config upstream)
+            if _need_value(i) is None:
                 return False
+            counts["-m"] += 1
             i += 2
-        elif tok == "-c":  # reasoning-effort pair
+        elif tok == "-c":  # reasoning-effort pair ONLY
             val = _need_value(i)
-            if val is None:
+            # Exactly the effort knob — NOT an arbitrary Codex `-c key=value`
+            # override. An extra `-c mcp_servers.…` would re-enable MCP and
+            # silently defeat --ignore-user-config, so only the effort pair with
+            # an enum value is allowed.
+            if val is None or not re.fullmatch(
+                r'model_reasoning_effort="(none|low|medium|high|xhigh)"', val
+            ):
                 return False
+            counts["-c"] += 1
             i += 2
         elif tok == "--output-schema":
             val = _need_value(i)
             if val is None:
                 return False
-            seen_schema = True
+            counts["--output-schema"] += 1
             schema_dir = _scratch_dir_of(val)
             i += 2
         elif tok == "-o":
             val = _need_value(i)
             if val is None:
                 return False
-            seen_o = True
+            counts["-o"] += 1
             scratch = _scratch_dir_of(val)
             i += 2
         elif tok == _DELEGATE_YOLO_FLAG:
-            seen_sandbox = True
+            counts["sandbox"] += 1
             i += 1
         elif tok == "-s":  # full-auto sandbox: -s workspace-write
-            val = _need_value(i)
-            if val != "workspace-write":
+            if _need_value(i) != "workspace-write":
                 return False
-            seen_sandbox = True
+            counts["sandbox"] += 1
             i += 2
         elif tok == "-":
             # stdin prompt: `-` then `<` then the prompt path.
@@ -250,7 +267,7 @@ def is_canonical_codex_delegation(command: str) -> bool:
             path = tokens[i + 2] if i + 2 < n else None
             if path is None:
                 return False
-            seen_prompt = True
+            counts["prompt"] += 1
             prompt_dir = _scratch_dir_of(path)
             i += 3
         else:
@@ -258,10 +275,15 @@ def is_canonical_codex_delegation(command: str) -> bool:
             # a second positional). Non-canonical → block.
             return False
 
-    # 4. All required pieces present, and the -o / schema / prompt share ONE
-    #    valid scratch dir.
-    if not (seen_ignore and seen_schema and seen_o and seen_prompt and seen_sandbox):
+    # 4. Each singleton must appear EXACTLY ONCE (no missing, no duplicate). `-m`
+    #    is the one optional flag (model defaults upstream); cap it at 1 too.
+    if counts["-m"] > 1:
         return False
+    for key in ("--ignore-user-config", "-c", "--output-schema", "-o", "sandbox", "prompt"):
+        if counts[key] != 1:
+            return False
+
+    # 5. The -o / schema / prompt must share ONE valid scratch dir.
     if scratch is None:
         return False
     if schema_dir != scratch or prompt_dir != scratch:

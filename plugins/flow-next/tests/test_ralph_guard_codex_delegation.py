@@ -337,6 +337,48 @@ class CanonicalDelegationHelperTestCase(unittest.TestCase):
             )
         )
 
+    # --- block: arbitrary -c config overrides + duplicate singletons (RP finding) ---
+
+    def test_extra_c_mcp_override_blocked(self) -> None:
+        # A second `-c mcp_servers.evil.command=...` would re-enable MCP and
+        # silently defeat --ignore-user-config. Only the effort pair is allowed,
+        # and -c must appear exactly once.
+        self.assertFalse(
+            self.ok(CANONICAL_YOLO + ' -c mcp_servers.evil.command="python3"')
+        )
+
+    def test_c_non_effort_key_blocked(self) -> None:
+        # `-c <anything-but-the-effort-pair>` → block.
+        self.assertFalse(
+            self.ok(
+                CANONICAL_YOLO.replace(
+                    "-c 'model_reasoning_effort=\"medium\"'",
+                    "-c 'sandbox_workspace_write.network_access=true'",
+                )
+            )
+        )
+
+    def test_c_bad_effort_value_blocked(self) -> None:
+        # The effort value must be one of the enum (none|low|medium|high|xhigh).
+        self.assertFalse(self.ok(CANONICAL_YOLO.replace("medium", "insane")))
+
+    def test_missing_c_blocked(self) -> None:
+        # `-c` is mandatory exactly once (the reference always emits it).
+        self.assertFalse(
+            self.ok(CANONICAL_YOLO.replace("-c 'model_reasoning_effort=\"medium\"' ", ""))
+        )
+
+    def test_duplicate_ignore_user_config_blocked(self) -> None:
+        self.assertFalse(self.ok(CANONICAL_YOLO + " --ignore-user-config"))
+
+    def test_duplicate_o_blocked(self) -> None:
+        self.assertFalse(self.ok(CANONICAL_YOLO + " -o .flow/tmp/codex-fn-1.2/x.json"))
+
+    def test_duplicate_output_schema_blocked(self) -> None:
+        self.assertFalse(
+            self.ok(CANONICAL_YOLO + " --output-schema .flow/tmp/codex-fn-1.2/s2.json")
+        )
+
 
 # ── Full hook end-to-end (subprocess — the production path) ───────────────────
 
@@ -417,6 +459,16 @@ class HookEndToEndTestCase(unittest.TestCase):
                 "-o .flow/tmp/codex-fn-1.2/result-batch-1.json "
                 "- < .flow/tmp/codex-fn-1.2/prompt-batch-1.md "
                 '--dangerously-bypass-approvals-and-sandbox"'
+            ),
+            self.BLOCKED,
+        )
+
+    def test_extra_c_mcp_override_blocked_by_hook(self) -> None:
+        # The security-critical case on the production path: an extra
+        # `-c mcp_servers.…` that would re-enable MCP must be blocked.
+        self.assertEqual(
+            _drive_hook(
+                CANONICAL_YOLO + ' -c mcp_servers.evil.command="python3"'
             ),
             self.BLOCKED,
         )
