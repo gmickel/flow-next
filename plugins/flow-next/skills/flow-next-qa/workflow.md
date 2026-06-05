@@ -202,19 +202,138 @@ Only re-evaluate the approach if **derivation** or the **fn-51 handoff** itself 
 
 ## Phase 5: file
 
-<!-- OWNER: fn-53.2 — structured P0/P1/P2 findings + evidence; feed the bug memory track.
-     Fill the body below. Do NOT edit sibling phase sections. -->
+<!-- OWNER: fn-53.2 — structured P0/P1/P2 findings + evidence; feed the bug memory track. -->
 
-**Goal:** file each failure as a structured P0/P1/P2 finding (persona, steps-to-reproduce, expected vs actual, evidence: console / screenshot / URL), filed immediately on FAIL. Findings feed the bug memory track via `memory add --track bug` (built-in overlap dedup — never `--no-overlap-check`) and carry the R-ID(s) they trace back to. *(Skeleton anchor — implemented in fn-53.2.)*
+**Goal:** file each failure as a structured P0/P1/P2 finding (persona, steps-to-reproduce, expected vs actual, evidence pointers), **filed immediately on FAIL** — not batched at the end. Findings feed the bug memory track via `memory add --track bug` (built-in overlap dedup — **never** `--no-overlap-check`) and carry the R-ID(s) they trace back to.
+
+The full filing discipline (taxonomy, evidence rules, reproduce-before-file, the `memory add` invocation, dedup surfacing, promote-to-spec) lives in **[references/bug-filing.md](references/bug-filing.md)** — read it before filing. The flow on the host:
+
+### 5.1 — Reproduce before you file (twice)
+
+Agentic driving is non-deterministic. A single failed observation is not yet a finding. **Re-run the scenario's failing step a second time** (fresh `observe → snapshot → act → verify`, same persona/viewport). File only if it fails both times. A pass-on-retry is a flake — record it in the run notes (not a finding), and move on. This defends the verdict against false P0s (the GitHub-Eng gap: self-reported failure ≈82% accurate; reproduce-twice closes it with structural evidence).
+
+### 5.2 — Severity (P0/P1/P2)
+
+Assign from the taxonomy in [references/bug-filing.md](references/bug-filing.md):
+
+- **P0** — blocks the core flow / data loss / security / crash: a real user cannot complete the scenario's goal.
+- **P1** — major degradation with a workaround, or a wrong-but-recoverable result.
+- **P2** — minor / cosmetic / edge polish.
+
+**Tie-break (never downgrade to avoid stopping):** when between two severities, take the **higher** if it touches the core flow or data integrity. A single open P0 is a NO in Phase 6 — do **not** relabel a P0 as P1 to keep the verdict green. Severity rests on observed user impact, never on convenience.
+
+### 5.3 — Capture the evidence pointers
+
+Every finding cites **real captured evidence** (from Phase 4, under `.flow/tmp/qa-<spec-id>/`), never narration:
+
+- **Console** — the last ~30 lines, verbatim (`.flow/tmp/qa-<spec-id>/<sid>-console.log`), referenced by path.
+- **Screenshot** — path under `.flow/tmp/qa-<spec-id>/` at the moment of failure.
+- **URL** — the full URL including query string at the point of failure.
+- **Write side-effects** — for any write path (create/update/delete), the server/DB row or API response confirming the actual persisted state.
+
+Evidence lives under `.flow/tmp/` (gitignored) and is **referenced by path**, never inlined into the receipt or memory body wholesale.
+
+### 5.4 — File the finding to bug memory (immediately, with dedup)
+
+On a confirmed FAIL, file at once via `memory add --track bug` **with overlap dedup left ON**. See [references/bug-filing.md](references/bug-filing.md) §"Filing to bug memory" for the full command and the finding body template. Skeleton:
+
+```bash
+# memory disabled → no-op cleanly (still record the finding in the run notes for the verdict).
+if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ]; then
+  mkdir -p .flow/tmp/qa-"$SPEC_ID"
+  # Write the finding body (problem / repro / expected-vs-actual / evidence pointers / R-IDs)
+  # to .flow/tmp/qa-$SPEC_ID/finding-<sid>.md per the reference template, then:
+  $FLOWCTL memory add \
+    --track bug --category "<ui|runtime-errors|integration|data|...>" \
+    --title "<persona> can't <goal> — <one-line symptom>" \
+    --module "<surface / route / component>" \
+    --tags "qa,<spec-id>,<surface>" \
+    --symptoms "<observed actual>" \
+    --root-cause "(observed via live QA — unconfirmed)" \
+    --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md
+  # NEVER pass --no-overlap-check. High overlap updates the existing entry in
+  # place; moderate overlap creates a related_to cross-reference. Surface
+  # "matches existing entry X" instead of re-filing on a re-run (idempotency).
+fi
+```
+
+The `memory add` overlap check is the dedup mechanism (per `docs/memory-schema.md`): a re-run of QA does **not** re-file the same finding — it folds into the existing entry. Findings can be **promoted to a flow spec/task** for the fix (compose from `flowctl spec create` / `/flow-next:capture`) — that is the spec↔scenario↔finding↔R-ID loop closing; see the reference.
+
+Track every finding's id and severity in a running list for Phase 6. **Read source to assert a PASS is forbidden (R1)** — but reading source to *explain* an already-evidenced failure (root-cause hint for the fix) is fine; the PASS gate is what's evidence-locked, not the post-hoc explanation.
 
 ---
 
 ## Phase 6: verdict
 
-<!-- OWNER: fn-53.2 — YES/NO ship verdict + open P0/P1 list; emit the qa_verdict receipt.
-     Fill the body below. Do NOT edit sibling phase sections. -->
+<!-- OWNER: fn-53.2 — YES/NO ship verdict + open P0/P1 list; emit the qa_verdict receipt. -->
 
-**Goal:** end with a YES/NO ship verdict + open P0/P1 list, emitted as a `type: qa_verdict` proof-of-work receipt. Four outcomes carried in `qa_outcome` — `SHIP` / `NEEDS_WORK` / `NA` (no driveable UI) / `BLOCKED` (no live deploy or driver) — with `verdict` holding the enum-compatible projection (`BLOCKED→NEEDS_WORK`, `NA→SHIP`). Honesty rules: incomplete R-ID coverage = NEEDS_WORK; a single open P0 = NEEDS_WORK; BLOCKED ≠ FAIL; the verdict rests on captured evidence, never narration. *(Skeleton anchor — implemented in fn-53.2.)*
+**Goal:** end with a YES/NO ship verdict + the open P0/P1 list, emitted as a `type: qa_verdict` proof-of-work receipt. The verdict rests on **captured evidence** (Phase 4) and **filed findings** (Phase 5) — never on agent narration, never on reading the diff.
+
+### 6.1 — Pick the `qa_outcome` (the four-outcome matrix)
+
+QA has **four** distinct outcomes. Pick exactly one, in this precedence order:
+
+1. **BLOCKED** — no live deploy reachable OR no driver available (incl. fn-51 degraded to the terminal manual rung). Could not verify. **BLOCKED ≠ FAIL** — it is "no ship *claim* on a QA basis," not "the app is broken." Set `blocked_reason`.
+2. **NA** — the spec has **no driveable user-visible AC** (all backend/CLI/non-UI — like most of flow-next's own specs). Live QA raises no objection because there is nothing to drive. Set `na_reason`.
+3. **NEEDS_WORK** — any open P0 or P1 finding, **OR** incomplete `live` coverage of a UI-observable R-ID (an honest gap is a NO, never a confident PASS). This is the NO outcome.
+4. **SHIP** — all derived scenarios pass on the live app, **zero** open P0/P1, and the R-ID coverage spine is complete for every UI-observable criterion. The YES outcome.
+
+**Honesty rules (load-bearing):**
+- A **single open P0 = NEEDS_WORK.** Do not downgrade a P0 to P1 to avoid stopping (Phase 5.2 tie-break).
+- **Incomplete R-ID coverage = NEEDS_WORK**, not SHIP — a `⚠️ no live scenario` row on a UI-observable R-ID is an uncovered gap.
+- **SHIP is forbidden without captured live-app evidence (R1).** If you cannot point to a screenshot/console/observed-state artifact per passing scenario, the outcome is BLOCKED, never SHIP.
+
+### 6.2 — Project `qa_outcome` → `verdict` (the Ralph-guard enum)
+
+`ralph-guard.py` validates **only** `verdict ∈ {SHIP, NEEDS_WORK, MAJOR_RETHINK}` (`validate_receipt_data`). The four QA outcomes live in `qa_outcome`; `verdict` is the enum-compatible **projection**:
+
+| `qa_outcome` | `verdict` | Rationale |
+|--------------|-----------|-----------|
+| `SHIP` | `SHIP` | all pass, zero open P0/P1, coverage complete |
+| `NEEDS_WORK` | `NEEDS_WORK` | open P0/P1 or incomplete coverage |
+| `BLOCKED` | `NEEDS_WORK` | could not verify → no ship claim on a QA basis |
+| `NA` | `SHIP` | no driveable UI → live QA raises no objection (`na_reason` records why) |
+
+QA never emits `MAJOR_RETHINK` — it is a valid enum member the guard accepts, but the QA matrix has no outcome that maps to it.
+
+### 6.3 — Write the `qa_verdict` receipt (direct write — the make-pr pattern)
+
+QA has **no review-backend subprocess**, so the receipt is written **directly** (the make-pr / impl-review-RP idiom — `cat > … <<EOF`), **not** via a `flowctl <backend> validate --receipt` path. Resolve the path from the caller (`--receipt` flag or `REVIEW_RECEIPT_PATH`) else default to the committed `.flow/review-receipts/qa-<spec-id>.json`; `mkdir -p` the parent first.
+
+```bash
+# QA_OUTCOME ∈ {SHIP,NEEDS_WORK,NA,BLOCKED} from §6.1; project to the enum (§6.2).
+case "$QA_OUTCOME" in
+  SHIP)       VERDICT="SHIP" ;;
+  NEEDS_WORK) VERDICT="NEEDS_WORK" ;;
+  BLOCKED)    VERDICT="NEEDS_WORK" ;;
+  NA)         VERDICT="SHIP" ;;
+  *) echo "Internal error: bad qa_outcome '$QA_OUTCOME'" >&2; exit 1 ;;
+esac
+
+# MODE: ralph (REVIEW_RECEIPT_PATH set) | rp (--receipt passed) | interactive (default).
+RECEIPT_PATH="${QA_RECEIPT_OVERRIDE:-${REVIEW_RECEIPT_PATH:-$REPO_ROOT/.flow/review-receipts/qa-$SPEC_ID.json}}"
+mkdir -p "$(dirname "$RECEIPT_PATH")"
+TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+# OPEN_P0P1 = JSON array of finding ids that are open P0/P1 (from Phase 5); "[]" when none.
+# Optional reason fields: set ONLY for their outcome (BLOCKED → blocked_reason, NA → na_reason).
+EXTRA=""
+[ "$QA_OUTCOME" = "BLOCKED" ] && EXTRA=",\"blocked_reason\":\"$BLOCKED_REASON\""
+[ "$QA_OUTCOME" = "NA" ]      && EXTRA=",\"na_reason\":\"$NA_REASON\""
+
+cat > "$RECEIPT_PATH" <<EOF
+{"type":"qa_verdict","id":"$SPEC_ID","mode":"$MODE","verdict":"$VERDICT","qa_outcome":"$QA_OUTCOME","open_p0p1":${OPEN_P0P1:-[]}$EXTRA,"timestamp":"$TS"}
+EOF
+echo "QA_VERDICT_WRITTEN: $RECEIPT_PATH ($QA_OUTCOME → $VERDICT)"
+```
+
+The default path `.flow/review-receipts/qa-<spec-id>.json` is **committed** (the receipts dir is tracked); `.flow/tmp/` (evidence) is gitignored. A second QA pass **overwrites** the latest receipt (idempotent) — findings dedup against bug memory (Phase 5), the receipt reflects the latest run.
+
+**There is NO generic `flowctl receipt write` helper** — compose the JSON as above. `qa-*.json` is not a path the Ralph guard's `parse_receipt_path` recognizes, so it validates via the plain verdict-enum check only (the planning decision: QA is **not** a hard Ralph receipt-gate in v1 — no `ralph-guard.py` change).
+
+### 6.4 — Surface the verdict to the user
+
+Print the YES/NO call, the `qa_outcome`, the open P0/P1 list (with finding ids + severities), and the R-ID coverage table (reused from Phase 2.2, now annotated with pass/fail per scenario). The verdict is shaped to feed `spec-completion-review` ("does the *live app* satisfy the AC, not just the code") — documented-only in v1; completion-review does not yet read the qa receipt.
 
 ---
 
