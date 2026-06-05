@@ -18158,10 +18158,25 @@ def cmd_codex_rollback_plan(args: argparse.Namespace) -> None:
     ``--repo-root`` is accepted for symmetry with the documented contract and
     future use (e.g. resolving snapshot-relative paths); the computation itself
     is a pure set diff over the two snapshots, so it does not touch the repo.
+
+    ``--print0`` emits ONLY the sanitized ``rollback_paths`` to stdout,
+    NUL-delimited (one trailing NUL per path), and nothing else — feed it
+    straight to ``xargs -0 git clean -fd --`` for a whitespace/newline-safe argv.
+    When the set is EMPTY (every new path rejected), it writes nothing, so
+    ``xargs -0 --no-run-if-empty`` never invokes a bare ``git clean``. (Pair it
+    with the documented ``rollback_paths | length`` guard for belt-and-braces.)
     """
     pre = _read_nul_delimited(args.preexisting_untracked_file)
     post = _read_nul_delimited(args.post_untracked_file)
     plan = rollback_plan(pre, post)
+
+    if getattr(args, "print0", False):
+        # NUL-delimited paths only — for `xargs -0 git clean -fd --`. Bytes are
+        # written verbatim (no rewrite): surrogateescape round-trips odd bytes.
+        data = "".join(p + "\x00" for p in plan["rollback_paths"])
+        sys.stdout.buffer.write(data.encode("utf-8", "surrogateescape"))
+        sys.stdout.buffer.flush()
+        return
 
     if args.json:
         json_output(plan)
@@ -24704,6 +24719,12 @@ def main() -> None:
         help="NUL-delimited untracked snapshot captured AFTER the run",
     )
     p_codex_rollback.add_argument("--json", action="store_true", help="JSON output")
+    p_codex_rollback.add_argument(
+        "--print0",
+        action="store_true",
+        help="Emit ONLY the sanitized rollback paths, NUL-delimited, for "
+        "`xargs -0 git clean -fd --` (empty set → no output → no bare clean)",
+    )
     p_codex_rollback.set_defaults(func=cmd_codex_rollback_plan)
 
     # copilot (GitHub Copilot CLI helpers). Subcommand surface mirrors codex;

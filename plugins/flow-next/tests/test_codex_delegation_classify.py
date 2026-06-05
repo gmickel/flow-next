@@ -416,6 +416,45 @@ class RollbackPlanLiveCliTestCase(unittest.TestCase):
         plan = self._run([], ["only.py"])
         self.assertEqual(plan["rollback_paths"], ["only.py"])
 
+    def _run_print0(self, pre_paths: list, post_paths: list) -> bytes:
+        pre = self._snapshot("pre.txt", pre_paths)
+        post = self._snapshot("post.txt", post_paths)
+        proc = subprocess.run(
+            [
+                str(FLOWCTL_BIN),
+                "codex",
+                "rollback-plan",
+                "--repo-root",
+                str(self.tmp),
+                "--preexisting-untracked-file",
+                str(pre),
+                "--post-untracked-file",
+                str(post),
+                "--print0",
+            ],
+            capture_output=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr.decode())
+        return proc.stdout
+
+    def test_print0_emits_nul_delimited_paths(self) -> None:
+        # REGRESSION (review P1/75): --print0 gives a whitespace-safe NUL argv.
+        out = self._run_print0(["pre.py"], ["pre.py", " ws.py", "dir/a.py"])
+        # NUL-delimited; trailing NUL per path. A whitespace path stays intact.
+        parts = [p for p in out.split(b"\x00") if p]
+        self.assertEqual(sorted(parts), [b" ws.py", b"dir/a.py"])
+
+    def test_print0_empty_set_emits_nothing(self) -> None:
+        # REGRESSION (review P1/75): when EVERY new path is rejected (or there is
+        # nothing new), --print0 writes NOTHING — so `xargs -0 --no-run-if-empty`
+        # never invokes a bare `git clean`. This is the anti-bare-clean guard.
+        out = self._run_print0(["pre.py"], ["pre.py", ".flow/tasks/x.md", "/abs"])
+        self.assertEqual(out, b"")
+
+    def test_print0_nothing_new_emits_nothing(self) -> None:
+        out = self._run_print0(["a.py"], ["a.py"])
+        self.assertEqual(out, b"")
+
     def test_full_mix_via_cli(self) -> None:
         plan = self._run(
             ["pre.py"],
@@ -614,6 +653,17 @@ class DelegationProseContractTestCase(unittest.TestCase):
         self.assertIn("git clean", low)
         # never a bare git clean.
         self.assertIn("never", low)
+
+    def test_rollback_has_nonempty_guard(self) -> None:
+        # REGRESSION (review P1/75): both reference and worker MUST guard the
+        # `git clean` against an empty path set (else an all-rejected set
+        # degrades into a bare clean) AND use --print0 for a safe argv.
+        for doc in (self.ref, self.worker):
+            self.assertIn("rollback_paths | length", doc)
+            self.assertIn("--print0", doc)
+            self.assertIn("xargs -0", doc)
+            # The buggy literal-space jq join must NOT be present anywhere.
+            self.assertNotIn('.rollback_paths[] + " "', doc)
 
 
 @unittest.skipUnless(shutil.which("bash"), "bash required for predicate")

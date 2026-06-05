@@ -151,9 +151,18 @@ THIS task's implementation to `codex exec`:
    # Scoped rollback (on a failure / partial-discard) — NEVER bare `git clean`:
    $FLOWCTL codex rollback-plan --repo-root . \
      --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
-     --post-untracked-file "$SCRATCH/post-untracked.txt" --json
-   #   → feed ONLY the sanitized rollback_paths to `git clean -fd -- <paths>`
-   #     (never a pre-existing untracked file, never a `.flow/**` path).
+     --post-untracked-file "$SCRATCH/post-untracked.txt" --json > "$SCRATCH/plan.json"
+   # MANDATORY non-empty guard: if EVERY new path was rejected, rollback_paths is
+   # empty and a bare `git clean -fd --` would wipe ALL untracked output. Guard it.
+   # `--print0` emits the sanitized paths NUL-delimited (whitespace/newline-safe):
+   if [ "$(jq '.rollback_paths | length' "$SCRATCH/plan.json")" -gt 0 ]; then
+     $FLOWCTL codex rollback-plan --repo-root . \
+       --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
+       --post-untracked-file "$SCRATCH/post-untracked.txt" --print0 \
+       | xargs -0 git clean -fd --
+   fi
+   #   → feeds ONLY the sanitized rollback_paths (never a pre-existing untracked
+   #     file, never a `.flow/**` path, never an empty/bare `git clean`).
    ```
 
    - `pre-untracked.txt` / `post-untracked.txt` are captured with

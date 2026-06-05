@@ -575,26 +575,46 @@ git ls-files --others --exclude-standard -z > "$SCRATCH/post-untracked.txt"
 # Compute the SAFE cleanup set (post − pre, sanitized):
 $FLOWCTL codex rollback-plan --repo-root . \
   --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
-  --post-untracked-file "$SCRATCH/post-untracked.txt" --json
+  --post-untracked-file "$SCRATCH/post-untracked.txt" --json > "$SCRATCH/plan.json"
 # → { rollback_paths: [...sanitized repo-relative FILE paths...], rejected: [...] }
 
 # Roll back (only when class is a failure / partial-discard):
 git checkout -- <tracked paths>            # tracked-only revert (never untracked)
-git clean -fd -- <rollback_paths>          # ONLY the sanitized post−pre FILES
+
+# MANDATORY non-empty guard — NEVER let `git clean` run with an empty path list.
+# If EVERY new path was rejected (all .flow/**, backslash, absolute, traversal,
+# bare-dir), `rollback_paths` is empty and `git clean -fd --` would degrade into
+# a BARE clean (github/copilot-cli#1675). The guard makes that impossible. Read
+# array via `--print0` (whitespace/newline-safe argv) — never shell-split it.
+N="$(jq '.rollback_paths | length' "$SCRATCH/plan.json")"
+if [ "$N" -gt 0 ]; then
+  # `--print0` emits the sanitized paths NUL-delimited (whitespace/newline-safe
+  # argv) — never shell-split the JSON text. Clean ONLY codex-created FILES:
+  $FLOWCTL codex rollback-plan --repo-root . \
+    --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
+    --post-untracked-file "$SCRATCH/post-untracked.txt" --print0 \
+    | xargs -0 git clean -fd --
+fi
+# N == 0 → there is nothing codex-created to clean → DO NOT call `git clean`.
+# (Belt-and-braces: --print0 emits nothing on an empty set, so even without
+#  the count guard, xargs -0 --no-run-if-empty never invokes a bare clean.)
 ```
 
-Key guarantees (all enforced by `rollback-plan`, all covered by tests):
+Key guarantees (all enforced by `rollback-plan` + the non-empty guard, all
+covered by tests):
 - The cleanup set is **`post − pre`** — derived from the snapshots, **NOT** from
   the result's `files_modified` (absent on CLI-failure / missing / malformed, yet
   Codex may have created untracked files). So cleanup works even with no result.
 - **Never bare `git clean`** — a bare clean has destroyed gigabytes of untracked
   output in the wild (github/copilot-cli#1675). `git clean` is fed ONLY the
-  sanitized path list.
+  sanitized path list, **and only when that list is non-empty** (the `N -gt 0`
+  guard — an all-rejected set must NEVER reach `git clean`).
 - **Never a pre-existing untracked file** (it's in `pre`, so excluded by the diff).
 - **Never a `.flow/**` path** — host-owned (plan-sync, specs, tasks); `.flow/`
   paths are rejected by `rollback-plan`.
-- Rejected: absolute paths, `..` traversal, empty, `.`, bare directories,
-  `.flow/**`. `git clean -fd <files>` removes the now-empty parent dirs.
+- Rejected: absolute paths, `..` traversal, empty, `.`, backslash paths, bare
+  directories, `.flow/**`. `git clean -fd <files>` removes the now-empty parent
+  dirs.
 
 ### Circuit breaker (host-owned)
 
