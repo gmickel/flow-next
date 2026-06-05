@@ -11,10 +11,8 @@
 This reference is the **host-side** substrate. The pre-flight gates + one-time
 consent run **once, in the host work skill** (the orchestrator), BEFORE the
 per-task loop — NOT in the spawned `worker` subagent. The worker is a subagent
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
-and cannot call `plain-text numbered prompt` (Claude Code #12890/#34592), so consent must
-live here. The host resolves the gates once, then passes the resolved flags
+and cannot prompt the user for consent (Claude Code #12890/#34592 — a spawned
+subagent has no interactive consent path), so consent must live here. The host resolves the gates once, then passes the resolved flags
 (`delegate on/off`, sandbox, effort floor, decision) into each spawned worker's
 prompt where `phases.md` Phase 3c injects worker context.
 
@@ -167,11 +165,13 @@ codex_available() {
 
 ### Gate 4 — One-time consent + sandbox mode (HOST skill only)
 
-Consent runs in the **host work skill** (`SKILL.md` / `phases.md`) via
-`plain-text numbered prompt` — NOT in the worker subagent (it cannot call `plain-text numbered prompt`,
-#12890/#34592). Issue it **once**; persist the result so a second run does not
-re-prompt. Pattern: lead-with-recommendation + persist-on-confirmation (mirrors
-the tracker-sync discovery ceremony).
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+The host asks the user via `plain-text numbered prompt` (NOT the worker subagent — a spawned
+subagent has no interactive consent path; #12890/#34592).
+Issue it **once**; persist the result so a second run does not re-prompt.
+Pattern: lead-with-recommendation + persist-on-confirmation (mirrors the
+tracker-sync discovery ceremony).
 
 The consent decides the **sandbox mode**:
 
@@ -187,9 +187,8 @@ do NOT re-ask; use the persisted `work.delegateSandbox`.
 # Gate 4 (interactive): only ask if consent not already granted.
 CONSENT="$($FLOWCTL config get work.delegateConsent --json | jq -r '.value')"
 if [ "$CONSENT" != "true" ]; then
- # Host calls plain-text numbered prompt (load its schema first: ToolSearch select:plain-text numbered prompt).
- # Lead with the recommendation (yolo), explain the network tradeoff, then on
- # confirmation persist BOTH keys:
+ # Host asks the user for consent. Lead with the recommendation (yolo), explain
+ # the network tradeoff, then on confirmation persist BOTH keys:
  $FLOWCTL config set work.delegateConsent true
  $FLOWCTL config set work.delegateSandbox <yolo|full-auto> # the chosen mode
  # If the user declines consent → delegation OFF for this run (standard mode).
@@ -198,8 +197,8 @@ fi
 
 **Headless (Ralph):** there is no prompt path. Proceed only if
 `work.delegateConsent` is already `true` (pre-granted in config); else delegation
-stays **silently off** — no `plain-text numbered prompt`, never blocks the loop. Headless is
-detected by `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` being set.
+stays **silently off** — no consent prompt is issued, never blocks the loop.
+Headless is detected by `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` being set.
 
 ### Gate 5 — Input is a plan/spec/task, not a bare prompt
 
@@ -217,14 +216,14 @@ input_kind_ok() {
 After the gates pass, `work.delegateDecision` controls per-task prompting:
 
 - **`auto`** (default) → delegate every eligible task without a per-task prompt.
-- **`ask`** → in **interactive** mode the host asks (`plain-text numbered prompt`) before
- delegating each task. **Headless** has no prompt path, so `ask` is treated as
- **`auto` only when** `work.delegateConsent` is already `true`; otherwise
+- **`ask`** → in **interactive** mode the host asks the user via `plain-text numbered prompt`
+ before delegating each task. **Headless** has no prompt path, so `ask` is treated
+ as **`auto` only when** `work.delegateConsent` is already `true`; otherwise
  delegation stays off.
 
 ```bash
 DECISION="$($FLOWCTL config get work.delegateDecision --json | jq -r '.value')"
-# interactive + ask → host plain-text numbered prompt before each delegated task
+# interactive + ask → host asks the user before each delegated task
 # auto (or headless with consent) → delegate eligible tasks without a prompt
 ```
 

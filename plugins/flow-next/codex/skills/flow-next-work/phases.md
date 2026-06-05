@@ -107,8 +107,6 @@ Phase 2.
 When `delegation_active`, read [references/codex-delegation.md](references/codex-delegation.md)
 and run its host pre-flight gates + one-time consent **ONCE here**, before the
 Phase 3 per-task loop. Run them in the **host** (this skill) — NOT the worker
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
 subagent, which cannot call `plain-text numbered prompt` (#12890/#34592). The reference
 pins the exact probes; the gate sequence is:
 

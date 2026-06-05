@@ -26,8 +26,6 @@ FLOWCTL="$HOME/.codex/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
 **Inline skill (no `context: fork`)** — `plain-text numbered prompt` must stay reachable across phases. Subagents can't call plain-text numbered prompts (Claude Code issues #12890, #34592). Phase 3 (Ask) and Phase 6 (Discoverability check) both require user choice in interactive mode.
 
 ## Mode Detection
@@ -65,6 +63,8 @@ fi
 In autofix mode, skip user questions entirely and apply the rules above.
 
 In interactive mode, follow these principles:
+
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
 - Ask **one question at a time** via `plain-text numbered prompt`. Never silently skip the question.
 - Prefer **multiple choice** when natural options exist.
