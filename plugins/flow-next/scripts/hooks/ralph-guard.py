@@ -125,13 +125,39 @@ def command_has_json_field(command: str, field: str) -> bool:
 _DELEGATE_YOLO_FLAG = "--dangerously-bypass-approvals-and-sandbox"
 
 
-def _scratch_dir_of(path: str):
-    """Return the `.flow/tmp/codex-<id>/` scratch-dir prefix of a repo-relative
-    path, or None. Accepts an optional `./` lead. The trailing slash is included
-    so a sibling like `.flow/tmp/codex-fn-1.2-evil` cannot prefix-match the
-    `.flow/tmp/codex-fn-1.2` scratch dir."""
-    m = re.match(r"(?:\./)?(\.flow/tmp/codex-[^/\s'\"]+)/", path)
-    return m.group(1) if m else None
+# Canonical scratch-file basenames the reference emits (codex-delegation.md). A
+# delegation path must be EXACTLY `[./].flow/tmp/codex-<id>/<one-of-these>` — no
+# extra path segments, no `..` traversal (which would prefix-match the scratch
+# dir yet escape it, e.g. `.flow/tmp/codex-x/../../tasks/y.json`).
+_SCRATCH_BASENAMES = {
+    "schema": r"result-schema\.json",
+    "result": r"result-batch-\d+\.json",
+    "prompt": r"prompt-batch-\d+\.md",
+}
+
+
+def _scratch_dir_of(path: str, kind: str):
+    """Return the `.flow/tmp/codex-<id>` scratch dir of a delegation `path`, or
+    None. STRICT — the path must be exactly
+    ``[./].flow/tmp/codex-<id>/<canonical-basename>`` for the given `kind`
+    (schema | result | prompt). No nested subdirs, no ``..`` traversal, no
+    absolute path, no backslash — so a path that prefix-matches the scratch dir
+    but then escapes it (`codex-x/../../tasks/y.json`) is rejected.
+
+    The `<id>` segment itself is constrained to a flow-id charset
+    (`[A-Za-z0-9._-]+`) so it cannot smuggle a `.` (current-dir) or a slash."""
+    basename = _SCRATCH_BASENAMES[kind]
+    m = re.fullmatch(
+        r"(?:\./)?(\.flow/tmp/codex-[A-Za-z0-9._-]+)/" + basename, path
+    )
+    if not m:
+        return None
+    # Defensive: the id charset allows dots, so explicitly reject any `..` segment
+    # in the captured scratch dir (e.g. a literal `codex-..`).
+    scratch = m.group(1)
+    if any(seg in ("", ".", "..") for seg in scratch.split("/")):
+        return None
+    return scratch
 
 
 def is_canonical_codex_delegation(command: str) -> bool:
@@ -243,14 +269,14 @@ def is_canonical_codex_delegation(command: str) -> bool:
             if val is None:
                 return False
             counts["--output-schema"] += 1
-            schema_dir = _scratch_dir_of(val)
+            schema_dir = _scratch_dir_of(val, "schema")
             i += 2
         elif tok == "-o":
             val = _need_value(i)
             if val is None:
                 return False
             counts["-o"] += 1
-            scratch = _scratch_dir_of(val)
+            scratch = _scratch_dir_of(val, "result")
             i += 2
         elif tok == _DELEGATE_YOLO_FLAG:
             counts["sandbox"] += 1
@@ -268,7 +294,7 @@ def is_canonical_codex_delegation(command: str) -> bool:
             if path is None:
                 return False
             counts["prompt"] += 1
-            prompt_dir = _scratch_dir_of(path)
+            prompt_dir = _scratch_dir_of(path, "prompt")
             i += 3
         else:
             # Unknown / unexpected token (a smuggled prompt, an extra flag,

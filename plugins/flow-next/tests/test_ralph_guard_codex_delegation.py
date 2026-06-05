@@ -307,15 +307,17 @@ class CanonicalDelegationHelperTestCase(unittest.TestCase):
 
     def test_extra_positional_prompt_arg_blocked(self) -> None:
         # An otherwise-canonical command with a stray positional prompt arg → the
-        # argv walk hits an unexpected token → block.
+        # argv walk hits an unexpected token → block. (Canonical basenames here so
+        # the ONLY reason to block is the stray positional, not a bad basename.)
         self.assertFalse(
             self.ok(
                 "FLOW_DELEGATE_CODEX=1 codex exec --ignore-user-config "
-                "--output-schema .flow/tmp/codex-fn-1.2/s.json "
-                "-o .flow/tmp/codex-fn-1.2/r.json "
+                "-c 'model_reasoning_effort=\"medium\"' "
+                "--output-schema .flow/tmp/codex-fn-1.2/result-schema.json "
+                "-o .flow/tmp/codex-fn-1.2/result-batch-1.json "
                 "--dangerously-bypass-approvals-and-sandbox "
                 '"arbitrary prompt" '
-                "- < .flow/tmp/codex-fn-1.2/p.md"
+                "- < .flow/tmp/codex-fn-1.2/prompt-batch-1.md"
             )
         )
 
@@ -372,11 +374,83 @@ class CanonicalDelegationHelperTestCase(unittest.TestCase):
         self.assertFalse(self.ok(CANONICAL_YOLO + " --ignore-user-config"))
 
     def test_duplicate_o_blocked(self) -> None:
-        self.assertFalse(self.ok(CANONICAL_YOLO + " -o .flow/tmp/codex-fn-1.2/x.json"))
+        # Second -o with a canonical basename → blocks on the duplicate, not a
+        # bad basename.
+        self.assertFalse(
+            self.ok(CANONICAL_YOLO + " -o .flow/tmp/codex-fn-1.2/result-batch-2.json")
+        )
 
     def test_duplicate_output_schema_blocked(self) -> None:
         self.assertFalse(
-            self.ok(CANONICAL_YOLO + " --output-schema .flow/tmp/codex-fn-1.2/s2.json")
+            self.ok(
+                CANONICAL_YOLO
+                + " --output-schema .flow/tmp/codex-fn-1.2/result-schema.json"
+            )
+        )
+
+    # --- block: path traversal / containment escape (RP finding) ---
+
+    def test_o_path_traversal_blocked(self) -> None:
+        # `.flow/tmp/codex-fn-1.2/../../tasks/x.json` prefix-matches the scratch
+        # dir but ESCAPES it — must block.
+        self.assertFalse(
+            self.ok(
+                CANONICAL_YOLO.replace(
+                    "-o .flow/tmp/codex-fn-1.2/result-batch-1.json",
+                    "-o .flow/tmp/codex-fn-1.2/../../tasks/result-batch-1.json",
+                )
+            )
+        )
+
+    def test_schema_path_traversal_blocked(self) -> None:
+        self.assertFalse(
+            self.ok(
+                CANONICAL_YOLO.replace(
+                    "--output-schema .flow/tmp/codex-fn-1.2/result-schema.json",
+                    "--output-schema .flow/tmp/codex-fn-1.2/../../config.json",
+                )
+            )
+        )
+
+    def test_prompt_path_traversal_blocked(self) -> None:
+        self.assertFalse(
+            self.ok(
+                CANONICAL_YOLO.replace(
+                    "- < .flow/tmp/codex-fn-1.2/prompt-batch-1.md",
+                    "- < .flow/tmp/codex-fn-1.2/../../specs/prompt-batch-1.md",
+                )
+            )
+        )
+
+    def test_nested_subdir_in_scratch_blocked(self) -> None:
+        # An extra path segment under the scratch dir is non-canonical.
+        self.assertFalse(
+            self.ok(
+                CANONICAL_YOLO.replace(
+                    "-o .flow/tmp/codex-fn-1.2/result-batch-1.json",
+                    "-o .flow/tmp/codex-fn-1.2/sub/result-batch-1.json",
+                )
+            )
+        )
+
+    def test_wrong_basename_in_scratch_blocked(self) -> None:
+        # A non-canonical basename under the scratch dir → block.
+        self.assertFalse(
+            self.ok(
+                CANONICAL_YOLO.replace(
+                    "-o .flow/tmp/codex-fn-1.2/result-batch-1.json",
+                    "-o .flow/tmp/codex-fn-1.2/evil.sh",
+                )
+            )
+        )
+
+    def test_absolute_o_path_blocked(self) -> None:
+        self.assertFalse(
+            self.ok(
+                CANONICAL_YOLO.replace(
+                    "-o .flow/tmp/codex-fn-1.2/result-batch-1.json", "-o /etc/passwd"
+                )
+            )
         )
 
 
@@ -469,6 +543,18 @@ class HookEndToEndTestCase(unittest.TestCase):
         self.assertEqual(
             _drive_hook(
                 CANONICAL_YOLO + ' -c mcp_servers.evil.command="python3"'
+            ),
+            self.BLOCKED,
+        )
+
+    def test_o_path_traversal_blocked_by_hook(self) -> None:
+        # Path-traversal containment escape on the production path → block.
+        self.assertEqual(
+            _drive_hook(
+                CANONICAL_YOLO.replace(
+                    "-o .flow/tmp/codex-fn-1.2/result-batch-1.json",
+                    "-o .flow/tmp/codex-fn-1.2/../../tasks/result-batch-1.json",
+                )
             ),
             self.BLOCKED,
         )

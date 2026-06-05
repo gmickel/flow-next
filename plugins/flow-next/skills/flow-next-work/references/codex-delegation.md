@@ -766,9 +766,14 @@ ALL of the following must hold:
   re-enable MCP and silently defeat `--ignore-user-config`, so any non-effort or
   duplicate `-c` is non-canonical;
 - an `-o` output target under a `.flow/tmp/codex-<id>/` scratch dir, AND
-  `--output-schema` + the stdin prompt (`- < …`) under the **SAME** scratch dir
-  (an inline prompt, or a schema/prompt elsewhere or split across dirs, is
-  non-canonical; a trailing-slash anchor prevents a sibling-prefix collision);
+  `--output-schema` + the stdin prompt (`- < …`) under the **SAME** scratch dir.
+  Each path must be **exactly** `[./].flow/tmp/codex-<id>/<canonical-basename>`
+  with NO nested subdir, NO `..` traversal, NO absolute/backslash path — the
+  basenames are pinned to `result-batch-<n>.json` / `result-schema.json` /
+  `prompt-batch-<n>.md`. So a path that prefix-matches the scratch dir yet escapes
+  it (`codex-<id>/../../tasks/x.json`) is rejected, and a sibling-prefix dir
+  (`codex-fn-1.2-evil`) is not confused with `codex-fn-1.2`. An inline prompt, or
+  a schema/prompt elsewhere or split across dirs, is non-canonical;
 - a sandbox flag from the allowlist
   (`--dangerously-bypass-approvals-and-sandbox` | `-s workspace-write` — `-s`
   must be exactly `workspace-write`);
