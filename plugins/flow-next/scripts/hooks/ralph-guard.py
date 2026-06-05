@@ -127,60 +127,113 @@ _DELEGATE_SANDBOX_PATTERNS = (
 )
 
 
+# Shell control / chaining metacharacters that would let a second command ride
+# along on the same Bash invocation. A canonical delegation is exactly ONE
+# command — any of these means it is not, and the allowance must NOT apply
+# (else `FLOW_DELEGATE_CODEX=1 codex exec <canonical> ; rm -rf /` would pass).
+# `<` is the SINGLE permitted redirect (stdin prompt: `- < <scratch>/prompt…`);
+# everything else (`>`, `>>`, `|`, `;`, `&`, `$(`, backtick, newline, `(`/`)`,
+# `{`/`}`) is rejected.
+_SHELL_CHAINING_PATTERN = re.compile(
+    r"(?:"
+    r"[;&|`\n(){}]"          # ; && || | & ` newline ( ) { }
+    r"|\$\("                 # $( command substitution
+    r"|\$\{"                 # ${ parameter/command expansion start
+    r"|>"                    # any output redirect (>, >>, &>, 2>) — none are canonical
+    r")"
+)
+
+
+def _scratch_dir_of(path: str):
+    """Return the `.flow/tmp/codex-<id>/` scratch-dir prefix of a repo-relative
+    path, or None. Accepts an optional `./` lead. The trailing slash is included
+    so a sibling like `.flow/tmp/codex-evil-vs-codex-x` cannot prefix-match a
+    different scratch dir."""
+    m = re.match(r"(?:\./)?(\.flow/tmp/codex-[^/\s'\"]+)/", path)
+    return m.group(1) if m else None
+
+
 def is_canonical_codex_delegation(command: str) -> bool:
     """Return True ONLY for the FULL canonical Codex implementation-delegation
     shape that fn-55 teaches (worker.md Phase 2 / codex-delegation.md).
 
     This is deliberately strict: the inline ``FLOW_DELEGATE_CODEX=1`` sentinel
     alone is NOT sufficient (else any Ralph Bash call could bypass the guard by
-    prepending it). EVERY one of the following must hold:
+    prepending it). The command must be EXACTLY ONE codex invocation — no shell
+    chaining (``;`` / ``&&`` / ``|`` / ``$(...)`` / redirects to other files /
+    a second ``codex exec``) — and EVERY one of the following must hold:
 
-      * inline ``FLOW_DELEGATE_CODEX=1`` env prefix (on the command string,
-        positioned before the ``codex`` token — a pre-exported var never reaches
-        this hook anyway, and a trailing/argument occurrence does not count);
-      * the ``codex exec`` subcommand (NOT ``resume`` / ``review`` / ``--last``);
+      * the command is a SINGLE command (no chaining metacharacters);
+      * inline ``FLOW_DELEGATE_CODEX=1`` env prefix, positioned before the
+        ``codex`` token (a pre-exported var never reaches this hook; a
+        trailing/argument occurrence does not count);
+      * EXACTLY ONE ``codex`` token, and it is ``codex exec`` (NOT ``resume`` /
+        ``review`` / ``--last``);
       * ``--ignore-user-config`` (load-bearing — without it MCP servers can
         re-enable and silently drop ``--output-schema``);
-      * ``--output-schema`` present;
-      * an ``-o`` output target under ``.flow/tmp/codex-*``;
+      * ``-o`` output target under a ``.flow/tmp/codex-<id>/`` scratch dir;
+      * ``--output-schema`` AND the stdin prompt (``- < …``) under the SAME
+        scratch dir as ``-o``;
       * a sandbox flag from the allowlist (yolo | ``-s workspace-write``);
       * NO ``--last`` (session-continuity escape hatch — always blocked).
 
-    Any deviation (missing flag, ``--last``, ``resume``/``review``, an ``-o``
-    target outside ``.flow/tmp/codex-*``) falls through → the normal block path.
+    Any deviation falls through → the normal block path.
     """
-    # 1. Inline FLOW_DELEGATE_CODEX=1 prefix, positioned BEFORE the codex token.
-    #    `re.search` would accept the sentinel anywhere; anchor it as an env-prefix
-    #    assignment that precedes `codex` so a sentinel buried in args won't pass.
+    # 0. Single command only. Any shell chaining / extra redirect / subshell means
+    #    this is NOT one canonical invocation — a trailing `; codex exec --last`
+    #    or `&& rm -rf …` must never inherit the allowance.
+    if _SHELL_CHAINING_PATTERN.search(command):
+        return False
+
+    # 1. Exactly ONE codex token (any subcommand). A second `codex …` — even one
+    #    that on its own would look canonical — is rejected by the count.
+    codex_tokens = list(re.finditer(r"(?<![\w./-])codex\b", command))
+    if len(codex_tokens) != 1:
+        return False
+
+    # 2. That one codex token must be `codex exec` (never resume / review).
+    if not re.search(r"(?<![\w./-])codex\s+exec\b", command):
+        return False
+
+    # 3. Inline FLOW_DELEGATE_CODEX=1 prefix, positioned BEFORE the codex token.
     sentinel = re.search(r"(?<![\w-])FLOW_DELEGATE_CODEX=1\b", command)
-    codex_tok = re.search(r"(?<![\w./-])codex\s+exec\b", command)
-    if not sentinel or not codex_tok:
-        return False
-    if sentinel.start() > codex_tok.start():
+    if not sentinel or sentinel.start() > codex_tokens[0].start():
         return False
 
-    # 2. codex exec only — never resume / review (and never --last, below).
-    if re.search(r"(?<![\w./-])codex\s+(?:resume|review)\b", command):
-        return False
-
-    # 3. --last is always forbidden, even on an otherwise-canonical shape.
+    # 4. --last is always forbidden, even on an otherwise-canonical shape.
     if re.search(r"(?<![\w-])--last\b", command):
         return False
 
-    # 4. The load-bearing flags must ALL be present.
+    # 5. The load-bearing flag must be present.
     if not re.search(r"(?<![\w-])--ignore-user-config\b", command):
         return False
-    if not re.search(r"(?<![\w-])--output-schema\b", command):
+
+    # 6. -o output target under a .flow/tmp/codex-<id>/ scratch dir. Capture the
+    #    scratch dir so the schema + prompt can be required under the SAME dir.
+    o_match = re.search(
+        r"(?<![\w-])-o\s+['\"]?((?:\./)?\.flow/tmp/codex-[^\s'\"]+)", command
+    )
+    if not o_match:
+        return False
+    scratch = _scratch_dir_of(o_match.group(1))
+    if not scratch:
         return False
 
-    # 5. -o output target under .flow/tmp/codex-* (the scratch dir).
-    #    Accept optional quotes; require the path to start with .flow/tmp/codex-.
-    if not re.search(
-        r"(?<![\w-])-o\s+['\"]?(?:\./)?\.flow/tmp/codex-[^\s'\"]+", command
-    ):
+    # 7. --output-schema MUST resolve to a path under the SAME scratch dir.
+    schema_match = re.search(
+        r"(?<![\w-])--output-schema\s+['\"]?([^\s'\"]+)", command
+    )
+    if not schema_match or _scratch_dir_of(schema_match.group(1)) != scratch:
         return False
 
-    # 6. A sandbox flag from the allowlist.
+    # 8. The stdin prompt redirect `- < <scratch>/…` MUST be under the SAME
+    #    scratch dir. An inline prompt (no `- <`) or one outside the scratch dir
+    #    is non-canonical.
+    prompt_match = re.search(r"-\s*<\s*['\"]?([^\s'\"]+)", command)
+    if not prompt_match or _scratch_dir_of(prompt_match.group(1)) != scratch:
+        return False
+
+    # 9. A sandbox flag from the allowlist.
     if not any(re.search(p, command) for p in _DELEGATE_SANDBOX_PATTERNS):
         return False
 

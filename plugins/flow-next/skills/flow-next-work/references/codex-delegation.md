@@ -738,26 +738,36 @@ In Ralph / headless mode, delegation is **non-blocking** and consent-gated:
 
 `ralph-guard.py` blocks bare `codex exec` (only `flowctl codex` wrappers passed).
 fn-55.5 amends the PreToolUse Bash matcher to ALSO allow the invocation — but
-**only when the command matches the FULL canonical delegation shape**, never the
-mere presence of the `FLOW_DELEGATE_CODEX=1` sentinel (else any Ralph Bash call
-could bypass the guard by prepending it). The allowance
-(`is_canonical_codex_delegation`) requires ALL of:
+**only when the command is exactly ONE codex invocation matching the FULL
+canonical delegation shape**, never the mere presence of the
+`FLOW_DELEGATE_CODEX=1` sentinel (else any Ralph Bash call could bypass the guard
+by prepending it). The allowance (`is_canonical_codex_delegation`) requires ALL
+of:
 
+- **a single command** — NO shell chaining / metacharacters (`;` / `&&` / `||` /
+  `|` / `&` / newline / `$(…)` / `${…}` / subshell parens/braces / any `>` output
+  redirect). The hook allowance applies to the WHOLE Bash command, so a trailing
+  `; codex exec --last` or `&& rm -rf …` would otherwise inherit it — rejecting
+  chaining closes that bypass;
+- **exactly one `codex` token**, and it is `codex exec` — **never** `resume` /
+  `review`, and no second `codex …` riding along;
 - inline `FLOW_DELEGATE_CODEX=1` env prefix, positioned **before** the `codex`
   token (a pre-exported var never reaches the hook; a sentinel buried in args
   does not count);
-- the `codex exec` subcommand — **never** `resume` / `review`;
 - `--ignore-user-config` (load-bearing — without it MCP servers can re-enable and
   silently drop `--output-schema`);
-- `--output-schema` present;
-- an `-o` output target under `.flow/tmp/codex-*`;
+- an `-o` output target under a `.flow/tmp/codex-<id>/` scratch dir, AND
+  `--output-schema` + the stdin prompt (`- < …`) under the **SAME** scratch dir
+  (an inline prompt, or a schema/prompt elsewhere, is non-canonical);
 - a sandbox flag from the allowlist
   (`--dangerously-bypass-approvals-and-sandbox` | `-s workspace-write`);
 - and **NO `--last`** (always blocked, even on an otherwise-canonical shape).
 
 A sentinel-prefixed but otherwise-arbitrary command — e.g.
-`FLOW_DELEGATE_CODEX=1 codex exec --last`, or one missing `--ignore-user-config`,
-or with an `-o` outside `.flow/tmp/codex-*` — STILL falls through to the block.
+`FLOW_DELEGATE_CODEX=1 codex exec --last`, one missing `--ignore-user-config`,
+one with an `-o`/schema/prompt outside (or split across) `.flow/tmp/codex-*`, or
+a canonical-looking command with a trailing `; …` second command — STILL falls
+through to the block.
 The copilot block stays intact; `RALPH_GUARD_VERSION` is bumped (→ `0.15.0`) with
 the change. `ralph-guard.py` is a hook (NOT dogfooded into `.flow/bin`), so it is
 single-copy — no dual-copy invariant to maintain.

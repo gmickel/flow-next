@@ -201,6 +201,92 @@ class CanonicalDelegationHelperTestCase(unittest.TestCase):
             )
         )
 
+    # --- block: shell-chaining / second-command bypass (RP finding 1) ---
+
+    def test_chained_trailing_command_blocked(self) -> None:
+        # A canonical-looking invocation with a trailing `; rm -rf` must NOT
+        # inherit the allowance — it is not a single canonical command.
+        self.assertFalse(self.ok(CANONICAL_YOLO + " ; rm -rf /"))
+
+    def test_chained_second_codex_exec_blocked(self) -> None:
+        # `&& codex exec --last` rides along on the same Bash call — block.
+        self.assertFalse(self.ok(CANONICAL_YOLO + " && codex exec --last"))
+
+    def test_piped_command_blocked(self) -> None:
+        self.assertFalse(self.ok(CANONICAL_YOLO + " | tee /tmp/x"))
+
+    def test_command_substitution_blocked(self) -> None:
+        self.assertFalse(
+            self.ok(CANONICAL_YOLO.replace('-m "gpt-5.5"', "-m $(whoami)"))
+        )
+
+    def test_extra_output_redirect_blocked(self) -> None:
+        self.assertFalse(self.ok(CANONICAL_YOLO + " > /tmp/leak"))
+
+    def test_newline_chained_command_blocked(self) -> None:
+        self.assertFalse(self.ok(CANONICAL_YOLO + "\ncodex exec --last"))
+
+    def test_two_codex_tokens_blocked(self) -> None:
+        # Two `codex` tokens (no operator, just whitespace-joined) → not one cmd.
+        self.assertFalse(self.ok(CANONICAL_YOLO + " codex exec --last"))
+
+    # --- block: schema / prompt not under the SAME scratch dir (RP finding 2) ---
+
+    def test_schema_outside_scratch_blocked(self) -> None:
+        self.assertFalse(
+            self.ok(
+                CANONICAL_YOLO.replace(
+                    "--output-schema .flow/tmp/codex-fn-1.2/result-schema.json",
+                    "--output-schema /tmp/schema.json",
+                )
+            )
+        )
+
+    def test_schema_in_different_scratch_dir_blocked(self) -> None:
+        # Schema under a DIFFERENT codex-* scratch dir than -o → block.
+        self.assertFalse(
+            self.ok(
+                CANONICAL_YOLO.replace(
+                    "--output-schema .flow/tmp/codex-fn-1.2/result-schema.json",
+                    "--output-schema .flow/tmp/codex-other/result-schema.json",
+                )
+            )
+        )
+
+    def test_prompt_outside_scratch_blocked(self) -> None:
+        self.assertFalse(
+            self.ok(
+                CANONICAL_YOLO.replace(
+                    "- < .flow/tmp/codex-fn-1.2/prompt-batch-1.md",
+                    "- < /tmp/prompt.md",
+                )
+            )
+        )
+
+    def test_inline_prompt_no_stdin_redirect_blocked(self) -> None:
+        # No `- < <scratch>/…` stdin redirect (inline prompt arg) → block.
+        self.assertFalse(
+            self.ok(
+                CANONICAL_YOLO.replace(
+                    "- < .flow/tmp/codex-fn-1.2/prompt-batch-1.md",
+                    '"inline prompt text"',
+                )
+            )
+        )
+
+    def test_sibling_prefix_scratch_dir_not_confused(self) -> None:
+        # `-o` under codex-fn-1.2 but schema under codex-fn-1.2-evil (a string
+        # prefix, NOT the same dir) → block. The trailing-slash anchor prevents
+        # the prefix collision.
+        self.assertFalse(
+            self.ok(
+                CANONICAL_YOLO.replace(
+                    "--output-schema .flow/tmp/codex-fn-1.2/result-schema.json",
+                    "--output-schema .flow/tmp/codex-fn-1.2-evil/result-schema.json",
+                )
+            )
+        )
+
 
 # ── Full hook end-to-end (subprocess — the production path) ───────────────────
 
@@ -251,6 +337,24 @@ class HookEndToEndTestCase(unittest.TestCase):
 
     def test_non_codex_command_passes_hook(self) -> None:
         self.assertEqual(_drive_hook("echo hello"), self.ALLOWED)
+
+    def test_chained_trailing_command_blocked_by_hook(self) -> None:
+        # The headline finding-1 case on the production path: a canonical-looking
+        # invocation with a trailing `; codex exec --last` must STILL be blocked.
+        self.assertEqual(
+            _drive_hook(CANONICAL_YOLO + " ; codex exec --last"), self.BLOCKED
+        )
+
+    def test_schema_outside_scratch_blocked_by_hook(self) -> None:
+        self.assertEqual(
+            _drive_hook(
+                CANONICAL_YOLO.replace(
+                    "--output-schema .flow/tmp/codex-fn-1.2/result-schema.json",
+                    "--output-schema /tmp/schema.json",
+                )
+            ),
+            self.BLOCKED,
+        )
 
 
 # ── Version bump ──────────────────────────────────────────────────────────────
