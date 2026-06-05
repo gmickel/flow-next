@@ -23,6 +23,7 @@ RALPH_GUARD_VERSION = "0.15.0"
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -121,34 +122,14 @@ def command_has_json_field(command: str, field: str) -> bool:
 # Sandbox flags allowed in a canonical Codex delegation invocation (R9). Exactly
 # the two the reference emits: yolo (--dangerously-bypass-approvals-and-sandbox)
 # and full-auto (-s workspace-write). Nothing else (no --full-auto, no other -s).
-_DELEGATE_SANDBOX_PATTERNS = (
-    r"--dangerously-bypass-approvals-and-sandbox\b",
-    r"(?:^|\s)-s\s+workspace-write\b",
-)
-
-
-# Shell control / chaining metacharacters that would let a second command ride
-# along on the same Bash invocation. A canonical delegation is exactly ONE
-# command — any of these means it is not, and the allowance must NOT apply
-# (else `FLOW_DELEGATE_CODEX=1 codex exec <canonical> ; rm -rf /` would pass).
-# `<` is the SINGLE permitted redirect (stdin prompt: `- < <scratch>/prompt…`);
-# everything else (`>`, `>>`, `|`, `;`, `&`, `$(`, backtick, newline, `(`/`)`,
-# `{`/`}`) is rejected.
-_SHELL_CHAINING_PATTERN = re.compile(
-    r"(?:"
-    r"[;&|`\n(){}]"          # ; && || | & ` newline ( ) { }
-    r"|\$\("                 # $( command substitution
-    r"|\$\{"                 # ${ parameter/command expansion start
-    r"|>"                    # any output redirect (>, >>, &>, 2>) — none are canonical
-    r")"
-)
+_DELEGATE_YOLO_FLAG = "--dangerously-bypass-approvals-and-sandbox"
 
 
 def _scratch_dir_of(path: str):
     """Return the `.flow/tmp/codex-<id>/` scratch-dir prefix of a repo-relative
     path, or None. Accepts an optional `./` lead. The trailing slash is included
-    so a sibling like `.flow/tmp/codex-evil-vs-codex-x` cannot prefix-match a
-    different scratch dir."""
+    so a sibling like `.flow/tmp/codex-fn-1.2-evil` cannot prefix-match the
+    `.flow/tmp/codex-fn-1.2` scratch dir."""
     m = re.match(r"(?:\./)?(\.flow/tmp/codex-[^/\s'\"]+)/", path)
     return m.group(1) if m else None
 
@@ -157,84 +138,133 @@ def is_canonical_codex_delegation(command: str) -> bool:
     """Return True ONLY for the FULL canonical Codex implementation-delegation
     shape that fn-55 teaches (worker.md Phase 2 / codex-delegation.md).
 
-    This is deliberately strict: the inline ``FLOW_DELEGATE_CODEX=1`` sentinel
-    alone is NOT sufficient (else any Ralph Bash call could bypass the guard by
-    prepending it). The command must be EXACTLY ONE codex invocation — no shell
-    chaining (``;`` / ``&&`` / ``|`` / ``$(...)`` / redirects to other files /
-    a second ``codex exec``) — and EVERY one of the following must hold:
+    **Tokenized, not substring-matched.** The command is parsed with ``shlex``
+    (POSIX shell-token semantics) and validated as an ARGV — so required flags
+    cannot be smuggled inside a quoted positional prompt while ``codex exec``
+    actually receives none of them. Every argv token must be one the canonical
+    invocation emits; an unexpected token (a stray prompt arg, an extra flag, a
+    chaining operator that survives tokenization) → block.
 
-      * the command is a SINGLE command (no chaining metacharacters);
-      * inline ``FLOW_DELEGATE_CODEX=1`` env prefix, positioned before the
-        ``codex`` token (a pre-exported var never reaches this hook; a
-        trailing/argument occurrence does not count);
-      * EXACTLY ONE ``codex`` token, and it is ``codex exec`` (NOT ``resume`` /
-        ``review`` / ``--last``);
-      * ``--ignore-user-config`` (load-bearing — without it MCP servers can
-        re-enable and silently drop ``--output-schema``);
-      * ``-o`` output target under a ``.flow/tmp/codex-<id>/`` scratch dir;
-      * ``--output-schema`` AND the stdin prompt (``- < …``) under the SAME
-        scratch dir as ``-o``;
+    EVERY one of the following must hold:
+
+      * the command tokenizes cleanly and contains NO shell control operator
+        (``;`` ``&&`` ``||`` ``|`` ``&`` ``$(`` backtick ``>`` newline …) — a
+        canonical delegation is exactly ONE command;
+      * leading ``FLOW_DELEGATE_CODEX=1`` env-prefix token, then ``codex``
+        ``exec`` (NOT ``resume`` / ``review``) — exactly ONE ``codex`` token;
+      * ``--ignore-user-config`` as a standalone token (load-bearing — without it
+        MCP servers can re-enable and silently drop ``--output-schema``);
+      * ``-o`` output target under a ``.flow/tmp/codex-<id>/`` scratch dir, AND
+        ``--output-schema`` + the stdin prompt (``- < …``) under the SAME dir;
       * a sandbox flag from the allowlist (yolo | ``-s workspace-write``);
-      * NO ``--last`` (session-continuity escape hatch — always blocked).
+      * NO ``--last``; and no token outside the canonical set.
 
     Any deviation falls through → the normal block path.
     """
-    # 0. Single command only. Any shell chaining / extra redirect / subshell means
-    #    this is NOT one canonical invocation — a trailing `; codex exec --last`
-    #    or `&& rm -rf …` must never inherit the allowance.
-    if _SHELL_CHAINING_PATTERN.search(command):
+    # 0. Reject shell control operators BEFORE tokenizing. shlex tokenizes `;`,
+    #    `&&`, `|` as ordinary WORDS (it is not a parser), so it would not catch
+    #    chaining on its own. A literal control char means this is not one
+    #    canonical command. `<` is NOT banned — it is the single permitted stdin
+    #    redirect (`- < <scratch>/prompt…`), validated as a token in the walk
+    #    below. `>` (any output redirect), `;`, `&`, `|`, backtick, newline,
+    #    `$(…)`, `${…}`, and subshell parens ARE banned (none are canonical).
+    #    Quotes/backslashes are fine — shlex handles them; we only ban operators.
+    if re.search(r"[;&|`\n>()]|\$\(|\$\{", command):
         return False
 
-    # 1. Exactly ONE codex token (any subcommand). A second `codex …` — even one
-    #    that on its own would look canonical — is rejected by the count.
-    codex_tokens = list(re.finditer(r"(?<![\w./-])codex\b", command))
-    if len(codex_tokens) != 1:
+    # 1. Tokenize with POSIX shell semantics. A `<` stdin redirect tokenizes to a
+    #    standalone `<` word (shlex is not a parser), which we validate in-stream.
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        return False  # unbalanced quotes / parse error → not canonical
+    if not tokens:
         return False
 
-    # 2. That one codex token must be `codex exec` (never resume / review).
-    if not re.search(r"(?<![\w./-])codex\s+exec\b", command):
+    # 2. Leading env-prefix token, then `codex exec`.
+    if tokens[0] != "FLOW_DELEGATE_CODEX=1":
+        return False
+    if len(tokens) < 3 or tokens[1] != "codex" or tokens[2] != "exec":
+        return False
+    # Exactly ONE codex token total (no smuggled second `codex …`).
+    if tokens.count("codex") != 1:
         return False
 
-    # 3. Inline FLOW_DELEGATE_CODEX=1 prefix, positioned BEFORE the codex token.
-    sentinel = re.search(r"(?<![\w-])FLOW_DELEGATE_CODEX=1\b", command)
-    if not sentinel or sentinel.start() > codex_tokens[0].start():
-        return False
+    # 3. Walk the remaining argv as a strict allowlist. Track required flags +
+    #    the scratch dir. ANY unexpected token → block (this is what defeats the
+    #    quoted-prompt-smuggling vector: a stray positional prompt is unexpected).
+    i = 3
+    n = len(tokens)
+    seen_ignore = seen_schema = seen_o = seen_prompt = seen_sandbox = False
+    scratch = None
+    schema_dir = None
+    prompt_dir = None
 
-    # 4. --last is always forbidden, even on an otherwise-canonical shape.
-    if re.search(r"(?<![\w-])--last\b", command):
-        return False
+    def _need_value(idx: int):
+        return tokens[idx + 1] if idx + 1 < n else None
 
-    # 5. The load-bearing flag must be present.
-    if not re.search(r"(?<![\w-])--ignore-user-config\b", command):
-        return False
+    while i < n:
+        tok = tokens[i]
+        if tok == "--last":
+            return False  # always forbidden
+        if tok == "--ignore-user-config":
+            seen_ignore = True
+            i += 1
+        elif tok == "-m":  # model
+            val = _need_value(i)
+            if val is None:
+                return False
+            i += 2
+        elif tok == "-c":  # reasoning-effort pair
+            val = _need_value(i)
+            if val is None:
+                return False
+            i += 2
+        elif tok == "--output-schema":
+            val = _need_value(i)
+            if val is None:
+                return False
+            seen_schema = True
+            schema_dir = _scratch_dir_of(val)
+            i += 2
+        elif tok == "-o":
+            val = _need_value(i)
+            if val is None:
+                return False
+            seen_o = True
+            scratch = _scratch_dir_of(val)
+            i += 2
+        elif tok == _DELEGATE_YOLO_FLAG:
+            seen_sandbox = True
+            i += 1
+        elif tok == "-s":  # full-auto sandbox: -s workspace-write
+            val = _need_value(i)
+            if val != "workspace-write":
+                return False
+            seen_sandbox = True
+            i += 2
+        elif tok == "-":
+            # stdin prompt: `-` then `<` then the prompt path.
+            if _need_value(i) != "<":
+                return False
+            path = tokens[i + 2] if i + 2 < n else None
+            if path is None:
+                return False
+            seen_prompt = True
+            prompt_dir = _scratch_dir_of(path)
+            i += 3
+        else:
+            # Unknown / unexpected token (a smuggled prompt, an extra flag,
+            # a second positional). Non-canonical → block.
+            return False
 
-    # 6. -o output target under a .flow/tmp/codex-<id>/ scratch dir. Capture the
-    #    scratch dir so the schema + prompt can be required under the SAME dir.
-    o_match = re.search(
-        r"(?<![\w-])-o\s+['\"]?((?:\./)?\.flow/tmp/codex-[^\s'\"]+)", command
-    )
-    if not o_match:
+    # 4. All required pieces present, and the -o / schema / prompt share ONE
+    #    valid scratch dir.
+    if not (seen_ignore and seen_schema and seen_o and seen_prompt and seen_sandbox):
         return False
-    scratch = _scratch_dir_of(o_match.group(1))
-    if not scratch:
+    if scratch is None:
         return False
-
-    # 7. --output-schema MUST resolve to a path under the SAME scratch dir.
-    schema_match = re.search(
-        r"(?<![\w-])--output-schema\s+['\"]?([^\s'\"]+)", command
-    )
-    if not schema_match or _scratch_dir_of(schema_match.group(1)) != scratch:
-        return False
-
-    # 8. The stdin prompt redirect `- < <scratch>/…` MUST be under the SAME
-    #    scratch dir. An inline prompt (no `- <`) or one outside the scratch dir
-    #    is non-canonical.
-    prompt_match = re.search(r"-\s*<\s*['\"]?([^\s'\"]+)", command)
-    if not prompt_match or _scratch_dir_of(prompt_match.group(1)) != scratch:
-        return False
-
-    # 9. A sandbox flag from the allowlist.
-    if not any(re.search(p, command) for p in _DELEGATE_SANDBOX_PATTERNS):
+    if schema_dir != scratch or prompt_dir != scratch:
         return False
 
     return True

@@ -287,6 +287,56 @@ class CanonicalDelegationHelperTestCase(unittest.TestCase):
             )
         )
 
+    # --- block: quoted-token smuggling (RP re-review finding) ---
+
+    def test_flags_smuggled_inside_quoted_prompt_blocked(self) -> None:
+        # The required flags live inside ONE quoted positional arg passed to
+        # `codex exec` — substring matching would see them, but `codex exec`
+        # actually receives an arbitrary prompt and none of the flags. The
+        # shlex/argv parse rejects the unexpected positional token.
+        self.assertFalse(
+            self.ok(
+                'FLOW_DELEGATE_CODEX=1 codex exec "do arbitrary work" '
+                '"--ignore-user-config '
+                "--output-schema .flow/tmp/codex-fn-1.2/result-schema.json "
+                "-o .flow/tmp/codex-fn-1.2/result-batch-1.json "
+                "- < .flow/tmp/codex-fn-1.2/prompt-batch-1.md "
+                '--dangerously-bypass-approvals-and-sandbox"'
+            )
+        )
+
+    def test_extra_positional_prompt_arg_blocked(self) -> None:
+        # An otherwise-canonical command with a stray positional prompt arg → the
+        # argv walk hits an unexpected token → block.
+        self.assertFalse(
+            self.ok(
+                "FLOW_DELEGATE_CODEX=1 codex exec --ignore-user-config "
+                "--output-schema .flow/tmp/codex-fn-1.2/s.json "
+                "-o .flow/tmp/codex-fn-1.2/r.json "
+                "--dangerously-bypass-approvals-and-sandbox "
+                '"arbitrary prompt" '
+                "- < .flow/tmp/codex-fn-1.2/p.md"
+            )
+        )
+
+    def test_unbalanced_quotes_blocked(self) -> None:
+        # A shlex parse error (unbalanced quote) → block, never crash.
+        self.assertFalse(
+            self.ok('FLOW_DELEGATE_CODEX=1 codex exec --ignore-user-config "unterminated')
+        )
+
+    def test_unknown_flag_blocked(self) -> None:
+        # An extra unrecognized flag (not in the canonical allowlist) → block.
+        self.assertFalse(self.ok(CANONICAL_YOLO + " --some-unknown-flag"))
+
+    def test_bad_full_auto_sandbox_value_blocked(self) -> None:
+        # `-s` must be followed by exactly `workspace-write`.
+        self.assertFalse(
+            self.ok(
+                CANONICAL_FULLAUTO.replace("-s workspace-write", "-s danger-full-access")
+            )
+        )
+
 
 # ── Full hook end-to-end (subprocess — the production path) ───────────────────
 
@@ -352,6 +402,21 @@ class HookEndToEndTestCase(unittest.TestCase):
                     "--output-schema .flow/tmp/codex-fn-1.2/result-schema.json",
                     "--output-schema /tmp/schema.json",
                 )
+            ),
+            self.BLOCKED,
+        )
+
+    def test_quoted_smuggled_flags_blocked_by_hook(self) -> None:
+        # Quoted-token smuggling on the production path: flags inside a quoted
+        # positional arg must STILL be blocked by the shipped hook.
+        self.assertEqual(
+            _drive_hook(
+                'FLOW_DELEGATE_CODEX=1 codex exec "do arbitrary work" '
+                '"--ignore-user-config '
+                "--output-schema .flow/tmp/codex-fn-1.2/result-schema.json "
+                "-o .flow/tmp/codex-fn-1.2/result-batch-1.json "
+                "- < .flow/tmp/codex-fn-1.2/prompt-batch-1.md "
+                '--dangerously-bypass-approvals-and-sandbox"'
             ),
             self.BLOCKED,
         )

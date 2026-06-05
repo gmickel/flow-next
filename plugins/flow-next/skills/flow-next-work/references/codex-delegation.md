@@ -741,33 +741,40 @@ fn-55.5 amends the PreToolUse Bash matcher to ALSO allow the invocation — but
 **only when the command is exactly ONE codex invocation matching the FULL
 canonical delegation shape**, never the mere presence of the
 `FLOW_DELEGATE_CODEX=1` sentinel (else any Ralph Bash call could bypass the guard
-by prepending it). The allowance (`is_canonical_codex_delegation`) requires ALL
-of:
+by prepending it). The allowance (`is_canonical_codex_delegation`) is
+**tokenized, not substring-matched**: it bans shell control operators, parses the
+command with `shlex` (POSIX shell-token semantics), and validates the resulting
+**argv** against a strict allowlist — so required flags cannot be smuggled inside
+a quoted positional prompt while `codex exec` actually receives none of them.
+ALL of the following must hold:
 
-- **a single command** — NO shell chaining / metacharacters (`;` / `&&` / `||` /
-  `|` / `&` / newline / `$(…)` / `${…}` / subshell parens/braces / any `>` output
-  redirect). The hook allowance applies to the WHOLE Bash command, so a trailing
-  `; codex exec --last` or `&& rm -rf …` would otherwise inherit it — rejecting
-  chaining closes that bypass;
-- **exactly one `codex` token**, and it is `codex exec` — **never** `resume` /
-  `review`, and no second `codex …` riding along;
-- inline `FLOW_DELEGATE_CODEX=1` env prefix, positioned **before** the `codex`
-  token (a pre-exported var never reaches the hook; a sentinel buried in args
-  does not count);
-- `--ignore-user-config` (load-bearing — without it MCP servers can re-enable and
-  silently drop `--output-schema`);
+- **a single command** — NO shell control operator (`;` / `&&` / `||` / `|` /
+  `&` / newline / `$(…)` / `${…}` / subshell parens / any `>` output redirect).
+  The hook allowance applies to the WHOLE Bash command, so a trailing
+  `; codex exec --last` or `&& <destructive>` would otherwise inherit it. (`<` is
+  the single permitted redirect — the stdin prompt.);
+- the argv parses cleanly (balanced quotes) and **every token is one the
+  canonical invocation emits** — an unexpected token (a stray positional prompt,
+  an extra flag, a smuggled quoted blob) → block;
+- leading `FLOW_DELEGATE_CODEX=1` env-prefix token, then `codex` `exec` —
+  **exactly one** `codex` token, **never** `resume` / `review`;
+- `--ignore-user-config` as a standalone token (load-bearing — without it MCP
+  servers can re-enable and silently drop `--output-schema`);
 - an `-o` output target under a `.flow/tmp/codex-<id>/` scratch dir, AND
   `--output-schema` + the stdin prompt (`- < …`) under the **SAME** scratch dir
-  (an inline prompt, or a schema/prompt elsewhere, is non-canonical);
+  (an inline prompt, or a schema/prompt elsewhere or split across dirs, is
+  non-canonical; a trailing-slash anchor prevents a sibling-prefix collision);
 - a sandbox flag from the allowlist
-  (`--dangerously-bypass-approvals-and-sandbox` | `-s workspace-write`);
+  (`--dangerously-bypass-approvals-and-sandbox` | `-s workspace-write` — `-s`
+  must be exactly `workspace-write`);
 - and **NO `--last`** (always blocked, even on an otherwise-canonical shape).
 
 A sentinel-prefixed but otherwise-arbitrary command — e.g.
 `FLOW_DELEGATE_CODEX=1 codex exec --last`, one missing `--ignore-user-config`,
-one with an `-o`/schema/prompt outside (or split across) `.flow/tmp/codex-*`, or
-a canonical-looking command with a trailing `; …` second command — STILL falls
-through to the block.
+one with an `-o`/schema/prompt outside (or split across) `.flow/tmp/codex-*`, a
+canonical-looking command with a trailing `; …` second command, or one that
+smuggles the flags inside a quoted positional prompt — STILL falls through to the
+block.
 The copilot block stays intact; `RALPH_GUARD_VERSION` is bumped (→ `0.15.0`) with
 the change. `ralph-guard.py` is a hook (NOT dogfooded into `.flow/bin`), so it is
 single-copy — no dual-copy invariant to maintain.
