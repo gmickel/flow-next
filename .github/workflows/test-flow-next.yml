@@ -9,6 +9,11 @@ on:
       # Dogfood copies guarded against template drift (test_dogfood_template_parity).
       - ".flow/usage.md"
       - ".flow/templates/spec.md"
+      # Cursor local-installers live at repo-root scripts/ (1.9.0) — outside
+      # plugins/flow-next/**, so trigger explicitly to run the install smoke.
+      - "scripts/install-cursor.sh"
+      - "scripts/install-cursor.ps1"
+      - "scripts/ci/verify_cursor_install.py"
   pull_request:
     branches: [main]
     paths:
@@ -16,6 +21,9 @@ on:
       - ".github/workflows/test-flow-next.yml"
       - ".flow/usage.md"
       - ".flow/templates/spec.md"
+      - "scripts/install-cursor.sh"
+      - "scripts/install-cursor.ps1"
+      - "scripts/ci/verify_cursor_install.py"
   workflow_dispatch:
 
 jobs:
@@ -173,6 +181,35 @@ jobs:
         # Guards .flow/usage.md ≡ canonical setup template (and spec.md) so the
         # fn-52 desync — tracker-sync docs added to the dogfood copy but not the
         # bundled template — hard-fails CI instead of shipping to consumers.
+
+      # ──────────── Cursor local-install (1.9.0) ────────────
+      # The bash + PowerShell Cursor installers (scripts/install-cursor.{sh,ps1})
+      # must not drift, and must actually produce a complete + clean install on
+      # each OS. The parity test is cross-platform (text-only). The real-install
+      # smoke runs the platform's OWN installer (rsync on Unix, robocopy on
+      # Windows) into ~/.cursor/plugins/local and verifies the result against the
+      # source tree (component trees match 1:1; codex/ tests/ *.pyc excluded).
+
+      - name: Python unit tests — Cursor installer parity (1.9.0)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_install_cursor_parity.py" \
+            -v
+
+      - name: install-cursor.sh real-install smoke (Unix)
+        if: always() && runner.os != 'Windows'
+        run: |
+          bash "$GITHUB_WORKSPACE/scripts/install-cursor.sh"
+          python "$GITHUB_WORKSPACE/scripts/ci/verify_cursor_install.py"
+
+      - name: install-cursor.ps1 real-install smoke (Windows)
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+          ./scripts/install-cursor.ps1
+          python ./scripts/ci/verify_cursor_install.py
 
       - name: Python unit tests — PNPM_HOME hint prose contract (fn-50.1, Windows-coverage)
         run: |
