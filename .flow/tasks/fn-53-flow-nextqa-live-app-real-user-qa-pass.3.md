@@ -40,9 +40,8 @@ Add the single lean **BRB-borrow reference** (the QA discipline) and wire the **
 - [ ] Reference + skill stay within the ≤500-line discipline
 
 ## Done summary
-
-_(filled on completion)_
-
+Added references/qa-discipline.md (the lean BRB borrow: 5 session-hygiene rules + persona suffixing, write-path-first / one-tab-per-shard caution, YES/NO verdict + paste-ready handoff discipline — cross-linking bug-filing.md for the P0/P1/P2 taxonomy + evidence rules rather than duplicating them, credited rayfernando-skills Apache-2.0). Wired the Phase 3 (prepare) section of workflow.md to resolve target URL / test accounts / session hygiene / device matrix (1 desktop + 1 mobile viewport, emulation-only), asking the user when undocumented and deferring all driving specifics to fn-51's references.
 ## Evidence
-
-_(filled on completion)_
+- Commits: f35081ee5ea0e1f4ed4f55691df1864d76df0d38
+- Tests: wc -l (≤500-line skill cap: workflow.md 418, qa-discipline.md 186), cross-link resolution check (bug-filing.md + fn-51 commands/agent-browser/auth/session-management all resolve), scoped-diff confined to Phase 3 section (no sibling-phase collision), impl-review (rp backend): triage-skip docs-only fast-path → SHIP
+- PRs:
