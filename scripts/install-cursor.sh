@@ -8,6 +8,10 @@
 #
 # Usage: ./scripts/install-cursor.sh [flow-next]
 #
+# Windows: use the PowerShell sibling instead — scripts/install-cursor.ps1
+#   (robocopy-based; same excludes + real-dir copy). Or run THIS script under
+#   Git Bash / WSL, where ~/.cursor resolves the same.
+#
 # Why a COPY (not a symlink): Cursor's plugin loader rejects a symlink whose
 # realpath escapes ~/.cursor/ (the skill loader is laxer, but the plugin loader
 # is not), so the plugin folder must physically live under ~/.cursor/plugins/local/.
