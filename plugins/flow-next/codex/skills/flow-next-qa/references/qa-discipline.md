@@ -108,12 +108,11 @@ only by acting like a returning real user with stale state. Capture the storage 
 
 ### Test accounts — ask, don't guess
 
-If the repo does not document test accounts (auth provider dev mode, an admin account or
-permission to create one, the per-run email-suffix convention, any payment / 3rd-party test
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
-credentials), **ask the user via `plain-text numbered prompt`** before writing scenarios that need
-auth — never guess credentials. Offer to document the convention as part of the pass.
+When the repo does not document test accounts, **ask the user via `plain-text numbered prompt`** before writing scenarios that need auth — never guess credentials.
+
+Undocumented means any of: auth provider dev mode, an admin account or permission to create one, the per-run email-suffix convention, any payment / 3rd-party test credentials. Offer to document the convention as part of the pass.
 Never commit a password to the repo; record the email pattern + role, pass secrets via the
 existing chat / vault. (Provider-specific fixtures — Clerk `424242`, Stripe `4242…`, etc. —
 are out of scope for this lean borrow; reach for the provider's own docs when a flow needs

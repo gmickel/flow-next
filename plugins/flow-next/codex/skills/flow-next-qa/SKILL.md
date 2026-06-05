@@ -49,7 +49,7 @@ while [[ $# -gt 0 ]]; do
 done
 ```
 
-When `SPEC_ID` is empty, the **discover** phase resolves it (branch-match or an `plain-text numbered prompt` info prompt) — never silently default.
+When `SPEC_ID` is empty, the **discover** phase resolves it (branch-match, or by asking the user via `plain-text numbered prompt` as an info prompt) — never silently default.
 
 Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected in workflow.md §AUTONOMY — the skill is **aware but not Ralph-blocked** (R11). The deep autonomy routing (autonomous when target URL + accounts are configured; receipt path resolution) is owned by a downstream task; the skeleton only lays the section anchor.
 
