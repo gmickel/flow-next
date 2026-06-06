@@ -122,40 +122,29 @@ gh api repos/{owner}/{repo} --jq '{
 
 ## Output Format
 
+**Output budget (hard).** This flows into the planner's context — be a **pointer, not a paste**. Keep it **under ~450 tokens**. The implementer opens the repo at the path to read the actual code; your job is to say WHICH repos + WHAT pattern + the path, not to reproduce the source:
+- **One line per repo:** `**owner/repo** (★N, Tier T) — \\`path/to/file.ts\\`: [the pattern it shows, named — e.g. "ipKeyGenerator IPv6 fallback + per-route limiter factory"]`.
+- **No fenced code blocks.** Name the pattern/API inline; the path + repo are the pointer to the code.
+- **Top 2–3 repos per tier**, ranked by relevance × stars; drop the rest. **NEVER drop the authoritative (Tier 1) source or a load-bearing pattern/gotcha.**
+- **No Source-Quality-Summary table** — ★/tier/freshness already ride on each repo line; the table duplicates them. Omit any section with no entries; the Search-Queries-Used dump is optional and off by default.
+
 ```markdown
 ## GitHub Search Results: [Query]
 
 ### Authoritative Sources
-- **[owner/repo]** (★N, Tier 1)
-  - Path: `path/to/file.ts`
-  - [Why relevant]
-  ```[lang]
-  // Key code snippet
-  ```
+- **[owner/repo]** (★N, Tier 1) — `path/to/file.ts`: [pattern named inline]
 
 ### Quality Examples
-- **[owner/repo]** (★N, Tier 2)
-  - Path: `path/to/file.ts`
-  - [What it demonstrates]
+- **[owner/repo]** (★N, Tier 2) — `path/to/file.ts`: [what it demonstrates]
 
 ### Additional References
 - **[owner/repo]** (★N, Tier 3) - [brief note]
 
 ### Related Issues/Discussions
-- [Issue title](url) - [relevance]
-  - Status: open/closed
-  - [Key insight or solution]
+- [Issue title](url) (open/closed) - [key insight in one line]
 
 ### Private Repos (if searched)
 - **[repo]** - [what was found]
-
-### Source Quality Summary
-| Repo | Stars | Last Push | Tier | Notes |
-|------|-------|-----------|------|-------|
-| owner/repo | N | date | 1-4 | ... |
-
-### Search Queries Used
-- `gh search code "..."` → N results
 ```
 
 ## Common Patterns
