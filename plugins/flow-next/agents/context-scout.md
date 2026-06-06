@@ -232,6 +232,13 @@ timeout: 600000  # 10 minutes for chat
 
 ## Output Format
 
+**Output budget (hard).** Keep the whole findings block **under ~500 tokens** — it flows straight into the planner's context, so every token is paid downstream:
+- **Repo-relative paths only** (`apps/web/lib/auth.ts:42`) — NEVER absolute `/Users/...` paths.
+- **Top 3–5 Key Files per area**, ranked by relevance; drop the rest. Cap the whole block at ~7 files unless the task genuinely spans more.
+- **One line per finding** — no bold sub-headers, no grouping prose between bullets.
+- **No fenced code blocks.** Fold the single load-bearing signature inline on the file's line (e.g. `auth.ts:42 — createAuth(ctx): Auth [VERIFIED]`); never paste a body or a multi-line signature dump.
+- **Omit any section that has no findings** (Code Signatures and Features Anchored are both optional).
+
 Return to main conversation with:
 
 ```markdown
@@ -240,7 +247,7 @@ Return to main conversation with:
 [2-3 sentence overview of what you found]
 
 ### Key Files
-- `path/to/file.ts:L10-50` - [what it does] `[VERIFIED]`
+- `path/to/file.ts:L10-50` - [what it does; key signature inline if load-bearing] `[VERIFIED]`
 - `path/to/other.ts` - [what it does] `[INFERRED]`
 
 ### Features Anchored (omit this section entirely when `.clawpatch/` absent)
@@ -259,15 +266,8 @@ features_anchored:
 
 Rank by `confidence` (`high` → `medium` → `low`) when surfacing the most relevant anchors.
 
-### Code Signatures
-```typescript
-// Key functions/types from structure command
-function validateToken(token: string): Promise<AuthUser>
-interface AuthConfig { ... }
-```
-
 ### Architecture Notes
-- [How pieces connect]
+- [How pieces connect — name the key signature inline, e.g. `searchHybrid(query, opts): SearchResult[]`, never a code block]
 - [Data flow observations]
 
 ### Recommendations
@@ -367,23 +367,15 @@ The hybrid search system combines vector similarity (vsearch) with BM25 text mat
 fusing results via RRF and optionally reranking with a cross-encoder.
 
 ### Key Files
-- `src/pipeline/hybrid.ts:L1-60` - Main searchHybrid() orchestration
-- `src/pipeline/fusion.ts` - RRF fusion of vector + BM25 results
-- `src/pipeline/rerank.ts` - Cross-encoder reranking
-- `src/pipeline/types.ts` - SearchResult, FusionConfig types
-
-### Code Signatures
-```typescript
-async function searchHybrid(query: string, opts: HybridOptions): Promise<SearchResult[]>
-function rrfFuse(results: SearchResult[][], k?: number): SearchResult[]
-async function rerankCandidates(query: string, candidates: SearchResult[]): Promise<SearchResult[]>
-```
+- `src/pipeline/hybrid.ts:L1-60` - `searchHybrid(query, opts): Promise<SearchResult[]>` orchestration `[VERIFIED]`
+- `src/pipeline/fusion.ts` - `rrfFuse(results, k?)` RRF fusion of vector + BM25 results `[VERIFIED]`
+- `src/pipeline/rerank.ts` - `rerankCandidates(query, candidates)` cross-encoder reranking `[INFERRED]`
+- `src/pipeline/types.ts` - `SearchResult`, `FusionConfig` types `[VERIFIED]`
 
 ### Architecture
 1. Query → parallel vector + BM25 search
 2. Results → RRF fusion (k=60)
-3. Fused → optional cross-encoder rerank
-4. Return top-k results
+3. Fused → optional cross-encoder rerank → top-k
 
 ### Recommendation
 Focus on hybrid.ts for the orchestration logic, fusion.ts for understanding scoring.
@@ -434,7 +426,6 @@ Standard tools excel at:
 
 ## Output Rules (for planning)
 
-- Show signatures from `structure` command, not full file contents
-- Keep code snippets to <10 lines illustrating the pattern shape
+- Name key signatures inline (from `structure`), not full file contents — no fenced code blocks (see Output budget)
 - DO NOT output complete function bodies for the planner to copy
 - Summarize architecture, don't dump raw output
