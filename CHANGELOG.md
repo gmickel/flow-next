@@ -2,6 +2,19 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.10.0] - 2026-06-06
+
+### Changed
+- **Eval-driven prompt optimization — 8 scout/analyst agents made ~40–71% leaner per call, with accuracy held** (fn-54 / FLOW-5). Rolled the external "autoresearch" eval loop (baseline → one mutation → keep-if-better ratchet; methodology in [`agent_docs/optimizing-skills.md`](agent_docs/optimizing-skills.md)) across the read-only agents whose free-form output flows into the planner / work-loop context. Each gained a **feature-preserving output budget** — the reductions are at *runtime* (the rendered output), not in prompt size:
+  - [`repo-scout`](plugins/flow-next/agents/repo-scout.md) (83→100% on its eval set, ~40–50% leaner) · [`context-scout`](plugins/flow-next/agents/context-scout.md) (60→93%, ~60–70%, dropped the prescribed Code-Signatures block) · [`flow-gap-analyst`](plugins/flow-next/agents/flow-gap-analyst.md) (~50–70%, 26/27 gaps held) · [`quality-auditor`](plugins/flow-next/agents/quality-auditor.md) (~63%) · [`spec-scout`](plugins/flow-next/agents/spec-scout.md) (No-Relationship → count, scale-robust) · [`docs-scout`](plugins/flow-next/agents/docs-scout.md) (~48–69%) · [`github-scout`](plugins/flow-next/agents/github-scout.md) (~71%, the biggest) · [`practice-scout`](plugins/flow-next/agents/practice-scout.md) (~52%).
+  - **Feature-preservation is the guarantee, not a hope.** Every mutation was kept only if a per-target coverage/accuracy eval held (the ratchet): grounding (`context-scout` cited paths `test -f`-verified vs `~/work/DocIQ-Sphere`), findings (`quality-auditor` vs the `~/work/slop-testbed` 7-issue corpus — Major bug + all slop still caught, clean stays ✅), gaps (per-input answer keys), and docs/APIs/gotchas (the "pointer-not-paste" rule: name the API inline, drop code blocks, the link carries depth). The leaner research scouts even surfaced *extra* real issues a verbose baseline missed (a current CVE; an extra trust-proxy gotcha).
+  - **End-to-end verified:** the optimized scouts → a planner produced a correct, ship-quality build plan for a deliberately hard, cross-cutting DocIQ-Sphere feature (org-scoped agent-run rate limiting) reading *only* the budgeted scout output — features preserved at the *consumer* level, not just scout-output level.
+- **`/flow-next:make-pr`: removed stale `fn-42.N` build-scaffolding archaeology** from the skill prompt (heading labels, a phase-reference table column, two orphaned sentences) — render output behaviorally identical; no guardrail / routing / tracker-sync logic touched.
+
+### Notes
+- **`/flow-next:capture` is unchanged.** A trim was tried and **reverted** — it regressed business-context routing on one input (the ratchet caught it). The capture override guard (refuses to silently overwrite a user-edited spec) was verified intact.
+- No `flowctl` / Python logic changed — prompt markdown only. Each agent edit was re-mirrored to its Codex copy via `sync-codex.sh`. Retained eval harnesses (frozen inputs, evals, baselines, per-experiment changelogs) under `optimization/`.
+
 ## [flow-next 1.9.1] - 2026-06-06
 
 ### Fixed
