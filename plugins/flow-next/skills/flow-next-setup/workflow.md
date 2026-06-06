@@ -19,7 +19,7 @@ if [ -n "${DROID_PLUGIN_ROOT:-}" ]; then
   PLATFORM="droid"
 elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
   PLATFORM="claude-code"
-elif [ -n "${CURSOR_AGENT:-}" ]; then
+elif [ -n "${CURSOR_AGENT:-}" ] && [ -f "${PLUGIN_ROOT}/.cursor-plugin/plugin.json" ]; then
   PLATFORM="cursor"
 else
   PLATFORM="codex"
@@ -27,6 +27,8 @@ fi
 ```
 
 **Cursor ordering matters.** Cursor exposes **no** plugin-root env var, so without the `CURSOR_AGENT` check it would fall through to the `codex` branch and get Codex-shaped project instructions (`$flow-next-plan` command names + `.codex/` setup) — wrong, because a Cursor local install drives the workflow with `/flow-next:*` slash commands and resolves `flowctl` via `.flow/bin/flowctl`. `CURSOR_AGENT` is Cursor's own signal (set in its agent shell; it also sets `CI=1` / `CURSOR_TRACE_ID`, but `CURSOR_AGENT` is the canonical one). The `CURSOR_AGENT` branch MUST come before the `else → codex` fallback.
+
+**Why the `.cursor-plugin/plugin.json` guard (don't classify Codex-hosted-in-Cursor as Cursor).** `CURSOR_AGENT` is **inherited by child processes** — so when Codex is launched *from* a Cursor Agent shell, the Codex process also sees `CURSOR_AGENT`, and a bare env check would misclassify a genuine Codex setup as `cursor` (skipping the `.codex/` agent + hook copy and writing the `/flow-next:` snippet instead of the Codex `$flow-next-` one — leaving the Codex setup incomplete). The env var alone only proves "a Cursor agent is somewhere in the process ancestry," not "this plugin is the Cursor local install." So the branch ALSO requires the `.cursor-plugin/plugin.json` manifest at the **resolved `PLUGIN_ROOT`** (the value resolved above): it is present only in a real Cursor install (`~/.cursor/plugins/local/flow-next/`, written by `install-cursor.sh`/`.ps1`) and absent from the `~/.codex` install and the `codex/` mirror — so a Codex process that merely inherited `CURSOR_AGENT` resolves a `PLUGIN_ROOT` without that manifest and correctly falls through to `codex`. (Same inherited-env-var class as the codex-delegation `CLAUDECODE` guard.)
 
 Store `PLATFORM` for use in later steps. This determines:
 - Which manifest to read for version (`plugin.json`)
