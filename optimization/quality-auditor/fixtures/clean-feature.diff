@@ -1,0 +1,92 @@
+diff --git a/src/registration.test.ts b/src/registration.test.ts
+new file mode 100644
+index 0000000..c1cc3e1
+--- /dev/null
++++ b/src/registration.test.ts
+@@ -0,0 +1,38 @@
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import { UserStore } from "./userStore.js";
++import { registerUser, RegistrationError } from "./registration.js";
++
++test("registers a valid user and makes it findable", () => {
++  const store = new UserStore();
++  const user = registerUser(store, { email: "ada@example.com", name: "Ada" });
++  assert.equal(store.findByEmail("ada@example.com")?.id, user.id);
++  assert.equal(store.size, 1);
++});
++
++test("rejects an invalid email", () => {
++  const store = new UserStore();
++  assert.throws(
++    () => registerUser(store, { email: "nope", name: "Ada" }),
++    RegistrationError,
++  );
++  assert.equal(store.size, 0);
++});
++
++test("rejects a duplicate email", () => {
++  const store = new UserStore();
++  registerUser(store, { email: "ada@example.com", name: "Ada" });
++  assert.throws(
++    () => registerUser(store, { email: "ada@example.com", name: "Ada Two" }),
++    RegistrationError,
++  );
++  assert.equal(store.size, 1);
++});
++
++test("rejects an empty name", () => {
++  const store = new UserStore();
++  assert.throws(
++    () => registerUser(store, { email: "ada@example.com", name: "  " }),
++    RegistrationError,
++  );
++});
+diff --git a/src/registration.ts b/src/registration.ts
+new file mode 100644
+index 0000000..2232a7c
+--- /dev/null
++++ b/src/registration.ts
+@@ -0,0 +1,42 @@
++import { randomUUID } from "node:crypto";
++import type { User } from "./types.js";
++import { UserStore } from "./userStore.js";
++import { validateEmail } from "./email.js";
++
++export interface RegistrationInput {
++  email: string;
++  name: string;
++}
++
++export class RegistrationError extends Error {}
++
++/**
++ * Register a new user into `store`.
++ *
++ * Validates the untrusted input (a real trust boundary — this is where
++ * caller-supplied data enters the service), rejects duplicate emails, and
++ * returns the stored user.
++ */
++export function registerUser(store: UserStore, input: RegistrationInput): User {
++  const email = input.email.trim();
++  const name = input.name.trim();
++
++  if (!validateEmail(email)) {
++    throw new RegistrationError(`invalid email: ${input.email}`);
++  }
++  if (name.length === 0) {
++    throw new RegistrationError("name must not be empty");
++  }
++  if (store.findByEmail(email) !== undefined) {
++    throw new RegistrationError(`email already registered: ${email}`);
++  }
++
++  const user: User = {
++    id: randomUUID(),
++    email,
++    name,
++    createdAt: new Date().toISOString(),
++  };
++  store.save(user);
++  return user;
++}

@@ -1,0 +1,181 @@
+diff --git a/src/registration.test.ts b/src/registration.test.ts
+new file mode 100644
+index 0000000..1b74cff
+--- /dev/null
++++ b/src/registration.test.ts
+@@ -0,0 +1,44 @@
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import { UserStore } from "./userStore.js";
++import { RegistrationService } from "./registration.js";
++import type { User } from "./types.js";
++
++function makeUser(): User {
++  return {
++    id: "u1",
++    email: "ada@example.com",
++    name: "Ada",
++    createdAt: "2026-01-01T00:00:00.000Z",
++  };
++}
++
++test("register persists via the repository", () => {
++  const fakeUser = makeUser();
++  const fakeStore = {
++    save() {},
++    findById: () => fakeUser,
++    findByEmail: () => undefined,
++    get size() {
++      return 0;
++    },
++  } as any;
++  const svc = new RegistrationService(fakeStore);
++  const result = svc.register({ email: "ada@example.com", name: "Ada" });
++  assert.equal(result.success, true);
++});
++
++test("legacy validation mode accepts a minimal email", () => {
++  const store = new UserStore();
++  const svc = new RegistrationService(store, { legacyValidationMode: true });
++  const r = svc.register({ email: "a@b", name: "X" });
++  assert.equal(r.success, true);
++});
++
++test("registers a valid user", () => {
++  const store = new UserStore();
++  const svc = new RegistrationService(store);
++  const r = svc.register({ email: "grace@example.com", name: "Grace" });
++  assert.equal(r.success, true);
++  assert.equal(store.findByEmail("grace@example.com")?.name, "Grace");
++});
+diff --git a/src/registration.ts b/src/registration.ts
+new file mode 100644
+index 0000000..46c07b2
+--- /dev/null
++++ b/src/registration.ts
+@@ -0,0 +1,125 @@
++import { randomUUID } from "node:crypto";
++import type { User } from "./types.js";
++import { UserStore } from "./userStore.js";
++
++export interface RegistrationInput {
++  email: string;
++  name: string;
++}
++
++export interface RegistrationResult {
++  success: boolean;
++  user?: User;
++  error?: string;
++}
++
++// Validate an email address.
++function isValidEmailAddress(value: string): boolean {
++  const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
++  return pattern.test(value.trim());
++}
++
++/**
++ * Generic persistence layer so we can swap storage backends later and reuse
++ * this for other entity types beyond users.
++ */
++export interface StorageProvider<T> {
++  persist(entity: T): void;
++  lookup(key: string): T | undefined;
++}
++
++abstract class AbstractEntityRepository<T extends { id: string }> {
++  constructor(protected readonly provider: StorageProvider<T>) {}
++
++  protected abstract keyOf(entity: T): string;
++
++  add(entity: T): void {
++    if (entity === null || entity === undefined) {
++      throw new Error("entity is required");
++    }
++    this.provider.persist(entity);
++  }
++
++  get(key: string): T | undefined {
++    return this.provider.lookup(key);
++  }
++}
++
++class UserRepository extends AbstractEntityRepository<User> {
++  protected keyOf(entity: User): string {
++    return entity.id;
++  }
++}
++
++class UserStoreProvider implements StorageProvider<User> {
++  constructor(private readonly store: UserStore) {}
++  persist(entity: User): void {
++    this.store.save(entity);
++  }
++  lookup(key: string): User | undefined {
++    return this.store.findById(key);
++  }
++}
++
++export interface RegistrationOptions {
++  legacyValidationMode?: boolean;
++}
++
++export class RegistrationService {
++  private readonly repo: UserRepository;
++
++  constructor(
++    private readonly store: UserStore,
++    private readonly options: RegistrationOptions = {},
++  ) {
++    this.repo = new UserRepository(new UserStoreProvider(store));
++  }
++
++  register(input: RegistrationInput): RegistrationResult {
++    try {
++      const email = input.email.trim();
++      const name = input.name.trim();
++
++      if (this.options.legacyValidationMode === true) {
++        if (!email.includes("@")) {
++          return { success: false, error: "legacy: missing @" };
++        }
++      } else {
++        if (!isValidEmailAddress(email)) {
++          return { success: false, error: `invalid email: ${input.email}` };
++        }
++      }
++
++      if (name.length === 0) {
++        return { success: false, error: "name must not be empty" };
++      }
++      if (this.store.findByEmail(email) !== undefined) {
++        return { success: false, error: `email already registered: ${email}` };
++      }
++
++      const user: User = {
++        id: randomUUID(),
++        email,
++        name,
++        createdAt: new Date().toISOString(),
++      };
++      this.repo.add(user);
++      return { success: true, user };
++    } catch (err) {
++      const anyErr = err as any;
++      console.error("registration failed", anyErr?.message);
++      return { success: true };
++    }
++  }
++}
++
++/** Public entry point for user registration. */
++export class RegistrationServiceWrapper {
++  private readonly inner: RegistrationService;
++  constructor(store: UserStore) {
++    this.inner = new RegistrationService(store);
++  }
++  register(input: RegistrationInput): RegistrationResult {
++    return this.inner.register(input);
++  }
++}

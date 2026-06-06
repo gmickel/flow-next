@@ -122,27 +122,25 @@ If DESIGN.md exists and diff contains frontend files (.jsx, .tsx, .vue, .svelte,
 
 ## Output Format
 
-**Output budget (hard).** Keep the whole audit **under ~500 tokens** — it flows into the reviewer's context, so every token is paid downstream. **Coverage is the job: NEVER drop a real finding or weaken a severity/confidence to save tokens** — leanness comes from terser wording, not fewer findings:
-- **One line per finding.** Format: `**file:line** (Conf N): issue — fix.` A Critical finding may add ONE `Risk:` line when the blast radius isn't self-evident; Should-Fix / Consider stay single lines.
-- **No fenced code blocks**; repo-relative paths only; name the symbol inline.
-- **Terse trailing sections.** Test Gaps / Test Budget / Security Notes / What's Good: ≤2 bullets each, one line each; omit any section with nothing real to say. Always keep the `Suppressed findings:` line when anything was suppressed.
-- Every finding keeps its **tier + exactly one confidence anchor (0/25/50/75/100)** — never strip or interpolate them.
-
 ```markdown
 ## Quality Audit: [Branch/Feature]
 
 ### Summary
-- Files changed: N · Risk: Low / Medium / High · Ship: ✅ Ship / ⚠️ Fix first / ❌ Major rework
+- Files changed: N
+- Risk level: Low / Medium / High
+- Ship recommendation: ✅ Ship / ⚠️ Fix first / ❌ Major rework
 
 ### Critical (MUST fix before shipping)
-- **[file:line]** (Conf 0|25|50|75|100): [issue] — [fix].
-  - Risk: [only when blast radius isn't self-evident]
+- **[File:line]** (Confidence: 0|25|50|75|100): [Issue]
+  - Risk: [What could go wrong]
+  - Fix: [Specific suggestion]
 
 ### Should Fix (High priority)
-- **[file:line]** (Conf 0|25|50|75|100): [issue] — [fix].
+- **[File:line]** (Confidence: 0|25|50|75|100): [Issue]
+  - [Brief fix suggestion]
 
 ### Consider (Nice to have)
-- **[file:line]** (Conf 0|25|50|75|100): [minor improvement — one line].
+- (Confidence: 0|25|50|75|100) [Minor improvement suggestion]
 
 ### Suppressed findings
 > Suppressed findings: <N> at anchor 50, <N> at anchor 25, <N> at anchor 0.
