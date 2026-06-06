@@ -155,6 +155,28 @@ Takeaway: lead with the **output-budget** lever on free-form scouts (big, low-ri
 prompt-trims on accuracy-critical/heavy skills as **archaeology-first, then careful per-section
 work** — and never relocate a table out of the phase that consumes it.
 
+**Where the big wins actually live — the uncapped-free-form-output agents.** The output-budget lever
+(40-70% leaner) pays wherever an agent emits **uncapped, free-form prose that flows into another
+prompt's context** — NOT on heavy *prompts* (those are load-bearing; trims are modest) and NOT on
+agents whose output is already a **bounded template**. The win pool, by inspection of the fleet:
+- **Done ✅:** `repo-scout`, `context-scout`, `flow-gap-analyst` (the last: 50-70% leaner, 26/27 gaps
+  preserved — proof the lever generalizes past the scouts).
+- **Next (uncapped free-form, no budget yet):** `quality-auditor` (full code-review report — per-finding
+  Risk/Fix prose); the smaller plan scouts (`spec-scout`, `memory-scout`, `docs-scout`) if their output
+  is verbose.
+- **Skip:** the prime scouts (`build`/`testing`/`security`/…) — already a bounded ✅/❌ template;
+  `practice-scout`/`github-scout` — external/non-deterministic.
+
+**Feature-preservation rule for any free-form-output budget (load-bearing):** trim **per-item
+verbosity, never the item COUNT**. For a gap-analyst that means every gap still surfaced; for a
+reviewer, every finding still flagged. The **coverage eval IS the no-feature-loss guarantee** — bake
+in a per-input answer key of must-find items and revert any mutation that drops below it. The biggest
+single bloat source is **cross-section duplication** (the same finding restated as a flow + edge case
++ priority); killing that — not dropping items — is where most of the tokens come from. Note the real
+**lean↔exhaustive knob**: a hard token cap can pressure the agent to enumerate fewer items; frame the
+budget as "leanness via de-duplication, coverage is the job" and let the gap-richest inputs run a bit
+longer rather than drop coverage (flow-gap-analyst exp1-vs-exp3).
+
 ## Promoting a kept mutation to ship
 
 The `opt/*` branch stays experimental. When a mutation is confirmed: apply it to the canonical
