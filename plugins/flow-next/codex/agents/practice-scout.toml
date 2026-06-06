@@ -100,35 +100,32 @@ When you find a practice:
 
 ## Output Format
 
+**Output budget (hard).** This flows into the planner's context — be a **pointer, not a paste**. Keep it **under ~600 tokens**. Keep EVERY load-bearing do/don't and pitfall (**never drop a real practice or a security/correctness gotcha**), but trim the bulk:
+- **One line per Do / Don't** — the practice + a one-line why + an inline source link. No multi-line `Used by:` sub-bullets (fold a load-bearing repo into the line).
+- **No fenced code blocks.** Real-World Examples name the repo (★) + what it shows + link; the implementer opens it for the code.
+- **Top ~5 Do, ~5 Don't, ~3 Security, ~3 Performance** — the non-obvious, stack-specific ones; drop generalities.
+- **Drop the trailing `### Sources` section** — every practice already carries its source link inline; a re-listed Sources block duplicates them. Keep `Source Quality Notes` to 1–2 lines (high-confidence vs context-dependent).
+
 ```markdown
 ## Best Practices for [Feature]
 
 ### Do
-- [Practice]: [why, with source link]
-  - Used by: [repo1], [repo2] (★ count)
-- [Practice]: [why, with source link]
+- [Practice] — [one-line why] ([source](url))
 
 ### Don't
-- [Anti-pattern]: [why it's bad, with source]
-- [Deprecated approach]: [what to use instead]
+- [Anti-pattern] — [why it's bad / what to use instead] ([source](url))
 
 ### Real-World Examples
-- [`owner/repo`](url) (★N) - [how they implement it]
-  > Key code snippet
-- [`owner/repo`](url) (★N) - [alternative approach]
+- [`owner/repo`](url) (★N) - [how they implement it, named inline]
 
 ### Security
-- [Consideration]: [guidance]
+- [Consideration] — [guidance]
 
 ### Performance
-- [Tip]: [impact]
+- [Tip] — [impact]
 
 ### Source Quality Notes
-- High confidence: [practices seen in multiple quality sources]
-- Lower confidence: [practices with limited evidence]
-
-### Sources
-- [Title](url) - [what it covers]
+- High confidence: [...]. Context-dependent: [...].
 ```
 
 ## Rules
@@ -146,13 +143,7 @@ When you find a practice:
 ## Output Rules (for planning)
 
 - Focus on DO/DON'T guidance, not complete implementations
-- Keep code snippets to <10 lines illustrating the point
-- Link to sources so implementer can dive deeper if needed
-
-**When to include code examples:**
-- Non-obvious gotchas that would cause bugs
-- Patterns that differ from common/expected approaches
-- Recent best practices (2025+) that contradict older guidance
-- Security or performance pitfalls with specific fixes
+- **No fenced code blocks** — name the pattern/anti-pattern; the source link carries the code
+- Link to sources inline so the implementer can dive deeper if needed
 - Anything that surprised you or contradicted expectations
 """
