@@ -115,9 +115,20 @@ for these must measure *fidelity + respect-for-override*, never "is the skill's 
 
 | Tier | Targets | Lever | Risk |
 |---|---|---|---|
-| Hot-path agents | `context-scout` (2.8k), the prime scouts (9, parallel), plan scouts, `repo-scout` ✅ | Output budget | low (generic mutation) |
+| Hot-path agents | `repo-scout` ✅, `context-scout` ✅ (2.8k), plan scouts | Output budget | low (generic mutation) |
 | Accuracy-critical | `capture`, `impl/plan/completion-review` (use `~/work/slop-testbed`) | accuracy-first, token 2nd | medium |
 | Heavy prompts | `make-pr` (31k), `audit`, `interview`, `prospect` | Prompt trim | higher — strong behavioral evals required |
+
+**Empirical note (which scouts the output-budget lever actually pays on):** the lever pays on the
+**free-form, local** scouts whose prose flows into the planner — `repo-scout` ✅ and `context-scout`
+✅ are both done (60–70% leaner, accuracy held). It has **little headroom on the prime scouts**
+(`build`/`testing`/`security`/`tooling`/`env`/`observability`/`workflow`/`docs`/`agents-md`): their
+output is already a **bounded template** (fixed sections, ✅/❌ flags, a scores checklist), and
+`prime` is a once-per-onboarding command (low frequency → low ROI per the cost rule). The
+**research scouts** (`practice-scout`, `github-scout`) are **external/non-deterministic** (live
+web/`gh` search, sources are URLs not local files) — noisy to score and not groundable against a
+fixed repo; treat them as smoke-test territory, not this loop. Net: the scout-tier budget prizes
+are `repo-scout` + `context-scout`; don't burn a loop re-confirming the templated/external ones.
 
 ## Promoting a kept mutation to ship
 
