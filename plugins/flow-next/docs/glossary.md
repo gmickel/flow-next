@@ -3,7 +3,7 @@
 `GLOSSARY.md` is a human-readable, project-canonical terminology file shipped in v0.39.0. Lives at the **repo root** (and optionally subdirectories), NOT inside `.flow/`. Survives `rm -rf .flow/` — terminology is the project's, not flow-next's.
 
 > Canonical vocabulary for this repo: [`../../../GLOSSARY.md`](../../../GLOSSARY.md).
-> The skill that writes/maintains glossary files: `plugins/flow-next/skills/flow-next-glossary/` (consumed by `/flow-next:interview`, `/flow-next:audit`, `/flow-next:sync`).
+> Glossary files are written/maintained via the `flowctl glossary` subcommands (`add` / `list` / `read` / `remove`), driven by `/flow-next:interview`, `/flow-next:audit`, and `/flow-next:sync`. (There is no standalone `flow-next-glossary` skill — `flowctl glossary` is the mechanism.)
 
 ## Format
 

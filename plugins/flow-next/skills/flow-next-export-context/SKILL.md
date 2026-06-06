@@ -1,6 +1,6 @@
 ---
 name: flow-next-export-context
-description: Export RepoPrompt context for external LLM review (ChatGPT, Claude web, etc.). Use when you want to review code or plans with an external model. Triggers on /flow-next:export-context.
+description: Export RepoPrompt context to a markdown file for review with an external LLM (ChatGPT, Claude web, etc.). Use when you want Carmack-level review but prefer an external model. Triggers on "export context", "export for external review", "export plan for ChatGPT", "export impl review context", "review with an external model", "export review context".
 ---
 
 # Export Context Mode
@@ -27,9 +27,11 @@ Types:
 - `plan <spec-id>` - Export plan review context
 - `impl` - Export implementation review context (current branch)
 
+This skill is phrase-triggered (no slash command) — invoke it by asking in natural language; the host agent parses `<type> <target> [focus areas]` from the request.
+
 Examples:
-- `/flow-next:export-context plan fn-1 focus on security`
-- `/flow-next:export-context impl focus on the auth changes`
+- "export context for plan fn-1, focus on security"
+- "export impl review context, focus on the auth changes"
 
 ## Setup
 
