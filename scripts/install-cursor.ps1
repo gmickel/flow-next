@@ -79,6 +79,17 @@ if ($rc -ge 8) {
     exit 1
 }
 
+# robocopy /MIR purges dest files absent from source, but /XD excludes a directory
+# from processing ENTIRELY — so it neither copies nor PURGES an excluded dir. A
+# stale codex/ (or tests/) left in the dest from an earlier full copy would survive,
+# breaking setup's Cursor-vs-Codex detection (which keys on codex/ being absent).
+# Explicitly remove the excluded dirs from the dest so the snapshot is a true mirror
+# (the rsync side gets this via --delete-excluded).
+foreach ($x in @("codex", "tests", "__pycache__")) {
+    $stale = Join-Path $Dest $x
+    if (Test-Path $stale) { Remove-Item -Recurse -Force $stale }
+}
+
 function Get-DirCount($path) {
     if (-not (Test-Path $path)) { return 0 }
     return (Get-ChildItem -Path $path -Directory -ErrorAction SilentlyContinue | Measure-Object).Count

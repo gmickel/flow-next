@@ -58,10 +58,14 @@ echo "Installing $PLUGIN into Cursor ($DEST)..."
 mkdir -p "$HOME/.cursor/plugins/local"
 
 # Real-dir copy (symlink is rejected by Cursor's plugin loader). --delete keeps
-# the snapshot in lockstep with the source on re-run. Exclude the Codex mirror,
-# tests, and Python/OS cruft.
+# the snapshot in lockstep with the source on re-run; --delete-excluded ALSO
+# removes excluded paths (e.g. a stale codex/ from an earlier full copy) from the
+# dest — plain --delete only removes files absent from source, NOT excluded ones,
+# so without it a pre-existing codex/ would survive and break setup's
+# Cursor-vs-Codex detection (which keys on codex/ being absent). Exclude the Codex
+# mirror, tests, and Python/OS cruft.
 if command -v rsync >/dev/null 2>&1; then
-    rsync -a --delete \
+    rsync -a --delete --delete-excluded \
         --exclude 'codex/' \
         --exclude 'tests/' \
         --exclude '__pycache__/' \
