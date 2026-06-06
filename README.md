@@ -51,6 +51,7 @@ First-class on **Claude Code**, **OpenAI Codex** (CLI + Desktop), and **Factory 
 /plugin marketplace add \
   https://github.com/gmickel/flow-next
 /plugin install flow-next
+/reload-plugins
 /flow-next:setup
 ```
 
