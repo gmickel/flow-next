@@ -28,7 +28,7 @@ Flow-Next is an AI agent orchestration plugin. **Twenty-six agent-native skills*
 - **Cross-model reviews.** A different model (RepoPrompt / Codex / Copilot) gates every implementation.
 - **R-IDs frozen at handover.** Acceptance criteria numbered once, never renumbered.
 
-First-class on **Claude Code**, **OpenAI Codex** (CLI + Desktop), and **Factory Droid**. Also runs on **OpenCode** via the [community port](https://github.com/gmickel/flow-next-opencode).
+First-class on **Claude Code**, **OpenAI Codex** (CLI + Desktop), and **Factory Droid**. Also runs on **xAI Grok Build** and **Cursor** (local plugin), plus **OpenCode** via the [community port](https://github.com/gmickel/flow-next-opencode).
 
 > 🆕 **v1.0+ — `flowctl epic` → `flowctl spec`.** The 1.0 release renames the canonical primitive across the entire flow-next surface. **All 0.x scripts and CLAUDE.md examples keep working** — the legacy CLI is preserved as a deprecation alias layer through all of 1.x. See the [CHANGELOG](CHANGELOG.md) for the migration path (interactive via `/flow-next:setup` or deterministic via `flowctl migrate-rename --yes`, both transactional with rollback).
 
@@ -51,6 +51,7 @@ First-class on **Claude Code**, **OpenAI Codex** (CLI + Desktop), and **Factory 
 /plugin marketplace add \
   https://github.com/gmickel/flow-next
 /plugin install flow-next
+/reload-plugins
 /flow-next:setup
 ```
 
