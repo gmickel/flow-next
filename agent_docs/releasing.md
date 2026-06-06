@@ -40,6 +40,23 @@ git push
 git tag flow-next-vX.Y.Z && git push origin flow-next-vX.Y.Z   # triggers release + Discord
 ```
 
+## Re-sync local installs (dogfood)
+
+Editing `agents/**`, `skills/**`, or `commands/**` does **not** update any LOCAL install — Cursor and
+Codex run from snapshot *copies* of `plugins/flow-next/`, not the repo. After an agent/skill change you
+want to dogfood locally (and after every release), re-run the installer for the tool you run flow-next in:
+
+- **Cursor:** `./scripts/install-cursor.sh` (macOS/Linux) or `scripts/install-cursor.ps1` (Windows) —
+  mirrors `plugins/flow-next/` into `~/.cursor/plugins/local/flow-next`. **Fully restart Cursor** after (a
+  reloaded local plugin needs a full Cmd-Q/reopen).
+- **Codex:** `./scripts/install-codex.sh` — installs the Codex mirror (`plugins/flow-next/codex/`).
+- **Claude Code:** a local source checkout runs the repo directly (no re-sync); marketplace users pick the
+  change up on `/plugin` update **after the release tag**.
+
+Each installer is **idempotent** (re-run to update) and snapshots the **current working tree** — sync from
+the branch/commit you actually want to dogfood. (For prompt-only optimizations there's no version-bump gate
+to dogfood early — just re-run the installer.)
+
 ## Docs-site changelog entry (flow-next.dev)
 
 The public, human-readable changelog at `~/work/flow-next.dev/src/content/docs/releases/changelog.mdx` is **not** a copy of the repo `CHANGELOG.md` — it is a *scannable* highlights page with a strict format. Every release MUST follow it so the page stays readable (one line per release, expand for detail) and the right-sidebar TOC stays a version index.
