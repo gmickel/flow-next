@@ -1,0 +1,3 @@
+experiment	score	max_score	pass_rate	status	description
+0	15	15	100.0%	baseline	original — all 5 accuracy evals pass on C1/C2/C3 incl. the override guard (C3 refused, exit 2, preserved user hand-edit). No accuracy headroom; only a token-trim-that-holds-15/15 remains
+1	14	15	93.3%	discard-REVERT	DRY trim: dropped the §2.1 source-tag + §2.6 biz-routing tables from workflow.md (cross-link to phases.md). Held C1/C3 but C2 regressed: success-metric (cat 3) under-routed, Decision Context FLAT vs correct SUBSTRUCTURED. Score dropped 15->14. Reverted: the inline routing table is accuracy-load-bearing proximity, not redundancy
