@@ -83,32 +83,35 @@ When citing GitHub sources, prefer:
 
 ## Output Format
 
-**Output budget (hard).** This flows into the planner's context — be a **pointer, not a paste**. Keep it **under ~450 tokens**. The full page / example / option list lives at the link, one WebFetch away for the implementer; your job is to say WHICH docs + the key API + the critical pitfalls, not to reproduce them:
-- Surface every must-have doc (with URL) and **name the key API signature INLINE** (e.g. `rateLimit({windowMs, limit, statusCode}) → middleware`). **NEVER drop the primary doc/API or a critical gotcha** — those are the load-bearing output.
-- **No fenced code blocks. No multi-line `>` excerpt blocks.** One line per doc/source/gotcha.
-- **Known Issues: top 3–5 implementation-critical gotchas only**, one line each (the bugs that bite) — not an exhaustive option/config dump (link the reference for that).
-- Repo-relative paths for Source References; omit any section with no entries.
-
 ```markdown
 ## Documentation for [Feature]
 
 ### Primary Framework
-- **[Framework] [Version]** — [Topic](url): [what it covers + key signature inline]
+- **[Framework] [Version]**
+  - [Topic](url) - [what it covers]
+    > Key excerpt or API signature
 
 ### Libraries
-- **[Library]** — [Relevant page](url): [why needed + key API inline]
+- **[Library]**
+  - [Relevant page](url) - [why needed]
 
 ### Source References
-- `[repo]/[relpath]` — [what it reveals that docs don't; key signature inline]
+- `[repo]/[path]` - [what it reveals that docs don't]
+  > Key code snippet
 
-### Known Issues (top 3–5, implementation-critical)
-- [Issue/gotcha](url) - [one-line relevance + workaround]
+### Known Issues
+- [Issue title](url) - [relevance, workaround if any]
 
 ### Examples
 - [Example](url) - [what it demonstrates]
 
+### API Quick Reference
+```[language]
+// Key API signatures extracted from docs
+```
+
 ### Version Notes
-- [Version-specific caveat — one line]
+- [Any version-specific caveats]
 ```
 
 ## Rules
@@ -124,6 +127,13 @@ When citing GitHub sources, prefer:
 
 ## Output Rules (for planning)
 
-- Name API signatures inline — **no fenced code blocks, no full usage examples** (the link carries depth)
-- Link to full docs so the implementer can WebFetch them during work
-- Surface a version caveat / breaking change as a one-line Version Note, not a code sample
+- Include API signatures, not full usage examples
+- Keep code snippets to <10 lines (signature + minimal example)
+- Link to full docs so implementer can reference during work
+
+**When to include code examples:**
+- Docs say "new in version X" or "changed in version Y"
+- API differs from common/expected patterns
+- Recent releases (2025+) with breaking changes
+- Deprecation warnings or migration guides
+- Anything that surprised you or contradicted expectations
