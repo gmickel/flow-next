@@ -6,8 +6,7 @@ Execute these phases in order. Each gates on the prior. Stop on user-blocking er
 
 ```bash
 set -e
-FLOWCTL="$HOME/.codex/scripts/flowctl"
-[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 TODAY="$(date -u +%Y-%m-%d)"
 ```
@@ -29,15 +28,13 @@ Detect once, route deterministically downstream. Per spec R24, the skill is **no
 ```bash
 RALPH=0
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
- RALPH=1
+  RALPH=1
 fi
 ```
 
 When `RALPH=1`:
 
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
-- Phase 0 questions hard-error with non-zero exit + a clear stderr message (no user to ask). (Interactive resolves the same via `plain-text numbered prompt`; both are info prompts, not a confirm gate.)
+- Phase 0 questions hard-error with non-zero exit + a clear stderr message (no user to ask). (Interactive resolves the same via `AskUserQuestion`; both are info prompts, not a confirm gate.)
 - Phase 4 forces `--draft` regardless of `--ready` (Ralph never opens ready-to-merge PRs) — the one Ralph-vs-interactive difference now that the confirm gate is gone for both.
 - Phase 5 emits the PR URL on stdout for the harness to capture.
 
@@ -51,31 +48,31 @@ Skip both checks under `--dry-run`. Rationale: dry-run renders the PR body to st
 
 ```bash
 if [[ "$DRY_RUN" != "1" ]]; then
- if ! command -v gh >/dev/null 2>&1; then
- cat <<'EOF' >&2
+  if ! command -v gh >/dev/null 2>&1; then
+    cat <<'EOF' >&2
 Error: gh CLI not installed. /flow-next:make-pr requires gh for PR creation.
 
 Install:
- macOS: brew install gh
- Linux: see https://github.com/cli/cli#installation
- Windows: winget install --id GitHub.cli
+  macOS: brew install gh
+  Linux: see https://github.com/cli/cli#installation
+  Windows: winget install --id GitHub.cli
 
 Then authenticate:
- gh auth login --hostname github.com
+  gh auth login --hostname github.com
 EOF
- exit 1
- fi
+    exit 1
+  fi
 
- if ! gh auth status --hostname github.com >/dev/null 2>&1; then
- cat <<'EOF' >&2
+  if ! gh auth status --hostname github.com >/dev/null 2>&1; then
+    cat <<'EOF' >&2
 Error: gh CLI not authenticated for github.com. Run:
 
- gh auth login --hostname github.com
+  gh auth login --hostname github.com
 
 If you already authed and this still fails, check `gh auth status` for hostname mismatches.
 EOF
- exit 1
- fi
+    exit 1
+  fi
 fi
 ```
 
@@ -89,31 +86,31 @@ Resolution order:
 
 ```bash
 if [[ -z "$SPEC_ID" ]]; then
- CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")
- if [[ -n "$CURRENT_BRANCH" ]]; then
- # Match against `.flow/specs/*.json` (canonical) + `.flow/epics/*.json`
- # (legacy alias dir) `branch_name` field. flowctl's spec store writes
- # branch_name on spec create; jq across both dirs finds the match.
- SPEC_ID=$(
- { find "$REPO_ROOT/.flow/specs" -maxdepth 1 -name '*.json' 2>/dev/null
- find "$REPO_ROOT/.flow/epics" -maxdepth 1 -name '*.json' 2>/dev/null
- } \
- | xargs -I{} jq -r --arg b "$CURRENT_BRANCH" \
- 'select(.branch_name == $b) | .id' {} 2>/dev/null \
- | head -1)
- fi
+  CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")
+  if [[ -n "$CURRENT_BRANCH" ]]; then
+    # Match against `.flow/specs/*.json` (canonical) + `.flow/epics/*.json`
+    # (legacy alias dir) `branch_name` field. flowctl's spec store writes
+    # branch_name on spec create; jq across both dirs finds the match.
+    SPEC_ID=$(
+      { find "$REPO_ROOT/.flow/specs" -maxdepth 1 -name '*.json' 2>/dev/null
+        find "$REPO_ROOT/.flow/epics" -maxdepth 1 -name '*.json' 2>/dev/null
+      } \
+      | xargs -I{} jq -r --arg b "$CURRENT_BRANCH" \
+          'select(.branch_name == $b) | .id' {} 2>/dev/null \
+      | head -1)
+  fi
 fi
 
 if [[ -z "$SPEC_ID" ]]; then
- if [[ "$RALPH" == "1" ]]; then
- echo "Error: no spec id supplied and no .flow/specs/*.json or .flow/epics/*.json branch_name matches '$CURRENT_BRANCH'. Ralph cannot prompt — pass an explicit spec id." >&2
- exit 2
- fi
- # Interactive: ask via plain-text numbered prompt.
- # Question: "No spec detected from current branch. Provide a spec id (fn-N-slug) or abort?"
- # Options: 1. Type spec id 2. Abort
- # On "Type spec id" — accept user input, validate via flowctl show.
- : "ask user for SPEC_ID (plain-text numbered prompt); abort exits 1"
+  if [[ "$RALPH" == "1" ]]; then
+    echo "Error: no spec id supplied and no .flow/specs/*.json or .flow/epics/*.json branch_name matches '$CURRENT_BRANCH'. Ralph cannot prompt — pass an explicit spec id." >&2
+    exit 2
+  fi
+  # Interactive: ask via AskUserQuestion.
+  # Question: "No spec detected from current branch. Provide a spec id (fn-N-slug) or abort?"
+  # Options: 1. Type spec id  2. Abort
+  # On "Type spec id" — accept user input, validate via flowctl show.
+  : "ask user for SPEC_ID (AskUserQuestion); abort exits 1"
 fi
 ```
 
@@ -121,8 +118,8 @@ Validate the resolved spec exists:
 
 ```bash
 if ! "$FLOWCTL" show "$SPEC_ID" --json >/dev/null 2>&1; then
- echo "Error: spec '$SPEC_ID' not found in .flow/specs/ or .flow/epics/. Check id with: $FLOWCTL specs" >&2
- exit 1
+  echo "Error: spec '$SPEC_ID' not found in .flow/specs/ or .flow/epics/. Check id with: $FLOWCTL specs" >&2
+  exit 1
 fi
 ```
 
@@ -130,28 +127,28 @@ fi
 
 ```bash
 if [[ -z "$BASE_REF" ]]; then
- for candidate in origin/main main origin/master master; do
- if git -C "$REPO_ROOT" rev-parse --verify --quiet "$candidate" >/dev/null 2>&1; then
- BASE_REF="$candidate"
- break
- fi
- done
+  for candidate in origin/main main origin/master master; do
+    if git -C "$REPO_ROOT" rev-parse --verify --quiet "$candidate" >/dev/null 2>&1; then
+      BASE_REF="$candidate"
+      break
+    fi
+  done
 fi
 
 if [[ -z "$BASE_REF" ]]; then
- if [[ "$RALPH" == "1" ]]; then
- echo "Error: no base ref detected (origin/main, main, origin/master, master all missing). Pass --base <ref> explicitly." >&2
- exit 2
- fi
- # Interactive: ask user for the base ref via plain-text numbered prompt. No frozen options —
- # accept a typed branch name; validate via git rev-parse --verify --quiet.
- : "ask user for BASE_REF; on abort exit 1"
+  if [[ "$RALPH" == "1" ]]; then
+    echo "Error: no base ref detected (origin/main, main, origin/master, master all missing). Pass --base <ref> explicitly." >&2
+    exit 2
+  fi
+  # Interactive: ask user for the base ref via AskUserQuestion. No frozen options —
+  # accept a typed branch name; validate via git rev-parse --verify --quiet.
+  : "ask user for BASE_REF; on abort exit 1"
 fi
 
 # Final validation — base must exist whether detected or supplied.
 if ! git -C "$REPO_ROOT" rev-parse --verify --quiet "$BASE_REF" >/dev/null 2>&1; then
- echo "Error: base ref '$BASE_REF' is not a valid git ref. Check with: git rev-parse --verify $BASE_REF" >&2
- exit 1
+  echo "Error: base ref '$BASE_REF' is not a valid git ref. Check with: git rev-parse --verify $BASE_REF" >&2
+  exit 1
 fi
 ```
 
@@ -161,28 +158,28 @@ HEAD must be a real commit, distinct from base, share a merge-base with base, an
 
 ```bash
 HEAD_SHA=$(git -C "$REPO_ROOT" rev-parse --verify HEAD 2>/dev/null) || {
- echo "Error: HEAD does not resolve to a commit. Repo state is broken; run from a normal branch." >&2; exit 1; }
+  echo "Error: HEAD does not resolve to a commit. Repo state is broken; run from a normal branch." >&2; exit 1; }
 
 BASE_SHA=$(git -C "$REPO_ROOT" rev-parse --verify "$BASE_REF" 2>/dev/null)
 
 if [[ "$HEAD_SHA" == "$BASE_SHA" ]]; then
- echo "Error: HEAD and base ($BASE_REF) point at the same commit. Nothing to PR." >&2
- exit 1
+  echo "Error: HEAD and base ($BASE_REF) point at the same commit. Nothing to PR." >&2
+  exit 1
 fi
 
 # Resolve the merge-base. Required for a valid PR — without one the branches
 # are unrelated histories and gh pr create will fail.
 MERGE_BASE=$(git -C "$REPO_ROOT" merge-base "$BASE_REF" HEAD 2>/dev/null) || {
- echo "Error: HEAD and base ($BASE_REF) share no merge-base — unrelated histories. Pick a different --base." >&2
- exit 1; }
+  echo "Error: HEAD and base ($BASE_REF) share no merge-base — unrelated histories. Pick a different --base." >&2
+  exit 1; }
 
 # Confirm at least one commit exists on the branch since the merge-base.
 # Use <merge-base>..HEAD (NOT <BASE_REF>..HEAD) so a branch that's behind base
 # on linear history is still accepted as long as it has its own commits.
 COMMITS_AHEAD=$(git -C "$REPO_ROOT" rev-list --count "$MERGE_BASE..HEAD")
 if [[ "$COMMITS_AHEAD" -lt 1 ]]; then
- echo "Error: HEAD has 0 commits since merge-base with $BASE_REF. Nothing to PR." >&2
- exit 1
+  echo "Error: HEAD has 0 commits since merge-base with $BASE_REF. Nothing to PR." >&2
+  exit 1
 fi
 ```
 
@@ -205,13 +202,13 @@ OPEN_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]? | select(.status != "done
 
 ```bash
 if [[ "$OPEN_COUNT" -gt 0 ]]; then
- if [[ "$RALPH" == "1" ]]; then
- echo "Error: $OPEN_COUNT task(s) under $SPEC_ID still open ($OPEN_TASKS). Ralph cannot open PRs for incomplete specs." >&2
- exit 2
- else
- # Interactive + --dry-run alike: warn, don't block. Open items → draft (§4.2).
- echo "Note: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS) — opening as a DRAFT. Run /flow-next:work to finish, then mark the PR ready." >&2
- fi
+  if [[ "$RALPH" == "1" ]]; then
+    echo "Error: $OPEN_COUNT task(s) under $SPEC_ID still open ($OPEN_TASKS). Ralph cannot open PRs for incomplete specs." >&2
+    exit 2
+  else
+    # Interactive + --dry-run alike: warn, don't block. Open items → draft (§4.2).
+    echo "Note: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS) — opening as a DRAFT. Run /flow-next:work to finish, then mark the PR ready." >&2
+  fi
 fi
 ```
 
@@ -221,23 +218,23 @@ fi
 
 ```bash
 EXISTING=$(gh pr view --json url,state,number 2>/dev/null \
- | jq -r 'select(.state == "OPEN") | .url' \
- || true)
+  | jq -r 'select(.state == "OPEN") | .url' \
+  || true)
 
 if [[ -n "$EXISTING" ]]; then
- cat <<EOF >&2
+  cat <<EOF >&2
 Error: branch already has an OPEN pull request: $EXISTING
 
 This skill creates new PRs only. To address review feedback on the existing PR,
 use:
 
- /flow-next:resolve-pr
+  /flow-next:resolve-pr
 
 If you want a fresh PR (e.g. the open one is stale), close it manually first:
 
- gh pr close <number> --comment "Replaced by upcoming /flow-next:make-pr"
+  gh pr close <number> --comment "Replaced by upcoming /flow-next:make-pr"
 EOF
- exit 1
+  exit 1
 fi
 ```
 
@@ -247,22 +244,22 @@ fi
 
 ```bash
 PHASE0_CONTEXT=$(jq -n \
- --arg spec "$SPEC_ID" \
- --arg base "$BASE_REF" \
- --arg head "$HEAD_SHA" \
- --arg branch "${CURRENT_BRANCH:-$(git -C "$REPO_ROOT" branch --show-current)}" \
- --argjson commits_ahead "$COMMITS_AHEAD" \
- --argjson open_tasks "$OPEN_COUNT" \
- --argjson dry_run "$DRY_RUN" \
- --argjson ralph "$RALPH" \
- --argjson no_mermaid "$NO_MERMAID" \
- --argjson write_memory "$WRITE_MEMORY" \
- --arg draft_force "$DRAFT_FORCE" \
- '{spec:$spec, base:$base, head:$head, branch:$branch,
- commits_ahead:$commits_ahead, open_tasks:$open_tasks,
- dry_run:($dry_run==1), ralph:($ralph==1),
- no_mermaid:($no_mermaid==1), write_memory:($write_memory==1),
- draft_force:$draft_force}')
+  --arg spec "$SPEC_ID" \
+  --arg base "$BASE_REF" \
+  --arg head "$HEAD_SHA" \
+  --arg branch "${CURRENT_BRANCH:-$(git -C "$REPO_ROOT" branch --show-current)}" \
+  --argjson commits_ahead "$COMMITS_AHEAD" \
+  --argjson open_tasks "$OPEN_COUNT" \
+  --argjson dry_run "$DRY_RUN" \
+  --argjson ralph "$RALPH" \
+  --argjson no_mermaid "$NO_MERMAID" \
+  --argjson write_memory "$WRITE_MEMORY" \
+  --arg draft_force "$DRAFT_FORCE" \
+  '{spec:$spec, base:$base, head:$head, branch:$branch,
+    commits_ahead:$commits_ahead, open_tasks:$open_tasks,
+    dry_run:($dry_run==1), ralph:($ralph==1),
+    no_mermaid:($no_mermaid==1), write_memory:($write_memory==1),
+    draft_force:$draft_force}')
 ```
 
 Phases 1-5 read `$PHASE0_CONTEXT` rather than re-deriving values.
@@ -278,7 +275,7 @@ Phases 1-5 read `$PHASE0_CONTEXT` rather than re-deriving values.
 
 ---
 
-## Phase 1: Gather inputs
+## Phase 1: Gather inputs (filled by fn-42.3 / fn-42.4)
 
 **Goal:** call `flowctl spec export-cognitive-aid <SPEC_ID> --base <BASE_REF> --json` once and load the structured payload. The schema is documented in the spec under "Architecture & Data Models".
 
@@ -290,9 +287,9 @@ This phase is implemented in dependent tasks. Scaffold-task notes:
 
 ---
 
-## Phase 2: Render body header sections
+## Phase 2: Render body header sections (fn-42.3)
 
-**Goal:** turn the structured payload from Phase 1 into the **header half** of the PR body — the sections a reviewer reads *first* to decide where to focus. Header half = Title + summary block + TL;DR + R-ID coverage table + Critical changes. The context half (Decisions / Memory / Glossary / Open items / Where to look) lands in §Phase 2 (cont). The mermaid `## Structural changes` section lands in §Phase 3.
+**Goal:** turn the structured payload from Phase 1 into the **header half** of the PR body — the sections a reviewer reads *first* to decide where to focus. Header half = Title + summary block + TL;DR + R-ID coverage table + Critical changes. The context half (Decisions / Memory / Glossary / Open items / Where to look) lands in fn-42.4 §Phase 2 (cont). The mermaid `## Structural changes` section lands in fn-42.5 §Phase 3.
 
 The host agent's reasoning IS the renderer. **There is no Python renderer to call** — the agent reads the payload and emits markdown directly. flowctl provided the structured input; the skill turns it into prose. This is the "harness's own model is the QA layer" part of the spec.
 
@@ -304,17 +301,19 @@ The body sections appear in this exact order. Skip any section whose source cont
 2. **TL;DR** — 3-5 plain-language bullets covering the headline change.
 3. **R-ID coverage** — table mapping every spec R-ID to satisfying task(s) + evidence commit(s).
 4. **Critical changes** — ≤7 bullets, prioritized by churn / cross-module / public-interface / security-sensitive / behavior-visible.
-5. **Structural changes** — mermaid codefences + prose summary (see §Phase 3).
-6. **Decisions made** — `knowledge/decisions/` entries written during the spec.
-7. **Memory left behind** — `bug/*` + `knowledge/architecture-patterns/*` entries.
-8. **Glossary / strategy notes** — added/renamed terms + tracks served.
-9. **Open items** — spec open questions + deferred review findings + spec-completion-review flags.
-10. **Where to look** — methodology #4 reviewer-focus list.
+5. **Structural changes** — mermaid codefences + prose summary (filled in fn-42.5 §Phase 3).
+6. **Decisions made** — `knowledge/decisions/` entries written during the spec (fn-42.4).
+7. **Memory left behind** — `bug/*` + `knowledge/architecture-patterns/*` entries (fn-42.4).
+8. **Glossary / strategy notes** — added/renamed terms + tracks served (fn-42.4).
+9. **Open items** — spec open questions + deferred review findings + spec-completion-review flags (fn-42.4).
+10. **Where to look** — methodology #4 reviewer-focus list (fn-42.4).
 11. **Footer breadcrumb** — `Generated by /flow-next:make-pr from <spec-id> against <base-ref> on <YYYY-MM-DD>`.
+
+This task (fn-42.3) is responsible for steps 1-4. Steps 5-11 are owned by other tasks in the spec; the skill scaffold here just commits to the order.
 
 ### 2.1 — Title + summary block
 
-**Title** — computed from the spec title (truncate to 72 chars + ellipsis if longer; first sentence of `spec.spec_sections.goal_and_context` truncated to 70 + `…` as fallback when spec title is empty). The body itself uses the spec title as a `# <title>` H1.
+**Title** — computed in fn-42.6 from the spec title (truncate to 72 chars + ellipsis if longer; first sentence of `spec.spec_sections.goal_and_context` truncated to 70 + `…` as fallback when spec title is empty). The body itself uses the spec title as a `# <title>` H1.
 
 **Summary block** — a single blockquote directly under the H1, four lines:
 
@@ -429,8 +428,8 @@ This is the one section that doesn't honor the §2.6 omission rule — even a ti
 **Lookup + the code-diff `<anchor>` (the host agent runs this once per PR).** The anchor is GitHub's per-file diff id: `diff-` + the lowercase SHA-256 hex of the file-path string.
 
 ```bash
-GH_NWO=$(gh repo view --json nameWithOwner --jq .nameWithOwner) # "owner/repo"
-HEAD_SHA=$(git rev-parse HEAD) # SHA-pin blob links (survive branch delete)
+GH_NWO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)   # "owner/repo"
+HEAD_SHA=$(git rev-parse HEAD)                                    # SHA-pin blob links (survive branch delete)
 BLOB_BASE="https://github.com/${GH_NWO}/blob/${HEAD_SHA}"
 COMMIT_BASE="https://github.com/${GH_NWO}/commit"
 file_anchor() { printf 'diff-%s' "$(printf '%s' "$1" | shasum -a 256 | cut -d' ' -f1)"; }
@@ -456,8 +455,8 @@ If `gh repo view` / `git rev-parse` fails (no remote, missing auth), **render pa
 **Anti-patterns:**
 
 ```markdown
-- [`plugins/flow-next/scripts/flowctl.py`](plugins/flow-next/scripts/flowctl.py) ← BROKEN: relative → resolves to /pull/<N>/plugins/... (404)
-- `plugins/flow-next/scripts/flowctl.py` (~line 12001) ← inline code, no link at all
+- [`plugins/flow-next/scripts/flowctl.py`](plugins/flow-next/scripts/flowctl.py)   ← BROKEN: relative → resolves to /pull/<N>/plugins/... (404)
+- `plugins/flow-next/scripts/flowctl.py` (~line 12001)                              ← inline code, no link at all
 ```
 
 Correct:
@@ -467,7 +466,7 @@ Correct:
 - **Read:** [`.flow/specs/fn-1-foo.md`](https://github.com/owner/repo/blob/<head-sha>/.flow/specs/fn-1-foo.md)
 ```
 
-### 2.5 — Hallucination guardrails (load-bearing)
+### 2.5 — Hallucination guardrails (load-bearing for fn-42.3)
 
 Phase 2 body rendering is the surface where hallucination risk peaks: the agent has rich structured input AND open-ended natural-language output, which is exactly the shape that produces fluent-sounding fabrication. These rules are load-bearing — every claim in the rendered body must trace back to a structured field in the export payload. **Honest "unclear" / "uncovered" beats plausible "wrong".**
 
@@ -481,7 +480,7 @@ The 10 rules below are not advisory. They define what the body MAY and MAY NOT c
 6. **No inflated scope.** Every claim in the body must trace to either (a) the R-ID coverage table or (b) a task's `done_summary`. If you can't anchor a claim to one of those, drop it. "We also improved overall reliability" with no concrete trace = drop.
 7. **No R-ID misattribution.** `tasks[].satisfies[]` is the source of truth. NEVER infer R-ID coverage from task titles ("This task is about validation, must be satisfying R3"). NEVER infer from commit messages alone. Empty `satisfies` → uncovered → ⚠️.
 8. **No stale references.** Cross-check against `diff_summary.files[].status`. A file with `status == "D"` (deleted) cannot appear in the body as if it still exists. A file with `status == "R"` (renamed) appears under its new path; the old path is mentioned only if the rename itself is the load-bearing change.
-9. **No invented "why".** The Decision Context section is a read-only mirror of `.flow/memory/knowledge/decisions/` + the spec's `## Decision Context`. NEVER paraphrase, never extend, never narrate a plausible-sounding rationale to fill a gap. If no decision exists for a structural change, the body says so honestly: `*No decision-track memory entry for this change. Decision context unclear — surface in PR comments if needed.*`
+9. **No invented "why".** The Decision Context section in fn-42.4 is a read-only mirror of `.flow/memory/knowledge/decisions/` + the spec's `## Decision Context`. NEVER paraphrase, never extend, never narrate a plausible-sounding rationale to fill a gap. If no decision exists for a structural change, the body says so honestly: `*No decision-track memory entry for this change. Decision context unclear — surface in PR comments if needed.*`
 10. **Trace every claim.** The meta-rule: every sentence in the body must trace to a structured field in the export payload (spec / tasks / memory / glossary / strategy / diff / reviews) or to a verbatim spec quote. If you can't point to which field a claim came from, drop the claim.
 
 When data is missing, surface that honestly:
@@ -500,12 +499,12 @@ Empty content → omit the entire section heading. Never emit an empty placehold
 | TL;DR | ≥1 bullet derivable | Aborts via §2.7 if zero bullets derivable |
 | R-ID coverage table | ≥1 R-ID in spec | Aborts via §2.7 if every R-ID uncovered |
 | Critical changes | Always (with fallback bullet per §2.4) | Never |
-| Structural changes (mermaid) | Trigger conditions fire | When `--no-mermaid` OR no triggers |
-| Decisions made | `memory_during_spec.decisions[]` non-empty | Empty array |
-| Memory left behind | `memory_during_spec.bugs[]` OR `architecture_patterns[]` non-empty | Both empty |
-| Glossary / strategy notes | `glossary_changes` non-empty OR `strategy_alignment.tracks_served` non-empty | Both empty |
-| Open items | spec `## Open Questions` non-empty OR `deferred_findings` non-empty | All empty |
-| Where to look | ≥1 reviewer-focus pointer derivable | None derivable |
+| Structural changes (mermaid) | Trigger conditions fire (fn-42.5) | When `--no-mermaid` OR no triggers |
+| Decisions made | `memory_during_spec.decisions[]` non-empty (fn-42.4) | Empty array |
+| Memory left behind | `memory_during_spec.bugs[]` OR `architecture_patterns[]` non-empty (fn-42.4) | Both empty |
+| Glossary / strategy notes | `glossary_changes` non-empty OR `strategy_alignment.tracks_served` non-empty (fn-42.4) | Both empty |
+| Open items | spec `## Open Questions` non-empty OR `deferred_findings` non-empty (fn-42.4) | All empty |
+| Where to look | ≥1 reviewer-focus pointer derivable (fn-42.4) | None derivable |
 | Footer breadcrumb | Always | Never |
 
 The omission rule preserves skim-readability — a heading with no content trains the reviewer to ignore future headings ("oh, /flow-next:make-pr always emits empty sections, I can skip them"). One real signal per heading.
@@ -534,9 +533,9 @@ These are guard conditions, not warnings — a body with empty TL;DR or empty R-
 
 ---
 
-## Phase 2 (cont): Render body context sections
+## Phase 2 (cont): Render body context sections (fn-42.4)
 
-**Goal:** turn the structured payload from Phase 1 into the **context half** of the PR body — the sections a reviewer reads *after* deciding where to focus, to anchor judgment in the surrounding intent. Context half = Decisions made + Memory left behind + Glossary / strategy notes + Open items + Where to look. The header half (TL;DR / R-ID coverage / Critical changes) lands in §Phase 2; the mermaid section lands in §Phase 3.
+**Goal:** turn the structured payload from Phase 1 into the **context half** of the PR body — the sections a reviewer reads *after* deciding where to focus, to anchor judgment in the surrounding intent. Context half = Decisions made + Memory left behind + Glossary / strategy notes + Open items + Where to look. The header half (TL;DR / R-ID coverage / Critical changes) lands in fn-42.3 §Phase 2; the mermaid section lands in fn-42.5 §Phase 3.
 
 These five sections are **read-only mirrors of structured fields**. The host agent never paraphrases, never extends, never narrates a plausible-sounding rationale to fill a gap. The §2.5 hallucination guardrails (esp. rule 9 "no invented why" and rule 10 "trace every claim") apply here with extra force: the context sections are the surface where fluent fabrication is most tempting, because the underlying data (decisions, memory entries, open questions) is already prose-shaped. Treat them as text to reformat, not text to embellish.
 
@@ -555,9 +554,9 @@ Field rules:
 - **Link target** — blob, SHA-pinned (per §2.4b — `.flow/memory/<id>.md` is an artifact to read): `https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/memory/<id>.md`. The `id` already contains the track/category prefix; concatenate it after `.flow/memory/`. (A bare relative `.flow/memory/<id>.md` is BROKEN in a PR body — see §2.4b.)
 - **`<first_sentence>`** — `decisions[].first_sentence` verbatim. flowctl already extracted this via `_export_first_sentence`. Never re-extract, never paraphrase.
 - **`<alternatives_considered>`** — `decisions[].alternatives_considered` from the export. **Caveat: this field arrives as a stringified Python list** (e.g. `"['option-a', 'option-b']"`) because flowctl wraps the frontmatter list with `str()` during export. The host agent renders it readably:
- - String matches `^\[.*\]$` and is non-empty → strip the brackets + quotes, emit as a comma-separated phrase: `option-a, option-b`.
- - String is empty (`""`) or literally `"[]"` → omit the trailing `Alternatives considered: …` clause entirely (don't emit the label with no content).
- - String is plain prose (legacy entries that wrote a sentence rather than a list) → emit verbatim.
+  - String matches `^\[.*\]$` and is non-empty → strip the brackets + quotes, emit as a comma-separated phrase: `option-a, option-b`.
+  - String is empty (`""`) or literally `"[]"` → omit the trailing `Alternatives considered: …` clause entirely (don't emit the label with no content).
+  - String is plain prose (legacy entries that wrote a sentence rather than a list) → emit verbatim.
 - **No truncation.** Decision entries are by-design prose-heavy; reviewer needs the full alternatives list to weigh the choice.
 
 If `memory_during_spec.decisions[]` is empty, the section heading is omitted entirely per §2.6. **No fallback "no decisions" line.** Section either has bullets or doesn't appear.
@@ -758,11 +757,11 @@ Field rules:
 
 - **`<path>`** — verbatim from `security_sensitive_paths[]`.
 - **Question variants permitted** — the host agent picks from a small whitelist of security focus questions based on the path heuristic:
- - Path contains `auth/` / `crypto/` → "Was the trust boundary preserved here?"
- - Path contains `.github/workflows/` → "Does this CI step run with appropriate scope (secrets / permissions)?"
- - Path contains `scripts/hooks/` → "Could this hook be bypassed or made non-executable?"
- - Path contains `*.pem` / `secret` / `token` / `credential` filename patterns → "Is this file safe to commit, or did a real secret leak in?"
- - Default fallback → "Was the trust boundary preserved here?"
+  - Path contains `auth/` / `crypto/` → "Was the trust boundary preserved here?"
+  - Path contains `.github/workflows/` → "Does this CI step run with appropriate scope (secrets / permissions)?"
+  - Path contains `scripts/hooks/` → "Could this hook be bypassed or made non-executable?"
+  - Path contains `*.pem` / `secret` / `token` / `credential` filename patterns → "Is this file safe to commit, or did a real secret leak in?"
+  - Default fallback → "Was the trust boundary preserved here?"
 - **Cap** — at most 3 security bullets. If more than 3 paths fire, host agent picks the highest-stakes (auth > crypto > workflows > hooks > *.pem).
 
 #### Category 3: Business correctness
@@ -890,7 +889,7 @@ The one exception is the §2.4 Critical changes "Limited churn" fallback bullet 
 
 ---
 
-## Phase 3: Mermaid generation
+## Phase 3: Mermaid generation (fn-42.5)
 
 **Goal:** when the diff signals warrant it, emit a `## Structural changes` section with one to three mermaid codefences, each preceded by a one-paragraph prose summary in plain language. The diagrams are supplementary; the prose is load-bearing — forges that don't render mermaid still convey the change. When triggers don't fire OR `--no-mermaid` is set, the section is omitted entirely (never an empty placeholder).
 
@@ -902,8 +901,8 @@ Phase 3 is bypassed entirely when `$NO_MERMAID == 1`. **No diagrams emitted.** P
 
 ```bash
 if [[ "$NO_MERMAID" == "1" ]]; then
- : "skip Phase 3 entirely; the rendered body has no ## Structural changes heading"
- return 0 # or equivalent skip control in the host agent's render loop
+  : "skip Phase 3 entirely; the rendered body has no ## Structural changes heading"
+  return 0  # or equivalent skip control in the host agent's render loop
 fi
 ```
 
@@ -958,17 +957,17 @@ The collapse-to-one rule prefers `graph TB` when the alternative is more than 3 
 
 ````
 Bad (15 nodes):
- skill --> agent_A
- skill --> agent_B
- skill --> agent_C
- skill --> agent_D
- skill --> agent_E
- ... (11 more)
+  skill --> agent_A
+  skill --> agent_B
+  skill --> agent_C
+  skill --> agent_D
+  skill --> agent_E
+  ... (11 more)
 
 Good (3 nodes):
- skill --> scouts["scouts (5)"]
- skill --> workers["workers (3)"]
- skill --> validators["validators (2)"]
+  skill --> scouts["scouts (5)"]
+  skill --> workers["workers (3)"]
+  skill --> validators["validators (2)"]
 ````
 
 The grouped label keeps the fan-out signal without burying it in 15 visually-similar nodes.
@@ -1073,7 +1072,7 @@ When in doubt: **fewer nodes, fewer edges, more honest.** A diagram with 4 nodes
 
 ---
 
-## Phase 4: Push + create PR
+## Phase 4: Push + create PR (fn-42.6)
 
 **Goal:** turn the rendered body into an open PR. Compute title + draft flag, persist the body to disk, then push the branch and run `gh pr create` directly — **no confirm prompt** — with the body delivered via `--body-file` (NOT a heredoc). `--dry-run` is the preview path and short-circuits before any state change. `--memory` is deferred to Phase 5.
 
@@ -1098,10 +1097,10 @@ The body string is owned by the host agent at this point — Phases 2/3 produced
 
 ```bash
 if [[ "$DRY_RUN" == "1" ]]; then
- printf '%s\n' "$BODY_CONTENT"
- echo "" >&2
- echo "Dry-run: body written to stdout. No push, no PR created, no memory entry written." >&2
- exit 0
+  printf '%s\n' "$BODY_CONTENT"
+  echo "" >&2
+  echo "Dry-run: body written to stdout. No push, no PR created, no memory entry written." >&2
+  exit 0
 fi
 ```
 
@@ -1119,15 +1118,15 @@ SPEC_TITLE=$(printf '%s' "$SPEC_JSON" | jq -r '.title // ""')
 GOAL_FIRST_SENTENCE=$(printf '%s' "$SPEC_JSON" | jq -r '(.spec_sections.goal_and_context // "") | split(". ")[0]')
 
 if [[ -n "$SPEC_TITLE" && "${#SPEC_TITLE}" -le 72 ]]; then
- PR_TITLE="$SPEC_TITLE"
+  PR_TITLE="$SPEC_TITLE"
 elif [[ -n "$GOAL_FIRST_SENTENCE" ]]; then
- if [[ "${#GOAL_FIRST_SENTENCE}" -gt 70 ]]; then
- PR_TITLE="${GOAL_FIRST_SENTENCE:0:70}…"
- else
- PR_TITLE="$GOAL_FIRST_SENTENCE"
- fi
+  if [[ "${#GOAL_FIRST_SENTENCE}" -gt 70 ]]; then
+    PR_TITLE="${GOAL_FIRST_SENTENCE:0:70}…"
+  else
+    PR_TITLE="$GOAL_FIRST_SENTENCE"
+  fi
 else
- PR_TITLE="$SPEC_ID" # last-resort fallback; spec id is always populated
+  PR_TITLE="$SPEC_ID"   # last-resort fallback; spec id is always populated
 fi
 ```
 
@@ -1145,30 +1144,30 @@ DRAFT_FLAG=""
 
 # Layer 1: Ralph mode forces draft (autonomous-loop opens-for-human-review default).
 if [[ "$RALPH" == "1" ]]; then
- DRAFT_FLAG="--draft"
+  DRAFT_FLAG="--draft"
 fi
 
 # Layer 2: Open items default to draft (incomplete state shouldn't go straight to ready).
 # OPEN_ITEMS_COUNT comes from Phase 1 — counts spec open_questions + deferred_findings + spec-completion-review needs_work flag.
 if [[ "$OPEN_ITEMS_COUNT" -gt 0 ]]; then
- DRAFT_FLAG="--draft"
+  DRAFT_FLAG="--draft"
 fi
 
 # Layer 3: Explicit --draft force.
 if [[ "$DRAFT_FORCE" == "draft" ]]; then
- DRAFT_FLAG="--draft"
+  DRAFT_FLAG="--draft"
 fi
 
 # Layer 4: Explicit --ready force overrides everything except Ralph.
 # Ralph is a hard layer-1 invariant — autonomous loops MUST NOT open ready PRs even with --ready in args.
 if [[ "$DRAFT_FORCE" == "ready" && "$RALPH" != "1" ]]; then
- DRAFT_FLAG=""
+  DRAFT_FLAG=""
 fi
 
 # Conflict surfacing: --draft AND --ready in the same invocation is the SKILL.md last-flag-wins rule.
 # DRAFT_FORCE captured the last one already; this layer just makes the conflict legible at runtime.
 if [[ "$DRAFT_FORCE" == "ready" && "$RALPH" == "1" ]]; then
- echo "Note: --ready ignored under Ralph mode. PR will open as draft (autonomous-loop terminus)." >&2
+  echo "Note: --ready ignored under Ralph mode. PR will open as draft (autonomous-loop terminus)." >&2
 fi
 ```
 
@@ -1192,8 +1191,8 @@ fi
 ```bash
 # Sources A + B come from EXPORT_PAYLOAD (spec open_questions + deferred_findings).
 PAYLOAD_OPEN=$(printf '%s' "$EXPORT_PAYLOAD" | jq '
- ( (.spec.spec_sections.open_questions // []) | length ) +
- ( ([(.deferred_findings // [])[] | (.items // [])[]] | length) )
+  ( (.spec.spec_sections.open_questions // []) | length ) +
+  ( ([(.deferred_findings // [])[] | (.items // [])[]] | length) )
 ')
 
 # Source C — spec-completion-review verdict. Read directly from the spec JSON;
@@ -1204,7 +1203,7 @@ PAYLOAD_OPEN=$(printf '%s' "$EXPORT_PAYLOAD" | jq '
 SPEC_REVIEW_STATUS=$("$FLOWCTL" show "$SPEC_ID" --json | jq -r '.completion_review_status // "unknown"')
 SPEC_REVIEW_OPEN=0
 if [[ "$SPEC_REVIEW_STATUS" == "needs_work" ]]; then
- SPEC_REVIEW_OPEN=1
+  SPEC_REVIEW_OPEN=1
 fi
 
 OPEN_ITEMS_COUNT=$(( PAYLOAD_OPEN + SPEC_REVIEW_OPEN ))
@@ -1229,8 +1228,8 @@ After the Write call, validate the file is non-empty before proceeding to push +
 
 ```bash
 if [[ ! -s "$BODY_FILE" ]]; then
- echo "Error: rendered body is empty. Phase 2/3 produced no content — re-check abort conditions (§2.7)." >&2
- exit 1
+  echo "Error: rendered body is empty. Phase 2/3 produced no content — re-check abort conditions (§2.7)." >&2
+  exit 1
 fi
 ```
 
@@ -1258,8 +1257,8 @@ The heredoc form survives simple bodies but fails on (a) backtick-wrapped code r
 ```bash
 BODY_BYTES=$(wc -c < "$BODY_FILE" | tr -d ' ')
 if [[ "$BODY_BYTES" -gt 65000 ]]; then
- : "host agent runs the truncation cascade above"
- : "(1) drop file list (2) trim TL;DR (3) collapse mermaid (4) spill to .flow/pr-bodies/"
+  : "host agent runs the truncation cascade above"
+  : "(1) drop file list  (2) trim TL;DR  (3) collapse mermaid  (4) spill to .flow/pr-bodies/"
 fi
 ```
 
@@ -1274,7 +1273,7 @@ The escape hatches are the **flags**, not a prompt:
 - `--ready` / `--draft` — override the draft/ready decision.
 - Want to hand-edit the body? `--dry-run | pbcopy`, edit, or edit the PR on GitHub after it opens (it's a draft).
 
-`plain-text numbered prompt` is still used in **Phase 0** — but only to resolve genuinely-missing info make-pr cannot derive (no base ref and no detection match; no spec detected). Those are *information* prompts, not a confirm gate, and are rare. A spec with not-all-tasks-done no longer blocks on a prompt — it **warns to stderr and proceeds** (the open items make it a draft anyway; §0 / §4.2).
+`AskUserQuestion` is still used in **Phase 0** — but only to resolve genuinely-missing info make-pr cannot derive (no base ref and no detection match; no spec detected). Those are *information* prompts, not a confirm gate, and are rare. A spec with not-all-tasks-done no longer blocks on a prompt — it **warns to stderr and proceeds** (the open items make it a draft anyway; §0 / §4.2).
 
 ### 4.6 — Push branch + `gh pr create` retry loop (R20 refinement)
 
@@ -1288,8 +1287,8 @@ Reached directly after §4.4 (body persisted) — no confirm gate. `git push -u 
 # cryptic "Head sha can't be blank" error after the push.
 HEAD_BRANCH=$(git branch --show-current)
 if [[ -z "$HEAD_BRANCH" ]]; then
- echo "Error: detached HEAD or empty branch name; cannot create PR. Check out a branch first." >&2
- exit 1
+  echo "Error: detached HEAD or empty branch name; cannot create PR. Check out a branch first." >&2
+  exit 1
 fi
 
 # Push branch. We don't pre-check `git rev-parse @{push}` — the cost of a redundant
@@ -1298,12 +1297,12 @@ fi
 PUSH_OUT=$(git push -u origin HEAD 2>&1)
 PUSH_RC=$?
 if [[ "$PUSH_RC" -ne 0 ]]; then
- echo "Error: git push failed:" >&2
- echo "$PUSH_OUT" >&2
- exit 1
+  echo "Error: git push failed:" >&2
+  echo "$PUSH_OUT" >&2
+  exit 1
 fi
 
-sleep 1 # GitHub API eventual-consistency lag (cli/cli #2691)
+sleep 1   # GitHub API eventual-consistency lag (cli/cli #2691)
 
 # `gh pr create --base` expects a BRANCH name, not a remote-tracking ref —
 # passing `origin/main` opens the PR against a branch literally named
@@ -1326,23 +1325,23 @@ BASE_BRANCH="${BASE_REF#origin/}"
 # never aborting the run after the push but before `gh pr create`.
 TRK_ACTIVE=$("$FLOWCTL" sync active --json 2>/dev/null | jq -r '.active // empty' 2>/dev/null || true)
 if [ "$TRK_ACTIVE" = "true" ]; then
- TRK_TYPE=$("$FLOWCTL" config get tracker.type --json 2>/dev/null | jq -r '.value // empty' 2>/dev/null || true)
- TRK_STATE=$("$FLOWCTL" sync get-state "$SPEC_ID" --json 2>/dev/null || printf '{}')
- TRK_ID=$(printf '%s' "$TRK_STATE" | jq -r '.tracker.identifier // empty' 2>/dev/null || true)
- REF=""
- case "$TRK_TYPE" in
- linear) [ -n "$TRK_ID" ] && REF="Ref ${TRK_ID}" ;; # WOR-N → Linear auto-link + Diffs
- github) [ -n "$TRK_ID" ] && REF="Refs ${TRK_ID}" ;; # #N → native GitHub cross-reference
- esac
- # Idempotency: match the exact ref LINE (whole-line, case-insensitive), NOT any
- # substring — the cognitive-aid body already mentions the spec path
- # (.flow/specs/wor-17-slug.md), so a substring grep for "WOR-17" would
- # false-positive and silently skip the ref. `-x` whole-line + `-F` fixed-string.
- # Size: the §4.4 cap targets 65,000 chars (vs GitHub's ~65,536 hard limit), so the
- # ~25-char ref line fits within the reserved headroom — no re-cap needed.
- if [ -n "$REF" ] && ! grep -qixF "$REF" "$BODY_FILE"; then
- printf '\n\n---\n%s\n' "$REF" >> "$BODY_FILE"
- fi
+  TRK_TYPE=$("$FLOWCTL" config get tracker.type --json 2>/dev/null | jq -r '.value // empty' 2>/dev/null || true)
+  TRK_STATE=$("$FLOWCTL" sync get-state "$SPEC_ID" --json 2>/dev/null || printf '{}')
+  TRK_ID=$(printf '%s' "$TRK_STATE" | jq -r '.tracker.identifier // empty' 2>/dev/null || true)
+  REF=""
+  case "$TRK_TYPE" in
+    linear) [ -n "$TRK_ID" ] && REF="Ref ${TRK_ID}" ;;      # WOR-N → Linear auto-link + Diffs
+    github) [ -n "$TRK_ID" ] && REF="Refs ${TRK_ID}" ;;      # #N → native GitHub cross-reference
+  esac
+  # Idempotency: match the exact ref LINE (whole-line, case-insensitive), NOT any
+  # substring — the cognitive-aid body already mentions the spec path
+  # (.flow/specs/wor-17-slug.md), so a substring grep for "WOR-17" would
+  # false-positive and silently skip the ref. `-x` whole-line + `-F` fixed-string.
+  # Size: the §4.4 cap targets 65,000 chars (vs GitHub's ~65,536 hard limit), so the
+  # ~25-char ref line fits within the reserved headroom — no re-cap needed.
+  if [ -n "$REF" ] && ! grep -qixF "$REF" "$BODY_FILE"; then
+    printf '\n\n---\n%s\n' "$REF" >> "$BODY_FILE"
+  fi
 fi
 
 # Retry loop. Only retry on the eventual-consistency error class. Other errors
@@ -1350,34 +1349,34 @@ fi
 # just produces the same error.
 PR_URL=""
 for attempt in 1 2 3; do
- CREATE_OUT=$(gh pr create \
- --title "$PR_TITLE" \
- --body-file "$BODY_FILE" \
- $DRAFT_FLAG \
- --base "$BASE_BRANCH" \
- --head "$HEAD_BRANCH" 2>&1) && { PR_URL="$CREATE_OUT"; break; }
+  CREATE_OUT=$(gh pr create \
+    --title "$PR_TITLE" \
+    --body-file "$BODY_FILE" \
+    $DRAFT_FLAG \
+    --base "$BASE_BRANCH" \
+    --head "$HEAD_BRANCH" 2>&1) && { PR_URL="$CREATE_OUT"; break; }
 
- # Eventual-consistency error class — retry. Empirically validated during fn-42 spike:
- # even after `git push` returns 0 and `sleep 1` elapses, gh pr create can fail with
- # "Head sha can't be blank, Base sha can't be blank, No commits between main and X"
- # while the GitHub API still propagates the push.
- case "$CREATE_OUT" in
- *"Head sha can't be blank"*|*"No commits between"*)
- sleep $((attempt * 2)) # 2s, 4s, 6s — total worst-case 12s before bailing
- continue
- ;;
- esac
+  # Eventual-consistency error class — retry. Empirically validated during fn-42 spike:
+  # even after `git push` returns 0 and `sleep 1` elapses, gh pr create can fail with
+  # "Head sha can't be blank, Base sha can't be blank, No commits between main and X"
+  # while the GitHub API still propagates the push.
+  case "$CREATE_OUT" in
+    *"Head sha can't be blank"*|*"No commits between"*)
+      sleep $((attempt * 2))   # 2s, 4s, 6s — total worst-case 12s before bailing
+      continue
+      ;;
+  esac
 
- # Any other error: fail fast.
- echo "Error: gh pr create failed:" >&2
- echo "$CREATE_OUT" >&2
- exit 1
+  # Any other error: fail fast.
+  echo "Error: gh pr create failed:" >&2
+  echo "$CREATE_OUT" >&2
+  exit 1
 done
 
 if [[ -z "$PR_URL" ]]; then
- echo "Error: gh pr create failed after 3 retries on eventual-consistency error." >&2
- echo "Manual recovery: wait 30s and re-run /flow-next:make-pr (skill detects the existing branch and re-tries)." >&2
- exit 1
+  echo "Error: gh pr create failed after 3 retries on eventual-consistency error." >&2
+  echo "Manual recovery: wait 30s and re-run /flow-next:make-pr (skill detects the existing branch and re-tries)." >&2
+  exit 1
 fi
 ```
 
@@ -1401,13 +1400,13 @@ When `gh pr create` fails after the retry loop is exhausted, the skill emits man
 - Draft flag computed (§4.2) via matrix layers (Ralph → open items → `--draft` → `--ready`). `--ready` ignored under Ralph; conflict surfaced via stderr note.
 - Body delivered via `--body-file` (§4.3) — mktemp + cleanup trap. Heredoc form documented as anti-pattern with cli/cli #29619 citation.
 - Body length cap (65,000 chars target) enforced (§4.4) via truncation cascade: drop file list → trim TL;DR → collapse mermaid → spill to `.flow/pr-bodies/`.
-- **No interactive confirm gate** — make-pr creates the PR directly (autonomous). `--dry-run` (§4.0) is the inspection escape hatch; `--ready`/`--draft` override the draft decision. Phase 0 may still `plain-text numbered prompt` to resolve genuinely-missing info (base/spec), never to confirm.
+- **No interactive confirm gate** — make-pr creates the PR directly (autonomous). `--dry-run` (§4.0) is the inspection escape hatch; `--ready`/`--draft` override the draft decision. Phase 0 may still `AskUserQuestion` to resolve genuinely-missing info (base/spec), never to confirm.
 - §4.6: `HEAD_BRANCH=$(git branch --show-current)` resolved + validated non-empty (rejects detached HEAD), then §4.6a links the PR to the tracker issue (if active), then `git push -u origin HEAD`, then `sleep 1`, then 3-attempt retry loop on eventual-consistency error class (`Head sha can't be blank` / `No commits between`). Backoff `2s, 4s, 6s`. Other errors fail fast.
 - Failure recovery hints (§4.7) printed to stderr before exit on each error class.
 
 ---
 
-## Phase 5: Output + footer
+## Phase 5: Output + footer (fn-42.6)
 
 **Goal:** print the success artefact (PR URL + breadcrumb) and run the optional `--memory` side effect. This phase fires only after `gh pr create` returned a URL on stdout.
 
@@ -1418,8 +1417,8 @@ cat <<EOF
 ✅ PR opened: $PR_URL
 
 Next steps:
- - Reviewer feedback → /flow-next:resolve-pr ${PR_URL##*/}
- - Body inspection → /flow-next:make-pr $SPEC_ID --dry-run
+  - Reviewer feedback → /flow-next:resolve-pr ${PR_URL##*/}
+  - Body inspection → /flow-next:make-pr $SPEC_ID --dry-run
 EOF
 ```
 
@@ -1435,17 +1434,17 @@ When `$WRITE_MEMORY == 1`, write a `knowledge/architecture-patterns/` memory ent
 
 ```bash
 if [[ "$WRITE_MEMORY" == "1" ]]; then
- SPEC_TAG="spec-$SPEC_ID"
- EXISTING_ENTRY=$("$FLOWCTL" memory list --track knowledge --category architecture-patterns --json 2>/dev/null \
- | jq -r --arg tag "$SPEC_TAG" \
- '.entries[]? | select((.tags // []) | index($tag)) | .entry_id' \
- | head -1)
+  SPEC_TAG="spec-$SPEC_ID"
+  EXISTING_ENTRY=$("$FLOWCTL" memory list --track knowledge --category architecture-patterns --json 2>/dev/null \
+    | jq -r --arg tag "$SPEC_TAG" \
+        '.entries[]? | select((.tags // []) | index($tag)) | .entry_id' \
+    | head -1)
 
- if [[ -n "$EXISTING_ENTRY" ]]; then
- echo "Note: memory entry already exists for $SPEC_ID ($EXISTING_ENTRY) — skipping --memory write." >&2
- else
- : "compose body, call flowctl memory add (see §5.2)"
- fi
+  if [[ -n "$EXISTING_ENTRY" ]]; then
+    echo "Note: memory entry already exists for $SPEC_ID ($EXISTING_ENTRY) — skipping --memory write." >&2
+  else
+    : "compose body, call flowctl memory add (see §5.2)"
+  fi
 fi
 ```
 
@@ -1487,43 +1486,43 @@ The "Impact" section is the only host-agent-prose section. Two-to-four sentences
 
 ```bash
 if [[ "$WRITE_MEMORY" == "1" && -z "$EXISTING_ENTRY" ]]; then
- MEMORY_BODY_FILE=$(mktemp -t make-pr-memory-XXXXXX.md)
- trap 'rm -f "$MEMORY_BODY_FILE" "$BODY_FILE"' EXIT
+  MEMORY_BODY_FILE=$(mktemp -t make-pr-memory-XXXXXX.md)
+  trap 'rm -f "$MEMORY_BODY_FILE" "$BODY_FILE"' EXIT
 
- # Host agent's Write tool emits the §5.2 body template into "$MEMORY_BODY_FILE",
- # filling slots from EXPORT_PAYLOAD.
+  # Host agent's Write tool emits the §5.2 body template into "$MEMORY_BODY_FILE",
+  # filling slots from EXPORT_PAYLOAD.
 
- MEMORY_TITLE="$SPEC_TITLE — what shipped"
- if [[ "${#MEMORY_TITLE}" -gt 80 ]]; then
- MEMORY_TITLE="${MEMORY_TITLE:0:77}..."
- fi
+  MEMORY_TITLE="$SPEC_TITLE — what shipped"
+  if [[ "${#MEMORY_TITLE}" -gt 80 ]]; then
+    MEMORY_TITLE="${MEMORY_TITLE:0:77}..."
+  fi
 
- # Tags: spec-<id> (idempotency key) + first 2 modules_touched (search relevance) +
- # any glossary terms added (cross-link signal).
- MODULES=$(printf '%s' "$EXPORT_PAYLOAD" | jq -r '.diff_summary.modules_touched // [] | .[0:2] | join(",")')
- TAGS="spec-$SPEC_ID"
- [[ -n "$MODULES" ]] && TAGS="$TAGS,$MODULES"
+  # Tags: spec-<id> (idempotency key) + first 2 modules_touched (search relevance) +
+  # any glossary terms added (cross-link signal).
+  MODULES=$(printf '%s' "$EXPORT_PAYLOAD" | jq -r '.diff_summary.modules_touched // [] | .[0:2] | join(",")')
+  TAGS="spec-$SPEC_ID"
+  [[ -n "$MODULES" ]] && TAGS="$TAGS,$MODULES"
 
- # Module field: most-touched module (first in modules_touched, already churn-sorted).
- PRIMARY_MODULE=$(printf '%s' "$EXPORT_PAYLOAD" | jq -r '.diff_summary.modules_touched // [] | .[0] // ""')
+  # Module field: most-touched module (first in modules_touched, already churn-sorted).
+  PRIMARY_MODULE=$(printf '%s' "$EXPORT_PAYLOAD" | jq -r '.diff_summary.modules_touched // [] | .[0] // ""')
 
- MEMORY_ADD_OUT=$("$FLOWCTL" memory add \
- --track knowledge \
- --category architecture-patterns \
- --title "$MEMORY_TITLE" \
- ${PRIMARY_MODULE:+--module "$PRIMARY_MODULE"} \
- --tags "$TAGS" \
- --applies-when "Future spec touches $PRIMARY_MODULE or related modules — this entry shows what $SPEC_ID established." \
- --body-file "$MEMORY_BODY_FILE" \
- --json 2>&1) || {
- echo "Warning: --memory write failed (non-fatal — PR is open):" >&2
- echo "$MEMORY_ADD_OUT" >&2
- }
+  MEMORY_ADD_OUT=$("$FLOWCTL" memory add \
+    --track knowledge \
+    --category architecture-patterns \
+    --title "$MEMORY_TITLE" \
+    ${PRIMARY_MODULE:+--module "$PRIMARY_MODULE"} \
+    --tags "$TAGS" \
+    --applies-when "Future spec touches $PRIMARY_MODULE or related modules — this entry shows what $SPEC_ID established." \
+    --body-file "$MEMORY_BODY_FILE" \
+    --json 2>&1) || {
+      echo "Warning: --memory write failed (non-fatal — PR is open):" >&2
+      echo "$MEMORY_ADD_OUT" >&2
+    }
 
- MEMORY_ID=$(printf '%s' "$MEMORY_ADD_OUT" | jq -r '.entry_id // empty' 2>/dev/null)
- if [[ -n "$MEMORY_ID" ]]; then
- echo "Memory entry written: $MEMORY_ID" >&2
- fi
+  MEMORY_ID=$(printf '%s' "$MEMORY_ADD_OUT" | jq -r '.entry_id // empty' 2>/dev/null)
+  if [[ -n "$MEMORY_ID" ]]; then
+    echo "Memory entry written: $MEMORY_ID" >&2
+  fi
 fi
 ```
 
@@ -1537,24 +1536,24 @@ Under Ralph (`$RALPH == 1`), the success footer changes shape — the harness ex
 
 ```bash
 if [[ "$RALPH" == "1" ]]; then
- # Single-line stdout: PR_URL=<url>
- echo "PR_URL=$PR_URL"
- # Human-readable framing → stderr.
- echo "" >&2
- echo "✅ Draft PR opened: $PR_URL" >&2
- echo "Reviewer should run: /flow-next:resolve-pr ${PR_URL##*/}" >&2
+  # Single-line stdout: PR_URL=<url>
+  echo "PR_URL=$PR_URL"
+  # Human-readable framing → stderr.
+  echo "" >&2
+  echo "✅ Draft PR opened: $PR_URL" >&2
+  echo "Reviewer should run: /flow-next:resolve-pr ${PR_URL##*/}" >&2
 else
- # Interactive mode: §5.0 success footer to stdout.
- cat <<EOF
+  # Interactive mode: §5.0 success footer to stdout.
+  cat <<EOF
 ✅ PR opened: $PR_URL
 
 Next steps:
- - Reviewer feedback → /flow-next:resolve-pr ${PR_URL##*/}
- - Body inspection → /flow-next:make-pr $SPEC_ID --dry-run
+  - Reviewer feedback → /flow-next:resolve-pr ${PR_URL##*/}
+  - Body inspection → /flow-next:make-pr $SPEC_ID --dry-run
 EOF
- if [[ -n "${MEMORY_ID:-}" ]]; then
- echo " - Memory entry written: $MEMORY_ID"
- fi
+  if [[ -n "${MEMORY_ID:-}" ]]; then
+    echo "  - Memory entry written: $MEMORY_ID"
+  fi
 fi
 ```
 
@@ -1567,21 +1566,20 @@ R24 invariant: under Ralph the PR URL is the **sole stdout artefact** in machine
 The **primary linkage already happened in §4.6a** — the `Ref <identifier>` line in the PR body, which makes the host's tracker integration auto-link the PR. §5.6 is the **enhancement layer** and is **transport- and tracker-type-aware**:
 
 - **Linear (`tracker.type == linear`):** the §4.6a body ref is what makes **Linear Diffs** render the PR inside the issue (Linear's GitHub integration auto-links on the `WOR-N` identifier). On the **GraphQL rung**, additionally create the *rich* GitHub-PR attachment + status sync via `attachmentLinkURL(issueId, $PR_URL)` (Linear auto-detects the GitHub URL; do NOT use `attachmentCreate` — that yields a dumb attachment with no diff/status). On the **MCP rung** there is no URL-attach tool, so it relies entirely on the §4.6a auto-link (sufficient — the integration does the rest). Optionally also post a one-line breadcrumb comment.
- - *Prereqs are user-side and flow-next can't set them:* the Linear GitHub integration must have **code access**, the user needs a **personal GitHub connection**, and **"Enable code reviews"** must be on. Without these the PR still links (status sync works); only the rendered diff view requires them. (Documented in `docs/tracker-sync.md`.)
+  - *Prereqs are user-side and flow-next can't set them:* the Linear GitHub integration must have **code access**, the user needs a **personal GitHub connection**, and **"Enable code reviews"** must be on. Without these the PR still links (status sync works); only the rendered diff view requires them. (Documented in `docs/tracker-sync.md`.)
 - **GitHub (`tracker.type == github`):** the PR and issue share the repo — use a **native `Refs #N`** (non-closing) reference, handled by the GitHub adapter (`github.md`). No Linear-style attachment, no "Diffs".
 
 ```bash
 if [[ -n "$PR_URL" ]] \
- && [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
- # Invoke the flow-next-tracker-sync skill: link $PR_URL to the issue.
- # linear → rich attachment via attachmentLinkURL (GraphQL rung) + optional breadcrumb comment;
- # the §4.6a body ref already enabled the auto-link + Diffs.
- # github → native `Refs #N` (github.md).
- # Unlinked spec → flow-first push (create + link) first, then link the PR / Diff
- # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable.
- # Best-effort — the PR is already open; a tracker failure must NOT exit non-zero.
- # Under Ralph, framing routes to stderr (keeps the PR_URL=<url> stdout invariant).
- :
+   && [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
+  # Invoke the flow-next-tracker-sync skill: link $PR_URL to the issue.
+  #   linear → rich attachment via attachmentLinkURL (GraphQL rung) + optional breadcrumb comment;
+  #            the §4.6a body ref already enabled the auto-link + Diffs.
+  #   github → native `Refs #N` (github.md).
+  # No-ops if the spec has no linked tracker id / no transport reachable.
+  # Best-effort — the PR is already open; a tracker failure must NOT exit non-zero.
+  # Under Ralph, framing routes to stderr (keeps the PR_URL=<url> stdout invariant).
+  :
 fi
 ```
 
@@ -1604,7 +1602,7 @@ The PR body file ends up in `/tmp/`, OS-cleaned on reboot even when trap doesn't
 
 ---
 
-## Anti-patterns (cross-phase)
+## Anti-patterns (cross-phase, fn-42.6)
 
 This skill is the autonomous-loop terminus, which means it's also the most-tempting surface for "improvements" that defeat its purpose. The patterns below are explicitly forbidden — both in current implementation AND in any future v2 enhancement that lands on this skill.
 
@@ -1632,16 +1630,16 @@ These anti-patterns are documented in skill prose (not just in the spec) so v2 e
 
 ---
 
-## Manual smoke
+## Manual smoke (Task 2 acceptance)
 
-The skill itself is markdown — no unit-test surface. Phase 0 validation is exercised via the smoke test and by manual invocation in a real session. Expected behavior:
+The skill itself is markdown — no unit-test surface. Phase 0 validation is exercised via the smoke test (fn-42.7) and by manual invocation in a real session. Expected behavior:
 
 - `command -v gh` missing → exit 1 with install instructions.
 - `gh auth status` failing → exit 1 with login instructions.
 - `--base <bad-ref>` → exit 1 with `git rev-parse --verify` failure message.
-- Branch with no `branch_name` match in any `.flow/specs/*.json` or `.flow/epics/*.json` AND no positional spec id → interactive `plain-text numbered prompt`; Ralph hard-errors with exit 2.
-- Tasks not all done + interactive → warn on stderr + proceed (open items force a draft via §4.2); Ralph exits 2; `--dry-run` warns and continues. No `plain-text numbered prompt` for open tasks.
+- Branch with no `branch_name` match in any `.flow/specs/*.json` or `.flow/epics/*.json` AND no positional spec id → interactive `AskUserQuestion`; Ralph hard-errors with exit 2.
+- Tasks not all done + interactive → warn on stderr + proceed (open items force a draft via §4.2); Ralph exits 2; `--dry-run` warns and continues. No `AskUserQuestion` for open tasks.
 - Branch with an OPEN PR → exit 1 with `/flow-next:resolve-pr` hint.
 - Branch with a CLOSED or MERGED PR (no OPEN) → continues cleanly. **This is the load-bearing check** — fn-42 spike validated empirically that bare `gh pr view --json url` rc=0 for closed/merged PRs would false-positive without the `select(.state == "OPEN")` filter.
 - Branch with no PR history at all (`gh pr view` exits 1) → continues cleanly.
-- Ralph mode (`FLOW_RALPH=1`) → no `plain-text numbered prompt` calls in Phase 0; deterministic exit codes on missing context.
+- Ralph mode (`FLOW_RALPH=1`) → no `AskUserQuestion` calls in Phase 0; deterministic exit codes on missing context.

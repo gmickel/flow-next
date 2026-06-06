@@ -2,18 +2,18 @@
 
 Per-phase Done-when checklists. The full execution flow lives in [workflow.md](workflow.md); this file is the at-a-glance map.
 
-| Phase | Goal |
-|-------|------|
-| Phase 0 | Pre-flight — gh ready, spec resolved, base valid, branch ahead, tasks done, no open PR. |
-| Phase 1 | Gather inputs — single `flowctl spec export-cognitive-aid` call, parse payload. |
-| Phase 2 | Render body — TL;DR, R-ID table, critical changes; decisions, memory, glossary/strategy, open items, where to look. |
-| Phase 3 | Mermaid generation — gated triggers, hard caps, fallback prose. |
-| Phase 4 | Push + create PR — `git push`, `gh pr create`, draft/ready, dry-run short-circuit, Ralph behavior. |
-| Phase 5 | Output + footer — PR URL, breadcrumb, optional `--memory` write. |
+| Phase | Owner task | Goal |
+|-------|------------|------|
+| Phase 0 | fn-42.2 (this task) | Pre-flight — gh ready, spec resolved, base valid, branch ahead, tasks done, no open PR. |
+| Phase 1 | fn-42.3 | Gather inputs — single `flowctl spec export-cognitive-aid` call, parse payload. |
+| Phase 2 | fn-42.3 + fn-42.4 | Render body — TL;DR, R-ID table, critical changes (.3); decisions, memory, glossary/strategy, open items, where to look (.4). |
+| Phase 3 | fn-42.5 | Mermaid generation — gated triggers, hard caps, fallback prose. |
+| Phase 4 | fn-42.6 | Push + create PR — `git push`, `gh pr create`, draft/ready, dry-run short-circuit, Ralph behavior. |
+| Phase 5 | fn-42.6 | Output + footer — PR URL, breadcrumb, optional `--memory` write. |
 
 ---
 
-## Phase 0: Pre-flight
+## Phase 0: Pre-flight (this task — fn-42.2)
 
 **Done when:**
 
@@ -43,7 +43,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 ---
 
-## Phase 1: Gather inputs
+## Phase 1: Gather inputs (fn-42.3)
 
 **Done when:**
 
@@ -53,9 +53,9 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 ---
 
-## Phase 2: Render body
+## Phase 2: Render body (fn-42.3 + fn-42.4)
 
-**Header sections — done when:**
+**fn-42.3 done when:**
 
 - [ ] Body section order locked: H1 title + summary block + TL;DR + R-ID coverage + Critical changes + (Structural changes from .5) + (Decisions / Memory / Glossary-strategy / Open items / Where to look from .4) + footer breadcrumb. Sections never reorder.
 - [ ] Title + summary block renders spec id link, branch / base, task counts, R-ID coverage ratio. Optional 2-line natural-language summary derived from `spec.spec_sections.goal_and_context` first paragraph (truncated to ≈240 chars at sentence boundary).
@@ -71,24 +71,24 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 - [ ] Section-omission rule (workflow.md §2.6) honored: empty content → no heading. Never empty placeholder. (Critical changes is the one exception — limited-churn fallback bullet keeps the heading present.)
 - [ ] Abort conditions (workflow.md §2.7) checked before any rendering: empty `goal_and_context` AND every task missing `done_summary` → exit 1; every R-ID uncovered → exit 1. Empty `acceptance_criteria` (zero R-IDs in spec) is NOT an abort — coverage table is omitted, body proceeds with TL;DR + Critical changes pair.
 
-**Context sections — done when:**
+**fn-42.4 done when:**
 
 - [ ] Decisions made section (workflow.md §2.8): one bullet per `memory_during_spec.decisions[]` entry — `**<title>** ([<id>](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/memory/<id>.md)) — <first_sentence>. Alternatives considered: <parsed alternatives>.` (blob link per §2.4b) Section omitted entirely when array empty (no sentinel "No decisions" line per §2.14). `alternatives_considered` parsed from the stringified-Python-list shape (`"['a', 'b']"` → `a, b`); empty / `"[]"` → trailing clause omitted; plain prose → emitted verbatim.
 - [ ] Memory left behind section (workflow.md §2.9): renders when `memory_during_spec.bugs[]` OR `memory_during_spec.architecture_patterns[]` non-empty. Two sub-lists with bold preambles ("**Bugs captured during this spec:**" / "**Architecture patterns captured during this spec:**") when both populated; one sub-list when only one. Each bullet: ``` `<id>` — <first_sentence> ```. Section omitted when both empty.
 - [ ] Glossary / strategy notes section (workflow.md §2.10): renders when `glossary_changes` has any non-empty array OR `strategy_alignment.tracks_served[]` non-empty OR `strategy_alignment.drift_flagged[]` non-empty. Glossary line: `**Glossary:** added \`<term>\`; renamed \`<old>\` → \`<new>\` (<N> files); removed \`<term>\`.` (clauses omitted per empty source array; rename clause documented but always empty in v1 per export `_export_glossary_diff` docstring). Strategy lines: `**Strategy:** served tracks \`<track-1>\`, ...` and/or `**Strategy drift:** \`<track>\` — <reason>; ...`. Section heading omitted when all contributions empty.
 - [ ] Open items section (workflow.md §2.11): aggregates 3 sources with provenance breadcrumbs:
- - Source A — `spec.spec_sections.open_questions[]` → `- [ ] <question> — open question from spec`
- - Source B — `deferred_findings[].items[]` (branch-slug sink, no per-task attribution) → `- [ ] <stripped raw> — deferred from impl-review (\`<sink-relpath>\`)`
- - Source C — `flowctl show <spec-id> --json | jq '.completion_review_status'` returns `needs_work` → `- [ ] Spec-completion-review verdict was \`needs_work\` (last reviewed <ts>) — flagged by spec-completion-review`
- - Section omitted when all three sources empty. Source order A → B → C.
+  - Source A — `spec.spec_sections.open_questions[]` → `- [ ] <question> — open question from spec`
+  - Source B — `deferred_findings[].items[]` (branch-slug sink, no per-task attribution) → `- [ ] <stripped raw> — deferred from impl-review (\`<sink-relpath>\`)`
+  - Source C — `flowctl show <spec-id> --json | jq '.completion_review_status'` returns `needs_work` → `- [ ] Spec-completion-review verdict was \`needs_work\` (last reviewed <ts>) — flagged by spec-completion-review`
+  - Section omitted when all three sources empty. Source order A → B → C.
 - [ ] Where to look section (workflow.md §2.12): 5 categories, **questions not labels**:
- - Architecture (≤3 bullets) from `spec.spec_sections.decision_context[]` — anchored to a `diff_summary.files[]` path; bullet dropped when no anchor.
- - Security (≤3 bullets) from `diff_summary.security_sensitive_paths[]` — question whitelist by path heuristic (`auth/`/`crypto/` → trust boundary; `.github/workflows/` → CI scope; `scripts/hooks/` → bypass; `*.pem`/`secret`/`token`/`credential` → safe-to-commit; default → trust boundary).
- - Business correctness (≤2 bullets) when `diff_summary.files[].path` matches `commands/`/`routes/`/`pages/`/`app/`/`cli/`/`hooks/`/`bin/` (same prefixes as Critical changes tier 5).
- - Performance (≤2 bullets) when host agent identifies hot-path heuristics (loops, DB queries, render-body calls) in source-extension files.
- - Tests (1 bullet) when zero `*.test.*` / `*_test.*` / `tests/` / `__tests__/` / `spec/` files in diff. Suppressed when diff is docs-only OR `files_changed < 3 AND lines_added+removed < 30`.
- - Section-level cap: 8 bullets total, trim in reverse-category order (Tests → Performance → Business → Security; Architecture never trimmed).
- - Section omitted when no category fires. Every focus prompt ends with `?`.
+  - Architecture (≤3 bullets) from `spec.spec_sections.decision_context[]` — anchored to a `diff_summary.files[]` path; bullet dropped when no anchor.
+  - Security (≤3 bullets) from `diff_summary.security_sensitive_paths[]` — question whitelist by path heuristic (`auth/`/`crypto/` → trust boundary; `.github/workflows/` → CI scope; `scripts/hooks/` → bypass; `*.pem`/`secret`/`token`/`credential` → safe-to-commit; default → trust boundary).
+  - Business correctness (≤2 bullets) when `diff_summary.files[].path` matches `commands/`/`routes/`/`pages/`/`app/`/`cli/`/`hooks/`/`bin/` (same prefixes as Critical changes tier 5).
+  - Performance (≤2 bullets) when host agent identifies hot-path heuristics (loops, DB queries, render-body calls) in source-extension files.
+  - Tests (1 bullet) when zero `*.test.*` / `*_test.*` / `tests/` / `__tests__/` / `spec/` files in diff. Suppressed when diff is docs-only OR `files_changed < 3 AND lines_added+removed < 30`.
+  - Section-level cap: 8 bullets total, trim in reverse-category order (Tests → Performance → Business → Security; Architecture never trimmed).
+  - Section omitted when no category fires. Every focus prompt ends with `?`.
 - [ ] Each of the 5 sections includes a "What this section MUST NOT do" callout (echo-chamber risk mitigation). Read-only mirror of source data — no paraphrasing, no extending, no inventing rationale to fill gaps.
 - [ ] §2.14 honest-empty-state rule honored: NO sentinel "*No decisions for this spec*" / "*No open items*" lines emitted. Absence of section IS the signal.
 - [ ] §2.13 section-omission table covers all five context sections.
@@ -96,7 +96,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 ---
 
-## Phase 3: Mermaid
+## Phase 3: Mermaid (fn-42.5)
 
 **Done when:**
 
@@ -112,7 +112,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 ---
 
-## Phase 4: Push + create PR
+## Phase 4: Push + create PR (fn-42.6)
 
 **Sub-section ordering.** `--dry-run` (§4.0) short-circuits before any state change; otherwise Phase 4 flows straight to push + create — **no confirm gate**. Layout: 4.0 dry-run short-circuit → 4.1 PR title → 4.2 draft flag → 4.3 body-file persistence → 4.4 length cap → 4.5 (no confirm gate — autonomous create) → 4.6 push + retry loop (4.6a links the PR to the tracker issue) → 4.7 failure hints.
 
@@ -124,7 +124,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 - [ ] `OPEN_ITEMS_COUNT` derived once from Phase 1 payload as `len(open_questions) + sum(deferred_findings.items) + (completion_review_status == "needs_work" ? 1 : 0)`. Same source feeds §2.11 Open items count and §4.2 layer 2.
 - [ ] Body delivery via `--body-file` (§4.3) — mktemp + `trap … EXIT` cleanup. Heredoc form documented as anti-pattern with cli/cli #29619 citation.
 - [ ] Body length cap (65,000 chars target, ~65,536 GitHub limit) enforced (§4.4) via truncation cascade: drop file list → trim TL;DR → collapse mermaid to overview-only → spill to `.flow/pr-bodies/<spec-id>.md` + commit + replace body with link.
-- [ ] No confirm gate (§4.5): make-pr does NOT prompt before push. `--dry-run` (§4.0) is the inspection path; `--ready`/`--draft` override draft state; Phase 0 `plain-text numbered prompt` only resolves missing base/spec (never "create?"). Not-all-tasks-done → warn + proceed as draft.
+- [ ] No confirm gate (§4.5): make-pr does NOT prompt before push. `--dry-run` (§4.0) is the inspection path; `--ready`/`--draft` override draft state; Phase 0 `AskUserQuestion` only resolves missing base/spec (never "create?"). Not-all-tasks-done → warn + proceed as draft.
 - [ ] §4.6: `HEAD_BRANCH=$(git branch --show-current)` resolved at the top of §4.6 + validated non-empty (rejects detached HEAD with stderr error before any push). `gh pr create --head` is non-optional, so an empty `HEAD_BRANCH` would silently expand to nothing and fail with a cryptic "Head sha can't be blank" — fail fast with a clear message instead.
 - [ ] §4.6: `git push -u origin HEAD` runs first; on failure, exit 1 with the `git push` error to stderr.
 - [ ] After push, `sleep 1` before `gh pr create` (cli/cli #2691 — GitHub API eventual-consistency lag).
@@ -134,7 +134,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 ---
 
-## Phase 5: Output + footer
+## Phase 5: Output + footer (fn-42.6)
 
 **Done when:**
 
@@ -151,7 +151,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 ---
 
-## Anti-patterns (workflow.md §Anti-patterns)
+## Anti-patterns (workflow.md §Anti-patterns, fn-42.6)
 
 Skill prose enumerates 10 forbidden patterns to make v2 enhancement footguns explicit. Documented inline so future authors must consciously violate them:
 

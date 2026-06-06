@@ -2,18 +2,18 @@
 
 Per-phase Done-when checklists. The full execution flow lives in [workflow.md](workflow.md); this file is the at-a-glance map.
 
-| Phase | Owner task | Goal |
-|-------|------------|------|
-| Phase 0 | fn-42.2 (this task) | Pre-flight — gh ready, spec resolved, base valid, branch ahead, tasks done, no open PR. |
-| Phase 1 | fn-42.3 | Gather inputs — single `flowctl spec export-cognitive-aid` call, parse payload. |
-| Phase 2 | fn-42.3 + fn-42.4 | Render body — TL;DR, R-ID table, critical changes (.3); decisions, memory, glossary/strategy, open items, where to look (.4). |
-| Phase 3 | fn-42.5 | Mermaid generation — gated triggers, hard caps, fallback prose. |
-| Phase 4 | fn-42.6 | Push + create PR — `git push`, `gh pr create`, draft/ready, dry-run short-circuit, Ralph behavior. |
-| Phase 5 | fn-42.6 | Output + footer — PR URL, breadcrumb, optional `--memory` write. |
+| Phase | Goal |
+|-------|------|
+| Phase 0 | Pre-flight — gh ready, spec resolved, base valid, branch ahead, tasks done, no open PR. |
+| Phase 1 | Gather inputs — single `flowctl spec export-cognitive-aid` call, parse payload. |
+| Phase 2 | Render body — TL;DR, R-ID table, critical changes; decisions, memory, glossary/strategy, open items, where to look. |
+| Phase 3 | Mermaid generation — gated triggers, hard caps, fallback prose. |
+| Phase 4 | Push + create PR — `git push`, `gh pr create`, draft/ready, dry-run short-circuit, Ralph behavior. |
+| Phase 5 | Output + footer — PR URL, breadcrumb, optional `--memory` write. |
 
 ---
 
-## Phase 0: Pre-flight (this task — fn-42.2)
+## Phase 0: Pre-flight
 
 **Done when:**
 
@@ -43,7 +43,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 ---
 
-## Phase 1: Gather inputs (fn-42.3)
+## Phase 1: Gather inputs
 
 **Done when:**
 
@@ -53,9 +53,9 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 ---
 
-## Phase 2: Render body (fn-42.3 + fn-42.4)
+## Phase 2: Render body
 
-**fn-42.3 done when:**
+**Header sections — done when:**
 
 - [ ] Body section order locked: H1 title + summary block + TL;DR + R-ID coverage + Critical changes + (Structural changes from .5) + (Decisions / Memory / Glossary-strategy / Open items / Where to look from .4) + footer breadcrumb. Sections never reorder.
 - [ ] Title + summary block renders spec id link, branch / base, task counts, R-ID coverage ratio. Optional 2-line natural-language summary derived from `spec.spec_sections.goal_and_context` first paragraph (truncated to ≈240 chars at sentence boundary).
@@ -71,7 +71,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 - [ ] Section-omission rule (workflow.md §2.6) honored: empty content → no heading. Never empty placeholder. (Critical changes is the one exception — limited-churn fallback bullet keeps the heading present.)
 - [ ] Abort conditions (workflow.md §2.7) checked before any rendering: empty `goal_and_context` AND every task missing `done_summary` → exit 1; every R-ID uncovered → exit 1. Empty `acceptance_criteria` (zero R-IDs in spec) is NOT an abort — coverage table is omitted, body proceeds with TL;DR + Critical changes pair.
 
-**fn-42.4 done when:**
+**Context sections — done when:**
 
 - [ ] Decisions made section (workflow.md §2.8): one bullet per `memory_during_spec.decisions[]` entry — `**<title>** ([<id>](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/memory/<id>.md)) — <first_sentence>. Alternatives considered: <parsed alternatives>.` (blob link per §2.4b) Section omitted entirely when array empty (no sentinel "No decisions" line per §2.14). `alternatives_considered` parsed from the stringified-Python-list shape (`"['a', 'b']"` → `a, b`); empty / `"[]"` → trailing clause omitted; plain prose → emitted verbatim.
 - [ ] Memory left behind section (workflow.md §2.9): renders when `memory_during_spec.bugs[]` OR `memory_during_spec.architecture_patterns[]` non-empty. Two sub-lists with bold preambles ("**Bugs captured during this spec:**" / "**Architecture patterns captured during this spec:**") when both populated; one sub-list when only one. Each bullet: ``` `<id>` — <first_sentence> ```. Section omitted when both empty.
@@ -96,7 +96,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 ---
 
-## Phase 3: Mermaid (fn-42.5)
+## Phase 3: Mermaid
 
 **Done when:**
 
@@ -112,7 +112,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 ---
 
-## Phase 4: Push + create PR (fn-42.6)
+## Phase 4: Push + create PR
 
 **Sub-section ordering.** `--dry-run` (§4.0) short-circuits before any state change; otherwise Phase 4 flows straight to push + create — **no confirm gate**. Layout: 4.0 dry-run short-circuit → 4.1 PR title → 4.2 draft flag → 4.3 body-file persistence → 4.4 length cap → 4.5 (no confirm gate — autonomous create) → 4.6 push + retry loop (4.6a links the PR to the tracker issue) → 4.7 failure hints.
 
@@ -134,7 +134,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 ---
 
-## Phase 5: Output + footer (fn-42.6)
+## Phase 5: Output + footer
 
 **Done when:**
 
@@ -151,7 +151,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 ---
 
-## Anti-patterns (workflow.md §Anti-patterns, fn-42.6)
+## Anti-patterns (workflow.md §Anti-patterns)
 
 Skill prose enumerates 10 forbidden patterns to make v2 enhancement footguns explicit. Documented inline so future authors must consciously violate them:
 

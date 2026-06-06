@@ -1,0 +1,693 @@
+{
+  "success": true,
+  "spec": {
+    "id": "fn-50-codebase-feature-map-flow-nextmap-skill",
+    "title": "Codebase feature map: /flow-next:map skill + scout enrichment + prime nudge",
+    "status": "done",
+    "branch_name": "fn-50-codebase-feature-map-flow-nextmap-skill",
+    "spec_path": ".flow/specs/fn-50-codebase-feature-map-flow-nextmap-skill.md",
+    "created_at": "2026-05-26T10:50:19.204108Z",
+    "spec_sections": {
+      "goal_and_context": "flow-next's scouts (`repo-scout`, `context-scout`) currently derive \"what's in this codebase\" via ad-hoc grep + glob during `/flow-next:plan` and `/flow-next:capture`. When a richer pre-computed feature index exists, scouts can anchor R-IDs and decision-context references to concrete semantic boundaries rather than re-deriving them from raw text.\n\nopenclaw/clawpatch already does this work in a battle-tested 20-language mapper. Wrapping it (not porting it) gives flow-next that signal cheaply via a new skill that calls clawpatch CLI through a thin shell-out.\n\nThe key constraint: this must remain an **opt-in convenience**, not a flow-next core dependency. Users who don't install clawpatch see no change in behavior; users who do install it get scout enrichment for free.",
+      "architecture_overview": "Three independent surfaces, sequenced so Part 1 unlocks Parts 2 and 3:\n\n**Part 1 \u2014 `/flow-next:map` skill (foundational):**\n- New skill at `plugins/flow-next/skills/flow-next-map/`. Wraps the `clawpatch` CLI via shell-out \u2014 mirrors the `/flow-next:resolve-pr`-wraps-`gh` precedent.\n- Install detection: `command -v clawpatch` + `clawpatch --version`. When missing, print upstream-canonical install instructions (`pnpm add -g clawpatch`) verbatim and exit cleanly. **No auto-install.** When pnpm is pr\u2026",
+      "acceptance_criteria": [
+        {
+          "id": "R1",
+          "text": "New `/flow-next:map` skill exists at `plugins/flow-next/skills/flow-next-map/`. Detects `clawpatch` via `command -v clawpatch` + `clawpatch --version`. When missing, prints `pnpm add -g clawpatch` install instructions verbatim and exits cleanly (no auto-install). **Default invocation passes `--source heuristic` (provider-free) and works without any clawpatch provider configured**; `--source auto|agent` is exposed as passthrough.",
+          "tag": ""
+        },
+        {
+          "id": "R2",
+          "text": "Skill runs `clawpatch init` automatically when `.clawpatch/` is absent and writes a `.clawpatch/.gitignore` skeleton (self-contained inside `.clawpatch/`; repo `.gitignore` not touched).",
+          "tag": ""
+        },
+        {
+          "id": "R3",
+          "text": "New `flowctl repo-map list / show / since-ref` subcommands read native `.clawpatch/features/*.json` and return text + `--json`. State location is native `.clawpatch/`; no duplication into `.flow/`. Readers BYPASS the `ensure_flow_exists()` guard \u2014 gate on `.clawpatch/` presence instead; return `count: 0` with exit 0 when absent.",
+          "tag": ""
+        },
+        {
+          "id": "R4",
+          "text": "`repo-scout` and `context-scout` agents call `flowctl repo-map list --json` when `.clawpatch/` is present and emit an optional `features_anchored: [...]` field in their structured output. Field includes `last_mapped` timestamp for staleness awareness. The field is purely additive scout-level enrichment in this spec \u2014 downstream skills (`/flow-next:plan`, `/flow-next:capture`) consume scout output as-is and gain no explicit `features_anchored` handling in fn-50. Future work may wire downstream consumers explicitly; tracked separately.",
+          "tag": ""
+        },
+        {
+          "id": "R5",
+          "text": "**Fallback contract (load-bearing):** scouts remain useful and produce structured output with the current grep/glob flow when `.clawpatch/` is absent. The `features_anchored` field is omitted or empty in that case. Verified via a two-layer approach (running scout subagents in CI is out of scope): (a) **static contract test** at `plugins/flow-next/tests/test_scout_fallback_contract.py` asserts the fallback prose + `features_anchored` schema documentation are present in both `agents/*.md` files and that `flowctl repo-map list --json` against a `.clawpatch/`-less fixture returns `count:0` cleanly; `plugins/flow-next/tests/scout-fallback.sh` is a thin bash wrapper that invokes the Python test for uniform test-runner entry; (b) **manual smoke** running `/flow-next:plan` against this no-`.clawpatch/` repo confirms scout output produced cleanly with no `features_anchored` field, logged in the implementing task's Done summary.",
+          "tag": ""
+        },
+        {
+          "id": "R6",
+          "text": "Root `CLAUDE.md` AND `plugins/flow-next/skills/flow-next-setup/templates/{claude-md-snippet,agents-md-snippet}.md` gain a one-paragraph optional-add under \"Where to look\" mentioning `/flow-next:map` as a discoverability aid. The two setup-template files are byte-identical to the same canonical snippet text (modulo `/flow-next:map` vs `$flow-next-map` syntax for CLAUDE/AGENTS convention); fn-45.3 byte-compare gate propagates on next `/flow-next:setup` in user repos.",
+          "tag": ""
+        },
+        {
+          "id": "R7",
+          "text": "`/flow-next:prime` adds exactly one sub-criterion under **Pillar 5 (Dev Environment)** as criterion ID **`DE7`**: *\"Codebase feature map present? \u2014 `/flow-next:map` recommended for richer scope anchoring (optional)\"*. Detection: `[[ -d .clawpatch ]]` + `flowctl repo-map list --count` > 0. Reporting: soft \u274c (informational, not a hard miss); surfaces `/flow-next:map` in Top Recommendations. **No auto-run.** **DE7 is informational** (mirrors the DC7 pattern at `pillars.md:87`): pillar count stays at 8, **scored criteria stay at 48** (DC7 + DE7 both informational, excluded from baseline), and **total criteria become 48 \u2192 49** with DE7 added.",
+          "tag": ""
+        },
+        {
+          "id": "R8",
+          "text": "Cross-platform parity verified: skill works on macOS, Linux, and Windows (including WSL) wherever Node 22+ is available, matching `plugins/flow-next/docs/platforms.md`. Platforms.md gains an \"Optional skill requirements\" paragraph for the Node 22+ requirement, scoped to `/flow-next:map` only.",
+          "tag": ""
+        },
+        {
+          "id": "R9",
+          "text": "`flowctl repo-map *` readers refuse `.clawpatch/features/*.json` entries with `schemaVersion != 1`, emit a one-line stderr diagnostic naming expected vs found version, and skip the offending file (never abort the full `list`). Unparseable JSON triggers the same skip-with-diagnostic path.",
+          "tag": ""
+        },
+        {
+          "id": "R10",
+          "text": "Skill carries a single-source `SUPPORTED_CLAWPATCH` version range (initial value `>=0.4.0 <0.5.0`) in skill prose. When `clawpatch --version` falls outside, skill prints a one-line stderr warning naming expected vs found and continues (degrades \u2014 never blocks).",
+          "tag": ""
+        },
+        {
+          "id": "R11",
+          "text": "Missing-binary branch (R1) probes pnpm-installed-but-not-on-PATH (`pnpm bin -g` exit-0 + `command -v clawpatch` exit non-zero) and prints PNPM_HOME `bin/` setup hint (run `pnpm setup`, re-source shell rc) when divergence detected.",
+          "tag": ""
+        },
+        {
+          "id": "R12",
+          "text": "Skill prints active config state on entry header (one block, four lines): clawpatch version + `--source`, `CLAWPATCH_PROVIDER` env (or \"none\"), flow-next review backend (informational), `.clawpatch/` last-mapped timestamp (or \"absent\").",
+          "tag": ""
+        },
+        {
+          "id": "R13",
+          "text": "Skill exits cleanly under Ralph (`FLOW_RALPH=1` OR `REVIEW_RECEIPT_PATH` set) with non-zero exit code and a one-line stderr diagnostic naming the trigger var. The skill **does NOT write to `$REVIEW_RECEIPT_PATH`** \u2014 the receipt belongs to whatever upstream review is using it; the Ralph-block is decline-to-run only, not a receipt producer. No `AskUserQuestion` blocks fire under Ralph \u2014 install/init prompts are unreachable.",
+          "tag": ""
+        },
+        {
+          "id": "R14",
+          "text": "`flow-next-map` registered in `scripts/sync-codex.sh` REQUIRED_OPENAI_YAML_SKILLS array; Codex mirror regenerated cleanly under `plugins/flow-next/codex/`; `plugins/flow-next/commands/flow-next/map.md` slash-command shim exists.",
+          "tag": ""
+        },
+        {
+          "id": "R15",
+          "text": "Release plumbing complete (this task lands the artefacts; version bumps are deliberately deferred to release-cut, NOT in this task): (a) `plugin.json` description string **skill-count bumped `23 \u2192 24`**; scored-criterion count stays `48` (DE7 informational); description prose may add \"(+1 informational)\" if needed for clarity, (b) `marketplace.json` description re-checked, (c) root `README.md` skill table row added (or \"Optional / enrichment\" subsection if introduced), (d) CHANGELOG entry under `## [Unreleased]` (NOT under a specific version block \u2014 release skill cuts the version), (e) `~/work/flow-next.dev` updates: new `src/content/docs/skills/map.mdx`, nav entry in `src/lib/site.ts` Skills \u2192 Maintenance group. **Out of scope for this task:** flow-next.dev `FLOW_NEXT_VERSION` + `package.json` version bumps and dated `[flow-next X.Y.Z]` changelog block \u2014 those happen at release-cut time after fn-50 merges, not in fn-50.6 itself. Docs-site changelog \"highlight\" entry is staged under an Unreleased section for the release cut to date-and-version.",
+          "tag": ""
+        }
+      ],
+      "boundaries": [
+        "The new `/flow-next:map` skill (Part 1).",
+        "`flowctl repo-map list/show/since-ref` reader subcommands (Part 1b).",
+        "Scout-level integration of the map for `repo-scout` and `context-scout` (Part 2).",
+        "The single `DE7` sub-criterion addition to `/flow-next:prime` (Part 3).",
+        "agents.md / CLAUDE.md / setup-template prose updates surfacing the skill.",
+        "Cross-platform parity + release-plumbing + Codex-mirror sync.",
+        "**Porting clawpatch's mapper into flowctl Python.** The wrap is the architectural choice. (See `~/work/agent-scripts/autoreview-analysis.md` \u00a76.5.9 for the porting-vs-wrapping trade-off.)",
+        "**Replacing flow-next's spec-first scope model.** Feature anchors enrich `Where to look`, `Investigation targets`, and Critical changes; they do NOT replace R-IDs, acceptance criteria, or spec structure.",
+        "**Auto-running `/flow-next:map`** from prime, capture, plan, or work. The user invokes it. Prime surfaces a suggestion; no other skill triggers a run.",
+        "**Make-pr / resolve-pr feature-anchored output.** Documented as future-work in `~/work/agent-scripts/autoreview-analysis.md` \u00a76.5; not part of this spec.",
+        "**Memory category for features.** Tempting (`knowledge/features/<name>.md`) but over-engineering. Scouts consume the map ephemerally; no new memory category.",
+        "**Multi-mapper abstraction.** Only clawpatch today. If a second mapper appears later, the skill can grow a `--provider` flag then.",
+        "**CI/CD integration of `/flow-next:map`.** `clawpatch ci` exists upstream but is the user's CI choice.",
+        "**Wiring `--source agent` into flow-next's review backend resolution.** clawpatch's provider matrix (codex/acpx/claude/cursor/grok/opencode/pi) is orthogonal to flow-next's review backend config. The skill exposes `--source` as passthrough; users configure clawpatch's provider directly via `CLAWPATCH_PROVIDER` env or its own config.",
+        "**Auto-upgrade to `--source auto` when deterministic coverage is \"weak.\"** Skill stays heuristic-by-default; users opt up explicitly.",
+        "**Opt-out flag for the prime nudge.** Soft \u274c informational format IS the opt-out by design."
+      ],
+      "decision_context": [],
+      "open_questions": []
+    }
+  },
+  "epic": {
+    "id": "fn-50-codebase-feature-map-flow-nextmap-skill",
+    "title": "Codebase feature map: /flow-next:map skill + scout enrichment + prime nudge",
+    "status": "done",
+    "branch_name": "fn-50-codebase-feature-map-flow-nextmap-skill",
+    "spec_path": ".flow/specs/fn-50-codebase-feature-map-flow-nextmap-skill.md",
+    "created_at": "2026-05-26T10:50:19.204108Z",
+    "spec_sections": {
+      "goal_and_context": "flow-next's scouts (`repo-scout`, `context-scout`) currently derive \"what's in this codebase\" via ad-hoc grep + glob during `/flow-next:plan` and `/flow-next:capture`. When a richer pre-computed feature index exists, scouts can anchor R-IDs and decision-context references to concrete semantic boundaries rather than re-deriving them from raw text.\n\nopenclaw/clawpatch already does this work in a battle-tested 20-language mapper. Wrapping it (not porting it) gives flow-next that signal cheaply via a new skill that calls clawpatch CLI through a thin shell-out.\n\nThe key constraint: this must remain an **opt-in convenience**, not a flow-next core dependency. Users who don't install clawpatch see no change in behavior; users who do install it get scout enrichment for free.",
+      "architecture_overview": "Three independent surfaces, sequenced so Part 1 unlocks Parts 2 and 3:\n\n**Part 1 \u2014 `/flow-next:map` skill (foundational):**\n- New skill at `plugins/flow-next/skills/flow-next-map/`. Wraps the `clawpatch` CLI via shell-out \u2014 mirrors the `/flow-next:resolve-pr`-wraps-`gh` precedent.\n- Install detection: `command -v clawpatch` + `clawpatch --version`. When missing, print upstream-canonical install instructions (`pnpm add -g clawpatch`) verbatim and exit cleanly. **No auto-install.** When pnpm is pr\u2026",
+      "acceptance_criteria": [
+        {
+          "id": "R1",
+          "text": "New `/flow-next:map` skill exists at `plugins/flow-next/skills/flow-next-map/`. Detects `clawpatch` via `command -v clawpatch` + `clawpatch --version`. When missing, prints `pnpm add -g clawpatch` install instructions verbatim and exits cleanly (no auto-install). **Default invocation passes `--source heuristic` (provider-free) and works without any clawpatch provider configured**; `--source auto|agent` is exposed as passthrough.",
+          "tag": ""
+        },
+        {
+          "id": "R2",
+          "text": "Skill runs `clawpatch init` automatically when `.clawpatch/` is absent and writes a `.clawpatch/.gitignore` skeleton (self-contained inside `.clawpatch/`; repo `.gitignore` not touched).",
+          "tag": ""
+        },
+        {
+          "id": "R3",
+          "text": "New `flowctl repo-map list / show / since-ref` subcommands read native `.clawpatch/features/*.json` and return text + `--json`. State location is native `.clawpatch/`; no duplication into `.flow/`. Readers BYPASS the `ensure_flow_exists()` guard \u2014 gate on `.clawpatch/` presence instead; return `count: 0` with exit 0 when absent.",
+          "tag": ""
+        },
+        {
+          "id": "R4",
+          "text": "`repo-scout` and `context-scout` agents call `flowctl repo-map list --json` when `.clawpatch/` is present and emit an optional `features_anchored: [...]` field in their structured output. Field includes `last_mapped` timestamp for staleness awareness. The field is purely additive scout-level enrichment in this spec \u2014 downstream skills (`/flow-next:plan`, `/flow-next:capture`) consume scout output as-is and gain no explicit `features_anchored` handling in fn-50. Future work may wire downstream consumers explicitly; tracked separately.",
+          "tag": ""
+        },
+        {
+          "id": "R5",
+          "text": "**Fallback contract (load-bearing):** scouts remain useful and produce structured output with the current grep/glob flow when `.clawpatch/` is absent. The `features_anchored` field is omitted or empty in that case. Verified via a two-layer approach (running scout subagents in CI is out of scope): (a) **static contract test** at `plugins/flow-next/tests/test_scout_fallback_contract.py` asserts the fallback prose + `features_anchored` schema documentation are present in both `agents/*.md` files and that `flowctl repo-map list --json` against a `.clawpatch/`-less fixture returns `count:0` cleanly; `plugins/flow-next/tests/scout-fallback.sh` is a thin bash wrapper that invokes the Python test for uniform test-runner entry; (b) **manual smoke** running `/flow-next:plan` against this no-`.clawpatch/` repo confirms scout output produced cleanly with no `features_anchored` field, logged in the implementing task's Done summary.",
+          "tag": ""
+        },
+        {
+          "id": "R6",
+          "text": "Root `CLAUDE.md` AND `plugins/flow-next/skills/flow-next-setup/templates/{claude-md-snippet,agents-md-snippet}.md` gain a one-paragraph optional-add under \"Where to look\" mentioning `/flow-next:map` as a discoverability aid. The two setup-template files are byte-identical to the same canonical snippet text (modulo `/flow-next:map` vs `$flow-next-map` syntax for CLAUDE/AGENTS convention); fn-45.3 byte-compare gate propagates on next `/flow-next:setup` in user repos.",
+          "tag": ""
+        },
+        {
+          "id": "R7",
+          "text": "`/flow-next:prime` adds exactly one sub-criterion under **Pillar 5 (Dev Environment)** as criterion ID **`DE7`**: *\"Codebase feature map present? \u2014 `/flow-next:map` recommended for richer scope anchoring (optional)\"*. Detection: `[[ -d .clawpatch ]]` + `flowctl repo-map list --count` > 0. Reporting: soft \u274c (informational, not a hard miss); surfaces `/flow-next:map` in Top Recommendations. **No auto-run.** **DE7 is informational** (mirrors the DC7 pattern at `pillars.md:87`): pillar count stays at 8, **scored criteria stay at 48** (DC7 + DE7 both informational, excluded from baseline), and **total criteria become 48 \u2192 49** with DE7 added.",
+          "tag": ""
+        },
+        {
+          "id": "R8",
+          "text": "Cross-platform parity verified: skill works on macOS, Linux, and Windows (including WSL) wherever Node 22+ is available, matching `plugins/flow-next/docs/platforms.md`. Platforms.md gains an \"Optional skill requirements\" paragraph for the Node 22+ requirement, scoped to `/flow-next:map` only.",
+          "tag": ""
+        },
+        {
+          "id": "R9",
+          "text": "`flowctl repo-map *` readers refuse `.clawpatch/features/*.json` entries with `schemaVersion != 1`, emit a one-line stderr diagnostic naming expected vs found version, and skip the offending file (never abort the full `list`). Unparseable JSON triggers the same skip-with-diagnostic path.",
+          "tag": ""
+        },
+        {
+          "id": "R10",
+          "text": "Skill carries a single-source `SUPPORTED_CLAWPATCH` version range (initial value `>=0.4.0 <0.5.0`) in skill prose. When `clawpatch --version` falls outside, skill prints a one-line stderr warning naming expected vs found and continues (degrades \u2014 never blocks).",
+          "tag": ""
+        },
+        {
+          "id": "R11",
+          "text": "Missing-binary branch (R1) probes pnpm-installed-but-not-on-PATH (`pnpm bin -g` exit-0 + `command -v clawpatch` exit non-zero) and prints PNPM_HOME `bin/` setup hint (run `pnpm setup`, re-source shell rc) when divergence detected.",
+          "tag": ""
+        },
+        {
+          "id": "R12",
+          "text": "Skill prints active config state on entry header (one block, four lines): clawpatch version + `--source`, `CLAWPATCH_PROVIDER` env (or \"none\"), flow-next review backend (informational), `.clawpatch/` last-mapped timestamp (or \"absent\").",
+          "tag": ""
+        },
+        {
+          "id": "R13",
+          "text": "Skill exits cleanly under Ralph (`FLOW_RALPH=1` OR `REVIEW_RECEIPT_PATH` set) with non-zero exit code and a one-line stderr diagnostic naming the trigger var. The skill **does NOT write to `$REVIEW_RECEIPT_PATH`** \u2014 the receipt belongs to whatever upstream review is using it; the Ralph-block is decline-to-run only, not a receipt producer. No `AskUserQuestion` blocks fire under Ralph \u2014 install/init prompts are unreachable.",
+          "tag": ""
+        },
+        {
+          "id": "R14",
+          "text": "`flow-next-map` registered in `scripts/sync-codex.sh` REQUIRED_OPENAI_YAML_SKILLS array; Codex mirror regenerated cleanly under `plugins/flow-next/codex/`; `plugins/flow-next/commands/flow-next/map.md` slash-command shim exists.",
+          "tag": ""
+        },
+        {
+          "id": "R15",
+          "text": "Release plumbing complete (this task lands the artefacts; version bumps are deliberately deferred to release-cut, NOT in this task): (a) `plugin.json` description string **skill-count bumped `23 \u2192 24`**; scored-criterion count stays `48` (DE7 informational); description prose may add \"(+1 informational)\" if needed for clarity, (b) `marketplace.json` description re-checked, (c) root `README.md` skill table row added (or \"Optional / enrichment\" subsection if introduced), (d) CHANGELOG entry under `## [Unreleased]` (NOT under a specific version block \u2014 release skill cuts the version), (e) `~/work/flow-next.dev` updates: new `src/content/docs/skills/map.mdx`, nav entry in `src/lib/site.ts` Skills \u2192 Maintenance group. **Out of scope for this task:** flow-next.dev `FLOW_NEXT_VERSION` + `package.json` version bumps and dated `[flow-next X.Y.Z]` changelog block \u2014 those happen at release-cut time after fn-50 merges, not in fn-50.6 itself. Docs-site changelog \"highlight\" entry is staged under an Unreleased section for the release cut to date-and-version.",
+          "tag": ""
+        }
+      ],
+      "boundaries": [
+        "The new `/flow-next:map` skill (Part 1).",
+        "`flowctl repo-map list/show/since-ref` reader subcommands (Part 1b).",
+        "Scout-level integration of the map for `repo-scout` and `context-scout` (Part 2).",
+        "The single `DE7` sub-criterion addition to `/flow-next:prime` (Part 3).",
+        "agents.md / CLAUDE.md / setup-template prose updates surfacing the skill.",
+        "Cross-platform parity + release-plumbing + Codex-mirror sync.",
+        "**Porting clawpatch's mapper into flowctl Python.** The wrap is the architectural choice. (See `~/work/agent-scripts/autoreview-analysis.md` \u00a76.5.9 for the porting-vs-wrapping trade-off.)",
+        "**Replacing flow-next's spec-first scope model.** Feature anchors enrich `Where to look`, `Investigation targets`, and Critical changes; they do NOT replace R-IDs, acceptance criteria, or spec structure.",
+        "**Auto-running `/flow-next:map`** from prime, capture, plan, or work. The user invokes it. Prime surfaces a suggestion; no other skill triggers a run.",
+        "**Make-pr / resolve-pr feature-anchored output.** Documented as future-work in `~/work/agent-scripts/autoreview-analysis.md` \u00a76.5; not part of this spec.",
+        "**Memory category for features.** Tempting (`knowledge/features/<name>.md`) but over-engineering. Scouts consume the map ephemerally; no new memory category.",
+        "**Multi-mapper abstraction.** Only clawpatch today. If a second mapper appears later, the skill can grow a `--provider` flag then.",
+        "**CI/CD integration of `/flow-next:map`.** `clawpatch ci` exists upstream but is the user's CI choice.",
+        "**Wiring `--source agent` into flow-next's review backend resolution.** clawpatch's provider matrix (codex/acpx/claude/cursor/grok/opencode/pi) is orthogonal to flow-next's review backend config. The skill exposes `--source` as passthrough; users configure clawpatch's provider directly via `CLAWPATCH_PROVIDER` env or its own config.",
+        "**Auto-upgrade to `--source auto` when deterministic coverage is \"weak.\"** Skill stays heuristic-by-default; users opt up explicitly.",
+        "**Opt-out flag for the prime nudge.** Soft \u274c informational format IS the opt-out by design."
+      ],
+      "decision_context": [],
+      "open_questions": []
+    }
+  },
+  "tasks": [
+    {
+      "id": "fn-50-codebase-feature-map-flow-nextmap-skill.1",
+      "status": "done",
+      "title": "/flow-next:map skill scaffold + clawpatch detection + init + provider-free map invocation",
+      "satisfies": [
+        "R1",
+        "R2",
+        "R10",
+        "R11",
+        "R12",
+        "R13"
+      ],
+      "done_summary": "Built the /flow-next:map skill scaffold (SKILL.md + workflow.md), slash-command shim at commands/flow-next/map.md, and a 65-case smoke test wiring the install-detect, version-range, Ralph-block, .gitignore-skeleton, config-state-echo, and argument-parsing branches. Manual smoke against this repo (clawpatch not installed) prints clean install instructions + PNPM_HOME hint and exits 1, validating the early proof point \u2014 install detection + map invocation + .clawpatch/.gitignore can all be done cleanly via skill bash with graceful degradation. The opt-in-skill architecture is viable; fn-50.2\u20136 can proceed.",
+      "evidence": {
+        "commits": [
+          "02869a7",
+          "6dee058",
+          "4760f732d4adec4c5cd8900bef966bc3d7739586"
+        ],
+        "tests": [
+          "bash plugins/flow-next/scripts/map_smoke_test.sh (65/65 cases pass)",
+          "python3 -m py_compile plugins/flow-next/scripts/flowctl.py",
+          "bash -n plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh",
+          "manual smoke: replayed install-detect path against this repo (clawpatch absent) \u2192 prints clean install instructions + PNPM_HOME hint, exits 1",
+          "codex impl-review NEEDS_WORK (2 findings) \u2192 fix \u2192 SHIP (R1/R2/R10/R11/R12/R13 all met)"
+        ],
+        "files_touched": []
+      }
+    },
+    {
+      "id": "fn-50-codebase-feature-map-flow-nextmap-skill.2",
+      "status": "done",
+      "title": "flowctl repo-map list/show/since-ref readers + schemaVersion guard",
+      "satisfies": [
+        "R3",
+        "R9"
+      ],
+      "done_summary": "Shipped `flowctl repo-map list/show/since-ref` reader subcommands that parse clawpatch's `.clawpatch/features/*.json` index, the first flowctl reader for data outside `.flow/`. Handlers bypass `ensure_flow_exists()` and gate on `.clawpatch/` presence; absent state returns `count:0` exit 0 so prime's DE7 detection works without special-casing. R9 enforced: `schemaVersion != 1` and malformed JSON each emit one-line stderr diagnostics + skip without aborting `list`, with `parse_skipped` surfacing in `list --json`. `since-ref` returns the zero-exit `{success:false, error:<kind>}` envelope for non-git-repo and unknown-ref cases. New `unittest` suite (`test_repo_map.py`, 21 tests, production-path via subprocess) + checked-in fixtures land cleanly for fn-50.6's CI wiring. Codex impl-review caught one real schema drift (numeric `confidence` vs upstream Zod enum `\"high\"|\"medium\"|\"low\"`); fixed + locked in a test assertion + captured a memory entry on the fixture-must-mirror-upstream-Zod lesson. R3 and R9 met.",
+      "evidence": {
+        "commits": [
+          "e5b5d0c",
+          "229b61b",
+          "1bfe1a8"
+        ],
+        "tests": [
+          "python3 -m py_compile plugins/flow-next/scripts/flowctl.py",
+          "python3 -m unittest discover -s plugins/flow-next/tests -p \"test_repo_map.py\" -v  # 21/21 pass",
+          "python3 -m unittest discover -s plugins/flow-next/tests -p \"test_prospect_cli.py\"  # 34/34 pass (adjacent suite \u2014 no regression)",
+          "flowctl codex impl-review fn-50-codebase-feature-map-flow-nextmap-skill.2 --base 4760f732d4adec4c5cd8900bef966bc3d7739586  # NEEDS_WORK (1 finding: confidence enum drift) -> SHIP after fix"
+        ],
+        "files_touched": []
+      }
+    },
+    {
+      "id": "fn-50-codebase-feature-map-flow-nextmap-skill.3",
+      "status": "done",
+      "title": "Scout enrichment (repo-scout + context-scout) + features_anchored + fallback smoke test",
+      "satisfies": [
+        "R4",
+        "R5"
+      ],
+      "done_summary": "Enriched `repo-scout` and `context-scout` with a `.clawpatch/` Step 0 that calls `flowctl repo-map list --json` and emits a `features_anchored` block (subfields `feature_id|title|kind|confidence|owned_files|last_mapped`, with `kind`/`confidence` enums mirroring clawpatch's upstream Zod `featureRecordSchema`). Added a static + plumbing contract test (`tests/test_scout_fallback_contract.py`, 14 unittest assertions) + bash wrapper + no-clawpatch fixture to lock the two-layer fallback discipline (prose contract + `flowctl repo-map list --json` against a `.clawpatch/`-less fixture returns `count:0` cleanly). Codex impl-review verdict: SHIP after one NEEDS_WORK\u2192SHIP cycle (fixed fallback prose flag drift from `--count` to `--json` to match spec decision lock-in). Manual smoke (Layer 2) deferred to release-cut \u2014 repo has no `.clawpatch/`, so any subsequent `/flow-next:plan` invocation on this branch will exercise the fallback path; both scouts' `features_anchored` section is gated behind `count > 0` so absence is the contract.",
+      "evidence": {
+        "commits": [
+          "1bc0a7f2365593be8262c7f33e836917aea8a1f2",
+          "c39a89305effe48040f8b31d95c1c147b9a06d51"
+        ],
+        "tests": [
+          "bash plugins/flow-next/tests/scout-fallback.sh (14 tests, all OK)",
+          "python3 -m unittest discover -s plugins/flow-next/tests -p test_repo_map.py (21 tests, all OK)"
+        ],
+        "files_touched": []
+      }
+    },
+    {
+      "id": "fn-50-codebase-feature-map-flow-nextmap-skill.4",
+      "status": "done",
+      "title": "CLAUDE.md + setup-template snippet one-paragraph optional-add for /flow-next:map",
+      "satisfies": [
+        "R6"
+      ],
+      "done_summary": "Added one-paragraph optional-add for `/flow-next:map` to root CLAUDE.md (new \"Where to look\" row + paragraph below the table) and to both `flow-next-setup/templates/claude-md-snippet.md` and `agents-md-snippet.md` inside the `<!-- BEGIN FLOW-NEXT -->` block. Byte-discipline preserved: diff between the two snippet files shows exactly 3 hunks, all command-syntax-token only (`/flow-next:map` vs `$flow-next-map`, plus the two pre-existing `plan`/`interview`/`setup` token hunks); no whitespace drift, LF line endings, single trailing newline at EOF \u2014 fn-45.3 byte-compare gate will propagate cleanly on next `/flow-next:setup` in user repos.",
+      "evidence": {
+        "commits": [
+          "4bc3a8a9dfacc2feefc4da40026dbb0fbe4b6f45"
+        ],
+        "tests": [
+          "diff plugins/flow-next/skills/flow-next-setup/templates/claude-md-snippet.md plugins/flow-next/skills/flow-next-setup/templates/agents-md-snippet.md (only command-syntax-token hunks present)",
+          "grep -n ' $' on both snippet files (no trailing whitespace)",
+          "tail -c 20 | xxd (final LF newline at EOF)",
+          "wc -l (42 lines, both files)",
+          "flowctl triage-skip --base c39a893... --json (verdict=SHIP, mode=triage_skip, reason=docs-only)"
+        ],
+        "files_touched": []
+      }
+    },
+    {
+      "id": "fn-50-codebase-feature-map-flow-nextmap-skill.5",
+      "status": "done",
+      "title": "/flow-next:prime DE7 sub-criterion under Pillar 5 (Dev Environment)",
+      "satisfies": [
+        "R7"
+      ],
+      "done_summary": "Added DE7 informational sub-criterion under Pillar 5 (Dev Environment) of `/flow-next:prime`. Pillar count stays at 8; scored criteria stay at 48 (DC7 + DE7 both informational, excluded from baseline); total criteria 48 \u2192 49. Detection uses `[[ -d .clawpatch ]]` + `flowctl repo-map list --count` > 0; reporting is soft \u274c informational with `/flow-next:map` surfaced in Top Recommendations. DE7 deliberately excluded from Phase 5 remediation prompts per spec R7 \"No auto-run.\" Docs-only diff \u2192 triage-skip SHIP via deterministic whitelist (correct: no Python/shell/tests, pure prose edits to `pillars.md` + `workflow.md`).",
+      "evidence": {
+        "commits": [
+          "b5c4694"
+        ],
+        "tests": [],
+        "files_touched": []
+      }
+    },
+    {
+      "id": "fn-50-codebase-feature-map-flow-nextmap-skill.6",
+      "status": "done",
+      "title": "Cross-platform parity + sync-codex.sh registration + release plumbing + docs site",
+      "satisfies": [
+        "R8",
+        "R14",
+        "R15"
+      ],
+      "done_summary": "Final-integration task for fn-50: cross-platform parity docs, sync-codex.sh registration, full release plumbing across plugin metadata + CHANGELOG + GLOSSARY + STRATEGY + root README + flow-next.dev docs site. Codex review caught five real bugs in prior tasks during the wider-base re-review (sync-codex agent FLOWCTL gap, .clawpatch/.gitignore directory-level miss, set -e swallowing MAP_EXIT, prime DE7 missing FLOWCTL prelude, flowctl config text-mode false-none) \u2014 all fixed in the same task with regression-locking smoke assertions. SHIP after 4 fix cycles; 0 introduced findings remaining.",
+      "evidence": {
+        "commits": [
+          "94b34e7",
+          "114ac47",
+          "197f300",
+          "1f43e1e",
+          "747c565",
+          "e9ca4e3",
+          "7674ced"
+        ],
+        "tests": [
+          "python3 -m unittest discover -s plugins/flow-next/tests (681 passed, 2 skipped)",
+          "python3 -m unittest discover -s plugins/flow-next/tests -p test_repo_map.py (21 passed)",
+          "python3 -m unittest discover -s plugins/flow-next/tests -p test_scout_fallback_contract.py (14 passed)",
+          "bash plugins/flow-next/tests/scout-fallback.sh (14 passed)",
+          "cd /tmp && bash plugins/flow-next/scripts/map_smoke_test.sh (75/75 passed)",
+          "bash scripts/sync-codex.sh (clean, 25 skills, 21 agents, 14 validators green, byte-idempotent)",
+          "cd ~/work/flow-next.dev && pnpm build (green, 51 pages, /skills/map/ rendered)",
+          "Manual: flowctl repo-map list --json from /tmp returns count:0 cleanly"
+        ],
+        "files_touched": []
+      }
+    }
+  ],
+  "tasks_summary": {
+    "total": 6,
+    "done": 6,
+    "open": 0,
+    "uncovered_r_ids": []
+  },
+  "memory_during_epic": {
+    "decisions": [
+      {
+        "id": "knowledge/decisions/tracker-sync-is-projection-not-2026-06-01",
+        "title": "Tracker sync is projection, not coordination (Linear-first)",
+        "first_sentence": "Spec fn-52 (tracker sync bridge) is in tension with STRATEGY.md, which positions flow-next AGAINST Jira/Linear's human cadence (\"the spec has to carry the full weight upstream\").",
+        "alternatives_considered": "",
+        "decision_status": ""
+      }
+    ],
+    "bugs": [
+      {
+        "id": "bug/build-errors/id-grammar-widening-must-cover-the-full-2026-06-03",
+        "title": "Id-grammar widening must cover the FULL command surface, not just named commands",
+        "module": "plugins/flow-next/scripts/flowctl.py",
+        "winning_hypothesis_first_sentence": "fn-52.10 widened flowctl's id grammar so a tracker key (WOR-17) resolves as a flow handle."
+      },
+      {
+        "id": "bug/build-errors/scout-fallback-prose-drifted-from-specs-2026-05-26",
+        "title": "Scout fallback prose drifted from spec's decision-lock command shape",
+        "module": "plugins/flow-next/agents/context-scout.md",
+        "winning_hypothesis_first_sentence": "Wrote agent fallback prose using `flowctl repo-map list --count` (the flag prime's DE7 detection uses for a fast scalar count) inside a scout agent's `Fallback: Standard Tools` section \u2014 but the spec decision lock-in explicitly says **scou\u2026"
+      },
+      {
+        "id": "bug/build-errors/skill-bash-set-arguments-cant-honor-2026-05-26",
+        "title": "Skill bash `set -- $ARGUMENTS` can't honor 'verbatim' passthrough",
+        "module": "plugins/flow-next/skills/flow-next-map/workflow.md",
+        "winning_hypothesis_first_sentence": "When a skill takes user `$ARGUMENTS` and word-splits with `set -- $ARGUMENTS`, **you cannot claim \"verbatim passthrough\"** for tokens flowing to a wrapped CLI."
+      },
+      {
+        "id": "bug/test-failures/test-fixtures-must-mirror-upstream-zod-2026-05-26",
+        "title": "Test fixtures must mirror upstream Zod enum, not concept",
+        "module": "plugins/flow-next/tests/fixtures/clawpatch-map, plugins/flow-next/scripts/flowctl.py",
+        "winning_hypothesis_first_sentence": "When wrapping an upstream third-party CLI's data schema in a flowctl reader, test fixtures and docs examples drifted from the real upstream `Zod` schema."
+      },
+      {
+        "id": "bug/runtime-errors/who-wins-ladder-must-check-the-2026-06-03",
+        "title": "Who-wins ladder must check the collision case before single-field rules",
+        "module": "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md",
+        "winning_hypothesis_first_sentence": "fn-52.5's status who-wins reconcile loop (status-sync.md) documented a \"status deadlock \u2192 conflictTiebreak\" fallback, but the loop evaluated the `tracker \u2208 {done,verified}` terminal-wins branch BEFORE the deadlock branch."
+      },
+      {
+        "id": "bug/performance/linear-graphql-every-nodes-connection-2026-06-03",
+        "title": "Linear GraphQL: every {nodes} connection needs first: \u2014 incl. workflowStates/tea",
+        "module": "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-graphql.md",
+        "winning_hypothesis_first_sentence": "Two impl-review rounds (Major, confidence 100 each) on fn-52.3's Linear GraphQL rung reference: a `workflowStates(...)` query and a `teams(...)` example were written as unbounded GraphQL connections \u2014 directly contradicting the SAME file's\u2026"
+      },
+      {
+        "id": "bug/integration/set-tracker-id-rejected-github-n-2026-06-03",
+        "title": "set-tracker-id rejected GitHub",
+        "module": "plugins/flow-next/scripts/flowctl.py",
+        "winning_hypothesis_first_sentence": "`flowctl sync set-tracker-id` rejected a GitHub issue identifier `#1` (caught live during the fn-52 GitHub round-trip smoke): \"Invalid tracker identifier '#1'."
+      },
+      {
+        "id": "bug/integration/trackers-auto-linkify-issue-key-2026-06-03",
+        "title": "Trackers auto-linkify issue-key substrings inside markers (even in HTML comments",
+        "module": "plugins/flow-next/skills/flow-next-tracker-sync/references/comments-sync.md",
+        "winning_hypothesis_first_sentence": "Linear (verified live during the fn-52 tracker-sync smoke test) **auto-linkifies any tracker issue-key substring** (`WOR-17`, case-insensitive) that appears in issue/comment markdown \u2014 **even inside an HTML comment**."
+      },
+      {
+        "id": "bug/data/paired-snapshot-setter-must-write-both-2026-06-03",
+        "title": "Paired-snapshot setter must write both halves atomically (merge base)",
+        "module": "plugins/flow-next/scripts/flowctl.py",
+        "winning_hypothesis_first_sentence": "`flowctl sync set-merge-base` (fn-52.1) stored the 3-way merge base as two independent fields (`mergeBaseFlow`/`baseHashFlow` and `mergeBaseTracker`/`baseHashTracker`) and updated each only when its CLI flag was passed."
+      },
+      {
+        "id": "bug/ui/flow-nextdev-docs-page-needs-2026-06-03",
+        "title": "flow-next.dev docs page needs registering in BOTH astro sidebar + site.ts navGro",
+        "module": "src/lib/site.ts",
+        "winning_hypothesis_first_sentence": "On the flow-next.dev docs site, adding a new Starlight docs page (`teams/tracker-sync.mdx`) requires registering it in TWO independent navigation sources, not one."
+      }
+    ],
+    "architecture_patterns": []
+  },
+  "glossary_changes": {
+    "added": [],
+    "removed": [],
+    "renamed": []
+  },
+  "strategy_alignment": {
+    "tracks_served": [
+      "Spec-driven team patterns** \u2014 scout enrichment makes R-ID anchoring and `Investigation targets` sharper at the spec-authoring stage. Better feature visibility \u2192 tighter spec scope \u2192 less drift downstream.",
+      "Cross-platform parity** \u2014 the wrap mechanism matches the existing platform matrix. Adds a Node 22+ requirement only for users who opt into the skill."
+    ],
+    "drift_flagged": []
+  },
+  "diff_summary": {
+    "base_ref": "origin/main",
+    "head_ref": "HEAD",
+    "head_sha": "9457e07bdbac1f5b75e30083e94e64a16b0c013a",
+    "merge_base_sha": "3fbf56f44631c1bb608917f0d3e22edf50b54651",
+    "files_changed": 26,
+    "lines_added": 2332,
+    "lines_removed": 48,
+    "files": [
+      {
+        "path": "CLAUDE.md",
+        "status": "M",
+        "additions": 1,
+        "deletions": 0,
+        "module": "<root>"
+      },
+      {
+        "path": "agent_docs/optimizing-skills.md",
+        "status": "A",
+        "additions": 137,
+        "deletions": 0,
+        "module": "agent_docs/optimizing-skills.md"
+      },
+      {
+        "path": "optimization/capture/README.md",
+        "status": "A",
+        "additions": 23,
+        "deletions": 0,
+        "module": "optimization/capture"
+      },
+      {
+        "path": "optimization/capture/baseline/SKILL.md",
+        "status": "A",
+        "additions": 156,
+        "deletions": 0,
+        "module": "optimization/capture"
+      },
+      {
+        "path": "optimization/capture/baseline/phases.md",
+        "status": "A",
+        "additions": 244,
+        "deletions": 0,
+        "module": "optimization/capture"
+      },
+      {
+        "path": "optimization/capture/baseline/workflow.md",
+        "status": "A",
+        "additions": 808,
+        "deletions": 0,
+        "module": "optimization/capture"
+      },
+      {
+        "path": "optimization/capture/changelog.md",
+        "status": "A",
+        "additions": 49,
+        "deletions": 0,
+        "module": "optimization/capture"
+      },
+      {
+        "path": "optimization/capture/evals.md",
+        "status": "A",
+        "additions": 51,
+        "deletions": 0,
+        "module": "optimization/capture"
+      },
+      {
+        "path": "optimization/capture/results.tsv",
+        "status": "A",
+        "additions": 3,
+        "deletions": 0,
+        "module": "optimization/capture"
+      },
+      {
+        "path": "optimization/capture/test-inputs.md",
+        "status": "A",
+        "additions": 72,
+        "deletions": 0,
+        "module": "optimization/capture"
+      },
+      {
+        "path": "optimization/context-scout/README.md",
+        "status": "A",
+        "additions": 19,
+        "deletions": 0,
+        "module": "optimization/context-scout"
+      },
+      {
+        "path": "optimization/context-scout/changelog.md",
+        "status": "A",
+        "additions": 22,
+        "deletions": 0,
+        "module": "optimization/context-scout"
+      },
+      {
+        "path": "optimization/context-scout/context-scout.md.baseline",
+        "status": "A",
+        "additions": 440,
+        "deletions": 0,
+        "module": "optimization/context-scout"
+      },
+      {
+        "path": "optimization/context-scout/evals.md",
+        "status": "A",
+        "additions": 41,
+        "deletions": 0,
+        "module": "optimization/context-scout"
+      },
+      {
+        "path": "optimization/context-scout/results.tsv",
+        "status": "A",
+        "additions": 3,
+        "deletions": 0,
+        "module": "optimization/context-scout"
+      },
+      {
+        "path": "optimization/context-scout/test-inputs.md",
+        "status": "A",
+        "additions": 16,
+        "deletions": 0,
+        "module": "optimization/context-scout"
+      },
+      {
+        "path": "optimization/repo-scout/README.md",
+        "status": "A",
+        "additions": 10,
+        "deletions": 0,
+        "module": "optimization/repo-scout"
+      },
+      {
+        "path": "optimization/repo-scout/changelog.md",
+        "status": "A",
+        "additions": 17,
+        "deletions": 0,
+        "module": "optimization/repo-scout"
+      },
+      {
+        "path": "optimization/repo-scout/evals.md",
+        "status": "A",
+        "additions": 21,
+        "deletions": 0,
+        "module": "optimization/repo-scout"
+      },
+      {
+        "path": "optimization/repo-scout/repo-scout.md.baseline",
+        "status": "A",
+        "additions": 145,
+        "deletions": 0,
+        "module": "optimization/repo-scout"
+      },
+      {
+        "path": "optimization/repo-scout/results.tsv",
+        "status": "A",
+        "additions": 3,
+        "deletions": 0,
+        "module": "optimization/repo-scout"
+      },
+      {
+        "path": "optimization/repo-scout/test-inputs.md",
+        "status": "A",
+        "additions": 7,
+        "deletions": 0,
+        "module": "optimization/repo-scout"
+      },
+      {
+        "path": "plugins/flow-next/agents/context-scout.md",
+        "status": "M",
+        "additions": 15,
+        "deletions": 24,
+        "module": "plugins/flow-next"
+      },
+      {
+        "path": "plugins/flow-next/agents/repo-scout.md",
+        "status": "M",
+        "additions": 7,
+        "deletions": 0,
+        "module": "plugins/flow-next"
+      },
+      {
+        "path": "plugins/flow-next/codex/agents/context-scout.toml",
+        "status": "M",
+        "additions": 15,
+        "deletions": 24,
+        "module": "plugins/flow-next"
+      },
+      {
+        "path": "plugins/flow-next/codex/agents/repo-scout.toml",
+        "status": "M",
+        "additions": 7,
+        "deletions": 0,
+        "module": "plugins/flow-next"
+      }
+    ],
+    "modules_touched": [
+      "<root>",
+      "agent_docs/optimizing-skills.md",
+      "optimization/capture",
+      "optimization/context-scout",
+      "optimization/repo-scout",
+      "plugins/flow-next"
+    ],
+    "cross_module_changes": [],
+    "public_exports_changed": [],
+    "high_churn_files": [
+      {
+        "path": "optimization/capture/baseline/workflow.md",
+        "additions": 808,
+        "deletions": 0
+      },
+      {
+        "path": "optimization/context-scout/context-scout.md.baseline",
+        "additions": 440,
+        "deletions": 0
+      },
+      {
+        "path": "optimization/capture/baseline/phases.md",
+        "additions": 244,
+        "deletions": 0
+      },
+      {
+        "path": "optimization/capture/baseline/SKILL.md",
+        "additions": 156,
+        "deletions": 0
+      },
+      {
+        "path": "optimization/repo-scout/repo-scout.md.baseline",
+        "additions": 145,
+        "deletions": 0
+      }
+    ],
+    "security_sensitive_paths": []
+  },
+  "review_receipts": [],
+  "deferred_findings": []
+}

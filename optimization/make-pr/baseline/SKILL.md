@@ -2,7 +2,7 @@
 name: flow-next-make-pr
 description: Render a cognitive-aid PR body from flow-next state and open via gh. Triggers on /flow-next:make-pr with optional spec id and flags (--draft, --ready, --no-mermaid, --base <ref>, --memory, --dry-run). Auto-detects spec from current branch when no id given. NOT Ralph-blocked — autonomous loops can surface a draft PR for human review.
 user-invocable: false
-allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
+allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
 ---
 
 # /flow-next:make-pr — PR-as-cognitive-aid
@@ -20,11 +20,10 @@ flowctl provides only thin plumbing: `flowctl spec export-cognitive-aid <spec-id
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks (here and in `workflow.md` / `phases.md`) use `$FLOWCTL`:
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
-[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 ```
 
-**Inline skill (no `context: fork`)** — `plain-text numbered prompt` must stay reachable for the **Phase 0** info prompts (resolve a missing base ref / undetected spec id — never a confirm gate). Subagents can't call plain-text numbered prompts (Claude Code issues #12890, #34592). There is **no Phase 4 confirm prompt** — make-pr creates the PR directly.
+**Inline skill (no `context: fork`)** — `AskUserQuestion` must stay reachable for the **Phase 0** info prompts (resolve a missing base ref / undetected spec id — never a confirm gate). Subagents can't call blocking question tools (Claude Code issues #12890, #34592). There is **no Phase 4 confirm prompt** — make-pr creates the PR directly. (sync-codex.sh rewrites any remaining `AskUserQuestion` to a plain-text numbered prompt in the Codex mirror.)
 
 ## Mode Detection
 
@@ -32,7 +31,7 @@ Parse `$ARGUMENTS` as a flag list. Recognized flags: `--draft`, `--ready`, `--no
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
-DRAFT_FORCE="auto" # auto | draft | ready
+DRAFT_FORCE="auto"      # auto | draft | ready
 NO_MERMAID=0
 WRITE_MEMORY=0
 DRY_RUN=0
@@ -42,18 +41,18 @@ SPEC_ID=""
 # Tokenize and walk the argument list.
 set -- $RAW_ARGS
 while [[ $# -gt 0 ]]; do
- case "$1" in
- --draft) DRAFT_FORCE="draft"; shift ;;
- --ready) DRAFT_FORCE="ready"; shift ;;
- --no-mermaid) NO_MERMAID=1; shift ;;
- --memory) WRITE_MEMORY=1; shift ;;
- --dry-run) DRY_RUN=1; shift ;;
- --base) BASE_REF="$2"; shift 2 ;;
- --base=*) BASE_REF="${1#--base=}"; shift ;;
- --) shift; break ;;
- -*) echo "Unknown flag: $1" >&2; exit 2 ;;
- *) SPEC_ID="$1"; shift ;;
- esac
+  case "$1" in
+    --draft)      DRAFT_FORCE="draft"; shift ;;
+    --ready)      DRAFT_FORCE="ready"; shift ;;
+    --no-mermaid) NO_MERMAID=1; shift ;;
+    --memory)     WRITE_MEMORY=1; shift ;;
+    --dry-run)    DRY_RUN=1; shift ;;
+    --base)       BASE_REF="$2"; shift 2 ;;
+    --base=*)     BASE_REF="${1#--base=}"; shift ;;
+    --) shift; break ;;
+    -*) echo "Unknown flag: $1" >&2; exit 2 ;;
+    *)  SPEC_ID="$1"; shift ;;
+  esac
 done
 ```
 
@@ -70,9 +69,7 @@ Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected separately 
 
 ## Interaction Principles
 
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
-- Ask **one question at a time** via `plain-text numbered prompt`. Never silently skip the question.
+- Ask **one question at a time** via `AskUserQuestion` (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). Fall back to a numbered options prompt only if the tool is unreachable. Never silently skip the question.
 - Lead with the **recommended option** and a one-sentence rationale.
 - **No confirm gate.** make-pr opens the PR without asking. Phase 0 asks *only* to resolve info it cannot derive (no `--base` and no detection match; no spec detected) — never "do you want to create it?". Not-all-tasks-done warns and proceeds (the open items make it a draft). Skip questions when context resolves cleanly.
 - **Ralph mode skips all questions.** Detect once at Phase 0 and route deterministically.
@@ -97,7 +94,7 @@ When data is missing, the body says so honestly (e.g. `*No decision-track memory
 ## Forbidden
 
 - **Ralph-blocking the skill.** This skill IS the autonomous-loop terminus per spec R24. Detect Ralph but proceed (with `--draft` forced). Do NOT add a `FLOW_RALPH`/`REVIEW_RECEIPT_PATH` exit-2 guard at the top of the skill.
-- **Re-adding a confirm gate.** make-pr creates the PR without prompting; do NOT reintroduce a "create / dry-run / abort" `plain-text numbered prompt` before push. The escape hatch is `--dry-run`, not a question.
+- **Re-adding a confirm gate.** make-pr creates the PR without prompting; do NOT reintroduce a "create / dry-run / abort" `AskUserQuestion` before push. The escape hatch is `--dry-run`, not a question.
 - **Pushing or creating PRs in `--dry-run` mode.** Phase 4 short-circuits before any `git push` or `gh pr create`. The body lands on stdout only.
 - **Squashing the existing-PR check.** A bare `gh pr view --json url 2>/dev/null` returns rc=0 for CLOSED and MERGED PRs as readily as OPEN. Filter `.state == "OPEN"` via `jq` (validated empirically during fn-42 spike). Closed/merged PRs on a reused branch must NOT trigger refusal.
 - **Manual `git push` workflows when `gh` is missing.** When `gh` isn't installed or authenticated, surface the install / `gh auth login` instructions and exit. Don't try to fall back to half-baked PR creation.
@@ -111,12 +108,12 @@ Same pattern as `/flow-next:plan` and `/flow-next:audit` — non-blocking notice
 
 ```bash
 if [[ -f .flow/meta.json ]]; then
- SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
- PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-plugin/plugin.json"
- PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
- if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
- echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})." >&2
- fi
+  SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
+  PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
+  PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
+  if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
+    echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})." >&2
+  fi
 fi
 ```
 
@@ -130,3 +127,5 @@ Execute the phases in [workflow.md](workflow.md) in order:
 3. **Mermaid generation** — gated by 5 trigger conditions (cross-module imports, public interface changes, new/removed top-level dirs, high fan-out spec). Hard caps: 3 diagrams, 12 nodes, 25 edges, 12K characters. Each codefence preceded by a 3-5 sentence plain-language prose summary (load-bearing for forges that don't render mermaid). Validates each codefence against the [`mermaid-rules.md`](mermaid-rules.md) §6 checklist (reserved words, escape patterns, no emoji / MathJax, no inheritance cycles) before emitting. Skipped under `--no-mermaid` or when no triggers fire / a skip rule applies (pure-additive single-module diff <50 LOC, flat-layout repo).
 4. **Push + create PR** — `git push -u origin HEAD`, then `gh pr create --title --body`. Draft when `OPEN_ITEMS_COUNT > 0` OR Ralph OR `--draft`; ready when `--ready`. `--dry-run` short-circuits before push.
 5. **Output + footer** — emit PR URL on success; print breadcrumb (`Generated by /flow-next:make-pr from <spec-id> against <base>`); optionally write `knowledge/architecture-patterns/` memory entry under `--memory`.
+
+Phase 0 is implemented in this task (fn-42.2). Phases 1-5 land in fn-42.3 → fn-42.6 (body sections, mermaid, push). The skill scaffold here owns the structure; per-phase content is filled in dependent tasks.
