@@ -1,0 +1,3 @@
+experiment	score	max_score	pass_rate	status	description
+0	8	10	80.0%	baseline	original — E1 critical coverage 2/2, E2 precision 2/2, E3 grounded 2/2, E4 already lean 2/2 (~93-100 tok on a 6-spec corpus), E5 0/2 (enumerates each No-Relationship id). NOTE: output already lean at small scale; the No-Relationship enumeration only bloats at 50+ specs. Small scale-dependent gain available. (S1 baseline also missed os-2 secondary overlap — detection nuance, not budget)
+1	10	10	100.0%	keep	output budget — No-Relationship collapsed to a COUNT (not per-id enumeration), empty sections omitted, one line/relationship. All real relationships + grounding preserved (E1-E3 2/2), E5 0->2/2. Small at 6-spec scale (~73-87 tok), scale-robust (50-spec repo saves a ~47-id unrelated list)

@@ -67,14 +67,6 @@ Look at in_progress and todo tasks for specific overlaps.
 
 ## Output Format
 
-**Output budget (hard).** The findings flow into the planner's context — keep them tight. Surface
-EVERY real relationship (Dependencies / Reverse-deps / Overlaps are the load-bearing output — never
-drop one), but:
-- **One line per relationship**, each citing the concrete shared anchor (file / API / data structure).
-- **No-Relationship is a COUNT, not an enumeration** — `N other open specs: no relationship` (never
-  list each unrelated id; that list scales with the spec count and is pure noise).
-- Omit any of the three relationship sections that has no entries (don't emit an empty heading).
-
 ```markdown
 ## Spec Dependencies
 
@@ -89,7 +81,7 @@ drop one), but:
 - **fn-3** (Refactor): Both touch `src/api/handlers.ts`
 
 ### No Relationship
-- 5 other open specs: no relationship.
+- fn-4, fn-6, fn-8: Unrelated scope
 ```
 
 If no relationships found:
