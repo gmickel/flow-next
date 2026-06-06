@@ -474,6 +474,21 @@ For **Claude Code / Droid**:
 }
 ```
 
+For **Cursor** (`PLATFORM=cursor`) — Cursor reads AGENTS.md, so recommend it (the `/flow-next:` snippet is wired in Step 7's write mapping, NOT the Codex `$flow-next-` one):
+```json
+{
+  "header": "Docs",
+  "question": "Update project documentation with Flow-Next instructions?",
+  "options": [
+    {"label": "AGENTS.md only (Recommended)", "description": "Add flow-next section to AGENTS.md (Cursor reads this)"},
+    {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
+    {"label": "Both", "description": "Add flow-next section to both files"},
+    {"label": "Skip", "description": "Don't update documentation"}
+  ],
+  "multiSelect": false
+}
+```
+
 **Star question** (always include):
 ```json
 {
@@ -532,7 +547,7 @@ esac
 
 Use the correct template based on **target file** and **platform**:
 - AGENTS.md on **Codex**: use [templates/agents-md-snippet.md](templates/agents-md-snippet.md) (uses `$flow-next-plan` syntax)
-- AGENTS.md on **Claude Code / Droid**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (uses `/flow-next:plan` syntax)
+- AGENTS.md on **Claude Code / Droid / Cursor**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (uses `/flow-next:plan` syntax — Cursor runs the slash commands, so its AGENTS.md must carry the `/flow-next:` snippet, NOT the Codex `$flow-next-` one)
 - CLAUDE.md (any platform): use [templates/claude-md-snippet.md](templates/claude-md-snippet.md)
 
 For each chosen file (CLAUDE.md and/or AGENTS.md) — preserve repo-custom content; only touch the marker block:
