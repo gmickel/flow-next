@@ -130,6 +130,31 @@ web/`gh` search, sources are URLs not local files) — noisy to score and not gr
 fixed repo; treat them as smoke-test territory, not this loop. Net: the scout-tier budget prizes
 are `repo-scout` + `context-scout`; don't burn a loop re-confirming the templated/external ones.
 
+**Field-tested lesson — accuracy-critical & heavy prompts resist trimming (proximity is load-bearing).**
+Two findings from running the loop on `capture` (R5) and `make-pr` (R6):
+
+- **`capture` baseline scored 15/15** — a mature accuracy-critical skill is often already correct
+  (the override guard held: an existing *user-edited* spec invoked without `--rewrite` refused, exit
+  2, hand-edit preserved). With no accuracy headroom, the only lever is a token-trim that *holds*
+  the score. A "self-evidently safe" DRY trim (move `workflow.md`'s duplicated source-tag +
+  biz-routing tables to the cross-linked `phases.md`) **regressed one input** — the success-metric
+  signal got under-routed and Decision Context came out FLAT instead of the spec-correct
+  SUBSTRUCTURED. 15→14 → revert. **The "duplication" was accuracy-load-bearing *proximity*:** a
+  routing/taxonomy table read right beside the drafting step is applied more reliably than the same
+  table one indirection away. **Do not trim routing/taxonomy/guardrail tables out of the phase that
+  uses them**, even when a copy exists elsewhere. The ratchet caught it — which is the whole point of
+  R3 (real accuracy evals make the guarantee real).
+- **`make-pr` (~31k) is mostly load-bearing** — 5 phases, ~11 conditional body sections, 10
+  hallucination guardrails, mermaid rules, push/retry, memory templating. The only cleanly-safe trim
+  was **~170 tokens of `fn-42.N` build-scaffolding archaeology** (stale "implemented in fn-42.3" task
+  refs in headings/parentheticals/a table column) — render-irrelevant by construction, body held
+  5/5. Its verbose *render prose* is accuracy-shaping (same proximity rule), so deeper trims are an
+  **accuracy-risky per-section backlog** (one eval-guarded experiment per section), not a one-shot.
+
+Takeaway: lead with the **output-budget** lever on free-form scouts (big, low-risk wins); treat
+prompt-trims on accuracy-critical/heavy skills as **archaeology-first, then careful per-section
+work** — and never relocate a table out of the phase that consumes it.
+
 ## Promoting a kept mutation to ship
 
 The `opt/*` branch stays experimental. When a mutation is confirmed: apply it to the canonical
