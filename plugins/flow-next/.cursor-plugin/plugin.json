@@ -1,6 +1,6 @@
 {
   "name": "flow-next",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "Zero-dependency, spec-driven agentic SDLC: durable specs, context-fit plans, re-anchored workers, adversarial cross-model review, receipts, and Ralph autonomous mode.",
   "author": {
     "name": "Gordon Mickel",
@@ -9,6 +9,12 @@
   "homepage": "https://flow-next.dev",
   "repository": "https://github.com/gmickel/flow-next",
   "license": "MIT",
-  "keywords": ["workflow", "planning", "execution", "automation", "ai"],
+  "keywords": [
+    "workflow",
+    "planning",
+    "execution",
+    "automation",
+    "ai"
+  ],
   "commands": "./commands/flow-next"
 }

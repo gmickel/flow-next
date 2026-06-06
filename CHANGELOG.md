@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.9.1] - 2026-06-06
+
+### Fixed
+- **`/flow-next:setup` now detects Cursor and writes Cursor-correct project instructions, instead of mis-detecting it as Codex.** Setup's platform detection keyed only on plugin-root env vars (`DROID_PLUGIN_ROOT` → Droid, `CLAUDE_PLUGIN_ROOT` → Claude Code, **else → Codex**). Cursor exposes *neither*, so a Cursor local install fell into the Codex branch — `/flow-next:setup` wrote the `$flow-next-plan` Codex command syntax into AGENTS.md and ran `.codex/` agent + hook setup, while the installer advertises Cursor usage as `/flow-next:*`. Setup now adds a **`CURSOR_AGENT`** branch (Cursor's own agent-shell signal — it also sets `CI=1` / `CURSOR_TRACE_ID`, but `CURSOR_AGENT` is canonical; the branch is ordered before the `else → codex` fallback) → `PLATFORM=cursor`, which: writes the `/flow-next:plan` slash-command snippet (Cursor runs the same commands; lands in AGENTS.md, which Cursor reads), resolves `flowctl` via `.flow/bin/flowctl`, reads the version from `.cursor-plugin/plugin.json`, and **skips** the Codex-only `.codex/` agent/hook copy. Surfaced in PR #162 review. Codex mirror regenerated.
+- **Tracker-sync create-if-unlinked now snapshots the merge base at issue-create time, even when the triggering op is `comment`.** When the first lifecycle touchpoint for an unlinked spec was a `comment` op (e.g. `work.done` / `makePr` with earlier events disabled), the auto-create path created the issue and attached the tracker id but did **not** call `sync set-merge-base` / `set-last-synced` — and the `comment` path itself leaves body/status untouched, so the linked issue had **no merge base**. A later body sync would then hit the no-base bootstrap, treat the sync as a fast-forward projection, and could silently **overwrite tracker-side edits** made after the issue was created. The flow-first auto-link now snapshots the just-rendered pair (`set-merge-base` BOTH halves + `set-last-synced`) at create time — the issue body we just wrote *is* the `renderFlowToTracker` output, so the base is exact. (`push`-first auto-link was already covered by the `push` skeleton's post-write snapshot; this makes the `comment`/`reconcile`-first paths match.) Surfaced in PR #162 review. Codex mirror regenerated.
+
 ## [flow-next 1.9.0] - 2026-06-06
 
 ### Added

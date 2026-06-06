@@ -19,15 +19,20 @@ if [ -n "${DROID_PLUGIN_ROOT:-}" ]; then
  PLATFORM="droid"
 elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
  PLATFORM="claude-code"
+elif [ -n "${CURSOR_AGENT:-}" ]; then
+ PLATFORM="cursor"
 else
  PLATFORM="codex"
 fi
 ```
 
+**Cursor ordering matters.** Cursor exposes **no** plugin-root env var, so without the `CURSOR_AGENT` check it would fall through to the `codex` branch and get Codex-shaped project instructions (`$flow-next-plan` command names + `.codex/` setup) — wrong, because a Cursor local install drives the workflow with `/flow-next:*` slash commands and resolves `flowctl` via `.flow/bin/flowctl`. `CURSOR_AGENT` is Cursor's own signal (set in its agent shell; it also sets `CI=1` / `CURSOR_TRACE_ID`, but `CURSOR_AGENT` is the canonical one). The `CURSOR_AGENT` branch MUST come before the `else → codex` fallback.
+
 Store `PLATFORM` for use in later steps. This determines:
 - Which manifest to read for version (`plugin.json`)
 - Which docs file to prefer (CLAUDE.md vs AGENTS.md)
 - Whether to copy Codex agents and hooks to project
+- Which command-name syntax the docs snippet uses (`/flow-next:plan` for Claude Code / Droid / **Cursor**; `$flow-next-plan` for Codex)
 
 ## Step 1: Initialize .flow/
 
@@ -116,6 +121,7 @@ Also read plugin version from the platform-specific manifest:
 - Codex: `${PLUGIN_ROOT}/.codex-plugin/plugin.json`
 - Claude Code: `${PLUGIN_ROOT}/.claude-plugin/plugin.json`
 - Factory Droid: `${PLUGIN_ROOT}/.claude-plugin/plugin.json` (Droid's interop layer reads the Claude Code manifest directly for Claude-first plugins like flow-next)
+- Cursor: `${PLUGIN_ROOT}/.cursor-plugin/plugin.json`
 
 Check whichever matches `PLATFORM`. Fall back to `.claude-plugin/plugin.json` if the platform-specific file doesn't exist.
 
@@ -238,7 +244,7 @@ Then handle `.flow/usage.md` — preserve any repo-customized variant:
 
 ## Step 4b: Codex-specific project setup (PLATFORM=codex only)
 
-**Skip this step entirely if PLATFORM is not `codex`.**
+**Skip this step entirely if PLATFORM is not `codex`.** (Claude Code / Droid / Cursor all skip it — Cursor drives the workflow with `/flow-next:*` slash commands and resolves `flowctl` via `.flow/bin/flowctl`, not project-scoped `.codex/` agents + hooks.)
 
 On Codex, agents and hooks live in project-scoped `.codex/` directories (not in the plugin cache). Copy them:
 
@@ -332,7 +338,7 @@ Store detection results for use in questions. When showing options, indicate cur
 
 Choose the correct template based on platform:
 - **Codex** (`PLATFORM=codex`): read [templates/agents-md-snippet.md](templates/agents-md-snippet.md) — uses `$flow-next-plan` syntax
-- **Claude Code / Droid**: read [templates/claude-md-snippet.md](templates/claude-md-snippet.md) — uses `/flow-next:plan` syntax
+- **Claude Code / Droid / Cursor**: read [templates/claude-md-snippet.md](templates/claude-md-snippet.md) — uses `/flow-next:plan` syntax (Cursor runs the same slash commands; on Cursor the snippet lands in AGENTS.md, which Cursor reads)
 
 For each of CLAUDE.md and AGENTS.md:
 1. Check if file exists
