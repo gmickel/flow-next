@@ -2,6 +2,18 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.10.1] - 2026-06-08
+
+### Fixed
+- **`flowctl copilot impl-review` no longer crashes with `UnicodeDecodeError` on a repo containing a non-UTF-8 source subtree** (#167 — the read-side counterpart to #123). `find_references()` (the symbol-cross-reference collector behind `gather_context_hints`) ran `git grep` over a fixed, broad extension set (`*.c *.h *.cpp *.cs *.java *.py …`) and decoded the hits with a hard `text=True, encoding="utf-8"` and **no `errors=`**. Because `gather_context_hints` extracts symbols from the *changed* files and greps each one **repo-wide**, a single legacy file anywhere in the tree — e.g. a German cp1252 C/C++ subtree carrying `0xfc` ü / `0xe4` ä / `0xf6` ö / `0xdf` ß — was enough to abort context gathering, *even when every file you actively edit is UTF-8*. The collector now captures `git grep` output as **bytes** and decodes defensively (`result.stdout.decode("utf-8", errors="replace")`), matching the byte-then-decode pattern the diff readers already use. Behavior is unchanged for valid UTF-8 repos. Reported with measured data by VGottselig (a large Windows CAD codebase: 304 of ~5400 C/C++ files non-UTF-8).
+- **`flowctl` forces its own stdout/stderr to UTF-8 at startup, so non-ASCII output (`→`, umlauts) no longer aborts on a legacy console codepage** such as Windows cp1252 (`UnicodeEncodeError: 'charmap' codec can't encode character '→'`, e.g. from `copilot plan-review`'s `print(output)`) (#167). `main()` now calls `sys.stdout/stderr.reconfigure(encoding="utf-8", errors="replace")` first thing, guarded so a captured or already-detached stream is left untouched. This removes the need for the `PYTHONIOENCODING=utf-8` workaround.
+
+### Changed
+- **`/flow-next:work` Verify-Completion (phase 3d) now carries a recovery heuristic for a lost/errored worker result** (#167). When the host (Agent-tool) drops a long-running worker's completion report (`[Tool result missing due to internal error]`) — its *work* may be complete even though the report never arrived — the loop no longer blocks waiting for a result that will never come. It diagnoses from ground truth (`flowctl show` + `git log` + `git status`) and classifies: **already done** → proceed to plan-sync; **code present but not finalized** → spawn a re-anchoring continuation worker that resumes from the late phase (build → review → `flowctl done`) instead of restarting; **nothing landed** → retry normally. Skill prose only; Codex mirror regenerated.
+
+### Notes
+- Both `flowctl.py` copies (canonical `scripts/` + dogfood `.flow/bin/`) updated in lockstep (byte-identical invariant held). New regression suite: `tests/test_cp1252_robustness.py` (reproduces the cp1252 `find_references` crash against a staged non-UTF-8 fixture; locks the stdio reconfigure guard and the phase-3d recovery prose, canonical + Codex mirror).
+
 ## [flow-next 1.10.0] - 2026-06-06
 
 ### Changed

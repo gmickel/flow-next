@@ -2670,11 +2670,16 @@ def find_references(
                 "*.cs",
             ],
             capture_output=True,
-            text=True, encoding="utf-8",
             cwd=repo_root,
         )
+        # Decode as bytes with errors="replace" rather than text=True /
+        # encoding="utf-8": git grep emits raw file bytes, so a repo with a
+        # non-UTF-8 source subtree (e.g. a legacy cp1252 C/C++ tree) would
+        # otherwise raise UnicodeDecodeError here and crash impl-review's
+        # context gathering — the read-side counterpart to #123. (#167)
+        stdout = result.stdout.decode("utf-8", errors="replace")
         refs = []
-        for line in result.stdout.strip().split("\n"):
+        for line in stdout.strip().split("\n"):
             if not line:
                 continue
             # Format: file:line:content
@@ -23030,7 +23035,26 @@ def cmd_validate(args: argparse.Namespace) -> None:
 # --- Main ---
 
 
+def _reconfigure_stdio_utf8() -> None:
+    """Force flowctl's own stdout/stderr to UTF-8 so non-ASCII output (e.g.
+    '→', umlauts) doesn't abort on a legacy console codepage such as Windows
+    cp1252 (UnicodeEncodeError: 'charmap'). Guarded with getattr/try so a
+    captured or already-detached stream (e.g. io.StringIO under test) is left
+    untouched rather than crashing the CLI at startup. (#167)
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            # Stream already detached / doesn't support reconfigure — ignore.
+            pass
+
+
 def main() -> None:
+    _reconfigure_stdio_utf8()
     parser = argparse.ArgumentParser(
         description="flowctl - CLI for .flow/ task tracking",
         formatter_class=argparse.RawDescriptionHelpFormatter,

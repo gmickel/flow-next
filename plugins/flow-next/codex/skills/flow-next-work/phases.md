@@ -254,6 +254,19 @@ $FLOWCTL show <task-id> --json
 
 If status is not `done`, the worker agent failed. Check output and retry or investigate.
 
+**Lost / errored worker result (`[Tool result missing due to internal error]`).** On long runs the host (Agent-tool) can drop the worker's completion report — you get an error placeholder instead of the report, even though the worker's *work* may be complete. Don't block waiting for a result that will never arrive. Treat a missing/errored result the same as "status not `done`" and **diagnose from ground truth** before retrying:
+
+```bash
+$FLOWCTL show <task-id> --json # status + evidence the worker recorded
+git log --oneline -5 # did the worker leave commits?
+git status --short # uncommitted-but-complete changes?
+```
+
+Classify and act:
+- **Already `done`** (status `done`, clean worktree at HEAD) — the report was lost but the task finished. Proceed to plan-sync (3e) as normal.
+- **Code present but not finalized** (commits and/or uncommitted changes exist, but status is still `in_progress` and build/review/`flowctl done` never ran) — spawn a **re-anchoring continuation worker** that re-reads the spec + current task status + `git status`/`git diff` and resumes from the late phase (verify build → review → `flowctl done`), rather than restarting the task from scratch.
+- **Nothing landed** (no commits, clean worktree, still `in_progress`) — the worker aborted early; retry the task normally.
+
 #### 3d.1 Tracker sync (opt-in) — task done → status comment + evidence
 
 **Optional. Runs only when the tracker bridge is active AND `work.done` is opted in, and only when the task reached `done` (from 3d). With no tracker configured this is a no-op.** Posts a structured status comment + evidence (tests / PR links from the task's evidence) to the linked issue; appends-only (R8), deduped by marker — never a conflict.

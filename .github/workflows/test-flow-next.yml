@@ -182,6 +182,18 @@ jobs:
         # fn-52 desync — tracker-sync docs added to the dogfood copy but not the
         # bundled template — hard-fails CI instead of shipping to consumers.
 
+      - name: Python unit tests — cp1252 / non-UTF-8 robustness (1.10.1, #167)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_cp1252_robustness.py" \
+            -v
+        # find_references decodes git-grep bytes defensively (no UnicodeDecodeError
+        # on a legacy cp1252 source subtree — the read-side counterpart to #123),
+        # flowctl forces UTF-8 stdout/stderr at startup, and phase-3d carries the
+        # lost-worker-result recovery heuristic (canonical + Codex mirror). Runs on
+        # the full ubuntu/macos/windows matrix — the fault is Windows-codepage-born.
+
       # ──────────── Cursor local-install (1.9.0) ────────────
       # The bash + PowerShell Cursor installers (scripts/install-cursor.{sh,ps1})
       # must not drift, and must actually produce a complete + clean install on
