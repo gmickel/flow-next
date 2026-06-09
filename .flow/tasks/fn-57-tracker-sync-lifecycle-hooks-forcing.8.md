@@ -37,7 +37,8 @@ Ship the self-improving story: a dedicated docs page (flow-next.dev + git-docs c
 - [ ] `pnpm build` green; site changes committed separately in flow-next.dev
 
 ## Done summary
-_(to be filled at completion)_
-
+Shipped the self-improving story across both repos: plugins/flow-next/docs/self-improving.md (+ README index row) and STRATEGY.md gained the "Self-improving through normal work" track in flow-next; flow-next.dev gained /strategy/self-improving (registered in BOTH navbars) and a redesigned hero pillar grid — six pillars including "Self-improving / Compounds as you work." in an extensible 3-column auto-wrapping capability index (frontend-design plugin direction, existing type/palette, mobile breakpoints verified). Site changelog/version deferred to fn-57.5 per the don't-advertise-unreleased-versions rule.
 ## Evidence
-_(to be filled at completion)_
+- Commits: 3038897359d785a0fda9ead02caec03e84d197aa, flow-next.dev:94990d26a908d8eaa84038bdbf19b94c67412f95
+- Tests: cd ~/work/flow-next.dev && pnpm build (green, 58 pages), slug-set diff astro.config.mjs vs site.ts navGroups (only install/introduction astro-only, as intended), visual QA via agent-browser on pnpm preview: 1512px / 1100px / 700px / mobile — six pillars render, no overflow, rail active state OK, relative cross-link existence check on docs/self-improving.md
+- PRs:
