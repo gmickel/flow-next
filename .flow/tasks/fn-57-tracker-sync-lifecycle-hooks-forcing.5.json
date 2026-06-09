@@ -5,7 +5,10 @@
   "created_at": "2026-06-09T19:57:59.534315Z",
   "depends_on": [
     "fn-57-tracker-sync-lifecycle-hooks-forcing.3",
-    "fn-57-tracker-sync-lifecycle-hooks-forcing.4"
+    "fn-57-tracker-sync-lifecycle-hooks-forcing.4",
+    "fn-57-tracker-sync-lifecycle-hooks-forcing.6",
+    "fn-57-tracker-sync-lifecycle-hooks-forcing.7",
+    "fn-57-tracker-sync-lifecycle-hooks-forcing.8"
   ],
   "id": "fn-57-tracker-sync-lifecycle-hooks-forcing.5",
   "priority": null,
@@ -13,5 +16,5 @@
   "spec_path": ".flow/tasks/fn-57-tracker-sync-lifecycle-hooks-forcing.5.md",
   "status": "todo",
   "title": "Docs + site + Codex mirror regen + release (1.11.0)",
-  "updated_at": "2026-06-09T19:59:56.118574Z"
+  "updated_at": "2026-06-09T20:24:59.141587Z"
 }

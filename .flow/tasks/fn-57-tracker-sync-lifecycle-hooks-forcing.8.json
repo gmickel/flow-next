@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-09T20:24:58.704397Z",
+  "depends_on": [
+    "fn-57-tracker-sync-lifecycle-hooks-forcing.6",
+    "fn-57-tracker-sync-lifecycle-hooks-forcing.7"
+  ],
+  "id": "fn-57-tracker-sync-lifecycle-hooks-forcing.8",
+  "priority": null,
+  "spec": "fn-57-tracker-sync-lifecycle-hooks-forcing",
+  "spec_path": ".flow/tasks/fn-57-tracker-sync-lifecycle-hooks-forcing.8.md",
+  "status": "todo",
+  "title": "Self-improving: docs page (site+repo), STRATEGY.md track, hero pillar redesign",
+  "updated_at": "2026-06-09T20:26:11.836030Z"
+}
