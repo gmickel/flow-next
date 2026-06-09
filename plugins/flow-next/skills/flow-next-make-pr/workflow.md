@@ -1377,6 +1377,30 @@ if [[ -z "$PR_URL" ]]; then
   echo "Manual recovery: wait 30s and re-run /flow-next:make-pr (skill detects the existing branch and re-tries)." >&2
   exit 1
 fi
+
+# 4.6b — Post-create ref verify/repair (fn-57 R4). §4.6a appends the ref to the
+# LOCAL body file before create — but a hand-rolled `gh pr create` (or a stale /
+# absent local file) bypasses it, opening the PR without its issue link. Verify
+# against the LIVE PR body, never $BODY_FILE. $REF and $TRK_ACTIVE are the
+# §4.6a-derived values and the matcher is the SAME whole-line `grep -qixF` —
+# ONE derivation, two sites, no drift (substring matching would false-positive
+# on the spec path in the body, see §4.6a). Fully non-fatal: the PR is already
+# open; every step degrades to a no-op under `set -e`.
+if [ "$TRK_ACTIVE" = "true" ] && [ -n "$REF" ]; then
+  if LIVE_BODY=$(gh pr view "$PR_URL" --json body --jq .body 2>/dev/null); then
+    if ! printf '%s\n' "$LIVE_BODY" | grep -qixF "$REF"; then
+      # Append-only read-modify-write: `gh pr edit` has NO append flag, so
+      # fetch→edit has a narrow window where a concurrent body edit would be
+      # overwritten — documented, accepted race (bodies are regenerable).
+      NEW_BODY=$(printf '%s\n\n---\n%s\n' "$LIVE_BODY" "$REF")
+      # Re-check GitHub's 65,536-char hard cap: §4.4 capped the LOCAL body at
+      # 65,000, but the LIVE body may differ — a near-cap body + ref can 422.
+      if [ "${#NEW_BODY}" -le 65536 ]; then
+        printf '%s\n' "$NEW_BODY" | gh pr edit "$PR_URL" --body-file - 2>/dev/null || true
+      fi
+    fi
+  fi
+fi
 ```
 
 **`gh pr create` has NO `--json` flag** (verified by docs-scout and the `gh pr create --help` output). The PR URL lands on stdout as a single line; capture via `PR_URL=$(...)`. Don't try to pipe through `jq`.
@@ -1401,6 +1425,7 @@ When `gh pr create` fails after the retry loop is exhausted, the skill emits man
 - Body length cap (65,000 chars target) enforced (§4.4) via truncation cascade: drop file list → trim TL;DR → collapse mermaid → spill to `.flow/pr-bodies/`.
 - **No interactive confirm gate** — make-pr creates the PR directly (autonomous). `--dry-run` (§4.0) is the inspection escape hatch; `--ready`/`--draft` override the draft decision. Phase 0 may still `AskUserQuestion` to resolve genuinely-missing info (base/spec), never to confirm.
 - §4.6: `HEAD_BRANCH=$(git branch --show-current)` resolved + validated non-empty (rejects detached HEAD), then §4.6a links the PR to the tracker issue (if active), then `git push -u origin HEAD`, then `sleep 1`, then 3-attempt retry loop on eventual-consistency error class (`Head sha can't be blank` / `No commits between`). Backoff `2s, 4s, 6s`. Other errors fail fast.
+- §4.6b (post-create, bridge active + ref derived): LIVE PR body fetched (`gh pr view --json body` — never `$BODY_FILE`), tested with the §4.6a whole-line `grep -qixF "$REF"` matcher, repaired append-only via `gh pr edit --body-file -` when absent, 65,536-char cap re-checked. Idempotent (ref already present → untouched) and fully non-fatal.
 - Failure recovery hints (§4.7) printed to stderr before exit on each error class.
 
 ---
@@ -1556,7 +1581,7 @@ EOF
 fi
 ```
 
-R24 invariant: under Ralph the PR URL is the **sole stdout artefact** in machine-parseable form (`PR_URL=<url>`), so the harness can capture it via `eval "$(/flow-next:make-pr ...)"` or by grep / tail. Everything else (memory write notes, recovery hints, breadcrumbs) routes through stderr where the harness logs it but doesn't parse it.
+R24 invariant: under Ralph the PR URL is the **sole stdout artefact** in machine-parseable form (`PR_URL=<url>`), so the harness can capture it via `eval "$(/flow-next:make-pr ...)"` or by grep / tail. Everything else (memory write notes, recovery hints, breadcrumbs, the §5.7 tracker-sync check + `Tracker sync:` summary line) routes through stderr where the harness logs it but doesn't parse it.
 
 ### 5.6 — Tracker sync (opt-in) — link the PR to the issue (Diffs-ready)
 
@@ -1572,6 +1597,7 @@ The **primary linkage already happened in §4.6a** — the `Ref <identifier>` li
 if [[ -n "$PR_URL" ]] \
    && [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
   # Invoke the flow-next-tracker-sync skill: link $PR_URL to the issue.
+  #   skill: flow-next-tracker-sync   (operation: link $PR_URL, event: makePr)
   #   linear → rich attachment via attachmentLinkURL (GraphQL rung) + optional breadcrumb comment;
   #            the §4.6a body ref already enabled the auto-link + Diffs.
   #   github → native `Refs #N` (github.md).
@@ -1583,7 +1609,39 @@ if [[ -n "$PR_URL" ]] \
 fi
 ```
 
-The PR is already open before this step; a tracker failure surfaces as a stderr warning and never changes the exit code (same non-fatal discipline as the `--memory` write in §5.1).
+The PR is already open before this step; a tracker failure surfaces as a stderr warning and never changes the exit code (same non-fatal discipline as the `--memory` write in §5.1). The skill emits its own receipt, event-tagged `--event makePr` — the tag §5.7's end-of-run `sync check` audits.
+
+### 5.7 — Tracker-sync end-of-run check — LAST action before exit (fn-57)
+
+Read-only audit: did the `makePr` touchpoint actually fire this run (receipt-backed)? It runs independently of §5.6, so a wholesale-skipped dispatch block is still caught. With no tracker configured, `sync check` exits silently in constant time — the summary slot then reads `n/a (bridge inactive)` and nothing else changes. (A disabled `tracker.perEvent.makePr` leaf is never MISSING — §5.6 still fires as bridge-active hygiene, but the audit only forces opted-in events.)
+
+```bash
+# --since: the PR's createdAt — on-disk anchor (bash vars do NOT survive across
+# tool calls; gh re-derives it anytime). Receipts older than the PR never clear.
+SINCE=$(gh pr view "$PR_URL" --json createdAt --jq .createdAt 2>/dev/null || true)
+
+[ -n "$SINCE" ] && "$FLOWCTL" sync check "$SPEC_ID" --events makePr --since "$SINCE" --json
+# Empty output → bridge inactive → slot = `n/a (bridge inactive)`. Otherwise
+# `.missing` empty → slot = `OK`; non-empty → retro-fire (below).
+# Ralph stdout invariant (§5.4 R24): stdout is reserved for the single
+# `PR_URL=<url>` line — under Ralph, route ALL check + summary lines to stderr.
+```
+
+**Retro-fire on MISSING — exactly ONE cycle, never blocking:**
+
+1. Record the retro-fire start anchor (the re-check needs it as `--since`): `date -u +%Y-%m-%dT%H:%M:%SZ`
+2. Invoke the **flow-next-tracker-sync skill directly** — the same dispatch as §5.6, with its `event:` tag: `skill: flow-next-tracker-sync (operation: link $PR_URL, event: makePr)` — NEVER this check block as a wrapper (no recursion).
+3. Re-check with `--since` = the step-1 anchor:
+   `"$FLOWCTL" sync check "$SPEC_ID" --events makePr --since "<retro-fire-start>" --json`
+4. Record the final state in the summary slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the PR is already open; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.
+
+**Mandatory summary slot — the LAST line the skill prints.** Exactly four states; an explicit `n/a` proves the check ran, an absent line is a skipped check:
+
+```text
+Tracker sync: <OK | MISSING:makePr → retro-fired → OK | MISSING:makePr (retro-fire failed: <reason>) | n/a (bridge inactive)>
+```
+
+Interactive mode: append it after the §5.0 success footer on stdout. Under Ralph: **stderr ONLY** — stdout's sole artefact stays the single `PR_URL=<url>` line (§5.4 R24 invariant).
 
 ### 5.5 — Cleanup
 
@@ -1598,6 +1656,7 @@ The PR body file ends up in `/tmp/`, OS-cleaned on reboot even when trap doesn't
 - `--memory` flag triggers idempotent memory write tagged `spec-<SPEC_ID>`. Skipped silently with a stderr note if entry exists. Failure is non-fatal — PR remains open.
 - Memory body shape follows the §5.2 template (What shipped / R-IDs satisfied / Modules touched / Decisions captured / Impact). Section omission rule honored.
 - Memory write failure surfaces as stderr warning, never exits non-zero — PR is already opened.
+- §5.6 dispatch carries `event: makePr`; §5.7 end-of-run `sync check` ran (`--events makePr`, `--since` = the PR's `createdAt`), retro-fired any MISSING touchpoint exactly once, and the final printed line is the mandatory four-state `Tracker sync:` slot — stderr-only under Ralph (stdout stays `PR_URL=<url>`).
 - Tempfiles cleaned up via `trap … EXIT`. No persistent artefact except the optional memory entry.
 
 ---

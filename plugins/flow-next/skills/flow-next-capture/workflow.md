@@ -707,14 +707,14 @@ if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ] \
    && [ "$("$FLOWCTL" config get tracker.perEvent.capture --json | jq -r '.value')" != "null" ]; then
   # Invoke the flow-next-tracker-sync skill: push/pull/reconcile the spec body
   # (operation follows the perEvent leaf — push | pull | reconcile).
-  #   skill: flow-next-tracker-sync   (operation: <leaf> <SPEC_ID>)
+  #   skill: flow-next-tracker-sync   (operation: <leaf> <SPEC_ID>, event: capture)
   # No-ops cleanly if no transport is reachable; genuine body conflicts surface
   # scoped (interactive) or queue (Ralph — but capture is Ralph-blocked anyway).
   :
 fi
 ```
 
-Best-effort — a tracker failure never blocks the capture. The skill emits its own receipt.
+Best-effort — a tracker failure never blocks the capture. The skill emits its own receipt, event-tagged `--event capture` — the tag Phase 6's end-of-run `sync check` audits.
 
 ### Done when
 
@@ -729,8 +729,33 @@ Best-effort — a tracker failure never blocks the capture. The skill emits its 
 
 **Goal:** print the suggested next step. The deliverable is the new spec; this footer tells the user what to do with it.
 
+**Tracker-sync end-of-run check — runs BEFORE the footer.** Read-only audit: did the capture touchpoint (5.7) actually fire (receipt-backed)? It runs independently of 5.7, so a wholesale-skipped dispatch block is still caught. With no tracker configured, `sync check` exits silently in constant time — the footer slot then reads `n/a (bridge inactive)` and nothing else changes. (Capture is Ralph-blocked, so there is no stdout-routing concern — the slot prints where the footer prints.)
+
+```bash
+# --since: the spec's created_at — on-disk anchor (bash vars do NOT survive
+# across tool calls; flowctl show re-derives it anytime). The spec was created
+# this run in Phase 5, so created_at lower-bounds the run; a Phase-6-captured
+# "now" would postdate the 5.7 receipt and false-MISSING.
+SINCE="$("$FLOWCTL" show "$SPEC_ID" --json | jq -r '.created_at')"
+
+"$FLOWCTL" sync check "$SPEC_ID" --events capture --since "$SINCE" --json
+# Empty output → bridge inactive → slot = `n/a (bridge inactive)`. Otherwise
+# `.missing` empty → slot = `OK`; non-empty → retro-fire (below).
+```
+
+**Retro-fire on MISSING — exactly ONE cycle, never blocking:**
+
+1. Record the retro-fire start anchor and echo it (the re-check needs it as `--since`): `date -u +%Y-%m-%dT%H:%M:%SZ`
+2. Invoke the **flow-next-tracker-sync skill directly** — the same dispatch as 5.7, with its `event:` tag: `skill: flow-next-tracker-sync (operation: <leaf> <SPEC_ID>, event: capture)` — NEVER this check block as a wrapper (no recursion).
+3. Re-check with `--since` = the step-1 anchor:
+   `"$FLOWCTL" sync check "$SPEC_ID" --events capture --since "<retro-fire-start>" --json`
+4. Record the final state in the footer slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the spec is already on disk; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.
+
+Then the footer. `Tracker sync:` is a REQUIRED line with exactly four states — an explicit `n/a` proves the check ran; an absent line is a skipped check:
+
 ```text
 Spec captured at .flow/specs/<SPEC_ID>.md.
+Tracker sync: <OK | MISSING:capture → retro-fired → OK | MISSING:capture (retro-fire failed: <reason>) | n/a (bridge inactive)>
 
 Next:
   /flow-next:plan <SPEC_ID>      → research + break into tasks
@@ -773,10 +798,11 @@ Related context (existing memory): <comma-separated entry ids>
 Consider reviewing before /flow-next:plan to avoid re-solving documented problems.
 ```
 
-If `REWRITE_TARGET` was set, the footer prefix changes:
+If `REWRITE_TARGET` was set, the footer prefix changes (the `Tracker sync:` line stays mandatory):
 
 ```text
 Spec rewritten at .flow/specs/<SPEC_ID>.md.
+Tracker sync: <same four states>
 
 Next:
   /flow-next:plan <SPEC_ID>      → re-plan tasks (existing tasks under the spec
@@ -786,7 +812,8 @@ Next:
 
 ### Done when
 
-- Footer is printed.
+- End-of-run `sync check` ran (`--events capture`, `--since` = the spec's `created_at`); any MISSING touchpoint was retro-fired exactly once and re-checked.
+- Footer is printed with the mandatory four-state `Tracker sync:` line (explicit `n/a (bridge inactive)` when no tracker is configured).
 - Skill exits 0.
 
 ---
