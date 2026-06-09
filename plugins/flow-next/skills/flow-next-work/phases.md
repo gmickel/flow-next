@@ -211,7 +211,7 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
    && [ "$($FLOWCTL config get tracker.perEvent.work.firstClaim --json | jq -r '.value')" != "off" ] \
    && [ "$($FLOWCTL config get tracker.perEvent.work.firstClaim --json | jq -r '.value')" != "null" ]; then
   # Invoke the flow-next-tracker-sync skill: move the linked issue In-Progress.
-  #   skill: flow-next-tracker-sync   (operation: push <spec-id>, status-only)
+  #   skill: flow-next-tracker-sync   (operation: push <spec-id>, status-only, event: work.firstClaim)
   # Unlinked spec → the skill flow-first-pushes (creates + links the issue) first,
   # then moves it In-Progress (tracker-sync §Phase 3 create-if-unlinked). No-op only
   # if no transport is reachable; in Ralph mode it queues/records a receipt — never blocks.
@@ -219,7 +219,7 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
 fi
 ```
 
-Best-effort: a tracker failure must never block the worker. The skill emits its own receipt (`sync receipt`).
+Best-effort: a tracker failure must never block the worker. The skill emits its own receipt, event-tagged `--event work.firstClaim` — the tag Phase 5's end-of-run `sync check` audits.
 
 ### 3c. Spawn Worker
 
@@ -297,14 +297,14 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
    && [ "$($FLOWCTL config get tracker.perEvent.work.done --json | jq -r '.value')" != "null" ]; then
   # Invoke the flow-next-tracker-sync skill: append a lifecycle comment to the
   # linked issue carrying the task's done-summary + evidence (tests / commits / PR).
-  #   skill: flow-next-tracker-sync   (operation: comment <spec-id>)
+  #   skill: flow-next-tracker-sync   (operation: comment <spec-id>, event: work.done)
   # Unlinked spec → flow-first push (create + link) first, then comment
   # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport; Ralph queues.
   :
 fi
 ```
 
-Best-effort — append-only comment sync never blocks the work loop; the skill emits its own receipt.
+Best-effort — append-only comment sync never blocks the work loop; the skill emits its own receipt, event-tagged `--event work.done` (audited by Phase 5's end-of-run `sync check`).
 
 #### 3d.2 Circuit breaker (ONLY when `delegation_active`) — bridge the worker signal
 
@@ -419,9 +419,10 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
        # Invoke the flow-next-tracker-sync skill: flip the linked issue to Done/verified
        # (status who-wins — tracker wins `done`/`verified`, R7) and post the verdict +
        # R-ID coverage as a comment.
-       #   skill: flow-next-tracker-sync   (operation: push <spec-id>, status + verdict comment)
+       #   skill: flow-next-tracker-sync   (operation: push <spec-id>, status + verdict comment, event: work.completionReview)
        # Unlinked spec → flow-first push (create + link) first, then status + verdict
        # comment (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport; Ralph queues.
+       # The skill's receipts carry --event work.completionReview — audited by Phase 5's sync check.
        :
      fi
      ```
@@ -483,6 +484,58 @@ Ralph closes done specs at the end of the loop.
 
 Then push + open PR if user wants.
 
+**Tracker-sync end-of-run check — LAST action before the final summary.** Read-only audit: did every lifecycle touchpoint that triggered this run actually fire (receipt-backed)? It runs independently of the touchpoints, so a wholesale-skipped dispatch block is still caught. With no tracker configured, `sync check` exits silently in constant time — the summary slot then reads `n/a (bridge inactive)` and nothing else changes.
+
+```bash
+# Tasks worked this run = the task ids Phase 3 claimed/completed (you know these
+# from the loop; substitute them).
+WORKED="<task-id-1> <task-id-2> ..."
+
+# --since: earliest claimed_at among tasks worked this run. On-disk anchor —
+# bash vars do NOT survive across tool calls; flowctl show re-derives it anytime.
+SINCE=""
+for T in $WORKED; do
+  TS="$($FLOWCTL show "$T" --json | jq -r '.claimed_at // empty')"
+  [ -n "$TS" ] && { [ -z "$SINCE" ] || [ "$TS" \< "$SINCE" ]; } && SINCE="$TS"
+done
+
+# --events: ONLY what actually triggered this run (triggered-set contract):
+#   ≥1 task claimed this run            → include work.firstClaim
+#   ≥1 task reached done this run       → include work.done
+#   completion review ran this run (3g) → include work.completionReview
+# Configured-but-not-triggered events are never checked, never MISSING.
+EVENTS="work.firstClaim,work.done"   # ← substitute the actual triggered set
+
+"$FLOWCTL" sync check "$SPEC_ID" --events "$EVENTS" --since "$SINCE" --json
+# Empty output → bridge inactive → slot = `n/a (bridge inactive)`. Otherwise
+# `.missing` empty → slot = `OK`; non-empty → retro-fire (below).
+# Under Ralph (FLOW_RALPH=1 / REVIEW_RECEIPT_PATH set): route any echo of check
+# output to stderr (>&2) — work's stdout stays clean for harness parsing.
+```
+
+(Nothing triggered at all — no claims, no dones, no 3g, e.g. a resumed no-op run — skip the check; the slot is vacuously `OK`.)
+
+**Retro-fire on MISSING — exactly ONE cycle, never blocking:**
+
+1. Record the retro-fire start anchor and echo it (the re-check needs it as `--since`): `date -u +%Y-%m-%dT%H:%M:%SZ`
+2. For each MISSING event, invoke the **flow-next-tracker-sync skill directly** — the same dispatch as the touchpoint that missed, with its `event:` tag — NEVER this check block as a wrapper (no recursion):
+   - `work.firstClaim` → `skill: flow-next-tracker-sync (operation: push <spec-id>, status-only, event: work.firstClaim)`
+   - `work.done` → `skill: flow-next-tracker-sync (operation: comment <spec-id>, event: work.done)`
+   - `work.completionReview` → `skill: flow-next-tracker-sync (operation: push <spec-id>, status + verdict comment, event: work.completionReview)`
+3. Re-check the missed events only, `--since` = the step-1 anchor:
+   `"$FLOWCTL" sync check "$SPEC_ID" --events "<missed-csv>" --since "<retro-fire-start>" --json`
+4. Record the final state in the summary slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the work is already done; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.
+
+**Final summary (mandatory template).** End the run with this block. `Tracker sync:` is a REQUIRED field with exactly four states — an explicit `n/a` proves the check ran; an absent field is a skipped check. Under Ralph, the summary goes to the summary block / stderr, never stdout.
+
+```
+Spec: <spec-id> — <title>
+Tasks: <n done>/<total>
+Tests: <commands + result>
+Review: <verdict | n/a>
+Tracker sync: <OK | MISSING:<event> → retro-fired → OK | MISSING:<event> (retro-fire failed: <reason>) | n/a (bridge inactive)>
+```
+
 ## Definition of Done
 
 Confirm before ship:
@@ -492,6 +545,7 @@ Confirm before ship:
 - Lint/format pass
 - Docs updated if needed
 - Working tree is clean
+- Final summary printed with the mandatory `Tracker sync:` slot (one of the four states — explicit `n/a (bridge inactive)` when no tracker is configured)
 
 ## Example flow
 
@@ -504,5 +558,5 @@ Phase 1 (resolve) → Phase 2 (branch) → Phase 3:
   ├─ no more tasks → 3g: check completion_review_status
   │   ├─ status != ship → invoke /flow-next:spec-completion-review → fix loop until SHIP → set status=ship
   │   └─ status = ship → Phase 4
-  └─ Phase 4 (quality) → Phase 5 (ship)
+  └─ Phase 4 (quality) → Phase 5 (ship: verify → commit → sync check → retro-fire MISSING once → summary w/ Tracker sync slot)
 ```
