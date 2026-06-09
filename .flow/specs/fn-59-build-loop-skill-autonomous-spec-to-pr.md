@@ -18,12 +18,12 @@ A host-driven loop conductor. Instead of the human prompting plan → work → m
 
 Single-tick conductor, driver-agnostic. Each tick:
 
-- **SELECT** — first `open` + `ready` (fn-58) + not-yet-PR'd spec via `flowctl specs`; classify stage from spec + task JSON: `0 tasks → plan`; `planned & plan_review != ship → plan-review`; `ready/in_progress tasks → work`; `all tasks done & no PR → make-pr`. The host judges stage — near-zero new flowctl.
+- **SELECT** — first `open` + `ready` (fn-58) spec with no open PR and all `depends_on_epics` satisfied, via `flowctl specs`; classify stage from spec + task JSON: `0 tasks → plan`; `planned & plan_review != ship → plan-review` (gate skipped when the review backend is `none`); `ready/in_progress tasks → work`; `all tasks done & no open PR → make-pr`. The host judges stage — near-zero new flowctl.
 - **ACT** — dispatch the one existing sub-skill with autonomous flags (`plan --depth/--research/--review`, `work --branch/--review`, `make-pr`). Never re-implements their logic.
-- **VERIFY** — existing review receipts (plan-review, impl-review at SHIP) + a confirmed status transition before a tick counts as advanced.
+- **VERIFY** — flowctl review-status fields (`plan_review_status` / `completion_review_status` at `ship`, where a review backend is configured) + confirmed task/spec status transitions before a tick counts as advanced. Receipt files are Ralph-harness artifacts (written only under `REVIEW_RECEIPT_PATH`) and do not exist in a host-driven loop — verification rests on flowctl state.
 - **REPORT** — a structured verdict consumable by a `/goal` validator or `/loop` cadence.
 
-Autonomous signaling: sets a lightweight `FLOW_AUTONOMOUS=1` "no user questions" signal — **distinct from `FLOW_RALPH`** so it does *not* activate the ralph-guard hooks (built for the shell loop). Reuses plan / work / make-pr + flowctl selection + receipts; does **not** reuse `ralph.sh`.
+Autonomous signaling: sets a lightweight `FLOW_AUTONOMOUS=1` "no user questions" signal — **distinct from `FLOW_RALPH`** so it does *not* activate the ralph-guard hooks (built for the shell loop). plan, work, and make-pr gain `FLOW_AUTONOMOUS` awareness alongside their existing `FLOW_RALPH` checks; under it make-pr behaves as under Ralph (forced draft, hard-error instead of prompts) — the draft is flipped to ready by the ship-loop (fn-60) or a human. Reuses plan / work / make-pr + flowctl selection + review-status state; does **not** reuse `ralph.sh`.
 
 ## API Contracts
 <!-- scope: technical -->
@@ -35,7 +35,9 @@ Autonomous signaling: sets a lightweight `FLOW_AUTONOMOUS=1` "no user questions"
 ## Edge Cases & Constraints
 <!-- scope: technical -->
 
-- Don't-thrash guard: a spec that fails to advance twice → `flowctl block` + skip; report `BLOCKED`. [paraphrase]
+- Don't-thrash guard: a spec that fails to advance twice → clear its `ready` flag via `flowctl spec unready` (fn-58 plumbing — selection then skips it; `flowctl block` is task-level and cannot block a spec) and report `BLOCKED` with the reason. The verdict must carry the reason, since an un-readied-by-failure spec looks identical to a never-blessed one in listings. [paraphrase]
+- Review backend `none`: the plan-review / impl-review gates are skipped and "advanced" rests on task/spec status transitions alone — the gate must never deadlock selection. [inferred]
+- A PR closed without merging (a human rejected it) → report `NEEDS_HUMAN`; never silently re-open a PR for that spec. [inferred]
 - Iteration / budget ceilings are the host loop's concern, but the skill must report `NO_WORK` cleanly so the host can stop. [inferred]
 - If a sub-skill would still ask under autonomy (genuinely ambiguous), report `NEEDS_HUMAN` rather than block on a question. [paraphrase]
 - Cross-platform: canonical Claude tool names; `sync-codex.sh` rewrites `AskUserQuestion` → numbered prompt and `Task` → `spawn_agent`. [strategy:Cross-platform parity]
@@ -44,15 +46,16 @@ Autonomous signaling: sets a lightweight `FLOW_AUTONOMOUS=1` "no user questions"
 <!-- scope: both -->
 
 - **R1:** A new skill `/flow-next:pilot` advances exactly one ready spec by one pipeline stage per invocation and exits with a structured verdict. [paraphrase]
-- **R2:** Stage selection picks the first `open` + ready (per fn-58) + not-yet-PR'd spec and classifies its stage (plan / plan-review / work / make-pr) from flowctl spec + task state. [paraphrase]
+- **R2:** Stage selection picks the first `open` + ready (per fn-58) spec that has no open PR and whose `depends_on_epics` are all satisfied, and classifies its stage (plan / plan-review / work / make-pr) from flowctl spec + task state. [paraphrase]
 - **R3:** It dispatches the existing plan / work / make-pr skills with autonomous flags, never re-implementing their logic. [user]
 - **R4:** It runs under autonomous mode (`FLOW_AUTONOMOUS`) — sub-skills ask no user questions and pick safe defaults; the signal does NOT activate ralph-guard hooks. [user]
-- **R5:** A tick counts as advanced only after existing review receipts (plan-review, impl-review at SHIP) plus a confirmed status transition. [paraphrase]
+- **R5:** A tick counts as advanced only after flowctl review-status fields reach `ship` (where a review backend is configured; gates are skipped under backend `none`) plus a confirmed task/spec status transition. [paraphrase]
 - **R6:** Verdicts are `ADVANCED | NO_WORK | BLOCKED | NEEDS_HUMAN`, shaped so a `/goal` validator or `/loop` cadence can decide whether to continue. [paraphrase]
-- **R7:** A spec that fails to advance twice is auto-blocked and skipped — no thrashing. [paraphrase]
+- **R7:** A spec that fails to advance twice is taken out of selection — its `ready` flag is cleared and the reason is reported in the `BLOCKED` verdict — and skipped on later ticks; no thrashing. [paraphrase]
 - **R8:** It is driver-agnostic — works invoked by Claude Code `/loop`, Claude Code `/goal`, or Codex `/goal`. [user]
 - **R9:** Cross-platform parity — canonical Claude tool names; `sync-codex.sh` handles the Codex mirror rewrites. [strategy:Cross-platform parity]
 - **R10:** Docs + flow-next.dev updated — new skill page, both navbars, changelog, command reference, version bump. [user]
+- **R11:** plan, work, and make-pr detect `FLOW_AUTONOMOUS` alongside `FLOW_RALPH` for question-suppression and safe defaults; under it make-pr forces draft and hard-errors instead of prompting. [inferred]
 
 ## Boundaries
 <!-- scope: business -->
@@ -60,7 +63,7 @@ Autonomous signaling: sets a lightweight `FLOW_AUTONOMOUS=1` "no user questions"
 - Build-loop **stops at make-pr**. PR-feedback resolution, merge, and release are the ship-loop's job (spec 3). [user]
 - Planning is **inside** the loop (the agent plans the implementation); the human gate is spec readiness (fn-58), not a plan-review sign-off. [user]
 - Parallel execution of multiple specs via worktrees is **out of scope for v1** (serial, one spec per tick); a flagged worktree-parallel mode is a later enhancement. [user]
-- Does **not** reuse `ralph.sh` or its hooks — only flowctl selection + receipts. [user]
+- Does **not** reuse `ralph.sh` or its hooks — only flowctl selection + review-status state. [user]
 - No new selection engine in flowctl beyond what exists; the host judges stage. [paraphrase]
 
 ## Decision Context
@@ -79,4 +82,4 @@ Host-driven (in-session) loop vs Ralph's external shell loop: the agent host (`/
 
 | R-ID | Task |
 |------|------|
-| R1–R10 | TBD — populate via /flow-next:plan |
+| R1–R11 | TBD — populate via /flow-next:plan |

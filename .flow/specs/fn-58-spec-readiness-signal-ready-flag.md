@@ -29,7 +29,7 @@ flowctl owns the field + set/query plumbing; the skills own *when* to set it and
 
 - **`flowctl spec ready <id>` / `flowctl spec unready <id>`** — set / clear the flag. [paraphrase]
 - **`ready` exposed** in `flowctl specs --json` and `flowctl show <id> --json`; surfaced as a badge in `flowctl list` / `specs` output. [paraphrase]
-- **Config key `tracker.readyState`** — records which tracker workflow state maps to readiness. [user]
+- **Config key `tracker.readyState`** — records which tracker workflow state maps to readiness, resolved per tracker type (Linear: a workflow-state name; GitHub: a label). [user]
 
 ## Edge Cases & Constraints
 <!-- scope: technical -->
@@ -38,6 +38,9 @@ flowctl owns the field + set/query plumbing; the skills own *when* to set it and
 - For tracker users, each sync re-projects readiness — a local flag edit may be overwritten by the tracker state (tracker authoritative). [paraphrase]
 - `capture --rewrite` resets `ready` → `false` (material spec change re-opens the blessing). [inferred]
 - Readiness is orthogonal to `status` — a ready spec stays `open` through planning and work. [paraphrase]
+- Linear readiness is a state-**name** match layered on the existing `state.type` mapping — a custom "Ready" state typically carries `state.type=unstarted`, which alone cannot distinguish Todo from Ready (same name-override pattern as status-sync). [inferred]
+- GitHub issues have no workflow states — for GitHub-tracked projects `tracker.readyState` resolves to a label. [inferred]
+- The `ready` flag lives in the committed spec JSON (same placement as `plan_review_status`), so tracker-driven re-projection may produce working-tree changes on sync — accepted, identical to existing status-sync behavior. [inferred]
 
 ## Acceptance Criteria
 <!-- scope: both -->
@@ -45,7 +48,7 @@ flowctl owns the field + set/query plumbing; the skills own *when* to set it and
 - **R1:** A spec carries a `ready` boolean (default `false`), persisted in its record and exposed via `flowctl specs --json` / `show --json`. [paraphrase]
 - **R2:** A human can mark / unmark a spec ready via flowctl (`spec ready` / `spec unready`), and the state is visible in spec listings as a badge. [user]
 - **R3:** For tracker-connected projects, the configured tracker "ready" state projects onto the local `ready` flag on sync, giving readiness a single local read path. [user]
-- **R4:** tracker-sync setup asks which tracker workflow state means "ready" and stores it as `tracker.readyState`. [user]
+- **R4:** tracker-sync setup asks which tracker workflow state means "ready" and stores it as `tracker.readyState` (a Linear state name or a GitHub label, per tracker type). [user]
 - **R5:** capture and interview offer an optional end-of-authoring prompt to mark the spec ready (default: keep draft). [user]
 - **R6:** plan soft-checks readiness — when a spec isn't ready it warns and offers proceed / abort; never a hard block. [user]
 - **R7:** The readiness gate is opt-in and invisible to users who never engage it — existing specs and non-loop workflows behave exactly as before. [inferred]

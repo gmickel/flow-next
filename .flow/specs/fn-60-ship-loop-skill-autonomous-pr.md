@@ -19,8 +19,8 @@ Per cadence tick, for each open PR the loop authored:
 2. **Reviews** — wait for automated-reviewer threads within a ~30-minute patience window; none yet & PR younger than window → report `AWAITING_REVIEW` (next tick re-checks).
 3. **Resolve** — new valid threads → `/flow-next:resolve-pr` (fix-verify-reply-resolve).
 4. **Converge** — repeat 2–3 until a tick finds no new reviews.
-5. **Merge** — CI green + an approving automated review + threads addressed → `gh pr merge`, autonomously.
-6. **Release** — discover + follow the project's own release instructions (RELEASING.md / docs / scripts) if present; otherwise stop at merge.
+5. **Merge** — CI green + an approving automated review + threads addressed → flip the build-loop's draft PR to ready (`gh pr ready` — pilot's PRs are born draft) and `gh pr merge`, autonomously; then `flowctl spec close` on the spec — land is the pipeline terminus, and closing prevents the build-loop from re-selecting a merged spec.
+6. **Release** — discover + follow the project's own release instructions (RELEASING.md / docs / scripts) if present; otherwise stop at merge. A config toggle (e.g. `land.release`) can disable the release step independently of the rest of the loop.
 
 `resolve-pr` gets a light autonomous touch: under `FLOW_AUTONOMOUS` it skips its needs-human bucket and reports `NEEDS_HUMAN` instead of blocking on a question.
 
@@ -36,7 +36,10 @@ Per cadence tick, for each open PR the loop authored:
 <!-- scope: technical -->
 
 - ~30-minute patience window for the first automated review; convergence = no new threads since the last resolve. [user]
-- Operates only on PRs the loop authored (or a configured label / filter) — never arbitrary PRs. [inferred]
+- Operates only on PRs the build-loop authored — discovered as open PRs whose head branch matches a flow spec's `branch_name` (make-pr bodies embed the spec id as a secondary signal); never arbitrary PRs. [inferred]
+- CI-fix attempts are bounded per PR; on exhaustion the PR is durably marked (e.g. a `flow-next:needs-human` label — survives sessions, visible on GitHub), reported `NEEDS_HUMAN`, and skipped on later ticks. [inferred]
+- The patience window anchors to the last push, not PR creation — a CI-fix push invalidates prior reviews and restarts the wait. [inferred]
+- "Approving automated review" must be a detectable, per-project signal (a bot's APPROVE review or a configured reviewer's clean verdict) — reviewer bots differ in whether they file formal approvals. [inferred]
 - If no approving automated review ever arrives and no reviewer is configured, it must **not** merge unreviewed — report `NEEDS_HUMAN`. [inferred]
 - Merge conflicts: attempt rebase / resolve; if unresolvable, report `BLOCKED`. [user]
 - `resolve-pr` is bounded at its existing 2 fix-verify cycles, then escalates → `NEEDS_HUMAN`. [paraphrase]
@@ -56,6 +59,9 @@ Per cadence tick, for each open PR the loop authored:
 - **R9:** It is opt-in and isolated — a separate skill; projects that don't run it are unaffected, and it touches only PRs it authored (or a configured filter). [user]
 - **R10:** Per-PR verdicts are `MERGED | RELEASED | FIXING_CI | AWAITING_REVIEW | RESOLVING | BLOCKED | NEEDS_HUMAN`. [paraphrase]
 - **R11:** Docs + flow-next.dev updated — new skill page, both navbars, changelog, command reference, version bump; the auto-merge override is documented. [user]
+- **R12:** Before merging, it flips the build-loop's draft PR to ready (`gh pr ready`) once the merge gate is satisfied. [inferred]
+- **R13:** After a successful merge it closes the spec (`flowctl spec close`), so the build-loop never re-selects a merged spec. [inferred]
+- **R14:** CI-fix attempts are bounded per PR; on exhaustion the PR is durably marked, reported `NEEDS_HUMAN`, and skipped on subsequent ticks. [inferred]
 
 ## Boundaries
 <!-- scope: business -->
@@ -83,4 +89,4 @@ Per cadence tick, for each open PR the loop authored:
 
 | R-ID | Task |
 |------|------|
-| R1–R11 | TBD — populate via /flow-next:plan |
+| R1–R14 | TBD — populate via /flow-next:plan |
