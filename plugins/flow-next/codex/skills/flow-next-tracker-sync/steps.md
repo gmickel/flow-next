@@ -10,11 +10,16 @@ Parse `$ARGUMENTS` for an optional operation token (`push` / `pull` / `reconcile
 
 `comment <spec-id>` is the lifecycle-event op the host skills invoke for opted-in touchpoints (`work.done` / `resolvePr` / `completionReview` / `qa` set to `comment` — see SKILL.md's perEvent table). It routes to the **comments-sync hook** (`postLifecycleComment` → `postComment` **[→ ref: comments-sync.md]**): append the structured lifecycle comment + evidence, dedup, receipt — it does NOT touch the body or status. Like `push` / `reconcile`, a `comment` op on an unlinked spec triggers the **Phase 3 create-if-unlinked** flow-first link first (create + attach), then posts the comment on the now-linked spec.
 
+**Event tag (fn-57 / R1).** When a lifecycle touchpoint invokes this skill, the invocation carries the perEvent key it serves — an `event: <perEvent-key>` token alongside the operation, e.g. `skill: flow-next-tracker-sync (operation: comment <spec-id>, event: work.done)`. Parse it into `EVENT`; **every `sync receipt` this run** then carries `--event "$EVENT"` — the call sites here and in the reference files use `${EVENT:+--event "$EVENT"}`, which expands to nothing when `EVENT` is empty, so one call-site shape serves both modes. The tag is what `flowctl sync check` audits at end-of-skill (an untagged receipt never clears a lifecycle event). **Manual invocations are NOT lifecycle touchpoints** — a user typing `/flow-next:tracker-sync push <id>`, the interactive menu, the discovery ceremony, `unlink`, and the round-trip spikes all leave `EVENT` empty, and their receipts legitimately carry no event tag (null event = not a lifecycle touchpoint).
+
 **Ralph / autonomous mode** (R11): when `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` is set, the skill still runs — but the discovery ceremony NEVER prompts (it needs a human; if the bridge isn't already configured, no-op + receipt note), and any genuine conflict **queues** (`sync defer`) instead of asking. Confident merges and conflict-free status/comment ops proceed unattended. "Ask the human" resolves to "queue for the human" in autonomous mode — same policy, surface-dependent delivery (mirrors fn-51's surface-aware ladder).
 
 ```bash
 RALPH=0
 [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" ]] && RALPH=1
+# Lifecycle event tag (fn-57): the caller's `event:` token, e.g. work.firstClaim |
+# work.done | work.completionReview | capture | makePr | resolvePr. Empty on manual runs.
+EVENT="<perEvent-key from the invocation, or empty>"
 ```
 
 ## Phase 1 — Discovery ceremony (R2)
@@ -166,8 +171,9 @@ reconcile(spec):
 Every operation ends with a receipt:
 
 ```bash
-$FLOWCTL sync receipt "$SPEC_ID" --status pushed --tracker-id "$ISSUE_UUID" --transport "$TRANSPORT" --note "..."
+$FLOWCTL sync receipt "$SPEC_ID" --status pushed --tracker-id "$ISSUE_UUID" --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} --note "..."
 # status ∈ {pushed,pulled,merged,updated,diverged,queued,errored,noop}; --transport ∈ {mcp,graphql,gh,none}
+# --event tags the lifecycle touchpoint served (Phase 0); empty EVENT (manual run) omits the flag
 # --merges-file records body-merge records for audit/rollback (fn-52.4 supplies it)
 ```
 
@@ -191,7 +197,7 @@ Unlinking clears tracker id + `lastSyncedAt` + merge-base atomically and posts a
 postComment(trackerId, "Detached from flow spec <id> on $(date -u +%Y-%m-%d).") [transport → fn-52.3/.7]
 # 2. wipe state atomically
 $FLOWCTL sync clear "$SPEC_ID"
-$FLOWCTL sync receipt "$SPEC_ID" --status updated --note "unlinked from tracker"
+$FLOWCTL sync receipt "$SPEC_ID" --status updated --note "unlinked from tracker" # no --event: unlink is a manual ceremony, never a lifecycle touchpoint (Phase 0)
 ```
 
 `sync clear` is atomic (fn-52.1) — it wipes the tracker id, `lastSyncedAt`, and the merge-base snapshot together. The id/branch/files of the spec are NEVER touched (no rename on unlink).
@@ -212,4 +218,4 @@ For each linked spec, render a line like `wor-17-slug ↔ WOR-17 (linked, synced
 
 - Hook bodies marked **[→ ref: <file>]** are NOT inlined here — this file routes; read the referenced file for the body. Transports live in `linear-ladder.md` / `github.md`; reconcile in `body-merge.md` / `status-sync.md` / `comments-sync.md`.
 - `set-merge-base` always writes BOTH halves (paired-snapshot invariant).
-- Receipts on every run; conflicts queue (`sync defer`), never block (R11).
+- Receipts on every run — event-tagged on lifecycle runs (`${EVENT:+--event "$EVENT"}`, Phase 0); conflicts queue (`sync defer`), never block (R11).

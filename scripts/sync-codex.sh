@@ -254,7 +254,7 @@ if [ -f "$phases" ]; then
 ### 3c. Run Worker Agent
 
 Use the **worker** agent role to implement the task. The worker gets fresh context and handles:
-- Re-anchoring (reading spec, git status)
+- Re-anchoring (reading spec, git status, task-relevant glossary terms when populated)
 - Implementation
 - Committing
 - Review cycles (if enabled)

@@ -85,11 +85,14 @@ Clear docs that tell agents how the project works.
 | DC5 | Test commands documented | How to run tests documented |
 | DC6 | Architecture documented | ARCHITECTURE.md, ADRs, or docs/ with structure |
 | DC7 | DESIGN.md exists (frontend projects) | DESIGN.md with color + typography + component sections (informational — not scored for backend-only projects) |
+| DC8 | Glossary populated | `"$FLOWCTL" glossary list --json` reports `total_terms > 0` (informational — not scored; husk-aware: gate on the term count, never `[[ -f GLOSSARY.md ]]` — `glossary remove` leaves an H1 husk; see `workflow.md` glossary signal block) |
 
 ### Scoring
 - ✅ 80%+: Agents can self-serve
 - ⚠️ 40-79%: Basic docs present
 - ❌ <40%: Agents must guess
+
+DC8 is **informational** — excluded from the Pillar 4 score and the agent-readiness baseline. Unlike DC7/DE7 (suggestion-only), a negative DC8 routes to the dedicated **Phase 5.5 glossary bootstrap** (read-back gated) — never to a Phase 5 template fix. A populated glossary is report-only: prime states term coverage and never rewrites or re-proposes existing terms (staleness/alias pruning belongs to `/flow-next:audit`).
 
 ---
 
@@ -114,7 +117,7 @@ Reproducible environment setup.
 - ⚠️ 40-79%: Setup mostly documented
 - ❌ <40%: Setup requires tribal knowledge
 
-DE7 is **informational** — like DC7, it is excluded from the Pillar 5 score and the agent-readiness baseline. Scored criteria total **48**; including DE7 the total is **49**.
+DE7 is **informational** — like DC7 and DC8, it is excluded from the Pillar 5 score and the agent-readiness baseline. Scored criteria total **48**; including the informational DE7 and DC8 rows the table totals **50**.
 
 ---
 
