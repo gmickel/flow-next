@@ -224,7 +224,7 @@ Best-effort: a tracker failure must never block the worker. The skill emits its 
 ### 3c. Spawn Worker
 
 Use the Task tool to spawn a `worker` subagent. The worker gets fresh context and handles:
-- Re-anchoring (reading spec, git status)
+- Re-anchoring (reading spec, git status, task-relevant glossary terms when populated)
 - Implementation
 - Committing
 - Review cycles (if enabled)

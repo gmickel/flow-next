@@ -385,6 +385,22 @@ Worked example — conversation: *"add timestamps to log lines"* (purely technic
 - No category carries content → no biz-routed lines written.
 - `BIZ_SIGNAL_CATEGORIES=0` → R25 suggestion does NOT fire (R22 invariant — solo dev who never mentioned biz context sees zero new prompts). `## Decision Context` stays FLAT.
 
+### 2.7 — New-vocabulary scan (glossary term-add proposals)
+
+Capture joins `/flow-next:interview` as a glossary writer. Gate first — same husk-aware autodetect as interview's doc-aware mode (`total_terms`, never `[[ -f ]]` — a `# Glossary` husk must not open the gate):
+
+```bash
+GLOSSARY_TERMS=$("$FLOWCTL" glossary list --json 2>/dev/null | jq -r '.total_terms // 0')
+```
+
+- `GLOSSARY_TERMS == 0` (absent, husk, or flowctl error) → **silent skip**: `GLOSSARY_PROPOSALS` stays empty, nothing downstream changes. Bootstrap is `/flow-next:prime`'s job, never capture's.
+- `GLOSSARY_TERMS > 0` → scan the conversation evidence for genuinely NEW project vocabulary. A term qualifies when ALL hold:
+  1. **Used repeatedly** — appears in ≥2 user turns (or once + load-bearing for an acceptance criterion).
+  2. **Project-specific** — a coined noun / flow / distinction, not generic English ("receipt gate" yes; "function" no).
+  3. **Absent from the glossary** — no existing entry matches on `term` or `avoid` aliases (case-insensitive, whitespace-collapsed — the `_glossary_term_matches` contract; do not reinvent matching logic).
+
+Collect at most **5** proposals (`GLOSSARY_PROPOSALS`), each with a one-line definition drawn from how the user actually used the term. Proposals surface at Phase 4 read-back; writes happen only in Phase 5.8 after consent.
+
 ### Done when
 
 - Every section is drafted with source tags applied.
@@ -393,6 +409,7 @@ Worked example — conversation: *"add timestamps to log lines"* (purely technic
 - 8+ acceptance count flag set if applicable.
 - Untestable acceptance candidates flagged for Phase 3 must-ask.
 - `BIZ_SIGNAL_CATEGORIES` (0..9) computed for Phase 6 R25 dispatch.
+- `GLOSSARY_PROPOSALS` collected (≤5; empty when the glossary gate is closed).
 
 ---
 
@@ -476,6 +493,12 @@ Construct the full draft including:
    Related memory entries (not blocking): bug/runtime-errors/oauth-callback-2025-08-12
    ```
 8. **Diff** — if `REWRITE_TARGET` is set, show existing spec → proposed spec diff (unified diff style; only show changed sections in full to keep the read-back navigable).
+9. **Glossary term-add proposals** (only when Phase 2.7 collected any):
+   ```
+   New project vocabulary (N terms, not yet in GLOSSARY.md):
+     - <term> — <one-line definition>
+     - <term> — <one-line definition>
+   ```
 
 ### 4.2 — Interactive read-back
 
@@ -494,6 +517,14 @@ Confidence tier for the recommendation:
 - `[high]` — `[inferred]` count is low (≤2) and no user-facing claims contradict the conversation evidence.
 - `[judgment-call]` — `[inferred]` count is moderate (3-6) or some `[inferred]` items are load-bearing (e.g. core acceptance criteria).
 - `[your-call]` — `[inferred]` count is high (7+) or rewrite-mode with substantive divergence from existing spec.
+
+**Glossary term-add consent (only when `GLOSSARY_PROPOSALS` is non-empty AND the user picked `approve`).** One follow-up question via `AskUserQuestion` — the read-back options above stay frozen; this is a separate ask:
+
+- **header**: `Glossary?`
+- **body**: `Add <N> new term(s) to GLOSSARY.md? <comma-separated terms>. Definitions shown in the read-back above. Recommended: add — they surfaced repeatedly in this conversation. Confidence: [judgment-call].`
+- **options**: `add-all`, `pick` (follow-up multi-select / serial yes-no per term), `skip`
+
+Record the approved subset for Phase 5.8. `skip` → no glossary writes; the spec write proceeds regardless of this answer.
 
 ### 4.3 — Edit branch
 
@@ -515,11 +546,14 @@ Print the full read-back payload (4.1) to stdout as a markdown block. Then:
 
 Autofix never offers `edit` — there's no user to ask. The print-then-rerun-with-yes pattern mirrors `flowctl memory migrate --yes` and is the documented autofix-substitute for read-back approval.
 
+**Autofix + glossary proposals:** the payload's item-9 block prints as suggestions (`Suggested glossary adds — review and add via flowctl glossary add "<term>" --definition-file -`), but autofix **never writes terms** — not even with `--yes` (`--yes` consents to the spec write, not to vocabulary changes). Phase 5.8 is interactive-only.
+
 ### 4.5 — Forbidden in Phase 4
 
 - **Never silently skip the read-back.** Even if `[inferred]` count is 0, show the draft. The user might still want to reject for reasons unrelated to inference.
 - **Never auto-split.** The `consider-split` option exits 0 and lets the user decide; it does not call `flowctl spec create` twice.
 - **Never edit `--rewrite` target without showing the diff.** The diff is non-optional in rewrite mode.
+- **Never write glossary terms here.** Phase 4 collects consent only; the writes happen in Phase 5.8, after the spec write.
 
 ### Done when
 
@@ -716,12 +750,25 @@ fi
 
 Best-effort — a tracker failure never blocks the capture. The skill emits its own receipt, event-tagged `--event capture` — the tag Phase 6's end-of-run `sync check` audits.
 
+### 5.8 — Glossary term-adds (consent-gated; interactive only)
+
+Runs only when Phase 4.2's glossary consent approved ≥1 term (which implies `GLOSSARY_TERMS > 0` — the Phase 2.7 gate — and interactive mode; autofix never reaches here). For each approved term:
+
+```bash
+"$FLOWCTL" glossary add "<term>" --definition-file - --json <<EOF
+<one-line definition from the read-back, as approved>
+EOF
+```
+
+Same call site as interview's behavior (b) — `glossary add` is a case-insensitive upsert; stdin keeps quoted phrasing intact. Best-effort: a failed add prints a warning and continues — never blocks the capture (the spec is already on disk). Report `Glossary: added N term(s) (<terms>)` for the Phase 6 footer.
+
 ### Done when
 
 - The new (or rewritten) spec is on disk at `.flow/specs/<id>.md`.
 - `SPEC_ID` is known for Phase 6.
 - Optional branch-name is set if user named one.
 - When the tracker bridge is active and `capture` is opted in, the spec body was pushed/pulled/reconciled to the linked issue (5.7); otherwise this step was a silent no-op.
+- Approved glossary term-adds written (5.8); skipped silently when none were proposed or approved.
 
 ---
 
@@ -761,6 +808,8 @@ Next:
   /flow-next:plan <SPEC_ID>      → research + break into tasks
   /flow-next:interview <SPEC_ID> → refine via Q&A
 ```
+
+When Phase 5.8 wrote terms, append one line after `Tracker sync:`: `Glossary: added N term(s) (<comma-separated terms>)`. Omit entirely otherwise (including every autofix run).
 
 ### Biz-suggestion footer (R25)
 
@@ -826,8 +875,8 @@ The skill itself is markdown — there's no unit-test surface. The validation is
 - Phase 1 emits a `## Conversation Evidence` block with verbatim user quotes (≤30 lines).
 - Phase 2 produces a draft with per-line source tags. Every acceptance criterion has one of `[user]` / `[paraphrase]` / `[inferred]`. Biz-context signals (R24) route to their destinations using only `[user]` / `[paraphrase]` tags; categories without conversation signal leave their destinations absent. `BIZ_SIGNAL_CATEGORIES` (0..9) computed for Phase 6.
 - Phase 3 fires must-ask cases only when (a) title is genuinely ambiguous, (b) acceptance is untestable, (c) scope-conflict persists. Optional ambiguities are deferred to Phase 4.
-- Phase 4 read-back surfaces `[inferred]` count, 8+ split note (if applicable), related-memory footer (if applicable). Interactive: user picks approve / edit / abort. Autofix: print + require `--yes`.
-- Phase 5 calls `flowctl spec create` + `spec set-plan` via heredoc.
+- Phase 4 read-back surfaces `[inferred]` count, 8+ split note (if applicable), related-memory footer (if applicable), glossary term-add proposals (only when `glossary list --json` reports `total_terms > 0` AND the conversation surfaced new vocabulary — Phase 2.7). Interactive: user picks approve / edit / abort; on approve with proposals, one follow-up `Glossary?` consent question. Autofix: print + require `--yes`; proposals print as suggestions, never written.
+- Phase 5 calls `flowctl spec create` + `spec set-plan` via heredoc. Approved term-adds written via `flowctl glossary add` (5.8, interactive only). With no glossary (or a husk), 2.7/4.x/5.8 are silent no-ops — zero behavior change.
 - Phase 6 prints the next-step footer. Calls `flowctl scope suggest --signal-categories-count "$BIZ_SIGNAL_CATEGORIES"`; on exit 0 (fire), appends the R25 `/flow-next:interview --scope=business` suggestion line. R22 invariant: `BIZ_SIGNAL_CATEGORIES=0` → no-fire → no suggestion.
 
 In autofix without `--yes`, the draft prints and the skill exits 0 — no write, no spec allocated.
