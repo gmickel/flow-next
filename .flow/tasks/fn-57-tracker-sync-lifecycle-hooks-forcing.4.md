@@ -38,7 +38,8 @@ Wire the sync check + retro-fire + summary slot into capture and make-pr, and ad
 - [ ] Both touchpoint invocations pass their `event:` key
 
 ## Done summary
-_(to be filled at completion)_
-
+Wired the fn-57 end-of-run sync check + one-cycle retro-fire + mandatory four-state Tracker sync summary slot into capture (Phase 6, --since = spec created_at) and make-pr (new §5.7, --since = PR createdAt, Ralph stdout invariant preserved), tagged both touchpoint dispatches with their event: keys (capture / makePr), and added make-pr §4.6b — the deterministic post-create PR↔issue ref verify/repair against the LIVE PR body using the shared §4.6a whole-line grep -qixF matcher, append-only gh pr edit repair, 65,536-char cap re-check, fully non-fatal.
 ## Evidence
-_(to be filled at completion)_
+- Commits: 548875ef9f94ef238e1bd1440a1484821c217975
+- Tests: cd plugins/flow-next && python3 -m unittest discover -s tests -p test_sync_check.py -v (19/19 OK), bash -n over every bash fence in both workflow.md files (only pre-existing placeholder block fails, identical at base), bash smoke of §4.6b matcher/append/cap/idempotency logic (5 cases OK), .flow/bin/flowctl sync check fn-57-tracker-sync-lifecycle-hooks-forcing --events capture,makePr --since <now> --json (read-only, exit 0, reports MISSING correctly)
+- PRs:
