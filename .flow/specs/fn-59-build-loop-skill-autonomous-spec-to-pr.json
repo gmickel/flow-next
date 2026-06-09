@@ -1,0 +1,25 @@
+{
+  "branch_name": "fn-59-build-loop-skill-autonomous-spec-to-pr",
+  "created_at": "2026-06-09T12:56:51.038551Z",
+  "depends_on_epics": [
+    "fn-58-spec-readiness-signal-ready-flag"
+  ],
+  "id": "fn-59-build-loop-skill-autonomous-spec-to-pr",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-59-build-loop-skill-autonomous-spec-to-pr.md",
+  "status": "open",
+  "title": "Build-loop skill: autonomous spec-to-PR conductor (pilot)",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-06-09T12:57:00.706354Z"
+}

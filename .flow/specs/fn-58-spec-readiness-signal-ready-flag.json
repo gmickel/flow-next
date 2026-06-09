@@ -1,0 +1,23 @@
+{
+  "branch_name": "fn-58-spec-readiness-signal-ready-flag",
+  "created_at": "2026-06-09T12:51:13.968815Z",
+  "depends_on_epics": [],
+  "id": "fn-58-spec-readiness-signal-ready-flag",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-58-spec-readiness-signal-ready-flag.md",
+  "status": "open",
+  "title": "Spec readiness signal: ready flag + tracker projection",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-06-09T12:51:14.149855Z"
+}
