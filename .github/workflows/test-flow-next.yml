@@ -194,6 +194,31 @@ jobs:
         # lost-worker-result recovery heuristic (canonical + Codex mirror). Runs on
         # the full ubuntu/macos/windows matrix — the fault is Windows-codepage-born.
 
+      # ──────────── fn-57 (tracker-sync lifecycle observability) ────────────
+
+      - name: Python unit tests — sync check lifecycle audit (fn-57.1)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_sync_check.py" \
+            -v
+        # Read-only `sync check` over `.flow/sync-runs/` receipts: R8 silent
+        # constant-time exit when the bridge is inactive (gate precedes id
+        # resolution), MISSING predicate (triggered ∩ perEvent-enabled ∩
+        # no event-matching receipt ≥ --since), any-status clears, null-event
+        # receipts never clear, nested work.* keys, Z-suffix --since on 3.8,
+        # tracker-handle id resolution, exit-0-always contract.
+
+      - name: Python unit tests — tracker receipts (fn-52.1 / fn-57.1)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_tracker_receipts.py" \
+            -v
+        # Sync receipt schema + guard isolation + tracker-handle
+        # canonicalization, extended in fn-57.1 with the `--event` lifecycle
+        # tag (free-form, `event: null` back-compat for pre-flag callers).
+
       # ──────────── Cursor local-install (1.9.0) ────────────
       # The bash + PowerShell Cursor installers (scripts/install-cursor.{sh,ps1})
       # must not drift, and must actually produce a complete + clean install on
