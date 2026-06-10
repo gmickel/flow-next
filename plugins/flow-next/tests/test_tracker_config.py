@@ -4,7 +4,8 @@ Asserts:
   * `get_default_config()` carries a `tracker` block with the documented
     shape: version + `enabled:false` + `type:null` + `provenance:null` +
     NESTED `perEvent` (so dotted-path get/set works) all defaulting `off` +
-    perTracker + staleAfterHours + conflictTiebreak.
+    perTracker + staleAfterHours + conflictTiebreak + readyState (fn-58,
+    top-level scalar, default null).
   * The dotted-path API resolves a nested perEvent leaf
     (`tracker.perEvent.work.firstClaim`).
   * `deep_merge` preserves unknown keys under `tracker` (forward-compat) and
@@ -77,6 +78,11 @@ class TrackerConfigTestCase(unittest.TestCase):
         self.assertIsNone(t["provenance"])
         self.assertEqual(t["staleAfterHours"], self.flowctl.TRACKER_DEFAULT_STALE_HOURS)
         self.assertEqual(t["conflictTiebreak"], "always-ask")
+        # fn-58 (R3/R4): readiness projection knob — a single scalar at the
+        # tracker TOP level (NOT under perTracker), default null (= off).
+        self.assertIn("readyState", t)
+        self.assertIsNone(t["readyState"])
+        self.assertNotIn("readyState", t["perTracker"])
 
     def test_per_event_is_nested_and_defaults_off(self) -> None:
         t = self.flowctl.get_default_config()["tracker"]
@@ -94,6 +100,8 @@ class TrackerConfigTestCase(unittest.TestCase):
             self.flowctl.get_config("tracker.perEvent.work.firstClaim"), "off"
         )
         self.assertEqual(self.flowctl.get_config("tracker.perEvent.capture"), "off")
+        # fn-58: a fresh repo reads a clean null for the readiness knob.
+        self.assertIsNone(self.flowctl.get_config("tracker.readyState"))
 
     # --- Forward-compat -----------------------------------------------------
 

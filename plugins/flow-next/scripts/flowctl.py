@@ -1077,6 +1077,14 @@ def get_default_tracker_config() -> dict:
         },
         "staleAfterHours": TRACKER_DEFAULT_STALE_HOURS,
         "conflictTiebreak": "always-ask",
+        # fn-58 (R3/R4) — the tracker workflow state that means "ready for
+        # work": a Linear state NAME or a GitHub label, set by the discovery
+        # ceremony. Pull-side sync projects it onto the local spec `ready`
+        # flag (one-way, tracker → local). A single scalar, so it lives at
+        # the tracker TOP level (sibling of conflictTiebreak), NOT under
+        # perTracker. None = readiness projection off (the gate stays
+        # dormant — R7 invisibility).
+        "readyState": None,
     }
 
 
