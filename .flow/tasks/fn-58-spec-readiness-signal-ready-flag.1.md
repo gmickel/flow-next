@@ -40,7 +40,8 @@ Per the spec's "Resolved at planning" section (read it first — it IS the contr
 - [ ] Dogfood copy byte-identical
 
 ## Done summary
-_(to be filled at completion)_
-
+Added the lazy on-disk `ready` flag to flowctl: new idempotent `spec ready`/`spec unready` subcommands (byte-identical-sidecar no-ops, .M rejection, done-spec + tracker-handle + epic-alias support), explicit `ready: false` on all three JSON read surfaces (show/specs/list), and a `[ready]` badge in human listings shown only for ready specs. Wired 14-case test_spec_ready.py into CI with an explicit -p step, extended ci/smoke/alias smoke scripts, and re-copied the dogfood .flow/bin/flowctl.py. rp impl-review verdict: SHIP (first pass, zero findings).
 ## Evidence
-_(to be filled at completion)_
+- Commits: 2630e3a07aad2c47c0f515bf33f60d87e021492f
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_spec_ready.py' -v (14 new cases), python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (full suite: 1047 OK, 2 skipped), bash plugins/flow-next/scripts/ci_test.sh (67 pass incl. 9 new Spec Readiness cases), bash plugins/flow-next/scripts/smoke_test.sh (132 pass incl. 5 new readiness cases; 2 pre-existing copilot-CLI env failures unrelated), bash plugins/flow-next/scripts/alias_smoke.sh (24 pass incl. 4 new Case 9 epic-alias cases)
+- PRs:
