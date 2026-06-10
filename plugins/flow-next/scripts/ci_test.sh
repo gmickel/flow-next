@@ -155,6 +155,47 @@ set -e
 [[ $ERR_RC -ne 0 ]] && pass "start done task returns error" || fail "start done task should fail"
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 3.5 Spec readiness flag (fn-58.1)
+# ─────────────────────────────────────────────────────────────────────────────
+echo -e "\n${YELLOW}--- Spec Readiness (fn-58.1) ---${NC}"
+
+# Lazy purity: never-toggled spec carries no `ready` key but JSON reads false.
+READY_VAL="$(flowctl show "$EPIC_ID" --json | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['ready'])")"
+[[ "$READY_VAL" == "False" ]] && pass "show emits explicit ready false" || fail "show ready default (got $READY_VAL)"
+
+flowctl spec ready "$EPIC_ID" --json >/dev/null && pass "spec ready" || fail "spec ready"
+READY_VAL="$(flowctl show "$EPIC_ID" --json | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['ready'])")"
+[[ "$READY_VAL" == "True" ]] && pass "show reports ready true" || fail "show ready true (got $READY_VAL)"
+
+# Badge shown ONLY while ready (human output).
+if flowctl specs | grep -q "\[ready\] $EPIC_ID"; then
+  pass "specs badge shown on ready spec"
+else
+  fail "specs badge missing on ready spec"
+fi
+
+flowctl spec unready "$EPIC_ID" --json >/dev/null && pass "spec unready" || fail "spec unready"
+READY_VAL="$(flowctl specs --json | "$PYTHON_BIN" -c "import json,sys; print([e['ready'] for e in json.load(sys.stdin)['specs']][0])")"
+[[ "$READY_VAL" == "False" ]] && pass "specs reports ready false after unready" || fail "specs ready false (got $READY_VAL)"
+
+if flowctl specs | grep -q "\[ready\]"; then
+  fail "badge still shown after unready"
+else
+  pass "badge gone after unready"
+fi
+
+# Idempotent no-op: second unready reports changed=false.
+CHANGED="$(flowctl spec unready "$EPIC_ID" --json | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['changed'])")"
+[[ "$CHANGED" == "False" ]] && pass "unready idempotent no-op" || fail "unready no-op (changed=$CHANGED)"
+
+# `.M` task ids rejected.
+set +e
+ERR_OUT="$(flowctl spec ready "$TASK1_ID" --json 2>&1)"
+ERR_RC=$?
+set -e
+[[ $ERR_RC -ne 0 ]] && pass "spec ready rejects task id" || fail "spec ready should reject task id"
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 4. Config System
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "\n${YELLOW}--- Config System ---${NC}"

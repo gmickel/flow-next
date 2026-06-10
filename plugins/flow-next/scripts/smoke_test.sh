@@ -423,6 +423,70 @@ scripts/flowctl spec close "$EPIC2" --json >/dev/null
 echo -e "${GREEN}✓${NC} epic close succeeds when done"
 PASS=$((PASS + 1))
 
+echo -e "${YELLOW}--- spec ready/unready + badge (fn-58.1) ---${NC}"
+# Lazy on-disk: never-toggled spec carries no `ready` key; JSON reads false.
+ready_spec_path() {
+  if [[ -f ".flow/specs/${1}.json" ]]; then printf '.flow/specs/%s.json' "$1"
+  else printf '.flow/epics/%s.json' "$1"
+  fi
+}
+EPIC2_PATH="$(ready_spec_path "$EPIC2")"
+show_json="$(scripts/flowctl show "$EPIC2" --json)"
+"$PYTHON_BIN" - "$show_json" "$EPIC2_PATH" <<'PY'
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["ready"] is False, f"Expected explicit false, got {data.get('ready')!r}"
+sidecar = json.load(open(sys.argv[2]))
+assert "ready" not in sidecar, "lazy purity violated: ready key on never-toggled spec"
+PY
+echo -e "${GREEN}✓${NC} lazy ready default (explicit false, no key on disk)"
+PASS=$((PASS + 1))
+
+# unready on a never-ready spec is a byte-identical no-op (no adoption churn).
+before_bytes="$("$PYTHON_BIN" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$EPIC2_PATH")"
+noop_json="$(scripts/flowctl spec unready "$EPIC2" --json)"
+after_bytes="$("$PYTHON_BIN" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$EPIC2_PATH")"
+"$PYTHON_BIN" - "$noop_json" <<'PY'
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["changed"] is False, f"Expected no-op, got {data}"
+PY
+[[ "$before_bytes" == "$after_bytes" ]]
+echo -e "${GREEN}✓${NC} unready on never-ready spec is byte-identical no-op"
+PASS=$((PASS + 1))
+
+# Toggle on a DONE spec (readiness is status-orthogonal) + badge appears.
+scripts/flowctl spec ready "$EPIC2" --json >/dev/null
+specs_human="$(scripts/flowctl specs)"
+if ! echo "$specs_human" | grep -q "\[ready\] $EPIC2"; then
+  echo "badge missing: $specs_human"; exit 1
+fi
+if echo "$specs_human" | grep -q "\[ready\] $EPIC1"; then
+  echo "badge leaked to non-ready spec"; exit 1
+fi
+echo -e "${GREEN}✓${NC} ready works on done spec; badge only on ready specs"
+PASS=$((PASS + 1))
+
+scripts/flowctl spec unready "$EPIC2" --json >/dev/null
+if scripts/flowctl specs | grep -q "\[ready\]"; then
+  echo "badge survived unready"; exit 1
+fi
+echo -e "${GREEN}✓${NC} badge gone after unready"
+PASS=$((PASS + 1))
+
+# `.M` task ids rejected with a targeted error.
+set +e
+ready_err="$(scripts/flowctl spec ready "${EPIC2}.1" --json 2>&1)"
+rc=$?
+set -e
+if [[ "$rc" -ne 0 ]] && echo "$ready_err" | grep -q "spec-level"; then
+  echo -e "${GREEN}✓${NC} spec ready rejects task id"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} spec ready rejects task id (rc=$rc; $ready_err)"
+  FAIL=$((FAIL + 1))
+fi
+
 echo -e "${YELLOW}--- config set/get ---${NC}"
 scripts/flowctl config set memory.enabled true --json >/dev/null
 config_json="$(scripts/flowctl config get memory.enabled --json)"
