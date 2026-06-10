@@ -37,7 +37,8 @@ Wire the end-of-run sync check + one-cycle retro-fire + mandatory summary slot i
 - [ ] Ralph mode: no new stdout pollution (check/summary routed per existing conventions)
 
 ## Done summary
-_(to be filled at completion)_
-
+Wired the fn-57 forcing function into the work skill: the three lifecycle touchpoints (3b.1 firstClaim, 3d.1 done, 3g completionReview) now pass their `event:` tag into the tracker-sync invocation, and Phase 5 Ship gains the end-of-run `flowctl sync check` block (on-disk `--since` from earliest claimed_at, triggered-set `--events`), a one-cycle direct retro-fire for MISSING events, and a mandatory four-state `Tracker sync:` slot in the final summary template (explicit `n/a (bridge inactive)`; Ralph output routed to stderr). Definition of Done, example flow, and SKILL.md's tracker section updated to match.
 ## Evidence
-_(to be filled at completion)_
+- Commits: 6426efd5eab652e85ebf47c075d49a97fbb6c3c2
+- Tests: cd plugins/flow-next && python3 -m unittest discover -s tests -p test_sync_check.py (19 OK, baseline), python3 -m unittest tests.test_template_canonical tests.test_codex_delegation_gates tests.test_work_delegate_config (64 OK, post-edit), smoke: Phase 5 bash block end-to-end on live fn-57 (since-derivation -> earliest claimed_at; sync check --json reported real MISSING:work.firstClaim), smoke: bridge-inactive repo -> sync check silent, exit 0, grep: splice anchors ^### 3c. Spawn Worker / ^### 3d. unique + intact
+- PRs:

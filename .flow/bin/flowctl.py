@@ -20333,6 +20333,12 @@ def cmd_sync_receipt(args: argparse.Namespace) -> None:
         "id": args.id,
         "tracker_id": getattr(args, "tracker_id", None),
         "status": status,
+        # fn-57.1 (R1): which lifecycle touchpoint this receipt served
+        # (perEvent key, e.g. "work.firstClaim"). Free-form — the perEvent key
+        # set is an open extension point, so the value is NOT enum-validated.
+        # Pre-flag receipts carry `event: null` and never satisfy an
+        # event-specific `sync check`.
+        "event": getattr(args, "event", None),
         "transport": getattr(args, "transport", None),
         "merges": merges,
         "note": getattr(args, "note", None),
@@ -20406,6 +20412,111 @@ def cmd_sync_defer(args: argparse.Namespace) -> None:
         )
     else:
         print(f"Queued tracker-sync conflict for {args.id} → {sink_path}")
+
+
+def _per_event_enabled(event: str) -> bool:
+    """True iff the `tracker.perEvent.<event>` leaf is enabled (non-"off").
+
+    perEvent keys are nested under `tracker.perEvent` (e.g. "work.firstClaim"
+    → `tracker.perEvent.work.firstClaim`); `get_config` splits on `.` so the
+    dotted event key routes through the nesting naturally. Values are verbs
+    ("reconcile", "comment", "status", ...) — anything other than absent /
+    empty / "off" counts as enabled. `set_config` coerces "true"/"false" to
+    booleans, so a boolean leaf is honored as-is.
+    """
+    value = get_config(f"tracker.perEvent.{event}")
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() not in ("", "off")
+
+
+def cmd_sync_check(args: argparse.Namespace) -> None:
+    """Read-only lifecycle audit over `.flow/sync-runs/` receipts (fn-57.1, R2).
+
+    For each event that TRIGGERED this run (`--events`), report whether a
+    matching receipt exists. An event is MISSING iff it triggered AND its
+    `tracker.perEvent` leaf is enabled AND the bridge is active AND no receipt
+    with a matching `event` field and `timestamp >= --since` exists. Linkage is
+    NOT a precondition (an unlinked spec triggering create-if-unlinked with no
+    receipt is exactly the miss this catches). ANY receipt status clears —
+    the check asserts the touchpoint *ran*; the receipt's own status carries
+    success/failure detail. `event: null` (pre-flag) receipts never clear.
+
+    Exit 0 always (best-effort contract — output drives agent action, not the
+    exit code). NO tracker-mutation code lives here or anywhere in flowctl
+    (R3): all tracker mutations stay agent-driven through the tracker-sync
+    skill; this command only reads local receipts.
+    """
+    # R8 zero-overhead gate: bridge inactive → silent constant-time exit 0,
+    # BEFORE any receipt IO, id resolution, or output. `tracker_sync_active`
+    # is safe when `.flow/` / config.json are absent (raw-probe → inactive).
+    if not tracker_sync_active():
+        return
+
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+
+    # Same id front-door as every other sync command (fn-52.10, R16): a
+    # tracker handle (FLOW-10) must resolve to the canonical spec id BEFORE
+    # any receipt comparison.
+    args.id = resolve_spec_id_arg(get_flow_dir(), args.id, use_json=args.json)
+
+    events = [e.strip() for e in (args.events or "").split(",") if e.strip()]
+    if not events:
+        error_exit("--events requires at least one perEvent key", use_json=args.json)
+
+    since = _parse_iso_ts(args.since)
+    if since is None:
+        error_exit(
+            f"Invalid --since timestamp: {args.since!r}. Expected ISO 8601 "
+            "(e.g. 2026-06-09T00:00:00Z)",
+            use_json=args.json,
+        )
+
+    # Collect the events served by this spec's receipts within the run window.
+    # Receipts accumulate forever in `.flow/sync-runs/`; `--since` is the
+    # run-scoping lower bound that keeps prior-run receipts from causing
+    # false passes. Malformed receipts are skipped (best-effort reader).
+    receipt_dir = get_repo_root() / SYNC_RUNS_DIR_REL
+    seen_events: set = set()
+    if receipt_dir.is_dir():
+        for path in sorted(receipt_dir.glob("sync-*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            if not isinstance(data, dict) or data.get("id") != args.id:
+                continue
+            event = data.get("event")
+            if not event:
+                continue  # pre-flag / null-event receipts never clear a check
+            ts = _parse_iso_ts(data.get("timestamp"))
+            if ts is None or ts < since:
+                continue
+            seen_events.add(event)
+
+    # A triggered event with a disabled perEvent leaf is never MISSING —
+    # configured-off means there is nothing that should have fired.
+    missing = [
+        e for e in events if _per_event_enabled(e) and e not in seen_events
+    ]
+    missing_set = set(missing)
+
+    if args.json:
+        json_output(
+            {
+                "id": args.id,
+                "events": events,
+                "missing": missing,
+                "count": len(missing),
+            }
+        )
+    else:
+        for event in events:
+            marker = "MISSING" if event in missing_set else "OK"
+            print(f"{marker}:{event}")
 
 
 def spec_md_rel_path(spec_id: str) -> str:
@@ -23199,6 +23310,13 @@ def main() -> None:
     )
     p_sync_receipt.add_argument("--tracker-id", dest="tracker_id", default=None, help="Tracker UUID")
     p_sync_receipt.add_argument("--transport", default=None, help="Transport used (mcp|graphql|gh|none)")
+    # fn-57.1 (R1): free-form (NOT choices=) — perEvent keys are an open
+    # extension point, and argparse choices= rejects before the handler runs.
+    p_sync_receipt.add_argument(
+        "--event",
+        default=None,
+        help="Lifecycle touchpoint served (perEvent key, e.g. work.firstClaim)",
+    )
     p_sync_receipt.add_argument(
         "--merges-file", dest="merges_file", default=None,
         help="JSON list of body-merge records for rollback ('-' for stdin)",
@@ -23217,6 +23335,25 @@ def main() -> None:
     p_sync_defer.add_argument("--branch", default=None, help="Branch slug override")
     p_sync_defer.add_argument("--json", action="store_true", help="JSON output")
     p_sync_defer.set_defaults(func=cmd_sync_defer)
+
+    p_sync_check = sync_sub.add_parser(
+        "check",
+        help="Read-only lifecycle audit: triggered events vs config + receipts (OK/MISSING)",
+    )
+    p_sync_check.add_argument("id", help="Spec ID (or tracker handle)")
+    p_sync_check.add_argument(
+        "--events",
+        required=True,
+        help="Comma-separated perEvent keys that triggered this run "
+        "(e.g. work.firstClaim,work.done)",
+    )
+    p_sync_check.add_argument(
+        "--since",
+        required=True,
+        help="ISO run-scoping lower bound — older receipts never clear an event",
+    )
+    p_sync_check.add_argument("--json", action="store_true", help="JSON output")
+    p_sync_check.set_defaults(func=cmd_sync_check)
 
     # review-backend (helper for skills)
     p_review_backend = subparsers.add_parser(

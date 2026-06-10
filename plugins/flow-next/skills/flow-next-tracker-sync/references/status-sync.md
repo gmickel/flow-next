@@ -182,7 +182,8 @@ $FLOWCTL sync defer "$SPEC_ID" \
   --summary "Status deadlock: tracker=done, flow=in-progress" \
   --suggested "Human picks: close the spec to match the tracker, or reopen the issue to match flow" \
   --reason "status-deadlock"
-$FLOWCTL sync receipt "$SPEC_ID" --status diverged --transport "$TRANSPORT" \
+# ($EVENT = lifecycle event tag from steps.md Phase 0; empty on manual runs.)
+$FLOWCTL sync receipt "$SPEC_ID" --status diverged --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
   --note "status deadlock queued (tracker=done × flow=in-progress); no status written, base unchanged"
 ```
 

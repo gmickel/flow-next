@@ -122,6 +122,7 @@ Conduct a John Carmack-level review:
 5. **Edge Cases** - Failure modes? Race conditions?
 6. **Tests** - Adequate coverage? Testing behavior?
 7. **Security** - Injection? Auth gaps?
+8. **Vocabulary** - [Include ONLY when `flowctl glossary list --json` reports `total_terms > 0`: "Canonical vocabulary lives in GLOSSARY.md — flag changes that contradict defined terms." Omit this line otherwise.]
 
 ## Scenario Exploration (for changed code only)
 

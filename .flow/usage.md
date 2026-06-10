@@ -119,7 +119,8 @@ The project's strategic intent and canonical vocabulary live **outside** `.flow/
 .flow/bin/flowctl sync list-unsynced                     # specs with no tracker id (need first push)
 .flow/bin/flowctl sync list-stale --older-than-hours 24  # linked specs with old/missing lastSyncedAt
 .flow/bin/flowctl sync check-collisions                  # tracker UUIDs shared by >1 spec
-.flow/bin/flowctl sync receipt <spec-id> --status pushed --transport mcp   # proof-of-work (status enum: pushed|pulled|merged|updated|diverged|queued|errored|noop)
+.flow/bin/flowctl sync receipt <spec-id> --status pushed --transport mcp --event work.firstClaim   # proof-of-work, event-tagged (status enum: pushed|pulled|merged|updated|diverged|queued|errored|noop)
+.flow/bin/flowctl sync check <spec-id> --events work.firstClaim,work.done --since <iso>   # read-only audit: OK/MISSING per triggered touchpoint (bridge inactive → silent exit)
 .flow/bin/flowctl sync defer <spec-id> --summary "..."   # queue a genuine conflict (never blocks; → review-deferred sink)
 # Tracker-first spec (keyed by the tracker identifier instead of fn-NN):
 .flow/bin/flowctl spec create --title "..." --tracker-first --tracker-identifier WOR-17  # canonical wor-17-slug

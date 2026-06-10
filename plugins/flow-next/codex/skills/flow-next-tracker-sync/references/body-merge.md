@@ -167,8 +167,9 @@ output, it does not replace the merge:
 ```bash
 # The gate is a host-agent self-check (read the merged body, verify the three
 # invariants above against base/flow/tracker). If it FAILS, do NOT write back —
-# emit an errored receipt and re-merge or queue:
-$FLOWCTL sync receipt "$SPEC_ID" --status errored --transport "$TRANSPORT" \
+# emit an errored receipt and re-merge or queue. ($EVENT = the lifecycle event tag
+# from steps.md Phase 0; empty on manual runs, so the expansion omits the flag.)
+$FLOWCTL sync receipt "$SPEC_ID" --status errored --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
  --note "structural gate failed: <which invariant> — write-back aborted, base unchanged"
 ```
 
@@ -192,7 +193,8 @@ Show the human the **merged body** (every cleanly-merged section already folded)
  accept a proposed merge of the two · edit by hand.
 - On choice → apply to that section only → re-run the **structural gate** → write
  back (`writeIssue` + write the spec) → `sync set-merge-base` (BOTH halves) +
- `sync set-last-synced` → `sync receipt --status merged`.
+ `sync set-last-synced` → `sync receipt --status merged` (+ `--event` on a
+ lifecycle run — steps.md Phase 0).
 
 The confirmation shows the *whole merged body* (so the human sees the merge is
 correct everywhere else) but the *decision* is scoped to the contradicting section.
@@ -213,7 +215,7 @@ $FLOWCTL sync defer "$SPEC_ID" \
  --summary "Goal section rewritten on both sides to mean different things (flow: OAuth-only; tracker: OAuth+SAML)" \
  --suggested "Human picks: keep flow's framing, the tracker's, or a merge of the two" \
  --reason "genuine-contradiction"
-$FLOWCTL sync receipt "$SPEC_ID" --status diverged --transport "$TRANSPORT" \
+$FLOWCTL sync receipt "$SPEC_ID" --status diverged --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
  --note "scoped conflict queued (Goal section); base unchanged"
 ```
 
@@ -235,7 +237,7 @@ reconcile + write-back**. This is the no-half-advance invariant:
 $FLOWCTL sync set-merge-base "$SPEC_ID" --flow-file /tmp/merged-flow.md --tracker-file /tmp/merged-tracker.md
 $FLOWCTL sync set-last-synced "$SPEC_ID"
 # 3. receipt records the merge for audit / rollback (--merges-file = the merge log):
-$FLOWCTL sync receipt "$SPEC_ID" --status merged --transport "$TRANSPORT" --merges-file /tmp/merges.json \
+$FLOWCTL sync receipt "$SPEC_ID" --status merged --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} --merges-file /tmp/merges.json \
  --note "3-way merge: 2 sections folded, 0 conflicts"
 ```
 
@@ -399,7 +401,7 @@ things** (flow excludes SAML; tracker includes it) → Step 4 scoped conflict.
 $FLOWCTL sync defer "$SPEC_ID" \
  --summary "Goal contradicts: flow excludes SAML, tracker includes it" \
  --suggested "Human picks OAuth-only vs OAuth+SAML" --reason "genuine-contradiction"
-$FLOWCTL sync receipt "$SPEC_ID" --status diverged --transport none \
+$FLOWCTL sync receipt "$SPEC_ID" --status diverged --transport none ${EVENT:+--event "$EVENT"} \
  --note "1 scoped conflict (Goal); Acceptance merged cleanly; base unchanged"
 ```
 
@@ -419,7 +421,7 @@ write).
 # Echo detection is a hash compare against the stored fence:
 STATE=$($FLOWCTL sync get-state "$SPEC_ID" --json) # → .tracker.baseHashTracker
 # pulled_hash == baseHashTracker ⇒ emit noop, do not reconcile, do not advance state:
-$FLOWCTL sync receipt "$SPEC_ID" --status noop --transport "$TRANSPORT" \
+$FLOWCTL sync receipt "$SPEC_ID" --status noop --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
  --note "post-push pull matched baseHashTracker — flow's own echo, no reconcile"
 ```
 

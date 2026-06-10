@@ -14,6 +14,7 @@ Reference material for flow-next. Each file is self-contained, terse, and offlin
 | [`tracker-sync.md`](tracker-sync.md) | `/flow-next:tracker-sync` bridge — projection-not-coordination, discovery ceremony, hybrid id model, sync-state schema, transport ladder (Linear/GitHub), lifecycle touchpoints, Ralph-safe conflict queueing; distinct from `/flow-next:sync` (plan-sync) |
 | [`glossary.md`](glossary.md) | Repo-root `GLOSSARY.md` shape, resolution walk, subcommands, R17 forbidden-vocabulary guard |
 | [`strategy.md`](strategy.md) | Repo-root `STRATEGY.md` shape, Rumelt sections, foreign-file refusal, R19 fluff guard, how downstream skills consume it |
+| [`self-improving.md`](self-improving.md) | How the system compounds through normal work — memory, glossary, decision records, strategy loops (seeded / grown / read / pruned); the no-manual-ceremony principle |
 | [`platforms.md`](platforms.md) | Install matrix (Claude Code / Codex / Droid / OpenCode), cross-platform patterns, Codex model mapping, community ports, optional skill requirements (`/flow-next:map` Node 22+ + `clawpatch`) |
 | [`sync-codex.md`](sync-codex.md) | `scripts/sync-codex.sh` pipeline shape, validation guards, plain-text transform (fn-45), R17 cross-link discipline |
 | [`troubleshooting.md`](troubleshooting.md) | Reset stuck tasks, `.flow/` cleanup, Ralph debugging, receipt validation, rp-cli conflict resolution, `/flow-next:map` clawpatch failure modes, uninstall |

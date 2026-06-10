@@ -72,9 +72,10 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 **Key phases:**
 1. **Parallel Assessment** — 9 sonnet scouts run in parallel (~15-20 seconds)
 2. **Verification** — Verify test commands actually work
-3. **Score & Synthesize** — Calculate scores, determine maturity level
+3. **Score & Synthesize** — Calculate scores, determine maturity level (includes the deterministic DC8 glossary signal — `flowctl glossary list --json`, gated on `total_terms == 0`, never file presence)
 4. **Present Report** — Full report with all 8 pillars
 5. **Interactive Remediation** — `AskUserQuestion` for agent readiness fixes only
+5.5. **Glossary Bootstrap** — when the glossary has zero terms (absent or husk), propose evidence-backed terms from the repo and seed `GLOSSARY.md` via `flowctl glossary add` after read-back approval; a populated glossary gets a coverage line, never a rewrite
 6. **Apply Fixes** — Create/modify files based on selections
 7. **Summary** — Show what was changed
 
@@ -109,6 +110,7 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 - **MUST use `AskUserQuestion` tool** for consent (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). Never just print questions as text. (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.)
 - Always ask before modifying existing files
 - Don't add dependencies without consent
+- **Glossary terms are never written unseen** — the Phase 5.5 bootstrap shows the full proposal (term + definition + file-ref evidence) at read-back before any `flowctl glossary add`; `--fix-all` does not bypass this gate, and a populated glossary (`total_terms > 0`) is never rewritten
 
 ### Scope Control
 - **Never create LICENSE files** — license choice requires explicit user decision

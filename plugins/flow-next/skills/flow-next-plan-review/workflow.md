@@ -286,6 +286,7 @@ Conduct a John Carmack-level review:
 8. **Task sizing** - M tasks preferred. Flag over-splitting: 7+ tasks? Sequential S tasks that should be combined?
 9. **Testability** - How will we verify this works?
 10. **Consistency** - Do task specs align with spec?
+11. **Vocabulary** - [Include ONLY when `flowctl glossary list --json` reports `total_terms > 0`: "Canonical vocabulary lives in GLOSSARY.md — flag specs/tasks that contradict defined terms." Omit this line otherwise.]
 
 ## Protected artifacts
 

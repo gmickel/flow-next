@@ -24,8 +24,8 @@ instruction).
 
 | Interface method | Linear MCP tool (verified 2026-06-03) | Key params |
 |---|---|---|
-| `writeIssue` (upsert) | **`save_issue`** | create: `team`+`title` required, `description` (body, markdown). update: pass `id` (UUID **or** identifier `WOR-17`) + changed fields. `state` (state type/name/ID) sets status. `labels`, `priority` (0=None,1=Urgent,2=High,3=Medium,4=Low). `assignee` (NOT `assigneeId`). |
-| `fetchIssue` | **`get_issue`** | `id` (UUID or identifier). `includeRelations:true` for blocking/related. Returns title, `description`, `state`, `priority`, `labels`, `url`, `updatedAt`, git branch name. |
+| `writeIssue` (upsert) | **`save_issue`** | create: `team`+`title` required, `description` (body, markdown). update: pass `id` (UUID **or** identifier `WOR-17`) + changed fields. `state` (state type/name/ID) sets status. `labels`, `priority` (0=None,1=Urgent,2=High,3=Medium,4=Low). `assignee` (NOT `assigneeId`). **Returns the identifier (`WOR-17`-form) as `id` — never the UUID** (verified 2026-06-09). |
+| `fetchIssue` | **`get_issue`** | `id` (UUID or identifier). `includeRelations:true` for blocking/related. Returns title, `description`, `state`, `priority`, `labels`, `url`, `updatedAt`, git branch name. **The returned `id` is the identifier, not the UUID** (verified 2026-06-09). |
 | `listComments` | **`list_comments`** | `issueId` (UUID or identifier). `orderBy: createdAt|updatedAt`, `limit` (default 50, max 250), `cursor` for paging. |
 | `postComment` | **`save_comment`** | create top-level: `issueId` + `body`. update: `id` + `body`. reply: `parentId` + `body`. |
 | status map build | **`list_issue_statuses`** | `team` (name or ID) → the team's workflow states (name + type + id) for the normalized-status map. |
@@ -48,10 +48,15 @@ touchpoint that folds Linear review threads back into flow; out of scope for the
 
 **Asymmetry to remember vs the GraphQL rung:** MCP accepts the **identifier**
 (`WOR-17`) interchangeably with the UUID on most inputs (`get_issue`,
-`save_comment`'s `issueId`, `save_issue`'s update `id`). The GraphQL rung is
-stricter — `commentCreate` needs the **UUID**. Either way, **store the UUID as
-the durable dedupe key** (`sync set-tracker-id`) and surface the `identifier` to
-humans; never persist `WOR-17` as the primary key.
+`save_comment`'s `issueId`, `save_issue`'s update `id`) — but it **returns
+identifiers, never UUIDs**: create AND fetch both come back with the
+`WOR-17`-form key as `id` (verified live 2026-06-09 — `get_issue` /
+`list_issues` / `save_issue` all did). The GraphQL rung is the mirror image:
+stricter on inputs (`commentCreate` needs the **UUID**) and the only rung whose
+responses carry the UUID. Either way, **store the UUID as the durable dedupe
+key** (`sync set-tracker-id`) and surface the `identifier` to humans; never
+persist `WOR-17` as the primary key — which means **first-link needs the GraphQL
+rung to obtain that UUID** (see Gotchas).
 
 ## The six interface methods over MCP
 
@@ -61,10 +66,13 @@ sees an MCP shape.
 ### `fetchIssue(trackerId)` → normalized `issue` | not-found
 
 ```
-get_issue(id: <uuid>)
-  → map: id, identifier, title, description→body, state.name→status.raw,
+get_issue(id: <uuid or identifier>)
+  → map: identifier, title, description→body, state.name→status.raw,
          (state.type + config map)→status.normalized, priority, labels[].name,
          url, updatedAt
+  → the wire `id` IS the identifier (`WOR-17`-form), never the UUID — populate
+    the normalized `issue.id` (UUID) from the stored sync state of the linked
+    spec (`sync get-state`), not from the MCP response (see Gotchas).
   → on missing/archived/deleted: the call errors or returns nothing ⇒ return
     `not-found` (NEVER raise out of the adapter). The skeleton then emits an
     `errored` receipt + prompts/queues unlink (see linear-ladder.md error contract).
@@ -77,7 +85,10 @@ no issue.id  ⇒ CREATE: save_issue(team:<team>, title:<title>, description:<bod
                         labels:[...,"flow:<id>"], priority:<0-4>)
 issue.id set ⇒ UPDATE: save_issue(id:<uuid>, description:<body>, title:<title>,
                         labels:[...], priority:<0-4>)   # changed fields only
-  → return { id, identifier, url } from the result.
+  → return { identifier, url } from the result; the interface's `id` (UUID) slot
+    CANNOT be filled on this rung — the wire `id` field IS the identifier
+    (`WOR-17`-form), NOT the UUID. On create, the durable UUID for
+    `sync set-tracker-id` must be fetched via the GraphQL rung (see Gotchas).
 ```
 
 Write the flow back-reference on create/first-link: a `flow:<id>` label and/or a
@@ -138,6 +149,11 @@ see the status table in [linear-ladder.md](linear-ladder.md).
 - **Literal markdown, no escapes.** The server expects real newlines in
   `description`/`body` — never `\n` escape sequences (a round-trip-spike failure
   mode: escaped newlines come back as literal backslash-n).
+- **MCP create/fetch returns an identifier, not a UUID** — `get_issue` /
+  `list_issues` / `save_issue` all return the `WOR-17`-form key as `id`
+  (verified live 2026-06-09). **First-link therefore requires the GraphQL rung
+  (`LINEAR_API_KEY`) to obtain the UUID** for `sync set-tracker-id` — a pure-MCP
+  environment cannot populate the durable dedupe key on a fresh link.
 - **UUID is the key, identifier is for humans.** MCP's leniency about accepting
   `WOR-17` does not make it a safe dedupe key — a deleted+recreated issue can
   reuse an identifier but never the UUID.

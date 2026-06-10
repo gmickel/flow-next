@@ -114,7 +114,7 @@ reconcile two-way         (3-way body merge + status who-wins + comment append)
 - **Reconcile** operates only on the normalized `issue` / `comment` / `status` structs — never a transport detail. The 3-way **body merge** + format translation + scoped conflict is [`references/body-merge.md`](references/body-merge.md) (fn-52.4); **status who-wins** is [`references/status-sync.md`](references/status-sync.md) and **comments/evidence append + dedup** is [`references/comments-sync.md`](references/comments-sync.md) (fn-52.5).
 - **Link / unlink ceremony stubs:** first-link base-seeding is handled in fn-52.4 (seed base from current issue body so the first sync isn't a whole-body conflict). **Unlink** wipes state via `sync clear` and posts a one-line detached comment to the issue (`postComment`). Skeleton in [steps.md](steps.md) Phase 5.
 
-Every run emits a receipt (`sync receipt --status …`) and genuine conflicts queue (`sync defer …`) — never block (R11/R12). The transport choice (mcp / graphql / gh / none) is recorded on the receipt; when no transport is reachable, the run is a `noop` + receipt note (never a crash).
+Every run emits a receipt (`sync receipt --status …`) and genuine conflicts queue (`sync defer …`) — never block (R11/R12). The transport choice (mcp / graphql / gh / none) is recorded on the receipt; when no transport is reachable, the run is a `noop` + receipt note (never a crash). **Lifecycle runs are event-tagged** (fn-57): the calling skill passes `event: <perEvent-key>` in the invocation, and every receipt that run carries `--event` — the tag `flowctl sync check` audits at end-of-skill. Manual runs carry no event tag (see [steps.md](steps.md) Phase 0).
 
 ## Boundaries
 

@@ -14,7 +14,9 @@ multi-rung ladder — only a single rung plus the terminal no-op.
 | 1 | **`gh` CLI** (headless via `GH_TOKEN`) | `gh auth status` exits 0 (a token is reachable) | the only GitHub transport; scriptable, version-stable JSON |
 | 2 (terminal) | **no-op + receipt note** | `gh` not installed OR `gh auth status` non-zero | the bridge is configured but no GitHub transport is reachable |
 
-The chosen rung is recorded on every receipt: `sync receipt … --transport gh|none`.
+The chosen rung is recorded on every receipt: `sync receipt … --transport gh|none`
+— plus, on a lifecycle run, the touchpoint it served: `${EVENT:+--event "$EVENT"}`
+(`$EVENT` is set in steps.md Phase 0; empty on manual runs, so the flag is omitted).
 The agentic reconciliation (fn-52.4 body merge, fn-52.5 status/comments) is
 **identical regardless of tracker** — that is the R13 guarantee, and the parity
 check below (vs the Linear adapter) is how it is verified.
@@ -60,8 +62,8 @@ contract as the Linear terminal rung and fn-51's manual rung):
  ("no remote view available this run"); the spec's flow-side state is left
  untouched and the merge base is NOT advanced.
 - `writeIssue` / `postComment` / `setStatus` → perform no remote write.
-- The run emits `sync receipt … --status noop --transport none --note "no GitHub
- transport reachable (gh not installed or not authenticated; set GH_TOKEN)"`.
+- The run emits `sync receipt … --status noop --transport none ${EVENT:+--event "$EVENT"}
+ --note "no GitHub transport reachable (gh not installed or not authenticated; set GH_TOKEN)"`.
 - `lastSyncedAt` is never advanced on a no-op (no real reconciliation happened).
 
 ## `gh` connection facts (pin these — they have sharp edges)
@@ -382,7 +384,8 @@ Steps:
 
 The spike writes a receipt like any sync run:
 `sync receipt <spec> --status noop --transport gh --note "round-trip spike: PASS|FAIL"`
-(status `noop` — a transport probe, not a sync of a tracked spec).
+(status `noop` — a transport probe, not a sync of a tracked spec; no `--event`
+either — the spike is a manual diagnostic, never a lifecycle touchpoint).
 
 ### B. Cross-tracker reconcile parity (the actual R13 check)
 
@@ -417,7 +420,7 @@ The failure modes that MUST be non-destructive:
 - **Missing / deleted / transferred / 404 linked issue** — `gh issue view` exits
  non-zero (`Could not resolve to an Issue`, `404`). `fetchIssue` returns
  `not-found` (NEVER raises). The skeleton then:
- - emits `sync receipt … --status errored --transport gh`,
+ - emits `sync receipt … --status errored --transport gh ${EVENT:+--event "$EVENT"}`,
  - does **NOT** crash, does **NOT** clear state, does **NOT** advance
  `lastSyncedAt` (a failed fetch must never corrupt the merge base),
  - prompts the user to unlink (interactive) or queues an unlink decision

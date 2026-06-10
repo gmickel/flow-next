@@ -37,6 +37,18 @@ You receive a feature/change request. Your task is NOT to plan or implement - ju
 
    **Staleness signal:** if `features[].updatedAt` (newest across all returned features) is more than 7 days old, emit one informational line `[repo-scout] feature map last updated N days ago` and continue. Staleness is signal, not a block.
 
+0.5. **Glossary terms** (optional — husk-aware, budget-capped)
+
+   ```bash
+   FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+   [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+   if [ -x "$FLOWCTL" ]; then
+     "$FLOWCTL" glossary list --json
+   fi
+   ```
+
+   When no working `flowctl` resolves, the command fails, or `total_terms` is `0` (absent file or husk), skip silently — zero output, nothing changes. When `total_terms > 0`, match each entry's `term` + `avoid` aliases against the request text (case-insensitive, whitespace-collapsed) and keep ONLY the matching entries. These are the project's canonical definitions — use them when interpreting the request, and surface them in the `### Glossary Terms` output section (max 5, never the whole glossary).
+
 1. **Project docs first** (fast context)
    - CLAUDE.md, README.md, CONTRIBUTING.md, ARCHITECTURE.md, DESIGN.md
    - Any docs/ or documentation/ folders
@@ -106,6 +118,12 @@ features_anchored:
 ```
 
 Rank by `confidence` (`high` → `medium` → `low`) when surfacing the most relevant anchors.
+
+### Glossary Terms (omit entirely unless Step 0.5 matched ≥1 term)
+
+Only entries whose `term`/`avoid` aliases match the request text — never the whole glossary. Max 5 lines, inside the overall ~500-token budget:
+
+- **<term>** — <one-line definition> (aliases to avoid: <avoid list, if any>)
 
 ### Reusable Code (DO NOT DUPLICATE)
 - `lib/utils/validation.ts` - existing validation helpers

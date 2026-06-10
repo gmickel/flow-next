@@ -38,7 +38,8 @@ Complete the glossary compounding loop: capture joins interview as a writer, and
 - [ ] No whole-glossary dumps anywhere — relevance-matched terms only
 
 ## Done summary
-_(to be filled at completion)_
-
+Completed the glossary compounding loop (R11+R12), prompting only: capture gains a husk-aware new-vocabulary scan (workflow §2.7), read-back term-add proposals with a post-approve consent question, and §5.8 writes via `flowctl glossary add` (autofix prints suggestions, never writes). The read path widened: repo-scout/context-scout Step 0.5 surfaces only request-matched glossary entries (max 5, budget-capped), the work worker's Phase 1 re-anchor reads task-relevant terms, and impl-review (RP) + plan-review prompts add a Vocabulary criterion conditional on `total_terms > 0`. Every gate is `total_terms == 0 → silent skip` — zero behavior change without a populated glossary, no whole-glossary dumps anywhere.
 ## Evidence
-_(to be filled at completion)_
+- Commits: efbcac9a453b8608967697a66a8455314743c4cc
+- Tests: python3 -m unittest discover -s tests (1033 tests, OK, baseline + post-change), ./scripts/sync-codex.sh (all mirror validators green over canonical edits; regen output reverted — fn-57.5 owns the codex/ commit)
+- PRs:

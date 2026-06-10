@@ -111,6 +111,21 @@ Calculate:
 
 **Overall Score** = average of all 8 pillar scores
 
+### Glossary signal (DC8 — deterministic, no scout)
+
+One bash call decides DC8 — run it during synthesis (no scout covers it):
+
+```bash
+FLOWCTL="$HOME/.codex/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+GLOSSARY_TERMS=$("$FLOWCTL" glossary list --json 2>/dev/null | jq -r '.total_terms // 0')
+```
+
+Gate on `total_terms == 0`, NEVER on `[[ -f GLOSSARY.md ]]` — `flowctl glossary remove` leaves a `# Glossary` H1 husk after the last term is removed (the file is project state, never deleted), so a presence check false-passes on an empty husk. Same invariant as interview's doc-aware autodetect.
+
+- `GLOSSARY_TERMS > 0` → DC8 ✅. Report term coverage in Phase 4. Never rewrite, never re-propose existing terms — staleness/alias pruning belongs to `/flow-next:audit`, not prime.
+- `GLOSSARY_TERMS == 0` (file absent or husk) → DC8 ❌. Phase 5.5 offers the bootstrap.
+
 ### Prioritize Recommendations
 
 Generate prioritized recommendations from **Pillars 1-5 only** (excluding informational sub-criteria DC7 and DE7):
@@ -195,6 +210,18 @@ FLOWCTL="$HOME/.codex/scripts/flowctl"
 
 DE7 is informational — surface as a suggestion only; do NOT include it in Phase 5 remediation prompts.
 
+Glossary (DC8) lines — driven by the Phase 3 glossary signal:
+
+- When `GLOSSARY_TERMS == 0`, append:
+
+ > GLOSSARY.md is absent or a husk — Phase 5.5 offers to seed it from the repo (read-back gated). Under `--report-only`, re-run prime without the flag to seed.
+
+- When `GLOSSARY_TERMS > 0`, report coverage instead:
+
+ > GLOSSARY.md: [N] terms — canonical vocabulary available to interview / plan / audit. No action; pruning belongs to `/flow-next:audit`.
+
+DC8 is informational like DE7, but its remediation path differs: it is handled exclusively by the Phase 5.5 bootstrap (read-back gated), never as a Phase 5 question option.
+
 ## Production Readiness Notes
 
 [Key observations from Pillars 6-8 that the team should be aware of]
@@ -206,7 +233,7 @@ DE7 is informational — surface as a suggestion only; do NOT include it in Phas
 
 ## Phase 5: Interactive Remediation
 
-**If `--fix-all`**: Skip to Phase 6, apply all recommendations from Pillars 1-5.
+**If `--fix-all`**: Skip the questions below and continue at Phase 5.5 (the glossary bootstrap keeps its read-back gate even under `--fix-all`); Phase 6 then applies all recommendations from Pillars 1-5.
 
 **CRITICAL**: For consent, you MUST ask via the plain-text numbered prompt described below.
 
@@ -330,6 +357,65 @@ Ask ONE question per category that has recommendations. Skip categories with no 
 6. **Max 4 options per question** — Tool limit, prioritize if more
 7. **Never offer Pillar 6-8 items** — Production readiness is informational only
 8. **Never offer informational sub-criteria (DC7, DE7)** — Surface as suggestions in Top Recommendations only; no auto-run from Phase 5
+9. **Never offer DC8 (glossary) as a Phase 5 option** — Its remediation is the dedicated Phase 5.5 bootstrap with its own read-back; a Phase 5 checkbox would bypass the never-write-terms-unseen gate
+
+---
+
+## Phase 5.5: Glossary Bootstrap (DC8)
+
+Runs only when the Phase 3 glossary signal reported `GLOSSARY_TERMS == 0` (GLOSSARY.md absent or husk). When `GLOSSARY_TERMS > 0`, skip this phase entirely — prime never rewrites a populated glossary and never re-proposes existing terms; staleness/alias pruning belongs to `/flow-next:audit`.
+
+`--fix-all` does NOT bypass the read-back below: term definitions are judgment-bearing canonical vocabulary, not mechanical templates — never write terms unseen. (`--report-only` never reaches this phase; the workflow stops at Phase 4.)
+
+### 5.5.1 Scan for load-bearing vocabulary
+
+Build the candidate pool from what Phase 1 already collected plus targeted reads:
+
+- README.md, docs/, CLAUDE.md / AGENTS.md (agents-md-scout and docs-gap-scout findings already summarize these — reuse them, don't re-read wholesale)
+- Top-level module / package / directory names
+- Domain nouns recurring across `.flow/specs/*.md` and source files
+- Places where the SAME concept goes by two names in the repo (naming drift → `_Avoid_` candidates)
+
+Selection bar: a term earns a slot when an agent could plausibly build around the wrong meaning — project-specific nouns, flows, and distinctions (e.g. two near-synonyms that mean different things in THIS repo). Exclude generic programming vocabulary (server, test, build) and anything without file evidence.
+
+### 5.5.2 Propose terms
+
+Draft ~10-20 candidates (fewer is fine for small repos — never pad). Each proposal carries:
+
+- **Term** — canonical name
+- **Definition** — 1-3 sentences, concrete, written against the code (not aspirational)
+- **Evidence** — at least one file ref (`path` or `path:line`) where the concept lives; a term with no evidence is dropped, not guessed
+- **`_Avoid_` aliases** (optional) — only where naming drift is visible in the repo
+- **`_Relates to_`** (optional) — cross-references between proposed terms
+
+### 5.5.3 Read-back (mandatory — never write unseen)
+
+Present the FULL proposal — every term with its definition, evidence, and aliases — then ask via `plain-text numbered prompt`:
+
+- **Approve all** — write every proposed term
+- **Select subset** — user indicates which terms to keep (follow up for the list)
+- **Skip** — write nothing
+
+No write happens before this approval. Decline/skip ⇒ DC8 stays ❌, note it in the Phase 7 summary, move on — never re-ask in the same run.
+
+### 5.5.4 Write accepted terms
+
+One `flowctl glossary add` per accepted term — stdin definition so multi-sentence text round-trips cleanly (same call shape as interview's doc-aware write). `glossary add` creates `GLOSSARY.md` at the repo root when no ancestor file exists, and upserts on re-runs:
+
+```bash
+"$FLOWCTL" glossary add "<term>" --definition-file - --json <<'EOF'
+<definition — 1-3 sentences>
+EOF
+# optional flags when proposed: --avoid "alt1,alt2" --relates-to "x,y"
+```
+
+Verify after the last write:
+
+```bash
+"$FLOWCTL" glossary list --json | jq -r '.total_terms' # must equal the accepted count
+```
+
+Record the outcome for Phase 7: seeded N terms / user declined / count mismatch (report it, don't retry-loop).
 
 ---
 
@@ -362,12 +448,14 @@ After fixes applied:
 ### Created
 - `CLAUDE.md` — Project conventions for agents
 - `.env.example` — Environment variable template
+- `GLOSSARY.md` — Seeded with [N] terms (Phase 5.5 bootstrap)
 
 ### Modified
 - `package.json` — Added lint-staged config
 
 ### Skipped (user declined)
 - Pre-commit hooks
+- Glossary bootstrap (declined at read-back)
 
 ### Not Offered (production readiness)
 - CI/CD, PR templates, observability, security — address independently if desired

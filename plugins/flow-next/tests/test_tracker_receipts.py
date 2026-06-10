@@ -136,6 +136,47 @@ class TrackerReceiptTestCase(unittest.TestCase):
         with self.assertRaises(SystemExit):
             self._receipt("bogus")
 
+    # --- lifecycle event tag (fn-57.1, R1) -----------------------------------
+
+    def test_receipt_records_event(self) -> None:
+        res = self._call(
+            func=self.flowctl.cmd_sync_receipt,
+            id=self.spec_id,
+            status="pushed",
+            tracker_id=None,
+            transport="graphql",
+            merges_file=None,
+            note=None,
+            event="work.firstClaim",
+        )
+        data = json.loads(Path(res["receipt"]).read_text(encoding="utf-8"))
+        self.assertEqual(data["event"], "work.firstClaim")
+
+    def test_receipt_event_is_free_form_not_enum(self) -> None:
+        # perEvent keys are an open extension point (R7): a key that does not
+        # exist in today's default config must still be accepted + recorded.
+        res = self._call(
+            func=self.flowctl.cmd_sync_receipt,
+            id=self.spec_id,
+            status="noop",
+            tracker_id=None,
+            transport=None,
+            merges_file=None,
+            note=None,
+            event="futureEvent.someKey",
+        )
+        data = json.loads(Path(res["receipt"]).read_text(encoding="utf-8"))
+        self.assertEqual(data["event"], "futureEvent.someKey")
+
+    def test_receipt_event_defaults_null_for_existing_callers(self) -> None:
+        # `_receipt` builds a Namespace WITHOUT an `event` attribute — the
+        # pre-fn-57 caller shape. The handler's getattr idiom must tolerate it
+        # and persist `event: null` (today's receipt shape + the new key).
+        res = self._receipt("pushed", transport="mcp")
+        data = json.loads(Path(res["receipt"]).read_text(encoding="utf-8"))
+        self.assertIn("event", data)
+        self.assertIsNone(data["event"])
+
     # --- guard isolation (R12: distinct path/type) --------------------------
 
     def test_receipt_path_is_guard_safe(self) -> None:

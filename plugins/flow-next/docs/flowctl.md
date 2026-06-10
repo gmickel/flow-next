@@ -711,13 +711,17 @@ flowctl sync list-stale [--older-than-hours N] [--json]         # default N = tr
 flowctl sync check-collisions [--json]                          # tracker UUIDs shared by >1 spec
 
 # Proof-of-work + Ralph-safe queueing
-flowctl sync receipt <spec-id> --status STATUS [--tracker-id ID] [--transport mcp|graphql|gh|none] [--merges-file F] [--note N] [--json]
+flowctl sync receipt <spec-id> --status STATUS [--event KEY] [--tracker-id ID] [--transport mcp|graphql|gh|none] [--merges-file F] [--note N] [--json]
 flowctl sync defer   <spec-id> --summary "..." [--suggested "..."] [--reason "..."] [--branch B] [--json]
+
+# Read-only lifecycle audit (fn-57) — did every triggered touchpoint fire?
+flowctl sync check <spec-id> --events <csv> --since <iso> [--json]
 ```
 
 - **`set-tracker-id`** stores the durable UUID dedupe key + display `--identifier` (`WOR-17`) + url. `--force` overrides the dup-tracker-id collision guard.
 - **`set-merge-base`** is a **paired-snapshot** writer: `--flow`/`--flow-file` AND `--tracker`/`--tracker-file` must come **together** (a partial one-sided write is rejected so the 3-way base never pins one half to a stale sync point).
-- **`receipt --status`** enum: `pushed | pulled | merged | updated | diverged | queued | errored | noop`. When no transport is reachable the run is a `noop` + receipt note, never a crash.
+- **`receipt --status`** enum: `pushed | pulled | merged | updated | diverged | queued | errored | noop`. When no transport is reachable the run is a `noop` + receipt note, never a crash. **`--event <perEvent-key>`** tags the receipt with the lifecycle touchpoint it served (`work.firstClaim`, `work.done`, `capture`, `makePr`, …) — free-form, NOT enum-validated (the perEvent key set is an open extension point). Pre-flag receipts carry `event: null` and never satisfy an event-specific `sync check`.
+- **`check`** is the **read-only** end-of-skill audit (no tracker-mutation code lives in flowctl): for each event in `--events` (comma-separated perEvent keys that *triggered this run*), it reports `OK:<event>` / `MISSING:<event>` (`--json`: `{events, missing, count}`). MISSING iff the event triggered AND its `tracker.perEvent` leaf is enabled AND the bridge is active AND no receipt with a matching `event` tag and `timestamp ≥ --since` exists. Any receipt status clears (the check asserts the touchpoint *ran*); `--since` is the run-scoping lower bound (older receipts never clear); linkage is NOT a precondition (a never-linked spec that should have create-if-unlinked'd is exactly the miss this catches). **Bridge inactive → silent constant-time exit 0 before any IO** — the zero-overhead path for non-tracker repos. Exit 0 always; output drives agent action, not the exit code.
 - **`defer`** queues a genuine conflict to the review deferred-findings sink (`.flow/review-deferred/<branch>.md`) — **never blocks**. In Ralph mode an `always-ask` tiebreak resolves to *queue*, not prompt.
 - The hybrid id model (tracker-first `wor-17-slug` canonical / flow-first `fn-NN` + resolvable `WOR-17` alias) is keyed at create/link time: `flowctl spec create --tracker-first --tracker-identifier WOR-17` (see [`spec create`](#spec-create)). Ids never rename; resolution is case-insensitive. Details in [`tracker-sync.md`](tracker-sync.md) + [`architecture.md`](architecture.md).
 

@@ -47,6 +47,12 @@ Legacy `.flow/memory/pitfalls.md` / `conventions.md` / `decisions.md` still surf
 
 Look for entries relevant to your task's technology/domain/module.
 
+**Glossary (canonical vocabulary):**
+```bash
+<FLOWCTL> glossary list --json   # husk-aware: total_terms == 0 → skip silently
+```
+When `total_terms > 0`, match each entry's `term` + `avoid` aliases against the task title/description (case-insensitive, whitespace-collapsed) and keep ONLY the matching entries' definitions — they are the canonical meanings for naming and concepts in this task; implementations must not contradict them. Never pull the whole glossary into context. No glossary, a husk, or zero matches → skip, zero change.
+
 Parse the spec carefully. Identify:
 - Acceptance criteria
 - Dependencies on other tasks

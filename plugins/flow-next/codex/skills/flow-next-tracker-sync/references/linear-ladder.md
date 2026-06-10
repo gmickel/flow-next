@@ -19,7 +19,9 @@ The per-rung command detail lives in the rung references:
 | 2 (headless) | **Linear GraphQL** via `LINEAR_API_KEY` | No MCP, but `LINEAR_API_KEY` is set — headless / CI / Ralph-safe, version-stable wire contract. | [linear-graphql.md](linear-graphql.md) |
 | 3 (terminal) | **no-op + receipt note** | Neither MCP registered NOR `LINEAR_API_KEY` set — the bridge is configured but no Linear transport is reachable. | — (this file) |
 
-The chosen rung is recorded on every receipt: `sync receipt … --transport mcp|graphql|none`.
+The chosen rung is recorded on every receipt: `sync receipt … --transport mcp|graphql|none`
+— plus, on a lifecycle run, the touchpoint it served: `${EVENT:+--event "$EVENT"}`
+(`$EVENT` is set in steps.md Phase 0; empty on manual runs, so the flag is omitted).
 The agentic reconciliation (fn-52.4 body merge, fn-52.5 status/comments) is
 **identical regardless of rung** — that is the R13 guarantee, and the parity
 check below is how it is verified.
@@ -60,8 +62,8 @@ one of the six interface methods becomes a documented no-op:
  (treated as "no remote view available this run"); the spec's flow-side state is
  left untouched and the merge base is NOT advanced.
 - `writeIssue` / `postComment` / `setStatus` → perform no remote write.
-- The run emits `sync receipt … --status noop --transport none --note "no Linear
- transport reachable (MCP not registered, LINEAR_API_KEY unset)"`.
+- The run emits `sync receipt … --status noop --transport none ${EVENT:+--event "$EVENT"}
+ --note "no Linear transport reachable (MCP not registered, LINEAR_API_KEY unset)"`.
 - `lastSyncedAt` is never advanced on a no-op (no real reconciliation happened).
 
 This is the same fail-soft contract as fn-51's terminal manual rung: the pass
@@ -206,7 +208,8 @@ Steps:
 The spike writes a receipt like any sync run:
 `sync receipt <spec> --status noop --transport <rung> --note "round-trip spike: PASS|FAIL"`
 (status `noop` because the spike performs no real reconciliation — it is a
-transport probe, not a sync of a tracked spec).
+transport probe, not a sync of a tracked spec; no `--event` either — the spike is
+a manual diagnostic, never a lifecycle touchpoint).
 
 ## Error contract (acceptance #5) — never crash, never corrupt state
 
@@ -216,7 +219,7 @@ The failure modes that MUST be non-destructive:
 - **Missing / deleted / archived / 404 linked issue** — `fetchIssue` returns
  `not-found` (MCP: `get_issue` errors or returns nothing; GraphQL: `issue`
  resolves `null` or an `errors[]` entry). The skeleton then:
- - emits `sync receipt … --status errored --transport <rung>`,
+ - emits `sync receipt … --status errored --transport <rung> ${EVENT:+--event "$EVENT"}`,
  - does **NOT** crash, does **NOT** clear state, does **NOT** advance
  `lastSyncedAt` (a failed fetch must never corrupt the merge base),
  - prompts the user to unlink (interactive) or queues an unlink decision

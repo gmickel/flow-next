@@ -1,6 +1,6 @@
 ---
 name: flow-next
-last_updated: 2026-05-16
+last_updated: 2026-06-09
 generator: flow-next-strategy
 ---
 
@@ -53,6 +53,10 @@ The on-disk `.flow/specs/` layout that flow-swarm reads natively. fn-43's rename
 ### Cross-platform parity
 
 First-class on Claude Code + OpenAI Codex + Factory Droid. Community port for OpenCode. Canonical skill files use Claude-native tool names; `sync-codex.sh` rewrites for the Codex mirror. Single source of truth.
+
+### Self-improving through normal work
+
+The system compounds as a side-effect of normal use — memory accretes from review fix-cycles, the glossary is seeded by prime and grows through interview/capture while plan/work/review read it back, decision records land when judgment calls happen, and strategy drift is surfaced by the skills that consume the doc. Never a manual compound/refresh ceremony: improvement that depends on remembering an extra command doesn't happen. Audit is the garbage collector, not the growth mechanism.
 
 ## Milestones
 

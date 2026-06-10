@@ -33,7 +33,8 @@ Tag every receipt emission in the tracker-sync skill with `--event`, define how 
 - [ ] No receipt call site missed: `grep -rn "sync receipt" plugins/flow-next/skills/flow-next-tracker-sync/` shows `--event` (or a documented manual-mode exemption) on every hit
 
 ## Done summary
-_(to be filled at completion)_
-
+Event-tagged every sync receipt call site in the tracker-sync skill via the `${EVENT:+--event "$EVENT"}` idiom, defined the caller invocation convention (`event: <perEvent-key>` token, parsed in steps.md Phase 0; manual runs legitimately untagged — unlink/spikes carry documented exemptions), and corrected linear-mcp.md: the claude.ai Linear MCP returns identifiers, never UUIDs (create AND fetch, verified live 2026-06-09), so first-link requires the GraphQL rung to obtain the UUID for sync set-tracker-id. linear-ladder.md's correct UUID-dedupe-key prose untouched.
 ## Evidence
-_(to be filled at completion)_
+- Commits: 1a0ef2c3c280f650b0b8f42c9ec19517dd70f0d5
+- Tests: cd plugins/flow-next && python3 -m unittest discover -s tests (1033 tests OK, 2 skipped), grep -rn 'sync receipt' plugins/flow-next/skills/flow-next-tracker-sync/ — every call site carries --event or a documented manual-mode exemption
+- PRs:
