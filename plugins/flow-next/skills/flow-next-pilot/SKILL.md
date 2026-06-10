@@ -122,7 +122,7 @@ Driver condition examples:
 
 Execute [workflow.md](workflow.md) in order:
 
-1. **guards** — refuse Ralph nesting, refuse dirty non-`.flow/` start state, load the `.git` strikes ledger.
+1. **guards** — refuse Ralph nesting, refuse dirty non-`.flow/` start state, resolve the `.git` strikes ledger (read-only at this point).
 2. **select** — two-pass ready-spec selection with dependency, claim, and re-bless checks.
 3. **classify** — derive one stage from flowctl state; probe gh only in the all-done branch.
 4. **branch** — resolve the spec branch matrix before work or make-pr.

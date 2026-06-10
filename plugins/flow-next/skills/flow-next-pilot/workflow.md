@@ -43,16 +43,15 @@ if git -C "$REPO_ROOT" status --porcelain | grep -v '^.. \.flow/' >/dev/null; th
 fi
 ```
 
-Load the strikes ledger after both hard guards. It lives under the git common dir so it is shared across worktrees and cannot be swept into commits by `git add -A`:
+Resolve the strikes ledger after both hard guards — READ-ONLY here (a missing file reads as `{}`; nothing is created or written until a write site in Phase 1 or Phase 6, so `--dry-run` leaves the filesystem untouched). It lives under the git common dir so it is shared across worktrees and cannot be swept into commits by `git add -A`:
 
 ```bash
 LEDGER_DIR="$(git -C "$REPO_ROOT" rev-parse --git-common-dir)/flow-next"
 LEDGER="$LEDGER_DIR/pilot-strikes.json"
-mkdir -p "$LEDGER_DIR"
-[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
+LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"
 ```
 
-Ledger schema: `{"<spec-id>": {"count": <n>, "stage": "<stage>", "reason": "<one line>", "ts": "<iso8601>"}}`. It is skill-owned scratch; no flowctl plumbing.
+Ledger schema: `{"<spec-id>": {"count": <n>, "stage": "<stage>", "reason": "<one line>", "ts": "<iso8601>"}}`. It is skill-owned scratch; no flowctl plumbing. Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
 
 ## Phase 1 — SELECT (two-pass)
 
@@ -81,8 +80,8 @@ TASKS_JSON="$($FLOWCTL tasks --spec "$candidate" --json)"
 Apply the full predicate:
 
 1. Dependencies: every `depends_on_epics[]` value is satisfied iff `$FLOWCTL show <dep> --json` reports `status == "done"`. Any unsatisfied dependency skips the candidate and records `deps unsatisfied: <ids>`.
-2. Collision avoidance: no task may be `in_progress` and assigned to another actor. Resolve this session's actor with `$FLOWCTL whoami` when available, then fall back to `git config user.email`; if no robust actor identity exists, any non-empty assignee that is not ours counts as another actor.
-3. Strikes: a ledger entry with `count >= 2` normally means the spec was unreadied after failure, but a candidate that is ready again has been human re-blessed. Clear that ledger entry atomically and treat the spec as fresh.
+2. Collision avoidance: no task may be `in_progress` and assigned to another actor. The minimal `tasks --spec` listing carries no `assignee` — for every task with `status == "in_progress"`, fetch `$FLOWCTL show <task-id> --json` and read its `assignee` field. Resolve this session's actor identity from `git config user.email`; if no robust actor identity exists, any non-empty assignee that is not ours counts as another actor.
+3. Strikes: a ledger entry with `count >= 2` normally means the spec was unreadied after failure, but a candidate that is ready again has been human re-blessed. Clear that ledger entry (write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, then atomic `jq` plus `mv`) and treat the spec as fresh. Under `--dry-run`, do not write — report the entry as would-clear in the classification report instead.
 4. No gh here. PR state belongs exclusively to the all-done classification branch.
 
 The first candidate passing everything becomes `SELECTED_SPEC`. If none pass, echo a compact skip table with counts by reason and stop:
@@ -137,7 +136,7 @@ Classification outcomes for the all-done branch:
 - MERGED PR exists while the spec is still open: `NEEDS_HUMAN`, because the state is inconsistent and pilot must not create a second PR.
 - No PR exists: stage is `make-pr`.
 
-Dry-run stops after classification. It prints selected spec, stage, review backend, task counts, consulted status fields, PR probe result if any, and skipped candidates. It writes no ledger, checks out no branch, and dispatches nothing:
+Dry-run stops after classification. It prints selected spec, stage, review backend, task counts, consulted status fields, PR probe result if any, skipped candidates, and any would-clear ledger entries. It writes no ledger (the ledger file is never created or modified on a dry-run tick), checks out no branch, and dispatches nothing:
 
 ```text
 PILOT_VERDICT=NO_WORK spec=<id> stage=<stage> reason="dry-run: classification only, nothing dispatched"
@@ -174,7 +173,7 @@ Record the pre-dispatch evidence snapshot before invoking the stage skill:
 
 - `plan`: task count from `$FLOWCTL tasks --spec <id> --json`.
 - `plan-review`: `plan_review_status` from `$FLOWCTL show <id> --json`.
-- `work`: per-task id/status/assignee list, spec status, and `completion_review_status`.
+- `work`: per-task id/status list, spec status, and `completion_review_status`.
 - `make-pr`: no OPEN PR for the branch, already proven by the all-done probe.
 
 Dispatch exactly one existing stage skill (slash-command invocation), with `mode:autonomous` and `FLOW_AUTONOMOUS=1` semantics for any process-level work it starts:
@@ -253,6 +252,8 @@ If the sub-skill emitted a `Tracker sync:` summary line, pass that line through 
 On `ADVANCED`, clear the selected spec's ledger entry if present and write the ledger atomically with `jq` plus `mv`:
 
 ```bash
+mkdir -p "$LEDGER_DIR"
+[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
 tmp="$LEDGER.tmp.$$"
 jq --arg spec "$SELECTED_SPEC" 'del(.[$spec])' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
 ```
@@ -266,6 +267,8 @@ PILOT_VERDICT=ADVANCED spec=<id> stage=<stage> reason="<what advanced>"
 On healthy-but-no-advance, record a strike with count, stage, reason, and timestamp:
 
 ```bash
+mkdir -p "$LEDGER_DIR"
+[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
 tmp="$LEDGER.tmp.$$"
 jq --arg spec "$SELECTED_SPEC" --arg stage "$STAGE" --arg reason "$NO_ADVANCE_REASON" --arg ts "$TODAY" '
   .[$spec].count = ((.[$spec].count // 0) + 1)
