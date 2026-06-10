@@ -272,11 +272,20 @@ skipped — no calls, no receipts, no flag writes (R7 invisibility).
   **Label absent ⇒ `desired = false` — a normal state, never an error or a warn**;
   un-labeling the issue is exactly how a GitHub user un-readies a spec.
 
+**Gate the clear path BEFORE any toggle** — `desired = false` is ambiguous
+between "the issue genuinely isn't in the ready state" and "the config is stale
+(state renamed/deleted, label removed from the repo)". When `desired = false`,
+run the existence check in "Unresolvable config" below **first**; stale config ⇒
+warn `noop` receipt + flag untouched + **skip the toggle entirely**. Only a
+confirmed-resolving config may clear the flag. (`desired = true` resolves by
+construction — no extra call, straight to the toggle.)
+
 **Apply via the idempotent fn-58.1 toggles** — they no-op (no write, no
 `updated_at` bump) when the flag already matches, and report whether anything
 changed:
 
 ```bash
+# desired=false ⇒ the stale-config gate above has already passed (config resolves):
 if [ "$DESIRED" = "true" ]; then
   RESULT=$($FLOWCTL spec ready "$SPEC_ID" --json)
 else
@@ -296,10 +305,10 @@ echo, mirroring the `lastSyncedAt` advance-only-on-real-reconciliation semantics
 
 ### Unresolvable config — warn `noop` receipt, flag untouched, sync continues
 
-A `desired = false` result is ambiguous between "the issue genuinely isn't in the
-ready state" and "the config is stale (state renamed/deleted, label removed from
-the repo)". Before **clearing** a flag, confirm the configured name still resolves
-on the tracker (a *match* resolves by construction — no extra call):
+These are the mechanics of the gate step above — it runs **between derive and
+apply**: `spec unready` must never run before the configured name is confirmed
+to still resolve on the tracker (a *match* resolves by construction — no extra
+call):
 
 - **Linear** — the configured name must exist among the team's workflow states:
   MCP `list_issue_statuses(team:<team>)`, GraphQL
