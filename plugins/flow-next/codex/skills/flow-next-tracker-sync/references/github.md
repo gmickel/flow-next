@@ -155,6 +155,26 @@ config time (`gh label create status:in-progress …` — optional; GitHub auto-
 unknown labels on `--add-label` only if they already exist, so pre-create them or
 tolerate the "label not found" by creating on demand).
 
+### Readiness label (`tracker.readyState` — fn-58 R3/R4)
+
+GitHub has no workflow states, so the readiness signal resolves to a **label**:
+`tracker.readyState` holds a label name (the ceremony pre-creates it with the
+tolerate-already-exists guard — steps.md Phase 1 step 5; `gh label create` fails
+with a 422 when the label exists, which is fine/idempotent). Read-side semantics
+([status-sync.md](status-sync.md) § Readiness projection owns the procedure):
+
+- **Label present on the issue ⇒ local `ready=true`; label ABSENT ⇒
+ `ready=false`** — absence is a *normal* state (un-labeling IS how a GitHub user
+ un-readies a spec), never an error and never a warn/noop.
+- Only an **unresolvable config** warns: the configured label missing from the
+ *repo's* label namespace (`gh label list -R "$REPO" --search "$READY_LABEL"
+ --json name` — substring search, compare names case-insensitively for the exact
+ match) ⇒ warn `noop` receipt, flag untouched, sync continues.
+- **One-way pull:** the adapter never adds/removes the readiness label from the
+ flow side — readiness is projected tracker → local only, and it is independent
+ of the single-valued `status:*` namespace above (a `ready` label coexists with
+ any `status:<x>` label).
+
 ## Normalized mapping — the firewall
 
 The `gh` JSON wire shape maps **to/from** the normalized structs in

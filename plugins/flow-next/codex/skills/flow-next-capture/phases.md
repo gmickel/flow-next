@@ -12,8 +12,8 @@ This file is the lookup-and-calibration companion to [workflow.md](workflow.md).
 | **1 — Extract conversation evidence** | Build verbatim `## Conversation Evidence` block FIRST | ≤30-line block of `> user (turn N): "..."` lines drafted; optional file-reference subagent results merged; candidate title proposed |
 | **2 — Source-tagged synthesis** | Draft spec sections with per-line tags using CLAUDE.md richer template | Every section drafted; R-IDs allocated sequentially from R1; `[inferred]` count computed; 8+ acceptance flag set if applicable; untestable criteria flagged for Phase 3; `GLOSSARY_PROPOSALS` collected (≤5; empty when glossary absent/husk — §2.7) |
 | **3 — Must-ask cases** | Resolve ambiguous-title / untestable-acceptance / scope-conflict | Interactive: user resolved each fired case; autofix: exit 2 with which case fired |
-| **4 — Read-back loop** | Show full draft + `[inferred]` tally; obtain approval | Interactive: `approve` / `consider-split` / `abort`; on approve with glossary proposals, `Glossary?` consent recorded; autofix `--yes`: payload printed; autofix without `--yes`: payload printed + exit 0 (proposals print as suggestions, never written) |
-| **5 — Write via flowctl** | Atomic write of new (or rewritten) spec | `.flow/specs/<id>.md` exists; `SPEC_ID` known; approved term-adds written via `flowctl glossary add` (§5.8, interactive only) |
+| **4 — Read-back loop** | Show full draft + `[inferred]` tally; obtain approval | Interactive: `approve` / `consider-split` / `abort`; on approve with glossary proposals, `Glossary?` consent recorded; on approve with the readiness predicate met (≥1 ready spec AND no `tracker.readyState` — §4.2), `Mark ready?` consent recorded (default keep-draft); autofix `--yes`: payload printed; autofix without `--yes`: payload printed + exit 0 (proposals print as suggestions, never written; readiness never written) |
+| **5 — Write via flowctl** | Atomic write of new (or rewritten) spec | `.flow/specs/<id>.md` exists; `SPEC_ID` known; approved term-adds written via `flowctl glossary add` (§5.8, interactive only); consented mark-ready written via `flowctl spec ready` (§5.9, interactive only); rewrite branch ran idempotent `spec unready` with `READY_RESET` recorded (§5.3) |
 | **6 — Suggested next step** | Print footer with `/flow-next:plan` and `/flow-next:interview` hints | Footer printed; skill exits 0 |
 
 ---
@@ -199,6 +199,7 @@ The full list lives in [SKILL.md](SKILL.md). Quick reference:
 | Setting `context: fork` | Blocking-question tools must stay reachable. |
 | Calling `flowctl spec create` before Phase 4 approval | Phase 5 is the only write phase. |
 | Glossary term-adds without read-back consent, or in autofix | Consent lives in Phase 4.2's `Glossary?` question; autofix prints suggestions only. Husk-aware gate (`total_terms > 0`) — seeding an empty glossary is `/flow-next:prime`'s job. |
+| Marking a spec ready without consent, in autofix, or outside the visibility predicate | Consent lives in Phase 4.2's `Mark ready?` question (shown only when readiness is adopted AND no `tracker.readyState`); the write is Phase 5.9, interactive-only. Readiness is the human's gate — capture never infers it. Autofix prints the footer suggestion only. |
 | `git add -A` from this skill | Stage only the JSON sidecar (`.flow/specs/<id>.json` post-1.0; `.flow/epics/<id>.json` on alias-mode 0.x repos) + `.flow/specs/<id>.md` (and `.flow/meta.json` if mutated). Capture does NOT commit by default — user owns staging. |
 
 ---

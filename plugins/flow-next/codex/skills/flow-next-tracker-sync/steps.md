@@ -60,6 +60,15 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
  $FLOWCTL sync active --json # confirm active: true
  ```
  **Never assume — but default-on is not assuming.** No signal / user declines the bridge ⇒ write nothing; `enabled` stays `false`; `sync active` stays `active: false`. Confirming the bridge IS the consent to sync the pipeline. The **config schema default stays `off`** (in `get_default_config()`), so a bare `tracker.enabled=true` set by hand or a script — WITHOUT this ceremony — activates **no lifecycle-event sync** (every `perEvent` event stays dormant). The **one exception** is make-pr's PR↔issue link, which is unconditional whenever the bridge is active (no per-event gate, by design — it powers Linear Diffs); only the ceremony's explicit per-event writes activate the events themselves. Users opt out per event afterward via `flowctl config set tracker.perEvent.<event> off`.
+5. **Readiness state (fn-58, R4 — optional, skippable).** After the config writes, ask one more question via `plain-text numbered prompt`: *which tracker workflow state means "ready for work"?* When set, every pull-side sync projects that state onto the local spec `ready` flag ([→ ref: status-sync.md] § Readiness projection) — **the tracker becomes authoritative for readiness** (a local `flowctl spec ready` is overwritten on the next sync). Readiness is optional: always offer **skip** (and lead with it when no candidate state exists); skipping writes nothing and leaves `tracker.readyState: null` — the readiness gate stays dormant (R7).
+ - **Linear** — discover the team's states first: MCP `list_issue_statuses(team:<team>)` → `{id, name, type}` per state (GraphQL rung: `workflowStates(first:100, filter:{team:{name:{eq:$team}}}){ nodes { id name type } }` — explicit `first:` on every connection). Lead with a recommendation: a state whose **name** looks like "Ready" / "Next" / "Ready for Dev" (case-insensitive); if none, lead with skip. Validate the chosen state resolves (`get_issue_status(<id or name>)`) before writing. Store the state **name** (names are what humans see; the projection matches case-insensitive/trimmed).
+ - **GitHub** — issues have no workflow states; readiness resolves to a **label** name (suggest `ready`). Pre-create it so the projection never trips on a missing label — tolerate already-exists (the create fails with a 422 when the label exists; that is fine, idempotent):
+ ```bash
+ gh label create "$READY_LABEL" -R "$REPO" \
+ --description "flow-next: spec ready for execution" \
+ --color 0E8A16 2>/dev/null || true # 422 already_exists ⇒ fine (github.md § Readiness label)
+ $FLOWCTL config set tracker.readyState "$READY_LABEL" # Linear: the state name instead
+ ```
 
 ## Phase 2 — Link / create ceremony (R2/R3/R16)
 
@@ -130,6 +139,7 @@ pull(spec):
  status = readStatus(trackerId) [→ ref: transport] → normalized status
  foldTrackerIntoFlow(spec, issue, status) → body-merge.md Step 3 (tracker→flow) + status-sync.md (who-wins) + comments-sync.md (pull genuine comments to sync log)
  # echo-fence first: pulled body hash == baseHashTracker ⇒ noop (body-merge.md Step 1 / Fixture D)
+ projectReadiness(spec, issue) → status-sync.md § Readiness projection — tracker.readyState → local `ready` flag (skipped when readyState null; change-only receipt; one-way pull)
  receipt: pulled | noop
 
 comment(spec): # lifecycle touchpoint (work.done / resolvePr / completionReview / qa)
@@ -149,6 +159,7 @@ conflict) lives in that reference:
 reconcile(spec):
  base = sync get-state → merge-base snapshot (BOTH forms: mergeBaseFlow + mergeBaseTracker)
  issue = fetchIssue(trackerId) [→ ref: transport]
+ projectReadiness(spec, issue) → status-sync.md § Readiness projection (rides every issue read; independent of the body merge — runs even when the body diverges)
  merged = threeWayMergeBody(base, flowBody, issue.body) → body-merge.md
  # Step 1 pre-reduce: echo / byte-identical / only-one-side-changed ⇒ auto (no conflict)
  # Step 2 agentic merge (both diverged) + Step 3 format translation + Step 3.5 structural gate

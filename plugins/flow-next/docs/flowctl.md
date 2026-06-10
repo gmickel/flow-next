@@ -50,7 +50,7 @@ Pre-1.0 layout had spec JSON sidecars at `.flow/epics/fn-N-slug.json` (the markd
 Flowctl accepts schema v1 and v2 (and v3 post-migration); new fields are optional and defaulted.
 
 New fields:
-- Spec JSON: `plan_review_status`, `plan_reviewed_at`, `completion_review_status`, `completion_reviewed_at`, `depends_on_epics` (JSON field name preserved for back-compat; reads accept both keys), `branch_name`, `default_impl`, `default_review`, `default_sync`
+- Spec JSON: `plan_review_status`, `plan_reviewed_at`, `completion_review_status`, `completion_reviewed_at`, `depends_on_epics` (JSON field name preserved for back-compat; reads accept both keys), `branch_name`, `default_impl`, `default_review`, `default_sync`, `ready` (1.12.0+, lazy — written only after a toggle; absent reads `false`)
 - Task JSON: `priority`, `impl`, `review`, `sync`
 
 ## ID Format
@@ -168,6 +168,22 @@ Close spec (requires all tasks done).
 ```bash
 flowctl spec close fn-1 [--json]
 ```
+
+### spec ready / spec unready
+
+Mark / clear the spec's human-owned readiness gate (1.12.0+). Readiness is orthogonal to `status` — a ready spec stays `open` through planning and work, and `done` specs may be toggled.
+
+```bash
+flowctl spec ready fn-1 [--json]
+flowctl spec unready fn-1 [--json]
+```
+
+Output:
+```json
+{"id": "fn-1", "ready": true, "changed": true, "message": "Spec fn-1 marked ready"}
+```
+
+Both verbs are **idempotent no-ops** when the flag already matches (no write, no `updated_at` bump, `"changed": false`) — which is what lets unconditional callers like `capture --rewrite`'s readiness reset run without turning every spec into a readiness adopter. The on-disk flag is **lazy**: the sidecar carries `ready` only after a toggle actually changes state (absent reads `false`; `spec create` never writes it). Task ids (`fn-1.2`) are rejected — readiness is spec-level only. When `tracker.readyState` is configured, the tracker is authoritative: a local `spec ready` is overwritten by the next pull-side sync (see [`tracker-sync.md`](tracker-sync.md)).
 
 ### spec add-dep / spec rm-dep
 
@@ -325,7 +341,7 @@ flowctl show fn-1 [--json]     # Spec with tasks
 flowctl show fn-1.2 [--json]   # Task only
 ```
 
-Spec output includes `tasks` array with id/title/status/priority/depends_on.
+Spec output includes `tasks` array with id/title/status/priority/depends_on, plus an explicit `"ready": <bool>` (1.12.0+ — absent on-disk key reads `false`, so consumers always see a stable boolean).
 
 ### specs
 
@@ -337,10 +353,10 @@ flowctl specs [--json]
 
 Output:
 ```json
-{"success": true, "specs": [{"id": "fn-1", "title": "...", "status": "open", "tasks": 5, "done": 2}], "count": 1}
+{"success": true, "specs": [{"id": "fn-1", "title": "...", "status": "open", "ready": false, "tasks": 5, "done": 2}], "count": 1}
 ```
 
-Human-readable output shows progress: `[open] fn-1: Title (2/5 tasks done)`
+Human-readable output shows progress: `[open] fn-1: Title (2/5 tasks done)`. Ready specs carry a badge — `[open] [ready] fn-1: …` — shown **only** when the flag is set (no draft-noise for non-adopters).
 
 ### tasks
 
@@ -386,6 +402,8 @@ JSON output:
 ```json
 {"success": true, "specs": [...], "tasks": [...], "spec_count": 2, "task_count": 5}
 ```
+
+Each `specs[]` entry carries the explicit `"ready"` boolean; the human-readable spec lines show the same `[ready]` badge as `flowctl specs` (only on ready specs).
 
 ### cat
 
@@ -541,6 +559,7 @@ flowctl config toggle memory.enabled [--json]
 | `tracker.perTracker.teamId` / `projectId` / `labelMap` / `priorityMap` | mixed | `null` / `{}` | Per-tracker linkage hints (Linear team/project ids; label/priority maps). |
 | `tracker.staleAfterHours` | int | `24` | Staleness threshold (hours) consumed by `sync list-stale`. |
 | `tracker.conflictTiebreak` | string | `always-ask` | Status who-wins tiebreak: `flow-wins | tracker-wins | always-ask`. In Ralph mode `always-ask` resolves to *queue*, not prompt. |
+| `tracker.readyState` | string | `null` | **Readiness projection (fn-58, 1.12.0+).** The tracker workflow state that means "ready for work" — a Linear workflow-state **name** (matched case-insensitive/trimmed against `status.raw`; names, not `state.type` — a custom "Ready" state is typically `type=unstarted`, indistinguishable from Todo by type alone) or a GitHub **label** (pre-created at ceremony time; label present ⇒ ready, absent ⇒ not ready — a normal state, never an error). Set by the `/flow-next:tracker-sync` discovery ceremony (optional, skippable). When set, every pull-side sync projects the state onto the local spec `ready` flag — **one-way, tracker → local; the tracker is authoritative** (a local `spec ready` is overwritten on the next sync, and capture/interview's mark-ready prompt is gated off). A single scalar at the tracker top level (sibling of `conflictTiebreak`), not under `perTracker`. `null` = projection off (readiness gate dormant). |
 | `work.delegate` | `codex \| false` | `false` | Opt-in `/flow-next:work` implementation-delegation to a local `codex exec`. **Set the value to the string `codex` to activate** (`flowctl config set work.delegate codex`) — **any other value, including bool `true`, is OFF**; the activation predicate is `value == "codex"`. **OFF by default** — with it off the work flow is byte-identical to today. Resolution: arg token `delegate:codex` / `delegate:local` > this config > hard default OFF. The generic fuzzy "use codex" is NOT a delegation trigger (it stays mapped to the review backend). See [`codex-delegation.md`](../skills/flow-next-work/references/codex-delegation.md). |
 | `work.delegateModel` | string | `gpt-5.5` | Model passed to `codex exec` for delegated implementation. |
 | `work.delegateEffort` | string | `medium` | Reasoning-effort floor (`none | low | medium | high | xhigh`). The per-batch risk escalation floors against this; gpt-5.5 supports `none`, not `minimal`. |
@@ -1325,6 +1344,8 @@ flow-next 1.0.0 renamed the spec surface from `epic` to `spec`. Every legacy for
 | `flowctl epic set-branch` | `flowctl spec set-branch` |
 | `flowctl epic set-title` | `flowctl spec set-title` |
 | `flowctl epic close` | `flowctl spec close` |
+| `flowctl epic ready` | `flowctl spec ready` |
+| `flowctl epic unready` | `flowctl spec unready` |
 | `flowctl epic add-dep` | `flowctl spec add-dep` |
 | `flowctl epic rm-dep` | `flowctl spec rm-dep` |
 | `flowctl epic set-backend` | `flowctl spec set-backend` |

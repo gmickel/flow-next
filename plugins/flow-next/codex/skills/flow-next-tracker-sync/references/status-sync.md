@@ -250,6 +250,90 @@ $FLOWCTL sync defer "$SPEC_ID" \
  --reason "unmapped-state"
 ```
 
+## Readiness projection — `tracker.readyState` → local `ready` flag (fn-58, R3)
+
+**One-way, pull-side only.** When `tracker.readyState` is configured (the ceremony
+question, steps.md Phase 1 step 5), every operation that reads the issue (`pull` /
+`reconcile`) projects the configured tracker state onto the local spec `ready`
+flag — after the status normalization above, independent of the who-wins rules
+(readiness is **orthogonal to status**; it never feeds `reconcileStatus` and never
+drives a `setStatus`). `readyState: null` (the default) ⇒ this whole section is
+skipped — no calls, no receipts, no flag writes (R7 invisibility).
+
+**Derive the desired flag** from the normalized `issue`:
+
+- **Linear** — `desired = (trim+casefold(status.raw) == trim+casefold(readyState))`.
+ The match is on the workflow-state **name** (`status.raw` carries it), not the
+ `state.type`: names are non-unique and renamable, and a custom "Ready" state is
+ typically `type=unstarted` — type alone cannot distinguish Todo from Ready (same
+ rationale as the `statusMap` name-override above).
+- **GitHub** — `desired = (readyState label ∈ issue.labels[].name)`, compared
+ case-insensitive/trimmed (GitHub label names are case-insensitively unique).
+ **Label absent ⇒ `desired = false` — a normal state, never an error or a warn**;
+ un-labeling the issue is exactly how a GitHub user un-readies a spec.
+
+**Apply via the idempotent fn-58.1 toggles** — they no-op (no write, no
+`updated_at` bump) when the flag already matches, and report whether anything
+changed:
+
+```bash
+if [ "$DESIRED" = "true" ]; then
+ RESULT=$($FLOWCTL spec ready "$SPEC_ID" --json)
+else
+ RESULT=$($FLOWCTL spec unready "$SPEC_ID" --json)
+fi
+CHANGED=$(printf '%s' "$RESULT" | jq -r '.changed')
+```
+
+**Receipt only when the flag actually CHANGES** (`changed == true`) — silent on an
+echo, mirroring the `lastSyncedAt` advance-only-on-real-reconciliation semantics:
+
+```bash
+[ "$CHANGED" = "true" ] && $FLOWCTL sync receipt "$SPEC_ID" --status updated \
+ --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
+ --note "readiness: ready=$DESIRED projected from tracker (readyState '<configured name>')"
+```
+
+### Unresolvable config — warn `noop` receipt, flag untouched, sync continues
+
+A `desired = false` result is ambiguous between "the issue genuinely isn't in the
+ready state" and "the config is stale (state renamed/deleted, label removed from
+the repo)". Before **clearing** a flag, confirm the configured name still resolves
+on the tracker (a *match* resolves by construction — no extra call):
+
+- **Linear** — the configured name must exist among the team's workflow states:
+ MCP `list_issue_statuses(team:<team>)`, GraphQL
+ `workflowStates(first:100, filter:{team:{name:{eq:$team}}}){ nodes { name } }`
+ (explicit `first:` — every `{nodes}` field is a connection). Present ⇒ genuine
+ not-ready, clear the flag. Absent ⇒ stale config.
+- **GitHub** — the label must exist in the repo's label namespace:
+ `gh label list -R "$REPO" --search "$READY_LABEL" --json name` (search is
+ substring — compare the returned names case-insensitively for an exact match).
+ Present ⇒ genuine not-ready. Absent from the repo ⇒ stale config.
+
+Stale config ⇒ **warn + `noop` receipt + flag untouched + the rest of the sync
+continues** — graceful degradation, same posture as the unmapped-state path above
+(one bad knob never aborts the run, and a stale `readyState` must not silently
+un-ready every linked spec):
+
+```bash
+$FLOWCTL sync receipt "$SPEC_ID" --status noop --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
+ --note "readiness: configured readyState '<name>' not found on the tracker — flag untouched; fix tracker.readyState"
+```
+
+### Invariants (load-bearing)
+
+- **Never write readiness back to the tracker.** No `setStatus`, no label
+ add/remove is ever driven by the local `ready` flag. A local `flowctl spec
+ ready` on a tracker-connected repo is overwritten by the next sync — the
+ tracker is authoritative (which is why the capture/interview mark-ready prompt
+ is gated off when `readyState` is configured).
+- **Readiness receipts are local-only** — never posted as tracker comments
+ (readiness is not a lifecycle comment; tracker-side comment text also gets
+ auto-linkified/rewritten, so it could never round-trip cleanly anyway).
+- The projection never advances `lastSyncedAt` by itself, never blocks, and never
+ aborts the run — body/status/comments reconcile exactly as before.
+
 ## Worked fixtures (runnable without a live tracker)
 
 Each fixture is a flow state + a tracker `status` struct + the expected reconcile
@@ -352,3 +436,6 @@ PASS iff no crash and the rest of the sync completes.
  `conflictTiebreak`; `always-ask` queues in Ralph, prompts interactively.
 - **State advances only on a successful reconcile.** A `setStatus` error, an
  unmapped state surfaced, or a queued deadlock does NOT advance `lastSyncedAt`.
+- **Readiness projection is one-way pull** (`tracker.readyState` → local `ready`
+ flag, fn-58): change-only receipts, stale config warns + leaves the flag
+ untouched, and readiness is never written back to the tracker.
