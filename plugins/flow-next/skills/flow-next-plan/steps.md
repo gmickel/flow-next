@@ -71,6 +71,45 @@ $FLOWCTL init --json
 
 **Handle-recognition rule (R16):** do NOT gate the Flow-ID branch on a hard "must start with `fn-`" check. Before treating a single-token arg as a freeform idea, route it through `$FLOWCTL show <arg> --json` — flowctl's widened resolver (fn-52.10) maps a tracker key (`wor-17` / `wor-17.M`) to its linked spec/task. If it resolves (rc 0), use the canonical id from the JSON and take the existing-Flow-ID path (Route A in Step 5); only a non-resolving token becomes a new idea (Route B). So `plan wor-17` refines the linked spec, never creating a duplicate.
 
+**Readiness soft-check (adoption-gated; warn-not-block; fn-58):** runs right after the spec resolves and BEFORE the scout fan-out (warn before spending research tokens on a half-baked spec). Applies ONLY when the input resolved to an existing SPEC (Route A, canonical id without a `.M` suffix) — task ids and freeform ideas (Route B) skip this entirely.
+
+```bash
+SHOW_JSON=$($FLOWCTL show <id> --json)   # `ready` is an explicit boolean (fn-58.1)
+SPEC_READY=$(jq -r '.ready // false' <<< "$SHOW_JSON")
+
+READINESS_WARN=false
+if [[ "$SPEC_READY" != "true" ]]; then
+  # Adoption gate (husk-vs-presence pattern, like the STRATEGY guard below): fire only
+  # when readiness is in use — any spec marked ready OR tracker.readyState configured.
+  # Probe failures degrade to "not adopted" → silence (non-adopters never see this).
+  READY_STATE=$($FLOWCTL config get tracker.readyState --json 2>/dev/null | jq -r '.value // empty')
+  READY_ADOPTED=$($FLOWCTL specs --json 2>/dev/null | jq '[.specs[] | select(.ready == true)] | length' 2>/dev/null || echo 0)
+  if [[ -n "$READY_STATE" || "$READY_ADOPTED" -ge 1 ]]; then
+    READINESS_WARN=true
+  fi
+fi
+```
+
+When `READINESS_WARN=false`: continue silently — zero behavior change for ready specs and for repos that never adopted readiness.
+
+When `READINESS_WARN=true`:
+
+- **Non-interactive / Ralph** (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set — same probe as work/make-pr): auto-proceed with ONE stderr line, never block:
+  ```bash
+  echo "[READINESS]: spec <id> not marked ready — proceeding (non-interactive)" >&2
+  ```
+- **Interactive**: ask ONE question via `AskUserQuestion` (lead with recommendation; default proceed — planning is non-destructive and often part of getting a spec ready). The option set splits by tracker mode:
+  - **`tracker.readyState` NOT configured** (local readiness):
+    - **header**: `Spec not ready`
+    - **body**: `<spec-id> is not marked ready (readiness is in use in this repo). Recommended: proceed — planning is non-destructive and refining a draft is normal. Confidence: [high].`
+    - **options** (frozen): `proceed` (default — continue to research), `mark-ready-then-proceed` (run `$FLOWCTL spec ready <id> --json`, then continue), `abort` (exit 0 — no spec or task changes made; re-run /flow-next:plan once the spec is blessed)
+  - **`tracker.readyState` configured** (tracker-authoritative readiness — one-way pull; NEVER offer local mark-ready, the next sync would silently revert it):
+    - **header**: `Spec not ready`
+    - **body**: `<spec-id> is not marked ready; readiness projects from the tracker (state: <readyState>). Recommended: proceed — planning is non-destructive. Confidence: [high].`
+    - **options** (frozen): `proceed` (default — continue to research), `abort` (exit 0 — no spec or task changes made), `update-tracker-state-then-rerun` (exit 0 with guidance: move the linked issue to "<readyState>" on the board, pull via /flow-next:tracker-sync, re-run /flow-next:plan)
+
+Never a hard block — `abort` / `update-tracker-state-then-rerun` are user choices, not skill-imposed stops (R6).
+
 **Check if memory and github-scout are enabled:**
 ```bash
 $FLOWCTL config get memory.enabled --json
