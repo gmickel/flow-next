@@ -274,7 +274,7 @@ Phases 1-5 read `$PHASE0_CONTEXT` rather than re-deriving values.
 - `gh` is installed AND authenticated.
 - `SPEC_ID` resolves to a spec in `.flow/specs/` (or the legacy `.flow/epics/` alias dir).
 - `BASE_REF` resolves to a real git ref AND shares a merge-base with HEAD AND `COMMITS_AHEAD >= 1` since that merge-base. (Base is NOT required to be an ancestor of HEAD — see §0.4 / §0.5.)
-- Open-task validation: silent when all done; otherwise a stderr warning + **proceed as draft** (no prompt). Ralph alone hard-errors (exit 2).
+- Open-task validation: silent when all done; otherwise a stderr warning + **proceed as draft** (no prompt). Ralph/autonomous hard-errors (exit 2).
 - No OPEN PR exists on the current branch.
 - Ralph context captured. `PHASE0_CONTEXT` JSON is built and ready for Phase 1.
 
