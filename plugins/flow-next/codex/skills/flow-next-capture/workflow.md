@@ -720,17 +720,19 @@ When `REWRITE_TARGET` is set:
 ```bash
 SPEC_ID="$REWRITE_TARGET"
 
-# Readiness reset — a rewrite is a full re-authoring; any prior blessing no longer
-# applies. Unconditional call: the toggle is idempotent (fn-58.1) — a never-ready
-# spec is a silent no-op (no write, no updated_at bump), so this does NOT turn
-# every rewritten draft into a readiness-adopter. Announce, never confirm —
-# --rewrite already carried the consent.
-READY_RESET=$("$FLOWCTL" spec unready "$SPEC_ID" --json | jq -r '.changed // false')
-
 # Skip spec create — the spec already exists. Just overwrite the spec body.
 "$FLOWCTL" spec set-plan "$SPEC_ID" --file - --json <<EOF
 $SPEC_BODY
 EOF
+
+# Readiness reset — runs AFTER set-plan: a failed rewrite must not downgrade a
+# blessed spec (Codex review, PR #170 P2). A rewrite is a full re-authoring; any
+# prior blessing no longer applies once the new body lands. Unconditional call:
+# the toggle is idempotent (fn-58.1) — a never-ready spec is a silent no-op (no
+# write, no updated_at bump), so this does NOT turn every rewritten draft into a
+# readiness-adopter. Announce, never confirm — --rewrite already carried the
+# consent.
+READY_RESET=$("$FLOWCTL" spec unready "$SPEC_ID" --json | jq -r '.changed // false')
 
 # Run anchor for Phase 6's sync check — REQUIRED on the rewrite path: created_at
 # is the spec's ORIGINAL creation time here (an earlier run), so an old
