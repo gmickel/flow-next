@@ -32,6 +32,8 @@ Four probed signals:
 
 Resolution is **env > config > ASK** (mirrors `flowctl review-backend`): if env/config already decides the transport, the ceremony doesn't re-ask. On confirmation the skill writes via `flowctl config set tracker.…` and verifies with `flowctl sync active --json` (must report `active: true`). The bridge is active iff raw `tracker.enabled == true` **OR** raw `tracker.type ∈ {linear, github}`.
 
+After the config writes, the ceremony asks **one optional, skippable readiness question** (1.12.0+): *which tracker workflow state means "ready for work"?* — a Linear workflow-state name (discovered from the team's states, with a "Ready"-looking name recommended) or a GitHub label (suggested `ready`, pre-created idempotently). The answer is stored as `tracker.readyState`; skipping writes nothing and leaves the readiness gate dormant. See [Readiness projection](#readiness-projection--trackerreadystate--local-ready-flag) below.
+
 ## Two entry flows — no fixed starting point
 
 Both attach sync state **on link**:
@@ -135,6 +137,17 @@ A `Tracker sync: MISSING:<event> (retro-fire failed: <reason>)` summary line mea
 - **Body** — agentic host-agent semantic **3-way merge** against the `lastSyncedAt` merge-base snapshot, translating between flow's structured spec and the tracker's free-form issue. Only **genuine contradictions** surface; confident merges proceed.
 - **Status** — per-field **who-wins** ladder. The collision/deadlock case is evaluated **before** single-field terminal-wins rules (a `tracker=done × flow=…` deadlock must fall to `conflictTiebreak`, not be silently overwritten by terminal-wins). Tiebreak is `tracker.conflictTiebreak` (`flow-wins | tracker-wins | always-ask`, default `always-ask`).
 - **Comments / evidence** — two-way **append** with dedup; neither side overwrites the other.
+
+## Readiness projection — `tracker.readyState` → local `ready` flag
+
+When `tracker.readyState` is configured (the optional ceremony question above), every operation that reads the issue (`pull` / `reconcile`) projects the configured tracker state onto the local spec [`ready` flag](flowctl.md#spec-ready--spec-unready) — giving readiness a **single local read path** whether it's human-set or tracker-driven (1.12.0+, fn-58).
+
+- **One-way pull, tracker authoritative.** Readiness is projected tracker → local only — the local `ready` flag is never pushed to the tracker (no `setStatus`, no label add/remove). A local `flowctl spec ready` on a tracker-connected repo is overwritten by the next sync; tracker users set readiness on the board (which is why capture/interview's mark-ready prompt is gated off when `readyState` is configured).
+- **Match semantics.** Linear: case-insensitive trimmed match on the workflow-state **name** (names, not `state.type` — a custom "Ready" state is typically `type=unstarted`, so type alone can't distinguish Todo from Ready). GitHub: the `readyState` **label** — present on the issue ⇒ `ready=true`, absent ⇒ `ready=false` (absence is a normal state; un-labeling IS how a GitHub user un-readies a spec).
+- **Change-only receipts.** The projection applies via the idempotent `spec ready`/`unready` toggles and emits an event-tagged receipt **only when the local flag actually changes** — silent on a no-op echo (mirrors the `lastSyncedAt` advance-only-on-real-reconciliation rule).
+- **Stale-config degradation.** A configured state name / label that no longer resolves on the tracker (renamed/deleted) ⇒ **warn + `noop` receipt + flag untouched + the sync continues** — one bad knob never aborts the run, and a stale `readyState` must not silently un-ready every linked spec.
+- **Orthogonal to status.** The projection never feeds the who-wins ladder above, never advances `lastSyncedAt` by itself, and never blocks — body/status/comments reconcile exactly as before. `readyState: null` (the default) skips it entirely: no calls, no receipts, no flag writes.
+- **Opting back out.** `flowctl config set tracker.readyState null` clears the knob (the literal `null` token is stored as JSON null) — the projection goes dormant and local `spec ready`/`unready` is authoritative again.
 
 ## Ralph-safe — never blocks
 

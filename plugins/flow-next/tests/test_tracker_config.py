@@ -4,7 +4,8 @@ Asserts:
   * `get_default_config()` carries a `tracker` block with the documented
     shape: version + `enabled:false` + `type:null` + `provenance:null` +
     NESTED `perEvent` (so dotted-path get/set works) all defaulting `off` +
-    perTracker + staleAfterHours + conflictTiebreak.
+    perTracker + staleAfterHours + conflictTiebreak + readyState (fn-58,
+    top-level scalar, default null).
   * The dotted-path API resolves a nested perEvent leaf
     (`tracker.perEvent.work.firstClaim`).
   * `deep_merge` preserves unknown keys under `tracker` (forward-compat) and
@@ -77,6 +78,11 @@ class TrackerConfigTestCase(unittest.TestCase):
         self.assertIsNone(t["provenance"])
         self.assertEqual(t["staleAfterHours"], self.flowctl.TRACKER_DEFAULT_STALE_HOURS)
         self.assertEqual(t["conflictTiebreak"], "always-ask")
+        # fn-58 (R3/R4): readiness projection knob — a single scalar at the
+        # tracker TOP level (NOT under perTracker), default null (= off).
+        self.assertIn("readyState", t)
+        self.assertIsNone(t["readyState"])
+        self.assertNotIn("readyState", t["perTracker"])
 
     def test_per_event_is_nested_and_defaults_off(self) -> None:
         t = self.flowctl.get_default_config()["tracker"]
@@ -94,6 +100,40 @@ class TrackerConfigTestCase(unittest.TestCase):
             self.flowctl.get_config("tracker.perEvent.work.firstClaim"), "off"
         )
         self.assertEqual(self.flowctl.get_config("tracker.perEvent.capture"), "off")
+        # fn-58: a fresh repo reads a clean null for the readiness knob.
+        self.assertIsNone(self.flowctl.get_config("tracker.readyState"))
+
+    # --- config set null coercion (PR #170 review) ---------------------------
+
+    def test_config_set_null_clears_ready_state(self) -> None:
+        # Opt in: configure a readiness state, then clear it with the
+        # documented off value `null`. The CLI delivers argv strings, so
+        # set_config must coerce the literal "null" token to JSON null —
+        # otherwise the string "null" persists and skill probes
+        # (`jq -r '.value // empty'`) see a configured state named "null".
+        self.flowctl.set_config("tracker.readyState", "Ready")
+        on_disk = json.loads(
+            (self.tmpdir / ".flow" / "config.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(on_disk["tracker"]["readyState"], "Ready")
+        self.assertEqual(self.flowctl.get_config("tracker.readyState"), "Ready")
+
+        self.flowctl.set_config("tracker.readyState", "null")
+        on_disk = json.loads(
+            (self.tmpdir / ".flow" / "config.json").read_text(encoding="utf-8")
+        )
+        self.assertIn("readyState", on_disk["tracker"])
+        self.assertIsNone(on_disk["tracker"]["readyState"])  # real JSON null
+        # `config get` round-trips to None (merged read path).
+        self.assertIsNone(self.flowctl.get_config("tracker.readyState"))
+
+    def test_config_set_null_is_case_insensitive(self) -> None:
+        # Same .lower() treatment as the true/false coercion.
+        self.flowctl.set_config("tracker.readyState", "NULL")
+        on_disk = json.loads(
+            (self.tmpdir / ".flow" / "config.json").read_text(encoding="utf-8")
+        )
+        self.assertIsNone(on_disk["tracker"]["readyState"])
 
     # --- Forward-compat -----------------------------------------------------
 

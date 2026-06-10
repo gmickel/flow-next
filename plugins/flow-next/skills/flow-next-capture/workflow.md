@@ -526,6 +526,27 @@ Confidence tier for the recommendation:
 
 Record the approved subset for Phase 5.8. `skip` → no glossary writes; the spec write proceeds regardless of this answer.
 
+**Mark-ready consent (only when the user picked `approve` AND the readiness visibility predicate holds).** Probe only after `approve`:
+
+```bash
+READY_STATE=$("$FLOWCTL" config get tracker.readyState --json 2>/dev/null | jq -r '.value // empty')
+READY_ADOPTED=$("$FLOWCTL" specs --json 2>/dev/null | jq '[.specs[] | select(.ready == true)] | length' 2>/dev/null || echo 0)
+# Offer IFF READY_ADOPTED >= 1 AND READY_STATE is empty (probe failures degrade to "don't offer").
+```
+
+Both must hold:
+
+- `READY_ADOPTED -ge 1` — readiness is adopted in this repo (≥1 spec already marked ready). First adoption enters via `flowctl spec ready`, the tracker ceremony, or prime — never via this prompt. Non-adopters see no question anywhere (R7-style invisibility).
+- `READY_STATE` empty — `tracker.readyState` is NOT configured. Readiness is a one-way tracker→local pull when the tracker is authoritative; never invite a local edit the next sync would silently revert.
+
+When the predicate holds, one follow-up question via `AskUserQuestion` — the read-back options above stay frozen; this is a separate ask (same shape as the glossary consent):
+
+- **header**: `Mark ready?`
+- **body**: `Mark this spec ready for execution once written? Readiness is adopted in this repo (<READY_ADOPTED> ready spec(s)). Recommended: keep-draft — bless the spec after you've read it on disk; readiness is the human gate, not a capture reflex. Confidence: [judgment-call].`
+- **options** (frozen): `mark-ready` (Phase 5.9 runs `spec ready` after the write), `keep-draft` (default — no readiness write)
+
+Record the answer for Phase 5.9. `keep-draft` → no readiness write; the spec write proceeds regardless of this answer.
+
 ### 4.3 — Edit branch
 
 If user picks `edit`:
@@ -548,16 +569,19 @@ Autofix never offers `edit` — there's no user to ask. The print-then-rerun-wit
 
 **Autofix + glossary proposals:** the payload's item-9 block prints as suggestions (`Suggested glossary adds — review and add via flowctl glossary add "<term>" --definition-file -`), but autofix **never writes terms** — not even with `--yes` (`--yes` consents to the spec write, not to vocabulary changes). Phase 5.8 is interactive-only.
 
+**Autofix + readiness:** autofix **never writes readiness** — not even with `--yes` (Phase 5.9 is interactive-only). When the §4.2 visibility predicate holds AND the spec gets written (`--yes`), Phase 6 appends a one-line suggestion: `Mark ready when blessed: flowctl spec ready <SPEC_ID>`. Without `--yes` nothing is suggested (no spec id exists). Predicate fails → silence — non-adopters and tracker-authoritative repos see nothing.
+
 ### 4.5 — Forbidden in Phase 4
 
 - **Never silently skip the read-back.** Even if `[inferred]` count is 0, show the draft. The user might still want to reject for reasons unrelated to inference.
 - **Never auto-split.** The `consider-split` option exits 0 and lets the user decide; it does not call `flowctl spec create` twice.
 - **Never edit `--rewrite` target without showing the diff.** The diff is non-optional in rewrite mode.
 - **Never write glossary terms here.** Phase 4 collects consent only; the writes happen in Phase 5.8, after the spec write.
+- **Never write readiness here.** Phase 4 collects the mark-ready consent only; the write happens in Phase 5.9, after the spec write. And never offer the question outside the visibility predicate (readiness adopted + no `tracker.readyState`).
 
 ### Done when
 
-- Interactive: user picked `approve` (proceed to Phase 5), `consider-split` / `abort` (exit 0, no write), or hit the edit-cycle cap.
+- Interactive: user picked `approve` (proceed to Phase 5), `consider-split` / `abort` (exit 0, no write), or hit the edit-cycle cap. On approve, the glossary and mark-ready consents (when their gates fired) are recorded for Phase 5.8/5.9.
 - Autofix with `--yes`: payload printed, proceeding to Phase 5.
 - Autofix without `--yes`: payload printed, exit 0.
 
@@ -678,6 +702,11 @@ fi
 "$FLOWCTL" spec set-plan "$SPEC_ID" --file - --json <<EOF
 $SPEC_BODY
 EOF
+
+# Run anchor for Phase 6's sync check — written at the write step, BEFORE the
+# 5.7 dispatch, so it lower-bounds this run's receipts (bash vars don't survive
+# across tool calls; this file does).
+date -u +%Y-%m-%dT%H:%M:%SZ > "${TMPDIR:-/tmp}/flow-capture-anchor-${SPEC_ID}"
 ```
 
 Use a real heredoc (not `printf`) so embedded markdown formatting and newlines round-trip cleanly. `read_file_or_stdin` in `flowctl.py` handles `--file -` correctly.
@@ -693,7 +722,24 @@ SPEC_ID="$REWRITE_TARGET"
 "$FLOWCTL" spec set-plan "$SPEC_ID" --file - --json <<EOF
 $SPEC_BODY
 EOF
+
+# Readiness reset — runs AFTER set-plan: a failed rewrite must not downgrade a
+# blessed spec (Codex review, PR #170 P2). A rewrite is a full re-authoring; any
+# prior blessing no longer applies once the new body lands. Unconditional call:
+# the toggle is idempotent (fn-58.1) — a never-ready spec is a silent no-op (no
+# write, no updated_at bump), so this does NOT turn every rewritten draft into a
+# readiness-adopter. Announce, never confirm — --rewrite already carried the
+# consent.
+READY_RESET=$("$FLOWCTL" spec unready "$SPEC_ID" --json | jq -r '.changed // false')
+
+# Run anchor for Phase 6's sync check — REQUIRED on the rewrite path: created_at
+# is the spec's ORIGINAL creation time here (an earlier run), so an old
+# `event: capture` receipt would false-OK the check and the retro-fire would
+# never fire (Codex review, PR #169 P2).
+date -u +%Y-%m-%dT%H:%M:%SZ > "${TMPDIR:-/tmp}/flow-capture-anchor-${SPEC_ID}"
 ```
+
+When `READY_RESET=true` (the spec WAS ready), Phase 6's rewrite footer carries a one-line reset announcement. When `false`, no readiness line is printed — never announce a reset that didn't happen (zero noise for never-ready specs).
 
 ### 5.4 — Optional branch-name set
 
@@ -762,6 +808,16 @@ EOF
 
 Same call site as interview's behavior (b) — `glossary add` is a case-insensitive upsert; stdin keeps quoted phrasing intact. Best-effort: a failed add prints a warning and continues — never blocks the capture (the spec is already on disk). Report `Glossary: added N term(s) (<terms>)` for the Phase 6 footer.
 
+### 5.9 — Mark-ready write (consent-gated; interactive only)
+
+Runs only when Phase 4.2's mark-ready consent recorded `mark-ready` (which implies the visibility predicate held — readiness adopted, no `tracker.readyState` — and interactive mode; autofix never reaches here):
+
+```bash
+"$FLOWCTL" spec ready "$SPEC_ID" --json
+```
+
+Idempotent plumbing (fn-58.1) — re-running is a silent no-op. Best-effort: a failed write prints a warning and continues — never blocks the capture (the spec is already on disk). Report `Readiness: marked ready` for the Phase 6 footer; on `keep-draft` (or when the question never fired) report nothing — zero footer noise outside the consent path.
+
 ### Done when
 
 - The new (or rewritten) spec is on disk at `.flow/specs/<id>.md`.
@@ -769,6 +825,7 @@ Same call site as interview's behavior (b) — `glossary add` is a case-insensit
 - Optional branch-name is set if user named one.
 - When the tracker bridge is active and `capture` is opted in, the spec body was pushed/pulled/reconciled to the linked issue (5.7); otherwise this step was a silent no-op.
 - Approved glossary term-adds written (5.8); skipped silently when none were proposed or approved.
+- Mark-ready write applied iff consented (5.9); rewrite branch reset readiness via idempotent `unready` with `READY_RESET` recorded for Phase 6 (5.3).
 
 ---
 
@@ -779,11 +836,18 @@ Same call site as interview's behavior (b) — `glossary add` is a case-insensit
 **Tracker-sync end-of-run check — runs BEFORE the footer.** Read-only audit: did the capture touchpoint (5.7) actually fire (receipt-backed)? It runs independently of 5.7, so a wholesale-skipped dispatch block is still caught. With no tracker configured, `sync check` exits silently in constant time — the footer slot then reads `n/a (bridge inactive)` and nothing else changes. (Capture is Ralph-blocked, so there is no stdout-routing concern — the slot prints where the footer prints.)
 
 ```bash
-# --since: the spec's created_at — on-disk anchor (bash vars do NOT survive
-# across tool calls; flowctl show re-derives it anytime). The spec was created
-# this run in Phase 5, so created_at lower-bounds the run; a Phase-6-captured
-# "now" would postdate the 5.7 receipt and false-MISSING.
-SINCE="$("$FLOWCTL" show "$SPEC_ID" --json | jq -r '.created_at')"
+# --since: the run anchor written at the Phase-5 write step (5.2/5.3). Fallback:
+# created_at — valid for FRESH captures only (spec created this run). The rewrite
+# path MUST have the anchor: created_at is the ORIGINAL creation time there, so
+# any old `event: capture` receipt would false-OK the check (Codex review,
+# PR #169 P2). A Phase-6 "now" would postdate the 5.7 receipt (false-MISSING);
+# updated_at can be bumped by §5.9's ready-toggle after 5.7 — neither is safe.
+ANCHOR_FILE="${TMPDIR:-/tmp}/flow-capture-anchor-${SPEC_ID}"
+if [[ -f "$ANCHOR_FILE" ]]; then
+  SINCE="$(cat "$ANCHOR_FILE")"
+else
+  SINCE="$("$FLOWCTL" show "$SPEC_ID" --json | jq -r '.created_at')"
+fi
 
 "$FLOWCTL" sync check "$SPEC_ID" --events capture --since "$SINCE" --json
 # Empty output → bridge inactive → slot = `n/a (bridge inactive)`. Otherwise
@@ -810,6 +874,10 @@ Next:
 ```
 
 When Phase 5.8 wrote terms, append one line after `Tracker sync:`: `Glossary: added N term(s) (<comma-separated terms>)`. Omit entirely otherwise (including every autofix run).
+
+When Phase 5.9 marked the spec ready, append one line after `Tracker sync:`: `Readiness: marked ready`. Omit entirely otherwise — `keep-draft`, predicate-not-met, and every non-consented run print no readiness line.
+
+Autofix only: when the §4.2 visibility predicate holds and the spec was written (`--yes`), append `Mark ready when blessed: flowctl spec ready <SPEC_ID>` (suggestion only — autofix never writes readiness).
 
 ### Biz-suggestion footer (R25)
 
@@ -851,6 +919,7 @@ If `REWRITE_TARGET` was set, the footer prefix changes (the `Tracker sync:` line
 
 ```text
 Spec rewritten at .flow/specs/<SPEC_ID>.md.
+Readiness: spec rewritten — readiness reset to draft (re-bless when ready)
 Tracker sync: <same four states>
 
 Next:
@@ -859,9 +928,11 @@ Next:
   /flow-next:interview <SPEC_ID> → refine via Q&A
 ```
 
+The `Readiness:` announcement line appears ONLY when §5.3's reset actually changed the flag (`READY_RESET=true`). Never-ready specs print no readiness line — an announcement is not a confirmation prompt, and it must not claim a reset that didn't happen.
+
 ### Done when
 
-- End-of-run `sync check` ran (`--events capture`, `--since` = the spec's `created_at`); any MISSING touchpoint was retro-fired exactly once and re-checked.
+- End-of-run `sync check` ran (`--events capture`, `--since` = the Phase-5 run anchor, falling back to `created_at` for fresh captures); any MISSING touchpoint was retro-fired exactly once and re-checked.
 - Footer is printed with the mandatory four-state `Tracker sync:` line (explicit `n/a (bridge inactive)` when no tracker is configured).
 - Skill exits 0.
 
@@ -875,8 +946,8 @@ The skill itself is markdown — there's no unit-test surface. The validation is
 - Phase 1 emits a `## Conversation Evidence` block with verbatim user quotes (≤30 lines).
 - Phase 2 produces a draft with per-line source tags. Every acceptance criterion has one of `[user]` / `[paraphrase]` / `[inferred]`. Biz-context signals (R24) route to their destinations using only `[user]` / `[paraphrase]` tags; categories without conversation signal leave their destinations absent. `BIZ_SIGNAL_CATEGORIES` (0..9) computed for Phase 6.
 - Phase 3 fires must-ask cases only when (a) title is genuinely ambiguous, (b) acceptance is untestable, (c) scope-conflict persists. Optional ambiguities are deferred to Phase 4.
-- Phase 4 read-back surfaces `[inferred]` count, 8+ split note (if applicable), related-memory footer (if applicable), glossary term-add proposals (only when `glossary list --json` reports `total_terms > 0` AND the conversation surfaced new vocabulary — Phase 2.7). Interactive: user picks approve / edit / abort; on approve with proposals, one follow-up `Glossary?` consent question. Autofix: print + require `--yes`; proposals print as suggestions, never written.
-- Phase 5 calls `flowctl spec create` + `spec set-plan` via heredoc. Approved term-adds written via `flowctl glossary add` (5.8, interactive only). With no glossary (or a husk), 2.7/4.x/5.8 are silent no-ops — zero behavior change.
+- Phase 4 read-back surfaces `[inferred]` count, 8+ split note (if applicable), related-memory footer (if applicable), glossary term-add proposals (only when `glossary list --json` reports `total_terms > 0` AND the conversation surfaced new vocabulary — Phase 2.7). Interactive: user picks approve / edit / abort; on approve with proposals, one follow-up `Glossary?` consent question; on approve with the readiness predicate met (≥1 ready spec, no `tracker.readyState`), one follow-up `Mark ready?` consent question (default keep-draft). Autofix: print + require `--yes`; proposals print as suggestions, never written; readiness never written.
+- Phase 5 calls `flowctl spec create` + `spec set-plan` via heredoc. Approved term-adds written via `flowctl glossary add` (5.8, interactive only). Consented mark-ready written via `flowctl spec ready` (5.9, interactive only). Rewrite branch (5.3) runs idempotent `spec unready` unconditionally; `READY_RESET` gates the Phase 6 announcement. With no glossary (or a husk), 2.7/4.x/5.8 are silent no-ops; with readiness un-adopted, 4.2's mark-ready question / 5.9 / all readiness footer lines are silent no-ops — zero behavior change.
 - Phase 6 prints the next-step footer. Calls `flowctl scope suggest --signal-categories-count "$BIZ_SIGNAL_CATEGORIES"`; on exit 0 (fire), appends the R25 `/flow-next:interview --scope=business` suggestion line. R22 invariant: `BIZ_SIGNAL_CATEGORIES=0` → no-fire → no suggestion.
 
 In autofix without `--yes`, the draft prints and the skill exits 0 — no write, no spec allocated.

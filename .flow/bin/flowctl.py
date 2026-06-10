@@ -1077,6 +1077,14 @@ def get_default_tracker_config() -> dict:
         },
         "staleAfterHours": TRACKER_DEFAULT_STALE_HOURS,
         "conflictTiebreak": "always-ask",
+        # fn-58 (R3/R4) — the tracker workflow state that means "ready for
+        # work": a Linear state NAME or a GitHub label, set by the discovery
+        # ceremony. Pull-side sync projects it onto the local spec `ready`
+        # flag (one-way, tracker → local). A single scalar, so it lives at
+        # the tracker TOP level (sibling of conflictTiebreak), NOT under
+        # perTracker. None = readiness projection off (the gate stays
+        # dormant — R7 invisibility).
+        "readyState": None,
     }
 
 
@@ -1323,6 +1331,13 @@ def set_config(key: str, value) -> dict:
             value = True
         elif value.lower() == "false":
             value = False
+        elif value.lower() == "null":
+            # JSON null — the documented "off" value for nullable keys like
+            # tracker.readyState / tracker.type. Without this, `config set
+            # tracker.readyState null` persists the STRING "null", which the
+            # skill probes (`jq -r '.value // empty'`) read as a non-empty
+            # configured state literally named "null" (PR #170 review).
+            value = None
         elif value.isdigit():
             value = int(value)
 
@@ -12011,6 +12026,9 @@ def cmd_show(args: argparse.Namespace) -> None:
         tasks.sort(key=lambda t: id_sort_key(t["id"]))
 
         result = {**epic_data, "tasks": tasks}
+        # fn-58.1 (R1): lazy on-disk, explicit in output — the spread omits an
+        # absent `ready` key, so default it explicitly (absent reads false).
+        result["ready"] = bool(epic_data.get("ready", False))
 
         if args.json:
             json_output(result)
@@ -12093,6 +12111,8 @@ def cmd_specs(args: argparse.Namespace) -> None:
                 "id": spec_data["id"],
                 "title": spec_data["title"],
                 "status": spec_data["status"],
+                # fn-58.1 (R1): explicit boolean — absent key reads false.
+                "ready": bool(spec_data.get("ready", False)),
                 "tasks": task_count,
                 "done": done_count,
             }
@@ -12120,8 +12140,11 @@ def cmd_specs(args: argparse.Namespace) -> None:
             print(f"Specs ({len(specs)}):\n")
             for e in specs:
                 progress = f"{e['done']}/{e['tasks']}" if e["tasks"] > 0 else "0/0"
+                # fn-58.1 (R2/R7): badge ONLY on ready specs — non-adopters
+                # see zero draft-noise (clig.dev restraint).
+                ready_badge = " [ready]" if e["ready"] else ""
                 print(
-                    f"  [{e['status']}] {e['id']}: {e['title']} ({progress} tasks done)"
+                    f"  [{e['status']}]{ready_badge} {e['id']}: {e['title']} ({progress} tasks done)"
                 )
 
 
@@ -12263,6 +12286,8 @@ def cmd_list(args: argparse.Namespace) -> None:
                     "id": e["id"],
                     "title": e["title"],
                     "status": e["status"],
+                    # fn-58.1 (R1): explicit boolean — absent key reads false.
+                    "ready": bool(e.get("ready", False)),
                     "tasks": len(task_list),
                     "done": done_count,
                 }
@@ -12294,7 +12319,9 @@ def cmd_list(args: argparse.Namespace) -> None:
             task_list = tasks_by_spec.get(e["id"], [])
             done_count = sum(1 for t in task_list if t["status"] == "done")
             progress = f"{done_count}/{len(task_list)}" if task_list else "0/0"
-            print(f"[{e['status']}] {e['id']}: {e['title']} ({progress} done)")
+            # fn-58.1 (R2/R7): badge ONLY on ready specs (no draft-noise).
+            ready_badge = " [ready]" if e.get("ready") else ""
+            print(f"[{e['status']}]{ready_badge} {e['id']}: {e['title']} ({progress} done)")
 
             for t in task_list:
                 deps = (
@@ -12455,6 +12482,78 @@ def cmd_spec_set_completion_review_status(args: argparse.Namespace) -> None:
 
 # Backward-compat alias (T2 layers the deprecation warning).
 cmd_epic_set_completion_review_status = cmd_spec_set_completion_review_status
+
+
+def _cmd_spec_set_ready(args: argparse.Namespace, *, target: bool) -> None:
+    """Shared body for `spec ready` / `spec unready` (fn-58.1, R1/R2/R7).
+
+    Lazy on-disk contract: the sidecar carries the `ready` key only after a
+    toggle actually CHANGES state. When the flag already matches the target
+    (incl. `unready` on a never-toggled spec — absent key reads false), the
+    command is an idempotent no-op: no write, no `updated_at` bump, sidecar
+    byte-identical. That is what lets unconditional `unready` callers (e.g.
+    capture --rewrite) run without turning every spec into a readiness
+    adopter. Readiness is status-orthogonal — `done` specs are allowed.
+    """
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
+        )
+
+    flow_dir = get_flow_dir()
+    # Readiness is spec-level only: reject `.M` task ids with a targeted
+    # message BEFORE the generic spec-id front-door (which would reject them
+    # too, but with a less actionable error).
+    if is_task_id(casefold_handle(args.id) or ""):
+        error_exit(
+            f"Invalid spec ID: {args.id}. Readiness is a spec-level flag - "
+            "pass a spec id (fn-N or fn-N-slug), not a task id (fn-N.M)",
+            use_json=args.json,
+        )
+    # fn-52.10: casefold → validate → expand (handles uppercase tracker handles).
+    args.id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
+    spec_json_path = find_spec_json_path(flow_dir, args.id)
+
+    if not spec_json_path.exists():
+        error_exit(f"Spec {args.id} not found", use_json=args.json)
+
+    spec_data = normalize_epic(
+        load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
+    )
+    changed = bool(spec_data.get("ready", False)) != target
+    if changed:
+        spec_data["ready"] = target
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_json_path, spec_data)
+
+    verb = "marked ready" if target else "marked not ready"
+    suffix = "" if changed else " (no change)"
+    if args.json:
+        json_output(
+            {
+                "id": args.id,
+                "ready": target,
+                "changed": changed,
+                "message": f"Spec {args.id} {verb}{suffix}",
+            }
+        )
+    else:
+        print(f"Spec {args.id} {verb}{suffix}")
+
+
+def cmd_spec_ready(args: argparse.Namespace) -> None:
+    """Mark a spec ready for execution (human-owned gate; fn-58.1)."""
+    _cmd_spec_set_ready(args, target=True)
+
+
+def cmd_spec_unready(args: argparse.Namespace) -> None:
+    """Clear a spec's ready flag (fn-58.1)."""
+    _cmd_spec_set_ready(args, target=False)
+
+
+# Backward-compat aliases (T2 layers the deprecation warning).
+cmd_epic_ready = cmd_spec_ready
+cmd_epic_unready = cmd_spec_unready
 
 
 def cmd_spec_set_branch(args: argparse.Namespace) -> None:
@@ -23893,7 +23992,7 @@ def main() -> None:
     # deprecation emission on the epic-side dispatch via a SubParserAction
     # wrapper; T1 ships them silently.
     def _add_spec_subparsers(parent_sub, *, noun: str, dest: str) -> None:
-        """Register the 11 sub-subcommands on a `spec` or `epic` parent.
+        """Register the 13 sub-subcommands on a `spec` or `epic` parent.
 
         `noun` is the user-visible verb in help text ("spec" or "epic").
         """
@@ -23987,6 +24086,27 @@ def main() -> None:
         )
         p_close.add_argument("--json", action="store_true", help="JSON output")
         p_close.set_defaults(func=cmd_spec_close)
+
+        # fn-58.1 (R2): human-owned readiness gate. Lazy on-disk — the sidecar
+        # carries `ready` only after a toggle changes state; both verbs are
+        # idempotent no-ops when the value already matches.
+        p_ready = parent_sub.add_parser(
+            "ready", help=f"Mark {noun} ready for execution (human-owned gate)"
+        )
+        p_ready.add_argument(
+            "id", help=f"{noun.capitalize()} ID (e.g., fn-1, fn-1-add-auth)"
+        )
+        p_ready.add_argument("--json", action="store_true", help="JSON output")
+        p_ready.set_defaults(func=cmd_spec_ready)
+
+        p_unready = parent_sub.add_parser(
+            "unready", help=f"Clear {noun} ready flag"
+        )
+        p_unready.add_argument(
+            "id", help=f"{noun.capitalize()} ID (e.g., fn-1, fn-1-add-auth)"
+        )
+        p_unready.add_argument("--json", action="store_true", help="JSON output")
+        p_unready.set_defaults(func=cmd_spec_unready)
 
         p_add_dep = parent_sub.add_parser(
             "add-dep", help=f"Add {noun}-level dependency"

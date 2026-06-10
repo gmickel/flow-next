@@ -72,6 +72,8 @@ The project's strategic intent and canonical vocabulary live **outside** `.flow/
 .flow/bin/flowctl spec set-title fn-1-add-oauth --title "..." # Rename (updates slug)
 .flow/bin/flowctl spec set-branch fn-1-add-oauth --branch ... # Set branch name
 .flow/bin/flowctl spec close fn-1-add-oauth # Close spec
+.flow/bin/flowctl spec ready fn-1-add-oauth # Mark ready for execution (human gate; idempotent)
+.flow/bin/flowctl spec unready fn-1-add-oauth # Clear ready flag (idempotent)
 .flow/bin/flowctl spec skeleton # Print fresh-spec scaffold
 
 # Task lifecycle

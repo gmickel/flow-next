@@ -32,7 +32,10 @@ instruction).
 
 Supporting tools used during the discovery/link ceremony (not part of the six
 interface methods, but verified present): `list_teams`, `get_team`,
-`list_issue_labels` / `create_issue_label`, `list_projects`, `list_users`.
+`list_issue_labels` / `create_issue_label`, `list_projects`, `list_users`, and
+`get_issue_status` (validates the chosen `tracker.readyState` state resolves —
+fn-58 ceremony, steps.md Phase 1 step 5; `list_issue_statuses` feeds the same
+question's state discovery).
 
 **`makePr` (PR link → Linear Diffs) on the MCP rung.** The MCP exposes **no
 URL-attach tool** — `create_attachment` / `prepare_attachment_upload` are for

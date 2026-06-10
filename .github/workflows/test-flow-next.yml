@@ -219,6 +219,21 @@ jobs:
         # canonicalization, extended in fn-57.1 with the `--event` lifecycle
         # tag (free-form, `event: null` back-compat for pre-flag callers).
 
+      # ──────────── fn-58 (spec readiness signal) ────────────
+
+      - name: Python unit tests — spec ready flag (fn-58.1)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_spec_ready.py" \
+            -v
+        # Lazy on-disk `ready` flag: `spec create` never writes the key,
+        # `normalize_epic` never backfills it, all three JSON read surfaces
+        # (show/specs/list) emit explicit false, toggles are idempotent
+        # no-ops (byte-identical sidecar, no updated_at churn), `.M` ids
+        # rejected, tracker handles resolve, done specs allowed, human
+        # listings badge ready specs only.
+
       # ──────────── Cursor local-install (1.9.0) ────────────
       # The bash + PowerShell Cursor installers (scripts/install-cursor.{sh,ps1})
       # must not drift, and must actually produce a complete + clean install on

@@ -10,7 +10,7 @@
 # Each assertion runs in a fresh subshell so the per-process
 # `_RENAME_DEPRECATION_EMITTED` set starts clean and the deprecation fires.
 #
-# Covers the 7 high-value alias paths from T14 spec:
+# Covers the 7 high-value alias paths from T14 spec (+ Case 9, fn-58.1):
 #   1. `flowctl epic create` → cmd_spec_create dispatch + stderr deprecation
 #   2. `flowctl epics --json` payload contains BOTH "specs": and "epics":
 #   3. `flowctl tasks --epic <id> --json` matches `--spec`; persisted task JSON
@@ -22,6 +22,8 @@
 #      is silent
 #   7. `flowctl next --json` blocked-task contains BOTH "reason" AND
 #      "legacy_reason"
+#   9. `flowctl epic ready` / `epic unready` → cmd_spec_ready/_unready
+#      dispatch + stderr deprecation; canonical `spec ready` silent (fn-58.1)
 #
 # Plus the FLOW_NO_DEPRECATION=1 suppression matrix.
 #
@@ -432,6 +434,59 @@ echo -e "${YELLOW}--- Case 8: FLOW_NO_DEPRECATION=1 suppresses alias warnings --
     ok "Case 8: FLOW_NO_DEPRECATION=1 silences EPICS_FILE env"
   else
     ko "Case 8: FLOW_NO_DEPRECATION=1 did not silence EPICS_FILE env; got: $(cat "$CASE8_NEXT_STDERR_FILE")"
+  fi
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Case 9: `flowctl epic ready` / `epic unready` → cmd_spec_ready/_unready
+# dispatch + stderr deprecation; canonical `spec ready` silent (fn-58.1).
+# ─────────────────────────────────────────────────────────────────────────────
+echo -e "${YELLOW}--- Case 9: flowctl epic ready/unready alias + deprecation ---${NC}"
+(
+  CASE9_SPEC="$(scripts/flowctl spec create --title "Case 9 ready alias" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+
+  # Legacy `epic ready` dispatches to the canonical handler + deprecates.
+  STDERR_FILE="$TEST_DIR/case9-stderr.txt"
+  STDOUT="$(scripts/flowctl epic ready "$CASE9_SPEC" --json 2>"$STDERR_FILE")"
+  STDERR="$(cat "$STDERR_FILE")"
+  if echo "$STDOUT" | "$PYTHON_BIN" -c '
+import json, sys
+data = json.load(sys.stdin)
+assert data["ready"] is True, f"ready not set: {data}"
+assert data["changed"] is True, f"expected changed: {data}"
+print("OK")
+' >/dev/null; then
+    ok "Case 9: \`flowctl epic ready\` sets ready via canonical handler"
+  else
+    ko "Case 9: \`flowctl epic ready\` wrong payload; got: $STDOUT"
+  fi
+  if echo "$STDERR" | grep -q 'flowctl epic is deprecated; use flowctl spec'; then
+    ok "Case 9: \`epic ready\` stderr emits deprecation marker"
+  else
+    ko "Case 9: stderr missing deprecation marker; got: $STDERR"
+  fi
+
+  # Legacy `epic unready` round-trips the flag.
+  UNREADY_OUT="$(scripts/flowctl epic unready "$CASE9_SPEC" --json 2>/dev/null)"
+  if echo "$UNREADY_OUT" | "$PYTHON_BIN" -c '
+import json, sys
+data = json.load(sys.stdin)
+assert data["ready"] is False, f"ready not cleared: {data}"
+print("OK")
+' >/dev/null; then
+    ok "Case 9: \`flowctl epic unready\` clears ready"
+  else
+    ko "Case 9: \`flowctl epic unready\` wrong payload; got: $UNREADY_OUT"
+  fi
+
+  # Canonical `spec ready` must be silent on stderr.
+  CANONICAL_STDERR_FILE="$TEST_DIR/case9-canonical-stderr.txt"
+  scripts/flowctl spec ready "$CASE9_SPEC" --json 2>"$CANONICAL_STDERR_FILE" >/dev/null
+  scripts/flowctl spec unready "$CASE9_SPEC" --json 2>>"$CANONICAL_STDERR_FILE" >/dev/null
+  if [[ -z "$(cat "$CANONICAL_STDERR_FILE")" ]]; then
+    ok "Case 9: canonical \`spec ready/unready\` silent on stderr"
+  else
+    ko "Case 9: canonical spec ready/unready leaked to stderr: $(cat "$CANONICAL_STDERR_FILE")"
   fi
 )
 

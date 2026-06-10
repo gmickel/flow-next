@@ -150,6 +150,8 @@ Wait for response. Parse naturally — user may reply terse ("1a 2b") or ramble 
 
 Read [steps.md](steps.md) and follow each step in order.
 
+**Step 1 readiness soft-check (fn-58)**: existing-spec inputs get an adoption-gated readiness check BEFORE the scout fan-out — warn-not-block, default proceed; repos that never adopted readiness see nothing. Details in steps.md Step 1.
+
 **CRITICAL — Step 1 (Research)**: You MUST launch ALL scout agents listed in steps.md in parallel. Do NOT skip scouts or run them sequentially. Codex will spawn them as parallel multi-agent threads. Each scout provides unique signal.
 
 If user chose review:

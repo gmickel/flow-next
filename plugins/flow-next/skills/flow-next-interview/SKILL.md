@@ -821,6 +821,31 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
 fi
 ```
 
+## Mark-ready offer (optional; flow spec inputs only)
+
+After the write-back (and the tracker-sync block above), optionally offer to mark the refined spec ready — the same consent shape and visibility predicate as capture's read-back follow-up (fn-58). Applies ONLY when the input was a flow spec (Detect Input Type patterns 1/3) — task ids and file paths carry no spec readiness.
+
+```bash
+READY_STATE=$($FLOWCTL config get tracker.readyState --json 2>/dev/null | jq -r '.value // empty')
+READY_ADOPTED=$($FLOWCTL specs --json 2>/dev/null | jq '[.specs[] | select(.ready == true)] | length' 2>/dev/null || echo 0)
+# Offer IFF READY_ADOPTED >= 1 AND READY_STATE is empty (probe failures degrade to "don't offer").
+```
+
+Both must hold:
+
+- `READY_ADOPTED -ge 1` — readiness is adopted in this repo (≥1 spec already marked ready); non-adopters see no question anywhere. First adoption enters via `flowctl spec ready`, the tracker ceremony, or prime — never via this prompt.
+- `READY_STATE` empty — `tracker.readyState` NOT configured. Tracker-authoritative readiness is a one-way pull; never invite a local edit the next sync would silently revert.
+
+When the predicate holds, ask once via `AskUserQuestion` (lead with recommendation):
+
+- **header**: `Mark ready?`
+- **body**: `Mark <spec-id> ready for execution? Readiness is adopted in this repo (<READY_ADOPTED> ready spec(s)). Recommended: keep-draft — re-read the refined spec on disk first; readiness is the human gate, not an interview reflex. Confidence: [judgment-call].`
+- **options** (frozen): `mark-ready` (run `$FLOWCTL spec ready <spec-id> --json` — idempotent), `keep-draft` (default — no readiness write)
+
+Best-effort: a failed `spec ready` prints a warning and continues — never blocks the interview write-back.
+
+**Interview NEVER auto-resets `ready` on refinement.** The interview edits the spec in place — a previously-blessed spec stays ready unless the human unmarks it. Only `capture --rewrite` (a full re-authoring) resets readiness.
+
 ## Completion
 
 Show summary:
@@ -828,6 +853,7 @@ Show summary:
 - Key decisions captured
 - What was written (Flow ID updated / file rewritten)
 - Tracker sync: when active and `interview` opted in, whether the spec body was pushed/pulled/reconciled to the linked issue (else a silent no-op)
+- Readiness (ONLY when the mark-ready offer fired): marked ready vs kept draft — omit the line entirely otherwise (no readiness noise for non-adopters)
 - **Scope mode**: which pass(es) ran — biz / tech / both — and which spec sections were written vs preserved byte-for-byte (cite the write-policy result). For `--scope=business`: project-docs resolutions captured under `## Resolved via Project Docs` (R26).
 - Doc-aware mode (when `DOC_AWARE=1` was active): glossary terms added/updated via `flowctl glossary add`, decision entries written via `flowctl memory add --track knowledge --category decisions`, glossary conflicts captured under `## Glossary Conflicts`
 - Strategy-aware mode (when `STRATEGY_AWARE=1` was active): strategy conflicts captured under `## Strategy Conflicts` (read-only — interview never edits STRATEGY.md)
