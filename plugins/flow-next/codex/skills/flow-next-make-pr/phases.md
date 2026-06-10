@@ -20,9 +20,9 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 - [ ] Ralph context detected (`RALPH=1` if `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set).
 - [ ] Autonomous context detected (`AUTONOMOUS=1` if the `mode:autonomous` token was parsed or `FLOW_AUTONOMOUS=1`) — never sets `RALPH`; prompt sites hard-error under `RALPH || AUTONOMOUS`.
 - [ ] When `DRY_RUN != 1`: `gh` installed AND `gh auth status --hostname github.com` succeeds. Skipped under `--dry-run` (Phase 4.0 short-circuits before any `gh pr create`, so requiring `gh` to be installed/authed there blocks the documented inspection path on machines / CI jobs that only render the body).
-- [ ] `SPEC_ID` resolved (positional arg → branch-match against `.flow/specs/*.json` + `.flow/epics/*.json` `branch_name` → interactive prompt / Ralph exit 2).
+- [ ] `SPEC_ID` resolved (positional arg → branch-match against `.flow/specs/*.json` + `.flow/epics/*.json` `branch_name` → interactive prompt / Ralph-or-autonomous exit 2).
 - [ ] `SPEC_ID` validated via `flowctl show <spec-id> --json` (spec exists).
-- [ ] `BASE_REF` resolved through cascade (`--base` → `origin/main` → `main` → `origin/master` → `master` → ask / Ralph exit 2).
+- [ ] `BASE_REF` resolved through cascade (`--base` → `origin/main` → `main` → `origin/master` → `master` → ask / Ralph-or-autonomous exit 2).
 - [ ] `BASE_REF` validated via `git rev-parse --verify --quiet`.
 - [ ] HEAD resolves; HEAD ≠ BASE; `git merge-base BASE HEAD` succeeds (shared history); `git rev-list --count <merge-base>..HEAD >= 1` (at least one commit since the merge-base — base does NOT need to be an ancestor of HEAD).
 - [ ] Tasks-done check (silent when all done / warn + proceed-as-draft interactively and under `--dry-run` / Ralph/autonomous exit 2). No prompt for open tasks.
@@ -39,7 +39,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 - HEAD == BASE → exit 1.
 - HEAD shares no merge-base with BASE (unrelated histories) → exit 1.
 - 0 commits since merge-base → exit 1.
-- Open tasks + Ralph → exit 2.
+- Open tasks + Ralph/autonomous → exit 2.
 - OPEN PR exists → exit 1 + `/flow-next:resolve-pr` hint.
 
 ---
@@ -121,7 +121,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 - [ ] `--dry-run` short-circuits (§4.0) before any state change: in-memory body printed to stdout, no body persisted, no `git push`, no `gh pr create`, no `--memory` write. Exit 0.
 - [ ] PR title computed (§4.1) via priority: spec title verbatim if `len <= 72` → first sentence of `goal_and_context` truncated to 70 + `…` → spec id fallback. NO automatic Conventional-Commits prefix injection.
-- [ ] `DRAFT_FLAG` matrix (§4.2) computed via four layers: Ralph forces draft → open items > 0 default draft → `--draft` forces draft → `--ready` forces ready (Ralph layer 1 always wins). Conflict surfaced via stderr note when `--ready` ignored under Ralph.
+- [ ] `DRAFT_FLAG` matrix (§4.2) computed via four layers: Ralph/autonomous forces draft → open items > 0 default draft → `--draft` forces draft → `--ready` forces ready (Ralph/autonomous layer 1 always wins). Conflict surfaced via stderr note when `--ready` ignored under Ralph/autonomous.
 - [ ] `OPEN_ITEMS_COUNT` derived once from Phase 1 payload as `len(open_questions) + sum(deferred_findings.items) + (completion_review_status == "needs_work" ? 1 : 0)`. Same source feeds §2.11 Open items count and §4.2 layer 2.
 - [ ] Body delivery via `--body-file` (§4.3) — mktemp + `trap … EXIT` cleanup. Heredoc form documented as anti-pattern with cli/cli #29619 citation.
 - [ ] Body length cap (65,000 chars target, ~65,536 GitHub limit) enforced (§4.4) via truncation cascade: drop file list → trim TL;DR → collapse mermaid to overview-only → spill to `.flow/pr-bodies/<spec-id>.md` + commit + replace body with link.
@@ -174,5 +174,5 @@ Skill prose enumerates 10 forbidden patterns to make v2 enhancement footguns exp
 - **Hallucination guardrails** (see SKILL.md): every body claim traces to a payload field. Honest "unclear" beats plausible "wrong".
 - **No raw diff content in body**: paths, churn, modules only.
 - **No `gh pr merge`**: skill creates and exits.
-- **NOT Ralph-blocked**: skill runs under Ralph; PR is created directly in both modes — under Ralph only the differences are forced `--draft` + Phase 0 hard-errors instead of info prompts.
+- **NOT Ralph-blocked**: skill runs under Ralph and pilot-style autonomous mode alike; PR is created directly in every mode — under Ralph/autonomous the only differences are forced `--draft` + Phase 0 hard-errors instead of info prompts (the `PR_URL=` stdout line stays Ralph-only).
 - **Body ≤8000 chars**: hard cap. Collapse in priority order (drop full file list → trim TL;DR → collapse mermaid to overview-only).

@@ -37,9 +37,7 @@ fi
 
 When `RALPH=1` or `AUTONOMOUS=1`:
 
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
-- Phase 0 questions hard-error with non-zero exit + a clear stderr message (no user to ask in an autonomous context). (Interactive resolves the same via `plain-text numbered prompt`; both are info prompts, not a confirm gate.)
+- Phase 0 questions hard-error with non-zero exit + a clear stderr message (no user to ask in an autonomous context). (Interactive mode resolves the same gaps with its usual Phase 0 info prompts — not a confirm gate.)
 - Phase 4 forces `--draft` regardless of `--ready` (autonomous loops never open ready-to-merge PRs) — the one autonomous-vs-interactive difference now that the confirm gate is gone for both.
 - **Ralph only** (`RALPH=1`): Phase 5 emits the `PR_URL=` line on stdout for the harness to capture.
  This and every receipt/harness semantic stay keyed on `RALPH` alone — `AUTONOMOUS` never triggers them.

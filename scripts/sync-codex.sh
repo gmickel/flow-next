@@ -1043,6 +1043,13 @@ def is_negative_context(line):
         return True
     if 'do NOT use' in line and 'plain-text numbered prompt' in line:
         return True
+    # Hard-error / no-user prose ("questions hard-error ...", "no user to
+    # ask ..."). These lines DESCRIBE a Ralph/autonomous branch that refuses
+    # to ask — injecting the R2 ask block here would contradict the branch
+    # semantics (observed: make-pr autonomous bullet, fn-59.3 review).
+    if ('hard-error' in line or 'no user to ask' in line) \
+            and 'plain-text numbered prompt' in line:
+        return True
     # Capability-negation prose ("cannot call X", "can't ask via X", "cannot
     # use X"). These describe a subagent/context that is UNABLE to ask — a
     # descriptive site (e.g. the delegation reference's "the worker is a
