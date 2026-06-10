@@ -35,7 +35,8 @@ Docs (repo + flow-next.dev), GLOSSARY "Ready" term, Codex mirror regeneration, a
 - [ ] Site commit separate + unpushed until tag (release sequence owns the push)
 
 ## Done summary
-_(to be filled at completion)_
-
+Shipped the fn-58 readiness docs + 1.12.0 release mechanics: GLOSSARY "Ready" term, architecture/flowctl/tracker-sync/usage.md repo docs (spec ready/unready, explicit-ready JSON + badge, tracker.readyState row, epic alias rows, readiness-projection section), CHANGELOG 1.12.0 entry, version bump across all manifests (lockstep), and the regenerated Codex mirror with all net-new AskUserQuestion sites verified as plain-text numbered prompts. Site repo (flow-next.dev) updated in a separate unpushed commit (c942a44): writing-specs ready-flag section, cli-reference/configuration rows, tracker-sync ceremony + projection, capture/interview/plan behavior notes, strict-format 1.12.0 changelog entry, FLOW_NEXT_VERSION/package.json bumps; pnpm build green; both navbars verified untouched. RP impl-review (merge-base scope, full feature surface): SHIP, all R1-R8 met.
 ## Evidence
-_(to be filled at completion)_
+- Commits: 9550a65e593eee614e2d8c5369fed002f3350441, site:c942a448b93335f501fec68db08485db5c47a408
+- Tests: cd plugins/flow-next && python3 -m unittest discover -s tests -p 'test_*.py' (1047 tests green after dogfood usage.md parity fix), cd ~/work/flow-next.dev && pnpm build (58 pages, green), mirror byte-idempotency: md5-of-md5s identical across second sync-codex.sh run, mirror ask-site audit: 4 net-new sites (capture mark-ready, interview mark-ready, plan soft-check, ceremony readyState) verified transformed; 1 R2 block per file; no mid-table/mid-codeblock injection
+- PRs:
