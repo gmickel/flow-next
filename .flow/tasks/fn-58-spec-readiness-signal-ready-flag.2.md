@@ -39,7 +39,8 @@ Per spec §Resolved at planning:
 - [ ] Full suite green; ceremony + projection prose passes sync-codex validators (regen deferred to .4)
 
 ## Done summary
-_(to be filled at completion)_
-
+Added the tracker readiness projection plumbing (fn-58 R3/R4): `tracker.readyState` config default (null, tracker top level) in flowctl with tests, the skippable discovery-ceremony question that sets it (Linear state-name discovery/validation via list_issue_statuses/get_issue_status, GitHub label with 422-guarded pre-create), and the pull-side projection in status-sync.md that maps the configured tracker state onto the local `ready` flag via the idempotent fn-58.1 toggles — change-only --event-tagged receipts, stale-config warn-noop with flag untouched, strictly one-way pull with local-only receipts. rp impl-review verdict: SHIP (first pass, no findings).
 ## Evidence
-_(to be filled at completion)_
+- Commits: 9b80f9756b404aa416fee1c2460b9ee0b18cfd0d
+- Tests: cd plugins/flow-next && python3 -m unittest discover -s tests (1047 tests OK), python3 -m unittest tests.test_tracker_config -v (10 tests OK incl. new readyState assertions), flowctl config get tracker.readyState --json -> null on fresh + existing repo; set/get round-trip, cmp plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py (byte-identical), bash scripts/sync-codex.sh (all validators pass; mirror regen reverted, deferred to fn-58.4)
+- PRs:
