@@ -37,7 +37,8 @@ Per spec §Resolved at planning:
 - [ ] Zero behavior change for non-adopters: no readiness adopted in repo → no prompts AND no warnings anywhere (capture, interview, plan)
 
 ## Done summary
-_(to be filled at completion)_
-
+Added the fn-58 readiness prompting layer: capture gains a post-approve consent-gated "Mark ready?" question (§4.2, write via spec ready in new §5.9, autofix suggestion-only) plus an unconditional idempotent spec-unready reset in the --rewrite branch with a changed-gated one-line announcement; interview gains the same optional mark-ready offer before Completion (never auto-resets on refinement); plan Step 1 gains an adoption-gated readiness soft-check before scout fan-out with tracker-mode-split options (local mark-ready never offered when tracker.readyState is configured) and FLOW_RALPH/REVIEW_RECEIPT_PATH auto-proceed. All prompts share one visibility predicate (>=1 ready spec, no tracker.readyState for the mark-ready offers) so non-adopters see zero new prompts, warnings, or footer noise (R7).
 ## Evidence
-_(to be filled at completion)_
+- Commits: da1b165adbd2c1863e473ad362ec7f7a9937e678
+- Tests: cd plugins/flow-next && python3 -m unittest discover -s tests -p 'test_*.py' (1047 tests OK), rp impl-review SHIP (first pass, scoped to 7353779..HEAD)
+- PRs:
