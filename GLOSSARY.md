@@ -58,7 +58,15 @@ A structured PR body synthesizing nine flow-next state streams (spec with R-IDs,
 
 ## Ralph
 
-The flow-next autonomous overnight loop. External shell loop drives fresh Claude / Codex sessions per task with cross-model review gates and receipt-based proof-of-work. Iterates plan-review -> work -> impl-review -> spec-completion-review until the spec ships or the iteration cap is hit. Differentiator from `ralph-wiggum`-style open-loop autonomous agents.
+The flow-next autonomous overnight loop. External shell loop drives fresh Claude / Codex sessions per task with cross-model review gates and receipt-based proof-of-work. Iterates plan-review -> work -> impl-review -> spec-completion-review until the spec ships or the iteration cap is hit. Differentiator from `ralph-wiggum`-style open-loop autonomous agents. Contrast `/flow-next:pilot`: the in-session, host-driven single-tick conductor — Ralph owns the loop in a shell script; pilot hands the loop to the host's `/loop` / `/goal` primitives.
+
+## Pilot
+
+The single-tick build-loop conductor (`/flow-next:pilot`): one tick advances one ready spec by one pipeline stage (plan / plan-review / work / make-pr) and ends with a terminal `PILOT_VERDICT` line; the host's `/loop` or `/goal` owns iteration. Signals autonomy to sub-skills via the `mode:autonomous` token + `FLOW_AUTONOMOUS=1` env (distinct from `FLOW_RALPH`; never activates ralph-guard). Selection consumes the fn-58 `ready` gate; two healthy no-advance ticks clear the spec's `ready` flag (don't-thrash).
+
+## Verdict
+
+The structured tick outcome pilot prints for transcript-blind drivers: `PILOT_VERDICT=<ADVANCED|NO_WORK|BLOCKED|NEEDS_HUMAN> spec=<id> stage=<stage> reason="<one line>"`, always the last line of a tick. Distinct from a review receipt (Ralph's file-based proof-of-work): a verdict lives in the conversation output because `/goal` validators read the transcript, never the filesystem.
 
 ## Spec-as-PR
 

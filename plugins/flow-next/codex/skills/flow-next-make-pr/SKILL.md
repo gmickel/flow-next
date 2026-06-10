@@ -28,7 +28,7 @@ FLOWCTL="$HOME/.codex/scripts/flowctl"
 
 ## Mode Detection
 
-Parse `$ARGUMENTS` as a flag list. Recognized flags: `--draft`, `--ready`, `--no-mermaid`, `--memory`, `--dry-run`, and `--base <ref>` (consumes the next token). Strip recognized tokens; the remainder (if any) is the optional spec id.
+Parse `$ARGUMENTS` as a flag list. Recognized flags: `--draft`, `--ready`, `--no-mermaid`, `--memory`, `--dry-run`, `--base <ref>` (consumes the next token), and the literal token `mode:autonomous`. Strip recognized tokens; the remainder (if any) is the optional spec id.
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
@@ -38,6 +38,7 @@ WRITE_MEMORY=0
 DRY_RUN=0
 BASE_REF=""
 SPEC_ID=""
+AUTONOMOUS=0
 
 # Tokenize and walk the argument list.
 set -- $RAW_ARGS
@@ -50,11 +51,18 @@ while [[ $# -gt 0 ]]; do
  --dry-run) DRY_RUN=1; shift ;;
  --base) BASE_REF="$2"; shift 2 ;;
  --base=*) BASE_REF="${1#--base=}"; shift ;;
+ mode:autonomous) AUTONOMOUS=1; shift ;;
  --) shift; break ;;
  -*) echo "Unknown flag: $1" >&2; exit 2 ;;
  *) SPEC_ID="$1"; shift ;;
  esac
 done
+
+# Secondary signal: process-level autonomous driver (env survives only
+# within one process tree; the token is the primary, prose-safe carrier).
+if [[ "${FLOW_AUTONOMOUS:-}" == "1" ]]; then
+ AUTONOMOUS=1
+fi
 ```
 
 | Flag | Effect |
@@ -65,8 +73,9 @@ done
 | `--memory` | After PR creation, write a `knowledge/architecture-patterns/` memory entry summarizing what shipped. Idempotent — rerun adds no second entry for the same spec id. |
 | `--dry-run` | Skip Phase 4 entirely. Render body to stdout. Useful for inspection or `… --dry-run \| pbcopy`. |
 | `--base <ref>` | Override base-branch detection cascade. Useful when the team's default branch is `develop`, etc. |
+| `mode:autonomous` | Autonomous mode: Phase 0 info prompts hard-error instead of asking; draft forced. Sets `AUTONOMOUS=1` only — NEVER `RALPH`. Also derived from `FLOW_AUTONOMOUS=1`. |
 
-Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected separately in workflow.md §0.0 — the skill is **not** Ralph-blocked. Under Ralph the skill hard-errors instead of asking the Phase 0 info prompts, forces `--draft`, and emits the PR URL to stdout. (The PR is created directly in both modes — the only difference is forced-draft + no Phase 0 prompts under Ralph.)
+Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected separately in workflow.md §0.0 — the skill is **not** Ralph-blocked. Under Ralph the skill hard-errors instead of asking the Phase 0 info prompts, forces `--draft`, and emits the PR URL to stdout. (The PR is created directly in both modes — the only difference is forced-draft + no Phase 0 prompts under Ralph.) Autonomous mode is a SEPARATE flag: `AUTONOMOUS=1` derives only from the `mode:autonomous` token or `FLOW_AUTONOMOUS=1` and never sets `RALPH`. Under `RALPH || AUTONOMOUS` the Phase 0 info prompts hard-error and `--draft` is forced (`--ready` ignored with a note); the `PR_URL=` stdout contract and all receipt/harness semantics remain Ralph-only.
 
 ## Interaction Principles
 
@@ -75,7 +84,7 @@ Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected separately 
 - Ask **one question at a time** via `plain-text numbered prompt`. Never silently skip the question.
 - Lead with the **recommended option** and a one-sentence rationale.
 - **No confirm gate.** make-pr opens the PR without asking. Phase 0 asks *only* to resolve info it cannot derive (no `--base` and no detection match; no spec detected) — never "do you want to create it?". Not-all-tasks-done warns and proceeds (the open items make it a draft). Skip questions when context resolves cleanly.
-- **Ralph mode skips all questions.** Detect once at Phase 0 and route deterministically.
+- **Ralph and autonomous modes skip all questions.** Detect both once at Phase 0 and route deterministically; a genuinely unanswerable gap hard-errors with a clear message (NEEDS_HUMAN-style) instead of hanging on a prompt.
 
 ## Hallucination guardrails
 

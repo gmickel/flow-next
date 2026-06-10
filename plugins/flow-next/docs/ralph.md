@@ -12,6 +12,7 @@ Ralph is Flow-Next's repo-local autonomous harness. It loops over tasks, applies
 - [Architecture](#architecture)
   - [How It Works](#how-it-works)
   - [Why Ralph vs ralph-wiggum](#why-ralph-vs-ralph-wiggum)
+  - [Host-driven loop vs Ralph](#host-driven-loop-vs-ralph)
 - [Quality Gates](#quality-gates)
   - [Multi-Model Reviews](#1-multi-model-reviews)
   - [Plan Review Gate](#plan-review-gate)
@@ -168,6 +169,29 @@ Anthropic's official ralph-wiggum uses a Stop hook to keep Claude in the same se
 4. **Binary outcome** — Completion promise or max iterations
 
 **Ralph's solution:** Fresh context + multi-model review gates + receipt-based proof-of-work.
+
+### Host-driven loop vs Ralph
+
+`/flow-next:pilot` is the in-session alternative to Ralph: one invocation is one tick, and the host's `/loop` or `/goal` owns repetition.
+
+| Aspect | Ralph | Pilot |
+|--------|-------|-------|
+| Loop owner | External `ralph.sh` | Host `/loop` / `/goal` |
+| Session | Fresh per iteration | In-session ticks |
+| Proof-of-work | Receipts under `.flow/review-receipts/` | `PILOT_VERDICT` lines echoed to the transcript |
+| Guard hooks | ralph-guard / DCG | None (`FLOW_AUTONOMOUS`, not `FLOW_RALPH`) |
+| Stuck handling | Auto-block after N failures | Two-strike `spec unready` |
+| Best for | Overnight unattended scale | In-session backlog draining |
+
+Never nest them. Pilot hard-errors when invoked under `FLOW_RALPH` / `REVIEW_RECEIPT_PATH`; Ralph and pilot are alternative drivers for the same pipeline.
+
+Driver recipes:
+
+- Claude Code `/loop` v2.1.72+ (loops expire after 7 days): `/loop 10m /flow-next:pilot`
+- Claude Code `/goal` v2.1.139+ (`/goal` validators are transcript-blind, so phrase the stop condition against the verdict grammar): `/goal keep running /flow-next:pilot until it prints PILOT_VERDICT=NO_WORK, or stop after 20 turns`
+- Codex `/goal`: opt-in `[features] goals = true`, CLI >= 0.128.0. No `$skill-in-goal` syntax — write a plain-text objective that names pilot behavior and `PILOT_VERDICT=<ADVANCED|NO_WORK|BLOCKED|NEEDS_HUMAN>`.
+
+The `rp` review backend needs the RepoPrompt GUI. For unattended or overnight runs, use `--review=codex`, `--review=copilot`, or `--review=none`.
 
 ---
 

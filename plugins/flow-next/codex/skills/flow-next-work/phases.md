@@ -431,6 +431,8 @@ Context optimization. Each task gets fresh context:
 
 **Ralph mode**: Worker inherits `bypassPermissions` from parent. FLOW_RALPH=1 and REVIEW_RECEIPT_PATH are passed through.
 
+**Autonomous mode** (`mode:autonomous` token or `FLOW_AUTONOMOUS=1`): forward `FLOW_AUTONOMOUS=1` to the worker when set. It suppresses questions only — no receipt obligations, no ralph-guard activation; never set `FLOW_RALPH` from it.
+
 **Interactive mode**: Permission prompts pass through to user. Worker runs in foreground (blocking).
 
 ## Phase 4: Quality

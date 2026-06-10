@@ -2,6 +2,17 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 1.13.0] - 2026-06-11
+
+### Added
+- **`/flow-next:pilot` — a single-tick autonomous build-loop conductor** (fn-59 / FLOW-8). One invocation is one tick: SELECT the first `open` + `ready` spec whose `depends_on_epics` are done and whose tasks carry no other-actor claims, ACT by dispatching exactly one stage skill, VERIFY advancement from `flowctl` state (or a gh-confirmed OPEN PR URL for make-pr, which has no flowctl transition), then REPORT with one terminal machine-greppable line: `PILOT_VERDICT=<ADVANCED|NO_WORK|BLOCKED|NEEDS_HUMAN> spec=<id> stage=<stage> reason="<one line>"`. Stages are exactly `plan` / `plan-review` / `work` / `make-pr`; selection is a two-pass walk over the fn-58 `ready` gate with dependency + collision checks; branch handling follows the spec branch matrix (checkout existing branch for work/make-pr, `--branch=new` on first work tick, `NEEDS_HUMAN` for inconsistent all-done/no-branch state). The don't-thrash guard records healthy no-advance ticks in `$(git rev-parse --git-common-dir)/flow-next/pilot-strikes.json`, clears the spec's `ready` flag via `flowctl spec unready` on strike 2/2, and clears strikes when a human re-blesses via `flowctl spec ready`. V1 args are intentionally small: bare `/flow-next:pilot`, `--spec <id>`, `--dry-run`, and passthroughs `--review=<backend>`, `--research=<grep|rp>`, `--depth=<level>` (defaults: configured backend, grep, short). Driver recipes are host-owned, not tick-owned: Claude Code `/loop` v2.1.72+ (`/loop 10m /flow-next:pilot`, loops expire after 7 days), Claude Code `/goal` v2.1.139+ (`/goal keep running /flow-next:pilot until it prints PILOT_VERDICT=NO_WORK, or stop after 20 turns`), and Codex `/goal` with `[features] goals = true`, CLI >= 0.128.0, and a plain-text objective naming pilot + the verdict grammar.
+
+### Changed
+- **`/flow-next:plan`, `/flow-next:work`, and `/flow-next:make-pr` now honor autonomous mode without entering Ralph** (fn-59.2). The primary signal is the `mode:autonomous` arg token, which survives skill-invokes-skill; the secondary signal is `FLOW_AUTONOMOUS=1` for process-level drivers. These signals suppress user-question branches only — they deliberately do **not** activate ralph-guard hooks, receipt choreography, or any `FLOW_RALPH` path. Under autonomy, work defaults to `--branch=new`, make-pr forces a draft PR and hard-errors instead of prompting, and genuinely ambiguous states surface to pilot as `NEEDS_HUMAN`.
+
+### Notes
+- Ralph and pilot are alternative drivers, never nested: pilot refuses under `FLOW_RALPH` / `REVIEW_RECEIPT_PATH`. Ralph remains the overnight shell harness with fresh sessions, receipts, and ralph-guard; pilot is the in-session single tick with transcript verdicts. The `rp` review backend still needs the RepoPrompt GUI, so unattended runs should use `--review=codex`, `--review=copilot`, or `--review=none`. Codex mirror regenerated with the new pilot skill (`openai.yaml` included). Docs touched: README, GLOSSARY Pilot / Verdict terms, `ralph.md` host-driven-vs-Ralph contrast, docs index; flow-next.dev counterpart page: `/skills/pilot`.
+
 ## [flow-next 1.12.0] - 2026-06-10
 
 ### Added
