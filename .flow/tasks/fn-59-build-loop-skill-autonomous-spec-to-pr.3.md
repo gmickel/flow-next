@@ -8,6 +8,7 @@ Docs (repo + flow-next.dev), the Ralph-vs-pilot story, the hero autonomy pillar,
 
 **Size:** M
 **Files:** repo: `README.md`, `GLOSSARY.md`, `CLAUDE.md` (Where-to-look row), `plugins/flow-next/docs/README.md` + `docs/ralph.md`, 3 manifests' count strings, `CHANGELOG.md`, version files (bump.sh), `plugins/flow-next/codex/**` (regen incl. new pilot mirror + openai.yaml); site: `src/content/docs/skills/pilot.mdx` (new) + BOTH navbars + `ralph/*.mdx` cross-links + `src/pages/index.astro` hero `proofPillars` + changelog + `FLOW_NEXT_VERSION`/`package.json`
+<!-- Updated by plan-sync: fn-59.1 added a new skill AND a new command (commands/flow-next/pilot.md) but left manifests at 1.12.0 counts. Count-string targets verified against actual files: skills 26→27, commands 22→23. Per-manifest: .claude-plugin/plugin.json description "21 subagents, 22 commands, 26 skills" → "...23 commands, 27 skills"; .claude-plugin/marketplace.json plugins[0].description same string → same bump; .codex-plugin/plugin.json carries "21 subagents, 26 skills" in interface.longDescription ONLY (top description has no counts) → "...27 skills" (no command count there). The README "Twenty-six"→"Twenty-seven" skills + commands-table row still hold; also bump the commands count if README states one. -->`
 
 ## Approach
 

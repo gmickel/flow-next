@@ -94,7 +94,7 @@ When `READINESS_WARN=false`: continue silently — zero behavior change for read
 
 When `READINESS_WARN=true`:
 
-- **Non-interactive / Ralph** (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set — same probe as work/make-pr): auto-proceed with ONE stderr line, never block:
+- **Non-interactive / Ralph / autonomous** (any non-interactive marker: `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` set, `FLOW_AUTONOMOUS=1`, or the `mode:autonomous` token parsed in SKILL.md — treat the marker *family* as the gate, not a rigid two-var list): auto-proceed with ONE stderr line, never block:
   ```bash
   echo "[READINESS]: spec <id> not marked ready — proceeding (non-interactive)" >&2
   ```

@@ -52,6 +52,16 @@ If `REVIEW_RECEIPT_PATH` is set or `FLOW_RALPH=1`:
 - **Must** stage with `git add -A` (never list files).
 - **Do NOT** use TodoWrite for tracking.
 
+## Autonomous Mode (questions off, no receipt obligations)
+
+If `$ARGUMENTS` contains the literal token `mode:autonomous` (strip it — same parse shape as capture's `mode:autofix`, a NEW branch) or `FLOW_AUTONOMOUS=1` is set:
+
+- **Ask NO setup questions** (branch + review questions below are suppressed).
+- **Branch defaults deterministically to `--branch=new`** when no explicit branch option is present — under autonomy "the user's answer" never exists, and defaulting to the current branch could commit straight to main.
+- **Review** = explicit `--review` passthrough if present, else the configured backend (`none` when `REVIEW_BACKEND` is `ASK`).
+- **Autonomy ≠ Ralph.** Neither signal sets `FLOW_RALPH`, implies `REVIEW_RECEIPT_PATH` receipt obligations, or activates ralph-guard hooks. The Ralph rules above apply only under their own markers (the done/`git add -A`/no-TodoWrite discipline is universal anyway).
+- **Never hang on a question.** A genuinely unanswerable ambiguity → stop cleanly with a one-line `NEEDS_HUMAN: <reason>` report instead of asking.
+
 ## Input
 
 Full request: $ARGUMENTS
@@ -96,7 +106,12 @@ Parse the arguments for these patterns. If found, use them and skip correspondin
 - `--review=export` or "export review" or "external llm" → export for external LLM
 - `--review=none` or `--no-review` or "no review" or "skip review" → no review
 
+**Autonomous mode**:
+- `mode:autonomous` token (stripped from arguments) or `FLOW_AUTONOMOUS=1` env → suppress ALL setup questions; defaults per the Autonomous Mode section above (branch `new`, review = configured backend).
+
 ### If options NOT found in arguments
+
+**If `AUTONOMOUS=1` (autonomous mode):** ask nothing — apply the autonomous defaults and continue to the workflow.
 
 **If REVIEW_BACKEND is rp, codex, or none** (already configured): Only ask branch question. Show override hint:
 

@@ -12,7 +12,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 TODAY="$(date -u +%Y-%m-%d)"
 ```
 
-`jq`, `python3` (or `python`), `gh`, and `git` must be on PATH. Mode + flags come from the SKILL.md mode-detection block (`DRAFT_FORCE`, `NO_MERMAID`, `WRITE_MEMORY`, `DRY_RUN`, `BASE_REF`, `SPEC_ID`).
+`jq`, `python3` (or `python`), `gh`, and `git` must be on PATH. Mode + flags come from the SKILL.md mode-detection block (`DRAFT_FORCE`, `NO_MERMAID`, `WRITE_MEMORY`, `DRY_RUN`, `BASE_REF`, `SPEC_ID`, `AUTONOMOUS`).
 
 If `.flow/` does not exist, print `No .flow/ directory — this command runs inside a flow-next-managed repo.` and exit 1.
 
@@ -22,7 +22,7 @@ If `.flow/` does not exist, print `No .flow/ directory — this command runs ins
 
 **Goal:** every external dependency is resolved (gh installed + authed; spec id known; base ref valid; branch ahead of base; tasks done; no existing OPEN PR) before any rendering work starts. Phase 0 has the heaviest external-state dependencies; failing fast here keeps Phases 1-4 deterministic.
 
-### 0.0 — Detect Ralph context
+### 0.0 — Detect Ralph / autonomous context
 
 Detect once, route deterministically downstream. Per spec R24, the skill is **not** Ralph-blocked — autonomous loops opening draft PRs is the intended use.
 
@@ -33,11 +33,14 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
 fi
 ```
 
-When `RALPH=1`:
+`AUTONOMOUS` comes from SKILL.md mode detection (`mode:autonomous` token or `FLOW_AUTONOMOUS=1`). It is a separate flag — autonomous drivers (e.g. /flow-next:pilot) are NOT Ralph; neither signal here may ever set `RALPH`, and `FLOW_AUTONOMOUS` activates no ralph-guard hooks.
 
-- Phase 0 questions hard-error with non-zero exit + a clear stderr message (no user to ask). (Interactive resolves the same via `AskUserQuestion`; both are info prompts, not a confirm gate.)
-- Phase 4 forces `--draft` regardless of `--ready` (Ralph never opens ready-to-merge PRs) — the one Ralph-vs-interactive difference now that the confirm gate is gone for both.
-- Phase 5 emits the PR URL on stdout for the harness to capture.
+When `RALPH=1` or `AUTONOMOUS=1`:
+
+- Phase 0 questions hard-error with non-zero exit + a clear stderr message (no user to ask in an autonomous context). (Interactive resolves the same via `AskUserQuestion`; both are info prompts, not a confirm gate.)
+- Phase 4 forces `--draft` regardless of `--ready` (autonomous loops never open ready-to-merge PRs) — the one autonomous-vs-interactive difference now that the confirm gate is gone for both.
+- **Ralph only** (`RALPH=1`): Phase 5 emits the `PR_URL=` line on stdout for the harness to capture.
+  This and every receipt/harness semantic stay keyed on `RALPH` alone — `AUTONOMOUS` never triggers them.
 
 There is no `FLOW_MAKE_PR_ALLOW_QUESTIONS_IN_RALPH` opt-in. Ralph is deterministic.
 
@@ -103,8 +106,8 @@ if [[ -z "$SPEC_ID" ]]; then
 fi
 
 if [[ -z "$SPEC_ID" ]]; then
-  if [[ "$RALPH" == "1" ]]; then
-    echo "Error: no spec id supplied and no .flow/specs/*.json or .flow/epics/*.json branch_name matches '$CURRENT_BRANCH'. Ralph cannot prompt — pass an explicit spec id." >&2
+  if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
+    echo "Error: no spec id supplied and no .flow/specs/*.json or .flow/epics/*.json branch_name matches '$CURRENT_BRANCH'. Autonomous context cannot prompt — pass an explicit spec id." >&2
     exit 2
   fi
   # Interactive: ask via AskUserQuestion.
@@ -137,7 +140,7 @@ if [[ -z "$BASE_REF" ]]; then
 fi
 
 if [[ -z "$BASE_REF" ]]; then
-  if [[ "$RALPH" == "1" ]]; then
+  if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
     echo "Error: no base ref detected (origin/main, main, origin/master, master all missing). Pass --base <ref> explicitly." >&2
     exit 2
   fi
@@ -198,13 +201,13 @@ OPEN_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]? | select(.status != "done
 |---------|----------|
 | `OPEN_COUNT == 0` | Proceed silently. |
 | `OPEN_COUNT > 0` AND `DRY_RUN == 1` | Warn on stderr but proceed (`--dry-run` is for inspection — body should still render). |
-| `OPEN_COUNT > 0` AND `RALPH == 1` | Hard-error with the open-task list. Ralph workers should not open PRs for incomplete specs. |
+| `OPEN_COUNT > 0` AND (`RALPH == 1` OR `AUTONOMOUS == 1`) | Hard-error with the open-task list. Autonomous loops should not open PRs for incomplete specs. |
 | `OPEN_COUNT > 0` AND interactive | **Warn on stderr and proceed** (no prompt — autonomous create). The open items make the PR a **draft** via the §4.2 heuristic, which is exactly the "open a draft early" workflow; the warning names the open tasks + suggests `/flow-next:work` so the user can finish + flip to `--ready`. |
 
 ```bash
 if [[ "$OPEN_COUNT" -gt 0 ]]; then
-  if [[ "$RALPH" == "1" ]]; then
-    echo "Error: $OPEN_COUNT task(s) under $SPEC_ID still open ($OPEN_TASKS). Ralph cannot open PRs for incomplete specs." >&2
+  if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
+    echo "Error: $OPEN_COUNT task(s) under $SPEC_ID still open ($OPEN_TASKS). Autonomous context cannot open PRs for incomplete specs." >&2
     exit 2
   else
     # Interactive + --dry-run alike: warn, don't block. Open items → draft (§4.2).
@@ -253,12 +256,13 @@ PHASE0_CONTEXT=$(jq -n \
   --argjson open_tasks "$OPEN_COUNT" \
   --argjson dry_run "$DRY_RUN" \
   --argjson ralph "$RALPH" \
+  --argjson autonomous "$AUTONOMOUS" \
   --argjson no_mermaid "$NO_MERMAID" \
   --argjson write_memory "$WRITE_MEMORY" \
   --arg draft_force "$DRAFT_FORCE" \
   '{spec:$spec, base:$base, head:$head, branch:$branch,
     commits_ahead:$commits_ahead, open_tasks:$open_tasks,
-    dry_run:($dry_run==1), ralph:($ralph==1),
+    dry_run:($dry_run==1), ralph:($ralph==1), autonomous:($autonomous==1),
     no_mermaid:($no_mermaid==1), write_memory:($write_memory==1),
     draft_force:$draft_force}')
 ```
@@ -1135,14 +1139,14 @@ If the spec title contains characters problematic for shell quoting (single-quot
 
 ### 4.2 — Draft-vs-ready matrix (R24)
 
-Compute `DRAFT_FLAG` from a four-input matrix: `OPEN_ITEMS_COUNT`, Ralph context, `--draft` force flag, `--ready` force flag. **Resolution order: explicit force flags win over context-derived defaults.** This is the smart draft/ready default the autonomous create relies on: draft when `OPEN_ITEMS_COUNT > 0` (or Ralph / `--draft`), ready otherwise (or `--ready`).
+Compute `DRAFT_FLAG` from a four-input matrix: `OPEN_ITEMS_COUNT`, Ralph context, `--draft` force flag, `--ready` force flag. **Resolution order: explicit force flags win over context-derived defaults.** This is the smart draft/ready default the autonomous create relies on: draft when `OPEN_ITEMS_COUNT > 0` (or Ralph / autonomous / `--draft`), ready otherwise (or `--ready`).
 
 ```bash
 # Default state — neither flag forced; let context decide.
 DRAFT_FLAG=""
 
-# Layer 1: Ralph mode forces draft (autonomous-loop opens-for-human-review default).
-if [[ "$RALPH" == "1" ]]; then
+# Layer 1: Ralph OR autonomous mode forces draft (autonomous-loop opens-for-human-review default).
+if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
   DRAFT_FLAG="--draft"
 fi
 
@@ -1157,16 +1161,16 @@ if [[ "$DRAFT_FORCE" == "draft" ]]; then
   DRAFT_FLAG="--draft"
 fi
 
-# Layer 4: Explicit --ready force overrides everything except Ralph.
-# Ralph is a hard layer-1 invariant — autonomous loops MUST NOT open ready PRs even with --ready in args.
-if [[ "$DRAFT_FORCE" == "ready" && "$RALPH" != "1" ]]; then
+# Layer 4: Explicit --ready force overrides everything except Ralph/autonomous.
+# Layer 1 is a hard invariant — autonomous loops (Ralph or pilot) MUST NOT open ready PRs even with --ready in args.
+if [[ "$DRAFT_FORCE" == "ready" && "$RALPH" != "1" && "$AUTONOMOUS" != "1" ]]; then
   DRAFT_FLAG=""
 fi
 
 # Conflict surfacing: --draft AND --ready in the same invocation is the SKILL.md last-flag-wins rule.
 # DRAFT_FORCE captured the last one already; this layer just makes the conflict legible at runtime.
-if [[ "$DRAFT_FORCE" == "ready" && "$RALPH" == "1" ]]; then
-  echo "Note: --ready ignored under Ralph mode. PR will open as draft (autonomous-loop terminus)." >&2
+if [[ "$DRAFT_FORCE" == "ready" && ( "$RALPH" == "1" || "$AUTONOMOUS" == "1" ) ]]; then
+  echo "Note: --ready ignored under Ralph/autonomous mode. PR will open as draft (autonomous-loop terminus)." >&2
 fi
 ```
 
@@ -1179,9 +1183,9 @@ fi
 | Interactive | — | yes | — | draft |
 | Interactive | 0 | — | yes | ready |
 | Interactive | >0 | — | yes | **ready** (user forced) |
-| Ralph | 0 | — | — | draft |
-| Ralph | — | — | yes | draft (Ralph always draft) |
-| Ralph | — | yes | — | draft |
+| Ralph / Autonomous | 0 | — | — | draft |
+| Ralph / Autonomous | — | — | yes | draft (autonomous always draft) |
+| Ralph / Autonomous | — | yes | — | draft |
 
 `--draft` and `--ready` in the same invocation is handled by SKILL.md mode-detection's "last-flag-wins" rule — `DRAFT_FORCE` ends up as whichever flag appeared last in `$ARGUMENTS`. The conflict isn't a hard error.
 
@@ -1556,7 +1560,7 @@ fi
 
 ### 5.4 — Ralph stdout shape
 
-Under Ralph (`$RALPH == 1`), the success footer changes shape — the harness expects the PR URL on stdout in a parseable form, with all human-readable framing routed through stderr.
+Under Ralph (`$RALPH == 1`), the success footer changes shape — the harness expects the PR URL on stdout in a parseable form, with all human-readable framing routed through stderr. This contract is keyed on `RALPH` ALONE — `AUTONOMOUS=1` without Ralph uses the interactive footer; autonomous drivers (pilot) confirm the PR via `gh`, not by scraping `PR_URL=`.
 
 ```bash
 if [[ "$RALPH" == "1" ]]; then

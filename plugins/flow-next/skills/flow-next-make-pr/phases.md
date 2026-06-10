@@ -18,13 +18,14 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 **Done when:**
 
 - [ ] Ralph context detected (`RALPH=1` if `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set).
+- [ ] Autonomous context detected (`AUTONOMOUS=1` if the `mode:autonomous` token was parsed or `FLOW_AUTONOMOUS=1`) — never sets `RALPH`; prompt sites hard-error under `RALPH || AUTONOMOUS`.
 - [ ] When `DRY_RUN != 1`: `gh` installed AND `gh auth status --hostname github.com` succeeds. Skipped under `--dry-run` (Phase 4.0 short-circuits before any `gh pr create`, so requiring `gh` to be installed/authed there blocks the documented inspection path on machines / CI jobs that only render the body).
 - [ ] `SPEC_ID` resolved (positional arg → branch-match against `.flow/specs/*.json` + `.flow/epics/*.json` `branch_name` → interactive prompt / Ralph exit 2).
 - [ ] `SPEC_ID` validated via `flowctl show <spec-id> --json` (spec exists).
 - [ ] `BASE_REF` resolved through cascade (`--base` → `origin/main` → `main` → `origin/master` → `master` → ask / Ralph exit 2).
 - [ ] `BASE_REF` validated via `git rev-parse --verify --quiet`.
 - [ ] HEAD resolves; HEAD ≠ BASE; `git merge-base BASE HEAD` succeeds (shared history); `git rev-list --count <merge-base>..HEAD >= 1` (at least one commit since the merge-base — base does NOT need to be an ancestor of HEAD).
-- [ ] Tasks-done check (silent when all done / warn + proceed-as-draft interactively and under `--dry-run` / Ralph exit 2). No prompt for open tasks.
+- [ ] Tasks-done check (silent when all done / warn + proceed-as-draft interactively and under `--dry-run` / Ralph/autonomous exit 2). No prompt for open tasks.
 - [ ] Existing-PR refusal check: `gh pr view --json url,state,number | jq -r 'select(.state == "OPEN") | .url'` returns empty.
 - [ ] `PHASE0_CONTEXT` JSON built with spec / base / head / branch / commits_ahead / open_tasks / flags / draft_force.
 
@@ -32,8 +33,8 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 - gh missing → exit 1 + install instructions (skipped under `--dry-run`).
 - gh unauthenticated → exit 1 + `gh auth login` instructions (skipped under `--dry-run`).
-- Spec not resolved + Ralph → exit 2.
-- Base not resolved + Ralph → exit 2.
+- Spec not resolved + Ralph/autonomous → exit 2.
+- Base not resolved + Ralph/autonomous → exit 2.
 - Base ref invalid → exit 1.
 - HEAD == BASE → exit 1.
 - HEAD shares no merge-base with BASE (unrelated histories) → exit 1.

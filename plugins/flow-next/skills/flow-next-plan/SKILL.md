@@ -73,7 +73,7 @@ Examples:
 - `/flow-next:plan fn-1` (legacy formats fn-1, fn-1-xxx still supported)
 - `/flow-next:plan fn-1-add-oauth then review via /flow-next:plan-review`
 
-If empty, ask: "What should I plan? Give me the feature or bug in 1-5 sentences."
+If empty, ask: "What should I plan? Give me the feature or bug in 1-5 sentences." Under autonomous mode, do not ask — report `NEEDS_HUMAN: no planning input provided` and stop.
 
 ## FIRST: Parse Options or Ask Questions
 
@@ -82,6 +82,15 @@ Check configured backend:
 REVIEW_BACKEND=$($FLOWCTL review-backend)
 ```
 Returns: `ASK` (not configured), or `rp`/`codex`/`none` (configured).
+
+### Autonomous mode (mode:autonomous / FLOW_AUTONOMOUS)
+
+Parse `$ARGUMENTS` for the literal token `mode:autonomous` (strip it, same shape as capture's `mode:autofix` — a NEW parse branch, never overloading that token). Also honor the env var `FLOW_AUTONOMOUS=1` as a secondary signal (process-level drivers). Either signal → `AUTONOMOUS=1`.
+
+Under `AUTONOMOUS=1`:
+- **Ask NO setup questions.** Explicit passthrough flags (`--depth`, `--research`, `--review`) win as usual; for anything unset, apply the autonomous defaults: depth = `short`, research = `grep` (repo-scout), review = configured backend (`none` when `REVIEW_BACKEND` is `ASK`).
+- **Never hang on a question.** If a genuinely unanswerable ambiguity remains (e.g. empty input), stop cleanly with a one-line `NEEDS_HUMAN: <reason>` report instead of asking.
+- Autonomy ≠ Ralph: neither `mode:autonomous` nor `FLOW_AUTONOMOUS` activates ralph-guard hooks or any receipt path — they gate question suppression only.
 
 ### Option Parsing (skip questions if found in arguments)
 
@@ -104,6 +113,8 @@ Parse the arguments for these patterns. If found, use them and skip questions:
 - `--depth=standard` or "normal" → STANDARD
 - `--depth=deep` or "comprehensive" or "detailed" → DEEP
 - Default: SHORT (simpler is better)
+
+**If `AUTONOMOUS=1`:** skip every question below — apply the autonomous defaults above and continue.
 
 **If REVIEW_BACKEND is rp, codex, or none** (already configured): Only ask research question. Show override hint:
 
