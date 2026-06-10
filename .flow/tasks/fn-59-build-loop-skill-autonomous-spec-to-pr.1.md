@@ -47,7 +47,8 @@ Tick phases (one invocation = one tick; report LAST, nothing after the verdict l
 - [ ] Command wrapper + sync-codex registration done; `./scripts/sync-codex.sh` run locally as VERIFICATION ONLY (validators green) — the regenerated `codex/**` tree is reverted/not committed here; .3 owns the committed mirror
 
 ## Done summary
-_(to be filled at completion)_
-
+Built the flow-next-pilot skill (SKILL.md + workflow.md): a single-tick autonomous build-loop conductor for /loop and /goal drivers that selects one ready spec, classifies its stage, dispatches one sub-skill with mode:autonomous, verifies advancement from flowctl state (gh OPEN-PR URL for make-pr), manages the .git-common-dir strikes ledger, and ends with the terminal PILOT_VERDICT line. Added the slash-command wrapper and sync-codex.sh registration; sync run as verification only with the regenerated mirror reverted (fn-59.3 owns the committed mirror). RP impl-review SHIP after 2 fix rounds.
 ## Evidence
-_(to be filled at completion)_
+- Commits: 21de8473cd6e6a07733b78dd72c4b6f2d885a1b9, 9247c0c, 90b3287, 1a1198289f64b1b936768f718422590bd95992e4
+- Tests: ./scripts/sync-codex.sh (all validators green, 20 required skills have openai.yaml; regenerated codex/** mirror reverted per task acceptance — fn-59.3 owns the committed mirror), bash -n scripts/sync-codex.sh, rp impl-review SHIP after 2 NEEDS_WORK fix rounds (base 3478ec0)
+- PRs:
