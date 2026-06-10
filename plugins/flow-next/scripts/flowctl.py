@@ -1331,6 +1331,13 @@ def set_config(key: str, value) -> dict:
             value = True
         elif value.lower() == "false":
             value = False
+        elif value.lower() == "null":
+            # JSON null — the documented "off" value for nullable keys like
+            # tracker.readyState / tracker.type. Without this, `config set
+            # tracker.readyState null` persists the STRING "null", which the
+            # skill probes (`jq -r '.value // empty'`) read as a non-empty
+            # configured state literally named "null" (PR #170 review).
+            value = None
         elif value.isdigit():
             value = int(value)
 

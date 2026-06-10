@@ -103,6 +103,38 @@ class TrackerConfigTestCase(unittest.TestCase):
         # fn-58: a fresh repo reads a clean null for the readiness knob.
         self.assertIsNone(self.flowctl.get_config("tracker.readyState"))
 
+    # --- config set null coercion (PR #170 review) ---------------------------
+
+    def test_config_set_null_clears_ready_state(self) -> None:
+        # Opt in: configure a readiness state, then clear it with the
+        # documented off value `null`. The CLI delivers argv strings, so
+        # set_config must coerce the literal "null" token to JSON null —
+        # otherwise the string "null" persists and skill probes
+        # (`jq -r '.value // empty'`) see a configured state named "null".
+        self.flowctl.set_config("tracker.readyState", "Ready")
+        on_disk = json.loads(
+            (self.tmpdir / ".flow" / "config.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(on_disk["tracker"]["readyState"], "Ready")
+        self.assertEqual(self.flowctl.get_config("tracker.readyState"), "Ready")
+
+        self.flowctl.set_config("tracker.readyState", "null")
+        on_disk = json.loads(
+            (self.tmpdir / ".flow" / "config.json").read_text(encoding="utf-8")
+        )
+        self.assertIn("readyState", on_disk["tracker"])
+        self.assertIsNone(on_disk["tracker"]["readyState"])  # real JSON null
+        # `config get` round-trips to None (merged read path).
+        self.assertIsNone(self.flowctl.get_config("tracker.readyState"))
+
+    def test_config_set_null_is_case_insensitive(self) -> None:
+        # Same .lower() treatment as the true/false coercion.
+        self.flowctl.set_config("tracker.readyState", "NULL")
+        on_disk = json.loads(
+            (self.tmpdir / ".flow" / "config.json").read_text(encoding="utf-8")
+        )
+        self.assertIsNone(on_disk["tracker"]["readyState"])
+
     # --- Forward-compat -----------------------------------------------------
 
     def test_unknown_key_under_tracker_survives_round_trip(self) -> None:

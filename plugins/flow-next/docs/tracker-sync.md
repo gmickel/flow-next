@@ -147,6 +147,7 @@ When `tracker.readyState` is configured (the optional ceremony question above), 
 - **Change-only receipts.** The projection applies via the idempotent `spec ready`/`unready` toggles and emits an event-tagged receipt **only when the local flag actually changes** — silent on a no-op echo (mirrors the `lastSyncedAt` advance-only-on-real-reconciliation rule).
 - **Stale-config degradation.** A configured state name / label that no longer resolves on the tracker (renamed/deleted) ⇒ **warn + `noop` receipt + flag untouched + the sync continues** — one bad knob never aborts the run, and a stale `readyState` must not silently un-ready every linked spec.
 - **Orthogonal to status.** The projection never feeds the who-wins ladder above, never advances `lastSyncedAt` by itself, and never blocks — body/status/comments reconcile exactly as before. `readyState: null` (the default) skips it entirely: no calls, no receipts, no flag writes.
+- **Opting back out.** `flowctl config set tracker.readyState null` clears the knob (the literal `null` token is stored as JSON null) — the projection goes dormant and local `spec ready`/`unready` is authoritative again.
 
 ## Ralph-safe — never blocks
 
