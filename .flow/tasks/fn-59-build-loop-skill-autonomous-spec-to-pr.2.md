@@ -38,7 +38,8 @@ Per spec R4/R11 (amended: token primary, env secondary). NEW parse branch per sk
 - [ ] Manual smoke: `plan <spec> mode:autonomous --review=none` and `make-pr <spec> mode:autonomous` run question-free on a scratch spec
 
 ## Done summary
-_(to be filled at completion)_
-
+plan, work, and make-pr now parse+strip the mode:autonomous token and honor FLOW_AUTONOMOUS=1 in their question-suppression branches only: plan defaults short/grep/configured-backend and its readiness soft-check treats the non-interactive marker family; work gains an Autonomous Mode section (deterministic --branch=new default, no receipt obligations) and forwards FLOW_AUTONOMOUS to workers; make-pr carries a separate AUTONOMOUS flag that hard-errors prompts and forces draft under RALPH || AUTONOMOUS while PR_URL= stdout/receipt semantics stay Ralph-only. Codex mirror regen deliberately rides fn-59.3; rp impl-review SHIP first pass.
 ## Evidence
-_(to be filled at completion)_
+- Commits: 2b5259b91f9876e1a9c15e419235894453d0490f
+- Tests: python3 (all 50 plugins/flow-next/tests/test_*.py) — 0 failures, ./scripts/sync-codex.sh — exit 0, validators pass (mirror diff reverted; regen rides fn-59.3), extracted-bash smoke: make-pr SKILL.md mode-detection block executed with token/env/none variants (AUTONOMOUS parsed+stripped, SPEC_ID intact), extracted-bash smoke: make-pr workflow.md 4.2 draft matrix executed across RALPH/AUTONOMOUS/OPEN_ITEMS/DRAFT_FORCE — all 6 cases per spec incl. --ready ignored under autonomous, grep proof: ralph-guard.py:927 activation keyed solely on FLOW_RALPH==1; zero FLOW_AUTONOMOUS in hooks; PR_URL bash gate stays RALPH-only
+- PRs:
