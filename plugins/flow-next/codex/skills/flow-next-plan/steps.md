@@ -98,9 +98,9 @@ When `READINESS_WARN=true`:
  ```bash
  echo "[READINESS]: spec <id> not marked ready — proceeding (non-interactive)" >&2
  ```
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+- **Interactive**: ask ONE question (MUST ask via the plain-text numbered prompt described below; lead with recommendation; default proceed — planning is non-destructive and often part of getting a spec ready). The option set splits by tracker mode:
 
-- **Interactive**: ask ONE question via `plain-text numbered prompt` (lead with recommendation; default proceed — planning is non-destructive and often part of getting a spec ready). The option set splits by tracker mode:
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
  - **`tracker.readyState` NOT configured** (local readiness):
  - **header**: `Spec not ready`
  - **body**: `<spec-id> is not marked ready (readiness is in use in this repo). Recommended: proceed — planning is non-destructive and refining a draft is normal. Confidence: [high].`

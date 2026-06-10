@@ -98,7 +98,7 @@ When `READINESS_WARN=true`:
   ```bash
   echo "[READINESS]: spec <id> not marked ready — proceeding (non-interactive)" >&2
   ```
-- **Interactive**: ask ONE question via `AskUserQuestion` (lead with recommendation; default proceed — planning is non-destructive and often part of getting a spec ready). The option set splits by tracker mode:
+- **Interactive**: ask ONE question (MUST use `AskUserQuestion` tool; lead with recommendation; default proceed — planning is non-destructive and often part of getting a spec ready). The option set splits by tracker mode:
   - **`tracker.readyState` NOT configured** (local readiness):
     - **header**: `Spec not ready`
     - **body**: `<spec-id> is not marked ready (readiness is in use in this repo). Recommended: proceed — planning is non-destructive and refining a draft is normal. Confidence: [high].`
