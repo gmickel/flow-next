@@ -112,15 +112,18 @@ Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins:
 |---|---|
 | 0 tasks exist | `plan` |
 | tasks exist and `plan_review_status != "ship"` and review backend is configured | `plan-review` |
-| any task is `ready`, `open`, or `in_progress` and own/unassigned | `work` |
+| any task has a non-`done` status — `todo`, `blocked`, or `in_progress` own/unassigned (canonical task statuses are `todo`, `in_progress`, `blocked`, `done`) | `work` |
 | all tasks done and `completion_review_status != "ship"` and review backend is configured | `work` |
 | all tasks done and completion is ship-or-ungated | PR probe, then `make-pr`, skip, or `NEEDS_HUMAN` |
 
+A spec whose only remaining tasks are `blocked` still classifies as `work`; if work cannot advance it, the healthy-no-advance strike path handles it.
+
 Review backend `none` or `ASK` skips both plan-review and completion-review gates; pilot never deadlocks on a gate that cannot run.
 
-The all-done PR probe is the only gh touch in classification. Use the spec's `branch_name`:
+The all-done PR probe is the only gh touch in classification. Resolve the spec's `branch_name` first (Phase 3 reuses the same `BRANCH_NAME`):
 
 ```bash
+BRANCH_NAME="$(printf '%s\n' "$SPEC_JSON" | jq -r '.branch_name // empty')"
 PR_PROBE_FAILED=0
 PR_JSON=$(gh pr list --head "$BRANCH_NAME" --state all --json url,state,number --limit 10 2>/dev/null) || PR_PROBE_FAILED=1
 OPEN_PR=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '.[] | select(.state == "OPEN") | .url' | head -1)
@@ -144,10 +147,10 @@ PILOT_VERDICT=NO_WORK spec=<id> stage=<stage> reason="dry-run: classification on
 
 ## Phase 3 — Branch resolution matrix
 
-Pilot owns branch resolution. Read `branch_name` from the selected spec JSON:
+Pilot owns branch resolution. Reuse `BRANCH_NAME` from Phase 2 (resolve it here when classification never reached the all-done branch):
 
 ```bash
-BRANCH_NAME="$(printf '%s\n' "$SPEC_JSON" | jq -r '.branch_name // empty')"
+[[ -n "${BRANCH_NAME:-}" ]] || BRANCH_NAME="$(printf '%s\n' "$SPEC_JSON" | jq -r '.branch_name // empty')"
 if [[ -n "$BRANCH_NAME" ]] && git -C "$REPO_ROOT" rev-parse --verify --quiet "$BRANCH_NAME" >/dev/null; then
   BRANCH_EXISTS=1
 else
