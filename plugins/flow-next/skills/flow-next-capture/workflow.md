@@ -702,6 +702,11 @@ fi
 "$FLOWCTL" spec set-plan "$SPEC_ID" --file - --json <<EOF
 $SPEC_BODY
 EOF
+
+# Run anchor for Phase 6's sync check — written at the write step, BEFORE the
+# 5.7 dispatch, so it lower-bounds this run's receipts (bash vars don't survive
+# across tool calls; this file does).
+date -u +%Y-%m-%dT%H:%M:%SZ > "${TMPDIR:-/tmp}/flow-capture-anchor-${SPEC_ID}"
 ```
 
 Use a real heredoc (not `printf`) so embedded markdown formatting and newlines round-trip cleanly. `read_file_or_stdin` in `flowctl.py` handles `--file -` correctly.
@@ -724,6 +729,12 @@ READY_RESET=$("$FLOWCTL" spec unready "$SPEC_ID" --json | jq -r '.changed // fal
 "$FLOWCTL" spec set-plan "$SPEC_ID" --file - --json <<EOF
 $SPEC_BODY
 EOF
+
+# Run anchor for Phase 6's sync check — REQUIRED on the rewrite path: created_at
+# is the spec's ORIGINAL creation time here (an earlier run), so an old
+# `event: capture` receipt would false-OK the check and the retro-fire would
+# never fire (Codex review, PR #169 P2).
+date -u +%Y-%m-%dT%H:%M:%SZ > "${TMPDIR:-/tmp}/flow-capture-anchor-${SPEC_ID}"
 ```
 
 When `READY_RESET=true` (the spec WAS ready), Phase 6's rewrite footer carries a one-line reset announcement. When `false`, no readiness line is printed — never announce a reset that didn't happen (zero noise for never-ready specs).
@@ -823,11 +834,18 @@ Idempotent plumbing (fn-58.1) — re-running is a silent no-op. Best-effort: a f
 **Tracker-sync end-of-run check — runs BEFORE the footer.** Read-only audit: did the capture touchpoint (5.7) actually fire (receipt-backed)? It runs independently of 5.7, so a wholesale-skipped dispatch block is still caught. With no tracker configured, `sync check` exits silently in constant time — the footer slot then reads `n/a (bridge inactive)` and nothing else changes. (Capture is Ralph-blocked, so there is no stdout-routing concern — the slot prints where the footer prints.)
 
 ```bash
-# --since: the spec's created_at — on-disk anchor (bash vars do NOT survive
-# across tool calls; flowctl show re-derives it anytime). The spec was created
-# this run in Phase 5, so created_at lower-bounds the run; a Phase-6-captured
-# "now" would postdate the 5.7 receipt and false-MISSING.
-SINCE="$("$FLOWCTL" show "$SPEC_ID" --json | jq -r '.created_at')"
+# --since: the run anchor written at the Phase-5 write step (5.2/5.3). Fallback:
+# created_at — valid for FRESH captures only (spec created this run). The rewrite
+# path MUST have the anchor: created_at is the ORIGINAL creation time there, so
+# any old `event: capture` receipt would false-OK the check (Codex review,
+# PR #169 P2). A Phase-6 "now" would postdate the 5.7 receipt (false-MISSING);
+# updated_at can be bumped by §5.9's ready-toggle after 5.7 — neither is safe.
+ANCHOR_FILE="${TMPDIR:-/tmp}/flow-capture-anchor-${SPEC_ID}"
+if [[ -f "$ANCHOR_FILE" ]]; then
+  SINCE="$(cat "$ANCHOR_FILE")"
+else
+  SINCE="$("$FLOWCTL" show "$SPEC_ID" --json | jq -r '.created_at')"
+fi
 
 "$FLOWCTL" sync check "$SPEC_ID" --events capture --since "$SINCE" --json
 # Empty output → bridge inactive → slot = `n/a (bridge inactive)`. Otherwise
@@ -912,7 +930,7 @@ The `Readiness:` announcement line appears ONLY when §5.3's reset actually chan
 
 ### Done when
 
-- End-of-run `sync check` ran (`--events capture`, `--since` = the spec's `created_at`); any MISSING touchpoint was retro-fired exactly once and re-checked.
+- End-of-run `sync check` ran (`--events capture`, `--since` = the Phase-5 run anchor, falling back to `created_at` for fresh captures); any MISSING touchpoint was retro-fired exactly once and re-checked.
 - Footer is printed with the mandatory four-state `Tracker sync:` line (explicit `n/a (bridge inactive)` when no tracker is configured).
 - Skill exits 0.
 
