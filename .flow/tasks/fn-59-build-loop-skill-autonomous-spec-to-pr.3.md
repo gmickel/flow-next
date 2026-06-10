@@ -38,7 +38,8 @@ Docs (repo + flow-next.dev), the Ralph-vs-pilot story, the hero autonomy pillar,
 - [ ] Site commit separate, unpushed until tag
 
 ## Done summary
-_(to be filled at completion)_
-
+1.13.0 release surfaces for /flow-next:pilot: repo docs (README Twenty-seven + commands row + two-path autonomy blurb, GLOSSARY Pilot/Verdict terms + Ralph contrast, docs/ralph.md "Host-driven loop vs Ralph" subsection with drive recipes and version gates, docs index + CLAUDE.md rows), manifest count sweep (21 subagents / 23 commands / 27 skills), CHANGELOG 1.13.0, bump.sh minor lockstep, and the committed Codex mirror regen including the new pilot mirror (openai.yaml present, R2 audit clean — plus an is_negative_context hardening so the R2 ask block can never anchor in autonomous hard-error prose). flow-next.dev updated in a separate unpushed commit (5b806f4): new skills/pilot.mdx in BOTH navbars, ralph cross-links, seventh hero pillar "Autonomous loop", changelog entry, FLOW_NEXT_VERSION/package.json 1.13.0, pnpm build green. RP impl-review SHIP after 2 fix rounds; repo docs batch implemented via codex delegation (gpt-5.5/medium, class=success).
 ## Evidence
-_(to be filled at completion)_
+- Commits: 3465f89, 2550f95, 49496fb, 3ff66b5
+- Tests: for f in plugins/flow-next/tests/test_*.py; do python3 $f; done (all green), ./scripts/sync-codex.sh (validation green: 28 skills, 21 agents, openai.yaml coverage incl. flow-next-pilot), cd ~/work/flow-next.dev && pnpm build (59 pages, green; site commit 5b806f4, unpushed until tag), jq parse + count grep across README + 3 manifests (27 skills / 23 commands / 21 subagents), version lockstep check: 1.13.0 across 5 manifests + README badge + site FLOW_NEXT_VERSION/package.json
+- PRs:
