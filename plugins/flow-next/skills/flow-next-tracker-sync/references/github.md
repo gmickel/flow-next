@@ -158,9 +158,11 @@ tolerate the "label not found" by creating on demand).
 ### Readiness label (`tracker.readyState` — fn-58 R3/R4)
 
 GitHub has no workflow states, so the readiness signal resolves to a **label**:
-`tracker.readyState` holds a label name (the ceremony pre-creates it with the
-tolerate-already-exists guard — steps.md Phase 1 step 5; `gh label create` fails
-with a 422 when the label exists, which is fine/idempotent). Read-side semantics
+`tracker.readyState` holds a label name (the ceremony pre-creates it and writes
+the config **only once the label is confirmed to exist** — steps.md Phase 1
+step 5 tolerates the already-exists 422 as idempotent but surfaces any other
+`gh label create` failure instead of writing the config, so the ceremony never
+manufactures the stale-config warn/noop below). Read-side semantics
 ([status-sync.md](status-sync.md) § Readiness projection owns the procedure):
 
 - **Label present on the issue ⇒ local `ready=true`; label ABSENT ⇒

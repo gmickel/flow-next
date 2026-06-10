@@ -60,13 +60,19 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
    **Never assume — but default-on is not assuming.** No signal / user declines the bridge ⇒ write nothing; `enabled` stays `false`; `sync active` stays `active: false`. Confirming the bridge IS the consent to sync the pipeline. The **config schema default stays `off`** (in `get_default_config()`), so a bare `tracker.enabled=true` set by hand or a script — WITHOUT this ceremony — activates **no lifecycle-event sync** (every `perEvent` event stays dormant). The **one exception** is make-pr's PR↔issue link, which is unconditional whenever the bridge is active (no per-event gate, by design — it powers Linear Diffs); only the ceremony's explicit per-event writes activate the events themselves. Users opt out per event afterward via `flowctl config set tracker.perEvent.<event> off`.
 5. **Readiness state (fn-58, R4 — optional, skippable).** After the config writes, ask one more question via `AskUserQuestion`: *which tracker workflow state means "ready for work"?* When set, every pull-side sync projects that state onto the local spec `ready` flag ([→ ref: status-sync.md] § Readiness projection) — **the tracker becomes authoritative for readiness** (a local `flowctl spec ready` is overwritten on the next sync). Readiness is optional: always offer **skip** (and lead with it when no candidate state exists); skipping writes nothing and leaves `tracker.readyState: null` — the readiness gate stays dormant (R7).
    - **Linear** — discover the team's states first: MCP `list_issue_statuses(team:<team>)` → `{id, name, type}` per state (GraphQL rung: `workflowStates(first:100, filter:{team:{name:{eq:$team}}}){ nodes { id name type } }` — explicit `first:` on every connection). Lead with a recommendation: a state whose **name** looks like "Ready" / "Next" / "Ready for Dev" (case-insensitive); if none, lead with skip. Validate the chosen state resolves (`get_issue_status(<id or name>)`) before writing. Store the state **name** (names are what humans see; the projection matches case-insensitive/trimmed).
-   - **GitHub** — issues have no workflow states; readiness resolves to a **label** name (suggest `ready`). Pre-create it so the projection never trips on a missing label — tolerate already-exists (the create fails with a 422 when the label exists; that is fine, idempotent):
+   - **GitHub** — issues have no workflow states; readiness resolves to a **label** name (suggest `ready`). Pre-create it so the projection never trips on a missing label — tolerate **only** already-exists (the create fails with a 422 when the label exists; that is fine, idempotent). Any other failure (auth / permissions / wrong repo / API) must surface — never write `tracker.readyState` for a label that isn't confirmed to exist, or every later pull hits the stale-config warn/noop (github.md § Readiness label) and the flag never moves:
    ```bash
-   gh label create "$READY_LABEL" -R "$REPO" \
-     --description "flow-next: spec ready for execution" \
-     --color 0E8A16 2>/dev/null || true   # 422 already_exists ⇒ fine (github.md § Readiness label)
-   $FLOWCTL config set tracker.readyState "$READY_LABEL"   # Linear: the state name instead
+   LABEL_OK=1
+   if ! CREATE_ERR=$(gh label create "$READY_LABEL" -R "$REPO" \
+       --description "flow-next: spec ready for execution" \
+       --color 0E8A16 2>&1); then
+     LABEL_OK=0   # nonzero exit — tolerate ONLY already-exists: confirm the label is really there
+     gh label list -R "$REPO" --search "$READY_LABEL" --json name --jq '.[].name' \
+       | grep -qix -- "$READY_LABEL" && LABEL_OK=1   # exists ⇒ 422 was idempotent, proceed
+   fi
+   [ "$LABEL_OK" = 1 ] && $FLOWCTL config set tracker.readyState "$READY_LABEL"   # Linear: the state name instead
    ```
+   If `LABEL_OK` stays 0 the label does NOT exist and the create genuinely failed: show the user `$CREATE_ERR` and re-ask via `AskUserQuestion` — retry, pick a different label, or skip (skip ⇒ `tracker.readyState` stays null, gate dormant per R7). Don't reach for `gh label create --force` — it silently overwrites an existing label's color/description, which is not our intent.
 
 ## Phase 2 — Link / create ceremony (R2/R3/R16)
 
