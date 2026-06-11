@@ -2,7 +2,7 @@
 name: flow-next-pilot
 description: Single-tick autonomous build-loop conductor for host drivers (/loop, /goal). Each invocation advances exactly ONE ready spec by ONE pipeline stage (plan, plan-review, work, make-pr) and ends with a terminal PILOT_VERDICT line for the driver to read. Triggers on /flow-next:pilot, optionally with --spec <id>, --dry-run, --review=<backend>, --research=<grep|rp>, --depth=<level>. Autonomous by design — never asks the user questions; reports NEEDS_HUMAN instead.
 user-invocable: false
-allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Skill, Task
+allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Skill
 ---
 
 # /flow-next:pilot — single-tick autonomous build-loop conductor

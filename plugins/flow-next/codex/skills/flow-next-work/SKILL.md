@@ -57,7 +57,7 @@ If `REVIEW_RECEIPT_PATH` is set or `FLOW_RALPH=1`:
 If `$ARGUMENTS` contains the literal token `mode:autonomous` (strip it — same parse shape as capture's `mode:autofix`, a NEW branch) or `FLOW_AUTONOMOUS=1` is set:
 
 - **Ask NO setup questions** (branch + review questions below are suppressed).
-- **Branch defaults deterministically to `--branch=new`** when no explicit branch option is present — under autonomy "the user's answer" never exists, and defaulting to the current branch could commit straight to main.
+- **Branch defaults deterministically to `--branch=new`** when no explicit branch option is present — under autonomy "the user's answer" never exists, and defaulting to the current branch could commit straight to main. **Name the new branch exactly the spec's `branch_name` field** (`$FLOWCTL show <spec-id> --json | jq -r '.branch_name'`) — pilot's branch matrix, its all-done PR probe, and make-pr's branch-match spec detection all key on that name; an ad-hoc name breaks multi-tick continuity.
 - **Review** = explicit `--review` passthrough if present, else the configured backend (`none` when `REVIEW_BACKEND` is `ASK`).
 - **Autonomy ≠ Ralph.** Neither signal sets `FLOW_RALPH`, implies `REVIEW_RECEIPT_PATH` receipt obligations, or activates ralph-guard hooks. The Ralph rules above apply only under their own markers (the done/`git add -A`/no-TodoWrite discipline is universal anyway).
 - **Never hang on a question.** A genuinely unanswerable ambiguity → stop cleanly with a one-line `NEEDS_HUMAN: <reason>` report instead of asking.

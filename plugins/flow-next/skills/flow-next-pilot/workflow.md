@@ -163,7 +163,7 @@ Matrix:
 | State | Action |
 |---|---|
 | branch exists and stage is `work` | `git checkout <branch_name>`, dispatch work with `--branch=current` |
-| branch absent and stage is first `work` tick | dispatch work with `--branch=new`; work creates it |
+| branch absent and stage is first `work` tick | dispatch work with `--branch=new`; under autonomy work names it exactly the spec's `branch_name` (fn-59.2 contract), so later ticks find it |
 | stage is `make-pr` and branch exists | `git checkout <branch_name>`; make-pr auto-detects the spec from the branch |
 | stage is `make-pr` and branch absent | `NEEDS_HUMAN`, reason `all tasks done but spec branch missing — inconsistent state` |
 | stage is `plan` or `plan-review` | no branch action |
