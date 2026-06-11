@@ -377,8 +377,28 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
 
 `TAIL_OK == 0` → verdict `NEEDS_HUMAN` for this PR, reason `squash commit missing from local base — tail not run`; do NOT run ANY tail step (no spec close, no tracker, no release) and continue to the next PR — a later tick re-enters via the merged-but-unclosed path once the base is fixed. Only with `TAIL_OK == 1` run the tail, in order:
 
-1. **Spec close** — `"$FLOWCTL" spec close "$spec" --json`. flowctl hard-requires all tasks done; stray non-done tasks at close time → verdict `NEEDS_HUMAN`, reason `spec close refused: <flowctl error>` (report, never force) — the merge stands, a later tick re-enters via the merged-but-unclosed path after a human fixes the task state. Do NOT commit yet — the tracker touchpoint below may update tracked `.flow` sync state; step 3 persists both in one commit.
-2. **Tracker touchpoint (opt-in, best-effort)** — gated exactly like every fn-57 touchpoint (active AND leaf ≠ off/null; an unseeded leaf reads `null` = off):
+1. **Spec close** — `"$FLOWCTL" spec close "$spec" --json`. flowctl hard-requires all tasks done; stray non-done tasks at close time → verdict `NEEDS_HUMAN`, reason `spec close refused: <flowctl error>` (report, never force) — the merge stands, a later tick re-enters via the merged-but-unclosed path after a human fixes the task state. Step 2 persists the close immediately — the tracker touchpoint runs later (step 4, after release-follow) so its verdict comment can carry the release outcome, and persists its own sync state best-effort.
+2. **Persist the `.flow` close** — commit + push the spec close before anything else in the tail. The dirty-tree guards exclude `.flow/`, so an unpushed close would silently sit forever while every other clone (and CI) still sees the spec open:
+
+   ```bash
+   git add .flow && git commit -m "chore(flow): close ${spec} (landed PR #${PR_NUMBER})"
+   git push || { git pull --rebase && git push; }
+   ```
+
+   If the push STILL fails, ROLL BACK the local close so the merged-but-unclosed re-entry path stays reachable from this clone (discovery selects `status == "open"` specs only — a stranded local `done` would orphan the tail):
+
+   ```bash
+   git rebase --abort 2>/dev/null || true
+   git reset --hard HEAD^   # safe: the commit contains ONLY the .flow close state; the tree was clean before it
+   ```
+
+   Then verdict `NEEDS_HUMAN`, reason `spec close not pushed`; skip release-follow for this PR and continue to the next — a later tick re-enters via merged-but-unclosed and retries the whole tail (`spec close` succeeds idempotently on a re-run).
+3. **Release-follow** (only when `LAND_RELEASE == true`) — discovery order, first hit wins: `docs/RELEASING.md` → `RELEASING.md` → `agent_docs/releasing.md` → release docs referenced from CLAUDE.md/AGENTS.md → none (stop at merge, verdict `MERGED`). Bounds, all binding:
+   - Deterministic, non-interactive commands from the discovered docs ONLY — no invented steps, no prompts, no secrets handling.
+   - Clean non-`.flow/` tree required before starting and asserted after.
+   - **Idempotency probe BEFORE acting**: check for an existing tag/GitHub release for the target version (`git tag -l <v>`, `gh release view <v>`); already present → resume past completed steps, never re-tag.
+   - Release-step failure AFTER the successful merge → verdict `NEEDS_HUMAN` + durable label on the (merged) PR via 3.4 — the merge is NEVER retried, and later ticks never blindly re-run the failed step (re-entry only resumes via the idempotency probe).
+   - Release completed → verdict `RELEASED`.4. **Tracker touchpoint (opt-in, best-effort)** — deliberately AFTER release-follow so the verdict comment can carry the release outcome — — gated exactly like every fn-57 touchpoint (active AND leaf ≠ off/null; an unseeded leaf reads `null` = off):
 
    ```bash
    LEAF="$("$FLOWCTL" config get tracker.perEvent.land.merged --json | jq -r '.value')"
@@ -395,34 +415,14 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
    skill: flow-next-tracker-sync   (operation: push <spec-id>, event: land.merged)
    ```
 
-   The push projects the just-closed spec onto the linked issue — status who-wins flips it to the configured terminal state — and posts the merge/release verdict comment (include `merged PR: <PR_URL>` and, when the release step ran, the released version). The tracker-sync skill owns the transport, status who-wins, comment dedup, and emits its own receipt event-tagged `land.merged` (the fn-57 layer). Best-effort: a dispatch failure or tracker error surfaces as a stderr warning in the PR's evidence block and NEVER blocks the remaining tail steps or changes the PR's verdict.
-3. **Persist the `.flow` state** — one commit covering the spec close AND any tracked sync state the touchpoint updated. The dirty-tree guards exclude `.flow/`, so an unpushed close would silently sit forever while every other clone (and CI) still sees the spec open:
+   The push projects the just-closed spec onto the linked issue — status who-wins flips it to the configured terminal state — and posts the merge/release verdict comment (include `merged PR: <PR_URL>` and, when the release step ran, the released version). The tracker-sync skill owns the transport, status who-wins, comment dedup, and emits its own receipt event-tagged `land.merged` (the fn-57 layer). Best-effort: a dispatch failure or tracker error surfaces as a stderr warning in the PR's evidence block and NEVER changes the PR's verdict (the close and any release already stand). Persist any tracked sync state the touchpoint updated with a best-effort follow-up commit (`git add .flow && git commit -m "chore(flow): sync state for ${spec} land.merged touchpoint" && git push` — no rollback needed; it carries receipts/sync state only).
 
-   ```bash
-   git add .flow && git commit -m "chore(flow): close ${spec} (landed PR #${PR_NUMBER})"
-   git push || { git pull --rebase && git push; }
-   ```
-
-   If the push STILL fails, ROLL BACK the local close so the merged-but-unclosed re-entry path stays reachable from this clone (discovery selects `status == "open"` specs only — a stranded local `done` would orphan the tail):
-
-   ```bash
-   git rebase --abort 2>/dev/null || true
-   git reset --hard HEAD^   # safe: the commit contains ONLY the .flow close/sync state; the tree was clean before it
-   ```
-
-   Then verdict `NEEDS_HUMAN`, reason `spec close not pushed`; skip release-follow for this PR and continue to the next — a later tick re-enters via merged-but-unclosed and retries the whole tail (`spec close` succeeds idempotently on a re-run).
-4. **Release-follow** (only when `LAND_RELEASE == true`) — discovery order, first hit wins: `docs/RELEASING.md` → `RELEASING.md` → `agent_docs/releasing.md` → release docs referenced from CLAUDE.md/AGENTS.md → none (stop at merge, verdict `MERGED`). Bounds, all binding:
-   - Deterministic, non-interactive commands from the discovered docs ONLY — no invented steps, no prompts, no secrets handling.
-   - Clean non-`.flow/` tree required before starting and asserted after.
-   - **Idempotency probe BEFORE acting**: check for an existing tag/GitHub release for the target version (`git tag -l <v>`, `gh release view <v>`); already present → resume past completed steps, never re-tag.
-   - Release-step failure AFTER the successful merge → verdict `NEEDS_HUMAN` + durable label on the (merged) PR via 3.4 — the merge is NEVER retried, and later ticks never blindly re-run the failed step (re-entry only resumes via the idempotency probe).
-   - Release completed → verdict `RELEASED`.
 
 Verdict `MERGED` (or `RELEASED`). On success, drop the PR's ledger entry (atomic `jq 'del(.[$pr])'` + `mv`). End on the base branch with a clean tree (the original branch may have been the now-deleted PR branch — the base IS the restore target after a merge).
 
 ### 3.6 — `resume-tail` (re-entry idempotency)
 
-A merged-but-unclosed spec resumes the tail exactly as 3.5 post-merge: checkout base + `git pull --ff-only` + verify the merge commit (via `gh pr view <MERGED_PR_NUM> --json mergeCommit`), then spec close → tracker touchpoint → persist `.flow` → release-follow. Never a second merge, never an error for already-completed steps (the release idempotency probe skips them; `spec close` succeeds idempotently on an already-closed spec). Verdict `MERGED`/`RELEASED` per how far the tail ran.
+A merged-but-unclosed spec resumes the tail exactly as 3.5 post-merge: checkout base + `git pull --ff-only` + verify the merge commit (via `gh pr view <MERGED_PR_NUM> --json mergeCommit`), then spec close → persist `.flow` → release-follow → tracker touchpoint. Never a second merge, never an error for already-completed steps (the release idempotency probe skips them; `spec close` succeeds idempotently on an already-closed spec). Verdict `MERGED`/`RELEASED` per how far the tail ran.
 
 ## Phase 4 — REPORT
 

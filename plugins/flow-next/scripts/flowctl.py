@@ -14254,7 +14254,9 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
             code=1,
         )
 
-    spec_id = getattr(args, "id", None)
+    # Casefold first so uppercase tracker display handles (WOR-17) survive
+    # the validity check — resolve_spec_id_arg below canonicalizes fully.
+    spec_id = casefold_handle(getattr(args, "id", None))
     if not spec_id or not is_spec_id(spec_id):
         error_exit(
             f"Invalid spec ID: {spec_id}. Expected format: fn-N or fn-N-slug "
