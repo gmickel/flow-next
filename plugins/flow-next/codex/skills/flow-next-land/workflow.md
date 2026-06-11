@@ -326,12 +326,18 @@ All gates passed in-tick. Re-read the head right before merging and pin it:
 HEAD_OID="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)"
 [[ "$IS_DRAFT" == "true" ]] && gh pr ready "$PR_NUMBER" # idempotent flip; non-draft skips
 MERGE_RC=0
-gh pr merge "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" || MERGE_RC=$?
+MERGE_ERR="$(gh pr merge "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
+if [[ "$MERGE_RC" -ne 0 ]]; then
+ echo "Evidence: merge refused (rc=$MERGE_RC) — $MERGE_ERR"
+fi
 ```
 
-NEVER `gh pr merge --auto`. A head-SHA mismatch refusal means state moved between gate and merge → verdict `RESOLVING` (re-tick), not `BLOCKED`. Any other merge refusal (server-side rule) → verdict `BLOCKED`, reason from gh stderr.
+NEVER `gh pr merge --auto`. **`MERGE_RC != 0` skips the ENTIRE post-merge tail** — classify from the captured stderr, leave the worktree where it is (no checkout happened yet), and continue to the next PR:
 
-On success, move the worktree onto the merged base BEFORE any tail step — `spec close`, the tracker touchpoint, and release-follow all run from the clean base checkout, never from the (deleted) PR branch or a stale original branch:
+- Head-SHA mismatch refusal (the `--match-head-commit` guard; stderr names the expected/actual sha) — state moved between gate and merge → verdict `RESOLVING` (re-tick), not `BLOCKED`.
+- Any other merge refusal (server-side rule) → verdict `BLOCKED`, reason = the captured `MERGE_ERR` line.
+
+Only on `MERGE_RC == 0`, move the worktree onto the merged base BEFORE any tail step — `spec close`, the tracker touchpoint, and release-follow all run from the clean base checkout, never from the (deleted) PR branch or a stale original branch:
 
 ```bash
 git checkout "$BASE_REF" && git pull --ff-only
@@ -358,13 +364,13 @@ git log --oneline -1 # evidence echo: the squash commit referencing the PR
  fi
  ```
 
- `TRACKER_FIRE == 1` → you MUST dispatch the tracker-sync skill via the Skill tool — this is a real skill invocation, not narration:
+ `TRACKER_FIRE == 1` → you MUST dispatch the tracker-sync skill via the Skill tool — this is a real skill invocation, not narration, and it uses the fn-57 lifecycle dispatch grammar (operation token + event tag, same shape as work/make-pr touchpoints):
 
  ```text
- /flow-next:tracker-sync <spec-id> — flip the linked issue to its terminal state and post the merge/release verdict comment (merged PR: <PR_URL>); event tag: land.merged
+ skill: flow-next-tracker-sync (operation: push <spec-id>, event: land.merged)
  ```
 
- The tracker-sync skill owns the transport, status who-wins, comment dedup, and emits its own receipt event-tagged `land.merged` (the fn-57 layer). Best-effort: a dispatch failure or tracker error surfaces as a stderr warning in the PR's evidence block and NEVER blocks the remaining tail steps or changes the PR's verdict.
+ The push projects the just-closed spec onto the linked issue — status who-wins flips it to the configured terminal state — and posts the merge/release verdict comment (include `merged PR: <PR_URL>` and, when the release step ran, the released version). The tracker-sync skill owns the transport, status who-wins, comment dedup, and emits its own receipt event-tagged `land.merged` (the fn-57 layer). Best-effort: a dispatch failure or tracker error surfaces as a stderr warning in the PR's evidence block and NEVER blocks the remaining tail steps or changes the PR's verdict.
 3. **Release-follow** (only when `LAND_RELEASE == true`) — discovery order, first hit wins: `docs/RELEASING.md` → `RELEASING.md` → `agent_docs/releasing.md` → release docs referenced from CLAUDE.md/AGENTS.md → none (stop at merge, verdict `MERGED`). Bounds, all binding:
  - Deterministic, non-interactive commands from the discovered docs ONLY — no invented steps, no prompts, no secrets handling.
  - Clean non-`.flow/` tree required before starting and asserted after.

@@ -335,7 +335,7 @@ Per unit:
 # contains spaces or newlines — which is the common case for human-facing
 # replies. Read line-by-line instead so each loop body receives one complete
 # verdict object.
-jq -c '.[]' <<<"$VERDICTS_JSON" | while IFS= read -r VERDICT; do
+jq -c '.[]' <<<"$VERDICTS" | while IFS= read -r VERDICT; do
  FB_TYPE=$(jq -r .feedback_type <<<"$VERDICT")
  FB_ID=$(jq -r .feedback_id <<<"$VERDICT")
  REPLY=$(jq -r .reply_text <<<"$VERDICT")
@@ -353,7 +353,7 @@ jq -c '.[]' <<<"$VERDICTS_JSON" | while IFS= read -r VERDICT; do
 done
 ```
 
-`$VERDICTS_JSON` is the full array of verdict objects as a single JSON string
+`$VERDICTS` is the full array of verdict objects as a single JSON string
 (as produced in Phase 6). `jq -c '.[]'` emits one compact JSON object per
 line; `while read -r` keeps each object intact through the pipe.
 
