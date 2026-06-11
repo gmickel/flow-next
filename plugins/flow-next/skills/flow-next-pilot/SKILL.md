@@ -60,6 +60,8 @@ Dirty tree means dirty outside `.flow/`; pilot leaves state untouched. No cleanu
 
 Parse `$ARGUMENTS` for the scope lock, dry-run switch, and passthroughs. Unknown flags warn to stderr and are ignored. Defaults are `research=grep`, `depth=short`, and `review` resolved later via `$FLOWCTL review-backend`.
 
+Normalize space-separated flag forms to their `=` form before the loop (`--spec fn-12` → `--spec=fn-12`). The loop itself deliberately avoids bash positional parameters (`shift`-based parsing) — the host's argument interpolation rewrites positional tokens inside skill code blocks, which corrupts a `case`-on-positionals parse (observed live in the 1.13.0 dogfood).
+
 ```bash
 RAW_ARGS="$ARGUMENTS"
 PILOT_SPEC=""
@@ -68,21 +70,15 @@ PILOT_REVIEW=""
 PILOT_RESEARCH="grep"
 PILOT_DEPTH="short"
 
-set -- $RAW_ARGS
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --spec)      PILOT_SPEC="$2"; shift 2 ;;
-    --spec=*)    PILOT_SPEC="${1#--spec=}"; shift ;;
-    --dry-run)   PILOT_DRY_RUN=1; shift ;;
-    --review)    PILOT_REVIEW="$2"; shift 2 ;;
-    --review=*)  PILOT_REVIEW="${1#--review=}"; shift ;;
-    --research)  PILOT_RESEARCH="$2"; shift 2 ;;
-    --research=*) PILOT_RESEARCH="${1#--research=}"; shift ;;
-    --depth)     PILOT_DEPTH="$2"; shift 2 ;;
-    --depth=*)   PILOT_DEPTH="${1#--depth=}"; shift ;;
-    --) shift; break ;;
-    -*) echo "Unknown flag: $1 (ignored by /flow-next:pilot)" >&2; shift ;;
-    *)  echo "Unknown argument: $1 (ignored by /flow-next:pilot)" >&2; shift ;;
+for ARG in $RAW_ARGS; do
+  case "$ARG" in
+    --spec=*)     PILOT_SPEC="${ARG#--spec=}" ;;
+    --dry-run)    PILOT_DRY_RUN=1 ;;
+    --review=*)   PILOT_REVIEW="${ARG#--review=}" ;;
+    --research=*) PILOT_RESEARCH="${ARG#--research=}" ;;
+    --depth=*)    PILOT_DEPTH="${ARG#--depth=}" ;;
+    -*) echo "Unknown flag: $ARG (ignored by /flow-next:pilot)" >&2 ;;
+    *)  echo "Unknown argument: $ARG (ignored by /flow-next:pilot)" >&2 ;;
   esac
 done
 export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH

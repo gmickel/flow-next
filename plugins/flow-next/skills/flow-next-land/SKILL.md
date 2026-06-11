@@ -62,19 +62,17 @@ Dirty tree means dirty outside `.flow/`; land leaves state untouched. No cleanup
 
 ## Mode Detection
 
-Parse `$ARGUMENTS` for the dry-run switch. Unknown flags warn to stderr and are ignored.
+Parse `$ARGUMENTS` for the dry-run switch. Unknown flags warn to stderr and are ignored. The loop avoids bash positional parameters — the host's argument interpolation rewrites positional tokens inside skill code blocks (pilot dogfood finding, 1.13.0).
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
 LAND_DRY_RUN=0
 
-set -- $RAW_ARGS
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --dry-run) LAND_DRY_RUN=1; shift ;;
-    --) shift; break ;;
-    -*) echo "Unknown flag: $1 (ignored by /flow-next:land)" >&2; shift ;;
-    *)  echo "Unknown argument: $1 (ignored by /flow-next:land)" >&2; shift ;;
+for ARG in $RAW_ARGS; do
+  case "$ARG" in
+    --dry-run) LAND_DRY_RUN=1 ;;
+    -*) echo "Unknown flag: $ARG (ignored by /flow-next:land)" >&2 ;;
+    *)  echo "Unknown argument: $ARG (ignored by /flow-next:land)" >&2 ;;
   esac
 done
 export LAND_DRY_RUN
