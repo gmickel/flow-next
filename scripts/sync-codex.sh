@@ -1202,6 +1202,7 @@ generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid 
 generate_openai_yaml "flow-next-tracker-sync" "Flow Tracker Sync" "Project a spec to a tracker (Linear/GitHub) and reconcile two-way — NOT plan-sync" "#3B82F6" false
 generate_openai_yaml "flow-next-qa" "Flow QA" "Live-app real-user QA pass derived from the spec — drives the running app, files P0/P1/P2 findings, emits a YES/NO verdict" "#3B82F6" false
 generate_openai_yaml "flow-next-pilot" "Flow Pilot" "Single-tick autonomous build-loop conductor — one ready spec, one stage per tick, terminal PILOT_VERDICT line" "#3B82F6" false
+generate_openai_yaml "flow-next-land" "Flow Land" "Cadence-tick autonomous PR babysitter — CI-fix, resolve, converge, merge, close, release; terminal LAND_VERDICT line" "#3B82F6" false
 
 # Review skills (red, explicit)
 generate_openai_yaml "flow-next-impl-review" "Flow Implementation Review" "Carmack-level code review via RepoPrompt"  "#EF4444" false
@@ -1269,6 +1270,7 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-tracker-sync"
   "flow-next-qa"
   "flow-next-pilot"
+  "flow-next-land"
   "flow-next-impl-review"
   "flow-next-plan-review"
   "flow-next-spec-completion-review"
