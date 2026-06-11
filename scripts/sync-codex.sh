@@ -228,7 +228,14 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
     -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-worktree-kit/scripts|~/.codex/scripts|g' \
     -e 's|\$PLUGIN_ROOT/skills/flow-next-ralph-init/templates|~/.codex/templates/flow-next-ralph-init|g' \
     -e 's|\$PLUGIN_ROOT/skills/flow-next-worktree-kit/scripts|~/.codex/scripts|g' \
+    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/skills/|$HOME/.codex/skills/|g' \
+    -e 's|\$PLUGIN_ROOT/skills/|$HOME/.codex/skills/|g' \
     "$f"
+  # The two generic /skills/ rules above are a catch-all for skill-local asset
+  # paths (e.g. resolve-pr's SCRIPTS dir) — install-codex.sh copies each skill
+  # dir wholesale to ~/.codex/skills/, so that root always resolves. Specific
+  # destinations (ralph-init templates, worktree-kit scripts) are rewritten
+  # first and therefore win. $HOME (not ~) so the path expands inside quotes.
 
   # plugin.json path: primary → .codex-plugin, fallback → .claude-plugin
   sed -i.bak \
@@ -1525,6 +1532,17 @@ if [ "$bare_refs" != "0" ]; then
   echo -e "  ${YELLOW}!${NC} $bare_refs bare CLAUDE_PLUGIN_ROOT refs (may need patching)"
 else
   echo -e "  ${GREEN}✓${NC} No bare CLAUDE_PLUGIN_ROOT refs"
+fi
+
+# Check no plugin-root /skills/ path refs survive (must be rewritten to
+# $HOME/.codex/skills/ or a specific destination — an unrewritten ref expands
+# to a broken /skills/... path inside Codex where neither var is set)
+skills_refs=$( { grep -rE '(DROID_PLUGIN_ROOT|CLAUDE_PLUGIN_ROOT|\$PLUGIN_ROOT)[^[:space:]]*/skills/' "$CODEX_DIR/skills/" 2>/dev/null || true; } | wc -l | tr -d ' ')
+if [ "$skills_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $skills_refs unrewritten plugin-root /skills/ path refs in codex/skills/"
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No unrewritten plugin-root /skills/ path refs"
 fi
 
 # Check no "Task flow-next:" in codex skills

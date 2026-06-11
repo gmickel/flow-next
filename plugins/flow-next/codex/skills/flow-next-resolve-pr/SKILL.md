@@ -17,7 +17,7 @@ Coordinate resolution of unresolved GitHub PR review threads, top-level PR comme
 ```bash
 FLOWCTL="$HOME/.codex/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-SCRIPTS="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-resolve-pr/scripts"
+SCRIPTS="$HOME/.codex/skills/flow-next-resolve-pr/scripts"
 ```
 
 ## Pre-check: Local setup version
