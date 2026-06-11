@@ -62,7 +62,7 @@ PLUGIN_ROOT="$HOME/.codex"
  ```
  Multiple review backends available. Which one?
  a) RepoPrompt (macOS, visual builder)
- b) Codex CLI (cross-platform, GPT 5.2 High)
+ b) Codex CLI (cross-platform, GPT 5.5 High)
  c) GitHub Copilot CLI (cross-platform, Claude/GPT via Copilot)
 
  (Reply: "a", "rp", "b", "codex", "c", "copilot", or just tell me)

@@ -101,7 +101,7 @@ Parse the arguments for these patterns. If found, use them and skip questions:
 - `--research=grep` or `--research grep` or "use grep" or "repo-scout" or "fast" → repo-scout
 
 **Review mode**:
-- `--review=codex` or "review with codex" or "codex review" or "use codex" → Codex CLI (GPT 5.2 High)
+- `--review=codex` or "review with codex" or "codex review" or "use codex" → Codex CLI (GPT 5.5 High)
 - `--review=rp` or "review with rp" or "rp chat" or "repoprompt review" → RepoPrompt chat (via `flowctl rp chat-send`)
 - `--review=export` or "export review" or "external llm" → export for external LLM
 - `--review=none` or `--no-review` or "no review" or "skip review" → no review

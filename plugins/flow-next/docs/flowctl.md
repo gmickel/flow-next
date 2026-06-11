@@ -964,7 +964,7 @@ npm install -g @openai/codex
 codex auth
 ```
 
-**Model:** Uses GPT 5.2 High by default (no user config needed). Override with `FLOW_CODEX_MODEL` env var.
+**Model:** Uses GPT 5.5 High by default (no user config needed). Override with `FLOW_CODEX_MODEL` env var.
 
 **Commands:**
 
