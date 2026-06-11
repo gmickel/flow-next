@@ -285,9 +285,11 @@ fi
 
 ```bash
 if [ -f .codex/config.toml ]; then
-  if ! grep -q 'codex_hooks' .codex/config.toml 2>/dev/null; then
-    echo -e '\n[features]\ncodex_hooks = true' >> .codex/config.toml
-    echo "Enabled codex_hooks in .codex/config.toml"
+  # `[features].hooks` is the current key; `codex_hooks` is the deprecated
+  # pre-2026 spelling (Codex warns on every run). Detect either, write the new one.
+  if ! grep -qE '(codex_)?hooks *= *true' .codex/config.toml 2>/dev/null; then
+    echo -e '\n[features]\nhooks = true' >> .codex/config.toml
+    echo "Enabled hooks in .codex/config.toml"
   fi
 fi
 ```
