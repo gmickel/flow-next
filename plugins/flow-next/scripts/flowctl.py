@@ -1068,6 +1068,10 @@ def get_default_tracker_config() -> dict:
             # /flow-next:qa skill treats any non-`off` value as `comment`.
             # Default `off` keeps every existing repo silent until opted in.
             "qa": "off",
+            # fn-60 (R13) — opt-in post-merge touchpoint for /flow-next:land
+            # (flip linked issue terminal + release/verdict comment). Nested
+            # like work.*; default off keeps non-land repos at zero overhead.
+            "land": {"merged": "off"},
         },
         "perTracker": {
             "teamId": None,
