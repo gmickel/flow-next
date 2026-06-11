@@ -112,11 +112,12 @@ Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins:
 |---|---|
 | 0 tasks exist | `plan` |
 | tasks exist and `plan_review_status != "ship"` and review backend is configured | `plan-review` |
-| any task has a non-`done` status — `todo`, `blocked`, or `in_progress` own/unassigned (canonical task statuses are `todo`, `in_progress`, `blocked`, `done`) | `work` |
+| any task is `todo` or `blocked` (canonical task statuses are `todo`, `in_progress`, `blocked`, `done`) | `work` |
+| the only non-`done` tasks are `in_progress` own/unassigned (other-actor claims were already skipped at SELECT) | `NEEDS_HUMAN`, reason `stale in-progress claim — work's ready-driven loop cannot resume it` |
 | all tasks done and `completion_review_status != "ship"` and review backend is configured | `work` |
 | all tasks done and completion is ship-or-ungated | PR probe, then `make-pr`, skip, or `NEEDS_HUMAN` |
 
-A spec whose only remaining tasks are `blocked` still classifies as `work`; if work cannot advance it, the healthy-no-advance strike path handles it.
+A spec whose only remaining tasks are `blocked` still classifies as `work`; if work cannot advance it, the healthy-no-advance strike path handles it. An in-progress-only spec is different: work's Phase 3a drives off `flowctl ready --spec`, which never returns an `in_progress` task, so dispatching would burn strikes or wrongly enter the completion-review path — the stale-claim `NEEDS_HUMAN` is crash-class (no dispatch, no strike).
 
 Review backend `none` or `ASK` skips both plan-review and completion-review gates; pilot never deadlocks on a gate that cannot run.
 
@@ -300,7 +301,7 @@ $FLOWCTL spec unready "$SELECTED_SPEC"
 PILOT_VERDICT=BLOCKED spec=<id> stage=<stage> reason="no advancement (strike 2/2, spec unreadied): <why>"
 ```
 
-Crash-class outcomes are `NEEDS_HUMAN`: sub-skill crash, dirty non-`.flow/` tree after dispatch, gh probe failure in the all-done branch, branch inconsistency, closed-without-merge PR, merged-PR-but-open-spec, or autonomy ambiguity. Leave state untouched and record no strike:
+Crash-class outcomes are `NEEDS_HUMAN`: sub-skill crash, dirty non-`.flow/` tree after dispatch, gh probe failure in the all-done branch, branch inconsistency, closed-without-merge PR, merged-PR-but-open-spec, stale in-progress-only claim, or autonomy ambiguity. Leave state untouched and record no strike:
 
 ```text
 PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=<stage> reason="<one line>"
