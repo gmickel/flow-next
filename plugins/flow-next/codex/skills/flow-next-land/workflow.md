@@ -209,9 +209,8 @@ UNRESOLVED="$(gh api graphql \
 
 ### 2.6 — Review signal (`land.reviewSignal`)
 
-Review bots (e.g. chatgpt-codex-connector) post COMMENTED reviews and never APPROVE; `reviewDecision` will not reflect them. An **automated reviewer** is a review author whose login ends in `[bot]` (REST form — fetch reviews via REST so bot logins carry the suffix), or any login in the `land.automatedReviewers` csv:
+Review bots (e.g. chatgpt-codex-connector) post COMMENTED reviews and never APPROVE; `reviewDecision` will not reflect them. An **automated reviewer** is a review author whose login ends in `[bot]` (REST form — fetch reviews via REST so bot logins carry the suffix), or any login in the `land.automatedReviewers` csv.
 
-```bash
 A historical review is NOT enough: after a land-authored push, an old automated review must not satisfy the gate (the new head would merge unreviewed). The signal is therefore **head-current**: an automated review counts only if its `commit_id` equals the current `HEAD_OID`, OR it was submitted after the last-push timestamp (some bots attach re-reviews to older commits; submitted-after-push still proves the reviewer saw the new state):
 
 ```bash
