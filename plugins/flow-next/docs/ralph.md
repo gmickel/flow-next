@@ -194,7 +194,7 @@ Driver recipes:
 - Codex `/goal`: opt-in `[features] goals = true`, CLI >= 0.128.0. No `$skill-in-goal` syntax — write a plain-text objective that names pilot behavior and `PILOT_VERDICT=<ADVANCED|NO_WORK|BLOCKED|NEEDS_HUMAN>`.
 - Ship loop (after the build loop's draft PRs are open — babysitting waits on external CI/reviewer events, so use a cadence): `/loop 30m /flow-next:land`
 
-The `rp` review backend needs the RepoPrompt GUI. For unattended or overnight runs, use `--review=codex`, `--review=copilot`, or `--review=none`.
+The `rp` review backend runs headlessly via rp-cli as long as the Repo Prompt app is running on the same Mac (cold start: `open -ga "Repo Prompt"` — MCP responds within seconds; a stopped app fails fast, never hangs). On machines without the app (remote/CI), use `--review=codex`, `--review=copilot`, or `--review=none`.
 
 ---
 
