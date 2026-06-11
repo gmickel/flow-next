@@ -129,7 +129,7 @@ Classify every discovered PR before acting on any. This phase performs reads onl
 Fetch the gate state in one call per PR:
 
 ```bash
-PR_STATE="$(gh pr view "$PR_NUMBER" --json url,number,state,isDraft,mergeStateStatus,reviewDecision,headRefOid,baseRefName,labels,commits)"
+PR_STATE="$(gh pr view "$PR_NUMBER" --json url,number,state,isDraft,mergeStateStatus,reviewDecision,headRefOid,baseRefName,labels,commits,createdAt)"
 PR_URL="$(printf '%s\n' "$PR_STATE" | jq -r '.url')"
 HEAD_OID="$(printf '%s\n' "$PR_STATE" | jq -r '.headRefOid')"
 BASE_REF="$(printf '%s\n' "$PR_STATE" | jq -r '.baseRefName')"
