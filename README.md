@@ -3,7 +3,7 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v1.13.0-green)](CHANGELOG.md)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v1.14.0-green)](CHANGELOG.md)
 [![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/docs/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -21,7 +21,7 @@
 
 ## What is this?
 
-Flow-Next is an AI agent orchestration plugin. **Twenty-seven agent-native skills** for the full lifecycle: idea → spec → tasks → review → ship → maintain. Bundled task tracking, dependency graphs, re-anchoring before every task, multi-model reviews, decay-aware project memory, GitHub PR creation and resolution, agent-readiness audits. Everything lives in your repo — no external services, no global config. Uninstall: delete `.flow/`.
+Flow-Next is an AI agent orchestration plugin. **Twenty-eight agent-native skills** for the full lifecycle: idea → spec → tasks → review → ship → maintain. Bundled task tracking, dependency graphs, re-anchoring before every task, multi-model reviews, decay-aware project memory, GitHub PR creation and resolution, agent-readiness audits. Everything lives in your repo — no external services, no global config. Uninstall: delete `.flow/`.
 
 - **Spec-first.** Every unit of work belongs to a spec `fn-N`. Tasks `fn-N.M` inherit context.
 - **Fresh-context workers.** Each task runs in its own subagent. No token bleed between tasks.
@@ -92,7 +92,7 @@ droid plugin marketplace add \
 /flow-next:resolve-pr <PR#>          # 5. Fetch review threads → triage → resolve
 ```
 
-That's the inner loop. Branch in (`/flow-next:prospect` for ranked candidates, `/flow-next:interview` for structured discovery), branch out (`/flow-next:ralph-init` for autonomous overnight runs, `/flow-next:pilot` for host-driven backlog draining, `/flow-next:audit` for memory garbage collection).
+That's the inner loop. Branch in (`/flow-next:prospect` for ranked candidates, `/flow-next:interview` for structured discovery), branch out (`/flow-next:ralph-init` for autonomous overnight runs, `/flow-next:pilot` for host-driven backlog draining, `/flow-next:land` for babysitting the resulting PRs to merge + release, `/flow-next:audit` for memory garbage collection).
 
 ---
 
@@ -185,7 +185,7 @@ Fetch unresolved threads + top-level comments + review-submission bodies, cluste
 
 ---
 
-**Going autonomous?** Two paths. Ralph is the external shell loop: `/flow-next:ralph-init` scaffolds `scripts/ralph/`, then runs overnight with fresh sessions per iteration, receipts, and auto-blocking. Pilot is the in-session single-tick conductor: `/flow-next:pilot` advances one ready spec by one pipeline stage, then your host `/loop` or `/goal` decides whether to tick again. → [flow-next.dev/ralph](https://flow-next.dev/ralph) · [flow-next.dev/skills/pilot](https://flow-next.dev/skills/pilot)
+**Going autonomous?** Three paths. Ralph is the external shell loop: `/flow-next:ralph-init` scaffolds `scripts/ralph/`, then runs overnight with fresh sessions per iteration, receipts, and auto-blocking. Pilot is the in-session single-tick conductor: `/flow-next:pilot` advances one ready spec by one pipeline stage, then your host `/loop` or `/goal` decides whether to tick again. Land is the ship loop: `/flow-next:land` babysits the draft PRs the build loop opened — CI green, reviews converged, gated merge, release — on a `/loop 30m` cadence. → [flow-next.dev/ralph](https://flow-next.dev/ralph) · [flow-next.dev/skills/pilot](https://flow-next.dev/skills/pilot) · [flow-next.dev/autonomous/land](https://flow-next.dev/autonomous/land)
 
 ---
 
@@ -226,6 +226,7 @@ Fetch unresolved threads + top-level comments + review-submission bodies, cluste
 | `/flow-next:memory-migrate` | Lift legacy flat memory files into the categorized schema |
 | `/flow-next:prime` | 8-pillar agent-readiness assessment with parallel scouts; remediation via consent prompts |
 | `/flow-next:pilot` | **Single-tick build-loop conductor** — advances one ready spec by one pipeline stage (plan → plan-review → work → make-pr) per tick, ends with a `PILOT_VERDICT` line; drive it with `/loop` or `/goal` |
+| `/flow-next:land` | **Cadence-tick ship loop** — babysits the build loop's draft PRs: CI tri-state fix loop, reviewer patience window, resolve-pr convergence, gated explicit merge, spec close, release-follow; ends with a `LAND_VERDICT` line; drive it with `/loop 30m /flow-next:land` |
 | `/flow-next:ralph-init` | Scaffold autonomous loop (`scripts/ralph/`) |
 | `/flow-next:sync` | **Plan-sync** — update downstream *task* specs after implementation drift inside flow-next |
 | `/flow-next:tracker-sync` | **Tracker bridge** (distinct from `/flow-next:sync`) — project a spec to a Linear/GitHub issue and reconcile body/status/comments two-way; projection, not coordination ([docs](plugins/flow-next/docs/tracker-sync.md)) |
