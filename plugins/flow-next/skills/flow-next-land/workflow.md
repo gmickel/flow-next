@@ -153,16 +153,19 @@ A merged-but-unclosed spec (from DISCOVER) plans action `resume-tail` directly �
 
 ### 2.3 — Patience-window anchor
 
-Anchored to the LAST PUSH, never `createdAt` — a land-authored CI-fix push restarts the window:
+Anchored to the actual PUSH time, never a commit's author/committer timestamp alone — a branch pushed NOW carrying earlier-authored or rebased commits must not look "older than the window" on tick one (that would skip the wait entirely), and a land-authored CI-fix push restarts the window. `pushedDate` is the primary signal; when GraphQL returns it null, the fallback is the MAX of the head commit's `committedDate` and the PR's `createdAt` (a just-opened PR's creation time IS its first push's availability time):
 
 ```bash
-LAST_PUSH="$(printf '%s\n' "$PR_STATE" | jq -r '.commits[-1].committedDate // empty')"
-if [[ -z "$LAST_PUSH" ]]; then
-  # Fallback: REST head sha → commit pushedDate via GraphQL
-  HEAD_SHA="$(gh api "repos/$OWNER_REPO/pulls/$PR_NUMBER" --jq '.head.sha')"
-  LAST_PUSH="$(gh api graphql -f query='query($owner:String!,$repo:String!,$oid:GitObjectID!){repository(owner:$owner,name:$repo){object(oid:$oid){... on Commit{pushedDate committedDate}}}}' \
-    -f owner="${OWNER_REPO%/*}" -f repo="${OWNER_REPO#*/}" -F oid="$HEAD_SHA" \
-    --jq '.data.repository.object.pushedDate // .data.repository.object.committedDate')"
+HEAD_SHA="$(printf '%s\n' "$PR_STATE" | jq -r '.headRefOid')"
+PUSHED_AT="$(gh api graphql -f query='query($owner:String!,$repo:String!,$oid:GitObjectID!){repository(owner:$owner,name:$repo){object(oid:$oid){... on Commit{pushedDate committedDate}}}}' \
+  -f owner="${OWNER_REPO%/*}" -f repo="${OWNER_REPO#*/}" -F oid="$HEAD_SHA" \
+  --jq '.data.repository.object.pushedDate // empty')"
+if [[ -n "$PUSHED_AT" ]]; then
+  LAST_PUSH="$PUSHED_AT"
+else
+  COMMITTED_AT="$(printf '%s\n' "$PR_STATE" | jq -r '.commits[-1].committedDate // empty')"
+  CREATED_AT="$(printf '%s\n' "$PR_STATE" | jq -r '.createdAt // empty')"
+  LAST_PUSH="$(printf '%s\n%s\n' "$COMMITTED_AT" "$CREATED_AT" | sort | tail -1)"   # ISO-8601 sorts lexically
 fi
 PUSH_EPOCH="$(printf '%s' "$LAST_PUSH" | jq -Rr 'fromdateiso8601' 2>/dev/null || echo "$NOW_EPOCH")"
 AGE_MIN=$(( (NOW_EPOCH - PUSH_EPOCH) / 60 ))
@@ -381,7 +384,7 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
 2. **Persist the `.flow` close** — commit + push the spec close before anything else in the tail. The dirty-tree guards exclude `.flow/`, so an unpushed close would silently sit forever while every other clone (and CI) still sees the spec open:
 
    ```bash
-   git add .flow && git commit -m "chore(flow): close ${spec} (landed PR #${PR_NUMBER})"
+   git add ".flow/specs/${spec}.json" ".flow/specs/${spec}.md" && git commit -m "chore(flow): close ${spec} (landed PR #${PR_NUMBER})"   # stage ONLY this spec's files — pre-existing .flow dirtiness (allowed by the guards) must not ride the close commit
    git push || { git pull --rebase && git push; }
    ```
 
@@ -389,7 +392,7 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
 
    ```bash
    git rebase --abort 2>/dev/null || true
-   git reset --hard HEAD^   # safe: the commit contains ONLY the .flow close state; the tree was clean before it
+   git reset --hard HEAD^   # safe: the commit was staged file-scoped, so it contains ONLY this spec's close state
    ```
 
    Then verdict `NEEDS_HUMAN`, reason `spec close not pushed`; skip release-follow for this PR and continue to the next — a later tick re-enters via merged-but-unclosed and retries the whole tail (`spec close` succeeds idempotently on a re-run).
@@ -415,7 +418,7 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
    skill: flow-next-tracker-sync   (operation: push <spec-id>, event: land.merged)
    ```
 
-   The push projects the just-closed spec onto the linked issue — status who-wins flips it to the configured terminal state — and posts the merge/release verdict comment (include `merged PR: <PR_URL>` and, when the release step ran, the released version). The tracker-sync skill owns the transport, status who-wins, comment dedup, and emits its own receipt event-tagged `land.merged` (the fn-57 layer). Best-effort: a dispatch failure or tracker error surfaces as a stderr warning in the PR's evidence block and NEVER changes the PR's verdict (the close and any release already stand). Persist any tracked sync state the touchpoint updated with a best-effort follow-up commit (`git add .flow && git commit -m "chore(flow): sync state for ${spec} land.merged touchpoint" && git push` — no rollback needed; it carries receipts/sync state only).
+   The push projects the just-closed spec onto the linked issue — status who-wins flips it to the configured terminal state — and posts the merge/release verdict comment (include `merged PR: <PR_URL>` and, when the release step ran, the released version). The tracker-sync skill owns the transport, status who-wins, comment dedup, and emits its own receipt event-tagged `land.merged` (the fn-57 layer). Best-effort: a dispatch failure or tracker error surfaces as a stderr warning in the PR's evidence block and NEVER changes the PR's verdict (the close and any release already stand). Persist any tracked sync state the touchpoint updated with a best-effort follow-up commit (`git add ".flow/specs/${spec}.json" .flow/sync-runs && git commit -m "chore(flow): sync state for ${spec} land.merged touchpoint" && git push` — file-scoped so pre-existing .flow dirtiness never rides along; no rollback needed, it carries this spec's sync state + receipts only).
 
 
 Verdict `MERGED` (or `RELEASED`). On success, drop the PR's ledger entry (atomic `jq 'del(.[$pr])'` + `mv`). End on the base branch with a clean tree (the original branch may have been the now-deleted PR branch — the base IS the restore target after a merge).
