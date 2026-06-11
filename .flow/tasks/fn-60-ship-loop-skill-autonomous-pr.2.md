@@ -37,9 +37,8 @@ Two thin patches: (1) resolve-pr gains the fn-59.2 autonomous mode — `mode:aut
 - [ ] All existing tests pass; sync-codex validators green (mirror diff reverted; regen rides fn-60.3)
 
 ## Done summary
-
-_(filled by /flow-next:work)_
-
+resolve-pr gains the fn-59.2 autonomous mode: Phase 0 parses + strips the `mode:autonomous` token (make-pr parse shape) with `FLOW_AUTONOMOUS=1` as secondary signal, the Phase 10 needs-human surface emits `NEEDS_HUMAN:` report lines plus the machine-readable `RESOLVE_PR_VERDICT=` terminal line under autonomy (interactive path byte-identical, never Ralph/receipt paths), and the Forbidden line carries the confined /flow-next:land dispatch exception. flowctl seeds the land.* config defaults (release=true, patienceMinutes=30, reviewSignal=silence, automatedReviewers="", ciFixBudget=3) with a new stdlib test file; dogfood flowctl.py copy refreshed to keep the dual-copy invariant green. Codex impl-review: SHIP (first pass).
 ## Evidence
-
-_(filled by /flow-next:work)_
+- Commits: 72c63d256a4c935de37624c9a7a2c72c048edd2e
+- Tests: python3 plugins/flow-next/tests/test_land_config.py (13 tests OK), for f in plugins/flow-next/tests/test_*.py; do python3 $f; done (full suite green), .flow/bin/flowctl config get land.reviewSignal --json -> silence, bash -n scripts/sync-codex.sh && ./scripts/sync-codex.sh (validators green; mirror diff reverted, regen rides fn-60.3)
+- PRs:
