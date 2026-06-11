@@ -196,13 +196,14 @@ CI pending → verdict `AWAITING_REVIEW`, action `none`, reason `CI pending (<n>
 
 ### 2.5 — Unresolved review threads
 
-Same GraphQL surface as resolve-pr's fetch (first 100 covers the gate question "are there ANY unresolved"; resolve-pr itself paginates fully when dispatched):
+Same GraphQL surface as resolve-pr's fetch — and fully PAGINATED, because `UNRESOLVED == 0` is a merge condition: a >100-thread PR must not read as resolved just because page one was (gh's GraphQL `--paginate` iterates on the `$endCursor` variable; the per-page counts are summed):
 
 ```bash
-UNRESOLVED="$(gh api graphql \
-  -f query='query($owner:String!,$repo:String!,$pr:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$pr){reviewThreads(first:100){nodes{isResolved}}}}}' \
+UNRESOLVED="$(gh api graphql --paginate \
+  -f query='query($owner:String!,$repo:String!,$pr:Int!,$endCursor:String){repository(owner:$owner,name:$repo){pullRequest(number:$pr){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{isResolved}}}}}' \
   -f owner="${OWNER_REPO%/*}" -f repo="${OWNER_REPO#*/}" -F pr="$PR_NUMBER" \
-  --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)] | length')"
+  --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)] | length' \
+  | awk '{s+=$1} END{print s+0}')"
 ```
 
 `UNRESOLVED > 0` with green CI → plan `resolve` (dispatch resolve-pr in ACT), provisional verdict `RESOLVING`.
