@@ -53,6 +53,7 @@ LAND_RELEASE="$(cfg land.release)";                  [[ -z "$LAND_RELEASE" || "$
 PATIENCE_MIN="$(cfg land.patienceMinutes)";          [[ -z "$PATIENCE_MIN" || "$PATIENCE_MIN" == "null" ]] && PATIENCE_MIN=30
 REVIEW_SIGNAL="$(cfg land.reviewSignal)";            [[ -z "$REVIEW_SIGNAL" || "$REVIEW_SIGNAL" == "null" ]] && REVIEW_SIGNAL=silence
 AUTOMATED_REVIEWERS="$(cfg land.automatedReviewers)"; [[ "$AUTOMATED_REVIEWERS" == "null" ]] && AUTOMATED_REVIEWERS=""
+REVIEW_TRIGGER="$(cfg land.reviewTrigger)";          [[ "$REVIEW_TRIGGER" == "null" ]] && REVIEW_TRIGGER=""
 CI_FIX_BUDGET="$(cfg land.ciFixBudget)";             [[ -z "$CI_FIX_BUDGET" || "$CI_FIX_BUDGET" == "null" ]] && CI_FIX_BUDGET=3
 ```
 
@@ -211,21 +212,28 @@ UNRESOLVED="$(gh api graphql \
 Review bots (e.g. chatgpt-codex-connector) post COMMENTED reviews and never APPROVE; `reviewDecision` will not reflect them. An **automated reviewer** is a review author whose login ends in `[bot]` (REST form — fetch reviews via REST so bot logins carry the suffix), or any login in the `land.automatedReviewers` csv:
 
 ```bash
-REVIEW_LOGINS="$(gh api --paginate "repos/$OWNER_REPO/pulls/$PR_NUMBER/reviews" --jq '.[].user.login' 2>/dev/null | sort -u)"
-AUTO_REVIEW_PRESENT=0
-while IFS= read -r login; do
+A historical review is NOT enough: after a land-authored push, an old automated review must not satisfy the gate (the new head would merge unreviewed). The signal is therefore **head-current**: an automated review counts only if its `commit_id` equals the current `HEAD_OID`, OR it was submitted after the last-push timestamp (some bots attach re-reviews to older commits; submitted-after-push still proves the reviewer saw the new state):
+
+```bash
+AUTO_REVIEW_PRESENT=0   # any automated review, ever (drives the trigger branch)
+AUTO_REVIEW_CURRENT=0   # automated review of the CURRENT head (drives the silence gate)
+while IFS=$'\t' read -r login commit submitted; do
   [[ -z "$login" ]] && continue
   if [[ "$login" == *"[bot]" ]] || [[ ",$AUTOMATED_REVIEWERS," == *",$login,"* ]]; then
     AUTO_REVIEW_PRESENT=1
+    if [[ "$commit" == "$HEAD_OID" || "$submitted" > "$LAST_PUSH" ]]; then
+      AUTO_REVIEW_CURRENT=1
+    fi
   fi
-done <<< "$REVIEW_LOGINS"
+done < <(gh api --paginate "repos/$OWNER_REPO/pulls/$PR_NUMBER/reviews" \
+  --jq '.[] | [.user.login, .commit_id, .submitted_at] | @tsv' 2>/dev/null)
 ```
 
-**Draft-PR review trigger (one-shot per head SHA).** Review bots do not auto-review DRAFT PRs (Codex's triggers are open-for-review, draft→ready, or an explicit `@codex review` comment) — and pilot's PRs are born draft, so without a nudge the review wait would dead-end at the no-review `NEEDS_HUMAN`, and a land-authored CI-fix push would go un-re-reviewed. When the PR `isDraft` AND `land.reviewTrigger` is non-empty AND the ledger's `triggerSha` for this PR differs from the current head SHA AND a review nudge is due (no automated review yet, OR the head moved since the last reviewed state): post the trigger (`gh pr comment "$PR_NUMBER" --body "$REVIEW_TRIGGER"`), set `triggerSha: <head-sha>` in the PR's ledger entry (atomic jq+mv; under `--dry-run` report would-trigger instead of posting), and report `AWAITING_REVIEW`, reason `review trigger posted; patience window open`. Keying the marker to the head SHA means each push gets at most one nudge — never a comment loop. The window still anchors to the last push. An empty `land.reviewTrigger` (the default) never posts — the no-review-beyond-window path stays `NEEDS_HUMAN` as below.
+**Draft-PR review trigger (one-shot per head SHA).** Review bots do not auto-review DRAFT PRs (Codex's triggers are open-for-review, draft→ready, or an explicit `@codex review` comment) — and pilot's PRs are born draft, so without a nudge the review wait would dead-end at the no-review `NEEDS_HUMAN`, and a land-authored CI-fix push would go un-re-reviewed. When the PR `isDraft` AND `land.reviewTrigger` is non-empty AND the ledger's `triggerSha` for this PR differs from the current head SHA AND a review nudge is due (`AUTO_REVIEW_CURRENT == 0` — no automated review of the current head): post the trigger (`gh pr comment "$PR_NUMBER" --body "$REVIEW_TRIGGER"`), set `triggerSha: <head-sha>` in the PR's ledger entry (atomic jq+mv; under `--dry-run` report would-trigger instead of posting), and report `AWAITING_REVIEW`, reason `review trigger posted; patience window open`. Keying the marker to the head SHA means each push gets at most one nudge — never a comment loop. The window still anchors to the last push. An empty `land.reviewTrigger` (the default) never posts — the no-review-beyond-window path stays `NEEDS_HUMAN` as below.
 
 Signal evaluation (only reached with green CI and `UNRESOLVED == 0`):
 
-- **`silence`** (default): satisfied iff `AUTO_REVIEW_PRESENT == 1` AND `UNRESOLVED == 0` AND `WINDOW_ELAPSED == 1` (the window elapsing since the last push with zero unresolved threads IS the no-new-threads convergence — any new thread starts unresolved). Window not elapsed → `AWAITING_REVIEW`, reason `patience window open (<AGE_MIN>/<PATIENCE_MIN>m)`. Window elapsed with NO automated review ever → never merge unreviewed → `NEEDS_HUMAN`, reason `no automated review arrived within the patience window`.
+- **`silence`** (default): satisfied iff `AUTO_REVIEW_CURRENT == 1` (an automated review of the CURRENT head — see above) AND `UNRESOLVED == 0` AND `WINDOW_ELAPSED == 1` (the window elapsing since the last push with zero unresolved threads IS the no-new-threads convergence — any new thread starts unresolved). Window not elapsed → `AWAITING_REVIEW`, reason `patience window open (<AGE_MIN>/<PATIENCE_MIN>m)`. Window elapsed with NO automated review ever → never merge unreviewed → `NEEDS_HUMAN`, reason `no automated review arrived within the patience window`.
 - **`approve`**: satisfied iff `REVIEW_DECISION == "APPROVED"` (the formal decision). Not approved within the window → `AWAITING_REVIEW`; not approved once the window has elapsed (`WINDOW_ELAPSED == 1`) → `NEEDS_HUMAN`, reason `no formal approval within the patience window` (the wait is bounded, same as the other signals); `CHANGES_REQUESTED` → threads should exist → the resolve path; an empty `reviewDecision` (repo has no review policy) is not a block for the OTHER signals, but `approve` explicitly requires the formal decision.
 - **`<github-login>`** (any other value): satisfied iff that reviewer's latest review is clean — fetch `gh pr view "$PR_NUMBER" --json latestReviews`, find the entry whose `author.login` matches the configured login (compare with any trailing `[bot]` stripped from both sides — GraphQL bot logins lack the suffix), and require its `state` to be `APPROVED`, or `COMMENTED` with `UNRESOLVED == 0`. `CHANGES_REQUESTED` or no review yet → `AWAITING_REVIEW` within the window, `NEEDS_HUMAN` beyond it.
 
