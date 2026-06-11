@@ -94,11 +94,11 @@ Discovery outcomes per spec:
 - gh probe failed (missing, unauthenticated, API error): per-PR-class `NEEDS_HUMAN` entry for this spec, reason `gh probe failed`; never guess.
 - `OPEN_COUNT > 1`: two open PRs on one spec branch → `NEEDS_HUMAN` entry, no mutation.
 - `OPEN_COUNT == 1` AND a MERGED PR also exists for the branch: ambiguous reopened/re-pushed state → `NEEDS_HUMAN` entry, no mutation.
-- `OPEN_COUNT == 1`: authorship check (below) → babysit candidate.
-- `OPEN_COUNT == 0` and `MERGED_PR_NUM` non-empty: the spec is merged-but-unclosed → authorship check → **re-entry candidate** (resume the post-merge tail: close → tracker → release; never a second merge).
+- `OPEN_COUNT == 1`: babysit path → `PR_NUMBER="$(printf '%s\n' "$OPEN_PRS" | jq -r '.[0].number')"`, then the authorship check (below) → babysit candidate.
+- `OPEN_COUNT == 0` and `MERGED_PR_NUM` non-empty: the spec is merged-but-unclosed → `PR_NUMBER="$MERGED_PR_NUM"`, then the authorship check → **re-entry candidate** (resume the post-merge tail: close → tracker → release; never a second merge).
 - `OPEN_COUNT == 0` and no MERGED PR (no PR, or CLOSED-without-merge only): not land's work — skip silently (pilot owns the no-PR state; a closed-unmerged PR is human-rejected work land must not resurrect).
 
-**Authorship requires BOTH signals before any mutation** (a hand-opened PR on a spec branch must not be auto-merged): the branch match above AND the make-pr breadcrumb in the PR body:
+**Authorship requires BOTH signals before any mutation** (a hand-opened PR on a spec branch must not be auto-merged): the branch match above AND the make-pr breadcrumb in the PR body. `PR_NUMBER` MUST have been assigned by the outcome branch above (babysit: the single open PR's number; re-entry: `MERGED_PR_NUM`) — never reuse a prior loop iteration's value:
 
 ```bash
 PR_BODY="$(gh pr view "$PR_NUMBER" --json body --jq .body 2>/dev/null || true)"
@@ -336,27 +336,35 @@ On success, move the worktree onto the merged base BEFORE any tail step — `spe
 ```bash
 git checkout "$BASE_REF" && git pull --ff-only
 MERGE_OID="$(gh pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid')"
-git merge-base --is-ancestor "$MERGE_OID" HEAD || { echo "squash commit not on local base after pull"; }
+TAIL_OK=1
+if [[ -z "$MERGE_OID" ]] || ! git merge-base --is-ancestor "$MERGE_OID" HEAD; then
+  echo "Evidence: squash commit ${MERGE_OID:-<unknown>} not on local $BASE_REF after pull"
+  TAIL_OK=0
+fi
 git log --oneline -1   # evidence echo: the squash commit referencing the PR
 ```
 
-The squash commit missing from the local base → verdict `NEEDS_HUMAN` (do not run the tail from a base that does not contain the merge). Then run the tail, in order:
+`TAIL_OK == 0` → verdict `NEEDS_HUMAN` for this PR, reason `squash commit missing from local base — tail not run`; do NOT run ANY tail step (no spec close, no tracker, no release) and continue to the next PR — a later tick re-enters via the merged-but-unclosed path once the base is fixed. Only with `TAIL_OK == 1` run the tail, in order:
 
 1. **Spec close** — `"$FLOWCTL" spec close "$spec" --json`. flowctl hard-requires all tasks done; stray non-done tasks at close time → verdict `NEEDS_HUMAN`, reason `spec close refused: <flowctl error>` (report, never force) — the merge stands, a later tick re-enters via the merged-but-unclosed path after a human fixes the task state.
 2. **Tracker touchpoint (opt-in, best-effort)** — gated exactly like every fn-57 touchpoint (active AND leaf ≠ off/null; an unseeded leaf reads `null` = off):
 
    ```bash
    LEAF="$("$FLOWCTL" config get tracker.perEvent.land.merged --json | jq -r '.value')"
+   TRACKER_FIRE=0
    if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ] \
       && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
-     # Invoke the flow-next-tracker-sync skill: flip the linked issue to its
-     # terminal state + post the release/verdict comment.
-     #   skill: flow-next-tracker-sync   (operation: status terminal + comment, event: land.merged)
-     :
+     TRACKER_FIRE=1
    fi
    ```
 
-   The tracker-sync skill emits its own receipt, event-tagged `land.merged`. A tracker failure never blocks the tail (stderr warning, continue).
+   `TRACKER_FIRE == 1` → you MUST dispatch the tracker-sync skill via the Skill tool — this is a real skill invocation, not narration:
+
+   ```text
+   /flow-next:tracker-sync <spec-id> — flip the linked issue to its terminal state and post the merge/release verdict comment (merged PR: <PR_URL>); event tag: land.merged
+   ```
+
+   The tracker-sync skill owns the transport, status who-wins, comment dedup, and emits its own receipt event-tagged `land.merged` (the fn-57 layer). Best-effort: a dispatch failure or tracker error surfaces as a stderr warning in the PR's evidence block and NEVER blocks the remaining tail steps or changes the PR's verdict.
 3. **Release-follow** (only when `LAND_RELEASE == true`) — discovery order, first hit wins: `docs/RELEASING.md` → `RELEASING.md` → `agent_docs/releasing.md` → release docs referenced from CLAUDE.md/AGENTS.md → none (stop at merge, verdict `MERGED`). Bounds, all binding:
    - Deterministic, non-interactive commands from the discovered docs ONLY — no invented steps, no prompts, no secrets handling.
    - Clean non-`.flow/` tree required before starting and asserted after.
