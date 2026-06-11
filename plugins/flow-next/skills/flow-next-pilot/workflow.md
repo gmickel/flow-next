@@ -166,9 +166,11 @@ Matrix:
 | branch absent and stage is first `work` tick | dispatch work with `--branch=new`; under autonomy work names it exactly the spec's `branch_name` (fn-59.2 contract), so later ticks find it |
 | stage is `make-pr` and branch exists | `git checkout <branch_name>`; make-pr auto-detects the spec from the branch |
 | stage is `make-pr` and branch absent | `NEEDS_HUMAN`, reason `all tasks done but spec branch missing — inconsistent state` |
-| stage is `plan` or `plan-review` | no branch action |
+| stage is `plan` or `plan-review` | `git checkout` the default branch (local `main`, else `master`) |
 
-If branch checkout fails, stop with `NEEDS_HUMAN`; do not dispatch and do not strike.
+The plan/plan-review checkout matters in multi-spec loops: a prior tick's make-pr leaves the worktree on that spec's PR branch, and planning state written there would mutate the already-open PR.
+
+If branch checkout fails (any matrix row, including the default-branch checkout), stop with `NEEDS_HUMAN`; do not dispatch and do not strike.
 
 ## Phase 4 — DISPATCH exactly one sub-skill
 
