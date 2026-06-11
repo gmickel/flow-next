@@ -218,6 +218,8 @@ while IFS= read -r login; do
 done <<< "$REVIEW_LOGINS"
 ```
 
+**Draft-PR review trigger (one-shot).** Review bots do not auto-review DRAFT PRs (Codex's triggers are open-for-review, draft→ready, or an explicit `@codex review` comment) — and pilot's PRs are born draft, so without a nudge the review wait would dead-end at the no-review `NEEDS_HUMAN`. When `AUTO_REVIEW_PRESENT == 0` AND the PR `isDraft` AND `land.reviewTrigger` is non-empty AND the ledger carries no `triggerPosted` marker for this PR: post the trigger ONCE (`gh pr comment "$PR_NUMBER" --body "$REVIEW_TRIGGER"`), set `triggerPosted: true` in the PR's ledger entry (atomic jq+mv; under `--dry-run` report would-trigger instead of posting), and report `AWAITING_REVIEW`, reason `review trigger posted; patience window open`. The window still anchors to the last push. An empty `land.reviewTrigger` (the default) never posts — the no-review-beyond-window path stays `NEEDS_HUMAN` as below.
+
 Signal evaluation (only reached with green CI and `UNRESOLVED == 0`):
 
 - **`silence`** (default): satisfied iff `AUTO_REVIEW_PRESENT == 1` AND `UNRESOLVED == 0` AND `WINDOW_ELAPSED == 1` (the window elapsing since the last push with zero unresolved threads IS the no-new-threads convergence — any new thread starts unresolved). Window not elapsed → `AWAITING_REVIEW`, reason `patience window open (<AGE_MIN>/<PATIENCE_MIN>m)`. Window elapsed with NO automated review ever → never merge unreviewed → `NEEDS_HUMAN`, reason `no automated review arrived within the patience window`.

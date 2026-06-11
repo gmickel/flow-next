@@ -1177,6 +1177,11 @@ def get_default_config() -> dict:
             # CSV allowlist of automated-reviewer logins, supplementing the
             # `[bot]`-suffix rule. Default empty = suffix rule only.
             "automatedReviewers": "",
+            # One-shot comment land posts to summon a reviewer bot when a
+            # DRAFT PR has zero automated reviews (bots like Codex do not
+            # auto-review drafts; pilot's PRs are born draft). Empty =
+            # never post; e.g. "@codex review".
+            "reviewTrigger": "",
             # Max CI-fix attempts per PR before the durable
             # `flow-next:needs-human` label + skip.
             "ciFixBudget": 3,

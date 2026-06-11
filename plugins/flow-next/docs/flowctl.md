@@ -571,6 +571,7 @@ flowctl config toggle memory.enabled [--json]
 | `land.patienceMinutes` | int | `30` | Land's reviewer patience window, anchored to the LAST push (a land-authored CI-fix push restarts it). |
 | `land.reviewSignal` | string | `silence` | Land's merge review-signal: `silence` (automated review present + zero unresolved threads + window elapsed), `approve` (formal `reviewDecision == APPROVED`), or a GitHub login (that reviewer's latest review must be clean). |
 | `land.automatedReviewers` | string | `""` | CSV allowlist of reviewer logins land counts as automated, supplementing the `[bot]`-suffix rule. |
+| `land.reviewTrigger` | string | `""` | One-shot comment land posts to summon a reviewer bot on a draft PR with zero automated reviews (e.g. `"@codex review"` — bots don't auto-review drafts). Empty = never post. |
 | `land.ciFixBudget` | int | `3` | CI-fix attempts per PR before land durably labels it `flow-next:needs-human` and skips it on later ticks. |
 
 \* `planSync.crossEpic` is the legacy alias — still readable in 1.x with a one-line stderr deprecation warning (suppress via `FLOW_NO_DEPRECATION=1`); removed in 2.0. `set` writes the canonical key only; `get` prefers `crossSpec` and falls back to `crossEpic` only when `crossSpec` is absent from the raw config file.

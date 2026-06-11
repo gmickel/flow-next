@@ -85,6 +85,7 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
                 "patienceMinutes": 30,
                 "reviewSignal": "silence",
                 "automatedReviewers": "",
+                "reviewTrigger": "",
                 "ciFixBudget": 3,
             },
         )
