@@ -27,16 +27,26 @@ Strip flags first; remaining token is the target.
 ```bash
 DRY_RUN=0
 NO_CLUSTER=0
+AUTONOMOUS=0
 TARGET=""
 
 for arg in $ARGUMENTS; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
     --no-cluster) NO_CLUSTER=1 ;;
+    mode:autonomous) AUTONOMOUS=1 ;;
     *) TARGET="$arg" ;;
   esac
 done
+
+# Secondary signal: process-level autonomous driver (env survives only
+# within one process tree; the token is the primary, prose-safe carrier).
+if [[ "${FLOW_AUTONOMOUS:-}" == "1" ]]; then
+  AUTONOMOUS=1
+fi
 ```
+
+`AUTONOMOUS=1` flips question-suppression branches ONLY (Phase 10): the needs-human surface reports instead of blocking, and the run ends with the machine-readable `RESOLVE_PR_VERDICT=` terminal line. Autonomy ≠ Ralph — neither signal sets `FLOW_RALPH`, implies `REVIEW_RECEIPT_PATH` receipt obligations, or activates ralph-guard hooks. Every other phase (triage, demotion/skip logic, cluster gate, dispatch, validation, commit, reply/resolve, the 2-cycle bound) behaves identically in both modes.
 
 Detect mode from `TARGET`. Regex matches are authoritative — do not relax:
 
@@ -368,6 +378,8 @@ If `REMAINING > 0` **and** some of those threads aren't in the `needs-human` set
   Suggest addressing at the architecture level before continuing.
   ```
 
+The 2-cycle bound is identical in both modes. Under `AUTONOMOUS=1` the escalation still stops the loop here; Phase 10 then reports it as part of the `NEEDS_HUMAN` verdict instead of waiting on the user.
+
 ---
 
 ## Phase 9.5: Tracker sync (opt-in) — optional resolution comment
@@ -417,9 +429,26 @@ Still pending from a previous run (count):
      Previous reply: <comment URL>
 ```
 
-For `needs-human` entries **and** "still pending" entries where the user might want to weigh in: invoke `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.). Wait for response; apply decisions; loop back to Phase 5 for any newly actionable items.
+**Interactive mode (`AUTONOMOUS=0`):** for `needs-human` entries **and** "still pending" entries where the user might want to weigh in: invoke `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.). Wait for response; apply decisions; loop back to Phase 5 for any newly actionable items.
 
 If none block, exit 0 with the printed summary.
+
+**Autonomous mode (`AUTONOMOUS=1`):** there is no user to answer — never wait on a question. Instead:
+
+- For each `needs-human` entry, emit one report line after the summary: `NEEDS_HUMAN: <path:line | comment id> — <one-line reason from decision_context.why_needs_decision>`. The threads stay open (Phase 8 already skipped resolving them); no decision is applied, no loop back to Phase 5.
+- The cycle-3 escalation from Phase 9, if it fired, counts as one `NEEDS_HUMAN` line: `NEEDS_HUMAN: cycle-budget — <recurring theme, one line>`.
+- End the run with exactly ONE machine-readable terminal line — the LAST line of output, nothing after it (the dispatching loop is transcript-blind and gates on it):
+
+  ```
+  RESOLVE_PR_VERDICT=<RESOLVED|PENDING|NEEDS_HUMAN> threads=<n> fixed=<n> needs_human=<n>
+  ```
+
+  - `NEEDS_HUMAN` — ≥1 `NEEDS_HUMAN` line was emitted (needs-human verdicts or the cycle-3 escalation).
+  - `PENDING` — no needs-human, but threads still await a reviewer ("still pending" set non-empty, or replies posted this run that a reviewer has not yet re-checked). The dispatcher re-checks on its next tick.
+  - `RESOLVED` — everything new was addressed: no needs-human, nothing pending. (Includes the "no open feedback" / "nothing new to address" fast paths: `threads=0`.)
+  - Counts: `threads` = new items processed this run, `fixed` = `fixed` + `fixed-differently` verdicts, `needs_human` = `NEEDS_HUMAN` lines emitted.
+
+Interactive runs never print the `RESOLVE_PR_VERDICT=` line.
 
 ---
 

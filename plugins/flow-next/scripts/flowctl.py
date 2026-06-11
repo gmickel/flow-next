@@ -1153,6 +1153,30 @@ def get_default_config() -> dict:
             # fn-55.2; this task only sets the default + documents the enum.
             "delegateDecision": "auto",
         },
+        # fn-60.2 — /flow-next:land babysit-loop defaults, seeded so
+        # `config get land.*` returns values (NOT null) on a fresh repo.
+        # Consumed by the opt-in flow-next-land skill (fn-60.1); flowctl
+        # itself only stores/serves them.
+        "land": {
+            # Follow the project's release instructions after merge.
+            # Also no-ops when no release docs/scripts are discovered.
+            "release": True,
+            # Patience window (minutes) for automated reviewers, anchored
+            # to the LAST push — a land-authored CI-fix push restarts it.
+            "patienceMinutes": 30,
+            # Merge review signal: silence (default) | approve | <github-login>.
+            #   silence  — ≥1 automated review + zero unresolved threads +
+            #              no new threads within the patience window.
+            #   approve  — formal reviewDecision == APPROVED.
+            #   <login>  — that reviewer's latest review is APPROVED/clean.
+            "reviewSignal": "silence",
+            # CSV allowlist of automated-reviewer logins, supplementing the
+            # `[bot]`-suffix rule. Default empty = suffix rule only.
+            "automatedReviewers": "",
+            # Max CI-fix attempts per PR before the durable
+            # `flow-next:needs-human` label + skip.
+            "ciFixBudget": 3,
+        },
     }
 
 
