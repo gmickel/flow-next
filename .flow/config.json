@@ -43,7 +43,7 @@
   },
   "work": {
     "delegate": false,
-    "delegateConsent": true,
+    "delegateConsent": false,
     "delegateDecision": "auto",
     "delegateEffort": "medium",
     "delegateModel": "gpt-5.5",
