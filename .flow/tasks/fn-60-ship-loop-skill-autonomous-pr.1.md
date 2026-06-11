@@ -45,9 +45,8 @@ Build the `flow-next-land` skill: SKILL.md + workflow.md + the `/flow-next:land`
 - [ ] All flowctl/gh invocations in prose verified against real CLI surfaces (gh 2.93.0)
 
 ## Done summary
-
-_(filled by /flow-next:work)_
-
+Built the /flow-next:land skill (SKILL.md + workflow.md + command shim + sync-codex registration): a cadence-tick autonomous PR babysitter that discovers build-loop-authored PRs (dual authorship signals, merged-but-unclosed re-entry), gates each through CI tri-state / patience window / review signal / merge gates, takes one action class per PR (bounded ledger-tracked CI fixes, resolve-pr mode:autonomous dispatch, mechanical rebase, explicit gated merge + spec close + tracker touchpoint + bounded release-follow), and ends with the worst-severity terminal LAND_VERDICT line; --dry-run classifies with zero mutations. Codex impl-review SHIP after one fix round (discovery PR_NUMBER assignment, hard TAIL_OK post-merge gate, explicit tracker-sync dispatch).
 ## Evidence
-
-_(filled by /flow-next:work)_
+- Commits: ad6734a334b0e21f30cdf8db9ae50c08ff963fce, 85c582ee0db2f18c94716ae90c1c8f209f588c2b
+- Tests: for f in plugins/flow-next/tests/test_*.py; do python3 $f; done (all green), bash -n scripts/sync-codex.sh && ./scripts/sync-codex.sh (validators green, 21 required skills incl. flow-next-land; mirror diff reverted per task scope), land --dry-run smoke against this repo: Phase 0 guards pass, config reads (release=true patienceMinutes=30 reviewSignal=silence ciFixBudget=3), discovery NO_WORK with 4 non-spec open PRs correctly ignored, terminal line LAND_VERDICT=NO_WORK prs=0 pr=- emitted last; GATE snippets exercised read-only vs live PR #95 (CI tri-state rc=1/empty->none-beyond-window, patience anchor parse, unresolved-threads GraphQL=0, silence signal=never); zero mutations verified (no ledger dir, no label, clean tree) — /tmp/land-dry-run-evidence.txt
+- PRs:
