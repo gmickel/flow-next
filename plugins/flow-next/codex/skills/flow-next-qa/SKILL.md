@@ -53,12 +53,19 @@ Parse `$ARGUMENTS`. The first non-flag token is the spec id (required). The valu
 RAW_ARGS="$ARGUMENTS"
 SPEC_ID=""
 
-# Normalize space-separated forms (`--target <url>` → `--target=<url>`) BEFORE
-# this loop. No bash positional parameters here — the host's argument
-# interpolation rewrites positional tokens inside skill code blocks (pilot
-# dogfood finding, 1.13.0).
+# The loop handles both `--flag=value` and space-separated `--flag value`
+# forms via a PREV token holder. No bash positional parameters here — the
+# host's argument interpolation rewrites positional tokens inside skill code
+# blocks (pilot dogfood finding, 1.13.0).
+PREV=""
 for ARG in $RAW_ARGS; do
+ case "$PREV" in
+ --target) QA_TARGET_URL="$ARG"; PREV=""; continue ;; # Phase 3.1 caller override
+ --receipt) QA_RECEIPT_OVERRIDE="$ARG"; PREV=""; continue ;; # Phase 6.3 receipt path
+ --base) QA_BASE_REF="$ARG"; PREV=""; continue ;; # §1.2 base-branch override
+ esac
  case "$ARG" in
+ --target|--receipt|--base) PREV="$ARG" ;;
  --target=*) QA_TARGET_URL="${ARG#--target=}" ;; # Phase 3.1 caller override
  --receipt=*) QA_RECEIPT_OVERRIDE="${ARG#--receipt=}" ;; # Phase 6.3 receipt path
  --base=*) QA_BASE_REF="${ARG#--base=}" ;; # §1.2 base-branch override
@@ -66,6 +73,7 @@ for ARG in $RAW_ARGS; do
  *) [[ -z "$SPEC_ID" ]] && SPEC_ID="$ARG" ;;
  esac
 done
+[[ -n "$PREV" ]] && echo "Flag $PREV given without a value (ignored)" >&2
 export QA_TARGET_URL QA_RECEIPT_OVERRIDE QA_BASE_REF # carry the resolved overrides into workflow.md Phases 3.1 / 6.3 / §1.2
 ```
 

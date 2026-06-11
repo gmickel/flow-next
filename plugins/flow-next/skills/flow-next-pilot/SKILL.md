@@ -60,7 +60,7 @@ Dirty tree means dirty outside `.flow/`; pilot leaves state untouched. No cleanu
 
 Parse `$ARGUMENTS` for the scope lock, dry-run switch, and passthroughs. Unknown flags warn to stderr and are ignored. Defaults are `research=grep`, `depth=short`, and `review` resolved later via `$FLOWCTL review-backend`.
 
-Normalize space-separated flag forms to their `=` form before the loop (`--spec fn-12` → `--spec=fn-12`). The loop itself deliberately avoids bash positional parameters (`shift`-based parsing) — the host's argument interpolation rewrites positional tokens inside skill code blocks, which corrupts a `case`-on-positionals parse (observed live in the 1.13.0 dogfood).
+The loop handles both `--flag=value` and space-separated `--flag value` forms directly via a `PREV` token holder. It deliberately avoids bash positional parameters (`shift`-based parsing) — the host's argument interpolation rewrites positional tokens inside skill code blocks, which corrupts a `case`-on-positionals parse (observed live in the 1.13.0 dogfood).
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
@@ -70,8 +70,16 @@ PILOT_REVIEW=""
 PILOT_RESEARCH="grep"
 PILOT_DEPTH="short"
 
+PREV=""
 for ARG in $RAW_ARGS; do
+  case "$PREV" in
+    --spec)     PILOT_SPEC="$ARG"; PREV=""; continue ;;
+    --review)   PILOT_REVIEW="$ARG"; PREV=""; continue ;;
+    --research) PILOT_RESEARCH="$ARG"; PREV=""; continue ;;
+    --depth)    PILOT_DEPTH="$ARG"; PREV=""; continue ;;
+  esac
   case "$ARG" in
+    --spec|--review|--research|--depth) PREV="$ARG" ;;
     --spec=*)     PILOT_SPEC="${ARG#--spec=}" ;;
     --dry-run)    PILOT_DRY_RUN=1 ;;
     --review=*)   PILOT_REVIEW="${ARG#--review=}" ;;
@@ -81,6 +89,7 @@ for ARG in $RAW_ARGS; do
     *)  echo "Unknown argument: $ARG (ignored by /flow-next:pilot)" >&2 ;;
   esac
 done
+[[ -n "$PREV" ]] && echo "Flag $PREV given without a value (ignored by /flow-next:pilot)" >&2
 export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH
 ```
 
