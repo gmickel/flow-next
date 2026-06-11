@@ -22,7 +22,7 @@ Per cadence tick, for each open PR the loop authored:
 5. **Merge** — CI green + an approving automated review + threads addressed → flip the build-loop's draft PR to ready (`gh pr ready` — pilot's PRs are born draft) and `gh pr merge`, autonomously; then `flowctl spec close` on the spec — land is the pipeline terminus, and closing prevents the build-loop from re-selecting a merged spec.
 6. **Release** — discover + follow the project's own release instructions (RELEASING.md / docs / scripts) if present; otherwise stop at merge. A config toggle (e.g. `land.release`) can disable the release step independently of the rest of the loop.
 
-`resolve-pr` gets a light autonomous touch: under `FLOW_AUTONOMOUS` it skips its needs-human bucket and reports `NEEDS_HUMAN` instead of blocking on a question.
+`resolve-pr` gets a light autonomous touch following the fn-59.2 convention — a `mode:autonomous` arg token as the primary signal (env vars do not survive across tool calls; capture's `mode:autofix` parse is the precedent) with `FLOW_AUTONOMOUS=1` env honored as the secondary, question-suppression branches only, never Ralph paths: under autonomy it skips its needs-human bucket and reports `NEEDS_HUMAN` instead of blocking on a question.
 
 ## API Contracts
 <!-- scope: technical -->
@@ -36,7 +36,8 @@ Per cadence tick, for each open PR the loop authored:
 <!-- scope: technical -->
 
 - ~30-minute patience window for the first automated review; convergence = no new threads since the last resolve. [user]
-- Operates only on PRs the build-loop authored — discovered as open PRs whose head branch matches a flow spec's `branch_name` (make-pr bodies embed the spec id as a secondary signal); never arbitrary PRs. [inferred]
+- Never nests under Ralph: refuse to run when `FLOW_RALPH` / `REVIEW_RECEIPT_PATH` is set (hard-error + terminal `NEEDS_HUMAN`-class verdict, same guard as pilot — alternative drivers, never nested). [inferred]
+- Operates only on PRs the build-loop authored — discovered as open PRs whose head branch matches a flow spec's `branch_name` (make-pr bodies embed the spec id as a secondary signal); never arbitrary PRs. The primary signal is contractual since fn-59.2: under autonomy, work names its new branch exactly the spec's `branch_name`. [inferred]
 - make-pr §4.6b (shipped 1.11.0) guarantees the PR body carries the tracker ref post-create — the body-embedded secondary discovery signal is now reliable; `branch_name` match stays primary. [inferred]
 - The post-merge close (R13) flips the linked issue to its terminal state + posts the release/verdict comment + emits an event-tagged receipt through the fn-57 layer — the exact flow exercised manually at the 1.11.0 release. [inferred]
 - CI-fix attempts are bounded per PR; on exhaustion the PR is durably marked (e.g. a `flow-next:needs-human` label — survives sessions, visible on GitHub), reported `NEEDS_HUMAN`, and skipped on later ticks. [inferred]
@@ -54,12 +55,12 @@ Per cadence tick, for each open PR the loop authored:
 - **R2:** For a PR with red CI it diagnoses + fixes + pushes and reports `FIXING_CI`; with green CI it proceeds. [user]
 - **R3:** It waits for automated-reviewer feedback within a ~30-minute patience window, reporting `AWAITING_REVIEW` until reviews arrive or the window elapses. [user]
 - **R4:** New valid review threads are resolved via `/flow-next:resolve-pr`; it loops resolve → re-check until no new reviews arrive (convergence). [user]
-- **R5:** `resolve-pr` runs autonomously under `FLOW_AUTONOMOUS` — its needs-human cases report `NEEDS_HUMAN` instead of blocking on a question. [paraphrase]
+- **R5:** `resolve-pr` runs autonomously under the fn-59.2 signal convention (`mode:autonomous` arg token primary, `FLOW_AUTONOMOUS=1` env secondary; question-suppression branches only, never Ralph/receipt paths) — its needs-human cases report `NEEDS_HUMAN` instead of blocking on a question. [paraphrase]
 - **R6:** Once CI is green, threads are addressed, and an approving automated review lands, it merges via `gh pr merge` — autonomously. [user]
 - **R7:** Merge conflicts are handled (rebase / resolve attempt) or reported `BLOCKED`. [user]
 - **R8:** After merge it discovers and follows the project's own release instructions if present; otherwise it stops at merge. [user]
 - **R9:** It is opt-in and isolated — a separate skill; projects that don't run it are unaffected, and it touches only PRs it authored (or a configured filter). [user]
-- **R10:** Per-PR verdicts are `MERGED | RELEASED | FIXING_CI | AWAITING_REVIEW | RESOLVING | BLOCKED | NEEDS_HUMAN`. [paraphrase]
+- **R10:** Per-PR verdicts are `MERGED | RELEASED | FIXING_CI | AWAITING_REVIEW | RESOLVING | BLOCKED | NEEDS_HUMAN`, and every tick ends with a single terminal tick-level verdict line as the LAST line of the response (per-PR verdicts echoed above it) — transcript-readable so a `/goal` validator or `/loop` cadence can act on it without tools, following the `PILOT_VERDICT` precedent (fn-59 R6); exact grammar resolved at planning. [paraphrase]
 - **R11:** Docs + flow-next.dev updated — new skill page, both navbars, changelog, command reference, version bump; the auto-merge override is documented. [user]
 - **R12:** Before merging, it flips the build-loop's draft PR to ready (`gh pr ready`) once the merge gate is satisfied. [inferred]
 - **R13:** After a successful merge it closes the spec (`flowctl spec close`), so the build-loop never re-selects a merged spec. [inferred]
