@@ -35,9 +35,8 @@ Release surfaces for `/flow-next:land` (1.14.0): repo docs, the confined auto-me
 - [ ] No `(soon)` / "in development" references to land remain anywhere on the site
 
 ## Done summary
-
-_(filled by /flow-next:work)_
-
+1.14.0 release surfaces for /flow-next:land: repo docs (README 28-skills count + commands row + third autonomous path, GLOSSARY Land term + Verdict extension, CLAUDE.md confined merge-rule exception, docs index, ralph.md ship-loop recipe, CHANGELOG 1.14.0, flowctl.md land.*/land.merged config rows), manifests at 1.14.0 lockstep with 28-skills/24-commands counts, regenerated Codex mirror incl. flow-next-land (zero R2 injections), and the flow-next.dev flip to shipped (land.mdx full doc, overview row, both navbars, landing card, changelog, version refs — commits ff521e1+9aceb86, held unpushed until the release tag). Four codex impl-review fix rounds also hardened sync-codex /skills/ path rewriting + validator, land's transactional .flow close persistence, the fn-57 tracker dispatch grammar, centralized ledger writes, flake-vs-fix strike timing, and CI wiring for test_land_config.py.
 ## Evidence
-
-_(filled by /flow-next:work)_
+- Commits: 19b880e0f892893e059b303dc791ef924eb23372, 34bb4489364d2fd7d601989d37cdb1023d2664fc, 4f7dfe4c4dcde6d326d8b9acab528d81248fa3f1, 07b7249cc10966745805a5807fb675c64e67442e, 1ac45453ac5f4573822eb826fd1180a4cc8da2eb
+- Tests: for f in plugins/flow-next/tests/test_*.py; do python3 $f; done (all green, incl. test_land_config.py), bash -n scripts/sync-codex.sh && ./scripts/sync-codex.sh (all validators green incl. new /skills/-ref validator; byte-idempotent re-run), cd ~/work/flow-next.dev && pnpm build (61 pages, green), jq version lockstep check: 1.14.0 across 5 manifests + README badge, grep sweep: zero '(soon)'/'in development' land refs sitewide
+- PRs:
