@@ -234,6 +234,19 @@ jobs:
         # rejected, tracker handles resolve, done specs allowed, human
         # listings badge ready specs only.
 
+      # ──────────── fn-60 (land ship loop) ────────────
+
+      - name: Python unit tests — land.* config defaults (fn-60.2)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_land_config.py" \
+            -v
+        # Seeded land.* defaults (release/patienceMinutes/reviewSignal/
+        # automatedReviewers/ciFixBudget) — `config get` returns values, not
+        # null, on fresh repos; set/get round-trips; dual flowctl.py copies
+        # stay in lockstep.
+
       # ──────────── Cursor local-install (1.9.0) ────────────
       # The bash + PowerShell Cursor installers (scripts/install-cursor.{sh,ps1})
       # must not drift, and must actually produce a complete + clean install on

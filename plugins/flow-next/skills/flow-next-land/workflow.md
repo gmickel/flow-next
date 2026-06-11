@@ -64,7 +64,7 @@ LEDGER="$LEDGER_DIR/land-strikes.json"
 LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"
 ```
 
-Ledger schema, keyed by PR URL: `{"<pr-url>": {"ci_fix_count": <n>, "decision_at_push": "<APPROVED|...|->", "land_pushed_sha": "<sha|->", "ts": "<iso8601>"}}`. It is skill-owned scratch; no flowctl plumbing. Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
+Ledger schema, keyed by PR URL: `{"<pr-url>": {"ci_fix_count": <n>, "rerun_count": <n>, "decision_at_push": "<APPROVED|...|->", "land_pushed_sha": "<sha|->", "ts": "<iso8601>"}}`. It is skill-owned scratch; no flowctl plumbing. Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
 
 ## Phase 1 — DISCOVER
 
@@ -253,30 +253,42 @@ Execute each PR's planned action serially. Branch hygiene around EVERY checkout:
 
 ### 3.1 — `ci-fix`
 
-1. Increment the ledger strike BEFORE pushing — a crashed push still consumed an attempt (write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, atomic `jq` + `mv`):
+1. `gh pr checkout "$PR_NUMBER"` (the spec branch lives in this repo; checkout tracks it).
+2. Inspect the failing check from the Phase 2 `CHECKS_JSON` (`name`, `bucket`, `link`). When the link maps to a GitHub Actions run (`/actions/runs/<id>` in the URL), derive the run id and read `gh run view <id> --log-failed`. External/status checks with no Actions run: use the check name/link as evidence and attempt only locally-discoverable matching validation. Logs unavailable AND no local validation exists → verdict `NEEDS_HUMAN`, restore branch, continue (never pretend CI was diagnosed).
+3. Judge relatedness against the PR diff:
+   - **Unrelated** (infra flake, e.g. runner timeout, network): ONE `gh run rerun <id>` for that run — verdict `FIXING_CI`, reason `infra flake — rerun dispatched`, restore branch, continue. The FIRST rerun for a PR consumes NO budget strike (diagnosis-only ticks must never durably label a healthy PR); a REPEAT flake on a later tick is a fresh attempt against the budget — it increments `ci_fix_count` alongside `rerun_count`. One rerun per PR per tick. Ledger write (every write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, atomic `jq` + `mv`):
 
-   ```bash
-   mkdir -p "$LEDGER_DIR"; [ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
-   tmp="$LEDGER.tmp.$$"
-   jq --arg pr "$PR_URL" --arg ts "$TODAY" --arg dec "$REVIEW_DECISION" '
-     .[$pr].ci_fix_count = ((.[$pr].ci_fix_count // 0) + 1) | .[$pr].ts = $ts | .[$pr].decision_at_push = (if $dec == "" then "-" else $dec end)
-   ' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
-   ```
+     ```bash
+     mkdir -p "$LEDGER_DIR"; [ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
+     tmp="$LEDGER.tmp.$$"
+     jq --arg pr "$PR_URL" --arg ts "$TODAY" '
+       .[$pr].rerun_count = ((.[$pr].rerun_count // 0) + 1) | .[$pr].ts = $ts
+       | (if .[$pr].rerun_count > 1 then .[$pr].ci_fix_count = ((.[$pr].ci_fix_count // 0) + 1) else . end)
+     ' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
+     ```
 
-2. `gh pr checkout "$PR_NUMBER"` (the spec branch lives in this repo; checkout tracks it).
-3. Inspect the failing check from the Phase 2 `CHECKS_JSON` (`name`, `bucket`, `link`). When the link maps to a GitHub Actions run (`/actions/runs/<id>` in the URL), derive the run id and read `gh run view <id> --log-failed`. External/status checks with no Actions run: use the check name/link as evidence and attempt only locally-discoverable matching validation. Logs unavailable AND no local validation exists → verdict `NEEDS_HUMAN`, restore branch, continue (never pretend CI was diagnosed).
-4. Judge relatedness against the PR diff:
-   - **Unrelated** (infra flake, e.g. runner timeout, network): ONE `gh run rerun <id>` for that run — this does NOT consume the strike's push (decrement is not needed; the strike was for the attempt) — verdict `FIXING_CI`, reason `infra flake — rerun dispatched`, restore branch, continue. One rerun per PR per tick; a repeat flake next tick is a fresh attempt against the budget.
-   - **Related**: scope edits to the failing surface ONLY; run the repo's matching local validation when discoverable; stage ONLY the files you edited (NEVER `git add -A` here); commit `fix(ci): <what>`; `git push`.
-5. After a successful push, record the pushed sha for stale-approval detection:
+   - **Related**: consume a budget strike BEFORE pushing — a crashed push still consumed an attempt:
+
+     ```bash
+     mkdir -p "$LEDGER_DIR"; [ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
+     tmp="$LEDGER.tmp.$$"
+     jq --arg pr "$PR_URL" --arg ts "$TODAY" --arg dec "$REVIEW_DECISION" '
+       .[$pr].ci_fix_count = ((.[$pr].ci_fix_count // 0) + 1) | .[$pr].ts = $ts | .[$pr].decision_at_push = (if $dec == "" then "-" else $dec end)
+     ' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
+     ```
+
+     Then: scope edits to the failing surface ONLY; run the repo's matching local validation when discoverable; stage ONLY the files you edited (NEVER `git add -A` here); commit `fix(ci): <what>`; `git push`.
+4. After a successful push, record the push for stale-approval detection — this is THE canonical post-push ledger write (3.2 and 3.3 reuse it verbatim); it records BOTH the pushed sha and the review decision observed at push time:
 
    ```bash
    PUSHED_SHA="$(git rev-parse HEAD)"
    tmp="$LEDGER.tmp.$$"
-   jq --arg pr "$PR_URL" --arg sha "$PUSHED_SHA" '.[$pr].land_pushed_sha = $sha' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
+   jq --arg pr "$PR_URL" --arg sha "$PUSHED_SHA" --arg dec "$REVIEW_DECISION" '
+     .[$pr].land_pushed_sha = $sha | .[$pr].decision_at_push = (if $dec == "" then "-" else $dec end)
+   ' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
    ```
 
-6. Verdict `FIXING_CI`. The push restarts the patience window (next tick re-anchors). Restore `ORIG_BRANCH`, assert clean.
+5. Verdict `FIXING_CI`. The push restarts the patience window (next tick re-anchors). Restore `ORIG_BRANCH`, assert clean.
 
 ### 3.2 — `resolve`
 
@@ -293,7 +305,7 @@ Gate ONLY on its machine-readable terminal line `RESOLVE_PR_VERDICT=<RESOLVED|PE
 - `NEEDS_HUMAN` → apply the durable label (3.4) + verdict `NEEDS_HUMAN` (resolve-pr's bounded 2 fix-verify cycles already escalated).
 - No terminal line (crash) → verdict `NEEDS_HUMAN`, no label (transient — a label needs a human to remove).
 
-resolve-pr pushes commits itself when it fixes code; if it pushed, update the ledger's `land_pushed_sha`/`decision_at_push` exactly as in 3.1 step 5 (read the new `headRefOid` via `gh pr view "$PR_NUMBER" --json headRefOid`). Restore `ORIG_BRANCH` if resolve-pr left the worktree elsewhere; assert clean.
+resolve-pr pushes commits itself when it fixes code; if it pushed, run the canonical post-push ledger write from 3.1 step 4 — read the fresh state via `gh pr view "$PR_NUMBER" --json headRefOid,reviewDecision` and write BOTH `land_pushed_sha` (the new `headRefOid`) and `decision_at_push` (the `reviewDecision` at push time, `-` when empty). Restore `ORIG_BRANCH` if resolve-pr left the worktree elsewhere; assert clean.
 
 ### 3.3 — `rebase` (mechanical only — v1 never hand-resolves conflicts)
 
@@ -307,7 +319,7 @@ if ! git rebase "origin/$BASE_REF"; then
 fi
 ```
 
-Clean rebase → `git push --force-with-lease` (restarts the patience window; update ledger `land_pushed_sha` + `decision_at_push` as in 3.1 step 5) → verdict `RESOLVING` (re-gate next tick). Restore `ORIG_BRANCH`, assert clean.
+Clean rebase → `git push --force-with-lease` (restarts the patience window) → run the canonical post-push ledger write from 3.1 step 4 (`land_pushed_sha` = the rebased HEAD, `decision_at_push` = the Phase 2 `REVIEW_DECISION`) → verdict `RESOLVING` (re-gate next tick). Restore `ORIG_BRANCH`, assert clean.
 
 ### 3.4 — `label` (durable needs-human marker)
 
@@ -352,7 +364,13 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
 
 `TAIL_OK == 0` → verdict `NEEDS_HUMAN` for this PR, reason `squash commit missing from local base — tail not run`; do NOT run ANY tail step (no spec close, no tracker, no release) and continue to the next PR — a later tick re-enters via the merged-but-unclosed path once the base is fixed. Only with `TAIL_OK == 1` run the tail, in order:
 
-1. **Spec close** — `"$FLOWCTL" spec close "$spec" --json`. flowctl hard-requires all tasks done; stray non-done tasks at close time → verdict `NEEDS_HUMAN`, reason `spec close refused: <flowctl error>` (report, never force) — the merge stands, a later tick re-enters via the merged-but-unclosed path after a human fixes the task state.
+1. **Spec close** — `"$FLOWCTL" spec close "$spec" --json`. flowctl hard-requires all tasks done; stray non-done tasks at close time → verdict `NEEDS_HUMAN`, reason `spec close refused: <flowctl error>` (report, never force) — the merge stands, a later tick re-enters via the merged-but-unclosed path after a human fixes the task state. On success, PERSIST the close — the dirty-tree guards exclude `.flow/`, so an uncommitted close would silently sit forever and every other clone (and the re-entry check) would still see the spec open:
+
+   ```bash
+   git add .flow && git commit -m "chore(flow): close ${spec} (landed PR #${PR_NUMBER})" && git push
+   ```
+
+   A push failure here is a tail failure: verdict `NEEDS_HUMAN`, reason `spec close not pushed`; continue to the next PR (a later tick re-enters and retries the tail — `spec close` is idempotent on an already-closed spec, treat "already closed" as success).
 2. **Tracker touchpoint (opt-in, best-effort)** — gated exactly like every fn-57 touchpoint (active AND leaf ≠ off/null; an unseeded leaf reads `null` = off):
 
    ```bash
