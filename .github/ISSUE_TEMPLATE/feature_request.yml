@@ -1,0 +1,31 @@
+name: Feature request
+description: Propose an improvement or new capability
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the workflow gap, not just the feature. flow-next holds the line on command count — features that strengthen an existing skill beat new commands.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would it look like? Which skill/command/flowctl surface does it touch?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I checked [STRATEGY.md "Not working on"](https://github.com/gmickel/flow-next/blob/main/STRATEGY.md) — this isn't explicitly out of scope
+        - label: I searched existing issues

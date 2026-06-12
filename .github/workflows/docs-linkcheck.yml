@@ -1,0 +1,44 @@
+name: docs-linkcheck
+
+on:
+  pull_request:
+    paths:
+      - "**/*.md"
+      - ".github/workflows/docs-linkcheck.yml"
+  push:
+    branches: [main]
+    paths:
+      - "**/*.md"
+
+jobs:
+  linkcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Internal relative links only (--offline) — that is the discipline the
+      # docs tree enforces (relative repo paths, fork-survivable). External
+      # URLs are deliberately not checked here: their flakiness should never
+      # block a PR. The auto-generated Codex mirror and .flow/ work artifacts
+      # are excluded to keep signal high.
+      - name: Check internal markdown links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --offline
+            --no-progress
+            --root-dir ${{ github.workspace }}
+            --exclude-path plugins/flow-next/codex
+            --exclude-path .flow
+            --exclude-path node_modules
+            --exclude-path flow-next-tui/node_modules
+            README.md
+            CONTRIBUTING.md
+            SECURITY.md
+            GLOSSARY.md
+            STRATEGY.md
+            agent_docs
+            plugins/flow-next/README.md
+            plugins/flow-next/docs
+            plugins/flow-next/skills
+          fail: true

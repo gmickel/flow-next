@@ -1,0 +1,50 @@
+name: Bug report
+description: Something in flow-next is broken
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: flow-next version
+      placeholder: "2.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Claude Code
+        - OpenAI Codex
+        - Factory Droid
+        - Grok Build
+        - Cursor
+        - OpenCode (community port)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you run, what did you expect, what happened instead. Paste exact commands and exact error output.
+      placeholder: |
+        1. Ran `/flow-next:plan fn-12`
+        2. Expected …
+        3. Got …
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Relevant context
+      description: "OS, Python version, review backend (`flowctl review-backend`), Ralph involved? Relevant `.flow/` state or receipts. Logs from `scripts/ralph/runs/` if autonomous."
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I'm on the latest flow-next release
+        - label: I checked [troubleshooting.md](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/troubleshooting.md)

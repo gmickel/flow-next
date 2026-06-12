@@ -1,6 +1,6 @@
 # Teams & Spec-Driven Development with Flow-Next
 
-This page maps the AI-native software development lifecycle (SDLC) to Flow-Next commands. If your team is asking *"where does our Agile fit when we adopt this?"*, start here.
+Agentic engineering compresses implementation from weeks to hours — and the touchpoints pre-agentic Agile relied on (standups, refinement, design review, hallway clarification) collapse with it. The collaboration doesn't become unnecessary; it has to move into **explicit artefacts before the run starts**. This page maps that AI-native software development lifecycle (SDLC) onto concrete Flow-Next commands. If your team is asking *"where does our Agile fit when we adopt this?"*, start here.
 
 The vocabulary on this page — *handover objects*, *Delegate / Review / Own*, *lifecycle steps [1]–[9]* — comes from the [AI-x-SDLC Starter-Kit methodology guide](https://github.com/gmickel/AI-x-SDLC-Starter-Kit/blob/main/guides/methodology.md). That document is the *theory*. This page is the *implementation* — the same lifecycle, mapped to concrete `flowctl` commands and `.flow/` artefacts.
 
