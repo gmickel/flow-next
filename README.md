@@ -27,6 +27,7 @@ Flow-Next is an AI agent orchestration plugin. **Twenty-eight agent-native skill
 - **Fresh-context workers.** Each task runs in its own subagent. No token bleed between tasks.
 - **Cross-model reviews.** A different model (RepoPrompt / Codex / Copilot) gates every implementation.
 - **R-IDs frozen at handover.** Acceptance criteria numbered once, never renumbered.
+- **Optional HTML render lenses.** Flip one config key (`artifacts.html.enabled`) and capture / plan / make-pr also emit self-contained HTML review pages under `.flow/artifacts/` — a spec visualizer (task DAG, R-ID coverage) and a PR review instrument. Markdown stays the record; artifacts are regenerable, never parsed back. OFF by default — zero cost when unused. → [`docs/html-artifacts.md`](plugins/flow-next/docs/html-artifacts.md)
 
 First-class on **Claude Code**, **OpenAI Codex** (CLI + Desktop), and **Factory Droid**. Also runs on **xAI Grok Build** and **Cursor** (local plugin), plus **OpenCode** via the [community port](https://github.com/gmickel/flow-next-opencode).
 
@@ -170,6 +171,8 @@ Render a PR body from nine flow-next input streams (spec R-IDs, per-task evidenc
 ```bash
 /flow-next:make-pr <spec-id>          # auto-detects from current branch
 ```
+
+With HTML artifact mode on (`flowctl config set artifacts.html.enabled true`), make-pr also commits a self-contained `pr.html` review instrument — diff-derived churn map, R-ID → evidence table with flagged mismatches, where-to-look checklist — and links it from the PR body. Same switch gives capture/plan a spec visualizer. Opt-in; see [`docs/html-artifacts.md`](plugins/flow-next/docs/html-artifacts.md).
 
 → [flow-next.dev/skills/make-pr](https://flow-next.dev/skills/make-pr)
 

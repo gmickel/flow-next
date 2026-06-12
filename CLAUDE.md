@@ -103,6 +103,7 @@ flow-next is a first-class citizen on Claude Code, Codex, and Factory Droid. **A
 | Memory schema (bug/knowledge tracks, audit lifecycle) | [`plugins/flow-next/docs/memory-schema.md`](plugins/flow-next/docs/memory-schema.md) |
 | Tracker-sync bridge (projection model, hybrid id, transport ladder; `/flow-next:tracker-sync` ≠ `/flow-next:sync`) | [`plugins/flow-next/docs/tracker-sync.md`](plugins/flow-next/docs/tracker-sync.md) |
 | Live-app QA (`/flow-next:qa` — spec-derived scenarios, drives the running app via `flow-next-drive`, P0/P1/P2 findings, `qa_verdict` receipt; forbidden from marking PASS by reading source; opt-in) | [`plugins/flow-next/skills/flow-next-qa/SKILL.md`](plugins/flow-next/skills/flow-next-qa/SKILL.md) |
+| HTML artifact mode (opt-in render lenses — `artifacts.html.enabled`, spec/PR artifacts under `.flow/artifacts/`, disclosure reference, Lavish companion, autonomous generate-only discipline) | [`plugins/flow-next/docs/html-artifacts.md`](plugins/flow-next/docs/html-artifacts.md) |
 | Cross-platform install matrix (Claude / Codex / Droid / OpenCode) | [`plugins/flow-next/docs/platforms.md`](plugins/flow-next/docs/platforms.md) |
 | Codebase feature map (optional) | [`plugins/flow-next/skills/flow-next-map/`](plugins/flow-next/skills/flow-next-map/) — `/flow-next:map` wraps `clawpatch map` |
 | Troubleshooting + uninstall | [`plugins/flow-next/docs/troubleshooting.md`](plugins/flow-next/docs/troubleshooting.md) |

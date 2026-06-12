@@ -85,6 +85,8 @@ All six properties of a real handover object hold:
 
 The artefact chain is the conversation that did not happen. Pre-agentic Agile relied on standups, refinement, design reviews, and hallway conversation to keep a 2–3 week implementation aligned. Flow-Next runs that implementation in a few hours per task — those touchpoints are gone, and the artefact chain replaces them.
 
+> **Optional render-lens companions (2.0.0+).** With HTML artifact mode on (`flowctl config set artifacts.html.enabled true`), the two human review surfaces gain a rendered companion: spec review gets a self-contained spec visualizer at `.flow/artifacts/<spec-id>/spec.html` (acceptance criteria with provenance chips; task DAG + R-ID coverage once planned — useful for POs/PMs reviewing handovers #1–#3) and diff review gets a read-only PR instrument at `pr.html` (churn map, R-ID → evidence table, where-to-look checklist — handover #6). The markdown artefacts above remain the record; lenses are regenerable derivations. OFF by default. See [`html-artifacts.md`](html-artifacts.md).
+
 ---
 
 ## Roles and ownership
