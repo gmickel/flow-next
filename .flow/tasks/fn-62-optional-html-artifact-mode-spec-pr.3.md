@@ -35,9 +35,8 @@ Wire the spec lens into the two lifecycle touchpoints that change spec state: ca
 - [ ] Ignored-artifacts repo gets local-open guidance, no dead repo link
 
 ## Done summary
-TBD
-
+Wired the opt-in HTML render lens into capture (workflow.md §5.10) and plan (steps.md Step 8.5) with hard bash gates on artifacts.html.enabled, idempotent artifact-link replacement, ignore-status link strategy, and snippet-enforced interactive-only Lavish open/poll; executed the fn-62.2 early proof — a fresh session generated the spec artifact from the reference alone, passing all pre-publish checks — and tightened reference §1.4/§4 to repo-relative spec-md links (proof fix round 1). RP impl-review SHIP after 2 fix rounds.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c892ae1, 1235c6d, fce92a1
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (1071 OK), bash plugins/flow-next/scripts/smoke_test.sh (132 pass; 2 copilot-CLI env flakes unrelated), bash scripts/sync-codex.sh (mirror parity clean), reference self-check grep: OK: self-contained, grep -c flow-next:artifact-link spec.md == 1, early proof: fresh claude -p session given ONLY plugins/flow-next/references/html-artifacts.md regenerated .flow/artifacts/fn-62-optional-html-artifact-mode-spec-pr/spec.html in house style (layered DAG, DOM-measured edges, provenance chips, staleness stamp, print CSS) — visually matched ~/Documents/flow-next-artifact-smoke quality bar
 - PRs:
