@@ -38,9 +38,8 @@ Structure per practice-scout (rules → worked example → checklist, NOT a desi
 - [ ] READY FOR PROOF: pre-publish checklist is complete and self-checkable; the executable proof (fresh session reproduces house style) runs and gates in fn-62.3
 
 ## Done summary
-TBD
-
+Shipped the shared HTML-artifacts disclosure reference at plugins/flow-next/references/html-artifacts.md (320 lines, rules -> design contract -> per-lens guidance -> DAG discipline -> Lavish -> pre-publish checklist; house style reverse-engineered from the three validated smoke artifacts; tool-name-agnostic) plus Codex mirror wiring: sync-codex.sh sibling cp -R for references/ (byte-identical mirror) and install-codex.sh copy to ~/.codex/references/. RP impl-review: SHIP after one fix round (grep portability, print-CSS A4 default, sync-codex.md docs).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: e4a426360fbdb6d97c95f16f066cd20f8ffc2a24, 5ba324d6ba4bcbb93396e0521037eb20431f4dc1
+- Tests: python3 plugins/flow-next/tests/test_*.py (full sweep, all pass), ./scripts/sync-codex.sh (all validation guards green, idempotent re-run), cmp plugins/flow-next/references/html-artifacts.md plugins/flow-next/codex/references/html-artifacts.md (byte-identical), grep -E 'AskUserQuestion|spawn_agent|Task' on the reference file (empty), bash -n scripts/sync-codex.sh scripts/install-codex.sh, self-check grep probed against spaced fetch() input (catches it)
 - PRs:
