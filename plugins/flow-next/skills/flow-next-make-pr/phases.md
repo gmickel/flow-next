@@ -64,15 +64,16 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 - [ ] Mode on: disclosure reference (`plugins/flow-next/references/html-artifacts.md`) loaded; `.flow/artifacts/<spec-id>/pr.html` generated at the fixed path per reference §5 — derived from `EXPORT_PAYLOAD` + the real diff (`git diff --stat "$MERGE_BASE"..HEAD`), **never commit messages**; staleness stamp present (head sha at payload-export time vs base).
 - [ ] R-ID verification ran: payload-vs-diff mismatches (claimed evidence outside the diff range, uncovered R-IDs, evidence touching no diff files) render as visibly flagged rows (red R-ID cell + `mismatch` chip + reason) — warn-in-artifact, never blocks make-pr.
 - [ ] Pre-publish checklist (reference §8) passed incl. self-containment grep → `OK: self-contained`.
-- [ ] Link mode follows ignore status (`git check-ignore -q .flow/artifacts/`): tracked → exactly ONE narrow commit `chore(flow): pr artifact <spec-id>` staging ONLY the artifact file (never `git add -A`), landing before §2.4b's `HEAD_SHA` capture; ignored → `LINK_MODE=local`, no commit.
-- [ ] Render-lens body line recorded for §2.1: repo mode → absolute SHA-pinned blob URL + "GitHub renders committed HTML as source — open locally" note; local mode → local-open guidance only. Never a blob link that 404s.
+- [ ] Link mode follows the ignore status of the EXACT artifact file (`git check-ignore -q "$ARTIFACT_PATH"` — catches `.flow/artifacts/**`, `*.html`, and exact-path rules the dir-level probe misses): tracked → exactly ONE narrow pathspec commit `chore(flow): pr artifact <spec-id>` (`-- "$ARTIFACT_PATH"`, never `git add -A`), landing before §2.4b's `HEAD_SHA` capture; byte-identical regeneration → no empty commit (blob link already resolves); ignored → `LINK_MODE=local`, no commit.
+- [ ] All git steps failure-guarded via `LENS_OK` (skill runs under `set -e` — an unguarded `git add`/`git commit` would abort the run): add/commit failure flips `LENS_OK=false`, never exits the skill.
+- [ ] Render-lens body line recorded for §2.1: repo mode → absolute SHA-pinned blob URL + "GitHub renders committed HTML as source — open locally" note; local mode → local-open guidance only; `LENS_OK=false` → no body line. Never a blob link that 404s.
 - [ ] NO `lavish-axi` session opened and NO poll — interactive AND autonomous alike (read-only review instrument; no Lavish snippet exists in this skill).
-- [ ] Failure path: generation/checklist/commit failure ⇒ body line skipped, ONE stderr note, phase exits cleanly into Phase 2 — PR creation proceeds. Ralph `PR_URL=<url>` stdout contract + receipts untouched.
+- [ ] Failure path: generation/checklist/stage/commit failure ⇒ `LENS_OK=false`, body line skipped, exactly ONE stderr note (`HTML render lens skipped: <reason>`), phase exits cleanly into Phase 2 — PR creation proceeds. Ralph `PR_URL=<url>` stdout contract + receipts untouched.
 
 **Failure modes:**
 
-- Artifact generation fails → stderr note, no body line, PR proceeds (non-fatal by design).
-- Narrow commit fails (e.g. pre-commit hook) → stderr note, no body line (the blob link would 404), PR proceeds.
+- Artifact generation fails → `LENS_OK=false`, stderr note, no body line, PR proceeds (non-fatal by design; step 5 stage/commit never runs).
+- Narrow commit fails (e.g. pre-commit hook) → `LENS_OK=false` via the guarded snippet, stderr note, no body line (the blob link would 404), PR proceeds.
 
 ---
 
