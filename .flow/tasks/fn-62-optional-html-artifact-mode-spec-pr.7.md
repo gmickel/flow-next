@@ -32,9 +32,8 @@ flow-next.dev mainline surfacing of the feature. Site repo: ~/work/flow-next.dev
 - [ ] pnpm build green
 
 ## Done summary
-TBD
-
+flow-next.dev feature pass for 2.0.0 HTML artifact mode (R12): two new pages (specs/visual-aids — spec render lens; review/visual-aids — PR review instrument) registered in BOTH navbars, landing feature card + "Render lenses" proof pillar, cross-page callouts in writing-specs/review-workflow/teams-collaboration/autonomous-overview (generate-never-poll), strict-format 2.0.0 changelog entry incl. planSync.crossEpic breaking-change line, FLOW_NEXT_VERSION + package.json bumped to 2.0.0. Committed in the site repo (1dd356d, not pushed); pnpm build green; RP impl-review SHIP first pass.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: flow-next.dev@1dd356d4 feat(visual-aids): surface HTML artifact mode as a mainline feature; 2.0.0
+- Tests: cd ~/work/flow-next.dev && pnpm build (green, 63 pages, both visual-aids pages emitted), slug-set diff between astro.config.mjs sidebar and site.ts navGroups (clean; only intentional introduction/install astro-only), grep checks: rail links to /specs/visual-aids/ and /review/visual-aids/ in built HTML; v2.0.0 on landing; 2.0.0 changelog entry rendered
 - PRs:
