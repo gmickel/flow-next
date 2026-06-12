@@ -854,7 +854,8 @@ When `HTML_LENS = true`:
 5. **Lavish session — interactive runs only** (reference §7). The guard is in the snippet, not just prose — open and poll sit INSIDE it:
 
    ```bash
-   LAVISH_OK=true   # mode:autofix is a skill argument, not an env var — autofix runs MUST set LAVISH_OK=false here
+   LAVISH_OK=true
+   [[ "${MODE:-interactive}" != "interactive" ]] && LAVISH_OK=false   # MODE from SKILL.md mode-detection — autofix never opens
    [[ -n "${FLOW_AUTONOMOUS:-}" || -n "${FLOW_RALPH:-}" || -n "${REVIEW_RECEIPT_PATH:-}" ]] && LAVISH_OK=false
    if [[ "$LAVISH_OK" == "true" ]] && command -v lavish-axi >/dev/null 2>&1; then
      lavish-axi "$(pwd)/.flow/artifacts/${SPEC_ID}/spec.html"   # absolute path — sessions key on it
