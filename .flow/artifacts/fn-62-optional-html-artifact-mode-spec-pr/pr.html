@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fn-62 · PR render lens — Optional HTML artifact mode</title>
+<style>
+/* flow-next PR lens · read-only review instrument (references/html-artifacts.md §5)
+   self-contained: no external fonts, no CDN, zero loaded external resources */
+:root {
+  --bg: #0c0b09; --panel: #14120e; --panel-2: #1a1712;
+  --line: #2c2719; --line-soft: #211d14;
+  --ink: #e8e2d4; --dim: #9a917c; --faint: #645d4c;
+  --amber: #ffb454; --amber-deep: #cc8b33;
+  --green: #87d96c; --red: #f07178; --cyan: #5ccfe6; --violet: #c9a7f5;
+  --mono: "Berkeley Mono", "JetBrains Mono", "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--mono); font-size: 14px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 999;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 2px, rgba(255,180,84,0.012) 2px 4px),
+    radial-gradient(ellipse 120% 60% at 50% -10%, rgba(255,180,84,0.05), transparent 60%);
+}
+a { color: var(--amber); text-decoration: none; border-bottom: 1px solid rgba(255,180,84,0.25); }
+a:hover { border-bottom-color: var(--amber); }
+code { color: var(--cyan); font-size: .95em; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 0 32px 96px; }
+
+header.mast { border-bottom: 1px solid var(--line); padding: 40px 0 28px; animation: rise .5s ease both; }
+.kicker { font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--amber); margin-bottom: 14px; }
+.kicker .sep { color: var(--faint); margin: 0 10px; }
+h1 { font-size: clamp(24px, 3.4vw, 38px); line-height: 1.14; margin: 0 0 8px; font-weight: 700; letter-spacing: -0.01em; max-width: 920px; }
+h1 .id { color: var(--amber); }
+.branchline { color: var(--dim); font-size: 12.5px; margin-bottom: 20px; }
+.branchline b { color: var(--cyan); font-weight: 600; }
+.dials { display: flex; flex-wrap: wrap; border: 1px solid var(--line); background: var(--panel); }
+.dial { padding: 12px 22px 10px; border-right: 1px solid var(--line); min-width: 104px; }
+.dial:last-child { border-right: 0; }
+.dial .v { font-size: 19px; font-weight: 700; }
+.dial .v .plus { color: var(--green); } .dial .v .minus { color: var(--red); }
+.dial .v.ok { color: var(--green); } .dial .v.warn { color: var(--amber); }
+.dial .k { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--faint); margin-top: 2px; }
+.footnote { font-size: 11px; color: var(--faint); margin: 10px 0 0; }
+
+.progress {
+  position: sticky; top: 0; z-index: 60; background: rgba(12,11,9,0.94); backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--line); margin: 0 -32px 48px; padding: 10px 32px;
+  display: flex; align-items: center; gap: 18px;
+}
+.progress .lbl { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+.progress .bar { flex: 1; height: 6px; background: var(--panel-2); border: 1px solid var(--line); position: relative; }
+.progress .bar i { position: absolute; inset: 0; width: 0%; background: linear-gradient(90deg, var(--amber-deep), var(--amber)); transition: width .3s ease; }
+.progress .pct { font-size: 12px; color: var(--amber); min-width: 96px; text-align: right; }
+.progress .reset { font-size: 10px; color: var(--faint); cursor: pointer; border: 1px solid var(--line); padding: 3px 10px; background: none; font-family: var(--mono); letter-spacing: .1em; }
+.progress .reset:hover { color: var(--red); border-color: var(--red); }
+
+section { margin-bottom: 72px; animation: rise .6s ease both; }
+section:nth-of-type(1){animation-delay:.05s} section:nth-of-type(2){animation-delay:.1s}
+section:nth-of-type(3){animation-delay:.15s} section:nth-of-type(4){animation-delay:.2s}
+.shead { display: flex; align-items: baseline; gap: 16px; border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 26px; }
+.shead .num { color: var(--amber); font-size: 12px; }
+.shead h2 { font-size: 17px; margin: 0; letter-spacing: .04em; text-transform: uppercase; font-weight: 700; }
+.shead .note { margin-left: auto; color: var(--faint); font-size: 11px; }
+
+.tldr { font-family: var(--serif); font-size: 20px; line-height: 1.62; max-width: 920px; margin: 0 0 22px; }
+.tldr strong { color: var(--amber); font-weight: 600; }
+.tldr em { color: var(--cyan); }
+.callout { border: 1px solid var(--line); border-left: 3px solid var(--green); background: var(--panel); padding: 16px 22px; max-width: 920px; font-size: 13px; color: var(--dim); }
+.callout b { color: var(--ink); }
+
+.churn { border: 1px solid var(--line); background: var(--panel); }
+.cgroup { border-bottom: 1px solid var(--line); }
+.cgroup:last-child { border-bottom: 0; }
+.cgroup > summary {
+  list-style: none; cursor: pointer; display: grid;
+  grid-template-columns: 26px minmax(220px, 1fr) 110px 90px 3fr; gap: 14px; align-items: center;
+  padding: 12px 18px; transition: background .12s ease;
+}
+.cgroup > summary::-webkit-details-marker { display: none; }
+.cgroup > summary:hover { background: #18150f; }
+.cgroup > summary .tw { color: var(--amber); font-size: 11px; }
+.cgroup[open] > summary .tw { transform: rotate(90deg); display: inline-block; }
+.cgroup .gname { font-size: 13px; font-weight: 700; color: var(--ink); }
+.cgroup .gname small { display: block; font-weight: 400; font-size: 10.5px; color: var(--faint); letter-spacing: .06em; }
+.cstat { font-size: 12px; white-space: nowrap; }
+.cstat .plus { color: var(--green); } .cstat .minus { color: var(--red); }
+.cfiles { font-size: 11px; color: var(--faint); }
+.cbar { height: 10px; background: var(--panel-2); border: 1px solid var(--line-soft); position: relative; overflow: hidden; }
+.cbar i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--green); opacity: .75; width: 0; transition: width .8s cubic-bezier(.2,.7,.2,1); }
+.cbar.gen i { background: var(--faint); }
+.cgroup ul { margin: 0; padding: 4px 18px 14px 58px; list-style: none; }
+.cgroup ul li { font-size: 12px; color: var(--dim); padding: 4px 0; border-bottom: 1px dotted var(--line-soft); display: flex; gap: 14px; }
+.cgroup ul li:last-child { border-bottom: 0; }
+.cgroup ul li .p { flex: 1; }
+.cgroup ul li .s { white-space: nowrap; font-size: 11px; }
+.gentag { display: inline-block; border: 1px solid var(--line); color: var(--faint); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; padding: 1px 7px; margin-left: 10px; vertical-align: 2px; }
+
+table.ev { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.ev th { text-align: left; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); padding: 8px 12px; border-bottom: 1px solid var(--line); }
+table.ev td { padding: 9px 12px; border-bottom: 1px solid var(--line-soft); color: var(--dim); vertical-align: top; }
+table.ev tbody tr:hover { background: #1c170d; }
+table.ev tbody tr:hover td { color: var(--ink); }
+.rid { color: var(--amber); font-weight: 700; white-space: nowrap; }
+td.rid-flag { color: var(--red); font-weight: 700; white-space: nowrap; }
+.mismatch { display: inline-block; border: 1px solid #5a2d30; color: var(--red); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; padding: 1px 7px; margin-left: 8px; }
+.commit { font-size: 11px; color: var(--cyan); white-space: nowrap; }
+.taskref { color: var(--green); white-space: nowrap; font-size: 11.5px; }
+.flagnote { font-size: 11px; color: var(--red); display: block; margin-top: 3px; }
+
+.focus { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 18px; }
+.fc { border: 1px solid var(--line); background: var(--panel); padding: 16px 20px 14px; display: flex; gap: 16px; align-items: flex-start; transition: border-color .15s ease; }
+.fc.checked { border-color: #2f4a25; background: #11150d; }
+.fc input { appearance: none; width: 20px; height: 20px; border: 1px solid var(--amber-deep); background: var(--panel-2); cursor: pointer; flex-shrink: 0; margin-top: 3px; position: relative; }
+.fc input:checked { background: var(--green); border-color: var(--green); }
+.fc input:checked::after { content: "✓"; position: absolute; inset: 0; display: grid; place-items: center; color: #0c0b09; font-size: 13px; font-weight: 700; }
+.fc .body h3 { margin: 0 0 6px; font-size: 12.5px; color: var(--ink); }
+.fc .body h3 code { color: var(--amber); }
+.fc .body p { margin: 0; font-size: 12px; color: var(--dim); }
+.fc.checked .body h3, .fc.checked .body p { color: var(--faint); text-decoration: line-through; text-decoration-color: rgba(135,217,108,.4); }
+
+.risk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 18px; }
+.rk { border: 1px solid var(--line); background: var(--panel); padding: 16px 20px 14px; }
+.rk h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; font-weight: 700; }
+.rk.hi h3 { color: var(--red); } .rk.med h3 { color: var(--amber); } .rk.low h3 { color: var(--green); }
+.rk p { margin: 0; font-size: 12.5px; color: var(--dim); }
+.rk p b { color: var(--ink); }
+
+footer { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 20px; font-size: 11px; color: var(--faint); letter-spacing: .06em; line-height: 1.8; }
+footer b { color: var(--dim); }
+.stamp { display: inline-block; border: 1px solid var(--line); background: var(--panel); padding: 2px 10px; color: var(--dim); margin-top: 6px; }
+
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+@media print {
+  :root { --bg:#fff; --panel:#fafaf7; --panel-2:#f2f0ea; --line:#ccc7ba; --line-soft:#e2ded2;
+          --ink:#1a1812; --dim:#4a463c; --faint:#8a8678; --amber:#9a6a10; --amber-deep:#9a6a10;
+          --green:#2e7d32; --red:#b3261e; --cyan:#0a6e8a; --violet:#6a3fae; }
+  body::before { display: none; }
+  nav.rail, .progress { display: none; }
+  section { break-inside: avoid-page; animation: none; }
+  .cgroup { break-inside: avoid; }
+  @page { size: A4; margin: 1.2cm; }
+}
+@media (max-width: 760px) {
+  .wrap { padding: 0 16px 64px; }
+  .progress { margin: 0 -16px 36px; padding: 10px 16px; }
+  .cgroup > summary { grid-template-columns: 20px 1fr 90px; }
+  .cgroup > summary .cfiles, .cgroup > summary .cbar { display: none; }
+  .focus { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="mast">
+  <div class="kicker">flow-next pr render lens<span class="sep">·</span>diff-derived, verified against the spec's r-id export<span class="sep">·</span>spec <a href="https://linear.app/gmickel/issue/FLOW-12">FLOW-12</a></div>
+  <h1><span class="id">fn-62</span> — Optional HTML artifact mode: spec &amp; PR render lenses</h1>
+  <div class="branchline"><b>fn-62-optional-html-artifact-mode-spec-pr</b> → <b>origin/main</b> · 19 commits · release 2.0.0</div>
+  <div class="dials">
+    <div class="dial"><div class="v"><span class="plus">+2,515</span> <span class="minus">−343</span></div><div class="k">diff</div></div>
+    <div class="dial"><div class="v">64</div><div class="k">files</div></div>
+    <div class="dial"><div class="v ok">14 / 14</div><div class="k">r-id coverage</div></div>
+    <div class="dial"><div class="v ok">8 / 8</div><div class="k">tasks done</div></div>
+    <div class="dial"><div class="v warn">~1,189</div><div class="k">human-review lines*</div></div>
+    <div class="dial"><div class="v ok">ship</div><div class="k">completion review</div></div>
+  </div>
+  <p class="footnote">* 2,515 added lines minus generated/mechanical churn: Codex mirror (+608), committed proof artifact (+553), dogfood flowctl copy (+26), .flow state (+133), version manifests (+6).</p>
+</header>
+
+<div class="progress">
+  <span class="lbl">review coverage</span>
+  <div class="bar"><i id="pbar"></i></div>
+  <span class="pct" id="ppct">0 / 9 checked</span>
+  <button class="reset" id="preset">reset</button>
+</div>
+
+<section>
+  <div class="shead"><span class="num">01</span><h2>The 90-second read</h2></div>
+  <p class="tldr">flow-next 2.0.0 gains an <strong>opt-in HTML artifact mode</strong>: when <em>artifacts.html.enabled</em> is on, capture/plan emit a spec render lens and make-pr emits a PR review instrument — self-contained single-file HTML, generated by the host agent from one shared disclosure reference. OFF by default; markdown stays the only record. <strong>This page is the feature reviewing its own PR.</strong></p>
+  <div class="callout">
+    <b>Three load-bearing claims to verify:</b> (1) with the mode off/unset every touched skill is gated by a real bash config check — no reference load, no artifacts, no output change · (2) the disclosure reference alone reproduces the house style — proven by a fresh-session generation (the committed spec.html) · (3) the 2.0.0 breaking change (crossEpic alias removal) is complete across code, tests, prose, and this repo's own config.
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="num">02</span><h2>Churn map — where the 2,858 changed lines live</h2><span class="note">grouped by review intent · click to expand</span></div>
+  <div class="churn">
+    <details class="cgroup" open>
+      <summary><span class="tw">▸</span><span class="gname">Disclosure reference — the core contract<small>the single file that makes any session generate house-style artifacts</small></span><span class="cstat"><span class="plus">+325</span> <span class="minus">−0</span></span><span class="cfiles">1 file</span><span class="cbar"><i data-w="12"></i></span></summary>
+      <ul><li><span class="p">plugins/flow-next/references/html-artifacts.md</span><span class="s"><span style="color:var(--green)">+325</span> · hard rules → design contract → per-lens guidance → DAG discipline → Lavish → checklist</span></li></ul>
+    </details>
+    <details class="cgroup" open>
+      <summary><span class="tw">▸</span><span class="gname">Skill integrations — canonical<small>capture §5.10 · plan Step 8.5 · make-pr Phase 1.5 · setup ceremony</small></span><span class="cstat"><span class="plus">+282</span> <span class="minus">−10</span></span><span class="cfiles">10 files</span><span class="cbar"><i data-w="10"></i></span></summary>
+      <ul>
+        <li><span class="p">skills/flow-next-capture/{SKILL,phases,workflow}.md</span><span class="s">spec lens post-write + LAVISH_OK interactive-only guard</span></li>
+        <li><span class="p">skills/flow-next-plan/{SKILL,steps}.md</span><span class="s">regeneration after the Step-8 refinement loop exits</span></li>
+        <li><span class="p">skills/flow-next-make-pr/{SKILL,phases,workflow}.md</span><span class="s">Phase 1.5 PR lens: LENS_OK guards, exact-file check-ignore, narrow commit</span></li>
+        <li><span class="p">skills/flow-next-setup/workflow.md + templates/usage.md</span><span class="s">HTML question (only-if-unset), gitignore choice, lavish offer</span></li>
+      </ul>
+    </details>
+    <details class="cgroup" open>
+      <summary><span class="tw">▸</span><span class="gname">flowctl + regression tests<small>one config default block; crossEpic alias removal + its removal tests</small></span><span class="cstat"><span class="plus">+337</span> <span class="minus">−198</span></span><span class="cfiles">4 files</span><span class="cbar"><i data-w="12"></i></span></summary>
+      <ul>
+        <li><span class="p">plugins/flow-next/scripts/flowctl.py</span><span class="s"><span style="color:var(--green)">+26</span> <span style="color:var(--red)">−31</span> · artifacts default block; _CONFIG_KEY_ALIASES emptied</span></li>
+        <li><span class="p">tests/test_artifacts_config.py (new) · test_config_alias.py (converted) · test_init_crossspec_mirror.py</span><span class="s"><span style="color:var(--green)">+311</span> <span style="color:var(--red)">−167</span></span></li>
+      </ul>
+    </details>
+    <details class="cgroup">
+      <summary><span class="tw">▸</span><span class="gname">Codex mirror<span class="gentag">generated</span><small>verify sync-codex ran clean — don't line-review</small></span><span class="cstat"><span class="plus">+608</span> <span class="minus">−11</span></span><span class="cfiles">12 files</span><span class="cbar gen"><i data-w="22"></i></span></summary>
+      <ul><li><span class="p">plugins/flow-next/codex/references/html-artifacts.md (byte-identical) + codex/skills/{capture,plan,make-pr,setup} mirrors</span><span class="s">regen audited in fn-62.6 (no spurious ask-blocks, no canonical tool names)</span></li></ul>
+    </details>
+    <details class="cgroup">
+      <summary><span class="tw">▸</span><span class="gname">Docs &amp; release surfaces<small>new html-artifacts.md reference doc · README · teams · ralph · GLOSSARY · CHANGELOG</small></span><span class="cstat"><span class="plus">+216</span> <span class="minus">−36</span></span><span class="cfiles">13 files</span><span class="cbar"><i data-w="8"></i></span></summary>
+      <ul>
+        <li><span class="p">plugins/flow-next/docs/html-artifacts.md (new feature reference)</span><span class="s">activation, lenses, link strategies, Lavish reality, autonomous discipline</span></li>
+        <li><span class="p">CHANGELOG.md (2.0.0: Added + BREAKING crossEpic line) · GLOSSARY.md (5 terms) · README/CLAUDE/teams/ralph/releasing/local-dev</span><span class="s"></span></li>
+      </ul>
+    </details>
+    <details class="cgroup">
+      <summary><span class="tw">▸</span><span class="gname">Sync/install scripts<small>references/ dir propagation</small></span><span class="cstat"><span class="plus">+29</span> <span class="minus">−1</span></span><span class="cfiles">2 files</span><span class="cbar"><i data-w="1"></i></span></summary>
+      <ul><li><span class="p">scripts/sync-codex.sh · scripts/install-codex.sh</span><span class="s">sibling cp -R for references/; ~/.codex/references install</span></li></ul>
+    </details>
+    <details class="cgroup">
+      <summary><span class="tw">▸</span><span class="gname">Mechanical<span class="gentag">lockstep</span><small>2.0.0 version surfaces + synced dogfood copy</small></span><span class="cstat"><span class="plus">+32</span> <span class="minus">−37</span></span><span class="cfiles">6 files</span><span class="cbar gen"><i data-w="1"></i></span></summary>
+      <ul><li><span class="p">3× plugin.json + 2× marketplace.json (2.0.0) · .flow/bin/flowctl.py (byte-identical sync)</span><span class="s"></span></li></ul>
+    </details>
+    <details class="cgroup">
+      <summary><span class="tw">▸</span><span class="gname">Process state<span class="gentag">flow</span><small>task evidence, receipts, captured memories + the committed proof artifact</small></span><span class="cstat"><span class="plus">+686</span> <span class="minus">−50</span></span><span class="cfiles">16 files</span><span class="cbar gen"><i data-w="25"></i></span></summary>
+      <ul>
+        <li><span class="p">.flow/artifacts/fn-62-…/spec.html</span><span class="s"><span style="color:var(--green)">+553</span> · the fresh-session proof artifact (R4 evidence)</span></li>
+        <li><span class="p">.flow/specs + tasks + config + 3 captured build-error memories</span><span class="s"><span style="color:var(--green)">+133</span> <span style="color:var(--red)">−50</span></span></li>
+      </ul>
+    </details>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="num">03</span><h2>R-ID → evidence</h2><span class="note">14 / 14 covered · external-repo evidence flagged honestly</span></div>
+  <table class="ev">
+    <thead><tr><th style="width:50px">R-ID</th><th>Criterion (abridged)</th><th style="width:90px">Task</th><th style="width:230px">Evidence commits</th></tr></thead>
+    <tbody>
+      <tr><td class="rid">R1</td><td>Opt-in via setup/config, OFF default; mode off ⇒ no reference load, no artifacts, no sessions, no visible output</td><td class="taskref">.1</td><td class="commit">5597dd1</td></tr>
+      <tr><td class="rid">R2</td><td>Progressively disclosed shared reference file + explicit anti-slop design system</td><td class="taskref">.2</td><td class="commit">e4a4263 · 5ba324d</td></tr>
+      <tr><td class="rid">R3</td><td>Markdown/tracker-sync sole source of truth; artifacts regenerable, never parsed back</td><td class="taskref">.2 ·.3</td><td class="commit">e4a4263 · c892ae1</td></tr>
+      <tr><td class="rid">R4</td><td>ONE spec-artifact pathway, state-dependent rendering (spec-only ↔ +DAG/matrix)</td><td class="taskref">.3</td><td class="commit">c892ae1 · 1235c6d · fce92a1</td></tr>
+      <tr><td class="rid">R5</td><td>PR artifact diff-derived (never commit messages), R-ID-verified, read-only instrument</td><td class="taskref">.4</td><td class="commit">3975a0f · 74a4ecd</td></tr>
+      <tr><td class="rid">R6</td><td>Self-contained single-file HTML, zero external requests, print-friendly</td><td class="taskref">.2</td><td class="commit">e4a4263</td></tr>
+      <tr><td class="rid">R7</td><td>Lavish optional dep: detect-on-PATH; annotate → markdown edit → regenerate</td><td class="taskref">.2 ·.3</td><td class="commit">e4a4263 · c892ae1</td></tr>
+      <tr><td class="rid">R8</td><td>PR artifact never in the annotate loop; autonomous never polls</td><td class="taskref">.3 ·.4</td><td class="commit">fce92a1 · 3975a0f</td></tr>
+      <tr><td class="rid">R9</td><td>Setup ceremony documents + offers lavish-axi on HTML opt-in</td><td class="taskref">.1</td><td class="commit">5597dd1</td></tr>
+      <tr><td class="rid">R10</td><td>Spec + PR markdown link their artifacts; GitHub limitation documented</td><td class="taskref">.3 ·.4 ·.5</td><td class="commit">c892ae1 · 74a4ecd · a2478b0</td></tr>
+      <tr><td class="rid">R11</td><td>Fixed regenerable .flow/artifacts/ layout, commit-or-gitignore per project</td><td class="taskref">.1</td><td class="commit">5597dd1</td></tr>
+      <tr><td class="rid-flag">R12<span class="mismatch">external</span></td><td>flow-next.dev mainline surfacing (visual-aids pages, landing card, both navbars, site changelog)<span class="flagnote">evidence lives in the flow-next.dev repo (commit 1dd356d) — outside this diff range by design; verify in the site repo before release push</span></td><td class="taskref">.7</td><td class="commit">flow-next.dev@1dd356d</td></tr>
+      <tr><td class="rid-flag">R13<span class="mismatch">external</span></td><td>flow-next.dev strategy/pipeline pass (pipeline page, autonomy content, Introduction)<span class="flagnote">evidence lives in the flow-next.dev repo (commit 2a226be) — outside this diff range by design; verify in the site repo before release push</span></td><td class="taskref">.8</td><td class="commit">flow-next.dev@2a226be</td></tr>
+      <tr><td class="rid">R14</td><td>2.0.0: version lockstep, crossEpic removal (BREAKING), mirror regen + audit, CHANGELOG</td><td class="taskref">.5 ·.6</td><td class="commit">a2478b0 · ee13019</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <div class="shead"><span class="num">04</span><h2>Where to look — the review checklist</h2><span class="note">check off as you go · persists locally</span></div>
+  <div class="focus" id="checks">
+    <label class="fc"><input type="checkbox" data-k="c1"><span class="body"><h3><code>references/html-artifacts.md</code> — the contract</h3><p>Is the design system concrete enough to regenerate the house style from scratch? Tool-name-agnostic (grep AskUserQuestion/Task/spawn_agent: must be empty)? Is §1.4's repo-relative-vs-blob link split right?</p></span></label>
+    <label class="fc"><input type="checkbox" data-k="c2"><span class="body"><h3><code>capture workflow §5.10</code> — the gate</h3><p>Config check is a real bash block, not prose. LAVISH_OK guard covers MODE != interactive AND the env-marker family (AUTONOMOUS/FLOW_AUTONOMOUS/FLOW_RALPH/REVIEW_RECEIPT_PATH).</p></span></label>
+    <label class="fc"><input type="checkbox" data-k="c3"><span class="body"><h3><code>plan steps Step 8.5</code> — timing</h3><p>Generation fires AFTER the Step-8 refinement loop exits; a later mutation regenerates before the final footer. Link line replaced via marker, never duplicated.</p></span></label>
+    <label class="fc"><input type="checkbox" data-k="c4"><span class="body"><h3><code>make-pr Phase 1.5</code> — side effects</h3><p>--dry-run writes nothing; LENS_OK guards every git step (no unguarded add/commit under set -e); exact-file check-ignore; narrow pathspec commit lands BEFORE HEAD_SHA capture; Ralph stdout stays PR_URL= only.</p></span></label>
+    <label class="fc"><input type="checkbox" data-k="c5"><span class="body"><h3><code>flowctl.py</code> — defaults + alias removal</h3><p>artifacts block follows the land/work precedent; _CONFIG_KEY_ALIASES emptied with machinery retained; removal regression tests (19 + 5) pin no-fallback/no-redirect/no-deprecation semantics.</p></span></label>
+    <label class="fc"><input type="checkbox" data-k="c6"><span class="body"><h3>crossEpic prose surfaces</h3><p>setup workflow, flowctl.md, plan-sync.md, releasing.md, local-dev.md all updated; this repo's own .flow/config.json dropped the stale key (crossSpec kept canonical).</p></span></label>
+    <label class="fc"><input type="checkbox" data-k="c7"><span class="body"><h3>Codex mirror integrity</h3><p>references/ copy byte-identical; mirror diff is exactly the canonical prose edits; no spurious R2 ask-block injections (fn-62.6 audit notes in the task summary).</p></span></label>
+    <label class="fc"><input type="checkbox" data-k="c8"><span class="body"><h3>Committed proof artifact</h3><p>.flow/artifacts/fn-62-…/spec.html was generated by a FRESH session from the reference alone — spot-check it embodies the contract (self-contained, layered DAG, staleness stamp).</p></span></label>
+    <label class="fc"><input type="checkbox" data-k="c9"><span class="body"><h3>Site repo (post-merge gate)</h3><p>flow-next.dev commits 1dd356d + 2a226be are local-only: visual-aids + pipeline pages, both navbars, 2.0.0 site changelog/version. Push them with the release, then tag flow-next-v2.0.0.</p></span></label>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="num">05</span><h2>Risk register</h2><span class="note">what could bite later</span></div>
+  <div class="risk-grid">
+    <div class="rk hi"><h3>high · breaking change exposure</h3><p><b>crossEpic removal ships in 2.0.0.</b> Any user config still carrying <code>planSync.crossEpic</code> gets default behavior silently (raw-null semantics). The CHANGELOG carries an explicit BREAKING + migration line — make sure release notes surface it prominently.</p></div>
+    <div class="rk med"><h3>med · reference-quality drift</h3><p>The disclosure reference is the single quality gate for all future artifacts. Edits to it are unguarded by tests — the fresh-session proof was a one-time check. Treat reference changes as design reviews.</p></div>
+    <div class="rk med"><h3>med · mirror staleness</h3><p>Canonical skill edits require a sync-codex regen; the references/ copy must stay byte-identical. The fn-62.6 audit caught a pre-existing braced-var escape in the setup mirror (noted, out of scope).</p></div>
+    <div class="rk low"><h3>low · lavish coupling</h3><p>Zero hard coupling by design (detect-on-PATH, pull-only). Worktree = separate session and global ~/.lavish-axi/state.json are documented caveats, not defects.</p></div>
+  </div>
+</section>
+
+<footer>
+  <b>Render lens, not record.</b> Generated from the diff (origin/main…HEAD) + the spec's R-ID export — the markdown PR body (by /flow-next:make-pr) is canonical on GitHub. Source spec: <b>.flow/specs/fn-62-optional-html-artifact-mode-spec-pr.md</b> · tracker <a href="https://linear.app/gmickel/issue/FLOW-12">FLOW-12</a>.<br>
+  <span class="stamp">staleness stamp · head 9f7dc18 vs base origin/main · rendered 2026-06-12</span><br>
+  flow-next · PR render lens · self-contained single-file HTML, zero external requests · review checkmarks persist in this browser only
+</footer>
+
+</div>
+<script>
+(function () {
+  var KEY = 'fn62-pr-review';
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('#checks input'));
+  var bar = document.getElementById('pbar'), pct = document.getElementById('ppct');
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+  function paint() {
+    var done = boxes.filter(function (b) { return b.checked; }).length;
+    bar.style.width = (done / boxes.length * 100) + '%';
+    pct.textContent = done + ' / ' + boxes.length + ' checked';
+    boxes.forEach(function (b) { b.closest('.fc').classList.toggle('checked', b.checked); });
+  }
+  boxes.forEach(function (b) {
+    b.checked = !!saved[b.dataset.k];
+    b.addEventListener('change', function () {
+      saved[b.dataset.k] = b.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+      paint();
+    });
+  });
+  document.getElementById('preset').addEventListener('click', function () {
+    saved = {}; try { localStorage.removeItem(KEY); } catch (e) {}
+    boxes.forEach(function (b) { b.checked = false; }); paint();
+  });
+  paint();
+  requestAnimationFrame(function () {
+    document.querySelectorAll('.cbar i').forEach(function (i) { i.style.width = i.dataset.w + '%'; });
+  });
+})();
+</script>
+</body>
+</html>
