@@ -103,7 +103,7 @@ Artifacts are **committed by default** — that is what makes the make-pr blob l
 | **Commit** (default) | PR body carries a resolvable SHA-pinned blob link; reviewers can fetch and open locally; artifacts ride normal code review. Cost: regenerable HTML in history. |
 | **Gitignore** (`artifacts/` appended below the auto-managed footer in `.flow/.gitignore`) | Clean history; local-open guidance only — make-pr skips blob links entirely. |
 
-The skills probe ignore status before choosing a link (`git check-ignore -q` against the exact artifact file — catching `*.html` and exact-path rules, not just the directory) and **never emit a blob link that 404s**.
+The skills probe ignore status before choosing a link (`git check-ignore --no-index -q` against the exact artifact file — catching `*.html` and exact-path rules, not just the directory; `--no-index` so an artifact committed before the ignore rule still honors it) and **never emit a blob link that 404s**.
 
 ## Conversational regeneration
 

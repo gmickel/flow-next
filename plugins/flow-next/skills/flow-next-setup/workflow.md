@@ -570,6 +570,8 @@ Only process answers for questions that were asked (config values that were unse
        - `Gitignore` — local-open only; make-pr skips blob links. Append the pattern below the auto-managed footer in `.flow/.gitignore` (user patterns there are preserved by flowctl), guarding against duplicates:
          ```bash
          grep -qx 'artifacts/' .flow/.gitignore 2>/dev/null || printf 'artifacts/\n' >> .flow/.gitignore
+         # Untrack any artifacts committed before this choice so state converges (no-op when none)
+         git rm -r --cached --quiet .flow/artifacts 2>/dev/null || true
          ```
   3. Print the lavish-axi offer verbatim. **NEVER auto-install** — detect-and-instruct only, same discipline as /flow-next:map (global npm installs are user-consent territory):
 

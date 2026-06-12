@@ -322,8 +322,10 @@ When `HTML_LENS = true`:
    ```bash
    ARTIFACT_PATH=".flow/artifacts/${SPEC_ID}/pr.html"
    LENS_OK=true   # any failure below flips this — never aborts the skill
-   if git check-ignore -q "$ARTIFACT_PATH"; then
+   if git check-ignore --no-index -q "$ARTIFACT_PATH"; then
      LINK_MODE=local   # file ignored (dir, glob, or exact-path rule) → local-open guidance, never a blob link that 404s
+     # --no-index honors the ignore rule even when an earlier run already committed
+     # the artifact (plain check-ignore skips tracked files → would re-commit forever)
    else
      LINK_MODE=repo
      # Stage ONLY the artifact file — NEVER `git add -A` / `git add .` (the
@@ -351,7 +353,7 @@ When `HTML_LENS = true`:
 
 - Mode off/unset or `--dry-run`: nothing happened beyond the single config read — no reference load, no artifact, no commit, no body line, no output change.
 - Mode on: `.flow/artifacts/<spec-id>/pr.html` exists at the fixed path, derived from the export payload + real diff, self-check grep printed `OK: self-contained`, staleness stamp present.
-- Ignore probe ran against the EXACT artifact file (`git check-ignore -q "$ARTIFACT_PATH"`), not the directory.
+- Ignore probe ran against the EXACT artifact file (`git check-ignore --no-index -q "$ARTIFACT_PATH"` — `--no-index` so an already-tracked artifact still honors a later ignore rule), not the directory.
 - `LINK_MODE=repo`: exactly one narrow pathspec commit (`chore(flow): pr artifact <spec-id>` `--` artifact file only), landing before §2.4b's `HEAD_SHA` capture; byte-identical regeneration makes no empty commit (blob link already resolves).
 - Every git step failure-guarded via `LENS_OK` — no unguarded `git add`/`git commit` that could abort the skill under `set -e`.
 - Render-lens body line recorded for §2.1 (or skipped — `LINK_MODE=""` — with one stderr note on failure).

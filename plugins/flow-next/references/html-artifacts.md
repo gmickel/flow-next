@@ -194,9 +194,10 @@ update the spec's marker link line (§1.4). GitHub renders committed HTML as raw
 source and rejects `.html` attachments — link with local-open guidance. Artifacts
 are committed by default; the spec-md link is repo-relative per §1.4 (resolves on
 every ref — blob URLs are reserved for the PR body, where make-pr requires absolute
-URLs). When the project gitignores the artifact (`git check-ignore -q` against the
-EXACT artifact file path hits — catching `.flow/artifacts/**`, `*.html`, and
-exact-path rules the dir-level probe misses), emit local-open guidance only —
+URLs). When the project gitignores the artifact (`git check-ignore --no-index -q`
+against the EXACT artifact file path hits — catching `.flow/artifacts/**`, `*.html`,
+and exact-path rules the dir-level probe misses; `--no-index` so an already-tracked
+artifact still honors a later ignore rule), emit local-open guidance only —
 never a link that 404s.
 
 ## 5. PR lens — read-only review instrument
