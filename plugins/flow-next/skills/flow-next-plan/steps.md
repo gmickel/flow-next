@@ -589,8 +589,12 @@ When `HTML_LENS = true`:
    else
      LINK_MODE=repo    # tracked → repo-relative link
    fi
-   # Idempotency enforcement — exactly one marker line after EVERY run:
-   test "$(grep -c 'flow-next:artifact-link' ".flow/specs/<spec-id>.md")" -eq 1
+   # Idempotency check — exactly one marker line after EVERY run. Non-fatal
+   # (best-effort contract below): warn and continue, never abort planning.
+   MARKER_COUNT=$(grep -c 'flow-next:artifact-link' ".flow/specs/<spec-id>.md" || true)
+   if [ "${MARKER_COUNT:-0}" -ne 1 ]; then
+     echo "warn: artifact link line check failed (${MARKER_COUNT:-0} markers in .flow/specs/<spec-id>.md) — link needs manual fix" >&2
+   fi
    ```
 5. **Run the reference's pre-publish checklist (§8)**, including the self-containment self-check grep (§2) — it must print `OK: self-contained` before the output may claim the artifact.
 6. **Lavish session — interactive runs only** (reference §7). The guard is in the snippet, not just prose — open and poll sit INSIDE it:
