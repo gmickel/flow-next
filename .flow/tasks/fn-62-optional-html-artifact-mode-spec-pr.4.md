@@ -40,9 +40,8 @@ The PR lens: make-pr emits a read-only review-instrument artifact derived from t
 - [ ] Ralph/autonomous draft-PR path: stdout still exactly `PR_URL=<url>`; receipts untouched (fn-59 R4/R11 regression)
 
 ## Done summary
-TBD
-
+Wired the PR render lens into /flow-next:make-pr: new Phase 1.5 (gated on artifacts.html.enabled, forced off under --dry-run) generates .flow/artifacts/<spec-id>/pr.html from the export payload + real diff per the shared disclosure reference §5, renders R-ID payload-vs-diff mismatches as flagged rows (warn-never-block), commits the artifact via a LENS_OK-guarded narrow pathspec commit (chore(flow): pr artifact <spec-id>) before HEAD_SHA capture/push so the blob link resolves, and injects a render-lens line into the PR body (blob URL when tracked, local-open guidance when the exact file is gitignored, no line on failure). No Lavish ever; Ralph PR_URL stdout contract untouched; Codex mirror regenerated.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 3975a0f669317fa67b7729371e39a1135be57a68, 74a4ecdf957b77708442b3151b8130cd16bd96b7
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (1071 tests OK), scripts/sync-codex.sh validators green, RP impl-review: NEEDS_WORK -> SHIP (2 findings fixed)
 - PRs:
