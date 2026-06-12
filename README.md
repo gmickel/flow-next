@@ -112,9 +112,9 @@ That's the inner loop. Branch in (`/flow-next:prospect` for ranked candidates, `
 
 <div align="center">
 
-<img src="assets/flow-next-plan.png" alt="/flow-next:plan fanning out parallel scout subagents" width="720">
+<img src="assets/flow-next-plan.png" alt="/flow-next:plan output — dependency-ordered tasks, cross-model review passed, key decisions documented" width="720">
 
-*`/flow-next:plan` fans out parallel scouts before writing a single task.*
+*A `/flow-next:plan` result: dependency-ordered tasks, cross-model review iterated to SHIP, key decisions documented.*
 
 </div>
 
