@@ -13,6 +13,8 @@ The strategy/pipeline docs pass Gordon called out: a canonical end-to-end pipeli
 - Introduction.mdx: update the pipeline narrative to match (it predates the autonomy suite), link the new pipeline page, mention render lenses at the review/PR touchpoints.
 - autonomous/overview.mdx: close content gaps vs current reality (pilot verdict grammar, land cadence, Ralph v2 direction at stub level) — audit against repo docs (ralph.md, pilot SKILL) rather than inventing.
 - Both navbars for the new page (TWO sources rule); pnpm build gate.
+<!-- Updated by plan-sync: fn-62.7 already landed in the site repo (flow-next.dev@1dd356d4) — site.ts/astro.config.mjs already carry FLOW_NEXT_VERSION 2.0.0 + the Specs/Review "Visual Aids" nav entries. This task's site.ts/astro.config.mjs edits are ADDITIVE: insert "strategy/pipeline" into the Strategy nav group in BOTH sources; do NOT re-bump the version or touch the visual-aids entries. -->
+
 
 ## Investigation targets
 **Required:**
@@ -29,9 +31,8 @@ The strategy/pipeline docs pass Gordon called out: a canonical end-to-end pipeli
 - [ ] pnpm build green
 
 ## Done summary
-TBD
-
+flow-next.dev strategy/pipeline pass (R13): new canonical strategy/pipeline.mdx (end-to-end narrative + 2 mermaid diagrams, autonomy-tier mapping, render-lens touchpoint table), introduction.mdx brought current (ship stage, pipeline link, autonomy-suite + render-lens bullets), autonomous/overview.mdx gains the Ralph v2 direction at stub level (fn-61, marked direction-not-shipped) + pipeline link, page registered in BOTH nav sources. Committed in the site repo (2a226be, not pushed); pnpm build green; RP impl-review SHIP first pass.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: flow-next.dev@2a226be8 docs(strategy): canonical pipeline page + Introduction/autonomy pass
+- Tests: cd ~/work/flow-next.dev && pnpm build (green, 64 pages, strategy/pipeline emitted), slug-set diff between astro.config.mjs sidebar and site.ts navGroups (clean; only intentional astro-only introduction/install), agent-browser render check: both pipeline.mdx mermaid diagrams + all 3 introduction diagrams processed (data-processed=true), grep checks: rail links /strategy/pipeline/ from introduction + autonomous/overview built HTML
 - PRs:
