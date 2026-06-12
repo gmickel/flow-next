@@ -33,9 +33,14 @@ Cut 2.0.0 — the FINAL task, after the docs-site tasks (.7/.8) per the release 
 - [ ] Full gate green (lint/typecheck/tests where applicable)
 
 ## Done summary
-TBD
+Cut the 2.0.0 release on the branch: bump.sh major synced all 5 version surfaces (3 plugin.json incl. .cursor + 2 marketplace.json) + README badge; removed the planSync.crossEpic config alias per the 1.x deprecation promise (alias map emptied, init pre-merge mirror removed, tests converted to removal regressions, prose surfaces + releasing.md surface-count claim fixed, repo .flow/config.json stale key dropped, dogfood flowctl re-synced byte-identical); regenerated + audited the Codex mirror (references/ byte-identical, diff limited to canonical prose edits, no spurious ask-blocks, validators green, idempotent re-sync); CHANGELOG 2.0.0 entry with its own BREAKING line. RP impl-review: SHIP (first pass, R14 met).
 
+Mirror audit checklist (recorded per acceptance): references/ copy byte-identical (diff -r clean); mirror diff = exactly the 2 canonical prose edits (plan-sync.toml footnote + setup workflow crossEpic lines); no R2 ask-block injected into changed regions (footnote lands between complete sentences); token sweep clean (no AskUserQuestion/request_user_input/ToolSearch in skill prose); sync validators all green; second sync-codex.sh run byte-idempotent. Noted latent pre-existing (unchanged, on main since <=1.14.0): two `${PLUGIN_ROOT}/skills/...` template-diff refs in codex setup workflow escape the braced-form rewrite/validator — out of this task's scope.
+
+Docs-site precondition confirmed: flow-next.dev commits 1dd356d (visual-aids + 2.0.0 changelog + FLOW_NEXT_VERSION=2.0.0) and 2a226be (pipeline page) are committed locally in ~/work/flow-next.dev (intentionally unpushed; go live with the release) — the "site changelog + version bump BEFORE the tag" ordering holds since the tag is cut post-merge.
+
+POST-MERGE STEPS (deliberately NOT executed — this work ships via PR; human-owned merge rule): 1) merge the PR; 2) git tag flow-next-v2.0.0 && git push origin flow-next-v2.0.0 (triggers release + Discord); 3) push ~/work/flow-next.dev (commits 1dd356d, 2a226be); 4) re-run local installers to dogfood (install-codex.sh / install-cursor.sh).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: ee13019bed09fcc7ac2cbcc5c1a052666a26eed3
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (1070 tests OK, 2 skipped), python3 -m py_compile plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py, bash -n plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh, diff -r plugins/flow-next/references plugins/flow-next/codex/references (byte-identical), .flow/bin/flowctl config get planSync.crossSpec --json / planSync.crossEpic --raw --json (round-trip clean)
 - PRs:
