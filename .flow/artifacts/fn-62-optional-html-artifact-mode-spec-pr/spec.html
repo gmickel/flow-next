@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fn-62 · Optional HTML artifact mode: spec &amp; PR render lenses</title>
+<style>
+:root {
+  --bg: #0c0b09; --panel: #14120e; --panel-2: #1a1712;
+  --line: #2c2719; --line-soft: #211d14;
+  --ink: #e8e2d4; --dim: #9a917c; --faint: #645d4c;
+  --amber: #ffb454; --amber-deep: #cc8b33;
+  --green: #87d96c; --red: #f07178; --cyan: #5ccfe6; --violet: #c9a7f5;
+  --mono: "Berkeley Mono", "JetBrains Mono", "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--mono); font-size: 14px; line-height: 1.65;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 999;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 2px, rgba(255,180,84,0.012) 2px 4px),
+    radial-gradient(ellipse 120% 60% at 50% -10%, rgba(255,180,84,0.05), transparent 60%);
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px 64px; }
+
+/* ---------- sticky nav rail ---------- */
+nav.rail {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(12,11,9,0.82); backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 0 22px; padding: 10px 28px;
+}
+nav.rail a {
+  font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--faint); padding: 3px 0;
+}
+nav.rail a:hover { color: var(--amber); text-decoration: none; }
+nav.rail .home { color: var(--amber); }
+
+/* ---------- masthead ---------- */
+header { padding: 44px 0 0; }
+.kicker {
+  font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--amber);
+}
+.kicker .sep { color: var(--faint); }
+h1 {
+  font-size: 30px; line-height: 1.25; margin: 10px 0 6px; font-weight: 700;
+  letter-spacing: -0.01em;
+}
+h1 .id { color: var(--amber); }
+.subline { color: var(--dim); font-size: 13px; margin-bottom: 22px; }
+.dials {
+  display: flex; flex-wrap: wrap; border: 1px solid var(--line);
+  background: var(--panel); margin-bottom: 40px;
+}
+.dial {
+  flex: 1 1 120px; padding: 14px 18px 12px;
+  border-right: 1px solid var(--line-soft); min-width: 110px;
+}
+.dial:last-child { border-right: 0; }
+.dial b { display: block; font-size: 19px; font-weight: 700; line-height: 1.2; }
+.dial small {
+  display: block; font-size: 10px; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--faint); margin-top: 4px;
+}
+.dial .ok { color: var(--green); }
+.dial .acc { color: var(--amber); }
+
+/* ---------- sections ---------- */
+section { margin: 0 0 52px; opacity: 0; animation: rise .55s ease forwards; }
+section:nth-of-type(1) { animation-delay: .05s; }
+section:nth-of-type(2) { animation-delay: .10s; }
+section:nth-of-type(3) { animation-delay: .15s; }
+section:nth-of-type(4) { animation-delay: .20s; }
+section:nth-of-type(5) { animation-delay: .25s; }
+section:nth-of-type(6) { animation-delay: .30s; }
+section:nth-of-type(7) { animation-delay: .35s; }
+section:nth-of-type(8) { animation-delay: .40s; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.shead {
+  display: flex; align-items: baseline; gap: 14px;
+  border-bottom: 1px solid var(--line); padding-bottom: 9px; margin-bottom: 22px;
+}
+.shead .num { color: var(--amber); font-size: 15px; font-weight: 700; }
+.shead h2 {
+  font-size: 17px; letter-spacing: .08em; text-transform: uppercase;
+  margin: 0; font-weight: 700;
+}
+.shead .note { margin-left: auto; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+
+/* ---------- thesis ---------- */
+.tldr {
+  font-family: var(--serif); font-size: 20px; line-height: 1.6;
+  max-width: 920px; color: var(--ink); margin: 0 0 20px;
+}
+.tldr strong { color: var(--amber); font-weight: 600; }
+.tldr em { color: var(--cyan); font-style: italic; }
+.thesis {
+  border: 1px solid var(--line); border-left: 3px solid var(--amber);
+  background: var(--panel); padding: 14px 18px; color: var(--dim); max-width: 920px;
+}
+.thesis b { color: var(--ink); }
+
+/* ---------- DAG ---------- */
+.dagwrap { position: relative; overflow-x: auto; border: 1px solid var(--line); background: var(--panel); padding: 26px 22px; }
+#edges { position: absolute; top: 0; left: 0; pointer-events: none; }
+#edges path { fill: none; stroke: var(--line); stroke-width: 1.5; }
+#edges path.crit { stroke: var(--amber); stroke-width: 2.5; }
+.daggrid { position: relative; display: flex; gap: 46px; align-items: flex-start; min-width: 940px; }
+.dagcol { display: flex; flex-direction: column; gap: 18px; flex: 1; }
+.dagcol .lvl {
+  font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--faint); margin-bottom: 2px;
+}
+.node {
+  border: 1px solid var(--line); background: var(--panel-2);
+  padding: 10px 12px; cursor: default; transition: border-color .15s ease;
+}
+.node:hover { border-color: var(--amber); }
+.node .tid { font-size: 12px; font-weight: 700; color: var(--amber); }
+.node .tname { font-size: 11px; color: var(--dim); line-height: 1.45; margin-top: 3px; }
+.node .tstat { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; margin-top: 6px; }
+.node.done { border-left: 3px solid var(--green); }
+.node.done .tstat { color: var(--green); }
+.node.active { border-left: 3px solid var(--amber); }
+.node.active .tstat { color: var(--amber); }
+.node.todo .tstat { color: var(--faint); }
+.daglegend { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 16px; font-size: 11px; color: var(--dim); }
+.daglegend .sw { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 7px; }
+.daglegend .sw.crit { background: var(--amber); }
+.daglegend .sw.dep { background: var(--line); }
+
+/* ---------- tables ---------- */
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left; font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--faint); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line);
+}
+td { padding: 9px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; color: var(--dim); }
+tr:hover td { color: var(--ink); background: #1c170d; }
+tr.lit td { color: var(--ink); background: #221b0e; }
+tr.lit td:first-child { color: var(--amber); }
+td.rid { color: var(--amber); font-weight: 700; white-space: nowrap; }
+td details summary { cursor: pointer; color: var(--cyan); font-size: 11px; margin-top: 4px; }
+td details p { margin: 6px 0 0; font-size: 12px; }
+
+/* ---------- chips ---------- */
+.tchip, .tagchip {
+  display: inline-block; border: 1px solid var(--line); padding: 0 7px;
+  font-size: 10px; letter-spacing: .06em; margin: 1px 2px 1px 0; white-space: nowrap;
+}
+.tchip { color: var(--cyan); border-color: #1e3a42; }
+.tagchip.user { color: var(--green); border-color: #2a4a22; }
+.tagchip.para { color: var(--cyan); border-color: #1e3a42; }
+.tagchip.inf  { color: var(--red); border-color: #4a2426; }
+
+/* ---------- architecture ---------- */
+.archgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
+.archbox { border: 1px solid var(--line); background: var(--panel); padding: 14px 16px; }
+.archbox.span3 { grid-column: 1 / -1; }
+.archbox h3 {
+  margin: 0 0 6px; font-size: 11px; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--amber); font-weight: 700;
+}
+.archbox p { margin: 0; font-size: 12px; color: var(--dim); line-height: 1.6; }
+.archbox code { color: var(--cyan); font-size: 12px; }
+.arrowrow { text-align: center; color: var(--faint); font-size: 16px; margin: -6px 0 8px; }
+.ladder { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--line); background: var(--panel); }
+.rung { flex: 1 1 200px; padding: 12px 16px; border-right: 1px solid var(--line-soft); position: relative; }
+.rung:last-child { border-right: 0; }
+.rung b { display: block; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); margin-bottom: 4px; }
+.rung p { margin: 0; font-size: 12px; color: var(--dim); }
+.rung .step { position: absolute; top: 10px; right: 12px; font-size: 10px; color: var(--faint); }
+
+/* ---------- edge-case cards ---------- */
+.cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.card { border: 1px solid var(--line); background: var(--panel); padding: 14px 16px; }
+.card.r { border-left: 3px solid var(--red); }
+.card.a { border-left: 3px solid var(--amber); }
+.card.c { border-left: 3px solid var(--cyan); }
+.card.g { border-left: 3px solid var(--green); }
+.card h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; font-weight: 700; }
+.card.r h3 { color: var(--red); } .card.a h3 { color: var(--amber); }
+.card.c h3 { color: var(--cyan); } .card.g h3 { color: var(--green); }
+.card ul { margin: 0; padding-left: 18px; }
+.card li { font-size: 12px; color: var(--dim); margin-bottom: 6px; }
+.card li b { color: var(--ink); }
+
+/* ---------- boundaries ---------- */
+.bounds { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.bcol { border: 1px solid var(--line); background: var(--panel); padding: 16px 20px; }
+.bcol h3 { margin: 0 0 10px; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; font-weight: 700; }
+.bcol.is h3 { color: var(--green); } .bcol.isnot h3 { color: var(--red); }
+.bcol ul { margin: 0; padding-left: 22px; }
+.bcol li { font-size: 12.5px; color: var(--dim); margin-bottom: 8px; }
+.bcol.is li::marker { content: "✓  "; color: var(--green); }
+.bcol.isnot li::marker { content: "✕  "; color: var(--red); }
+.bcol li b { color: var(--ink); }
+
+/* ---------- decisions ---------- */
+.decs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.dec { border: 1px solid var(--line); background: var(--panel); padding: 14px 16px; }
+.dec .dtag { font-size: 10px; letter-spacing: .16em; color: var(--amber); border: 1px solid var(--amber-deep); display: inline-block; padding: 0 7px; margin-bottom: 8px; }
+.dec h3 { margin: 0 0 6px; font-size: 13px; font-weight: 700; color: var(--ink); }
+.dec p { margin: 0 0 6px; font-size: 12px; color: var(--dim); line-height: 1.6; }
+.dec .ev { color: var(--green); font-style: italic; }
+.dec .rej { color: var(--red); }
+.dec .rej b { color: var(--red); }
+
+/* ---------- proof point ---------- */
+.proof {
+  border: 1px solid var(--amber-deep);
+  background: linear-gradient(135deg, rgba(255,180,84,0.07), var(--panel) 55%);
+  padding: 20px 24px;
+}
+.proof h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--amber); }
+.proof p { margin: 0 0 8px; font-size: 13px; color: var(--dim); max-width: 880px; }
+.proof p b { color: var(--ink); }
+
+/* ---------- footer ---------- */
+footer { border-top: 1px solid var(--line); padding-top: 18px; color: var(--faint); font-size: 11px; }
+.stamp {
+  border: 1px solid var(--line); display: inline-block; padding: 6px 12px;
+  margin-top: 10px; letter-spacing: .08em; color: var(--dim);
+}
+
+/* ---------- print ---------- */
+@media print {
+  :root { --bg:#fff; --panel:#fafaf7; --panel-2:#f2f0ea; --line:#ccc7ba; --line-soft:#e2ded2;
+          --ink:#1a1812; --dim:#4a463c; --faint:#8a8678; --amber:#9a6a10; --amber-deep:#9a6a10;
+          --green:#2e7d32; --red:#b3261e; --cyan:#0a6e8a; --violet:#6a3fae; }
+  body::before { display: none; }
+  nav.rail, .progress { display: none; }
+  section { break-inside: avoid-page; animation: none; }
+  @page { size: A4 landscape; margin: 1.2cm; }
+  .dagwrap { overflow: visible; }
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 760px) {
+  .wrap { padding: 0 16px 48px; }
+  .archgrid, .cards, .bounds, .decs { grid-template-columns: 1fr; }
+  .dial { flex-basis: 50%; }
+  h1 { font-size: 23px; }
+  .tldr { font-size: 17px; }
+}
+</style>
+</head>
+<body>
+
+<nav class="rail">
+  <a class="home" href="#top">fn-62</a>
+  <a href="#thesis">Thesis</a>
+  <a href="#graph">Task graph</a>
+  <a href="#criteria">Acceptance</a>
+  <a href="#arch">Architecture</a>
+  <a href="#edges-sec">Edge cases</a>
+  <a href="#bounds">Boundaries</a>
+  <a href="#decisions">Decisions</a>
+  <a href="#proof">Proof point</a>
+</nav>
+
+<div class="wrap" id="top">
+
+<header>
+  <div class="kicker">spec render lens <span class="sep">·</span> flow-next <span class="sep">·</span> post-plan <span class="sep">·</span> 2026-06-12</div>
+  <h1><span class="id">fn-62</span> Optional HTML artifact mode: spec &amp; PR render lenses</h1>
+  <div class="subline">spec &amp; PR review surfaces as self-contained HTML — opt-in, regenerable, markdown stays the record · tracker <a href="https://linear.app/gmickel/issue/FLOW-12">FLOW-12</a> · repo <a href="https://github.com/gmickel/flow-next">gmickel/flow-next</a></div>
+  <div class="dials">
+    <div class="dial"><b class="acc">open</b><small>status · plan ship</small></div>
+    <div class="dial"><b>14</b><small>r-ids</small></div>
+    <div class="dial"><b class="ok">14 / 14</b><small>r-id coverage</small></div>
+    <div class="dial"><b>8</b><small>tasks · 2 done · 1 active</small></div>
+    <div class="dial"><b class="acc">7</b><small>critical-path depth</small></div>
+    <div class="dial"><b>opt-in</b><small>activation · off default</small></div>
+    <div class="dial"><b>2.0.0</b><small>release vehicle</small></div>
+  </div>
+</header>
+
+<section id="thesis">
+  <div class="shead"><span class="num">01</span><h2>Thesis</h2><span class="note">scope: business</span></div>
+  <p class="tldr">flow-next's human touchpoints — <strong>spec review, plan review, diff review</strong> — are markdown-only today. This feature adds an <strong>optional HTML artifact mode</strong>: when activated via setup/config, the lifecycle skills load one progressively disclosed reference file and emit <em>self-contained, beautifully rendered HTML lenses</em> beside their markdown output — maximum legibility and review ergonomics for POs, PMs, and devs, while markdown-only users see zero change.</p>
+  <div class="thesis"><b>The load-bearing clarification:</b> markdown (and tracker-sync) stays 100% the source of truth. Every HTML output is a regenerable <b>render lens, never the record</b> — one-way derivation, never parsed back as state. Validated by smoke test on real history (fn-52 spec visualizer, PR #171 review instrument) before this spec was written.</div>
+</section>
+
+<section id="graph">
+  <div class="shead"><span class="num">02</span><h2>Task graph</h2><span class="note">8 nodes · hover a node to light its r-ids below</span></div>
+  <div class="dagwrap">
+    <svg id="edges"></svg>
+    <div class="daggrid" id="dag">
+      <div class="dagcol"><div class="lvl">L0</div>
+        <div class="node done" id="t1" data-deps="" data-rids="R1,R9,R11">
+          <div class="tid">fn-62.1</div><div class="tname">Config gate + .flow/artifacts layout + setup ceremony (lavish offer)</div><div class="tstat">done</div>
+        </div>
+      </div>
+      <div class="dagcol"><div class="lvl">L1</div>
+        <div class="node done" id="t2" data-deps="t1" data-rids="R2,R3,R6,R7">
+          <div class="tid">fn-62.2</div><div class="tname">Shared disclosure reference (design system + generation rules) + Codex mirror</div><div class="tstat">done</div>
+        </div>
+      </div>
+      <div class="dagcol"><div class="lvl">L2</div>
+        <div class="node active" id="t3" data-deps="t2" data-rids="R3,R4,R7,R8,R10">
+          <div class="tid">fn-62.3</div><div class="tname">Spec-lens integration: capture + plan touchpoints, lavish session, state-dependent rendering</div><div class="tstat">in progress</div>
+        </div>
+        <div class="node todo" id="t4" data-deps="t2" data-rids="R5,R8,R10">
+          <div class="tid">fn-62.4</div><div class="tname">PR-lens integration: make-pr emission, R-ID verification, link strategy</div><div class="tstat">todo</div>
+        </div>
+      </div>
+      <div class="dagcol"><div class="lvl">L3</div>
+        <div class="node todo" id="t5" data-deps="t3,t4" data-rids="R10,R14">
+          <div class="tid">fn-62.5</div><div class="tname">Repo docs: html-artifacts doc + README/teams/ralph/GLOSSARY/CLAUDE.md surfaces</div><div class="tstat">todo</div>
+        </div>
+      </div>
+      <div class="dagcol"><div class="lvl">L4</div>
+        <div class="node todo" id="t7" data-deps="t5" data-rids="R12">
+          <div class="tid">fn-62.7</div><div class="tname">flow-next.dev feature pass: visual-aids pages, landing card, both navbars, changelog</div><div class="tstat">todo</div>
+        </div>
+      </div>
+      <div class="dagcol"><div class="lvl">L5</div>
+        <div class="node todo" id="t8" data-deps="t7" data-rids="R13">
+          <div class="tid">fn-62.8</div><div class="tname">flow-next.dev strategy/pipeline pass: pipeline page, autonomy content, Introduction</div><div class="tstat">todo</div>
+        </div>
+      </div>
+      <div class="dagcol"><div class="lvl">L6</div>
+        <div class="node todo" id="t6" data-deps="t5,t8" data-rids="R14">
+          <div class="tid">fn-62.6</div><div class="tname">2.0.0 release: bump, crossEpic alias removal, Codex mirror regen + audit, CHANGELOG</div><div class="tstat">todo</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="daglegend">
+    <span><span class="sw crit"></span>critical path · .1 → .2 → .3 → .5 → .7 → .8 → .6 (7 deep)</span>
+    <span><span class="sw dep"></span>dependency</span>
+    <span>parallel lane: .4 (PR lens) runs beside .3 off the shared .2 base</span>
+  </div>
+</section>
+
+<section id="criteria">
+  <div class="shead"><span class="num">03</span><h2>Acceptance criteria</h2><span class="note">14 rows · provenance-tagged · scope: both</span></div>
+  <table>
+    <thead><tr><th>R-ID</th><th>Criterion</th><th>Provenance</th><th>Owned by</th></tr></thead>
+    <tbody>
+      <tr data-rid="R1"><td class="rid">R1</td><td>HTML mode is opt-in via setup/config, OFF by default. Off ⇒ no reference load, no artifacts, no Lavish sessions, no behavior-visible output — the heavy disclosure file costs zero tokens.</td><td><span class="tagchip user">user</span><span class="tagchip para">paraphrase</span></td><td><span class="tchip">fn-62.1</span></td></tr>
+      <tr data-rid="R2"><td class="rid">R2</td><td>When active, skills load a progressively disclosed shared reference file: generation rules + explicit anti-slop design system (own typography/palette; no CDN fonts; no purple-gradient defaults).</td><td><span class="tagchip user">user</span><span class="tagchip para">paraphrase</span></td><td><span class="tchip">fn-62.2</span></td></tr>
+      <tr data-rid="R3"><td class="rid">R3</td><td>Markdown + tracker-sync remain the sole source of truth; every HTML output is an additional regenerable artifact, never parsed back as state.</td><td><span class="tagchip user">user</span></td><td><span class="tchip">fn-62.2</span><span class="tchip">fn-62.3</span></td></tr>
+      <tr data-rid="R4"><td class="rid">R4</td><td>Spec artifact uses ONE generation pathway with state-dependent rendering: spec-only before tasks exist; spec+plan layer (task DAG, R-ID coverage matrix) once tasks exist.</td><td><span class="tagchip user">user</span><span class="tagchip para">paraphrase</span></td><td><span class="tchip">fn-62.3</span></td></tr>
+      <tr data-rid="R5"><td class="rid">R5</td><td>PR artifact is diff-derived (never commit messages), verified against the spec's R-ID export before publishing; read-only review instrument.</td><td><span class="tagchip user">user</span><span class="tagchip para">paraphrase</span></td><td><span class="tchip">fn-62.4</span></td></tr>
+      <tr data-rid="R6"><td class="rid">R6</td><td>All artifacts are self-contained single-file HTML — inline CSS/JS, zero external requests, print-friendly.</td><td><span class="tagchip para">paraphrase</span></td><td><span class="tchip">fn-62.2</span></td></tr>
+      <tr data-rid="R7"><td class="rid">R7</td><td>Lavish (<code>lavish-axi</code>) ships as an optional dependency: detect-on-PATH, never required; when present + interactive, spec/plan artifacts open as sessions and annotations map to markdown-source edits + lens regeneration.</td><td><span class="tagchip user">user</span></td><td><span class="tchip">fn-62.2</span><span class="tchip">fn-62.3</span></td></tr>
+      <tr data-rid="R8"><td class="rid">R8</td><td>The PR artifact never enters the annotate-edit loop; autonomous/Ralph contexts never run a Lavish poll.</td><td><span class="tagchip user">user</span><span class="tagchip para">paraphrase</span></td><td><span class="tchip">fn-62.3</span><span class="tchip">fn-62.4</span></td></tr>
+      <tr data-rid="R9"><td class="rid">R9</td><td>The setup ceremony, on HTML opt-in, documents and offers the lavish-axi install — including the session-spanning feedback model and idle-stop/resume behavior.</td><td><span class="tagchip user">user</span></td><td><span class="tchip">fn-62.1</span></td></tr>
+      <tr data-rid="R10"><td class="rid">R10</td><td>Markdown spec and make-pr output link to their HTML artifacts; the GitHub display limitation is documented with local-open guidance.</td><td><span class="tagchip user">user</span></td><td><span class="tchip">fn-62.3</span><span class="tchip">fn-62.4</span><span class="tchip">fn-62.5</span></td></tr>
+      <tr data-rid="R11"><td class="rid">R11</td><td>Artifacts live in a dedicated regenerable location under <code>.flow/</code>, commit-or-gitignore per project.</td><td><span class="tagchip inf">inferred</span></td><td><span class="tchip">fn-62.1</span></td></tr>
+      <tr data-rid="R12"><td class="rid">R12</td><td>flow-next.dev surfaces this as a mainline feature: landing page, SPECS/TEAMS/REVIEW sections, a new visual-aids page (both navbars), changelog entry, build gate green.</td><td><span class="tagchip user">user</span></td><td><span class="tchip">fn-62.7</span></td></tr>
+      <tr data-rid="R13"><td class="rid">R13</td><td>flow-next.dev strategy/pipeline pass in the same workstream: a pipeline page, the missing autonomy-suite content, Introduction narrative updated to match.</td><td><span class="tagchip user">user</span></td><td><span class="tchip">fn-62.8</span></td></tr>
+      <tr data-rid="R14"><td class="rid">R14</td><td>Released as <b>2.0.0</b> — repo docs, Codex mirror regen, manifest/version lockstep, CHANGELOG.</td><td><span class="tagchip user">user</span></td><td><span class="tchip">fn-62.5</span><span class="tchip">fn-62.6</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="arch">
+  <div class="shead"><span class="num">04</span><h2>Architecture</h2><span class="note">scope: technical</span></div>
+  <div class="archgrid">
+    <div class="archbox span3"><h3>Activation gate</h3>
+      <p><code>flowctl config get artifacts.html.enabled</code> — written by the setup ceremony, OFF by default. Off ⇒ skills load nothing extra: zero token cost, zero behavior change. The one flowctl edit is the <code>artifacts</code> default block in <code>get_default_config</code>; everything else is skill prose.</p>
+    </div>
+  </div>
+  <div class="arrowrow">↓ when enabled, participating skills load ↓</div>
+  <div class="archgrid">
+    <div class="archbox span3"><h3>Shared disclosure reference</h3>
+      <p><code>plugins/flow-next/references/html-artifacts.md</code> — design system (instrument-panel house style), generation rules, per-lens guidance, DAG discipline, Lavish protocol, pre-publish checklist. ONE generator definition; tool-name-agnostic so the Codex mirror needs no rewrite pass.</p>
+    </div>
+  </div>
+  <div class="arrowrow">↓ consumed at three lifecycle touchpoints ↓</div>
+  <div class="archgrid">
+    <div class="archbox"><h3>capture → spec lens</h3><p>Phase 5 post-write emits <code>.flow/artifacts/&lt;spec-id&gt;/spec.html</code> — pre-plan, spec-only business-review view.</p></div>
+    <div class="archbox"><h3>plan → spec lens</h3><p>After Step 8's refinement loop exits, the SAME pathway regenerates at the SAME path — now with the task DAG, coverage matrix, critical path.</p></div>
+    <div class="archbox"><h3>make-pr → PR lens</h3><p>Emits <code>pr.html</code> from <code>git diff --stat</code> + the R-ID export; injects the body link before <code>gh pr create</code>. Read-only — no annotate loop, ever.</p></div>
+  </div>
+  <div class="arrowrow">↓ optional companion — detect, never require ↓</div>
+  <div class="ladder">
+    <div class="rung"><span class="step">1</span><b>detect</b><p><code>command -v lavish-axi</code> — absent ⇒ plain artifact, zero mention, never an error.</p></div>
+    <div class="rung"><span class="step">2</span><b>open (interactive only)</b><p><code>lavish-axi &lt;abs-path&gt;</code> opens an annotation session keyed on the absolute artifact path.</p></div>
+    <div class="rung"><span class="step">3</span><b>pull-only feedback</b><p>Annotations queue in <code>~/.lavish-axi/state.json</code> — session-spanning, survives agent death; any later session drains via <code>lavish-axi poll</code>.</p></div>
+    <div class="rung"><span class="step">4</span><b>apply + regen</b><p>Each annotation maps to an edit of the markdown source of truth, then the lens regenerates at the fixed path.</p></div>
+  </div>
+</section>
+
+<section id="edges-sec">
+  <div class="shead"><span class="num">05</span><h2>Edge cases &amp; constraints</h2><span class="note">grouped by blast radius</span></div>
+  <div class="cards">
+    <div class="card r"><h3>Contract integrity — break these and the model collapses</h3>
+      <ul>
+        <li><b>Stale-lens risk:</b> artifacts regenerate at lifecycle touchpoints and are never parsed back as state; every footer carries a staleness stamp (spec <code>updated_at</code> + commit at render time).</li>
+        <li><b>R-ID mismatch (PR lens):</b> diff vs R-ID-export disagreement renders as a visibly flagged row — warn-in-artifact, never block make-pr.</li>
+        <li><b>Self-contained or nothing:</b> zero external requests, fonts included — must open identically from disk, in Lavish, in CI archives, printed.</li>
+      </ul>
+    </div>
+    <div class="card a"><h3>Workflow discipline — make-pr &amp; plan side effects</h3>
+      <ul>
+        <li><b>make-pr:</b> <code>--dry-run</code> writes NO artifact; committed-mode stages ONLY <code>pr.html</code> (never <code>git add -A</code>) as <code>chore(flow): pr artifact &lt;spec-id&gt;</code>; generation failure is non-fatal; Ralph's <code>PR_URL=</code> stdout contract untouched.</li>
+        <li><b>Link idempotency:</b> the spec's artifact-link line is replaced in place on every regen — never duplicated.</li>
+        <li><b>Plan timing:</b> the lens generates AFTER Step 8's refinement loop exits, never mid-edit.</li>
+      </ul>
+    </div>
+    <div class="card c"><h3>Environment realities — GitHub, paths, storage</h3>
+      <ul>
+        <li><b>GitHub can't render committed HTML</b> and rejects .html attachments — bodies link with local-open guidance; no hosting over-engineering.</li>
+        <li><b>Fixed deterministic paths:</b> <code>spec.html</code> / <code>pr.html</code>, never timestamped — Lavish keys sessions on the absolute path. Worktree caveat documented and accepted.</li>
+        <li><b>Link strategy follows ignore status:</b> committed by default (blob links resolve); gitignored projects get local-open guidance only — never a 404 blob link.</li>
+        <li><b>localStorage</b> is try-wrapped progressive enhancement; artifacts stay fully readable without it.</li>
+      </ul>
+    </div>
+    <div class="card g"><h3>Graceful degradation — absence is invisible</h3>
+      <ul>
+        <li><b>No lavish on PATH</b> ⇒ plain artifact, zero mention. Server idle-stop ⇒ still a static page; reopening resumes.</li>
+        <li><b>Autonomous discipline:</b> pilot/Ralph generate artifacts but never open sessions, never poll — at most a one-line pending-prompts note.</li>
+        <li><b>DAG discipline:</b> layered CSS grid + DOM-measured edges — hand-typed SVG coordinates banned; &gt;~20 nodes collapse to lanes.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="bounds">
+  <div class="shead"><span class="num">06</span><h2>Boundaries</h2><span class="note">scope: business</span></div>
+  <div class="bounds">
+    <div class="bcol is"><h3>This IS</h3>
+      <ul>
+        <li><b>Fully opt-in</b> — markdown-only users see zero new steps, prerequisites, or token overhead (zero-dep base contract preserved).</li>
+        <li><b>Regenerable render lenses</b> beside markdown output — spec lens (one state-dependent pathway) + read-only PR lens.</li>
+        <li><b>Lavish as detect-on-PATH optional dep</b> — same shape as clawpatch / /flow-next:map.</li>
+        <li><b>Committed by default</b> under <code>.flow/artifacts/</code>, gitignore offered at setup.</li>
+        <li><b>A 2.0.0 mainline feature</b>, surfaced on flow-next.dev.</li>
+      </ul>
+    </div>
+    <div class="bcol isnot"><h3>This is NOT</h3>
+      <ul>
+        <li><b>A storage format</b> — no state ever lives in artifacts.</li>
+        <li><b>A Lavish wrapper or bundle</b> — never wrapped, bundled, or required.</li>
+        <li><b>PR-annotation → review-comment plumbing</b> — explicitly out of scope (plausible future increment).</li>
+        <li><b>Review-report artifacts</b> (impl-review / plan-review / qa as HTML) — later increment.</li>
+        <li><b>The codex-apop delegation hardening</b> — deliberately deferred behind this ("bigger bang for our buck").</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="decisions">
+  <div class="shead"><span class="num">07</span><h2>Decision context</h2><span class="note">capture + planning decisions</span></div>
+  <div class="decs">
+    <div class="dec"><span class="dtag">D1</span><h3>Lavish: detect, don't wrap</h3>
+      <p>Its portable-artifacts guarantee means plain self-contained HTML gets the annotate loop for free when present. Pull-only architecture (CLI long-poll, global state file, no MCP) keeps coupling at zero and makes feedback session-spanning.</p>
+      <p class="ev">"the lavish editor is definitely a large boon … lavish is a go as an optional dep"</p>
+      <p class="rej"><b>Rejected:</b> wrapping/bundling — adds a Node dependency to the zero-dep base for no gain.</p>
+    </div>
+    <div class="dec"><span class="dtag">D2</span><h3>One artifact pathway, not two</h3>
+      <p>Spec-vs-plan is a rendering question (what state exists), not a product question. Same generator, same path, same flowctl export.</p>
+      <p class="ev">"i think it would be the same pathway, we would just generate the html using information from the spec and/or the spec + tasks"</p>
+      <p class="rej"><b>Rejected:</b> separate spec/plan artifact types — a needless config axis.</p>
+    </div>
+    <div class="dec"><span class="dtag">D3</span><h3>Annotate loop scoped to spec/plan only</h3>
+      <p>A PR artifact derives from an immutable diff, and GitHub already owns review comments — duplicating that surface creates a sync problem.</p>
+      <p class="ev">"the agentic editing of a PR doesnt make sense does it?"</p>
+      <p class="rej"><b>Rejected:</b> PR-lens annotate loop.</p>
+    </div>
+    <div class="dec"><span class="dtag">D4</span><h3>No new slash command</h3>
+      <p>Auto-regen rides the existing lifecycle skills (capture, plan, make-pr); ad-hoc regeneration is conversational — the host agent reads the disclosure file on request. Skill surface stays flat per repo rule; interview integration is OUT of v1.</p>
+      <p class="rej"><b>Rejected:</b> a dedicated artifact skill / fourth wiring point.</p>
+    </div>
+    <div class="dec"><span class="dtag">D5</span><h3>No deterministic Python renderer</h3>
+      <p>Generation is the host agent reading the disclosure file (the repo's agentic-vs-deterministic rule); flowctl's only contribution is the config default block.</p>
+      <p class="rej"><b>Rejected:</b> a flowctl HTML generator — brittle, unmaintainable, worse output.</p>
+    </div>
+    <div class="dec"><span class="dtag">D6</span><h3>Release task runs last</h3>
+      <p>The 2.0.0 release (fn-62.6) depends on the flow-next.dev tasks because the release procedure needs the docs-site changelog + version bump before the tag: order .5 → .7 → .8 → .6. The <code>planSync.crossEpic</code> alias removal rides the release task as its own breaking-change CHANGELOG line — kept visible, not folded silently into the bump.</p>
+    </div>
+  </div>
+</section>
+
+<section id="proof">
+  <div class="shead"><span class="num">08</span><h2>Early proof point</h2></div>
+  <div class="proof">
+    <h3>the core bet — and this page is the experiment</h3>
+    <p>Task <b>fn-62.2</b> (the disclosure reference) validated through <b>fn-62.3</b>'s first real regeneration: a fresh agent session reading ONLY the disclosure file must reproduce the smoke-test house style — instrument-panel design, layered DAG, source-tag chips, staleness stamp, zero external requests — for fn-62 itself, matching the hand-built artifacts in <code>~/Documents/flow-next-artifact-smoke/</code> without having seen them.</p>
+    <p>If the output drifts sloppy or inconsistent, <b>fix the reference file's rules/examples/checklist BEFORE building the PR lens (fn-62.4) and docs (fn-62.5+)</b>.</p>
+  </div>
+</section>
+
+<footer>
+  Render lens, not record. Source: <code>.flow/specs/fn-62-optional-html-artifact-mode-spec-pr.md</code> · regenerate via capture/plan touchpoints or by asking the agent.<br>
+  <span class="stamp">staleness stamp · spec updated_at 2026-06-11T23:03:57Z · repo commit 2f78ff5 · rendered 2026-06-12</span>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  var svg = document.getElementById('edges');
+  var wrap = svg.parentElement;
+  var CRIT = { 't1>t2': 1, 't2>t3': 1, 't3>t5': 1, 't5>t7': 1, 't7>t8': 1, 't8>t6': 1 };
+  function draw() {
+    var grid = document.getElementById('dag');
+    var w = Math.max(grid.scrollWidth, wrap.clientWidth), h = grid.scrollHeight + 26;
+    svg.setAttribute('width', w); svg.setAttribute('height', h);
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+    svg.innerHTML = '';
+    var wb = wrap.getBoundingClientRect();
+    document.querySelectorAll('#dag .node').forEach(function (n) {
+      (n.dataset.deps || '').split(',').filter(Boolean).forEach(function (d) {
+        var a = document.getElementById(d).getBoundingClientRect(), b = n.getBoundingClientRect();
+        var x1 = a.right - wb.left + wrap.scrollLeft, y1 = a.top + a.height / 2 - wb.top;
+        var x2 = b.left - wb.left + wrap.scrollLeft, y2 = b.top + b.height / 2 - wb.top;
+        var mx = (x1 + x2) / 2;
+        var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        p.setAttribute('d', 'M' + x1 + ',' + y1 + ' C' + mx + ',' + y1 + ' ' + mx + ',' + y2 + ' ' + x2 + ',' + y2);
+        if (CRIT[d + '>' + n.id]) p.setAttribute('class', 'crit');
+        svg.appendChild(p);
+      });
+    });
+  }
+  window.addEventListener('resize', draw);
+  requestAnimationFrame(draw);
+})();
+
+(function () {
+  document.querySelectorAll('#dag .node').forEach(function (n) {
+    var rids = (n.dataset.rids || '').split(',').filter(Boolean);
+    n.addEventListener('mouseenter', function () {
+      rids.forEach(function (r) {
+        var row = document.querySelector('tr[data-rid="' + r + '"]');
+        if (row) row.classList.add('lit');
+      });
+    });
+    n.addEventListener('mouseleave', function () {
+      rids.forEach(function (r) {
+        var row = document.querySelector('tr[data-rid="' + r + '"]');
+        if (row) row.classList.remove('lit');
+      });
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

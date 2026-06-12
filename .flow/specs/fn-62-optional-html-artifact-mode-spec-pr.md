@@ -1,5 +1,7 @@
 # Optional HTML artifact mode: spec & PR render lenses
 
+> HTML render lens: [.flow/artifacts/fn-62-optional-html-artifact-mode-spec-pr/spec.html](../artifacts/fn-62-optional-html-artifact-mode-spec-pr/spec.html) — regenerable, markdown is the record; GitHub shows raw source, open locally in a browser to render. <!-- flow-next:artifact-link -->
+
 ## Conversation Evidence
 
 > user (turn 1): "i am considering html artifacts for the SPEC and the PR, look at ALL of this research"

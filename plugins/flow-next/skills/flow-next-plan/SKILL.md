@@ -163,6 +163,8 @@ Read [steps.md](steps.md) and follow each step in order.
 
 **Step 1 readiness soft-check (fn-58)**: existing-spec inputs get an adoption-gated readiness check BEFORE the scout fan-out — warn-not-block, default proceed; repos that never adopted readiness see nothing. Details in steps.md Step 1.
 
+**Step 8.5 HTML render lens (opt-in)**: when `artifacts.html.enabled` is true, planning regenerates `.flow/artifacts/<spec-id>/spec.html` with the plan layer (task DAG + R-ID coverage) per the shared disclosure reference ([`plugins/flow-next/references/html-artifacts.md`](../../references/html-artifacts.md)) — generated only after the Step 8 refinement loop exits, link line replaced in place in the spec md. With the mode off/unset there is zero artifact-related behavior or output. Details in steps.md Step 8.5.
+
 **CRITICAL — Step 1 (Research)**: You MUST launch ALL scouts listed in steps.md in ONE parallel Task call. Do NOT skip scouts or run them sequentially. Each scout provides unique signal.
 
 If user chose review:
@@ -174,6 +176,7 @@ If user chose review:
 All plans go into `.flow/`:
 - Spec: `.flow/specs/fn-N-slug.json` + `.flow/specs/fn-N-slug.md`
 - Tasks: `.flow/tasks/fn-N-slug.M.json` + `.flow/tasks/fn-N-slug.M.md`
+- Render lens (only when `artifacts.html.enabled`): `.flow/artifacts/fn-N-slug/spec.html` (steps.md Step 8.5)
 
 **Never write plan files outside `.flow/`. Never use TodoWrite for task tracking.**
 

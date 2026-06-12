@@ -31,7 +31,11 @@ Lavish → pre-publish checklist. Follow it top to bottom when generating.
    On regeneration, find the marker and REPLACE that whole line in place; if absent,
    insert once after the H1 title. Repeated runs leave exactly one link line — never
    a duplicate. Canonical shape:
-   `> HTML render lens: [.flow/artifacts/<spec-id>/spec.html](<repo-relative-or-blob-url>) — regenerable, markdown is the record. <!-- flow-next:artifact-link -->`
+   `> HTML render lens: [.flow/artifacts/<spec-id>/spec.html](<repo-relative-path>) — regenerable, markdown is the record. <!-- flow-next:artifact-link -->`
+   The link target is REPO-RELATIVE (from `.flow/specs/` that is
+   `../artifacts/<spec-id>/spec.html`) — it then resolves on every ref and survives
+   branch deletion. NEVER a branch-pinned blob URL here (404s after merge); absolute
+   blob URLs belong only where absolute URLs are mandatory (the PR body, per make-pr).
 5. **Staleness stamp in every footer**, inside a bordered `.stamp` element so a reader
    can tell when the lens lags the markdown:
    - spec lens: `staleness stamp · spec updated_at <ISO> · repo commit <short-sha> · rendered <YYYY-MM-DD>`
@@ -188,9 +192,10 @@ when present). ONE generator; what renders depends on what state exists.
 Link-back, GitHub limitation, and commit-or-ignore: after writing the artifact,
 update the spec's marker link line (§1.4). GitHub renders committed HTML as raw
 source and rejects `.html` attachments — link with local-open guidance. Artifacts
-are committed by default (blob links resolve for remote reviewers); when the project
-gitignores `.flow/artifacts/` (`git check-ignore -q .flow/artifacts/` hits), emit
-local-open guidance only — never a blob link that 404s.
+are committed by default; the spec-md link is repo-relative per §1.4 (resolves on
+every ref — blob URLs are reserved for the PR body, where make-pr requires absolute
+URLs). When the project gitignores `.flow/artifacts/` (`git check-ignore -q
+.flow/artifacts/` hits), emit local-open guidance only — never a link that 404s.
 
 ## 5. PR lens — read-only review instrument
 

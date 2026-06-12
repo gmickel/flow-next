@@ -558,3 +558,54 @@ If user selects 4 or 5:
 - **Simplify**: Remove non-essential sections, tighten acceptance criteria, merge small tasks
 
 Loop back to options after changes until user selects 1, 2, or 3.
+
+**On loop exit (user picked 1, 2, or 3):** run Step 8.5 BEFORE dispatching the chosen next step or finishing — never on first arrival at this menu. Options 4/5 mutate tasks; generating earlier would render a lens the user is still editing.
+
+Under `AUTONOMOUS=1` there is no options menu — run Step 8.5 directly after Step 6/7 complete.
+
+## Step 8.5: HTML render lens (opt-in) — regenerate the spec artifact with the plan layer
+
+**Gated on `artifacts.html.enabled` — this check is the ONLY addition when the mode is off.**
+
+```bash
+HTML_LENS=$($FLOWCTL config get artifacts.html.enabled --json | jq -r 'if .value == true then "true" else "false" end')
+```
+
+When `HTML_LENS != true` (off or unset): **skip this entire step.** Load no reference file, write no artifact, open no session, print no artifact-related output — the gate read above is the only cost.
+
+When `HTML_LENS = true`:
+
+1. **Load the disclosure reference** [`plugins/flow-next/references/html-artifacts.md`](../../references/html-artifacts.md) (relative cross-link — resolves from this skill dir in every install layout, same shape as the spec-template link). It owns ALL design and generation rules — hard rules, design contract, spec-lens content, DAG discipline, Lavish flow, pre-publish checklist. Never duplicate its rules here; follow it top to bottom.
+2. **Regenerate the artifact** at the SAME fixed path capture uses (reference §1.3) — one pathway, state-dependent (reference §4): tasks now exist, so the lens renders the plan layer too (task dependency DAG with critical path, R-ID → task coverage matrix, plan dials).
+
+ ```bash
+ mkdir -p ".flow/artifacts/<spec-id>"
+ # Host agent regenerates .flow/artifacts/<spec-id>/spec.html per the reference.
+ ```
+3. **Late-mutation rule:** if anything after this generation mutates tasks in the same plan session (e.g. the chosen option 3's `/flow-next:plan-review` fix loop, or the user re-opening go-deeper/simplify), regenerate before the final output — same path, never a second file.
+4. **Update the artifact link line in the spec markdown** per reference §1.4: replace the `<!-- flow-next:artifact-link -->` marker line in place (capture usually wrote it; insert once after the H1 if absent). Link target follows ignore status (reference §4):
+
+ ```bash
+ if git check-ignore -q .flow/artifacts/; then
+ LINK_MODE=local # ignored → local-open guidance, never a blob link that 404s
+ else
+ LINK_MODE=repo # tracked → repo-relative link
+ fi
+ # Idempotency enforcement — exactly one marker line after EVERY run:
+ test "$(grep -c 'flow-next:artifact-link' ".flow/specs/<spec-id>.md")" -eq 1
+ ```
+5. **Run the reference's pre-publish checklist (§8)**, including the self-containment self-check grep (§2) — it must print `OK: self-contained` before the output may claim the artifact.
+6. **Lavish session — interactive runs only** (reference §7):
+
+ ```bash
+ if command -v lavish-axi >/dev/null 2>&1; then
+ lavish-axi "$(pwd)/.flow/artifacts/<spec-id>/spec.html" # absolute path — sessions key on it
+ fi
+ ```
+
+ Then poll for feedback in the background via `lavish-axi poll`; each drained annotation maps to an edit of the spec/task markdown (never the HTML), then the lens regenerates at the same path. `lavish-axi` absent → plain artifact, zero mention of Lavish, never an error.
+
+ **Non-interactive runs generate only** (any non-interactive marker: `AUTONOMOUS=1`, `FLOW_AUTONOMOUS=1`, `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` set — treat the marker *family* as the gate, not a rigid var list): never open a session, never poll; at most one stderr line noting pending prompts.
+7. **Name the artifact in the final output:** append `Artifact: .flow/artifacts/<spec-id>/spec.html (render lens — regenerable; markdown is the record)` to the plan summary. Omit entirely when the mode is off/unset.
+
+Best-effort: artifact generation failure is non-fatal — skip the link-line update, print one stderr note, never block planning (the plan is already on disk; markdown is the record).

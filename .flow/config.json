@@ -1,4 +1,9 @@
 {
+  "artifacts": {
+    "html": {
+      "enabled": true
+    }
+  },
   "land": {
     "automatedReviewers": "",
     "ciFixBudget": 3,

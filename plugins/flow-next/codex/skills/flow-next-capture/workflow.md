@@ -820,6 +820,54 @@ Runs only when Phase 4.2's mark-ready consent recorded `mark-ready` (which impli
 
 Idempotent plumbing (fn-58.1) — re-running is a silent no-op. Best-effort: a failed write prints a warning and continues — never blocks the capture (the spec is already on disk). Report `Readiness: marked ready` for the Phase 6 footer; on `keep-draft` (or when the question never fired) report nothing — zero footer noise outside the consent path.
 
+### 5.10 — HTML render lens (opt-in) — spec artifact + link line
+
+**Gated on `artifacts.html.enabled` — this check is the ONLY addition when the mode is off.** Runs last in Phase 5 (after 5.7–5.9 have settled the spec body and metadata), so the lens renders the final state.
+
+```bash
+HTML_LENS=$("$FLOWCTL" config get artifacts.html.enabled --json | jq -r 'if .value == true then "true" else "false" end')
+```
+
+When `HTML_LENS != true` (off or unset): **skip this entire section.** Load no reference file, write no artifact, open no session, print no artifact-related output — the gate read above is the only cost.
+
+When `HTML_LENS = true`:
+
+1. **Load the disclosure reference** [`plugins/flow-next/references/html-artifacts.md`](../../references/html-artifacts.md) (relative cross-link — resolves from this skill dir in every install layout, same shape as the spec-template link). It owns ALL design and generation rules — hard rules, design contract, spec-lens content, DAG discipline, Lavish flow, pre-publish checklist. Never duplicate its rules here; follow it top to bottom.
+2. **Generate the artifact** at the fixed path (reference §1.3):
+
+ ```bash
+ mkdir -p ".flow/artifacts/${SPEC_ID}"
+ # Host agent generates .flow/artifacts/${SPEC_ID}/spec.html per the reference.
+ ```
+
+ ONE pathway, state-dependent (reference §4): a fresh capture renders the spec-only view (no tasks exist yet); a `--rewrite` of an already-planned spec (tasks exist under it) renders the plan layer too — same generator, same path.
+3. **Update the artifact link line in the spec markdown** per reference §1.4: find the `<!-- flow-next:artifact-link -->` marker and replace that whole line in place; if absent, insert once after the H1 title. Link target follows ignore status (reference §4):
+
+ ```bash
+ if git check-ignore -q .flow/artifacts/; then
+ LINK_MODE=local # ignored → local-open guidance, never a blob link that 404s
+ else
+ LINK_MODE=repo # tracked → repo-relative link
+ fi
+ # Idempotency enforcement — exactly one marker line after EVERY run:
+ test "$(grep -c 'flow-next:artifact-link' ".flow/specs/${SPEC_ID}.md")" -eq 1
+ ```
+4. **Run the reference's pre-publish checklist (§8)**, including the self-containment self-check grep (§2) — it must print `OK: self-contained` before the footer may claim the artifact.
+5. **Lavish session — interactive runs only** (reference §7):
+
+ ```bash
+ if command -v lavish-axi >/dev/null 2>&1; then
+ lavish-axi "$(pwd)/.flow/artifacts/${SPEC_ID}/spec.html" # absolute path — sessions key on it
+ fi
+ ```
+
+ Then poll for feedback in the background via `lavish-axi poll`; each drained annotation maps to an edit of the spec markdown (never the HTML), then the lens regenerates at the same path. `lavish-axi` absent → plain artifact, zero mention of Lavish, never an error.
+
+ **Autofix / non-interactive runs generate only** (`mode:autofix`, or any non-interactive marker — `FLOW_AUTONOMOUS=1`, `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH`; capture is Ralph-blocked anyway, so autofix is the live case): never open a session, never poll; at most one stderr line noting pending prompts.
+6. **Record the footer line for Phase 6:** `Artifact: .flow/artifacts/<SPEC_ID>/spec.html (render lens — regenerable; markdown is the record)`.
+
+Best-effort: artifact generation failure is non-fatal — skip the link line, print one stderr note, never block the capture (the spec is already on disk; markdown is the record).
+
 ### Done when
 
 - The new (or rewritten) spec is on disk at `.flow/specs/<id>.md`.
@@ -828,6 +876,7 @@ Idempotent plumbing (fn-58.1) — re-running is a silent no-op. Best-effort: a f
 - When the tracker bridge is active and `capture` is opted in, the spec body was pushed/pulled/reconciled to the linked issue (5.7); otherwise this step was a silent no-op.
 - Approved glossary term-adds written (5.8); skipped silently when none were proposed or approved.
 - Mark-ready write applied iff consented (5.9); rewrite branch reset readiness via idempotent `unready` with `READY_RESET` recorded for Phase 6 (5.3).
+- HTML render lens (5.10): with `artifacts.html.enabled` true, `.flow/artifacts/<SPEC_ID>/spec.html` regenerated per the disclosure reference, the spec's marker link line replaced in place (exactly one), and the pre-publish checklist passed; with the mode off/unset, 5.10 was a silent no-op beyond the single config read.
 
 ---
 
@@ -878,6 +927,8 @@ Next:
 When Phase 5.8 wrote terms, append one line after `Tracker sync:`: `Glossary: added N term(s) (<comma-separated terms>)`. Omit entirely otherwise (including every autofix run).
 
 When Phase 5.9 marked the spec ready, append one line after `Tracker sync:`: `Readiness: marked ready`. Omit entirely otherwise — `keep-draft`, predicate-not-met, and every non-consented run print no readiness line.
+
+When Phase 5.10 wrote the render lens, append one line after `Tracker sync:`: `Artifact: .flow/artifacts/<SPEC_ID>/spec.html (render lens — regenerable; markdown is the record)`. Omit entirely when the mode is off/unset (zero artifact-related output) or when generation failed (5.10's stderr note already reported it).
 
 Autofix only: when the §4.2 visibility predicate holds and the spec was written (`--yes`), append `Mark ready when blessed: flowctl spec ready <SPEC_ID>` (suggestion only — autofix never writes readiness).
 
@@ -949,7 +1000,7 @@ The skill itself is markdown — there's no unit-test surface. The validation is
 - Phase 2 produces a draft with per-line source tags. Every acceptance criterion has one of `[user]` / `[paraphrase]` / `[inferred]`. Biz-context signals (R24) route to their destinations using only `[user]` / `[paraphrase]` tags; categories without conversation signal leave their destinations absent. `BIZ_SIGNAL_CATEGORIES` (0..9) computed for Phase 6.
 - Phase 3 fires must-ask cases only when (a) title is genuinely ambiguous, (b) acceptance is untestable, (c) scope-conflict persists. Optional ambiguities are deferred to Phase 4.
 - Phase 4 read-back surfaces `[inferred]` count, 8+ split note (if applicable), related-memory footer (if applicable), glossary term-add proposals (only when `glossary list --json` reports `total_terms > 0` AND the conversation surfaced new vocabulary — Phase 2.7). Interactive: user picks approve / edit / abort; on approve with proposals, one follow-up `Glossary?` consent question; on approve with the readiness predicate met (≥1 ready spec, no `tracker.readyState`), one follow-up `Mark ready?` consent question (default keep-draft). Autofix: print + require `--yes`; proposals print as suggestions, never written; readiness never written.
-- Phase 5 calls `flowctl spec create` + `spec set-plan` via heredoc. Approved term-adds written via `flowctl glossary add` (5.8, interactive only). Consented mark-ready written via `flowctl spec ready` (5.9, interactive only). Rewrite branch (5.3) runs idempotent `spec unready` unconditionally; `READY_RESET` gates the Phase 6 announcement. With no glossary (or a husk), 2.7/4.x/5.8 are silent no-ops; with readiness un-adopted, 4.2's mark-ready question / 5.9 / all readiness footer lines are silent no-ops — zero behavior change.
+- Phase 5 calls `flowctl spec create` + `spec set-plan` via heredoc. Approved term-adds written via `flowctl glossary add` (5.8, interactive only). Consented mark-ready written via `flowctl spec ready` (5.9, interactive only). Rewrite branch (5.3) runs idempotent `spec unready` unconditionally; `READY_RESET` gates the Phase 6 announcement. With no glossary (or a husk), 2.7/4.x/5.8 are silent no-ops; with readiness un-adopted, 4.2's mark-ready question / 5.9 / all readiness footer lines are silent no-ops — zero behavior change. With `artifacts.html.enabled` true, 5.10 regenerates `.flow/artifacts/<id>/spec.html` per the disclosure reference and leaves exactly one `<!-- flow-next:artifact-link -->` line in the spec md; off/unset, 5.10 is a single config read and nothing else.
 - Phase 6 prints the next-step footer. Calls `flowctl scope suggest --signal-categories-count "$BIZ_SIGNAL_CATEGORIES"`; on exit 0 (fire), appends the R25 `/flow-next:interview --scope=business` suggestion line. R22 invariant: `BIZ_SIGNAL_CATEGORIES=0` → no-fire → no suggestion.
 
 In autofix without `--yes`, the draft prints and the skill exits 0 — no write, no spec allocated.
