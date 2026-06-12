@@ -54,7 +54,7 @@ Before publishing, run this against the generated file — it must print OK:
 
 ```bash
 F=.flow/artifacts/<spec-id>/spec.html   # or pr.html
-if grep -nE '<script[^>]+src=|<link[^>]+href=|<img[^>]+src=|<iframe|srcset=|@import|@font-face|url\(\s*["'"'"']?https?:|fetch\(' "$F"; then
+if grep -nE '<script[^>]+src=|<link[^>]+href=|<img[^>]+src=|<iframe|srcset=|@import|@font-face|url\([[:space:]]*["'"'"']?https?:|fetch[[:space:]]*\(' "$F"; then
   echo "FAIL: external/loaded resources found — inline or remove them"
 else
   echo "OK: self-contained"
@@ -96,7 +96,7 @@ grouping. Body text is `--ink` on `--bg`; supporting prose `--dim`; micro-labels
   body::before { display: none; }
   nav.rail, .progress { display: none; }
   section { break-inside: avoid-page; animation: none; }
-  @page { size: A4 landscape; margin: 1.2cm; }  /* plain A4 when no DAG */
+  @page { size: A4; margin: 1.2cm; }  /* switch to `size: A4 landscape;` ONLY when the artifact renders a DAG */
 }
 ```
 

@@ -1,6 +1,6 @@
 # Codex Mirror Generation (`sync-codex.sh`)
 
-[`../../../scripts/sync-codex.sh`](../../../scripts/sync-codex.sh) generates the pre-built Codex files from canonical `skills/` and `agents/` sources. Output: `plugins/flow-next/codex/{skills/,agents/,hooks.json}` plus a mirrored `templates/` directory. The script is **idempotent** — running twice produces identical output.
+[`../../../scripts/sync-codex.sh`](../../../scripts/sync-codex.sh) generates the pre-built Codex files from canonical `skills/` and `agents/` sources. Output: `plugins/flow-next/codex/{skills/,agents/,hooks.json}` plus mirrored `templates/` and `references/` directories. The script is **idempotent** — running twice produces identical output.
 
 > Read the script's top-of-file comments and stage banners for the authoritative behavior. This doc gives the high-level shape and points at the validation guards.
 
@@ -12,6 +12,7 @@ Run after modifying any of:
 - `plugins/flow-next/agents/**` — agent `.md` files (converted to `.toml`)
 - `plugins/flow-next/hooks/hooks.json` — hook definitions
 - `plugins/flow-next/templates/spec.md` — canonical scaffold mirrored into `codex/templates/` for R20 relative-path resolution
+- `plugins/flow-next/references/**` — shared disclosure files (e.g. `html-artifacts.md`) mirrored byte-identical into `codex/references/` (tool-name-agnostic by contract; no rewrite pass touches them)
 
 ```bash
 ./scripts/sync-codex.sh
@@ -26,7 +27,7 @@ The script runs in numbered stages (see banners in [`../../../scripts/sync-codex
 1. **Copy & patch skills** — canonical `skills/` copied to `codex/skills/`, then per-stage transforms applied (Claude-native tool names rewritten to Codex equivalents; `request_user_input` → plain-text numbered prompt per fn-45).
 2. **Convert agents** — `agents/*.md` → `codex/agents/*.toml` with per-agent reasoning effort, sandbox mode, model mapping, and nickname candidates.
 3. **Generate hooks.json** — derived from canonical `hooks/hooks.json`.
-4. **Mirror templates/** — canonical `templates/spec.md` copied to `codex/templates/` so the R20 4-tier discovery cascade resolves the same relative path in the mirror.
+4. **Mirror templates/ + references/** — canonical `templates/spec.md` copied to `codex/templates/` so the R20 4-tier discovery cascade resolves the same relative path in the mirror; canonical `references/` copied byte-identical to `codex/references/` (shared disclosure files are tool-name-agnostic, so no transform applies).
 5. **Validation** — counts + drift guards (see below).
 
 ## Validation guards
