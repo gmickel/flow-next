@@ -1186,6 +1186,15 @@ def get_default_config() -> dict:
             # `flow-next:needs-human` label + skip.
             "ciFixBudget": 3,
         },
+        # fn-62.1 — optional HTML artifact mode (render lenses), seeded so
+        # `config get artifacts.html.enabled` returns False (NOT null) on a
+        # fresh repo. OFF by default: with it off, participating skills load
+        # no reference file, write no artifacts, and open no Lavish session.
+        # flowctl only stores/serves the knob — generation is agentic (the
+        # skills read the disclosure reference); artifacts live at the fixed
+        # deterministic paths .flow/artifacts/<spec-id>/{spec,pr}.html
+        # (never timestamped — Lavish keys sessions on the absolute path).
+        "artifacts": {"html": {"enabled": False}},
     }
 
 

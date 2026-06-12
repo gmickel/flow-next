@@ -342,6 +342,7 @@ CURRENT_PLANSYNC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.enabled 
 # fires only when the user typed the legacy alias, which is never here.
 CURRENT_CROSSSPEC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.crossSpec --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 CURRENT_GITHUB_SCOUT=$("${PLUGIN_ROOT}/scripts/flowctl" config get scouts.github --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+CURRENT_HTML_ARTIFACTS=$("${PLUGIN_ROOT}/scripts/flowctl" config get artifacts.html.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 ```
 
 Store detection results for use in questions. When showing options, indicate current value if set (e.g., "(current)" after the matching option label).
@@ -373,6 +374,7 @@ Current configuration:
 - Plan-Sync cross-spec: <enabled|disabled> (change with: flowctl config set planSync.crossSpec <true|false>)
 - Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|rp|copilot|none OR spec form like codex:gpt-5.4:xhigh>)
 - GitHub scout: <enabled|disabled> (change with: flowctl config set scouts.github <true|false>)
+- HTML artifacts: <enabled|disabled> (change with: flowctl config set artifacts.html.enabled <true|false>)
 ```
 
 Only include lines for config values that are set. If no config is set, skip this notice.
@@ -434,6 +436,19 @@ Available questions (include only if corresponding config is unset):
  "options": [
  {"label": "No (Recommended)", "description": "Skip cross-repo search. Faster plans, no gh CLI needed."},
  {"label": "Yes", "description": "Search GitHub repos for patterns/examples during /flow-next:plan"}
+ ],
+ "multiSelect": false
+}
+```
+
+**HTML Artifacts question** (include if CURRENT_HTML_ARTIFACTS is empty):
+```json
+{
+ "header": "HTML Artifacts",
+ "question": "Enable HTML artifact mode? (Renders specs/PRs as self-contained HTML review pages under .flow/artifacts/ — markdown stays the source of truth)",
+ "options": [
+ {"label": "Yes (Recommended)", "description": "Participating skills (capture, plan, make-pr) also emit regenerable HTML render lenses for human review"},
+ {"label": "No", "description": "Markdown-only. Zero extra steps, zero token overhead. Enable later: flowctl config set artifacts.html.enabled true"}
  ],
  "multiSelect": false
 }
@@ -542,6 +557,41 @@ Only process answers for questions that were asked (config values that were unse
 - If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set scouts.github true --json`
 - If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set scouts.github false --json`
 
+**HTML Artifacts** (if question was asked):
+- If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set artifacts.html.enabled false --json`
+- If "Yes":
+ 1. `"${PLUGIN_ROOT}/scripts/flowctl" config set artifacts.html.enabled true --json`
+ 2. Ask ONE follow-up via `plain-text numbered prompt` — track or ignore the artifact directory:
+ - **header**: `Artifacts in git?`
+ - **question**: `Artifacts live at .flow/artifacts/<spec-id>/{spec,pr}.html (fixed paths, regenerable). Commit them or gitignore the directory?`
+ - **options**:
+ - `Commit artifacts (Recommended)` — keep `.flow/artifacts/` tracked. This is what makes make-pr blob links resolve for remote reviewers. No action needed (the auto-managed `.flow/.gitignore` block does not exclude `artifacts/`).
+ - `Gitignore` — local-open only; make-pr skips blob links. Append the pattern below the auto-managed footer in `.flow/.gitignore` (user patterns there are preserved by flowctl), guarding against duplicates:
+ ```bash
+ grep -qx 'artifacts/' .flow/.gitignore 2>/dev/null || printf 'artifacts/\n' >> .flow/.gitignore
+ ```
+ 3. Print the lavish-axi offer verbatim. **NEVER auto-install** — detect-and-instruct only, same discipline as /flow-next:map (global npm installs are user-consent territory):
+
+ ```
+ HTML artifact mode enabled.
+
+ Optional companion — lavish-axi (annotate spec artifacts in the browser; feedback
+ flows back as markdown-source edits, then the lens regenerates):
+
+ Install: npm i -g lavish-axi
+ (or zero-setup, per run: npx lavish-axi <artifact.html>)
+
+ Feedback model — session-spanning, pull-only: annotations queue in the global
+ ~/.lavish-axi/state.json and survive the agent session; any later agent session
+ drains the queue via the lavish-axi poll CLI. Nothing is pushed into the agent.
+
+ Lifecycle: the local server idle-stops after ~30 min; reopening the artifact
+ resumes the session. Without lavish-axi (or after idle-stop) the artifact still
+ renders as a plain static page — it is never a dependency.
+
+ flow-next never auto-installs lavish-axi.
+ ```
+
 **Review** (if question was asked):
 Map user's answer to config value and persist:
 
@@ -619,6 +669,7 @@ Configuration (use flowctl config set to change):
 - Plan-Sync: <enabled|disabled>
 - Plan-Sync cross-spec: <enabled|disabled>
 - GitHub scout: <enabled|disabled>
+- HTML artifacts: <enabled|disabled>
 - Review backend: <codex|rp|none>
 
 Documentation updated:

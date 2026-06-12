@@ -21,6 +21,7 @@ Task tracking for AI agents. All state lives in `.flow/`.
 ├── tasks/fn-N-slug.M.json # Task metadata
 ├── memory/{bug,knowledge}/<category>/ # Context memory (categorized; bug: build-errors, runtime-errors, test-failures, …; knowledge: architecture-patterns, conventions, …)
 ├── prospects/<slug>-<date>.md # Ideation artifacts (v0.36.0+)
+├── artifacts/<spec-id>/ # Regenerable HTML render lenses — spec.html + pr.html (opt-in via artifacts.html.enabled; fixed paths, never timestamped; commit-or-gitignore per project)
 ├── review-receipts/<branch>.json # Review verdicts + findings (per branch)
 ├── review-deferred/<branch>.md # Walkthrough deferrals (fn-32.3)
 ├── .flow_version # 1.0.0 sentinel — written after layout migration
@@ -169,6 +170,7 @@ The project's strategic intent and canonical vocabulary live **outside** `.flow/
 .flow/bin/flowctl config set planSync.enabled true # sync downstream task specs after impl drift
 .flow/bin/flowctl config set planSync.crossSpec false # also check other open specs (canonical key; legacy alias planSync.crossEpic removed in 2.0)
 .flow/bin/flowctl config set scouts.github false # GitHub scout (requires gh CLI)
+.flow/bin/flowctl config set artifacts.html.enabled true # optional HTML artifact mode: skills render specs/PRs as self-contained HTML under .flow/artifacts/<spec-id>/ (OFF by default; markdown stays the source of truth)
 .flow/bin/flowctl config set work.delegate codex # /flow-next:work opt-in: offload impl to local `codex exec` (value MUST be `codex` to activate; OFF by default, consent-gated; arg `delegate:codex` overrides per-run)
 .flow/bin/flowctl config set tracker.perEvent.qa comment # /flow-next:qa opt-in: post the live-app QA ship verdict as a tracker comment (off|comment; default off; needs the tracker bridge active)
 
