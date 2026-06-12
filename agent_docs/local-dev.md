@@ -146,11 +146,11 @@ despite `--ignore-user-config`, the structured-output contract is unreliable in
 this environment → **STOP**: the blocker is fixed at build or fn-55 does not ship
 (no `--json` JSONL fallback).
 
-## Config alias smoke (planSync.crossEpic → crossSpec)
+## Config alias removal smoke (planSync.crossEpic removed in 2.0.0)
 
-Manual verification that the fn-46.1 alias mechanism reads + writes the canonical `planSync.crossSpec` key, falls back to the legacy `planSync.crossEpic` on read when the canonical key is absent from the raw config file, and emits a one-line stderr deprecation hint exactly once per process on legacy read.
+The fn-46.1 legacy alias (`planSync.crossEpic` → `planSync.crossSpec`, deprecated 1.1.3+) was removed in 2.0.0 per the documented 1.x deprecation promise. Manual verification that the removal holds: flowctl reads + writes only the canonical `planSync.crossSpec` key, a leftover `crossEpic` key in the raw config file is inert (no read fallback, no init mirror), and no deprecation hint fires.
 
-Run after any change touching `flowctl config get / set` or `_emit_rename_deprecation` (`plugins/flow-next/scripts/flowctl.py`).
+Run after any change touching `flowctl config get / set`, `cmd_init`'s config upgrade, or `_CONFIG_KEY_ALIASES` (`plugins/flow-next/scripts/flowctl.py`). The automated counterparts are `tests/test_config_alias.py` + `tests/test_init_crossspec_mirror.py`.
 
 **Setup:** scratch repo with `.flow/` initialised.
 
@@ -166,39 +166,33 @@ mkdir -p /tmp/fn-crossspec-smoke && cd /tmp/fn-crossspec-smoke
 # Expected: writes canonical key only; .flow/config.json contains "crossSpec": true, no "crossEpic" key.
 
 .flow/bin/flowctl config get planSync.crossSpec
-# Expected stdout: true   (no deprecation warning on stderr)
+# Expected stdout: true   (nothing on stderr)
 ```
 
-**Legacy read with deprecation:**
+**Leftover legacy key is inert (no fallback, no mirror, no warning):**
 
 ```bash
-.flow/bin/flowctl config get planSync.crossEpic
-# Expected stdout: true
-# Expected stderr: one-line deprecation hint mentioning planSync.crossSpec is the canonical key and crossEpic is removed in 2.0.
-```
-
-**Suppression:**
-
-```bash
-FLOW_NO_DEPRECATION=1 .flow/bin/flowctl config get planSync.crossEpic
-# Expected stdout: true
-# Expected stderr: silent (no deprecation hint).
-```
-
-**Per-process dedup (warning fires exactly once):**
-
-```bash
-# In a single Python process (the dedup cache is per-process), three back-to-back legacy reads:
+# Seed a pre-2.0 layout: legacy key only, canonical absent.
 python3 -c "
-import subprocess
-for _ in range(3):
-    subprocess.run(['.flow/bin/flowctl', 'config', 'get', 'planSync.crossEpic'])
+import json, pathlib
+p = pathlib.Path('.flow/config.json')
+cfg = json.loads(p.read_text())
+cfg['planSync'] = {'crossEpic': True}
+p.write_text(json.dumps(cfg, indent=2))
 "
-# Each subprocess is its own process → warning fires 3 times.
-# To verify the per-process dedup contract, invoke the alias path in-process via the flowctl entry point (e.g. via the smoke suite) rather than re-spawning the CLI.
+
+.flow/bin/flowctl config get planSync.crossSpec --raw --json
+# Expected: "value": null — the canonical read must NOT fall back to the legacy value.
+
+.flow/bin/flowctl config get planSync.crossSpec
+# Expected stdout: false (the default) — not the legacy true. Nothing on stderr.
+
+.flow/bin/flowctl init
+# Expected: NO "mirrored legacy planSync.crossEpic" action; crossSpec lands at the
+# default false; the leftover crossEpic key is preserved but never read.
 ```
 
-Any deviation (canonical `set` touches `crossEpic`, legacy `get` doesn't emit the deprecation, `FLOW_NO_DEPRECATION=1` still emits) is a regression — inspect `cmd_config_get` / `set_config` / `_emit_rename_deprecation` in `flowctl.py`.
+Any deviation (canonical `get` surfaces the legacy value, `init` mirrors `crossEpic` → `crossSpec`, or any `planSync.crossEpic` deprecation hint appears on stderr) is a regression — inspect `_CONFIG_KEY_ALIASES` / `cmd_config_get` / `cmd_init` in `flowctl.py`.
 
 ## Repo-root SPEC.md smoke (template discovery cascade)
 

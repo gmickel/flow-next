@@ -13,11 +13,15 @@ Steps to ship a new version of flow-next.
 
 ## Files kept in sync
 
-`scripts/bump.sh` handles all three; verify with `jq` after running:
+`scripts/bump.sh` handles all five version surfaces; verify with `jq` after running:
 
-- `.claude-plugin/marketplace.json` — plugin version inside the `plugins[]` array
 - `plugins/flow-next/.claude-plugin/plugin.json` — version
 - `plugins/flow-next/.codex-plugin/plugin.json` — version
+- `plugins/flow-next/.cursor-plugin/plugin.json` — version (Cursor local-install manifest — easy to miss)
+- `.claude-plugin/marketplace.json` — plugin version inside the `plugins[]` array AND `metadata.version`
+- `.agents/plugins/marketplace.json` — plugin version inside the `plugins[]` array (Codex marketplace, no `metadata` block)
+
+It also rewrites the version badges in `README.md` + `plugins/flow-next/README.md` and re-runs `scripts/sync-codex.sh`. It does **not** touch the prose skill/command/subagent counts inside manifest `description`/`longDescription` strings — when a release adds or removes a skill/command/agent, sweep those counts manually (see memory `skill-adding-version-bump-leaves-stale`).
 
 ## Marketplace rules
 

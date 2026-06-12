@@ -16,7 +16,6 @@
     "enabled": true
   },
   "planSync": {
-    "crossEpic": true,
     "crossSpec": false,
     "enabled": true
   },

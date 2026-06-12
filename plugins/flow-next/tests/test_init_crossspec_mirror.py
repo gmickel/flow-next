@@ -1,17 +1,18 @@
-"""Tests for `flowctl init`'s legacy `planSync.crossEpic` → canonical
-`planSync.crossSpec` mirror (1.1.11).
+"""Removal regression tests for `flowctl init`'s legacy
+`planSync.crossEpic` → `planSync.crossSpec` mirror (fn-62.6, R14 — 2.0.0).
 
-Pre-1.1.3 users had `planSync.crossEpic: true` (the only key) in their
-on-disk config. The 1.1.3 default-merge introduced `planSync.crossSpec:
-false` as the new canonical default, and the 1.1.3 read precedence is
-"canonical wins on presence". Without a mirror, every upgrading user
-who'd opted into cross-spec sync lost the setting silently on the next
-`flowctl init` (called by `/flow-next:setup` and bundled worker paths).
+History: pre-1.1.3 users had `planSync.crossEpic: true` as the only key.
+1.1.11 added a pre-merge mirror in `cmd_init` (crossEpic → crossSpec when
+canonical absent) so the 1.1.3 canonical-wins read precedence didn't
+silently flip upgraders' effective setting. 2.0.0 removed the alias AND
+that mirror per the documented 1.x deprecation promise.
 
-1.1.11 adds a pre-merge mirror: if `crossEpic` is in the file and
-`crossSpec` is absent, copy `crossEpic` → `crossSpec` so the canonical
-key reflects the user's intended setting. Legacy key is preserved per
-the 1.1.3 deprecation cadence (removed in 2.0).
+Post-removal contract pinned here:
+  * `init` never mirrors a leftover `crossEpic` value — the canonical
+    `crossSpec` gets the default (`false`) via the standard default-merge.
+  * The leftover legacy key is inert but preserved (init never deletes
+    user keys; the merge keeps unknown keys).
+  * No `crossEpic`-mentioning action message is ever emitted.
 """
 
 import json
@@ -59,10 +60,17 @@ def _read_config(repo_root: Path) -> dict:
     return json.loads((repo_root / ".flow" / "config.json").read_text())
 
 
-class InitMirrorsLegacyCrossEpic(unittest.TestCase):
-    """legacy crossEpic + no crossSpec → mirror to canonical."""
+def _mirror_actions(result: dict) -> list:
+    return [
+        a for a in result.get("actions", [])
+        if "crossEpic" in a
+    ]
 
-    def test_mirrors_true_legacy(self):
+
+class InitDoesNotMirrorLegacyCrossEpic(unittest.TestCase):
+    """Legacy crossEpic + no crossSpec → NO mirror; canonical default lands."""
+
+    def test_true_legacy_is_inert(self):
         with tempfile.TemporaryDirectory() as td:
             repo_root = Path(td)
             flow_dir = repo_root / ".flow"
@@ -76,22 +84,18 @@ class InitMirrorsLegacyCrossEpic(unittest.TestCase):
             result = _run_init(repo_root)
 
             cfg = _read_config(repo_root)
-            # Mirror happened: crossSpec now reflects user's intended value.
-            self.assertEqual(cfg["planSync"]["crossSpec"], True)
-            # Legacy key preserved per 1.1.3 deprecation cadence.
+            # 2.0.0: NO mirror — canonical gets the default, not the legacy
+            # value (pre-2.0 this would have been mirrored to True).
+            self.assertEqual(cfg["planSync"]["crossSpec"], False)
+            # Leftover legacy key is preserved (init never deletes user
+            # keys) but inert — nothing reads it anymore.
             self.assertEqual(cfg["planSync"]["crossEpic"], True)
-            # Action log mentions the mirror.
-            actions = result.get("actions", [])
-            mirror_msgs = [
-                a for a in actions
-                if "crossEpic" in a and "crossSpec" in a
-            ]
-            self.assertEqual(len(mirror_msgs), 1,
-                             f"expected mirror action; got actions={actions}")
+            self.assertEqual(
+                _mirror_actions(result), [],
+                "2.0.0 removed the crossEpic mirror — no mirror action",
+            )
 
-    def test_mirrors_false_legacy(self):
-        # If user explicitly turned crossEpic off (rare but valid),
-        # mirroring preserves that too.
+    def test_false_legacy_is_inert(self):
         with tempfile.TemporaryDirectory() as td:
             repo_root = Path(td)
             flow_dir = repo_root / ".flow"
@@ -99,44 +103,38 @@ class InitMirrorsLegacyCrossEpic(unittest.TestCase):
             (flow_dir / "config.json").write_text(json.dumps({
                 "planSync": {"crossEpic": False},
             }))
-            _run_init(repo_root)
+            result = _run_init(repo_root)
             cfg = _read_config(repo_root)
             self.assertEqual(cfg["planSync"]["crossSpec"], False)
             self.assertEqual(cfg["planSync"]["crossEpic"], False)
+            self.assertEqual(_mirror_actions(result), [])
 
 
-class InitDoesNotMirrorWhenCanonicalPresent(unittest.TestCase):
-    """If user already set canonical crossSpec, the legacy value is ignored
-    (canonical-wins-on-presence semantics)."""
+class InitCanonicalUntouchedByLegacy(unittest.TestCase):
+    """An explicit canonical crossSpec is never overwritten by a leftover
+    legacy value."""
 
-    def test_canonical_wins(self):
+    def test_canonical_preserved(self):
         with tempfile.TemporaryDirectory() as td:
             repo_root = Path(td)
             flow_dir = repo_root / ".flow"
             flow_dir.mkdir()
             (flow_dir / "config.json").write_text(json.dumps({
                 "planSync": {
-                    "crossEpic": True,    # legacy says enable
+                    "crossEpic": True,    # leftover legacy says enable
                     "crossSpec": False,   # canonical says disable
                 },
             }))
             result = _run_init(repo_root)
             cfg = _read_config(repo_root)
-            # User's explicit canonical setting wins; no mirror runs.
             self.assertEqual(cfg["planSync"]["crossSpec"], False)
             self.assertEqual(cfg["planSync"]["crossEpic"], True)
-            actions = result.get("actions", [])
-            mirror_msgs = [
-                a for a in actions
-                if "crossEpic" in a and "crossSpec" in a
-            ]
-            self.assertEqual(mirror_msgs, [],
-                             "must not mirror when canonical is present")
+            self.assertEqual(_mirror_actions(result), [])
 
 
-class InitDoesNotMirrorWhenNeitherSet(unittest.TestCase):
-    """Fresh-install style configs (neither key set) just get default-merge
-    behavior with crossSpec: false."""
+class InitFreshDefaults(unittest.TestCase):
+    """Fresh-install style configs (neither key set) get default-merge
+    behavior with crossSpec: false and no legacy key ever written."""
 
     def test_neither_set(self):
         with tempfile.TemporaryDirectory() as td:
@@ -148,43 +146,28 @@ class InitDoesNotMirrorWhenNeitherSet(unittest.TestCase):
             }))
             result = _run_init(repo_root)
             cfg = _read_config(repo_root)
-            # Default canonical (false) lands; no legacy key written.
             self.assertEqual(cfg["planSync"]["crossSpec"], False)
             self.assertNotIn("crossEpic", cfg["planSync"])
-            actions = result.get("actions", [])
-            mirror_msgs = [
-                a for a in actions
-                if "crossEpic" in a and "crossSpec" in a
-            ]
-            self.assertEqual(mirror_msgs, [],
-                             "must not mirror when legacy is absent")
+            self.assertEqual(_mirror_actions(result), [])
 
 
 class InitIdempotent(unittest.TestCase):
-    """Re-running init on a config that already has both keys (post-mirror
-    state) must be a no-op for the planSync section."""
+    """Re-running init on a config carrying a leftover legacy key must be a
+    no-op for the planSync section (beyond the first default-merge)."""
 
-    def test_idempotent_after_mirror(self):
+    def test_idempotent_with_leftover_legacy(self):
         with tempfile.TemporaryDirectory() as td:
             repo_root = Path(td)
             flow_dir = repo_root / ".flow"
             flow_dir.mkdir()
-            # First run: legacy → mirror happens.
             (flow_dir / "config.json").write_text(json.dumps({
                 "planSync": {"crossEpic": True},
             }))
             _run_init(repo_root)
             cfg_after_first = _read_config(repo_root)
-            self.assertEqual(cfg_after_first["planSync"]["crossSpec"], True)
-            # Second run: no mirror action expected.
+            self.assertEqual(cfg_after_first["planSync"]["crossSpec"], False)
             result = _run_init(repo_root)
-            actions = result.get("actions", [])
-            mirror_msgs = [
-                a for a in actions
-                if "crossEpic" in a and "crossSpec" in a
-            ]
-            self.assertEqual(mirror_msgs, [],
-                             "second run must not re-mirror")
+            self.assertEqual(_mirror_actions(result), [])
             cfg_after_second = _read_config(repo_root)
             self.assertEqual(
                 cfg_after_second["planSync"], cfg_after_first["planSync"],

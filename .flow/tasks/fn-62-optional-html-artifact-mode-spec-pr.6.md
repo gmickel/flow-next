@@ -10,14 +10,14 @@ Cut 2.0.0 — the FINAL task, after the docs-site tasks (.7/.8) per the release 
 
 ## Approach
 - Follow agent_docs/releasing.md; `bump.sh major flow-next` covers the 5 version surfaces (3 plugin.json incl. .cursor — easy to miss — + 2 marketplace.json). Sweep descriptions/longDescription for stale counts (memory: skill-adding-version-bump-leaves-stale).
-- Remove the `planSync.crossEpic` alias per the documented 1.x deprecation promise — ALL surfaces: flowctl.py (:5114-5130, :1196), test_config_alias.py (convert to a removal regression test), flowctl.md alias row, flow-next-setup/workflow.md legacy-alias comments/footnotes, any releasing.md claims that undercount bump.sh's synced surfaces, AND this repo's own committed `.flow/config.json` (drop the stale persisted `planSync.crossEpic` key; keep/confirm the canonical `planSync.crossSpec` value). OWN breaking-change line in CHANGELOG — never folded silently into the bump.
+- Remove the `planSync.crossEpic` alias per the documented 1.x deprecation promise — ALL surfaces: flowctl.py (~:5123-5135 <!-- Updated by plan-sync: crossEpic mirror block drifted from :5114-5130 to ~:5123-5135 — confirm before editing -->, :1196), test_config_alias.py (convert to a removal regression test), flowctl.md alias row, flow-next-setup/workflow.md legacy-alias comments/footnotes, any releasing.md claims that undercount bump.sh's synced surfaces, AND this repo's own committed `.flow/config.json` (drop the stale persisted `planSync.crossEpic` key; keep/confirm the canonical `planSync.crossSpec` value). OWN breaking-change line in CHANGELOG — never folded silently into the bump.
 - Regen Codex mirror (scripts/sync-codex.sh) AFTER fn-62.3/.4/.5 land; run a dedicated mirror audit (memory: mirror-regen-exposes-latent-canonical — fn-60's regen took 4 NEEDS_WORK rounds; budget for it): verify the references/ copy is byte-identical, no R2 ask-block injected into new/changed files, sentence-boundary check on any injected blocks, no surviving canonical tool names.
 - CHANGELOG 2.0.0 entry: Added (HTML artifact mode, spec/PR lenses, lavish optional dep, artifacts.html config, .flow/artifacts/) / Removed (crossEpic alias — BREAKING) / Notes (opt-in, zero change when off).
 
 ## Investigation targets
 **Required:**
 - agent_docs/releasing.md — full release procedure incl. docs-site-before-tag ordering
-- plugins/flow-next/scripts/flowctl.py:5114-5130 + :1196 — alias code
+- plugins/flow-next/scripts/flowctl.py:~5123-5135 + :1196 — alias code <!-- Updated by plan-sync: crossEpic mirror block now at ~:5123-5135 (was :5114-5130) -->
 - plugins/flow-next/tests/test_config_alias.py — current alias test to convert
 - .flow/config.json — stale persisted planSync.crossEpic in this repo
 - scripts/sync-codex.sh — regen entry point

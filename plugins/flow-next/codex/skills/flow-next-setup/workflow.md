@@ -336,10 +336,9 @@ HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
 CURRENT_BACKEND=$("${PLUGIN_ROOT}/scripts/flowctl" config get review.backend --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 CURRENT_MEMORY=$("${PLUGIN_ROOT}/scripts/flowctl" config get memory.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 CURRENT_PLANSYNC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-# planSync.crossSpec is canonical; planSync.crossEpic is a read-only legacy
-# alias (removed in 2.0). The `--raw` probe checks both keys in the on-disk
-# file (canonical wins on presence, legacy fills in on fallback); deprecation
-# fires only when the user typed the legacy alias, which is never here.
+# planSync.crossSpec is canonical (the pre-1.1.3 legacy alias
+# planSync.crossEpic was removed in 2.0.0 — a leftover key in the on-disk
+# file is inert). The `--raw` probe checks only the canonical key.
 CURRENT_CROSSSPEC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.crossSpec --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 CURRENT_GITHUB_SCOUT=$("${PLUGIN_ROOT}/scripts/flowctl" config get scouts.github --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 CURRENT_HTML_ARTIFACTS=$("${PLUGIN_ROOT}/scripts/flowctl" config get artifacts.html.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
@@ -415,7 +414,7 @@ Available questions (include only if corresponding config is unset):
 
 **Plan-Sync cross-spec question** (include if CURRENT_PLANSYNC is "true" AND CURRENT_CROSSSPEC is empty)[^crossspec-legacy]:
 
-[^crossspec-legacy]: The canonical config key is `planSync.crossSpec`. The pre-1.1.3 name `planSync.crossEpic` remains readable as a legacy alias (one-line stderr deprecation; removed in 2.0).
+[^crossspec-legacy]: The canonical config key is `planSync.crossSpec`. The pre-1.1.3 name `planSync.crossEpic` was removed in 2.0.0 — flowctl no longer reads it; a leftover key in `.flow/config.json` is inert.
 ```json
 {
  "header": "Cross-Spec",
@@ -549,7 +548,7 @@ Only process answers for questions that were asked (config values that were unse
 - If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.enabled true --json`
 - If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.enabled false --json`
 
-**Plan-Sync cross-spec** (if question was asked; canonical key is `planSync.crossSpec` — the legacy `planSync.crossEpic` alias is read-only and removed in 2.0):
+**Plan-Sync cross-spec** (if question was asked; canonical key is `planSync.crossSpec` — the legacy `planSync.crossEpic` alias was removed in 2.0.0):
 - If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.crossSpec true --json`
 - If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.crossSpec false --json`
 
