@@ -1188,14 +1188,45 @@ def get_default_config() -> dict:
         },
         # fn-62.1 — optional HTML artifact mode (render lenses), seeded so
         # `config get artifacts.html.enabled` returns False (NOT null) on a
-        # fresh repo. OFF by default: with it off, participating skills load
-        # no reference file, write no artifacts, and open no Lavish session.
-        # flowctl only stores/serves the knob — generation is agentic (the
-        # skills read the disclosure reference); artifacts live at the fixed
-        # deterministic paths .flow/artifacts/<spec-id>/{spec,pr}.html
-        # (never timestamped — Lavish keys sessions on the absolute path).
+        # fresh repo via the defaults MERGE (load_flow_config), NOT by
+        # persisting the key into config.json: `init` deliberately skips
+        # this block (see _init_persisted_defaults) so the setup ceremony's
+        # include-only-if-unset `--raw` probe still reads null until the
+        # user explicitly decides. OFF by default: with it off,
+        # participating skills load no reference file, write no artifacts,
+        # and open no Lavish session. flowctl only stores/serves the knob —
+        # generation is agentic (the skills read the disclosure reference);
+        # artifacts live at the fixed deterministic paths
+        # .flow/artifacts/<spec-id>/{spec,pr}.html (never timestamped —
+        # Lavish keys sessions on the absolute path).
         "artifacts": {"html": {"enabled": False}},
     }
+
+
+# Config blocks `flowctl init` must NOT materialize into .flow/config.json.
+# The setup ceremony (flow-next-setup workflow.md Step 6) gates its
+# include-only-if-unset questions on `config get <key> --raw` returning null
+# (= "user never decided"). Step 1 runs `init` BEFORE that detection, so any
+# default `init` persists would permanently suppress the question. Reads are
+# unaffected: load_flow_config() merges get_default_config() over the file,
+# so merged `config get` still returns the seeded default.
+# Scoped to fn-62's artifacts block only — the older ask-at-setup keys
+# (memory.enabled, planSync.enabled, scouts.github) predate this and keep
+# their materialize-on-init behavior unchanged.
+_INIT_UNMATERIALIZED_BLOCKS = ("artifacts",)
+
+
+def _init_persisted_defaults() -> dict:
+    """Defaults `cmd_init` writes/merges into config.json.
+
+    Equal to get_default_config() minus _INIT_UNMATERIALIZED_BLOCKS, so the
+    raw-file presence of those keys stays a faithful "explicitly set"
+    provenance signal for the setup ceremony's `--raw` probe.
+    """
+    defaults = get_default_config()
+    for block in _INIT_UNMATERIALIZED_BLOCKS:
+        defaults.pop(block, None)
+    return defaults
 
 
 # Canonical mapping for legacy config keys. Reads of a legacy key resolve to the
@@ -5112,7 +5143,7 @@ def cmd_init(args: argparse.Namespace) -> None:
     # Config: create or upgrade (merge missing defaults)
     config_path = flow_dir / CONFIG_FILE
     if not config_path.exists():
-        atomic_write_json(config_path, get_default_config())
+        atomic_write_json(config_path, _init_persisted_defaults())
         actions.append("created config.json")
     else:
         # Load raw config, compare with merged (which includes new defaults)
@@ -5125,7 +5156,7 @@ def cmd_init(args: argparse.Namespace) -> None:
         # The 1.1.11 pre-merge crossEpic→crossSpec mirror was removed in
         # 2.0.0 along with the `planSync.crossEpic` alias: a leftover legacy
         # key in the file is now inert (preserved by the merge, never read).
-        merged = deep_merge(get_default_config(), raw)
+        merged = deep_merge(_init_persisted_defaults(), raw)
         if merged != raw:
             atomic_write_json(config_path, merged)
             actions.append("upgraded config.json (added missing keys)")

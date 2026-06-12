@@ -844,8 +844,8 @@ When `HTML_LENS = true`:
 3. **Update the artifact link line in the spec markdown** per reference §1.4: find the `<!-- flow-next:artifact-link -->` marker and replace that whole line in place; if absent, insert once after the H1 title. Link target follows ignore status (reference §4):
 
  ```bash
- if git check-ignore -q .flow/artifacts/; then
- LINK_MODE=local # ignored → local-open guidance, never a blob link that 404s
+ if git check-ignore -q ".flow/artifacts/${SPEC_ID}/spec.html"; then
+ LINK_MODE=local # file ignored (dir, glob, or exact-path rule) → local-open guidance, never a blob link that 404s
  else
  LINK_MODE=repo # tracked → repo-relative link
  fi

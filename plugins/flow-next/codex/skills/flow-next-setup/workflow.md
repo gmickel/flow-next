@@ -341,6 +341,10 @@ CURRENT_PLANSYNC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.enabled 
 # file is inert). The `--raw` probe checks only the canonical key.
 CURRENT_CROSSSPEC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.crossSpec --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 CURRENT_GITHUB_SCOUT=$("${PLUGIN_ROOT}/scripts/flowctl" config get scouts.github --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+# Survives Step 1's `flowctl init`: init deliberately does NOT materialize the
+# `artifacts` block into config.json (flowctl.py _INIT_UNMATERIALIZED_BLOCKS),
+# so this raw probe reads null until the user explicitly decides — here in 6e
+# or via `flowctl config set`. Merged reads still return the seeded default.
 CURRENT_HTML_ARTIFACTS=$("${PLUGIN_ROOT}/scripts/flowctl" config get artifacts.html.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 ```
 
