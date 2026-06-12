@@ -1,14 +1,23 @@
 # Flow-Next docs
 
-Reference material for flow-next. Each file is self-contained, terse, and offline-readable. Cross-links use relative repo paths — fork-survivable, no external URLs.
+The offline-resilient reference for flow-next — **repeatable agentic engineering**: durable specs, re-anchored workers, adversarial reviews, receipts. Each file here is self-contained, terse, and offline-readable. Cross-links use relative repo paths — fork-survivable, no external URLs.
 
-> For the plugin overview, install path, and the 6-step workflow narrative see [`../README.md`](../README.md). For the repo's strategic intent see [`../../../STRATEGY.md`](../../../STRATEGY.md). For canonical vocabulary see [`../../../GLOSSARY.md`](../../../GLOSSARY.md).
+**Start here by intent:**
+
+- *"What is this and how do I install it?"* → [root README](../../../README.md) — pitch, tenets, install, 5-command happy path.
+- *"What skills exist?"* → [`skills.md`](skills.md) — all 28 skills, triggers, one-liners.
+- *"How do we adopt this as a team?"* → [`teams.md`](teams.md) — handover objects, Spec-as-PR, adoption ladder.
+- *"How do I run it autonomously?"* → [`ralph.md`](ralph.md) + the pilot/land skill pages below.
+- *"What's every flag on every command?"* → [`flowctl.md`](flowctl.md).
+
+> For the repo's strategic intent see [`../../../STRATEGY.md`](../../../STRATEGY.md). For canonical vocabulary (Spec, R-ID, Handover object, Receipt, render lens, …) see [`../../../GLOSSARY.md`](../../../GLOSSARY.md).
 
 ## Subsystem references
 
 | Doc | What's in it |
 |-----|--------------|
 | [`architecture.md`](architecture.md) | `.flow/` directory layout, spec-first task model, ID format, separation of concerns, task completion shape |
+| [`skills.md`](skills.md) | Skills catalog — all 28 skills (22 slash-command, 6 phrase-triggered), grouped by lifecycle / autonomy / maintenance, each linked to its `SKILL.md` |
 | [`spec-template.md`](spec-template.md) | Canonical scaffold cross-link, R-ID rules, confidence anchors, introduced-vs-pre-existing, protected artifacts, trivial-diff skip, receipt schema |
 | [`memory-schema.md`](memory-schema.md) | Categorized memory tree (bug / knowledge tracks), frontmatter schemas, decisions subtree, audit lifecycle, legacy migration |
 | [`tracker-sync.md`](tracker-sync.md) | `/flow-next:tracker-sync` bridge — projection-not-coordination, discovery ceremony, hybrid id model, sync-state schema, transport ladder (Linear/GitHub), lifecycle touchpoints, Ralph-safe conflict queueing; distinct from `/flow-next:sync` (plan-sync) |
@@ -44,4 +53,5 @@ Reference material for flow-next. Each file is self-contained, terse, and offlin
 - [`../README.md`](../README.md) — plugin overview, install, workflow narrative.
 - [`../../../STRATEGY.md`](../../../STRATEGY.md) — flow-next's strategic intent + active tracks.
 - [`../../../GLOSSARY.md`](../../../GLOSSARY.md) — canonical vocabulary (Spec, Task, R-ID, ...).
+- [`../../../CONTRIBUTING.md`](../../../CONTRIBUTING.md) — contributor entry point (local dev, adding skills, releasing).
 - [`../../../CLAUDE.md`](../../../CLAUDE.md) — repo-level guide for working in this codebase.

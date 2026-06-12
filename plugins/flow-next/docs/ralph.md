@@ -1,8 +1,10 @@
 # Ralph — Autonomous Loop
 
-Ralph is Flow-Next's repo-local autonomous harness. It loops over tasks, applies multi-model review gates, and produces production-quality code overnight.
+Ralph is Flow-Next's repo-local **hardened** autonomous harness. It exists because long-lived autonomous sessions accumulate failed attempts and stale assumptions — Ralph instead starts a *fresh* session per iteration, re-anchors, and gates every transition on receipts. It consumes **fully planned** specs only (it never plans), applies multi-model review gates, and produces production-quality code overnight.
 
 > **TL;DR**: External shell loop → fresh Claude session per task → cross-model review gates → receipt-based proof-of-work → iterate until SHIP.
+>
+> **Which loop do I want?** The default autonomy path is the in-session **pilot + land pipeline** (`/loop 10m /flow-next:pilot` to build, `/loop 30m /flow-next:land` to ship) — zero scaffold, transcript verdicts, host-driven. Reach for Ralph when a run outlasts a session or prose guardrails aren't enough: Ralph owns the loop in a shell script with hook-enforced guardrails. The two are alternative drivers for the same pipeline and are **never nested**. See [Host-driven loop vs Ralph](#host-driven-loop-vs-ralph).
 
 ---
 

@@ -2,6 +2,8 @@
 
 How flow-next stores state, how the spec-first task model works, and the separation of concerns between metadata and narrative content.
 
+The design tenet behind all of it: **everything lives in the repo**. Specs, tasks, memory, receipts are plain markdown + JSON under `.flow/` — in git, code-reviewable, diff-able, fork-survivable. No external services, no global config, no database. Uninstall is `rm -rf .flow/`.
+
 ## Spec-first task model
 
 Flow-next does not support standalone tasks. Every unit of work belongs to a spec `fn-N-slug` (even if it's a single task). Tasks are always `fn-N-slug.M` and inherit context from the parent spec.
