@@ -20,6 +20,7 @@
 #   - CLI tools: flowctl, flowctl.py       → ~/.codex/scripts/
 #   - Scripts:   worktree.sh              → ~/.codex/scripts/  (from codex/skills/)
 #   - Templates: ralph-init templates      → ~/.codex/templates/
+#   - References: codex/references/*.md    → ~/.codex/references/
 #   - Manifest:  .codex-plugin/plugin.json → ~/.codex/plugin.json
 #   - Config:    agent entries             → ~/.codex/config.toml (merged)
 #
@@ -71,7 +72,7 @@ echo
 
 # Create target directories
 mkdir -p "$CODEX_DIR/skills" "$CODEX_DIR/agents" "$CODEX_DIR/scripts" \
-         "$CODEX_DIR/prompts" "$CODEX_DIR/templates"
+         "$CODEX_DIR/prompts" "$CODEX_DIR/templates" "$CODEX_DIR/references"
 
 # ====================
 # Skills (pre-patched)
@@ -152,6 +153,22 @@ if [ -d "$CODEX_SRC/templates" ]; then
     done
     TPL_COUNT=$(find "$CODEX_SRC/templates" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')
     [ "$TPL_COUNT" -gt 0 ] && echo -e "${GREEN}✓${NC} $TPL_COUNT top-level template(s) (spec.md + siblings)"
+fi
+
+# ====================
+# References (shared disclosure files — fn-62.2)
+# ====================
+# Skills resolve `${CLAUDE_PLUGIN_ROOT}/references/<name>.md` at runtime
+# (e.g. references/html-artifacts.md, loaded only when the matching config
+# gate is on). Mirrored by sync-codex.sh into $CODEX_SRC/references/ —
+# byte-identical to canonical (reference files are tool-name-agnostic).
+if [ -d "$CODEX_SRC/references" ]; then
+    for ref in "$CODEX_SRC/references/"*.md; do
+        [ -f "$ref" ] || continue
+        cp "$ref" "$CODEX_DIR/references/"
+    done
+    REF_COUNT=$(find "$CODEX_SRC/references" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')
+    [ "$REF_COUNT" -gt 0 ] && echo -e "${GREEN}✓${NC} $REF_COUNT shared reference file(s)"
 fi
 
 # ====================

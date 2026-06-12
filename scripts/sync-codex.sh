@@ -145,6 +145,17 @@ if [ -d "$PLUGIN_DIR/templates" ]; then
   cp -R "$PLUGIN_DIR/templates" "$CODEX_DIR/"
 fi
 
+# Mirror canonical references dir (fn-62.2: shared disclosure files such as
+# references/html-artifacts.md, loaded by skills only when the matching config
+# gate is on). Same shape as the templates copy above: skills cite the file by
+# repo-relative path; in the mirror, `../../references/<name>.md` from
+# `codex/skills/<name>/<file>.md` resolves to `codex/references/<name>.md`.
+# Reference files are tool-name-agnostic by contract, so NO rewrite pass below
+# touches them — the mirror copy must stay byte-identical to canonical.
+if [ -d "$PLUGIN_DIR/references" ]; then
+  cp -R "$PLUGIN_DIR/references" "$CODEX_DIR/"
+fi
+
 # --- flow-next-drive: Codex Browser-Use preface ──────────────────────────────
 # The canonical skill is `flow-next-drive` (no `@browser` collision — the old
 # `browser` → `agent-browser` rename is gone; the copy loop above already
