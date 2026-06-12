@@ -31,9 +31,8 @@ Repo-side documentation for the feature (docs part of R14; the release mechanics
 - [ ] Glossary terms match the spec's vocabulary exactly (no synonyms drift)
 
 ## Done summary
-TBD
-
+Repo-side docs for HTML artifact mode: new feature reference at plugins/flow-next/docs/html-artifacts.md (activation, disclosure file, spec/PR lens hooks as implemented in fn-62.1-.4, GitHub display limitation + raw.githack note, commit-vs-gitignore, conversational regen, Lavish global-state/pull-only/idle-stop reality incl. worktree session caveat, autonomous generate-only discipline), plus surfaces in docs/README.md index, root README (overview bullet + make-pr note), teams.md (render-lens companion on review surfaces), ralph.md (generate-only-never-poll subsection), GLOSSARY.md (render lens expanded; HTML artifact mode, spec artifact, PR artifact, Lavish (lavish-axi) added), and CLAUDE.md Where-to-look. Review: triage-skip SHIP (docs-only).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: a2478b0290da692b1beb4bab45ed43eeabb6ff5e
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (1071 tests, OK, 2 skipped), flowctl glossary list --json parses 30 terms incl. 4 new, flowctl config get artifacts.html.enabled --json verified against real CLI
 - PRs:
