@@ -851,17 +851,20 @@ When `HTML_LENS = true`:
    test "$(grep -c 'flow-next:artifact-link' ".flow/specs/${SPEC_ID}.md")" -eq 1
    ```
 4. **Run the reference's pre-publish checklist (§8)**, including the self-containment self-check grep (§2) — it must print `OK: self-contained` before the footer may claim the artifact.
-5. **Lavish session — interactive runs only** (reference §7):
+5. **Lavish session — interactive runs only** (reference §7). The guard is in the snippet, not just prose — open and poll sit INSIDE it:
 
    ```bash
-   if command -v lavish-axi >/dev/null 2>&1; then
+   LAVISH_OK=true   # mode:autofix is a skill argument, not an env var — autofix runs MUST set LAVISH_OK=false here
+   [[ -n "${FLOW_AUTONOMOUS:-}" || -n "${FLOW_RALPH:-}" || -n "${REVIEW_RECEIPT_PATH:-}" ]] && LAVISH_OK=false
+   if [[ "$LAVISH_OK" == "true" ]] && command -v lavish-axi >/dev/null 2>&1; then
      lavish-axi "$(pwd)/.flow/artifacts/${SPEC_ID}/spec.html"   # absolute path — sessions key on it
+     # ...then poll for feedback in the background via `lavish-axi poll` — ONLY inside this guard
    fi
    ```
 
-   Then poll for feedback in the background via `lavish-axi poll`; each drained annotation maps to an edit of the spec markdown (never the HTML), then the lens regenerates at the same path. `lavish-axi` absent → plain artifact, zero mention of Lavish, never an error.
+   Each drained annotation maps to an edit of the spec markdown (never the HTML), then the lens regenerates at the same path. `lavish-axi` absent → plain artifact, zero mention of Lavish, never an error.
 
-   **Autofix / non-interactive runs generate only** (`mode:autofix`, or any non-interactive marker — `FLOW_AUTONOMOUS=1`, `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH`; capture is Ralph-blocked anyway, so autofix is the live case): never open a session, never poll; at most one stderr line noting pending prompts.
+   **Autofix / non-interactive runs generate only** (`mode:autofix`, or any non-interactive marker — `FLOW_AUTONOMOUS=1`, `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH`; capture is Ralph-blocked anyway, so autofix is the live case; treat the marker *family* as the gate, not a rigid var list): `LAVISH_OK=false` — never open a session, never poll; at most one stderr line noting pending prompts.
 6. **Record the footer line for Phase 6:** `Artifact: .flow/artifacts/<SPEC_ID>/spec.html (render lens — regenerable; markdown is the record)`.
 
 Best-effort: artifact generation failure is non-fatal — skip the link line, print one stderr note, never block the capture (the spec is already on disk; markdown is the record).

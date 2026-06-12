@@ -595,17 +595,20 @@ When `HTML_LENS = true`:
  test "$(grep -c 'flow-next:artifact-link' ".flow/specs/<spec-id>.md")" -eq 1
  ```
 5. **Run the reference's pre-publish checklist (§8)**, including the self-containment self-check grep (§2) — it must print `OK: self-contained` before the output may claim the artifact.
-6. **Lavish session — interactive runs only** (reference §7):
+6. **Lavish session — interactive runs only** (reference §7). The guard is in the snippet, not just prose — open and poll sit INSIDE it:
 
  ```bash
- if command -v lavish-axi >/dev/null 2>&1; then
+ LAVISH_OK=true
+ [[ "${AUTONOMOUS:-0}" == "1" || -n "${FLOW_AUTONOMOUS:-}" || -n "${FLOW_RALPH:-}" || -n "${REVIEW_RECEIPT_PATH:-}" ]] && LAVISH_OK=false
+ if [[ "$LAVISH_OK" == "true" ]] && command -v lavish-axi >/dev/null 2>&1; then
  lavish-axi "$(pwd)/.flow/artifacts/<spec-id>/spec.html" # absolute path — sessions key on it
+ # ...then poll for feedback in the background via `lavish-axi poll` — ONLY inside this guard
  fi
  ```
 
- Then poll for feedback in the background via `lavish-axi poll`; each drained annotation maps to an edit of the spec/task markdown (never the HTML), then the lens regenerates at the same path. `lavish-axi` absent → plain artifact, zero mention of Lavish, never an error.
+ Each drained annotation maps to an edit of the spec/task markdown (never the HTML), then the lens regenerates at the same path. `lavish-axi` absent → plain artifact, zero mention of Lavish, never an error.
 
- **Non-interactive runs generate only** (any non-interactive marker: `AUTONOMOUS=1`, `FLOW_AUTONOMOUS=1`, `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` set — treat the marker *family* as the gate, not a rigid var list): never open a session, never poll; at most one stderr line noting pending prompts.
+ **Non-interactive runs generate only** (any non-interactive marker: `AUTONOMOUS=1`, `FLOW_AUTONOMOUS=1`, `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` set — treat the marker *family* as the gate, not a rigid var list; a marker the family implies but the snippet misses still means `LAVISH_OK=false`): never open a session, never poll; at most one stderr line noting pending prompts.
 7. **Name the artifact in the final output:** append `Artifact: .flow/artifacts/<spec-id>/spec.html (render lens — regenerable; markdown is the record)` to the plan summary. Omit entirely when the mode is off/unset.
 
 Best-effort: artifact generation failure is non-fatal — skip the link-line update, print one stderr note, never block planning (the plan is already on disk; markdown is the record).
