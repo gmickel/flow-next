@@ -292,6 +292,59 @@ This phase is implemented in dependent tasks. Scaffold-task notes:
 
 ---
 
+## Phase 1.5: HTML render lens (opt-in) — PR artifact
+
+**Gated on `artifacts.html.enabled` — this check is the ONLY addition when the mode is off.** Runs directly after Phase 1 (the export payload is the lens's input) and BEFORE Phase 2, so the artifact commit (step 5 below) lands before §2.4b captures `HEAD_SHA` — the SHA-pinned blob link then points at a commit that actually contains `pr.html`.
+
+```bash
+HTML_LENS=$("$FLOWCTL" config get artifacts.html.enabled --json | jq -r 'if .value == true then "true" else "false" end')
+# --dry-run promises NO state change (§4.0) — no artifact, no commit, no body line.
+[[ "$DRY_RUN" == "1" ]] && HTML_LENS=false
+```
+
+When `HTML_LENS != true` (off, unset, or `--dry-run`): **skip this entire phase.** Load no reference file, write no artifact, add no body line, print no artifact-related output — the gate read above is the only cost.
+
+When `HTML_LENS = true`:
+
+1. **Load the disclosure reference** [`plugins/flow-next/references/html-artifacts.md`](../../references/html-artifacts.md) (relative cross-link — resolves from this skill dir in every install layout). It owns ALL design and generation rules; §5 is the PR-lens contract (read-only review instrument: masthead + dials, sticky review-progress bar, 90-second read, churn map by review intent, R-ID → evidence table, where-to-look checklist, risk register). Never duplicate its rules here; follow it top to bottom.
+2. **Generate the artifact** at the fixed path (reference §1.3):
+
+ ```bash
+ mkdir -p ".flow/artifacts/${SPEC_ID}"
+ # Host agent generates .flow/artifacts/${SPEC_ID}/pr.html per reference §5.
+ ```
+
+ Inputs are `EXPORT_PAYLOAD` (R-IDs from `spec.spec_sections.acceptance_criteria`, `tasks[].satisfies[]` + `tasks[].evidence.commits[]`, `diff_summary` files/churn/modules) plus `git diff --stat "$MERGE_BASE"..HEAD` for any stat the payload lacks. **Diff-derived, never commit messages** — commit subjects/bodies are not lens input. The staleness stamp (reference §1.5, PR variant) uses HEAD **at payload-export time** — the code under review; the artifact commit below deliberately excludes itself from its own churn map.
+3. **R-ID verification (warn-in-artifact, never block).** Cross-check the payload before publishing: an R-ID whose owning tasks claim evidence commits absent from the diff range, an R-ID with no owning task (`tasks_summary.uncovered_r_ids`), or evidence commits touching no files in `diff_summary.files[]` — each renders as a **visibly flagged row** in the R-ID → evidence table (red R-ID cell + `mismatch` chip + one-line reason, reference §5.5). Never block make-pr on a mismatch, never silently drop the row.
+4. **Run the reference's pre-publish checklist (§8)**, including the self-containment self-check grep (§2) — it must print `OK: self-contained` before the body may link the artifact.
+5. **Link mode + narrow commit.** Link strategy follows ignore status; committed artifacts land BEFORE Phase 2 so the blob link resolves once §4.6 pushes:
+
+ ```bash
+ if git check-ignore -q .flow/artifacts/; then
+ LINK_MODE=local # ignored → local-open guidance, never a blob link that 404s
+ else
+ LINK_MODE=repo
+ # Stage ONLY the artifact file — NEVER `git add -A` / `git add .` (the
+ # working tree may carry unrelated changes that are not make-pr's concern).
+ git add ".flow/artifacts/${SPEC_ID}/pr.html"
+ git commit -m "chore(flow): pr artifact ${SPEC_ID}"
+ fi
+ ```
+
+ The fixed-message commit rides §4.6's `git push -u origin HEAD` — by creation time the blob URL resolves on the remote branch. Dirty-tree discipline: the narrow add/commit touches nothing else.
+6. **Record the body line for Phase 2 (§2.1).** `LINK_MODE=repo` → absolute SHA-pinned blob URL per the §2.4b artifact row (`https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/artifacts/<spec-id>/pr.html`, where `<head-sha>` is captured AFTER the artifact commit) plus the note "GitHub renders committed HTML as source — open locally in a browser". `LINK_MODE=local` → local-open guidance only (`.flow/artifacts/<spec-id>/pr.html` as bare inline code, "gitignored — open locally"). Never emit a blob link that 404s.
+7. **No Lavish — ever.** The PR lens is a read-only review instrument (reference §5): make-pr never opens a `lavish-axi` session and never polls, **interactive AND autonomous alike** — review conversation belongs to the code host. There is no Lavish snippet in this skill by design; do not import one from capture §5.10 / plan Step 8.5.
+8. **Failure is non-fatal.** Generation, checklist, or commit failure ⇒ skip the body line (and skip/undo nothing else), print ONE stderr note (`HTML render lens skipped: <reason>`), and proceed to Phase 2 — the PR is the product, the lens is an extra. Under Ralph ALL artifact messaging routes to stderr — the `PR_URL=<url>` single-line stdout contract (§5.4) and every receipt are untouched.
+
+### Done when
+
+- Mode off/unset or `--dry-run`: nothing happened beyond the single config read — no reference load, no artifact, no commit, no body line, no output change.
+- Mode on: `.flow/artifacts/<spec-id>/pr.html` exists at the fixed path, derived from the export payload + real diff, self-check grep printed `OK: self-contained`, staleness stamp present.
+- `LINK_MODE=repo`: exactly one narrow commit (`chore(flow): pr artifact <spec-id>`) staging only the artifact file, landing before §2.4b's `HEAD_SHA` capture.
+- Render-lens body line recorded for §2.1 (or skipped with one stderr note on failure).
+
+---
+
 ## Phase 2: Render body header sections
 
 **Goal:** turn the structured payload from Phase 1 into the **header half** of the PR body — the sections a reviewer reads *first* to decide where to focus. Header half = Title + summary block + TL;DR + R-ID coverage table + Critical changes. The context half (Decisions / Memory / Glossary / Open items / Where to look) lands in §Phase 2 (cont). The mermaid `## Structural changes` section lands in §Phase 3.
@@ -328,6 +381,14 @@ The body sections appear in this exact order. Skip any section whose source cont
 ```
 
 (The spec link is a `.flow/*` artifact → blob, SHA-pinned per §2.4b. Same for every `.flow/tasks/*` / `.flow/memory/*` link below.)
+
+**Render-lens line (only when Phase 1.5 recorded one).** Append it as a fifth blockquote line — committed artifact (`LINK_MODE=repo`):
+
+```markdown
+> **Render lens:** [`.flow/artifacts/<spec-id>/pr.html`](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/artifacts/<spec-id>/pr.html) — GitHub renders committed HTML as source; open locally in a browser. Regenerable; markdown is the record.
+```
+
+Gitignored artifacts (`LINK_MODE=local`) get local-open guidance only — `` > **Render lens:** `.flow/artifacts/<spec-id>/pr.html` (gitignored — open locally in a browser; regenerable) `` — never a blob link that 404s. With the mode off/unset (or `--dry-run`, or Phase 1.5 failed) this line is absent entirely.
 
 All four values come from the payload directly:
 
@@ -1707,3 +1768,8 @@ The skill itself is markdown — no unit-test surface. Phase 0 validation is exe
 - Branch with a CLOSED or MERGED PR (no OPEN) → continues cleanly. **This is the load-bearing check** — fn-42 spike validated empirically that bare `gh pr view --json url` rc=0 for closed/merged PRs would false-positive without the `select(.state == "OPEN")` filter.
 - Branch with no PR history at all (`gh pr view` exits 1) → continues cleanly.
 - Ralph mode (`FLOW_RALPH=1`) → no `plain-text numbered prompt` calls in Phase 0; deterministic exit codes on missing context.
+- `artifacts.html.enabled` unset/false → Phase 1.5 is a single config read; no reference load, no `.flow/artifacts/` write, no commit, no render-lens body line, byte-identical body vs pre-feature.
+- `artifacts.html.enabled` true → `.flow/artifacts/<spec-id>/pr.html` written, self-check grep prints `OK: self-contained`, exactly one `chore(flow): pr artifact <spec-id>` commit (artifact file only — `git show --stat` lists one path) before `gh pr create`, blob link in the body resolves on the remote branch.
+- `artifacts.html.enabled` true + `--dry-run` → no artifact written, no commit, no render-lens line in the stdout body.
+- `artifacts.html.enabled` true + `.flow/artifacts/` gitignored → no commit, body carries local-open guidance, no blob link.
+- `artifacts.html.enabled` true + Ralph → artifact may generate, but stdout is still exactly `PR_URL=<url>`; all artifact messaging on stderr; no `lavish-axi` invocation in the transcript (interactive or autonomous — the PR lens never opens a session).

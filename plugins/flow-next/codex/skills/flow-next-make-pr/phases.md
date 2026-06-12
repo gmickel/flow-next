@@ -6,6 +6,7 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 |-------|------|
 | Phase 0 | Pre-flight — gh ready, spec resolved, base valid, branch ahead, tasks done, no open PR. |
 | Phase 1 | Gather inputs — single `flowctl spec export-cognitive-aid` call, parse payload. |
+| Phase 1.5 | HTML render lens (opt-in) — PR artifact from payload + diff, narrow commit, body link line. Off/unset/`--dry-run` ⇒ no-op beyond one config read. |
 | Phase 2 | Render body — TL;DR, R-ID table, critical changes; decisions, memory, glossary/strategy, open items, where to look. |
 | Phase 3 | Mermaid generation — gated triggers, hard caps, fallback prose. |
 | Phase 4 | Push + create PR — `git push`, `gh pr create`, draft/ready, dry-run short-circuit, Ralph behavior. |
@@ -54,12 +55,33 @@ Per-phase Done-when checklists. The full execution flow lives in [workflow.md](w
 
 ---
 
+## Phase 1.5: HTML render lens (opt-in) — PR artifact
+
+**Done when:**
+
+- [ ] `HTML_LENS` gate read via `flowctl config get artifacts.html.enabled --json`; forced `false` when `DRY_RUN == 1` (the §4.0 no-state-change promise holds: no artifact, no commit, no body line).
+- [ ] Mode off/unset/`--dry-run`: entire phase skipped — no reference-file load, no `.flow/artifacts/` write, no commit, no artifact-related output. The config read is the only cost.
+- [ ] Mode on: disclosure reference (`plugins/flow-next/references/html-artifacts.md`) loaded; `.flow/artifacts/<spec-id>/pr.html` generated at the fixed path per reference §5 — derived from `EXPORT_PAYLOAD` + the real diff (`git diff --stat "$MERGE_BASE"..HEAD`), **never commit messages**; staleness stamp present (head sha at payload-export time vs base).
+- [ ] R-ID verification ran: payload-vs-diff mismatches (claimed evidence outside the diff range, uncovered R-IDs, evidence touching no diff files) render as visibly flagged rows (red R-ID cell + `mismatch` chip + reason) — warn-in-artifact, never blocks make-pr.
+- [ ] Pre-publish checklist (reference §8) passed incl. self-containment grep → `OK: self-contained`.
+- [ ] Link mode follows ignore status (`git check-ignore -q .flow/artifacts/`): tracked → exactly ONE narrow commit `chore(flow): pr artifact <spec-id>` staging ONLY the artifact file (never `git add -A`), landing before §2.4b's `HEAD_SHA` capture; ignored → `LINK_MODE=local`, no commit.
+- [ ] Render-lens body line recorded for §2.1: repo mode → absolute SHA-pinned blob URL + "GitHub renders committed HTML as source — open locally" note; local mode → local-open guidance only. Never a blob link that 404s.
+- [ ] NO `lavish-axi` session opened and NO poll — interactive AND autonomous alike (read-only review instrument; no Lavish snippet exists in this skill).
+- [ ] Failure path: generation/checklist/commit failure ⇒ body line skipped, ONE stderr note, phase exits cleanly into Phase 2 — PR creation proceeds. Ralph `PR_URL=<url>` stdout contract + receipts untouched.
+
+**Failure modes:**
+
+- Artifact generation fails → stderr note, no body line, PR proceeds (non-fatal by design).
+- Narrow commit fails (e.g. pre-commit hook) → stderr note, no body line (the blob link would 404), PR proceeds.
+
+---
+
 ## Phase 2: Render body
 
 **Header sections — done when:**
 
 - [ ] Body section order locked: H1 title + summary block + TL;DR + R-ID coverage + Critical changes + (Structural changes from .5) + (Decisions / Memory / Glossary-strategy / Open items / Where to look from .4) + footer breadcrumb. Sections never reorder.
-- [ ] Title + summary block renders spec id link, branch / base, task counts, R-ID coverage ratio. Optional 2-line natural-language summary derived from `spec.spec_sections.goal_and_context` first paragraph (truncated to ≈240 chars at sentence boundary).
+- [ ] Title + summary block renders spec id link, branch / base, task counts, R-ID coverage ratio. Optional 2-line natural-language summary derived from `spec.spec_sections.goal_and_context` first paragraph (truncated to ≈240 chars at sentence boundary). Optional fifth blockquote line: the Phase 1.5 render-lens link (blob URL when committed / local-open guidance when gitignored) — absent entirely when the mode is off, under `--dry-run`, or when Phase 1.5 failed.
 - [ ] TL;DR renders 3-5 plain-language bullets sourced from `goal_and_context` first sentence + top 5 tasks by churn (their `done_summary` first sentences). Never includes R-IDs. Never quotes raw diff content. Never pads if fewer than 4 substantive changes shipped.
 - [ ] R-ID coverage table renders every R-ID from `spec.spec_sections.acceptance_criteria` in spec order (R-ID gaps preserved verbatim — never renumber). Columns exactly: `R-ID | Acceptance criterion | Task | Evidence`. Criterion text truncated to 120 chars + `…`. Task column derives ONLY from `tasks[].satisfies[]` — never inferred from titles or commit messages — and renders as a blob link per workflow.md §2.4b. Evidence column emits an absolute `[\`<sha7>\`](https://github.com/<owner>/<repo>/commit/<sha40>)` per commit in `tasks[].evidence.commits[]` (§2.4b — NOT bare-relative `../../commit/`). Uncovered → `⚠️ uncovered` + `—` evidence.
 - [ ] When `tasks_summary.uncovered_r_ids` is non-empty, table is followed by an italic explanatory sentence: `⚠️ **<N> uncovered acceptance criterion(a):** R<i>, R<j>, R<k>. Reviewer should confirm these are intentional gaps before merge.`
@@ -176,3 +198,4 @@ Skill prose enumerates 10 forbidden patterns to make v2 enhancement footguns exp
 - **No `gh pr merge`**: skill creates and exits.
 - **NOT Ralph-blocked**: skill runs under Ralph and pilot-style autonomous mode alike; PR is created directly in every mode — under Ralph/autonomous the only differences are forced `--draft` + Phase 0 hard-errors instead of info prompts (the `PR_URL=` stdout line stays Ralph-only).
 - **Body ≤8000 chars**: hard cap. Collapse in priority order (drop full file list → trim TL;DR → collapse mermaid to overview-only).
+- **PR artifact discipline** (Phase 1.5, only when `artifacts.html.enabled`): read-only review instrument — never a Lavish session/poll from make-pr; `--dry-run` writes no artifact; the only state change is the single narrow `chore(flow): pr artifact <spec-id>` commit; artifact failure never blocks the PR.
