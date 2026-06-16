@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-05T22:45:24.063842Z",
+  "depends_on": [],
+  "id": "fn-56-repo-documentation-improvements.3",
+  "priority": null,
+  "spec": "fn-56-repo-documentation-improvements",
+  "spec_path": ".flow/tasks/fn-56-repo-documentation-improvements.3.md",
+  "status": "todo",
+  "title": "Community health + contributor onboarding: CONTRIBUTING, SECURITY, issue templates",
+  "updated_at": "2026-06-05T22:46:42.127313Z"
+}

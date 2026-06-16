@@ -1,0 +1,25 @@
+{
+  "branch_name": "fn-56-repo-documentation-improvements",
+  "created_at": "2026-06-05T22:43:56.842278Z",
+  "depends_on_epics": [
+    "fn-54-eval-driven-prompt-optimization-for"
+  ],
+  "id": "fn-56-repo-documentation-improvements",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-56-repo-documentation-improvements.md",
+  "status": "done",
+  "title": "Repo documentation improvements: accuracy, discoverability, contributor onboarding",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-06-16T15:02:30.236523Z"
+}

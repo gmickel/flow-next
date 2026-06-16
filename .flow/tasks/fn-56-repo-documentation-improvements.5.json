@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-05T22:45:24.803642Z",
+  "depends_on": [
+    "fn-56-repo-documentation-improvements.2",
+    "fn-56-repo-documentation-improvements.4"
+  ],
+  "id": "fn-56-repo-documentation-improvements.5",
+  "priority": null,
+  "spec": "fn-56-repo-documentation-improvements",
+  "spec_path": ".flow/tasks/fn-56-repo-documentation-improvements.5.md",
+  "status": "todo",
+  "title": "Markdown link-check CI gate",
+  "updated_at": "2026-06-05T22:47:32.567828Z"
+}
