@@ -34,9 +34,8 @@ Make land's `silence` signal also recognize a bot's clean-review ISSUE COMMENT (
 - [ ] `test_land_config.py` covers the new key: default value present, set/get round-trip, no-clobber, docstring; PLUS an **explicit-empty-disables** assertion (set `""` → reads back `""`, distinct from the seeded default) AND a static assertion that workflow.md contains the comment scan (`--paginate`), the `REVIEW_SIGNAL == silence` gate, and the SHA min-length/non-empty guard. `python3 -m unittest plugins.flow-next.tests.test_land_config` green.
 - [ ] Codex mirror regenerated (`scripts/sync-codex.sh`) + committed; `bash plugins/flow-next/tests/ci_test.sh` green. (Pre-audit path vars — mirror regen re-exposes the whole land skill as "introduced".)
 ## Done summary
-TBD
-
+Made /flow-next:land's `silence` review signal also accept a review bot's clean-review SHA-named issue comment (e.g. Codex's no-findings comment) as satisfying evidence — closing the blind spot where a clean comment never appears in the reviews API. Added a silence-gated, paginated, head-SHA-anchored comment scan in workflow.md §2.6 with an empty/min-length SHA-token guard, seeded a structured-ERE `land.cleanReviewCommentPattern` config (null→default, explicit ""→disabled) in both flowctl.py copies, documented the supplement in SKILL.md, expanded test_land_config.py (+16 tests) with static §2.6 assertions, and regenerated the Codex mirror.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c57f45e33a82485cbd51a867e16bd5b3f72c4b2f
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (1104 OK, skipped=2), bash plugins/flow-next/scripts/ci_test.sh (67 passed, 0 failed), behavioral bash matrix on the §2.6 comment-scan snippet
 - PRs:

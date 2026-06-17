@@ -2,6 +2,17 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 2.1.1] - 2026-06-17
+
+### Added
+- **`/flow-next:land` accepts a bot "reviewed-clean" SHA-named comment as the `silence` signal** (fn-65). The default `silence` review signal was satisfied by "an automated review of the current head + zero unresolved threads + patience window elapsed", but land detected automated reviews **only** via the formal reviews API. The Codex GitHub reviewer (`chatgpt-codex-connector[bot]`) files a formal review only when it has findings — on a **clean** pass it posts an issue comment instead (e.g. *"Codex Review: Didn't find any major issues. Reviewed commit: `<sha>`"*) that never reaches the reviews API. So an unattended land loop would NOT auto-merge a converged-clean PR whose only change since the last finding was approved-by-silence — exactly the state land exists to merge (it bit the fn-64 land of PR #176; a human merged on judgment).
+  - **Comment-scan evidence source** (fn-65.1): when `land.reviewSignal == silence`, land additionally scans `issues/<n>/comments` for an automated-reviewer (`[bot]`-suffix or `land.automatedReviewers`) comment matching `land.cleanReviewCommentPattern` that names the **current head SHA**. SHA tokens are explicitly extracted (`[0-9a-fA-F]{7,40}`, ≥7 chars, non-empty) and prefix-matched against `HEAD_OID` — an empty extraction never spuriously passes, and a stale-SHA or no-SHA clean comment is ignored (conservative by design). A match only ever **sets** `AUTO_REVIEW_CURRENT=1` (never resets the reviews-API path); CI, unresolved-thread, and window gates are unchanged. Comment-driven satisfaction is observable: `AUTO_REVIEW_SOURCE=comment` + `AUTO_REVIEW_EVIDENCE` (author + matched SHA prefix) surface in `--dry-run` and the verdict report.
+  - **`land.cleanReviewCommentPattern` config** (fn-65.1): new optional key, seeded with a **structured built-in ERE** (`(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit`) that requires BOTH the clean phrase AND the `Reviewed commit` marker — a bare "no issues" mention never satisfies the gate. Contract: `null`/missing (an unseeded older repo) → fall back to the built-in default; **explicit empty string `""` → comment scan DISABLED** (pure reviews-API behavior, the real off-switch); other value → used. Scoped to `silence` only — `approve` and `<login>` signals are unchanged. New regression coverage in `tests/test_land_config.py`.
+  - **Docs**: `docs/flowctl.md` land config table (new `land.cleanReviewCommentPattern` row — default shown as the built-in ERE, empty-disables stated), land skill workflow + SKILL.md, Codex mirror regenerated; flow-next.dev `autonomous/land.mdx` (silence-signal row, automated-reviewer prose, Configuration table) + changelog ship the counterpart pass.
+
+### Notes
+- Patch release — additive, opt-in, backward-compatible: empty/unset `land.cleanReviewCommentPattern` with a non-Codex reviewer is today's behavior exactly. The change only lets land *see* a clean review it currently misses; it introduces no new merge authority — CI-green, zero-unresolved-threads, and window-elapsed gates are untouched, and a clean comment never bypasses an open thread or red check.
+
 ## [flow-next 2.1.0] - 2026-06-17
 
 ### Added
