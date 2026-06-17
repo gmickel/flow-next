@@ -1,7 +1,9 @@
 # Linear adapter — transport ladder (MCP / GraphQL / no-op)
 
-The Linear implementation of the six-method transport interface
-([adapter-interface.md](adapter-interface.md)). It is a **detect-best-available
+The Linear implementation of the eight-method transport interface
+([adapter-interface.md](adapter-interface.md)) — the original six plus the
+dependency-projection pair (`listIssueRelations` / `setIssueRelation`, fn-64.3).
+It is a **detect-best-available
 ladder**, the exact shape as `flow-next-drive`'s driver ladder (SKILL.md Step 3 +
 `references/agent-browser.md`): probe top-down, use the **highest rung that
 passes**, fail soft to the next, terminal rung is a documented no-op. **Neither
@@ -56,12 +58,14 @@ path, which is why the GraphQL parity check (below) is load-bearing, not optiona
 ## No-op rung (terminal) — never crash
 
 When `TRANSPORT=none`, the configured bridge cannot reach Linear this run. Every
-one of the six interface methods becomes a documented no-op:
+one of the eight interface methods becomes a documented no-op:
 
-- `fetchIssue` / `listComments` / `readStatus` → return nothing actionable
-  (treated as "no remote view available this run"); the spec's flow-side state is
-  left untouched and the merge base is NOT advanced.
-- `writeIssue` / `postComment` / `setStatus` → perform no remote write.
+- `fetchIssue` / `listComments` / `readStatus` / `listIssueRelations` → return
+  nothing actionable (treated as "no remote view available this run"); the spec's
+  flow-side state is left untouched and the merge base is NOT advanced.
+- `writeIssue` / `postComment` / `setStatus` / `setIssueRelation` → perform no
+  remote write. Dependency projection is skipped with a `noop` receipt — never a
+  crash, never a lifecycle block (fn-64.3).
 - The run emits `sync receipt … --status noop --transport none ${EVENT:+--event "$EVENT"}
   --note "no Linear transport reachable (MCP not registered, LINEAR_API_KEY unset)"`.
 - `lastSyncedAt` is never advanced on a no-op (no real reconciliation happened).
@@ -112,6 +116,44 @@ so `setStatus` can resolve a normalized status back to the team's concrete
 `stateId`. Both rungs produce the same normalized `status` struct — that is what
 the parity check verifies.
 
+## Relation transport (dependency projection, fn-64.3)
+
+The `listIssueRelations` / `setIssueRelation` pair routes through the same rung
+ladder as the other six methods, with one extra wrinkle: the MCP rung's relation
+params can drift out of the pinned schema, so the rung selection has a **relation-
+specific fallback** layered on top of the normal probe.
+
+| Rung | `listIssueRelations` | `setIssueRelation` | Reference |
+|------|----------------------|--------------------|-----------|
+| 1 MCP | `get_issue(id, includeRelations:true)` | `save_issue(id, blockedBy:[…])` — append-only | [linear-mcp.md](linear-mcp.md) |
+| 2 GraphQL | `issue{ relations + inverseRelations }` (both `first:`-bounded) | `issueRelationCreate(type:blocks)` — read-before-write | [linear-graphql.md](linear-graphql.md) |
+| 3 none | no-op + `noop` receipt | no-op + `noop` receipt | (this file) |
+
+**MCP schema re-verify + fallback (acceptance #1).** The MCP `blockedBy` /
+`includeRelations` params were verified live 2026-06-17, but the server schema
+drifts. At impl/run time, **inspect the host tool list**: if the Linear MCP server
+no longer exposes `save_issue.blockedBy` (or `get_issue.includeRelations`), do NOT
+fail — degrade the relation pair specifically:
+
+```
+if MCP relation params present      → use the MCP rung (rung 1)
+elif LINEAR_API_KEY set             → use the GraphQL rung for relations (rung 2)
+else                                → noop receipt (rung 3)
+```
+
+This is a **per-capability** fall-through: the rest of the adapter can still run
+on MCP while only the relation pair drops to GraphQL when the MCP relation surface
+is missing. Everything else (the six core methods) keeps the standard whole-rung
+probe above.
+
+**Read-before-write on every rung.** Both rungs MUST `listIssueRelations` and skip
+the write when the (issue is-blocked-by blockedBy) edge already exists — append-
+only on MCP, mandatory on GraphQL (`issueRelationCreate` is not idempotent). The
+GraphQL read canonicalizes across `relations` + `inverseRelations` so an inverse-
+duplicate cannot slip through. **Never-delete-non-ours:** both `setIssueRelation`
+forms only ever ADD the blocked-by edge; provenance for safe removal lives in the
+flow-side `depRelations` ledger (fn-64.1), never inferred from the wire (R6).
+
 ## Capability parity (MCP ↔ GraphQL) — the R13 guarantee
 
 Reconcile is genuinely transport-blind only if the GraphQL rung covers
@@ -126,6 +168,8 @@ the same fields into/out of the normalized structs:
 | `postComment` | `save_comment(issueId, body)` | `commentCreate(issueId:UUID, body)` | same `comment` |
 | `readStatus` | from `get_issue.state` | from `issue.state` | same `status{raw,normalized}` |
 | `setStatus` | `save_issue(id, state)` | `issueUpdate(id, stateId)` | ok / `errored` |
+| `listIssueRelations` | `get_issue(id, includeRelations:true)` | `issue{ relations(first:N) + inverseRelations(first:N) }` | same blocked-by `relation[]` (`{from,to,type:"blocks",source}`) |
+| `setIssueRelation` | `save_issue(id, blockedBy:[…])` (append-only) | `issueRelationCreate(issueId:B, relatedIssueId:A, type:blocks)` | ok / `errored` / `noop`; read-before-write on both |
 | status map build | `list_issue_statuses(team)` | `workflowStates(first:100, filter:{team}){type}` | same name/type → stateId map |
 
 If a field is reachable on one rung but not the other, that is a parity gap —

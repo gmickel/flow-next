@@ -16,9 +16,8 @@ Pure doc/contract task; small. It unblocks fn-64.3 and fn-64.4 (both depend on i
 - States the direction convention once (blocked-by = "current issue blocked by dep issue") so both adapters map consistently.
 - No code — this is the contract doc both downstream adapter tasks implement against.
 ## Done summary
-TBD
-
+Documented the normalized dependency-relation contract in adapter-interface.md: added `setIssueRelation(issue, blockedBy)` / `listIssueRelations(issue)` to the transport table, a new `relation` struct `{from, to, type, source}`, the once-stated blocked-by direction convention, and the mandatory read-before-write idempotency + never-delete-non-ours provenance rules — cross-linked to fn-64.1's depRelations ledger and the fn-64.4 fenced-block/body-merge exclusion. Contract-only doc that unblocks fn-64.3 and fn-64.4.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: a5f4384cad8212326ea0ec6e2d380983b3ca6247
+- Tests: docs-only — no tests; impl-review triage-skip SHIP (docs-only, mode=triage_skip)
 - PRs:
