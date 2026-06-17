@@ -113,6 +113,9 @@ class TrackerSyncStateTestCase(unittest.TestCase):
         ):
             self.assertIn(field, state)
             self.assertIsNone(state[field])
+        # fn-64: depRelations is a provenance LIST, defaulting to [] (not None).
+        self.assertIn("depRelations", state)
+        self.assertEqual(state["depRelations"], [])
 
     def test_set_tracker_id_persists_atomically(self) -> None:
         spec_id = self._create_spec("Beta tracker state")
@@ -321,6 +324,224 @@ class TrackerSyncStateTestCase(unittest.TestCase):
         with self.assertRaises(SystemExit):
             self._set_id(spec_id, "uuid-x", identifier="wor-17-slug")
         self.assertIsNone(self._state(spec_id)["id"])
+
+    def test_bare_numeric_identifier_accepted(self) -> None:
+        # fn-64: `sync set-tracker-id --identifier 42` must succeed; a bare
+        # numeric is a display-only reference normalized to the `#42` form.
+        spec_id = self._create_spec("Bare numeric link")
+        self._set_id(spec_id, "node-bare", identifier="42")
+        state = self._state(spec_id)
+        self.assertEqual(state["id"], "node-bare")
+        self.assertEqual(state["identifier"], "#42")  # normalized display form
+
+    def test_bare_zero_identifier_rejected(self) -> None:
+        # A leading-zero / zero number is not a valid issue reference.
+        spec_id = self._create_spec("Bare zero")
+        with self.assertRaises(SystemExit):
+            self._set_id(spec_id, "node-zero", identifier="0")
+        self.assertIsNone(self._state(spec_id)["id"])
+
+
+class TrackerDepRelationsTestCase(unittest.TestCase):
+    """fn-64: depRelations ledger + list/set/clear-dep-relation plumbing."""
+
+    def setUp(self) -> None:
+        self.tmpdir = Path(tempfile.mkdtemp())
+        self.prev_cwd = Path.cwd()
+        os.chdir(self.tmpdir)
+        subprocess.run(
+            ["git", "init", "-q"], cwd=self.tmpdir, check=True, capture_output=True
+        )
+        self.flowctl = _load_flowctl()
+        self._call("init")
+
+    def tearDown(self) -> None:
+        os.chdir(self.prev_cwd)
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    # --- helpers ------------------------------------------------------------
+
+    def _call(self, func_name: str = None, *, func=None, **kwargs) -> dict:
+        kwargs.setdefault("json", True)
+        ns = argparse.Namespace(**kwargs)
+        handler = func or getattr(self.flowctl, f"cmd_{func_name}")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            handler(ns)
+        out = buf.getvalue().strip()
+        return json.loads(out) if out else {}
+
+    def _create_spec(self, title: str) -> str:
+        res = self._call(func=self.flowctl.cmd_spec_create, title=title, branch=None)
+        return res["id"]
+
+    def _state(self, spec_id: str) -> dict:
+        return self._call(func=self.flowctl.cmd_sync_get_state, id=spec_id)["tracker"]
+
+    def _set_id(self, spec_id: str, tracker_id: str, **kw) -> dict:
+        return self._call(
+            func=self.flowctl.cmd_sync_set_tracker_id,
+            id=spec_id,
+            tracker_id=tracker_id,
+            identifier=kw.get("identifier"),
+            url=kw.get("url"),
+            force=kw.get("force", False),
+        )
+
+    def _add_dep(self, spec_id: str, dep_id: str) -> dict:
+        return self._call(
+            func=self.flowctl.cmd_spec_add_dep, epic=spec_id, depends_on=dep_id
+        )
+
+    def _set_dep_relation(self, spec_id: str, dep_spec: str, frm: str, to: str, **kw) -> dict:
+        return self._call(
+            func=self.flowctl.cmd_sync_set_dep_relation,
+            id=spec_id,
+            dep_spec=dep_spec,
+            from_tracker_id=frm,
+            to_tracker_id=to,
+            type=kw.get("type", "blocks"),
+            source=kw.get("source", "flow"),
+        )
+
+    def _list_dep_relations(self, spec_id: str) -> dict:
+        return self._call(func=self.flowctl.cmd_sync_list_dep_relations, id=spec_id)
+
+    # --- ledger: add / idempotent / clear -----------------------------------
+
+    def test_set_dep_relation_records_entry_shape(self) -> None:
+        parent = self._create_spec("Parent spec")
+        dep = self._create_spec("Dep spec")
+        res = self._set_dep_relation(parent, dep, "node-parent", "node-dep")
+        self.assertTrue(res["success"])
+        # Re-read from disk to prove the atomic write landed.
+        ledger = self._state(parent)["depRelations"]
+        self.assertEqual(len(ledger), 1)
+        entry = ledger[0]
+        self.assertEqual(entry["dep_spec"], dep)
+        self.assertEqual(entry["from_tracker_id"], "node-parent")
+        self.assertEqual(entry["to_tracker_id"], "node-dep")
+        self.assertEqual(entry["type"], "blocks")
+        self.assertEqual(entry["source"], "flow")
+        self.assertTrue(entry["updatedAt"].endswith("Z"))
+        # key is an opaque token, never a raw tracker id inlined.
+        self.assertTrue(entry["key"])
+        self.assertNotIn("node-dep", entry["key"])
+        self.assertNotIn("node-parent", entry["key"])
+
+    def test_set_dep_relation_idempotent_no_dup(self) -> None:
+        parent = self._create_spec("Parent idem")
+        dep = self._create_spec("Dep idem")
+        self._set_dep_relation(parent, dep, "node-p", "node-d")
+        first = self._state(parent)["depRelations"]
+        first_ts = first[0]["updatedAt"]
+        # Re-run with the SAME directed edge → no-op, no second entry, no ts bump.
+        res = self._set_dep_relation(parent, dep, "node-p", "node-d")
+        self.assertIn("already recorded", res["message"])
+        ledger = self._state(parent)["depRelations"]
+        self.assertEqual(len(ledger), 1)
+        self.assertEqual(ledger[0]["updatedAt"], first_ts)
+
+    def test_clear_dep_relation_by_dep_spec(self) -> None:
+        parent = self._create_spec("Parent clear")
+        dep = self._create_spec("Dep clear")
+        self._set_dep_relation(parent, dep, "node-p", "node-d")
+        res = self._call(
+            func=self.flowctl.cmd_sync_clear_dep_relation,
+            id=parent,
+            dep_spec=dep,
+            key=None,
+        )
+        self.assertEqual(res["removed"], 1)
+        self.assertEqual(self._state(parent)["depRelations"], [])
+
+    def test_clear_dep_relation_by_key(self) -> None:
+        parent = self._create_spec("Parent clearkey")
+        dep = self._create_spec("Dep clearkey")
+        set_res = self._set_dep_relation(parent, dep, "node-p", "node-d")
+        res = self._call(
+            func=self.flowctl.cmd_sync_clear_dep_relation,
+            id=parent,
+            dep_spec=None,
+            key=set_res["key"],
+        )
+        self.assertEqual(res["removed"], 1)
+        self.assertEqual(self._state(parent)["depRelations"], [])
+
+    def test_clear_missing_dep_relation_is_noop(self) -> None:
+        parent = self._create_spec("Parent noclear")
+        res = self._call(
+            func=self.flowctl.cmd_sync_clear_dep_relation,
+            id=parent,
+            dep_spec=None,
+            key="nope",
+        )
+        self.assertEqual(res["removed"], 0)
+
+    def test_clear_dep_relation_requires_selector(self) -> None:
+        parent = self._create_spec("Parent noselect")
+        with self.assertRaises(SystemExit):
+            self._call(
+                func=self.flowctl.cmd_sync_clear_dep_relation,
+                id=parent,
+                dep_spec=None,
+                key=None,
+            )
+
+    def test_self_edge_dep_relation_rejected(self) -> None:
+        parent = self._create_spec("Parent self")
+        with self.assertRaises(SystemExit):
+            self._set_dep_relation(parent, parent, "node-p", "node-p")
+        self.assertEqual(self._state(parent)["depRelations"], [])
+
+    # --- list-dep-relations -------------------------------------------------
+
+    def test_list_dep_relations_resolves_link_and_projected(self) -> None:
+        parent = self._create_spec("Parent list")
+        dep = self._create_spec("Dep list")
+        self._add_dep(parent, dep)
+        self._set_id(dep, "node-dep-uuid", identifier="WOR-9")
+        res = self._list_dep_relations(parent)
+        self.assertEqual(res["count"], 1)
+        rel = res["depRelations"][0]
+        self.assertEqual(rel["dep_spec"], dep)
+        self.assertEqual(rel["dep_tracker_id"], "node-dep-uuid")
+        self.assertEqual(rel["dep_identifier"], "WOR-9")
+        self.assertEqual(rel["dep_status"], "open")  # local dep-spec status
+        self.assertFalse(rel["projected"])  # not yet in the ledger
+        # After recording the relation, projected flips true.
+        self._set_dep_relation(parent, dep, "node-parent-uuid", "node-dep-uuid")
+        rel2 = self._list_dep_relations(parent)["depRelations"][0]
+        self.assertTrue(rel2["projected"])
+
+    def test_list_dep_relations_missing_link_surfaced(self) -> None:
+        # A dependency spec with no tracker id resolves to dep_tracker_id=None
+        # — the skill surfaces this as the missing-link warning.
+        parent = self._create_spec("Parent missing")
+        dep = self._create_spec("Dep missing")
+        self._add_dep(parent, dep)
+        rel = self._list_dep_relations(parent)["depRelations"][0]
+        self.assertEqual(rel["dep_spec"], dep)
+        self.assertIsNone(rel["dep_tracker_id"])
+        self.assertIsNone(rel["dep_identifier"])
+        self.assertEqual(rel["dep_status"], "open")
+
+    def test_list_dep_relations_completed_blocker_status(self) -> None:
+        # A `done` dependency surfaces dep_status=done (the completed-blocker
+        # signal the skill keys off — local flow status, not a remote fetch).
+        parent = self._create_spec("Parent done-dep")
+        dep = self._create_spec("Dep done")
+        self._add_dep(parent, dep)
+        self._set_id(dep, "node-done", identifier="WOR-5")
+        self._call(func=self.flowctl.cmd_spec_close, id=dep)
+        rel = self._list_dep_relations(parent)["depRelations"][0]
+        self.assertEqual(rel["dep_status"], "done")
+
+    def test_list_dep_relations_empty_when_no_deps(self) -> None:
+        parent = self._create_spec("Parent nodeps")
+        res = self._list_dep_relations(parent)
+        self.assertEqual(res["count"], 0)
+        self.assertEqual(res["depRelations"], [])
 
 
 if __name__ == "__main__":

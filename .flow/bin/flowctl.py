@@ -1108,6 +1108,14 @@ def default_spec_tracker_state() -> dict:
                         a real reconcile, never on a no-op pull / echo).
     - `baseHashFlow`  / `baseHashTracker`  — content hashes of each base side.
     - `mergeBaseFlow` / `mergeBaseTracker` — the body snapshots themselves.
+    - `depRelations`  — provenance ledger (fn-64) of dependency relations
+                        tracker-sync created. Each entry is the shape written by
+                        `sync set-dep-relation`:
+                        ``{key, dep_spec, from_tracker_id, to_tracker_id,
+                        type: "blocks", source: "flow", updatedAt}``. `key` is an
+                        opaque hash (never a raw issue key — trackers auto-linkify
+                        keys even inside HTML comments). The ledger makes
+                        projection idempotent and removals provably-ours-only.
     """
     return {
         "id": None,
@@ -1118,6 +1126,7 @@ def default_spec_tracker_state() -> dict:
         "baseHashTracker": None,
         "mergeBaseFlow": None,
         "mergeBaseTracker": None,
+        "depRelations": [],
     }
 
 
@@ -2159,12 +2168,14 @@ def validate_tracker_identifier(
     returns ``None`` without error (link may set other fields without one).
 
     ``allow_reference`` (link-time only): also accept a GitHub-style issue
-    reference — ``#123`` or ``owner/repo#123`` — as a **display-only** identifier.
-    It returns ``("", number, display)`` (empty key) — stored + shown + used in a
-    ``Refs #123`` PR cross-link, but NOT a resolvable spec handle (only Linear
-    keys resolve via the hybrid id scheme; you never ``work #123``). Tracker-first
-    canonical-id generation does NOT pass this flag, so a GitHub ref can never
-    become a canonical spec id.
+    reference — ``#123``, ``owner/repo#123``, or a bare ``123`` — as a
+    **display-only** identifier. It returns ``("", number, display)`` (empty key)
+    — stored + shown + used in a ``Refs #123`` PR cross-link, but NOT a resolvable
+    spec handle (only Linear keys resolve via the hybrid id scheme; you never
+    ``work #123``). The bare-``N`` form (fn-64) lets ``sync set-tracker-id
+    --identifier 42`` succeed; it is normalized to the ``#42`` display form on the
+    way out. Tracker-first canonical-id generation does NOT pass this flag, so a
+    GitHub ref can never become a canonical spec id.
     """
     if not identifier:
         if required:
@@ -2174,10 +2185,16 @@ def validate_tracker_identifier(
             )
         return None
     if allow_reference:
-        ref = re.match(r"^(?:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?#(\d+)$", identifier.strip())
+        stripped = identifier.strip()
+        ref = re.match(r"^(?:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?#(\d+)$", stripped)
         if ref:
             # GitHub-style reference — display-only (empty key = not resolvable).
-            return ("", int(ref.group(1)), identifier.strip())
+            return ("", int(ref.group(1)), stripped)
+        # Bare numeric reference (e.g. `42`) — also display-only. Normalize to
+        # the `#42` display form so downstream `Refs #N` rendering is uniform.
+        bare = re.match(r"^([1-9][0-9]*)$", stripped)
+        if bare:
+            return ("", int(bare.group(1)), f"#{bare.group(1)}")
     parsed = parse_tracker_identifier(identifier)
     if parsed is None:
         error_exit(
@@ -20423,6 +20440,237 @@ def cmd_sync_check_collisions(args: argparse.Namespace) -> None:
                 print(f"  {c['trackerId']} ← {', '.join(c['specs'])}")
 
 
+def _dep_relation_key(from_tracker_id: str, to_tracker_id: str) -> str:
+    """Opaque, stable edge key for the `depRelations` ledger (fn-64).
+
+    Hashes the directed (from → to) tracker-id pair so the stored token never
+    inlines a raw issue key (trackers auto-linkify keys even inside HTML
+    comments — bug: trackers-auto-linkify-issue-key). The directed pair is the
+    edge identity: same edge → same key (idempotent set), so dedup is a pure
+    key lookup. 16 hex chars is ample collision margin for a per-spec ledger.
+    """
+    return _content_hash(f"{from_tracker_id}\x00{to_tracker_id}")[:16]
+
+
+def _resolve_dep_link(flow_dir: Path, dep_spec_id: str):
+    """Resolve a dependency spec id → (tracker_id, identifier, local_status).
+
+    `local_status` is the LOCAL dep-spec status from flowctl (`done`/`open`),
+    NOT a remote fetch — flow is authoritative and the completed-blocker rule
+    (fn-64) keys off the local dep spec being `done`. Returns (None, None,
+    status) when the dep spec is unlinked (no tracker id), and a status of
+    `None` when the dep spec sidecar is missing/unreadable.
+    """
+    dep_path = find_spec_json_path(flow_dir, dep_spec_id)
+    if not dep_path.exists():
+        return (None, None, None)
+    try:
+        dep_data = normalize_epic(
+            json.loads(dep_path.read_text(encoding="utf-8"))
+        )
+    except (json.JSONDecodeError, OSError):
+        return (None, None, None)
+    state = dep_data.get("tracker") or default_spec_tracker_state()
+    status = dep_data.get("status", "open")
+    return (state.get("id"), state.get("identifier"), status)
+
+
+def cmd_sync_list_dep_relations(args: argparse.Namespace) -> None:
+    """Enumerate a spec's dependency edges + their resolved tracker links (fn-64, R7).
+
+    Reads `depends_on_epics` from the spec being synced and, for each dep edge,
+    resolves the dep spec's tracker link + LOCAL status, plus whether the edge
+    is already in our `depRelations` provenance ledger. Self-edges are skipped
+    (a spec can never `depends_on_epics` itself, but we guard defensively so the
+    listing can never represent a self-relation). Transport-blind: this is pure
+    flowctl plumbing; the projection DECISION lives in the skill (fn-64.5).
+
+    Output (`--json`): `[{dep_spec, dep_tracker_id, dep_identifier,
+    dep_status, projected}]` where `dep_status` is the local dep-spec status.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+    # fn-52.10: fold an uppercase tracker handle before the gate; the canonical
+    # casefold→validate→expand happens in _resolve_sync_spec.
+    args.id = casefold_handle(args.id)
+    if not is_spec_id(args.id):
+        error_exit(f"Invalid spec ID: {args.id}", use_json=args.json)
+
+    _, spec_data = _resolve_sync_spec(args)
+    flow_dir = get_flow_dir()
+    self_id = args.id
+    ledger = (spec_data.get("tracker") or {}).get("depRelations") or []
+    projected_specs = {e.get("dep_spec") for e in ledger if e.get("dep_spec")}
+
+    relations = []
+    for dep_spec in spec_data.get("depends_on_epics", []) or []:
+        dep_canon = expand_bare_spec_id(flow_dir, dep_spec, use_json=args.json)
+        if dep_canon == self_id:
+            continue  # self-edge guard — never represent a self relation
+        dep_tracker_id, dep_identifier, dep_status = _resolve_dep_link(
+            flow_dir, dep_canon
+        )
+        relations.append(
+            {
+                "dep_spec": dep_canon,
+                "dep_tracker_id": dep_tracker_id,
+                "dep_identifier": dep_identifier,
+                "dep_status": dep_status,
+                "projected": dep_canon in projected_specs,
+            }
+        )
+
+    if args.json:
+        json_output({"id": self_id, "depRelations": relations, "count": len(relations)})
+    else:
+        if not relations:
+            print(f"No dependency relations for {self_id}.")
+        else:
+            print(f"{len(relations)} dependency edge(s) for {self_id}:")
+            for r in relations:
+                link = r["dep_identifier"] or r["dep_tracker_id"] or "(unlinked)"
+                proj = "projected" if r["projected"] else "not-projected"
+                print(
+                    f"  {r['dep_spec']} → {link} "
+                    f"[{r['dep_status'] or 'unknown'}, {proj}]"
+                )
+
+
+def cmd_sync_set_dep_relation(args: argparse.Namespace) -> None:
+    """Record a projected dependency relation in the `depRelations` ledger (fn-64, R7).
+
+    Idempotent append (mirrors `cmd_spec_add_dep`): an edge whose key already
+    exists is a no-op success — the entry's `updatedAt` is NOT bumped, so a
+    rerun is a true no-op. Writes atomically via `_write_sync_state`. Self-edges
+    (`--dep-spec` resolving to the spec itself) are rejected. The opaque `key`
+    is derived from the directed (from → to) tracker-id pair.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+    # fn-52.10: fold an uppercase tracker handle before the gate.
+    args.id = casefold_handle(args.id)
+    if not is_spec_id(args.id):
+        error_exit(f"Invalid spec ID: {args.id}", use_json=args.json)
+
+    flow_dir = get_flow_dir()
+    dep_spec = expand_bare_spec_id(
+        flow_dir, casefold_handle(args.dep_spec), use_json=args.json
+    )
+    if dep_spec == args.id:
+        error_exit("A spec cannot have a dependency relation to itself", use_json=args.json)
+
+    spec_json_path, spec_data = _resolve_sync_spec(args)
+    if dep_spec == args.id:  # re-check post-expand (args.id is now canonical)
+        error_exit("A spec cannot have a dependency relation to itself", use_json=args.json)
+
+    rel_type = getattr(args, "type", None) or "blocks"
+    source = getattr(args, "source", None) or "flow"
+    key = _dep_relation_key(args.from_tracker_id, args.to_tracker_id)
+
+    state = spec_data["tracker"]
+    ledger = state.setdefault("depRelations", [])
+    for entry in ledger:
+        if entry.get("key") == key:
+            # Idempotent no-op — same directed edge already recorded.
+            if args.json:
+                json_output(
+                    {
+                        "success": True,
+                        "id": args.id,
+                        "key": key,
+                        "depRelations": ledger,
+                        "message": "dep relation already recorded",
+                    }
+                )
+            else:
+                print(f"dep relation {key} already recorded for {args.id}")
+            return
+
+    entry = {
+        "key": key,
+        "dep_spec": dep_spec,
+        "from_tracker_id": args.from_tracker_id,
+        "to_tracker_id": args.to_tracker_id,
+        "type": rel_type,
+        "source": source,
+        "updatedAt": now_iso(),
+    }
+    ledger.append(entry)
+    _write_sync_state(spec_json_path, spec_data)
+
+    if args.json:
+        json_output(
+            {
+                "success": True,
+                "id": args.id,
+                "key": key,
+                "depRelations": ledger,
+                "message": f"recorded dep relation to {dep_spec}",
+            }
+        )
+    else:
+        print(f"Recorded dep relation {key} ({args.id} → {dep_spec})")
+
+
+def cmd_sync_clear_dep_relation(args: argparse.Namespace) -> None:
+    """Remove a projected dependency relation from the `depRelations` ledger (fn-64, R7).
+
+    Selects the entry by `--key` (the opaque edge token) OR by `--dep-spec`
+    (canonicalized). Removing a non-existent entry is a no-op success. Writes
+    atomically via `_write_sync_state`.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+    args.id = casefold_handle(args.id)
+    if not is_spec_id(args.id):
+        error_exit(f"Invalid spec ID: {args.id}", use_json=args.json)
+
+    key = getattr(args, "key", None)
+    dep_spec_arg = getattr(args, "dep_spec", None)
+    if not key and not dep_spec_arg:
+        error_exit(
+            "clear-dep-relation needs --key <token> or --dep-spec <id>.",
+            use_json=args.json,
+        )
+
+    flow_dir = get_flow_dir()
+    dep_spec = (
+        expand_bare_spec_id(flow_dir, casefold_handle(dep_spec_arg), use_json=args.json)
+        if dep_spec_arg
+        else None
+    )
+
+    spec_json_path, spec_data = _resolve_sync_spec(args)
+    state = spec_data["tracker"]
+    ledger = state.get("depRelations") or []
+
+    def _keep(entry: dict) -> bool:
+        if key and entry.get("key") == key:
+            return False
+        if dep_spec and entry.get("dep_spec") == dep_spec:
+            return False
+        return True
+
+    remaining = [e for e in ledger if _keep(e)]
+    removed = len(ledger) - len(remaining)
+    if removed:
+        state["depRelations"] = remaining
+        _write_sync_state(spec_json_path, spec_data)
+
+    if args.json:
+        json_output(
+            {
+                "success": True,
+                "id": args.id,
+                "removed": removed,
+                "depRelations": remaining,
+                "message": f"removed {removed} dep relation(s)",
+            }
+        )
+    else:
+        print(f"Removed {removed} dep relation(s) from {args.id}")
+
+
 def cmd_sync_active(args: argparse.Namespace) -> None:
     """Report whether the tracker bridge is active (value-checked predicate, R1).
 
@@ -23464,6 +23712,44 @@ def main() -> None:
     )
     p_sync_coll.add_argument("--json", action="store_true", help="JSON output")
     p_sync_coll.set_defaults(func=cmd_sync_check_collisions)
+
+    # fn-64: dependency-relation projection plumbing (transport-blind).
+    p_sync_listdep = sync_sub.add_parser(
+        "list-dep-relations",
+        help="Enumerate a spec's dependency edges + resolved tracker links + projected status",
+    )
+    p_sync_listdep.add_argument("id", help="Spec ID")
+    p_sync_listdep.add_argument("--json", action="store_true", help="JSON output")
+    p_sync_listdep.set_defaults(func=cmd_sync_list_dep_relations)
+
+    p_sync_setdep = sync_sub.add_parser(
+        "set-dep-relation",
+        help="Record a projected dependency relation in the depRelations ledger (idempotent)",
+    )
+    p_sync_setdep.add_argument("id", help="Spec ID")
+    p_sync_setdep.add_argument("--dep-spec", dest="dep_spec", required=True, help="Dependency spec ID")
+    p_sync_setdep.add_argument(
+        "--from-tracker-id", dest="from_tracker_id", required=True,
+        help="Tracker id of the blocked (current) issue",
+    )
+    p_sync_setdep.add_argument(
+        "--to-tracker-id", dest="to_tracker_id", required=True,
+        help="Tracker id of the blocking (dependency) issue",
+    )
+    p_sync_setdep.add_argument("--type", default="blocks", help="Relation type (default: blocks)")
+    p_sync_setdep.add_argument("--source", default="flow", help="Provenance source (default: flow)")
+    p_sync_setdep.add_argument("--json", action="store_true", help="JSON output")
+    p_sync_setdep.set_defaults(func=cmd_sync_set_dep_relation)
+
+    p_sync_cleardep = sync_sub.add_parser(
+        "clear-dep-relation",
+        help="Remove a projected dependency relation from the depRelations ledger (by --key or --dep-spec)",
+    )
+    p_sync_cleardep.add_argument("id", help="Spec ID")
+    p_sync_cleardep.add_argument("--dep-spec", dest="dep_spec", default=None, help="Dependency spec ID to remove")
+    p_sync_cleardep.add_argument("--key", default=None, help="Opaque edge key to remove")
+    p_sync_cleardep.add_argument("--json", action="store_true", help="JSON output")
+    p_sync_cleardep.set_defaults(func=cmd_sync_clear_dep_relation)
 
     p_sync_receipt = sync_sub.add_parser(
         "receipt", help="Write a sync run receipt (guard-safe path, type: sync)"

@@ -1,0 +1,19 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-16T15:27:51.213307Z",
+  "depends_on": [
+    "fn-64-tracker-sync-project-flow-spec.1",
+    "fn-64-tracker-sync-project-flow-spec.2",
+    "fn-64-tracker-sync-project-flow-spec.3",
+    "fn-64-tracker-sync-project-flow-spec.4"
+  ],
+  "id": "fn-64-tracker-sync-project-flow-spec.5",
+  "priority": null,
+  "spec": "fn-64-tracker-sync-project-flow-spec",
+  "spec_path": ".flow/tasks/fn-64-tracker-sync-project-flow-spec.5.md",
+  "status": "todo",
+  "title": "projectDepRelations transport-blind skill hook (steps.md/SKILL.md): push+reconcile, warnings, completed-blocker, never-clobber, receipts",
+  "updated_at": "2026-06-16T15:40:27.054383Z"
+}
