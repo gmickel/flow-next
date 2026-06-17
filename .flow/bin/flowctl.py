@@ -1194,6 +1194,26 @@ def get_default_config() -> dict:
             # Max CI-fix attempts per PR before the durable
             # `flow-next:needs-human` label + skip.
             "ciFixBudget": 3,
+            # fn-65.1 — STRUCTURED built-in ERE for the `silence`-signal
+            # clean-review COMMENT path: a review bot (e.g. Codex) posts an
+            # issue comment instead of a formal APPROVE on a no-findings
+            # pass, e.g. "Didn't find any major issues. Reviewed commit:
+            # `8ff0e50f`". This pattern requires BOTH the clean phrase AND
+            # the `Reviewed commit` marker so a bare "no issues" mention
+            # never satisfies the gate; the workflow additionally extracts a
+            # head-current SHA token before counting it.
+            #   Config contract (workflow.md §2.6 cfg read):
+            #     null/missing (pre-seed flowctl copy) → fall back to THIS
+            #                                            built-in default
+            #     explicit ""  → comment scan DISABLED (pure reviews-API)
+            #     other value  → use it
+            # The empty-disables arm is the only real off-switch — an
+            # "empty → default fallback" would make the feature
+            # un-disableable.
+            "cleanReviewCommentPattern": (
+                r"(Didn'?t find any( major)? issues"
+                r"|No( major)? issues found).*Reviewed commit"
+            ),
         },
         # fn-62.1 — optional HTML artifact mode (render lenses), seeded so
         # `config get artifacts.html.enabled` returns False (NOT null) on a

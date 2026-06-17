@@ -55,6 +55,19 @@ REVIEW_SIGNAL="$(cfg land.reviewSignal)"; [[ -z "$REVIEW_SIGNAL" || "$REVIEW_SIG
 AUTOMATED_REVIEWERS="$(cfg land.automatedReviewers)"; [[ "$AUTOMATED_REVIEWERS" == "null" ]] && AUTOMATED_REVIEWERS=""
 REVIEW_TRIGGER="$(cfg land.reviewTrigger)"; [[ "$REVIEW_TRIGGER" == "null" ]] && REVIEW_TRIGGER=""
 CI_FIX_BUDGET="$(cfg land.ciFixBudget)"; [[ -z "$CI_FIX_BUDGET" || "$CI_FIX_BUDGET" == "null" ]] && CI_FIX_BUDGET=3
+# fn-65.1 — clean-review COMMENT pattern (silence-signal supplement, §2.6).
+# CONTRACT (distinct from the keys above — do NOT collapse `""` into the
+# default): the seeded built-in default is a STRUCTURED ERE; an unseeded
+# pre-fn-65 flowctl copy returns the literal "null" → fall back to the
+# built-in; an EXPLICIT empty string "" (the user's off-switch) → DISABLE
+# the comment scan; any other value → use it verbatim. `jq -r` prints the
+# literal "null" for JSON null and an EMPTY line for "", so the two are
+# distinguishable — guard ONLY the "null" case, never `-z`.
+CLEAN_REVIEW_PATTERN="$(cfg land.cleanReviewCommentPattern)"
+if [[ "$CLEAN_REVIEW_PATTERN" == "null" ]]; then
+ # pre-seed flowctl (key absent) → the canonical built-in default
+ CLEAN_REVIEW_PATTERN="(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit"
+fi # explicit "" stays "" → §2.6 treats empty as DISABLED (no default fallback)
 ```
 
 Resolve the land ledger — READ-ONLY here (a missing file reads as `{}`; nothing is created or written until an ACT/REPORT write site, so `--dry-run` leaves the filesystem untouched). It lives under the git common dir so it is shared across worktrees and cannot be swept into commits by `git add -A`:
@@ -220,6 +233,8 @@ A historical review is NOT enough: after a land-authored push, an old automated 
 ```bash
 AUTO_REVIEW_PRESENT=0 # any automated review, ever (drives the trigger branch)
 AUTO_REVIEW_CURRENT=0 # automated review of the CURRENT head (drives the silence gate)
+AUTO_REVIEW_SOURCE= # set to "comment" iff the clean-review COMMENT scan (below) satisfied it; empty = reviews-API
+AUTO_REVIEW_EVIDENCE= # comment author + matched SHA prefix (fn-65.1 observability)
 while IFS=$'\t' read -r login commit submitted; do
  [[ -z "$login" ]] && continue
  if [[ "$login" == *"[bot]" ]] || [[ ",$AUTOMATED_REVIEWERS," == *",$login,"* ]]; then
@@ -231,6 +246,45 @@ while IFS=$'\t' read -r login commit submitted; do
 done < <(gh api --paginate "repos/$OWNER_REPO/pulls/$PR_NUMBER/reviews" \
  --jq '.[] | [.user.login, .commit_id, .submitted_at] | @tsv' 2>/dev/null)
 ```
+
+**Clean-review COMMENT scan (`silence` only — fn-65.1).** A no-findings review bot (e.g. `chatgpt-codex-connector[bot]`) posts an **issue comment** instead of a formal review — that comment NEVER appears in the reviews API above, so `AUTO_REVIEW_CURRENT` reads `0` and the `silence` gate would dead-end at `NEEDS_HUMAN` even though the head was demonstrably re-reviewed clean. This scan supplies that missing evidence. It runs **only** when `REVIEW_SIGNAL == silence` (never on `approve`/`<login>`), **only** when `CLEAN_REVIEW_PATTERN` is non-empty (explicit `""` disables it), and it ONLY ever **sets** `AUTO_REVIEW_CURRENT=1` — it never resets the reviews-API result. It runs BEFORE the draft-trigger check below so a comment-proven head-current review correctly suppresses a now-redundant `@codex review` re-trigger (a clean comment naming the head IS proof the bot reviewed the head). The `gh api` is a read-only paginated GET (dry-run-safe). The login allowlist gate is the SAME `[bot]`-suffix/`AUTOMATED_REVIEWERS` test used by the reviews loop above; the head-current test is the comment analog of the reviews path's `commit_id == HEAD_OID`:
+
+```bash
+if [[ "$REVIEW_SIGNAL" == "silence" && -n "$CLEAN_REVIEW_PATTERN" ]]; then
+ HEAD_LC="$(printf '%s' "$HEAD_OID" | tr 'A-Z' 'a-z')"
+ while IFS=$'\t' read -r login body; do
+ [[ -z "$login" ]] && continue
+ # 1) automated-reviewer allowlist (verbatim from the reviews loop)
+ if [[ "$login" == *"[bot]" ]] || [[ ",$AUTOMATED_REVIEWERS," == *",$login,"* ]]; then
+ # 2) body must match the structured clean-review pattern
+ printf '%s\n' "$body" | grep -Eiq "$CLEAN_REVIEW_PATTERN" || continue
+ # 3) head-current SHA token — EMPTY-GUARDED. Prefer the token on the
+ # `Reviewed commit` marker line; else any hex run in the body.
+ # Lowercase; a token counts ONLY if it is non-empty, >=7 chars, AND
+ # a prefix of HEAD_OID. NEVER test `[[ $HEAD_OID == $token* ]]` on an
+ # unset/empty token — an empty token makes the prefix-glob spuriously
+ # TRUE and would pass on ANY matching comment.
+ SHA_TOKENS="$(printf '%s\n' "$body" \
+ | grep -Eio 'Reviewed commit[^0-9a-fA-F]*[0-9a-fA-F]{7,40}' \
+ | grep -Eio '[0-9a-fA-F]{7,40}')"
+ [[ -z "$SHA_TOKENS" ]] && SHA_TOKENS="$(printf '%s\n' "$body" | grep -Eio '[0-9a-fA-F]{7,40}')"
+ while IFS= read -r token; do
+ token="$(printf '%s' "$token" | tr 'A-Z' 'a-z')"
+ # non-empty AND min-length AND prefix-of-head — all three required
+ if [[ -n "$token" && ${#token} -ge 7 && "$HEAD_LC" == "$token"* ]]; then
+ AUTO_REVIEW_CURRENT=1
+ AUTO_REVIEW_SOURCE=comment
+ AUTO_REVIEW_EVIDENCE="$login @ ${token:0:12}"
+ break
+ fi
+ done <<< "$SHA_TOKENS"
+ fi
+ done < <(gh api --paginate "repos/$OWNER_REPO/issues/$PR_NUMBER/comments" \
+ --jq '.[] | [.user.login, (.body | gsub("\t";" ") | gsub("\n";" "))] | @tsv' 2>/dev/null)
+fi
+```
+
+A non-automated login (step 1 fails), a body with no clean phrase (step 2 fails), and a comment whose only SHA is stale or absent (step 3 finds no qualifying token) are ALL ignored — the gate falls through to the unchanged reviews-API result. `AUTO_REVIEW_SOURCE` defaults unset (reviews-API satisfaction) and is set to `comment` only on a comment-driven match; surface `AUTO_REVIEW_SOURCE` + `AUTO_REVIEW_EVIDENCE` (author + matched SHA prefix) in the `--dry-run` classification report and the verdict report so a transcript reader sees WHY the gate passed.
 
 **Draft-PR review trigger (one-shot per head SHA).** Review bots do not auto-review DRAFT PRs (Codex's triggers are open-for-review, draft→ready, or an explicit `@codex review` comment) — and pilot's PRs are born draft, so without a nudge the review wait would dead-end at the no-review `NEEDS_HUMAN`, and a land-authored CI-fix push would go un-re-reviewed. When the PR `isDraft` AND `land.reviewTrigger` is non-empty AND the ledger's `triggerSha` for this PR differs from the current head SHA AND a review nudge is due (`AUTO_REVIEW_CURRENT == 0` — no automated review of the current head): post the trigger (`gh pr comment "$PR_NUMBER" --body "$REVIEW_TRIGGER"`), set `triggerSha: <head-sha>` in the PR's ledger entry (atomic jq+mv; under `--dry-run` report would-trigger instead of posting), and report `AWAITING_REVIEW`, reason `review trigger posted; patience window open`. Keying the marker to the head SHA means each push gets at most one nudge — never a comment loop. The window still anchors to the last push. An empty `land.reviewTrigger` (the default) never posts — the no-review-beyond-window path stays `NEEDS_HUMAN` as below.
 
@@ -261,7 +315,7 @@ LAND_PUSHED_SHA="$(printf '%s\n' "$PR_LEDGER" | jq -r '.land_pushed_sha // "-"')
 
 ### Dry-run stops here (R17)
 
-`LAND_DRY_RUN == 1` → print the full classification report per PR (CI tri-state read with bucket counts, review-signal state, unresolved count, window age, ledger state, would-be action) plus the discovery table, then the aggregated terminal line computed by the Phase 4 worst-severity rule with the reason prefixed `dry-run: no mutations —`. Nothing was checked out, pushed, labeled, merged, dispatched, or written (ledger untouched).
+`LAND_DRY_RUN == 1` → print the full classification report per PR (CI tri-state read with bucket counts, review-signal state, unresolved count, window age, ledger state, would-be action) plus the discovery table, then the aggregated terminal line computed by the Phase 4 worst-severity rule with the reason prefixed `dry-run: no mutations —`. When `AUTO_REVIEW_SOURCE == comment`, the review-signal state line must name the comment path and its evidence — e.g. `review: silence satisfied via clean-review comment (AUTO_REVIEW_EVIDENCE)` — so a transcript reader sees a comment, not a formal review, carried the gate. Nothing was checked out, pushed, labeled, merged, dispatched, or written (ledger untouched).
 
 ## Phase 3 — ACT (at most ONE action class per PR per tick)
 
@@ -436,6 +490,8 @@ PR <url> [<spec-id>]
  signal=<silence|approve|login>:<satisfied|waiting|never> decision=<reviewDecision|->
  action=<ci-fix|resolve|rebase|merge|resume-tail|label|none> verdict=<VERDICT> reason="<one line>"
 ```
+
+When the `silence` signal was satisfied via the clean-review comment path (`AUTO_REVIEW_SOURCE == comment`, fn-65.1), append the comment evidence to the `signal=` line so the report shows the gate passed on a comment, not a formal review — e.g. `signal=silence:satisfied via=comment evidence="<AUTO_REVIEW_EVIDENCE>"`.
 
 Compute the tick verdict as the worst severity across all per-PR verdicts, priority order:
 
