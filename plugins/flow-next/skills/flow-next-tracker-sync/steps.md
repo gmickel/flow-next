@@ -134,6 +134,7 @@ push(spec):
   writeIssue(issue{... body ...})                [→ ref: transport]
   setStatus(map flow status → tracker status)    → status-sync.md (who-wins)
   postComment(lifecycle event marker)            → comments-sync.md (append + dedup)
+  projectDepRelations(spec, issue)               → § projectDepRelations below — depends_on_epics → blocked-by relations (additive, ledger-tracked, never advances lastSyncedAt; warns on unlinked dep; skipped when no transport)
   sync set-merge-base (BOTH halves) + set-last-synced   # snapshot the pushed pair (body-merge.md Step 5)
   receipt: pushed
 
@@ -164,6 +165,7 @@ reconcile(spec):
   base    = sync get-state → merge-base snapshot (BOTH forms: mergeBaseFlow + mergeBaseTracker)
   issue   = fetchIssue(trackerId)                [→ ref: transport]
   projectReadiness(spec, issue)                  → status-sync.md § Readiness projection (rides every issue read; independent of the body merge — runs even when the body diverges)
+  projectDepRelations(spec, issue)               → § projectDepRelations below (rides every issue read like projectReadiness; independent of the body merge — runs even when the body diverges or conflicts)
   merged  = threeWayMergeBody(base, flowBody, issue.body)   → body-merge.md
             # Step 1 pre-reduce: echo / byte-identical / only-one-side-changed ⇒ auto (no conflict)
             # Step 2 agentic merge (both diverged) + Step 3 format translation + Step 3.5 structural gate
@@ -178,6 +180,65 @@ reconcile(spec):
   # no-base bootstrap (first link): body-merge.md "First-sync / no-base bootstrap" —
   #   flow-first ⇒ fast-forward projection; tracker-first ⇒ seed base, pull-only. Never a conflict.
 ```
+
+### `projectDepRelations(spec, issue)` — project `depends_on_epics` as blocked-by relations (fn-64, R3/R4/R5/R6/R8/R10)
+
+**Transport-blind, one-way, additive.** This hook projects the spec's *local* dependency graph onto the tracker. It rides **both** the `push` and `reconcile` paths (modelled on `projectReadiness` [→ ref: status-sync.md § Readiness projection]): change-only receipts, **never advances `lastSyncedAt`** by itself, never blocks the lifecycle. The skill resolves edges and drives the normalized `listIssueRelations` / `setIssueRelation` transport pair ([→ ref: adapter-interface.md § Relation transport]) — it **never branches on Linear-vs-GitHub** (R8); each adapter ([→ ref: linear-ladder.md / github.md]) implements its own fidelity. No transport reachable (`TRANSPORT=none`) ⇒ skip the whole hook, write **one** `noop` receipt, return (never a crash, never a block).
+
+**Enumerate edges from flowctl (the deterministic half).** `depends_on_epics` is read for you; do NOT parse the spec yourself:
+
+```bash
+EDGES=$($FLOWCTL sync list-dep-relations "$SPEC_ID" --json)
+# → .depRelations[] = [{dep_spec, dep_tracker_id, dep_identifier, dep_status, projected}]
+#   dep_tracker_id null  ⇒ the dep spec is NOT linked to any issue (missing-link warning)
+#   dep_status            ⇒ the LOCAL dep-spec status (done/open/…), flow-authoritative — NOT a remote fetch
+#   projected: true       ⇒ already in the depRelations ledger (idempotent re-run target)
+```
+
+For each edge, in order:
+
+1. **Missing dependency link (R4).** `dep_tracker_id == null` ⇒ the dep spec isn't linked. **Warn naming the dep spec id + the parent**, surface it on the receipt with the fn-57 grammar, and **continue** (item-level isolation — one unresolvable dep never aborts the rest):
+   ```bash
+   $FLOWCTL sync receipt "$SPEC_ID" --status noop --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
+     --note "operation: projectDepRelations $SPEC_ID, event: ${EVENT:-manual} — dependency spec <dep_spec> has no tracker link; relation skipped, sync continues"
+   ```
+   The warning line ALSO appears in the skill's human-facing report. Never silently drop an unlinked dep.
+
+2. **Self-edge (R8).** The resolved dep issue is the **same** issue as the current spec's (`dep_tracker_id == this spec's tracker.id`) ⇒ **skip with a warning** — never project an issue blocked by itself. (flowctl already rejects a self `dep_spec` at `set-dep-relation`; this guard catches the rare case where two specs resolve to the *same* issue.)
+
+3. **Resolved edge ⇒ project the blocked-by relation (R3/R8).** Drive the transport with **read-before-write** dedup baked into the adapter (`listIssueRelations` first — neither platform reliably no-ops a duplicate). The direction is anchored once in adapter-interface.md: `setIssueRelation(issue = this spec's issue, blockedBy = dep issue)`:
+   ```bash
+   setIssueRelation(issue=$ISSUE, blockedBy=$DEP_ISSUE)   [→ ref: linear-ladder.md / github.md]
+   ```
+   On a successful **new** create, record provenance in the ledger so the rerun is idempotent and removal stays provably-ours-only (R6/R7):
+   ```bash
+   $FLOWCTL sync set-dep-relation "$SPEC_ID" --dep-spec "$DEP_SPEC" \
+     --from-tracker-id "$ISSUE_ID" --to-tracker-id "$DEP_ISSUE_ID"   # type=blocks, source=flow (defaults)
+   ```
+   An adapter `noop` (edge already present) writes nothing new; a `set-dep-relation` is itself idempotent (dedup no-op) so a redundant call is harmless. **Cycles (R8): NO graph traversal.** Each `depends_on_epics` edge is projected as an independent direct relation; a cycle in the flow graph is tolerated (each declared edge stands alone — never expand transitively).
+
+4. **Completed blocker (R5).** `dep_status == "done"` ⇒ the dep is a **historical/completed blocker**. **Keep the relation visible** (still project it / leave it in place — a closed blocker on the board is real audit history) but it must **NOT feed `ready=true` gating** — readiness (fn-58) already treats done deps as satisfied, and this hook **never** touches the `ready` flag (no `spec ready`/`unready` call here). Keying off the **local** `dep_status` (not a remote status fetch) is what keeps this from regressing fn-58.
+
+**Never-clobber + who-wins collision (R6/R10).** `setIssueRelation` is **strictly additive** — it only ever *creates* the blocked-by edge, never deletes. A relation not in our `depRelations` ledger (native) / outside the `<!-- flow:deps -->` fence (GitHub fallback) is **never ours** and is left untouched. The one reconcile case that needs judgment is the **collision** — and it is evaluated **BEFORE** any per-side add/keep rule (memory: who-wins-ladder-must-check-collision-first — order the both-match branch first or the earlier single-field rule silently wins):
+
+> **Collision:** an edge present in the `depRelations` ledger AND still in Flow's `depends_on_epics`, but **MISSING remotely** (`listIssueRelations` doesn't return it). A tracker user removed the relation flow projected.
+
+Re-creating it silently would steamroll a deliberate human removal (the explicit anti-behavior). So **defer + `queued`, never silently recreate**:
+
+```bash
+$FLOWCTL sync defer "$SPEC_ID" \
+  --summary "Projected blocked-by relation (<dep_spec>) removed on the tracker but still declared in depends_on_epics" \
+  --suggested "Human: re-add the relation, or drop <dep_spec> from depends_on_epics" \
+  --reason "dep-relation-collision"
+$FLOWCTL sync receipt "$SPEC_ID" --status queued --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
+  --note "operation: projectDepRelations $SPEC_ID, event: ${EVENT:-manual} — ledgered relation <dep_spec> missing remotely; queued, not recreated"
+```
+
+In Ralph/autonomous mode this is already the behavior ("ask the human" resolves to "queue for the human", Phase 0). Interactive mode MAY additionally surface the choice via `AskUserQuestion`, but the conservative default — **queue, do not recreate** — holds either way.
+
+**GitHub fenced-block ↔ body-merge ownership (R10 — fn-64.5 owns this rule).** On the GitHub *fallback* path the relation lives in a flow-owned `<!-- flow:deps -->` … `<!-- /flow:deps -->` body block ([→ ref: github.md § setIssueRelation]). That block is **flow's, not the spec's** — the body-merge layer MUST exclude it from divergence detection so a reconcile never folds flow's own dependency block back into the spec and render never overwrites it. This is the canonical **tracker-body-for-merge** transform: strip the fenced region BEFORE every `baseHashTracker` / `mergeBaseTracker` / fetched-`issue.body` comparison, and reinject/preserve it ONLY on the GitHub issue-body write. See [→ ref: body-merge.md § Flow-owned fenced regions]. Raw full-body hashing would flag the block as tracker divergence and break echo-suppression — the strip happens at the **hash boundary**, not just visually.
+
+**Receipts (use the real enum).** Every projectDepRelations outcome ends in a receipt whose status ∈ `{updated, noop, queued, errored}` (NO "deferred" — not in the enum): a new relation created ⇒ `updated`; nothing to do / already-projected / no-transport / missing-link ⇒ `noop`; collision deferred ⇒ `queued`; a genuine transport failure (not a 404-style absent issue) ⇒ `errored`. Lifecycle runs carry `--event` (`${EVENT:+--event "$EVENT"}`); the note uses the fn-57 `operation: projectDepRelations <id>, event: <key>` grammar verbatim. A relation receipt **never advances `lastSyncedAt`** — like readiness, this is a one-way projection that rides the sync, not a body reconciliation.
 
 **Echo-loop suppression** (constraint): after a push, record the resulting tracker-side content hash; on the next pull a hash match = flow's own echo ⇒ `noop`, never a phantom conflict. `lastSyncedAt` advances only on a real reconciliation, never on a no-op pull. The hash bookkeeping rides on the merge-base snapshot (fn-52.4).
 
