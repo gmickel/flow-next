@@ -17,9 +17,8 @@ Implement the relation transport on the GitHub `gh` adapter — native REST issu
 - [ ] Fallback: provenance-fenced `<!-- flow:deps -->`…`<!-- /flow:deps -->` body block of `#N` refs, rewritten only inside the markers; idempotent (no duplicate `#N` lines on rerun, R3).
 - [ ] github.md updated documenting native-vs-fallback selection + completed-blocker behavior. (Bare-`N` identifier widening is owned by fn-64.1.)
 ## Done summary
-TBD
-
+Implemented the GitHub adapter relation transport for dependency projection in references/github.md: native REST issue-dependencies via `gh api` (GET feature-detect probe, POST `blocked_by` with numeric DB-id resolution via `-F`, 50/type cap, blocked_by-only-writable, no-delete-default) with a provenance-fenced `<!-- flow:deps -->` `#N` body-block fallback; read-before-write dedup, never-delete-non-ours, completed-blocker semantics, and capability-parity table rows extending the R13 transport-blind proof. Native facts verified against official REST docs + a live `gh api` probe. Satisfies R2, R3.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 60a10a72, f626188
+- Tests: live `gh api` probe against gmickel/flow-next: GET .../dependencies/blocked_by exit 0 + [] (feature available); gh api repos/.../issues/{n} --jq .id → numeric DB id; native facts cross-checked vs official GitHub REST docs (API 2026-03-10, GA Aug 2025, 50/type cap), impl-review RP backend: SHIP (after NEEDS_WORK→fix: gh api -f→-F numeric issue_id); R2/R3/R5/R6/R8/R13 all covered, no code test suite — docs-as-implementation (github.md adapter reference); markdown fence/marker balance verified
 - PRs:
