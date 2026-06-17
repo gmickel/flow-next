@@ -58,10 +58,11 @@ When `TRANSPORT=none`, the configured bridge cannot reach GitHub this run. Every
 one of the six interface methods becomes a documented no-op (same fail-soft
 contract as the Linear terminal rung and fn-51's manual rung):
 
-- `fetchIssue` / `listComments` / `readStatus` → return nothing actionable
- ("no remote view available this run"); the spec's flow-side state is left
- untouched and the merge base is NOT advanced.
-- `writeIssue` / `postComment` / `setStatus` → perform no remote write.
+- `fetchIssue` / `listComments` / `readStatus` / `listIssueRelations` → return
+ nothing actionable ("no remote view available this run"); the spec's flow-side
+ state is left untouched and the merge base is NOT advanced.
+- `writeIssue` / `postComment` / `setStatus` / `setIssueRelation` → perform no
+ remote write.
 - The run emits `sync receipt … --status noop --transport none ${EVENT:+--event "$EVENT"}
  --note "no GitHub transport reachable (gh not installed or not authenticated; set GH_TOKEN)"`.
 - `lastSyncedAt` is never advanced on a no-op (no real reconciliation happened).
@@ -301,6 +302,114 @@ printf '%s' "$BODY_WITH_MARKER" | gh issue comment "$NUMBER" -R "$REPO" --body-f
 Derived from the `fetchIssue` `state` + `stateReason` + `status:` label — no
 separate call (same as Linear deriving status from `state{name type}`).
 
+## Relation transport (dependency projection, fn-64.4)
+
+The `listIssueRelations` / `setIssueRelation` pair ([adapter-interface.md](adapter-interface.md)
+§ Relation transport) projects a Flow `depends_on_epics` edge as a **blocked-by**
+relation. GitHub has **two** fidelities, selected by a feature-detect probe — the
+same reduced-fidelity posture this adapter already takes for status:
+
+| Path | Transport | Use when | Fidelity |
+|------|-----------|----------|----------|
+| **Native** | REST issue dependencies via `gh api` (`…/dependencies/blocked_by`) | the GET probe below exits 0 (endpoint present, not 404/410) | first-class, board-visible "Blocked by" |
+| **Fallback** | provenance-fenced `<!-- flow:deps -->` body block of `#N` refs | the probe 404s/410s (account/repo lacks native deps) OR `gh` unreachable | body-rendered list, reduced |
+| **no-op** | none + `noop` receipt | `TRANSPORT=none` (gh not installed / unauthed) | nothing written |
+
+The fenced fallback is the GitHub analog of `setStatus`'s `status:` label: when the
+native model is missing, the relation survives as a documented body artifact rather
+than failing the run. The **direction convention is anchored once** in
+adapter-interface.md — *the current issue (A) is blocked by the dependency issue (B)*;
+both GitHub paths point A's "blocked by" at B, never inverted.
+
+### Native facts (pin these — verified against the official REST docs + a live `gh api` probe, 2026-06-17)
+
+- **GA Aug 2025**; REST under `X-GitHub-Api-Version: 2026-03-10`. Endpoints:
+ - `GET /repos/{o}/{r}/issues/{n}/dependencies/blocked_by` → JSON **array of Issue
+ objects** (each has `id` (DB id), `number`, `state`, …); `[]` when none.
+ - `POST /repos/{o}/{r}/issues/{n}/dependencies/blocked_by` with body
+ `{"issue_id": <numeric DB id of the BLOCKER>}`.
+ - `DELETE /repos/{o}/{r}/issues/{n}/dependencies/blocked_by/{issue_id}` — **OPTIONAL
+ / future**, not implemented here (default safe no-delete; never removes a remote
+ relation — R6).
+- **`issue_id` is the numeric DB id, NOT `#N`.** The POST body and the GET response
+ both speak DB ids. `gh issue` positional args and the `#N` display key are a
+ *different* namespace — resolve `#N` → DB id with one extra call
+ (`gh api repos/{o}/{r}/issues/{n} --jq .id`) before POSTing. The endpoint path
+ itself takes the **issue number** `{n}` (the blocked issue A); only the body
+ `issue_id` is the DB id (the blocker B). Mixing the two is the sharp edge.
+- **Only `blocked_by` is writable; max 50 dependencies per type.** Flow projects
+ exactly the blocked-by edge, so this single writable direction is sufficient. Stop
+ appending at 50 and surface a warning rather than erroring the run.
+
+### Feature-detect (probe, don't assume) — native vs fallback
+
+```bash
+# Resolve the repo's owner/repo once (or use the configured tracker.perTracker.repo).
+# Probe the GET endpoint on the issue being projected (A = $NUMBER):
+PROBE=$(gh api -H "X-GitHub-Api-Version: 2026-03-10" \
+ "repos/$OWNER/$REPO/issues/$NUMBER/dependencies/blocked_by" 2>/dev/null)
+if [ $? -eq 0 ]; then
+ REL_PATH=native # endpoint present (a 200 + JSON array, even when empty `[]`)
+else
+ REL_PATH=fallback # 404/410 (or any non-zero) → account/repo lacks native deps
+fi
+# When TRANSPORT=none (gh not installed/unauthed) the probe never runs → no-op rung.
+```
+
+A `[]` array is the **available-but-empty** signal (seen live on this repo), NOT a
+"not found" — only a non-zero exit (404/410) selects the fallback. The probe is per
+the issue being projected; cache the verdict for the run.
+
+### `listIssueRelations(issue)` → normalized `relation[]`
+
+**Native:**
+```bash
+gh api -H "X-GitHub-Api-Version: 2026-03-10" \
+ "repos/$OWNER/$REPO/issues/$NUMBER/dependencies/blocked_by" \
+ --jq '.[] | {number, id}'
+```
+Each blocker issue → one `relation`: `{ from: "#"+A.number (blocked), to: "#"+blocker.number (blocking), type: "blocks", source: "unknown" }`. Native deps store no authorship, so `source` is `unknown` and the flow-side `depRelations` ledger (fn-64.1) is the provenance authority (R6/R7) — same as Linear's native relations.
+
+**Fallback:** parse the `#N` lines **inside** the `<!-- flow:deps -->` … `<!-- /flow:deps -->` markers of the issue body (`gh issue view "$NUMBER" --json body -q .body`). Each `#N` inside the markers → `{ from: "#"+A.number, to: "#N", type: "blocks", source: "flow" }` (inside the fence ⇒ provably ours). `#N` references **outside** the markers are NOT relations — never returned (they could be any human cross-reference).
+
+### `setIssueRelation(issue=A, blockedBy=B)` → ok | errored | noop
+
+**Read-before-write on both paths (mandatory, R3):** `listIssueRelations(A)` first; skip the write when A-is-blocked-by-B already exists. Neither path no-ops a duplicate for free.
+
+**Native:**
+```bash
+# 1. Resolve B's #N → numeric DB id (the POST body speaks DB ids, not #N):
+BLOCKER_ID=$(gh api "repos/$OWNER/$REPO/issues/$B_NUMBER" --jq '.id')
+# 2. POST the blocked_by edge on A (the endpoint path takes A's NUMBER).
+# issue_id MUST be a JSON NUMBER, not a string — use -F (--field, type-aware:
+# bare integers stay numeric), NEVER -f (--raw-field, always a string):
+gh api --method POST -H "X-GitHub-Api-Version: 2026-03-10" \
+ "repos/$OWNER/$REPO/issues/$A_NUMBER/dependencies/blocked_by" \
+ -F "issue_id=$BLOCKER_ID"
+```
+- **`-F`, not `-f`, for `issue_id`.** GitHub rejects a string id; `gh api -f` would
+ send `"issue_id":"123"` (string) and 422. `-F`/`--field` types a bare integer as
+ a JSON number. (Equivalent: pipe `jq -n --argjson issue_id "$BLOCKER_ID" '{issue_id:$issue_id}'` to `--input -`.)
+- Stop at the **50/type cap**: count the existing `blocked_by` set first; at 50, skip + warn (never error the whole run).
+- A `gh` non-zero exit (bad id, perms, 422 already-exists) ⇒ return `errored` (don't crash); a 422 "already exists" is treated as an idempotent success (the read-before-write should have caught it, but tolerate the race).
+
+**Fallback (fenced body block):** rewrite **only inside** the `<!-- flow:deps -->` markers, idempotently (R3):
+```markdown
+<!-- flow:deps -->
+**Blocked by:** #12, #15, #23
+<!-- /flow:deps -->
+```
+- If the markers are absent, append a fresh empty block to the body (the only edit outside the markers — establishing the fence — never touches existing body text).
+- Inside the markers: add `#B_NUMBER` only when not already present (dedup on the `#N` token, not a substring). No marker ⇒ create; existing entry ⇒ no-op. A re-run appends nothing.
+- Write the merged body back via `gh issue edit "$A_NUMBER" --body-file -` (NEVER raw `--body` — the body-quoting rule above). Use the **opaque `#N` token** as the stored ref (consistent with the trackers-auto-linkify-issue-key pattern — GitHub's `#N` linkify is milder than Linear's key linkify, but keep the marker-content discipline uniform across adapters).
+- The marker is the **provenance boundary**: only `#N` inside it are flow's (`source: "flow"`). The body-merge layer excludes the fenced region from divergence detection (fn-64.5 owns the exclusion) so reconcile never folds flow's own block back into the spec.
+
+**Never-delete-non-ours (R6):** `setIssueRelation` only ever ADDS the blocked-by edge — on both paths. Native: provenance is the ledger; a native dep not in the ledger is not ours, left alone. Fallback: only lines inside the fence are ours; a `#N` a human wrote elsewhere in the body is never touched.
+
+**Completed-blocker (R5).** A dependency whose issue is closed/done stays a visible blocked-by relation on both paths — the native dep is left in place (a closed blocker still renders on the board) and the fenced `#N` entry is not stripped. The adapter never decides this; the completed-blocker call is the skill's (fn-64.5), keyed off the **local** dep-spec status (`dep_status` from `flowctl sync list-dep-relations`), and it must not feed back into `ready=true` gating — readiness already treats done deps as satisfied. The relation is historical/audit, not a re-gate.
+
+**`#N` identifier parsing.** The fallback writer/reader accepts the `#N`, `owner/repo#N`, and bare `N` forms when matching an existing entry (memory: set-tracker-id-rejected-github-n — the same widening fn-64.1 applied to the identifier validator); it always *writes* the canonical `#N` form. Cross-repo `owner/repo#N` refs are tolerated on read but native deps are single-repo (`tracker.perTracker.repo`), so projection stays in-repo.
+
 ## `makePr` — link the PR to the issue (native GitHub, no "Diffs")
 
 When the tracker is **GitHub**, the spec maps to a GitHub *issue* and the PR lives
@@ -328,6 +437,8 @@ Verify per method:
 | `postComment` | `gh issue comment --body-file -` | `save_comment` / `commentCreate` | same `comment` |
 | `readStatus` | from `state`+`stateReason`+`status:` label | from `state{name type}` | same `status{raw,normalized}` |
 | `setStatus` | `gh issue close/reopen` + `status:` label | `save_issue(state)` / `issueUpdate(stateId)` | ok / `errored` |
+| `listIssueRelations` | native `…/dependencies/blocked_by` (reduced → fenced `#N` block) | `issue{ relations + inverseRelations }` | same blocked-by `relation[]` (`{from,to,type:"blocks",source}`) |
+| `setIssueRelation` | native POST `blocked_by` (reduced → fenced-block append) | `issueRelationCreate(type:blocks)` | ok / `errored` / `noop`; read-before-write on both |
 | status map | open/closed+reason+`status:` label (reduced — recovered via label) | team `workflowStates` / `list_issue_statuses` | same **normalized** vocabulary out |
 
 The fidelity gap (GitHub's two-value native state) is bridged by the `status:`
@@ -336,6 +447,13 @@ transport-blind despite GitHub's poorer native model. If a `status:` label is
 absent (human-edited issue), the read-mapping table degrades gracefully to a
 best-effort normalized value; that is a documented reduced-fidelity case, not a
 parity break (the struct shape is still identical).
+
+The same holds for relations: native `blocked_by` deps and the fenced `#N` block
+both produce the **identical** normalized `relation[]` (`{from,to,type:"blocks",source}`),
+so the skill (fn-64.5) sees one transport-blind hook regardless of which GitHub
+path served it — only the `source` field differs (`unknown` on native, deferring
+to the ledger; `flow` inside the fenced marker). Native-vs-fallback is a fidelity
+selection, not a parity break.
 
 ## Transport-blind proof / round-trip spike (acceptance #3 — run FIRST)
 

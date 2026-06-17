@@ -28,6 +28,8 @@ instruction).
 | `fetchIssue` | **`get_issue`** | `id` (UUID or identifier). `includeRelations:true` for blocking/related. Returns title, `description`, `state`, `priority`, `labels`, `url`, `updatedAt`, git branch name. **The returned `id` is the identifier, not the UUID** (verified 2026-06-09). |
 | `listComments` | **`list_comments`** | `issueId` (UUID or identifier). `orderBy: createdAt|updatedAt`, `limit` (default 50, max 250), `cursor` for paging. |
 | `postComment` | **`save_comment`** | create top-level: `issueId` + `body`. update: `id` + `body`. reply: `parentId` + `body`. |
+| `listIssueRelations` | **`get_issue`** + `includeRelations:true` | `id` (UUID or identifier). Returns the issue's blocking/related/duplicate relations (fn-64.3). |
+| `setIssueRelation` | **`save_issue`** + `blockedBy:[…]` | update form: `id` = the **blocked** issue + `blockedBy:[<blocker id/identifier>]`. **Append-only** — server doc: "existing relations are never removed" (fn-64.3). |
 | status map build | **`list_issue_statuses`** | `team` (name or ID) → the team's workflow states (name + type + id) for the normalized-status map. |
 
 Supporting tools used during the discovery/link ceremony (not part of the six
@@ -131,6 +133,55 @@ save_comment(issueId:<uuid>, body:<markdown, with the flow-evt marker line>)
 get_issue(id:<uuid>).state → { raw: state.name,
  normalized: map(state.type, config) }
 ```
+
+## Relation transport (dependency projection, fn-64.3)
+
+The two relation methods from [adapter-interface.md](adapter-interface.md) over MCP.
+**Direction convention** (stated once there): `from` is-blocked-by `to`; flow's
+`depends_on_epics:[B]` on spec A projects to `setIssueRelation(issue=A, blockedBy=B)`.
+
+> **MCP schema re-verify (fn-64.3, verified live 2026-06-17).** `save_issue` DOES
+> expose `blockedBy` / `blocks` (append-only — "existing relations are never
+> removed") and `removeBlockedBy` / `removeBlocks`; `get_issue` DOES expose
+> `includeRelations:true`. The schema drifts, so **re-inspect the host tool list
+> before relying on these** — if a future server drops `blockedBy`, the ladder
+> falls to the GraphQL rung when `LINEAR_API_KEY` is set, else writes a `noop`
+> receipt ([linear-ladder.md](linear-ladder.md)). flow projects **only the
+> blocked-by edge** — never touch `blocks` / `relatedTo` / `duplicateOf` here.
+
+### `listIssueRelations(issue)` → normalized `relation[]` | errored
+
+```
+get_issue(id:<uuid or identifier>, includeRelations:true)
+ → read the returned relations (the blocking set: this issue's "blocked by"
+ edges). For each blocker B, emit a normalized relation:
+ { from: <this issue>, to: B, type: "blocks", source: "unknown" }
+ → `source` is "unknown" on MCP — Linear stores no relation authorship; the
+ flow-side depRelations ledger (fn-64.1) is the provenance authority.
+ → return ONLY the blocked-by view. Drop related/duplicate edges so the skill's
+ read-before-write dedup never trips over an unrelated relation kind.
+ → on error / missing issue: return `errored` — never raise.
+```
+
+### `setIssueRelation(issue, blockedBy)` → ok | errored | noop
+
+```
+# READ-BEFORE-WRITE (mandatory): listIssueRelations(issue) first; if the
+# (issue is-blocked-by blockedBy) edge already exists → return noop, skip write.
+save_issue(id:<the BLOCKED issue>, blockedBy:[<the BLOCKING issue>])
+ → save_issue's blockedBy is append-only (the server never removes existing
+ relations), so this only ever ADDS the edge — it can never clobber a human's
+ manual relation (R6). Pass id/identifier interchangeably.
+ → on success: return ok (the skill records the edge in the depRelations ledger).
+ → on error (issue not found, etc.): return `errored` — never raise.
+```
+
+**Why read-before-write even though `blockedBy` is append-only.** The MCP rung's
+append-only semantics mean a duplicate `save_issue(blockedBy:…)` is harmless on
+the wire, but the contract still requires the pre-check ([adapter-interface.md](adapter-interface.md))
+for parity with the GraphQL rung (where `issueRelationCreate` is **not** reliably
+idempotent) and so the skill can record "no new edge created" accurately. Skip
+the write when the edge is already present.
 
 ## Status map (MCP)
 

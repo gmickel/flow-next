@@ -57,6 +57,38 @@ STATE=$($FLOWCTL sync get-state "$SPEC_ID" --json)
 # .tracker.mergeBaseFlow / .mergeBaseTracker / .baseHashFlow / .baseHashTracker
 ```
 
+## Step 0.5 — Flow-owned fenced regions: the *tracker-body-for-merge* transform (fn-64, R10)
+
+Some regions of the tracker body are **flow's, not the spec's** — flow writes them, flow owns them, and they must NEVER round-trip back into the spec or be re-litigated as tracker divergence. Today that is the GitHub dependency block on the fallback path:
+
+```markdown
+<!-- flow:deps -->
+**Blocked by:** #12, #15, #23
+<!-- /flow:deps -->
+```
+
+(written by `setIssueRelation` on the GitHub fenced fallback — [github.md](github.md) § Relation transport; the marker is its provenance boundary.)
+
+**The rule (load-bearing):** define a canonical **`trackerBodyForMerge(rawBody)`** transform that **strips the entire `<!-- flow:deps -->` … `<!-- /flow:deps -->` fenced region** (markers included), and apply it to the tracker body **before EVERY hash / merge-base / divergence comparison in this file** — specifically:
+
+- the `baseHashTracker` content hash and the stored `mergeBaseTracker` snapshot (Step 5 writes the *stripped* tracker form, so the next reconcile compares like-with-like);
+- the echo-fence check (Step 1 "Echo / no real change") and ALL of Step 1's pre-reduction comparisons;
+- the `fetchIssue(trackerId).body` fed into Steps 2–4.
+
+```bash
+# Pseudo: everywhere this file reads issue.body for comparison/merge, read it through the transform.
+TRACKER_BODY=$(trackerBodyForMerge "$RAW_ISSUE_BODY") # <!-- flow:deps -->…<!-- /flow:deps --> stripped
+```
+
+**Reinject / preserve ONLY on the GitHub issue-body write.** The fenced block is reattached (by `setIssueRelation`, which edits *only inside* its own markers — github.md) when writing the issue body; the *merge* never sees it, never produces it, and never copies it into `.flow/specs/<id>.md`. Concretely:
+
+- **Reconcile never folds flow's own block back into the spec.** Because the block is stripped before tracker→flow folding (Step 3 / Step 2), a `## ` section or stray `**Blocked by:**` line can never be invented into the spec from flow's own projection.
+- **Render never overwrites it.** `renderFlowToTracker` (flow→tracker) produces the spec body only; the dep block is a separate, additive `setIssueRelation` write that operates inside its markers. A flow→tracker push does not clobber the dep block, and the dep projection does not clobber the rendered spec body.
+
+> **Why at the hash boundary, not just visually:** raw full-body hashing would see flow's just-written `<!-- flow:deps -->` block as a tracker-side change on the very next pull, flag a phantom divergence, and break echo-suppression. The strip MUST happen where the hash is computed — `trackerBodyForMerge` is the seam. (Linear native relations need no transform: relations are not in the body. The transform is GitHub-fallback-specific but lives here, transport-blind, as a body-merge rule.)
+
+This generalizes the existing flow-internal-scaffolding exclusions (the `<!-- scope: … -->` HTML comments and the source-tag breakdown comment are likewise never surfaced as tracker text, Step 3) — `<!-- flow:deps -->` is the same idea on the tracker side: a flow-owned region the merge is blind to.
+
 ## Step 1 — Deterministic pre-reduction (kills false-conflict over-surfacing)
 
 Before the agent judges anything, reduce the trivial cases mechanically. This is
@@ -75,7 +107,9 @@ Per side, compare against the base **in that side's form**:
 | **Both changed** | flow != `mergeBaseFlow` AND tracker != `mergeBaseTracker` (not an echo) | → **Step 2** (the agent's real job). |
 
 The echo check uses the stored `baseHashTracker` content hash (fn-52.1's
-`_content_hash`): a post-push pull whose body hash matches what flow pushed is
+`_content_hash`) — computed over the **`trackerBodyForMerge`-stripped** body (Step
+0.5), so flow's own `<!-- flow:deps -->` block never registers as a tracker-side
+change: a post-push pull whose stripped body hash matches what flow pushed is
 flow's **own echo**, not a tracker-side edit — a `noop`, never a phantom conflict.
 `lastSyncedAt` advances only on a real reconciliation (a fast-forward or a merge),
 **never on an echo or a no-op pull**.
@@ -426,6 +460,49 @@ $FLOWCTL sync receipt "$SPEC_ID" --status noop --transport "$TRANSPORT" ${EVENT:
 ```
 
 PASS iff the matching-hash pull is a `noop` and state is unchanged.
+
+### Fixture E — flow-owned `<!-- flow:deps -->` block excluded from divergence (fn-64, R10)
+
+The GitHub adapter's fenced dependency block is flow's own write. A pull that
+returns it MUST NOT register as a tracker-side edit, and a reconcile MUST NOT fold
+it into the spec. This is the `trackerBodyForMerge` transform (Step 0.5) under test.
+
+**Base** (`mergeBaseTracker`, already a *stripped* snapshot — Step 5 stores the
+stripped form):
+
+~~~markdown
+## Goal & Context
+Add login to the dashboard.
+~~~
+
+**Tracker-side** (`fetchIssue.body` — raw, with flow's just-written dep block; NO
+human edit):
+
+~~~markdown
+## Goal & Context
+Add login to the dashboard.
+
+<!-- flow:deps -->
+**Blocked by:** #12, #15
+<!-- /flow:deps -->
+~~~
+
+**Transform:** `trackerBodyForMerge(raw)` strips the `<!-- flow:deps -->` … `<!-- /flow:deps -->`
+region (markers included) → the stripped body is byte-identical to
+`mergeBaseTracker`.
+
+**Oracle:** after the transform, tracker hash == `baseHashTracker` → **echo /
+no-change** → `noop`; the `**Blocked by:**` line is NEVER folded into
+`## Goal & Context` (or any spec section); `lastSyncedAt` does not advance. PASS iff
+the dep block causes neither a phantom divergence nor a spec edit.
+
+> **Companion negative case (R6 collision, owned in [../steps.md](../steps.md)
+> § projectDepRelations):** an edge in the `depRelations` ledger AND still in
+> `depends_on_epics` but MISSING from `listIssueRelations` (a tracker user removed
+> flow's relation) is evaluated BEFORE any per-side rule → `sync defer` + a
+> `queued` receipt, NEVER silently recreated. The collision check belongs to the
+> relation hook, not this body merge; it is cross-referenced here because both are
+> the same "flow-owned, never-clobber" posture applied to relations vs body.
 
 ## Boundaries
 

@@ -23,9 +23,8 @@ Wire the transport-blind `projectDepRelations` hook into the skill spine so depe
 - [ ] Skill stays transport-blind — no Linear-vs-GitHub branching (R8). Transport-unreachable → `noop` receipt, never blocks.
 - [ ] A dry-run round-trip against a linked spec + linked dep produces the expected blocked-by edge (Linear) and native-dep/fenced-block (GitHub) with no duplicates on rerun.
 ## Done summary
-TBD
-
+Wired the transport-blind projectDepRelations hook into the tracker-sync skill spine (steps.md push + reconcile, modelled on projectReadiness): depends_on_epics edge enumeration via flowctl sync list-dep-relations, missing-link warnings in fn-57 grammar, read-before-write project + ledger provenance, completed-blocker keep-not-regate, strictly-additive never-clobber with collision-before-per-side-rules deferring to queued, self-edge/cycle no-traversal handling, and the body-merge.md Step 0.5 tracker-body-for-merge transform that strips the flow-owned <!-- flow:deps --> block at the hash boundary (R10). Extended SKILL.md owns-table + boundaries.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: a5b5e0319ba979a2600c0ced19f025e50391051d
+- Tests: python3 -m unittest plugins.flow-next.tests.test_tracker_sync_state (30 passed)
 - PRs:
