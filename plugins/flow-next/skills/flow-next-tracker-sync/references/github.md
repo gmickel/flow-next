@@ -231,10 +231,27 @@ NUMBER=$(printf '%s' "$URL" | sed -E 's@.*/issues/([0-9]+).*@\1@')
 # Re-view to capture the durable node id (the create output has no id):
 gh issue view "$NUMBER" -R "$REPO" --json id,number,url
 
-# UPDATE (issue.id present) — number is the positional arg:
-printf '%s' "$BODY" | gh issue edit "$NUMBER" -R "$REPO" \
+# UPDATE (issue.id present) — number is the positional arg.
+# PRESERVE the flow-owned <!-- flow:deps -->…<!-- /flow:deps --> region: $BODY is the
+# rendered spec body (renderFlowToTracker), which never contains the dep block — a raw
+# full-body replace would WIPE it, and the next projectDepRelations would misread the
+# ledgered edge as remotely-removed → false collision (self-deletes projected deps).
+# Read the current body, carry its fenced block forward into the rendered body, THEN edit:
+CURRENT=$(gh issue view "$NUMBER" -R "$REPO" --json body -q .body)
+DEPS_BLOCK=$(printf '%s' "$CURRENT" | sed -n '/<!-- flow:deps -->/,/<!-- \/flow:deps -->/p')
+BODY_WITH_DEPS="$BODY"
+[ -n "$DEPS_BLOCK" ] && BODY_WITH_DEPS=$(printf '%s\n\n%s' "$BODY" "$DEPS_BLOCK")
+printf '%s' "$BODY_WITH_DEPS" | gh issue edit "$NUMBER" -R "$REPO" \
   --title "$TITLE" --body-file -
 ```
+- **Preserve the `<!-- flow:deps -->` fenced region on every UPDATE.** This is the
+  WRITE half of the `trackerBodyForMerge` ownership model ([body-merge.md](body-merge.md)
+  § Step 0.5): the merge strips the block at the hash boundary; the write must RETAIN
+  it. Carry the existing block forward verbatim (idempotent — a later `setIssueRelation`
+  edits *only inside* the markers). `renderFlowToTracker` never emits the block, so a
+  naive `--body-file -` of `$BODY` alone self-deletes a normal push's projected deps and
+  contradicts body-merge.md's "render never overwrites it" invariant. Linear native
+  relations live off-body and need no carry-forward — this is GitHub-fallback-specific.
 - **Upsert by presence of `issue.id`** (interface rule): no id ⇒ create; id ⇒ edit.
 - `gh issue create` prints only the URL (no `--json`), so after a **create**
   derive the `number` from the URL and re-view once

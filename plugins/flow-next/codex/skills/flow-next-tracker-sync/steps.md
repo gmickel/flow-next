@@ -133,7 +133,7 @@ Route the operation; each layer calls hooks that operate on the normalized struc
 ```
 push(spec):
  body = renderFlowToTracker(spec) → body-merge.md Step 3 (flow→tracker) — COMPLETE spec, ALL sections; never summarize/truncate
- writeIssue(issue{... body ...}) [→ ref: transport]
+ writeIssue(issue{... body ...}) [→ ref: transport] # GitHub UPDATE preserves the flow-owned <!-- flow:deps --> region (github.md § writeIssue) — body=renderFlowToTracker output never contains it, so a raw full-body replace would wipe it and make projectDepRelations misread the ledgered edge as a remote removal → false collision. Write retains; merge strips (body-merge.md Step 0.5).
  setStatus(map flow status → tracker status) → status-sync.md (who-wins)
  postComment(lifecycle event marker) → comments-sync.md (append + dedup)
  projectDepRelations(spec, issue) → § projectDepRelations below — depends_on_epics → blocked-by relations (additive, ledger-tracked, never advances lastSyncedAt; warns on unlinked dep; skipped when no transport)
