@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-65-land-accept-a-bot-reviewed-clean",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-06-17T08:51:19.952992Z",
   "created_at": "2026-06-17T07:28:03.220063Z",
   "default_impl": null,
   "default_review": null,
@@ -25,5 +25,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-06-17T07:58:32.835521Z"
+  "updated_at": "2026-06-17T08:51:19.953162Z"
 }
