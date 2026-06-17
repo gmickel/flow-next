@@ -380,11 +380,16 @@ Each blocker issue → one `relation`: `{ from: "#"+A.number (blocked), to: "#"+
 ```bash
 # 1. Resolve B's #N → numeric DB id (the POST body speaks DB ids, not #N):
 BLOCKER_ID=$(gh api "repos/$OWNER/$REPO/issues/$B_NUMBER" --jq '.id')
-# 2. POST the blocked_by edge on A (the endpoint path takes A's NUMBER):
+# 2. POST the blocked_by edge on A (the endpoint path takes A's NUMBER).
+#    issue_id MUST be a JSON NUMBER, not a string — use -F (--field, type-aware:
+#    bare integers stay numeric), NEVER -f (--raw-field, always a string):
 gh api --method POST -H "X-GitHub-Api-Version: 2026-03-10" \
   "repos/$OWNER/$REPO/issues/$A_NUMBER/dependencies/blocked_by" \
-  -f "issue_id=$BLOCKER_ID"
+  -F "issue_id=$BLOCKER_ID"
 ```
+- **`-F`, not `-f`, for `issue_id`.** GitHub rejects a string id; `gh api -f` would
+  send `"issue_id":"123"` (string) and 422. `-F`/`--field` types a bare integer as
+  a JSON number. (Equivalent: pipe `jq -n --argjson issue_id "$BLOCKER_ID" '{issue_id:$issue_id}'` to `--input -`.)
 - Stop at the **50/type cap**: count the existing `blocked_by` set first; at 50, skip + warn (never error the whole run).
 - A `gh` non-zero exit (bad id, perms, 422 already-exists) ⇒ return `errored` (don't crash); a 422 "already exists" is treated as an idempotent success (the read-before-write should have caught it, but tolerate the race).
 
