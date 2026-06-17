@@ -18,9 +18,8 @@ SKILL.md + the canonical land workflow prose are owned by fn-65.1 (so the Codex 
 - [ ] CHANGELOG.md entry added + version bumped via `scripts/bump.sh` across all manifests; flow-next.dev changelog + `FLOW_NEXT_VERSION` + package.json bumped to match.
 - [ ] Repo gate green (`bash plugins/flow-next/tests/ci_test.sh`).
 ## Done summary
-TBD
-
+Documented the new `land.cleanReviewCommentPattern` config key in flowctl.md (land config table — default shown as the built-in structured ERE, with empty-string-disables stated), added a CHANGELOG 2.1.1 `### Added` entry citing fn-65, and bumped the version 2.1.0 -> 2.1.1 across all manifests + README badge via scripts/bump.sh. RepoPrompt impl-review: SHIP, no findings; repo gate green (67/0).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: dd2da711612bc5bbf0d7df4f61ea2dc4707a8146
+- Tests: bash plugins/flow-next/scripts/ci_test.sh (67 passed, 0 failed)
 - PRs:
