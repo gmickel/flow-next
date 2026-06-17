@@ -22,9 +22,8 @@ Docs-last task; depends on the implementation (fn-64.1, fn-64.5) being settled s
 - flow-next.dev tracker-sync page + changelog updated, `FLOW_NEXT_VERSION`/`package.json` bumped, `pnpm build` green.
 - Repo gate green: `bash plugins/flow-next/tests/ci_test.sh` (or the repo's documented gate).
 ## Done summary
-TBD
-
+Landed the fn-64 docs-last deliverables in the flow-next repo: new Dependency-projection section in docs/tracker-sync.md, the list/set/clear-dep-relation subcommands in docs/flowctl.md, three GLOSSARY terms (dependency projection, provenance ledger, completed-blocker rule), the 2.1.0 CHANGELOG feature entry, a minor version bump (2.0.0 → 2.1.0) across all manifests via scripts/bump.sh, and the regenerated Codex mirror of the tracker-sync references. impl-review (rp) returned SHIP with zero findings.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 34de130056f52233addf958e24ed0c70725c3d21
+- Tests: python3 -m unittest test_tracker_sync_state (30 passed), python3 -m unittest test_dogfood_template_parity test_template_canonical test_install_cursor_parity test_codex_delegation_gates (52 passed), python3 -m py_compile flowctl.py, bash scripts/sync-codex.sh validators green (via bump.sh)
 - PRs:
