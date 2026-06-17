@@ -20499,8 +20499,15 @@ def cmd_sync_list_dep_relations(args: argparse.Namespace) -> None:
     _, spec_data = _resolve_sync_spec(args)
     flow_dir = get_flow_dir()
     self_id = args.id
-    ledger = (spec_data.get("tracker") or {}).get("depRelations") or []
-    projected_specs = {e.get("dep_spec") for e in ledger if e.get("dep_spec")}
+    self_tracker = spec_data.get("tracker") or {}
+    self_tracker_id = self_tracker.get("id")
+    ledger = self_tracker.get("depRelations") or []
+    # `projected` must key off the directed tracker EDGE, not the dep spec id:
+    # the ledger key is hash(from_tracker_id → to_tracker_id), so after either
+    # side is relinked to a different tracker issue the stored edge no longer
+    # matches the current resolution and projected must read false (fn-64 R7 —
+    # stale-ledger-after-relink). A dep-spec-membership check would lie here.
+    ledger_keys = {e.get("key") for e in ledger if e.get("key")}
 
     relations = []
     for dep_spec in spec_data.get("depends_on_epics", []) or []:
@@ -20510,13 +20517,20 @@ def cmd_sync_list_dep_relations(args: argparse.Namespace) -> None:
         dep_tracker_id, dep_identifier, dep_status = _resolve_dep_link(
             flow_dir, dep_canon
         )
+        # An edge is projected only when BOTH endpoints currently resolve to a
+        # tracker id AND the resulting directed edge key is in our ledger.
+        projected = bool(
+            self_tracker_id
+            and dep_tracker_id
+            and _dep_relation_key(self_tracker_id, dep_tracker_id) in ledger_keys
+        )
         relations.append(
             {
                 "dep_spec": dep_canon,
                 "dep_tracker_id": dep_tracker_id,
                 "dep_identifier": dep_identifier,
                 "dep_status": dep_status,
-                "projected": dep_canon in projected_specs,
+                "projected": projected,
             }
         )
 

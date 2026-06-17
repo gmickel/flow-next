@@ -500,6 +500,8 @@ class TrackerDepRelationsTestCase(unittest.TestCase):
         parent = self._create_spec("Parent list")
         dep = self._create_spec("Dep list")
         self._add_dep(parent, dep)
+        # Both endpoints must be linked for a relation to be projectable.
+        self._set_id(parent, "node-parent-uuid", identifier="WOR-1")
         self._set_id(dep, "node-dep-uuid", identifier="WOR-9")
         res = self._list_dep_relations(parent)
         self.assertEqual(res["count"], 1)
@@ -509,10 +511,29 @@ class TrackerDepRelationsTestCase(unittest.TestCase):
         self.assertEqual(rel["dep_identifier"], "WOR-9")
         self.assertEqual(rel["dep_status"], "open")  # local dep-spec status
         self.assertFalse(rel["projected"])  # not yet in the ledger
-        # After recording the relation, projected flips true.
+        # After recording the relation (parent→dep edge), projected flips true.
         self._set_dep_relation(parent, dep, "node-parent-uuid", "node-dep-uuid")
         rel2 = self._list_dep_relations(parent)["depRelations"][0]
         self.assertTrue(rel2["projected"])
+
+    def test_list_dep_relations_projected_false_after_relink(self) -> None:
+        # Regression (fn-64 R7): `projected` keys off the directed tracker EDGE,
+        # not the dep spec id. After the dep is relinked to a DIFFERENT issue,
+        # the stored ledger edge no longer matches the current resolution, so
+        # projected must read false — the old edge was never projected to the
+        # new issue. A dep-spec-membership check would wrongly report true.
+        parent = self._create_spec("Parent relink")
+        dep = self._create_spec("Dep relink")
+        self._add_dep(parent, dep)
+        self._set_id(parent, "node-parent-uuid", identifier="WOR-1")
+        self._set_id(dep, "node-dep-uuid", identifier="WOR-9")
+        self._set_dep_relation(parent, dep, "node-parent-uuid", "node-dep-uuid")
+        self.assertTrue(self._list_dep_relations(parent)["depRelations"][0]["projected"])
+        # Relink the dependency to a different tracker issue.
+        self._set_id(dep, "node-dep-MOVED", identifier="WOR-42", force=True)
+        rel = self._list_dep_relations(parent)["depRelations"][0]
+        self.assertEqual(rel["dep_tracker_id"], "node-dep-MOVED")
+        self.assertFalse(rel["projected"])  # stale ledger edge no longer matches
 
     def test_list_dep_relations_missing_link_surfaced(self) -> None:
         # A dependency spec with no tracker id resolves to dep_tracker_id=None
