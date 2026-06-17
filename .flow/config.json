@@ -5,12 +5,12 @@
     }
   },
   "land": {
-    "automatedReviewers": "",
+    "automatedReviewers": "chatgpt-codex-connector",
     "ciFixBudget": 3,
     "patienceMinutes": 30,
     "release": true,
     "reviewSignal": "silence",
-    "reviewTrigger": ""
+    "reviewTrigger": "@codex review"
   },
   "memory": {
     "enabled": true
