@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-17T11:31:22.928310Z",
+  "depends_on": [],
+  "id": "fn-66-tracker-sync-reserve-linear-done-for.4",
+  "priority": null,
+  "spec": "fn-66-tracker-sync-reserve-linear-done-for",
+  "spec_path": ".flow/tasks/fn-66-tracker-sync-reserve-linear-done-for.4.md",
+  "status": "todo",
+  "title": "Docs + CHANGELOG + version bump + Codex mirror + flow-next.dev",
+  "updated_at": "2026-06-17T11:41:04.988581Z"
+}
