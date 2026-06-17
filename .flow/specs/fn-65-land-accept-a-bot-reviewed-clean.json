@@ -12,7 +12,7 @@
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-06-17T07:58:32.835347Z",
   "spec_path": ".flow/specs/fn-65-land-accept-a-bot-reviewed-clean.md",
-  "status": "open",
+  "status": "done",
   "title": "land: accept a bot 'reviewed-clean' comment as the silence signal (not just formal reviews)",
   "tracker": {
     "baseHashFlow": null,
@@ -25,5 +25,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-06-17T08:51:19.953162Z"
+  "updated_at": "2026-06-17T10:11:45.011595Z"
 }
