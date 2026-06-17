@@ -17,9 +17,8 @@ Implement the relation transport on the Linear adapter ladder (MCP + GraphQL run
 - [ ] Bottom rung no-ops with a `noop` receipt (not "deferred").
 - [ ] linear-mcp.md / linear-graphql.md / linear-ladder.md updated with exact mutation/field names, verified against the live schema.
 ## Done summary
-TBD
-
+Implemented the Linear adapter relation transport for dependency projection across the three rung references: MCP rung (`setIssueRelation` via `save_issue` `blockedBy` append-only, live-re-verified schema; `listIssueRelations` via `get_issue includeRelations:true`), GraphQL rung (`issueRelationCreate(type: blocks)` with correct "A blocked by B" operand inversion `issueId:B`/`relatedIssueId:A`, dedup across BOTH `relations`+`inverseRelations` with explicit `first:` canonicalized to one direction), and the ladder (per-capability MCP-schema-drift fallback to GraphQL/noop, never-delete-non-ours, noop bottom rung). Read-before-write idempotency mandated on every rung. Satisfies R1, R3.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 08cb57beb6c65bca36f405e392f167f2e52a0323
+- Tests: docs-as-implementation (Linear adapter reference files) — no test suite; impl-review RP backend SHIP, 0 findings, R1+R3 covered
 - PRs:
