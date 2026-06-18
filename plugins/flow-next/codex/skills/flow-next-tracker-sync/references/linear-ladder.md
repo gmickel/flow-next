@@ -106,9 +106,20 @@ taxonomy) plus an optional config name-override (`tracker.perTracker.statusMap`)
 |---|---|---|
 | `backlog` | `backlog` | — |
 | `unstarted` | `planned` | — |
-| `started` | `in-progress` | flow wins |
+| `started` | `in-progress` / `in-review` (the In Review rung — a `started`-type state named "In Review", resolved via `statusMap`) | flow wins (`in-progress`); In Review is the open-PR rung |
 | `completed` | `done` (or `verified` via name-map, e.g. a "Verified" state) | tracker wins |
 | `canceled` | `wontfix` (or `deferred` via name-map) | surface to user, never auto-change |
+
+**Outbound terminal requires merge evidence (R1, lockstep with
+[status-sync.md](status-sync.md) flow→normalized).** This table is the *inbound*
+(tracker→normalized) read map. The *outbound* flow→normalized map gates terminal
+`done`/`verified` on a `MERGED` merge-evidence probe: a locally-`done` spec maps to
+**`in-review`** (Linear In Review — a `started`-type "In Review" state) until a
+`MERGED` PR is observed for its branch; `setStatus(done|verified)` is driven ONLY
+once `prEvidence == merged`. The In Review state resolves through the same
+name/type → `stateId` map below (a `started`-type state whose name matches the
+configured In Review rung). Keep this in lockstep with the
+`flowToNormalized(spec, prEvidence)` table in status-sync.md — they must not drift.
 
 Build the **name/type → `stateId` map once at config time** (MCP:
 `list_issue_statuses`; GraphQL: `workflowStates(first:100, filter:{team:…}){ id name type }`)
