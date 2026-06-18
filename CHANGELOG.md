@@ -2,6 +2,22 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 2.1.2] - 2026-06-18
+
+### Fixed
+- **tracker-sync reserves Linear `Done` for *merged* PRs; an open PR maps to `In Review`** (fn-66 / FLOW-15). tracker-sync could push a projected tracker issue to **`Done`** when a Flow spec was *locally* complete (all tasks `done` + completion-review `ship`) **even though no PR existed or the PR had not merged** — the SapienXT incident (`fn-29` / `WOR-27` reached all-done + `SHIP`, closeout pushed `WOR-27` → `Done` with no GitHub PR and unmerged commits, and a human had to drag it back). `Done` is a claim about reality ("this shipped"), read by people who don't see the repo, so a premature `Done` is a correctness bug, not cosmetic.
+  - **Merge-evidence gate** (fn-66.1): the flow→normalized mapping is now `flowToNormalized(spec, prEvidence)` — a function of `(spec status, completion_review_status, PR-merge-evidence)`, not spec state alone. **No** write path — automatic touchpoint OR a manual `/flow-next:tracker-sync` reconcile — may set the terminal `Done`/completed state without a GitHub-confirmed `MERGED` probe for the spec's `branch_name` (`gh pr list --head <branch> --state all` → `MERGED`). Local Flow completion is necessary, never sufficient. The invariant is **transport-blind** ([`references/status-sync.md`](plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md), [`references/adapter-interface.md`](plugins/flow-next/skills/flow-next-tracker-sync/references/adapter-interface.md)) — every adapter receives a terminal normalized status only after the gate. Worked-fixture matrix (no-PR / open / merged / closed-unmerged) added.
+  - **make-pr → `In Review`, unconditional when bridge active** (fn-66.2): an open PR *is* the In Review lifecycle rung. make-pr now moves the linked issue to `In Review` (alongside the existing PR-link comment) on the same unconditional path that powers Linear Diffs — not gated behind `perEvent.makePr`.
+  - **completion-review never terminal** (fn-66.2): the `completionReview` touchpoint is re-scoped from `reconcile` to a `comment`-shaped effect — it posts its verdict + R-ID coverage and at most leaves the issue at `In Review`, **never `Done`**.
+  - **land/merge → `Done`, active-by-default + self-checked** (fn-66.2): `land.merged` is the **sole** Done driver and is **active-by-default when the bridge is active** (leaving it opt-in would strand boards at `In Review` after a real merge). The terminal write self-checks the `MERGED` probe; the `perEvent.land.merged` leaf, if set, only tunes the optional verdict comment, never the status.
+  - **GitHub adapter parity** (fn-66.1): the GitHub adapter's reduced-fidelity terminal `setStatus(done|verified)` honors the same `MERGED` gate, so the bug can't regress via the back door.
+
+### Changed
+- **Pilot never returns terminal `NO_WORK` for an all-done spec lacking a merged PR** (fn-66.3). An all-done / completion-`ship` spec with **no** PR classifies `make-pr` and dispatches it; one with an **open** PR is land's work, so pilot records it as a *deferred candidate* and — if no other candidate is selectable — terminates with the new distinct, greppable `PILOT_VERDICT=DEFERRED_TO_LAND` line (registered in the `ralph.md` `/goal` driver grammar), never collapsing to `NO_WORK`. Closed-unmerged / missing-branch / merged-but-open-spec all-done states surface `NEEDS_HUMAN`.
+
+### Notes
+- Patch release — a behavior **fix** to the status projection, not a new capability. Boundaries hold: no new lifecycle phases, no change to merge mechanics (land still owns merging — this only constrains the *status write* to require merge evidence), no override of human board edits (the who-wins tiebreak is preserved), tracker stays a projection. Docs updated across `tracker-sync.md`, `teams.md`, the tracker-sync / work / pilot / land skill prose, the `references/{status-sync,github,adapter-interface}.md` notes, and the projection decision record; Codex mirror regenerated + audited; flow-next.dev ships the counterpart tracker-sync + land pass.
+
 ## [flow-next 2.1.1] - 2026-06-17
 
 ### Added
