@@ -3,12 +3,14 @@
   "claim_note": "",
   "claimed_at": null,
   "created_at": "2026-06-17T11:31:22.145573Z",
-  "depends_on": [],
+  "depends_on": [
+    "fn-66-tracker-sync-reserve-linear-done-for.1"
+  ],
   "id": "fn-66-tracker-sync-reserve-linear-done-for.2",
   "priority": null,
   "spec": "fn-66-tracker-sync-reserve-linear-done-for",
   "spec_path": ".flow/tasks/fn-66-tracker-sync-reserve-linear-done-for.2.md",
   "status": "todo",
   "title": "Touchpoint re-scoping: completionReview never-terminal / makePr to In Review / land.merged Done-on-merge-evidence",
-  "updated_at": "2026-06-17T11:41:04.608961Z"
+  "updated_at": "2026-06-18T07:50:21.366899Z"
 }
