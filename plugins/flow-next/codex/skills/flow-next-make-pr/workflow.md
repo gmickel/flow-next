@@ -1679,15 +1679,18 @@ The **primary linkage already happened in §4.6a** — the `Ref <identifier>` li
 ```bash
 if [[ -n "$PR_URL" ]] \
  && [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
- # Invoke the flow-next-tracker-sync skill: link $PR_URL to the issue AND move it
- # to In Review (the open-PR rung — fn-66, R2). BOTH ride this unconditional
- # bridge-active path (NOT gated behind perEvent.makePr): the link powers Diffs and
- # the In Review status is the honest lifecycle state for an open PR.
- # skill: flow-next-tracker-sync (operation: push <spec-id> (In Review) + link $PR_URL, event: makePr)
+ # Invoke the flow-next-tracker-sync skill with the canonical lifecycle dispatch
+ # grammar — `operation: <verb> <id>, event: <key>` (verbatim, no descriptors in
+ # the operation token):
+ # skill: flow-next-tracker-sync (operation: push <spec-id>, event: makePr)
+ # The `push` op (open-PR evidence) moves the issue to In Review AND links $PR_URL —
+ # BOTH ride this unconditional bridge-active path (NOT gated behind perEvent.makePr):
+ # the link powers Diffs and In Review is the honest lifecycle state for an open PR.
  # linear → rich attachment via attachmentLinkURL (GraphQL rung) + setStatus(in-review)
  # via status who-wins (flowToNormalized(spec, open) → in-review, non-terminal);
  # the §4.6a body ref already enabled the auto-link + Diffs. Optional breadcrumb comment.
  # github → native `Refs #N` (github.md) + status:in-review label.
+ # (the PR URL itself rides as evidence in the comment/attachment, not the op token.)
  # The open PR is the merge-evidence `open` bucket → In Review, NEVER terminal (no MERGED).
  # Unlinked spec → flow-first push (create + link) first, then link the PR / Diff + In Review
  # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable.
@@ -1718,7 +1721,7 @@ SINCE=$(gh pr view "$PR_URL" --json createdAt --jq .createdAt 2>/dev/null || tru
 **Retro-fire on MISSING — exactly ONE cycle, never blocking:**
 
 1. Record the retro-fire start anchor (the re-check needs it as `--since`): `date -u +%Y-%m-%dT%H:%M:%SZ`
-2. Invoke the **flow-next-tracker-sync skill directly** — the same dispatch as §5.6, with its `event:` tag: `skill: flow-next-tracker-sync (operation: link $PR_URL, event: makePr)` — NEVER this check block as a wrapper (no recursion).
+2. Invoke the **flow-next-tracker-sync skill directly** — the same dispatch as §5.6, with its `event:` tag, in the canonical `operation: <verb> <id>, event: <key>` grammar: `skill: flow-next-tracker-sync (operation: push <spec-id>, event: makePr)` (the `push` op links $PR_URL + moves the issue to In Review; the PR URL rides as evidence, not in the op token) — NEVER this check block as a wrapper (no recursion).
 3. Re-check with `--since` = the step-1 anchor:
  `"$FLOWCTL" sync check "$SPEC_ID" --events makePr --since "<retro-fire-start>" --json`
 4. Record the final state in the summary slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the PR is already open; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.

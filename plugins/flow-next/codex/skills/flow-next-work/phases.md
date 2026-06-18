@@ -402,7 +402,8 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
  # terminal `Done`/`verified` without a MERGED probe, so even if a stale config
  # set this leaf to `reconcile` the gate keeps it non-terminal: at most it leaves
  # the issue at `In Review` (open-PR evidence). land.merged is the SOLE Done driver.
- # skill: flow-next-tracker-sync (operation: comment <spec-id>, verdict + R-ID coverage, event: work.completionReview)
+ # skill: flow-next-tracker-sync (operation: comment <spec-id>, event: work.completionReview)
+ # (the comment carries the verdict + R-ID coverage as evidence — never a status push)
  # Unlinked spec → flow-first push (create + link) first, then the verdict comment
  # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport; Ralph queues.
  # The skill's receipts carry --event work.completionReview — audited by Phase 5's sync check.
@@ -506,7 +507,7 @@ EVENTS="work.firstClaim,work.done" # ← substitute the actual triggered set
 2. For each MISSING event, invoke the **flow-next-tracker-sync skill directly** — the same dispatch as the touchpoint that missed, with its `event:` tag — NEVER this check block as a wrapper (no recursion):
  - `work.firstClaim` → `skill: flow-next-tracker-sync (operation: push <spec-id>, status-only, event: work.firstClaim)`
  - `work.done` → `skill: flow-next-tracker-sync (operation: comment <spec-id>, event: work.done)`
- - `work.completionReview` → `skill: flow-next-tracker-sync (operation: comment <spec-id>, verdict + R-ID coverage, event: work.completionReview)` — comment-shaped, NEVER terminal (fn-66)
+ - `work.completionReview` → `skill: flow-next-tracker-sync (operation: comment <spec-id>, event: work.completionReview)` — comment-shaped (verdict + R-ID coverage as evidence), NEVER terminal (fn-66)
 3. Re-check the missed events only, `--since` = the step-1 anchor:
  `"$FLOWCTL" sync check "$SPEC_ID" --events "<missed-csv>" --since "<retro-fire-start>" --json`
 4. Record the final state in the summary slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the work is already done; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.
