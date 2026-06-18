@@ -24,9 +24,8 @@ Docs-last; depends on fn-66.1/.2/.3 settling so prose matches reality. GLOSSARY:
 - [ ] `plugins/flow-next/docs/teams.md` Linear Diffs paragraph updated — "spec-completion-review owns Done" → "land/merged evidence owns Done".
 - [ ] `references/github.md` + `adapter-interface.md` doc notes shipped (terminal-requires-merge-evidence).
 ## Done summary
-TBD
-
+fn-66.4 docs/release pass: audited that fn-66.1/.2/.3 fully inverted the tracker-sync.md/teams.md/status-sync.md "completion-review owns Done" prose to "land.merged owns Done" + In Review (no fix needed); added the decision-record Consequences note, the CHANGELOG 2.1.2 entry, and bumped flow-next 2.1.1→2.1.2 across all manifests + README + Codex/Cursor mirrors. RepoPrompt impl-review SHIP (2 rounds; the one NEEDS_WORK was a stale installed-copy artifact outside the repo/diff, not a real defect).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 8decd4a6ba4df1752e014cc650972acaa64d39d6
+- Tests: bash plugins/flow-next/scripts/ci_test.sh (67 passed), python3 -m unittest discover -s tests (1110 passed, 2 skipped)
 - PRs:
