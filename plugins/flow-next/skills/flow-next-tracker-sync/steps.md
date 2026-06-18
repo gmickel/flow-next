@@ -130,9 +130,16 @@ Route the operation; each layer calls hooks that operate on the normalized struc
 
 ```
 push(spec):
+  prEvidence = mergeEvidenceProbe(spec.branch_name)  → status-sync.md (merged|open|closed-unmerged|none|ambiguous|probe-error)
   body    = renderFlowToTracker(spec)            → body-merge.md Step 3 (flow→tracker) — COMPLETE spec, ALL sections; never summarize/truncate
   writeIssue(issue{... body ...})                [→ ref: transport]  # GitHub UPDATE preserves the flow-owned <!-- flow:deps --> region (github.md § writeIssue) — body=renderFlowToTracker output never contains it, so a raw full-body replace would wipe it and make projectDepRelations misread the ledgered edge as a remote removal → false collision. Write retains; merge strips (body-merge.md Step 0.5).
-  setStatus(map flow status → tracker status)    → status-sync.md (who-wins)
+  setStatus(flowToNormalized(spec, prEvidence) → tracker status)    → status-sync.md (who-wins)
+            # MERGE-EVIDENCE GATE (fn-66): the terminal rung (done/verified) is reachable
+            # ONLY when prEvidence == merged. flowToNormalized refuses terminal for
+            # none/open/closed-unmerged/ambiguous/probe-error — so NO push (automatic land.merged
+            # OR a manual reconcile) ever writes Done without a GitHub MERGED probe. The gate is a
+            # per-WRITE invariant (status-sync.md): a manual merge-evidenced push MAY terminal-write;
+            # a local-completion-only push never does.
   postComment(lifecycle event marker)            → comments-sync.md (append + dedup)
   projectDepRelations(spec, issue)               → § projectDepRelations below — depends_on_epics → blocked-by relations (additive, ledger-tracked, never advances lastSyncedAt; warns on unlinked dep; skipped when no transport)
   sync set-merge-base (BOTH halves) + set-last-synced   # snapshot the pushed pair (body-merge.md Step 5)
@@ -164,6 +171,7 @@ conflict) lives in that reference:
 reconcile(spec):
   base    = sync get-state → merge-base snapshot (BOTH forms: mergeBaseFlow + mergeBaseTracker)
   issue   = fetchIssue(trackerId)                [→ ref: transport]
+  prEvidence = mergeEvidenceProbe(spec.branch_name)  → status-sync.md (feeds reconcileStatus; gates terminal)
   projectReadiness(spec, issue)                  → status-sync.md § Readiness projection (rides every issue read; independent of the body merge — runs even when the body diverges)
   projectDepRelations(spec, issue)               → § projectDepRelations below (rides every issue read like projectReadiness; independent of the body merge — runs even when the body diverges or conflicts)
   merged  = threeWayMergeBody(base, flowBody, issue.body)   → body-merge.md
@@ -174,7 +182,12 @@ reconcile(spec):
      Ralph       → sync defer (queue the scoped conflict, never block)   [R9/R11]
      receipt: diverged
   else:
-     writeIssue(merged) + setStatus(who-wins)    [transport → fn-52.3/.7] + status-sync.md (who-wins)
+     writeIssue(merged) + setStatus(reconcileStatus(spec, issue, prEvidence))    [transport → fn-52.3/.7] + status-sync.md (who-wins)
+            # MERGE-EVIDENCE GATE (fn-66): reconcileStatus runs flowToNormalized(spec, prEvidence)
+            # first — a manual reconcile MAY terminal-write Done/verified IFF prEvidence == merged
+            # (status-sync.md S-I); closed-unmerged/ambiguous/probe-error → in-review + NEEDS_HUMAN
+            # (S-J), none → preserve non-terminal (S-G). The terminal-write merge-evidence invariant
+            # holds on this manual path exactly as on the automatic land.merged touchpoint.
      sync set-merge-base (BOTH halves) + sync set-last-synced   # body-merge.md Step 5 — ONLY on success
      receipt: merged | updated
   # no-base bootstrap (first link): body-merge.md "First-sync / no-base bootstrap" —

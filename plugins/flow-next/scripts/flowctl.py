@@ -1068,9 +1068,17 @@ def get_default_tracker_config() -> dict:
             # /flow-next:qa skill treats any non-`off` value as `comment`.
             # Default `off` keeps every existing repo silent until opted in.
             "qa": "off",
-            # fn-60 (R13) — opt-in post-merge touchpoint for /flow-next:land
-            # (flip linked issue terminal + release/verdict comment). Nested
-            # like work.*; default off keeps non-land repos at zero overhead.
+            # fn-60 (R13) / fn-66 (R10) — post-merge touchpoint for /flow-next:land.
+            # fn-66 makes land.merged the SOLE `Done` driver and ACTIVE-BY-DEFAULT
+            # whenever the bridge is active (like make-pr's unconditional PR-link
+            # path) — the merge→Done projection rides the bridge-active predicate
+            # alone, NOT this leaf. A real merge is the only event that legitimately
+            # projects terminal Done (gated on the GitHub MERGED probe), so leaving
+            # it opt-in would strand boards at In Review post-merge. The schema
+            # default stays `off` (a bare enabled=true activates no lifecycle sync
+            # — fn-52.1 invariant); when the bridge IS active the land skill fires
+            # this touchpoint regardless of the leaf, which then only tunes the
+            # optional verdict comment, never the (MERGED-gated) status write.
             "land": {"merged": "off"},
         },
         "perTracker": {

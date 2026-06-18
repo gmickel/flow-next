@@ -1664,9 +1664,11 @@ fi
 
 R24 invariant: under Ralph the PR URL is the **sole stdout artefact** in machine-parseable form (`PR_URL=<url>`), so the harness can capture it via `eval "$(/flow-next:make-pr ...)"` or by grep / tail. Everything else (memory write notes, recovery hints, breadcrumbs, the §5.7 tracker-sync check + `Tracker sync:` summary line) routes through stderr where the harness logs it but doesn't parse it.
 
-### 5.6 — Tracker sync (opt-in) — link the PR to the issue (Diffs-ready)
+### 5.6 — Tracker sync (opt-in) — link the PR to the issue + move it to In Review (Diffs-ready)
 
 **Runs whenever the tracker bridge is active, after `gh pr create` returned a `$PR_URL` in §4.6 (never under `--dry-run` — Phase 4.0 short-circuits before Phase 5).** No separate `makePr` opt-in — linking a PR to its issue is zero-/near-zero-cost hygiene and is the whole value (Linear Diffs). Links the PR to the tracker issue (R10), append-only and conflict-free (R8). **Not Ralph-blocked** (attaching a link is a confident, conflict-free op).
+
+**In Review status push rides this SAME unconditional bridge-active path (fn-66, R2).** Because an open PR for the branch is by definition the *In Review* lifecycle rung, moving the linked issue to `In Review` is part of the same PR↔issue linkage that powers Linear Diffs — it is **NOT gated behind `tracker.perEvent.makePr != off`** (that leaf gates only the optional breadcrumb comment, not the link/status that make the bridge useful). A just-created PR is `OPEN`, so the merge-evidence probe yields `open` and `flowToNormalized(spec, open)` → `in-review`; the dispatch below reconciles the issue to that non-terminal rung (never terminal — a freshly-opened PR has no merge evidence).
 
 The **primary linkage already happened in §4.6a** — the `Ref <identifier>` line in the PR body, which makes the host's tracker integration auto-link the PR. §5.6 is the **enhancement layer** and is **transport- and tracker-type-aware**:
 
@@ -1677,12 +1679,17 @@ The **primary linkage already happened in §4.6a** — the `Ref <identifier>` li
 ```bash
 if [[ -n "$PR_URL" ]] \
  && [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
- # Invoke the flow-next-tracker-sync skill: link $PR_URL to the issue.
- # skill: flow-next-tracker-sync (operation: link $PR_URL, event: makePr)
- # linear → rich attachment via attachmentLinkURL (GraphQL rung) + optional breadcrumb comment;
- # the §4.6a body ref already enabled the auto-link + Diffs.
- # github → native `Refs #N` (github.md).
- # Unlinked spec → flow-first push (create + link) first, then link the PR / Diff
+ # Invoke the flow-next-tracker-sync skill: link $PR_URL to the issue AND move it
+ # to In Review (the open-PR rung — fn-66, R2). BOTH ride this unconditional
+ # bridge-active path (NOT gated behind perEvent.makePr): the link powers Diffs and
+ # the In Review status is the honest lifecycle state for an open PR.
+ # skill: flow-next-tracker-sync (operation: push <spec-id> (In Review) + link $PR_URL, event: makePr)
+ # linear → rich attachment via attachmentLinkURL (GraphQL rung) + setStatus(in-review)
+ # via status who-wins (flowToNormalized(spec, open) → in-review, non-terminal);
+ # the §4.6a body ref already enabled the auto-link + Diffs. Optional breadcrumb comment.
+ # github → native `Refs #N` (github.md) + status:in-review label.
+ # The open PR is the merge-evidence `open` bucket → In Review, NEVER terminal (no MERGED).
+ # Unlinked spec → flow-first push (create + link) first, then link the PR / Diff + In Review
  # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable.
  # Best-effort — the PR is already open; a tracker failure must NOT exit non-zero.
  # Under Ralph, framing routes to stderr (keeps the PR_URL=<url> stdout invariant).
@@ -1690,7 +1697,7 @@ if [[ -n "$PR_URL" ]] \
 fi
 ```
 
-The PR is already open before this step; a tracker failure surfaces as a stderr warning and never changes the exit code (same non-fatal discipline as the `--memory` write in §5.1). The skill emits its own receipt, event-tagged `--event makePr` — the tag §5.7's end-of-run `sync check` audits.
+The PR is already open before this step; a tracker failure surfaces as a stderr warning and never changes the exit code (same non-fatal discipline as the `--memory` write in §5.1). The skill emits its own receipt, event-tagged `--event makePr` — the tag §5.7's end-of-run `sync check` audits. The `In Review` status push is non-terminal (`flowToNormalized(spec, open) → in-review`, status-sync.md S-H) — an open PR is never `Done`.
 
 ### 5.7 — Tracker-sync end-of-run check — LAST action before exit (fn-57)
 
