@@ -60,20 +60,43 @@ PR_JSON=$(gh pr list --head "$BRANCH_NAME" --state all \
  --json url,state,number,isDraft 2>/dev/null)
 MERGED=$(printf '%s' "$PR_JSON" | jq '[.[] | select(.state=="MERGED")] | length')
 OPEN=$(printf '%s' "$PR_JSON" | jq '[.[] | select(.state=="OPEN")] | length')
-# prEvidence ∈ { merged (≥1 MERGED), open (≥1 OPEN, 0 MERGED),
-# closed-unmerged (≥1 CLOSED, 0 MERGED/OPEN), none (no PR for branch) }
+# prEvidence ∈ {
+# merged ≥1 MERGED
+# open ≥1 OPEN, 0 MERGED
+# closed-unmerged ≥1 CLOSED, 0 MERGED/OPEN
+# none no PR for branch (probe succeeded, empty result)
+# ambiguous a state the four buckets above don't cleanly cover — e.g. a
+# branch with BOTH an open AND a closed-unmerged PR, or a draft-
+# only result where no clear merge/open/closed signal dominates
+# probe-error the gh probe itself failed (non-zero rc, no auth, network) —
+# branch_name unknown counts here (cannot probe)
+# }
 ```
+
+**Probe failure / unknown branch is NOT merge evidence.** If `spec.branch_name` is
+empty/unknown, or the `gh pr list` probe errors (rc≠0, no `gh`/auth, network), treat
+`prEvidence` as `probe-error` — never as `none` and never as `merged`. Both
+`probe-error` and `ambiguous` are non-terminal and route to NEEDS_HUMAN (below);
+terminal is reachable ONLY from an unambiguous `merged`.
 
 > Use `-F` not `-f` for numeric `gh api` fields (a `-f number=…` stringifies the
 > JSON value — memory `gh-api-f-stringifies`). The probe above uses `gh pr list`,
 > not `gh api`, so it is unaffected; the note is for any follow-on `gh api` call.
 
+`flowToNormalized` maps to the normalized rung the spec *would* project. **It never
+forces a rung downgrade by itself** — the reconcile loop (below) decides whether to
+*write* it. In particular, `prEvidence == none` projects `in-review` but the loop's
+**no-PR preserve rule** keeps an already-valid non-terminal tracker state (S-G); the
+`in-review` projection only drives a `setStatus` when there is a real open-PR
+(`open`) signal behind it.
+
 | flow condition | `prEvidence` | normalized | Rationale |
 |---|---|---|---|
 | spec `open`, **no** task `in_progress`/`done` yet (all `todo`) | any | `planned` (or `backlog` if no tasks exist) | authored, not started |
 | spec `open`, **any** task `in_progress` or some `done` | any | `in-progress` | work underway |
-| spec `done` (any `completion_review_status`) | `none` / `closed-unmerged` | **`in-review`** (NOT terminal) | implementation complete, but **no merged PR** — terminal is reserved for `MERGED` (R1). `closed-unmerged` additionally **surfaces NEEDS_HUMAN** (a PR was closed without merging) |
-| spec `done` | `open` | `in-review` | open PR awaiting merge — the In Review rung (R2) |
+| spec `done` (any `completion_review_status`) | `none` | **`in-review`** projection (NOT terminal); loop **preserves** an existing non-terminal state (S-G) | no PR exists — no merge evidence, no open-PR signal → never terminal, never a forced advance (R1) |
+| spec `done` (any `completion_review_status`) | `closed-unmerged` / `ambiguous` / `probe-error` | **`in-review`** (NOT terminal) **+ surface NEEDS_HUMAN** | locally shipped but the probe is not a clean MERGED — never terminal; the conflict goes to a human (R6) |
+| spec `done` | `open` | `in-review` | open PR awaiting merge — the In Review rung, drives `setStatus(in-review)` (R2) |
 | spec `done`, `completion_review_status != ship` | `merged` | `in-review` | PR merged but completion review not yet shipped — stay in review until verified |
 | spec `done`, `completion_review_status == ship` | `merged` | **`verified`** | completion review shipped **and** PR merged — terminal, verified |
 | spec `done`, no completion-review configured | `merged` | **`done`** | terminal, no review gate, **merge-confirmed** |
@@ -125,7 +148,7 @@ the two current normalized statuses, which are always available).
 
 ```
 reconcileStatus(spec, issue):
- prEvidence = mergeEvidenceProbe(spec.branch_name) # merged|open|closed-unmerged|none
+ prEvidence = mergeEvidenceProbe(spec.branch_name) # merged|open|closed-unmerged|none|ambiguous
  flowNorm = flowToNormalized(spec, prEvidence) # table above — terminal needs MERGED
  trackerNorm = issue.status.normalized # adapter already mapped it
 
@@ -141,6 +164,17 @@ reconcileStatus(spec, issue):
  # genuine status deadlock (tracker=done × flow=in-progress, simultaneously) →
  # R1 conflictTiebreak fallback (next section). NOT a silent auto-close.
 
+ # ── CLOSED-UNMERGED / AMBIGUOUS / PROBE-ERROR — flow is locally done but the
+ # merge probe is NOT a clean MERGED. flowNorm is in-review (non-terminal — the
+ # gate forbade terminal), but the closed-without-merge / missing-branch /
+ # ambiguous / probe-error condition is a conflict a human must judge: surface
+ # NEEDS_HUMAN and do NOT write any status. Caught before the in-review
+ # advancement so it never silently pushes a rung. ──
+ elif spec.status == done and prEvidence ∈ {closed-unmerged, ambiguous, probe-error}:
+ # R6: locally shipped, but no merged PR and the probe is not clean →
+ # surface NEEDS_HUMAN (interactive ask / Ralph `sync defer --reason <prEvidence>`).
+ # NO setStatus, NO terminal, NO spec change. Tracker keeps its current state.
+
  elif trackerNorm ∈ {done, verified} (terminal, flow NOT in-progress):
  # tracker wins terminal — flow is at backlog/planned/done, so the tracker's
  # closure folds in cleanly (no live in-progress work to contradict it)
@@ -151,12 +185,28 @@ reconcileStatus(spec, issue):
  # flow wins in-progress — push flow's progress to the tracker
  setStatus(trackerId, in-progress) [transport — linear-ladder.md]
 
+ # ── NO-PR PRESERVE RULE (S-G) — flow is locally done but prEvidence is `none`
+ # (no PR exists). flowNorm is in-review, but if the tracker is ALREADY at a
+ # valid non-terminal state (backlog/planned/in-progress/in-review) we do NOT
+ # force a rung change: a locally-shipped spec with no PR has no merge evidence
+ # and no open-PR signal, so we KEEP the current non-terminal state (no advance,
+ # no terminal). This is checked before the generic in-review push so `none`
+ # never drives an unconditional in-progress→in-review downgrade. ──
+ elif flowNorm == in-review and prEvidence == none
+ and trackerNorm ∈ {backlog, planned, in-progress, in-review}:
+ # S-G: preserve the existing valid non-terminal state — no setStatus, no advance.
+
+ elif flowNorm == in-review and trackerNorm ∈ {backlog, planned, in-progress}:
+ # flow is in review (open PR — prEvidence=open), tracker behind → push the
+ # In Review rung (R2). Non-terminal advance; issue stays OPEN.
+ setStatus(trackerId, in-review) [transport — linear-ladder.md / github.md]
+
  elif trackerNorm ∈ {deferred, wontfix} OR priority differs:
  # surface, never auto-change (interactive ask / Ralph queue) — see below
 
- elif flowNorm ∈ {done, verified} and trackerNorm ∈ {backlog, planned}:
- # flow reached terminal, tracker still pre-active (not in-progress → not a
- # deadlock) — push flow's closure out
+ elif flowNorm ∈ {done, verified} and trackerNorm ∈ {backlog, planned, in-review}:
+ # flow reached terminal (prEvidence=merged — the gate passed), tracker still
+ # pre-terminal (not in-progress → not a deadlock) — push flow's closure out
  setStatus(trackerId, flowNorm) [transport]
 
  else:
@@ -533,6 +583,15 @@ ambiguity (locally shipped, but the PR was closed unmerged) **surfaces NEEDS_HUM
 surfaced/queued entry naming the closed-unmerged branch; the issue stays
 non-terminal. PASS iff a closed-unmerged spec never auto-closes the tracker issue and
 the conflict reaches a human.
+
+> **`ambiguous` and `probe-error` share S-J's path.** A `prEvidence` of `ambiguous`
+> (e.g. both an open AND a closed-unmerged PR on the branch) or `probe-error`
+> (`gh` failed / no auth / unknown `branch_name`) is handled by the **same**
+> reconcile branch as `closed-unmerged`: `flowToNormalized` → `in-review`
+> (non-terminal), and the loop surfaces NEEDS_HUMAN (`sync defer --reason ambiguous`
+> / `--reason probe-error`) with **no** status write. Terminal is reachable ONLY
+> from an unambiguous `merged` (S-I) — a failed or ambiguous probe never closes the
+> issue.
 
 ## Boundaries
 
