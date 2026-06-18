@@ -448,7 +448,9 @@ attachment, no Linear Diffs (GitHub has its own PR review UI). make-pr §4.6a's
 Linear branch is GitHub-typed-skipped; instead the GitHub adapter ensures the PR
 body carries a **non-closing** reference to the issue — `Refs #<number>` (NOT
 `Fixes #<number>`, which would auto-close the issue on merge and bypass
-spec-completion-review; flow-next owns the lifecycle, R7/R10). GitHub then renders
+flow-next's `land.merged` Done projection — the merge-evidence-gated lifecycle
+that owns the terminal `Done` transition post-fn-66; flow-next owns the lifecycle,
+R7/R10). GitHub then renders
 the PR↔issue cross-link automatically. Gate is the same as Linear: bridge **active
 AND tracker.type == github** — no separate `makePr` opt-in. There is no rich-attach
 step (the cross-reference IS the link).

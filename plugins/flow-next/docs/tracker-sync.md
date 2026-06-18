@@ -127,7 +127,7 @@ These are the only two unconditional touchpoints; everything else stays `perEven
 A `Tracker sync: MISSING:<event> (retro-fire failed: <reason>)` summary line means the touchpoint didn't fire AND the one bounded retro-fire couldn't recover it — typically no reachable transport (MCP server down, no `LINEAR_API_KEY`, `gh` unauthenticated). The primary work is unaffected: tracker sync is best-effort and never blocks, so the task is done / the PR is open. To recover by hand:
 
 1. **Read the failure reason** from the run's receipts: `ls -t .flow/sync-runs/sync-<spec-id>-*.json | head -3` — the `status` (`noop` / `errored`) and `note` fields on the event-tagged receipt say why it failed.
-2. **Once transport returns**, re-fire the missed touchpoint manually via the skill: `/flow-next:tracker-sync push <spec-id>` for status events (`work.firstClaim`, `work.completionReview`), or the matching op for comment events (`comment <spec-id>` for `work.done` / `makePr`).
+2. **Once transport returns**, re-fire the missed touchpoint manually via the skill: `/flow-next:tracker-sync push <spec-id>` for the status event (`work.firstClaim`), or the matching `comment <spec-id>` op for comment events (`work.done`, `makePr`, and `work.completionReview` — the last posts only a verdict + R-ID coverage comment, never a terminal status per fn-66).
 3. **Verify**: `flowctl sync check <spec-id> --events <event> --since <retro-fire-time>` now prints `OK:<event>`.
 
 ## Linear Diffs — review the PR inside the issue
