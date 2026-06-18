@@ -90,16 +90,43 @@ forces a rung downgrade by itself** — the reconcile loop (below) decides wheth
 `in-review` projection only drives a `setStatus` when there is a real open-PR
 (`open`) signal behind it.
 
-| flow condition | `prEvidence` | normalized | Rationale |
-|---|---|---|---|
-| spec `open`, **no** task `in_progress`/`done` yet (all `todo`) | any | `planned` (or `backlog` if no tasks exist) | authored, not started |
-| spec `open`, **any** task `in_progress` or some `done` | any | `in-progress` | work underway |
-| spec `done` (any `completion_review_status`) | `none` | **`in-review`** projection (NOT terminal); loop **preserves** an existing non-terminal state (S-G) | no PR exists — no merge evidence, no open-PR signal → never terminal, never a forced advance (R1) |
-| spec `done` (any `completion_review_status`) | `closed-unmerged` / `ambiguous` / `probe-error` | **`in-review`** (NOT terminal) **+ surface NEEDS_HUMAN** | locally shipped but the probe is not a clean MERGED — never terminal; the conflict goes to a human (R6) |
-| spec `done` | `open` | `in-review` | open PR awaiting merge — the In Review rung, drives `setStatus(in-review)` (R2) |
-| spec `done`, `completion_review_status != ship` | `merged` | `in-review` | PR merged but completion review not yet shipped — stay in review until verified |
-| spec `done`, `completion_review_status == ship` | `merged` | **`verified`** | completion review shipped **and** PR merged — terminal, verified |
-| spec `done`, no completion-review configured | `merged` | **`done`** | terminal, no review gate, **merge-confirmed** |
+**Row-order discipline (load-bearing).** `prEvidence` is evaluated **FIRST** — a PR
+signal (`merged` / `open`) decides the rung *before* any local task/completion-status
+row gets a vote. The local-status rows (the `no PR evidence` block) apply **only**
+when there is no PR signal (`none` / `closed-unmerged` / `ambiguous` / `probe-error`).
+This ordering is what makes an all-tasks-done OPEN spec with an open PR project
+`in-review` (not `in-progress`), and a merged ungated/`unknown`-completion spec reach
+terminal Done (not stay `in-review`). The merge-evidence INVARIANT is intact: terminal
+(`done`/`verified`) is reachable ONLY from `prEvidence == merged`.
+
+| # | flow condition | `prEvidence` | normalized | Rationale |
+|---|---|---|---|---|
+| 1 | spec `done`, no completion-review configured | `merged` | **`done`** | terminal, no review gate, **merge-confirmed** — a merge is a merge |
+| 2 | spec `done`, `completion_review_status == ship` | `merged` | **`verified`** | completion review shipped **and** PR merged — terminal, verified |
+| 3 | spec `done`, `completion_review_status != ship` (incl. `unknown`) | `merged` | `in-review` | PR merged but a configured completion review is not yet `ship` — stay in review until verified |
+| 4 | spec at any local status (incl. all-tasks-done OPEN, or spec `done`) | `open` | `in-review` | open PR awaiting merge — the In Review rung, drives `setStatus(in-review)` (R2). The open-PR signal wins over the local task rows |
+| 5 | spec `done` | `none` | **`in-review`** projection (NOT terminal); loop **preserves** an existing non-terminal state (S-G) | no PR exists — no merge evidence, no open-PR signal → never terminal, never a forced advance (R1) |
+| 6 | spec `done` | `closed-unmerged` / `ambiguous` / `probe-error` | **`in-review`** (NOT terminal) **+ surface NEEDS_HUMAN** | locally shipped but the probe is not a clean MERGED — never terminal; the conflict goes to a human (R6) |
+| 7 | spec `open`, **any** task `in_progress` or some `done` | `none` / `closed-unmerged` / `ambiguous` / `probe-error` | `in-progress` | work underway, no open/merged PR signal |
+| 8 | spec `open`, **no** task `in_progress`/`done` yet (all `todo`) | `none` / `closed-unmerged` / `ambiguous` / `probe-error` | `planned` (or `backlog` if no tasks exist) | authored, not started |
+
+> **Why row 3 catches `unknown`.** flowctl normalizes a missing completion-review
+> field to `unknown` (`flowctl.py:2296-2297`), and for repos without a
+> completion-review backend pilot treats `completion_review_status != ship` as
+> ungated. Row 3 is the `merged` + non-`ship` rung **only when a completion review is
+> actually configured** — when no completion-review backend is configured at all,
+> row 1 fires first (a spec with no review gate has nothing to wait on, so a merge is
+> terminal `done`). Distinguish the two by `flowctl config`: "no completion-review
+> configured" ⇒ row 1; "configured but the spec's review isn't `ship`/`unknown`-while-
+> backend-present" ⇒ row 3.
+
+> **Why rows 4–6 sit above rows 7–8.** A PR signal — open or merged — is stronger
+> evidence of where the work *is* than the local task ledger. In the normal make-pr
+> path the spec is still `open` with all tasks `done` (flow-next-work/phases.md:488
+> says not to close the spec before the PR; land later discovers `status==open &&
+> tasks==done`). Evaluating the open-PR row (4) before the broad "some task done →
+> in-progress" row (7) is what moves that issue to **In Review** on the make-pr push
+> (flow-next-make-pr/workflow.md:1685-1690) instead of leaving it at In Progress.
 
 **Terminal (`done`/`verified`) is impossible without a `MERGED` probe result.** The
 old map (pre-fn-66) mapped `spec done + completion ship → verified` and `spec done,
@@ -592,6 +619,43 @@ the conflict reaches a human.
 > / `--reason probe-error`) with **no** status write. Terminal is reachable ONLY
 > from an unambiguous `merged` (S-I) — a failed or ambiguous probe never closes the
 > issue.
+
+### Fixture S-K — all-tasks-done OPEN spec + open PR → In Review (row-order, Thread A)
+
+**Flow:** spec **`open`** (NOT yet `done` — the normal make-pr path leaves the spec
+`open` after all tasks finish; flow-next-work/phases.md:488), **all tasks `done`**.
+**`prEvidence`:** `open` (one `OPEN` PR for the spec branch, 0 `MERGED`).
+**Tracker:** `status.normalized = "in-progress"`.
+
+**Expected:** `flowToNormalized(spec, open)` → **`in-review`** (row 4 — the open-PR
+signal is evaluated **before** the "some task done → in-progress" local row, so it
+wins). The make-pr push (flow-next-make-pr/workflow.md:1685-1690) drives
+`setStatus(trackerId, in-review)` → the issue moves to **In Review**, stays OPEN, NOT
+terminal.
+
+**Oracle:** exactly one `setStatus(in-review)`; the issue is **In Review** (NOT left
+at In Progress). PASS iff an all-tasks-done OPEN spec with an open PR projects to In
+Review — the pre-fn-66 row order returned `in-progress` here and the make-pr push
+never advanced the issue. Regression guard for Thread A.
+
+### Fixture S-L — merged ungated / `unknown`-completion spec → terminal Done (row-order, Thread B)
+
+**Flow:** spec `done`, **`completion_review_status == unknown`** (no completion-review
+backend configured — flowctl normalizes the missing field to `unknown`,
+flowctl.py:2296-2297; pilot treats `!= ship` as ungated, flow-next-pilot/workflow.md:117-122).
+**`prEvidence`:** `merged` (≥1 `MERGED` PR for the spec branch).
+**Tracker:** `status.normalized = "in-review"`.
+
+**Expected:** `flowToNormalized(spec, merged)` → **`done`** (terminal — row 1 fires
+because no completion-review backend is configured; a merge is a merge for an ungated
+repo). `setStatus(trackerId, done)` → Linear `completed`-type Done / GitHub
+`gh issue close --reason completed`. The `unknown` completion status does **not**
+trap the spec in `in-review`.
+
+**Oracle:** exactly one terminal `setStatus(done)` (issue closed/Done). PASS iff a
+merged ungated/`unknown`-completion spec reaches terminal Done — the pre-fn-66 row
+order let row 3 (`!= ship → in-review`) catch `unknown` first, so `land.merged` never
+wrote Done for ungated projects. Regression guard for Thread B.
 
 ## Boundaries
 
