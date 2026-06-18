@@ -1021,8 +1021,11 @@ def save_task_definition(task_id: str, definition: dict) -> None:
 # because `load_flow_config()` always merges this default block in, an absent /
 # null / unrelated write must NOT activate the bridge. The bridge is active iff
 # raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github}` (see
-# `tracker_sync_active`). All `perEvent` leaves default `off`, so even a stray
-# `enabled=true` does nothing until a specific event is opted in.
+# `tracker_sync_active`). All `perEvent` leaves default `off`, so a stray
+# `enabled=true` opts in no PER-EVENT lifecycle sync until a specific event is
+# enabled — EXCEPT the two fn-66 unconditional bridge-active paths: make-pr's
+# PR↔issue link + In Review push, and `land.merged`'s Done-on-merge (both ride the
+# bridge-active predicate alone, not a perEvent leaf — see SKILL.md / steps.md).
 TRACKER_TYPES = {"linear", "github"}
 TRACKER_PER_EVENT_LEAVES = {"off", "pull", "push", "reconcile", "comment"}
 TRACKER_TIEBREAKS = {"flow-wins", "tracker-wins", "always-ask"}
