@@ -465,10 +465,14 @@ git log --oneline -1 # evidence echo: the squash commit referencing the PR
  fi
  ```
 
- **Self-check the `MERGED` probe before dispatching the terminal push (fn-66, R3).** This touchpoint runs from the post-merge tail, but it must NOT trust the caller's claim of a merge — it re-confirms GitHub reports the linked PR `MERGED` for the spec branch (`MERGED_PR_NUM` from the Phase 3.5 probe is non-empty; equivalently `gh pr list --head "$BRANCH_NAME" --state all --json state` shows a `MERGED` entry). The merge-evidence invariant is an **invariant on the outbound terminal write**, enforced at the source — if the probe is not a clean `MERGED`, do NOT dispatch a `Done` push (fall back to a non-terminal comment or `NEEDS_HUMAN`), so no path writes `Done` without merge evidence:
+ **Self-check the `MERGED` probe before dispatching the terminal push (fn-66, R3).** This touchpoint runs from the post-merge tail, but it must NOT trust the caller's claim of a merge — it re-confirms GitHub reports the linked PR `MERGED` for the spec branch. **Critically, do NOT reuse the Phase 3.5 `MERGED_PR_NUM`** — on the normal babysit path the PR was `OPEN` at discovery, so that variable is empty even though land just merged it. **Re-probe fresh, after the `gh pr merge` succeeded and before deciding `TRACKER_TERMINAL_OK`** (this also covers the re-entry path, where the pre-merge probe already saw `MERGED`). The merge-evidence invariant is an **invariant on the outbound terminal write**, enforced at the source — if the fresh probe is not a clean `MERGED`, do NOT dispatch a `Done` push (fall back to a non-terminal comment or `NEEDS_HUMAN`), so no path writes `Done` without merge evidence:
 
  ```bash
- if [ "$TRACKER_FIRE" = "1" ] && [ -n "$MERGED_PR_NUM" ]; then
+ # Fresh post-merge re-probe — NEVER the stale Phase 3.5 MERGED_PR_NUM (empty on the
+ # normal OPEN→merge path). This is the authoritative merge-evidence read for the gate.
+ MERGED_CONFIRMED="$(gh pr list --head "$BRANCH_NAME" --state all --json state \
+ | jq -r '[.[] | select(.state == "MERGED")] | length')"
+ if [ "$TRACKER_FIRE" = "1" ] && [ "${MERGED_CONFIRMED:-0}" -gt 0 ]; then
  TRACKER_TERMINAL_OK=1 # GitHub-confirmed MERGED → the gate is satisfied
  else
  TRACKER_TERMINAL_OK=0 # no clean MERGED → comment only, never terminal
