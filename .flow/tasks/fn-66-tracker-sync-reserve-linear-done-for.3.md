@@ -18,9 +18,8 @@ Independent of fn-66.1/.2 (edits only pilot workflow.md), but conceptually the p
 - [ ] Closed-unmerged PR, missing branch, or merged-but-still-open-spec → `NEEDS_HUMAN` (R6), never Done/NO_WORK.
 - [ ] The classification table + crash-class note in pilot workflow.md reflect the new cases; reasons are greppable in the verdict line.
 ## Done summary
-TBD
-
+Hardened pilot's all-done classification: an all-done spec with an open PR now emits an explicit greppable PILOT_VERDICT=DEFERRED_TO_LAND (stage=land) instead of silently collapsing to terminal NO_WORK; no-PR all-done always classifies make-pr (FLOW-15 case); closed-unmerged/missing-branch/merged-but-open-spec stay NEEDS_HUMAN. Registered the new DEFERRED_TO_LAND verdict token + land stage in the SKILL.md grammar and ralph.md /goal driver recipes; regenerated the Codex mirror.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 17e58dccc80b9ae73955a7381c3fa18e8e1b5da9, 6f69001c95676ad9ac3bd985a6216131ad28e69b
+- Tests: bash plugins/flow-next/scripts/ci_test.sh (67 passed, 0 failed), bash scripts/sync-codex.sh (mirror regen, all gates pass)
 - PRs:

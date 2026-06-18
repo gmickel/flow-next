@@ -25,9 +25,8 @@ Depends on fn-66.1 (the policy/map). This task wires the callers to it. No merge
 - [ ] make-pr's `In Review` push rides the UNCONDITIONAL PR-link path (active whenever the bridge is active), not gated behind `perEvent.makePr != off` (R2).
 - [ ] A manual `/flow-next:tracker-sync` reconcile MAY terminal-write `Done` iff `MERGED` evidence exists (the merge-evidence invariant is per-write, not per-touchpoint) (R10).
 ## Done summary
-TBD
-
+Re-scoped the three tracker-sync status touchpoints to the corrected lifecycle policy: completionReview is now comment-shaped (verdict + R-ID coverage, never terminal Done), make-pr pushes In Review on the unconditional bridge-active PR-link path, and land.merged is the sole active-by-default Done driver that self-checks the GitHub MERGED probe. Added a flowctl perEvent round-trip test, a steps.md setStatus merge-evidence gate, and updated docs + the Codex mirror. RepoPrompt impl-review reached SHIP (R2/R3/R4/R10 all met) after 3 fix rounds.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0ac5dae, d78f505, fe62787, 5d022d4
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (1110 tests, OK), bash plugins/flow-next/scripts/ci_test.sh (67 passed, 0 failed)
 - PRs:

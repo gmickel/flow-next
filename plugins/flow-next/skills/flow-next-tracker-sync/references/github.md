@@ -142,6 +142,19 @@ edited directly on GitHub by a human who didn't touch the label):
 | `done` / `verified` | `gh issue close --reason completed` | set `status:<normalized>` (so `verified` vs `done` is recoverable) |
 | `deferred` / `wontfix` | **do NOT auto-apply** — these are R7 surface-only | — |
 
+**Terminal close requires merge evidence (R1, R8 — same gate as Linear).** The
+`done` / `verified` row above is a *transport* mapping: the adapter only ever
+*receives* a terminal normalized status to write because the upstream
+`flowToNormalized(spec, prEvidence)` map ([status-sync.md](status-sync.md)) gated it
+on a `MERGED` merge-evidence probe for the spec branch. A locally-`done` spec with no
+merged PR normalizes to **`in-review`** (→ open issue + `status:in-review`), so this
+adapter **never closes the issue** for a spec that lacks a merged PR. The
+merge-evidence gate is transport-blind — it applies identically on the GitHub adapter
+and the Linear adapter (R8); this firewall just maps the already-gated normalized
+status DOWN to GitHub's `OPEN`/`CLOSED`+reason. A `closed-unmerged` / missing-branch
+probe never produces a terminal normalized status, so no `gh issue close --reason
+completed` is ever driven from local completion alone.
+
 **`deferred` / `wontfix` are surfaced, never auto-applied** (R7 semantics, same as
 Linear's `canceled`-type states): the adapter reports the desired transition to
 the user (or queues it in Ralph) rather than closing the issue as `not planned`
@@ -435,7 +448,9 @@ attachment, no Linear Diffs (GitHub has its own PR review UI). make-pr §4.6a's
 Linear branch is GitHub-typed-skipped; instead the GitHub adapter ensures the PR
 body carries a **non-closing** reference to the issue — `Refs #<number>` (NOT
 `Fixes #<number>`, which would auto-close the issue on merge and bypass
-spec-completion-review; flow-next owns the lifecycle, R7/R10). GitHub then renders
+flow-next's `land.merged` Done projection — the merge-evidence-gated lifecycle
+that owns the terminal `Done` transition post-fn-66; flow-next owns the lifecycle,
+R7/R10). GitHub then renders
 the PR↔issue cross-link automatically. Gate is the same as Linear: bridge **active
 AND tracker.type == github** — no separate `makePr` opt-in. There is no rich-attach
 step (the cross-reference IS the link).

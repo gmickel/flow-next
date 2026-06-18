@@ -1664,9 +1664,11 @@ fi
 
 R24 invariant: under Ralph the PR URL is the **sole stdout artefact** in machine-parseable form (`PR_URL=<url>`), so the harness can capture it via `eval "$(/flow-next:make-pr ...)"` or by grep / tail. Everything else (memory write notes, recovery hints, breadcrumbs, the §5.7 tracker-sync check + `Tracker sync:` summary line) routes through stderr where the harness logs it but doesn't parse it.
 
-### 5.6 — Tracker sync (opt-in) — link the PR to the issue (Diffs-ready)
+### 5.6 — Tracker sync (opt-in) — link the PR to the issue + move it to In Review (Diffs-ready)
 
 **Runs whenever the tracker bridge is active, after `gh pr create` returned a `$PR_URL` in §4.6 (never under `--dry-run` — Phase 4.0 short-circuits before Phase 5).** No separate `makePr` opt-in — linking a PR to its issue is zero-/near-zero-cost hygiene and is the whole value (Linear Diffs). Links the PR to the tracker issue (R10), append-only and conflict-free (R8). **Not Ralph-blocked** (attaching a link is a confident, conflict-free op).
+
+**In Review status push rides this SAME unconditional bridge-active path (fn-66, R2).** Because an open PR for the branch is by definition the *In Review* lifecycle rung, moving the linked issue to `In Review` is part of the same PR↔issue linkage that powers Linear Diffs — it is **NOT gated behind `tracker.perEvent.makePr != off`** (that leaf gates only the optional breadcrumb comment, not the link/status that make the bridge useful). A just-created PR is `OPEN`, so the merge-evidence probe yields `open` and `reconcileStatus(spec, issue, open)` → `in-review` (status-sync.md row 4); the dispatch below reconciles the issue to that non-terminal rung (never terminal — a freshly-opened PR has no merge evidence). The dispatch uses the **`reconcile`** op (not `push`) precisely so this In Review nudge rides the body-preserving 3-way merge — a `push` would re-render and overwrite the issue body first (steps.md push() lines 134-136), clobbering human tracker-side edits.
 
 The **primary linkage already happened in §4.6a** — the `Ref <identifier>` line in the PR body, which makes the host's tracker integration auto-link the PR. §5.6 is the **enhancement layer** and is **transport- and tracker-type-aware**:
 
@@ -1677,20 +1679,35 @@ The **primary linkage already happened in §4.6a** — the `Ref <identifier>` li
 ```bash
 if [[ -n "$PR_URL" ]] \
    && [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
-  # Invoke the flow-next-tracker-sync skill: link $PR_URL to the issue.
-  #   skill: flow-next-tracker-sync   (operation: link $PR_URL, event: makePr)
-  #   linear → rich attachment via attachmentLinkURL (GraphQL rung) + optional breadcrumb comment;
-  #            the §4.6a body ref already enabled the auto-link + Diffs.
-  #   github → native `Refs #N` (github.md).
-  # Unlinked spec → flow-first push (create + link) first, then link the PR / Diff
-  # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable.
+  # Invoke the flow-next-tracker-sync skill with the canonical lifecycle dispatch
+  # grammar — `operation: <verb> <id>, event: <key>` (verbatim, no descriptors in
+  # the operation token):
+  #   skill: flow-next-tracker-sync   (operation: reconcile <spec-id>, event: makePr)
+  # The `reconcile` op (open-PR evidence) moves the issue to In Review AND links $PR_URL —
+  # BOTH ride this unconditional bridge-active path (NOT gated behind perEvent.makePr):
+  # the link powers Diffs and In Review is the honest lifecycle state for an open PR.
+  # WHY `reconcile`, NOT `push` (fn-66 regression fix): `push` renders the COMPLETE
+  # spec body and writeIssue's it BEFORE setStatus (steps.md push() lines 134-136), so
+  # opening a PR just to nudge In Review would CLOBBER any human tracker-side body edits
+  # made since the last sync. `reconcile` runs the 3-way body merge (steps.md reconcile()
+  # lines 177-185) that PRESERVES tracker-side edits, and sets In Review as part of the
+  # SAME op via reconcileStatus(spec, issue, open) → in-review (status-sync.md row 4 / R2).
+  # A genuine body conflict queues (sync defer) or asks — it NEVER blocks the open PR.
+  #   linear → rich attachment via attachmentLinkURL (GraphQL rung) + setStatus(in-review)
+  #            via reconcileStatus (open prEvidence → in-review, non-terminal, status-sync.md
+  #            row 4); the §4.6a body ref already enabled the auto-link + Diffs. Optional breadcrumb comment.
+  #   github → native `Refs #N` (github.md) + status:in-review label.
+  #   (the PR URL itself rides as evidence in the comment/attachment, not the op token.)
+  # The open PR is the merge-evidence `open` bucket → In Review, NEVER terminal (no MERGED).
+  # Unlinked spec → flow-first link (create + base-snapshot) first, then reconcile the now-linked
+  # spec → link the PR / Diff + In Review (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable.
   # Best-effort — the PR is already open; a tracker failure must NOT exit non-zero.
   # Under Ralph, framing routes to stderr (keeps the PR_URL=<url> stdout invariant).
   :
 fi
 ```
 
-The PR is already open before this step; a tracker failure surfaces as a stderr warning and never changes the exit code (same non-fatal discipline as the `--memory` write in §5.1). The skill emits its own receipt, event-tagged `--event makePr` — the tag §5.7's end-of-run `sync check` audits.
+The PR is already open before this step; a tracker failure surfaces as a stderr warning and never changes the exit code (same non-fatal discipline as the `--memory` write in §5.1). The skill emits its own receipt, event-tagged `--event makePr` — the tag §5.7's end-of-run `sync check` audits. The `In Review` status push is non-terminal (`reconcileStatus(spec, issue, open) → in-review`, status-sync.md row 4) — an open PR is never `Done`. **`reconcile` (not `push`) is deliberate (fn-66):** the body-preserving 3-way merge means moving the issue to In Review on PR open can never overwrite human tracker-side body edits — the prior conflict-free guarantee of the old `link $PR_URL` path, now extended to the status nudge.
 
 ### 5.7 — Tracker-sync end-of-run check — LAST action before exit (fn-57)
 
@@ -1711,7 +1728,7 @@ SINCE=$(gh pr view "$PR_URL" --json createdAt --jq .createdAt 2>/dev/null || tru
 **Retro-fire on MISSING — exactly ONE cycle, never blocking:**
 
 1. Record the retro-fire start anchor (the re-check needs it as `--since`): `date -u +%Y-%m-%dT%H:%M:%SZ`
-2. Invoke the **flow-next-tracker-sync skill directly** — the same dispatch as §5.6, with its `event:` tag: `skill: flow-next-tracker-sync (operation: link $PR_URL, event: makePr)` — NEVER this check block as a wrapper (no recursion).
+2. Invoke the **flow-next-tracker-sync skill directly** — the same dispatch as §5.6, with its `event:` tag, in the canonical `operation: <verb> <id>, event: <key>` grammar: `skill: flow-next-tracker-sync (operation: reconcile <spec-id>, event: makePr)` (the `reconcile` op links $PR_URL + moves the issue to In Review via the body-preserving 3-way merge — never clobbers tracker-side edits, fn-66; the PR URL rides as evidence, not in the op token) — NEVER this check block as a wrapper (no recursion).
 3. Re-check with `--since` = the step-1 anchor:
    `"$FLOWCTL" sync check "$SPEC_ID" --events makePr --since "<retro-fire-start>" --json`
 4. Record the final state in the summary slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the PR is already open; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.

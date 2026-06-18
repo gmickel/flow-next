@@ -455,24 +455,47 @@ git log --oneline -1 # evidence echo: the squash commit referencing the PR
  - Clean non-`.flow/` tree required before starting and asserted after.
  - **Idempotency probe BEFORE acting**: check for an existing tag/GitHub release for the target version (`git tag -l <v>`, `gh release view <v>`); already present → resume past completed steps, never re-tag.
  - Release-step failure AFTER the successful merge → verdict `NEEDS_HUMAN` + durable label on the (merged) PR via 3.4 — the merge is NEVER retried, and later ticks never blindly re-run the failed step (re-entry only resumes via the idempotency probe).
- - Release completed → verdict `RELEASED`.4. **Tracker touchpoint (opt-in, best-effort)** — deliberately AFTER release-follow so the verdict comment can carry the release outcome — — gated exactly like every fn-57 touchpoint (active AND leaf ≠ off/null; an unseeded leaf reads `null` = off):
+ - Release completed → verdict `RELEASED`.
+4. **Tracker touchpoint — the SOLE `Done` driver (fn-66, R3/R10)** — deliberately AFTER release-follow so the verdict comment can carry the release outcome. **`land.merged` is active-by-default whenever the bridge is active** — it is NOT gated behind `tracker.perEvent.land.merged != off`. This is deliberate (fn-66, R10): a real merge is the ONLY event that legitimately projects `Done`, so leaving it opt-in would let boards stick at `In Review` forever after a merge. Like make-pr's unconditional PR-link path, the merge→Done projection rides the bridge-active predicate alone (the `land.merged` leaf, if a repo set it, only tunes the optional verdict comment — never gates the status):
 
  ```bash
- LEAF="$("$FLOWCTL" config get tracker.perEvent.land.merged --json | jq -r '.value')"
  TRACKER_FIRE=0
- if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ] \
- && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
- TRACKER_FIRE=1
+ if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
+ TRACKER_FIRE=1 # active-by-default — no perEvent gate (fn-66, R10)
  fi
  ```
 
- `TRACKER_FIRE == 1` → you MUST dispatch the tracker-sync skill via the Skill tool — this is a real skill invocation, not narration, and it uses the fn-57 lifecycle dispatch grammar (operation token + event tag, same shape as work/make-pr touchpoints):
+ **Self-check the `MERGED` probe before dispatching the terminal push (fn-66, R3).** This touchpoint runs from the post-merge tail, but it must NOT trust the caller's claim of a merge — it re-confirms GitHub reports the linked PR `MERGED` for the spec branch. **Critically, do NOT reuse the Phase 3.5 `MERGED_PR_NUM`** — on the normal babysit path the PR was `OPEN` at discovery, so that variable is empty even though land just merged it. **Re-probe fresh, after the `gh pr merge` succeeded and before deciding `TRACKER_TERMINAL_OK`** (this also covers the re-entry path, where the pre-merge probe already saw `MERGED`). The merge-evidence invariant is an **invariant on the outbound terminal write**, enforced at the source — if the fresh probe is not a clean `MERGED`, do NOT dispatch a `Done` push (fall back to a non-terminal comment or `NEEDS_HUMAN`), so no path writes `Done` without merge evidence:
+
+ ```bash
+ # Fresh post-merge re-probe — NEVER the stale Phase 3.5 MERGED_PR_NUM (empty on the
+ # normal OPEN→merge path). This is the authoritative merge-evidence read for the gate.
+ MERGED_CONFIRMED="$(gh pr list --head "$BRANCH_NAME" --state all --json state \
+ | jq -r '[.[] | select(.state == "MERGED")] | length')"
+ if [ "$TRACKER_FIRE" = "1" ] && [ "${MERGED_CONFIRMED:-0}" -gt 0 ]; then
+ TRACKER_TERMINAL_OK=1 # GitHub-confirmed MERGED → the gate is satisfied
+ else
+ TRACKER_TERMINAL_OK=0 # no clean MERGED → comment only, never terminal
+ fi
+ ```
+
+ `TRACKER_FIRE == 1` → you MUST dispatch the tracker-sync skill via the Skill tool — this is a real skill invocation, not narration, and it uses the fn-57 lifecycle dispatch grammar (operation token + event tag, same shape as work/make-pr touchpoints). **The `TRACKER_TERMINAL_OK` self-check selects the operation** — land does NOT trust the caller's merge claim, it branches on its own GitHub-`MERGED` probe (fn-66, R3):
+
+ - **`TRACKER_TERMINAL_OK == 1`** (clean GitHub `MERGED`) → dispatch the terminal `push`:
 
  ```text
  skill: flow-next-tracker-sync (operation: push <spec-id>, event: land.merged)
  ```
 
- The push projects the just-closed spec onto the linked issue — status who-wins flips it to the configured terminal state — and posts the merge/release verdict comment (include `merged PR: <PR_URL>` and, when the release step ran, the released version). The tracker-sync skill owns the transport, status who-wins, comment dedup, and emits its own receipt event-tagged `land.merged` (the fn-57 layer). Best-effort: a dispatch failure or tracker error surfaces as a stderr warning in the PR's evidence block and NEVER changes the PR's verdict (the close and any release already stand). Persist any tracked sync state the touchpoint updated with a best-effort follow-up commit (`git add ".flow/specs/${spec}.json" .flow/sync-runs && git commit -m "chore(flow): sync state for ${spec} land.merged touchpoint" && git push` — file-scoped so pre-existing .flow dirtiness never rides along; no rollback needed, it carries this spec's sync state + receipts only).
+ The `push` projects the just-closed spec; the tracker-sync skill's own `flowToNormalized(spec, merged)` gate (status-sync.md S-I) resolves the terminal rung — `verified` if completion review shipped, else `done` — so status who-wins flips the issue to the merge-confirmed terminal state, ALSO posting the merge/release verdict comment (include `merged PR: <PR_URL>` and, when the release step ran, the released version). The Done write is **double-gated** (this caller's probe AND the skill's own merge-evidence gate).
+
+ - **`TRACKER_TERMINAL_OK == 0`** (no clean `MERGED` — e.g. the post-merge probe came back empty/ambiguous, a corruption signal) → do NOT dispatch a terminal `push`. Dispatch the **comment-only** path instead and surface `NEEDS_HUMAN`, so no path writes `Done` without merge evidence:
+
+ ```text
+ skill: flow-next-tracker-sync (operation: comment <spec-id>, event: land.merged) # verdict comment only, no terminal status
+ ```
+
+ Best-effort either way: a dispatch failure or tracker error surfaces as a stderr warning in the PR's evidence block and NEVER changes the PR's verdict (the close and any release already stand). Persist any tracked sync state the touchpoint updated with a best-effort follow-up commit (`git add ".flow/specs/${spec}.json" .flow/sync-runs && git commit -m "chore(flow): sync state for ${spec} land.merged touchpoint" && git push` — file-scoped so pre-existing .flow dirtiness never rides along; no rollback needed, it carries this spec's sync state + receipts only).
 
 Verdict `MERGED` (or `RELEASED`). On success, drop the PR's ledger entry (atomic `jq 'del(.[$pr])'` + `mv`). End on the base branch with a clean tree (the original branch may have been the now-deleted PR branch — the base IS the restore target after a merge).
 

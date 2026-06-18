@@ -115,7 +115,7 @@ Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins:
 | any task is `todo` or `blocked` (canonical task statuses are `todo`, `in_progress`, `blocked`, `done`) | `work` |
 | the only non-`done` tasks are `in_progress` own/unassigned (other-actor claims were already skipped at SELECT) | `NEEDS_HUMAN`, reason `stale in-progress claim — work's ready-driven loop cannot resume it` |
 | all tasks done and `completion_review_status != "ship"` and review backend is configured | `work` |
-| all tasks done and completion is ship-or-ungated | PR probe, then `make-pr`, skip, or `NEEDS_HUMAN` |
+| all tasks done and completion is ship-or-ungated | PR probe, then `make-pr` (no PR), defer-to-land (open PR), or `NEEDS_HUMAN` (closed-unmerged / missing-branch / merged-but-open-spec) |
 
 A spec whose only remaining tasks are `blocked` still classifies as `work`; if work cannot advance it, the healthy-no-advance strike path handles it. An in-progress-only spec is different: work's Phase 3a drives off `flowctl ready --spec`, which never returns an `in_progress` task, so dispatching would burn strikes or wrongly enter the completion-review path — the stale-claim `NEEDS_HUMAN` is crash-class (no dispatch, no strike).
 
@@ -132,13 +132,13 @@ CLOSED_PR=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '.[] | select(.state == "CLOS
 MERGED_PR=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '.[] | select(.state == "MERGED") | .url' | head -1)
 ```
 
-Classification outcomes for the all-done branch:
+Classification outcomes for the all-done branch (the all-done invariant: an all-done / completion-`ship` spec lacking a **merged** PR is *unfinished from the board's perspective* — pilot keeps driving it (`make-pr`), defers it to land (open PR), or surfaces it (`NEEDS_HUMAN`); it never collapses to terminal `NO_WORK`):
 
 - gh missing, unauthenticated, or API failure: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="gh probe failed at all-done branch"`.
-- OPEN PR exists: this spec is finished from pilot's perspective; skip to the next SELECT candidate.
+- OPEN PR exists (and no MERGED PR): this spec is **deferred to land** — land owns the open PR, not pilot — so record it as a *deferred candidate* and skip to the next SELECT candidate. This is an explicit defer, never a silent finish: if no later candidate is selectable, the tick terminates with the distinct, greppable `PILOT_VERDICT=DEFERRED_TO_LAND` line (Phase 6), never `NO_WORK`. Track the deferred spec id + open-PR url so the terminal line can name it.
+- No PR exists: stage is `make-pr`. This is the FLOW-15 case (all-done, no PR — make-pr never ran or its PR was lost); it MUST classify `make-pr` and never fall through to `NO_WORK`.
 - CLOSED PR exists and no OPEN PR exists: `NEEDS_HUMAN`, because the PR was closed without merge and pilot never silently reopens human-rejected work.
 - MERGED PR exists while the spec is still open: `NEEDS_HUMAN`, because the state is inconsistent and pilot must not create a second PR.
-- No PR exists: stage is `make-pr`.
 
 Dry-run stops after classification. It prints selected spec, stage, review backend, task counts, consulted status fields, PR probe result if any, skipped candidates, and any would-clear ledger entries. It writes no ledger (the ledger file is never created or modified on a dry-run tick), checks out no branch, and dispatches nothing:
 
@@ -307,10 +307,22 @@ Crash-class outcomes are `NEEDS_HUMAN`: sub-skill crash, dirty non-`.flow/` tree
 PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=<stage> reason="<one line>"
 ```
 
-No selectable candidate or all candidates finished with existing OPEN PRs yields:
+An all-done spec with an **open** PR is *not* crash-class — it is the benign `DEFERRED_TO_LAND` terminal below (land owns the merge). Only the closed-unmerged, missing-branch, and merged-but-open-spec all-done states are `NEEDS_HUMAN`. An all-done spec with **no** PR is never terminal at all — it classifies `make-pr` and dispatches.
 
-```text
-PILOT_VERDICT=NO_WORK spec=- stage=- reason="no ready spec with satisfied deps"
-```
+Terminal verdict when no spec was dispatched, split by why — the two cases are distinct and must never be conflated:
+
+- **No selectable candidate at all** (none open+ready, or all skipped for unsatisfied deps / other-actor claims) yields `NO_WORK`:
+
+ ```text
+ PILOT_VERDICT=NO_WORK spec=- stage=- reason="no ready spec with satisfied deps"
+ ```
+
+- **Every remaining candidate was deferred to land** (each all-done with an existing OPEN PR — the only reason they weren't dispatched) yields the distinct, greppable `DEFERRED_TO_LAND` verdict, naming the deferred spec so a transcript-only driver can hand it to `/flow-next:land`. This case MUST NOT collapse to `NO_WORK`: a `DONE`-but-open-PR spec is real outstanding work that land owns, not absence of work.
+
+ ```text
+ PILOT_VERDICT=DEFERRED_TO_LAND spec=<id> stage=land reason="all tasks done, open PR <url> — land owns the merge"
+ ```
+
+ When more than one candidate was deferred, name the first deferred spec (stable id order) in the line; the reason still reads `defer to land`.
 
 The `PILOT_VERDICT` line is always the last line of the tick output. Print nothing after it.

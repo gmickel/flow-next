@@ -84,6 +84,8 @@ The wire-agnostic shapes the transports produce and reconcile consumes. These ar
 
 Who-wins (R7, implemented in fn-52.5 — [status-sync.md](status-sync.md)): tracker wins `done`/`verified`; flow wins `in-progress`; `priority` + `deferred`/`wontfix` surface to the user, never auto-changed. Comments/evidence two-way append + dedup (R8) is [comments-sync.md](comments-sync.md).
 
+**Transport-blind terminal invariant (R1, R8).** A **terminal outbound write** (mapping a spec to normalized `done`/`verified`, i.e. closing/completing the tracker issue) **requires merge evidence**: the flow→normalized map is `flowToNormalized(spec, prEvidence)` ([status-sync.md](status-sync.md)) and emits a terminal status ONLY when a `MERGED` PR probe for the spec branch is present. Local completion (spec `done` + completion review shipped) is necessary, not sufficient. This invariant is **transport-blind** — every adapter (Linear fn-52.3, GitHub fn-52.7, any future tracker) receives a terminal normalized status only after the gate, and maps it DOWN to its native closed state without re-deciding. No adapter ever closes an issue from local spec state alone.
+
 ### `relation`
 
 The wire-agnostic edge shape `listIssueRelations` produces. One entry per directed blocked-by edge the transport can see for the inspected issue.

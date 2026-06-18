@@ -410,25 +410,29 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
 
 2. After skill returns with SHIP:
    - Set status: `$FLOWCTL spec set-completion-review-status <spec-id> --status ship --json`
-   - **Tracker sync (opt-in) — SHIP → issue Done/verified + verdict:** runs only when the tracker bridge is active AND `completionReview` is opted in. With no tracker configured this is a no-op. Hooked **here at the caller** (not inside the review skill) because this is where `completion_review_status=ship` lands:
+   - **Tracker sync (opt-in) — SHIP → verdict comment, NEVER terminal Done (fn-66):** runs only when the tracker bridge is active AND `completionReview` is opted in. With no tracker configured this is a no-op. Hooked **here at the caller** (not inside the review skill) because this is where `completion_review_status=ship` lands. **Local completion review is NOT merge evidence** — `Done` is reserved for a `MERGED` PR (fn-66 status-sync `flowToNormalized`), so this touchpoint is **comment-shaped only**: it posts the verdict + R-ID coverage and at most leaves the issue at `In Review` (if an open PR exists). It NEVER pushes `Done`/`verified`:
 
      ```bash
      if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
         && [ "$($FLOWCTL config get tracker.perEvent.completionReview --json | jq -r '.value')" != "off" ] \
         && [ "$($FLOWCTL config get tracker.perEvent.completionReview --json | jq -r '.value')" != "null" ]; then
-       # Invoke the flow-next-tracker-sync skill: flip the linked issue to Done/verified
-       # (status who-wins — tracker wins `done`/`verified`, R7) and post the verdict +
-       # R-ID coverage as a comment.
-       #   skill: flow-next-tracker-sync   (operation: push <spec-id>, status + verdict comment, event: work.completionReview)
-       # Unlinked spec → flow-first push (create + link) first, then status + verdict
-       # comment (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport; Ralph queues.
+       # Invoke the flow-next-tracker-sync skill: post the completion-review verdict +
+       # R-ID coverage as a comment (comment-shaped — NEVER a terminal status push).
+       # The skill's reconcileStatus gate (status-sync.md flowToNormalized) refuses
+       # terminal `Done`/`verified` without a MERGED probe, so even if a stale config
+       # set this leaf to `reconcile` the gate keeps it non-terminal: at most it leaves
+       # the issue at `In Review` (open-PR evidence). land.merged is the SOLE Done driver.
+       #   skill: flow-next-tracker-sync   (operation: comment <spec-id>, event: work.completionReview)
+       #   (the comment carries the verdict + R-ID coverage as evidence — never a status push)
+       # Unlinked spec → flow-first push (create + link) first, then the verdict comment
+       # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport; Ralph queues.
        # The skill's receipts carry --event work.completionReview — audited by Phase 5's sync check.
        :
      fi
      ```
    - Go to Phase 4 (Quality)
 
-**Note:** The spec-completion-review skill gets SHIP from the reviewer but does NOT set the status itself. The caller (work skill or Ralph) sets `completion_review_status=ship` after successful review — and (when opted in) flips the linked tracker issue Done/verified here. The review skill (`flow-next-spec-completion-review`) is NOT edited; the touchpoint lives at this caller.
+**Note:** The spec-completion-review skill gets SHIP from the reviewer but does NOT set the status itself. The caller (work skill or Ralph) sets `completion_review_status=ship` after successful review — and (when opted in) posts the verdict / R-ID-coverage comment to the linked tracker issue here. It does **NOT** flip the issue to `Done`/`verified` (fn-66: that is gated on a `MERGED` PR and driven solely by `land.merged`). The review skill (`flow-next-spec-completion-review`) is NOT edited; the touchpoint lives at this caller.
 
 **Fix loop behavior**: Same as impl-review. If reviewer returns NEEDS_WORK:
 1. Skill parses issues
@@ -523,7 +527,7 @@ EVENTS="work.firstClaim,work.done"   # ← substitute the actual triggered set
 2. For each MISSING event, invoke the **flow-next-tracker-sync skill directly** — the same dispatch as the touchpoint that missed, with its `event:` tag — NEVER this check block as a wrapper (no recursion):
    - `work.firstClaim` → `skill: flow-next-tracker-sync (operation: push <spec-id>, status-only, event: work.firstClaim)`
    - `work.done` → `skill: flow-next-tracker-sync (operation: comment <spec-id>, event: work.done)`
-   - `work.completionReview` → `skill: flow-next-tracker-sync (operation: push <spec-id>, status + verdict comment, event: work.completionReview)`
+   - `work.completionReview` → `skill: flow-next-tracker-sync (operation: comment <spec-id>, event: work.completionReview)` — comment-shaped (verdict + R-ID coverage as evidence), NEVER terminal (fn-66)
 3. Re-check the missed events only, `--since` = the step-1 anchor:
    `"$FLOWCTL" sync check "$SPEC_ID" --events "<missed-csv>" --since "<retro-fire-start>" --json`
 4. Record the final state in the summary slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the work is already done; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.

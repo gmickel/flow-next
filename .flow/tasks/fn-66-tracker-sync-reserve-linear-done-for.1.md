@@ -27,9 +27,8 @@ This task is the POLICY core; the touchpoints (fn-66.2) and pilot (fn-66.3) enfo
 - [ ] `references/github.md` terminal/closed mapping requires `MERGED` evidence; `references/adapter-interface.md` notes the transport-blind "terminal outbound write requires merge evidence" invariant.
 - [ ] Fixtures S-G..S-J assert EXACT states (not "non-terminal"): no-PR all-done → stays `In Progress` (no advance); open-PR → `In Review`; merged-PR → `Done`; closed-unmerged → `In Progress`/non-terminal + NEEDS_HUMAN.
 ## Done summary
-TBD
-
+Gated terminal tracker Done/verified on a MERGED merge-evidence probe (flow→normalized map is now flowToNormalized(spec, prEvidence)), added an In Review rung for open PRs wired into the reconcile loop, and routed closed-unmerged/ambiguous/probe-error to non-terminal + NEEDS_HUMAN. Updated status-sync.md, linear-ladder.md, github.md, adapter-interface.md in lockstep + Codex mirror, with worked fixtures S-G..S-J asserting exact projected states. who-wins/deadlock-first ordering untouched.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0480e82, 6948fe8
+- Tests: plugins/flow-next/scripts/ci_test.sh (67/0), python3 -m unittest discover -s plugins/flow-next/tests -p test_*.py (1104 OK, skipped=2), scripts/sync-codex.sh (mirror regenerated, all gates pass)
 - PRs:

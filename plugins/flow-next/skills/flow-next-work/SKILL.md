@@ -168,7 +168,7 @@ If user chose review, pass the review mode to the worker. The worker invokes `/f
 |---|---|---|
 | first task claimed (phases.md 3b.1) | `tracker.perEvent.work.firstClaim` | move the linked issue In-Progress |
 | task done (phases.md 3d.1) | `tracker.perEvent.work.done` | post a status comment + evidence (tests / commits / PR) |
-| spec-completion-review SHIP (phases.md 3g) | `tracker.perEvent.completionReview` | flip the issue Done/verified + post verdict / R-ID coverage |
+| spec-completion-review SHIP (phases.md 3g) | `tracker.perEvent.completionReview` | post verdict / R-ID coverage as a comment; NEVER terminal Done (fn-66 — Done is reserved for a MERGED PR, driven by land.merged) — at most leaves the issue at In Review |
 
 (capture / interview / plan / make-pr / resolve-pr carry their own touchpoints in those skills, gated identically on `tracker.perEvent.{capture,interview,plan,makePr,resolvePr}`.)
 

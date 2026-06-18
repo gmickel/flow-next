@@ -53,11 +53,11 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
    $FLOWCTL config set tracker.perEvent.work.done comment           # status comment + evidence
    $FLOWCTL config set tracker.perEvent.makePr comment              # PR link is unconditional; extra status comment
    $FLOWCTL config set tracker.perEvent.resolvePr comment           # resolution comment
-   $FLOWCTL config set tracker.perEvent.completionReview reconcile  # flip Done/verified + verdict / R-ID coverage
+   $FLOWCTL config set tracker.perEvent.completionReview comment    # fn-66: verdict + R-ID coverage comment; NEVER terminal Done (land.merged is the sole Done driver)
    $FLOWCTL config set tracker.perTracker.teamId "<team>"           # if the user named one
    $FLOWCTL sync active --json   # confirm active: true
    ```
-   **Never assume — but default-on is not assuming.** No signal / user declines the bridge ⇒ write nothing; `enabled` stays `false`; `sync active` stays `active: false`. Confirming the bridge IS the consent to sync the pipeline. The **config schema default stays `off`** (in `get_default_config()`), so a bare `tracker.enabled=true` set by hand or a script — WITHOUT this ceremony — activates **no lifecycle-event sync** (every `perEvent` event stays dormant). The **one exception** is make-pr's PR↔issue link, which is unconditional whenever the bridge is active (no per-event gate, by design — it powers Linear Diffs); only the ceremony's explicit per-event writes activate the events themselves. Users opt out per event afterward via `flowctl config set tracker.perEvent.<event> off`.
+   **Never assume — but default-on is not assuming.** No signal / user declines the bridge ⇒ write nothing; `enabled` stays `false`; `sync active` stays `active: false`. Confirming the bridge IS the consent to sync the pipeline. The **config schema default stays `off`** (in `get_default_config()`), so a bare `tracker.enabled=true` set by hand or a script — WITHOUT this ceremony — activates **no lifecycle-event sync** (every `perEvent` event stays dormant). The **two exceptions** are unconditional whenever the bridge is active (no per-event gate, by design): (1) make-pr's PR↔issue link **and its In Review status push** (fn-66, R2 — an open PR is the In Review rung, riding the same Diffs-powering link path); (2) **`land.merged`** (fn-66, R10 — a real merge is the SOLE event that projects terminal `Done`, gated on the GitHub `MERGED` probe; leaving it opt-in would strand boards at In Review post-merge). Only the ceremony's explicit per-event writes activate the other events themselves. Users opt out per event afterward via `flowctl config set tracker.perEvent.<event> off`.
 5. **Readiness state (fn-58, R4 — optional, skippable).** After the config writes, ask one more question via `AskUserQuestion`: *which tracker workflow state means "ready for work"?* When set, every pull-side sync projects that state onto the local spec `ready` flag ([→ ref: status-sync.md] § Readiness projection) — **the tracker becomes authoritative for readiness** (a local `flowctl spec ready` is overwritten on the next sync). Readiness is optional: always offer **skip** (and lead with it when no candidate state exists); skipping writes nothing and leaves `tracker.readyState: null` — the readiness gate stays dormant (R7).
    - **Linear** — discover the team's states first: MCP `list_issue_statuses(team:<team>)` → `{id, name, type}` per state (GraphQL rung: `workflowStates(first:100, filter:{team:{name:{eq:$team}}}){ nodes { id name type } }` — explicit `first:` on every connection). Lead with a recommendation: a state whose **name** looks like "Ready" / "Next" / "Ready for Dev" (case-insensitive); if none, lead with skip. Validate the chosen state resolves (`get_issue_status(<id or name>)`) before writing. Store the state **name** (names are what humans see; the projection matches case-insensitive/trimmed).
    - **GitHub** — issues have no workflow states; readiness resolves to a **label** name (suggest `ready`). Pre-create it so the projection never trips on a missing label — tolerate **only** already-exists (the create fails with a 422 when the label exists; that is fine, idempotent). Any other failure (auth / permissions / wrong repo / API) must surface — never write `tracker.readyState` for a label that isn't confirmed to exist, or every later pull hits the stale-config warn/noop (github.md § Readiness label) and the flag never moves:
@@ -130,9 +130,16 @@ Route the operation; each layer calls hooks that operate on the normalized struc
 
 ```
 push(spec):
+  prEvidence = mergeEvidenceProbe(spec.branch_name)  → status-sync.md (merged|open|closed-unmerged|none|ambiguous|probe-error)
   body    = renderFlowToTracker(spec)            → body-merge.md Step 3 (flow→tracker) — COMPLETE spec, ALL sections; never summarize/truncate
   writeIssue(issue{... body ...})                [→ ref: transport]  # GitHub UPDATE preserves the flow-owned <!-- flow:deps --> region (github.md § writeIssue) — body=renderFlowToTracker output never contains it, so a raw full-body replace would wipe it and make projectDepRelations misread the ledgered edge as a remote removal → false collision. Write retains; merge strips (body-merge.md Step 0.5).
-  setStatus(map flow status → tracker status)    → status-sync.md (who-wins)
+  setStatus(flowToNormalized(spec, prEvidence) → tracker status)    → status-sync.md (who-wins)
+            # MERGE-EVIDENCE GATE (fn-66): the terminal rung (done/verified) is reachable
+            # ONLY when prEvidence == merged. flowToNormalized refuses terminal for
+            # none/open/closed-unmerged/ambiguous/probe-error — so NO push (automatic land.merged
+            # OR a manual reconcile) ever writes Done without a GitHub MERGED probe. The gate is a
+            # per-WRITE invariant (status-sync.md): a manual merge-evidenced push MAY terminal-write;
+            # a local-completion-only push never does.
   postComment(lifecycle event marker)            → comments-sync.md (append + dedup)
   projectDepRelations(spec, issue)               → § projectDepRelations below — depends_on_epics → blocked-by relations (additive, ledger-tracked, never advances lastSyncedAt; warns on unlinked dep; skipped when no transport)
   sync set-merge-base (BOTH halves) + set-last-synced   # snapshot the pushed pair (body-merge.md Step 5)
@@ -164,6 +171,7 @@ conflict) lives in that reference:
 reconcile(spec):
   base    = sync get-state → merge-base snapshot (BOTH forms: mergeBaseFlow + mergeBaseTracker)
   issue   = fetchIssue(trackerId)                [→ ref: transport]
+  prEvidence = mergeEvidenceProbe(spec.branch_name)  → status-sync.md (feeds reconcileStatus; gates terminal)
   projectReadiness(spec, issue)                  → status-sync.md § Readiness projection (rides every issue read; independent of the body merge — runs even when the body diverges)
   projectDepRelations(spec, issue)               → § projectDepRelations below (rides every issue read like projectReadiness; independent of the body merge — runs even when the body diverges or conflicts)
   merged  = threeWayMergeBody(base, flowBody, issue.body)   → body-merge.md
@@ -174,7 +182,12 @@ reconcile(spec):
      Ralph       → sync defer (queue the scoped conflict, never block)   [R9/R11]
      receipt: diverged
   else:
-     writeIssue(merged) + setStatus(who-wins)    [transport → fn-52.3/.7] + status-sync.md (who-wins)
+     writeIssue(merged) + setStatus(reconcileStatus(spec, issue, prEvidence))    [transport → fn-52.3/.7] + status-sync.md (who-wins)
+            # MERGE-EVIDENCE GATE (fn-66): reconcileStatus runs flowToNormalized(spec, prEvidence)
+            # first — a manual reconcile MAY terminal-write Done/verified IFF prEvidence == merged
+            # (status-sync.md S-I); closed-unmerged/ambiguous/probe-error → in-review + NEEDS_HUMAN
+            # (S-J), none → preserve non-terminal (S-G). The terminal-write merge-evidence invariant
+            # holds on this manual path exactly as on the automatic land.merged touchpoint.
      sync set-merge-base (BOTH halves) + sync set-last-synced   # body-merge.md Step 5 — ONLY on success
      receipt: merged | updated
   # no-base bootstrap (first link): body-merge.md "First-sync / no-base bootstrap" —
