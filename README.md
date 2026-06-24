@@ -316,6 +316,8 @@ Flow-Next is a methodology, not just a tool. The [teams guide](plugins/flow-next
 
 Teams that live in Linear keep their board: the tracker bridge projects every spec to an issue, two-way, and `make-pr` output is [Linear Diffs](https://linear.app/docs/diffs)-ready — review the PR inside the issue. → [`docs/teams.md`](plugins/flow-next/docs/teams.md) · [`docs/tracker-sync.md`](plugins/flow-next/docs/tracker-sync.md)
 
+**Rolling it out to everyone?** On Claude Code you can skip the per-developer install: deploy the marketplace + plugin org-wide via a `managed-settings.json` (MDM/GPO — `extraKnownMarketplaces` + `enabledPlugins`), or commit a `.claude/settings.json` to a repo for prompt-on-trust install. Each repo still needs `/flow-next:setup`. → [Install: team / org-wide deployment](https://flow-next.dev/install/#team--org-wide-deployment-claude-code-managed-settings)
+
 ---
 
 ## Where to look
