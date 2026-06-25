@@ -7,7 +7,16 @@ The autonomy track already ships **pilot** (ready spec → plan → reviews → 
 
 Trigger: the Warp *"factory engineers, not product engineers"* memo (2026-06). Its transferable frame: the job is building the factory, measured by **% of changes shipped automatically / (inference cost + human time)**, with agents doing triage → spec → implement → review → verify → monitor and humans stepping in only where needed. flow-next has the conveyor (pilot/land/Ralph) and a two-way tracker channel (tracker-sync); it lacks the **floor scheduler**, the **async human-in-the-loop valve** (so "stuck" becomes a question, not a stall), and the **efficiency readout**.
 
-This spec adds an **optional backlog mode** to pilot. Per tick: enumerate everything open (flow + tracker), select the top dep-ordered actionable item, and advance it one stage along the **full** lifecycle `triage → spec → plan → plan-review → work → make-pr` — **full-auto by default**, surfacing a precise question to the human via the spec + tracker only when it cannot safely proceed, and **never merging** (land stays human-gated).
+This spec adds an **optional backlog mode** to pilot. Per tick: enumerate everything open (flow + tracker), select the top dep-ordered actionable item, **triage** it, and — if it is a workable, written spec — advance it one stage along pilot's existing pipeline `plan → plan-review → work → make-pr (draft)` — **full-auto by default**, surfacing a precise question to the human via the spec + tracker when it cannot safely proceed, and **never merging** (land stays human-gated).
+
+**Backlog mode does not author specs.** Spec authoring (`capture`, conversation→spec; `interview`, interactive Q&A) is **human-gated and upstream** — an agent inventing scope from a one-line ticket is precisely the slop the question-valve exists to prevent. So a ticket without a workable spec is **surfaced as a gap** ("run `/flow-next:capture` or `/flow-next:interview`"), never auto-written. The autonomous span runs only from a *workable spec* onward — exactly pilot's current pipeline. The lifecycle, with consent gates marked:
+
+```
+idea → [capture / interview] → plan → plan-review → work → make-pr(draft) → [human review] → resolve-pr → [land / merge]
+        ^ human, upstream        └──────────── backlog mode runs this span ────────────┘                ^ human, downstream
+```
+
+Triage sits at the front and only **routes**: workable → run the span; not-workable → surface "needs a spec," park; blocked → sequence behind the blocker. It never authors and never merges. (`plan` — spec→tasks — is autonomous and already a pilot stage; spec *authoring* is not.)
 
 Decided **not** to build a separate skill (an earlier "foreman above pilot" proposal was considered and rejected): Gordon's full-auto reframe removed the pre-pilot consent boundary that would have justified splitting. pilot already selects across the backlog and walks a pipeline, so backlog mode is a **leftward extension of the same single-tick conductor**, not a new altitude — one `/loop` target, one verdict grammar, one mental model.
 
@@ -17,10 +26,10 @@ Decided **not** to build a separate skill (an earlier "foreman above pilot" prop
 - **Backlog mode is a behavior of the existing `flow-next-pilot` skill**, gated by config `pilot.autonomy` (default `ready` = current behavior; `backlog` enables the wide mode), overridable per run by `--backlog` / `--auto`. With the flag off, pilot behavior is unchanged.
 - **Single-tick contract preserved.** One invocation = select one item + advance one stage + emit one terminal verdict. `/loop` (Claude Code) and `/goal` (Codex) still own repetition. No within-tick loop over multiple items.
 - **Selection widens** from "one ready spec" to "one actionable open item across flow specs + tracker issues, **dep-ordered**" — using `depends_on_epics` + tracker `depRelations` + the `flow-next-deps` graph.
-- **Pipeline extends leftward** with `triage`, `spec`, and `ask` stages on top of pilot's existing `plan → plan-review → work → make-pr`:
-  - **triage** — classify the selected item: workable-now / needs-spec / blocked-by-dep / ambiguous / needs-human.
-  - **spec** — for needs-spec items clear enough, auto-draft via `plan` (or `capture`); otherwise route to `ask`.
-  - **ask** — write **Open Questions** into the spec, project them as a tracker comment via tracker-sync, mark park-pending-answer.
+- **Pipeline extends leftward** with `triage` and `ask` stages **in front of** pilot's existing `plan → plan-review → work → make-pr` — it does **not** add a spec-authoring stage:
+  - **triage** — classify the selected item: workable-now / needs-spec / blocked-by-dep / ambiguous / needs-human. Routing only.
+  - **ask** — when not-workable or ambiguous, write **Open Questions** into the spec, project them as a tracker comment via tracker-sync, mark park-pending-answer. For a *missing or too-thin* spec the surfaced gap is an explicit "run `/flow-next:capture` or `/flow-next:interview`" — backlog mode never authors the spec itself. (It MAY fill an obvious blank in an *existing* spec; it never authors from nothing.)
+  - workable, written, dep-clear specs flow into pilot's existing `plan → plan-review → work → make-pr` unchanged.
 - **Backlog-mode workflow lives in its own reference file** under the pilot skill (e.g. `references/backlog-mode.md`) so `SKILL.md`'s core single-tick contract stays thin — separation of concerns at the file level, not the command level.
 - **Net-new flowctl plumbing (thin):** a backlog-wide ready scan (`flowctl ready --all`; today `ready` is `--spec`-only) returning open items with triage/dep/ready state; and a per-tick **decision log** (receipt-shaped) recording each action + token cost, which powers metrics and the self-improvement substrate.
 - **Merge stays out.** land remains a separate human-gated step; backlog mode never invokes merge/land.
@@ -43,7 +52,7 @@ Decided **not** to build a separate skill (an earlier "foreman above pilot" prop
 - **Park is never silent** — always a logged dep-wait or a surfaced question.
 - **Dep deadlock / cycle:** detect, surface as a question, do not spin.
 - **Idempotent surfacing:** re-triaging an already-asked/parked item must not duplicate questions/comments (dedup via tracker-sync comment dedup + stable Open-Questions anchors).
-- **Auto-spec threshold:** only auto-draft a spec when the item is clear enough; ambiguous → ask, never fabricate scope.
+- **No autonomous spec authoring:** backlog mode never runs `capture`/`interview` and never writes a spec from a bare ticket; a missing/too-thin spec is surfaced as a "needs capture/interview" gap and parked. Augmenting an obvious blank in an *existing* spec is the only writing it may do.
 - **Tracker unavailable** (no adapter / offline): degrade to spec-only questions + log note; never crash (mirrors tracker-sync noop).
 - **Default off:** existing pilot/land/Ralph users unaffected until they opt in.
 - **Single-tick discipline preserved:** the host primitive loops, not the skill.
@@ -53,8 +62,8 @@ Decided **not** to build a separate skill (an earlier "foreman above pilot" prop
 <!-- scope: both -->
 
 - **R1:** pilot gains a backlog mode gated by config `pilot.autonomy` (default = current ready-only behavior), overridable per run by `--backlog` / `--auto`; with the flag off, pilot behavior is unchanged.
-- **R2:** In backlog mode, one tick enumerates the full open set (flow specs + tracker issues), selects the top dep-ordered actionable item, advances it exactly one lifecycle stage (`triage → spec → plan → plan-review → work → make-pr`), and emits one terminal verdict line.
-- **R3:** Triage classifies the selected item into workable-now / needs-spec / blocked-by-dep / ambiguous / needs-human and acts accordingly (promote, auto-draft spec, sequence behind blocker, or ask).
+- **R2:** In backlog mode, one tick enumerates the full open set (flow specs + tracker issues), selects the top dep-ordered actionable item, triages it, and — for a workable written spec — advances it exactly one stage of pilot's existing pipeline (`plan → plan-review → work → make-pr`), emitting one terminal verdict line. The autonomous span runs only from a workable spec onward; `make-pr` (draft) is its terminus.
+- **R3:** Triage classifies the selected item into workable-now / needs-spec / blocked-by-dep / ambiguous / needs-human and **routes** accordingly — promote, sequence behind blocker, or ask. It never authors a spec: a missing/too-thin spec is routed to the `ask` gap ("run capture/interview"), not auto-written.
 - **R4:** When it cannot safely proceed, it writes Open Questions into the spec and projects them as a tracker comment via tracker-sync (spec-first; Linear/GitHub where an adapter exists; spec-only for Jira), then parks-pending-answer and moves on — never blocks, never asks interactively.
 - **R5:** Full-auto by default — workable, dep-clear, unambiguous items are promoted/advanced with no pre-gate; a force-gate config can require surfacing before action for named classes.
 - **R6:** Never merges; land remains a separate human-gated step; backlog mode never invokes merge/land.
@@ -73,6 +82,7 @@ Decided **not** to build a separate skill (an earlier "foreman above pilot" prop
 - **Never merges** — land stays human-gated; the merge consent boundary is untouched.
 - **Not prospect** — prospect invents *new* work; backlog mode manages the *existing* open backlog.
 - **Not interactive interview** — surfacing is async (spec + tracker), never a blocking prompt.
+- **Does not author specs** — `capture`/`interview` are human-gated prerequisites that must run before a ticket is workable; triage surfaces "needs a spec" as a gap and parks, it never auto-writes one (may augment an obvious blank in an existing spec only). The autonomous span is *workable spec → draft PR*, not *ticket → draft PR*.
 - **Jira comment projection out of scope** until a Jira adapter exists (spec-only questions meanwhile).
 - **Self-improvement *synthesis* is a follow-on** — this spec ships the decision-log substrate + metrics readout; the agent that mines the log into spec-template / plan patches is a separate, later spec.
 
@@ -89,9 +99,10 @@ The Warp *"factory engineers, not product engineers"* memo (2026-06): build the 
 
 - **Mode-on-pilot over separate skill:** the full-auto reframe removed the consent boundary that justified a split; pilot already selects across the backlog and walks a pipeline, so this is a leftward pipeline extension, not a new altitude. One `/loop` target, one verdict grammar, one mental model. Cost: pilot's `SKILL.md` grows — mitigated by a dedicated reference file. (Earlier "foreman above pilot" considered and rejected.)
 - **Full-auto default + async-surface valve over propose-and-confirm gate:** a pre-gate would duplicate what prompting already gives; surfacing-on-block is the memo's semi-automation realized as a conversation, and yields the human-touch-point log for free.
+- **Surface "needs a spec" over autonomous authoring:** an earlier draft had triage auto-draft a spec for thin tickets. Rejected — `capture`/`interview` are human-gated by nature (capture needs a conversation; interview is interactive), and autonomous scope-invention is exactly the slop the valve guards against. The narrower span (workable spec → draft PR) is both safer and thinner to build; spec authoring stays upstream and human.
 - **Config flag (default) overridable per-run (`--backlog`/`--auto`):** config so `/loop /flow-next:pilot` picks it up without arg-threading; flag for ad-hoc override.
 - **Default off:** preserves existing pilot/land/Ralph users; opt into the bigger autonomy.
-- **Reuse over rebuild:** pilot (executor), land (merge), tracker-sync (channel), plan/capture (spec authoring), flow-next-deps (graph), receipts (log shape). Net-new code is the wide ready scan + the decision log + the triage/spec/ask stage handlers.
+- **Reuse over rebuild:** pilot (the whole `plan → make-pr` executor), land (merge), tracker-sync (channel), flow-next-deps (graph), receipts (log shape). Net-new code is just the wide ready scan + the decision log + the `triage`/`ask` (route + surface) handlers — no spec-authoring engine.
 
 ## Strategy Alignment
 <!-- STRATEGY.md cross-check at author time -->
