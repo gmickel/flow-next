@@ -35,9 +35,8 @@ Still pure host-driven (the host drives the Sandbox SDK / MCP) — **no flowctl 
 - [ ] Every unvalidated Sandbox/Lume/cloud behavior is marked **"verify at build"** unless the implementer records an actual provisioning run.
 
 ## Done summary
-TBD
-
+Extended references/cua.md with the Cua Sandbox native rung — the headless/CI-only surface (isolated VM/container) that lifts the local-driver/Computer-Use real-display limitation; documents local lume/QEMU/Docker as the zero-network default and cua.ai cloud as explicit opt-in (CUA_API_KEY, bills, data egress), provision/teardown discipline (no leaked VMs), the first-pull coffee-break, and marks unvalidated Sandbox/Lume/cloud behavior "verify at build." Added the headless precedence row to SKILL.md Step 4; Codex mirror regenerated clean; no flowctl plumbing.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 4a520a84eb7311d8b7cb0d6f166e3cf42765e13e
+- Tests: bash scripts/sync-codex.sh (29 skills, 21 agents, all validators pass; idempotent on re-run), inspected Codex mirror of references/cua.md — multi-host wiring + sandbox prose coherent (no byte-identical claim), git diff --name-only confirms no .py/flowctl files changed (pure host-driven prose)
 - PRs:
