@@ -89,6 +89,19 @@ flow-next is a first-class citizen on Claude Code, Codex, and Factory Droid. **A
 - Run the docs-site gate before handoff: `cd ~/work/flow-next.dev && pnpm build`.
 - Commit docs-site changes separately in the `flow-next.dev` repo unless the user asks for a combined handoff.
 
+## Downstream narrative docs — GrowthFactors microsite + AI x SDLC guide
+
+Two **downstream** properties describe flow-next + the methodology to external audiences. **Whenever a change alters the pipeline, the skill set, public vocabulary, the methodology framing, or QA/tracker/measurement substance, consider updating these too** (same discipline as flow-next.dev — they drift silently otherwise). They are narrative/marketing, not the source of truth, so update them *after* the repo + flow-next.dev reflect reality.
+
+- **GrowthFactors microsite — `code-factory-package`** (`~/work/code-factory-package`).
+  - Rendered microsites: `dist/gf.html` (+ `shd.html`, `shopfully.html`, `flooid.html`).
+  - Measurement spec (PSVI/CAV + patent-note source): `spec/09-measurement.md`.
+  - Bundled GF copy inside the guide: `~/work/AI-x-SDLC-Starter-Kit/resources/assets/code-factory-onboarding.html`.
+- **AI x SDLC guide — `AI-x-SDLC-Starter-Kit`** (`~/work/AI-x-SDLC-Starter-Kit`).
+  - Pipeline breakdown linked to flow-next.dev: `guides/flow-next.md` — the "## The pipeline: idea to merged PR" section (~L47; interview→plan→review→work→make-pr→resolve-pr→land, each step linked to its flow-next.dev page). **A pipeline change (e.g. the optional QA stage) must update this breakdown.**
+  - QA / testing coverage (where QA substance lives): `guides/phased-rollout.md` ("### 3. Testing & Quality Assurance", ~L136 — primary QA section); `guides/ai-readiness.md` ("### The dogfood skill: automated QA" ~L263; "### 4. Test coverage" ~L107); `guides/production-grade.md` ("AI-generated test coverage" + "Evaluation" sections); `guides/metrics.md` ("### Test coverage delta" ~L303). The flow-next **QA skill** specifically is referenced in `guides/flow-next.md` (~L40, "team-level release and QA tasks") and lives at `flow-next.dev/skills/qa`.
+  - **QA framing across all of these:** flow-next QA is **not a replacement** for staging/CI or manual QA — like everything in flow-next it reduces human work by doing as much agentically as possible and **surfaces problems to humans** (it augments, it does not gate-out human QA). Sharpen this framing wherever QA is described.
+
 ## Where to look
 
 | For | Look at |

@@ -6,7 +6,10 @@
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
-  "depends_on_epics": [],
+  "depends_on_epics": [
+    "fn-69-tracker-sync-gitlab-adapter-glab-cli",
+    "fn-70-tracker-sync-jira-adapter-rest-api"
+  ],
   "id": "fn-67-flow-nextguide-opinionated-router-over",
   "next_task": 1,
   "plan_review_status": "unknown",
@@ -25,5 +28,5 @@
     "mergeBaseTracker": "# fn-67 /flow-next:guide \u2014 opinionated router over flow-next's skill flows\n(projected condensed body present on FLOW-16 as of 2026-06-23; see Linear)\n",
     "url": "https://linear.app/gmickel/issue/FLOW-16"
   },
-  "updated_at": "2026-06-25T03:50:02.543495Z"
+  "updated_at": "2026-06-26T11:44:41.425989Z"
 }

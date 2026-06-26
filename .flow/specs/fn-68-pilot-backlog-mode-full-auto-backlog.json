@@ -6,7 +6,9 @@
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
-  "depends_on_epics": [],
+  "depends_on_epics": [
+    "fn-72-qa-as-an-optional-pipeline-stage-spec"
+  ],
   "id": "fn-68-pilot-backlog-mode-full-auto-backlog",
   "next_task": 1,
   "plan_review_status": "unknown",
@@ -25,5 +27,5 @@
     "mergeBaseTracker": "# tracker projection on FLOW board, synced 2026-06-25\n",
     "url": "https://linear.app/gmickel/issue/FLOW-17"
   },
-  "updated_at": "2026-06-25T14:31:15.665852Z"
+  "updated_at": "2026-06-26T11:44:40.713613Z"
 }
