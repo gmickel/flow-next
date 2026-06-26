@@ -305,6 +305,18 @@ jobs:
             -p "test_copilot_windows_smoke.py" \
             -v
 
+      - name: Python unit tests — Cua native-rung headless/CI determination (fn-71)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_drive_headless_determination.py" \
+            -v
+        # Executes the shipped `cua-driver call get_screen_size` display probe from
+        # references/cua.md against a stubbed driver (present → attended, error/zero
+        # → headless) on macOS+ubuntu; the prose-contract class runs on Windows too
+        # (the $CI short-circuit, the probe, the macOS $DISPLAY caveat, doctor≠display).
+        # Real no-display behavior on Linux/Windows stays verify-at-build (driver opt-in).
+
       # ──────────── Functional smokes (ordered cheap-first) ────────────
       # All smokes refuse to run from the main plugin repo, so cd into the
       # runner's temp dir before invoking. $RUNNER_TEMP is set on every
