@@ -86,6 +86,12 @@ the relevant commands and let the operator run them.
  irm https://raw.githubusercontent.com/trycua/cua/main/libs/cua-driver/scripts/install.ps1 | iex
  ```
 
+> **Supply-chain note.** These are upstream's official installers, piped from the
+> **mutable `main` branch** — a compromised upstream could turn `curl … | bash` /
+> `irm … | iex` into arbitrary code execution. For sensitive or CI machines,
+> review the script first (drop the pipe and inspect) or pin a release tag instead
+> of `main`. flow-next only *instructs*; it never runs these for you.
+
 **2. Register the MCP server with your host.** The wiring is **host-specific** —
 present the form for the operator's host, not Claude-only:
 
@@ -230,35 +236,52 @@ path — different paths, no conflict. Web/Chromium surfaces (A/B) are unaffecte
 
 ## Determining headless / CI (which path you're on)
 
-The split above hinges on one question — **is a usable display reachable?** —
-so determine it, never assume. In order:
+The split above hinges on one question — **is a usable display reachable?**
+Determine it, never assume — and keep it **separate from driver-install state and
+TCC grants** (different questions, see the cautions below). In order:
 
 1. **CI short-circuit.** `$CI` set (GitHub Actions, GitLab CI, CircleCI, etc. all
  export it) ⇒ treat as headless: skip the attended, focus-stealing local driver
  and go straight to the **Cua Sandbox** rung.
-2. **Empirical display probe — the trustworthy signal (ask the driver, don't
- sniff env).** `cua-driver call get_screen_size` returns `{width, height,
- scale_factor}` and exits 0 when a real display is reachable; on a no-display
- host it errors / returns non-positive dims:
+2. **Probe only when the driver is installed.** The display probe is meaningful
+ *only* if `cua-driver` actually exists. **A probe that fails because the binary
+ is absent is NOT a no-display signal** — never route an attended machine to the
+ sandbox just because nothing is installed.
+
+ - **Driver present** (`command -v cua-driver`): `cua-driver call get_screen_size`
+ returns positive dims when a real display is reachable. The CLI returns a flat
+ `{width, height, scale_factor}` (verified 0.6.8); tolerate the MCP
+ `structuredContent` envelope too:
 
  ```bash
- if cua-driver call get_screen_size 2>/dev/null | jq -e '.width > 0 and .height > 0' >/dev/null; then
- DISPLAY_PRESENT=1 # attended ladder: Cua Driver → Computer Use
+ if ! command -v cua-driver >/dev/null 2>&1; then
+ DISPLAY_PRESENT=unknown # driver absent — can't probe; fall back to env/platform (#3) + Computer Use, NOT headless
+ elif cua-driver call get_screen_size 2>/dev/null \
+ | jq -e '(.width // .structuredContent.width // 0) > 0' >/dev/null; then
+ DISPLAY_PRESENT=1 # display reachable → attended ladder (Cua Driver → Computer Use)
  else
- DISPLAY_PRESENT=0 # headless → Cua Sandbox (if a backend exists, else documented-limitation)
+ DISPLAY_PRESENT=0 # driver present but no display → headless (Cua Sandbox if a backend exists)
  fi
  ```
 
- *(Validated 0.6.8 on macOS: a real display returns `{width:5120,height:1440}`,
- exit 0. Verify the no-display / errors-out branch per platform — see the
- drift / verify-at-build note.)*
-3. **Linux-only cheap pre-check.** `[ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ]`
- is a fast headless hint **on Linux**. **Never use it on macOS** — `$DISPLAY` is
- unset on a fully-displayed Mac (macOS doesn't use X11), so it false-positives
- headless (verified: a 5120×1440 Mac reports `$DISPLAY` unset). macOS always has
- a window server even over SSH, so the **empirical probe (#2) is the only
- trustworthy signal there**; a Mac is "headless" for our purposes only when
- `get_screen_size` fails or the Accessibility / Screen-Recording grants are absent.
+ - **Driver absent:** you can't probe — do **not** infer headless. Fall back to
+ env/platform (#3) and let the **Computer Use** ladder (and its own display
+ check) decide; only a real no-display signal routes to the sandbox.
+3. **Env/platform fallback (driver absent).** On **Linux**,
+ `[ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ]` is a fast headless hint.
+ **Never use `$DISPLAY` on macOS** — it's unset on a fully-displayed Mac (verified:
+ a 5120×1440 Mac reports `$DISPLAY` unset), so it false-positives headless. macOS
+ always has a window server even over SSH; absent the driver, assume **attended**
+ and let Computer Use's own probe decide.
+
+**Two things that are NOT a headless signal (don't conflate them):**
+
+- **TCC grants (macOS).** `get_screen_size` works with **no** grants. Missing
+ **Accessibility** is an *attended-path driver failure* → fall through to Computer
+ Use, **not** the sandbox. Missing **Screen Recording** still drives (AX-only
+ evidence). Keep grant state out of the display decision entirely.
+- **Driver not installed.** That's a *detect-and-instruct* gap (print the install),
+ not proof of no display — see #2.
 
 `cua-driver doctor` reports install / TCC health, **not** display presence — don't
 use it for this decision.
@@ -311,7 +334,7 @@ The Sandbox rung has two backends with **very different** privacy/cost profiles.
 
 | Backend | What it is | Default? | Cost / privacy |
 |---------|-----------|----------|----------------|
-| **Local** (`lume` / QEMU / Docker) | A VM/container on the operator's own hardware — zero-network, nothing leaves the machine | **Yes — the default sandbox path** | Free; uses local CPU/RAM/disk. Consistent with flow-next's no-SaaS posture. |
+| **Local** (`lume` / QEMU / Docker) | A VM/container on the operator's own hardware — no driven data leaves the machine (**set `CUA_TELEMETRY_ENABLED=false` for fully-offline; the SDK ships usage telemetry on by default**) | **Yes — the default sandbox path** | Free; uses local CPU/RAM/disk. Consistent with flow-next's no-SaaS posture. |
 | **Cloud** (`cua.ai`) | A managed VM on Cua's infrastructure, same SDK surface | **No — explicit opt-in only** | **Bills**, and **the driven screen + data leave the machine** (data egress). Requires a `CUA_API_KEY`. |
 
 The local backend matrix (verify at build): **Linux** → Docker container (shares
@@ -375,7 +398,17 @@ lume ls # confirm the image is present
 # Cua's quickstart requires Python 3.12+ (lists 3.12/3.13). flow-next itself is 3.8+,
 # so install into a dedicated venv: python3.12 -m venv .cua && .cua/bin/pip install cua
 pip install cua # MIT base; the omni/vision extras are NOT needed here — see Licensing
+
+# IMPORTANT for the "local = zero-network" promise: the `cua` package ships
+# anonymous usage telemetry ENABLED by default. For a truly offline local run,
+# opt out — export before driving (or set telemetry_enabled=False in code):
+export CUA_TELEMETRY_ENABLED=false
 ```
+
+> **The "zero-network" local backend is only fully offline with telemetry disabled**
+> (`CUA_TELEMETRY_ENABLED=false`). Without the opt-out, the SDK still phones home
+> anonymous usage stats even on the local backend — set it, or soften the offline
+> claim for your environment.
 
 **Cloud — explicit opt-in only** (bills + data egress):
 
