@@ -51,7 +51,7 @@ No slash command — just describe what you want.
 |---|---|---|
 | [`flow-next`](../skills/flow-next/SKILL.md) | "show me my tasks", "what's ready?", "list specs" | Day-to-day `.flow/` task and spec management via flowctl. |
 | [`flow-next-deps`](../skills/flow-next-deps/SKILL.md) | "what's blocking what?", "execution order", "critical path" | Spec dependency graph and execution order — which specs can run in parallel. |
-| [`flow-next-drive`](../skills/flow-next-drive/SKILL.md) | "drive the app", "verify the deployed UI" | Drive any UI surface like a real user — web, Electron/WebView2 over CDP, or native via Computer Use. Surface-aware driver ladder; powers `/flow-next:qa`. |
+| [`flow-next-drive`](../skills/flow-next-drive/SKILL.md) | "drive the app", "verify the deployed UI" | Drive any UI surface like a real user — web, Electron/WebView2 over CDP, or native via the Cua Driver (MIT, provider-agnostic, background) / Computer Use, with a Cua Sandbox rung for headless/CI native runs. Surface-aware driver ladder; powers `/flow-next:qa`. |
 | [`flow-next-export-context`](../skills/flow-next-export-context/SKILL.md) | "export context for external review" | Export RepoPrompt context to markdown for review with an external LLM (ChatGPT, Claude web, …). |
 | [`flow-next-rp-explorer`](../skills/flow-next-rp-explorer/SKILL.md) | "use rp to find …" | Token-efficient codebase exploration through the RepoPrompt CLI. |
 | [`flow-next-worktree-kit`](../skills/flow-next-worktree-kit/SKILL.md) | "create a worktree for …" | Git worktree create/list/switch/cleanup + `.env` copying — parallel feature work, isolated review. |

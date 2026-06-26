@@ -2,6 +2,18 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Added
+- **`flow-next-drive` native rung gains the Cua Driver (provider-agnostic computer-use) + a Cua Sandbox rung for headless/CI native runs** (fn-71). The native rung of the surface-aware driver ladder (Step 4) was served **only** by Computer Use (Codex CU / Anthropic Claude CU) — provider-locked, macOS/Windows-only, and focus-stealing, and **never reachable on a headless / CI / Linux path**. [trycua/cua](https://github.com/trycua/cua) (MIT) is added as a **detected, opt-in** native driver with two surfaces, never a hard dependency:
+  - **Cua Driver** (`cua-driver mcp`, fn-71.1) — background computer-use on the *local* machine (macOS / Windows / Linux) over an MCP server: **no focus steal** (`launch_app` returns `self_activation_suppressed: true`), **accessibility-tree-based** (structured `element_index` elements, not pixels), and **provider-agnostic** (not tied to Claude/Codex). Validated live end-to-end against cua-driver 0.6.8. On macOS, the load-bearing **TCC permission split** is documented: **Accessibility** unlocks *driving*, **Screen Recording** unlocks *screenshots* — the rung surfaces "Screen Recording not granted ⇒ AX-only evidence, no screenshot" rather than emitting an empty screenshot.
+  - **Cua Sandbox** (fn-71.2) — drives an app inside an isolated VM/container (any OS), the **only** native option on a **headless/CI** host with no real display. Opt-in per run, torn down each run; **local `lume`/QEMU/Docker is the default backend, the `cua.ai` cloud is explicit opt-in** (bills + data-egress, never auto-selected).
+  - **Detect-and-instruct, never auto-install** — the same no-auto-install consent rule `/flow-next:map` applies to `clawpatch`; base install stays zero-dep, agent-browser remains the only assumed-present driver, and `flowctl` never imports Cua. The **default driving path (background `cua-driver` MCP) uses only MIT components**; the optional `cua-agent[omni]` (ultralytics AGPL-3.0) / OmniParser (CC-BY-4.0) extras are documented and never auto-installed. Native-rung precedence is explicit (attended: Cua Driver → Computer Use → documented-limitation; headless/CI: Cua Sandbox only). The `/flow-next:qa` evidence tuple accepts `cua-driver` / `cua-sandbox` as `driver_rung` values with no schema change — the fn-51↔fn-53 seam is unchanged.
+  - **Docs**: a new per-rung reference [`references/cua.md`](plugins/flow-next/skills/flow-next-drive/references/cua.md) (install + multi-host MCP wiring, the AX-tree driving loop, the permission-split evidence mode, the precedence list, sandbox provision/teardown, licensing, a drift / verify-at-build section, and the degradation table); the `flow-next-drive` SKILL Step 4; `docs/skills.md`, `docs/platforms.md`; Codex mirror regenerated. flow-next.dev ships the counterpart drive-page + changelog pass.
+
+### Notes
+- Additive, opt-in, backward-compatible — a pass still completes with no Cua installed (fall to Computer Use → documented-limitation). No new skill or command (a rung, not a re-architecture); the universal flow and QA's workflow are untouched. **Version bump deferred to the batched release** (per CLAUDE.md "version bumps are batched, not per-spec").
+
 ## [flow-next 2.1.3] - 2026-06-26
 
 ### Fixed
