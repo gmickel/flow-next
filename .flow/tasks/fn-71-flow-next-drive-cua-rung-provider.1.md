@@ -42,9 +42,8 @@ Add the **local Cua Driver** as a detected, opt-in option on flow-next-drive's N
 - [ ] NO flowctl/Python added (grep confirms no `flowctl cua` / Python CUA wrapper).
 
 ## Done summary
-TBD
-
+Added the local Cua Driver as a detected, opt-in native-rung driver on flow-next-drive (SKILL.md Step 4: probe Cua Driver → Computer Use → documented-limitation) and authored `references/cua.md` — pure host-driven MCP prose mirroring `computer-use.md`, with multi-host wiring (Claude `claude mcp add` + Codex `[mcp_servers.cua-driver]`), the macOS Accessibility-vs-Screen-Recording permission-split evidence mode, MIT-only default path, and a drift/verify-at-build section. No flowctl/Python added; Codex mirror regenerated and verified coherent.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: cd325107e8bb1635c54b8d1741d7daba609c1927
+- Tests: bash scripts/sync-codex.sh (29 skills, all validations pass, idempotent), diff canonical vs codex mirror of references/cua.md (whitespace-only normalization; multi-host wiring intact), grep -rn flowctl cua (no flowctl/Python CUA wrapper)
 - PRs:

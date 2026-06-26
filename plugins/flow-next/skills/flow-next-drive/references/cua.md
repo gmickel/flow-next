@@ -219,23 +219,187 @@ and a *path* split (attended vs headless). The order, stated explicitly so R4
   3. **Documented-limitation** — no driver reachable; document and stop, never fail silently.
 - **Headless / CI path** (no real display): the **Cua Sandbox** rung is the
   *only* option — local Computer Use *and* the local Cua Driver both need a real
-  display. (Sandbox detail lands in the sandbox section / a later task.)
+  display. (Full detail in "Sandbox — the headless/CI surface" below.)
 
 So the local Cua Driver ranks **above** Computer Use on the attended path (better:
 no focus steal, more platforms), and the sandbox is first-and-only on the headless
 path — different paths, no conflict. Web/Chromium surfaces (A/B) are unaffected.
 
-## Sandbox — the headless/CI surface (forward pointer)
+## Sandbox — the headless/CI surface
 
 The **Cua Sandbox SDK** drives an app inside an **isolated VM/container** (any
-OS) for hermetic or **headless/CI** native runs — the one surface the local
-driver (and Computer Use) can't reach, because both need a real display.
-**Local `lume`/QEMU is the default backend; cua.ai cloud is explicit opt-in**
-(credentials + cost + data-egress, never auto-selected). It is heavier
-(provisions a VM, seconds–minutes) and opt-in per run, never the default native
-path — always torn down each run (no leaked VMs). Detection: `cua` SDK / `lume`
-present, or a configured cua.ai endpoint. Full sandbox provision/teardown detail
-is owned by the sandbox task; this reference will carry it.
+OS) for hermetic or **headless/CI** native runs — the one surface the local Cua
+Driver (and Computer Use) can't reach, because both need a real display. A
+sandbox is a **full, disposable computer**: it starts from a known image,
+accumulates state only while it lives, and is deleted without consequence — so a
+native-app QA pass can finally run **unattended / in CI**, on a host with no
+screen of its own.
+
+This is a **less-grounded surface than the local driver**: the local Cua Driver
+was validated live end-to-end (see the Provenance note up top), **the Sandbox SDK
+was not**. Treat every provisioning / image / SDK-shape claim below as
+**verify at build** unless you record an actual provisioning run — the API moves
+fast (the SDK surface here is from the upstream docs at authoring time, not a
+live run).
+
+### When the sandbox is the rung — and when it is not
+
+The sandbox is the **headless / CI-only** rung. Reach for it when there is **no
+real display** (cloud VM, Linux CI runner, an unattended box) and the surface is
+genuinely native — that is the *only* place it wins outright, because local
+Computer Use and the local Cua Driver both simply cannot run there.
+
+On an **attended path** (a real display + an operator present) the sandbox ranks
+**below** the local Cua Driver and below Computer Use purely on **cost and
+latency** — provisioning a VM costs seconds-to-minutes and disk where a local
+background drive is near-instant. So it does **not** displace the attended
+ordering in "Native-rung precedence" above; it slots in as the headless leg. The
+two compose:
+
+- **Attended path:** Cua Driver background → Computer Use → documented-limitation
+  (the sandbox is available but not preferred — only worth it for hermetic
+  isolation the operator explicitly wants).
+- **Headless / CI path:** **Cua Sandbox only** — first and last resort, because
+  nothing else can drive a native surface with no display.
+
+Still **for true-native + non-CDP surfaces only** (same scope rule as the rest of
+this rung). A Chromium app (Electron / WebView2) in CI belongs on the web ladder
+(headless agent-browser), not in a provisioned desktop VM.
+
+### Two backends — local default, cloud explicit opt-in
+
+The Sandbox rung has two backends with **very different** privacy/cost profiles.
+**Never auto-select the cloud.**
+
+| Backend | What it is | Default? | Cost / privacy |
+|---------|-----------|----------|----------------|
+| **Local** (`lume` / QEMU / Docker) | A VM/container on the operator's own hardware — zero-network, nothing leaves the machine | **Yes — the default sandbox path** | Free; uses local CPU/RAM/disk. Consistent with flow-next's no-SaaS posture. |
+| **Cloud** (`cua.ai`) | A managed VM on Cua's infrastructure, same SDK surface | **No — explicit opt-in only** | **Bills**, and **the driven screen + data leave the machine** (data egress). Requires a `CUA_API_KEY`. |
+
+The local backend matrix (verify at build): **Linux** → Docker container (shares
+the host kernel, fast to start); **macOS** → a VM via **Lume** (Apple
+Virtualization Framework); **Windows** → QEMU / Hyper-V; **Android** → QEMU
+(Android is out of scope for this rung regardless). Containers start in seconds;
+full VMs are slower but higher-fidelity.
+
+**The cloud backend is opt-in per run and never the inferred default.** It
+*receives the driven screen* — that is real data egress — and it bills. Document
+the credential (`CUA_API_KEY` from the cua.ai Dashboard → API Keys), the cost,
+and the egress at the point of use; require an explicit operator choice. The
+zero-network **local** backend is what the rung reaches for unless the operator
+asks for the cloud by name.
+
+### Detect availability before relying on it
+
+Same posture as the local driver — *probably absent*, confirm before planning
+around it. Probe inline; observe, don't force:
+
+- **Local backend present.** The `cua` Python SDK is importable **and** a local
+  VM/container backend is usable: `command -v lume` (macOS VM), `command -v
+  docker` + a running daemon (Linux container), or a QEMU install. No backend →
+  no local sandbox.
+- **Cloud backend configured.** `CUA_API_KEY` is set **and** the operator has
+  opted into the cloud for this run. Never treat a present key as consent to
+  egress — the cloud is opt-in per run.
+- **Headless is fine here.** Unlike every other native rung, the sandbox is
+  *designed* for a no-display host — that is its whole point. Absence of a
+  display is **not** a degradation signal for this rung.
+
+Surface **present AND absent** in the rung report, same as every other ladder
+probe. Absent local backend *and* no opted-in cloud → no sandbox rung; on a
+headless host that means the native surface is undriveable → documented
+limitation (don't fail silently).
+
+### Install + wiring (detect-and-instruct — never auto-installed)
+
+flow-next **detects and instructs**; it **never runs these for the user** —
+the same no-auto-install consent rule the local driver follows (and `/flow-next:map`
+follows for `clawpatch`). Print the relevant commands; let the operator run them.
+All commands below are **verify at build** (SDK + Lume surfaces drift).
+
+**Local — `lume` (macOS) / Docker (Linux), the default backend:**
+
+```bash
+# macOS VM backend — install Lume (Apple Virtualization Framework)
+curl -fsSL https://raw.githubusercontent.com/trycua/cua/main/libs/lume/scripts/install.sh | bash
+
+# Pull a base image — FIRST PULL IS A MULTI-GB "COFFEE BREAK", not a hang
+# (the macOS image is ~30GB; it downloads once, then is cached)
+lume pull macos-sequoia-cua:latest
+lume ls   # confirm the image is present
+
+# Linux container backend — Docker Desktop / engine running is enough; no lume.
+```
+
+**The Sandbox SDK** (drives the provisioned machine, both backends):
+
+```bash
+pip install cua   # MIT base; the omni/vision extras are NOT needed here — see Licensing
+```
+
+**Cloud — explicit opt-in only** (bills + data egress):
+
+```bash
+# 1. Sign in at cua.ai → Dashboard → API Keys → New API Key
+# 2. Export the key ONLY when the operator has chosen the cloud for this run:
+export CUA_API_KEY=sk_cua-...
+```
+
+For the full sandbox API and current image catalog, point the user at upstream
+[`libs/cua-sandbox`](https://github.com/trycua/cua/tree/main/libs/python/cua-sandbox)
+and the [Sandbox SDK docs](https://cua.ai/docs).
+
+### Provision → drive → tear down (no leaked VMs)
+
+The rung **owns the VM lifecycle** and must tear the sandbox down on **success
+AND on error/abort** — a provisioned VM left running leaks cost (cloud) or
+local resources. The upstream **ephemeral** lifecycle gives this for free: the
+context manager auto-destroys the sandbox on block exit, error path included.
+Prefer it. (SDK shape **verify at build** — names below are from the upstream
+docs, not a live run.)
+
+```python
+import asyncio
+from cua import Sandbox, Image
+
+async def main():
+    # local=True → the zero-network local backend (Docker/Lume/QEMU); the DEFAULT here.
+    # Omit local=True ONLY when the operator opted into the cloud (CUA_API_KEY set) — bills + egress.
+    async with Sandbox.ephemeral(Image.linux(), local=True) as sb:   # ← auto-destroyed on exit
+        # observe → snapshot → act → verify → capture, the universal flow (SKILL.md Step 2),
+        # now inside the hermetic machine. The sandbox exposes a GUI half (screenshot / AX /
+        # click / type) and a code half (sb.shell.run(...)) over one filesystem.
+        png = await sb.screenshot()              # capture — hermetic display, no host screen needed
+        with open("evidence.png", "wb") as f:
+            f.write(png)
+    # sandbox destroyed HERE — on normal exit AND on exception. No leaked VM.
+
+asyncio.run(main())
+```
+
+**Teardown discipline (load-bearing):**
+
+- **`ephemeral` is the default pattern** — its `async with` tears the sandbox
+  down automatically, on the error path too. Use it unless you have a reason not to.
+- If you use the **persistent** form (`Sandbox.create(... name=...)` →
+  `disconnect()` keeps it running), you **own** the deletion: `sb.destroy()` or
+  `Sandbox.delete(name)`. A persistent sandbox is **exactly** the leak risk this
+  rung exists to avoid — only use it when the state must outlive the run, and
+  delete it explicitly.
+- **On error/abort, still tear down.** Never leave a half-driven VM running —
+  wrap non-ephemeral lifecycles so an exception still reaches `destroy()`.
+- **`Sandbox.list()` is the leak audit** — list and reap orphaned sandboxes if a
+  run died without cleanup. (Verify at build.)
+
+### First-pull "coffee break" — not a hang
+
+The **first** `lume pull` of a macOS image downloads a **multi-GB** disk image
+(~30GB for the macOS image; verify at build) and **provisioning a fresh VM takes
+seconds-to-minutes**. Surface this up front — *"first run pulls a multi-GB image,
+this is a one-time coffee break, not a hang"* — so a long first pull isn't
+mistaken for a stall and killed. Subsequent runs reuse the cached image and are
+fast. (Containers — the Linux backend — skip the multi-GB VM image and start in
+seconds.)
 
 ## Licensing — documented, never auto-installed
 
@@ -253,13 +417,16 @@ is owned by the sandbox task; this reference will carry it.
 ## Evidence tuple (R6) — slots into QA with no schema change
 
 QA's per-scenario evidence tuple `{driver_rung, target_url, viewport,
-screenshot_path, console_path}` accepts **`cua-driver`** as a valid free-form
-`driver_rung` value with **no schema or code change** — the
-`/flow-next:qa` ↔ flow-next-drive (fn-51↔fn-53) read-and-drive seam and the
-universal flow are unchanged. On the **AX-only evidence** mode (Screen Recording
-absent), the AX tree is the captured live-state evidence and `screenshot_path` is
-reported as unavailable — QA decides whether that meets its bar. Everything
-downstream (scenario authoring, bug filing, verdict) stays QA's concern.
+screenshot_path, console_path}` accepts both **`cua-driver`** (local) and
+**`cua-sandbox`** (the headless/CI surface) as valid free-form `driver_rung`
+values with **no schema or code change** — the `/flow-next:qa` ↔ flow-next-drive
+(fn-51↔fn-53) read-and-drive seam and the universal flow are unchanged. On the
+local driver's **AX-only evidence** mode (Screen Recording absent), the AX tree
+is the captured live-state evidence and `screenshot_path` is reported as
+unavailable — QA decides whether that meets its bar. The **sandbox** captures a
+hermetic-display screenshot (`sb.screenshot()`) with no host screen, so it has no
+permission-split caveat. Everything downstream (scenario authoring, bug filing,
+verdict) stays QA's concern.
 
 ## Drift-prone facts — **verify at build**
 
@@ -275,8 +442,14 @@ Cua moves fast (the live run was 0.6.8). Confirm against current upstream at bui
   add` form, and the Codex `[mcp_servers.cua-driver]` shape.
 - **Permission model** — the macOS Accessibility-vs-Screen-Recording split, the
   `com.trycua.driver` attribution, and the daemon-restart-to-pick-up-grant rule.
-- **Sandbox provisioning API** — the `lume`/QEMU local default and the cua.ai
-  cloud opt-in surface.
+- **Sandbox provisioning API** — the `cua` SDK lifecycle surface
+  (`Sandbox.ephemeral` / `create` / `connect` / `destroy` / `delete` / `list`,
+  the `local=True` local-vs-cloud switch, `Image.linux()` and the image catalog),
+  the local backend matrix (`lume`/Apple-Virtualization on macOS, Docker on
+  Linux, QEMU/Hyper-V on Windows), the `lume pull` image name + ~30GB size, and
+  the cua.ai cloud `CUA_API_KEY` opt-in surface. **None of this was validated
+  live** — the local *driver* was; the *sandbox* was not. Verify every claim
+  before relying on it.
 - **License-extra boundary** — that the MIT `cua-driver` MCP is the
   default-path-complete set and `cua-agent[omni]` (ultralytics AGPL-3.0) /
   OmniParser (CC-BY-4.0) remain optional, never-auto-installed extras.
@@ -287,23 +460,29 @@ Cua Driver is never required. When it's absent, fall through — never fail sile
 
 | Situation | Behavior |
 |-----------|----------|
-| No display / headless host (cloud VM, Linux, CI) | The local driver does **not** run here. For a true-native surface, this is the **Cua Sandbox** rung's job (hermetic display); for web/Chromium, the web ladder. |
+| No display / headless host (cloud VM, Linux, CI), **a local sandbox backend usable** (`lume`/Docker/QEMU) | This is the **Cua Sandbox** rung — provision a hermetic VM/container (local, zero-network default), drive inside it, **tear it down each run** (no leaked VMs). Surface the first-pull multi-GB "coffee break." |
+| No display / headless host, **no local backend and no opted-in cloud** | No native driver reachable at all (local driver + Computer Use both need a display). **Document the limitation and stop** — print the sandbox install (`lume`/Docker) so the operator can enable it; for web/Chromium, the web ladder still runs. Never auto-select the billing cloud. |
+| Sandbox: **cloud chosen but `CUA_API_KEY` unset** (or key set but operator didn't opt into the cloud) | **Do not egress silently.** The cloud bills and receives the driven screen — it is opt-in per run. Use the local backend, or instruct the operator to set `CUA_API_KEY` + explicitly choose the cloud. |
 | `cua-driver` not installed / MCP not registered | **Detect-and-instruct** — print the install + wiring commands (you can't install for the user). Fall to Codex/Claude **Computer Use** → documented-limitation. Don't block — run whatever the web ladder reaches meanwhile. |
 | macOS, installed, but **Accessibility not granted** | Only no-grant reads work; **no driving**. Guide the user through `cua-driver permissions grant` + a daemon restart (you can't grant OS permissions for them). Fall to Computer Use meanwhile. |
 | macOS, driving works, but **Screen Recording not granted** | Drives fully; **AX-only evidence** — surface "Screen Recording not granted ⇒ AX-only evidence, no screenshot." Do not emit an empty screenshot as if captured. |
-| App is **Chromium-backed (Electron / WebView2)** | **Not this rung** — drive on the **web ladder** by CDP-attach (agent-browser `--cdp` / `--auto-connect`; chrome-devtools-mcp `--browser-url`), even though `launch_app` exposes the debug ports. |
-| App is **genuinely native / non-CDP webview** and **no native driver at all** (no Cua Driver, no Computer Use) | **Document the limitation and stop — do not fail silently.** Continue with code review + whatever the spec allows; surface the gap. |
+| App is **Chromium-backed (Electron / WebView2)** | **Not this rung** — drive on the **web ladder** by CDP-attach (agent-browser `--cdp` / `--auto-connect`; chrome-devtools-mcp `--browser-url`), even though `launch_app` exposes the debug ports. Even headless/CI Chromium is the web ladder, not a provisioned desktop VM. |
+| App is **genuinely native / non-CDP webview** and **no native driver at all** (no Cua Driver, no Computer Use, no sandbox backend) | **Document the limitation and stop — do not fail silently.** Continue with code review + whatever the spec allows; surface the gap. |
 | App is **iOS / iPadOS** | Out of scope — defer to the community iOS simulator skills. (Cua's Android sandbox is also out of scope here.) |
 
 ## Limits
 
-- **Never a hard dependency, never headless.** If the local driver isn't present
-  (or there's no display), fall through per the table — the pass still completes.
-  agent-browser stays the only assumed-present driver; flowctl never imports or
-  requires Cua.
-- This rung is for **true-native + non-CDP webviews only**. Anything Chromium
-  (Electron / WebView2) → the web ladder
-  ([agent-browser.md](agent-browser.md), [chrome-devtools-mcp.md](chrome-devtools-mcp.md)).
-- The **local** driver needs a real display; **headless/CI** native driving is
-  the **Cua Sandbox** rung, not this one. Keep that distinction explicit so CI
-  users reach for the right surface.
+- **Never a hard dependency.** If neither the local driver nor a sandbox backend
+  is present, fall through per the table — the pass still completes. agent-browser
+  stays the only assumed-present driver; flowctl never imports or requires Cua.
+- This rung is for **true-native + non-CDP webviews only** — local driver *and*
+  sandbox alike. Anything Chromium (Electron / WebView2) → the web ladder
+  ([agent-browser.md](agent-browser.md), [chrome-devtools-mcp.md](chrome-devtools-mcp.md)),
+  even in CI.
+- **The local driver needs a real display; the Cua Sandbox is the only headless/CI
+  native surface.** Keep that distinction explicit so CI users reach for the
+  sandbox, not the local driver. The sandbox is heavier (provisions a VM) and
+  opt-in per run — never the default native path on an attended host.
+- **The cloud sandbox backend bills and egresses the driven screen — never
+  auto-selected.** The zero-network local backend (`lume`/QEMU/Docker) is the
+  default; the cua.ai cloud requires an explicit per-run opt-in and a `CUA_API_KEY`.
