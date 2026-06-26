@@ -1,0 +1,43 @@
+---
+satisfies: [R9]
+---
+
+## Description
+
+The **full documentation sweep across all four surfaces** (this changes the pipeline) + Codex mirror regen + version bump. Per CLAUDE.md doc-update discipline + `agent_docs/releasing.md`. **The QA framing everywhere: augments — never replaces — staging/CI/manual QA; reduces human work agentically; surfaces problems to humans.**
+
+**Size:** L  *(broad sweep: repo docs + Codex mirror + version + 3 external repos + site build + diagram regen)*
+**Files:** repo docs + `CHANGELOG.md` + flow-next.dev + AI×SDLC guide + GF microsite + version manifests (via `scripts/bump.sh`)
+
+## Approach
+
+- **Codex mirror:** edits to pilot `workflow.md`/`SKILL.md` + qa `workflow.md` ⇒ run `scripts/sync-codex.sh`, **smoke the mirror** (memory: mirror-regen exposes latent canonical gaps; don't wait for review).
+- **Repo (`/Users/gordon/work/flow-next`):** `flow-next-qa/SKILL.md` (L3 + "fills that gap" para → optional-stage + augments-not-replaces); pilot `SKILL.md`/`workflow.md` (stage set already edited in .2 — confirm docs match); `docs/ralph.md` (the pipeline para ~L200 + the qa-receipt note ~L427 + quality-gates header — add the optional QA stage between work and make-pr); `docs/README.md` (L37 QA row + L136/L145 diagram/callout); `README.md` (same diagram/callout); `docs/flowctl.md` (`pipeline.qa` config row — confirm from .2); **`CHANGELOG.md`** top entry.
+- **flow-next.dev (`~/work/flow-next.dev`):** `src/content/docs/skills/qa.mdx` (L44/L48 → optional pipeline stage; **sharpen augments-not-replaces / surfaces-to-humans**); `skills/pilot.mdx` (L24/L25 classify+dispatch, L36 verdict stages → add `qa`; L109 "stops at draft PR" note); `autonomous/overview.mdx` (~L121 pipeline → add optional QA stage); `releases/changelog.mdx` (new entry); `FLOW_NEXT_VERSION` (`src/lib/site.ts`) + `package.json`. QA already in BOTH navbars — **no nav surgery**. Gate: `pnpm build`.
+- **AI×SDLC guide (`~/work/AI-x-SDLC-Starter-Kit`):** `guides/flow-next.md` ("## The pipeline" ~L47 → add optional QA stage to the idea→merged-PR spine); `guides/phased-rollout.md` (~L263/L328 + L86 QA-tracks note); `guides/ai-readiness.md` (~L263 dogfood-QA); `guides/production-grade.md` (test/eval section); `guides/metrics.md` (~L303 coverage-delta). Apply augments-not-replaces framing. (Page list non-exhaustive — scan for other touched framing.)
+- **GF microsite (`~/work/code-factory-package`):** `spec/04-pipeline.md` (add optional QA stage between BUILD and REVIEW; update `spec/diagrams/pipeline.mmd` + regenerate `pipeline.svg`); `spec/06-rid-coverage.md:20`, `spec/07-install-access.md:89`, `spec/08-autonomy.md:15` (→ "optional QA pipeline stage" framing).
+- **Version bump:** `scripts/bump.sh` — version **follows fn-71** (e.g. 2.1.4 if shipped separately, or one combined bump if fn-71+fn-72 ship together); updates ALL surfaces (`.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, `.cursor-plugin/plugin.json`, both `marketplace.json`, both README badges) + re-runs sync-codex.
+
+## Investigation targets
+**Required:**
+- `agent_docs/releasing.md`, `scripts/bump.sh`, `scripts/sync-codex.sh`
+- `plugins/flow-next/docs/ralph.md` (~L200,L427), `docs/README.md` (L37,L136), `README.md`, `CHANGELOG.md`
+- `~/work/flow-next.dev/src/content/docs/skills/qa.mdx`, `skills/pilot.mdx`, `autonomous/overview.mdx`, `src/lib/site.ts`
+- `~/work/AI-x-SDLC-Starter-Kit/guides/{flow-next,phased-rollout,ai-readiness,production-grade,metrics}.md`
+- `~/work/code-factory-package/spec/{04-pipeline,06-rid-coverage,07-install-access,08-autonomy}.md` + `spec/diagrams/pipeline.mmd`
+
+## Acceptance
+- [ ] `scripts/sync-codex.sh` clean + mirror smoked after pilot/qa edits.
+- [ ] Repo docs updated (qa SKILL, pilot docs, `docs/ralph.md`, `docs/README.md`, `README.md`, `docs/flowctl.md` `pipeline.qa` row) + `CHANGELOG.md` top entry.
+- [ ] flow-next.dev: qa.mdx (augments-not-replaces / surfaces-to-humans framing), pilot.mdx (qa stage), autonomous/overview.mdx (pipeline), changelog, FLOW_NEXT_VERSION + package.json; `pnpm build` green; no nav surgery.
+- [ ] AI×SDLC guide: flow-next.md pipeline section + the QA pages (phased-rollout/ai-readiness/production-grade/metrics) carry the optional-stage + augments-not-replaces framing.
+- [ ] GF microsite: `04-pipeline.md` + diagram regenerated; 06/07/08 framing updated.
+- [ ] Version bumped via `scripts/bump.sh` (all surfaces), version follows fn-71.
+
+## Done summary
+TBD
+
+## Evidence
+- Commits:
+- Tests:
+- PRs:

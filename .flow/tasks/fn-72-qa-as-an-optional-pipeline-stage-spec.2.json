@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-26T13:11:37.582050Z",
+  "depends_on": [
+    "fn-72-qa-as-an-optional-pipeline-stage-spec.1"
+  ],
+  "id": "fn-72-qa-as-an-optional-pipeline-stage-spec.2",
+  "priority": null,
+  "spec": "fn-72-qa-as-an-optional-pipeline-stage-spec",
+  "spec_path": ".flow/tasks/fn-72-qa-as-an-optional-pipeline-stage-spec.2.md",
+  "status": "todo",
+  "title": "Pilot qa stage wiring (config gate + Forbidden reversal + qa_outcome routing)",
+  "updated_at": "2026-06-26T13:21:11.943455Z"
+}

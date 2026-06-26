@@ -12,10 +12,10 @@ Two design commitments shape it: **(1) lean + agentic** — the host derives and
 ## Architecture & Data Models
 <!-- scope: technical -->
 
-- **A config-gated pilot stage reusing the existing `/flow-next:qa` skill — net-new is the pilot wiring only.** No new skill, **no new flowctl subcommand, no persisted `.flow/qa/` test-case file**. The host derives scenarios in-context (the QA skill's `derive` phase) and drives the **local running app** agentically; R-ID coverage is reported in the verdict / PR body, not a tracked artifact. Net-new flowctl for this spec is **zero** — pure host-agent skill wiring.
+- **A config-gated pilot stage reusing the existing `/flow-next:qa` skill — net-new is the pilot wiring only.** No new skill, **no new flowctl subcommand, no persisted `.flow/qa/` test-case file**. The host derives scenarios in-context (the QA skill's `derive` phase) and drives the **local running app** agentically; R-ID coverage is reported in the verdict / PR body, not a tracked artifact. Net-new flowctl is **zero new subcommands/engines — one `pipeline.qa` config-key default only**; pure host-agent skill wiring.
 - **Reverses pilot's "QA is never a stage" — and the reversal is principled.** pilot's `SKILL.md` forbids `{capture, interview, QA, resolve-pr, merge, release}` as stages, but for **three different reasons**: capture/interview are **human authoring upstream of the consent boundary**; resolve-pr/merge/release are **land's territory downstream of the PR** (merge is the human gate); **QA alone was excluded for a *capability* reason** — it needed a live app pilot couldn't guarantee and had no autonomy-safe "can't verify" behavior. fn-72 supplies exactly those missing capabilities (opt-in gate + autonomy-safe verdict), so QA — a pre-ship *verification* gate on the same artifact pilot builds, the live-app sibling of the impl-review gate that **already runs inside `work`** — can join the stage set. **The other five stay forbidden, for their distinct (loop-ownership / consent) reasons** — opening QA is not a precedent to open them.
 - **Pipeline placement:** `plan → plan-review → work → **qa** → make-pr`, with QA at the **all-tasks-done** juncture (one live pass per spec over the complete build), not per-tick. The net-new pilot edits are the Forbidden-list line (QA removed *only under the gate*), the classify table, branch matrix, dispatch list, and the `PILOT_VERDICT` stage entry.
-- **Evidence-aware — lean on what `work` already verified.** Before driving, read work's recorded evidence (`flowctl show <spec-id> --json | jq '.tasks[].evidence'` + each task's `## Evidence`). **Subtract only the AC whose work-evidence is a deterministic, re-runnable check** (a real test/lint/build command in `evidence.tests` / a Quick command) — never re-run those. **Always keep + live-run every AC whose satisfaction is runtime/UI/integration behavior**, even if work narrated it done: work's `evidence.tests` are command strings work *says* it ran and `delegation.verification_summary` is the worker's *self-report* (the work skill itself says don't trust it as the sole gate) — that is narration, and QA's hard rule (SHIP needs captured live evidence) cannot honor narration. The subtraction keys on evidence **type, not presence**.
+- **Evidence-aware — lean on what `work` already verified.** Before driving, read work's recorded evidence — via the **cognitive-aid payload the QA `discover` phase already pulls** (`flowctl spec export-cognitive-aid <spec-id>`, which carries per-task `evidence`), or per-task `flowctl show <task-id> --json`. *(NOT `flowctl show <spec-id> --json | jq '.tasks[].evidence'` — the spec-level task objects carry only `id/status/title/deps`, no `evidence`.)* **Subtract only the AC whose work-evidence is a deterministic, re-runnable check** (a real test/lint/build command in `evidence.tests` / a Quick command) — never re-run those. **Always keep + live-run every AC whose satisfaction is runtime/UI/integration behavior**, even if work narrated it done: work's `evidence.tests` are command strings work *says* it ran and `delegation.verification_summary` is the worker's *self-report* (the work skill itself says don't trust it as the sole gate) — that is narration, and QA's hard rule (SHIP needs captured live evidence) cannot honor narration. The subtraction keys on evidence **type, not presence**.
 - **Verdict is surfaced, not a hard loop-block (gate reads `qa_outcome`, never the `verdict` projection).** The receipt emits `qa_outcome ∈ {SHIP, NEEDS_WORK, NA, BLOCKED}` and *separately* projects a Ralph-guard `verdict` where **`BLOCKED→NEEDS_WORK`** — the gate MUST read `qa_outcome`. Routing: `SHIP` / `NA` / `BLOCKED` → advance to make-pr cleanly; **`NEEDS_WORK` → still advance to make-pr (draft) and surface the findings** into the PR body + bug-memory track + (when the bridge is active) a tracker-sync comment. QA never blocks the build loop — it's an advisory live-test signal the **human reviewer + the land gate** act on (merge stays human). *(Interactive mode MAY route NEEDS_WORK back to `work`, bounded to avoid work↔qa thrash; autonomous surfaces + proceeds.)*
 - **Local-dev-app scope.** QA drives the instance already up on the dev's machine (work brought it up); when no local app is reachable it returns **BLOCKED → advance** — it's the optional augmenting pass, not the CI/staging gate.
 - **Reuses:** the QA skill (executor + its hard rule), flow-next-drive (the agentic driver ladder; the fn-71 CUA rung is *optional* reach once it ships — agent-browser is the only assumed driver), the existing `qa_verdict` receipt, the bug-memory track, and pilot's stage machine. No new persistence.
@@ -23,7 +23,7 @@ Two design commitments shape it: **(1) lean + agentic** — the host derives and
 ## API Contracts
 <!-- scope: technical -->
 
-- **Config:** `pipeline.qa ∈ {off (default), on}` (+ optional per-spec override). On ⇒ pilot inserts the `qa` stage at all-tasks-done. Default **off**.
+- **Config:** `pipeline.qa ∈ {off (default), on}` — global config only. On ⇒ pilot inserts the `qa` stage at all-tasks-done. Default **off**. *(A per-spec override is an explicit out-of-scope follow-on — fn-72 ships the global key only.)*
 - **No new flowctl, no new artifact.** The QA stage is host-agent skill work; the only persisted output is the existing `qa_verdict` receipt at `.flow/review-receipts/qa-<id>.json`, which rides the PR/land hand-off.
 - **Gate** reads `qa_outcome` from that receipt (NOT the Ralph-guard `verdict` projection where `BLOCKED→NEEDS_WORK`).
 - **Pilot verdict:** the `qa` stage emits `ADVANCED <id> qa`; `NEEDS_WORK` still advances (findings surfaced on the draft PR), so the build loop never stalls.
@@ -44,7 +44,8 @@ Two design commitments shape it: **(1) lean + agentic** — the host derives and
 <!-- scope: both -->
 
 - **R1:** A config gate (`pipeline.qa`, default **off**) inserts a `qa` stage at the **all-tasks-done** juncture (before make-pr); with it off, the pipeline is byte-for-byte unchanged.
-- **R2:** **Lean + agentic — zero new flowctl plumbing and no persisted test-case artifact.** The host derives scenarios in-context and drives the local running app agentically (reusing the `/flow-next:qa` executor); R-ID coverage is reported in the verdict/PR, not a tracked file.
+- **R1b (idempotence — pilot is single-tick):** the `qa` classification is **gated on the absence of a *fresh* `qa_verdict` receipt** for the spec. **Freshness is defined by a `head_sha` field added to the existing `qa_verdict` receipt** (additive, not a new artifact): a receipt is fresh iff `receipt.id == <spec-id>` (the existing receipt's spec-id field, `workflow.md:423`) AND `receipt.head_sha == git rev-parse HEAD` AND `qa_outcome` is a valid terminal value. All-done + `pipeline.qa==on` + no fresh receipt ⇒ classify `qa`; a fresh receipt ⇒ fall through to the make-pr probe. Without this, a single-tick pilot re-classifies `qa` forever and never reaches make-pr.
+- **R2:** **Lean + agentic — no new flowctl subcommand/engine and no persisted test-case artifact.** The host derives scenarios in-context and drives the local running app agentically (reusing the `/flow-next:qa` executor); R-ID coverage is reported in the verdict/PR, not a tracked file. *(The one legitimate mechanical flowctl touch is registering the `pipeline.qa` config-key default `"off"` in `get_default_config()` — the same trivial schema plumbing every config key gets, e.g. `artifacts.html.enabled`; NOT a new command, extractor, or engine.)*
 - **R3:** Reverses pilot's "QA is never a stage" **only under the gate** — QA removed from the Forbidden list / added to the classify table, branch matrix, dispatch list, and `PILOT_VERDICT` stage entry *when gated on*; **capture/interview/resolve-pr/merge/release remain forbidden** (distinct loop-ownership / consent reasons).
 - **R4:** **Evidence-aware** — reads work's recorded evidence first; subtracts from the live pass only AC proven by a deterministic re-runnable check (a command in `evidence.tests` / a Quick command); **always live-runs every runtime/UI/integration AC even if work narrated it done.**
 - **R5:** **SHIP needs captured live evidence** — preserved unchanged in the pilot context; work narration (incl. `verification_summary`) never substitutes for it.
@@ -60,12 +61,12 @@ Two design commitments shape it: **(1) lean + agentic** — the host derives and
 <!-- scope: business -->
 
 - **Augmenting initial QA on the local dev app — NOT a replacement** for CI/CD-time QA, staging QA, or manual QA.
-- **Lean + agentic — no new flowctl plumbing, no persisted artifacts, no extra receipts** (the host derives + drives in-context; receipts only at the human/land hand-off).
+- **Lean + agentic — no new flowctl subcommand/engine, no persisted test-case artifacts, no extra receipts** (the host derives + drives in-context; receipts only at the human/land hand-off). The lone mechanical flowctl touch is the `pipeline.qa` config-key default in `get_default_config()` (schema plumbing, not a command).
 - **Optional, default off** — environments without a local app are never blocked (BLOCKED/NA advance).
 - **Reuses the QA skill** — no fork, no second QA engine; net-new is pilot stage wiring + the evidence-aware dedup.
 - **Not a merge gate** — surfaces its verdict into the draft PR; `land` + human review stay the merge authority.
 - **The other five forbidden pilot items stay forbidden** — opening QA is not a precedent to open land's stages or the authoring stages.
-- **Drivers are fn-71's concern** — consumes flow-next-drive; the fn-71 CUA rung is optional reach (once it ships), not a gate.
+- **Drivers are fn-71's concern** — consumes flow-next-drive; **functionally fn-72 needs only agent-browser** (the always-present driver). fn-71's CUA rung widens reach but is **not a functional prerequisite**. The `depends_on_epics: fn-71` edge in the sidecar is a deliberate **build-order/sequencing** choice (Gordon's `71 → 72 → 68` ordering), not a functional gate — recorded so the prose and the sidecar agree.
 - **Self-improvement / flaky-case management** is a follow-on, not this spec.
 
 ## Decision Context
@@ -75,19 +76,38 @@ Two design commitments shape it: **(1) lean + agentic** — the host derives and
 The cheapest high-value verification — does the running product actually work — lives outside the loop today. The app is already up on the dev's machine during `work`; running an initial agentic live pass over the complete build, before a human opens the PR, catches obvious runtime breakage early. It augments (never replaces) the real QA that still happens at staging/CI and by hand.
 
 ### Implementation Tradeoffs
-- **Lean + agentic over artifacts/receipts (the load-bearing steer):** an earlier draft added a persisted `.flow/qa/<spec-id>/cases.json` + a `flowctl qa cases` subcommand + receipt emphasis. **Rejected** — the host agent IS the intelligence; it derives and drives in-context and surfaces findings. Receipts matter only at a hand-off to another system/human (the `qa_verdict` on the PR/land hand-off) — not for the in-loop pass. This drops fn-72's net-new flowctl to **zero**.
+- **Lean + agentic over artifacts/receipts (the load-bearing steer):** an earlier draft added a persisted `.flow/qa/<spec-id>/cases.json` + a `flowctl qa cases` subcommand + receipt emphasis. **Rejected** — the host agent IS the intelligence; it derives and drives in-context and surfaces findings. Receipts matter only at a hand-off to another system/human (the `qa_verdict` on the PR/land hand-off) — not for the in-loop pass. This drops fn-72's net-new flowctl to **a single config-key default** (`pipeline.qa: off` in the schema) — **no new subcommand, engine, extractor, or artifact**. The `qa_verdict` receipt gains lean additive fields (`head_sha`, `rid_coverage`, `open_p0p1` objects) but stays the only persisted output.
 - **QA-as-optional-pilot-stage is justified because the exclusion was capability-contingent**, not loop-ownership (resolve-pr/merge/release) or consent (capture/interview). fn-72 supplies the missing capabilities; the other five stay forbidden.
 - **Evidence-aware, keyed on evidence type:** work already verifies (tests + the worker drives the app agentically while building); don't re-run deterministic checks, but always live-run runtime/UI AC because work's evidence there is narration, not QA-grade captured evidence.
-- **Surface, don't block (D3):** `NEEDS_WORK` makes the draft PR + surfaces findings rather than holding the loop — consistent with "draft PR is the terminus, the human gate decides." Merge stays human.
+- **Surface, don't block (D3):** `NEEDS_WORK` makes the draft PR + surfaces findings rather than holding the loop — consistent with "draft PR is the terminus, the human gate decides." Merge stays human. Grounded in DORA's research: heavyweight blocking approval gates correlate with *worse* delivery/stability, advisory feedback that *informs* the path to production correlates with better outcomes ([DORA — Streamlining change approval](https://dora.dev/capabilities/streamlining-change-approval/)); and automated QA as fast-feedback that *complements* human judgment, not replaces it ([DORA — Test automation](https://dora.dev/capabilities/test-automation/)).
 - **Placement at all-done (D2):** QA needs a complete build; one pass per spec at the all-done juncture, not per-tick.
 - **Default off:** QA needs a local app; forcing it on would break the zero-friction default. Once on, it runs automatically every all-done (no per-run remembering).
 
 ## Strategy Alignment
-- **"Host agent IS the intelligence; flowctl thin helpers"** — fn-72 now adds **zero new flowctl** and no artifacts; it is pure host-agent skill wiring + agentic driving. The leanest possible expression of the architecture rule.
+- **"Host agent IS the intelligence; flowctl thin helpers"** — fn-72 adds **no new flowctl subcommand/engine and no new artifact** (only a `pipeline.qa` config-key default + additive `qa_verdict` receipt fields); it is pure host-agent skill wiring + agentic driving. The leanest possible expression of the architecture rule.
 - **Ralph autonomous mode track** — adds a live-verification station to the pilot/land assembly line; evidence over narration by construction; surface-don't-block matches the loop discipline.
 - **Self-improving through normal work** — QA findings feed the bug-memory track as a side-effect of running the stage.
 - **Cross-platform parity** — canonical names + sync-codex; reach widens once fn-71 (CUA rung) ships (optional).
 - Tightens **idea-to-merge quality** — a live-tested draft PR, not just a built one.
+
+## Early proof point
+
+Task `fn-72-qa-as-an-optional-pipeline-stage-spec.1` (the evidence-aware QA pass in the shared `flow-next-qa` skill) proves the core lean+agentic thesis — the host reads work's evidence + derives + drives in-context with **zero new flowctl/persistence**, and it's usable by user-invoked QA immediately (not pilot-gated). If `.1` cannot do the evidence-aware subtraction without a persisted artifact / new flowctl, reconsider the "lean, no-plumbing" stance before wiring the pilot stage in `.2`.
+
+## Requirement coverage
+
+| Req | Description | Task(s) | Gap justification |
+|-----|-------------|---------|-------------------|
+| R1 | Config gate `pipeline.qa` (default off) inserts qa at all-done | .2 | — |
+| R1b | Idempotent — qa classified only when no fresh `qa_verdict` receipt | .1 (adds `head_sha`), .2 (freshness/verify) | — |
+| R2 | Lean+agentic — no new flowctl subcommand/engine (one config default only), no new artifact; host derives+drives | .1 (derive), .2 (wiring) | — |
+| R3 | Reverses "QA never a stage" only under the gate; other five stay | .2 | — |
+| R4 | Evidence-aware — subtract deterministic checks, runtime always live | .1 | — |
+| R5 | SHIP needs captured live evidence (hard rule preserved) | .1 | — |
+| R6 | Augmenting local-dev; BLOCKED/NA advance | .2 (routing), .1 (BLOCKED outcome) | — |
+| R7 | Verdict surfaced not loop-blocked; routes on `qa_outcome` | .2 | — |
+| R8 | Receipts only at the hand-off (no new receipt/artifact) | .1, .2 | — |
+| R9 | Autonomy-safe + full doc sweep (4 repos) + version | .3 | — |
 
 ## Conversation Evidence
 > user: "separately we should consider whether QA should become a fixed (pot optional) part of the pipeline with the test cases being extracted from the spec and context and tested etc, probably a sep spec"

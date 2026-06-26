@@ -11,8 +11,8 @@
   ],
   "id": "fn-72-qa-as-an-optional-pipeline-stage-spec",
   "next_task": 1,
-  "plan_review_status": "unknown",
-  "plan_reviewed_at": null,
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-06-26T13:30:38.431789Z",
   "spec_path": ".flow/specs/fn-72-qa-as-an-optional-pipeline-stage-spec.md",
   "status": "open",
   "title": "QA as an optional pipeline stage \u2014 lean, agentic, evidence-aware",
@@ -27,5 +27,5 @@
     "mergeBaseTracker": "# tracker projection on FLOW board, full reconcile 2026-06-26\n",
     "url": "https://linear.app/gmickel/issue/FLOW-21"
   },
-  "updated_at": "2026-06-26T12:14:01.658682Z"
+  "updated_at": "2026-06-26T13:30:38.432007Z"
 }
