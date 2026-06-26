@@ -19,7 +19,7 @@ Classify the target into one of three buckets and take the matching path. The un
 |---|---------|------------|------|
 | A | **Web app** | A URL in a browser (localhost dev server, staging, production) | **Web ladder** (Step 3) |
 | B | **Chromium-backed desktop app** | Electron / Windows WebView2 — Chromium under the hood, exposes a CDP debug port | **Web ladder** (Step 3), attaching over CDP to the app's remote-debugging port |
-| C | **True-native / non-CDP surface** | macOS AppKit/SwiftUI, Catalyst, or a webview exposing no CDP (macOS WKWebView, which Tauri uses on macOS) | **Native rung** (Step 4) → Computer Use |
+| C | **True-native / non-CDP surface** | macOS AppKit/SwiftUI, Catalyst, or a webview exposing no CDP (macOS WKWebView, which Tauri uses on macOS) | **Native rung** (Step 4) — **Cua Driver** → **Computer Use** (attended); **Cua Sandbox** (headless/CI) |
 
 How to decide:
 
