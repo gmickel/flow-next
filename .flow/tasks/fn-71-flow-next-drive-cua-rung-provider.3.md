@@ -36,9 +36,8 @@ Cross-platform parity + the full documentation sweep + the **release version bum
 - [ ] GF microsite / AI×SDLC guide NOT touched.
 
 ## Done summary
-TBD
-
+Documented the Cua native driver rung across the repo docs sweep (flow-next-drive SKILL frontmatter, docs/skills.md, docs/platforms.md), staged a `## Unreleased` CHANGELOG entry (version bump deferred per CLAUDE.md), regenerated + smoked the Codex mirror (multi-host wiring intact), and shipped the flow-next.dev counterpart pass (drive page CUA rung + verbatim install/permission instructions + unreleased changelog entry, pnpm build green) — committed separately in the flow-next.dev repo. No version bump in any repo.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 23159cdbda03812a6133d64a6e05ae22bc46e324
+- Tests: bash scripts/sync-codex.sh (clean, idempotent — 29 skills, all validators green), python3 -m py_compile plugins/flow-next/scripts/flowctl.py, python3 -m unittest tests.test_template_canonical tests.test_pnpm_home_hint_prose (23 tests OK), cd ~/work/flow-next.dev && pnpm build (64 pages, green)
 - PRs:
