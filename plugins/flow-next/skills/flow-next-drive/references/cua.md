@@ -5,9 +5,11 @@ by **Computer Use** (Codex CU / Anthropic Claude CU) — provider-locked,
 macOS/Windows-only, and focus-stealing. **Cua Driver** ([trycua/cua](https://github.com/trycua/cua), MIT)
 is an open-source, **provider-agnostic** computer-use driver exposed as an **MCP
 server** (`cua-driver mcp`). It adds three things the Computer-Use rung lacks:
-**(1)** a driver that isn't tied to Claude/Codex; **(2)** first-class **Windows +
-Linux** support and **background driving** — click, type, verify *without
-stealing the cursor or focus*; **(3)** an **accessibility-tree-based** loop
+**(1)** a driver that isn't tied to Claude/Codex; **(2)** first-class **Windows**
+support (**Linux is pre-release/experimental** — Wayland-only limits, not yet a
+fully-tested tier; treat it as experimental and fall to the sandbox or
+documented-limitation rung) plus **background driving** — click, type text,
+verify *without stealing the cursor or focus*; **(3)** an **accessibility-tree-based** loop
 (structured elements, not pixels) that is robust for native apps.
 
 Cua Driver is **never a hard dependency** and **never on a headless / no-display
@@ -58,9 +60,10 @@ its MCP tools. The everyday loop seen live:
   Markdown rendering, and — *when Screen Recording is granted* — a
   `screenshot_png_b64` of the live window. `get_screen_size` / `list_apps` are
   no-grant reads.
-- **Act** — element-indexed `click` / `type` (you act on an `element_index` from
-  the live AX tree, **not** pixel coordinates), plus the usual key/scroll
-  actuation.
+- **Act** — element-indexed `click` / `type_text` (you act on an `element_index`
+  from the live AX tree, **not** pixel coordinates), plus `press_key` / `hotkey`
+  / `scroll` actuation. *(The MCP text-entry tool is `type_text`, not `type` —
+  per `cua-driver list-tools`; a bare `type` call will not resolve.)*
 
 The driver is **accessibility-tree based** — the host reasons over structured
 elements, which is far more robust for native apps than pixel-matching. Exact
@@ -157,7 +160,7 @@ degradation table.
 start_session         → distinct cursor for this drive
 launch_app (background → self_activation_suppressed: true, no focus steal)
 get_window_state      → fresh AX tree (element_index / role / label / frame)  [REQUIRED before each act]
-act                   → click / type on an element_index (NOT pixels) toward the next step
+act                   → click / type_text on an element_index (NOT pixels) toward the next step
 verify                → confirm the expected element / label / state appeared in the AX tree
 capture               → get_window_state screenshot (Screen Recording) OR the AX tree as evidence
 kill_app + end_session → clean teardown, no leaked session
@@ -166,7 +169,7 @@ kill_app + end_session → clean teardown, no leaked session
 This is the universal flow (SKILL.md Step 2) expressed in Cua tools — only the
 actuation differs. **Snapshot before each indexed action:** the AX tree's
 `element_index` values go stale after any action that mutates the UI; re-read
-`get_window_state` before the next `click` / `type`, exactly as web refs go stale
+`get_window_state` before the next `click` / `type_text`, exactly as web refs go stale
 after a navigation. Describe the **goal + success state** (the element/label you
 expect), never pixel coordinates. Work **one app at a time** — but note that, by
 design, concurrent agents *can* drive different apps via distinct sessions
@@ -178,7 +181,7 @@ macOS TCC unlocks driving and screenshots through **two independent grants**:
 
 | Grant | Unlocks | If absent |
 |-------|---------|-----------|
-| **Accessibility** | Driving — `launch_app`, `click`, `type`, reading the live AX tree | No driving at all; only no-grant reads (`get_screen_size`, `list_apps`) work |
+| **Accessibility** | Driving — `launch_app`, `click`, `type_text`, reading the live AX tree | No driving at all; only no-grant reads (`get_screen_size`, `list_apps`) work |
 | **Screen Recording** | Screenshots — `get_window_state`'s `screenshot_png_b64` | Drives fully, but the screenshot field is **empty** |
 
 With **Accessibility only**, the driver still drives *and* captures the **AX tree
@@ -214,7 +217,7 @@ and a *path* split (attended vs headless). The order, stated explicitly so R4
 (prefer background when attended) and R5 (sandbox for CI) compose without conflict:
 
 - **Attended path** (a real display + an operator present):
-  1. **Cua Driver background** — provider-agnostic, no focus steal, Windows/Linux/macOS.
+  1. **Cua Driver background** — provider-agnostic, no focus steal, macOS/Windows (Linux pre-release/experimental — fall to sandbox/limitation there).
   2. **Codex / Claude Computer Use** — screen-takeover; the prior providers.
   3. **Documented-limitation** — no driver reachable; document and stop, never fail silently.
 - **Headless / CI path** (no real display): the **Cua Sandbox** rung is the
@@ -334,6 +337,8 @@ lume ls   # confirm the image is present
 **The Sandbox SDK** (drives the provisioned machine, both backends):
 
 ```bash
+# Cua's quickstart requires Python 3.12+ (lists 3.12/3.13). flow-next itself is 3.8+,
+# so install into a dedicated venv: python3.12 -m venv .cua && .cua/bin/pip install cua
 pip install cua   # MIT base; the omni/vision extras are NOT needed here — see Licensing
 ```
 
@@ -368,7 +373,7 @@ async def main():
     async with Sandbox.ephemeral(Image.linux(), local=True) as sb:   # ← auto-destroyed on exit
         # observe → snapshot → act → verify → capture, the universal flow (SKILL.md Step 2),
         # now inside the hermetic machine. The sandbox exposes a GUI half (screenshot / AX /
-        # click / type) and a code half (sb.shell.run(...)) over one filesystem.
+        # click / type_text) and a code half (sb.shell.run(...)) over one filesystem.
         png = await sb.screenshot()              # capture — hermetic display, no host screen needed
         with open("evidence.png", "wb") as f:
             f.write(png)
@@ -434,7 +439,7 @@ Cua moves fast (the live run was 0.6.8). Confirm against current upstream at bui
 
 - **MCP command surface** — the tool names/fields (`start_session`,
   `launch_app`, `get_window_state` and its `element_index` / `role` / `label` /
-  `frame` / `screenshot_png_b64` shape, `click`, `type`, `kill_app`,
+  `frame` / `screenshot_png_b64` shape, `click`, `type_text`, `press_key` / `hotkey`, `kill_app`,
   `end_session`), the `self_activation_suppressed` background signal, and the CLI
   subcommands (`mcp`, `serve`, `doctor`, `permissions status` / `grant`,
   `skills install`).

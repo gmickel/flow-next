@@ -67,7 +67,7 @@ A genuinely native app (or a non-CDP webview) has no browser tab to attach to �
 
 | Probe | Driver | Reference |
 |-------|--------|-----------|
-| `cua-driver` MCP registered / `command -v cua-driver` (real display) | **Cua Driver** — MIT, provider-agnostic, **background** (no focus steal), macOS/Windows/Linux, accessibility-tree-based. Preferred when present. | `references/cua.md` |
+| `cua-driver` MCP registered / `command -v cua-driver` (real display) | **Cua Driver** — MIT, provider-agnostic, **background** (no focus steal), macOS/Windows (Linux pre-release), accessibility-tree-based. Preferred when present. | `references/cua.md` |
 | Codex CU available, or a Claude Computer-Use harness present | **Computer Use** — Codex CU (macOS/Windows) / Anthropic Claude CU (the API `computer` tool via its own harness). Screen-takeover. | `references/computer-use.md` |
 | **Headless / CI** (no display) and a sandbox backend (`lume`/Docker/QEMU, or opted-in cloud) | **Cua Sandbox** — drive inside an isolated VM/container; the **only** native option with no real screen. Opt-in per run, torn down each run; local backend default, cua.ai cloud explicit opt-in. | `references/cua.md` |
 | None present | **Documented limitation** — document the gap and stop; never fail silently. | — |
