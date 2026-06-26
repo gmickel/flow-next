@@ -228,6 +228,41 @@ So the local Cua Driver ranks **above** Computer Use on the attended path (bette
 no focus steal, more platforms), and the sandbox is first-and-only on the headless
 path — different paths, no conflict. Web/Chromium surfaces (A/B) are unaffected.
 
+## Determining headless / CI (which path you're on)
+
+The split above hinges on one question — **is a usable display reachable?** —
+so determine it, never assume. In order:
+
+1. **CI short-circuit.** `$CI` set (GitHub Actions, GitLab CI, CircleCI, etc. all
+ export it) ⇒ treat as headless: skip the attended, focus-stealing local driver
+ and go straight to the **Cua Sandbox** rung.
+2. **Empirical display probe — the trustworthy signal (ask the driver, don't
+ sniff env).** `cua-driver call get_screen_size` returns `{width, height,
+ scale_factor}` and exits 0 when a real display is reachable; on a no-display
+ host it errors / returns non-positive dims:
+
+ ```bash
+ if cua-driver call get_screen_size 2>/dev/null | jq -e '.width > 0 and .height > 0' >/dev/null; then
+ DISPLAY_PRESENT=1 # attended ladder: Cua Driver → Computer Use
+ else
+ DISPLAY_PRESENT=0 # headless → Cua Sandbox (if a backend exists, else documented-limitation)
+ fi
+ ```
+
+ *(Validated 0.6.8 on macOS: a real display returns `{width:5120,height:1440}`,
+ exit 0. Verify the no-display / errors-out branch per platform — see the
+ drift / verify-at-build note.)*
+3. **Linux-only cheap pre-check.** `[ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ]`
+ is a fast headless hint **on Linux**. **Never use it on macOS** — `$DISPLAY` is
+ unset on a fully-displayed Mac (macOS doesn't use X11), so it false-positives
+ headless (verified: a 5120×1440 Mac reports `$DISPLAY` unset). macOS always has
+ a window server even over SSH, so the **empirical probe (#2) is the only
+ trustworthy signal there**; a Mac is "headless" for our purposes only when
+ `get_screen_size` fails or the Accessibility / Screen-Recording grants are absent.
+
+`cua-driver doctor` reports install / TCC health, **not** display presence — don't
+use it for this decision.
+
 ## Sandbox — the headless/CI surface
 
 The **Cua Sandbox SDK** drives an app inside an **isolated VM/container** (any
