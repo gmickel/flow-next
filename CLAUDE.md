@@ -71,6 +71,7 @@ flow-next is a first-class citizen on Claude Code, Codex, and Factory Droid. **A
 - Avoid feature flags or backwards-compatibility scaffolding (plugins are pre-1.0 except flow-next 1.0+).
 - Do not add extra commands / agents / skills unless explicitly requested.
 - For pure docs / agent_docs / README changes, do NOT bump the plugin version.
+- **Version bumps are batched, not per-spec.** When implementing a spec, land the code + docs + an `## Unreleased` CHANGELOG entry (repo + docs-site), but do NOT run `scripts/bump.sh` or touch the version manifests / `FLOW_NEXT_VERSION`. The release + version-number decision is made separately, later, across several accumulated specs — to avoid version churn. Spec/task acceptance that says "bump to X.Y.Z" means *stage under `## Unreleased`*; the actual bump happens at the batched release.
 
 ## PR workflow
 
