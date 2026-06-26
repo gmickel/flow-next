@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PR lens · fn-71 flow-next-drive CUA rung</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161922; --panel2:#1d2130; --ink:#e6e9f0; --dim:#9aa3b5;
+    --line:#2a2f3e; --accent:#5eead4; --accent2:#a78bfa; --warn:#fbbf24; --ok:#34d399; --bad:#f87171;
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:"Iowan Old Style","Palatino Linotype",Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(160deg,#0f1115,#12141d 60%,#161320);color:var(--ink);
+    font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:920px;margin:0 auto;padding:32px 22px 80px}
+  header.mast{border:1px solid var(--line);border-radius:16px;padding:22px 24px;
+    background:radial-gradient(120% 140% at 0% 0%,rgba(167,139,250,.16),transparent 50%),var(--panel)}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+  h1{font-size:27px;margin:6px 0 4px;letter-spacing:-.01em}
+  .sub{color:var(--dim);font-size:14.5px}
+  .dials{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+  .dial{flex:1 1 130px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel2)}
+  .dial b{display:block;font-family:var(--mono);font-size:22px;color:var(--ink)}
+  .dial span{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
+  h2{font-size:13px;font-family:var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--accent2);
+    margin:34px 0 12px;border-bottom:1px solid var(--line);padding-bottom:7px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+  code,.m{font-family:var(--mono);font-size:12.5px}
+  .chip{display:inline-block;font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line)}
+  .ok{color:var(--ok);border-color:rgba(52,211,153,.4)} .warn{color:var(--warn);border-color:rgba(251,191,36,.4)}
+  .bar{height:7px;border-radius:6px;background:var(--panel2);overflow:hidden;margin:3px 0}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+  ul{margin:8px 0;padding-left:20px} li{margin:5px 0;font-size:14.5px}
+  .where li code, .risk li code{color:var(--accent)}
+  .foot{margin-top:40px;color:var(--dim);font-size:12px;font-family:var(--mono)}
+  .pill{font-family:var(--mono);font-size:11px;color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div class="eyebrow">flow-next · PR review lens</div>
+    <h1>flow-next-drive CUA rung — provider-agnostic computer-use</h1>
+    <div class="sub">A new <b>Native-rung</b> on flow-next-drive: trycua/cua (MIT) for background, cross-platform (Windows/Linux), and headless/CI native driving — detect-best-available, opt-in, never a hard dep. Docs-and-skill-prose change; no flowctl/Python.</div>
+    <div class="dials">
+      <div class="dial"><b>3 / 3</b><span>tasks done</span></div>
+      <div class="dial"><b>8 / 8</b><span>R-IDs covered</span></div>
+      <div class="dial"><b>12</b><span>files · +1047 / −39</span></div>
+      <div class="dial"><b>0</b><span>flowctl / .py touched</span></div>
+      <div class="dial"><b>none</b><span>version bump (deferred)</span></div>
+    </div>
+  </header>
+
+  <h2>90-second read</h2>
+  <ul>
+    <li><b>What:</b> documents <code>cua-driver mcp</code> as a detected native driver (local background + isolated-sandbox surfaces) so <code>/flow-next:qa</code> can drive native apps on Windows/Linux and headless/CI — the four gaps the Codex/Claude Computer-Use rung can't reach.</li>
+    <li><b>How:</b> pure host-driven MCP prose in a new <code>references/cua.md</code> + a Step-4 detect/route line in the drive SKILL. The host calls CUA's MCP tools; <b>no deterministic engine, no flowctl, no Python.</b></li>
+    <li><b>Proof:</b> the local Cua Driver was validated live (AX-driven loop, the Accessibility-vs-Screen-Recording permission split). The Sandbox SDK was <b>not</b> — every unvalidated sandbox claim is marked <span class="chip warn">verify at build</span>.</li>
+    <li><b>Scope guard:</b> agent-browser stays the only assumed driver; absent ⇒ fall to Computer Use → documented-limitation. Base install stays zero-dep.</li>
+  </ul>
+
+  <h2>R-ID → evidence</h2>
+  <table>
+    <thead><tr><th>R-ID</th><th>Criterion</th><th>Task</th><th>Commit</th></tr></thead>
+    <tbody>
+      <tr><td><code>R1</code></td><td>Native rung documents CUA as a detected optional driver (local + sandbox); no new skill</td><td class="m">.1, .2</td><td><code>cd32510</code> <code>4a520a8</code></td></tr>
+      <tr><td><code>R2</code></td><td><code>references/cua.md</code> with concrete install + multi-host MCP wiring + permission grant</td><td class="m">.1</td><td><code>cd32510</code></td></tr>
+      <tr><td><code>R3</code></td><td>Probe-based graceful detection; absent ⇒ Computer Use → documented-limitation</td><td class="m">.1</td><td><code>cd32510</code></td></tr>
+      <tr><td><code>R4</code></td><td>Explicit native-rung precedence (attended vs headless) — composes with R5</td><td class="m">.1</td><td><code>cd32510</code></td></tr>
+      <tr><td><code>R5</code></td><td>Sandbox rung enables headless/CI driving; local lume/QEMU default, cua.ai opt-in</td><td class="m">.2</td><td><code>4a520a8</code></td></tr>
+      <tr><td><code>R6</code></td><td>Evidence tuple accepts cua-driver/cua-sandbox; fn-51↔fn-53 seam unchanged; drift section</td><td class="m">.1</td><td><code>cd32510</code></td></tr>
+      <tr><td><code>R7</code></td><td>Licensing — MIT-only default path; AGPL/CC-BY extras flagged, never auto-installed</td><td class="m">.1</td><td><code>cd32510</code></td></tr>
+      <tr><td><code>R8</code></td><td>Cross-platform parity + full doc sweep + Codex mirror (version bump deferred)</td><td class="m">.3</td><td><code>23159cd</code></td></tr>
+    </tbody>
+  </table>
+  <p class="pill"><span class="chip ok">8/8 covered</span> — no uncovered acceptance criteria.</p>
+
+  <h2>Churn map · by review intent</h2>
+  <table>
+    <thead><tr><th>File</th><th>Intent</th><th>Churn</th></tr></thead>
+    <tbody>
+      <tr><td><code>skills/flow-next-drive/references/cua.md</code> <span class="chip">NEW</span></td><td>The rung reference — read first</td><td><div class="bar"><i style="width:100%"></i></div>+488</td></tr>
+      <tr><td><code>skills/flow-next-drive/SKILL.md</code></td><td>Step 4 detect/route + degradation</td><td><div class="bar"><i style="width:14%"></i></div>+21/−10</td></tr>
+      <tr><td><code>codex/skills/flow-next-drive/{SKILL,references/cua}.md</code></td><td>Codex mirror (sync-codex.sh)</td><td><div class="bar"><i style="width:100%"></i></div>+509</td></tr>
+      <tr><td><code>CHANGELOG.md</code></td><td><code>## Unreleased</code> entry (no version bump)</td><td><div class="bar"><i style="width:9%"></i></div>+12</td></tr>
+      <tr><td><code>docs/skills.md</code>, <code>docs/platforms.md</code></td><td>Driver-ladder one-liners name CUA</td><td><div class="bar"><i style="width:3%"></i></div>+2/−2</td></tr>
+      <tr><td><code>.flow/*</code></td><td>Task state + done summaries</td><td><div class="bar"><i style="width:4%"></i></div>+15/−17</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="where">Where to look</h2>
+  <ul class="where">
+    <li><code>references/cua.md</code> — the substance. Check the <b>multi-host MCP wiring</b> (Claude + Codex), the <b>native-rung precedence</b> (attended: cua-driver → Computer Use → limitation; headless: sandbox-only), and that command detail stays OUT of <code>SKILL.md</code>.</li>
+    <li><b>Permission-split evidence mode</b> — Accessibility unlocks driving, Screen Recording unlocks screenshots; absent Screen Recording ⇒ "AX-only evidence" surfaced, not a silent empty screenshot.</li>
+    <li><b>Codex mirror</b> — confirm <code>cua.md</code> reads coherently after sync-codex.sh (multi-host intact). Not a byte-identical claim — skill-local refs ride the rewrites.</li>
+    <li><code>docs/skills.md</code> / <code>docs/platforms.md</code> driver-ladder strings + the flow-next.dev drive page (separate repo, committed separately, <code>pnpm build</code> green).</li>
+  </ul>
+
+  <h2 class="risk">Risk register</h2>
+  <ul class="risk">
+    <li><span class="chip warn">verify at build</span> The <b>Cua Sandbox SDK</b> (lume/QEMU, cua.ai cloud) was <b>not</b> validated live — 9 "verify at build" markers in <code>cua.md</code> flag every unverified provisioning/teardown claim. The local driver <b>was</b> validated.</li>
+    <li><span class="chip warn">licensing</span> Default path is MIT-only; <code>cua-agent[omni]</code> (AGPL) / OmniParser (CC-BY) are flagged and <b>never auto-installed</b> — confirm the prose never runs <code>pip install</code> for the user.</li>
+    <li><span class="chip">privacy</span> cua.ai cloud sandbox receives the driven screen (data egress) + bills — must be explicit opt-in, never auto-selected. Local lume/QEMU is the default.</li>
+    <li><span class="chip">deferred</span> <b>No version bump</b> — staged under <code>## Unreleased</code> per the batched-release rule; version decided later. GF microsite / AI×SDLC guide untouched (driver rung).</li>
+  </ul>
+
+  <div class="foot">Generated by /flow-next:make-pr from fn-71-flow-next-drive-cua-rung-provider against origin/main · 2026-06-26 · regenerable, the markdown PR body is the record.</div>
+</div>
+</body>
+</html>
