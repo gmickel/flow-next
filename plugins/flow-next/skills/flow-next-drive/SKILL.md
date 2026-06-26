@@ -59,23 +59,32 @@ Probe availability top-down and use the **highest rung that passes**; fail soft 
 
 > **agent-browser command detail lives in the rung reference, not here.** The default-rung reference [`references/agent-browser.md`](references/agent-browser.md) is the entry point — setup/version check, the universal flow in agent-browser commands, the Chromium-desktop (Electron / WebView2) CDP driver, the `--headed` daemon-reuse gotcha, and an index into the per-topic references it folds: `commands.md`, `advanced.md` (CDP attach), `auth.md`, `snapshot-refs.md`, `session-management.md`, `proxy.md`, `debugging.md`.
 
-## Step 4 — Native rung (surface C): Computer Use
+## Step 4 — Native rung (surface C): Cua Driver, then Computer Use
 
-A genuinely native app (or a non-CDP webview) has no browser tab to attach to. The only way to drive it is **Computer Use** — the model looks at the screen, moves a cursor, clicks, and types. Driver-agnostic across what the host offers: **Codex Computer Use** (macOS/Windows) and/or **Anthropic "Claude" Computer Use** (the API `computer` tool, run via its own harness — a controlled display/sandbox or an MCP wrapper). Detect availability and use whichever the environment provides; verify the tool/beta-header version at build (it drifts).
+A genuinely native app (or a non-CDP webview) has no browser tab to attach to — the model has to drive the live machine. This rung is provider-agnostic; probe for the best available driver in this order, prefer the highest that passes, degrade to the next:
 
-The actuation differs from the web ladder but the universal flow (Step 2) is identical — `observe → act → verify → capture`, described as goal + success state, not pixel coordinates.
+| Probe | Driver | Reference |
+|-------|--------|-----------|
+| `cua-driver` MCP registered / `command -v cua-driver` (real display) | **Cua Driver** — MIT, provider-agnostic, **background** (no focus steal), macOS/Windows/Linux, accessibility-tree-based. Preferred when present. | `references/cua.md` |
+| Codex CU available, or a Claude Computer-Use harness present | **Computer Use** — Codex CU (macOS/Windows) / Anthropic Claude CU (the API `computer` tool via its own harness). Screen-takeover. | `references/computer-use.md` |
+| Neither present | **Documented limitation** — document the gap and stop; never fail silently. | — |
 
-→ Read `references/computer-use.md` for availability detection, the enable/permission walkthrough, the driving loop, safety/hygiene, and the full graceful-degradation table.
+All three share the universal flow (Step 2) — `observe → act → verify → capture`, described as goal + success state, not pixel coordinates; only the actuation differs. **Detect, never assume** (`command -v`, MCP list, `uname -s`); no native driver is ever a hard dependency or on a headless/no-display path. The explicit attended-vs-headless precedence (and where the **Cua Sandbox** headless/CI surface fits) lives in `references/cua.md`.
+
+→ Read `references/cua.md` for Cua Driver detection, the install/permission walkthrough (multi-host MCP wiring), the AX-tree driving loop, the macOS permission-split evidence mode, the Native-rung precedence list, licensing, and degradation.
+→ Read `references/computer-use.md` for Computer Use availability detection, the enable/permission walkthrough, the driving loop, safety/hygiene, and the full graceful-degradation table.
 
 ## Driver detection & graceful degradation (all surfaces)
 
-1. **Probe, don't assume.** Detect each non-default rung before planning around it (`command -v`, MCP list, `uname -s` for macOS-only Computer Use). Treat anything above the default rung as *probably absent*.
+1. **Probe, don't assume.** Detect each non-default rung before planning around it (`command -v`, MCP list, `uname -s` for the macOS-only paths). Treat anything above the default rung — incl. **Cua Driver** and **Computer Use** — as *probably absent*.
 2. **Pick the highest rung that passes; fail soft to the next.** The terminal rung is always manual / documented-limitation — the pass still completes.
-3. **Computer Use is never required and never on a headless/CI path.** Most VMs/Linux/CI lack it.
-4. **Graceful degradation when no Computer Use is present:**
+3. **No native driver is required or on a headless/CI path.** Neither the local Cua Driver nor Computer Use runs without a real display; most VMs/Linux/CI lack both. (Headless/CI native driving is the opt-in **Cua Sandbox** surface — see `references/cua.md`.)
+4. **Graceful degradation on the native rung (C):**
+   - Prefer **Cua Driver** (background, provider-agnostic) when present → else **Computer Use** (screen-takeover) → else **documented-limitation** (document, don't fail).
    - A **Chromium-backed app (B)** still drives via the web-ladder CDP attach (Step 3), or by driving its local dev-server URL in a browser. Note that shell-level integration (system tray, native menus, OS dialogs) can't be reached this way — surface that limitation.
-   - A **genuinely native app (C)** with no Computer Use → document the limitation rather than fail.
-5. **agent-browser stays the only assumed-present driver.** No MCP server or Computer Use is ever a hard install dependency.
+   - A **genuinely native app (C)** with no native driver at all → document the limitation rather than fail.
+   - On macOS, the Cua Driver's **Accessibility-vs-Screen-Recording permission split** means driving can work while screenshots don't — surface "AX-only evidence, no screenshot" rather than emit an empty one (`references/cua.md`).
+5. **agent-browser stays the only assumed-present driver.** No MCP server, Cua Driver, or Computer Use is ever a hard install dependency; flowctl never imports any of them.
 
 ## Boundaries
 
