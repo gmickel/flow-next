@@ -55,6 +55,14 @@ its MCP tools. The everyday loop seen live:
  cursors** via separate sessions, so two drives don't fight over one pointer.
 - **App lifecycle** — `launch_app` (launches **in the background**; returns
  `self_activation_suppressed: true`, confirming no focus steal) / `kill_app`.
+ **Platform scope (0.6.8):** `launch_app` / `list_apps` / `list_windows` are
+ **macOS-shaped** — `launch_app` takes a macOS `bundle_id` (e.g.
+ `com.apple.calculator`) + `open -n`; `list_windows` reads the macOS WindowServer.
+ On **Windows / Linux** native runs, do **not** assume `launch_app` works the same
+ — the target is typically **already running** (discover + attach by `pid` rather
+ than cold-launch), and the cold-launch/focus path is platform-specific. **Verify
+ the Windows/Linux launch surface at build** (the driver's Windows tier is
+ pre-release; see "drift / verify-at-build").
 - **Observe** — `get_window_state` returns the **accessibility tree** as
  structured elements (`element_index` / `role` / `label` / `frame`) plus a
  Markdown rendering, and — *when Screen Recording is granted* — a
@@ -257,8 +265,9 @@ TCC grants** (different questions, see the cautions below). In order:
  if ! command -v cua-driver >/dev/null 2>&1; then
  DISPLAY_PRESENT=unknown # driver absent — can't probe; fall back to env/platform (#3) + Computer Use, NOT headless
  elif cua-driver call get_screen_size 2>/dev/null \
- | jq -e '(.width // .structuredContent.width // 0) > 0' >/dev/null; then
- DISPLAY_PRESENT=1 # display reachable → attended ladder (Cua Driver → Computer Use)
+ | jq -e '(.width // .structuredContent.width // 0) > 0
+ and (.height // .structuredContent.height // 0) > 0' >/dev/null; then
+ DISPLAY_PRESENT=1 # display reachable (positive WIDTH and HEIGHT) → attended ladder
  else
  DISPLAY_PRESENT=0 # driver present but no display → headless (Cua Sandbox if a backend exists)
  fi

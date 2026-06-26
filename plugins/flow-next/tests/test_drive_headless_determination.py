@@ -44,9 +44,10 @@ _BASH = shutil.which("bash")
 _STUB = """#!/bin/sh
 if [ "$1" = "call" ] && [ "$2" = "get_screen_size" ]; then
   case "$STUB_MODE" in
-    present)       echo '{"width":5120,"height":1440,"scale_factor":1.0}'; exit 0 ;;
-    headless_err)  exit 1 ;;
-    headless_zero) echo '{"width":0,"height":0}'; exit 0 ;;
+    present)        echo '{"width":5120,"height":1440,"scale_factor":1.0}'; exit 0 ;;
+    headless_err)   exit 1 ;;
+    headless_zero)  echo '{"width":0,"height":0}'; exit 0 ;;
+    zero_height)    echo '{"width":5120,"height":0}'; exit 0 ;;
   esac
 fi
 exit 2
@@ -123,6 +124,10 @@ class HeadlessProbeExecution(unittest.TestCase):
     def test_zero_dims_is_headless(self) -> None:
         self.assertEqual(self._run_probe("headless_zero"), "0")
 
+    def test_zero_height_is_headless(self) -> None:
+        # Width>0 but height==0 must NOT count as a display (the probe checks both).
+        self.assertEqual(self._run_probe("zero_height"), "0")
+
     def test_driver_absent_is_unknown_not_headless(self) -> None:
         # The load-bearing bug guard: a missing driver must NOT be read as headless.
         self.assertEqual(self._run_probe("absent"), "unknown")
@@ -139,8 +144,10 @@ class HeadlessDeterminationProseContract(unittest.TestCase):
         # Driver-presence guard + the absent→not-headless property (the real bug fix).
         self.assertIn("command -v cua-driver", t)
         self.assertIn("DISPLAY_PRESENT=unknown", t)
-        # Defensive parse tolerates the MCP structuredContent envelope.
+        # Defensive parse tolerates the MCP structuredContent envelope; checks BOTH dims.
         self.assertIn(".structuredContent.width", t)
+        self.assertIn(".height", t)
+        self.assertIn(".structuredContent.height", t)
         # TCC grants are NOT a headless signal; macOS $DISPLAY caveat; doctor≠display.
         self.assertRegex(t, r"grant[s]?[^\n]*not[^\n]*headless|NOT a headless signal")
         self.assertRegex(t, r"[Nn]ever use[^\n]*macOS")
