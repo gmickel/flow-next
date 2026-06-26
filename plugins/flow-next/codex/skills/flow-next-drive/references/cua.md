@@ -132,11 +132,20 @@ reset grants. (Linux/Windows have no TCC split — skip this step there.)
 **4. (Optional) Run the daemon** so MCP tools share one driver process:
 
 ```bash
-cua-driver serve
+cua-driver serve # macOS / Linux, and Windows from an interactive desktop session
 ```
 
 Without `serve`, tools fall back to an **in-process** driver with a warning —
 functional, but `serve` is the supported steady state.
+
+> **Windows from SSH / a non-interactive shell:** a bare `cua-driver serve` lands
+> in **Session 0**, where the GUI tools return empty arrays (installed but
+> undriveable). Use the autostart path instead — it runs the daemon in the user's
+> **interactive** session:
+> ```powershell
+> cua-driver autostart enable # register a logon Scheduled Task
+> cua-driver autostart kick # start it now without re-logging in
+> ```
 
 For sandbox/cloud operations and the full API, point the user at upstream
 [`libs/cua-driver/README.md`](https://github.com/trycua/cua/blob/main/libs/cua-driver/README.md).
@@ -465,9 +474,11 @@ asyncio.run(main())
  down automatically, on the error path too. Use it unless you have a reason not to.
 - If you use the **persistent** form (`Sandbox.create(... name=...)` →
  `disconnect()` keeps it running), you **own** the deletion: `sb.destroy()` or
- `Sandbox.delete(name)`. A persistent sandbox is **exactly** the leak risk this
- rung exists to avoid — only use it when the state must outlive the run, and
- delete it explicitly.
+ the classmethod `Sandbox.delete(name, local=True)`. **`local=True` is required to
+ delete a *local* sandbox — the default `local=False` targets the cloud namespace,
+ so `Sandbox.delete(name)` after a `local=True` create silently leaves the local
+ VM running** (the exact leak this rung exists to avoid). Only use the persistent
+ form when state must outlive the run, and delete it explicitly. (Verify at build.)
 - **On error/abort, still tear down.** Never leave a half-driven VM running —
  wrap non-ephemeral lifecycles so an exception still reaches `destroy()`.
 - **`Sandbox.list()` is the leak audit** — list and reap orphaned sandboxes if a
