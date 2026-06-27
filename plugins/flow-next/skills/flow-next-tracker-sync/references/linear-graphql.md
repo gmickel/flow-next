@@ -182,12 +182,14 @@ query ($team: ID, $state: String!, $first: Int!, $after: String) {
     first: $first
     after: $after
     filter: {
+      # `team` predicate is included ONLY when tracker.perTracker.teamId is set —
+      # omit it entirely when unset (never `eq: null`, which mis-filters to teamless issues).
       team:  { id: { eq: $team } }
       state: { name: { eqIgnoreCase: $state } }   # EXACT name match — the promoted lane only
     }
   ) {
     nodes { id identifier title description url updatedAt
-            state { name type } labels { nodes { name } } priority }
+            state { name type } labels(first: 10) { nodes { name } } priority }
     pageInfo { hasNextPage endCursor }
   }
 }
@@ -204,7 +206,15 @@ query ($team: ID, $state: String!, $first: Int!, $after: String) {
   →`labels`, etc. A tracker-only ticket (no `flow:<id>` label) maps identically; its
   missing back-reference label is how the skill knows it is unlinked.
 - **Always set `first:`** and page via `after`/`endCursor` — never unbounded
-  (complexity-limit hygiene), same as `listComments`.
+  (complexity-limit hygiene), same as `listComments`. **Nested connections are
+  bounded too** — `labels(first: 10)` (a promoted-lane filter never needs an
+  issue's full label set; 10 covers the `flow:<id>` back-reference + readyState
+  label).
+- **Omit the `team` predicate when `tracker.perTracker.teamId` is unset.** Build
+  the `filter` object conditionally — include `team: { id: { eq: $team } }` ONLY
+  when a teamId is configured; with no team, the filter carries `state` alone. A
+  literal `team: { id: { eq: null } }` mis-filters (matches teamless issues / errors),
+  so the predicate is *added*, never *nulled*.
 - **`tracker.readyState` unset ⇒ the skill never calls this** (steps.md Phase 7a
   short-circuits to a `noop` + note); reached with an empty `$state` it returns
   `[]` + `noop`. No transport reachable ⇒ `noop` + receipt note, `[]`.
