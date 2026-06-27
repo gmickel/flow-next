@@ -219,15 +219,15 @@ un-promoted item; it simply moves on. (Selection in 1f already filters to signal
 items, so a silent skip here is the rare case of an item that lost its signal between
 scan and triage.)
 
-For a **signalled** item, route it to exactly one class. **First match wins:**
+For a **signalled** item, route it to exactly one class. **First match wins — and `dep-unsatisfied` is evaluated BEFORE `workable`:** a signalled item carrying an unsatisfied (acyclic) blocker is a dep-wait, never a workable advance, so it surfaces the wait (`BLOCKED`) rather than slipping into CLASSIFY/DISPATCH (1f selects it precisely so the wait gets surfaced — R10):
 
 | Class | The agent's read | Route |
 |---|---|---|
-| **workable** | signal present AND the spec is complete enough to act on (clear AC / R-IDs, an actionable next stage) | **advance** — hand to pilot's existing CLASSIFY (`workflow.md` Phase 2); it advances exactly one stage (`plan → plan-review → work → [qa] → make-pr`) |
-| **ready-but-thin / ambiguous** | signal present, but the spec is missing, a stub, or too thin/ambiguous to act on safely | **`ask`** (Phase 3) — kick back the gap; **never build, never auto-author** |
 | **needs-spec** | a **tracker-only** promoted item — no flow spec exists at all | **`ask` via the tracker comment ALONE** (Phase 3) — surface "run capture/interview"; **never a spec stub** |
 | **dep-unsatisfied** | signal present, but a blocker (flow or tracker) is not yet done | **`BLOCKED <id> by <dep>`** — a state-changing terminal that **surfaces the dep wait** (never `NO_WORK` — the item was selectable in 1f); the topo-sort offers the blocker first on a later tick. A circular/unsatisfiable dep routes to `ASKED` instead (1e) |
-| **needs-human** | signal present, spec exists, but a genuine decision needs a person (conflicting AC, a real design fork) | **`ask`** (Phase 3) |
+| **workable** | signal present, **deps satisfied**, AND the spec is complete enough to act on (clear AC / R-IDs, an actionable next stage) | **advance** — hand to pilot's existing CLASSIFY (`workflow.md` Phase 2); it advances exactly one stage (`plan → plan-review → work → [qa] → make-pr`) |
+| **ready-but-thin / ambiguous** | signal present, deps satisfied, but the spec is missing, a stub, or too thin/ambiguous to act on safely | **`ask`** (Phase 3) — kick back the gap; **never build, never auto-author** |
+| **needs-human** | signal present, deps satisfied, spec exists, but a genuine decision needs a person (conflicting AC, a real design fork) | **`ask`** (Phase 3) |
 
 **The completeness read may only WITHHOLD, never FORCE.** A promoted-but-thin item is
 kicked back with a question (`ask`) — it is **never** built into a slop PR. But the

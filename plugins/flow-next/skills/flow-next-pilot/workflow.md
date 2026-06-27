@@ -237,15 +237,15 @@ GATE_CLASSES="$($FLOWCTL config get pilot.gateClasses --json | jq -r '.value[]?'
 
 An empty/unset `gateClasses` (the default) gates nothing — full-auto is unconditional.
 
-Classify `SUBJECT_ID` to exactly one class (first match wins) and route:
+Classify `SUBJECT_ID` to exactly one class (first match wins) and route. **Order matters: `dep-unsatisfied` is checked BEFORE `workable`** — a signalled item with an unsatisfied (acyclic) blocker is a dep-wait, NOT a workable advance, so it must route to the dep-wait `BLOCKED` terminal rather than slipping into CLASSIFY/DISPATCH (matches Phase 1f / R10 — a signalled-but-dep-blocked item is selectable and surfaces the wait):
 
 | Class | The agent's read | Route → terminal |
 |---|---|---|
-| **workable** | signal present AND spec complete enough to act on (clear AC / R-IDs, an actionable next stage), AND not matching a force-gate class | **advance** — set `SELECTED_SPEC="$SUBJECT_ID"` and fall through to Phase 2 CLASSIFY → … → Phase 5 (the existing pipeline, unchanged); terminal `ADVANCED <id> <stage>` |
-| **ready-but-thin / ambiguous** | signal present, but the spec is missing/stub/too-thin to act on safely (or it matched a force-gate class) | **ask** (Phase 3.5) → `ASKED <id> (<n>)` |
 | **needs-spec** | a **tracker-only** promoted item — no flow spec exists at all | **ask via tracker comment ALONE** (Phase 3.5) → `ASKED <id> (<n>)`; never a spec stub |
 | **dep-unsatisfied** | signal present, but a blocker (flow or tracker) is not yet done | **`BLOCKED <id> by <dep>`** — a state-changing terminal that surfaces the dep wait (a circular/unsatisfiable dep routes to `ASKED` instead, per 1e) |
-| **needs-human** | signal present, spec exists, but a genuine decision needs a person (conflicting AC, a real design fork) | **ask** (Phase 3.5) → `ASKED <id> (<n>)` |
+| **workable** | signal present, **deps satisfied**, AND spec complete enough to act on (clear AC / R-IDs, an actionable next stage), AND not matching a force-gate class | **advance** — set `SELECTED_SPEC="$SUBJECT_ID"` and fall through to Phase 2 CLASSIFY → … → Phase 5 (the existing pipeline, unchanged); terminal `ADVANCED <id> <stage>` |
+| **ready-but-thin / ambiguous** | signal present, deps satisfied, but the spec is missing/stub/too-thin to act on safely (or it matched a force-gate class) | **ask** (Phase 3.5) → `ASKED <id> (<n>)` |
+| **needs-human** | signal present, deps satisfied, spec exists, but a genuine decision needs a person (conflicting AC, a real design fork) | **ask** (Phase 3.5) → `ASKED <id> (<n>)` |
 
 **The completeness read may only WITHHOLD, never FORCE** (R3): a promoted-but-thin item is kicked back with a question, never built into a slop PR — but the read never overrides an explicit ready signal to *force* work, never sets the ready flag, never promotes.
 
