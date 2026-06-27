@@ -64,9 +64,11 @@ The wire-agnostic shapes the transports produce and reconcile consumes. These ar
   "author":    "string",            // tracker-side author (for the sync log)
   "body":      "markdown",
   "createdAt": "ISO-8601",
-  "marker":    "flow-evt:work.done",// dedup/echo marker: present on flow-posted comments so a
+  "marker":    "flow-evt:work.done",// dedup/echo marker: present on EVERY flow-OWNED comment so a
                                     // pull doesn't re-import flow's own structured comment. null on
                                     // genuine tracker-side comments (those pull into the spec sync log).
+                                    // The adapter sets `marker` from ANY flow-owned marker line (see the
+                                    // marker-vocabulary table below) — NOT only `flow-evt:<event>`.
   "parentId":  "uuid-or-null"       // OPTIONAL reply/parent metadata (fn-68 R15). On a THREADED tracker
                                     // (Linear) a reply carries its parent comment's id, so a human's
                                     // answer-under-a-question is matched by thread + the question-valve
@@ -83,6 +85,29 @@ The wire-agnostic shapes the transports produce and reconcile consumes. These ar
 > the `<!-- flow-next:answer id=<hash> -->` marker. Reconcile/dedup (comments-sync)
 > is unaffected when `parentId` is absent — the field is read only by the
 > question-valve answer round-trip ([steps.md](../steps.md) Phase 7).
+
+**Marker vocabulary the adapter MUST recognize (fn-68 R15 — read-side).** Every
+adapter's `listComments` sets `comment.marker` from the FIRST flow-owned marker
+line it finds — **not only `flow-evt:<event>`**. The flow-owned set is closed and
+shared by Linear (MCP + GraphQL) and GitHub; an adapter that detects only the
+lifecycle marker would return a parked **question** with `marker: null`, and
+comments-sync would wrongly import it into `## Sync Log`. The vocabulary:
+
+| Body marker line | `comment.marker` | Pull behavior |
+|---|---|---|
+| `<!-- flow-next:sync … evt=<event> … -->` | `flow-evt:<event>` | flow-OWNED echo — skip Sync-Log import (Layer 1) |
+| `<!-- flow-next:question id=<hash> status=… -->` | `flow-evt:question` | flow-OWNED — skip Sync-Log import; the question's home is `## Open Questions` / the tracker, never the Sync Log |
+| `<!-- flow-next:status … rolling -->` | `flow-evt:status` | flow-OWNED rolling status comment — skip Sync-Log import |
+| `<!-- flow-next:answer id=<hash> -->` | **`null`** (genuine human content) — BUT carries the answer `id` for the round-trip | the question-valve answer round-trip ([steps.md](../steps.md) Phase 7) consumes it **by `id` BEFORE** the generic Sync-Log append; an answer that matches no open question falls through to a normal Sync-Log comment |
+| (no flow marker) | `null` | genuine tracker comment → `## Sync Log` |
+
+> **`flow-next:answer` is the one human-authored marker** — it is NOT a flow echo,
+> so `marker` stays `null` (it is genuine tracker-side content the human wrote). The
+> adapter still **surfaces its `id`** (parse `flow-next:answer id=<hash>`) so the
+> round-trip can pair it; the round-trip is what claims it before the Sync-Log
+> append, NOT the marker skip. Keeping `marker: null` is deliberate — a matched
+> answer is imported under `## Open Questions` (not the Sync Log), and an *unmatched*
+> answer is a real comment that SHOULD reach the Sync Log.
 
 ### `status`
 

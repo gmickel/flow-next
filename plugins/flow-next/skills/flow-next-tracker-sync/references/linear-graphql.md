@@ -136,9 +136,13 @@ query ($id: String!, $first: Int!, $after: String) {
 ```
 - **Always set `first:`** (e.g. 50) and page via `after`/`endCursor` — never
   unbounded (complexity-limit hygiene).
-- Map each: `user.name`→`author`; detect the `flow-evt:<event>` marker in `body`
-  → set `marker` (flow's own echo, skipped on pull); genuine tracker comments get
-  `marker:null` and pull into the spec sync log.
+- Map each: `user.name`→`author`; detect the **closed flow-owned marker set** in
+  `body` → set `marker` (flow's own echo, skipped on pull): `flow-next:sync`→
+  `flow-evt:<event>`, `flow-next:question`→`flow-evt:question`, rolling
+  `flow-next:status`→`flow-evt:status` ([adapter-interface.md](adapter-interface.md)
+  § `comment` marker-vocabulary table). **`flow-next:answer` is the human reply —
+  `marker` stays `null`, but surface its `id`** for the answer round-trip. Genuine
+  tracker comments get `marker:null` and pull into the spec sync log.
 - **`parent { id }` → the optional `comment.parentId`** (fn-68 R15): Linear threads
   replies, so a human's answer posted *under* a `flow-next:question` comment carries
   that question comment's id. The question-valve answer round-trip ([adapter-interface.md](adapter-interface.md)

@@ -307,10 +307,15 @@ gh issue view "$NUMBER" -R "$REPO" \
 ```
 - **GitHub comment ids are stable** (the node id `IC_kwDO…` on each comment) —
   same dedup property the Linear comments rely on; safe as the dedup key.
-- Map each: `author.login`→`author`; `body`, `createdAt`; **detect the
-  `flow-evt:<event>` marker** in `body` → set `marker` (flow's own echo, skipped
-  on pull); genuine tracker-side comments get `marker:null` and pull into the spec
-  sync log. Same dedup-marker scheme as fn-52.5 ([comments-sync.md](comments-sync.md)).
+- Map each: `author.login`→`author`; `body`, `createdAt`; **detect the flow-owned
+  marker set** in `body` → set `marker` (flow's own echo, skipped on pull). The set
+  is closed (fn-68 R15): `flow-next:sync`→`flow-evt:<event>`,
+  `flow-next:question`→`flow-evt:question`, rolling `flow-next:status`→`flow-evt:status`
+  ([adapter-interface.md](adapter-interface.md) § `comment` marker-vocabulary table).
+  **`flow-next:answer` is the human reply — `marker` stays `null`, but surface its
+  `id`** (the round-trip claims it by `id`). Genuine tracker-side comments get
+  `marker:null` and pull into the spec sync log. Same dedup-marker scheme as fn-52.5
+  ([comments-sync.md](comments-sync.md)).
 - **`comment.parentId` is always `null` on GitHub (fn-68 R15).** GitHub issue
   comments are **flat — there is no threading / parent link**, so the question-valve
   answer round-trip CANNOT match an answer to its question by thread. The

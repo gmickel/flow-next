@@ -1,8 +1,9 @@
 # Linear adapter — transport ladder (MCP / GraphQL / no-op)
 
-The Linear implementation of the eight-method transport interface
-([adapter-interface.md](adapter-interface.md)) — the original six plus the
-dependency-projection pair (`listIssueRelations` / `setIssueRelation`, fn-64.3).
+The Linear implementation of the nine-method transport interface
+([adapter-interface.md](adapter-interface.md)) — the original six, the
+dependency-projection pair (`listIssueRelations` / `setIssueRelation`, fn-64.3),
+plus the enumeration method (`listOpenIssues`, fn-68.2).
 It is a **detect-best-available
 ladder**, the exact shape as `flow-next-drive`'s driver ladder (SKILL.md Step 3 +
 `references/agent-browser.md`): probe top-down, use the **highest rung that
@@ -58,10 +59,11 @@ path, which is why the GraphQL parity check (below) is load-bearing, not optiona
 ## No-op rung (terminal) — never crash
 
 When `TRANSPORT=none`, the configured bridge cannot reach Linear this run. Every
-one of the eight interface methods becomes a documented no-op:
+one of the nine interface methods becomes a documented no-op:
 
-- `fetchIssue` / `listComments` / `readStatus` / `listIssueRelations` → return
-  nothing actionable (treated as "no remote view available this run"); the spec's
+- `fetchIssue` / `listComments` / `readStatus` / `listIssueRelations` /
+  `listOpenIssues` → return nothing actionable (treated as "no remote view
+  available this run"); `listOpenIssues` returns `[]` (fn-68.2). The spec's
   flow-side state is left untouched and the merge base is NOT advanced.
 - `writeIssue` / `postComment` / `setStatus` / `setIssueRelation` → perform no
   remote write. Dependency projection is skipped with a `noop` receipt — never a

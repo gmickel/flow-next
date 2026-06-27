@@ -356,6 +356,110 @@ class TrackerSyncBacklogModeProseContract(unittest.TestCase):
         # Idempotent-by-id fixture (Fixture C-F).
         self.assertIn("Fixture C-F", self.comments)
 
+    def test_question_marker_is_flow_owned_not_sync_log(self) -> None:
+        """A parked flow-next:question is flow-OWNED (marker set, NOT imported to
+        the Sync Log). The adapter must detect it as part of a CLOSED marker
+        vocabulary — detecting only flow-evt:<event> would import it wrongly."""
+        # adapter-interface.md must define the closed marker vocabulary table and
+        # map flow-next:question → a non-null marker.
+        self.assertRegex(
+            self.adapter,
+            r"(?s)marker vocabulary|marker-vocabulary|Marker vocabulary",
+            "adapter-interface must define the closed flow-owned marker vocabulary",
+        )
+        self.assertRegex(
+            self.adapter,
+            r"(?s)flow-next:question.{0,80}flow-evt:question",
+            "flow-next:question must map to a non-null marker (flow-evt:question)",
+        )
+        # The 'not only flow-evt:<event>' caveat — the exact gap the review caught.
+        self.assertRegex(
+            self.adapter,
+            r"(?i)not only .?flow-evt|NOT only .?flow-evt",
+            "adapter must state marker detection is NOT only flow-evt:<event>",
+        )
+        # comments-sync states the question is flow-owned ⇒ not the Sync Log.
+        self.assertRegex(
+            self.comments,
+            r"(?s)flow-next:question.{0,200}(NOT pulled into the\s*Sync Log|never the Sync Log)",
+            "comments-sync must state a parked question is NOT imported to the Sync Log",
+        )
+
+    def test_answer_marker_is_human_content_claimed_by_id_first(self) -> None:
+        """flow-next:answer is the ONE human-authored marker — marker stays null
+        (genuine content), but the round-trip claims it by id BEFORE the generic
+        Sync-Log append; an unmatched answer falls through to a real comment."""
+        # adapter-interface: answer keeps marker null but surfaces its id.
+        self.assertRegex(
+            self.adapter,
+            r"(?s)flow-next:answer.{0,400}(null|human)",
+            "adapter must state flow-next:answer keeps marker null (human content)",
+        )
+        # comments-sync PULL flow claims the answer by id before Sync-Log append.
+        self.assertRegex(
+            self.comments,
+            r"(?s)flow-next:answer.{0,200}(BEFORE|before).{0,80}Sync-?Log"
+            r"|claim it by .?<id>.{0,120}BEFORE",
+            "comments-sync PULL must claim the answer by id BEFORE the Sync-Log append",
+        )
+        # An unmatched answer is a genuine comment (falls through).
+        self.assertRegex(
+            self.comments,
+            r"(?s)(no matching open question|matches no open question|unmatched).{0,160}"
+            r"(Sync.?Log|genuine|real comment)",
+            "an unmatched answer must fall through to a genuine Sync-Log comment",
+        )
+
+    def test_all_three_adapters_detect_the_closed_marker_set(self) -> None:
+        """GitHub + Linear (GraphQL + MCP) listComments must each detect the
+        closed flow-owned marker set (sync/question/status), not only flow-evt."""
+        for name, text in (
+            ("github", self.github),
+            ("linear-graphql", self.linear_graphql),
+            ("linear-mcp", self.linear_mcp),
+        ):
+            with self.subTest(adapter=name):
+                self.assertIn(
+                    "flow-next:question",
+                    text,
+                    f"{name} listComments must detect flow-next:question",
+                )
+                self.assertIn(
+                    "flow-next:answer",
+                    text,
+                    f"{name} listComments must handle flow-next:answer (id surfaced)",
+                )
+
+    def test_no_stale_method_count_in_canonical_adapter_docs(self) -> None:
+        """The interface is NINE methods now. No canonical adapter doc may still
+        call the interface 'eight-method' / 'eight interface methods' (the review
+        caught linear-ladder.md)."""
+        for name, text in (
+            ("adapter-interface", self.adapter),
+            ("linear-ladder", self.linear_ladder),
+            ("linear-graphql", self.linear_graphql),
+            ("linear-mcp", self.linear_mcp),
+            ("github", self.github),
+        ):
+            with self.subTest(doc=name):
+                lowered = text.lower()
+                self.assertNotIn(
+                    "eight-method",
+                    lowered,
+                    f"{name} must not call the interface 'eight-method' (now nine)",
+                )
+                self.assertNotIn(
+                    "eight interface methods",
+                    lowered,
+                    f"{name} must not say 'eight interface methods' (now nine)",
+                )
+        # linear-ladder must affirmatively say nine.
+        self.assertRegex(
+            self.linear_ladder,
+            r"(?i)nine-method|nine interface methods",
+            "linear-ladder must describe the interface as nine-method",
+        )
+
     # ---- R16: reuse the existing readyState projection -----------------
 
     def test_r16_reuses_existing_readiness_projection_no_new_mechanism(self) -> None:
