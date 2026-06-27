@@ -142,7 +142,7 @@ flowchart LR
     A -.-> M[(.flow/memory/)]
 ```
 
-> `/flow-next:qa` is an **opt-in** live-app QA stage (after work / around make-pr) — it drives the deployed app like a real user and only runs when there's a live deploy + a driver; with neither it surfaces the limitation rather than blocking.
+> `/flow-next:qa` is an **opt-in** live-app QA stage (after work, before make-pr) — it drives the deployed app like a real user and only runs when there's a live deploy + a driver; with neither it surfaces the limitation rather than blocking. It **augments, never replaces** CI/staging/manual QA: the cheap first live pass that catches obvious runtime breakage before a human opens the PR. Run it by hand, or wire it into the autonomous loop as the optional `pipeline.qa` pilot stage (`flowctl config set pipeline.qa on`, default off) — `plan → plan-review → work → qa → make-pr`.
 
 The loop is spec-driven. Each step below maps to one skill; click through to flow-next.dev for the full page.
 
@@ -296,7 +296,7 @@ Scope honesty, because the architecture depends on it:
 | `/flow-next:audit` | Agent-native review of `.flow/memory/` entries against current code (Keep / Update / Consolidate / Replace / Delete) |
 | `/flow-next:memory-migrate` | Lift legacy flat memory files into the categorized schema |
 | `/flow-next:prime` | 8-pillar agent-readiness assessment with parallel scouts; remediation via consent prompts |
-| `/flow-next:pilot` | **Single-tick build-loop conductor** — advances one ready spec by one pipeline stage (plan → plan-review → work → make-pr) per tick, ends with a `PILOT_VERDICT` line; drive it with `/loop` or `/goal` |
+| `/flow-next:pilot` | **Single-tick build-loop conductor** — advances one ready spec by one pipeline stage (plan → plan-review → work → make-pr, plus an optional `qa` stage when `pipeline.qa==on`) per tick, ends with a `PILOT_VERDICT` line; drive it with `/loop` or `/goal` |
 | `/flow-next:land` | **Cadence-tick ship loop** — babysits the build loop's draft PRs: CI tri-state fix loop, reviewer patience window, resolve-pr convergence, gated explicit merge, spec close, release-follow; ends with a `LAND_VERDICT` line; drive it with `/loop 30m /flow-next:land` |
 | `/flow-next:ralph-init` | Scaffold autonomous loop (`scripts/ralph/`) |
 | `/flow-next:setup` | Per-project setup — `.flow/` init, local flowctl install, CLAUDE.md/AGENTS.md instructions, review-backend + config ceremony |
