@@ -2,6 +2,16 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Added
+- **tracker-sync is autonomous-safe on the pilot/backlog path + gains the backlog-mode enumeration + the async question-valve** (fn-68.2) — the substrate `/flow-next:pilot` backlog mode needs to run the whole open backlog unattended and surface "stuck" as a question, not a stall:
+  - **Phase-0 autonomy parity (R14)** — the tracker-sync Phase-0 gate recognized only `FLOW_RALPH` / `REVIEW_RECEIPT_PATH`; it now also recognizes `FLOW_AUTONOMOUS=1` / the `mode:autonomous` token, matching `work` / `make-pr` / `resolve-pr` / `capture`. tracker-sync was the **one** lifecycle-participating skill whose gate omitted `FLOW_AUTONOMOUS` — under the marker NO path reaches `AskUserQuestion` (discovery ceremony, collision guard, genuine conflict, and `question` authoring all resolve "ask the human" to `sync defer`), so a per-tick backlog sync can never hang the loop.
+  - **9th adapter method `listOpenIssues(filter) → issue[]`** (R15) — added to `adapter-interface.md` + implemented for **Linear + GitHub** (v1; GitLab/Jira inherit). Enumerates the **promoted lane** — open issues at the **exact** `tracker.readyState` state (Linear) / label (GitHub); exact-match, no ordering, no "beyond" lane. Returns normalized, transport-blind `issue` structs so pilot can union in tracker-only tickets `flowctl specs` can't see. **No-ops with a note when `tracker.readyState` is unset.**
+  - **Named skill ops `list-open` + `question <spec-id | tracker-id>`** (R15) — skill-level + transport-blind (NOT flowctl transport). `question` posts a stable anchor `<!-- flow-next:question id=<hash> status=open -->` where `id` hashes **stable fields only** (`subjectId` + blocked-stage + reason code + question slug; free prose *outside* the hash so rephrasing never duplicates; `subjectId` is the spec id when spec-backed, else the opaque tracker UUID — never a bare tracker key). A human's reply carries `<!-- flow-next:answer id=<hash> -->`, matched by `id` (threaded on Linear via new optional `comment.parentId` reply/parent metadata; flat on GitHub via the body marker) and imported **under the matching `## Open Questions` entry**, flipping the anchor to `answered`. A **tracker-only** `question` is exempt from the spec-id sync receipt — its parked/answered state lives in the tracker comments, with no spec import until `capture`/`interview` later creates a spec.
+  - **R16** reuses the existing status-sync `tracker.readyState` → local `ready` projection unchanged (no new mechanism). Tracker-sync stays **projection, not coordination** — it surfaces, never stalls the loop; no second-LLM spawn, no regex grader.
+  - **Docs**: `docs/tracker-sync.md` documents the parity fix + `listOpenIssues` + the named ops; the skill `SKILL.md` / `steps.md` (new Phase 7) + `references/adapter-interface.md` / `comments-sync.md` / `github.md` / `linear-graphql.md` / `linear-ladder.md` / `linear-mcp.md` carry the contract. Codex mirror regen is a **separate task (fn-68.5)**.
+
 ## [flow-next 2.2.0] - 2026-06-27
 
 ### Added

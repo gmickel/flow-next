@@ -128,7 +128,7 @@ Resolve the normalized status → the team's concrete `stateId` via the status m
 query ($id: String!, $first: Int!, $after: String) {
   issue(id: $id) {
     comments(first: $first, after: $after, orderBy: updatedAt) {
-      nodes { id body createdAt user { name } }
+      nodes { id body createdAt user { name } parent { id } }
       pageInfo { hasNextPage endCursor }
     }
   }
@@ -139,6 +139,13 @@ query ($id: String!, $first: Int!, $after: String) {
 - Map each: `user.name`→`author`; detect the `flow-evt:<event>` marker in `body`
   → set `marker` (flow's own echo, skipped on pull); genuine tracker comments get
   `marker:null` and pull into the spec sync log.
+- **`parent { id }` → the optional `comment.parentId`** (fn-68 R15): Linear threads
+  replies, so a human's answer posted *under* a `flow-next:question` comment carries
+  that question comment's id. The question-valve answer round-trip ([adapter-interface.md](adapter-interface.md)
+  § `comment`; [steps.md](../steps.md) Phase 7) matches the `<!-- flow-next:answer id=… -->`
+  reply to its question by **thread (parentId) + id**. A top-level comment has
+  `parent == null` → `parentId: null` (matched by the body `id` marker alone, like
+  the flat-tracker rung).
 
 ### `postComment(trackerId, body)` → normalized `comment`
 
@@ -154,6 +161,46 @@ mutation ($input: CommentCreateInput!) {
 ### `readStatus(trackerId)` → normalized `status`
 
 Derived from the `fetchIssue` `state { name type }` — no separate call.
+
+### `listOpenIssues(filter) → issue[]` (fn-68 — enumeration)
+
+Enumerate the **promoted lane** — open issues at the **exact** `tracker.readyState`
+workflow-state name. Filter on the state **name** (not `state.type`), the same exact
+match the readiness projection uses ([status-sync.md](status-sync.md)). Bound the
+team to `tracker.perTracker.teamId` when set.
+
+```graphql
+query ($team: ID, $state: String!, $first: Int!, $after: String) {
+  issues(
+    first: $first
+    after: $after
+    filter: {
+      team:  { id: { eq: $team } }
+      state: { name: { eqIgnoreCase: $state } }   # EXACT name match — the promoted lane only
+    }
+  ) {
+    nodes { id identifier title description url updatedAt
+            state { name type } labels { nodes { name } } priority }
+    pageInfo { hasNextPage endCursor }
+  }
+}
+# variables: { "team": "<teamId or null>", "state": "<tracker.readyState NAME>", "first": 50 }
+```
+
+- **`state: { name: { eqIgnoreCase } }` is the exact-lane filter** — no `type`
+  predicate, no ordering, no "and-later" states. `readyState` matching is exact
+  (adapter-interface.md § Enumeration transport); an ordered promoted-set is a
+  future config, never inferred here.
+- **Map each node into the normalized `issue` struct** via the same firewall table
+  the `fetchIssue` map uses ([linear-ladder.md](linear-ladder.md) § Normalized
+  mapping) — `description`→`body`, `state.name`→`status.raw`, `labels.nodes[].name`
+  →`labels`, etc. A tracker-only ticket (no `flow:<id>` label) maps identically; its
+  missing back-reference label is how the skill knows it is unlinked.
+- **Always set `first:`** and page via `after`/`endCursor` — never unbounded
+  (complexity-limit hygiene), same as `listComments`.
+- **`tracker.readyState` unset ⇒ the skill never calls this** (steps.md Phase 7a
+  short-circuits to a `noop` + note); reached with an empty `$state` it returns
+  `[]` + `noop`. No transport reachable ⇒ `noop` + receipt note, `[]`.
 
 ## Relation transport (dependency projection, fn-64.3)
 

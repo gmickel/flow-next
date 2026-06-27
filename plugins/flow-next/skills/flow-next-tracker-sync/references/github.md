@@ -311,6 +311,14 @@ gh issue view "$NUMBER" -R "$REPO" \
   `flow-evt:<event>` marker** in `body` → set `marker` (flow's own echo, skipped
   on pull); genuine tracker-side comments get `marker:null` and pull into the spec
   sync log. Same dedup-marker scheme as fn-52.5 ([comments-sync.md](comments-sync.md)).
+- **`comment.parentId` is always `null` on GitHub (fn-68 R15).** GitHub issue
+  comments are **flat — there is no threading / parent link**, so the question-valve
+  answer round-trip CANNOT match an answer to its question by thread. The
+  load-bearing match is the body marker: a human's answer comment carries
+  `<!-- flow-next:answer id=<hash> -->`, matched to the open question **by `id`,
+  threading-blind** ([adapter-interface.md](adapter-interface.md) § `comment`;
+  [steps.md](../steps.md) Phase 7). This is exactly why the flat-tracker marker is
+  not optional on GitHub — without it there is no way to pair the answer.
 - `gh issue view --json comments` returns all comments inline (no manual paging
   needed for typical issues); for very large threads page via
   `gh api repos/{owner}/{repo}/issues/{number}/comments --paginate`.
@@ -331,6 +339,36 @@ printf '%s' "$BODY_WITH_MARKER" | gh issue comment "$NUMBER" -R "$REPO" --body-f
 
 Derived from the `fetchIssue` `state` + `stateReason` + `status:` label — no
 separate call (same as Linear deriving status from `state{name type}`).
+
+### `listOpenIssues(filter) → issue[]` (fn-68 — enumeration)
+
+Enumerate the **promoted lane** — open issues carrying the **exact**
+`tracker.readyState` **label** (GitHub has no workflow states; readiness is a label,
+[Readiness label](#readiness-label-trackerreadystate--fn-58-r3r4)). `--label` is an
+**exact** label filter (AND-combined if repeated) — there is no label *ordering*, so
+no "and-later" lane exists (adapter-interface.md § Enumeration transport).
+
+```bash
+gh issue list -R "$REPO" --state open --label "$READY_LABEL" --limit 200 \
+  --json id,number,title,body,state,stateReason,labels,url,updatedAt,author
+```
+
+- **`--label "$READY_LABEL"`** is the exact promoted-lane filter — only issues
+  carrying the configured `tracker.readyState` label, never "beyond" it.
+- **`--state open`** bounds it to open issues — never the whole (closed-inclusive)
+  history.
+- **Map each into the normalized `issue` struct** via the same firewall table the
+  `fetchIssue` map uses (§ Normalized mapping — `id`(node id)→`id`, `"#"+number`→
+  `identifier`, `state`/`stateReason`/`status:` label→`status`, `labels[].name`→
+  `labels`, …). A tracker-only ticket (no `flow:<id>` label) maps identically; its
+  missing back-reference label is how the skill knows it is unlinked.
+- **`--limit 200`** is a generous promoted-lane bound; raise it (or page with
+  `gh api ... --paginate`) only if a repo's ready lane is genuinely larger.
+- **`tracker.readyState` unset ⇒ the skill never calls this** (steps.md Phase 7a
+  short-circuits to a `noop` + note — there is no label to filter on); reached with
+  an empty label it returns `[]` + `noop`. `TRANSPORT=none` (gh not installed /
+  unauthed) ⇒ `noop` + receipt note, `[]` — same no-transport floor as the other
+  methods.
 
 ## Relation transport (dependency projection, fn-64.4)
 
@@ -465,12 +503,13 @@ Verify per method:
 |---|---|---|---|
 | `fetchIssue` | `gh issue view --json …` | `get_issue` / `issue(id)` | same `issue` struct (title/body/status/priority/labels/url/updatedAt) |
 | `writeIssue` (upsert) | `gh issue create` / `gh issue edit` | `save_issue` / `issueCreate`/`issueUpdate` | same `{id, identifier, url}` |
-| `listComments` | `gh issue view --json comments` | `list_comments` / `comments(first:N)` | same `comment[]` (author/body/createdAt/marker) |
+| `listComments` | `gh issue view --json comments` | `list_comments` / `comments(first:N)` | same `comment[]` (author/body/createdAt/marker); `parentId` always `null` (flat) vs Linear's `parent{id}` — fn-68 R15 answer matched by body `id` marker either way |
 | `postComment` | `gh issue comment --body-file -` | `save_comment` / `commentCreate` | same `comment` |
 | `readStatus` | from `state`+`stateReason`+`status:` label | from `state{name type}` | same `status{raw,normalized}` |
 | `setStatus` | `gh issue close/reopen` + `status:` label | `save_issue(state)` / `issueUpdate(stateId)` | ok / `errored` |
 | `listIssueRelations` | native `…/dependencies/blocked_by` (reduced → fenced `#N` block) | `issue{ relations + inverseRelations }` | same blocked-by `relation[]` (`{from,to,type:"blocks",source}`) |
 | `setIssueRelation` | native POST `blocked_by` (reduced → fenced-block append) | `issueRelationCreate(type:blocks)` | ok / `errored` / `noop`; read-before-write on both |
+| `listOpenIssues` (fn-68) | `gh issue list --state open --label readyState` | `issues(filter:{state:{name:{eqIgnoreCase}}})` | same `issue[]` at the **exact** readyState lane (label vs state name — both exact, no ordering) |
 | status map | open/closed+reason+`status:` label (reduced — recovered via label) | team `workflowStates` / `list_issue_statuses` | same **normalized** vocabulary out |
 
 The fidelity gap (GitHub's two-value native state) is bridged by the `status:`

@@ -181,6 +181,7 @@ the same fields into/out of the normalized structs:
 | `setStatus` | `save_issue(id, state)` | `issueUpdate(id, stateId)` | ok / `errored` |
 | `listIssueRelations` | `get_issue(id, includeRelations:true)` | `issue{ relations(first:N) + inverseRelations(first:N) }` | same blocked-by `relation[]` (`{from,to,type:"blocks",source}`) |
 | `setIssueRelation` | `save_issue(id, blockedBy:[…])` (append-only) | `issueRelationCreate(issueId:B, relatedIssueId:A, type:blocks)` | ok / `errored` / `noop`; read-before-write on both |
+| `listOpenIssues` (fn-68) | `list_issues(team, state=readyState NAME)` | `issues(filter:{team, state:{name:{eqIgnoreCase}}}, first:N)` | same `issue[]` at the **exact** readyState lane (no `type`, no ordering) |
 | status map build | `list_issue_statuses(team)` | `workflowStates(first:100, filter:{team}){type}` | same name/type → stateId map |
 
 If a field is reachable on one rung but not the other, that is a parity gap —

@@ -4,23 +4,32 @@ Read [SKILL.md](SKILL.md) first for the architecture, the flowctl-vs-skill split
 
 This file is the transport-blind orchestration **spine**: discovery ceremony, link/unlink ceremony, grain, identity, and the push/pull/reconcile skeleton with named hooks. The hook bodies live in dedicated reference files: transports (`fetchIssue`/`writeIssue`/… — Linear [`references/linear-ladder.md`](references/linear-ladder.md), GitHub [`references/github.md`](references/github.md)) and reconcile (3-way body merge [`references/body-merge.md`](references/body-merge.md); status who-wins [`references/status-sync.md`](references/status-sync.md); comments/evidence append [`references/comments-sync.md`](references/comments-sync.md)), all plugging through the contract in [`references/adapter-interface.md`](references/adapter-interface.md). Inline, a hook points at its reference with **[→ ref: <file>]** — read that file for the body; this file owns only the routing.
 
-## Phase 0 — Mode + Ralph awareness
+## Phase 0 — Mode + Ralph/autonomous awareness
 
-Parse `$ARGUMENTS` for an optional operation token (`push` / `pull` / `reconcile` / `comment` / `link` / `unlink` / `discover`) and an optional spec id. With none, default to the interactive menu (discover if the bridge is inactive, else offer push/pull/reconcile over `list-unsynced` / `list-stale`).
+Parse `$ARGUMENTS` for an optional operation token (`push` / `pull` / `reconcile` / `comment` / `list-open` / `question` / `link` / `unlink` / `discover`) and an optional spec id (or, for `question`, a `<spec-id | tracker-id>`). With none, default to the interactive menu (discover if the bridge is inactive, else offer push/pull/reconcile over `list-unsynced` / `list-stale`).
 
 `comment <spec-id>` is the lifecycle-event op the host skills invoke for opted-in touchpoints (`work.done` / `resolvePr` / `completionReview` / `qa` set to `comment` — see SKILL.md's perEvent table). It routes to the **comments-sync hook** (`postLifecycleComment` → `postComment` **[→ ref: comments-sync.md]**): append the structured lifecycle comment + evidence, dedup, receipt — it does NOT touch the body or status. Like `push` / `reconcile`, a `comment` op on an unlinked spec triggers the **Phase 3 create-if-unlinked** flow-first link first (create + attach), then posts the comment on the now-linked spec.
 
+`list-open` and `question <spec-id | tracker-id>` are the **backlog-mode named ops** (fn-68 — pilot's autonomous floor scheduler invokes them). They are **skill-level, transport-blind operations** — NOT new flowctl transport (flowctl has no tracker transport and must not grow one). `list-open` enumerates the promoted-lane open issues via the `listOpenIssues` adapter method; `question` posts a question-valve comment carrying the stable anchor. Both route through the same adapter ladder as every other op. See **Phase 7 — Backlog-mode ops** below for their bodies.
+
 **Event tag (fn-57 / R1).** When a lifecycle touchpoint invokes this skill, the invocation carries the perEvent key it serves — an `event: <perEvent-key>` token alongside the operation, e.g. `skill: flow-next-tracker-sync (operation: comment <spec-id>, event: work.done)`. Parse it into `EVENT`; **every `sync receipt` this run** then carries `--event "$EVENT"` — the call sites here and in the reference files use `${EVENT:+--event "$EVENT"}`, which expands to nothing when `EVENT` is empty, so one call-site shape serves both modes. The tag is what `flowctl sync check` audits at end-of-skill (an untagged receipt never clears a lifecycle event). **Manual invocations are NOT lifecycle touchpoints** — a user typing `/flow-next:tracker-sync push <id>`, the interactive menu, the discovery ceremony, `unlink`, and the round-trip spikes all leave `EVENT` empty, and their receipts legitimately carry no event tag (null event = not a lifecycle touchpoint).
 
-**Ralph / autonomous mode** (R11): when `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` is set, the skill still runs — but the discovery ceremony NEVER prompts (it needs a human; if the bridge isn't already configured, no-op + receipt note), and any genuine conflict **queues** (`sync defer`) instead of asking. Confident merges and conflict-free status/comment ops proceed unattended. "Ask the human" resolves to "queue for the human" in autonomous mode — same policy, surface-dependent delivery (mirrors fn-51's surface-aware ladder).
+**Ralph / autonomous mode** (R11 + fn-68 R14): when `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` is set, **`FLOW_AUTONOMOUS=1`, or the `mode:autonomous` token is present in `$ARGUMENTS`** (strip it — same parse shape as work / make-pr / resolve-pr / capture), the skill still runs — but the discovery ceremony NEVER prompts (it needs a human; if the bridge isn't already configured, no-op + receipt note), and any genuine conflict / id collision / readyState-label failure **queues** (`sync defer`) instead of asking. Confident merges and conflict-free status/comment ops proceed unattended. "Ask the human" resolves to "queue for the human" in autonomous mode — same policy, surface-dependent delivery (mirrors fn-51's surface-aware ladder). Every per-tick tracker interaction on the pilot/backlog path is therefore fully unattended — **`AskUserQuestion` is never reachable under the marker** (fn-68 R14: backlog mode's lifecycle sync could otherwise reach a prompt and hang).
+
+The autonomy marker family folds into the **single `RALPH` gate** below — tracker-sync's "never prompt, queue instead" policy is identical for all four signals, so they collapse to one flag (unlike work / make-pr, which keep `RALPH` and `AUTONOMOUS` separate because they differ on receipt obligations; tracker-sync has none of that split — it queues conflicts the same way regardless of which signal fired). This makes tracker-sync match the autonomy-parity of every other lifecycle-participating skill; it was the **one** whose gate omitted `FLOW_AUTONOMOUS`.
 
 ```bash
 RALPH=0
-[[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" ]] && RALPH=1
+# fn-68 R14: recognize the FULL autonomy marker family (FLOW_AUTONOMOUS / mode:autonomous),
+# not just FLOW_RALPH / REVIEW_RECEIPT_PATH — parity with work / make-pr / resolve-pr / capture.
+[[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
+   || "${FLOW_AUTONOMOUS:-}" == "1" || "$ARGUMENTS" == *mode:autonomous* ]] && RALPH=1
 # Lifecycle event tag (fn-57): the caller's `event:` token, e.g. work.firstClaim |
 # work.done | work.completionReview | capture | makePr | resolvePr. Empty on manual runs.
 EVENT="<perEvent-key from the invocation, or empty>"
 ```
+
+> **Autonomy parity is a hard invariant (fn-68 R14).** Under `RALPH=1` NO code path may reach `AskUserQuestion` — the discovery ceremony (Phase 1), the collision guard (Phase 2c / Phase 3), the genuine-conflict surface (Phase 4), and the `question`-op authoring (Phase 7) ALL resolve their "ask the human" to `sync defer` (queue) when `RALPH=1`. A backlog-mode tick that hit a live prompt would stall the whole autonomous loop, so this gate is what makes tracker-sync safe to call per-tick from pilot.
 
 ## Phase 1 — Discovery ceremony (R2)
 
@@ -303,9 +312,118 @@ $FLOWCTL sync get-state "$SPEC_ID" --json   # one spec's full state (tracker id 
 
 For each linked spec, render a line like `wor-17-slug  ↔  WOR-17  (linked, synced 3h ago)` or `fn-42-foo  ↔  WOR-99  (alias, stale)`. The flow id is the canonical handle; `identifier` is the board-facing display form.
 
+## Phase 7 — Backlog-mode ops (`list-open` / `question`) — fn-68 R14/R15
+
+Two **skill-level, transport-blind** named ops that pilot's autonomous backlog scheduler invokes. They route through the same adapter ladder (`listOpenIssues` / `listComments` / `postComment` **[→ ref: linear-ladder.md / github.md]**) as every other op — pilot never calls a tracker-specific API and **never** calls flowctl for transport (flowctl has no tracker transport; architecture rule). Both run under the **autonomy gate** (Phase 0) — `question` authoring resolves "ask the human" to a queued/best-effort post, never `AskUserQuestion`.
+
+### 7a — `list-open` — enumerate the promoted-lane open issues
+
+Unions in the **tracker-side** open issues that have no flow spec, so backlog mode can triage tickets `flowctl specs` can't see. It is the skill's half of the union (`flowctl ready --all` supplies the flow-side specs; this op supplies the tracker-side items).
+
+```
+list-open:
+  if tracker.readyState is unset:
+     # No promoted-lane filter exists — readiness setup is optional and was skipped.
+     # NO-OP WITH A NOTE (fn-68): backlog mode then runs the flow-ready specs ONLY
+     # (the flow `ready` flag needs no tracker). Never enumerate the whole issue history.
+     receipt: noop  --note "list-open: tracker.readyState unset — no promoted lane to enumerate; flow-ready specs only"
+     return []                                   # empty list, not an error
+  issues = listOpenIssues({ readyState: <tracker.readyState> })   [→ ref: transport]
+           # EXACT-match filter: lists ONLY issues at the exact readyState state (Linear) /
+           # carrying the exact readyState label (GitHub). readyState matching is exact —
+           # no state ordering exists, so NO "beyond"/"and-later" lane is inferred (fn-68).
+  → normalized issue[]  (transport-blind structs — pilot reads {id, identifier, title, status, labels, url})
+  receipt: noop  --note "list-open: <N> open issues at readyState '<configured>'"   # a read-only enumeration never advances lastSyncedAt
+```
+
+- **`tracker.readyState` unset ⇒ no-op + note, return `[]`** (NOT an error). No promoted lane exists to filter on, so backlog mode falls back to the flow-ready specs only.
+- **Exact-match, bounded.** `listOpenIssues` lists issues at the **exact** `tracker.readyState` state/label — never "beyond" it (no state ordering exists; an ordered promoted-set is a future config, never inferred). It is the promoted lane, not the whole backlog.
+- **Transport-blind.** Pilot consumes the normalized `issue[]`; it never branches on Linear-vs-GitHub. The adapter (`listOpenIssues` in [`references/linear-ladder.md`](references/linear-ladder.md) / [`references/github.md`](references/github.md)) owns the wire query.
+- **No-transport ⇒ `noop` + note, `[]`** — same documented no-op floor as the other methods.
+
+### 7b — `question <spec-id | tracker-id>` — post a question-valve comment
+
+The `ask` stage's tracker side: post an Open Question to the issue behind the **stable anchor** (R15), so a re-triage never re-posts and a human reply round-trips back. Resolves the subject by id form:
+
+- **spec-backed** (`question <spec-id>` resolving to a linked spec) — the question's durable parked state lives in the spec's `## Open Questions` (the answer-import path below folds the reply there). The tracker comment is the mirror.
+- **tracker-only** (`question <tracker-id>`, an issue with no flow spec — a promoted ticket backlog mode surfaced via `list-open`) — there is no spec to anchor in, so the **parked state lives in the tracker**: the question comment's `status=open` anchor + a matching `<!-- flow-next:answer id=… -->`, detected by scanning the issue comments. **No spec import/flip happens until capture/interview later creates a spec.**
+
+**Build the stable anchor — hash STABLE fields only:**
+
+```
+id = hash( subjectId + "\0" + blockedStage + "\0" + reasonCode + "\0" + questionSlug )
+     # subjectId  = the SPEC ID when spec-backed, else the opaque TRACKER ID (UUID) — tracker-only
+     #              items have no spec id. NEVER a bare tracker issue KEY (WOR-17 / #123) — Linear
+     #              auto-linkifies keys even inside HTML comments, mangling the anchor.
+     # blockedStage = the pilot stage that blocked (e.g. plan / work / review).
+     # reasonCode  = a stable enum slug (e.g. needs-spec / ambiguous-ac / dep-unsatisfied).
+     # questionSlug = a short stable slug of the question (NOT the free prose).
+     # The free-prose reason text is OUTSIDE the hash — rephrasing the question NEVER spawns a
+     # duplicate anchor (same id ⇒ comments-sync dedup skips the re-post).
+```
+
+Post the comment (the anchor is the first line, then the free-prose question + the `capture`/`interview` pointer):
+
+```markdown
+<!-- flow-next:question id=<hash> status=open -->
+
+**flow-next needs a human** — <blocked stage>: <free-prose reason / question>.
+
+Run `/flow-next:capture` or `/flow-next:interview` to resolve, or reply here with `<!-- flow-next:answer id=<hash> -->`.
+```
+
+```
+question(subject):
+  resolve subjectId:
+     spec-backed → subjectId = <spec-id>;   parkedHome = spec ## Open Questions (mirror in tracker)
+     tracker-only → subjectId = <tracker UUID>;  parkedHome = the tracker (no spec yet)
+  id = hash(subjectId, blockedStage, reasonCode, questionSlug)        # stable fields only
+  existing = listComments(trackerId)                                  # normalize <issue …>KEY</issue> → KEY first
+  if any comment carries `flow-next:question id=<id>`:  skip (already parked)   # comments-sync dedup by id
+  else: postComment(trackerId, anchor + question body)   [→ ref: transport]
+  spec-backed → ALSO write the `<!-- flow-next:question id=<id> status=open -->` anchor under the
+                spec `## Open Questions` (the durable flow-side park).
+  receipt:
+     spec-backed  → sync receipt <spec-id> --status updated   (the normal spec-id-keyed sync receipt)
+     tracker-only → NO spec-id sync receipt (there is no spec id to key on — fn-68): the audit trail is
+                    the pilot-log row + the tracker comment anchor itself. Emit at most a noop note.
+```
+
+- **Idempotent by `id`.** Re-triaging the same blocked subject computes the same `id` (the prose is outside the hash) → comments-sync's marker dedup (`comments-sync.md` Layer 1, keyed on `flow-next:question id=`) finds the existing comment → **skip the re-post**.
+- **No bare issue key in the anchor.** `subjectId` is the spec id or the opaque UUID — never `WOR-17` / `#123` (linkify hazard, same mitigation as the `flow-next:sync` marker keying on `issue=<uuid>`).
+- **Tracker-only `question` is exempt from the spec-id sync receipt** (fn-68): there is no spec id to key a receipt on. Its parked/answered state is detected by **scanning the tracker comments** for `flow-next:question id=… status=open` + a matching `flow-next:answer id=…` — no spec anchor required, no import/flip until a spec exists.
+- **Selection skips a parked subject.** Backlog selection (in .3/.4) checks the parked home — the spec `## Open Questions` (spec-backed) or the tracker comments (tracker-only) — and **skips any subject carrying a `status=open` parked question**, so it is never re-picked every tick.
+
+### Answer round-trip (R15) — import a matched reply, flip the anchor
+
+The answer is detected on the **next pull/reconcile** (rides the existing `listComments` path) from **either** side:
+
+1. **Spec anchor flipped by a human** — a human edits the spec `## Open Questions` anchor to `status=answered` with the answer prose. The next tick re-triages the now-answered item and proceeds.
+2. **Tracker reply matched by `id`** — the answer comment carries `<!-- flow-next:answer id=<hash> -->`. Match it to the open question by `id`:
+   - **Threaded tracker (Linear)** — the normalized `comment` carries optional **reply/parent metadata** ([→ ref: adapter-interface.md § `comment`]); a reply *under* the question comment is matched by thread + `id`.
+   - **Flat tracker (GitHub — no threads)** — there is no parent link, so the **`<!-- flow-next:answer id=<hash> -->` marker is the load-bearing match**: the answer is matched to the question **by `id` regardless of threading**.
+
+```
+on pull/reconcile, for each open question (spec ## Open Questions, or tracker comments for tracker-only):
+  ans = find a comment carrying `flow-next:answer id=<id>`   # by thread+id (Linear) OR flat id-marker (GitHub)
+  if ans found AND subject is spec-backed:
+     import ans.body UNDER the matching `## Open Questions` entry by `id`   # NOT only into ## Sync Log
+     flip that anchor: status=open → status=answered
+     receipt: updated  --note "answer imported for question id=<id>; flipped to answered"
+  if ans found AND subject is tracker-only:
+     leave it in the tracker (no spec to import into); the status=open + matching answer is the durable record.
+     A later /flow-next:capture or /flow-next:interview creates the spec and folds the Q+A then.
+  else: stays parked (status=open) — selection keeps skipping it next tick.
+```
+
+- **Import target is the matching Open Question, not just the Sync Log.** A matched answer folds **under the `## Open Questions` entry keyed by `id`** (and flips that anchor to `answered`), so the question and its answer live together — distinct from a genuine tracker comment, which still appends to `## Sync Log` per comments-sync.
+- **Answer matching is `id`-keyed on both rungs.** Threaded (Linear reply/parent metadata) OR flat (GitHub `<!-- flow-next:answer id= -->` marker) — the `id` is the join key either way, so a flat tracker's answer round-trips exactly like a threaded one.
+
 ## Boundaries (repeat — load-bearing for this scaffold)
 
 - Hook bodies marked **[→ ref: <file>]** are NOT inlined here — this file routes; read the referenced file for the body. Transports live in `linear-ladder.md` / `github.md`; reconcile in `body-merge.md` / `status-sync.md` / `comments-sync.md`.
 - `set-merge-base` always writes BOTH halves (paired-snapshot invariant).
 - Receipts on every run — event-tagged on lifecycle runs (`${EVENT:+--event "$EVENT"}`, Phase 0); conflicts queue (`sync defer`), never block (R11).
-- Codex mirror is regenerated in fn-52.9 — keep this file Claude-native (`AskUserQuestion`, `Task`).
+- **Autonomy parity (fn-68 R14):** the Phase-0 `RALPH` gate recognizes the full marker family (`FLOW_RALPH` / `REVIEW_RECEIPT_PATH` / `FLOW_AUTONOMOUS` / `mode:autonomous`); under it NO path reaches `AskUserQuestion` — every "ask the human" resolves to `sync defer`.
+- **Backlog-mode ops (fn-68, Phase 7):** `list-open` + `question` are skill-level + transport-blind (never flowctl transport). `list-open` no-ops with a note when `tracker.readyState` is unset; a tracker-only `question` is exempt from the spec-id sync receipt and parks in the tracker.
+- Codex mirror is regenerated in **fn-68.5** (a SEPARATE task) — keep this file Claude-native (`AskUserQuestion`, `Task`); do NOT regenerate the mirror here.
