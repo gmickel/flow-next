@@ -13,7 +13,7 @@
   "plan_reviewed_at": "2026-06-26T12:59:15.749916Z",
   "ready": true,
   "spec_path": ".flow/specs/fn-71-flow-next-drive-cua-rung-provider.md",
-  "status": "open",
+  "status": "done",
   "title": "flow-next-drive CUA rung \u2014 provider-agnostic cross-platform computer-use (Windows/native/sandbox)",
   "tracker": {
     "baseHashFlow": "19613e509aa06c3829270cc5acee4d3957cba9255ba906c25aa734b2dc02a83d",
@@ -26,5 +26,5 @@
     "mergeBaseTracker": "# fn-71 flow-next-drive CUA rung \u2014 provider-agnostic cross-platform computer-use\n(projected to FLOW-20 via tracker-sync; full body lives on Linear)\n",
     "url": "https://linear.app/gmickel/issue/FLOW-20"
   },
-  "updated_at": "2026-06-26T23:39:06.720544Z"
+  "updated_at": "2026-06-27T05:58:05.957196Z"
 }
