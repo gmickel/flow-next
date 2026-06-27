@@ -546,6 +546,8 @@ The default path `.flow/review-receipts/qa-<spec-id>.json` is **committed** (the
 
 When `QA_AUTONOMOUS=1` (the pilot stage dispatched this pass — autonomy ≠ Ralph), QA commits **its own outputs** so the dispatching pilot stage hands off a clean tree and the branch the eventual make-pr pushes carries exactly what the `## Live QA` body advertises. **QA committing its own writes is the agentic, precise answer** — it knows exactly which files it produced (the receipt above, plus the bug-memory entries tracked in `QA_FILED_MEMORY` at §5.4), so pilot never has to guess or diff the tree. Never a `.flow/memory` glob (it would sweep pre-existing dirty memory) and never `git add -A`. **User-invoked QA does not auto-commit** — the user owns their commits.
 
+**Precondition (autonomous mode):** the loop operates on **committed state** — the worker commits before QA, so `.flow/memory` is clean at dispatch. QA commits only the entries it filed this run; the one out-of-contract case is a pre-existing **uncommitted** manual/audit edit to a bug entry that QA then high-overlap-*updates* — that edit would ride this commit. The autonomous pilot loop never carries such state (it operates on committed trees); a human running `/flow-next:qa mode:autonomous` over a dirty `.flow/memory` should commit those edits first.
+
 ```bash
 if [ "$QA_AUTONOMOUS" = "1" ]; then
   # Receipt always; the filed memory paths only when non-empty (SHIP/NA/BLOCKED or
