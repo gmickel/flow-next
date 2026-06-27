@@ -106,11 +106,11 @@ case "$REVIEW_BACKEND" in
 esac
 ```
 
-Resolve the optional QA-stage gate (fn-72). The canonical 3-clause guard — `on` iff the value is neither `off` nor `null` (a string-enum knob, default `off`; the activating value is the literal `on`, NOT bool `true`). This is read once here and reused by the all-done classification:
+Resolve the optional QA-stage gate (fn-72). **Strict** string-enum knob (default `off`): the stage activates **only** on the literal `on` — any other value (`off`, `null`, a coerced bool `true`, or a typo like `maybe`) leaves it off. Read once here and reused by the all-done classification:
 
 ```bash
 QA_GATE="$($FLOWCTL config get pipeline.qa --json | jq -r '.value')"
-if [ "$QA_GATE" != "off" ] && [ "$QA_GATE" != "null" ]; then
+if [ "$QA_GATE" = "on" ]; then # ONLY the literal `on` activates — never bool true / typos
  QA_STAGE_ENABLED=1
 else
  QA_STAGE_ENABLED=0

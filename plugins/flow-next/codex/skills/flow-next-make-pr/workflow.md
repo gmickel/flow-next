@@ -819,6 +819,15 @@ if [ -f "$QA_RECEIPT" ] && jq -e . "$QA_RECEIPT" >/dev/null 2>&1; then
  QA_COV_COVERED="$(jq -r '.rid_coverage.covered // "?"' "$QA_RECEIPT")"
  QA_COV_TOTAL="$(jq -r '.rid_coverage.total // "?"' "$QA_RECEIPT")"
 fi
+
+# Freshness — the receipt carries head_sha for exactly this reason. A receipt written
+# against a DIFFERENT commit (QA ran, then more commits landed, or a manual make-pr with
+# the gate off) is STALE; surfacing its SHIP/findings would mislabel this PR's HEAD.
+# Treat a stale receipt as absent — omit the Live QA section rather than show a wrong signal.
+if [ "$QA_PRESENT" = "1" ] && [ -n "$QA_HEAD_SHA" ] \
+ && [ "$QA_HEAD_SHA" != "$(git -C "$REPO_ROOT" rev-parse HEAD)" ]; then
+ QA_PRESENT=0
+fi
 ```
 
 Read directly with `jq` (do NOT compose any free-form receipt field into shell-built JSON — surface the values as rendered markdown only). The receipt fields are exactly those task .1 added (`qa_outcome`, `head_sha`, `branch`, `rid_coverage`, `open_p0p1` as **objects**, plus the scoped `blocked_reason` / `na_reason`).

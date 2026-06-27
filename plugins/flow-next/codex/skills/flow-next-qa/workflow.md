@@ -96,7 +96,7 @@ $FLOWCTL show "$SPEC_ID" --json | jq -e '.tasks != null' >/dev/null \
 
 ### 1.2 — Resolve the diff base + pull the cognitive-aid payload
 
-`spec export-cognitive-aid` requires a `--base` ref. QA only needs the **spec** section (AC / R-IDs / boundaries / decision context) to derive scenarios — request that section explicitly to keep the payload small:
+`spec export-cognitive-aid` requires a `--base` ref. QA needs the **spec** section (AC / R-IDs / boundaries / decision context) to derive scenarios **and** the top-level `tasks[]` (with each task's `satisfies` + `evidence`) for the §2.0 evidence-aware subtraction — so load the **full** payload (a `--section spec` filter strips `tasks[]`, silently disabling R4):
 
 ```bash
 # Base-branch detection cascade (reuses make-pr §0.3): pick the first ref that
@@ -168,7 +168,7 @@ fi
 # (Only runs when not short-circuited to BLOCKED above.)
 if [[ "$QA_OUTCOME" != "BLOCKED" ]]; then
  BASE_REF="$(git -C "$REPO_ROOT" merge-base "$DEFAULT_BRANCH" HEAD 2>/dev/null || echo "$DEFAULT_BRANCH")"
- PAYLOAD="$($FLOWCTL spec export-cognitive-aid "$SPEC_ID" --base "$BASE_REF" --section spec --json)"
+ PAYLOAD="$($FLOWCTL spec export-cognitive-aid "$SPEC_ID" --base "$BASE_REF" --json)" # full payload — tasks[] is the evidence source for §2.0
 fi
 ```
 
