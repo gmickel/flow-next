@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-68-pilot-backlog-mode-full-auto-backlog",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-06-27T18:34:08.112579Z",
   "created_at": "2026-06-25T04:05:43.645554Z",
   "default_impl": null,
   "default_review": null,
@@ -27,5 +27,5 @@
     "mergeBaseTracker": "# tracker projection on FLOW board, synced 2026-06-26\n",
     "url": "https://linear.app/gmickel/issue/FLOW-17"
   },
-  "updated_at": "2026-06-27T13:47:06.106838Z"
+  "updated_at": "2026-06-27T18:34:08.112750Z"
 }
