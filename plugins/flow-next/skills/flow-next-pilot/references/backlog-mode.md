@@ -355,7 +355,10 @@ it to `ask` (Phase 3) instead of advancing — even when it is otherwise workabl
 empty / unset `gateClasses` (the default) gates nothing; full-auto is unconditional.
 
 ```bash
-GATE_CLASSES="$($FLOWCTL config get pilot.gateClasses --json | jq -r '.value[]?' 2>/dev/null)"
+# Tolerate BOTH a JSON array (`["risky"]`) AND a scalar set via the CLI —
+# `flowctl config set pilot.gateClasses risky` persists the bare string "risky",
+# which the array-only `.value[]?` would silently drop.
+GATE_CLASSES="$($FLOWCTL config get pilot.gateClasses --json | jq -r '(.value // empty) | if type=="array" then .[] else . end' 2>/dev/null)"
 ```
 
 (Matching an item to a gate class is the agent's read of the item, like triage —
