@@ -15291,9 +15291,10 @@ def cmd_ready_all(args: argparse.Namespace) -> None:
                       skill annotates tracker-origin readiness at union time.
       * blockedBy   — spec-level deps (`depends_on_epics`) whose spec is
                       missing or not `done` (same rule as `cmd_next`).
-      * hasSpec     — always True here (every row is a real local spec record);
-                      present so the skill can union tracker-only items (which
-                      have no spec) into the SAME shape with hasSpec=False.
+      * hasSpec     — whether the spec MARKDOWN (`.flow/specs/<id>.md`) exists.
+                      A `.json` sidecar can exist without the `.md`, so a specless
+                      local row reads hasSpec=False and surfaces the needs-spec
+                      gap — the SAME shape the skill gives tracker-only items.
 
     Done specs are skipped — the backlog is the open frontier.
     """
@@ -15328,13 +15329,18 @@ def cmd_ready_all(args: argparse.Namespace) -> None:
             if dep_data.get("status") != "done":
                 blocked_by.append(dep)
 
+        # hasSpec reflects whether the spec MARKDOWN exists — a .json sidecar can
+        # exist without the .md, so a specless local row surfaces the needs-spec
+        # gap (matching tracker-only items, hasSpec=False).
+        has_spec_md = spec_file.with_suffix(".md").exists()
+
         rows.append(
             {
                 "id": spec_id,
                 "ready": is_ready,
                 "readySignal": "local" if is_ready else "none",
                 "blockedBy": blocked_by,
-                "hasSpec": True,
+                "hasSpec": has_spec_md,
             }
         )
 

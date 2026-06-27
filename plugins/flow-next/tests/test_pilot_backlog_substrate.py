@@ -201,8 +201,21 @@ class ReadyAllTestCase(_FlowctlTmpRepo):
         # No judgment/triage field leaks from flowctl.
         self.assertNotIn("triageClass", row)
         self.assertNotIn("completeness", row)
-        # hasSpec is always True for a real local spec record.
+        # hasSpec reflects the spec .md existence; a normally-created spec has
+        # both the .json sidecar and the .md, so it reads True.
         self.assertTrue(row["hasSpec"])
+
+    def test_has_spec_reflects_markdown_existence(self) -> None:
+        # hasSpec must be COMPUTED from the .md path, not hardcoded — a .json
+        # sidecar can exist without the markdown (completion-review finding).
+        sid = self._spec_create("Alpha")
+        row = next(r for r in self._ready_all()["specs"] if r["id"] == sid)
+        self.assertTrue(row["hasSpec"])  # created spec has both .json + .md
+        # Remove the markdown only; the .json sidecar remains.
+        (self.tmpdir / ".flow" / "specs" / f"{sid}.md").unlink()
+        row = next(r for r in self._ready_all()["specs"] if r["id"] == sid)
+        # Specless sidecar must read False so backlog mode surfaces needs-spec.
+        self.assertFalse(row["hasSpec"])
 
     def test_local_ready_flag_and_signal(self) -> None:
         sid = self._spec_create("Alpha")
