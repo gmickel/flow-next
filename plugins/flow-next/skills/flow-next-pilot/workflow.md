@@ -325,12 +325,20 @@ Routing on the **fresh** `qa_outcome` (`QA_ADVANCED=true`):
 
 ```bash
 if [ "$QA_ADVANCED" = "true" ]; then
-  # Narrow pathspec — the receipt + QA's bug-memory tree; NEVER `git add -A`. In the
-  # autonomous flow the worker already committed everything else, so the only dirty
-  # paths here are QA's own outputs.
-  git -C "$REPO_ROOT" add -- "$QA_RECEIPT" "$REPO_ROOT/.flow/memory"
-  git -C "$REPO_ROOT" diff --cached --quiet -- "$QA_RECEIPT" "$REPO_ROOT/.flow/memory" \
-    || git -C "$REPO_ROOT" commit -m "chore(flow): qa verdict $SELECTED_SPEC" -- "$QA_RECEIPT" "$REPO_ROOT/.flow/memory"
+  # Narrow pathspec — the receipt always, plus QA's bug-memory tree ONLY when it exists.
+  # A SHIP/NA/BLOCKED pass (or memory.enabled=false) files no memory, and `git add` errors
+  # on a pathspec matching nothing — which would abort the handoff after a fresh receipt was
+  # written, failing the tick. NEVER `git add -A`. In the autonomous flow the worker already
+  # committed everything else, so the only dirty paths here are QA's own outputs.
+  git -C "$REPO_ROOT" add -- "$QA_RECEIPT"
+  if [ -e "$REPO_ROOT/.flow/memory" ]; then
+    git -C "$REPO_ROOT" add -- "$REPO_ROOT/.flow/memory"
+    git -C "$REPO_ROOT" diff --cached --quiet -- "$QA_RECEIPT" "$REPO_ROOT/.flow/memory" \
+      || git -C "$REPO_ROOT" commit -m "chore(flow): qa verdict $SELECTED_SPEC" -- "$QA_RECEIPT" "$REPO_ROOT/.flow/memory"
+  else
+    git -C "$REPO_ROOT" diff --cached --quiet -- "$QA_RECEIPT" \
+      || git -C "$REPO_ROOT" commit -m "chore(flow): qa verdict $SELECTED_SPEC" -- "$QA_RECEIPT"
+  fi
 fi
 ```
 
