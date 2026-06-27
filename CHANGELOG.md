@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 2.2.0] - 2026-06-27
 
 ### Added
 - **`flow-next-drive` native rung gains the Cua Driver (provider-agnostic computer-use) + a Cua Sandbox rung for headless/CI native runs** (fn-71). The native rung of the surface-aware driver ladder (Step 4) was served **only** by Computer Use (Codex CU / Anthropic Claude CU) — provider-locked, macOS/Windows-only, and focus-stealing, and **never reachable on a headless / CI / Linux path**. [trycua/cua](https://github.com/trycua/cua) (MIT) is added as a **detected, opt-in** native driver with two surfaces, never a hard dependency:
@@ -16,8 +16,8 @@ All notable changes to the flow-next.
   - **Docs**: `pipeline.qa` config row in [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md); the optional `qa` stage threaded through [`docs/ralph.md`](plugins/flow-next/docs/ralph.md), `docs/README.md`, root `README.md`, the qa + pilot + make-pr skill prose; Codex mirror regenerated + smoked. flow-next.dev + the AI×SDLC guide + the GF microsite ship the counterpart pipeline/QA framing passes.
 
 ### Notes
-- Additive, opt-in, backward-compatible — a pass still completes with no Cua installed (fall to Computer Use → documented-limitation). No new skill or command (a rung, not a re-architecture); the universal flow and QA's workflow are untouched. **Version bump deferred to the batched release** (per CLAUDE.md "version bumps are batched, not per-spec").
-- The QA pilot stage is **off by default** — environments without a local app are never blocked (`BLOCKED`/`NA` advance), and the QA stage is host-agent skill wiring (no new subcommand/engine, no new receipt or artifact beyond the additive `qa_verdict` receipt fields). **Version bump deferred to the batched release** (per CLAUDE.md "version bumps are batched, not per-spec").
+- Additive, opt-in, backward-compatible — a pass still completes with no Cua installed (fall to Computer Use → documented-limitation). No new skill or command (a rung, not a re-architecture); the universal flow and QA's workflow are untouched. Shipped together in the 2.2.0 batched release.
+- The QA pilot stage is **off by default** — environments without a local app are never blocked (`BLOCKED`/`NA` advance), and the QA stage is host-agent skill wiring (no new subcommand/engine, no new receipt or artifact beyond the additive `qa_verdict` receipt fields). Shipped together in the 2.2.0 batched release.
 
 ## [flow-next 2.1.3] - 2026-06-26
 
