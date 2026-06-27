@@ -14,7 +14,7 @@
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-06-27T13:45:58.213816Z",
   "spec_path": ".flow/specs/fn-68-pilot-backlog-mode-full-auto-backlog.md",
-  "status": "open",
+  "status": "done",
   "title": "pilot backlog mode: full-auto backlog triage + dep-scheduling + async gap-surfacing",
   "tracker": {
     "baseHashFlow": "493ba327c78acd0e33d8d2c0e5c3ef3d01d6c4ff7561b5b264b0cf72b42159bf",
@@ -27,5 +27,5 @@
     "mergeBaseTracker": "# tracker projection on FLOW board, synced 2026-06-26\n",
     "url": "https://linear.app/gmickel/issue/FLOW-17"
   },
-  "updated_at": "2026-06-27T18:34:08.112750Z"
+  "updated_at": "2026-06-27T22:00:57.436157Z"
 }
