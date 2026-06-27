@@ -1254,6 +1254,28 @@ def get_default_config() -> dict:
         # flowctl only stores/serves the knob; the QA stage is host-agent
         # skill wiring (no new subcommand/engine).
         "pipeline": {"qa": "off"},
+        # fn-68.1 — pilot backlog-mode autonomy gate, seeded so
+        # `config get pilot.autonomy` returns the enum string "ready" (NOT
+        # null) on a fresh repo via the defaults MERGE. SCALAR STRING-ENUM
+        # (ready|backlog), NOT a bool: the pilot read is a STRICT POSITIVE
+        # match — `[ "$value" = "backlog" ]` — so ONLY the literal "backlog"
+        # activates full-backlog autonomy; "ready" / null / a coerced bool
+        # `true` / a typo all leave it at the conservative "ready"-queue-only
+        # behavior (memory docs-activation-command-for-string-enum). Default
+        # "ready" keeps pilot's existing consent boundary byte-for-byte
+        # unchanged (it selects only from the already-ready queue).
+        #
+        # `gateClasses` is a SIBLING key, NOT a `pilot.autonomy.gate`
+        # sub-path: a scalar (`autonomy`) and a list (`gateClasses`) cannot
+        # share the `pilot.autonomy` dot-path (review finding #2). It is the
+        # force-gate — the host skill consults it to decide which triage
+        # classes still require a human even in backlog mode. Empty list =
+        # the skill's built-in default applies; flowctl only stores/serves
+        # it (no judgment, no enum-validation — the class vocabulary is the
+        # skill's, an open extension point). Like pipeline.* / work.* /
+        # land.*, this materializes on init (NOT in
+        # _INIT_UNMATERIALIZED_BLOCKS — no setup-ceremony `--raw` null probe).
+        "pilot": {"autonomy": "ready", "gateClasses": []},
     }
 
 
@@ -5138,6 +5160,10 @@ FLOW_GITIGNORE_AUTO_PATTERNS = [
     # fn-52 tracker-sync per-run receipts (proof-of-work; accumulate per sync,
     # same class as receipts/ — runtime artifacts, not durable repo state)
     "sync-runs/",
+    # fn-68 pilot backlog-mode decision-log rows (per-tick triage/advance/ask
+    # proof-of-work; accumulate per pilot tick, same runtime-artifact class as
+    # sync-runs/ — deliberately NOT a receipts/ path the ralph-guard validates)
+    "pilot-runs/",
 ]
 
 
@@ -15244,12 +15270,104 @@ def _task_set_section(
         print(f"Task {task_id} {section} updated")
 
 
+def cmd_ready_all(args: argparse.Namespace) -> None:
+    """Spec-level eligibility FACTS for the whole backlog (fn-68.1, R1/R8/R9).
+
+    A DISTINCT branch from the task-within-spec `cmd_ready` — `ready --all`
+    enumerates every open spec and reports pure, judgment-free facts the host
+    pilot skill unions and triages itself:
+
+      {id, ready, readySignal, blockedBy, hasSpec}
+
+    Field contract (FACTS ONLY — no `triageClass`, no completeness score, no
+    judgment; that read is the skill's, never flowctl's):
+      * id          — canonical spec id.
+      * ready       — the LOCAL fn-58 boolean (`spec.ready`); flowctl reports
+                      ONLY what it sees locally.
+      * readySignal — "local" when that local flag is set, else "none".
+                      flowctl stores NO readiness provenance — it CANNOT
+                      attribute a *tracker-projected* ready (finding #3); the
+                      skill annotates tracker-origin readiness at union time.
+      * blockedBy   — spec-level deps (`depends_on_epics`) whose spec is
+                      missing or not `done` (same rule as `cmd_next`).
+      * hasSpec     — always True here (every row is a real local spec record);
+                      present so the skill can union tracker-only items (which
+                      have no spec) into the SAME shape with hasSpec=False.
+
+    Done specs are skipped — the backlog is the open frontier.
+    """
+    flow_dir = get_flow_dir()
+
+    rows = []
+    for spec_file in iter_spec_json_files(flow_dir):
+        spec_id = spec_file.stem
+        spec_data = normalize_epic(
+            load_json_or_exit(spec_file, f"Spec {spec_id}", use_json=args.json)
+        )
+        if spec_data.get("status") == "done":
+            continue
+
+        # fn-58.1: explicit boolean — absent key reads false. readySignal is
+        # derived from the LOCAL flag only (no provenance stored).
+        is_ready = bool(spec_data.get("ready", False))
+
+        # Spec-level deps: blocked when a dep spec is missing or not done.
+        # Same computation as cmd_next (flowctl.py blocked_by loop).
+        blocked_by: list[str] = []
+        for dep in spec_data.get("depends_on_epics", []) or []:
+            if dep == spec_id:
+                continue
+            dep_path = find_spec_json_path(flow_dir, dep)
+            if not dep_path.exists():
+                blocked_by.append(dep)
+                continue
+            dep_data = normalize_epic(
+                load_json_or_exit(dep_path, f"Spec {dep}", use_json=args.json)
+            )
+            if dep_data.get("status") != "done":
+                blocked_by.append(dep)
+
+        rows.append(
+            {
+                "id": spec_id,
+                "ready": is_ready,
+                "readySignal": "local" if is_ready else "none",
+                "blockedBy": blocked_by,
+                "hasSpec": True,
+            }
+        )
+
+    rows.sort(key=lambda r: id_sort_key(r["id"]))
+
+    if args.json:
+        json_output({"success": True, "specs": rows, "count": len(rows)})
+    else:
+        if not rows:
+            print("No open specs.")
+        else:
+            print(f"Backlog eligibility ({len(rows)}):\n")
+            for r in rows:
+                ready_badge = " [ready]" if r["ready"] else ""
+                blocked = (
+                    f" (blocked by: {', '.join(r['blockedBy'])})"
+                    if r["blockedBy"]
+                    else ""
+                )
+                print(f"  {r['id']}{ready_badge}{blocked}")
+
+
 def cmd_ready(args: argparse.Namespace) -> None:
-    """List ready tasks for a spec."""
+    """List ready tasks for a spec (or, with --all, spec-level backlog facts)."""
     if not ensure_flow_exists():
         error_exit(
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
+
+    # fn-68.1: --all is a DISTINCT spec-level eligibility-facts mode. Dispatch
+    # to it BEFORE the task-within-spec resolution so the two never conflate.
+    if getattr(args, "all", False):
+        cmd_ready_all(args)
+        return
 
     spec_id = resolve_spec_arg(args, get_flow_dir())
     if not spec_id or not is_spec_id(spec_id):
@@ -19928,6 +20046,36 @@ DEFER_SINK_DIR_REL = ".flow/review-deferred"
 # and a status enum here is never seen by that validator, so it can't be rejected.
 SYNC_RUNS_DIR_REL = ".flow/sync-runs"
 
+# fn-68.1 (R8): pilot backlog-mode decision-log rows live in their OWN
+# directory, deliberately NOT under any `receipts/` path and NOT pointed to by
+# REVIEW_RECEIPT_PATH — same guard-safe placement rationale as SYNC_RUNS_DIR_REL
+# above. The ralph-guard only validates the REVIEW_RECEIPT_PATH file and
+# pattern-matches shell writes to `…receipts/…json`; a pilot-log row here is
+# never seen by that validator, so an autonomous pilot run can append freely.
+PILOT_RUNS_DIR_REL = ".flow/pilot-runs"
+
+# fn-68.1 (finding #8): FROZEN action enum for the decision-log. The host
+# pilot skill records exactly one of these per tick; flowctl validates the
+# token but applies NO judgment about which is correct.
+PILOT_LOG_ACTIONS = ("triaged", "advanced", "asked", "blocked", "needs-human")
+
+
+def _pilot_log_id_slug(raw_id: str) -> str:
+    """Normalize an OPAQUE pilot-log id into a safe filename component.
+
+    `pilot-log --id` accepts an arbitrary opaque id — a flow spec id (`fn-68`)
+    OR a bare tracker key (`WOR-17`) for tracker-only items that have no local
+    spec (round-3 #2). It MUST NOT be forced through `resolve_spec_id_arg`
+    (which would reject/expand a tracker key). We only need a path-safe,
+    linkify-safe token: keep [A-Za-z0-9._-], collapse every other run to a
+    single '-', strip leading dots (no hidden files) and surrounding
+    separators. Case is preserved (tracker keys are case-bearing). Empty input
+    falls back to "unknown".
+    """
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", str(raw_id))
+    slug = slug.strip("-").lstrip(".").strip("-.")
+    return slug or "unknown"
+
 
 def _branch_slug(branch: Optional[str] = None) -> str:
     """Derive a filesystem-safe slug from the current (or supplied) branch.
@@ -20847,6 +20995,129 @@ def cmd_sync_receipt(args: argparse.Namespace) -> None:
         )
     else:
         print(f"Sync receipt written ({status}, {len(merges)} merge(s)): {receipt_path}")
+
+
+def cmd_pilot_log_append(args: argparse.Namespace) -> None:
+    """Append one pilot backlog-mode decision-log row (fn-68.1, R8).
+
+    Writes a `{tick, id, action, stage, costTokens}` row under
+    `.flow/pilot-runs/` — a guard-safe path (NOT any `receipts/` path the
+    ralph-guard validates). PURE STORAGE: flowctl validates the frozen action
+    enum and stores the host-reported fields; it applies NO judgment.
+
+    `--id` is an OPAQUE id (a flow spec id OR a bare tracker key for
+    tracker-only items) — it is safe-filename-normalized, NEVER forced through
+    `resolve_spec_id_arg` (round-3 #2). `--cost-tokens` is host-reported and
+    optional (null/omitted when the host cannot measure it). `tick` is a
+    per-id monotonic counter derived from existing rows for that id.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+
+    action = args.action
+    if action not in PILOT_LOG_ACTIONS:
+        error_exit(
+            f"Invalid pilot-log action '{action}'. "
+            f"Expected one of: {', '.join(PILOT_LOG_ACTIONS)}",
+            use_json=args.json,
+        )
+
+    # OPAQUE id — preserved verbatim in the row, normalized only for the
+    # filename. No resolve_spec_id_arg (tracker-only items have no spec).
+    raw_id = args.id
+    id_slug = _pilot_log_id_slug(raw_id)
+
+    # `--stage` is free-form (the host's pipeline-stage label) with "-" as the
+    # canonical "no stage" sentinel; stored as null when "-"/empty.
+    stage = getattr(args, "stage", None)
+    if stage in ("-", ""):
+        stage = None
+
+    repo_root = get_repo_root()
+    run_dir = repo_root / PILOT_RUNS_DIR_REL
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    # Per-id monotonic tick = (#existing rows for this id) + 1. Rows are one
+    # file each (`pilot-<id_slug>-<n>-<ts>.json`) so the count is a glob.
+    existing = list(run_dir.glob(f"pilot-{id_slug}-*.json"))
+    tick = len(existing) + 1
+
+    row = {
+        "tick": tick,
+        "id": raw_id,
+        "action": action,
+        "stage": stage,
+        "costTokens": getattr(args, "cost_tokens", None),
+        "timestamp": now_iso(),
+    }
+
+    ts_slug = now_iso().replace(":", "").replace("-", "").replace(".", "")
+    row_path = run_dir / f"pilot-{id_slug}-{tick}-{ts_slug}.json"
+    atomic_write_json(row_path, row)
+
+    if args.json:
+        json_output(
+            {
+                "success": True,
+                "row": str(row_path),
+                "tick": tick,
+                "id": raw_id,
+                "action": action,
+                "stage": stage,
+                "costTokens": row["costTokens"],
+            }
+        )
+    else:
+        cost = f", cost {row['costTokens']}" if row["costTokens"] is not None else ""
+        print(f"Pilot-log row appended (tick {tick}, {action}{cost}): {row_path}")
+
+
+def cmd_pilot_log_summary(args: argparse.Namespace) -> None:
+    """Summarize pilot decision-log rows (fn-68.1, R8) — pure enumeration.
+
+    Emits every `{tick, id, action, stage, costTokens}` row under
+    `.flow/pilot-runs/`, ordered by (id, tick). No judgment, no aggregation
+    beyond a flat count — the host skill reads the facts and decides.
+    """
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+
+    repo_root = get_repo_root()
+    run_dir = repo_root / PILOT_RUNS_DIR_REL
+
+    rows = []
+    if run_dir.exists():
+        for row_file in run_dir.glob("pilot-*.json"):
+            try:
+                data = json.loads(row_file.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue  # Skip a corrupt/partial row rather than failing the read.
+            if not isinstance(data, dict):
+                continue
+            rows.append(
+                {
+                    "tick": data.get("tick"),
+                    "id": data.get("id"),
+                    "action": data.get("action"),
+                    "stage": data.get("stage"),
+                    "costTokens": data.get("costTokens"),
+                }
+            )
+
+    # Stable order: by id, then tick (tick may be None on a malformed row → 0).
+    rows.sort(key=lambda r: (str(r.get("id") or ""), r.get("tick") or 0))
+
+    if args.json:
+        json_output({"success": True, "rows": rows, "count": len(rows)})
+    else:
+        if not rows:
+            print("No pilot-log rows.")
+        else:
+            print(f"Pilot-log rows ({len(rows)}):\n")
+            for r in rows:
+                stage = r["stage"] or "-"
+                cost = "" if r["costTokens"] is None else f" cost={r['costTokens']}"
+                print(f"  [{r['tick']}] {r['id']} {r['action']} stage={stage}{cost}")
 
 
 def cmd_sync_defer(args: argparse.Namespace) -> None:
@@ -23867,6 +24138,49 @@ def main() -> None:
     p_sync_check.add_argument("--json", action="store_true", help="JSON output")
     p_sync_check.set_defaults(func=cmd_sync_check)
 
+    # pilot-log — fn-68.1 (R8) pilot backlog-mode decision log. Append a
+    # per-tick {triaged|advanced|asked|blocked|needs-human} row + summarize.
+    # FROZEN CLI: rows live under .flow/pilot-runs/ (guard-safe, NOT receipts/).
+    p_pilot_log = subparsers.add_parser(
+        "pilot-log", help="Pilot backlog-mode decision log (append / summary)"
+    )
+    pilot_log_sub = p_pilot_log.add_subparsers(dest="pilot_log_cmd", required=True)
+
+    p_pilot_log_append = pilot_log_sub.add_parser(
+        "append", help="Append one decision-log row"
+    )
+    p_pilot_log_append.add_argument(
+        "--id",
+        required=True,
+        help="Opaque id (spec id OR bare tracker key; safe-filename-normalized)",
+    )
+    p_pilot_log_append.add_argument(
+        "--action",
+        required=True,
+        choices=PILOT_LOG_ACTIONS,
+        help="Frozen action enum: triaged|advanced|asked|blocked|needs-human",
+    )
+    p_pilot_log_append.add_argument(
+        "--stage",
+        default=None,
+        help="Pipeline stage label ('-' or omitted = none)",
+    )
+    p_pilot_log_append.add_argument(
+        "--cost-tokens",
+        dest="cost_tokens",
+        type=int,
+        default=None,
+        help="Host-reported token cost (optional)",
+    )
+    p_pilot_log_append.add_argument("--json", action="store_true", help="JSON output")
+    p_pilot_log_append.set_defaults(func=cmd_pilot_log_append)
+
+    p_pilot_log_summary = pilot_log_sub.add_parser(
+        "summary", help="List all decision-log rows ({tick,id,action,stage,costTokens})"
+    )
+    p_pilot_log_summary.add_argument("--json", action="store_true", help="JSON output")
+    p_pilot_log_summary.set_defaults(func=cmd_pilot_log_summary)
+
     # review-backend (helper for skills)
     p_review_backend = subparsers.add_parser(
         "review-backend", help="Get review backend (ASK if not configured)"
@@ -24889,6 +25203,14 @@ def main() -> None:
     )
     p_ready.add_argument(
         "--epic", help="Spec ID (alias for --spec; removed in 2.0)"
+    )
+    # fn-68.1: spec-level eligibility-facts mode for the whole backlog. A
+    # DISTINCT branch from task-within-spec ready — emits {id, ready,
+    # readySignal, blockedBy, hasSpec} (facts only, no judgment).
+    p_ready.add_argument(
+        "--all",
+        action="store_true",
+        help="Spec-level backlog eligibility facts (ignores --spec)",
     )
     p_ready.add_argument("--json", action="store_true", help="JSON output")
     p_ready.set_defaults(func=cmd_ready)
