@@ -414,15 +414,17 @@ if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ];
  mkdir -p .flow/tmp/qa-"$SPEC_ID"
  # Write the finding body (problem / repro / expected-vs-actual / evidence pointers / R-IDs)
  # to .flow/tmp/qa-$SPEC_ID/finding-<sid>.md per the reference template, then:
- $FLOWCTL memory add \
+ _p="$($FLOWCTL memory add \
  --track bug --category "<ui|runtime-errors|integration|data|...>" \
  --title "<persona> can't <goal> — <one-line symptom>" \
  --module "<surface / route / component>" \
  --tags "qa,<spec-id>,<surface>" \
  --symptoms "<observed actual>" \
  --root-cause "(observed via live QA — unconfirmed)" \
- --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json \
- | jq -r '.path // empty' | { read -r _p; [ -n "$_p" ] && QA_FILED_MEMORY="${QA_FILED_MEMORY:+$QA_FILED_MEMORY }$_p"; }
+ --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json | jq -r '.path // empty')"
+ # Capture via command-substitution in the PARENT shell — a `… | { read … }` pipeline tail
+ # runs in a subshell, so the assignment would be lost and the memory left uncommitted.
+ [ -n "$_p" ] && QA_FILED_MEMORY="${QA_FILED_MEMORY:+$QA_FILED_MEMORY }$_p"
  # Track the EXACT path filed (from --json) into QA_FILED_MEMORY — §6.3b commits precisely
  # these, never a broad `.flow/memory` glob. NEVER pass --no-overlap-check. High overlap
  # updates the existing entry in place; moderate overlap creates a related_to cross-reference.
