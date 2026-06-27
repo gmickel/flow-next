@@ -402,10 +402,14 @@ The answer is detected on the **next pull/reconcile** (rides the existing `listC
 2. **Tracker reply matched by `id`** — the answer comment carries `<!-- flow-next:answer id=<hash> -->`. Match it to the open question by `id`:
    - **Threaded tracker (Linear)** — the normalized `comment` carries optional **reply/parent metadata** ([→ ref: adapter-interface.md § `comment`]); a reply *under* the question comment is matched by thread + `id`.
    - **Flat tracker (GitHub — no threads)** — there is no parent link, so the **`<!-- flow-next:answer id=<hash> -->` marker is the load-bearing match**: the answer is matched to the question **by `id` regardless of threading**.
+3. **Answer authority (security — the marker `id` is necessary, NOT sufficient).** Honor a `flow-next:answer` marker **only from an authorized commenter** — anyone with tracker comment access could inject the marker, so validate `comment.author` before treating the question as answered:
+   - the author has **write access** to the tracker (a member/collaborator per the adapter's author metadata) — never an external drive-by commenter, and never a bot (except flow's own automation marker); **AND/OR**
+   - the author is in the optional `tracker.answerAuthors` allowlist (issue assignee / named approvers) when configured.
+   An answer marker from an **unauthorized** author is **ignored** — the question stays `status=open` and the run emits a receipt note (`answer id=<id> from unauthorized author <login> — ignored`). The spec-anchor path (1) already carries its own authority (the human edits the spec in a **commit**, gated by repo write access); this guard closes the weaker tracker-comment path.
 
 ```
 on pull/reconcile, for each open question (spec ## Open Questions, or tracker comments for tracker-only):
-  ans = find a comment carrying `flow-next:answer id=<id>`   # by thread+id (Linear) OR flat id-marker (GitHub)
+  ans = find a comment carrying `flow-next:answer id=<id>` FROM AN AUTHORIZED AUTHOR   # marker id + author-authority (security); unauthorized markers are ignored, question stays parked
   if ans found AND subject is spec-backed:
      import ans.body UNDER the matching `## Open Questions` entry by `id`   # NOT only into ## Sync Log
      flip that anchor: status=open → status=answered
