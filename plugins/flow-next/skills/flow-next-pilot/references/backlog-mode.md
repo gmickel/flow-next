@@ -153,15 +153,18 @@ edges come from **two** sources and feed **one** existing sorter:
 
 - **Flow deps** — `blockedBy` from `ready --all` (1b). An edge `A blockedBy B`.
 - **Tracker deps** — these are **NOT** in the `issue` struct (`list-open` returns
-  issue-only). For each **tracker** candidate, fetch its relations via the per-issue
-  op and normalize the `relation[]` edges (`from` = blocked, `to` = blocker):
+  issue-only). For each **tracker** candidate, read its relations via the
+  **`list-relations`** named op and normalize the `relation[]` edges (`from` =
+  blocked, `to` = blocker):
 
   ```text
-  /flow-next:tracker-sync ... → listIssueRelations(issue)   # per tracker issue
+  /flow-next:tracker-sync list-relations <tracker-id> mode:autonomous   # per tracker issue
   ```
 
-  (This is the `listIssueRelations` adapter method from fn-64, surfaced through the
-  same transport-blind ladder — backlog mode never calls a tracker API directly.)
+  (This routes through the `listIssueRelations` adapter method from fn-64 over the
+  same transport-blind ladder — backlog mode never calls a tracker API directly. It
+  is a **READ** — on pilot's dispatch allowlist, never a merge/write. No-ops when the
+  bridge is inactive or the issue has no relations.)
 
 Feed **both** edge sets — the flow `blockedBy` edges and the normalized tracker
 `relation[]` edges — into the **flow-next-deps jq topo-sort** (the phase-assignment
@@ -363,11 +366,13 @@ selected item belongs to one.)
 
 ## Transport-blind, multi-tracker (R13)
 
-Backlog mode's tracker surface is **only** the two transport-blind named ops —
-`list-open` (enumerate the promoted lane) and `question` (park a gap) — plus the
-per-issue `listIssueRelations` read for dep edges. It calls **no** tracker-specific
-API and **never** branches on tracker type; the active adapter (from `tracker.type`)
-supplies the wire query behind the normalized interface.
+Backlog mode's tracker surface is **only** the three transport-blind named ops —
+`list-open` (enumerate the promoted lane), `list-relations` (READ one issue's dep
+edges via `listIssueRelations`), and `question` (park a gap). All three are on
+pilot's dispatch allowlist; `list-open` / `list-relations` are read-only, `question`
+posts a comment. It calls **no** tracker-specific API and **never** branches on
+tracker type; the active adapter (from `tracker.type`) supplies the wire query behind
+the normalized interface.
 
 - **v1 ships on Linear + GitHub** — the two adapters that already implement
   `listOpenIssues` / `listIssueRelations` / the comment ops (fn-68.2 / fn-64).

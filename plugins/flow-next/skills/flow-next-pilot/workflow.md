@@ -71,13 +71,16 @@ else
 
   # Invariant #1 — never merge / never invoke land (R6). The ONLY skills a backlog
   # tick may invoke are the pipeline stages {plan, plan-review, work, qa, make-pr}
-  # plus the tracker-sync surfacing ops {reconcile, list-open, question}. Called
+  # plus the tracker-sync surfacing/read ops {reconcile, list-open, list-relations,
+  # question}. ALL FOUR tracker ops are read/surface-only — none merges, lands, or
+  # resolves, so the never-merge guard is unaffected. `list-relations` is the
+  # per-issue listIssueRelations READ that 1e needs for tracker dep edges. Called
   # inline immediately before EVERY dispatch (Phase 1.5 tracker ops, Phase 3.5 ask,
   # Phase 4 stage dispatch) with the about-to-run slash command.
   assert_allowed_dispatch() {  # $1 = the slash command about to be invoked
     case "$1" in
       /flow-next:plan|/flow-next:plan-review|/flow-next:work|/flow-next:qa|/flow-next:make-pr) return 0 ;;
-      "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync list-open"*|"/flow-next:tracker-sync question"*) return 0 ;;
+      "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync list-open"*|"/flow-next:tracker-sync list-relations"*|"/flow-next:tracker-sync question"*) return 0 ;;
       *)
         echo "Evidence: backlog mode attempted a forbidden dispatch ($1)"
         echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="backlog mode dispatch allowlist — never merges/lands/resolves (R6)"'
@@ -185,7 +188,18 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 ⇒ inspection-only: no tracker-sync dispatch, f
 
 4. **1d — skip parked subjects (R7/R15).** Skip any candidate carrying a `status=open` parked question — spec-backed: a `<!-- flow-next:question id=… status=open -->` anchor in `## Open Questions`; tracker-only: a `flow-next:question id=… status=open` comment with no matching `<!-- flow-next:answer id=… -->`. An anchor flipped to `status=answered` is no longer parked — it re-enters and is re-triaged this tick.
 
-5. **1e — dep-order the survivors.** Feed the flow `blockedBy` edges + the per-issue tracker `relation[]` edges (via the `listIssueRelations` read) into the **flow-next-deps jq topo-sort** — reuse it, build no new graph engine. (Under `--dry-run` there are no tracker candidates — 1c was skipped — so 1e uses the flow `blockedBy` edges only and issues no tracker read.) **Invariant #4 — a cycle/deadlock is surfaced, never spun on.** When the topo-sort cannot place the chosen candidate because its dep chain is circular or a dep is itself parked/unsatisfiable, set `DEP_DEADLOCK=1` and route it to a state-changing terminal — never fall through to re-pick it next tick:
+5. **1e — dep-order the survivors.** Feed the flow `blockedBy` edges + the per-issue tracker `relation[]` edges into the **flow-next-deps jq topo-sort** — reuse it, build no new graph engine. The tracker relation edges come from the per-issue `listIssueRelations` READ, dispatched via tracker-sync's `list-relations` op. Guard it (invariant #1) before dispatching — it is on the allowlist (a READ, never a merge):
+
+   ```bash
+   if [ "$DRY" = "0" ]; then
+     # For each TRACKER candidate, read its relations to add the tracker dep edges.
+     DISPATCH_TARGET="/flow-next:tracker-sync list-relations"; assert_allowed_dispatch "$DISPATCH_TARGET"
+     # → dispatch per tracker issue: /flow-next:tracker-sync list-relations <tracker-id> mode:autonomous
+     #   (the listIssueRelations read; no-op/empty when the bridge is inactive or the issue has no relations)
+   fi
+   ```
+
+   (Under `--dry-run` there are no tracker candidates — 1c was skipped — so 1e uses the flow `blockedBy` edges only and issues no tracker read; the guarded dispatch above is skipped.) **Invariant #4 — a cycle/deadlock is surfaced, never spun on.** When the topo-sort cannot place the chosen candidate because its dep chain is circular or a dep is itself parked/unsatisfiable, set `DEP_DEADLOCK=1` and route it to a state-changing terminal — never fall through to re-pick it next tick:
 
    ```bash
    if [ "${DEP_DEADLOCK:-0}" = "1" ]; then
