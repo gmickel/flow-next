@@ -820,12 +820,17 @@ if [ -f "$QA_RECEIPT" ] && jq -e . "$QA_RECEIPT" >/dev/null 2>&1; then
  QA_COV_TOTAL="$(jq -r '.rid_coverage.total // "?"' "$QA_RECEIPT")"
 fi
 
-# Freshness — the receipt carries head_sha for exactly this reason. A receipt written
-# against a DIFFERENT commit (QA ran, then more commits landed, or a manual make-pr with
-# the gate off) is STALE; surfacing its SHIP/findings would mislabel this PR's HEAD.
-# Treat a stale receipt as absent — omit the Live QA section rather than show a wrong signal.
-if [ "$QA_PRESENT" = "1" ] && [ -n "$QA_HEAD_SHA" ] \
- && [ "$QA_HEAD_SHA" != "$(git -C "$REPO_ROOT" rev-parse HEAD)" ]; then
+# Freshness — the receipt carries head_sha for exactly this reason. The QA receipt is
+# keyed to the CODE head; Phase 1.5 may have already committed the pr.html artifact,
+# which advanced HEAD — so compare against the PRE-ARTIFACT head (HEAD^ when HEAD is the
+# artifact commit), never the post-artifact HEAD, or a fresh pass reads as stale.
+CODE_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+if git -C "$REPO_ROOT" log -1 --format='%s' 2>/dev/null | grep -q '^chore(flow): pr artifact '; then
+ CODE_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD^)"
+fi
+# Fail CLOSED: a missing/empty head_sha, or one that doesn't match the code head, is STALE
+# (a SHIP/findings signal for a different commit) — treat as absent and omit the section.
+if [ "$QA_PRESENT" = "1" ] && { [ -z "$QA_HEAD_SHA" ] || [ "$QA_HEAD_SHA" != "$CODE_HEAD" ]; }; then
  QA_PRESENT=0
 fi
 ```
