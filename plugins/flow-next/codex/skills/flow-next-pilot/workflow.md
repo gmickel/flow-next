@@ -261,7 +261,7 @@ A signalled-but-dep-blocked candidate is **selectable**, so its presence yields 
 # Tolerate BOTH shapes: a JSON array (`["risky"]`) AND a scalar set through the
 # CLI — `flowctl config set pilot.gateClasses risky` persists the bare string
 # "risky", which `.value[]?` would silently drop. Normalize string→single-class.
-GATE_CLASSES="$($FLOWCTL config get pilot.gateClasses --json | jq -r '(.value // empty) | if type=="array" then .[] else . end' 2>/dev/null)"
+GATE_CLASSES="$($FLOWCTL config get pilot.gateClasses --json | jq -r '(.value // empty) | if type=="array" then .[] elif type=="string" then ((try fromjson catch .) | if type=="array" then .[] else . end) else empty end' 2>/dev/null)"
 ```
 
 An empty/unset `gateClasses` (the default) gates nothing — full-auto is unconditional. A scalar `flowctl config set pilot.gateClasses risky` is read as the single class `risky`; multiple classes use a JSON array.

@@ -189,7 +189,7 @@ query ($team: ID, $state: String!, $first: Int!, $after: String) {
  }
  ) {
  nodes { id identifier title description url updatedAt
- state { name type } labels(first: 10) { nodes { name } } priority }
+ state { name type } labels(first: 25) { nodes { name } } priority }
  pageInfo { hasNextPage endCursor }
  }
 }
@@ -203,13 +203,17 @@ query ($team: ID, $state: String!, $first: Int!, $after: String) {
 - **Map each node into the normalized `issue` struct** via the same firewall table
  the `fetchIssue` map uses ([linear-ladder.md](linear-ladder.md) § Normalized
  mapping) — `description`→`body`, `state.name`→`status.raw`, `labels.nodes[].name`
- →`labels`, etc. A tracker-only ticket (no `flow:<id>` label) maps identically; its
- missing back-reference label is how the skill knows it is unlinked.
+ →`labels`, etc. A tracker-only ticket (no `flow:<id>` label) maps identically.
+ **Linkage is decided authoritatively by the local sync state** (the linked
+ tracker-ids the skill recorded), with the `flow:<id>` label only a corroborating
+ hint — a **truncated** label set (one that hit the `labels(first:)` bound) is
+ **never** read as "unlinked": a many-label issue could carry the back-reference
+ past the bound, so a *linked* issue is never mis-classified as a tracker-only one.
 - **Always set `first:`** and page via `after`/`endCursor` — never unbounded
  (complexity-limit hygiene), same as `listComments`. **Nested connections are
- bounded too** — `labels(first: 10)` (a promoted-lane filter never needs an
- issue's full label set; 10 covers the `flow:<id>` back-reference + readyState
- label).
+ bounded too** — `labels(first: 25)` (generous headroom for the `flow:<id>`
+ back-reference + readyState label; and linkage is confirmed from the local sync
+ state regardless of the bound, per the mapping note above).
 - **Omit the `team` predicate when `tracker.perTracker.teamId` is unset.** Build
  the `filter` object conditionally — include `team: { id: { eq: $team } }` ONLY
  when a teamId is configured; with no team, the filter carries `state` alone. A
