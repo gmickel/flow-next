@@ -46,9 +46,8 @@ Wire `qa` as an **optional, config-gated, idempotent pilot stage** at all-tasks-
 - [ ] Regression coverage: `pipeline.qa` default-off; pilot docs include the `qa` stage enum; routing reads `qa_outcome` not `verdict`; receipt-present ⇒ skip-to-make-pr. No new flowctl subcommand; flowctl field names/enums match exactly.
 
 ## Done summary
-TBD
-
+Wired `qa` as an optional, config-gated (`pipeline.qa`, default off), idempotent pilot stage at the all-tasks-done juncture before make-pr: a 3-clause gate read, classify-on-no-fresh-receipt (id + spec-branch `head_sha` + terminal `qa_outcome`), explicit branch-matrix rows, dispatch of `/flow-next:qa mode:autonomous`, and observed-state advancement that routes on `qa_outcome` (SHIP/NA/BLOCKED advance; NEEDS_WORK advances to the draft PR + surfaces). Reversed pilot's "QA is never a stage" Forbidden line only under the gate (the other five stay forbidden), added the `pipeline.qa` config default + a make-pr Live QA section that surfaces the receipt's outcome/open_p0p1/reason/rid_coverage, plus a 12-test config regression and the flowctl.md config row.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 116603e74cc17bdf756398829cbaf9f74d758e93
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (1135 tests, 2 skipped, 0 failures), python3 -m unittest tests.test_pipeline_qa_config (12 new config tests, all pass)
 - PRs:
