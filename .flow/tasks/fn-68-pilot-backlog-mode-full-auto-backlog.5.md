@@ -23,9 +23,8 @@ Cross-platform parity + autonomous-safety verification — its OWN task because 
 - [ ] autonomous-safety tests pass: under the autonomy marker, backlog mode never reaches AskUserQuestion, never invokes merge/land, never authors a spec; gate-off path byte-identical.
 
 ## Done summary
-TBD
-
+Regenerated the Codex mirror (sync-codex.sh) for pilot backlog mode + tracker-sync and fixed three latent mirror defects the regen exposed: the R2 numbered-prompt instruction block was mis-injected into negation-only autonomy prose (pilot's Forbidden/Phase-3.5 sections AND before tracker-sync's Phase-0 R14 invariant — both contradict the never-prompt contract), a bold-led maintainer breadcrumb wasn't stripped, and a wrong-article artifact. Hardened sync-codex.sh's is_negative_context() (case-insensitive, full reach-family + modal) and breadcrumb stripper, and added a 20-case autonomous-safety prose-contract test (test_pilot_backlog_mirror_safety.py) locking cross-platform parity (R14 fix + triage/ask + ASKED survive; zero Claude-native leakage; /goal NO_WORK/DEFERRED_TO_LAND grep-able; TRIAGED diagnostic-only) and the no-prompt / never-merge / never-author / byte-identical-gate-off invariants (R12; verifies R6/R7). Registered the fn-68 test trio in CI. RP impl-review: SHIP (1 NEEDS_WORK round — it caught the tracker-sync instance).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 26aeadd9, f78f060783f2c74f7aada673137e84426ab43e28
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p test_pilot_backlog_mirror_safety.py (20 cases), python3 -m unittest discover -s plugins/flow-next/tests -p test_pilot_backlog_substrate.py (32), python3 -m unittest discover -s plugins/flow-next/tests -p test_tracker_sync_backlog_mode.py (23), bash scripts/sync-codex.sh (21 validators green, idempotent)
 - PRs:
