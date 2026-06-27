@@ -126,8 +126,7 @@ Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins:
 | any task is `todo` or `blocked` (canonical task statuses are `todo`, `in_progress`, `blocked`, `done`) | `work` |
 | the only non-`done` tasks are `in_progress` own/unassigned (other-actor claims were already skipped at SELECT) | `NEEDS_HUMAN`, reason `stale in-progress claim — work's ready-driven loop cannot resume it` |
 | all tasks done and `completion_review_status != "ship"` and review backend is configured | `work` |
-| all tasks done, completion is ship-or-ungated, **`QA_STAGE_ENABLED=1`, and no *fresh* `qa_verdict` receipt exists** (R1/R1b — see the freshness probe below) | `qa` |
-| all tasks done and completion is ship-or-ungated (QA gate off, or a fresh `qa_verdict` receipt already exists) | PR probe, then `make-pr` (no PR), defer-to-land (open PR), or `NEEDS_HUMAN` (closed-unmerged / missing-branch / merged-but-open-spec) |
+| all tasks done and completion is ship-or-ungated | run the all-done PR probe (below; `--state all`, fails closed): **open PR** → defer-to-land; **closed/merged/probe-failed/missing-branch** → `NEEDS_HUMAN`; **no PR** → `qa` (when `QA_STAGE_ENABLED=1` and no *fresh* `qa_verdict` — R1/R1b) else `make-pr` |
 
 A spec whose only remaining tasks are `blocked` still classifies as `work`; if work cannot advance it, the healthy-no-advance strike path handles it. An in-progress-only spec is different: work's Phase 3a drives off `flowctl ready --spec`, which never returns an `in_progress` task, so dispatching would burn strikes or wrongly enter the completion-review path — the stale-claim `NEEDS_HUMAN` is crash-class (no dispatch, no strike).
 
@@ -141,7 +140,7 @@ When the QA gate is on, the all-done juncture classifies `qa` **only when no *fr
 2. `receipt.head_sha == git rev-parse "$BRANCH_NAME"` — the spec **branch** head. Compute against the branch, NOT `HEAD`: a resumed or manual tick may sit on another branch at classify time (a prior tick's make-pr leaves the worktree on a PR branch). After the Phase 3 checkout, `HEAD` equals the branch head, so the Phase 5 post-dispatch verify can use `HEAD`.
 3. `receipt.qa_outcome` is a valid terminal value (`SHIP`, `NEEDS_WORK`, `NA`, or `BLOCKED`).
 
-Resolve `BRANCH_NAME` here (the qa classification is reached *before* the PR-probe block that normally resolves it) and read the receipt with a single `jq` so a missing/malformed file degrades to never-fresh:
+Resolve `BRANCH_NAME` + `QA_FRESH` here; the `qa` decision itself is made in the all-done PR probe's **no-PR** branch below, so an existing PR always takes priority. Read the receipt with a single `jq` so a missing/malformed file degrades to never-fresh:
 
 ```bash
 [[ -n "${BRANCH_NAME:-}" ]] || BRANCH_NAME="$(printf '%s\n' "$SPEC_JSON" | jq -r '.branch_name // empty')"
@@ -154,17 +153,9 @@ if [ -n "$BRANCH_SHA" ] && [ -f "$QA_RECEIPT" ]; then
  and (.qa_outcome | IN("SHIP","NEEDS_WORK","NA","BLOCKED")))
  then 1 else 0 end' "$QA_RECEIPT" 2>/dev/null || echo 0)"
 fi
-# An all-done spec with an OPEN PR belongs to land, not a re-run of QA — probe for it
-# HERE so defer-to-land wins over (re-)classifying `qa`. Without this, a QA gate enabled
-# AFTER make-pr ran (or a manually-created PR) would dispatch QA; the next tick then sees
-# the open PR and never runs make-pr, so the fresh QA outcome never reaches the PR.
-QA_OPEN_PR=0
-if [ -n "$BRANCH_NAME" ]; then
- QA_OPEN_PR="$(gh pr list --head "$BRANCH_NAME" --state open --json number --jq 'length' 2>/dev/null || echo 0)"
-fi
 ```
 
-`QA_STAGE_ENABLED=1` **and** `QA_FRESH=0` **and** `QA_OPEN_PR=0` ⇒ classify `qa`. A fresh receipt (`QA_FRESH=1`), an **open PR** (`QA_OPEN_PR>0` → the all-done PR probe defers it to land), or the gate off, falls through to the make-pr PR probe below — never re-classifies `qa`. (Echo `qa_gate=<on|off> qa_fresh=<0|1>` in the classification report so a transcript-only driver sees why the juncture chose `qa` vs `make-pr`.)
+`QA_FRESH` feeds the **no-PR branch** of the all-done PR probe below — the `qa` decision is made *there*, not before it. Classify `qa` only when that probe finds **no PR** AND `QA_STAGE_ENABLED=1` AND `QA_FRESH=0`. Any existing PR takes priority over (re-)running QA (open → defer-to-land; closed/merged/probe-failed → `NEEDS_HUMAN`), and the probe **fails closed** on a `gh` error — so a transient API failure never misroutes to `qa`. A fresh receipt (`QA_FRESH=1`) or the gate off ⇒ `make-pr`. (Echo `qa_gate=<on|off> qa_fresh=<0|1>` in the classification report so a transcript-only driver sees why the juncture chose `qa` vs `make-pr`.)
 
 The all-done PR probe is the only gh touch in classification. Resolve the spec's `branch_name` first (Phase 3 reuses the same `BRANCH_NAME`):
 
@@ -181,7 +172,7 @@ Classification outcomes for the all-done branch (the all-done invariant: an all-
 
 - gh missing, unauthenticated, or API failure: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="gh probe failed at all-done branch"`.
 - OPEN PR exists (and no MERGED PR): this spec is **deferred to land** — land owns the open PR, not pilot — so record it as a *deferred candidate* and skip to the next SELECT candidate. This is an explicit defer, never a silent finish: if no later candidate is selectable, the tick terminates with the distinct, greppable `PILOT_VERDICT=DEFERRED_TO_LAND` line (Phase 6), never `NO_WORK`. Track the deferred spec id + open-PR url so the terminal line can name it.
-- No PR exists: stage is `make-pr`. This is the FLOW-15 case (all-done, no PR — make-pr never ran or its PR was lost); it MUST classify `make-pr` and never fall through to `NO_WORK`.
+- No PR exists: classify `qa` when `QA_STAGE_ENABLED=1` **and** `QA_FRESH=0` (the optional QA stage runs before make-pr); otherwise `make-pr`. This is the FLOW-15 case (all-done, no PR — make-pr never ran or its PR was lost); it MUST classify `qa`/`make-pr` and never fall through to `NO_WORK`.
 - CLOSED PR exists and no OPEN PR exists: `NEEDS_HUMAN`, because the PR was closed without merge and pilot never silently reopens human-rejected work.
 - MERGED PR exists while the spec is still open: `NEEDS_HUMAN`, because the state is inconsistent and pilot must not create a second PR.
 
