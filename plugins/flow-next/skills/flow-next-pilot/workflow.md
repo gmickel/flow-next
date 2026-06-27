@@ -321,17 +321,20 @@ Routing on the **fresh** `qa_outcome` (`QA_ADVANCED=true`):
 - `SHIP` / `NA` / `BLOCKED` → advance cleanly to the next tick's make-pr (BLOCKED = no local app reachable / NA = no driveable UI; both advance — QA is the optional augmenting pass, never a wedge).
 - `NEEDS_WORK` → **still advance** (the build loop never stalls on QA). The findings ride the draft PR: make-pr surfaces them from the receipt (its §2.x QA-summary section), and the QA skill already filed them to the bug-memory track + (when the bridge is active) the tracker comment. A `NEEDS_WORK` qa stage is an `ADVANCED` verdict, not `BLOCKED`/`NEEDS_HUMAN`.
 
-**Commit the `qa_verdict` receipt before advancing (`QA_ADVANCED=true`).** The QA skill writes `.flow/review-receipts/qa-<spec-id>.json` into the worktree but does not commit it. Pilot **narrow-commits** it now so the branch the next tick's make-pr pushes actually carries the receipt its `## Live QA` body advertises (otherwise reviewers see a Live QA section referencing a receipt absent from the diff), and so the dirty file is never later swept into an unrelated `git add -A` (land's dirty-tree guard ignores `.flow`):
+**Commit the QA handoff before advancing (`QA_ADVANCED=true`).** The QA skill writes the `qa_verdict` receipt (`.flow/review-receipts/qa-<spec-id>.json`) **and, when `memory.enabled=true` and it files a P0/P1, tracked `.flow/memory/bug/…` entries** into the worktree — but commits none of them. Pilot **narrow-commits both** now so the branch the next tick's make-pr pushes actually carries the receipt its `## Live QA` body advertises *and* the bug-memory entries make-pr's export reads into the PR body (otherwise the PR advertises receipt/memory absent from the diff), and so neither dirty file is later swept into an unrelated `git add -A` (land's dirty-tree guard ignores `.flow`):
 
 ```bash
 if [ "$QA_ADVANCED" = "true" ]; then
-  git -C "$REPO_ROOT" add -- "$QA_RECEIPT"
-  git -C "$REPO_ROOT" diff --cached --quiet -- "$QA_RECEIPT" \
-    || git -C "$REPO_ROOT" commit -m "chore(flow): qa verdict $SELECTED_SPEC" -- "$QA_RECEIPT"
+  # Narrow pathspec — the receipt + QA's bug-memory tree; NEVER `git add -A`. In the
+  # autonomous flow the worker already committed everything else, so the only dirty
+  # paths here are QA's own outputs.
+  git -C "$REPO_ROOT" add -- "$QA_RECEIPT" "$REPO_ROOT/.flow/memory"
+  git -C "$REPO_ROOT" diff --cached --quiet -- "$QA_RECEIPT" "$REPO_ROOT/.flow/memory" \
+    || git -C "$REPO_ROOT" commit -m "chore(flow): qa verdict $SELECTED_SPEC" -- "$QA_RECEIPT" "$REPO_ROOT/.flow/memory"
 fi
 ```
 
-Narrow pathspec commit — only the receipt, never `git add -A`; a no-op when it is already committed (byte-identical regeneration makes no empty commit).
+A no-op when nothing changed (byte-identical regeneration makes no empty commit). The `chore(flow): qa verdict` subject is what the freshness peel above recognizes, so the commit doesn't make the receipt read stale.
 
 A missing/stale receipt (`QA_ADVANCED=false`) is the healthy-no-advance path (Phase 6 strike), NOT a crash — the QA skill ran but produced no fresh verdict (e.g. it errored before writing). **Don't-thrash + non-fatal:** pilot is single-tick and the freshness gate prevents re-classifying `qa` once a fresh receipt exists, so the same spec is bounded to one qa pass per branch-head; the interactive work↔qa re-pass (out of scope here — autonomous surfaces + proceeds) is bounded by the existing strike/auto-block reflexes (2 strikes → unready). `BLOCKED` from a missing app is a fresh terminal outcome (it advances), never a failed loop.
 
