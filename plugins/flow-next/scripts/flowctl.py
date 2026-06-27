@@ -4547,6 +4547,30 @@ def find_spec_json_path(flow_dir: Path, spec_id: str) -> Path:
     return get_specs_json_write_dir(flow_dir) / f"{spec_id}.json"
 
 
+def find_spec_md_path(flow_dir: Path, spec_id: str) -> Path:
+    """Locate an existing spec MARKDOWN file across both legacy + canonical paths.
+
+    The spec markdown is canonically at `.flow/specs/<id>.md`. A pre-1.0 SPLIT
+    layout kept spec metadata JSON under `.flow/epics/` while the markdown still
+    lived under `.flow/specs/` — so deriving the `.md` path by swapping the JSON
+    file's suffix (`spec_file.with_suffix(".md")`) is WRONG for that layout: it
+    would point at `.flow/epics/<id>.md` where the markdown never lives. Probe
+    the canonical `specs/` location first, fall back to the legacy `epics/`
+    sibling (the rare fully-legacy repo that colocated both), else return the
+    canonical path so callers can use it in error messages / existence checks.
+
+    Reads (e.g. the `hasSpec` fact in `cmd_ready_all`) should use this helper,
+    never `spec_file.with_suffix(".md")`.
+    """
+    canonical = flow_dir / SPECS_DIR / f"{spec_id}.md"
+    legacy = flow_dir / EPICS_DIR / f"{spec_id}.md"
+    if canonical.exists():
+        return canonical
+    if legacy.exists():
+        return legacy
+    return canonical
+
+
 def _spec_tracker_fields(path: Path) -> tuple[Optional[str], Optional[str]]:
     """Read ``(tracker.identifier, tracker.id)`` from a spec JSON, lowercasing
     the identifier. Returns ``(None, None)`` for unparseable / unlinked specs.
@@ -15331,8 +15355,12 @@ def cmd_ready_all(args: argparse.Namespace) -> None:
 
         # hasSpec reflects whether the spec MARKDOWN exists — a .json sidecar can
         # exist without the .md, so a specless local row surfaces the needs-spec
-        # gap (matching tracker-only items, hasSpec=False).
-        has_spec_md = spec_file.with_suffix(".md").exists()
+        # gap (matching tracker-only items, hasSpec=False). Resolve via the
+        # canonical spec-markdown path resolver, NOT `spec_file.with_suffix(".md")`:
+        # a pre-1.0 split-layout spec keeps its .json under `.flow/epics/` while
+        # the .md still lives under `.flow/specs/`, so a suffix-swap would look in
+        # `epics/` and falsely read hasSpec=False (completion-review finding).
+        has_spec_md = find_spec_md_path(flow_dir, spec_id).exists()
 
         rows.append(
             {

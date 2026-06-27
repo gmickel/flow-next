@@ -217,6 +217,33 @@ class ReadyAllTestCase(_FlowctlTmpRepo):
         # Specless sidecar must read False so backlog mode surfaces needs-spec.
         self.assertFalse(row["hasSpec"])
 
+    def test_has_spec_legacy_split_layout(self) -> None:
+        # Pre-1.0 SPLIT layout: spec metadata JSON under `.flow/epics/`, the spec
+        # MARKDOWN still under `.flow/specs/`. hasSpec must resolve the .md via
+        # the canonical spec-markdown resolver, NOT `spec_file.with_suffix(".md")`
+        # (which would look in `epics/<id>.md` — where the .md never lives — and
+        # falsely read hasSpec=False). Thread PRRT_kwDOQvZwh86Mvx7r.
+        sid = self._spec_create("Alpha")
+        flow = self.tmpdir / ".flow"
+        epics = flow / "epics"
+        epics.mkdir(exist_ok=True)
+        # Move ONLY the JSON sidecar to the legacy epics/ dir; leave the .md in
+        # specs/ (the split layout). The .md still exists, so hasSpec=True.
+        (flow / "specs" / f"{sid}.json").rename(epics / f"{sid}.json")
+        self.assertTrue((flow / "specs" / f"{sid}.md").exists())
+        self.assertFalse((flow / "specs" / f"{sid}.json").exists())
+        # Sanity: the resolver locates the .md under specs/ given the epics/ json.
+        md = self.flowctl.find_spec_md_path(flow, sid)
+        self.assertEqual(md, flow / "specs" / f"{sid}.md")
+        self.assertTrue(md.exists())
+        # The bug: with `with_suffix(".md")` this would read False.
+        row = next(r for r in self._ready_all()["specs"] if r["id"] == sid)
+        self.assertTrue(row["hasSpec"])
+        # And once the .md is removed (specless legacy sidecar) it reads False.
+        (flow / "specs" / f"{sid}.md").unlink()
+        row = next(r for r in self._ready_all()["specs"] if r["id"] == sid)
+        self.assertFalse(row["hasSpec"])
+
     def test_local_ready_flag_and_signal(self) -> None:
         sid = self._spec_create("Alpha")
         # Not ready by default.
