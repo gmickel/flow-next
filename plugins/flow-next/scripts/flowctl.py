@@ -1240,6 +1240,20 @@ def get_default_config() -> dict:
         # .flow/artifacts/<spec-id>/{spec,pr}.html (never timestamped —
         # Lavish keys sessions on the absolute path).
         "artifacts": {"html": {"enabled": False}},
+        # fn-72.2 — optional QA pipeline stage gate, seeded so
+        # `config get pipeline.qa` returns the enum string "off" (NOT null)
+        # on a fresh repo via the defaults MERGE. STRING-ENUM (off|on), NOT a
+        # bool: the pilot gate read is the canonical 3-clause guard
+        # (value != "off" && value != "null"), so the activating value is the
+        # literal "on" — bool `true` is NOT recognized (memory
+        # docs-activation-command-for-string-enum). OFF by default: pilot's
+        # stage set + behavior are byte-for-byte unchanged with it off. This
+        # is NOT in _INIT_UNMATERIALIZED_BLOCKS — unlike the artifacts block
+        # there is no setup-ceremony include-only-if-unset question gated on a
+        # `--raw` null probe, so it materializes on init like work.*/land.*.
+        # flowctl only stores/serves the knob; the QA stage is host-agent
+        # skill wiring (no new subcommand/engine).
+        "pipeline": {"qa": "off"},
     }
 
 

@@ -106,6 +106,17 @@ case "$REVIEW_BACKEND" in
 esac
 ```
 
+Resolve the optional QA-stage gate (fn-72). The canonical 3-clause guard — `on` iff the value is neither `off` nor `null` (a string-enum knob, default `off`; the activating value is the literal `on`, NOT bool `true`). This is read once here and reused by the all-done classification:
+
+```bash
+QA_GATE="$($FLOWCTL config get pipeline.qa --json | jq -r '.value')"
+if [ "$QA_GATE" != "off" ] && [ "$QA_GATE" != "null" ]; then
+  QA_STAGE_ENABLED=1
+else
+  QA_STAGE_ENABLED=0
+fi
+```
+
 Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins:
 
 | Condition | Stage |
@@ -115,11 +126,37 @@ Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins:
 | any task is `todo` or `blocked` (canonical task statuses are `todo`, `in_progress`, `blocked`, `done`) | `work` |
 | the only non-`done` tasks are `in_progress` own/unassigned (other-actor claims were already skipped at SELECT) | `NEEDS_HUMAN`, reason `stale in-progress claim — work's ready-driven loop cannot resume it` |
 | all tasks done and `completion_review_status != "ship"` and review backend is configured | `work` |
-| all tasks done and completion is ship-or-ungated | PR probe, then `make-pr` (no PR), defer-to-land (open PR), or `NEEDS_HUMAN` (closed-unmerged / missing-branch / merged-but-open-spec) |
+| all tasks done, completion is ship-or-ungated, **`QA_STAGE_ENABLED=1`, and no *fresh* `qa_verdict` receipt exists** (R1/R1b — see the freshness probe below) | `qa` |
+| all tasks done and completion is ship-or-ungated (QA gate off, or a fresh `qa_verdict` receipt already exists) | PR probe, then `make-pr` (no PR), defer-to-land (open PR), or `NEEDS_HUMAN` (closed-unmerged / missing-branch / merged-but-open-spec) |
 
 A spec whose only remaining tasks are `blocked` still classifies as `work`; if work cannot advance it, the healthy-no-advance strike path handles it. An in-progress-only spec is different: work's Phase 3a drives off `flowctl ready --spec`, which never returns an `in_progress` task, so dispatching would burn strikes or wrongly enter the completion-review path — the stale-claim `NEEDS_HUMAN` is crash-class (no dispatch, no strike).
 
 Review backend `none` or `ASK` skips both plan-review and completion-review gates; pilot never deadlocks on a gate that cannot run.
+
+### QA-stage freshness probe (R1b — only when `QA_STAGE_ENABLED=1`)
+
+When the QA gate is on, the all-done juncture classifies `qa` **only when no *fresh* `qa_verdict` receipt exists** for the spec. Pilot is single-tick: without this idempotence gate it would re-classify `qa` forever and never reach make-pr. The receipt lives at the committed path `.flow/review-receipts/qa-<spec-id>.json` (the QA skill's default; task .1 added the `head_sha` field). A receipt is **fresh** iff all three hold:
+
+1. `receipt.id == <spec-id>` (the receipt's existing spec-id field is `id`, not `spec`).
+2. `receipt.head_sha == git rev-parse "$BRANCH_NAME"` — the spec **branch** head. Compute against the branch, NOT `HEAD`: a resumed or manual tick may sit on another branch at classify time (a prior tick's make-pr leaves the worktree on a PR branch). After the Phase 3 checkout, `HEAD` equals the branch head, so the Phase 5 post-dispatch verify can use `HEAD`.
+3. `receipt.qa_outcome` is a valid terminal value (`SHIP`, `NEEDS_WORK`, `NA`, or `BLOCKED`).
+
+Resolve `BRANCH_NAME` here (the qa classification is reached *before* the PR-probe block that normally resolves it) and read the receipt with a single `jq` so a missing/malformed file degrades to never-fresh:
+
+```bash
+[[ -n "${BRANCH_NAME:-}" ]] || BRANCH_NAME="$(printf '%s\n' "$SPEC_JSON" | jq -r '.branch_name // empty')"
+QA_RECEIPT="$REPO_ROOT/.flow/review-receipts/qa-$SELECTED_SPEC.json"
+BRANCH_SHA="$(git -C "$REPO_ROOT" rev-parse --verify --quiet "$BRANCH_NAME" 2>/dev/null || echo "")"
+QA_FRESH=0
+if [ -n "$BRANCH_SHA" ] && [ -f "$QA_RECEIPT" ]; then
+  QA_FRESH="$(jq -r --arg id "$SELECTED_SPEC" --arg sha "$BRANCH_SHA" '
+    if (.id == $id and .head_sha == $sha
+        and (.qa_outcome | IN("SHIP","NEEDS_WORK","NA","BLOCKED")))
+    then 1 else 0 end' "$QA_RECEIPT" 2>/dev/null || echo 0)"
+fi
+```
+
+`QA_STAGE_ENABLED=1` **and** `QA_FRESH=0` ⇒ classify `qa`. A fresh receipt (`QA_FRESH=1`), or the gate off, falls through to the make-pr PR probe below — never re-classifies `qa`. (Echo `qa_gate=<on|off> qa_fresh=<0|1>` in the classification report so a transcript-only driver sees why the juncture chose `qa` vs `make-pr`.)
 
 The all-done PR probe is the only gh touch in classification. Resolve the spec's `branch_name` first (Phase 3 reuses the same `BRANCH_NAME`):
 
@@ -165,6 +202,8 @@ Matrix:
 |---|---|
 | branch exists and stage is `work` | `git checkout <branch_name>`, dispatch work with `--branch=current` |
 | branch absent and stage is first `work` tick | dispatch work with `--branch=new`; under autonomy work names it exactly the spec's `branch_name` (fn-59.2 contract), so later ticks find it |
+| stage is `qa` and branch exists | `git checkout <branch_name>`; QA drives the running app against this branch's build (never the default branch — the app under test is the spec's build). After checkout `HEAD` equals the branch head, so the Phase 5 post-dispatch freshness verify uses `HEAD`. |
+| stage is `qa` and branch absent | `NEEDS_HUMAN`, reason `all tasks done but spec branch missing — inconsistent state` (all-done with no branch is the same inconsistency as the make-pr row; QA never silently skips) |
 | stage is `make-pr` and branch exists | `git checkout <branch_name>`; make-pr auto-detects the spec from the branch |
 | stage is `make-pr` and branch absent | `NEEDS_HUMAN`, reason `all tasks done but spec branch missing — inconsistent state` |
 | stage is `plan` or `plan-review` | `git checkout` the default branch (local `main`, else `master`) |
@@ -180,6 +219,7 @@ Record the pre-dispatch evidence snapshot before invoking the stage skill:
 - `plan`: task count from `$FLOWCTL tasks --spec <id> --json`.
 - `plan-review`: `plan_review_status` from `$FLOWCTL show <id> --json`.
 - `work`: per-task id/status list, spec status, and `completion_review_status`.
+- `qa`: absence of a fresh `qa_verdict` receipt (`QA_FRESH=0`), already proven by the classify-time freshness probe, plus the spec-branch head `BRANCH_SHA` the post-dispatch verify compares against.
 - `make-pr`: no OPEN PR for the branch, already proven by the all-done probe.
 
 Dispatch exactly one existing stage skill (slash-command invocation), with `mode:autonomous` and `FLOW_AUTONOMOUS=1` semantics for any process-level work it starts:
@@ -187,6 +227,7 @@ Dispatch exactly one existing stage skill (slash-command invocation), with `mode
 - `plan`: `/flow-next:plan <spec-id> mode:autonomous --research=<grep|rp> --depth=<level> --review=<backend>`
 - `plan-review`: `/flow-next:plan-review <spec-id> --review=<backend>`
 - `work`: `/flow-next:work <spec-id> mode:autonomous --branch=<current|new> --review=<backend>`
+- `qa`: `/flow-next:qa <spec-id> mode:autonomous` — the QA skill derives scenarios from the spec, reads work's evidence, drives the **local running app**, and writes the `qa_verdict` receipt. `mode:autonomous` suppresses all prompts (the QA skill's Autonomous-mode gate) so the loop can't hang on an `AskUserQuestion`. Pilot dispatches the existing skill and never re-implements its logic; routing on the resulting `qa_outcome` is Phase 5.
 - `make-pr`: `/flow-next:make-pr <spec-id> mode:autonomous`
 
 Setter convention call-out: plan-review sets `plan_review_status` itself in its workflow Phase 4, and pilot only re-reads the field. Completion review is reached through work's Phase 3g; work invokes spec-completion-review, then the caller sets `completion_review_status=ship`. Pilot must not dispatch completion review directly.
@@ -231,6 +272,46 @@ completion_review_status.after=<value>
 advanced=<true|false>
 ```
 
+For `qa`, advancement is judged from the **post-dispatch `qa_verdict` receipt** — observed state, never the QA skill's narration. The QA stage **advances on every terminal outcome**: the gate routes on `qa_outcome` (the four-outcome field), NOT the Ralph-guard `verdict` projection (the QA skill projects `BLOCKED→verdict=NEEDS_WORK`, so reading `verdict` would wrongly conflate "couldn't verify" with "found problems"). QA is advisory — it never hard-blocks the build loop; the human reviewer + the land gate act on its findings.
+
+Read the receipt fresh after dispatch (here `HEAD` is correct — Phase 3 checked out the spec branch, so `HEAD` equals the branch head):
+
+```bash
+QA_RECEIPT="$REPO_ROOT/.flow/review-receipts/qa-$SELECTED_SPEC.json"
+HEAD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
+QA_OUTCOME=""
+QA_RECEIPT_SHA=""
+QA_ADVANCED=false
+if [ -f "$QA_RECEIPT" ]; then
+  QA_OUTCOME="$(jq -r '.qa_outcome // ""' "$QA_RECEIPT" 2>/dev/null || echo "")"
+  QA_RECEIPT_SHA="$(jq -r '.head_sha // ""' "$QA_RECEIPT" 2>/dev/null || echo "")"
+  # Advance ONLY on a FRESH receipt: id matches, head_sha == HEAD, and the
+  # outcome is a valid terminal value. A missing/stale receipt ⇒ advanced=false
+  # (the QA skill never wrote a fresh verdict — do not advance on narration).
+  QA_ADVANCED="$(jq -r --arg id "$SELECTED_SPEC" --arg sha "$HEAD_SHA" '
+    if (.id == $id and .head_sha == $sha
+        and (.qa_outcome | IN("SHIP","NEEDS_WORK","NA","BLOCKED")))
+    then "true" else "false" end' "$QA_RECEIPT" 2>/dev/null || echo false)"
+fi
+```
+
+Echo the evidence block:
+
+```text
+Evidence:
+stage=qa
+qa_outcome=<SHIP|NEEDS_WORK|NA|BLOCKED|->
+head_sha=<receipt head_sha or ->
+advanced=<true|false>
+```
+
+Routing on the **fresh** `qa_outcome` (`QA_ADVANCED=true`):
+
+- `SHIP` / `NA` / `BLOCKED` → advance cleanly to the next tick's make-pr (BLOCKED = no local app reachable / NA = no driveable UI; both advance — QA is the optional augmenting pass, never a wedge).
+- `NEEDS_WORK` → **still advance** (the build loop never stalls on QA). The findings ride the draft PR: make-pr surfaces them from the receipt (its §2.x QA-summary section), and the QA skill already filed them to the bug-memory track + (when the bridge is active) the tracker comment. A `NEEDS_WORK` qa stage is an `ADVANCED` verdict, not `BLOCKED`/`NEEDS_HUMAN`.
+
+A missing/stale receipt (`QA_ADVANCED=false`) is the healthy-no-advance path (Phase 6 strike), NOT a crash — the QA skill ran but produced no fresh verdict (e.g. it errored before writing). **Don't-thrash + non-fatal:** pilot is single-tick and the freshness gate prevents re-classifying `qa` once a fresh receipt exists, so the same spec is bounded to one qa pass per branch-head; the interactive work↔qa re-pass (out of scope here — autonomous surfaces + proceeds) is bounded by the existing strike/auto-block reflexes (2 strikes → unready). `BLOCKED` from a missing app is a fresh terminal outcome (it advances), never a failed loop.
+
 For `make-pr`, advancement means a gh-confirmed OPEN PR URL for the branch. There is no flowctl transition for make-pr, and a successful PR tick must never record a strike:
 
 ```bash
@@ -269,6 +350,8 @@ Then print the terminal line:
 ```text
 PILOT_VERDICT=ADVANCED spec=<id> stage=<stage> reason="<what advanced>"
 ```
+
+For a `qa` stage the reason names the fresh `qa_outcome` so a transcript-only driver sees the result without re-reading the receipt, e.g. `reason="qa pass: qa_outcome=NEEDS_WORK — findings surfaced on draft PR"` or `reason="qa pass: qa_outcome=BLOCKED — no local app reachable, advancing"`. Every fresh terminal `qa_outcome` (SHIP/NEEDS_WORK/NA/BLOCKED) is an `ADVANCED` — QA is advisory and never `BLOCKED`/`NEEDS_HUMAN` on its own outcome; only a *missing/stale* receipt routes to the healthy-no-advance strike below.
 
 On healthy-but-no-advance, record a strike with count, stage, reason, and timestamp:
 
