@@ -21038,37 +21038,52 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
     run_dir = repo_root / PILOT_RUNS_DIR_REL
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Per-id monotonic tick = (#existing rows whose STORED id == this raw id)
-    # + 1. The slug glob is a cheap pre-filter; we then read each candidate's
-    # `id` and count EXACT raw-id matches so two distinct ids that normalize to
-    # the same slug (e.g. "a/b" and "a-b" → "a-b") never share a counter
-    # (review finding #1). A row whose JSON can't be read is skipped — it can't
-    # belong to this id.
-    tick = 1
-    for cand in run_dir.glob(f"pilot-{id_slug}-*.json"):
-        try:
-            cand_data = json.loads(cand.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            continue
-        if isinstance(cand_data, dict) and cand_data.get("id") == raw_id:
-            tick += 1
-
-    row = {
-        "tick": tick,
-        "id": raw_id,
-        "action": action,
-        "stage": stage,
-        "costTokens": getattr(args, "cost_tokens", None),
-        "timestamp": now_iso(),
-    }
-
-    # Filename: slug + tick + timestamp + a short content-hash of the RAW id, so
-    # two distinct ids sharing a slug (or two appends landing on the same tick +
-    # timestamp) never collide on the same path and clobber each other's row.
-    ts_slug = now_iso().replace(":", "").replace("-", "").replace(".", "")
+    # Filename hash of the RAW id: stamped into both the lock-file name and the
+    # row-file name so two distinct ids that normalize to the same slug never
+    # share a lock OR clobber each other's path (review finding #1).
     id_hash = hashlib.sha1(raw_id.encode("utf-8")).hexdigest()[:8]
-    row_path = run_dir / f"pilot-{id_slug}-{tick}-{ts_slug}-{id_hash}.json"
-    atomic_write_json(row_path, row)
+
+    # The count+write is serialized under a per-id exclusive flock so two
+    # concurrent same-id appends can't both read N rows and both write tick=N+1
+    # (review finding #1 follow-up — duplicate-tick race). The lock is keyed by
+    # the id-hash (exact per raw id, not per slug); on Windows _flock is a no-op
+    # (single-machine use, same contract as lock_task / migrate locks). The
+    # lock file is a sibling, never itself a `pilot-*.json` row, so neither the
+    # count glob nor the summary glob ever sees it.
+    lock_path = run_dir / f".pilot-{id_hash}.lock"
+    with open(lock_path, "w", encoding="utf-8") as lock_f:
+        _flock(lock_f, LOCK_EX)
+        try:
+            # Per-id monotonic tick = (#existing rows whose STORED id == this raw
+            # id) + 1. The slug glob is a cheap pre-filter; we then read each
+            # candidate's `id` and count EXACT raw-id matches so two distinct ids
+            # that normalize to the same slug never share a counter. A row whose
+            # JSON can't be read is skipped — it can't belong to this id.
+            tick = 1
+            for cand in run_dir.glob(f"pilot-{id_slug}-*.json"):
+                try:
+                    cand_data = json.loads(cand.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    continue
+                if isinstance(cand_data, dict) and cand_data.get("id") == raw_id:
+                    tick += 1
+
+            row = {
+                "tick": tick,
+                "id": raw_id,
+                "action": action,
+                "stage": stage,
+                "costTokens": getattr(args, "cost_tokens", None),
+                "timestamp": now_iso(),
+            }
+
+            # Filename: slug + tick + timestamp + id-hash, unique per write even
+            # for slug-colliding ids or two appends in the same timestamp tick.
+            ts_slug = now_iso().replace(":", "").replace("-", "").replace(".", "")
+            row_path = run_dir / f"pilot-{id_slug}-{tick}-{ts_slug}-{id_hash}.json"
+            atomic_write_json(row_path, row)
+        finally:
+            _flock(lock_f, LOCK_UN)
 
     if args.json:
         json_output(

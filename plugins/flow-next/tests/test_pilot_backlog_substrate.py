@@ -339,6 +339,51 @@ class PilotLogTestCase(_FlowctlTmpRepo):
         self.assertEqual(ab_slash, [1, 2])
         self.assertEqual(ab_dash, [1])  # own counter, not 3
 
+    def test_concurrent_same_id_appends_get_distinct_ticks(self) -> None:
+        # Two concurrent same-id appends must NOT both write tick=N+1 — the
+        # per-id flock around count+write serializes them (review finding #1
+        # follow-up). Use subprocess so the OS-level flock is actually
+        # exercised (in-process threads share the same fd semantics on some
+        # platforms). Shell the dogfood flowctl.py in this repo's throwaway
+        # .flow/ (cwd is already chdir'd there by setUp).
+        import concurrent.futures
+        import subprocess
+
+        flowctl_py = str(DOGFOOD_FLOWCTL_PY)
+
+        def _append_once(_n: int) -> int:
+            return subprocess.run(
+                [
+                    sys.executable, flowctl_py, "pilot-log", "append",
+                    "--id", "fn-race", "--action", "advanced", "--stage", "work",
+                    "--json",
+                ],
+                cwd=str(self.tmpdir), capture_output=True, text=True,
+            ).returncode
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            codes = list(ex.map(_append_once, range(8)))
+        self.assertTrue(all(c == 0 for c in codes), codes)
+
+        rows = [r for r in self._summary()["rows"] if r["id"] == "fn-race"]
+        ticks = sorted(r["tick"] for r in rows)
+        # Eight appends → eight rows with the eight distinct ticks 1..8 (no
+        # duplicates, no gaps).
+        self.assertEqual(ticks, list(range(1, 9)))
+
+    def test_lock_file_invisible_to_summary_and_count(self) -> None:
+        # The per-id lock file must never be globbed as a row by summary (or by
+        # the append count) — it is a dot-prefixed .lock sibling.
+        self._append(id="fn-1", action="triaged", stage="plan")
+        run_dir = self.tmpdir / ".flow" / "pilot-runs"
+        locks = list(run_dir.glob(".pilot-*.lock"))
+        self.assertTrue(locks, "expected a per-id lock file to exist")
+        # summary sees exactly the one real row, not the lock.
+        self.assertEqual(self._summary()["count"], 1)
+        # A second append for the same id is tick 2 (lock not counted as a row).
+        out = self._append(id="fn-1", action="advanced", stage="work")
+        self.assertEqual(out["tick"], 2)
+
     def test_summary_tolerates_malformed_non_int_tick(self) -> None:
         # A hand-edited/corrupt row carrying a non-int tick must not crash the
         # summary sort with a str-vs-int TypeError (review finding #2).
