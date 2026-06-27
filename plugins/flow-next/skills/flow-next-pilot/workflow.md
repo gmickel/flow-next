@@ -199,10 +199,22 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 ⇒ inspection-only: no tracker-sync dispatch, f
 
 6. **1f — pick the top actionable item.** The first dep-ordered candidate that (a) carries an explicit readiness signal and (b) is not parked becomes `SUBJECT_ID` — the one item to triage in Phase 1.6. **A signalled item is selectable even when a dependency is unsatisfied** (it routes to `BLOCKED` in Phase 1.6, surfacing the dep wait — never dropped to `NO_WORK`). Only unsignalled items (never in the pool) and parked-unanswered ones (1d) are excluded.
 
-**Invariant #3 — single-tick — is enforced here.** Selection sets exactly ONE `SUBJECT_ID`; there is no `for item in candidates` advance/park loop downstream. Resolve `SPEC_PATH` (the spec file path when spec-backed, else **empty** for a tracker-only item) and `HAS_SPEC`, then hard-assert the count:
+7. **1g — apply pilot's ready-mode claim / collision / re-bless checks to the picked candidate (R2).** Backlog SELECT **reuses the SAME checks as Phase 1 Pass 2** — it does not skip them. Phase 1.6 CLASSIFY (and the downstream `NEEDS_HUMAN` stale-claim row) **assumes other-actor `in_progress` claims were already skipped at SELECT**, so they MUST be applied here, before triage. For a **spec-backed** `SUBJECT_ID` (a tracker-only item has no flow tasks, so this step is a no-op for it):
+
+   - **Collision avoidance (Phase 1 Pass 2 rule 2, verbatim):** load `$FLOWCTL tasks --spec "$SUBJECT_ID" --json`; for every task with `status == "in_progress"`, fetch `$FLOWCTL show <task-id> --json` and read its `assignee`. Resolve this session's actor exactly as `flowctl.get_actor()` does (`$FLOW_ACTOR` → `git config user.email` → `git config user.name` → `$USER` → `unknown`; when it bottoms out at `unknown`, any non-empty assignee counts as another actor). **If a task is claimed by another actor, this candidate is NOT selectable** — drop it and advance to the next dep-ordered candidate (back to 1f), recording `claimed by other actor: <task-id>` in the skip table. Never select a spec another actor is mid-flight on.
+   - **Strikes / re-bless (Phase 1 Pass 2 rule 3, verbatim):** a ledger entry with `count >= 2` normally means the spec was unreadied after failure; a candidate that is **ready again** has been human re-blessed — clear that ledger entry (write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, then atomic `jq` plus `mv`) and treat the spec as fresh. Under `--dry-run`, do not write — report the entry as would-clear instead.
+   - **No gh here** (Phase 1 Pass 2 rule 4) — PR state belongs exclusively to the all-done CLASSIFY branch.
+
+   These are pilot's existing ready-mode SELECT checks — reuse them, do not reinvent. The dependency check is already covered by 1e (topo-sort) + the `dep-unsatisfied` triage class; 1g adds the claim + re-bless halves so the backlog candidate reaching Phase 1.6 has the same selection discipline a ready-mode candidate does.
+
+**Invariant #3 — single-tick — is enforced here.** Selection sets exactly ONE `SUBJECT_ID`; there is no `for item in candidates` advance/park loop downstream. **Assign `SELECTED_SUBJECTS` to the chosen subject** (the single id 1f/1g settled on, or empty when the pool yielded none), resolve `SPEC_PATH` (the spec file path when spec-backed, else **empty** for a tracker-only item) and `HAS_SPEC`, then hard-assert the count:
 
 ```bash
-# SELECTED_SUBJECTS = the chosen subject id(s) — selection must yield exactly one.
+# SELECTED_SUBJECTS = the chosen subject id — selection yields exactly one (or
+# empty when no candidate survived 1f/1g). Assign it from SUBJECT_ID here so the
+# single-tick guard below counts the REAL selection (an unset var would always
+# count 0 and wrongly fall through to NO_WORK even after a subject was picked).
+SELECTED_SUBJECTS="${SUBJECT_ID:-}"
 SELECTED_COUNT="$(printf '%s\n' "$SELECTED_SUBJECTS" | grep -c . )"
 if [ "$SELECTED_COUNT" -gt 1 ]; then
   echo "Evidence: backlog selection yielded $SELECTED_COUNT subjects — single-tick contract violated"
@@ -211,7 +223,7 @@ if [ "$SELECTED_COUNT" -gt 1 ]; then
 fi
 ```
 
-A `SELECTED_COUNT` of 0 falls through to the terminal split below (`NO_WORK`); exactly 1 proceeds to Phase 1.6.
+A `SELECTED_COUNT` of 0 (empty `SUBJECT_ID` — no candidate survived 1f/1g) falls through to the terminal split below (`NO_WORK`); exactly 1 proceeds to Phase 1.6.
 
 Fall through to the existing terminal split **only when the pool is genuinely empty of a selectable candidate** — verbatim, backlog mode adds neither verdict:
 

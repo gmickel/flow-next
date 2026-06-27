@@ -185,10 +185,31 @@ state-changing terminal (R10 — a live triage never ends on a no-op). Dep-block
 **not** a reason to skip selection; only a `status=open` **parked** question
 (already surfaced, waiting on a human — 1d) removes a candidate from the pool.
 
+### 1g — Apply pilot's ready-mode claim / collision / re-bless checks
+
+Backlog SELECT **reuses the SAME checks as ready-mode SELECT** (`workflow.md` Phase 1
+Pass 2) on the picked candidate — it does not skip them. Phase 2 CLASSIFY (and its
+stale-claim `NEEDS_HUMAN` row) **assumes other-actor `in_progress` claims were
+already skipped at SELECT**, so they must run here, before triage:
+
+- **Collision avoidance** — for a spec-backed candidate, any task `in_progress` and
+  assigned to **another** actor makes the candidate non-selectable: drop it and take
+  the next dep-ordered candidate (record `claimed by other actor` in the skip table).
+  Resolve the actor exactly as `flowctl.get_actor()` does. (A tracker-only item has
+  no flow tasks — this is a no-op for it.)
+- **Strikes / re-bless** — a `count >= 2` ledger entry on a candidate that is **ready
+  again** has been human re-blessed: clear the entry and treat the spec as fresh
+  (skip the write under `--dry-run`, report would-clear instead).
+- **No gh here** — PR state belongs only to the all-done CLASSIFY branch.
+
+Reuse pilot's existing ready-mode checks — do not reinvent them. (The dependency
+half is already covered by 1e's topo-sort + the `dep-unsatisfied` triage class.)
+
 So the **only** items excluded from selection are the silently-skipped unsignalled
-items (never in the pool) and the parked-and-unanswered ones (1d). Fall through to
-pilot's existing terminal split **only when the pool is genuinely empty of a
-selectable, reportable candidate**:
+items (never in the pool), the parked-and-unanswered ones (1d), and any candidate an
+**other actor is mid-flight on** (1g collision). Fall through to pilot's existing
+terminal split **only when the pool is genuinely empty of a selectable, reportable
+candidate**:
 
 - **`NO_WORK`** — no signalled, unparked candidate exists at all (and no dep wait to
   report). A signalled-but-dep-blocked candidate is *selectable*, so its presence
