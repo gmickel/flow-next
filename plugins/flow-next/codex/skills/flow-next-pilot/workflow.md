@@ -154,9 +154,17 @@ if [ -n "$BRANCH_SHA" ] && [ -f "$QA_RECEIPT" ]; then
  and (.qa_outcome | IN("SHIP","NEEDS_WORK","NA","BLOCKED")))
  then 1 else 0 end' "$QA_RECEIPT" 2>/dev/null || echo 0)"
 fi
+# An all-done spec with an OPEN PR belongs to land, not a re-run of QA — probe for it
+# HERE so defer-to-land wins over (re-)classifying `qa`. Without this, a QA gate enabled
+# AFTER make-pr ran (or a manually-created PR) would dispatch QA; the next tick then sees
+# the open PR and never runs make-pr, so the fresh QA outcome never reaches the PR.
+QA_OPEN_PR=0
+if [ -n "$BRANCH_NAME" ]; then
+ QA_OPEN_PR="$(gh pr list --head "$BRANCH_NAME" --state open --json number --jq 'length' 2>/dev/null || echo 0)"
+fi
 ```
 
-`QA_STAGE_ENABLED=1` **and** `QA_FRESH=0` ⇒ classify `qa`. A fresh receipt (`QA_FRESH=1`), or the gate off, falls through to the make-pr PR probe below — never re-classifies `qa`. (Echo `qa_gate=<on|off> qa_fresh=<0|1>` in the classification report so a transcript-only driver sees why the juncture chose `qa` vs `make-pr`.)
+`QA_STAGE_ENABLED=1` **and** `QA_FRESH=0` **and** `QA_OPEN_PR=0` ⇒ classify `qa`. A fresh receipt (`QA_FRESH=1`), an **open PR** (`QA_OPEN_PR>0` → the all-done PR probe defers it to land), or the gate off, falls through to the make-pr PR probe below — never re-classifies `qa`. (Echo `qa_gate=<on|off> qa_fresh=<0|1>` in the classification report so a transcript-only driver sees why the juncture chose `qa` vs `make-pr`.)
 
 The all-done PR probe is the only gh touch in classification. Resolve the spec's `branch_name` first (Phase 3 reuses the same `BRANCH_NAME`):
 

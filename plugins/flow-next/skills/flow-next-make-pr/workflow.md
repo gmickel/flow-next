@@ -824,13 +824,16 @@ fi
 # keyed to the CODE head; Phase 1.5 may have already committed the pr.html artifact,
 # which advanced HEAD — so compare against the PRE-ARTIFACT head (HEAD^ when HEAD is the
 # artifact commit), never the post-artifact HEAD, or a fresh pass reads as stale.
-CODE_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+CUR_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+CODE_HEAD="$CUR_HEAD"
 if git -C "$REPO_ROOT" log -1 --format='%s' 2>/dev/null | grep -q '^chore(flow): pr artifact '; then
-  CODE_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD^)"
+  CODE_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD^)"   # pre-artifact code head
 fi
-# Fail CLOSED: a missing/empty head_sha, or one that doesn't match the code head, is STALE
-# (a SHIP/findings signal for a different commit) — treat as absent and omit the section.
-if [ "$QA_PRESENT" = "1" ] && { [ -z "$QA_HEAD_SHA" ] || [ "$QA_HEAD_SHA" != "$CODE_HEAD" ]; }; then
+# Fresh iff head_sha matches the code head (QA ran before make-pr's artifact commit) OR the
+# current HEAD (QA ran when the artifact was already at tip → it recorded the artifact SHA).
+# Fail CLOSED: a missing/empty head_sha, or one matching NEITHER, is STALE — omit the section.
+if [ "$QA_PRESENT" = "1" ] \
+   && { [ -z "$QA_HEAD_SHA" ] || { [ "$QA_HEAD_SHA" != "$CODE_HEAD" ] && [ "$QA_HEAD_SHA" != "$CUR_HEAD" ]; }; }; then
   QA_PRESENT=0
 fi
 ```

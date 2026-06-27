@@ -345,7 +345,7 @@ This task (fn-53.1) exercises the contract end-to-end on ≥1 derived scenario t
 
 ### 4.2 — BLOCKED proof receipt (R13 path — no live target)
 
-When no live deploy + driver is reachable, the proof point is still satisfied: it proves scenario derivation + the fn-51 dispatch handoff + the evidence-tuple plumbing — only the captured screenshot is absent. Emit a BLOCKED proof receipt and stop:
+When no live deploy + driver is reachable, the proof point is still satisfied: it proves scenario derivation + the fn-51 dispatch handoff + the evidence-tuple plumbing — only the captured screenshot is absent. Capture the transient proof-of-handoff under `.flow/tmp/`, then **set `QA_OUTCOME=BLOCKED` and fall through to §6.3 to write the committed `qa_verdict`** — do **not** stop here:
 
 ```bash
 mkdir -p .flow/tmp/qa-"$SPEC_ID"
@@ -356,6 +356,13 @@ cat > .flow/tmp/qa-"$SPEC_ID"/proof-receipt.json <<EOF
   "fn51_handoff": "read-and-drive contract exercised; driver probe found <rung|none>",
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)" }
 EOF
+# Route to §6.3 — the committed qa_verdict is what the pilot stage advances on (R6
+# BLOCKED→advance). Writing ONLY the transient .flow/tmp/ proof, with no
+# .flow/review-receipts/qa-<spec>.json, leaves the pilot stage with no fresh receipt
+# → it strikes/unreadies the spec instead of moving on to make-pr. NEVER stop here.
+QA_OUTCOME="BLOCKED"
+BLOCKED_REASON="<no live deploy reachable | no driver available>"
+# → fall through to Phase 6.3: write the BLOCKED qa_verdict, then exit clean.
 ```
 
 Only re-evaluate the approach if **derivation** or the **fn-51 handoff** itself fails — a missing live target is an expected, surfaced limitation, not a thesis failure.
