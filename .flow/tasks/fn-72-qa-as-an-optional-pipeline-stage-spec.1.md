@@ -41,9 +41,8 @@ Make `/flow-next:qa` **evidence-aware**, **autonomous-safe**, and extend its `qa
 - [ ] Works for user-invoked `/flow-next:qa` too (shared executor, not pilot-only).
 
 ## Done summary
-TBD
-
+Made `/flow-next:qa` evidence-aware and autonomous-safe and extended its `qa_verdict` receipt. The SKILL.md mode-detection now parses `mode:autonomous`/`FLOW_AUTONOMOUS=1` and the workflow preamble computes a `NO_PROMPT` gate before any prompt path (undocumented target/accounts/base/missing-app → BLOCKED receipt + clean exit, never a prompt). The derive phase gains a conservative evidence-aware subtraction (§2.0) keyed on `tasks[].satisfies` + a deterministic `evidence.tests` command from the cognitive-aid payload — runtime/UI/integration AC always live-run, narration never subtracts. The receipt gains additive `head_sha`, `branch`, `rid_coverage`, and object-shaped `open_p0p1` fields; no new flowctl subcommand, artifact, or receipt file.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 8c945e9684f205ec31cc82b8bed4ee93f6bdc918
+- Tests: python3 -m unittest plugins.flow-next.tests.test_qa_receipt (17 tests, OK), python3 -m unittest discover -s plugins/flow-next/tests (1123 tests, OK, 2 skipped)
 - PRs:
