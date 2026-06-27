@@ -35,9 +35,8 @@ The **agentic heart**, in a NEW `references/backlog-mode.md` (R11). Host-agent w
 - [ ] no daemon / polling / trigger-handler prose — one smarter tick.
 
 ## Done summary
-TBD
-
+Authored references/backlog-mode.md — the agentic backlog-mode workflow for /flow-next:pilot: pull-before-scan wide selection (reconcile → flowctl ready --all ∪ tracker-sync list-open at exact tracker.readyState), mixed flow+tracker dep-ordering via the reused flow-next-deps jq topo-sort (cycle → ASKED/BLOCKED), agentic triage as the host agent's read (no scorer / regex grader / triageClass / second-LLM), full-auto default + sibling pilot.gateClasses force-gate, transport-blind Linear+GitHub v1, and the spec-first floor. One smarter tick — no daemon/loop/trigger; never authors specs, never merges, never promotes readiness. RP impl-review: NEEDS_WORK → SHIP (fixed a Phase-1f bug where a dep-blocked item wrongly fell through to NO_WORK instead of routing to BLOCKED).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f0d5f95c13d3b7402de6fbced8fe9cb9e64f2632, ab7f7bf67dc62d8d3ba02d1f05e0c59cb30e5ca4, f0db0359e431d8b34f767a3e2bd1e5aff37a3af4
+- Tests: impl-review (rp): NEEDS_WORK -> SHIP (1 cycle); R2/R3/R5/R11/R13/R17 all met (R11 doc-sweep deferred to .6), self-check greps: strategy-guard terms present; internal link to flow-next-deps/SKILL.md resolves
 - PRs:
