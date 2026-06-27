@@ -53,7 +53,61 @@ LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"
 
 Ledger schema: `{"<spec-id>": {"count": <n>, "stage": "<stage>", "reason": "<one line>", "ts": "<iso8601>"}}`. It is skill-owned scratch; no flowctl plumbing. Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
 
+## Phase 0.5 — Autonomy mode + backlog safety invariants (R1, R6)
+
+`PILOT_AUTONOMY` was resolved in SKILL.md Mode Detection (strict scalar `pilot.autonomy == "backlog"`, or the `--backlog` / `--auto` override). Branch the whole tick on it:
+
+```bash
+if [ "${PILOT_AUTONOMY:-ready}" != "backlog" ]; then
+  : # ready mode — Phases 1–6 run exactly as written; backlog-mode.md is never read.
+else
+  : # backlog mode — Phase 1.5 (wide SELECT) + Phase 3.5 (triage/ask) are active.
+fi
+```
+
+**Ready mode is byte-for-byte unchanged** — when the gate is off, none of the backlog blocks below run, `references/backlog-mode.md` is never loaded, and the verdict grammar/stage set match today's pilot exactly (R1).
+
+When `PILOT_AUTONOMY=backlog`, export the autonomy marker so **every** sub-skill and tracker-sync op this tick runs unattended (`AskUserQuestion` is never reached — R14), and **load [references/backlog-mode.md](references/backlog-mode.md)** now (the agentic SELECT/TRIAGE/ASK workflow):
+
+```bash
+export FLOW_AUTONOMOUS=1
+```
+
+### Backlog safety invariants — ENFORCING guards, not prose (R6)
+
+These four invariants are hard branches an executing agent (and a reviewer) reads as authoritative. They are not advisory prose — each one short-circuits a forbidden action with a parseable terminal line. They are in force for the entire backlog tick.
+
+**1. Never merge / never invoke land (R6).** The terminus is `make-pr` (draft). Backlog mode must never call `/flow-next:land`, `gh pr merge`, or any merge path. Guard the dispatch set: the only skills a backlog tick may invoke are the pipeline stages `{plan, plan-review, work, qa, make-pr}` plus the tracker-sync surfacing ops `{reconcile, list-open, question}`. Assert before any dispatch:
+
+```bash
+# DISPATCH_TARGET is the slash command about to be invoked (e.g. /flow-next:work).
+case "$DISPATCH_TARGET" in
+  /flow-next:land|*"pr merge"*|*"gh pr merge"*|/flow-next:resolve-pr)
+    echo "Evidence: backlog mode attempted a forbidden merge/land dispatch ($DISPATCH_TARGET)"
+    echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="backlog mode never merges — land/merge is human-gated (R6)"'
+    exit 1 ;;
+esac
+```
+
+**2. Never author a spec.** A tracker-only item (no flow spec) or a too-thin spec is **surfaced** as a "needs capture/interview" gap and parked (`ASKED`), never auto-written. Backlog mode never runs `capture`/`interview` and never writes a spec file from a bare ticket. The `ask` stage may **only** fill an obvious blank in an *existing* spec — it must never create a new spec path:
+
+```bash
+# Before the ask stage writes anything spec-side, assert the spec file already exists.
+# A tracker-only item has NO spec — its question parks in the tracker comment ALONE.
+if [ "$ASK_WRITES_SPEC" = "1" ] && [ ! -f "$SPEC_PATH" ]; then
+  echo "Evidence: backlog mode attempted to author a spec for a specless item ($SUBJECT_ID)"
+  echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=ask reason="backlog mode never authors specs — surfaced as needs capture/interview gap (R3/R4)"'
+  exit 1
+fi
+```
+
+**3. Single-tick — no within-tick multi-item loop.** One invocation triages exactly **one** selected item and resolves to exactly **one** terminal verdict. There is no `for item in candidates` loop that advances/parks more than one subject. The host `/loop` (Claude Code) or `/goal` (Codex) owns repetition. Selection (Phase 1.5) picks the single top dep-ordered actionable item; everything after acts on that one subject only.
+
+**4. Dep cycle / deadlock → surface, never spin.** When dep-ordering (Phase 1.5e) cannot place the selected item because its dep chain is circular or a dep is itself parked/unsatisfiable, the item routes to `ASKED` (surface the unresolvable dependency as an async question) — never re-picked tick after tick. Selection must terminate every tick.
+
 ## Phase 1 — SELECT (two-pass)
+
+**Ready mode only.** This two-pass selection runs when `PILOT_AUTONOMY=ready` (the default). In **backlog mode** it is REPLACED by Phase 1.5's wide SELECT (which reuses the same dependency / claim / re-bless checks but widens the candidate set and acts on the skip pile instead of dropping it to `NO_WORK`). Skip directly to Phase 1.5 when `PILOT_AUTONOMY=backlog`.
 
 Pass 1 enumerates minimal candidates:
 
@@ -89,6 +143,82 @@ The first candidate passing everything becomes `SELECTED_SPEC`. If none pass, ec
 ```text
 PILOT_VERDICT=NO_WORK spec=- stage=- reason="no ready spec with satisfied deps"
 ```
+
+## Phase 1.5 — SELECT (wide, backlog mode only) — R2, R3, R7, R16
+
+**Active only when `PILOT_AUTONOMY=backlog`.** Execute the SELECT workflow in [references/backlog-mode.md](references/backlog-mode.md) Phase 1 — it is the agentic floor scheduler, loaded only in this mode. The mechanics there are authoritative; the binding flow is:
+
+1. **1a — pull-before-scan (R16).** Run an unattended tracker-sync reconcile FIRST so readiness from the tracker is fresh this tick, then scan. This dispatches the tracker-sync `reconcile` op under the autonomy gate:
+
+   ```text
+   /flow-next:tracker-sync reconcile mode:autonomous     # FLOW_AUTONOMOUS=1; no-op when the bridge is inactive
+   ```
+
+   A no-op (inactive bridge) is fine — selection proceeds on the flow facts alone (R17 spec-first floor). It never blocks and never prompts (R14).
+
+2. **1b — scan the flow side (facts).** `READY_ALL_JSON="$($FLOWCTL ready --all --json)"` → the flow-side open specs with deterministic eligibility facts `{id, ready, readySignal, blockedBy, hasSpec}` (R8). flowctl returns **no** `triageClass` — the class is the agent's read in Phase 3.5.
+
+3. **1c — union the tracker side (`list-open`).** Union in the tracker-only promoted issues (no flow spec) via the tracker-sync `list-open` op:
+
+   ```text
+   /flow-next:tracker-sync list-open mode:autonomous     # no-ops when tracker.readyState unset → flow-ready specs only
+   ```
+
+   De-dup linked issues (they already appear on the flow side) by tracker id / `flow:<id>` label.
+
+4. **1d — skip parked subjects (R7/R15).** Skip any candidate carrying a `status=open` parked question — spec-backed: a `<!-- flow-next:question id=… status=open -->` anchor in `## Open Questions`; tracker-only: a `flow-next:question id=… status=open` comment with no matching `<!-- flow-next:answer id=… -->`. An anchor flipped to `status=answered` is no longer parked — it re-enters and is re-triaged this tick.
+
+5. **1e — dep-order the survivors.** Feed the flow `blockedBy` edges + the per-issue tracker `relation[]` edges (via the `listIssueRelations` read) into the **flow-next-deps jq topo-sort** — reuse it, build no new graph engine. A cycle/deadlock is never spun on (safety invariant #4): the un-placeable candidate routes to `ASKED` (Phase 3.5) or `BLOCKED`, never re-picked.
+
+6. **1f — pick the top actionable item.** The first dep-ordered candidate that (a) carries an explicit readiness signal and (b) is not parked becomes `SUBJECT_ID` — the one item to triage in Phase 3.5. **A signalled item is selectable even when a dependency is unsatisfied** (it routes to `BLOCKED` in Phase 3.5, surfacing the dep wait — never dropped to `NO_WORK`). Only unsignalled items (never in the pool) and parked-unanswered ones (1d) are excluded.
+
+**Single-tick (safety invariant #3):** select exactly ONE `SUBJECT_ID`; never loop over multiple. Resolve `SPEC_PATH` (the spec file path when spec-backed, else empty for a tracker-only item) and `HAS_SPEC` here for Phase 3.5.
+
+Fall through to the existing terminal split **only when the pool is genuinely empty of a selectable candidate** — verbatim, backlog mode adds neither verdict:
+
+- **`NO_WORK`** — no signalled, unparked candidate exists at all (and no dep wait to report):
+
+  ```text
+  PILOT_VERDICT=NO_WORK spec=- stage=- reason="no signalled, unparked backlog item"
+  ```
+
+- **`DEFERRED_TO_LAND`** — every all-done candidate has an open PR (the Phase 6 split, unchanged).
+
+A signalled-but-dep-blocked candidate is **selectable**, so its presence yields `BLOCKED` (Phase 3.5), never `NO_WORK`.
+
+## Phase 1.6 — TRIAGE the selected item (backlog mode only) — R3, R5, R8, R10
+
+**Active only when `PILOT_AUTONOMY=backlog`.** TRIAGE runs **in front of** CLASSIFY: a thin / specless / blocked item never reaches the pipeline. Execute [references/backlog-mode.md](references/backlog-mode.md) Phase 2 — the classification is the **host agent's READ** of the item (its spec body, or the tracker-only issue title+body), never a flowctl field, never a score, never a regex grader, never a second LLM. flowctl supplied facts (Phase 1.5b); the agent supplies judgment here.
+
+**Optional force-gate (R5).** Read the sibling key `pilot.gateClasses` (an array — NOT `pilot.autonomy.gate`). When the selected item matches a configured gate class (the agent's read, like triage — no scorer), route it to `ask` even when otherwise workable:
+
+```bash
+GATE_CLASSES="$($FLOWCTL config get pilot.gateClasses --json | jq -r '.value[]?' 2>/dev/null)"
+```
+
+An empty/unset `gateClasses` (the default) gates nothing — full-auto is unconditional.
+
+Classify `SUBJECT_ID` to exactly one class (first match wins) and route:
+
+| Class | The agent's read | Route → terminal |
+|---|---|---|
+| **workable** | signal present AND spec complete enough to act on (clear AC / R-IDs, an actionable next stage), AND not matching a force-gate class | **advance** — set `SELECTED_SPEC="$SUBJECT_ID"` and fall through to Phase 2 CLASSIFY → … → Phase 5 (the existing pipeline, unchanged); terminal `ADVANCED <id> <stage>` |
+| **ready-but-thin / ambiguous** | signal present, but the spec is missing/stub/too-thin to act on safely (or it matched a force-gate class) | **ask** (Phase 3.5) → `ASKED <id> (<n>)` |
+| **needs-spec** | a **tracker-only** promoted item — no flow spec exists at all | **ask via tracker comment ALONE** (Phase 3.5) → `ASKED <id> (<n>)`; never a spec stub |
+| **dep-unsatisfied** | signal present, but a blocker (flow or tracker) is not yet done | **`BLOCKED <id> by <dep>`** — a state-changing terminal that surfaces the dep wait (a circular/unsatisfiable dep routes to `ASKED` instead, per 1e) |
+| **needs-human** | signal present, spec exists, but a genuine decision needs a person (conflicting AC, a real design fork) | **ask** (Phase 3.5) → `ASKED <id> (<n>)` |
+
+**The completeness read may only WITHHOLD, never FORCE** (R3): a promoted-but-thin item is kicked back with a question, never built into a slop PR — but the read never overrides an explicit ready signal to *force* work, never sets the ready flag, never promotes.
+
+**A live triage always resolves to a state-changing terminal** (R10): `ADVANCED` / `ASKED` / `BLOCKED` / `NEEDS_HUMAN`. It never ends on a bare `TRIAGED` no-op line — `TRIAGED <id> <class>` is diagnostic / dry-run only. Append the matching decision-log row at the resolving terminal (Phase 6).
+
+**Dry-run is the ONLY case that emits `TRIAGED`.** Under `--dry-run` (`PILOT_DRY_RUN=1`), backlog triage classifies the subject and stops — it dispatches nothing, posts no question, writes no pilot-log row, and emits the diagnostic line (and nothing after it):
+
+```text
+PILOT_VERDICT=TRIAGED spec=<id> stage=triage reason="dry-run: classified <class>, nothing dispatched or parked"
+```
+
+When the class is **workable**, set `SELECTED_SPEC="$SUBJECT_ID"` and continue into Phase 2 CLASSIFY (the existing pipeline). For every other class, skip Phases 2–5 and resolve in Phase 3.5 (ask) or directly at Phase 6 (`BLOCKED`).
 
 ## Phase 2 — CLASSIFY the stage
 
@@ -348,6 +478,33 @@ If the post-dispatch tree is dirty outside `.flow/`, stop with `NEEDS_HUMAN` and
 
 If the sub-skill emitted a `Tracker sync:` summary line, pass that line through in the evidence echo. Pilot never re-checks the tracker itself.
 
+## Phase 3.5 — ASK (backlog mode only, non-workable subjects) — R4, R7, R15
+
+**Active only when `PILOT_AUTONOMY=backlog` AND Phase 1.6 routed the subject to `ask`** (ready-but-thin / needs-spec / needs-human / force-gated). Execute [references/backlog-mode.md](references/backlog-mode.md) Phase 3 — the async question valve. **Never asks interactively** (`AskUserQuestion` is forbidden on the tick path — the human answers later via the spec or the tracker).
+
+The question is posted via tracker-sync's transport-blind `question` op (it owns the stable-anchor authoring, comments-sync dedup, and the answer round-trip — backlog mode invokes it, never re-implements it):
+
+```text
+/flow-next:tracker-sync question <SUBJECT_ID> mode:autonomous     # <SUBJECT_ID> = spec id OR tracker id
+```
+
+Where the question parks depends on whether a spec exists — enforced by safety invariant #2 (never author a spec):
+
+- **Spec-backed** (`HAS_SPEC=1`, `SPEC_PATH` exists) — the durable parked state lives in the spec's `## Open Questions` behind the `<!-- flow-next:question id=… status=open -->` anchor (the floor), AND it is mirrored as a tracker comment when the bridge is active. The op writes both. A context-package is included (what's blocked, why, what each answer would do, the spec id + tick).
+- **Tracker-only** (`HAS_SPEC=0`, no spec) — there is no spec to anchor in, so the question lives in the **tracker comment ALONE**. The surfaced gap is always *"this promoted ticket has no flow spec — run `/flow-next:capture` or `/flow-next:interview`"*. **Never write a spec stub** (invariant #2 short-circuits a spec write for a specless subject). Its parked/answered state lives in the tracker.
+
+**Idempotent (R7/R15).** Re-triaging the same blocked subject computes the same anchor `id` (the hash covers stable fields only — `subjectId` + blocked-stage + `reasonCode` + `questionSlug`; the free prose is outside it), so comments-sync's marker dedup finds the existing comment and skips the re-post. Selection (Phase 1.5d) already skips a `status=open` parked subject, so a parked item is not re-picked.
+
+**Spec-first floor (R17).** When no transport is reachable, the question is written to the spec's `## Open Questions` only (when a spec exists) plus a one-line "enable tracker-sync to mirror" note — never a block. A tracker-only item with no transport has nowhere to park; that degrades to a `NEEDS_HUMAN` surface (the gap cannot be recorded), never a silent drop.
+
+The terminal is `ASKED <id> (<n>)` — a **durable park** (the `status=open` anchor makes Phase 1.5d skip it next tick). Count `<n>` = open questions surfaced. Append the `asked` decision-log row (Phase 6) and emit:
+
+```text
+PILOT_VERDICT=ASKED spec=<id> stage=ask reason="parked behind <n> open question(s): <one line>"
+```
+
+(`spec=<id>` is the spec id for a spec-backed subject, else the tracker id for a tracker-only subject.)
+
 ## Phase 6 — REPORT + strikes ledger
 
 On `ADVANCED`, clear the selected spec's ledger entry if present and write the ledger atomically with `jq` plus `mv`:
@@ -421,5 +578,23 @@ Terminal verdict when no spec was dispatched, split by why — the two cases are
   ```
 
   When more than one candidate was deferred, name the first deferred spec (stable id order) in the line; the reason still reads `defer to land`.
+
+### Backlog-mode decision log (R9) — one row per tick, at the resolving terminal
+
+**Active only when `PILOT_AUTONOMY=backlog`.** Every backlog tick that selected a subject appends exactly **one** decision-log row, keyed to the verdict grammar action, at its resolving terminal. The row co-occurs with the state-changing terminal — a live `TRIAGED` is never a bare no-op, so the logged action is always a terminal action (R10). Stored under `.flow/pilot-runs/` (a sync-runs-style dir, NOT a ralph-guard `receipts/` path), auto-gitignored:
+
+```bash
+# ACTION ∈ {advanced, asked, blocked, needs-human}  (mapped from the terminal verdict)
+#   ADVANCED  → advanced   · ASKED → asked   · BLOCKED → blocked   · NEEDS_HUMAN → needs-human
+# STAGE is the pipeline stage advanced/blocked-at, or 'ask' for ASKED, or '-' when none.
+# COST_TOKENS is host-reported (this tick's token cost); omit the flag when unavailable.
+$FLOWCTL pilot-log append --id "$SUBJECT_ID" --action "$ACTION" --stage "${STAGE:--}" ${COST_TOKENS:+--cost-tokens "$COST_TOKENS"}
+```
+
+- **`--id`** takes the spec id (spec-backed) OR the bare tracker key (tracker-only) — flowctl safe-filename-normalizes it.
+- **`--action`** is the frozen enum `triaged|advanced|asked|blocked|needs-human`. A **live** tick logs only the terminal action (`advanced`/`asked`/`blocked`/`needs-human`); `triaged` is for a diagnostic/dry-run inspection only, matching the `TRIAGED` diagnostic-only verdict.
+- **`--cost-tokens`** is host-reported by the skill (flowctl only stores the row; it never measures cost). Omit the flag when the host cannot report it.
+
+A `NO_WORK` / `DEFERRED_TO_LAND` tick selected no subject, so it writes **no** row (there is nothing to log against). A `--dry-run` tick writes no row (classification/inspection only). The single-tick contract holds: exactly one row per acting backlog tick.
 
 The `PILOT_VERDICT` line is always the last line of the tick output. Print nothing after it.
