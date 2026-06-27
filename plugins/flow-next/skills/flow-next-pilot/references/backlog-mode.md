@@ -178,11 +178,27 @@ ready-now set; pick from it.
 ### 1f — Pick the top actionable item
 
 The **first** candidate in dep-order that (a) carries an explicit readiness signal
-and (b) is not parked becomes the item to triage in Phase 2. If **no** candidate
-qualifies — none signalled, or every signalled one is parked / dep-blocked — fall
-through to pilot's existing terminal split: `NO_WORK` when nothing is selectable,
-`DEFERRED_TO_LAND` when every all-done candidate has an open PR (verbatim from
-`workflow.md` Phase 6 — backlog mode adds neither verdict and changes neither).
+and (b) is not parked becomes the item to triage in Phase 2. **A signalled item is
+selectable even when a dependency is unsatisfied** — it is picked and routed to
+`BLOCKED` in Phase 2's `dep-unsatisfied` branch, which **surfaces the dep wait** as a
+state-changing terminal (R10 — a live triage never ends on a no-op). Dep-blocked is
+**not** a reason to skip selection; only a `status=open` **parked** question
+(already surfaced, waiting on a human — 1d) removes a candidate from the pool.
+
+So the **only** items excluded from selection are the silently-skipped unsignalled
+items (never in the pool) and the parked-and-unanswered ones (1d). Fall through to
+pilot's existing terminal split **only when the pool is genuinely empty of a
+selectable, reportable candidate**:
+
+- **`NO_WORK`** — no signalled, unparked candidate exists at all (and no dep wait to
+  report). A signalled-but-dep-blocked candidate is *selectable*, so its presence
+  yields `BLOCKED`, never `NO_WORK`.
+- **`DEFERRED_TO_LAND`** — every all-done candidate has an open PR (verbatim from
+  `workflow.md` Phase 6).
+
+Backlog mode adds neither verdict and changes neither — it only ensures a
+ready-but-blocked item reaches `BLOCKED` (Phase 2) rather than collapsing into
+`NO_WORK`.
 
 ---
 
@@ -210,7 +226,7 @@ For a **signalled** item, route it to exactly one class. **First match wins:**
 | **workable** | signal present AND the spec is complete enough to act on (clear AC / R-IDs, an actionable next stage) | **advance** — hand to pilot's existing CLASSIFY (`workflow.md` Phase 2); it advances exactly one stage (`plan → plan-review → work → [qa] → make-pr`) |
 | **ready-but-thin / ambiguous** | signal present, but the spec is missing, a stub, or too thin/ambiguous to act on safely | **`ask`** (Phase 3) — kick back the gap; **never build, never auto-author** |
 | **needs-spec** | a **tracker-only** promoted item — no flow spec exists at all | **`ask` via the tracker comment ALONE** (Phase 3) — surface "run capture/interview"; **never a spec stub** |
-| **dep-unsatisfied** | signal present, but a blocker (flow or tracker) is not yet done | **`BLOCKED`** — sequence it; the topo-sort offers the blocker first on a later tick |
+| **dep-unsatisfied** | signal present, but a blocker (flow or tracker) is not yet done | **`BLOCKED <id> by <dep>`** — a state-changing terminal that **surfaces the dep wait** (never `NO_WORK` — the item was selectable in 1f); the topo-sort offers the blocker first on a later tick. A circular/unsatisfiable dep routes to `ASKED` instead (1e) |
 | **needs-human** | signal present, spec exists, but a genuine decision needs a person (conflicting AC, a real design fork) | **`ask`** (Phase 3) |
 
 **The completeness read may only WITHHOLD, never FORCE.** A promoted-but-thin item is
