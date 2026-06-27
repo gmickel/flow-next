@@ -136,7 +136,10 @@ Backlog mode **ADDS** `ASKED` and reuses the existing terminals; it changes none
 - **`NO_WORK` and `DEFERRED_TO_LAND` are kept VERBATIM** — drivers grep `DEFERRED_TO_LAND` to route an all-done-with-open-PR spec to `/flow-next:land`, and `/goal`/`/loop` stop-clauses key on `NO_WORK`; coalescing either into a generic "idle" would break the land hand-off and the loop-stop. Never rename them.
 - **No `PROMOTED` verb** — the agent never sets the ready flag; promotion is the human's board act.
 
-**`TRIAGED <id> <class>` is DIAGNOSTIC / dry-run ONLY** — emitted only under a triage-only inspection (`--dry-run`). A **live** triage always resolves to a **state-changing** terminal (`ADVANCED` / `ASKED` / `BLOCKED` / `NEEDS_HUMAN`), so an item can never re-select forever. A live tick MUST NOT end on a bare `TRIAGED` no-op line.
+**`TRIAGED <id> <class>` is DIAGNOSTIC / dry-run ONLY** — emitted only under a triage-only inspection (`--dry-run`). The split is explicit:
+
+- **Live backlog grammar** (no `--dry-run`): `ADVANCED | ASKED | NO_WORK | DEFERRED_TO_LAND | BLOCKED | NEEDS_HUMAN` — **`TRIAGED` is NOT a live terminal.** A live triage always resolves to a state-changing terminal, so an item can never re-select forever. A live tick MUST NOT end on a bare `TRIAGED` no-op line. The primary grammar line above (which `/loop`/`/goal` drivers read) is exactly this live set.
+- **Dry-run-only grammar** (`--dry-run`): adds `TRIAGED <id> <class>` as the diagnostic terminal — the tick classifies and stops, dispatching nothing and parking nothing. A `/loop`/`/goal` driver never runs `--dry-run`, so it never sees `TRIAGED`.
 
 Driver condition examples:
 
