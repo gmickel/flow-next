@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-27T13:12:41.391674Z",
+  "depends_on": [
+    "fn-68-pilot-backlog-mode-full-auto-backlog.3"
+  ],
+  "id": "fn-68-pilot-backlog-mode-full-auto-backlog.4",
+  "priority": null,
+  "spec": "fn-68-pilot-backlog-mode-full-auto-backlog",
+  "spec_path": ".flow/tasks/fn-68-pilot-backlog-mode-full-auto-backlog.4.md",
+  "status": "todo",
+  "title": "pilot wiring \u2014 autonomy gate, --backlog/--auto, triage/ask stages, TRIAGED/ASKED verdict, ask valve + safety invariants",
+  "updated_at": "2026-06-27T13:35:46.867564Z"
+}

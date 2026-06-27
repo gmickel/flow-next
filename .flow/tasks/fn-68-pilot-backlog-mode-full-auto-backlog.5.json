@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-27T13:12:41.935823Z",
+  "depends_on": [
+    "fn-68-pilot-backlog-mode-full-auto-backlog.4"
+  ],
+  "id": "fn-68-pilot-backlog-mode-full-auto-backlog.5",
+  "priority": null,
+  "spec": "fn-68-pilot-backlog-mode-full-auto-backlog",
+  "spec_path": ".flow/tasks/fn-68-pilot-backlog-mode-full-auto-backlog.5.md",
+  "status": "todo",
+  "title": "cross-platform Codex mirror regen + impl-review + autonomous-safety tests (no-prompt / never-merge / never-author guards)",
+  "updated_at": "2026-06-27T13:15:48.081785Z"
+}
