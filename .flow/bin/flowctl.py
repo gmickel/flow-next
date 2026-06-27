@@ -20142,14 +20142,22 @@ def _pilot_log_lock(lock_dir: Path):
             os.mkdir(lock_dir)
             acquired = True
             break
-        except FileExistsError:
-            # Held by a peer. Reclaim only if it's stale (crashed without
-            # releasing); otherwise wait for the holder to finish its short
-            # critical section.
+        except OSError:
+            # Held by a peer (FileExistsError), OR a Windows transient: under
+            # rapid mkdir/rmdir churn `os.mkdir` can raise PermissionError
+            # [WinError 5] / other OSErrors instead of FileExistsError while the
+            # dir is mid-create/delete — catching only FileExistsError let those
+            # propagate and fail the append (fn-68 Windows-CI flake). Route every
+            # mkdir failure through the same stat → stale/deadline → wait path.
+            # Reclaim only if the lock is stale (crashed peer); else wait.
             try:
                 age = _pilot_log_now() - lock_dir.stat().st_mtime
             except OSError:
-                # Vanished between mkdir and stat — peer released; retry.
+                # No lock dir (peer released, or a transient mkdir error that
+                # left nothing) — back off briefly and retry.
+                if _monotonic_now() >= deadline:
+                    continue
+                _migrate_sleep(PILOT_LOG_LOCK_POLL_SECS)
                 continue
             if age >= PILOT_LOG_LOCK_STALE_SECS:
                 try:
