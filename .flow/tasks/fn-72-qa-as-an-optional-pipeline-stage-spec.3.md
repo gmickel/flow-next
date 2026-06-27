@@ -35,9 +35,8 @@ The **full documentation sweep across all four surfaces** (this changes the pipe
 - [ ] **NO version bump in this task** — staged under `## Unreleased` (repo + docs-site); `scripts/bump.sh` + manifests deferred to the batched release (per CLAUDE.md).
 
 ## Done summary
-TBD
-
+Documentation sweep for the optional QA pipeline stage (fn-72) across all four surfaces + Codex mirror regen. Repo: qa SKILL.md (optional-stage + augments-never-replaces framing), docs/ralph.md / docs/README.md / README.md (optional `qa` stage threaded into the pilot pipeline `plan → … → qa → make-pr`), CHANGELOG.md `## Unreleased` fn-72 entry; Codex mirror regenerated (sync-codex.sh, validation clean) for the .1/.2 canonical edits. flow-next.dev: qa.mdx (sharpened augments/surfaces-to-humans framing) + pilot.mdx + autonomous/overview.mdx + strategy/pipeline.mdx (optional QA node in both Mermaid diagrams) + changelog Unreleased entry; pnpm build green; NO version bump. AI×SDLC guide: flow-next.md pipeline spine + 4 QA pages (phased-rollout/ai-readiness/production-grade/metrics) carry the augments-not-replaces framing. GF microsite: 04-pipeline.md + pipeline.mmd/.svg regenerated + 06/07/08 framing; dist HTMLs re-rendered. NO version bump anywhere; external repos committed but NOT pushed (held for the batch).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 3540744e7a6b56b6bc2905d2139fa7fc7d5c3f12, cdd15002dea2cbe3eb488ac465788aaea4ea4955
+- Tests: python3 -m unittest test_pipeline_qa_config test_qa_receipt test_qa_smoke test_qa_tracker_event (39 passed), scripts/sync-codex.sh (validation clean, mirror byte-stable), cd ~/work/flow-next.dev && pnpm build (green, 64 pages), mmdc + bun scripts/render gf|shd|shopfully|flooid (GF microsite re-rendered)
 - PRs:
