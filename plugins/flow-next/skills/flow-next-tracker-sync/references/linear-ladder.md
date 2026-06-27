@@ -132,7 +132,7 @@ the parity check verifies.
 ## Relation transport (dependency projection, fn-64.3)
 
 The `listIssueRelations` / `setIssueRelation` pair routes through the same rung
-ladder as the other six methods, with one extra wrinkle: the MCP rung's relation
+ladder as the six core methods, with one extra wrinkle: the MCP rung's relation
 params can drift out of the pinned schema, so the rung selection has a **relation-
 specific fallback** layered on top of the normal probe.
 

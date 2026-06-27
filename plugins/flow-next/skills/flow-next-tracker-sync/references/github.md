@@ -1,7 +1,9 @@
 # GitHub adapter — transport via `gh` (headless-safe, reduced-fidelity status)
 
-The GitHub implementation of the six-method transport interface
-([adapter-interface.md](adapter-interface.md)). GitHub-next per the staging
+The GitHub implementation of the nine-method transport interface
+([adapter-interface.md](adapter-interface.md)) — the original six core methods, the
+dependency-projection pair (`listIssueRelations` / `setIssueRelation`, fn-64.4),
+plus the enumeration method (`listOpenIssues`, fn-68.2). GitHub-next per the staging
 decision (Linear first — [linear-ladder.md](linear-ladder.md) — GitHub second,
 the **headless-robust** path). This is the transport behind the fn-52.2 adapter
 interface; it reuses the fn-52.4/.5 reconcile core **unchanged** — proving the
@@ -55,8 +57,9 @@ load-bearing signal.
 ## No-op rung (terminal) — never crash
 
 When `TRANSPORT=none`, the configured bridge cannot reach GitHub this run. Every
-one of the six interface methods becomes a documented no-op (same fail-soft
-contract as the Linear terminal rung and fn-51's manual rung):
+one of the nine interface methods becomes a documented no-op (same fail-soft
+contract as the Linear terminal rung and fn-51's manual rung) — including
+`listOpenIssues` (returns `[]`, fn-68.2) and the relation pair (fn-64.4):
 
 - `fetchIssue` / `listComments` / `readStatus` / `listIssueRelations` → return
   nothing actionable ("no remote view available this run"); the spec's flow-side
@@ -214,8 +217,13 @@ bug stays in reconcile.
 
 `tracker`/`type` on the struct are set to `"github"` / `"issue"`.
 
-## The six interface methods over `gh`
+## The core interface methods over `gh`
 
+The original **six** core methods (`fetchIssue` / `writeIssue` / `listComments` /
+`postComment` / `readStatus` / `setStatus`) **plus the enumeration method**
+`listOpenIssues` (fn-68.2). The dependency-projection pair
+(`listIssueRelations` / `setIssueRelation`, fn-64.4) is its own section below —
+together these are the **nine-method** interface ([adapter-interface.md](adapter-interface.md)).
 Mapping wire ↔ normalized happens here, at the adapter boundary. Reconcile never
 sees a `gh` JSON shape. (`-R <repo>` is the configured `tracker.perTracker.repo`;
 omit it when running inside the target repo's checkout.)

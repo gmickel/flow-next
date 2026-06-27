@@ -171,7 +171,7 @@ This mirrors the bridge's existing "surface diffs, never overwrite" posture: the
 
 ### Transport-unavailable / completed-blocker
 
-- **No transport reachable** → the projection is a documented `noop` + receipt note (same no-transport shape as the other six methods), never a crash and never a lifecycle block.
+- **No transport reachable** → the projection is a documented `noop` + receipt note (same no-transport shape as the six core methods), never a crash and never a lifecycle block.
 - **Completed blocker** (dep spec is locally `done`) → the relation stays visible on the tracker as a historical blocker; it is NOT removed and does NOT feed back into `ready=true` gating. The completed-blocker decision is the skill's (fn-64.5), keyed off the **local** dep-spec status (`dep_status` from `flowctl sync list-dep-relations`), not a remote fetch.
 
 ## Enumeration transport (`listOpenIssues`, fn-68)

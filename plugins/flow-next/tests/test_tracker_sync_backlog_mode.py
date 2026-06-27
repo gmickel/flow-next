@@ -432,8 +432,17 @@ class TrackerSyncBacklogModeProseContract(unittest.TestCase):
 
     def test_no_stale_method_count_in_canonical_adapter_docs(self) -> None:
         """The interface is NINE methods now. No canonical adapter doc may still
-        call the interface 'eight-method' / 'eight interface methods' (the review
-        caught linear-ladder.md)."""
+        call the *interface* 'eight-method' / 'eight interface methods' OR
+        'six-method' / 'six interface methods' (the review caught linear-ladder,
+        then github/linear-graphql/linear-mcp). A bare 'six core methods' /
+        'original six' reference to the original core subset is allowed — only the
+        *interface-count* claims are forbidden."""
+        forbidden = (
+            "eight-method",
+            "eight interface methods",
+            "six-method",
+            "six interface methods",
+        )
         for name, text in (
             ("adapter-interface", self.adapter),
             ("linear-ladder", self.linear_ladder),
@@ -441,24 +450,28 @@ class TrackerSyncBacklogModeProseContract(unittest.TestCase):
             ("linear-mcp", self.linear_mcp),
             ("github", self.github),
         ):
+            lowered = text.lower()
+            for phrase in forbidden:
+                with self.subTest(doc=name, phrase=phrase):
+                    self.assertNotIn(
+                        phrase,
+                        lowered,
+                        f"{name} must not call the interface {phrase!r} (now nine; "
+                        f"use 'nine-method' or 'original six core methods')",
+                    )
+        # The per-transport adapter docs must affirmatively say nine.
+        for name, text in (
+            ("linear-ladder", self.linear_ladder),
+            ("github", self.github),
+            ("linear-graphql", self.linear_graphql),
+            ("linear-mcp", self.linear_mcp),
+        ):
             with self.subTest(doc=name):
-                lowered = text.lower()
-                self.assertNotIn(
-                    "eight-method",
-                    lowered,
-                    f"{name} must not call the interface 'eight-method' (now nine)",
+                self.assertRegex(
+                    text,
+                    r"(?i)nine-method|nine interface methods",
+                    f"{name} must describe the interface as nine-method",
                 )
-                self.assertNotIn(
-                    "eight interface methods",
-                    lowered,
-                    f"{name} must not say 'eight interface methods' (now nine)",
-                )
-        # linear-ladder must affirmatively say nine.
-        self.assertRegex(
-            self.linear_ladder,
-            r"(?i)nine-method|nine interface methods",
-            "linear-ladder must describe the interface as nine-method",
-        )
 
     # ---- R16: reuse the existing readyState projection -----------------
 

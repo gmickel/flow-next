@@ -64,12 +64,15 @@ if [ "$CODE" = "400" ] && printf '%s' "$BODY" | grep -q '"RATELIMITED"'; then
 fi
 ```
 
-## The six interface methods over GraphQL
+## The core interface methods over GraphQL
 
-Mapping wire ↔ normalized happens here, at the adapter boundary. Reconcile never
-sees a GraphQL shape. (`$KEY` = `LINEAR_API_KEY`; `EP` =
-`https://api.linear.app/graphql`. Bodies passed as GraphQL `variables`, not
-string-interpolated, to avoid escaping bugs.)
+The original **six** core methods plus the enumeration method `listOpenIssues`
+(fn-68.2); the dependency-projection pair (`listIssueRelations` /
+`setIssueRelation`, fn-64.3) is its own section below — together the **nine-method**
+interface ([adapter-interface.md](adapter-interface.md)). Mapping wire ↔ normalized
+happens here, at the adapter boundary. Reconcile never sees a GraphQL shape.
+(`$KEY` = `LINEAR_API_KEY`; `EP` = `https://api.linear.app/graphql`. Bodies passed
+as GraphQL `variables`, not string-interpolated, to avoid escaping bugs.)
 
 ### `fetchIssue(trackerId)` → normalized `issue` | not-found
 

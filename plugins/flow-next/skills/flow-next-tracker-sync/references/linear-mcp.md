@@ -64,8 +64,12 @@ key** (`sync set-tracker-id`) and surface the `identifier` to humans; never
 persist `WOR-17` as the primary key — which means **first-link needs the GraphQL
 rung to obtain that UUID** (see Gotchas).
 
-## The six interface methods over MCP
+## The original six core methods over MCP
 
+The six core methods below. The enumeration method `listOpenIssues` (fn-68.2) is
+pinned in the tool-name table above (`list_issues`); the dependency-projection pair
+(`listIssueRelations` / `setIssueRelation`, fn-64.3) is its own section below —
+together the **nine-method** interface ([adapter-interface.md](adapter-interface.md)).
 Mapping wire ↔ normalized happens here, at the adapter boundary. Reconcile never
 sees an MCP shape.
 
