@@ -26,9 +26,8 @@ Both flow-next.dev navbars must change together or the page silently vanishes fr
 - [ ] downstream: AI×SDLC `guides/flow-next.md` + GF microsite autonomy section reflect backlog mode (consent boundary, human-gated merge/authoring, surface-don't-block).
 
 ## Done summary
-TBD
-
+Full documentation sweep for pilot backlog mode (fn-68) across four properties, no version bump (batched-release rule). Repo: ralph.md (autonomy story — consent boundary moves inside-the-loop-on-block), README.md skill index, flowctl.md (ready --all, pilot-log, pilot.autonomy/pilot.gateClasses), GLOSSARY.md (backlog mode / triage stage / ask stage-question valve / decision-log terms + Pilot/Verdict updates), STRATEGY.md autonomy track, and CHANGELOG.md ## Unreleased (full .1/.3/.4/.5 capability + .6 doc-sweep). flow-next.dev: backlog-mode section on the pilot page + autonomous/overview + changelog Unreleased (pnpm build green; both navbars already list Pilot — no navbar edit needed). Downstream: AI×SDLC guides/flow-next.md pipeline/autonomy framing + GF microsite spec/08-autonomy.md (re-stamped overlay provenance + re-rendered all four dist lenses). Pilot SKILL.md backlog wiring was authored in fn-68.4 — this task extended the surrounding docs, no duplication.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 9bbd3fd3a1811b32f28034ce4b53fcbc1f125353
+- Tests: flowctl ready --all --json (verified facts schema), flowctl pilot-log append/summary --help (verified subcommand), flowctl config get pilot.autonomy/pilot.gateClasses (verified keys), flowctl glossary list --json (38 terms, new entries parse), cd ~/work/flow-next.dev && pnpm build (green, 64 pages, anchors validated), cd ~/work/code-factory-package && bun scripts/render {gf,shd,shopfully,flooid} + --check (self-contained/under-2MB/spec-pure all OK) + bun scripts/test.mjs (27 passed), flowctl triage-skip (SHIP, release-chore docs-only)
 - PRs:
