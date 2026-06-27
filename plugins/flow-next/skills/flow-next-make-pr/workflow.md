@@ -824,18 +824,22 @@ fi
 # keyed to the CODE head; Phase 1.5 may have already committed the pr.html artifact,
 # which advanced HEAD — so compare against the PRE-ARTIFACT head (HEAD^ when HEAD is the
 # artifact commit), never the post-artifact HEAD, or a fresh pass reads as stale.
-CUR_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD)"
-CODE_HEAD="$CUR_HEAD"
-if git -C "$REPO_ROOT" log -1 --format='%s' 2>/dev/null | grep -q '^chore(flow): pr artifact '; then
-  CODE_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD^)"   # pre-artifact code head
+# The receipt's head_sha is the head AT QA TIME. Bookkeeping commits land ABOVE the code
+# head AFTER QA — pilot's `chore(flow): qa verdict <spec>` receipt commit, then Phase 1.5's
+# `chore(flow): pr artifact <spec>`. So the branch tip is NOT the code head. Accept the
+# receipt if its head_sha matches the tip OR any commit reached by peeling those leading
+# bookkeeping commits (the code head and everything above it). Fail CLOSED on empty.
+QA_FRESH_OK=0
+if [ "$QA_PRESENT" = "1" ] && [ -n "$QA_HEAD_SHA" ]; then
+  _s="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
+  while [ -n "$_s" ]; do
+    [ "$_s" = "$QA_HEAD_SHA" ] && { QA_FRESH_OK=1; break; }
+    git -C "$REPO_ROOT" log -1 --format='%s' "$_s" 2>/dev/null \
+      | grep -qE '^chore\(flow\): (qa verdict|pr artifact) ' || break
+    _s="$(git -C "$REPO_ROOT" rev-parse "$_s^" 2>/dev/null || echo "")"
+  done
 fi
-# Fresh iff head_sha matches the code head (QA ran before make-pr's artifact commit) OR the
-# current HEAD (QA ran when the artifact was already at tip → it recorded the artifact SHA).
-# Fail CLOSED: a missing/empty head_sha, or one matching NEITHER, is STALE — omit the section.
-if [ "$QA_PRESENT" = "1" ] \
-   && { [ -z "$QA_HEAD_SHA" ] || { [ "$QA_HEAD_SHA" != "$CODE_HEAD" ] && [ "$QA_HEAD_SHA" != "$CUR_HEAD" ]; }; }; then
-  QA_PRESENT=0
-fi
+[ "$QA_FRESH_OK" = 1 ] || QA_PRESENT=0   # stale or empty head_sha → omit the section
 ```
 
 Read directly with `jq` (do NOT compose any free-form receipt field into shell-built JSON — surface the values as rendered markdown only). The receipt fields are exactly those task .1 added (`qa_outcome`, `head_sha`, `branch`, `rid_coverage`, `open_p0p1` as **objects**, plus the scoped `blocked_reason` / `na_reason`).
