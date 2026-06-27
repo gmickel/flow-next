@@ -69,17 +69,30 @@ for ARG in $RAW_ARGS; do
  --target=*) QA_TARGET_URL="${ARG#--target=}" ;; # Phase 3.1 caller override
  --receipt=*) QA_RECEIPT_OVERRIDE="${ARG#--receipt=}" ;; # Phase 6.3 receipt path
  --base=*) QA_BASE_REF="${ARG#--base=}" ;; # §1.2 base-branch override
+ mode:autonomous) QA_AUTONOMOUS=1 ;; # strip the literal token (see "Autonomous mode" below)
  -*) echo "Unknown flag: $ARG (reserved for a later task)" >&2 ;;
  *) [[ -z "$SPEC_ID" ]] && SPEC_ID="$ARG" ;;
  esac
 done
 [[ -n "$PREV" ]] && echo "Flag $PREV given without a value (ignored)" >&2
-export QA_TARGET_URL QA_RECEIPT_OVERRIDE QA_BASE_REF # carry the resolved overrides into workflow.md Phases 3.1 / 6.3 / §1.2
+# Secondary autonomy signal: the FLOW_AUTONOMOUS=1 env var (process-level drivers
+# like the pilot stage). Either signal flips QA_AUTONOMOUS on.
+[[ "${FLOW_AUTONOMOUS:-}" == "1" ]] && QA_AUTONOMOUS=1
+export QA_TARGET_URL QA_RECEIPT_OVERRIDE QA_BASE_REF QA_AUTONOMOUS # carry the resolved overrides + autonomy into workflow.md (Phases 3.1 / 6.3 / §1.2 + the preamble)
 ```
 
 When `SPEC_ID` is empty, the **discover** phase resolves it (branch-match, or by asking the user via `plain-text numbered prompt` as an info prompt) — never silently default.
 
-Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected in workflow.md §AUTONOMY — the skill is **aware but not Ralph-blocked** (R11). The deep autonomy routing (autonomous when target URL + accounts are configured; receipt path resolution) is owned by a downstream task; the skeleton only lays the section anchor.
+## Autonomous mode (mode:autonomous / FLOW_AUTONOMOUS)
+
+`QA_AUTONOMOUS=1` (set above from the literal `mode:autonomous` token — stripped, same shape as plan's autonomous branch — or the `FLOW_AUTONOMOUS=1` env var) means **ask NO questions**. This is the signal the pilot QA stage passes so the build loop can't hang on an `plain-text numbered prompt`. The workflow honors it **at the preamble, before any prompt path** (workflow.md "Autonomous-mode gate") — not in the post-verdict preflight, because the early phases (1.1 spec id, 1.2 base, 3.1 target, 3.2 accounts) all prompt.
+
+Under `QA_AUTONOMOUS=1`:
+- **Ask NO questions anywhere.** Every `plain-text numbered prompt` info-prompt path becomes a deterministic branch: resolve from spec / config / env, else surface a limitation — never prompt.
+- **Undocumented target URL / required accounts / no reachable local app / undetermined spec id ⇒ emit a `BLOCKED` `qa_verdict` + clean exit** (the §6.3 writer), never an interactive prompt and never a hang.
+- **Autonomy ≠ Ralph.** Neither `mode:autonomous` nor `FLOW_AUTONOMOUS` activates ralph-guard hooks or any receipt-path gate — they gate **question suppression** only. Ralph (`FLOW_RALPH=1` / `REVIEW_RECEIPT_PATH`) is the separate, additive signal detected in Phase A; the two compose (a pilot run may be autonomous-but-not-Ralph).
+
+Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected in workflow.md §AUTONOMY — the skill is **aware but not Ralph-blocked** (R11). Ralph independently suppresses prompts too (Phase A), so a Ralph run is implicitly autonomous; `QA_AUTONOMOUS` covers the non-Ralph autonomous caller (the pilot stage).
 
 ## fn-51 consumption — a read-and-drive contract, NOT a callable API
 

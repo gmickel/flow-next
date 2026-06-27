@@ -1,13 +1,13 @@
 ---
 name: flow-next-pilot
-description: Single-tick autonomous build-loop conductor for host drivers (/loop, /goal). Each invocation advances exactly ONE ready spec by ONE pipeline stage (plan, plan-review, work, make-pr) and ends with a terminal PILOT_VERDICT line for the driver to read. Triggers on /flow-next:pilot, optionally with --spec <id>, --dry-run, --review=<backend>, --research=<grep|rp>, --depth=<level>. Autonomous by design — never asks the user questions; reports NEEDS_HUMAN instead.
+description: Single-tick autonomous build-loop conductor for host drivers (/loop, /goal). Each invocation advances exactly ONE ready spec by ONE pipeline stage (plan, plan-review, work, qa [opt-in, gated on pipeline.qa==on], make-pr) and ends with a terminal PILOT_VERDICT line for the driver to read. Triggers on /flow-next:pilot, optionally with --spec <id>, --dry-run, --review=<backend>, --research=<grep|rp>, --depth=<level>. Autonomous by design — never asks the user questions; reports NEEDS_HUMAN instead.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Skill
 ---
 
 # /flow-next:pilot — single-tick autonomous build-loop conductor
 
-A tick is one invocation of `/flow-next:pilot`: select one ready spec, classify its current stage, dispatch exactly one existing stage skill, verify state advanced, and end with one terminal `PILOT_VERDICT` line. It is intentionally not a runner; `/loop` in Claude Code or `/goal` in Claude Code / Codex owns repeated invocation.
+A tick is one invocation of `/flow-next:pilot`: select one ready spec, classify its current stage (`plan`, `plan-review`, `work`, the opt-in `qa`, `make-pr`), dispatch exactly one existing stage skill, verify state advanced, and end with one terminal `PILOT_VERDICT` line. It is intentionally not a runner; `/loop` in Claude Code or `/goal` in Claude Code / Codex owns repeated invocation.
 
 Pilot and Ralph are alternative autonomous drivers. Ralph is an external shell loop with receipt plumbing; pilot is an in-session conductor for host loop primitives. Never nest them, and never reuse Ralph harness state inside pilot.
 
@@ -105,7 +105,7 @@ Every tick ends with exactly one terminal line, the last line of the response, w
 PILOT_VERDICT=<ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec=<id> stage=<stage> reason="<one line>"
 ```
 
-Use `spec=-` and `stage=-` when no spec was selected. Stage values are exactly `plan`, `plan-review`, `work`, `make-pr`, `land`, or `-`.
+Use `spec=-` and `stage=-` when no spec was selected. Stage values are exactly `plan`, `plan-review`, `work`, `qa` (opt-in — only when `pipeline.qa==on`), `make-pr`, `land`, or `-`.
 
 `DEFERRED_TO_LAND` is a distinct *non-terminal-work* verdict (stage `land`): every remaining all-done candidate has an open PR that land — not pilot — owns. It is deliberately separated from `NO_WORK` so a driver can route it to `/flow-next:land` instead of stopping; an all-done spec with an open PR is real outstanding work, never absence of work.
 
@@ -119,7 +119,7 @@ Driver condition examples:
 ## Forbidden
 
 - Asking the user anything in the tick path. Pilot is autonomous; ambiguity maps to `NEEDS_HUMAN`.
-- Dispatching any skill outside the stage set `{plan, plan-review, work, make-pr}`. Capture, interview, QA, resolve-pr, merge, and release are never pilot stages.
+- Dispatching any skill outside the stage set `{plan, plan-review, work, make-pr}` — plus `qa` **only when `pipeline.qa==on`** (fn-72: an opt-in, gate-reversed stage at the all-done juncture before make-pr; with the gate off, `qa` is forbidden and the stage set is byte-for-byte unchanged). Capture, interview, resolve-pr, merge, and release are **never** pilot stages — they stay forbidden for their distinct reasons (capture/interview are human authoring upstream of the consent boundary; resolve-pr/merge/release are land's territory downstream of the PR). Opening `qa` under its gate is not a precedent to open any of those five.
 - Re-implementing sub-skill logic. Pilot owns selection, dispatch, verification, verdicts, and the strikes ledger only.
 - Touching gh anywhere except the all-done classification branch's PR probe and the make-pr verification probe.
 - Printing anything after the `PILOT_VERDICT` line.
