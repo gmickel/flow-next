@@ -258,10 +258,13 @@ A signalled-but-dep-blocked candidate is **selectable**, so its presence yields 
 **Optional force-gate (R5).** Read the sibling key `pilot.gateClasses` (an array — NOT `pilot.autonomy.gate`). When the selected item matches a configured gate class (the agent's read, like triage — no scorer), route it to `ask` even when otherwise workable:
 
 ```bash
-GATE_CLASSES="$($FLOWCTL config get pilot.gateClasses --json | jq -r '.value[]?' 2>/dev/null)"
+# Tolerate BOTH shapes: a JSON array (`["risky"]`) AND a scalar set through the
+# CLI — `flowctl config set pilot.gateClasses risky` persists the bare string
+# "risky", which `.value[]?` would silently drop. Normalize string→single-class.
+GATE_CLASSES="$($FLOWCTL config get pilot.gateClasses --json | jq -r '(.value // empty) | if type=="array" then .[] else . end' 2>/dev/null)"
 ```
 
-An empty/unset `gateClasses` (the default) gates nothing — full-auto is unconditional.
+An empty/unset `gateClasses` (the default) gates nothing — full-auto is unconditional. A scalar `flowctl config set pilot.gateClasses risky` is read as the single class `risky`; multiple classes use a JSON array.
 
 Classify `SUBJECT_ID` to exactly one class (first match wins) and route. **Order matters: `dep-unsatisfied` is checked BEFORE `workable`** — a signalled item with an unsatisfied (acyclic) blocker is a dep-wait, NOT a workable advance, so it must route to the dep-wait `BLOCKED` terminal rather than slipping into CLASSIFY/DISPATCH (matches Phase 1f / R10 — a signalled-but-dep-blocked item is selectable and surfaces the wait):
 
