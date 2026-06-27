@@ -176,24 +176,24 @@ workflow-state name. Filter on the state **name** (not `state.type`), the same e
 match the readiness projection uses ([status-sync.md](status-sync.md)). Bound the
 team to `tracker.perTracker.teamId` when set.
 
+The skill **builds the `$filter` object** and passes it whole — it includes the
+`team` key ONLY when `tracker.perTracker.teamId` is set, `state` always. The
+template never hardcodes a `team` predicate, so a null team is never sent (an
+inline `team: { id: { eq: null } }` mis-filters to teamless issues):
+
 ```graphql
-query ($team: ID, $state: String!, $first: Int!, $after: String) {
-  issues(
-    first: $first
-    after: $after
-    filter: {
-      # `team` predicate is included ONLY when tracker.perTracker.teamId is set —
-      # omit it entirely when unset (never `eq: null`, which mis-filters to teamless issues).
-      team:  { id: { eq: $team } }
-      state: { name: { eqIgnoreCase: $state } }   # EXACT name match — the promoted lane only
-    }
-  ) {
+query ($filter: IssueFilter!, $first: Int!, $after: String) {
+  issues(first: $first, after: $after, filter: $filter) {
     nodes { id identifier title description url updatedAt
             state { name type } labels(first: 25) { nodes { name } } priority }
     pageInfo { hasNextPage endCursor }
   }
 }
-# variables: { "team": "<teamId or null>", "state": "<tracker.readyState NAME>", "first": 50 }
+# $filter — built by the skill (state always; team ONLY when teamId is set):
+#   teamId set → { "state": { "name": { "eqIgnoreCase": "<readyState>" } },
+#                  "team":  { "id":   { "eq": "<teamId>" } } }
+#   no teamId  → { "state": { "name": { "eqIgnoreCase": "<readyState>" } } }   # team key OMITTED
+# $first: 50
 ```
 
 - **`state: { name: { eqIgnoreCase } }` is the exact-lane filter** — no `type`

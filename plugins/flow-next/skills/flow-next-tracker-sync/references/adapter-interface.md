@@ -198,7 +198,7 @@ Backlog mode ([../../flow-next-pilot](../../flow-next-pilot/SKILL.md)) must **un
 
 - **`tracker.readyState` unset ⇒ documented `noop` (return `[]`), never an error.** No promoted lane exists to filter on — backlog mode falls back to flow-ready specs only. The **skill** ([steps.md](../steps.md) Phase 7a) short-circuits to the no-op + note before calling the transport; an adapter that *is* reached with an empty filter likewise returns `[]` + `noop`.
 - **No transport reachable ⇒ `noop` + receipt note, `[]`** — same no-transport floor as the other methods.
-- **Returns normalized `issue` structs** (transport-blind). The skill reads `{id, identifier, title, status, labels, url}` and never sees a Linear/GitHub wire shape — exactly like `fetchIssue`. A tracker-only ticket (no flow spec) has the same `issue` shape as a linked one; its lack of a `flow:<id>` label is how the skill knows it is unlinked.
+- **Returns normalized `issue` structs** (transport-blind). The skill reads `{id, identifier, title, status, labels, url}` and never sees a Linear/GitHub wire shape — exactly like `fetchIssue`. A tracker-only ticket (no flow spec) has the same `issue` shape as a linked one. **Linkage is determined authoritatively by the local sync state** (the tracker-ids the skill recorded as linked), **NOT** by the presence/absence of a `flow:<id>` label — the label is a corroborating hint only. A bounded/truncated label set is **never** read as "unlinked" (a many-label issue could carry the back-reference past the connection bound), so a linked issue is never mis-classified as tracker-only.
 - **Read-only — never advances `lastSyncedAt`** (an enumeration is not a reconcile). Its receipt is a `noop`-status read note.
 
 ## Why structs, not byte-copy
