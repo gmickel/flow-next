@@ -8,6 +8,7 @@ Agents must use flowctl for all writes - never edit .flow/* directly.
 
 import argparse
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -21037,10 +21038,20 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
     run_dir = repo_root / PILOT_RUNS_DIR_REL
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Per-id monotonic tick = (#existing rows for this id) + 1. Rows are one
-    # file each (`pilot-<id_slug>-<n>-<ts>.json`) so the count is a glob.
-    existing = list(run_dir.glob(f"pilot-{id_slug}-*.json"))
-    tick = len(existing) + 1
+    # Per-id monotonic tick = (#existing rows whose STORED id == this raw id)
+    # + 1. The slug glob is a cheap pre-filter; we then read each candidate's
+    # `id` and count EXACT raw-id matches so two distinct ids that normalize to
+    # the same slug (e.g. "a/b" and "a-b" → "a-b") never share a counter
+    # (review finding #1). A row whose JSON can't be read is skipped — it can't
+    # belong to this id.
+    tick = 1
+    for cand in run_dir.glob(f"pilot-{id_slug}-*.json"):
+        try:
+            cand_data = json.loads(cand.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if isinstance(cand_data, dict) and cand_data.get("id") == raw_id:
+            tick += 1
 
     row = {
         "tick": tick,
@@ -21051,8 +21062,12 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
         "timestamp": now_iso(),
     }
 
+    # Filename: slug + tick + timestamp + a short content-hash of the RAW id, so
+    # two distinct ids sharing a slug (or two appends landing on the same tick +
+    # timestamp) never collide on the same path and clobber each other's row.
     ts_slug = now_iso().replace(":", "").replace("-", "").replace(".", "")
-    row_path = run_dir / f"pilot-{id_slug}-{tick}-{ts_slug}.json"
+    id_hash = hashlib.sha1(raw_id.encode("utf-8")).hexdigest()[:8]
+    row_path = run_dir / f"pilot-{id_slug}-{tick}-{ts_slug}-{id_hash}.json"
     atomic_write_json(row_path, row)
 
     if args.json:
@@ -21104,8 +21119,18 @@ def cmd_pilot_log_summary(args: argparse.Namespace) -> None:
                 }
             )
 
-    # Stable order: by id, then tick (tick may be None on a malformed row → 0).
-    rows.sort(key=lambda r: (str(r.get("id") or ""), r.get("tick") or 0))
+    # Stable order: by id, then tick. The sort key COERCES tick to int so a
+    # hand-edited/corrupt row carrying a non-int tick (e.g. "x") can't raise a
+    # str-vs-int TypeError and crash the whole read (review finding #2). The
+    # emitted `tick` value stays verbatim — we sort on a safe view, not a
+    # mutation.
+    def _tick_sort(value: Any) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    rows.sort(key=lambda r: (str(r.get("id") or ""), _tick_sort(r.get("tick"))))
 
     if args.json:
         json_output({"success": True, "rows": rows, "count": len(rows)})

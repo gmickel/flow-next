@@ -326,6 +326,35 @@ class PilotLogTestCase(_FlowctlTmpRepo):
         keys = [(r["id"], r["tick"]) for r in rows]
         self.assertEqual(keys, sorted(keys, key=lambda k: (str(k[0]), k[1])))
 
+    def test_slug_colliding_ids_keep_distinct_per_id_ticks(self) -> None:
+        # Two DISTINCT raw ids that normalize to the same filename slug must
+        # NOT share a tick counter (review finding #1) — tick is per stored id,
+        # not per slug. "a/b" and "a-b" both slug to "a-b".
+        self._append(id="a/b", action="triaged", stage="plan")
+        self._append(id="a/b", action="advanced", stage="work")
+        self._append(id="a-b", action="triaged", stage="plan")
+        rows = self._summary()["rows"]
+        ab_slash = sorted(r["tick"] for r in rows if r["id"] == "a/b")
+        ab_dash = sorted(r["tick"] for r in rows if r["id"] == "a-b")
+        self.assertEqual(ab_slash, [1, 2])
+        self.assertEqual(ab_dash, [1])  # own counter, not 3
+
+    def test_summary_tolerates_malformed_non_int_tick(self) -> None:
+        # A hand-edited/corrupt row carrying a non-int tick must not crash the
+        # summary sort with a str-vs-int TypeError (review finding #2).
+        self._append(id="fn-1", action="triaged", stage="plan")  # valid tick=1
+        run_dir = self.tmpdir / ".flow" / "pilot-runs"
+        (run_dir / "pilot-fn-1-x-bad.json").write_text(
+            json.dumps({"tick": "x", "id": "fn-1", "action": "asked",
+                        "stage": None, "costTokens": None}),
+            encoding="utf-8",
+        )
+        out = self._summary()  # must not raise
+        self.assertTrue(out["success"])
+        self.assertEqual(out["count"], 2)
+        # Both rows present; the malformed one sorts as tick 0 (coerced view).
+        self.assertEqual({r["tick"] for r in out["rows"]}, {1, "x"})
+
     def test_id_slug_blocks_path_and_linkify_hazards(self) -> None:
         # Path-traversal / separator chars collapse to '-'; leading dots are
         # stripped (no hidden files). The id field stays verbatim.
