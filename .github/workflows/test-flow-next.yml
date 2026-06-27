@@ -317,6 +317,34 @@ jobs:
         # (the $CI short-circuit, the probe, the macOS $DISPLAY caveat, doctor≠display).
         # Real no-display behavior on Linux/Windows stays verify-at-build (driver opt-in).
 
+      # ──────────── fn-68 (pilot backlog mode) ────────────
+
+      - name: Python unit tests — pilot backlog mode (fn-68.1 / .2 / .5)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_pilot_backlog_substrate.py" \
+            -v
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_tracker_sync_backlog_mode.py" \
+            -v
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_pilot_backlog_mirror_safety.py" \
+            -v
+        # .1 — flowctl substrate (pilot.autonomy scalar default, `ready --all`
+        #   eligibility FACTS only, pilot-log decision rows under .flow/pilot-runs/).
+        # .2 — tracker-sync R14 Phase-0 autonomy parity + the listOpenIssues 9th
+        #   adapter method + the R15 question-valve anchor contract (prose).
+        # .5 — cross-platform Codex-mirror parity + autonomous-safety: the R14 fix
+        #   + triage/ask stages + ASKED verdict + backlog-mode.md survive the
+        #   sync-codex.sh rewrite; ZERO Claude-native tool-name leakage; the R2
+        #   numbered-prompt block is NEVER injected into pilot (it only negates);
+        #   /goal stop-clause verbs (NO_WORK/DEFERRED_TO_LAND) grep-able; the
+        #   never-merge / never-author enforcing guards + the byte-identical
+        #   gate-off path survive in the mirror.
+
       # ──────────── Functional smokes (ordered cheap-first) ────────────
       # All smokes refuse to run from the main plugin repo, so cd into the
       # runner's temp dir before invoking. $RUNNER_TEMP is set on every

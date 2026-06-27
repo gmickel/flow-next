@@ -4,11 +4,12 @@ date: "2026-06-10"
 track: bug
 category: build-errors
 module: plugins/flow-next/skills/flow-next-pilot/workflow.md
-tags: [fn-59, pilot, skill-authoring, flowctl-json, task-status, rp-review]
+tags: [fn-59, pilot, skill-authoring, flowctl-json, task-status, rp-review, fn-68, backlog-mode, safety-gates, dry-run, review-feedback]
 problem_type: build-error
 symptoms: "RP impl-review 2x NEEDS_WORK: assignee read from listing that lacks it, phantom flowctl whoami, ready/open vs todo status enum, var used before assignment"
 root_cause: "Workflow bash written from spec vocabulary without verifying flowctl JSON emitters, status enums, and subcommand existence"
 resolution_type: fix
+last_updated: "2026-06-27"
 ---
 
 ## Problem
@@ -26,3 +27,26 @@ Per finding: fetch `assignee` via `show <task-id> --json` for in_progress tasks;
 
 ## Prevention
 When a skill's prose embeds flowctl invocations or JSON-field predicates, verify EACH against the real surface before review: run the subcommand once (`flowctl <cmd> --json | jq keys`), grep `TASK_STATUS`/emitter functions in flowctl.py for enums, and check every `$VAR` in a snippet is assigned in the same or an earlier phase. Spec vocabulary ("ready", "claimed") is conceptual, not the wire format.
+
+## Update 2026-06-27
+
+## Problem
+fn-68.4 wired backlog mode into the pilot skill. RP impl-review returned NEEDS_WORK twice (5 findings total), every one a "skill bash snippet read as authoritative but not actually enforcing/correct under literal execution":
+- R1: never-merge / never-author guards sat at Phase 0.5 but depended on vars (`DISPATCH_TARGET`, `ASK_WRITES_SPEC`, `SPEC_PATH`) assigned in a LATER phase → guards no-op if run literally.
+- R1: single-tick + dep-cycle invariants were prose-only ("there is no loop", "a cycle is surfaced") with NO bash branch/flag/terminal.
+- R1: live verdict-grammar enum omitted `TRIAGED` while the dry-run path emitted `PILOT_VERDICT=TRIAGED` → contract inconsistency.
+- R2: backlog `--dry-run` still dispatched tracker-sync `reconcile`/`list-open` before triage → a dispatch-free inspection tick mutated readiness/receipts.
+- R2: `export FLOW_AUTONOMOUS=1` was a bare snippet OUTSIDE the `if PILOT_AUTONOMY=backlog` branch → ready mode (gate off) got the autonomy side-effect, violating "gate off byte-for-byte unchanged".
+
+## What Didn't Work
+Stating an invariant in prose next to an illustrative snippet, and defining a guard early then relying on prose to "call it later". A reviewer (and an executing host agent) reads the SNIPPET as authoritative: a guard whose `$VAR` is unset no-ops; a prose-only "single-tick" claim enforces nothing; a bare `export`/side-effect outside the mode branch runs in BOTH modes.
+
+## Solution
+- Define guards as `assert_allowed_dispatch` / `assert_spec_write_allowed` shell functions and CALL them inline at every real dispatch + spec-write site (Phase 1.5 tracker ops, Phase 3.5 question op, Phase 4 stage dispatch), setting `DISPATCH_TARGET` on the line before each call.
+- Make single-tick a `SELECTED_COUNT` hard-assert and dep-cycle a `DEP_DEADLOCK` branch routing to a terminal — both enforcing bash, not prose.
+- Split the verdict grammar explicitly: live set (no TRIAGED) vs dry-run-only set (adds TRIAGED).
+- Gate every Phase 1.5 tracker dispatch on `[ "$DRY" = "0" ]` and add a Phase 1.6 `exit 0` short-circuit emitting diagnostic TRIAGED before any routing.
+- Move `export FLOW_AUTONOMOUS=1` + all helper defs INSIDE the `else` (backlog) branch of the autonomy guard; ready mode hits a bare `:` no-op.
+
+## Prevention
+When authoring a config-gated mode on an existing skill: (a) every safety invariant the prose promises must be a HARD bash branch (flag/assert/exit) at the site it protects — never prose-only, never a guard floating on a var assigned in a different phase; (b) any mode-specific side-effect (`export`, helper def, dispatch) must live INSIDE the `if mode==X` branch so the gate-off path is provably side-effect-free; (c) cross-check the `--dry-run` / inspection path dispatches NOTHING and mutates NOTHING — gate every dispatch on the dry-run flag and short-circuit to the diagnostic terminal before routing; (d) keep the live verdict enum and any diagnostic-only verdict in explicitly separate grammars. This is the fn-68.4 instance of `skill-workflow-snippets-must-enforce` — two NEEDS_WORK rounds, same root cause.

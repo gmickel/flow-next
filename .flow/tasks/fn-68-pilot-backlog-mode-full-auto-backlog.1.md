@@ -33,9 +33,8 @@ Strict-enum reads only (bool `true` must NOT activate). The pilot-log MUST avoid
 - [ ] `pilot-runs/` added to the auto-gitignore patterns + `init` upgrades an existing `.flow/.gitignore`; pure-stdlib unittest for all four; `py_compile` clean; both flowctl.py copies byte-identical.
 
 ## Done summary
-TBD
-
+Added the deterministic flowctl substrate for pilot backlog mode: pilot.autonomy/pilot.gateClasses config defaults (strict string-enum, materialized on init), a new spec-level `ready --all` eligibility-facts mode ({id, ready, readySignal, blockedBy, hasSpec}, judgment-free, leaving task-level `ready --spec` unchanged), and a frozen `pilot-log append/summary` decision-log CLI writing {tick, id, action, stage, costTokens} rows under guard-safe `.flow/pilot-runs/`. Opaque id normalization blocks path/linkify hazards; per-id tick allocation is flock-serialized; pilot-runs/ added to auto-gitignore. 32-case stdlib unittest; both flowctl.py copies byte-identical. RP impl-review: SHIP (R1/R8/R9 met).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: e4a3855, 21504ba, bdd8015
+- Tests: python3 -m unittest test_pilot_backlog_substrate (32 tests), python3 -m unittest test_lockfile test_flow_gitignore test_cp1252_robustness test_pipeline_qa_config, python3 -m py_compile plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py
 - PRs:

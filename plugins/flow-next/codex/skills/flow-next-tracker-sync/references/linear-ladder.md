@@ -1,8 +1,9 @@
 # Linear adapter — transport ladder (MCP / GraphQL / no-op)
 
-The Linear implementation of the eight-method transport interface
-([adapter-interface.md](adapter-interface.md)) — the original six plus the
-dependency-projection pair (`listIssueRelations` / `setIssueRelation`, fn-64.3).
+The Linear implementation of the nine-method transport interface
+([adapter-interface.md](adapter-interface.md)) — the original six, the
+dependency-projection pair (`listIssueRelations` / `setIssueRelation`, fn-64.3),
+plus the enumeration method (`listOpenIssues`, fn-68.2).
 It is a **detect-best-available
 ladder**, the exact shape as `flow-next-drive`'s driver ladder (SKILL.md Step 3 +
 `references/agent-browser.md`): probe top-down, use the **highest rung that
@@ -58,10 +59,11 @@ path, which is why the GraphQL parity check (below) is load-bearing, not optiona
 ## No-op rung (terminal) — never crash
 
 When `TRANSPORT=none`, the configured bridge cannot reach Linear this run. Every
-one of the eight interface methods becomes a documented no-op:
+one of the nine interface methods becomes a documented no-op:
 
-- `fetchIssue` / `listComments` / `readStatus` / `listIssueRelations` → return
- nothing actionable (treated as "no remote view available this run"); the spec's
+- `fetchIssue` / `listComments` / `readStatus` / `listIssueRelations` /
+ `listOpenIssues` → return nothing actionable (treated as "no remote view
+ available this run"); `listOpenIssues` returns `[]` (fn-68.2). The spec's
  flow-side state is left untouched and the merge base is NOT advanced.
 - `writeIssue` / `postComment` / `setStatus` / `setIssueRelation` → perform no
  remote write. Dependency projection is skipped with a `noop` receipt — never a
@@ -130,7 +132,7 @@ the parity check verifies.
 ## Relation transport (dependency projection, fn-64.3)
 
 The `listIssueRelations` / `setIssueRelation` pair routes through the same rung
-ladder as the other six methods, with one extra wrinkle: the MCP rung's relation
+ladder as the six core methods, with one extra wrinkle: the MCP rung's relation
 params can drift out of the pinned schema, so the rung selection has a **relation-
 specific fallback** layered on top of the normal probe.
 
@@ -181,6 +183,7 @@ the same fields into/out of the normalized structs:
 | `setStatus` | `save_issue(id, state)` | `issueUpdate(id, stateId)` | ok / `errored` |
 | `listIssueRelations` | `get_issue(id, includeRelations:true)` | `issue{ relations(first:N) + inverseRelations(first:N) }` | same blocked-by `relation[]` (`{from,to,type:"blocks",source}`) |
 | `setIssueRelation` | `save_issue(id, blockedBy:[…])` (append-only) | `issueRelationCreate(issueId:B, relatedIssueId:A, type:blocks)` | ok / `errored` / `noop`; read-before-write on both |
+| `listOpenIssues` (fn-68) | `list_issues(team, state=readyState NAME)` | `issues(filter:{team, state:{name:{eqIgnoreCase}}}, first:N)` | same `issue[]` at the **exact** readyState lane (no `type`, no ordering) |
 | status map build | `list_issue_statuses(team)` | `workflowStates(first:100, filter:{team}){type}` | same name/type → stateId map |
 
 If a field is reachable on one rung but not the other, that is a parity gap —

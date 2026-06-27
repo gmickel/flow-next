@@ -95,15 +95,22 @@ line. The marker is the canonical dedup key and the back-reference all at once:
 
 > **Marker reconciliation.** The adapter ([linear-ladder.md](linear-ladder.md),
 > [linear-mcp.md](linear-mcp.md), [linear-graphql.md](linear-graphql.md)) detects
-> the `flow-evt:<event>` token and sets the normalized `comment.marker` field. This
-> file's richer HTML-comment form (`<!-- flow-next:sync … -->`) is what is actually
-> *written into the body*; the adapter's `flow-evt:<event>` is the **shorthand it
-> parses out of that line** into `comment.marker`. One marker, two views: the full
-> HTML comment in the body (carries `issue` + `spec` + `evidence`; `issue` is the
-> linkify-safe match key), the `flow-evt:<event>` token the adapter exposes as
-> `comment.marker`. **On read, normalize tracker mention-markup** (`<issue …>KEY</issue>` →
-> `KEY`) before parsing the line, so a linkified marker still resolves. A comment whose `marker` is
-> non-null is **flow's own** — skip it on pull.
+> a flow-owned marker token and sets the normalized `comment.marker` field. The
+> flow-owned set is **closed** — `flow-next:sync` (→ `flow-evt:<event>`),
+> `flow-next:question` (→ `flow-evt:question`), and the rolling `flow-next:status`
+> (→ `flow-evt:status`) — see the marker-vocabulary table in
+> [adapter-interface.md](adapter-interface.md) § `comment`. An adapter that sets
+> `marker` ONLY for `flow-evt:<event>` would wrongly return a parked **question**
+> with `marker: null` and import it into the Sync Log — detect the whole set. This
+> file's richer HTML-comment forms (`<!-- flow-next:sync … -->` /
+> `<!-- flow-next:question … -->`) are what is actually *written into the body*; the
+> adapter's `flow-evt:<…>` token is the **shorthand it parses out of that line**
+> into `comment.marker`. **On read, normalize tracker mention-markup**
+> (`<issue …>KEY</issue>` → `KEY`) before parsing the line, so a linkified marker
+> still resolves. A comment whose `marker` is non-null is **flow's own** — skip it
+> on pull. The **one exception** is `flow-next:answer`: it is the human's reply
+> (genuine content), so `marker` stays `null`, but the adapter still surfaces its
+> `id`; the answer round-trip claims it by `id` BEFORE the generic Sync-Log append.
 
 **On pull:** a tracker comment whose `marker` is non-null (the `flow-next:sync`
 marker is present) is **flow's own echo** → do **not** import it into the sync log
@@ -172,6 +179,11 @@ re-posted/re-imported" (R8) actually hold.
 # PULL (tracker → flow sync log):
 for c in listComments(trackerId):
  if c.marker != null: continue # Layer 1: flow's own marked comment — skip
+ # (flow-evt:<event> / flow-evt:question / flow-evt:status)
+ if c carries flow-next:answer id=<id>: # human ANSWER (marker stays null): the round-trip
+ claim it by <id> for the question-valve (steps.md Phase 7) BEFORE Sync-Log;
+ if it MATCHED an open question: continue # imported under ## Open Questions, not the Sync Log
+ # else (no matching open question) fall through — it is a genuine comment
  if c.id ∈ postedIds: continue # Layer 2: known flow-originated id — skip
  if normHash(c.body) ∈ seenSet: continue # Layer 3: human paste of flow content — skip
  append c to the spec's ## Sync Log # a genuine tracker-side comment
@@ -226,6 +238,44 @@ tracker comment, marker-fenced:
 The `evidence=a1b2c3d` in the marker is the per-evidence dedup key: re-running
 `work.done` for the same commit finds the existing marker (Layer 1) and **skips** —
 no duplicate evidence comment.
+
+## The async question-valve markers (fn-68 R15)
+
+Backlog mode's `ask` stage posts a **question-valve comment** through this same
+`postComment` channel, behind a **distinct marker family** that rides the Layer-1
+dedup but is keyed on a stable `id` rather than `issue+evt+evidence`:
+
+```html
+<!-- flow-next:question id=<hash> status=open --> <!-- the parked question -->
+<!-- flow-next:answer id=<hash> --> <!-- a human's reply, matched by id -->
+```
+
+- **`id` hashes STABLE fields only** — `subjectId` + blocked-stage + `reasonCode` +
+ `questionSlug` (the question authoring lives in [steps.md](../steps.md) Phase 7).
+ `subjectId` = the spec id when spec-backed, else the opaque tracker **UUID** —
+ **never a bare tracker key** (`WOR-17` / `#123`), because the linkify hazard above
+ mangles keys even inside HTML comments. The **free-prose reason is OUTSIDE the
+ hash**, so rephrasing the question never spawns a duplicate anchor.
+- **Dedup by `id` (Layer 1).** Before posting a question, `listComments` and check
+ for an existing `flow-next:question id=<id>` → if present, **skip the re-post**
+ (the subject is already parked). Same exact-match fence as the `flow-evt` marker,
+ keyed on `id`.
+- **`flow-next:question` is flow-posted ⇒ the adapter sets `marker = flow-evt:question`
+ ⇒ NOT pulled into the Sync Log** (Layer 1 on pull — it is flow's own structured
+ comment, like every `flow-evt` comment; the adapter MUST detect it per the closed
+ marker vocabulary in [adapter-interface.md](adapter-interface.md) § `comment`). The
+ question's durable home is the spec `## Open Questions` (spec-backed) or the tracker
+ comment itself (tracker-only) — never the Sync Log.
+- **`flow-next:answer` is the HUMAN's reply** — it is genuine tracker-side content,
+ but it is NOT a free-form Sync-Log comment: the answer round-trip
+ ([steps.md](../steps.md) Phase 7) matches it to its open question **by `id`**
+ (threaded via `comment.parentId` on Linear, or flat by the body marker on
+ GitHub) and imports it **under the matching `## Open Questions` entry**, flipping
+ the question anchor to `status=answered`. An answer that matches no open question
+ falls through to the normal Sync-Log append (a genuine tracker comment).
+
+This is additive to the three-layer dedup — the question-valve markers are a second
+marker *vocabulary* on the same Layer-1 channel, not a new dedup mechanism.
 
 ## The ONE edit-in-place exception — the rolling "flow-next status" comment (opt-in)
 
@@ -330,6 +380,41 @@ append comment is created by the rolling refresh.
 place is confined to the single rolling marker and the append fence holds for
 everything else.
 
+### Fixture C-F — question-valve is idempotent by `id` (fn-68 R15)
+
+**Setup:** the `ask` stage posted a `flow-next:question id=H1 status=open` comment for
+a blocked subject. A later tick re-triages the same subject (same `subjectId` +
+blocked-stage + `reasonCode` + `questionSlug`) but **rephrases** the free-prose
+reason.
+
+**Action:** the `question` op recomputes `id` and `listComments` before posting.
+
+**Expected:** the rephrase leaves `id == H1` (prose is OUTSIDE the hash) → Layer-1
+dedup finds the existing `flow-next:question id=H1` → **skip the re-post**. No
+duplicate question comment.
+
+**Oracle:** exactly one `flow-next:question id=H1` comment; the re-triage is a
+`noop`. PASS iff rephrasing never spawns a second anchor.
+
+### Fixture C-G — answer round-trips by `id` on a FLAT tracker (fn-68 R15)
+
+**Setup:** a `flow-next:question id=H2 status=open` comment exists on a **GitHub**
+issue (flat — no threading). A human posts a reply comment carrying
+`<!-- flow-next:answer id=H2 -->` plus the answer prose. GitHub gives it
+`parentId: null`.
+
+**Action:** pull/reconcile runs the answer round-trip.
+
+**Expected:** despite `parentId == null`, the answer is matched to the open question
+**by `id` (H2)** via the body marker. For a spec-backed subject it imports **under
+the matching `## Open Questions` entry** and flips the anchor to `status=answered`;
+for a tracker-only subject it stays in the tracker as the durable answered record.
+
+**Oracle:** the question with `id=H2` is now `answered`, the answer prose is paired
+with it (NOT merely appended to `## Sync Log`), and the flat `parentId` did not
+prevent the match. PASS iff the flat-tracker answer round-trips exactly like a
+threaded one.
+
 ## Boundaries
 
 - **This is the comments/evidence layer, not the body merge, status, or transport.**
@@ -341,6 +426,11 @@ everything else.
  for evidence / lifecycle / user comments.
 - **Dedup is three independent layers** — marker (exact), stored id (durable),
  normalized-text hash (catches the human paste). Any hit ⇒ skip.
+- **The question-valve markers (fn-68 R15)** — `flow-next:question id=<hash>` /
+ `flow-next:answer id=<hash>` — ride the Layer-1 channel keyed on a STABLE `id`
+ (free prose outside the hash, never a bare tracker key). The authoring + answer
+ round-trip live in [steps.md](../steps.md) Phase 7; this file owns their dedup +
+ the `flow-next:answer`-vs-Sync-Log distinction.
 - **Never promote a tracker comment to an R-ID** — log it; promotion is a flow-
  authoring act (interview/plan), not a sync act. The bridge projects.
 - **State advances only on a real reconcile** — a run that dedups to a no-op does not

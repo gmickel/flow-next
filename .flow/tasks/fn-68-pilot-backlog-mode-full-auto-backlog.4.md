@@ -31,9 +31,8 @@ Skill prose MUST match the real flowctl + tracker-sync op surface — verify eve
 - [ ] never-merge / never-author / single-tick / dep-cycle-surface are **enforcing bash snippets**.
 
 ## Done summary
-TBD
-
+Wired backlog mode into the flow-next-pilot skill: a strict `pilot.autonomy == "backlog"` config gate plus `--backlog`/`--auto` per-run override in SKILL.md, with workflow.md hooks (Phase 0.5 mode resolution + four enforcing-bash safety guards, Phase 1.5 wide pull-before-scan SELECT, Phase 1.6 agentic triage + force-gate, Phase 3.5 async ask valve via tracker-sync's `question` op, Phase 6 pilot-log decision row). Added the durable `ASKED` verdict and made `TRIAGED` diagnostic/dry-run-only; kept `NO_WORK`/`DEFERRED_TO_LAND` verbatim and added no `PROMOTED`. Gate off leaves pilot byte-for-byte unchanged; backlog-mode.md (fn-68.3) is loaded only in the mode. RP impl-review SHIP after two fix rounds.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 438f93b73b3dd9c673fc17c00953d267cc008078, 8997fd84e0ca831102bd1d4f4d2fe8acd05fd5b0, 08b090480b2eb0e1d1dc61ddcff446d47d3b91b9
+- Tests: python3 plugins/flow-next/tests/test_pilot_backlog_substrate.py (32 OK — flowctl substrate sanity, markdown-only change unaffected), RP impl-review SHIP (2 NEEDS_WORK rounds → SHIP; R1/R4/R6/R7/R9/R10 all met, 0 unaddressed)
 - PRs:

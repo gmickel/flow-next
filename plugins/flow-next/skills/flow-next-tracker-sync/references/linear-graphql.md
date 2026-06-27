@@ -64,12 +64,15 @@ if [ "$CODE" = "400" ] && printf '%s' "$BODY" | grep -q '"RATELIMITED"'; then
 fi
 ```
 
-## The six interface methods over GraphQL
+## The core interface methods over GraphQL
 
-Mapping wire ↔ normalized happens here, at the adapter boundary. Reconcile never
-sees a GraphQL shape. (`$KEY` = `LINEAR_API_KEY`; `EP` =
-`https://api.linear.app/graphql`. Bodies passed as GraphQL `variables`, not
-string-interpolated, to avoid escaping bugs.)
+The original **six** core methods plus the enumeration method `listOpenIssues`
+(fn-68.2); the dependency-projection pair (`listIssueRelations` /
+`setIssueRelation`, fn-64.3) is its own section below — together the **nine-method**
+interface ([adapter-interface.md](adapter-interface.md)). Mapping wire ↔ normalized
+happens here, at the adapter boundary. Reconcile never sees a GraphQL shape.
+(`$KEY` = `LINEAR_API_KEY`; `EP` = `https://api.linear.app/graphql`. Bodies passed
+as GraphQL `variables`, not string-interpolated, to avoid escaping bugs.)
 
 ### `fetchIssue(trackerId)` → normalized `issue` | not-found
 
@@ -128,7 +131,7 @@ Resolve the normalized status → the team's concrete `stateId` via the status m
 query ($id: String!, $first: Int!, $after: String) {
   issue(id: $id) {
     comments(first: $first, after: $after, orderBy: updatedAt) {
-      nodes { id body createdAt user { name } }
+      nodes { id body createdAt user { id name } botActor { id name } parent { id } }
       pageInfo { hasNextPage endCursor }
     }
   }
@@ -136,9 +139,25 @@ query ($id: String!, $first: Int!, $after: String) {
 ```
 - **Always set `first:`** (e.g. 50) and page via `after`/`endCursor` — never
   unbounded (complexity-limit hygiene).
-- Map each: `user.name`→`author`; detect the `flow-evt:<event>` marker in `body`
-  → set `marker` (flow's own echo, skipped on pull); genuine tracker comments get
-  `marker:null` and pull into the spec sync log.
+- **`authorAuthority` (fn-68 R15 security — populate it here, the producer):**
+  `botActor` present ⇒ `bot`; else the `user` maps to `writer` when a workspace
+  **member** (the user's `admin`/`member` role / workspace membership), `outsider`
+  for a guest, and `unknown` when membership can't be resolved (⇒ the answer valve
+  fails closed). This is why the query fetches `user { id name }` + `botActor`.
+- Map each: `user.name`→`author`; detect the **closed flow-owned marker set** in
+  `body` → set `marker` (flow's own echo, skipped on pull): `flow-next:sync`→
+  `flow-evt:<event>`, `flow-next:question`→`flow-evt:question`, rolling
+  `flow-next:status`→`flow-evt:status` ([adapter-interface.md](adapter-interface.md)
+  § `comment` marker-vocabulary table). **`flow-next:answer` is the human reply —
+  `marker` stays `null`, but surface its `id`** for the answer round-trip. Genuine
+  tracker comments get `marker:null` and pull into the spec sync log.
+- **`parent { id }` → the optional `comment.parentId`** (fn-68 R15): Linear threads
+  replies, so a human's answer posted *under* a `flow-next:question` comment carries
+  that question comment's id. The question-valve answer round-trip ([adapter-interface.md](adapter-interface.md)
+  § `comment`; [steps.md](../steps.md) Phase 7) matches the `<!-- flow-next:answer id=… -->`
+  reply to its question by **thread (parentId) + id**. A top-level comment has
+  `parent == null` → `parentId: null` (matched by the body `id` marker alone, like
+  the flat-tracker rung).
 
 ### `postComment(trackerId, body)` → normalized `comment`
 
@@ -154,6 +173,60 @@ mutation ($input: CommentCreateInput!) {
 ### `readStatus(trackerId)` → normalized `status`
 
 Derived from the `fetchIssue` `state { name type }` — no separate call.
+
+### `listOpenIssues(filter) → issue[]` (fn-68 — enumeration)
+
+Enumerate the **promoted lane** — open issues at the **exact** `tracker.readyState`
+workflow-state name. Filter on the state **name** (not `state.type`), the same exact
+match the readiness projection uses ([status-sync.md](status-sync.md)). Bound the
+team to `tracker.perTracker.teamId` when set.
+
+The skill **builds the `$filter` object** and passes it whole — it includes the
+`team` key ONLY when `tracker.perTracker.teamId` is set, `state` always. The
+template never hardcodes a `team` predicate, so a null team is never sent (an
+inline `team: { id: { eq: null } }` mis-filters to teamless issues):
+
+```graphql
+query ($filter: IssueFilter!, $first: Int!, $after: String) {
+  issues(first: $first, after: $after, filter: $filter) {
+    nodes { id identifier title description url updatedAt
+            state { name type } labels(first: 25) { nodes { name } } priority }
+    pageInfo { hasNextPage endCursor }
+  }
+}
+# $filter — built by the skill (state always; team ONLY when teamId is set):
+#   teamId set → { "state": { "name": { "eqIgnoreCase": "<readyState>" } },
+#                  "team":  { "id":   { "eq": "<teamId>" } } }
+#   no teamId  → { "state": { "name": { "eqIgnoreCase": "<readyState>" } } }   # team key OMITTED
+# $first: 50
+```
+
+- **`state: { name: { eqIgnoreCase } }` is the exact-lane filter** — no `type`
+  predicate, no ordering, no "and-later" states. `readyState` matching is exact
+  (adapter-interface.md § Enumeration transport); an ordered promoted-set is a
+  future config, never inferred here.
+- **Map each node into the normalized `issue` struct** via the same firewall table
+  the `fetchIssue` map uses ([linear-ladder.md](linear-ladder.md) § Normalized
+  mapping) — `description`→`body`, `state.name`→`status.raw`, `labels.nodes[].name`
+  →`labels`, etc. A tracker-only ticket (no `flow:<id>` label) maps identically.
+  **Linkage is decided authoritatively by the local sync state** (the linked
+  tracker-ids the skill recorded), with the `flow:<id>` label only a corroborating
+  hint — a **truncated** label set (one that hit the `labels(first:)` bound) is
+  **never** read as "unlinked": a many-label issue could carry the back-reference
+  past the bound, so a *linked* issue is never mis-classified as a tracker-only one.
+- **Always set `first:`** and page via `after`/`endCursor` — never unbounded
+  (complexity-limit hygiene), same as `listComments`. **Nested connections are
+  bounded too** — `labels(first: 25)` (generous headroom for the `flow:<id>`
+  back-reference + readyState label; and linkage is confirmed from the local sync
+  state regardless of the bound, per the mapping note above).
+- **Omit the `team` predicate when `tracker.perTracker.teamId` is unset.** Build
+  the `filter` object conditionally — include `team: { id: { eq: $team } }` ONLY
+  when a teamId is configured; with no team, the filter carries `state` alone. A
+  literal `team: { id: { eq: null } }` mis-filters (matches teamless issues / errors),
+  so the predicate is *added*, never *nulled*.
+- **`tracker.readyState` unset ⇒ the skill never calls this** (steps.md Phase 7a
+  short-circuits to a `noop` + note); reached with an empty `$state` it returns
+  `[]` + `noop`. No transport reachable ⇒ `noop` + receipt note, `[]`.
 
 ## Relation transport (dependency projection, fn-64.3)
 

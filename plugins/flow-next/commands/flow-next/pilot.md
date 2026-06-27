@@ -1,7 +1,7 @@
 ---
 name: flow-next:pilot
-description: Single-tick autonomous build-loop conductor (one ready spec, one stage per invocation)
-argument-hint: "[--spec <fn-N>] [--dry-run] [--review=<backend>] [--research=<grep|rp>] [--depth=<level>]"
+description: Single-tick autonomous build-loop conductor (one item, one stage per invocation); --backlog/--auto widens it to triage the whole open backlog
+argument-hint: "[--backlog|--auto] [--spec <fn-N>] [--dry-run] [--review=<backend>] [--research=<grep|rp>] [--depth=<level>]"
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-pilot`

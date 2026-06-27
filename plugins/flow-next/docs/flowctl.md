@@ -434,6 +434,50 @@ Output:
 }
 ```
 
+**`ready --all`** (fn-68, backlog mode) — a **spec-level** backlog-wide eligibility scan (ignores `--spec`), the deterministic substrate `/flow-next:pilot` backlog mode (`pilot.autonomy=backlog`) consumes:
+
+```bash
+flowctl ready --all [--json]
+```
+
+Output:
+```json
+{
+  "success": true,
+  "specs": [
+    {"id": "fn-12-add-auth", "ready": true,  "readySignal": "local", "blockedBy": [],            "hasSpec": true},
+    {"id": "fn-13-rate-limit", "ready": false, "readySignal": "none",  "blockedBy": ["fn-12-add-auth"], "hasSpec": true}
+  ]
+}
+```
+
+Returns **deterministic eligibility facts only** for every open flow spec — `ready` (the **local** fn-58 `ready` boolean, exactly what flowctl sees on disk), `readySignal ∈ {local, none}` (whether that local flag is set — flowctl stores no readiness *provenance*, so it cannot attribute a tracker-projected ready; the skill annotates tracker-origin readiness when it unions tracker items), `blockedBy` (unsatisfied dep spec ids), and `hasSpec` (whether a spec file exists). It **never** computes a judgment `triageClass` / completeness score — *workable / thin / ambiguous / needs-spec* is the host agent's agentic read in the `triage` stage, never a flowctl field (the agentic/deterministic line). flowctl has **no tracker transport** and must not grow one: the **tracker-side** open items (incl. tickets with no flow spec) are unioned in by the skill from tracker-sync's adapter, not by `ready --all`. After a backlog tick's tracker pull projects `tracker.readyState` onto the local flag, a tracker-promoted spec simply reads `ready: true, readySignal: local` like any other.
+
+### pilot-log
+
+The per-tick **decision log** `/flow-next:pilot` backlog mode (fn-68) writes — the factory-metrics substrate (and the later self-improvement-synthesis substrate). Receipt-shaped rows under `.flow/pilot-runs/` (a sync-runs-style dir, auto-gitignored) — deliberately **NOT** any `receipts/` path the ralph-guard validates, so a pilot-log row never trips a Ralph receipt gate.
+
+```bash
+# Append one row (called by the skill at each backlog terminal)
+flowctl pilot-log append --id <id> --action <triaged|advanced|asked|blocked|needs-human> \
+                         [--stage <stage|->] [--cost-tokens <n>] [--json]
+
+# List all rows
+flowctl pilot-log summary [--json]
+```
+
+- `--id` — an **opaque** id: the spec id when spec-backed, else a bare tracker key (safe-filename-normalized).
+- `--action` — the **frozen** enum `triaged | advanced | asked | blocked | needs-human`, aligned to the backlog verdict grammar.
+- `--stage` — the pipeline stage label (`-` or omitted = none).
+- `--cost-tokens` — **host-reported** token cost (optional; omitted/null when the host can't report it — flowctl only stores the row, it never *measures* cost).
+
+`summary` output:
+```json
+{"success": true, "rows": [{"tick": 1, "id": "fn-12-add-auth", "action": "advanced", "stage": "work", "costTokens": 84213}], "count": 1}
+```
+
+`tick` is a per-id monotonic counter assigned by `append` (flock-guarded). The rows power the efficiency readout — % of items moved with no question / one async answer / parked, and cost per change.
+
 ### next
 
 Select next plan/work unit.
@@ -576,6 +620,8 @@ flowctl config toggle memory.enabled [--json]
 | `land.ciFixBudget` | int | `3` | CI-fix attempts per PR before land durably labels it `flow-next:needs-human` and skips it on later ticks. |
 | `artifacts.html.enabled` | bool | `false` | **Optional HTML artifact mode (fn-62, 2.0.0+).** Enable with `flowctl config set artifacts.html.enabled true`: participating skills (capture, plan, make-pr) load the shared render-lens reference and emit self-contained HTML artifacts at the fixed paths `.flow/artifacts/<spec-id>/spec.html` / `pr.html` (regenerable lenses, never timestamped — markdown stays the sole source of truth and artifacts are never parsed back as state). **OFF by default** — with it off, no reference file loads, no artifacts are written, no Lavish session opens; behavior is byte-identical to markdown-only. flowctl only stores the knob; generation is skill-side. |
 | `pipeline.qa` | `off \| on` | `off` | **Optional QA pipeline stage (fn-72, 2.2.0+).** Enable with `flowctl config set pipeline.qa on` — this is a **string-enum** knob (`off \| on`), **NOT a bool**; the activating value is the literal string `on` and **any other value, including bool `true`, is OFF** (the `/flow-next:pilot` gate read is the canonical 3-clause guard `value != "off" && value != "null"`). With it `on`, pilot inserts a `qa` stage at the **all-tasks-done** juncture (before make-pr): one live `/flow-next:qa` pass over the complete build, surfacing its `qa_outcome` into the draft PR. **OFF by default** — with it off, pilot's stage set and behavior are byte-for-byte unchanged. Augments (never replaces) CI/staging/manual QA; `BLOCKED` (no local app) / `NA` (no UI) advance, `NEEDS_WORK` still advances to the draft PR + surfaces findings (it never hard-blocks the loop). flowctl only stores the knob; the QA stage is host-agent skill wiring (no new subcommand/engine). |
+| `pilot.autonomy` | `ready \| backlog` | `ready` | **Pilot backlog mode (fn-68).** A **scalar string-enum** (`ready \| backlog`), **NOT a bool**. `ready` (default) = current behavior: pilot selects only already-ready specs. Set to the literal `backlog` (`flowctl config set pilot.autonomy backlog`, or per-run `--backlog` / `--auto`) to enable **backlog mode** — pilot widens selection to the whole open backlog (flow specs via `ready --all` + tracker issues unioned by the skill), triages the top dep-ordered item, and either advances it or surfaces an async question (`ASKED`). **Only the literal `backlog` activates** — any other value (bool `true`, a typo, `null`) leaves pilot byte-for-byte in `ready` mode, and `references/backlog-mode.md` is never read. Backlog mode **never authors a spec, never sets `ready`, never merges**; readiness stays the human's explicit signal. flowctl only stores the knob; the SELECT/TRIAGE/ASK workflow is host-agent skill wiring. |
+| `pilot.gateClasses` | string[] | `[]` | **Backlog-mode force-gate (fn-68).** An optional list of class names (e.g. `["risky", "prod-config"]`) that, in backlog mode, force **surfacing before action** — a matching item is parked with a question (`ASKED`) instead of advanced full-auto, even when otherwise workable. A **sibling** key, deliberately NOT `pilot.autonomy.gate` (a scalar and an object cannot share the `pilot.autonomy` dot-path). Empty `[]` (default) = full-auto for every workable item. |
 
 \* The pre-1.1.3 legacy alias `planSync.crossEpic` was **removed in 2.0.0** (it was readable through 1.x with a stderr deprecation warning). `flowctl` no longer reads or writes it — a leftover `crossEpic` key in `.flow/config.json` is inert. If you relied on it, set the canonical key once: `flowctl config set planSync.crossSpec true`.
 
