@@ -32,9 +32,8 @@ Tracker-sync is projection, not coordination. `listOpenIssues` + the `comment` r
 - [ ] R16 reuses the existing status-sync projection; `docs/tracker-sync.md` documents the parity fix + `listOpenIssues` + the named ops; tests cover the gate, the anchor/answer round-trip (threaded + flat), exact-match enumeration, and the readyState-null no-op.
 
 ## Done summary
-TBD
-
+Made tracker-sync autonomous-safe on the pilot/backlog path (R14: Phase-0 gate now folds FLOW_AUTONOMOUS/mode:autonomous into RALPH — never AskUserQuestion, conflicts sync defer) and added the 9th adapter method listOpenIssues + named skill ops list-open/question + the R15 async question-valve anchor contract (stable id-hashed anchor, flat/threaded answer round-trip, tracker-only receipt exemption); R16 reuses the existing readyState→ready projection unchanged. Skill prose + adapter references (Linear+GitHub) + a 23-case prose-contract test; Codex mirror regen deferred to fn-68.5. RepoPrompt review: SHIP (after two NEEDS_WORK rounds — closed a producer-side marker-vocabulary gap + stale method-count wording).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 7545732, b2ea4c7a, 0f9f6645, ea958b0c
+- Tests: python3 -m unittest plugins.flow-next.tests.test_tracker_sync_backlog_mode (23 cases, OK), python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (1190 tests, OK skipped=2)
 - PRs:
