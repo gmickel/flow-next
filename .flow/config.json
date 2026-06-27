@@ -1,7 +1,7 @@
 {
   "artifacts": {
     "html": {
-      "enabled": true
+      "enabled": false
     }
   },
   "land": {
@@ -15,6 +15,9 @@
   },
   "memory": {
     "enabled": true
+  },
+  "pipeline": {
+    "qa": "off"
   },
   "planSync": {
     "crossSpec": false,
