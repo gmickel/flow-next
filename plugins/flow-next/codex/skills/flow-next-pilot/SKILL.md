@@ -69,6 +69,7 @@ PILOT_DRY_RUN=0
 PILOT_REVIEW=""
 PILOT_RESEARCH="grep"
 PILOT_DEPTH="short"
+PILOT_BACKLOG_OVERRIDE="" # "" = use config; "1" = force backlog (--backlog/--auto)
 
 PREV=""
 for ARG in $RAW_ARGS; do
@@ -82,6 +83,7 @@ for ARG in $RAW_ARGS; do
  --spec|--review|--research|--depth) PREV="$ARG" ;;
  --spec=*) PILOT_SPEC="${ARG#--spec=}" ;;
  --dry-run) PILOT_DRY_RUN=1 ;;
+ --backlog|--auto) PILOT_BACKLOG_OVERRIDE=1 ;;
  --review=*) PILOT_REVIEW="${ARG#--review=}" ;;
  --research=*) PILOT_RESEARCH="${ARG#--research=}" ;;
  --depth=*) PILOT_DEPTH="${ARG#--depth=}" ;;
@@ -90,10 +92,26 @@ for ARG in $RAW_ARGS; do
  esac
 done
 [[ -n "$PREV" ]] && echo "Flag $PREV given without a value (ignored by /flow-next:pilot)" >&2
-export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH
+export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH PILOT_BACKLOG_OVERRIDE
 ```
 
 No branch flag exists in v1. Branch resolution is pilot-owned from the selected spec's `branch_name`.
+
+### Autonomy mode resolution (R1) — gate the wide backlog behavior
+
+Resolve `PILOT_AUTONOMY` once, here, so every downstream block keys off a single value. The gate is a **strict scalar string-enum** — backlog mode activates **only** on the literal `backlog` (config `pilot.autonomy`), or when the per-run `--backlog` / `--auto` flag forced the override. Any other config value (`ready`, `null`, a coerced bool `true`, a typo) leaves pilot in `ready` mode — **byte-for-byte unchanged behavior** (the `references/backlog-mode.md` file is never even read):
+
+```bash
+PILOT_AUTONOMY="$($FLOWCTL config get pilot.autonomy --json | jq -r '.value')"
+if [ "$PILOT_BACKLOG_OVERRIDE" = "1" ]; then
+ PILOT_AUTONOMY="backlog" # --backlog / --auto forces backlog this run
+elif [ "$PILOT_AUTONOMY" != "backlog" ]; then
+ PILOT_AUTONOMY="ready" # ONLY the literal `backlog` enables — never bool true / typos / null
+fi
+export PILOT_AUTONOMY
+```
+
+When `PILOT_AUTONOMY=ready` (the default), pilot behaves exactly as documented in `workflow.md` Phases 1–6 — no backlog-mode code path runs, `references/backlog-mode.md` is not loaded, and the verdict grammar/stage set/forbidden block are unchanged. When `PILOT_AUTONOMY=backlog`, the SELECT and TRIAGE/ASK phases follow `references/backlog-mode.md` (loaded only then), the verdict grammar gains `ASKED`, and the safety invariants below are active. `FLOW_AUTONOMOUS=1` is exported into every sub-skill / tracker-sync dispatch so the whole tick runs unattended (`plain-text numbered prompt` is never reached).
 
 ## The verdict contract (read this before the workflow)
 
@@ -102,12 +120,26 @@ The `/goal` validator is transcript-blind: it reads conversation output only and
 Every tick ends with exactly one terminal line, the last line of the response, with nothing after it:
 
 ```text
-PILOT_VERDICT=<ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec=<id> stage=<stage> reason="<one line>"
+PILOT_VERDICT=<ADVANCED|ASKED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec=<id> stage=<stage> reason="<one line>"
 ```
 
-Use `spec=-` and `stage=-` when no spec was selected. Stage values are exactly `plan`, `plan-review`, `work`, `qa` (opt-in — only when `pipeline.qa==on`), `make-pr`, `land`, or `-`.
+Use `spec=-` and `stage=-` when no spec was selected. Stage values are exactly `plan`, `plan-review`, `work`, `qa` (opt-in — only when `pipeline.qa==on`), `make-pr`, `land`, plus `triage`/`ask` (backlog mode only), or `-`.
 
 `DEFERRED_TO_LAND` is a distinct *non-terminal-work* verdict (stage `land`): every remaining all-done candidate has an open PR that land — not pilot — owns. It is deliberately separated from `NO_WORK` so a driver can route it to `/flow-next:land` instead of stopping; an all-done spec with an open PR is real outstanding work, never absence of work.
+
+### Backlog-mode verdict grammar (R10 — only when `PILOT_AUTONOMY=backlog`)
+
+Backlog mode **ADDS** `ASKED` and reuses the existing terminals; it changes none of them:
+
+- **`ASKED <id> (<n>)`** — a **durable park**. The `ask` stage wrote a `status=open` question anchor (spec `## Open Questions` for a spec-backed item, or the tracker comment alone for a tracker-only item), so the next tick's SELECT skips this subject. `<n>` is the count of open questions surfaced. Stage = `ask`.
+- **`ADVANCED <id> <stage>`** and **`BLOCKED <id> by <dep>`** — reused unchanged (BLOCKED here = ready-but-dep-unsatisfied, a state-changing surface of the dep wait).
+- **`NO_WORK` and `DEFERRED_TO_LAND` are kept VERBATIM** — drivers grep `DEFERRED_TO_LAND` to route an all-done-with-open-PR spec to `/flow-next:land`, and `/goal`/`/loop` stop-clauses key on `NO_WORK`; coalescing either into a generic "idle" would break the land hand-off and the loop-stop. Never rename them.
+- **No `PROMOTED` verb** — the agent never sets the ready flag; promotion is the human's board act.
+
+**`TRIAGED <id> <class>` is DIAGNOSTIC / dry-run ONLY** — emitted only under a triage-only inspection (`--dry-run`). The split is explicit:
+
+- **Live backlog grammar** (no `--dry-run`): `ADVANCED | ASKED | NO_WORK | DEFERRED_TO_LAND | BLOCKED | NEEDS_HUMAN` — **`TRIAGED` is NOT a live terminal.** A live triage always resolves to a state-changing terminal, so an item can never re-select forever. A live tick MUST NOT end on a bare `TRIAGED` no-op line. The primary grammar line above (which `/loop`/`/goal` drivers read) is exactly this live set.
+- **Dry-run-only grammar** (`--dry-run`): adds `TRIAGED <id> <class>` as the diagnostic terminal — the tick classifies and stops, dispatching nothing and parking nothing. A `/loop`/`/goal` driver never runs `--dry-run`, so it never sees `TRIAGED`.
 
 Driver condition examples:
 
@@ -118,9 +150,11 @@ Driver condition examples:
 
 ## Forbidden
 
-- Asking the user anything in the tick path. Pilot is autonomous; ambiguity maps to `NEEDS_HUMAN`.
-- Dispatching any skill outside the stage set `{plan, plan-review, work, make-pr}` — plus `qa` **only when `pipeline.qa==on`** (fn-72: an opt-in, gate-reversed stage at the all-done juncture before make-pr; with the gate off, `qa` is forbidden and the stage set is byte-for-byte unchanged). Capture, interview, resolve-pr, merge, and release are **never** pilot stages — they stay forbidden for their distinct reasons (capture/interview are human authoring upstream of the consent boundary; resolve-pr/merge/release are land's territory downstream of the PR). Opening `qa` under its gate is not a precedent to open any of those five.
-- Re-implementing sub-skill logic. Pilot owns selection, dispatch, verification, verdicts, and the strikes ledger only.
+- Asking the user anything in the tick path. Pilot is autonomous; ambiguity maps to `NEEDS_HUMAN`. In backlog mode, ambiguity that needs a person is surfaced **async** via the `ask` stage (`ASKED`) — never an interactive `plain-text numbered prompt`.
+- Dispatching any skill outside the stage set `{plan, plan-review, work, make-pr}` — plus `qa` **only when `pipeline.qa==on`** (fn-72: an opt-in, gate-reversed stage at the all-done juncture before make-pr; with the gate off, `qa` is forbidden and the stage set is byte-for-byte unchanged). **Backlog mode (`PILOT_AUTONOMY=backlog`) additionally invokes `/flow-next:tracker-sync` for the `reconcile` / `list-open` / `question` ops** — these are read/surface-only tracker calls, not a pipeline stage, and run only on the backlog path. Capture, interview, resolve-pr, merge, and release are **never** pilot stages — they stay forbidden for their distinct reasons (capture/interview are human authoring upstream of the consent boundary; resolve-pr/merge/release are land's territory downstream of the PR). Opening `qa` under its gate or `tracker-sync` under backlog mode is not a precedent to open any of those five.
+- Re-implementing sub-skill logic. Pilot owns selection, dispatch, verification, verdicts, and the strikes ledger only. The backlog-mode SELECT/TRIAGE/ASK workflow lives in `references/backlog-mode.md` (loaded only when `PILOT_AUTONOMY=backlog`); the question-anchor authoring + answer round-trip live in tracker-sync — backlog mode invokes them, never re-implements them.
+- **Never merging / never invoking land** (R6) — in either mode, the terminus is `make-pr` (draft). Merge stays human-gated. Backlog mode never calls `/flow-next:land`, `gh pr merge`, or any merge path.
+- **Never authoring a spec** (backlog mode) — `capture`/`interview` are human-gated upstream. A missing/too-thin spec is surfaced as a "needs capture/interview" gap and parked (`ASKED`), never auto-written. The only writing the `ask` stage may do is fill an obvious blank in an *existing* spec — never create a spec stub from a bare ticket.
 - Touching gh anywhere except the all-done classification branch's PR probe and the make-pr verification probe.
 - Printing anything after the `PILOT_VERDICT` line.
 - Running under Ralph (`FLOW_RALPH` / `REVIEW_RECEIPT_PATH`).
@@ -136,6 +170,8 @@ Execute [workflow.md](workflow.md) in order:
 5. **dispatch** — invoke exactly one stage skill with `mode:autonomous` plus review/research/depth passthroughs.
 6. **verify** — re-read flowctl state, or gh for make-pr, and echo before/after evidence.
 7. **report** — clear or record strikes, optionally unready on the second healthy no-advance tick, and print the terminal verdict.
+
+**Backlog mode (`PILOT_AUTONOMY=backlog`).** When the autonomy gate resolved to `backlog`, the SELECT and TRIAGE/ASK behavior follows [references/backlog-mode.md](references/backlog-mode.md) — the agentic floor scheduler (loaded **only** in this mode). It widens SELECT (pull-before-scan, union tracker-only items, dep-order, skip parked) and adds the `triage`/`ask` stages **in front of** CLASSIFY; a **workable** item flows into the existing `classify → branch → dispatch → verify` path unchanged. `workflow.md` Phase 0.5 resolves the mode and routes; `workflow.md` Phase 1.5/Phase 3.5 carry the backlog SELECT + TRIAGE/ASK hooks and the safety invariants. The single-tick contract is unchanged: one item, one stage or one durable park, one terminal verdict.
 
 ## Unattended runs — rp caveat
 

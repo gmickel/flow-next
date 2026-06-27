@@ -40,12 +40,12 @@ when none qualify. Backlog mode reuses that wholesale and adds exactly three thi
 nothing more:
 
 1. **A second ready source** — a tracker issue at the exact `tracker.readyState`
-   counts as promoted, alongside the flow `ready` flag pilot already reads.
+ counts as promoted, alongside the flow `ready` flag pilot already reads.
 2. **Acting on SELECT's skip pile** — the not-ready-but-signalled, the
-   dep-unsatisfied, and the spec-less items pilot today silently drops to `NO_WORK`
-   are triaged / sequenced / surfaced instead of dropped.
+ dep-unsatisfied, and the spec-less items pilot today silently drops to `NO_WORK`
+ are triaged / sequenced / surfaced instead of dropped.
 3. **Enumerating tracker issues with no flow spec** — promoted tickets invisible to
-   `flowctl specs`, unioned in via the `list-open` op.
+ `flowctl specs`, unioned in via the `list-open` op.
 
 A **workable** item routes straight into pilot's **existing** CLASSIFY → DISPATCH →
 VERIFY path (`workflow.md` Phase 2–5) unchanged — backlog mode does not re-implement
@@ -68,17 +68,17 @@ so a tracker-promoted spec reads `ready: true` from `flowctl ready --all` in 1b 
 any other:
 
 ```text
-/flow-next:tracker-sync reconcile mode:autonomous     # FLOW_AUTONOMOUS=1
+/flow-next:tracker-sync reconcile mode:autonomous # FLOW_AUTONOMOUS=1
 ```
 
 - **No-op when the bridge is inactive** (no `tracker.type`, no transport reachable)
-  — the reconcile returns a `noop` receipt and selection proceeds on the flow facts
-  alone (R17 spec-first floor). Never a block, never a ceremony mid-loop.
+ — the reconcile returns a `noop` receipt and selection proceeds on the flow facts
+ alone (R17 spec-first floor). Never a block, never a ceremony mid-loop.
 - **Autonomous-safe (R14).** The reconcile runs under the autonomy gate
-  (tracker-sync Phase 0 recognizes `FLOW_AUTONOMOUS` / `mode:autonomous` after
-  fn-68.2): no path reaches `AskUserQuestion`; a genuine conflict / id collision /
-  readyState-label failure resolves to `sync defer` (queued for the human), never a
-  prompt that would stall the loop.
+ (tracker-sync Phase 0 recognizes `FLOW_AUTONOMOUS` / `mode:autonomous` after
+ fn-68.2): no path reaches `plain-text numbered prompt`; a genuine conflict / id collision /
+ readyState-label failure resolves to `sync defer` (queued for the human), never a
+ prompt that would stall the loop.
 
 ### 1b — Scan the flow side (facts)
 
@@ -90,10 +90,10 @@ READY_ALL_JSON="$($FLOWCTL ready --all --json)"
 facts only** — `{id, ready, readySignal, blockedBy, hasSpec}` (R8):
 
 - `ready` — the local fn-58 `ready` boolean (after 1a's projection, a
-  tracker-promoted spec reads `true`).
+ tracker-promoted spec reads `true`).
 - `readySignal ∈ {local, none}` — whether the local flag is set. flowctl stores no
-  readiness provenance, so it cannot attribute a *tracker-projected* ready; that is
-  fine — after the 1a pull the flag is simply `local`.
+ readiness provenance, so it cannot attribute a *tracker-projected* ready; that is
+ fine — after the 1a pull the flag is simply `local`.
 - `blockedBy` — the unsatisfied `depends_on_epics` (the flow dep edges, 1d).
 - `hasSpec` — whether a spec file exists.
 
@@ -113,18 +113,18 @@ named op:
 ```
 
 - It enumerates open issues at the **exact** `tracker.readyState` (the promoted lane
-  — the same explicit signal as the flow `ready` flag), via the `listOpenIssues`
-  adapter method. Returns normalized `issue[]` (`{id, identifier, title, status,
-  labels, url}`) — **transport-blind**: backlog mode reads the struct and never
-  branches on Linear-vs-GitHub.
+ — the same explicit signal as the flow `ready` flag), via the `listOpenIssues`
+ adapter method. Returns normalized `issue[]` (`{id, identifier, title, status,
+ labels, url}`) — **transport-blind**: backlog mode reads the struct and never
+ branches on Linear-vs-GitHub.
 - **`tracker.readyState` unset ⇒ `list-open` no-ops** (returns `[]` + a note): no
-  promoted lane exists to filter on, so backlog mode runs the **flow-ready specs
-  only**. The flow `ready` flag needs no tracker (R17). Same floor when no transport
-  is reachable.
+ promoted lane exists to filter on, so backlog mode runs the **flow-ready specs
+ only**. The flow `ready` flag needs no tracker (R17). Same floor when no transport
+ is reachable.
 - A tracker-only ticket is recognized by the **absence of a `flow:<id>` label** —
-  that is how the skill knows it is unlinked (no spec). A linked issue already shows
-  up on the flow side via 1b, so de-dup by tracker id / `flow:<id>` label when
-  unioning to avoid scanning the same item twice.
+ that is how the skill knows it is unlinked (no spec). A linked issue already shows
+ up on the flow side via 1b, so de-dup by tracker id / `flow:<id>` label when
+ unioning to avoid scanning the same item twice.
 
 The merged candidate set = the flow specs (1b) ∪ the tracker-only issues (1c).
 
@@ -135,11 +135,11 @@ surfaced and is waiting on a human; re-picking it every tick is exactly the nagg
 R3 forbids. Check the parked home that applies to the item:
 
 - **Spec-backed** — scan the spec's `## Open Questions` for a
-  `<!-- flow-next:question id=… status=open -->` anchor.
+ `<!-- flow-next:question id=… status=open -->` anchor.
 - **Tracker-only** (no spec) — scan the tracker comments (from the `list-open` /
-  `listComments` read) for a `flow-next:question id=… status=open` anchor with **no**
-  matching `<!-- flow-next:answer id=… -->`. The parked state lives in the tracker;
-  there is no spec to anchor in.
+ `listComments` read) for a `flow-next:question id=… status=open` anchor with **no**
+ matching `<!-- flow-next:answer id=… -->`. The parked state lives in the tracker;
+ there is no spec to anchor in.
 
 An item whose anchor has flipped to `status=answered` (a human edited the spec
 anchor, or the answer round-trip matched a tracker reply by `id` — tracker-sync
@@ -153,15 +153,15 @@ edges come from **two** sources and feed **one** existing sorter:
 
 - **Flow deps** — `blockedBy` from `ready --all` (1b). An edge `A blockedBy B`.
 - **Tracker deps** — these are **NOT** in the `issue` struct (`list-open` returns
-  issue-only). For each **tracker** candidate, fetch its relations via the per-issue
-  op and normalize the `relation[]` edges (`from` = blocked, `to` = blocker):
+ issue-only). For each **tracker** candidate, fetch its relations via the per-issue
+ op and normalize the `relation[]` edges (`from` = blocked, `to` = blocker):
 
-  ```text
-  /flow-next:tracker-sync ... → listIssueRelations(issue)   # per tracker issue
-  ```
+ ```text
+ /flow-next:tracker-sync ... → listIssueRelations(issue) # per tracker issue
+ ```
 
-  (This is the `listIssueRelations` adapter method from fn-64, surfaced through the
-  same transport-blind ladder — backlog mode never calls a tracker API directly.)
+ (This is the `listIssueRelations` adapter method from fn-64, surfaced through the
+ same transport-blind ladder — backlog mode never calls a tracker API directly.)
 
 Feed **both** edge sets — the flow `blockedBy` edges and the normalized tracker
 `relation[]` edges — into the **flow-next-deps jq topo-sort** (the phase-assignment
@@ -170,10 +170,10 @@ Feed **both** edge sets — the flow `blockedBy` edges and the normalized tracke
 ready-now set; pick from it.
 
 - **A cycle / deadlock is never spun on.** If the topo-sort cannot place a candidate
-  because its dep chain is circular (or a dep is itself parked / unsatisfiable),
-  that candidate routes to `ASKED` (surface the unresolvable dependency as an async
-  question — Phase 3) or `BLOCKED` (Phase 2's dep-unsatisfied branch), never picked
-  again-and-again. Selection must terminate every tick.
+ because its dep chain is circular (or a dep is itself parked / unsatisfiable),
+ that candidate routes to `ASKED` (surface the unresolvable dependency as an async
+ question — Phase 3) or `BLOCKED` (Phase 2's dep-unsatisfied branch), never picked
+ again-and-again. Selection must terminate every tick.
 
 ### 1f — Pick the top actionable item
 
@@ -191,10 +191,10 @@ pilot's existing terminal split **only when the pool is genuinely empty of a
 selectable, reportable candidate**:
 
 - **`NO_WORK`** — no signalled, unparked candidate exists at all (and no dep wait to
-  report). A signalled-but-dep-blocked candidate is *selectable*, so its presence
-  yields `BLOCKED`, never `NO_WORK`.
+ report). A signalled-but-dep-blocked candidate is *selectable*, so its presence
+ yields `BLOCKED`, never `NO_WORK`.
 - **`DEFERRED_TO_LAND`** — every all-done candidate has an open PR (verbatim from
-  `workflow.md` Phase 6).
+ `workflow.md` Phase 6).
 
 Backlog mode adds neither verdict and changes neither — it only ensures a
 ready-but-blocked item reaches `BLOCKED` (Phase 2) rather than collapsing into
@@ -257,7 +257,7 @@ owned by fn-68.4.)
 
 When triage cannot safely proceed (ready-but-thin, needs-spec, needs-human), park
 the item behind an **async** question and resolve the tick to `ASKED`. **Never ask
-interactively** — `AskUserQuestion` is forbidden on the tick path; the human answers
+interactively** — `plain-text numbered prompt` is forbidden on the tick path; the human answers
 later, on their own time, via the spec or the tracker.
 
 Backlog mode **does not author specs.** Spec authoring (`capture`,
@@ -277,17 +277,17 @@ the stable-anchor authoring, the comments-sync dedup, and the answer round-trip
 Where the question parks depends on whether a spec exists:
 
 - **Spec-backed** (`question <spec-id>`) — the durable parked state lives in the
-  spec's `## Open Questions` behind the `<!-- flow-next:question id=… status=open -->`
-  anchor (the floor), AND it is mirrored as a tracker comment when the bridge is
-  active. The op writes both.
+ spec's `## Open Questions` behind the `<!-- flow-next:question id=… status=open -->`
+ anchor (the floor), AND it is mirrored as a tracker comment when the bridge is
+ active. The op writes both.
 - **Tracker-only** (`question <tracker-id>`, a promoted ticket with no flow spec) —
-  there is no spec to anchor in, so the question lives in the **tracker comment
-  ALONE**. The surfaced gap is always *"this promoted ticket has no flow spec — run
-  `/flow-next:capture` or `/flow-next:interview`"*. **Backlog mode never writes a
-  spec stub** (that is the forbidden authoring). Its parked/answered state lives in
-  the tracker (the `status=open` anchor + a matching `<!-- flow-next:answer id=… -->`,
-  detected by scanning the issue comments) — **no spec import/flip happens until
-  capture/interview later creates a spec.**
+ there is no spec to anchor in, so the question lives in the **tracker comment
+ ALONE**. The surfaced gap is always *"this promoted ticket has no flow spec — run
+ `/flow-next:capture` or `/flow-next:interview`"*. **Backlog mode never writes a
+ spec stub** (that is the forbidden authoring). Its parked/answered state lives in
+ the tracker (the `status=open` anchor + a matching `<!-- flow-next:answer id=… -->`,
+ detected by scanning the issue comments) — **no spec import/flip happens until
+ capture/interview later creates a spec.**
 
 **Idempotent (R7/R15).** Re-triaging the same blocked subject computes the **same**
 anchor `id` (the hash covers stable fields only — `subjectId` + blocked-stage +
@@ -343,38 +343,36 @@ API and **never** branches on tracker type; the active adapter (from `tracker.ty
 supplies the wire query behind the normalized interface.
 
 - **v1 ships on Linear + GitHub** — the two adapters that already implement
-  `listOpenIssues` / `listIssueRelations` / the comment ops (fn-68.2 / fn-64).
+ `listOpenIssues` / `listIssueRelations` / the comment ops (fn-68.2 / fn-64).
 - **GitLab (fn-69) and Jira (fn-70)** inherit the same contract once their adapters
-  ship — backlog mode layers coverage on with **zero** pilot changes (no
-  tracker-specific code lives here to update).
+ ship — backlog mode layers coverage on with **zero** pilot changes (no
+ tracker-specific code lives here to update).
 - **Zero-setup (R17).** Each tracker resolves via tracker-sync's discovery-ceremony
-  probe ladder, preferring auth the company already has (`gh`/`glab` CLI session,
-  registered Linear/Atlassian MCP, or a CI/REST env token) — no flow-next-specific
-  provisioning, OAuth app, webhook, or special config. The spec-first floor
-  guarantees the loop works with **zero** trackers configured.
+ probe ladder, preferring auth the company already has (`gh`/`glab` CLI session,
+ registered Linear/Atlassian MCP, or a CI/REST env token) — no flow-next-specific
+ provisioning, OAuth app, webhook, or special config. The spec-first floor
+ guarantees the loop works with **zero** trackers configured.
 
 ---
 
 ## What backlog mode must NOT do (load-bearing boundaries)
 
 - **No daemon / polling loop / trigger / webhook / cron / parallel-worktree.** One
-  smarter tick — the host `/loop` · `/goal` owns repetition. The standing
-  control-plane role (scheduler, cloud environments, triggers, multi-agent at
-  scale) is mergefoundry / flow-swarm's (fn-94/99), not flow-next's. If this file
-  ever starts describing a standing process, that is drift — remove it.
+ smarter tick — the host `/loop` · `/goal` owns repetition. The standing
+ control-plane role (scheduler, cloud environments, triggers, multi-agent at
+ scale) is mergefoundry / flow-swarm's (fn-94/99), not flow-next's. If this file
+ ever starts describing a standing process, that is drift — remove it.
 - **Never authors a spec.** `capture`/`interview` are human-gated; a needs-spec gap
-  is surfaced, never auto-written (may augment an obvious blank in an *existing*
-  spec only — never create one). The span is *workable spec → draft PR*, not
-  *ticket → draft PR*.
+ is surfaced, never auto-written (may augment an obvious blank in an *existing*
+ spec only — never create one). The span is *workable spec → draft PR*, not
+ *ticket → draft PR*.
 - **Never merges / never invokes land.** The terminus is `make-pr` (draft). Merge
-  stays human-gated; land owns it (R6).
+ stays human-gated; land owns it (R6).
 - **Never sets the ready flag / never promotes.** Readiness is the human's explicit
-  signal; the agent's completeness read can only *withhold*, never *force* or
-  *promote*.
+ signal; the agent's completeness read can only *withhold*, never *force* or
+ *promote*.
 - **No deterministic triage.** No completeness scorer, no regex spec-grader, no
-  weighted scoring, no flowctl `triageClass` field, no second LLM spawned to judge.
-  Triage is the host agent's read; flowctl supplies facts and a log row only.
+ weighted scoring, no flowctl `triageClass` field, no second LLM spawned to judge.
+ Triage is the host agent's read; flowctl supplies facts and a log row only.
 - **No new graph engine.** Dep-ordering reuses the flow-next-deps jq topo-sort; a
-  cycle is surfaced (`ASKED`/`BLOCKED`), never spun on.
-- **Codex mirror is regenerated in fn-68.5** (a SEPARATE task) — keep this file
-  Claude-native (`AskUserQuestion`, `Task`); do NOT regenerate the mirror here.
+ cycle is surfaced (`ASKED`/`BLOCKED`), never spun on.

@@ -26,8 +26,9 @@ instruction).
 |---|---|---|
 | `writeIssue` (upsert) | **`save_issue`** | create: `team`+`title` required, `description` (body, markdown). update: pass `id` (UUID **or** identifier `WOR-17`) + changed fields. `state` (state type/name/ID) sets status. `labels`, `priority` (0=None,1=Urgent,2=High,3=Medium,4=Low). `assignee` (NOT `assigneeId`). **Returns the identifier (`WOR-17`-form) as `id` — never the UUID** (verified 2026-06-09). |
 | `fetchIssue` | **`get_issue`** | `id` (UUID or identifier). `includeRelations:true` for blocking/related. Returns title, `description`, `state`, `priority`, `labels`, `url`, `updatedAt`, git branch name. **The returned `id` is the identifier, not the UUID** (verified 2026-06-09). |
-| `listComments` | **`list_comments`** | `issueId` (UUID or identifier). `orderBy: createdAt|updatedAt`, `limit` (default 50, max 250), `cursor` for paging. |
+| `listComments` | **`list_comments`** | `issueId` (UUID or identifier). `orderBy: createdAt|updatedAt`, `limit` (default 50, max 250), `cursor` for paging. Each comment carries its `parent`/`parentId` (a reply's parent comment) → the optional `comment.parentId` (fn-68 R15 answer-thread match). Set `marker` from the **closed flow-owned set** — `flow-next:sync`/`flow-next:question`/rolling `flow-next:status` (adapter-interface.md § `comment`); `flow-next:answer` keeps `marker:null` but surfaces its `id`. |
 | `postComment` | **`save_comment`** | create top-level: `issueId` + `body`. update: `id` + `body`. reply: `parentId` + `body`. |
+| `listOpenIssues` | **`list_issues`** | filter to the promoted lane: `team` (name or ID) + the **exact** `tracker.readyState` workflow-state **name** (`state`/`status` filter, case-insensitive name match — NOT `state.type`, no ordering). `limit`/`cursor` paging. Returns normalized `issue[]` (fn-68 enumeration). |
 | `listIssueRelations` | **`get_issue`** + `includeRelations:true` | `id` (UUID or identifier). Returns the issue's blocking/related/duplicate relations (fn-64.3). |
 | `setIssueRelation` | **`save_issue`** + `blockedBy:[…]` | update form: `id` = the **blocked** issue + `blockedBy:[<blocker id/identifier>]`. **Append-only** — server doc: "existing relations are never removed" (fn-64.3). |
 | status map build | **`list_issue_statuses`** | `team` (name or ID) → the team's workflow states (name + type + id) for the normalized-status map. |
@@ -63,8 +64,12 @@ key** (`sync set-tracker-id`) and surface the `identifier` to humans; never
 persist `WOR-17` as the primary key — which means **first-link needs the GraphQL
 rung to obtain that UUID** (see Gotchas).
 
-## The six interface methods over MCP
+## The original six core methods over MCP
 
+The six core methods below. The enumeration method `listOpenIssues` (fn-68.2) is
+pinned in the tool-name table above (`list_issues`); the dependency-projection pair
+(`listIssueRelations` / `setIssueRelation`, fn-64.3) is its own section below —
+together the **nine-method** interface ([adapter-interface.md](adapter-interface.md)).
 Mapping wire ↔ normalized happens here, at the adapter boundary. Reconcile never
 sees an MCP shape.
 

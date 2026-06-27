@@ -492,18 +492,23 @@ text = re.sub(
 #
 # Two concrete shapes (handle each explicitly — a single lazy regex backtracks
 # unpredictably across the wrapped form):
+#   The bullet may lead with a bare "Codex mirror" OR a bold-opening
+#   "**Codex mirror ...**" where the bold span carries extra words before it
+#   closes (e.g. "**Codex mirror is regenerated in fn-68.5**"). `(?:\*\*)?`
+#   matches an OPTIONAL opening bold marker (zero or two asterisks) so both the
+#   tracker-sync (bare-led) and backlog-mode (bold-led) breadcrumbs are stripped.
 #   (a) two-line bullet — "- **Codex mirror** ...\n  Claude-native ...\n"
 #       (line 1 opens the bullet, line 2 is a 2-space-indented continuation
 #       carrying the `Claude-native` anchor).
 text = re.sub(
-    r'(?m)^- (?:\*\*Codex mirror\*\*|Codex mirror)[^\n]*\n  [^\n]*Claude-native[^\n]*\n',
+    r'(?m)^- (?:\*\*)?Codex mirror[^\n]*\n  [^\n]*Claude-native[^\n]*\n',
     '',
     text,
 )
 #   (b) single-line bullet — "- **Codex mirror** ... Claude-native ...\n"
 #       (both the `Codex mirror` lead and the `Claude-native` anchor on one line).
 text = re.sub(
-    r'(?m)^- (?:\*\*Codex mirror\*\*|Codex mirror)[^\n]*Claude-native[^\n]*\n',
+    r'(?m)^- (?:\*\*)?Codex mirror[^\n]*Claude-native[^\n]*\n',
     '',
     text,
 )
@@ -1087,6 +1092,25 @@ def is_negative_context(line):
     # Reference-style "It is not / X is not ..." bullets. These describe
     # what the prompt isn't — not a live ask site.
     if re.search(r'(?:It|This|That) is not\b', line) and 'plain-text numbered prompt' in line:
+        return True
+    # Forbidden / never-reached / never-interactive prose. An autonomous-only
+    # skill (pilot) describes its prompt path ONLY to forbid it: "never an
+    # interactive `plain-text numbered prompt`", "`plain-text numbered prompt`
+    # is forbidden on the tick path", "`plain-text numbered prompt` is never
+    # reached / never reachable", "no path reaches `plain-text numbered
+    # prompt`", "Never asks interactively". Injecting the R2 ask block here
+    # contradicts the surface-don't-block / autonomous contract (fn-68 R14:
+    # pilot backlog mode never reaches an interactive prompt). The verb regex
+    # mis-reads the leading "Asking ..." / "Never asks ..." as an active-ask
+    # anchor, so this guard must catch the negation explicitly.
+    if 'plain-text numbered prompt' in line and re.search(
+        r'\b(?:is|are) forbidden\b'
+        r'|\b(?:is|are) never reach(?:ed|able)\b'
+        r'|\bnever an interactive\b'
+        r'|\bno (?:code )?path reaches\b'
+        r'|\bNever asks? interactively\b',
+        line,
+    ):
         return True
     return False
 

@@ -10,7 +10,7 @@ The structs are the firewall: a transport bug stays in the adapter; a merge bug 
 
 ## Transport interface
 
-Eight methods. Each adapter (Linear via MCP-or-GraphQL; GitHub via `gh`) implements all eight. The skeleton calls them by name and never branches on tracker type — the active adapter (from `tracker.type`) supplies the implementation.
+Nine methods. Each adapter (Linear via MCP-or-GraphQL; GitHub via `gh`) implements all nine. The skeleton calls them by name and never branches on tracker type — the active adapter (from `tracker.type`) supplies the implementation.
 
 | Method | Direction | Input | Output | Implemented by |
 |---|---|---|---|---|
@@ -22,8 +22,9 @@ Eight methods. Each adapter (Linear via MCP-or-GraphQL; GitHub via `gh`) impleme
 | `setStatus(trackerId, status)` | flow → tracker | UUID + normalized `status` | ok / `errored` | fn-52.3 / fn-52.7 |
 | `listIssueRelations(issue)` | tracker → flow | the `issue` to inspect | normalized `relation[]` (or `errored`) | fn-64.3 / fn-64.4 |
 | `setIssueRelation(issue, blockedBy)` | flow → tracker | the `issue` + the issue it is **blocked by** | ok / `errored` / `noop` | fn-64.3 / fn-64.4 |
+| `listOpenIssues(filter)` | tracker → flow | a `filter` (the promoted-lane `readyState`) | normalized `issue[]` (or `noop` / `errored`) | fn-68.2 (Linear + GitHub) |
 
-The last two (`listIssueRelations` / `setIssueRelation`) are the **dependency-projection** pair added by fn-64 — see [Relation transport](#relation-transport-dependency-projection-fn-64) below. The first six are unchanged.
+`listIssueRelations` / `setIssueRelation` are the **dependency-projection** pair added by fn-64 — see [Relation transport](#relation-transport-dependency-projection-fn-64) below. `listOpenIssues` is the **enumeration** method added by fn-68 — see [Enumeration transport](#enumeration-transport-listopenissues-fn-68) below. The first six are unchanged.
 
 **Contract rules every adapter MUST honor:**
 
@@ -63,11 +64,50 @@ The wire-agnostic shapes the transports produce and reconcile consumes. These ar
  "author": "string", // tracker-side author (for the sync log)
  "body": "markdown",
  "createdAt": "ISO-8601",
- "marker": "flow-evt:work.done" // dedup/echo marker: present on flow-posted comments so a
+ "marker": "flow-evt:work.done",// dedup/echo marker: present on EVERY flow-OWNED comment so a
  // pull doesn't re-import flow's own structured comment. null on
  // genuine tracker-side comments (those pull into the spec sync log).
+ // The adapter sets `marker` from ANY flow-owned marker line (see the
+ // marker-vocabulary table below) — NOT only `flow-evt:<event>`.
+ "parentId": "uuid-or-null" // OPTIONAL reply/parent metadata (fn-68 R15). On a THREADED tracker
+ // (Linear) a reply carries its parent comment's id, so a human's
+ // answer-under-a-question is matched by thread + the question-valve
+ // `id`. On a FLAT tracker (GitHub — no threads) there is no parent,
+ // so parentId is null and the `<!-- flow-next:answer id=<hash> -->`
+ // body marker is the load-bearing match (by id, threading-blind).
 }
 ```
+
+> **`parentId` is OPTIONAL and additive (fn-68 R15).** It exists ONLY to let the
+> async question-valve match a human's *answer* reply to the *question* comment by
+> `id`. Adapters on a threaded tracker (Linear) populate it from the reply/parent
+> link; flat trackers (GitHub) leave it `null` and the answer is matched purely by
+> the `<!-- flow-next:answer id=<hash> -->` marker. Reconcile/dedup (comments-sync)
+> is unaffected when `parentId` is absent — the field is read only by the
+> question-valve answer round-trip ([steps.md](../steps.md) Phase 7).
+
+**Marker vocabulary the adapter MUST recognize (fn-68 R15 — read-side).** Every
+adapter's `listComments` sets `comment.marker` from the FIRST flow-owned marker
+line it finds — **not only `flow-evt:<event>`**. The flow-owned set is closed and
+shared by Linear (MCP + GraphQL) and GitHub; an adapter that detects only the
+lifecycle marker would return a parked **question** with `marker: null`, and
+comments-sync would wrongly import it into `## Sync Log`. The vocabulary:
+
+| Body marker line | `comment.marker` | Pull behavior |
+|---|---|---|
+| `<!-- flow-next:sync … evt=<event> … -->` | `flow-evt:<event>` | flow-OWNED echo — skip Sync-Log import (Layer 1) |
+| `<!-- flow-next:question id=<hash> status=… -->` | `flow-evt:question` | flow-OWNED — skip Sync-Log import; the question's home is `## Open Questions` / the tracker, never the Sync Log |
+| `<!-- flow-next:status … rolling -->` | `flow-evt:status` | flow-OWNED rolling status comment — skip Sync-Log import |
+| `<!-- flow-next:answer id=<hash> -->` | **`null`** (genuine human content) — BUT carries the answer `id` for the round-trip | the question-valve answer round-trip ([steps.md](../steps.md) Phase 7) consumes it **by `id` BEFORE** the generic Sync-Log append; an answer that matches no open question falls through to a normal Sync-Log comment |
+| (no flow marker) | `null` | genuine tracker comment → `## Sync Log` |
+
+> **`flow-next:answer` is the one human-authored marker** — it is NOT a flow echo,
+> so `marker` stays `null` (it is genuine tracker-side content the human wrote). The
+> adapter still **surfaces its `id`** (parse `flow-next:answer id=<hash>`) so the
+> round-trip can pair it; the round-trip is what claims it before the Sync-Log
+> append, NOT the marker skip. Keeping `marker: null` is deliberate — a matched
+> answer is imported under `## Open Questions` (not the Sync Log), and an *unmatched*
+> answer is a real comment that SHOULD reach the Sync Log.
 
 ### `status`
 
@@ -131,8 +171,35 @@ This mirrors the bridge's existing "surface diffs, never overwrite" posture: the
 
 ### Transport-unavailable / completed-blocker
 
-- **No transport reachable** → the projection is a documented `noop` + receipt note (same no-transport shape as the other six methods), never a crash and never a lifecycle block.
+- **No transport reachable** → the projection is a documented `noop` + receipt note (same no-transport shape as the six core methods), never a crash and never a lifecycle block.
 - **Completed blocker** (dep spec is locally `done`) → the relation stays visible on the tracker as a historical blocker; it is NOT removed and does NOT feed back into `ready=true` gating. The completed-blocker decision is the skill's (fn-64.5), keyed off the **local** dep-spec status (`dep_status` from `flowctl sync list-dep-relations`), not a remote fetch.
+
+## Enumeration transport (`listOpenIssues`, fn-68)
+
+Backlog mode ([../../flow-next-pilot](../../flow-next-pilot/SKILL.md)) must **union in tracker issues that have no flow spec** — tickets a human promoted on the board but never `capture`/`interview`'d into a spec, invisible to `flowctl specs`. The six core methods are all **per-issue** (you already hold the id); none can *enumerate*. fn-68 adds one transport-blind method.
+
+### `listOpenIssues(filter) → issue[]`
+
+| | |
+|---|---|
+| **Direction** | tracker → flow |
+| **Input** | a `filter` — for v1 the single field `{ readyState: <tracker.readyState> }` |
+| **Output** | normalized `issue[]` (the same `issue` struct above), or `noop` (no-transport / readyState unset) / `errored` |
+| **Implemented by** | fn-68.2 — **Linear** ([linear-graphql.md](linear-graphql.md) / [linear-mcp.md](linear-mcp.md)) + **GitHub** ([github.md](github.md)); GitLab (fn-69) / Jira (fn-70) inherit the contract |
+
+**Exact-match filter (mandatory).** `listOpenIssues` lists open issues at the **exact** `tracker.readyState` state/label — the **promoted lane**, not the whole issue history:
+
+- **Linear** — issues whose workflow-state **name** equals `readyState` (case-insensitive/trimmed, the same match as the readiness projection in [status-sync.md](status-sync.md)). No `state.type` ordering, no "and-later" states.
+- **GitHub** — open issues carrying the `readyState` **label** (case-insensitive). No label ordering.
+
+**`readyState` matching is exact — there is no state ordering, so "beyond" / "and-later" is undefined** (an explicit ordered promoted-set is a future config knob, **never inferred** by an adapter). The skill (steps.md Phase 7a) — not the adapter — owns the policy of what to do with the result; the adapter only enumerates the exact lane.
+
+**Contract rules (mirroring the other methods):**
+
+- **`tracker.readyState` unset ⇒ documented `noop` (return `[]`), never an error.** No promoted lane exists to filter on — backlog mode falls back to flow-ready specs only. The **skill** ([steps.md](../steps.md) Phase 7a) short-circuits to the no-op + note before calling the transport; an adapter that *is* reached with an empty filter likewise returns `[]` + `noop`.
+- **No transport reachable ⇒ `noop` + receipt note, `[]`** — same no-transport floor as the other methods.
+- **Returns normalized `issue` structs** (transport-blind). The skill reads `{id, identifier, title, status, labels, url}` and never sees a Linear/GitHub wire shape — exactly like `fetchIssue`. A tracker-only ticket (no flow spec) has the same `issue` shape as a linked one; its lack of a `flow:<id>` label is how the skill knows it is unlinked.
+- **Read-only — never advances `lastSyncedAt`** (an enumeration is not a reconcile). Its receipt is a `noop`-status read note.
 
 ## Why structs, not byte-copy
 
