@@ -230,7 +230,7 @@ Record the pre-dispatch evidence snapshot before invoking the stage skill:
 - `plan`: task count from `$FLOWCTL tasks --spec <id> --json`.
 - `plan-review`: `plan_review_status` from `$FLOWCTL show <id> --json`.
 - `work`: per-task id/status list, spec status, and `completion_review_status`.
-- `qa`: absence of a fresh `qa_verdict` receipt (`QA_FRESH=0`), already proven by the classify-time freshness probe, plus the spec-branch head `BRANCH_SHA` the post-dispatch verify compares against.
+- `qa`: absence of a fresh `qa_verdict` receipt (`QA_FRESH=0`), already proven by the classify-time freshness probe; the post-dispatch verify re-reads the receipt against the **code head** (HEAD peeled past the qa-verdict bookkeeping commit).
 - `make-pr`: no OPEN PR for the branch, already proven by the all-done probe.
 
 Dispatch exactly one existing stage skill (slash-command invocation), with `mode:autonomous` and `FLOW_AUTONOMOUS=1` semantics for any process-level work it starts:
@@ -285,21 +285,22 @@ advanced=<true|false>
 
 For `qa`, advancement is judged from the **post-dispatch `qa_verdict` receipt** — observed state, never the QA skill's narration. The QA stage **advances on every terminal outcome**: the gate routes on `qa_outcome` (the four-outcome field), NOT the Ralph-guard `verdict` projection (the QA skill projects `BLOCKED→verdict=NEEDS_WORK`, so reading `verdict` would wrongly conflate "couldn't verify" with "found problems"). QA is advisory — it never hard-blocks the build loop; the human reviewer + the land gate act on its findings.
 
-Read the receipt fresh after dispatch (here `HEAD` is correct — Phase 3 checked out the spec branch, so `HEAD` equals the branch head):
+Read the receipt fresh after dispatch. The QA skill commits its own handoff in autonomous mode (qa §6.3b), so `HEAD` is now the `chore(flow): qa verdict` commit — peel it to the **code head** and match the receipt's `head_sha` against that (the pr-artifact commit can't exist yet — that's the next tick's make-pr):
 
 ```bash
 QA_RECEIPT="$REPO_ROOT/.flow/review-receipts/qa-$SELECTED_SPEC.json"
-HEAD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
 QA_OUTCOME=""
-QA_RECEIPT_SHA=""
 QA_ADVANCED=false
+# Code head = HEAD, peeled past qa's own `chore(flow): qa verdict` handoff commit (§6.3b).
+CODE_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
+git -C "$REPO_ROOT" log -1 --format='%s' 2>/dev/null | grep -q '^chore(flow): qa verdict ' \
+  && CODE_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD^ 2>/dev/null || echo "")"
 if [ -f "$QA_RECEIPT" ]; then
   QA_OUTCOME="$(jq -r '.qa_outcome // ""' "$QA_RECEIPT" 2>/dev/null || echo "")"
-  QA_RECEIPT_SHA="$(jq -r '.head_sha // ""' "$QA_RECEIPT" 2>/dev/null || echo "")"
-  # Advance ONLY on a FRESH receipt: id matches, head_sha == HEAD, and the
-  # outcome is a valid terminal value. A missing/stale receipt ⇒ advanced=false
-  # (the QA skill never wrote a fresh verdict — do not advance on narration).
-  QA_ADVANCED="$(jq -r --arg id "$SELECTED_SPEC" --arg sha "$HEAD_SHA" '
+  # Advance ONLY on a FRESH receipt this dispatch produced: id matches, head_sha == the code
+  # head, terminal outcome. A missing/stale receipt (qa errored before writing) ⇒
+  # advanced=false — never advance on narration.
+  QA_ADVANCED="$(jq -r --arg id "$SELECTED_SPEC" --arg sha "$CODE_HEAD" '
     if (.id == $id and .head_sha == $sha
         and (.qa_outcome | IN("SHIP","NEEDS_WORK","NA","BLOCKED")))
     then "true" else "false" end' "$QA_RECEIPT" 2>/dev/null || echo false)"
@@ -321,28 +322,7 @@ Routing on the **fresh** `qa_outcome` (`QA_ADVANCED=true`):
 - `SHIP` / `NA` / `BLOCKED` → advance cleanly to the next tick's make-pr (BLOCKED = no local app reachable / NA = no driveable UI; both advance — QA is the optional augmenting pass, never a wedge).
 - `NEEDS_WORK` → **still advance** (the build loop never stalls on QA). The findings ride the draft PR: make-pr surfaces them from the receipt (its §2.x QA-summary section), and the QA skill already filed them to the bug-memory track + (when the bridge is active) the tracker comment. A `NEEDS_WORK` qa stage is an `ADVANCED` verdict, not `BLOCKED`/`NEEDS_HUMAN`.
 
-**Commit the QA handoff before advancing (`QA_ADVANCED=true`).** The QA skill writes the `qa_verdict` receipt (`.flow/review-receipts/qa-<spec-id>.json`) **and, when `memory.enabled=true` and it files a P0/P1, tracked `.flow/memory/bug/…` entries** into the worktree — but commits none of them. Pilot **narrow-commits both** now so the branch the next tick's make-pr pushes actually carries the receipt its `## Live QA` body advertises *and* the bug-memory entries make-pr's export reads into the PR body (otherwise the PR advertises receipt/memory absent from the diff), and so neither dirty file is later swept into an unrelated `git add -A` (land's dirty-tree guard ignores `.flow`):
-
-```bash
-if [ "$QA_ADVANCED" = "true" ]; then
-  # Narrow pathspec — the receipt always, plus QA's bug-memory tree ONLY when it exists.
-  # A SHIP/NA/BLOCKED pass (or memory.enabled=false) files no memory, and `git add` errors
-  # on a pathspec matching nothing — which would abort the handoff after a fresh receipt was
-  # written, failing the tick. NEVER `git add -A`. In the autonomous flow the worker already
-  # committed everything else, so the only dirty paths here are QA's own outputs.
-  git -C "$REPO_ROOT" add -- "$QA_RECEIPT"
-  if [ -e "$REPO_ROOT/.flow/memory" ]; then
-    git -C "$REPO_ROOT" add -- "$REPO_ROOT/.flow/memory"
-    git -C "$REPO_ROOT" diff --cached --quiet -- "$QA_RECEIPT" "$REPO_ROOT/.flow/memory" \
-      || git -C "$REPO_ROOT" commit -m "chore(flow): qa verdict $SELECTED_SPEC" -- "$QA_RECEIPT" "$REPO_ROOT/.flow/memory"
-  else
-    git -C "$REPO_ROOT" diff --cached --quiet -- "$QA_RECEIPT" \
-      || git -C "$REPO_ROOT" commit -m "chore(flow): qa verdict $SELECTED_SPEC" -- "$QA_RECEIPT"
-  fi
-fi
-```
-
-A no-op when nothing changed (byte-identical regeneration makes no empty commit). The `chore(flow): qa verdict` subject is what the freshness peel above recognizes, so the commit doesn't make the receipt read stale.
+**The QA skill commits its own handoff** (the `qa_verdict` receipt + the exact bug-memory it filed) in autonomous mode (qa §6.3b) — so the receipt is already on the branch and rides the eventual make-pr push. **Pilot adds no commit of its own here**: the agent that wrote the files commits them precisely, so pilot never sweeps the tree or guesses paths.
 
 A missing/stale receipt (`QA_ADVANCED=false`) is the healthy-no-advance path (Phase 6 strike), NOT a crash — the QA skill ran but produced no fresh verdict (e.g. it errored before writing). **Don't-thrash + non-fatal:** pilot is single-tick and the freshness gate prevents re-classifying `qa` once a fresh receipt exists, so the same spec is bounded to one qa pass per branch-head; the interactive work↔qa re-pass (out of scope here — autonomous surfaces + proceeds) is bounded by the existing strike/auto-block reflexes (2 strikes → unready). `BLOCKED` from a missing app is a fresh terminal outcome (it advances), never a failed loop.
 

@@ -421,10 +421,12 @@ if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ];
  --tags "qa,<spec-id>,<surface>" \
  --symptoms "<observed actual>" \
  --root-cause "(observed via live QA — unconfirmed)" \
- --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md
- # NEVER pass --no-overlap-check. High overlap updates the existing entry in
- # place; moderate overlap creates a related_to cross-reference. Surface
- # "matches existing entry X" instead of re-filing on a re-run (idempotency).
+ --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json \
+ | jq -r '.path // empty' | { read -r _p; [ -n "$_p" ] && QA_FILED_MEMORY="${QA_FILED_MEMORY:+$QA_FILED_MEMORY }$_p"; }
+ # Track the EXACT path filed (from --json) into QA_FILED_MEMORY — §6.3b commits precisely
+ # these, never a broad `.flow/memory` glob. NEVER pass --no-overlap-check. High overlap
+ # updates the existing entry in place; moderate overlap creates a related_to cross-reference.
+ # Surface "matches existing entry X" instead of re-filing on a re-run (idempotency).
 fi
 ```
 
@@ -539,6 +541,22 @@ echo "QA_VERDICT_WRITTEN: $RECEIPT_PATH ($QA_OUTCOME → $VERDICT)"
 The additive fields are **additive only** — `type`, `id`, `mode`, `verdict`, `qa_outcome`, the scoped reasons, and `timestamp` are unchanged, so the receipt still passes `ralph-guard.validate_receipt_data` (it gates on `verdict` only; the extra fields are ignored). `open_p0p1` changing from bare ids to objects is a shape change the guard does not inspect (it never reads `open_p0p1`) and make-pr/.2 consume; no Ralph-guard change.
 
 The default path `.flow/review-receipts/qa-<spec-id>.json` is **committed** (the receipts dir is tracked); `.flow/tmp/` (evidence) is gitignored. A second QA pass **overwrites** the latest receipt (idempotent) — findings dedup against bug memory (Phase 5), the receipt reflects the latest run.
+
+### 6.3b — Commit QA's own handoff (autonomous mode only)
+
+When `QA_AUTONOMOUS=1` (the pilot stage dispatched this pass — autonomy ≠ Ralph), QA commits **its own outputs** so the dispatching pilot stage hands off a clean tree and the branch the eventual make-pr pushes carries exactly what the `## Live QA` body advertises. **QA committing its own writes is the agentic, precise answer** — it knows exactly which files it produced (the receipt above, plus the bug-memory entries tracked in `QA_FILED_MEMORY` at §5.4), so pilot never has to guess or diff the tree. Never a `.flow/memory` glob (it would sweep pre-existing dirty memory) and never `git add -A`. **User-invoked QA does not auto-commit** — the user owns their commits.
+
+```bash
+if [ "$QA_AUTONOMOUS" = "1" ]; then
+ # Receipt always; the filed memory paths only when non-empty (SHIP/NA/BLOCKED or
+ # memory.enabled=false file none). Narrow pathspec — exactly QA's own files.
+ git -C "$REPO_ROOT" add -- "$RECEIPT_PATH" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY}
+ git -C "$REPO_ROOT" diff --cached --quiet -- "$RECEIPT_PATH" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY} \
+ || git -C "$REPO_ROOT" commit -m "chore(flow): qa verdict $SPEC_ID" -- "$RECEIPT_PATH" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY}
+fi
+```
+
+The `chore(flow): qa verdict` subject is what the pilot + make-pr freshness gates peel to find the code head; `head_sha` was recorded at QA time (the code head, before this commit), so they still resolve freshness correctly. A no-op when nothing changed.
 
 **There is NO generic `flowctl receipt write` helper** — compose the JSON as above. `qa-*.json` is not a path the Ralph guard's `parse_receipt_path` recognizes, so it validates via the plain verdict-enum check only (the planning decision: QA is **not** a hard Ralph receipt-gate in v1 — no `ralph-guard.py` change).
 
