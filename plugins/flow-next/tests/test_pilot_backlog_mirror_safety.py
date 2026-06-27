@@ -165,6 +165,42 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
             with self.subTest(gate=token):
                 self.assertIn(token, gate_window)
 
+    def test_no_r2_block_before_tracker_sync_phase0_invariant(self) -> None:
+        """THE second defect this regen exposed (impl-review r1): the R2 ask
+        INSTRUCTION block was injected directly BEFORE the tracker-sync Phase-0
+        autonomy invariant ('Under RALPH=1 NO code path may reach ...'). That
+        contradicts R14 (under the marker tracker-sync queues/defers, never
+        prompts). The block belongs at the GENUINE Phase-1 discovery ASK (where
+        the human IS prompted to enable the bridge), never at the Phase-0
+        autonomy invariant. Assert ordering: if an R2 block exists at all, it
+        comes AFTER the Phase-0 invariant line."""
+        invariant_idx = self.m_ts_steps.find(
+            "Autonomy parity is a hard invariant"
+        )
+        self.assertNotEqual(
+            invariant_idx, -1,
+            "the tracker-sync mirror must carry the Phase-0 autonomy invariant",
+        )
+        first_r2 = self.m_ts_steps.find(R2_INSTRUCTION_SENTINEL)
+        if first_r2 != -1:
+            self.assertGreater(
+                first_r2,
+                invariant_idx,
+                "the R2 ask block must NOT precede the Phase-0 autonomy "
+                "invariant — it belongs at the genuine Phase-1 discovery ask "
+                "(under the autonomy marker tracker-sync never prompts — R14)",
+            )
+        # And the autonomy invariant itself must NOT be immediately preceded by
+        # the R2 block (the precise defect site): no R2 sentinel in the 600 chars
+        # before the invariant.
+        window_before = self.m_ts_steps[max(0, invariant_idx - 600):invariant_idx]
+        self.assertNotIn(
+            R2_INSTRUCTION_SENTINEL,
+            window_before,
+            "the R2 ask block must not sit immediately before the Phase-0 "
+            "autonomy invariant (R14: that path never prompts)",
+        )
+
     def test_mirror_has_no_claude_native_tool_leakage(self) -> None:
         """ZERO Claude-native tool names leak into the mirror PROSE. The
         DROID_PLUGIN_ROOT/CLAUDE_PLUGIN_ROOT plugin.json FALLBACK chain is the

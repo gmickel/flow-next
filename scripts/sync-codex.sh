@@ -1094,22 +1094,33 @@ def is_negative_context(line):
     if re.search(r'(?:It|This|That) is not\b', line) and 'plain-text numbered prompt' in line:
         return True
     # Forbidden / never-reached / never-interactive prose. An autonomous-only
-    # skill (pilot) describes its prompt path ONLY to forbid it: "never an
-    # interactive `plain-text numbered prompt`", "`plain-text numbered prompt`
-    # is forbidden on the tick path", "`plain-text numbered prompt` is never
-    # reached / never reachable", "no path reaches `plain-text numbered
-    # prompt`", "Never asks interactively". Injecting the R2 ask block here
-    # contradicts the surface-don't-block / autonomous contract (fn-68 R14:
-    # pilot backlog mode never reaches an interactive prompt). The verb regex
-    # mis-reads the leading "Asking ..." / "Never asks ..." as an active-ask
-    # anchor, so this guard must catch the negation explicitly.
+    # skill (pilot) — and tracker-sync's Phase-0 autonomy invariant — describe
+    # the prompt path ONLY to forbid it: "never an interactive `plain-text
+    # numbered prompt`", "`plain-text numbered prompt` is forbidden on the tick
+    # path", "`plain-text numbered prompt` is never reached / never reachable",
+    # "no path reaches `plain-text numbered prompt`", "NO code path may reach
+    # `plain-text numbered prompt`", "Never asks interactively". Injecting the R2
+    # ask block here contradicts the surface-don't-block / autonomous contract
+    # (fn-68 R14: the backlog/Ralph path never reaches an interactive prompt).
+    # The verb regex mis-reads the leading "Asking ..." / "Never asks ..." OR the
+    # trailing "ask the human" as an active-ask anchor, so this guard must catch
+    # the negation explicitly.
+    #
+    # CASE-INSENSITIVE on purpose: the tracker-sync invariant capitalizes it as
+    # "NO code path may reach" (review caught this — a case-sensitive
+    # "no ... reaches" missed both the uppercase AND the "may reach" form). The
+    # `reach` clause covers reach / reaches / reached / reachable, with or
+    # without an intervening modal ("may"/"can"/"could"/"will") and the optional
+    # "code" qualifier.
     if 'plain-text numbered prompt' in line and re.search(
         r'\b(?:is|are) forbidden\b'
-        r'|\b(?:is|are) never reach(?:ed|able)\b'
         r'|\bnever an interactive\b'
-        r'|\bno (?:code )?path reaches\b'
-        r'|\bNever asks? interactively\b',
+        r'|\bnever asks?\s+interactively\b'
+        r'|\b(?:no|never)\b[^.]*?\b(?:code\s+)?path[^.]*?\breach(?:es|ed|able)?\b'
+        r'|\bis\s+never\s+reach(?:ed|able)\b'
+        r'|\bnever\s+reach(?:es|ed|able)\b',
         line,
+        re.IGNORECASE,
     ):
         return True
     return False
