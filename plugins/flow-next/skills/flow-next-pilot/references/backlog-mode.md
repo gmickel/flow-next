@@ -272,6 +272,12 @@ forever. (`TRIAGED <id> <class>` is diagnostic / dry-run only — emitted under 
 triage-only inspection, never as a live terminal. The verdict grammar itself is
 owned by fn-68.4.)
 
+The `dep-unsatisfied` → `BLOCKED` terminal is a **dep-wait surface, NOT a strike**:
+it records no strike, never unreadies the spec, and emits its own `blocked`
+decision-log row — its concrete verdict-line + `pilot-log` template live in
+`workflow.md` Phase 6 ("Backlog-mode dep-wait `BLOCKED` terminal"), distinct from
+the strike-based `BLOCKED`.
+
 ---
 
 ## Phase 3 — ASK (the async question valve — surface, never block)
