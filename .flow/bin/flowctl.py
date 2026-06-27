@@ -20084,6 +20084,79 @@ def _pilot_log_id_slug(raw_id: str) -> str:
     return slug or "unknown"
 
 
+# Pilot-log per-id tick allocation is serialized by a CROSS-PLATFORM directory
+# lock (`os.mkdir` — atomic on POSIX + Windows), NOT raw `fcntl.flock` (Unix-only
+# advisory locks don't serialize concurrent same-id appends on Windows, so two
+# processes would both read N rows and both write tick=N+1). This mirrors the
+# migrate-rename lock primitive (os.mkdir gate + crashed-peer reclaim) but is a
+# short, in-flight critical section so its bounds are far tighter.
+PILOT_LOG_LOCK_WAIT_SECS = 30  # generous: subprocess fan-out + cold imports
+PILOT_LOG_LOCK_POLL_SECS = 0.02  # tight spin — the held section is a few I/O ops
+PILOT_LOG_LOCK_STALE_SECS = 60  # reclaim a lock dir older than this (crashed peer)
+
+
+@contextmanager
+def _pilot_log_lock(lock_dir: Path):
+    """Cross-platform exclusive lock for one pilot-log id's count+write section.
+
+    Uses `os.mkdir(lock_dir)` as the atomic create gate (works on POSIX AND
+    Windows, unlike `fcntl.flock` which is Unix-only and a no-op on Windows). On
+    contention, spin-wait up to PILOT_LOG_LOCK_WAIT_SECS; reclaim a lock dir
+    older than PILOT_LOG_LOCK_STALE_SECS (a crashed peer that never released).
+    The directory itself is the mutex — nothing is written inside, so it never
+    collides with the `pilot-*.json` row glob or the summary glob, and it still
+    matches the `.pilot-*.lock` glob the dot-prefixed sibling name preserves.
+    """
+    deadline = _monotonic_now() + PILOT_LOG_LOCK_WAIT_SECS
+    acquired = False
+    while True:
+        try:
+            os.mkdir(lock_dir)
+            acquired = True
+            break
+        except FileExistsError:
+            # Held by a peer. Reclaim only if it's stale (crashed without
+            # releasing); otherwise wait for the holder to finish its short
+            # critical section.
+            try:
+                age = _pilot_log_now() - lock_dir.stat().st_mtime
+            except OSError:
+                # Vanished between mkdir and stat — peer released; retry.
+                continue
+            if age >= PILOT_LOG_LOCK_STALE_SECS:
+                try:
+                    os.rmdir(lock_dir)
+                except OSError:
+                    pass  # another process raced us to reclaim; loop again
+                continue
+            if _monotonic_now() >= deadline:
+                # Last resort: reclaim and proceed rather than fail the append.
+                # A live append holds the lock for milliseconds, so reaching the
+                # deadline means the holder is wedged — take it over.
+                try:
+                    os.rmdir(lock_dir)
+                except OSError:
+                    pass
+                continue
+            _migrate_sleep(PILOT_LOG_LOCK_POLL_SECS)
+    try:
+        yield
+    finally:
+        if acquired:
+            try:
+                os.rmdir(lock_dir)
+            except OSError:
+                pass
+
+
+def _pilot_log_now() -> float:
+    """Wall-clock indirection (the lock-dir mtime is wall-clock, so its staleness
+    age must be compared against wall-clock too — not monotonic)."""
+    import time as _time
+
+    return _time.time()
+
+
 def _branch_slug(branch: Optional[str] = None) -> str:
     """Derive a filesystem-safe slug from the current (or supplied) branch.
 
@@ -21049,47 +21122,46 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
     # share a lock OR clobber each other's path (review finding #1).
     id_hash = hashlib.sha1(raw_id.encode("utf-8")).hexdigest()[:8]
 
-    # The count+write is serialized under a per-id exclusive flock so two
-    # concurrent same-id appends can't both read N rows and both write tick=N+1
-    # (review finding #1 follow-up — duplicate-tick race). The lock is keyed by
-    # the id-hash (exact per raw id, not per slug); on Windows _flock is a no-op
-    # (single-machine use, same contract as lock_task / migrate locks). The
-    # lock file is a sibling, never itself a `pilot-*.json` row, so neither the
-    # count glob nor the summary glob ever sees it.
+    # The count+write is serialized under a per-id exclusive CROSS-PLATFORM lock
+    # so two concurrent same-id appends can't both read N rows and both write
+    # tick=N+1 (review finding #1 follow-up — duplicate-tick race). The lock is a
+    # `.pilot-<id-hash>.lock` DIRECTORY: `os.mkdir` is atomic on POSIX AND Windows
+    # (raw `fcntl.flock` is Unix-only and a no-op on Windows, so it failed to
+    # serialize concurrent appends there — fn-68 Windows-CI fix). Keyed by the
+    # id-hash (exact per raw id, not per slug). The dot-prefixed `.lock` dir is a
+    # sibling, never itself a `pilot-*.json` row, so neither the count glob nor
+    # the summary glob ever sees it (and it still matches the `.pilot-*.lock`
+    # glob a caller may use to spot the lock).
     lock_path = run_dir / f".pilot-{id_hash}.lock"
-    with open(lock_path, "w", encoding="utf-8") as lock_f:
-        _flock(lock_f, LOCK_EX)
-        try:
-            # Per-id monotonic tick = (#existing rows whose STORED id == this raw
-            # id) + 1. The slug glob is a cheap pre-filter; we then read each
-            # candidate's `id` and count EXACT raw-id matches so two distinct ids
-            # that normalize to the same slug never share a counter. A row whose
-            # JSON can't be read is skipped — it can't belong to this id.
-            tick = 1
-            for cand in run_dir.glob(f"pilot-{id_slug}-*.json"):
-                try:
-                    cand_data = json.loads(cand.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, OSError):
-                    continue
-                if isinstance(cand_data, dict) and cand_data.get("id") == raw_id:
-                    tick += 1
+    with _pilot_log_lock(lock_path):
+        # Per-id monotonic tick = (#existing rows whose STORED id == this raw
+        # id) + 1. The slug glob is a cheap pre-filter; we then read each
+        # candidate's `id` and count EXACT raw-id matches so two distinct ids
+        # that normalize to the same slug never share a counter. A row whose
+        # JSON can't be read is skipped — it can't belong to this id.
+        tick = 1
+        for cand in run_dir.glob(f"pilot-{id_slug}-*.json"):
+            try:
+                cand_data = json.loads(cand.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            if isinstance(cand_data, dict) and cand_data.get("id") == raw_id:
+                tick += 1
 
-            row = {
-                "tick": tick,
-                "id": raw_id,
-                "action": action,
-                "stage": stage,
-                "costTokens": getattr(args, "cost_tokens", None),
-                "timestamp": now_iso(),
-            }
+        row = {
+            "tick": tick,
+            "id": raw_id,
+            "action": action,
+            "stage": stage,
+            "costTokens": getattr(args, "cost_tokens", None),
+            "timestamp": now_iso(),
+        }
 
-            # Filename: slug + tick + timestamp + id-hash, unique per write even
-            # for slug-colliding ids or two appends in the same timestamp tick.
-            ts_slug = now_iso().replace(":", "").replace("-", "").replace(".", "")
-            row_path = run_dir / f"pilot-{id_slug}-{tick}-{ts_slug}-{id_hash}.json"
-            atomic_write_json(row_path, row)
-        finally:
-            _flock(lock_f, LOCK_UN)
+        # Filename: slug + tick + timestamp + id-hash, unique per write even
+        # for slug-colliding ids or two appends in the same timestamp tick.
+        ts_slug = now_iso().replace(":", "").replace("-", "").replace(".", "")
+        row_path = run_dir / f"pilot-{id_slug}-{tick}-{ts_slug}-{id_hash}.json"
+        atomic_write_json(row_path, row)
 
     if args.json:
         json_output(
