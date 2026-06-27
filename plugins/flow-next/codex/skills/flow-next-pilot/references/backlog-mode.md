@@ -153,15 +153,18 @@ edges come from **two** sources and feed **one** existing sorter:
 
 - **Flow deps** — `blockedBy` from `ready --all` (1b). An edge `A blockedBy B`.
 - **Tracker deps** — these are **NOT** in the `issue` struct (`list-open` returns
- issue-only). For each **tracker** candidate, fetch its relations via the per-issue
- op and normalize the `relation[]` edges (`from` = blocked, `to` = blocker):
+ issue-only). For each **tracker** candidate, read its relations via the
+ **`list-relations`** named op and normalize the `relation[]` edges (`from` =
+ blocked, `to` = blocker):
 
  ```text
- /flow-next:tracker-sync ... → listIssueRelations(issue) # per tracker issue
+ /flow-next:tracker-sync list-relations <tracker-id> mode:autonomous # per tracker issue
  ```
 
- (This is the `listIssueRelations` adapter method from fn-64, surfaced through the
- same transport-blind ladder — backlog mode never calls a tracker API directly.)
+ (This routes through the `listIssueRelations` adapter method from fn-64 over the
+ same transport-blind ladder — backlog mode never calls a tracker API directly. It
+ is a **READ** — on pilot's dispatch allowlist, never a merge/write. No-ops when the
+ bridge is inactive or the issue has no relations.)
 
 Feed **both** edge sets — the flow `blockedBy` edges and the normalized tracker
 `relation[]` edges — into the **flow-next-deps jq topo-sort** (the phase-assignment
@@ -185,10 +188,31 @@ state-changing terminal (R10 — a live triage never ends on a no-op). Dep-block
 **not** a reason to skip selection; only a `status=open` **parked** question
 (already surfaced, waiting on a human — 1d) removes a candidate from the pool.
 
+### 1g — Apply pilot's ready-mode claim / collision / re-bless checks
+
+Backlog SELECT **reuses the SAME checks as ready-mode SELECT** (`workflow.md` Phase 1
+Pass 2) on the picked candidate — it does not skip them. Phase 2 CLASSIFY (and its
+stale-claim `NEEDS_HUMAN` row) **assumes other-actor `in_progress` claims were
+already skipped at SELECT**, so they must run here, before triage:
+
+- **Collision avoidance** — for a spec-backed candidate, any task `in_progress` and
+ assigned to **another** actor makes the candidate non-selectable: drop it and take
+ the next dep-ordered candidate (record `claimed by other actor` in the skip table).
+ Resolve the actor exactly as `flowctl.get_actor()` does. (A tracker-only item has
+ no flow tasks — this is a no-op for it.)
+- **Strikes / re-bless** — a `count >= 2` ledger entry on a candidate that is **ready
+ again** has been human re-blessed: clear the entry and treat the spec as fresh
+ (skip the write under `--dry-run`, report would-clear instead).
+- **No gh here** — PR state belongs only to the all-done CLASSIFY branch.
+
+Reuse pilot's existing ready-mode checks — do not reinvent them. (The dependency
+half is already covered by 1e's topo-sort + the `dep-unsatisfied` triage class.)
+
 So the **only** items excluded from selection are the silently-skipped unsignalled
-items (never in the pool) and the parked-and-unanswered ones (1d). Fall through to
-pilot's existing terminal split **only when the pool is genuinely empty of a
-selectable, reportable candidate**:
+items (never in the pool), the parked-and-unanswered ones (1d), and any candidate an
+**other actor is mid-flight on** (1g collision). Fall through to pilot's existing
+terminal split **only when the pool is genuinely empty of a selectable, reportable
+candidate**:
 
 - **`NO_WORK`** — no signalled, unparked candidate exists at all (and no dep wait to
  report). A signalled-but-dep-blocked candidate is *selectable*, so its presence
@@ -219,15 +243,15 @@ un-promoted item; it simply moves on. (Selection in 1f already filters to signal
 items, so a silent skip here is the rare case of an item that lost its signal between
 scan and triage.)
 
-For a **signalled** item, route it to exactly one class. **First match wins:**
+For a **signalled** item, route it to exactly one class. **First match wins — and `dep-unsatisfied` is evaluated BEFORE `workable`:** a signalled item carrying an unsatisfied (acyclic) blocker is a dep-wait, never a workable advance, so it surfaces the wait (`BLOCKED`) rather than slipping into CLASSIFY/DISPATCH (1f selects it precisely so the wait gets surfaced — R10):
 
 | Class | The agent's read | Route |
 |---|---|---|
-| **workable** | signal present AND the spec is complete enough to act on (clear AC / R-IDs, an actionable next stage) | **advance** — hand to pilot's existing CLASSIFY (`workflow.md` Phase 2); it advances exactly one stage (`plan → plan-review → work → [qa] → make-pr`) |
-| **ready-but-thin / ambiguous** | signal present, but the spec is missing, a stub, or too thin/ambiguous to act on safely | **`ask`** (Phase 3) — kick back the gap; **never build, never auto-author** |
 | **needs-spec** | a **tracker-only** promoted item — no flow spec exists at all | **`ask` via the tracker comment ALONE** (Phase 3) — surface "run capture/interview"; **never a spec stub** |
 | **dep-unsatisfied** | signal present, but a blocker (flow or tracker) is not yet done | **`BLOCKED <id> by <dep>`** — a state-changing terminal that **surfaces the dep wait** (never `NO_WORK` — the item was selectable in 1f); the topo-sort offers the blocker first on a later tick. A circular/unsatisfiable dep routes to `ASKED` instead (1e) |
-| **needs-human** | signal present, spec exists, but a genuine decision needs a person (conflicting AC, a real design fork) | **`ask`** (Phase 3) |
+| **workable** | signal present, **deps satisfied**, AND the spec is complete enough to act on (clear AC / R-IDs, an actionable next stage) | **advance** — hand to pilot's existing CLASSIFY (`workflow.md` Phase 2); it advances exactly one stage (`plan → plan-review → work → [qa] → make-pr`) |
+| **ready-but-thin / ambiguous** | signal present, deps satisfied, but the spec is missing, a stub, or too thin/ambiguous to act on safely | **`ask`** (Phase 3) — kick back the gap; **never build, never auto-author** |
+| **needs-human** | signal present, deps satisfied, spec exists, but a genuine decision needs a person (conflicting AC, a real design fork) | **`ask`** (Phase 3) |
 
 **The completeness read may only WITHHOLD, never FORCE.** A promoted-but-thin item is
 kicked back with a question (`ask`) — it is **never** built into a slop PR. But the
@@ -250,6 +274,12 @@ ends on a no-op `TRIAGED` line in a live tick, so an item can never re-select
 forever. (`TRIAGED <id> <class>` is diagnostic / dry-run only — emitted under a
 triage-only inspection, never as a live terminal. The verdict grammar itself is
 owned by fn-68.4.)
+
+The `dep-unsatisfied` → `BLOCKED` terminal is a **dep-wait surface, NOT a strike**:
+it records no strike, never unreadies the spec, and emits its own `blocked`
+decision-log row — its concrete verdict-line + `pilot-log` template live in
+`workflow.md` Phase 6 ("Backlog-mode dep-wait `BLOCKED` terminal"), distinct from
+the strike-based `BLOCKED`.
 
 ---
 
@@ -336,11 +366,13 @@ selected item belongs to one.)
 
 ## Transport-blind, multi-tracker (R13)
 
-Backlog mode's tracker surface is **only** the two transport-blind named ops —
-`list-open` (enumerate the promoted lane) and `question` (park a gap) — plus the
-per-issue `listIssueRelations` read for dep edges. It calls **no** tracker-specific
-API and **never** branches on tracker type; the active adapter (from `tracker.type`)
-supplies the wire query behind the normalized interface.
+Backlog mode's tracker surface is **only** the three transport-blind named ops —
+`list-open` (enumerate the promoted lane), `list-relations` (READ one issue's dep
+edges via `listIssueRelations`), and `question` (park a gap). All three are on
+pilot's dispatch allowlist; `list-open` / `list-relations` are read-only, `question`
+posts a comment. It calls **no** tracker-specific API and **never** branches on
+tracker type; the active adapter (from `tracker.type`) supplies the wire query behind
+the normalized interface.
 
 - **v1 ships on Linear + GitHub** — the two adapters that already implement
  `listOpenIssues` / `listIssueRelations` / the comment ops (fn-68.2 / fn-64).

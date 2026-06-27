@@ -71,13 +71,16 @@ else
 
  # Invariant #1 — never merge / never invoke land (R6). The ONLY skills a backlog
  # tick may invoke are the pipeline stages {plan, plan-review, work, qa, make-pr}
- # plus the tracker-sync surfacing ops {reconcile, list-open, question}. Called
+ # plus the tracker-sync surfacing/read ops {reconcile, list-open, list-relations,
+ # question}. ALL FOUR tracker ops are read/surface-only — none merges, lands, or
+ # resolves, so the never-merge guard is unaffected. `list-relations` is the
+ # per-issue listIssueRelations READ that 1e needs for tracker dep edges. Called
  # inline immediately before EVERY dispatch (Phase 1.5 tracker ops, Phase 3.5 ask,
  # Phase 4 stage dispatch) with the about-to-run slash command.
  assert_allowed_dispatch() { # $1 = the slash command about to be invoked
  case "$1" in
  /flow-next:plan|/flow-next:plan-review|/flow-next:work|/flow-next:qa|/flow-next:make-pr) return 0 ;;
- "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync list-open"*|"/flow-next:tracker-sync question"*) return 0 ;;
+ "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync list-open"*|"/flow-next:tracker-sync list-relations"*|"/flow-next:tracker-sync question"*) return 0 ;;
  *)
  echo "Evidence: backlog mode attempted a forbidden dispatch ($1)"
  echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="backlog mode dispatch allowlist — never merges/lands/resolves (R6)"'
@@ -185,7 +188,18 @@ DRY="${PILOT_DRY_RUN:-0}" # 1 ⇒ inspection-only: no tracker-sync dispatch, flo
 
 4. **1d — skip parked subjects (R7/R15).** Skip any candidate carrying a `status=open` parked question — spec-backed: a `<!-- flow-next:question id=… status=open -->` anchor in `## Open Questions`; tracker-only: a `flow-next:question id=… status=open` comment with no matching `<!-- flow-next:answer id=… -->`. An anchor flipped to `status=answered` is no longer parked — it re-enters and is re-triaged this tick.
 
-5. **1e — dep-order the survivors.** Feed the flow `blockedBy` edges + the per-issue tracker `relation[]` edges (via the `listIssueRelations` read) into the **flow-next-deps jq topo-sort** — reuse it, build no new graph engine. (Under `--dry-run` there are no tracker candidates — 1c was skipped — so 1e uses the flow `blockedBy` edges only and issues no tracker read.) **Invariant #4 — a cycle/deadlock is surfaced, never spun on.** When the topo-sort cannot place the chosen candidate because its dep chain is circular or a dep is itself parked/unsatisfiable, set `DEP_DEADLOCK=1` and route it to a state-changing terminal — never fall through to re-pick it next tick:
+5. **1e — dep-order the survivors.** Feed the flow `blockedBy` edges + the per-issue tracker `relation[]` edges into the **flow-next-deps jq topo-sort** — reuse it, build no new graph engine. The tracker relation edges come from the per-issue `listIssueRelations` READ, dispatched via tracker-sync's `list-relations` op. Guard it (invariant #1) before dispatching — it is on the allowlist (a READ, never a merge):
+
+ ```bash
+ if [ "$DRY" = "0" ]; then
+ # For each TRACKER candidate, read its relations to add the tracker dep edges.
+ DISPATCH_TARGET="/flow-next:tracker-sync list-relations"; assert_allowed_dispatch "$DISPATCH_TARGET"
+ # → dispatch per tracker issue: /flow-next:tracker-sync list-relations <tracker-id> mode:autonomous
+ # (the listIssueRelations read; no-op/empty when the bridge is inactive or the issue has no relations)
+ fi
+ ```
+
+ (Under `--dry-run` there are no tracker candidates — 1c was skipped — so 1e uses the flow `blockedBy` edges only and issues no tracker read; the guarded dispatch above is skipped.) **Invariant #4 — a cycle/deadlock is surfaced, never spun on.** When the topo-sort cannot place the chosen candidate because its dep chain is circular or a dep is itself parked/unsatisfiable, set `DEP_DEADLOCK=1` and route it to a state-changing terminal — never fall through to re-pick it next tick:
 
  ```bash
  if [ "${DEP_DEADLOCK:-0}" = "1" ]; then
@@ -199,10 +213,22 @@ DRY="${PILOT_DRY_RUN:-0}" # 1 ⇒ inspection-only: no tracker-sync dispatch, flo
 
 6. **1f — pick the top actionable item.** The first dep-ordered candidate that (a) carries an explicit readiness signal and (b) is not parked becomes `SUBJECT_ID` — the one item to triage in Phase 1.6. **A signalled item is selectable even when a dependency is unsatisfied** (it routes to `BLOCKED` in Phase 1.6, surfacing the dep wait — never dropped to `NO_WORK`). Only unsignalled items (never in the pool) and parked-unanswered ones (1d) are excluded.
 
-**Invariant #3 — single-tick — is enforced here.** Selection sets exactly ONE `SUBJECT_ID`; there is no `for item in candidates` advance/park loop downstream. Resolve `SPEC_PATH` (the spec file path when spec-backed, else **empty** for a tracker-only item) and `HAS_SPEC`, then hard-assert the count:
+7. **1g — apply pilot's ready-mode claim / collision / re-bless checks to the picked candidate (R2).** Backlog SELECT **reuses the SAME checks as Phase 1 Pass 2** — it does not skip them. Phase 1.6 CLASSIFY (and the downstream `NEEDS_HUMAN` stale-claim row) **assumes other-actor `in_progress` claims were already skipped at SELECT**, so they MUST be applied here, before triage. For a **spec-backed** `SUBJECT_ID` (a tracker-only item has no flow tasks, so this step is a no-op for it):
+
+ - **Collision avoidance (Phase 1 Pass 2 rule 2, verbatim):** load `$FLOWCTL tasks --spec "$SUBJECT_ID" --json`; for every task with `status == "in_progress"`, fetch `$FLOWCTL show <task-id> --json` and read its `assignee`. Resolve this session's actor exactly as `flowctl.get_actor()` does (`$FLOW_ACTOR` → `git config user.email` → `git config user.name` → `$USER` → `unknown`; when it bottoms out at `unknown`, any non-empty assignee counts as another actor). **If a task is claimed by another actor, this candidate is NOT selectable** — drop it and advance to the next dep-ordered candidate (back to 1f), recording `claimed by other actor: <task-id>` in the skip table. Never select a spec another actor is mid-flight on.
+ - **Strikes / re-bless (Phase 1 Pass 2 rule 3, verbatim):** a ledger entry with `count >= 2` normally means the spec was unreadied after failure; a candidate that is **ready again** has been human re-blessed — clear that ledger entry (write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, then atomic `jq` plus `mv`) and treat the spec as fresh. Under `--dry-run`, do not write — report the entry as would-clear instead.
+ - **No gh here** (Phase 1 Pass 2 rule 4) — PR state belongs exclusively to the all-done CLASSIFY branch.
+
+ These are pilot's existing ready-mode SELECT checks — reuse them, do not reinvent. The dependency check is already covered by 1e (topo-sort) + the `dep-unsatisfied` triage class; 1g adds the claim + re-bless halves so the backlog candidate reaching Phase 1.6 has the same selection discipline a ready-mode candidate does.
+
+**Invariant #3 — single-tick — is enforced here.** Selection sets exactly ONE `SUBJECT_ID`; there is no `for item in candidates` advance/park loop downstream. **Assign `SELECTED_SUBJECTS` to the chosen subject** (the single id 1f/1g settled on, or empty when the pool yielded none), resolve `SPEC_PATH` (the spec file path when spec-backed, else **empty** for a tracker-only item) and `HAS_SPEC`, then hard-assert the count:
 
 ```bash
-# SELECTED_SUBJECTS = the chosen subject id(s) — selection must yield exactly one.
+# SELECTED_SUBJECTS = the chosen subject id — selection yields exactly one (or
+# empty when no candidate survived 1f/1g). Assign it from SUBJECT_ID here so the
+# single-tick guard below counts the REAL selection (an unset var would always
+# count 0 and wrongly fall through to NO_WORK even after a subject was picked).
+SELECTED_SUBJECTS="${SUBJECT_ID:-}"
 SELECTED_COUNT="$(printf '%s\n' "$SELECTED_SUBJECTS" | grep -c . )"
 if [ "$SELECTED_COUNT" -gt 1 ]; then
  echo "Evidence: backlog selection yielded $SELECTED_COUNT subjects — single-tick contract violated"
@@ -211,7 +237,7 @@ if [ "$SELECTED_COUNT" -gt 1 ]; then
 fi
 ```
 
-A `SELECTED_COUNT` of 0 falls through to the terminal split below (`NO_WORK`); exactly 1 proceeds to Phase 1.6.
+A `SELECTED_COUNT` of 0 (empty `SUBJECT_ID` — no candidate survived 1f/1g) falls through to the terminal split below (`NO_WORK`); exactly 1 proceeds to Phase 1.6.
 
 Fall through to the existing terminal split **only when the pool is genuinely empty of a selectable candidate** — verbatim, backlog mode adds neither verdict:
 
@@ -237,15 +263,15 @@ GATE_CLASSES="$($FLOWCTL config get pilot.gateClasses --json | jq -r '.value[]?'
 
 An empty/unset `gateClasses` (the default) gates nothing — full-auto is unconditional.
 
-Classify `SUBJECT_ID` to exactly one class (first match wins) and route:
+Classify `SUBJECT_ID` to exactly one class (first match wins) and route. **Order matters: `dep-unsatisfied` is checked BEFORE `workable`** — a signalled item with an unsatisfied (acyclic) blocker is a dep-wait, NOT a workable advance, so it must route to the dep-wait `BLOCKED` terminal rather than slipping into CLASSIFY/DISPATCH (matches Phase 1f / R10 — a signalled-but-dep-blocked item is selectable and surfaces the wait):
 
 | Class | The agent's read | Route → terminal |
 |---|---|---|
-| **workable** | signal present AND spec complete enough to act on (clear AC / R-IDs, an actionable next stage), AND not matching a force-gate class | **advance** — set `SELECTED_SPEC="$SUBJECT_ID"` and fall through to Phase 2 CLASSIFY → … → Phase 5 (the existing pipeline, unchanged); terminal `ADVANCED <id> <stage>` |
-| **ready-but-thin / ambiguous** | signal present, but the spec is missing/stub/too-thin to act on safely (or it matched a force-gate class) | **ask** (Phase 3.5) → `ASKED <id> (<n>)` |
 | **needs-spec** | a **tracker-only** promoted item — no flow spec exists at all | **ask via tracker comment ALONE** (Phase 3.5) → `ASKED <id> (<n>)`; never a spec stub |
 | **dep-unsatisfied** | signal present, but a blocker (flow or tracker) is not yet done | **`BLOCKED <id> by <dep>`** — a state-changing terminal that surfaces the dep wait (a circular/unsatisfiable dep routes to `ASKED` instead, per 1e) |
-| **needs-human** | signal present, spec exists, but a genuine decision needs a person (conflicting AC, a real design fork) | **ask** (Phase 3.5) → `ASKED <id> (<n>)` |
+| **workable** | signal present, **deps satisfied**, AND spec complete enough to act on (clear AC / R-IDs, an actionable next stage), AND not matching a force-gate class | **advance** — set `SELECTED_SPEC="$SUBJECT_ID"` and fall through to Phase 2 CLASSIFY → … → Phase 5 (the existing pipeline, unchanged); terminal `ADVANCED <id> <stage>` |
+| **ready-but-thin / ambiguous** | signal present, deps satisfied, but the spec is missing/stub/too-thin to act on safely (or it matched a force-gate class) | **ask** (Phase 3.5) → `ASKED <id> (<n>)` |
+| **needs-human** | signal present, deps satisfied, spec exists, but a genuine decision needs a person (conflicting AC, a real design fork) | **ask** (Phase 3.5) → `ASKED <id> (<n>)` |
 
 **The completeness read may only WITHHOLD, never FORCE** (R3): a promoted-but-thin item is kicked back with a question, never built into a slop PR — but the read never overrides an explicit ready signal to *force* work, never sets the ready flag, never promotes.
 
@@ -619,6 +645,23 @@ $FLOWCTL spec unready "$SELECTED_SPEC"
 PILOT_VERDICT=BLOCKED spec=<id> stage=<stage> reason="no advancement (strike 2/2, spec unreadied): <why>"
 ```
 
+### Backlog-mode dep-wait `BLOCKED` terminal (R10 — distinct from the strike path)
+
+**Active only when `PILOT_AUTONOMY=backlog` AND Phase 1.6 routed the subject to `dep-unsatisfied`.** This is a SEPARATE `BLOCKED` terminal from the strike-based one above: it is a clean **dep-wait surface** (the selected, signalled item has an acyclic-but-unsatisfied blocker — Phase 1.6 / Phase 1f), **not** a no-advancement failure. It records **no strike** (the spec is healthy — it is simply waiting on a blocker the topo-sort offers first on a later tick), does **not** unready the spec, and writes the `blocked` decision-log row (the dep-wait, not a strike). `<dep>` is the unsatisfied blocker id (flow `blockedBy` edge or tracker relation); name the first when several:
+
+```bash
+# No ledger write — a dep wait is healthy, not a strike. STAGE is the stage the
+# item would advance to once unblocked (or '-'); $SUBJECT_ID is spec-backed or a
+# tracker key. The `blocked` action distinguishes the dep wait from the strike path.
+$FLOWCTL pilot-log append --id "$SUBJECT_ID" --action blocked --stage "${STAGE:--}" ${COST_TOKENS:+--cost-tokens "$COST_TOKENS"}
+```
+
+```text
+PILOT_VERDICT=BLOCKED spec=<id> stage=<stage> reason="dep wait — blocked by <dep> (not yet done); topo-sort offers the blocker first next tick"
+```
+
+(A circular/unsatisfiable dep does NOT reach here — Phase 1e routes it to `ASKED` instead. This terminal is for the plain acyclic dep wait only.)
+
 Crash-class outcomes are `NEEDS_HUMAN`: sub-skill crash, dirty non-`.flow/` tree after dispatch, gh probe failure in the all-done branch, branch inconsistency, closed-without-merge PR, merged-PR-but-open-spec, stale in-progress-only claim, or autonomy ambiguity. Leave state untouched and record no strike:
 
 ```text
@@ -660,5 +703,7 @@ $FLOWCTL pilot-log append --id "$SUBJECT_ID" --action "$ACTION" --stage "${STAGE
 - **`--cost-tokens`** is host-reported by the skill (flowctl only stores the row; it never measures cost). Omit the flag when the host cannot report it.
 
 A `NO_WORK` / `DEFERRED_TO_LAND` tick selected no subject, so it writes **no** row (there is nothing to log against). A `--dry-run` tick writes no row (classification/inspection only). The single-tick contract holds: exactly one row per acting backlog tick.
+
+**The dep-wait `BLOCKED` terminal above already emits its own `--action blocked` row inline** — that IS its single decision-log row, so do NOT append a second one here for that path. This generic block covers the other resolving terminals (`advanced` / `asked` / `needs-human`) and the strike-based `BLOCKED`. Whichever terminal resolves the tick writes exactly **one** `blocked` row, never two.
 
 The `PILOT_VERDICT` line is always the last line of the tick output. Print nothing after it.
