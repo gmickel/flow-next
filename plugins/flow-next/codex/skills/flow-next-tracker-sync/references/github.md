@@ -311,10 +311,11 @@ esac
 
 ```bash
 gh issue view "$NUMBER" -R "$REPO" \
- --json comments -q '.comments[] | {id, author: .author.login, body, createdAt, url}'
+ --json comments -q '.comments[] | {id, author: .author.login, authorAssociation: .authorAssociation, body, createdAt, url}'
 ```
 - **GitHub comment ids are stable** (the node id `IC_kwDO…` on each comment) —
  same dedup property the Linear comments rely on; safe as the dedup key.
+- **`authorAssociation`→`authorAuthority`** (fn-68 R15 security — populate it here, the producer): `OWNER`/`MEMBER`/`COLLABORATOR` ⇒ `writer`; `CONTRIBUTOR`/`FIRST_TIMER`/`FIRST_TIME_CONTRIBUTOR`/`MANNEQUIN`/`NONE` ⇒ `outsider`; a `*[bot]` login ⇒ `bot`; absent/unparsed ⇒ `unknown` (the answer valve fails closed). This is why the `-q` projection now selects `authorAssociation`.
 - Map each: `author.login`→`author`; `body`, `createdAt`; **detect the flow-owned
  marker set** in `body` → set `marker` (flow's own echo, skipped on pull). The set
  is closed (fn-68 R15): `flow-next:sync`→`flow-evt:<event>`,
@@ -373,8 +374,11 @@ gh issue list -R "$REPO" --state open --label "$READY_LABEL" --limit 200 \
 - **Map each into the normalized `issue` struct** via the same firewall table the
  `fetchIssue` map uses (§ Normalized mapping — `id`(node id)→`id`, `"#"+number`→
  `identifier`, `state`/`stateReason`/`status:` label→`status`, `labels[].name`→
- `labels`, …). A tracker-only ticket (no `flow:<id>` label) maps identically; its
- missing back-reference label is how the skill knows it is unlinked.
+ `labels`, …). A tracker-only ticket (no linked flow spec) maps identically.
+ **Linkage is decided authoritatively by the local sync state** (the recorded
+ linked tracker-ids), NOT by `flow:<id>` label absence — the label is a
+ corroborating hint only, and a label set that lost the back-reference is never
+ read as "unlinked" (a linked issue is never mis-classified tracker-only).
 - **`--limit 200`** is a generous promoted-lane bound; raise it (or page with
  `gh api ... --paginate`) only if a repo's ready lane is genuinely larger.
 - **`tracker.readyState` unset ⇒ the skill never calls this** (steps.md Phase 7a

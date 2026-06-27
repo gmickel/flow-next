@@ -131,7 +131,7 @@ Resolve the normalized status → the team's concrete `stateId` via the status m
 query ($id: String!, $first: Int!, $after: String) {
   issue(id: $id) {
     comments(first: $first, after: $after, orderBy: updatedAt) {
-      nodes { id body createdAt user { name } parent { id } }
+      nodes { id body createdAt user { id name } botActor { id name } parent { id } }
       pageInfo { hasNextPage endCursor }
     }
   }
@@ -139,6 +139,11 @@ query ($id: String!, $first: Int!, $after: String) {
 ```
 - **Always set `first:`** (e.g. 50) and page via `after`/`endCursor` — never
   unbounded (complexity-limit hygiene).
+- **`authorAuthority` (fn-68 R15 security — populate it here, the producer):**
+  `botActor` present ⇒ `bot`; else the `user` maps to `writer` when a workspace
+  **member** (the user's `admin`/`member` role / workspace membership), `outsider`
+  for a guest, and `unknown` when membership can't be resolved (⇒ the answer valve
+  fails closed). This is why the query fetches `user { id name }` + `botActor`.
 - Map each: `user.name`→`author`; detect the **closed flow-owned marker set** in
   `body` → set `marker` (flow's own echo, skipped on pull): `flow-next:sync`→
   `flow-evt:<event>`, `flow-next:question`→`flow-evt:question`, rolling
