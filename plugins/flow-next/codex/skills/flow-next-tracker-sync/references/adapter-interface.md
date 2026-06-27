@@ -69,12 +69,20 @@ The wire-agnostic shapes the transports produce and reconcile consumes. These ar
  // genuine tracker-side comments (those pull into the spec sync log).
  // The adapter sets `marker` from ANY flow-owned marker line (see the
  // marker-vocabulary table below) — NOT only `flow-evt:<event>`.
- "parentId": "uuid-or-null" // OPTIONAL reply/parent metadata (fn-68 R15). On a THREADED tracker
+ "parentId": "uuid-or-null", // OPTIONAL reply/parent metadata (fn-68 R15). On a THREADED tracker
  // (Linear) a reply carries its parent comment's id, so a human's
  // answer-under-a-question is matched by thread + the question-valve
  // `id`. On a FLAT tracker (GitHub — no threads) there is no parent,
  // so parentId is null and the `<!-- flow-next:answer id=<hash> -->`
  // body marker is the load-bearing match (by id, threading-blind).
+ "authorAuthority": "writer|outsider|bot|unknown" // fn-68 R15 SECURITY: the author's permission tier —
+ // the answer valve honors a `flow-next:answer` marker ONLY from a
+ // `writer` (a marker id alone is NOT proof; anyone with comment access
+ // could inject the marker). GitHub: derived from `author_association`
+ // (OWNER/MEMBER/COLLABORATOR ⇒ writer; CONTRIBUTOR/FIRST_TIMER/NONE ⇒
+ // outsider; a `*[bot]` login ⇒ bot). Linear: team membership ⇒ writer,
+ // guest/none ⇒ outsider. `unknown` when the transport can't resolve it
+ // ⇒ treated as NOT authorized (fail closed).
 }
 ```
 

@@ -121,10 +121,13 @@ named op:
   promoted lane exists to filter on, so backlog mode runs the **flow-ready specs
   only**. The flow `ready` flag needs no tracker (R17). Same floor when no transport
   is reachable.
-- A tracker-only ticket is recognized by the **absence of a `flow:<id>` label** —
-  that is how the skill knows it is unlinked (no spec). A linked issue already shows
-  up on the flow side via 1b, so de-dup by tracker id / `flow:<id>` label when
-  unioning to avoid scanning the same item twice.
+- A tracker-only ticket is one with **no linked flow spec** — decided
+  authoritatively by the **local sync state** (the tracker-ids the skill recorded
+  as linked), NOT by the absence of a `flow:<id>` label (the label is a
+  corroborating hint only; a bounded/truncated label set is never read as
+  "unlinked"). A linked issue already shows up on the flow side via 1b, so **de-dup
+  by tracker id** (the sync-state link) when unioning — the `flow:<id>` label is a
+  fallback hint, never the sole test — to avoid scanning the same item twice.
 
 The merged candidate set = the flow specs (1b) ∪ the tracker-only issues (1c).
 
