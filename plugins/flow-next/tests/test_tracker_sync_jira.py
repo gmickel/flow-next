@@ -521,6 +521,22 @@ class JiraCeremonyWiringTestCase(unittest.TestCase):
         self.assertIn("tracker.perTracker.projectKey", self.steps)
         self.assertIn("tracker.perTracker.baseUrl", self.steps)
 
+    def test_steps_jira_readiness_distinguishes_config_error_from_floor(self) -> None:
+        # rp-review fix #2: the readiness branch must NOT collapse "no creds"
+        # (spec-first floor → accept-on-faith) with "creds present but
+        # baseUrl/projectKey missing" (a config error → never write an
+        # unvalidated readyState). Assert the three-way split: a CRED_OK=0 floor
+        # path, a config-incomplete path that does NOT write, and a separate
+        # READY_WRITE gate on the actual config-set.
+        self.assertIn('[ "$CRED_OK" = 0 ]', self.steps)
+        self.assertIn("READY_WRITE", self.steps)
+        # The config-set is gated on BOTH READY_OK and READY_WRITE — so the
+        # config-error path (READY_WRITE=0) can never persist a readyState.
+        self.assertIn(
+            '[ "$READY_OK" = 1 ] && [ "$READY_WRITE" = 1 ] && $FLOWCTL config set tracker.readyState',
+            self.steps,
+        )
+
     # --- tracker-first caveat (R6-identity) ---------------------------------
 
     def test_steps_phase2_caveat_says_jira_tracker_first(self) -> None:

@@ -170,23 +170,35 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
      cloud-basic) [ -n "${JIRA_EMAIL:-}" ] && [ -n "${JIRA_API_TOKEN:-}" ] && { JAUTH=(-u "$JIRA_EMAIL:$JIRA_API_TOKEN"); CRED_OK=1; } ;;
      bearer-pat)  [ -n "${JIRA_PAT:-}" ] && { JAUTH=(-H "Authorization: Bearer $JIRA_PAT"); CRED_OK=1; } ;;
    esac
-   if [ -n "$JIRA_BASE" ] && [ -n "$PROJ_KEY" ] && [ "$CRED_OK" = 1 ]; then
-     # Credential present for the persisted scheme → VALIDATE the chosen status
-     # NAME exists in the project. sslVerify==false ⇒ -k for self-hosted
-     # internal-CA certs (opt-in, persisted; env JIRA_SSL_VERIFY=false also honored).
+   # THREE distinct outcomes — never collapse them:
+   #   (a) no creds for the persisted scheme (CRED_OK=0) → spec-first floor:
+   #       cannot validate, accept on faith OR skip → no-op backlog lane.
+   #   (b) creds present BUT baseUrl/projectKey missing → a CONFIG ERROR, not a
+   #       floor: do NOT write an unvalidated readyState (an unconfirmed name
+   #       silently empties the lane) — surface it and re-ask / fix config / skip.
+   #   (c) creds + config present → VALIDATE against the project's statuses.
+   READY_WRITE=0
+   if [ "$CRED_OK" = 0 ]; then
+     # (a) spec-first floor — no credential reachable for the persisted scheme.
+     READY_OK=1; READY_WRITE=1
+   elif [ -z "$JIRA_BASE" ] || [ -z "$PROJ_KEY" ]; then
+     # (b) creds present but config incomplete — config error, never write.
+     READY_OK=0; READY_WRITE=0
+     echo "Jira readiness: credential present but baseUrl/projectKey not configured — re-run the config-write, or skip readiness." >&2
+   else
+     # (c) VALIDATE the chosen status NAME exists in the project. sslVerify==false
+     # ⇒ -k for self-hosted internal-CA certs (opt-in, persisted; env
+     # JIRA_SSL_VERIFY=false also honored).
      [ "$SSL_VERIFY" = false ] || [ "${JIRA_SSL_VERIFY:-}" = false ] && JK=(-k) || JK=()
      STATUSES=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
        "$JIRA_BASE/rest/api/$APIV/project/$PROJ_KEY/statuses" 2>/dev/null \
        | jq -r '[.[].statuses[].name] | unique | .[]' 2>/dev/null)
      printf '%s\n' "$STATUSES" | grep -qix -- "$READY_STATE" && READY_OK=1
-   else
-     # No credential reachable for the persisted scheme (spec-first floor) —
-     # cannot validate; accept on faith OR skip → no-op backlog lane.
-     READY_OK=1
+     READY_WRITE=1
    fi
-   [ "$READY_OK" = 1 ] && $FLOWCTL config set tracker.readyState "$READY_STATE"
+   [ "$READY_OK" = 1 ] && [ "$READY_WRITE" = 1 ] && $FLOWCTL config set tracker.readyState "$READY_STATE"
    ```
-   If `READY_OK` stays 0 the status does NOT exist in the project: show the user the discovered status list and re-ask via `AskUserQuestion` — pick an existing status, or skip (skip ⇒ `tracker.readyState` stays null, gate dormant per R7, `listOpenIssues` no-ops — jira.md § Readiness). The `readyState` is the **raw Jira status name** used directly in the JQL filter, escaped before interpolation (jira.md § listOpenIssues).
+   If `READY_OK` stays 0 in case **(c)** the status does NOT exist in the project: show the user the discovered status list and re-ask via `AskUserQuestion` — pick an existing status, or skip. In case **(b)** the credential is present but `baseUrl`/`projectKey` were never persisted (a config gap, not a spec-first floor): re-run the config-write to set them, or skip — **never** write an unvalidated `readyState`. Skipping in any case ⇒ `tracker.readyState` stays null, gate dormant per R7, `listOpenIssues` no-ops (jira.md § Readiness). The `readyState` is the **raw Jira status name** used directly in the JQL filter, escaped before interpolation (jira.md § listOpenIssues).
 
 ## Phase 2 — Link / create ceremony (R2/R3/R16)
 
