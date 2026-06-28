@@ -65,9 +65,9 @@ Never reimplement a flowctl helper inline; never push a merge/judgment decision 
 
 ## Discovery ceremony (R2) — detect / surface / ask / never-assume
 
-The bridge is **off until explicitly enabled**. The ceremony probes five signals, surfaces present AND absent, ASKS, and writes config **only on confirmation** — with provenance. No-signal ⇒ nothing written; `enabled` stays `false`. Never assume. But **once the user confirms, enabling is opt-OUT, not opt-in**: the ceremony activates the whole pipeline (every `perEvent` event) by default — hooking up the bridge means you want it to sync. The user excludes events at ceremony time or turns any off later (`flowctl config set tracker.perEvent.<event> off`). The `get_default_config()` schema default stays `off`, so a bare `enabled=true` set WITHOUT the ceremony activates **no lifecycle-event sync** (every `perEvent` event stays dormant) — only the ceremony's explicit writes activate them. (Two exceptions are unconditional whenever the bridge is active — no per-event gate, by design: (1) make-pr's PR↔issue link **and its In Review status push** (fn-66, R2 — an open PR is the In Review rung, riding the same Diffs-powering link path); (2) **`land.merged`** (fn-66, R10 — a real merge is the SOLE event that projects terminal `Done`, gated on the GitHub `MERGED` probe; leaving it opt-in would strand boards at In Review post-merge).)
+The bridge is **off until explicitly enabled**. The ceremony probes six signals, surfaces present AND absent, ASKS, and writes config **only on confirmation** — with provenance. No-signal ⇒ nothing written; `enabled` stays `false`. Never assume. But **once the user confirms, enabling is opt-OUT, not opt-in**: the ceremony activates the whole pipeline (every `perEvent` event) by default — hooking up the bridge means you want it to sync. The user excludes events at ceremony time or turns any off later (`flowctl config set tracker.perEvent.<event> off`). The `get_default_config()` schema default stays `off`, so a bare `enabled=true` set WITHOUT the ceremony activates **no lifecycle-event sync** (every `perEvent` event stays dormant) — only the ceremony's explicit writes activate them. (Two exceptions are unconditional whenever the bridge is active — no per-event gate, by design: (1) make-pr's PR↔issue link **and its In Review status push** (fn-66, R2 — an open PR is the In Review rung, riding the same Diffs-powering link path); (2) **`land.merged`** (fn-66, R10 — a real merge is the SOLE event that projects terminal `Done`, gated on the GitHub `MERGED` probe; leaving it opt-in would strand boards at In Review post-merge).)
 
-Probe these five signals (detection lives in the skill, not flowctl — same shape as fn-51's driver-ladder detection):
+Probe these six signals (detection lives in the skill, not flowctl — same shape as fn-51's driver-ladder detection):
 
 | Signal | Probe | Means |
 |---|---|---|
@@ -75,7 +75,7 @@ Probe these five signals (detection lives in the skill, not flowctl — same sha
 | `LINEAR_API_KEY` | `[ -n "$LINEAR_API_KEY" ]` | headless Linear GraphQL transport available |
 | GitHub auth | `gh auth status` exits 0 | headless GitHub transport available |
 | GitLab auth / token | `glab auth status` exits 0, or `GITLAB_TOKEN` / `CI_JOB_TOKEN` set | GitLab transport available (`glab` primary → REST token fallback; self-managed hosts honored — references/gitlab.md) |
-| Jira host | a `*.atlassian.net` host configured/visible | Jira present (out of scope here — surface but don't offer) |
+| Jira REST + token | `JIRA_BASE_URL` set, plus Cloud `JIRA_EMAIL`+`JIRA_API_TOKEN` OR self-hosted DC/Server `JIRA_PAT` | Jira REST transport available — **offered** (Cloud `/rest/api/3` + API-token, DC/Server `/rest/api/2` + PAT; single rung + no-op, NO MCP — references/jira.md). A bare `*.atlassian.net` host with no credential is surfaced but can't be offered |
 
 Resolution model is **env > config > ASK**, mirroring `cmd_review_backend` (`flowctl.py:4859`): if the transport/tracker is already decided by env or config, don't re-ask. Steps in [steps.md](steps.md) Phase 1.
 
@@ -83,7 +83,7 @@ Resolution model is **env > config > ASK**, mirroring `cmd_review_backend` (`flo
 
 ```bash
 $FLOWCTL config set tracker.enabled true
-$FLOWCTL config set tracker.type linear            # or github / gitlab
+$FLOWCTL config set tracker.type linear            # or github / gitlab / jira
 $FLOWCTL config set tracker.provenance "discovery ceremony 2026-06-03; confirmed by <who>; signals: MCP+API_KEY"
 # DEFAULT-ON (opt-out): activate the whole pipeline — skip only what the user excluded.
 $FLOWCTL config set tracker.perEvent.capture reconcile
@@ -94,7 +94,17 @@ $FLOWCTL config set tracker.perEvent.work.done comment
 $FLOWCTL config set tracker.perEvent.makePr comment
 $FLOWCTL config set tracker.perEvent.resolvePr comment
 $FLOWCTL config set tracker.perEvent.completionReview comment   # fn-66: comment-shaped (verdict + R-ID coverage) — NEVER terminal Done; land.merged is the sole Done driver (active-by-default, no perEvent seed needed)
+# Jira (tracker.type jira) — write the site + project key, and PERSIST the
+# deployment shape the probe detected (auth scheme + api version) so runtime
+# never re-infers. Credentials stay in env (read each run), never written here.
+$FLOWCTL config set tracker.perTracker.baseUrl "https://acme.atlassian.net"  # Jira: the site base (JIRA_BASE_URL env overrides; the persisted value is the default)
+$FLOWCTL config set tracker.perTracker.projectKey "PROJ"                      # Jira: the project key (JQL / listOpenIssues scope)
+$FLOWCTL config set tracker.perTracker.authScheme "cloud-basic"               # Jira: cloud-basic (Cloud email:API_TOKEN) | bearer-pat (DC/Server PAT) — detected from the credential/host, persisted
+$FLOWCTL config set tracker.perTracker.apiVersion "3"                         # Jira: 3 (Cloud, ADF) | 2 (DC/Server) — the REST endpoint family
+$FLOWCTL sync active --json   # confirm active: true
 ```
+
+> **Auth scheme + api version are detected from the credential/deployment and PERSISTED at the ceremony** — a `*.atlassian.net` `baseUrl` ⇒ `cloud-basic` + apiVersion `3`; else `bearer-pat` + apiVersion `2`. If BOTH `JIRA_API_TOKEN` and `JIRA_PAT` are present AND the deployment is genuinely ambiguous, **ASK** (never silently guess), then persist. Runtime reads only the persisted `authScheme` — precedence is decided once here, never re-raced per run (mirrors `cmd_review_backend`).
 
 Confirm the result with `flowctl sync active --json` (must report `active: true` once enabled/type are set). Negative path: user declines ⇒ write nothing; `sync active` stays `active: false`.
 
@@ -103,7 +113,7 @@ Confirm the result with `flowctl sync active --json` (must report `active: true`
 Two entry flows, both attach sync state **on link** (never impose where the user must start):
 
 1. **Author-in-flow-then-push (flow-first):** a `fn-NN` spec already exists (capture/interview/plan authored it). Push creates the tracker issue, then `sync set-tracker-id` attaches the issue UUID + `--identifier WOR-17` + `--url`. Keep the `fn-NN` id; store the tracker key as a resolvable alias.
-2. **Link-existing-issue (tracker-first): "grab issue X and spec it."** Fetch the issue via an already-installed transport, create the spec **keyed by the tracker key** (`flowctl spec create --tracker-first --tracker-identifier WOR-17`), seed the merge base from the current issue body, first pass is pull-only. See [steps.md](steps.md) Phase 2 (link) and [`references/identity.md`](references/identity.md).
+2. **Link-existing-issue (tracker-first): "grab issue X and spec it."** Fetch the issue via an already-installed transport, create the spec **keyed by the tracker key** (`flowctl spec create --tracker-first --tracker-identifier WOR-17`), seed the merge base from the current issue body, first pass is pull-only. **Tracker-first needs an alpha-prefixed `KEY-N` key — Linear `WOR-17` AND Jira `PROJ-123` (both `KEY-N`, both tracker-first capable).** GitHub `#N` / GitLab `<project>#<iid>` are NOT `KEY-N`, so they go flow-first only (see steps.md Phase 2). See [steps.md](steps.md) Phase 2 (link) and [`references/identity.md`](references/identity.md).
 
 ## Grain (R3) — one spec ↔ one issue
 

@@ -264,19 +264,20 @@ class GitlabCeremonyWiringTestCase(unittest.TestCase):
         self.assertIn("glab auth status", self.skill)
         self.assertIn("GITLAB_TOKEN", self.skill)
 
-    def test_probe_count_wording_updated_to_five(self) -> None:
-        # The PROBE-count wording must read FIVE (Linear MCP, LINEAR_API_KEY,
-        # GitHub, GitLab, Jira), not the stale "four". Scope the negative
+    def test_probe_count_wording_not_stale_four(self) -> None:
+        # The PROBE-count wording grew past FOUR when GitLab landed (fn-69) and
+        # again to SIX when Jira landed (fn-70). Assert it is NOT the stale
+        # "four"; the EXACT count is owned by test_tracker_sync_jira (so this
+        # test doesn't break each time a tracker is added). Scope the negative
         # assertion to the probe phrasing — steps.md legitimately says "four
         # signals" elsewhere about the RALPH autonomy-marker family (FLOW_RALPH /
         # REVIEW_RECEIPT_PATH / FLOW_AUTONOMOUS / mode:autonomous), which is a
         # DIFFERENT four and must stay.
-        self.assertIn("probes five signals", self.skill)
-        self.assertIn("Probe these five signals", self.skill)
-        self.assertIn("Probe the five signals", self.steps)
         self.assertNotIn("probes four signals", self.skill)
         self.assertNotIn("Probe these four signals", self.skill)
         self.assertNotIn("Probe the four signals", self.steps)
+        # GitLab is still offered regardless of the count wording.
+        self.assertIn("`gitlab`", self.steps)
 
     # --- ASK option (R3) ----------------------------------------------------
 

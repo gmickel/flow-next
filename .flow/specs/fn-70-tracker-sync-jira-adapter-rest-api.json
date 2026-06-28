@@ -10,7 +10,7 @@
   "id": "fn-70-tracker-sync-jira-adapter-rest-api",
   "next_task": 1,
   "plan_review_status": "ship",
-  "plan_reviewed_at": "2026-06-28T13:27:45.551220Z",
+  "plan_reviewed_at": "2026-06-28T22:52:15.381522Z",
   "ready": true,
   "spec_path": ".flow/specs/fn-70-tracker-sync-jira-adapter-rest-api.md",
   "status": "open",
@@ -26,5 +26,5 @@
     "mergeBaseTracker": "# tracker projection on FLOW board, full reconcile 2026-06-26\n",
     "url": "https://linear.app/gmickel/issue/FLOW-19"
   },
-  "updated_at": "2026-06-28T14:18:18.586805Z"
+  "updated_at": "2026-06-28T22:52:15.381723Z"
 }

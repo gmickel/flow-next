@@ -170,7 +170,9 @@ class TrackerConfigTestCase(unittest.TestCase):
     def test_activation_inactive_for_empty_or_unknown_type(self) -> None:
         self._write_config({"tracker": {"type": ""}})
         self.assertFalse(self.flowctl.tracker_sync_active())
-        self._write_config({"tracker": {"type": "jira"}})
+        # `asana` is a genuinely-unsupported tracker type (jira became a real
+        # type in fn-70, so it now activates — see test_activation_active_for_known_type).
+        self._write_config({"tracker": {"type": "asana"}})
         self.assertFalse(self.flowctl.tracker_sync_active())
 
     def test_activation_active_when_enabled_true(self) -> None:
@@ -178,7 +180,7 @@ class TrackerConfigTestCase(unittest.TestCase):
         self.assertTrue(self.flowctl.tracker_sync_active())
 
     def test_activation_active_for_known_type(self) -> None:
-        for ttype in ("linear", "github", "Linear", "GITHUB"):
+        for ttype in ("linear", "github", "gitlab", "jira", "Linear", "GITHUB", "Jira"):
             self._write_config({"tracker": {"enabled": False, "type": ttype}})
             self.assertTrue(
                 self.flowctl.tracker_sync_active(), f"type={ttype} should activate"

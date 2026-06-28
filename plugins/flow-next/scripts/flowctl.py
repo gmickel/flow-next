@@ -1027,7 +1027,7 @@ def save_task_definition(task_id: str, definition: dict) -> None:
 # enabled — EXCEPT the two fn-66 unconditional bridge-active paths: make-pr's
 # PR↔issue link + In Review push, and `land.merged`'s Done-on-merge (both ride the
 # bridge-active predicate alone, not a perEvent leaf — see SKILL.md / steps.md).
-TRACKER_TYPES = {"linear", "github", "gitlab"}
+TRACKER_TYPES = {"linear", "github", "gitlab", "jira"}
 TRACKER_PER_EVENT_LEAVES = {"off", "pull", "push", "reconcile", "comment"}
 TRACKER_TIEBREAKS = {"flow-wins", "tracker-wins", "always-ask"}
 # Default staleness threshold (hours) consumed by `sync list-stale`.
@@ -1100,6 +1100,32 @@ def get_default_tracker_config() -> dict:
             # not a missing-key error.
             "project": None,
             "host": None,
+            # fn-70 (R8) — Jira adapter config. `baseUrl` pins the Jira site
+            # (e.g. `https://acme.atlassian.net` Cloud, or a self-hosted DC/Server
+            # base); `JIRA_BASE_URL` env overrides it at runtime, so the persisted
+            # value is the default, never inert. `projectKey` is the Jira project
+            # key (`PROJ`) — the JQL/`listOpenIssues` scope. `authScheme` records
+            # the deployment's auth shape decided ONCE at the discovery ceremony
+            # and persisted (`cloud-basic` = Cloud HTTP-basic `email:API_TOKEN`;
+            # `bearer-pat` = DC/Server `Authorization: Bearer <PAT>`) so runtime
+            # never re-infers it — credentials still read from env each run, never
+            # stored here. `apiVersion` is the REST endpoint family (`3` Cloud ADF
+            # / `2` DC/Server) the adapter branches on. `sslVerify` is an opt-in
+            # escape hatch (default true) for self-hosted internal-CA / self-signed
+            # certs (`JIRA_SSL_VERIFY=false` env override); never silent. `statusMap`
+            # maps the FULL normalized status set → a Jira status `{name}`/`{id}`
+            # (id preferred when both present — names are project-renamable),
+            # applied through the transitions API. The discovery ceremony writes
+            # these on confirmation (steps.md Phase 1 / SKILL.md ceremony); flowctl
+            # only seeds the schema defaults so a fresh
+            # `config get tracker.perTracker.baseUrl|projectKey|authScheme|apiVersion`
+            # returns the default, not a missing-key error.
+            "baseUrl": None,
+            "projectKey": None,
+            "authScheme": None,
+            "apiVersion": None,
+            "sslVerify": True,
+            "statusMap": {},
         },
         "staleAfterHours": TRACKER_DEFAULT_STALE_HOURS,
         "conflictTiebreak": "always-ask",
@@ -2219,6 +2245,11 @@ def parse_tracker_identifier(
     lowercased key + int number, or ``None`` for anything else (slugged,
     suffixed, malformed, empty). Used by create + link to validate the
     identifier before it is stored as a resolvable alias.
+
+    A Jira issue key (`PROJ-123`, lowercased `proj-123`) IS this `KEY-N` form,
+    so — like a Linear handle — it parses, resolves, and is tracker-first
+    capable (fn-70). GitHub `#N` / GitLab `<project>#<iid>` are NOT `KEY-N`
+    (they take the `allow_reference` display-only path in the validator below).
     """
     if not identifier:
         return None
@@ -2250,7 +2281,8 @@ def validate_tracker_identifier(
     ``group/subgroup/project#12``, or a bare ``123`` — as a **display-only**
     identifier. It returns ``("", number, display)`` (empty key) — stored + shown
     + used in a ``Refs #123`` PR cross-link, but NOT a resolvable spec handle
-    (only Linear keys resolve via the hybrid id scheme; you never ``work #123``).
+    (only `KEY-N` keys — Linear ``WOR-17`` / Jira ``PROJ-123`` — resolve via the
+    hybrid id scheme; you never ``work #123``).
     The path part is one-or-more ``/``-joined segments (each non-empty, no ``/``
     or ``#``), so GitLab nested groups (``group/subgroup/project#12``) are
     accepted while empty-segment forms (``group/#12``, ``/p#1``, ``a//b#1``) are
@@ -2287,7 +2319,8 @@ def validate_tracker_identifier(
     if parsed is None:
         error_exit(
             f"Invalid tracker identifier '{identifier}'. Expected a bare "
-            "display key like WOR-17 (1-10 char key + number, no slug/suffix).",
+            "display key like WOR-17 or PROJ-123 (1-10 char key + number, no "
+            "slug/suffix).",
             use_json=use_json,
         )
     if parsed[0] == RESERVED_TRACKER_KEY:
