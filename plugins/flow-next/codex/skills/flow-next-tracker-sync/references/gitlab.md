@@ -191,13 +191,15 @@ token's allowlisted scope) — the run never fails hard.
 - **Project target:** every REST path needs the **URL-encoded** project
  (`encodedProject`) — see the encoding rule above. The bridge config's
  `tracker.perTracker.project` supplies the literal path.
-- **Bodies via `--body-file -` (or piped stdin), NEVER raw inline.** GitLab issue
- bodies are **GitLab-Flavored Markdown** (the same family as GitHub) — backticks,
- `$`, newlines, and quotes break shell quoting on an inline body argument. Write
- the body to a temp file (or pipe stdin) and pass `--body-file -`. **No ADF
- translation layer is needed** (GFM is a plain markdown string — verified —
- unlike Jira's ADF). This is the GitLab analog of github.md's `--body-file -`
- discipline; same failure mode (escaping mangles the round-trip), same fix.
+- **Bodies via a `--field <key>=@-` stdin source (or `--input -`), NEVER raw inline.**
+ GitLab issue bodies are **GitLab-Flavored Markdown** (the same family as GitHub) —
+ backticks, `$`, newlines, and quotes break shell quoting on an inline body argument.
+ Pipe the body to stdin and pass **`--field description=@-`** (issue body) /
+ **`--field body=@-`** (comment): `glab api`'s `--field`/`--raw-field` read `@-` from
+ stdin. **`glab api` has NO `--body-file` flag** — that belongs to `glab issue`/`gh`;
+ use `--field …=@-` (or `--input -`) here. **No ADF translation layer is needed** (GFM
+ is a plain markdown string — verified — unlike Jira's ADF). Same failure mode as
+ github.md's body-quoting discipline (escaping mangles the round-trip), same fix.
 - **id vs iid:**
  - **Durable dedupe key = the global issue `id`** (immutable, project-independent —
  NOT the project-local `iid`) from the create response's `.id` (piped to `jq`). Store it via `sync set-tracker-id`.
@@ -607,14 +609,18 @@ never read back as a relation (below).
 ### License degrade (probe-by-attempt, don't pre-detect)
 
 ```bash
-# A = the blocked issue (path iid), B = the blocker. Try directional first:
-if glab api --method POST "projects/$ENC/issues/$A_IID/links" \
+# A = the blocked issue (path iid), B = the blocker. Try directional first; CAPTURE the
+# response so a NON-license failure is not misclassified as a degrade.
+PRESP=$(glab api --method POST "projects/$ENC/issues/$A_IID/links" \
  --field "target_project_id=$B_PROJECT_NUM" \
  --field "target_issue_iid=$B_IID" \
- --field "link_type=is_blocked_by" >/dev/null 2>&1; then
+ --field "link_type=is_blocked_by" 2>&1) && PRC=0 || PRC=$?
+if [ "$PRC" -eq 0 ]; then
  REL_PATH=native # 201 → Premium/Ultimate namespace; directional link created
+elif printf '%s' "$PRESP" | grep -qi 'not available for current license'; then
+ REL_PATH=degraded # license 403 ONLY → relates_to (UI only) + the body block carries direction
 else
- REL_PATH=degraded # 403 license → relates_to (UI only) + the body block carries direction
+ REL_PATH=errored # bad iid / perms / 429 / 5xx → errored + defer, NOT a silent degrade
 fi
 # When TRANSPORT=none the POST never runs → no-op rung.
 ```

@@ -101,7 +101,10 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
  LABEL_OK=1
  # POST /projects/:id/labels — :id is the URL-encoded `group/project` path.
  # 201 ⇒ created; a 409 / "already exists" is the idempotent no-op we tolerate.
- if ! CREATE_ERR=$(glab api --method POST \
+ # ${HOST:+--hostname "$HOST"} pins the configured self-managed host (tracker.perTracker.host);
+ # without it glab api targets the current git dir's host / gitlab.com → could create `ready`
+ # on the WRONG instance and then persist tracker.readyState, so later syncs warn/noop.
+ if ! CREATE_ERR=$(glab api ${HOST:+--hostname "$HOST"} --method POST \
  "projects/$(printf '%s' "$PROJECT" | jq -sRr @uri)/labels" \
  -f "name=$READY_LABEL" -f "color=#0E8A16" \
  -f "description=flow-next: spec ready for execution" 2>&1); then
@@ -137,6 +140,17 @@ $FLOWCTL spec create --tracker-first --tracker-identifier "WOR-17" --title "<iss
 # → canonical id wor-17-slug; tasks wor-17-slug.M; bare wor-17 / wor-17.M are aliases (fn-52.10).
 $FLOWCTL sync set-tracker-id "wor-17-slug" "$ISSUE_UUID" --identifier "WOR-17" --url "$ISSUE_URL"
 ```
+
+> **GitLab grabs go FLOW-FIRST, not tracker-first.** The `--tracker-first
+> --tracker-identifier` path above is for **`KEY-N`** keys (Linear `WOR-17`, GitHub
+> `#N`). A GitLab key is `<project>#<iid>` (slashes + `#`) which can't slugify into a
+> canonical spec id, so `cmd_spec_create`'s strict `KEY-N` validator
+> (`validate_tracker_identifier(..., allow_reference=False)`) rejects it. For a GitLab
+> grab, create a **flow-first `fn-NN` spec** instead, then attach the issue:
+> `$FLOWCTL sync set-tracker-id "<fn-id>" "<global-issue-id>" --identifier
+> "<project>#<iid>" --url "<web_url>"` — fn-69.1 widened the **`set-tracker-id`**
+> validator to accept `group/subgroup/project#12` + bare `#<iid>`, and the alias
+> resolver maps `group/project#12` back to the spec. (gitlab.md § identity.)
 
 Seed the merge base from the **current issue body** so the first sync is pull-only (never surfaces the whole issue as a conflict) — first-link base-seeding is in **[→ ref: body-merge.md]**; call `sync set-merge-base` with the flow-form + tracker-form snapshots it produces:
 
