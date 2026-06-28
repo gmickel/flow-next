@@ -62,7 +62,11 @@ take the first rung that passes:
 #   GITLAB_TOKEN / CI_JOB_TOKEN in the environment (glab reads env too — no
 #   `glab auth login` required). `glab api` drives IDENTICALLY regardless of the
 #   credential source. The discovery probe in SKILL.md uses this same signal.
-if command -v glab >/dev/null 2>&1 && glab auth status >/dev/null 2>&1; then
+# Resolve $HOST (the bare `tracker.perTracker.host` hostname) BEFORE probing, so the
+# auth check is pinned to the CONFIGURED instance: a bare `glab auth status` checks the
+# current git dir's host and could select TRANSPORT=glab with creds for the WRONG host
+# (then the $HOST-pinned api calls fail instead of falling back cleanly to REST).
+if command -v glab >/dev/null 2>&1 && glab auth status ${HOST:+--hostname "$HOST"} >/dev/null 2>&1; then
   TRANSPORT=glab
 # Rung 2 — glab absent but an env token is set → raw REST against /api/v4.
 elif [ -n "$GITLAB_TOKEN" ] || [ -n "$CI_JOB_TOKEN" ]; then
@@ -85,18 +89,20 @@ reports "no token found" → 401 → the adapter's no-op rung.)
 GitLab is heavily self-managed; **never hardcode gitlab.com**. Resolve the host
 once and derive the REST base from it:
 
-- **Host:** `tracker.perTracker.host` (config) → `GITLAB_HOST` → `glab config get
-  host` → `CI_SERVER_URL` (CI). **The resolved host is authoritative — thread it
-  explicitly into every `glab api` call via `--hostname "$HOST"`** (or export
-  `GITLAB_HOST="$HOST"` for the call). Do NOT rely on `glab api`'s default, which
-  targets the **current git directory's** authenticated host (or `gitlab.com`): a repo
-  cloned from a *different* GitLab instance than `tracker.perTracker.host` would
-  otherwise silently mis-target — the `glab` rung hitting one host while the REST rung
-  hits the configured one. On the REST rung, the resolved host drives the base URL.
-- **REST base = `<host>/api/v4`**, never a hardcoded `gitlab.com` base. The
+- **Host (a BARE hostname, no scheme):** `tracker.perTracker.host` (config) →
+  `GITLAB_HOST` → `glab config get host` → strip the scheme from `CI_SERVER_URL` (CI).
+  `$HOST` is always a bare hostname like `gitlab.example.com` — **`glab api --hostname`
+  and `GITLAB_HOST` both take a hostname, NOT a URL** (a `https://…` value breaks the
+  glab rung). **Thread it explicitly into every `glab api` call via `--hostname
+  "$HOST"`** (or export `GITLAB_HOST="$HOST"`). Do NOT rely on `glab api`'s default,
+  which targets the **current git directory's** authenticated host (or `gitlab.com`): a
+  repo cloned from a *different* GitLab instance than `tracker.perTracker.host` would
+  otherwise silently mis-target.
+- **Raw-REST base = `https://<host>/api/v4`** (the raw-REST rung re-adds the `https://`
+  scheme to the bare `$HOST`), never a hardcoded `gitlab.com` base. The
   `glab api --hostname "$HOST" <path>` rung speaks **relative** REST paths (e.g.
-  `projects/:id/issues`) and glab prepends the resolved host, so the same path string
-  works on both rungs — both pinned to `$HOST`, never the ambient git dir.
+  `projects/:id/issues`) — glab supplies the scheme + host from `--hostname` — so the
+  same path string works on both rungs, both pinned to `$HOST`, never the ambient git dir.
 
 > **Recipe convention:** the `glab api` examples throughout this doc assume `export
 > GITLAB_HOST="$HOST"` is in effect (the resolved host above), so a bare `glab api`
@@ -658,9 +664,16 @@ are NOT relations — never returned.
 
 ### `setIssueRelation(issue=A, blockedBy=B)` → ok | errored | noop
 
-**Read-before-write (mandatory, R3):** `listIssueRelations(A)` first; skip the write
-when A-is-blocked-by-B already exists (in a native directional link or the
-`<!-- flow:deps -->` block). GitLab does not reliably no-op a duplicate link.
+**Read-before-write (mandatory, R3):** `listIssueRelations(A)` first. Skip the write
+ONLY when the **tracker-visible relation is present** — a native directional
+`is_blocked_by` link, OR (on a degraded namespace) the `relates_to` link. **The
+`<!-- flow:deps -->` block ALONE is NOT sufficient proof.** If the block records the
+edge but the native link is **gone** (a human deleted the board-visible link), that is
+a **human-removal collision**, not an already-projected no-op: re-create the link
+(autonomous mode → `sync defer` for the human) — never let the provenance block mask a
+removed tracker-visible dependency. (The block is direction/provenance; the *link* is
+the projection.) GitLab does not reliably no-op a duplicate link, so the
+link-presence check is also the dedup.
 
 **The write (degrade ladder — always also the body block):**
 ```bash

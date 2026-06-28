@@ -74,10 +74,10 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
  $FLOWCTL config set tracker.perTracker.teamId "<team>" # Linear: if the user named one
  # GitLab (tracker.type gitlab) — parallel to GitHub's `repo`: write the
  # group/project path (nested groups allowed, e.g. `group/subgroup/repo`) and,
- # only for self-managed, the host base URL. Omit `host` on gitlab.com (it
- # resolves from glab config / CI_SERVER_URL). Skip both for linear/github.
+ # only for self-managed, the BARE HOSTNAME (no scheme). Omit `host` on gitlab.com
+ # (it resolves from glab config / CI_SERVER_URL). Skip both for linear/github.
  $FLOWCTL config set tracker.perTracker.project "<group/project>" # GitLab: the group/project path
- $FLOWCTL config set tracker.perTracker.host "<https://gitlab.example.com>" # GitLab self-managed only; omit on gitlab.com
+ $FLOWCTL config set tracker.perTracker.host "<gitlab.example.com>" # GitLab self-managed: a BARE HOSTNAME (no scheme) — `glab api --hostname` needs a host, not a URL; the REST rung derives https://<host>/api/v4. Omit on gitlab.com.
  $FLOWCTL sync active --json # confirm active: true
  ```
  **Never assume — but default-on is not assuming.** No signal / user declines the bridge ⇒ write nothing; `enabled` stays `false`; `sync active` stays `active: false`. Confirming the bridge IS the consent to sync the pipeline. The **config schema default stays `off`** (in `get_default_config()`), so a bare `tracker.enabled=true` set by hand or a script — WITHOUT this ceremony — activates **no lifecycle-event sync** (every `perEvent` event stays dormant). The **two exceptions** are unconditional whenever the bridge is active (no per-event gate, by design): (1) make-pr's PR↔issue link **and its In Review status push** (fn-66, R2 — an open PR is the In Review rung, riding the same Diffs-powering link path); (2) **`land.merged`** (fn-66, R10 — a real merge is the SOLE event that projects terminal `Done`, gated on the GitHub `MERGED` probe; leaving it opt-in would strand boards at In Review post-merge). Only the ceremony's explicit per-event writes activate the other events themselves. Users opt out per event afterward via `flowctl config set tracker.perEvent.<event> off`.
