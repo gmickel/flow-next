@@ -65,15 +65,16 @@ Never reimplement a flowctl helper inline; never push a merge/judgment decision 
 
 ## Discovery ceremony (R2) — detect / surface / ask / never-assume
 
-The bridge is **off until explicitly enabled**. The ceremony probes four signals, surfaces present AND absent, ASKS, and writes config **only on confirmation** — with provenance. No-signal ⇒ nothing written; `enabled` stays `false`. Never assume. But **once the user confirms, enabling is opt-OUT, not opt-in**: the ceremony activates the whole pipeline (every `perEvent` event) by default — hooking up the bridge means you want it to sync. The user excludes events at ceremony time or turns any off later (`flowctl config set tracker.perEvent.<event> off`). The `get_default_config()` schema default stays `off`, so a bare `enabled=true` set WITHOUT the ceremony activates **no lifecycle-event sync** (every `perEvent` event stays dormant) — only the ceremony's explicit writes activate them. (Two exceptions are unconditional whenever the bridge is active — no per-event gate, by design: (1) make-pr's PR↔issue link **and its In Review status push** (fn-66, R2 — an open PR is the In Review rung, riding the same Diffs-powering link path); (2) **`land.merged`** (fn-66, R10 — a real merge is the SOLE event that projects terminal `Done`, gated on the GitHub `MERGED` probe; leaving it opt-in would strand boards at In Review post-merge).)
+The bridge is **off until explicitly enabled**. The ceremony probes five signals, surfaces present AND absent, ASKS, and writes config **only on confirmation** — with provenance. No-signal ⇒ nothing written; `enabled` stays `false`. Never assume. But **once the user confirms, enabling is opt-OUT, not opt-in**: the ceremony activates the whole pipeline (every `perEvent` event) by default — hooking up the bridge means you want it to sync. The user excludes events at ceremony time or turns any off later (`flowctl config set tracker.perEvent.<event> off`). The `get_default_config()` schema default stays `off`, so a bare `enabled=true` set WITHOUT the ceremony activates **no lifecycle-event sync** (every `perEvent` event stays dormant) — only the ceremony's explicit writes activate them. (Two exceptions are unconditional whenever the bridge is active — no per-event gate, by design: (1) make-pr's PR↔issue link **and its In Review status push** (fn-66, R2 — an open PR is the In Review rung, riding the same Diffs-powering link path); (2) **`land.merged`** (fn-66, R10 — a real merge is the SOLE event that projects terminal `Done`, gated on the GitHub `MERGED` probe; leaving it opt-in would strand boards at In Review post-merge).)
 
-Probe these four signals (detection lives in the skill, not flowctl — same shape as fn-51's driver-ladder detection):
+Probe these five signals (detection lives in the skill, not flowctl — same shape as fn-51's driver-ladder detection):
 
 | Signal | Probe | Means |
 |---|---|---|
 | Linear MCP registered | the host's MCP/tool list contains a Linear server (e.g. `*Linear*` tools like `save_issue`) | interactive Linear transport available (OAuth handled) |
 | `LINEAR_API_KEY` | `[ -n "$LINEAR_API_KEY" ]` | headless Linear GraphQL transport available |
 | GitHub auth | `gh auth status` exits 0 | headless GitHub transport available |
+| GitLab auth / token | `glab auth status` exits 0, or `GITLAB_TOKEN` / `CI_JOB_TOKEN` set | GitLab transport available (`glab` primary → REST token fallback; self-managed hosts honored — references/gitlab.md) |
 | Jira host | a `*.atlassian.net` host configured/visible | Jira present (out of scope here — surface but don't offer) |
 
 Resolution model is **env > config > ASK**, mirroring `cmd_review_backend` (`flowctl.py:4859`): if the transport/tracker is already decided by env or config, don't re-ask. Steps in [steps.md](steps.md) Phase 1.
@@ -82,7 +83,7 @@ Resolution model is **env > config > ASK**, mirroring `cmd_review_backend` (`flo
 
 ```bash
 $FLOWCTL config set tracker.enabled true
-$FLOWCTL config set tracker.type linear            # or github
+$FLOWCTL config set tracker.type linear            # or github / gitlab
 $FLOWCTL config set tracker.provenance "discovery ceremony 2026-06-03; confirmed by <who>; signals: MCP+API_KEY"
 # DEFAULT-ON (opt-out): activate the whole pipeline — skip only what the user excluded.
 $FLOWCTL config set tracker.perEvent.capture reconcile

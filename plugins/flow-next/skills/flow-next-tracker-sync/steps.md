@@ -35,24 +35,30 @@ EVENT="<perEvent-key from the invocation, or empty>"
 
 Only when the bridge is not yet active (`flowctl sync active --json` → `active: false`) AND not in Ralph mode. If already active, skip to Phase 2.
 
-1. **Probe the four signals** (see SKILL.md table). Detection lives here, not flowctl:
+1. **Probe the five signals** (see SKILL.md table). Detection lives here, not flowctl:
    ```bash
    # Linear MCP: inspect the host's MCP/tool list for a Linear server (verified upsert
    #   verbs save_issue / save_comment / list_comments / get_issue / list_issue_statuses —
    #   see references/linear-mcp.md). Host-agent introspection — no flowctl call.
    LINEAR_API=0; [ -n "${LINEAR_API_KEY:-}" ] && LINEAR_API=1
    GH_OK=0; gh auth status >/dev/null 2>&1 && GH_OK=1
+   # GitLab: a logged-in `glab` session OR a GITLAB_TOKEN / CI_JOB_TOKEN env token
+   #   (the headless REST fallback). Either ⇒ GitLab transport available
+   #   (references/gitlab.md). Self-managed hosts are honored via glab's configured
+   #   host / CI_SERVER_URL — never assume gitlab.com.
+   GLAB_OK=0; glab auth status >/dev/null 2>&1 && GLAB_OK=1
+   [ -n "${GITLAB_TOKEN:-}${CI_JOB_TOKEN:-}" ] && GLAB_OK=1
    # Jira: a *.atlassian.net host visible in config/env (surface only — out of scope here).
    ```
    The Linear transport rung the bridge will use follows from these signals (MCP
    beats GraphQL when both present): MCP registered → rung 1; else `LINEAR_API_KEY`
    set → rung 2 (GraphQL); else no-op. See [`references/linear-ladder.md`](references/linear-ladder.md).
-2. **Surface present AND absent.** Tell the user what was found and what wasn't — e.g. "Linear MCP: present. LINEAR_API_KEY: absent. gh: authenticated. Jira: none." Absent signals matter (they explain why a transport is unavailable).
-3. **ASK via `AskUserQuestion`** (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). Lead with the recommended tracker (the strongest present signal) + a one-sentence rationale. Ask: enable the bridge? which tracker (`linear` / `github`)? **Enabling activates the WHOLE pipeline by default (opt-out model)** — tell the user that on confirmation every lifecycle event (capture / interview / plan / work.firstClaim / work.done / makePr / resolvePr / completionReview) starts mirroring to the tracker, because hooking up the bridge means you want it to sync. Offer an **optional opt-out**: any events to exclude now (default: all on); they can also turn any off later via `flowctl config set tracker.perEvent.<event> off`. Resolution is **env > config > ASK** — don't re-ask anything env/config already decided.
+2. **Surface present AND absent.** Tell the user what was found and what wasn't — e.g. "Linear MCP: present. LINEAR_API_KEY: absent. gh: authenticated. glab: authenticated. Jira: none." Absent signals matter (they explain why a transport is unavailable).
+3. **ASK via `AskUserQuestion`** (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded). Lead with the recommended tracker (the strongest present signal) + a one-sentence rationale. Ask: enable the bridge? which tracker (`linear` / `github` / `gitlab`)? **Enabling activates the WHOLE pipeline by default (opt-out model)** — tell the user that on confirmation every lifecycle event (capture / interview / plan / work.firstClaim / work.done / makePr / resolvePr / completionReview) starts mirroring to the tracker, because hooking up the bridge means you want it to sync. Offer an **optional opt-out**: any events to exclude now (default: all on); they can also turn any off later via `flowctl config set tracker.perEvent.<event> off`. Resolution is **env > config > ASK** — don't re-ask anything env/config already decided.
 4. **On confirmation, write config** (dot-paths are safe). Activate every lifecycle event to its natural op — **skip only the ones the user explicitly excluded in step 3**:
    ```bash
    $FLOWCTL config set tracker.enabled true
-   $FLOWCTL config set tracker.type "$CHOSEN_TYPE"        # linear | github
+   $FLOWCTL config set tracker.type "$CHOSEN_TYPE"        # linear | github | gitlab
    $FLOWCTL config set tracker.provenance "discovery ceremony $(date -u +%Y-%m-%d); confirmed by <who>; signals: <list>"
    # DEFAULT-ON (opt-out): activate the whole pipeline so it mirrors end-to-end.
    $FLOWCTL config set tracker.perEvent.capture reconcile           # two-way body sync on capture
@@ -63,7 +69,13 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
    $FLOWCTL config set tracker.perEvent.makePr comment              # PR link is unconditional; extra status comment
    $FLOWCTL config set tracker.perEvent.resolvePr comment           # resolution comment
    $FLOWCTL config set tracker.perEvent.completionReview comment    # fn-66: verdict + R-ID coverage comment; NEVER terminal Done (land.merged is the sole Done driver)
-   $FLOWCTL config set tracker.perTracker.teamId "<team>"           # if the user named one
+   $FLOWCTL config set tracker.perTracker.teamId "<team>"           # Linear: if the user named one
+   # GitLab (tracker.type gitlab) — parallel to GitHub's `repo`: write the
+   # group/project path (nested groups allowed, e.g. `group/subgroup/repo`) and,
+   # only for self-managed, the host base URL. Omit `host` on gitlab.com (it
+   # resolves from glab config / CI_SERVER_URL). Skip both for linear/github.
+   $FLOWCTL config set tracker.perTracker.project "<group/project>"  # GitLab: the group/project path
+   $FLOWCTL config set tracker.perTracker.host "<https://gitlab.example.com>"  # GitLab self-managed only; omit on gitlab.com
    $FLOWCTL sync active --json   # confirm active: true
    ```
    **Never assume — but default-on is not assuming.** No signal / user declines the bridge ⇒ write nothing; `enabled` stays `false`; `sync active` stays `active: false`. Confirming the bridge IS the consent to sync the pipeline. The **config schema default stays `off`** (in `get_default_config()`), so a bare `tracker.enabled=true` set by hand or a script — WITHOUT this ceremony — activates **no lifecycle-event sync** (every `perEvent` event stays dormant). The **two exceptions** are unconditional whenever the bridge is active (no per-event gate, by design): (1) make-pr's PR↔issue link **and its In Review status push** (fn-66, R2 — an open PR is the In Review rung, riding the same Diffs-powering link path); (2) **`land.merged`** (fn-66, R10 — a real merge is the SOLE event that projects terminal `Done`, gated on the GitHub `MERGED` probe; leaving it opt-in would strand boards at In Review post-merge). Only the ceremony's explicit per-event writes activate the other events themselves. Users opt out per event afterward via `flowctl config set tracker.perEvent.<event> off`.
@@ -82,6 +94,21 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
    [ "$LABEL_OK" = 1 ] && $FLOWCTL config set tracker.readyState "$READY_LABEL"   # Linear: the state name instead
    ```
    If `LABEL_OK` stays 0 the label does NOT exist and the create genuinely failed: show the user `$CREATE_ERR` and re-ask via `AskUserQuestion` — retry, pick a different label, or skip (skip ⇒ `tracker.readyState` stays null, gate dormant per R7). Don't reach for `gh label create --force` — it silently overwrites an existing label's color/description, which is not our intent.
+   - **GitLab** — like GitHub, GitLab issues have no rich workflow; readiness resolves to a **label** name (suggest `ready`). Same pre-create-and-confirm discipline as GitHub (mirrors github.md / the block above): pre-create the label via the adapter so the projection never trips on a missing label, **tolerate ONLY already-exists** (a label create on GitLab returns a 409/`already exists` when present — that is idempotent and fine), and **never write `tracker.readyState` for a label that isn't confirmed to exist**, or every later pull hits the stale-config warn/noop (gitlab.md § Readiness label) and the flag never moves. The create call itself (`glab api` / REST `POST /projects/:id/labels`) is documented in [`references/gitlab.md`](references/gitlab.md); the ceremony invokes it through the adapter (`$PROJECT` = `tracker.perTracker.project`, host-resolved):
+   ```bash
+   LABEL_OK=1
+   # POST /projects/:id/labels — :id is the URL-encoded `group/project` path.
+   # 201 ⇒ created; a 409 / "already exists" is the idempotent no-op we tolerate.
+   if ! CREATE_ERR=$(glab api --method POST \
+       "projects/$(printf '%s' "$PROJECT" | jq -sRr @uri)/labels" \
+       -f "name=$READY_LABEL" -f "color=#0E8A16" \
+       -f "description=flow-next: spec ready for execution" 2>&1); then
+     LABEL_OK=0   # nonzero exit — tolerate ONLY already-exists: confirm the label is really there
+     printf '%s' "$CREATE_ERR" | grep -qiE 'already exists|409' && LABEL_OK=1
+   fi
+   [ "$LABEL_OK" = 1 ] && $FLOWCTL config set tracker.readyState "$READY_LABEL"
+   ```
+   If `LABEL_OK` stays 0 the create genuinely failed (auth / permissions / wrong project / API): show the user `$CREATE_ERR` and re-ask via `AskUserQuestion` — retry, pick a different label, or skip (skip ⇒ `tracker.readyState` stays null, gate dormant per R7). Under a write-scope-limited `CI_JOB_TOKEN` the create may be refused — surface it and skip rather than write an unconfirmed `readyState` (gitlab.md § Readiness label).
 
 ## Phase 2 — Link / create ceremony (R2/R3/R16)
 

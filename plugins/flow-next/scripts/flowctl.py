@@ -1027,7 +1027,7 @@ def save_task_definition(task_id: str, definition: dict) -> None:
 # enabled — EXCEPT the two fn-66 unconditional bridge-active paths: make-pr's
 # PR↔issue link + In Review push, and `land.merged`'s Done-on-merge (both ride the
 # bridge-active predicate alone, not a perEvent leaf — see SKILL.md / steps.md).
-TRACKER_TYPES = {"linear", "github"}
+TRACKER_TYPES = {"linear", "github", "gitlab"}
 TRACKER_PER_EVENT_LEAVES = {"off", "pull", "push", "reconcile", "comment"}
 TRACKER_TIEBREAKS = {"flow-wins", "tracker-wins", "always-ask"}
 # Default staleness threshold (hours) consumed by `sync list-stale`.
@@ -1090,6 +1090,16 @@ def get_default_tracker_config() -> dict:
             "projectId": None,
             "labelMap": {},
             "priorityMap": {},
+            # fn-69 (R3) — GitLab adapter config. `project` is the group/project
+            # path (e.g. `group/subgroup/repo`), the GitLab parallel to GitHub's
+            # `repo`; `host` pins a self-managed base URL (None ⇒ resolve from
+            # `glab` config / `CI_SERVER_URL`, never assume gitlab.com). The
+            # discovery ceremony writes these on confirmation (steps.md Phase 1 /
+            # SKILL.md ceremony); flowctl only seeds the schema defaults so a
+            # fresh `config get tracker.perTracker.project|host` returns None,
+            # not a missing-key error.
+            "project": None,
+            "host": None,
         },
         "staleAfterHours": TRACKER_DEFAULT_STALE_HOURS,
         "conflictTiebreak": "always-ask",
@@ -2235,15 +2245,21 @@ def validate_tracker_identifier(
     won't resolve. When ``required`` is False and the identifier is None/empty,
     returns ``None`` without error (link may set other fields without one).
 
-    ``allow_reference`` (link-time only): also accept a GitHub-style issue
-    reference — ``#123``, ``owner/repo#123``, or a bare ``123`` — as a
-    **display-only** identifier. It returns ``("", number, display)`` (empty key)
-    — stored + shown + used in a ``Refs #123`` PR cross-link, but NOT a resolvable
-    spec handle (only Linear keys resolve via the hybrid id scheme; you never
-    ``work #123``). The bare-``N`` form (fn-64) lets ``sync set-tracker-id
-    --identifier 42`` succeed; it is normalized to the ``#42`` display form on the
-    way out. Tracker-first canonical-id generation does NOT pass this flag, so a
-    GitHub ref can never become a canonical spec id.
+    ``allow_reference`` (link-time only): also accept a GitHub/GitLab-style issue
+    reference — ``#123``, ``owner/repo#123``, a **nested** GitLab group path
+    ``group/subgroup/project#12``, or a bare ``123`` — as a **display-only**
+    identifier. It returns ``("", number, display)`` (empty key) — stored + shown
+    + used in a ``Refs #123`` PR cross-link, but NOT a resolvable spec handle
+    (only Linear keys resolve via the hybrid id scheme; you never ``work #123``).
+    The path part is one-or-more ``/``-joined segments (each non-empty, no ``/``
+    or ``#``), so GitLab nested groups (``group/subgroup/project#12``) are
+    accepted while empty-segment forms (``group/#12``, ``/p#1``, ``a//b#1``) are
+    rejected. The iid must be a POSITIVE integer with no leading zero, so ``#0``
+    / ``#01`` are rejected (fn-69 R4-identity). The bare-``N`` form (fn-64) lets
+    ``sync set-tracker-id --identifier 42`` succeed; it is normalized to the
+    ``#42`` display form on the way out. Tracker-first canonical-id generation
+    does NOT pass this flag, so a GitHub/GitLab ref can never become a canonical
+    spec id.
     """
     if not identifier:
         if required:
@@ -2254,9 +2270,13 @@ def validate_tracker_identifier(
         return None
     if allow_reference:
         stripped = identifier.strip()
-        ref = re.match(r"^(?:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?#(\d+)$", stripped)
+        # GitHub/GitLab-style reference — display-only (empty key = not
+        # resolvable). The optional path part is one-or-more `/`-joined
+        # non-empty segments (GitLab nested groups: `group/subgroup/project`;
+        # also GitHub `owner/repo`); the iid is a positive integer (no leading
+        # zero), so `#0` / `group/#12` / `a//b#1` are rejected (fn-69 R4).
+        ref = re.match(r"^(?:(?:[^/#]+/)+[^/#]+)?#([1-9][0-9]*)$", stripped)
         if ref:
-            # GitHub-style reference — display-only (empty key = not resolvable).
             return ("", int(ref.group(1)), stripped)
         # Bare numeric reference (e.g. `42`) — also display-only. Normalize to
         # the `#42` display form so downstream `Refs #N` rendering is uniform.
