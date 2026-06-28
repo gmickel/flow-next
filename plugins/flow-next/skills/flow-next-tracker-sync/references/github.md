@@ -537,7 +537,7 @@ best-effort normalized value; that is a documented reduced-fidelity case, not a
 parity break (the struct shape is still identical).
 
 The same holds for relations: native `blocked_by` deps and the fenced `#N` block
-both produce the **identical** normalized `relation[]` (`{from,to,type:"blocks",source}`),
+both produce the **identical** normalized `relation[]` (`{from,to,type:"blocks",source,linkPresent}` — `linkPresent` always `true` on GitHub, the relation IS the visible projection),
 so the skill (fn-64.5) sees one transport-blind hook regardless of which GitHub
 path served it — only the `source` field differs (`unknown` on native, deferring
 to the ledger; `flow` inside the fenced marker). Native-vs-fallback is a fidelity

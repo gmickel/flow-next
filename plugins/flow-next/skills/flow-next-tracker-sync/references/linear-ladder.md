@@ -181,7 +181,7 @@ the same fields into/out of the normalized structs:
 | `postComment` | `save_comment(issueId, body)` | `commentCreate(issueId:UUID, body)` | same `comment` |
 | `readStatus` | from `get_issue.state` | from `issue.state` | same `status{raw,normalized}` |
 | `setStatus` | `save_issue(id, state)` | `issueUpdate(id, stateId)` | ok / `errored` |
-| `listIssueRelations` | `get_issue(id, includeRelations:true)` | `issue{ relations(first:N) + inverseRelations(first:N) }` | same blocked-by `relation[]` (`{from,to,type:"blocks",source}`) |
+| `listIssueRelations` | `get_issue(id, includeRelations:true)` | `issue{ relations(first:N) + inverseRelations(first:N) }` | same blocked-by `relation[]` (`{from,to,type:"blocks",source,linkPresent:true}` — Linear native relations never orphan) |
 | `setIssueRelation` | `save_issue(id, blockedBy:[…])` (append-only) | `issueRelationCreate(issueId:B, relatedIssueId:A, type:blocks)` | ok / `errored` / `noop`; read-before-write on both |
 | `listOpenIssues` (fn-68) | `list_issues(team, state=readyState NAME)` | `issues(filter:{team, state:{name:{eqIgnoreCase}}}, first:N)` | same `issue[]` at the **exact** readyState lane (no `type`, no ordering) |
 | status map build | `list_issue_statuses(team)` | `workflowStates(first:100, filter:{team}){type}` | same name/type → stateId map |

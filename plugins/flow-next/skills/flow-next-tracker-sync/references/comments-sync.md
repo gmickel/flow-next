@@ -131,8 +131,10 @@ comment with the **same `issue` + `evt` + `evidence`** marker already exists →
 >    on the tracker-key-bearing `spec` value.
 > 2. **Read:** before matching ANY marker, normalize the comment body — strip the
 >    tracker's mention markup back to bare text:
->    `s/<issue [^>]*>([^<]*)<\/issue>/$1/g` (GitHub uses `<a …>#123</a>`; strip the
->    same way). Then even an older `spec=`-keyed marker re-matches.
+>    `s/<issue [^>]*>([^<]*)<\/issue>/$1/g` (GitHub **and GitLab** auto-linkify `#N` /
+>    `<project>#N` to `<a …>#123</a>` anchor markup; strip it the same way). Then even an
+>    older `spec=`-keyed marker re-matches. (GitLab specs are flow-first — markers carry
+>    `fn-NN`, not a tracker key — so the mangle risk is lowest there, but the strip is uniform.)
 >
 > The same hazard hits the flow back-reference: write it as a **`flow:<id>` label**
 > (labels are plain text — never linkified), NOT as a body/title-embedded `[<id>]`
@@ -270,7 +272,9 @@ dedup but is keyed on a stable `id` rather than `issue+evt+evidence`:
   but it is NOT a free-form Sync-Log comment: the answer round-trip
   ([steps.md](../steps.md) Phase 7) matches it to its open question **by `id`**
   (threaded via `comment.parentId` on Linear, or flat by the body marker on
-  GitHub) and imports it **under the matching `## Open Questions` entry**, flipping
+  GitHub **and GitLab** — GitLab issue notes are flat, `parentId: null`, matched by
+  the `<!-- flow-next:answer id=… -->` body marker exactly like GitHub) and imports it
+  **under the matching `## Open Questions` entry**, flipping
   the question anchor to `status=answered`. An answer that matches no open question
   falls through to the normal Sync-Log append (a genuine tracker comment).
 

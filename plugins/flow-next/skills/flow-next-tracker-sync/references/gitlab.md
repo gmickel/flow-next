@@ -834,7 +834,7 @@ normalized value; that is a documented reduced-fidelity case, not a parity break
 
 The same holds for relations: a native `is_blocked_by` link and the `<!-- flow:deps
 -->` block both produce the **identical** normalized `relation[]`
-(`{from,to,type:"blocks",source}`), so the skill (fn-64.5) sees one transport-blind
+(`{from,to,type:"blocks",source,linkPresent}` — only GitLab may set `linkPresent:false`/`source:"block-only"` when the link is gone), so the skill (fn-64.5) sees one transport-blind
 hook regardless of which GitLab path served it — only the `source` field differs
 (`unknown` on native, deferring to the ledger; `flow` inside the block). The
 directionless `relates_to` is the one link kind that is **never** read as a relation
