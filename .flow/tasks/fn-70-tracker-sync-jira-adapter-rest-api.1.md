@@ -31,9 +31,8 @@ Make `tracker.type: jira` a real, activatable tracker and flip the ceremony from
 TBD
 
 ## Done summary
-TBD
-
+Made `tracker.type: jira` a real, activatable tracker (deterministic flowctl plumbing + discovery-ceremony prose + Python tests) — the fn-70.1 slice before the Jira REST adapter itself. flowctl: `TRACKER_TYPES += jira` (R7); `get_default_config` perTracker schema `baseUrl`/`projectKey`/`authScheme`/`apiVersion`/`sslVerify`/`statusMap` (R8); `validate_tracker_identifier` error-text/docstrings for Jira `KEY-N` (`PROJ-123` already passes the strict grammar — regression coverage, not a rewrite). Ceremony (steps.md + SKILL.md + docs/tracker-sync.md): six-signal REST probe (NO MCP rung), ASK offers jira, config-write block, Jira readiness branch (status-name like Linear, reads persisted authScheme, three-way validate/config-error/floor), and a Jira→tracker-first caveat (PROJ-123 is KEY-N like Linear; BOTH entry flows, distinct from GitHub/GitLab flow-first). Tests prove the resolver works end-to-end (`show PROJ-123` + `start PROJ-123.M`), not just the validator (fn-69 scar). `.flow/bin/flowctl.py` kept byte-identical to canonical. rp impl-review: SHIP (3 NEEDS_WORK→fix cycles). Full suite green (1276 tests).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 474ea849, e8269758, 5e13909e, 8bc9f669, 214a3a00
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (1276 tests, OK, skipped=2), python3 -m py_compile plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py (OK), bash -n on the steps.md Jira readiness snippet (OK), md5 canonical == mirror (byte-identical)
 - PRs:
