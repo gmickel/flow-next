@@ -39,9 +39,8 @@ Regenerate the Codex mirror from the canonical fn-69.1/.2 files, extend the **tr
 TBD
 
 ## Done summary
-TBD
-
+Regenerated the Codex mirror for the GitLab tracker adapter (new gitlab.md + openai.yaml), extended the receipt `--transport` vocabulary with the GitLab `glab`/`rest` rungs, carried the full GitLab contract into `references/adapter-interface.md` (implemented-by table, issue.tracker enum, authorAuthority=access_level, relation source/direction, listOpenIssues label match, marker vocabulary), and corrected the dependency-projection prose so the `<!-- flow:deps -->` block is documented as flow-owned on GitHub's fenced fallback AND GitLab on every tier. Swept every stale Linear/GitHub-only supported-tracker enumeration across docs/tracker-sync.md, flowctl.md, skills.md, teams.md, README.md (root + docs), GLOSSARY.md, the work/pilot/setup skill prose, the setup usage template + installed .flow/usage.md, and the command/skill frontmatter descriptions. Added a named mirror-parity test, a CHANGELOG Unreleased entry (NO version bump per batched-release rule), and the matching flow-next.dev page + changelog updates (committed separately).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 8cfcdfeec406409e3fca3394218aabfd5ec644c9, e8cdee9df79a4d21f6e205fadcda5499a801379b, fae71b4f7a5e72377188a0f28262ca34cce6f1af, c962e1efc6c29a550355a80eeb36c2ad8b2196d5, 346bd68230058c7851e31057983ef05ce494f012, b19b12919befca12f3d1c17278dc41cfdfbcf989, 0ad2f6d19aa36de9199acb0bfebfbb9cffa22dd5
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (1244 OK, skipped=2), python3 -m unittest plugins.flow-next.tests.test_tracker_sync_mirror_parity (10 OK — named parity test), bash scripts/sync-codex.sh (all validations pass, byte-idempotent), cd ~/work/flow-next.dev && pnpm build (64 pages, green)
 - PRs:
