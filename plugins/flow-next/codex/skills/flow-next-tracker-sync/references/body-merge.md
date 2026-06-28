@@ -59,7 +59,7 @@ STATE=$($FLOWCTL sync get-state "$SPEC_ID" --json)
 
 ## Step 0.5 — Flow-owned fenced regions: the *tracker-body-for-merge* transform (fn-64, R10)
 
-Some regions of the tracker body are **flow's, not the spec's** — flow writes them, flow owns them, and they must NEVER round-trip back into the spec or be re-litigated as tracker divergence. Today that is the GitHub dependency block on the fallback path:
+Some regions of the tracker body are **flow's, not the spec's** — flow writes them, flow owns them, and they must NEVER round-trip back into the spec or be re-litigated as tracker divergence. That is the dependency block flow writes:
 
 ```markdown
 <!-- flow:deps -->
@@ -67,7 +67,7 @@ Some regions of the tracker body are **flow's, not the spec's** — flow writes 
 <!-- /flow:deps -->
 ```
 
-(written by `setIssueRelation` on the GitHub fenced fallback — [github.md](github.md) § Relation transport; the marker is its provenance boundary.)
+(written by `setIssueRelation` — on **GitHub's fenced fallback** when native dependencies are unavailable ([github.md](github.md) § Relation transport), and on **GitLab on every tier** ([gitlab.md](gitlab.md) § Relation transport): GitLab carries the block as the durable direction/provenance source on BOTH the Premium/Ultimate native `is_blocked_by` path AND the Free/personal `relates_to` degrade, since the native link alone is board-visible but the block is the authoritative direction record. The marker is its provenance boundary.)
 
 **The rule (load-bearing):** define a canonical **`trackerBodyForMerge(rawBody)`** transform that **strips the entire `<!-- flow:deps -->` … `<!-- /flow:deps -->` fenced region** (markers included), and apply it to the tracker body **before EVERY hash / merge-base / divergence comparison in this file** — specifically:
 
@@ -80,12 +80,12 @@ Some regions of the tracker body are **flow's, not the spec's** — flow writes 
 TRACKER_BODY=$(trackerBodyForMerge "$RAW_ISSUE_BODY") # <!-- flow:deps -->…<!-- /flow:deps --> stripped
 ```
 
-**Reinject / preserve ONLY on a body-fallback issue-body write (GitHub-native-unavailable, or GitLab on a Free/personal namespace).** The fenced block is reattached (by `setIssueRelation`, which edits *only inside* its own markers — github.md / gitlab.md) when writing the issue body; the *merge* never sees it, never produces it, and never copies it into `.flow/specs/<id>.md`. Concretely:
+**Reinject / preserve on every issue-body write for an adapter that carries the block — GitHub on its fenced fallback, GitLab on every tier.** The fenced block is reattached (by `setIssueRelation`, which edits *only inside* its own markers — github.md / gitlab.md) when writing the issue body; the *merge* never sees it, never produces it, and never copies it into `.flow/specs/<id>.md`. (GitLab carries the block on the native `is_blocked_by` path too — so a GitLab `writeIssue` UPDATE must preserve it on **every** update regardless of license tier, never only on the degrade.) Concretely:
 
 - **Reconcile never folds flow's own block back into the spec.** Because the block is stripped before tracker→flow folding (Step 3 / Step 2), a `## ` section or stray `**Blocked by:**` line can never be invented into the spec from flow's own projection.
 - **Render never overwrites it — but only because the WRITE preserves it.** `renderFlowToTracker` (flow→tracker) produces the spec body only; the dep block is a separate, additive `setIssueRelation` write that operates inside its markers. `renderFlowToTracker`'s output therefore does NOT contain the block, so a full-body `writeIssue` UPDATE path (GitHub's `gh issue edit --body-file -`, or GitLab's `PUT /issues/:iid` description write — github.md / gitlab.md § `writeIssue`) MUST read the current issue body and carry the existing `<!-- flow:deps -->` region forward before writing. Skip that carry-forward and a normal push self-deletes the block, and the very next `projectDepRelations` misreads the still-ledgered edge as a remote removal → false collision (queued, never recreated). The strip-on-read / retain-on-write seam is symmetric: the merge is blind to the block; the write keeps it. The dep projection, in turn, does not clobber the rendered spec body (it edits only inside its markers).
 
-> **Why at the hash boundary, not just visually:** raw full-body hashing would see flow's just-written `<!-- flow:deps -->` block as a tracker-side change on the very next pull, flag a phantom divergence, and break echo-suppression. The strip MUST happen where the hash is computed — `trackerBodyForMerge` is the seam. (Linear native relations need no transform: relations are not in the body. The transform is body-fallback-specific — GitHub-native-unavailable, or GitLab on a Free/personal namespace — but lives here, transport-blind, as a body-merge rule.)
+> **Why at the hash boundary, not just visually:** raw full-body hashing would see flow's just-written `<!-- flow:deps -->` block as a tracker-side change on the very next pull, flag a phantom divergence, and break echo-suppression. The strip MUST happen where the hash is computed — `trackerBodyForMerge` is the seam. (Linear native relations need no transform: relations are not in the body. The transform applies wherever the block lives in the body — GitHub's fenced fallback and GitLab on every tier — but lives here, transport-blind, as a body-merge rule.)
 
 This generalizes the existing flow-internal-scaffolding exclusions (the `<!-- scope: … -->` HTML comments and the source-tag breakdown comment are likewise never surfaced as tracker text, Step 3) — `<!-- flow:deps -->` is the same idea on the tracker side: a flow-owned region the merge is blind to.
 
