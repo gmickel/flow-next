@@ -499,9 +499,21 @@ class JiraCeremonyWiringTestCase(unittest.TestCase):
         # not a label), validated against the project's statuses when creds are
         # present, else skip → no-op backlog lane.
         self.assertIn("/rest/api/", self.steps)
-        self.assertIn("project/$PROJECT_KEY/statuses", self.steps)
+        self.assertIn("project/$PROJ_KEY/statuses", self.steps)
         self.assertIn("READY_OK", self.steps)
         self.assertIn("tracker.readyState", self.steps)
+
+    def test_steps_jira_readiness_uses_persisted_auth_scheme(self) -> None:
+        # rp-review fix: the readiness validation must branch on the CEREMONY-
+        # PERSISTED authScheme (decided once, R5), NOT re-race which JIRA_* env
+        # var happens to be set. Assert it reads the persisted config + branches
+        # on cloud-basic / bearer-pat by name, and resolves baseUrl/projectKey
+        # config-first (env baseUrl override only).
+        self.assertIn("tracker.perTracker.authScheme", self.steps)
+        self.assertIn("cloud-basic)", self.steps)
+        self.assertIn("bearer-pat)", self.steps)
+        self.assertIn("tracker.perTracker.projectKey", self.steps)
+        self.assertIn("tracker.perTracker.baseUrl", self.steps)
 
     # --- tracker-first caveat (R6-identity) ---------------------------------
 

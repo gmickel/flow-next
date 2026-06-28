@@ -152,19 +152,36 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
    - **Jira** — like Linear, Jira has **rich per-project workflow states** (not labels), so readiness resolves to a **Jira status NAME** used directly in the promoted-lane JQL (e.g. `"Ready for Dev"` — a raw status name, NOT a `statusMap` key; consistent with how Linear/GitHub treat `readyState`). Discover the project's statuses first and **validate the chosen name exists** before writing, so the JQL never filters on a status the project lacks (`listOpenIssues` would then return nothing and the lane stays silently empty). When a credential is present, validate via `GET /rest/api/{3|2}/project/<projectKey>/statuses` (the apiVersion from `tracker.perTracker.apiVersion`); lead with a recommendation: a status whose name looks like "Ready" / "Selected for Development" / "To Do" (case-insensitive); if none looks right, lead with skip. When **no credential is reachable** (spec-first floor), you cannot validate — allow the user to type a name on faith OR **skip → no-op backlog lane** (`tracker.readyState` stays null; `listOpenIssues` no-ops with a note, backlog mode runs flow-ready specs only). Never write `tracker.readyState` for a status you couldn't confirm exists when creds WERE available — an unconfirmed name silently empties the promoted lane:
    ```bash
    READY_OK=0
-   if [ -n "${JIRA_BASE_URL:-}" ] && { [ -n "${JIRA_PAT:-}" ] || { [ -n "${JIRA_API_TOKEN:-}" ] && [ -n "${JIRA_EMAIL:-}" ]; }; }; then
-     # Credential present → VALIDATE the chosen status NAME exists in the project.
-     # Auth header per the persisted authScheme: Cloud basic email:API_TOKEN, else Bearer PAT.
-     APIV=$($FLOWCTL config get tracker.perTracker.apiVersion --json | jq -r '.value // "3"')
-     if [ -n "${JIRA_PAT:-}" ]; then JAUTH=(-H "Authorization: Bearer $JIRA_PAT"); else JAUTH=(-u "$JIRA_EMAIL:$JIRA_API_TOKEN"); fi
-     # ${JIRA_SSL_VERIFY:-true}==false ⇒ -k for self-hosted internal-CA certs (opt-in, documented).
-     [ "${JIRA_SSL_VERIFY:-true}" = false ] && JK=(-k) || JK=()
+   # Read the CEREMONY-PERSISTED transport shape — auth scheme + api version were
+   # decided once when the bridge was configured (above), so validation must NOT
+   # re-race env. Resolution mirrors runtime: baseUrl = JIRA_BASE_URL || config
+   # (env overrides the persisted default); projectKey / authScheme / apiVersion /
+   # sslVerify come from config; credentials still read from env per the persisted
+   # scheme. This is the SAME resolution the adapter uses at runtime (jira.md).
+   JIRA_BASE=${JIRA_BASE_URL:-$($FLOWCTL config get tracker.perTracker.baseUrl --json | jq -r '.value // empty')}
+   PROJ_KEY=$($FLOWCTL config get tracker.perTracker.projectKey --json | jq -r '.value // empty')
+   AUTH_SCHEME=$($FLOWCTL config get tracker.perTracker.authScheme --json | jq -r '.value // empty')
+   APIV=$($FLOWCTL config get tracker.perTracker.apiVersion --json | jq -r '.value // "3"')
+   SSL_VERIFY=$($FLOWCTL config get tracker.perTracker.sslVerify --json | jq -r '.value // true')
+   # Build the auth header by the PERSISTED authScheme — never by probing which
+   # env var happens to be set (that is the re-race the ceremony exists to avoid).
+   CRED_OK=0; JAUTH=()
+   case "$AUTH_SCHEME" in
+     cloud-basic) [ -n "${JIRA_EMAIL:-}" ] && [ -n "${JIRA_API_TOKEN:-}" ] && { JAUTH=(-u "$JIRA_EMAIL:$JIRA_API_TOKEN"); CRED_OK=1; } ;;
+     bearer-pat)  [ -n "${JIRA_PAT:-}" ] && { JAUTH=(-H "Authorization: Bearer $JIRA_PAT"); CRED_OK=1; } ;;
+   esac
+   if [ -n "$JIRA_BASE" ] && [ -n "$PROJ_KEY" ] && [ "$CRED_OK" = 1 ]; then
+     # Credential present for the persisted scheme → VALIDATE the chosen status
+     # NAME exists in the project. sslVerify==false ⇒ -k for self-hosted
+     # internal-CA certs (opt-in, persisted; env JIRA_SSL_VERIFY=false also honored).
+     [ "$SSL_VERIFY" = false ] || [ "${JIRA_SSL_VERIFY:-}" = false ] && JK=(-k) || JK=()
      STATUSES=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
-       "$JIRA_BASE_URL/rest/api/$APIV/project/$PROJECT_KEY/statuses" 2>/dev/null \
+       "$JIRA_BASE/rest/api/$APIV/project/$PROJ_KEY/statuses" 2>/dev/null \
        | jq -r '[.[].statuses[].name] | unique | .[]' 2>/dev/null)
      printf '%s\n' "$STATUSES" | grep -qix -- "$READY_STATE" && READY_OK=1
    else
-     # No credential (spec-first floor) — cannot validate; accept on faith OR skip.
+     # No credential reachable for the persisted scheme (spec-first floor) —
+     # cannot validate; accept on faith OR skip → no-op backlog lane.
      READY_OK=1
    fi
    [ "$READY_OK" = 1 ] && $FLOWCTL config set tracker.readyState "$READY_STATE"
