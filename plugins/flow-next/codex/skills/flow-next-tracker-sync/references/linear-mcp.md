@@ -160,9 +160,11 @@ The two relation methods from [adapter-interface.md](adapter-interface.md) over 
 get_issue(id:<uuid or identifier>, includeRelations:true)
  → read the returned relations (the blocking set: this issue's "blocked by"
  edges). For each blocker B, emit a normalized relation:
- { from: <this issue>, to: B, type: "blocks", source: "unknown" }
+ { from: <this issue>, to: B, type: "blocks", source: "unknown", linkPresent: true }
  → `source` is "unknown" on MCP — Linear stores no relation authorship; the
  flow-side depRelations ledger (fn-64.1) is the provenance authority.
+ → `linkPresent` is always true — a Linear native relation IS the tracker-visible
+ link (no separate-block split like GitLab; Linear never emits linkPresent:false).
  → return ONLY the blocked-by view. Drop related/duplicate edges so the skill's
  read-before-write dedup never trips over an unrelated relation kind.
  → on error / missing issue: return `errored` — never raise.

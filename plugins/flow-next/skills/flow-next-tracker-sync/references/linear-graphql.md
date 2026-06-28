@@ -271,9 +271,11 @@ query ($id: String!, $first: Int!) {
   `{from: relatedIssue, to: this}` (relatedIssue is-blocked-by this). A `blocks`
   node in `inverseRelations` means *the node's `issue` blocks this issue* →
   canonical `{from: this, to: node.issue}` (this is-blocked-by node.issue). Map
-  both into the normalized `{from, to, type:"blocks", source:"unknown"}` so the
-  same edge seen from either endpoint dedupes to one entry — otherwise an
-  inverse-duplicate slips past read-before-write.
+  both into the normalized `{from, to, type:"blocks", source:"unknown", linkPresent:true}`
+  so the same edge seen from either endpoint dedupes to one entry — otherwise an
+  inverse-duplicate slips past read-before-write. `linkPresent` is always `true` — a
+  Linear native relation **is** the tracker-visible link (no separate-block split like
+  GitLab; Linear never emits `linkPresent:false`).
 - `source` is `"unknown"` — Linear records no relation authorship; the flow-side
   `depRelations` ledger (fn-64.1) is the provenance authority.
 - On `data.issue == null` / `errors[]`: return `errored` — never raise.

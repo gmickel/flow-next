@@ -717,9 +717,14 @@ LRESP=$(glab api --method POST "projects/$ENC/issues/$A_IID/links" \
   --field "link_type=is_blocked_by" 2>&1) && LRC=0 || LRC=$?
 if [ "$LRC" -ne 0 ]; then
   if printf '%s' "$LRESP" | grep -qi 'not available for current license'; then
-    glab api --method POST "projects/$ENC/issues/$A_IID/links" \
+    # Premium-license 403 ONLY → directionless UI visibility. CHECK this write's exit
+    # TOO: a transient 429/5xx/perms failure here must NOT fall through to step 2, or
+    # we'd record a flow:deps edge with NO tracker-visible link → linkPresent:false on
+    # the very first projection = a FALSE human-removal collision next run. A failed
+    # fallback link ⇒ errored + defer, write NO block (retry re-creates link+block atomically).
+    RRESP=$(glab api --method POST "projects/$ENC/issues/$A_IID/links" \
       --field "target_project_id=$B_PROJECT_NUM" --field "target_issue_iid=$B_IID" \
-      --field "link_type=relates_to"   # Premium-license 403 ONLY → directionless UI visibility
+      --field "link_type=relates_to" 2>&1) || { return_errored "$RRESP"; }   # SKIP step 2 on failure
   else
     return_errored "$LRESP"   # genuine error → errored + defer; SKIP step 2 (no flow:deps write)
   fi
