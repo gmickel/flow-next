@@ -42,7 +42,7 @@ After the config writes, the ceremony asks **one optional, skippable readiness q
 Both attach sync state **on link**:
 
 1. **Author-in-flow-then-push (flow-first).** A `fn-NN` spec already exists. Push creates the tracker issue, then `flowctl sync set-tracker-id` attaches the issue UUID + `--identifier WOR-17` + `--url`. The `fn-NN` id is kept; the tracker key becomes a resolvable alias.
-2. **Link-existing-issue (tracker-first): "grab issue X and spec it."** Fetch the issue, create the spec **keyed by the tracker key** (`flowctl spec create --tracker-first --tracker-identifier WOR-17`), seed the merge base from the current issue body, first pass is pull-only.
+2. **Link-existing-issue (tracker-first): "grab issue X and spec it."** Fetch the issue, create the spec **keyed by the tracker key** (`flowctl spec create --tracker-first --tracker-identifier WOR-17`), seed the merge base from the current issue body, first pass is pull-only. **Tracker-first needs an alpha-prefixed `KEY-N` key (Linear `WOR-17`)** — it mints the canonical spec id from it. **GitHub `#N` and GitLab `<project>#<iid>` are NOT `KEY-N`** (no alpha key / slashes + `#`), so `cmd_spec_create`'s strict validator rejects them — **grab those flow-first**: create an `fn-NN` spec, then `flowctl sync set-tracker-id fn-NN <issue-id> --identifier <key> --url <url>` (the link-time validator accepts the issue ref), as in flow #1.
 
 ## Hybrid id model (R16)
 
