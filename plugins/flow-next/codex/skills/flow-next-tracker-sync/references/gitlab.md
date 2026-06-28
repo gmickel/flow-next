@@ -148,6 +148,13 @@ The token *kind* selects the header — getting this wrong is a silent 401:
 | `GITLAB_TOKEN` (classic PAT or fine-grained) | **`PRIVATE-TOKEN: <tok>`** | the standard PAT header |
 | `CI_JOB_TOKEN` | **`JOB-TOKEN: <tok>`** | **NOT** `PRIVATE-TOKEN` — CI job tokens authenticate via `JOB-TOKEN` |
 
+**Preference when BOTH are set** (common in CI — `CI_JOB_TOKEN` is auto-injected and a
+user adds a write-scoped `GITLAB_TOKEN`): pick **`GITLAB_TOKEN` first**, fall back to
+`CI_JOB_TOKEN` only when `GITLAB_TOKEN` is unset. The auto job token is often
+allowlist-limited / read-only (above), so preferring it would 403 every write
+(label/issue create, link). The raw-REST rung and every ceremony REST call follow this
+order; `glab api` (rung 1) makes the same choice through its own auth resolution.
+
 ### Project-path encoding (BOTH rungs — verified, a literal slash 404s)
 
 The `project` config (`tracker.perTracker.project`) is a group/project path

@@ -115,7 +115,9 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
  -f "name=$READY_LABEL" -f "color=#0E8A16" -f "description=flow-next: spec ready for execution" 2>&1) \
  && LABEL_OK=1 || LABEL_OK=0
  else # token-only RAW REST rung (no glab installed)
- GL_HDR="PRIVATE-TOKEN: ${GITLAB_TOKEN:-}"; [ -n "${CI_JOB_TOKEN:-}" ] && GL_HDR="JOB-TOKEN: $CI_JOB_TOKEN"
+ # Prefer the explicit write-scoped GITLAB_TOKEN (PAT) over the auto CI_JOB_TOKEN —
+ # the job token is often allowlist-limited / read-only, so a label create would 403.
+ if [ -n "${GITLAB_TOKEN:-}" ]; then GL_HDR="PRIVATE-TOKEN: $GITLAB_TOKEN"; else GL_HDR="JOB-TOKEN: ${CI_JOB_TOKEN:-}"; fi
  CREATE_ERR=$(curl -sS --fail-with-body -X POST "https://${HOST:-gitlab.com}/api/v4/projects/$ENC_PROJ/labels" \
  --header "$GL_HDR" --data-urlencode "name=$READY_LABEL" --data-urlencode "color=#0E8A16" \
  --data-urlencode "description=flow-next: spec ready for execution" 2>&1) \
