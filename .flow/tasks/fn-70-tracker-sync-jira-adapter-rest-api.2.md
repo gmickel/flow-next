@@ -27,9 +27,8 @@ Author `references/jira.md` transport + core: the **Jira REST API + token single
 TBD
 
 ## Done summary
-TBD
-
+Authored `references/jira.md` — the Jira REST-API single-rung transport doc: the six core methods (fetchIssue/writeIssue/listComments/postComment/readStatus/setStatus) over `/rest/api/{3|2}`, the two auth schemes (Cloud cloud-basic email:API_TOKEN over v3, DC/Server bearer-pat JIRA_PAT over v2) with opt-in self-hosted TLS, the immutable-`id`-vs-mutable-`key` identity model, the normalized-struct firewall, and the in-adapter make-pr remote-link. Records the MCP-evaluated-not-wired decision + evidence (NO MCP rung) and defers ADF translation / transitions-status / relations / listOpenIssues to fn-70.3 with explicit boundary pointers.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d7856a62422a1bc5fb2c4f7183574785842b9910
+- Tests: uv run python -m pytest plugins/flow-next/tests/test_tracker_sync_jira.py (32 passed), full tracker-sync suite: 215 passed, 39 subtests (test_tracker_sync_{jira,gitlab,state,backlog_mode,mirror_parity},test_tracker_id_{generator,resolution},test_tracker_config,test_tracker_receipts,test_land_tracker_event,test_qa_tracker_event)
 - PRs:
