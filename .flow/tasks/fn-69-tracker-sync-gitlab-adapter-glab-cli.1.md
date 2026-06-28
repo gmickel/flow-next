@@ -1,3 +1,7 @@
+---
+satisfies: [R3, R4, R5, R7]
+---
+
 ## Goal
 Make `tracker.type: gitlab` a real, activatable tracker: the deterministic flowctl bits (activation enum, config schema, identifier validator) + the discovery-ceremony's coupled sites (probe / ASK / config-write **+ the readiness-label site**), plus Python tests. This wiring makes the GitLab adapter (fn-69.2) reachable end-to-end. (Spec R3, R4-identity, R5-ceremony, R7.)
 

@@ -1,3 +1,7 @@
+---
+satisfies: [R1, R2, R5, R6]
+---
+
 ## Goal
 Author `references/gitlab.md` — the complete, transport-blind GitLab adapter — modeled section-for-section on `references/github.md`. Covers the transport ladder, all nine adapter-interface methods, reduced-status mapping, identity, relations, and enumeration. Prose the host agent follows, NOT literal code. **Endpoints/limits verified live 2026-06-28** (`~/work/agent-scripts/flow-smoke/out/FINDINGS-gitlab.md`). (Spec R1, R2, R5, R6.)
 

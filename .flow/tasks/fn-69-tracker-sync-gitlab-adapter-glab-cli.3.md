@@ -1,3 +1,7 @@
+---
+satisfies: [R8, R9]
+---
+
 ## Goal
 Regenerate the Codex mirror from the canonical fn-69.1/.2 files, extend the **transport vocabulary**, and complete the **full doc sweep** + changelog so GitLab is a documented, shipped tracker. (Spec R8, R9-verification.)
 
