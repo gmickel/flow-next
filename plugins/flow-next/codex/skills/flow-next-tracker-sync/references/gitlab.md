@@ -652,30 +652,44 @@ perms — return `errored`, not a silent degrade.)
 
 ### `listIssueRelations(issue)` → normalized `relation[]`
 
-**Native (Premium/Ultimate):**
+**Step 1 — the LINK set (tracker-visible):**
 ```bash
 glab api "projects/$ENC/issues/$IID/links" \
- | jq '.[] | select(.link_type == "is_blocked_by") | {iid, id, project_id}'
+ | jq '.[] | {iid, id, project_id, link_type}' # ALL links: is_blocked_by AND relates_to
 ```
-Each `is_blocked_by` link → one `relation`: `{ from: "<project>#"+A.iid (blocked),
-to: "<project>#"+blocker.iid (blocking), type: "blocks", source: "unknown" }`. Native
-links store no flow authorship, so `source` is `unknown` and the flow-side
-`depRelations` ledger (fn-64.1) is the provenance authority (R6/R7) — same as the
-GitHub-native + Linear-native rungs.
+A directional `is_blocked_by` link → a tracker-visible **directed** edge; a
+`relates_to` link → a tracker-visible **pair** (no direction). Native links store no
+flow authorship, so the flow-side `depRelations` ledger (fn-64.1) is the
+provenance/direction authority (R6/R7) — same as the GitHub-native + Linear-native rungs.
 
-**Degraded / always — the `<!-- flow:deps -->` block:** parse the `#N` / `<project>#N`
-lines **inside** the `<!-- flow:deps -->` … `<!-- /flow:deps -->` markers of the
-issue `description` (`glab api "projects/$ENC/issues/$IID" | jq -r '.description'`). Each
-ref inside the markers → `{ from: "<project>#"+A.iid, to: <ref>, type: "blocks",
-source: "flow" }` (inside the fence ⇒ provably ours). Refs **outside** the markers
-are NOT relations — never returned.
+**Step 2 — the BLOCK (flow-owned direction):** parse the `#N` / `<project>#N` lines
+**inside** the `<!-- flow:deps -->` … `<!-- /flow:deps -->` markers of the issue
+`description` (`glab api "projects/$ENC/issues/$IID" | jq -r '.description'`). Refs
+**outside** the markers are NOT relations — never returned.
 
-> **NEVER read a relation from a directionless `relates_to` link.** A `relates_to`
-> link carries **no** from/to direction, so `listIssueRelations` returns directed
-> `{from, to, type:"blocks"}` relations **ONLY** from native **directional** links
-> (`is_blocked_by`) **or** the flow-owned `<!-- flow:deps -->` block — **never** from
-> a `relates_to`. The block is the durable direction/provenance source on a degraded
-> (Free / personal) namespace; the `relates_to` link is GitLab-UI decoration only.
+**Step 3 — merge into one directed `relation[]`, each tagged with `linkPresent`** so a
+consumer can tell a live projection from an orphaned block entry (this is the crux —
+membership alone is NOT presence):
+
+- edge backed by a tracker-visible link (a directional `is_blocked_by`, or a degraded
+ `relates_to` whose pair the block directs) → `{ from: "<project>#"+A.iid, to:
+ "<project>#"+blocker.iid, type: "blocks", source: "link", linkPresent: true }`.
+- edge in the block whose tracker-visible link is **gone** → `{ …, source:
+ "block-only", linkPresent: false }`. This is **NOT** a satisfied projection — it is the
+ **human-removal** signal the collision rule (steps.md / status-sync) keys on: the
+ human deleted the board-visible link, so re-create it (autonomous → `sync defer`),
+ never treat the block entry as the dependency still being present on the tracker.
+
+**Consumers MUST branch on `linkPresent`, never bare membership** — a `block-only`
+relation means the dependency has vanished from the tracker UI even though flow's
+provenance still remembers it.
+
+> **NEVER derive DIRECTION from a directionless `relates_to` link.** A `relates_to`
+> link contributes link-**presence** for a pair but carries no from/to, so the directed
+> `{from, to, type:"blocks"}` always takes its direction from a native **directional**
+> `is_blocked_by` link **or** the flow-owned `<!-- flow:deps -->` block. The block is
+> the durable direction/provenance source on a degraded (Free / personal) namespace;
+> the `relates_to` link is GitLab-UI decoration that only proves the pair is still linked.
 
 ### `setIssueRelation(issue=A, blockedBy=B)` → ok | errored | noop
 

@@ -289,7 +289,7 @@ For each edge, in order:
 
 **Never-clobber + who-wins collision (R6/R10).** `setIssueRelation` is **strictly additive** — it only ever *creates* the blocked-by edge, never deletes. A relation not in our `depRelations` ledger (native) / outside the `<!-- flow:deps -->` fence (GitHub's fenced fallback; GitLab's block on every tier) is **never ours** and is left untouched. The one reconcile case that needs judgment is the **collision** — and it is evaluated **BEFORE** any per-side add/keep rule (memory: who-wins-ladder-must-check-collision-first — order the both-match branch first or the earlier single-field rule silently wins):
 
-> **Collision:** an edge present in the `depRelations` ledger AND still in Flow's `depends_on_epics`, but **MISSING remotely** (`listIssueRelations` doesn't return it). A tracker user removed the relation flow projected.
+> **Collision:** an edge present in the `depRelations` ledger AND still in Flow's `depends_on_epics`, but **MISSING as a tracker-visible link** — `listIssueRelations` either doesn't return it OR returns it `linkPresent:false` (on GitLab a `source:"block-only"` entry: the `<!-- flow:deps -->` block still records the edge but the native `is_blocked_by` / degraded `relates_to` link is gone). A tracker user removed the relation flow projected. **Branch on `linkPresent`, never bare membership** — the flow block alone is provenance, not tracker presence (gitlab.md § listIssueRelations).
 
 Re-creating it silently would steamroll a deliberate human removal (the explicit anti-behavior). So **defer + `queued`, never silently recreate**:
 

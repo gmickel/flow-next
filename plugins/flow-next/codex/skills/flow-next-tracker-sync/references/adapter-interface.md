@@ -145,14 +145,18 @@ The wire-agnostic edge shape `listIssueRelations` produces. One entry per direct
  "from": "uuid-or-identifier", // the BLOCKED issue (the one that depends on `to`)
  "to": "uuid-or-identifier", // the BLOCKING issue (the dependency / blocker)
  "type": "blocks", // always "blocks" — flow only projects the blocked-by edge type
- "source": "flow" // flow | human | unknown — provenance WHERE the transport can tell;
+ "source": "flow", // flow | human | unknown | block-only — provenance WHERE the transport can tell;
  // else the flow-side `depRelations` ledger is authoritative (see below)
+ "linkPresent": true // is the edge backed by a TRACKER-VISIBLE link right now? false ⇒ orphaned
+ // provenance (e.g. GitLab `block-only`: in the flow block, link removed) — a
+ // human-removal signal, NOT a satisfied projection. Consumers branch on this.
 }
 ```
 
 - **`from` / `to` are the directed edge `from` is-blocked-by `to`.** This is the one direction convention every adapter maps to consistently (see [Direction convention](#direction-convention) below). The identifier form (UUID vs `#N` display key) is whatever the transport natively returns; the skill matches against the resolved pair, not on form.
 - **`type` is always `blocks`.** Flow projects exactly one edge kind — the blocked-by relation. An adapter that surfaces other relation kinds (`relates`, `duplicate`, …) MUST NOT return them here; this list is the blocked-by view only, so the skill's read-before-write dedup never trips over an unrelated edge.
 - **`source` distinguishes ours-vs-theirs only where the transport records it.** Linear's native relations, GitHub's native dependencies, and GitLab's native issue links do **not** store authorship, so on those rungs `source` is `unknown` and the flow-side `depRelations` ledger (fn-64.1) is the authority for "did flow create this?". Wherever the `<!-- flow:deps -->` block lives — GitHub's fenced fallback (native deps unavailable) or GitLab on every tier (the durable provenance source alongside the native `is_blocked_by` link, and the sole record on the Free/personal `relates_to` degrade) — the marker itself is the provenance boundary (lines inside `<!-- flow:deps -->` … `<!-- /flow:deps -->` are flow's, `source: "flow"`). Either way, **provenance is never inferred from `source` alone** — the ledger / marker is load-bearing. (GitLab note: a directionless `relates_to` link — written for UI visibility when `is_blocked_by` is unlicensed — carries **no** from/to direction, so `listIssueRelations` NEVER derives a `blocks` edge from it; direction comes only from a native directional link or the `<!-- flow:deps -->` block.)
+- **`linkPresent` separates a live projection from orphaned provenance.** `source` says *who authored* the edge; `linkPresent` says *whether the tracker still shows it as a link right now*. They diverge on the adapters that carry a `<!-- flow:deps -->` block (GitHub fenced fallback, GitLab every tier): an edge recorded in the block but whose tracker-visible link a human deleted returns `linkPresent: false` (GitLab tags it `source: "block-only"`). The read-before-write dedup and the reconcile **collision** rule (status-sync.md / steps.md) MUST branch on `linkPresent` — never bare membership — so a removed board-visible link is detected as a human-removal collision (re-create / `sync defer`), not silently masked by the still-present block.
 
 ## Relation transport (dependency projection, fn-64)
 
