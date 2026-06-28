@@ -161,11 +161,12 @@ edges come from **two** sources and feed **one** existing sorter:
   blocked, `to` = blocker):
 
   ```text
-  /flow-next:tracker-sync list-relations <issue-handle> mode:autonomous   # per tracker issue
+  /flow-next:tracker-sync list-relations <tracker-id> mode:autonomous   # per tracker issue
   ```
 
-  **`<issue-handle>` is the candidate's `listOpenIssues` normalized `issue.identifier`,
-  NOT the bare global `id`.** On GitLab the global id can't index the
+  **The `<tracker-id>` passed is the candidate's `listOpenIssues` normalized
+  `issue.identifier` (the display handle `<project>#<iid>` / `WOR-17` / `#123`), NOT the
+  opaque global `id`.** On GitLab the global id can't index the
   `/projects/:id/issues/:iid` path — the adapter needs the `<project>#<iid>` the
   identifier carries (gitlab.md § identity). `list-open` already returns `identifier`
   per issue, so the pilot passes that handle straight through; Linear/GitHub resolve
@@ -312,13 +313,13 @@ the stable-anchor authoring, the comments-sync dedup, and the answer round-trip
 (tracker-sync steps.md Phase 7 — backlog mode invokes it, never re-implements it):
 
 ```text
-/flow-next:tracker-sync question <spec-id | issue-handle> mode:autonomous
+/flow-next:tracker-sync question <spec-id | tracker-id> mode:autonomous
 ```
 
-For a **tracker-only** subject the `<issue-handle>` is the candidate's `list-open`
-`issue.identifier` (not the bare global id) — posting the comment hits
-`POST /projects/:id/issues/:iid/notes` on GitLab, which needs the `<project>#<iid>` the
-identifier carries (gitlab.md § identity); a spec-backed subject passes its `<spec-id>`.
+For a **tracker-only** subject the `<tracker-id>` is the candidate's `list-open`
+`issue.identifier` (the display handle, not the opaque global id) — posting the comment
+hits `POST /projects/:id/issues/:iid/notes` on GitLab, which needs the `<project>#<iid>`
+the identifier carries (gitlab.md § identity); a spec-backed subject passes its `<spec-id>`.
 
 Where the question parks depends on whether a spec exists:
 
