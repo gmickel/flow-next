@@ -21,7 +21,7 @@ The contrast with Symphony: there, Linear is the canonical finite-state machine 
 
 The bridge is **off until explicitly enabled** (`tracker.enabled` defaults `false`, `tracker.type` defaults `null`). The discovery ceremony **detects → surfaces → asks → never assumes**, and writes config **only on confirmation**, with provenance. No signal ⇒ nothing written.
 
-Five probed signals:
+Six probed signals:
 
 | Signal | Probe | Means |
 |---|---|---|

@@ -58,6 +58,7 @@ REPO_ROOT = HERE.parents[3]
 TRACKER_SKILL = REPO_ROOT / "plugins" / "flow-next" / "skills" / "flow-next-tracker-sync"
 STEPS_MD = TRACKER_SKILL / "steps.md"
 SKILL_MD = TRACKER_SKILL / "SKILL.md"
+DOCS_TRACKER_SYNC = REPO_ROOT / "plugins" / "flow-next" / "docs" / "tracker-sync.md"
 
 
 def _load_flowctl(name: str) -> Any:
@@ -438,6 +439,7 @@ class JiraCeremonyWiringTestCase(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.steps = STEPS_MD.read_text(encoding="utf-8")
         cls.skill = SKILL_MD.read_text(encoding="utf-8")
+        cls.docs = DOCS_TRACKER_SYNC.read_text(encoding="utf-8")
 
     # --- probe table (R5) ---------------------------------------------------
 
@@ -469,6 +471,10 @@ class JiraCeremonyWiringTestCase(unittest.TestCase):
         self.assertNotIn("probes five signals", self.skill)
         self.assertNotIn("Probe these five signals", self.skill)
         self.assertNotIn("Probe the five signals", self.steps)
+        # docs/tracker-sync.md probe-table header must match the six-row table
+        # (rp-review P3: the count header lagged the added Jira row).
+        self.assertIn("Six probed signals", self.docs)
+        self.assertNotIn("Five probed signals", self.docs)
 
     # --- ASK option (R5) ----------------------------------------------------
 
