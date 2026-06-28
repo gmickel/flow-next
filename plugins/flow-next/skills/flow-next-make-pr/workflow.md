@@ -1790,7 +1790,10 @@ if [[ -n "$PR_URL" ]] \
   #            via land.merged) — + the open/closed-side status:in-review label. A
   #            GitHub-PR body ref can't auto-link a cross-instance GitLab issue, so the
   #            note IS the cross-link; the §4.6a `Ref <project>#<iid>` is a human breadcrumb.
-  #   (the PR URL itself rides as evidence in the comment/attachment, not the op token.)
+  #   (PR URL source: reconcile RE-DERIVES it from `mergeEvidenceProbe(spec.branch_name)` —
+  #    the same probe yielding open/merged queries the code host `gh pr … --json url,state`
+  #    (status-sync.md) — so the op token `reconcile <spec-id>` deliberately omits it; the
+  #    note dedupes on the URL so a re-run never stacks duplicates. gitlab.md §makePr.)
   # The open PR is the merge-evidence `open` bucket → In Review, NEVER terminal (no MERGED).
   # Unlinked spec → flow-first link (create + base-snapshot) first, then reconcile the now-linked
   # spec → link the PR / Diff + In Review (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable.

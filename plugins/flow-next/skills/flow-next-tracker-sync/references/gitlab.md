@@ -804,8 +804,13 @@ When the tracker is **GitLab**, the spec maps to a GitLab *issue* and linkage is
 **native GitLab cross-referencing** — no Linear attachment, no Linear Diffs (GitLab
 has its own MR review UI). make-pr §4.6a's Linear branch is GitLab-typed-skipped;
 instead the GitLab adapter posts a **note** on the issue carrying the PR/MR URL
-(verified: a note with the URL renders as a GFM cross-reference). It must be a
-**non-closing** reference — flow-next owns the terminal `Done` transition via the
+(verified: a note with the URL renders as a GFM cross-reference). **The URL is sourced
+from reconcile's `mergeEvidenceProbe(spec.branch_name)`** — the same probe that yields
+the open/merged state queries the code host for the PR on the branch (`gh pr … --json
+url,state`; status-sync.md), so the adapter has the URL even though the dispatch op
+token (`reconcile <spec-id>`) deliberately omits it. The note write is idempotent —
+re-running reconcile must not stack duplicate PR-URL notes (dedup on the URL /
+comments-sync marker, comments-sync.md). It must be a **non-closing** reference — flow-next owns the terminal `Done` transition via the
 merge-evidence-gated `land.merged` lifecycle (R7/R10), so do **NOT** put a `Closes
 #N` in the MR description (that auto-closes the issue on merge and bypasses
 flow-next's Done projection). A plain note with the URL gives the cross-link without

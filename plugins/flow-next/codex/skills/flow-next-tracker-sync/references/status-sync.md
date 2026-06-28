@@ -435,11 +435,15 @@ call):
  `gh label list -R "$REPO" --search "$READY_LABEL" --json name` (search is
  substring — compare the returned names case-insensitively for an exact match).
  Present ⇒ genuine not-ready. Absent from the repo ⇒ stale config.
-- **GitLab** — the label must exist in the project's label namespace:
- `glab api ${HOST:+--hostname "$HOST"} "projects/$ENC/labels?search=$READY_ENC" | jq -r '.[].name'`
- (`search` is substring — compare case-insensitively for an exact match;
- `READY_ENC` is the `@uri`-encoded label). Present ⇒ genuine not-ready. Absent from
- the project ⇒ stale config.
+- **GitLab** — the label must exist in the project's label namespace, read via the
+ **resolved rung** (glab when installed, else the token-only raw-REST floor — never
+ hard-require glab; gitlab.md § header ladder): glab →
+ `glab api ${HOST:+--hostname "$HOST"} "projects/$ENC/labels?search=$READY_ENC"`, or raw
+ REST → `curl -sS --header "$GL_HDR" "https://${HOST:-gitlab.com}/api/v4/projects/$ENC/labels?search=$READY_ENC"`
+ (`$GL_HDR` prefers the write-scoped `GITLAB_TOKEN`), then `| jq -r '.[].name'`
+ (`search` is substring — compare case-insensitively for an exact match; `READY_ENC`
+ is the `@uri`-encoded label). Present ⇒ genuine not-ready. Absent from the project ⇒
+ stale config.
 
 Stale config ⇒ **warn + `noop` receipt + flag untouched + the rest of the sync
 continues** — graceful degradation, same posture as the unmapped-state path above
