@@ -104,13 +104,23 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
    # ${HOST:+--hostname "$HOST"} pins the configured self-managed host (tracker.perTracker.host);
    # without it glab api targets the current git dir's host / gitlab.com → could create `ready`
    # on the WRONG instance and then persist tracker.readyState, so later syncs warn/noop.
-   if ! CREATE_ERR=$(glab api ${HOST:+--hostname "$HOST"} --method POST \
-       "projects/$(printf '%s' "$PROJECT" | jq -sRr @uri)/labels" \
-       -f "name=$READY_LABEL" -f "color=#0E8A16" \
-       -f "description=flow-next: spec ready for execution" 2>&1); then
-     LABEL_OK=0   # nonzero exit — tolerate ONLY already-exists: confirm the label is really there
-     printf '%s' "$CREATE_ERR" | grep -qiE 'already exists|409' && LABEL_OK=1
+   # Use whichever rung the discovery probe resolved — glab when installed, else the
+   # token-only RAW REST /api/v4 floor (Phase 1 offers GitLab on a bare GITLAB_TOKEN even
+   # with glab absent, so this ceremony MUST NOT hard-require glab or it dies "command not found").
+   ENC_PROJ=$(printf '%s' "$PROJECT" | jq -sRr @uri)
+   if command -v glab >/dev/null 2>&1; then           # glab rung (stored auth OR env token)
+     CREATE_ERR=$(glab api ${HOST:+--hostname "$HOST"} --method POST "projects/$ENC_PROJ/labels" \
+       -f "name=$READY_LABEL" -f "color=#0E8A16" -f "description=flow-next: spec ready for execution" 2>&1) \
+       && LABEL_OK=1 || LABEL_OK=0
+   else                                                # token-only RAW REST rung (no glab installed)
+     GL_HDR="PRIVATE-TOKEN: ${GITLAB_TOKEN:-}"; [ -n "${CI_JOB_TOKEN:-}" ] && GL_HDR="JOB-TOKEN: $CI_JOB_TOKEN"
+     CREATE_ERR=$(curl -sS --fail-with-body -X POST "https://${HOST:-gitlab.com}/api/v4/projects/$ENC_PROJ/labels" \
+       --header "$GL_HDR" --data-urlencode "name=$READY_LABEL" --data-urlencode "color=#0E8A16" \
+       --data-urlencode "description=flow-next: spec ready for execution" 2>&1) \
+       && LABEL_OK=1 || LABEL_OK=0   # --fail-with-body: nonzero on HTTP≥400 but keeps the body for the grep
    fi
+   # tolerate ONLY already-exists (a 409 / "already exists" is the idempotent no-op)
+   [ "$LABEL_OK" = 0 ] && printf '%s' "$CREATE_ERR" | grep -qiE 'already exists|409' && LABEL_OK=1
    [ "$LABEL_OK" = 1 ] && $FLOWCTL config set tracker.readyState "$READY_LABEL"
    ```
    If `LABEL_OK` stays 0 the create genuinely failed (auth / permissions / wrong project / API): show the user `$CREATE_ERR` and re-ask via `AskUserQuestion` — retry, pick a different label, or skip (skip ⇒ `tracker.readyState` stays null, gate dormant per R7). Under a write-scope-limited `CI_JOB_TOKEN` the create may be refused — surface it and skip rather than write an unconfirmed `readyState` (gitlab.md § Readiness label).
@@ -142,11 +152,15 @@ $FLOWCTL sync set-tracker-id "wor-17-slug" "$ISSUE_UUID" --identifier "WOR-17" -
 ```
 
 > **GitLab grabs go FLOW-FIRST, not tracker-first.** The `--tracker-first
-> --tracker-identifier` path above is for **`KEY-N`** keys (Linear `WOR-17`, GitHub
-> `#N`). A GitLab key is `<project>#<iid>` (slashes + `#`) which can't slugify into a
-> canonical spec id, so `cmd_spec_create`'s strict `KEY-N` validator
-> (`validate_tracker_identifier(..., allow_reference=False)`) rejects it. For a GitLab
-> grab, create a **flow-first `fn-NN` spec** instead, then attach the issue:
+> --tracker-identifier` path above only accepts an **alpha-prefixed `KEY-N`** display
+> key (Linear `WOR-17` → mints `wor-17-slug`). **GitHub `#N` is NOT a `KEY-N` either**
+> (`#123` has no alpha key) — it too goes flow-first; only Linear-style alpha-keyed
+> trackers are tracker-first. A GitLab key is `<project>#<iid>` (slashes + `#`) which
+> likewise can't slugify into a canonical spec id, so `cmd_spec_create`'s strict
+> validator (`validate_tracker_identifier(..., allow_reference=False)`, verified)
+> rejects **both `#123` and `<project>#<iid>`** at create time (issue refs are accepted
+> only at LINK time via `set-tracker-id`, `allow_reference=True`). For a GitLab grab,
+> create a **flow-first `fn-NN` spec** instead, then attach the issue:
 > `$FLOWCTL sync set-tracker-id "<fn-id>" "<global-issue-id>" --identifier
 > "<project>#<iid>" --url "<web_url>"` — fn-69.1 widened the **`set-tracker-id`**
 > validator to accept `group/subgroup/project#12` + bare `#<iid>`. The key is stored as
