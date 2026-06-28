@@ -696,8 +696,10 @@ membership alone is NOT presence):
 - edge in the block whose tracker-visible link is **gone** → `{ …, source:
   "block-only", linkPresent: false }`. This is **NOT** a satisfied projection — it is the
   **human-removal** signal the collision rule (steps.md / status-sync) keys on: the
-  human deleted the board-visible link, so re-create it (autonomous → `sync defer`),
-  never treat the block entry as the dependency still being present on the tracker.
+  human deleted the board-visible link, so the collision is **queued, default NOT
+  re-created** (autonomous → `sync defer`; interactive → surface/ask; never silently
+  re-create — R6/R10); never treat the block entry as the dependency still being present
+  on the tracker.
 
 **Consumers MUST branch on `linkPresent`, never bare membership** — a `block-only`
 relation means the dependency has vanished from the tracker UI even though flow's
@@ -717,9 +719,13 @@ ONLY when the **tracker-visible relation is present** — a native directional
 `is_blocked_by` link, OR (on a degraded namespace) the `relates_to` link. **The
 `<!-- flow:deps -->` block ALONE is NOT sufficient proof.** If the block records the
 edge but the native link is **gone** (a human deleted the board-visible link), that is
-a **human-removal collision**, not an already-projected no-op: re-create the link
-(autonomous mode → `sync defer` for the human) — never let the provenance block mask a
-removed tracker-visible dependency. (The block is direction/provenance; the *link* is
+a **human-removal collision**, not an already-projected no-op — and the default is to
+**queue it, NOT silently re-create** (R6/R10, steps.md § projectDepRelations collision):
+autonomous → `sync defer` (`queued`); interactive → surface/ask whether to restore or
+honor the removal. **Never silently re-create the link** — recreating steamrolls a
+deliberate human removal (the explicit anti-behavior); restore ONLY on the human's
+explicit choice. Either way, never let the provenance block mask a removed
+tracker-visible dependency. (The block is direction/provenance; the *link* is
 the projection.) GitLab does not reliably no-op a duplicate link, so the
 link-presence check is also the dedup.
 
