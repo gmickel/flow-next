@@ -74,8 +74,10 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
  $FLOWCTL config set tracker.perTracker.teamId "<team>" # Linear: if the user named one
  # GitLab (tracker.type gitlab) — parallel to GitHub's `repo`: write the
  # group/project path (nested groups allowed, e.g. `group/subgroup/repo`) and,
- # only for self-managed, the BARE HOSTNAME (no scheme). Omit `host` on gitlab.com
- # (it resolves from glab config / CI_SERVER_URL). Skip both for linear/github.
+ # only for self-managed, the BARE HOSTNAME (no scheme). Omit `host` on gitlab.com —
+ # the adapter's host resolution defaults to `gitlab.com`, so even a token-only REST
+ # sync (no glab, no CI_SERVER_URL) still builds https://gitlab.com/api/v4. Skip both
+ # for linear/github.
  $FLOWCTL config set tracker.perTracker.project "<group/project>" # GitLab: the group/project path
  $FLOWCTL config set tracker.perTracker.host "<gitlab.example.com>" # GitLab self-managed: a BARE HOSTNAME (no scheme) — `glab api --hostname` needs a host, not a URL; the REST rung derives https://<host>/api/v4. Omit on gitlab.com.
  $FLOWCTL sync active --json # confirm active: true

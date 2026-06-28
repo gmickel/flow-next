@@ -90,8 +90,12 @@ GitLab is heavily self-managed; **never hardcode gitlab.com**. Resolve the host
 once and derive the REST base from it:
 
 - **Host (a BARE hostname, no scheme):** `tracker.perTracker.host` (config) →
-  `GITLAB_HOST` → `glab config get host` → strip the scheme from `CI_SERVER_URL` (CI).
-  `$HOST` is always a bare hostname like `gitlab.example.com` — **`glab api --hostname`
+  `GITLAB_HOST` → `glab config get host` → strip the scheme from `CI_SERVER_URL` (CI) →
+  **`gitlab.com` (the final default when all are empty)**. The default matters for the
+  **raw-REST rung**: a gitlab.com project synced token-only (no `glab`, `host` omitted)
+  has nothing else to resolve, so without the `gitlab.com` floor the REST base
+  (`https://<host>/api/v4`) can't be built and the token rung the probe marked
+  available would no-op. `$HOST` is always a bare hostname like `gitlab.example.com` — **`glab api --hostname`
   and `GITLAB_HOST` both take a hostname, NOT a URL** (a `https://…` value breaks the
   glab rung). **Thread it explicitly into every `glab api` call via `--hostname
   "$HOST"`** (or export `GITLAB_HOST="$HOST"`). Do NOT rely on `glab api`'s default,

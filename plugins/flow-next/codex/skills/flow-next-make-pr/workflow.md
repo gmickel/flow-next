@@ -1498,7 +1498,7 @@ if [ "$TRK_ACTIVE" = "true" ]; then
  case "$TRK_TYPE" in
  linear) [ -n "$TRK_ID" ] && REF="Ref ${TRK_ID}" ;; # WOR-N → Linear auto-link + Diffs
  github) [ -n "$TRK_ID" ] && REF="Refs ${TRK_ID}" ;; # #N → native GitHub cross-reference
- gitlab) [ -n "$TRK_ID" ] && REF="Ref ${TRK_ID}" ;; # <project>#<iid> → human breadcrumb only; a GitHub-PR body ref can NOT auto-link a GitLab issue (cross-platform) — the real cross-link is the §5.6 non-closing PR-URL note posted on the GitLab issue
+ gitlab) [ -n "$TRK_ID" ] && REF="Ref \`${TRK_ID}\`" ;; # <project>#<iid> in BACKTICKS → inline code, so GitHub does NOT autolink it as a cross-repo "owner/repo#N" reference (a GitLab key whose path also names a GitHub repo would otherwise mis-link to GitHub issue #N). A GitHub-PR ref can't link a GitLab issue anyway — the real cross-link is the §5.6 non-closing PR-URL note on the GitLab issue.
  esac
  # Idempotency: match the exact ref LINE (whole-line, case-insensitive), NOT any
  # substring — the cognitive-aid body already mentions the spec path
