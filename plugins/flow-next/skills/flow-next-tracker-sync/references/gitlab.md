@@ -86,11 +86,22 @@ GitLab is heavily self-managed; **never hardcode gitlab.com**. Resolve the host
 once and derive the REST base from it:
 
 - **Host:** `tracker.perTracker.host` (config) → `GITLAB_HOST` → `glab config get
-  host` → `CI_SERVER_URL` (CI). On the `glab` rung, glab's own configured host is
-  authoritative; on the REST rung, the resolved host drives the base URL.
+  host` → `CI_SERVER_URL` (CI). **The resolved host is authoritative — thread it
+  explicitly into every `glab api` call via `--hostname "$HOST"`** (or export
+  `GITLAB_HOST="$HOST"` for the call). Do NOT rely on `glab api`'s default, which
+  targets the **current git directory's** authenticated host (or `gitlab.com`): a repo
+  cloned from a *different* GitLab instance than `tracker.perTracker.host` would
+  otherwise silently mis-target — the `glab` rung hitting one host while the REST rung
+  hits the configured one. On the REST rung, the resolved host drives the base URL.
 - **REST base = `<host>/api/v4`**, never a hardcoded `gitlab.com` base. The
-  `glab api <path>` rung speaks **relative** REST paths (e.g. `projects/:id/issues`)
-  and glab prepends its host, so the same path string works on both rungs.
+  `glab api --hostname "$HOST" <path>` rung speaks **relative** REST paths (e.g.
+  `projects/:id/issues`) and glab prepends the resolved host, so the same path string
+  works on both rungs — both pinned to `$HOST`, never the ambient git dir.
+
+> **Recipe convention:** the `glab api` examples throughout this doc assume `export
+> GITLAB_HOST="$HOST"` is in effect (the resolved host above), so a bare `glab api`
+> targets the **configured** instance, not the current git directory's host. In any
+> context without that env export, pass `--hostname "$HOST"` on each call.
 
 ### Self-managed TLS (opt-in escape hatch, never silent)
 
@@ -376,13 +387,17 @@ glab api "projects/$ENC/issues/$IID"
 
 ```bash
 # CREATE (no issue.id) — body via stdin/--body-file to dodge shell quoting.
-# `glab issue create` works, but to capture the global id in one shape use glab api:
-URL=$(printf '%s' "$BODY" | glab api --method POST "projects/$ENC/issues" \
+# Capture id + iid + web_url from the CREATE response in ONE shape — no refetch needed
+# (the POST response already carries all three). The global `id` is the durable dedupe
+# key for `sync set-tracker-id`; the iid is the display `<project>#<iid>` identifier.
+CREATED=$(printf '%s' "$BODY" | glab api --method POST "projects/$ENC/issues" \
         --field "title=$TITLE" --field "description=@-" \
         --field "labels=flow:$FLOW_ID,status:$NORMALIZED_STATUS" \
-        --jq '.web_url')
-# Re-fetch (or capture the same POST response) for the global id + iid:
-glab api "projects/$ENC/issues/$NEW_IID" --jq '{id, iid, web_url}'
+        --jq '{id, iid, web_url}')
+NEW_ID=$(printf '%s'  "$CREATED" | jq -r '.id')       # global issue id  → tracker.id (durable)
+NEW_IID=$(printf '%s' "$CREATED" | jq -r '.iid')      # project-local iid → <project>#<iid> identifier
+URL=$(printf '%s'     "$CREATED" | jq -r '.web_url')
+# Then link it: sync set-tracker-id <spec> "$NEW_ID" --identifier "$PROJECT#$NEW_IID" --url "$URL"
 
 # UPDATE (issue.id present) — the path takes the iid.
 # PRESERVE the flow-owned <!-- flow:deps -->…<!-- /flow:deps --> region: $BODY is the
@@ -630,19 +645,30 @@ when A-is-blocked-by-B already exists (in a native directional link or the
 
 **The write (degrade ladder — always also the body block):**
 ```bash
-# 1. Try the native DIRECTIONAL link (per the license-degrade probe above).
-#    201 → native path done. 403 license → fall through to relates_to.
-glab api --method POST "projects/$ENC/issues/$A_IID/links" \
+# 1. Try the native DIRECTIONAL link. Degrade to relates_to ONLY on the Free-tier
+#    license 403 ("Blocked issues not available for current license"). ANY OTHER
+#    failure (bad iid, expired/insufficient token, rate limit, transient network) is a
+#    REAL error → `errored` + defer receipt and STOP — do NOT write a directionless
+#    relates_to and do NOT write the flow:deps block. (A bare `|| relates_to` is WRONG:
+#    it masks every failure as a degraded dependency that never actually landed.)
+LRESP=$(glab api --method POST "projects/$ENC/issues/$A_IID/links" \
   --field "target_project_id=$B_PROJECT_NUM" --field "target_issue_iid=$B_IID" \
-  --field "link_type=is_blocked_by" \
-  || glab api --method POST "projects/$ENC/issues/$A_IID/links" \
-       --field "target_project_id=$B_PROJECT_NUM" --field "target_issue_iid=$B_IID" \
-       --field "link_type=relates_to"   # directionless UI visibility ONLY
+  --field "link_type=is_blocked_by" 2>&1) && LRC=0 || LRC=$?
+if [ "$LRC" -ne 0 ]; then
+  if printf '%s' "$LRESP" | grep -qi 'not available for current license'; then
+    glab api --method POST "projects/$ENC/issues/$A_IID/links" \
+      --field "target_project_id=$B_PROJECT_NUM" --field "target_issue_iid=$B_IID" \
+      --field "link_type=relates_to"   # Premium-license 403 ONLY → directionless UI visibility
+  else
+    return_errored "$LRESP"   # genuine error → errored + defer; SKIP step 2 (no flow:deps write)
+  fi
+fi
 
-# 2. ALWAYS write/update the <!-- flow:deps --> block in A's description for
-#    DIRECTION + PROVENANCE — on BOTH the native and degraded paths. On native it
-#    is the provenance ledger's body twin; on degraded it is the ONLY direction
-#    source (relates_to has none). Rewrite ONLY inside the markers, idempotently:
+# 2. Write/update the <!-- flow:deps --> block in A's description for DIRECTION +
+#    PROVENANCE — reached ONLY on native-success or the license-degrade above (the
+#    genuine-error branch already returned). On native it is the provenance ledger's
+#    body twin; on degrade it is the ONLY direction source (relates_to has none).
+#    Rewrite ONLY inside the markers, idempotently:
 ```
 ```markdown
 <!-- flow:deps -->
