@@ -565,12 +565,17 @@ filter is **exact** (AND-combined if multiple) — there is no label *ordering*,
 "and-later" lane exists (adapter-interface.md § Enumeration transport).
 
 ```bash
-glab api "projects/$ENC/issues?state=opened&labels=$READY_LABEL&per_page=100" --paginate \
+# URL-ENCODE the label: tracker.readyState is a user-chosen label and may contain
+# spaces / & / # / + that would malform the query string (split params, drop the
+# filter) → list-open would silently miss ready issues. jq's @uri is the portable encode
+# (glab api's -f/--field would force the method to POST — wrong for this GET list).
+READY_ENC=$(printf '%s' "$READY_LABEL" | jq -sRr @uri)
+glab api "projects/$ENC/issues?state=opened&labels=$READY_ENC&per_page=100" --paginate \
  | jq '.[] | {id, iid, title, description, state, labels, web_url, updated_at, author}'
 ```
 
-- **`labels=$READY_LABEL`** is the exact promoted-lane filter — only issues carrying
- the configured `tracker.readyState` label, never "beyond" it.
+- **`labels=$READY_ENC`** (the URL-encoded `tracker.readyState`) is the exact
+ promoted-lane filter — only issues carrying the configured label, never "beyond" it.
 - **`state=opened`** bounds it to opened issues — never the whole (closed-inclusive)
  history.
 - **Map each into the normalized `issue` struct** via the same firewall table

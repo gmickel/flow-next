@@ -195,6 +195,9 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 ⇒ inspection-only: no tracker-sync dispatch, f
      # For each TRACKER candidate, read its relations to add the tracker dep edges.
      DISPATCH_TARGET="/flow-next:tracker-sync list-relations"; assert_allowed_dispatch "$DISPATCH_TARGET"
      # → dispatch per tracker issue: /flow-next:tracker-sync list-relations <tracker-id> mode:autonomous
+     #   <tracker-id> = the candidate's list-open `issue.identifier` (the display handle:
+     #   GitLab indexes /issues/:iid from the <project>#<iid> it carries — a global id is
+     #   NOT a valid path index), never the opaque global id.
      #   (the listIssueRelations read; no-op/empty when the bridge is inactive or the issue has no relations)
    fi
    ```
@@ -221,7 +224,7 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 ⇒ inspection-only: no tracker-sync dispatch, f
 
    These are pilot's existing ready-mode SELECT checks — reuse them, do not reinvent. The dependency check is already covered by 1e (topo-sort) + the `dep-unsatisfied` triage class; 1g adds the claim + re-bless halves so the backlog candidate reaching Phase 1.6 has the same selection discipline a ready-mode candidate does.
 
-**Invariant #3 — single-tick — is enforced here.** Selection sets exactly ONE `SUBJECT_ID`; there is no `for item in candidates` advance/park loop downstream. **Assign `SELECTED_SUBJECTS` to the chosen subject** (the single id 1f/1g settled on, or empty when the pool yielded none), resolve `SPEC_PATH` (the spec file path when spec-backed, else **empty** for a tracker-only item) and `HAS_SPEC`, then hard-assert the count:
+**Invariant #3 — single-tick — is enforced here.** Selection sets exactly ONE `SUBJECT_ID`; there is no `for item in candidates` advance/park loop downstream. **Assign `SELECTED_SUBJECTS` to the chosen subject** (the single id 1f/1g settled on, or empty when the pool yielded none), resolve `SPEC_PATH` (the spec file path when spec-backed, else **empty** for a tracker-only item — whose `SUBJECT_ID` is the candidate's `list-open` `issue.identifier`, the display handle the downstream `list-relations` / `question` dispatches resolve against, never the opaque global id) and `HAS_SPEC`, then hard-assert the count:
 
 ```bash
 # SELECTED_SUBJECTS = the chosen subject id — selection yields exactly one (or
@@ -578,7 +581,7 @@ DISPATCH_TARGET="/flow-next:tracker-sync question"; assert_allowed_dispatch "$DI
 The question is then posted via tracker-sync's transport-blind `question` op (it owns the stable-anchor authoring, comments-sync dedup, and the answer round-trip — backlog mode invokes it, never re-implements it):
 
 ```text
-/flow-next:tracker-sync question <SUBJECT_ID> mode:autonomous     # <SUBJECT_ID> = spec id OR tracker id
+/flow-next:tracker-sync question <SUBJECT_ID> mode:autonomous     # <SUBJECT_ID> = spec id (spec-backed) OR the list-open issue.identifier (tracker-only — the display handle, NOT the global id; GitLab needs the <project>#<iid> it carries to post …/issues/:iid/notes)
 ```
 
 Where the question parks depends on whether a spec exists — enforced by safety invariant #2 (never author a spec):
