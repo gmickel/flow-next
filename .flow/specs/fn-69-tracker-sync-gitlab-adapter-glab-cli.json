@@ -13,7 +13,7 @@
   "plan_reviewed_at": "2026-06-28T12:48:33.284756Z",
   "ready": true,
   "spec_path": ".flow/specs/fn-69-tracker-sync-gitlab-adapter-glab-cli.md",
-  "status": "open",
+  "status": "done",
   "title": "tracker-sync GitLab adapter (glab CLI + token transport)",
   "tracker": {
     "baseHashFlow": "6bfcc7d7fe25c2648b27f8a4b097f54f2a30f83e7ed66d2eb54666d9376f5443",
@@ -26,5 +26,5 @@
     "mergeBaseTracker": "# tracker projection on FLOW board, full reconcile 2026-06-26\n",
     "url": "https://linear.app/gmickel/issue/FLOW-18"
   },
-  "updated_at": "2026-06-28T14:18:18.232682Z"
+  "updated_at": "2026-06-28T20:50:18.730353Z"
 }
