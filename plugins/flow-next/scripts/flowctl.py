@@ -24266,7 +24266,7 @@ def main() -> None:
         help="Sync run status",
     )
     p_sync_receipt.add_argument("--tracker-id", dest="tracker_id", default=None, help="Tracker UUID")
-    p_sync_receipt.add_argument("--transport", default=None, help="Transport used (mcp|graphql|gh|none)")
+    p_sync_receipt.add_argument("--transport", default=None, help="Transport used (mcp|graphql|gh|glab|rest|none)")
     # fn-57.1 (R1): free-form (NOT choices=) — perEvent keys are an open
     # extension point, and argparse choices= rejects before the handler runs.
     p_sync_receipt.add_argument(

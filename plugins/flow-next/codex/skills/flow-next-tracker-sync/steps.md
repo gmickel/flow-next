@@ -2,7 +2,7 @@
 
 Read [SKILL.md](SKILL.md) first for the architecture, the flowctl-vs-skill split, and the boundaries. This file is the execution detail. `$FLOWCTL` is defined in SKILL.md's Preamble.
 
-This file is the transport-blind orchestration **spine**: discovery ceremony, link/unlink ceremony, grain, identity, and the push/pull/reconcile skeleton with named hooks. The hook bodies live in dedicated reference files: transports (`fetchIssue`/`writeIssue`/… — Linear [`references/linear-ladder.md`](references/linear-ladder.md), GitHub [`references/github.md`](references/github.md)) and reconcile (3-way body merge [`references/body-merge.md`](references/body-merge.md); status who-wins [`references/status-sync.md`](references/status-sync.md); comments/evidence append [`references/comments-sync.md`](references/comments-sync.md)), all plugging through the contract in [`references/adapter-interface.md`](references/adapter-interface.md). Inline, a hook points at its reference with **[→ ref: <file>]** — read that file for the body; this file owns only the routing.
+This file is the transport-blind orchestration **spine**: discovery ceremony, link/unlink ceremony, grain, identity, and the push/pull/reconcile skeleton with named hooks. The hook bodies live in dedicated reference files: transports (`fetchIssue`/`writeIssue`/… — Linear [`references/linear-ladder.md`](references/linear-ladder.md), GitHub [`references/github.md`](references/github.md), GitLab [`references/gitlab.md`](references/gitlab.md)) and reconcile (3-way body merge [`references/body-merge.md`](references/body-merge.md); status who-wins [`references/status-sync.md`](references/status-sync.md); comments/evidence append [`references/comments-sync.md`](references/comments-sync.md)), all plugging through the contract in [`references/adapter-interface.md`](references/adapter-interface.md). Inline, a hook points at its reference with **[→ ref: <file>]** — read that file for the body; this file owns only the routing.
 
 ## Phase 0 — Mode + Ralph/autonomous awareness
 
@@ -35,26 +35,32 @@ EVENT="<perEvent-key from the invocation, or empty>"
 
 Only when the bridge is not yet active (`flowctl sync active --json` → `active: false`) AND not in Ralph mode. If already active, skip to Phase 2.
 
-1. **Probe the four signals** (see SKILL.md table). Detection lives here, not flowctl:
+1. **Probe the five signals** (see SKILL.md table). Detection lives here, not flowctl:
  ```bash
  # Linear MCP: inspect the host's MCP/tool list for a Linear server (verified upsert
  # verbs save_issue / save_comment / list_comments / get_issue / list_issue_statuses —
  # see references/linear-mcp.md). Host-agent introspection — no flowctl call.
  LINEAR_API=0; [ -n "${LINEAR_API_KEY:-}" ] && LINEAR_API=1
  GH_OK=0; gh auth status >/dev/null 2>&1 && GH_OK=1
+ # GitLab: a logged-in `glab` session OR a GITLAB_TOKEN / CI_JOB_TOKEN env token
+ # (the headless REST fallback). Either ⇒ GitLab transport available
+ # (references/gitlab.md). Self-managed hosts are honored via glab's configured
+ # host / CI_SERVER_URL — never assume gitlab.com.
+ GLAB_OK=0; glab auth status >/dev/null 2>&1 && GLAB_OK=1
+ [ -n "${GITLAB_TOKEN:-}${CI_JOB_TOKEN:-}" ] && GLAB_OK=1
  # Jira: a *.atlassian.net host visible in config/env (surface only — out of scope here).
  ```
  The Linear transport rung the bridge will use follows from these signals (MCP
  beats GraphQL when both present): MCP registered → rung 1; else `LINEAR_API_KEY`
  set → rung 2 (GraphQL); else no-op. See [`references/linear-ladder.md`](references/linear-ladder.md).
-2. **Surface present AND absent.** Tell the user what was found and what wasn't — e.g. "Linear MCP: present. LINEAR_API_KEY: absent. gh: authenticated. Jira: none." Absent signals matter (they explain why a transport is unavailable).
+2. **Surface present AND absent.** Tell the user what was found and what wasn't — e.g. "Linear MCP: present. LINEAR_API_KEY: absent. gh: authenticated. glab: authenticated. Jira: none." Absent signals matter (they explain why a transport is unavailable).
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
-3. **ASK via `plain-text numbered prompt`**. Lead with the recommended tracker (the strongest present signal) + a one-sentence rationale. Ask: enable the bridge? which tracker (`linear` / `github`)? **Enabling activates the WHOLE pipeline by default (opt-out model)** — tell the user that on confirmation every lifecycle event (capture / interview / plan / work.firstClaim / work.done / makePr / resolvePr / completionReview) starts mirroring to the tracker, because hooking up the bridge means you want it to sync. Offer an **optional opt-out**: any events to exclude now (default: all on); they can also turn any off later via `flowctl config set tracker.perEvent.<event> off`. Resolution is **env > config > ASK** — don't re-ask anything env/config already decided.
+3. **ASK via `plain-text numbered prompt`**. Lead with the recommended tracker (the strongest present signal) + a one-sentence rationale. Ask: enable the bridge? which tracker (`linear` / `github` / `gitlab`)? **Enabling activates the WHOLE pipeline by default (opt-out model)** — tell the user that on confirmation every lifecycle event (capture / interview / plan / work.firstClaim / work.done / makePr / resolvePr / completionReview) starts mirroring to the tracker, because hooking up the bridge means you want it to sync. Offer an **optional opt-out**: any events to exclude now (default: all on); they can also turn any off later via `flowctl config set tracker.perEvent.<event> off`. Resolution is **env > config > ASK** — don't re-ask anything env/config already decided.
 4. **On confirmation, write config** (dot-paths are safe). Activate every lifecycle event to its natural op — **skip only the ones the user explicitly excluded in step 3**:
  ```bash
  $FLOWCTL config set tracker.enabled true
- $FLOWCTL config set tracker.type "$CHOSEN_TYPE" # linear | github
+ $FLOWCTL config set tracker.type "$CHOSEN_TYPE" # linear | github | gitlab
  $FLOWCTL config set tracker.provenance "discovery ceremony $(date -u +%Y-%m-%d); confirmed by <who>; signals: <list>"
  # DEFAULT-ON (opt-out): activate the whole pipeline so it mirrors end-to-end.
  $FLOWCTL config set tracker.perEvent.capture reconcile # two-way body sync on capture
@@ -65,7 +71,13 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
  $FLOWCTL config set tracker.perEvent.makePr comment # PR link is unconditional; extra status comment
  $FLOWCTL config set tracker.perEvent.resolvePr comment # resolution comment
  $FLOWCTL config set tracker.perEvent.completionReview comment # fn-66: verdict + R-ID coverage comment; NEVER terminal Done (land.merged is the sole Done driver)
- $FLOWCTL config set tracker.perTracker.teamId "<team>" # if the user named one
+ $FLOWCTL config set tracker.perTracker.teamId "<team>" # Linear: if the user named one
+ # GitLab (tracker.type gitlab) — parallel to GitHub's `repo`: write the
+ # group/project path (nested groups allowed, e.g. `group/subgroup/repo`) and,
+ # only for self-managed, the host base URL. Omit `host` on gitlab.com (it
+ # resolves from glab config / CI_SERVER_URL). Skip both for linear/github.
+ $FLOWCTL config set tracker.perTracker.project "<group/project>" # GitLab: the group/project path
+ $FLOWCTL config set tracker.perTracker.host "<https://gitlab.example.com>" # GitLab self-managed only; omit on gitlab.com
  $FLOWCTL sync active --json # confirm active: true
  ```
  **Never assume — but default-on is not assuming.** No signal / user declines the bridge ⇒ write nothing; `enabled` stays `false`; `sync active` stays `active: false`. Confirming the bridge IS the consent to sync the pipeline. The **config schema default stays `off`** (in `get_default_config()`), so a bare `tracker.enabled=true` set by hand or a script — WITHOUT this ceremony — activates **no lifecycle-event sync** (every `perEvent` event stays dormant). The **two exceptions** are unconditional whenever the bridge is active (no per-event gate, by design): (1) make-pr's PR↔issue link **and its In Review status push** (fn-66, R2 — an open PR is the In Review rung, riding the same Diffs-powering link path); (2) **`land.merged`** (fn-66, R10 — a real merge is the SOLE event that projects terminal `Done`, gated on the GitHub `MERGED` probe; leaving it opt-in would strand boards at In Review post-merge). Only the ceremony's explicit per-event writes activate the other events themselves. Users opt out per event afterward via `flowctl config set tracker.perEvent.<event> off`.
@@ -84,6 +96,21 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
  [ "$LABEL_OK" = 1 ] && $FLOWCTL config set tracker.readyState "$READY_LABEL" # Linear: the state name instead
  ```
  If `LABEL_OK` stays 0 the label does NOT exist and the create genuinely failed: show the user `$CREATE_ERR` and re-ask via `plain-text numbered prompt` — retry, pick a different label, or skip (skip ⇒ `tracker.readyState` stays null, gate dormant per R7). Don't reach for `gh label create --force` — it silently overwrites an existing label's color/description, which is not our intent.
+ - **GitLab** — like GitHub, GitLab issues have no rich workflow; readiness resolves to a **label** name (suggest `ready`). Same pre-create-and-confirm discipline as GitHub (mirrors github.md / the block above): pre-create the label via the adapter so the projection never trips on a missing label, **tolerate ONLY already-exists** (a label create on GitLab returns a 409/`already exists` when present — that is idempotent and fine), and **never write `tracker.readyState` for a label that isn't confirmed to exist**, or every later pull hits the stale-config warn/noop (gitlab.md § Readiness label) and the flag never moves. The create call itself (`glab api` / REST `POST /projects/:id/labels`) is documented in [`references/gitlab.md`](references/gitlab.md); the ceremony invokes it through the adapter (`$PROJECT` = `tracker.perTracker.project`, host-resolved):
+ ```bash
+ LABEL_OK=1
+ # POST /projects/:id/labels — :id is the URL-encoded `group/project` path.
+ # 201 ⇒ created; a 409 / "already exists" is the idempotent no-op we tolerate.
+ if ! CREATE_ERR=$(glab api --method POST \
+ "projects/$(printf '%s' "$PROJECT" | jq -sRr @uri)/labels" \
+ -f "name=$READY_LABEL" -f "color=#0E8A16" \
+ -f "description=flow-next: spec ready for execution" 2>&1); then
+ LABEL_OK=0 # nonzero exit — tolerate ONLY already-exists: confirm the label is really there
+ printf '%s' "$CREATE_ERR" | grep -qiE 'already exists|409' && LABEL_OK=1
+ fi
+ [ "$LABEL_OK" = 1 ] && $FLOWCTL config set tracker.readyState "$READY_LABEL"
+ ```
+ If `LABEL_OK` stays 0 the create genuinely failed (auth / permissions / wrong project / API): show the user `$CREATE_ERR` and re-ask via `plain-text numbered prompt` — retry, pick a different label, or skip (skip ⇒ `tracker.readyState` stays null, gate dormant per R7). Under a write-scope-limited `CI_JOB_TOKEN` the create may be refused — surface it and skip rather than write an unconfirmed `readyState` (gitlab.md § Readiness label).
 
 ## Phase 2 — Link / create ceremony (R2/R3/R16)
 
@@ -91,7 +118,7 @@ Attach sync state **on link**. Pick the flow by where the user is starting:
 
 ### 2a — Flow-first (author-in-flow-then-push)
 
-A `fn-NN` spec already exists. Keep the `fn-NN` id (never rename). Push body via the body-sync hook **[→ ref: body-merge.md]**, which creates the issue via `writeIssue` **[→ ref: linear-ladder.md / github.md]**, then attach state.
+A `fn-NN` spec already exists. Keep the `fn-NN` id (never rename). Push body via the body-sync hook **[→ ref: body-merge.md]**, which creates the issue via `writeIssue` **[→ ref: linear-ladder.md / github.md / gitlab.md]**, then attach state.
 
 > **The pushed body is the COMPLETE spec — every section, in full.** The render (`renderFlowToTracker`, body-merge.md Step 3) is a *format translation*, NOT a summary: never condense, truncate, abbreviate, or drop a section. Projection means the issue mirrors the whole spec (the Step 3.5 structural gate enforces "no section silently dropped"). If you find yourself summarizing to save tokens, stop — read body-merge.md Step 3 and render the full body.
 
@@ -99,11 +126,11 @@ A `fn-NN` spec already exists. Keep the `fn-NN` id (never rename). Push body via
 $FLOWCTL sync set-tracker-id "$SPEC_ID" "$ISSUE_UUID" --identifier "WOR-17" --url "$ISSUE_URL"
 ```
 
-Write the back-reference into the issue: a `flow:<id>` label and/or a `[<id>]` title prefix (transport call — `writeIssue`/`setStatus` **[→ ref: linear-ladder.md / github.md]**) so the issue points back at the spec. The tracker key `WOR-17` becomes a resolvable alias for the `fn-NN` spec (`work wor-17` resolves — fn-52.10).
+Write the back-reference into the issue: a `flow:<id>` label and/or a `[<id>]` title prefix (transport call — `writeIssue`/`setStatus` **[→ ref: linear-ladder.md / github.md / gitlab.md]**) so the issue points back at the spec. The tracker key `WOR-17` becomes a resolvable alias for the `fn-NN` spec (`work wor-17` resolves — fn-52.10).
 
 ### 2b — Tracker-first (link an existing issue — "grab issue X and spec it")
 
-Fetch the issue via the transport (`fetchIssue` **[→ ref: linear-ladder.md / github.md]**) → normalized `issue` struct. Create the spec **keyed by the tracker key** so the repo artifact mirrors the board:
+Fetch the issue via the transport (`fetchIssue` **[→ ref: linear-ladder.md / github.md / gitlab.md]**) → normalized `issue` struct. Create the spec **keyed by the tracker key** so the repo artifact mirrors the board:
 
 ```bash
 $FLOWCTL spec create --tracker-first --tracker-identifier "WOR-17" --title "<issue title>" --json
@@ -137,7 +164,7 @@ If `set-tracker-id` reports a collision, ask the user (interactive) or queue (`s
 
 **Always snapshot the merge base at create time — even when the triggering op is `comment`.** The `comment` path leaves body/status untouched and seeds no base of its own, and `reconcile` on a brand-new issue echo-fences to a noop, so the **auto-create** step is the only place the base gets written on a `comment`-first (or `reconcile`-first) auto-link. The issue body we just wrote *is* the `renderFlowToTracker` output, so both base halves are exact at that instant. Skip this and a `comment`-first auto-create leaves the linked issue **base-less** until some later body sync; the no-base bootstrap then treats that sync as a fast-forward projection and can silently **overwrite tracker-side edits** made after the issue was created. (`push`-first auto-link is unaffected either way — the `push` skeleton below re-snapshots the base after writing; the create-time snapshot just makes the `comment`/`reconcile`-first paths match.)
 
-Route the operation; each layer calls hooks that operate on the normalized structs ([`references/adapter-interface.md`](references/adapter-interface.md)). The skeleton is real; the hook bodies plug in later. The **Linear transport hooks** (`fetchIssue`/`writeIssue`/`listComments`/`postComment`/`readStatus`/`setStatus`) are implemented by the detect-best-available ladder in [`references/linear-ladder.md`](references/linear-ladder.md) (MCP → GraphQL → no-op); GitHub's are the `gh` transport in [`references/github.md`](references/github.md) (single rung + no-op, reduced-fidelity status — fn-52.7). The **body hooks** (`renderFlowToTracker` / `foldTrackerIntoFlow` / `threeWayMergeBody`) are the agentic 3-way merge + format translation in [`references/body-merge.md`](references/body-merge.md) (fn-52.4); the **status who-wins** hook (`reconcileStatus`) is [`references/status-sync.md`](references/status-sync.md) and the **comments/evidence append + dedup** hooks (`postLifecycleComment` / `pullCommentsToSyncLog`) are [`references/comments-sync.md`](references/comments-sync.md) (fn-52.5).
+Route the operation; each layer calls hooks that operate on the normalized structs ([`references/adapter-interface.md`](references/adapter-interface.md)). The skeleton is real; the hook bodies plug in later. The **Linear transport hooks** (`fetchIssue`/`writeIssue`/`listComments`/`postComment`/`readStatus`/`setStatus`) are implemented by the detect-best-available ladder in [`references/linear-ladder.md`](references/linear-ladder.md) (MCP → GraphQL → no-op); GitHub's are the `gh` transport in [`references/github.md`](references/github.md) (single rung + no-op, reduced-fidelity status — fn-52.7); GitLab's are the `glab` transport in [`references/gitlab.md`](references/gitlab.md) (`glab` CLI → raw-REST token fallback → no-op, reduced-fidelity status — fn-69). The **body hooks** (`renderFlowToTracker` / `foldTrackerIntoFlow` / `threeWayMergeBody`) are the agentic 3-way merge + format translation in [`references/body-merge.md`](references/body-merge.md) (fn-52.4); the **status who-wins** hook (`reconcileStatus`) is [`references/status-sync.md`](references/status-sync.md) and the **comments/evidence append + dedup** hooks (`postLifecycleComment` / `pullCommentsToSyncLog`) are [`references/comments-sync.md`](references/comments-sync.md) (fn-52.5).
 
 ```
 push(spec):
@@ -207,7 +234,7 @@ reconcile(spec):
 
 ### `projectDepRelations(spec, issue)` — project `depends_on_epics` as blocked-by relations (fn-64, R3/R4/R5/R6/R8/R10)
 
-**Transport-blind, one-way, additive.** This hook projects the spec's *local* dependency graph onto the tracker. It rides **both** the `push` and `reconcile` paths (modelled on `projectReadiness` [→ ref: status-sync.md § Readiness projection]): change-only receipts, **never advances `lastSyncedAt`** by itself, never blocks the lifecycle. The skill resolves edges and drives the normalized `listIssueRelations` / `setIssueRelation` transport pair ([→ ref: adapter-interface.md § Relation transport]) — it **never branches on Linear-vs-GitHub** (R8); each adapter ([→ ref: linear-ladder.md / github.md]) implements its own fidelity. No transport reachable (`TRANSPORT=none`) ⇒ skip the whole hook, write **one** `noop` receipt, return (never a crash, never a block).
+**Transport-blind, one-way, additive.** This hook projects the spec's *local* dependency graph onto the tracker. It rides **both** the `push` and `reconcile` paths (modelled on `projectReadiness` [→ ref: status-sync.md § Readiness projection]): change-only receipts, **never advances `lastSyncedAt`** by itself, never blocks the lifecycle. The skill resolves edges and drives the normalized `listIssueRelations` / `setIssueRelation` transport pair ([→ ref: adapter-interface.md § Relation transport]) — it **never branches on per-tracker (Linear / GitHub / GitLab)** (R8); each adapter ([→ ref: linear-ladder.md / github.md / gitlab.md]) implements its own fidelity. No transport reachable (`TRANSPORT=none`) ⇒ skip the whole hook, write **one** `noop` receipt, return (never a crash, never a block).
 
 **Enumerate edges from flowctl (the deterministic half).** `depends_on_epics` is read for you; do NOT parse the spec yourself:
 
@@ -232,7 +259,7 @@ For each edge, in order:
 
 3. **Resolved edge ⇒ project the blocked-by relation (R3/R8).** Drive the transport with **read-before-write** dedup baked into the adapter (`listIssueRelations` first — neither platform reliably no-ops a duplicate). The direction is anchored once in adapter-interface.md: `setIssueRelation(issue = this spec's issue, blockedBy = dep issue)`:
  ```bash
- setIssueRelation(issue=$ISSUE, blockedBy=$DEP_ISSUE) [→ ref: linear-ladder.md / github.md]
+ setIssueRelation(issue=$ISSUE, blockedBy=$DEP_ISSUE) [→ ref: linear-ladder.md / github.md / gitlab.md]
  ```
  On a successful **new** create, record provenance in the ledger so the rerun is idempotent and removal stays provably-ours-only (R6/R7):
  ```bash
@@ -272,7 +299,7 @@ Every operation ends with a receipt:
 
 ```bash
 $FLOWCTL sync receipt "$SPEC_ID" --status pushed --tracker-id "$ISSUE_UUID" --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} --note "..."
-# status ∈ {pushed,pulled,merged,updated,diverged,queued,errored,noop}; --transport ∈ {mcp,graphql,gh,none}
+# status ∈ {pushed,pulled,merged,updated,diverged,queued,errored,noop}; --transport ∈ {mcp,graphql,gh,glab,rest,none}
 # --event tags the lifecycle touchpoint served (Phase 0); empty EVENT (manual run) omits the flag
 # --merges-file records body-merge records for audit/rollback (fn-52.4 supplies it)
 ```
@@ -316,7 +343,7 @@ For each linked spec, render a line like `wor-17-slug ↔ WOR-17 (linked, synced
 
 ## Phase 7 — Backlog-mode ops (`list-open` / `list-relations` / `question`) — fn-68 R14/R15
 
-Three **skill-level, transport-blind** named ops that pilot's autonomous backlog scheduler invokes. They route through the same adapter ladder (`listOpenIssues` / `listIssueRelations` / `listComments` / `postComment` **[→ ref: linear-ladder.md / github.md]**) as every other op — pilot never calls a tracker-specific API and **never** calls flowctl for transport (flowctl has no tracker transport; architecture rule). `list-open` and `list-relations` are **read-only** (they never write to the tracker); `question` writes a comment. All run under the **autonomy gate** (Phase 0) — `question` authoring resolves "ask the human" to a queued/best-effort post, never `plain-text numbered prompt`.
+Three **skill-level, transport-blind** named ops that pilot's autonomous backlog scheduler invokes. They route through the same adapter ladder (`listOpenIssues` / `listIssueRelations` / `listComments` / `postComment` **[→ ref: linear-ladder.md / github.md / gitlab.md]**) as every other op — pilot never calls a tracker-specific API and **never** calls flowctl for transport (flowctl has no tracker transport; architecture rule). `list-open` and `list-relations` are **read-only** (they never write to the tracker); `question` writes a comment. All run under the **autonomy gate** (Phase 0) — `question` authoring resolves "ask the human" to a queued/best-effort post, never `plain-text numbered prompt`.
 
 ### 7a — `list-open` — enumerate the promoted-lane open issues
 
@@ -340,7 +367,7 @@ list-open:
 
 - **`tracker.readyState` unset ⇒ no-op + note, return `[]`** (NOT an error). No promoted lane exists to filter on, so backlog mode falls back to the flow-ready specs only.
 - **Exact-match, bounded.** `listOpenIssues` lists issues at the **exact** `tracker.readyState` state/label — never "beyond" it (no state ordering exists; an ordered promoted-set is a future config, never inferred). It is the promoted lane, not the whole backlog.
-- **Transport-blind.** Pilot consumes the normalized `issue[]`; it never branches on Linear-vs-GitHub. The adapter (`listOpenIssues` in [`references/linear-ladder.md`](references/linear-ladder.md) / [`references/github.md`](references/github.md)) owns the wire query.
+- **Transport-blind.** Pilot consumes the normalized `issue[]`; it never branches on per-tracker (Linear / GitHub / GitLab). The adapter (`listOpenIssues` in [`references/linear-ladder.md`](references/linear-ladder.md) / [`references/github.md`](references/github.md) / [`references/gitlab.md`](references/gitlab.md)) owns the wire query.
 - **No-transport ⇒ `noop` + note, `[]`** — same documented no-op floor as the other methods.
 
 ### 7b — `question <spec-id | tracker-id>` — post a question-valve comment
@@ -437,13 +464,13 @@ list-relations(trackerId):
  receipt: noop --note "list-relations: <N> relation(s) for <trackerId>" # a read-only enumeration never advances lastSyncedAt
 ```
 
-- **Transport-blind.** Pilot consumes the normalized `relation[]`; it never branches on Linear-vs-GitHub. The adapter (`listIssueRelations` in [`references/linear-ladder.md`](references/linear-ladder.md) / [`references/github.md`](references/github.md)) owns the wire query.
+- **Transport-blind.** Pilot consumes the normalized `relation[]`; it never branches on per-tracker (Linear / GitHub / GitLab). The adapter (`listIssueRelations` in [`references/linear-ladder.md`](references/linear-ladder.md) / [`references/github.md`](references/github.md) / [`references/gitlab.md`](references/gitlab.md)) owns the wire query.
 - **No-transport / no-relations ⇒ `noop` + note, `[]`** — same documented no-op floor as `list-open`; selection then dep-orders on the flow `blockedBy` edges alone.
 - **Read-only.** This op NEVER drives `setIssueRelation` — it only reads. Relation *projection* (writes) stays on the `push` / `reconcile` `projectDepRelations` path, never on a backlog-mode tick.
 
 ## Boundaries (repeat — load-bearing for this scaffold)
 
-- Hook bodies marked **[→ ref: <file>]** are NOT inlined here — this file routes; read the referenced file for the body. Transports live in `linear-ladder.md` / `github.md`; reconcile in `body-merge.md` / `status-sync.md` / `comments-sync.md`.
+- Hook bodies marked **[→ ref: <file>]** are NOT inlined here — this file routes; read the referenced file for the body. Transports live in `linear-ladder.md` / `github.md` / `gitlab.md`; reconcile in `body-merge.md` / `status-sync.md` / `comments-sync.md`.
 - `set-merge-base` always writes BOTH halves (paired-snapshot invariant).
 - Receipts on every run — event-tagged on lifecycle runs (`${EVENT:+--event "$EVENT"}`, Phase 0); conflicts queue (`sync defer`), never block (R11).
 - **Autonomy parity (fn-68 R14):** the Phase-0 `RALPH` gate recognizes the full marker family (`FLOW_RALPH` / `REVIEW_RECEIPT_PATH` / `FLOW_AUTONOMOUS` / `mode:autonomous`); under it NO path reaches `plain-text numbered prompt` — every "ask the human" resolves to `sync defer`.

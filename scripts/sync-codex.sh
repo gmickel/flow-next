@@ -1252,7 +1252,7 @@ generate_openai_yaml "flow-next-strategy"  "Flow Strategy"  "Generate or update 
 generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory/ entries against current code"   "#3B82F6" false
 generate_openai_yaml "flow-next-memory-migrate" "Flow Memory Migrate" "Migrate legacy flat memory files to categorized YAML schema" "#3B82F6" false
 generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid PR body from flow-next state and open via gh" "#3B82F6" false
-generate_openai_yaml "flow-next-tracker-sync" "Flow Tracker Sync" "Project a spec to a tracker (Linear/GitHub) and reconcile two-way — NOT plan-sync" "#3B82F6" false
+generate_openai_yaml "flow-next-tracker-sync" "Flow Tracker Sync" "Project a spec to a tracker (Linear/GitHub/GitLab) and reconcile two-way — NOT plan-sync" "#3B82F6" false
 generate_openai_yaml "flow-next-qa" "Flow QA" "Live-app real-user QA pass derived from the spec — drives the running app, files P0/P1/P2 findings, emits a YES/NO verdict" "#3B82F6" false
 generate_openai_yaml "flow-next-pilot" "Flow Pilot" "Single-tick autonomous build-loop conductor — one ready spec, one stage per tick, terminal PILOT_VERDICT line" "#3B82F6" false
 generate_openai_yaml "flow-next-land" "Flow Land" "Cadence-tick autonomous PR babysitter — CI-fix, resolve, converge, merge, close, release; terminal LAND_VERDICT line" "#3B82F6" false

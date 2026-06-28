@@ -301,7 +301,7 @@ Scope honesty, because the architecture depends on it:
 | `/flow-next:ralph-init` | Scaffold autonomous loop (`scripts/ralph/`) |
 | `/flow-next:setup` | Per-project setup — `.flow/` init, local flowctl install, CLAUDE.md/AGENTS.md instructions, review-backend + config ceremony |
 | `/flow-next:sync` | **Plan-sync** — update downstream *task* specs after implementation drift inside flow-next |
-| `/flow-next:tracker-sync` | **Tracker bridge** (distinct from `/flow-next:sync`) — project a spec to a Linear/GitHub issue and reconcile body/status/comments two-way; projection, not coordination ([docs](plugins/flow-next/docs/tracker-sync.md)) |
+| `/flow-next:tracker-sync` | **Tracker bridge** (distinct from `/flow-next:sync`) — project a spec to a Linear/GitHub/GitLab issue and reconcile body/status/comments two-way; projection, not coordination ([docs](plugins/flow-next/docs/tracker-sync.md)) |
 | `/flow-next:map` | Optional — wrap [openclaw/clawpatch](https://github.com/openclaw/clawpatch)'s `clawpatch map` for a semantic feature index (`.clawpatch/features/*.json`); scouts read it when present, fall back to grep/glob when absent. Requires Node 22+ + `pnpm add -g clawpatch` |
 
 **Phrase-triggered skills** (no slash command — just ask): `flow-next-deps` ("what's blocking what?" — dependency graph + execution order), `flow-next-drive` (drive a running app like a real user; powers `/flow-next:qa`), `flow-next-export-context` (export RepoPrompt context for external-LLM review), `flow-next-rp-explorer` (token-efficient codebase exploration via RepoPrompt), `flow-next-worktree-kit` (worktree create/list/switch/cleanup + `.env` copying), and base `flow-next` ("show me my tasks", "what's ready?").

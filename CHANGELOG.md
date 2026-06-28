@@ -2,6 +2,14 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Added
+- **GitLab tracker adapter** (fn-69) — `/flow-next:tracker-sync` gains a third tracker behind the same normalized, transport-blind adapter interface (modelled on the GitHub adapter). Companies on GitLab — a large share of self-managed and EU/regulated shops — can now mirror flow specs to their tracker, and `/flow-next:pilot` backlog mode surfaces its async gap-questions to a GitLab issue. **Zero special setup** — it prefers the `glab auth login` session a developer already has (or a `GITLAB_TOKEN` / `CI_JOB_TOKEN` already present, gh-style), never a flow-next-specific provisioning step; the spec-first floor applies when neither is present.
+  - **flowctl plumbing + ceremony** (fn-69.1) — `TRACKER_TYPES` extended to include `gitlab` so `tracker.type: gitlab` activates the bridge; the `set-tracker-id` identifier validator widened to accept the GitLab `<project>#<iid>` form incl. nested group paths (`group/subgroup/project#12`) + bare `#<iid>`; new `tracker.perTracker.project` / `host` config defaults; and the discovery ceremony's three coupled sites (probe table, ASK step, config-write block) extended to detect, offer, and write GitLab.
+  - **`references/gitlab.md` adapter** (fn-69.2) — all nine adapter methods over the `glab` CLI → raw-REST `/api/v4` token fallback → no-op ladder, reduced-fidelity status (open/closed + label), the `system==true` notes filter on pull, `authorAuthority` from project `access_level`, the global-issue-`id` durable dedupe key, the `flow:<id>` back-reference label, and dependency projection via native `is_blocked_by` issue links on a licensed namespace — degrading to a directionless `relates_to` + the provenance-fenced `<!-- flow:deps -->` block on a Free/personal namespace (403 `Blocked issues not available for current license`). Self-managed hosts honored via `glab`'s host or `CI_SERVER_URL`; the MCP route is documented as available-but-deliberately-unwired (Premium/Ultimate-gated, not universal).
+  - **transport vocabulary + Codex mirror + doc sweep** (fn-69.3) — the receipt `--transport` enum + the SKILL/steps prose gain the GitLab rung (`glab` / `rest`); `references/adapter-interface.md` (implemented-by table, `issue.tracker` enum, `authorAuthority`, relation/`source` semantics, `listOpenIssues` GitLab label match) carries the GitLab contract; the Codex mirror + `openai.yaml` registration include GitLab; and EVERY stale "Linear/GitHub" supported-tracker enumeration across `docs/tracker-sync.md`, `docs/flowctl.md`, `docs/skills.md`, `docs/teams.md`, root `README.md`, and `GLOSSARY.md` now lists GitLab.
+
 ## [flow-next 2.3.0] - 2026-06-28
 
 ### Added

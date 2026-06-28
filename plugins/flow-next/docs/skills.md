@@ -39,7 +39,7 @@ The spec-to-merge pipeline, in order.
 | [`flow-next-audit`](../skills/flow-next-audit/SKILL.md) | `/flow-next:audit` | Memory garbage collection — review each `.flow/memory/` entry against current code; Keep / Update / Consolidate / Replace / Delete. |
 | [`flow-next-memory-migrate`](../skills/flow-next-memory-migrate/SKILL.md) | `/flow-next:memory-migrate` | Lift pre-fn-30 legacy flat memory files into the categorized YAML schema. |
 | [`flow-next-sync`](../skills/flow-next-sync/SKILL.md) | `/flow-next:sync` | Plan-sync — update downstream task specs after implementation drift. Distinct from `tracker-sync`. |
-| [`flow-next-tracker-sync`](../skills/flow-next-tracker-sync/SKILL.md) | `/flow-next:tracker-sync` | Project a spec to a Linear/GitHub issue and reconcile body/status/comments two-way — projection, not coordination; the spec stays the source of truth. |
+| [`flow-next-tracker-sync`](../skills/flow-next-tracker-sync/SKILL.md) | `/flow-next:tracker-sync` | Project a spec to a Linear/GitHub/GitLab issue and reconcile body/status/comments two-way — projection, not coordination; the spec stays the source of truth. |
 | [`flow-next-map`](../skills/flow-next-map/SKILL.md) | `/flow-next:map` | Optional — wrap `clawpatch map` for a semantic feature index at `.clawpatch/features/*.json`; scouts read it when present, fall back to grep/glob when absent. |
 | [`flow-next-setup`](../skills/flow-next-setup/SKILL.md) | `/flow-next:setup` | Per-project setup — `.flow/` init, local flowctl install, CLAUDE.md/AGENTS.md instructions, review-backend + config ceremony. |
 
