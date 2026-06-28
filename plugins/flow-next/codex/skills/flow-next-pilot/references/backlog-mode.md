@@ -382,11 +382,13 @@ the normalized interface.
 
 - **Ships on Linear, GitHub + GitLab** — the three adapters that implement
  `listOpenIssues` / `listIssueRelations` / the comment ops (fn-68.2 / fn-64 / fn-69).
- The op carries the durable `<tracker-id>` (the global issue id) unchanged across
- trackers; on **GitLab** the adapter internally derives the project-local `iid` its
- issue API paths require from the spec's stored normalized `tracker.identifier`
- (`<project>#<iid>`) — never from the global id (gitlab.md § identity / fetchIssue). The
- normalized op signature is identical for every tracker; the iid derivation is an
+ On **GitLab** the adapter derives the project-local `iid` its issue API paths require
+ from the issue's normalized **`identifier`** (`<project>#<iid>`) — never the global
+ id (gitlab.md § identity / fetchIssue). That identifier is available in **both**
+ backlog cases, so no spec is required: a **spec-backed** issue carries it as the
+ stored `tracker.identifier`, and a **tracker-only** issue (one `list-open` enumerated
+ with no flow spec) carries it in the `listOpenIssues` normalized `issue.identifier`.
+ The normalized op signature is identical for every tracker; the iid derivation is an
  adapter-internal concern, so pilot still branches on **no** tracker type.
 - **Jira (fn-70)** inherits the same contract once its adapter
  ships — backlog mode layers coverage on with **zero** pilot changes (no

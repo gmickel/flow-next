@@ -201,12 +201,19 @@ token's allowlisted scope) — the run never fails hard.
 - **Project target:** every REST path needs the **URL-encoded** project
   (`encodedProject`) — see the encoding rule above. The bridge config's
   `tracker.perTracker.project` supplies the literal path.
-- **Bodies via a `--field <key>=@-` stdin source (or `--input -`), NEVER raw inline.**
+- **Free-text SCALAR fields (`title`, …) use `--raw-field`/`-f`, NOT `--field`/`-F`.**
+  `--field` *infers type*: a `title` of exactly `123` / `true` / `false` / `null` would
+  be coerced to a JSON number/bool/null, but the issue API wants a **string** → a
+  malformed write. `--raw-field` always sends a string. (Numeric fields —
+  `target_project_id`, `target_issue_iid` — keep `--field` for correct int typing;
+  `link_type=is_blocked_by` etc. are non-scalar strings that `--field` never coerces.)
+- **Bodies via a `<key>=@-` stdin source (or `--input -`), NEVER raw inline.**
   GitLab issue bodies are **GitLab-Flavored Markdown** (the same family as GitHub) —
   backticks, `$`, newlines, and quotes break shell quoting on an inline body argument.
   Pipe the body to stdin and pass **`--field description=@-`** (issue body) /
-  **`--field body=@-`** (comment): `glab api`'s `--field`/`--raw-field` read `@-` from
-  stdin. **`glab api` has NO `--body-file` flag** — that belongs to `glab issue`/`gh`;
+  **`--field body=@-`** (comment): on a `@-`/`@file` value BOTH `--field` and
+  `--raw-field` read the file content **as a string** (no type inference on `@`), so
+  either reads `@-` from stdin. **`glab api` has NO `--body-file` flag** — that belongs to `glab issue`/`gh`;
   use `--field …=@-` (or `--input -`) here. **No ADF translation layer is needed** (GFM
   is a plain markdown string — verified — unlike Jira's ADF). Same failure mode as
   github.md's body-quoting discipline (escaping mangles the round-trip), same fix.
@@ -427,7 +434,7 @@ glab api "projects/$ENC/issues/$IID"
 # (the POST response already carries all three). The global `id` is the durable dedupe
 # key for `sync set-tracker-id`; the iid is the display `<project>#<iid>` identifier.
 CREATED=$(printf '%s' "$BODY" | glab api --method POST "projects/$ENC/issues" \
-        --field "title=$TITLE" --field "description=@-" \
+        --raw-field "title=$TITLE" --field "description=@-" \
         --field "labels=flow:$FLOW_ID,status:$NORMALIZED_STATUS" \
         | jq '{id, iid, web_url}')
 NEW_ID=$(printf '%s'  "$CREATED" | jq -r '.id')       # global issue id  → tracker.id (durable)
@@ -446,7 +453,7 @@ DEPS_BLOCK=$(printf '%s' "$CURRENT" | sed -n '/<!-- flow:deps -->/,/<!-- \/flow:
 BODY_WITH_DEPS="$BODY"
 [ -n "$DEPS_BLOCK" ] && BODY_WITH_DEPS=$(printf '%s\n\n%s' "$BODY" "$DEPS_BLOCK")
 printf '%s' "$BODY_WITH_DEPS" | glab api --method PUT "projects/$ENC/issues/$IID" \
-  --field "title=$TITLE" --field "description=@-"
+  --raw-field "title=$TITLE" --field "description=@-"
 ```
 - **Preserve the `<!-- flow:deps -->` fenced region on every UPDATE.** This is the
   WRITE half of the `trackerBodyForMerge` ownership model ([body-merge.md](body-merge.md)
@@ -875,7 +882,7 @@ Steps:
 2. **Push (create)** via `writeIssue` (no id ⇒ create), body via stdin:
    ```bash
    IID=$(printf '%s' "$(cat /tmp/spike-flow-body.md)" | glab api --method POST \
-           "projects/$ENC/issues" --field "title=flow spike" --field "description=@-" \
+           "projects/$ENC/issues" --raw-field "title=flow spike" --field "description=@-" \
            | jq -r '.iid')
    ```
 3. **Pull back** via `fetchIssue(iid)`:
