@@ -149,8 +149,9 @@ $FLOWCTL sync set-tracker-id "wor-17-slug" "$ISSUE_UUID" --identifier "WOR-17" -
 > grab, create a **flow-first `fn-NN` spec** instead, then attach the issue:
 > `$FLOWCTL sync set-tracker-id "<fn-id>" "<global-issue-id>" --identifier
 > "<project>#<iid>" --url "<web_url>"` — fn-69.1 widened the **`set-tracker-id`**
-> validator to accept `group/subgroup/project#12` + bare `#<iid>`, and the alias
-> resolver maps `group/project#12` back to the spec. (gitlab.md § identity.)
+> validator to accept `group/subgroup/project#12` + bare `#<iid>`. The key is stored as
+> the display `identifier`, but flowctl's resolver does NOT resolve a bare GitLab key
+> (`fn-*` / `KEY-N` only) — use the **`fn-NN` id** for commands. (gitlab.md § identity.)
 
 Seed the merge base from the **current issue body** so the first sync is pull-only (never surfaces the whole issue as a conflict) — first-link base-seeding is in **[→ ref: body-merge.md]**; call `sync set-merge-base` with the flow-form + tracker-form snapshots it produces:
 

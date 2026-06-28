@@ -354,7 +354,10 @@ stays in reconcile.
 > mints a canonical spec id from the key (`<key>-<number>-<slug>`), and a GitLab
 > `<project>#<iid>` can't slugify (slashes + `#`), so `cmd_spec_create`'s strict
 > `KEY-N` validator rightly rejects it. GitLab linking always goes flow-first →
-> `set-tracker-id` (the alias resolver then maps `group/project#12` back to the spec).
+> `set-tracker-id`. The `<project>#<iid>` is stored as the display `identifier`
+> (surfaced in `sync` listings), but flowctl's resolver does **NOT** resolve a bare
+> GitLab key — `resolve_spec_id_arg` accepts only `fn-*` / `KEY-N` handles, so use the
+> **`fn-NN` spec id** for `show` / `work` / `sync` commands, never `group/project#12`.
 
 ### `authorAuthority` — from project membership `access_level` (fn-68 R15 security)
 
@@ -394,9 +397,17 @@ GitLab JSON shape.
 
 ### `fetchIssue(trackerId)` → normalized `issue` | not-found
 
+**GitLab's project issue endpoints take the project-local `iid`, NOT the global `id`.**
+`trackerId` (= `tracker.id`) is the durable GLOBAL issue id (the dedup key); derive the
+path `iid` from `tracker.identifier` (`<project>#<iid>`) — never put the global id in
+the `/issues/:iid` path:
+
 ```bash
+IID="${TRACKER_IDENTIFIER##*#}"      # "group/project#12" → "12" (the project-local iid)
 glab api "projects/$ENC/issues/$IID"
-# → JSON with id, iid, title, description, state, labels, web_url, updated_at, author
+# → JSON with id, iid, title, description, state, labels, web_url, updated_at, author.
+# Guard: the returned `id` MUST equal trackerId (the global id) — a mismatch means the
+# iid was reused after a project move; re-resolve, never trust a bare iid cross-project.
 ```
 - Map per the firewall table above. `state` + the `status:` label → `status`.
 - **not-found:** a deleted/moved/404 issue makes `glab api` **exit non-zero** with a
