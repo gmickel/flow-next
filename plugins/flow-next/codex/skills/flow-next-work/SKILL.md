@@ -162,7 +162,7 @@ If user chose review, pass the review mode to the worker. The worker agent invok
 
 ## Tracker sync (opt-in, off by default)
 
-**The no-tracker path is the documented default and is behaviorally unchanged.** Every tracker touchpoint below runs ONLY when the bridge is **active** AND the specific event is opted in; otherwise it is a silent no-op (no new steps, no new prerequisites). The bridge is active iff `flowctl sync active --json` reports `active: true` (the single value-checked predicate from fn-52.1: raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear,github}` — NOT merely that a `tracker` block exists, and NOT a stray `type:null`). Each event then reads its own nested `perEvent` leaf (all default `off`):
+**The no-tracker path is the documented default and is behaviorally unchanged.** Every tracker touchpoint below runs ONLY when the bridge is **active** AND the specific event is opted in; otherwise it is a silent no-op (no new steps, no new prerequisites). The bridge is active iff `flowctl sync active --json` reports `active: true` (the single value-checked predicate from fn-52.1: raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear,github,gitlab}` — NOT merely that a `tracker` block exists, and NOT a stray `type:null`). Each event then reads its own nested `perEvent` leaf (all default `off`):
 
 | Lifecycle event | perEvent key | Effect when opted in |
 |---|---|---|

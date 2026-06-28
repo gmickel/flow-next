@@ -380,10 +380,10 @@ posts a comment. It calls **no** tracker-specific API and **never** branches on
 tracker type; the active adapter (from `tracker.type`) supplies the wire query behind
 the normalized interface.
 
-- **v1 ships on Linear + GitHub** — the two adapters that already implement
-  `listOpenIssues` / `listIssueRelations` / the comment ops (fn-68.2 / fn-64).
-- **GitLab (fn-69) and Jira (fn-70)** inherit the same contract once their adapters
-  ship — backlog mode layers coverage on with **zero** pilot changes (no
+- **Ships on Linear, GitHub + GitLab** — the three adapters that implement
+  `listOpenIssues` / `listIssueRelations` / the comment ops (fn-68.2 / fn-64 / fn-69).
+- **Jira (fn-70)** inherits the same contract once its adapter
+  ships — backlog mode layers coverage on with **zero** pilot changes (no
   tracker-specific code lives here to update).
 - **Zero-setup (R17).** Each tracker resolves via tracker-sync's discovery-ceremony
   probe ladder, preferring auth the company already has (`gh`/`glab` CLI session,

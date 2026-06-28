@@ -99,7 +99,7 @@ The wire-agnostic shapes the transports produce and reconcile consumes. These ar
 **Marker vocabulary the adapter MUST recognize (fn-68 R15 — read-side).** Every
 adapter's `listComments` sets `comment.marker` from the FIRST flow-owned marker
 line it finds — **not only `flow-evt:<event>`**. The flow-owned set is closed and
-shared by Linear (MCP + GraphQL) and GitHub; an adapter that detects only the
+shared by Linear (MCP + GraphQL), GitHub, and GitLab; an adapter that detects only the
 lifecycle marker would return a parked **question** with `marker: null`, and
 comments-sync would wrongly import it into `## Sync Log`. The vocabulary:
 

@@ -140,7 +140,7 @@ A `Tracker sync: MISSING:<event> (retro-fire failed: <reason>)` summary line mea
 
 - **What flow-next does:** make-pr puts a **non-closing** `Ref WOR-N` line in the PR body (make-pr §4.6a) so Linear's GitHub integration auto-links the PR to the issue — which is exactly what makes the diff render. On the GraphQL transport it also creates the rich PR attachment (`attachmentLinkURL`) for status sync. *Non-closing* (`Ref`, not `Fixes`) is deliberate: the PR links + renders as a diff but does **not** auto-complete the Linear issue on merge — flow-next's `land.merged` touchpoint owns the `Done` transition (fn-66), gated on a GitHub-confirmed `MERGED` probe. (Pre-fn-66 this said "spec-completion-review owns the Done transition" — that was the bug FLOW-15 caught: completion review is *local* completion, not merge evidence, so it could close the issue before the PR merged. Completion review now posts only a verdict comment + at most `In Review`; `Done` is reserved for a merged PR.)
 - **What you must enable (one-time, Linear-side — flow-next can't set these):** the Linear **GitHub integration with code access** to the repo, your **personal GitHub connection**, and **"Enable code reviews"** in Linear settings. Without them the PR still links and status still syncs; only the rendered diff view needs them.
-- **GitHub tracker:** no Linear Diffs — the PR is cross-linked natively (`Refs #N`) in the same repo; review happens on GitHub.
+- **GitHub / GitLab tracker:** no Linear Diffs — the PR is cross-linked natively (`Refs #N` on GitHub; `Ref <project>#<iid>` on GitLab) and review happens on the host.
 
 ## Reconciliation — who-wins
 

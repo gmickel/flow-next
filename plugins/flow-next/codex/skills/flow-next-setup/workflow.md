@@ -692,7 +692,7 @@ Notes:
 
 ```
 Optional next step — connect a tracker:
- If your team lives in Linear or GitHub Issues, run /flow-next:tracker-sync to set up the
+ If your team lives in Linear, GitHub Issues, or GitLab, run /flow-next:tracker-sync to set up the
  two-way bridge (spec ⇄ issue, status, comments) and make PRs reviewable as Linear Diffs.
  Fully opt-in — nothing syncs until you confirm it in the discovery ceremony.
 ```
