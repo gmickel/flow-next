@@ -1498,6 +1498,7 @@ if [ "$TRK_ACTIVE" = "true" ]; then
   case "$TRK_TYPE" in
     linear) [ -n "$TRK_ID" ] && REF="Ref ${TRK_ID}" ;;      # WOR-N → Linear auto-link + Diffs
     github) [ -n "$TRK_ID" ] && REF="Refs ${TRK_ID}" ;;      # #N → native GitHub cross-reference
+    gitlab) [ -n "$TRK_ID" ] && REF="Ref ${TRK_ID}" ;;       # <project>#<iid> → human breadcrumb only; a GitHub-PR body ref can NOT auto-link a GitLab issue (cross-platform) — the real cross-link is the §5.6 non-closing PR-URL note posted on the GitLab issue
   esac
   # Idempotency: match the exact ref LINE (whole-line, case-insensitive), NOT any
   # substring — the cognitive-aid body already mentions the spec path
@@ -1784,6 +1785,11 @@ if [[ -n "$PR_URL" ]] \
   #            via reconcileStatus (open prEvidence → in-review, non-terminal, status-sync.md
   #            row 4); the §4.6a body ref already enabled the auto-link + Diffs. Optional breadcrumb comment.
   #   github → native `Refs #N` (github.md) + status:in-review label.
+  #   gitlab → the GitLab adapter posts a non-closing PR-URL **note** on the issue
+  #            (gitlab.md §makePr) — NEVER a `Closes #N` (flow-next owns terminal Done
+  #            via land.merged) — + the open/closed-side status:in-review label. A
+  #            GitHub-PR body ref can't auto-link a cross-instance GitLab issue, so the
+  #            note IS the cross-link; the §4.6a `Ref <project>#<iid>` is a human breadcrumb.
   #   (the PR URL itself rides as evidence in the comment/attachment, not the op token.)
   # The open PR is the merge-evidence `open` bucket → In Review, NEVER terminal (no MERGED).
   # Unlinked spec → flow-first link (create + base-snapshot) first, then reconcile the now-linked

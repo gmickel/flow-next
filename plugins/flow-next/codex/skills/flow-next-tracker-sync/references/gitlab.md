@@ -337,6 +337,17 @@ stays in reconcile.
 
 `tracker`/`type` on the struct are set to `"gitlab"` / `"issue"`.
 
+> **Identity is flow-first only — NOT tracker-first.** Grabbing a GitLab issue into a
+> spec creates a normal **flow-first `fn-NN` spec**, then `sync set-tracker-id <spec>
+> <global-id> --identifier "<project>#<iid>" --url <web_url>` attaches the GitLab key
+> as the resolvable alias (fn-69.1 widened the `set-tracker-id` validator to accept
+> `group/subgroup/project#12` + bare `#<iid>`). The **tracker-first** path
+> (`spec create --tracker-first --tracker-identifier`) is **NOT used for GitLab**: it
+> mints a canonical spec id from the key (`<key>-<number>-<slug>`), and a GitLab
+> `<project>#<iid>` can't slugify (slashes + `#`), so `cmd_spec_create`'s strict
+> `KEY-N` validator rightly rejects it. GitLab linking always goes flow-first →
+> `set-tracker-id` (the alias resolver then maps `group/project#12` back to the spec).
+
 ### `authorAuthority` — from project membership `access_level` (fn-68 R15 security)
 
 Populate the `comment.authorAuthority` tier (the answer-valve authorization gate)
