@@ -33,9 +33,8 @@ Make `tracker.type: gitlab` a real, activatable tracker: the deterministic flowc
 TBD
 
 ## Done summary
-TBD
-
+Wired `tracker.type: gitlab` as a real, activatable tracker: added `gitlab` to flowctl's `TRACKER_TYPES` enum (R7), seeded `tracker.perTracker.project`/`host` config defaults (R3), and widened the `set-tracker-id` identifier validator to accept nested GitLab group paths (`group/subgroup/project#12`) + bare `#<iid>` while rejecting empty segments and non-positive iids (R4-identity). Wired the discovery-ceremony prose across both SKILL.md and steps.md (GitLab probe row, ASK option, `tracker.type gitlab` + `perTracker.project`/`host` config-writes, and a pre-create-and-confirm readiness-label branch — R5), updated the probe-count wording four→five, kept `.flow/bin/flowctl.py` byte-identical, and added 22 tests. Plan-review SHIP (rp), full stdlib suite green (1234 tests).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 6d45fabdcc0cbd5e489ad71e43fa9cd45eaaed56
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (1234 tests OK, skipped=2), python3 -m unittest discover -s plugins/flow-next/tests -p 'test_tracker*.py' (161 OK), python3 -m unittest plugins.flow-next.tests.test_tracker_sync_gitlab (22 OK)
 - PRs:
