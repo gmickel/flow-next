@@ -12,8 +12,8 @@ fn-68.2 makes the tracker-sync skill safe to call **per-tick from
         outside the hash, no bare tracker key), a flat-tracker
         `<!-- flow-next:answer id=<hash> -->` fallback matched by id, and the
         9th adapter method `listOpenIssues(filter) → issue[]` (exact-match
-        readyState lane, Linear + GitHub) + the named skill ops `list-open` /
-        `question`.
+        readyState lane; fn-68 shipped Linear + GitHub, GitLab inherited it in
+        fn-69) + the named skill ops `list-open` / `question`.
   R16 — reuses the existing status-sync readyState→ready projection (no new
         mechanism — asserted by absence of a *second* projection mechanism).
 
@@ -197,7 +197,9 @@ class TrackerSyncBacklogModeProseContract(unittest.TestCase):
         )
 
     def test_listopenissues_implemented_for_linear_and_github(self) -> None:
-        """v1 implements listOpenIssues for BOTH Linear and GitHub."""
+        """fn-68 shipped listOpenIssues for BOTH Linear and GitHub (GitLab
+        inherited it in fn-69 — see references/gitlab.md, covered by
+        test_tracker_sync_mirror_parity / test_tracker_sync_gitlab)."""
         # GitHub: gh issue list with the readyState label filter.
         self.assertIn("listOpenIssues", self.github)
         self.assertRegex(

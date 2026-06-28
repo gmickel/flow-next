@@ -168,7 +168,7 @@ Flow's `depends_on_epics: [B]` on spec A means *A depends on / is blocked by B*.
 
 ### Read-before-write idempotency (mandatory)
 
-**No platform reliably no-ops a duplicate relation**, so every adapter MUST `listIssueRelations(issue)` and check for the (from, to) pair **before** calling `setIssueRelation`. Skip the write when the edge already exists. The Linear dedup must canonicalize across **both** `relations` and `inverseRelations` (the same edge appears from either endpoint) before comparing; the GitHub fenced-block writer must not append a `#N` already present in the block; the GitLab adapter checks the existing `/links` listing (native rung) or the existing `#N` lines in the `<!-- flow:deps -->` block (fenced fallback). A re-run over an already-projected dependency creates zero new relations and appends nothing (R3).
+**No platform reliably no-ops a duplicate relation**, so every adapter MUST `listIssueRelations(issue)` and check for the (from, to) pair **before** calling `setIssueRelation`. Skip the write when the edge already exists. The Linear dedup must canonicalize across **both** `relations` and `inverseRelations` (the same edge appears from either endpoint) before comparing; the GitHub fenced-block writer must not append a `#N` already present in the block; the GitLab adapter checks the existing `/links` listing (native `is_blocked_by` rung) AND the existing `#N` lines in the `<!-- flow:deps -->` block (which GitLab carries on every tier). A re-run over an already-projected dependency creates zero new relations and appends nothing (R3).
 
 ### Never-delete-non-ours provenance (mandatory)
 

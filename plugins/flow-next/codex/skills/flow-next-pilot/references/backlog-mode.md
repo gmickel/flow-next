@@ -116,7 +116,7 @@ named op:
  — the same explicit signal as the flow `ready` flag), via the `listOpenIssues`
  adapter method. Returns normalized `issue[]` (`{id, identifier, title, status,
  labels, url}`) — **transport-blind**: backlog mode reads the struct and never
- branches on Linear-vs-GitHub.
+ branches on tracker type (Linear / GitHub / GitLab).
 - **`tracker.readyState` unset ⇒ `list-open` no-ops** (returns `[]` + a note): no
  promoted lane exists to filter on, so backlog mode runs the **flow-ready specs
  only**. The flow `ready` flag needs no tracker (R17). Same floor when no transport
