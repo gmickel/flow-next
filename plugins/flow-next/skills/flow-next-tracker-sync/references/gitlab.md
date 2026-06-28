@@ -16,7 +16,7 @@ second — plus the terminal no-op. **Endpoints/limits verified live 2026-06-28*
 
 | Rung | Transport | Use when | Notes |
 |------|-----------|----------|-------|
-| 1 | **`glab api <path>`** (headless via `GITLAB_TOKEN`/`CI_JOB_TOKEN`, or a stored `glab auth login`) | `glab auth status` exits 0 (a credential resolves) | the **primary** GitLab transport — glab's stored auth + the full `/api/v4` REST surface, **including issue links** the `glab issue` subcommand **lacks**. Scriptable JSON via `-O json --jq` (NOT `-F`). |
+| 1 | **`glab api <path>`** (headless via `GITLAB_TOKEN`/`CI_JOB_TOKEN`, or a stored `glab auth login`) | `glab auth status` exits 0 (a credential resolves) | the **primary** GitLab transport — glab's stored auth + the full `/api/v4` REST surface, **including issue links** the `glab issue` subcommand **lacks**. Outputs raw JSON on stdout — **pipe to `jq`** for projection (`glab api` has NO `--jq` flag and no `-O` short flag; `--jq`/`-O json` are `glab issue list` flags, a different command). |
 | 2 | **raw REST `/api/v4`** (headless via `GITLAB_TOKEN`/`CI_JOB_TOKEN`) | `glab` absent but an env token is set | the same `/api/v4` surface without glab — header ladder below; the CI/headless floor when glab is not installed |
 | 3 (terminal) | **no-op + receipt note** | no `glab` credential AND no env token | the bridge is configured but no GitLab transport is reachable |
 
@@ -184,8 +184,10 @@ token's allowlisted scope) — the run never fails hard.
   stored auth + the full `/api/v4` surface, **including issue links** that the `glab
   issue` subcommand **lacks** (verified — `glab issue` has no link/relate/block
   command). `glab issue`/`glab mr` cover convenience ops (create/list/view/note).
-- **JSON flag is `-O json` / `--output json`** (+ `--jq` for projection), **NOT
-  `-F json`** (`-F`/`--output-format` is details/ids/urls, a different flag).
+- **`glab api` outputs raw JSON on stdout — pipe to `jq`** for projection. It has
+  **NO `--jq` flag and no `-O` short flag** (only `--output {json,ndjson}`); the
+  `-O json` / `--jq` / `-F` flags belong to the `glab issue list` subcommand, NOT
+  `glab api`. For streamed lists use `--paginate --output ndjson | jq`.
 - **Project target:** every REST path needs the **URL-encoded** project
   (`encodedProject`) — see the encoding rule above. The bridge config's
   `tracker.perTracker.project` supplies the literal path.
@@ -198,7 +200,7 @@ token's allowlisted scope) — the run never fails hard.
   discipline; same failure mode (escaping mangles the round-trip), same fix.
 - **id vs iid:**
   - **Durable dedupe key = the global issue `id`** (immutable, project-independent —
-    NOT the project-local `iid`) from `--jq .id`. Store it via `sync set-tracker-id`.
+    NOT the project-local `iid`) from the create response's `.id` (piped to `jq`). Store it via `sync set-tracker-id`.
   - `<project>#<iid>` (`iid` = the project-local display number) is the display key
     (the normalized `identifier`); surface it to humans. The `iid` is **only unique
     within a project**, which is exactly why the global `id` is the durable key —
@@ -393,7 +395,7 @@ glab api "projects/$ENC/issues/$IID"
 CREATED=$(printf '%s' "$BODY" | glab api --method POST "projects/$ENC/issues" \
         --field "title=$TITLE" --field "description=@-" \
         --field "labels=flow:$FLOW_ID,status:$NORMALIZED_STATUS" \
-        --jq '{id, iid, web_url}')
+        | jq '{id, iid, web_url}')
 NEW_ID=$(printf '%s'  "$CREATED" | jq -r '.id')       # global issue id  → tracker.id (durable)
 NEW_IID=$(printf '%s' "$CREATED" | jq -r '.iid')      # project-local iid → <project>#<iid> identifier
 URL=$(printf '%s'     "$CREATED" | jq -r '.web_url')
@@ -405,7 +407,7 @@ URL=$(printf '%s'     "$CREATED" | jq -r '.web_url')
 # full-body replace would WIPE it, and the next projectDepRelations would misread the
 # ledgered edge as remotely-removed → false collision (self-deletes projected deps).
 # Read the current description, carry its fenced block forward, THEN update:
-CURRENT=$(glab api "projects/$ENC/issues/$IID" --jq '.description')
+CURRENT=$(glab api "projects/$ENC/issues/$IID" | jq -r '.description')
 DEPS_BLOCK=$(printf '%s' "$CURRENT" | sed -n '/<!-- flow:deps -->/,/<!-- \/flow:deps -->/p')
 BODY_WITH_DEPS="$BODY"
 [ -n "$DEPS_BLOCK" ] && BODY_WITH_DEPS=$(printf '%s\n\n%s' "$BODY" "$DEPS_BLOCK")
@@ -462,7 +464,7 @@ esac
 
 ```bash
 glab api "projects/$ENC/issues/$IID/notes" --paginate \
-  --jq '.[] | select(.system == false)
+  | jq '.[] | select(.system == false)
         | {id, author: .author.username, authorUserId: .author.id, body, createdAt: .created_at, url: .web_url}'
 ```
 - **MUST filter `system==true` notes** (verified): `GET /issues/:iid/notes` items
@@ -499,7 +501,7 @@ glab api "projects/$ENC/issues/$IID/notes" --paginate \
 
 ```bash
 printf '%s' "$BODY_WITH_MARKER" | glab api --method POST \
-  "projects/$ENC/issues/$IID/notes" --field "body=@-" --jq '{id, web_url}'
+  "projects/$ENC/issues/$IID/notes" --field "body=@-" | jq '{id, web_url}'
 ```
 - `$BODY_WITH_MARKER` carries the `flow-evt:<event>` marker line (echo suppression +
   dedup, per [comments-sync.md](comments-sync.md)).
@@ -523,7 +525,7 @@ filter is **exact** (AND-combined if multiple) — there is no label *ordering*,
 
 ```bash
 glab api "projects/$ENC/issues?state=opened&labels=$READY_LABEL&per_page=100" --paginate \
-  --jq '.[] | {id, iid, title, description, state, labels, web_url, updated_at, author}'
+  | jq '.[] | {id, iid, title, description, state, labels, web_url, updated_at, author}'
 ```
 
 - **`labels=$READY_LABEL`** is the exact promoted-lane filter — only issues carrying
@@ -615,7 +617,7 @@ perms — return `errored`, not a silent degrade.)
 **Native (Premium/Ultimate):**
 ```bash
 glab api "projects/$ENC/issues/$IID/links" \
-  --jq '.[] | select(.link_type == "is_blocked_by") | {iid, id, project_id}'
+  | jq '.[] | select(.link_type == "is_blocked_by") | {iid, id, project_id}'
 ```
 Each `is_blocked_by` link → one `relation`: `{ from: "<project>#"+A.iid (blocked),
 to: "<project>#"+blocker.iid (blocking), type: "blocks", source: "unknown" }`. Native
@@ -625,7 +627,7 @@ GitHub-native + Linear-native rungs.
 
 **Degraded / always — the `<!-- flow:deps -->` block:** parse the `#N` / `<project>#N`
 lines **inside** the `<!-- flow:deps -->` … `<!-- /flow:deps -->` markers of the
-issue `description` (`glab api "projects/$ENC/issues/$IID" --jq '.description'`). Each
+issue `description` (`glab api "projects/$ENC/issues/$IID" | jq -r '.description'`). Each
 ref inside the markers → `{ from: "<project>#"+A.iid, to: <ref>, type: "blocks",
 source: "flow" }` (inside the fence ⇒ provably ours). Refs **outside** the markers
 are NOT relations — never returned.
@@ -810,11 +812,11 @@ Steps:
    ```bash
    IID=$(printf '%s' "$(cat /tmp/spike-flow-body.md)" | glab api --method POST \
            "projects/$ENC/issues" --field "title=flow spike" --field "description=@-" \
-           --jq '.iid')
+           | jq -r '.iid')
    ```
 3. **Pull back** via `fetchIssue(iid)`:
    ```bash
-   glab api "projects/$ENC/issues/$IID" --jq '.description' > /tmp/spike-pulled-body.md
+   glab api "projects/$ENC/issues/$IID" | jq -r '.description' > /tmp/spike-pulled-body.md
    ```
 4. **Oracle (success/fail):**
    ```bash
