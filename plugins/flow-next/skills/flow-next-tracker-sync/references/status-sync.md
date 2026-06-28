@@ -383,6 +383,10 @@ skipped — no calls, no receipts, no flag writes (R7 invisibility).
   case-insensitive/trimmed (GitHub label names are case-insensitively unique).
   **Label absent ⇒ `desired = false` — a normal state, never an error or a warn**;
   un-labeling the issue is exactly how a GitHub user un-readies a spec.
+- **GitLab** — same as GitHub: GitLab has no workflow states, so readiness is a
+  **label**. `desired = (readyState label ∈ issue.labels[])` (the normalized
+  `issue.labels`), compared case-insensitive/trimmed. **Label absent ⇒ `desired =
+  false`** — a normal state; removing the label is how a GitLab user un-readies a spec.
 
 **Gate the clear path BEFORE any toggle** — `desired = false` is ambiguous
 between "the issue genuinely isn't in the ready state" and "the config is stale
@@ -431,6 +435,11 @@ call):
   `gh label list -R "$REPO" --search "$READY_LABEL" --json name` (search is
   substring — compare the returned names case-insensitively for an exact match).
   Present ⇒ genuine not-ready. Absent from the repo ⇒ stale config.
+- **GitLab** — the label must exist in the project's label namespace:
+  `glab api ${HOST:+--hostname "$HOST"} "projects/$ENC/labels?search=$READY_ENC" | jq -r '.[].name'`
+  (`search` is substring — compare case-insensitively for an exact match;
+  `READY_ENC` is the `@uri`-encoded label). Present ⇒ genuine not-ready. Absent from
+  the project ⇒ stale config.
 
 Stale config ⇒ **warn + `noop` receipt + flag untouched + the rest of the sync
 continues** — graceful degradation, same posture as the unmapped-state path above

@@ -821,7 +821,7 @@ Verify per method:
 | `postComment` | `glab api POST …/notes` (`body=@-`) | `gh issue comment --body-file -` | same `comment` |
 | `readStatus` | from `state`+`status:` label | from `state`+`stateReason`+`status:` label | same `status{raw,normalized}` |
 | `setStatus` | `PUT {state_event}` + `status:` label | `gh issue close/reopen` + `status:` label | ok / `errored` |
-| `listIssueRelations` | native `is_blocked_by` links (degraded → `<!-- flow:deps -->` block; never `relates_to`) | native `…/dependencies/blocked_by` (reduced → fenced `#N` block) | same blocked-by `relation[]` (`{from,to,type:"blocks",source}`) |
+| `listIssueRelations` | native `is_blocked_by` links (degraded → `<!-- flow:deps -->` block; never `relates_to`) | native `…/dependencies/blocked_by` (reduced → fenced `#N` block) | same blocked-by `relation[]` (`{from,to,type:"blocks",source,linkPresent}` — GitLab alone may emit `linkPresent:false`/`source:"block-only"`) |
 | `setIssueRelation` | native `is_blocked_by` POST (degraded → `relates_to` + body block) | native POST `blocked_by` (reduced → fenced-block append) | ok / `errored` / `noop`; read-before-write on both |
 | `listOpenIssues` (fn-68) | `…/issues?state=opened&labels=readyState` | `gh issue list --state open --label readyState` | same `issue[]` at the **exact** readyState lane (label — both exact, no ordering) |
 | status map | opened/closed + `status:` label (reduced — recovered via label) | open/closed + reason + `status:` label (reduced) | same **normalized** vocabulary out |
