@@ -135,6 +135,32 @@ class TrackerConfigTestCase(unittest.TestCase):
         )
         self.assertIsNone(on_disk["tracker"]["readyState"])
 
+    def test_config_set_coerces_json_object(self) -> None:
+        # The CLI delivers argv strings; a JSON-object value (e.g. the Jira
+        # tracker.perTracker.statusMap the discovery ceremony derives) must be
+        # PARSED, not stored as a string — else the adapter cannot read it as an
+        # object (PR #183). Ids stay strings (rename-stable), matching jira.md.
+        sm = '{"in-progress": {"id": "3"}, "in-review": {"name": "In Review"}, "done": {"id": "10001"}}'
+        self.flowctl.set_config("tracker.perTracker.statusMap", sm)
+        on_disk = json.loads(
+            (self.tmpdir / ".flow" / "config.json").read_text(encoding="utf-8")
+        )
+        stored = on_disk["tracker"]["perTracker"]["statusMap"]
+        self.assertIsInstance(stored, dict)  # a real object, NOT a string
+        self.assertEqual(stored["done"]["id"], "10001")  # id preserved as a string
+        self.assertEqual(stored["in-review"]["name"], "In Review")
+
+    def test_config_set_keeps_malformed_json_as_string(self) -> None:
+        # A value that looks like JSON but doesn't parse falls through to the
+        # literal string (surfaced downstream), never silently mangled.
+        self.flowctl.set_config("tracker.perTracker.statusMap", "{not valid json")
+        on_disk = json.loads(
+            (self.tmpdir / ".flow" / "config.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            on_disk["tracker"]["perTracker"]["statusMap"], "{not valid json"
+        )
+
     # --- Forward-compat -----------------------------------------------------
 
     def test_unknown_key_under_tracker_survives_round_trip(self) -> None:

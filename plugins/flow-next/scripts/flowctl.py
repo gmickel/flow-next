@@ -1528,6 +1528,16 @@ def set_config(key: str, value) -> dict:
             value = None
         elif value.isdigit():
             value = int(value)
+        elif value.lstrip()[:1] in ("{", "["):
+            # JSON object/array value (e.g. tracker.perTracker.statusMap — a normalized→
+            # {id|name} map written by the Jira discovery ceremony). Without this, config
+            # set stores the JSON as a STRING, which the adapter cannot read as an object
+            # (PR #183 review). Coerce ONLY when it parses as valid JSON; a malformed value
+            # falls through to the literal string (surfaced downstream, never silently mangled).
+            try:
+                value = json.loads(value)
+            except (json.JSONDecodeError, ValueError):
+                pass  # not valid JSON — keep the literal string
 
     current[parts[-1]] = value
     atomic_write_json(config_path, config)
