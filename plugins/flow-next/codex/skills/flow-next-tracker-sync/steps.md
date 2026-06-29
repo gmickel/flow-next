@@ -194,7 +194,7 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
  PROJ_KEY=$($FLOWCTL config get tracker.perTracker.projectKey --json | jq -r '.value // empty')
  AUTH_SCHEME=$($FLOWCTL config get tracker.perTracker.authScheme --json | jq -r '.value // empty')
  APIV=$($FLOWCTL config get tracker.perTracker.apiVersion --json | jq -r '.value // "3"')
- SSL_VERIFY=$($FLOWCTL config get tracker.perTracker.sslVerify --json | jq -r '.value // true')
+ SSL_VERIFY=$($FLOWCTL config get tracker.perTracker.sslVerify --json | jq -r 'if .value == null then true else .value end') # `// true` would flip an explicit false (jq `//` treats false as empty)
  # Build the auth header by the PERSISTED authScheme — never by probing which
  # env var happens to be set (that is the re-race the ceremony exists to avoid).
  CRED_OK=0; JAUTH=()
