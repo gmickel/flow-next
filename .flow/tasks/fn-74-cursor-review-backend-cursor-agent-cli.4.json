@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-29T11:35:59.808072Z",
+  "depends_on": [
+    "fn-74-cursor-review-backend-cursor-agent-cli.3"
+  ],
+  "id": "fn-74-cursor-review-backend-cursor-agent-cli.4",
+  "priority": null,
+  "spec": "fn-74-cursor-review-backend-cursor-agent-cli",
+  "spec_path": ".flow/tasks/fn-74-cursor-review-backend-cursor-agent-cli.4.md",
+  "status": "todo",
+  "title": "docs + downstream chain \u2014 flowctl.md/README/GLOSSARY/CHANGELOG + flow-next.dev + AI-x-SDLC + GF + vault",
+  "updated_at": "2026-06-29T11:44:50.428266Z"
+}

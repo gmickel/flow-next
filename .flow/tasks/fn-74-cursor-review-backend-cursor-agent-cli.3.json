@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-06-29T11:35:59.404049Z",
+  "depends_on": [
+    "fn-74-cursor-review-backend-cursor-agent-cli.2"
+  ],
+  "id": "fn-74-cursor-review-backend-cursor-agent-cli.3",
+  "priority": null,
+  "spec": "fn-74-cursor-review-backend-cursor-agent-cli",
+  "spec_path": ".flow/tasks/fn-74-cursor-review-backend-cursor-agent-cli.3.md",
+  "status": "todo",
+  "title": "skill + setup wiring + codex mirror \u2014 workflow-cursor.md x2, --review literals, review.backend, sync-codex",
+  "updated_at": "2026-06-29T11:38:29.781438Z"
+}
