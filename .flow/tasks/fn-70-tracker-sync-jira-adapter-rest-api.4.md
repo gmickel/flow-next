@@ -33,9 +33,8 @@ Regenerate the Codex mirror and complete the full doc sweep — flipping "Jira o
 TBD
 
 ## Done summary
-TBD
-
+Regenerated the Codex mirror and swept Jira through every tracker-sync enumeration + per-adapter fidelity surface (adapter-interface.md implemented-by table / issue.tracker enum / terminal invariant / authorAuthority / relation source+linkPresent / direction / dedup / listOpenIssues JQL; docs/tracker-sync.md transport ladder + per-adapter relation/direction/readyState/dep-projection bullets + Linear-Diffs branch; flowctl.md config; README/GLOSSARY/teams/skills/commands/SKILL/steps/work/pilot/make-pr/setup; CHANGELOG Unreleased — no version bump; flat-tracker answer-matching prose). Extended the mirror-parity test to assert canonical jira.md is mirrored + openai.yaml/sync-codex register Jira. rp impl-review SHIP after 5 rounds; full suite (1283) + parity (17) green. A pre-existing jira.md ADF/flow:deps self-contradiction (Jira writes no block) was flagged out-of-scope as a tracked follow-up.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: e8594785aeb45bb85db995761b33289dd7ef3b64, e91a9d2c4bfc0ac415abadd295256351b3f59194, f495178d24a5090c87d06b85204c32e0032d38b5, 17cb87b4a868a6a9a0eeeab9f475539cb48cf1c4, b63f2e6cda5b06e62b847d13d0d4079514b95c98
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (1283 tests, OK skipped=2), python3 -m unittest plugins.flow-next.tests.test_tracker_sync_mirror_parity (17 tests, OK — 8 new Jira parity assertions), bash scripts/sync-codex.sh (mirror regenerated, all validations pass)
 - PRs:
