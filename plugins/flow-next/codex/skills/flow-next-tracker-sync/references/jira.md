@@ -292,15 +292,26 @@ Upsert by presence of `issue.id` (interface rule): no id ⇒ **create** (`POST
 # translation; a create has no current ADF, so it builds from the supported subset only);
 # v2 (DC/Server) = wiki/plain TEXT — `--arg desc` (a STRING).
 # NEVER --argjson a v2 string: jq rejects it as invalid JSON, and an ADF object is wrong
-# on /rest/api/2. issuetype by name ("Task") works (confirmed live); colon labels accepted.
-# projectKey = tracker.perTracker.projectKey
+# on /rest/api/2. Colon labels accepted. projectKey = tracker.perTracker.projectKey
+# ISSUE TYPE — DISCOVER it, never hard-code "Task" (a project's issue-type scheme may not
+# include "Task"; the create would 400). Prefer a configured tracker.perTracker.issueType,
+# else read the project's createable types and pick "Task" if present, else the first
+# STANDARD (non-subtask) type. (createmeta shape differs Cloud v3 vs DC v2 — verify-at-build.)
+ITYPE="${CFG_ISSUE_TYPE:-}" # tracker.perTracker.issueType, if the user pinned one
+if [ -z "$ITYPE" ]; then
+ ITYPE=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
+ "$JIRA_BASE/rest/api/$APIV/issue/createmeta/$PROJ_KEY/issuetypes" \
+ | jq -r '(.issueTypes // .values // []) | map(select(.subtask|not))
+ | ((map(select(.name=="Task"))[0]) // .[0] // {}).name // empty')
+ [ -z "$ITYPE" ] && ITYPE="Task" # last-resort default if discovery returned nothing
+fi
 if [ "$APIV" = 3 ]; then DESC_ARG=(--argjson desc "$ADF_DESCRIPTION"); else DESC_ARG=(--arg desc "$TEXT_DESCRIPTION"); fi
 curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
  -H "Content-Type: application/json" -H "Accept: application/json" \
  -X POST "$JIRA_BASE/rest/api/$APIV/issue" \
- --data @<(jq -n --arg pk "$PROJ_KEY" --arg sum "$TITLE" --arg lbl "flow:$FLOW_ID" \
+ --data @<(jq -n --arg pk "$PROJ_KEY" --arg sum "$TITLE" --arg lbl "flow:$FLOW_ID" --arg it "$ITYPE" \
  "${DESC_ARG[@]}" '
- { fields: { project: {key:$pk}, issuetype: {name:"Task"},
+ { fields: { project: {key:$pk}, issuetype: {name:$it},
  summary: $sum, description: $desc, labels: [$lbl] } }')
 # The 201 response carries {id, key, self}. Build the browse url from key:
 # id=.id identifier=.key url="$JIRA_BASE/browse/"+.key

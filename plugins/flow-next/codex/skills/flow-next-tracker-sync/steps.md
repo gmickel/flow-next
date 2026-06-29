@@ -67,8 +67,11 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
  if [ -n "${JIRA_BASE_URL:-}" ]; then
  JBL_LC=$(printf '%s' "$JIRA_BASE_URL" | tr '[:upper:]' '[:lower:]') # host match is case-INSENSITIVE (Atlassian.net == atlassian.net)
  case "$JBL_LC" in
- *.atlassian.net*) [ -n "${JIRA_EMAIL:-}" ] && [ -n "${JIRA_API_TOKEN:-}" ] && JIRA_OK=1 ;; # Cloud → cloud-basic
- *) [ -n "${JIRA_PAT:-}" ] && JIRA_OK=1 ;; # self-hosted DC/Server → bearer-pat
+ *.atlassian.net*) [ -n "${JIRA_EMAIL:-}" ] && [ -n "${JIRA_API_TOKEN:-}" ] && JIRA_OK=1 ;; # canonical Cloud → cloud-basic
+ *) # CUSTOM DOMAIN — Cloud OR self-hosted (a Cloud tenant on an Atlassian custom domain
+ # does NOT end in .atlassian.net). Offer if EITHER credential scheme is present; the
+ # authScheme detection below disambiguates (email+token ⇒ cloud-basic; PAT ⇒ bearer-pat; both ⇒ ASK).
+ { { [ -n "${JIRA_EMAIL:-}" ] && [ -n "${JIRA_API_TOKEN:-}" ]; } || [ -n "${JIRA_PAT:-}" ]; } && JIRA_OK=1 ;;
  esac
  fi
  ```
@@ -104,9 +107,12 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
  $FLOWCTL config set tracker.perTracker.host "<gitlab.example.com>" # GitLab self-managed: a BARE HOSTNAME (no scheme) — `glab api --hostname` needs a host, not a URL; the REST rung derives https://<host>/api/v4. Omit on gitlab.com.
  # Jira (tracker.type jira) — write the site + project key, and PERSIST the
  # deployment shape the probe detected so runtime never re-infers. The auth
- # scheme + api version are DETECTED from the credential/host at the ceremony
- # (a *.atlassian.net baseUrl ⇒ cloud-basic + apiVersion 3; else bearer-pat +
- # apiVersion 2; if BOTH JIRA_API_TOKEN and JIRA_PAT are present AND the
+ # scheme + api version are DETECTED at the ceremony: a *.atlassian.net baseUrl ⇒
+ # cloud-basic + apiVersion 3. A CUSTOM DOMAIN (Cloud tenant not on .atlassian.net,
+ # OR self-hosted) can't be told apart by URL → infer from the CREDENTIAL: only
+ # email+token ⇒ cloud-basic + v3; only PAT ⇒ bearer-pat + v2.
+ # (a *.atlassian.net baseUrl ⇒ cloud-basic + apiVersion 3; else infer from the
+ # credential as above; if BOTH JIRA_API_TOKEN and JIRA_PAT are present AND the
  # deployment is genuinely ambiguous, ASK — never silently guess — then persist).
  # Credentials stay in env (read each run), never written here. Skip all for
  # linear/github/gitlab.
