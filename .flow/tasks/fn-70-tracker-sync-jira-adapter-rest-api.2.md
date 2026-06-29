@@ -1,3 +1,6 @@
+---
+satisfies: [R1, R2, R6, R8, R9]
+---
 ## Goal
 Author `references/jira.md` transport + core: the **Jira REST API + token single-rung + no-op** transport (GitHub-shaped — NO MCP rung; Cloud `/rest/api/3` + API-token, DC/Server `/rest/api/2` + PAT), the six core methods, auth (Cloud basic vs DC Bearer PAT + self-hosted TLS), identity, and the make-pr PR-link. Records the MCP-evaluated-not-wired decision + evidence. Modeled on `github.md`. (Spec R1-core, R2, R6-link.)
 

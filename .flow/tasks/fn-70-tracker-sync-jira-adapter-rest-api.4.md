@@ -1,3 +1,6 @@
+---
+satisfies: [R8]
+---
 ## Goal
 Regenerate the Codex mirror and complete the full doc sweep — flipping "Jira out of scope" everywhere — + changelog. (Spec R8, R9.) [dep: fn-70.1, .2, .3.]
 

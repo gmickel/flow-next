@@ -1,3 +1,6 @@
+---
+satisfies: [R1, R3, R4]
+---
 ## Goal
 Extend `references/jira.md` with the Jira-specific weight: Markdown↔ADF translation, the workflow-aware status model (transitions API + statusMap + fn-66 terminal invariant), the relation pair (is-blocked-by links), and `listOpenIssues` (JQL via `/search/jql`). (Spec R1-relation+ninth, R3, R4.) [dep: fn-70.2 — same file.]
 

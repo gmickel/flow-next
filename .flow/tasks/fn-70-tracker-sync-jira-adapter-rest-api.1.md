@@ -1,3 +1,6 @@
+---
+satisfies: [R2, R5, R6, R7, R9]
+---
 ## Goal
 Make `tracker.type: jira` a real, activatable tracker and flip the ceremony from "surface but don't offer" to "offer": the deterministic flowctl bits (activation enum, config schema incl. `authScheme`/`apiVersion`, identifier validator) + the discovery-ceremony sites (probe / ASK / config-write **+ readiness branch**) + Python tests. The transport + auth scheme are **resolved once here and persisted** — no per-run re-probe (mirrors `cmd_review_backend`). (Spec R5, R6-identity, R7.)
 
