@@ -2,7 +2,7 @@
 
 Read [SKILL.md](SKILL.md) first for the architecture, the flowctl-vs-skill split, and the boundaries. This file is the execution detail. `$FLOWCTL` is defined in SKILL.md's Preamble.
 
-This file is the transport-blind orchestration **spine**: discovery ceremony, link/unlink ceremony, grain, identity, and the push/pull/reconcile skeleton with named hooks. The hook bodies live in dedicated reference files: transports (`fetchIssue`/`writeIssue`/… — Linear [`references/linear-ladder.md`](references/linear-ladder.md), GitHub [`references/github.md`](references/github.md), GitLab [`references/gitlab.md`](references/gitlab.md)) and reconcile (3-way body merge [`references/body-merge.md`](references/body-merge.md); status who-wins [`references/status-sync.md`](references/status-sync.md); comments/evidence append [`references/comments-sync.md`](references/comments-sync.md)), all plugging through the contract in [`references/adapter-interface.md`](references/adapter-interface.md). Inline, a hook points at its reference with **[→ ref: <file>]** — read that file for the body; this file owns only the routing.
+This file is the transport-blind orchestration **spine**: discovery ceremony, link/unlink ceremony, grain, identity, and the push/pull/reconcile skeleton with named hooks. The hook bodies live in dedicated reference files: transports (`fetchIssue`/`writeIssue`/… — Linear [`references/linear-ladder.md`](references/linear-ladder.md), GitHub [`references/github.md`](references/github.md), GitLab [`references/gitlab.md`](references/gitlab.md), Jira [`references/jira.md`](references/jira.md)) and reconcile (3-way body merge [`references/body-merge.md`](references/body-merge.md); status who-wins [`references/status-sync.md`](references/status-sync.md); comments/evidence append [`references/comments-sync.md`](references/comments-sync.md)), all plugging through the contract in [`references/adapter-interface.md`](references/adapter-interface.md). Inline, a hook points at its reference with **[→ ref: <file>]** — read that file for the body; this file owns only the routing.
 
 ## Phase 0 — Mode + Ralph/autonomous awareness
 
@@ -35,7 +35,7 @@ EVENT="<perEvent-key from the invocation, or empty>"
 
 Only when the bridge is not yet active (`flowctl sync active --json` → `active: false`) AND not in Ralph mode. If already active, skip to Phase 2.
 
-1. **Probe the five signals** (see SKILL.md table). Detection lives here, not flowctl:
+1. **Probe the six signals** (see SKILL.md table). Detection lives here, not flowctl:
  ```bash
  # Linear MCP: inspect the host's MCP/tool list for a Linear server (verified upsert
  # verbs save_issue / save_comment / list_comments / get_issue / list_issue_statuses —
@@ -48,19 +48,44 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
  # host / CI_SERVER_URL — never assume gitlab.com.
  GLAB_OK=0; glab auth status >/dev/null 2>&1 && GLAB_OK=1
  [ -n "${GITLAB_TOKEN:-}${CI_JOB_TOKEN:-}" ] && GLAB_OK=1
- # Jira: a *.atlassian.net host visible in config/env (surface only — out of scope here).
+ # Jira: the REST signal — JIRA_BASE_URL plus a credential. Cloud needs
+ # JIRA_EMAIL + JIRA_API_TOKEN (HTTP-basic email:API_TOKEN); self-hosted
+ # Data Center / Server needs JIRA_PAT (Authorization: Bearer <PAT>). Either
+ # credential alongside JIRA_BASE_URL ⇒ Jira REST transport available — flow-next
+ # offers it (references/jira.md). NO MCP probe: Jira is REST-only (the official
+ # Atlassian MCP can't transition status / update fields / set links — the writes
+ # a two-way sync needs — and the community MCP is a redundant PAT-wrapper; the
+ # fn-70 transport decision). A bare `*.atlassian.net` host with no credential is
+ # still SURFACED (so the user knows why Jira can't be offered), but only a
+ # JIRA_BASE_URL + credential pair OFFERS it.
+ # Offer Jira only when the credential MATCHES the deployment the baseUrl implies:
+ # Cloud (*.atlassian.net) ⇒ email + API token (cloud-basic); self-hosted DC/Server ⇒
+ # Bearer PAT. A Cloud URL with only a PAT (or a self-hosted URL with only Cloud
+ # email/token) is a MISMATCH → surfaced, NOT offered (the persisted authScheme would
+ # otherwise be wrong and every call 401).
+ JIRA_OK=0
+ if [ -n "${JIRA_BASE_URL:-}" ]; then
+ JBL_LC=$(printf '%s' "$JIRA_BASE_URL" | tr '[:upper:]' '[:lower:]') # host match is case-INSENSITIVE (Atlassian.net == atlassian.net)
+ case "$JBL_LC" in
+ *.atlassian.net*) [ -n "${JIRA_EMAIL:-}" ] && [ -n "${JIRA_API_TOKEN:-}" ] && JIRA_OK=1 ;; # canonical Cloud → cloud-basic
+ *) # CUSTOM DOMAIN — Cloud OR self-hosted (a Cloud tenant on an Atlassian custom domain
+ # does NOT end in .atlassian.net). Offer if EITHER credential scheme is present; the
+ # authScheme detection below disambiguates (email+token ⇒ cloud-basic; PAT ⇒ bearer-pat; both ⇒ ASK).
+ { { [ -n "${JIRA_EMAIL:-}" ] && [ -n "${JIRA_API_TOKEN:-}" ]; } || [ -n "${JIRA_PAT:-}" ]; } && JIRA_OK=1 ;;
+ esac
+ fi
  ```
  The Linear transport rung the bridge will use follows from these signals (MCP
  beats GraphQL when both present): MCP registered → rung 1; else `LINEAR_API_KEY`
  set → rung 2 (GraphQL); else no-op. See [`references/linear-ladder.md`](references/linear-ladder.md).
-2. **Surface present AND absent.** Tell the user what was found and what wasn't — e.g. "Linear MCP: present. LINEAR_API_KEY: absent. gh: authenticated. glab: authenticated. Jira: none." Absent signals matter (they explain why a transport is unavailable).
+2. **Surface present AND absent.** Tell the user what was found and what wasn't — e.g. "Linear MCP: present. LINEAR_API_KEY: absent. gh: authenticated. glab: authenticated. Jira: JIRA_BASE_URL + JIRA_API_TOKEN present (Cloud)." Absent signals matter (they explain why a transport is unavailable) — e.g. "Jira: JIRA_BASE_URL present but no JIRA_EMAIL+JIRA_API_TOKEN / JIRA_PAT → surfaced, can't offer until a credential is set."
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
-3. **ASK via `plain-text numbered prompt`**. Lead with the recommended tracker (the strongest present signal) + a one-sentence rationale. Ask: enable the bridge? which tracker (`linear` / `github` / `gitlab`)? **Enabling activates the WHOLE pipeline by default (opt-out model)** — tell the user that on confirmation every lifecycle event (capture / interview / plan / work.firstClaim / work.done / makePr / resolvePr / completionReview) starts mirroring to the tracker, because hooking up the bridge means you want it to sync. Offer an **optional opt-out**: any events to exclude now (default: all on); they can also turn any off later via `flowctl config set tracker.perEvent.<event> off`. Resolution is **env > config > ASK** — don't re-ask anything env/config already decided.
+3. **ASK via `plain-text numbered prompt`**. Lead with the recommended tracker (the strongest present signal) + a one-sentence rationale. Ask: enable the bridge? which tracker (`linear` / `github` / `gitlab` / `jira`)? **Enabling activates the WHOLE pipeline by default (opt-out model)** — tell the user that on confirmation every lifecycle event (capture / interview / plan / work.firstClaim / work.done / makePr / resolvePr / completionReview) starts mirroring to the tracker, because hooking up the bridge means you want it to sync. Offer an **optional opt-out**: any events to exclude now (default: all on); they can also turn any off later via `flowctl config set tracker.perEvent.<event> off`. Resolution is **env > config > ASK** — don't re-ask anything env/config already decided.
 4. **On confirmation, write config** (dot-paths are safe). Activate every lifecycle event to its natural op — **skip only the ones the user explicitly excluded in step 3**:
  ```bash
  $FLOWCTL config set tracker.enabled true
- $FLOWCTL config set tracker.type "$CHOSEN_TYPE" # linear | github | gitlab
+ $FLOWCTL config set tracker.type "$CHOSEN_TYPE" # linear | github | gitlab | jira
  $FLOWCTL config set tracker.provenance "discovery ceremony $(date -u +%Y-%m-%d); confirmed by <who>; signals: <list>"
  # DEFAULT-ON (opt-out): activate the whole pipeline so it mirrors end-to-end.
  $FLOWCTL config set tracker.perEvent.capture reconcile # two-way body sync on capture
@@ -80,6 +105,34 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
  # for linear/github.
  $FLOWCTL config set tracker.perTracker.project "<group/project>" # GitLab: the group/project path
  $FLOWCTL config set tracker.perTracker.host "<gitlab.example.com>" # GitLab self-managed: a BARE HOSTNAME (no scheme) — `glab api --hostname` needs a host, not a URL; the REST rung derives https://<host>/api/v4. Omit on gitlab.com.
+ # Jira (tracker.type jira) — write the site + project key, and PERSIST the
+ # deployment shape the probe detected so runtime never re-infers. The auth
+ # scheme + api version are DETECTED at the ceremony: a *.atlassian.net baseUrl ⇒
+ # cloud-basic + apiVersion 3. A CUSTOM DOMAIN (Cloud tenant not on .atlassian.net,
+ # OR self-hosted) can't be told apart by URL → infer from the CREDENTIAL: only
+ # email+token ⇒ cloud-basic + v3; only PAT ⇒ bearer-pat + v2.
+ # (a *.atlassian.net baseUrl ⇒ cloud-basic + apiVersion 3; else infer from the
+ # credential as above; if BOTH JIRA_API_TOKEN and JIRA_PAT are present AND the
+ # deployment is genuinely ambiguous, ASK — never silently guess — then persist).
+ # Credentials stay in env (read each run), never written here. Skip all for
+ # linear/github/gitlab.
+ $FLOWCTL config set tracker.perTracker.baseUrl "<https://acme.atlassian.net>" # Jira: the site base (JIRA_BASE_URL env overrides; the persisted value is the default — never inert)
+ $FLOWCTL config set tracker.perTracker.projectKey "<PROJ>" # Jira: the project key (the JQL / listOpenIssues scope)
+ $FLOWCTL config set tracker.perTracker.authScheme "<cloud-basic|bearer-pat>" # Jira: cloud-basic (Cloud HTTP-basic email:API_TOKEN) | bearer-pat (DC/Server Bearer PAT) — detected, persisted; runtime reads only this
+ $FLOWCTL config set tracker.perTracker.apiVersion "<3|2>" # Jira: 3 (Cloud /rest/api/3, ADF) | 2 (DC/Server /rest/api/2) — the REST endpoint family the adapter branches on
+ # statusMap — WRITE IT NOW or Jira status sync is inert: setStatus DEFERS every status
+ # with no statusMap entry (references/jira.md § Status / transitions), so an unset map
+ # means an active bridge that never projects status. AUTO-DERIVE it from the project's
+ # workflow when the credential is present, then surface for the user to refine:
+ # GET /rest/api/$APIV/project/$PROJ/statuses → issue-type → [{id,name,statusCategory:{key}}].
+ # Map the FULL normalized set by name first, then statusCategory.key:
+ # done / verified → a status with statusCategory.key=="done"
+ # in-progress → "In Progress" (category indeterminate)
+ # in-review → "In Review" / "Review" IF present (else leave UNMAPPED → setStatus
+ # defers for in-review only; never invent a transition the workflow lacks)
+ # planned → "To Do" / "Backlog" (category new)
+ # Write id-keyed (ids are rename-stable): {"in-progress":{"id":"3"},"done":{"id":"10001"},…}.
+ $FLOWCTL config set tracker.perTracker.statusMap "$DERIVED_STATUSMAP_JSON" # Jira: normalized→{id|name}; auto-derived (refine later via config). NO creds at ceremony ⇒ write {} AND tell the user status sync defers until they set it (never silently inert).
  $FLOWCTL sync active --json # confirm active: true
  ```
  **Never assume — but default-on is not assuming.** No signal / user declines the bridge ⇒ write nothing; `enabled` stays `false`; `sync active` stays `active: false`. Confirming the bridge IS the consent to sync the pipeline. The **config schema default stays `off`** (in `get_default_config()`), so a bare `tracker.enabled=true` set by hand or a script — WITHOUT this ceremony — activates **no lifecycle-event sync** (every `perEvent` event stays dormant). The **two exceptions** are unconditional whenever the bridge is active (no per-event gate, by design): (1) make-pr's PR↔issue link **and its In Review status push** (fn-66, R2 — an open PR is the In Review rung, riding the same Diffs-powering link path); (2) **`land.merged`** (fn-66, R10 — a real merge is the SOLE event that projects terminal `Done`, gated on the GitHub `MERGED` probe; leaving it opt-in would strand boards at In Review post-merge). Only the ceremony's explicit per-event writes activate the other events themselves. Users opt out per event afterward via `flowctl config set tracker.perEvent.<event> off`.
@@ -128,6 +181,56 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
  [ "$LABEL_OK" = 1 ] && $FLOWCTL config set tracker.readyState "$READY_LABEL"
  ```
  If `LABEL_OK` stays 0 the create genuinely failed (auth / permissions / wrong project / API): show the user `$CREATE_ERR` and re-ask via `plain-text numbered prompt` — retry, pick a different label, or skip (skip ⇒ `tracker.readyState` stays null, gate dormant per R7). Under a write-scope-limited `CI_JOB_TOKEN` the create may be refused — surface it and skip rather than write an unconfirmed `readyState` (gitlab.md § Readiness label).
+ - **Jira** — like Linear, Jira has **rich per-project workflow states** (not labels), so readiness resolves to a **Jira status NAME** used directly in the promoted-lane JQL (e.g. `"Ready for Dev"` — a raw status name, NOT a `statusMap` key; consistent with how Linear/GitHub treat `readyState`). Discover the project's statuses first and **validate the chosen name exists** before writing, so the JQL never filters on a status the project lacks (`listOpenIssues` would then return nothing and the lane stays silently empty). When a credential is present, validate via `GET /rest/api/{3|2}/project/<projectKey>/statuses` (the apiVersion from `tracker.perTracker.apiVersion`); lead with a recommendation: a status whose name looks like "Ready" / "Selected for Development" / "To Do" (case-insensitive); if none looks right, lead with skip. When **no credential is reachable** (spec-first floor), you cannot validate — allow the user to type a name on faith OR **skip → no-op backlog lane** (`tracker.readyState` stays null; `listOpenIssues` no-ops with a note, backlog mode runs flow-ready specs only). Never write `tracker.readyState` for a status you couldn't confirm exists when creds WERE available — an unconfirmed name silently empties the promoted lane:
+ ```bash
+ READY_OK=0
+ # Read the CEREMONY-PERSISTED transport shape — auth scheme + api version were
+ # decided once when the bridge was configured (above), so validation must NOT
+ # re-race env. Resolution mirrors runtime: baseUrl = JIRA_BASE_URL || config
+ # (env overrides the persisted default); projectKey / authScheme / apiVersion /
+ # sslVerify come from config; credentials still read from env per the persisted
+ # scheme. This is the SAME resolution the adapter uses at runtime (jira.md).
+ JIRA_BASE=${JIRA_BASE_URL:-$($FLOWCTL config get tracker.perTracker.baseUrl --json | jq -r '.value // empty')}
+ PROJ_KEY=$($FLOWCTL config get tracker.perTracker.projectKey --json | jq -r '.value // empty')
+ AUTH_SCHEME=$($FLOWCTL config get tracker.perTracker.authScheme --json | jq -r '.value // empty')
+ APIV=$($FLOWCTL config get tracker.perTracker.apiVersion --json | jq -r '.value // "3"')
+ SSL_VERIFY=$($FLOWCTL config get tracker.perTracker.sslVerify --json | jq -r 'if .value == null then true else .value end') # `// true` would flip an explicit false (jq `//` treats false as empty)
+ # Build the auth header by the PERSISTED authScheme — never by probing which
+ # env var happens to be set (that is the re-race the ceremony exists to avoid).
+ CRED_OK=0; JAUTH=()
+ case "$AUTH_SCHEME" in
+ cloud-basic) [ -n "${JIRA_EMAIL:-}" ] && [ -n "${JIRA_API_TOKEN:-}" ] && { JAUTH=(-u "$JIRA_EMAIL:$JIRA_API_TOKEN"); CRED_OK=1; } ;;
+ bearer-pat) [ -n "${JIRA_PAT:-}" ] && { JAUTH=(-H "Authorization: Bearer $JIRA_PAT"); CRED_OK=1; } ;;
+ esac
+ # THREE distinct outcomes — never collapse them:
+ # (a) no creds for the persisted scheme (CRED_OK=0) → spec-first floor:
+ # cannot validate, accept on faith OR skip → no-op backlog lane.
+ # (b) creds present BUT baseUrl/projectKey missing → a CONFIG ERROR, not a
+ # floor: do NOT write an unvalidated readyState (an unconfirmed name
+ # silently empties the lane) — surface it and re-ask / fix config / skip.
+ # (c) creds + config present → VALIDATE against the project's statuses.
+ READY_WRITE=0
+ if [ "$CRED_OK" = 0 ]; then
+ # (a) spec-first floor — no credential reachable for the persisted scheme.
+ READY_OK=1; READY_WRITE=1
+ elif [ -z "$JIRA_BASE" ] || [ -z "$PROJ_KEY" ]; then
+ # (b) creds present but config incomplete — config error, never write.
+ READY_OK=0; READY_WRITE=0
+ echo "Jira readiness: credential present but baseUrl/projectKey not configured — re-run the config-write, or skip readiness." >&2
+ else
+ # (c) VALIDATE the chosen status NAME exists in the project. sslVerify==false
+ # ⇒ -k for self-hosted internal-CA certs (opt-in, persisted; env
+ # JIRA_SSL_VERIFY=false also honored).
+ [ "$SSL_VERIFY" = false ] || [ "${JIRA_SSL_VERIFY:-}" = false ] && JK=(-k) || JK=()
+ STATUSES=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
+ "$JIRA_BASE/rest/api/$APIV/project/$PROJ_KEY/statuses" 2>/dev/null \
+ | jq -r '[.[].statuses[].name] | unique | .[]' 2>/dev/null)
+ printf '%s\n' "$STATUSES" | grep -qix -- "$READY_STATE" && READY_OK=1
+ READY_WRITE=1
+ fi
+ [ "$READY_OK" = 1 ] && [ "$READY_WRITE" = 1 ] && $FLOWCTL config set tracker.readyState "$READY_STATE"
+ ```
+ If `READY_OK` stays 0 in case **(c)** the status does NOT exist in the project: show the user the discovered status list and re-ask via `plain-text numbered prompt` — pick an existing status, or skip. In case **(b)** the credential is present but `baseUrl`/`projectKey` were never persisted (a config gap, not a spec-first floor): re-run the config-write to set them, or skip — **never** write an unvalidated `readyState`. Skipping in any case ⇒ `tracker.readyState` stays null, gate dormant per R7, `listOpenIssues` no-ops (jira.md § Readiness). The `readyState` is the **raw Jira status name** used directly in the JQL filter, escaped before interpolation (jira.md § listOpenIssues).
 
 ## Phase 2 — Link / create ceremony (R2/R3/R16)
 
@@ -135,7 +238,7 @@ Attach sync state **on link**. Pick the flow by where the user is starting:
 
 ### 2a — Flow-first (author-in-flow-then-push)
 
-A `fn-NN` spec already exists. Keep the `fn-NN` id (never rename). Push body via the body-sync hook **[→ ref: body-merge.md]**, which creates the issue via `writeIssue` **[→ ref: linear-ladder.md / github.md / gitlab.md]**, then attach state.
+A `fn-NN` spec already exists. Keep the `fn-NN` id (never rename). Push body via the body-sync hook **[→ ref: body-merge.md]**, which creates the issue via `writeIssue` **[→ ref: linear-ladder.md / github.md / gitlab.md / jira.md]**, then attach state.
 
 > **The pushed body is the COMPLETE spec — every section, in full.** The render (`renderFlowToTracker`, body-merge.md Step 3) is a *format translation*, NOT a summary: never condense, truncate, abbreviate, or drop a section. Projection means the issue mirrors the whole spec (the Step 3.5 structural gate enforces "no section silently dropped"). If you find yourself summarizing to save tokens, stop — read body-merge.md Step 3 and render the full body.
 
@@ -143,11 +246,11 @@ A `fn-NN` spec already exists. Keep the `fn-NN` id (never rename). Push body via
 $FLOWCTL sync set-tracker-id "$SPEC_ID" "$ISSUE_UUID" --identifier "WOR-17" --url "$ISSUE_URL"
 ```
 
-Write the back-reference into the issue: a `flow:<id>` label and/or a `[<id>]` title prefix (transport call — `writeIssue`/`setStatus` **[→ ref: linear-ladder.md / github.md / gitlab.md]**) so the issue points back at the spec. The tracker key `WOR-17` becomes a resolvable alias for the `fn-NN` spec (`work wor-17` resolves — fn-52.10).
+Write the back-reference into the issue: a `flow:<id>` label and/or a `[<id>]` title prefix (transport call — `writeIssue`/`setStatus` **[→ ref: linear-ladder.md / github.md / gitlab.md / jira.md]**) so the issue points back at the spec. The tracker key `WOR-17` becomes a resolvable alias for the `fn-NN` spec (`work wor-17` resolves — fn-52.10).
 
 ### 2b — Tracker-first (link an existing issue — "grab issue X and spec it")
 
-Fetch the issue via the transport (`fetchIssue` **[→ ref: linear-ladder.md / github.md / gitlab.md]**) → normalized `issue` struct. Create the spec **keyed by the tracker key** so the repo artifact mirrors the board:
+Fetch the issue via the transport (`fetchIssue` **[→ ref: linear-ladder.md / github.md / gitlab.md / jira.md]**) → normalized `issue` struct. Create the spec **keyed by the tracker key** so the repo artifact mirrors the board:
 
 ```bash
 $FLOWCTL spec create --tracker-first --tracker-identifier "WOR-17" --title "<issue title>" --json
@@ -155,11 +258,28 @@ $FLOWCTL spec create --tracker-first --tracker-identifier "WOR-17" --title "<iss
 $FLOWCTL sync set-tracker-id "wor-17-slug" "$ISSUE_UUID" --identifier "WOR-17" --url "$ISSUE_URL"
 ```
 
+> **Jira grabs go TRACKER-FIRST (like Linear).** A Jira issue key `PROJ-123` IS an
+> alpha-prefixed `KEY-N` (key `PROJ`, number `123`), so it takes the **same
+> tracker-first path as Linear** — `spec create --tracker-first --tracker-identifier
+> PROJ-123` mints a clean `proj-123-slug` canonical id (Jira keys are alnum-`-num`,
+> no slugify hazard), and bare `proj-123` / `proj-123.M` resolve like `wor-17`. BOTH
+> entry flows work for Jira (tracker-first AND flow-first), distinct from GitHub/GitLab
+> (flow-first only — below).
+>
+> **Exception — a DC/Server CUSTOM key that isn't clean `KEY-N`** (underscores
+> `MY_PROJECT-7`, OR a >10-char alnum key `PRODUCT2013-7`) can't mint a kebab canonical
+> id, so the strict `--tracker-first` validator REJECTS it. Those grabs go **flow-first**
+> like GitHub/GitLab: create an `fn-NN` spec, then `sync set-tracker-id "<fn-id>"
+> "$ISSUE_ID" --identifier "MY_PROJECT-7" --url "$ISSUE_URL"` (display-only alias — stored,
+> shown, back-referenced, but you never `work MY_PROJECT-7`). Standard keys (no underscore,
+> ≤10-char) stay tracker-first.
+>
 > **GitLab grabs go FLOW-FIRST, not tracker-first.** The `--tracker-first
 > --tracker-identifier` path above only accepts an **alpha-prefixed `KEY-N`** display
-> key (Linear `WOR-17` → mints `wor-17-slug`). **GitHub `#N` is NOT a `KEY-N` either**
-> (`#123` has no alpha key) — it too goes flow-first; only Linear-style alpha-keyed
-> trackers are tracker-first. A GitLab key is `<project>#<iid>` (slashes + `#`) which
+> key (Linear `WOR-17` / Jira `PROJ-123` → mints `wor-17-slug` / `proj-123-slug`).
+> **GitHub `#N` is NOT a `KEY-N` either**
+> (`#123` has no alpha key) — it too goes flow-first; only `KEY-N`-keyed
+> trackers (Linear, Jira) are tracker-first. A GitLab key is `<project>#<iid>` (slashes + `#`) which
 > likewise can't slugify into a canonical spec id, so `cmd_spec_create`'s strict
 > validator (`validate_tracker_identifier(..., allow_reference=False)`, verified)
 > rejects **both `#123` and `<project>#<iid>`** at create time (issue refs are accepted
@@ -197,7 +317,7 @@ If `set-tracker-id` reports a collision, ask the user (interactive) or queue (`s
 
 **Always snapshot the merge base at create time — even when the triggering op is `comment`.** The `comment` path leaves body/status untouched and seeds no base of its own, and `reconcile` on a brand-new issue echo-fences to a noop, so the **auto-create** step is the only place the base gets written on a `comment`-first (or `reconcile`-first) auto-link. The issue body we just wrote *is* the `renderFlowToTracker` output, so both base halves are exact at that instant. Skip this and a `comment`-first auto-create leaves the linked issue **base-less** until some later body sync; the no-base bootstrap then treats that sync as a fast-forward projection and can silently **overwrite tracker-side edits** made after the issue was created. (`push`-first auto-link is unaffected either way — the `push` skeleton below re-snapshots the base after writing; the create-time snapshot just makes the `comment`/`reconcile`-first paths match.)
 
-Route the operation; each layer calls hooks that operate on the normalized structs ([`references/adapter-interface.md`](references/adapter-interface.md)). The skeleton is real; the hook bodies plug in later. The **Linear transport hooks** (`fetchIssue`/`writeIssue`/`listComments`/`postComment`/`readStatus`/`setStatus`) are implemented by the detect-best-available ladder in [`references/linear-ladder.md`](references/linear-ladder.md) (MCP → GraphQL → no-op); GitHub's are the `gh` transport in [`references/github.md`](references/github.md) (single rung + no-op, reduced-fidelity status — fn-52.7); GitLab's are the `glab` transport in [`references/gitlab.md`](references/gitlab.md) (`glab` CLI → raw-REST token fallback → no-op, reduced-fidelity status — fn-69). The **body hooks** (`renderFlowToTracker` / `foldTrackerIntoFlow` / `threeWayMergeBody`) are the agentic 3-way merge + format translation in [`references/body-merge.md`](references/body-merge.md) (fn-52.4); the **status who-wins** hook (`reconcileStatus`) is [`references/status-sync.md`](references/status-sync.md) and the **comments/evidence append + dedup** hooks (`postLifecycleComment` / `pullCommentsToSyncLog`) are [`references/comments-sync.md`](references/comments-sync.md) (fn-52.5).
+Route the operation; each layer calls hooks that operate on the normalized structs ([`references/adapter-interface.md`](references/adapter-interface.md)). The skeleton is real; the hook bodies plug in later. The **Linear transport hooks** (`fetchIssue`/`writeIssue`/`listComments`/`postComment`/`readStatus`/`setStatus`) are implemented by the detect-best-available ladder in [`references/linear-ladder.md`](references/linear-ladder.md) (MCP → GraphQL → no-op); GitHub's are the `gh` transport in [`references/github.md`](references/github.md) (single rung + no-op, reduced-fidelity status — fn-52.7); GitLab's are the `glab` transport in [`references/gitlab.md`](references/gitlab.md) (`glab` CLI → raw-REST token fallback → no-op, reduced-fidelity status — fn-69); Jira's are the REST transport in [`references/jira.md`](references/jira.md) (Cloud `/rest/api/3` + ADF → DC/Server `/rest/api/2` → no-op, workflow-aware status via the transitions API — fn-70). The **body hooks** (`renderFlowToTracker` / `foldTrackerIntoFlow` / `threeWayMergeBody`) are the agentic 3-way merge + format translation in [`references/body-merge.md`](references/body-merge.md) (fn-52.4); the **status who-wins** hook (`reconcileStatus`) is [`references/status-sync.md`](references/status-sync.md) and the **comments/evidence append + dedup** hooks (`postLifecycleComment` / `pullCommentsToSyncLog`) are [`references/comments-sync.md`](references/comments-sync.md) (fn-52.5).
 
 ```
 push(spec):
@@ -267,7 +387,7 @@ reconcile(spec):
 
 ### `projectDepRelations(spec, issue)` — project `depends_on_epics` as blocked-by relations (fn-64, R3/R4/R5/R6/R8/R10)
 
-**Transport-blind, one-way, additive.** This hook projects the spec's *local* dependency graph onto the tracker. It rides **both** the `push` and `reconcile` paths (modelled on `projectReadiness` [→ ref: status-sync.md § Readiness projection]): change-only receipts, **never advances `lastSyncedAt`** by itself, never blocks the lifecycle. The skill resolves edges and drives the normalized `listIssueRelations` / `setIssueRelation` transport pair ([→ ref: adapter-interface.md § Relation transport]) — it **never branches on per-tracker (Linear / GitHub / GitLab)** (R8); each adapter ([→ ref: linear-ladder.md / github.md / gitlab.md]) implements its own fidelity. No transport reachable (`TRANSPORT=none`) ⇒ skip the whole hook, write **one** `noop` receipt, return (never a crash, never a block).
+**Transport-blind, one-way, additive.** This hook projects the spec's *local* dependency graph onto the tracker. It rides **both** the `push` and `reconcile` paths (modelled on `projectReadiness` [→ ref: status-sync.md § Readiness projection]): change-only receipts, **never advances `lastSyncedAt`** by itself, never blocks the lifecycle. The skill resolves edges and drives the normalized `listIssueRelations` / `setIssueRelation` transport pair ([→ ref: adapter-interface.md § Relation transport]) — it **never branches on per-tracker (Linear / GitHub / GitLab / Jira)** (R8); each adapter ([→ ref: linear-ladder.md / github.md / gitlab.md / jira.md]) implements its own fidelity. No transport reachable (`TRANSPORT=none`) ⇒ skip the whole hook, write **one** `noop` receipt, return (never a crash, never a block).
 
 **Enumerate edges from flowctl (the deterministic half).** `depends_on_epics` is read for you; do NOT parse the spec yourself:
 
@@ -292,7 +412,7 @@ For each edge, in order:
 
 3. **Resolved edge ⇒ project the blocked-by relation (R3/R8).** Drive the transport with **read-before-write** dedup baked into the adapter (`listIssueRelations` first — neither platform reliably no-ops a duplicate). The direction is anchored once in adapter-interface.md: `setIssueRelation(issue = this spec's issue, blockedBy = dep issue)`:
  ```bash
- setIssueRelation(issue=$ISSUE, blockedBy=$DEP_ISSUE) [→ ref: linear-ladder.md / github.md / gitlab.md]
+ setIssueRelation(issue=$ISSUE, blockedBy=$DEP_ISSUE) [→ ref: linear-ladder.md / github.md / gitlab.md / jira.md]
  ```
  On a successful **new** create, record provenance in the ledger so the rerun is idempotent and removal stays provably-ours-only (R6/R7):
  ```bash
@@ -376,7 +496,7 @@ For each linked spec, render a line like `wor-17-slug ↔ WOR-17 (linked, synced
 
 ## Phase 7 — Backlog-mode ops (`list-open` / `list-relations` / `question`) — fn-68 R14/R15
 
-Three **skill-level, transport-blind** named ops that pilot's autonomous backlog scheduler invokes. They route through the same adapter ladder (`listOpenIssues` / `listIssueRelations` / `listComments` / `postComment` **[→ ref: linear-ladder.md / github.md / gitlab.md]**) as every other op — pilot never calls a tracker-specific API and **never** calls flowctl for transport (flowctl has no tracker transport; architecture rule). `list-open` and `list-relations` are **read-only** (they never write to the tracker); `question` writes a comment. All run under the **autonomy gate** (Phase 0) — `question` authoring resolves "ask the human" to a queued/best-effort post, never `plain-text numbered prompt`.
+Three **skill-level, transport-blind** named ops that pilot's autonomous backlog scheduler invokes. They route through the same adapter ladder (`listOpenIssues` / `listIssueRelations` / `listComments` / `postComment` **[→ ref: linear-ladder.md / github.md / gitlab.md / jira.md]**) as every other op — pilot never calls a tracker-specific API and **never** calls flowctl for transport (flowctl has no tracker transport; architecture rule). `list-open` and `list-relations` are **read-only** (they never write to the tracker); `question` writes a comment. All run under the **autonomy gate** (Phase 0) — `question` authoring resolves "ask the human" to a queued/best-effort post, never `plain-text numbered prompt`.
 
 ### 7a — `list-open` — enumerate the promoted-lane open issues
 
@@ -400,7 +520,7 @@ list-open:
 
 - **`tracker.readyState` unset ⇒ no-op + note, return `[]`** (NOT an error). No promoted lane exists to filter on, so backlog mode falls back to the flow-ready specs only.
 - **Exact-match, bounded.** `listOpenIssues` lists issues at the **exact** `tracker.readyState` state/label — never "beyond" it (no state ordering exists; an ordered promoted-set is a future config, never inferred). It is the promoted lane, not the whole backlog.
-- **Transport-blind.** Pilot consumes the normalized `issue[]`; it never branches on per-tracker (Linear / GitHub / GitLab). The adapter (`listOpenIssues` in [`references/linear-ladder.md`](references/linear-ladder.md) / [`references/github.md`](references/github.md) / [`references/gitlab.md`](references/gitlab.md)) owns the wire query.
+- **Transport-blind.** Pilot consumes the normalized `issue[]`; it never branches on per-tracker (Linear / GitHub / GitLab / Jira). The adapter (`listOpenIssues` in [`references/linear-ladder.md`](references/linear-ladder.md) / [`references/github.md`](references/github.md) / [`references/gitlab.md`](references/gitlab.md) / [`references/jira.md`](references/jira.md)) owns the wire query.
 - **No-transport ⇒ `noop` + note, `[]`** — same documented no-op floor as the other methods.
 
 ### 7b — `question <spec-id | tracker-id>` — post a question-valve comment
@@ -463,7 +583,7 @@ The answer is detected on the **next pull/reconcile** (rides the existing `listC
 1. **Spec anchor flipped by a human** — a human edits the spec `## Open Questions` anchor to `status=answered` with the answer prose. The next tick re-triages the now-answered item and proceeds.
 2. **Tracker reply matched by `id`** — the answer comment carries `<!-- flow-next:answer id=<hash> -->`. Match it to the open question by `id`:
  - **Threaded tracker (Linear)** — the normalized `comment` carries optional **reply/parent metadata** ([→ ref: adapter-interface.md § `comment`]); a reply *under* the question comment is matched by thread + `id`.
- - **Flat tracker (GitHub — no threads)** — there is no parent link, so the **`<!-- flow-next:answer id=<hash> -->` marker is the load-bearing match**: the answer is matched to the question **by `id` regardless of threading**.
+ - **Flat tracker (GitHub / GitLab / Jira — no threads)** — there is no parent link, so the **`<!-- flow-next:answer id=<hash> -->` marker is the load-bearing match**: the answer is matched to the question **by `id` regardless of threading**.
 3. **Answer authority (security — the marker `id` is necessary, NOT sufficient).** Honor a `flow-next:answer` marker **only from an authorized commenter** — anyone with tracker comment access could inject the marker, so validate `comment.author` before treating the question as answered:
  - **`comment.authorAuthority == "writer"`** — the adapter resolves the author's permission tier into the normalized `comment` field ([→ ref: adapter-interface.md § `comment`]: GitHub from `author_association`, Linear from team membership). Never an `outsider` drive-by commenter, never a `bot` (except flow's own automation marker), and never `unknown` (the transport couldn't resolve it ⇒ **fail closed**); **AND/OR**
  - the author is in the optional `tracker.answerAuthors` allowlist (issue assignee / named approvers) when configured.
@@ -483,7 +603,7 @@ on pull/reconcile, for each open question (spec ## Open Questions, or tracker co
 ```
 
 - **Import target is the matching Open Question, not just the Sync Log.** A matched answer folds **under the `## Open Questions` entry keyed by `id`** (and flips that anchor to `answered`), so the question and its answer live together — distinct from a genuine tracker comment, which still appends to `## Sync Log` per comments-sync.
-- **Answer matching is `id`-keyed on both rungs.** Threaded (Linear reply/parent metadata) OR flat (GitHub `<!-- flow-next:answer id= -->` marker) — the `id` is the join key either way, so a flat tracker's answer round-trips exactly like a threaded one.
+- **Answer matching is `id`-keyed on both rungs.** Threaded (Linear reply/parent metadata) OR flat (GitHub / GitLab / Jira `<!-- flow-next:answer id= -->` marker) — the `id` is the join key either way, so a flat tracker's answer round-trips exactly like a threaded one.
 
 ### 7c — `list-relations <tracker-id>` — read one issue's dependency relations
 
@@ -497,13 +617,13 @@ list-relations(trackerId):
  receipt: noop --note "list-relations: <N> relation(s) for <trackerId>" # a read-only enumeration never advances lastSyncedAt
 ```
 
-- **Transport-blind.** Pilot consumes the normalized `relation[]`; it never branches on per-tracker (Linear / GitHub / GitLab). The adapter (`listIssueRelations` in [`references/linear-ladder.md`](references/linear-ladder.md) / [`references/github.md`](references/github.md) / [`references/gitlab.md`](references/gitlab.md)) owns the wire query.
+- **Transport-blind.** Pilot consumes the normalized `relation[]`; it never branches on per-tracker (Linear / GitHub / GitLab / Jira). The adapter (`listIssueRelations` in [`references/linear-ladder.md`](references/linear-ladder.md) / [`references/github.md`](references/github.md) / [`references/gitlab.md`](references/gitlab.md) / [`references/jira.md`](references/jira.md)) owns the wire query.
 - **No-transport / no-relations ⇒ `noop` + note, `[]`** — same documented no-op floor as `list-open`; selection then dep-orders on the flow `blockedBy` edges alone.
 - **Read-only.** This op NEVER drives `setIssueRelation` — it only reads. Relation *projection* (writes) stays on the `push` / `reconcile` `projectDepRelations` path, never on a backlog-mode tick.
 
 ## Boundaries (repeat — load-bearing for this scaffold)
 
-- Hook bodies marked **[→ ref: <file>]** are NOT inlined here — this file routes; read the referenced file for the body. Transports live in `linear-ladder.md` / `github.md` / `gitlab.md`; reconcile in `body-merge.md` / `status-sync.md` / `comments-sync.md`.
+- Hook bodies marked **[→ ref: <file>]** are NOT inlined here — this file routes; read the referenced file for the body. Transports live in `linear-ladder.md` / `github.md` / `gitlab.md` / `jira.md`; reconcile in `body-merge.md` / `status-sync.md` / `comments-sync.md`.
 - `set-merge-base` always writes BOTH halves (paired-snapshot invariant).
 - Receipts on every run — event-tagged on lifecycle runs (`${EVENT:+--event "$EVENT"}`, Phase 0); conflicts queue (`sync defer`), never block (R11).
 - **Autonomy parity (fn-68 R14):** the Phase-0 `RALPH` gate recognizes the full marker family (`FLOW_RALPH` / `REVIEW_RECEIPT_PATH` / `FLOW_AUTONOMOUS` / `mode:autonomous`); under it NO path reaches `plain-text numbered prompt` — every "ask the human" resolves to `sync defer`.

@@ -7,7 +7,7 @@ between flow's structured spec and the tracker's free-form issue, surfacing only
 **genuine, section-scoped contradictions** for a human.
 
 It operates ONLY on the normalized `issue` struct ([adapter-interface.md](adapter-interface.md)) —
-never a Linear/GitHub/GitLab wire shape. The transport ([linear-ladder.md](linear-ladder.md))
+never a Linear/GitHub/GitLab/Jira wire shape. The transport ([linear-ladder.md](linear-ladder.md))
 is the firewall; this file is the merge. A transport bug stays in the rung file; a
 merge bug stays here.
 

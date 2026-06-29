@@ -1499,6 +1499,7 @@ if [ "$TRK_ACTIVE" = "true" ]; then
     linear) [ -n "$TRK_ID" ] && REF="Ref ${TRK_ID}" ;;      # WOR-N → Linear auto-link + Diffs
     github) [ -n "$TRK_ID" ] && REF="Refs ${TRK_ID}" ;;      # #N → native GitHub cross-reference
     gitlab) [ -n "$TRK_ID" ] && REF="Ref \`${TRK_ID}\`" ;;    # <project>#<iid> in BACKTICKS → inline code, so GitHub does NOT autolink it as a cross-repo "owner/repo#N" reference (a GitLab key whose path also names a GitHub repo would otherwise mis-link to GitHub issue #N). A GitHub-PR ref can't link a GitLab issue anyway — the real cross-link is the §5.6 non-closing PR-URL note on the GitLab issue.
+    jira)   REF="" ;;                                        # NO PR-body ref — Jira has neither PR auto-linkify (Linear) nor `gh` (GitHub), and a `PROJ-123` key in a GitHub PR body would not link the Jira issue anyway. The real cross-link is the §5.6 in-adapter **remote link** (POST /issue/{key}/remotelink) on the Jira issue (jira.md §makePr).
   esac
   # Idempotency: match the exact ref LINE (whole-line, case-insensitive), NOT any
   # substring — the cognitive-aid body already mentions the spec path
@@ -1790,6 +1791,13 @@ if [[ -n "$PR_URL" ]] \
   #            via land.merged) — + the open/closed-side status:in-review label. A
   #            GitHub-PR body ref can't auto-link a cross-instance GitLab issue, so the
   #            note IS the cross-link; the §4.6a `Ref <project>#<iid>` is a human breadcrumb.
+  #   jira   → the Jira adapter writes the PR link as a **remote link**
+  #            (POST /issue/{key}/remotelink, jira.md §makePr) — NEVER a transition to Done
+  #            (flow-next owns terminal Done via land.merged, gated on MERGED) — + the
+  #            In Review transition via reconcileStatus (open prEvidence → in-review). No
+  #            PR-body ref auto-links a Jira issue, so the remote link IS the cross-link.
+  #            On a remote-link POST failure (permission / older DC) it falls back to a
+  #            PR-URL **comment** carrying the lifecycle marker (jira.md §makePr).
   #   (PR URL source: reconcile RE-DERIVES it from `mergeEvidenceProbe(spec.branch_name)` —
   #    the same probe yielding open/merged queries the code host `gh pr … --json url,state`
   #    (status-sync.md) — so the op token `reconcile <spec-id>` deliberately omits it; the

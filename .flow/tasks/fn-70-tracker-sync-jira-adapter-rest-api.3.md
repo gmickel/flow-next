@@ -1,3 +1,6 @@
+---
+satisfies: [R1, R3, R4]
+---
 ## Goal
 Extend `references/jira.md` with the Jira-specific weight: Markdown↔ADF translation, the workflow-aware status model (transitions API + statusMap + fn-66 terminal invariant), the relation pair (is-blocked-by links), and `listOpenIssues` (JQL via `/search/jql`). (Spec R1-relation+ninth, R3, R4.) [dep: fn-70.2 — same file.]
 
@@ -28,9 +31,10 @@ Extend `references/jira.md` with the Jira-specific weight: Markdown↔ADF transl
 TBD
 
 ## Done summary
-TBD
+Extended `references/jira.md` (+620) with the Jira-specific weight + added the status-sync readiness Jira branch (+17). **ADF translation** — Markdown↔ADF round-trip-safe subset; the WRITE path is fetch-current-ADF-first → splice only the supported-subset regions → carry unknown nodes + the `<!-- flow:deps -->` block forward verbatim (never blind-regenerate); DC/Server v2 body format flagged verify-at-build. **Status** via the transitions API (never a direct set): statusMap full normalized set ({id|name}, id preferred), terminal = `statusCategory.key=="done"` (not the renamable name), readStatus reverse-map, fn-66 invariant (locally-done→In Review until MERGED), no-entry/unreachable ⇒ defer+receipt never force. **Relations** via native `Blocks` issue links: listIssueRelations returns `linkPresent:true`/`source:"unknown"` (native links never orphan — ledger is provenance authority); setIssueRelation read-before-write dedup + additive-only + ledger-says-projected-but-link-absent ⇒ human-removal defer (never re-create). **listOpenIssues** by apiVersion: Cloud v3 `POST /search/jql` + cursor (nextPageToken until isLast), DC v2 `/rest/api/2/search` + offset (implemented, verify-at-build); JQL injection guards (projectKey grammar + escape order). **status-sync.md**: additive Jira readiness-projection branch (DESIRED = status NAME match like Linear + stale-config existence check); who-wins untouched.
 
+Recovered from a lost worker process (prior Claude Code process exited mid-run): the worker had committed all work (f283acb7) before dying but not run `flowctl done`. Host verified: full tracker gate green (203 tests), `.flow/bin/flowctl.py` byte-identical to canonical, and every deliverable present + correctly structured (ADF fetch-first-splice, statusCategory terminal, linkPresent + human-removal-defer, /search/jql cursor + DC offset, JQL guards, status-sync Jira readiness branch). rp impl-review triage-skips (docs-only diff — jira.md + status-sync.md prose, same fast-path as .2); the thorough adversarial review lands at the PR resolve-pr loop (as gitlab.md got in fn-69).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f283acb7
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_tracker*.py' → 203 tests OK; cmp canonical==mirror flowctl.py byte-identical
 - PRs:

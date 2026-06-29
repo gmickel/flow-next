@@ -106,7 +106,7 @@ An in-progress companion product to flow-next that reads `.flow/specs/` directly
 
 ## Tracker
 
-An external issue tracker (Linear, GitHub Issues, or GitLab) that flow-next *projects* a spec to via `/flow-next:tracker-sync`. The tracker is a **co-editable mirror** — body, status, and comments sync two-way — but it is **projection, not coordination**: the `.flow/specs/<id>.md` spec stays the source of truth and the quality layer, and the tracker never drives flow state or spawns agents. Distinct from `/flow-next:sync` (plan-sync). Contrast OpenAI Symphony, where the tracker *is* the control plane.
+An external issue tracker (Linear, GitHub Issues, GitLab, or Jira) that flow-next *projects* a spec to via `/flow-next:tracker-sync`. The tracker is a **co-editable mirror** — body, status, and comments sync two-way — but it is **projection, not coordination**: the `.flow/specs/<id>.md` spec stays the source of truth and the quality layer, and the tracker never drives flow state or spawns agents. Distinct from `/flow-next:sync` (plan-sync). Contrast OpenAI Symphony, where the tracker *is* the control plane.
 
 ## merge-base snapshot
 
@@ -114,7 +114,7 @@ The common-ancestor body the tracker-sync 3-way merge compares against — a **p
 
 ## discovery ceremony
 
-The detect → surface → ask → never-assume flow `/flow-next:tracker-sync` runs before enabling the bridge. It probes five signals (Linear MCP, `LINEAR_API_KEY`, GitHub auth, GitLab auth/`GITLAB_TOKEN`, a Jira host), surfaces what is present *and* absent, asks the user, and writes `tracker.*` config **only on confirmation**, with provenance. No signal ⇒ nothing written; the bridge stays off. Resolution model is env > config > ask (mirrors `flowctl review-backend`).
+The detect → surface → ask → never-assume flow `/flow-next:tracker-sync` runs before enabling the bridge. It probes six signals (Linear MCP, `LINEAR_API_KEY`, GitHub auth, GitLab auth/`GITLAB_TOKEN`, Jira REST + token — `JIRA_BASE_URL` plus Cloud `JIRA_EMAIL`+`JIRA_API_TOKEN` or DC/Server `JIRA_PAT`), surfaces what is present *and* absent, asks the user, and writes `tracker.*` config **only on confirmation**, with provenance. No signal ⇒ nothing written; the bridge stays off. Resolution model is env > config > ask (mirrors `flowctl review-backend`).
 
 ## tracker-key handle
 
@@ -122,7 +122,7 @@ A tracker identifier (e.g. `WOR-17`) used as a **resolvable flow id**, the hybri
 
 ## dependency projection
 
-Tracker-sync's projection of a spec's local `depends_on_epics` edges into **tracker issue relations** (fn-64) — a `depends_on_epics` edge between two linked specs becomes a **blocked-by** relation between their issues (Linear native relations / GitHub native dependencies / GitLab native `is_blocked_by` issue links, else a provenance-fenced `<!-- flow:deps -->` body block). The relations counterpart to body/status/comments sync: projection, not coordination — flow stays authoritative, the tracker never declares deps back. Runs through the transport-blind `projectDepRelations` hook + the normalized `setIssueRelation` / `listIssueRelations` adapter pair; idempotent via read-before-write. No transitive/graph expansion — only direct edges project.
+Tracker-sync's projection of a spec's local `depends_on_epics` edges into **tracker issue relations** (fn-64) — a `depends_on_epics` edge between two linked specs becomes a **blocked-by** relation between their issues (Linear native relations / GitHub native dependencies / GitLab native `is_blocked_by` issue links / Jira native "is blocked by" issue links — directional and universally available, no licence gate, no `flow:deps` block — else, for GitHub's reduced rung and GitLab on every tier, a provenance-fenced `<!-- flow:deps -->` body block). The relations counterpart to body/status/comments sync: projection, not coordination — flow stays authoritative, the tracker never declares deps back. Runs through the transport-blind `projectDepRelations` hook + the normalized `setIssueRelation` / `listIssueRelations` adapter pair; idempotent via read-before-write. No transitive/graph expansion — only direct edges project.
 
 ## provenance ledger
 

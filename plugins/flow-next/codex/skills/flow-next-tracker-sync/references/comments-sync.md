@@ -272,8 +272,9 @@ dedup but is keyed on a stable `id` rather than `issue+evt+evidence`:
  but it is NOT a free-form Sync-Log comment: the answer round-trip
  ([steps.md](../steps.md) Phase 7) matches it to its open question **by `id`**
  (threaded via `comment.parentId` on Linear, or flat by the body marker on
- GitHub **and GitLab** — GitLab issue notes are flat, `parentId: null`, matched by
- the `<!-- flow-next:answer id=… -->` body marker exactly like GitHub) and imports it
+ GitHub, GitLab **and Jira** — GitLab issue notes and Jira issue comments are flat,
+ `parentId: null`, matched by the `<!-- flow-next:answer id=… -->` body marker exactly
+ like GitHub) and imports it
  **under the matching `## Open Questions` entry**, flipping
  the question anchor to `status=answered`. An answer that matches no open question
  falls through to the normal Sync-Log append (a genuine tracker comment).
