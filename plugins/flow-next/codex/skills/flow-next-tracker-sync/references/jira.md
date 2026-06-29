@@ -600,6 +600,13 @@ because Jira status **names are renamable** while the **id is durable** (same id
 name discipline as the durable `tracker.id`). It is the **full normalized set**, not
 just ready/done:
 
+> **Compare ids as STRINGS on BOTH the write match and the read reverse-map** (`| tostring`
+> both sides). Jira returns status ids as strings, but an id refined via the dot-path
+> (`flowctl config set tracker.perTracker.statusMap.done.id 10031`) is INT-coerced by
+> `set_config`, so a bare `==` (string vs int) silently never matches. The whole-object
+> JSON write (`config set …statusMap '{…}'`) keeps ids as strings; the `tostring` makes
+> both forms work.
+
 ```jsonc
 // tracker.perTracker.statusMap — normalized → Jira status (id preferred over name)
 {
@@ -635,9 +642,12 @@ TRS=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
 # → { transitions: [ { id, name, to: { id, name, statusCategory:{key} } }, … ] }
 
 # 3. Find the transition whose .to matches the target (by id first, then name).
+# Compare ids as STRINGS (`| tostring` both sides): Jira returns `.to.id` as a string,
+# but a statusMap id refined via the dot-path (`config set …statusMap.done.id 10031`)
+# gets INT-coerced by set_config — so a bare `==` (string vs int) would never match.
 TID=$(printf '%s' "$TRS" | jq -r --argjson t "$TARGET" '
  .transitions[] | select(
- ($t.id != null and .to.id == $t.id) or
+ ($t.id != null and (.to.id | tostring) == ($t.id | tostring)) or
  ($t.name != null and (.to.name | ascii_downcase) == ($t.name | ascii_downcase))
  ) | .id' | head -1)
 
