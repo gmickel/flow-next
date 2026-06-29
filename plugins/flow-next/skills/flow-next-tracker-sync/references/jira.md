@@ -287,16 +287,19 @@ Upsert by presence of `issue.id` (interface rule): no id ⇒ **create** (`POST
 /issue`); id present ⇒ **update** (`PUT /issue/{issueIdOrKey}`).
 
 ```bash
-# CREATE (no issue.id). Body is JSON; the description is ADF on /rest/api/3
-# (the ADF doc is built by the markdown→ADF translation — § ADF translation; a create
-# has no current ADF, so it builds from the supported subset only). issuetype by
-# name ("Task") works (confirmed live). Colon labels (flow:<id>) are accepted.
+# CREATE (no issue.id). Body is JSON. The DESCRIPTION FIELD branches on apiVersion:
+# v3 (Cloud) = an ADF DOC — `--argjson desc` (a JSON object built by markdown→ADF, § ADF
+#   translation; a create has no current ADF, so it builds from the supported subset only);
+# v2 (DC/Server) = wiki/plain TEXT — `--arg desc` (a STRING).
+# NEVER --argjson a v2 string: jq rejects it as invalid JSON, and an ADF object is wrong
+# on /rest/api/2. issuetype by name ("Task") works (confirmed live); colon labels accepted.
 #   projectKey = tracker.perTracker.projectKey
+if [ "$APIV" = 3 ]; then DESC_ARG=(--argjson desc "$ADF_DESCRIPTION"); else DESC_ARG=(--arg desc "$TEXT_DESCRIPTION"); fi
 curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
   -H "Content-Type: application/json" -H "Accept: application/json" \
   -X POST "$JIRA_BASE/rest/api/$APIV/issue" \
   --data @<(jq -n --arg pk "$PROJ_KEY" --arg sum "$TITLE" --arg lbl "flow:$FLOW_ID" \
-              --argjson desc "$ADF_DESCRIPTION" '
+              "${DESC_ARG[@]}" '
               { fields: { project: {key:$pk}, issuetype: {name:"Task"},
                           summary: $sum, description: $desc, labels: [$lbl] } }')
 # The 201 response carries {id, key, self}. Build the browse url from key:
@@ -311,10 +314,14 @@ curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
 # spliced doc. (Jira has NO <!-- flow:deps --> body block — dependency edges are NATIVE
 # issue links, § Relation transport — so there is no dep block to carry, unlike the
 # GitHub fenced fallback / GitLab degraded tier.)
+# Same apiVersion body branch as CREATE: v3 ADF doc (--argjson) / v2 plain text (--arg).
+# On v2 the ADF fetch-current-splice does not apply — the body is a plain-text round-trip,
+# so $TEXT_DESCRIPTION is the rendered prose; DESC_ARG carries the right shape either way.
+if [ "$APIV" = 3 ]; then DESC_ARG=(--argjson desc "$ADF_DESCRIPTION"); else DESC_ARG=(--arg desc "$TEXT_DESCRIPTION"); fi
 curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
   -H "Content-Type: application/json" \
   -X PUT "$JIRA_BASE/rest/api/$APIV/issue/$TRACKER_ID" \
-  --data @<(jq -n --arg sum "$TITLE" --argjson desc "$ADF_DESCRIPTION" \
+  --data @<(jq -n --arg sum "$TITLE" "${DESC_ARG[@]}" \
               '{ fields: { summary: $sum, description: $desc } }')
 ```
 
@@ -720,7 +727,7 @@ once in [adapter-interface.md](adapter-interface.md) § Direction convention:
 ```bash
 curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
   "$JIRA_BASE/rest/api/$APIV/issue/$A_ID?fields=issuelinks" \
-  | jq -c '.fields.issuelinks[]
+  | jq -c --arg A "$A_ID" '.fields.issuelinks[]
            | select(.type.name == "Blocks")        # ONLY the blocked-by edge kind
            | if .inwardIssue then
                # A shows "is blocked by" B → A is blocked, B is the blocker
@@ -912,11 +919,15 @@ may be absent). So the make-pr PR link projects to Jira as a **remote link** wri
 
 ```bash
 # POST a remote link carrying the PR url + a title. HTTP 201 (confirmed live 2026-06-28).
+# IDEMPOTENT via globalId: Jira UPSERTS a remote link keyed on globalId (POST updates the
+# existing one rather than creating a duplicate), so repeated makePr / retro-fire /
+# reconcile runs REFRESH the same link instead of stacking duplicates. Derive globalId
+# deterministically from flow-next + the PR url (stable across runs for this PR).
 curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
   -H "Content-Type: application/json" -H "Accept: application/json" \
   -X POST "$JIRA_BASE/rest/api/$APIV/issue/$TRACKER_ID/remotelink" \
-  --data @<(jq -n --arg url "$PR_URL" --arg title "$PR_TITLE" \
-              '{ object: { url: $url, title: $title } }')
+  --data @<(jq -n --arg url "$PR_URL" --arg title "$PR_TITLE" --arg gid "flow-next:pr:$PR_URL" \
+              '{ globalId: $gid, object: { url: $url, title: $title } }')
 ```
 
 - **Remote link, not a Smart-Commit key and not an auto-linkify.** The remote link is
