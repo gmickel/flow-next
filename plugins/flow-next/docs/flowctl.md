@@ -11,7 +11,7 @@ init, detect, status, config, review-backend, memory, prospect, glossary, strate
 spec, task, dep, show, specs, tasks, list, cat, ready, next, start, done, block,
 state-path, migrate-state, migrate-rename, migrate-rollback, validate, triage-skip,
 checkpoint, prep-chat, repo-map, sync,
-ralph, rp, codex, copilot,
+ralph, rp, codex, copilot, cursor,
 review-deep-auto, review-walkthrough-defer, review-walkthrough-record
 ```
 
@@ -645,7 +645,7 @@ Text output prints the bare backend name (e.g. `codex`) for skill grep back-comp
 {"backend": "codex", "spec": "codex:gpt-5.4:high", "model": "gpt-5.4", "effort": "high", "source": "env"}
 ```
 
-Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5:high`. RP is bare only (model set via window config); `none` is an explicit opt-out.
+Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5:high`, `cursor:gpt-5.5-high` (cursor folds effort into the model name — no `:effort` rung). RP is bare only (model set via window config); `none` is an explicit opt-out.
 
 ### memory
 
@@ -1158,6 +1158,33 @@ flowctl copilot deep-pass --pass adversarial|security|performance \
 ```
 
 Spec form: `copilot[:model[:effort]]`. Default model resolved via env (`FLOW_COPILOT_MODEL`) / config / registry. Receipt fields mirror codex: `mode: "copilot"`, `session_id` for resume.
+
+### cursor
+
+Cursor `cursor-agent` CLI wrappers — alternative review backend, parallel to codex/copilot. Same review criteria (Carmack-level, 7 each for plan/impl), same receipt schema, same session-resume model. Unlocks Cursor-billed review (your existing Cursor subscription, no separate API key) and Cursor reviewer models the others can't reach in one place: `gpt-5.5-high` (1M ctx, the default), the `gpt-5.3-codex` family, `composer-2.5`, `claude-opus-4-8-thinking-high`.
+
+```bash
+# Verify cursor availability + auth
+flowctl cursor check [--json] [--skip-probe]
+
+# Implementation review
+flowctl cursor impl-review <task-id> --base <branch> [--receipt <path>] [--spec cursor:gpt-5.5-high] [--json]
+
+# Plan review
+flowctl cursor plan-review <spec-id> --files <file1,file2,...> [--receipt <path>] [--spec ...] [--json]
+
+# Completion review
+flowctl cursor completion-review <spec-id> [--receipt <path>] [--spec ...] [--json]
+
+# Validator pass (fn-32.1 --validate)
+flowctl cursor validate --findings-file findings.jsonl --receipt /tmp/impl-fn-1.3.json [--spec ...] [--json]
+
+# Deep-pass review (fn-32.2 --deep)
+flowctl cursor deep-pass --pass adversarial|security|performance \
+  --receipt /tmp/impl-fn-1.3.json [--primary-findings primary.jsonl] [--spec ...] [--json]
+```
+
+Spec form: `cursor[:model]` — **effort is folded into the model name** (Cursor convention), so `cursor:<model>:<effort>` is rejected. Default model resolved via env (`FLOW_CURSOR_MODEL`, no `FLOW_CURSOR_EFFORT`) / config / registry. Receipt fields mirror codex/copilot but **omit `effort`**: `mode: "cursor"`, `spec: "cursor:<model>"`, `session_id` for resume. Sessions are **resume-only** — the first call omits `--resume` and persists Cursor's generated `session_id`; a continuation passes `--resume <stored-id>` only when the receipt's `mode == "cursor"` (cross-backend → fresh). Runs `cursor-agent -p --output-format json --trust --mode ask` with `cwd=repo_root` (read-only Q&A; never mutates the tree). Keep the model list synced with `cursor-agent --list-models`. **Auth:** stored `cursor-agent` login OR `CURSOR_API_KEY`. **Triage note:** the opt-in LLM triage judge (`FLOW_TRIAGE_LLM=1`, default off) stays `codex|copilot` — a cursor user who enables it also needs codex/copilot present; with the judge off (the default) cursor reviews use the deterministic whitelist, zero extra dependency.
 
 ### ralph
 

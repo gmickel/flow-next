@@ -4,6 +4,15 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Added
+
+- **Cursor review backend** (fn-74) — the cross-model review subsystem gains a fourth backend, `cursor`, parallel to `rp` / `codex` / `copilot` and selected the same way (`review.backend` config, `FLOW_REVIEW_BACKEND`, `--review=cursor`, or per-task/spec `cursor:<model>`). It shells out to Cursor's **`cursor-agent` CLI** in headless read-only mode (`-p --output-format json --trust --mode ask`, run with `cwd=repo_root`), so reviews are **Cursor-billed** (your existing Cursor subscription, no separate API key) and reach Cursor reviewer models the other backends can't in one place: `gpt-5.5-high` (1M ctx, the default), the `gpt-5.3-codex` family, `composer-2.5`, `claude-opus-4-8-thinking-high`. A parity port of the `copilot` backend (fn-28) — no new review *features*, same Carmack-level criteria, same receipt schema, same session-resume, same validator/deep-pass shapes — wired through `/flow-next:impl-review`, `/flow-next:plan-review`, `/flow-next:spec-completion-review`, and `/flow-next:setup`.
+  - **Backend foundation** (fn-74.1) — `cursor` added to `BACKEND_REGISTRY` / `VALID_BACKENDS` with a **new registry shape** (model accepted, `efforts: None` — Cursor **folds reasoning effort into the model name**, so `cursor:<model>:<effort>` is rejected); `require_cursor` / `get_cursor_version` / `run_cursor_exec` helpers; `flowctl cursor check`; and `test_cursor_run_exec.py` + `test_backend_spec.py` cursor cases (success / `is_error` / timeout / first-call-omits-`--resume` / resume-passes-id / `cwd=repo_root` / `--mode ask` read-only / prompt-too-large).
+  - **Review commands** (fn-74.2) — `cursor impl-review` / `plan-review` / `completion-review` / `validate` / `deep-pass` writing `mode: "cursor"` receipts (`spec: "cursor:<model>"`, **no `effort` key**) with the same confidence/classification rubric, suppressed-count, introduced-vs-pre-existing, unaddressed-R-ID and protected-path handling as copilot.
+  - **Skill + setup wiring + Codex mirror** (fn-74.3) — `workflow-cursor.md` for impl-review, `cursor` sections in plan-review / spec-completion-review, every user-facing `--review=rp|codex|copilot|cursor|none` string, `flow-next-setup` accepting `cursor` / `cursor:<model>`, and the regenerated Codex mirror (`scripts/sync-codex.sh`).
+  - **Session model is resume-only** — the first call omits `--resume` and persists Cursor's generated `session_id`; a re-review resumes via `--resume <stored-id>` only when the receipt's `mode == "cursor"` (cross-backend → fresh). The opt-in LLM **triage judge** stays `codex|copilot` (a cursor user who enables `FLOW_TRIAGE_LLM=1` also needs codex/copilot present; with the judge off — the default — cursor reviews use the deterministic whitelist, zero extra dependency).
+  - **Doc-drift closed** — the GrowthFactors cross-model-review spec already advertised "Cursor via its `cursor-agent` headless CLI"; fn-74 makes that published claim true.
+
 ## [flow-next 2.4.0] - 2026-06-29
 
 ### Added
