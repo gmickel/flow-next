@@ -19091,7 +19091,18 @@ def cmd_cursor_check(args: argparse.Namespace) -> None:
                 cwd=str(repo_root),
             )
             authed = result.returncode == 0
-            if not authed:
+            if authed:
+                # Exit 0 alone is not auth — cursor-agent signals failures via
+                # ``is_error`` in the JSON result (a clean exit + is_error:true is
+                # a backend/auth failure, never a pass). Mirrors run_cursor_exec.
+                _, _, probe_is_error = _parse_cursor_result(result.stdout)
+                if probe_is_error:
+                    authed = False
+                    error = (
+                        "cursor-agent probe returned is_error "
+                        "(check login / CURSOR_API_KEY)"
+                    )
+            if not authed and error is None:
                 stderr_first = (result.stderr or "").strip().splitlines()
                 error = stderr_first[0] if stderr_first else f"exit {result.returncode}"
         except subprocess.TimeoutExpired:
@@ -19641,7 +19652,15 @@ def _run_validator_pass(
         # prior session_id), so cursor's resume-only model is satisfied here.
         if spec_arg:
             try:
-                spec = BackendSpec.parse(spec_arg).resolve()
+                parsed = BackendSpec.parse(spec_arg)
+                if parsed.backend != "cursor":
+                    error_exit(
+                        "cursor commands require a cursor:<model> --spec "
+                        f"(got '{parsed.backend}')",
+                        use_json=use_json,
+                        code=2,
+                    )
+                spec = parsed.resolve()
             except ValueError as e:
                 error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
         else:
@@ -20329,7 +20348,15 @@ def _run_deep_pass(
         # prior session_id), so cursor's resume-only model is satisfied here.
         if spec_arg:
             try:
-                spec = BackendSpec.parse(spec_arg).resolve()
+                parsed = BackendSpec.parse(spec_arg)
+                if parsed.backend != "cursor":
+                    error_exit(
+                        "cursor commands require a cursor:<model> --spec "
+                        f"(got '{parsed.backend}')",
+                        use_json=use_json,
+                        code=2,
+                    )
+                spec = parsed.resolve()
             except ValueError as e:
                 error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
         else:
@@ -23450,7 +23477,15 @@ def _resolve_cursor_review_spec(
     spec_arg = getattr(args, "spec", None)
     if spec_arg:
         try:
-            return BackendSpec.parse(spec_arg).resolve()
+            parsed = BackendSpec.parse(spec_arg)
+            if parsed.backend != "cursor":
+                error_exit(
+                    "cursor commands require a cursor:<model> --spec "
+                    f"(got '{parsed.backend}')",
+                    use_json=args.json,
+                    code=2,
+                )
+            return parsed.resolve()
         except ValueError as e:
             error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
     return resolve_review_spec("cursor", task_id)

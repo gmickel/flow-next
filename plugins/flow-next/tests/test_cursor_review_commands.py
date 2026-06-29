@@ -399,5 +399,69 @@ class CursorDeepPassDispatch(unittest.TestCase):
             self.assertIn("adversarial", data.get("deep_passes", []))
 
 
+class CursorSpecBackendGuard(unittest.TestCase):
+    """fn-74 completion-review fix — cursor commands reject a non-cursor ``--spec``.
+
+    Without the guard, ``--spec codex:gpt-5.5:high`` parses and runs cursor-agent
+    with a foreign model + serializes ``spec:"codex:..."`` under ``mode:"cursor"``
+    (violating R5/R6/R14's cursor:<model> / no-effort contract).
+    """
+
+    def test_resolve_helper_rejects_non_cursor_spec(self):
+        args = argparse.Namespace(spec="codex:gpt-5.5:high", json=False)
+        with self.assertRaises(SystemExit):
+            flowctl._resolve_cursor_review_spec(args, None)
+
+    def test_resolve_helper_accepts_cursor_spec(self):
+        args = argparse.Namespace(spec="cursor:gpt-5.5-high", json=False)
+        spec = flowctl._resolve_cursor_review_spec(args, None)
+        self.assertEqual(spec.backend, "cursor")
+        self.assertEqual(spec.model, "gpt-5.5-high")
+        self.assertIsNone(spec.effort)
+
+    def test_impl_review_rejects_non_cursor_spec(self):
+        with _flow_repo() as (repo, base):
+            receipt = repo / "r.json"
+            args = _impl_args(repo, base, receipt, spec="codex:gpt-5.5:high")
+            with mock.patch.object(flowctl, "run_cursor_exec", _fake_exec()):
+                with self.assertRaises(SystemExit):
+                    flowctl.cmd_cursor_impl_review(args)
+            self.assertFalse(receipt.exists())
+
+
+class CursorCheckIsError(unittest.TestCase):
+    """fn-74 completion-review fix — ``cursor check`` honors ``is_error`` (R4).
+
+    A cursor-agent probe can exit 0 yet carry ``is_error:true`` in its JSON
+    result (an auth/backend failure); that must NOT report ``authed:true``.
+    """
+
+    def _probe(self, returncode: int, stdout: str) -> dict:
+        fake = subprocess.CompletedProcess(args=[], returncode=returncode,
+                                           stdout=stdout, stderr="")
+        args = argparse.Namespace(json=True, skip_probe=False)
+        buf = io.StringIO()
+        with mock.patch.object(flowctl.shutil, "which",
+                               return_value="/fake/cursor-agent"), \
+                mock.patch.object(flowctl, "get_cursor_version",
+                                  return_value="2026.06"), \
+                mock.patch.object(flowctl.subprocess, "run", return_value=fake), \
+                contextlib.redirect_stdout(buf):
+            flowctl.cmd_cursor_check(args)
+        return json.loads(buf.getvalue())
+
+    def test_exit0_with_is_error_is_not_authed(self):
+        out = self._probe(
+            0, '{"type":"result","is_error":true,"result":"","session_id":"x"}')
+        self.assertFalse(out["authed"])
+        self.assertIsNotNone(out["error"])
+
+    def test_clean_result_is_authed(self):
+        out = self._probe(
+            0, '{"type":"result","is_error":false,"result":"ok","session_id":"x"}')
+        self.assertTrue(out["authed"])
+        self.assertIsNone(out["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -65,7 +65,7 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|none)
 FLOW_REVIEW_BACKEND=codex:gpt-5.5:xhigh $FLOWCTL codex plan-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5 $FLOWCTL copilot plan-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 # Cursor folds effort into the model name (no :<effort>):
-FLOW_REVIEW_BACKEND=cursor:gpt-5.5-high $FLOWCTL cursor plan-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
+FLOW_REVIEW_BACKEND=cursor:gpt-5.5-high $FLOWCTL cursor plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
 # Or pass spec directly:
 $FLOWCTL codex plan-review "$SPEC_ID" --spec "codex:gpt-5.5:xhigh" --receipt "$RECEIPT_PATH"
 ```
