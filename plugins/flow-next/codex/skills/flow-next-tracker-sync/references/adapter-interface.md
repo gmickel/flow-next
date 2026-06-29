@@ -72,7 +72,7 @@ The wire-agnostic shapes the transports produce and reconcile consumes. These ar
  "parentId": "uuid-or-null", // OPTIONAL reply/parent metadata (fn-68 R15). On a THREADED tracker
  // (Linear) a reply carries its parent comment's id, so a human's
  // answer-under-a-question is matched by thread + the question-valve
- // `id`. On a FLAT tracker (GitHub — no threads) there is no parent,
+ // `id`. On a FLAT tracker (GitHub / GitLab / Jira — no threads) there is no parent,
  // so parentId is null and the `<!-- flow-next:answer id=<hash> -->`
  // body marker is the load-bearing match (by id, threading-blind).
  "authorAuthority": "writer|outsider|bot|unknown" // fn-68 R15 SECURITY: the author's permission tier —
@@ -95,7 +95,7 @@ The wire-agnostic shapes the transports produce and reconcile consumes. These ar
 > **`parentId` is OPTIONAL and additive (fn-68 R15).** It exists ONLY to let the
 > async question-valve match a human's *answer* reply to the *question* comment by
 > `id`. Adapters on a threaded tracker (Linear) populate it from the reply/parent
-> link; flat trackers (GitHub) leave it `null` and the answer is matched purely by
+> link; flat trackers (GitHub / GitLab / Jira) leave it `null` and the answer is matched purely by
 > the `<!-- flow-next:answer id=<hash> -->` marker. Reconcile/dedup (comments-sync)
 > is unaffected when `parentId` is absent — the field is read only by the
 > question-valve answer round-trip ([steps.md](../steps.md) Phase 7).

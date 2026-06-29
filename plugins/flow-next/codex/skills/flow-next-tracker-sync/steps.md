@@ -545,7 +545,7 @@ The answer is detected on the **next pull/reconcile** (rides the existing `listC
 1. **Spec anchor flipped by a human** — a human edits the spec `## Open Questions` anchor to `status=answered` with the answer prose. The next tick re-triages the now-answered item and proceeds.
 2. **Tracker reply matched by `id`** — the answer comment carries `<!-- flow-next:answer id=<hash> -->`. Match it to the open question by `id`:
  - **Threaded tracker (Linear)** — the normalized `comment` carries optional **reply/parent metadata** ([→ ref: adapter-interface.md § `comment`]); a reply *under* the question comment is matched by thread + `id`.
- - **Flat tracker (GitHub — no threads)** — there is no parent link, so the **`<!-- flow-next:answer id=<hash> -->` marker is the load-bearing match**: the answer is matched to the question **by `id` regardless of threading**.
+ - **Flat tracker (GitHub / GitLab / Jira — no threads)** — there is no parent link, so the **`<!-- flow-next:answer id=<hash> -->` marker is the load-bearing match**: the answer is matched to the question **by `id` regardless of threading**.
 3. **Answer authority (security — the marker `id` is necessary, NOT sufficient).** Honor a `flow-next:answer` marker **only from an authorized commenter** — anyone with tracker comment access could inject the marker, so validate `comment.author` before treating the question as answered:
  - **`comment.authorAuthority == "writer"`** — the adapter resolves the author's permission tier into the normalized `comment` field ([→ ref: adapter-interface.md § `comment`]: GitHub from `author_association`, Linear from team membership). Never an `outsider` drive-by commenter, never a `bot` (except flow's own automation marker), and never `unknown` (the transport couldn't resolve it ⇒ **fail closed**); **AND/OR**
  - the author is in the optional `tracker.answerAuthors` allowlist (issue assignee / named approvers) when configured.
@@ -565,7 +565,7 @@ on pull/reconcile, for each open question (spec ## Open Questions, or tracker co
 ```
 
 - **Import target is the matching Open Question, not just the Sync Log.** A matched answer folds **under the `## Open Questions` entry keyed by `id`** (and flips that anchor to `answered`), so the question and its answer live together — distinct from a genuine tracker comment, which still appends to `## Sync Log` per comments-sync.
-- **Answer matching is `id`-keyed on both rungs.** Threaded (Linear reply/parent metadata) OR flat (GitHub `<!-- flow-next:answer id= -->` marker) — the `id` is the join key either way, so a flat tracker's answer round-trips exactly like a threaded one.
+- **Answer matching is `id`-keyed on both rungs.** Threaded (Linear reply/parent metadata) OR flat (GitHub / GitLab / Jira `<!-- flow-next:answer id= -->` marker) — the `id` is the join key either way, so a flat tracker's answer round-trips exactly like a threaded one.
 
 ### 7c — `list-relations <tracker-id>` — read one issue's dependency relations
 
