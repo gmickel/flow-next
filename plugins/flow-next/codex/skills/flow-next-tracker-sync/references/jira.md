@@ -347,9 +347,19 @@ curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
 ### `listComments(trackerId)` → normalized `comment[]`
 
 ```bash
-curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
- "$JIRA_BASE/rest/api/$APIV/issue/$TRACKER_ID/comment"
-# → { comments: [ { id, author:{accountId,accountType,displayName}, body, created, updated }, … ], total, … }
+# PageOfComments is PAGINATED (startAt / maxResults / total) — read ALL pages or an issue
+# with many comments is silently truncated to the first page. OFFSET pagination (NOT the
+# v3 /search/jql cursor — different endpoint): loop until startAt+maxResults >= total.
+START=0; PER=100; : > /tmp/jira-comments.ndjson
+while :; do
+ PAGE=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
+ "$JIRA_BASE/rest/api/$APIV/issue/$TRACKER_ID/comment?startAt=$START&maxResults=$PER")
+ printf '%s' "$PAGE" | jq -c '.comments[]' >> /tmp/jira-comments.ndjson
+ TOTAL=$(printf '%s' "$PAGE" | jq -r '.total // 0')
+ START=$((START + PER)); [ "$START" -ge "$TOTAL" ] && break
+done
+# each page → { comments: [ { id, author:{accountId,accountType,displayName}, body, created, updated }, … ], total, startAt, maxResults }
+# /tmp/jira-comments.ndjson now holds EVERY comment (one JSON per line); map each per the firewall below.
 ```
 
 - **Jira comment ids are stable** (the numeric `comment.id`) — the dedup key, same

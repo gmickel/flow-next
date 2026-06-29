@@ -58,8 +58,18 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
    #   fn-70 transport decision). A bare `*.atlassian.net` host with no credential is
    #   still SURFACED (so the user knows why Jira can't be offered), but only a
    #   JIRA_BASE_URL + credential pair OFFERS it.
+   # Offer Jira only when the credential MATCHES the deployment the baseUrl implies:
+   # Cloud (*.atlassian.net) ⇒ email + API token (cloud-basic); self-hosted DC/Server ⇒
+   # Bearer PAT. A Cloud URL with only a PAT (or a self-hosted URL with only Cloud
+   # email/token) is a MISMATCH → surfaced, NOT offered (the persisted authScheme would
+   # otherwise be wrong and every call 401).
    JIRA_OK=0
-   [ -n "${JIRA_BASE_URL:-}" ] && { [ -n "${JIRA_API_TOKEN:-}" ] && [ -n "${JIRA_EMAIL:-}" ] || [ -n "${JIRA_PAT:-}" ]; } && JIRA_OK=1
+   if [ -n "${JIRA_BASE_URL:-}" ]; then
+     case "$JIRA_BASE_URL" in
+       *.atlassian.net*) [ -n "${JIRA_EMAIL:-}" ] && [ -n "${JIRA_API_TOKEN:-}" ] && JIRA_OK=1 ;;  # Cloud → cloud-basic
+       *)                [ -n "${JIRA_PAT:-}" ] && JIRA_OK=1 ;;                                      # self-hosted DC/Server → bearer-pat
+     esac
+   fi
    ```
    The Linear transport rung the bridge will use follows from these signals (MCP
    beats GraphQL when both present): MCP registered → rung 1; else `LINEAR_API_KEY`
