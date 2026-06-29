@@ -894,8 +894,10 @@ Restore ONLY on the human's explicit choice.
 
 ```bash
 # Ledger says we projected (A,B) but the native link is absent → human removed it → defer.
-LEDGERED=$($FLOWCTL sync list-dep-relations "$SPEC_ID" --json | jq --arg b "$B_TRACKER_ID" \
- 'any(.relations[]?; .to_tracker_id == $b)')
+# `sync list-dep-relations` returns top-level `depRelations[]`, each `{dep_spec,
+# dep_tracker_id, dep_identifier, dep_status}`; the blocker B's Jira issue id is $B_ID.
+LEDGERED=$($FLOWCTL sync list-dep-relations "$SPEC_ID" --json | jq --arg b "$B_ID" \
+ 'any(.depRelations[]?; .dep_tracker_id == $b)')
 if [ "$LEDGERED" = true ] && [ "$EXISTS" != true ]; then
  $FLOWCTL sync defer "$SPEC_ID" --reason dep-link-removed \
  --summary "Blocked-by link A→B removed on the tracker (ledgered but no native link)" \
