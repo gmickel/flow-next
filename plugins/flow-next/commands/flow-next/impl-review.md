@@ -1,7 +1,7 @@
 ---
 name: flow-next:impl-review
 description: John Carmack-level implementation review via RepoPrompt or Codex
-argument-hint: "[--review=rp|codex|export] [focus areas]"
+argument-hint: "[--review=rp|codex|copilot|cursor|none] [focus areas]"
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-impl-review`

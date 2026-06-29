@@ -1,7 +1,7 @@
 ---
 name: flow-next:plan-review
 description: Carmack-level plan review via RepoPrompt or Codex
-argument-hint: "<fn-N> [--review=rp|codex|export] [focus areas]"
+argument-hint: "<fn-N> [--review=rp|codex|copilot|cursor|none] [focus areas]"
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-plan-review`
