@@ -113,6 +113,19 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
  $FLOWCTL config set tracker.perTracker.projectKey "<PROJ>" # Jira: the project key (the JQL / listOpenIssues scope)
  $FLOWCTL config set tracker.perTracker.authScheme "<cloud-basic|bearer-pat>" # Jira: cloud-basic (Cloud HTTP-basic email:API_TOKEN) | bearer-pat (DC/Server Bearer PAT) — detected, persisted; runtime reads only this
  $FLOWCTL config set tracker.perTracker.apiVersion "<3|2>" # Jira: 3 (Cloud /rest/api/3, ADF) | 2 (DC/Server /rest/api/2) — the REST endpoint family the adapter branches on
+ # statusMap — WRITE IT NOW or Jira status sync is inert: setStatus DEFERS every status
+ # with no statusMap entry (references/jira.md § Status / transitions), so an unset map
+ # means an active bridge that never projects status. AUTO-DERIVE it from the project's
+ # workflow when the credential is present, then surface for the user to refine:
+ # GET /rest/api/$APIV/project/$PROJ/statuses → issue-type → [{id,name,statusCategory:{key}}].
+ # Map the FULL normalized set by name first, then statusCategory.key:
+ # done / verified → a status with statusCategory.key=="done"
+ # in-progress → "In Progress" (category indeterminate)
+ # in-review → "In Review" / "Review" IF present (else leave UNMAPPED → setStatus
+ # defers for in-review only; never invent a transition the workflow lacks)
+ # planned → "To Do" / "Backlog" (category new)
+ # Write id-keyed (ids are rename-stable): {"in-progress":{"id":"3"},"done":{"id":"10001"},…}.
+ $FLOWCTL config set tracker.perTracker.statusMap "$DERIVED_STATUSMAP_JSON" # Jira: normalized→{id|name}; auto-derived (refine later via config). NO creds at ceremony ⇒ write {} AND tell the user status sync defers until they set it (never silently inert).
  $FLOWCTL sync active --json # confirm active: true
  ```
  **Never assume — but default-on is not assuming.** No signal / user declines the bridge ⇒ write nothing; `enabled` stays `false`; `sync active` stays `active: false`. Confirming the bridge IS the consent to sync the pipeline. The **config schema default stays `off`** (in `get_default_config()`), so a bare `tracker.enabled=true` set by hand or a script — WITHOUT this ceremony — activates **no lifecycle-event sync** (every `perEvent` event stays dormant). The **two exceptions** are unconditional whenever the bridge is active (no per-event gate, by design): (1) make-pr's PR↔issue link **and its In Review status push** (fn-66, R2 — an open PR is the In Review rung, riding the same Diffs-powering link path); (2) **`land.merged`** (fn-66, R10 — a real merge is the SOLE event that projects terminal `Done`, gated on the GitHub `MERGED` probe; leaving it opt-in would strand boards at In Review post-merge). Only the ceremony's explicit per-event writes activate the other events themselves. Users opt out per event afterward via `flowctl config set tracker.perEvent.<event> off`.
