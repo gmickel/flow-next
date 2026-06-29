@@ -42,9 +42,19 @@ Session-resume pitfall (memory `drop-receipt-to-break-codex`): a stuck/hallucina
 - [ ] handler + dispatch tests pass; triage `--backend` choices unchanged (`codex|copilot`); full suite green (R11)
 
 ## Done summary
-TBD
+# fn-74.2 — cursor review commands (DONE · codex impl-review SHIP)
 
+Wired `cursor` into the five review commands on top of the .1 foundation:
+- subcommands `impl-review` / `plan-review` / `completion-review` / `validate` / `deep-pass` + `cmd_cursor_*` handlers
+- `elif backend == "cursor"` branches in the shared validator/deep dispatchers
+- own-mode `mode:"cursor"` receipts (no `effort` key; copilot rigor fields) + the session-resume guard (resume only when prior receipt `mode == "cursor"`, cross-backend → fresh)
+- optional live clean-tree integration test gated on `cursor-agent` availability
+
+Triage judge left at `codex|copilot` (spec §8). Recovered + finalized after a lost-worker truncation: code was committed (d5c58042); full suite + codex review re-run by the host.
+
+**Tests:** full suite `python3 -m unittest discover -s plugins/flow-next/tests` → 1286 passed, 2 skipped.
+**Review:** codex impl-review (base c9834827) → SHIP, no blocking findings.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d5c58042
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests → 1286 passed, 2 skipped
 - PRs:
