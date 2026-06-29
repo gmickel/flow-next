@@ -349,17 +349,21 @@ curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
 ```bash
 # PageOfComments is PAGINATED (startAt / maxResults / total) — read ALL pages or an issue
 # with many comments is silently truncated to the first page. OFFSET pagination (NOT the
-# v3 /search/jql cursor — different endpoint): loop until startAt+maxResults >= total.
-START=0; PER=100; : > /tmp/jira-comments.ndjson
+# v3 /search/jql cursor — different endpoint): loop until startAt >= total.
+CFILE=$(mktemp "${TMPDIR:-/tmp}/jira-comments.XXXXXX")   # UNIQUE per run — concurrent reconciles must NOT share a fixed path
+START=0; PER=100
 while :; do
   PAGE=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
     "$JIRA_BASE/rest/api/$APIV/issue/$TRACKER_ID/comment?startAt=$START&maxResults=$PER")
-  printf '%s' "$PAGE" | jq -c '.comments[]' >> /tmp/jira-comments.ndjson
-  TOTAL=$(printf '%s' "$PAGE" | jq -r '.total // 0')
+  # GUARD: a non-JSON / error body must NOT read as total=0 (that would silently truncate).
+  # `jq -e .total` fails (nonzero) on a missing/invalid total → errored receipt, never a partial import.
+  TOTAL=$(printf '%s' "$PAGE" | jq -e -r '.total' 2>/dev/null) \
+    || { rm -f "$CFILE"; sync_receipt errored "listComments: non-JSON/invalid page at startAt=$START"; return; }
+  printf '%s' "$PAGE" | jq -c '.comments[]?' >> "$CFILE"   # `[]?` tolerates an absent comments array
   START=$((START + PER)); [ "$START" -ge "$TOTAL" ] && break
 done
 # each page → { comments: [ { id, author:{accountId,accountType,displayName}, body, created, updated }, … ], total, startAt, maxResults }
-# /tmp/jira-comments.ndjson now holds EVERY comment (one JSON per line); map each per the firewall below.
+# $CFILE now holds EVERY comment (one JSON per line); map each per the firewall below, then `rm -f "$CFILE"`.
 ```
 
 - **Jira comment ids are stable** (the numeric `comment.id`) — the dedup key, same

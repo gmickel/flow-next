@@ -65,7 +65,8 @@ Only when the bridge is not yet active (`flowctl sync active --json` → `active
  # otherwise be wrong and every call 401).
  JIRA_OK=0
  if [ -n "${JIRA_BASE_URL:-}" ]; then
- case "$JIRA_BASE_URL" in
+ JBL_LC=$(printf '%s' "$JIRA_BASE_URL" | tr '[:upper:]' '[:lower:]') # host match is case-INSENSITIVE (Atlassian.net == atlassian.net)
+ case "$JBL_LC" in
  *.atlassian.net*) [ -n "${JIRA_EMAIL:-}" ] && [ -n "${JIRA_API_TOKEN:-}" ] && JIRA_OK=1 ;; # Cloud → cloud-basic
  *) [ -n "${JIRA_PAT:-}" ] && JIRA_OK=1 ;; # self-hosted DC/Server → bearer-pat
  esac
