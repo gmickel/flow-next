@@ -116,7 +116,7 @@ named op:
   — the same explicit signal as the flow `ready` flag), via the `listOpenIssues`
   adapter method. Returns normalized `issue[]` (`{id, identifier, title, status,
   labels, url}`) — **transport-blind**: backlog mode reads the struct and never
-  branches on tracker type (Linear / GitHub / GitLab).
+  branches on tracker type (Linear / GitHub / GitLab / Jira).
 - **`tracker.readyState` unset ⇒ `list-open` no-ops** (returns `[]` + a note): no
   promoted lane exists to filter on, so backlog mode runs the **flow-ready specs
   only**. The flow `ready` flag needs no tracker (R17). Same floor when no transport
@@ -394,19 +394,18 @@ posts a comment. It calls **no** tracker-specific API and **never** branches on
 tracker type; the active adapter (from `tracker.type`) supplies the wire query behind
 the normalized interface.
 
-- **Ships on Linear, GitHub + GitLab** — the three adapters that implement
-  `listOpenIssues` / `listIssueRelations` / the comment ops (fn-68.2 / fn-64 / fn-69).
+- **Ships on Linear, GitHub, GitLab + Jira** — the four adapters that implement
+  `listOpenIssues` / `listIssueRelations` / the comment ops (fn-68.2 / fn-64 / fn-69 / fn-70).
   On **GitLab** the adapter derives the project-local `iid` its issue API paths require
   from the issue's normalized **`identifier`** (`<project>#<iid>`) — never the global
-  id (gitlab.md § identity / fetchIssue). That identifier is available in **both**
+  id (gitlab.md § identity / fetchIssue). On **Jira** the adapter indexes its issue API
+  paths from the normalized `identifier` (`PROJ-123` key) — never the numeric global id
+  (jira.md § identity). That identifier is available in **both**
   backlog cases, so no spec is required: a **spec-backed** issue carries it as the
   stored `tracker.identifier`, and a **tracker-only** issue (one `list-open` enumerated
   with no flow spec) carries it in the `listOpenIssues` normalized `issue.identifier`.
-  The normalized op signature is identical for every tracker; the iid derivation is an
+  The normalized op signature is identical for every tracker; the iid/key derivation is an
   adapter-internal concern, so pilot still branches on **no** tracker type.
-- **Jira (fn-70)** inherits the same contract once its adapter
-  ships — backlog mode layers coverage on with **zero** pilot changes (no
-  tracker-specific code lives here to update).
 - **Zero-setup (R17).** Each tracker resolves via tracker-sync's discovery-ceremony
   probe ladder, preferring auth the company already has (`gh`/`glab` CLI session,
   registered Linear/Atlassian MCP, or a CI/REST env token) — no flow-next-specific

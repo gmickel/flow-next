@@ -387,6 +387,14 @@ skipped — no calls, no receipts, no flag writes (R7 invisibility).
  **label**. `desired = (readyState label ∈ issue.labels[])` (the normalized
  `issue.labels`), compared case-insensitive/trimmed. **Label absent ⇒ `desired =
  false`** — a normal state; removing the label is how a GitLab user un-readies a spec.
+- **Jira** — like Linear, Jira has **workflow states, not labels**, so readiness is a
+ **status-name match**: `desired = (trim+casefold(status.raw) ==
+ trim+casefold(readyState))`. The match is on the workflow-state **name**
+ (`status.raw` carries `fields.status.name`), **never** `statusCategory` — names are
+ what a human moves an issue *to* on the board, and a "Ready" state could be any
+ category. `readyState` here is the **raw Jira status name** (the same value
+ `listOpenIssues` interpolates into its JQL — [jira.md](jira.md) § `listOpenIssues`),
+ NOT a `statusMap`-resolved value. One-way, tracker-authoritative.
 
 **Gate the clear path BEFORE any toggle** — `desired = false` is ambiguous
 between "the issue genuinely isn't in the ready state" and "the config is stale
@@ -444,6 +452,15 @@ call):
  (`search` is substring — compare case-insensitively for an exact match; `READY_ENC`
  is the `@uri`-encoded label). Present ⇒ genuine not-ready. Absent from the project ⇒
  stale config.
+- **Jira** — like Linear (a workflow-state name, not a label), the configured status
+ name must still **exist in the project's workflow**. Read the project's statuses via
+ the persisted-scheme auth ([jira.md](jira.md) § Auth):
+ `curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json"
+ "$JIRA_BASE/rest/api/$APIV/project/$PROJ_KEY/statuses"` returns the issue types each
+ with their `statuses[]` (`{name, id, statusCategory}`); collect every `.statuses[].name`
+ and compare case-insensitively/trimmed for an exact match against `readyState`.
+ Present ⇒ genuine not-ready, clear the flag. **Absent from the project ⇒ stale
+ config** (the status was renamed/removed) — warn + noop, never mass-un-ready.
 
 Stale config ⇒ **warn + `noop` receipt + flag untouched + the rest of the sync
 continues** — graceful degradation, same posture as the unmapped-state path above

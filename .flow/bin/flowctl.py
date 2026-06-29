@@ -1021,8 +1021,8 @@ def save_task_definition(task_id: str, definition: dict) -> None:
 # Activation is EXPLICIT and VALUE-CHECKED, not merely "the block exists":
 # because `load_flow_config()` always merges this default block in, an absent /
 # null / unrelated write must NOT activate the bridge. The bridge is active iff
-# raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github}` (see
-# `tracker_sync_active`). All `perEvent` leaves default `off`, so a stray
+# raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github, gitlab,
+# jira}` (see `tracker_sync_active`). All `perEvent` leaves default `off`, so a stray
 # `enabled=true` opts in no PER-EVENT lifecycle sync until a specific event is
 # enabled — EXCEPT the two fn-66 unconditional bridge-active paths: make-pr's
 # PR↔issue link + In Review push, and `land.merged`'s Done-on-merge (both ride the
@@ -1538,7 +1538,7 @@ def tracker_sync_active() -> bool:
     """Single value-checked activation predicate for the tracker bridge (fn-52, R1).
 
     The bridge is active iff the RAW (on-disk) config has
-    `tracker.enabled == true` OR `tracker.type ∈ {linear, github}`. It is
+    `tracker.enabled == true` OR `tracker.type ∈ {linear, github, gitlab, jira}`. It is
     deliberately raw-config-aware (via `_get_config_from_file`, the same probe
     `cmd_config_get --raw` uses) so that:
 

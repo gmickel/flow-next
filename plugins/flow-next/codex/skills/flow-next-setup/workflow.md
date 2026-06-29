@@ -683,7 +683,7 @@ Documentation updated:
 Notes:
 - Re-run /flow-next:setup after plugin updates to refresh scripts
 - Interested in autonomous mode? Run /flow-next:ralph-init
-- Use Linear / GitHub Issues / GitLab for project management? Run /flow-next:tracker-sync to configure the (opt-in) two-way tracker bridge — it runs a discovery ceremony (detects Linear MCP / LINEAR_API_KEY / gh auth / glab auth or GITLAB_TOKEN, asks, writes config), then syncs specs ⇄ issues; on Linear it additionally makes your PRs reviewable as Linear Diffs. Skips cleanly if you don't use a tracker; adds nothing to the base install until enabled.
+- Use Linear / GitHub Issues / GitLab / Jira for project management? Run /flow-next:tracker-sync to configure the (opt-in) two-way tracker bridge — it runs a discovery ceremony (detects Linear MCP / LINEAR_API_KEY / gh auth / glab auth or GITLAB_TOKEN / JIRA_BASE_URL + credential, asks, writes config), then syncs specs ⇄ issues; on Linear it additionally makes your PRs reviewable as Linear Diffs. Skips cleanly if you don't use a tracker; adds nothing to the base install until enabled.
 - Uninstall (run manually): rm -rf .flow/bin .flow/templates .flow/usage.md and remove <!-- BEGIN/END FLOW-NEXT --> block from docs
 - This setup is optional - plugin works without it
 ```
@@ -692,7 +692,7 @@ Notes:
 
 ```
 Optional next step — connect a tracker:
- If your team lives in Linear, GitHub Issues, or GitLab, run /flow-next:tracker-sync to set up the
+ If your team lives in Linear, GitHub Issues, GitLab, or Jira, run /flow-next:tracker-sync to set up the
  two-way bridge (spec ⇄ issue, status, comments) and make PRs reviewable as Linear Diffs.
  Fully opt-in — nothing syncs until you confirm it in the discovery ceremony.
 ```

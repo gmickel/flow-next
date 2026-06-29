@@ -111,9 +111,9 @@ The project's strategic intent and canonical vocabulary live **outside** `.flow/
 .flow/bin/flowctl prospect promote <id> --idea N --force # override idempotency guard
 .flow/bin/flowctl prospect archive <id>                  # → .flow/prospects/_archive/
 
-# Tracker sync (project a spec to a Linear/GitHub/GitLab issue — /flow-next:tracker-sync bridge)
+# Tracker sync (project a spec to a Linear/GitHub/GitLab/Jira issue — /flow-next:tracker-sync bridge)
 # NOTE: /flow-next:tracker-sync (external tracker bridge) is NOT /flow-next:sync (plan-sync of downstream task specs).
-.flow/bin/flowctl sync active                            # is the bridge active? (enabled OR type ∈ {linear,github,gitlab})
+.flow/bin/flowctl sync active                            # is the bridge active? (enabled OR type ∈ {linear,github,gitlab,jira})
 .flow/bin/flowctl sync get-state <spec-id>               # per-spec tracker state (id/identifier/url/lastSyncedAt/merge-base)
 .flow/bin/flowctl sync set-tracker-id <spec-id> <uuid> --identifier WOR-17 --url <url>   # link (flow-first alias)
 .flow/bin/flowctl sync set-last-synced <spec-id>         # advance lastSyncedAt (default: now)
