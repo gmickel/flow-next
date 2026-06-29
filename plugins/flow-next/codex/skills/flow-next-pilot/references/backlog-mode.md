@@ -398,13 +398,15 @@ the normalized interface.
  `listOpenIssues` / `listIssueRelations` / the comment ops (fn-68.2 / fn-64 / fn-69 / fn-70).
  On **GitLab** the adapter derives the project-local `iid` its issue API paths require
  from the issue's normalized **`identifier`** (`<project>#<iid>`) — never the global
- id (gitlab.md § identity / fetchIssue). On **Jira** the adapter indexes its issue API
- paths from the normalized `identifier` (`PROJ-123` key) — never the numeric global id
- (jira.md § identity). That identifier is available in **both**
- backlog cases, so no spec is required: a **spec-backed** issue carries it as the
- stored `tracker.identifier`, and a **tracker-only** issue (one `list-open` enumerated
- with no flow spec) carries it in the `listOpenIssues` normalized `issue.identifier`.
- The normalized op signature is identical for every tracker; the iid/key derivation is an
+ id (gitlab.md § identity / fetchIssue). On **Jira** the `{issueIdOrKey}` path accepts
+ either, and the adapter **prefers the durable numeric `id`** (the immutable issue id,
+ e.g. `"10042"`) over the renamable `PROJ-123` key (jira.md § identity) — the opposite
+ of GitLab, whose global id can't index a path at all. The handle the adapter needs is
+ available in **both** backlog cases, so no spec is required: a **spec-backed** issue
+ carries the durable `id` as the stored `tracker.id` (and `tracker.identifier` for
+ display), and a **tracker-only** issue (one `list-open` enumerated with no flow spec)
+ carries both `issue.id` and `issue.identifier` in the normalized struct.
+ The normalized op signature is identical for every tracker; the id/iid/key derivation is an
  adapter-internal concern, so pilot still branches on **no** tracker type.
 - **Zero-setup (R17).** Each tracker resolves via tracker-sync's discovery-ceremony
  probe ladder, preferring auth the company already has (`gh`/`glab` CLI session,

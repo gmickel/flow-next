@@ -1795,8 +1795,9 @@ if [[ -n "$PR_URL" ]] \
  # (POST /issue/{key}/remotelink, jira.md §makePr) — NEVER a transition to Done
  # (flow-next owns terminal Done via land.merged, gated on MERGED) — + the
  # In Review transition via reconcileStatus (open prEvidence → in-review). No
- # PR-body ref auto-links a Jira issue, so the remote link IS the cross-link;
- # it dedupes on the URL so a re-run never stacks duplicates.
+ # PR-body ref auto-links a Jira issue, so the remote link IS the cross-link.
+ # On a remote-link POST failure (permission / older DC) it falls back to a
+ # PR-URL **comment** carrying the lifecycle marker (jira.md §makePr).
  # (PR URL source: reconcile RE-DERIVES it from `mergeEvidenceProbe(spec.branch_name)` —
  # the same probe yielding open/merged queries the code host `gh pr … --json url,state`
  # (status-sync.md) — so the op token `reconcile <spec-id>` deliberately omits it; the
