@@ -40,9 +40,8 @@ Codex-mirror discipline (memory): mirror regen exposes latent canonical gaps; tr
 - [ ] `scripts/sync-codex.sh` re-run; `cursor` surfaces in `plugins/flow-next/codex/**`; R2-block injection intact; install/sync parity tests pass (R12)
 
 ## Done summary
-TBD
-
+Surfaced the `cursor` review backend across the three review skills + setup and regenerated the Codex mirror: new `workflow-cursor.md` in impl-review and spec-completion-review, a Cursor section in plan-review, `cursor` added to every `--review=rp|codex|copilot|none` literal in the 8 hand-edited files (plus backend-at-a-glance / critical-rules / re-review / dispatch branches), and `flow-next-setup` `review.backend` now detects `cursor-agent`, offers a Cursor CLI option, maps the answer to `cursor`, and documents the `cursor:gpt-5.5-high` spec form (model-only, no effort). `scripts/sync-codex.sh` re-run; R2 ask-block injection verified clean; full Python suite + parity tests green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0f0641b63a07e8f3e619349374d696519050ae71
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (1286 tests, OK, skipped=2), scripts/sync-codex.sh (29 skills/21 agents, all validators green), diff -q .flow/bin/flowctl.py plugins/flow-next/scripts/flowctl.py (IDENTICAL), flowctl codex impl-review --base fc0f900 → VERDICT=SHIP
 - PRs:
