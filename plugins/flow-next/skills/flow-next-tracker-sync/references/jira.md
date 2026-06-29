@@ -91,7 +91,7 @@ Persisted config keys (written by the ceremony, fn-70.1):
 | Key | Meaning |
 |---|---|
 | `tracker.perTracker.baseUrl` | the site base, e.g. `https://acme.atlassian.net` (Cloud) or `https://jira.acme.com` (DC/Server). **`JIRA_BASE_URL` env overrides** the persisted value (the persisted value is the default, never inert). |
-| `tracker.perTracker.projectKey` | the project key (the `listOpenIssues` JQL scope; validated `^[A-Z][A-Z0-9]+$` before JQL interpolation — § `listOpenIssues`) |
+| `tracker.perTracker.projectKey` | the project key (the `listOpenIssues` JQL scope; validated `^[A-Z][A-Z0-9_]+$` — underscores allowed for DC custom keys, still injection-safe — before JQL interpolation — § `listOpenIssues`) |
 | `tracker.perTracker.statusMap` | normalized status → Jira target `{"id":…}\|{"name":…}` (id preferred); the FULL normalized set — § Status / transitions. `tracker.readyState` (the promoted-lane Jira **status name**) is used RAW, NOT through this map. |
 | `tracker.perTracker.authScheme` | `cloud-basic` (Cloud HTTP-basic `email:API_TOKEN`) \| `bearer-pat` (DC/Server Bearer PAT) — **runtime reads only this**, never re-probes which env var is set |
 | `tracker.perTracker.apiVersion` | `3` (Cloud, `/rest/api/3`, ADF) \| `2` (DC/Server, `/rest/api/2`) — the REST endpoint family the adapter branches on |
@@ -293,18 +293,22 @@ Upsert by presence of `issue.id` (interface rule): no id ⇒ **create** (`POST
 # v2 (DC/Server) = wiki/plain TEXT — `--arg desc` (a STRING).
 # NEVER --argjson a v2 string: jq rejects it as invalid JSON, and an ADF object is wrong
 # on /rest/api/2. Colon labels accepted.  projectKey = tracker.perTracker.projectKey
-# ISSUE TYPE — DISCOVER it, never hard-code "Task" (a project's issue-type scheme may not
-# include "Task"; the create would 400). Prefer a configured tracker.perTracker.issueType,
-# else read the project's createable types and pick "Task" if present, else the first
-# STANDARD (non-subtask) type. (createmeta shape differs Cloud v3 vs DC v2 — verify-at-build.)
-ITYPE=$("$FLOWCTL" config get tracker.perTracker.issueType --json 2>/dev/null | jq -r '.value // empty')   # optional pin; empty ⇒ discover
-if [ -z "$ITYPE" ]; then
-  ITYPE=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
-    "$JIRA_BASE/rest/api/$APIV/issue/createmeta/$PROJ_KEY/issuetypes" \
-    | jq -r '(.issueTypes // .values // []) | map(select(.subtask|not))
-             | ((map(select(.name=="Task"))[0]) // .[0] // {}).name // empty')
-  [ -z "$ITYPE" ] && ITYPE="Task"   # last-resort default if discovery returned nothing
-fi
+# ISSUE TYPE + LABELS-SETTABLE — DISCOVER both from createmeta (never hard-code "Task";
+# never assume the Labels field is on the create screen). ONE call, fields expanded.
+# Prefer a configured tracker.perTracker.issueType; else "Task" if present, else the first
+# STANDARD (non-subtask) type. LABELS_SETTABLE defaults 0 (omit — the body anchor is the
+# durable back-ref) and is set 1 ONLY when the chosen type's create fields include "labels".
+# (createmeta shape differs Cloud v3 vs DC v2 — Cloud may need createmeta/<key>/issuetypes(/<id>);
+#  verify-at-build. The `// .issueTypes // .values` fallbacks cover both response shapes.)
+LABELS_SETTABLE=0
+ITYPE=$("$FLOWCTL" config get tracker.perTracker.issueType --json 2>/dev/null | jq -r '.value // empty')
+META=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
+  "$JIRA_BASE/rest/api/$APIV/issue/createmeta?projectKeys=$PROJ_KEY&expand=projects.issuetypes.fields")
+ITS=$(printf '%s' "$META" | jq -c '(.projects[0].issuetypes // .issueTypes // .values // [])')
+[ -z "$ITYPE" ] && ITYPE=$(printf '%s' "$ITS" \
+    | jq -r 'map(select(.subtask|not)) | ((map(select(.name=="Task"))[0]) // .[0] // {}).name // empty')
+[ -z "$ITYPE" ] && ITYPE="Task"   # last-resort default if discovery returned nothing
+printf '%s' "$ITS" | jq -e --arg it "$ITYPE" 'any(.[]; .name==$it and ((.fields//{})|has("labels")))' >/dev/null 2>&1 && LABELS_SETTABLE=1
 if [ "$APIV" = 3 ]; then DESC_ARG=(--argjson desc "$ADF_DESCRIPTION"); else DESC_ARG=(--arg desc "$TEXT_DESCRIPTION"); fi
 # Back-reference: the body ANCHOR in the description is the DURABLE link; the `flow:<id>`
 # LABEL is BEST-EFFORT — a project whose create screen omits the Labels field rejects
@@ -930,9 +934,11 @@ filter on (the skill, steps.md Phase 7a, short-circuits before calling the trans
 `readyState` and `projectKey` are interpolated into JQL, so both MUST be sanitized:
 
 ```bash
-# 1. projectKey — validate against the Jira key grammar (uppercase alnum, starts with a
-#    letter: ^[A-Z][A-Z0-9]+$). Reject anything else (no JQL injection via the key).
-printf '%s' "$PROJ_KEY" | grep -Eq '^[A-Z][A-Z0-9]+$' \
+# 1. projectKey — validate against the Jira key grammar: starts with a letter, then
+#    letters/digits/UNDERSCORE. DC/Server admins can configure custom key formats with
+#    underscores or longer keys (e.g. MY_PROJECT), so `^[A-Z][A-Z0-9_]+$` (still strictly
+#    [A-Z0-9_] — no JQL metacharacters, injection-safe). Reject anything else.
+printf '%s' "$PROJ_KEY" | grep -Eq '^[A-Z][A-Z0-9_]+$' \
   || { sync_receipt errored "invalid projectKey '$PROJ_KEY' — not a Jira key"; return; }
 
 # 2. readyState — escape backslashes THEN double-quotes for the JQL string literal
