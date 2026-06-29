@@ -857,9 +857,11 @@ projection; it never orphans). Shape ([adapter-interface.md](adapter-interface.m
  Linear/GitHub-native/GitLab-native) the flow-side `depRelations` **ledger** (fn-64.1)
  is the provenance authority for "did flow create this?". Provenance is never inferred
  from `source` alone.
-- **Only `type.name == "Blocks"` edges are returned.** Other Jira link types
- (`Relates`, `Duplicate`, `Cloners`, …) are NOT relations in the flow sense and are
- filtered out, so the read-before-write dedup never trips over an unrelated edge.
+- **Only `type.name == $BLOCKS_TYPE` edges are returned** (the configured/discovered
+ blocks-semantics type — `"Blocks"` by default, or whatever a site renamed it to; see
+ the `$BLOCKS_TYPE` resolution above). Other Jira link types (`Relates`, `Duplicate`,
+ `Cloners`, …) are NOT relations in the flow sense and are filtered out, so the
+ read-before-write dedup never trips over an unrelated edge.
 
 ### `setIssueRelation(issue=A, blockedBy=B)` → ok | errored | noop
 
