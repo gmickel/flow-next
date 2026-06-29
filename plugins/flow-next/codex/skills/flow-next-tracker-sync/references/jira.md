@@ -344,6 +344,12 @@ curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
 # screen usually exposes Description even when the CREATE screen doesn't). Surface a one-line
 # degrade note on the receipt so the empty first-create body is never silently mistaken for
 # a sync gap.
+# CRITICAL — DO NOT seed the create-time merge base from the rendered spec body when
+# DESC_SETTABLE=0: the issue body is EMPTY, so a base snapshotted as the full spec body
+# makes the next reconcile read Jira's empty description as a tracker-side DELETION/conflict
+# instead of the promised follow-up push. Seed the base from the ACTUAL written body — i.e.
+# the empty/fetched tracker description (or defer the snapshot until the UPDATE writes it).
+# Then base=empty vs flow=full ⇒ a normal flow→tracker push, never a phantom deletion.
 # The 201 response carries {id, key, self}. Build the browse url from key:
 # id=.id identifier=.key url="$JIRA_BASE/browse/"+.key
 
@@ -906,10 +912,13 @@ Restore ONLY on the human's explicit choice.
 
 ```bash
 # Ledger says we projected (A,B) but the native link is absent → human removed it → defer.
-# `sync list-dep-relations` returns top-level `depRelations[]`, each `{dep_spec,
-# dep_tracker_id, dep_identifier, dep_status}`; the blocker B's Jira issue id is $B_ID.
+# `sync list-dep-relations` returns top-level `depRelations[]` — EVERY current depends_on
+# edge `{dep_spec, dep_tracker_id, dep_identifier, dep_status, projected}` — so the match
+# MUST gate on `.projected == true` (the edge is in the provenance ledger). Without it a
+# FIRST projection (projected:false, no native link yet) would read LEDGERED and wrongly
+# defer instead of create. The blocker B's Jira issue id is $B_ID.
 LEDGERED=$($FLOWCTL sync list-dep-relations "$SPEC_ID" --json | jq --arg b "$B_ID" \
- 'any(.depRelations[]?; .dep_tracker_id == $b)')
+ 'any(.depRelations[]?; .dep_tracker_id == $b and .projected == true)')
 if [ "$LEDGERED" = true ] && [ "$EXISTS" != true ]; then
  $FLOWCTL sync defer "$SPEC_ID" --reason dep-link-removed \
  --summary "Blocked-by link A→B removed on the tracker (ledgered but no native link)" \
