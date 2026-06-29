@@ -40,9 +40,8 @@ Foundation of the `cursor` review backend in flowctl — the registry entry, the
 - [ ] `test_cursor_run_exec.py` (success / `is_error` / timeout / first-call-omits-resume / resume-passes-id / cwd=repo_root / mode-ask-flag / prompt-too-large) + `test_backend_spec.py` cursor cases pass; full Python suite green (R11)
 
 ## Done summary
-TBD
-
+Added the `cursor` review backend foundation in flowctl: the BACKEND_REGISTRY entry (model-yes / effort-no shape, default gpt-5.5-high), the require_cursor / get_cursor_version / run_cursor_exec helper trio (positional-argv prompt, resume-only session, cwd=repo_root, --mode ask --trust, no --effort, explicit prompt-too-large raise, non-zero on is_error/timeout), the `cursor check [--skip-probe]` subcommand, and unit tests (test_cursor_run_exec.py + test_backend_spec.py cursor cases). Full Python suite green at 1271 tests.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: dcbb1a7e5a6e39a021ee56dd81290b4101bf8559
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (1271 passed, skipped=2)
 - PRs:
