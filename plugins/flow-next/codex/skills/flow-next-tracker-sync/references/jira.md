@@ -306,13 +306,19 @@ if [ -z "$ITYPE" ]; then
  [ -z "$ITYPE" ] && ITYPE="Task" # last-resort default if discovery returned nothing
 fi
 if [ "$APIV" = 3 ]; then DESC_ARG=(--argjson desc "$ADF_DESCRIPTION"); else DESC_ARG=(--arg desc "$TEXT_DESCRIPTION"); fi
+# Back-reference: the body ANCHOR in the description is the DURABLE link; the `flow:<id>`
+# LABEL is BEST-EFFORT — a project whose create screen omits the Labels field rejects
+# `labels` with a field-not-on-screen 400. Include it ONLY when the create meta exposes
+# labels for this issue type (createmeta …/issuetypes/<id> → `.fields[]|select(.fieldId=="labels")`,
+# or .values on newer builds); LABELS_SETTABLE defaults 1, set 0 when absent. The anchor
+# carries the back-reference regardless, so omitting the label never loses the link.
 curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
  -H "Content-Type: application/json" -H "Accept: application/json" \
  -X POST "$JIRA_BASE/rest/api/$APIV/issue" \
  --data @<(jq -n --arg pk "$PROJ_KEY" --arg sum "$TITLE" --arg lbl "flow:$FLOW_ID" --arg it "$ITYPE" \
- "${DESC_ARG[@]}" '
- { fields: { project: {key:$pk}, issuetype: {name:$it},
- summary: $sum, description: $desc, labels: [$lbl] } }')
+ --argjson wl "${LABELS_SETTABLE:-1}" "${DESC_ARG[@]}" '
+ { fields: ({ project: {key:$pk}, issuetype: {name:$it}, summary: $sum, description: $desc }
+ + (if $wl == 1 then { labels: [$lbl] } else {} end)) }')
 # The 201 response carries {id, key, self}. Build the browse url from key:
 # id=.id identifier=.key url="$JIRA_BASE/browse/"+.key
 
@@ -764,6 +770,22 @@ once in [adapter-interface.md](adapter-interface.md) § Direction convention:
 
 > **blocked-by = the current issue (A) is blocked by the dependency issue (B).**
 
+**The link type is configurable — admins can rename or remove the default `Blocks`.**
+Resolve `$BLOCKS_TYPE` ONCE and use it in BOTH the `setIssueRelation` POST and the
+`listIssueRelations` filter below: `tracker.perTracker.blocksLinkType` if the user pinned
+one, else **discover** via `GET /rest/api/$APIV/issueLinkType` → the type whose `outward`
+matches `blocks` case-insensitively (default `"Blocks"`). A site with **no**
+blocks-semantics link type at all ⇒ `defer` + receipt (no native blocked-by surface to
+project onto), never force an arbitrary type.
+
+```bash
+BLOCKS_TYPE=$("$FLOWCTL" config get tracker.perTracker.blocksLinkType --json 2>/dev/null | jq -r '.value // empty')
+[ -z "$BLOCKS_TYPE" ] && BLOCKS_TYPE=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
+ "$JIRA_BASE/rest/api/$APIV/issueLinkType" \
+ | jq -r '(.issueLinkTypes // [])[] | select(.outward|ascii_downcase|test("block")) | .name' | head -1)
+[ -z "$BLOCKS_TYPE" ] && BLOCKS_TYPE="Blocks" # last-resort default
+```
+
 ### Native facts (pin these — verified live 2026-06-28)
 
 - **`POST /rest/api/3/issueLink`** with `{type:{name:"Blocks"}, outwardIssue:{key|id},
@@ -785,8 +807,8 @@ once in [adapter-interface.md](adapter-interface.md) § Direction convention:
 ```bash
 curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
  "$JIRA_BASE/rest/api/$APIV/issue/$A_ID?fields=issuelinks" \
- | jq -c --arg A "$A_ID" '.fields.issuelinks[]
- | select(.type.name == "Blocks") # ONLY the blocked-by edge kind
+ | jq -c --arg A "$A_ID" --arg BLT "$BLOCKS_TYPE" '.fields.issuelinks[]
+ | select(.type.name == $BLT) # ONLY the configured blocks-type edge
  | if .inwardIssue then
  # A "is blocked by" B → A is blocked (from), B is the blocker (to)
  { from: $A, to: .inwardIssue.id, type: "blocks", source: "unknown", linkPresent: true }
@@ -867,8 +889,8 @@ fi
 curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
  -H "Content-Type: application/json" -H "Accept: application/json" \
  -X POST "$JIRA_BASE/rest/api/$APIV/issueLink" \
- --data @<(jq -n --arg out "$B_ID" --arg in "$A_ID" \
- '{ type: {name:"Blocks"}, outwardIssue:{id:$out}, inwardIssue:{id:$in} }')
+ --data @<(jq -n --arg out "$B_ID" --arg in "$A_ID" --arg blt "$BLOCKS_TYPE" \
+ '{ type: {name:$blt}, outwardIssue:{id:$out}, inwardIssue:{id:$in} }')
 # → HTTP 201. Record the projected edge in the ledger (flowctl sync set-dep-relation).
 ```
 
