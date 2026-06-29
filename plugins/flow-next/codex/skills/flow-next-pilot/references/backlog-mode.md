@@ -410,8 +410,9 @@ the normalized interface.
  adapter-internal concern, so pilot still branches on **no** tracker type.
 - **Zero-setup (R17).** Each tracker resolves via tracker-sync's discovery-ceremony
  probe ladder, preferring auth the company already has (`gh`/`glab` CLI session,
- registered Linear/Atlassian MCP, or a CI/REST env token) — no flow-next-specific
- provisioning, OAuth app, webhook, or special config. The spec-first floor
+ a registered Linear MCP, or a CI/REST env token — Jira is REST-token only, **no
+ MCP**: fn-70's transport decision) — no flow-next-specific provisioning, OAuth app,
+ webhook, or special config. The spec-first floor
  guarantees the loop works with **zero** trackers configured.
 
 ---
