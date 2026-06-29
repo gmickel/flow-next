@@ -245,6 +245,15 @@ class JiraIdentifierValidatorTestCase(unittest.TestCase):
             self._set_id(spec_id, "j-fn", identifier="FN-1")
         self.assertIsNone(self._state(spec_id)["id"])
 
+    def test_jira_underscore_key_accepted_display_only(self) -> None:
+        # A Jira DC/Server CUSTOM key format with underscores (`MY_PROJECT-7`) is
+        # NOT clean KEY-N — it can't mint a kebab canonical spec id — so it links
+        # DISPLAY-ONLY (flow-first; spec stays fn-NN), exactly like a GitHub ref.
+        # Stored + shown verbatim, but not a resolvable spec handle.
+        spec_id = self._create_spec("Jira underscore key")
+        self._set_id(spec_id, "10500", identifier="MY_PROJECT-7")
+        self.assertEqual(self._state(spec_id)["identifier"], "MY_PROJECT-7")
+
     # --- regressions: existing forms unchanged ------------------------------
 
     def test_github_reference_still_accepted(self) -> None:

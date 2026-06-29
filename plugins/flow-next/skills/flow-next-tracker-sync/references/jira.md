@@ -221,6 +221,14 @@ $FLOWCTL sync set-tracker-id "<spec-id>" "$ISSUE_ID" --identifier "$ISSUE_KEY" -
   `proj-123` / `proj-123.M` resolve like `wor-17`. Both entry flows work (tracker-first
   AND flow-first). Distinct from GitHub/GitLab (flow-first only — their keys don't
   slugify into a canonical id).
+  - **Exception — a DC/Server CUSTOM key format with underscores (`MY_PROJECT-7`)** is
+    NOT clean `KEY-N` (it can't mint a kebab canonical id), so it links **flow-first /
+    display-only** like a GitHub ref: the spec stays `fn-NN`, and `set-tracker-id
+    --identifier MY_PROJECT-7` stores the bare handle as a shown alias + back-reference
+    (NOT a resolvable spec handle — you never `work MY_PROJECT-7`). Standard keys (no
+    underscore) stay tracker-first. (The `listOpenIssues` JQL `projectKey` validator
+    allows underscores too — `^[A-Z][A-Z0-9_]+$`, injection-safe — so the project still
+    scopes; only the *canonical-id minting* requires a clean key.)
 - **Refresh the `identifier` from every fetch response.** Because the `key` is
   mutable, each `fetchIssue` re-reads `.key` and surfaces the current display key —
   the durable `id` in storage is the join key; the displayed `identifier` follows the
