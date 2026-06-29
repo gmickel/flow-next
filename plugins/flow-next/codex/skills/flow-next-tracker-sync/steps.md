@@ -266,6 +266,14 @@ $FLOWCTL sync set-tracker-id "wor-17-slug" "$ISSUE_UUID" --identifier "WOR-17" -
 > entry flows work for Jira (tracker-first AND flow-first), distinct from GitHub/GitLab
 > (flow-first only — below).
 >
+> **Exception — a DC/Server CUSTOM key that isn't clean `KEY-N`** (underscores
+> `MY_PROJECT-7`, OR a >10-char alnum key `PRODUCT2013-7`) can't mint a kebab canonical
+> id, so the strict `--tracker-first` validator REJECTS it. Those grabs go **flow-first**
+> like GitHub/GitLab: create an `fn-NN` spec, then `sync set-tracker-id "<fn-id>"
+> "$ISSUE_ID" --identifier "MY_PROJECT-7" --url "$ISSUE_URL"` (display-only alias — stored,
+> shown, back-referenced, but you never `work MY_PROJECT-7`). Standard keys (no underscore,
+> ≤10-char) stay tracker-first.
+>
 > **GitLab grabs go FLOW-FIRST, not tracker-first.** The `--tracker-first
 > --tracker-identifier` path above only accepts an **alpha-prefixed `KEY-N`** display
 > key (Linear `WOR-17` / Jira `PROJ-123` → mints `wor-17-slug` / `proj-123-slug`).
