@@ -4,6 +4,8 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+## [flow-next 2.4.0] - 2026-06-29
+
 ### Added
 - **Jira tracker adapter** (fn-70) — `/flow-next:tracker-sync` gains a fourth tracker behind the same normalized, transport-blind adapter interface. Enterprise teams on Jira — the dominant enterprise tracker — can now mirror flow specs to their board (Cloud **and** Data Center / Server), and `/flow-next:pilot` backlog mode surfaces its async gap-questions to a Jira issue. **Zero special setup** — a standard Jira credential the company already issues (Cloud `email:API_TOKEN` or DC/Server `Bearer <PAT>`), never an OAuth app, webhook, or Atlassian Connect/Forge app; the spec-first floor applies when no credential is present. **REST-only, single-rung, NO MCP** (the official Atlassian MCP can't transition status / update fields / set links — the writes a two-way sync needs — and the community MCP is a redundant PAT-wrapper; the fn-70 transport decision).
   - **flowctl plumbing + ceremony** (fn-70.1) — `TRACKER_TYPES` extended to include `jira` so `tracker.type: jira` activates the bridge; the `set-tracker-id` identifier validator already accepts the Jira `PROJ-123` `KEY-N` form (tracker-first like Linear); new `tracker.perTracker.baseUrl` / `projectKey` / `authScheme` / `apiVersion` / `statusMap` / `sslVerify` config; and the discovery ceremony's three coupled sites (probe table, ASK step, config-write block) extended to detect, **offer** (flipping today's "surface but don't offer"), and write Jira — including a validated readiness **status name** for the promoted-lane JQL.
