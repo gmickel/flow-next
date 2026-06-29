@@ -106,7 +106,7 @@ JIRA_BASE=${JIRA_BASE_URL:-$($FLOWCTL config get tracker.perTracker.baseUrl --js
 PROJ_KEY=$($FLOWCTL config get tracker.perTracker.projectKey --json | jq -r '.value // empty')
 AUTH_SCHEME=$($FLOWCTL config get tracker.perTracker.authScheme --json | jq -r '.value // empty')
 APIV=$($FLOWCTL config get tracker.perTracker.apiVersion --json | jq -r '.value // "3"')
-SSL_VERIFY=$($FLOWCTL config get tracker.perTracker.sslVerify --json | jq -r '.value // true')
+SSL_VERIFY=$($FLOWCTL config get tracker.perTracker.sslVerify --json | jq -r 'if .value == null then true else .value end')  # `// true` would flip an explicit false (jq `//` treats false as empty)
 
 # Build the auth ARGS by the PERSISTED authScheme — NEVER by probing which env var
 # happens to be set (that would re-race a decided value). Credentials are read from
@@ -221,9 +221,10 @@ $FLOWCTL sync set-tracker-id "<spec-id>" "$ISSUE_ID" --identifier "$ISSUE_KEY" -
   `proj-123` / `proj-123.M` resolve like `wor-17`. Both entry flows work (tracker-first
   AND flow-first). Distinct from GitHub/GitLab (flow-first only — their keys don't
   slugify into a canonical id).
-  - **Exception — a DC/Server CUSTOM key format with underscores (`MY_PROJECT-7`)** is
-    NOT clean `KEY-N` (it can't mint a kebab canonical id), so it links **flow-first /
-    display-only** like a GitHub ref: the spec stays `fn-NN`, and `set-tracker-id
+  - **Exception — a DC/Server CUSTOM key that isn't clean `KEY-N`** (underscores
+    `MY_PROJECT-7`, OR a >10-char alnum key `PRODUCT2013-7`) can't mint a kebab canonical
+    id, so it links **flow-first / display-only** like a GitHub ref: the spec stays
+    `fn-NN`, and `set-tracker-id
     --identifier MY_PROJECT-7` stores the bare handle as a shown alias + back-reference
     (NOT a resolvable spec handle — you never `work MY_PROJECT-7`). Standard keys (no
     underscore) stay tracker-first. (The `listOpenIssues` JQL `projectKey` validator
@@ -975,7 +976,7 @@ while :; do
            -H "Content-Type: application/json" -H "Accept: application/json" \
            -X POST "$JIRA_BASE/rest/api/3/search/jql" --data @<(printf '%s' "$BODY"))
   printf '%s' "$RESP" | jq -c '.issues[]'    # map each → normalized issue (firewall)
-  ISLAST=$(printf '%s' "$RESP" | jq -r '.isLast // true')
+  ISLAST=$(printf '%s' "$RESP" | jq -r 'if .isLast == null then true else .isLast end')  # `// true` would flip an explicit isLast:false (more pages) → stop early, under-read
   NEXT=$(printf '%s' "$RESP" | jq -r '.nextPageToken // empty')
   PAGE=$((PAGE+1))
   { [ "$ISLAST" = true ] || [ -z "$NEXT" ] || [ "$PAGE" -ge "$MAXP" ]; } && break

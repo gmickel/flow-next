@@ -254,6 +254,15 @@ class JiraIdentifierValidatorTestCase(unittest.TestCase):
         self._set_id(spec_id, "10500", identifier="MY_PROJECT-7")
         self.assertEqual(self._state(spec_id)["identifier"], "MY_PROJECT-7")
 
+    def test_jira_long_alnum_key_accepted_display_only(self) -> None:
+        # A DC/Server custom key longer than the 10-char alnum KEY-N cap
+        # (`PRODUCT2013-7`, 11 chars) also can't mint a kebab canonical id
+        # (is_spec_id rejects the long minted id), so it links DISPLAY-ONLY
+        # (flow-first), same as the underscore case — not a hard reject.
+        spec_id = self._create_spec("Jira long key")
+        self._set_id(spec_id, "10501", identifier="PRODUCT2013-7")
+        self.assertEqual(self._state(spec_id)["identifier"], "PRODUCT2013-7")
+
     # --- regressions: existing forms unchanged ------------------------------
 
     def test_github_reference_still_accepted(self) -> None:

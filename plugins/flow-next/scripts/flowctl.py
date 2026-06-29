@@ -2259,10 +2259,11 @@ def parse_tracker_identifier(
     A STANDARD Jira issue key (`PROJ-123`, lowercased `proj-123`) IS this
     `KEY-N` form, so — like a Linear handle — it parses, resolves, and is
     tracker-first capable (fn-70). A Jira DC/Server project on a CUSTOM key
-    format with underscores (`MY_PROJECT-7`) is NOT clean `KEY-N`: it can't mint
-    a kebab-case canonical spec id, so it takes the FLOW-FIRST path instead
+    format that isn't clean `KEY-N` — underscores (`MY_PROJECT-7`) OR a key
+    longer than the 10-char alnum cap (`PRODUCT2013-7`) — can't mint a
+    kebab-case canonical spec id, so it takes the FLOW-FIRST path instead
     (`fn-NN` spec + `set-tracker-id --identifier MY_PROJECT-7` stores the bare
-    handle as a resolvable display alias), exactly like GitHub `#N` / GitLab
+    handle as a display alias), exactly like GitHub `#N` / GitLab
     `<project>#<iid>` (which also take the `allow_reference` display-only path
     in the validator below).
     """
@@ -2294,8 +2295,8 @@ def validate_tracker_identifier(
     ``allow_reference`` (link-time only): also accept a GitHub/GitLab-style issue
     reference — ``#123``, ``owner/repo#123``, a **nested** GitLab group path
     ``group/subgroup/project#12``, or a bare ``123`` — OR a Jira DC/Server CUSTOM
-    key with underscores (``MY_PROJECT-7``, not clean ``KEY-N``) — as a
-    **display-only** identifier. It returns ``("", number, display)`` (empty key) — stored + shown
+    key that isn't clean ``KEY-N`` (underscores ``MY_PROJECT-7`` OR a >10-char
+    alnum key ``PRODUCT2013-7``) — as a **display-only** identifier. It returns ``("", number, display)`` (empty key) — stored + shown
     + used in a ``Refs #123`` PR cross-link, but NOT a resolvable spec handle
     (only `KEY-N` keys — Linear ``WOR-17`` / Jira ``PROJ-123`` — resolve via the
     hybrid id scheme; you never ``work #123``).
@@ -2331,15 +2332,17 @@ def validate_tracker_identifier(
         bare = re.match(r"^([1-9][0-9]*)$", stripped)
         if bare:
             return ("", int(bare.group(1)), f"#{bare.group(1)}")
-        # A Jira DC/Server CUSTOM key format with underscores (`MY_PROJECT-7`) is
-        # not clean `KEY-N` — its lowercase key can't mint a kebab canonical spec
-        # id — so it links DISPLAY-ONLY like a GitHub ref: stored + shown + used
-        # in the back-reference, but NOT a resolvable spec handle (flow-first; the
-        # spec stays `fn-NN`). The key must contain at least one `_`, so clean
-        # keys WITHOUT underscores fall through to the strict resolvable path.
-        uref = re.match(r"^[A-Za-z][A-Za-z0-9_]*_[A-Za-z0-9_]*-([1-9][0-9]*)$", stripped)
-        if uref:
-            return ("", int(uref.group(1)), stripped)
+        # A Jira DC/Server CUSTOM key that ISN'T clean resolvable `KEY-N` — it has
+        # underscores (`MY_PROJECT-7`) OR exceeds the 10-char alnum cap
+        # (`PRODUCT2013-7`) — can't mint a kebab canonical spec id (`is_spec_id`
+        # rejects the minted id for both), so it links DISPLAY-ONLY like a GitHub
+        # ref: stored + shown + used in the back-reference, but NOT a resolvable
+        # spec handle (flow-first; the spec stays `fn-NN`). The strict-parse
+        # gate means clean keys (`PROJ-123` / `WOR-17`) match this broad grammar
+        # too but resolve, so they fall through to the resolvable path below.
+        jref = re.match(r"^[A-Za-z][A-Za-z0-9_]*-([1-9][0-9]*)$", stripped)
+        if jref and parse_tracker_identifier(stripped) is None:
+            return ("", int(jref.group(1)), stripped)
     parsed = parse_tracker_identifier(identifier)
     if parsed is None:
         error_exit(
