@@ -647,6 +647,19 @@ just ready/done:
 TARGET=$(printf '%s' "$STATUS_MAP" | jq -c --arg n "$NORMALIZED" '.[$n] // empty')
 [ -z "$TARGET" ] && { sync_defer status-unmapped "$NORMALIZED"; return; } # no entry → defer
 
+# 1.5. ALREADY-CURRENT ⇒ NOOP (not defer). A push/status-only caller (work.firstClaim,
+# land.merged) may not have checked the current status; if the issue is ALREADY at
+# the target, Jira exposes no self-transition, so the step-3 lookup would otherwise
+# wrongly fall through to `transition-unreachable`. Read the current status and
+# string-match it the SAME way as step 3 (id tostring, else case-insensitive name):
+CUR=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
+ "$JIRA_BASE/rest/api/$APIV/issue/$TRACKER_ID?fields=status" | jq -c '.fields.status')
+if printf '%s' "$CUR" | jq -e --argjson t "$TARGET" '
+ ($t.id != null and (.id | tostring) == ($t.id | tostring)) or
+ ($t.name != null and (.name | ascii_downcase) == ($t.name | ascii_downcase))' >/dev/null; then
+ sync_receipt noop "status already at $NORMALIZED — no transition needed"; return
+fi
+
 # 2. Read the transitions LEGAL FROM THE CURRENT STATUS (ids are current-state-relative).
 TRS=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
  "$JIRA_BASE/rest/api/$APIV/issue/$TRACKER_ID/transitions")
@@ -845,7 +858,12 @@ if [ "$LEDGERED" = true ] && [ "$EXISTS" != true ]; then
  return
 fi
 
-# Otherwise CREATE the link (additive-only). B = outwardIssue (blocks), A = inwardIssue (blocked).
+# Otherwise CREATE the link (additive-only). DIRECTION — LIVE-VALIDATED 2026-06-28
+# (FINDINGS-jira.md): `outwardIssue` **blocks** `inwardIssue`; `inwardIssue` shows
+# "is blocked by". The edge is "A is blocked by B" (A=current/blocked, B=dep/blocker),
+# so the BLOCKER B = outwardIssue (it blocks) and the BLOCKED A = inwardIssue (it is
+# blocked by). Hence out=$B_ID, in=$A_ID — do NOT swap (a fetched link on A then reads
+# back `inwardIssue: B` ⇒ "A is blocked by B", exactly what listIssueRelations expects).
 curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
  -H "Content-Type: application/json" -H "Accept: application/json" \
  -X POST "$JIRA_BASE/rest/api/$APIV/issueLink" \
