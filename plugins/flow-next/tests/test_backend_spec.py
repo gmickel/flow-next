@@ -53,10 +53,41 @@ BACKEND_REGISTRY = flowctl.BACKEND_REGISTRY
 class TestRegistryShape(unittest.TestCase):
     """Registry contents are the contract downstream code depends on."""
 
-    def test_exactly_four_backends(self) -> None:
+    def test_exactly_five_backends(self) -> None:
+        # cursor added in fn-74 (model-yes / effort-no shape).
         self.assertEqual(
             sorted(BACKEND_REGISTRY.keys()),
-            ["codex", "copilot", "none", "rp"],
+            ["codex", "copilot", "cursor", "none", "rp"],
+        )
+
+    def test_cursor_effort_is_none(self) -> None:
+        # Cursor folds reasoning effort into the model name → no effort axis.
+        self.assertIsNone(BACKEND_REGISTRY["cursor"]["efforts"])
+
+    def test_cursor_default_model(self) -> None:
+        self.assertEqual(
+            BACKEND_REGISTRY["cursor"]["default_model"], "gpt-5.5-high"
+        )
+        # No default_effort — effort is not a cursor field.
+        self.assertNotIn("default_effort", BACKEND_REGISTRY["cursor"])
+
+    def test_cursor_model_catalog(self) -> None:
+        # Source of truth: ``cursor-agent --list-models`` (v2026.06). Keep synced
+        # — Cursor ships new rows + auto-updates the CLI without changelog.
+        self.assertEqual(
+            BACKEND_REGISTRY["cursor"]["models"],
+            {
+                "auto",
+                "gpt-5.5-high",
+                "gpt-5.4-high",
+                "gpt-5.3-codex",
+                "gpt-5.3-codex-high",
+                "gpt-5.3-codex-xhigh",
+                "gpt-5.2",
+                "composer-2.5",
+                "claude-opus-4-8-thinking-high",
+                "claude-opus-4-7-thinking-high",
+            },
         )
 
     def test_rp_rejects_model_and_effort(self) -> None:
@@ -152,6 +183,20 @@ class TestParseValid(unittest.TestCase):
     def test_copilot_model_only(self) -> None:
         s = BackendSpec.parse("copilot:gpt-5.2")
         self.assertEqual(s, BackendSpec("copilot", "gpt-5.2", None))
+
+    def test_bare_cursor(self) -> None:
+        s = BackendSpec.parse("cursor")
+        self.assertEqual(s, BackendSpec("cursor", None, None))
+
+    def test_cursor_with_model(self) -> None:
+        s = BackendSpec.parse("cursor:gpt-5.5-high")
+        self.assertEqual(s, BackendSpec("cursor", "gpt-5.5-high", None))
+
+    def test_cursor_model_with_baked_effort_name(self) -> None:
+        # Effort is part of the model string for cursor — this is a model, not
+        # a separate effort field.
+        s = BackendSpec.parse("cursor:gpt-5.3-codex-xhigh")
+        self.assertEqual(s, BackendSpec("cursor", "gpt-5.3-codex-xhigh", None))
 
     def test_codex_all_efforts(self) -> None:
         for eff in ("none", "minimal", "low", "medium", "high", "xhigh"):
@@ -258,6 +303,29 @@ class TestParseInvalid(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unknown effort for copilot"):
             BackendSpec.parse("copilot:gpt-5.2:none")
 
+    def test_cursor_rejects_effort(self) -> None:
+        # Cursor has no effort axis — ``cursor:<model>:<effort>`` must raise.
+        with self.assertRaisesRegex(ValueError, "does not accept an effort"):
+            BackendSpec.parse("cursor:gpt-5.5-high:high")
+
+    def test_cursor_unknown_model_lists_valid(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Unknown model for cursor"):
+            BackendSpec.parse("cursor:bogus")
+        try:
+            BackendSpec.parse("cursor:bogus")
+            self.fail("expected ValueError")
+        except ValueError as e:
+            msg = str(e)
+            # Sorted valid-list in message — at least these anchors.
+            self.assertIn("'gpt-5.5-high'", msg)
+            self.assertIn("'composer-2.5'", msg)
+
+    def test_cursor_rejects_gpt5_high_lookalike_in_effort_slot(self) -> None:
+        # A copilot/codex-style ``cursor:gpt-5.2:xhigh`` (effort in slot 3) must
+        # fail on the effort axis, not silently parse.
+        with self.assertRaisesRegex(ValueError, "does not accept an effort"):
+            BackendSpec.parse("cursor:gpt-5.2:xhigh")
+
     def test_rp_rejects_model(self) -> None:
         with self.assertRaisesRegex(ValueError, "does not accept a model"):
             BackendSpec.parse("rp:opus")
@@ -305,6 +373,7 @@ class TestResolve(unittest.TestCase):
         self._env_snapshot = os.environ.copy()
         for key in list(os.environ.keys()):
             if key.startswith("FLOW_CODEX_") or key.startswith("FLOW_COPILOT_") \
+               or key.startswith("FLOW_CURSOR_") \
                or key.startswith("FLOW_RP_") or key.startswith("FLOW_NONE_"):
                 os.environ.pop(key, None)
 
@@ -319,6 +388,22 @@ class TestResolve(unittest.TestCase):
     def test_bare_copilot_fills_both_defaults(self) -> None:
         r = BackendSpec.parse("copilot").resolve()
         self.assertEqual(r, BackendSpec("copilot", "gpt-5.5", "high"))
+
+    def test_bare_cursor_fills_model_effort_stays_none(self) -> None:
+        # Model fills from registry default; effort stays None (no effort axis).
+        r = BackendSpec.parse("cursor").resolve()
+        self.assertEqual(r, BackendSpec("cursor", "gpt-5.5-high", None))
+
+    def test_cursor_env_fills_missing_model(self) -> None:
+        os.environ["FLOW_CURSOR_MODEL"] = "composer-2.5"
+        r = BackendSpec.parse("cursor").resolve()
+        self.assertEqual(r, BackendSpec("cursor", "composer-2.5", None))
+
+    def test_cursor_effort_env_is_ignored(self) -> None:
+        # No effort axis — a stray FLOW_CURSOR_EFFORT must never leak in.
+        os.environ["FLOW_CURSOR_EFFORT"] = "xhigh"
+        r = BackendSpec.parse("cursor:gpt-5.4-high").resolve()
+        self.assertEqual(r, BackendSpec("cursor", "gpt-5.4-high", None))
 
     def test_env_fills_missing_model(self) -> None:
         os.environ["FLOW_CODEX_MODEL"] = "gpt-5.2"
@@ -403,6 +488,9 @@ class TestStrRoundTrip(unittest.TestCase):
             "codex:gpt-5.4:xhigh",
             "copilot:claude-opus-4.5:xhigh",
             "copilot:gpt-5.2:medium",
+            "cursor",
+            "cursor:gpt-5.5-high",
+            "cursor:gpt-5.3-codex-xhigh",
         ):
             with self.subTest(spec=raw):
                 self.assertEqual(str(BackendSpec.parse(raw)), raw)

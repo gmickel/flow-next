@@ -3524,6 +3524,29 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         "default_model": "gpt-5.5",
         "default_effort": "high",
     },
+    "cursor": {
+        # NEW registry shape: model accepted, effort folded into the model name
+        # (Cursor convention) so ``efforts`` is ``None`` — ``cursor:<m>:<e>`` is
+        # rejected by the existing parser with no parser edits. Model strings are
+        # verbatim from ``cursor-agent --list-models`` (v2026.06); Cursor ships
+        # new rows + auto-updates the CLI without changelog, so keep this list
+        # synced with ``cursor-agent --list-models``.
+        "models": {
+            "auto",
+            "gpt-5.5-high",
+            "gpt-5.4-high",
+            "gpt-5.3-codex",
+            "gpt-5.3-codex-high",
+            "gpt-5.3-codex-xhigh",
+            "gpt-5.2",
+            "composer-2.5",
+            "claude-opus-4-8-thinking-high",
+            "claude-opus-4-7-thinking-high",
+        },
+        # Cursor bakes reasoning effort into the model name — no ``--effort`` flag.
+        "efforts": None,
+        "default_model": "gpt-5.5-high",
+    },
     "none": {
         # Explicit opt-out. Parser still validates it so ``--review=none`` can
         # be stored as a spec without special-casing upstream.
@@ -3992,6 +4015,212 @@ def run_copilot_exec(
                 tmp_prompt_path.unlink(missing_ok=True)
             except OSError:
                 pass
+
+
+# --- Cursor Backend Helpers (fn-74) ---
+#
+# Mirror the copilot helpers with cursor-agent's verified headless contract
+# (v2026.06). Deliberate divergences from copilot (see fn-74 spec):
+#   - prompt is a POSITIONAL argv arg (not ``-p <prompt>``, not stdin)
+#   - session is RESUME-ONLY (first call omits ``--resume`` and we capture the
+#     id cursor-agent generates; never fabricate a first-call id)
+#   - effort folds into the model name → NO ``--effort`` flag
+#   - run with ``cwd=repo_root`` (Cursor scopes to the workspace dir)
+#   - ``--mode ask`` (read-only Q&A) + ``--trust`` (or the CLI hangs on a prompt)
+
+
+def require_cursor() -> str:
+    """Ensure cursor-agent CLI is available. Returns path to cursor-agent."""
+    cursor = shutil.which("cursor-agent")
+    if not cursor:
+        error_exit("cursor-agent not found in PATH", use_json=False, code=2)
+    return cursor
+
+
+def get_cursor_version() -> Optional[str]:
+    """Get cursor-agent version, or None if not available.
+
+    cursor-agent prints a calendar-style version like ``2026.06.13-abc1234``.
+    We capture the dotted version plus the optional ``-<hash>`` suffix; if the
+    output doesn't match, return it verbatim.
+    """
+    cursor = shutil.which("cursor-agent")
+    if not cursor:
+        return None
+    try:
+        result = subprocess.run(
+            [cursor, "--version"],
+            capture_output=True,
+            text=True, encoding="utf-8",
+            check=True,
+        )
+        output = result.stdout.strip()
+        match = re.search(r"(\d+\.\d+\.\d+(?:-\S+)?)", output)
+        return match.group(1) if match else output
+    except subprocess.CalledProcessError:
+        return None
+
+
+# Cursor reuses copilot's argv-size threshold. cursor-agent takes the prompt as a
+# POSITIONAL argv arg (NOT stdin), so above this size there is no safe delivery
+# path: copilot's temp-file step just reads the file back into argv (it bypasses
+# no cap), and cursor-agent stdin is unconfirmed. ``run_cursor_exec`` raises an
+# explicit error instead of silently truncating or reusing the read-back trick.
+CURSOR_ARGV_PROMPT_MAX = COPILOT_ARGV_PROMPT_MAX
+
+
+def _parse_cursor_result(stdout: str) -> tuple[str, Optional[str], bool]:
+    """Parse cursor-agent ``--output-format json`` stdout.
+
+    Returns ``(result_text, session_id, is_error)``. ``--output-format json``
+    emits a single result object
+    ``{"type":"result","is_error":bool,"result":"<text>","session_id":"<uuid>"}``;
+    we also tolerate streaming JSON-lines by scanning for the last result
+    object. On unparseable / empty output we return ``("", None, True)`` so the
+    caller treats it as a backend failure (never a false SHIP).
+    """
+    text = (stdout or "").strip()
+    if not text:
+        return "", None, True
+
+    def _is_result_obj(d: Any) -> bool:
+        return isinstance(d, dict) and (
+            d.get("type") == "result"
+            or ("result" in d and "session_id" in d)
+        )
+
+    obj: Optional[dict] = None
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        parsed = None
+    if _is_result_obj(parsed):
+        obj = parsed
+    else:
+        # Streaming JSON-lines fallback — take the last result object.
+        for line in reversed(text.splitlines()):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                cand = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if _is_result_obj(cand):
+                obj = cand
+                break
+
+    if obj is None:
+        return "", None, True
+
+    result_text = obj.get("result")
+    if not isinstance(result_text, str):
+        result_text = ""
+    session_id = obj.get("session_id")
+    if not isinstance(session_id, str) or not session_id:
+        session_id = None
+    is_error = bool(obj.get("is_error", False))
+    return result_text, session_id, is_error
+
+
+def run_cursor_exec(
+    prompt: str,
+    session_id: Optional[str] = None,
+    *,
+    spec: Optional["BackendSpec"] = None,
+    repo_root: Path,
+) -> tuple[str, str, int, str]:
+    """Run cursor-agent headless. Returns (result_text, session_id, exit_code, stderr).
+
+    Invocation::
+
+        cursor-agent -p --output-format json --trust --mode ask --model <m> \\
+            [--resume <session_id>] "<prompt>"
+
+    run with **``cwd=repo_root``** (Cursor scopes to the workspace dir — a review
+    launched from a subdir reads the wrong tree without this), ``--mode ask``
+    (read-only; the CLI refuses to edit), ``--trust`` (mandatory headless or the
+    CLI blocks on a trust prompt), ``timeout=600``.
+
+    Session = **resume-only**: ``session_id=None`` (first call) omits ``--resume``
+    and lets Cursor generate the id, which we parse from the result and return.
+    A non-None ``session_id`` passes ``--resume <id>``. Never fabricate a
+    first-call ``--resume`` id.
+
+    Prompt delivery is **positional argv** (NOT stdin). Above
+    ``CURSOR_ARGV_PROMPT_MAX`` we raise an explicit ``ValueError`` — there is no
+    safe oversized path yet.
+
+    ``spec`` is a resolved ``BackendSpec`` (backend=cursor). Cursor folds effort
+    into the model name, so there is **no** ``--effort`` flag. When ``spec`` is
+    ``None`` (defensive / non-review callers), fall back to bare-cursor
+    resolution (env + registry default).
+
+    Returns:
+        tuple: (result_text, returned_session_id, exit_code, stderr)
+        - exit_code 0 = success; non-zero on ``is_error`` / CLI failure / timeout.
+        - On timeout (600s) returns ("", session_id or "", 2, "<msg>").
+    """
+    # Positional-argv size guard — raise BEFORE shelling out (no safe oversized
+    # path; see CURSOR_ARGV_PROMPT_MAX). Never silently read back into argv.
+    if len(prompt) >= CURSOR_ARGV_PROMPT_MAX:
+        raise ValueError(
+            f"cursor-agent prompt too large: {len(prompt)} chars "
+            f">= {CURSOR_ARGV_PROMPT_MAX} (positional-argv limit; cursor-agent "
+            f"has no confirmed stdin/file delivery path)"
+        )
+
+    cursor = require_cursor()
+
+    if spec is None:
+        spec = BackendSpec("cursor").resolve()
+    elif spec.model is None:
+        spec = spec.resolve()
+    effective_model = spec.model or "gpt-5.5-high"
+
+    cmd = [
+        cursor,
+        "-p",
+        "--output-format",
+        "json",
+        "--trust",
+        "--mode",
+        "ask",
+        "--model",
+        effective_model,
+    ]
+    # Resume-only: omit --resume on the first call (session_id is None), let
+    # Cursor mint the id, capture it from the result below.
+    if session_id is not None:
+        cmd += ["--resume", session_id]
+    # Prompt is the trailing positional arg (NOT ``-p <prompt>``).
+    cmd.append(prompt)
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True, encoding="utf-8",
+            check=False,  # Don't raise on non-zero exit; caller inspects
+            timeout=600,
+            cwd=str(repo_root),
+        )
+    except subprocess.TimeoutExpired:
+        return "", (session_id or ""), 2, "cursor-agent timed out (600s)"
+
+    result_text, returned_session_id, is_error = _parse_cursor_result(
+        result.stdout
+    )
+    if returned_session_id is None:
+        returned_session_id = session_id or ""
+
+    exit_code = result.returncode
+    if is_error and exit_code == 0:
+        # CLI reported a logical error without a non-zero exit — surface it so
+        # the caller never treats an errored review as a clean SHIP.
+        exit_code = 1
+
+    return result_text, returned_session_id, exit_code, result.stderr
 
 
 # --- Confidence calibration (fn-29.3) ---
@@ -18800,6 +19029,104 @@ def cmd_copilot_check(args: argparse.Namespace) -> None:
             )
 
 
+# --- Cursor Commands (fn-74) ---
+
+
+def cmd_cursor_check(args: argparse.Namespace) -> None:
+    """Check cursor-agent availability + live auth probe.
+
+    Schema-aligned to ``cmd_copilot_check``: a present binary with missing /
+    stale credentials (no stored login + no ``CURSOR_API_KEY``) still fails on
+    first real invocation, so we probe live auth. ``--skip-probe`` bypasses the
+    live call (fast CI path where auth is already verified).
+
+    Probe: trivial prompt ("ok"), read-only ``--mode ask --trust``, the cheap
+    ``auto`` model (Cursor routes to an appropriate small model), fresh session
+    (no ``--resume``), 60s timeout, run with ``cwd=repo_root`` (same
+    workspace-scope requirement as ``run_cursor_exec``). ``authed: true`` iff
+    exit_code == 0.
+
+    JSON output schema (aligned to copilot's ``check``):
+        {
+          "available": bool,      # binary on PATH
+          "version": str|null,    # parsed from --version
+          "authed": bool|null,    # live probe succeeded (null if skipped)
+          "model_used": str,      # probe model (even when skipped)
+          "error": str|null       # first stderr line or timeout message
+        }
+    """
+    cursor = shutil.which("cursor-agent")
+    available = cursor is not None
+    version = get_cursor_version() if available else None
+
+    # ``auto`` lets Cursor route to a small/fast model — the probe just verifies
+    # auth round-trips, so the exact model is immaterial and cost is negligible.
+    probe_model = "auto"
+
+    authed: Optional[bool] = None
+    error: Optional[str] = None
+
+    if available and not getattr(args, "skip_probe", False):
+        repo_root = get_repo_root() if ensure_flow_exists() else Path.cwd()
+        probe_prompt = "ok"
+        cmd = [
+            cursor,
+            "-p",
+            "--output-format",
+            "json",
+            "--trust",
+            "--mode",
+            "ask",
+            "--model",
+            probe_model,
+            probe_prompt,
+        ]
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True, encoding="utf-8",
+                check=False,
+                timeout=60,
+                cwd=str(repo_root),
+            )
+            authed = result.returncode == 0
+            if not authed:
+                stderr_first = (result.stderr or "").strip().splitlines()
+                error = stderr_first[0] if stderr_first else f"exit {result.returncode}"
+        except subprocess.TimeoutExpired:
+            authed = False
+            error = "cursor-agent probe timed out (60s)"
+        except OSError as e:
+            authed = False
+            error = f"cursor-agent probe failed to launch: {e}"
+
+    if args.json:
+        json_output(
+            {
+                "available": available,
+                "version": version,
+                "authed": authed,
+                "model_used": probe_model,
+                "error": error,
+            }
+        )
+    else:
+        if not available:
+            print("cursor-agent not available")
+            return
+        version_str = version or "unknown version"
+        if authed is None:
+            print(f"cursor-agent available: {version_str} (auth probe skipped)")
+        elif authed:
+            print(f"cursor-agent available: {version_str} (authed via {probe_model})")
+        else:
+            print(
+                f"cursor-agent available: {version_str} but auth probe failed: "
+                f"{error or 'unknown error'}"
+            )
+
+
 def build_standalone_review_prompt(
     base_branch: str, focus: Optional[str], diff_summary: str, files_embedded: bool = True
 ) -> str:
@@ -26121,6 +26448,24 @@ def main() -> None:
     )
     p_copilot_deep.add_argument("--json", action="store_true", help="JSON output")
     p_copilot_deep.set_defaults(func=cmd_copilot_deep_pass)
+
+    # cursor (cursor-agent CLI helpers — fn-74). Subcommand surface mirrors
+    # codex/copilot; review subcommands (impl-review/plan-review/...) are added
+    # in task fn-74-cursor-review-backend-cursor-agent-cli.2.
+    p_cursor = subparsers.add_parser("cursor", help="Cursor (cursor-agent CLI) helpers")
+    cursor_sub = p_cursor.add_subparsers(dest="cursor_cmd", required=True)
+
+    p_cursor_check = cursor_sub.add_parser(
+        "check",
+        help="Check cursor-agent availability + live auth probe",
+    )
+    p_cursor_check.add_argument("--json", action="store_true", help="JSON output")
+    p_cursor_check.add_argument(
+        "--skip-probe",
+        action="store_true",
+        help="Skip live auth probe (fast CI path when auth already verified)",
+    )
+    p_cursor_check.set_defaults(func=cmd_cursor_check)
 
     # Review auto-enable heuristic (fn-32.2 --deep). Skill layer calls this
     # to determine which deep passes auto-enable for a given changed-file

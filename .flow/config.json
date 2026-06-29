@@ -16,6 +16,10 @@
   "memory": {
     "enabled": true
   },
+  "pilot": {
+    "autonomy": "ready",
+    "gateClasses": []
+  },
   "pipeline": {
     "qa": "off"
   },
@@ -24,7 +28,7 @@
     "enabled": true
   },
   "review": {
-    "backend": "rp"
+    "backend": "codex"
   },
   "scouts": {
     "github": false
@@ -49,8 +53,10 @@
       }
     },
     "perTracker": {
+      "host": null,
       "labelMap": {},
       "priorityMap": {},
+      "project": null,
       "projectId": "98736b8e-2fa4-4d61-95db-0a4829f6aabf",
       "teamId": "7c086b79-e7fc-4eee-8d2d-b2dd60eee166"
     },
