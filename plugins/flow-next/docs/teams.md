@@ -168,7 +168,7 @@ Branch strategy is a per-team choice:
 
 `/flow-next:impl-review` runs a different model over the diff against the spec. Default backend is configured at the team level via `flowctl review-backend`; per-task overrides via task frontmatter; per-invocation overrides via `--review` flag.
 
-Backends: `rp` (RepoPrompt), `codex` (Codex CLI), `copilot` (GitHub Copilot CLI), `none`. Spec-form: `codex:gpt-5.5:high`, `copilot:claude-opus-4.5:high`, etc. See [`docs/flowctl.md`](flowctl.md) for the `flowctl review-backend` command reference.
+Backends: `rp` (RepoPrompt), `codex` (Codex CLI), `copilot` (GitHub Copilot CLI), `cursor` (Cursor `cursor-agent` CLI), `none`. Spec-form: `codex:gpt-5.5:high`, `copilot:claude-opus-4.5:high`, `cursor:gpt-5.5-high` (cursor folds effort into the model name — no `:effort` rung), etc. See [`docs/flowctl.md`](flowctl.md) for the `flowctl review-backend` command reference.
 
 The review surfaces findings on five confidence anchors (0 / 25 / 50 / 75 / 100) and gates `<75` except P0 @ 50+. Findings classified `introduced` vs `pre_existing` — only `introduced` counts toward the verdict. Receipts at `.flow/review-receipts/<branch>.json` carry `unaddressed: [R-IDs]`, `suppressed_count`, `verdict_before_validate`, etc. The receipt is itself a handover artefact.
 
