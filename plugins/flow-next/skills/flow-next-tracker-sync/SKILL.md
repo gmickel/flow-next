@@ -101,10 +101,11 @@ $FLOWCTL config set tracker.perTracker.baseUrl "https://acme.atlassian.net"  # J
 $FLOWCTL config set tracker.perTracker.projectKey "PROJ"                      # Jira: the project key (JQL / listOpenIssues scope)
 $FLOWCTL config set tracker.perTracker.authScheme "cloud-basic"               # Jira: cloud-basic (Cloud email:API_TOKEN) | bearer-pat (DC/Server PAT) — detected from the credential/host, persisted
 $FLOWCTL config set tracker.perTracker.apiVersion "3"                         # Jira: 3 (Cloud, ADF) | 2 (DC/Server) — the REST endpoint family
+$FLOWCTL config set tracker.perTracker.statusMap "$DERIVED_STATUSMAP_JSON"    # Jira: normalized→{id|name}, AUTO-DERIVED from the project workflow — WITHOUT it setStatus defers EVERY status (steps.md / jira.md § Status); write {} + warn the user when no creds
 $FLOWCTL sync active --json   # confirm active: true
 ```
 
-> **Auth scheme + api version are detected from the credential/deployment and PERSISTED at the ceremony** — a `*.atlassian.net` `baseUrl` ⇒ `cloud-basic` + apiVersion `3`; else `bearer-pat` + apiVersion `2`. If BOTH `JIRA_API_TOKEN` and `JIRA_PAT` are present AND the deployment is genuinely ambiguous, **ASK** (never silently guess), then persist. Runtime reads only the persisted `authScheme` — precedence is decided once here, never re-raced per run (mirrors `cmd_review_backend`).
+> **Auth scheme + api version are detected from the credential/deployment and PERSISTED at the ceremony** — a `*.atlassian.net` `baseUrl` ⇒ `cloud-basic` + apiVersion `3`. A **custom domain** (a Cloud tenant on an Atlassian custom domain, OR self-hosted — neither ends in `.atlassian.net`) can't be told apart by URL, so infer from the **credential**: only `JIRA_EMAIL`+`JIRA_API_TOKEN` ⇒ `cloud-basic` + `3`; only `JIRA_PAT` ⇒ `bearer-pat` + `2`. If BOTH `JIRA_API_TOKEN` and `JIRA_PAT` are present AND the deployment is genuinely ambiguous, **ASK** (never silently guess), then persist. Runtime reads only the persisted `authScheme` — precedence is decided once here, never re-raced per run (mirrors `cmd_review_backend`).
 
 Confirm the result with `flowctl sync active --json` (must report `active: true` once enabled/type are set). Negative path: user declines ⇒ write nothing; `sync active` stays `active: false`.
 

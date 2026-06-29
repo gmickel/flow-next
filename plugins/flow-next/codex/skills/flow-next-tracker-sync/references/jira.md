@@ -297,7 +297,7 @@ Upsert by presence of `issue.id` (interface rule): no id ⇒ **create** (`POST
 # include "Task"; the create would 400). Prefer a configured tracker.perTracker.issueType,
 # else read the project's createable types and pick "Task" if present, else the first
 # STANDARD (non-subtask) type. (createmeta shape differs Cloud v3 vs DC v2 — verify-at-build.)
-ITYPE="${CFG_ISSUE_TYPE:-}" # tracker.perTracker.issueType, if the user pinned one
+ITYPE=$("$FLOWCTL" config get tracker.perTracker.issueType --json 2>/dev/null | jq -r '.value // empty') # optional pin; empty ⇒ discover
 if [ -z "$ITYPE" ]; then
  ITYPE=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
  "$JIRA_BASE/rest/api/$APIV/issue/createmeta/$PROJ_KEY/issuetypes" \
