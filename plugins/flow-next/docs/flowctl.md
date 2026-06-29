@@ -580,7 +580,7 @@ flowctl config get review.backend [--json]
 
 # Set a config value
 flowctl config set memory.enabled true [--json]
-flowctl config set review.backend codex [--json]  # rp, codex, or none
+flowctl config set review.backend codex [--json]  # rp, codex, copilot, cursor, or none
 
 # Toggle boolean config
 flowctl config toggle memory.enabled [--json]
@@ -594,7 +594,7 @@ flowctl config toggle memory.enabled [--json]
 | `planSync.enabled` | bool | `false` | Enable plan-sync after task completion |
 | `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync — scan other open specs for stale references after each task (opt-in; increases sync time)* |
 | `scouts.github` | bool | `false` | Enable github-scout during planning (requires gh CLI) |
-| `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `none`). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
+| `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `cursor`, `none`), or spec form (`codex:gpt-5.4:high`, `cursor:gpt-5.5-high` — cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
 | `tracker.enabled` | bool | `false` | Enable the tracker-sync bridge (see [`sync`](#sync)). The bridge is active iff raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github, gitlab, jira}`. |
 | `tracker.type` | string | `null` | Tracker backend: `linear`, `github`, `gitlab`, or `jira`. |
 | `tracker.provenance` | string | `null` | Free-form provenance written by the discovery ceremony on confirmation (who/when/signals). |
