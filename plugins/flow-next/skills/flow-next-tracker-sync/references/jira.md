@@ -783,7 +783,11 @@ BLOCKS_TYPE=$("$FLOWCTL" config get tracker.perTracker.blocksLinkType --json 2>/
 [ -z "$BLOCKS_TYPE" ] && BLOCKS_TYPE=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
   "$JIRA_BASE/rest/api/$APIV/issueLinkType" \
   | jq -r '(.issueLinkTypes // [])[] | select(.outward|ascii_downcase|test("block")) | .name' | head -1)
-[ -z "$BLOCKS_TYPE" ] && BLOCKS_TYPE="Blocks"   # last-resort default
+# NO last-resort "Blocks" default — discovery already MATCHES the stock "Blocks" when it
+# exists (its outward is "blocks"), so an empty result means the site genuinely has no
+# blocks-semantics link type. Forcing "Blocks" would 400 on exactly those sites. Empty ⇒
+# the relation methods DEFER (setIssueRelation: sync defer + receipt "no Jira blocks link
+# type — set tracker.perTracker.blocksLinkType"; listIssueRelations: return [] — no surface).
 ```
 
 ### Native facts (pin these — verified live 2026-06-28)
@@ -847,11 +851,17 @@ projection; it never orphans). Shape ([adapter-interface.md](adapter-interface.m
 
 ### `setIssueRelation(issue=A, blockedBy=B)` → ok | errored | noop
 
+**No blocks-semantics link type** (`$BLOCKS_TYPE` empty after config + discovery) ⇒
+**defer, never force**: `sync defer --reason no-blocks-link-type` + a receipt
+("no Jira blocks link type — set `tracker.perTracker.blocksLinkType`"); the site has no
+native blocked-by surface to project onto.
+
 **Read-before-write dedup (mandatory, R3)** — Jira does not no-op a duplicate, so
 `listIssueRelations(A)` FIRST and skip the write when the (A blocked-by B) edge is
 already present as a native link:
 
 ```bash
+[ -z "$BLOCKS_TYPE" ] && { sync_defer no-blocks-link-type "$SPEC_ID"; return; }   # no native surface
 EXISTS=$(listIssueRelations "$A_ID" | jq -s --arg b "$B_ID" \
            'any(.[]; .from == "'"$A_ID"'" and .to == $b and .type == "blocks")')
 [ "$EXISTS" = true ] && { sync_receipt noop "relation already linked (A blocked-by B)"; return; }
