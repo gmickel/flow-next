@@ -318,6 +318,12 @@ ITS=$(printf '%s' "$META" | jq -c '(.projects[0].issuetypes // .issueTypes // .v
  | jq -r 'map(select(.subtask|not)) | ((map(select(.name=="Task"))[0]) // .[0] // {}).name // empty')
 [ -z "$ITYPE" ] && ITYPE="Task" # last-resort default if discovery returned nothing
 printf '%s' "$ITS" | jq -e --arg it "$ITYPE" 'any(.[]; .name==$it and ((.fields//{})|has("labels")))' >/dev/null 2>&1 && LABELS_SETTABLE=1
+# DESC_SETTABLE defaults 1 (include — the body NEEDS the description field; it's on the
+# create screen of virtually every project). Set 0 ONLY when createmeta POSITIVELY shows
+# the chosen type's create screen has fields but NOT `description` (a custom screen that
+# omits it would 400 on `description`). Unresolved createmeta ⇒ stays 1 (the common case).
+DESC_SETTABLE=1
+printf '%s' "$ITS" | jq -e --arg it "$ITYPE" 'any(.[]; .name==$it and ((.fields//{})|length>0) and ((.fields//{})|has("description")|not))' >/dev/null 2>&1 && DESC_SETTABLE=0
 if [ "$APIV" = 3 ]; then DESC_ARG=(--argjson desc "$ADF_DESCRIPTION"); else DESC_ARG=(--arg desc "$TEXT_DESCRIPTION"); fi
 # Back-reference: the body ANCHOR in the description is the DURABLE link; the `flow:<id>`
 # LABEL is BEST-EFFORT — a project whose create screen omits the Labels field rejects
@@ -329,9 +335,15 @@ curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
  -H "Content-Type: application/json" -H "Accept: application/json" \
  -X POST "$JIRA_BASE/rest/api/$APIV/issue" \
  --data @<(jq -n --arg pk "$PROJ_KEY" --arg sum "$TITLE" --arg lbl "flow:$FLOW_ID" --arg it "$ITYPE" \
- --argjson wl "${LABELS_SETTABLE:-1}" "${DESC_ARG[@]}" '
- { fields: ({ project: {key:$pk}, issuetype: {name:$it}, summary: $sum, description: $desc }
+ --argjson wl "${LABELS_SETTABLE:-1}" --argjson ws "${DESC_SETTABLE:-1}" "${DESC_ARG[@]}" '
+ { fields: ({ project: {key:$pk}, issuetype: {name:$it}, summary: $sum }
+ + (if $ws == 1 then { description: $desc } else {} end)
  + (if $wl == 1 then { labels: [$lbl] } else {} end)) }')
+# DESC_SETTABLE=0 (rare custom create screen omitting Description) ⇒ create WITHOUT a body;
+# the spec body then projects on the next push/reconcile via writeIssue UPDATE (the EDIT
+# screen usually exposes Description even when the CREATE screen doesn't). Surface a one-line
+# degrade note on the receipt so the empty first-create body is never silently mistaken for
+# a sync gap.
 # The 201 response carries {id, key, self}. Build the browse url from key:
 # id=.id identifier=.key url="$JIRA_BASE/browse/"+.key
 
