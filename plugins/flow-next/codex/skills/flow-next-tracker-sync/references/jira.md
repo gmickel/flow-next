@@ -356,10 +356,14 @@ while :; do
  PAGE=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
  "$JIRA_BASE/rest/api/$APIV/issue/$TRACKER_ID/comment?startAt=$START&maxResults=$PER")
  # GUARD: a non-JSON / error body must NOT read as total=0 (that would silently truncate).
- # `jq -e .total` fails (nonzero) on a missing/invalid total → errored receipt, never a partial import.
- TOTAL=$(printf '%s' "$PAGE" | jq -e -r '.total' 2>/dev/null) \
- || { rm -f "$CFILE"; sync_receipt errored "listComments: non-JSON/invalid page at startAt=$START"; return; }
+ # Validate JSON with `jq empty` (do NOT use `jq -e .total` — `-e` exits nonzero on a
+ # FALSY result, so a valid empty issue with `total: 0` would be mis-flagged as an error).
+ printf '%s' "$PAGE" | jq empty 2>/dev/null \
+ || { rm -f "$CFILE"; sync_receipt errored "listComments: non-JSON page at startAt=$START"; return; }
+ TOTAL=$(printf '%s' "$PAGE" | jq -r '.total // -1') # -1 sentinel = .total field absent (≠ a real 0)
+ [ "$TOTAL" -lt 0 ] && { rm -f "$CFILE"; sync_receipt errored "listComments: page missing .total at startAt=$START"; return; }
  printf '%s' "$PAGE" | jq -c '.comments[]?' >> "$CFILE" # `[]?` tolerates an absent comments array
+ # total: 0 (empty issue) → falls straight through: no comments appended, START(=PER) ≥ 0 → break.
  START=$((START + PER)); [ "$START" -ge "$TOTAL" ] && break
 done
 # each page → { comments: [ { id, author:{accountId,accountType,displayName}, body, created, updated }, … ], total, startAt, maxResults }
