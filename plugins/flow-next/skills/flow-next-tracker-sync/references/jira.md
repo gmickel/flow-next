@@ -303,17 +303,18 @@ curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
 #   id=.id  identifier=.key  url="$JIRA_BASE/browse/"+.key
 
 # UPDATE (issue.id present) — PUT replaces only the supplied fields (HTTP 204, no body).
-# PRESERVE the flow-owned <!-- flow:deps -->…<!-- /flow:deps --> region on write
-# (fn-64): the rendered spec body never contains the dep block, so a raw description
-# replace would WIPE it. The fetch-current-first ADF write path (§ ADF translation —
-# Write direction) supplies BOTH the dep block AND the unknown-node splice from one GET:
-# read the current description's markdown (deps block + adf:unknown placeholders),
-# update only the rendered spec prose, carry the deps block + placeholders forward,
-# THEN markdownToAdf splices and PUTs. $ADF_DESCRIPTION_WITH_DEPS is that spliced doc.
+# PRESERVE human-authored ADF the spec body doesn't model: the fetch-current-first ADF
+# write path (§ ADF translation — Write direction) re-reads the current description and
+# carries any unknown/unsupported ADF nodes (panels, tables, media a Jira editor added)
+# forward verbatim, splicing the updated spec prose ONLY into the supported-subset
+# regions — a raw regenerate-from-markdown would WIPE them. $ADF_DESCRIPTION is that
+# spliced doc. (Jira has NO <!-- flow:deps --> body block — dependency edges are NATIVE
+# issue links, § Relation transport — so there is no dep block to carry, unlike the
+# GitHub fenced fallback / GitLab degraded tier.)
 curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
   -H "Content-Type: application/json" \
   -X PUT "$JIRA_BASE/rest/api/$APIV/issue/$TRACKER_ID" \
-  --data @<(jq -n --arg sum "$TITLE" --argjson desc "$ADF_DESCRIPTION_WITH_DEPS" \
+  --data @<(jq -n --arg sum "$TITLE" --argjson desc "$ADF_DESCRIPTION" \
               '{ fields: { summary: $sum, description: $desc } }')
 ```
 
@@ -334,7 +335,7 @@ curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
   output. On `/rest/api/3` the description MUST be an ADF doc
   (`{"type":"doc","version":1,"content":[…]}`, confirmed to round-trip exactly); on
   `/rest/api/2` it is wiki/plain text. The splice algorithm (markdown ↔ ADF,
-  unknown-node preservation, the deps-block carry-forward) is § ADF translation below.
+  unknown-node preservation) is § ADF translation below.
 
 ### `listComments(trackerId)` → normalized `comment[]`
 
@@ -456,13 +457,14 @@ Unknown-node preservation).
 | `<!-- … -->` HTML comment (the flow markers) | — (see note) | preserved as a verbatim text node, NOT an ADF node |
 
 > **The flow markers survive because they are plain text, not ADF structure.** The
-> `<!-- flow:deps -->` block, the `flow-evt:<event>` comment marker, and the
-> `<!-- flow-next:answer id=… -->` marker are HTML-comment **lines flow itself wrote**
+> `flow-evt:<event>` comment marker and the `<!-- flow-next:question id=… -->` /
+> `<!-- flow-next:answer id=… -->` markers are HTML-comment **lines flow itself wrote**
 > — they map to ordinary `text` nodes inside a `paragraph` and round-trip as literal
 > characters (ADF has no concept of HTML comments, so they are carried as text). The
-> marker scan in `listComments` / the dep-block reader runs on the **normalized
-> markdown** the read direction produces, so a marker that round-tripped through ADF
-> is still a plain `<!-- … -->` line when reconcile sees it.
+> marker scan in `listComments` runs on the **normalized markdown** the read direction
+> produces, so a marker that round-tripped through ADF is still a plain `<!-- … -->`
+> line when reconcile sees it. (Jira writes **no** `<!-- flow:deps -->` block — deps are
+> native issue links — so there is no dep-block marker to preserve here.)
 
 **Anything not in this table is "unknown"** — an ADF node type the subset doesn't
 model (`panel`, `table`, `mediaSingle`/`media`, `expand`, `taskList`, `status`,
@@ -522,29 +524,25 @@ markdownToAdf(newMarkdown, currentAdf):                 # currentAdf from a fres
   human's panel/table/media survives a flow write untouched. This is the
   no-silent-data-loss guarantee (R3): a flow push that only changed prose never
   destroys a Jira-editor-authored block.
-- **Fetch the current ADF as part of the write path** (the UPDATE already re-reads to
-  carry the `<!-- flow:deps -->` block forward — § Relation transport; the same fetch
-  supplies `currentAdf` for the splice). A **create** has no current ADF, so it builds
-  the doc from the supported subset only (a fresh spec body has no human-authored
-  unknown nodes yet).
+- **Fetch the current ADF as part of the write path** — the UPDATE re-reads the issue
+  to obtain `currentAdf` for the unknown-node splice. A **create** has no current ADF,
+  so it builds the doc from the supported subset only (a fresh spec body has no
+  human-authored unknown nodes yet).
 - **A placeholder whose `idx` no longer resolves** (the current ADF changed shape
   between read and write, or the doc was edited concurrently so `content[N]` is a
   different node) is dropped to an empty paragraph rather than splicing the wrong node
   — never splice a mismatched index. (The body-merge base hash, fn-52.4, already
   guards the common concurrent-edit case; this is the defensive floor.)
 
-### The `<!-- flow:deps -->` block on an ADF write (relation carry-forward)
+### No `<!-- flow:deps -->` body block on Jira — deps are native issue links
 
-The relation projection (§ Relation transport) writes the blocked-by edge into a
-`<!-- flow:deps -->` … `<!-- /flow:deps -->` fenced region of the description. Because
-that block is markdown HTML-comment lines, it lives in the normalized markdown and is
-spliced into the ADF as ordinary `paragraph` text nodes — **the same fetch-current
-write path preserves it**: read the current description's markdown (incl. the deps
-block + any `adf:unknown` placeholders), update only the rendered spec prose, carry
-the deps block + the unknown placeholders forward, then `markdownToAdf` splices both.
-A raw description replace that regenerated ADF from the spec body alone would WIPE the
-deps block (the rendered spec never contains it) — the fetch-first/splice path is what
-prevents that.
+Unlike the GitHub fenced fallback and the GitLab degraded tier, **Jira never writes a
+`<!-- flow:deps -->` body block.** Dependency edges project as **native `Blocks` issue
+links** (§ Relation transport), available on every Jira tier (Cloud + DC/Server, no
+licensing gate — there is no Premium-only relation surface to degrade around). So the
+description body carries no flow-owned dep region: the ADF write path preserves only
+**unknown human-authored nodes** (above), never a dep block. (This is why the relation
+collision check reads the native link listing, not a body block — § Relation transport.)
 
 ### DC/Server (`/rest/api/2`) body format — verify-at-build
 
