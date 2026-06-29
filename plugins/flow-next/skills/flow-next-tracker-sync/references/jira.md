@@ -390,12 +390,14 @@ curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
 ### `postComment(trackerId, body)` → normalized `comment`
 
 ```bash
-# body carries the flow-evt:<event> marker line (echo suppression + dedup). On v3 the
-# comment body is ADF (§ ADF translation); on v2 plain/wiki.
+# body carries the flow-evt:<event> marker line (echo suppression + dedup). Branch the
+# comment body by apiVersion exactly like writeIssue: v3 = ADF doc (--argjson b, a JSON
+# object); v2 (DC/Server) = plain/wiki TEXT (--arg b, a STRING). Never --argjson a v2 string.
+if [ "$APIV" = 3 ]; then CBODY_ARG=(--argjson b "$ADF_COMMENT_BODY"); else CBODY_ARG=(--arg b "$TEXT_COMMENT_BODY"); fi
 curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
   -H "Content-Type: application/json" -H "Accept: application/json" \
   -X POST "$JIRA_BASE/rest/api/$APIV/issue/$TRACKER_ID/comment" \
-  --data @<(jq -n --argjson b "$ADF_COMMENT_BODY" '{ body: $b }')
+  --data @<(jq -n "${CBODY_ARG[@]}" '{ body: $b }')
 # → 201 { id, author, body, created, … } — map to the returned normalized comment.
 ```
 
@@ -730,16 +732,20 @@ curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
   | jq -c --arg A "$A_ID" '.fields.issuelinks[]
            | select(.type.name == "Blocks")        # ONLY the blocked-by edge kind
            | if .inwardIssue then
-               # A shows "is blocked by" B → A is blocked, B is the blocker
-               { from: $A, to: .inwardIssue.id, dir: "blocked-by" }
+               # A "is blocked by" B → A is blocked (from), B is the blocker (to)
+               { from: $A, to: .inwardIssue.id, type: "blocks", source: "unknown", linkPresent: true }
              elif .outwardIssue then
-               # A "blocks" B → the inverse edge from A; B is blocked, A is the blocker
-               { from: .outwardIssue.id, to: $A, dir: "blocks-out" }
+               # A "blocks" B → the inverse edge; B is blocked (from), A is the blocker (to)
+               { from: .outwardIssue.id, to: $A, type: "blocks", source: "unknown", linkPresent: true }
              else empty end'
 ```
 
-Each blocked-by edge maps to the normalized `relation`
-([adapter-interface.md](adapter-interface.md) § `relation`):
+The jq **emits the normalized `relation` directly** — `type: "blocks"` (so
+`setIssueRelation`'s read-before-write dedup matches on `.type == "blocks"`),
+`source: "unknown"` (Jira native links store no flow authorship → the ledger is the
+provenance authority), `linkPresent: true` (a Jira native link IS the visible
+projection; it never orphans). Shape ([adapter-interface.md](adapter-interface.md) §
+`relation`):
 
 ```jsonc
 { "from": "<blocked A id>", "to": "<blocker B id>", "type": "blocks",
