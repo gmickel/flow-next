@@ -11,7 +11,7 @@ user-invocable: false
 Conduct a John Carmack-level review of spec plans.
 
 **Role**: Code Review Coordinator (NOT the reviewer)
-**Backends**: RepoPrompt (rp), Codex CLI (codex), or GitHub Copilot CLI (copilot)
+**Backends**: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot), or Cursor CLI (cursor)
 
 ## Preamble
 
@@ -25,8 +25,8 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 ## Backend Selection
 
 **Priority** (first match wins):
-1. `--review=rp|codex|copilot|export|none` argument
-2. `FLOW_REVIEW_BACKEND` env var — bare backend (`rp`, `codex`, `copilot`, `none`) OR spec form (`codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5`)
+1. `--review=rp|codex|copilot|cursor|export|none` argument
+2. `FLOW_REVIEW_BACKEND` env var — bare backend (`rp`, `codex`, `copilot`, `cursor`, `none`) OR spec form (`codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5`, `cursor:gpt-5.5-high`)
 3. `.flow/config.json` → `review.backend` (same bare / spec forms)
 4. **Error** - no auto-detection
 
@@ -36,6 +36,7 @@ Check $ARGUMENTS for:
 - `--review=rp` or `--review rp` → use rp
 - `--review=codex` or `--review codex` → use codex
 - `--review=copilot` or `--review copilot` → use copilot
+- `--review=cursor` or `--review cursor` → use cursor
 - `--review=export` or `--review export` → use export
 - `--review=none` or `--review none` → skip review
 
@@ -49,11 +50,11 @@ BACKEND=$($FLOWCTL review-backend)
 
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."
-  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
+  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|none"
   exit 1
 fi
 
-echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
+echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|none)"
 ```
 
 ### Backend at a glance
@@ -61,8 +62,9 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 - **rp** — RepoPrompt (macOS GUI); builder auto-selects context. Primary backend.
 - **codex** — Codex CLI (cross-platform); uses OpenAI models (default `gpt-5.5`). `FLOW_CODEX_MODEL` / `FLOW_CODEX_EFFORT` env vars, or `--spec codex:gpt-5.4:xhigh`.
 - **copilot** — GitHub Copilot CLI (cross-platform); supports Claude Opus/Sonnet/Haiku 4.5 and GPT-5.2 families via a Copilot subscription. `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, or `--spec copilot:claude-opus-4.5:xhigh`.
+- **cursor** — Cursor CLI (`cursor-agent`, cross-platform); reaches `gpt-5.5-high` (1M-ctx default), the `gpt-5.3-codex` family, `composer-2.5`, and `claude-opus-4-8-thinking-high` via a Cursor subscription. `FLOW_CURSOR_MODEL` env var, or `--spec cursor:gpt-5.5-high`. Cursor folds reasoning effort into the model name — **no effort field**.
 
-**Spec grammar:** `backend[:model[:effort]]` — `FLOW_REVIEW_BACKEND` and `.flow/config.json review.backend` both accept this. Examples: `codex`, `codex:gpt-5.2`, `copilot:claude-opus-4.5:xhigh`. Per-spec `default_review` (set via `flowctl spec set-backend`) overrides env.
+**Spec grammar:** `backend[:model[:effort]]` — `FLOW_REVIEW_BACKEND` and `.flow/config.json review.backend` both accept this. Examples: `codex`, `codex:gpt-5.2`, `copilot:claude-opus-4.5:xhigh`, `cursor:gpt-5.5-high` (cursor takes model only — no `:effort`). Per-spec `default_review` (set via `flowctl spec set-backend`) overrides env.
 
 ## Critical Rules
 
@@ -82,6 +84,12 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 1. Use `$FLOWCTL copilot plan-review` exclusively
 2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "copilot"`)
 3. Model + effort resolved via (first match wins): `--spec backend:model:effort` flag, per-spec `default_review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, registry defaults
+4. Parse verdict from command output
+
+**For cursor backend:**
+1. Use `$FLOWCTL cursor plan-review` exclusively (requires `--files <code files>`, same as codex/copilot)
+2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "cursor"`)
+3. Model resolved via (first match wins): `--spec cursor:<model>` flag, per-spec `default_review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CURSOR_MODEL` env var, registry default (`gpt-5.5-high`). **No effort** — Cursor bakes effort into the model name; `cursor:<model>:<effort>` is rejected
 4. Parse verdict from command output
 
 **For all backends:**
@@ -163,6 +171,33 @@ On NEEDS_WORK: fix plan via `$FLOWCTL spec set-plan` AND sync affected task spec
 
 **Note**: `copilot plan-review` automatically includes task specs in the review prompt (same as codex).
 
+### Cursor Backend
+
+```bash
+SPEC_ID="${1:-}"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
+
+# Save checkpoint before review (recovery point if context compacts)
+$FLOWCTL checkpoint save --spec "$SPEC_ID" --json
+
+# --files: comma-separated CODE files for reviewer context (same shape as codex)
+# Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
+CODE_FILES="src/main.py,src/config.py"
+
+# Override model (pick one):
+#   --spec cursor:gpt-5.5-high             (preferred)
+#   FLOW_REVIEW_BACKEND=cursor:gpt-5.5-high
+#   FLOW_CURSOR_MODEL=composer-2.5
+# Cursor folds effort into the model name — no :<effort> and no FLOW_CURSOR_EFFORT.
+
+$FLOWCTL cursor plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
+# Output includes VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK
+```
+
+On NEEDS_WORK: fix plan via `$FLOWCTL spec set-plan` AND sync affected task specs via `$FLOWCTL task set-spec`, then re-run. Session resume only when prior receipt has `mode == "cursor"`.
+
+**Note**: `cursor plan-review` automatically includes task specs in the review prompt (same as codex).
+
 ### RepoPrompt Backend
 
 **⚠️ STOP: You MUST read and execute [workflow.md](workflow.md) now.**
@@ -209,6 +244,7 @@ If verdict is NEEDS_WORK, loop internally until SHIP:
 4. **Re-review**:
    - **Codex**: Re-run `flowctl codex plan-review` (receipt enables context)
    - **Copilot**: Re-run `flowctl copilot plan-review` (receipt enables context; must be `mode == "copilot"` to resume)
+   - **Cursor**: Re-run `flowctl cursor plan-review` (receipt enables context; must be `mode == "cursor"` to resume)
    - **RP**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md` (NO `--new-chat`)
 5. **Repeat** until `<verdict>SHIP</verdict>`
 

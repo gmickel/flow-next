@@ -324,6 +324,7 @@ Before asking questions, detect available tools and read current config:
 HAVE_RP=$(which rp-cli >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
+HAVE_CURSOR=$(which cursor-agent >/dev/null 2>&1 && echo 1 || echo 0)
 
 # Read current config values if they exist.
 # NB: pass `--raw` to bypass merged defaults. Without it, `flowctl config get`
@@ -375,7 +376,7 @@ Current configuration:
 - Memory: <enabled|disabled> (change with: flowctl config set memory.enabled <true|false>)
 - Plan-Sync: <enabled|disabled> (change with: flowctl config set planSync.enabled <true|false>)
 - Plan-Sync cross-spec: <enabled|disabled> (change with: flowctl config set planSync.crossSpec <true|false>)
-- Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|rp|copilot|none OR spec form like codex:gpt-5.4:xhigh>)
+- Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|rp|copilot|cursor|none OR spec form like codex:gpt-5.4:xhigh or cursor:gpt-5.5-high>)
 - GitHub scout: <enabled|disabled> (change with: flowctl config set scouts.github <true|false>)
 - HTML artifacts: <enabled|disabled> (change with: flowctl config set artifacts.html.enabled <true|false>)
 ```
@@ -465,6 +466,7 @@ Available questions (include only if corresponding config is unset):
  "options": [
  {"label": "Codex CLI", "description": "Cross-platform, uses GPT 5.2 High for reviews. Simple setup, works everywhere. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
  {"label": "Copilot CLI", "description": "Cross-platform, routes to Claude (Sonnet/Opus/Haiku 4.5) or GPT-5.2 via GitHub Copilot. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
+ {"label": "Cursor CLI", "description": "Cross-platform, runs cursor-agent (default gpt-5.5-high 1M-ctx; also gpt-5.3-codex, composer-2.5, opus-4.8-thinking). Billed to your Cursor subscription. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
  {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, ~65% fewer tokens than traditional approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
  {"label": "None", "description": "Skip reviews, can configure later with --review flag"}
  ],
@@ -472,7 +474,7 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-Stored value is a bare backend name by default. Power users can also write a full spec like `codex:gpt-5.4:high` or `copilot:claude-opus-4.5:xhigh` via `flowctl config set review.backend <spec>` after setup — the review commands accept both forms.
+Stored value is a bare backend name by default. Power users can also write a full spec like `codex:gpt-5.4:high`, `copilot:claude-opus-4.5:xhigh`, or `cursor:gpt-5.5-high` (cursor takes a model only — no `:effort`) via `flowctl config set review.backend <spec>` after setup — the review commands accept both forms.
 
 **Docs question** (always include — adjust default based on platform):
 
@@ -538,7 +540,7 @@ Print the prompt content built above and stop for the user's reply.
 
 **Note:** If docs are already current, adjust the Docs question description to mention "(already up to date)" or skip that question entirely.
 
-**Note:** If none of rp-cli, codex, or copilot is detected, add note to the Review question: "No review backend detected. Install rp-cli, codex, or copilot for review support."
+**Note:** If none of rp-cli, codex, copilot, or cursor-agent is detected, add note to the Review question: "No review backend detected. Install rp-cli, codex, copilot, or cursor-agent for review support."
 
 ## Step 7: Process Answers
 
@@ -605,6 +607,7 @@ Map user's answer to config value and persist:
 case "$review_answer" in
  "Codex"*) REVIEW_BACKEND="codex" ;;
  "Copilot"*|"copilot"*) REVIEW_BACKEND="copilot" ;;
+ "Cursor"*|"cursor"*) REVIEW_BACKEND="cursor" ;;
  "RepoPrompt"*) REVIEW_BACKEND="rp" ;;
  *) REVIEW_BACKEND="none" ;;
 esac

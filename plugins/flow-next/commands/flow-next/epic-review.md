@@ -1,7 +1,7 @@
 ---
 name: flow-next:epic-review
 description: "[deprecated] Renamed to /flow-next:spec-completion-review — invokes the new skill"
-argument-hint: "<fn-N> [--review=rp|codex|copilot|none]"
+argument-hint: "<fn-N> [--review=rp|codex|copilot|cursor|none]"
 ---
 
 # `/flow-next:epic-review` is renamed to `/flow-next:spec-completion-review`
