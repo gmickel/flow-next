@@ -5,10 +5,15 @@ The Jira implementation of the nine-method transport interface
 (`fetchIssue` / `writeIssue` / `listComments` / `postComment` / `readStatus` /
 `setStatus`), the enumeration method (`listOpenIssues`, fn-68.2), and the
 dependency-projection pair (`listIssueRelations` / `setIssueRelation`, fn-64.4).
-This file (fn-70.2) establishes the **transport + six core + auth + identity + the
-make-pr PR remote-link**; the **ADF body translation, the transitions/status model
-(incl. the fn-66 terminal gate), the relation pair, and `listOpenIssues`** are
-fn-70.3 — each is pointed at the boundary below, never half-built here.
+fn-70.2 established the **transport + six core + auth + identity + the make-pr PR
+remote-link**; **fn-70.3** lands the Jira-specific weight: the **Markdown↔ADF body
+translation** (round-trip-safe subset + unknown-node preservation), the
+**transitions-API status model** (statusMap + the `statusCategory` terminal signal +
+the fn-66 terminal gate + defer-on-unreachable), the **relation pair** (`Blocks`
+issue links with read-before-write dedup + defer-on-human-removal), and
+**`listOpenIssues`** (Cloud `POST /search/jql` cursor + DC/Server `/rest/api/2/search`
+offset). The readiness projection's Jira branch lives in
+[status-sync.md](status-sync.md) (§ Readiness projection — a name-match like Linear).
 
 Jira mirrors the **GitHub adapter's shape** ([github.md](github.md)), not the
 Linear MCP-or-token ladder: Jira has **one** transport (the REST API driven over
@@ -86,7 +91,8 @@ Persisted config keys (written by the ceremony, fn-70.1):
 | Key | Meaning |
 |---|---|
 | `tracker.perTracker.baseUrl` | the site base, e.g. `https://acme.atlassian.net` (Cloud) or `https://jira.acme.com` (DC/Server). **`JIRA_BASE_URL` env overrides** the persisted value (the persisted value is the default, never inert). |
-| `tracker.perTracker.projectKey` | the project key (the `listOpenIssues` JQL scope, fn-70.3) |
+| `tracker.perTracker.projectKey` | the project key (the `listOpenIssues` JQL scope; validated `^[A-Z][A-Z0-9]+$` before JQL interpolation — § `listOpenIssues`) |
+| `tracker.perTracker.statusMap` | normalized status → Jira target `{"id":…}\|{"name":…}` (id preferred); the FULL normalized set — § Status / transitions. `tracker.readyState` (the promoted-lane Jira **status name**) is used RAW, NOT through this map. |
 | `tracker.perTracker.authScheme` | `cloud-basic` (Cloud HTTP-basic `email:API_TOKEN`) \| `bearer-pat` (DC/Server Bearer PAT) — **runtime reads only this**, never re-probes which env var is set |
 | `tracker.perTracker.apiVersion` | `3` (Cloud, `/rest/api/3`, ADF) \| `2` (DC/Server, `/rest/api/2`) — the REST endpoint family the adapter branches on |
 | `tracker.perTracker.sslVerify` | optional; `false` opts out of TLS verification for a self-hosted cert (`curl -k`). Default `true`. Also honored as the env override `JIRA_SSL_VERIFY=false`. |
@@ -135,7 +141,7 @@ if [ "$CRED_OK" = 1 ] && [ -n "$JIRA_BASE" ]; then TRANSPORT=rest; else TRANSPOR
 When `TRANSPORT=none`, the configured bridge cannot reach Jira this run. Every one
 of the nine interface methods becomes a documented no-op (same fail-soft contract as
 the GitHub terminal rung and fn-51's manual rung) — including `listOpenIssues`
-(returns `[]`, fn-68.2 / fn-70.3) and the relation pair (fn-64.4 / fn-70.3):
+(returns `[]`, fn-68.2) and the relation pair (fn-64.4):
 
 - `fetchIssue` / `listComments` / `readStatus` / `listIssueRelations` → return
   nothing actionable ("no remote view available this run"); the spec's flow-side
@@ -178,8 +184,8 @@ persisted value. **Label them so a Cloud user is never told to create a non-exis
 > for the six core methods (`/issue`, `/issue/{idOrKey}`, `/issue/{idOrKey}/comment`,
 > `/issue/{idOrKey}/remotelink`); the principal delta is the **body format** —
 > `/rest/api/3` bodies (description + comment) are **ADF**, `/rest/api/2` accepts
-> wiki-markup/plain text. The ADF translation itself is fn-70.3 (§ ADF boundary
-> below); for the six core, branch on `$APIV` only for the body shape.
+> wiki-markup/plain text. The ADF translation is § ADF translation below; for the
+> six core, branch on `$APIV` only for the body shape.
 
 ## Identity — durable `tracker.id` is the immutable issue `id`, NOT the display key
 
@@ -241,9 +247,9 @@ in reconcile.
 | `id` | `id` (immutable issue id, e.g. `"10042"`) | **durable dedupe key** — stored via `sync set-tracker-id`. Never the `key`. |
 | `identifier` | `key` (e.g. `PROJ-123`) | display only; **mutable** — refreshed from each fetch. |
 | `title` | `fields.summary` | |
-| `body` | `fields.description` | ADF on `/rest/api/3` → normalized markdown via the ADF translation (**fn-70.3**); on `/rest/api/2` it is wiki/plain text. Until fn-70.3 lands the translation, the body is carried as the raw ADF/text round-trip (see § ADF boundary). |
-| `status.raw` | `fields.status.name` (+ `fields.status.statusCategory.key`) | the literal Jira status; the **status model + normalization is fn-70.3** (terminal detection keys off `statusCategory.key` ∈ `new`/`indeterminate`/`done`, NOT the project-specific name). |
-| `status.normalized` | the fn-70.3 status map | deferred — see § Status boundary. |
+| `body` | `fields.description` | ADF on `/rest/api/3` → normalized markdown via the ADF translation (§ ADF translation); on `/rest/api/2` it is wiki/plain text. |
+| `status.raw` | `fields.status.name` (+ `fields.status.statusCategory.key`) | the literal Jira status; the **status model + normalization** is § Status / transitions (terminal detection keys off `statusCategory.key == "done"`, NOT the project-specific name). |
+| `status.normalized` | the `statusMap` reverse-map (§ Status / transitions) | the reverse of the write map; `statusCategory.key` fallback, else unmapped → defer. |
 | `priority` | `fields.priority.name` | folded, never auto-changed (R7). |
 | `labels` | `fields.labels[]` | includes the `flow:<spec-id>` back-reference label. |
 | `url` | `"$JIRA_BASE/browse/" + key` | the browse URL (Jira's `self` is the API URL, not the human one). |
@@ -267,8 +273,9 @@ curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/js
   "$JIRA_BASE/rest/api/$APIV/issue/$TRACKER_ID?fields=summary,description,status,priority,labels,updated"
 ```
 
-- Map per the firewall table above. `fields.status` → `status` (the normalization is
-  fn-70.3; for now carry `status.raw` = `fields.status.name`).
+- Map per the firewall table above. `fields.status` → `status` (the normalization —
+  the `statusMap` reverse-map + the `statusCategory` terminal signal — is § Status /
+  transitions; `status.raw` = `fields.status.name`).
 - **not-found:** a deleted/moved/permission-lost issue returns **HTTP 404** (Jira:
   `{"errorMessages":["Issue does not exist..."]}`). `fetchIssue` returns
   `not-found` — **never raises out of the adapter**. The skeleton then emits an
@@ -281,7 +288,8 @@ Upsert by presence of `issue.id` (interface rule): no id ⇒ **create** (`POST
 
 ```bash
 # CREATE (no issue.id). Body is JSON; the description is ADF on /rest/api/3
-# (the ADF doc is built by the fn-70.3 translation — § ADF boundary). issuetype by
+# (the ADF doc is built by the markdown→ADF translation — § ADF translation; a create
+# has no current ADF, so it builds from the supported subset only). issuetype by
 # name ("Task") works (confirmed live). Colon labels (flow:<id>) are accepted.
 #   projectKey = tracker.perTracker.projectKey
 curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
@@ -296,11 +304,12 @@ curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
 
 # UPDATE (issue.id present) — PUT replaces only the supplied fields (HTTP 204, no body).
 # PRESERVE the flow-owned <!-- flow:deps -->…<!-- /flow:deps --> region on write
-# (fn-64 / fn-70.3): the rendered spec body never contains the dep block, so a raw
-# description replace would WIPE it. Read the current description, carry its fenced
-# block forward into the rendered body, THEN PUT. (Implemented in fn-70.3 alongside
-# the ADF splice — until then writeIssue updates summary/labels and the description
-# round-trips the raw form. § Relation boundary.)
+# (fn-64): the rendered spec body never contains the dep block, so a raw description
+# replace would WIPE it. The fetch-current-first ADF write path (§ ADF translation —
+# Write direction) supplies BOTH the dep block AND the unknown-node splice from one GET:
+# read the current description's markdown (deps block + adf:unknown placeholders),
+# update only the rendered spec prose, carry the deps block + placeholders forward,
+# THEN markdownToAdf splices and PUTs. $ADF_DESCRIPTION_WITH_DEPS is that spliced doc.
 curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
   -H "Content-Type: application/json" \
   -X PUT "$JIRA_BASE/rest/api/$APIV/issue/$TRACKER_ID" \
@@ -321,12 +330,11 @@ curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
 - **Write the flow back-reference on create:** the `flow:<spec-id>` label (and a body
   anchor). Jira accepts colon labels and auto-creates unknown labels on write (no
   pre-create step, unlike the GitHub `status:`/`flow:` labels) — confirmed live.
-- **ADF boundary (fn-70.3):** `$ADF_DESCRIPTION` is the markdown→ADF translation
+- **ADF body (§ ADF translation):** `$ADF_DESCRIPTION` is the markdown→ADF translation
   output. On `/rest/api/3` the description MUST be an ADF doc
   (`{"type":"doc","version":1,"content":[…]}`, confirmed to round-trip exactly); on
   `/rest/api/2` it is wiki/plain text. The splice algorithm (markdown ↔ ADF,
-  unknown-node preservation, the deps-block carry-forward) lives in **fn-70.3** — this
-  file references the boundary; it does not implement the translator.
+  unknown-node preservation, the deps-block carry-forward) is § ADF translation below.
 
 ### `listComments(trackerId)` → normalized `comment[]`
 
@@ -339,7 +347,7 @@ curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
 - **Jira comment ids are stable** (the numeric `comment.id`) — the dedup key, same
   property the GitHub/Linear comment ids carry.
 - Map each: `author.displayName` → `author`; `body` (ADF on v3 → markdown via the
-  fn-70.3 translation; on v2 plain/wiki) → `body`; `created` → `createdAt`.
+  § ADF translation read direction; on v2 plain/wiki) → `body`; `created` → `createdAt`.
 - **`author.accountType` → `authorAuthority`** (fn-68 R15 security — populate it here,
   the producer). The enum is fixed (`writer|outsider|bot|unknown` — **no new value**,
   fn-68 contract):
@@ -366,15 +374,16 @@ curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
   `null` and the **answer is matched to its question by the body `id` marker**
   (threading-blind), not by thread. The `<!-- flow-next:answer id=<hash> -->` marker
   is the load-bearing match (adapter-interface.md § `comment`; steps.md Phase 7).
-- The markers live inside the ADF/text body; the fn-70.3 ADF translation surfaces the
-  body as markdown so the marker scan runs on normalized text (the marker comments are
-  HTML-comment lines flow itself wrote, so they survive the ADF round-trip).
+- The markers live inside the ADF/text body; the § ADF translation read direction
+  surfaces the body as markdown so the marker scan runs on normalized text (the marker
+  comments are HTML-comment lines flow itself wrote, so they survive the ADF round-trip
+  as plain text nodes — § ADF translation, the flow-marker note).
 
 ### `postComment(trackerId, body)` → normalized `comment`
 
 ```bash
 # body carries the flow-evt:<event> marker line (echo suppression + dedup). On v3 the
-# comment body is ADF (fn-70.3 translation); on v2 plain/wiki.
+# comment body is ADF (§ ADF translation); on v2 plain/wiki.
 curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
   -H "Content-Type: application/json" -H "Accept: application/json" \
   -X POST "$JIRA_BASE/rest/api/$APIV/issue/$TRACKER_ID/comment" \
@@ -392,60 +401,507 @@ curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
 
 ### `readStatus(trackerId)` → normalized `status`
 
-Derived from the `fetchIssue` `fields.status` (`name` + `statusCategory.key`) — no
-separate call (same as the GitHub adapter deriving status from `state`+`stateReason`).
-**The normalization map (raw Jira status → flow vocabulary) and the fn-66 terminal
-gate are fn-70.3** (§ Status boundary). For the six-core scope, `readStatus` surfaces
-`status.raw = fields.status.name` and defers the `normalized` mapping to fn-70.3.
+Derived from the `fetchIssue` `fields.status` (`name` + `id` + `statusCategory.key`) —
+no separate call (same as the GitHub adapter deriving status from `state`+`stateReason`).
+The full **status model** — the `statusMap` reverse-map, the `statusCategory` terminal
+signal, and the fn-66 terminal gate — is **§ Status / transitions** below;
+`status.raw = fields.status.name` and `status.normalized` is the reverse-map result.
 
-### `setStatus(trackerId, status)` → ok | errored — **deferred to fn-70.3**
+### `setStatus(trackerId, status)` → ok | errored
 
-Jira forbids a direct status write: you cannot `PUT fields.status`. A status change
-goes through the **transitions API** (`GET /issue/{idOrKey}/transitions` →
-`POST /issue/{idOrKey}/transitions {transition:{id}}`), resolving the legal transition
-id from the issue's *current* status. That model — plus the fn-66 terminal invariant
-(locally-`done` → In Review until a `MERGED` PR, terminal Done gated on merge
-evidence) and the "illegal/unreachable transition ⇒ defer + receipt, never force"
-rule — is **fn-70.3** ([→ § Status / transitions boundary]). It is intentionally NOT
-stubbed here: a half-implemented direct-status write would be wrong on Jira.
+Jira forbids a direct status write (`PUT fields.status` is rejected) — a status
+change goes through the **transitions API**. The full model (transition resolution,
+`statusMap`, the fn-66 terminal invariant, defer-on-unreachable) is **§ Status /
+transitions** below.
 
-### `listOpenIssues` / `listIssueRelations` / `setIssueRelation` — **deferred to fn-70.3**
+### `listOpenIssues` / `listIssueRelations` / `setIssueRelation`
 
-The enumeration method (`listOpenIssues`, fn-68.2) and the dependency-projection pair
-(`listIssueRelations` / `setIssueRelation`, fn-64.4) are **fn-70.3**. Boundary notes
-so the build doesn't re-research them:
+The enumeration method (`listOpenIssues`, fn-68.2) is **§ `listOpenIssues`** below;
+the dependency-projection pair (`listIssueRelations` / `setIssueRelation`, fn-64.4) is
+**§ Relation transport** below.
 
-- **`listOpenIssues`** filters the promoted lane by the `tracker.readyState` **Jira
-  status name** via JQL. **The search endpoint is `POST /rest/api/3/search/jql`** with
-  body `{jql, fields, maxResults}` — the old `GET /rest/api/3/search` returns **HTTP
-  410 REMOVED** (CHANGE-2046, confirmed live 2026-06-28); pagination is **cursor-based**
-  (`isLast` + `nextPageToken`), not the legacy `total`/`startAt` offset model. Escape
-  the status name before interpolating into the JQL.
-- **Relations** project the blocked-by edge as a Jira **issue link**: `POST
-  /rest/api/3/issueLink` with `{type:{name:"Blocks"}, outwardIssue, inwardIssue}`
-  (HTTP 201, confirmed live). `outwardIssue` **blocks** `inwardIssue` (`inwardIssue`
-  shows "is blocked by") — so for `depends_on` the **dependency** is `outwardIssue`
-  and the **current issue** is `inwardIssue`. Direction is anchored once in
-  adapter-interface.md § Direction convention; read-before-write dedup + the
-  never-delete-non-ours provenance (ledger) apply.
-
-## ADF boundary (fn-70.3) — what this file does and does NOT do
+## ADF translation — Markdown ↔ Atlassian Document Format (the Jira body boundary)
 
 Jira `/rest/api/3` issue **descriptions and comment bodies are ADF** (Atlassian
 Document Format — `{"type":"doc","version":1,"content":[…]}`, confirmed to round-trip
-exactly live). The **markdown ↔ ADF translation, the round-trip-safe subset, and the
-unknown-node-preservation rule are fn-70.3.** This file:
+exactly live 2026-06-28). The normalized structs ([adapter-interface.md](adapter-interface.md))
+carry **free-form markdown**; reconcile (fn-52.4 body merge) only ever sees markdown.
+So this adapter translates **markdown ↔ ADF at the boundary** — the Jira analog of
+"reconcile stays transport-blind". `/rest/api/2` (DC/Server) bodies are **wiki/plain
+text**, not ADF, so the translation is **gated on `$APIV == 3`** (§ DC/Server body
+format below); on v2 the body passes through as wiki/plain text.
 
-- **References** the boundary (every `writeIssue` / `postComment` above takes an
-  `$ADF_*` body that the fn-70.3 translator produces; every read maps ADF → markdown
-  via that translator).
-- **Does NOT implement** the splice algorithm. The only stub pointer `writeIssue`
-  needs is "the description body is ADF on v3 / wiki-or-plain on v2, built by the
-  fn-70.3 translation; preserve the `<!-- flow:deps -->` fenced region on UPDATE" —
-  recorded above, not coded here.
+The translation is **lossy-but-faithful over a documented subset** with one
+load-bearing rule: **never blind-regenerate ADF from markdown on a write** — that
+drops every ADF node the subset doesn't model (panels, tables, media, custom marks a
+human added in the Jira editor). Instead, **preserve unknown nodes verbatim** (§
+Unknown-node preservation).
 
-Keeping the translator out of this task keeps the six-core transport contract
-reviewable on its own; the ADF work is a self-contained fn-70.3 deliverable.
+### The round-trip-safe subset (documented — what survives `markdown → ADF → markdown`)
+
+| Markdown | ADF node/mark | Round-trips |
+|---|---|---|
+| paragraph | `paragraph` with `text` content | exact |
+| `# … ######` heading | `heading` `attrs.level` 1–6 | exact |
+| `**bold**` | `text` + mark `strong` | exact (verified live) |
+| `*italic*` / `_italic_` | `text` + mark `em` | exact (normalizes to `*…*`) |
+| `` `code` `` | `text` + mark `code` | exact (verified live) |
+| `~~strike~~` | `text` + mark `strike` | exact |
+| `[label](url)` | `text` + mark `link` `attrs.href` | exact |
+| ` ```lang\n…\n``` ` fenced code | `codeBlock` `attrs.language` | exact |
+| `> quote` | `blockquote` → `paragraph` | exact |
+| `- ` / `* ` bullet list | `bulletList` → `listItem` → `paragraph` | exact |
+| `1. ` ordered list | `orderedList` → `listItem` → `paragraph` | exact (numbering re-derived) |
+| `---` thematic break | `rule` | exact |
+| `<!-- … -->` HTML comment (the flow markers) | — (see note) | preserved as a verbatim text node, NOT an ADF node |
+
+> **The flow markers survive because they are plain text, not ADF structure.** The
+> `<!-- flow:deps -->` block, the `flow-evt:<event>` comment marker, and the
+> `<!-- flow-next:answer id=… -->` marker are HTML-comment **lines flow itself wrote**
+> — they map to ordinary `text` nodes inside a `paragraph` and round-trip as literal
+> characters (ADF has no concept of HTML comments, so they are carried as text). The
+> marker scan in `listComments` / the dep-block reader runs on the **normalized
+> markdown** the read direction produces, so a marker that round-tripped through ADF
+> is still a plain `<!-- … -->` line when reconcile sees it.
+
+**Anything not in this table is "unknown"** — an ADF node type the subset doesn't
+model (`panel`, `table`, `mediaSingle`/`media`, `expand`, `taskList`, `status`,
+`emoji`, `mention`, `inlineCard`, a future node) or a mark the subset doesn't model.
+Unknown nodes are **never** produced *from* markdown (markdown can't express them) but
+DO appear on **reads** of a human-authored Jira body — and they MUST survive a
+write-back.
+
+### Read direction (ADF → markdown) — `fetchIssue` / `listComments`
+
+`fields.description` (and each `comment.body`) on v3 is an ADF doc. Walk
+`doc.content[]`; each known node renders to its markdown equivalent (table above);
+each **unknown node renders to a placeholder token** carrying its **index** so the
+write direction can splice the original ADF back in:
+
+```
+adfToMarkdown(doc):
+  out = []
+  for i, node in enumerate(doc.content):
+    if node.type ∈ KNOWN_SUBSET:
+       out.append( renderKnown(node) )           # markdown for the supported node
+    else:
+       out.append( "<!-- adf:unknown idx=" + i + " -->" )   # opaque placeholder, keeps position
+  return join(out, "\n\n")
+```
+
+- The placeholder `<!-- adf:unknown idx=N -->` is itself an HTML comment, so it
+  round-trips as text **and** the body-merge layer treats it as opaque (it is a flow
+  marker, not human prose — reconcile never tries to "merge" it). The normalized
+  markdown that reaches reconcile thus contains the human's editable prose **plus**
+  position-keyed placeholders for the parts the subset can't represent.
+- `status.raw`-style fidelity is preserved: a human reading the spec sees their
+  editable content; the un-modelled panel/table is referenced by a placeholder rather
+  than silently dropped or mangled.
+
+### Write direction (markdown → ADF) — **fetch-current-first, splice, preserve unknowns**
+
+On a body **write** (`writeIssue` UPDATE / a `postComment` that edits — though
+comments are append-only, so this matters mainly for the description), the rule is
+**fetch the current ADF FIRST, then splice** — never regenerate the whole doc from
+markdown:
+
+```
+markdownToAdf(newMarkdown, currentAdf):                 # currentAdf from a fresh GET
+  newBlocks = parseMarkdownBlocks(newMarkdown)          # blocks incl. the adf:unknown placeholders
+  out = []
+  for block in newBlocks:
+    if block is an <!-- adf:unknown idx=N --> placeholder:
+       out.append( currentAdf.content[N] )              # SPLICE the original ADF node back VERBATIM
+    else:
+       out.append( renderMarkdownBlockToAdf(block) )    # build ADF for the supported subset
+  return { "type":"doc", "version":1, "content": out }
+```
+
+- **Unknown ADF nodes are carried through verbatim** — the placeholder the read
+  direction emitted is replaced by the exact `currentAdf.content[N]` node, so the
+  human's panel/table/media survives a flow write untouched. This is the
+  no-silent-data-loss guarantee (R3): a flow push that only changed prose never
+  destroys a Jira-editor-authored block.
+- **Fetch the current ADF as part of the write path** (the UPDATE already re-reads to
+  carry the `<!-- flow:deps -->` block forward — § Relation transport; the same fetch
+  supplies `currentAdf` for the splice). A **create** has no current ADF, so it builds
+  the doc from the supported subset only (a fresh spec body has no human-authored
+  unknown nodes yet).
+- **A placeholder whose `idx` no longer resolves** (the current ADF changed shape
+  between read and write, or the doc was edited concurrently so `content[N]` is a
+  different node) is dropped to an empty paragraph rather than splicing the wrong node
+  — never splice a mismatched index. (The body-merge base hash, fn-52.4, already
+  guards the common concurrent-edit case; this is the defensive floor.)
+
+### The `<!-- flow:deps -->` block on an ADF write (relation carry-forward)
+
+The relation projection (§ Relation transport) writes the blocked-by edge into a
+`<!-- flow:deps -->` … `<!-- /flow:deps -->` fenced region of the description. Because
+that block is markdown HTML-comment lines, it lives in the normalized markdown and is
+spliced into the ADF as ordinary `paragraph` text nodes — **the same fetch-current
+write path preserves it**: read the current description's markdown (incl. the deps
+block + any `adf:unknown` placeholders), update only the rendered spec prose, carry
+the deps block + the unknown placeholders forward, then `markdownToAdf` splices both.
+A raw description replace that regenerated ADF from the spec body alone would WIPE the
+deps block (the rendered spec never contains it) — the fetch-first/splice path is what
+prevents that.
+
+### DC/Server (`/rest/api/2`) body format — verify-at-build
+
+On `/rest/api/2` (DC/Server, `$APIV == 2`) descriptions and comment bodies are **wiki
+markup / plain text, NOT ADF**. So the ADF translation above is **gated on `$APIV ==
+3`**; on v2 the body is carried as text (the `description`/`body` field is a plain
+string, not an ADF doc). The exact v2 body representation (wiki-markup vs the
+`renderer`/`representation` field on some DC builds) is **verify-at-build against the
+Atlassian DC REST docs** (no DC instance was available to validate) — but the branch
+is implemented now: `[ "$APIV" = 3 ] && body=ADF || body=text`. Unknown-node
+preservation is an ADF-only concern (v2 has no node graph); on v2 the body is a
+faithful text round-trip.
+
+## Status / transitions — workflow-aware, via the transitions API (NEVER a direct set)
+
+Jira has **rich, per-project configurable workflows** — you cannot `PUT fields.status`
+to an arbitrary value. A status change goes through the **transitions API**: read the
+transitions **legal from the issue's CURRENT status**, resolve the one that lands the
+target, and POST its id. This is the GitLab/GitHub "reduced fidelity" inverted —
+Jira's native model is *richer* than the normalized vocabulary, so the adapter maps
+normalized → a project status via a configured `statusMap`, then drives the transition.
+
+### `statusMap` — the FULL normalized set → Jira status `{id|name}`
+
+`tracker.perTracker.statusMap` maps **each** normalized status to a Jira target. The
+value is an **object** — `{"id": "10031"}` (preferred) or `{"name": "In Review"}` —
+because Jira status **names are renamable** while the **id is durable** (same id-over-
+name discipline as the durable `tracker.id`). It is the **full normalized set**, not
+just ready/done:
+
+```jsonc
+// tracker.perTracker.statusMap — normalized → Jira status (id preferred over name)
+{
+  "planned":     { "id": "10000" },          // e.g. "To Do"
+  "in-progress": { "id": "3" },              // e.g. "In Progress"
+  "in-review":   { "name": "In Review" },    // name when the id isn't pinned
+  "done":        { "id": "10001" },          // a statusCategory.key=="done" status
+  "verified":    { "id": "10002" }           // a second done-category status, if the project has one
+  // backlog / deferred / wontfix — map only if the project has a lane for them
+}
+```
+
+- **A normalized status with NO `statusMap` entry ⇒ defer + receipt, never force** —
+  the adapter cannot invent a target. `sync defer --reason status-unmapped` (autonomous)
+  / surface (interactive) + a `diverged` receipt; no transition is attempted.
+- **A project lacking the target status entirely** (the canonical case: a team-managed
+  project with **To Do / In Progress / Done and no "In Review"** — confirmed live
+  2026-06-28) ⇒ **defer + receipt** (deterministic). The "nearest" status is **never
+  inferred** — only an explicit configured fallback in `statusMap` may redirect it.
+  This is the fn-66 sharp edge: the In-Review rung may simply not exist in a given
+  project, and the adapter must defer it, not force the issue into an arbitrary lane.
+
+### `setStatus(trackerId, status)` → ok | errored
+
+```bash
+# 1. Resolve the normalized status to a Jira target via statusMap (id preferred).
+TARGET=$(printf '%s' "$STATUS_MAP" | jq -c --arg n "$NORMALIZED" '.[$n] // empty')
+[ -z "$TARGET" ] && { sync_defer status-unmapped "$NORMALIZED"; return; }   # no entry → defer
+
+# 2. Read the transitions LEGAL FROM THE CURRENT STATUS (ids are current-state-relative).
+TRS=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
+        "$JIRA_BASE/rest/api/$APIV/issue/$TRACKER_ID/transitions")
+# → { transitions: [ { id, name, to: { id, name, statusCategory:{key} } }, … ] }
+
+# 3. Find the transition whose .to matches the target (by id first, then name).
+TID=$(printf '%s' "$TRS" | jq -r --argjson t "$TARGET" '
+        .transitions[] | select(
+          ($t.id   != null and .to.id   == $t.id) or
+          ($t.name != null and (.to.name | ascii_downcase) == ($t.name | ascii_downcase))
+        ) | .id' | head -1)
+
+# 4. No legal transition reaches the target FROM HERE ⇒ defer + receipt, NEVER force.
+[ -z "$TID" ] && { sync_defer transition-unreachable "$NORMALIZED"; return; }
+
+# 5. Apply the transition (HTTP 204, no body).
+curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
+  -H "Content-Type: application/json" \
+  -X POST "$JIRA_BASE/rest/api/$APIV/issue/$TRACKER_ID/transitions" \
+  --data @<(jq -n --arg id "$TID" '{ transition: { id: $id } }')
+```
+
+- **Transition ids are valid only FROM the current status** — you must `GET
+  …/transitions` each time, never cache an id across statuses (verified live: To
+  Do→In Progress→Done each surfaced different transition ids).
+- **No legal transition to the target ⇒ defer + receipt, NEVER an illegal/forced
+  jump** (`sync defer --reason transition-unreachable`; `diverged` receipt). This is
+  the fn-66 "unreachable terminal transition" sharp edge: post-merge the In-Review→Done
+  transition may be unreachable from the issue's current workflow state — the adapter
+  surfaces it deferred, never forced, so a board is never stranded by a silent
+  illegal-status attempt.
+- **Prefer the durable status `id`** in `statusMap` and in the `.to.id` match; the
+  name match is the fallback for an unpinned config (`statusMap.<n>.name`).
+
+### Terminal detection = `statusCategory.key == "done"` (NOT the status name)
+
+```bash
+# fetchIssue already pulled fields.status — terminal is the CATEGORY, not the name.
+TERMINAL=$(printf '%s' "$ISSUE_JSON" | jq -r '.fields.status.statusCategory.key == "done"')
+```
+
+- **`statusCategory.key ∈ { new, indeterminate, done }`** is the stable signal: status
+  *names* are project-specific and renamable ("Done" may be renamed "Shipped"), while
+  the category key is fixed. A `done`-category status is terminal; `new`/`indeterminate`
+  are non-terminal. (Confirmed live 2026-06-28 — the spec's name-based detection was
+  wrong; category is the durable signal.)
+
+### `readStatus` — reverse-map (the inverse of the write `statusMap`)
+
+`readStatus` normalizes the Jira status BACK to the flow vocabulary — the inverse of
+the write map. Resolution order:
+
+1. **Reverse `statusMap`** — find the normalized key whose `statusMap` value matches
+   `fields.status` (**`id` first, then case-insensitive `name`**). This is the
+   authoritative reverse (a project's "In Review" → `in-review`).
+2. **`statusCategory.key` fallback** when no `statusMap` entry matches (a status the
+   map doesn't cover): `done` → `done`; `new`/`indeterminate` → a **safe non-terminal**
+   (`planned` / `in-progress` respectively) **only when unambiguous** — never guess a
+   `verified`/`in-review` rung from a category alone.
+3. **Unmapped** (neither the map nor an unambiguous category fallback resolves it) ⇒
+   **defer + receipt** (`sync defer --reason status-unmapped`), `status.normalized`
+   left unresolved — the same warn-and-surface posture as the Linear unmapped-state
+   path ([status-sync.md](status-sync.md)). The other fields still reconcile.
+
+`status.raw = fields.status.name` (the literal Jira name, for the sync log);
+`status.normalized` = the reverse-map result (or unresolved → deferred).
+
+### fn-66 terminal invariant — transport-blind, honored DOWN through statusMap
+
+The terminal-status invariant ([adapter-interface.md](adapter-interface.md) §
+Transport-blind terminal invariant; [status-sync.md](status-sync.md)) is **upstream
+and transport-blind**: `flowToNormalized(spec, prEvidence)` only ever hands this
+adapter a terminal `done`/`verified` AFTER a `MERGED` PR probe for the spec branch.
+This adapter therefore:
+
+- **never decides terminal from local spec state** — a locally-`done` spec with no
+  merged PR arrives as **`in-review`** (the open-PR rung), which `statusMap` maps to
+  the project's In-Review status and the transitions API applies. The issue is NOT
+  closed.
+- maps a gated terminal `done`/`verified` DOWN through `statusMap` to a
+  `statusCategory.key == "done"` status and drives the transition — only after the
+  merge gate, never re-deciding it here.
+- surfaces a **deferred** terminal transition (the In-Review→Done transition
+  unreachable from the current workflow state) via receipt, **never** a forced jump —
+  the unreachable-transition defer rule above IS the fn-66 "deferred terminal
+  transition" surface.
+
+## Relation transport (dependency projection, fn-64)
+
+`depends_on_epics` edges project to **blocked-by** relations via Jira native **issue
+links** — `POST /rest/api/$APIV/issueLink` with the `Blocks` link type. Jira native
+links are first-class and directional (unlike GitLab's license-gated tiers), so there
+is **one** fidelity here — no degrade ladder. The direction convention is anchored
+once in [adapter-interface.md](adapter-interface.md) § Direction convention:
+
+> **blocked-by = the current issue (A) is blocked by the dependency issue (B).**
+
+### Native facts (pin these — verified live 2026-06-28)
+
+- **`POST /rest/api/3/issueLink`** with `{type:{name:"Blocks"}, outwardIssue:{key|id},
+  inwardIssue:{key|id}}` returns **HTTP 201**. `outwardIssue` **blocks** `inwardIssue`
+  → `inwardIssue` shows **"is blocked by"**. So for `depends_on`: the **dependency B**
+  is `outwardIssue` (it blocks), the **current issue A** is `inwardIssue` (it is
+  blocked). Pass the durable `id` for both operands (key also accepted).
+- **`GET /rest/api/$APIV/issue/{idOrKey}?fields=issuelinks`** returns
+  `fields.issuelinks[]`, each `{ type:{name,inward,outward}, inwardIssue?, outwardIssue? }`
+  — an entry has `outwardIssue` XOR `inwardIssue` depending on the direction from the
+  inspected issue's perspective.
+- **Jira does NOT no-op a duplicate `POST /issueLink`** — re-posting the same edge
+  creates a second link. **Read-before-write dedup is mandatory** (below).
+- **DELETE (`DELETE /rest/api/$APIV/issueLink/{linkId}`) is OPTIONAL / future** — not
+  implemented (default-safe no-delete; never removes a remote relation — R6).
+
+### `listIssueRelations(issue)` → normalized `relation[]`
+
+```bash
+curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
+  "$JIRA_BASE/rest/api/$APIV/issue/$A_ID?fields=issuelinks" \
+  | jq -c '.fields.issuelinks[]
+           | select(.type.name == "Blocks")        # ONLY the blocked-by edge kind
+           | if .inwardIssue then
+               # A shows "is blocked by" B → A is blocked, B is the blocker
+               { from: $A, to: .inwardIssue.id, dir: "blocked-by" }
+             elif .outwardIssue then
+               # A "blocks" B → the inverse edge from A; B is blocked, A is the blocker
+               { from: .outwardIssue.id, to: $A, dir: "blocks-out" }
+             else empty end'
+```
+
+Each blocked-by edge maps to the normalized `relation`
+([adapter-interface.md](adapter-interface.md) § `relation`):
+
+```jsonc
+{ "from": "<blocked A id>", "to": "<blocker B id>", "type": "blocks",
+  "source": "unknown",        // Jira native links store NO flow authorship → ledger is authority
+  "linkPresent": true }        // a Jira native link IS the visible projection; it never orphans
+```
+
+- **`linkPresent` is ALWAYS `true`** (mandatory field, fn-69). A Jira native link is
+  the tracker-visible projection itself — there is **no** GitLab-style block/link
+  divergence here (Jira writes one native link, not a link **plus** a separate body
+  block), so a relation never reads as orphaned `linkPresent: false`. Setting it
+  unconditionally is required: a producer that omitted it would make every Jira live
+  relation read as falsy → misclassified as orphaned.
+- **`source` is `"unknown"`** — Jira native links carry no authorship, so (like
+  Linear/GitHub-native/GitLab-native) the flow-side `depRelations` **ledger** (fn-64.1)
+  is the provenance authority for "did flow create this?". Provenance is never inferred
+  from `source` alone.
+- **Only `type.name == "Blocks"` edges are returned.** Other Jira link types
+  (`Relates`, `Duplicate`, `Cloners`, …) are NOT relations in the flow sense and are
+  filtered out, so the read-before-write dedup never trips over an unrelated edge.
+
+### `setIssueRelation(issue=A, blockedBy=B)` → ok | errored | noop
+
+**Read-before-write dedup (mandatory, R3)** — Jira does not no-op a duplicate, so
+`listIssueRelations(A)` FIRST and skip the write when the (A blocked-by B) edge is
+already present as a native link:
+
+```bash
+EXISTS=$(listIssueRelations "$A_ID" | jq -s --arg b "$B_ID" \
+           'any(.[]; .from == "'"$A_ID"'" and .to == $b and .type == "blocks")')
+[ "$EXISTS" = true ] && { sync_receipt noop "relation already linked (A blocked-by B)"; return; }
+```
+
+**Defer-on-human-removal collision (R6/R10).** The dedup reads the **tracker-visible
+native link**, not the ledger. When the flow `depRelations` ledger records the (A,B)
+edge but the **native link is gone** (a human deleted the board-visible "is blocked by"
+link), that is a **human-removal collision**, NOT a missing projection to re-create:
+**queue it, default NOT re-create** (autonomous → `sync defer --reason dep-link-removed`;
+interactive → surface/ask whether to restore or honor the removal). **Never silently
+re-create** — recreating steamrolls a deliberate human removal (the explicit
+anti-behavior; the shared steps.md `projectDepRelations` rule, hardened in fn-69).
+Restore ONLY on the human's explicit choice.
+
+```bash
+# Ledger says we projected (A,B) but the native link is absent → human removed it → defer.
+LEDGERED=$($FLOWCTL sync list-dep-relations "$SPEC_ID" --json | jq --arg b "$B_TRACKER_ID" \
+             'any(.relations[]?; .to_tracker_id == $b)')
+if [ "$LEDGERED" = true ] && [ "$EXISTS" != true ]; then
+  $FLOWCTL sync defer "$SPEC_ID" --reason dep-link-removed \
+    --summary "Blocked-by link A→B removed on the tracker (ledgered but no native link)" \
+    --suggested "Restore the link, or accept the human removal and drop the dep edge"
+  $FLOWCTL sync receipt "$SPEC_ID" --status diverged --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
+    --note "dep link A blocked-by B removed on tracker — queued, NOT re-created"
+  return
+fi
+
+# Otherwise CREATE the link (additive-only). B = outwardIssue (blocks), A = inwardIssue (blocked).
+curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
+  -H "Content-Type: application/json" -H "Accept: application/json" \
+  -X POST "$JIRA_BASE/rest/api/$APIV/issueLink" \
+  --data @<(jq -n --arg out "$B_ID" --arg in "$A_ID" \
+              '{ type: {name:"Blocks"}, outwardIssue:{id:$out}, inwardIssue:{id:$in} }')
+# → HTTP 201. Record the projected edge in the ledger (flowctl sync set-dep-relation).
+```
+
+- **Additive-only / never-delete-non-ours (R6).** `setIssueRelation` only ever
+  **creates** the blocked-by link. A native link not in the `depRelations` ledger is,
+  by definition, not flow's and is never touched.
+- **Completed-blocker (R5).** A dependency whose spec is locally `done` stays a
+  visible blocked-by link (a closed blocker still renders); it is NOT removed and does
+  NOT feed `ready=true` gating. The decision is the skill's (fn-64.5), keyed off the
+  **local** `dep_status` (`flowctl sync list-dep-relations`), not a remote fetch.
+- **No-transport** ⇒ `noop` + receipt note (the terminal rung), never a crash.
+
+## `listOpenIssues(filter)` → `issue[]` (fn-68 — enumeration), endpoint by `apiVersion`
+
+Enumerate the **promoted lane** — open issues at the exact `tracker.readyState` **Jira
+status name** — via JQL. The `readyState` is the **tracker-side promoted-lane value
+used RAW in the JQL** (a literal Jira status name, like Linear/GitHub readyState),
+**NOT** resolved through `statusMap` ([adapter-interface.md](adapter-interface.md) §
+Enumeration transport — the exact lane, no ordering).
+
+**`tracker.readyState` unset ⇒ documented `noop` (return `[]`)** — no promoted lane to
+filter on (the skill, steps.md Phase 7a, short-circuits before calling the transport).
+`TRANSPORT=none` ⇒ `noop` + receipt note, `[]`.
+
+### JQL safety (mandatory — no injection)
+
+`readyState` and `projectKey` are interpolated into JQL, so both MUST be sanitized:
+
+```bash
+# 1. projectKey — validate against the Jira key grammar (uppercase alnum, starts with a
+#    letter: ^[A-Z][A-Z0-9]+$). Reject anything else (no JQL injection via the key).
+printf '%s' "$PROJ_KEY" | grep -Eq '^[A-Z][A-Z0-9]+$' \
+  || { sync_receipt errored "invalid projectKey '$PROJ_KEY' — not a Jira key"; return; }
+
+# 2. readyState — escape backslashes THEN double-quotes for the JQL string literal
+#    (order matters: backslash first, else the quote-escape's backslash gets doubled).
+READY_ESC=$(printf '%s' "$READY_STATE" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+JQL="project = $PROJ_KEY AND status = \"$READY_ESC\""
+```
+
+### Cloud v3 — `POST /rest/api/3/search/jql` + cursor pagination
+
+The legacy `GET /rest/api/3/search` returns **HTTP 410 REMOVED** (CHANGE-2046,
+confirmed live 2026-06-28). The real call is **`POST /rest/api/3/search/jql`** with a
+JSON body, paginated by an opaque **cursor** (`nextPageToken`), NOT the legacy
+`startAt`/`total` offset:
+
+```bash
+NEXT=""; PAGE=0; MAXP=20    # bounded page count; a truncating bound writes a receipt note
+while :; do
+  BODY=$(jq -n --arg jql "$JQL" --arg tok "$NEXT" \
+           '{ jql: $jql, maxResults: 100,
+              fields: ["summary","description","status","priority","labels","updated"] }
+            + ( if $tok == "" then {} else { nextPageToken: $tok } end )')
+  RESP=$(curl -sS "${JK[@]}" "${JAUTH[@]}" \
+           -H "Content-Type: application/json" -H "Accept: application/json" \
+           -X POST "$JIRA_BASE/rest/api/3/search/jql" --data @<(printf '%s' "$BODY"))
+  printf '%s' "$RESP" | jq -c '.issues[]'    # map each → normalized issue (firewall)
+  ISLAST=$(printf '%s' "$RESP" | jq -r '.isLast // true')
+  NEXT=$(printf '%s' "$RESP" | jq -r '.nextPageToken // empty')
+  PAGE=$((PAGE+1))
+  { [ "$ISLAST" = true ] || [ -z "$NEXT" ] || [ "$PAGE" -ge "$MAXP" ]; } && break
+done
+# PAGE >= MAXP with more pages → truncation receipt note (never silently under-read).
+```
+
+- **Pass the returned `nextPageToken` in the next request body until `isLast: true`**
+  (or the token is empty). Bounded by `MAXP`; a truncating bound writes a **receipt
+  note**, never a silent under-read of the promoted lane.
+
+### DC/Server v2 — `/rest/api/2/search` (implemented now, verify-at-build)
+
+DC/Server (`$APIV == 2`) uses the **`/rest/api/2/search`** endpoint. The Cloud 410
+removal is a **Cloud-only** change (CHANGE-2046 targets Cloud); DC/Server retains the
+classic search with **offset pagination** (`startAt` / `maxResults` / `total`). This
+is **implemented now** (R1/R9 require all nine methods for DC — NOT deferred); the
+exact endpoint + body shape is **verify-at-build against the Atlassian DC REST docs**
+(no DC instance was available to validate):
+
+```bash
+START=0; MAXR=100; MAXTOTAL=2000   # bounded; a truncating bound writes a receipt note
+while :; do
+  # DC classic search — likely GET with query params, or POST /search with a JSON body.
+  RESP=$(curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json" \
+           --data-urlencode "jql=$JQL" --data-urlencode "startAt=$START" \
+           --data-urlencode "maxResults=$MAXR" \
+           --data-urlencode "fields=summary,description,status,priority,labels,updated" \
+           -G "$JIRA_BASE/rest/api/2/search")
+  printf '%s' "$RESP" | jq -c '.issues[]'    # map each → normalized issue
+  TOTAL=$(printf '%s' "$RESP" | jq -r '.total // 0')
+  START=$((START + MAXR))
+  { [ "$START" -ge "$TOTAL" ] || [ "$START" -ge "$MAXTOTAL" ]; } && break
+done
+# START >= MAXTOTAL with more results → truncation receipt note.
+```
+
+- **Branch on the persisted `$APIV`**: `3` → the Cloud cursor path; `2` → this DC
+  offset path. The deltas (exact verb, body shape, `nextPage` field name on newer DC
+  builds) are flagged **verify-at-build** — but the offset-pagination path IS
+  implemented, not deferred.
+- **Map each `.issues[]` into the normalized `issue` struct** via the same firewall
+  table `fetchIssue` uses (ADF descriptions translated on v3 — § ADF translation).
+  **Linkage is decided authoritatively by the local sync state** (the recorded linked
+  tracker-ids), NOT by the `flow:<id>` label's presence — the label is a corroborating
+  hint only; a bounded/truncated label set is never read as "unlinked".
 
 ## `makePr` — link the PR to the issue as a **remote link** (in-adapter)
 
@@ -476,8 +932,9 @@ curl -sS -w '\n%{http_code}' "${JK[@]}" "${JAUTH[@]}" \
   equivalent — branch on `$APIV` (verify-at-build on a DC instance).
 - **Gate:** bridge **active AND `tracker.type == jira`** — no separate `makePr`
   opt-in (one of the two unconditional-when-active exceptions, steps.md). This rides
-  the same In-Review status push the other adapters do (the status push itself is
-  fn-70.3's transitions model); the remote link is the link half and is owned here.
+  the same In-Review status push the other adapters do (the status push itself is the
+  transitions model in § Status / transitions above); the remote link is the link half
+  and is owned here.
 - No auto-linkify, no `gh`, no Linear attachment — the remote link IS the projection.
 
 ## Error contract — never crash, never corrupt state
@@ -525,10 +982,15 @@ The failure modes that MUST be non-destructive:
   and live in those tasks — **reused unchanged** here.
 - **REST-only by design — no MCP rung** (the decision above). One transport + the
   no-op floor; no detect-best-available ladder.
-- **This task (fn-70.2) is the transport + six core + auth + identity + PR
-  remote-link.** The ADF translation, the transitions/status model (incl. the fn-66
-  terminal gate), the relation pair, and `listOpenIssues` are **fn-70.3** — pointed at
-  the boundary above, never half-built here.
+- **fn-70.2 authored the transport + six core + auth + identity + PR remote-link;
+  fn-70.3 added the ADF translation, the transitions/status model (incl. the fn-66
+  terminal gate), the relation pair, and `listOpenIssues`** — the full nine-method
+  interface is now implemented here.
+- **The readiness projection's Jira branch is in [status-sync.md](status-sync.md)**
+  (the one additive carve-out to "status-sync untouched") — a name-match like Linear
+  (`DESIRED = status name == readyState`) + the stale-config existence check, mirroring
+  fn-69's GitLab branch. It is distinct from the `listOpenIssues` JQL filter (the
+  promoted-lane enumeration) and from the ceremony's readyState collection.
 - **No new hard dependency.** Only `curl` + `jq` (already required by the bridge); the
   terminal rung is a documented no-op. The zero-dep base install is untouched
   (STRATEGY opt-in carve-out).
