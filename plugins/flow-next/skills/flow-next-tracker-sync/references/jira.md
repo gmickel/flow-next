@@ -692,8 +692,12 @@ TERMINAL=$(printf '%s' "$ISSUE_JSON" | jq -r '.fields.status.statusCategory.key 
 the write map. Resolution order:
 
 1. **Reverse `statusMap`** — find the normalized key whose `statusMap` value matches
-   `fields.status` (**`id` first, then case-insensitive `name`**). This is the
-   authoritative reverse (a project's "In Review" → `in-review`).
+   `fields.status`: **`id` first, compared as STRINGS** — `(fields.status.id | tostring)
+   == (entry.id | tostring)` — because a `statusMap` id refined via the dot-path
+   (`config set …statusMap.done.id 10031`) is int-coerced by `set_config`, so a bare
+   `==` against Jira's string id would never match (identical rule to the `setStatus`
+   write match, § above); **then case-insensitive `name`**. This is the authoritative
+   reverse (a project's "In Review" → `in-review`).
 2. **`statusCategory.key` fallback** when no `statusMap` entry matches (a status the
    map doesn't cover): `done` → `done`; `new`/`indeterminate` → a **safe non-terminal**
    (`planned` / `in-progress` respectively) **only when unambiguous** — never guess a
