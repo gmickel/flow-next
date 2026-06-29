@@ -19531,12 +19531,12 @@ def _run_validator_pass(
     spec_arg: Optional[str],
     use_json: bool,
 ) -> None:
-    """Execute a validator pass against ``backend`` (codex|copilot).
+    """Execute a validator pass against ``backend`` (codex|copilot|cursor).
 
     Reads findings + prior session from receipt, invokes the backend with
     session continuity, parses validator output, merges into receipt. This
-    is the shared spine for ``cmd_codex_validate`` and
-    ``cmd_copilot_validate``.
+    is the shared spine for ``cmd_codex_validate`` / ``cmd_copilot_validate`` /
+    ``cmd_cursor_validate``.
     """
     # Load prior receipt to get session_id + verdict context.
     receipt_file = Path(receipt_path)
@@ -19636,6 +19636,26 @@ def _run_validator_pass(
                 use_json=use_json,
                 code=2,
             )
+    elif backend == "cursor":
+        # Validator always resumes the primary review's session (it requires a
+        # prior session_id), so cursor's resume-only model is satisfied here.
+        if spec_arg:
+            try:
+                spec = BackendSpec.parse(spec_arg).resolve()
+            except ValueError as e:
+                error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
+        else:
+            spec = resolve_review_spec("cursor", None)
+        repo_root = get_repo_root()
+        output, _sid, exit_code, stderr = run_cursor_exec(
+            prompt, session_id=prior_session_id, repo_root=repo_root, spec=spec
+        )
+        if exit_code != 0:
+            error_exit(
+                f"cursor validator pass failed: {(stderr or output or '').strip()}",
+                use_json=use_json,
+                code=2,
+            )
     else:
         error_exit(
             f"Unknown validator backend: {backend}",
@@ -19697,6 +19717,17 @@ def cmd_copilot_validate(args: argparse.Namespace) -> None:
     """Dispatch a copilot validator pass over findings from a prior review."""
     _run_validator_pass(
         backend="copilot",
+        findings_file=getattr(args, "findings_file", None),
+        receipt_path=args.receipt,
+        spec_arg=getattr(args, "spec", None),
+        use_json=args.json,
+    )
+
+
+def cmd_cursor_validate(args: argparse.Namespace) -> None:
+    """Dispatch a cursor validator pass over findings from a prior review."""
+    _run_validator_pass(
+        backend="cursor",
         findings_file=getattr(args, "findings_file", None),
         receipt_path=args.receipt,
         spec_arg=getattr(args, "spec", None),
@@ -20201,7 +20232,7 @@ def _run_deep_pass(
     spec_arg: Optional[str],
     use_json: bool,
 ) -> None:
-    """Execute one deep pass against ``backend`` (codex|copilot).
+    """Execute one deep pass against ``backend`` (codex|copilot|cursor).
 
     Reads prior session from receipt, invokes backend with session
     continuity, parses output, merges findings into receipt. Each call
@@ -20293,6 +20324,26 @@ def _run_deep_pass(
                 use_json=use_json,
                 code=2,
             )
+    elif backend == "cursor":
+        # Deep-pass always resumes the primary review's session (requires a
+        # prior session_id), so cursor's resume-only model is satisfied here.
+        if spec_arg:
+            try:
+                spec = BackendSpec.parse(spec_arg).resolve()
+            except ValueError as e:
+                error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
+        else:
+            spec = resolve_review_spec("cursor", None)
+        repo_root = get_repo_root()
+        output, _sid, exit_code, stderr = run_cursor_exec(
+            prompt, session_id=prior_session_id, repo_root=repo_root, spec=spec
+        )
+        if exit_code != 0:
+            error_exit(
+                f"cursor deep-pass ({pass_name}) failed: {(stderr or output or '').strip()}",
+                use_json=use_json,
+                code=2,
+            )
     else:
         error_exit(
             f"Unknown deep-pass backend: {backend}",
@@ -20367,6 +20418,18 @@ def cmd_copilot_deep_pass(args: argparse.Namespace) -> None:
     """Dispatch one copilot deep-pass (adversarial|security|performance)."""
     _run_deep_pass(
         backend="copilot",
+        pass_name=args.pass_name,
+        primary_findings_file=getattr(args, "primary_findings", None),
+        receipt_path=args.receipt,
+        spec_arg=getattr(args, "spec", None),
+        use_json=args.json,
+    )
+
+
+def cmd_cursor_deep_pass(args: argparse.Namespace) -> None:
+    """Dispatch one cursor deep-pass (adversarial|security|performance)."""
+    _run_deep_pass(
+        backend="cursor",
         pass_name=args.pass_name,
         primary_findings_file=getattr(args, "primary_findings", None),
         receipt_path=args.receipt,
@@ -23355,6 +23418,639 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
             "mode": "copilot",
             "model": effective_model,
             "effort": effective_effort,
+            "spec": str(resolved_spec),
+            "review": output,
+        }
+        if suppressed_count:
+            json_payload["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            json_payload["introduced_count"] = classification_counts["introduced"]
+            json_payload["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            json_payload["unaddressed"] = unaddressed_rids
+        json_output(json_payload)
+    else:
+        print(output)
+        print(f"\nVERDICT={verdict or 'UNKNOWN'}")
+
+
+def _resolve_cursor_review_spec(
+    args: argparse.Namespace, task_id: Optional[str]
+) -> BackendSpec:
+    """Resolve ``BackendSpec`` for a cursor review command.
+
+    Precedence:
+      1. ``--spec`` argv (strict parse — user just typed it, surface errors)
+      2. ``resolve_review_spec("cursor", task_id)`` — task/epic/env/config/defaults
+
+    Cursor folds reasoning effort into the model name, so the resolved spec
+    carries **no** ``effort``; the caller uses ``resolved.model`` for receipts
+    and passes the spec to ``run_cursor_exec`` (which never emits ``--effort``).
+    """
+    spec_arg = getattr(args, "spec", None)
+    if spec_arg:
+        try:
+            return BackendSpec.parse(spec_arg).resolve()
+        except ValueError as e:
+            error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
+    return resolve_review_spec("cursor", task_id)
+
+
+def cmd_cursor_impl_review(args: argparse.Namespace) -> None:
+    """Run implementation review via cursor-agent -p.
+
+    Mirrors ``cmd_copilot_impl_review`` but for the cursor backend:
+    - Session is **resume-only** — there is no client-generated UUID. On a
+      first review ``session_id`` stays ``None`` and ``run_cursor_exec`` omits
+      ``--resume``; Cursor mints + returns the id which we persist in the
+      receipt. Re-review resumes only when the prior receipt's ``mode`` is
+      ``"cursor"`` (cross-backend receipt ⇒ fresh session).
+    - Receipt stamps ``mode: "cursor"`` + ``model`` — **no ``effort`` key**
+      (effort is folded into the cursor model name and is not a cursor field).
+    """
+    task_id = args.task
+    base_branch = args.base
+    focus = getattr(args, "focus", None)
+
+    # Standalone mode (no task ID) - review branch without task context
+    standalone = task_id is None
+
+    if not standalone:
+        if not ensure_flow_exists():
+            error_exit(".flow/ does not exist", use_json=args.json)
+
+        if not is_task_id(task_id):
+            error_exit(f"Invalid task ID: {task_id}", use_json=args.json)
+
+        flow_dir = get_flow_dir()
+        task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
+
+        if not task_spec_path.exists():
+            error_exit(f"Task spec not found: {task_spec_path}", use_json=args.json)
+
+        task_spec = task_spec_path.read_text(encoding="utf-8")
+
+    # Get diff summary (--stat) - use base..HEAD for committed changes only
+    diff_summary = ""
+    try:
+        diff_result = subprocess.run(
+            ["git", "diff", "--stat", f"{base_branch}..HEAD"],
+            capture_output=True,
+            text=True, encoding="utf-8",
+            cwd=get_repo_root(),
+        )
+        if diff_result.returncode == 0:
+            diff_summary = diff_result.stdout.strip()
+    except (subprocess.CalledProcessError, OSError):
+        pass
+
+    # Get actual diff content with size cap (avoid memory spike on large diffs)
+    diff_content = ""
+    max_diff_bytes = 50000
+    try:
+        proc = subprocess.Popen(
+            ["git", "diff", f"{base_branch}..HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=get_repo_root(),
+        )
+        diff_bytes = proc.stdout.read(max_diff_bytes + 1)
+        was_truncated = len(diff_bytes) > max_diff_bytes
+        if was_truncated:
+            diff_bytes = diff_bytes[:max_diff_bytes]
+        while proc.stdout.read(65536):
+            pass
+        stderr_bytes = proc.stderr.read()
+        proc.stdout.close()
+        proc.stderr.close()
+        returncode = proc.wait()
+
+        if returncode != 0 and stderr_bytes:
+            diff_content = f"[git diff failed: {stderr_bytes.decode('utf-8', errors='replace').strip()}]"
+        else:
+            diff_content = diff_bytes.decode("utf-8", errors="replace").strip()
+            if was_truncated:
+                diff_content += "\n\n... [diff truncated at 50KB]"
+    except (subprocess.CalledProcessError, OSError):
+        pass
+
+    # Always embed changed file contents (same rationale as codex/copilot).
+    # Cursor callers route through FLOW_CURSOR_EMBED_MAX_BYTES.
+    changed_files = get_changed_files(base_branch)
+    embedded_content, embed_stats = get_embedded_file_contents(
+        changed_files, budget_env_var="FLOW_CURSOR_EMBED_MAX_BYTES"
+    )
+
+    files_embedded = not embed_stats.get("budget_skipped") and not embed_stats.get("truncated")
+    if standalone:
+        prompt = build_standalone_review_prompt(base_branch, focus, diff_summary, files_embedded)
+        if diff_content:
+            prompt += f"\n\n<diff_content>\n{diff_content}\n</diff_content>"
+        if embedded_content:
+            prompt += f"\n\n<embedded_files>\n{embedded_content}\n</embedded_files>"
+    else:
+        context_hints = gather_context_hints(base_branch)
+        prompt = build_review_prompt(
+            "impl", task_spec, context_hints, diff_summary,
+            embedded_files=embedded_content, diff_content=diff_content,
+            files_embedded=files_embedded
+        )
+
+    # Check for existing session in receipt (indicates re-review). Cursor only
+    # resumes when the prior receipt was written by THIS backend
+    # (mode == "cursor"); a cross-backend receipt would feed a foreign id to
+    # cursor --resume, so it starts a fresh session instead.
+    receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
+    session_id: Optional[str] = None
+    is_rereview = False
+    if receipt_path:
+        receipt_file = Path(receipt_path)
+        if receipt_file.exists():
+            try:
+                receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
+                if receipt_data.get("mode") == "cursor":
+                    prior_sid = receipt_data.get("session_id")
+                    if prior_sid:  # non-empty id ⇒ resume
+                        session_id = prior_sid
+                        is_rereview = True
+            except (json.JSONDecodeError, Exception):
+                pass
+
+    # Resume-only: NO uuid fallback. session_id stays None on a first review;
+    # run_cursor_exec omits --resume and captures the id Cursor mints.
+
+    # For re-reviews, prepend instruction to re-read changed files
+    if is_rereview:
+        changed_files = get_changed_files(base_branch)
+        if changed_files:
+            rereview_preamble = build_rereview_preamble(
+                changed_files, "implementation", files_embedded
+            )
+            prompt = rereview_preamble + prompt
+
+    # Resolve review spec (task/epic/env/config/defaults or --spec override)
+    resolved_spec = _resolve_cursor_review_spec(args, task_id)
+    effective_model = resolved_spec.model or "gpt-5.5-high"
+
+    # Run cursor (resume-only; spec carries no effort)
+    repo_root = get_repo_root()
+    output, returned_session_id, exit_code, stderr = run_cursor_exec(
+        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
+    )
+
+    # Handle failures
+    if exit_code != 0:
+        if receipt_path:
+            try:
+                Path(receipt_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        msg = (stderr or output or "cursor failed").strip()
+        error_exit(f"cursor failed: {msg}", use_json=args.json, code=2)
+
+    # Parse verdict
+    verdict = parse_codex_verdict(output)
+
+    if not verdict:
+        if receipt_path:
+            try:
+                Path(receipt_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        error_exit(
+            "Cursor review completed but no verdict found in output. "
+            "Expected <verdict>SHIP</verdict> or <verdict>NEEDS_WORK</verdict>",
+            use_json=args.json,
+            code=2,
+        )
+
+    review_id = task_id if task_id else "branch"
+
+    # Parse optional review-rigor signals from output (fn-29.2, fn-29.3, fn-29.4)
+    suppressed_count = parse_suppressed_count(output)
+    classification_counts = parse_classification_counts(output)
+    unaddressed_rids = parse_unaddressed_rids(output)
+
+    if receipt_path:
+        receipt_data = {
+            "type": "impl_review",
+            "id": review_id,
+            "mode": "cursor",
+            "base": base_branch,
+            "verdict": verdict,
+            "session_id": returned_session_id,
+            "model": effective_model,
+            "spec": str(resolved_spec),
+            "timestamp": now_iso(),
+            "review": output,
+        }
+        ralph_iter = os.environ.get("RALPH_ITERATION")
+        if ralph_iter:
+            try:
+                receipt_data["iteration"] = int(ralph_iter)
+            except ValueError:
+                pass
+        if focus:
+            receipt_data["focus"] = focus
+        if suppressed_count:
+            receipt_data["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            receipt_data["introduced_count"] = classification_counts["introduced"]
+            receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            receipt_data["unaddressed"] = unaddressed_rids
+        Path(receipt_path).write_text(
+            json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
+        )
+
+    if args.json:
+        json_payload = {
+            "type": "impl_review",
+            "id": review_id,
+            "verdict": verdict,
+            "session_id": returned_session_id,
+            "mode": "cursor",
+            "model": effective_model,
+            "spec": str(resolved_spec),
+            "standalone": standalone,
+            "review": output,
+        }
+        if suppressed_count:
+            json_payload["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            json_payload["introduced_count"] = classification_counts["introduced"]
+            json_payload["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            json_payload["unaddressed"] = unaddressed_rids
+        json_output(json_payload)
+    else:
+        print(output)
+        print(f"\nVERDICT={verdict or 'UNKNOWN'}")
+
+
+def cmd_cursor_plan_review(args: argparse.Namespace) -> None:
+    """Run plan review via cursor-agent -p (resume-only, mode:cursor)."""
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist", use_json=args.json)
+
+    # Resolve short ids / tracker handles to the canonical on-disk id (fn-60).
+    epic_id = resolve_spec_id_arg(get_flow_dir(), args.epic, use_json=args.json)
+
+    files_arg = getattr(args, "files", None)
+    if not files_arg:
+        error_exit(
+            "plan-review requires --files argument (comma-separated CODE file paths). "
+            "Example: --files src/main.py,src/utils.py",
+            use_json=args.json,
+        )
+
+    repo_root = get_repo_root()
+    file_paths = []
+    invalid_paths = []
+    for f in files_arg.split(","):
+        f = f.strip()
+        if not f:
+            continue
+        full_path = (repo_root / f).resolve()
+        try:
+            full_path.relative_to(repo_root)
+            if full_path.exists():
+                file_paths.append(f)
+            else:
+                invalid_paths.append(f"{f} (not found)")
+        except ValueError:
+            invalid_paths.append(f"{f} (outside repo)")
+
+    if invalid_paths:
+        print(f"Warning: Skipping invalid paths: {', '.join(invalid_paths)}", file=sys.stderr)
+
+    if not file_paths:
+        error_exit(
+            "No valid file paths provided. Use --files with comma-separated repo-relative code paths.",
+            use_json=args.json,
+        )
+
+    flow_dir = get_flow_dir()
+    epic_spec_path = flow_dir / SPECS_DIR / f"{epic_id}.md"
+
+    if not epic_spec_path.exists():
+        error_exit(f"Epic spec not found: {epic_spec_path}", use_json=args.json)
+
+    epic_spec = epic_spec_path.read_text(encoding="utf-8")
+
+    tasks_dir = flow_dir / TASKS_DIR
+    task_specs_parts = []
+    for task_file in sorted(tasks_dir.glob(f"{epic_id}.*.md")):
+        task_id = task_file.stem
+        task_content = task_file.read_text(encoding="utf-8")
+        task_specs_parts.append(f"### {task_id}\n\n{task_content}")
+
+    task_specs = "\n\n---\n\n".join(task_specs_parts) if task_specs_parts else ""
+
+    embedded_content, embed_stats = get_embedded_file_contents(
+        file_paths, budget_env_var="FLOW_CURSOR_EMBED_MAX_BYTES"
+    )
+
+    base_branch = args.base if hasattr(args, "base") and args.base else "main"
+    context_hints = gather_context_hints(base_branch)
+
+    files_embedded = not embed_stats.get("budget_skipped") and not embed_stats.get("truncated")
+    prompt = build_review_prompt(
+        "plan", epic_spec, context_hints, task_specs=task_specs,
+        embedded_files=embedded_content, files_embedded=files_embedded,
+    )
+
+    if file_paths:
+        files_list = "\n".join(f"- {f}" for f in file_paths)
+        prompt += f"\n\n<requested_files>\nThe following code files are relevant to this plan:\n{files_list}\n</requested_files>"
+
+    receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
+    session_id: Optional[str] = None
+    is_rereview = False
+    if receipt_path:
+        receipt_file = Path(receipt_path)
+        if receipt_file.exists():
+            try:
+                receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
+                if receipt_data.get("mode") == "cursor":
+                    prior_sid = receipt_data.get("session_id")
+                    if prior_sid:
+                        session_id = prior_sid
+                        is_rereview = True
+            except (json.JSONDecodeError, Exception):
+                pass
+
+    # Resume-only: no uuid fallback (see cmd_cursor_impl_review).
+
+    if is_rereview:
+        spec_files = [str(epic_spec_path.relative_to(repo_root))]
+        for task_file in sorted(tasks_dir.glob(f"{epic_id}.*.md")):
+            spec_files.append(str(task_file.relative_to(repo_root)))
+        rereview_preamble = build_rereview_preamble(spec_files, "plan", files_embedded)
+        prompt = rereview_preamble + prompt
+
+    # Resolve review spec — plan reviews are epic-scoped (no task_id context)
+    resolved_spec = _resolve_cursor_review_spec(args, None)
+    effective_model = resolved_spec.model or "gpt-5.5-high"
+
+    output, returned_session_id, exit_code, stderr = run_cursor_exec(
+        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
+    )
+
+    if exit_code != 0:
+        if receipt_path:
+            try:
+                Path(receipt_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        msg = (stderr or output or "cursor failed").strip()
+        error_exit(f"cursor failed: {msg}", use_json=args.json, code=2)
+
+    verdict = parse_codex_verdict(output)
+
+    if not verdict:
+        if receipt_path:
+            try:
+                Path(receipt_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        error_exit(
+            "Cursor review completed but no verdict found in output. "
+            "Expected <verdict>SHIP</verdict> or <verdict>NEEDS_WORK</verdict>",
+            use_json=args.json,
+            code=2,
+        )
+
+    if receipt_path:
+        receipt_data = {
+            "type": "plan_review",
+            "id": epic_id,
+            "mode": "cursor",
+            "verdict": verdict,
+            "session_id": returned_session_id,
+            "model": effective_model,
+            "spec": str(resolved_spec),
+            "timestamp": now_iso(),
+            "review": output,
+        }
+        ralph_iter = os.environ.get("RALPH_ITERATION")
+        if ralph_iter:
+            try:
+                receipt_data["iteration"] = int(ralph_iter)
+            except ValueError:
+                pass
+        Path(receipt_path).write_text(
+            json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
+        )
+
+    if args.json:
+        json_output(
+            {
+                "type": "plan_review",
+                "id": epic_id,
+                "verdict": verdict,
+                "session_id": returned_session_id,
+                "mode": "cursor",
+                "model": effective_model,
+                "spec": str(resolved_spec),
+                "review": output,
+            }
+        )
+    else:
+        print(output)
+        print(f"\nVERDICT={verdict or 'UNKNOWN'}")
+
+
+def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
+    """Run spec completion review via cursor-agent -p (resume-only, mode:cursor)."""
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist", use_json=args.json)
+
+    # Resolve short ids / tracker handles to the canonical on-disk id (fn-60).
+    epic_id = resolve_spec_id_arg(get_flow_dir(), args.epic, use_json=args.json)
+
+    flow_dir = get_flow_dir()
+
+    epic_spec_path = flow_dir / SPECS_DIR / f"{epic_id}.md"
+    if not epic_spec_path.exists():
+        error_exit(f"Spec markdown not found: {epic_spec_path}", use_json=args.json)
+
+    epic_spec = epic_spec_path.read_text(encoding="utf-8")
+
+    tasks_dir = flow_dir / TASKS_DIR
+    task_specs_parts = []
+    for task_file in sorted(tasks_dir.glob(f"{epic_id}.*.md")):
+        task_id = task_file.stem
+        task_content = task_file.read_text(encoding="utf-8")
+        task_specs_parts.append(f"### {task_id}\n\n{task_content}")
+
+    task_specs = "\n\n---\n\n".join(task_specs_parts) if task_specs_parts else ""
+
+    base_branch = args.base if hasattr(args, "base") and args.base else "main"
+
+    diff_summary = ""
+    try:
+        diff_result = subprocess.run(
+            ["git", "diff", "--stat", f"{base_branch}..HEAD"],
+            capture_output=True,
+            text=True, encoding="utf-8",
+            cwd=get_repo_root(),
+        )
+        if diff_result.returncode == 0:
+            diff_summary = diff_result.stdout.strip()
+    except (subprocess.CalledProcessError, OSError):
+        pass
+
+    diff_content = ""
+    max_diff_bytes = 50000
+    try:
+        proc = subprocess.Popen(
+            ["git", "diff", f"{base_branch}..HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=get_repo_root(),
+        )
+        diff_bytes = proc.stdout.read(max_diff_bytes + 1)
+        was_truncated = len(diff_bytes) > max_diff_bytes
+        if was_truncated:
+            diff_bytes = diff_bytes[:max_diff_bytes]
+        while proc.stdout.read(65536):
+            pass
+        stderr_bytes = proc.stderr.read()
+        proc.stdout.close()
+        proc.stderr.close()
+        returncode = proc.wait()
+
+        if returncode != 0 and stderr_bytes:
+            diff_content = f"[git diff failed: {stderr_bytes.decode('utf-8', errors='replace').strip()}]"
+        else:
+            diff_content = diff_bytes.decode("utf-8", errors="replace").strip()
+            if was_truncated:
+                diff_content += "\n\n... [diff truncated at 50KB]"
+    except (subprocess.CalledProcessError, OSError):
+        pass
+
+    changed_files = get_changed_files(base_branch)
+    embedded_content, embed_stats = get_embedded_file_contents(
+        changed_files, budget_env_var="FLOW_CURSOR_EMBED_MAX_BYTES"
+    )
+
+    files_embedded = not embed_stats.get("budget_skipped") and not embed_stats.get("truncated")
+    prompt = build_completion_review_prompt(
+        epic_spec,
+        task_specs,
+        diff_summary,
+        diff_content,
+        embedded_files=embedded_content,
+        files_embedded=files_embedded,
+    )
+
+    receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
+    session_id: Optional[str] = None
+    is_rereview = False
+    if receipt_path:
+        receipt_file = Path(receipt_path)
+        if receipt_file.exists():
+            try:
+                receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
+                if receipt_data.get("mode") == "cursor":
+                    prior_sid = receipt_data.get("session_id")
+                    if prior_sid:
+                        session_id = prior_sid
+                        is_rereview = True
+            except (json.JSONDecodeError, Exception):
+                pass
+
+    # Resume-only: no uuid fallback (see cmd_cursor_impl_review).
+
+    if is_rereview:
+        changed_files = get_changed_files(base_branch)
+        if changed_files:
+            rereview_preamble = build_rereview_preamble(
+                changed_files, "completion", files_embedded
+            )
+            prompt = rereview_preamble + prompt
+
+    # Resolve review spec — completion reviews are epic-scoped
+    resolved_spec = _resolve_cursor_review_spec(args, None)
+    effective_model = resolved_spec.model or "gpt-5.5-high"
+
+    repo_root = get_repo_root()
+    output, returned_session_id, exit_code, stderr = run_cursor_exec(
+        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
+    )
+
+    if exit_code != 0:
+        if receipt_path:
+            try:
+                Path(receipt_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        msg = (stderr or output or "cursor failed").strip()
+        error_exit(f"cursor failed: {msg}", use_json=args.json, code=2)
+
+    verdict = parse_codex_verdict(output)
+
+    if not verdict:
+        if receipt_path:
+            try:
+                Path(receipt_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        error_exit(
+            "Cursor review completed but no verdict found in output. "
+            "Expected <verdict>SHIP</verdict> or <verdict>NEEDS_WORK</verdict>",
+            use_json=args.json,
+            code=2,
+        )
+
+    # Preserve session_id for continuity (avoid clobbering on resumed sessions)
+    session_id_to_write = returned_session_id or session_id
+
+    # Parse optional review-rigor signals from output (fn-29.2, fn-29.3, fn-29.4)
+    suppressed_count = parse_suppressed_count(output)
+    classification_counts = parse_classification_counts(output)
+    unaddressed_rids = parse_unaddressed_rids(output)
+
+    if receipt_path:
+        receipt_data = {
+            "type": "completion_review",
+            "id": epic_id,
+            "mode": "cursor",
+            "base": base_branch,
+            "verdict": verdict,
+            "session_id": session_id_to_write,
+            "model": effective_model,
+            "spec": str(resolved_spec),
+            "timestamp": now_iso(),
+            "review": output,
+        }
+        ralph_iter = os.environ.get("RALPH_ITERATION")
+        if ralph_iter:
+            try:
+                receipt_data["iteration"] = int(ralph_iter)
+            except ValueError:
+                pass
+        if suppressed_count:
+            receipt_data["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            receipt_data["introduced_count"] = classification_counts["introduced"]
+            receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            receipt_data["unaddressed"] = unaddressed_rids
+        Path(receipt_path).write_text(
+            json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
+        )
+
+    if args.json:
+        json_payload = {
+            "type": "completion_review",
+            "id": epic_id,
+            "base": base_branch,
+            "verdict": verdict,
+            "session_id": session_id_to_write,
+            "mode": "cursor",
+            "model": effective_model,
             "spec": str(resolved_spec),
             "review": output,
         }
@@ -26450,8 +27146,8 @@ def main() -> None:
     p_copilot_deep.set_defaults(func=cmd_copilot_deep_pass)
 
     # cursor (cursor-agent CLI helpers — fn-74). Subcommand surface mirrors
-    # codex/copilot; review subcommands (impl-review/plan-review/...) are added
-    # in task fn-74-cursor-review-backend-cursor-agent-cli.2.
+    # codex/copilot: check + impl-review/plan-review/completion-review/validate/
+    # deep-pass (NOT classify-result/rollback-plan — those are codex-only).
     p_cursor = subparsers.add_parser("cursor", help="Cursor (cursor-agent CLI) helpers")
     cursor_sub = p_cursor.add_subparsers(dest="cursor_cmd", required=True)
 
@@ -26466,6 +27162,121 @@ def main() -> None:
         help="Skip live auth probe (fast CI path when auth already verified)",
     )
     p_cursor_check.set_defaults(func=cmd_cursor_check)
+
+    p_cursor_impl = cursor_sub.add_parser("impl-review", help="Implementation review")
+    p_cursor_impl.add_argument(
+        "task",
+        nargs="?",
+        default=None,
+        help="Task ID (e.g., fn-1.2, fn-1-add-auth.2), optional for standalone",
+    )
+    p_cursor_impl.add_argument("--base", required=True, help="Base branch for diff")
+    p_cursor_impl.add_argument(
+        "--focus", help="Focus areas for standalone review (comma-separated)"
+    )
+    p_cursor_impl.add_argument(
+        "--receipt", help="Receipt file path for session continuity"
+    )
+    p_cursor_impl.add_argument("--json", action="store_true", help="JSON output")
+    p_cursor_impl.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'cursor:gpt-5.5-high'). "
+        "Overrides task/epic/env/config resolution. Strict parse. "
+        "Cursor folds effort into the model name (no ':<effort>').",
+    )
+    p_cursor_impl.set_defaults(func=cmd_cursor_impl_review)
+
+    p_cursor_plan = cursor_sub.add_parser("plan-review", help="Plan review")
+    p_cursor_plan.add_argument("epic", help="Spec ID (e.g., fn-1, fn-1-add-auth)")
+    p_cursor_plan.add_argument(
+        "--files",
+        required=True,
+        help="Comma-separated file paths to embed for context (required)",
+    )
+    p_cursor_plan.add_argument("--base", default="main", help="Base branch for context")
+    p_cursor_plan.add_argument(
+        "--receipt", help="Receipt file path for session continuity"
+    )
+    p_cursor_plan.add_argument("--json", action="store_true", help="JSON output")
+    p_cursor_plan.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'cursor:gpt-5.5-high'). "
+        "Overrides env/config resolution. Strict parse.",
+    )
+    p_cursor_plan.set_defaults(func=cmd_cursor_plan_review)
+
+    p_cursor_completion = cursor_sub.add_parser(
+        "completion-review", help="Spec completion review"
+    )
+    p_cursor_completion.add_argument(
+        "epic", help="Spec ID (e.g., fn-1, fn-1-add-auth)"
+    )
+    p_cursor_completion.add_argument(
+        "--base", default="main", help="Base branch for diff"
+    )
+    p_cursor_completion.add_argument(
+        "--receipt", help="Receipt file path for session continuity"
+    )
+    p_cursor_completion.add_argument("--json", action="store_true", help="JSON output")
+    p_cursor_completion.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'cursor:gpt-5.5-high'). "
+        "Overrides env/config resolution. Strict parse.",
+    )
+    p_cursor_completion.set_defaults(func=cmd_cursor_completion_review)
+
+    p_cursor_validate = cursor_sub.add_parser(
+        "validate",
+        help="Validator pass over prior review findings (fn-32.1 --validate)",
+    )
+    p_cursor_validate.add_argument(
+        "--findings-file",
+        dest="findings_file",
+        help="JSON-lines file with findings to validate (one object per line, "
+        "with at least `id`). Empty or missing => no-op.",
+    )
+    p_cursor_validate.add_argument(
+        "--receipt",
+        required=True,
+        help="Receipt file from prior impl-review (required; provides session_id).",
+    )
+    p_cursor_validate.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'cursor:gpt-5.5-high'). "
+        "Defaults to env/config resolution.",
+    )
+    p_cursor_validate.add_argument("--json", action="store_true", help="JSON output")
+    p_cursor_validate.set_defaults(func=cmd_cursor_validate)
+
+    p_cursor_deep = cursor_sub.add_parser(
+        "deep-pass",
+        help="Deep-pass review (adversarial|security|performance) — fn-32.2 --deep",
+    )
+    p_cursor_deep.add_argument(
+        "--pass",
+        dest="pass_name",
+        required=True,
+        choices=list(DEEP_PASSES),
+        help="Which specialized pass to run.",
+    )
+    p_cursor_deep.add_argument(
+        "--primary-findings",
+        dest="primary_findings",
+        help="JSON-lines file with primary review findings (provides context; "
+        "also used for cross-pass agreement / dedup).",
+    )
+    p_cursor_deep.add_argument(
+        "--receipt",
+        required=True,
+        help="Receipt file from prior impl-review (required; provides session_id).",
+    )
+    p_cursor_deep.add_argument(
+        "--spec",
+        help="Backend spec override (e.g. 'cursor:gpt-5.5-high'). "
+        "Defaults to env/config resolution.",
+    )
+    p_cursor_deep.add_argument("--json", action="store_true", help="JSON output")
+    p_cursor_deep.set_defaults(func=cmd_cursor_deep_pass)
 
     # Review auto-enable heuristic (fn-32.2 --deep). Skill layer calls this
     # to determine which deep passes auto-enable for a given changed-file
