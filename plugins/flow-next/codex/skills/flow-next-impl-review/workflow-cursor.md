@@ -36,7 +36,12 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
 # so there is NO effort field — `cursor:<model>:<effort>` is rejected, and there
 # is no FLOW_CURSOR_EFFORT env var.
 
-$FLOWCTL cursor impl-review "$TASK_ID" --base "$DIFF_BASE" --receipt "$RECEIPT_PATH"
+# Standalone branch reviews leave TASK_ID empty — OMIT the positional entirely
+# (a quoted "" is rejected as an invalid task id; standalone mode needs no task arg).
+args=(cursor impl-review)
+[ -n "$TASK_ID" ] && args+=("$TASK_ID")
+args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH")
+$FLOWCTL "${args[@]}"
 ```
 
 **Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`.**

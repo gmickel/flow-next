@@ -23325,33 +23325,12 @@ def cmd_cursor_impl_review(args: argparse.Namespace) -> None:
     except (subprocess.CalledProcessError, OSError):
         pass
 
-    # Cursor reviews are AGENTIC: cursor-agent runs read-only (`--mode ask`) with
-    # cwd=repo_root and reads the changed files from disk itself. The embedded
-    # diff is DYNAMICALLY sized to the space left under CURSOR_ARGV_PROMPT_MAX
-    # (positional-argv cap) — a static cap can't (overhead varies per task; a big
-    # changed file like flowctl.py overflowed, PR #184). cursor reads full files
-    # from disk, so a budget-trimmed embedded diff loses only a convenience signal.
-    if standalone:
-        prompt = build_standalone_review_prompt(base_branch, focus, diff_summary)
-        fitted_diff = fit_cursor_diff_to_budget(prompt, diff_content)
-        if fitted_diff:
-            prompt += f"\n\n<diff_content>\n{fitted_diff}\n</diff_content>"
-    else:
-        context_hints = gather_context_hints(base_branch)
-        prompt_without_diff = build_review_prompt(
-            "impl", task_spec, context_hints, diff_summary,
-            diff_content="",
-        )
-        fitted_diff = fit_cursor_diff_to_budget(prompt_without_diff, diff_content)
-        prompt = build_review_prompt(
-            "impl", task_spec, context_hints, diff_summary,
-            diff_content=fitted_diff,
-        )
-
-    # Check for existing session in receipt (indicates re-review). Cursor only
-    # resumes when the prior receipt was written by THIS backend
-    # (mode == "cursor"); a cross-backend receipt would feed a foreign id to
-    # cursor --resume, so it starts a fresh session instead.
+    # Detect re-review FIRST (before building the prompt) so the re-review
+    # preamble is reserved in the cursor argv budget. A resumed review prepends
+    # preamble text; if it isn't counted, the prompt can exceed
+    # CURSOR_ARGV_PROMPT_MAX and fail closed. Cursor only resumes when the prior
+    # receipt was written by THIS backend (mode == "cursor"); a cross-backend
+    # receipt would feed a foreign id to cursor --resume, so it starts fresh.
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
     session_id: Optional[str] = None
     is_rereview = False
@@ -23371,14 +23350,48 @@ def cmd_cursor_impl_review(args: argparse.Namespace) -> None:
     # Resume-only: NO uuid fallback. session_id stays None on a first review;
     # run_cursor_exec omits --resume and captures the id Cursor mints.
 
-    # For re-reviews, prepend instruction to re-read changed files
+    # Re-review preamble (empty on a first review) is prepended to the final
+    # prompt and MUST be reserved in the diff budget below.
+    rereview_preamble = ""
     if is_rereview:
         changed_files = get_changed_files(base_branch)
         if changed_files:
             rereview_preamble = build_rereview_preamble(
                 changed_files, "implementation"
             )
-            prompt = rereview_preamble + prompt
+
+    # Cursor reviews are AGENTIC: cursor-agent runs read-only (`--mode ask`) with
+    # cwd=repo_root and reads the changed files from disk itself. The embedded
+    # diff is DYNAMICALLY sized to the space left under CURSOR_ARGV_PROMPT_MAX
+    # (positional-argv cap) AFTER reserving the re-review preamble — a static cap
+    # can't (overhead varies per task; a big changed file like flowctl.py
+    # overflowed, PR #184). cursor reads full files from disk, so a budget-trimmed
+    # embedded diff loses only a convenience signal.
+    if standalone:
+        base_prompt = build_standalone_review_prompt(base_branch, focus, diff_summary)
+        fitted_diff = fit_cursor_diff_to_budget(
+            rereview_preamble + base_prompt, diff_content
+        )
+        prompt = base_prompt
+        if fitted_diff:
+            prompt += f"\n\n<diff_content>\n{fitted_diff}\n</diff_content>"
+    else:
+        context_hints = gather_context_hints(base_branch)
+        prompt_without_diff = build_review_prompt(
+            "impl", task_spec, context_hints, diff_summary,
+            diff_content="",
+        )
+        fitted_diff = fit_cursor_diff_to_budget(
+            rereview_preamble + prompt_without_diff, diff_content
+        )
+        prompt = build_review_prompt(
+            "impl", task_spec, context_hints, diff_summary,
+            diff_content=fitted_diff,
+        )
+
+    # Prepend the re-review preamble (already reserved in the budget above).
+    if rereview_preamble:
+        prompt = rereview_preamble + prompt
 
     # Resolve review spec (task/epic/env/config/defaults or --spec override)
     resolved_spec = _resolve_cursor_review_spec(args, task_id)
@@ -23716,26 +23729,8 @@ def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
     except (subprocess.CalledProcessError, OSError):
         pass
 
-    # Cursor reviews are AGENTIC: cursor-agent runs read-only (`--mode ask`) with
-    # cwd=repo_root and reads the changed files from disk itself. The embedded
-    # diff is DYNAMICALLY sized to the space left under CURSOR_ARGV_PROMPT_MAX
-    # (positional-argv cap) — a static cap can't (overhead varies per spec; a big
-    # changed file like flowctl.py overflowed, PR #184). cursor reads full files
-    # from disk, so a budget-trimmed embedded diff loses only a convenience signal.
-    prompt_without_diff = build_completion_review_prompt(
-        epic_spec,
-        task_specs,
-        diff_summary,
-        "",
-    )
-    fitted_diff = fit_cursor_diff_to_budget(prompt_without_diff, diff_content)
-    prompt = build_completion_review_prompt(
-        epic_spec,
-        task_specs,
-        diff_summary,
-        fitted_diff,
-    )
-
+    # Detect re-review FIRST so the preamble is reserved in the cursor argv
+    # budget (see cmd_cursor_impl_review). Resume only on a prior cursor receipt.
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
     session_id: Optional[str] = None
     is_rereview = False
@@ -23754,13 +23749,41 @@ def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
 
     # Resume-only: no uuid fallback (see cmd_cursor_impl_review).
 
+    # Re-review preamble (empty on a first review) — reserved in the budget below.
+    rereview_preamble = ""
     if is_rereview:
         changed_files = get_changed_files(base_branch)
         if changed_files:
             rereview_preamble = build_rereview_preamble(
                 changed_files, "completion"
             )
-            prompt = rereview_preamble + prompt
+
+    # Cursor reviews are AGENTIC: cursor-agent runs read-only (`--mode ask`) with
+    # cwd=repo_root and reads the changed files from disk itself. The embedded
+    # diff is DYNAMICALLY sized to the space left under CURSOR_ARGV_PROMPT_MAX
+    # (positional-argv cap) AFTER reserving the re-review preamble — a static cap
+    # can't (overhead varies per spec; a big changed file like flowctl.py
+    # overflowed, PR #184). cursor reads full files from disk, so a budget-trimmed
+    # embedded diff loses only a convenience signal.
+    prompt_without_diff = build_completion_review_prompt(
+        epic_spec,
+        task_specs,
+        diff_summary,
+        "",
+    )
+    fitted_diff = fit_cursor_diff_to_budget(
+        rereview_preamble + prompt_without_diff, diff_content
+    )
+    prompt = build_completion_review_prompt(
+        epic_spec,
+        task_specs,
+        diff_summary,
+        fitted_diff,
+    )
+
+    # Prepend the re-review preamble (already reserved in the budget above).
+    if rereview_preamble:
+        prompt = rereview_preamble + prompt
 
     # Resolve review spec — completion reviews are epic-scoped
     resolved_spec = _resolve_cursor_review_spec(args, None)
