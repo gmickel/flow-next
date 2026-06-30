@@ -3965,8 +3965,10 @@ def fit_cursor_prompt_to_budget(
 ) -> str:
     """Backstop guard: keep ANY cursor review prompt under the argv cap.
 
-    Returns ``prompt`` unchanged when it already fits
-    ``CURSOR_ARGV_PROMPT_MAX``. Otherwise PREPENDS a read-from-disk header
+    Returns ``prompt`` unchanged only when it is STRICTLY under
+    ``CURSOR_ARGV_PROMPT_MAX`` — ``run_cursor_exec`` rejects a prompt whose length
+    is ``>=`` the cap, so a prompt of exactly the cap must still be trimmed.
+    Otherwise PREPENDS a read-from-disk header
     naming the on-disk sources (``.flow/specs/<spec_id>.md``, the relevant
     ``.flow/tasks/<task_id>.md`` files, and the changed files) and TRUNCATES the
     embedded SPEC/TASK/DIFF body so the total stays a margin below the cap.
@@ -3982,7 +3984,7 @@ def fit_cursor_prompt_to_budget(
     ``repo_root`` is accepted for symmetry / future path resolution; the header
     references repo-relative ``.flow`` paths cursor reads under ``cwd=repo_root``.
     """
-    if len(prompt) <= CURSOR_ARGV_PROMPT_MAX:
+    if len(prompt) < CURSOR_ARGV_PROMPT_MAX:
         return prompt
 
     header = _cursor_disk_read_header(spec_id, task_ids)

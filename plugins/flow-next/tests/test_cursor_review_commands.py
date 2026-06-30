@@ -447,6 +447,21 @@ class CursorPromptArgvCap(unittest.TestCase):
         )
         self.assertEqual(out, small)
 
+    def test_exactly_at_cap_is_trimmed(self):
+        # Off-by-one: run_cursor_exec rejects len >= CAP, so a prompt of EXACTLY
+        # the cap must be trimmed to STRICTLY under (not passed through).
+        rubric = (
+            "<review_instructions>\n<verdict>SHIP</verdict>\n"
+            "</review_instructions>"
+        )
+        prompt = ("B" * (self.CAP - len(rubric))) + rubric
+        self.assertEqual(len(prompt), self.CAP)  # sanity: exactly at the cap
+        out = flowctl.fit_cursor_prompt_to_budget(
+            prompt, repo_root=Path("/tmp"), spec_id="fn-1-demo"
+        )
+        self.assertLess(len(out), self.CAP)
+        self.assertIn("<verdict>SHIP</verdict>", out)
+
     def test_over_cap_truncates_under_cap_and_keeps_rubric(self):
         # Huge embedded spec body + a trailing rubric carrying the verdict tag.
         rubric = (
