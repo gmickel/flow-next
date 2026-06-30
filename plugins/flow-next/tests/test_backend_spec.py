@@ -140,8 +140,6 @@ class TestRegistryShape(unittest.TestCase):
                 "gpt-5.4",
                 "gpt-5.4-mini",
                 "gpt-5.3-codex",
-                "gpt-5.2",
-                "gpt-5.2-codex",
                 "gpt-5-mini",
                 "gpt-4.1",
             },
@@ -181,8 +179,8 @@ class TestParseValid(unittest.TestCase):
         self.assertEqual(s, BackendSpec("copilot", "claude-opus-4.5", "xhigh"))
 
     def test_copilot_model_only(self) -> None:
-        s = BackendSpec.parse("copilot:gpt-5.2")
-        self.assertEqual(s, BackendSpec("copilot", "gpt-5.2", None))
+        s = BackendSpec.parse("copilot:gpt-5.4")
+        self.assertEqual(s, BackendSpec("copilot", "gpt-5.4", None))
 
     def test_bare_cursor(self) -> None:
         s = BackendSpec.parse("cursor")
@@ -299,9 +297,9 @@ class TestParseInvalid(unittest.TestCase):
     def test_copilot_rejects_codex_only_efforts(self) -> None:
         # ``none`` and ``minimal`` are codex-only; copilot must reject.
         with self.assertRaisesRegex(ValueError, "Unknown effort for copilot"):
-            BackendSpec.parse("copilot:gpt-5.2:minimal")
+            BackendSpec.parse("copilot:gpt-5.4:minimal")
         with self.assertRaisesRegex(ValueError, "Unknown effort for copilot"):
-            BackendSpec.parse("copilot:gpt-5.2:none")
+            BackendSpec.parse("copilot:gpt-5.4:none")
 
     def test_cursor_rejects_effort(self) -> None:
         # Cursor has no effort axis — ``cursor:<model>:<effort>`` must raise.
@@ -487,7 +485,7 @@ class TestStrRoundTrip(unittest.TestCase):
             "codex:gpt-5.4",
             "codex:gpt-5.4:xhigh",
             "copilot:claude-opus-4.5:xhigh",
-            "copilot:gpt-5.2:medium",
+            "copilot:gpt-5.4:medium",
             "cursor",
             "cursor:gpt-5.5-high",
             "cursor:gpt-5.3-codex-xhigh",
@@ -1225,7 +1223,7 @@ class TestResolveReviewSpec(unittest.TestCase):
     def test_config_backend_when_nothing_else_set(self) -> None:
         with _flow_fixture() as td:
             (td / ".flow" / "config.json").write_text(
-                json.dumps({"review": {"backend": "copilot:gpt-5.2"}})
+                json.dumps({"review": {"backend": "copilot:gpt-5.4"}})
             )
             _write_epic(td / ".flow", "fn-9-e")
             _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
@@ -1234,7 +1232,7 @@ class TestResolveReviewSpec(unittest.TestCase):
             # codex command still executes via codex CLI; model name travels
             # in spec.
             self.assertEqual(resolved.backend, "copilot")
-            self.assertEqual(resolved.model, "gpt-5.2")
+            self.assertEqual(resolved.model, "gpt-5.4")
 
     def test_backend_hint_fallback_when_nothing_set(self) -> None:
         with _flow_fixture() as td:
@@ -1290,7 +1288,6 @@ class TestPerTaskReviewSpecIntegration(unittest.TestCase):
                 "get_repo_root": module.get_repo_root,
                 "get_changed_files": module.get_changed_files,
                 "gather_context_hints": module.gather_context_hints,
-                "get_embedded_file_contents": module.get_embedded_file_contents,
                 "build_review_prompt": module.build_review_prompt,
                 "parse_codex_verdict": module.parse_codex_verdict,
                 "resolve_codex_sandbox": module.resolve_codex_sandbox,
@@ -1310,9 +1307,6 @@ class TestPerTaskReviewSpecIntegration(unittest.TestCase):
             module.get_repo_root = lambda: fixture_dir
             module.get_changed_files = lambda base: []
             module.gather_context_hints = lambda base: ""
-            module.get_embedded_file_contents = (
-                lambda files, **kw: ("", {"budget_skipped": False, "truncated": False})
-            )
             module.build_review_prompt = lambda *a, **kw: "fake-prompt"
             module.parse_codex_verdict = lambda out: "SHIP"
             module.resolve_codex_sandbox = lambda s: "read-only"

@@ -153,7 +153,7 @@ CODE_FILES="src/main.py,src/config.py" # Customize per spec
 # Runtime config:
 # --spec <spec> full spec (backend:model:effort), highest priority
 # FLOW_REVIEW_BACKEND spec-form ok: copilot:claude-opus-4.5:xhigh
-# FLOW_COPILOT_MODEL fills missing model only (default gpt-5.2)
+# FLOW_COPILOT_MODEL fills missing model only (default gpt-5.5)
 # FLOW_COPILOT_EFFORT fills missing effort only (default high)
 
 $FLOWCTL copilot plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"

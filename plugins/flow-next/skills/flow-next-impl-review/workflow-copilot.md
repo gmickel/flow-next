@@ -27,7 +27,7 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
 # Runtime config:
 #   --spec <spec>           full spec (backend:model:effort), highest priority
 #   FLOW_REVIEW_BACKEND     env (spec-form ok: copilot:claude-opus-4.5:xhigh)
-#   FLOW_COPILOT_MODEL      env (fills missing model only; default gpt-5.2)
+#   FLOW_COPILOT_MODEL      env (fills missing model only; default gpt-5.5)
 #   FLOW_COPILOT_EFFORT     env (fills missing effort only; default high)
 #   per-task stored review  via `flowctl task set-backend` (highest if set)
 

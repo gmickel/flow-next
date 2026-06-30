@@ -161,7 +161,7 @@ CODE_FILES="src/main.py,src/config.py"
 # Override model + effort (pick one):
 #   --spec copilot:claude-opus-4.5:xhigh   (preferred)
 #   FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5:xhigh
-#   FLOW_COPILOT_MODEL=gpt-5.2 FLOW_COPILOT_EFFORT=high
+#   FLOW_COPILOT_MODEL=gpt-5.5 FLOW_COPILOT_EFFORT=high
 
 $FLOWCTL copilot plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
 # Output includes VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK
