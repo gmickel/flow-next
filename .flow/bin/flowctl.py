@@ -19574,6 +19574,10 @@ def _run_validator_pass(
             if spec.backend != "cursor" and _src in ("env", "config"):
                 spec = BackendSpec("cursor").resolve()
         repo_root = get_repo_root()
+        # Backstop: the validator/deep findings payload can be verbose, so keep
+        # the cursor prompt under the argv cap too (no spec_id/task_ids here — the
+        # header references the changed files; cursor reads them from disk).
+        prompt = fit_cursor_prompt_to_budget(prompt, repo_root=repo_root)
         output, _sid, exit_code, stderr = run_cursor_exec(
             prompt, session_id=prior_session_id, repo_root=repo_root, spec=spec
         )
@@ -20278,6 +20282,10 @@ def _run_deep_pass(
             if spec.backend != "cursor" and _src in ("env", "config"):
                 spec = BackendSpec("cursor").resolve()
         repo_root = get_repo_root()
+        # Backstop: the validator/deep findings payload can be verbose, so keep
+        # the cursor prompt under the argv cap too (no spec_id/task_ids here — the
+        # header references the changed files; cursor reads them from disk).
+        prompt = fit_cursor_prompt_to_budget(prompt, repo_root=repo_root)
         output, _sid, exit_code, stderr = run_cursor_exec(
             prompt, session_id=prior_session_id, repo_root=repo_root, spec=spec
         )
