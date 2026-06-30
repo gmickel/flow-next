@@ -22019,12 +22019,12 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     # verdict on complex epics). The FLOW_CODEX_EMBED_MAX_BYTES budget cap
     # prevents oversized prompts.
     changed_files = get_changed_files(base_branch)
-    embedded_content, embed_stats = get_embedded_file_contents(changed_files)
+    embedded_content = ""  # agentic: codex reads changed files from disk (PR #184)
 
     # Only forbid disk reads when ALL files were fully embedded. If the budget
     # was exhausted or files were truncated, allow Codex to read the remainder
     # from disk so it doesn't review with incomplete context.
-    files_embedded = not embed_stats.get("budget_skipped") and not embed_stats.get("truncated")
+    files_embedded = False  # agentic backends read from disk; never embed (PR #184)
     if standalone:
         prompt = build_standalone_review_prompt(base_branch, focus, diff_summary, files_embedded)
         # Append embedded files and diff content to standalone prompt
@@ -22285,14 +22285,14 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
 
     # Always embed file contents so Codex doesn't waste turns reading files
     # from disk. See cmd_codex_impl_review comment for rationale.
-    embedded_content, embed_stats = get_embedded_file_contents(file_paths)
+    embedded_content = ""  # agentic: codex reads files from disk (PR #184)
 
     # Get context hints (from main branch for plans)
     base_branch = args.base if hasattr(args, "base") and args.base else "main"
     context_hints = gather_context_hints(base_branch)
 
     # Only forbid disk reads when ALL files were fully embedded.
-    files_embedded = not embed_stats.get("budget_skipped") and not embed_stats.get("truncated")
+    files_embedded = False  # agentic backends read from disk; never embed (PR #184)
     prompt = build_review_prompt(
         "plan", epic_spec, context_hints, task_specs=task_specs, embedded_files=embedded_content,
         files_embedded=files_embedded
@@ -22671,10 +22671,10 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
     # Always embed changed file contents. See cmd_codex_impl_review comment
     # for rationale.
     changed_files = get_changed_files(base_branch)
-    embedded_content, embed_stats = get_embedded_file_contents(changed_files)
+    embedded_content = ""  # agentic: codex reads changed files from disk (PR #184)
 
     # Only forbid disk reads when ALL files were fully embedded.
-    files_embedded = not embed_stats.get("budget_skipped") and not embed_stats.get("truncated")
+    files_embedded = False  # agentic backends read from disk; never embed (PR #184)
     prompt = build_completion_review_prompt(
         epic_spec,
         task_specs,
@@ -22932,11 +22932,9 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
     # Always embed changed file contents (same rationale as codex). Copilot
     # callers route through FLOW_COPILOT_EMBED_MAX_BYTES.
     changed_files = get_changed_files(base_branch)
-    embedded_content, embed_stats = get_embedded_file_contents(
-        changed_files, budget_env_var="FLOW_COPILOT_EMBED_MAX_BYTES"
-    )
+    embedded_content = ""  # agentic: copilot reads changed files from disk (PR #184)
 
-    files_embedded = not embed_stats.get("budget_skipped") and not embed_stats.get("truncated")
+    files_embedded = False  # agentic backends read from disk; never embed (PR #184)
     if standalone:
         prompt = build_standalone_review_prompt(base_branch, focus, diff_summary, files_embedded)
         if diff_content:
@@ -23144,14 +23142,12 @@ def cmd_copilot_plan_review(args: argparse.Namespace) -> None:
 
     task_specs = "\n\n---\n\n".join(task_specs_parts) if task_specs_parts else ""
 
-    embedded_content, embed_stats = get_embedded_file_contents(
-        file_paths, budget_env_var="FLOW_COPILOT_EMBED_MAX_BYTES"
-    )
+    embedded_content = ""  # agentic: copilot reads files from disk (PR #184)
 
     base_branch = args.base if hasattr(args, "base") and args.base else "main"
     context_hints = gather_context_hints(base_branch)
 
-    files_embedded = not embed_stats.get("budget_skipped") and not embed_stats.get("truncated")
+    files_embedded = False  # agentic backends read from disk; never embed (PR #184)
     prompt = build_review_prompt(
         "plan", epic_spec, context_hints, task_specs=task_specs,
         embedded_files=embedded_content, files_embedded=files_embedded,
@@ -23330,11 +23326,9 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
         pass
 
     changed_files = get_changed_files(base_branch)
-    embedded_content, embed_stats = get_embedded_file_contents(
-        changed_files, budget_env_var="FLOW_COPILOT_EMBED_MAX_BYTES"
-    )
+    embedded_content = ""  # agentic: copilot reads changed files from disk (PR #184)
 
-    files_embedded = not embed_stats.get("budget_skipped") and not embed_stats.get("truncated")
+    files_embedded = False  # agentic backends read from disk; never embed (PR #184)
     prompt = build_completion_review_prompt(
         epic_spec,
         task_specs,
