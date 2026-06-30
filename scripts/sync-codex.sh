@@ -285,7 +285,7 @@ Use the **worker** agent role to implement the task. The worker gets fresh conte
 TASK_ID: fn-X.Y
 SPEC_ID: fn-X
 FLOWCTL: $FLOWCTL
-REVIEW_MODE: none|rp|codex
+REVIEW_MODE: none|rp|codex|copilot|cursor
 RALPH_MODE: true|false
 
 Follow your phases exactly."

@@ -2853,6 +2853,7 @@ def run_codex_exec(
     session_id: Optional[str] = None,
     sandbox: str = "read-only",
     spec: Optional["BackendSpec"] = None,
+    repo_root: Optional[Path] = None,
 ) -> tuple[str, Optional[str], int, str]:
     """Run codex exec and return (stdout, thread_id, exit_code, stderr).
 
@@ -2894,6 +2895,10 @@ def run_codex_exec(
                 text=True, encoding="utf-8",
                 check=True,
                 timeout=600,
+                # cwd=repo_root so codex resolves repo-relative changed-file paths
+                # when launched from a subdir (mirrors run_cursor_exec). repo_root
+                # is computed by the handler; --skip-git-repo-check still allows /tmp.
+                cwd=str(repo_root) if repo_root is not None else None,
             )
             output = result.stdout
             # For resumed sessions, thread_id stays the same
@@ -2929,6 +2934,10 @@ def run_codex_exec(
             text=True, encoding="utf-8",
             check=False,  # Don't raise on non-zero exit
             timeout=600,
+            # cwd=repo_root so codex resolves repo-relative changed-file paths
+            # when launched from a subdir (mirrors run_cursor_exec). repo_root
+            # is computed by the handler; --skip-git-repo-check still allows /tmp.
+            cwd=str(repo_root) if repo_root is not None else None,
         )
         output = result.stdout
         thread_id = parse_codex_thread_id(output)
@@ -3788,6 +3797,9 @@ def run_copilot_exec(
                 text=True, encoding="utf-8",
                 check=False,  # Don't raise on non-zero exit; caller inspects
                 timeout=600,
+                # cwd=repo_root so copilot resolves repo-relative changed-file
+                # paths when launched from a subdir (mirrors run_cursor_exec).
+                cwd=str(repo_root),
                 **subprocess_kwargs,
             )
             # Record first-call success (both paths) so subsequent invocations
@@ -3857,6 +3869,44 @@ def get_cursor_version() -> Optional[str]:
 # no cap), and cursor-agent stdin is unconfirmed. ``run_cursor_exec`` raises an
 # explicit error instead of silently truncating or reusing the read-back trick.
 CURSOR_ARGV_PROMPT_MAX = COPILOT_ARGV_PROMPT_MAX
+
+# Wrapper + safety margin reserved when fitting an embedded diff into a cursor
+# prompt: covers the ``<diff_content>`` tags, the join separator, the truncation
+# marker, and a little slack below CURSOR_ARGV_PROMPT_MAX.
+_CURSOR_DIFF_FIT_MARGIN = 300
+
+_CURSOR_DIFF_TRUNC_MARKER = (
+    "\n…[diff truncated to fit cursor's argv limit — "
+    "read changed files from disk for full context]"
+)
+
+
+def fit_cursor_diff_to_budget(prompt_without_diff: str, diff_content: str) -> str:
+    """Trim ``diff_content`` so the final cursor prompt stays under the argv cap.
+
+    cursor-agent delivers the prompt as a positional argv arg capped at
+    ``CURSOR_ARGV_PROMPT_MAX`` (~30k). The spec/template/context overhead varies
+    per task/spec, so a static diff cap can't guarantee a fit (a 55KB diff
+    trimmed to a fixed 18KB still overflowed — PR #184). Instead we measure the
+    diff-LESS prompt and size the embedded diff to exactly the budget that
+    remains, minus a margin for the wrapper + a truncation marker.
+
+    cursor runs read-only with ``cwd=repo_root`` and reads the full changed
+    files from disk itself, so a trimmed embedded diff loses only a convenience
+    signal — never correctness. Returns ``diff_content`` unchanged when it fits.
+    """
+    if not diff_content:
+        return diff_content
+    budget = CURSOR_ARGV_PROMPT_MAX - len(prompt_without_diff) - _CURSOR_DIFF_FIT_MARGIN
+    if len(diff_content) <= budget:
+        return diff_content
+    keep = budget - len(_CURSOR_DIFF_TRUNC_MARKER)
+    if keep <= 0:
+        # No room for any meaningful diff (huge spec/template). Drop the diff
+        # entirely rather than appending a marker that would only grow an
+        # already-tight prompt — cursor reads the changed files from disk anyway.
+        return ""
+    return diff_content[:keep] + _CURSOR_DIFF_TRUNC_MARKER
 
 
 def _parse_cursor_result(stdout: str) -> tuple[str, Optional[str], bool]:
@@ -19352,13 +19402,17 @@ def _run_validator_pass(
             except ValueError as e:
                 error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
         else:
-            spec = resolve_review_spec("codex", None)
+            spec, _src = resolve_review_spec("codex", None, return_source=True)
+            if spec.backend != "codex" and _src in ("env", "config"):
+                spec = BackendSpec("codex").resolve()
         try:
             sandbox = resolve_codex_sandbox("auto")
         except ValueError as e:
             error_exit(str(e), use_json=use_json, code=2)
+        repo_root = get_repo_root()
         output, _tid, exit_code, stderr = run_codex_exec(
-            prompt, session_id=prior_session_id, sandbox=sandbox, spec=spec
+            prompt, session_id=prior_session_id, sandbox=sandbox, spec=spec,
+            repo_root=repo_root,
         )
         if exit_code != 0:
             error_exit(
@@ -19373,7 +19427,9 @@ def _run_validator_pass(
             except ValueError as e:
                 error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
         else:
-            spec = resolve_review_spec("copilot", None)
+            spec, _src = resolve_review_spec("copilot", None, return_source=True)
+            if spec.backend != "copilot" and _src in ("env", "config"):
+                spec = BackendSpec("copilot").resolve()
         repo_root = get_repo_root()
         output, _sid, exit_code, stderr = run_copilot_exec(
             prompt, session_id=prior_session_id, repo_root=repo_root, spec=spec
@@ -19401,7 +19457,9 @@ def _run_validator_pass(
             except ValueError as e:
                 error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
         else:
-            spec = resolve_review_spec("cursor", None)
+            spec, _src = resolve_review_spec("cursor", None, return_source=True)
+            if spec.backend != "cursor" and _src in ("env", "config"):
+                spec = BackendSpec("cursor").resolve()
         repo_root = get_repo_root()
         output, _sid, exit_code, stderr = run_cursor_exec(
             prompt, session_id=prior_session_id, repo_root=repo_root, spec=spec
@@ -20048,13 +20106,17 @@ def _run_deep_pass(
             except ValueError as e:
                 error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
         else:
-            spec = resolve_review_spec("codex", None)
+            spec, _src = resolve_review_spec("codex", None, return_source=True)
+            if spec.backend != "codex" and _src in ("env", "config"):
+                spec = BackendSpec("codex").resolve()
         try:
             sandbox = resolve_codex_sandbox("auto")
         except ValueError as e:
             error_exit(str(e), use_json=use_json, code=2)
+        repo_root = get_repo_root()
         output, _tid, exit_code, stderr = run_codex_exec(
-            prompt, session_id=prior_session_id, sandbox=sandbox, spec=spec
+            prompt, session_id=prior_session_id, sandbox=sandbox, spec=spec,
+            repo_root=repo_root,
         )
         if exit_code != 0:
             error_exit(
@@ -20069,7 +20131,9 @@ def _run_deep_pass(
             except ValueError as e:
                 error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
         else:
-            spec = resolve_review_spec("copilot", None)
+            spec, _src = resolve_review_spec("copilot", None, return_source=True)
+            if spec.backend != "copilot" and _src in ("env", "config"):
+                spec = BackendSpec("copilot").resolve()
         repo_root = get_repo_root()
         output, _sid, exit_code, stderr = run_copilot_exec(
             prompt, session_id=prior_session_id, repo_root=repo_root, spec=spec
@@ -20097,7 +20161,9 @@ def _run_deep_pass(
             except ValueError as e:
                 error_exit(f"Invalid --spec: {e}", use_json=use_json, code=2)
         else:
-            spec = resolve_review_spec("cursor", None)
+            spec, _src = resolve_review_spec("cursor", None, return_source=True)
+            if spec.backend != "cursor" and _src in ("env", "config"):
+                spec = BackendSpec("cursor").resolve()
         repo_root = get_repo_root()
         output, _sid, exit_code, stderr = run_cursor_exec(
             prompt, session_id=prior_session_id, repo_root=repo_root, spec=spec
@@ -21789,9 +21855,12 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     # Resolve review spec (--spec overrides task/epic/env/config resolution)
     resolved_spec = _resolve_codex_review_spec(args, task_id)
 
-    # Run codex
+    # Run codex (cwd=repo_root so repo-relative changed-file paths resolve from
+    # any subdir; codex reads files from disk — never embedded into the prompt).
+    repo_root = get_repo_root()
     output, thread_id, exit_code, stderr = run_codex_exec(
-        prompt, session_id=session_id, sandbox=sandbox, spec=resolved_spec
+        prompt, session_id=session_id, sandbox=sandbox, spec=resolved_spec,
+        repo_root=repo_root,
     )
 
     # Check for sandbox failures (clear stale receipt and exit)
@@ -22056,9 +22125,11 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
     # Resolve review spec — plan reviews are epic-scoped (no task_id context)
     resolved_spec = _resolve_codex_review_spec(args, None)
 
-    # Run codex
+    # Run codex (cwd=repo_root so repo-relative changed-file paths resolve from
+    # any subdir; codex reads files from disk — never embedded into the prompt).
     output, thread_id, exit_code, stderr = run_codex_exec(
-        prompt, session_id=session_id, sandbox=sandbox, spec=resolved_spec
+        prompt, session_id=session_id, sandbox=sandbox, spec=resolved_spec,
+        repo_root=repo_root,
     )
 
     # Check for sandbox failures (clear stale receipt and exit)
@@ -22402,9 +22473,12 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
     # Resolve review spec — completion reviews are epic-scoped
     resolved_spec = _resolve_codex_review_spec(args, None)
 
-    # Run codex
+    # Run codex (cwd=repo_root so repo-relative changed-file paths resolve from
+    # any subdir; codex reads files from disk — never embedded into the prompt).
+    repo_root = get_repo_root()
     output, thread_id, exit_code, stderr = run_codex_exec(
-        prompt, session_id=session_id, sandbox=sandbox, spec=resolved_spec
+        prompt, session_id=session_id, sandbox=sandbox, spec=resolved_spec,
+        repo_root=repo_root,
     )
 
     # Check for sandbox failures
@@ -23223,9 +23297,10 @@ def cmd_cursor_impl_review(args: argparse.Namespace) -> None:
     except (subprocess.CalledProcessError, OSError):
         pass
 
-    # Get actual diff content with size cap (avoid memory spike on large diffs)
+    # Read the diff with a cheap upper bound (memory guard). The real fit is
+    # computed dynamically below from the budget left under CURSOR_ARGV_PROMPT_MAX.
     diff_content = ""
-    max_diff_bytes = 50000
+    max_diff_bytes = CURSOR_ARGV_PROMPT_MAX * 2  # generous read cap; budget trims to fit below
     try:
         proc = subprocess.Popen(
             ["git", "diff", f"{base_branch}..HEAD"],
@@ -23234,8 +23309,7 @@ def cmd_cursor_impl_review(args: argparse.Namespace) -> None:
             cwd=get_repo_root(),
         )
         diff_bytes = proc.stdout.read(max_diff_bytes + 1)
-        was_truncated = len(diff_bytes) > max_diff_bytes
-        if was_truncated:
+        if len(diff_bytes) > max_diff_bytes:
             diff_bytes = diff_bytes[:max_diff_bytes]
         while proc.stdout.read(65536):
             pass
@@ -23248,24 +23322,30 @@ def cmd_cursor_impl_review(args: argparse.Namespace) -> None:
             diff_content = f"[git diff failed: {stderr_bytes.decode('utf-8', errors='replace').strip()}]"
         else:
             diff_content = diff_bytes.decode("utf-8", errors="replace").strip()
-            if was_truncated:
-                diff_content += "\n\n... [diff truncated at 50KB]"
     except (subprocess.CalledProcessError, OSError):
         pass
 
     # Cursor reviews are AGENTIC: cursor-agent runs read-only (`--mode ask`) with
-    # cwd=repo_root and reads the changed files from disk itself. We never embed
-    # file CONTENTS into the (positional-argv, ~30KB-capped) prompt — embedding a
-    # large changed file (e.g. flowctl.py) blew CURSOR_ARGV_PROMPT_MAX (PR #184).
+    # cwd=repo_root and reads the changed files from disk itself. The embedded
+    # diff is DYNAMICALLY sized to the space left under CURSOR_ARGV_PROMPT_MAX
+    # (positional-argv cap) — a static cap can't (overhead varies per task; a big
+    # changed file like flowctl.py overflowed, PR #184). cursor reads full files
+    # from disk, so a budget-trimmed embedded diff loses only a convenience signal.
     if standalone:
         prompt = build_standalone_review_prompt(base_branch, focus, diff_summary)
-        if diff_content:
-            prompt += f"\n\n<diff_content>\n{diff_content}\n</diff_content>"
+        fitted_diff = fit_cursor_diff_to_budget(prompt, diff_content)
+        if fitted_diff:
+            prompt += f"\n\n<diff_content>\n{fitted_diff}\n</diff_content>"
     else:
         context_hints = gather_context_hints(base_branch)
+        prompt_without_diff = build_review_prompt(
+            "impl", task_spec, context_hints, diff_summary,
+            diff_content="",
+        )
+        fitted_diff = fit_cursor_diff_to_budget(prompt_without_diff, diff_content)
         prompt = build_review_prompt(
             "impl", task_spec, context_hints, diff_summary,
-            diff_content=diff_content,
+            diff_content=fitted_diff,
         )
 
     # Check for existing session in receipt (indicates re-review). Cursor only
@@ -23608,8 +23688,10 @@ def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
     except (subprocess.CalledProcessError, OSError):
         pass
 
+    # Read the diff with a cheap upper bound (memory guard). The real fit is
+    # computed dynamically below from the budget left under CURSOR_ARGV_PROMPT_MAX.
     diff_content = ""
-    max_diff_bytes = 50000
+    max_diff_bytes = CURSOR_ARGV_PROMPT_MAX * 2  # generous read cap; budget trims to fit below
     try:
         proc = subprocess.Popen(
             ["git", "diff", f"{base_branch}..HEAD"],
@@ -23618,8 +23700,7 @@ def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
             cwd=get_repo_root(),
         )
         diff_bytes = proc.stdout.read(max_diff_bytes + 1)
-        was_truncated = len(diff_bytes) > max_diff_bytes
-        if was_truncated:
+        if len(diff_bytes) > max_diff_bytes:
             diff_bytes = diff_bytes[:max_diff_bytes]
         while proc.stdout.read(65536):
             pass
@@ -23632,20 +23713,27 @@ def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
             diff_content = f"[git diff failed: {stderr_bytes.decode('utf-8', errors='replace').strip()}]"
         else:
             diff_content = diff_bytes.decode("utf-8", errors="replace").strip()
-            if was_truncated:
-                diff_content += "\n\n... [diff truncated at 50KB]"
     except (subprocess.CalledProcessError, OSError):
         pass
 
     # Cursor reviews are AGENTIC: cursor-agent runs read-only (`--mode ask`) with
-    # cwd=repo_root and reads the changed files from disk itself. We never embed
-    # file CONTENTS into the (positional-argv, ~30KB-capped) prompt — embedding a
-    # large changed file (e.g. flowctl.py) blew CURSOR_ARGV_PROMPT_MAX (PR #184).
+    # cwd=repo_root and reads the changed files from disk itself. The embedded
+    # diff is DYNAMICALLY sized to the space left under CURSOR_ARGV_PROMPT_MAX
+    # (positional-argv cap) — a static cap can't (overhead varies per spec; a big
+    # changed file like flowctl.py overflowed, PR #184). cursor reads full files
+    # from disk, so a budget-trimmed embedded diff loses only a convenience signal.
+    prompt_without_diff = build_completion_review_prompt(
+        epic_spec,
+        task_specs,
+        diff_summary,
+        "",
+    )
+    fitted_diff = fit_cursor_diff_to_budget(prompt_without_diff, diff_content)
     prompt = build_completion_review_prompt(
         epic_spec,
         task_specs,
         diff_summary,
-        diff_content,
+        fitted_diff,
     )
 
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None

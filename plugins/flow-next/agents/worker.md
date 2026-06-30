@@ -14,7 +14,7 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `TASK_ID` - the task to implement (e.g., fn-1.2)
 - `SPEC_ID` - parent spec (e.g., fn-1)
 - `FLOWCTL` - path to flowctl CLI
-- `REVIEW_MODE` - none, rp, or codex
+- `REVIEW_MODE` - none, rp, codex, copilot, or cursor
 - `RALPH_MODE` - true if running autonomously
 - `DELEGATE` - codex to delegate Phase 2 implementation to `codex exec`; absent or `local` ⇒ standard in-session (the host only sets this when delegation is active and all pre-flight gates passed). `DELEGATE_MODEL` / `DELEGATE_SANDBOX` / `DELEGATE_EFFORT_FLOOR` / `DELEGATE_DECISION` accompany it — see Phase 2.
 
@@ -259,7 +259,7 @@ there is no independent impl-review gate, so Phase 5 below runs its own
 verification on the delegated diff — `verification_summary` from Codex is NOT
 trusted as the sole gate. See Phase 5.)
 
-**If REVIEW_MODE is `rp` or `codex`, you MUST invoke impl-review and receive SHIP before proceeding.**
+**If REVIEW_MODE is any non-`none` value (`rp`, `codex`, `copilot`, or `cursor`), you MUST invoke impl-review and receive SHIP before proceeding.**
 (On a delegated task this impl-review SHIP gate IS the independent check — do not
 re-run a duplicate test pass in Phase 5; the impl-review gate already covers it.)
 
@@ -269,10 +269,11 @@ Use the Skill tool to invoke impl-review (NOT flowctl directly):
 /flow-next:impl-review <TASK_ID> --base $BASE_COMMIT
 ```
 
-The skill handles everything:
+The skill handles everything — including resolving which backend runs (rp / codex /
+copilot / cursor) from config or an explicit override, so you never name it here:
 - Scoped diff (BASE_COMMIT..HEAD, not main..HEAD)
 - Receipt paths (don't pass --receipt yourself)
-- Sending to reviewer (rp or codex backend)
+- Sending to reviewer (rp, codex, copilot, or cursor backend)
 - Parsing verdict (SHIP/NEEDS_WORK/MAJOR_RETHINK)
 - Fix loops until SHIP
 
