@@ -10,7 +10,7 @@
   "priority": null,
   "spec": "fn-74-cursor-review-backend-cursor-agent-cli",
   "spec_path": ".flow/tasks/fn-74-cursor-review-backend-cursor-agent-cli.2.md",
-  "status": "todo",
+  "status": "done",
   "title": "cursor review commands \u2014 impl/plan/completion/validate/deep handlers + dispatch + mode:cursor receipts",
   "updated_at": "2026-06-29T11:44:49.743310Z"
 }

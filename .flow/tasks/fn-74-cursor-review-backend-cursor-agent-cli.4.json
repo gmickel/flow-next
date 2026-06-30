@@ -10,7 +10,7 @@
   "priority": null,
   "spec": "fn-74-cursor-review-backend-cursor-agent-cli",
   "spec_path": ".flow/tasks/fn-74-cursor-review-backend-cursor-agent-cli.4.md",
-  "status": "todo",
+  "status": "done",
   "title": "docs + downstream chain \u2014 flowctl.md/README/GLOSSARY/CHANGELOG + flow-next.dev + AI-x-SDLC + GF + vault",
   "updated_at": "2026-06-29T11:44:50.428266Z"
 }

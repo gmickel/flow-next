@@ -10,7 +10,7 @@
   "priority": null,
   "spec": "fn-74-cursor-review-backend-cursor-agent-cli",
   "spec_path": ".flow/tasks/fn-74-cursor-review-backend-cursor-agent-cli.3.md",
-  "status": "todo",
+  "status": "done",
   "title": "skill + setup wiring + codex mirror \u2014 workflow-cursor.md x2, --review literals, review.backend, sync-codex",
   "updated_at": "2026-06-29T11:38:29.781438Z"
 }

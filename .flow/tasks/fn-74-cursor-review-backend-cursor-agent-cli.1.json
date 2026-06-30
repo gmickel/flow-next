@@ -8,7 +8,7 @@
   "priority": null,
   "spec": "fn-74-cursor-review-backend-cursor-agent-cli",
   "spec_path": ".flow/tasks/fn-74-cursor-review-backend-cursor-agent-cli.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "flowctl cursor backend foundation \u2014 registry + run_cursor_exec + check + parser tests",
   "updated_at": "2026-06-29T11:44:49.065046Z"
 }
