@@ -3514,8 +3514,10 @@ def parse_backend_spec_lenient(
 
 
 def resolve_review_spec(
-    backend_hint: str, task_id: Optional[str] = None
-) -> BackendSpec:
+    backend_hint: str,
+    task_id: Optional[str] = None,
+    return_source: bool = False,
+):
     """Resolve a fully-filled ``BackendSpec`` for a review invocation.
 
     ``backend_hint`` is the command-level backend name (``"codex"`` or
@@ -3542,7 +3544,15 @@ def resolve_review_spec(
     This helper does NOT read ``--spec`` argv — cmd functions call
     ``BackendSpec.parse(args.spec)`` directly when set (strict parse, since
     the user just typed it).
+
+    When ``return_source`` is True, returns ``(spec, source)`` where ``source``
+    is one of ``"task"`` / ``"epic"`` / ``"env"`` / ``"config"`` / ``"hint"`` —
+    so a caller can coerce a config/env DEFAULT to its command backend while
+    still honoring a deliberate per-task / per-epic cross-backend spec.
     """
+    def _ret(spec, source):
+        return (spec, source) if return_source else spec
+
     # 1 + 2: per-task / per-epic stored specs
     if task_id is not None and is_task_id(task_id) and ensure_flow_exists():
         flow_dir = get_flow_dir()
@@ -3556,7 +3566,7 @@ def resolve_review_spec(
                 if task_review:
                     parsed = parse_backend_spec_lenient(task_review, warn=True)
                     if parsed is not None:
-                        return parsed.resolve()
+                        return _ret(parsed.resolve(), "task")
                 # Spec fallback
                 spec_id = task_data.get("spec") or task_data.get("epic")
                 if spec_id:
@@ -3574,7 +3584,7 @@ def resolve_review_spec(
                                     epic_review, warn=True
                                 )
                                 if parsed is not None:
-                                    return parsed.resolve()
+                                    return _ret(parsed.resolve(), "epic")
                         except (json.JSONDecodeError, OSError):
                             pass
             except (json.JSONDecodeError, OSError):
@@ -3585,7 +3595,7 @@ def resolve_review_spec(
     if env_val:
         parsed = parse_backend_spec_lenient(env_val, warn=True)
         if parsed is not None:
-            return parsed.resolve()
+            return _ret(parsed.resolve(), "env")
 
     # 4: .flow/config.json review.backend
     if ensure_flow_exists():
@@ -3593,7 +3603,7 @@ def resolve_review_spec(
         if cfg_val:
             parsed = parse_backend_spec_lenient(str(cfg_val), warn=True)
             if parsed is not None:
-                return parsed.resolve()
+                return _ret(parsed.resolve(), "config")
 
     # 5: fall back to bare backend_hint and resolve defaults
     if backend_hint not in BACKEND_REGISTRY:
@@ -3602,7 +3612,7 @@ def resolve_review_spec(
             f"Unknown backend_hint: {backend_hint!r}. "
             f"Valid: {sorted(BACKEND_REGISTRY.keys())}"
         )
-    return BackendSpec(backend_hint).resolve()
+    return _ret(BackendSpec(backend_hint).resolve(), "hint")
 
 
 # --- Copilot Backend Helpers ---
@@ -21920,7 +21930,14 @@ def _resolve_codex_review_spec(
             return BackendSpec.parse(spec_arg).resolve()
         except ValueError as e:
             error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
-    return resolve_review_spec("codex", task_id)
+    resolved, source = resolve_review_spec("codex", task_id, return_source=True)
+    # Honor a deliberate per-task / per-epic cross-backend ``review`` spec, but
+    # coerce an env/config DEFAULT that resolves to a non-codex backend (e.g.
+    # ``review.backend=rp``) under an explicit ``flowctl codex ...`` to the codex
+    # default — so receipts never stamp a foreign / null model (PR #184).
+    if resolved.backend != "codex" and source in ("env", "config"):
+        return BackendSpec("codex").resolve()
+    return resolved
 
 
 def cmd_codex_plan_review(args: argparse.Namespace) -> None:
@@ -22520,7 +22537,13 @@ def _resolve_copilot_review_spec(
             return BackendSpec.parse(spec_arg).resolve()
         except ValueError as e:
             error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
-    return resolve_review_spec("copilot", task_id)
+    resolved, source = resolve_review_spec("copilot", task_id, return_source=True)
+    # Same as codex: honor a per-task / per-epic cross-backend spec, but coerce an
+    # env/config DEFAULT resolving to a non-copilot backend to the copilot default
+    # so receipts record the model actually run (PR #184).
+    if resolved.backend != "copilot" and source in ("env", "config"):
+        return BackendSpec("copilot").resolve()
+    return resolved
 
 
 def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
@@ -23141,14 +23164,13 @@ def _resolve_cursor_review_spec(
             return parsed.resolve()
         except ValueError as e:
             error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
-    resolved = resolve_review_spec("cursor", task_id)
-    # The resolve precedence (per-task review > per-spec default > env > config
-    # > hint) can hand back a NON-cursor backend when the repo/env default is,
-    # say, codex — but this command IS cursor (explicit `--review=cursor` /
-    # `flowctl cursor ...`). Honor that explicit selection: coerce a non-cursor
-    # fallback to the cursor default, so we never shell `cursor-agent` with a
-    # foreign model or stamp `spec:"codex:..."` under `mode:"cursor"`.
-    if resolved.backend != "cursor":
+    resolved, source = resolve_review_spec("cursor", task_id, return_source=True)
+    # An explicit ``flowctl cursor ...`` whose backend resolves elsewhere only
+    # because of an env/config DEFAULT (e.g. ``review.backend=codex``) is coerced
+    # to the cursor default — so we never shell ``cursor-agent`` with a foreign
+    # model or stamp ``spec:"codex:..."`` under ``mode:"cursor"``. A deliberate
+    # per-task / per-epic cross-backend ``review`` spec is honored (not coerced).
+    if resolved.backend != "cursor" and source in ("env", "config"):
         return BackendSpec("cursor").resolve()
     return resolved
 

@@ -1235,6 +1235,58 @@ class TestResolveReviewSpec(unittest.TestCase):
             self.assertEqual(resolved.backend, "copilot")
             self.assertEqual(resolved.model, "gpt-5.4")
 
+    def test_return_source_reports_config(self) -> None:
+        # PR #184 Finding B: return_source tags where the resolved spec came from.
+        with _flow_fixture() as td:
+            (td / ".flow" / "config.json").write_text(
+                json.dumps({"review": {"backend": "codex:gpt-5.4"}})
+            )
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
+            spec, source = flowctl.resolve_review_spec(
+                "copilot", "fn-9-e.1", return_source=True)
+            self.assertEqual(source, "config")
+            self.assertEqual(spec.backend, "codex")
+
+    def test_codex_helper_coerces_config_default(self) -> None:
+        # Finding B: explicit `flowctl codex` with config default=rp (a modelless
+        # non-codex backend) coerces to the codex default — never stamps a
+        # foreign/null model on the receipt.
+        with _flow_fixture() as td:
+            (td / ".flow" / "config.json").write_text(
+                json.dumps({"review": {"backend": "rp"}})
+            )
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
+            args = argparse.Namespace(spec=None, json=False)
+            out = flowctl._resolve_codex_review_spec(args, "fn-9-e.1")
+            self.assertEqual(out.backend, "codex")
+            self.assertTrue(out.model)
+
+    def test_codex_helper_honors_per_task_cross_backend(self) -> None:
+        # A deliberate per-task cross-backend review is HONORED, not coerced.
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e",
+                        review="copilot:gpt-5.5")
+            args = argparse.Namespace(spec=None, json=False)
+            out = flowctl._resolve_codex_review_spec(args, "fn-9-e.1")
+            self.assertEqual(out.backend, "copilot")
+
+    def test_copilot_helper_coerces_config_default(self) -> None:
+        # Finding B + A: copilot coerces a non-copilot config default to copilot's
+        # gpt-5.5 (not the retired gpt-5.2), so the receipt is accurate.
+        with _flow_fixture() as td:
+            (td / ".flow" / "config.json").write_text(
+                json.dumps({"review": {"backend": "rp"}})
+            )
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
+            args = argparse.Namespace(spec=None, json=False)
+            out = flowctl._resolve_copilot_review_spec(args, "fn-9-e.1")
+            self.assertEqual(out.backend, "copilot")
+            self.assertEqual(out.model, "gpt-5.5")
+
     def test_backend_hint_fallback_when_nothing_set(self) -> None:
         with _flow_fixture() as td:
             _write_epic(td / ".flow", "fn-9-e")
