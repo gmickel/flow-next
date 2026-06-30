@@ -1098,8 +1098,6 @@ Completion review receipt:
 
 **Session continuity:** Receipt includes `session_id` (thread_id from codex). Subsequent reviews read the existing receipt and resume the conversation, maintaining full context across fix → re-review cycles.
 
-**Embedding budget (`FLOW_CODEX_EMBED_MAX_BYTES`):** Optional limit on the total bytes of file contents embedded into the review prompt (diff excluded). Default `0` (unlimited). Set to a value like `500000` (500KB) to cap prompt size.
-
 **Sandbox mode (`--sandbox`):** Controls Codex CLI's file system access. Available modes:
 - `read-only` (default on Unix) — Can only read files
 - `workspace-write` — Can write files in workspace

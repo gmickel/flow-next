@@ -441,7 +441,6 @@ export CODEX_SANDBOX  # Ensure available to Claude worker for flowctl codex comm
 # set in config.env — empty values would otherwise override flowctl defaults.
 [[ -n "${FLOW_COPILOT_MODEL:-}" ]] && export FLOW_COPILOT_MODEL
 [[ -n "${FLOW_COPILOT_EFFORT:-}" ]] && export FLOW_COPILOT_EFFORT
-[[ -n "${FLOW_COPILOT_EMBED_MAX_BYTES:-}" ]] && export FLOW_COPILOT_EMBED_MAX_BYTES
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do

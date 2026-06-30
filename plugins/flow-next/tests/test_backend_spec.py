@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import inspect
 import io
 import json
 import os
@@ -1105,15 +1106,15 @@ class TestRunCopilotExecHonorsSpec(unittest.TestCase):
 
     def test_spec_model_and_effort_flow_into_argv(self) -> None:
         captured: list = []
-        spec = BackendSpec("copilot", "gpt-5.2", "medium")
+        spec = BackendSpec("copilot", "gpt-5.4", "medium")
         with _stub_subprocess(flowctl, captured, stdout="verdict"):
             flowctl.run_copilot_exec(
                 "prompt", session_id="s1", repo_root=self.repo_root, spec=spec
             )
         argv, _ = captured[0]
         self.assertIn("--model", argv)
-        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.2")
-        # gpt-5.2 accepts --effort (non-claude model).
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.4")
+        # gpt-5.4 accepts --effort (non-claude model).
         self.assertIn("--effort", argv)
         self.assertEqual(argv[argv.index("--effort") + 1], "medium")
 
@@ -1158,13 +1159,13 @@ class TestRunCopilotExecHonorsSpec(unittest.TestCase):
         os.environ["FLOW_COPILOT_MODEL"] = "gpt-4.1"
         os.environ["FLOW_COPILOT_EFFORT"] = "low"
         captured: list = []
-        spec = BackendSpec("copilot", "gpt-5.2", "xhigh")
+        spec = BackendSpec("copilot", "gpt-5.4", "xhigh")
         with _stub_subprocess(flowctl, captured, stdout="verdict"):
             flowctl.run_copilot_exec(
                 "prompt", session_id="s1", repo_root=self.repo_root, spec=spec
             )
         argv, _ = captured[0]
-        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.2")
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.4")
         self.assertEqual(argv[argv.index("--effort") + 1], "xhigh")
 
 
@@ -1625,6 +1626,41 @@ class TestRalphBareBackendExtraction(unittest.TestCase):
         self.assertEqual(bare("none"), "none")
         # Degenerate: trailing colon still parses cleanly.
         self.assertEqual(bare("codex:"), "codex")
+
+
+class NoEmbedRegression(unittest.TestCase):
+    """PR #184 — all review backends (codex/copilot/cursor) read changed files
+    from disk; the review prompt NEVER embeds file contents. These guard against
+    a silent re-introduction of embedding (which broke cursor's argv limit and
+    bloated codex/copilot prompts)."""
+
+    def test_review_prompt_has_no_embedded_files_block(self) -> None:
+        prompt = flowctl.build_review_prompt(
+            "impl", "SPEC", "HINTS", diff_summary="DSUM", diff_content="DDIFF")
+        self.assertNotIn("<embedded_files>", prompt)
+        self.assertTrue(
+            "read files from" in prompt or "full access" in prompt,
+            "review prompt must instruct the reviewer to read files from disk")
+
+    def test_completion_prompt_has_no_embedded_files_block(self) -> None:
+        prompt = flowctl.build_completion_review_prompt(
+            "EPIC", "TASKS", "DSUM", "DDIFF")
+        self.assertNotIn("<embedded_files>", prompt)
+
+    def test_embed_helper_stays_removed(self) -> None:
+        # get_embedded_file_contents was removed when backends went agentic;
+        # its return is a regression signal.
+        self.assertFalse(hasattr(flowctl, "get_embedded_file_contents"))
+
+    def test_builders_reject_embed_kwargs(self) -> None:
+        # The dead files_embedded / embedded_files params must not come back.
+        for name in ("build_review_prompt", "build_standalone_review_prompt",
+                     "build_completion_review_prompt", "build_rereview_preamble"):
+            params = inspect.signature(getattr(flowctl, name)).parameters
+            self.assertNotIn("files_embedded", params,
+                             f"{name} regained files_embedded")
+            self.assertNotIn("embedded_files", params,
+                             f"{name} regained embedded_files")
 
 
 if __name__ == "__main__":
