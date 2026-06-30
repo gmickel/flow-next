@@ -429,6 +429,106 @@ class CursorSpecBackendGuard(unittest.TestCase):
             self.assertFalse(receipt.exists())
 
 
+class CursorPromptArgvCap(unittest.TestCase):
+    """Every cursor review prompt stays under CURSOR_ARGV_PROMPT_MAX regardless of
+    spec/task/diff size — the general backstop guard (fit_cursor_prompt_to_budget).
+
+    Reviewer-bot argv-overflow class: the diff overflowed (fixed by
+    fit_cursor_diff_to_budget), the re-review preamble (fixed), and a large
+    spec/task body (fixed here). cursor reads the full sources from disk.
+    """
+
+    CAP = flowctl.CURSOR_ARGV_PROMPT_MAX
+
+    def test_under_cap_returned_unchanged(self):
+        small = "tiny prompt <review_instructions>x</review_instructions>"
+        out = flowctl.fit_cursor_prompt_to_budget(
+            small, repo_root=Path("/tmp"), spec_id="fn-1-demo"
+        )
+        self.assertEqual(out, small)
+
+    def test_over_cap_truncates_under_cap_and_keeps_rubric(self):
+        # Huge embedded spec body + a trailing rubric carrying the verdict tag.
+        rubric = (
+            "<review_instructions>\nReview this.\n"
+            "<verdict>SHIP</verdict>\n</review_instructions>"
+        )
+        body = "<spec>\n" + ("S" * (self.CAP + 5000)) + "\n</spec>\n\n"
+        prompt = body + rubric
+        self.assertGreater(len(prompt), self.CAP)
+        out = flowctl.fit_cursor_prompt_to_budget(
+            prompt, repo_root=Path("/tmp"),
+            spec_id="fn-1-demo", task_ids=["fn-1-demo.1", "fn-1-demo.2"],
+        )
+        self.assertLess(len(out), self.CAP)
+        # Read-from-disk header naming real on-disk sources is prepended.
+        self.assertIn("Read full context from disk", out)
+        self.assertIn(".flow/specs/fn-1-demo.md", out)
+        self.assertIn(".flow/tasks/fn-1-demo.1.md", out)
+        self.assertIn(".flow/tasks/fn-1-demo.2.md", out)
+        # Trailing rubric / verdict grammar preserved verbatim.
+        self.assertTrue(out.rstrip().endswith("</review_instructions>"))
+        self.assertIn("<verdict>SHIP</verdict>", out)
+        # Truncation marker present.
+        self.assertIn("truncated to fit cursor's argv limit", out)
+
+    def test_standalone_head_truncation_keeps_verdict(self):
+        # No <review_instructions> tag (standalone shape): rubric/verdict is at the
+        # top, diff appended last → head-truncation must keep the verdict tags.
+        rubric_top = (
+            "# Implementation Review\n...criteria...\n"
+            "<verdict>SHIP</verdict>\n<verdict>NEEDS_WORK</verdict>\n\n"
+        )
+        prompt = rubric_top + "<diff_content>\n" + ("D" * (self.CAP + 2000)) + "\n</diff_content>"
+        out = flowctl.fit_cursor_prompt_to_budget(prompt, repo_root=Path("/tmp"))
+        self.assertLess(len(out), self.CAP)
+        self.assertIn("<verdict>SHIP</verdict>", out)
+
+    def test_plan_review_caps_oversized_spec(self):
+        # End-to-end: a large epic spec must reach run_cursor_exec UNDER the cap
+        # and still yield a verdict (not "prompt too large").
+        with _flow_repo() as (repo, base):
+            (repo / ".flow" / "specs" / f"{EPIC_ID}.md").write_text(
+                "# Big spec\n\n" + ("paragraph of spec text. " * 3000),
+                encoding="utf-8",
+            )
+            receipt = repo / "receipt.json"
+            runner = _fake_exec()
+            args = argparse.Namespace(
+                epic=EPIC_ID, files="src/mod.py", base=base,
+                receipt=str(receipt), json=False, spec=None,
+            )
+            with mock.patch.object(flowctl, "run_cursor_exec", runner):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    flowctl.cmd_cursor_plan_review(args)
+            self.assertEqual(len(runner.calls), 1)
+            sent = runner.calls[0]["prompt"]
+            self.assertLess(len(sent), flowctl.CURSOR_ARGV_PROMPT_MAX)
+            self.assertIn(f".flow/specs/{EPIC_ID}.md", sent)
+            self.assertEqual(_read_receipt(receipt)["verdict"], "NEEDS_WORK")
+
+    def test_completion_review_caps_oversized_spec(self):
+        with _flow_repo() as (repo, base):
+            (repo / ".flow" / "specs" / f"{EPIC_ID}.md").write_text(
+                "# Big spec\n\n" + ("paragraph of spec text. " * 3000),
+                encoding="utf-8",
+            )
+            receipt = repo / "receipt.json"
+            runner = _fake_exec()
+            args = argparse.Namespace(
+                epic=EPIC_ID, base=base, receipt=str(receipt),
+                json=False, spec=None,
+            )
+            with mock.patch.object(flowctl, "run_cursor_exec", runner):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    flowctl.cmd_cursor_completion_review(args)
+            self.assertEqual(len(runner.calls), 1)
+            sent = runner.calls[0]["prompt"]
+            self.assertLess(len(sent), flowctl.CURSOR_ARGV_PROMPT_MAX)
+            self.assertIn(f".flow/specs/{EPIC_ID}.md", sent)
+            self.assertEqual(_read_receipt(receipt)["verdict"], "NEEDS_WORK")
+
+
 class CursorCheckIsError(unittest.TestCase):
     """fn-74 completion-review fix — ``cursor check`` honors ``is_error`` (R4).
 

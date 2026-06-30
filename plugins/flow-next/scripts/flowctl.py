@@ -3909,6 +3909,115 @@ def fit_cursor_diff_to_budget(prompt_without_diff: str, diff_content: str) -> st
     return diff_content[:keep] + _CURSOR_DIFF_TRUNC_MARKER
 
 
+# General cursor-prompt backstop (fit_cursor_prompt_to_budget). The diff fit
+# above trims the embedded diff pre-emptively, but the epic/task SPEC body is
+# embedded UNBOUNDED — a large spec (≥~30k chars) overflows the positional-argv
+# cap even with zero diff. This is the same reviewer-bot argv-overflow class:
+# the diff overflowed (fixed), then the re-review preamble (fixed), now the
+# spec/task body. The general guard is the catch-all so no cursor review prompt
+# can exceed CURSOR_ARGV_PROMPT_MAX regardless of spec/task/diff size.
+_CURSOR_PROMPT_FIT_MARGIN = 300
+
+_CURSOR_PROMPT_TRUNC_MARKER = (
+    "\n\n…[embedded spec/task/diff body truncated to fit cursor's argv limit — "
+    "read the on-disk sources named at the top of this prompt for the full, "
+    "untruncated context]\n"
+)
+
+
+def _cursor_disk_read_header(
+    spec_id: Optional[str], task_ids: Optional[list[str]]
+) -> str:
+    """Short read-from-disk preamble naming the on-disk sources for cursor.
+
+    cursor runs read-only (``--mode ask``) with ``cwd=repo_root`` and reads
+    files from disk itself, so a truncated embedded body costs no correctness —
+    the reviewer reads the named files directly for full context.
+    """
+    sources: list[str] = []
+    if spec_id:
+        sources.append(f"- `.flow/specs/{spec_id}.md` — the full spec")
+    for tid in task_ids or []:
+        sources.append(f"- `.flow/tasks/{tid}.md` — task spec")
+    sources.append(
+        "- the changed files in the repo (`git diff` against the base, or read "
+        "the files directly)"
+    )
+    sources_block = "\n".join(sources)
+    return (
+        "## IMPORTANT: Read full context from disk\n\n"
+        "Some content embedded below was TRUNCATED to fit a hard prompt-size "
+        "limit. You run read-only with the repository as your working directory "
+        "— read these on-disk sources directly for the complete, authoritative "
+        "context before reviewing:\n"
+        f"{sources_block}\n\n"
+        "Do NOT base your verdict on a truncated embedded copy when the full "
+        "file is available on disk.\n\n"
+    )
+
+
+def fit_cursor_prompt_to_budget(
+    prompt: str,
+    *,
+    repo_root: Path,
+    spec_id: Optional[str] = None,
+    task_ids: Optional[list[str]] = None,
+) -> str:
+    """Backstop guard: keep ANY cursor review prompt under the argv cap.
+
+    Returns ``prompt`` unchanged when it already fits
+    ``CURSOR_ARGV_PROMPT_MAX``. Otherwise PREPENDS a read-from-disk header
+    naming the on-disk sources (``.flow/specs/<spec_id>.md``, the relevant
+    ``.flow/tasks/<task_id>.md`` files, and the changed files) and TRUNCATES the
+    embedded SPEC/TASK/DIFF body so the total stays a margin below the cap.
+
+    The trailing ``<review_instructions>`` rubric is preserved VERBATIM — it
+    carries the verdict grammar the automation parses, so only the body before
+    it is trimmed. (``build_review_prompt`` / ``build_completion_review_prompt``
+    both append ``<review_instructions>`` LAST; the standalone branch keeps its
+    rubric at the top, so a head-truncation there still preserves the verdict.)
+    cursor reads the full files from disk, so a trimmed embedded body loses only
+    a convenience signal — never correctness.
+
+    ``repo_root`` is accepted for symmetry / future path resolution; the header
+    references repo-relative ``.flow`` paths cursor reads under ``cwd=repo_root``.
+    """
+    if len(prompt) <= CURSOR_ARGV_PROMPT_MAX:
+        return prompt
+
+    header = _cursor_disk_read_header(spec_id, task_ids)
+
+    # Preserve the trailing review rubric/instructions verbatim — truncate only
+    # the body that precedes it.
+    marker_tag = "<review_instructions>"
+    split = prompt.rfind(marker_tag)
+    if split != -1:
+        body, rubric = prompt[:split], prompt[split:]
+    else:
+        # Standalone prompt: rubric (incl. verdict tags) is at the TOP and the
+        # diff is appended last, so a head-truncation keeps the rubric/verdict
+        # and trims the trailing diff — the right outcome here.
+        body, rubric = prompt, ""
+
+    budget = (
+        CURSOR_ARGV_PROMPT_MAX
+        - len(header)
+        - len(rubric)
+        - len(_CURSOR_PROMPT_TRUNC_MARKER)
+        - _CURSOR_PROMPT_FIT_MARGIN
+    )
+    if budget < 0:
+        budget = 0
+    fitted = header + body[:budget] + _CURSOR_PROMPT_TRUNC_MARKER + rubric
+
+    # Final hard guard: even a header + rubric alone could (pathologically)
+    # exceed the cap; chop to stay strictly under it (last resort — the
+    # rubric-preserving path above is the normal case).
+    if len(fitted) >= CURSOR_ARGV_PROMPT_MAX:
+        fitted = fitted[: CURSOR_ARGV_PROMPT_MAX - _CURSOR_PROMPT_FIT_MARGIN]
+    return fitted
+
+
 def _parse_cursor_result(stdout: str) -> tuple[str, Optional[str], bool]:
     """Parse cursor-agent ``--output-format json`` stdout.
 
@@ -23399,8 +23508,18 @@ def cmd_cursor_impl_review(args: argparse.Namespace) -> None:
     resolved_spec = _resolve_cursor_review_spec(args, task_id)
     effective_model = resolved_spec.model or "gpt-5.5-high"
 
-    # Run cursor (resume-only; spec carries no effort)
+    # Final argv-cap backstop: the diff fit above pre-trims the diff, but a large
+    # task spec can still overflow CURSOR_ARGV_PROMPT_MAX. Cap the whole prompt,
+    # naming the on-disk sources cursor reads for full context (it runs read-only
+    # with cwd=repo_root). Rubric/verdict grammar is preserved verbatim.
     repo_root = get_repo_root()
+    prompt = fit_cursor_prompt_to_budget(
+        prompt,
+        repo_root=repo_root,
+        task_ids=[task_id] if task_id else None,
+    )
+
+    # Run cursor (resume-only; spec carries no effort)
     output, returned_session_id, exit_code, stderr = run_cursor_exec(
         prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
     )
@@ -23594,6 +23713,18 @@ def cmd_cursor_plan_review(args: argparse.Namespace) -> None:
     # Resolve review spec — plan reviews are epic-scoped (no task_id context)
     resolved_spec = _resolve_cursor_review_spec(args, None)
     effective_model = resolved_spec.model or "gpt-5.5-high"
+
+    # Final argv-cap backstop: plan reviews embed the FULL epic spec + every task
+    # spec UNBOUNDED — a large spec overflows CURSOR_ARGV_PROMPT_MAX even with no
+    # diff. Cap the whole prompt, naming the on-disk spec/task files cursor reads
+    # for full context. Rubric/verdict grammar is preserved verbatim.
+    task_ids = [tf.stem for tf in sorted(tasks_dir.glob(f"{epic_id}.*.md"))]
+    prompt = fit_cursor_prompt_to_budget(
+        prompt,
+        repo_root=repo_root,
+        spec_id=epic_id,
+        task_ids=task_ids or None,
+    )
 
     output, returned_session_id, exit_code, stderr = run_cursor_exec(
         prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
@@ -23791,7 +23922,20 @@ def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
     resolved_spec = _resolve_cursor_review_spec(args, None)
     effective_model = resolved_spec.model or "gpt-5.5-high"
 
+    # Final argv-cap backstop: completion reviews embed the FULL epic spec +
+    # every task spec UNBOUNDED (plus the diff) — a large spec overflows
+    # CURSOR_ARGV_PROMPT_MAX even after the diff fit. Cap the whole prompt,
+    # naming the on-disk spec/task files cursor reads for full context. Rubric/
+    # verdict grammar is preserved verbatim.
     repo_root = get_repo_root()
+    task_ids = [tf.stem for tf in sorted(tasks_dir.glob(f"{epic_id}.*.md"))]
+    prompt = fit_cursor_prompt_to_budget(
+        prompt,
+        repo_root=repo_root,
+        spec_id=epic_id,
+        task_ids=task_ids or None,
+    )
+
     output, returned_session_id, exit_code, stderr = run_cursor_exec(
         prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
     )
