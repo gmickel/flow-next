@@ -463,5 +463,32 @@ class CursorCheckIsError(unittest.TestCase):
         self.assertIsNone(out["error"])
 
 
+class CursorFallbackCoercion(unittest.TestCase):
+    """PR #184 codex review — the no-``--spec`` resolve fallback must keep an
+    explicit cursor command on cursor, coercing a non-cursor default (e.g. config
+    ``review.backend=codex``) to the cursor default rather than running
+    cursor-agent with a foreign model / stamping ``spec:"codex:"`` under cursor.
+    """
+
+    def test_fallback_coerces_non_cursor_default_to_cursor(self):
+        args = argparse.Namespace(spec=None, json=False)
+        codex_default = flowctl.BackendSpec("codex", "gpt-5.5", "high")
+        with mock.patch.object(flowctl, "resolve_review_spec",
+                               return_value=codex_default):
+            out = flowctl._resolve_cursor_review_spec(args, None)
+        self.assertEqual(out.backend, "cursor")
+        self.assertIsNone(out.effort)
+        self.assertTrue(out.model)
+
+    def test_fallback_keeps_a_cursor_default(self):
+        args = argparse.Namespace(spec=None, json=False)
+        cursor_default = flowctl.BackendSpec("cursor", "gpt-5.3-codex", None)
+        with mock.patch.object(flowctl, "resolve_review_spec",
+                               return_value=cursor_default):
+            out = flowctl._resolve_cursor_review_spec(args, None)
+        self.assertEqual(out.backend, "cursor")
+        self.assertEqual(out.model, "gpt-5.3-codex")
+
+
 if __name__ == "__main__":
     unittest.main()

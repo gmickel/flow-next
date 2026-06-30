@@ -4148,7 +4148,8 @@ def run_cursor_exec(
     first-call ``--resume`` id.
 
     Prompt delivery is **positional argv** (NOT stdin). Above
-    ``CURSOR_ARGV_PROMPT_MAX`` we raise an explicit ``ValueError`` — there is no
+    ``CURSOR_ARGV_PROMPT_MAX`` we fail closed via a non-zero return tuple (NOT a
+    raised exception, so callers' ``exit_code != 0`` cleanup runs) — there is no
     safe oversized path yet.
 
     ``spec`` is a resolved ``BackendSpec`` (backend=cursor). Cursor folds effort
@@ -4161,13 +4162,19 @@ def run_cursor_exec(
         - exit_code 0 = success; non-zero on ``is_error`` / CLI failure / timeout.
         - On timeout (600s) returns ("", session_id or "", 2, "<msg>").
     """
-    # Positional-argv size guard — raise BEFORE shelling out (no safe oversized
-    # path; see CURSOR_ARGV_PROMPT_MAX). Never silently read back into argv.
+    # Positional-argv size guard — fail closed BEFORE shelling out (no safe
+    # oversized path; see CURSOR_ARGV_PROMPT_MAX; never silently read back into
+    # argv). Return a non-zero result tuple (NOT a raised exception) so the
+    # cursor command handlers hit their ``exit_code != 0`` cleanup — structured
+    # error + stale-receipt drop — instead of leaking a traceback past them.
     if len(prompt) >= CURSOR_ARGV_PROMPT_MAX:
-        raise ValueError(
+        return (
+            "",
+            session_id or "",
+            2,
             f"cursor-agent prompt too large: {len(prompt)} chars "
             f">= {CURSOR_ARGV_PROMPT_MAX} (positional-argv limit; cursor-agent "
-            f"has no confirmed stdin/file delivery path)"
+            f"has no confirmed stdin/file delivery path)",
         )
 
     cursor = require_cursor()
@@ -23488,7 +23495,16 @@ def _resolve_cursor_review_spec(
             return parsed.resolve()
         except ValueError as e:
             error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
-    return resolve_review_spec("cursor", task_id)
+    resolved = resolve_review_spec("cursor", task_id)
+    # The resolve precedence (per-task review > per-spec default > env > config
+    # > hint) can hand back a NON-cursor backend when the repo/env default is,
+    # say, codex — but this command IS cursor (explicit `--review=cursor` /
+    # `flowctl cursor ...`). Honor that explicit selection: coerce a non-cursor
+    # fallback to the cursor default, so we never shell `cursor-agent` with a
+    # foreign model or stamp `spec:"codex:..."` under `mode:"cursor"`.
+    if resolved.backend != "cursor":
+        return BackendSpec("cursor").resolve()
+    return resolved
 
 
 def cmd_cursor_impl_review(args: argparse.Namespace) -> None:

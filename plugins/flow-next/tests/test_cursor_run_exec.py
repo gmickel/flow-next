@@ -221,29 +221,39 @@ class CursorFailureModes(unittest.TestCase):
 
 
 class CursorPromptTooLarge(unittest.TestCase):
-    """Above the argv threshold: explicit raise, never a silent read-back."""
+    """Above the argv threshold: fail closed via a non-zero return tuple (NOT a
+    raised exception), so cursor command handlers hit their ``exit_code != 0``
+    cleanup (drop stale receipt + structured error) instead of leaking a
+    traceback."""
 
-    def test_oversized_prompt_raises(self):
+    def test_oversized_prompt_returns_nonzero(self):
         with tempfile.TemporaryDirectory() as td:
             repo_root = Path(td)
             big = "x" * (flowctl.CURSOR_ARGV_PROMPT_MAX + 1)
-            # Must raise BEFORE shelling out — subprocess.run must not be called.
+            # Fail closed BEFORE shelling out — subprocess.run must not be called.
             with mock.patch.object(flowctl.subprocess, "run") as m_run, \
                     mock.patch.object(flowctl, "require_cursor",
                                       return_value="/cursor-agent"):
-                with self.assertRaisesRegex(ValueError, "too large"):
-                    flowctl.run_cursor_exec(prompt=big, repo_root=repo_root)
+                out, _sid, rc, err = flowctl.run_cursor_exec(
+                    prompt=big, repo_root=repo_root)
             m_run.assert_not_called()
+            self.assertEqual(out, "")
+            self.assertNotEqual(rc, 0)
+            self.assertIn("too large", err)
 
-    def test_at_threshold_boundary_raises(self):
+    def test_at_threshold_boundary_returns_nonzero(self):
         with tempfile.TemporaryDirectory() as td:
             repo_root = Path(td)
-            # ``>=`` threshold: exactly MAX chars must raise.
+            # ``>=`` threshold: exactly MAX chars fails closed (no spawn).
             at = "x" * flowctl.CURSOR_ARGV_PROMPT_MAX
-            with mock.patch.object(flowctl, "require_cursor",
-                                   return_value="/cursor-agent"):
-                with self.assertRaises(ValueError):
-                    flowctl.run_cursor_exec(prompt=at, repo_root=repo_root)
+            with mock.patch.object(flowctl.subprocess, "run") as m_run, \
+                    mock.patch.object(flowctl, "require_cursor",
+                                      return_value="/cursor-agent"):
+                _out, _sid, rc, err = flowctl.run_cursor_exec(
+                    prompt=at, repo_root=repo_root)
+            m_run.assert_not_called()
+            self.assertNotEqual(rc, 0)
+            self.assertIn("too large", err)
 
     def test_just_under_threshold_does_not_raise(self):
         with tempfile.TemporaryDirectory() as td:
