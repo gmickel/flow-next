@@ -27,6 +27,7 @@ Ralph mode rules (must follow):
 - If PLAN_REVIEW_BACKEND=rp: use `flowctl rp` wrappers (setup-review, select-add, prompt-get, chat-send).
 - If PLAN_REVIEW_BACKEND=codex: use `flowctl codex` wrappers (plan-review with --receipt).
 - If PLAN_REVIEW_BACKEND=copilot: use `flowctl copilot` wrappers (plan-review with --receipt). Never call `copilot` directly; never pass `--continue`.
+- If PLAN_REVIEW_BACKEND=cursor: use `flowctl cursor` wrappers (plan-review with --receipt). Never call `cursor-agent` directly; never pass `--continue`.
 - Write receipt via bash heredoc (no Write tool) if `REVIEW_RECEIPT_PATH` set.
 - If any rule is violated, output `<promise>RETRY</promise>` and stop.
 
@@ -34,6 +35,7 @@ Ralph mode rules (must follow):
  - If PLAN_REVIEW_BACKEND=rp: run `/flow-next:plan-review {{SPEC_ID}} --review=rp`
  - If PLAN_REVIEW_BACKEND=codex: run `/flow-next:plan-review {{SPEC_ID}} --review=codex`
  - If PLAN_REVIEW_BACKEND=copilot: run `/flow-next:plan-review {{SPEC_ID}} --review=copilot`
+ - If PLAN_REVIEW_BACKEND=cursor: run `/flow-next:plan-review {{SPEC_ID}} --review=cursor`
  - If PLAN_REVIEW_BACKEND=export: run `/flow-next:plan-review {{SPEC_ID}} --review=export`
  - If PLAN_REVIEW_BACKEND=none:
  - If REQUIRE_PLAN_REVIEW=1: output `<promise>RETRY</promise>` and stop.
@@ -61,6 +63,7 @@ Ralph mode rules (must follow):
  ```
  For codex mode, receipt is written automatically by `flowctl codex plan-review --receipt`.
  For copilot mode, receipt is written automatically by `flowctl copilot plan-review --receipt`.
+ For cursor mode, receipt is written automatically by `flowctl cursor plan-review --receipt`.
  **CRITICAL: Copy EXACTLY. The `"id":"{{SPEC_ID}}"` and `"verdict":"SHIP"` fields are REQUIRED.**
  Missing id/verdict = verification fails = forced retry.
 

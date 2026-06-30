@@ -54,6 +54,7 @@ PLUGIN_ROOT="$HOME/.codex"
  HAVE_RP=$(which rp-cli >/dev/null 2>&1 && echo 1 || echo 0)
  HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
  HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
+ HAVE_CURSOR=$(which cursor-agent >/dev/null 2>&1 && echo 1 || echo 0)
  ```
 
 4. Determine review backend (skip if UPDATE_MODE=1):
@@ -64,13 +65,15 @@ PLUGIN_ROOT="$HOME/.codex"
  a) RepoPrompt (macOS, visual builder)
  b) Codex CLI (cross-platform, GPT 5.5 High)
  c) GitHub Copilot CLI (cross-platform, Claude/GPT via Copilot)
+ d) Cursor CLI (cross-platform, runs cursor-agent; gpt-5.5-high via Cursor subscription)
 
- (Reply: "a", "rp", "b", "codex", "c", "copilot", or just tell me)
+ (Reply: "a", "rp", "b", "codex", "c", "copilot", "d", "cursor", or just tell me)
  ```
- Wait for response. Default if empty/ambiguous: prefer `rp` > `codex` > `copilot`.
+ Wait for response. Default if empty/ambiguous: prefer `rp` > `codex` > `copilot` > `cursor`.
  - If only rp-cli available: use `rp`
  - If only codex available: use `codex`
  - If only copilot available: use `copilot`
+ - If only cursor-agent available: use `cursor`
  - If none available: use `none`
 
 5. Copy files using bash (MUST use cp, NOT Write tool):

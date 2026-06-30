@@ -18749,8 +18749,10 @@ def cmd_copilot_check(args: argparse.Namespace) -> None:
     error: Optional[str] = None
 
     if available and not getattr(args, "skip_probe", False):
-        # Live probe — trivial prompt, short timeout. Fresh UUID per probe
-        # so we don't accidentally resume an old session's context.
+        # Live probe — trivial prompt, short timeout. Fresh UUID per probe via
+        # --session-id (CREATE): Copilot's --resume is resume-only, so probing a
+        # fresh uuid with --resume errors "No session matched" and would falsely
+        # report auth failure even with valid credentials.
         repo_root = get_repo_root() if ensure_flow_exists() else Path.cwd()
         # Use a short, dedicated timeout for the probe (60s) rather than
         # the 600s default inside run_copilot_exec. We do this by calling
@@ -18762,7 +18764,7 @@ def cmd_copilot_check(args: argparse.Namespace) -> None:
             copilot,
             "-p",
             probe_prompt,
-            f"--resume={session_id}",
+            f"--session-id={session_id}",
             "--output-format",
             "text",
             "-s",
