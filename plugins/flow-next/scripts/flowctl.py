@@ -23585,14 +23585,12 @@ def cmd_cursor_impl_review(args: argparse.Namespace) -> None:
     except (subprocess.CalledProcessError, OSError):
         pass
 
-    # Always embed changed file contents (same rationale as codex/copilot).
-    # Cursor callers route through FLOW_CURSOR_EMBED_MAX_BYTES.
     changed_files = get_changed_files(base_branch)
-    embedded_content, embed_stats = get_embedded_file_contents(
-        changed_files, budget_env_var="FLOW_CURSOR_EMBED_MAX_BYTES"
-    )
-
-    files_embedded = not embed_stats.get("budget_skipped") and not embed_stats.get("truncated")
+    # Cursor reviews are AGENTIC: cursor-agent runs read-only (`--mode ask`) with
+    # cwd=repo_root and reads the changed files from disk itself. We never embed
+    # file CONTENTS into the (positional-argv, ~30KB-capped) prompt — embedding a
+    # large changed file (e.g. flowctl.py) blew CURSOR_ARGV_PROMPT_MAX (PR #184).
+    embedded_content, files_embedded = "", False
     if standalone:
         prompt = build_standalone_review_prompt(base_branch, focus, diff_summary, files_embedded)
         if diff_content:
@@ -23798,14 +23796,12 @@ def cmd_cursor_plan_review(args: argparse.Namespace) -> None:
 
     task_specs = "\n\n---\n\n".join(task_specs_parts) if task_specs_parts else ""
 
-    embedded_content, embed_stats = get_embedded_file_contents(
-        file_paths, budget_env_var="FLOW_CURSOR_EMBED_MAX_BYTES"
-    )
+    # Cursor reviews are AGENTIC (see impl-review): never embed file contents —
+    # cursor-agent reads the relevant files from disk itself (PR #184).
+    embedded_content, files_embedded = "", False
 
     base_branch = args.base if hasattr(args, "base") and args.base else "main"
     context_hints = gather_context_hints(base_branch)
-
-    files_embedded = not embed_stats.get("budget_skipped") and not embed_stats.get("truncated")
     prompt = build_review_prompt(
         "plan", epic_spec, context_hints, task_specs=task_specs,
         embedded_files=embedded_content, files_embedded=files_embedded,
@@ -23982,11 +23978,11 @@ def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
         pass
 
     changed_files = get_changed_files(base_branch)
-    embedded_content, embed_stats = get_embedded_file_contents(
-        changed_files, budget_env_var="FLOW_CURSOR_EMBED_MAX_BYTES"
-    )
-
-    files_embedded = not embed_stats.get("budget_skipped") and not embed_stats.get("truncated")
+    # Cursor reviews are AGENTIC: cursor-agent runs read-only (`--mode ask`) with
+    # cwd=repo_root and reads the changed files from disk itself. We never embed
+    # file CONTENTS into the (positional-argv, ~30KB-capped) prompt — embedding a
+    # large changed file (e.g. flowctl.py) blew CURSOR_ARGV_PROMPT_MAX (PR #184).
+    embedded_content, files_embedded = "", False
     prompt = build_completion_review_prompt(
         epic_spec,
         task_specs,
