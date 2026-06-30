@@ -266,11 +266,14 @@ re-run a duplicate test pass in Phase 5; the impl-review gate already covers it.
 Use the Skill tool to invoke impl-review (NOT flowctl directly):
 
 ```
-/flow-next:impl-review <TASK_ID> --base $BASE_COMMIT
+/flow-next:impl-review <TASK_ID> --base $BASE_COMMIT --review=$REVIEW_MODE
 ```
 
-The skill handles everything — including resolving which backend runs (rp / codex /
-copilot / cursor) from config or an explicit override, so you never name it here:
+Pass `--review=$REVIEW_MODE` so a one-off `work --review=<backend>` override (when it
+differs from the repo config) actually reaches the review — `REVIEW_MODE` already holds
+the backend resolved for this run (config OR override), and impl-review cannot see the
+worker prompt variable otherwise, so a bare invocation would silently re-resolve from
+config. The skill still handles everything else:
 - Scoped diff (BASE_COMMIT..HEAD, not main..HEAD)
 - Receipt paths (don't pass --receipt yourself)
 - Sending to reviewer (rp, codex, copilot, or cursor backend)
@@ -280,7 +283,7 @@ copilot / cursor) from config or an explicit override, so you never name it here
 If NEEDS_WORK:
 1. Fix the issues identified
 2. Commit fixes
-3. Re-invoke the skill: `/flow-next:impl-review <TASK_ID> --base $BASE_COMMIT`
+3. Re-invoke the skill: `/flow-next:impl-review <TASK_ID> --base $BASE_COMMIT --review=$REVIEW_MODE`
 
 Continue until SHIP verdict.
 
