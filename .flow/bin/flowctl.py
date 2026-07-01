@@ -22115,14 +22115,15 @@ def _resolve_codex_review_spec(
             return BackendSpec.parse(spec_arg).resolve()
         except ValueError as e:
             error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
-    resolved, source = resolve_review_spec(
-        "codex", task_id, spec_id=spec_id, return_source=True
-    )
-    # Honor a deliberate per-task / per-epic cross-backend ``review`` spec, but
-    # coerce an env/config DEFAULT that resolves to a non-codex backend (e.g.
-    # ``review.backend=rp``) under an explicit ``flowctl codex ...`` to the codex
-    # default — so receipts never stamp a foreign / null model (PR #184).
-    if resolved.backend != "codex" and source in ("env", "config"):
+    resolved = resolve_review_spec("codex", task_id, spec_id=spec_id)
+    # ``flowctl codex ...`` ALWAYS runs codex, so a resolved spec for a DIFFERENT backend — an
+    # env/config default (``review.backend=rp``) OR a stored per-task/epic ``review: cursor:...`` —
+    # can't be honored: it would pass a foreign model to codex and stamp a foreign ``spec`` under
+    # ``mode:"codex"``. Coerce ANY non-codex spec to the codex default regardless of source.
+    # Choosing the RIGHT backend is the skill's job (task-aware ``review-backend`` routes a
+    # cursor-task to the cursor command); this coercion just makes an explicit ``--review=codex`` /
+    # ``flowctl codex`` WIN over a stored cross-backend spec rather than shell a foreign model. (PR #184)
+    if resolved.backend != "codex":
         return BackendSpec("codex").resolve()
     return resolved
 
@@ -22734,13 +22735,13 @@ def _resolve_copilot_review_spec(
             return BackendSpec.parse(spec_arg).resolve()
         except ValueError as e:
             error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
-    resolved, source = resolve_review_spec(
-        "copilot", task_id, spec_id=spec_id, return_source=True
-    )
-    # Same as codex: honor a per-task / per-epic cross-backend spec, but coerce an
-    # env/config DEFAULT resolving to a non-copilot backend to the copilot default
-    # so receipts record the model actually run (PR #184).
-    if resolved.backend != "copilot" and source in ("env", "config"):
+    resolved = resolve_review_spec("copilot", task_id, spec_id=spec_id)
+    # Same as codex: ``flowctl copilot ...`` ALWAYS runs copilot, so coerce ANY non-copilot
+    # resolved spec (env/config default OR a stored per-task/epic cross-backend ``review:``) to
+    # the copilot default regardless of source — the command can't shell a foreign model. Backend
+    # SELECTION is the skill's job (task-aware ``review-backend``); this makes an explicit
+    # ``--review=copilot`` win over a stored cross-backend spec. (PR #184)
+    if resolved.backend != "copilot":
         return BackendSpec("copilot").resolve()
     return resolved
 

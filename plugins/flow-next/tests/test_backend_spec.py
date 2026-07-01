@@ -1263,14 +1263,27 @@ class TestResolveReviewSpec(unittest.TestCase):
             self.assertEqual(out.backend, "codex")
             self.assertTrue(out.model)
 
-    def test_codex_helper_honors_per_task_cross_backend(self) -> None:
-        # A deliberate per-task cross-backend review is HONORED, not coerced.
+    def test_codex_helper_coerces_per_task_cross_backend(self) -> None:
+        # A stored per-task cross-backend review is COERCED to the codex default —
+        # `flowctl codex` ALWAYS runs codex, so a foreign (e.g. cursor-format) model can't
+        # be honored; an explicit `--review=codex` wins over the stored spec (PR #184).
         with _flow_fixture() as td:
             _write_epic(td / ".flow", "fn-9-e")
             _write_task(td / ".flow", "fn-9-e.1", "fn-9-e",
-                        review="copilot:gpt-5.5")
+                        review="cursor:gpt-5.5-high")
             args = argparse.Namespace(spec=None, json=False)
             out = flowctl._resolve_codex_review_spec(args, "fn-9-e.1")
+            self.assertEqual(out.backend, "codex")
+            self.assertTrue(out.model)
+
+    def test_copilot_helper_coerces_per_task_cross_backend(self) -> None:
+        # Symmetric to codex: a stored per-task cursor spec is coerced to the copilot default.
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e",
+                        review="cursor:gpt-5.5-high")
+            args = argparse.Namespace(spec=None, json=False)
+            out = flowctl._resolve_copilot_review_spec(args, "fn-9-e.1")
             self.assertEqual(out.backend, "copilot")
 
     def test_copilot_helper_coerces_config_default(self) -> None:
