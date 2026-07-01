@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-01T10:00:54.415485Z",
+  "depends_on": [
+    "fn-77-windows-python3-stub-fix-cross-context.1"
+  ],
+  "id": "fn-77-windows-python3-stub-fix-cross-context.4",
+  "priority": null,
+  "spec": "fn-77-windows-python3-stub-fix-cross-context",
+  "spec_path": ".flow/tasks/fn-77-windows-python3-stub-fix-cross-context.4.md",
+  "status": "todo",
+  "title": "Interpreter-site sweep: source helper in 12 copies, un-shebang direct-exec .py, heredocs, codex re-sync",
+  "updated_at": "2026-07-01T10:02:31.185351Z"
+}

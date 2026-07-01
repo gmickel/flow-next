@@ -92,18 +92,33 @@ Contract: the returned token, when invoked as `$TOKEN -c "import sys"`, exits 0 
 - *Prose "agent should use `py -3`" instruction* — fragile; depends on the model remembering. A deterministic launcher is the point. [paraphrase]
 - *Rewrite flowctl.py as a packaged `.exe` / console entry-point* — heavyweight, breaks the zero-dependency ethos. [inferred]
 
+## Strategy Alignment
+
+Active tracks served by this plan:
+- **Cross-platform parity** — flow-next is a first-class citizen on Claude Code / Codex / Droid / OpenCode across macOS, Linux, and Windows. This fix removes a break that made the base `flowctl` CLI unusable on Windows in the common python.org-install configuration — directly advancing the parity track.
+
+Consistent with the **zero-dependency** approach: the fix adds no runtime dependency (probes interpreters already present) and nothing to the uninstall path (the `.cmd` shim lives under `.flow/bin/`, deleted with the directory).
+
+## Early proof point
+
+Task **fn-77-...​.1** (shared probe helper + self-contained bash launcher) validates the core hypothesis: the `-c "import sys"` functionality probe rejects a 9009 stub on PATH and falls through to a working interpreter, while mac/linux still selects `python3` first. Proven in planning with a fake-stub harness. **If it fails** (e.g. a stub that exits 0, or a mac/linux regression), re-evaluate the probe strategy before building the `.cmd` shim (.2), init self-heal (.3), and the sweep (.4).
+
+## Coordination note (not a dependency)
+
+fn-77 has **no logical dependency** on any other spec, but it shares files with **fn-74** (Cursor review backend — paused, live worktree): `plugins/flow-next/scripts/flowctl.py` (init self-heal ↔ fn-74's backend dispatch rewrites), `flow-next-setup/workflow.md`, and `ralph.sh`. Whichever lands second needs a rebase pass. No `spec add-dep` edge is warranted (spec-scout). fn-75 (the branch currently in flight) explicitly does **not** touch flowctl (its R14) — no collision there.
+
 ## Requirement coverage
 
-| R-ID | Task |
-|------|------|
-| R1 | fn-N.M (TBD — populate via /flow-next:plan) |
-| R2 | fn-N.M (TBD — populate via /flow-next:plan) |
-| R3 | fn-N.M (TBD — populate via /flow-next:plan) |
-| R4 | fn-N.M (TBD — populate via /flow-next:plan) |
-| R5 | fn-N.M (TBD — populate via /flow-next:plan) |
-| R6 | fn-N.M (TBD — populate via /flow-next:plan) |
-| R7 | fn-N.M (TBD — populate via /flow-next:plan) |
-| R8 | fn-N.M (TBD — populate via /flow-next:plan) |
-| R9 | fn-N.M (TBD — populate via /flow-next:plan) |
-| R10 | fn-N.M (TBD — populate via /flow-next:plan) |
-| R11 | fn-N.M (TBD — populate via /flow-next:plan) |
+| R-ID | Description | Task(s) | Gap justification |
+|------|-------------|---------|-------------------|
+| R1 | Shared `pick-python.sh` probe helper (functionality, not presence); 12 copies source it | fn-77-...​.1 (helper), fn-77-...​.4 (consumers) | — |
+| R2 | Bash `flowctl` launcher resolves via probe before exec (3 copies) | fn-77-...​.1 | — |
+| R3 | `flowctl.cmd` dual shim for PowerShell/cmd (`py -3` first) + copy wiring | fn-77-...​.2 | — |
+| R4 | `flowctl init` re-stamps `.flow/bin/flowctl`(+`.cmd`) — self-heal | fn-77-...​.3 | — |
+| R5 | Un-shebang direct-exec `.py` (hooks.json→ralph-guard.py, ralph.sh→watch-filter.py) | fn-77-...​.4 | — |
+| R6 | qa/prospect heredocs resolve `$PY` once | fn-77-...​.4 | — |
+| R7 | CI example no longer bare `python3 flowctl.py` | fn-77-...​.6 | — |
+| R8 | No mac/linux regression — `python3` still picked first | fn-77-...​.1 (design), fn-77-...​.5 (verified) | — |
+| R9 | Fake-9009-stub regression harness + `alias_smoke` extension | fn-77-...​.5 | — |
+| R10 | Real Windows CI runner job (`flowctl.cmd` + bash launcher) | fn-77-...​.5 | — |
+| R11 | Docs (troubleshooting/platforms/flowctl.md/README) + alias workaround | fn-77-...​.6 | — |
