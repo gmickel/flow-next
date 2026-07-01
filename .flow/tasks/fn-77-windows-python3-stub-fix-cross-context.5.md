@@ -33,9 +33,8 @@ Prove the fix and lock it against regression — with heavy emphasis on **no mac
 - [ ] CI green on macOS, Linux, and Windows
 
 ## Done summary
-TBD
-
+Added the fn-77 test layer: a POSIX/Git-Bash regression harness (pick_python_test.sh) proving the functionality probe + self-contained launcher reject the Windows 9009 python3 stub (PYTHON_BIN-probed, py-3-preferred, array execs both forms, python3-first on mac/linux for R8); an alias_smoke.sh Case 10 exercising the stub bypass on the standard smoke path; and a deterministic windows-latest CI job asserting both `flowctl` (Git Bash) and `flowctl.cmd` (PowerShell) bypass a forced 9009 stub. Gate: 12/12 + 27/27 + smoke 138/0.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 24b735504bf6e4143259895a3dbca5bd2eb1af54
+- Tests: bash plugins/flow-next/scripts/pick_python_test.sh (12/12), bash plugins/flow-next/scripts/alias_smoke.sh (27/27), bash plugins/flow-next/scripts/smoke_test.sh (138 passed, 0 failed — R8 no-regression), python3 -c yaml.safe_load on all 4 .github/workflows/*.yml (well-formed); bash -n on windows job run-blocks (clean)
 - PRs:
