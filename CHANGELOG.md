@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 2.5.2] - 2026-07-02
+
+### Changed
+
+- **Subagent models pin to a family alias, not a frozen version** — the 11 scout agents that were pinned to `model: claude-sonnet-4-6` (`build-scout`, `claude-md-scout`, `docs-gap-scout`, `env-scout`, `memory-scout`, `observability-scout`, `security-scout`, `spec-scout`, `testing-scout`, `tooling-scout`, `workflow-scout`) now declare `model: sonnet` so they track the current Sonnet family instead of rotting on a superseded minor. The other agents were already correct — 8 use the `opus` family alias, and `worker` / `pr-comment-resolver` `inherit` the session model. **Cross-platform:** Cursor consumes the same canonical `agents/*.md`, so it's covered by the same change; the Codex mirror is unaffected — `scripts/sync-codex.sh`'s `map_model` already matches by family pattern (`claude-sonnet-*` → `gpt-5.5` / `gpt-5.4-mini`), so re-syncing produces a byte-identical mirror. No behavior change beyond model currency.
+
 ## [flow-next 2.5.1] - 2026-07-01
 
 ### Fixed
