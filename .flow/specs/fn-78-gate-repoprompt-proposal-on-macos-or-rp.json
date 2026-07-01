@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-78-gate-repoprompt-proposal-on-macos-or-rp",
+  "created_at": "2026-07-01T10:07:24.924034Z",
+  "depends_on_epics": [],
+  "id": "fn-78-gate-repoprompt-proposal-on-macos-or-rp",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-78-gate-repoprompt-proposal-on-macos-or-rp.md",
+  "status": "open",
+  "title": "Gate RepoPrompt proposal on macOS-or-rp-cli \u2014 plan & plan-review skip the rp path when it can't run",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-01T10:08:37.888100Z"
+}
