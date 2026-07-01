@@ -483,6 +483,61 @@ print("OK")
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Case 10: Windows python3 9009-stub is skipped by the probe + bash launcher (fn-77)
+#   A non-functional `python3` first on PATH (the Microsoft Store App Execution
+#   Alias stub: present, exits non-zero) must NOT be selected — the shared probe
+#   and the self-contained launcher both fall through to a working interpreter.
+# ─────────────────────────────────────────────────────────────────────────────
+echo -e "${YELLOW}--- Case 10: 9009 python3-stub bypass (probe + launcher) ---${NC}"
+(
+  # An absolute real interpreter to back the working `python` delegate — captured
+  # before poisoning PATH so it is not itself shadowed by the stub.
+  REAL_PY="$(command -v python3 || command -v python || true)"
+  STUB_BIN="$TEST_DIR/stub9009"
+  mkdir -p "$STUB_BIN"
+  # python3 == the non-functional Store stub (present on PATH, exits 9009).
+  cat > "$STUB_BIN/python3" <<'STUB'
+#!/bin/bash
+echo "Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Apps > Advanced app settings > App execution aliases." >&2
+exit 9009
+STUB
+  # python == a working interpreter (execs the real absolute path, unshadowed).
+  cat > "$STUB_BIN/python" <<STUB
+#!/bin/bash
+exec "$REAL_PY" "\$@"
+STUB
+  chmod +x "$STUB_BIN/python3" "$STUB_BIN/python"
+
+  # Sanity: with the stub first, the OLD presence-check accepts it but exec fails.
+  if PATH="$STUB_BIN:$PATH" bash -c 'command -v python3 >/dev/null' \
+     && ! PATH="$STUB_BIN:$PATH" python3 -c 'import sys' >/dev/null 2>&1; then
+    ok "Case 10: python3 stub present on PATH but non-functional on exec"
+  else
+    ko "Case 10: stub setup wrong (should be present-but-broken)"
+  fi
+
+  # The shared resolver skips the stub and execs a working interpreter.
+  RESOLVED="$(PATH="$STUB_BIN:$PATH" bash -c '. "'"$PLUGIN_ROOT"'/scripts/lib/pick-python.sh"; pick_python && "${FLOW_PY[@]}" -c "print(\"RESOLVER-OK\")"' 2>&1 || true)"
+  if printf '%s' "$RESOLVED" | grep -q "RESOLVER-OK"; then
+    ok "Case 10: shared resolver skips the stub, execs a working interpreter"
+  else
+    ko "Case 10: resolver failed to skip the stub: $RESOLVED"
+  fi
+
+  # The self-contained bash launcher runs flowctl.py end-to-end past the stub.
+  STUB_REPO="$TEST_DIR/stub-repo"
+  mkdir -p "$STUB_REPO"
+  ( cd "$STUB_REPO" && git init -q )
+  LAUNCH_OUT="$(cd "$STUB_REPO" && PATH="$STUB_BIN:$PATH" "$PLUGIN_ROOT/scripts/flowctl" init --json 2>&1 || true)"
+  if printf '%s' "$LAUNCH_OUT" | grep -q '"success": true' \
+     && ! printf '%s' "$LAUNCH_OUT" | grep -q "Python was not found"; then
+    ok "Case 10: bash launcher bypasses the stub and runs flowctl init"
+  else
+    ko "Case 10: launcher failed to bypass the stub: $LAUNCH_OUT"
+  fi
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────────────
 PASS_COUNT="$(wc -l < "$PASS_LOG" | tr -d '[:space:]')"
