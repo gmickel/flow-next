@@ -633,13 +633,13 @@ No auto-detect. Run `/flow-next:setup` (or `flowctl config set review.backend ..
 
 ### review-backend
 
-Resolve the active review backend spec (used by skills + Ralph). Reads `--spec` / per-task / per-spec / `FLOW_REVIEW_BACKEND` / `.flow/config.json` / backend-specific env / registry default in that order.
+Resolve the active review backend spec (used by skills + Ralph). With an optional **task/spec id**, a per-task `review:` / per-spec `default_review` override wins **above env/config** (the id is canonicalized first, so short/tracker handles like `fn-74.1` / `fn-74` resolve to the slugged id). Precedence: per-task / per-epic override > `FLOW_REVIEW_BACKEND` > `.flow/config.json` `review.backend` > backend-specific env > registry default. Without an id it reads env/config only. The review skills pass the review-target id so a task's own backend override actually routes.
 
 ```bash
-flowctl review-backend [--json]
+flowctl review-backend [<task-or-spec-id>] [--json]
 ```
 
-Text output prints the bare backend name (e.g. `codex`) for skill grep back-compat. JSON output:
+Text output prints the bare backend name (e.g. `codex`) for skill grep back-compat. JSON output (`source` ∈ `task` / `epic` / `env` / `config` / `hint`):
 
 ```json
 {"backend": "codex", "spec": "codex:gpt-5.4:high", "model": "gpt-5.4", "effort": "high", "source": "env"}
