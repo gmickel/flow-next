@@ -3,7 +3,7 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v2.5.0-green)](CHANGELOG.md)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v2.5.1-green)](CHANGELOG.md)
 [![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/docs/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -354,7 +354,7 @@ Doc index with one-line descriptions: [`plugins/flow-next/docs/README.md`](plugi
 
 ## Requirements
 
-- **Python 3.8+** — bundled `flowctl` CLI is pure-stdlib.
+- **Python 3.8+** (or the `py` launcher on Windows) — bundled `flowctl` CLI is pure-stdlib.
 - **`jq`** and **`gh`** — required for the review subsystem and PR plumbing.
 - **`bun`** *(optional)* — only needed for the [Ralph TUI](flow-next-tui/).
 

@@ -35,9 +35,8 @@ Add the Windows-native `flowctl.cmd` batch shim (npm-style dual launcher) so Pow
 - [ ] setup `cp`s `flowctl.cmd` into `.flow/bin/` (+ summary); ralph-init `cp`s `flowctl` + `flowctl.cmd` + `flowctl.py` + `pick-python.sh` into the user's `scripts/ralph/` in BOTH branches (verified via the installed layout, not a committed `scripts/ralph/`)
 
 ## Done summary
-TBD
-
+Added the Windows-native flowctl.cmd batch shim (npm/cmd-shim shape: find_dp0, quoted %dp0%flowctl.py, forwards %*, EXIT /b %errorlevel%) at plugins/flow-next/scripts/flowctl.cmd + tracked dogfood .flow/bin/flowctl.cmd, with a functionality probe mirroring the bash launcher (%PYTHON_BIN% command-name-only -> py -3 -> python3 -> python) that skips the Windows Store python3 9009 stub. Pinned *.cmd eol=crlf / bash flowctl launchers eol=lf in .gitattributes, and wired setup (copies .cmd into .flow/bin) + ralph-init (copies flowctl/flowctl.cmd/flowctl.py/pick-python.sh flat into installed scripts/ralph/ in both cp branches). Codex mirror regenerated.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 2a7a5f2757c521fea9826c9a6d1b5d26fba9bb2c
+- Tests: bash plugins/flow-next/scripts/smoke_test.sh (135/135), bash plugins/flow-next/scripts/ralph_smoke_test.sh (15/15), static batch-shim structural assertions (dp0/GOTO/CALL/%*/EXIT /b/probe-order all OK; cannot run cmd.exe on macOS)
 - PRs:

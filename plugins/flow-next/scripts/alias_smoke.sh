@@ -44,17 +44,9 @@ SCRIPT_DIR="$(to_winpath "$SCRIPT_DIR")"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PLUGIN_ROOT="$(to_winpath "$PLUGIN_ROOT")"
 
-pick_python() {
-  if [[ -n "${PYTHON_BIN:-}" ]]; then
-    command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
-  fi
-  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
-  if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
-  echo ""
-}
-
-PYTHON_BIN="$(pick_python)"
-[[ -n "$PYTHON_BIN" ]] || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
+# shellcheck source=lib/pick-python.sh
+. "$SCRIPT_DIR/lib/pick-python.sh"
+pick_python || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
 
 # Safety: never run from the main plugin repo.
 if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-next/.claude-plugin/plugin.json" ]]; then
@@ -126,7 +118,7 @@ echo -e "${YELLOW}--- Case 1: flowctl epic create dispatch + deprecation ---${NC
   STDERR="$(cat "$STDERR_FILE")"
 
   # Stdout matches canonical shape (success + id + spec_path).
-  case1_id="$(echo "$STDOUT" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  case1_id="$(echo "$STDOUT" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
   if [[ -n "$case1_id" && "$case1_id" =~ ^fn-[0-9]+- ]]; then
     ok "Case 1: \`flowctl epic create\` returns canonical id ($case1_id)"
   else
@@ -151,7 +143,7 @@ echo -e "${YELLOW}--- Case 2: flowctl epics --json dual-emit + deprecation ---${
   STDERR="$(cat "$STDERR_FILE")"
 
   # Both "specs" and "epics" keys present (R31 co-emit).
-  if echo "$STDOUT" | "$PYTHON_BIN" -c '
+  if echo "$STDOUT" | "${FLOW_PY[@]}" -c '
 import json, sys
 data = json.load(sys.stdin)
 assert "specs" in data, "missing canonical specs key"
@@ -187,7 +179,7 @@ print("OK")
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "${YELLOW}--- Case 3: flowctl tasks --epic alias + canonical task JSON ---${NC}"
 (
-  CASE3_SPEC="$(scripts/flowctl spec create --title "Case 3 alias" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  CASE3_SPEC="$(scripts/flowctl spec create --title "Case 3 alias" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
   scripts/flowctl task create --spec "$CASE3_SPEC" --title "First" --json >/dev/null
   scripts/flowctl task create --spec "$CASE3_SPEC" --title "Second" --json >/dev/null
 
@@ -216,7 +208,7 @@ echo -e "${YELLOW}--- Case 3: flowctl tasks --epic alias + canonical task JSON -
   # Persisted task JSON has "spec" only (no "epic" — fn-43.2 invariant).
   TASK_JSON_PATH=".flow/tasks/${CASE3_SPEC}.1.json"
   if [[ -f "$TASK_JSON_PATH" ]]; then
-    if "$PYTHON_BIN" -c '
+    if "${FLOW_PY[@]}" -c '
 import json, sys
 data = json.load(open(sys.argv[1]))
 assert "spec" in data, "missing canonical spec key on disk"
@@ -240,7 +232,7 @@ print("OK")
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "${YELLOW}--- Case 4: --section epic alias + dual-emit payload ---${NC}"
 (
-  CASE4_SPEC="$(scripts/flowctl spec create --title "Case 4 alias" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  CASE4_SPEC="$(scripts/flowctl spec create --title "Case 4 alias" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
   cat > "$TEST_DIR/case4-spec.md" <<'EOF'
 # Case 4 spec
 
@@ -268,7 +260,7 @@ EOF
   fi
 
   # Payload has BOTH top-level "spec" and "epic" keys (same value).
-  if echo "$LEGACY_OUT" | "$PYTHON_BIN" -c '
+  if echo "$LEGACY_OUT" | "${FLOW_PY[@]}" -c '
 import json, sys
 data = json.load(sys.stdin)
 assert "spec" in data, "missing canonical spec key"
@@ -289,13 +281,13 @@ print("OK")
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "${YELLOW}--- Case 5: flowctl show top-level (not renamed) ---${NC}"
 (
-  CASE5_SPEC="$(scripts/flowctl spec create --title "Case 5 alias" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  CASE5_SPEC="$(scripts/flowctl spec create --title "Case 5 alias" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
   scripts/flowctl task create --spec "$CASE5_SPEC" --title "Task A" --json >/dev/null
   CASE5_TASK="${CASE5_SPEC}.1"
 
   # show on spec id resolves.
   if scripts/flowctl show "$CASE5_SPEC" --json 2>/dev/null \
-       | "$PYTHON_BIN" -c "import json,sys; d=json.load(sys.stdin); assert d['id']=='${CASE5_SPEC}'; print('OK')" >/dev/null; then
+       | "${FLOW_PY[@]}" -c "import json,sys; d=json.load(sys.stdin); assert d['id']=='${CASE5_SPEC}'; print('OK')" >/dev/null; then
     ok "Case 5: \`flowctl show <spec-id>\` resolves spec"
   else
     ko "Case 5: \`flowctl show <spec-id>\` failed to resolve"
@@ -303,7 +295,7 @@ echo -e "${YELLOW}--- Case 5: flowctl show top-level (not renamed) ---${NC}"
 
   # show on task id resolves.
   if scripts/flowctl show "$CASE5_TASK" --json 2>/dev/null \
-       | "$PYTHON_BIN" -c "import json,sys; d=json.load(sys.stdin); assert d['id']=='${CASE5_TASK}'; print('OK')" >/dev/null; then
+       | "${FLOW_PY[@]}" -c "import json,sys; d=json.load(sys.stdin); assert d['id']=='${CASE5_TASK}'; print('OK')" >/dev/null; then
     ok "Case 5: \`flowctl show <task-id>\` resolves task"
   else
     ko "Case 5: \`flowctl show <task-id>\` failed to resolve"
@@ -328,7 +320,7 @@ echo -e "${YELLOW}--- Case 5: flowctl show top-level (not renamed) ---${NC}"
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "${YELLOW}--- Case 6: EPICS_FILE / SPECS_FILE env-var alias ---${NC}"
 (
-  CASE6_SPEC="$(scripts/flowctl spec create --title "Case 6 alias" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  CASE6_SPEC="$(scripts/flowctl spec create --title "Case 6 alias" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
   scripts/flowctl task create --spec "$CASE6_SPEC" --title "Task" --json >/dev/null
   printf '{"specs":["%s"]}\n' "$CASE6_SPEC" > "$TEST_DIR/case6-list.json"
 
@@ -359,9 +351,9 @@ echo -e "${YELLOW}--- Case 6: EPICS_FILE / SPECS_FILE env-var alias ---${NC}"
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "${YELLOW}--- Case 7: flowctl next blocked-task dual-emit (reason/legacy_reason) ---${NC}"
 (
-  CASE7_BASE="$(scripts/flowctl spec create --title "Case 7 base" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  CASE7_BASE="$(scripts/flowctl spec create --title "Case 7 base" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
   scripts/flowctl task create --spec "$CASE7_BASE" --title "Base" --json >/dev/null
-  CASE7_CHILD="$(scripts/flowctl spec create --title "Case 7 child" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  CASE7_CHILD="$(scripts/flowctl spec create --title "Case 7 child" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 
   # Inject a spec-level dependency directly into the spec JSON (probe both
   # canonical + legacy paths).
@@ -372,7 +364,7 @@ echo -e "${YELLOW}--- Case 7: flowctl next blocked-task dual-emit (reason/legacy
     fi
   }
   CHILD_PATH="$(spec_path "$CASE7_CHILD")"
-  "$PYTHON_BIN" - "$CHILD_PATH" "$CASE7_BASE" <<'PY'
+  "${FLOW_PY[@]}" - "$CHILD_PATH" "$CASE7_BASE" <<'PY'
 import json, sys
 from pathlib import Path
 path = Path(sys.argv[1])
@@ -385,7 +377,7 @@ PY
   printf '{"specs":["%s"]}\n' "$CASE7_CHILD" > "$TEST_DIR/case7-list.json"
   STDOUT="$(scripts/flowctl next --specs-file "$TEST_DIR/case7-list.json" --json 2>/dev/null)"
 
-  if echo "$STDOUT" | "$PYTHON_BIN" -c '
+  if echo "$STDOUT" | "${FLOW_PY[@]}" -c '
 import json, sys
 data = json.load(sys.stdin)
 assert data["status"] == "none", f"unexpected status: {data}"
@@ -418,7 +410,7 @@ echo -e "${YELLOW}--- Case 8: FLOW_NO_DEPRECATION=1 suppresses alias warnings --
   fi
 
   CASE8_TASKS_STDERR_FILE="$TEST_DIR/case8-tasks-stderr.txt"
-  CASE8_SPEC_ID="$(scripts/flowctl spec create --title "Case 8 driver" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  CASE8_SPEC_ID="$(scripts/flowctl spec create --title "Case 8 driver" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
   scripts/flowctl task create --spec "$CASE8_SPEC_ID" --title "T" --json >/dev/null
   FLOW_NO_DEPRECATION=1 scripts/flowctl tasks --epic "$CASE8_SPEC_ID" --json 2>"$CASE8_TASKS_STDERR_FILE" >/dev/null
   if [[ -z "$(cat "$CASE8_TASKS_STDERR_FILE")" ]]; then
@@ -443,13 +435,13 @@ echo -e "${YELLOW}--- Case 8: FLOW_NO_DEPRECATION=1 suppresses alias warnings --
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "${YELLOW}--- Case 9: flowctl epic ready/unready alias + deprecation ---${NC}"
 (
-  CASE9_SPEC="$(scripts/flowctl spec create --title "Case 9 ready alias" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  CASE9_SPEC="$(scripts/flowctl spec create --title "Case 9 ready alias" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 
   # Legacy `epic ready` dispatches to the canonical handler + deprecates.
   STDERR_FILE="$TEST_DIR/case9-stderr.txt"
   STDOUT="$(scripts/flowctl epic ready "$CASE9_SPEC" --json 2>"$STDERR_FILE")"
   STDERR="$(cat "$STDERR_FILE")"
-  if echo "$STDOUT" | "$PYTHON_BIN" -c '
+  if echo "$STDOUT" | "${FLOW_PY[@]}" -c '
 import json, sys
 data = json.load(sys.stdin)
 assert data["ready"] is True, f"ready not set: {data}"
@@ -468,7 +460,7 @@ print("OK")
 
   # Legacy `epic unready` round-trips the flag.
   UNREADY_OUT="$(scripts/flowctl epic unready "$CASE9_SPEC" --json 2>/dev/null)"
-  if echo "$UNREADY_OUT" | "$PYTHON_BIN" -c '
+  if echo "$UNREADY_OUT" | "${FLOW_PY[@]}" -c '
 import json, sys
 data = json.load(sys.stdin)
 assert data["ready"] is False, f"ready not cleared: {data}"
@@ -487,6 +479,72 @@ print("OK")
     ok "Case 9: canonical \`spec ready/unready\` silent on stderr"
   else
     ko "Case 9: canonical spec ready/unready leaked to stderr: $(cat "$CANONICAL_STDERR_FILE")"
+  fi
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Case 10: Windows python3 9009-stub is skipped by the probe + bash launcher (fn-77)
+#   A non-functional `python3` first on PATH (the Microsoft Store App Execution
+#   Alias stub: present, exits non-zero) must NOT be selected — the shared probe
+#   and the self-contained launcher both fall through to a working interpreter.
+# ─────────────────────────────────────────────────────────────────────────────
+echo -e "${YELLOW}--- Case 10: 9009 python3-stub bypass (probe + launcher) ---${NC}"
+(
+  # POSIX-only: an extensionless `python3` stub first on PATH shadows the real
+  # interpreter on Linux/macOS. On Windows Git Bash it does NOT — `.exe`
+  # resolution finds the real `python3.exe`, so the stub can't shadow. Windows
+  # coverage lives in the dedicated `windows-python3-stub` CI job (proper
+  # `.exe`/`.cmd` stub); skip here rather than assert a precondition that can't
+  # hold under Git Bash.
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*)
+      echo -e "  ${YELLOW}skip${NC}: Case 10 stub-shadow is POSIX-only (Git Bash resolves real python3.exe); Windows covered by the windows-python3-stub CI job"
+      exit 0 ;;
+  esac
+  # An absolute real interpreter to back the working `python` delegate — captured
+  # before poisoning PATH so it is not itself shadowed by the stub.
+  REAL_PY="$(command -v python3 || command -v python || true)"
+  STUB_BIN="$TEST_DIR/stub9009"
+  mkdir -p "$STUB_BIN"
+  # python3 == the non-functional Store stub (present on PATH, exits 9009).
+  cat > "$STUB_BIN/python3" <<'STUB'
+#!/bin/bash
+echo "Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Apps > Advanced app settings > App execution aliases." >&2
+exit 9009
+STUB
+  # python == a working interpreter (execs the real absolute path, unshadowed).
+  cat > "$STUB_BIN/python" <<STUB
+#!/bin/bash
+exec "$REAL_PY" "\$@"
+STUB
+  chmod +x "$STUB_BIN/python3" "$STUB_BIN/python"
+
+  # Sanity: with the stub first, the OLD presence-check accepts it but exec fails.
+  if PATH="$STUB_BIN:$PATH" bash -c 'command -v python3 >/dev/null' \
+     && ! PATH="$STUB_BIN:$PATH" python3 -c 'import sys' >/dev/null 2>&1; then
+    ok "Case 10: python3 stub present on PATH but non-functional on exec"
+  else
+    ko "Case 10: stub setup wrong (should be present-but-broken)"
+  fi
+
+  # The shared resolver skips the stub and execs a working interpreter.
+  RESOLVED="$(PATH="$STUB_BIN:$PATH" bash -c '. "'"$PLUGIN_ROOT"'/scripts/lib/pick-python.sh"; pick_python && "${FLOW_PY[@]}" -c "print(\"RESOLVER-OK\")"' 2>&1 || true)"
+  if printf '%s' "$RESOLVED" | grep -q "RESOLVER-OK"; then
+    ok "Case 10: shared resolver skips the stub, execs a working interpreter"
+  else
+    ko "Case 10: resolver failed to skip the stub: $RESOLVED"
+  fi
+
+  # The self-contained bash launcher runs flowctl.py end-to-end past the stub.
+  STUB_REPO="$TEST_DIR/stub-repo"
+  mkdir -p "$STUB_REPO"
+  ( cd "$STUB_REPO" && git init -q )
+  LAUNCH_OUT="$(cd "$STUB_REPO" && PATH="$STUB_BIN:$PATH" "$PLUGIN_ROOT/scripts/flowctl" init --json 2>&1 || true)"
+  if printf '%s' "$LAUNCH_OUT" | grep -q '"success": true' \
+     && ! printf '%s' "$LAUNCH_OUT" | grep -q "Python was not found"; then
+    ok "Case 10: bash launcher bypasses the stub and runs flowctl init"
+  else
+    ko "Case 10: launcher failed to bypass the stub: $LAUNCH_OUT"
   fi
 )
 

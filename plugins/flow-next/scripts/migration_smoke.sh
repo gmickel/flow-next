@@ -45,17 +45,9 @@ SCRIPT_DIR="$(to_winpath "$SCRIPT_DIR")"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PLUGIN_ROOT="$(to_winpath "$PLUGIN_ROOT")"
 
-pick_python() {
-  if [[ -n "${PYTHON_BIN:-}" ]]; then
-    command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
-  fi
-  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
-  if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
-  echo ""
-}
-
-PYTHON_BIN="$(pick_python)"
-[[ -n "$PYTHON_BIN" ]] || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
+# shellcheck source=lib/pick-python.sh
+. "$SCRIPT_DIR/lib/pick-python.sh"
+pick_python || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
 
 # Safety: never run from the main plugin repo.
 if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-next/.claude-plugin/plugin.json" ]]; then
@@ -171,7 +163,7 @@ echo -e "${YELLOW}--- Scenario 1: --dry-run is non-destructive ---${NC}"
   cd "$R1"
   STDOUT="$(scripts/flowctl migrate-rename --dry-run --json 2>/dev/null)"
 
-  if echo "$STDOUT" | "$PYTHON_BIN" -c '
+  if echo "$STDOUT" | "${FLOW_PY[@]}" -c '
 import json, sys
 data = json.load(sys.stdin)
 assert data["dry_run"] is True
@@ -210,7 +202,7 @@ echo -e "${YELLOW}--- Scenario 2: --yes applies migration ---${NC}"
   cd "$R2"
   STDOUT="$(scripts/flowctl migrate-rename --yes --json 2>/dev/null)"
 
-  if echo "$STDOUT" | "$PYTHON_BIN" -c '
+  if echo "$STDOUT" | "${FLOW_PY[@]}" -c '
 import json, sys
 data = json.load(sys.stdin)
 assert data.get("migrated") is True
@@ -284,7 +276,7 @@ echo -e "${YELLOW}--- Scenario 4: idempotent re-run ---${NC}"
   scripts/flowctl migrate-rename --yes --json 2>/dev/null >/dev/null
   STDOUT="$(scripts/flowctl migrate-rename --yes --json 2>/dev/null)"
 
-  if echo "$STDOUT" | "$PYTHON_BIN" -c '
+  if echo "$STDOUT" | "${FLOW_PY[@]}" -c '
 import json, sys
 data = json.load(sys.stdin)
 assert data.get("migrated") is False, f"second --yes should be no-op: {data}"
@@ -459,7 +451,7 @@ echo -e "${YELLOW}--- Scenario 8: concurrency (real parallel + stale-lock reclai
   for OUT in "$OUT1" "$OUT2"; do
     # Outputs may carry preceding banner text on stderr-merged streams; we
     # redirected 2>&1 above, so locate the JSON body via python.
-    "$PYTHON_BIN" - "$OUT" <<'PY' || true
+    "${FLOW_PY[@]}" - "$OUT" <<'PY' || true
 import json, re, sys
 text = open(sys.argv[1]).read()
 match = re.search(r'(\{[\s\S]*\})', text)
@@ -639,7 +631,7 @@ echo -e "${YELLOW}--- Scenario 10: read-only .flow/ semantics ---${NC}"
     rc=$?
     set -e
     chmod -R u+w .flow 2>/dev/null || true
-    if [[ "$rc" -eq 0 ]] && echo "$OUT" | "$PYTHON_BIN" -c '
+    if [[ "$rc" -eq 0 ]] && echo "$OUT" | "${FLOW_PY[@]}" -c '
 import json, sys
 data = json.load(sys.stdin)
 assert data.get("migrated") is False
@@ -752,7 +744,7 @@ echo -e "${YELLOW}--- Scenario 11: atomic sentinel + crash-during-step-11 ---${N
   STDOUT="$(scripts/flowctl migrate-rename --yes --json 2>/dev/null)"
   rc=$?
   set -e
-  if [[ "$rc" -eq 0 ]] && echo "$STDOUT" | "$PYTHON_BIN" -c '
+  if [[ "$rc" -eq 0 ]] && echo "$STDOUT" | "${FLOW_PY[@]}" -c '
 import json, sys
 data = json.load(sys.stdin)
 assert data.get("migrated") is False
@@ -779,7 +771,7 @@ echo -e "${YELLOW}--- Scenario 12: SHA256 task-drift detection ---${NC}"
   # Mutate a task JSON post-migration to drift off the manifest's recorded SHA256.
   TASK_JSON=".flow/tasks/fn-1-fixture.1.json"
   if [[ -f "$TASK_JSON" ]]; then
-    "$PYTHON_BIN" -c "
+    "${FLOW_PY[@]}" -c "
 import json
 data = json.load(open('$TASK_JSON'))
 data['title'] = 'Drifted post-migration title'
@@ -828,7 +820,7 @@ echo -e "${YELLOW}--- Scenario 13: contamination wipe before re-init ---${NC}"
   if [[ "$rc" -eq 0 && -f .flow/.flow_version ]]; then
     ok "Scenario 13: stale manifest wiped + re-initialized; migration completes"
     # Validate fresh manifest shape (must be JSON, must NOT have "stale" key).
-    if "$PYTHON_BIN" -c '
+    if "${FLOW_PY[@]}" -c '
 import json
 data = json.load(open(".flow/.migration-manifest"))
 assert "stale" not in data, "stale key survived re-init"
@@ -893,7 +885,7 @@ unsuppressed_flowctl() {
   make_pre10_fixture "$RB2"
   cd "$RB2"
   STDOUT="$(unsuppressed_flowctl scripts/flowctl status --json 2>/dev/null)"
-  if echo "$STDOUT" | "$PYTHON_BIN" -c 'import json, sys; json.load(sys.stdin); print("OK")' >/dev/null; then
+  if echo "$STDOUT" | "${FLOW_PY[@]}" -c 'import json, sys; json.load(sys.stdin); print("OK")' >/dev/null; then
     ok "Banner B2: --json stdout parses cleanly with banner on stderr"
   else
     ko "Banner B2: --json stdout corrupted by banner: $STDOUT"
@@ -943,7 +935,7 @@ done
   make_pre10_fixture "$RB5"
   cd "$RB5"
   # Stamp ack in the future-relative-to-zero (today).
-  "$PYTHON_BIN" -c '
+  "${FLOW_PY[@]}" -c '
 from datetime import datetime, timezone
 from pathlib import Path
 Path(".flow/.banner-acknowledged").write_text(datetime.now(timezone.utc).isoformat() + "\n")

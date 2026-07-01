@@ -1,4 +1,36 @@
 #!/bin/bash
-# flowctl wrapper - invokes flowctl.py from the same directory
+# flowctl wrapper — invokes flowctl.py from the same directory via a probed
+# Python interpreter.
+#
+# SELF-CONTAINED: this launcher does NOT source scripts/lib/pick-python.sh —
+# installed copies (.flow/bin/flowctl, scripts/ralph/flowctl) can't assume that
+# path is reachable. Keep this inline probe in sync with the shared resolver at
+# plugins/flow-next/scripts/lib/pick-python.sh.
+#
+# Probe = functionality, not presence: each candidate must actually run
+# `<cand> -c "import sys"` and exit 0, so the Windows Store `python3` App
+# Execution Alias stub (prints "Python was not found", exits 9009) is skipped
+# even though it is present on PATH. Candidate order:
+#   $PYTHON_BIN (scalar override) -> py -3 -> python3 -> python
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec python3 "$SCRIPT_DIR/flowctl.py" "$@"
+
+FLOW_PY=()
+for _cand in "${PYTHON_BIN:-}" "py -3" "python3" "python"; do
+  [ -n "$_cand" ] || continue
+  # Intentional word-split so the two-word `py -3` becomes two argv elements.
+  read -r -a _argv <<< "$_cand"
+  [ "${#_argv[@]}" -gt 0 ] || continue
+  if "${_argv[@]}" -c "import sys" >/dev/null 2>&1; then
+    FLOW_PY=("${_argv[@]}")
+    break
+  fi
+done
+
+if [ "${#FLOW_PY[@]}" -eq 0 ]; then
+  echo "flowctl: no working Python interpreter found (tried \$PYTHON_BIN, py -3, python3, python)." >&2
+  echo "  On Windows, 'python3' may be the disabled Microsoft Store alias stub;" >&2
+  echo "  install python.org Python (or the py launcher), or set PYTHON_BIN to a working interpreter." >&2
+  exit 1
+fi
+
+exec "${FLOW_PY[@]}" "$SCRIPT_DIR/flowctl.py" "$@"

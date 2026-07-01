@@ -3,6 +3,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Python interpreter resolution via the shared functionality probe (skips the
+# Windows Store python3 alias stub; fills the FLOW_PY array). See lib/pick-python.sh.
+# shellcheck source=lib/pick-python.sh
+. "$SCRIPT_DIR/lib/pick-python.sh"
+pick_python || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
 REPO_ROOT="$(cd "$PLUGIN_ROOT/.." && pwd)"
 
 # Safety: never run tests from the main plugin repo
@@ -76,7 +82,7 @@ cp "$PLUGIN_ROOT/scripts/flowctl.py" scripts/ralph/flowctl.py
 cp "$PLUGIN_ROOT/scripts/flowctl" scripts/ralph/flowctl
 chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl
 
-python3 - <<'PY'
+"${FLOW_PY[@]}" - <<'PY'
 from pathlib import Path
 import re
 cfg = Path("scripts/ralph/config.env")
@@ -142,7 +148,7 @@ chmod +x "$TEST_DIR/bin/claude"
 echo -e "${YELLOW}--- running ralph ---${NC}"
 CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh
 
-python3 - <<'PY'
+"${FLOW_PY[@]}" - <<'PY'
 import json
 from pathlib import Path
 for tid in ["fn-1.1", "fn-2.1"]:
@@ -151,7 +157,7 @@ for tid in ["fn-1.1", "fn-2.1"]:
 PY
 
 run_dir="$(ls -1 scripts/ralph/runs | grep -v '^\\.gitkeep$' | head -n 1)"
-python3 - <<'PY' "$run_dir"
+"${FLOW_PY[@]}" - <<'PY' "$run_dir"
 import json, sys
 from pathlib import Path
 run_dir = sys.argv[1]

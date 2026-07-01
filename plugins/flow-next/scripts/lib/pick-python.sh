@@ -1,0 +1,48 @@
+# pick-python.sh — shared Python interpreter resolver for flow-next.
+#
+# Source this file, then call pick_python:
+#   . "$SCRIPT_DIR/lib/pick-python.sh"        # resolver path varies by layout
+#   pick_python || { echo "no working python" >&2; exit 1; }
+#   exec "${FLOW_PY[@]}" some_script.py "$@"
+#
+# Two distinct names — do NOT conflate them:
+#   PYTHON_BIN — optional user override: a *scalar* command name (e.g. python3.12,
+#                py). Exportable; read as the first candidate, but still probed.
+#                A bash array cannot be exported, so the override must stay scalar.
+#   FLOW_PY    — the *resolved bash array* this fills (e.g. (python3) | (python) |
+#                (py -3)). Callers exec "${FLOW_PY[@]}". An array is required so it
+#                can carry the two-word `py -3`; a single string cannot be both a
+#                multi-word invocation and a space-safe single token.
+#
+# Probe = functionality, not presence. Each candidate must actually run
+# `<cand> -c "import sys"` and exit 0. This rejects the Windows Store `python3`
+# App Execution Alias stub — a 0-byte reparse point that prints "Python was not
+# found" and exits 9009 (never 0 with -c; bpo-41327) — which a bare `command -v`
+# would wrongly accept, and equally rejects a genuinely-absent interpreter.
+#
+# Candidate order:  $PYTHON_BIN -> py -3 -> python3 -> python
+#   `py -3` is first on Windows because the py launcher (C:\Windows\py.exe) is
+#   installed by python.org / registry-resolved and is never a Store alias stub.
+#   On mac/linux there is no `py`, so resolution falls through cleanly to
+#   `python3` — identical to the pre-fix behavior (no regression).
+#
+# set -u-safe: PYTHON_BIN is read via ${PYTHON_BIN:-}. Callers running under
+# `set -u` should guard reads as "${FLOW_PY[@]:-}" until pick_python has
+# returned 0 (after which FLOW_PY is guaranteed non-empty).
+
+pick_python() {
+  FLOW_PY=()
+  local _cand
+  local -a _argv
+  for _cand in "${PYTHON_BIN:-}" "py -3" "python3" "python"; do
+    [ -n "$_cand" ] || continue
+    # Intentional word-split so the two-word `py -3` becomes two argv elements.
+    read -r -a _argv <<< "$_cand"
+    [ "${#_argv[@]}" -gt 0 ] || continue
+    if "${_argv[@]}" -c "import sys" >/dev/null 2>&1; then
+      FLOW_PY=("${_argv[@]}")
+      return 0
+    fi
+  done
+  return 1
+}

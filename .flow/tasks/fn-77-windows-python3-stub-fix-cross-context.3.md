@@ -28,9 +28,8 @@ Teach `flowctl init` to (re-)stamp `.flow/bin/flowctl` and `.flow/bin/flowctl.cm
 - [ ] Task acceptance does NOT claim a broken `.flow/bin/flowctl` bash launcher self-heals by running itself — the bootstrap entrypoints (plugin update / `.cmd` / `py -3 …flowctl.py init`) are the documented paths
 
 ## Done summary
-TBD
-
+Taught `flowctl init` (`cmd_init`) to re-stamp `.flow/bin/flowctl` + `.flow/bin/flowctl.cmd` from byte-identical in-module constants so existing installs with the old `exec python3` launcher self-heal without a full `/flow-next:setup` re-run. Idempotent (writes only on content diff — no tracked-file churn), best-effort `chmod +x`, with a byte-for-byte drift guard test plus smoke-test coverage of fresh-stamp, old→probe self-heal, and no-churn re-run.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 598a87da98ce7c09762715fddf553681b45962ba
+- Tests: bash plugins/flow-next/scripts/smoke_test.sh (138 passed, 0 failed), python3 -m unittest tests.test_init_stamp_launchers (7 passed)
 - PRs:

@@ -4,6 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Python interpreter resolution via the shared functionality probe (skips the
+# Windows Store python3 alias stub; fills the FLOW_PY array). See lib/pick-python.sh.
+# shellcheck source=lib/pick-python.sh
+. "$SCRIPT_DIR/lib/pick-python.sh"
+pick_python || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
+
 # Safety: never run tests from the main plugin repo
 if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-next/.claude-plugin/plugin.json" ]]; then
   echo "ERROR: refusing to run from main plugin repo. Run from any other directory." >&2
@@ -71,7 +77,7 @@ $FLOWCTL init --json >/dev/null
 # stamps the title into the id (e.g. "Tiny lib" -> fn-1-tiny-lib); a
 # hard-coded fn-1 would no longer match.
 if [[ -z "$SPEC_ID" ]]; then
-  SPEC_ID=$($FLOWCTL spec create --title "Tiny lib" --json | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+  SPEC_ID=$($FLOWCTL spec create --title "Tiny lib" --json | "${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['id'])")
 else
   $FLOWCTL spec create --title "Tiny lib" --json >/dev/null
 fi
@@ -123,7 +129,7 @@ RECEIPT_PATH="$RUN_DIR/receipts/plan-$EPIC_ID.json"
 mkdir -p "$RUN_DIR/receipts"
 
 PROMPT_OUT="$TEST_DIR/prompt_plan.txt"
-python3 - "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/prompt_plan.md" "$PROMPT_OUT" "$EPIC_ID" "$RECEIPT_PATH" <<'PY'
+"${FLOW_PY[@]}" - "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/prompt_plan.md" "$PROMPT_OUT" "$EPIC_ID" "$RECEIPT_PATH" <<'PY'
 import sys
 from pathlib import Path
 

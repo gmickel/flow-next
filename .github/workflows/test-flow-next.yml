@@ -350,13 +350,24 @@ jobs:
       # runner's temp dir before invoking. $RUNNER_TEMP is set on every
       # GitHub-hosted runner (ubuntu/macos/windows).
 
+      - name: pick_python_test.sh (Windows 9009-stub probe regression, POSIX/Git-Bash, fn-77.5)
+        if: always() && runner.os != 'Windows'
+        run: |
+          cd "$RUNNER_TEMP"
+          bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/pick_python_test.sh"
+        # POSIX/mac-linux unit layer for the interpreter probe: a fake 9009
+        # `python3` stub first on PATH must be rejected by the shared resolver +
+        # the bash launcher, PYTHON_BIN override is itself probed, py -3 preferred,
+        # python3 still first on mac/linux (R8). The real windows-latest end-to-end
+        # of flowctl.cmd + the bash launcher lives in the windows-python3-stub job.
+
       - name: ci_test.sh (flowctl integration, 58 cases)
         if: always()
         run: |
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/ci_test.sh"
 
-      - name: alias_smoke.sh (deprecation alias paths, 20 cases, ~5s)
+      - name: alias_smoke.sh (deprecation alias paths + fn-77 9009-stub bypass, ~5s)
         if: always()
         run: |
           cd "$RUNNER_TEMP"
@@ -425,3 +436,108 @@ jobs:
       # Smokes intentionally skipped (require external CLIs not on GitHub runners):
       #   - ralph_smoke_test.sh / ralph_smoke_rp.sh — need claude / codex / rp-cli
       #   - plan_review_prompt_smoke.sh — needs rp-cli
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # fn-77.5 (R10): real windows-latest end-to-end. A DETERMINISTIC fake `python3`
+  # stub (exit 9009 — the Microsoft Store App Execution Alias failure mode) is
+  # forced FIRST on PATH for BOTH a Git Bash step AND a PowerShell/cmd step (NOT
+  # reliant on the runner's own Store alias, which may be absent). A real
+  # python.org Python (+ the py launcher, already on the hosted image) is present
+  # via setup-python; then the bash `flowctl` launcher and the `flowctl.cmd` batch
+  # shim must each probe past the stub, resolve a working interpreter, and run
+  # `flowctl init` — proving the fix works in the exact shells where Claude
+  # Desktop / native Codex / Cursor invoke flowctl on Windows.
+  # ─────────────────────────────────────────────────────────────────────────────
+  windows-python3-stub:
+    runs-on: windows-latest
+    steps:
+      - name: Disable git autocrlf so the LF-pinned bash launcher stays LF
+        shell: bash
+        run: git config --global core.autocrlf false
+        # The bash `flowctl` launcher is pinned eol=lf (.gitattributes); CRLF would
+        # break `bash` parsing. Default Windows-runner autocrlf would rewrite it.
+
+      - uses: actions/checkout@v4
+
+      - name: Setup Python (real python.org interpreter + py launcher)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Configure git identity (flowctl init touches git)
+        shell: bash
+        run: |
+          git config --global user.email "ci@flow-next.test"
+          git config --global user.name "flow-next CI"
+          git config --global init.defaultBranch main
+
+      - name: Build a deterministic 9009 python3 stub for both shells
+        shell: bash
+        run: |
+          set -euo pipefail
+          STUB="$RUNNER_TEMP/pystub"
+          mkdir -p "$STUB"
+          # Extensionless stub for Git Bash: MSYS resolves bare `python3` to this
+          # shebang script (it does not append .cmd), so `python3` runs the stub.
+          {
+            printf '#!/bin/bash\n'
+            printf 'echo "Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Apps > Advanced app settings > App execution aliases." >&2\n'
+            printf 'exit 9009\n'
+          } > "$STUB/python3"
+          chmod +x "$STUB/python3"
+          # .cmd stub for cmd.exe / PowerShell: PATHEXT resolves `python3` here.
+          {
+            printf '@ECHO OFF\n'
+            printf 'ECHO Python was not found; disable the Microsoft Store App execution alias. 1>&2\n'
+            printf 'EXIT /b 9009\n'
+          } > "$STUB/python3.cmd"
+          # Prove the stub really is non-functional before wiring it onto PATH.
+          if "$STUB/python3" -c "import sys" >/dev/null 2>&1; then
+            echo "FAIL: stub python3 should exit non-zero" >&2; exit 1
+          fi
+          printf 'PYSTUB_DIR=%s\n' "$STUB" >> "$GITHUB_ENV"
+
+      - name: Git Bash — bash `flowctl` bypasses the 9009 stub
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$PYSTUB_DIR:$PATH"
+          echo "python3 resolves to: $(command -v python3)"
+          # The stub is genuinely first on PATH and non-functional.
+          if python3 -c "import sys" >/dev/null 2>&1; then
+            echo "FAIL: python3 stub should exit non-zero under Git Bash" >&2; exit 1
+          fi
+          FLOWCTL="$GITHUB_WORKSPACE/plugins/flow-next/scripts/flowctl"
+          REPO="$RUNNER_TEMP/bash-stub-repo"; mkdir -p "$REPO"; cd "$REPO"; git init -q
+          OUT="$("$FLOWCTL" init --json 2>&1)" || { echo "FAIL: launcher exited non-zero"; echo "$OUT"; exit 1; }
+          echo "$OUT"
+          echo "$OUT" | grep -q '"success": true' || { echo "FAIL: flowctl init did not succeed" >&2; exit 1; }
+          if echo "$OUT" | grep -q "Python was not found"; then
+            echo "FAIL: stub message leaked — launcher did not bypass the stub" >&2; exit 1
+          fi
+          echo "PASS: bash flowctl bypassed the 9009 python3 stub"
+
+      - name: PowerShell — `flowctl.cmd` bypasses the 9009 stub
+        shell: pwsh
+        run: |
+          # GitHub pwsh sets $ErrorActionPreference='Stop'; with the 7.3+ default
+          # $PSNativeCommandUseErrorActionPreference=$true a non-zero native exit
+          # THROWS. We invoke a stub that is MEANT to fail, so drive control flow
+          # off $LASTEXITCODE explicitly instead.
+          $PSNativeCommandUseErrorActionPreference = $false
+          $env:PATH = "$env:PYSTUB_DIR;$env:PATH"
+          Write-Host "python3 resolves to: $((Get-Command python3 -ErrorAction SilentlyContinue).Source)"
+          # The stub is genuinely first on PATH and non-functional (native 9009).
+          & python3 -c "import sys" 2>$null
+          if ($LASTEXITCODE -eq 0) { Write-Error "python3 stub should exit non-zero in pwsh"; exit 1 }
+          $flowctl = Join-Path $env:GITHUB_WORKSPACE "plugins/flow-next/scripts/flowctl.cmd"
+          $repo = Join-Path $env:RUNNER_TEMP "cmd-stub-repo"
+          New-Item -ItemType Directory -Force -Path $repo | Out-Null
+          Set-Location $repo
+          git init -q
+          $out = & $flowctl init --json 2>&1 | Out-String
+          Write-Host $out
+          if ($LASTEXITCODE -ne 0) { Write-Error "flowctl.cmd exited $LASTEXITCODE"; exit 1 }
+          if ($out -notmatch '"success": true') { Write-Error "flowctl.cmd init did not succeed"; exit 1 }
+          if ($out -match "Python was not found") { Write-Error "stub message leaked — flowctl.cmd did not bypass the stub"; exit 1 }
+          Write-Host "PASS: flowctl.cmd bypassed the 9009 python3 stub"

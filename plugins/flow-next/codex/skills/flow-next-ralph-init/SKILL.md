@@ -36,7 +36,7 @@ PLUGIN_ROOT="$HOME/.codex"
 - Only create/update `scripts/ralph/` in the current repo.
 - If `scripts/ralph/` already exists, offer to update (preserves config.env).
 - Copy templates from `templates/` into `scripts/ralph/`.
-- Copy `flowctl` and `flowctl.py` from `$PLUGIN_ROOT/scripts/` into `scripts/ralph/`.
+- Copy `flowctl`, `flowctl.cmd`, `flowctl.py` (from `$PLUGIN_ROOT/scripts/`) and `pick-python.sh` (from `$PLUGIN_ROOT/scripts/lib/`) into `scripts/ralph/` — flat, so the resolver lands at `scripts/ralph/pick-python.sh` (NOT `scripts/ralph/lib/`) where `ralph.sh` and the hook wrapper source it.
 - Set executable bit on `scripts/ralph/ralph.sh`, `scripts/ralph/ralph_once.sh`, and `scripts/ralph/flowctl`.
 
 ## Workflow
@@ -90,10 +90,10 @@ PLUGIN_ROOT="$HOME/.codex"
  cp "~/.codex/templates/flow-next-ralph-init/prompt_work.md" scripts/ralph/
  cp "~/.codex/templates/flow-next-ralph-init/prompt_completion.md" scripts/ralph/
  cp "~/.codex/templates/flow-next-ralph-init/watch-filter.py" scripts/ralph/
- cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.py" scripts/ralph/
+ cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
  mkdir -p scripts/ralph/hooks
- cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" scripts/ralph/hooks/
- chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/hooks/ralph-guard.py
+ cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" "$PLUGIN_ROOT/scripts/hooks/ralph-guard" scripts/ralph/hooks/
+ chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/hooks/ralph-guard.py scripts/ralph/hooks/ralph-guard
 
  # Restore config.env
  cp /tmp/ralph-config-backup.env scripts/ralph/config.env
@@ -103,9 +103,9 @@ PLUGIN_ROOT="$HOME/.codex"
  ```bash
  mkdir -p scripts/ralph/runs scripts/ralph/hooks
  cp -R "~/.codex/templates/flow-next-ralph-init/." scripts/ralph/
- cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.py" scripts/ralph/
- cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" scripts/ralph/hooks/
- chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/hooks/ralph-guard.py
+ cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
+ cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" "$PLUGIN_ROOT/scripts/hooks/ralph-guard" scripts/ralph/hooks/
+ chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/hooks/ralph-guard.py scripts/ralph/hooks/ralph-guard
  ```
  Note: `cp -R templates/.` copies all files including dotfiles (.gitignore).
 

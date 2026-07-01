@@ -5397,6 +5397,154 @@ def _ensure_flow_gitignore(flow_dir: Path) -> bool:
     return True
 
 
+# fn-77.3: in-module launcher bodies for `flowctl init` self-heal. flowctl.py
+# runs from .flow/bin/flowctl.py at runtime with NO plugin-root / template on
+# disk, so `init` re-stamps the .flow/bin/ launchers from these constants (not
+# a cp). init runs INSIDE flowctl.py, so it never needs the (possibly broken)
+# bash launcher itself — a broken .flow/bin/flowctl is reached only via a
+# working entrypoint (plugin auto-update, the .cmd, or `py -3
+# .flow/bin/flowctl.py init`); this just refreshes the on-disk copies.
+#
+# DRIFT GUARD: LAUNCHER_SH / LAUNCHER_CMD MUST stay byte-identical to the
+# committed sources plugins/flow-next/scripts/flowctl and
+# plugins/flow-next/scripts/flowctl.cmd. tests/test_init_stamp_launchers.py
+# asserts that equality — edit both sides together. LAUNCHER_SH uses LF
+# endings; LAUNCHER_CMD is stored LF here but written to disk as CRLF (a
+# Windows batch file) by _stamp_flow_bin_launchers.
+LAUNCHER_SH = r'''#!/bin/bash
+# flowctl wrapper — invokes flowctl.py from the same directory via a probed
+# Python interpreter.
+#
+# SELF-CONTAINED: this launcher does NOT source scripts/lib/pick-python.sh —
+# installed copies (.flow/bin/flowctl, scripts/ralph/flowctl) can't assume that
+# path is reachable. Keep this inline probe in sync with the shared resolver at
+# plugins/flow-next/scripts/lib/pick-python.sh.
+#
+# Probe = functionality, not presence: each candidate must actually run
+# `<cand> -c "import sys"` and exit 0, so the Windows Store `python3` App
+# Execution Alias stub (prints "Python was not found", exits 9009) is skipped
+# even though it is present on PATH. Candidate order:
+#   $PYTHON_BIN (scalar override) -> py -3 -> python3 -> python
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+FLOW_PY=()
+for _cand in "${PYTHON_BIN:-}" "py -3" "python3" "python"; do
+  [ -n "$_cand" ] || continue
+  # Intentional word-split so the two-word `py -3` becomes two argv elements.
+  read -r -a _argv <<< "$_cand"
+  [ "${#_argv[@]}" -gt 0 ] || continue
+  if "${_argv[@]}" -c "import sys" >/dev/null 2>&1; then
+    FLOW_PY=("${_argv[@]}")
+    break
+  fi
+done
+
+if [ "${#FLOW_PY[@]}" -eq 0 ]; then
+  echo "flowctl: no working Python interpreter found (tried \$PYTHON_BIN, py -3, python3, python)." >&2
+  echo "  On Windows, 'python3' may be the disabled Microsoft Store alias stub;" >&2
+  echo "  install python.org Python (or the py launcher), or set PYTHON_BIN to a working interpreter." >&2
+  exit 1
+fi
+
+exec "${FLOW_PY[@]}" "$SCRIPT_DIR/flowctl.py" "$@"
+'''
+
+LAUNCHER_CMD = '''@ECHO OFF
+REM flowctl.cmd -- Windows batch launcher for cmd.exe / PowerShell (Claude
+REM Desktop, native Codex, native Cursor). Invokes flowctl.py from this
+REM directory via a probed Python interpreter. Companion to the extensionless
+REM bash `flowctl` launcher (Git Bash / WSL / macOS / Linux); PATHEXT resolves
+REM `flowctl` to this file in cmd/PowerShell.
+REM
+REM Probe = functionality, not presence: each candidate must actually run
+REM `<cand> -c "import sys"` and exit 0, so the Microsoft Store `python3` App
+REM Execution Alias stub (prints "Python was not found", exits 9009) is skipped
+REM even though it is on PATH. Candidate order mirrors the bash launcher:
+REM   %PYTHON_BIN% (command name only) -> py -3 -> python3 -> python
+REM Keep this probe in sync with plugins/flow-next/scripts/lib/pick-python.sh.
+GOTO :start
+
+:find_dp0
+SET "dp0=%~dp0"
+EXIT /b
+
+:start
+SETLOCAL
+CALL :find_dp0
+
+SET "_prog="
+
+REM %PYTHON_BIN% is honored as a COMMAND NAME ONLY (e.g. python3.12, py) -- no
+REM quoted paths-with-spaces / embedded args, which keeps batch quoting trivial.
+IF DEFINED PYTHON_BIN (
+  "%PYTHON_BIN%" -c "import sys" >NUL 2>&1 && SET "_prog=%PYTHON_BIN%"
+)
+IF NOT DEFINED _prog (
+  py -3 -c "import sys" >NUL 2>&1 && SET "_prog=py -3"
+)
+IF NOT DEFINED _prog (
+  python3 -c "import sys" >NUL 2>&1 && SET "_prog=python3"
+)
+IF NOT DEFINED _prog (
+  python -c "import sys" >NUL 2>&1 && SET "_prog=python"
+)
+
+IF NOT DEFINED _prog (
+  ECHO flowctl: no working Python interpreter found ^(tried PYTHON_BIN, py -3, python3, python^). 1>&2
+  ECHO   On Windows, 'python3' may be the disabled Microsoft Store alias stub; 1>&2
+  ECHO   install python.org Python ^(or the py launcher^), or set PYTHON_BIN to a working interpreter. 1>&2
+  EXIT /b 1
+)
+
+REM %_prog% is intentionally UNQUOTED so a two-word `py -3` expands to two argv
+REM words; this is why %PYTHON_BIN% must be a command name only. Args (%*) and
+REM the dp0 path are quoted so spaced/paren'd install paths survive.
+%_prog% "%dp0%flowctl.py" %*
+EXIT /b %errorlevel%
+'''
+
+
+def _stamp_flow_bin_launchers(flow_dir: Path) -> list:
+    """Re-stamp .flow/bin/flowctl (+ .cmd) from the in-module launcher constants
+    so existing installs self-heal a pre-fix (bare `exec python3`) launcher on
+    the next `init`. Idempotent: writes each file only when absent or when its
+    bytes differ (.flow/bin is tracked — avoid churn). Returns an action string
+    per real change only; a no-op run returns [].
+
+    fn-77 impl-review: guarded on the sibling target — only stamps when
+    .flow/bin/flowctl.py already exists. The self-heal use case is an existing
+    install that has flowctl.py but a stale/broken launcher; a bare/fresh `init`
+    (or a /flow-next:setup that aborts before copying flowctl.py) must NOT leave
+    launchers whose target is missing — that full install is setup's job."""
+    actions = []
+    bin_dir = flow_dir / "bin"
+    # No target to launch → don't stamp orphan launchers. (If flowctl.py is
+    # present, bin_dir necessarily exists, so no mkdir is needed here.)
+    if not (bin_dir / "flowctl.py").exists():
+        return actions
+
+    sh_bytes = LAUNCHER_SH.encode("utf-8")
+    # .cmd is a Windows batch file: store LF in-module, write CRLF to disk.
+    cmd_bytes = LAUNCHER_CMD.encode("utf-8").replace(b"\n", b"\r\n")
+
+    sh_path = bin_dir / "flowctl"
+    if not sh_path.exists() or sh_path.read_bytes() != sh_bytes:
+        sh_path.write_bytes(sh_bytes)
+        actions.append("stamped bin/flowctl")
+    # Preserve the exec bit best-effort; harmless no-op on NTFS / when already +x.
+    try:
+        sh_path.chmod(sh_path.stat().st_mode | 0o111)
+    except OSError:
+        pass
+
+    cmd_path = bin_dir / "flowctl.cmd"
+    if not cmd_path.exists() or cmd_path.read_bytes() != cmd_bytes:
+        cmd_path.write_bytes(cmd_bytes)
+        actions.append("stamped bin/flowctl.cmd")
+
+    return actions
+
+
 def cmd_init(args: argparse.Namespace) -> None:
     """Initialize or upgrade .flow/ directory structure (idempotent)."""
     flow_dir = get_flow_dir()
@@ -5411,6 +5559,14 @@ def cmd_init(args: argparse.Namespace) -> None:
         if not dir_path.exists():
             dir_path.mkdir(parents=True)
             actions.append(f"created {subdir}/")
+
+    # fn-77.3: (re-)stamp .flow/bin launchers so existing installs self-heal a
+    # pre-fix `exec python3` launcher without a full /flow-next:setup re-run.
+    # Emitted from in-module constants (not cp — no plugin-root on disk here);
+    # idempotent (writes only on content diff), so no tracked-file churn.
+    # No-op unless .flow/bin/flowctl.py is already present (fn-77 impl-review):
+    # a bare/fresh init must not leave launchers pointing at a missing target.
+    actions.extend(_stamp_flow_bin_launchers(flow_dir))
 
     # fn-43: write .flow/.gitignore so users don't accidentally commit
     # migration transients (.backup-pre-1.0/, .banner-acknowledged, etc.)

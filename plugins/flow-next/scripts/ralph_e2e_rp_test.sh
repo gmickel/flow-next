@@ -4,6 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Python interpreter resolution via the shared functionality probe (skips the
+# Windows Store python3 alias stub; fills the FLOW_PY array). See lib/pick-python.sh.
+# shellcheck source=lib/pick-python.sh
+. "$SCRIPT_DIR/lib/pick-python.sh"
+pick_python || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
+
 # Safety: never run tests from the main plugin repo
 if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-next/.claude-plugin/plugin.json" ]]; then
   echo "ERROR: refusing to run from main plugin repo. Run from any other directory." >&2
@@ -23,7 +29,7 @@ fail() { echo "ralph_e2e_rp: $*" >&2; exit 1; }
 run_with_timeout() {
   local timeout_s="$1"
   shift
-  python3 - "$timeout_s" "$@" <<'PY'
+  "${FLOW_PY[@]}" - "$timeout_s" "$@" <<'PY'
 import subprocess, sys
 try:
     timeout = float(sys.argv[1])
@@ -65,7 +71,7 @@ retry_cmd() {
 }
 
 swap_tmp_root() {
-  python3 - "$1" <<'PY'
+  "${FLOW_PY[@]}" - "$1" <<'PY'
 import sys
 path = sys.argv[1]
 if path.startswith("/private/tmp/"):
@@ -96,7 +102,7 @@ latest_jsonl() {
 }
 
 new_session_id() {
-  python3 - <<'PY'
+  "${FLOW_PY[@]}" - <<'PY'
 import uuid
 print(uuid.uuid4())
 PY
@@ -165,7 +171,7 @@ cp "$PLUGIN_ROOT/scripts/flowctl" scripts/ralph/flowctl
 chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl
 FLOWCTL="scripts/ralph/flowctl"
 
-python3 - <<'PY'
+"${FLOW_PY[@]}" - <<'PY'
 from pathlib import Path
 import re
 cfg = Path("scripts/ralph/config.env")
@@ -326,7 +332,7 @@ EOF
 fi
 CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh
 
-python3 - <<'PY'
+"${FLOW_PY[@]}" - <<'PY'
 import json
 from pathlib import Path
 for tid in ["fn-1.1", "fn-2.1"]:

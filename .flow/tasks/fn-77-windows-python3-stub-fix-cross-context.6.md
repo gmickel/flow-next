@@ -35,9 +35,8 @@ Document the fix + immediate workaround + broken-install bootstrap, fix the port
 - [ ] flow-next.dev noted as a follow-up (not done in-repo)
 
 ## Done summary
-TBD
-
+Documented the fn-77 Windows `python3` Store-alias-stub fix (R7 + R11): new troubleshooting.md section (probe fix + both recovery paths — re-stamp via `py -3 .flow/bin/flowctl.py init` and the disable-App-Execution-Aliases workaround), a "Windows: Python discovery" subsection in platforms.md (probe order, `flowctl.cmd` dual launcher, alias pitfall, "Ralph requires Git Bash on Windows") plus a Python 3.8+ caveat, `flowctl.cmd` added to the flowctl.md `.flow/bin/` layout with the `init` self-heal note, a `py`-launcher note on the README requirement line, an interpreter-probe replacement for the bare `python3 flowctl.py` in ci-workflow-example.yml, and a fresh `## Unreleased` / `### Fixed` CHANGELOG entry. Docs-only, no version bump (batched). flow-next.dev docs are a separate out-of-repo downstream follow-up per CLAUDE.md.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: b372067b70c83d9be4b7fa34766b1e7398b1a397
+- Tests: bash plugins/flow-next/scripts/smoke_test.sh (138 passed / 0 failed), bash plugins/flow-next/scripts/glossary_smoke_test.sh (80 passed / 0 failed), python3 -c 'import yaml; yaml.safe_load(open("plugins/flow-next/docs/ci-workflow-example.yml"))' (parses OK)
 - PRs:

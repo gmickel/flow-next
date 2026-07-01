@@ -14,17 +14,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-pick_python() {
-  if [[ -n "${PYTHON_BIN:-}" ]]; then
-    command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
-  fi
-  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
-  if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
-  echo ""
-}
-
-PYTHON_BIN="$(pick_python)"
-[[ -n "$PYTHON_BIN" ]] || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
+# shellcheck source=lib/pick-python.sh
+. "$SCRIPT_DIR/lib/pick-python.sh"
+pick_python || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
 
 # Safety: never run from the main plugin repo (matches sibling smoke scripts).
 if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-next/.claude-plugin/plugin.json" ]]; then
@@ -68,7 +60,7 @@ fail() {
 # --- helper: assert receipt JSON has / lacks a key ---
 assert_has_key() {
   local file="$1" key="$2" label="$3"
-  if "$PYTHON_BIN" -c "import json,sys; d=json.load(open('$file')); sys.exit(0 if '$key' in d else 1)"; then
+  if "${FLOW_PY[@]}" -c "import json,sys; d=json.load(open('$file')); sys.exit(0 if '$key' in d else 1)"; then
     ok "$label has key '$key'"
   else
     fail "$label missing key '$key'"
@@ -78,7 +70,7 @@ assert_has_key() {
 
 assert_lacks_key() {
   local file="$1" key="$2" label="$3"
-  if "$PYTHON_BIN" -c "import json,sys; d=json.load(open('$file')); sys.exit(0 if '$key' not in d else 1)"; then
+  if "${FLOW_PY[@]}" -c "import json,sys; d=json.load(open('$file')); sys.exit(0 if '$key' not in d else 1)"; then
     ok "$label lacks key '$key' (default-shape regression)"
   else
     fail "$label unexpectedly carries key '$key'"
@@ -89,7 +81,7 @@ assert_lacks_key() {
 assert_eq_jq() {
   local file="$1" expr="$2" expected="$3" label="$4"
   local actual
-  actual="$("$PYTHON_BIN" -c "import json; d=json.load(open('$file')); print($expr)" 2>&1 || true)"
+  actual="$("${FLOW_PY[@]}" -c "import json; d=json.load(open('$file')); print($expr)" 2>&1 || true)"
   if [[ "$actual" == "$expected" ]]; then
     ok "$label  ($expr == $expected)"
   else
@@ -181,7 +173,7 @@ cat > "$RECEIPT_2B" <<'EOF'
 {"type":"impl_review","id":"fn-32.5-c2b","mode":"codex","verdict":"NEEDS_WORK","session_id":"sess-2b"}
 EOF
 
-"$PYTHON_BIN" - "$SCRIPT_DIR/flowctl.py" "$RECEIPT_2B" <<'PYEOF'
+"${FLOW_PY[@]}" - "$SCRIPT_DIR/flowctl.py" "$RECEIPT_2B" <<'PYEOF'
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("flowctl", sys.argv[1])
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
@@ -201,7 +193,7 @@ RECEIPT_2C="$CASE2_DIR/receipt_2c.json"
 cat > "$RECEIPT_2C" <<'EOF'
 {"type":"impl_review","id":"fn-32.5-c2c","mode":"codex","verdict":"NEEDS_WORK","session_id":"sess-2c"}
 EOF
-"$PYTHON_BIN" - "$SCRIPT_DIR/flowctl.py" "$RECEIPT_2C" <<'PYEOF'
+"${FLOW_PY[@]}" - "$SCRIPT_DIR/flowctl.py" "$RECEIPT_2C" <<'PYEOF'
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("flowctl", sys.argv[1])
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
@@ -238,7 +230,7 @@ cat > "$RECEIPT_3" <<'EOF'
 {"type":"impl_review","id":"fn-32.5-c3","mode":"codex","verdict":"SHIP","session_id":"sess-c3"}
 EOF
 
-"$PYTHON_BIN" - "$SCRIPT_DIR/flowctl.py" "$RECEIPT_3" <<'PYEOF'
+"${FLOW_PY[@]}" - "$SCRIPT_DIR/flowctl.py" "$RECEIPT_3" <<'PYEOF'
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("flowctl", sys.argv[1])
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
@@ -276,7 +268,7 @@ RECEIPT_3B="$CASE3_DIR/receipt_block.json"
 cat > "$RECEIPT_3B" <<'EOF'
 {"type":"impl_review","id":"fn-32.5-c3b","mode":"codex","verdict":"SHIP","session_id":"sess-c3b"}
 EOF
-"$PYTHON_BIN" - "$SCRIPT_DIR/flowctl.py" "$RECEIPT_3B" <<'PYEOF'
+"${FLOW_PY[@]}" - "$SCRIPT_DIR/flowctl.py" "$RECEIPT_3B" <<'PYEOF'
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("flowctl", sys.argv[1])
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
@@ -312,7 +304,7 @@ EOF
 # Simulate the SKILL.md branch: --deep=performance bypasses auto-enable
 # and runs ONLY the listed pass. The smoke layer here tests that the
 # deep-pass receipt writer accepts an arbitrary subset (passes_run=["performance"]).
-"$PYTHON_BIN" - "$SCRIPT_DIR/flowctl.py" "$RECEIPT_4" <<'PYEOF'
+"${FLOW_PY[@]}" - "$SCRIPT_DIR/flowctl.py" "$RECEIPT_4" <<'PYEOF'
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("flowctl", sys.argv[1])
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
@@ -432,7 +424,7 @@ cat > "$RECEIPT_6" <<'EOF'
 EOF
 
 # Phase order: primary (already in receipt) → deep → validate → walkthrough
-"$PYTHON_BIN" - "$SCRIPT_DIR/flowctl.py" "$RECEIPT_6" <<'PYEOF'
+"${FLOW_PY[@]}" - "$SCRIPT_DIR/flowctl.py" "$RECEIPT_6" <<'PYEOF'
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("flowctl", sys.argv[1])
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)

@@ -149,10 +149,13 @@ Copy using Bash `cp` with absolute paths:
 
 ```bash
 cp "${PLUGIN_ROOT}/scripts/flowctl" .flow/bin/flowctl
+cp "${PLUGIN_ROOT}/scripts/flowctl.cmd" .flow/bin/flowctl.cmd
 cp "${PLUGIN_ROOT}/scripts/flowctl.py" .flow/bin/flowctl.py
 cp "${PLUGIN_ROOT}/templates/spec.md" .flow/templates/spec.md
 chmod +x .flow/bin/flowctl
 ```
+
+`flowctl.cmd` is the Windows batch launcher (cmd.exe / PowerShell — Claude Desktop, native Codex, native Cursor); no `chmod +x` needed (PATHEXT resolves it, not the exec bit). The bash `flowctl` and the `.cmd` share one `flowctl.py` target.
 
 `.flow/templates/spec.md` is the canonical 7-section spec scaffold that the AGENTS.md / CLAUDE.md snippet points downstream agents at. Copying it project-local means the path the snippet references resolves without depending on the plugin install location.
 
@@ -651,6 +654,7 @@ Platform: <claude-code|codex|droid>
 
 Installed:
 - .flow/bin/flowctl (v<VERSION>)
+- .flow/bin/flowctl.cmd (Windows PowerShell/cmd launcher)
 - .flow/bin/flowctl.py
 - .flow/templates/spec.md
 - .flow/usage.md

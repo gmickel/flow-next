@@ -21,11 +21,23 @@ jobs:
           python-version: '3.11'
 
       - name: Validate .flow structure
+        # `shell: bash` on every runner (Git Bash ships on GitHub-hosted
+        # windows-latest too), so the interpreter probe below is portable.
+        shell: bash
         run: |
           # Download flowctl (adjust path/method for your setup)
-          # Option 1: If flowctl is in repo
-          # python3 ./scripts/flowctl.py validate --all --json
+          # Option 1: flowctl already in the repo (installed by /flow-next:setup)
+          # ./.flow/bin/flowctl validate --all --json   # dual launcher probes for a working Python
 
-          # Option 2: Download from plugin (example)
+          # Option 2: Download just flowctl.py from the plugin
           curl -sL https://raw.githubusercontent.com/gmickel/gmickel-claude-marketplace/main/plugins/flow-next/scripts/flowctl.py -o flowctl.py
-          python3 flowctl.py validate --all --json
+          # Resolve a REAL interpreter first: on Windows `python3` is often the
+          # Microsoft Store alias stub (prints "Python was not found", exits 9009)
+          # even though it is on PATH, so probe with `-c "import sys"` and prefer
+          # the py launcher. Order matches flowctl's own launcher.
+          PY=""
+          for _cand in "py -3" python3 python; do
+            if $_cand -c "import sys" >/dev/null 2>&1; then PY="$_cand"; break; fi
+          done
+          [ -n "$PY" ] || { echo "no working Python interpreter found" >&2; exit 1; }
+          $PY flowctl.py validate --all --json
