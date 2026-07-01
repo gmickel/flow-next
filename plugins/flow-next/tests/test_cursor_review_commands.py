@@ -440,6 +440,15 @@ class CursorPromptArgvCap(unittest.TestCase):
 
     CAP = flowctl.CURSOR_ARGV_PROMPT_MAX
 
+    def test_dropped_diff_yields_disk_read_pointer_never_empty(self):
+        # Retest finding: when a huge spec/template leaves no budget for the diff,
+        # fit_cursor_diff_to_budget must emit a read-from-disk pointer (never ""),
+        # so <diff_content> always cues the reviewer to read the changed files.
+        near_cap = "x" * (self.CAP - 100)  # budget goes negative → diff dropped
+        out = flowctl.fit_cursor_diff_to_budget(near_cap, "A" * 5000)
+        self.assertNotEqual(out, "")
+        self.assertIn("disk", out.lower())
+
     def test_under_cap_returned_unchanged(self):
         small = "tiny prompt <review_instructions>x</review_instructions>"
         out = flowctl.fit_cursor_prompt_to_budget(

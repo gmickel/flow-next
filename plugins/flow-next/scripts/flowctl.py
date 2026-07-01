@@ -3905,6 +3905,15 @@ _CURSOR_DIFF_TRUNC_MARKER = (
     "read changed files from disk for full context]"
 )
 
+# Placed IN the ``<diff_content>`` slot when the diff can't be embedded at all
+# (huge spec/template leaves no budget): never leave the slot empty, or the
+# reviewer would review branch changes with no diff AND no read-from-disk cue.
+_CURSOR_DIFF_OMITTED_MARKER = (
+    "[diff omitted — too large for cursor's argv limit; "
+    "review the branch changes by reading the changed files from disk "
+    "(run `git diff` / read the files directly)]"
+)
+
 
 def fit_cursor_diff_to_budget(prompt_without_diff: str, diff_content: str) -> str:
     """Trim ``diff_content`` so the final cursor prompt stays under the argv cap.
@@ -3927,10 +3936,13 @@ def fit_cursor_diff_to_budget(prompt_without_diff: str, diff_content: str) -> st
         return diff_content
     keep = budget - len(_CURSOR_DIFF_TRUNC_MARKER)
     if keep <= 0:
-        # No room for any meaningful diff (huge spec/template). Drop the diff
-        # entirely rather than appending a marker that would only grow an
-        # already-tight prompt — cursor reads the changed files from disk anyway.
-        return ""
+        # No room for the actual diff (huge spec/template). Emit a short
+        # read-from-disk pointer INSTEAD of an empty string, so the reviewer is
+        # never handed an empty ``<diff_content>`` with no cue to read the files.
+        # If even this pointer pushes the prompt over the cap,
+        # fit_cursor_prompt_to_budget() (the final backstop) trims and prepends
+        # its own disk-read header.
+        return _CURSOR_DIFF_OMITTED_MARKER
     return diff_content[:keep] + _CURSOR_DIFF_TRUNC_MARKER
 
 
