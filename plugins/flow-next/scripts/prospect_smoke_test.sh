@@ -41,17 +41,9 @@ PLUGIN_ROOT="$(to_winpath "$PLUGIN_ROOT")"
 FLOWCTL_PY="$SCRIPT_DIR/flowctl.py"
 FLOWCTL="$SCRIPT_DIR/flowctl"
 
-pick_python() {
-  if [[ -n "${PYTHON_BIN:-}" ]]; then
-    command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
-  fi
-  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
-  if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
-  echo ""
-}
-
-PYTHON_BIN="$(pick_python)"
-[[ -n "$PYTHON_BIN" ]] || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
+# shellcheck source=lib/pick-python.sh
+. "$SCRIPT_DIR/lib/pick-python.sh"
+pick_python || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
 
 # Safety: never run from the main plugin repo (matches sibling smoke scripts).
 if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-next/.claude-plugin/plugin.json" ]]; then
@@ -130,7 +122,7 @@ assert_grep_re() {
 # Helper: JSON value extraction via python.
 json_get() {
   local file="$1" expr="$2"
-  "$PYTHON_BIN" -c "import json; d=json.load(open(r'$file')); print($expr)" 2>&1 | tr -d '\r' || true
+  "${FLOW_PY[@]}" -c "import json; d=json.load(open(r'$file')); print($expr)" 2>&1 | tr -d '\r' || true
 }
 
 assert_eq_jq() {
@@ -155,7 +147,7 @@ assert_eq_jq() {
 #   $6 = optional extra args:  "stale" | "noflag" | "withfloor"
 synthetic_artifact() {
   local repo="$1" aid="$2" iso="$3" focus="$4" surv="$5" mode="${6:-noflag}"
-  ( cd "$repo" && "$PYTHON_BIN" - "$FLOWCTL_PY" "$aid" "$iso" "$focus" "$surv" "$mode" <<'PYEOF'
+  ( cd "$repo" && "${FLOW_PY[@]}" - "$FLOWCTL_PY" "$aid" "$iso" "$focus" "$surv" "$mode" <<'PYEOF'
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("flowctl", sys.argv[1])
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
@@ -359,7 +351,7 @@ echo -e "${YELLOW}--- Case 4: artifact writer (R4, R13) ---${NC}"
 CASE4_REPO="$TEST_DIR/case4"
 init_test_repo "$CASE4_REPO"
 
-( cd "$CASE4_REPO" && "$PYTHON_BIN" - "$FLOWCTL_PY" "$TODAY" <<'PYEOF'
+( cd "$CASE4_REPO" && "${FLOW_PY[@]}" - "$FLOWCTL_PY" "$TODAY" <<'PYEOF'
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("flowctl", sys.argv[1])
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
@@ -482,7 +474,7 @@ PROMOTE_JSON="$TEST_DIR/case6-promote.json"
 
 # Required JSON keys per task 5 spec: success/epic_id/epic_title/idea/artifact_id/source_link/spec_path/artifact_updated
 for key in success epic_id epic_title idea artifact_id source_link spec_path artifact_updated; do
-  if "$PYTHON_BIN" -c "import json,sys; sys.exit(0 if '$key' in json.load(open('$PROMOTE_JSON')) else 1)"; then
+  if "${FLOW_PY[@]}" -c "import json,sys; sys.exit(0 if '$key' in json.load(open('$PROMOTE_JSON')) else 1)"; then
     ok "Case 6: promote JSON has key '$key'"
   else
     fail "Case 6: promote JSON missing key '$key'"

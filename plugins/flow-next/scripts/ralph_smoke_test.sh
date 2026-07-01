@@ -10,18 +10,11 @@ TEST_DIR="${TEST_DIR:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/ralph-smoke-$$}"
 # Windows accepts forward-slash paths natively; no-op on Linux/macOS.
 TEST_DIR="${TEST_DIR//\\//}"
 
-# Python detection: prefer python3, fallback to python (Windows support, GH-35)
-pick_python() {
-  if [[ -n "${PYTHON_BIN:-}" ]]; then
-    command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
-  fi
-  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
-  if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
-  echo ""
-}
-
-PYTHON_BIN="$(pick_python)"
-[[ -n "$PYTHON_BIN" ]] || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
+# Python interpreter resolution via the shared functionality probe (skips the
+# Windows Store python3 alias stub; fills the FLOW_PY array). See lib/pick-python.sh.
+# shellcheck source=lib/pick-python.sh
+. "$SCRIPT_DIR/lib/pick-python.sh"
+pick_python || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
 
 # Safety: never run tests from the main plugin repo
 if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-next/.claude-plugin/plugin.json" ]]; then
@@ -61,11 +54,17 @@ git add README.md
 git commit -m "chore: init" >/dev/null
 
 scaffold() {
-  mkdir -p scripts/ralph
+  mkdir -p scripts/ralph/hooks
   cp -R "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/." scripts/ralph/
   cp "$PLUGIN_ROOT/scripts/flowctl.py" scripts/ralph/flowctl.py
   cp "$PLUGIN_ROOT/scripts/flowctl" scripts/ralph/flowctl
-  chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl
+  # Shared resolver copied FLAT next to ralph.sh (installed layout) — ralph.sh and
+  # the hook wrapper source it as "$SCRIPT_DIR/pick-python.sh". Mirrors ralph-init.
+  cp "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/pick-python.sh
+  cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" scripts/ralph/hooks/ralph-guard.py
+  cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard" scripts/ralph/hooks/ralph-guard
+  chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl \
+           scripts/ralph/hooks/ralph-guard.py scripts/ralph/hooks/ralph-guard
 }
 
 write_config() {
@@ -77,7 +76,7 @@ write_config() {
   local max_iter="$6"
   local max_turns="$7"
   local max_attempts="$8"
-  "$PYTHON_BIN" - <<'PY' "$plan" "$work" "$completion" "$require" "$branch" "$max_iter" "$max_turns" "$max_attempts"
+  "${FLOW_PY[@]}" - <<'PY' "$plan" "$work" "$completion" "$require" "$branch" "$max_iter" "$max_turns" "$max_attempts"
 from pathlib import Path
 import re, sys
 plan, work, completion, require, branch, max_iter, max_turns, max_attempts = sys.argv[1:9]
@@ -101,14 +100,14 @@ PY
 
 # Extract epic/task ID from JSON output
 extract_id() {
-  "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['id'])"
+  "${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['id'])"
 }
 
 scaffold
 
 echo -e "${YELLOW}--- ralph-init scaffold ---${NC}"
 missing=0
-for f in ralph.sh ralph_once.sh prompt_plan.md prompt_work.md config.env runs/.gitkeep flowctl flowctl.py .gitignore; do
+for f in ralph.sh ralph_once.sh prompt_plan.md prompt_work.md config.env runs/.gitkeep flowctl flowctl.py pick-python.sh hooks/ralph-guard hooks/ralph-guard.py .gitignore; do
   if [[ ! -f "scripts/ralph/$f" ]]; then
     echo -e "${RED}✗${NC} missing scripts/ralph/$f"
     missing=1
@@ -241,14 +240,14 @@ STUB_MODE=success STUB_WRITE_RECEIPT=1 CLAUDE_BIN="$TEST_DIR/bin/claude" scripts
 # Use flowctl show to get merged state (definition + runtime)
 # Note: Definition files don't store status; runtime state is in .git/flow-state/
 for tid in "$TASK2_1" "$TASK2_2"; do
-  status=$(scripts/ralph/flowctl show "$tid" --json | "$PYTHON_BIN" -c "import sys,json; print(json.load(sys.stdin)['status'])")
+  status=$(scripts/ralph/flowctl show "$tid" --json | "${FLOW_PY[@]}" -c "import sys,json; print(json.load(sys.stdin)['status'])")
   if [[ "$status" != "done" ]]; then
     echo "Task $tid status is '$status', expected 'done'" >&2
     exit 1
   fi
 done
 run_dir="$(latest_run_dir)"
-"$PYTHON_BIN" - <<PY "$run_dir" "$EPIC2" "$TASK2_1"
+"${FLOW_PY[@]}" - <<PY "$run_dir" "$EPIC2" "$TASK2_1"
 import json, sys
 from pathlib import Path
 run_dir, epic2, task2_1 = sys.argv[1:4]
@@ -352,7 +351,7 @@ TASK4_1_JSON="$(scripts/ralph/flowctl task create --spec "$EPIC4" --title "Stuck
 TASK4_1="$(echo "$TASK4_1_JSON" | extract_id)"
 write_config "none" "none" "none" "0" "new" "3" "5" "2"
 STUB_MODE=retry CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh >/dev/null
-status=$(scripts/ralph/flowctl show "$TASK4_1" --json | "$PYTHON_BIN" -c "import sys,json; print(json.load(sys.stdin)['status'])")
+status=$(scripts/ralph/flowctl show "$TASK4_1" --json | "${FLOW_PY[@]}" -c "import sys,json; print(json.load(sys.stdin)['status'])")
 if [[ "$status" != "blocked" ]]; then
   echo "Task $TASK4_1 status is '$status', expected 'blocked'" >&2
   exit 1
@@ -403,7 +402,7 @@ set +e
 STUB_MODE=success STUB_EXIT_CODE=1 CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh >/dev/null 2>&1
 rc=$?
 set -e
-status=$(scripts/ralph/flowctl show "$TASK6_1" --json | "$PYTHON_BIN" -c "import sys,json; print(json.load(sys.stdin)['status'])")
+status=$(scripts/ralph/flowctl show "$TASK6_1" --json | "${FLOW_PY[@]}" -c "import sys,json; print(json.load(sys.stdin)['status'])")
 if [[ "$status" == "done" ]]; then
   echo -e "${GREEN}✓${NC} task done + exit 1 -> task completed (rc=$rc)"
   PASS=$((PASS + 1))
@@ -423,7 +422,7 @@ STUB_MODE=success STUB_EXIT_CODE=1 STUB_SKIP_DONE=1 CLAUDE_BIN="$TEST_DIR/bin/cl
 rc=$?
 set -e
 # Should be blocked because task wasn't done AND exit was non-zero
-status=$(scripts/ralph/flowctl show "$TASK7_1" --json | "$PYTHON_BIN" -c "import sys,json; print(json.load(sys.stdin)['status'])")
+status=$(scripts/ralph/flowctl show "$TASK7_1" --json | "${FLOW_PY[@]}" -c "import sys,json; print(json.load(sys.stdin)['status'])")
 if [[ "$status" == "blocked" ]]; then
   echo -e "${GREEN}✓${NC} task not done + exit 1 -> blocked (rc=$rc)"
   PASS=$((PASS + 1))

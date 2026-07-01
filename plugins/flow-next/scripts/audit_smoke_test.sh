@@ -30,17 +30,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 FLOWCTL="$SCRIPT_DIR/flowctl"
 
-pick_python() {
-  if [[ -n "${PYTHON_BIN:-}" ]]; then
-    command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
-  fi
-  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
-  if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
-  echo ""
-}
-
-PYTHON_BIN="$(pick_python)"
-[[ -n "$PYTHON_BIN" ]] || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
+# shellcheck source=lib/pick-python.sh
+. "$SCRIPT_DIR/lib/pick-python.sh"
+pick_python || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
 
 # Safety: never run from the main plugin repo (matches sibling smoke scripts).
 if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-next/.claude-plugin/plugin.json" ]]; then
@@ -117,7 +109,7 @@ assert_grep_re() {
 # JSON value extraction via python.
 json_get() {
   local file="$1" expr="$2"
-  "$PYTHON_BIN" -c "import json; d=json.load(open(r'$file')); print($expr)" 2>&1 | tr -d '\r' || true
+  "${FLOW_PY[@]}" -c "import json; d=json.load(open(r'$file')); print($expr)" 2>&1 | tr -d '\r' || true
 }
 
 assert_eq_jq() {
@@ -158,7 +150,7 @@ seed_entry() {
   if [[ -n "$tags" ]];   then args+=(--tags "$tags"); fi
   if [[ "$overlap" == "no-overlap" ]]; then args+=(--no-overlap-check); fi
   ( cd "$dir" && "$FLOWCTL" memory add "${args[@]}" 2>/dev/null ) \
-    | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["entry_id"])'
+    | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["entry_id"])'
 }
 
 echo -e "${YELLOW}=== audit smoke tests (fn-34.3) ===${NC}"
@@ -191,7 +183,7 @@ echo -e "${YELLOW}--- Case 1: mark-stale roundtrip ---${NC}"
 # Snapshot body before mark-stale to verify it stays untouched.
 BODY_BEFORE="$TEST_DIR/case1-body-before.txt"
 ( cd "$REPO" && "$FLOWCTL" memory read "$ENTRY_A" --json 2>/dev/null ) \
-  | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin).get("body",""))' \
+  | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin).get("body",""))' \
   > "$BODY_BEFORE"
 
 ( cd "$REPO" && "$FLOWCTL" memory mark-stale "$ENTRY_A" --reason "module renamed" >/dev/null )
@@ -208,7 +200,7 @@ assert_eq_jq "$READ_JSON" "d['frontmatter']['audit_notes']" "module renamed" \
   "Case 1: audit_notes carries --reason verbatim"
 
 BODY_AFTER="$TEST_DIR/case1-body-after.txt"
-"$PYTHON_BIN" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("body",""))' "$READ_JSON" \
+"${FLOW_PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("body",""))' "$READ_JSON" \
   > "$BODY_AFTER"
 
 if diff -q "$BODY_BEFORE" "$BODY_AFTER" >/dev/null 2>&1; then
@@ -247,7 +239,7 @@ JSON_OUT="$TEST_DIR/case3-mark-stale.json"
 
 # Required keys per fn-34.2 ship: id, path, status, last_audited, audit_notes
 for key in id path status last_audited audit_notes; do
-  if "$PYTHON_BIN" -c "import json,sys; sys.exit(0 if '$key' in json.load(open('$JSON_OUT')) else 1)"; then
+  if "${FLOW_PY[@]}" -c "import json,sys; sys.exit(0 if '$key' in json.load(open('$JSON_OUT')) else 1)"; then
     ok "Case 3: JSON has key '$key'"
   else
     fail "Case 3: JSON missing key '$key'"
@@ -363,7 +355,7 @@ SEARCH_JSON="$TEST_DIR/case8-search.json"
   || fail "Case 8: search invocation failed"
 
 # Stale ENTRY_C should NOT appear in default search.
-if "$PYTHON_BIN" -c "
+if "${FLOW_PY[@]}" -c "
 import json,sys
 d=json.load(open('$SEARCH_JSON'))
 matches = d.get('matches', d.get('results', []))
@@ -385,7 +377,7 @@ SEARCH_JSON="$TEST_DIR/case9-search.json"
 ( cd "$REPO" && "$FLOWCTL" memory search webpack --status stale --json > "$SEARCH_JSON" ) \
   || fail "Case 9: search --status stale invocation failed"
 
-if "$PYTHON_BIN" -c "
+if "${FLOW_PY[@]}" -c "
 import json,sys
 d=json.load(open('$SEARCH_JSON'))
 matches = d.get('matches', d.get('results', []))
@@ -418,7 +410,7 @@ ENTRY_D="$(seed_entry "$REPO" bug runtime-errors "Auth callback never resolves o
 # default — only D
 SEARCH_JSON="$TEST_DIR/case10-default.json"
 ( cd "$REPO" && "$FLOWCTL" memory search auth --json > "$SEARCH_JSON" )
-if "$PYTHON_BIN" -c "
+if "${FLOW_PY[@]}" -c "
 import json,sys
 d=json.load(open('$SEARCH_JSON'))
 matches = d.get('matches', d.get('results', []))
@@ -434,7 +426,7 @@ fi
 # --status all — both A and D
 SEARCH_JSON="$TEST_DIR/case10-all.json"
 ( cd "$REPO" && "$FLOWCTL" memory search auth --status all --json > "$SEARCH_JSON" )
-if "$PYTHON_BIN" -c "
+if "${FLOW_PY[@]}" -c "
 import json,sys
 d=json.load(open('$SEARCH_JSON'))
 matches = d.get('matches', d.get('results', []))
@@ -456,7 +448,7 @@ LIST_JSON="$TEST_DIR/case11-list.json"
 ( cd "$REPO" && "$FLOWCTL" memory list --status stale --json > "$LIST_JSON" )
 
 # A and C are stale at this point.
-if "$PYTHON_BIN" -c "
+if "${FLOW_PY[@]}" -c "
 import json,sys
 d=json.load(open('$LIST_JSON'))
 items = d.get('entries', d.get('matches', []))

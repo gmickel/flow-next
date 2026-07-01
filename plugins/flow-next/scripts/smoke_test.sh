@@ -18,18 +18,11 @@ SCRIPT_DIR="$(to_winpath "$SCRIPT_DIR")"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PLUGIN_ROOT="$(to_winpath "$PLUGIN_ROOT")"
 
-# Python detection: prefer python3, fallback to python (Windows support, GH-35)
-pick_python() {
-  if [[ -n "${PYTHON_BIN:-}" ]]; then
-    command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
-  fi
-  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
-  if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
-  echo ""
-}
-
-PYTHON_BIN="$(pick_python)"
-[[ -n "$PYTHON_BIN" ]] || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
+# Python interpreter resolution via the shared functionality probe (skips the
+# Windows Store python3 alias stub; fills the FLOW_PY array). See lib/pick-python.sh.
+# shellcheck source=lib/pick-python.sh
+. "$SCRIPT_DIR/lib/pick-python.sh"
+pick_python || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
 
 # Safety: never run tests from the main plugin repo
 if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-next/.claude-plugin/plugin.json" ]]; then
@@ -90,7 +83,7 @@ echo -e "${YELLOW}--- idempotent init ---${NC}"
 
 # Test 1: Re-run init (no changes)
 init_result="$(scripts/flowctl init --json)"
-init_actions="$(echo "$init_result" | "$PYTHON_BIN" -c 'import json,sys; print(len(json.load(sys.stdin).get("actions", [])))')"
+init_actions="$(echo "$init_result" | "${FLOW_PY[@]}" -c 'import json,sys; print(len(json.load(sys.stdin).get("actions", [])))')"
 if [[ "$init_actions" == "0" ]]; then
   echo -e "${GREEN}✓${NC} init idempotent (no changes on re-run)"
   PASS=$((PASS + 1))
@@ -102,7 +95,7 @@ fi
 # Test 2: Config upgrade (old config without planSync)
 echo '{"memory":{"enabled":true}}' > .flow/config.json
 init_upgrade="$(scripts/flowctl init --json)"
-upgrade_msg="$(echo "$init_upgrade" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin).get("message", ""))')"
+upgrade_msg="$(echo "$init_upgrade" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin).get("message", ""))')"
 if [[ "$upgrade_msg" == *"upgraded config.json"* ]]; then
   echo -e "${GREEN}✓${NC} init upgrades config (adds missing keys)"
   PASS=$((PASS + 1))
@@ -112,7 +105,7 @@ else
 fi
 
 # Test 3: Verify existing values preserved after upgrade
-memory_val="$(scripts/flowctl config get memory.enabled --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin).get("value"))')"
+memory_val="$(scripts/flowctl config get memory.enabled --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin).get("value"))')"
 if [[ "$memory_val" == "True" ]]; then
   echo -e "${GREEN}✓${NC} init preserves existing config values"
   PASS=$((PASS + 1))
@@ -122,7 +115,7 @@ else
 fi
 
 # Test 4: Verify new defaults added (memory + planSync now default to True)
-plansync_val="$(scripts/flowctl config get planSync.enabled --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin).get("value"))')"
+plansync_val="$(scripts/flowctl config get planSync.enabled --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin).get("value"))')"
 if [[ "$plansync_val" == "True" ]]; then
   echo -e "${GREEN}✓${NC} init adds new default keys"
   PASS=$((PASS + 1))
@@ -137,12 +130,12 @@ scripts/flowctl config set memory.enabled false --json >/dev/null
 echo -e "${YELLOW}--- next: plan/work/none + priority ---${NC}"
 # Capture epic ID from create output (fn-N-xxx format)
 EPIC1_JSON="$(scripts/flowctl spec create --title "Epic One" --json)"
-EPIC1="$(echo "$EPIC1_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+EPIC1="$(echo "$EPIC1_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 scripts/flowctl task create --spec "$EPIC1" --title "Low pri" --priority 5 --json >/dev/null
 scripts/flowctl task create --spec "$EPIC1" --title "High pri" --priority 1 --json >/dev/null
 
 plan_json="$(scripts/flowctl next --require-plan-review --json)"
-"$PYTHON_BIN" - "$plan_json" "$EPIC1" <<'PY'
+"${FLOW_PY[@]}" - "$plan_json" "$EPIC1" <<'PY'
 import json, sys
 data = json.loads(sys.argv[1])
 expected_epic = sys.argv[2]
@@ -154,7 +147,7 @@ PASS=$((PASS + 1))
 
 scripts/flowctl spec set-plan-review-status "$EPIC1" --status ship --json >/dev/null
 work_json="$(scripts/flowctl next --json)"
-"$PYTHON_BIN" - "$work_json" "$EPIC1" <<'PY'
+"${FLOW_PY[@]}" - "$work_json" "$EPIC1" <<'PY'
 import json, sys
 data = json.loads(sys.argv[1])
 expected_epic = sys.argv[2]
@@ -169,7 +162,7 @@ scripts/flowctl done "${EPIC1}.2" --summary-file "$TEST_DIR/summary.md" --eviden
 scripts/flowctl start "${EPIC1}.1" --json >/dev/null
 scripts/flowctl done "${EPIC1}.1" --summary-file "$TEST_DIR/summary.md" --evidence-json "$TEST_DIR/evidence.json" --json >/dev/null
 none_json="$(scripts/flowctl next --json)"
-"$PYTHON_BIN" - <<'PY' "$none_json"
+"${FLOW_PY[@]}" - <<'PY' "$none_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["status"] == "none"
@@ -251,7 +244,7 @@ rm -f ".flow/tasks/${EPIC1}.1-evidence.json" ".flow/tasks/${EPIC1}.1-summary.jso
 
 echo -e "${YELLOW}--- plan_review_status default ---${NC}"
 EPIC1_JSON_PATH="$(spec_json_path "$EPIC1")"
-"$PYTHON_BIN" - "$EPIC1_JSON_PATH" <<'PY'
+"${FLOW_PY[@]}" - "$EPIC1_JSON_PATH" <<'PY'
 import json, sys
 from pathlib import Path
 path = Path(sys.argv[1])
@@ -262,7 +255,7 @@ data.pop("branch_name", None)
 path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 PY
 show_json="$(scripts/flowctl show "$EPIC1" --json)"
-"$PYTHON_BIN" - <<'PY' "$show_json"
+"${FLOW_PY[@]}" - <<'PY' "$show_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data.get("plan_review_status") == "unknown"
@@ -275,7 +268,7 @@ PASS=$((PASS + 1))
 echo -e "${YELLOW}--- branch_name set ---${NC}"
 scripts/flowctl spec set-branch "$EPIC1" --branch "${EPIC1}-epic" --json >/dev/null
 show_json="$(scripts/flowctl show "$EPIC1" --json)"
-"$PYTHON_BIN" - "$show_json" "$EPIC1" <<'PY'
+"${FLOW_PY[@]}" - "$show_json" "$EPIC1" <<'PY'
 import json, sys
 data = json.loads(sys.argv[1])
 expected_branch = f"{sys.argv[2]}-epic"
@@ -287,7 +280,7 @@ PASS=$((PASS + 1))
 echo -e "${YELLOW}--- epic set-title ---${NC}"
 # Create epic with tasks for rename test
 RENAME_EPIC_JSON="$(scripts/flowctl spec create --title "Old Title" --json)"
-RENAME_EPIC="$(echo "$RENAME_EPIC_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+RENAME_EPIC="$(echo "$RENAME_EPIC_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 scripts/flowctl task create --spec "$RENAME_EPIC" --title "First task" --json >/dev/null
 scripts/flowctl task create --spec "$RENAME_EPIC" --title "Second task" --json >/dev/null
 # Add task dependency within epic
@@ -295,7 +288,7 @@ scripts/flowctl dep add "${RENAME_EPIC}.2" "${RENAME_EPIC}.1" --json >/dev/null
 
 # Rename epic
 rename_result="$(scripts/flowctl spec set-title "$RENAME_EPIC" --title "New Shiny Title" --json)"
-NEW_EPIC="$(echo "$rename_result" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["new_id"])')"
+NEW_EPIC="$(echo "$rename_result" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["new_id"])')"
 
 # Test 1: Verify old files are gone (probe both legacy + canonical paths)
 if [[ ! -f ".flow/epics/${RENAME_EPIC}.json" ]] && [[ ! -f ".flow/specs/${RENAME_EPIC}.json" ]] && [[ ! -f ".flow/specs/${RENAME_EPIC}.md" ]]; then
@@ -317,7 +310,7 @@ else
 fi
 
 # Test 3: Verify epic JSON content updated
-"$PYTHON_BIN" - "$NEW_EPIC" "$NEW_EPIC_JSON_PATH" <<'PY'
+"${FLOW_PY[@]}" - "$NEW_EPIC" "$NEW_EPIC_JSON_PATH" <<'PY'
 import json, sys
 from pathlib import Path
 new_id = sys.argv[1]
@@ -341,7 +334,7 @@ fi
 # Test 5: Verify task JSON content updated (including depends_on).
 # fn-43.2: persisted task JSON uses canonical "spec" key; legacy "epic"
 # only present in 0.x files that haven't been rewritten. Accept either.
-"$PYTHON_BIN" - "$NEW_EPIC" <<'PY'
+"${FLOW_PY[@]}" - "$NEW_EPIC" <<'PY'
 import json, sys
 from pathlib import Path
 new_id = sys.argv[1]
@@ -360,7 +353,7 @@ PASS=$((PASS + 1))
 
 # Test 6: Verify show works with new ID
 show_json="$(scripts/flowctl show "$NEW_EPIC" --json)"
-"$PYTHON_BIN" - "$show_json" "$NEW_EPIC" <<'PY'
+"${FLOW_PY[@]}" - "$show_json" "$NEW_EPIC" <<'PY'
 import json, sys
 data = json.loads(sys.argv[1])
 expected_id = sys.argv[2]
@@ -372,17 +365,17 @@ PASS=$((PASS + 1))
 
 # Test 7: depends_on_epics update in other epics
 DEP_EPIC_JSON="$(scripts/flowctl spec create --title "Depends on renamed" --json)"
-DEP_EPIC="$(echo "$DEP_EPIC_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+DEP_EPIC="$(echo "$DEP_EPIC_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 scripts/flowctl spec add-dep "$DEP_EPIC" "$NEW_EPIC" --json >/dev/null
 # Rename the dependency
 rename2_result="$(scripts/flowctl spec set-title "$NEW_EPIC" --title "Final Title" --json)"
-FINAL_EPIC="$(echo "$rename2_result" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["new_id"])')"
+FINAL_EPIC="$(echo "$rename2_result" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["new_id"])')"
 # Verify DEP_EPIC's depends_on_epics was updated. Use `flowctl show --json`
 # instead of reading .flow/epics/<id>.json directly so the assertion works
 # regardless of whether write went to legacy .flow/epics/ or canonical
 # .flow/specs/ (the on-disk JSON key is still `depends_on_epics` through 1.x).
 DEP_EPIC_SHOW="$(scripts/flowctl show "$DEP_EPIC" --json)"
-"$PYTHON_BIN" - "$FINAL_EPIC" "$DEP_EPIC_SHOW" <<'PY'
+"${FLOW_PY[@]}" - "$FINAL_EPIC" "$DEP_EPIC_SHOW" <<'PY'
 import json, sys
 final_epic = sys.argv[1]
 data = json.loads(sys.argv[2])
@@ -394,7 +387,7 @@ PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- block + validate + epic close ---${NC}"
 EPIC2_JSON="$(scripts/flowctl spec create --title "Epic Two" --json)"
-EPIC2="$(echo "$EPIC2_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+EPIC2="$(echo "$EPIC2_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 scripts/flowctl task create --spec "$EPIC2" --title "Block me" --json >/dev/null
 scripts/flowctl task create --spec "$EPIC2" --title "Other" --json >/dev/null
 printf "Blocked by test\n" > "$TEST_DIR/reason.md"
@@ -432,7 +425,7 @@ ready_spec_path() {
 }
 EPIC2_PATH="$(ready_spec_path "$EPIC2")"
 show_json="$(scripts/flowctl show "$EPIC2" --json)"
-"$PYTHON_BIN" - "$show_json" "$EPIC2_PATH" <<'PY'
+"${FLOW_PY[@]}" - "$show_json" "$EPIC2_PATH" <<'PY'
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["ready"] is False, f"Expected explicit false, got {data.get('ready')!r}"
@@ -443,10 +436,10 @@ echo -e "${GREEN}✓${NC} lazy ready default (explicit false, no key on disk)"
 PASS=$((PASS + 1))
 
 # unready on a never-ready spec is a byte-identical no-op (no adoption churn).
-before_bytes="$("$PYTHON_BIN" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$EPIC2_PATH")"
+before_bytes="$("${FLOW_PY[@]}" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$EPIC2_PATH")"
 noop_json="$(scripts/flowctl spec unready "$EPIC2" --json)"
-after_bytes="$("$PYTHON_BIN" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$EPIC2_PATH")"
-"$PYTHON_BIN" - "$noop_json" <<'PY'
+after_bytes="$("${FLOW_PY[@]}" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$EPIC2_PATH")"
+"${FLOW_PY[@]}" - "$noop_json" <<'PY'
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["changed"] is False, f"Expected no-op, got {data}"
@@ -490,7 +483,7 @@ fi
 echo -e "${YELLOW}--- config set/get ---${NC}"
 scripts/flowctl config set memory.enabled true --json >/dev/null
 config_json="$(scripts/flowctl config get memory.enabled --json)"
-"$PYTHON_BIN" - <<'PY' "$config_json"
+"${FLOW_PY[@]}" - <<'PY' "$config_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["value"] == True, f"Expected True, got {data['value']}"
@@ -500,7 +493,7 @@ PASS=$((PASS + 1))
 
 scripts/flowctl config set memory.enabled false --json >/dev/null
 config_json="$(scripts/flowctl config get memory.enabled --json)"
-"$PYTHON_BIN" - <<'PY' "$config_json"
+"${FLOW_PY[@]}" - <<'PY' "$config_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["value"] == False, f"Expected False, got {data['value']}"
@@ -511,7 +504,7 @@ PASS=$((PASS + 1))
 echo -e "${YELLOW}--- planSync config ---${NC}"
 scripts/flowctl config set planSync.enabled true --json >/dev/null
 config_json="$(scripts/flowctl config get planSync.enabled --json)"
-"$PYTHON_BIN" - <<'PY' "$config_json"
+"${FLOW_PY[@]}" - <<'PY' "$config_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["value"] is True, f"Expected True, got {data['value']}"
@@ -521,7 +514,7 @@ PASS=$((PASS + 1))
 
 scripts/flowctl config set planSync.enabled false --json >/dev/null
 config_json="$(scripts/flowctl config get planSync.enabled --json)"
-"$PYTHON_BIN" - <<'PY' "$config_json"
+"${FLOW_PY[@]}" - <<'PY' "$config_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["value"] is False, f"Expected False, got {data['value']}"
@@ -564,7 +557,7 @@ fi
 
 # fn-30 task 2: --type legacy backcompat auto-maps to --track/--category with stderr warning.
 add_json="$(scripts/flowctl memory add --type pitfall "Test pitfall entry" --json 2>/dev/null)"
-"$PYTHON_BIN" - <<'PY' "$add_json"
+"${FLOW_PY[@]}" - <<'PY' "$add_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["success"] is True
@@ -600,7 +593,7 @@ add_json="$(scripts/flowctl memory add \
   --root-cause "Missing optional chaining" \
   --resolution-type fix \
   --json 2>/dev/null)"
-"$PYTHON_BIN" - <<'PY' "$add_json"
+"${FLOW_PY[@]}" - <<'PY' "$add_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["success"] is True
@@ -620,7 +613,7 @@ add_json="$(scripts/flowctl memory add \
   --tags "auth,nullcheck" \
   --problem-type runtime-error \
   --json 2>/dev/null)"
-"$PYTHON_BIN" - <<'PY' "$add_json"
+"${FLOW_PY[@]}" - <<'PY' "$add_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["success"] is True, data
@@ -638,7 +631,7 @@ add_json="$(scripts/flowctl memory add \
   --tags "auth,nullcheck" \
   --no-overlap-check \
   --json 2>/dev/null)"
-"$PYTHON_BIN" - <<'PY' "$add_json"
+"${FLOW_PY[@]}" - <<'PY' "$add_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["success"] is True, data
@@ -655,7 +648,7 @@ add_json="$(scripts/flowctl memory add \
   --tags "pnpm,tooling" \
   --applies-when "choosing package manager" \
   --json 2>/dev/null)"
-"$PYTHON_BIN" - <<'PY' "$add_json"
+"${FLOW_PY[@]}" - <<'PY' "$add_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["action"] == "created"
@@ -666,7 +659,7 @@ add_json="$(scripts/flowctl memory add \
   --title "Lockfile discipline for pnpm workspaces" \
   --tags "pnpm,workspace" \
   --json 2>/dev/null)"
-"$PYTHON_BIN" - <<'PY' "$add_json"
+"${FLOW_PY[@]}" - <<'PY' "$add_json"
 import json, sys
 data = json.loads(sys.argv[1])
 # Shared tag pnpm + same category = score 2 (moderate).
@@ -710,12 +703,12 @@ add_json="$(printf 'Body from stdin\n' | scripts/flowctl memory add \
   --body-file - \
   --applies-when "always" \
   --json 2>/dev/null)"
-"$PYTHON_BIN" - <<'PY' "$add_json"
+"${FLOW_PY[@]}" - <<'PY' "$add_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["action"] == "created", data
 PY
-stdin_path=$(echo "$add_json" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["path"])')
+stdin_path=$(echo "$add_json" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["path"])')
 if grep -q "Body from stdin" "$stdin_path"; then
   echo -e "${GREEN}✓${NC} memory add --body-file - reads body from stdin"
   PASS=$((PASS + 1))
@@ -726,7 +719,7 @@ fi
 
 # fn-30.3: list / read / search with categorized tree.
 list_json="$(scripts/flowctl memory list --json)"
-"$PYTHON_BIN" - <<'PY' "$list_json"
+"${FLOW_PY[@]}" - <<'PY' "$list_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["success"] is True
@@ -742,7 +735,7 @@ echo -e "${GREEN}✓${NC} memory list returns categorized entries (default --sta
 PASS=$((PASS + 1))
 
 list_json="$(scripts/flowctl memory list --track knowledge --json)"
-"$PYTHON_BIN" - <<'PY' "$list_json"
+"${FLOW_PY[@]}" - <<'PY' "$list_json"
 import json, sys
 data = json.loads(sys.argv[1])
 entries = data["entries"]
@@ -768,7 +761,7 @@ applies_when: "never"
 Body.
 EOF
 stale_json="$(scripts/flowctl memory list --status stale --json)"
-"$PYTHON_BIN" - <<'PY' "$stale_json"
+"${FLOW_PY[@]}" - <<'PY' "$stale_json"
 import json, sys
 data = json.loads(sys.argv[1])
 ids = [e["entry_id"] for e in data["entries"]]
@@ -780,7 +773,7 @@ PASS=$((PASS + 1))
 
 # Read by full id.
 read_json="$(scripts/flowctl memory read knowledge/workflow/stale-example-2026-01-01 --json)"
-"$PYTHON_BIN" - <<'PY' "$read_json"
+"${FLOW_PY[@]}" - <<'PY' "$read_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["entry_id"] == "knowledge/workflow/stale-example-2026-01-01"
@@ -791,7 +784,7 @@ PASS=$((PASS + 1))
 
 # Read by slug+date.
 read_json="$(scripts/flowctl memory read stale-example-2026-01-01 --json)"
-"$PYTHON_BIN" - <<'PY' "$read_json"
+"${FLOW_PY[@]}" - <<'PY' "$read_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["entry_id"].endswith("stale-example-2026-01-01")
@@ -801,7 +794,7 @@ PASS=$((PASS + 1))
 
 # Read by slug only (latest date).
 read_json="$(scripts/flowctl memory read stale-example --json)"
-"$PYTHON_BIN" - <<'PY' "$read_json"
+"${FLOW_PY[@]}" - <<'PY' "$read_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["entry_id"].endswith("stale-example-2026-01-01")
@@ -825,7 +818,7 @@ fi
 # Search with token overlap. Pass --status all because the seeded entry
 # carries `status: stale` and fn-34.2 default-excludes stale from search.
 search_json="$(scripts/flowctl memory search 'stale example' --status all --json)"
-"$PYTHON_BIN" - <<'PY' "$search_json"
+"${FLOW_PY[@]}" - <<'PY' "$search_json"
 import json, sys
 data = json.loads(sys.argv[1])
 matches = data["matches"]
@@ -839,7 +832,7 @@ PASS=$((PASS + 1))
 
 # Search default (no --status) excludes stale entries — fn-34.2 contract.
 search_json="$(scripts/flowctl memory search 'stale example' --json)"
-"$PYTHON_BIN" - <<'PY' "$search_json"
+"${FLOW_PY[@]}" - <<'PY' "$search_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["matches"] == [], f"default search leaked stale entry: {data}"
@@ -849,7 +842,7 @@ PASS=$((PASS + 1))
 
 # Search --track filter.
 search_json="$(scripts/flowctl memory search 'stale example' --track bug --status all --json)"
-"$PYTHON_BIN" - <<'PY' "$search_json"
+"${FLOW_PY[@]}" - <<'PY' "$search_json"
 import json, sys
 data = json.loads(sys.argv[1])
 # No bug-track entry mentions "stale example" → expect no matches.
@@ -873,7 +866,7 @@ legacy entry about null deref in auth
 another legacy pitfall
 EOF
 hint_json="$(scripts/flowctl memory init --json)"
-"$PYTHON_BIN" - <<'PY' "$hint_json"
+"${FLOW_PY[@]}" - <<'PY' "$hint_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["success"] is True
@@ -885,7 +878,7 @@ PASS=$((PASS + 1))
 
 # Legacy list includes the file.
 list_json="$(scripts/flowctl memory list --json)"
-"$PYTHON_BIN" - <<'PY' "$list_json"
+"${FLOW_PY[@]}" - <<'PY' "$list_json"
 import json, sys
 data = json.loads(sys.argv[1])
 legacy = data.get("legacy", [])
@@ -897,7 +890,7 @@ PASS=$((PASS + 1))
 
 # Legacy read by path.
 read_json="$(scripts/flowctl memory read legacy/pitfalls --json)"
-"$PYTHON_BIN" - <<'PY' "$read_json"
+"${FLOW_PY[@]}" - <<'PY' "$read_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["legacy"] is True
@@ -908,7 +901,7 @@ PASS=$((PASS + 1))
 
 # Legacy read by entry index.
 read_json="$(scripts/flowctl memory read legacy/pitfalls#2 --json)"
-"$PYTHON_BIN" - <<'PY' "$read_json"
+"${FLOW_PY[@]}" - <<'PY' "$read_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["legacy"] is True
@@ -920,7 +913,7 @@ PASS=$((PASS + 1))
 
 # Search covers legacy file.
 search_json="$(scripts/flowctl memory search 'null deref' --json)"
-"$PYTHON_BIN" - <<'PY' "$search_json"
+"${FLOW_PY[@]}" - <<'PY' "$search_json"
 import json, sys
 data = json.loads(sys.argv[1])
 ids = [m["entry_id"] for m in data["matches"]]
@@ -933,7 +926,7 @@ PASS=$((PASS + 1))
 # (legacy entries have no status field; treating them as implicit-active means
 # excluding from --status stale queries — Codex P2 finding on PR #120).
 stale_json="$(scripts/flowctl memory search 'null deref' --status stale --json)"
-"$PYTHON_BIN" - <<'PY' "$stale_json"
+"${FLOW_PY[@]}" - <<'PY' "$stale_json"
 import json, sys
 data = json.loads(sys.argv[1])
 legacy = [m for m in data["matches"] if m.get("legacy")]
@@ -944,7 +937,7 @@ PASS=$((PASS + 1))
 
 # --status all should include legacy back in.
 all_json="$(scripts/flowctl memory search 'null deref' --status all --json)"
-"$PYTHON_BIN" - <<'PY' "$all_json"
+"${FLOW_PY[@]}" - <<'PY' "$all_json"
 import json, sys
 data = json.loads(sys.argv[1])
 legacy = [m for m in data["matches"] if m.get("legacy")]
@@ -956,7 +949,7 @@ PASS=$((PASS + 1))
 rm -f .flow/memory/pitfalls.md
 
 echo -e "${YELLOW}--- schema v1 validate ---${NC}"
-"$PYTHON_BIN" - <<'PY'
+"${FLOW_PY[@]}" - <<'PY'
 import json
 from pathlib import Path
 path = Path(".flow/meta.json")
@@ -971,7 +964,7 @@ PASS=$((PASS + 1))
 echo -e "${YELLOW}--- codex commands ---${NC}"
 # Test codex check (may or may not have codex installed)
 codex_check_json="$(scripts/flowctl codex check --json 2>/dev/null || echo '{"success":true}')"
-"$PYTHON_BIN" - <<'PY' "$codex_check_json"
+"${FLOW_PY[@]}" - <<'PY' "$codex_check_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["success"] == True, f"codex check failed: {data}"
@@ -1009,7 +1002,7 @@ fi
 echo -e "${YELLOW}--- copilot commands ---${NC}"
 # Test copilot check (may or may not have copilot installed)
 copilot_check_json="$(scripts/flowctl copilot check --skip-probe --json 2>/dev/null || echo '{"success":true}')"
-"$PYTHON_BIN" - <<'PY' "$copilot_check_json"
+"${FLOW_PY[@]}" - <<'PY' "$copilot_check_json"
 import json, sys
 data = json.loads(sys.argv[1])
 assert data["success"] == True, f"copilot check failed: {data}"
@@ -1099,7 +1092,7 @@ git -C "$TEST_DIR/repo" commit -m "Update auth with expiry" >/dev/null
 
 # Test context hints: should find handler.py referencing validate_token/User
 cd "$TEST_DIR/repo"
-hints_output="$(PYTHONPATH="$SCRIPT_DIR" "$PYTHON_BIN" -c "
+hints_output="$(PYTHONPATH="$SCRIPT_DIR" "${FLOW_PY[@]}" -c "
 from flowctl import gather_context_hints
 hints = gather_context_hints('HEAD~1')
 print(hints)
@@ -1118,7 +1111,7 @@ echo -e "${YELLOW}--- build_review_prompt ---${NC}"
 # Go back to plugin root for Python tests
 cd "$TEST_DIR/repo"
 # Test that build_review_prompt generates proper structure
-"$PYTHON_BIN" - "$SCRIPT_DIR" <<'PY'
+"${FLOW_PY[@]}" - "$SCRIPT_DIR" <<'PY'
 import sys
 sys.path.insert(0, sys.argv[1])
 from flowctl import build_review_prompt
@@ -1176,7 +1169,7 @@ echo -e "${GREEN}✓${NC} build_review_prompt has full criteria"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- parse_suppressed_count (fn-29.3) ---${NC}"
-"$PYTHON_BIN" - "$SCRIPT_DIR" <<'PY'
+"${FLOW_PY[@]}" - "$SCRIPT_DIR" <<'PY'
 import sys
 sys.path.insert(0, sys.argv[1])
 from flowctl import parse_suppressed_count
@@ -1208,7 +1201,7 @@ echo -e "${GREEN}✓${NC} parse_suppressed_count handles canonical + edge cases"
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- parse_classification_counts (fn-29.4) ---${NC}"
-"$PYTHON_BIN" - "$SCRIPT_DIR" <<'PY'
+"${FLOW_PY[@]}" - "$SCRIPT_DIR" <<'PY'
 import sys
 sys.path.insert(0, sys.argv[1])
 from flowctl import parse_classification_counts
@@ -1253,7 +1246,7 @@ echo -e "${GREEN}✓${NC} parse_classification_counts handles summary + per-find
 PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- triage-skip classifier (fn-29.6) ---${NC}"
-"$PYTHON_BIN" - "$SCRIPT_DIR" <<'PY'
+"${FLOW_PY[@]}" - "$SCRIPT_DIR" <<'PY'
 import sys
 sys.path.insert(0, sys.argv[1])
 from flowctl import _classify_triage_path, _triage_deterministic, _triage_parse_llm_output
@@ -1357,7 +1350,7 @@ mkdir -p "$TRIAGE_TEST_DIR"
   git add bun.lock
   git commit -qm "dep bump"
   RECEIPT="$TRIAGE_TEST_DIR/r1.json"
-  "$PYTHON_BIN" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --receipt "$RECEIPT" --task fn-9-test.1 --json > "$TRIAGE_TEST_DIR/out1.json"
+  "${FLOW_PY[@]}" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --receipt "$RECEIPT" --task fn-9-test.1 --json > "$TRIAGE_TEST_DIR/out1.json"
   EXIT1=$?
   [ "$EXIT1" = "0" ] || { echo "FAIL: expected exit 0 on lockfile SKIP, got $EXIT1"; exit 1; }
   grep -q '"mode": "triage_skip"' "$RECEIPT" || { echo "FAIL: receipt missing triage_skip mode"; cat "$RECEIPT"; exit 1; }
@@ -1370,7 +1363,7 @@ mkdir -p "$TRIAGE_TEST_DIR"
   git commit -qm "add script"
   RECEIPT2="$TRIAGE_TEST_DIR/r2.json"
   set +e
-  "$PYTHON_BIN" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --receipt "$RECEIPT2" --json > "$TRIAGE_TEST_DIR/out2.json"
+  "${FLOW_PY[@]}" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --receipt "$RECEIPT2" --json > "$TRIAGE_TEST_DIR/out2.json"
   EXIT2=$?
   set -e
   [ "$EXIT2" = "1" ] || { echo "FAIL: expected exit 1 on code REVIEW, got $EXIT2"; exit 1; }
@@ -1403,7 +1396,7 @@ mkdir -p "$CHORE_TEST_DIR"
   git add -A
   git commit -qm "bump"
   set +e
-  "$PYTHON_BIN" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --json > "$CHORE_TEST_DIR/outA.json"
+  "${FLOW_PY[@]}" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --json > "$CHORE_TEST_DIR/outA.json"
   EXITA=$?
   set -e
   [ "$EXITA" = "0" ] || { echo "FAIL: version bump should SKIP (exit 0), got $EXITA"; cat "$CHORE_TEST_DIR/outA.json"; exit 1; }
@@ -1416,7 +1409,7 @@ mkdir -p "$CHORE_TEST_DIR"
   git add package.json
   git commit -qm "add dep"
   set +e
-  "$PYTHON_BIN" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --json > "$CHORE_TEST_DIR/outB.json"
+  "${FLOW_PY[@]}" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --json > "$CHORE_TEST_DIR/outB.json"
   EXITB=$?
   set -e
   [ "$EXITB" = "1" ] || { echo "FAIL: dep edit must REVIEW (exit 1), got $EXITB"; cat "$CHORE_TEST_DIR/outB.json"; exit 1; }
@@ -1429,7 +1422,7 @@ mkdir -p "$CHORE_TEST_DIR"
   git add CHANGELOG.md
   git commit -qm "changelog"
   set +e
-  "$PYTHON_BIN" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --json > "$CHORE_TEST_DIR/outC.json"
+  "${FLOW_PY[@]}" "$SCRIPT_DIR/flowctl.py" triage-skip --base main --no-llm --json > "$CHORE_TEST_DIR/outC.json"
   EXITC=$?
   set -e
   [ "$EXITC" = "0" ] || { echo "FAIL: CHANGELOG-only should SKIP (exit 0), got $EXITC"; cat "$CHORE_TEST_DIR/outC.json"; exit 1; }
@@ -1439,7 +1432,7 @@ PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- parse_receipt_path ---${NC}"
 # Test receipt path parsing for Ralph gating (both legacy and new fn-N-xxx formats)
-"$PYTHON_BIN" - "$SCRIPT_DIR/hooks" <<'PY'
+"${FLOW_PY[@]}" - "$SCRIPT_DIR/hooks" <<'PY'
 import sys
 hooks_dir = sys.argv[1]
 sys.path.insert(0, hooks_dir)
@@ -1521,11 +1514,11 @@ PASS=$((PASS + 1))
 
 echo -e "${YELLOW}--- codex e2e (requires codex CLI) ---${NC}"
 # Check if codex is available (handles its own auth)
-codex_available="$(scripts/flowctl codex check --json 2>/dev/null | "$PYTHON_BIN" -c "import sys,json; print(json.load(sys.stdin).get('available', False))" 2>/dev/null || echo "False")"
+codex_available="$(scripts/flowctl codex check --json 2>/dev/null | "${FLOW_PY[@]}" -c "import sys,json; print(json.load(sys.stdin).get('available', False))" 2>/dev/null || echo "False")"
 if [[ "$codex_available" == "True" ]]; then
   # Create a simple epic + task for testing
   EPIC3_JSON="$(scripts/flowctl spec create --title "Codex test epic" --json)"
-  EPIC3="$(echo "$EPIC3_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  EPIC3="$(echo "$EPIC3_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
   scripts/flowctl task create --spec "$EPIC3" --title "Test task" --json >/dev/null
 
   # Write a simple spec
@@ -1560,7 +1553,7 @@ EOF
   if [[ "$plan_rc" -eq 0 ]]; then
     # Verify receipt was written with correct schema
     if [[ -f "$TEST_DIR/plan-receipt.json" ]]; then
-      "$PYTHON_BIN" - "$TEST_DIR/plan-receipt.json" "$EPIC3" <<'PY'
+      "${FLOW_PY[@]}" - "$TEST_DIR/plan-receipt.json" "$EPIC3" <<'PY'
 import sys, json
 from pathlib import Path
 data = json.loads(Path(sys.argv[1]).read_text())
@@ -1598,7 +1591,7 @@ EOF
   if [[ "$impl_rc" -eq 0 ]]; then
     # Verify receipt was written with correct schema
     if [[ -f "$TEST_DIR/impl-receipt.json" ]]; then
-      "$PYTHON_BIN" - "$TEST_DIR/impl-receipt.json" "$EPIC3" <<'PY'
+      "${FLOW_PY[@]}" - "$TEST_DIR/impl-receipt.json" "$EPIC3" <<'PY'
 import sys, json
 from pathlib import Path
 data = json.loads(Path(sys.argv[1]).read_text())
@@ -1628,7 +1621,7 @@ echo -e "${YELLOW}--- copilot e2e (requires copilot CLI) ---${NC}"
 # request on availability detection; the real review below exercises auth for
 # real. With --skip-probe, `authed` is null (can't know without a probe), so
 # we gate on `available` alone and let a real auth failure fail the e2e below.
-copilot_available="$(scripts/flowctl copilot check --skip-probe --json 2>/dev/null | "$PYTHON_BIN" -c "import sys,json; d=json.load(sys.stdin); print(bool(d.get('available', False)))" 2>/dev/null || echo "False")"
+copilot_available="$(scripts/flowctl copilot check --skip-probe --json 2>/dev/null | "${FLOW_PY[@]}" -c "import sys,json; d=json.load(sys.stdin); print(bool(d.get('available', False)))" 2>/dev/null || echo "False")"
 if [[ "$copilot_available" == "True" ]]; then
   # Use gpt-5-mini + effort=low to minimize premium-request cost and wall time.
   # Note: claude-family models reject --effort (task-1 finding), so GPT is required.
@@ -1637,7 +1630,7 @@ if [[ "$copilot_available" == "True" ]]; then
 
   # Create a simple epic + task for testing
   EPIC4_JSON="$(scripts/flowctl spec create --title "Copilot test epic" --json)"
-  EPIC4="$(echo "$EPIC4_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  EPIC4="$(echo "$EPIC4_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
   scripts/flowctl task create --spec "$EPIC4" --title "Test task" --json >/dev/null
 
   # Write a simple spec
@@ -1672,7 +1665,7 @@ EOF
   if [[ "$cop_plan_rc" -eq 0 ]]; then
     # Verify receipt was written with correct schema (mode=copilot + model + effort)
     if [[ -f "$TEST_DIR/cop-plan-receipt.json" ]]; then
-      "$PYTHON_BIN" - "$TEST_DIR/cop-plan-receipt.json" "$EPIC4" <<'PY'
+      "${FLOW_PY[@]}" - "$TEST_DIR/cop-plan-receipt.json" "$EPIC4" <<'PY'
 import sys, json
 from pathlib import Path
 data = json.loads(Path(sys.argv[1]).read_text())
@@ -1705,13 +1698,13 @@ PY
   # mode receipt here must yield the SAME session_id (resume path), not a
   # fresh UUID (new-session path). This proves cross-run continuity works.
   if [[ -f "$TEST_DIR/cop-plan-receipt.json" ]]; then
-    prior_session="$("$PYTHON_BIN" -c 'import json,sys; print(json.load(open(sys.argv[1]))["session_id"])' "$TEST_DIR/cop-plan-receipt.json")"
+    prior_session="$("${FLOW_PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["session_id"])' "$TEST_DIR/cop-plan-receipt.json")"
     set +e
     cop_re_result="$(scripts/flowctl copilot plan-review "$EPIC4" --files "src/hello_copilot.py" --base main --receipt "$TEST_DIR/cop-plan-receipt.json" --json 2>&1)"
     cop_re_rc=$?
     set -e
     if [[ "$cop_re_rc" -eq 0 ]]; then
-      new_session="$("$PYTHON_BIN" -c 'import json,sys; print(json.load(open(sys.argv[1]))["session_id"])' "$TEST_DIR/cop-plan-receipt.json")"
+      new_session="$("${FLOW_PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["session_id"])' "$TEST_DIR/cop-plan-receipt.json")"
       if [[ "$prior_session" == "$new_session" ]]; then
         echo -e "${GREEN}✓${NC} copilot plan-review re-review resumes session"
         PASS=$((PASS + 1))
@@ -1741,7 +1734,7 @@ EOF
   if [[ "$cop_impl_rc" -eq 0 ]]; then
     # Verify receipt was written with correct schema (mode=copilot + model + effort)
     if [[ -f "$TEST_DIR/cop-impl-receipt.json" ]]; then
-      "$PYTHON_BIN" - "$TEST_DIR/cop-impl-receipt.json" "$EPIC4" <<'PY'
+      "${FLOW_PY[@]}" - "$TEST_DIR/cop-impl-receipt.json" "$EPIC4" <<'PY'
 import sys, json
 from pathlib import Path
 data = json.loads(Path(sys.argv[1]).read_text())
@@ -1777,12 +1770,12 @@ echo -e "${YELLOW}--- depends_on_epics gate ---${NC}"
 cd "$TEST_DIR/repo"  # Back to test repo
 # Create epics and capture their IDs
 DEP_BASE_JSON="$(scripts/flowctl spec create --title "Dep base" --json)"
-DEP_BASE_ID="$(echo "$DEP_BASE_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+DEP_BASE_ID="$(echo "$DEP_BASE_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 scripts/flowctl task create --spec "$DEP_BASE_ID" --title "Base task" --json >/dev/null
 DEP_CHILD_JSON="$(scripts/flowctl spec create --title "Dep child" --json)"
-DEP_CHILD_ID="$(echo "$DEP_CHILD_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+DEP_CHILD_ID="$(echo "$DEP_CHILD_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 DEP_CHILD_JSON_PATH="$(spec_json_path "$DEP_CHILD_ID")"
-"$PYTHON_BIN" - "$DEP_CHILD_JSON_PATH" "$DEP_BASE_ID" <<'PY'
+"${FLOW_PY[@]}" - "$DEP_CHILD_JSON_PATH" "$DEP_BASE_ID" <<'PY'
 import json, sys
 from pathlib import Path
 path = Path(sys.argv[1])
@@ -1795,7 +1788,7 @@ printf '{"specs":["%s"]}\n' "$DEP_CHILD_ID" > "$TEST_DIR/specs.json"
 # Canonical --specs-file is silent; legacy --epics-file emits deprecation
 # (verified separately in alias_smoke.sh).
 blocked_json="$(scripts/flowctl next --specs-file "$TEST_DIR/specs.json" --json)"
-"$PYTHON_BIN" - "$DEP_CHILD_ID" "$blocked_json" <<'PY'
+"${FLOW_PY[@]}" - "$DEP_CHILD_ID" "$blocked_json" <<'PY'
 import json, sys
 child_id = sys.argv[1]
 data = json.loads(sys.argv[2])
@@ -1815,7 +1808,7 @@ PASS=$((PASS + 1))
 echo -e "${YELLOW}--- stdin support ---${NC}"
 cd "$TEST_DIR/repo"
 STDIN_EPIC_JSON="$(scripts/flowctl spec create --title "Stdin test" --json)"
-STDIN_EPIC="$(echo "$STDIN_EPIC_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+STDIN_EPIC="$(echo "$STDIN_EPIC_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 # Test epic set-plan with stdin
 scripts/flowctl spec set-plan "$STDIN_EPIC" --file - --json <<'EOF'
 # Stdin Test Plan
@@ -1970,7 +1963,7 @@ fi
 echo -e "${YELLOW}--- backend spec validation (fn-28.2) ---${NC}"
 # Fresh epic + task for backend spec tests
 BSPEC_EPIC_JSON="$(scripts/flowctl spec create --title "Backend spec test" --json)"
-BSPEC_EPIC="$(echo "$BSPEC_EPIC_JSON" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+BSPEC_EPIC="$(echo "$BSPEC_EPIC_JSON" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 scripts/flowctl task create --spec "$BSPEC_EPIC" --title "Backend task" --json >/dev/null
 BSPEC_TASK="${BSPEC_EPIC}.1"
 
@@ -2014,9 +2007,9 @@ fi
 
 # Test 5: show-backend json has raw + resolved + sources
 show_out="$(scripts/flowctl task show-backend "$BSPEC_TASK" --json)"
-raw_val="$(echo "$show_out" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["review"]["raw"])')"
-resolved_str="$(echo "$show_out" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["review"]["resolved"]["str"])')"
-effort_src="$(echo "$show_out" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["review"]["effort_source"])')"
+raw_val="$(echo "$show_out" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["review"]["raw"])')"
+resolved_str="$(echo "$show_out" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["review"]["resolved"]["str"])')"
+effort_src="$(echo "$show_out" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["review"]["effort_source"])')"
 if [[ "$raw_val" == "copilot:claude-opus-4.5:xhigh" && "$resolved_str" == "copilot:claude-opus-4.5:xhigh" && "$effort_src" == "spec" ]]; then
   echo -e "${GREEN}✓${NC} show-backend emits raw + resolved + source fields"
   PASS=$((PASS + 1))
@@ -2027,7 +2020,7 @@ fi
 
 # Test 6: legacy stored value (codex:gpt-5.4-high dash form) falls back with warning
 # Directly patch the task JSON to simulate pre-epic stored data.
-"$PYTHON_BIN" -c "
+"${FLOW_PY[@]}" -c "
 import json
 p = '.flow/tasks/${BSPEC_TASK}.json'
 d = json.load(open(p))
@@ -2036,8 +2029,8 @@ json.dump(d, open(p, 'w'))
 "
 legacy_stdout="$(scripts/flowctl task show-backend "$BSPEC_TASK" --json 2>/tmp/legacy_stderr_$$.txt)"
 legacy_stderr="$(cat /tmp/legacy_stderr_$$.txt)"
-legacy_backend="$(echo "$legacy_stdout" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["review"]["resolved"]["backend"])')"
-legacy_raw="$(echo "$legacy_stdout" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["review"]["raw"])')"
+legacy_backend="$(echo "$legacy_stdout" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["review"]["resolved"]["backend"])')"
+legacy_raw="$(echo "$legacy_stdout" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["review"]["raw"])')"
 trash /tmp/legacy_stderr_$$.txt 2>/dev/null || rm -f /tmp/legacy_stderr_$$.txt
 if [[ "$legacy_backend" == "codex" && "$legacy_raw" == "codex:gpt-5.4-high" ]] && echo "$legacy_stderr" | grep -qi "warning:"; then
   echo -e "${GREEN}✓${NC} legacy spec codex:gpt-5.4-high falls back to bare codex with stderr warning"
@@ -2049,7 +2042,7 @@ fi
 
 # Test 7: empty-string clears field without validation
 if scripts/flowctl task set-backend "$BSPEC_TASK" --review "" --json >/dev/null 2>&1; then
-  cleared="$(scripts/flowctl task show-backend "$BSPEC_TASK" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["review"]["raw"])')"
+  cleared="$(scripts/flowctl task show-backend "$BSPEC_TASK" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["review"]["raw"])')"
   if [[ "$cleared" == "None" ]]; then
     echo -e "${GREEN}✓${NC} empty string clears backend spec"
     PASS=$((PASS + 1))
@@ -2509,7 +2502,7 @@ PASS=$((PASS + 1))
 # Test: helper functions — fingerprint/merge/promotion unit tests.
 (
   cd "$DEEP_TEST_DIR"
-  "$PYTHON_BIN" - "$SCRIPT_DIR/flowctl.py" <<'PYEOF' || { echo "FAIL: helper unit tests"; exit 1; }
+  "${FLOW_PY[@]}" - "$SCRIPT_DIR/flowctl.py" <<'PYEOF' || { echo "FAIL: helper unit tests"; exit 1; }
 import sys, importlib.util
 spec = importlib.util.spec_from_file_location("flowctl", sys.argv[1])
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)

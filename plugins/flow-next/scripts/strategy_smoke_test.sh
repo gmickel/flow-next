@@ -62,17 +62,9 @@ PLUGIN_ROOT="$(to_winpath "$PLUGIN_ROOT")"
 FLOWCTL="$SCRIPT_DIR/flowctl"
 FLOWCTL_PY="$SCRIPT_DIR/flowctl.py"  # for subprocess.run([sys.executable, FLOWCTL_PY, ...]) on Windows where the bash wrapper isn't a valid Win32 exe
 
-pick_python() {
-  if [[ -n "${PYTHON_BIN:-}" ]]; then
-    command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
-  fi
-  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
-  if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
-  echo ""
-}
-
-PYTHON_BIN="$(pick_python)"
-[[ -n "$PYTHON_BIN" ]] || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
+# shellcheck source=lib/pick-python.sh
+. "$SCRIPT_DIR/lib/pick-python.sh"
+pick_python || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
 
 # Safety: never run from the main plugin repo (matches sibling smoke scripts).
 # See glossary_smoke_test.sh:60-63 for the canonical refuse-to-run guard.
@@ -134,7 +126,7 @@ assert_grep() {
 
 json_get() {
   local file="$1" expr="$2"
-  "$PYTHON_BIN" -c "import json; d=json.load(open(r'$file')); print($expr)" 2>&1 | tr -d '\r' || true
+  "${FLOW_PY[@]}" -c "import json; d=json.load(open(r'$file')); print($expr)" 2>&1 | tr -d '\r' || true
 }
 
 assert_eq_jq() {
@@ -325,7 +317,7 @@ assert_eq_jq "T1" "$T1_STATUS" "d['generator']"        "flow-next-strategy" "gen
 T1_PATH="$(json_get "$T1_STATUS" "d['file_path']")"
 # Normalize Windows backslashes (Python's pathlib returns native form on Windows)
 T1_PATH="${T1_PATH//\\//}"
-T1_PATH_REAL="$( "$PYTHON_BIN" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$REPO/STRATEGY.md" )"
+T1_PATH_REAL="$( "${FLOW_PY[@]}" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$REPO/STRATEGY.md" )"
 # Normalize Windows backslashes so the comparison matches T1_PATH (also normalized).
 T1_PATH_REAL="${T1_PATH_REAL//\\//}"
 [[ "$T1_PATH" == "$T1_PATH_REAL" ]] \
@@ -345,7 +337,7 @@ T2_BEFORE="$TEST_DIR/t2-before.json"
 # Mutate the file: change `## Target problem` body via Python (skill writes
 # direct via Write tool in real flow; we simulate by string-replace + re-render
 # via parse_strategy_file/render_strategy_file roundtrip to mirror skill behavior).
-"$PYTHON_BIN" - <<EOF
+"${FLOW_PY[@]}" - <<EOF
 import sys
 sys.path.insert(0, "$SCRIPT_DIR")
 import flowctl
@@ -493,7 +485,7 @@ T6_APPROACH="$(json_get "$T6_READ" "d['approach']")"
 
 # Unfilled sections -- empty STRING (per plan-sync breadcrumb: NOT null).
 # Use python to distinguish empty-string from None.
-"$PYTHON_BIN" - <<EOF
+"${FLOW_PY[@]}" - <<EOF
 import json, sys
 d = json.load(open("$T6_READ"))
 for key in ("personas", "metrics", "tracks"):
@@ -619,11 +611,11 @@ T8_GLOSSARY_JSON="$TEST_DIR/t8-glossary.json"
 ( cd "$T8_REPO" && "$FLOWCTL" glossary list --json > "$T8_GLOSSARY_JSON" )
 
 # Both must be valid JSON.
-"$PYTHON_BIN" -c "import json; json.load(open('$T8_STRATEGY_JSON'))" 2>&1 \
+"${FLOW_PY[@]}" -c "import json; json.load(open('$T8_STRATEGY_JSON'))" 2>&1 \
   && ok "T8" "strategy read --json is valid JSON" \
   || fail "T8" "strategy read --json failed to parse"
 
-"$PYTHON_BIN" -c "import json; json.load(open('$T8_GLOSSARY_JSON'))" 2>&1 \
+"${FLOW_PY[@]}" -c "import json; json.load(open('$T8_GLOSSARY_JSON'))" 2>&1 \
   && ok "T8" "glossary list --json is valid JSON" \
   || fail "T8" "glossary list --json failed to parse"
 
@@ -711,7 +703,7 @@ echo -e "${YELLOW}--- T10: prospect grounding snapshot emits verbatim approach +
 # We replicate the same logic with python to avoid jq dependency in smoke.
 
 T10_OUT="$TEST_DIR/t10-snapshot.txt"
-"$PYTHON_BIN" - <<EOF > "$T10_OUT"
+"${FLOW_PY[@]}" - <<EOF > "$T10_OUT"
 import json, subprocess, sys
 # Use [sys.executable, FLOWCTL_PY, ...] so the call works on Windows where
 # the bash wrapper is not a valid Win32 executable (WinError 193).

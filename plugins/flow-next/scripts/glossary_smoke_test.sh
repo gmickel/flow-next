@@ -58,17 +58,9 @@ PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PLUGIN_ROOT="$(to_winpath "$PLUGIN_ROOT")"
 FLOWCTL="$SCRIPT_DIR/flowctl"
 
-pick_python() {
-  if [[ -n "${PYTHON_BIN:-}" ]]; then
-    command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
-  fi
-  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
-  if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
-  echo ""
-}
-
-PYTHON_BIN="$(pick_python)"
-[[ -n "$PYTHON_BIN" ]] || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
+# shellcheck source=lib/pick-python.sh
+. "$SCRIPT_DIR/lib/pick-python.sh"
+pick_python || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
 
 # Safety: never run from the main plugin repo (matches sibling smoke scripts).
 if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-next/.claude-plugin/plugin.json" ]]; then
@@ -138,7 +130,7 @@ assert_no_grep() {
 
 json_get() {
   local file="$1" expr="$2"
-  "$PYTHON_BIN" -c "import json; d=json.load(open(r'$file')); print($expr)" 2>&1 | tr -d '\r' || true
+  "${FLOW_PY[@]}" -c "import json; d=json.load(open(r'$file')); print($expr)" 2>&1 | tr -d '\r' || true
 }
 
 assert_eq_jq() {
@@ -281,7 +273,7 @@ assert_eq_jq "$READ7" "d['definition']" "Updated worker definition." \
 
 # Update should not duplicate the term
 TERM_COUNT="$( cd "$REPO" && "$FLOWCTL" glossary list --json \
-  | "$PYTHON_BIN" -c 'import json,sys; d=json.load(sys.stdin); print(d["total_terms"])' )"
+  | "${FLOW_PY[@]}" -c 'import json,sys; d=json.load(sys.stdin); print(d["total_terms"])' )"
 [[ "$TERM_COUNT" == "2" ]] && ok "Case 7: total_terms=2 (Worker + Pipeline, no dupes)" \
   || fail "Case 7: expected 2 terms, got $TERM_COUNT"
 
@@ -320,7 +312,7 @@ mkdir -p "$SUB"
 ( cd "$SUB" && "$FLOWCTL" glossary add "Worker" \
     --definition "Subdir-scoped admin worker (not the root one)." --json > "$TEST_DIR/case9-add.json" )
 # macOS resolves /tmp -> /private/tmp via symlink; compare via realpath.
-SUB_REALPATH="$( "$PYTHON_BIN" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$SUB/GLOSSARY.md" )"
+SUB_REALPATH="$( "${FLOW_PY[@]}" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$SUB/GLOSSARY.md" )"
 ACTUAL_PATH="$(json_get "$TEST_DIR/case9-add.json" "d['path']")"
 [[ "$ACTUAL_PATH" == "$SUB_REALPATH" ]] \
   && ok "Case 9: write went to subdir glossary" \
@@ -344,7 +336,7 @@ mkdir -p "$SUB2"
 ROOT_READ="$TEST_DIR/case10-read.json"
 ( cd "$SUB2" && "$FLOWCTL" glossary read "Pipeline" --json > "$ROOT_READ" )
 ROOT_PATH="$(json_get "$ROOT_READ" "d['path']")"
-ROOT_REALPATH="$( "$PYTHON_BIN" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$REPO/GLOSSARY.md" )"
+ROOT_REALPATH="$( "${FLOW_PY[@]}" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$REPO/GLOSSARY.md" )"
 [[ "$ROOT_PATH" == "$ROOT_REALPATH" ]] \
   && ok "Case 10: read from subdir without local glossary resolves to root" \
   || fail "Case 10: expected root path, got '$ROOT_PATH'"
@@ -401,9 +393,9 @@ echo -e "${YELLOW}--- Case 13: atomic write under crash simulation ---${NC}"
 #   (a) atomic_write rejects a write that raises mid-content (the temp
 #       file is unlinked, dest unchanged), and
 #   (b) the temp file isn't left around in the directory.
-BEFORE_HASH="$( "$PYTHON_BIN" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$REPO/GLOSSARY.md" )"
+BEFORE_HASH="$( "${FLOW_PY[@]}" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$REPO/GLOSSARY.md" )"
 
-"$PYTHON_BIN" - <<EOF
+"${FLOW_PY[@]}" - <<EOF
 import sys, os
 sys.path.insert(0, "$SCRIPT_DIR")
 import flowctl
@@ -443,7 +435,7 @@ EOF
 ATOMIC_RC=$?
 assert_rc 0 "$ATOMIC_RC" "Case 13: atomic_write raised on simulated crash"
 
-AFTER_HASH="$( "$PYTHON_BIN" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$REPO/GLOSSARY.md" )"
+AFTER_HASH="$( "${FLOW_PY[@]}" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$REPO/GLOSSARY.md" )"
 [[ "$BEFORE_HASH" == "$AFTER_HASH" ]] \
   && ok "Case 13: dest file byte-identical after simulated crash (no half-write)" \
   || fail "Case 13: dest file changed despite crash (not atomic)"
@@ -459,7 +451,7 @@ TMP_COUNT="$(find "$REPO" -maxdepth 1 -name '*.tmp' | wc -l | tr -d ' ')"
 # =============================================================================
 echo -e "${YELLOW}--- Case 14: parse roundtrip ---${NC}"
 ROUNDTRIP_OUT="$TEST_DIR/case14-out.txt"
-"$PYTHON_BIN" - <<EOF > "$ROUNDTRIP_OUT"
+"${FLOW_PY[@]}" - <<EOF > "$ROUNDTRIP_OUT"
 import sys
 sys.path.insert(0, "$SCRIPT_DIR")
 import flowctl
@@ -496,7 +488,7 @@ fi
 # CASE 15: _Avoid_ aliases survive parse + re-render
 # =============================================================================
 echo -e "${YELLOW}--- Case 15: _Avoid_ survives roundtrip ---${NC}"
-"$PYTHON_BIN" - <<EOF
+"${FLOW_PY[@]}" - <<EOF
 import sys
 sys.path.insert(0, "$SCRIPT_DIR")
 import flowctl
@@ -564,7 +556,7 @@ assert_no_grep "pipeline" "$REMAINING_LC" "Case 17: Pipeline removed"
 # macOS resolves /tmp -> /private/tmp via symlink; compare via realpath.
 SUB_LIST="$TEST_DIR/case17-sub-list.json"
 ( cd "$SUB" && "$FLOWCTL" glossary read "Worker" --json > "$SUB_LIST" )
-SUB_PATH_RESOLVED="$( "$PYTHON_BIN" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$SUB/GLOSSARY.md" )"
+SUB_PATH_RESOLVED="$( "${FLOW_PY[@]}" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$SUB/GLOSSARY.md" )"
 ACTUAL_SUB_PATH="$(json_get "$SUB_LIST" "d['path']")"
 [[ "$ACTUAL_SUB_PATH" == "$SUB_PATH_RESOLVED" ]] \
   && ok "Case 17: subdir Worker entry untouched (resolved path match)" \
@@ -596,7 +588,7 @@ assert_grep "# Glossary" "$HUSK_CONTENT" "Case 18: husk has '# Glossary' H1"
 # per-group count for SUB's file specifically.
 HUSK_LIST="$TEST_DIR/case18-husk-list.json"
 ( cd "$SUB" && "$FLOWCTL" glossary list --json > "$HUSK_LIST" )
-HUSK_GROUP_COUNT="$( "$PYTHON_BIN" -c '
+HUSK_GROUP_COUNT="$( "${FLOW_PY[@]}" -c '
 import json, sys, os
 d = json.load(open(sys.argv[1]))
 husk_path = os.path.realpath(sys.argv[2])
@@ -609,7 +601,7 @@ print("not-found"); sys.exit(1)' "$HUSK_LIST" "$SUB/GLOSSARY.md" )"
   || fail "Case 18: husk group count was '$HUSK_GROUP_COUNT'"
 
 # And the husk file should still appear as a group (file-level visibility)
-HUSK_VISIBLE="$( "$PYTHON_BIN" -c '
+HUSK_VISIBLE="$( "${FLOW_PY[@]}" -c '
 import json, sys, os
 d = json.load(open(sys.argv[1]))
 husk_path = os.path.realpath(sys.argv[2])
@@ -668,8 +660,8 @@ echo -e "${YELLOW}--- Case 20: R18 (.flow/ removal preserves glossaries) ---${NC
 # Phase 1: write entries
 ( cd "$REPO" && "$FLOWCTL" glossary add "PreNuke" --definition "Defined before .flow/ removal." --json >/dev/null )
 
-ROOT_HASH_BEFORE="$( "$PYTHON_BIN" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$REPO/GLOSSARY.md" )"
-SUB_HASH_BEFORE="$( "$PYTHON_BIN" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$SUB/GLOSSARY.md" )"
+ROOT_HASH_BEFORE="$( "${FLOW_PY[@]}" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$REPO/GLOSSARY.md" )"
+SUB_HASH_BEFORE="$( "${FLOW_PY[@]}" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$SUB/GLOSSARY.md" )"
 
 # rm -rf .flow/ — using find to avoid the global rm safety habit, but the
 # point is to simulate flow-next uninstall.
@@ -678,8 +670,8 @@ find "$REPO/.flow" -depth -type d -exec rmdir {} \; 2>/dev/null || true
 [[ ! -d "$REPO/.flow" ]] && ok "Case 20: .flow/ removed" || fail "Case 20: .flow/ still present"
 
 # Both glossaries must survive byte-for-byte.
-ROOT_HASH_AFTER="$( "$PYTHON_BIN" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$REPO/GLOSSARY.md" )"
-SUB_HASH_AFTER="$( "$PYTHON_BIN" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$SUB/GLOSSARY.md" )"
+ROOT_HASH_AFTER="$( "${FLOW_PY[@]}" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$REPO/GLOSSARY.md" )"
+SUB_HASH_AFTER="$( "${FLOW_PY[@]}" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$SUB/GLOSSARY.md" )"
 [[ "$ROOT_HASH_BEFORE" == "$ROOT_HASH_AFTER" ]] \
   && ok "Case 20: root GLOSSARY.md byte-identical after .flow/ removal" \
   || fail "Case 20: root GLOSSARY.md changed"
@@ -760,7 +752,7 @@ echo -e "${YELLOW}--- Case 24: list --json shape ---${NC}"
 LIST24="$TEST_DIR/case24-list.json"
 ( cd "$REPO" && "$FLOWCTL" glossary list --json > "$LIST24" )
 for key in groups file_count total_terms; do
-  if "$PYTHON_BIN" -c "import json,sys; sys.exit(0 if '$key' in json.load(open('$LIST24')) else 1)"; then
+  if "${FLOW_PY[@]}" -c "import json,sys; sys.exit(0 if '$key' in json.load(open('$LIST24')) else 1)"; then
     ok "Case 24: JSON has key '$key'"
   else
     fail "Case 24: JSON missing key '$key'"
@@ -768,7 +760,7 @@ for key in groups file_count total_terms; do
 done
 # Check group shape
 for key in path entries count; do
-  if "$PYTHON_BIN" -c "import json,sys; d=json.load(open('$LIST24')); sys.exit(0 if '$key' in d['groups'][0] else 1)"; then
+  if "${FLOW_PY[@]}" -c "import json,sys; d=json.load(open('$LIST24')); sys.exit(0 if '$key' in d['groups'][0] else 1)"; then
     ok "Case 24: groups[0] has key '$key'"
   else
     fail "Case 24: groups[0] missing key '$key'"
@@ -782,7 +774,7 @@ echo -e "${YELLOW}--- Case 25: read --json shape ---${NC}"
 READ25="$TEST_DIR/case25-read.json"
 ( cd "$REPO" && "$FLOWCTL" glossary read "Receipt" --json > "$READ25" )
 for key in path term definition avoid relates_to; do
-  if "$PYTHON_BIN" -c "import json,sys; sys.exit(0 if '$key' in json.load(open('$READ25')) else 1)"; then
+  if "${FLOW_PY[@]}" -c "import json,sys; sys.exit(0 if '$key' in json.load(open('$READ25')) else 1)"; then
     ok "Case 25: JSON has key '$key'"
   else
     fail "Case 25: JSON missing key '$key'"

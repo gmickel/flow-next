@@ -61,17 +61,9 @@ PLUGIN_ROOT="$(to_winpath "$PLUGIN_ROOT")"
 FLOWCTL="$SCRIPT_DIR/flowctl"
 FLOWCTL_PY="$SCRIPT_DIR/flowctl.py"  # for subprocess.run([sys.executable, FLOWCTL_PY, ...]) on Windows where the bash wrapper isn't a valid Win32 exe
 
-pick_python() {
-  if [[ -n "${PYTHON_BIN:-}" ]]; then
-    command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
-  fi
-  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
-  if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
-  echo ""
-}
-
-PYTHON_BIN="$(pick_python)"
-[[ -n "$PYTHON_BIN" ]] || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
+# shellcheck source=lib/pick-python.sh
+. "$SCRIPT_DIR/lib/pick-python.sh"
+pick_python || { echo "ERROR: python not found (need python3 or python in PATH)" >&2; exit 1; }
 
 # Safety: never run from the main plugin repo (matches sibling smoke scripts).
 if [[ -f "$PWD/.claude-plugin/marketplace.json" ]] || [[ -f "$PWD/plugins/flow-next/.claude-plugin/plugin.json" ]]; then
@@ -134,7 +126,7 @@ assert_grep() {
 
 json_get() {
   local file="$1" expr="$2"
-  "$PYTHON_BIN" -c "import json; d=json.load(open(r'$file')); print($expr)" 2>&1 | tr -d '\r' || true
+  "${FLOW_PY[@]}" -c "import json; d=json.load(open(r'$file')); print($expr)" 2>&1 | tr -d '\r' || true
 }
 
 assert_eq_jq() {
@@ -251,7 +243,7 @@ EOF
 
     # Create epic + spec
     EPIC_RAW="$("$FLOWCTL" spec create --title "Smoke fixture epic" --json)"
-    EPIC_ID="$(echo "$EPIC_RAW" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+    EPIC_ID="$(echo "$EPIC_RAW" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
     echo "$EPIC_ID" > "$repo/.epic_id"
 
     # Set epic spec with 3 R-IDs and Strategy Alignment section. Use a
@@ -288,7 +280,7 @@ EOF
 
     # Create + complete 2 tasks (each with one real evidence commit)
     T1_RAW="$("$FLOWCTL" task create --spec "$EPIC_ID" --title "First task" --json)"
-    T1_ID="$(echo "$T1_RAW" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+    T1_ID="$(echo "$T1_RAW" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 
     # Create cross-module changes via two new files in different module roots.
     mkdir -p src/mod_a src/mod_b
@@ -325,7 +317,7 @@ EOF
     T1_SPEC=".flow/tasks/$T1_ID.md"
     if [[ -f "$T1_SPEC" ]]; then
       # Insert satisfies frontmatter at the top
-      "$PYTHON_BIN" - "$T1_SPEC" "R1" <<'PYEOF'
+      "${FLOW_PY[@]}" - "$T1_SPEC" "R1" <<'PYEOF'
 import sys, pathlib
 path = pathlib.Path(sys.argv[1])
 rid = sys.argv[2]
@@ -349,7 +341,7 @@ PYEOF
 
     # T2 — second task, second commit
     T2_RAW="$("$FLOWCTL" task create --spec "$EPIC_ID" --title "Second task" --json)"
-    T2_ID="$(echo "$T2_RAW" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+    T2_ID="$(echo "$T2_RAW" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
     cat > src/mod_a/baz.py <<'EOF'
 """Module A baz file."""
 
@@ -375,7 +367,7 @@ EOF
     # Add satisfies frontmatter to T2 spec for R2
     T2_SPEC=".flow/tasks/$T2_ID.md"
     if [[ -f "$T2_SPEC" ]]; then
-      "$PYTHON_BIN" - "$T2_SPEC" "R2" <<'PYEOF'
+      "${FLOW_PY[@]}" - "$T2_SPEC" "R2" <<'PYEOF'
 import sys, pathlib
 path = pathlib.Path(sys.argv[1])
 rid = sys.argv[2]
@@ -485,7 +477,7 @@ EOF
     git commit -m "feat: drop legacy_pkg public surface" -q >/dev/null
 
     # Deferred review finding
-    EPIC_BRANCH="$("$FLOWCTL" show "$EPIC_ID" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin).get("branch_name") or "")')"
+    EPIC_BRANCH="$("$FLOWCTL" show "$EPIC_ID" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin).get("branch_name") or "")')"
     BRANCH_SLUG="${EPIC_BRANCH:-fixture-branch}"
     mkdir -p .flow/review-deferred
     cat > ".flow/review-deferred/$BRANCH_SLUG.md" <<EOF
@@ -525,7 +517,7 @@ set -e
 assert_rc "T1" 0 "$T1_RC" "export-cognitive-aid full payload exits 0"
 
 # Validate JSON
-"$PYTHON_BIN" -c "import json; json.load(open('$T1_OUT'))" 2>/dev/null \
+"${FLOW_PY[@]}" -c "import json; json.load(open('$T1_OUT'))" 2>/dev/null \
   && ok "T1" "stdout is valid JSON" \
   || fail "T1" "stdout is NOT valid JSON"
 
@@ -678,7 +670,7 @@ mkdir -p "$EMPTY_REPO"
   "$FLOWCTL" init --json >/dev/null
 
   EPIC_RAW="$("$FLOWCTL" spec create --title "Empty epic" --json)"
-  EPIC_ID_E="$(echo "$EPIC_RAW" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  EPIC_ID_E="$(echo "$EPIC_RAW" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
   echo "$EPIC_ID_E" > .epic_id
 
   # Set spec with 1 R-ID so we have an uncovered_r_ids check
@@ -758,7 +750,7 @@ mkdir -p "$NOAHEAD_REPO"
   git commit --allow-empty -m "init" -q
   "$FLOWCTL" init --json >/dev/null
   EPIC_RAW="$("$FLOWCTL" spec create --title "No-ahead epic" --json)"
-  echo "$EPIC_RAW" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])' > .epic_id
+  echo "$EPIC_RAW" | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])' > .epic_id
 )
 NOAHEAD_EPIC_ID="$(cat "$NOAHEAD_REPO/.epic_id")"
 

@@ -13,7 +13,7 @@ PROSPECTS_DIR="$REPO_ROOT/.flow/prospects"
 TODAY="$(date -u +%Y-%m-%d)"
 ```
 
-`jq` and `python3` (or `python`) must be on PATH. The skill prefers stdlib-only Python for any frontmatter parsing — see Phase 0.
+`jq` and a working Python (`python3`, `python`, or `py -3` on Windows) must be on PATH — each Python block resolves one into `$PY` via a functionality probe, so the Windows Store `python3` alias stub (exits 9009) is skipped, not selected. The skill prefers stdlib-only Python for any frontmatter parsing — see Phase 0.
 
 ---
 
@@ -60,7 +60,17 @@ Mark `status: corrupt` if any of those checks fail. Mark `status: stale` if the 
 A single Python helper keeps this cheap and dependency-free. Inline it directly in the skill rather than shelling out per file:
 
 ```bash
-python3 - "$PROSPECTS_DIR" "$TODAY" <<'PY'
+# Resolve a working Python once (functionality probe — the Windows Store python3
+# alias stub satisfies `command -v` but exits 9009; the probe skips it). Order
+# mirrors the shared scripts/lib/pick-python.sh resolver.
+PY=""
+for _c in "${PYTHON_BIN:-}" "py -3" python3 python; do
+ [ -n "$_c" ] || continue
+ $_c -c "import sys" >/dev/null 2>&1 && { PY="$_c"; break; }
+done
+[ -n "$PY" ] || { echo "prospect: no working Python interpreter found" >&2; exit 1; }
+
+$PY - "$PROSPECTS_DIR" "$TODAY" <<'PY'
 import os, sys, json, re
 from datetime import date, datetime
 
@@ -489,7 +499,16 @@ The `GENERATION_TARGET_DESCRIPTION` slot:
 Parse the model output. The skill must accept output the model wraps in ```yaml fences as well as bare YAML. A defensive parser:
 
 ```bash
-python3 - <<'PY'
+# Resolve a working Python once (functionality probe — skips the Windows Store
+# python3 alias stub that exits 9009). Order mirrors scripts/lib/pick-python.sh.
+PY=""
+for _c in "${PYTHON_BIN:-}" "py -3" python3 python; do
+ [ -n "$_c" ] || continue
+ $_c -c "import sys" >/dev/null 2>&1 && { PY="$_c"; break; }
+done
+[ -n "$PY" ] || { echo "prospect: no working Python interpreter found" >&2; exit 1; }
+
+$PY - <<'PY'
 import sys, re, yaml # PyYAML may not be installed — fall back to a stdlib loader if needed.
 text = sys.stdin.read()
 m = re.search(r"```yaml\s*\n(.*?)\n```", text, re.DOTALL)
@@ -739,7 +758,16 @@ Materialize `RANKED` — the parsed ranking with each survivor's full candidate 
 Use the bundled helpers — both are stdlib-only and concurrency-safe:
 
 ```bash
-python3 - "$PROSPECTS_DIR" "$FOCUS_HINT" "$TODAY" <<'PY'
+# Resolve a working Python once (functionality probe — skips the Windows Store
+# python3 alias stub that exits 9009). Order mirrors scripts/lib/pick-python.sh.
+PY=""
+for _c in "${PYTHON_BIN:-}" "py -3" python3 python; do
+ [ -n "$_c" ] || continue
+ $_c -c "import sys" >/dev/null 2>&1 && { PY="$_c"; break; }
+done
+[ -n "$PY" ] || { echo "prospect: no working Python interpreter found" >&2; exit 1; }
+
+$PY - "$PROSPECTS_DIR" "$FOCUS_HINT" "$TODAY" <<'PY'
 import importlib.util, os, sys
 from pathlib import Path
 

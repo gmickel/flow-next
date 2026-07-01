@@ -944,6 +944,8 @@ CODEX_SANDBOX=auto
 
 The `read-only` sandbox blocks all commands on Windows.
 
+**Ralph requires Git Bash on Windows.** The harness (`ralph.sh`) and its guard hooks are bash scripts, so Ralph mode runs under Git Bash (or WSL), never native `cmd.exe`/PowerShell. The interpreter is resolved through a functionality probe (`scripts/ralph/pick-python.sh`), so a Microsoft Store `python3` alias stub (present on `PATH` but exits 9009) is skipped in favor of `py -3` / `python`; no native `.cmd` guard is provided because the bash harness could not use one. If `python3` is the Store stub, install python.org Python (or the `py` launcher), or set `PYTHON_BIN` to a working interpreter. (The plain `flowctl.cmd` shim covers non-Ralph PowerShell/cmd use — see [platforms.md](platforms.md).)
+
 ### Run Inspection
 
 ```bash

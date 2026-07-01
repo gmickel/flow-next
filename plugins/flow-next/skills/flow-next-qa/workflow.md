@@ -26,7 +26,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 TODAY="$(date -u +%Y-%m-%d)"
 ```
 
-`jq`, `python3` (or `python`), and `git` must be on PATH. `SPEC_ID` comes from the SKILL.md mode-detection block (may be empty — Phase 1 resolves it).
+`jq`, a working Python (`python3`, `python`, or `py -3` on Windows — the receipt block probes one into `$PY`, skipping the Windows Store stub), and `git` must be on PATH. `SPEC_ID` comes from the SKILL.md mode-detection block (may be empty — Phase 1 resolves it).
 
 If `.flow/` does not exist, print `No .flow/ directory — /flow-next:qa runs inside a flow-next-managed repo.` and exit 1.
 
@@ -482,7 +482,7 @@ The receipt is the **only committed persisted output** (no new artifact, no new 
 | `rid_coverage` | object `{covered, total, rids: [{id, coverage}]}` | the §2.2 coverage spine, persisted so make-pr surfaces coverage without re-deriving. `coverage ∈ {live, subtracted, no_live_scenario, backend_cli}`. `covered` counts the non-gap rows (`live` + `subtracted` + `backend_cli`); a `no_live_scenario` row on a UI R-ID is the only uncovered kind. |
 | `open_p0p1` | array of **objects** `{id, severity, reason, file}` | open P0/P1 findings (Phase 5) as structured objects — `severity ∈ {P0, P1}`, `reason` a one-line symptom, `file` the surface/route — so make-pr surfaces findings, not bare ids. (Was a bare-id array; now objects.) |
 
-**Build the JSON with `python3`, not a `cat <<EOF` heredoc** — and this is now *load-bearing*, not just for the reasons: `rid_coverage.rids[].id`/coverage and every `open_p0p1[]` object field (`reason`, `file`) are agent-authored free-form text. Raw shell interpolation into JSON would emit malformed output (or allow field injection) the moment any value contains a quote, backslash, or newline. Pass the structured fields as **JSON strings** through `os.environ` and re-parse with `json.loads`; let `json.dump` escape everything:
+**Build the JSON with a probed Python interpreter (`$PY`, resolved once per the snippet below), not a `cat <<EOF` heredoc** — and this is now *load-bearing*, not just for the reasons: `rid_coverage.rids[].id`/coverage and every `open_p0p1[]` object field (`reason`, `file`) are agent-authored free-form text. Raw shell interpolation into JSON would emit malformed output (or allow field injection) the moment any value contains a quote, backslash, or newline. Pass the structured fields as **JSON strings** through `os.environ` and re-parse with `json.loads`; let `json.dump` escape everything:
 
 ```bash
 # QA_OUTCOME ∈ {SHIP,NEEDS_WORK,NA,BLOCKED} from §6.1; project to the enum (§6.2).
@@ -518,7 +518,17 @@ export QA_TYPE="qa_verdict" QA_ID="$SPEC_ID" QA_MODE="$MODE" QA_VERDICT="$VERDIC
        OPEN_P0P1="${OPEN_P0P1:-[]}" RID_COVERAGE="${RID_COVERAGE:-{}}" \
        BLOCKED_REASON="${BLOCKED_REASON:-}" NA_REASON="${NA_REASON:-}"
 
-python3 - "$RECEIPT_PATH" <<'PY'
+# Resolve a working Python once (functionality probe — the Windows Store python3
+# alias stub satisfies `command -v` but exits 9009; the probe skips it). Order
+# mirrors the shared scripts/lib/pick-python.sh resolver.
+PY=""
+for _c in "${PYTHON_BIN:-}" "py -3" python3 python; do
+  [ -n "$_c" ] || continue
+  $_c -c "import sys" >/dev/null 2>&1 && { PY="$_c"; break; }
+done
+[ -n "$PY" ] || { echo "qa: no working Python interpreter found (see Windows python3 stub in troubleshooting)" >&2; exit 1; }
+
+$PY - "$RECEIPT_PATH" <<'PY'
 import datetime, json, os, sys
 r = {"type": os.environ["QA_TYPE"], "id": os.environ["QA_ID"],
      "mode": os.environ["QA_MODE"], "verdict": os.environ["QA_VERDICT"],

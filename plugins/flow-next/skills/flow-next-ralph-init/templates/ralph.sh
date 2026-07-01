@@ -10,21 +10,25 @@ case "$UNAME_S" in
   MINGW*|MSYS*|CYGWIN*) IS_WINDOWS=1 ;;
 esac
 
-# Python detection: prefer python3, fallback to python (common on Windows)
-pick_python() {
-  if [[ -n "${PYTHON_BIN:-}" ]]; then
-    command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
-  fi
-  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
-  if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
-  echo ""
-}
-
-PYTHON_BIN="$(pick_python)"
-[[ -n "$PYTHON_BIN" ]] || { echo "ralph: python not found (need python3 or python in PATH)" >&2; exit 1; }
-export PYTHON_BIN
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Python interpreter resolution via the shared functionality probe (skips the
+# Windows Store python3 alias stub; fills the FLOW_PY array). ralph-init copies
+# pick-python.sh flat into scripts/ralph/ next to this script (installed layout);
+# the source-tree fallback resolves the canonical helper when ralph.sh runs from
+# the plugin templates dir (templates -> flow-next-ralph-init -> skills ->
+# flow-next -> scripts/lib). FLOW_PY is a bash array (not exportable), so any
+# child needing the interpreter must source this resolver itself, not read a
+# scalar $PYTHON_BIN (which would drop the `-3` of a `py -3` resolution).
+if [[ -f "$SCRIPT_DIR/pick-python.sh" ]]; then
+  # shellcheck source=/dev/null
+  . "$SCRIPT_DIR/pick-python.sh"
+else
+  # shellcheck source=/dev/null
+  . "$SCRIPT_DIR/../../../scripts/lib/pick-python.sh"
+fi
+pick_python || { echo "ralph: python not found (need python3 or python in PATH)" >&2; exit 1; }
+
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CONFIG="$SCRIPT_DIR/config.env"
 FLOWCTL="$SCRIPT_DIR/flowctl"
@@ -67,9 +71,17 @@ ensure_flowctl_wrapper() {
 #!/usr/bin/env bash
 set -euo pipefail
 DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
-PY="\${PYTHON_BIN:-python3}"
-command -v "\$PY" >/dev/null 2>&1 || PY="python"
-exec "\$PY" "\$DIR/flowctl.py" "\$@"
+# Source the shared resolver so FLOW_PY carries the two-word \`py -3\` intact —
+# a scalar \${PYTHON_BIN:-python3} would drop the \`-3\` and could select the
+# Windows Store python3 stub. Installed layout: pick-python.sh sits flat beside
+# this wrapper; source-tree fallback reaches the canonical helper.
+if [ -f "\$DIR/pick-python.sh" ]; then
+  . "\$DIR/pick-python.sh"
+else
+  . "\$DIR/../../../scripts/lib/pick-python.sh"
+fi
+pick_python || { echo "flowctl: no working Python interpreter found" >&2; exit 1; }
+exec "\${FLOW_PY[@]}" "\$DIR/flowctl.py" "\$@"
 SH
     chmod +x "$wrapper" 2>/dev/null || true
     FLOWCTL="$wrapper"
@@ -128,7 +140,7 @@ ui() {
 # Get title from spec/task JSON
 get_title() {
   local json="$1"
-  "$PYTHON_BIN" - "$json" <<'PY'
+  "${FLOW_PY[@]}" - "$json" <<'PY'
 import json, sys
 try:
     data = json.loads(sys.argv[1])
@@ -142,7 +154,7 @@ PY
 # Scans .flow/specs/ (canonical post-1.0) AND .flow/epics/ (legacy 0.x); fn-43.2
 # alias-mode keeps both layouts on disk for back-compat.
 get_progress() {
-  "$PYTHON_BIN" - "$ROOT_DIR" "${SPECS_FILE:-}" <<'PY'
+  "${FLOW_PY[@]}" - "$ROOT_DIR" "${SPECS_FILE:-}" <<'PY'
 import json, sys
 from pathlib import Path
 root = Path(sys.argv[1])
@@ -210,7 +222,7 @@ get_git_stats() {
     echo ""
     return
   fi
-  "$PYTHON_BIN" - "$stats" <<'PY'
+  "${FLOW_PY[@]}" - "$stats" <<'PY'
 import re, sys
 s = sys.argv[1]
 files = re.search(r"(\d+) files? changed", s)
@@ -546,7 +558,7 @@ get_actor() {
 }
 
 rand4() {
-  "$PYTHON_BIN" - <<'PY'
+  "${FLOW_PY[@]}" - <<'PY'
 import secrets
 print(secrets.token_hex(2))
 PY
@@ -559,7 +571,7 @@ truncate_file() {
 
 render_template() {
   local path="$1"
-  "$PYTHON_BIN" - "$path" <<'PY'
+  "${FLOW_PY[@]}" - "$path" <<'PY'
 import os, sys
 path = sys.argv[1]
 text = open(path, encoding="utf-8").read()
@@ -573,7 +585,7 @@ PY
 json_get() {
   local key="$1"
   local json="$2"
-  "$PYTHON_BIN" - "$key" "$json" <<'PY'
+  "${FLOW_PY[@]}" - "$key" "$json" <<'PY'
 import json, sys
 key = sys.argv[1]
 data = json.loads(sys.argv[2])
@@ -592,7 +604,7 @@ ensure_attempts_file() {
 }
 
 bump_attempts() {
-  "$PYTHON_BIN" - "$1" "$2" <<'PY'
+  "${FLOW_PY[@]}" - "$1" "$2" <<'PY'
 import json, sys, os
 path, task = sys.argv[1], sys.argv[2]
 data = {}
@@ -608,7 +620,7 @@ PY
 }
 
 write_specs_file() {
-  "$PYTHON_BIN" - "$1" <<'PY'
+  "${FLOW_PY[@]}" - "$1" <<'PY'
 import json, sys
 raw = sys.argv[1]
 parts = [p.strip() for p in raw.replace(",", " ").split() if p.strip()]
@@ -641,7 +653,7 @@ PROGRESS_FILE="$RUN_DIR/progress.txt"
 
 extract_tag() {
   local tag="$1"
-  "$PYTHON_BIN" - "$tag" <<'PY'
+  "${FLOW_PY[@]}" - "$tag" <<'PY'
 import re, sys
 tag = sys.argv[1]
 text = sys.stdin.read()
@@ -653,7 +665,7 @@ PY
 # Extract assistant text from stream-json log (for tag extraction in watch mode)
 extract_text_from_stream_json() {
   local log_file="$1"
-  "$PYTHON_BIN" - "$log_file" <<'PY'
+  "${FLOW_PY[@]}" - "$log_file" <<'PY'
 import json, sys
 path = sys.argv[1]
 out = []
@@ -750,7 +762,7 @@ init_branches_file() {
   if [[ -f "$BRANCHES_FILE" ]]; then return; fi
   local base_branch
   base_branch="$(git -C "$ROOT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-  "$PYTHON_BIN" - "$BRANCHES_FILE" "$base_branch" <<'PY'
+  "${FLOW_PY[@]}" - "$BRANCHES_FILE" "$base_branch" <<'PY'
 import json, sys
 path, base = sys.argv[1], sys.argv[2]
 data = {"base_branch": base, "run_branch": ""}
@@ -760,7 +772,7 @@ PY
 }
 
 get_base_branch() {
-  "$PYTHON_BIN" - "$BRANCHES_FILE" <<'PY'
+  "${FLOW_PY[@]}" - "$BRANCHES_FILE" <<'PY'
 import json, sys
 try:
     with open(sys.argv[1], encoding="utf-8") as f:
@@ -772,7 +784,7 @@ PY
 }
 
 get_run_branch() {
-  "$PYTHON_BIN" - "$BRANCHES_FILE" <<'PY'
+  "${FLOW_PY[@]}" - "$BRANCHES_FILE" <<'PY'
 import json, sys
 try:
     with open(sys.argv[1], encoding="utf-8") as f:
@@ -784,7 +796,7 @@ PY
 }
 
 set_run_branch() {
-  "$PYTHON_BIN" - "$BRANCHES_FILE" "$1" <<'PY'
+  "${FLOW_PY[@]}" - "$BRANCHES_FILE" "$1" <<'PY'
 import json, sys
 path, branch = sys.argv[1], sys.argv[2]
 data = {"base_branch": "", "run_branch": ""}
@@ -800,7 +812,7 @@ PY
 }
 
 list_specs_from_file() {
-  "$PYTHON_BIN" - "$SPECS_FILE" <<'PY'
+  "${FLOW_PY[@]}" - "$SPECS_FILE" <<'PY'
 import json, sys
 path = sys.argv[1]
 if not path:
@@ -816,7 +828,7 @@ PY
 }
 
 spec_all_tasks_done() {
-  "$PYTHON_BIN" - "$1" <<'PY'
+  "${FLOW_PY[@]}" - "$1" <<'PY'
 import json, sys
 try:
     data = json.loads(sys.argv[1])
@@ -841,7 +853,7 @@ list_open_specs() {
   local tmpfile
   tmpfile="$(mktemp)"
   "$FLOWCTL" specs --json 2>/dev/null > "$tmpfile"
-  "$PYTHON_BIN" - "$tmpfile" <<'PY'
+  "${FLOW_PY[@]}" - "$tmpfile" <<'PY'
 import sys, json
 try:
     with open(sys.argv[1]) as f:
@@ -895,7 +907,7 @@ verify_receipt() {
   local kind="$2"
   local id="$3"
   [[ -f "$path" ]] || return 1
-  "$PYTHON_BIN" - "$path" "$kind" "$id" <<'PY'
+  "${FLOW_PY[@]}" - "$path" "$kind" "$id" <<'PY'
 import json, sys
 path, kind, rid = sys.argv[1], sys.argv[2], sys.argv[3]
 try:
@@ -916,7 +928,7 @@ PY
 read_receipt_verdict() {
   local path="$1"
   [[ -f "$path" ]] || return 0
-  "$PYTHON_BIN" - "$path" <<'PY'
+  "${FLOW_PY[@]}" - "$path" <<'PY'
 import json, sys
 try:
     data = json.load(open(sys.argv[1], encoding="utf-8"))
@@ -1107,9 +1119,9 @@ Violations break automation and leave the user with incomplete work. Be precise,
     [[ ! " ${claude_args[*]} " =~ " --verbose " ]] && claude_args+=(--verbose)
     echo ""
     if [[ -n "$TIMEOUT_CMD" ]]; then
-      $TIMEOUT_CMD "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py" --verbose
+      $TIMEOUT_CMD "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "${FLOW_PY[@]}" "$SCRIPT_DIR/watch-filter.py" --verbose
     else
-      "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py" --verbose
+      "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "${FLOW_PY[@]}" "$SCRIPT_DIR/watch-filter.py" --verbose
     fi
     claude_rc=${PIPESTATUS[0]}
     claude_out="$(cat "$iter_log")"
@@ -1118,9 +1130,9 @@ Violations break automation and leave the user with incomplete work. Be precise,
     # Add --verbose only if not already set (needed for tool visibility)
     [[ ! " ${claude_args[*]} " =~ " --verbose " ]] && claude_args+=(--verbose)
     if [[ -n "$TIMEOUT_CMD" ]]; then
-      $TIMEOUT_CMD "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py"
+      $TIMEOUT_CMD "$WORKER_TIMEOUT" "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "${FLOW_PY[@]}" "$SCRIPT_DIR/watch-filter.py"
     else
-      "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "$SCRIPT_DIR/watch-filter.py"
+      "$CLAUDE_BIN" "${claude_args[@]}" "$prompt" 2>&1 | tee "$iter_log" | "${FLOW_PY[@]}" "$SCRIPT_DIR/watch-filter.py"
     fi
     claude_rc=${PIPESTATUS[0]}
     # Log contains stream-json; verdict/promise extraction handled by fallback logic

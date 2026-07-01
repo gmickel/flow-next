@@ -1487,7 +1487,10 @@ echo -e "${BLUE}Generating hooks.json...${NC}"
 # Build Codex hooks from canonical source:
 # - Keep: PreToolUse (Bash only), PostToolUse (Bash only), Stop
 # - Drop: SubagentStop, Edit/Write matchers
-# - Add: python3 explicit, statusMessage fields
+# - Invoke via the bash wrapper (`bash scripts/ralph/hooks/ralph-guard`), same as
+#   canonical: the wrapper sources pick-python.sh and runs the guard through a
+#   probed interpreter, so a Windows Store `python3` stub (exits 9009) is skipped
+#   rather than executed. The not-installed no-op guard checks the wrapper file.
 cat > "$CODEX_DIR/hooks.json" << 'HOOKS_EOF'
 {
   "description": "Ralph workflow guards for Codex - only active when FLOW_RALPH=1 and ralph-init has been run",
@@ -1498,7 +1501,7 @@ cat > "$CODEX_DIR/hooks.json" << 'HOOKS_EOF'
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f scripts/ralph/hooks/ralph-guard.py ] || python3 scripts/ralph/hooks/ralph-guard.py",
+            "command": "[ ! -f scripts/ralph/hooks/ralph-guard ] || bash scripts/ralph/hooks/ralph-guard",
             "timeout": 5
           }
         ]
@@ -1510,7 +1513,7 @@ cat > "$CODEX_DIR/hooks.json" << 'HOOKS_EOF'
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f scripts/ralph/hooks/ralph-guard.py ] || python3 scripts/ralph/hooks/ralph-guard.py",
+            "command": "[ ! -f scripts/ralph/hooks/ralph-guard ] || bash scripts/ralph/hooks/ralph-guard",
             "timeout": 5
           }
         ]
@@ -1521,7 +1524,7 @@ cat > "$CODEX_DIR/hooks.json" << 'HOOKS_EOF'
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f scripts/ralph/hooks/ralph-guard.py ] || python3 scripts/ralph/hooks/ralph-guard.py",
+            "command": "[ ! -f scripts/ralph/hooks/ralph-guard ] || bash scripts/ralph/hooks/ralph-guard",
             "timeout": 5
           }
         ]

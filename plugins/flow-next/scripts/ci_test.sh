@@ -6,18 +6,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Python detection
-pick_python() {
-  if [[ -n "${PYTHON_BIN:-}" ]]; then
-    command -v "$PYTHON_BIN" >/dev/null 2>&1 && { echo "$PYTHON_BIN"; return; }
-  fi
-  if command -v python3 >/dev/null 2>&1; then echo "python3"; return; fi
-  if command -v python  >/dev/null 2>&1; then echo "python"; return; fi
-  echo ""
-}
-
-PYTHON_BIN="$(pick_python)"
-[[ -n "$PYTHON_BIN" ]] || { echo "ERROR: python not found" >&2; exit 1; }
+# Python interpreter resolution via the shared functionality probe (skips the
+# Windows Store python3 alias stub; fills the FLOW_PY array). See lib/pick-python.sh.
+# shellcheck source=lib/pick-python.sh
+. "$SCRIPT_DIR/lib/pick-python.sh"
+pick_python || { echo "ERROR: python not found" >&2; exit 1; }
 
 # Use provided TEST_DIR or create temp
 if [[ -z "${TEST_DIR:-}" ]]; then
@@ -45,11 +38,11 @@ fail() { echo -e "${RED}✗${NC} $1"; FAIL=$((FAIL + 1)); }
 
 # Helper to run flowctl
 flowctl() {
-  "$PYTHON_BIN" "$TEST_DIR/scripts/flowctl.py" "$@"
+  "${FLOW_PY[@]}" "$TEST_DIR/scripts/flowctl.py" "$@"
 }
 
 echo -e "${YELLOW}=== flow-next CI tests ===${NC}"
-echo "Python: $PYTHON_BIN"
+echo "Python: ${FLOW_PY[*]}"
 echo "Test dir: $TEST_DIR"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -71,15 +64,15 @@ echo -e "\n${YELLOW}--- Basic Commands ---${NC}"
 flowctl init --json >/dev/null && pass "init" || fail "init"
 
 EPIC_JSON="$(flowctl spec create --title "Test Epic" --json)"
-EPIC_ID="$("$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['id'])" <<< "$EPIC_JSON")"
+EPIC_ID="$("${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['id'])" <<< "$EPIC_JSON")"
 [[ -n "$EPIC_ID" ]] && pass "epic create ($EPIC_ID)" || fail "epic create"
 
 TASK1_JSON="$(flowctl task create --spec "$EPIC_ID" --title "Task One" --priority 2 --json)"
-TASK1_ID="$("$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['id'])" <<< "$TASK1_JSON")"
+TASK1_ID="$("${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['id'])" <<< "$TASK1_JSON")"
 [[ -n "$TASK1_ID" ]] && pass "task create ($TASK1_ID)" || fail "task create"
 
 TASK2_JSON="$(flowctl task create --spec "$EPIC_ID" --title "Task Two" --priority 1 --json)"
-TASK2_ID="$("$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['id'])" <<< "$TASK2_JSON")"
+TASK2_ID="$("${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['id'])" <<< "$TASK2_JSON")"
 
 flowctl list --json >/dev/null && pass "list" || fail "list"
 flowctl show "$EPIC_ID" --json >/dev/null && pass "show epic" || fail "show epic"
@@ -92,7 +85,7 @@ echo -e "\n${YELLOW}--- State Machine ---${NC}"
 
 # next should return plan (no plan review yet)
 NEXT_JSON="$(flowctl next --require-plan-review --json)"
-STATUS="$("$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['status'])" <<< "$NEXT_JSON")"
+STATUS="$("${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['status'])" <<< "$NEXT_JSON")"
 [[ "$STATUS" == "plan" ]] && pass "next returns plan" || fail "next returns plan (got $STATUS)"
 
 # set plan review status
@@ -100,32 +93,32 @@ flowctl spec set-plan-review-status "$EPIC_ID" --status ship --json >/dev/null &
 
 # next should now return work with higher priority task (Task Two, priority 1)
 NEXT_JSON="$(flowctl next --json)"
-NEXT_TASK="$("$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin).get('task',''))" <<< "$NEXT_JSON")"
+NEXT_TASK="$("${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin).get('task',''))" <<< "$NEXT_JSON")"
 [[ "$NEXT_TASK" == "$TASK2_ID" ]] && pass "next picks high priority task" || fail "next picks high priority (expected $TASK2_ID, got $NEXT_TASK)"
 
 # start task
 flowctl start "$TASK2_ID" --json >/dev/null && pass "start task" || fail "start task"
 
 # verify task is in_progress
-TASK_STATUS="$(flowctl show "$TASK2_ID" --json | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['status'])")"
+TASK_STATUS="$(flowctl show "$TASK2_ID" --json | "${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['status'])")"
 [[ "$TASK_STATUS" == "in_progress" ]] && pass "task status is in_progress" || fail "task status (got $TASK_STATUS)"
 
 # block task (requires --reason-file)
 echo "Waiting for external API" > "$TEST_DIR/block_reason.md"
 flowctl block "$TASK2_ID" --reason-file "$TEST_DIR/block_reason.md" --json >/dev/null && pass "block task" || fail "block task"
-TASK_STATUS="$(flowctl show "$TASK2_ID" --json | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['status'])")"
+TASK_STATUS="$(flowctl show "$TASK2_ID" --json | "${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['status'])")"
 [[ "$TASK_STATUS" == "blocked" ]] && pass "task status is blocked" || fail "task blocked status (got $TASK_STATUS)"
 
 # Note: there's no unblock command - use --force to restart blocked tasks
 flowctl start "$TASK2_ID" --force --json >/dev/null && pass "restart blocked task (--force)" || fail "restart blocked task"
-TASK_STATUS="$(flowctl show "$TASK2_ID" --json | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['status'])")"
+TASK_STATUS="$(flowctl show "$TASK2_ID" --json | "${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['status'])")"
 [[ "$TASK_STATUS" == "in_progress" ]] && pass "task status restored to in_progress" || fail "task unblocked status (got $TASK_STATUS)"
 
 # done task (create temp files for evidence)
 echo "Task completed" > "$TEST_DIR/summary.md"
 echo '{"commits":["abc123"],"tests":["npm test"],"prs":[]}' > "$TEST_DIR/evidence.json"
 flowctl done "$TASK2_ID" --summary-file "$TEST_DIR/summary.md" --evidence-json "$TEST_DIR/evidence.json" --json >/dev/null && pass "done task" || fail "done task"
-TASK_STATUS="$(flowctl show "$TASK2_ID" --json | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['status'])")"
+TASK_STATUS="$(flowctl show "$TASK2_ID" --json | "${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['status'])")"
 [[ "$TASK_STATUS" == "done" ]] && pass "task status is done" || fail "task done status (got $TASK_STATUS)"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -160,11 +153,11 @@ set -e
 echo -e "\n${YELLOW}--- Spec Readiness (fn-58.1) ---${NC}"
 
 # Lazy purity: never-toggled spec carries no `ready` key but JSON reads false.
-READY_VAL="$(flowctl show "$EPIC_ID" --json | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['ready'])")"
+READY_VAL="$(flowctl show "$EPIC_ID" --json | "${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['ready'])")"
 [[ "$READY_VAL" == "False" ]] && pass "show emits explicit ready false" || fail "show ready default (got $READY_VAL)"
 
 flowctl spec ready "$EPIC_ID" --json >/dev/null && pass "spec ready" || fail "spec ready"
-READY_VAL="$(flowctl show "$EPIC_ID" --json | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['ready'])")"
+READY_VAL="$(flowctl show "$EPIC_ID" --json | "${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['ready'])")"
 [[ "$READY_VAL" == "True" ]] && pass "show reports ready true" || fail "show ready true (got $READY_VAL)"
 
 # Badge shown ONLY while ready (human output).
@@ -175,7 +168,7 @@ else
 fi
 
 flowctl spec unready "$EPIC_ID" --json >/dev/null && pass "spec unready" || fail "spec unready"
-READY_VAL="$(flowctl specs --json | "$PYTHON_BIN" -c "import json,sys; print([e['ready'] for e in json.load(sys.stdin)['specs']][0])")"
+READY_VAL="$(flowctl specs --json | "${FLOW_PY[@]}" -c "import json,sys; print([e['ready'] for e in json.load(sys.stdin)['specs']][0])")"
 [[ "$READY_VAL" == "False" ]] && pass "specs reports ready false after unready" || fail "specs ready false (got $READY_VAL)"
 
 if flowctl specs | grep -q "\[ready\]"; then
@@ -185,7 +178,7 @@ else
 fi
 
 # Idempotent no-op: second unready reports changed=false.
-CHANGED="$(flowctl spec unready "$EPIC_ID" --json | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['changed'])")"
+CHANGED="$(flowctl spec unready "$EPIC_ID" --json | "${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['changed'])")"
 [[ "$CHANGED" == "False" ]] && pass "unready idempotent no-op" || fail "unready no-op (changed=$CHANGED)"
 
 # `.M` task ids rejected.
@@ -202,7 +195,7 @@ echo -e "\n${YELLOW}--- Config System ---${NC}"
 
 flowctl config set memory.enabled true --json >/dev/null && pass "config set" || fail "config set"
 
-CONFIG_VAL="$(flowctl config get memory.enabled --json | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['value'])")"
+CONFIG_VAL="$(flowctl config get memory.enabled --json | "${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['value'])")"
 [[ "$CONFIG_VAL" == "True" ]] && pass "config get" || fail "config get (got $CONFIG_VAL)"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -224,7 +217,7 @@ flowctl memory add --type convention "Use snake_case for functions" --json >/dev
 
 MEM_LIST="$(flowctl memory list --json)"
 # memory list returns {success: true, entries: [...], legacy: [...], count: N, status: "active"}
-MEM_TOTAL="$("$PYTHON_BIN" -c "import json,sys; d=json.load(sys.stdin); print(d.get('count', 0))" <<< "$MEM_LIST")"
+MEM_TOTAL="$("${FLOW_PY[@]}" -c "import json,sys; d=json.load(sys.stdin); print(d.get('count', 0))" <<< "$MEM_LIST")"
 [[ "$MEM_TOTAL" -ge 2 ]] && pass "memory list ($MEM_TOTAL total)" || fail "memory list (got $MEM_TOTAL)"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -242,14 +235,14 @@ DEC_JSON="$(flowctl memory add \
   --superseded-by "knowledge/decisions/foo-2026-04-30" \
   --alternatives-considered "always-root,explicit-config,meta-file" \
   --json)"
-DEC_ID="$("$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['entry_id'])" <<< "$DEC_JSON")"
+DEC_ID="$("${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['entry_id'])" <<< "$DEC_JSON")"
 [[ -n "$DEC_ID" ]] && pass "memory add decisions ($DEC_ID)" || fail "memory add decisions"
 
-DEC_PATH="$("$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin)['path'])" <<< "$DEC_JSON")"
+DEC_PATH="$("${FLOW_PY[@]}" -c "import json,sys; print(json.load(sys.stdin)['path'])" <<< "$DEC_JSON")"
 [[ -f "$DEC_PATH" ]] && pass "decisions entry written to disk" || fail "decisions entry missing on disk"
 
 # Round-trip: parse the file we wrote, verify all three optional fields survived.
-"$PYTHON_BIN" - "$DEC_PATH" << 'PYTEST'
+"${FLOW_PY[@]}" - "$DEC_PATH" << 'PYTEST'
 import sys
 from pathlib import Path
 text = Path(sys.argv[1]).read_text(encoding="utf-8")
@@ -291,7 +284,7 @@ PYTEST
 # first frontmatter block, parse + write_memory_entry the same dict, compare
 # byte-for-byte. Field order is anchored by MEMORY_FIELD_ORDER; rerunning
 # write_memory_entry on the same dict must produce the same bytes.
-"$PYTHON_BIN" - "$TEST_DIR" "$DEC_PATH" << 'PYTEST'
+"${FLOW_PY[@]}" - "$TEST_DIR" "$DEC_PATH" << 'PYTEST'
 import importlib.util
 import sys
 from pathlib import Path
@@ -349,7 +342,7 @@ BAD_RC=$?
 set -e
 [[ $BAD_RC -ne 0 ]] && pass "decision_status rejects out-of-enum (cli)" || fail "decision_status should reject 'pending'"
 
-"$PYTHON_BIN" - "$TEST_DIR" << 'PYTEST'
+"${FLOW_PY[@]}" - "$TEST_DIR" << 'PYTEST'
 import importlib.util
 import sys
 from pathlib import Path
@@ -582,7 +575,7 @@ public interface PaymentGateway {
 EOF
 
 # Test symbol extraction via Python directly
-"$PYTHON_BIN" - "$TEST_DIR" << 'PYTEST'
+"${FLOW_PY[@]}" - "$TEST_DIR" << 'PYTEST'
 import sys
 sys.path.insert(0, sys.argv[1] + "/scripts")
 from flowctl import extract_symbols_from_file
@@ -645,7 +638,7 @@ PYTEST
 [[ $? -eq 0 ]] && pass "symbol extraction (6 languages)" || fail "symbol extraction"
 
 # RepoPrompt builder parsing regressions
-"$PYTHON_BIN" - "$TEST_DIR" << 'PYTEST'
+"${FLOW_PY[@]}" - "$TEST_DIR" << 'PYTEST'
 import sys
 sys.path.insert(0, sys.argv[1] + "/scripts")
 from flowctl import extract_builder_tab_from_payload, parse_builder_tab
@@ -683,7 +676,7 @@ PYTEST
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "\n${YELLOW}--- RepoPrompt Setup Review ---${NC}"
 
-"$PYTHON_BIN" - "$TEST_DIR" << 'PYTEST'
+"${FLOW_PY[@]}" - "$TEST_DIR" << 'PYTEST'
 import hashlib
 import importlib.util
 import io
@@ -857,7 +850,7 @@ PYTEST
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "\n${YELLOW}--- RepoPrompt Chat Send Compatibility ---${NC}"
 
-"$PYTHON_BIN" - "$TEST_DIR" << 'PYTEST'
+"${FLOW_PY[@]}" - "$TEST_DIR" << 'PYTEST'
 import importlib.util
 import io
 import json
@@ -1053,7 +1046,7 @@ PYTEST
 echo -e "\n${YELLOW}--- ralph.sh Helpers ---${NC}"
 
 # Test tag extraction
-"$PYTHON_BIN" - << 'PYTEST'
+"${FLOW_PY[@]}" - << 'PYTEST'
 import re
 import sys
 
@@ -1080,7 +1073,7 @@ PYTEST
 [[ $? -eq 0 ]] && pass "tag extraction" || fail "tag extraction"
 
 # Test JSON helpers (simulate ralph.sh json_get)
-"$PYTHON_BIN" - << 'PYTEST'
+"${FLOW_PY[@]}" - << 'PYTEST'
 import json
 
 def json_get(key, data):
@@ -1105,7 +1098,7 @@ PYTEST
 [[ $? -eq 0 ]] && pass "JSON helpers" || fail "JSON helpers"
 
 # Test attempts tracking
-"$PYTHON_BIN" - "$TEST_DIR" << 'PYTEST'
+"${FLOW_PY[@]}" - "$TEST_DIR" << 'PYTEST'
 import json
 import sys
 from pathlib import Path
@@ -1168,7 +1161,7 @@ flowctl status >/dev/null 2>&1
 
 # Test status --json (Python validates JSON, not jq)
 STATUS_OUT="$(flowctl status --json)"
-echo "$STATUS_OUT" | "$PYTHON_BIN" -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null
+echo "$STATUS_OUT" | "${FLOW_PY[@]}" -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null
 [[ $? -eq 0 ]] && pass "status --json" || fail "status --json invalid JSON"
 
 # Test ralph pause/resume/stop commands
@@ -1187,13 +1180,13 @@ flowctl ralph stop --run test-run >/dev/null
 rm -rf scripts/ralph/runs/test-run
 
 # Test task reset
-RESET_EPIC="$(flowctl spec create --title "Reset test" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-RESET_TASK="$(flowctl task create --spec "$RESET_EPIC" --title "Test task" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+RESET_EPIC="$(flowctl spec create --title "Reset test" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+RESET_TASK="$(flowctl task create --spec "$RESET_EPIC" --title "Test task" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 
 flowctl start "$RESET_TASK" --json >/dev/null
 flowctl done "$RESET_TASK" --json >/dev/null
 flowctl task reset "$RESET_TASK" --json >/dev/null
-RESET_STATUS="$(flowctl show "$RESET_TASK" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["status"])')"
+RESET_STATUS="$(flowctl show "$RESET_TASK" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["status"])')"
 [[ "$RESET_STATUS" == "todo" ]] && pass "task reset" || fail "task reset: status=$RESET_STATUS"
 
 # Test task reset errors on in_progress
@@ -1205,15 +1198,15 @@ set -e
 [[ $RESET_RC -ne 0 ]] && pass "task reset rejects in_progress" || fail "task reset should reject in_progress"
 
 # Test epic add-dep/rm-dep
-DEP_BASE="$(flowctl spec create --title "Dep base" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-DEP_CHILD="$(flowctl spec create --title "Dep child" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+DEP_BASE="$(flowctl spec create --title "Dep base" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+DEP_CHILD="$(flowctl spec create --title "Dep child" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 
 flowctl spec add-dep "$DEP_CHILD" "$DEP_BASE" --json >/dev/null
-DEPS="$(flowctl show "$DEP_CHILD" --json | "$PYTHON_BIN" -c 'import json,sys; print(",".join(json.load(sys.stdin).get("depends_on_epics",[])))')"
+DEPS="$(flowctl show "$DEP_CHILD" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(",".join(json.load(sys.stdin).get("depends_on_epics",[])))')"
 [[ "$DEPS" == "$DEP_BASE" ]] && pass "epic add-dep" || fail "epic add-dep: deps=$DEPS"
 
 flowctl spec rm-dep "$DEP_CHILD" "$DEP_BASE" --json >/dev/null
-DEPS="$(flowctl show "$DEP_CHILD" --json | "$PYTHON_BIN" -c 'import json,sys; print(",".join(json.load(sys.stdin).get("depends_on_epics",[])))')"
+DEPS="$(flowctl show "$DEP_CHILD" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(",".join(json.load(sys.stdin).get("depends_on_epics",[])))')"
 [[ -z "$DEPS" ]] && pass "epic rm-dep" || fail "epic rm-dep: deps=$DEPS"
 
 # Test ralph auto-detection (single active run)
@@ -1243,19 +1236,19 @@ promise=RETRY
 completion_reason=DONE
 promise=COMPLETE
 PROGRESS
-ACTIVE_COUNT="$(flowctl status --json | "$PYTHON_BIN" -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("active_runs",[])))')"
+ACTIVE_COUNT="$(flowctl status --json | "${FLOW_PY[@]}" -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("active_runs",[])))')"
 [[ "$ACTIVE_COUNT" == "0" ]] && pass "completed run excluded from active" || fail "completed run still active: count=$ACTIVE_COUNT"
 rm -rf scripts/ralph/runs/completed-test
 
 # Test task reset --cascade
-CASCADE_EPIC="$(flowctl spec create --title "Cascade test" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-CASCADE_T1="$(flowctl task create --spec "$CASCADE_EPIC" --title "Base task" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-CASCADE_T2="$(flowctl task create --spec "$CASCADE_EPIC" --title "Dependent task" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+CASCADE_EPIC="$(flowctl spec create --title "Cascade test" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+CASCADE_T1="$(flowctl task create --spec "$CASCADE_EPIC" --title "Base task" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+CASCADE_T2="$(flowctl task create --spec "$CASCADE_EPIC" --title "Dependent task" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 flowctl dep add "$CASCADE_T2" "$CASCADE_T1" --json >/dev/null  # T2 depends on T1
 flowctl start "$CASCADE_T1" >/dev/null && flowctl done "$CASCADE_T1" >/dev/null
 flowctl start "$CASCADE_T2" >/dev/null && flowctl done "$CASCADE_T2" >/dev/null
 flowctl task reset "$CASCADE_T1" --cascade --json >/dev/null
-T2_STATUS="$(flowctl show "$CASCADE_T2" --json | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["status"])')"
+T2_STATUS="$(flowctl show "$CASCADE_T2" --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin)["status"])')"
 [[ "$T2_STATUS" == "todo" ]] && pass "task reset --cascade" || fail "cascade reset: t2 status=$T2_STATUS"
 
 # ─────────────────────────────────────────────────────────────────────────────
