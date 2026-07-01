@@ -11,7 +11,9 @@ user-invocable: false
 Conduct a John Carmack-level review of spec plans.
 
 **Role**: Code Review Coordinator (NOT the reviewer)
-**Backends**: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot), or Cursor CLI (cursor). rp is macOS-only — when `RP_ELIGIBLE=0` (Preamble guard) drop it from all guidance and present only codex, copilot, cursor (plus none); `--review=rp` stays accepted.
+**Backends** (branch on the Preamble `RP_ELIGIBLE` guard):
+- When `RP_ELIGIBLE=1`: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot), or Cursor CLI (cursor)
+- When `RP_ELIGIBLE=0`: Codex CLI (codex), GitHub Copilot CLI (copilot), or Cursor CLI (cursor) — rp is macOS-only; never list it in guidance you surface (`--review=rp` stays accepted)
 
 ## Preamble
 
@@ -81,7 +83,9 @@ fi
 
 ### Backend at a glance
 
-- **rp** — RepoPrompt (macOS GUI); builder auto-selects context. Primary backend. List/recommend only when `RP_ELIGIBLE=1`; on `RP_ELIGIBLE=0` omit this line from any guidance you surface (explicit `--review=rp` still honored).
+When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (explicit `--review=rp` still honored):
+
+- **rp** — RepoPrompt (macOS GUI); builder auto-selects context. Primary backend.
 - **codex** — Codex CLI (cross-platform); uses OpenAI models (default `gpt-5.5`). `FLOW_CODEX_MODEL` / `FLOW_CODEX_EFFORT` env vars, or `--spec codex:gpt-5.4:xhigh`.
 - **copilot** — GitHub Copilot CLI (cross-platform); supports Claude Opus/Sonnet/Haiku 4.5 and GPT-5.2 families via a Copilot subscription. `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, or `--spec copilot:claude-opus-4.5:xhigh`.
 - **cursor** — Cursor CLI (`cursor-agent`, cross-platform); reaches `gpt-5.5-high` (1M-ctx default), the `gpt-5.3-codex` family, `composer-2.5`, and `claude-opus-4-8-thinking-high` via a Cursor subscription. `FLOW_CURSOR_MODEL` env var, or `--spec cursor:gpt-5.5-high`. Cursor folds reasoning effort into the model name — **no effort field**.
