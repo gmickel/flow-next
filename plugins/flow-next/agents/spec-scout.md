@@ -1,7 +1,7 @@
 ---
 name: spec-scout
 description: Scan existing specs to find dependencies and relationships for a new plan.
-model: claude-sonnet-4-6
+model: sonnet
 disallowedTools: Edit, Write, Task
 color: "#F59E0B"
 ---

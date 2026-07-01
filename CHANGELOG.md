@@ -2,6 +2,16 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 2.5.2] - 2026-07-02
+
+### Changed
+
+- **Subagent models: family aliases, tiered by task — no frozen versions** — the 11 scout agents were pinned to `model: claude-sonnet-4-6` (a superseded minor that rots when a newer Sonnet ships). They're now tiered with family aliases that track their family and match the task's cost/latency profile:
+  - **`haiku`** (Haiku 4.5 — fast, cheap, strong tool-use/instruction-following) for the 8 pure config-scanners: `build-scout`, `env-scout`, `memory-scout`, `observability-scout`, `security-scout`, `testing-scout`, `tooling-scout`, `workflow-scout`. Sonnet 5 is overkill (cost + latency) for grep/glob/read-and-report; Haiku 4.5 actually **out-scores `gpt-5.4-mini`** (the model the Codex mirror already runs these on) on coding + tool-calling, at 3× less than Sonnet.
+  - **`sonnet`** (Sonnet 5) for the 3 judgment scouts that do open-ended reasoning: `spec-scout` (cross-spec dependency reasoning), `claude-md-scout` (CLAUDE.md/AGENTS.md quality assessment), `docs-gap-scout` (inferring which docs a change breaks).
+  - Unchanged: 8 heavy-judgment agents on the `opus` alias; `worker` / `pr-comment-resolver` `inherit` the session model.
+  - **Cross-platform:** this Claude split exactly mirrors the intent already encoded in `scripts/sync-codex.sh`'s `map_model` (FAST `gpt-5.4-mini` vs INTELLIGENT `gpt-5.5`). Cursor consumes the same canonical `agents/*.md`, so it's covered. The Codex mirror is **byte-identical** after re-sync (8 `gpt-5.4-mini` + 11 `gpt-5.5`, unchanged) — `map_model` matches by family pattern, and `haiku` → FAST / `sonnet` (intelligent scouts) → INTELLIGENT produces the same output as before.
+
 ## [flow-next 2.5.1] - 2026-07-01
 
 ### Fixed
