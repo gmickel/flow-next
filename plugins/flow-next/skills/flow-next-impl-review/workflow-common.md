@@ -18,11 +18,14 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-# Priority: --review flag > env > config (flag parsed in SKILL.md)
-# Text output is bare backend name for back-compat grep. The same command in
-# --json mode returns {backend, spec, model, effort, source} — use that if you
-# need the model / effort resolved from a spec-form env value.
-BACKEND=$($FLOWCTL review-backend)
+# Priority: --review flag > per-task/spec `review` override > env > config (flag parsed in SKILL.md).
+# Pass the review target's id (the `fn-N.M` task / `fn-N` spec being reviewed — resolve it from
+# $ARGUMENTS first) so a per-task `review: <backend>:...` override routes to the RIGHT backend
+# even when it differs from the project default; omit for a standalone (no-spec) review. The id
+# is OPTIONAL — an empty value falls back to env/config unchanged (no regression).
+# Text output is bare backend name for back-compat grep. The same command in --json mode returns
+# {backend, spec, model, effort, source} — use that if you need the model / effort resolved.
+BACKEND=$($FLOWCTL review-backend "${TASK_ID:-}")
 
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."

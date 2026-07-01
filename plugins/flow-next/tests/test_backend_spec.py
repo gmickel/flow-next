@@ -1745,5 +1745,41 @@ class NoEmbedRegression(unittest.TestCase):
                              f"{name} regained embedded_files")
 
 
+class TestReviewBackendTaskAware(unittest.TestCase):
+    """PR #184 codex finding — `flowctl review-backend <id>` must let a per-task /
+    per-spec `review` override route above env/config, so the review skills pick the
+    right backend even when it differs from the project default (else a task set to
+    `review: cursor:...` under a codex default would run the wrong CLI)."""
+
+    def _rb(self, review_id):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            flowctl.cmd_review_backend(_ns(id=review_id, json=False))
+        return out.getvalue().strip()
+
+    def test_per_spec_override_beats_config(self) -> None:
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e", default_review="cursor:gpt-5.3-codex")
+            (td / ".flow" / "config.json").write_text(
+                json.dumps({"review": {"backend": "codex"}}))
+            self.assertEqual(self._rb("fn-9-e"), "cursor")   # per-spec override wins
+            self.assertEqual(self._rb(None), "codex")        # no id → config default
+
+    def test_per_task_override_beats_config(self) -> None:
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e", default_review="codex")
+            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e", review="cursor:gpt-5.3-codex")
+            (td / ".flow" / "config.json").write_text(
+                json.dumps({"review": {"backend": "codex"}}))
+            self.assertEqual(self._rb("fn-9-e.1"), "cursor")
+
+    def test_no_override_falls_through_to_config(self) -> None:
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-e")  # no default_review
+            (td / ".flow" / "config.json").write_text(
+                json.dumps({"review": {"backend": "copilot"}}))
+            self.assertEqual(self._rb("fn-9-e"), "copilot")  # id given, no override → config
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

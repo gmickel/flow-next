@@ -5807,12 +5807,32 @@ def cmd_review_backend(args: argparse.Namespace) -> None:
     choice. Text mode still prints just the bare backend name for back-compat
     with skill greps (``BACKEND=$(flowctl review-backend)``).
     """
-    # Priority: FLOW_REVIEW_BACKEND env > config > ASK
+    # Priority: per-task/epic ``review`` override > FLOW_REVIEW_BACKEND env > config > ASK
     spec: Optional[BackendSpec] = None
     source = "none"
 
+    # A per-task ``review:`` / per-spec ``default_review`` override wins over env/config
+    # (matches the documented "per-task review overrides env"), so the review skills route
+    # to the RIGHT backend even when it differs from the project default — otherwise a task
+    # set to ``review: cursor:...`` under a ``codex`` default would pick the codex workflow
+    # and shell the wrong CLI. Only adopt the resolved spec when it actually came from the
+    # task/epic; env/config/ASK below are unchanged. resolve_review_spec's own precedence is
+    # task>epic>env>config>hint, so a non-task/epic source means "no per-item override here".
+    review_id = getattr(args, "id", None)
+    if review_id and ensure_flow_exists():
+        try:
+            if is_task_id(review_id):
+                resolved, rsource = resolve_review_spec("rp", review_id, return_source=True)
+            else:
+                resolved, rsource = resolve_review_spec("rp", None, spec_id=review_id, return_source=True)
+            if rsource in ("task", "epic"):
+                spec = resolved
+                source = rsource
+        except Exception:
+            pass
+
     env_val = os.environ.get("FLOW_REVIEW_BACKEND", "").strip()
-    if env_val:
+    if spec is None and env_val:
         # Lenient parse handles spec-form and legacy bare values; degrades on
         # bad input rather than silently falling to ASK (previous behavior
         # quietly dropped ``codex:gpt-5.2``).
@@ -25393,6 +25413,11 @@ def main() -> None:
     # review-backend (helper for skills)
     p_review_backend = subparsers.add_parser(
         "review-backend", help="Get review backend (ASK if not configured)"
+    )
+    p_review_backend.add_argument(
+        "id", nargs="?", default=None,
+        help="Optional task/spec id — a per-task `review:` / per-spec `default_review` "
+        "override routes above env/config (so the review skills pick the right backend)",
     )
     p_review_backend.add_argument("--json", action="store_true", help="JSON output")
     p_review_backend.set_defaults(func=cmd_review_backend)
