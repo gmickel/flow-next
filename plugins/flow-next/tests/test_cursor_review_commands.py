@@ -579,17 +579,20 @@ class CursorCheckIsError(unittest.TestCase):
 
 
 class CursorFallbackCoercion(unittest.TestCase):
-    """PR #184 codex review — the no-``--spec`` resolve fallback must keep an
-    explicit cursor command on cursor, coercing a non-cursor default (e.g. config
-    ``review.backend=codex``) to the cursor default rather than running
-    cursor-agent with a foreign model / stamping ``spec:"codex:"`` under cursor.
+    """PR #184 — the no-``--spec`` cursor resolve fallback coerces ANY non-cursor
+    resolved spec (env/config default OR a stored per-task/epic ``review: codex:...``)
+    to the cursor default: ``flowctl cursor`` always shells cursor-agent, and
+    Cursor's model names are format-specific (``gpt-5.5-high``, not ``gpt-5.5``), so a
+    foreign spec would pass an invalid ``--model``. A ``cursor:<model>`` spec is
+    honored. (Retest finding: honoring a cross-backend stored spec shelled cursor-agent
+    with a foreign model.)
     """
 
     def test_fallback_coerces_non_cursor_config_default_to_cursor(self):
         args = argparse.Namespace(spec=None, json=False)
         codex_default = flowctl.BackendSpec("codex", "gpt-5.5", "high")
         with mock.patch.object(flowctl, "resolve_review_spec",
-                               return_value=(codex_default, "config")):
+                               return_value=codex_default):
             out = flowctl._resolve_cursor_review_spec(args, None)
         self.assertEqual(out.backend, "cursor")
         self.assertIsNone(out.effort)
@@ -599,20 +602,22 @@ class CursorFallbackCoercion(unittest.TestCase):
         args = argparse.Namespace(spec=None, json=False)
         cursor_default = flowctl.BackendSpec("cursor", "gpt-5.3-codex", None)
         with mock.patch.object(flowctl, "resolve_review_spec",
-                               return_value=(cursor_default, "config")):
+                               return_value=cursor_default):
             out = flowctl._resolve_cursor_review_spec(args, None)
         self.assertEqual(out.backend, "cursor")
         self.assertEqual(out.model, "gpt-5.3-codex")
 
-    def test_fallback_honors_per_task_cross_backend(self):
-        # A deliberate per-task ``review: codex:...`` (source="task") is HONORED,
-        # not coerced to cursor — the documented cross-backend behavior.
+    def test_fallback_coerces_per_task_cross_backend(self):
+        # A stored per-task/epic ``review: codex:...`` is COERCED to the cursor
+        # default (NOT honored) — cursor can't run a foreign-format model, same
+        # strictness as the explicit ``--spec`` guard.
         args = argparse.Namespace(spec=None, json=False)
         codex_task = flowctl.BackendSpec("codex", "gpt-5.5", "high")
         with mock.patch.object(flowctl, "resolve_review_spec",
-                               return_value=(codex_task, "task")):
+                               return_value=codex_task):
             out = flowctl._resolve_cursor_review_spec(args, None)
-        self.assertEqual(out.backend, "codex")
+        self.assertEqual(out.backend, "cursor")
+        self.assertIsNone(out.effort)
 
 
 if __name__ == "__main__":

@@ -23403,15 +23403,17 @@ def _resolve_cursor_review_spec(
             return parsed.resolve()
         except ValueError as e:
             error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
-    resolved, source = resolve_review_spec(
-        "cursor", task_id, spec_id=spec_id, return_source=True
-    )
-    # An explicit ``flowctl cursor ...`` whose backend resolves elsewhere only
-    # because of an env/config DEFAULT (e.g. ``review.backend=codex``) is coerced
-    # to the cursor default — so we never shell ``cursor-agent`` with a foreign
-    # model or stamp ``spec:"codex:..."`` under ``mode:"cursor"``. A deliberate
-    # per-task / per-epic cross-backend ``review`` spec is honored (not coerced).
-    if resolved.backend != "cursor" and source in ("env", "config"):
+    resolved = resolve_review_spec("cursor", task_id, spec_id=spec_id)
+    # ``flowctl cursor ...`` ALWAYS shells cursor-agent, and Cursor's model names
+    # are format-specific (effort folded in, e.g. ``gpt-5.5-high`` / ``gpt-5.3-codex``).
+    # A resolved NON-cursor spec from ANY source — an env/config default OR a stored
+    # per-task/per-epic ``review: codex:...`` — would pass a foreign model
+    # (``gpt-5.5``) to ``cursor-agent --model`` and fail, exactly what the explicit
+    # ``--spec`` guard above rejects. So coerce ANY non-cursor spec to the cursor
+    # default regardless of source (a per-task/per-spec ``cursor:<model>`` is still
+    # honored — its backend IS cursor). codex/copilot stay lenient (OpenAI-style
+    # model names cross over); only Cursor's format demands this.
+    if resolved.backend != "cursor":
         return BackendSpec("cursor").resolve()
     return resolved
 
