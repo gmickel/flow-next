@@ -1,8 +1,8 @@
 """Unit tests for `_stamp_flow_bin_launchers` and its integration into
 `cmd_init` (fn-77.3, R4). Covers the drift guard (in-module constants must be
-byte-identical to the committed launcher sources), fresh-init stamping, the
-self-heal of a pre-fix `exec python3` launcher, and idempotency (no
-tracked-file churn on re-run)."""
+byte-identical to the committed launcher sources), the sibling-target guard
+(only stamp when .flow/bin/flowctl.py is present), the self-heal of a pre-fix
+`exec python3` launcher, and idempotency (no tracked-file churn on re-run)."""
 
 from __future__ import annotations
 
@@ -33,6 +33,13 @@ OLD_BROKEN_SH = (
 )
 
 
+def _seed_flowctl_py(bin_dir: Path) -> None:
+    """Seed the launcher target the stamp guards on. Contents are irrelevant —
+    only its presence gates stamping (fn-77 impl-review)."""
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    (bin_dir / "flowctl.py").write_text("# flowctl target\n", encoding="utf-8")
+
+
 class TestLauncherConstantDriftGuard(unittest.TestCase):
     """DRIFT GUARD (R4): the in-module launcher bodies must be byte-identical
     to the committed sources so `init` self-heal stamps the real launchers."""
@@ -56,10 +63,10 @@ class TestLauncherConstantDriftGuard(unittest.TestCase):
 class TestStampFlowBinLaunchers(unittest.TestCase):
     """`_stamp_flow_bin_launchers(flow_dir) -> list` invariants."""
 
-    def test_fresh_creates_both_launchers(self) -> None:
+    def test_stamps_when_flowctl_py_present(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow_dir = Path(tmp) / ".flow"
-            flow_dir.mkdir()
+            _seed_flowctl_py(flow_dir / "bin")
             actions = flowctl._stamp_flow_bin_launchers(flow_dir)
             sh = flow_dir / "bin" / "flowctl"
             cmd = flow_dir / "bin" / "flowctl.cmd"
@@ -69,10 +76,31 @@ class TestStampFlowBinLaunchers(unittest.TestCase):
             self.assertIn("stamped bin/flowctl", actions)
             self.assertIn("stamped bin/flowctl.cmd", actions)
 
-    def test_self_heals_old_exec_python3_launcher(self) -> None:
+    def test_skips_when_flowctl_py_absent(self) -> None:
+        # Fresh/bare init: no launcher target on disk. Stamping must be a no-op
+        # so we never leave orphan launchers pointing at a missing flowctl.py.
+        with tempfile.TemporaryDirectory() as tmp:
+            flow_dir = Path(tmp) / ".flow"
+            flow_dir.mkdir()
+            actions = flowctl._stamp_flow_bin_launchers(flow_dir)
+            self.assertEqual(actions, [])
+            self.assertFalse((flow_dir / "bin" / "flowctl").exists())
+            self.assertFalse((flow_dir / "bin" / "flowctl.cmd").exists())
+
+    def test_skips_when_bin_has_no_flowctl_py(self) -> None:
+        # bin/ exists (e.g. holds unrelated files) but flowctl.py is absent —
+        # still skip: the guard is on the target, not on the directory.
         with tempfile.TemporaryDirectory() as tmp:
             flow_dir = Path(tmp) / ".flow"
             (flow_dir / "bin").mkdir(parents=True)
+            actions = flowctl._stamp_flow_bin_launchers(flow_dir)
+            self.assertEqual(actions, [])
+            self.assertFalse((flow_dir / "bin" / "flowctl").exists())
+
+    def test_self_heals_old_exec_python3_launcher(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow_dir = Path(tmp) / ".flow"
+            _seed_flowctl_py(flow_dir / "bin")
             # Pre-fix repo: broken bash launcher present, .cmd missing entirely.
             (flow_dir / "bin" / "flowctl").write_text(OLD_BROKEN_SH, encoding="utf-8")
             actions = flowctl._stamp_flow_bin_launchers(flow_dir)
@@ -85,7 +113,7 @@ class TestStampFlowBinLaunchers(unittest.TestCase):
     def test_idempotent_no_churn_on_rerun(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow_dir = Path(tmp) / ".flow"
-            flow_dir.mkdir()
+            _seed_flowctl_py(flow_dir / "bin")
             flowctl._stamp_flow_bin_launchers(flow_dir)  # first stamp
             sh = flow_dir / "bin" / "flowctl"
             before = sh.read_bytes()
@@ -95,7 +123,8 @@ class TestStampFlowBinLaunchers(unittest.TestCase):
 
 
 class TestCmdInitStampsLaunchers(unittest.TestCase):
-    """cmd_init wires the stamp on fresh init and stays idempotent."""
+    """cmd_init wires the stamp on an existing install and stays idempotent;
+    a fresh init leaves no orphan launchers (fn-77 impl-review)."""
 
     def _run_init(self, tmp: Path) -> dict:
         ns = mock.Mock()
@@ -106,9 +135,10 @@ class TestCmdInitStampsLaunchers(unittest.TestCase):
                 flowctl.cmd_init(ns)
         return captured
 
-    def test_fresh_init_stamps_and_reports(self) -> None:
+    def test_existing_install_stamps_and_reports(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
+            _seed_flowctl_py(tmp / ".flow" / "bin")  # existing install: target present
             result = self._run_init(tmp)
             self.assertTrue(result.get("success"))
             actions = result.get("actions", [])
@@ -117,9 +147,21 @@ class TestCmdInitStampsLaunchers(unittest.TestCase):
             self.assertTrue((tmp / ".flow" / "bin" / "flowctl").exists())
             self.assertTrue((tmp / ".flow" / "bin" / "flowctl.cmd").exists())
 
+    def test_fresh_init_skips_launchers(self) -> None:
+        # A bare `flowctl init` (no flowctl.py yet) must not stamp launchers.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            result = self._run_init(tmp)
+            self.assertTrue(result.get("success"))
+            bin_actions = [a for a in result.get("actions", []) if "bin/flowctl" in a]
+            self.assertEqual(bin_actions, [])
+            self.assertFalse((tmp / ".flow" / "bin" / "flowctl").exists())
+            self.assertFalse((tmp / ".flow" / "bin" / "flowctl.cmd").exists())
+
     def test_re_init_reports_no_bin_action(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
+            _seed_flowctl_py(tmp / ".flow" / "bin")
             self._run_init(tmp)
             second = self._run_init(tmp)
             bin_actions = [a for a in second.get("actions", []) if "bin/" in a]

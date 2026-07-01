@@ -1490,7 +1490,9 @@ echo -e "${BLUE}Generating hooks.json...${NC}"
 # - Invoke via the bash wrapper (`bash scripts/ralph/hooks/ralph-guard`), same as
 #   canonical: the wrapper sources pick-python.sh and runs the guard through a
 #   probed interpreter, so a Windows Store `python3` stub (exits 9009) is skipped
-#   rather than executed. The not-installed no-op guard checks the wrapper file.
+#   rather than executed. Prefer the wrapper when present; fall back to the legacy
+#   `scripts/ralph/hooks/ralph-guard.py` (direct shebang exec) for installs that
+#   ran ralph-init before the wrapper existed; no-op when neither is present.
 cat > "$CODEX_DIR/hooks.json" << 'HOOKS_EOF'
 {
   "description": "Ralph workflow guards for Codex - only active when FLOW_RALPH=1 and ralph-init has been run",
@@ -1501,7 +1503,7 @@ cat > "$CODEX_DIR/hooks.json" << 'HOOKS_EOF'
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f scripts/ralph/hooks/ralph-guard ] || bash scripts/ralph/hooks/ralph-guard",
+            "command": "if [ -f scripts/ralph/hooks/ralph-guard ]; then bash scripts/ralph/hooks/ralph-guard; elif [ -f scripts/ralph/hooks/ralph-guard.py ]; then scripts/ralph/hooks/ralph-guard.py; fi",
             "timeout": 5
           }
         ]
@@ -1513,7 +1515,7 @@ cat > "$CODEX_DIR/hooks.json" << 'HOOKS_EOF'
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f scripts/ralph/hooks/ralph-guard ] || bash scripts/ralph/hooks/ralph-guard",
+            "command": "if [ -f scripts/ralph/hooks/ralph-guard ]; then bash scripts/ralph/hooks/ralph-guard; elif [ -f scripts/ralph/hooks/ralph-guard.py ]; then scripts/ralph/hooks/ralph-guard.py; fi",
             "timeout": 5
           }
         ]
@@ -1524,7 +1526,7 @@ cat > "$CODEX_DIR/hooks.json" << 'HOOKS_EOF'
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f scripts/ralph/hooks/ralph-guard ] || bash scripts/ralph/hooks/ralph-guard",
+            "command": "if [ -f scripts/ralph/hooks/ralph-guard ]; then bash scripts/ralph/hooks/ralph-guard; elif [ -f scripts/ralph/hooks/ralph-guard.py ]; then scripts/ralph/hooks/ralph-guard.py; fi",
             "timeout": 5
           }
         ]

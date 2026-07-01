@@ -5509,12 +5509,19 @@ def _stamp_flow_bin_launchers(flow_dir: Path) -> list:
     so existing installs self-heal a pre-fix (bare `exec python3`) launcher on
     the next `init`. Idempotent: writes each file only when absent or when its
     bytes differ (.flow/bin is tracked — avoid churn). Returns an action string
-    per real change only; a no-op run returns []."""
+    per real change only; a no-op run returns [].
+
+    fn-77 impl-review: guarded on the sibling target — only stamps when
+    .flow/bin/flowctl.py already exists. The self-heal use case is an existing
+    install that has flowctl.py but a stale/broken launcher; a bare/fresh `init`
+    (or a /flow-next:setup that aborts before copying flowctl.py) must NOT leave
+    launchers whose target is missing — that full install is setup's job."""
     actions = []
     bin_dir = flow_dir / "bin"
-    if not bin_dir.exists():
-        bin_dir.mkdir(parents=True)
-        actions.append("created bin/")
+    # No target to launch → don't stamp orphan launchers. (If flowctl.py is
+    # present, bin_dir necessarily exists, so no mkdir is needed here.)
+    if not (bin_dir / "flowctl.py").exists():
+        return actions
 
     sh_bytes = LAUNCHER_SH.encode("utf-8")
     # .cmd is a Windows batch file: store LF in-module, write CRLF to disk.
@@ -5557,6 +5564,8 @@ def cmd_init(args: argparse.Namespace) -> None:
     # pre-fix `exec python3` launcher without a full /flow-next:setup re-run.
     # Emitted from in-module constants (not cp — no plugin-root on disk here);
     # idempotent (writes only on content diff), so no tracked-file churn.
+    # No-op unless .flow/bin/flowctl.py is already present (fn-77 impl-review):
+    # a bare/fresh init must not leave launchers pointing at a missing target.
     actions.extend(_stamp_flow_bin_launchers(flow_dir))
 
     # fn-43: write .flow/.gitignore so users don't accidentally commit

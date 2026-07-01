@@ -124,21 +124,24 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# fn-77.3: init self-heals .flow/bin launchers (re-stamps bash + .cmd)
+# fn-77.3 (+ fn-77 impl-review): init self-heals .flow/bin launchers (re-stamps
+# bash + .cmd) — but ONLY when the launcher target .flow/bin/flowctl.py is
+# already present. A bare/fresh init must NOT leave orphan launchers.
 echo -e "${YELLOW}--- init self-heals .flow/bin launchers (fn-77.3) ---${NC}"
 
-# Fresh init above already stamped both launchers; they must match source.
-if [[ -f .flow/bin/flowctl && -f .flow/bin/flowctl.cmd ]] \
-   && diff -q .flow/bin/flowctl "$PLUGIN_ROOT/scripts/flowctl" >/dev/null \
-   && diff -q .flow/bin/flowctl.cmd "$PLUGIN_ROOT/scripts/flowctl.cmd" >/dev/null; then
-  echo -e "${GREEN}✓${NC} init stamps .flow/bin/flowctl + flowctl.cmd (byte-match source)"
+# Fresh init above had no .flow/bin/flowctl.py target → no launchers stamped.
+if [[ ! -f .flow/bin/flowctl && ! -f .flow/bin/flowctl.cmd ]]; then
+  echo -e "${GREEN}✓${NC} fresh init leaves no orphan launchers (no flowctl.py target)"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} init did not stamp matching .flow/bin launchers"
+  echo -e "${RED}✗${NC} fresh init wrongly stamped .flow/bin launchers without a target"
   FAIL=$((FAIL + 1))
 fi
 
-# Simulate a pre-fix install: broken `exec python3` launcher + missing .cmd.
+# Simulate an existing install: seed the launcher target, then a pre-fix broken
+# `exec python3` launcher + missing .cmd. init self-heals both.
+mkdir -p .flow/bin
+cp scripts/flowctl.py .flow/bin/flowctl.py
 printf '#!/bin/bash\nexec python3 "$(dirname "${BASH_SOURCE[0]}")/flowctl.py" "$@"\n' > .flow/bin/flowctl
 rm -f .flow/bin/flowctl.cmd
 scripts/flowctl init --json >/dev/null

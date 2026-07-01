@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f scripts/ralph/hooks/ralph-guard ] || bash scripts/ralph/hooks/ralph-guard",
+            "command": "if [ -f scripts/ralph/hooks/ralph-guard ]; then bash scripts/ralph/hooks/ralph-guard; elif [ -f scripts/ralph/hooks/ralph-guard.py ]; then scripts/ralph/hooks/ralph-guard.py; fi",
             "timeout": 5
           }
         ]
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f scripts/ralph/hooks/ralph-guard ] || bash scripts/ralph/hooks/ralph-guard",
+            "command": "if [ -f scripts/ralph/hooks/ralph-guard ]; then bash scripts/ralph/hooks/ralph-guard; elif [ -f scripts/ralph/hooks/ralph-guard.py ]; then scripts/ralph/hooks/ralph-guard.py; fi",
             "timeout": 5
           }
         ]
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f scripts/ralph/hooks/ralph-guard ] || bash scripts/ralph/hooks/ralph-guard",
+            "command": "if [ -f scripts/ralph/hooks/ralph-guard ]; then bash scripts/ralph/hooks/ralph-guard; elif [ -f scripts/ralph/hooks/ralph-guard.py ]; then scripts/ralph/hooks/ralph-guard.py; fi",
             "timeout": 5
           }
         ]
