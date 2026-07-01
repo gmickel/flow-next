@@ -72,6 +72,8 @@ Flow-Next's plan-review and impl-review skills include specific instructions for
 
 **Fix:** Remove or comment out custom rp-cli instructions from your `CLAUDE.md`/`AGENTS.md` when using Flow-Next reviews. The plugin provides complete rp-cli guidance.
 
+> **Note:** RepoPrompt is macOS-only. On non-Mac hosts without `rp-cli` on PATH, `/flow-next:plan` and `/flow-next:plan-review` don't propose the RepoPrompt path at all — only the cross-platform backends (`codex`, `copilot`, `cursor`, `none`) are offered. An explicit `--review=rp` is still accepted and errors at runtime if `rp-cli` is missing.
+
 ## Copilot review backend on Windows (fixed in 1.1.9)
 
 Spec-driven `flowctl copilot {impl,plan,completion}-review` calls work on native Windows from 1.1.9 onwards. No action required — the WSL detour from the 1.1.8 era is no longer necessary.

@@ -222,6 +222,10 @@ flow-next's bundled `flowctl` is a thin launcher over `flowctl.py`. On Windows i
 - **Alias-stub pitfall.** On Windows `python3` is, by default, the Microsoft Store **App Execution Alias** stub — on `PATH` but non-functional (prints *"Python was not found"*, exits **9009**). The probe skips it; a bare presence check does not. If a *pre-fix* install still hits it, see [`troubleshooting.md` → Windows `python3` / Store alias stub](troubleshooting.md#windows-python3-not-found--microsoft-store-alias-stub-fixed-in-fn-77) for the two recovery paths (re-stamp launchers via `py -3 .flow/bin/flowctl.py init`, or disable the alias).
 - **Ralph mode requires Git Bash on Windows.** The Ralph harness (`ralph.sh`) and its hook wrapper are bash, and the `ralph-guard.py` hook is invoked via a bash wrapper that sources the shared resolver — there is **no** native `ralph-guard.cmd`, because the harness that would call it is itself bash. So run Ralph under Git Bash / WSL on Windows. The interactive `flowctl` / plan / work / review workflow needs no such constraint (the `.cmd` shim covers cmd/PowerShell).
 
+## RepoPrompt review backend (macOS-only)
+
+The `rp` review backend drives the [RepoPrompt](https://repoprompt.com) macOS GUI via `rp-cli` — it does not exist on Linux or Windows. `/flow-next:plan` and `/flow-next:plan-review` therefore only *propose* the RepoPrompt path when it can actually run (host is macOS, or `rp-cli` is on PATH); on other hosts their interactive setup offers just the cross-platform backends (`codex`, `copilot`, `cursor`, `none`). An explicit `--review=rp` / `review.backend=rp` is still accepted anywhere and fails at runtime with a clear `rp-cli not found in PATH` error if the CLI is absent.
+
 ## Windows + Copilot review backend
 
 Works natively from flow-next 1.1.9. flow-next picks the prompt-delivery path per host:

@@ -108,6 +108,20 @@ Parse the arguments for these patterns. If found, use them and skip questions:
 
 ### If options NOT found in arguments
 
+**RepoPrompt eligibility** (compute once, before any question below):
+
+```bash
+# RepoPrompt is macOS-only (rp-cli bridges the GUI). Only offer the rp path
+# when it can actually run: on macOS, or when rp-cli is already on PATH.
+if [ "$(uname 2>/dev/null)" = "Darwin" ] || command -v rp-cli >/dev/null 2>&1; then
+ RP_ELIGIBLE=1
+else
+ RP_ELIGIBLE=0
+fi
+```
+
+Suppression governs *proposals only* — an explicit `--research=rp` / `--review=rp` argument (parsed above) is always honored and errors at runtime if rp-cli is missing, exactly as today.
+
 **Plan depth** (parse from args or ask):
 - `--depth=short` or "quick" or "minimal" → SHORT
 - `--depth=standard` or "normal" → STANDARD
@@ -116,7 +130,11 @@ Parse the arguments for these patterns. If found, use them and skip questions:
 
 **If `AUTONOMOUS=1`:** skip every question below — apply the autonomous defaults above and continue.
 
-**If REVIEW_BACKEND is rp, codex, or none** (already configured): Only ask research question. Show override hint:
+**If REVIEW_BACKEND is rp, codex, or none** (already configured): Only ask research question. Show override hint.
+
+When `RP_ELIGIBLE=0` (not macOS, no rp-cli): do NOT ask about RepoPrompt — context-scout cannot run here. Research = `repo-scout`; ask nothing in this branch and continue.
+
+When `RP_ELIGIBLE=1`:
 
 ```
 Quick setup: Use RepoPrompt for deeper context?
@@ -127,7 +145,9 @@ b) No, repo-scout (faster)
 (Tip: --depth=short|standard|deep, --review=rp|codex|none)
 ```
 
-**If REVIEW_BACKEND is ASK** (not configured): Ask all questions:
+**If REVIEW_BACKEND is ASK** (not configured): Ask all questions.
+
+When `RP_ELIGIBLE=1`:
 
 ```
 Quick setup before planning:
@@ -148,6 +168,24 @@ Quick setup before planning:
  d) None (configure later)
 
 (Reply: "1a 2b 3d", or just tell me naturally)
+```
+
+When `RP_ELIGIBLE=0` (not macOS, no rp-cli): omit the Research question entirely (research = `repo-scout`) and drop the RepoPrompt review option:
+
+```
+Quick setup before planning:
+
+1. **Plan depth** — How detailed?
+ a) Short — problem, acceptance, key context only
+ b) Standard (default) — + approach, risks, test notes
+ c) Deep — + phases, alternatives, rollout plan
+
+2. **Review** — Run Carmack-level review after?
+ a) Codex CLI
+ b) Export for external LLM
+ c) None (configure later)
+
+(Reply: "1a 2c", or just tell me naturally)
 ```
 
 Wait for response. Parse naturally — user may reply terse ("1a 2b") or ramble via voice.
