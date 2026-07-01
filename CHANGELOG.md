@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **`/flow-next:plan` and `/flow-next:plan-review` no longer propose RepoPrompt where it cannot run** (fn-78) — RepoPrompt is a macOS-only GUI app (its `rp-cli` bridge only exists there), yet both skills proactively dangled the rp path in their interactive setup on every host; on Linux/Windows without `rp-cli`, picking it was a guaranteed runtime failure (`require_rp_cli()` → exit 2). Both skills now compute a single POSIX eligibility guard — `RP_ELIGIBLE ⟺ uname == "Darwin" OR rp-cli on PATH` — at the top of their interactive-setup step and, when ineligible, drop every RepoPrompt *proposal*: plan's "Use RepoPrompt for deeper context?" research question (research defaults to `repo-scout`) and its "Review → RepoPrompt" option; plan-review's Backends summary, "Backend at a glance" rp/"Primary backend" line, and ASK-error/override hints (steering only to the runnable configured backends `codex`/`copilot`/`cursor` + `none`). **Suppression is not a ban**: an explicit `--research=rp` / `--review=rp` / `FLOW_REVIEW_BACKEND=rp` / `review.backend=rp` still resolves to rp and hits the existing runtime error; on eligible hosts (macOS, or `rp-cli` present anywhere) every surface renders byte-for-byte as before. Codex mirror regenerated via `scripts/sync-codex.sh`; `flow-next-setup` untouched (its menu already gates on `HAVE_RP`). No version bump (batched).
+
 ## [flow-next 2.5.2] - 2026-07-02
 
 ### Changed

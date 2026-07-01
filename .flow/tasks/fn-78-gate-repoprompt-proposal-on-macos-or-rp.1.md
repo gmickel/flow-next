@@ -17,9 +17,8 @@ Add a single `RP_ELIGIBLE` eligibility gate to the two canonical skills so the R
 **Files:** `plugins/flow-next/skills/flow-next-plan/SKILL.md`, `plugins/flow-next/skills/flow-next-plan-review/SKILL.md` (canonical only — do NOT hand-edit the codex mirror; that is task .2). Inline bash probe only — no new flowctl surface; do not touch flowctl backend resolution / `require_rp_cli`. `steps.md:160` already degrades dispatch on rp-unavailable; this gates the earlier *proposal*.
 
 ## Done summary
-TBD
-
+Added the RP_ELIGIBLE gate (uname Darwin OR rp-cli on PATH) to canonical flow-next-plan and flow-next-plan-review SKILL.md: on ineligible hosts the RepoPrompt research/review proposals and rp backend steering (Backends summary, at-a-glance, ASK-error, override hints) are suppressed with clean re-lettering, while eligible rendering stays byte-for-byte and explicit --research=rp/--review=rp remain honored via runtime require_rp_cli. Codex mirror regen is task .2.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: a7c20fb7, 9298b9e9d931574eba407d003d1d52d21c67355f
+- Tests: bash -n + live execution of RP_ELIGIBLE guard (Darwin=1; simulated Linux w/o rp-cli=0), cursor impl-review fn-78.1 --base 7354f9bb: NEEDS_WORK then SHIP (all R-IDs met)
 - PRs:
