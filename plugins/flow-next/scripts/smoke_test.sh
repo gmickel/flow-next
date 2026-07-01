@@ -124,6 +124,44 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# fn-77.3: init self-heals .flow/bin launchers (re-stamps bash + .cmd)
+echo -e "${YELLOW}--- init self-heals .flow/bin launchers (fn-77.3) ---${NC}"
+
+# Fresh init above already stamped both launchers; they must match source.
+if [[ -f .flow/bin/flowctl && -f .flow/bin/flowctl.cmd ]] \
+   && diff -q .flow/bin/flowctl "$PLUGIN_ROOT/scripts/flowctl" >/dev/null \
+   && diff -q .flow/bin/flowctl.cmd "$PLUGIN_ROOT/scripts/flowctl.cmd" >/dev/null; then
+  echo -e "${GREEN}✓${NC} init stamps .flow/bin/flowctl + flowctl.cmd (byte-match source)"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} init did not stamp matching .flow/bin launchers"
+  FAIL=$((FAIL + 1))
+fi
+
+# Simulate a pre-fix install: broken `exec python3` launcher + missing .cmd.
+printf '#!/bin/bash\nexec python3 "$(dirname "${BASH_SOURCE[0]}")/flowctl.py" "$@"\n' > .flow/bin/flowctl
+rm -f .flow/bin/flowctl.cmd
+scripts/flowctl init --json >/dev/null
+if diff -q .flow/bin/flowctl "$PLUGIN_ROOT/scripts/flowctl" >/dev/null \
+   && [[ -f .flow/bin/flowctl.cmd ]] \
+   && diff -q .flow/bin/flowctl.cmd "$PLUGIN_ROOT/scripts/flowctl.cmd" >/dev/null; then
+  echo -e "${GREEN}✓${NC} init self-heals old exec-python3 launcher + re-adds flowctl.cmd"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} init did not self-heal a broken .flow/bin launcher"
+  FAIL=$((FAIL + 1))
+fi
+
+# Idempotent: a second init makes no .flow/bin change (no tracked-file churn).
+heal_bin_actions="$(scripts/flowctl init --json | "${FLOW_PY[@]}" -c 'import json,sys; print([a for a in json.load(sys.stdin).get("actions",[]) if "bin/" in a])')"
+if [[ "$heal_bin_actions" == "[]" ]]; then
+  echo -e "${GREEN}✓${NC} init .flow/bin stamping idempotent (no churn on re-run)"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} init .flow/bin not idempotent, got: $heal_bin_actions"
+  FAIL=$((FAIL + 1))
+fi
+
 # Reset config for remaining tests
 scripts/flowctl config set memory.enabled false --json >/dev/null
 
