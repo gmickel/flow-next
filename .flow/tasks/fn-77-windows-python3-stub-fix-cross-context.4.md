@@ -3,39 +3,40 @@ satisfies: [R1, R5, R6]
 ---
 
 ## Description
-Sweep the remaining bare-`python3` invocation sites the launcher fix doesn't reach, and de-duplicate the 12 copy-pasted `pick_python` bodies. Three site classes:
-1. **12 `pick_python` copies** (11 smoke/CI test scripts + the runtime `ralph.sh` template) → `source` the shared `scripts/lib/pick-python.sh` from task .1 instead of redefining.
-2. **Direct-shebang `.py` executed by path** (a bash launcher can't save these) → invoke through a resolved interpreter: `hooks.json` (5 sites → `ralph-guard.py`) and `ralph.sh` (4 pipe sites → `watch-filter.py`).
-3. **Agent-run heredocs** in `flow-next-qa/workflow.md` + `flow-next-prospect/workflow.md` → resolve `$PY` once, invoke `$PY - <<'PY'`.
-Then **regenerate the Codex mirror** via `sync-codex.sh` (never hand-edit `plugins/flow-next/codex/**`).
+Sweep the remaining bare-`python3` sites and de-duplicate the 12 `pick_python` copies. Because task .1 makes the resolver fill a bash **array** `FLOW_PY`, this task must convert every scalar interpreter call in the consumers — sourcing the helper alone is NOT enough (plan-review Major). Site classes:
+1. **12 `pick_python` copies** (11 smoke/CI scripts + runtime `ralph.sh`) → source `scripts/lib/pick-python.sh` AND convert every `"$PYTHON_BIN"` call-site to `"${FLOW_PY[@]}"`.
+2. **Direct-shebang `.py` by path** → invoke through a resolved interpreter via a committed bash wrapper: `hooks.json` (5 sites → `ralph-guard.py`) + `ralph.sh` (4 pipe sites → `watch-filter.py`).
+3. **Agent-run heredocs** in qa/prospect workflow.md → resolve `$PY` once, `$PY - <<'PY'`.
+Then regenerate the Codex mirror via `sync-codex.sh`.
 
-**Size:** M (mechanical but broad — low logical risk, uniform edits)
-**Files:** 11 `plugins/flow-next/scripts/*_smoke*.sh`/`ci_test.sh`, `.../templates/ralph.sh`, `plugins/flow-next/hooks/hooks.json`, `flow-next-qa/workflow.md`, `flow-next-prospect/workflow.md`, `plugins/flow-next/codex/**` (generated), possibly `scripts/hooks/ralph-*.sh`
+**Size:** M/L (mechanical but broad — many call-site conversions)
+**Files:** 11 `plugins/flow-next/scripts/*_smoke*.sh`/`ci_test.sh`, `.../templates/ralph.sh`, `plugins/flow-next/hooks/hooks.json`, `plugins/flow-next/scripts/hooks/ralph-guard` (new bash wrapper) + its `scripts/ralph/hooks/` copy, `flow-next-qa/workflow.md`, `flow-next-prospect/workflow.md`, `plugins/flow-next/codex/**` (generated)
 
 ## Approach
-- **Sourcing:** each `*.sh` has `set -euo pipefail` before its `pick_python` def (repo-scout table) — replace the def+assign with a `source "$SCRIPT_DIR/lib/pick-python.sh"` (path relative to each script's own dir) that stays `set -u`-safe. Confirm the relative path resolves from `scripts/` and from `templates/` (ralph.sh).
-- **hooks.json:** the 5 invocations are `[ ! -f … ] || scripts/ralph/hooks/ralph-guard.py` (lines 10,20,32,43,54) — route through an interpreter (resolve once; a `PYTHON_BIN`/`py -3` prefix) rather than the bare `.py` path. Keep the shebang for POSIX direct-exec but don't RELY on it on Windows.
-- **ralph.sh pipes (1096,1098,1107,1109):** `"$PYTHON_BIN" "$SCRIPT_DIR/watch-filter.py"` (PYTHON_BIN already exported at ralph.sh:25).
-- **heredocs:** qa:521, prospect:63/490/740 — resolve `$PY` once near the top of each bash block; also update the `:16`/`:485` prose that says "python3".
-- **Open question (decide in this task):** the 3 orphan `.sh` hooks (`ralph-guard.sh:9`, `ralph-receipt-guard.sh:17`, `ralph-verbose-log.sh:21`) have ZERO runtime refs (repo-scout) — fix for completeness or delete. Lean: delete if truly dead, else fix.
-- Run `scripts/sync-codex.sh` and commit the regenerated mirror in the same task.
+- **Scalar→array conversion (plan-review Major):** in each of the 12 consumers, replace the `pick_python` def+assign with `source "$SCRIPT_DIR/lib/pick-python.sh"`, then rewrite EVERY interpreter invocation from `"$PYTHON_BIN"` (scalar — expands only element 0, drops `-3`) to `"${FLOW_PY[@]}"`. `set -u`-safe. Confirm relative path resolves from `scripts/` and `templates/`.
+- **ralph.sh child wrapper (plan-review Major):** `ensure_flowctl_wrapper()` currently generates `PY="${PYTHON_BIN:-python3}"; exec "$PY" …` — a scalar that drops `-3`. Regenerate it to SOURCE the resolver (copied into `scripts/ralph/` by task .2) and `exec "${FLOW_PY[@]}" …`. Same for the 4 `watch-filter.py` pipes: `"${FLOW_PY[@]}" "$SCRIPT_DIR/watch-filter.py"`.
+- **hooks.json needs a bash wrapper (plan-review Major):** hook command strings may run under `/bin/sh` (no arrays/`source`) or native Windows — inline `source`+array in JSON is unsafe. Add a committed **`scripts/ralph/hooks/ralph-guard`** (bash shebang; sources `../pick-python.sh`; `exec "${FLOW_PY[@]}" "$(dirname "$0")/ralph-guard.py" "$@"`), copied by ralph-init. Change the 5 `hooks.json` invocations (lines 10/20/32/43/54) from `… || scripts/ralph/hooks/ralph-guard.py` to call the wrapper (or `bash scripts/ralph/hooks/ralph-guard`). Keep `ralph-guard.py`'s POSIX shebang but don't rely on it on Windows. **Wrapper resolver-path (plan-review Minor):** the wrapper must locate `pick-python.sh` in BOTH layouts — the canonical source (`plugins/flow-next/scripts/hooks/` → `../lib/pick-python.sh`) and the installed copy (`scripts/ralph/hooks/` → `../pick-python.sh`) — via a two-path fallback; tests exercise the INSTALLED layout.
+- **heredocs:** qa:521, prospect:63/490/740 — resolve `$PY` once per bash block; update `:16`/`:485` prose.
+- **Orphan `.sh` hooks** (`ralph-guard.sh:9`, `ralph-receipt-guard.sh:17`, `ralph-verbose-log.sh:21`): ZERO runtime refs — delete if dead, else fix. Record the decision.
+- Run `scripts/sync-codex.sh`; commit the regenerated mirror.
 
 ## Investigation targets
 **Required:**
-- repo-scout's 12-copy table (each `pick_python` def+assign line) — `smoke_test.sh:22/31`, `ci_test.sh:10/19`, `alias_smoke.sh:47/56`, `migration_smoke.sh:48/57`, `ralph_smoke_test.sh:14/23`, `make-pr_smoke_test.sh:64/73`, `audit_smoke_test.sh:33/42`, `glossary_smoke_test.sh:61/70`, `impl-review_smoke_test.sh:17/26`, `prospect_smoke_test.sh:44/53`, `strategy_smoke_test.sh:65/74`, `ralph.sh:14/23`
-- `plugins/flow-next/hooks/hooks.json:10,20,32,43,54`
-- `plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh:1096,1098,1107,1109` + `:25` (PYTHON_BIN export)
+- repo-scout's 12-copy table (def+assign): `smoke_test.sh:22/31`, `ci_test.sh:10/19`, `alias_smoke.sh:47/56`, `migration_smoke.sh:48/57`, `ralph_smoke_test.sh:14/23`, `make-pr_smoke_test.sh:64/73`, `audit_smoke_test.sh:33/42`, `glossary_smoke_test.sh:61/70`, `impl-review_smoke_test.sh:17/26`, `prospect_smoke_test.sh:44/53`, `strategy_smoke_test.sh:65/74`, `ralph.sh:14/23`
+- **each consumer's `"$PYTHON_BIN"` CALL-sites** (not just the def) — grep `"$PYTHON_BIN"` per file to convert to `"${FLOW_PY[@]}"`
+- `plugins/flow-next/hooks/hooks.json:10,20,32,43,54` + `plugins/flow-next/scripts/hooks/ralph-guard.py:1`
+- `plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh:57-72` (wrapper) + `:1096,1098,1107,1109` (pipes) + `:25`
 - `flow-next-qa/workflow.md:521,485` · `flow-next-prospect/workflow.md:63,490,740,16`
-- `plugins/flow-next/scripts/sync-codex.sh` — regeneration command
+- `plugins/flow-next/scripts/sync-codex.sh`
 
 ## Acceptance
-- [ ] All 12 `pick_python` copies source `scripts/lib/pick-python.sh`; each script still passes `set -euo pipefail` and runs green on mac/linux
-- [ ] `hooks.json` invokes `ralph-guard.py` through a resolved interpreter (not bare `.py` path); Ralph hooks fire on a stub-configured Windows box
-- [ ] `ralph.sh` pipes to `watch-filter.py` as `"$PYTHON_BIN" watch-filter.py`
+- [ ] All 12 consumers source `scripts/lib/pick-python.sh` AND every `"$PYTHON_BIN"` call-site is converted to `"${FLOW_PY[@]}"`; each passes `set -euo pipefail`, runs green on mac/linux, AND passes under a forced fake `py -3` resolution (proves the array conversion, not just the source)
+- [ ] `ralph.sh`'s generated child wrapper sources the resolver and execs `"${FLOW_PY[@]}"` (no scalar `${PYTHON_BIN:-python3}` that drops `-3`); the 4 `watch-filter.py` pipes use `"${FLOW_PY[@]}"`
+- [ ] A committed bash wrapper `scripts/ralph/hooks/ralph-guard` invokes `ralph-guard.py` via the resolver; `hooks.json`'s 5 sites call the wrapper (bash-guaranteed), not the bare `.py`; it resolves `pick-python.sh` in both source-tree and installed layouts (two-path fallback), is copied into installed `scripts/ralph/hooks/`, and fires on a stub-configured Windows box (tests exercise the installed layout)
 - [ ] qa + prospect heredocs resolve `$PY` once; no bare `python3 -` remains in either workflow.md
 - [ ] The 3 orphan `.sh` hooks are fixed or removed (decision recorded)
-- [ ] `sync-codex.sh` re-run; the codex mirror reflects the changes (no hand-edits)
-- [ ] `grep -rn "python3" plugins/flow-next --include='*.sh'` shows no bare unfixed invocation in the canonical tree
+- [ ] `sync-codex.sh` re-run; codex mirror reflects changes (no hand-edits)
+- [ ] A targeted grep for EXECUTABLE `python3` invocations (line-start / after `|`/`(`/`$(`; excluding prose, comments, `#!` shebangs, prereq text) finds no unfixed site in the canonical tree
 
 ## Done summary
 TBD

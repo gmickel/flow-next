@@ -31,25 +31,31 @@ Target design — one interpreter target (`flowctl.py`), thin cross-context shim
 ## API Contracts
 <!-- scope: technical -->
 
-`pick-python.sh` exposes one function that echoes a runnable interpreter token (may be multi-word, e.g. `py -3`) and returns non-zero when none work:
+**Two distinct names — do NOT conflate them (plan-review Major):**
+- **`PYTHON_BIN`** — the user-provided **scalar override**, a *command name only* (e.g. `python3.12`, `py`). Exportable, survives `${PYTHON_BIN:-…}` child reads. The resolver reads it as the first candidate. (A bash array can't be exported, so the override must stay scalar.)
+- **`FLOW_PY`** — the **resolved bash array** the resolver fills (e.g. `(python3)` | `(python)` | `(py -3)`). This is what callers exec. An array is required because it must carry the two-word `py -3` invocation; a single string can't.
 
 ```
-pick_python() -> stdout: "<interpreter token>"   # e.g. "python3", "python", "py -3"
+pick_python  ->  sets  FLOW_PY=( ... )   # reads PYTHON_BIN (scalar) first, then py -3, python3, python
                  exit 0 on success, non-zero when no working interpreter found
 ```
 
-Contract: the returned token, when invoked as `$TOKEN -c "import sys"`, exits 0 on the resolving machine. The 9009 stub MUST NOT be returned even though it is on `PATH`. Callers `exec $TOKEN "$SCRIPT_DIR/flowctl.py" "$@"` (unquoted expansion to allow the two-word `py -3`). [paraphrase]
+Contract: `"${FLOW_PY[@]}" -c "import sys"` exits 0 on the resolving machine. The 9009 stub MUST NOT be selected even though it is on `PATH`. Callers `exec "${FLOW_PY[@]}" "$SCRIPT_DIR/flowctl.py" "$@"`. The resolver emits PATH-resolvable command names (`python3`/`python`/`py -3`), not rewritten absolute paths; the WindowsApps stub is excluded by the probe, not by path-rewriting. **Nothing relies on a scalar resolved interpreter** — every consumer either sources the resolver and uses `"${FLOW_PY[@]}"`, or is the self-contained launcher with an inline array probe. (This is why ralph's child wrapper must SOURCE the resolver, not read a scalar `${PYTHON_BIN:-python3}` that would drop `-3`.) [paraphrase]
 
-`flowctl.cmd` mirrors the contract for cmd/PowerShell: resolve `py -3` → `python` → `python3` (probed), then `%RESOLVED% "%~dp0flowctl.py" %*`, forwarding the exit code. [paraphrase]
+`flowctl.cmd` mirrors the contract for cmd/PowerShell with the SAME order as R1: `%PYTHON_BIN%` → `py -3` → `python3` → `python` (each probed), then `%RESOLVED% "%~dp0flowctl.py" %*`, forwarding the exit code (`EXIT /b %errorlevel%`). On the `.cmd` side too, **`%PYTHON_BIN%` is a command name only** (no quoted paths-with-spaces / embedded args) — keeps batch quoting trivial. [paraphrase]
 
 ## Edge Cases & Constraints
 <!-- scope: technical -->
 
 - **mac/linux no-regression (hard constraint):** no `py` launcher exists there, so resolution falls through cleanly to `python3`; a system with working `python3` MUST still select `python3` first, unchanged. [user]
-- `$PYTHON_BIN` override is honored **but still probed** — a broken explicit override is rejected, not trusted. [user] [paraphrase]
+- `$PYTHON_BIN` (scalar command-name override) is honored **but still probed** — a broken explicit override is rejected, not trusted, and falls through to `py -3`/`python3`/`python`. [user] [paraphrase]
+- **Array not exportable (plan-review Major):** the resolved `FLOW_PY` is a bash array — it cannot cross an `export`/child-process boundary. Any place that previously exported a scalar interpreter for children (e.g. ralph.sh's generated wrapper reading `${PYTHON_BIN:-python3}`) must instead SOURCE `pick-python.sh` in the child and use `"${FLOW_PY[@]}"` — otherwise a `py -3` resolution silently loses `-3`. [paraphrase]
+- **Hook commands aren't guaranteed bash (plan-review Major):** `hooks.json` command strings may run under `/bin/sh` (no arrays/`source`) or native Windows. So `ralph-guard.py` is invoked via a committed bash wrapper script (`scripts/ralph/hooks/ralph-guard`, bash shebang, sources the resolver) that `hooks.json` calls — not inline `source`+array in the JSON string. [paraphrase]
 - `py -3` preferred on Windows because the py launcher is installed by python.org and is **never** a Store alias stub. [paraphrase]
 - The probe runs one extra `-c "import sys"` per resolution — negligible, and cached within a single launcher invocation. [inferred]
 - CRLF / exec-bit hazards already present on Windows (Git Bash) must not regress — `.cmd` is CRLF-tolerant; the bash path keeps its existing `cygpath`/exec-bit handling. [inferred]
+- **Init self-heal bootstrap (chicken-and-egg, plan-review Major):** a *broken* `.flow/bin/flowctl` (old `exec python3`) can't run to self-heal itself. Self-heal reaches broken installs only via a working entrypoint: (a) the plugin auto-updates → the fixed `scripts/flowctl`/`flowctl.cmd` runs `/flow-next:setup` (or `init`) which re-stamps `.flow/bin`; (b) on Windows, the newly-delivered `.flow/bin/flowctl.cmd` works even when the bash launcher is broken; (c) the documented manual escape hatch `py -3 .flow/bin/flowctl.py init` (or `python .flow/bin/flowctl.py init`) re-stamps directly. `init` never *needs* the broken bash launcher — it runs inside `flowctl.py`. This bootstrap path MUST be documented (R11). [paraphrase]
+- **Resolver availability in installed repos (plan-review Major):** the shared `pick-python.sh` lives in the plugin tree; installed `scripts/ralph/hooks/` won't see it unless ralph-init copies it. So the resolver is copied into `scripts/ralph/` alongside `flowctl`, and the launcher/`.cmd`/`ralph-guard.py` wiring uses a resolver that is actually present next to them (or an inline probe) — never a plugin-only path. [paraphrase]
 
 ## Acceptance Criteria
 <!-- scope: both -->
@@ -58,7 +64,7 @@ Contract: the returned token, when invoked as `$TOKEN -c "import sys"`, exits 0 
 - **R2:** The bash `flowctl` launcher (source `scripts/flowctl`, re-stamped into `.flow/bin/flowctl` and `scripts/ralph/flowctl`) resolves via the probe before `exec`; on a machine where `python3` is the 9009 stub but `python`/`py -3` works, `flowctl <cmd>` succeeds. [user]
 - **R3:** A `flowctl.cmd` batch shim ships alongside the bash launcher; invoking `flowctl` from PowerShell / cmd.exe runs `flowctl.py` through a working interpreter (`py -3` preferred) without hitting the stub. [user]
 - **R4:** `flowctl init` re-stamps `.flow/bin/flowctl` + `.flow/bin/flowctl.cmd`; a pre-fix `.flow/bin/flowctl` is refreshed on next `init` without a full `/flow-next:setup` re-run. [user] [paraphrase]
-- **R5:** Direct-shebang Python is invoked through a resolved interpreter, not bare `#!/usr/bin/env python3` path execution: `hooks.json` invokes `ralph-guard.py` via a resolved interpreter; `ralph.sh` pipes to `watch-filter.py` as `"$PYTHON_BIN" watch-filter.py`. [user] [paraphrase]
+- **R5:** Direct-shebang Python is invoked through the resolved interpreter array, not bare `#!/usr/bin/env python3` path execution: `hooks.json` invokes `ralph-guard.py` via a committed bash wrapper that sources the resolver; `ralph.sh` invokes `watch-filter.py` as `"${FLOW_PY[@]}" watch-filter.py`. [user] [paraphrase]
 - **R6:** Agent-run heredocs resolve an interpreter once and invoke `$PY - <<'PY'`: `flow-next-qa/workflow.md` and `flow-next-prospect/workflow.md` no longer emit bare `python3 -`. [user]
 - **R7:** The CI template `docs/ci-workflow-example.yml` no longer hardcodes bare `python3 flowctl.py`; it uses a probe / `py -3` form that works on a Windows runner. [user]
 - **R8:** No mac/linux regression: on a system with a working `python3` and no `py` launcher, the resolver selects `python3` first and all existing smoke tests pass unchanged. [user]
