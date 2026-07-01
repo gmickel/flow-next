@@ -268,11 +268,12 @@ Use the Skill tool to invoke impl-review (NOT flowctl directly):
 /flow-next:impl-review <TASK_ID> --base $BASE_COMMIT --review=$REVIEW_MODE
 ```
 
-Pass `--review=$REVIEW_MODE` so a one-off `work --review=<backend>` override (when it
-differs from the repo config) actually reaches the review — `REVIEW_MODE` already holds
-the backend resolved for this run (config OR override), and impl-review cannot see the
-worker prompt variable otherwise, so a bare invocation would silently re-resolve from
-config. The skill still handles everything else:
+Pass `--review=$REVIEW_MODE` so an explicit run-wide `work --review=<backend>` override reaches
+the review — `REVIEW_MODE` holds the backend resolved for THIS task (the explicit run override if
+given, else the **task-aware** backend from `review-backend "$TASK_ID"`, which already honors the
+task's own `review:` override; see phases.md §3c). impl-review cannot see the worker prompt variable
+otherwise, so passing it propagates the correct explicit-or-per-task precedence rather than
+re-resolving from config. The skill still handles everything else:
 - Scoped diff (BASE_COMMIT..HEAD, not main..HEAD)
 - Receipt paths (don't pass --receipt yourself)
 - Sending to reviewer (rp, codex, copilot, or cursor backend)

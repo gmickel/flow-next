@@ -51,7 +51,10 @@ If found, use that backend and skip all other detection.
 ### Otherwise read from config
 
 ```bash
-BACKEND=$($FLOWCTL review-backend)
+# Resolve the spec id from $ARGUMENTS FIRST so a per-spec `default_review` override routes to the
+# right backend before branching (empty → env/config, no regression).
+SPEC_ID="<the fn-N spec id from $ARGUMENTS, or empty>"
+BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
  echo "Error: No review backend configured."
