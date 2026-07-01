@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 2.5.1] - 2026-07-01
 
 ### Fixed
 
@@ -12,7 +12,7 @@ All notable changes to the flow-next.
   - **`init` self-heal** — `flowctl init` re-stamps both `.flow/bin/flowctl` and `.flow/bin/flowctl.cmd` from in-module launcher constants, so an existing (pre-fix) install refreshes on the next `init` without a full `/flow-next:setup` re-run. A broken bash launcher is reached via the newly-delivered `.cmd`, a plugin auto-update, or the documented `py -3 .flow/bin/flowctl.py init` escape hatch.
   - **Direct-shebang sites swept** — `hooks.json` invokes `ralph-guard.py` via a bash wrapper that sources the resolver; `ralph.sh` runs `watch-filter.py` through the resolved interpreter array; the `qa` / `prospect` agent heredocs resolve an interpreter once instead of emitting bare `python3 -`. (Ralph mode requires Git Bash on Windows — the harness is bash.)
   - **Regression coverage** — a fake-9009-stub-on-`PATH` harness asserts the old `command -v` path selects the stub, the new probe falls through to a working interpreter, `$PYTHON_BIN` is probed (a broken override is rejected), and `py -3` is preferred when present; a real `windows-latest` CI job exercises `flowctl.cmd` (PowerShell/cmd) and the bash launcher (Git Bash) against the stub configuration.
-  - **CI template + docs** — `docs/ci-workflow-example.yml` no longer hardcodes bare `python3 flowctl.py` (it probes for a working interpreter, `shell: bash`); `docs/troubleshooting.md` and `docs/platforms.md` document the fix, the probe order, the `flowctl.cmd` shim, the "Ralph requires Git Bash on Windows" constraint, and **both** recovery paths for a broken install — re-stamp via `init` and the manual disable-App-Execution-Aliases workaround. No version bump (batched).
+  - **CI template + docs** — `docs/ci-workflow-example.yml` no longer hardcodes bare `python3 flowctl.py` (it probes for a working interpreter, `shell: bash`); `docs/troubleshooting.md` and `docs/platforms.md` document the fix, the probe order, the `flowctl.cmd` shim, the "Ralph requires Git Bash on Windows" constraint, and **both** recovery paths for a broken install — re-stamp via `init` and the manual disable-App-Execution-Aliases workaround.
 
 ## [flow-next 2.5.0] - 2026-07-01
 
