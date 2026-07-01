@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-01T21:51:10.019173Z",
+  "depends_on": [
+    "fn-78-gate-repoprompt-proposal-on-macos-or-rp.1"
+  ],
+  "id": "fn-78-gate-repoprompt-proposal-on-macos-or-rp.2",
+  "priority": 2,
+  "spec": "fn-78-gate-repoprompt-proposal-on-macos-or-rp",
+  "spec_path": ".flow/tasks/fn-78-gate-repoprompt-proposal-on-macos-or-rp.2.md",
+  "status": "todo",
+  "title": "Regen Codex mirror + CHANGELOG Unreleased + doc annotations for the RepoPrompt gate",
+  "updated_at": "2026-07-01T21:51:10.019350Z"
+}
