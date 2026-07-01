@@ -21862,6 +21862,9 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
 
         # Load task spec
         flow_dir = get_flow_dir()
+        # Canonicalize a short/legacy/tracker handle (`fn-74.1`) to its slugged on-disk id BEFORE
+        # the spec-path lookup + downstream per-task `review:` resolution (no-op on a full id).
+        task_id = resolve_task_arg(flow_dir, task_id) or task_id
         task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
 
         if not task_spec_path.exists():
@@ -22765,6 +22768,10 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
             error_exit(f"Invalid task ID: {task_id}", use_json=args.json)
 
         flow_dir = get_flow_dir()
+        # Canonicalize a short/legacy/tracker handle (`fn-74.1`) to its slugged on-disk id BEFORE
+        # the spec-path lookup + downstream per-task `review:` resolution (resolve_task_arg no-ops
+        # on a full/unresolvable id) — else `flowctl <backend> impl-review fn-74.1` misses the file.
+        task_id = resolve_task_arg(flow_dir, task_id) or task_id
         task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
 
         if not task_spec_path.exists():
@@ -23407,6 +23414,10 @@ def cmd_cursor_impl_review(args: argparse.Namespace) -> None:
             error_exit(f"Invalid task ID: {task_id}", use_json=args.json)
 
         flow_dir = get_flow_dir()
+        # Canonicalize a short/legacy/tracker handle (`fn-74.1`) to its slugged on-disk id BEFORE
+        # the spec-path lookup + downstream per-task `review:` resolution (resolve_task_arg no-ops
+        # on a full/unresolvable id) — else `flowctl <backend> impl-review fn-74.1` misses the file.
+        task_id = resolve_task_arg(flow_dir, task_id) or task_id
         task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
 
         if not task_spec_path.exists():
