@@ -25,7 +25,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 # diff review. Passing it lets a per-task `review: <backend>:...` override route to the RIGHT
 # backend before dispatch, even when it differs from the project default. Empty → env/config
 # unchanged (no regression).
-REVIEW_ID="<the fn-N.M task / fn-N spec id from $ARGUMENTS, or empty for a standalone diff>"
+REVIEW_ID="${1:-}" # the review-target positional arg (fn-N.M task / fn-N spec); empty for a standalone diff
 # Text output is bare backend name for back-compat grep. The same command in --json mode returns
 # {backend, spec, model, effort, source} — use that if you need the model / effort resolved.
 BACKEND=$($FLOWCTL review-backend "$REVIEW_ID")

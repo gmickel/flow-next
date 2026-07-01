@@ -53,7 +53,7 @@ If found, use that backend and skip all other detection.
 ```bash
 # Resolve the spec id from $ARGUMENTS FIRST so a per-spec `default_review` override routes to the
 # right backend before branching (empty → env/config, no regression).
-SPEC_ID="<the fn-N spec id from $ARGUMENTS, or empty>"
+SPEC_ID="${1:-}"   # the spec-id positional arg (canonicalized by review-backend); empty falls back to env/config
 BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then

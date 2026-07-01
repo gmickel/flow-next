@@ -55,7 +55,7 @@ If found, use that backend and skip all other detection.
 # Resolve the review-target id from $ARGUMENTS HERE (the `fn-N.M` task / `fn-N` spec) — this is
 # before the later TASK_ID parse, so do NOT use `$TASK_ID` (still unset); empty for a standalone
 # diff. Passing it lets a per-task `review:` override route to the right backend (empty → env/config).
-REVIEW_ID="<the fn-N.M task / fn-N spec id from $ARGUMENTS, or empty for a standalone diff>"
+REVIEW_ID="${1:-}"   # the review-target positional arg (fn-N.M task / fn-N spec); empty for a standalone diff
 BACKEND=$($FLOWCTL review-backend "$REVIEW_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then

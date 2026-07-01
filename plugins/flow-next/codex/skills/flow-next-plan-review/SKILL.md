@@ -47,9 +47,9 @@ If found, use that backend and skip all other detection.
 ```bash
 # Priority: --review flag > per-spec `default_review` override > env > config.
 # Resolve the spec id from $ARGUMENTS FIRST so a per-spec `default_review` override routes to the
-# right backend BEFORE branching (empty → env/config, no regression). Do NOT rely on the later
-# `SPEC_ID="${1:-}"` — that is assigned in the backend blocks below, after this detection.
-SPEC_ID="<the fn-N spec id from $ARGUMENTS, or empty>"
+# right backend BEFORE branching (empty → env/config, no regression). `$1` is the positional spec
+# arg — the backend blocks below reuse it as `SPEC_ID`.
+SPEC_ID="${1:-}" # the spec-id positional arg (canonicalized by review-backend); empty falls back to env/config
 BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then

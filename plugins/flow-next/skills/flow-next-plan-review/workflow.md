@@ -23,7 +23,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 # right backend before branching (empty → env/config, no regression).
 # Text output is bare backend name for back-compat grep. --json returns full
 # resolved spec (backend, spec, model, effort, source).
-SPEC_ID="<the fn-N spec id from $ARGUMENTS, or empty>"
+SPEC_ID="${1:-}"   # the spec-id positional arg (canonicalized by review-backend); empty falls back to env/config
 BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
