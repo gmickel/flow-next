@@ -41,9 +41,8 @@ Then regenerate the Codex mirror via `sync-codex.sh`.
 - [ ] A targeted grep for EXECUTABLE `python3` invocations (line-start / after `|`/`(`/`$(`; excluding prose/comments/`#!`/prereq text) finds no unfixed site in the canonical tree
 
 ## Done summary
-TBD
-
+Interpreter-site sweep: 16 plugin-tree consumers (11 pick_python copies + 5 rp/e2e harnesses) now source the shared scripts/lib/pick-python.sh probe and exec the FLOW_PY array instead of a scalar "$PYTHON_BIN"; ralph.sh sources the installed flat resolver (source-tree fallback), regenerates its flowctl-wrapper + prefixes the 4 watch-filter.py pipes with "${FLOW_PY[@]}", and drops export PYTHON_BIN. A committed bash hook wrapper scripts/hooks/ralph-guard resolves pick-python.sh in both layouts and execs "${FLOW_PY[@]}" ralph-guard.py; hooks.json's 5 sites call it behind the not-installed no-op guard, and ralph-init copies it. qa/prospect heredocs resolve $PY once per block (no bare python3 -). 3 dead orphan .sh hooks removed. sync-codex.sh hooks generator + codex mirror updated; "Ralph requires Git Bash on Windows" documented.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 94ff75460005661943d588a564970d2539365fed
+- Tests: bash plugins/flow-next/scripts/smoke_test.sh (135 passed / 0 failed), bash plugins/flow-next/scripts/ralph_smoke_test.sh (15 passed / 0 failed; scaffold now copies pick-python.sh + ralph-guard wrapper), PATH=<fake py -3, broken python3 stub> bash plugins/flow-next/scripts/ci_test.sh (Python: py -3, 0 failed) — proves FLOW_PY array carries the two-word interpreter through every call-site, hook wrapper scripts/hooks/ralph-guard resolved + no-op/ran in both installed & source-tree layouts, incl. under the broken-python3 stub (py -3 fallback), python3 -m unittest tests.test_qa_receipt tests.test_ralph_guard_codex_delegation tests.test_tracker_receipts (102 passed), targeted grep: no bare executable python3 in the canonical (non-codex) tree except the R7 CI template (task .6), scripts/sync-codex.sh re-run green + idempotent; codex mirror regenerated
 - PRs:
