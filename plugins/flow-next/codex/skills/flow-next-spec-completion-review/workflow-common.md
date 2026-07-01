@@ -22,14 +22,17 @@ FLOWCTL="$HOME/.codex/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-# Priority: --review flag > env > config (flag parsed in SKILL.md)
+# Priority: --review flag > per-spec `default_review` override > env > config (flag parsed in SKILL.md).
+# Resolve the spec id from $ARGUMENTS FIRST so a per-spec `default_review` override routes to the
+# right backend before branching (empty → env/config, no regression).
 # Text output is bare backend name for back-compat grep. --json returns full
 # resolved spec (backend, spec, model, effort, source).
-BACKEND=$($FLOWCTL review-backend)
+SPEC_ID="${1:-}" # the spec-id positional arg (canonicalized by review-backend); empty falls back to env/config
+BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
  echo "Error: No review backend configured."
- echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
+ echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|none"
  exit 1
 fi
 
@@ -41,6 +44,8 @@ echo "Review backend: $BACKEND"
 ```bash
 FLOW_REVIEW_BACKEND=codex:gpt-5.5:xhigh $FLOWCTL codex completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5 $FLOWCTL copilot completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
+# Cursor folds effort into the model name (no :<effort>):
+FLOW_REVIEW_BACKEND=cursor:gpt-5.5-high $FLOWCTL cursor completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 # Or pass spec directly:
 $FLOWCTL codex completion-review "$SPEC_ID" --spec "codex:gpt-5.5:xhigh" --receipt "$RECEIPT_PATH"
 ```
@@ -55,6 +60,7 @@ Per-spec `default_review` (set via `flowctl spec set-backend`) overrides env.
 |------------|------|
 | `codex` | [workflow-codex.md](workflow-codex.md) |
 | `copilot` | [workflow-copilot.md](workflow-copilot.md) |
+| `cursor` | [workflow-cursor.md](workflow-cursor.md) |
 | `rp` | [workflow-rp.md](workflow-rp.md) |
 
 Only the file for the active backend should enter context. Do not read the other backend files.

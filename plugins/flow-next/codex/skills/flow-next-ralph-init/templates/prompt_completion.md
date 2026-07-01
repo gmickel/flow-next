@@ -26,6 +26,7 @@ Ralph mode rules (must follow):
 - If COMPLETION_REVIEW_BACKEND=rp: use `flowctl rp` wrappers (setup-review, select-add, prompt-get, chat-send).
 - If COMPLETION_REVIEW_BACKEND=codex: use `flowctl codex` wrappers (completion-review with --receipt).
 - If COMPLETION_REVIEW_BACKEND=copilot: use `flowctl copilot` wrappers (completion-review with --receipt). Never call `copilot` directly; never pass `--continue`.
+- If COMPLETION_REVIEW_BACKEND=cursor: use `flowctl cursor` wrappers (completion-review with --receipt). Never call `cursor-agent` directly; never pass `--continue`.
 - Write receipt via bash heredoc (no Write tool) if `REVIEW_RECEIPT_PATH` set.
 - If any rule is violated, output `<promise>RETRY</promise>` and stop.
 
@@ -33,6 +34,7 @@ Ralph mode rules (must follow):
  - If COMPLETION_REVIEW_BACKEND=rp: run `/flow-next:spec-completion-review {{SPEC_ID}} --review=rp`
  - If COMPLETION_REVIEW_BACKEND=codex: run `/flow-next:spec-completion-review {{SPEC_ID}} --review=codex`
  - If COMPLETION_REVIEW_BACKEND=copilot: run `/flow-next:spec-completion-review {{SPEC_ID}} --review=copilot`
+ - If COMPLETION_REVIEW_BACKEND=cursor: run `/flow-next:spec-completion-review {{SPEC_ID}} --review=cursor`
  - If COMPLETION_REVIEW_BACKEND=none: set ship and stop:
  `scripts/ralph/flowctl spec set-completion-review-status {{SPEC_ID}} --status ship --json`
 
@@ -57,6 +59,7 @@ Ralph mode rules (must follow):
  ```
  For codex mode, receipt is written automatically by `flowctl codex completion-review --receipt`.
  For copilot mode, receipt is written automatically by `flowctl copilot completion-review --receipt`.
+ For cursor mode, receipt is written automatically by `flowctl cursor completion-review --receipt`.
  **CRITICAL: Copy EXACTLY. The `"id":"{{SPEC_ID}}"` and `"verdict":"SHIP"` fields are REQUIRED.**
  Missing id/verdict = verification fails = forced retry.
 

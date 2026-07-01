@@ -96,7 +96,7 @@ Mirror the `copilot` backend end-to-end. Paths in
 - **Repo scoping — REQUIRED.** `run_cursor_exec` runs with `cwd=repo_root`; add a test that invokes from a subdirectory and confirms the correct tree is reviewed.
 - **`--trust` mandatory** headless or the CLI hangs on a trust prompt.
 - **Read-only — VERIFIED.** `--mode ask` refused a "create a file" instruction; tree stayed clean. R8 asserts `git status` unchanged across a review.
-- **Oversized prompts — VERIFIED on POSIX (60KB argv).** Reuse copilot's argv-vs-temp threshold. **Windows is the one open risk:** cursor-agent stdin support is unconfirmed and there is no `CreateProcessW`-safe path yet → during impl either confirm/implement a stdin path OR explicitly document Windows large-prompt as unsupported (don't silently hardcode argv).
+- **Oversized prompts — VERIFIED on POSIX (60KB positional argv).** cursor-agent takes the prompt as a **positional argument** (not stdin). Up to the threshold, pass it positionally. **Above the threshold there is no safe path yet:** copilot's temp-file step just reads the file back into argv (it does NOT bypass any cap), and cursor-agent stdin support is unconfirmed → `run_cursor_exec` must raise an **explicit "prompt too large" error** above the threshold (with a test), NOT silently reuse the read-back-into-argv trick. Implement a stdin path only if cursor-agent confirms stdin input. (The Windows `CreateProcessW` cap is where this bites first.)
 - **Triage precision** — see Architecture §8: deterministic by default; opt-in LLM judge stays codex/copilot and is a documented dependency for cursor users who enable it.
 - **Auth not configured** → `check` and runners surface a clear error pointing at `cursor-agent` login / `CURSOR_API_KEY` (never a silent empty review).
 - **`.result` empty / `is_error:true`** → backend failure (non-zero exit + stderr), never a false SHIP.
@@ -106,25 +106,25 @@ Mirror the `copilot` backend end-to-end. Paths in
 
 ## Acceptance Criteria
 
-- **R1:** `cursor` is in `BACKEND_REGISTRY` and `VALID_BACKENDS`; `flowctl review-backend` resolves/reports `cursor` from `.flow/config.json`, `FLOW_REVIEW_BACKEND`, per-task stored review, and `--spec`.
+- **R1:** `cursor` is in `BACKEND_REGISTRY` and `VALID_BACKENDS`; `flowctl review-backend` reports `cursor` from `.flow/config.json` + `FLOW_REVIEW_BACKEND` (its only two sources); per-task `default_review` and `--spec cursor:<model>` resolve via `resolve_review_spec` / the review commands (NOT `review-backend`).
 - **R2:** `BackendSpec.parse("cursor")` / `parse("cursor:gpt-5.5-high")` succeed; `parse("cursor:gpt-5.5-high:high")` raises (effort rejected); `parse("cursor:bogus")` raises listing valid models; `.resolve()` fills `gpt-5.5-high`, effort `None`.
 - **R3:** `run_cursor_exec` shells `cursor-agent -p --output-format json --trust --mode ask --model <m>` with `cwd=repo_root`; on a first call it omits `--resume` and returns Cursor's generated `session_id`; on continuation it passes `--resume <session_id>`; parses `.result`/`.session_id`/`.is_error`; returns non-zero on a 600s timeout.
 - **R4:** `flowctl cursor check [--skip-probe]` reports availability + version + auth (`authed`) in text and `--json`, schema-aligned to copilot's `check`.
 - **R5:** `flowctl cursor impl-review <task> --base <b> --receipt <r>` writes a `mode:"cursor"` receipt (no `effort` key) and prints `VERDICT=...`.
 - **R6:** `cursor plan-review`, `completion-review`, `validate`, `deep-pass` dispatch through `run_cursor_exec` and write the same additive receipt shapes as codex/copilot (`mode:"cursor"`).
 - **R7:** Re-review with an existing `mode=="cursor"` receipt resumes via `--resume <session_id>` (using the persisted returned id); a cross-backend receipt starts fresh.
-- **R8:** A cursor review leaves the working tree unchanged (`git status` identical before/after).
+- **R8:** A cursor review leaves the working tree unchanged. Unit-level: `run_cursor_exec` is asserted to pass `--mode ask` (read-only) and never an edit/write flag. Integration-level: an **optional live smoke test gated on `cursor-agent` availability** runs a real `cursor impl-review` against a temp git repo and asserts `git status` is identical before/after (skipped when the CLI is absent — never a mocked clean-tree claim).
 - **R9:** `/flow-next:impl-review` routes `BACKEND=="cursor"` to `workflow-cursor.md`; `/flow-next:plan-review` and `/flow-next:spec-completion-review` handle `cursor`; every user-facing `--review=rp|codex|copilot|none` string includes `cursor`.
 - **R10:** `flow-next-setup` `review.backend` config accepts `cursor` and spec form `cursor:gpt-5.5-high`.
-- **R11:** Tests: `test_cursor_run_exec.py` (mock subprocess: success / `is_error` / timeout / **first-call-omits-resume** / **resume-passes-id** / **cwd=repo_root** / **no-effort-in-receipt**), `test_backend_spec.py` cursor cases (model-yes/effort-no), receipt-schema `mode:"cursor"`. Full Python suite passes.
+- **R11:** Tests: `test_cursor_run_exec.py` (mock subprocess: success / `is_error` / timeout / **first-call-omits-resume** / **resume-passes-id** / **cwd=repo_root** / **mode-ask-flag** / **prompt-too-large**), `test_backend_spec.py` cursor cases (model-yes/effort-no). Receipt-schema `mode:"cursor"` + the `effort`-absent assertion are the review-command tests (R14, task .2). Full Python suite passes.
 - **R12:** `scripts/sync-codex.sh` regenerated; `cursor` surfaces in the codex mirror; install/sync parity tests pass.
 - **R13:** Docs chain updated at the concrete targets below; **no version bump** (batched), entries under `## Unreleased`:
   - **Repo:** `plugins/flow-next/docs/flowctl.md` (cmd list L14 + new cursor backend section), `README.md` (L44 / L253 / L290 backend lists), `GLOSSARY.md` (L29 "Backends:" list), root `CHANGELOG.md` `## Unreleased`.
-  - **flow-next.dev:** `src/content/docs/review/workflow.mdx` + `review/receipts.mdx` + `install.mdx` backend enumeration, `releases/changelog.mdx`, bump `src/lib/site.ts` `FLOW_NEXT_VERSION` + `package.json`. No new page → navbars unchanged. Run `pnpm build`.
+  - **flow-next.dev:** `src/content/docs/review/workflow.mdx` (flip the live "coming next release" Cursor row → shipped) + `review/receipts.mdx` + `install.mdx` backend enumeration + `releases/changelog.mdx`. **No `FLOW_NEXT_VERSION` / `package.json` bump in this spec** — the docs-site version bump is release-only (batched), same rule as the plugin. No new page → navbars unchanged. Run `pnpm build`.
   - **AI-x-SDLC:** `guides/flow-next.md` (L65 "(RepoPrompt, OpenAI Codex, GitHub Copilot)" → add Cursor), `guides/code-review-tools-changelog.md`.
   - **GrowthFactors:** `spec/05-cross-model-review.md` (claim already lists Cursor — verify/tighten), re-render `dist/gf.html` (+ `shd`/`shopfully`/`flooid`) and the bundled `~/work/AI-x-SDLC-Starter-Kit/resources/assets/code-factory-onboarding.html`.
   - **Obsidian vault:** the cross-model-review / Skills Catalog / Release Timeline note(s).
-- **R14:** Cursor `impl-review` / `completion-review` receipts carry the **same rigor fields as copilot** — confidence-rubric anchors, suppressed-finding counts, introduced-vs-pre_existing classification, unaddressed-R-ID surfacing, and protected-path filtering — asserted by a receipt-parity test against the copilot field set.
+- **R14:** Cursor `impl-review` / `completion-review` receipts carry the same **rigor fields** as copilot — confidence-rubric anchors, suppressed-finding counts, introduced-vs-pre_existing classification, unaddressed-R-ID surfacing, protected-path filtering — asserted by a parity test scoped to **those rigor fields only**, which **also asserts `effort` is absent** (cursor must never write it; effort is not a cursor field).
 
 ## Boundaries
 
@@ -176,3 +176,41 @@ fields [R14, R5, R11]. Proves the backend works end-to-end on a real spec.
 Natural task seams: (1) flowctl core (registry + helpers + subcommands + handlers +
 dispatch + unit tests), (2) skill/setup wiring + codex-mirror regen, (3) docs +
 downstream chain.
+
+## Plan (4 tasks)
+
+Decomposed into 4 sequential tasks (a parity port is inherently code → wire → document); the flowctl core is split into **proof** + **commands** so each fits one `/flow-next:work` iteration.
+
+1. **`.1` — flowctl cursor foundation** (M, no deps · **early proof**) — registry entry + `require_cursor`/`get_cursor_version`/`run_cursor_exec` + `cursor check` + parser/run-exec tests. → R1, R2, R3, R4, R11
+2. **`.2` — cursor review commands** (M, deps .1) — 5 subcommands + `cmd_cursor_*` handlers + validator/deep dispatch + own-mode `mode:"cursor"` receipts (resume-guard, rigor parity, clean-tree live test). → R5, R6, R7, R8, R11, R14
+3. **`.3` — skill + setup wiring + codex mirror** (M–L, deps .2) — `workflow-cursor.md` ×2 + plan-review section + `--review` literals (8 files) + setup config + `sync-codex.sh` regen. → R9, R10, R12
+4. **`.4` — docs + downstream chain** (M, deps .3) — repo docs + flow-next.dev (flip the already-live "coming" Cursor row → shipped) + AI×SDLC + GF + vault. No version bump. → R13
+
+### Early proof point
+Task `.1` proves the `cursor-agent` contract end-to-end (`run_cursor_exec` + `check` + `BackendSpec` parse/resolve). Already de-risked by the spec's live smoke-tests + dogfood; if `.1` nonetheless fails, re-examine the cursor-agent CLI contract before `.2`+.
+
+### Strategy Alignment
+- **Cross-model review** — adds a fourth reviewer backend (Cursor: gpt-5.5-high / codex / composer / opus), widening the disagreement surface and letting teams bill review to an existing Cursor subscription.
+- **Host agent IS the intelligence / lean flowctl** — pure parity port: a ~6-line registry entry + mirrored helpers; no new architecture, no new skill/command, no second-LLM-spawn-from-flowctl.
+
+### Requirement coverage
+
+| Req | Task(s) |
+|-----|---------|
+| R1 registry / resolve | .1 |
+| R2 spec grammar (model-yes/effort-no) | .1 |
+| R3 run_cursor_exec | .1 |
+| R4 cursor check | .1 |
+| R5 impl-review receipt mode:cursor | .2 |
+| R6 plan/completion/validate/deep dispatch | .2 |
+| R7 session-resume guard | .2 |
+| R8 read-only / clean tree | .2 (live test) · .1 (`--mode ask` flag) |
+| R9 skill routing + --review literals | .3 |
+| R10 setup config | .3 |
+| R11 tests | .1, .2 |
+| R12 codex mirror | .3 |
+| R13 docs chain | .4 |
+| R14 receipt rigor parity | .2 |
+
+### Soft sequencing note
+fn-54 (eval-driven prompt optimization, 0 tasks) also edits the review `workflow*.md` files — coordinate on those edits if fn-54 activates concurrently. Not a hard dependency (spec-scout: standalone).

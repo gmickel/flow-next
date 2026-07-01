@@ -2,7 +2,7 @@
 
 ## Philosophy
 
-The reviewer model only sees selected files. RepoPrompt's Builder discovers context you'd miss (rp backend). Codex and Copilot use context hints from flowctl (codex/copilot backends).
+The reviewer model only sees selected files. RepoPrompt's Builder discovers context you'd miss (rp backend). Codex, Copilot, and Cursor use context hints from flowctl (codex/copilot/cursor backends).
 
 ---
 
@@ -18,18 +18,21 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-# Priority: --review flag > env > config (flag parsed in SKILL.md)
+# Priority: --review flag > per-spec `default_review` override > env > config (flag parsed in SKILL.md).
+# Resolve the spec id from $ARGUMENTS FIRST so a per-spec `default_review` override routes to the
+# right backend before branching (empty → env/config, no regression).
 # Text output is bare backend name for back-compat grep. --json returns full
 # resolved spec (backend, spec, model, effort, source).
-BACKEND=$($FLOWCTL review-backend)
+SPEC_ID="${1:-}"   # the spec-id positional arg (canonicalized by review-backend); empty falls back to env/config
+BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."
-  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
+  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|none"
   exit 1
 fi
 
-echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
+echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|none)"
 ```
 
 **Spec-form env var (optional):** `FLOW_REVIEW_BACKEND` accepts bare or full spec:
@@ -37,6 +40,8 @@ echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
 ```bash
 FLOW_REVIEW_BACKEND=codex:gpt-5.5:xhigh $FLOWCTL codex plan-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5 $FLOWCTL copilot plan-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
+# Cursor folds effort into the model name (no :<effort>):
+FLOW_REVIEW_BACKEND=cursor:gpt-5.5-high $FLOWCTL cursor plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
 # Or pass spec directly:
 $FLOWCTL codex plan-review "$SPEC_ID" --spec "codex:gpt-5.5:xhigh" --receipt "$RECEIPT_PATH"
 ```
@@ -124,7 +129,7 @@ CODE_FILES="src/main.py,src/config.py"  # Customize per spec
 # Runtime config:
 #   --spec <spec>           full spec (backend:model:effort), highest priority
 #   FLOW_REVIEW_BACKEND     spec-form ok: copilot:claude-opus-4.5:xhigh
-#   FLOW_COPILOT_MODEL      fills missing model only (default gpt-5.2)
+#   FLOW_COPILOT_MODEL      fills missing model only (default gpt-5.5)
 #   FLOW_COPILOT_EFFORT     fills missing effort only (default high)
 
 $FLOWCTL copilot plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
@@ -157,6 +162,68 @@ Format: `{"type":"plan_review","id":"<spec-id>","mode":"copilot","verdict":"<ver
 The `spec` field is the canonical round-trippable form (added in fn-28.3). `model` + `effort` remain for backward compatibility.
 
 Session resume guard: re-review only resumes the copilot session when the existing receipt at `$RECEIPT_PATH` has `mode == "copilot"`. Cross-backend switches start a fresh session.
+
+---
+
+## Cursor Backend Workflow
+
+Use when `BACKEND="cursor"`.
+
+### Step 0: Save Checkpoint
+
+**Before review** (protects against context compaction):
+```bash
+SPEC_ID="${1:-}"
+$FLOWCTL checkpoint save --spec "$SPEC_ID" --json
+```
+
+### Step 1: Execute Review
+
+```bash
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
+
+# --files: comma-separated CODE files for reviewer context
+# Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
+CODE_FILES="src/main.py,src/config.py"  # Customize per spec
+
+# Runtime config:
+#   --spec <spec>           full spec (cursor:<model>), highest priority
+#   FLOW_REVIEW_BACKEND     spec-form ok: cursor:gpt-5.5-high
+#   FLOW_CURSOR_MODEL       fills missing model only (default gpt-5.5-high)
+# Cursor folds effort into the model name — no :<effort>, no FLOW_CURSOR_EFFORT.
+
+$FLOWCTL cursor plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
+```
+
+**Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`.**
+
+The runner invokes `cursor-agent -p --output-format json --trust --mode ask` with `cwd=repo_root` (`--mode ask` is read-only).
+
+### Step 2: Update Status
+
+```bash
+# Based on verdict
+$FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship --json
+# OR
+$FLOWCTL spec set-plan-review-status "$SPEC_ID" --status needs_work --json
+```
+
+### Step 3: Handle Verdict
+
+If `VERDICT=NEEDS_WORK`:
+1. Parse issues from output
+2. Fix plan via `$FLOWCTL spec set-plan`
+3. Re-run step 1 (receipt enables session continuity when `mode == "cursor"`)
+4. Repeat until SHIP
+
+### Step 4: Receipt
+
+Receipt is written automatically by `flowctl cursor plan-review` when `--receipt` provided.
+Format: `{"type":"plan_review","id":"<spec-id>","mode":"cursor","verdict":"<verdict>","session_id":"<uuid>","model":"<model>","spec":"cursor:<model>","timestamp":"..."}`
+
+There is **no `effort` key** — effort is not a Cursor field. The `spec` field is the canonical round-trippable form.
+
+Session resume guard: re-review only resumes the cursor session when the existing receipt at `$RECEIPT_PATH` has `mode == "cursor"`. The first call omits `--resume` and captures Cursor's returned `session_id`; continuations pass `--resume <session_id>`. Cross-backend switches start a fresh session.
 
 ---
 
@@ -288,24 +355,10 @@ Conduct a John Carmack-level review:
 10. **Consistency** - Do task specs align with spec?
 11. **Vocabulary** - [Include ONLY when `flowctl glossary list --json` reports `total_terms > 0`: "Canonical vocabulary lives in GLOSSARY.md — flag specs/tasks that contradict defined terms." Omit this line otherwise.]
 
+**Also explicitly verify (commonly-missed):** a stated **test strategy**; **observability** (logging/metrics/progress) for any async/batch work; each task **sized for one iteration and correctly ordered** by dependency; and stated **non-functional requirements** (performance, security, privacy).
+
 ## Protected artifacts
-
-The following paths are flow-next / project-pipeline artifacts. Any finding recommending their deletion, gitignore, or removal MUST be discarded during synthesis. Do not flag these paths for cleanup under any circumstances:
-
-- `.flow/*` — flow-next state, specs, tasks, runtime
-- `.flow/bin/*` — bundled flowctl
-- `.flow/memory/*` — learnings store (pitfalls, conventions, decisions)
-- `.flow/specs/*.md` — specs (decision artifacts)
-- `.flow/tasks/*.md` — task specs (decision artifacts)
-- `docs/plans/*` — plan artifacts (if project uses this convention)
-- `docs/solutions/*` — solutions artifacts (if project uses this convention)
-- `scripts/ralph/*` — Ralph harness (when present)
-
-These files are intentionally committed. They are the pipeline's state, not clutter. An agent that deletes them destroys the project's planning trail and breaks Ralph autonomous runs.
-
-If you notice genuine issues with content INSIDE these files (e.g., a spec that contradicts itself, a stale entry), flag the content — not the file's existence.
-
-**Protected-path filter.** Before emitting findings, scan each for recommendations to delete, gitignore, or `rm -rf` any path matching the protected list above. Drop those findings. If you drop any, report the drop count in a `Protected-path filter:` line in the review output (e.g. `Protected-path filter: dropped 2 findings`). Omit the line when nothing was dropped.
+NEVER recommend deleting / gitignoring / removing these committed pipeline paths (flag bad CONTENT inside them, never their existence): `.flow/*`, `.flow/bin/*`, `.flow/memory/*`, `.flow/specs/*.md`, `.flow/tasks/*.md`, `docs/plans/*`, `docs/solutions/*`, `scripts/ralph/*`. Discard any such finding during synthesis; emit a `Protected-path filter:` count when any dropped.
 
 ## Output Format
 
@@ -472,3 +525,10 @@ If verdict is NEEDS_WORK:
 - **Inventing `--model`/`--effort` CLI flags** - Use `--spec` for a full backend:model:effort value, or `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars to fill individual fields
 - **Using `--continue`** - Conflicts with parallel usage; session resume uses `--resume=<uuid>` under the hood via `--receipt`
 - **Assuming cross-backend session continuity** - Resume only works when prior receipt has `mode == "copilot"`
+
+**Cursor backend only:**
+- **Direct cursor-agent calls** - Must use `flowctl cursor` wrappers
+- **Inventing a `--model` CLI flag** - Use `--spec` for a full `cursor:<model>` value, or the `FLOW_CURSOR_MODEL` env var to fill the model
+- **Passing an effort** - Cursor has no effort field; `cursor:<model>:<effort>` is rejected. Pick a model whose name already encodes the effort
+- **Fabricating a first-call `--resume` id** - The first call omits `--resume`; persist Cursor's returned `session_id` and resume with that via `--receipt`
+- **Assuming cross-backend session continuity** - Resume only works when prior receipt has `mode == "cursor"`

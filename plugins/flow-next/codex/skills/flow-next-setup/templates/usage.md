@@ -162,7 +162,7 @@ The project's strategic intent and canonical vocabulary live **outside** `.flow/
 # /flow-next:strategy skill writes STRATEGY.md directly (no flowctl strategy add — too prose-heavy for atomic CLI).
 
 # Config (per-project knobs in .flow/config.json — see /flow-next:setup for guided setup)
-.flow/bin/flowctl config get review.backend # rp|codex|copilot|none, or spec form like codex:gpt-5.4:high
+.flow/bin/flowctl config get review.backend # rp|codex|copilot|cursor|none, or spec form like codex:gpt-5.4:high / cursor:gpt-5.5-high
 .flow/bin/flowctl config get review.backend --raw --json # bypass merged defaults (null = absent from file)
 .flow/bin/flowctl config set review.backend codex # bare backend
 .flow/bin/flowctl config set review.backend codex:gpt-5.4:high # full spec (backend:model:effort)

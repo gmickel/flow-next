@@ -3,7 +3,7 @@
 # Flow-Next
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Flow-next](https://img.shields.io/badge/Flow--next-v2.4.0-green)](CHANGELOG.md)
+[![Flow-next](https://img.shields.io/badge/Flow--next-v2.5.0-green)](CHANGELOG.md)
 [![Docs](https://img.shields.io/badge/Docs-📖-informational)](plugins/flow-next/docs/README.md)
 
 [![Author](https://img.shields.io/badge/Author-Gordon_Mickel-orange)](https://mickel.tech)
@@ -41,7 +41,7 @@ Flow-Next is an AI agent orchestration plugin: **28 agent-native skills** coveri
 | **Spec-driven** | Intent survives the chat. The unit of work is the spec — not the ticket, not the transcript, not the PR title. One durable document at `.flow/specs/<id>.md`, evolving through layers. |
 | **Context-fit planning** | Right-sized task slices. Specs decompose into dependency-ordered tasks, each sized to one fresh ~100k-token context window. |
 | **Re-anchored work** | Fresh context per task. Every worker subagent re-reads the spec, the task, and git state before touching code — no token bleed, no stale assumptions. |
-| **Adversarial gates** | Fix until SHIP. A *different* model (RepoPrompt / Codex / Copilot) reviews every plan and every implementation. Different models make different mistakes — the disagreement surface is where the gaps live. |
+| **Adversarial gates** | Fix until SHIP. A *different* model (RepoPrompt / Codex / Copilot / Cursor) reviews every plan and every implementation. Different models make different mistakes — the disagreement surface is where the gaps live. |
 | **Receipts** | "Done" means there is proof. Commits, tests, review verdicts, and evidence recorded per task — never narration. |
 | **Multi-harness** | One workflow everywhere. First-class on Claude Code, OpenAI Codex, and Factory Droid; runs on Grok Build and Cursor; community OpenCode port. |
 | **Self-improving** | Compounds as you work. Memory, glossary, decision records, and strategy grow as side-effects of the workflow you already run — no manual "refresh" ceremony, ever. |
@@ -250,7 +250,7 @@ scripts/ralph/ralph.sh          # Run from terminal
 |---------|----------|
 | Context drift | **Re-anchoring** before every task — re-reads specs + git state |
 | Context window limits | **Fresh context per task** — worker subagent starts clean |
-| Single-model blind spots | **Cross-model reviews** — RepoPrompt, Codex, or Copilot as second opinion |
+| Single-model blind spots | **Cross-model reviews** — RepoPrompt, Codex, Copilot, or Cursor as second opinion |
 | Forgotten requirements | **R-IDs frozen at handover** — numbered once, never renumbered; traced spec → task → commit → PR coverage table |
 | "It worked on my machine" | **Evidence recording** — commits, tests, PRs tracked per task |
 | Infinite retry loops | **Auto-block stuck tasks** — fails after N attempts, moves on |
@@ -287,7 +287,7 @@ Scope honesty, because the architecture depends on it:
 | `/flow-next:interview` | Deep spec refinement with lead-with-recommendation + confidence tiers + codebase-first investigation; `--scope=business\|technical\|both` |
 | `/flow-next:plan` | Research codebase, create spec + dependency-ordered tasks |
 | `/flow-next:work` | Execute tasks with re-anchoring + worker subagents + review gates. Opt-in: offload implementation to a local `codex exec` with `delegate:codex` (or `work.delegate=codex` config) — OFF by default, consent-gated, host keeps all judgment ([config keys](plugins/flow-next/docs/flowctl.md#config)) |
-| `/flow-next:impl-review` | Cross-model implementation review (RepoPrompt, Codex, or Copilot) |
+| `/flow-next:impl-review` | Cross-model implementation review (RepoPrompt, Codex, Copilot, or Cursor) |
 | `/flow-next:plan-review` | Cross-model plan review |
 | `/flow-next:spec-completion-review` | Spec-completion review gate — verify combined implementation matches the spec (renamed from `/flow-next:epic-review` in 1.0.0) |
 | `/flow-next:qa` | **Live-app real-user QA** — derives scenarios from the spec (AC / R-IDs / boundaries), drives the running app via `flow-next-drive`, files P0/P1/P2 findings with evidence, ends with a YES/NO ship verdict receipt. Forbidden from marking PASS by reading source. Opt-in — needs a live deploy + a driver |

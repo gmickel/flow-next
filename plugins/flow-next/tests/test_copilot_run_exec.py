@@ -37,7 +37,8 @@ def _completed(stdout: str = "ok", returncode: int = 0, stderr: str = ""):
 
 
 class CopilotPosixPath(unittest.TestCase):
-    """POSIX path is unchanged from 1.1.8: -p + --resume + argv."""
+    """POSIX path: -p + argv; session flag is marker-tracked (copilot >= 1.0.65
+    made --resume resume-only here too, so the FIRST call uses --session-id)."""
 
     def test_posix_uses_argv_with_dash_p(self):
         with tempfile.TemporaryDirectory() as td:
@@ -54,19 +55,20 @@ class CopilotPosixPath(unittest.TestCase):
                 )
             self.assertEqual(rc, 0)
             self.assertEqual(stdout, "ok")
-            # Argv must contain -p with the literal prompt, and create-or-resume
-            # --resume= (POSIX mode has create-or-resume semantics).
+            # Argv must contain -p with the literal prompt, and --session-id on
+            # the FIRST call (no marker yet) — copilot --resume is resume-only.
             cmd = m_run.call_args.args[0]
             self.assertIn("-p", cmd)
             self.assertEqual(cmd[cmd.index("-p") + 1], "hello world")
             self.assertIn(
-                "--resume=11111111-1111-1111-1111-111111111111", cmd
+                "--session-id=11111111-1111-1111-1111-111111111111", cmd
             )
             # stdin is NOT used on POSIX path.
             self.assertNotIn("input", m_run.call_args.kwargs)
-            # Marker file is NOT created on POSIX (it's a Windows-only concern).
+            # Marker dir IS created on POSIX now (success-touch) so the NEXT
+            # call switches to --resume.
             marker_dir = repo_root / ".flow" / "tmp" / "copilot-sessions"
-            self.assertFalse(marker_dir.exists())
+            self.assertTrue(marker_dir.exists())
 
 
 class CopilotWindowsStdinPath(unittest.TestCase):

@@ -79,7 +79,7 @@ The methodology calls a *handover object* a named, reviewable artefact that carr
 All six properties of a real handover object hold:
 
 1. **Reviewable on its own.** A spec without code, a plan without an implementation, a PR body without a diff — each artefact stands alone as a reviewable unit.
-2. **Cross-model reviewed.** `/flow-next:plan-review` and `/flow-next:impl-review` run a *different* model (RepoPrompt / Codex / Copilot) over the artefact before handover. See the [root README — Commands](../../../README.md#commands) for review backends, or [flow-next.dev](https://flow-next.dev) for the narrative walkthrough.
+2. **Cross-model reviewed.** `/flow-next:plan-review` and `/flow-next:impl-review` run a *different* model (RepoPrompt / Codex / Copilot / Cursor) over the artefact before handover. See the [root README — Commands](../../../README.md#commands) for review backends, or [flow-next.dev](https://flow-next.dev) for the narrative walkthrough.
 3. **Verifiable against the prior artefact.** R-IDs in the spec are tracked through `satisfies: [R1, R3]` frontmatter on tasks and through commit-message references; `/flow-next:make-pr` emits an R-ID coverage table that maps every R# to the satisfying task and evidence commit.
 4. **Frozen at handover.** Spec acceptance criteria are numbered `**R1:**`, `**R2:**`, ... and **never renumbered** after the first review cycle (deletions leave gaps). Anyone reading R5 in a six-month-old commit is reading the same R5 today.
 
@@ -136,7 +136,7 @@ The tech lead runs `/flow-next:interview <spec-id> --scope=technical`. This is t
 
 Optional `--strategy --docs` flags activate doc-aware mode (orthogonal to scope): the interview pulls from `STRATEGY.md` (active tracks), `GLOSSARY.md` (canonical vocabulary), and `knowledge/decisions/` (load-bearing past choices). When the user's wording diverges from the canonical glossary term, the interview surfaces the conflict in a `## Glossary Conflicts` spec section rather than silently rewriting. Same shape for strategy: a `## Strategy Conflicts` section parallel to glossary, ≤1 strategy-conflict question per turn.
 
-Run `/flow-next:plan-review <spec-id>` before handover. A different model (RepoPrompt / Codex / Copilot) reads the fully-completed spec and reports gaps, ambiguities, and hidden assumptions. The disagreement surface between the writing model and the review model is where the gaps live.
+Run `/flow-next:plan-review <spec-id>` before handover. A different model (RepoPrompt / Codex / Copilot / Cursor) reads the fully-completed spec and reports gaps, ambiguities, and hidden assumptions. The disagreement surface between the writing model and the review model is where the gaps live.
 
 ### [4] Implementation plan — Handover #3
 
@@ -168,7 +168,7 @@ Branch strategy is a per-team choice:
 
 `/flow-next:impl-review` runs a different model over the diff against the spec. Default backend is configured at the team level via `flowctl review-backend`; per-task overrides via task frontmatter; per-invocation overrides via `--review` flag.
 
-Backends: `rp` (RepoPrompt), `codex` (Codex CLI), `copilot` (GitHub Copilot CLI), `none`. Spec-form: `codex:gpt-5.5:high`, `copilot:claude-opus-4.5:high`, etc. See [`docs/flowctl.md`](flowctl.md) for the `flowctl review-backend` command reference.
+Backends: `rp` (RepoPrompt), `codex` (Codex CLI), `copilot` (GitHub Copilot CLI), `cursor` (Cursor `cursor-agent` CLI), `none`. Spec-form: `codex:gpt-5.5:high`, `copilot:claude-opus-4.5:high`, `cursor:gpt-5.5-high` (cursor folds effort into the model name — no `:effort` rung), etc. See [`docs/flowctl.md`](flowctl.md) for the `flowctl review-backend` command reference.
 
 The review surfaces findings on five confidence anchors (0 / 25 / 50 / 75 / 100) and gates `<75` except P0 @ 50+. Findings classified `introduced` vs `pre_existing` — only `introduced` counts toward the verdict. Receipts at `.flow/review-receipts/<branch>.json` carry `unaddressed: [R-IDs]`, `suppressed_count`, `verdict_before_validate`, etc. The receipt is itself a handover artefact.
 

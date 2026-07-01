@@ -14,7 +14,7 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `TASK_ID` - the task to implement (e.g., fn-1.2)
 - `SPEC_ID` - parent spec (e.g., fn-1)
 - `FLOWCTL` - path to flowctl CLI
-- `REVIEW_MODE` - none, rp, or codex
+- `REVIEW_MODE` - none, rp, codex, copilot, or cursor
 - `RALPH_MODE` - true if running autonomously
 - `DELEGATE` - codex to delegate Phase 2 implementation to `codex exec`; absent or `local` ⇒ standard in-session (the host only sets this when delegation is active and all pre-flight gates passed). `DELEGATE_MODEL` / `DELEGATE_SANDBOX` / `DELEGATE_EFFORT_FLOOR` / `DELEGATE_DECISION` accompany it — see Phase 2.
 
@@ -259,27 +259,32 @@ there is no independent impl-review gate, so Phase 5 below runs its own
 verification on the delegated diff — `verification_summary` from Codex is NOT
 trusted as the sole gate. See Phase 5.)
 
-**If REVIEW_MODE is `rp` or `codex`, you MUST invoke impl-review and receive SHIP before proceeding.**
+**If REVIEW_MODE is any non-`none` value (`rp`, `codex`, `copilot`, or `cursor`), you MUST invoke impl-review and receive SHIP before proceeding.**
 (On a delegated task this impl-review SHIP gate IS the independent check — do not
 re-run a duplicate test pass in Phase 5; the impl-review gate already covers it.)
 
 Use the Skill tool to invoke impl-review (NOT flowctl directly):
 
 ```
-/flow-next:impl-review <TASK_ID> --base $BASE_COMMIT
+/flow-next:impl-review <TASK_ID> --base $BASE_COMMIT --review=$REVIEW_MODE
 ```
 
-The skill handles everything:
+Pass `--review=$REVIEW_MODE` so an explicit run-wide `work --review=<backend>` override reaches
+the review — `REVIEW_MODE` holds the backend resolved for THIS task (the explicit run override if
+given, else the **task-aware** backend from `review-backend "$TASK_ID"`, which already honors the
+task's own `review:` override; see phases.md §3c). impl-review cannot see the worker prompt variable
+otherwise, so passing it propagates the correct explicit-or-per-task precedence rather than
+re-resolving from config. The skill still handles everything else:
 - Scoped diff (BASE_COMMIT..HEAD, not main..HEAD)
 - Receipt paths (don't pass --receipt yourself)
-- Sending to reviewer (rp or codex backend)
+- Sending to reviewer (rp, codex, copilot, or cursor backend)
 - Parsing verdict (SHIP/NEEDS_WORK/MAJOR_RETHINK)
 - Fix loops until SHIP
 
 If NEEDS_WORK:
 1. Fix the issues identified
 2. Commit fixes
-3. Re-invoke the skill: `/flow-next:impl-review <TASK_ID> --base $BASE_COMMIT`
+3. Re-invoke the skill: `/flow-next:impl-review <TASK_ID> --base $BASE_COMMIT --review=$REVIEW_MODE`
 
 Continue until SHIP verdict.
 

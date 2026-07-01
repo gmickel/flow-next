@@ -26,7 +26,7 @@ Re-reading the spec, the task, and `git log` since branch base before each task 
 
 ## Cross-model review
 
-A different model reviews the artefact produced by the first model. Applied at every handover. Backends: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot). The disagreement surface between writing model and reviewing model is where the gaps live.
+A different model reviews the artefact produced by the first model. Applied at every handover. Backends: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor `cursor-agent` CLI (cursor). The disagreement surface between writing model and reviewing model is where the gaps live.
 
 ## Feature map
 

@@ -7,4 +7,5 @@ tmp/
 .migrating
 .migration-manifest
 sync-runs/
+pilot-runs/
 # End of auto-managed block. User patterns below this line are preserved.

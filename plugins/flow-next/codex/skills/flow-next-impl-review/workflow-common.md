@@ -2,7 +2,7 @@
 
 ## Philosophy
 
-The reviewer model only sees selected files. RepoPrompt's Builder discovers context you'd miss (rp backend). Codex and Copilot use context hints from flowctl (codex/copilot backends).
+The reviewer model only sees selected files. RepoPrompt's Builder discovers context you'd miss (rp backend). Codex, Copilot, and Cursor use context hints from flowctl (codex/copilot/cursor backends).
 
 ---
 
@@ -18,19 +18,25 @@ FLOWCTL="$HOME/.codex/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-# Priority: --review flag > env > config (flag parsed in SKILL.md)
-# Text output is bare backend name for back-compat grep. The same command in
-# --json mode returns {backend, spec, model, effort, source} — use that if you
-# need the model / effort resolved from a spec-form env value.
-BACKEND=$($FLOWCTL review-backend)
+# Priority: --review flag > per-task/spec `review` override > env > config (flag parsed in SKILL.md).
+# FIRST resolve the review-target id from $ARGUMENTS — the `fn-N.M` task / `fn-N` spec being
+# reviewed. This is BEFORE the later `TASK_ID` parse (Workflow Step 0), so extract it HERE (do
+# NOT rely on `$TASK_ID`, which is still unset at Phase 0); leave empty for a standalone no-spec
+# diff review. Passing it lets a per-task `review: <backend>:...` override route to the RIGHT
+# backend before dispatch, even when it differs from the project default. Empty → env/config
+# unchanged (no regression).
+REVIEW_ID="${1:-}" # the review-target positional arg (fn-N.M task / fn-N spec); empty for a standalone diff
+# Text output is bare backend name for back-compat grep. The same command in --json mode returns
+# {backend, spec, model, effort, source} — use that if you need the model / effort resolved.
+BACKEND=$($FLOWCTL review-backend "$REVIEW_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
  echo "Error: No review backend configured."
- echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|none"
+ echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|none"
  exit 1
 fi
 
-echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|none)"
+echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|none)"
 ```
 
 **Spec-form env var (optional):** `FLOW_REVIEW_BACKEND` accepts bare or full spec:
@@ -42,6 +48,8 @@ FLOW_REVIEW_BACKEND=codex $FLOWCTL codex impl-review "$TASK_ID" --receipt "$RECE
 # Full spec — model + effort resolved automatically
 FLOW_REVIEW_BACKEND=codex:gpt-5.5:xhigh $FLOWCTL codex impl-review "$TASK_ID" --receipt "$RECEIPT_PATH"
 FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5 $FLOWCTL copilot impl-review "$TASK_ID" --receipt "$RECEIPT_PATH"
+# Cursor folds effort into the model name (no :<effort>):
+FLOW_REVIEW_BACKEND=cursor:gpt-5.5-high $FLOWCTL cursor impl-review "$TASK_ID" --base "$DIFF_BASE" --receipt "$RECEIPT_PATH"
 
 # Or pass spec directly (preferred for one-offs, avoids env pollution):
 $FLOWCTL codex impl-review "$TASK_ID" --spec "codex:gpt-5.5:xhigh" --receipt "$RECEIPT_PATH"
@@ -57,6 +65,7 @@ Per-task `review` (set via `flowctl task set-backend`) overrides env.
 |------------|------|
 | `codex` | [workflow-codex.md](workflow-codex.md) |
 | `copilot` | [workflow-copilot.md](workflow-copilot.md) |
+| `cursor` | [workflow-cursor.md](workflow-cursor.md) |
 | `rp` | [workflow-rp.md](workflow-rp.md) |
 
 Only the file for the active backend should enter context. Do not read the other backend files.
@@ -267,6 +276,13 @@ for pass in $SELECTED_PASSES; do
  --receipt "$RECEIPT_PATH" \
  --json
  ;;
+ cursor)
+ $FLOWCTL cursor deep-pass \
+ --pass "$pass" \
+ --primary-findings "$PRIMARY_FINDINGS" \
+ --receipt "$RECEIPT_PATH" \
+ --json
+ ;;
  rp)
  # RP: same-chat session continuity is automatic. Render the
  # pass-specific prompt from deep-passes.md (inject primary
@@ -374,6 +390,12 @@ case "$BACKEND" in
  ;;
  copilot)
  VALIDATOR_JSON="$($FLOWCTL copilot validate \
+ --findings-file "$FINDINGS_FILE" \
+ --receipt "$RECEIPT_PATH" \
+ --json 2>&1)"
+ ;;
+ cursor)
+ VALIDATOR_JSON="$($FLOWCTL cursor validate \
  --findings-file "$FINDINGS_FILE" \
  --receipt "$RECEIPT_PATH" \
  --json 2>&1)"

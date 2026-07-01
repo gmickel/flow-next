@@ -71,6 +71,35 @@ installed/cached copy, so your edits may not take effect. Instead:
 - **Hold the model constant** (= the target's frontmatter `model`, e.g. `opus`) so scores compare
   apples-to-apples. Run the **same** N inputs every experiment.
 
+## Higher-fidelity variant: the real backend in the loop (review prompts, fn-74)
+
+The subagent-reads-prompt trick above is right for scouts/agents. For a prompt consumed by a
+**CLI/GUI review backend** — `build_review_prompt` (codex/copilot/cursor) and the RP skill
+rubrics — a stronger harness puts the *real engine* in the loop: monkeypatch the actual
+`build_review_prompt` (swap rubric-block constants / inject a candidate block), then run the
+prompt through `codex exec` / `rp-cli setup-review`+`chat-send` / `cursor-agent` — the same
+engine a real review uses. **Reusable scaffold + worked example: [`optimization/review-prompt/`](../optimization/review-prompt/README.md); scores in [`optimization-log.md`](optimization-log.md).**
+Four techniques it adds to the base loop:
+
+- **Ground-truth corpus + answer key** — a planted-issue file (correctness bugs + smells) or
+  spec (plan weaknesses) makes detection a deterministic **keyword OR-match per planted item**,
+  not host-judgment. This IS the R3 accuracy eval, made a hard number.
+- **Over-flag check on a CLEAN corpus** — a "find X" quality lever must NOT invent findings on
+  a *good* artifact: keep only if finding-rate ≈ baseline and `false-missing == 0`. (Twice in
+  fn-74 the "clean" corpus turned out to hide a real bug both prompts caught — a bonus eval-quality
+  check on your own corpus.)
+- **Cross-backend validation** — confirm the winner on ≥2 engines (fn-74: codex GPT-5.5-high +
+  RP GPT-5.5-high scored the *same* baseline, 7/10, which validated the eval itself). Note RP
+  keeps a **parallel rubric copy** in the skill markdown (`flow-next-impl-review/workflow-rp.md`,
+  `flow-next-plan-review/workflow.md`) — a `build_review_prompt` change must land in BOTH sources.
+- **Both axes every run** — prompt tokens (`len(prompt)//4`, the lever we control) + backend
+  `output_tokens` + wall-time, alongside the detection number.
+
+Result: impl detection **7→10/10 at −27% tokens**; plan **8.0→9.3 at +74 tokens** — both shipped.
+Two transferable lessons: **less-is-more** (a lean/targeted list beat a broad one *twice*) and
+**position barely matters** (a block validated at the prompt's top scored identically wired lower —
+wire it at the clean code seam).
+
 ## Scoring — deterministic where possible
 
 - **Grounded:** extract every cited `path[:line]`, `test -f` it; spot-check line refs / claims.

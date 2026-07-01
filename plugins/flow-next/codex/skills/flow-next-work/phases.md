@@ -230,6 +230,12 @@ Use the **worker** agent role to implement the task. The worker gets fresh conte
 - Review cycles (if enabled)
 - Completing the task (flowctl done)
 
+**`REVIEW_MODE` is per-task, not a fixed run-wide value.** Resolve it for THIS task: if the user
+passed an explicit `--review=<backend>` to `/flow-next:work`, use that (a deliberate run-wide override
+wins for every task); OTHERWISE resolve task-aware — `REVIEW_MODE=$($FLOWCTL review-backend "$TASK_ID")`
+— so a task's own `review:` override (e.g. `review: cursor:...` under a `codex` project default) selects
+its backend rather than the project default. `none` still skips review.
+
 **Invoke the worker:**
 
 "Use the worker agent to implement this task:
@@ -237,7 +243,7 @@ Use the **worker** agent role to implement the task. The worker gets fresh conte
 TASK_ID: fn-X.Y
 SPEC_ID: fn-X
 FLOWCTL: $FLOWCTL
-REVIEW_MODE: none|rp|codex
+REVIEW_MODE: none|rp|codex|copilot|cursor
 RALPH_MODE: true|false
 
 Follow your phases exactly."
@@ -385,7 +391,7 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
 
 1. Invoke `/flow-next:spec-completion-review <spec-id>` skill
  - Pass `--review=<backend>` matching the work review backend
- - Skill handles rp/codex backend dispatch
+ - Skill handles rp/codex/copilot/cursor backend dispatch
  - Skill runs fix loop internally until SHIP verdict
 
 2. After skill returns with SHIP:

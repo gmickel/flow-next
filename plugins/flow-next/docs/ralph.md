@@ -540,7 +540,6 @@ Externally-set env vars are preserved (the resolver does not clobber `SPECS_FILE
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CODEX_SANDBOX` | `auto` | `read-only`, `workspace-write`, `danger-full-access`, `auto` |
-| `FLOW_CODEX_EMBED_MAX_BYTES` | `500000` | Max bytes embedded in prompts |
 
 > **Windows:** Use `auto` or `danger-full-access`. The `read-only` mode blocks all shell commands.
 

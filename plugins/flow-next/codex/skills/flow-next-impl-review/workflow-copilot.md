@@ -27,11 +27,16 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
 # Runtime config:
 # --spec <spec> full spec (backend:model:effort), highest priority
 # FLOW_REVIEW_BACKEND env (spec-form ok: copilot:claude-opus-4.5:xhigh)
-# FLOW_COPILOT_MODEL env (fills missing model only; default gpt-5.2)
+# FLOW_COPILOT_MODEL env (fills missing model only; default gpt-5.5)
 # FLOW_COPILOT_EFFORT env (fills missing effort only; default high)
 # per-task stored review via `flowctl task set-backend` (highest if set)
 
-$FLOWCTL copilot impl-review "$TASK_ID" --base "$DIFF_BASE" --receipt "$RECEIPT_PATH"
+# Standalone branch reviews leave TASK_ID empty — OMIT the positional entirely
+# (a quoted "" is rejected as an invalid task id; standalone mode needs no task arg).
+args=(copilot impl-review)
+[ -n "$TASK_ID" ] && args+=("$TASK_ID")
+args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH")
+$FLOWCTL "${args[@]}"
 ```
 
 **Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`.**

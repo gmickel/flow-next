@@ -247,16 +247,19 @@ ui_config() {
     rp) plan_display="RepoPrompt${PLAN_REVIEW#rp}" ;;
     codex) plan_display="Codex${PLAN_REVIEW#codex}" ;;
     copilot) plan_display="Copilot${PLAN_REVIEW#copilot}" ;;
+    cursor) plan_display="Cursor${PLAN_REVIEW#cursor}" ;;
   esac
   case "$WORK_REVIEW_BACKEND" in
     rp) work_display="RepoPrompt${WORK_REVIEW#rp}" ;;
     codex) work_display="Codex${WORK_REVIEW#codex}" ;;
     copilot) work_display="Copilot${WORK_REVIEW#copilot}" ;;
+    cursor) work_display="Cursor${WORK_REVIEW#cursor}" ;;
   esac
   case "$COMPLETION_REVIEW_BACKEND" in
     rp) completion_display="RepoPrompt${COMPLETION_REVIEW#rp}" ;;
     codex) completion_display="Codex${COMPLETION_REVIEW#codex}" ;;
     copilot) completion_display="Copilot${COMPLETION_REVIEW#copilot}" ;;
+    cursor) completion_display="Cursor${COMPLETION_REVIEW#cursor}" ;;
   esac
   ui "${C_DIM}   Reviews:${C_RESET} Plan=$plan_display ${C_DIM}•${C_RESET} Work=$work_display ${C_DIM}•${C_RESET} Completion=$completion_display"
   [[ -n "${SPECS:-}" ]] && ui "${C_DIM}   Scope:${C_RESET} $SPECS"
@@ -315,6 +318,10 @@ ui_plan_review() {
     ui ""
     ui "   ${C_YELLOW}📝 Plan Review${C_RESET}"
     ui "      ${C_DIM}Sending to reviewer via Copilot...${C_RESET}"
+  elif [[ "$mode" == "cursor" ]]; then
+    ui ""
+    ui "   ${C_YELLOW}📝 Plan Review${C_RESET}"
+    ui "      ${C_DIM}Sending to reviewer via Cursor...${C_RESET}"
   fi
 }
 
@@ -332,6 +339,10 @@ ui_impl_review() {
     ui ""
     ui "   ${C_MAGENTA}🔍 Implementation Review${C_RESET}"
     ui "      ${C_DIM}Sending to reviewer via Copilot...${C_RESET}"
+  elif [[ "$mode" == "cursor" ]]; then
+    ui ""
+    ui "   ${C_MAGENTA}🔍 Implementation Review${C_RESET}"
+    ui "      ${C_DIM}Sending to reviewer via Cursor...${C_RESET}"
   fi
 }
 
@@ -349,6 +360,10 @@ ui_completion_review() {
     ui ""
     ui "   ${C_GREEN}✅ Spec Completion Review${C_RESET}"
     ui "      ${C_DIM}Verifying spec compliance via Copilot...${C_RESET}"
+  elif [[ "$mode" == "cursor" ]]; then
+    ui ""
+    ui "   ${C_GREEN}✅ Spec Completion Review${C_RESET}"
+    ui "      ${C_DIM}Verifying spec compliance via Cursor...${C_RESET}"
   fi
 }
 
@@ -441,7 +456,6 @@ export CODEX_SANDBOX  # Ensure available to Claude worker for flowctl codex comm
 # set in config.env — empty values would otherwise override flowctl defaults.
 [[ -n "${FLOW_COPILOT_MODEL:-}" ]] && export FLOW_COPILOT_MODEL
 [[ -n "${FLOW_COPILOT_EFFORT:-}" ]] && export FLOW_COPILOT_EFFORT
-[[ -n "${FLOW_COPILOT_EMBED_MAX_BYTES:-}" ]] && export FLOW_COPILOT_EMBED_MAX_BYTES
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -1142,7 +1156,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
   task_status=""
   impl_receipt_ok="1"
   # Gate on BARE backend name (spec form like codex:gpt-5.4:xhigh resolves to codex).
-  if [[ "$status" == "plan" && ( "$PLAN_REVIEW_BACKEND" == "rp" || "$PLAN_REVIEW_BACKEND" == "codex" || "$PLAN_REVIEW_BACKEND" == "copilot" ) ]]; then
+  if [[ "$status" == "plan" && ( "$PLAN_REVIEW_BACKEND" == "rp" || "$PLAN_REVIEW_BACKEND" == "codex" || "$PLAN_REVIEW_BACKEND" == "copilot" || "$PLAN_REVIEW_BACKEND" == "cursor" ) ]]; then
     if ! verify_receipt "$REVIEW_RECEIPT_PATH" "plan_review" "$spec_id"; then
       echo "ralph: missing plan review receipt; forcing retry" >> "$iter_log"
       log "missing plan receipt; forcing retry"
@@ -1156,7 +1170,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
   fi
   completion_review_status=""
   completion_receipt_ok="1"
-  if [[ "$status" == "completion_review" && ( "$COMPLETION_REVIEW_BACKEND" == "rp" || "$COMPLETION_REVIEW_BACKEND" == "codex" || "$COMPLETION_REVIEW_BACKEND" == "copilot" ) ]]; then
+  if [[ "$status" == "completion_review" && ( "$COMPLETION_REVIEW_BACKEND" == "rp" || "$COMPLETION_REVIEW_BACKEND" == "codex" || "$COMPLETION_REVIEW_BACKEND" == "copilot" || "$COMPLETION_REVIEW_BACKEND" == "cursor" ) ]]; then
     if ! verify_receipt "$REVIEW_RECEIPT_PATH" "completion_review" "$spec_id"; then
       echo "ralph: missing completion review receipt; forcing retry" >> "$iter_log"
       log "missing completion receipt; forcing retry"
@@ -1179,7 +1193,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
     fi
   fi
   receipt_verdict=""
-  if [[ "$status" == "work" && ( "$WORK_REVIEW_BACKEND" == "rp" || "$WORK_REVIEW_BACKEND" == "codex" || "$WORK_REVIEW_BACKEND" == "copilot" ) ]]; then
+  if [[ "$status" == "work" && ( "$WORK_REVIEW_BACKEND" == "rp" || "$WORK_REVIEW_BACKEND" == "codex" || "$WORK_REVIEW_BACKEND" == "copilot" || "$WORK_REVIEW_BACKEND" == "cursor" ) ]]; then
     if ! verify_receipt "$REVIEW_RECEIPT_PATH" "impl_review" "$task_id"; then
       echo "ralph: missing impl review receipt; forcing retry" >> "$iter_log"
       log "missing impl receipt; forcing retry"

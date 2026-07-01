@@ -234,13 +234,20 @@ Use the Task tool to spawn a `worker` subagent. The worker gets fresh context an
 
 Pass config values only. Worker reads worker.md for phases. Do NOT paraphrase or add step-by-step instructions - worker.md has them.
 
+**`REVIEW_MODE` is per-task, not a fixed run-wide value.** Resolve it for THIS task: if the user
+passed an explicit `--review=<backend>` to `/flow-next:work`, use that (a deliberate run-wide override
+wins for every task); OTHERWISE resolve task-aware — `REVIEW_MODE=$($FLOWCTL review-backend "$TASK_ID")`
+— so a task's own `review:` override (e.g. `review: cursor:...` under a `codex` project default) selects
+its backend rather than the project default. `none` still skips review. (This is why the worker passes
+`--review=$REVIEW_MODE` below — the value already carries the correct explicit-or-per-task precedence.)
+
 ```
 Implement flow-next task.
 
 TASK_ID: fn-X.Y
 SPEC_ID: fn-X
 FLOWCTL: /path/to/flowctl
-REVIEW_MODE: none|rp|codex
+REVIEW_MODE: none|rp|codex|copilot|cursor
 RALPH_MODE: true|false
 
 Follow your phases in worker.md exactly.
@@ -405,7 +412,7 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
 
 1. Invoke `/flow-next:spec-completion-review <spec-id>` skill
    - Pass `--review=<backend>` matching the work review backend
-   - Skill handles rp/codex backend dispatch
+   - Skill handles rp/codex/copilot/cursor backend dispatch
    - Skill runs fix loop internally until SHIP verdict
 
 2. After skill returns with SHIP:

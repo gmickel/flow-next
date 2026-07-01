@@ -1155,14 +1155,14 @@ assert "Test diff" in impl_prompt
 assert "<spec>" in impl_prompt
 assert "Test spec" in impl_prompt
 
-# fn-29.3: confidence rubric + suppression gate baked into impl prompt
-assert "Confidence calibration" in impl_prompt
+# fn-29.3: confidence rubric + suppression gate baked into impl prompt (fn-74: tightened headings)
+assert "Confidence (pick ONE anchor" in impl_prompt
 assert "Suppression gate" in impl_prompt
 assert "0 / 25 / 50 / 75 / 100" in impl_prompt
 assert "Suppressed findings" in impl_prompt
 
-# fn-29.4: introduced vs pre_existing classification baked into impl prompt
-assert "Introduced vs pre-existing classification" in impl_prompt
+# fn-29.4: introduced vs pre_existing classification baked into impl prompt (fn-74: tightened heading)
+assert "Introduced vs pre-existing" in impl_prompt
 assert "introduced" in impl_prompt
 assert "pre_existing" in impl_prompt
 assert "Pre-existing issues (not blocking this verdict)" in impl_prompt
@@ -1170,7 +1170,7 @@ assert "Classification counts" in impl_prompt
 assert "Verdict gate" in impl_prompt
 
 # fn-29.4: plan review does NOT need classification (plans don't have diffs to classify against)
-assert "Introduced vs pre-existing classification" not in plan_prompt
+assert "Introduced vs pre-existing" not in plan_prompt
 PY
 echo -e "${GREEN}✓${NC} build_review_prompt has full criteria"
 PASS=$((PASS + 1))
