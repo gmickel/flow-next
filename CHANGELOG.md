@@ -2,6 +2,18 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **Windows `python3` Microsoft Store alias-stub breakage** (fn-77) — flowctl was unusable on the common Windows configuration where real Python is installed from python.org / the `py` launcher but `python3` resolves to the Microsoft Store **App Execution Alias** — a 0-byte reparse point (`%LOCALAPPDATA%\Microsoft\WindowsApps\python3.exe`, enabled by default) that is on `PATH` yet non-functional (prints *"Python was not found"*, exits **9009**). The old launchers hardcoded `exec python3` and the GH-35 `pick_python` helper tested `command -v` (presence, not function), so both selected the broken stub. The fix makes flowctl **just work** across every Windows invocation context (Git Bash / WSL, cmd.exe / PowerShell, Claude Desktop, native Codex / Cursor) with no user intervention and **no mac/linux regression**:
+  - **Probe over presence** — a shared resolver (`scripts/lib/pick-python.sh`) and the self-contained launchers probe interpreter *functionality* (`<cand> -c "import sys"`, reject non-zero exit) in order `$PYTHON_BIN` → `py -3` → `python3` → `python`; the 9009 stub is skipped even though it is on `PATH`, while a machine with a working `python3` (and no `py` launcher) still selects `python3` first. The 12 copy-pasted `pick_python` bodies source the one helper.
+  - **Dual launcher** — a `flowctl.cmd` batch shim ships alongside the extensionless bash `flowctl`, running the same probe under cmd.exe / PowerShell where the bash launcher's shebang is never honored (`py -3` preferred). CRLF / exec-bit handling pinned so Git Bash doesn't regress.
+  - **`init` self-heal** — `flowctl init` re-stamps both `.flow/bin/flowctl` and `.flow/bin/flowctl.cmd` from in-module launcher constants, so an existing (pre-fix) install refreshes on the next `init` without a full `/flow-next:setup` re-run. A broken bash launcher is reached via the newly-delivered `.cmd`, a plugin auto-update, or the documented `py -3 .flow/bin/flowctl.py init` escape hatch.
+  - **Direct-shebang sites swept** — `hooks.json` invokes `ralph-guard.py` via a bash wrapper that sources the resolver; `ralph.sh` runs `watch-filter.py` through the resolved interpreter array; the `qa` / `prospect` agent heredocs resolve an interpreter once instead of emitting bare `python3 -`. (Ralph mode requires Git Bash on Windows — the harness is bash.)
+  - **Regression coverage** — a fake-9009-stub-on-`PATH` harness asserts the old `command -v` path selects the stub, the new probe falls through to a working interpreter, `$PYTHON_BIN` is probed (a broken override is rejected), and `py -3` is preferred when present; a real `windows-latest` CI job exercises `flowctl.cmd` (PowerShell/cmd) and the bash launcher (Git Bash) against the stub configuration.
+  - **CI template + docs** — `docs/ci-workflow-example.yml` no longer hardcodes bare `python3 flowctl.py` (it probes for a working interpreter, `shell: bash`); `docs/troubleshooting.md` and `docs/platforms.md` document the fix, the probe order, the `flowctl.cmd` shim, the "Ralph requires Git Bash on Windows" constraint, and **both** recovery paths for a broken install — re-stamp via `init` and the manual disable-App-Execution-Aliases workaround. No version bump (batched).
+
 ## [flow-next 2.5.0] - 2026-07-01
 
 ### Added

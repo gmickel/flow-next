@@ -213,6 +213,15 @@ flow-next's **skills, commands, and subagents all register and run** on Cursor. 
 
 > **Status:** skills + commands + agents register and run; **multi-agent verified**; flowctl resolves post-`/flow-next:setup`. Cosmetic: no plugin card + autocomplete under-lists. Ralph unsupported (hook-schema mismatch).
 
+## Windows: Python discovery
+
+flow-next's bundled `flowctl` is a thin launcher over `flowctl.py`. On Windows it resolves the Python interpreter by **probing functionality, not presence** (fn-77): each candidate must actually run `<cand> -c "import sys"` and exit 0. Probe order is `$PYTHON_BIN` → `py -3` → `python3` → `python`.
+
+- **Dual launcher.** The extensionless bash `flowctl` runs under Git Bash / WSL (and macOS / Linux); a **`flowctl.cmd`** batch shim runs the same probe under **cmd.exe / PowerShell** — i.e. Claude Desktop, native Codex, and native Cursor, where the bash launcher's shebang is never honored. Both live under `.flow/bin/` and are (re-)written by `flowctl init` / `/flow-next:setup`.
+- **`py -3` preferred.** The [py launcher](https://docs.python.org/3/using/windows.html) (`C:\Windows\py.exe`, installed by python.org / [PEP 397](https://peps.python.org/pep-0397/)) is never a Store alias stub, so it's the most reliable Windows candidate.
+- **Alias-stub pitfall.** On Windows `python3` is, by default, the Microsoft Store **App Execution Alias** stub — on `PATH` but non-functional (prints *"Python was not found"*, exits **9009**). The probe skips it; a bare presence check does not. If a *pre-fix* install still hits it, see [`troubleshooting.md` → Windows `python3` / Store alias stub](troubleshooting.md#windows-python3-not-found--microsoft-store-alias-stub-fixed-in-fn-77) for the two recovery paths (re-stamp launchers via `py -3 .flow/bin/flowctl.py init`, or disable the alias).
+- **Ralph mode requires Git Bash on Windows.** The Ralph harness (`ralph.sh`) and its hook wrapper are bash, and the `ralph-guard.py` hook is invoked via a bash wrapper that sources the shared resolver — there is **no** native `ralph-guard.cmd`, because the harness that would call it is itself bash. So run Ralph under Git Bash / WSL on Windows. The interactive `flowctl` / plan / work / review workflow needs no such constraint (the `.cmd` shim covers cmd/PowerShell).
+
 ## Windows + Copilot review backend
 
 Works natively from flow-next 1.1.9. flow-next picks the prompt-delivery path per host:
@@ -227,6 +236,8 @@ Upstream tracking: [github/copilot-cli#3398](https://github.com/github/copilot-c
 ## Optional skill requirements
 
 Most flow-next skills run on the base flowctl install (Python 3.8+, `jq`, `gh`). A couple of opt-in skills carry an extra prerequisite:
+
+> **Windows Python 3.8+ caveat:** the `py` launcher or a python.org install satisfies this; the Microsoft Store `python3` **alias stub does not** (it's on `PATH` but non-functional). flowctl's launcher probes past it automatically — see [Windows: Python discovery](#windows-python-discovery).
 
 | Skill | Requires | Notes |
 |---|---|---|

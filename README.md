@@ -354,7 +354,7 @@ Doc index with one-line descriptions: [`plugins/flow-next/docs/README.md`](plugi
 
 ## Requirements
 
-- **Python 3.8+** — bundled `flowctl` CLI is pure-stdlib.
+- **Python 3.8+** (or the `py` launcher on Windows) — bundled `flowctl` CLI is pure-stdlib.
 - **`jq`** and **`gh`** — required for the review subsystem and PR plumbing.
 - **`bun`** *(optional)* — only needed for the [Ralph TUI](flow-next-tui/).
 

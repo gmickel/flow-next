@@ -40,10 +40,13 @@ Works out of the box for parallel branches. No setup required.
 ├── tasks/fn-N-slug.M.md       # Task spec (markdown)
 ├── memory/                    # Agent memory (reserved)
 ├── bin/                       # (optional) Local flowctl install via /flow-next:setup
-│   ├── flowctl
-│   └── flowctl.py
+│   ├── flowctl                # bash launcher (Git Bash / WSL / macOS / Linux)
+│   ├── flowctl.cmd            # batch launcher (cmd.exe / PowerShell) — probes py -3/python3/python
+│   └── flowctl.py             # Python entrypoint (all CLI logic)
 └── usage.md                   # (optional) CLI reference via /flow-next:setup
 ```
+
+Both launchers resolve a working Python by **probing functionality** (`<cand> -c "import sys"`, order `$PYTHON_BIN` → `py -3` → `python3` → `python`) so the Windows Microsoft Store `python3` alias stub is skipped (fn-77). `flowctl init` re-stamps **both** `bin/flowctl` and `bin/flowctl.cmd` from in-module launcher constants, so an existing install self-heals a pre-fix launcher without a full `/flow-next:setup` re-run — see [`platforms.md` → Windows: Python discovery](platforms.md#windows-python-discovery).
 
 Pre-1.0 layout had spec JSON sidecars at `.flow/epics/fn-N-slug.json` (the markdown was already at `.flow/specs/fn-N-slug.md`). The alias layer keeps reads working until you run `flowctl migrate-rename --yes` (or `/flow-next:setup`'s upgrade branch).
 

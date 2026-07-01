@@ -84,6 +84,30 @@ POSIX (macOS / Linux / WSL) behavior is unchanged.
 
 **Upstream:** [github/copilot-cli#3398](https://github.com/github/copilot-cli/issues/3398) tracks a first-class `--prompt-file` flag. Once that lands, both POSIX and Windows paths will move to the cleaner file-based delivery.
 
+## Windows: `python3` not found / Microsoft Store alias stub (fixed in fn-77)
+
+**Symptom:** on Windows, `flowctl` fails with *"Python was not found; run without arguments to install from the Microsoft Store…"* and exit code **9009**, even though you installed real Python.
+
+**Cause:** `python3` resolves to the Microsoft Store **App Execution Alias** — a 0-byte reparse point at `%LOCALAPPDATA%\Microsoft\WindowsApps\python3.exe` that Windows ships **enabled by default**. When your real Python came from [python.org](https://python.org) or the `py` launcher (not the Store), the stub shadows it: it satisfies `command -v python3` (it *is* on `PATH`) but is non-functional. Older flowctl launchers trusted presence over function and picked the stub — so flow-next broke on every Windows machine in this configuration.
+
+**The shipped fix (no action needed on a fresh install):** the `flowctl` launchers now **probe interpreter functionality** — each candidate must actually run `<cand> -c "import sys"` and exit 0 — in order `$PYTHON_BIN` → `py -3` → `python3` → `python`, so the 9009 stub is skipped. A `flowctl.cmd` batch shim ships alongside the extensionless bash `flowctl`, so PowerShell / cmd.exe (Claude Desktop, native Codex, native Cursor) resolve a working interpreter too. See [`platforms.md` → Windows: Python discovery](platforms.md#windows-python-discovery).
+
+**Recovering an already-broken install** (a pre-fix `.flow/bin/flowctl` hardcodes `exec python3` and cannot fix itself). Pick either:
+
+1. **Re-stamp the launchers (recommended, durable).** `flowctl init` re-writes `.flow/bin/flowctl` **and** `.flow/bin/flowctl.cmd` from the fixed source. Because the broken bash launcher can't run, drive `init` through a working interpreter directly — `init` lives inside `flowctl.py`, so it never needs the launcher:
+
+   ```powershell
+   py -3 .flow/bin/flowctl.py init      # or:  python .flow/bin/flowctl.py init
+   ```
+
+   or just re-run `/flow-next:setup` (its upgrade branch re-stamps both). After this, `flowctl` and `flowctl.cmd` work in every shell.
+
+2. **Disable the Store alias (per-machine OS workaround).** Settings → Apps → Advanced app settings → **App execution aliases** → toggle **OFF** for `python.exe` **and** `python3.exe`. `python3` then resolves to your real install. Note the `py` launcher is [not included with Store Python](https://learn.microsoft.com/windows/python/faqs), so if you were relying on Store Python, install python.org Python (which ships `py`) to get `py -3`.
+
+Prefer path 1 — the alias toggle is per-machine, not durable, and does not survive a fresh Windows profile.
+
+**Sources:** Microsoft Learn [Python on Windows FAQ](https://learn.microsoft.com/windows/python/faqs) (the App Execution Alias stub + "the py launcher is not included with Store Python" + disabling the alias); python.org [Using Python on Windows](https://docs.python.org/3/using/windows.html) and [PEP 397](https://peps.python.org/pep-0397/) (the `py` launcher / `py -3`).
+
 ## `/flow-next:map` — clawpatch not found / version mismatch / Node 20
 
 `/flow-next:map` wraps the upstream `clawpatch` CLI. Three common failure modes:
