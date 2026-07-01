@@ -82,7 +82,17 @@ def run_codex(prompt, timeout=420):
         it = o.get("item", {})
         if it.get("type") == "agent_message" and it.get("text"):
             msgs.append(it["text"])
-    return ("\n".join(msgs), usage, dt, "OK")
+    text = "\n".join(msgs)
+    # A non-zero exit (auth failure, bad model/config, CLI error) or an empty
+    # response is NOT a real review — return a non-OK status so callers SKIP the
+    # run instead of scoring it as 0 detections, which would silently corrupt the
+    # variant comparison (a good prompt could look worse purely from a flaky call).
+    # Mirrors the TIMEOUT path above; callers already gate on `st != "OK"`.
+    if p.returncode != 0:
+        return text, usage, dt, f"FAIL(rc={p.returncode})"
+    if not text.strip():
+        return text, usage, dt, "EMPTY"
+    return text, usage, dt, "OK"
 
 
 def verdict_of(review):
