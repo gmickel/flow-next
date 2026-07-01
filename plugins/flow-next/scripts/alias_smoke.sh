@@ -490,6 +490,17 @@ print("OK")
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "${YELLOW}--- Case 10: 9009 python3-stub bypass (probe + launcher) ---${NC}"
 (
+  # POSIX-only: an extensionless `python3` stub first on PATH shadows the real
+  # interpreter on Linux/macOS. On Windows Git Bash it does NOT — `.exe`
+  # resolution finds the real `python3.exe`, so the stub can't shadow. Windows
+  # coverage lives in the dedicated `windows-python3-stub` CI job (proper
+  # `.exe`/`.cmd` stub); skip here rather than assert a precondition that can't
+  # hold under Git Bash.
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*)
+      echo -e "  ${YELLOW}skip${NC}: Case 10 stub-shadow is POSIX-only (Git Bash resolves real python3.exe); Windows covered by the windows-python3-stub CI job"
+      exit 0 ;;
+  esac
   # An absolute real interpreter to back the working `python` delegate — captured
   # before poisoning PATH so it is not itself shadowed by the stub.
   REAL_PY="$(command -v python3 || command -v python || true)"
