@@ -1780,6 +1780,18 @@ class TestReviewBackendTaskAware(unittest.TestCase):
                 json.dumps({"review": {"backend": "copilot"}}))
             self.assertEqual(self._rb("fn-9-e"), "copilot")  # id given, no override → config
 
+    def test_bare_handle_canonicalized_to_slugged_spec(self) -> None:
+        # A bare `fn-9` / `fn-9.1` handle must expand to the slugged on-disk id so its
+        # stored override applies — else resolve_review_spec's exact-file lookup misses it.
+        with _flow_fixture() as td:
+            _write_epic(td / ".flow", "fn-9-cool-slug", default_review="cursor:gpt-5.3-codex")
+            (td / ".flow" / "config.json").write_text(
+                json.dumps({"review": {"backend": "codex"}}))
+            self.assertEqual(self._rb("fn-9"), "cursor")     # bare spec handle canonicalized
+            _write_task(td / ".flow", "fn-9-cool-slug.1", "fn-9-cool-slug",
+                        review="cursor:gpt-5.3-codex")
+            self.assertEqual(self._rb("fn-9.1"), "cursor")   # bare task handle canonicalized
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

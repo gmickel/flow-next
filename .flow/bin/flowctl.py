@@ -5820,11 +5820,20 @@ def cmd_review_backend(args: argparse.Namespace) -> None:
     # task>epic>env>config>hint, so a non-task/epic source means "no per-item override here".
     review_id = getattr(args, "id", None)
     if review_id and ensure_flow_exists():
+        # Canonicalize a short/legacy handle (`fn-74.1` / `fn-74`, or a tracker alias) to its
+        # slugged on-disk id FIRST — resolve_review_spec looks up exact `.flow/tasks|specs/<id>`
+        # files, so a bare handle would miss its stored `review:` override and fall through.
+        # Both canonicalizers are safe no-ops on non-match (they never error_exit).
+        flow_dir = get_flow_dir()
         try:
             if is_task_id(review_id):
-                resolved, rsource = resolve_review_spec("rp", review_id, return_source=True)
+                canonical = resolve_task_arg(flow_dir, review_id) or review_id
+                resolved, rsource = resolve_review_spec("rp", canonical, return_source=True)
+            elif is_spec_id(review_id):
+                canonical = expand_bare_spec_id(flow_dir, review_id) or review_id
+                resolved, rsource = resolve_review_spec("rp", None, spec_id=canonical, return_source=True)
             else:
-                resolved, rsource = resolve_review_spec("rp", None, spec_id=review_id, return_source=True)
+                resolved, rsource = None, None
             if rsource in ("task", "epic"):
                 spec = resolved
                 source = rsource
