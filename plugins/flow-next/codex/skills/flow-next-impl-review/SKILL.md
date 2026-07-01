@@ -52,9 +52,11 @@ If found, use that backend and skip all other detection.
 ### Otherwise read from config
 
 ```bash
-# Pass the review target id (task `fn-N.M` / spec `fn-N`, resolved from $ARGUMENTS) so a
-# per-task `review:` override routes to the right backend; optional (empty → env/config).
-BACKEND=$($FLOWCTL review-backend "${TASK_ID:-}")
+# Resolve the review-target id from $ARGUMENTS HERE (the `fn-N.M` task / `fn-N` spec) — this is
+# before the later TASK_ID parse, so do NOT use `$TASK_ID` (still unset); empty for a standalone
+# diff. Passing it lets a per-task `review:` override route to the right backend (empty → env/config).
+REVIEW_ID="<the fn-N.M task / fn-N spec id from $ARGUMENTS, or empty for a standalone diff>"
+BACKEND=$($FLOWCTL review-backend "$REVIEW_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
  echo "Error: No review backend configured."

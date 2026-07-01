@@ -19,13 +19,16 @@ FLOWCTL="$HOME/.codex/scripts/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 # Priority: --review flag > per-task/spec `review` override > env > config (flag parsed in SKILL.md).
-# Pass the review target's id (the `fn-N.M` task / `fn-N` spec being reviewed — resolve it from
-# $ARGUMENTS first) so a per-task `review: <backend>:...` override routes to the RIGHT backend
-# even when it differs from the project default; omit for a standalone (no-spec) review. The id
-# is OPTIONAL — an empty value falls back to env/config unchanged (no regression).
+# FIRST resolve the review-target id from $ARGUMENTS — the `fn-N.M` task / `fn-N` spec being
+# reviewed. This is BEFORE the later `TASK_ID` parse (Workflow Step 0), so extract it HERE (do
+# NOT rely on `$TASK_ID`, which is still unset at Phase 0); leave empty for a standalone no-spec
+# diff review. Passing it lets a per-task `review: <backend>:...` override route to the RIGHT
+# backend before dispatch, even when it differs from the project default. Empty → env/config
+# unchanged (no regression).
+REVIEW_ID="<the fn-N.M task / fn-N spec id from $ARGUMENTS, or empty for a standalone diff>"
 # Text output is bare backend name for back-compat grep. The same command in --json mode returns
 # {backend, spec, model, effort, source} — use that if you need the model / effort resolved.
-BACKEND=$($FLOWCTL review-backend "${TASK_ID:-}")
+BACKEND=$($FLOWCTL review-backend "$REVIEW_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
  echo "Error: No review backend configured."
