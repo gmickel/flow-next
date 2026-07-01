@@ -39,9 +39,8 @@ Two artifacts:
 - [ ] `.flow/bin/flowctl --help` and a real `flowctl list` succeed unchanged on this repo (dogfood)
 
 ## Done summary
-TBD
-
+Added shared scripts/lib/pick-python.sh (functionality-probe resolver filling the FLOW_PY array, scalar $PYTHON_BIN override first, order $PYTHON_BIN→py -3→python3→python, set -u-safe) and rewrote scripts/flowctl + the dogfood .flow/bin/flowctl with a self-contained inline array probe. The `<cand> -c "import sys"` probe rejects the Windows Store python3 9009 stub and falls through to a working interpreter, while mac/linux still selects python3 first — proven by a fake-stub harness (8/8) with no regression in smoke_test.sh (135/135) or ralph_smoke_test.sh (15/15).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c121dd05928c1addc4369971b0be0235be7c5c4a
+- Tests: scratchpad/gate.sh fake-9009-stub harness (8/8 PASS), bash plugins/flow-next/scripts/smoke_test.sh (135/135), bash plugins/flow-next/scripts/ralph_smoke_test.sh (15/15), .flow/bin/flowctl --help + flowctl list (dogfood OK, resolves python3)
 - PRs:

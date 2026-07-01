@@ -36,7 +36,7 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
 - Only create/update `scripts/ralph/` in the current repo.
 - If `scripts/ralph/` already exists, offer to update (preserves config.env).
 - Copy templates from `templates/` into `scripts/ralph/`.
-- Copy `flowctl` and `flowctl.py` from `$PLUGIN_ROOT/scripts/` into `scripts/ralph/`.
+- Copy `flowctl`, `flowctl.cmd`, `flowctl.py` (from `$PLUGIN_ROOT/scripts/`) and `pick-python.sh` (from `$PLUGIN_ROOT/scripts/lib/`) into `scripts/ralph/` — flat, so the resolver lands at `scripts/ralph/pick-python.sh` (NOT `scripts/ralph/lib/`) where `ralph.sh` and the hook wrapper source it.
 - Set executable bit on `scripts/ralph/ralph.sh`, `scripts/ralph/ralph_once.sh`, and `scripts/ralph/flowctl`.
 
 ## Workflow
@@ -90,7 +90,7 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
    cp "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/prompt_work.md" scripts/ralph/
    cp "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/prompt_completion.md" scripts/ralph/
    cp "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/watch-filter.py" scripts/ralph/
-   cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.py" scripts/ralph/
+   cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
    mkdir -p scripts/ralph/hooks
    cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" scripts/ralph/hooks/
    chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/hooks/ralph-guard.py
@@ -103,7 +103,7 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
    ```bash
    mkdir -p scripts/ralph/runs scripts/ralph/hooks
    cp -R "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/." scripts/ralph/
-   cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.py" scripts/ralph/
+   cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
    cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" scripts/ralph/hooks/
    chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/hooks/ralph-guard.py
    ```

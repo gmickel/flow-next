@@ -1,2 +1,9 @@
 
 # Use bd merge for beads JSONL files
+
+# Windows batch shims must be CRLF (cmd.exe / PowerShell tolerate LF but CRLF is
+# canonical); the extensionless bash `flowctl` launchers must stay LF so Git Bash
+# execs them. `flowctl` (no slash) matches every launcher copy by basename
+# (plugins/flow-next/scripts/flowctl, .flow/bin/flowctl, installed scripts/ralph/flowctl).
+*.cmd text eol=crlf
+flowctl text eol=lf
