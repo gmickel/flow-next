@@ -4289,6 +4289,14 @@ Beyond correctness, name any of these you spot and quote the hunk (each a heuris
 Long Method · Large Class · Long Parameter List · Duplicated Code · Feature Envy (uses another object's data more than its own) · Data Clumps (same values always passed together — wants a type) · Primitive Obsession (bare primitives where a small type belongs) · Speculative Generality.
 """
 
+# Plan-review analog of the code-smell baseline: the four things a strong plan
+# review reliably OVERLOOKS. Targeted (not a broad list — that dilutes focus).
+# Eval-validated: lifts plan detection 8.0 → 9.7/10 (test-strategy, observability,
+# task ordering) for ~+74 tokens, with no over-flagging of good specs.
+PLAN_QUALITY_BLOCK = """
+## Also explicitly verify (commonly-missed): a stated **test strategy**; **observability** (logging/metrics/progress) for any async/batch work; each task **sized for one iteration and correctly ordered** by dependency; and stated **non-functional requirements** (performance, security, privacy).
+"""
+
 
 def build_review_prompt(
     review_type: str,
@@ -4449,6 +4457,7 @@ Do NOT mark NEEDS_WORK for:
 You MAY mention these as "FYI" observations without affecting the verdict.
 
 """
+            + PLAN_QUALITY_BLOCK
             + PROTECTED_ARTIFACTS_BLOCK
             + """
 ## Output Format

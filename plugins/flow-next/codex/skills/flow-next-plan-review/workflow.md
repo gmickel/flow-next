@@ -379,6 +379,8 @@ Conduct a John Carmack-level review:
 10. **Consistency** - Do task specs align with spec?
 11. **Vocabulary** - [Include ONLY when `flowctl glossary list --json` reports `total_terms > 0`: "Canonical vocabulary lives in GLOSSARY.md — flag specs/tasks that contradict defined terms." Omit this line otherwise.]
 
+**Also explicitly verify (commonly-missed):** a stated **test strategy**; **observability** (logging/metrics/progress) for any async/batch work; each task **sized for one iteration and correctly ordered** by dependency; and stated **non-functional requirements** (performance, security, privacy).
+
 ## Protected artifacts
 NEVER recommend deleting / gitignoring / removing these committed pipeline paths (flag bad CONTENT inside them, never their existence): `.flow/*`, `.flow/bin/*`, `.flow/memory/*`, `.flow/specs/*.md`, `.flow/tasks/*.md`, `docs/plans/*`, `docs/solutions/*`, `scripts/ralph/*`. Discard any such finding during synthesis; emit a `Protected-path filter:` count when any dropped.
 
