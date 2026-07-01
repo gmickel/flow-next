@@ -45,10 +45,13 @@ FLOWCTL="$HOME/.codex/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-# Priority: --review flag > env > config (flag parsed in SKILL.md)
+# Priority: --review flag > per-spec `default_review` override > env > config (flag parsed in SKILL.md).
+# Resolve the spec id from $ARGUMENTS FIRST so a per-spec `default_review` override routes to the
+# right backend before branching (empty → env/config, no regression).
 # Text output is bare backend name for back-compat grep. --json returns full
 # resolved spec (backend, spec, model, effort, source).
-BACKEND=$($FLOWCTL review-backend)
+SPEC_ID="<the fn-N spec id from $ARGUMENTS, or empty>"
+BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
  echo "Error: No review backend configured."
