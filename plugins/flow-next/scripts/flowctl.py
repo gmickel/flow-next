@@ -4225,31 +4225,13 @@ def run_cursor_exec(
 # with the RP workflow.md files and quality-auditor.md — if you change the
 # wording, update those copies too.
 
-CONFIDENCE_RUBRIC_BLOCK = """## Confidence calibration
-
-Rate each finding on exactly one of these 5 discrete anchors. Do not use interpolated values (no 33, 80, 90).
-
-| Anchor | Meaning |
-|--------|---------|
-| 100 | Verifiable from the code alone, zero interpretation. A definitive logic error (off-by-one in a tested algorithm, wrong return type, swapped arguments, clear type error). The bug is mechanical. |
-| 75 | Full execution path traced: "input X enters here, takes this branch, reaches line Z, produces wrong result." Reproducible from the code alone. A normal caller will hit it. |
-| 50 | Depends on conditions visible but not fully confirmable from this diff — e.g., whether a value can actually be null depends on callers not in the diff. Surfaces only as P0-escape or via soft-bucket routing. |
-| 25 | Requires runtime conditions with no direct evidence — specific timing, specific input shapes, specific external state. |
-| 0 | Speculative. Not worth filing. |
-
-## Suppression gate
-
-After all findings are collected:
-1. Suppress findings below anchor 75.
-2. **Exception:** P0 severity findings at anchor 50+ survive the gate. Critical-but-uncertain issues must not be silently dropped.
-3. Report the suppressed count by anchor in a `Suppressed findings` section of the review output.
-
-Example:
-
-> Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0.
-
-Each surviving finding carries a `Confidence: <N>` field alongside severity, file, and line.
-"""
+CONFIDENCE_RUBRIC_BLOCK = """## Confidence (pick ONE anchor; no interpolation)
+- **100** — definitive from code alone (mechanical: off-by-one, wrong type, swapped args).
+- **75** — full path traced; a normal caller hits it; reproducible from the diff.
+- **50** — depends on conditions visible but not confirmable here (e.g. can this be null? callers not in diff).
+- **25** — needs runtime conditions with no direct evidence.
+- **0** — speculative; don't file.
+Suppression gate: drop findings below 75, EXCEPT P0 at 50+ (those survive). Emit a `Suppressed findings:` count when any dropped."""
 
 
 # --- Introduced-vs-pre_existing classification (fn-29.4) ---
@@ -4258,35 +4240,9 @@ Each surviving finding carries a `Confidence: <N>` field alongside severity, fil
 # `introduced` findings gate the verdict; `pre_existing` surface in a separate
 # non-blocking section. Keep synchronized with the RP workflow.md files.
 
-CLASSIFICATION_RUBRIC_BLOCK = """## Introduced vs pre-existing classification
-
-For each finding, classify whether this branch's diff caused it:
-
-- **introduced** — this branch caused the issue (new code, or a pre-existing bug that this diff amplified/exposed in a way that now matters)
-- **pre_existing** — the issue was already present on the base branch; this diff did not touch it
-
-Evidence methods (use whatever is cheapest for this diff):
-- `git blame <file> <line>` to see when the line was last touched
-- Read the base-branch version of the file directly
-- Infer from diff context: a finding on an unchanged line in an unchanged file is `pre_existing` by default
-
-**Verdict gate:** only `introduced` findings affect the verdict. A review whose only surviving findings are all `pre_existing` ships.
-
-Report pre-existing findings in a dedicated non-blocking section:
-
-```
-## Pre-existing issues (not blocking this verdict)
-
-- [P1, confidence 75, introduced=false] src/legacy.ts:102 — null dereference on empty array
-- ...
-```
-
-Never delete pre-existing findings from the report — they stay visible for future prioritization. After the lists, emit a `Classification counts:` line tallying both buckets, e.g.:
-
-> Classification counts: 2 introduced, 4 pre_existing.
-
-Each surviving finding carries a `Classification: introduced | pre_existing` field alongside severity, confidence, file, and line.
-"""
+CLASSIFICATION_RUBRIC_BLOCK = """## Introduced vs pre-existing
+Classify each finding: **introduced** (this diff caused or newly exposed it) or **pre_existing** (already on base, untouched — a finding on an unchanged line is pre_existing by default; confirm with `git blame`/base-file read when cheap).
+Verdict gate: only `introduced` findings affect the verdict — a review whose survivors are all `pre_existing` ships. List pre-existing under `## Pre-existing issues (not blocking this verdict)` as `[sev, confidence N, introduced=false] file:line — summary`; never drop them. End with `Classification counts: N introduced, M pre_existing.`"""
 
 
 # --- Protected artifacts (fn-29.5) ---
@@ -4299,24 +4255,7 @@ Each surviving finding carries a `Classification: introduced | pre_existing` fie
 # Keep synchronized with the three workflow.md files + quality-auditor.md.
 
 PROTECTED_ARTIFACTS_BLOCK = """## Protected artifacts
-
-The following paths are flow-next / project-pipeline artifacts. Any finding recommending their deletion, gitignore, or removal MUST be discarded during synthesis. Do not flag these paths for cleanup under any circumstances:
-
-- `.flow/*` — flow-next state, specs, tasks, epics, runtime
-- `.flow/bin/*` — bundled flowctl
-- `.flow/memory/*` — learnings store (pitfalls, conventions, decisions)
-- `.flow/specs/*.md` — epic specs (decision artifacts)
-- `.flow/tasks/*.md` — task specs (decision artifacts)
-- `docs/plans/*` — plan artifacts (if project uses this convention)
-- `docs/solutions/*` — solutions artifacts (if project uses this convention)
-- `scripts/ralph/*` — Ralph harness (when present)
-
-These files are intentionally committed. They are the pipeline's state, not clutter. An agent that deletes them destroys the project's planning trail and breaks Ralph autonomous runs.
-
-If you notice genuine issues with content INSIDE these files (e.g., a spec that contradicts itself, a stale runtime value, a memory entry that's wrong), flag the content — not the file's existence.
-
-**Protected-path filter.** Before emitting findings, scan each for recommendations to delete, gitignore, or `rm -rf` any path matching the protected list above. Drop those findings. If you drop any, report the drop count in a `Protected-path filter:` line in the review output (e.g. `Protected-path filter: dropped 2 findings`). Omit the line when nothing was dropped.
-"""
+NEVER recommend deleting / gitignoring / removing these committed pipeline paths (flag bad CONTENT inside them, never their existence): `.flow/*`, `.flow/bin/*`, `.flow/memory/*`, `.flow/specs/*.md`, `.flow/tasks/*.md`, `docs/plans/*`, `docs/solutions/*`, `scripts/ralph/*`. Discard any such finding during synthesis; emit a `Protected-path filter:` count when any dropped."""
 
 
 # --- Per-R-ID requirements coverage (fn-29.2) ---
@@ -4331,44 +4270,23 @@ If you notice genuine issues with content INSIDE these files (e.g., a spec that 
 # impl-review and epic-review (completion-review) prompts. Keep synchronized
 # with the RP workflow.md files.
 
-R_ID_COVERAGE_BLOCK = """## Requirements coverage (if spec has R-IDs)
-
-If the task or epic spec references an epic spec with numbered acceptance
-criteria like `- **R1:** ...`, `- **R2:** ...`, produce a per-R-ID coverage
-table. Read the epic spec's `## Acceptance Criteria` section (canonical;
-reviewer MUST also tolerate the legacy `## Acceptance` and `## Acceptance
-criteria` heading variants for back-compat). If no R-IDs are present
-anywhere, skip this block entirely — the rest of the review is unchanged.
-
-For each R-ID, classify status:
-
-| Status | Meaning |
-|--------|---------|
-| met | Diff clearly implements the requirement with appropriate tests/evidence |
-| partial | Diff advances the requirement but leaves gaps (missing tests, missing edge case, missing integration point) |
-| not-addressed | Diff does not advance this requirement at all |
-| deferred | Spec explicitly defers this requirement to a later task/PR |
-
-Report as a markdown table in the review output:
-
+R_ID_COVERAGE_BLOCK = """## Requirements coverage (only if the spec has R-IDs like `- **R1:** ...`)
+If R-IDs are present, read the epic's `## Acceptance Criteria` (tolerate legacy `## Acceptance` / `## Acceptance criteria`) and emit:
 | R-ID | Status | Evidence |
-|------|--------|----------|
-| R1 | met | src/auth.ts:42 + tests/auth.test.ts:17 |
-| R2 | partial | implementation exists but no error-path tests |
-| R3 | not-addressed | — |
+Status ∈ met / partial / not-addressed / deferred. After the table emit `Unaddressed R-IDs: [...]`. A non-deferred `not-addressed` R-ID forces NEEDS_WORK. If no R-IDs anywhere, skip this block entirely."""
 
-After the table, emit one line listing every `not-addressed` R-ID that is NOT
-explicitly deferred in the spec:
 
-> Unaddressed R-IDs: [R3, R5]
+# --- Code-smell baseline (fn-74 review-prompt optimization) ---
+#
+# Always-on Fowler smell heuristics injected into IMPL reviews only (a spec plan
+# has no code smells). Validated (reveval) to lift smell detection 7->10/10 while
+# cutting tokens. Judgement calls, not hard violations. Keep synchronized with
+# the RP impl-review workflow.md heredoc's `## Code-smell baseline` section.
 
-If there are zero unaddressed R-IDs, emit `Unaddressed R-IDs: []` or omit the
-line entirely — both forms are valid. Deferred R-IDs are never listed here.
-
-**Verdict gate:** any `not-addressed` R-ID that is NOT marked `deferred` in the
-spec MUST flip the verdict to `NEEDS_WORK`. A clean coverage table (all `met`
-or `deferred`) does not by itself force SHIP — the other review gates still
-apply.
+SMELL_BASELINE_BLOCK = """
+## Code-smell baseline (always-on, judgement calls — repo standards override; skip what tooling enforces)
+Beyond correctness, name any of these you spot and quote the hunk (each a heuristic, never a hard violation):
+Long Method · Large Class · Long Parameter List · Duplicated Code · Feature Envy (uses another object's data more than its own) · Data Clumps (same values always passed together — wants a type) · Primitive Obsession (bare primitives where a small type belongs) · Speculative Generality.
 """
 
 
@@ -4456,6 +4374,7 @@ Do NOT mark NEEDS_WORK for:
 You MAY mention these as "FYI" observations without affecting the verdict.
 
 """
+            + SMELL_BASELINE_BLOCK
             + R_ID_COVERAGE_BLOCK
             + "\n"
             + CONFIDENCE_RUBRIC_BLOCK
@@ -4476,14 +4395,7 @@ For each surviving `introduced` finding:
 
 Then, under a separate `## Pre-existing issues (not blocking this verdict)` heading, list each `pre_existing` finding using the compact form `[severity, confidence N, introduced=false] file:line — summary`. Never silently drop pre-existing findings.
 
-After the findings list, emit:
-- The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the spec uses R-IDs; otherwise skip).
-- A `Suppressed findings:` line tallying anchors dropped by the gate (omit when nothing was suppressed).
-- A `Classification counts:` line tallying `introduced` vs `pre_existing` survivors, e.g. `Classification counts: 2 introduced, 4 pre_existing.`.
-- A `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
-
-Be critical. Find real issues.
-
+After the findings, add (only when applicable): the `## Requirements coverage` table + `Unaddressed R-IDs:` line, and the `Suppressed findings:` / `Classification counts:` / `Protected-path filter:` tally lines named above.
 **Verdict gate:** only `introduced` findings affect the verdict. A review whose sole surviving findings are all `pre_existing` MUST ship. Any non-deferred `not-addressed` R-ID also forces NEEDS_WORK regardless of other findings.
 
 **REQUIRED**: End your response with exactly one verdict tag:
@@ -19149,7 +19061,7 @@ Do NOT mark NEEDS_WORK for:
 - Style nitpicks in files you didn't change
 
 You MAY mention these as "FYI" observations without affecting the verdict.
-
+{SMELL_BASELINE_BLOCK}
 {R_ID_COVERAGE_BLOCK}
 {CONFIDENCE_RUBRIC_BLOCK}
 {CLASSIFICATION_RUBRIC_BLOCK}

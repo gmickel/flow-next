@@ -353,23 +353,7 @@ Conduct a John Carmack-level review:
 11. **Vocabulary** - [Include ONLY when `flowctl glossary list --json` reports `total_terms > 0`: "Canonical vocabulary lives in GLOSSARY.md — flag specs/tasks that contradict defined terms." Omit this line otherwise.]
 
 ## Protected artifacts
-
-The following paths are flow-next / project-pipeline artifacts. Any finding recommending their deletion, gitignore, or removal MUST be discarded during synthesis. Do not flag these paths for cleanup under any circumstances:
-
-- `.flow/*` — flow-next state, specs, tasks, runtime
-- `.flow/bin/*` — bundled flowctl
-- `.flow/memory/*` — learnings store (pitfalls, conventions, decisions)
-- `.flow/specs/*.md` — specs (decision artifacts)
-- `.flow/tasks/*.md` — task specs (decision artifacts)
-- `docs/plans/*` — plan artifacts (if project uses this convention)
-- `docs/solutions/*` — solutions artifacts (if project uses this convention)
-- `scripts/ralph/*` — Ralph harness (when present)
-
-These files are intentionally committed. They are the pipeline's state, not clutter. An agent that deletes them destroys the project's planning trail and breaks Ralph autonomous runs.
-
-If you notice genuine issues with content INSIDE these files (e.g., a spec that contradicts itself, a stale entry), flag the content — not the file's existence.
-
-**Protected-path filter.** Before emitting findings, scan each for recommendations to delete, gitignore, or `rm -rf` any path matching the protected list above. Drop those findings. If you drop any, report the drop count in a `Protected-path filter:` line in the review output (e.g. `Protected-path filter: dropped 2 findings`). Omit the line when nothing was dropped.
+NEVER recommend deleting / gitignoring / removing these committed pipeline paths (flag bad CONTENT inside them, never their existence): `.flow/*`, `.flow/bin/*`, `.flow/memory/*`, `.flow/specs/*.md`, `.flow/tasks/*.md`, `docs/plans/*`, `docs/solutions/*`, `scripts/ralph/*`. Discard any such finding during synthesis; emit a `Protected-path filter:` count when any dropped.
 
 ## Output Format
 
