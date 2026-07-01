@@ -13,9 +13,8 @@ Propagate task .1's canonical skill edits to the Codex mirror (`scripts/sync-cod
 **Files:** run `scripts/sync-codex.sh` → `plugins/flow-next/codex/**`; `CHANGELOG.md`; `docs/platforms.md`, `docs/troubleshooting.md` as needed. NOT `flow-next-setup`. NOT a version bump.
 
 ## Done summary
-TBD
-
+Regenerated the Codex mirror via scripts/sync-codex.sh so the fn-78.1 RP_ELIGIBLE gate lands in the mirror's plan/plan-review skills (no hand-edits, byte-identical on second regen), added the required CHANGELOG.md ## Unreleased entry (no version bump), and annotated docs/platforms.md (new "RepoPrompt review backend (macOS-only)" section) + docs/troubleshooting.md that non-Mac hosts without rp-cli are not proposed the rp path — with per-skill accurate backend lists after cursor review feedback.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d486ba2c33072a21f859513526feb498333fc791, 6111f02e17c923c594d17aecd52f320f9dd36573
+- Tests: ./scripts/sync-codex.sh (built-in verification all green), idempotency: md5 of codex/** identical across two regens, git diff --exit-code plugins/flow-next/codex/ after post-commit regen (clean), flowctl cursor impl-review --base 6c0fc024 (verdict SHIP after 1 fix round)
 - PRs:
