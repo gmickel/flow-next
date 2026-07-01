@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-01T10:00:54.927438Z",
+  "depends_on": [
+    "fn-77-windows-python3-stub-fix-cross-context.1",
+    "fn-77-windows-python3-stub-fix-cross-context.2"
+  ],
+  "id": "fn-77-windows-python3-stub-fix-cross-context.5",
+  "priority": null,
+  "spec": "fn-77-windows-python3-stub-fix-cross-context",
+  "spec_path": ".flow/tasks/fn-77-windows-python3-stub-fix-cross-context.5.md",
+  "status": "todo",
+  "title": "Tests: fake-9009-stub harness + alias_smoke extension + Windows CI runner",
+  "updated_at": "2026-07-01T10:09:41.953425Z"
+}
