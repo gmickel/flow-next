@@ -3526,6 +3526,7 @@ def resolve_review_spec(
     backend_hint: str,
     task_id: Optional[str] = None,
     return_source: bool = False,
+    spec_id: Optional[str] = None,
 ):
     """Resolve a fully-filled ``BackendSpec`` for a review invocation.
 
@@ -3536,7 +3537,11 @@ def resolve_review_spec(
 
     Precedence (first hit wins, then ``.resolve()`` fills missing fields):
       1. Per-task ``review`` field (stored spec; may be legacy → lenient parse)
-      2. Per-epic ``default_review`` field (stored spec; lenient parse)
+      2. Per-epic ``default_review`` field (stored spec; lenient parse) — reached
+         either by following a task's ``spec`` field (when ``task_id`` is set) or
+         directly via ``spec_id`` (plan / completion reviews are epic-scoped and
+         have no task in context — without ``spec_id`` a per-spec
+         ``default_review`` would be silently skipped; PR #184)
       3. ``FLOW_REVIEW_BACKEND`` env var (lenient parse — user-typed at shell,
          but we tolerate stale values)
       4. ``.flow/config.json`` ``review.backend`` (lenient parse)
@@ -3596,6 +3601,26 @@ def resolve_review_spec(
                                     return _ret(parsed.resolve(), "epic")
                         except (json.JSONDecodeError, OSError):
                             pass
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    # 2 (no-task variant): per-epic ``default_review`` reached directly via
+    # ``spec_id`` when there is no task in context (plan / completion reviews are
+    # epic-scoped). Same precedence as source 2 above — before env/config/hint —
+    # so a per-spec ``flowctl spec set-backend <spec> --review ...`` is honored.
+    if task_id is None and spec_id is not None and ensure_flow_exists():
+        flow_dir = get_flow_dir()
+        epic_path = find_spec_json_path(flow_dir, spec_id)
+        if epic_path.exists():
+            try:
+                epic_data = normalize_epic(
+                    json.loads(epic_path.read_text(encoding="utf-8"))
+                )
+                epic_review = epic_data.get("default_review")
+                if epic_review:
+                    parsed = parse_backend_spec_lenient(epic_review, warn=True)
+                    if parsed is not None:
+                        return _ret(parsed.resolve(), "epic")
             except (json.JSONDecodeError, OSError):
                 pass
 
@@ -22100,13 +22125,18 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
 
 
 def _resolve_codex_review_spec(
-    args: argparse.Namespace, task_id: Optional[str]
+    args: argparse.Namespace,
+    task_id: Optional[str],
+    spec_id: Optional[str] = None,
 ) -> BackendSpec:
     """Resolve ``BackendSpec`` for a codex review command.
 
     Precedence:
       1. ``--spec`` argv (strict parse — user just typed it, surface errors)
-      2. ``resolve_review_spec("codex", task_id)`` — task/epic/env/config/defaults
+      2. ``resolve_review_spec("codex", task_id, spec_id=spec_id)`` —
+         task/epic/env/config/defaults. ``spec_id`` lets epic-scoped plan /
+         completion reviews (no task in context) still pick up a per-spec
+         ``default_review`` (PR #184).
 
     The resolved spec's backend is whatever the source said (task spec might
     request ``copilot:gpt-5.2`` from a codex command); the codex command
@@ -22120,7 +22150,9 @@ def _resolve_codex_review_spec(
             return BackendSpec.parse(spec_arg).resolve()
         except ValueError as e:
             error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
-    resolved, source = resolve_review_spec("codex", task_id, return_source=True)
+    resolved, source = resolve_review_spec(
+        "codex", task_id, spec_id=spec_id, return_source=True
+    )
     # Honor a deliberate per-task / per-epic cross-backend ``review`` spec, but
     # coerce an env/config DEFAULT that resolves to a non-codex backend (e.g.
     # ``review.backend=rp``) under an explicit ``flowctl codex ...`` to the codex
@@ -22244,7 +22276,7 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
         error_exit(str(e), use_json=args.json, code=2)
 
     # Resolve review spec — plan reviews are epic-scoped (no task_id context)
-    resolved_spec = _resolve_codex_review_spec(args, None)
+    resolved_spec = _resolve_codex_review_spec(args, None, spec_id=epic_id)
 
     # Run codex (cwd=repo_root so repo-relative changed-file paths resolve from
     # any subdir; codex reads files from disk — never embedded into the prompt).
@@ -22592,7 +22624,7 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
         error_exit(str(e), use_json=args.json, code=2)
 
     # Resolve review spec — completion reviews are epic-scoped
-    resolved_spec = _resolve_codex_review_spec(args, None)
+    resolved_spec = _resolve_codex_review_spec(args, None, spec_id=epic_id)
 
     # Run codex (cwd=repo_root so repo-relative changed-file paths resolve from
     # any subdir; codex reads files from disk — never embedded into the prompt).
@@ -22714,13 +22746,18 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
 
 
 def _resolve_copilot_review_spec(
-    args: argparse.Namespace, task_id: Optional[str]
+    args: argparse.Namespace,
+    task_id: Optional[str],
+    spec_id: Optional[str] = None,
 ) -> BackendSpec:
     """Resolve ``BackendSpec`` for a copilot review command.
 
     Precedence:
       1. ``--spec`` argv (strict parse — user just typed it, surface errors)
-      2. ``resolve_review_spec("copilot", task_id)`` — task/epic/env/config/defaults
+      2. ``resolve_review_spec("copilot", task_id, spec_id=spec_id)`` —
+         task/epic/env/config/defaults. ``spec_id`` lets epic-scoped plan /
+         completion reviews (no task in context) still pick up a per-spec
+         ``default_review`` (PR #184).
 
     Caller uses ``resolved.model`` / ``resolved.effort`` for receipts and
     passes the spec to ``run_copilot_exec`` which honors ``spec.model`` /
@@ -22732,7 +22769,9 @@ def _resolve_copilot_review_spec(
             return BackendSpec.parse(spec_arg).resolve()
         except ValueError as e:
             error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
-    resolved, source = resolve_review_spec("copilot", task_id, return_source=True)
+    resolved, source = resolve_review_spec(
+        "copilot", task_id, spec_id=spec_id, return_source=True
+    )
     # Same as codex: honor a per-task / per-epic cross-backend spec, but coerce an
     # env/config DEFAULT resolving to a non-copilot backend to the copilot default
     # so receipts record the model actually run (PR #184).
@@ -23057,7 +23096,7 @@ def cmd_copilot_plan_review(args: argparse.Namespace) -> None:
         prompt = rereview_preamble + prompt
 
     # Resolve review spec — plan reviews are epic-scoped (no task_id context)
-    resolved_spec = _resolve_copilot_review_spec(args, None)
+    resolved_spec = _resolve_copilot_review_spec(args, None, spec_id=epic_id)
     effective_model = resolved_spec.model or "gpt-5.5"
     effective_effort = resolved_spec.effort or "high"
 
@@ -23234,7 +23273,7 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
             prompt = rereview_preamble + prompt
 
     # Resolve review spec — completion reviews are epic-scoped
-    resolved_spec = _resolve_copilot_review_spec(args, None)
+    resolved_spec = _resolve_copilot_review_spec(args, None, spec_id=epic_id)
     effective_model = resolved_spec.model or "gpt-5.5"
     effective_effort = resolved_spec.effort or "high"
 
@@ -23333,13 +23372,18 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
 
 
 def _resolve_cursor_review_spec(
-    args: argparse.Namespace, task_id: Optional[str]
+    args: argparse.Namespace,
+    task_id: Optional[str],
+    spec_id: Optional[str] = None,
 ) -> BackendSpec:
     """Resolve ``BackendSpec`` for a cursor review command.
 
     Precedence:
       1. ``--spec`` argv (strict parse — user just typed it, surface errors)
-      2. ``resolve_review_spec("cursor", task_id)`` — task/epic/env/config/defaults
+      2. ``resolve_review_spec("cursor", task_id, spec_id=spec_id)`` —
+         task/epic/env/config/defaults. ``spec_id`` lets epic-scoped plan /
+         completion reviews (no task in context) still pick up a per-spec
+         ``default_review`` (PR #184).
 
     Cursor folds reasoning effort into the model name, so the resolved spec
     carries **no** ``effort``; the caller uses ``resolved.model`` for receipts
@@ -23359,7 +23403,9 @@ def _resolve_cursor_review_spec(
             return parsed.resolve()
         except ValueError as e:
             error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
-    resolved, source = resolve_review_spec("cursor", task_id, return_source=True)
+    resolved, source = resolve_review_spec(
+        "cursor", task_id, spec_id=spec_id, return_source=True
+    )
     # An explicit ``flowctl cursor ...`` whose backend resolves elsewhere only
     # because of an env/config DEFAULT (e.g. ``review.backend=codex``) is coerced
     # to the cursor default — so we never shell ``cursor-agent`` with a foreign
@@ -23721,7 +23767,7 @@ def cmd_cursor_plan_review(args: argparse.Namespace) -> None:
         prompt = rereview_preamble + prompt
 
     # Resolve review spec — plan reviews are epic-scoped (no task_id context)
-    resolved_spec = _resolve_cursor_review_spec(args, None)
+    resolved_spec = _resolve_cursor_review_spec(args, None, spec_id=epic_id)
     effective_model = resolved_spec.model or "gpt-5.5-high"
 
     # Final argv-cap backstop: plan reviews embed the FULL epic spec + every task
@@ -23929,7 +23975,7 @@ def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
         prompt = rereview_preamble + prompt
 
     # Resolve review spec — completion reviews are epic-scoped
-    resolved_spec = _resolve_cursor_review_spec(args, None)
+    resolved_spec = _resolve_cursor_review_spec(args, None, spec_id=epic_id)
     effective_model = resolved_spec.model or "gpt-5.5-high"
 
     # Final argv-cap backstop: completion reviews embed the FULL epic spec +

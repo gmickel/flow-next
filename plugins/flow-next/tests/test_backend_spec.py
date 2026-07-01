@@ -1303,6 +1303,36 @@ class TestResolveReviewSpec(unittest.TestCase):
             self.assertEqual(resolved.backend, "copilot")
             self.assertEqual(resolved.model, "gpt-5.5")  # registry default
 
+    def test_spec_id_resolves_per_spec_default_review_no_task(self) -> None:
+        # PR #184 T3: plan/completion reviews pass task_id=None but DO know the
+        # spec id. A per-spec ``default_review`` must be discovered directly via
+        # ``spec_id`` (no task to follow) and tagged source "epic".
+        with _flow_fixture() as td:
+            _write_epic(
+                td / ".flow", "fn-9-e", default_review="cursor:gpt-5.3-codex"
+            )
+            spec, source = flowctl.resolve_review_spec(
+                "cursor", None, spec_id="fn-9-e", return_source=True
+            )
+            self.assertEqual(source, "epic")
+            self.assertEqual(spec.backend, "cursor")
+            self.assertEqual(spec.model, "gpt-5.3-codex")
+
+    def test_cursor_helper_honors_per_spec_default_review(self) -> None:
+        # The cursor helper threads spec_id through and HONORS the per-spec
+        # ``default_review`` (source "epic" is never coerced), so an epic-scoped
+        # plan/completion review runs the configured cursor model.
+        with _flow_fixture() as td:
+            _write_epic(
+                td / ".flow", "fn-9-e", default_review="cursor:gpt-5.3-codex"
+            )
+            args = argparse.Namespace(spec=None, json=False)
+            out = flowctl._resolve_cursor_review_spec(
+                args, None, spec_id="fn-9-e"
+            )
+            self.assertEqual(out.backend, "cursor")
+            self.assertEqual(out.model, "gpt-5.3-codex")
+
 
 # --- Per-task review spec actually runs that model (fn-28.3 integration) ---
 
