@@ -42,9 +42,8 @@ Probe is pure read (no state mutation except the opt-in ledger). Determinism doc
 - [ ] Full pytest + smoke green; no version bump
 
 ## Done summary
-TBD
-
+Implemented `flowctl plan-sync-probe` — a pure-stdlib deterministic drift-possibility probe with the fn-83 fail-open lattice (range-based touched-set requiring `evidence.base_commit`, morphological hunk-token arm, PurePosixPath exact/basename/dir-prefix matching, parseable-refs + crossSpec arms), the `planSync.gate` string-enum config (off|shadow|on, default on), and the `.flow/plansync-gate.jsonl` gate ledger (O_APPEND fixed-schema records, deterministic 1-in-2/1-in-5 ramped audit slots, `record-actual` in-place pairing with audit_miss). 73 new unit tests cover every lattice arm both directions incl. multi-commit fix-loop, rename D+A, Windows paths, and the exact CLI wire form; full suite + smoke green; rp review SHIP first pass.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 5993c44643f79c7ef21fdf700a1ac99b571a81bb
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (1468 tests, OK), python3 -m unittest discover -s plugins/flow-next/tests -p test_plan_sync_probe.py (57 tests), python3 -m unittest discover -s plugins/flow-next/tests -p test_plansync_gate_config.py (16 tests), bash plugins/flow-next/scripts/smoke_test.sh from non-repo cwd (138 passed)
 - PRs:
