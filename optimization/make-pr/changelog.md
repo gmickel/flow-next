@@ -38,3 +38,28 @@ lesson, its verbose render prose is accuracy-shaping and proximity-sensitive; tr
 accuracy-risky **per-section backlog** (each section needs its own eval-guarded experiment), not a
 one-shot. Deliverables: the archaeology trim (kept), a reusable --dry-run behavioral-eval harness +
 two real frozen payloads (rich/sparse) for future per-section trims.
+
+## Experiment 2 — re-baseline (fn-82.4, 2026-07-02)
+**Score:** 5/5 (rich payload, N=1). Fresh baseline on the fn-82 branch (post fn-81 single-emission +
+fn-82.1-.3 reshapes) before the phases.md fold — the exp-0/1 rows predate those reshapes.
+**Per-eval:** Section-set/order ✓ · R-ID-coverage ✓ (16/16 from `tasks[].satisfies` + evidence) ·
+No-halluc-paths/SHAs ✓ (23/23 SHAs + 5/5 paths payload-traceable, checked programmatically) ·
+Decisions/memory-honest ✓ (1 decision + 7 bugs mirrored, 0 patterns, empty surfaces omitted) ·
+No-raw-diff/breadcrumb/dry-run ✓. Note: this run omitted `## Where to look` — legitimate under
+§2.12 (docs-only diff: no Architecture anchor, security/business/performance empty, Tests bullet
+suppressed); exp-0 emitted it — run variance on a judgment call, both spec-defensible.
+
+## Experiment 3 — KEEP (fn-82.4 fold)
+**Score:** 5/5 (held baseline).
+**Change (one hypothesis = fold, not gate):** folded every phases.md `**Done when:**` checklist
+verbatim into workflow.md's inline `### Done when` blocks (union — richer phases.md items added,
+new Phase-1 block, Phase-0/1.5 failure-modes lists), reduced phases.md to a 15-line stub (stable
+link target — deletion forbidden), removed phases.md from SKILL.md's force-load list + the
+`$FLOWCTL` preamble mention. No guardrail/routing/render prose touched. Working set −18.1KB
+(~4.5k tok)/run; workflow.md +6.4KB. The phases.md-only "Body ≤8000 chars" cross-phase invariant
+(contradicting §4.4's 65,000-char cap) died with the stub — it was stale archaeology.
+**Result:** body held 5/5 — same section order, 16/16 coverage, 36/36 SHAs traceable, same
+1-decision/7-bug mirror, trigger-5 `graph TB` + prose summary, breadcrumb, dry-run short-circuit.
+Variance: this run EMITTED the Where-to-look Tests bullet (baseline suppressed it) — same
+docs-only judgment call as exp 2's note, rule text identical in both rounds (it lives in
+workflow.md §2.12, which the fold did not touch). Not fold-caused. KEEP.
