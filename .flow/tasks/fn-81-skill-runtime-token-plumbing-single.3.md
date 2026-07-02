@@ -46,9 +46,8 @@ Do NOT touch: land workflow.md:473 (deliberate fresh probe, fn-66 R3), pilot's d
 - [ ] canonical-only diff (no mirror commit)
 
 ## Done summary
-TBD
-
+Round-trip eliminations across plan (single show --json + post-write show/cat deleted; pilot verified state-based), deps (one heavy per-spec gather cached to a unique file), make-pr §4.6b (local ref assertion; live refetch only on the hand-rolled-create bypass), tracker-sync (set-merge-base --flow-file = the spec file itself; tracker half + merge log on unique temps), the tracker.perEvent config-get single-fetch sweep (work x3, resolve-pr, interview, plan Step 6.5 — every gate now uses the canonical LEAF pattern), prime scout-model prose corrected to the verified 7-haiku/2-sonnet split, and R13 fixed-path cleanup (plan + flow-next/SKILL.md /tmp/desc.md-style shared paths → unique per-task paths). Canonical files only; mirror regen deferred to fn-81.4. RP review: SHIP (first pass, 0 findings).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 041bab303de86ad00a9ab0b5e0f1f0e08930369e
+- Tests: uv run --with pytest python3 -m pytest plugins/flow-next/tests/ -q (1393 passed, 2 skipped, 164 subtests), bash scripts/sync-codex.sh (parity guards pass; mirror output stashed, committed in fn-81.4), grep -rn 'config get tracker.perEvent' plugins/flow-next/skills/ (all gates single-fetch), fixed temp-path greps clean (/tmp/desc.md /tmp/acc.md /tmp/merged-flow.md /tmp/merges.json etc.)
 - PRs:
