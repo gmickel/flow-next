@@ -78,17 +78,24 @@ $FLOWCTL rp select-add --window "$W" --tab "$T" .flow/specs/<task-id>.md
 
 ## Phase 3: Execute Review (RP)
 
-### Build combined prompt
+### Build combined prompt (file composition — no content re-typing)
 
-Get builder's handoff:
-```bash
-HANDOFF="$($FLOWCTL rp prompt-get --window "$W" --tab "$T")"
-```
+**Path-persistence rule:** bash vars do NOT survive across tool calls. Compose these literal unique paths in agent context and type them verbatim in EVERY block that references them (`mktemp` is reserved for paths created and consumed within a single bash block):
 
-Write combined prompt:
+- Prompt file: `${TMPDIR:-/tmp}/flow-impl-review-prompt-<task-id-or-branch-slug>-<agent-chosen 4-char suffix>.md`
+- Response file: `${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md`
+
+Build the prompt by deterministic composition — redirect command output into the file, never paste it into a heredoc. Only cheap **scalar** slots (branch, file list, commit summary, focus areas — values you already hold from Phase 1) are filled inline while typing the quoted heredocs below; multi-line command output is always appended via redirection.
+
 ```bash
-cat > /tmp/review-prompt.md << 'EOF'
-[PASTE HANDOFF HERE]
+PROMPT_FILE="${TMPDIR:-/tmp}/flow-impl-review-prompt-<task-id-or-branch-slug>-<suffix>.md"   # literal path
+
+# 1. Builder handoff — captured via redirection, never re-typed
+$FLOWCTL rp prompt-get --window "$W" --tab "$T" > "$PROMPT_FILE"
+
+# 2. Static header (quoted heredoc — no shell expansion; fill the scalar
+#    [BRACKET] slots inline while typing this block)
+cat >> "$PROMPT_FILE" << 'EOF'
 
 ---
 
@@ -106,7 +113,13 @@ Files: [LIST CHANGED FILES]
 Commits: [COMMIT SUMMARY]
 
 ## Original Spec
-[PASTE flowctl show OUTPUT if known]
+EOF
+
+# 3. Task spec — appended via redirection, never re-typed (skip when no task id)
+[[ -n "$TASK_ID" ]] && $FLOWCTL show "$TASK_ID" >> "$PROMPT_FILE"
+
+# 4. Review criteria (static, quoted heredoc; [USER'S FOCUS AREAS] is a scalar slot)
+cat >> "$PROMPT_FILE" << 'EOF'
 
 ## Review Focus
 [USER'S FOCUS AREAS]
@@ -185,14 +198,16 @@ Do NOT skip this tag. The automation depends on it.
 EOF
 ```
 
-### Send to RepoPrompt
+### Send to RepoPrompt (single-entry response)
+
+Redirect the review response to the literal response file — it must enter context exactly ONCE, via a single Read of that file (command substitution + `echo` would be the second copy; redirection keeps stdout out of context entirely):
 
 ```bash
-REVIEW_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/review-prompt.md --new-chat --chat-name "Impl Review: $BRANCH")"
-echo "$REVIEW_RESPONSE"
+RESPONSE_FILE="${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"   # literal path
 
-VERDICT="$(echo "$REVIEW_RESPONSE" \
-  | tr -d '\r' \
+$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Impl Review: $BRANCH" > "$RESPONSE_FILE"
+
+VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
   | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>' \
   | tail -n 1 \
   | sed -E 's#</?verdict>##g')"
@@ -202,9 +217,12 @@ if [[ -z "$VERDICT" ]]; then
   echo "<promise>RETRY</promise>"
   exit 0
 fi
+echo "VERDICT=$VERDICT"
 ```
 
 **WAIT** for response. Takes 1-5+ minutes.
+
+**Single-entry rule:** after this block, Read the response file ONCE (Read tool, literal path). That render IS the findings context — it feeds parsing and the fix loop. Do NOT `echo`/`cat` the response; verdict and receipt tallies grep the file directly.
 
 ---
 
@@ -217,10 +235,12 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
 
+  # Same literal response file from Phase 3 (path-persistence rule — type it verbatim)
+  RESPONSE_FILE="${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"
+
   # Optional: capture suppression-gate tally (fn-29.3).
   # Reviewer emits a line like "Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0."
-  SUPPRESSED_JSON="$(printf '%s' "$REVIEW_RESPONSE" \
-    | grep -iE '^[>*_` ]*suppressed findings[ *_`]*:' \
+  SUPPRESSED_JSON="$(grep -iE '^[>*_` ]*suppressed findings[ *_`]*:' "$RESPONSE_FILE" \
     | head -n 1 \
     | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//' \
     | awk '
@@ -240,8 +260,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   # Optional: capture introduced vs pre_existing classification tally (fn-29.4).
   # Reviewer emits a line like "Classification counts: 2 introduced, 4 pre_existing."
   # Uses portable grep -Eio so this works on BSD awk / mawk / gawk alike.
-  CLASSIFICATION_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
-    | grep -iE '^[>*_` ]*classification counts[ *_`]*:' \
+  CLASSIFICATION_LINE="$(grep -iE '^[>*_` ]*classification counts[ *_`]*:' "$RESPONSE_FILE" \
     | head -n 1 \
     | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//')"
   INTRODUCED_COUNT=""
@@ -266,8 +285,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   # Reviewer emits `Unaddressed R-IDs: [R3, R5]` (or `[]` / `none` for empty).
   # Absent line => legacy spec (no R-IDs) — leave field off the receipt entirely.
   UNADDRESSED_JSON=""
-  UNADDRESSED_LINE="$(printf '%s' "$REVIEW_RESPONSE" \
-    | grep -iE '^[>*_` ]*unaddressed([[:space:]]+r[-_ ]?ids?)?[ *_`]*:' \
+  UNADDRESSED_LINE="$(grep -iE '^[>*_` ]*unaddressed([[:space:]]+r[-_ ]?ids?)?[ *_`]*:' "$RESPONSE_FILE" \
     | head -n 1 \
     | sed -E 's/^[^:]+:[[:space:]]*//; s/[[:space:]]*$//; s/\.$//')"
   if [[ -n "$UNADDRESSED_LINE" ]]; then
@@ -333,17 +351,38 @@ See [workflow-common.md](workflow-common.md) "Phase ordering & flag-combination 
 
 If verdict is NEEDS_WORK:
 
-1. **Parse issues** - Extract ALL issues by severity (Critical → Major → Minor)
-2. **Fix the code** - Address each issue in order
-3. **Run tests/lints** - Verify fixes don't break anything
-4. **Commit fixes** (MANDATORY before re-review):
+1. **Parse issues** - Extract ALL issues by severity (Critical → Major → Minor) from the response-file Read
+2. **Snapshot the pre-fix state** (BEFORE touching any file — literal paths per the path-persistence rule):
    ```bash
-   git add -A
-   git commit -m "fix: address review feedback"
+   git status --porcelain > "${TMPDIR:-/tmp}/flow-impl-review-snap-pre-<task-id-or-branch-slug>-<suffix>.txt"
+   ```
+3. **Fix the code** - Address each issue in order
+4. **Run tests/lints** - Verify fixes don't break anything
+5. **Commit fixes with snapshot-scoped staging** (MANDATORY before re-review — NEVER `git add -A`):
+
+   **Pre-dirty collision rule:** if a path you edited during the fix already appears in the PRE snapshot, do NOT stage it — path-level staging cannot separate pre-existing hunks from fix hunks. Surface the collision, defer/escalate that finding (report it in the re-review request or final summary), and never sweep pre-existing changes into a review-fix commit.
+
+   ```bash
+   SNAP_PRE="${TMPDIR:-/tmp}/flow-impl-review-snap-pre-<task-id-or-branch-slug>-<suffix>.txt"    # same literal path from step 2
+   SNAP_POST="${TMPDIR:-/tmp}/flow-impl-review-snap-post-<task-id-or-branch-slug>-<suffix>.txt"
+   git status --porcelain > "$SNAP_POST"
+
+   # Stage ONLY paths that appear in the post-fix snapshot but not the pre-fix one
+   # (covers modified, untracked, deleted, renamed — rename lines stage the new path).
+   # Paths already dirty pre-fix are excluded automatically (collision rule above).
+   extract_paths() { cut -c4- "$1" | sed 's/^"\(.*\)"$/\1/; s/.* -> //' | sort -u; }
+   comm -13 <(extract_paths "$SNAP_PRE") <(extract_paths "$SNAP_POST") \
+     | while IFS= read -r p; do git add -- "$p"; done
+
+   if git diff --cached --quiet; then
+     echo "No stageable fix paths (all fixer-touched paths collided with pre-existing dirty state) — escalate; do NOT re-review without committed changes"
+   else
+     git commit -m "fix: address review feedback"
+   fi
    ```
    **If you skip this and re-review without committing changes, reviewer will return NEEDS_WORK again.**
 
-5. **Request re-review** (only AFTER step 4):
+6. **Request re-review** (only AFTER step 5):
 
    **IMPORTANT**: Do NOT re-add files already in the selection. RepoPrompt auto-refreshes
    file contents on every message. Only use `select-add` for NEW files created during fixes:
@@ -358,16 +397,20 @@ If verdict is NEEDS_WORK:
 
    **CRITICAL: Do NOT summarize fixes.** RP auto-refreshes file contents - reviewer sees your changes automatically. Just request re-review. Any summary wastes tokens and duplicates what reviewer already sees.
 
+   Redirect the re-review response to the SAME literal response file from Phase 3 (overwrite), then Read it once — the single-entry rule applies to every round:
+
    ```bash
-   cat > /tmp/re-review.md << 'EOF'
+   cat > "${TMPDIR:-/tmp}/flow-impl-review-rereview-<task-id-or-branch-slug>-<suffix>.md" << 'EOF'
    Issues addressed. Please re-review.
 
    **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>`
    EOF
 
-   $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md
+   $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "${TMPDIR:-/tmp}/flow-impl-review-rereview-<task-id-or-branch-slug>-<suffix>.md" > "${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"
    ```
-6. **Repeat** until Ship
+
+   Re-extract the verdict from the response file (same grep as Phase 3), then Read the file once for the next round's findings.
+7. **Repeat** until Ship
 
 **Anti-pattern**: Re-adding already-selected files before re-review. RP auto-refreshes; re-adding can cause issues.
 
@@ -379,3 +422,5 @@ If verdict is NEEDS_WORK:
 - **Skipping setup-review** - Window selection MUST happen via this command
 - **Hard-coding window IDs** - Never write `--window 1`
 - **Missing changed files** - Add ALL changed files to selection
+- **`git add -A` in the fix loop** - Sweeps pre-existing dirty paths into review-fix commits; use the snapshot-scoped staging
+- **Re-typing command output into heredocs** - Handoff/spec/response content moves by redirection (`>`/`>>`) only; echoing a captured response is a duplicate emission

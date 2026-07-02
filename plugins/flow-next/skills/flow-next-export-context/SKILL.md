@@ -75,22 +75,25 @@ $FLOWCTL rp select-get --window "$W" --tab "$T"
 $FLOWCTL rp select-add --window "$W" --tab "$T" <files>
 ```
 
-### Step 5: Build Review Prompt
+### Step 5: Build Review Prompt (file composition — no content re-typing)
 
-Get builder's handoff:
+**Path-persistence rule:** bash vars do NOT survive across tool calls. Compose a literal unique prompt path in agent context — `${TMPDIR:-/tmp}/flow-export-prompt-<target>-<agent-chosen 4-char suffix>.md` — and type it verbatim in every block that references it.
+
+Build the prompt by deterministic composition — the handoff is captured via redirection, never pasted into a heredoc; only the static review criteria (same criteria as plan-review or impl-review) are typed, once, in the quoted heredoc:
+
 ```bash
-$FLOWCTL rp prompt-get --window "$W" --tab "$T"
-```
+PROMPT_FILE="${TMPDIR:-/tmp}/flow-export-prompt-<target>-<suffix>.md"   # literal path
 
-Build combined prompt with review criteria (same as plan-review or impl-review).
+# 1. Builder handoff — captured via redirection, never re-typed
+$FLOWCTL rp prompt-get --window "$W" --tab "$T" > "$PROMPT_FILE"
 
-Set the prompt:
-```bash
-cat > /tmp/export-prompt.md << 'EOF'
-[COMBINED PROMPT WITH REVIEW CRITERIA]
+# 2. Review criteria (static, quoted heredoc — same criteria block as
+#    plan-review or impl-review, per the export type)
+cat >> "$PROMPT_FILE" << 'EOF'
+<review criteria — static block>
 EOF
 
-$FLOWCTL rp prompt-set --window "$W" --tab "$T" --message-file /tmp/export-prompt.md
+$FLOWCTL rp prompt-set --window "$W" --tab "$T" --message-file "$PROMPT_FILE"
 ```
 
 ### Step 6: Export
