@@ -204,22 +204,23 @@ $FLOWCTL start <task-id> --json
 
 #### 3b.1 Tracker sync (opt-in) — first claim → In-Progress
 
-**Optional. Runs only when the tracker bridge is active AND `work.firstClaim` is opted in. With no tracker configured this is a no-op — the work flow is unchanged.** Trigger only on the spec's **first** claimed task this run (the issue moves to In-Progress once, not per task).
+**Optional. Runs only when the tracker bridge is active AND `work.firstClaim` is opted in. With no tracker configured this is a no-op — the work flow is unchanged.**
 
 ```bash
-LEAF="$($FLOWCTL config get tracker.perEvent.work.firstClaim --json | jq -r '.value')"   # read the leaf ONCE (shared gating predicate — SKILL.md)
-if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
-   && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
-  # Invoke the flow-next-tracker-sync skill: move the linked issue In-Progress.
-  #   skill: flow-next-tracker-sync   (operation: push <spec-id>, status-only, event: work.firstClaim)
-  # Unlinked spec → the skill flow-first-pushes (creates + links the issue) first,
-  # then moves it In-Progress (tracker-sync §Phase 3 create-if-unlinked). No-op only
-  # if no transport is reachable; in Ralph mode it queues/records a receipt — never blocks.
-  :
+ACTIVE=0
+# NO pipelines in the probe — a failed producer masked by a healthy consumer
+# fails CLOSED. Capture raw first, rc-checked; parse separately.
+RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
+if [ "$ACTIVE" = "0" ]; then
+  VAL="$(printf '%s' "$RAW" | jq -r '.active' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
+  [ "$VAL" = "true" ] && ACTIVE=1
 fi
+if [ "$ACTIVE" = "1" ]; then
+  echo "GATE ACTIVE — STOP. Read references/tracker-touchpoints.md#first-claim before continuing."
+fi   # default branch: bare no-op — NO link, NO read path
 ```
 
-Best-effort: a tracker failure must never block the worker. The skill emits its own receipt, event-tagged `--event work.firstClaim` — the tag Phase 5's end-of-run `sync check` audits.
+When the sentinel prints, STOP and Read [references/tracker-touchpoints.md](references/tracker-touchpoints.md) before any further step — its `First claim` section holds this touchpoint's `work.firstClaim` leaf check + dispatch (best-effort; never blocks the worker). When the gate is silent (bridge inactive), continue — nothing fires here.
 
 ### 3c. Spawn Worker
 
@@ -296,22 +297,23 @@ Classify and act:
 
 #### 3d.1 Tracker sync (opt-in) — task done → status comment + evidence
 
-**Optional. Runs only when the tracker bridge is active AND `work.done` is opted in, and only when the task reached `done` (from 3d). With no tracker configured this is a no-op.** Posts a structured status comment + evidence (tests / PR links from the task's evidence) to the linked issue; appends-only (R8), deduped by marker — never a conflict.
+**Optional. Runs only when the tracker bridge is active AND `work.done` is opted in, and only when the task reached `done` (from 3d). With no tracker configured this is a no-op.**
 
 ```bash
-LEAF="$($FLOWCTL config get tracker.perEvent.work.done --json | jq -r '.value')"   # read the leaf ONCE (shared gating predicate — SKILL.md)
-if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
-   && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
-  # Invoke the flow-next-tracker-sync skill: append a lifecycle comment to the
-  # linked issue carrying the task's done-summary + evidence (tests / commits / PR).
-  #   skill: flow-next-tracker-sync   (operation: comment <spec-id>, event: work.done)
-  # Unlinked spec → flow-first push (create + link) first, then comment
-  # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport; Ralph queues.
-  :
+ACTIVE=0
+# NO pipelines in the probe — a failed producer masked by a healthy consumer
+# fails CLOSED. Capture raw first, rc-checked; parse separately.
+RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
+if [ "$ACTIVE" = "0" ]; then
+  VAL="$(printf '%s' "$RAW" | jq -r '.active' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
+  [ "$VAL" = "true" ] && ACTIVE=1
 fi
+if [ "$ACTIVE" = "1" ]; then
+  echo "GATE ACTIVE — STOP. Read references/tracker-touchpoints.md#task-done before continuing."
+fi   # default branch: bare no-op — NO link, NO read path
 ```
 
-Best-effort — append-only comment sync never blocks the work loop; the skill emits its own receipt, event-tagged `--event work.done` (audited by Phase 5's end-of-run `sync check`).
+When the sentinel prints, STOP and Read [references/tracker-touchpoints.md](references/tracker-touchpoints.md) before any further step — its `Task done` section holds this touchpoint's `work.done` leaf check + dispatch (best-effort; never blocks the work loop). When the gate is silent (bridge inactive), continue — nothing fires here.
 
 #### 3d.2 Circuit breaker (ONLY when `delegation_active`) — bridge the worker signal
 
@@ -417,26 +419,23 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
 
 2. After skill returns with SHIP:
    - Set status: `$FLOWCTL spec set-completion-review-status <spec-id> --status ship --json`
-   - **Tracker sync (opt-in) — SHIP → verdict comment, NEVER terminal Done (fn-66):** runs only when the tracker bridge is active AND `completionReview` is opted in. With no tracker configured this is a no-op. Hooked **here at the caller** (not inside the review skill) because this is where `completion_review_status=ship` lands. **Local completion review is NOT merge evidence** — `Done` is reserved for a `MERGED` PR (fn-66 status-sync `flowToNormalized`), so this touchpoint is **comment-shaped only**: it posts the verdict + R-ID coverage and at most leaves the issue at `In Review` (if an open PR exists). It NEVER pushes `Done`/`verified`:
+   - **Tracker sync (opt-in) — SHIP → verdict comment, NEVER terminal Done (fn-66):** runs only when the tracker bridge is active AND `completionReview` is opted in. With no tracker configured this is a no-op:
 
      ```bash
-     LEAF="$($FLOWCTL config get tracker.perEvent.completionReview --json | jq -r '.value')"   # read the leaf ONCE (shared gating predicate — SKILL.md)
-     if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
-        && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
-       # Invoke the flow-next-tracker-sync skill: post the completion-review verdict +
-       # R-ID coverage as a comment (comment-shaped — NEVER a terminal status push).
-       # The skill's reconcileStatus gate (status-sync.md flowToNormalized) refuses
-       # terminal `Done`/`verified` without a MERGED probe, so even if a stale config
-       # set this leaf to `reconcile` the gate keeps it non-terminal: at most it leaves
-       # the issue at `In Review` (open-PR evidence). land.merged is the SOLE Done driver.
-       #   skill: flow-next-tracker-sync   (operation: comment <spec-id>, event: work.completionReview)
-       #   (the comment carries the verdict + R-ID coverage as evidence — never a status push)
-       # Unlinked spec → flow-first push (create + link) first, then the verdict comment
-       # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport; Ralph queues.
-       # The skill's receipts carry --event work.completionReview — audited by Phase 5's sync check.
-       :
+     ACTIVE=0
+     # NO pipelines in the probe — a failed producer masked by a healthy consumer
+     # fails CLOSED. Capture raw first, rc-checked; parse separately.
+     RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
+     if [ "$ACTIVE" = "0" ]; then
+       VAL="$(printf '%s' "$RAW" | jq -r '.active' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
+       [ "$VAL" = "true" ] && ACTIVE=1
      fi
+     if [ "$ACTIVE" = "1" ]; then
+       echo "GATE ACTIVE — STOP. Read references/tracker-touchpoints.md#completion-review before continuing."
+     fi   # default branch: bare no-op — NO link, NO read path
      ```
+
+     When the sentinel prints, STOP and Read [references/tracker-touchpoints.md](references/tracker-touchpoints.md) before any further step — its `Completion review` section holds this touchpoint's `completionReview` leaf check + the comment-shaped dispatch (verdict + R-ID coverage; never a terminal `Done`/`verified` push — land.merged is the SOLE Done driver). When the gate is silent (bridge inactive), continue — nothing fires here.
    - Go to Phase 4 (Quality)
 
 **Note:** The spec-completion-review skill gets SHIP from the reviewer but does NOT set the status itself. The caller (work skill or Ralph) sets `completion_review_status=ship` after successful review — and (when opted in) posts the verdict / R-ID-coverage comment to the linked tracker issue here. It does **NOT** flip the issue to `Done`/`verified` (fn-66: that is gated on a `MERGED` PR and driven solely by `land.merged`). The review skill (`flow-next-spec-completion-review`) is NOT edited; the touchpoint lives at this caller.
