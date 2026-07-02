@@ -330,7 +330,9 @@ Follow the phases in the per-backend file end-to-end. Each file owns its own Ide
 
 **CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is production-grade world-class software and architecture. Never use AskUserQuestion in this loop.**
 
-If verdict is NEEDS_WORK, loop internally until SHIP:
+**MAX ITERATIONS (backend-agnostic — applies to ALL backends: rp, codex, copilot, cursor):** keep an iteration counter in agent context, starting at 0. Each fix+re-review cycle increments it. When the counter reaches **${MAX_REVIEW_ITERATIONS:-3}** (default 3; env-overridable, configurable in Ralph's config.env) and the verdict is still NEEDS_WORK, BREAK the loop and escalate: surface the surviving findings to the caller and stop (in Ralph mode output `<promise>RETRY</promise>` so the next iteration starts fresh). Never loop unbounded. The per-backend workflow files defer to this cap.
+
+If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 
 0. **Deep-pass phase (only if `DEEP=true`)** — see [workflow-common.md](workflow-common.md) "Deep-Pass Phase" section.
    - After primary review completes (any verdict) and before validator,
@@ -351,12 +353,12 @@ If verdict is NEEDS_WORK, loop internally until SHIP:
    - Receipt gains `walkthrough: {applied, deferred, skipped, acknowledged}`.
 3. **Parse issues** from reviewer feedback (Critical → Major → Minor)
 4. **Fix code** and run tests/lints
-5. **Commit fixes** (mandatory before re-review)
+5. **Commit fixes** (mandatory before re-review; RP backend uses the snapshot-scoped staging in workflow-rp.md — never blanket-stage with `git add --all`)
 6. **Re-review**:
    - **Codex**: Re-run `flowctl codex impl-review` (receipt enables context)
    - **Copilot**: Re-run `flowctl copilot impl-review` (receipt enables context; must be `mode == "copilot"` to resume)
    - **Cursor**: Re-run `flowctl cursor impl-review` (receipt enables context; must be `mode == "cursor"` to resume)
-   - **RP**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md` (NO `--new-chat`)
-7. **Repeat** until `<verdict>SHIP</verdict>`
+   - **RP**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file <literal re-review path from workflow-rp.md's fix loop>` (NO `--new-chat`; stdout redirected to the same literal response file, Read once)
+7. **Repeat** until `<verdict>SHIP</verdict>` — or the MAX ITERATIONS cap above breaks the loop (escalate with surviving findings)
 
 **CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.

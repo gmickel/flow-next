@@ -299,17 +299,23 @@ $FLOWCTL rp select-add --window "$W" --tab "$T" docs/prd.md
 
 ## Phase 3: Execute Review (RP)
 
-### Build combined prompt
+### Build combined prompt (file composition — no content re-typing)
 
-Get builder's handoff:
-```bash
-HANDOFF="$($FLOWCTL rp prompt-get --window "$W" --tab "$T")"
-```
+**Path-persistence rule:** bash vars do NOT survive across tool calls. Compose these literal unique paths in agent context and type them verbatim in EVERY block that references them (`mktemp` is reserved for paths created and consumed within a single bash block):
 
-Write combined prompt:
+- Prompt file: `${TMPDIR:-/tmp}/flow-plan-review-prompt-<spec-id>-<agent-chosen 4-char suffix>.md`
+- Response file: `${TMPDIR:-/tmp}/flow-plan-review-response-<spec-id>-<suffix>.md`
+
+Build the prompt by deterministic composition — redirect command output into the file, never paste it into a heredoc. Only cheap **scalar** slots (`[USER'S FOCUS AREAS]`) are filled inline while typing the quoted heredocs below; multi-line command output is always appended via redirection.
+
 ```bash
-cat > /tmp/review-prompt.md << 'EOF'
-[PASTE HANDOFF HERE]
+PROMPT_FILE="${TMPDIR:-/tmp}/flow-plan-review-prompt-<spec-id>-<suffix>.md"   # literal path
+
+# 1. Builder handoff — captured via redirection, never re-typed
+$FLOWCTL rp prompt-get --window "$W" --tab "$T" > "$PROMPT_FILE"
+
+# 2. Static header (quoted heredoc — no shell expansion)
+cat >> "$PROMPT_FILE" << 'EOF'
 
 ---
 
@@ -322,7 +328,14 @@ RepoPrompt includes the actual source code of selected files in a `<file_content
 If you cannot find `<file_contents>`, ask for the files to be re-attached before proceeding.
 
 ## Plan Under Review
-[PASTE flowctl show OUTPUT]
+EOF
+
+# 3. Plan under review — appended via redirection, never re-typed
+$FLOWCTL show "$SPEC_ID" >> "$PROMPT_FILE"
+
+# 4. Review criteria (static, quoted heredoc; [USER'S FOCUS AREAS] is a scalar slot
+#    filled inline while typing this block)
+cat >> "$PROMPT_FILE" << 'EOF'
 
 ## Review Focus
 [USER'S FOCUS AREAS]
@@ -377,14 +390,19 @@ Do NOT skip this tag. The automation depends on it.
 EOF
 ```
 
-### Send to RepoPrompt
+### Send to RepoPrompt (single-entry response)
+
+Redirect the review response to the literal response file — it must enter context exactly ONCE, via a single Read of that file (command substitution + `echo` would be the second copy; redirection keeps stdout out of context entirely):
 
 ```bash
-REVIEW_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/review-prompt.md --new-chat --chat-name "Plan Review: <SPEC_ID>")"
-echo "$REVIEW_RESPONSE"
+# Re-declare BOTH literal paths — this may run as a separate tool call from the
+# build block, and bash vars do not survive across tool calls (type them verbatim)
+PROMPT_FILE="${TMPDIR:-/tmp}/flow-plan-review-prompt-<spec-id>-<suffix>.md"      # same literal path from the build block
+RESPONSE_FILE="${TMPDIR:-/tmp}/flow-plan-review-response-<spec-id>-<suffix>.md"  # literal path
 
-VERDICT="$(echo "$REVIEW_RESPONSE" \
-  | tr -d '\r' \
+$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Plan Review: <SPEC_ID>" > "$RESPONSE_FILE"
+
+VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
   | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>' \
   | tail -n 1 \
   | sed -E 's#</?verdict>##g')"
@@ -394,9 +412,12 @@ if [[ -z "$VERDICT" ]]; then
   echo "<promise>RETRY</promise>"
   exit 0
 fi
+echo "VERDICT=$VERDICT"
 ```
 
 **WAIT** for response. Takes 1-5+ minutes.
+
+**Single-entry rule:** after this block, Read the response file ONCE (Read tool, literal path). That render IS the findings context — it feeds parsing and the fix loop. Do NOT `echo`/`cat` the response; verdict extraction greps the file directly.
 
 ---
 
@@ -435,6 +456,8 @@ If no verdict tag, output `<promise>RETRY</promise>` and stop.
 
 **CRITICAL: You MUST fix the plan BEFORE re-reviewing. Never re-review without making changes.**
 
+**MAX ITERATIONS**: Limit fix+re-review cycles to **${MAX_REVIEW_ITERATIONS:-3}** iterations (default 3, configurable in Ralph's config.env). If still NEEDS_WORK after max rounds, output `<promise>RETRY</promise>` and stop — let the next Ralph iteration start fresh.
+
 If verdict is NEEDS_WORK:
 
 1. **Parse issues** - Extract ALL issues by severity (Critical → Major → Minor)
@@ -446,8 +469,9 @@ If verdict is NEEDS_WORK:
    <updated spec content>
    EOF
 
-   # Option B: temp file (if content has single quotes)
-   $FLOWCTL spec set-plan <SPEC_ID> --file /tmp/updated-plan.md --json
+   # Option B: temp file (if content has single quotes) — literal unique path
+   # per the path-persistence rule
+   $FLOWCTL spec set-plan <SPEC_ID> --file "${TMPDIR:-/tmp}/flow-plan-review-updated-plan-<spec-id>-<suffix>.md" --json
    ```
    **If you skip this step and re-review with same content, reviewer will return NEEDS_WORK again.**
 
@@ -484,15 +508,19 @@ If verdict is NEEDS_WORK:
 
    **CRITICAL: Do NOT summarize fixes.** RP auto-refreshes file contents - reviewer sees your changes automatically. Just request re-review. Any summary wastes tokens and duplicates what reviewer already sees.
 
+   Redirect the re-review response to the SAME literal response file from Phase 3 (overwrite), then Read it once — the single-entry rule applies to every round:
+
    ```bash
-   cat > /tmp/re-review.md << 'EOF'
+   cat > "${TMPDIR:-/tmp}/flow-plan-review-rereview-<spec-id>-<suffix>.md" << 'EOF'
    Issues addressed. Please re-review.
 
    **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>`
    EOF
 
-   $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/re-review.md
+   $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "${TMPDIR:-/tmp}/flow-plan-review-rereview-<spec-id>-<suffix>.md" > "${TMPDIR:-/tmp}/flow-plan-review-response-<spec-id>-<suffix>.md"
    ```
+
+   Re-extract the verdict from the response file (same grep as Phase 3), then Read the file once for the next round's findings.
 6. **Repeat** until Ship
 
 **Anti-pattern**: Re-adding already-selected files before re-review. RP auto-refreshes; re-adding can cause issues.

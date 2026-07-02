@@ -612,6 +612,8 @@ Both banks share the `Pre-Question Taxonomy` and `Interview Guidelines` blocks, 
 
 After interview complete, write everything back — **scope depends on input type**.
 
+**Single-emission write pattern (all branches below):** compose the body and Write it ONCE via the **Write tool** to a **literal unique path** — the Write render is the user-visible read-back. Path-persistence rule: bash vars do NOT survive across prompt turns, and that applies to the draft path itself — compose the path in agent context (`${TMPDIR:-/tmp}/flow-interview-<kind>-<id>-<agent-chosen 4-char suffix>.md`) and type it verbatim in the Write call AND the flowctl `--file <path>` call; never a shell variable across prompt turns (`mktemp` only for paths created and consumed within one bash block). **Edit-cycle Read rule:** if the user requests revisions after seeing the render, apply them via the Edit tool (deltas only), then **Read the FULL draft file** before re-asking approval — the Read render is that cycle's full read-back and satisfies Edit's read-before-edit for the next cycle.
+
 The canonical spec section structure lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (the single source of truth — never re-embed the section list inline per R17). The templates below show the additional **interview audit sections** that layer onto the canonical structure; the underlying spec sections (`## Goal & Context`, `## Architecture & Data Models`, ...) come from the template.
 
 Section-write rules from the scope-aware pass behavior (above) MUST be honored — the write-policy result from `flowctl scope write-policy` is the source of truth for which sections this scope writes vs preserves. The `## Decision Context` substructure / FLAT-vs-substructured promotion logic is in the write-policy; do not invent inline.
@@ -673,8 +675,11 @@ $FLOWCTL spec create --title "..." --json
 # may be stripped from the final spec body — they're authoring guidance,
 # not user-visible spec content.
 # 2. Append the auxiliary interview-audit sections (only those that fired):
+```
 
-cat > /tmp/spec.md <<'EOF'
+Compose the full body and Write it ONCE to a literal unique path (e.g. `${TMPDIR:-/tmp}/flow-interview-spec-<id>-<suffix>.md`) via the **Write tool** — per the single-emission write pattern above. The body:
+
+```markdown
 <canonical body from skeleton, with interview-answered prose under each
  writable section per the write-policy — biz pass fills biz-owned sections,
  tech pass fills tech-owned, placeholders under empty other-side sections>
@@ -697,9 +702,12 @@ Per-line: user-wording vs. canonical-strategy-wording (track name or approach), 
 
 ## Open Questions
 Unresolved items that need research during planning
-EOF
+```
 
-$FLOWCTL spec set-plan <id> --file /tmp/spec.md --json
+Then hand flowctl the draft file — the literal path typed verbatim (never a shell variable across prompt turns):
+
+```bash
+$FLOWCTL spec set-plan <id> --file "${TMPDIR:-/tmp}/flow-interview-spec-<id>-<suffix>.md" --json
 ```
 
 Then suggest: "Run `/flow-next:plan fn-N` to research best practices and create tasks."
@@ -717,18 +725,14 @@ $FLOWCTL tasks --spec <id> --json
 
 The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md). Read the existing spec, refine sections under your scope per the write-policy (preserving sections owned by the other scope byte-for-byte), and append/update the auxiliary interview-audit sections. The R21 drift guard forbids re-embedding the canonical section sequence in this skill — read the existing body, do not regenerate from a template.
 
-```bash
-# Read existing spec body:
-EXISTING=$("$FLOWCTL" cat <id>)
+**Reuse the spec body already fetched at Detect Input Type** (`$FLOWCTL cat <id>` ran there) — do NOT re-fetch here. Re-fetch only if the interview mutated the spec on disk since that read (e.g. an earlier partial write-back in this run).
 
-# Refine canonical sections under your scope's writable list (per write-policy)
-# while preserving sections owned by the other scope byte-for-byte. Append the
-# auxiliary interview-audit sections (only those that fired):
+Refine canonical sections under your scope's writable list (per write-policy) while preserving sections owned by the other scope byte-for-byte, append the auxiliary interview-audit sections (only those that fired), and Write the merged body ONCE to a literal unique path (e.g. `${TMPDIR:-/tmp}/flow-interview-spec-<id>-<suffix>.md`) via the **Write tool** — per the single-emission write pattern above. The body:
 
-cat > /tmp/spec.md <<'EOF'
-<merged body: canonical sections from $EXISTING, with this scope's writable
- sections refined from interview answers, other-scope sections preserved
- byte-for-byte per the write-policy>
+```markdown
+<merged body: canonical sections from the Detect-Input-Type read, with this
+ scope's writable sections refined from interview answers, other-scope sections
+ preserved byte-for-byte per the write-policy>
 
 ## Resolved via Codebase
 (optional — written by the technical pass when codebase-investigation resolved items)
@@ -748,9 +752,12 @@ Per-line: user-wording vs. canonical-strategy-wording, STRATEGY.md path, resolut
 
 ## Open Questions
 Unresolved items
-EOF
+```
 
-$FLOWCTL spec set-plan <id> --file /tmp/spec.md --json
+Then hand flowctl the draft file — the literal path typed verbatim:
+
+```bash
+$FLOWCTL spec set-plan <id> --file "${TMPDIR:-/tmp}/flow-interview-spec-<id>-<suffix>.md" --json
 ```
 
 ### For Flow Task ID (fn-N.M)
@@ -762,19 +769,19 @@ $FLOWCTL cat <id>
 
 **If task has substantial planning content** (description with file refs, sizing, approach):
 - **Do NOT overwrite** — planning detail would be lost
-- Only ADD new acceptance criteria discovered in interview:
+- Only ADD new acceptance criteria discovered in interview: read the existing acceptance (already fetched via `$FLOWCTL cat <id>` above), append the new criteria, and Write the merged list ONCE via the **Write tool** to a literal unique path (e.g. `${TMPDIR:-/tmp}/flow-interview-acc-<id>-<suffix>.md`) — per the single-emission write pattern above. Then:
  ```bash
- # Read existing acceptance, append new criteria
- $FLOWCTL task set-acceptance <id> --file /tmp/acc.md --json
+ $FLOWCTL task set-acceptance <id> --file "${TMPDIR:-/tmp}/flow-interview-acc-<id>-<suffix>.md" --json
  ```
 - Or suggest interviewing the spec instead: `/flow-next:interview <spec-id>`
 
 **If task is minimal** (just title, empty or stub description):
 - Update task with interview findings
 - Focus on **requirements**, not implementation details
+- Write the description and acceptance each ONCE via the **Write tool** to literal unique paths (e.g. `${TMPDIR:-/tmp}/flow-interview-desc-<id>-<suffix>.md` / `${TMPDIR:-/tmp}/flow-interview-acc-<id>-<suffix>.md`) — per the single-emission write pattern above. Then:
 
 ```bash
-$FLOWCTL task set-spec <id> --description /tmp/desc.md --acceptance /tmp/acc.md --json
+$FLOWCTL task set-spec <id> --description "${TMPDIR:-/tmp}/flow-interview-desc-<id>-<suffix>.md" --acceptance "${TMPDIR:-/tmp}/flow-interview-acc-<id>-<suffix>.md" --json
 ```
 
 Description should capture:
@@ -799,9 +806,9 @@ This is typically a pre-spec doc. After interview, suggest `/flow-next:plan <fil
 **Optional. Runs only when the tracker bridge is active AND `interview` is opted in. With no tracker configured this is a no-op — the interview behaves exactly as today.** After the refined spec is written back (`## Write Refined Spec`), project the enrichment to the linked tracker issue and reconcile two-way (R6): interview enrichment done in flow flows back to the tracker; tracker-side edits fold into the right flow sections. (Skip for the file-input case — there is no flow spec yet.)
 
 ```bash
+LEAF="$($FLOWCTL config get tracker.perEvent.interview --json | jq -r '.value')" # read the leaf ONCE (shared gating predicate — work SKILL.md)
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
- && [ "$($FLOWCTL config get tracker.perEvent.interview --json | jq -r '.value')" != "off" ] \
- && [ "$($FLOWCTL config get tracker.perEvent.interview --json | jq -r '.value')" != "null" ]; then
+ && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
  # Invoke the flow-next-tracker-sync skill: push/pull/reconcile the spec body
  # (operation follows the perEvent leaf — push | pull | reconcile).
  # skill: flow-next-tracker-sync (operation: <leaf> <spec-id>)
