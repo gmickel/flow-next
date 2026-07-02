@@ -34,9 +34,8 @@ Final gate: the ONE mirror regeneration + commit, full test sweep, gate-contract
 - [ ] optimizing-skills target map corrected; optimization-log rows consolidated; CHANGELOG sibling entry; no version bump
 
 ## Done summary
-TBD
-
+Final gate for fn-82 (skill prompt diet): regenerated the Codex mirror once (idempotent x2, all parity guards green — new references/*.md mirrored, spike archive kept out of the plugin tree), ran the full test sweep (smoke 138/138 from non-repo cwd; pytest 1393 passed), verified the R9 gate contract for both new gates (work tracker-touchpoints x3, pilot qa-stage) via programmatic greps, produced the R12 before/after token table (~10.7k always-loaded tokens cut across 11 skills), corrected the optimizing-skills target map + consolidated the fn-82.1/.2/.3 optimization-log rows + added the gated-references heuristic to adding-skills, and landed the CHANGELOG Unreleased sibling entry (no version bump). Caught and fixed a real regression: fn-82.2's fn-strip archaeology over-stripped a test-pinned breadcrumb in tracker-sync steps.md (test_pilot_backlog_mirror_safety) — restored the canonical string and re-mirrored. rp impl-review returned a clean first-pass SHIP.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 82f890ea, 6690e334, bb91d1ff
+- Tests: bash smoke_test.sh (non-repo cwd): 138/138 passed, python3 -m pytest plugins/flow-next/tests/ (via uv): 1393 passed, 2 skipped, 164 subtests passed, sync-codex.sh: idempotent x2, all parity guards green, R9 gate-contract greps: work=3 sentinels + 6 fail-open, pilot=1 sentinel + 2 fail-open, one-level links, default no-op — all pass, rp impl-review: clean first-pass SHIP, 0 introduced findings
 - PRs:
