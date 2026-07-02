@@ -281,6 +281,8 @@ re-resolving from config. The skill still handles everything else:
 - Parsing verdict (SHIP/NEEDS_WORK/MAJOR_RETHINK)
 - Fix loops until SHIP
 
+**Foreground rule (do not background the review).** When the impl-review workflow shells a `flowctl <backend> …` review command, run it as one **blocking foreground** Bash call with a generous timeout (10 minutes; verdicts typically land in 1–7). Never launch it with `run_in_background` + a monitor — a background completion does not reliably resume your (subagent) context, and you would idle on an already-finished review. Blocking is safe: the call is bounded. (This does NOT apply to codex-delegation's `codex exec` launch in Phase 2 — that pattern deliberately backgrounds and polls a result file in foreground calls.)
+
 If NEEDS_WORK:
 1. Fix the issues identified
 2. Commit fixes
