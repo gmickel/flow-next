@@ -17,9 +17,8 @@ Implement `normalize_section_content(section, new_content)` in `flowctl.py` and 
 **Files:** `plugins/flow-next/scripts/flowctl.py`, tests (repo's existing test dir), `plugins/flow-next/docs/flowctl.md`, `CHANGELOG.md`.
 
 ## Done summary
-TBD
-
+Task-section content is now normalized at every flowctl write site (set-description/set-acceptance/set-spec section mode/create --acceptance-file): leading title-variant H2 stripped per the known-variant grammar, remaining H2s demoted to H3 outside code fences, with on-write self-heal folding contiguous fn-78-shape rogue layered sections. All H2 scans of task .md files (patch, read, validate, set-spec scaffold check) share one fence-aware tracker so fenced '## ' content never acts as a boundary or duplicate. 26 regression tests; docs + CHANGELOG Unreleased entry; cursor impl-review SHIP after 2 fix rounds.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 96e0079f, e6208977, bb1e03ca5c8340f2507ee2bf55dc990d11ab4838
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (1395 tests OK), bash plugins/flow-next/scripts/smoke_test.sh (138 passed)
 - PRs:
