@@ -294,8 +294,10 @@ $FLOWCTL sync set-tracker-id "wor-17-slug" "$ISSUE_UUID" --identifier "WOR-17" -
 Seed the merge base from the **current issue body** so the first sync is pull-only (never surfaces the whole issue as a conflict) — first-link base-seeding is in **[→ ref: body-merge.md]**; call `sync set-merge-base` with the flow-form + tracker-form snapshots it produces:
 
 ```bash
-# fn-52.4 produces both body forms; the setter requires BOTH halves together (paired-snapshot invariant):
-$FLOWCTL sync set-merge-base "wor-17-slug" --flow-file flow.txt --tracker-file tracker.txt
+# fn-52.4 produces both body forms; the setter requires BOTH halves together (paired-snapshot invariant).
+# The flow half IS the spec file at the snapshot point (just written/folded) — pass it
+# directly; only the tracker form gets a unique temp file (path-persistence rule):
+$FLOWCTL sync set-merge-base "wor-17-slug" --flow-file .flow/specs/wor-17-slug.md --tracker-file "${TMPDIR:-/tmp}/flow-base-tracker-wor-17-slug-<suffix>.txt"
 $FLOWCTL sync set-last-synced "wor-17-slug"
 ```
 
@@ -333,7 +335,7 @@ push(spec):
  # a local-completion-only push never does.
  postComment(lifecycle event marker) → comments-sync.md (append + dedup)
  projectDepRelations(spec, issue) → § projectDepRelations below — depends_on_epics → blocked-by relations (additive, ledger-tracked, never advances lastSyncedAt; warns on unlinked dep; skipped when no transport)
- sync set-merge-base (BOTH halves) + set-last-synced # snapshot the pushed pair (body-merge.md Step 5)
+ sync set-merge-base (BOTH halves: --flow-file .flow/specs/<id>.md directly + tracker-form unique temp) + set-last-synced # snapshot the pushed pair (body-merge.md Step 5)
  receipt: pushed
 
 pull(spec):
@@ -379,7 +381,7 @@ reconcile(spec):
  # (status-sync.md S-I); closed-unmerged/ambiguous/probe-error → in-review + NEEDS_HUMAN
  # (S-J), none → preserve non-terminal (S-G). The terminal-write merge-evidence invariant
  # holds on this manual path exactly as on the automatic land.merged touchpoint.
- sync set-merge-base (BOTH halves) + sync set-last-synced # body-merge.md Step 5 — ONLY on success
+ sync set-merge-base (BOTH halves: --flow-file .flow/specs/<id>.md directly + tracker-form unique temp) + sync set-last-synced # body-merge.md Step 5 — ONLY on success
  receipt: merged | updated
  # no-base bootstrap (first link): body-merge.md "First-sync / no-base bootstrap" —
  # flow-first ⇒ fast-forward projection; tracker-first ⇒ seed base, pull-only. Never a conflict.

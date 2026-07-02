@@ -67,14 +67,21 @@ $FLOWCTL init --json
 
 ## Step 1: Fast research (parallel)
 
-**If input is a Flow ID** (fn-N-slug or fn-N-slug.M, including legacy fn-N/fn-N-xxx): First fetch it with `$FLOWCTL show <id> --json` and `$FLOWCTL cat <id>` to get the request context.
+**If input is a Flow ID** (fn-N-slug or fn-N-slug.M, including legacy fn-N/fn-N-xxx): First fetch it with `$FLOWCTL cat <id>` plus ONE `show --json`, captured as `SHOW_JSON` — the readiness soft-check below reads the same capture, so run the fetch and the readiness check in the SAME bash block (vars do not survive across prompt turns; never run a second `show --json` for readiness):
+
+```bash
+$FLOWCTL cat <id> # request context (spec body)
+SHOW_JSON=$($FLOWCTL show <id> --json) # ONE fetch — request context AND readiness read
+echo "$SHOW_JSON" # command substitution hides stdout — bring it into view once
+```
 
 **Handle-recognition rule (R16):** do NOT gate the Flow-ID branch on a hard "must start with `fn-`" check. Before treating a single-token arg as a freeform idea, route it through `$FLOWCTL show <arg> --json` — flowctl's widened resolver (fn-52.10) maps a tracker key (`wor-17` / `wor-17.M`) to its linked spec/task. If it resolves (rc 0), use the canonical id from the JSON and take the existing-Flow-ID path (Route A in Step 5); only a non-resolving token becomes a new idea (Route B). So `plan wor-17` refines the linked spec, never creating a duplicate.
 
 **Readiness soft-check (adoption-gated; warn-not-block; fn-58):** runs right after the spec resolves and BEFORE the scout fan-out (warn before spending research tokens on a half-baked spec). Applies ONLY when the input resolved to an existing SPEC (Route A, canonical id without a `.M` suffix) — task ids and freeform ideas (Route B) skip this entirely.
 
 ```bash
-SHOW_JSON=$($FLOWCTL show <id> --json) # `ready` is an explicit boolean (fn-58.1)
+# Reuses $SHOW_JSON from the Step 1 fetch — SAME bash block (vars die across tool
+# calls); do NOT re-run `show --json` here. `ready` is an explicit boolean (fn-58.1).
 SPEC_READY=$(jq -r '.ready // false' <<< "$SHOW_JSON")
 
 READINESS_WARN=false
@@ -246,8 +253,9 @@ Default to standard unless complexity demands more or less.
 2. If task ID (fn-N-slug.M or legacy fn-N.M/fn-N-xxx.M):
  ```bash
  # Combined set-spec: description + acceptance in one call
- # Write to temp files only if content has single quotes
- $FLOWCTL task set-spec <id> --description /tmp/desc.md --acceptance /tmp/acc.md --json
+ # Write to temp files only if content has single quotes — unique per-task paths
+ # (path-persistence rule: literal agent-composed paths, never shared fixed names)
+ $FLOWCTL task set-spec <id> --description "${TMPDIR:-/tmp}/flow-plan-desc-<task-id>.md" --acceptance "${TMPDIR:-/tmp}/flow-plan-acc-<task-id>.md" --json
  ```
 
 **Route B - Input was text (new idea)**:
@@ -391,8 +399,9 @@ Default to standard unless complexity demands more or less.
 6. Write task specs (use combined set-spec):
  ```bash
  # For each task - single call sets both sections
- # Write description and acceptance to temp files, then:
- $FLOWCTL task set-spec <task-id> --description /tmp/desc.md --acceptance /tmp/acc.md --json
+ # Write description and acceptance to UNIQUE per-task temp files (path-persistence
+ # rule: literal agent-composed paths; write + consume in one bash block), then:
+ $FLOWCTL task set-spec <task-id> --description "${TMPDIR:-/tmp}/flow-plan-desc-<task-id>.md" --acceptance "${TMPDIR:-/tmp}/flow-plan-acc-<task-id>.md" --json
  ```
 
  **When the task needs `satisfies:` frontmatter**, use `--file` mode instead (frontmatter lives above the sections, not inside them):
@@ -486,11 +495,7 @@ Default to standard unless complexity demands more or less.
 
  Use `dep add` when you need to add dependencies to existing tasks or fix missed dependencies.
 
-8. Output current state:
- ```bash
- $FLOWCTL show <spec-id> --json
- $FLOWCTL cat <spec-id>
- ```
+ Do NOT re-fetch the spec after writing (no post-write `show`/`cat` — you just authored this state; Step 6 validates it, and pilot judges the plan stage from flowctl state, not this skill's stdout). The Step 7 fix-loop re-anchor is the deliberate exception.
 
 ## Step 6: Validate
 
@@ -505,9 +510,9 @@ Fix any errors before proceeding.
 **Optional. Runs only when the tracker bridge is active AND `plan` is opted in. With no tracker configured this is a no-op — planning behaves exactly as today.** When opted in, planning projects the spec to the tracker issue. **If the spec is not yet linked (e.g. you started straight from `/flow-next:plan`, no `/flow-next:capture`), the tracker-sync skill flow-first-pushes — it creates the issue + links it — then reconciles** (tracker-sync §Phase 3 "create-if-unlinked"); an active bridge therefore never silently leaves a planned spec untracked. Planning **never auto-creates tracker sub-issues per task** — tasks stay flow-local (R3, Grain); the spec ↔ one-issue grain holds. The only optional task-level effect is rendering the task list as a **checklist inside the issue body** (off by default; a body-format concern owned by the merge engine).
 
 ```bash
+LEAF="$($FLOWCTL config get tracker.perEvent.plan --json | jq -r '.value')" # read the leaf ONCE (shared gating predicate — work SKILL.md)
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
- && [ "$($FLOWCTL config get tracker.perEvent.plan --json | jq -r '.value')" != "off" ] \
- && [ "$($FLOWCTL config get tracker.perEvent.plan --json | jq -r '.value')" != "null" ]; then
+ && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
  # Invoke the flow-next-tracker-sync skill to push/reconcile the spec body
  # (which MAY render the task list as a body checklist — never sub-issues).
  # skill: flow-next-tracker-sync (operation: <leaf> <spec-id>)

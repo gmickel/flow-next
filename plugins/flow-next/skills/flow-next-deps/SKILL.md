@@ -25,14 +25,12 @@ command -v jq >/dev/null 2>&1 && echo "OK: jq installed" || echo "ERROR: brew in
 
 ## Step 1: Gather Spec Data
 
-Build a consolidated view of all specs with their dependencies:
+Build a consolidated view of all specs with their dependencies — ONE heavy per-spec loop for the whole skill. Steps 2 and 3 reuse the cached file (bash vars do not survive across tool calls, so the cache is a file at a literal agent-composed path — compose `<suffix>` once, e.g. 4 random chars, and reuse the SAME literal path in every later block):
 
 ```bash
-# Get all spec IDs
-spec_ids=$($FLOWCTL specs --json | jq -r '.specs[].id')
-
-# For each spec, get full details including dependencies
-for id in $spec_ids; do
+# ONE gather — Steps 2 and 3 read this file; never re-run the per-spec loop
+SPECS_FILE="${TMPDIR:-/tmp}/flow-deps-specs-<suffix>.json"
+$FLOWCTL specs --json | jq -r '.specs[].id' | while read id; do
   $FLOWCTL show "$id" --json | jq -c '{
     id: .id,
     title: .title,
@@ -40,7 +38,8 @@ for id in $spec_ids; do
     plan_review: .plan_review_status,
     deps: (.depends_on_epics // [])
   }'
-done
+done | jq -s '.' > "$SPECS_FILE"
+cat "$SPECS_FILE"
 ```
 
 ## Step 2: Identify Blocking Chains
@@ -48,13 +47,11 @@ done
 Determine which specs are ready vs blocked (pure jq, works on any shell):
 
 ```bash
-# Collect all spec data with deps
-specs_json=$($FLOWCTL specs --json | jq -r '.specs[].id' | while read id; do
-  $FLOWCTL show "$id" --json | jq -c '{id: .id, title: .title, status: .status, deps: (.depends_on_epics // [])}'
-done | jq -s '.')
+# Reuse the Step 1 gather — same literal path, NO re-fetch (one heavy loop total)
+SPECS_FILE="${TMPDIR:-/tmp}/flow-deps-specs-<suffix>.json"
 
 # Compute blocking status
-echo "$specs_json" | jq -r '
+jq -r '
   # Build status lookup
   (map({(.id): .status}) | add // {}) as $status |
 
@@ -70,7 +67,7 @@ echo "$specs_json" | jq -r '
   else
     "BLOCKED: \($id) - \($title) (by: \($blocked_by))"
   end
-'
+' "$SPECS_FILE"
 ```
 
 ## Step 3: Compute Execution Phases
@@ -78,13 +75,11 @@ echo "$specs_json" | jq -r '
 Group specs into parallel execution phases:
 
 ```bash
-# Collect all spec data
-specs_json=$($FLOWCTL specs --json | jq -r '.specs[].id' | while read id; do
-  $FLOWCTL show "$id" --json | jq -c '{id: .id, title: .title, status: .status, deps: (.depends_on_epics // [])}'
-done | jq -s '.')
+# Reuse the Step 1 gather — same literal path, NO re-fetch (one heavy loop total)
+SPECS_FILE="${TMPDIR:-/tmp}/flow-deps-specs-<suffix>.json"
 
 # Phase assignment algorithm (run in jq for reliability)
-echo "$specs_json" | jq '
+jq '
   # Build status lookup
   (map({(.id): .status}) | add // {}) as $status |
 
@@ -110,7 +105,7 @@ echo "$specs_json" | jq '
     else . end
   ) |
   .result
-'
+' "$SPECS_FILE"
 ```
 
 ## Output Format

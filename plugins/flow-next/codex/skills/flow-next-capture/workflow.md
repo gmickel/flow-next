@@ -464,15 +464,22 @@ Even when multiple must-ask cases fire, ask **one at a time**. Subsequent questi
 
 **Goal:** show the user the full draft before write. Even in autofix mode (`--yes` is the read-back substitute).
 
-### 4.1 — Build the read-back payload
+### 4.1 — Materialize the draft (single emission)
 
-Construct the full draft including:
+**Path-persistence rule:** bash vars do NOT survive across prompt turns — and that applies to the draft path itself. Compose a **literal unique path in agent context** — `${TMPDIR:-/tmp}/flow-capture-draft-<working-title-slug>-<agent-chosen 4-char suffix>.md` — and use that literal path verbatim in the Write call here AND in Phase 5's `spec set-plan <id> --file <path>` call. Never carry the path in a shell variable across prompt turns; `mktemp` is reserved for paths created and consumed within a single bash block. (No spec id exists yet on the new-spec branch — the working-title slug keeps the path readable; uniqueness comes from the suffix.)
 
-1. Frontmatter (`title`, candidate `branch_name`).
-2. The `## Conversation Evidence` block (Phase 1).
-3. Every section drafted in Phase 2, with source tags visible.
-4. The `## Acceptance Criteria` R-ID list — bulleted, source tags shown.
-5. **Source-tag tally** — total count across the spec, with per-tag breakdown. Format:
+Write the full draft to that path via the **Write tool** — exactly once. The Write render IS the user-visible read-back: the full draft appears in the tool render immediately above the §4.2 question. Long renders collapse in the terminal — the question body must say the full draft is in the Write render above (expand if collapsed). Do NOT print the draft again to stdout and do NOT re-author it into a Phase-5 heredoc — the file written here is exactly what Phase 5 hands to `spec set-plan --file`.
+
+The **draft file** contains the spec body (what `spec set-plan` consumes — no duplicate `# <title>` heading, per §5.1):
+
+1. The `## Conversation Evidence` block (Phase 1).
+2. Every section drafted in Phase 2, with source tags visible.
+3. The `## Acceptance Criteria` R-ID list — bulleted, source tags shown.
+
+The **summary payload** rides in the §4.2 question body (autofix: printed to stdout) — it is metadata about the draft, never a re-emission of it:
+
+1. `title` + candidate `branch_name`.
+2. **Source-tag tally** — total count across the spec, with per-tag breakdown. Format:
  ```
  Source: [user] N · [paraphrase] M · [strategy] K · [inferred] L
  ```
@@ -484,18 +491,18 @@ Construct the full draft including:
  - Boundaries: 2
  ```
  The `[strategy]` count aggregates all `[strategy:<track>]` lines regardless of track. When Phase 0 strategy snapshot scanned `none` (`STRATEGY_PRESENT=false`), `[strategy] K` reads `[strategy] 0` (or the field is omitted entirely — equivalent in practice).
-6. **8+ acceptance-criterion suggestion** (if Phase 2.5 fired):
+3. **8+ acceptance-criterion suggestion** (if Phase 2.5 fired):
  ```
  This spec has 11 acceptance criteria — consider splitting into multiple
  specs? You can: approve as-is, edit (drop some), or accept and split via
  /flow-next:plan after capture lands.
  ```
-7. **Related context** footnote (if Phase 0.3 found memory hits):
+4. **Related context** footnote (if Phase 0.3 found memory hits):
  ```
  Related memory entries (not blocking): bug/runtime-errors/oauth-callback-2025-08-12
  ```
-8. **Diff** — if `REWRITE_TARGET` is set, show existing spec → proposed spec diff (unified diff style; only show changed sections in full to keep the read-back navigable).
-9. **Glossary term-add proposals** (only when Phase 2.7 collected any):
+5. **Diff** — if `REWRITE_TARGET` is set, show existing spec → proposed spec diff (unified diff style; only show changed sections in full to keep the read-back navigable).
+6. **Glossary term-add proposals** (only when Phase 2.7 collected any):
  ```
  New project vocabulary (N terms, not yet in GLOSSARY.md):
  - <term> — <one-line definition>
@@ -507,7 +514,7 @@ Construct the full draft including:
 Use `plain-text numbered prompt`:
 
 - **header**: `Read-back`
-- **body**: `Draft: <inline full draft above>. [N] criteria are [inferred]. <8+ split note if applicable>. Recommended: approve — <one-sentence summary of confidence>. Confidence: [<tier>].`
+- **body**: `Full draft in the Write render above (expand if collapsed). <summary payload from §4.1: title + branch, source-tag tally, [inferred] breakdown, 8+ split note if applicable, related-memory footnote, rewrite diff if applicable, glossary proposals>. Recommended: approve — <one-sentence summary of confidence>. Confidence: [<tier>].`
 - **options** (frozen):
  - `approve` — proceed to Phase 5 write
  - `edit` — revise specific sections (loops back to Phase 2 for those sections)
@@ -555,27 +562,29 @@ If user picks `edit`:
 
 - Ask which sections (offer multi-select if the platform supports it; otherwise serial single-select).
 - For each section, re-run Phase 2's drafting logic for that section only, with the user's correction context as additional input.
+- Apply the revisions to the §4.1 draft file via the **Edit tool** (deltas only — never rewrite the whole file via Write).
 - Re-tally `[inferred]` count.
-- Re-show the read-back. Loop until user picks `approve` or `abort`.
+- **Read the FULL draft file** before re-asking approval — an Edit render shows only the delta, which is NOT a full read-back. The Read render is that cycle's mandatory full read-back (one full emission per edit cycle) AND satisfies the Edit tool's read-before-edit requirement for the next cycle.
+- Re-ask the §4.2 question. Loop until user picks `approve` or `abort`.
 
 Hard cap at **3 edit cycles**. If the user is still editing on the 4th cycle, surface: `You've gone through 3 edit cycles. Capture's read-back loop isn't deep refinement — consider /flow-next:interview <id> after capture lands for iterative Q&A.` Offer `approve as-is` / `abort` only.
 
 ### 4.4 — Autofix read-back
 
-Print the full read-back payload (4.1) to stdout as a markdown block. Then:
+The §4.1 Write render IS the single full emission — it replaces the old stdout print-substitute (no separate draft print, no second read-back; `--yes` consents on the render). Print only the **summary payload** (§4.1 items — tally, 8+ note, related memory, rewrite diff, glossary suggestions) to stdout. Then:
 
-- If `COMMIT_YES=0`, exit 0 with: `Draft printed above. Re-run with --yes to commit (in autofix mode, --yes substitutes for the interactive read-back approval).`
+- If `COMMIT_YES=0`, exit 0 with: `Draft written (full content in the Write render above). Re-run with --yes to commit (in autofix mode, --yes substitutes for the interactive read-back approval).`
 - If `COMMIT_YES=1`, proceed to Phase 5.
 
-Autofix never offers `edit` — there's no user to ask. The print-then-rerun-with-yes pattern mirrors `flowctl memory migrate --yes` and is the documented autofix-substitute for read-back approval.
+Autofix never offers `edit` — there's no user to ask. The render-then-rerun-with-yes pattern mirrors `flowctl memory migrate --yes` and is the documented autofix-substitute for read-back approval.
 
-**Autofix + glossary proposals:** the payload's item-9 block prints as suggestions (`Suggested glossary adds — review and add via flowctl glossary add "<term>" --definition-file -`), but autofix **never writes terms** — not even with `--yes` (`--yes` consents to the spec write, not to vocabulary changes). Phase 5.8 is interactive-only.
+**Autofix + glossary proposals:** the summary payload's glossary block prints as suggestions (`Suggested glossary adds — review and add via flowctl glossary add "<term>" --definition-file -`), but autofix **never writes terms** — not even with `--yes` (`--yes` consents to the spec write, not to vocabulary changes). Phase 5.8 is interactive-only.
 
 **Autofix + readiness:** autofix **never writes readiness** — not even with `--yes` (Phase 5.9 is interactive-only). When the §4.2 visibility predicate holds AND the spec gets written (`--yes`), Phase 6 appends a one-line suggestion: `Mark ready when blessed: flowctl spec ready <SPEC_ID>`. Without `--yes` nothing is suggested (no spec id exists). Predicate fails → silence — non-adopters and tracker-authoritative repos see nothing.
 
 ### 4.5 — Forbidden in Phase 4
 
-- **Never silently skip the read-back.** Even if `[inferred]` count is 0, show the draft. The user might still want to reject for reasons unrelated to inference.
+- **Never silently skip the read-back.** Even if `[inferred]` count is 0, the draft goes through the §4.1 Write (render visible) before any write. The user might still want to reject for reasons unrelated to inference.
 - **Never auto-split.** The `consider-split` option exits 0 and lets the user decide; it does not call `flowctl spec create` twice.
 - **Never edit `--rewrite` target without showing the diff.** The diff is non-optional in rewrite mode.
 - **Never write glossary terms here.** Phase 4 collects consent only; the writes happen in Phase 5.8, after the spec write.
@@ -584,8 +593,8 @@ Autofix never offers `edit` — there's no user to ask. The print-then-rerun-wit
 ### Done when
 
 - Interactive: user picked `approve` (proceed to Phase 5), `consider-split` / `abort` (exit 0, no write), or hit the edit-cycle cap. On approve, the glossary and mark-ready consents (when their gates fired) are recorded for Phase 5.8/5.9.
-- Autofix with `--yes`: payload printed, proceeding to Phase 5.
-- Autofix without `--yes`: payload printed, exit 0.
+- Autofix with `--yes`: draft Written (render = emission), summary payload printed, proceeding to Phase 5.
+- Autofix without `--yes`: draft Written (render = emission), summary payload printed, exit 0.
 
 ---
 
@@ -680,9 +689,9 @@ The audit trail line appears in both interactive (after the user picks) and auto
 
 When `STRATEGY_PRESENT=false`, this entire section is a no-op — there's no strategy snapshot to contradict.
 
-### 5.1 — Build the spec body
+### 5.1 — The spec body is the §4.1 draft file
 
-The spec body assembled in Phase 2 + revised in Phase 4 edit cycles is the input to `flowctl spec set-plan`. Source tags **stay in the spec body** — they are part of the audit trail and survive into the on-disk spec at `.flow/specs/<id>.md`. Future readers (including `/flow-next:plan` and `/flow-next:interview`) see the tags and can scrutinize.
+The approved draft file from §4.1 (revised in-place by Phase 4 edit cycles) IS the input to `flowctl spec set-plan --file <literal draft path>` — never re-authored into a heredoc. Source tags **stay in the spec body** — they are part of the audit trail and survive into the on-disk spec at `.flow/specs/<id>.md`. Future readers (including `/flow-next:plan` and `/flow-next:interview`) see the tags and can scrutinize.
 
 The frontmatter top of the spec is whatever `flowctl spec create` writes (it generates a placeholder via the spec-create plumbing). `spec set-plan` overwrites the placeholder with the captured body — so the captured body should NOT include a duplicate `# <title>` heading; `set-plan` accepts the body as-is and atomic-writes to `.flow/specs/<id>.md`.
 
@@ -700,18 +709,16 @@ if [[ -z "$SPEC_ID" || "$SPEC_ID" == "null" ]]; then
  exit 1
 fi
 
-# Write the spec body via heredoc.
-"$FLOWCTL" spec set-plan "$SPEC_ID" --file - --json <<EOF
-$SPEC_BODY
-EOF
+# Write the spec body from the §4.1 draft file — type the literal path verbatim
+# from agent context (path-persistence rule: never a shell variable across prompt turns).
+"$FLOWCTL" spec set-plan "$SPEC_ID" --file "${TMPDIR:-/tmp}/flow-capture-draft-<working-title-slug>-<suffix>.md" --json
 
 # Run anchor for Phase 6's sync check — written at the write step, BEFORE the
-# 5.7 dispatch, so it lower-bounds this run's receipts (bash vars don't survive
-# across prompt turns; this file does).
+# 5.7 dispatch, so it lower-bounds this run's receipts.
 date -u +%Y-%m-%dT%H:%M:%SZ > "${TMPDIR:-/tmp}/flow-capture-anchor-${SPEC_ID}"
 ```
 
-Use a real heredoc (not `printf`) so embedded markdown formatting and newlines round-trip cleanly. `read_file_or_stdin` in `flowctl.py` handles `--file -` correctly.
+The draft file round-trips embedded markdown and newlines byte-exact — `read_file_or_stdin` in `flowctl.py` handles `--file <path>` directly. No re-authoring: the approved content is consumed from disk, exactly as the user read it back.
 
 ### 5.3 — Rewrite branch
 
@@ -720,10 +727,9 @@ When `REWRITE_TARGET` is set:
 ```bash
 SPEC_ID="$REWRITE_TARGET"
 
-# Skip spec create — the spec already exists. Just overwrite the spec body.
-"$FLOWCTL" spec set-plan "$SPEC_ID" --file - --json <<EOF
-$SPEC_BODY
-EOF
+# Skip spec create — the spec already exists. Overwrite the spec body from the
+# §4.1 draft file (literal path typed verbatim, per the path-persistence rule).
+"$FLOWCTL" spec set-plan "$SPEC_ID" --file "${TMPDIR:-/tmp}/flow-capture-draft-<working-title-slug>-<suffix>.md" --json
 
 # Readiness reset — runs AFTER set-plan: a failed rewrite must not downgrade a
 # blessed spec (Codex review, PR #170 P2). A rewrite is a full re-authoring; any
@@ -784,9 +790,9 @@ If a future enhancement adds a `--commit` flag, Phase 5 would gain a "stage + co
 **Optional. Runs only when the tracker bridge is active AND `capture` is opted in. With no tracker configured this is a no-op — capture behaves exactly as today.** After the spec is on disk, project the captured/enriched body to the linked (or freshly linked) tracker issue and reconcile two-way (R6): a flow-first capture pushes the body out; a tracker-first spec (one already linked) reconciles the new capture content against the issue via the agentic 3-way merge.
 
 ```bash
+LEAF="$("$FLOWCTL" config get tracker.perEvent.capture --json | jq -r '.value')"
 if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ] \
- && [ "$("$FLOWCTL" config get tracker.perEvent.capture --json | jq -r '.value')" != "off" ] \
- && [ "$("$FLOWCTL" config get tracker.perEvent.capture --json | jq -r '.value')" != "null" ]; then
+ && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
  # Invoke the flow-next-tracker-sync skill: push/pull/reconcile the spec body
  # (operation follows the perEvent leaf — push | pull | reconcile).
  # skill: flow-next-tracker-sync (operation: <leaf> <SPEC_ID>, event: capture)
@@ -1008,11 +1014,11 @@ The skill itself is markdown — there's no unit-test surface. The validation is
 - Phase 1 emits a `## Conversation Evidence` block with verbatim user quotes (≤30 lines).
 - Phase 2 produces a draft with per-line source tags. Every acceptance criterion has one of `[user]` / `[paraphrase]` / `[inferred]`. Biz-context signals (R24) route to their destinations using only `[user]` / `[paraphrase]` tags; categories without conversation signal leave their destinations absent. `BIZ_SIGNAL_CATEGORIES` (0..9) computed for Phase 6.
 - Phase 3 fires must-ask cases only when (a) title is genuinely ambiguous, (b) acceptance is untestable, (c) scope-conflict persists. Optional ambiguities are deferred to Phase 4.
-- Phase 4 read-back surfaces `[inferred]` count, 8+ split note (if applicable), related-memory footer (if applicable), glossary term-add proposals (only when `glossary list --json` reports `total_terms > 0` AND the conversation surfaced new vocabulary — Phase 2.7). Interactive: user picks approve / edit / abort; on approve with proposals, one follow-up `Glossary?` consent question; on approve with the readiness predicate met (≥1 ready spec, no `tracker.readyState`), one follow-up `Mark ready?` consent question (default keep-draft). Autofix: print + require `--yes`; proposals print as suggestions, never written; readiness never written.
-- Phase 5 calls `flowctl spec create` + `spec set-plan` via heredoc. Approved term-adds written via `flowctl glossary add` (5.8, interactive only). Consented mark-ready written via `flowctl spec ready` (5.9, interactive only). Rewrite branch (5.3) runs idempotent `spec unready` unconditionally; `READY_RESET` gates the Phase 6 announcement. With no glossary (or a husk), 2.7/4.x/5.8 are silent no-ops; with readiness un-adopted, 4.2's mark-ready question / 5.9 / all readiness footer lines are silent no-ops — zero behavior change. With `artifacts.html.enabled` true, 5.10 regenerates `.flow/artifacts/<id>/spec.html` per the disclosure reference and leaves exactly one `<!-- flow-next:artifact-link -->` line in the spec md; off/unset, 5.10 is a single config read and nothing else.
+- Phase 4 materializes the draft ONCE via the Write tool to a literal unique path (§4.1 — render = read-back) and surfaces the summary payload (`[inferred]` count, 8+ split note if applicable, related-memory footer if applicable, glossary term-add proposals — only when `glossary list --json` reports `total_terms > 0` AND the conversation surfaced new vocabulary — Phase 2.7) in the question body. Interactive: user picks approve / edit / abort; edit cycles revise via the Edit tool + a full-file Read before re-approval; on approve with proposals, one follow-up `Glossary?` consent question; on approve with the readiness predicate met (≥1 ready spec, no `tracker.readyState`), one follow-up `Mark ready?` consent question (default keep-draft). Autofix: the Write render is the single full emission (summary payload printed) + require `--yes`; proposals print as suggestions, never written; readiness never written.
+- Phase 5 calls `flowctl spec create` + `spec set-plan --file <literal draft path>` (consumes the §4.1 draft file — no heredoc re-authoring). Approved term-adds written via `flowctl glossary add` (5.8, interactive only). Consented mark-ready written via `flowctl spec ready` (5.9, interactive only). Rewrite branch (5.3) runs idempotent `spec unready` unconditionally; `READY_RESET` gates the Phase 6 announcement. With no glossary (or a husk), 2.7/4.x/5.8 are silent no-ops; with readiness un-adopted, 4.2's mark-ready question / 5.9 / all readiness footer lines are silent no-ops — zero behavior change. With `artifacts.html.enabled` true, 5.10 regenerates `.flow/artifacts/<id>/spec.html` per the disclosure reference and leaves exactly one `<!-- flow-next:artifact-link -->` line in the spec md; off/unset, 5.10 is a single config read and nothing else.
 - Phase 6 prints the next-step footer. Calls `flowctl scope suggest --signal-categories-count "$BIZ_SIGNAL_CATEGORIES"`; on exit 0 (fire), appends the R25 `/flow-next:interview --scope=business` suggestion line. R22 invariant: `BIZ_SIGNAL_CATEGORIES=0` → no-fire → no suggestion.
 
-In autofix without `--yes`, the draft prints and the skill exits 0 — no write, no spec allocated.
-In autofix with `--yes`, Phase 4 still prints the draft (substituting for read-back) before Phase 5 writes.
+In autofix without `--yes`, the draft is Written (render visible) and the skill exits 0 — no `.flow/` write, no spec allocated.
+In autofix with `--yes`, the §4.1 Write render substitutes for the read-back before Phase 5 writes.
 
 The Ralph-block (SKILL.md) ensures this skill never runs under `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` — capture requires a user at the terminal.

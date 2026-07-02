@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-02T06:33:46.735888Z",
+  "depends_on": [
+    "fn-81-skill-runtime-token-plumbing-single.1"
+  ],
+  "id": "fn-81-skill-runtime-token-plumbing-single.2",
+  "priority": null,
+  "spec": "fn-81-skill-runtime-token-plumbing-single",
+  "spec_path": ".flow/tasks/fn-81-skill-runtime-token-plumbing-single.2.md",
+  "status": "todo",
+  "title": "Review-backend plumbing: RP file composition, single-entry responses, fix-loop cap + staging guards",
+  "updated_at": "2026-07-02T06:48:16.437743Z"
+}

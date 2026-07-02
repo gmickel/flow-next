@@ -418,9 +418,9 @@ The 2-cycle bound is identical in both modes. Under `AUTONOMOUS=1` the escalatio
 The linked spec id comes from the PR's spec association (the same `SPEC_ID` make-pr used; resolve `flowctl show <spec-id>` from the branch / PR body breadcrumb as elsewhere in this skill).
 
 ```bash
+LEAF="$($FLOWCTL config get tracker.perEvent.resolvePr --json | jq -r '.value')" # read the leaf ONCE (shared gating predicate — work SKILL.md)
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
- && [ "$($FLOWCTL config get tracker.perEvent.resolvePr --json | jq -r '.value')" != "off" ] \
- && [ "$($FLOWCTL config get tracker.perEvent.resolvePr --json | jq -r '.value')" != "null" ]; then
+ && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
  # Invoke the flow-next-tracker-sync skill: append a one-line resolution comment
  # to the linked issue (e.g. "Addressed N of M review items on PR #<NUMBER>").
  # skill: flow-next-tracker-sync (operation: comment <spec-id>)
