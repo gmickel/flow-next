@@ -41,9 +41,8 @@ Early proof point: fn-82.4 depends on this task. If the sentinel can't reliably 
 - [ ] Local sync-codex run shows both new files mirrored + parity guards green (mirror not committed); canonical-only diff
 
 ## Done summary
-TBD
-
+Moved work's three tracker-touchpoint payloads + SKILL.md bridge overview into gated references/tracker-touchpoints.md and pilot's QA-freshness probe into gated references/qa-stage.md, each behind the spec's exact fail-open gate skeleton with a forcing GATE ACTIVE sentinel — default runs never load them (gate branches executed in all four scenarios). Also single-sourced pilot's backlog select/triage/ask prose to backlog-mode.md and work's delegation value-check to phases.md Phase 0, keeping Phase 5 sync-check + 4-state summary template, QA_FRESH consumers, Phase 5/6 qa routing, and R16/unlink prose inline; ~2.7k tokens cut from the always-loaded set; RP review SHIP (r2).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: cdedc470, 691c9a2d, 105d4add
+- Tests: uvx --with pytest python3 -m pytest plugins/flow-next/tests/ -q  (1393 passed, 2 skipped — run WITH locally regenerated mirror), (cd $(mktemp -d) && bash .../scripts/smoke_test.sh)  (All tests passed), bash scripts/sync-codex.sh x2 (both new references auto-mirror; all parity guards green; mirror stashed, not committed — fn-82.5 regenerates), gate-block execution matrix in scratch repo: pipeline.qa gate default/on/probe-error/parse-error + sync-active gate inactive/active — sentinel fires only on active/error, QA_STAGE_ENABLED stays strict literal-on, targeted post-fix run: 134 passed; sole failure = expected canonical-without-mirror structural check (mirror regen deferred to fn-82.5 per R11), green after regen
 - PRs:
