@@ -18,26 +18,15 @@ Do not load the others — only the active backend's file is needed.
 Conduct a John Carmack-level review of implementation changes on the current branch.
 
 **Role**: Code Review Coordinator (NOT the reviewer)
-**Backends** (branch on the Preamble `RP_ELIGIBLE` guard):
+**Backends** (branch on the Phase 0 `RP_ELIGIBLE` probe):
 - When `RP_ELIGIBLE=1`: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot), or Cursor CLI (cursor)
 - When `RP_ELIGIBLE=0`: Codex CLI (codex), GitHub Copilot CLI (copilot), or Cursor CLI (cursor) — rp is macOS-only; never list it in guidance you surface (`--review=rp` stays accepted)
 
-## Preamble
+## Preamble — execute Phase 0 exactly once
 
-**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks (here and in `workflow-*.md`) use `$FLOWCTL`:
+**The executable Phase 0 lives in [workflow-common.md](workflow-common.md) §"Phase 0: Backend Detection" — Read it and execute it ONCE, before any other bash in this skill.** It defines `$FLOWCTL` (bundled — NOT installed globally; `which flowctl` fails, expected), probes `RP_ELIGIBLE`, resolves `$BACKEND` via the single `flowctl review-backend` call, and handles the ASK / `none` cases. Every later bash block here (triage, deep-pass selection) uses the `$FLOWCTL` it defines. Never invoke `flowctl review-backend` a second time in the same run.
 
-```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
-[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-
-# RepoPrompt is macOS-only (rp-cli bridges the GUI). Only offer the rp path
-# when it can actually run: on macOS, or when rp-cli is already on PATH.
-if [ "$(uname 2>/dev/null)" = "Darwin" ] || command -v rp-cli >/dev/null 2>&1; then
- RP_ELIGIBLE=1
-else
- RP_ELIGIBLE=0
-fi
-```
+Exception: a `--review=<backend>` argument (see Backend Selection below) wins — when present, set `BACKEND` from the flag and skip Phase 0's `review-backend` call + ASK handling (still run its `$FLOWCTL` / `RP_ELIGIBLE` setup lines).
 
 When `RP_ELIGIBLE=0` (not macOS, no rp-cli), never *steer* the user toward rp: every backend summary, recommendation, or override hint you surface presents only the runnable configured backends `codex`, `copilot`, `cursor` (plus `none`). `export` is an explicit one-off review MODE (`--review=export`), not a configured backend — never present it as one. Suppression is not a ban: an explicit `--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` still resolves to rp and errors at runtime via `require_rp_cli()` as today.
 
@@ -61,31 +50,9 @@ Check $ARGUMENTS for:
 
 If found, use that backend and skip all other detection.
 
-### Otherwise read from config
+### Otherwise: Phase 0 resolves it
 
-```bash
-# Resolve the review-target id from $ARGUMENTS HERE (the `fn-N.M` task / `fn-N` spec) — this is
-# before the later TASK_ID parse, so do NOT use `$TASK_ID` (still unset); empty for a standalone
-# diff. Passing it lets a per-task `review:` override route to the right backend (empty → env/config).
-REVIEW_ID="${1:-}" # the review-target positional arg (fn-N.M task / fn-N spec); empty for a standalone diff
-BACKEND=$($FLOWCTL review-backend "$REVIEW_ID")
-
-if [[ "$BACKEND" == "ASK" ]]; then
- echo "Error: No review backend configured."
- if [ "$RP_ELIGIBLE" = 1 ]; then
- echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|none"
- else
- echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|none"
- fi
- exit 1
-fi
-
-if [ "$RP_ELIGIBLE" = 1 ]; then
- echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|none)"
-else
- echo "Review backend: $BACKEND (override: --review=codex|copilot|cursor|none)"
-fi
-```
+No `--review` flag → `$BACKEND` comes from [workflow-common.md](workflow-common.md) Phase 0 (executed once per the Preamble): the single `flowctl review-backend "$REVIEW_ID"` call with ASK handling included. Do not re-resolve here.
 
 ### Backend at a glance
 
@@ -308,10 +275,10 @@ when explicitly validating a suspicious chore diff, or when the deterministic
 whitelist misclassifies). `FLOW_RALPH_NO_TRIAGE=1` has the same effect for
 Ralph runs.
 
-### Step 1: Detect Backend + Load Workflow
+### Step 1: Load Backend Workflow
 
-1. Read [workflow-common.md](workflow-common.md) and execute its Phase 0 to resolve `$BACKEND`.
-2. Then read **only** the file for that backend:
+1. `$BACKEND` was already resolved by workflow-common.md Phase 0 (Preamble) — do NOT re-run it.
+2. Read **only** the file for that backend:
 
 | `$BACKEND` | File to read |
 |------------|--------------|

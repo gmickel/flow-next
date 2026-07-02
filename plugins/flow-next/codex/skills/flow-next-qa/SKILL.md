@@ -120,9 +120,7 @@ Execute the phases in [workflow.md](workflow.md) in order:
 
 1. **discover** — resolve the spec id (arg / branch-match / info prompt); pull the cognitive-aid payload.
 2. **derive** — AC → scenarios, R-IDs → coverage spine, boundaries → exclusions, decision context → expected behavior.
-3. **prepare** — target URL, test accounts, session hygiene, device matrix. *(Owned by a downstream task; section anchor laid here.)*
-4. **execute** — drive the live app via the fn-51 read-and-drive contract; capture the evidence tuple per scenario. *(Owned by a downstream task; section anchor laid here.)*
-5. **file** — structured P0/P1/P2 findings with evidence; feed the bug memory track. *(Owned by a downstream task.)*
-6. **verdict** — YES/NO ship verdict + open P0/P1 list; emit the `qa_verdict` receipt. *(Owned by a downstream task.)*
-
-This task (fn-53.1) stands up the **skeleton** (all six phase anchors) plus the working **discover** and **derive** phases, and proves the thesis end-to-end (derive ≥1 scenario → dispatch through the fn-51 contract → record an evidence tuple, or a BLOCKED proof receipt when no live target exists). Phases 3-6 are filled by serial downstream tasks editing their own disjoint section anchors.
+3. **prepare** — target URL, test accounts, session hygiene, device matrix.
+4. **execute** — drive the live app via the fn-51 read-and-drive contract; capture the evidence tuple per scenario.
+5. **file** — structured P0/P1/P2 findings with evidence; feed the bug memory track.
+6. **verdict** — YES/NO ship verdict + open P0/P1 list; emit the `qa_verdict` receipt.

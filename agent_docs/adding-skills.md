@@ -49,6 +49,37 @@ SKILL.md routing block (canonical pattern in `flow-next-impl-review/SKILL.md`): 
 
 **sync-codex.sh impact:** the RP-warning injector (line 365-378) auto-prefers `workflow-rp.md` when present, falling back to monolithic `workflow.md`. No sync edits needed unless new tool-name references are introduced (see memory entry `bug/build-errors/sync-codexsh-tool-substitution-needs-2026-05-18`).
 
+## Gated references/*.md — progressive disclosure (heuristic)
+
+When a skill's always-loaded file (`SKILL.md` / `workflow.md` / `phases.md`) inlines **default-OFF machinery** — a code path that runs only when an opt-in feature is active — that text is dead weight on every default-path invocation. Move it into a `references/*.md` file that the agent reads **only when a forcing-sentinel gate tells it to**. Referenced files under a skill dir cost **zero tokens until Read** (Anthropic Agent Skills 3-level loading) and auto-mirror to Codex (`sync-codex.sh` wholesale skill-dir copy).
+
+**Heuristic — gate when the path is genuinely default-OFF or mutually-exclusive.** If the content is consumed on *every* run (an always-checked checklist), do NOT gate — the probe cost + skip risk outweigh the load saving; **fold** it inline toward the richer copy instead (make-pr's `phases.md` fold, fn-82.4). Gating pays only when the default path skips the content entirely.
+
+**Canonical gate skeleton** (binding — fail OPEN, no unguarded pipeline):
+
+```bash
+ACTIVE=0
+# NO pipelines in the probe — a failed producer masked by a healthy consumer
+# (flowctl … | jq …) fails CLOSED. Capture raw first, rc-checked; parse separately.
+RAW="$(<probe-cmd> --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
+if [ "$ACTIVE" = "0" ]; then
+  VAL="$(printf '%s' "$RAW" | jq -r '<path>' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
+  [ "<active-condition on $VAL>" ] && ACTIVE=1
+fi
+if [ "$ACTIVE" = "1" ]; then
+  echo "GATE ACTIVE — STOP. Read references/<file>.md#<section> before continuing."
+fi   # default branch: bare no-op — NO link, NO read path
+```
+
+The always-loaded prose immediately after the gate repeats the imperative ("When the sentinel prints, STOP and Read the named reference before any further step") and links the reference **one level deep** — a `[references/<file>.md](references/<file>.md)` markdown link in the gating file itself (nested refs trigger partial reads). Any safety net that must run on EVERY invocation (an end-of-run reconcile, a mandatory summary slot) stays **inline** — never behind the gate. A reference file >100 lines opens with a short table of contents.
+
+**Grep-gate contract** (a final-task check should verify, per gate): the sentinel text is present, `|| ACTIVE=1` appears on BOTH the probe and the parse, no unguarded `| jq` pipeline sits inside any gate block, the reference is linked one level deep, and the default branch contains no Read of the reference.
+
+**Landed examples** (fn-82):
+- `flow-next-work` (fn-82.1) — three tracker touchpoints (first-claim / done / completion-review) → `references/tracker-touchpoints.md` behind the `flowctl sync active` bridge predicate; Phase-5 sync-check + four-state summary kept inline. **−984 tok** default path.
+- `flow-next-pilot` (fn-82.1) — QA-stage freshness probe → `references/qa-stage.md` behind `pipeline.qa == on`; Phase 5/6 qa routing kept inline. **−2207 tok** default path.
+- `flow-next-make-pr` (fn-82.4) — **inline-fold, NOT gated**: the per-phase Done-when checklists run every render, so folded into `workflow.md` + `phases.md` reduced to a stub and un-force-loaded (eval held 5/5).
+
 ## FLOWCTL prelude consolidation (heuristic)
 
 When a skill invokes `flowctl` from bash, define the variable **once per canonical file** in a `## Preamble` section near the top; subsequent bash blocks call `$FLOWCTL` bare.

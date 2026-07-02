@@ -9,7 +9,7 @@ allowed-tools: Read, Bash, Grep, Glob, Write, Edit
 
 **Read [workflow.md](workflow.md) for full phase-by-phase execution.**
 
-Wrap the upstream [`clawpatch`](https://github.com/openclaw/clawpatch) CLI's `map` subcommand. Default invocation is provider-free (`--source heuristic`) — zero LLM calls, zero API spend, deterministic mapper. Output lands at `.clawpatch/features/*.json` (Zod-validated upstream, `schemaVersion: 1`). Scout enrichment and the `/flow-next:prime` DE7 nudge land in fn-50.2–.5; this skill is the install/init/invoke surface.
+Wrap the upstream [`clawpatch`](https://github.com/openclaw/clawpatch) CLI's `map` subcommand. Default invocation is provider-free (`--source heuristic`) — zero LLM calls, zero API spend, deterministic mapper. Output lands at `.clawpatch/features/*.json` (Zod-validated upstream, `schemaVersion: 1`). Scout enrichment and the `/flow-next:prime` DE7 nudge read the resulting index; this skill is the install/init/invoke surface.
 
 **Role**: thin shell-out wrapper. flowctl never imports or requires clawpatch; the skill is the only flow-next surface that touches it.
 
@@ -77,7 +77,7 @@ Execute the phases in [workflow.md](workflow.md) in order:
 2. **Version-range guard (R10)** — parse `clawpatch --version` with `(\d+\.\d+\.\d+)`; compare against `SUPPORTED_CLAWPATCH`. Outside range → one-line stderr warning naming expected vs found and continue (degrade — never block).
 3. **Init (R2)** — when `.clawpatch/` absent, run `clawpatch init` first. After clawpatch creates `.clawpatch/project.json` + `.clawpatch/config.json`, write a self-contained `.clawpatch/.gitignore` skeleton (skill owns this write — STRATEGY zero-dep means flowctl never references clawpatch).
 4. **Map invocation (R1)** — `clawpatch map --source <SOURCE> [extra passthrough]`. Default `<SOURCE>` is `heuristic` (always passed explicitly — never rely on clawpatch's default in case upstream changes it). clawpatch streams stdout live; the skill does not buffer.
-5. **Result summary** — print path to `.clawpatch/features/`, count of feature files, last-mapped timestamp; suggest `flowctl repo-map list` (lands in fn-50.2) and the `/flow-next:plan` / `/flow-next:capture` paths that consume it.
+5. **Result summary** — print path to `.clawpatch/features/`, count of feature files, last-mapped timestamp; suggest `flowctl repo-map list` and the `/flow-next:plan` / `/flow-next:capture` paths that consume it.
 
 ## Sharing contract — local-only by design
 

@@ -11,7 +11,7 @@ Pre-fn-30 flow-next stored memory as three flat markdown files: `.flow/memory/pi
 
 This skill IS the migration. The host agent (Claude Code / Codex / Droid) reads each legacy entry, applies the mechanical default `(track, category)` from the source filename, overrides only when the entry's content warrants, and writes a categorized entry via `flowctl memory add`. Optional autofix mode accepts every mechanical default and marks ambiguous entries as `needs-review` in the report.
 
-There is no Python classifier subprocess, no `codex`/`copilot` dispatch, no fast-model probability scoring. The host agent is already an LLM with full repo context and does the work directly. flowctl provides only thin parsing + persistence plumbing (`memory list-legacy --json`, existing `memory add`) — landed by Task 2 of this spec.
+There is no Python classifier subprocess, no `codex`/`copilot` dispatch, no fast-model probability scoring. The host agent is already an LLM with full repo context and does the work directly. flowctl provides only thin parsing + persistence plumbing (`memory list-legacy --json`, existing `memory add`).
 
 **Read [workflow.md](workflow.md) for the full phase-by-phase execution. Read [phases.md](phases.md) for the (track, category) decision tree with mechanical baseline + override examples.**
 
@@ -81,7 +81,7 @@ This skill runs almost entirely on the main thread. Phase 1's "one entry per pro
 - **Migrating files outside `MEMORY_LEGACY_FILES`** (`pitfalls.md`, `conventions.md`, `decisions.md` at `.flow/memory/` root). Any other `.md` at the memory root is user data — leave it alone.
 - **Migrating entries inside categorized directories** (`.flow/memory/{bug,knowledge}/<category>/*.md`). Those are already migrated; re-running on them is a bug.
 - **Auto-deleting legacy flat files.** Phase 4 renames originals to `.flow/memory/_migrated/<filename>.bak` for traceability — never `rm`. User can `git rm` later if they want.
-- **Inventing flowctl subcommands** beyond what Task 2 ships (`memory list-legacy`). Phase 2 writes via existing `flowctl memory add`. Mechanical map is documented in phases.md so the agent doesn't need to call a flowctl helper for it.
+- **Inventing flowctl subcommands** beyond the shipped `memory list-legacy`. Phase 2 writes via existing `flowctl memory add`. Mechanical map is documented in phases.md so the agent doesn't need to call a flowctl helper for it.
 - **Batch-classifying multiple entries in a single prompt turn.** Phase 1 enforces one entry per prompt turn. Agents under context pressure batch-classify in-prompt and silently skip entries (practice-scout flagged this real failure mode).
 - **Setting `context: fork`** — plain-text numbered prompt must stay reachable.
 - **Re-running on already-migrated files.** Phase 0 checks `.flow/memory/_migrated/<filename>.bak` and skips with an "already migrated" log line.

@@ -351,6 +351,10 @@ BANK_PATH=$("$FLOWCTL" scope bank "$SCOPE")
 
 When `$SCOPE` is `business` or `both`, load `questions-business.md` for the biz phase questions. When `$SCOPE` is `technical` or `both`, load `questions-technical.md` for the tech phase. Both banks reference `questions-shared.md` for the `Pre-Question Taxonomy` and `Interview Guidelines` blocks — read the shared file first so the classifier applies symmetrically across passes.
 
+### Auxiliary-sections rule (applies to every pass)
+
+The auxiliary sections — `Strategy Alignment` / `Strategy Conflicts` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Codebase` / `Resolved via Project Docs` — are preserved byte-for-byte across passes and scope changes: no pass deletes or rewrites an auxiliary section another pass wrote. Each pass only ADDS its own: the biz pass adds `Resolved via Project Docs`; the tech pass adds `Resolved via Codebase`.
+
 ### Business pass (`SCOPE == business`, or first phase of `both`)
 
 Run BEFORE the first plain-text numbered prompt call:
@@ -366,7 +370,7 @@ Per-section write behavior (per the write-policy):
  - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == true` (FLAT body exists from a prior tech-only pass): promote the existing flat body byte-for-byte into a new `### Implementation Tradeoffs` H3 (preserve the prose verbatim — same content, just under a new H3), and write the new `### Motivation` H3 as a sibling.
  - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == false` (H3s already exist): preserve `### Implementation Tradeoffs` byte-for-byte; write/refine ONLY `### Motivation`.
 - **`## Acceptance Criteria`**: append outcome-AC R-IDs (R-IDs are append-only across passes per fn-29 rules — never renumber, never replace; take the next unused number).
-- **Auxiliary sections** (`Strategy Alignment` / `Strategy Conflicts` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Codebase`): preserve byte-for-byte. Biz pass adds `Resolved via Project Docs` only.
+- **Auxiliary sections**: preserve byte-for-byte per the auxiliary-sections rule above; biz pass adds `Resolved via Project Docs` only.
 
 ### Technical pass (`SCOPE == technical`, default; or second phase of `both`)
 
@@ -383,7 +387,7 @@ Per-section write behavior (per the write-policy):
  - When `shape == "flat"` (no H3s exist, no biz pass has run — default zero-flag-tech case on a fresh/legacy spec): write/refine the flat body in place. Do NOT introduce `### Motivation` / `### Implementation Tradeoffs` H3 substructure. Preserves R22 1.0.2 backward compat.
  - When `shape == "substructured"` (`### Motivation` already exists from a prior biz pass, or the existing spec has the substructure): preserve `### Motivation` body byte-for-byte; write/refine ONLY `### Implementation Tradeoffs`.
 - **`## Acceptance Criteria`**: append verifiable-AC R-IDs (R-IDs are append-only — never renumber).
-- **Auxiliary sections** (`Strategy Alignment` / `Strategy Conflicts` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Project Docs`): preserve byte-for-byte. Tech pass adds `Resolved via Codebase` only.
+- **Auxiliary sections**: preserve byte-for-byte per the auxiliary-sections rule above; tech pass adds `Resolved via Codebase` only.
 
 ### Both pass (`SCOPE == both`)
 
@@ -392,7 +396,7 @@ Runs biz pass first, then tech pass in the same skill invocation. Each phase enf
 1. **Phase 1: biz pass** — runs the full biz-pass workflow above. Writes biz sections; preserves any pre-existing tech sections byte-for-byte (with placeholder lines under empty tech sections).
 2. **Phase 2: tech pass** — runs the full tech-pass workflow above using the just-written biz output as in-memory context. Reads biz sections, cites them in the opener, writes tech sections, preserves biz sections byte-for-byte.
 
-Auxiliary sections (`Strategy Alignment` / `Strategy Conflicts` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Codebase` / `Resolved via Project Docs`) are preserved across both phases — neither phase deletes or rewrites an auxiliary section the other phase wrote.
+Auxiliary sections are preserved across both phases per the auxiliary-sections rule above.
 
 If the user interrupts between phase 1 and phase 2, the biz sections are written but the tech sections retain placeholder lines. Re-running `--scope=technical` later completes the spec.
 
@@ -417,7 +421,7 @@ Classify biz questions via the **Pre-Question Taxonomy** before asking:
 
 If you find yourself asking the user a biz question that README/CHANGELOG/STRATEGY already answers, that's the bug. Stop and resolve from docs. Symmetric form of the existing "if you find yourself answering a 'should' question via grep, that's the bug" rule.
 
-The `## Resolved via Project Docs` section is auxiliary and biz-pass-only (parallel to `## Resolved via Codebase` for the tech pass). Preserved across scope changes alongside `Strategy Alignment`, `Strategy Conflicts`, `Glossary Conflicts`, `Conversation Evidence`, and `Resolved via Codebase` — tech pass never deletes or rewrites any auxiliary section the biz pass produced.
+The `## Resolved via Project Docs` section is auxiliary and biz-pass-only (parallel to `## Resolved via Codebase` for the tech pass). Preserved across scope changes per the auxiliary-sections rule above.
 
 ## Doc-aware behaviors
 
@@ -454,7 +458,7 @@ JSON shape:
 }
 ```
 
-For each defined term across `groups[].entries`, scan the user's request for occurrences. Term match is **case-insensitive whitespace-collapsed** — the same rule as `flowctl glossary read` (see `_glossary_term_matches` in `flowctl.py:401`). Do NOT reinvent matching logic; the canonical contract is "lowercase both sides, collapse runs of whitespace to single space, compare equal." Alias hits via `entries[].avoid`: if the user wrote `consumer` and the entry's `avoid` list contains `consumer`, that's a canonical-mismatch hit on `Worker`.
+For each defined term across `groups[].entries`, scan the user's request for occurrences. Term match is **case-insensitive whitespace-collapsed** — the same rule as `flowctl glossary read` (see `_glossary_term_matches` in `flowctl.py`). Do NOT reinvent matching logic; the canonical contract is "lowercase both sides, collapse runs of whitespace to single space, compare equal." Alias hits via `entries[].avoid`: if the user wrote `consumer` and the entry's `avoid` list contains `consumer`, that's a canonical-mismatch hit on `Worker`.
 
 For each hit, evaluate one filter before surfacing:
 
@@ -633,47 +637,13 @@ $FLOWCTL spec create --title "..." --json
 # (Overview / Scope / Approach / Quick commands / Acceptance / References)
 # don't match the scope-aware write-policy's canonical section names).
 #
-# Resolve the template via the 4-tier discovery cascade — first match wins;
-# do not read later tiers once a hit is found:
-# 1. <repo_root>/SPEC.md (user-customized, uppercase preferred)
-# 2. <repo_root>/spec.md (user-customized, lowercase honored)
-# 3. .flow/templates/spec.md (project-local copy from /flow-next:setup)
-# 4. ${CLAUDE_PLUGIN_ROOT:-${DROID_PLUGIN_ROOT:-${CODEX_HOME:-$HOME/.codex}}}/templates/spec.md
-# (bundled — canonical source of truth)
-#
-# Case-insensitive FS handling (macOS APFS, Windows NTFS): SPEC.md and
-# spec.md may resolve to the same inode. Probe via:
-# HITS=$(ls -1 SPEC.md spec.md 2>/dev/null | sort -u | wc -l | tr -d ' ')
-# where 0 → tier 1+2 miss, fall to tier 3; 1 → single hit (or case-insensitive
-# collapse) — use it; 2 → case-sensitive FS with both distinct, prefer
-# SPEC.md and print a stderr warning.
-#
-# Walker (bash):
-# REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-# TEMPLATE_PATH=""
-# HITS=$(ls -1 "$REPO_ROOT/SPEC.md" "$REPO_ROOT/spec.md" 2>/dev/null | sort -u | wc -l | tr -d ' ')
-# if [ "$HITS" = "2" ]; then
-# TEMPLATE_PATH="$REPO_ROOT/SPEC.md"
-# echo "warn: both SPEC.md and spec.md exist at repo root; preferring uppercase." >&2
-# elif [ -f "$REPO_ROOT/SPEC.md" ]; then
-# TEMPLATE_PATH="$REPO_ROOT/SPEC.md"
-# elif [ -f "$REPO_ROOT/spec.md" ]; then
-# TEMPLATE_PATH="$REPO_ROOT/spec.md"
-# elif [ -f ".flow/templates/spec.md" ]; then
-# TEMPLATE_PATH=".flow/templates/spec.md"
-# else
-# TEMPLATE_PATH="${CLAUDE_PLUGIN_ROOT:-${DROID_PLUGIN_ROOT:-${CODEX_HOME:-$HOME/.codex}}}/templates/spec.md"
-# fi
-# TEMPLATE=$(cat "$TEMPLATE_PATH")
-#
-# The template contains: frontmatter, the 7 canonical sections
-# (Goal & Context, Architecture & Data Models, API Contracts,
-# Edge Cases & Constraints, Acceptance Criteria, Boundaries,
-# Decision Context) with scope-owner HTML-comment annotations. Fill
-# bodies from interview answers under your scope's writable sections
-# per the write-policy. Frontmatter + HTML-comment scope-owner markers
-# may be stripped from the final spec body — they're authoring guidance,
-# not user-visible spec content.
+# Resolve the template via the 4-tier discovery cascade. The full walker
+# (cascade order, case-insensitive FS probe, both-exist warning, plugin-root
+# fallback) is single-sourced in ../../references/spec-template-discovery.md —
+# Read it and run its walker to set TEMPLATE_PATH + TEMPLATE.
+# Fill section bodies from interview answers under your scope's writable
+# sections per the write-policy (frontmatter + scope-owner markers may be
+# stripped from the final spec body — authoring guidance, not spec content).
 # 2. Append the auxiliary interview-audit sections (only those that fired):
 ```
 
