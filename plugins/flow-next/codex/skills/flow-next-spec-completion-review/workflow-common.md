@@ -22,6 +22,14 @@ FLOWCTL="$HOME/.codex/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
+# RepoPrompt is macOS-only (rp-cli bridges the GUI). Only offer the rp path
+# when it can actually run: on macOS, or when rp-cli is already on PATH.
+if [ "$(uname 2>/dev/null)" = "Darwin" ] || command -v rp-cli >/dev/null 2>&1; then
+ RP_ELIGIBLE=1
+else
+ RP_ELIGIBLE=0
+fi
+
 # Priority: --review flag > per-spec `default_review` override > env > config (flag parsed in SKILL.md).
 # Resolve the spec id from $ARGUMENTS FIRST so a per-spec `default_review` override routes to the
 # right backend before branching (empty → env/config, no regression).
@@ -32,7 +40,11 @@ BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
  echo "Error: No review backend configured."
+ if [ "$RP_ELIGIBLE" = 1 ]; then
  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|none"
+ else
+ echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|none"
+ fi
  exit 1
 fi
 

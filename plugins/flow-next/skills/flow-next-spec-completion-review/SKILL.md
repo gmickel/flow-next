@@ -18,7 +18,9 @@ Do not load the others — only the active backend's file is needed.
 Verify that the combined implementation of all tasks in a spec satisfies the spec requirements. This is NOT a code quality review (that's impl-review's job) — this confirms spec compliance only.
 
 **Role**: Spec Completion Review Coordinator (NOT the reviewer)
-**Backends**: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot), or Cursor CLI (cursor)
+**Backends** (branch on the Preamble `RP_ELIGIBLE` guard):
+- When `RP_ELIGIBLE=1`: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot), or Cursor CLI (cursor)
+- When `RP_ELIGIBLE=0`: Codex CLI (codex), GitHub Copilot CLI (copilot), or Cursor CLI (cursor) — rp is macOS-only; never list it in guidance you surface (`--review=rp` stays accepted)
 
 ## Preamble
 
@@ -27,7 +29,17 @@ Verify that the combined implementation of all tasks in a spec satisfies the spe
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+
+# RepoPrompt is macOS-only (rp-cli bridges the GUI). Only offer the rp path
+# when it can actually run: on macOS, or when rp-cli is already on PATH.
+if [ "$(uname 2>/dev/null)" = "Darwin" ] || command -v rp-cli >/dev/null 2>&1; then
+  RP_ELIGIBLE=1
+else
+  RP_ELIGIBLE=0
+fi
 ```
+
+When `RP_ELIGIBLE=0` (not macOS, no rp-cli), never *steer* the user toward rp: every backend summary, recommendation, or override hint you surface presents only the runnable configured backends `codex`, `copilot`, `cursor` (plus `none`). Suppression is not a ban: an explicit `--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` still resolves to rp and errors at runtime via `require_rp_cli()` as today.
 
 ## Backend Selection
 
@@ -58,14 +70,24 @@ BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."
-  echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|none"
+  if [ "$RP_ELIGIBLE" = 1 ]; then
+    echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|none"
+  else
+    echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|none"
+  fi
   exit 1
 fi
 
-echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|none)"
+if [ "$RP_ELIGIBLE" = 1 ]; then
+  echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|none)"
+else
+  echo "Review backend: $BACKEND (override: --review=codex|copilot|cursor|none)"
+fi
 ```
 
 ### Backend at a glance
+
+When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (explicit `--review=rp` still honored):
 
 - **rp** — RepoPrompt (macOS GUI); builder auto-selects context. Primary backend.
 - **codex** — Codex CLI (cross-platform); uses OpenAI models (default `gpt-5.5`). `FLOW_CODEX_MODEL` / `FLOW_CODEX_EFFORT` env vars, or `--spec codex:gpt-5.4:xhigh`.
