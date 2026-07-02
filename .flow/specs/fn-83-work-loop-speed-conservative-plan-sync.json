@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-83-work-loop-speed-conservative-plan-sync",
+  "created_at": "2026-07-02T21:49:38.890320Z",
+  "depends_on_epics": [],
+  "id": "fn-83-work-loop-speed-conservative-plan-sync",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-83-work-loop-speed-conservative-plan-sync.md",
+  "status": "open",
+  "title": "Work-loop speed: conservative plan-sync gate + worker anchor bundle (zero quality loss)",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-02T21:50:38.738269Z"
+}
