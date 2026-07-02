@@ -13,11 +13,11 @@ The host agent (Claude Code / Codex / Droid) reads the structured payload from `
 
 flowctl provides only thin plumbing: `flowctl spec export-cognitive-aid <spec-id> --base <ref> --json` aggregates the inputs into a single JSON payload (Task 1 of this spec). The skill renders the body, then pushes and creates the PR **directly — no confirm prompt** (invoking make-pr is the intent; the body is deterministic; the default is a reversible draft). `--dry-run` prints the body without creating; `--ready`/`--draft` set draft state.
 
-**Read [workflow.md](workflow.md) for the full phase-by-phase execution. Read [phases.md](phases.md) for the per-phase Done-when checklists. Read [mermaid-rules.md](mermaid-rules.md) before emitting any mermaid codefence — it defines reserved words, escape patterns, shape selection, and the pre-emission validation checklist.**
+**Read [workflow.md](workflow.md) for the full phase-by-phase execution — each phase ends with its inline `### Done when` checklist. Read [mermaid-rules.md](mermaid-rules.md) before emitting any mermaid codefence — it defines reserved words, escape patterns, shape selection, and the pre-emission validation checklist.**
 
 ## Preamble
 
-**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks (here and in `workflow.md` / `phases.md`) use `$FLOWCTL`:
+**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks (here and in `workflow.md`) use `$FLOWCTL`:
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
