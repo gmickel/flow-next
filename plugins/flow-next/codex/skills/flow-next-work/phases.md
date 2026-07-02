@@ -207,9 +207,9 @@ $FLOWCTL start <task-id> --json
 **Optional. Runs only when the tracker bridge is active AND `work.firstClaim` is opted in. With no tracker configured this is a no-op — the work flow is unchanged.** Trigger only on the spec's **first** claimed task this run (the issue moves to In-Progress once, not per task).
 
 ```bash
+LEAF="$($FLOWCTL config get tracker.perEvent.work.firstClaim --json | jq -r '.value')" # read the leaf ONCE (shared gating predicate — SKILL.md)
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
- && [ "$($FLOWCTL config get tracker.perEvent.work.firstClaim --json | jq -r '.value')" != "off" ] \
- && [ "$($FLOWCTL config get tracker.perEvent.work.firstClaim --json | jq -r '.value')" != "null" ]; then
+ && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
  # Invoke the flow-next-tracker-sync skill: move the linked issue In-Progress.
  # skill: flow-next-tracker-sync (operation: push <spec-id>, status-only, event: work.firstClaim)
  # Unlinked spec → the skill flow-first-pushes (creates + links the issue) first,
@@ -278,9 +278,9 @@ Classify and act:
 **Optional. Runs only when the tracker bridge is active AND `work.done` is opted in, and only when the task reached `done` (from 3d). With no tracker configured this is a no-op.** Posts a structured status comment + evidence (tests / PR links from the task's evidence) to the linked issue; appends-only (R8), deduped by marker — never a conflict.
 
 ```bash
+LEAF="$($FLOWCTL config get tracker.perEvent.work.done --json | jq -r '.value')" # read the leaf ONCE (shared gating predicate — SKILL.md)
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
- && [ "$($FLOWCTL config get tracker.perEvent.work.done --json | jq -r '.value')" != "off" ] \
- && [ "$($FLOWCTL config get tracker.perEvent.work.done --json | jq -r '.value')" != "null" ]; then
+ && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
  # Invoke the flow-next-tracker-sync skill: append a lifecycle comment to the
  # linked issue carrying the task's done-summary + evidence (tests / commits / PR).
  # skill: flow-next-tracker-sync (operation: comment <spec-id>, event: work.done)
@@ -399,9 +399,9 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
  - **Tracker sync (opt-in) — SHIP → verdict comment, NEVER terminal Done (fn-66):** runs only when the tracker bridge is active AND `completionReview` is opted in. With no tracker configured this is a no-op. Hooked **here at the caller** (not inside the review skill) because this is where `completion_review_status=ship` lands. **Local completion review is NOT merge evidence** — `Done` is reserved for a `MERGED` PR (fn-66 status-sync `flowToNormalized`), so this touchpoint is **comment-shaped only**: it posts the verdict + R-ID coverage and at most leaves the issue at `In Review` (if an open PR exists). It NEVER pushes `Done`/`verified`:
 
  ```bash
+ LEAF="$($FLOWCTL config get tracker.perEvent.completionReview --json | jq -r '.value')" # read the leaf ONCE (shared gating predicate — SKILL.md)
  if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
- && [ "$($FLOWCTL config get tracker.perEvent.completionReview --json | jq -r '.value')" != "off" ] \
- && [ "$($FLOWCTL config get tracker.perEvent.completionReview --json | jq -r '.value')" != "null" ]; then
+ && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
  # Invoke the flow-next-tracker-sync skill: post the completion-review verdict +
  # R-ID coverage as a comment (comment-shaped — NEVER a terminal status push).
  # The skill's reconcileStatus gate (status-sync.md flowToNormalized) refuses

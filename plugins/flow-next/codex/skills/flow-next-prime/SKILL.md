@@ -85,7 +85,7 @@ Examples:
 Read [workflow.md](workflow.md) and execute each phase in order.
 
 **Key phases:**
-1. **Parallel Assessment** — 9 sonnet scouts run in parallel (~15-20 seconds)
+1. **Parallel Assessment** — 9 scouts run in parallel (7 haiku fast scanners; agents-md-scout + docs-gap-scout on sonnet for judgment) (~15-20 seconds)
 2. **Verification** — Verify test commands actually work
 3. **Score & Synthesize** — Calculate scores, determine maturity level (includes the deterministic DC8 glossary signal — `flowctl glossary list --json`, gated on `total_terms == 0`, never file presence)
 4. **Present Report** — Full report with all 8 pillars
@@ -136,13 +136,13 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 
 ## Scouts
 
-### Agent Readiness (haiku, fast)
+### Agent Readiness (haiku fast scanners; agents-md-scout + docs-gap-scout on sonnet)
 - `tooling-scout` — linters, formatters, pre-commit, type checking
-- `agents-md-scout` — CLAUDE.md/AGENTS.md analysis
+- `agents-md-scout` — CLAUDE.md/AGENTS.md analysis (sonnet — judgment-heavy)
 - `env-scout` — environment setup
 - `testing-scout` — test infrastructure
 - `build-scout` — build system
-- `docs-gap-scout` — README, ADRs, architecture
+- `docs-gap-scout` — README, ADRs, architecture (sonnet — judgment-heavy)
 
 ### Production Readiness (haiku, fast)
 - `observability-scout` — logging, tracing, metrics, health

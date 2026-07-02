@@ -267,11 +267,17 @@ reconcile + write-back**. This is the no-half-advance invariant:
 # 1. write-back (transport + spec) — both must succeed:
 # writeIssue(merged) [transport — linear-ladder.md]
 # write the merged flow body to .flow/specs/<id>.md
-# 2. ONLY THEN advance state — snapshot BOTH forms together (paired invariant):
-$FLOWCTL sync set-merge-base "$SPEC_ID" --flow-file /tmp/merged-flow.md --tracker-file /tmp/merged-tracker.md
+# 2. ONLY THEN advance state — snapshot BOTH forms together (paired invariant).
+# The flow half IS the just-written spec file — pass it directly; never re-emit
+# the merged body to a second temp copy. The tracker form has no on-disk home,
+# so it keeps a unique temp file (path-persistence rule: literal agent-composed
+# paths, written and consumed in this same block):
+MERGED_TRACKER="${TMPDIR:-/tmp}/flow-merged-tracker-<spec-id>-<suffix>.md" # tracker-form snapshot (from step 1's writeIssue render)
+$FLOWCTL sync set-merge-base "$SPEC_ID" --flow-file ".flow/specs/${SPEC_ID}.md" --tracker-file "$MERGED_TRACKER"
 $FLOWCTL sync set-last-synced "$SPEC_ID"
-# 3. receipt records the merge for audit / rollback (--merges-file = the merge log):
-$FLOWCTL sync receipt "$SPEC_ID" --status merged --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} --merges-file /tmp/merges.json \
+# 3. receipt records the merge for audit / rollback (--merges-file = the merge log, unique temp path):
+$FLOWCTL sync receipt "$SPEC_ID" --status merged --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
+ --merges-file "${TMPDIR:-/tmp}/flow-merges-<spec-id>-<suffix>.json" \
  --note "3-way merge: 2 sections folded, 0 conflicts"
 ```
 

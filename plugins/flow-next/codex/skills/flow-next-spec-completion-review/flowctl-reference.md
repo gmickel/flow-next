@@ -49,6 +49,6 @@ flowctl rp prompt-export --window "$W" --tab "$T" --out ~/Desktop/export.md
 ## Re-Review Rule (CRITICAL)
 
 First review: `chat-send ... --new-chat --chat-name "..."`
-Re-reviews: `chat-send ... --message-file /tmp/re-review.md` (NO --new-chat)
+Re-reviews: `chat-send ... --message-file "${TMPDIR:-/tmp}/flow-<skill>-rereview-<id>-<suffix>.md"` — the literal re-review path composed in the fix loop (NO --new-chat)
 
 **Why**: Reviewer needs context from previous feedback. New chat = lost context = reviewer repeats same issues.

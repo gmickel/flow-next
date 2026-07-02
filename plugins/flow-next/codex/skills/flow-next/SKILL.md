@@ -56,8 +56,8 @@ $FLOWCTL ready --spec fn-1-add-oauth --json
 # Create task under existing spec
 $FLOWCTL task create --spec fn-1-add-oauth --title "Fix bug X" --json
 
-# Set task description and acceptance (combined, fewer writes)
-$FLOWCTL task set-spec fn-1-add-oauth.2 --description /tmp/desc.md --acceptance /tmp/accept.md --json
+# Set task description and acceptance (combined, fewer writes; unique per-task temp paths)
+$FLOWCTL task set-spec fn-1-add-oauth.2 --description "${TMPDIR:-/tmp}/flow-desc-fn-1-add-oauth.2.md" --acceptance "${TMPDIR:-/tmp}/flow-accept-fn-1-add-oauth.2.md" --json
 
 # Or use stdin with heredoc (no temp file):
 $FLOWCTL task set-description fn-1-add-oauth.2 --file - --json <<'EOF'
@@ -97,18 +97,19 @@ $FLOWCTL validate --all --json
 
 3. Add description + acceptance (combined):
  ```bash
- cat > /tmp/desc.md << 'EOF'
+ # Unique per-task temp paths — written + consumed in this one block
+ cat > "${TMPDIR:-/tmp}/flow-desc-fn-N.M.md" << 'EOF'
  **Bug/Feature:** Brief description
 
  **Details:**
  - Point 1
  - Point 2
  EOF
- cat > /tmp/accept.md << 'EOF'
+ cat > "${TMPDIR:-/tmp}/flow-accept-fn-N.M.md" << 'EOF'
  - [ ] Criterion 1
  - [ ] Criterion 2
  EOF
- $FLOWCTL task set-spec fn-N.M --description /tmp/desc.md --acceptance /tmp/accept.md --json
+ $FLOWCTL task set-spec fn-N.M --description "${TMPDIR:-/tmp}/flow-desc-fn-N.M.md" --acceptance "${TMPDIR:-/tmp}/flow-accept-fn-N.M.md" --json
  ```
 
 ### "What tasks are there?"

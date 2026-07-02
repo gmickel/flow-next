@@ -174,16 +174,18 @@ Follow the phases in the per-backend file end-to-end. Each file owns its own Ide
 
 **CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is complete spec compliance. Never use the plain-text numbered prompt in this loop.**
 
-If verdict is NEEDS_WORK, loop internally until SHIP:
+**MAX ITERATIONS (backend-agnostic — applies to ALL backends: rp, codex, copilot, cursor):** keep an iteration counter in agent context, starting at 0. Each fix+re-review cycle increments it. When the counter reaches **${MAX_REVIEW_ITERATIONS:-3}** (default 3; env-overridable, configurable in Ralph's config.env) and the verdict is still NEEDS_WORK, BREAK the loop and escalate: surface the surviving gaps to the caller and stop (in Ralph mode output `<promise>RETRY</promise>` so the next iteration starts fresh). Never loop unbounded. The per-backend workflow files defer to this cap.
+
+If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 
 1. **Parse issues** from reviewer feedback (missing requirements, incomplete implementations)
 2. **Fix code** and run tests/lints
-3. **Commit fixes** (mandatory before re-review)
+3. **Commit fixes** (mandatory before re-review; RP backend uses the snapshot-scoped staging in workflow-rp.md — never `git add -A`)
 4. **Re-review**:
  - **Codex**: Re-run `flowctl codex completion-review` (receipt enables context)
  - **Copilot**: Re-run `flowctl copilot completion-review` (receipt enables context; must be `mode == "copilot"` to resume)
  - **Cursor**: Re-run `flowctl cursor completion-review` (receipt enables context; must be `mode == "cursor"` to resume)
- - **RP**: `$FLOWCTL rp chat-send (2-10 min, DO NOT RETRY) --window "$W" --tab "$T" --message-file /tmp/re-review.md` (NO `--new-chat`)
-5. **Repeat** until `<verdict>SHIP</verdict>`
+ - **RP**: `$FLOWCTL rp chat-send (2-10 min, DO NOT RETRY) --window "$W" --tab "$T" --message-file <literal re-review path from workflow-rp.md's fix loop>` (NO `--new-chat`; stdout redirected to the same literal response file, Read once)
+5. **Repeat** until `<verdict>SHIP</verdict>` — or the MAX ITERATIONS cap above breaks the loop (escalate with surviving gaps)
 
 **CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.
