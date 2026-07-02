@@ -17,9 +17,8 @@ Copy the shipped fn-78 `RP_ELIGIBLE` guard (see `flow-next-plan-review/SKILL.md`
 **Files:** `plugins/flow-next/skills/flow-next-impl-review/SKILL.md`, `plugins/flow-next/skills/flow-next-impl-review/workflow-common.md`, `plugins/flow-next/skills/flow-next-spec-completion-review/SKILL.md`, `plugins/flow-next/skills/flow-next-spec-completion-review/workflow-common.md`, `plugins/flow-next/codex/**` (regen), `CHANGELOG.md`.
 
 ## Done summary
-TBD
-
+Applied the fn-78 RP_ELIGIBLE gate (uname==Darwin OR rp-cli on PATH) to impl-review and spec-completion-review steering: guard computed locally in both SKILL.md files and both workflow-common.md Phase 0 blocks; Backends summaries, glance-list rp/"Primary backend" lines, and ASK-error/override hints now omit rp when ineligible, while --review=rp grammar, resolution, and workflow-rp.md stay untouched. Codex mirror regenerated (idempotent), platforms.md/troubleshooting.md fn-78 notes extended to name the two skills, CHANGELOG Unreleased entry added, no version bump. Cursor impl-review verdict: SHIP (first pass, all R1-R7 covered).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: a47f49a40c17e4b480602192ba47ee6875ee38b8
+- Tests: plugins/flow-next/scripts/ci_test.sh (67/67 pass), plugins/flow-next/scripts/impl-review_smoke_test.sh (74/74 pass), scripts/sync-codex.sh second-regen idempotence (git diff --exit-code plugins/flow-next/codex/ clean), RP_ELIGIBLE gate executed in both states (macOS eligible=1 byte-identical echoes; fake-Linux PATH shim ineligible=0 rp omitted)
 - PRs:
