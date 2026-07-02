@@ -65,6 +65,8 @@ Per-spec `default_review` (set via `flowctl spec set-backend`) overrides env.
 
 Only the file for the active backend should enter context. Do not read the other backend files.
 
+**Foreground rule — review CLI calls are blocking.** Run every `flowctl <backend> …` review command as a single **foreground** Bash call with a generous timeout (10 minutes; verdicts typically land in 1–7). **Never** launch one with `run_in_background` + a monitor/poll — a background completion does not reliably resume a subagent context, and the call is bounded, so blocking is safe and simpler.
+
 ---
 
 ## Anti-patterns (all backends)
@@ -74,5 +76,6 @@ Only the file for the active backend should enter context. Do not read the other
 - **Ignoring verdict** - Must extract and act on verdict tag
 - **Mixing backends** - Stick to one backend for the entire review session
 - **Checking code quality** - That's impl-review's job; focus on spec compliance
+- **Backgrounding the review CLI** - Never `run_in_background` + monitor/poll a `flowctl <backend>` review call; one blocking foreground Bash call with a long timeout (Foreground rule, Phase 0)
 
 Backend-specific anti-patterns live in each `workflow-<backend>.md` file.

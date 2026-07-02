@@ -121,6 +121,7 @@ When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (
 **For all backends:**
 - If `REVIEW_RECEIPT_PATH` set: write receipt after review (any verdict)
 - Any failure → output `<promise>RETRY</promise>` and stop
+- **Foreground rule:** run every `flowctl <backend> plan-review` call as one **blocking foreground** Bash call with a generous timeout (10 minutes; verdicts typically land in 1–7) — never `run_in_background` + monitor/poll (a background completion does not reliably resume a subagent context)
 
 **FORBIDDEN**:
 - Self-declaring SHIP without actual backend verdict

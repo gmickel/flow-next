@@ -70,6 +70,8 @@ Per-task `review` (set via `flowctl task set-backend`) overrides env.
 
 Only the file for the active backend should enter context. Do not read the other backend files.
 
+**Foreground rule — review CLI calls are blocking.** Run every `flowctl <backend> …` review command (`impl-review` / `plan-review` / `completion-review` / `validate` / `deep-pass`) as a single **foreground** Bash call with a generous timeout (10 minutes; verdicts typically land in 1–7). **Never** launch one with `run_in_background` + a monitor/poll — a background completion does not reliably resume a subagent context (observed in the fn-78 dogfood: a worker idled on an already-finished cursor review until manually poked), and the call is bounded, so blocking is safe and simpler. (The one sanctioned background launch stays codex-delegation's `codex exec` implementation offload — a different pattern that polls a result file in foreground calls; it is not a review command.)
+
 ---
 
 ## Phase 0.5: Trivial-diff triage (fn-29.6)
@@ -584,5 +586,6 @@ deferred items for later revisit.
 - **No receipt** - If REVIEW_RECEIPT_PATH is set, you MUST write receipt
 - **Ignoring verdict** - Must extract and act on verdict tag
 - **Mixing backends** - Stick to one backend for the entire review session
+- **Backgrounding the review CLI** - Never `run_in_background` + monitor/poll a `flowctl <backend>` review call; run it as one blocking foreground Bash call with a long timeout (Foreground rule, Phase 0)
 
 Backend-specific anti-patterns live in each `workflow-<backend>.md` file.
