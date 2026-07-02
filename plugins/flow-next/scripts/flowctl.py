@@ -5284,12 +5284,20 @@ def get_task_section(content: str, section: str) -> str:
 
 
 def validate_task_spec_headings(content: str) -> list[str]:
-    """Validate task spec has required headings exactly once. Returns errors."""
+    """Validate task spec has required headings exactly once. Returns errors.
+
+    Fence-aware (fn-79): a `## ` line inside a fenced code block is section
+    content, not a heading — it neither satisfies a required heading nor
+    counts as a duplicate. Matches the write/read scans
+    (`patch_task_section` / `get_task_section`).
+    """
+    counts = {heading: 0 for heading in TASK_SPEC_HEADINGS}
+    for line, in_fence in _iter_fence_aware(content.split("\n")):
+        if not in_fence and line.startswith("## ") and line.strip() in counts:
+            counts[line.strip()] += 1
     errors = []
     for heading in TASK_SPEC_HEADINGS:
-        # Use regex anchored to line start to avoid matching inside code blocks
-        pattern = rf"^{re.escape(heading)}\s*$"
-        count = len(re.findall(pattern, content, flags=re.MULTILINE))
+        count = counts[heading]
         if count == 0:
             errors.append(f"Missing required heading: {heading}")
         elif count > 1:
@@ -15515,9 +15523,14 @@ def cmd_task_set_spec(args: argparse.Namespace) -> None:
         # Append any missing required scaffold headings (fn-60 dogfood: a
         # --file replacement that omits Done summary / Evidence left tasks
         # failing `validate` on every planning run). Stubs match the create
-        # scaffold; existing headings are never touched.
-        _missing = [h for h in TASK_SPEC_HEADINGS if not re.search(
-            rf"^{re.escape(h)}\s*$", content, flags=re.MULTILINE)]
+        # scaffold; existing headings are never touched. Fence-aware (fn-79):
+        # a fenced `## <heading>` line is content and does NOT satisfy the
+        # heading — matches `validate_task_spec_headings`.
+        _present = set()
+        for _line, _in_fence in _iter_fence_aware(content.split("\n")):
+            if not _in_fence and _line.startswith("## "):
+                _present.add(_line.strip())
+        _missing = [h for h in TASK_SPEC_HEADINGS if h not in _present]
         if _missing:
             _stubs = {
                 "## Description": "## Description\nTBD\n",

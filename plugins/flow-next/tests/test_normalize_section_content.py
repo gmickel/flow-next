@@ -242,6 +242,23 @@ class PatchTaskSectionTestCase(unittest.TestCase):
             flowctl.get_task_section(content, "## Acceptance"), body
         )
 
+    def test_validate_headings_fenced_canonical_not_duplicate(self) -> None:
+        # A persisted fenced `## Acceptance` is content — validate must not
+        # report it as a duplicate heading (write/read/validate parity).
+        content = _task_md("- R1: x\n```\n## Acceptance\n```")
+        self.assertEqual(flowctl.validate_task_spec_headings(content), [])
+
+    def test_validate_headings_fenced_heading_does_not_satisfy(self) -> None:
+        # A fenced heading must NOT satisfy the required-heading presence
+        # check — the real section is missing.
+        content = (
+            "# fn-1.1 T\n\n## Description\nbody\n\n"
+            "```\n## Acceptance\n```\n\n"
+            "## Done summary\nTBD\n\n## Evidence\n- Commits:\n"
+        )
+        errors = flowctl.validate_task_spec_headings(content)
+        self.assertIn("Missing required heading: ## Acceptance", errors)
+
     def test_duplicate_canonical_heading_still_raises(self) -> None:
         content = _task_md("- a") + "\n## Acceptance\n- dup\n"
         with self.assertRaises(ValueError) as ctx:
