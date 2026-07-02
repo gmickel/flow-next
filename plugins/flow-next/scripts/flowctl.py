@@ -25,7 +25,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, ContextManager, Optional
 
 # Platform-specific file locking (fcntl on Unix, no-op on Windows)
@@ -1182,7 +1182,18 @@ def get_default_config() -> dict:
     """Return default config structure."""
     return {
         "memory": {"enabled": True},
-        "planSync": {"enabled": True, "crossSpec": False},
+        # fn-83.1 — `gate` is a STRING-ENUM (off|shadow|on), NOT a bool, per
+        # the pipeline.qa precedent: readers use a strict positive match, so
+        # only the literal "on" gates plan-sync spawns behind the probe and
+        # only the literal "shadow" records would-decisions; anything else
+        # (bool true, typo, null) resolves to "off" = always spawn (today's
+        # behavior). Matrix: planSync.enabled=false ⇒ plan-sync step skipped
+        # entirely (gate irrelevant); enabled=true + gate=off ⇒ always spawn,
+        # probe not invoked; shadow ⇒ probe + ledger record + ALWAYS spawn;
+        # on ⇒ probe-gated with deterministic ramped audit sampling. Default
+        # "on" is justified by the fn-83 zero-false-skip eval proof; "shadow"
+        # is the documented cautious adoption path.
+        "planSync": {"enabled": True, "crossSpec": False, "gate": "on"},
         "review": {"backend": None},
         "scouts": {"github": False},
         "tracker": get_default_tracker_config(),
@@ -19073,6 +19084,593 @@ def cmd_codex_rollback_plan(args: argparse.Namespace) -> None:
             print(f"REJECTED {r}", file=sys.stderr)
 
 
+# --- Plan-Sync Gate Probe (fn-83.1) ---
+#
+# `flowctl plan-sync-probe <task-id>` is a pure deterministic drift-possibility
+# probe: it PROVES that spawning the plan-sync agent after <task-id> completed
+# cannot find drift (decision `skip`) or fails open (decision `spawn`). No LLM,
+# no RNG, no state mutation except the opt-in `--record` ledger append.
+#
+# Decision lattice (fail-open — `skip` requires EVERY arm to hold):
+#   1. evidence carries `base_commit` + ≥1 commit (range provably complete)
+#   2. the base..head range diff resolved cleanly (rc-checked, no pipelines)
+#   3. no touched-path overlap with any scanned downstream body
+#   4. no morphological hunk-token overlap with any scanned downstream body
+#   5. worker deviation flag is literally "no" (missing/malformed ⇒ "yes")
+#   6. every scanned body yielded ≥1 parseable path reference
+#   7. crossSpec off OR open-spec enumeration succeeded
+# Anything else ⇒ `spawn`. Expected failure modes (missing evidence, bad
+# range, unreadable body) are fail-open `spawn` decisions with exit 0;
+# unexpected internal errors exit nonzero (the caller treats a failed probe
+# invocation as `spawn`).
+
+# Ledger for gate decisions — pairs shadow/audit would-decisions with actual
+# `Drift detected:` verdicts. Lives under .flow/ (repo-local, durable).
+PLANSYNC_GATE_LEDGER = "plansync-gate.jsonl"
+
+# Commit-ish values read from task evidence are passed to git as argv; require
+# hash shape so a hostile/corrupt value can never be parsed as a git flag.
+_PSP_COMMIT_RE = re.compile(r"[0-9a-fA-F]{4,64}$")
+
+# Candidate identifier tokens in diff hunks: identifier runs optionally joined
+# by `.` / `::` / `->` into compounds (os.path, Foo::bar, ptr->field).
+_PSP_TOKEN_RE = re.compile(
+    r"[A-Za-z0-9_]+(?:(?:\.|::|->)[A-Za-z0-9_]+)*"
+)
+_PSP_CAMEL_HUMP_RE = re.compile(r"[a-z][A-Z]")
+
+# Path-shaped references in downstream bodies. Two shapes:
+#   - slashed paths (`plugins/flow-next/scripts/flowctl.py`, `dir/sub/`,
+#     Windows `plugins\flow-next\...` — backslash tolerated, normalized
+#     later). Kept deliberately BROAD (2-segment dir refs like `src/mod`
+#     count): missing a genuine dir ref would be a path-arm recall hole
+#     (false-skip vector), while over-extraction only over-satisfies the
+#     parseable-refs arm on prose-only bodies.
+#   - lone filenames with an extension (`flowctl.py`, `phases.md`) — stem ≥2
+#     chars ending in a non-dot, extension starts with a letter, so prose
+#     artifacts (`e.g`, `2.6.0`, `fn-83.1`) don't count as parseable
+#     references (under-extraction only produces MORE spawns — safe).
+# Both are backtick-tolerant (delimiters excluded from the char class) and
+# `:12-40`-suffix-tolerant (the class excludes `:` so matching stops there).
+_PSP_PATH_REF_RE = re.compile(
+    r"(?:[A-Za-z0-9_.\-]+[/\\])+[A-Za-z0-9_.\-]*"  # ≥1 separator
+    r"|[A-Za-z0-9_\-][A-Za-z0-9_.\-]*[A-Za-z0-9_\-]\.[A-Za-z][A-Za-z0-9]{0,7}\b"
+)
+
+
+def _psp_is_identifier_shaped(token: str) -> bool:
+    """Morphological identifier predicate (fn-83 spec — shape-based ONLY).
+
+    A kept token must contain at least one ASCII letter (identifiers have
+    letters; pure numbers / dotted versions like `2.6.0` are not identifiers)
+    and pass ANY of the spec's arms:
+      - contains `_`                      (snake_case, SCREAMING_SNAKE)
+      - camelCase hump                    (`camelCase`, `getUser`)
+      - dotted / `::` / `->` compound     (`os.path`, `Foo::bar`, `p->f`)
+      - ALL-CAPS length ≥2                (`HEAD`, `JSON`, `PR`)
+      - contains a digit                  (`utf8`, `sha256`, `fn83`)
+    NO English stoplist per repo doctrine. Plain single words (`parse`,
+    `read`) deliberately fail — that class is covered by the deviation flag
+    + audit sampling (the fn-83 stated residual).
+    """
+    if not token or not any(c.isalpha() and ord(c) < 128 for c in token):
+        return False
+    if "_" in token:
+        return True
+    if _PSP_CAMEL_HUMP_RE.search(token):
+        return True
+    if "." in token or "::" in token or "->" in token:
+        return True
+    if len(token) >= 2 and token.isupper():
+        return True
+    if any(c.isdigit() for c in token):
+        return True
+    return False
+
+
+def _psp_hunk_tokens(diff_text: str) -> set:
+    """Extract morphological identifier tokens from unified-diff hunk lines.
+
+    Both `+` and `-` lines are tokenized (old names live on `-` — required
+    for rename recall); file headers (`+++` / `---`) and context lines are
+    skipped.
+    """
+    tokens: set = set()
+    for line in diff_text.split("\n"):
+        if line.startswith("+++") or line.startswith("---"):
+            continue
+        if not (line.startswith("+") or line.startswith("-")):
+            continue
+        for tok in _PSP_TOKEN_RE.findall(line[1:]):
+            if _psp_is_identifier_shaped(tok):
+                tokens.add(tok)
+    return tokens
+
+
+def _psp_normalize_ref(raw: str) -> Optional[str]:
+    """Normalize an extracted path reference to a repo-relative POSIX string.
+
+    Backslashes (Windows-style refs in prose) normalize to `/`; leading `./`
+    and trailing `/` are stripped (a directory ref participates via the
+    directory-prefix match). Returns None for empty/degenerate results.
+    """
+    s = raw.replace("\\", "/").strip()
+    while s.startswith("./"):
+        s = s[2:]
+    s = s.rstrip("/")
+    if not s or s == ".":
+        return None
+    return s
+
+
+def _psp_extract_path_refs(body: str) -> set:
+    """Extract path-shaped references from a task/spec markdown body.
+
+    Union of three passes (the general pass subsumes the targeted ones; the
+    targeted passes keep the load-bearing sections explicit and guard against
+    general-regex regressions):
+      1. `**Files:**` list lines (task Description convention)
+      2. `## Investigation targets` section via the fn-79 fence-aware
+         `get_task_section` helper
+      3. path-like tokens anywhere in the body (backtick-tolerant,
+         `:12-40`-suffix-tolerant, fences included — a path in a fenced
+         command block is a genuine reference)
+    """
+    refs: set = set()
+
+    def _scan(text: str) -> None:
+        for m in _PSP_PATH_REF_RE.finditer(text):
+            ref = _psp_normalize_ref(m.group(0))
+            if ref:
+                refs.add(ref)
+
+    for line in body.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("**Files:**"):
+            _scan(stripped[len("**Files:**"):])
+    section = get_task_section(body, "## Investigation targets")
+    if section:
+        _scan(section)
+    _scan(body)
+    return refs
+
+
+def _psp_paths_overlap(touched: str, ref: str) -> bool:
+    """True when a touched git path overlaps a downstream path reference.
+
+    PurePosixPath semantics (git paths are always `/`). Three match kinds,
+    all counting (over-approximation only produces spawns — safe):
+      - exact:            ref == touched
+      - basename:         ref's final component == touched's final component
+      - directory-prefix: ref's parts are a proper prefix of touched's parts
+        (3.8-safe `.parts` tuple compare — `is_relative_to` is 3.9+)
+    """
+    t = PurePosixPath(touched)
+    r = PurePosixPath(ref)
+    if t == r:
+        return True
+    if r.name and r.name == t.name:
+        return True
+    rp, tp = r.parts, t.parts
+    if rp and len(rp) < len(tp) and tp[: len(rp)] == rp:
+        return True
+    return False
+
+
+def _psp_run_git(git_args: list, repo_root: Path):
+    """Run one rc-checked git command (list argv, NO pipelines, no shell).
+
+    Returns (stdout, None) on rc==0, (None, reason) otherwise — including
+    OSError (git missing). Callers fail open on any error reason.
+    """
+    try:
+        result = subprocess.run(
+            ["git"] + git_args,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            cwd=str(repo_root),
+        )
+    except OSError as e:
+        return None, f"git unavailable: {e}"
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip().split("\n")[0]
+        return None, f"git {git_args[0]} failed (rc={result.returncode}): {stderr}"
+    return result.stdout, None
+
+
+def _psp_touched_set(base: str, head: str, repo_root: Path):
+    """Touched paths from ONE range diff `git diff --no-renames --name-status`.
+
+    `--name-status` (NEVER `--name-only` — it drops old rename paths) with
+    `--no-renames` renders renames as D+A so BOTH paths count. All
+    tab-separated path fields after the status are collected (defensive:
+    R/C rows carry two paths even though --no-renames should prevent them).
+    Interleaved foreign commits in the range only over-approximate — safe.
+    Returns (sorted paths, None) or (None, reason).
+    """
+    out, err = _psp_run_git(
+        ["diff", "--no-renames", "--name-status", base, head], repo_root
+    )
+    if err is not None:
+        return None, err
+    touched: set = set()
+    for line in out.split("\n"):
+        if not line.strip():
+            continue
+        fields = line.split("\t")
+        for path in fields[1:]:
+            if path:
+                touched.add(path)
+    return sorted(touched), None
+
+
+def _psp_gate_mode() -> str:
+    """Effective `planSync.gate` mode — strict positive enum read.
+
+    Only the literal strings "shadow" / "on" activate those modes; any other
+    value (bool true, typo, null) resolves to "off" = always spawn.
+    """
+    value = get_config("planSync.gate", "off")
+    return value if value in ("off", "shadow", "on") else "off"
+
+
+def _psp_cross_spec_enabled() -> bool:
+    """Strict positive read of `planSync.crossSpec` (bool True or "true")."""
+    value = get_config("planSync.crossSpec", False)
+    return value is True or value == "true"
+
+
+def _psp_ledger_path() -> Path:
+    return get_flow_dir() / PLANSYNC_GATE_LEDGER
+
+
+def _psp_read_ledger(path: Path) -> list:
+    """Read ledger entries, tolerating (skipping) unparseable lines."""
+    entries: list = []
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError:
+        return entries
+    for line in raw.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            entries.append(parsed)
+    return entries
+
+
+def _psp_audit_due(skip_index: int) -> bool:
+    """Deterministic ramped audit schedule (fn-83 R7 — counter, not RNG).
+
+    Every 2nd skip for the repo's first 20 skips, every 5th thereafter.
+    `skip_index` is 1-based across ALL recorded skip decisions (shadow
+    would-skips count: a shadow period pre-warms the ramp with 100% pairing,
+    strictly better coverage than the 1-in-2 early audits).
+    """
+    if skip_index <= 20:
+        return skip_index % 2 == 0
+    return skip_index % 5 == 0
+
+
+def _psp_append_ledger(path: Path, entry: dict) -> None:
+    """Append one ledger record as a single O_APPEND write (atomic append)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(entry, sort_keys=True) + "\n"
+    fd = os.open(str(path), os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o644)
+    try:
+        os.write(fd, line.encode("utf-8"))
+    finally:
+        os.close(fd)
+
+
+def _psp_record_decision(
+    task_id: str, spec_id: str, mode: str, decision: str, reason: str
+) -> dict:
+    """Append a gate-decision record with the FIXED fn-83 ledger schema.
+
+    `skip_index` is the 1-based count of skip decisions across the ledger
+    (None on spawn records); `audit_spawned` marks the deterministic audit
+    slots in `on` mode (shadow always spawns anyway — not an audit).
+    `actual_drift` starts null and is filled by `record-actual`.
+    """
+    path = _psp_ledger_path()
+    skip_index = None
+    audit_spawned = False
+    if decision == "skip":
+        prior_skips = sum(
+            1 for e in _psp_read_ledger(path) if e.get("decision") == "skip"
+        )
+        skip_index = prior_skips + 1
+        if mode == "on":
+            audit_spawned = _psp_audit_due(skip_index)
+    entry = {
+        "ts": now_iso(),
+        "spec": spec_id,
+        "task": task_id,
+        "mode": mode,
+        "decision": decision,
+        "skip_index": skip_index,
+        "audit_spawned": audit_spawned,
+        "actual_drift": None,
+        "audit_miss": False,
+        "reason": reason,
+    }
+    _psp_append_ledger(path, entry)
+    return entry
+
+
+def _psp_record_actual(args: argparse.Namespace) -> None:
+    """`plan-sync-probe record-actual <task-id> --actual yes|no`.
+
+    Updates the PENDING entry in place (chosen over appending a paired
+    record: one record per gate event keeps `skip_index` derivation a plain
+    count and gives consumers a single row to read). The last ledger entry
+    for the task with `actual_drift == null` gets `actual_drift` set and
+    `audit_miss` computed; the whole file is rewritten via `atomic_write`
+    (the ledger is single-writer — the host work loop).
+
+    `audit_miss` = the recorded decision was `skip` AND actual drift is
+    `yes` — covers both the `on`-mode audit miss and the shadow would-miss.
+    """
+    task_id = args.record_target
+    if not task_id:
+        error_exit(
+            "record-actual requires a task id: "
+            "plan-sync-probe record-actual <task-id> --actual yes|no",
+            use_json=args.json,
+        )
+    if not args.actual:
+        error_exit("record-actual requires --actual yes|no", use_json=args.json)
+    task_id = casefold_handle(task_id)
+    if not is_task_id(task_id):
+        error_exit(f"Invalid task ID: {task_id}", use_json=args.json)
+    task_id = resolve_task_arg(get_flow_dir(), task_id, use_json=args.json)
+
+    path = _psp_ledger_path()
+    entries = _psp_read_ledger(path)
+    target_idx = None
+    for i in range(len(entries) - 1, -1, -1):
+        if entries[i].get("task") == task_id and entries[i].get("actual_drift") is None:
+            target_idx = i
+            break
+    if target_idx is None:
+        error_exit(
+            f"No pending ledger entry for {task_id} in {path}",
+            use_json=args.json,
+        )
+    entry = entries[target_idx]
+    entry["actual_drift"] = args.actual
+    entry["audit_miss"] = bool(
+        entry.get("decision") == "skip" and args.actual == "yes"
+    )
+    content = "".join(json.dumps(e, sort_keys=True) + "\n" for e in entries)
+    atomic_write(path, content)
+
+    payload = {
+        "task": task_id,
+        "actual_drift": entry["actual_drift"],
+        "audit_miss": entry["audit_miss"],
+        "decision": entry.get("decision"),
+        "mode": entry.get("mode"),
+    }
+    if args.json:
+        json_output(payload)
+    else:
+        print(
+            f"recorded actual_drift={entry['actual_drift']} "
+            f"audit_miss={entry['audit_miss']} for {task_id}"
+        )
+
+
+def _psp_downstream_task_bodies(flow_dir: Path, spec_id: str, exclude: str) -> list:
+    """(body_id, text-or-None) for every todo task of `spec_id` except `exclude`.
+
+    text is None when the task markdown is missing/unreadable (⇒ the caller
+    cannot prove disjointness ⇒ spawn).
+    """
+    bodies: list = []
+    tasks_dir = flow_dir / TASKS_DIR
+    if not tasks_dir.exists():
+        return bodies
+    for task_file in sorted(
+        tasks_dir.glob(f"{spec_id}.*.json"), key=lambda p: id_sort_key(p.stem)
+    ):
+        tid = task_file.stem
+        if not is_task_id(tid) or tid == exclude:
+            continue
+        task_data = load_task_with_state(tid, use_json=True)
+        if "id" not in task_data or task_data.get("status") != "todo":
+            continue
+        md_path = tasks_dir / f"{tid}.md"
+        try:
+            bodies.append((tid, md_path.read_text(encoding="utf-8")))
+        except OSError:
+            bodies.append((tid, None))
+    return bodies
+
+
+def cmd_plan_sync_probe(args: argparse.Namespace) -> None:
+    """Deterministic plan-sync drift-possibility probe (fail-open lattice).
+
+    Forms:
+      plan-sync-probe <task-id> [--deviation yes|no|missing]
+                      [--record shadow|on] [--json]
+      plan-sync-probe record-actual <task-id> --actual yes|no [--json]
+
+    Output (per the fn-83 spec API contract):
+      {decision, facts: {touched, overlaps[], tokens_matched[], deviation,
+       unparseable_downstream[], cross_spec}, mode}
+    plus `reason` (spawn cause / skip proof) and, under `--record`, the
+    appended ledger entry as `record` (additive fields).
+    """
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
+        )
+
+    if args.target == "record-actual":
+        _psp_record_actual(args)
+        return
+    if args.record_target:
+        error_exit(
+            f"Unexpected extra argument: {args.record_target}", use_json=args.json
+        )
+
+    task_id = casefold_handle(args.target)
+    if not is_task_id(task_id):
+        error_exit(
+            f"Invalid task ID: {task_id}. Expected format: fn-N.M or fn-N-slug.M",
+            use_json=args.json,
+        )
+    flow_dir = get_flow_dir()
+    task_id = resolve_task_arg(flow_dir, task_id, use_json=args.json)
+    task_data = load_task_with_state(task_id, use_json=args.json)
+    spec_id = task_data.get("spec") or spec_id_from_task(task_id)
+
+    mode = args.record if args.record else _psp_gate_mode()
+    cross_spec = _psp_cross_spec_enabled()
+    # Effective deviation: only a literal "no" clears the arm (missing ⇒ yes).
+    deviation = "no" if args.deviation == "no" else "yes"
+
+    facts: dict = {
+        "touched": [],
+        "overlaps": [],
+        "tokens_matched": [],
+        "deviation": deviation,
+        "unparseable_downstream": [],
+        "cross_spec": cross_spec,
+    }
+
+    def _emit(decision: str, reason: str) -> None:
+        payload: dict = {
+            "decision": decision,
+            "facts": facts,
+            "mode": mode,
+            "reason": reason,
+        }
+        if args.record:
+            payload["record"] = _psp_record_decision(
+                task_id, spec_id, args.record, decision, reason
+            )
+        if args.json:
+            json_output(payload)
+        else:
+            print(f"decision={decision} mode={mode} reason={reason}")
+
+    # Arm 1: evidence completeness — base_commit + ≥1 commit, hash-shaped.
+    evidence = task_data.get("evidence")
+    if not isinstance(evidence, dict) or not evidence:
+        _emit("spawn", "no evidence recorded (gate inapplicable)")
+        return
+    base = evidence.get("base_commit")
+    commits = [str(c) for c in (evidence.get("commits") or []) if c]
+    if not base or not isinstance(base, str):
+        _emit("spawn", "evidence.base_commit missing (range not provably complete)")
+        return
+    if not commits:
+        _emit("spawn", "evidence.commits empty (no head commit)")
+        return
+    head = commits[-1]
+    if not _PSP_COMMIT_RE.fullmatch(base) or not _PSP_COMMIT_RE.fullmatch(head):
+        _emit("spawn", "evidence commit not hash-shaped")
+        return
+
+    repo_root = get_repo_root()
+
+    # Arm 2: range diff resolves cleanly (rc-checked, no pipelines).
+    touched, err = _psp_touched_set(base, head, repo_root)
+    if err is not None:
+        _emit("spawn", f"range diff unresolvable: {err}")
+        return
+    facts["touched"] = touched
+
+    diff_text, err = _psp_run_git(
+        ["diff", "--no-renames", base, head], repo_root
+    )
+    if err is not None:
+        _emit("spawn", f"unified diff unresolvable: {err}")
+        return
+    hunk_tokens = _psp_hunk_tokens(diff_text)
+
+    # Scanned bodies: downstream todo tasks of the current spec, plus — under
+    # crossSpec — every OTHER open spec's body and its todo tasks (mirrors
+    # plan-sync Phase 4b, which excludes the current SPEC_ID).
+    bodies = _psp_downstream_task_bodies(flow_dir, spec_id, exclude=task_id)
+    if cross_spec:
+        try:
+            for spec_file in iter_spec_json_files(flow_dir):
+                other_id = spec_file.stem
+                if other_id == spec_id:
+                    continue
+                spec_data = normalize_epic(load_json(spec_file))
+                if spec_data.get("status") != "open":
+                    continue
+                md_path = find_spec_md_path(flow_dir, other_id)
+                try:
+                    bodies.append((other_id, md_path.read_text(encoding="utf-8")))
+                except OSError:
+                    bodies.append((other_id, None))
+                bodies.extend(
+                    _psp_downstream_task_bodies(flow_dir, other_id, exclude=task_id)
+                )
+        except Exception as e:  # enumeration failure ⇒ cannot prove ⇒ spawn
+            _emit("spawn", f"cross-spec enumeration failed: {e}")
+            return
+
+    overlaps: list = []
+    tokens_matched: list = []
+    unparseable: list = []
+    for body_id, text in bodies:
+        if text is None:
+            unparseable.append(body_id)
+            continue
+        refs = _psp_extract_path_refs(text)
+        if not refs:
+            # Arm 6: a body with no parseable refs cannot be proven disjoint.
+            unparseable.append(body_id)
+            continue
+        for ref in sorted(refs):
+            for t in touched:
+                if _psp_paths_overlap(t, ref):
+                    overlaps.append({"body": body_id, "ref": ref, "touched": t})
+        for tok in sorted(hunk_tokens):
+            if re.search(
+                r"\b" + re.escape(tok) + r"\b", text
+            ):
+                tokens_matched.append({"body": body_id, "token": tok})
+    facts["overlaps"] = overlaps
+    facts["tokens_matched"] = tokens_matched
+    facts["unparseable_downstream"] = sorted(unparseable)
+
+    if unparseable:
+        _emit(
+            "spawn",
+            "downstream body without parseable refs: " + ", ".join(sorted(unparseable)),
+        )
+        return
+    if overlaps:
+        _emit("spawn", f"path overlap ({len(overlaps)})")
+        return
+    if tokens_matched:
+        _emit("spawn", f"token overlap ({len(tokens_matched)})")
+        return
+    if deviation != "no":
+        _emit("spawn", "worker deviation flag not 'no'")
+        return
+
+    _emit(
+        "skip",
+        "no path overlap, no token overlap, deviation=no, "
+        "all downstream bodies parseable",
+    )
+
+
 # --- Copilot Commands ---
 
 
@@ -26066,6 +26664,58 @@ def main() -> None:
         "--json", action="store_true", help="JSON output"
     )
     p_prospect_promote.set_defaults(func=cmd_prospect_promote)
+
+    # plan-sync-probe (fn-83.1) — deterministic drift-possibility probe.
+    # Two forms share one parser (a task id can never be the literal verb
+    # `record-actual`, so the first positional disambiguates):
+    #   plan-sync-probe <task-id> [--deviation ...] [--record ...] [--json]
+    #   plan-sync-probe record-actual <task-id> --actual yes|no [--json]
+    p_psp = subparsers.add_parser(
+        "plan-sync-probe",
+        help=(
+            "Deterministic plan-sync drift-possibility probe (fail-open): "
+            "skip only when no drift is provably possible, else spawn"
+        ),
+    )
+    p_psp.add_argument(
+        "target",
+        help="Completed task id (fn-N.M) — or the literal verb 'record-actual'",
+    )
+    p_psp.add_argument(
+        "record_target",
+        nargs="?",
+        default=None,
+        help="Task id (only with the 'record-actual' verb)",
+    )
+    p_psp.add_argument(
+        "--deviation",
+        choices=["yes", "no", "missing"],
+        default="missing",
+        help=(
+            "Worker PLAN_DEVIATION flag as parsed by the caller "
+            "(missing/malformed ⇒ treated as yes ⇒ spawn)"
+        ),
+    )
+    p_psp.add_argument(
+        "--record",
+        choices=["shadow", "on"],
+        default=None,
+        help=(
+            "Append the decision to .flow/plansync-gate.jsonl with this gate "
+            "mode (off never records — the probe is not invoked)"
+        ),
+    )
+    p_psp.add_argument(
+        "--actual",
+        choices=["yes", "no"],
+        default=None,
+        help=(
+            "record-actual verb only: the plan-sync 'Drift detected' verdict "
+            "to pair with the pending ledger entry"
+        ),
+    )
+    p_psp.add_argument("--json", action="store_true", help="JSON output")
+    p_psp.set_defaults(func=cmd_plan_sync_probe)
 
     # repo-map list / show / since-ref (fn-50.2)
     p_repo_map = subparsers.add_parser(
