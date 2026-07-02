@@ -1,0 +1,18 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-02T06:33:48.203273Z",
+  "depends_on": [
+    "fn-81-skill-runtime-token-plumbing-single.1",
+    "fn-81-skill-runtime-token-plumbing-single.2",
+    "fn-81-skill-runtime-token-plumbing-single.3"
+  ],
+  "id": "fn-81-skill-runtime-token-plumbing-single.4",
+  "priority": null,
+  "spec": "fn-81-skill-runtime-token-plumbing-single",
+  "spec_path": ".flow/tasks/fn-81-skill-runtime-token-plumbing-single.4.md",
+  "status": "todo",
+  "title": "Final gate: mirror parity, smoke + pytest, CHANGELOG Unreleased, optimization-log",
+  "updated_at": "2026-07-02T06:48:17.195084Z"
+}

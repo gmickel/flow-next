@@ -1,0 +1,107 @@
+# fn-81 Skill runtime token plumbing: single-emission writes, round-trip elimination, fix-loop guards
+
+## Overview
+
+Flow-next skills re-emit large content (spec bodies, review handoffs, PR bodies) multiple times per run and make redundant CLI round-trips. Fleet survey (2026-07-02, all 28 skills) + scout verification quantified the pattern; this spec fixes the runtime plumbing. Skill-markdown-only — no flowctl CLI changes (`--file <path>` / `--file -` already supported everywhere).
+
+Goals: token efficiency AND speed WITHOUT quality loss. Read-backs stay mandatory and user-authoritative. Methodology anchor: `agent_docs/optimizing-skills.md`.
+
+## Quick commands
+
+```bash
+bash scripts/sync-codex.sh                    # regen mirror + byte-parity guards (run twice: idempotent)
+git diff --stat plugins/flow-next/codex/      # confirm mirror delta is expected
+(cd "$(mktemp -d)" && bash /Users/gordon/work/flow-next/plugins/flow-next/scripts/smoke_test.sh)  # smoke REFUSES to run from the plugin repo — run from any other cwd
+python3 -m pytest plugins/flow-next/tests/ -q # incl. mirror-parity tests
+```
+
+## Approach — the three patterns
+
+**1. Single-emission write (capture, interview).** A drafted body is materialized exactly once. The skill writes the draft ONCE via the Write tool — the tool render IS the user-visible read-back — revises via Edit-tool deltas, and hands flowctl the file path. Key facts (verified): bash vars do NOT survive across tool calls (capture `workflow.md:707-709` states this — today the agent re-authors `$SPEC_BODY` into the Phase 5 heredoc; the file-based pattern removes exactly that); sync-codex does NOT rewrite Write/Edit mentions (both platforms understand them; Codex `apply_patch` on a NEW file shows full content).
+
+**Path persistence rule (vars die across tool calls — applies to the draft path itself):** the draft path is NOT a shell variable. The agent composes a literal unique path (`${TMPDIR:-/tmp}/flow-<skill>-draft-<spec-id>-<agent-chosen 4-char suffix>.md`), uses that literal in the Write call AND in the later `spec set-plan <id> --file <literal path>` call — the path lives in agent context, never in shell state. mktemp is reserved for paths created and consumed within one bash block.
+
+**Read-back contract preserved** (capture §4.2, `workflow.md:505-521`, `:559`, `:576`): full draft visible in the Write render immediately above the question; the `AskUserQuestion` body carries the summary payload (R-ID list, `[inferred]` tally, diff-of-changed-sections on rewrite) and points to the render; frozen `approve`/`edit`/`abort` options and the 3-edit-cycle cap unchanged. **Autofix (`--yes`): the Write render IS the single full emission** — it replaces the stdout print-substitute (no separate print, no second read-back; `--yes` consents on the render). Long renders collapse in the terminal — the question body must say the full draft is in the Write render above (expandable). **Edit-cycle read-back rule:** an Edit render shows only the delta, which is NOT a full read-back — after each edit cycle, Read the full draft file BEFORE re-asking approval (that Read render is the mandatory full read-back for that cycle; one full emission per edit cycle, same cost as today's re-show — no regression, no double-authoring). The Read also satisfies Edit's read-before-edit requirement for the next cycle.
+
+**2. File composition for assembled prompts (RP backends, export-context).** Replace heredocs with content-re-typing placeholders (`[PASTE HANDOFF HERE]`, `[PASTE flowctl show OUTPUT]`, `[PASTE SPEC]`) with deterministic file composition — no shell-var interpolation (vars die across tool calls; unquoted heredocs are injection surfaces for content containing `$`/backticks/`EOF`):
+
+```bash
+PROMPT_FILE="${TMPDIR:-/tmp}/flow-review-prompt-<spec-id>-<suffix>.md"   # literal path, agent context
+$FLOWCTL rp prompt-get --window "$W" --tab "$T" > "$PROMPT_FILE"   # captured, never re-typed
+cat >> "$PROMPT_FILE" <<'EOF_CRITERIA'
+<static review criteria — quoted heredoc, no expansion>
+EOF_CRITERIA
+$FLOWCTL show "$ID" >> "$PROMPT_FILE"                              # appended, never re-typed
+```
+
+Scalar placeholders the agent fills inline (`[SPEC_ID]`, `[BRANCH_NAME]`, `[USER'S FOCUS AREAS]`) are fine — they are cheap value substitutions, not content re-typing. The acceptance gate distinguishes the two: zero content-re-typing placeholders may remain; scalar slots are allowed.
+
+**3. Single-entry review responses (ALL RP review-response handlers).** `RESPONSE=$(flowctl rp chat-send ...)` + `echo` is how the response enters context at all (command substitution hides stdout) — the echo is NOT pure waste. Reframe: the response enters context exactly ONCE — redirect chat-send stdout to a unique response file, Read it once (that is the parse + fix-loop context), run verdict/tally extraction via grep/awk against the file; no second full-body emission. Applies uniformly to impl-review, spec-completion-review, AND plan-review RP handlers (one convention, no per-skill exceptions).
+
+## Boundaries / non-goals
+
+- No flowctl Python behavior changes; no new flags, commands, or skills.
+- Prompt-content trims / progressive-disclosure gating are fn-82, not here (fn-82 rebases onto this).
+- land, drive, strategy, sync, ralph-init: surveyed clean — out of scope. resolve-pr is IN scope for exactly one mechanical fix (R7 double config-get, `workflow.md:422-423`) — its heredoc/jq flows are clean.
+- Do NOT "fix" deliberate re-probes: land `workflow.md:473` (fn-66 R3, fresh merge-evidence probe by design); pilot's pre/post-dispatch `gh pr list` pair.
+- No weakening of read-back content: summary-only read-backs rejected (Decision context).
+- Docs-site: no user-facing behavior change → changelog only at batched release.
+
+## Strategy Alignment
+
+Active tracks served by this plan:
+- **Ralph autonomous mode** — hot-path skills (plan, impl-review, work, capture) run per-tick/per-task in the pilot+land loop; every eliminated re-emission multiplies across autonomous runs. Bounded fix-loops on ALL backends (R10) harden the don't-thrash discipline.
+- **Cross-platform parity** — the Write/Edit-based patterns are verified against the sync-codex rewrite pipeline (no Write/Edit rewrites exist; mirror regenerated once, in the final task).
+- **Self-improving through normal work** — survey findings + kept levers land in `agent_docs/optimization-log.md` per its append-a-row convention.
+
+## Decision context
+
+- Write-tool-as-read-back chosen over (a) summary-only read-back — weakens the user-authoritative fidelity contract on accuracy-critical spec writes; (b) flowctl display helper — the cost is agent re-AUTHORING tokens, not file mechanics.
+- File composition chosen over unquoted-heredoc var interpolation for R8: vars don't survive across tool calls (gap analysis), and interpolating untrusted reviewer/spec content is a command-injection surface. `>`/`>>` redirection + quoted-heredoc static blocks is deterministic and injection-free.
+- R9 reframed after gap analysis: the echo is the single entry of the response into context today — the fix is "exactly once via file + Read", not deletion. Review round 1 extended it uniformly to all three RP response handlers.
+- make-pr §4.6b kept as a conditional gate (it exists to catch hand-rolled `gh pr create` bypassing §4.6a, per `workflow.md:1550-1557`) + a cheap local grep assertion — not deleted.
+- Interview correction (survey group C): its write step is already single-emission at the heredoc; interview's real items are the heredoc→Write-tool swap (consistency + edit-cycle delta cheapness), unique paths, and the duplicate spec fetch.
+- **Mirror regeneration is serialized into the final task** (review round 1): tasks 1-3 edit canonical files only and MAY run `sync-codex.sh` locally to validate, but the regenerated `plugins/flow-next/codex/` tree is committed once, in fn-81.4 — avoids inter-task mirror conflicts.
+- **Task ordering enforces the early proof point** (review round 1): fn-81.2 and fn-81.3 depend on fn-81.1 so the Write-render read-back pattern is validated before other skills adopt its conventions.
+
+## Acceptance Criteria
+
+- **R1:** capture Phase 4→5 emits the spec body once: draft Written to a literal unique path per the path-persistence rule (render = read-back), `AskUserQuestion` body carries summary payload + points to the render, approved content consumed via `spec set-plan --file <literal path>` — no verbatim heredoc re-emission. Approve/edit/abort semantics, 3-cycle cap, and Phase-5 anchor-file ordering unchanged; in autofix the Write render replaces the stdout print (single emission). **Each edit cycle Reads the full draft file before re-approval** (full read-back per cycle; also satisfies Edit's read-before-edit requirement).
+- **R2:** interview's three write branches (new-idea / existing-spec / task) use the Write-tool + `--file <literal path>` pattern with unique paths per the path-persistence rule; the duplicate spec fetch is collapsed (fetch once at Detect Input Type `SKILL.md:202-203`, reuse at write-back `:730`); the edit-cycle Read rule applies.
+- **R3:** tracker-sync reconcile passes the just-written `.flow/specs/<id>.md` as `set-merge-base --flow-file` (`references/body-merge.md:264-273`; call sites `steps.md:296,334,380`); merged flow body no longer re-emitted to `/tmp/merged-flow.md`; tracker half keeps a unique temp file.
+- **R4:** plan drops the post-write `show`+`cat` (`steps.md:487-491`) and the duplicate `show --json` (`:70` vs `:77` — capture once, reuse); the Step 7 fix-loop re-anchor (`:528,:536`) is retained; verified pilot parses flowctl state, not plan's removed stdout.
+- **R5:** make-pr §4.6b live-body refetch fires only when the §4.6a local append did not run (hand-rolled-create bypass case); the happy path keeps a cheap local assertion (grep `$REF` in `$BODY_FILE`) instead of the full `gh pr view` round-trip.
+- **R6:** deps gathers `specs_json` once and reuses it — the two byte-identical heavy loops (`SKILL.md:52-54`, `:82-84`) become one.
+- **R7:** every tracker perEvent gate reads its config leaf exactly once via the `LEAF=$(...)` pattern (`flow-next-work/SKILL.md:184-190` is canonical): capture `workflow.md:786-787`, plan `steps.md:506-508` (Step 6.5), work `phases.md:211-212,303-304,423-425`, resolve-pr `workflow.md:422-423`; final sweep: every `config get tracker.perEvent` hit in `plugins/flow-next/skills/` uses the single-fetch shape.
+- **R8:** all four RP prompt-assembly sites + export-context build prompts by file composition — zero content-re-typing placeholders remain (`grep -rn '\[PASTE' plugins/flow-next/skills/` empty; remaining bracket placeholders verified scalar-only: id/branch/focus values, never multi-line content): plan-review `workflow.md:305-325`, impl-review `workflow-rp.md:85-109`, spec-completion-review `workflow-rp.md:88-112`, export-context `SKILL.md:82-93`.
+- **R9:** RP review responses enter context exactly once in ALL three handlers (impl-review, spec-completion-review, plan-review): chat-send stdout → unique response file → single Read; verdict/tallies grep the file; no duplicate full-body emissions. Fix loops still receive full findings context.
+- **R10:** fix-loop iteration cap (`MAX_REVIEW_ITERATIONS`, default 3) with an actual counter + break/escalate lives in the backend-agnostic common fix loop (impl-review `SKILL.md:333-362` / `workflow-common.md`) and the per-backend files defer to it — `workflow-codex.md` (":39-44 Repeat until SHIP"), `workflow-copilot.md`, `workflow-cursor.md` each updated to reference the bounded common loop; rp keeps behavior (`workflow-rp.md:332`). Enumeration sweep run (`grep -rniE 'rp.{0,3}codex.{0,3}copilot|review.backend'` + cursor) so no doc/table still implies rp-only.
+- **R11:** both RP fix loops replace `git add -A` (impl-review `workflow-rp.md:341`, spec-completion-review `workflow-rp.md:449`) with snapshot-scoped staging: record `git status --porcelain` before the fix, diff it after, stage ONLY paths that changed between snapshots (covering modified, untracked, deleted, renamed). If a fixer-modified path was ALREADY dirty before the fix, do NOT stage it — surface the collision and defer/escalate that finding (path-level staging cannot separate pre-existing hunks; never sweep them in).
+- **R12:** prime's scout-model prose matches agent frontmatter ground truth re-verified at implementation time (currently 7 haiku: tooling/env/testing/build/observability/security/workflow; 2 sonnet: claude-md, docs-gap): fix `SKILL.md:88`, `:137` header, `workflow.md:5`.
+- **R13:** every touched temp path is unique per the path-persistence rule (literal agent-composed path across tool calls; mktemp within one block); final gate greps each known fixed path individually: `/tmp/spec.md`, `/tmp/acc.md`, `/tmp/desc.md`, `/tmp/review-prompt.md`, `/tmp/re-review.md`, `/tmp/updated-plan.md`, `/tmp/export-prompt.md`, `/tmp/completion-review-prompt.md`, `/tmp/merged-flow.md` — zero hits in canonical skills.
+- **R14:** tasks 1-3 edit canonical files only (local `sync-codex.sh` validation allowed, mirror not committed); fn-81.4 regenerates the mirror ONCE (run twice — idempotent), commits it, and runs the full gate: smoke from a non-repo cwd (`(cd "$(mktemp -d)" && bash .../smoke_test.sh)`) + `python3 -m pytest plugins/flow-next/tests/` green.
+- **R15:** CHANGELOG gains a `## Unreleased` section (does not exist yet — create it) with this spec's entry per house style; `agent_docs/optimization-log.md` gains a row with the COMPUTED count of removed re-emissions/round-trips (count them during implementation; never a placeholder); NO version bump (batched-release rule).
+
+## Early proof point
+
+Task fn-81.1 validates the core approach (Write-tool-as-read-back preserves the capture read-back contract end-to-end, including the edit-cycle Read rule). **fn-81.2 and fn-81.3 depend on fn-81.1** — if the render/read-back pattern fails, re-evaluate pattern 1 (fall back to read-back-in-question + single heredoc) before any other skill adopts it.
+
+## Requirement coverage
+
+| Req | Description | Task(s) | Gap justification |
+|-----|-------------|---------|-------------------|
+| R1  | capture single-emission + edit-cycle Read | fn-81.1 | — |
+| R2  | interview single-emission + dedupe fetch | fn-81.1 | — |
+| R3  | tracker-sync merge-base path | fn-81.3 | — |
+| R4  | plan post-write + dup show | fn-81.3 | — |
+| R5  | make-pr §4.6b gate | fn-81.3 | — |
+| R6  | deps single gather | fn-81.3 | — |
+| R7  | config-get single-fetch sweep (incl. plan 6.5) | fn-81.1 (capture site), fn-81.3 (rest) | — |
+| R8  | RP file-composition, no content re-typing | fn-81.2 | — |
+| R9  | single-entry responses, all 3 RP handlers | fn-81.2 | — |
+| R10 | fix-loop cap all backends (incl. cursor file) | fn-81.2 | — |
+| R11 | snapshot-scoped staging in rp fix loops | fn-81.2 | — |
+| R12 | prime model prose | fn-81.3 | — |
+| R13 | unique temp paths + fixed-path greps | fn-81.1, fn-81.2, fn-81.3, gate in fn-81.4 | — |
+| R14 | canonical-only tasks; mirror + full gate in .4 | fn-81.4 | — |
+| R15 | CHANGELOG Unreleased + computed optimization-log row | fn-81.4 | — |
