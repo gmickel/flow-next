@@ -36,9 +36,8 @@ Adapter-ref strips are dead-text cleanup (on-demand files), the SKILL+steps stri
 - [ ] Canonical-only diff; smoke green locally
 
 ## Done summary
-TBD
-
+Class-1 archaeology: stripped ~90 fn-NN provenance tags from tracker-sync SKILL.md/steps.md per the R5 allowlist (R-IDs/S-fixtures/versions kept; rule-carrying tags rewritten to prose first — sole survivor fn-42-foo is a listing example); moved the linear/github/gitlab round-trip spike harnesses verbatim to agent_docs/tracker-sync-spikes.md with runtime breadcrumbs (status-sync.md byte-untouched); removed qa's fn-53 ownership table, OWNER comments, skeleton/proof-point prose and the transient proof-receipt.json write (§6.3 qa_verdict is the single receipt; §4.2 is now BLOCKED routing); present-tensed map + memory-migrate and replaced flowctl.py line anchors with symbol names. Canonical-only; smoke green; RP review SHIP after one fix round.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 390fe446, ff51daceb362e2ef615818c144f4a708eda06cae
+- Tests: bash plugins/flow-next/scripts/smoke_test.sh (138/138 pass, non-repo cwd), python3 -m unittest discover -s plugins/flow-next/tests (1395 tests; only pre-existing mirror-parity failures — mirror regen owned by fn-82.5), grep -n 'fn-[0-9]' tracker-sync SKILL.md+steps.md (sole survivor: fn-42-foo listing example), grep -rn proof-receipt (canonical clean; mirror only)
 - PRs:
