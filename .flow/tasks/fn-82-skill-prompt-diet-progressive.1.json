@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-02T09:37:26.128572Z",
+  "depends_on": [],
+  "id": "fn-82-skill-prompt-diet-progressive.1",
+  "priority": null,
+  "spec": "fn-82-skill-prompt-diet-progressive",
+  "spec_path": ".flow/tasks/fn-82-skill-prompt-diet-progressive.1.md",
+  "status": "todo",
+  "title": "Class-2 gating: work tracker-touchpoints + pilot qa-stage references (early proof point)",
+  "updated_at": "2026-07-02T09:38:18.554179Z"
+}
