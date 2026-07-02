@@ -43,9 +43,8 @@ This is the spec's early proof point — fn-81.2 and fn-81.3 depend on this task
 - [ ] canonical-only diff (no `plugins/flow-next/codex/` changes committed); local sync-codex validation run recorded in summary
 
 ## Done summary
-TBD
-
+Converted capture (Phase 4→5) and interview (all three Write-Refined-Spec branches) to the single-emission write pattern: draft body Written ONCE via the Write tool to a literal unique path (render = read-back), Edit-tool revisions with a mandatory full-file Read before each re-approval, flowctl consumes `spec set-plan/set-acceptance/set-spec --file <literal path>` — the `$SPEC_BODY` heredoc re-emission and fixed `/tmp/spec.md`/`/tmp/acc.md`/`/tmp/desc.md` paths are gone. Capture's tracker gate reads `tracker.perEvent.capture` once (LEAF pattern); interview's duplicate spec fetch collapsed onto the Detect-Input-Type read. Canonical files only; local sync-codex.sh validation run passed (mirror regen deferred to fn-81.4). RP impl-review: SHIP (first pass).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 94924748a87566ef7ca9e31b03041bb2b40e1103
+- Tests: uv run --with pytest python -m pytest plugins/flow-next/tests/ -q (1393 passed, 2 skipped, 164 subtests), bash scripts/sync-codex.sh (all validators green; regenerated mirror stashed, not committed — fn-81.4 owns mirror regen), grep -rn '/tmp/spec.md|/tmp/acc.md|/tmp/desc.md|SPEC_BODY' touched skills → zero hits
 - PRs:
