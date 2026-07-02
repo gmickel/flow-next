@@ -859,104 +859,14 @@ directionless `relates_to` is the one link kind that is **never** read as a rela
 (it has no direction) — it is UI decoration, not a parity participant. Native vs
 degraded is a fidelity selection, not a parity break.
 
-## Transport-blind proof / round-trip spike — run FIRST
+## Transport-blind proof / round-trip spike
 
 The R13 guarantee: **the same reconcile path over `glab` fixtures yields merge
-output identical to the GitHub/Linear path.** Two checks:
+output identical to the GitHub/Linear path.** Reconcile is never edited to make a
+transport pass.
 
-### A. Round-trip spike (transport in isolation — no merge)
-
-Push a flow body to a real GitLab issue, then pull it back — format translation
-only. Surfaces transport bugs (auth, `description=@-` escaping, iid-vs-global-id,
-project encoding, GFM round-trip) BEFORE relying on reconcile.
-
-> **Live-verification status.** The endpoints/limits below were **smoke-tested live
-> 2026-06-28** against gitlab.com (throwaway project `gmickel/fnsmoke`, permanently
-> deleted after) — create/read/update/close, GFM body, labels (incl. a `flow:<id>`
-> back-ref), `listOpenIssues` by label, notes, MR-link note, and the Premium-403
-> relation degrade. A *fresh* round-trip needs a real `GITLAB_TOKEN` against a
-> project with issue write access; the `glab`/REST flags + JSON fields it depends on
-> are verified and pinned above. Run it once per environment.
-
-Fixture (the same canonical flow body the GitHub/Linear spikes use — headings, a
-checklist, a fenced block, a link — the structures most likely to be mangled):
-
-~~~markdown
-## Goal
-Round-trip fixture for the GitLab transport spike.
-
-## Acceptance
-- [ ] item one
-- [x] item two (done)
-
-## Notes
-A fenced block:
-
-```
-exact text — must survive verbatim
-```
-
-A [link](https://example.com) and an inline `code` span.
-~~~
-
-Steps:
-
-1. **Build the body** — write the fixture to `/tmp/spike-flow-body.md`.
-2. **Push (create)** via `writeIssue` (no id ⇒ create), body via stdin:
-   ```bash
-   IID=$(printf '%s' "$(cat /tmp/spike-flow-body.md)" | glab api --method POST \
-           "projects/$ENC/issues" --raw-field "title=flow spike" --field "description=@-" \
-           | jq -r '.iid')
-   ```
-3. **Pull back** via `fetchIssue(iid)`:
-   ```bash
-   glab api "projects/$ENC/issues/$IID" | jq -r '.description' > /tmp/spike-pulled-body.md
-   ```
-4. **Oracle (success/fail):**
-   ```bash
-   if diff -u /tmp/spike-flow-body.md /tmp/spike-pulled-body.md; then
-     echo "SPIKE PASS — round-trip preserved the body"
-   else
-     echo "SPIKE FAIL — glab transport mangled the body; see diff above"
-   fi
-   ```
-   A non-empty diff is a transport bug to fix here BEFORE relying on reconcile —
-   e.g. GitLab normalizing trailing whitespace or line endings. (If GitLab
-   canonicalizes GFM in a stable, loss-less way, record that exact canonical form as
-   the fixture's expected output so reconcile reconciles against *that*.)
-5. **Cleanup:** `glab api --method PUT "projects/$ENC/issues/$IID" --field
-   "state_event=close"` (or delete via `glab api --method DELETE
-   "projects/$ENC/issues/$IID"` where the token allows).
-
-The spike writes a receipt like any sync run:
-`sync receipt <spec> --status noop --transport glab --note "round-trip spike: PASS|FAIL"`
-(status `noop` — a transport probe, not a sync of a tracked spec; no `--event` — the
-spike is a manual diagnostic, never a lifecycle touchpoint).
-
-### B. Cross-tracker reconcile parity (the actual R13 check)
-
-Feed the **same normalized fixtures** through reconcile twice — once with the GitLab
-adapter's output structs, once with the GitHub adapter's — and assert the merge
-output is identical:
-
-```bash
-# Pseudo-procedure (reconcile is agentic — fn-52.4/.5 — and consumes structs):
-#   1. Take a flow body + a base snapshot + a tracker-side edit.
-#   2. Produce the normalized `issue`/`comment`/`status` structs TWICE:
-#        - via the GitLab mapping tables above (opened/closed + status: label)
-#        - via the GitHub mapping (open/closed + reason + status: label)
-#      Construct both so they represent the SAME logical state (e.g. GitLab
-#      opened+`status:in-progress` ≡ GitHub OPEN+`status:in-progress`).
-#   3. Run the UNCHANGED reconcile core (body-merge.md / status-sync.md /
-#      comments-sync.md) on each struct set against the same base.
-#   4. Oracle: the two merge outputs are identical (same merged body, same
-#      who-wins status, same comment dedup). Any difference is a mapping bug in an
-#      adapter — NOT a reconcile change. Reconcile is never edited to make a
-#      transport pass.
-```
-
-This is the load-bearing R13 assertion: identical reconcile output across GitLab and
-GitHub fixtures, with the reconcile core touched in neither task.
+Round-trip spike + cross-tracker reconcile-parity check: dev archive at
+`agent_docs/tracker-sync-spikes.md` — not runtime material.
 
 ## Error contract — never crash, never corrupt state
 

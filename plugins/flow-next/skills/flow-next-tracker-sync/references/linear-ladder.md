@@ -188,86 +188,14 @@ the same fields into/out of the normalized structs:
 
 If a field is reachable on one rung but not the other, that is a parity gap —
 fix it in the rung file before relying on reconcile being transport-blind. The
-**round-trip spike below is run on BOTH rungs** (whichever the environment
+**round-trip spike is run on BOTH rungs** (whichever the environment
 provides) precisely to catch parity gaps early.
 
-## Round-trip spike (acceptance #1 — run FIRST, before fn-52.4)
+## Round-trip spike
 
-A de-risking spike that exercises the transport in isolation: **push a flow body
-to a real Linear issue, then pull it back unchanged** — format translation only,
-**no merge**. It surfaces transport bugs (OAuth, tool-name drift, GraphQL
-auth/asymmetry, identifier-vs-UUID, complexity rate limits) BEFORE the .4 merge
-engine is built on top.
-
-> **Live-verification status (this environment).** A live Linear round-trip needs
-> real credentials (a registered MCP server OR a `LINEAR_API_KEY` against a real
-> workspace). Those are unavailable in the build environment, so the **live
-> execution is deferred to the post-PR smoke-testing phase** the maintainer
-> drives. The spike below is a complete, runnable procedure with an explicit
-> success/fail oracle; the MCP tool names + GraphQL wire facts it depends on are
-> verified and pinned (see linear-mcp.md / linear-graphql.md). Run it once per
-> rung the target environment exposes.
-
-### Spike procedure (per rung)
-
-Fixture: a small canonical flow body the round-trip must preserve byte-for-byte
-after a normalize→render cycle (headings, a checklist, a fenced block, a link —
-the structures most likely to be mangled by a markdown round-trip):
-
-~~~markdown
-## Goal
-Round-trip fixture for the Linear transport spike.
-
-## Acceptance
-- [ ] item one
-- [x] item two (done)
-
-## Notes
-A fenced block:
-
-```
-exact text — must survive verbatim
-```
-
-A [link](https://example.com) and an inline `code` span.
-~~~
-
-Steps:
-
-1. **Build the body** — write the fixture above to `/tmp/spike-flow-body.md`.
-2. **Push (create)** via the active rung's `writeIssue` (no `id` ⇒ create):
-   - MCP: `save_issue(team:<team>, title:"flow spike", description:<body>)`
-   - GraphQL: `issueCreate(input:{teamId:<uuid>, title:"flow spike",
-     description:<body>})`
-   Capture the returned `{ id (UUID), identifier (WOR-N), url }`.
-3. **Pull back** via `fetchIssue(id)` (use the **UUID**, not `WOR-N`):
-   - MCP: `get_issue(id:<uuid>)` → `.description`
-   - GraphQL: `query{ issue(id:<uuid>){ description } }`
-   Write the returned body to `/tmp/spike-pulled-body.md`.
-4. **Oracle (success/fail):**
-   ```bash
-   # Idempotent format translation ⇒ byte-identical round-trip.
-   if diff -u /tmp/spike-flow-body.md /tmp/spike-pulled-body.md; then
-     echo "SPIKE PASS — round-trip preserved the body"
-   else
-     echo "SPIKE FAIL — transport mangled the body; see diff above"
-   fi
-   ```
-   A non-empty diff is a transport bug to fix in the rung file BEFORE fn-52.4 —
-   e.g. Linear normalizing list markers, collapsing blank lines, or rewriting the
-   fenced block. (If Linear's renderer canonicalizes markdown in a stable,
-   loss-less way, record the exact canonical form as the fixture's expected
-   output so .4 reconciles against *that*, not the raw input.)
-5. **Repeat on the second rung** if the environment exposes both — the two pulled
-   bodies must match each other (parity), not just their own inputs.
-6. **Cleanup:** delete or archive the spike issue (MCP: `save_issue(id, state:
-   "Canceled")` or the workspace's archive; GraphQL: `issueArchive(id)`).
-
-The spike writes a receipt like any sync run:
-`sync receipt <spec> --status noop --transport <rung> --note "round-trip spike: PASS|FAIL"`
-(status `noop` because the spike performs no real reconciliation — it is a
-transport probe, not a sync of a tracked spec; no `--event` either — the spike is
-a manual diagnostic, never a lifecycle touchpoint).
+Round-trip spike (push a flow body to a real Linear issue, pull it back, diff —
+per rung): dev archive at `agent_docs/tracker-sync-spikes.md` — not runtime
+material.
 
 ## Error contract (acceptance #5) — never crash, never corrupt state
 

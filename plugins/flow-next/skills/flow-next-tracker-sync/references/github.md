@@ -543,102 +543,14 @@ path served it — only the `source` field differs (`unknown` on native, deferri
 to the ledger; `flow` inside the fenced marker). Native-vs-fallback is a fidelity
 selection, not a parity break.
 
-## Transport-blind proof / round-trip spike (acceptance #3 — run FIRST)
+## Transport-blind proof / round-trip spike
 
 The R13 guarantee: **the same reconcile path over `gh` fixtures yields merge
-output identical to the Linear path.** Two checks:
+output identical to the Linear path.** Reconcile is never edited to make a
+transport pass.
 
-### A. Round-trip spike (transport in isolation — no merge)
-
-Push a flow body to a real GitHub issue, then pull it back — format translation
-only. Surfaces transport bugs (auth, `--body-file` escaping, number-vs-node-id,
-markdown round-trip) BEFORE relying on reconcile.
-
-> **Live-verification status (this environment).** A live GitHub round-trip needs
-> a real `GH_TOKEN` against a real repo with issue write access — unavailable in
-> the build environment, so the **live execution is deferred to the post-PR
-> smoke-testing phase** the maintainer drives. The spike below is a complete,
-> runnable procedure with an explicit success/fail oracle; the `gh` flags + JSON
-> fields it depends on are verified and pinned above (gh ≥ 2.x). Run it once.
-
-Fixture (the same canonical flow body the Linear spike uses — headings, a
-checklist, a fenced block, a link — the structures most likely to be mangled):
-
-~~~markdown
-## Goal
-Round-trip fixture for the GitHub transport spike.
-
-## Acceptance
-- [ ] item one
-- [x] item two (done)
-
-## Notes
-A fenced block:
-
-```
-exact text — must survive verbatim
-```
-
-A [link](https://example.com) and an inline `code` span.
-~~~
-
-Steps:
-
-1. **Build the body** — write the fixture to `/tmp/spike-flow-body.md`.
-2. **Push (create)** via `writeIssue` (no id ⇒ create), body via `--body-file -`:
-   ```bash
-   NUM=$(gh issue create -R "$REPO" --title "flow spike" \
-           --body-file /tmp/spike-flow-body.md \
-           | sed -E 's@.*/issues/([0-9]+).*@\1@')
-   ```
-3. **Pull back** via `fetchIssue(number)`:
-   ```bash
-   gh issue view "$NUM" -R "$REPO" --json body -q .body > /tmp/spike-pulled-body.md
-   ```
-4. **Oracle (success/fail):**
-   ```bash
-   if diff -u /tmp/spike-flow-body.md /tmp/spike-pulled-body.md; then
-     echo "SPIKE PASS — round-trip preserved the body"
-   else
-     echo "SPIKE FAIL — gh transport mangled the body; see diff above"
-   fi
-   ```
-   A non-empty diff is a transport bug to fix here BEFORE relying on reconcile —
-   e.g. GitHub normalizing trailing whitespace or line endings. (If GitHub
-   canonicalizes markdown in a stable, loss-less way, record that exact canonical
-   form as the fixture's expected output so .4 reconciles against *that*.)
-5. **Cleanup:** `gh issue close "$NUM" -R "$REPO" --reason "not planned"` (or
-   delete via `gh issue delete "$NUM" -R "$REPO" --yes` where the token allows).
-
-The spike writes a receipt like any sync run:
-`sync receipt <spec> --status noop --transport gh --note "round-trip spike: PASS|FAIL"`
-(status `noop` — a transport probe, not a sync of a tracked spec; no `--event`
-either — the spike is a manual diagnostic, never a lifecycle touchpoint).
-
-### B. Cross-tracker reconcile parity (the actual R13 check)
-
-Feed the **same normalized fixtures** through reconcile twice — once with the
-GitHub adapter's output structs, once with the Linear adapter's — and assert the
-merge output is identical:
-
-```bash
-# Pseudo-procedure (reconcile is agentic — fn-52.4/.5 — and consumes structs):
-#   1. Take a flow body + a base snapshot + a tracker-side edit.
-#   2. Produce the normalized `issue`/`comment`/`status` structs TWICE:
-#        - via the GitHub mapping tables above (open/closed+reason+status: label)
-#        - via the Linear mapping (state{name type})
-#      Construct both so they represent the SAME logical state (e.g. GitHub
-#      OPEN+`status:in-progress` ≡ Linear `started`/`in-progress`).
-#   3. Run the UNCHANGED reconcile core (body-merge.md / status-sync.md /
-#      comments-sync.md) on each struct set against the same base.
-#   4. Oracle: the two merge outputs are identical (same merged body, same
-#      who-wins status, same comment dedup). Any difference is a mapping bug in
-#      an adapter — NOT a reconcile change. Reconcile is never edited to make a
-#      transport pass.
-```
-
-This is the load-bearing R13 assertion: identical reconcile output across Linear
-and GitHub fixtures, with the reconcile core touched in neither task.
+Round-trip spike + cross-tracker reconcile-parity check: dev archive at
+`agent_docs/tracker-sync-spikes.md` — not runtime material.
 
 ## Error contract (acceptance #4) — never crash, never corrupt state
 
