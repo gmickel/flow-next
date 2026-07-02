@@ -39,9 +39,8 @@ python-picker caution: the 3× repetition may be partially load-bearing (path-pe
 - [ ] Canonical-only diff; smoke green locally
 
 ## Done summary
-TBD
-
+Class-3 dedupe: impl-review + spec-completion-review now delegate executable Phase 0 to workflow-common.md (one flowctl review-backend call per run); interview template-discovery walker single-sourced verbatim in new references/spec-template-discovery.md with plan steps.md + docs/spec-template.md repointed and the auxiliary-sections rule defined once; audit Replace/supersede/mark-stale flows delegate to phases.md; prospect python-picker defined once in the Preamble with explicit per-block re-resolve notes; stale task-N scaffolding and all flowctl.py absolute line refs stripped from canonical skill markdown. Canonical-only (-135 net lines); mirror regen rides fn-82.5.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 1d668d3586d7053873ef0556fb5fc97194f5dbaa
+- Tests: bash plugins/flow-next/scripts/smoke_test.sh (from mktemp cwd) — 138/138 pass, /usr/bin/python3 -m unittest discover -s plugins/flow-next/tests — 1395 tests, same 4 pre-existing stale-mirror parity failures as pre-change baseline (mirror regen deferred to fn-82.5), RP impl-review SHIP (first pass, 0 findings; --base 3fcdd367)
 - PRs:
