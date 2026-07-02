@@ -32,7 +32,7 @@ If no legacy flat files exist (`pitfalls.md`, `conventions.md`, `decisions.md` a
 "$FLOWCTL" memory list-legacy --json > /tmp/memory-migrate-legacy.json
 ```
 
-Output shape (Task 2 ships this subcommand):
+Output shape:
 
 ```json
 {

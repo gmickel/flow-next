@@ -72,9 +72,8 @@ degradation (all surfaces)":
   the skill can drive autonomously → BLOCKED (not a fabricated PASS, not a hard error).
 - **BLOCKED ≠ FAIL.** "No ship *claim* on a QA basis," never "the app is broken."
 
-The concrete BLOCKED proof receipt (when only the proof point is exercised) is in
-`workflow.md` §4.2; the production verdict BLOCKED is `workflow.md` §6.1 / §6.3 with
-`blocked_reason` set. **SHIP is forbidden without captured live-app evidence (R1)** —
+The BLOCKED routing (no live target) is `workflow.md` §4.2; the verdict BLOCKED is
+`workflow.md` §6.1 / §6.3 with `blocked_reason` set. **SHIP is forbidden without captured live-app evidence (R1)** —
 absent evidence, the outcome is BLOCKED, never SHIP.
 
 ## 4. Opt-in tracker verdict post (`tracker.perEvent.qa`, R9)

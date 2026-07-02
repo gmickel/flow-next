@@ -1,6 +1,6 @@
 # Memory migration — `(track, category)` decision tree
 
-For each legacy entry, classify it into exactly one `(track, category)` pair. Calibration below mirrors the deterministic baseline in `flowctl.py` (`_memory_classify_mechanical` at line 6390 + `_DEPRECATED_TYPE_MAP` at line 4918) plus narrative guidance for when the entry's body warrants overriding the mechanical default. For the workflow phases that drive these decisions, see [workflow.md](workflow.md).
+For each legacy entry, classify it into exactly one `(track, category)` pair. Calibration below mirrors the deterministic baseline in `flowctl.py` (`_memory_classify_mechanical` + `_DEPRECATED_TYPE_MAP`) plus narrative guidance for when the entry's body warrants overriding the mechanical default. For the workflow phases that drive these decisions, see [workflow.md](workflow.md).
 
 ---
 
