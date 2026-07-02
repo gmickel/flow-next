@@ -308,8 +308,8 @@ FLOW_DELEGATE_CODEX=1 codex exec \
  path** — `--ignore-user-config` deliberately skips the user Codex config (MCP
  isolation wins), so model + effort MUST come from flow config, never the user's
  codex config.
-- **Cross-check vs. the proven review-path invocation** at
- `flowctl.py:2841-2853` (same `-m`, same `-c 'model_reasoning_effort="..."'`
+- **Cross-check vs. the proven review-path invocation** in
+ `run_codex_exec()` in `flowctl.py` (same `-m`, same `-c 'model_reasoning_effort="..."'`
  quoting, same stdin `-`, same `gpt-5.5` default-model fallback). This delegation
  path ADDS `--output-schema` + `-o` + `--ignore-user-config`, which the review
  path lacks; everything else matches the battle-tested shape.
