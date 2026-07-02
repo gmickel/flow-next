@@ -1,0 +1,18 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-02T22:23:08.326757Z",
+  "depends_on": [
+    "fn-83-work-loop-speed-conservative-plan-sync.1",
+    "fn-83-work-loop-speed-conservative-plan-sync.3",
+    "fn-83-work-loop-speed-conservative-plan-sync.2"
+  ],
+  "id": "fn-83-work-loop-speed-conservative-plan-sync.4",
+  "priority": null,
+  "spec": "fn-83-work-loop-speed-conservative-plan-sync",
+  "spec_path": ".flow/tasks/fn-83-work-loop-speed-conservative-plan-sync.4.md",
+  "status": "todo",
+  "title": "Skill/agent wiring: 3e gate + audit sampling, PLAN_DEVIATION, anchor call, CROSS_SPEC fix",
+  "updated_at": "2026-07-02T22:32:39.796721Z"
+}
