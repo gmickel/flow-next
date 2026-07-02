@@ -5121,8 +5121,72 @@ TBD
 """
 
 
+def _section_title_variant_re(section: str) -> "re.Pattern[str]":
+    """Compile the known-title-variant grammar for a task section heading.
+
+    Matches the section's own H2 title and its legacy/decorated variants:
+    the exact section word, an optional literal `Criteria`/`criteria` word
+    (Acceptance only), then an optional separator-introduced suffix starting
+    with `(`, `—`, `:`, or `-`. Shape for `## Acceptance`:
+    `^##\\s+Acceptance(\\s+[Cc]riteria)?\\s*([(:—-].*)?$`.
+    A different word after the section word (e.g. `## Acceptance Tests`)
+    does NOT match — that is content, not a title variant.
+    """
+    word = section[3:].strip() if section.startswith("## ") else section.strip()
+    criteria = r"(\s+[Cc]riteria)?" if word == "Acceptance" else ""
+    return re.compile(rf"^##\s+{re.escape(word)}{criteria}\s*([(:—-].*)?$")
+
+
+def normalize_section_content(section: str, new_content: str) -> str:
+    """Normalize agent-supplied content destined for a task `## ` section.
+
+    Task `.md` files treat H2 headings as section boundaries, so content
+    placed INSIDE a section must never itself contain H2 lines (fn-79):
+    1. Strip a leading H2 line only when it matches the target section's
+       known-title-variant grammar (exact name, legacy `Criteria` word,
+       optional separator suffix — see `_section_title_variant_re`).
+    2. Demote every remaining H2 (`## `) line to H3 (`### `), skipping
+       lines inside fenced code blocks (``` / ~~~ fences tracked).
+    3. Everything else is byte-preserved; already-clean content
+       round-trips unchanged.
+    """
+    variant_re = _section_title_variant_re(section)
+
+    # Rule 1: strip a leading title-variant H2 (defensive — handles agents
+    # that include "## Acceptance Criteria (…)" atop the temp file).
+    first_lines = new_content.lstrip().split("\n")
+    if first_lines and variant_re.match(first_lines[0].strip()):
+        new_content = "\n".join(first_lines[1:]).lstrip()
+
+    # Rule 2: demote remaining H2 → H3 outside fenced code blocks.
+    out_lines = []
+    changed = False
+    fence = None  # active fence marker ("```" or "~~~"), None when outside
+    for line in new_content.split("\n"):
+        stripped = line.lstrip()
+        if fence is None:
+            if stripped.startswith("```"):
+                fence = "```"
+            elif stripped.startswith("~~~"):
+                fence = "~~~"
+            elif line.startswith("## "):
+                out_lines.append("###" + line[2:])
+                changed = True
+                continue
+        elif stripped.startswith(fence):
+            fence = None
+        out_lines.append(line)
+
+    return "\n".join(out_lines) if changed else new_content
+
+
 def patch_task_section(content: str, section: str, new_content: str) -> str:
     """Patch a specific section in task spec. Preserves other sections.
+
+    Normalizes `new_content` (leading title stripped, embedded H2 demoted —
+    see `normalize_section_content`) and self-heals files already layered in
+    the fn-78 shape: contiguous rogue NON-canonical title-variant sections
+    directly after the target section are folded into the replacement.
 
     Raises ValueError on invalid content (duplicate/missing headings).
     """
@@ -5134,30 +5198,42 @@ def patch_task_section(content: str, section: str, new_content: str) -> str:
             f"Cannot patch: duplicate heading '{section}' found ({matches} times)"
         )
 
-    # Strip leading section heading from new_content if present (defensive)
-    # Handles case where agent includes "## Description" in temp file
-    new_lines = new_content.lstrip().split("\n")
-    if new_lines and new_lines[0].strip() == section:
-        new_content = "\n".join(new_lines[1:]).lstrip()
+    new_content = normalize_section_content(section, new_content)
+
+    # Self-heal fold set: title-like variants of the target section, minus
+    # the exact canonical heading (a byte-exact duplicate raised above).
+    variant_re = _section_title_variant_re(section)
 
     lines = content.split("\n")
     result = []
     in_target_section = False
+    in_rogue_section = False
     section_found = False
 
-    for i, line in enumerate(lines):
+    for line in lines:
         if line.startswith("## "):
-            if line.strip() == section:
+            stripped = line.strip()
+            if stripped == section:
                 in_target_section = True
+                in_rogue_section = False
                 section_found = True
                 result.append(line)
                 # Add new content
                 result.append(new_content.rstrip())
                 continue
-            else:
+            if (
+                (in_target_section or in_rogue_section)
+                and variant_re.match(stripped)
+            ):
+                # fn-78 damage shape: rogue layered title-variant section
+                # contiguous with the target — fold it into the replacement.
                 in_target_section = False
+                in_rogue_section = True
+                continue
+            in_target_section = False
+            in_rogue_section = False
 
-        if not in_target_section:
+        if not in_target_section and not in_rogue_section:
             result.append(line)
 
     if not section_found:
@@ -12323,6 +12399,10 @@ def cmd_task_create(args: argparse.Namespace) -> None:
         acceptance = read_text_or_exit(
             Path(args.acceptance_file), "Acceptance file", use_json=args.json
         )
+        # fn-79: normalize before embedding — an input file starting with its
+        # own `## Acceptance Criteria …` H2 must not plant a rogue sibling
+        # section in the skeleton.
+        acceptance = normalize_section_content("## Acceptance", acceptance)
 
     # fn-43.2: persisted task JSON uses canonical "spec" key only. Read paths
     # accept legacy "epic" via normalize_task() for 0.x task files that

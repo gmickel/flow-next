@@ -230,6 +230,8 @@ Create task under spec.
 flowctl task create --spec fn-1 --title "Task title" [--deps fn-1.2,fn-1.3] [--acceptance-file accept.md] [--priority 10] [--json]
 ```
 
+Section content is normalized on write (here and in `task set-description` / `set-acceptance` / `set-spec`): a leading title-like H2 (e.g. `## Acceptance Criteria (…)`) is stripped, and any remaining `## ` headings in the content are demoted to `### ` (fenced code blocks untouched) so they never become section boundaries.
+
 Output:
 ```json
 {"success": true, "id": "fn-1.4", "spec": "fn-1", "title": "Task title", "depends_on": ["fn-1.2", "fn-1.3"]}
