@@ -361,7 +361,7 @@ If verdict is NEEDS_WORK:
    ```
 3. **Fix the code** - Address each issue in order
 4. **Run tests/lints** - Verify fixes don't break anything
-5. **Commit fixes with snapshot-scoped staging** (MANDATORY before re-review — NEVER `git add -A`):
+5. **Commit fixes with snapshot-scoped staging** (MANDATORY before re-review — NEVER blanket-stage with `git add --all`):
 
    **Pre-dirty collision rule:** if a path you edited during the fix already appears in the PRE snapshot, do NOT stage it — path-level staging cannot separate pre-existing hunks from fix hunks. Surface the collision, defer/escalate that finding (report it in the re-review request or final summary), and never sweep pre-existing changes into a review-fix commit.
 
@@ -425,5 +425,5 @@ If verdict is NEEDS_WORK:
 - **Skipping setup-review** - Window selection MUST happen via this command
 - **Hard-coding window IDs** - Never write `--window 1`
 - **Missing changed files** - Add ALL changed files to selection
-- **`git add -A` in the fix loop** - Sweeps pre-existing dirty paths into review-fix commits; use the snapshot-scoped staging
+- **Blanket staging (`git add --all`) in the fix loop** - Sweeps pre-existing dirty paths into review-fix commits; use the snapshot-scoped staging
 - **Re-typing command output into heredocs** - Handoff/spec/response content moves by redirection (`>`/`>>`) only; echoing a captured response is a duplicate emission

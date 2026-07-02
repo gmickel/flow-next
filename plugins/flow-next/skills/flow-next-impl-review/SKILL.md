@@ -353,7 +353,7 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
    - Receipt gains `walkthrough: {applied, deferred, skipped, acknowledged}`.
 3. **Parse issues** from reviewer feedback (Critical → Major → Minor)
 4. **Fix code** and run tests/lints
-5. **Commit fixes** (mandatory before re-review; RP backend uses the snapshot-scoped staging in workflow-rp.md — never `git add -A`)
+5. **Commit fixes** (mandatory before re-review; RP backend uses the snapshot-scoped staging in workflow-rp.md — never blanket-stage with `git add --all`)
 6. **Re-review**:
    - **Codex**: Re-run `flowctl codex impl-review` (receipt enables context)
    - **Copilot**: Re-run `flowctl copilot impl-review` (receipt enables context; must be `mode == "copilot"` to resume)
