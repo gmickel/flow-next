@@ -203,7 +203,10 @@ EOF
 Redirect the review response to the literal response file — it must enter context exactly ONCE, via a single Read of that file (command substitution + `echo` would be the second copy; redirection keeps stdout out of context entirely):
 
 ```bash
-RESPONSE_FILE="${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"   # literal path
+# Re-declare BOTH literal paths — this may run as a separate tool call from the
+# build block, and bash vars do not survive across tool calls (type them verbatim)
+PROMPT_FILE="${TMPDIR:-/tmp}/flow-impl-review-prompt-<task-id-or-branch-slug>-<suffix>.md"      # same literal path from the build block
+RESPONSE_FILE="${TMPDIR:-/tmp}/flow-impl-review-response-<task-id-or-branch-slug>-<suffix>.md"  # literal path
 
 $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Impl Review: $BRANCH" > "$RESPONSE_FILE"
 
