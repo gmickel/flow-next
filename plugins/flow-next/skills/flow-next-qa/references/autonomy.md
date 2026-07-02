@@ -1,6 +1,6 @@
 # Autonomy — Ralph-aware-not-blocked + opt-in tracker post + graceful degradation
 
-This reference carries the full Phase A contract for `/flow-next:qa` (fn-53.4, R9 +
+This reference carries the full Phase A contract for `/flow-next:qa` (R9 +
 R11 + R13): detect-once Ralph routing, the opt-in `tracker.perEvent.qa` verdict
 post, and the graceful-degradation matrix when no live deploy / driver is present.
 `workflow.md` Phase A is the entry point; this is the detail it folds.

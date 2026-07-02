@@ -77,7 +77,7 @@ Probe these six signals (detection lives in the skill, not flowctl):
 | GitLab auth / token | `glab auth status` exits 0, or `GITLAB_TOKEN` / `CI_JOB_TOKEN` set | GitLab transport available (`glab` primary → REST token fallback; self-managed hosts honored — references/gitlab.md) |
 | Jira REST + token | `JIRA_BASE_URL` set, plus Cloud `JIRA_EMAIL`+`JIRA_API_TOKEN` OR self-hosted DC/Server `JIRA_PAT` | Jira REST transport available — **offered** (Cloud `/rest/api/3` + API-token, DC/Server `/rest/api/2` + PAT; single rung + no-op, NO MCP — references/jira.md). A bare `*.atlassian.net` host with no credential is surfaced but can't be offered |
 
-Resolution model is **env > config > ASK**, mirroring `cmd_review_backend` (`flowctl.py:4859`): if the transport/tracker is already decided by env or config, don't re-ask. Steps in [steps.md](steps.md) Phase 1.
+Resolution model is **env > config > ASK**, mirroring `cmd_review_backend`: if the transport/tracker is already decided by env or config, don't re-ask. Steps in [steps.md](steps.md) Phase 1.
 
 **On confirmation only**, write via `flowctl config set` (dot-paths are safe — config keys are nested):
 
