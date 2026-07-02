@@ -10,5 +10,5 @@
   "spec_path": ".flow/tasks/fn-80-gate-repoprompt-steering-in-impl-review.1.md",
   "status": "todo",
   "title": "Apply the fn-78 RP_ELIGIBLE gate to impl-review & spec-completion-review steering + mirror regen",
-  "updated_at": "2026-07-02T00:31:34.367566Z"
+  "updated_at": "2026-07-02T00:45:19.506646Z"
 }

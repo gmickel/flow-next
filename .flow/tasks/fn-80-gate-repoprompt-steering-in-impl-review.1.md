@@ -2,12 +2,12 @@
 
 ## Description
 
-Copy the shipped fn-78 `RP_ELIGIBLE` guard (see `flow-next-plan-review/SKILL.md` for canonical wording) into `flow-next-impl-review/SKILL.md` and `flow-next-spec-completion-review/SKILL.md`, branching their user-facing backend steering on eligibility. Gate the guidance echoes in both skills' `workflow-common.md` (`:35` ASK-error hint, `:39` override echo). Regenerate the Codex mirror. CHANGELOG Unreleased entry. Steering only — resolution untouched. Do not disturb the adjacent Foreground-rule text added in 2.5.3.
+Copy the shipped fn-78 `RP_ELIGIBLE` guard (see `flow-next-plan-review/SKILL.md` for canonical wording) into `flow-next-impl-review/SKILL.md` and `flow-next-spec-completion-review/SKILL.md`, branching their user-facing backend steering on eligibility. Gate the guidance echoes in impl-review's `workflow-common.md` (`:35` ASK-error hint + `:39` override echo) and spec-completion-review's `workflow-common.md` (`:35` ASK-error hint only — its backend echo has no list). Regenerate the Codex mirror. CHANGELOG Unreleased entry. Steering only — resolution untouched. Do not disturb the adjacent Foreground-rule text added in 2.5.3.
 
 ## Acceptance
 
-- **R1:** The `RP_ELIGIBLE` guard (identical predicate to fn-78: `uname == "Darwin"` OR `command -v rp-cli`) is computed in canonical `flow-next-impl-review/SKILL.md` and `flow-next-spec-completion-review/SKILL.md` before their backend-guidance text renders.
-- **R2:** When `RP_ELIGIBLE=0`, both skills' steering — Backends summary, "Backend at a glance" (the "**rp** — … Primary backend." line), ASK-error messages, and `--review=…` override-hint echoes (SKILL.md sites + `workflow-common.md:35,39` in each skill) — omits rp and lists only `codex`/`copilot`/`cursor` (+ `none`).
+- **R1:** The `RP_ELIGIBLE` guard (identical predicate to fn-78: `uname == "Darwin"` OR `command -v rp-cli`) is computed **locally in every file whose text it gates** — both SKILL.md files AND each skill's `workflow-common.md` Phase 0 (self-contained docs; never reference the guard without computing it in-file). 3-line duplication is intentional (fn-78 inline-over-helper decision).
+- **R2:** When `RP_ELIGIBLE=0`, steering omits rp, listing only `codex`/`copilot`/`cursor` (+ `none`). Per-file: **impl-review** SKILL.md (Backends summary, at-a-glance rp/"Primary backend" line, ASK-error, override hints) + `workflow-common.md:35` AND `:39`; **spec-completion-review** SKILL.md (`:35,43,61,65,70,115`) + `workflow-common.md:35` ONLY (its backend echo prints just `Review backend: $BACKEND`, no list — NOT gated).
 - **R3:** When `RP_ELIGIBLE=1`, all surfaces render byte-for-byte as today.
 - **R4:** Resolution untouched: explicit `--review=rp` / `FLOW_REVIEW_BACKEND=rp` / `review.backend=rp` / per-task `review:` override still resolves to rp and reaches `require_rp_cli()`; `--review=rp` stays in the accepted-flag grammar; `workflow-rp.md` files unmodified.
 - **R5:** `scripts/sync-codex.sh` run; regenerated `plugins/flow-next/codex/**` committed; `git diff --exit-code plugins/flow-next/codex/` clean after a second regen; no hand-edits to the mirror.

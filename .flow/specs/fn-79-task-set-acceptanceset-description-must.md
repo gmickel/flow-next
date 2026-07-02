@@ -16,7 +16,7 @@ Deterministic plumbing writing a structurally wrong file is exactly what flowctl
 **One normalization helper, applied at every task-section write site.** Canonical task `.md` structure treats H2 (`## `) headings as section boundaries (skeleton: `## Description`, `## Acceptance`, `## Done summary`, `## Evidence`). Therefore *content* placed inside a section must never itself contain H2 headings.
 
 Normalization rules (pure function, e.g. `normalize_section_content(section: str, new_content: str) -> str`):
-1. Strip a leading H2 heading line when it equals the target section name (existing behavior, kept) **or** when it is a title-like variant of it (e.g. `## Acceptance Criteria (…)` for `## Acceptance`, `## Description — …` for `## Description`): case-insensitive prefix match on the section word.
+1. Strip a leading H2 heading line ONLY when it is the exact target section name (existing behavior, kept) or a **known title variant**: the section word optionally followed by the literal word `Criteria`/`criteria` (legacy forms), then optionally a separator-introduced suffix (`(`, `—`, `:`, `-`). Regex shape: `^##\s+Acceptance(\s+[Cc]riteria)?\s*([(:—-].*)?$` for `## Acceptance`; `^##\s+Description\s*([(:—-].*)?$` for `## Description`. A different word after the section word (e.g. `## Acceptance Tests`) is NOT a title variant — it is content and gets demoted by rule 2, never stripped.
 2. **Demote every remaining H2 (`## `) line inside the content to H3 (`### `)** so embedded structure survives visually but never becomes a section boundary.
 3. Leave H3+ headings, code fences, and prose untouched; do not demote `## ` occurrences inside fenced code blocks.
 
@@ -24,7 +24,7 @@ Applied at:
 - `patch_task_section` (`flowctl.py:5124`) — normalize `new_content` before splice (covers `task set-description`, `task set-acceptance`, and the section-patch mode of `task set-spec`).
 - `cmd_task_create`'s `--acceptance-file` embed path — normalize before writing the skeleton so the rogue section never enters the file.
 
-**Self-heal on write:** when `patch_task_section` detects the *current* file already carries a rogue layered section (an H2 immediately following the target section that is a title-like variant per rule 1 — the fn-78 damage shape), fold that rogue section's span into the replacement (i.e. replace through it) instead of preserving it, so one corrective `set-acceptance` heals a previously layered file. Conservative match: only title-like variants of the SAME section word are folded; unrelated H2s (`## Done summary` etc.) stay boundaries.
+**Self-heal on write:** when `patch_task_section` detects the *current* file already carries a rogue layered section (an H2 immediately following the target section that is a title-like variant per rule 1 — the fn-78 damage shape), fold **all contiguous** rogue title-variant spans (one or more — repeated layering stacks several) into the replacement, replacing through them until the next unrelated H2, so one corrective `set-acceptance` heals a previously layered file regardless of how many times it was layered. Conservative match: the fold set is the rule-1 grammar **minus the exact canonical heading** — a duplicate byte-exact `## Acceptance` still raises the existing duplicate-heading error (R6), only NON-canonical variants (`## Acceptance Criteria …`, `## Acceptance criteria`) are folded; unrelated H2s (`## Done summary` etc.) stay boundaries.
 
 ## API Contracts
 <!-- scope: technical -->
@@ -46,7 +46,7 @@ normalize_section_content(section: str, new_content: str) -> str
 <!-- scope: technical -->
 
 - **Fenced code blocks** containing `## ` lines (bash comments, markdown examples) must NOT be demoted — track fence state (``` / ~~~) while scanning.
-- **Legacy heading variants** (`## Acceptance criteria`, `## Acceptance Criteria`) are title-like variants of `## Acceptance` (case-insensitive first-word match) — both stripped as leading titles (rule 1) and folded by self-heal.
+- **Legacy heading variants** (`## Acceptance criteria`, `## Acceptance Criteria`) match the known-title-variant grammar from rule 1 — both stripped as leading titles and folded by self-heal. Anything outside that grammar (e.g. `## Acceptance Tests`) is content: demoted, never stripped or folded.
 - **Self-heal must not eat legitimate skeleton sections:** folding only applies to title-like variants of the target section word; `## Done summary` / `## Evidence` / `## Description` remain hard boundaries.
 - **Already-clean files** round-trip byte-identically (no gratuitous rewrites; `updated_at` bump only on actual change is NOT required — keep current always-bump behavior).
 - **Spec-side (`spec set-plan`) is out of scope** — it is full-file replacement, no section splice, no layering surface.
@@ -55,11 +55,11 @@ normalize_section_content(section: str, new_content: str) -> str
 ## Acceptance Criteria
 <!-- scope: both -->
 
-- **R1:** A single normalization helper strips a leading title-like H2 (byte-equal OR case-insensitive section-word variant, e.g. `## Acceptance Criteria (…)` for `## Acceptance`) and demotes all remaining H2 headings in section content to H3, skipping fenced code blocks.
+- **R1:** A single normalization helper strips a leading H2 only when it matches the target section's **known-title-variant grammar** (exact name; optional legacy `Criteria`/`criteria` word; optional separator-introduced suffix `(`/`—`/`:`/`-` — never an arbitrary different word like `## Acceptance Tests`, which is demoted, not stripped) and demotes all remaining H2 headings in content to H3, skipping fenced code blocks.
 - **R2:** `patch_task_section` applies the helper to `new_content`; `task set-acceptance` / `set-description` / `set-spec --acceptance/--description` produce exactly ONE target section — repeated invocation with the same input is byte-idempotent (no layering).
 - **R3:** `task create --acceptance-file` applies the helper before embedding, so an input file beginning with its own `## Acceptance Criteria …` H2 yields a well-formed skeleton with no rogue sibling section.
-- **R4:** Self-heal: on a file already damaged in the fn-78 shape (rogue title-like H2 section directly after the target section), one `set-acceptance` call replaces the target section AND the rogue span, leaving one clean section. Unrelated skeleton sections are never folded.
-- **R5:** Regression tests cover: leading-H2 acceptance file at create; set-acceptance twice (idempotent, no layering); embedded H2 demotion; `## ` inside code fences untouched; legacy `## Acceptance criteria` variant; self-heal of a pre-layered file; unrelated-section preservation.
+- **R4:** Self-heal: on a file already damaged in the fn-78 shape (one OR MORE contiguous rogue NON-canonical title-variant H2 spans directly after the target section), one `set-acceptance` call replaces the target section AND every contiguous rogue span, leaving one clean section. The fold set excludes the exact canonical heading — a duplicate byte-exact `## Acceptance` still raises the existing duplicate-heading error (R6). Unrelated skeleton sections are never folded.
+- **R5:** Regression tests cover: leading-H2 acceptance file at create; set-acceptance twice (idempotent, no layering); embedded H2 demotion; `## ` inside code fences untouched; legacy `## Acceptance criteria` variant; self-heal of a pre-layered file AND of a doubly-layered file (two-plus rogue spans); `## Acceptance Tests` demoted-not-stripped (variant-grammar negative case); unrelated-section preservation.
 - **R6:** Existing error semantics (duplicate canonical heading, missing section) and JSON output are unchanged; full existing test suite green (`python3 -m unittest` + `bash tests/smoke_test.sh` or repo equivalent).
 - **R7:** Docs: `docs/flowctl.md` section for `task set-acceptance`/`set-description`/`create --acceptance-file` gains one line documenting the normalization (content H2s demoted; leading title stripped). CHANGELOG `## Unreleased` entry. No version bump in this spec (batched).
 
