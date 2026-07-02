@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **Codex hooks config no longer written as a duplicate/deprecated key** — `install-codex.sh` still wrote the **deprecated** `codex_hooks = true` (which Codex warns on every run) and was blind to an existing `hooks = true`, so a config that already carried the modern key ended up with BOTH; and `flow-next-setup` Step 4b's naive `sed codex_hooks→hooks` migration could turn that pair into a **duplicate `hooks` key**, which is invalid TOML and silently breaks Codex hook loading. Both paths now converge through one idempotent, dedup-safe normalizer (`scripts/normalize_codex_hooks.py`, mirrored inline in the setup skill): exactly one `hooks = true` under `[features]`, zero `codex_hooks`, everything else byte-preserved, re-running is a no-op. Regression-tested (`test_codex_hooks_normalize.py`, 10 cases incl. the both-keys scenario). Codex mirror regenerated via `scripts/sync-codex.sh`.
+
 ## [flow-next 2.6.0] - 2026-07-02
 
 ### Changed

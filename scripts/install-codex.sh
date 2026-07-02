@@ -233,28 +233,11 @@ if grep -q "# --- flow-next features" "$CONFIG" 2>/dev/null; then
     rm -f "${CONFIG}.bak"
 fi
 
-# Merge codex_hooks = true into [features] (TOML disallows duplicate tables)
-if ! grep -q '^codex_hooks = true' "$CONFIG"; then
-    if grep -q '^\[features\]' "$CONFIG"; then
-        # Existing [features] block — insert key after header (portable awk)
-        awk '
-          /^\[features\]/ && !inserted {
-            print
-            print "codex_hooks = true  # flow-next"
-            inserted = 1
-            next
-          }
-          { print }
-        ' "$CONFIG" > "${CONFIG}.new" && mv "${CONFIG}.new" "$CONFIG"
-    else
-        # No [features] block yet — create one
-        {
-            echo ""
-            echo "[features]"
-            echo "codex_hooks = true  # flow-next"
-        } >> "$CONFIG"
-    fi
-fi
+# Ensure exactly one `hooks = true` under [features], migrating away from the
+# deprecated `codex_hooks` spelling and de-duplicating. Idempotent + dedup-safe:
+# handles a config that already carries BOTH codex_hooks and hooks (which older
+# versions of this script produced) without leaving an invalid duplicate key.
+python3 "$SCRIPT_DIR/normalize_codex_hooks.py" "$CONFIG"
 
 # Generate agent entries
 CODEX_MAX_THREADS="${CODEX_MAX_THREADS:-12}"
@@ -286,7 +269,7 @@ CODEX_MAX_THREADS="${CODEX_MAX_THREADS:-12}"
 } >> "$CONFIG"
 
 echo -e "  ${GREEN}✓${NC} config.toml ($AGENT_COUNT agent entries, max_threads=$CODEX_MAX_THREADS)"
-echo -e "  ${GREEN}✓${NC} [features] codex_hooks = true"
+echo -e "  ${GREEN}✓${NC} [features] hooks = true"
 
 # ====================
 # Summary

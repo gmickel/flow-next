@@ -291,17 +291,51 @@ fi
 ```bash
 if [ -f .codex/config.toml ]; then
  # `[features].hooks` is the current key; `codex_hooks` is the deprecated
- # pre-2026 spelling (Codex warns on every run). A repo carrying ONLY the old
- # key still needs the new one written — detect them separately (the old key
- # must not satisfy the check), and migrate the old spelling in place.
- if grep -qE '^ *codex_hooks *= *true' .codex/config.toml 2>/dev/null; then
- sed -i.bak 's/^ *codex_hooks *= *true/hooks = true/' .codex/config.toml && rm -f .codex/config.toml.bak
- echo "Migrated deprecated codex_hooks -> hooks in .codex/config.toml"
- fi
- if ! grep -qE '^ *hooks *= *true' .codex/config.toml 2>/dev/null; then
- echo -e '\n[features]\nhooks = true' >> .codex/config.toml
- echo "Enabled hooks in .codex/config.toml"
- fi
+ # pre-2026 spelling (Codex warns on every run). Goal: EXACTLY ONE
+ # `hooks = true` under [features], NO `codex_hooks`. This must stay dedup-safe:
+ # a config carrying BOTH keys (older setup/install left this) would, under a
+ # naive `sed codex_hooks->hooks`, gain a DUPLICATE `hooks` key — invalid TOML
+ # that breaks Codex hook loading. Use python3 to normalize idempotently.
+ python3 - .codex/config.toml <<'PY'
+import re, sys
+path = sys.argv[1]
+HOOKS = "hooks = true # flow-next"
+sec = re.compile(r"^\s*\[([^\]]+)\]\s*$")
+old = re.compile(r"^\s*codex_hooks\s*=")
+new = re.compile(r"^\s*hooks\s*=")
+try:
+ text = open(path, encoding="utf-8").read()
+except FileNotFoundError:
+ text = ""
+out, in_feat, feat_seen, kept = [], False, False, False
+for line in text.splitlines():
+ m = sec.match(line)
+ if m:
+ if in_feat and not kept:
+ out.append(HOOKS); kept = True
+ in_feat = m.group(1).strip() == "features"
+ if in_feat:
+ feat_seen = True; kept = False
+ out.append(line); continue
+ if in_feat:
+ if old.match(line):
+ continue # drop deprecated key
+ if new.match(line):
+ if kept:
+ continue # drop duplicate hooks
+ kept = True; out.append(line); continue
+ out.append(line)
+if in_feat and not kept:
+ out.append(HOOKS)
+if not feat_seen:
+ if out and out[-1].strip():
+ out.append("")
+ out += ["[features]", HOOKS]
+result = "\n".join(out).rstrip("\n") + "\n"
+if result != text:
+ open(path, "w", encoding="utf-8").write(result)
+ print("Normalized .codex/config.toml -> single [features] hooks = true")
+PY
 fi
 ```
 
