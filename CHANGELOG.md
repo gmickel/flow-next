@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **`flowctl task set-acceptance` / `set-description` now replace the whole section — H2-in-input layering fix** (fn-79) — found live in the fn-78 autonomous dogfood: agents routinely pass section content that begins with its own `## Acceptance Criteria (…)` H2, and the section plumbing mishandled that shape at two write sites (`task create --acceptance-file` embedded the rogue H2 verbatim as a sibling section; `patch_task_section` then treated it as a boundary, so every subsequent `set-acceptance` *layered* a new block above the old one — a cursor plan-review round was wasted on the resulting contradiction). All task-section write sites (`task set-description` / `set-acceptance` / `set-spec --description/--acceptance` / `create --acceptance-file`) now normalize content through a single helper: a leading H2 is stripped only when it matches the section's known-title-variant grammar (exact name, legacy `Criteria`/`criteria` word, optional `(`/`—`/`:`/`-` suffix — `## Acceptance Tests` is content, demoted, never stripped), and remaining H2 headings are demoted to H3 outside fenced code blocks. Writes are byte-idempotent (no layering), and a self-heal folds contiguous rogue title-variant sections from already-damaged files on the next section write — while a byte-exact duplicate `## Acceptance` still raises the existing duplicate-heading error. Pure stdlib; JSON output and error semantics unchanged.
+
 ## [flow-next 2.5.3] - 2026-07-02
 
 ### Fixed
