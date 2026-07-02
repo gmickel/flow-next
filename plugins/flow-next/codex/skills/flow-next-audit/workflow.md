@@ -433,12 +433,7 @@ For each entry, the recommendation from Phase 1 + cross-doc context from Phase 1
 
 ### Replace evidence sufficiency check
 
-Replace requires writing a trustworthy successor. Assess whether Phase 1 investigation gathered enough:
-
-- **Sufficient** — you understand the old recommendation AND the current approach. File paths, current pattern, why old guidance is misleading. → proceed to Phase 4 Replace flow.
-- **Insufficient** — the drift is so fundamental you can't confidently document the current approach. Entire subsystem replaced; new architecture too complex to summarize from a file scan. → mark stale (Phase 4 stale flow).
-
-In autofix mode, "insufficient evidence" always routes to mark-stale, never to a half-baked Replace.
+Replace requires writing a trustworthy successor. Apply the **Evidence sufficiency check** in [phases.md](phases.md) §Replace (the gate): sufficient → Phase 4 Replace flow; insufficient → Phase 4 stale flow. In autofix mode, "insufficient evidence" always routes to mark-stale, never to a half-baked Replace.
 
 ### Auto-Delete criteria (must meet ALL)
 
@@ -554,28 +549,11 @@ If a cluster has 3+ overlapping entries, process pairwise: consolidate the two m
 
 Process Replace candidates **one at a time, sequentially.** Each replacement may need significant code investigation to write the successor — running multiple in parallel risks orchestrator context exhaustion.
 
-When evidence is sufficient (Phase 2 check):
+Execute per [phases.md](phases.md) §Replace — the authoritative copy:
 
-1. Spawn a single subagent (sequential) to write the replacement entry. Pass:
- - The old entry's full content.
- - A summary of investigation evidence (what changed, what current code does, why old guidance misleads).
- - The target track + category (same as old entry unless category itself drifted).
- - The memory schema reference: required fields = `title`, `date`, `track`, `category`. Track-specific = `problem_type` / `symptoms` / `root_cause` / `resolution_type` for bug; `applies_when` for knowledge. Optional = `module`, `tags`, `related_to`. (See `MEMORY_REQUIRED_FIELDS` / `MEMORY_BUG_FIELDS` / `MEMORY_KNOWLEDGE_FIELDS` / `MEMORY_OPTIONAL_FIELDS` constants in `flowctl.py:3679-3696`.)
-2. The subagent uses the Write tool OR `flowctl memory add --track <t> --category <c> --title "..." --body-file <path>` to land the file. Either works — flowctl `add` enforces schema validation; direct Write requires the subagent to emit valid frontmatter.
-3. After the subagent completes, the orchestrator `git rm`'s the old entry. Optionally include `related_to: [<old-id>]` in the new entry's frontmatter for traceability.
-
-When evidence is insufficient:
-
-1. Mark the entry as stale: `flowctl memory mark-stale <id> --reason "<what was found>" --audited-by "/flow-next:audit"`.
-2. Report what evidence was found and what's missing.
-3. Recommend the user run a domain-specific solve afterwards to capture fresh context.
-
-**Replace flow for `knowledge/decisions/` entries** — the old entry is **not** `git rm`'d. Decision history stays on disk. Two-step supersession:
-
-1. Subagent (or orchestrator on the main thread for short successors) writes the new decision entry under `.flow/memory/knowledge/decisions/<slug>-<date>.md`. Include `related_to: [<old-id>]` and, when known, `alternatives_considered` listing both the original alternatives and the prior decision (now also rejected).
-2. Orchestrator edits the old entry's frontmatter via Write tool: set `decision_status: superseded` and `superseded_by: <new-entry-id>`. Body untouched. Other frontmatter fields preserved (round-trip rules from §4.2 apply).
-
-Insufficient evidence on a decision Replace routes to mark-stale on the old entry — same path as non-decision Replace, but the operator's follow-up is "draft the new decision when the constraint settles" rather than "research the new code shape."
+- Evidence **sufficient** (Phase 2 check) → §Replace "Action steps (sufficient evidence)".
+- Evidence **insufficient** → §Replace's mark-stale fallback (same helper as §4.6).
+- `knowledge/decisions/` entries → §"Replace = supersede": the old entry is **never** `git rm`'d — decision history stays on disk (round-trip rules from §4.2 apply when editing its frontmatter).
 
 ### 4.4.1 — Glossary stale-marking (Phase 0.5 outcomes)
 
@@ -601,13 +579,7 @@ Only execute Delete when ALL auto-Delete criteria hold (Phase 2 §Auto-Delete). 
 
 ### 4.6 — Mark-stale flow (autofix ambiguous + Replace-insufficient)
 
-```bash
-"$FLOWCTL" memory mark-stale "$ENTRY_ID" \
- --reason "<one-line ambiguity description>" \
- --audited-by "/flow-next:audit"
-```
-
-The helper sets `status: stale`, stamps `last_audited` (today's date), records `audit_notes` from `--reason`. Atomic via existing `write_memory_entry` — preserves unknown frontmatter fields.
+Execute per [phases.md](phases.md) §"Mark stale (autofix ambiguous + Replace-insufficient)" — the `flowctl memory mark-stale` helper with `--reason` + `--audited-by "/flow-next:audit"`. Never hand-edit frontmatter for stale-flagging; the helper is atomic and preserves unknown fields.
 
 ### Done when
 

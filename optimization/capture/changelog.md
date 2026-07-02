@@ -47,3 +47,26 @@ experiment (the obvious DRY candidate regressed biz-routing). The durable R5 del
 A future experiment could try a *non-routing* trim (e.g. compressing the §5.0 strategy-override
 heredoc, which is verbose and NOT exercised by these inputs) — but routing/taxonomy tables in
 workflow.md should be treated as load-bearing and left in place.
+
+## Experiment 2 — re-baseline (fn-82.4, 2026-07-02)
+**Score:** 15/15  [C1 5/5, C2 5/5, C3 5/5]. Fresh baseline on the fn-82 branch (post fn-81
+single-emission reshape) before the far-copy dedupe — the exp-0/1 rows predate that reshape.
+C1: all ACs [user]/[paraphrase], tally + [inferred] breakdown, Decision Context FLAT. C2: cat-3
+success-metric routed to outcome-AC R7 + `### Motivation`, SUBSTRUCTURED, zero [inferred] in biz
+lines. C3: refused (exit 2), named fn-91, no draft — override guard intact.
+
+## Experiment 3 — KEEP (fn-82.4 far-copy dedupe, inverse of exp 1)
+**Score:** 15/15 (held baseline)  [C1 5/5, C2 5/5, C3 5/5]
+**Change (one hypothesis = dedupe the FAR copy, survivor at the consumer):** exp 1 (discarded)
+removed the workflow.md §2.6 copy and regressed C2. This experiment does the inverse: the FULL
+nine-category routing table (incl. the trigger-phrasing column) + the 2 rules that existed only
+in phases.md moved verbatim INTO workflow.md §2.6 — right beside the §2.2 drafting step that
+consumes it — and phases.md §Biz-context signal routing became a pointer (−3.9KB). Net
+always-loaded saving ~2.5KB (~630 tok)/run. Source-tag taxonomy + forbidden-behaviors recap were
+analyzed and SKIPPED (complementary copies / imperative-rules-at-action-site — see
+optimization-log.md row).
+**Result:** C2's cat-3 routing held (outcome-AC R6 + `### Motivation`, SUBSTRUCTURED) — the exact
+behavior exp 1 broke. C3 still refuses (exit 2, names fn-91, preserves the hand-edit). C1 clean
+(Decision Context stayed non-substructured for the zero-biz input; this run omitted the section
+entirely per the empty-by-default rule where baseline wrote a FLAT body — R22-consistent either
+way, no scaffolding leaked). KEEP.

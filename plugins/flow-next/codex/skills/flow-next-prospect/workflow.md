@@ -11,9 +11,20 @@ FLOWCTL="$HOME/.codex/scripts/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 PROSPECTS_DIR="$REPO_ROOT/.flow/prospects"
 TODAY="$(date -u +%Y-%m-%d)"
+
+# Python picker — CANONICAL copy. Resolve a working Python once per bash block
+# (functionality probe — the Windows Store python3 alias stub satisfies
+# `command -v` but exits 9009; the probe skips it). Order mirrors the shared
+# scripts/lib/pick-python.sh resolver.
+PY=""
+for _c in "${PYTHON_BIN:-}" "py -3" python3 python; do
+ [ -n "$_c" ] || continue
+ $_c -c "import sys" >/dev/null 2>&1 && { PY="$_c"; break; }
+done
+[ -n "$PY" ] || { echo "prospect: no working Python interpreter found" >&2; exit 1; }
 ```
 
-`jq` and a working Python (`python3`, `python`, or `py -3` on Windows) must be on PATH — each Python block resolves one into `$PY` via a functionality probe, so the Windows Store `python3` alias stub (exits 9009) is skipped, not selected. The skill prefers stdlib-only Python for any frontmatter parsing — see Phase 0.
+`jq` and a working Python (`python3`, `python`, or `py -3` on Windows) must be on PATH. **Bash vars do NOT survive across prompt turns** — any later bash block that uses `$PY` (Phase 0 §0.2, Phase 2 §2.4, Phase 5 §5.2) must re-declare the Preamble picker block VERBATIM at its top before invoking `$PY`. The skill prefers stdlib-only Python for any frontmatter parsing — see Phase 0.
 
 ---
 
@@ -60,15 +71,8 @@ Mark `status: corrupt` if any of those checks fail. Mark `status: stale` if the 
 A single Python helper keeps this cheap and dependency-free. Inline it directly in the skill rather than shelling out per file:
 
 ```bash
-# Resolve a working Python once (functionality probe — the Windows Store python3
-# alias stub satisfies `command -v` but exits 9009; the probe skips it). Order
-# mirrors the shared scripts/lib/pick-python.sh resolver.
-PY=""
-for _c in "${PYTHON_BIN:-}" "py -3" python3 python; do
- [ -n "$_c" ] || continue
- $_c -c "import sys" >/dev/null 2>&1 && { PY="$_c"; break; }
-done
-[ -n "$PY" ] || { echo "prospect: no working Python interpreter found" >&2; exit 1; }
+# Re-resolve $PY: re-declare the Preamble's canonical picker block verbatim
+# here first (vars die across prompt turns).
 
 $PY - "$PROSPECTS_DIR" "$TODAY" <<'PY'
 import os, sys, json, re
@@ -179,10 +183,8 @@ open N — print the path to artifact #N and exit Phase 0
 ### 0.5 — Routing
 
 - `fresh` → continue to Phase 1 with no prior-session context.
-- `extend N` → record `EXTEND_TARGET=<artifact path>` for use in Phase 5 (task 3 will append a dated section); for now, continue to Phase 1 noting the target in the snapshot.
+- `extend N` → record `EXTEND_TARGET=<artifact path>` for use in Phase 5 (which appends a dated section to it); continue to Phase 1 noting the target in the snapshot.
 - `open N` → print `Artifact: <absolute path>` to stdout and exit 0. Do not run Phase 1.
-
-The `extend` / `open` paths are the same across this task and downstream tasks; only `extend`'s artifact-write side-effect lands in task 3.
 
 ---
 
@@ -202,7 +204,7 @@ Classify the hint by surface:
 
 - Empty → `FOCUS_KIND=open-ended`. No further checks.
 - Looks like a path (contains `/`, no spaces, `realpath -m "$REPO_ROOT/$FOCUS_HINT"` resolves under `$REPO_ROOT`) → `FOCUS_KIND=path`, set `FOCUS_PATH="$FOCUS_HINT"`.
-- Matches one of `top N`, `N ideas`, `raise the bar` → `FOCUS_KIND=volume`. Volume semantics are interpreted in Phase 2 (task 2); record verbatim here.
+- Matches one of `top N`, `N ideas`, `raise the bar` → `FOCUS_KIND=volume`. Volume semantics are interpreted in Phase 2; record verbatim here.
 - Anything else → `FOCUS_KIND=concept`. Hint flows to Phase 2 prompts as-is.
 
 If `FOCUS_KIND == path` and `[[ ! -e "$REPO_ROOT/$FOCUS_PATH" ]]`, the hint resolves to nothing on disk. Ask via plain-text numbered prompt whether to (a) continue open-ended, (b) re-enter a different hint, or (c) abort. Do not assume open-ended silently — the user typed a path for a reason.
@@ -356,7 +358,7 @@ The `target_problem`, `approach`, and `tracks` strings are emitted **verbatim** 
 
 Concatenate the blocks under a single `## Grounding snapshot` heading. Order is fixed (git log → open specs → changelog → memory → memory audit → strategy) so the snapshot is comparable across runs. Cap each block by line-count so total output stays in the 30-50 line target window.
 
-The snapshot is the input to Phase 2's generation prompt (task 2). For this task, the snapshot is printed to stdout for manual inspection — Phase 2's prompt scaffolding lands later.
+The snapshot flows directly into Phase 2's generation prompt (and, verbatim, into the Phase 3 critique and the Phase 5 artifact) — compose it once here:
 
 ```bash
 cat <<EOF
@@ -382,9 +384,7 @@ EOF
 
 ### 1.4 — Manual smoke (acceptance R1, R17)
 
-In the flow-next plugin repo: `prospect DX` should produce a readable snapshot listing recently-modified files, open specs (e.g. fn-33 itself), CHANGELOG entries from the last few releases, memory hits if memory is initialised, and `scanned: none (...)` lines for any absent source. The snapshot must fit in roughly 30-50 lines of output and must not contain raw file bodies.
-
-If grounding can't produce a useful snapshot from a real repo (too noisy / too sparse / too slow), this is the early-proof-point gate — re-evaluate scanning strategy before building Phases 2-5.
+In the flow-next plugin repo: `prospect DX` should produce a readable snapshot listing recently-modified files, open specs, CHANGELOG entries from the last few releases, memory hits if memory is initialised, and `scanned: none (...)` lines for any absent source. The snapshot must fit in roughly 30-50 lines of output and must not contain raw file bodies.
 
 ---
 
@@ -499,14 +499,8 @@ The `GENERATION_TARGET_DESCRIPTION` slot:
 Parse the model output. The skill must accept output the model wraps in ```yaml fences as well as bare YAML. A defensive parser:
 
 ```bash
-# Resolve a working Python once (functionality probe — skips the Windows Store
-# python3 alias stub that exits 9009). Order mirrors scripts/lib/pick-python.sh.
-PY=""
-for _c in "${PYTHON_BIN:-}" "py -3" python3 python; do
- [ -n "$_c" ] || continue
- $_c -c "import sys" >/dev/null 2>&1 && { PY="$_c"; break; }
-done
-[ -n "$PY" ] || { echo "prospect: no working Python interpreter found" >&2; exit 1; }
+# Re-resolve $PY: re-declare the Preamble's canonical picker block verbatim
+# here first (vars die across prompt turns).
 
 $PY - <<'PY'
 import sys, re, yaml # PyYAML may not be installed — fall back to a stdlib loader if needed.
@@ -631,7 +625,7 @@ Frozen string format (R12 anchor — must match across backends): `regenerate | 
 Materialize:
 
 - `SURVIVORS` — list of `{candidate, critique}` pairs where `critique.verdict == "keep"`. Order preserved from Phase 2.
-- `DROPS` — list of `{candidate, critique}` pairs where `critique.verdict == "drop"`. Used by Phase 5 (task 3) to populate the `## Rejected` section.
+- `DROPS` — list of `{candidate, critique}` pairs where `critique.verdict == "drop"`. Used by Phase 5 to populate the `## Rejected` section.
 
 If `len(SURVIVORS) == 0`, surface a plain-text numbered prompt:
 
@@ -733,7 +727,7 @@ Materialize `RANKED` — the parsed ranking with each survivor's full candidate 
 2. Worth considering entries by position
 3. If you have the time entries by position
 
-`RANKED` plus `DROPS` (Phase 3 §3.3) is the input to Phase 5 (task 3) — the artifact writer.
+`RANKED` plus `DROPS` (Phase 3 §3.3) is the input to Phase 5 — the artifact writer.
 
 ---
 
@@ -758,14 +752,8 @@ Materialize `RANKED` — the parsed ranking with each survivor's full candidate 
 Use the bundled helpers — both are stdlib-only and concurrency-safe:
 
 ```bash
-# Resolve a working Python once (functionality probe — skips the Windows Store
-# python3 alias stub that exits 9009). Order mirrors scripts/lib/pick-python.sh.
-PY=""
-for _c in "${PYTHON_BIN:-}" "py -3" python3 python; do
- [ -n "$_c" ] || continue
- $_c -c "import sys" >/dev/null 2>&1 && { PY="$_c"; break; }
-done
-[ -n "$PY" ] || { echo "prospect: no working Python interpreter found" >&2; exit 1; }
+# Re-resolve $PY: re-declare the Preamble's canonical picker block verbatim
+# here first (vars die across prompt turns).
 
 $PY - "$PROSPECTS_DIR" "$FOCUS_HINT" "$TODAY" <<'PY'
 import importlib.util, os, sys
@@ -813,7 +801,7 @@ frontmatter = {
  "rejected_count": rejected_count, # int
  "rejection_rate": rejection_rate, # float, two decimals
  "artifact_id": artifact_id,
- "promoted_ideas": [], # task 5 (promote) appends here
+ "promoted_ideas": [], # `flowctl prospect promote` appends here
  "status": "active",
 }
 # Optional flags — set ONLY when upstream phases provided them.
@@ -920,4 +908,4 @@ Normalize the reply (strip whitespace, lowercase). Route by exact match:
 
 ### 6.4 — Exit cleanly regardless
 
-The artifact is on disk. Phase 6 does not retry, does not extend, does not delete. If `flowctl prospect promote` errors (task 5 lands the command), surface its stderr verbatim and exit non-zero — the user can re-run promote manually with the artifact id printed in the saved-to line.
+The artifact is on disk. Phase 6 does not retry, does not extend, does not delete. If `flowctl prospect promote` errors, surface its stderr verbatim and exit non-zero — the user can re-run promote manually with the artifact id printed in the saved-to line.

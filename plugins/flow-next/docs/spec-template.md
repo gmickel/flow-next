@@ -24,7 +24,7 @@ When a skill needs the spec template, it walks four locations in order (first ma
 3. `.flow/templates/spec.md` — project-local copy from `/flow-next:setup`
 4. `${PLUGIN_ROOT}/templates/spec.md` — bundled (canonical source of truth)
 
-Case-insensitive FS handling (macOS APFS, Windows NTFS) and the bash walker that implements it lives in [`../skills/flow-next-interview/SKILL.md`](../skills/flow-next-interview/SKILL.md) (search for "4-tier discovery cascade"). Copy + customize tier 1 to override the scaffold for your project.
+Case-insensitive FS handling (macOS APFS, Windows NTFS) and the bash walker that implements it live in [`../references/spec-template-discovery.md`](../references/spec-template-discovery.md). Copy + customize tier 1 to override the scaffold for your project.
 
 ## Acceptance criteria — R-ID rules
 

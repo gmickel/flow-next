@@ -4,12 +4,12 @@ date: "2026-06-10"
 track: bug
 category: build-errors
 module: plugins/flow-next/skills/flow-next-pilot/workflow.md
-tags: [fn-59, pilot, skill-authoring, flowctl-json, task-status, rp-review, fn-68, backlog-mode, safety-gates, dry-run, review-feedback]
+tags: [fn-59, pilot, skill-authoring, flowctl-json, task-status, rp-review, fn-68, backlog-mode, safety-gates, dry-run, review-feedback, fn-82, skill-prose, dedupe, progressive-disclosure]
 problem_type: build-error
 symptoms: "RP impl-review 2x NEEDS_WORK: assignee read from listing that lacks it, phantom flowctl whoami, ready/open vs todo status enum, var used before assignment"
 root_cause: "Workflow bash written from spec vocabulary without verifying flowctl JSON emitters, status enums, and subcommand existence"
 resolution_type: fix
-last_updated: "2026-06-27"
+last_updated: "2026-07-02"
 ---
 
 ## Problem
@@ -50,3 +50,17 @@ Stating an invariant in prose next to an illustrative snippet, and defining a gu
 
 ## Prevention
 When authoring a config-gated mode on an existing skill: (a) every safety invariant the prose promises must be a HARD bash branch (flag/assert/exit) at the site it protects — never prose-only, never a guard floating on a var assigned in a different phase; (b) any mode-specific side-effect (`export`, helper def, dispatch) must live INSIDE the `if mode==X` branch so the gate-off path is provably side-effect-free; (c) cross-check the `--dry-run` / inspection path dispatches NOTHING and mutates NOTHING — gate every dispatch on the dry-run flag and short-circuit to the diagnostic terminal before routing; (d) keep the live verdict enum and any diagnostic-only verdict in explicitly separate grammars. This is the fn-68.4 instance of `skill-workflow-snippets-must-enforce` — two NEEDS_WORK rounds, same root cause.
+
+## Update 2026-07-02
+
+## Problem
+fn-82.1 deduped pilot's backlog SELECT/TRIAGE/ASK prose "with a one-line pointer per phase" to backlog-mode.md, but the first pass kept step-level parenthetical restatements ("backlog-mode.md 1a — never blocks, never prompts; inactive-bridge no-op falls back…") and re-enumerated the triage class table in the Phase 1.6 intro. RP impl-review flagged it Major: the prose was still double-sourced and the always-loaded diet goal (R2) unmet.
+
+## What Didn't Work
+Treating "one-line pointer" as "one line that also summarizes the mechanics". A pointer that restates the pointed-at content is still a duplicate — reviewers (and token counts) read it as such.
+
+## Solution
+Commit 691c9a2d: pointers reduced to bare section references (`(backlog-mode.md 1a)`), the class-table enumeration dropped from the Phase 1.6 intro, and the redundant class→terminal mapping paragraph deleted (the pre-existing route-by-class sentence already carried it). Kept inline: enforcing bash, invariants #1–#4, dry-run rules (workflow-owned, absent from the reference), and verdict-grammar lines.
+
+## Prevention
+When a spec says "delegate prose with a one-line pointer per phase": the pointer names the owning file+section and NOTHING of the mechanics. Before committing, re-read each pointer and ask "does any clause here restate what the reference says?" — if yes, cut it. Keep only content the reference genuinely does not own (enforcing bash, invariants, verdict grammar, mode-specific rules like dry-run).

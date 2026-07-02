@@ -2,20 +2,6 @@
 
 Execute these phases in order. Each gates on the prior. Stop on a user-blocking error — never plow through with bad state, and never fabricate evidence to keep going.
 
-The phases below are laid out as **disjoint, clearly-delimited sections** so the serial downstream tasks each edit ONE section without colliding on this shared file:
-
-| Phase | Section anchor | Owner |
-|-------|----------------|-------|
-| discover | `## Phase 1: discover` | fn-53.1 (this task) |
-| derive | `## Phase 2: derive` | fn-53.1 (this task) |
-| prepare | `## Phase 3: prepare` | fn-53.3 |
-| execute | `## Phase 4: execute` | fn-53.4 |
-| file | `## Phase 5: file` | fn-53.2 |
-| verdict | `## Phase 6: verdict` | fn-53.2 |
-| autonomy | `## Phase A: autonomy` | fn-53.4 |
-
-Downstream tasks: replace only the body under your owned anchor. Do NOT touch a sibling phase's section — that is what keeps this file merge-safe across the serial task chain.
-
 ## Preamble
 
 ```bash
@@ -267,8 +253,6 @@ Scenarios carry forward to Phase 3 (prepare) and Phase 4 (execute). At least one
 
 ## Phase 3: prepare
 
-<!-- OWNER: fn-53.3 — accounts, session hygiene, device matrix; BRB lean-borrow reference. -->
-
 **Goal:** make the live app driveable before Phase 4 touches it — resolve the **target URL / app**, **test accounts**, **session hygiene**, and the **device matrix** (one desktop + one mobile viewport). The QA discipline this phase applies (the five hygiene rules, persona suffixing, the write-path-first / one-tab-per-shard caution) is the lean BRB borrow in **[references/qa-discipline.md](references/qa-discipline.md)** — read it before preparing. When `NO_PROMPT=0`, ask the user (`plain-text numbered prompt`, info-only — never a confirm gate) when the URL or accounts are undocumented (R7). When `NO_PROMPT=1` (autonomous / Ralph — the Autonomous-mode gate), an undocumented URL / accounts is a hard limitation → BLOCKED (§6.3) + clean exit, never a prompt.
 
 **Driving stays fn-51's job.** This phase resolves *what to drive and as whom*; the concrete commands (set viewport, clear storage, save/load auth state) live in fn-51's references — point at them, never duplicate the prose:
@@ -331,49 +315,36 @@ After Phase 3, each scenario carries: its persona (+ suffix), its viewport(s), i
 
 ## Phase 4: execute
 
-<!-- OWNER: fn-53.4 — drive the live app via the fn-51 read-and-drive contract; autonomy routing.
- Fill the body below. Do NOT edit sibling phase sections. -->
+**Goal:** drive each scenario against the live app via the **fn-51 read-and-drive contract** (the host reads fn-51's workflow + references and executes `observe → snapshot → act → verify → capture` itself — QA never re-implements driving). Record the evidence tuple per scenario: `{driver_rung, target_url, viewport, screenshot_path, console_path}`; transient evidence (screenshots, console dumps) lands under `.flow/tmp/` (gitignored), referenced by path, never inlined.
 
-**Goal:** drive each scenario against the live app via the **fn-51 read-and-drive contract** (the host reads fn-51's workflow + references and executes `observe → snapshot → act → verify → capture` itself — QA never re-implements driving). Record the evidence tuple per scenario: `{driver_rung, target_url, viewport, screenshot_path, console_path}`; transient evidence (screenshots, console dumps) lands under `.flow/tmp/` (gitignored), referenced by path, never inlined. *(Skeleton anchor — full execution + autonomy implemented in fn-53.4.)*
+### 4.1 — The fn-51 read-and-drive contract
 
-### 4.1 — The fn-51 read-and-drive contract (skeleton — proof point)
-
-This task (fn-53.1) exercises the contract end-to-end on ≥1 derived scenario to prove the thesis:
+Execute the contract per scenario:
 
 1. **Read fn-51's driving flow** — `plugins/flow-next/skills/flow-next-drive/SKILL.md` (surface detection + universal flow + ladder) and the relevant rung reference under `plugins/flow-next/skills/flow-next-drive/references/`. Do NOT duplicate that prose here.
-2. **Resolve a target.** A live deploy URL or a localhost app. If none is reachable, jump to the BLOCKED proof receipt (§4.2) — the R13 graceful-surface path.
+2. **Resolve a target.** A live deploy URL or a localhost app. If none is reachable, jump to the BLOCKED routing (§4.2) — the R13 graceful-surface path.
 3. **Drive the scenario** via fn-51's universal flow (`observe → snapshot fresh refs → act → verify → capture`), using whatever driver rung the environment resolves (agent-browser is the only assumed-present driver; everything else is probe-and-degrade).
 4. **Capture evidence.** Screenshot + console at the moment of interest to `.flow/tmp/qa-<spec-id>/`, and record the evidence tuple.
 
-### 4.2 — BLOCKED proof receipt (R13 path — no live target)
+### 4.2 — BLOCKED routing (R13 path — no live target)
 
-When no live deploy + driver is reachable, the proof point is still satisfied: it proves scenario derivation + the fn-51 dispatch handoff + the evidence-tuple plumbing — only the captured screenshot is absent. Capture the transient proof-of-handoff under `.flow/tmp/`, then **set `QA_OUTCOME=BLOCKED` and fall through to §6.3 to write the committed `qa_verdict`** — do **not** stop here:
+When no live deploy + driver is reachable, **set `QA_OUTCOME=BLOCKED` and fall through to §6.3 to write the committed `qa_verdict`** — do **not** stop here:
 
 ```bash
-mkdir -p .flow/tmp/qa-"$SPEC_ID"
-cat > .flow/tmp/qa-"$SPEC_ID"/proof-receipt.json <<EOF
-{ "type": "qa_proof", "id": "$SPEC_ID", "outcome": "BLOCKED",
- "blocked_reason": "<no live deploy reachable | no driver available>",
- "scenarios_derived": <N>, "evidence_tuple_plumbed": true,
- "fn51_handoff": "read-and-drive contract exercised; driver probe found <rung|none>",
- "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)" }
-EOF
 # Route to §6.3 — the committed qa_verdict is what the pilot stage advances on (R6
-# BLOCKED→advance). Writing ONLY the transient .flow/tmp/ proof, with no
-# .flow/review-receipts/qa-<spec>.json, leaves the pilot stage with no fresh receipt
-# → it strikes/unreadies the spec instead of moving on to make-pr. NEVER stop here.
+# BLOCKED→advance). Writing no .flow/review-receipts/qa-<spec>.json leaves the
+# pilot stage with no fresh receipt → it strikes/unreadies the spec instead of
+# moving on to make-pr. NEVER stop here.
 QA_OUTCOME="BLOCKED"
 BLOCKED_REASON="<no live deploy reachable | no driver available>"
 # → fall through to Phase 6.3: write the BLOCKED qa_verdict, then exit clean.
 ```
 
-Only re-evaluate the approach if **derivation** or the **fn-51 handoff** itself fails — a missing live target is an expected, surfaced limitation, not a thesis failure.
+A missing live target is an expected, surfaced limitation — never a fabricated PASS.
 
 ---
 
 ## Phase 5: file
-
-<!-- OWNER: fn-53.2 — structured P0/P1/P2 findings + evidence; feed the bug memory track. -->
 
 **Goal:** file each failure as a structured P0/P1/P2 finding (persona, steps-to-reproduce, expected vs actual, evidence pointers), **filed immediately on FAIL** — not batched at the end. Findings feed the bug memory track via `memory add --track bug` (built-in overlap dedup — **never** `--no-overlap-check`) and carry the R-ID(s) they trace back to.
 
@@ -439,8 +410,6 @@ Track every finding's id and severity in a running list for Phase 6. **Read sour
 ---
 
 ## Phase 6: verdict
-
-<!-- OWNER: fn-53.2 — YES/NO ship verdict + open P0/P1 list; emit the qa_verdict receipt. -->
 
 **Goal:** end with a YES/NO ship verdict + the open P0/P1 list, emitted as a `type: qa_verdict` proof-of-work receipt. The verdict rests on **captured evidence** (Phase 4) and **filed findings** (Phase 5) — never on agent narration, never on reading the diff.
 
@@ -582,8 +551,6 @@ Print the YES/NO call, the `qa_outcome`, the open P0/P1 list (with finding ids +
 
 ## Phase A: autonomy
 
-<!-- OWNER: fn-53.4 — Ralph-aware-not-blocked detect-once; opt-in tracker.perEvent.qa; graceful degradation. -->
-
 **Goal:** detect Ralph **once** and route deterministically (R11) — autonomous when the target URL + test accounts are configured (emits the verdict receipt, no prompts); asks the user (info-only) when they are undocumented. The skill is **not a hard Ralph-block** — there is **no** top-of-skill `FLOW_RALPH` exit-2 guard (the make-pr §0.0 precedent; see [SKILL.md](SKILL.md) Forbidden). Phase A also owns the opt-in tracker verdict post (`tracker.perEvent.qa`) and the graceful-degradation contract when no live deploy / driver is present. The full routing table, gating predicate, and degradation matrix live in **[references/autonomy.md](references/autonomy.md)** — read it before any Ralph or tracker step.
 
 ### A.1 — Detect Ralph once, route deterministically (R11)
@@ -603,7 +570,7 @@ fi
 
 ### A.2 — Graceful degradation (R13)
 
-No live deploy reachable, OR no driver available (incl. fn-51 degraded to its terminal manual rung per [flow-next-drive/SKILL.md](../flow-next-drive/SKILL.md) "Driver detection & graceful degradation") → surface the limitation as a **BLOCKED** verdict (Phase 6.1 / the §4.2 BLOCKED proof receipt), add **nothing** to the base flow, exit clean. Inherit fn-51's degradation table — do not re-derive it. BLOCKED ≠ FAIL: it is "no ship *claim* on a QA basis," never a fabricated PASS and never a hard error.
+No live deploy reachable, OR no driver available (incl. fn-51 degraded to its terminal manual rung per [flow-next-drive/SKILL.md](../flow-next-drive/SKILL.md) "Driver detection & graceful degradation") → surface the limitation as a **BLOCKED** verdict (Phase 6.1 / the §4.2 BLOCKED routing), add **nothing** to the base flow, exit clean. Inherit fn-51's degradation table — do not re-derive it. BLOCKED ≠ FAIL: it is "no ship *claim* on a QA basis," never a fabricated PASS and never a hard error.
 
 ### A.3 — Opt-in tracker verdict post (`tracker.perEvent.qa`, R9)
 

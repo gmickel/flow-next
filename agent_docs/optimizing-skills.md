@@ -144,9 +144,10 @@ for these must measure *fidelity + respect-for-override*, never "is the skill's 
 
 | Tier | Targets | Lever | Risk |
 |---|---|---|---|
-| Hot-path agents | `repo-scout` ✅, `context-scout` ✅ (2.8k), plan scouts | Output budget | low (generic mutation) |
+| Hot-path agents | `repo-scout` ✅, `context-scout` ✅ (2.8k), plan scouts ✅, `flow-gap-analyst` ✅, `quality-auditor` ✅ | Output budget | low (generic mutation) — **pool now harvested** |
+| Always-loaded skill weight | hot-path `SKILL.md` + force-loaded companions (fn-82 ✅: work, pilot, tracker-sync, review pair, interview, audit, qa, prospect, capture, make-pr) | gating (default-OFF machinery) → intra-skill dedupe → archaeology | low→medium (gating/archaeology safe; dedupe keeps imperative repetition; eval-guard accuracy-critical folds) |
 | Accuracy-critical | `capture`, `impl/plan/completion-review` (use `~/work/slop-testbed`) | accuracy-first, token 2nd | medium |
-| Heavy prompts | `make-pr` (31k), `audit`, `interview`, `prospect` | Prompt trim | higher — strong behavioral evals required |
+| Heavy prompts | `make-pr` (~28k after fold), `audit`, `interview`, `prospect` | Prompt trim | higher — strong behavioral evals required |
 
 **Empirical note (which scouts the output-budget lever actually pays on):** the lever pays on the
 **free-form, local** scouts whose prose flows into the planner — `repo-scout` ✅ and `context-scout`
@@ -184,17 +185,42 @@ Takeaway: lead with the **output-budget** lever on free-form scouts (big, low-ri
 prompt-trims on accuracy-critical/heavy skills as **archaeology-first, then careful per-section
 work** — and never relocate a table out of the phase that consumes it.
 
-**Where the big wins actually live — the uncapped-free-form-output agents.** The output-budget lever
-(40-70% leaner) pays wherever an agent emits **uncapped, free-form prose that flows into another
-prompt's context** — NOT on heavy *prompts* (those are load-bearing; trims are modest) and NOT on
-agents whose output is already a **bounded template**. The win pool, by inspection of the fleet:
+**Where the big wins used to live — the uncapped-free-form-output agents (pool now harvested).** The
+output-budget lever (40-70% leaner) paid wherever an agent emitted **uncapped, free-form prose that
+flows into another prompt's context** — NOT on heavy *prompts* (those are load-bearing; trims are
+modest) and NOT on agents whose output is already a **bounded template**. That pool is now **exhausted**:
 - **Done ✅:** `repo-scout`, `context-scout`, `flow-gap-analyst` (the last: 50-70% leaner, 26/27 gaps
-  preserved — proof the lever generalizes past the scouts).
-- **Next (uncapped free-form, no budget yet):** `quality-auditor` (full code-review report — per-finding
-  Risk/Fix prose); the smaller plan scouts (`spec-scout`, `memory-scout`, `docs-scout`) if their output
-  is verbose.
-- **Skip:** the prime scouts (`build`/`testing`/`security`/…) — already a bounded ✅/❌ template;
-  `practice-scout`/`github-scout` — external/non-deterministic.
+  preserved — proof the lever generalizes past the scouts), plus `quality-auditor` and the plan scouts
+  (`spec-scout`/`memory-scout`/`docs-scout`) — all now output-budgeted.
+- **No uncapped free-form agents remain.** The prime scouts (`build`/`testing`/`security`/…) are a
+  bounded ✅/❌ template (fixed size — leave); `practice-scout`/`github-scout` are external/
+  non-deterministic (smoke-test territory, not this loop). Do not burn a loop re-confirming these.
+
+**Where the big wins live NOW — always-loaded skill weight (fn-82).** With the agent output-budget pool
+harvested, the remaining ROI prize is the **always-loaded prompt weight of the hot-path skills** — the
+`SKILL.md` + force-loaded companion files a skill reads on *every* invocation. Three levers, safest first
+(all zero-quality-loss when applied in this order — see `optimization-log.md` fn-82 rows for the numbers):
+- **Progressive-disclosure gating (biggest lever):** default-OFF machinery inlined in an always-read
+  file is dead weight on the default path. Move it behind a **forcing-sentinel gate** into a
+  `references/*.md` file — a gate whose stdout is an imperative the agent must act on (`GATE ACTIVE —
+  STOP. Read <ref> …`), **fail-open** on probe/parse error (`RAW="$(<probe> 2>/dev/null)" || ACTIVE=1`
+  on both the producer and the parse, no unguarded `| jq`), linked **one level deep**, default branch a
+  bare no-op. Referenced files cost **zero tokens until Read** (Anthropic Agent Skills 3-level loading);
+  new `references/*.md` auto-mirror to Codex. Reserve for genuinely default-OFF or mutually-exclusive
+  paths — gating an every-run checklist is net-loss (probe cost + skip risk); **fold** that inline
+  instead (make-pr).
+- **Intra-skill dedupe:** merge duplicated *explanatory/context* blocks across always-loaded file pairs
+  to one authoritative site; **keep** short imperative rules repeated at their action sites (verbatim
+  repetition is load-bearing). Never relocate a routing/taxonomy/guardrail table out of the phase that
+  consumes it (proximity rule, below).
+- **Archaeology (safest, do first):** strip build-time `fn-N`/`fn-N.M` provenance and absolute
+  `flowctl.py` line-refs from always-loaded prose, and relocate dev-time scaffolding (spike harnesses)
+  to `agent_docs/`. Allowlist: **keep** `R\d+` requirement ids, `S-[A-Z]` fixture oracles, and version
+  numbers; rewrite a rule-carrying fn-tag into prose before stripping it.
+
+Eval-guarded the two accuracy-critical mutations (make-pr fold, capture dedupe) baseline-first; both held
+full score. Fleet-wide fn-82 harvested **~10.7k always-loaded tokens** across 11 skills with zero quality
+loss — savings that multiply across every autonomous tick.
 
 **Feature-preservation rule for any free-form-output budget (load-bearing):** trim **per-item
 verbosity, never the item COUNT**. For a gap-analyst that means every gap still surfaced; for a

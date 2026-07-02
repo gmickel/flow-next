@@ -169,7 +169,7 @@ Process Replace candidates **one at a time, sequentially.** Each replacement may
  - Old entry's full content.
  - Investigation evidence summary (what changed, current pattern, why old misleads).
  - Target track + category. Same as old unless the category itself drifted (e.g. a `bug/integration` entry whose problem domain morphed into a `knowledge/architecture-patterns` issue — agent decides).
- - Memory schema reference (`flowctl.py:3679-3737`):
+ - Memory schema reference (the `MEMORY_REQUIRED_FIELDS` / `MEMORY_BUG_FIELDS` / `MEMORY_KNOWLEDGE_FIELDS` / `MEMORY_OPTIONAL_FIELDS` constants in `flowctl.py`):
  - Required: `title`, `date`, `track`, `category`.
  - Track-specific bug: `problem_type`, `symptoms`, `root_cause`, `resolution_type`.
  - Track-specific knowledge: `applies_when`.

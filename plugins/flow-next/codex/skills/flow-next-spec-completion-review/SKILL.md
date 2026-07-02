@@ -18,26 +18,15 @@ Do not load the others — only the active backend's file is needed.
 Verify that the combined implementation of all tasks in a spec satisfies the spec requirements. This is NOT a code quality review (that's impl-review's job) — this confirms spec compliance only.
 
 **Role**: Spec Completion Review Coordinator (NOT the reviewer)
-**Backends** (branch on the Preamble `RP_ELIGIBLE` guard):
+**Backends** (branch on the Phase 0 `RP_ELIGIBLE` probe):
 - When `RP_ELIGIBLE=1`: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot), or Cursor CLI (cursor)
 - When `RP_ELIGIBLE=0`: Codex CLI (codex), GitHub Copilot CLI (copilot), or Cursor CLI (cursor) — rp is macOS-only; never list it in guidance you surface (`--review=rp` stays accepted)
 
-## Preamble
+## Preamble — execute Phase 0 exactly once
 
-**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks (here and in `workflow-*.md`) use `$FLOWCTL`:
+**The executable Phase 0 lives in [workflow-common.md](workflow-common.md) §"Phase 0: Backend Detection" — Read it and execute it ONCE, before any other bash in this skill.** It defines `$FLOWCTL` (bundled — NOT installed globally; `which flowctl` fails, expected), probes `RP_ELIGIBLE`, resolves `$BACKEND` via the single `flowctl review-backend` call, and handles the ASK / `none` cases. Never invoke `flowctl review-backend` a second time in the same run.
 
-```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
-[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-
-# RepoPrompt is macOS-only (rp-cli bridges the GUI). Only offer the rp path
-# when it can actually run: on macOS, or when rp-cli is already on PATH.
-if [ "$(uname 2>/dev/null)" = "Darwin" ] || command -v rp-cli >/dev/null 2>&1; then
- RP_ELIGIBLE=1
-else
- RP_ELIGIBLE=0
-fi
-```
+Exception: a `--review=<backend>` argument (see Backend Selection below) wins — when present, set `BACKEND` from the flag and skip Phase 0's `review-backend` call + ASK handling (still run its `$FLOWCTL` / `RP_ELIGIBLE` setup lines).
 
 When `RP_ELIGIBLE=0` (not macOS, no rp-cli), never *steer* the user toward rp: every backend summary, recommendation, or override hint you surface presents only the runnable configured backends `codex`, `copilot`, `cursor` (plus `none`). Suppression is not a ban: an explicit `--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` still resolves to rp and errors at runtime via `require_rp_cli()` as today.
 
@@ -60,30 +49,9 @@ Check $ARGUMENTS for:
 
 If found, use that backend and skip all other detection.
 
-### Otherwise read from config
+### Otherwise: Phase 0 resolves it
 
-```bash
-# Resolve the spec id from $ARGUMENTS FIRST so a per-spec `default_review` override routes to the
-# right backend before branching (empty → env/config, no regression).
-SPEC_ID="${1:-}" # the spec-id positional arg (canonicalized by review-backend); empty falls back to env/config
-BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
-
-if [[ "$BACKEND" == "ASK" ]]; then
- echo "Error: No review backend configured."
- if [ "$RP_ELIGIBLE" = 1 ]; then
- echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|none"
- else
- echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|none"
- fi
- exit 1
-fi
-
-if [ "$RP_ELIGIBLE" = 1 ]; then
- echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|none)"
-else
- echo "Review backend: $BACKEND (override: --review=codex|copilot|cursor|none)"
-fi
-```
+No `--review` flag → `$BACKEND` comes from [workflow-common.md](workflow-common.md) Phase 0 (executed once per the Preamble): the single `flowctl review-backend "$SPEC_ID"` call with ASK handling included. Do not re-resolve here.
 
 ### Backend at a glance
 
@@ -152,10 +120,10 @@ Parse $ARGUMENTS for:
 - `--review=<backend>` → backend override
 - Remaining args → focus areas
 
-### Step 1: Detect Backend + Load Workflow
+### Step 1: Load Backend Workflow
 
-1. Read [workflow-common.md](workflow-common.md) and execute its Phase 0 to resolve `$BACKEND`.
-2. Then read **only** the file for that backend:
+1. `$BACKEND` was already resolved by workflow-common.md Phase 0 (Preamble) — do NOT re-run it.
+2. Read **only** the file for that backend:
 
 | `$BACKEND` | File to read |
 |------------|--------------|
