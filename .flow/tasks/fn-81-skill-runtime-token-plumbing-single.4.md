@@ -33,9 +33,8 @@ Final validation gate + release staging: the ONE mirror regeneration + commit, f
 - [ ] optimization-log row appended with computed counts
 
 ## Done summary
-TBD
-
+fn-81 final gate: regenerated + committed the Codex mirror once (sync-codex run twice, idempotent, parity guards green), created the CHANGELOG `## Unreleased` fn-81 entry (no version bump), and appended the optimization-log row with computed counts (11 full-content re-emission sites + 13 redundant CLI round-trips removed across 12 skills, tallied from the fn-81.1-.3 diffs). Full gate green: smoke 138/138 from non-repo cwd, pytest 1393 passed; all cross-task greps clean after an RP-review-driven reword of the 6 blanket-staging prohibition lines (literal `git add -A` -> `git add --all` phrasing) so the acceptance gate grep passes. RP impl-review verdict: SHIP.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 706503dd320ac4c868a904698b6bfc04afc04fca, 45586ef1
+- Tests: bash scripts/sync-codex.sh (x2, idempotent - identical output hashes, all parity guards green), smoke_test.sh from non-repo cwd - 138 passed / 0 failed (run pre- and post-fix), python3 -m pytest plugins/flow-next/tests/ -q - 1393 passed, 2 skipped, 164 subtests, pytest test_tracker_sync_mirror_parity.py + test_sync_check.py - 36 passed (post-fix), cross-task greps clean: [PASTE]=0 hits; git add -A in the two review-skill dirs=0 hits (post-fix reword); each of the 9 fixed /tmp paths=0 hits
 - PRs:
