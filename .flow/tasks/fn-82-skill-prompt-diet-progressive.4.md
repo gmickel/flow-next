@@ -37,9 +37,14 @@ optimization-log precedent rows: make-pr "body held 5/5" (the bar to hold); capt
 - [ ] Canonical-only diff; smoke green locally
 
 ## Done summary
-TBD
+Eval-guarded pair, baseline-first ratchet — both mutations KEPT at full score.
 
+- make-pr phases.md FOLD: per-phase Done-when checklists folded verbatim into workflow.md inline blocks; phases.md reduced to a 15-line stub (deletion forbidden, kept as link target), removed from SKILL.md force-load list + $FLOWCTL preamble sweep. Body eval held 5/5 on payload-rich fixture (re-baseline exp 2 = 5/5 → fold exp 3 = 5/5). Working set −18.1KB (~4.5k tok)/run.
+- capture far-copy dedupe: moved the FULL nine-category biz-routing table + 2 phases.md-only rules INLINE into workflow.md §2.6 beside the §2.2 drafting step (inverse of the historically-reverted trim — proximity preserved at the CONSUMER, not stripped); phases.md §Biz-routing → pointer. Capture suite held 15/15 (re-baseline exp 2 = 15/15 → dedupe exp 3 = 15/15; C2 cat-3 metric still routed to outcome-AC + ### Motivation SUBSTRUCTURED, C3 override guard intact). Net always-loaded ~2.5KB (~630 tok)/run.
+
+Review: rp impl-review — clean first-pass SHIP, 0 findings, R4/R8 met.
+Tests: smoke 138/138 (non-repo cwd); full unittest green. Canonical-only diff (mirror regen = fn-82.5).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: a3e84f3f
+- Tests: bash smoke_test.sh (non-repo cwd): 138/138, python3 -m pytest plugins/flow-next/tests/ (green with regenerated mirror), optimization/make-pr eval: baseline exp2 5/5 -> fold exp3 5/5 (held), optimization/capture eval: baseline exp2 15/15 -> dedupe exp3 15/15 (held)
 - PRs:
