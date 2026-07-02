@@ -2,7 +2,7 @@
 
 Execute these phases in order. Reference [pillars.md](pillars.md) for scoring criteria and [remediation.md](remediation.md) for fix templates.
 
-**Model guidance**: This skill uses sonnet for synthesis and report generation. Scouts run as sonnet for quality.
+**Model guidance**: This skill uses sonnet for synthesis and report generation. Scouts run per their agent frontmatter: 7 haiku fast scanners (tooling, env, testing, build, observability, security, workflow); claude-md-scout and docs-gap-scout on sonnet for judgment quality.
 
 ---
 

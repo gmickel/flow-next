@@ -814,9 +814,9 @@ This is typically a pre-spec doc. After interview, suggest `/flow-next:plan <fil
 **Optional. Runs only when the tracker bridge is active AND `interview` is opted in. With no tracker configured this is a no-op — the interview behaves exactly as today.** After the refined spec is written back (`## Write Refined Spec`), project the enrichment to the linked tracker issue and reconcile two-way (R6): interview enrichment done in flow flows back to the tracker; tracker-side edits fold into the right flow sections. (Skip for the file-input case — there is no flow spec yet.)
 
 ```bash
+LEAF="$($FLOWCTL config get tracker.perEvent.interview --json | jq -r '.value')"   # read the leaf ONCE (shared gating predicate — work SKILL.md)
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
-   && [ "$($FLOWCTL config get tracker.perEvent.interview --json | jq -r '.value')" != "off" ] \
-   && [ "$($FLOWCTL config get tracker.perEvent.interview --json | jq -r '.value')" != "null" ]; then
+   && [ "$LEAF" != "off" ] && [ "$LEAF" != "null" ]; then
   # Invoke the flow-next-tracker-sync skill: push/pull/reconcile the spec body
   # (operation follows the perEvent leaf — push | pull | reconcile).
   #   skill: flow-next-tracker-sync   (operation: <leaf> <spec-id>)
