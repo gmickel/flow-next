@@ -5137,6 +5137,29 @@ def _section_title_variant_re(section: str) -> "re.Pattern[str]":
     return re.compile(rf"^##\s+{re.escape(word)}{criteria}\s*([(:—-].*)?$")
 
 
+def _iter_fence_aware(lines: list) -> "Iterator[tuple[str, bool]]":
+    """Yield (line, in_fence) pairs tracking fenced-code-block state.
+
+    `in_fence` is True for lines inside a ``` / ~~~ fenced code block
+    (including the closing delimiter; the opening delimiter reports False).
+    Lines inside fences must never be treated as H2 section boundaries,
+    duplicate headings, or demotion targets.
+    """
+    fence = None  # active fence marker ("```" or "~~~"), None when outside
+    for line in lines:
+        stripped = line.lstrip()
+        if fence is None:
+            if stripped.startswith("```"):
+                fence = "```"
+            elif stripped.startswith("~~~"):
+                fence = "~~~"
+            yield line, False
+        else:
+            if stripped.startswith(fence):
+                fence = None
+            yield line, True
+
+
 def normalize_section_content(section: str, new_content: str) -> str:
     """Normalize agent-supplied content destined for a task `## ` section.
 
@@ -5161,21 +5184,12 @@ def normalize_section_content(section: str, new_content: str) -> str:
     # Rule 2: demote remaining H2 → H3 outside fenced code blocks.
     out_lines = []
     changed = False
-    fence = None  # active fence marker ("```" or "~~~"), None when outside
-    for line in new_content.split("\n"):
-        stripped = line.lstrip()
-        if fence is None:
-            if stripped.startswith("```"):
-                fence = "```"
-            elif stripped.startswith("~~~"):
-                fence = "~~~"
-            elif line.startswith("## "):
-                out_lines.append("###" + line[2:])
-                changed = True
-                continue
-        elif stripped.startswith(fence):
-            fence = None
-        out_lines.append(line)
+    for line, in_fence in _iter_fence_aware(new_content.split("\n")):
+        if not in_fence and line.startswith("## "):
+            out_lines.append("###" + line[2:])
+            changed = True
+        else:
+            out_lines.append(line)
 
     return "\n".join(out_lines) if changed else new_content
 
@@ -5190,9 +5204,17 @@ def patch_task_section(content: str, section: str, new_content: str) -> str:
 
     Raises ValueError on invalid content (duplicate/missing headings).
     """
+    # Fence-aware view of the current file: normalization preserves `## `
+    # lines inside fenced code blocks, so the file scan must not treat those
+    # preserved lines as section boundaries or duplicate headings (fn-79).
+    flagged = list(_iter_fence_aware(content.split("\n")))
+
     # Check for duplicate headings first (defensive)
-    pattern = rf"^{re.escape(section)}\s*$"
-    matches = len(re.findall(pattern, content, flags=re.MULTILINE))
+    matches = sum(
+        1
+        for line, in_fence in flagged
+        if not in_fence and line.startswith("## ") and line.strip() == section
+    )
     if matches > 1:
         raise ValueError(
             f"Cannot patch: duplicate heading '{section}' found ({matches} times)"
@@ -5204,14 +5226,13 @@ def patch_task_section(content: str, section: str, new_content: str) -> str:
     # the exact canonical heading (a byte-exact duplicate raised above).
     variant_re = _section_title_variant_re(section)
 
-    lines = content.split("\n")
     result = []
     in_target_section = False
     in_rogue_section = False
     section_found = False
 
-    for line in lines:
-        if line.startswith("## "):
+    for line, in_fence in flagged:
+        if not in_fence and line.startswith("## "):
             stripped = line.strip()
             if stripped == section:
                 in_target_section = True
@@ -5243,12 +5264,15 @@ def patch_task_section(content: str, section: str, new_content: str) -> str:
 
 
 def get_task_section(content: str, section: str) -> str:
-    """Get content under a task section heading."""
-    lines = content.split("\n")
+    """Get content under a task section heading.
+
+    Fence-aware (fn-79): `## ` lines inside fenced code blocks are section
+    content, not boundaries — reads must match the write-side scan.
+    """
     in_target = False
     collected = []
-    for line in lines:
-        if line.startswith("## "):
+    for line, in_fence in _iter_fence_aware(content.split("\n")):
+        if not in_fence and line.startswith("## "):
             if line.strip() == section:
                 in_target = True
                 continue

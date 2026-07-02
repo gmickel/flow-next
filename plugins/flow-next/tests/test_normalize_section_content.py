@@ -210,6 +210,38 @@ class PatchTaskSectionTestCase(unittest.TestCase):
         self.assertIn("## Acceptance Criteria (orphan)", out)
         self.assertIn("- orphan", out)
 
+    def test_fenced_h2_in_stored_section_not_a_boundary(self) -> None:
+        # Content with a fence-preserved `## ` line persisted in the section:
+        # the next patch must replace the WHOLE section (fenced line is not a
+        # boundary — no stale content left behind) and stay idempotent.
+        new = "- R1: x\n```bash\n## not a heading\n```\nafter fence"
+        current = _task_md(new)
+        once = flowctl.patch_task_section(current, "## Acceptance", new)
+        self.assertEqual(once.count("\n## Acceptance"), 1)
+        twice = flowctl.patch_task_section(once, "## Acceptance", new)
+        self.assertEqual(once, twice)
+        # Replacement with different content leaves no stale fenced remnant.
+        replaced = flowctl.patch_task_section(once, "## Acceptance", "- fresh")
+        self.assertNotIn("## not a heading", replaced)
+        self.assertNotIn("after fence", replaced)
+        self.assertIn("## Acceptance\n- fresh", replaced)
+
+    def test_fenced_canonical_heading_no_duplicate_error(self) -> None:
+        # A byte-exact `## Acceptance` INSIDE a fence is content, not a
+        # duplicate heading — patching must succeed and replace cleanly.
+        new = "- R1: x\n```\n## Acceptance\n```"
+        current = _task_md(new)
+        healed = flowctl.patch_task_section(current, "## Acceptance", "- ok")
+        self.assertEqual(healed.count("\n## Acceptance"), 1)
+        self.assertIn("## Acceptance\n- ok", healed)
+
+    def test_get_task_section_fence_aware(self) -> None:
+        body = "- R1: x\n```bash\n## not a heading\n```\ntail"
+        content = _task_md(body)
+        self.assertEqual(
+            flowctl.get_task_section(content, "## Acceptance"), body
+        )
+
     def test_duplicate_canonical_heading_still_raises(self) -> None:
         content = _task_md("- a") + "\n## Acceptance\n- dup\n"
         with self.assertRaises(ValueError) as ctx:
