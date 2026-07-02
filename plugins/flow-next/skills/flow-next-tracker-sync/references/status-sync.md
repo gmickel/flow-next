@@ -111,7 +111,7 @@ terminal Done (not stay `in-review`). The merge-evidence INVARIANT is intact: te
 | 8 | spec `open`, **no** task `in_progress`/`done` yet (all `todo`) | `none` / `closed-unmerged` / `ambiguous` / `probe-error` | `planned` (or `backlog` if no tasks exist) | authored, not started |
 
 > **Why row 3 catches `unknown`.** flowctl normalizes a missing completion-review
-> field to `unknown` (`flowctl.py:2296-2297`), and for repos without a
+> field to `unknown` (the `completion_review_status` fallback in `flowctl.py`), and for repos without a
 > completion-review backend pilot treats `completion_review_status != ship` as
 > ungated. Row 3 is the `merged` + non-`ship` rung **only when a completion review is
 > actually configured** — when no completion-review backend is configured at all,
@@ -672,7 +672,7 @@ never advanced the issue. Regression guard for Thread A.
 
 **Flow:** spec `done`, **`completion_review_status == unknown`** (no completion-review
 backend configured — flowctl normalizes the missing field to `unknown`,
-flowctl.py:2296-2297; pilot treats `!= ship` as ungated, flow-next-pilot/workflow.md:117-122).
+the `completion_review_status` fallback in flowctl.py; pilot treats `!= ship` as ungated, flow-next-pilot/workflow.md:117-122).
 **`prEvidence`:** `merged` (≥1 `MERGED` PR for the spec branch).
 **Tracker:** `status.normalized = "in-review"`.
 
