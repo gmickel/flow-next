@@ -39,9 +39,8 @@ If the corpus defeats the lattice (a false skip survives probe iteration), STOP 
 - [ ] Full pytest + smoke green
 
 ## Done summary
-TBD
-
+Built the fn-83 merge-gate eval harness at optimization/plan-sync-gate/: 23-scenario append-only corpus (13 constructed drift-positive fixtures + 10 real-history worktree replays with pinned SHAs, at-SHA husks, FLOW_STATE_DIR-isolated reconstructed runtime state), a FROZEN answer key generated once from the REAL agents/plan-sync.md (headless claude-opus-4-8, N=3 majority, any-wobble=>drift, raw runs committed), and a deterministic CI check (test_plan_sync_gate_corpus.py + workflow step + optimization/** path filters) asserting zero false skips (0/14, HARD), the adversarial PLAN_DEVIATION=no arm, annotated residual expected-misses, frozen probe expectations, and results.tsv metrics parity. Two probe iterations were required and landed in flowctl.py (bookkeeping exclusion from touched-set/hunk tokens; dirless-only basename matching) with unit tests; honest headline: skip-rate on negatives 0/9 (<50% ship-with-rationale threshold — documented in README for the fn-83.5 decision), rule-of-three <=3/14 (~21%) @95%. RP impl-review: SHIP (first pass).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c0477c32f7e97ab4fe509cf1a099920fe3caa571
+- Tests: uv run --with pytest python -m pytest plugins/flow-next/tests/ -q (1491 passed, 2 skipped, 236 subtests), python3 -m unittest discover -s plugins/flow-next/tests -p test_plan_sync_gate_corpus.py (9 tests, 72 subtests), bash plugins/flow-next/scripts/smoke_test.sh from mktemp dir (138/138)
 - PRs:
