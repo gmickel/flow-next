@@ -36,9 +36,8 @@ Cost note: ~72-90 real-agent runs ≈ same order as fn-83.2 (~$100). The spawn-r
 - [ ] No external-repo content committed (privacy grep clean); results.tsv + optimization-log rows
 
 ## Done summary
-TBD
-
+Cross-repo ship-gate validation for the plan-sync gate: 27 real-history scenarios (9 each from DocIQ-Sphere/gno/transcribe) replayed at pinned SHAs with frozen real-agent answer keys (opus, N=3, wobble⇒drift). VERDICT: FAIL on both clauses — 1 false skip (transcribe fn-25.3, confirmed by production plan-sync's own downstream edit at commit 8f3565b2) and 1/15 = 6.7% aggregate true-negative skip-rate (<50% required). The gate does not ship: fn-83.4 rewritten to the FAIL branch (unconditional spawn retained; probe/ledger stay unwired dev assets); methodology + pointer table + votes-only key + results committed under optimization/plan-sync-gate/cross-repo/ with external-repo content kept maintainer-local (privacy grep clean). RP impl-review: SHIP.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: e89f1beb, c5829fd3ee3c4e97f47feb5020cfe05766d2e253
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (1504 OK, 2 skipped), bash plugins/flow-next/scripts/smoke_test.sh (all passed, non-repo cwd), python3 replay.py probe scenarios.json (27/27 deterministic, reproduced from committed location), python3 replay.py keygen — 27 scenarios x 3 opus votes + 1 retry (claude-opus-4-8), keys maintainer-local
 - PRs:
