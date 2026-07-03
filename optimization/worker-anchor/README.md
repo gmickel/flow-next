@@ -1,9 +1,15 @@
 # Worker-anchor comprehension-equivalence eval (fn-83.3) — the bundle merge gate
 
+> **This eval backs the shipped `flowctl anchor` command** (live — unlike
+> the sibling `optimization/plan-sync-gate/` harness, whose gate was proven
+> non-viable and removed; see that README's ARCHIVED banner). The bundle
+> passed both this comprehension eval and the deterministic superset test,
+> and `/flow-next:work`'s worker anchors via the single call since fn-83.4.
+
 Proof that `flowctl anchor <task-id> --md` — the single-call worker anchor
-bundle — loses ZERO comprehension versus the status-quo worker Phase-1 read
-sequence (agents/worker.md:21-68: show/cat task+spec, git status/log,
-memory flag, memory index, glossary). The bundle's win is round-trips, not
+bundle — loses ZERO comprehension versus the legacy discrete worker Phase-1
+read sequence (show/cat task+spec, git status/log, memory flag, memory
+index, glossary — replaced by the single anchor call in fn-83.4). The bundle's win is round-trips, not
 content reduction — this harness is the proof, alongside the deterministic
 superset test ([`plugins/flow-next/tests/test_anchor_bundle.py`](../../plugins/flow-next/tests/test_anchor_bundle.py))
 which locks byte-for-byte verbatim-ness in CI forever. Pattern lineage:

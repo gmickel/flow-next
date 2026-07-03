@@ -12,12 +12,15 @@ failed:**
 | false skips | 0 everywhere | **1** (`transcribe-02`) | **FAIL** |
 | aggregate true-negative skip-rate | ≥50% | **1/15 = 6.7%** (DocIQ 0/5, gno 1/6, transcribe 0/4) | **FAIL** |
 
-**Consequence (recorded per the fn-83 spec):** fn-83.4 ships **without gate
-wiring** — `/flow-next:work` retains the unconditional plan-sync spawn.
-The probe (`flowctl plan-sync-probe`), the gate ledger, and both eval
-harnesses (this directory + the parent corpus) remain **dev assets**, kept
-for a future attempt with a fundamentally better disjointness proof. The
-anchor bundle (fn-83.3) and the CROSS_SPEC caller fix are unaffected.
+**Consequence (recorded per the fn-83 spec; superseded by the streamline
+decision):** fn-83.4 ships **without gate wiring** — `/flow-next:work`
+retains the unconditional plan-sync spawn. *(Update, 2026-07-03 streamline:
+the probe, gate ledger, and gate config were subsequently REMOVED from the
+shipped CLI entirely — not kept as dev assets — and the decision record
+`.flow/memory/knowledge/decisions/plan-sync-skip-gate-not-viable-2026-07-03.md`
+marks the gate "do not re-attempt". Both eval harnesses stay as archived
+evidence.)* The anchor bundle (fn-83.3) and the CROSS_SPEC caller fix are
+unaffected.
 
 ### Why it failed (the two headline findings)
 

@@ -353,6 +353,12 @@ DOWNSTREAM=$($FLOWCTL tasks --spec <spec-id> --status todo --json | jq -r '[.[].
 
 Note: Only sync to `todo` tasks. `in_progress` tasks are already being worked on - updating them mid-flight could cause confusion.
 
+Read the cross-spec flag (single config-leaf read — plan-sync.md documents `CROSS_SPEC` as a caller-provided input):
+
+```bash
+CROSS_SPEC=$($FLOWCTL config get planSync.crossSpec --json | jq -r '.value')
+```
+
 Use the plan_sync agent with this prompt:
 
 ```
@@ -362,6 +368,7 @@ COMPLETED_TASK_ID: fn-X.Y
 SPEC_ID: fn-X
 FLOWCTL: /path/to/flowctl
 DOWNSTREAM_TASK_IDS: fn-X.3,fn-X.4,fn-X.5
+CROSS_SPEC: true|false
 
 Follow your phases in plan-sync.md exactly.
 ```

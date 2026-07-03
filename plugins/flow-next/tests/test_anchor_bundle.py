@@ -1,10 +1,13 @@
 """Deterministic SUPERSET test for `flowctl anchor` (fn-83.3, R8).
 
-THE STANDING GUARDRAIL: every artifact the worker's Phase-1 re-anchor
-currently reads (agents/worker.md:21-68 — show/cat task+spec, git status,
-git log -5 --oneline, branch, config get memory.enabled, glossary list,
-memory list index) must be present VERBATIM (byte-for-byte) — or strictly
-richer — in the anchor bundle. Both arms drive the PRODUCTION CLI wire form
+THE STANDING GUARDRAIL: the REQUIRED ANCHOR PAYLOAD — every artifact of the
+legacy discrete-read baseline the worker's Phase 1 used to run one-by-one
+(show/cat task+spec, git status, git log -5 --oneline, branch, config get
+memory.enabled, glossary list, memory list index; since fn-83.4 the worker
+runs the single `flowctl anchor <task-id> --md` call instead) — must be
+present VERBATIM (byte-for-byte) — or strictly richer — in the anchor
+bundle. This test validates bundle CONTENT against that baseline; it must
+never be collapsed into merely checking that `anchor` runs. Both arms drive the PRODUCTION CLI wire form
 via subprocess (memory: test-production-path, never a parallel
 construction): the expected side is the exact command the worker would run;
 the actual side is the section `flowctl anchor <task-id> --json` carries.
@@ -19,8 +22,8 @@ content, default form), determinism (byte-identical across runs),
 memory-disabled skip, short-id resolution, fail-open git sections, and the
 --json/--md mutual exclusion.
 
-Fixtures per test_plan_sync_probe.py conventions: importlib load of
-flowctl.py, TemporaryDirectory + real `git init`.
+Fixtures: importlib load of flowctl.py, TemporaryDirectory + real
+`git init`.
 """
 
 from __future__ import annotations
@@ -270,9 +273,13 @@ class AnchorRepoTestCase(unittest.TestCase):
 
 # ── The superset guardrail ────────────────────────────────────────────────
 
-# worker.md Phase 1 read list (agents/worker.md:21-68). Update THIS table in
-# the same change as any worker.md Phase-1 read-list edit — the bundle must
-# stay a verbatim superset of whatever the worker reads.
+# REQUIRED ANCHOR PAYLOAD — the legacy discrete-read baseline (the commands
+# worker.md Phase 1 ran one-by-one before the single `flowctl anchor
+# <task-id> --md` call replaced them in fn-83.4). This table pins what the
+# bundle must carry, byte-for-byte. Update THIS table in the same change as
+# any worker.md Phase-1 anchor-content edit — the bundle must stay a
+# verbatim superset of the baseline; never reduce this test to "anchor
+# exits 0".
 WORKER_PHASE1_COMMANDS = [
     ("task_show", ("show", "fn-9.2", "--json")),
     ("task_md", ("cat", "fn-9.2")),

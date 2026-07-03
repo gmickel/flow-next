@@ -20,39 +20,27 @@ You implement a single flow-next task. Your prompt contains configuration values
 
 ## Phase 1: Re-anchor (CRITICAL - DO NOT SKIP)
 
-Use the FLOWCTL path and IDs from your prompt:
+Use the FLOWCTL path and IDs from your prompt. ONE call fetches the whole re-anchor bundle:
 
 ```bash
-# 1. Read task and parent specs (substitute actual values)
-<FLOWCTL> show <TASK_ID> --json
-<FLOWCTL> cat <TASK_ID>
-<FLOWCTL> show <SPEC_ID> --json
-<FLOWCTL> cat <SPEC_ID>
-
-# 2. Check git state
-git status
-git log -5 --oneline
-
-# 3. Check memory system
-<FLOWCTL> config get memory.enabled --json
+<FLOWCTL> anchor <TASK_ID> --md
 ```
 
-**If memory.enabled is true**, query relevant memory via the CLI (not by reading files directly — it handles both the categorized tree and legacy flat files):
+The bundle carries, verbatim and in fixed order: the task record + body (`show`/`cat`), the parent spec record + body, `git status` / `git log -5 --oneline` / current branch, `memory.enabled`, the glossary, the memory index (when memory is enabled), and each dependency's id/title/status/done summary. If a section reports `(section unavailable: ...)`, run that one command directly — the bundle is fail-open.
+
+**The bundle is a FLOOR, not a ceiling.** It replaces the discrete Phase-1 reads — it does not cap your context. Query further whenever useful:
+
 ```bash
-<FLOWCTL> memory list --json          # full index, track/category metadata
 <FLOWCTL> memory search "<keyword>" --json   # by task keyword / module / tag
+<FLOWCTL> memory read <entry-id>             # full entry body
 ```
-Narrow with `--track bug|knowledge`, `--category <cat>`, `--module <path>`, or `--tags "a,b"` when you have context. Read individual entries with `<FLOWCTL> memory read <entry-id>`.
+Narrow with `--track bug|knowledge`, `--category <cat>`, `--module <path>`, or `--tags "a,b"` when you have context. Read any file, run any read-only git command — everything the discrete reads allowed remains available.
 
-Legacy `.flow/memory/pitfalls.md` / `conventions.md` / `decisions.md` still surface via `memory list` / `search` (track=`legacy`) until `flowctl memory migrate` has run.
+Legacy `.flow/memory/pitfalls.md` / `conventions.md` / `decisions.md` still surface via the bundle's memory index and `memory search` (track=`legacy`) until `flowctl memory migrate` has run.
 
-Look for entries relevant to your task's technology/domain/module.
+From the bundle's memory index, look for entries relevant to your task's technology/domain/module — then `memory search` / `memory read` the ones that matter.
 
-**Glossary (canonical vocabulary):**
-```bash
-<FLOWCTL> glossary list --json   # husk-aware: total_terms == 0 → skip silently
-```
-When `total_terms > 0`, match each entry's `term` + `avoid` aliases against the task title/description (case-insensitive, whitespace-collapsed) and keep ONLY the matching entries' definitions — they are the canonical meanings for naming and concepts in this task; implementations must not contradict them. Never pull the whole glossary into context. No glossary, a husk, or zero matches → skip, zero change.
+**Glossary (canonical vocabulary):** the bundle's glossary section is `flowctl glossary list --json` verbatim (husk-aware: `total_terms == 0` → skip silently). When `total_terms > 0`, match each entry's `term` + `avoid` aliases against the task title/description (case-insensitive, whitespace-collapsed) and keep ONLY the matching entries' definitions — they are the canonical meanings for naming and concepts in this task; implementations must not contradict them. Never pull the whole glossary into context. No glossary, a husk, or zero matches → skip, zero change.
 
 Parse the spec carefully. Identify:
 - Acceptance criteria
@@ -66,6 +54,13 @@ Parse the spec carefully. Identify:
 # Run project's test/lint commands to confirm green baseline
 # If baseline fails, investigate before proceeding
 ```
+
+**Capture the base commit at Phase-1 end — BEFORE any edit:**
+```bash
+BASE_COMMIT=$(git rev-parse HEAD)
+echo "BASE_COMMIT=$BASE_COMMIT"
+```
+`BASE_COMMIT` scopes the impl-review diff (Phase 4), anchors delegation git-ownership (Phase 2), and is recorded with the full commit list in the done evidence (Phase 5).
 
 ## Phase 1.5: Pre-implementation Investigation
 
@@ -112,13 +107,7 @@ If DESIGN.md is missing or the path is wrong, note it and proceed — design con
 
 ## Phase 2: Implement
 
-**First, capture base commit for scoped review:**
-```bash
-BASE_COMMIT=$(git rev-parse HEAD)
-echo "BASE_COMMIT=$BASE_COMMIT"
-```
-Save this - you'll pass it to impl-review so it only reviews THIS task's changes.
-(It is also the git-ownership anchor for the delegation path below.)
+**`BASE_COMMIT` was captured at Phase-1 end (before any edit).** You'll pass it to impl-review so it only reviews THIS task's changes. (It is also the git-ownership anchor for the delegation path below.)
 
 **Delegation hook — ONLY when `DELEGATE: codex` is in your prompt.** If `DELEGATE`
 is absent or `local`, skip this entire hook and implement in-session as usual
@@ -376,15 +365,15 @@ tests/lints; on failure, fix + follow-up commit (never blind-commit). When
 `REVIEW_MODE != none`, the impl-review SHIP gate already covered this — skip the
 duplicate run.
 
-Capture the commit hash:
+Capture the FULL commit list for this task — every commit from `BASE_COMMIT` (Phase 1) to HEAD, oldest first, so multi-commit fix-loop tasks are fully covered:
 ```bash
-COMMIT_HASH=$(git rev-parse HEAD)
+COMMITS_JSON=$(git rev-list --reverse "$BASE_COMMIT"..HEAD | jq -R . | jq -s -c .)
 ```
 
-Write evidence file (use actual commit hash and test commands you ran):
+Write evidence file (use the captured commit list, `base_commit`, and the test commands you ran — `base_commit` is an additive evidence field, always include it):
 ```bash
 cat > /tmp/evidence.json << EOF
-{"commits": ["$COMMIT_HASH"], "tests": ["<actual test commands>"], "prs": []}
+{"commits": $COMMITS_JSON, "base_commit": "$BASE_COMMIT", "tests": ["<actual test commands>"], "prs": []}
 EOF
 ```
 
@@ -397,7 +386,7 @@ Codex `result-batch-*.json`; `class` comes from `flowctl codex classify-result`;
 
 ```bash
 cat > /tmp/evidence.json << EOF
-{"commits": ["$COMMIT_HASH"], "tests": ["<actual test commands>"], "prs": [],
+{"commits": $COMMITS_JSON, "base_commit": "$BASE_COMMIT", "tests": ["<actual test commands>"], "prs": [],
  "delegation": {
    "result": {"status": "completed", "files_modified": ["<f>"], "issues": [],
               "summary": "<codex summary>", "verification_summary": "<codex verify>"},

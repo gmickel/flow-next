@@ -1,9 +1,19 @@
-# Plan-sync gate corpus (fn-83.2) — the zero-false-skip merge gate
+# Plan-sync gate corpus (fn-83.2) — ARCHIVED evidence (the gate did not ship)
 
-Ground-truth eval harness for `flowctl plan-sync-probe` — the deterministic
-drift-possibility probe that decides whether `/flow-next:work` may SKIP
-spawning the plan-sync agent after a task completes (fn-83). This is the
-**merge gate** for that feature: the probe ships only while it produces
+> **ARCHIVED** — the plan-sync skip-gate this harness validated was proven
+> non-viable and removed from the shipped CLI (fn-83.4); see
+> `.flow/memory/knowledge/decisions/plan-sync-skip-gate-not-viable-2026-07-03.md`.
+> Kept as the evidence behind that decision; **nothing here is a runnable
+> ship instruction.** The `flowctl plan-sync-probe` command, the
+> `plansync-gate.jsonl` ledger, the gate config, and the CI corpus check no
+> longer exist in the shipped plugin. Do not re-attempt the gate (the
+> decision record explains why the failure is fundamental, not tunable).
+
+Ground-truth eval harness for the (since-removed) `flowctl plan-sync-probe`
+— the deterministic drift-possibility probe that would have decided whether
+`/flow-next:work` may SKIP spawning the plan-sync agent after a task
+completes (fn-83). This was the **merge gate (historical — the gate did not
+ship)** for that feature: the probe could ship only while it produced
 **zero false skips** against a frozen answer key generated from the REAL
 production `agents/plan-sync.md`. Pattern lineage:
 [`optimization/review-prompt/`](../review-prompt/README.md) (real backend in
@@ -19,13 +29,13 @@ the loop, ground-truth corpus + answer key) per
 | `answer-key.json` | **FROZEN** real-agent labels (N=3 votes, majority, wobble ⇒ drift) |
 | `answer-key-runs/<id>/` | Raw agent outputs per run (auditability) |
 | `results.tsv` | Probe-iteration log (kept/discarded) + per-scenario results + honesty metrics |
-| CI check | [`plugins/flow-next/tests/test_plan_sync_gate_corpus.py`](../../plugins/flow-next/tests/test_plan_sync_gate_corpus.py) |
+| CI check | *(historical)* `test_plan_sync_gate_corpus.py` — removed with the gate in fn-83.4 (the probe it exercised no longer exists in flowctl); recover via git history if ever needed |
 
-Run the check locally:
+Historical local run (requires the pre-fn-83.4 flowctl with the probe; use
+`git show` to recover both):
 
 ```bash
-python3 -m unittest discover -s plugins/flow-next/tests -p "test_plan_sync_gate_corpus.py" -v
-# or: python3 optimization/plan-sync-gate/builders.py   # ad-hoc decision table
+# python3 optimization/plan-sync-gate/builders.py   # ad-hoc decision table (needs the removed probe)
 ```
 
 ## Corpus
@@ -82,16 +92,16 @@ reclassified `neg-fn81-2` as drift via the wobble rule — see Results).
   `https://github.com/gmickel/flow-next.git` (fork-survivable). A missing
   commit FAILS the check — a silently shrunk corpus would weaken the gate.
 
-## APPEND-ONLY rule + live-miss freeze procedure
+## APPEND-ONLY rule + live-miss freeze procedure (historical — the gate did not ship)
 
-The corpus only ever GROWS. Never delete, weaken, relabel, or re-generate an
-existing scenario/key entry to make the probe pass — if the corpus defeats
-the probe (any false skip that survives probe iteration), the outcome is
-"gate not shippable, evidence attached", never a softer corpus.
+The corpus only ever GROWS — this still holds as an archival-integrity rule:
+never delete, weaken, relabel, or re-generate an existing scenario/key entry.
+The rule's operational branch resolved exactly as designed: the corpus (via
+the fn-83.6 cross-repo extension) defeated the probe, and the outcome was
+"gate not shippable, evidence attached" — never a softer corpus.
 
-When a live miss occurs (an `on`-mode audit spawn returns
-`Drift detected: yes` — an AUDIT MISS in `.flow/plansync-gate.jsonl` — or a
-user reports drift the gate skipped past):
+The live-miss freeze procedure below never activated (the gate never ran in
+production, so no live miss can occur). Preserved verbatim as methodology:
 
 1. Freeze the state: record the repo, completed task id, `base_commit`,
    head commit, and the downstream body that consumed the drift.
@@ -102,9 +112,9 @@ user reports drift the gate skipped past):
    never re-run.
 4. Iterate the PROBE until the new scenario passes with zero false skips
    across the WHOLE corpus; log every kept/discarded iteration in
-   `results.tsv`. If no iteration closes it, STOP and surface — flip
-   `planSync.gate` to `shadow` and treat the gate as not shippable until it
-   is closed.
+   `results.tsv`. If no iteration closes it, STOP and surface — treat the
+   gate as not shippable until it is closed. *(The historical text said to
+   flip the gate config to `shadow`; that config was removed with the gate.)*
 
 ## Answer key — generation procedure (run ONCE per scenario, then FROZEN)
 
@@ -141,10 +151,10 @@ runner is a host agent or the headless CLI, not plain shell):
 6. Commit votes + label + wobble + model id to `answer-key.json`; raw run
    outputs to `answer-key-runs/<id>/run-<n>.md`. FREEZE.
 
-## What CI asserts (deterministic forever)
+## What the CI check asserted (historical — check removed with the gate)
 
-- **Zero false skips (HARD merge gate):** every key-`drift` scenario probed
-  with its TRUTHFUL deviation flag must `spawn`.
+- **Zero false skips (the hard merge-gate clause, historical):** every
+  key-`drift` scenario probed with its TRUTHFUL deviation flag must `spawn`.
 - **Adversarial flag arm:** every drift-positive re-probed with
   `--deviation no` forced must still `spawn` wherever the drift is
   path/token-visible (`visibility: path|token` in scenarios.json annotates
@@ -160,7 +170,7 @@ runner is a host agent or the headless CLI, not plain shell):
 - **Metrics honesty:** the `metric` rows in `results.tsv` must be
   recomputable from today's probe (skip-rate, false skips, rule-of-three).
 
-## Residual statement (verbatim — carried into the fn-83 PR)
+## Residual statement (historical — drafted for the ship decision; the gate did not ship)
 
 > The proof establishes zero false skips against the frozen real-agent
 > oracle ON LATTICE INPUTS (paths, tokens, a truthful deviation flag). The
@@ -191,17 +201,18 @@ any-flip ⇒ drift rule:
   planned move needs no downstream correction; the flip classifies it
   drift. The probe spawns (path arm) either way.
 
-> **Cross-repo ship gate (fn-83.6): FAIL — the gate does not ship.** The
+> **Cross-repo ship gate (fn-83.6): FAIL — the gate did not ship.** The
 > fn-83 R14 ship gate extended this methodology to three external
 > flow-managed repos (DocIQ-Sphere / gno / transcribe, 27 replayed
 > scenarios, frozen real-agent keys). Result: 1 false skip
 > (production-history-confirmed) and 1/15 = 6.7% aggregate true-negative
-> skip-rate — both clauses failed. fn-83.4 ships without gate wiring
-> (unconditional plan-sync spawn retained); the probe/ledger/harnesses stay
-> as dev assets. Full methodology, per-scenario table, spawn-reason
-> histogram, and verdict: [`cross-repo/README.md`](cross-repo/README.md).
+> skip-rate — both clauses failed. fn-83.4 shipped without gate wiring
+> (unconditional plan-sync spawn retained) and REMOVED the probe/ledger/
+> gate config from the shipped CLI; this directory is the archived
+> evidence. Full methodology, per-scenario table, spawn-reason histogram,
+> and verdict: [`cross-repo/README.md`](cross-repo/README.md).
 
-Headline numbers (recomputed by CI on every run):
+Headline numbers (historical — recomputed by the CI check while it existed):
 
 - **False skips: 0 / 14 key-drift scenarios** (hard gate, green) — incl.
   the adversarial `PLAN_DEVIATION=no` arm on every path/token-visible
@@ -222,9 +233,9 @@ Headline numbers (recomputed by CI on every run):
   genuine shared scope that a conservative gate must respect. Further
   lifting would require demoting generic dirless basenames or ALL-CAPS prose
   tokens — English-stoplist territory, rejected by repo doctrine and by the
-  false-skip risk. **Consequence for fn-83:** the gate is PROVEN safe (zero
-  false skips) but pays ~nothing on repos with this task-graph shape;
-  expected yield is on specs whose tasks are genuinely file-disjoint. This
-  feeds the documented ship-with-rationale decision at fn-83.5/PR time —
-  options include shipping default `shadow` (ledger measures per-repo yield
-  before anyone pays the gate's complexity) rather than default `on`.
+  false-skip risk. **Consequence for fn-83 (as it played out):** on THIS
+  repo the gate was safe (zero false skips) but paid ~nothing; the fn-83.6
+  cross-repo extension then produced a genuine false skip AND confirmed the
+  ~0% yield generalizes (6.7% aggregate) — so the ship decision landed as
+  FAIL and the gate machinery was removed from the shipped CLI (fn-83.4).
+  See the decision record for the full "do not re-attempt" analysis.

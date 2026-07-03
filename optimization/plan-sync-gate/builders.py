@@ -18,10 +18,13 @@ Two scenario kinds, both driven by `scenarios.json` (APPEND-ONLY — see README)
   override). NEVER probe a replay without FLOW_STATE_DIR: the state store is
   shared across worktrees and you would read/mutate the live repo's state.
 
-The CI check (plugins/flow-next/tests/test_plan_sync_gate_corpus.py) imports
-this module and runs `flowctl plan-sync-probe` (the CURRENT working-tree
-copy) against every scenario. The LLM answer key is generated ONCE from the
-real plan-sync agent and frozen (answer-key.json) — CI never re-runs it.
+HISTORICAL (fn-83.4): the CI check (test_plan_sync_gate_corpus.py) that
+imported this module was removed together with `flowctl plan-sync-probe`
+when the skip-gate was proven non-viable (fn-83.6 cross-repo verdict FAIL;
+see the README's ARCHIVED banner and the fn-83 decision record). This module
+needs the removed probe to run — recover both via git history if ever
+needed. The frozen LLM answer key (answer-key.json) remains valid archived
+evidence.
 """
 
 from __future__ import annotations

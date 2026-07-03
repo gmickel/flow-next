@@ -14,10 +14,6 @@ on:
       - "scripts/install-cursor.sh"
       - "scripts/install-cursor.ps1"
       - "scripts/ci/verify_cursor_install.py"
-      # fn-83 eval harnesses: corpus/answer-key/results edits must re-run the
-      # gate-corpus check (zero-false-skip merge gate) even without code changes.
-      - "optimization/plan-sync-gate/**"
-      - "optimization/worker-anchor/**"
   pull_request:
     branches: [main]
     paths:
@@ -28,8 +24,6 @@ on:
       - "scripts/install-cursor.sh"
       - "scripts/install-cursor.ps1"
       - "scripts/ci/verify_cursor_install.py"
-      - "optimization/plan-sync-gate/**"
-      - "optimization/worker-anchor/**"
   workflow_dispatch:
 
 jobs:
@@ -154,28 +148,22 @@ jobs:
 
       # ──────────── fn-83 (plan-sync gate: probe + frozen-key corpus) ────────────
 
-      - name: Python unit tests — plan-sync probe lattice + gate config (fn-83.1)
+      - name: Python unit tests — worker anchor-call prose + gate-removal guards + done-evidence provenance (fn-83.4)
         run: |
           python -m unittest discover \
             -s plugins/flow-next/tests \
-            -p "test_plan_sync_probe.py" \
+            -p "test_worker_anchor_prose.py" \
             -v
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_plansync_gate_config.py" \
-            -v
-
-      - name: Gate corpus — probe vs FROZEN real-agent answer key (fn-83.2)
-        run: |
-          python -m unittest discover \
-            -s plugins/flow-next/tests \
-            -p "test_plan_sync_gate_corpus.py" \
-            -v
-        # Deterministic probe vs the frozen answer key generated ONCE from the
-        # real plan-sync agent (optimization/plan-sync-gate/). Zero false skips
-        # is a HARD merge gate; the LLM is never re-run in CI. Replay scenarios
-        # fetch their pinned SHAs (origin, then the canonical repo URL) when the
-        # shallow clone lacks them — a missing commit FAILS, never skips.
+        # The plan-sync skip-gate was proven non-viable (fn-83.6 cross-repo
+        # verdict FAIL; decision record plan-sync-skip-gate-not-viable-
+        # 2026-07-03.md) and its machinery removed from the shipped CLI.
+        # Locks: worker Phase 1 = single `flowctl anchor` call (floor, not
+        # ceiling) in canonical AND Codex mirror; CROSS_SPEC passed to the
+        # (still unconditional) plan-sync spawn; both gate-removal grep
+        # guards (user-surface + symbol-level, `_psp_run_git`-only
+        # whitelist); PLAN_DEVIATION fully deleted; BASE_COMMIT + done-
+        # evidence provenance (base_commit + full commit list) retained,
+        # fixture-verified round-trip.
 
       # ──────────── fn-50 (clawpatch wrap) ────────────
       # New readers + scout-fallback contract land here so they run on the full
