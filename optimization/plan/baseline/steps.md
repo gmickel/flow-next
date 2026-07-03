@@ -49,11 +49,6 @@ Use **T-shirt sizes** based on observable metrics — not token estimates (model
 - ❌ Over-split: 4 sequential S tasks for backend setup
 - ✅ Better: 1 M task covering the sequential work
 
-**7+ is a ceiling, not a floor — combine trivial sequential S tasks even below it:**
-- **Finalization folds into ONE task.** Docs + CHANGELOG + release-notes + CI/test-wiring for a feature are a single S/M task — never a separate task per artifact.
-- ❌ Over-split (6 tasks): `…5 "docs + CHANGELOG"` + `…6 "wire tests into CI"` as two S tasks
-- ✅ Better: one `"docs + CHANGELOG + CI wiring"` S/M task (CI-wiring is part of a task's Definition of Done, not its own task)
-
 **Minimize file overlap for parallel work:**
 
 When splitting tasks, design for minimal file overlap. Tasks touching disjoint files can be worked in parallel without merge conflicts.

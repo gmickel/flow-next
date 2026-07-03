@@ -46,9 +46,20 @@ Optional:
 - [ ] If time-boxed out: STOP, log why, reclassify to fn-85 (R9 handoff)
 
 ## Done summary
-TBD
+Built the `optimization/plan/` eval suite (Tier-A proof point) and ran the full autoresearch loop on the `/flow-next:plan` skill prose. **1 mutation KEPT (quality: accuracy 15→16/16, zero quality loss) + 1 trim honestly DISCARDED.** Fable-model review (our rules): SHIP.
 
+**Suite** (`optimization/plan/`): 4 frozen fixtures — P1 flow-native, **P2 non-flow-next (DocIQ-Sphere, Major-2 anti-overfit)**, P3 override-respect (hand-edited spec, Major-4), P4 ordering/sizing stress; 5 binary evals (E1–E4 accuracy incl. override-respect + E5 dependency-ordering quality eval, all pre-authored before baseline, Major-B); extended auditable `results.tsv` (Major-3); baseline/ prose copies. Run-trick = frozen-research emission at a held-constant `sonnet` (documented in README).
+
+**Baseline 15/16** (P1/P2/P3 5/5; P4 4/5, E3 over-split — confirmed N=2). Key finding: the a-priori dependency-ordering lever (E5) had NO headroom (ordering correct on all 4 incl. the stress fixture), so the lever **pivoted to the data-diagnosed E3 sizing gap**.
+
+**Exp 1 (KEPT):** a lean +6-line "finalization folds into one task / 7+ is a ceiling not a floor" cue at `steps.md` Task Sizing (proximity — consuming phase). P4 E3 fail→PASS confirmed N=2; accuracy **15→16**, quality held, +117 tok. **Exp 2 (DISCARD, principled):** an examples.md trim, discarded as unverifiable by the current eval surface (the emission run-trick only exercises the authoring-judgment surface; keeping it would be a weak-ratchet false hold) — deferred behind an E6 no-code eval + re-baseline.
+
+**Ledger + docs:** `agent_docs/optimization-log.md` (2 rows), CHANGELOG `## Unreleased`, Codex mirror regenerated (`sync-codex.sh`).
+
+**Disclosed deviations / deferrals:** (1) the **worktree-isolation mechanic (Major-1/C) is DEFERRED** — the proof point used output-only emission; the first write-happy suite (fn-84.3 interview / fn-84.5 audit) must prove the worktree mechanic before relying on it. (2) fixtures P1/P4 are invented-realistic (not verbatim from real Goal sections) — privacy-friendlier, same eval value. (3) fn-84.9 must adopt one canonical keep-rule + record the E3-fixture-contamination follow-up (fresh sizing fixture next iteration). All in README § Rigor notes + changelog.
+
+Gate: unittest **1425 passed / 2 skipped (OK)**; smoke guarded (refuses to run from the plugin repo — no flowctl.py change anyway). Skill-prose only, no version bump (batched).
 ## Evidence
 - Commits:
-- Tests:
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py': 1425 passed, 2 skipped (OK), fable-model impl-review against our review rules: SHIP (ratchet confirmed honest; rigor fixes applied)
 - PRs:

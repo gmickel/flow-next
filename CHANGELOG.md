@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Prose optimization (fn-84.1 — Tier A, eval-gated) — `plan` skill task sizing** — the plan skill now folds a feature's finalization work (docs + CHANGELOG + release-notes + CI/test-wiring) into a **single** task instead of splitting it per artifact, and treats the "7+ tasks → combine" rule as a ceiling, not a floor. Landed through the eval-gated autoresearch ratchet (`optimization/plan/` — 4 frozen fixtures incl. a non-flow-next repo and an override-respect case): **accuracy 15 → 16/16 with zero quality loss** (dependency-ordering held at ceiling). Skill-prose only — no behavior, marker, or flow change; +117 always-loaded tokens bought the correctness win. A companion prompt-trim was honestly discarded as unverifiable by the current eval surface (logged in `agent_docs/optimization-log.md`). First of fn-84's Tier-A suites. No version bump (batched).
+
 ## [flow-next 2.6.3] - 2026-07-03
 
 ### Added
