@@ -4,7 +4,7 @@ satisfies: [R5, R7, R10]
 
 ## Description
 
-Wire it all into the skills/agents: phases.md 3e gate branch (mode matrix + audit sampling + summary slot), worker.md (PLAN_DEVIATION line + single anchor call), CROSS_SPEC latent-bug fix, prefix-anchored terminal-line parsing prose, mirror validation. Depends on fn-83.1 (probe) + fn-83.2 (the PROOF — wiring/default-on never lands before the corpus check passes) + fn-83.3 (anchor).
+Wire it all into the skills/agents: phases.md 3e gate branch (mode matrix + audit sampling + summary slot), worker.md (PLAN_DEVIATION line + single anchor call), CROSS_SPEC latent-bug fix, prefix-anchored terminal-line parsing prose, mirror validation. Depends on fn-83.1 (probe) + fn-83.2 (safety proof) + fn-83.6 (CROSS-REPO ship gate — wiring never lands unless R14 passed) + fn-83.3 (anchor). NO CONFIG (user decision 2026-07-03): remove the `planSync.gate` enum from get_default_config + delete test_plansync_gate_config.py; the gate is unconditional when `planSync.enabled` is true. If fn-83.6 FAILED the ship gate, this task ships ONLY the worker changes (base_commit evidence, PLAN_DEVIATION, anchor call, CROSS_SPEC fix) and leaves 3e as unconditional spawn.
 
 **Size:** M
 **Files:** `plugins/flow-next/skills/flow-next-work/phases.md`, `plugins/flow-next/agents/worker.md`, `plugins/flow-next/agents/plan-sync.md` (caller-contract note only, if needed), regenerated mirror (validate locally; commit per repo convention for this spec's tasks — single regen at fn-83.5)

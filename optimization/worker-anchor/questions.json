@@ -1,0 +1,169 @@
+{
+  "_comment": "COMMITTED ANSWER KEY for the worker-anchor comprehension eval (fn-83.3, R9). Binary anchor-comprehension questions per frozen task; grading is against THIS key (bundle-vs-statusquo agreement is NOT the metric — both-wrong must fail). `accept` = case-insensitive regexes that must ALL match the subject's answer line for a point. `kind: non_satisfies` marks the question answerable ONLY from a spec section OUTSIDE the task's satisfies/coverage list (guards any future bundle-filtering regression). Key is FROZEN once generated; new tasks/questions append.",
+  "key_threshold": "6/7 per question set",
+  "tasks": {
+    "fn-64.3": {
+      "task_id": "fn-64-tracker-sync-project-flow-spec.3",
+      "questions": [
+        {
+          "id": "q1",
+          "kind": "acceptance_ids",
+          "question": "Per the parent spec's Requirement coverage table, which R-IDs does task fn-64.3 cover? List the R-IDs.",
+          "answer": "R1 and R3",
+          "accept": ["\\bR1\\b", "\\bR3\\b"],
+          "reject": ["\\bR2\\b"]
+        },
+        {
+          "id": "q2",
+          "kind": "files",
+          "question": "The task's acceptance requires updating which three Linear reference docs with exact mutation/field names?",
+          "answer": "linear-mcp.md, linear-graphql.md, linear-ladder.md",
+          "accept": ["linear-mcp", "linear-graphql", "linear-ladder"]
+        },
+        {
+          "id": "q3",
+          "kind": "boundaries",
+          "question": "Per the parent spec's Boundaries, is transitive/graph expansion of dependency edges in scope? Answer yes or no, and state what IS projected.",
+          "answer": "No — only direct depends_on_epics edges are projected",
+          "accept": ["\\bno\\b", "direct"]
+        },
+        {
+          "id": "q4",
+          "kind": "dep_status",
+          "question": "What is the status of this task's dependency task fn-64.2?",
+          "answer": "done",
+          "accept": ["\\bdone\\b"]
+        },
+        {
+          "id": "q5",
+          "kind": "requirement_content",
+          "question": "Which GraphQL mutation implements the relation write on the GraphQL rung, and with which relation type value?",
+          "answer": "issueRelationCreate with type: blocks",
+          "accept": ["issueRelationCreate", "\\bblocks\\b"]
+        },
+        {
+          "id": "q6",
+          "kind": "non_satisfies",
+          "question": "Per the parent spec's R6 (NOT one of fn-64.3's covered R-IDs), what must tracker-sync do with existing tracker relations it cannot prove it created?",
+          "answer": "Preserve them — never remove relations it cannot prove it created",
+          "accept": ["preserv|never remov|not remov|kept|keep"]
+        },
+        {
+          "id": "q7",
+          "kind": "requirement_content",
+          "question": "When listing relations for dedup, which TWO GraphQL connections must be queried, and which explicit argument does each require?",
+          "answer": "relations AND inverseRelations, each with an explicit first: argument",
+          "accept": ["inverseRelations", "\\bfirst\\b"]
+        }
+      ]
+    },
+    "fn-74.2": {
+      "task_id": "fn-74-cursor-review-backend-cursor-agent-cli.2",
+      "questions": [
+        {
+          "id": "q1",
+          "kind": "acceptance_ids",
+          "question": "Which R-IDs does the task's satisfies list name? List them all.",
+          "answer": "R5, R6, R7, R8, R11, R14",
+          "accept": ["\\bR5\\b", "\\bR6\\b", "\\bR7\\b", "\\bR8\\b", "\\bR11\\b", "\\bR14\\b"]
+        },
+        {
+          "id": "q2",
+          "kind": "files",
+          "question": "Which file does the task's Files line name as the implementation target?",
+          "answer": "plugins/flow-next/scripts/flowctl.py",
+          "accept": ["flowctl\\.py"]
+        },
+        {
+          "id": "q3",
+          "kind": "boundaries",
+          "question": "Per the parent spec's Boundaries, may the trivial-diff triage judge gain cursor as a backend? Answer yes or no, and name the backends it keeps.",
+          "answer": "No — the triage judge stays codex|copilot",
+          "accept": ["\\bno\\b", "codex", "copilot"]
+        },
+        {
+          "id": "q4",
+          "kind": "dep_status",
+          "question": "What is the status of this task's dependency task fn-74.1?",
+          "answer": "done",
+          "accept": ["\\bdone\\b"]
+        },
+        {
+          "id": "q5",
+          "kind": "requirement_content",
+          "question": "Under what exact condition may a cursor re-review resume via --resume, and what happens on a cross-backend receipt?",
+          "answer": "Resume only when the prior receipt's mode == \"cursor\"; a cross-backend receipt starts a fresh session",
+          "accept": ["mode", "cursor", "fresh"]
+        },
+        {
+          "id": "q6",
+          "kind": "non_satisfies",
+          "question": "Per the parent spec's R2 (NOT in this task's satisfies list), what must BackendSpec.parse(\"cursor:gpt-5.5-high:high\") do?",
+          "answer": "Raise — effort is rejected for cursor",
+          "accept": ["raise|reject|error|fail"]
+        },
+        {
+          "id": "q7",
+          "kind": "requirement_content",
+          "question": "Which receipt key must cursor receipts NEVER contain?",
+          "answer": "effort",
+          "accept": ["\\beffort\\b"]
+        }
+      ]
+    },
+    "fn-81.2": {
+      "task_id": "fn-81-skill-runtime-token-plumbing-single.2",
+      "questions": [
+        {
+          "id": "q1",
+          "kind": "acceptance_ids",
+          "question": "Which R-IDs does the task's satisfies list name? List them all.",
+          "answer": "R8, R9, R10, R11, R13",
+          "accept": ["\\bR8\\b", "\\bR9\\b", "\\bR10\\b", "\\bR11\\b", "\\bR13\\b"]
+        },
+        {
+          "id": "q2",
+          "kind": "files",
+          "question": "Which TWO skills' workflow-rp.md files appear in the task's Files list?",
+          "answer": "flow-next-impl-review and flow-next-spec-completion-review",
+          "accept": ["impl-review", "spec-completion-review"]
+        },
+        {
+          "id": "q3",
+          "kind": "boundaries",
+          "question": "Is Codex-mirror regeneration in scope for this task? Answer yes or no, and name which task owns it.",
+          "answer": "No — canonical files only; fn-81.4 owns the mirror regen",
+          "accept": ["\\bno\\b", "81\\.4|81-skill-runtime-token-plumbing-single\\.4"]
+        },
+        {
+          "id": "q4",
+          "kind": "dep_status",
+          "question": "What is the status of this task's dependency task fn-81.1?",
+          "answer": "done",
+          "accept": ["\\bdone\\b"]
+        },
+        {
+          "id": "q5",
+          "kind": "requirement_content",
+          "question": "What is the default value of the fix-loop iteration cap, and which environment variable overrides it?",
+          "answer": "Default 3; MAX_REVIEW_ITERATIONS",
+          "accept": ["\\b3\\b", "MAX_REVIEW_ITERATIONS"]
+        },
+        {
+          "id": "q6",
+          "kind": "non_satisfies",
+          "question": "Per the parent spec's R12 (NOT in this task's satisfies list), which skill's scout-model prose must be made to match the agent frontmatter ground truth?",
+          "answer": "prime (7 haiku scouts, 2 sonnet)",
+          "accept": ["\\bprime\\b"]
+        },
+        {
+          "id": "q7",
+          "kind": "requirement_content",
+          "question": "What staging discipline replaces `git add -A` in both RP fix loops?",
+          "answer": "Snapshot-scoped staging — git status --porcelain before/after, stage only paths that changed between snapshots",
+          "accept": ["snapshot|porcelain"]
+        }
+      ]
+    }
+  }
+}

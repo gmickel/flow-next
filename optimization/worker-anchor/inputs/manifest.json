@@ -1,0 +1,18 @@
+{
+  "generated": "2026-07-03",
+  "head": "7d62856467be004d8cfd2529d0f0a6368760286e",
+  "tasks": {
+    "fn-64.3": {
+      "task_id": "fn-64-tracker-sync-project-flow-spec.3",
+      "spec_id": "fn-64-tracker-sync-project-flow-spec"
+    },
+    "fn-74.2": {
+      "task_id": "fn-74-cursor-review-backend-cursor-agent-cli.2",
+      "spec_id": "fn-74-cursor-review-backend-cursor-agent-cli"
+    },
+    "fn-81.2": {
+      "task_id": "fn-81-skill-runtime-token-plumbing-single.2",
+      "spec_id": "fn-81-skill-runtime-token-plumbing-single"
+    }
+  }
+}

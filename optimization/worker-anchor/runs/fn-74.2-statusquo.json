@@ -1,0 +1,62 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "api_error_status": null,
+  "duration_ms": 7071,
+  "duration_api_ms": 6785,
+  "ttft_ms": 5926,
+  "ttft_stream_ms": 1928,
+  "time_to_request_ms": 145,
+  "num_turns": 1,
+  "result": "q1: R5, R6, R7, R8, R11, R14\nq2: plugins/flow-next/scripts/flowctl.py\nq3: No \u2014 triage judge stays codex|copilot only\nq4: done\nq5: Resumes via --resume only when the prior receipt's mode == \"cursor\"; a cross-backend receipt starts a fresh session (no resume)\nq6: It must raise a ValueError (effort rejected \u2014 \"does not accept an effort\")\nq7: effort",
+  "stop_reason": "end_turn",
+  "session_id": "5fe0949c-6d8f-4b9e-94fb-3641e3a4049d",
+  "total_cost_usd": 0.4878585,
+  "usage": {
+    "input_tokens": 15608,
+    "cache_creation_input_tokens": 71047,
+    "cache_read_input_tokens": 23025,
+    "output_tokens": 523,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 71047,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 15608,
+        "output_tokens": 523,
+        "cache_read_input_tokens": 23025,
+        "cache_creation_input_tokens": 71047,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 71047
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 15608,
+      "outputTokens": 523,
+      "cacheReadInputTokens": 23025,
+      "cacheCreationInputTokens": 71047,
+      "webSearchRequests": 0,
+      "costUSD": 0.4878585,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "uuid": "13cc7286-606c-4e7d-9fdc-5409a705f3be"
+}

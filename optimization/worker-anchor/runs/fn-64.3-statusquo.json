@@ -1,0 +1,62 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "api_error_status": null,
+  "duration_ms": 8865,
+  "duration_api_ms": 8564,
+  "ttft_ms": 7885,
+  "ttft_stream_ms": 1628,
+  "time_to_request_ms": 143,
+  "num_turns": 1,
+  "result": "q1: R1, R3\nq2: linear-mcp.md, linear-graphql.md, linear-ladder.md\nq3: No; only direct depends_on_epics edges are projected (no traversal/transitive expansion)\nq4: done\nq5: issueRelationCreate, with type: blocks\nq6: Preserve them \u2014 never remove existing relations it cannot prove it created\nq7: relations and inverseRelations; each requires an explicit first: argument",
+  "stop_reason": "end_turn",
+  "session_id": "bd35a7fc-1e8a-4ce5-9ffb-5246b9f0249e",
+  "total_cost_usd": 0.41067149999999997,
+  "usage": {
+    "input_tokens": 15608,
+    "cache_creation_input_tokens": 57280,
+    "cache_read_input_tokens": 23025,
+    "output_tokens": 884,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 57280,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 15608,
+        "output_tokens": 884,
+        "cache_read_input_tokens": 23025,
+        "cache_creation_input_tokens": 57280,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 57280
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 15608,
+      "outputTokens": 884,
+      "cacheReadInputTokens": 23025,
+      "cacheCreationInputTokens": 57280,
+      "webSearchRequests": 0,
+      "costUSD": 0.41067149999999997,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "uuid": "5d572e01-2256-4c2a-acf2-e76e792ad3c5"
+}
