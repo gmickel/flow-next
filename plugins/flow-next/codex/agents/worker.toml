@@ -148,6 +148,11 @@ THIS task's implementation to `codex exec`:
      --result "$SCRATCH/result-batch-1.json" --exit "$CODEX_EXIT" --json)"
    ACTION="$(printf '%s' "$CLASS_JSON" | jq -r '.action')"
 
+   # Re-read BASE_COMMIT — bash vars do not survive across tool-call Bash blocks;
+   # an empty ref here would wrongly force-rollback a SUCCESSFUL delegated run and
+   # run `git reset --mixed ""`.
+   BASE_COMMIT=$(cat .flow/tmp/base_commit)
+
    # Git-ownership assertion — a moved HEAD means Codex committed (yolo can run
    # git); that is ALWAYS an enforcement failure → force a rollback + disable.
    if [ "$(git rev-parse HEAD)" != "$BASE_COMMIT" ]; then
