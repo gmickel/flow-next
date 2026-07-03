@@ -1,0 +1,506 @@
+{
+  "version": 1,
+  "append_only": "Scenarios are APPEND-ONLY. Never delete, weaken, or re-label a scenario to make the probe pass. Every future live miss (audit miss or user-reported) becomes a new permanent scenario. See README.md.",
+  "scenarios": [
+    {
+      "id": "pos-rename-morph",
+      "kind": "fixture",
+      "intent": "positive",
+      "builder": "pos_rename_morph",
+      "description": "Symbol rename, morphologically visible: planned alpha_handler implemented as alpha_handler_v2; downstream task calls alpha_handler by name (disjoint file set).",
+      "task": "fn-9.1",
+      "spec": "fn-9",
+      "cross_spec": false,
+      "truthful_deviation": "yes",
+      "visibility": "token",
+      "probe_expected": {
+        "truthful": "spawn",
+        "adversarial": "spawn"
+      },
+      "downstream": [
+        "fn-9.2"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "pos-rename-plainword",
+      "kind": "fixture",
+      "intent": "positive",
+      "builder": "pos_rename_plainword",
+      "description": "Symbol rename, plain-word: planned `parse` implemented as `read` (no morphological shape on either side); downstream references `parse` in prose. THE stated residual class: only the deviation flag carries it on the lattice.",
+      "task": "fn-9.1",
+      "spec": "fn-9",
+      "cross_spec": false,
+      "truthful_deviation": "yes",
+      "visibility": "flag-only",
+      "residual": true,
+      "probe_expected": {
+        "truthful": "spawn",
+        "adversarial": "skip"
+      },
+      "downstream": [
+        "fn-9.2"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "pos-api-signature-invtargets",
+      "kind": "fixture",
+      "intent": "positive",
+      "builder": "pos_api_signature_invtargets",
+      "description": "API signature change beyond spec, consumed via downstream Investigation targets listing the touched file (path arm, exact).",
+      "task": "fn-9.1",
+      "spec": "fn-9",
+      "cross_spec": false,
+      "truthful_deviation": "yes",
+      "visibility": "path",
+      "probe_expected": {
+        "truthful": "spawn",
+        "adversarial": "spawn"
+      },
+      "downstream": [
+        "fn-9.2"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "pos-deviation-only",
+      "kind": "fixture",
+      "intent": "positive",
+      "builder": "pos_deviation_only",
+      "description": "Deviation-only drift: spec said in-memory cache, implementation wrote a disk cache; downstream task has ZERO file/token overlap with the change but assumes in-memory semantics. THE second stated residual class: flag-dependent by construction.",
+      "task": "fn-9.1",
+      "spec": "fn-9",
+      "cross_spec": false,
+      "truthful_deviation": "yes",
+      "visibility": "flag-only",
+      "residual": true,
+      "probe_expected": {
+        "truthful": "spawn",
+        "adversarial": "skip"
+      },
+      "downstream": [
+        "fn-9.2"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "pos-acceptance-semantics",
+      "kind": "fixture",
+      "intent": "positive",
+      "builder": "pos_acceptance_semantics",
+      "description": "Acceptance-semantics staleness: render_summary output switched plain-text to JSON; downstream AC still says it parses the plain-text output (token arm via render_summary).",
+      "task": "fn-9.1",
+      "spec": "fn-9",
+      "cross_spec": false,
+      "truthful_deviation": "yes",
+      "visibility": "token",
+      "probe_expected": {
+        "truthful": "spawn",
+        "adversarial": "spawn"
+      },
+      "downstream": [
+        "fn-9.2"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "pos-file-rename-planned",
+      "kind": "fixture",
+      "intent": "positive",
+      "builder": "pos_file_rename_planned",
+      "description": "PLANNED file move (deviation truthfully `no` \u2014 the task spec ordered the move): src/mod/alpha.py -> src/core/alpha_core.py; downstream Files still lists the old path. Proves the path arm is load-bearing without the flag (D+A old path, exact match).",
+      "task": "fn-9.1",
+      "spec": "fn-9",
+      "cross_spec": false,
+      "truthful_deviation": "no",
+      "visibility": "path",
+      "probe_expected": {
+        "truthful": "spawn",
+        "adversarial": "spawn"
+      },
+      "downstream": [
+        "fn-9.2"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "pos-cross-spec",
+      "kind": "fixture",
+      "intent": "positive",
+      "builder": "pos_cross_spec",
+      "description": "Cross-spec drift (crossSpec=true): another OPEN spec's body references the file this task rewired; same-spec downstream is disjoint. Probe must spawn via the cross-spec scan.",
+      "task": "fn-9.1",
+      "spec": "fn-9",
+      "cross_spec": true,
+      "truthful_deviation": "yes",
+      "visibility": "path",
+      "probe_expected": {
+        "truthful": "spawn",
+        "adversarial": "spawn"
+      },
+      "downstream": [
+        "fn-9.2"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "pos-prose-shared-contract",
+      "kind": "fixture",
+      "intent": "positive",
+      "builder": "pos_prose_shared_contract",
+      "description": "Prose-only shared-contract reference: AuthResult field renamed token -> access_token; downstream never lists the touched file but discusses `AuthResult.token` in prose (token arm via camel-hump AuthResult).",
+      "task": "fn-9.1",
+      "spec": "fn-9",
+      "cross_spec": false,
+      "truthful_deviation": "yes",
+      "visibility": "token",
+      "probe_expected": {
+        "truthful": "spawn",
+        "adversarial": "spawn"
+      },
+      "downstream": [
+        "fn-9.2"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "pos-schema-key-rename",
+      "kind": "fixture",
+      "intent": "positive",
+      "builder": "pos_schema_key_rename",
+      "description": "Wire-schema key rename: serialized dict key user_id -> uid; downstream carries a fenced JSON example with \"user_id\" (token arm via snake_case in a fence).",
+      "task": "fn-9.1",
+      "spec": "fn-9",
+      "cross_spec": false,
+      "truthful_deviation": "yes",
+      "visibility": "token",
+      "probe_expected": {
+        "truthful": "spawn",
+        "adversarial": "spawn"
+      },
+      "downstream": [
+        "fn-9.2"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "pos-dir-restructure-planned",
+      "kind": "fixture",
+      "intent": "positive",
+      "builder": "pos_dir_restructure_planned",
+      "description": "PLANNED directory restructure (deviation truthfully `no`): helpers moved src/util/ -> src/common/; downstream references the src/util/ directory (dir-prefix arm on the old D paths).",
+      "task": "fn-9.1",
+      "spec": "fn-9",
+      "cross_spec": false,
+      "truthful_deviation": "no",
+      "visibility": "path",
+      "probe_expected": {
+        "truthful": "spawn",
+        "adversarial": "spawn"
+      },
+      "downstream": [
+        "fn-9.2"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "pos-glossary-rename",
+      "kind": "fixture",
+      "intent": "positive",
+      "builder": "pos_glossary_rename",
+      "description": "Glossary-term rename in flight (plan-sync 3b.1 signal): GLOSSARY.md canonical `feedback loop` avoids `polling cycle`; task implemented run_feedback_loop while spec prose said polling cycle; downstream (same engine file in Files) still says polling cycle. Path-visible by construction \u2014 glossary drift co-locates with the touched engine file.",
+      "task": "fn-9.1",
+      "spec": "fn-9",
+      "cross_spec": false,
+      "truthful_deviation": "yes",
+      "visibility": "path",
+      "probe_expected": {
+        "truthful": "spawn",
+        "adversarial": "spawn"
+      },
+      "downstream": [
+        "fn-9.2"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "pos-multi-commit-fix-loop",
+      "kind": "fixture",
+      "intent": "positive",
+      "builder": "pos_multi_commit_fix_loop",
+      "description": "Multi-commit fix-loop: the drift-relevant rename (compute_total -> compute_grand_total) lands in commit 1 of 3; later commits touch unrelated notes. A HEAD-only diff would miss it \u2014 the base..head RANGE must catch it (token arm).",
+      "task": "fn-9.1",
+      "spec": "fn-9",
+      "cross_spec": false,
+      "truthful_deviation": "yes",
+      "visibility": "token",
+      "probe_expected": {
+        "truthful": "spawn",
+        "adversarial": "spawn"
+      },
+      "downstream": [
+        "fn-9.2"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "pos-config-key-rename",
+      "kind": "fixture",
+      "intent": "positive",
+      "builder": "pos_config_key_rename",
+      "description": "Config surface rename: settings key retry_max renamed to max_retries in src/config/loader.py; downstream task's fenced setup command still sets retry_max (token arm via snake_case inside a fenced command block).",
+      "task": "fn-9.1",
+      "spec": "fn-9",
+      "cross_spec": false,
+      "truthful_deviation": "yes",
+      "visibility": "token",
+      "probe_expected": {
+        "truthful": "spawn",
+        "adversarial": "spawn"
+      },
+      "downstream": [
+        "fn-9.2"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "neg-fn81-1",
+      "kind": "replay",
+      "intent": "negative",
+      "description": "Real history: fn-81.1 (single-emission spec writes) post-task state. Historical plan-sync: no drift.",
+      "checkout": "ae4726c65460256c2da4cf083bd58affba00988e",
+      "pr_ref": "refs/pull/191/head",
+      "task": "fn-81-skill-runtime-token-plumbing-single.1",
+      "spec": "fn-81-skill-runtime-token-plumbing-single",
+      "base_commit": "c6df8cc0c2da77756f8b166716dba3065275167c",
+      "head_commit": "94924748a87566ef7ca9e31b03041bb2b40e1103",
+      "cross_spec": false,
+      "truthful_deviation": "no",
+      "probe_expected": {
+        "truthful": "spawn"
+      },
+      "downstream": [
+        "fn-81-skill-runtime-token-plumbing-single.2",
+        "fn-81-skill-runtime-token-plumbing-single.3",
+        "fn-81-skill-runtime-token-plumbing-single.4"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "neg-fn81-2",
+      "kind": "replay",
+      "intent": "negative",
+      "description": "Real history: fn-81.2 (review-backend plumbing) post-task state; multi-commit (work + review-fix).",
+      "checkout": "166ea532115f9ab49966969e23e6d30366736059",
+      "pr_ref": "refs/pull/191/head",
+      "task": "fn-81-skill-runtime-token-plumbing-single.2",
+      "spec": "fn-81-skill-runtime-token-plumbing-single",
+      "base_commit": "ae4726c65460256c2da4cf083bd58affba00988e",
+      "head_commit": "23797981045b26a0d6ded979dae472d0dc48305a",
+      "cross_spec": false,
+      "truthful_deviation": "no",
+      "probe_expected": {
+        "truthful": "spawn"
+      },
+      "downstream": [
+        "fn-81-skill-runtime-token-plumbing-single.3",
+        "fn-81-skill-runtime-token-plumbing-single.4"
+      ],
+      "done_siblings": [
+        "fn-81-skill-runtime-token-plumbing-single.1"
+      ]
+    },
+    {
+      "id": "neg-fn81-3",
+      "kind": "replay",
+      "intent": "negative",
+      "description": "Real history: fn-81.3 (round-trip eliminations) post-task state.",
+      "checkout": "e01e631a05e6a4c8e0f065e700d2b018914d2f63",
+      "pr_ref": "refs/pull/191/head",
+      "task": "fn-81-skill-runtime-token-plumbing-single.3",
+      "spec": "fn-81-skill-runtime-token-plumbing-single",
+      "base_commit": "166ea532115f9ab49966969e23e6d30366736059",
+      "head_commit": "041bab303de86ad00a9ab0b5e0f1f0e08930369e",
+      "cross_spec": false,
+      "truthful_deviation": "no",
+      "probe_expected": {
+        "truthful": "spawn"
+      },
+      "downstream": [
+        "fn-81-skill-runtime-token-plumbing-single.4"
+      ],
+      "done_siblings": [
+        "fn-81-skill-runtime-token-plumbing-single.1",
+        "fn-81-skill-runtime-token-plumbing-single.2"
+      ]
+    },
+    {
+      "id": "neg-fn82-1",
+      "kind": "replay",
+      "intent": "negative",
+      "description": "Real history: fn-82.1 (gate work/pilot behind forced-read references) post-task state; range includes a swept memory commit (over-approximation direction).",
+      "checkout": "c39e4f5c3f04143538a0df2aa74e1201e2a8d2e5",
+      "pr_ref": "refs/pull/193/head",
+      "task": "fn-82-skill-prompt-diet-progressive.1",
+      "spec": "fn-82-skill-prompt-diet-progressive",
+      "base_commit": "aaeaf1ffbf9d6ad2b8fbb3acb1f893b74c4b6440",
+      "head_commit": "bdb188ef002d4575d5a2c2883b45f51439495587",
+      "cross_spec": false,
+      "truthful_deviation": "no",
+      "probe_expected": {
+        "truthful": "spawn"
+      },
+      "downstream": [
+        "fn-82-skill-prompt-diet-progressive.2",
+        "fn-82-skill-prompt-diet-progressive.3",
+        "fn-82-skill-prompt-diet-progressive.4",
+        "fn-82-skill-prompt-diet-progressive.5"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "neg-fn82-2",
+      "kind": "replay",
+      "intent": "negative",
+      "description": "Real history: fn-82.2 (Class-1 archaeology) post-task state; multi-commit fix-loop (work + review r1 fix).",
+      "checkout": "8500861523e055d2b68acd37ca26375c746fb5ce",
+      "pr_ref": "refs/pull/193/head",
+      "task": "fn-82-skill-prompt-diet-progressive.2",
+      "spec": "fn-82-skill-prompt-diet-progressive",
+      "base_commit": "c39e4f5c3f04143538a0df2aa74e1201e2a8d2e5",
+      "head_commit": "f7e6732841dae8f6b9e969b21229b623ad8c15b8",
+      "cross_spec": false,
+      "truthful_deviation": "no",
+      "probe_expected": {
+        "truthful": "spawn"
+      },
+      "downstream": [
+        "fn-82-skill-prompt-diet-progressive.3",
+        "fn-82-skill-prompt-diet-progressive.4",
+        "fn-82-skill-prompt-diet-progressive.5"
+      ],
+      "done_siblings": [
+        "fn-82-skill-prompt-diet-progressive.1"
+      ]
+    },
+    {
+      "id": "neg-fn82-3",
+      "kind": "replay",
+      "intent": "negative",
+      "description": "Real history: fn-82.3 (Class-3 dedupe) post-task state.",
+      "checkout": "33d8f6d150bd6d50ddc19d4a0293aaf5caeaf0fd",
+      "pr_ref": "refs/pull/193/head",
+      "task": "fn-82-skill-prompt-diet-progressive.3",
+      "spec": "fn-82-skill-prompt-diet-progressive",
+      "base_commit": "8500861523e055d2b68acd37ca26375c746fb5ce",
+      "head_commit": "c92e7fdcf8968103b4660bf4ce214cd1c5cd7034",
+      "cross_spec": false,
+      "truthful_deviation": "no",
+      "probe_expected": {
+        "truthful": "spawn"
+      },
+      "downstream": [
+        "fn-82-skill-prompt-diet-progressive.4",
+        "fn-82-skill-prompt-diet-progressive.5"
+      ],
+      "done_siblings": [
+        "fn-82-skill-prompt-diet-progressive.1",
+        "fn-82-skill-prompt-diet-progressive.2"
+      ]
+    },
+    {
+      "id": "neg-fn82-4",
+      "kind": "replay",
+      "intent": "negative",
+      "description": "Real history: fn-82.4 (eval-guarded pair) post-task state.",
+      "checkout": "2f1a73c9de6a1d147c265e5d7999c302d0de0cc4",
+      "pr_ref": "refs/pull/193/head",
+      "task": "fn-82-skill-prompt-diet-progressive.4",
+      "spec": "fn-82-skill-prompt-diet-progressive",
+      "base_commit": "33d8f6d150bd6d50ddc19d4a0293aaf5caeaf0fd",
+      "head_commit": "cd2e61201a0b818262dbebb91ff436585f6e29f2",
+      "cross_spec": false,
+      "truthful_deviation": "no",
+      "probe_expected": {
+        "truthful": "spawn"
+      },
+      "downstream": [
+        "fn-82-skill-prompt-diet-progressive.5"
+      ],
+      "done_siblings": [
+        "fn-82-skill-prompt-diet-progressive.1",
+        "fn-82-skill-prompt-diet-progressive.2",
+        "fn-82-skill-prompt-diet-progressive.3"
+      ]
+    },
+    {
+      "id": "neg-fn78-1",
+      "kind": "replay",
+      "intent": "negative",
+      "description": "Real history: fn-78.1 (RepoPrompt-proposal gate) post-task state; multi-commit (feat + review fix).",
+      "checkout": "571bb1606b8b2eabdb9e5f411e37758987d75bd6",
+      "pr_ref": "refs/pull/187/head",
+      "task": "fn-78-gate-repoprompt-proposal-on-macos-or-rp.1",
+      "spec": "fn-78-gate-repoprompt-proposal-on-macos-or-rp",
+      "base_commit": "9938d3ffff85816a63d7f5a7cf91418085c9d34e",
+      "head_commit": "4b546630ed99eb0e970039a3c5648bad20fc9095",
+      "cross_spec": false,
+      "truthful_deviation": "no",
+      "probe_expected": {
+        "truthful": "spawn"
+      },
+      "downstream": [
+        "fn-78-gate-repoprompt-proposal-on-macos-or-rp.2"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "neg-fn74-1",
+      "kind": "replay",
+      "intent": "negative",
+      "description": "Real history: fn-74.1 (cursor backend foundation \u2014 flowctl code + tests) post-task state. Code-heavy texture (vs the skills-prose fn-81/82 replays).",
+      "checkout": "af7008a036a7c677e5bf5682bff13d8e4daedf67",
+      "pr_ref": "refs/pull/184/head",
+      "task": "fn-74-cursor-review-backend-cursor-agent-cli.1",
+      "spec": "fn-74-cursor-review-backend-cursor-agent-cli",
+      "base_commit": "1100568ae401b0307e700d60566f1b1de9341861",
+      "head_commit": "0d3aba119234c809a5ed2bdad111f333c446dbcd",
+      "cross_spec": false,
+      "truthful_deviation": "no",
+      "probe_expected": {
+        "truthful": "spawn"
+      },
+      "downstream": [
+        "fn-74-cursor-review-backend-cursor-agent-cli.2",
+        "fn-74-cursor-review-backend-cursor-agent-cli.3",
+        "fn-74-cursor-review-backend-cursor-agent-cli.4"
+      ],
+      "done_siblings": []
+    },
+    {
+      "id": "neg-fn74-2",
+      "kind": "replay",
+      "intent": "negative",
+      "description": "Real history: fn-74.2 (cursor review commands) post-task state.",
+      "checkout": "0dd42057cb5b090b0dd09e61e4ec20a54434b4be",
+      "pr_ref": "refs/pull/184/head",
+      "task": "fn-74-cursor-review-backend-cursor-agent-cli.2",
+      "spec": "fn-74-cursor-review-backend-cursor-agent-cli",
+      "base_commit": "af7008a036a7c677e5bf5682bff13d8e4daedf67",
+      "head_commit": "6818a0733940c554d7305f0b42173729537e3a8e",
+      "cross_spec": false,
+      "truthful_deviation": "no",
+      "probe_expected": {
+        "truthful": "spawn"
+      },
+      "downstream": [
+        "fn-74-cursor-review-backend-cursor-agent-cli.3",
+        "fn-74-cursor-review-backend-cursor-agent-cli.4"
+      ],
+      "done_siblings": [
+        "fn-74-cursor-review-backend-cursor-agent-cli.1"
+      ]
+    }
+  ]
+}

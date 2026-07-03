@@ -14,6 +14,10 @@ on:
       - "scripts/install-cursor.sh"
       - "scripts/install-cursor.ps1"
       - "scripts/ci/verify_cursor_install.py"
+      # fn-83 eval harnesses: corpus/answer-key/results edits must re-run the
+      # gate-corpus check (zero-false-skip merge gate) even without code changes.
+      - "optimization/plan-sync-gate/**"
+      - "optimization/worker-anchor/**"
   pull_request:
     branches: [main]
     paths:
@@ -24,6 +28,8 @@ on:
       - "scripts/install-cursor.sh"
       - "scripts/install-cursor.ps1"
       - "scripts/ci/verify_cursor_install.py"
+      - "optimization/plan-sync-gate/**"
+      - "optimization/worker-anchor/**"
   workflow_dispatch:
 
 jobs:
@@ -145,6 +151,31 @@ jobs:
         # the host-owned circuit-breaker + worker DELEGATION_RESULT/ACTION signal
         # + evidence.delegation inline + attribution trailers + REVIEW_MODE=none
         # verification-backstop prose contract.
+
+      # ──────────── fn-83 (plan-sync gate: probe + frozen-key corpus) ────────────
+
+      - name: Python unit tests — plan-sync probe lattice + gate config (fn-83.1)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_plan_sync_probe.py" \
+            -v
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_plansync_gate_config.py" \
+            -v
+
+      - name: Gate corpus — probe vs FROZEN real-agent answer key (fn-83.2)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_plan_sync_gate_corpus.py" \
+            -v
+        # Deterministic probe vs the frozen answer key generated ONCE from the
+        # real plan-sync agent (optimization/plan-sync-gate/). Zero false skips
+        # is a HARD merge gate; the LLM is never re-run in CI. Replay scenarios
+        # fetch their pinned SHAs (origin, then the canonical repo URL) when the
+        # shallow clone lacks them — a missing commit FAILS, never skips.
 
       # ──────────── fn-50 (clawpatch wrap) ────────────
       # New readers + scout-fallback contract land here so they run on the full

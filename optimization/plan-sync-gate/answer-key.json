@@ -1,0 +1,242 @@
+{
+  "frozen": true,
+  "generated_at": "2026-07-03",
+  "generator": "headless `claude -p --model opus --tools \"Read,Grep,Glob\" --output-format json`, cwd = materialized scenario, prompt = agents/plan-sync.md as complete operating instructions + full input contract (DRY_RUN=true, at-SHA husks). See README.md \u00a7Answer key.",
+  "model_alias": "opus",
+  "model_id": "claude-opus-4-8",
+  "agent_prompt_file": "plugins/flow-next/agents/plan-sync.md",
+  "n_runs": 3,
+  "vote_rule": "majority; ANY flip across runs => drift (wobble = ambiguity = drift); unparseable verdict counts as yes",
+  "scenarios": {
+    "pos-rename-morph": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false,
+      "construction_intent": "positive"
+    },
+    "pos-rename-plainword": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false,
+      "construction_intent": "positive"
+    },
+    "pos-api-signature-invtargets": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false,
+      "construction_intent": "positive"
+    },
+    "pos-deviation-only": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false,
+      "construction_intent": "positive"
+    },
+    "pos-acceptance-semantics": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false,
+      "construction_intent": "positive"
+    },
+    "pos-file-rename-planned": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false,
+      "construction_intent": "positive"
+    },
+    "pos-cross-spec": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false,
+      "construction_intent": "positive"
+    },
+    "pos-prose-shared-contract": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false,
+      "construction_intent": "positive"
+    },
+    "pos-schema-key-rename": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false,
+      "construction_intent": "positive"
+    },
+    "pos-dir-restructure-planned": {
+      "votes": [
+        "yes",
+        "no",
+        "no"
+      ],
+      "label": "drift",
+      "wobble": true,
+      "construction_intent": "positive"
+    },
+    "pos-glossary-rename": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false,
+      "construction_intent": "positive"
+    },
+    "pos-multi-commit-fix-loop": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false,
+      "construction_intent": "positive"
+    },
+    "pos-config-key-rename": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false,
+      "construction_intent": "positive"
+    },
+    "neg-fn81-1": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false,
+      "construction_intent": "negative"
+    },
+    "neg-fn81-2": {
+      "votes": [
+        "yes",
+        "no",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": true,
+      "construction_intent": "negative"
+    },
+    "neg-fn81-3": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false,
+      "construction_intent": "negative"
+    },
+    "neg-fn82-1": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false,
+      "construction_intent": "negative"
+    },
+    "neg-fn82-2": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false,
+      "construction_intent": "negative"
+    },
+    "neg-fn82-3": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false,
+      "construction_intent": "negative"
+    },
+    "neg-fn82-4": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false,
+      "construction_intent": "negative"
+    },
+    "neg-fn78-1": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false,
+      "construction_intent": "negative"
+    },
+    "neg-fn74-1": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false,
+      "construction_intent": "negative"
+    },
+    "neg-fn74-2": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false,
+      "construction_intent": "negative"
+    }
+  }
+}

@@ -1,0 +1,44 @@
+row_type	subject	outcome	detail
+iteration	iteration-0	discarded	Probe as shipped in fn-83.1 (commit 5993c446). fn-81.1 replay: spawn with 32 path overlaps + 97 token matches — nearly all from `git add -A`-swept .flow bookkeeping (task/spec md edits, interleaved fn-82 spec authoring) and cross-directory basename matches on generic names (SKILL.md). Gate vacuous on real history.
+iteration	iteration-1	kept	Bookkeeping exclusion: .flow/tasks/, .flow/specs/, .flow/review-receipts/, .flow/review-runs/ removed from the touched-set AND from hunk tokenization (_PSP_BOOKKEEPING_PREFIXES). Durable .flow content (config.json, memory/, templates/, usage.md, bin/) stays. fn-81.1 replay: 32->15 overlaps, 97->16 tokens.
+iteration	iteration-2	kept	Basename arm restricted to DIRLESS refs: a ref with a directory part matches exact/dir-prefix only (the author was specific; --no-renames keeps old paths in the touched-set so stale full-path refs still match exactly). Kills cross-directory SKILL.md-matches-any-SKILL.md. Zero false skips on the corpus after both iterations.
+iteration	iteration-3-candidates	rejected	Demoting generic dirless basenames (SKILL.md/phases.md/workflow.md) or ALL-CAPS prose tokens (NOT/ONLY/AND) = English-stoplist territory — rejected per repo doctrine (shape-based predicates only) and false-skip risk. Remaining negative spawns are GENUINE shared-scope references (shared flowctl.py Files entries, real shared symbols e.g. run_cursor_exec, plugins/flow-next/skills dir refs).
+result	pos-rename-morph/truthful	spawn	key=drift votes=yes,yes,yes
+result	pos-rename-morph/adversarial	spawn	key=drift votes=yes,yes,yes
+result	pos-rename-plainword/truthful	spawn	key=drift votes=yes,yes,yes
+result	pos-rename-plainword/adversarial	skip	key=drift votes=yes,yes,yes residual-expected-miss
+result	pos-api-signature-invtargets/truthful	spawn	key=drift votes=yes,yes,yes
+result	pos-api-signature-invtargets/adversarial	spawn	key=drift votes=yes,yes,yes
+result	pos-deviation-only/truthful	spawn	key=drift votes=yes,yes,yes
+result	pos-deviation-only/adversarial	skip	key=drift votes=yes,yes,yes residual-expected-miss
+result	pos-acceptance-semantics/truthful	spawn	key=drift votes=yes,yes,yes
+result	pos-acceptance-semantics/adversarial	spawn	key=drift votes=yes,yes,yes
+result	pos-file-rename-planned/truthful	spawn	key=drift votes=yes,yes,yes
+result	pos-file-rename-planned/adversarial	spawn	key=drift votes=yes,yes,yes
+result	pos-cross-spec/truthful	spawn	key=drift votes=yes,yes,yes
+result	pos-cross-spec/adversarial	spawn	key=drift votes=yes,yes,yes
+result	pos-prose-shared-contract/truthful	spawn	key=drift votes=yes,yes,yes
+result	pos-prose-shared-contract/adversarial	spawn	key=drift votes=yes,yes,yes
+result	pos-schema-key-rename/truthful	spawn	key=drift votes=yes,yes,yes
+result	pos-schema-key-rename/adversarial	spawn	key=drift votes=yes,yes,yes
+result	pos-dir-restructure-planned/truthful	spawn	key=drift votes=yes,no,no WOBBLE
+result	pos-dir-restructure-planned/adversarial	spawn	key=drift votes=yes,no,no WOBBLE
+result	pos-glossary-rename/truthful	spawn	key=drift votes=yes,yes,yes
+result	pos-glossary-rename/adversarial	spawn	key=drift votes=yes,yes,yes
+result	pos-multi-commit-fix-loop/truthful	spawn	key=drift votes=yes,yes,yes
+result	pos-multi-commit-fix-loop/adversarial	spawn	key=drift votes=yes,yes,yes
+result	pos-config-key-rename/truthful	spawn	key=drift votes=yes,yes,yes
+result	pos-config-key-rename/adversarial	spawn	key=drift votes=yes,yes,yes
+result	neg-fn81-1/truthful	spawn	key=no_drift votes=no,no,no
+result	neg-fn81-2/truthful	spawn	key=drift votes=yes,no,yes WOBBLE
+result	neg-fn81-3/truthful	spawn	key=no_drift votes=no,no,no
+result	neg-fn82-1/truthful	spawn	key=no_drift votes=no,no,no
+result	neg-fn82-2/truthful	spawn	key=no_drift votes=no,no,no
+result	neg-fn82-3/truthful	spawn	key=no_drift votes=no,no,no
+result	neg-fn82-4/truthful	spawn	key=no_drift votes=no,no,no
+result	neg-fn78-1/truthful	spawn	key=no_drift votes=no,no,no
+result	neg-fn74-1/truthful	spawn	key=no_drift votes=no,no,no
+result	neg-fn74-2/truthful	spawn	key=no_drift votes=no,no,no
+metric	false_skips	0/14	HARD merge gate — must be 0 (truthful arm vs key-drift scenarios)
+metric	skip_rate_on_negatives	0/9	target >=80%; <50% => ship-with-rationale decision (see README)
+metric	rule_of_three_bound	<=3/14 (~21%) @95%	0 FN in N=14 key-drift scenarios

@@ -19103,6 +19103,13 @@ def cmd_codex_rollback_plan(args: argparse.Namespace) -> None:
 # range, unreadable body) are fail-open `spawn` decisions with exit 0;
 # unexpected internal errors exit nonzero (the caller treats a failed probe
 # invocation as `spawn`).
+#
+# Arms 3+4 exclude workflow-run bookkeeping (`.flow/tasks/`, `.flow/specs/`,
+# review receipts/runs — `_PSP_BOOKKEEPING_PREFIXES`) from the touched-set
+# and hunk tokenization, and full-path refs match exact/dir-prefix only
+# (basename matching is for dirless refs). Both iterations are validated by
+# the frozen-answer-key gate corpus (optimization/plan-sync-gate/) — zero
+# false skips against the real plan-sync agent's labels is the merge gate.
 
 # Ledger for gate decisions — pairs shadow/audit would-decisions with actual
 # `Drift detected:` verdicts. Lives under .flow/ (repo-local, durable).
@@ -19111,6 +19118,27 @@ PLANSYNC_GATE_LEDGER = "plansync-gate.jsonl"
 # Commit-ish values read from task evidence are passed to git as argv; require
 # hash shape so a hostile/corrupt value can never be parsed as a git flag.
 _PSP_COMMIT_RE = re.compile(r"[0-9a-fA-F]{4,64}$")
+
+# Workflow-run bookkeeping excluded from the touched-set + hunk tokenization
+# (fn-83.2 gate-corpus iteration 1). Worker commits `git add -A`, sweeping
+# plan/task markdown edits (claims, done summaries, plan-sync breadcrumbs,
+# interleaved spec authoring) and review receipts into every task's range —
+# none of which is implementation drift, while downstream bodies trivially
+# reference sibling `.flow/tasks//.flow/specs/` paths (guaranteed overlap ⇒
+# the gate could never skip on real history). Durable `.flow` content stays
+# IN the touched-set: config.json (behavioral), memory/ (decision entries are
+# plan-sync 3b.2 signal), templates/ + usage.md + bin/ (dogfood deliverables).
+_PSP_BOOKKEEPING_PREFIXES = (
+    ".flow/tasks/",
+    ".flow/specs/",
+    ".flow/review-receipts/",
+    ".flow/review-runs/",
+)
+
+
+def _psp_is_bookkeeping(path: str) -> bool:
+    """True for workflow-run bookkeeping paths (never implementation drift)."""
+    return path.startswith(_PSP_BOOKKEEPING_PREFIXES)
 
 # Candidate identifier tokens in diff hunks: identifier runs optionally joined
 # by `.` / `::` / `->` into compounds (os.path, Foo::bar, ptr->field).
@@ -19168,16 +19196,56 @@ def _psp_is_identifier_shaped(token: str) -> bool:
     return False
 
 
+def _psp_diff_header_path(line: str) -> Optional[str]:
+    """Path from a `--- a/x` / `+++ b/x` diff header line (None for /dev/null).
+
+    Tolerates the quoted form git emits for unusual filenames; the a// b/
+    prefix is stripped. Only used to decide bookkeeping exclusion, so an
+    unparseable header safely resolves to None (= not excludable ⇒ tokens
+    kept ⇒ over-approximation ⇒ spawn direction).
+    """
+    body = line[4:].strip()
+    if body.startswith('"') and body.endswith('"') and len(body) >= 2:
+        body = body[1:-1]
+    if body == "/dev/null":
+        return None
+    if body.startswith("a/") or body.startswith("b/"):
+        return body[2:]
+    return body
+
+
 def _psp_hunk_tokens(diff_text: str) -> set:
     """Extract morphological identifier tokens from unified-diff hunk lines.
 
     Both `+` and `-` lines are tokenized (old names live on `-` — required
     for rename recall); file headers (`+++` / `---`) and context lines are
-    skipped.
+    skipped. File sections whose paths are ALL workflow-run bookkeeping
+    (`_psp_is_bookkeeping`) are skipped entirely — their hunk content (task
+    prose edits, spec authoring swept in by `git add -A`, receipt JSON) is
+    not implementation drift and would otherwise flood the token arm.
     """
     tokens: set = set()
+    section_excluded = False
+    old_path: Optional[str] = None
     for line in diff_text.split("\n"):
-        if line.startswith("+++") or line.startswith("---"):
+        if line.startswith("diff --git "):
+            section_excluded = False
+            old_path = None
+            continue
+        if line.startswith("--- "):
+            old_path = _psp_diff_header_path(line)
+            continue
+        if line.startswith("+++ "):
+            new_path = _psp_diff_header_path(line)
+            real = [p for p in (old_path, new_path) if p is not None]
+            # Exclude only when every real path in the section is
+            # bookkeeping (with --no-renames old==new for M; one side is
+            # /dev/null for A/D). No real path ⇒ keep (fail toward spawn).
+            section_excluded = bool(real) and all(
+                _psp_is_bookkeeping(p) for p in real
+            )
+            continue
+        if section_excluded:
             continue
         if not (line.startswith("+") or line.startswith("-")):
             continue
@@ -19238,10 +19306,16 @@ def _psp_extract_path_refs(body: str) -> set:
 def _psp_paths_overlap(touched: str, ref: str) -> bool:
     """True when a touched git path overlaps a downstream path reference.
 
-    PurePosixPath semantics (git paths are always `/`). Three match kinds,
-    all counting (over-approximation only produces spawns — safe):
+    PurePosixPath semantics (git paths are always `/`). Three match kinds:
       - exact:            ref == touched
-      - basename:         ref's final component == touched's final component
+      - basename:         DIRLESS ref's single component == touched's final
+        component (a bare `flowctl.py` mention matches wherever it lives).
+        A ref WITH a directory part matches only exact/dir-prefix — the
+        author was specific, and cross-directory basename matching on
+        generic names (`SKILL.md`, `README.md`) made every skills-touching
+        task overlap every other (fn-83.2 gate-corpus iteration 2). A
+        moved/renamed file is still caught: `--no-renames` keeps the OLD
+        path in the touched-set, so a stale full-path ref matches exactly.
       - directory-prefix: ref's parts are a proper prefix of touched's parts
         (3.8-safe `.parts` tuple compare — `is_relative_to` is 3.9+)
     """
@@ -19249,9 +19323,9 @@ def _psp_paths_overlap(touched: str, ref: str) -> bool:
     r = PurePosixPath(ref)
     if t == r:
         return True
-    if r.name and r.name == t.name:
-        return True
     rp, tp = r.parts, t.parts
+    if len(rp) == 1 and r.name and r.name == t.name:
+        return True
     if rp and len(rp) < len(tp) and tp[: len(rp)] == rp:
         return True
     return False
@@ -19287,7 +19361,9 @@ def _psp_touched_set(base: str, head: str, repo_root: Path):
     tab-separated path fields after the status are collected (defensive:
     R/C rows carry two paths even though --no-renames should prevent them).
     Interleaved foreign commits in the range only over-approximate — safe.
-    Returns (sorted paths, None) or (None, reason).
+    Workflow-run bookkeeping paths (`_psp_is_bookkeeping`) are excluded —
+    see `_PSP_BOOKKEEPING_PREFIXES`. Returns (sorted paths, None) or
+    (None, reason).
     """
     out, err = _psp_run_git(
         ["diff", "--no-renames", "--name-status", base, head], repo_root
@@ -19300,7 +19376,7 @@ def _psp_touched_set(base: str, head: str, repo_root: Path):
             continue
         fields = line.split("\t")
         for path in fields[1:]:
-            if path:
+            if path and not _psp_is_bookkeeping(path):
                 touched.add(path)
     return sorted(touched), None
 

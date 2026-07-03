@@ -646,9 +646,15 @@ class PathOverlapTest(unittest.TestCase):
     def test_exact(self) -> None:
         self.assertTrue(flowctl._psp_paths_overlap("a/b/c.py", "a/b/c.py"))
 
-    def test_basename(self) -> None:
+    def test_basename_dirless_ref_only(self) -> None:
+        # A bare filename mention matches wherever the file lives...
         self.assertTrue(flowctl._psp_paths_overlap("a/b/c.py", "c.py"))
-        self.assertTrue(flowctl._psp_paths_overlap("a/b/c.py", "x/y/c.py"))
+        # ...but a ref WITH a directory part is specific: no cross-directory
+        # basename matching (gate-corpus iteration 2 — generic basenames like
+        # SKILL.md made every skills task overlap every other). Stale
+        # full-path refs to moved files still match exactly via the old path
+        # (--no-renames keeps it in the touched-set).
+        self.assertFalse(flowctl._psp_paths_overlap("a/b/c.py", "x/y/c.py"))
 
     def test_directory_prefix(self) -> None:
         self.assertTrue(flowctl._psp_paths_overlap("a/b/c.py", "a/b"))
@@ -660,6 +666,144 @@ class PathOverlapTest(unittest.TestCase):
         self.assertFalse(flowctl._psp_paths_overlap("a/b", "a/b/c.py"))
         # shared leading segment only counts as full-parts prefix
         self.assertFalse(flowctl._psp_paths_overlap("abc/d.py", "ab"))
+
+
+# ── Bookkeeping exclusion (gate-corpus iteration 1) ───────────────────────
+
+
+class BookkeepingExclusionTest(ProbeRepoTestCase):
+    """`.flow/tasks//.flow/specs/` + receipt sweeps must not defeat the gate.
+
+    Workers commit `git add -A`, sweeping claim/done/breadcrumb edits (and
+    interleaved spec authoring) into every task range. Downstream bodies
+    always reference sibling `.flow/tasks/...` paths, so without the
+    exclusion no real-history task could ever skip.
+    """
+
+    def test_swept_task_md_edit_does_not_spawn(self) -> None:
+        # Work commit touches src (disjoint) AND a .flow/tasks markdown
+        # (claim-note style sweep). Downstream references .flow/tasks/.
+        self._commit(".flow/tasks/fn-7.1.md", "impl task body\n", "seed flow")
+        head = self._commit(
+            ".flow/tasks/fn-7.1.md",
+            "impl task body\n\n## Done summary\nswept claim edit\n",
+            "work + sweep",
+        )
+        base = self._git("rev-parse", "HEAD~1")
+        self._finish_task(
+            head,
+            base=base,
+            downstream_body=(
+                "Update `.flow/tasks/fn-7.3.md` refs.\n\n"
+                "**Files:** `src/other/widget.py`\n"
+            ),
+        )
+        out = self._probe()
+        self.assertEqual(out["decision"], "skip")
+        self.assertNotIn(".flow/tasks/fn-7.1.md", out["facts"]["touched"])
+
+    def test_swept_spec_authoring_tokens_excluded(self) -> None:
+        # Interleaved spec authoring swept into the work commit: its hunk
+        # tokens (identifier-shaped) must NOT trip the token arm.
+        head = self._commit(
+            ".flow/specs/fn-9.md",
+            "Plan: rework widget_dispatcher in src/other/widget.py\n",
+            "swept spec authoring",
+        )
+        self._finish_task(
+            head,
+            downstream_body=(
+                "Extend widget_dispatcher.\n\n**Files:** `src/other/widget.py`\n"
+            ),
+        )
+        out = self._probe()
+        self.assertEqual(out["decision"], "skip")
+        self.assertEqual(out["facts"]["tokens_matched"], [])
+
+    def test_durable_flow_content_still_counts(self) -> None:
+        # .flow/config.json is behavioral, NOT bookkeeping — it stays in the
+        # touched-set (path arm) and its hunks stay tokenized.
+        head = self._commit(
+            ".flow/config.json", '{"planSync": {"enabled": true}}\n', "config"
+        )
+        self._finish_task(
+            head,
+            downstream_body=(
+                "Flip `.flow/config.json` planSync leaf.\n\n"
+                "**Files:** `src/other/widget.py`\n"
+            ),
+        )
+        out = self._probe()
+        self.assertEqual(out["decision"], "spawn")
+        self.assertIn(".flow/config.json", out["facts"]["touched"])
+
+    def test_bookkeeping_predicate_table(self) -> None:
+        excluded = [
+            ".flow/tasks/fn-1.2.md",
+            ".flow/specs/fn-1.md",
+            ".flow/review-receipts/fn-1.2.json",
+            ".flow/review-runs/2026/x.json",
+        ]
+        kept = [
+            ".flow/config.json",
+            ".flow/memory/knowledge/decisions/x.md",
+            ".flow/templates/spec.md",
+            ".flow/usage.md",
+            ".flow/bin/flowctl.py",
+            "src/tasks/queue.py",  # non-.flow path with a 'tasks' segment
+            "flow/tasks/x.md",  # not .flow
+        ]
+        for p in excluded:
+            self.assertTrue(flowctl._psp_is_bookkeeping(p), p)
+        for p in kept:
+            self.assertFalse(flowctl._psp_is_bookkeeping(p), p)
+
+    def test_hunk_tokens_skip_bookkeeping_sections(self) -> None:
+        diff = (
+            "diff --git a/.flow/tasks/fn-1.2.md b/.flow/tasks/fn-1.2.md\n"
+            "--- a/.flow/tasks/fn-1.2.md\n"
+            "+++ b/.flow/tasks/fn-1.2.md\n"
+            "@@ -1 +1 @@\n"
+            "-old bookkeeping_token here\n"
+            "+new bookkeeping_token here\n"
+            "diff --git a/src/x.py b/src/x.py\n"
+            "--- a/src/x.py\n"
+            "+++ b/src/x.py\n"
+            "@@ -1 +1 @@\n"
+            "-def old_name(): pass\n"
+            "+def new_name(): pass\n"
+        )
+        tokens = flowctl._psp_hunk_tokens(diff)
+        self.assertIn("old_name", tokens)
+        self.assertIn("new_name", tokens)
+        self.assertNotIn("bookkeeping_token", tokens)
+
+    def test_hunk_tokens_added_and_deleted_bookkeeping_files(self) -> None:
+        # A/D sections have one /dev/null side — the real side decides.
+        diff = (
+            "diff --git a/.flow/specs/fn-9.md b/.flow/specs/fn-9.md\n"
+            "new file mode 100644\n"
+            "--- /dev/null\n"
+            "+++ b/.flow/specs/fn-9.md\n"
+            "@@ -0,0 +1 @@\n"
+            "+added_spec_token\n"
+            "diff --git a/.flow/tasks/fn-9.1.md b/.flow/tasks/fn-9.1.md\n"
+            "deleted file mode 100644\n"
+            "--- a/.flow/tasks/fn-9.1.md\n"
+            "+++ /dev/null\n"
+            "@@ -1 +0,0 @@\n"
+            "-deleted_task_token\n"
+            "diff --git a/src/y.py b/src/y.py\n"
+            "new file mode 100644\n"
+            "--- /dev/null\n"
+            "+++ b/src/y.py\n"
+            "@@ -0,0 +1 @@\n"
+            "+kept_src_token\n"
+        )
+        tokens = flowctl._psp_hunk_tokens(diff)
+        self.assertNotIn("added_spec_token", tokens)
+        self.assertNotIn("deleted_task_token", tokens)
+        self.assertIn("kept_src_token", tokens)
 
 
 # ── Gate ledger ───────────────────────────────────────────────────────────
