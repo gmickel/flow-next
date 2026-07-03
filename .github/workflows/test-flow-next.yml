@@ -154,6 +154,10 @@ jobs:
             -s plugins/flow-next/tests \
             -p "test_worker_anchor_prose.py" \
             -v
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_anchor_bundle.py" \
+            -v
         # The plan-sync skip-gate was proven non-viable (fn-83.6 cross-repo
         # verdict FAIL; decision record plan-sync-skip-gate-not-viable-
         # 2026-07-03.md) and its machinery removed from the shipped CLI.

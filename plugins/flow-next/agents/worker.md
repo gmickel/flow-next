@@ -55,12 +55,14 @@ Parse the spec carefully. Identify:
 # If baseline fails, investigate before proceeding
 ```
 
-**Capture the base commit at Phase-1 end — BEFORE any edit:**
+**Capture the base commit at Phase-1 end — BEFORE any edit — and PERSIST it to a file** (bash variables do NOT survive across separate tool-call Bash blocks; a later block reading a stale `$BASE_COMMIT` would expand to `..HEAD` and record blank/empty evidence):
 ```bash
+mkdir -p .flow/tmp
 BASE_COMMIT=$(git rev-parse HEAD)
-echo "BASE_COMMIT=$BASE_COMMIT"
+printf '%s\n' "$BASE_COMMIT" > .flow/tmp/base_commit
+echo "BASE_COMMIT=$BASE_COMMIT (persisted to .flow/tmp/base_commit — gitignored)"
 ```
-`BASE_COMMIT` scopes the impl-review diff (Phase 4), anchors delegation git-ownership (Phase 2), and is recorded with the full commit list in the done evidence (Phase 5).
+`BASE_COMMIT` scopes the impl-review diff (Phase 4), anchors delegation git-ownership (Phase 2), and is recorded with the full commit list in the done evidence (Phase 5). **In EVERY later Bash block that references it, re-read from the file first: `BASE_COMMIT=$(cat .flow/tmp/base_commit)`** — the Phase-1 assignment does not carry across tool calls.
 
 ## Phase 1.5: Pre-implementation Investigation
 
@@ -252,7 +254,7 @@ trusted as the sole gate. See Phase 5.)
 (On a delegated task this impl-review SHIP gate IS the independent check — do not
 re-run a duplicate test pass in Phase 5; the impl-review gate already covers it.)
 
-Use the Skill tool to invoke impl-review (NOT flowctl directly):
+Use the Skill tool to invoke impl-review (NOT flowctl directly). If you're in a fresh shell, re-read the base first (`BASE_COMMIT=$(cat .flow/tmp/base_commit)`) so `--base` is populated:
 
 ```
 /flow-next:impl-review <TASK_ID> --base $BASE_COMMIT --review=$REVIEW_MODE
@@ -365,13 +367,10 @@ tests/lints; on failure, fix + follow-up commit (never blind-commit). When
 `REVIEW_MODE != none`, the impl-review SHIP gate already covered this — skip the
 duplicate run.
 
-Capture the FULL commit list for this task — every commit from `BASE_COMMIT` (Phase 1) to HEAD, oldest first, so multi-commit fix-loop tasks are fully covered:
+Write the evidence file — re-read `BASE_COMMIT` from the persisted file and compute the FULL commit list (`BASE_COMMIT`..HEAD, oldest first, so multi-commit fix-loop tasks are covered) in the SAME block, so no shell variable has to survive across tool calls. `base_commit` is an additive evidence field — always include it:
 ```bash
+BASE_COMMIT=$(cat .flow/tmp/base_commit)
 COMMITS_JSON=$(git rev-list --reverse "$BASE_COMMIT"..HEAD | jq -R . | jq -s -c .)
-```
-
-Write evidence file (use the captured commit list, `base_commit`, and the test commands you ran — `base_commit` is an additive evidence field, always include it):
-```bash
 cat > /tmp/evidence.json << EOF
 {"commits": $COMMITS_JSON, "base_commit": "$BASE_COMMIT", "tests": ["<actual test commands>"], "prs": []}
 EOF
@@ -385,6 +384,8 @@ Codex `result-batch-*.json`; `class` comes from `flowctl codex classify-result`;
 `model`/`effort` are the `DELEGATE_MODEL` + per-batch `effective_effort` you ran:
 
 ```bash
+BASE_COMMIT=$(cat .flow/tmp/base_commit)
+COMMITS_JSON=$(git rev-list --reverse "$BASE_COMMIT"..HEAD | jq -R . | jq -s -c .)
 cat > /tmp/evidence.json << EOF
 {"commits": $COMMITS_JSON, "base_commit": "$BASE_COMMIT", "tests": ["<actual test commands>"], "prs": [],
  "delegation": {

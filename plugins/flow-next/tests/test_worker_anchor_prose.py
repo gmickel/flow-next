@@ -86,11 +86,20 @@ class WorkerAnchorCallProse(unittest.TestCase):
         # BASE_COMMIT captured at Phase-1 end, before any edit.
         self.assertIn("BASE_COMMIT=$(git rev-parse HEAD)", text, path)
         self.assertIn("BEFORE any edit", text, path)
+        # Persisted to a gitignored file — bash vars do not survive across
+        # tool-call Bash blocks, so BASE_COMMIT must be written once and
+        # re-read where used, else Phase-5 evidence records a blank base.
+        self.assertIn("> .flow/tmp/base_commit", text, path)
 
     def _assert_evidence_contract(self, path: pathlib.Path) -> None:
         text = _read(path)
         # Full commit list, oldest first, from the Phase-1 base commit.
         self.assertIn('git rev-list --reverse "$BASE_COMMIT"..HEAD', text, path)
+        # Each evidence block re-reads BASE_COMMIT from the persisted file
+        # (self-contained — no cross-tool-call variable dependency).
+        self.assertEqual(
+            text.count("BASE_COMMIT=$(cat .flow/tmp/base_commit)") >= 2, True, path
+        )
         # base_commit provenance in BOTH evidence templates (standard +
         # delegation) — retained per fn-83 R4 (only the removed probe's
         # CONSUMPTION of it is gone).
