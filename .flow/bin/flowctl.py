@@ -15896,6 +15896,45 @@ def cmd_ready(args: argparse.Namespace) -> None:
     # MU-2: Get current actor for display (marks your tasks)
     current_actor = get_actor()
 
+    # Spec-level dependency gate (GH PR #95): a spec blocked by unfinished
+    # depends_on_epics must not report its tasks as ready. Same dep rule as
+    # cmd_next / cmd_ready_all: blocked when a dep spec is missing or not done.
+    spec_data = normalize_epic(
+        load_json_or_exit(epic_path, f"Spec {spec_id}", use_json=args.json)
+    )
+    blocked_by_specs: list[str] = []
+    for dep in spec_data.get("depends_on_epics", []) or []:
+        if dep == spec_id:
+            continue
+        dep_path = find_spec_json_path(flow_dir, dep)
+        if not dep_path.exists():
+            blocked_by_specs.append(dep)
+            continue
+        dep_data = normalize_epic(
+            load_json_or_exit(dep_path, f"Spec {dep}", use_json=args.json)
+        )
+        if dep_data.get("status") != "done":
+            blocked_by_specs.append(dep)
+    if blocked_by_specs:
+        if args.json:
+            # R31: co-emit canonical "spec"/"blocked_by_specs" + legacy
+            # "epic"/"epic_blocked_by" alias keys.
+            json_output(
+                {
+                    "spec": spec_id,
+                    "epic": spec_id,
+                    "actor": current_actor,
+                    "ready": [],
+                    "in_progress": [],
+                    "blocked": [],
+                    "blocked_by_specs": blocked_by_specs,
+                    "epic_blocked_by": blocked_by_specs,
+                }
+            )
+        else:
+            print(f"Spec {spec_id} is blocked by: {', '.join(blocked_by_specs)}")
+        return
+
     # Get all tasks for spec (with merged runtime state)
     tasks_dir = flow_dir / TASKS_DIR
     if not tasks_dir.exists():
