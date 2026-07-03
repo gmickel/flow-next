@@ -1,5 +1,5 @@
 ---
-satisfies: [R14]
+satisfies: []  # historical: cross-repo ship-gate verdict (FAIL); evidence only
 ---
 
 ## Description

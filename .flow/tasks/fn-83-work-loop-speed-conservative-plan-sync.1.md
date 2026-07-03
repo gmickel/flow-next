@@ -1,5 +1,5 @@
 ---
-satisfies: [R1, R6]
+satisfies: []  # historical: built the probe (removed in .4); evidence only
 ---
 
 ## Description

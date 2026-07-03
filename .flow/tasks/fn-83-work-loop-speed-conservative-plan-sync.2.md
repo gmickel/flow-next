@@ -1,5 +1,5 @@
 ---
-satisfies: [R2, R3, R4]
+satisfies: []  # historical: built the gate corpus/proof; evidence only
 ---
 
 ## Description

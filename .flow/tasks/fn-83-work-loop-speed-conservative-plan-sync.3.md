@@ -1,5 +1,5 @@
 ---
-satisfies: [R8, R9]
+satisfies: [R1]
 ---
 
 ## Description
