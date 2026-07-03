@@ -1,37 +1,40 @@
 ---
-satisfies: [R4, R11, R12, R13]
+satisfies: [R6, R7, R9]
 ---
 
 ## Description
 
-Final gate: live-run evidence, the honesty statements in the PR, repo docs + docs-site edits, single mirror regen + commit, CHANGELOG. Depends on all prior tasks.
+Final gate: streamlined docs + CHANGELOG for the shipping surface (anchor bundle + CROSS_SPEC fix), the honest "skip-gate shelved" note pointing at the decision record, docs-site edits, mirror idempotency check. Depends on all prior tasks.
 
 **Size:** M
-**Files:** `plugins/flow-next/docs/flowctl.md`, `plugins/flow-next/docs/architecture.md`, `agent_docs/optimizing-skills.md`, `agent_docs/optimization-log.md`, `GLOSSARY.md`, `CHANGELOG.md`, `plugins/flow-next/codex/` (single regen+commit), `~/work/flow-next.dev` (separate repo, same workstream)
+**Files:** `plugins/flow-next/docs/flowctl.md`, `agent_docs/optimizing-skills.md`, `agent_docs/optimization-log.md`, `GLOSSARY.md`, `CHANGELOG.md`, `~/work/flow-next.dev` (separate repo, same workstream)
 
 ## Approach
 
-- **Live evidence (R11):** run a real multi-task `/flow-next:work` on this repo with gate `on` (a small maintenance spec or fixture spec); capture per-task `plan-sync:` slots + `.flow/plansync-gate.jsonl` excerpt; count worker anchor round-trips before (worker.md old read list) vs after (one call) — table into the PR body.
-- **Honesty block in the PR (R4):** the rule-of-three bound with actual N; skip-rate on negatives; the deviation-only/plain-word residual stated verbatim with its mitigations (unsure⇒yes, 1-in-5 audit, append-only corpus).
-- **Repo docs (R12):** flowctl.md — `plan-sync-probe` + `anchor` command sections (usage → JSON shape → exit/edge bullets, per the sync/prospect house style) + `planSync.gate` config-table row beside crossSpec (adoption note: cautious users set shadow first) + disambiguation note (plan-sync-probe ≠ /flow-next:sync); architecture.md — short paragraph on the fail-open lattice + zero-false-skip merge-gate discipline; optimizing-skills.md — pointers to both new harnesses beside the fn-74 real-backend section; GLOSSARY — light refresh of `Re-anchoring` + `Worker subagent` (single-call bundle, same information); optimization-log.md rows (gate corpus outcome, anchor eval outcome); CHANGELOG `## Unreleased` (create — top is released 2.6.1).
-- **Docs-site (same workstream, separate commit in ~/work/flow-next.dev):** skills/work.mdx plan-sync section + mermaid `Sync` node (now probe-gated); flowctl/configuration.mdx new `planSync.gate` section (sibling/format of crossSpec section); subagents/execution.mdx + overview.mdx gate footnotes; `pnpm build` green; NO FLOW_NEXT_VERSION bump (batched).
-- **Mirror:** idempotency verification re-run of `sync-codex.sh` (fn-83.4 already committed the regenerated mirror; this run must produce a no-op diff — any delta is a finding); drop any stray validation stashes.
-- Full gates: smoke (non-repo cwd) + full pytest; no version bump.
+- **Repo docs (R6):** flowctl.md — new `anchor` command section (usage → JSON shape → exit/edge bullets, per the `sync`/`prospect` house style). **No `plan-sync-probe` section, no `planSync.gate` config-table row** (both removed). GLOSSARY — light refresh of `Re-anchoring` + `Worker subagent` to reflect the single-call bundle (same information, one call). optimizing-skills.md — a pointer to `optimization/worker-anchor/` (comprehension-equivalence eval — a new proof shape worth a short callout beside the fn-74 real-backend section). optimization-log.md — two rows: anchor eval = PASS/shipped; plan-sync skip-gate = FAIL/shelved (link the decision record). CHANGELOG `## Unreleased` (create — top is released 2.6.1): entry ships `flowctl anchor` (worker anchors in one call, proven zero-loss) + the CROSS_SPEC caller fix; one sentence records the skip-gate as proven non-viable + shelved with the decision-record path — NOT sold as a feature.
+- **Honest note (R8 PR half):** the PR body carries the anchor round-trip before/after table (worker.md old ~8 reads → one `flowctl anchor` call) and one paragraph: the skip-gate was proven non-viable on cross-repo evidence (1 false skip, 6.7% skip-rate) and shelved; pointer to `.flow/memory/knowledge/decisions/plan-sync-skip-gate-not-viable-2026-07-03.md`. Do not present any gate/audit/shadow mechanism as shipped.
+- **Docs-site (R7, separate commit in ~/work/flow-next.dev):** plan-sync stays documented as UNCONDITIONAL (skills/work.mdx section + mermaid `Sync` node UNCHANGED); NO `planSync.gate` configuration.mdx section, NO gate footnotes. The only documentable change is the anchor round-trip win (mention in work.mdx if it fits naturally). `pnpm build` green; NO FLOW_NEXT_VERSION bump (batched).
+- **Mirror (R9):** idempotency verification re-run of `sync-codex.sh` (fn-83.4 already committed the regenerated mirror; this run must be a no-op diff — any delta is a finding).
+- Gates: smoke (non-repo cwd) + full unittest; no version bump.
 
 ## Investigation targets
 
 **Required:**
-- `plugins/flow-next/docs/flowctl.md:577-640` (config table) + `:749-800` (command-section style)
+- `plugins/flow-next/docs/flowctl.md` — `sync`/`prospect` command-section style + config table (confirm no planSync.gate row was ever added to the doc)
 - `agent_docs/releasing.md` — batched-release + docs-site changelog conventions (entry only at release)
-- `~/work/flow-next.dev/src/content/docs/flowctl/configuration.mdx:55-80` (crossSpec section = template)
+- `~/work/flow-next.dev/src/content/docs/skills/work.mdx` — plan-sync section (stays unconditional)
+
+## Key context
+
+This is a smaller PR than the original spec implied — the gate died, so there is no gate config/shadow/mermaid/footnote surface to document. Keep the docs honest and minimal: one new command, one bug fix, one shelved-experiment pointer.
 
 ## Acceptance
 
-- [ ] Live-run evidence + round-trip table + honesty block staged for the PR body
-- [ ] All repo docs updated per Approach; CHANGELOG Unreleased created; optimization-log rows present
-- [ ] Docs-site edits committed in flow-next.dev with green `pnpm build`; no version refs bumped
-- [ ] Mirror regenerated once (×2 idempotent, parity green) + committed; stashes dropped
-- [ ] smoke + full pytest green; no version bump
+- [ ] flowctl.md `anchor` section added; zero `plan-sync-probe`/`planSync.gate` doc surface; GLOSSARY refreshed; optimizing-skills.md pointer; optimization-log.md rows (anchor PASS, gate FAIL/shelved)
+- [ ] CHANGELOG `## Unreleased` created — anchor + CROSS_SPEC fix; skip-gate recorded as shelved w/ decision-record pointer; no version bump
+- [ ] PR body: anchor round-trip table + honest shelved-gate paragraph
+- [ ] docs-site: plan-sync stays unconditional (no gate surface); `pnpm build` green; no version refs bumped
+- [ ] mirror sync-codex re-run is a no-op; smoke + full unittest green
 
 ## Done summary
 TBD
