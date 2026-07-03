@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-03T19:15:48.020661Z",
+  "depends_on": [
+    "fn-84-prose-optimization-pass-tier-a-eval.1"
+  ],
+  "id": "fn-84-prose-optimization-pass-tier-a-eval.4",
+  "priority": null,
+  "spec": "fn-84-prose-optimization-pass-tier-a-eval",
+  "spec_path": ".flow/tasks/fn-84-prose-optimization-pass-tier-a-eval.4.md",
+  "status": "todo",
+  "title": "make-pr: re-baseline suite on current main + one mutation",
+  "updated_at": "2026-07-03T19:36:05.422538Z"
+}
