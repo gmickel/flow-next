@@ -1,45 +1,47 @@
 ---
-satisfies: [R5, R7, R10]
+satisfies: [R2, R3, R4, R5, R8]
 ---
 
 ## Description
 
-Wire it all into the skills/agents: phases.md 3e gate branch (mode matrix + audit sampling + summary slot), worker.md (PLAN_DEVIATION line + single anchor call), CROSS_SPEC latent-bug fix, prefix-anchored terminal-line parsing prose, mirror validation. Depends on fn-83.1 (probe) + fn-83.2 (the PROOF — wiring/default-on never lands before the corpus check passes) + fn-83.3 (anchor).
+Wire the shipping win into the worker, apply the CROSS_SPEC caller fix, and REMOVE the shelved skip-gate machinery from the shipped CLI. The gate was proven non-viable (fn-83.6 verdict FAIL; decision record `.flow/memory/knowledge/decisions/plan-sync-skip-gate-not-viable-2026-07-03.md`) — this task makes the shipped surface reflect only what ships. Depends on fn-83.3 (anchor).
 
 **Size:** M
-**Files:** `plugins/flow-next/skills/flow-next-work/phases.md`, `plugins/flow-next/agents/worker.md`, `plugins/flow-next/agents/plan-sync.md` (caller-contract note only, if needed), regenerated mirror (validate locally; commit per repo convention for this spec's tasks — single regen at fn-83.5)
+**Files:** `plugins/flow-next/agents/worker.md` (anchor call + delete PLAN_DEVIATION line), `plugins/flow-next/skills/flow-next-work/phases.md` (CROSS_SPEC + delete PLAN_DEVIATION parser prose), `plugins/flow-next/scripts/flowctl.py` (+ `.flow/bin/flowctl.py` dogfood copy), `plugins/flow-next/tests/` (delete 3 test files), `optimization/plan-sync-gate/README.md` + `optimization/worker-anchor/README.md` (archive note), regenerated + committed mirror
 
 ## Approach
 
-- **phases.md 3e (current anchor :347-390 — relocate by content):** keep the `planSync.enabled` outer check (matrix: enabled=false ⇒ 3e skipped entirely, gate irrelevant). Inside: read `planSync.gate` once (LEAF pattern); `off` ⇒ today's spawn path, probe not invoked; `shadow` ⇒ run probe with `--record shadow` + worker's deviation value, ALWAYS spawn, record actual verdict via record-actual after plan-sync returns; `on` ⇒ probe decides; skip ⇒ deterministic RAMPED audit counter from the ledger's skip_index (1-in-2 for the repo's first 20 skips, 1-in-5 thereafter; spawns anyway with `--record audit`; pairing recorded; a `Drift detected: yes` on an audit spawn = **AUDIT MISS** — surface loudly in the summary + ledger + instruct flipping to shadow; NEVER auto-mutate config). Per-task `plan-sync:` slot in the final summary in ALL modes: `spawned (<reason>) | skipped (<proof>) | shadow: would-<decision> | audit: <outcome>`. Follow the fn-82 gate-skeleton rules (no pipelines, rc-checked, fail-open ⇒ spawn).
-- **CROSS_SPEC fix:** spawn prompt (currently :379-388) gains `CROSS_SPEC: <planSync.crossSpec value>` — the documented plan-sync.md:19 input the caller never passed. Probe and spawn read the same config leaf once.
-- **worker.md evidence completeness (load-bearing for the probe):** capture `BASE_COMMIT=$(git rev-parse HEAD)` at Phase-1 end (before any edit); at done-time include additive `base_commit` + the full `git rev-list --reverse $BASE_COMMIT..HEAD` list in the `flowctl done` evidence JSON (multi-commit fix-loop tasks fully covered; evidence schema additive — no migration).
-- **worker.md:** Phase 1 replaces the discrete anchor reads with one `flowctl anchor <TASK_ID> --md` call + explicit floor-not-ceiling prose (memory keyword-search + read-more freedom retained; Investigation targets/Design context reads unchanged in Phase 1.5). Phase 6: mandatory `PLAN_DEVIATION: yes|no` line with the explicit yes-trigger RUBRIC — API/function/name change beyond spec; contract/schema change; file set differs from Files list; scope grew/shrank; AC satisfied differently; dependency assumptions changed; glossary/strategy-relevant wording introduced; test plan diverged; ANY uncertainty ⇒ yes (placed immediately before the DELEGATION lines) — plus a prose regression test asserting rubric + grammar survive in canonical AND mirror, and the host-side parsing prose (phases.md 3d area) states all three terminal lines are parsed by anchored prefix regex over the whole return, last match wins, missing/malformed PLAN_DEVIATION ⇒ yes.
-- **Mirror: regenerate AND COMMIT here with this task's canonical edits** (single sync-codex run; parity guards green; PLAN_DEVIATION + anchor call intact in mirror) — avoids dirty-generated-files/stash awkwardness under the work protocol's `git add -A`. fn-83.5 re-runs sync-codex as an idempotency verification (expected no-op diff).
+- **SURGICAL removal first (do this before wiring, verify tests green after):** delete from `plugins/flow-next/scripts/flowctl.py` — `cmd_plan_sync_probe` + its argparse registration, the probe-specific `_psp_*` helpers, `PLANSYNC_GATE_LEDGER` + the ledger writer, and the `planSync.gate` key from `get_default_config()`. **CRITICAL: `flowctl anchor` (fn-83.3) reuses `_psp_run_git` — KEEP that one helper** (relocate/rename to an anchor-neutral name if it reads cleaner; grep `cmd_anchor`/anchor helpers for every `_psp_*` they call and preserve exactly those). Delete tests `test_plan_sync_probe.py`, `test_plansync_gate_config.py`, `test_plan_sync_gate_corpus.py`. Re-sync the `.flow/bin/flowctl.py` dogfood copy (dual-copy byte-identical invariant). Confirm `test_anchor_bundle.py` + full suite green after removal. Two grep guards prove the removal (R4): user-surface `grep -rn 'plan.sync.probe\|planSync.gate\|plansync-gate' plugins/flow-next/{scripts,skills,agents}` clean, AND symbol-level `grep -n 'cmd_plan_sync_probe\|PLANSYNC_GATE_LEDGER\|_psp_' plugins/flow-next/scripts/flowctl.py` returning ONLY `_psp_run_git`.
+- **worker.md (R2):** Phase 1 uses the single `flowctl anchor <TASK_ID> --md` call in place of the discrete show/cat/git/memory/glossary reads; explicit floor-not-ceiling prose (memory keyword-search + read-more freedom retained; Investigation-targets/Design-context reads in Phase 1.5 unchanged). **DELETE the existing `PLAN_DEVIATION` surface** — already in the tree from the pre-streamline gate work: the terminal line in worker.md (~:430) AND the prefix-anchored parser prose in phases.md (~:285). Both go (dead gate signal — nothing consumes it once the probe is removed). **Do NOT touch `BASE_COMMIT`** — it scopes the impl-review diff (Phase 4), anchors delegation rollback (Phase 2), and records commit-range provenance in done evidence (Phase 5), all independent of the gate and load-bearing; removing `base_commit` would break impl-review/delegation. Only the removed probe consumed `evidence.base_commit`.
+- **CROSS_SPEC fix (R3):** phases.md plan-sync spawn prompt gains `CROSS_SPEC: <planSync.crossSpec value>` (single config-leaf read). Plan-sync spawn stays UNCONDITIONAL — no gate branch, no probe call, no mode matrix, no per-task gate slot. The CROSS_SPEC line is the only 3e change.
+- **Archive note (R5):** `optimization/plan-sync-gate/README.md` — prepend a boxed ARCHIVED banner AND neutralize the active-voice framing in the body so it never reads as runnable ship guidance: any "merge gate", "ship gate", live-miss-loop, `planSync.gate`, or "residual for the PR" language is rewritten to past tense / "(historical — the gate did not ship)" or struck. Banner: "ARCHIVED — the plan-sync skip-gate this harness validated was proven non-viable and removed from the shipped CLI (fn-83.4); see `.flow/memory/knowledge/decisions/plan-sync-skip-gate-not-viable-2026-07-03.md`. Kept as the evidence behind that decision; nothing here is a runnable ship instruction." `optimization/worker-anchor/README.md` stays LIVE (its eval backs the shipped bundle) — note: "This eval backs the shipped `flowctl anchor` command."
+- **Mirror (R8 mirror half):** single `sync-codex.sh` regen + commit with this task's canonical edits (parity green; anchor call intact in mirror); fn-83.5 re-runs as idempotency check.
 
 ## Investigation targets
 
 **Required:**
-- `plugins/flow-next/skills/flow-next-work/phases.md:315-395` — 3d terminal parsing + 3e block (post-fn-82 state)
-- `plugins/flow-next/agents/worker.md:21-111,425-480` — Phase 1 reads + Phase 6 return grammar + DELEGATION lines
-- `plugins/flow-next/agents/plan-sync.md:13-24` — input contract (CROSS_SPEC)
-- fn-82 gate-skeleton precedent: `plugins/flow-next/skills/flow-next-work/SKILL.md` bridge gate + `references/tracker-touchpoints.md` gate prose
+- `plugins/flow-next/scripts/flowctl.py` — `cmd_plan_sync_probe`/`_psp_*`/`PLANSYNC_GATE_LEDGER`/`planSync.gate` (remove) AND `cmd_anchor` (find which `_psp_*` it calls — preserve those)
+- `plugins/flow-next/agents/worker.md:21-111` — Phase 1 reads to replace with the anchor call
+- `plugins/flow-next/skills/flow-next-work/phases.md` plan-sync spawn block — CROSS_SPEC insertion point (spawn stays unconditional)
+- `plugins/flow-next/tests/test_anchor_bundle.py` — must stay green after removal
 
 ## Key context
 
-Ralph/autonomous: gate rides receipts + summary slots, never prompts; audit miss surfaces identically. The deterministic audit counter state lives in the gate ledger (count skips per spec from the jsonl — no new state file).
+The decision record is already committed (written during the streamline). This task must not leave any `plan-sync-probe`/`planSync.gate`/`plansync-gate.jsonl` reference in the shipped plugin (`grep -rn 'plan.sync.probe\|planSync.gate\|plansync-gate' plugins/flow-next/{scripts,skills,agents}` clean, allowing only the mirror which regenerates from canonical). Ralph/autonomous: unchanged — plan-sync spawn stays unconditional; no new receipts/prompts.
 
 ## Acceptance
 
-- [ ] 3e mode matrix implemented per Approach; summary slot present in all modes; audit counter deterministic; AUDIT MISS loud; config never auto-mutated
-- [ ] CROSS_SPEC passed to every plan-sync spawn; single config-leaf read
-- [ ] worker.md: single anchor call + floor prose; PLAN_DEVIATION emitted; prefix-anchored parsing prose for all three terminal lines
-- [ ] base_commit + full commit list recorded in done evidence (fixture-verified); mirror regenerated + committed with this task, parity green; smoke + pytest green
+- [ ] Probe/gate/ledger/config removed from flowctl.py + dogfood copy; 3 tests deleted; `_psp_run_git` (or its anchor-used helpers) preserved; `flowctl anchor` + full suite green
+- [ ] both grep guards clean: `plan.sync.probe|planSync.gate|plansync-gate` in scripts/skills/agents; AND `cmd_plan_sync_probe|PLANSYNC_GATE_LEDGER|_psp_` in flowctl.py returns only `_psp_run_git`
+- [ ] worker.md Phase 1 = single anchor call + floor prose; `PLAN_DEVIATION` line (worker.md) + parser prose (phases.md) DELETED (`grep -rn PLAN_DEVIATION plugins/flow-next/{agents,skills}` clean); `BASE_COMMIT` + evidence recording untouched (impl-review/delegation/provenance intact)
+- [ ] `test_anchor_bundle.py` still validates the bundle against the discrete-read baseline (rename comments to "required anchor payload / legacy discrete-read baseline" so a future edit can't collapse it to merely checking `anchor` runs)
+- [ ] CROSS_SPEC passed to every plan-sync spawn; spawn otherwise unconditional + byte-unchanged
+- [ ] plan-sync-gate README ARCHIVED-banner + active-voice/`merge gate`/`planSync.gate` language neutralized to historical; worker-anchor README notes it backs the shipped anchor
+- [ ] mirror regenerated + committed, parity green; smoke + full unittest green; no version bump
 
 ## Done summary
-TBD
-
+Wired the surviving fn-83 wins and removed the shelved skip-gate: worker.md Phase 1 now runs the single `flowctl anchor <TASK_ID> --md` call (floor-not-ceiling; BASE_COMMIT captured at Phase-1 end; done evidence records base_commit + the full base..HEAD commit list), phases.md 3e passes CROSS_SPEC to the still-unconditional plan-sync spawn (latent caller-bug fix), and the plan-sync-probe + gate ledger + planSync.gate config + 3 gate tests were surgically removed from the shipped CLI (`_psp_run_git` retained for anchor; dogfood copy re-synced byte-identical; both R4 grep guards now locked by test_worker_anchor_prose.py alongside a done-evidence provenance fixture). Optimization READMEs carry the ARCHIVED/live-evidence notes; Codex mirror regenerated and committed; rp impl-review SHIP (first pass, zero findings).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 54c597af3ad88bdd928dac54193c6e0ec033d1d9
+- Tests: uv run --with pytest python -m pytest plugins/flow-next/tests/ -q (1433 passed, 2 skipped, 188 subtests), (cd $(mktemp -d) && bash plugins/flow-next/scripts/smoke_test.sh) (138 passed, 0 failed), python3 -m unittest discover -s plugins/flow-next/tests -p test_worker_anchor_prose.py (9 passed), python3 -m unittest discover -s plugins/flow-next/tests -p test_anchor_bundle.py (21 passed), bash scripts/sync-codex.sh (parity guards green)
 - PRs:

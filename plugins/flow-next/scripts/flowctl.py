@@ -9,6 +9,7 @@ Agents must use flowctl for all writes - never edit .flow/* directly.
 import argparse
 import difflib
 import hashlib
+import io
 import json
 import os
 import re
@@ -22,10 +23,10 @@ import tempfile
 import unicodedata
 import uuid
 from abc import ABC, abstractmethod
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stdout
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, ContextManager, Optional
 
 # Platform-specific file locking (fcntl on Unix, no-op on Windows)
@@ -1182,6 +1183,11 @@ def get_default_config() -> dict:
     """Return default config structure."""
     return {
         "memory": {"enabled": True},
+        # fn-83.4 — NO `gate` key here: the plan-sync skip-gate was proven
+        # non-viable (fn-83.6 cross-repo verdict FAIL; decision record
+        # plan-sync-skip-gate-not-viable-2026-07-03.md) and its machinery
+        # was removed from the shipped CLI. Plan-sync spawns unconditionally
+        # whenever `enabled` is true. Do not re-add gate config.
         "planSync": {"enabled": True, "crossSpec": False},
         "review": {"backend": None},
         "scouts": {"github": False},
@@ -19112,6 +19118,296 @@ def cmd_codex_rollback_plan(args: argparse.Namespace) -> None:
             print(f"REJECTED {r}", file=sys.stderr)
 
 
+# ---------------------------------------------------------------------------
+# `flowctl anchor <task-id>` — single-call worker anchor bundle (fn-83.3, R8).
+#
+# One pure read delivering the VERBATIM outputs of every discrete command the
+# worker's Phase-1 re-anchor historically ran (now the single `anchor` call in
+# agents/worker.md Phase 1) in one deterministic payload — plus the dependency
+# tasks' ids/titles/statuses/done-summaries. The bundle is a FLOOR, never a
+# ceiling: no filtering, no truncation, no summarization; the worker keeps
+# memory keyword-search and all read-more freedom (wired in fn-83.4). Worker-invoked at its
+# own Phase 1 — never host-precomputed — so it observes the previous task's
+# plan-sync edits (point-in-time semantics unchanged).
+#
+# Verbatim-by-construction: each section is the captured stdout of the SAME
+# production cmd_* function the standalone CLI command dispatches to (clone
+# of the export-command assembly discipline, but zero re-parsing). The
+# deterministic superset test (tests/test_anchor_bundle.py) locks this — it
+# compares every section byte-for-byte against the real CLI wire-form output
+# and is the standing guardrail future edits run against.
+
+
+def _psp_run_git(git_args: list, repo_root: Path):
+    """Run one rc-checked git command (list argv, NO pipelines, no shell).
+
+    Returns (stdout, None) on rc==0, (None, reason) otherwise — including
+    OSError (git missing). Callers fail open on any error reason.
+
+    Retained when the plan-sync gate probe was removed (fn-83.4 — the gate
+    was proven non-viable, see the fn-83 decision record): `flowctl anchor`
+    is its remaining caller. The name's prefix is historical (plan-sync
+    probe); kept stable so the anchor call sites stay untouched.
+    """
+    try:
+        result = subprocess.run(
+            ["git"] + git_args,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            cwd=str(repo_root),
+        )
+    except OSError as e:
+        return None, f"git unavailable: {e}"
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip().split("\n")[0]
+        return None, f"git {git_args[0]} failed (rc={result.returncode}): {stderr}"
+    return result.stdout, None
+
+
+def _anchor_capture(func, ns: argparse.Namespace):
+    """Capture one production cmd_* function's stdout verbatim.
+
+    Returns (output, None) on success, or (captured_or_None, reason) when the
+    command error_exits (SystemExit) or raises. The anchor is fail-open: a
+    broken section is reported inside the bundle, never a crash — the worker
+    falls back to running that one read directly.
+    """
+    buf = io.StringIO()
+    try:
+        with redirect_stdout(buf):
+            func(ns)
+    except SystemExit as exc:
+        return buf.getvalue() or None, f"command exited with code {exc.code}"
+    except Exception as exc:  # defensive: the bundle must always render
+        return buf.getvalue() or None, f"{type(exc).__name__}: {exc}"
+    return buf.getvalue(), None
+
+
+def _anchor_sections(task_id: str, spec_id: str) -> list:
+    """Assemble the ordered anchor sections (deterministic order, verbatim).
+
+    Section order mirrors worker.md Phase 1's read order: task record, task
+    spec, parent spec record, parent spec body, git state, memory flag,
+    glossary, memory index.
+    """
+    repo_root = get_repo_root()
+    sections: list = []
+
+    def add(
+        name: str,
+        command: str,
+        output,
+        error=None,
+        note=None,
+    ) -> None:
+        entry: dict = {
+            "name": name,
+            "command": command,
+            "output": output,
+            "error": error,
+        }
+        if note is not None:
+            entry["note"] = note
+        sections.append(entry)
+
+    out, err = _anchor_capture(
+        cmd_show, argparse.Namespace(id=task_id, json=True)
+    )
+    add("task_show", f"flowctl show {task_id} --json", out, err)
+
+    out, err = _anchor_capture(cmd_cat, argparse.Namespace(id=task_id))
+    add("task_md", f"flowctl cat {task_id}", out, err)
+
+    out, err = _anchor_capture(
+        cmd_show, argparse.Namespace(id=spec_id, json=True)
+    )
+    add("spec_show", f"flowctl show {spec_id} --json", out, err)
+
+    out, err = _anchor_capture(cmd_cat, argparse.Namespace(id=spec_id))
+    add("spec_md", f"flowctl cat {spec_id}", out, err)
+
+    out, err = _psp_run_git(["status"], repo_root)
+    add("git_status", "git status", out, err)
+
+    out, err = _psp_run_git(["log", "-5", "--oneline"], repo_root)
+    add("git_log", "git log -5 --oneline", out, err)
+
+    out, err = _psp_run_git(["rev-parse", "--abbrev-ref", "HEAD"], repo_root)
+    add("git_branch", "git rev-parse --abbrev-ref HEAD", out, err)
+
+    mem_out, mem_err = _anchor_capture(
+        cmd_config_get,
+        argparse.Namespace(key="memory.enabled", json=True, raw=False),
+    )
+    add(
+        "memory_enabled",
+        "flowctl config get memory.enabled --json",
+        mem_out,
+        mem_err,
+    )
+
+    out, err = _anchor_capture(cmd_glossary_list, argparse.Namespace(json=True))
+    add("glossary", "flowctl glossary list --json", out, err)
+
+    # memory index only when memory.enabled resolves true — mirroring the
+    # worker's own conditional read (worker.md Phase 1). The flag is parsed from
+    # the captured command output (the same artifact the worker reads), not
+    # from a second config resolution that could drift from it.
+    mem_enabled = False
+    if mem_out and mem_err is None:
+        try:
+            mem_enabled = bool(json.loads(mem_out).get("value"))
+        except (ValueError, AttributeError):
+            mem_enabled = False
+    if mem_enabled:
+        out, err = _anchor_capture(
+            cmd_memory_list,
+            argparse.Namespace(
+                json=True, track=None, category=None, status="active"
+            ),
+        )
+        add("memory_index", "flowctl memory list --json", out, err)
+    else:
+        add(
+            "memory_index",
+            "flowctl memory list --json",
+            None,
+            None,
+            note=(
+                "memory disabled - skipped (the worker Phase 1 skips this "
+                "read too)"
+            ),
+        )
+
+    return sections
+
+
+def _anchor_dependencies(flow_dir: Path, task_data: dict) -> list:
+    """Dependency tasks' ids/titles/statuses/done-summaries.
+
+    Recorded `depends_on` order (deterministic — the task file's own order).
+    Done summaries come from the dependency's `## Done summary` section via
+    the fence-aware production reader (`get_task_section`).
+    """
+    deps: list = []
+    for dep_id in task_data.get("depends_on", task_data.get("deps", [])) or []:
+        entry: dict = {
+            "id": dep_id,
+            "title": "",
+            "status": "",
+            "done_summary": "",
+        }
+        buf = io.StringIO()
+        try:
+            with redirect_stdout(buf):
+                dep_data = load_task_with_state(dep_id, use_json=True)
+        except SystemExit:
+            entry["error"] = "task not loadable"
+            deps.append(entry)
+            continue
+        entry["title"] = dep_data.get("title", "")
+        entry["status"] = dep_data.get("status", "")
+        md_path = flow_dir / TASKS_DIR / f"{dep_id}.md"
+        try:
+            content = md_path.read_text(encoding="utf-8")
+        except OSError:
+            content = ""
+        entry["done_summary"] = get_task_section(content, "## Done summary")
+        deps.append(entry)
+    return deps
+
+
+def cmd_anchor(args: argparse.Namespace) -> None:
+    """Single-call worker anchor bundle (fn-83.3, R8).
+
+    Forms:
+      anchor <task-id>          # worker-facing markdown render (default)
+      anchor <task-id> --md     # explicit markdown render
+      anchor <task-id> --json   # machine form (sections + dependencies)
+
+    Pure read; deterministic section order; verbatim command outputs.
+    """
+    use_json = bool(getattr(args, "json", False))
+
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.", use_json=use_json
+        )
+
+    flow_dir = get_flow_dir()
+    task_id = casefold_handle(args.id)
+    if not is_task_id(task_id):
+        error_exit(
+            f"Invalid task ID: {task_id}. Expected format: fn-N.M or fn-N-slug.M",
+            use_json=use_json,
+        )
+    task_id = resolve_task_arg(flow_dir, task_id, use_json=use_json)
+    task_data = load_task_with_state(task_id, use_json=use_json)
+    spec_id = task_data.get("spec") or spec_id_from_task(task_id)
+
+    sections = _anchor_sections(task_id, spec_id)
+    dependencies = _anchor_dependencies(flow_dir, task_data)
+
+    if use_json:
+        json_output(
+            {
+                "task": task_id,
+                "spec": spec_id,
+                "sections": sections,
+                "dependencies": dependencies,
+            }
+        )
+        return
+
+    # Markdown render (default): worker-facing, clear banners, same order
+    # every run. Banner lines (`===== [k/N] …`) cannot collide with embedded
+    # markdown content — spec/task bodies never start lines with `===== [`.
+    total = len(sections) + 1
+    lines: list = [
+        f"# Worker anchor bundle - {task_id} (spec {spec_id})",
+        "",
+        "Verbatim outputs of the worker Phase-1 re-anchor reads, fixed "
+        "order, no filtering or truncation. The bundle is a floor, not a "
+        "ceiling - memory keyword-search and every further read remain "
+        "available.",
+        "",
+    ]
+    for i, s in enumerate(sections, start=1):
+        lines.append(f"===== [{i}/{total}] {s['name']}: `{s['command']}` =====")
+        if s.get("note"):
+            lines.append(f"({s['note']})")
+        elif s.get("error"):
+            lines.append(
+                f"(section unavailable: {s['error']} - run "
+                f"`{s['command']}` directly)"
+            )
+            if s.get("output"):
+                lines.append(s["output"].rstrip("\n"))
+        else:
+            lines.append((s.get("output") or "").rstrip("\n"))
+        lines.append("")
+    lines.append(
+        f"===== [{total}/{total}] dependencies: ids, titles, statuses, "
+        f"done summaries ====="
+    )
+    if not dependencies:
+        lines.append("(no dependencies)")
+    for d in dependencies:
+        lines.append(f"- {d['id']} [{d.get('status') or '?'}] - {d.get('title', '')}")
+        if d.get("error"):
+            lines.append(f"    (error: {d['error']})")
+            continue
+        summary = (d.get("done_summary") or "").strip()
+        if summary:
+            for sline in summary.splitlines():
+                lines.append(f"    {sline}")
+        else:
+            lines.append("    (no done summary)")
+    lines.append("")
+    print("\n".join(lines))
+
+
 # --- Copilot Commands ---
 
 
@@ -26105,6 +26401,31 @@ def main() -> None:
         "--json", action="store_true", help="JSON output"
     )
     p_prospect_promote.set_defaults(func=cmd_prospect_promote)
+
+    # anchor (fn-83.3) — single-call worker anchor bundle: the verbatim
+    # outputs of every worker Phase-1 re-anchor read in one deterministic
+    # payload (plus dependency ids/titles/statuses/done-summaries).
+    p_anchor = subparsers.add_parser(
+        "anchor",
+        help=(
+            "Single-call worker anchor bundle — verbatim Phase-1 re-anchor "
+            "reads (task+spec show/cat, git state, memory flag, glossary, "
+            "memory index, dependencies) in one deterministic payload"
+        ),
+    )
+    p_anchor.add_argument("id", help="Task id (fn-N.M or fn-N-slug.M)")
+    anchor_fmt = p_anchor.add_mutually_exclusive_group()
+    anchor_fmt.add_argument(
+        "--json",
+        action="store_true",
+        help="Machine form (sections + dependencies)",
+    )
+    anchor_fmt.add_argument(
+        "--md",
+        action="store_true",
+        help="Worker-facing markdown render (the default)",
+    )
+    p_anchor.set_defaults(func=cmd_anchor)
 
     # repo-map list / show / since-ref (fn-50.2)
     p_repo_map = subparsers.add_parser(

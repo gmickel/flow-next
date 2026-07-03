@@ -100,6 +100,22 @@ Two transferable lessons: **less-is-more** (a lean/targeted list beat a broad on
 **position barely matters** (a block validated at the prompt's top scored identically wired lower —
 wire it at the clean code seam).
 
+## Zero-loss proof for round-trip reductions: comprehension-equivalence (worker anchor, fn-83)
+
+A third proof shape, for mutations that are pure **packaging** — N discrete reads collapsed into one
+bundled call, no content judgment involved. The eval question flips from "does it detect more" to
+"does the consumer lose anything". Two guards, both required:
+
+- **Deterministic superset test (CI, forever):** every bundle section byte-for-byte equals the
+  standalone command's wire output (`plugins/flow-next/tests/test_anchor_bundle.py`) — zero loss
+  *by construction*, guarded against future edits.
+- **Comprehension-equivalence eval:** a headless subject (no tools, empty cwd) answers frozen binary
+  questions about the task from the bundle vs from the old discrete-read transcript; ship only if
+  bundle ≥ status-quo. Worked example:
+  [`optimization/worker-anchor/`](../optimization/worker-anchor/README.md) — bundle 7/7 ≥ status-quo
+  7/7 on 3 frozen real tasks (incl. a non-satisfies-section question), which shipped `flowctl anchor`
+  as the worker's single-call Phase-1 re-anchor.
+
 ## Scoring — deterministic where possible
 
 - **Grounded:** extract every cited `path[:line]`, `test -f` it; spot-check line refs / claims.

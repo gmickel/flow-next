@@ -1,0 +1,47 @@
+{
+ "dociq": {
+  "repo": "/Users/gordon/work/DocIQ-Sphere",
+  "candidates": "dociq-candidates.json",
+  "picks": [
+   "fn-11-dgd.2",
+   "fn-27-phase-b-strict-denorm-reads.1",
+   "fn-32-world-class-agent-evals.1",
+   "fn-52-review-workbook-template-library.2",
+   "fn-53-docx-human-markup-reader.4",
+   "fn-54-litigation-workflow-playbook-pack.1",
+   "fn-55-uk-authority-research-tools.2",
+   "fn-56-companies-house-intelligence-connector.1",
+   "fn-57-openai-compatible-model-provider.2"
+  ]
+ },
+ "gno": {
+  "repo": "/Users/gordon/work/gno",
+  "candidates": "gno-all-candidates.json",
+  "picks": [
+   "fn-79-graph-aware-retrieval-and-agent.1",
+   "fn-79-graph-aware-retrieval-and-agent.3",
+   "fn-79-graph-aware-retrieval-and-agent.5",
+   "fn-81-embedding-and-package-hardening.2",
+   "fn-81-embedding-and-package-hardening.4",
+   "fn-83-second-brain-page-types-and-synthesis.2",
+   "fn-83-second-brain-page-types-and-synthesis.3",
+   "fn-85-agent-recipes-and-ingestion-workflow.2",
+   "fn-72-backgrounding-flags-for-serve-and-daemon.2"
+  ]
+ },
+ "transcribe": {
+  "repo": "/Users/gordon/work/transcribe",
+  "candidates": "transcribe-candidates.json",
+  "picks": [
+   "fn-25.1",
+   "fn-25.3",
+   "fn-61-hosted-cloud-meeting-notes-and-polish.2",
+   "fn-61-hosted-cloud-meeting-notes-and-polish.5",
+   "fn-70-hide-first-dictation-stt-cold-start.3",
+   "fn-71-deterministic-dictionary-correction-for.2",
+   "fn-71-deterministic-dictionary-correction-for.4",
+   "fn-72-advanced-local-mlx-meeting-note-models.2",
+   "fn-74-fluidaudio-upgrade-and-local-speech-wins.2"
+  ]
+ }
+}

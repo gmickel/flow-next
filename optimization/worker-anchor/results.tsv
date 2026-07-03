@@ -1,0 +1,8 @@
+date	task	arm	score	max_score	model	status	description
+2026-07-03	fn-64.3	bundle	7	7	claude-sonnet-5	pass	small task (fn-64-tracker-sync-project-flow-spec.3, 3.2k task md) — bundle --md only; all 7 key-graded incl. non-satisfies R6 question
+2026-07-03	fn-64.3	statusquo	7	7	claude-sonnet-5	pass	same questions, status-quo worker Phase-1 transcript only
+2026-07-03	fn-74.2	bundle	7	7	claude-sonnet-5	pass	medium task (fn-74-cursor-review-backend-cursor-agent-cli.2, 5.6k task md) — incl. non-satisfies R2 question
+2026-07-03	fn-74.2	statusquo	7	7	claude-sonnet-5	pass	same questions, status-quo transcript only
+2026-07-03	fn-81.2	bundle	7	7	claude-sonnet-5	pass	large task (fn-81-skill-runtime-token-plumbing-single.2, 8.1k task md) — incl. non-satisfies R12 question
+2026-07-03	fn-81.2	statusquo	7	7	claude-sonnet-5	pass	same questions, status-quo transcript only
+2026-07-03	MERGE-GATE	—	21	21	claude-sonnet-5	PASS	bundle >= statusquo on every set (7/7 vs 7/7 x3) AND bundle >= key threshold (6/7) on every set; inputs frozen @ 7d62856467be; zero comprehension loss measured

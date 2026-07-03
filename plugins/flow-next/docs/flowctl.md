@@ -8,7 +8,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 
 ```
 init, detect, status, config, review-backend, memory, prospect, glossary, strategy,
-spec, task, dep, show, specs, tasks, list, cat, ready, next, start, done, block,
+spec, task, dep, show, specs, tasks, list, cat, anchor, ready, next, start, done, block,
 state-path, migrate-state, migrate-rename, migrate-rollback, validate, triage-skip,
 checkpoint, prep-chat, repo-map, sync,
 ralph, rp, codex, copilot, cursor,
@@ -418,6 +418,38 @@ Print spec markdown (no JSON mode).
 flowctl cat fn-1      # Spec markdown
 flowctl cat fn-1.2    # Task spec
 ```
+
+### anchor
+
+Single-call worker anchor bundle — the `/flow-next:work` worker's entire Phase-1 re-anchor in one deterministic, pure read.
+
+```bash
+flowctl anchor fn-1.2          # Worker-facing markdown render (default)
+flowctl anchor fn-1.2 --md     # Explicit markdown render
+flowctl anchor fn-1.2 --json   # Machine form (sections + dependencies)
+```
+
+Sections come in fixed order, each the **verbatim captured stdout of the same production function the standalone command dispatches to** (no re-parsing, no filtering, no truncation): `show <task> --json`, `cat <task>`, `show <spec> --json`, `cat <spec>`, `git status`, `git log -5 --oneline`, `git rev-parse --abbrev-ref HEAD`, `config get memory.enabled --json`, `glossary list --json`, and `memory list --json` (captured only when `memory.enabled` resolves true — mirroring the worker's own conditional read; otherwise the section carries a skip `note`). A final dependencies section lists each `depends_on` task's id, title, status, and `## Done summary` (fence-aware section read), in the task file's recorded order. The byte-for-byte superset test (`tests/test_anchor_bundle.py`) locks every section against the real CLI wire-form output.
+
+`--json` shape:
+
+```json
+{
+  "task": "fn-1.2",
+  "spec": "fn-1",
+  "sections": [
+    {"name": "task_show", "command": "flowctl show fn-1.2 --json", "output": "…", "error": null}
+  ],
+  "dependencies": [
+    {"id": "fn-1.1", "title": "…", "status": "done", "done_summary": "…"}
+  ]
+}
+```
+
+- **Fail-open, never a crash:** a broken section is reported inline — markdown renders `(section unavailable: <reason> — run `` `<command>` `` directly)`, JSON carries the `error` field — so the caller falls back to running that one read directly. Same for an unloadable dependency (`error: "task not loadable"`).
+- **Floor, not a ceiling:** the bundle replaces the worker's discrete Phase-1 reads but caps nothing — memory keyword-search (`flowctl memory search`) and every further read stay available.
+- Pure read (no state mutation, no `updated_at` bumps); markdown banner lines (`===== [k/N] …`) cannot collide with embedded content — spec/task bodies never start lines with `===== [`.
+- `--json` and `--md` are mutually exclusive; invalid/unresolvable task id or missing `.flow/` → standard error exit (JSON envelope under `--json`). Short task ids resolve via the usual resolution rules.
 
 ### ready
 

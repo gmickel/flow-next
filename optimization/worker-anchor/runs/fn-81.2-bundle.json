@@ -1,0 +1,62 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "api_error_status": null,
+  "duration_ms": 10351,
+  "duration_api_ms": 10037,
+  "ttft_ms": 8969,
+  "ttft_stream_ms": 1673,
+  "time_to_request_ms": 162,
+  "num_turns": 1,
+  "result": "q1: R8, R9, R10, R11, R13\nq2: flow-next-impl-review and flow-next-spec-completion-review\nq3: No \u2014 mirror regen is owned by fn-81.4\nq4: done\nq5: Default 3, overridden by MAX_REVIEW_ITERATIONS\nq6: flow-next-prime (prime skill)\nq7: Snapshot-scoped staging: `git status --porcelain` before the fix, diff after, stage only changed paths (never pre-dirty ones)",
+  "stop_reason": "end_turn",
+  "session_id": "023983a5-1273-43e9-a9ff-ab0d10065bf4",
+  "total_cost_usd": 0.44920049999999995,
+  "usage": {
+    "input_tokens": 15608,
+    "cache_creation_input_tokens": 63759,
+    "cache_read_input_tokens": 23025,
+    "output_tokens": 861,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 63759,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 15608,
+        "output_tokens": 861,
+        "cache_read_input_tokens": 23025,
+        "cache_creation_input_tokens": 63759,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 63759
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 15608,
+      "outputTokens": 861,
+      "cacheReadInputTokens": 23025,
+      "cacheCreationInputTokens": 63759,
+      "webSearchRequests": 0,
+      "costUSD": 0.44920049999999995,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "uuid": "1581c1c1-20e6-41e7-b7be-19f74355a2f1"
+}

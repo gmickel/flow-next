@@ -1,0 +1,592 @@
+{
+ "scenarios": [
+  {
+   "id": "dociq-01",
+   "task": "fn-11-dgd.2",
+   "spec": "fn-11-dgd",
+   "base_commit": "dbefd6c191f69b5e27fa2978b025434fbc98fe59",
+   "first_commit": "b7aebd66d835f7e8f07f7587b2bc62b0ca688c9e",
+   "head_commit": "db8827c65c7329417f8b6b6cc361e55e242d7013",
+   "checkout": "54b48b44db72bb10c91c546a00c7bb9289889622",
+   "downstream": [
+    "fn-11-dgd.3",
+    "fn-11-dgd.4",
+    "fn-11-dgd.5",
+    "fn-11-dgd.6",
+    "fn-11-dgd.7",
+    "fn-11-dgd.8"
+   ],
+   "done_siblings": [
+    "fn-11-dgd.1"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/DocIQ-Sphere"
+  },
+  {
+   "id": "dociq-02",
+   "task": "fn-27-phase-b-strict-denorm-reads.1",
+   "spec": "fn-27-phase-b-strict-denorm-reads",
+   "base_commit": "6cd76d7f714de88d88bcf2d72d42e65f4d9ce14c",
+   "first_commit": "1edcf4c1d3a8e486f2549dffc9f0a4d13f63d37c",
+   "head_commit": "dd4aaa77d652e8eae321fa189b1cce37b2ffc955",
+   "checkout": "dd4aaa77d652e8eae321fa189b1cce37b2ffc955",
+   "downstream": [
+    "fn-27-phase-b-strict-denorm-reads.2"
+   ],
+   "done_siblings": [],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=head",
+   "notes": [
+    "downstream bodies fn-27-phase-b-strict-denorm-reads.2 changed in sweep range; checkout reverted to head (pre-sync state, done summary absent)"
+   ],
+   "repo": "/Users/gordon/work/DocIQ-Sphere"
+  },
+  {
+   "id": "dociq-03",
+   "task": "fn-32-world-class-agent-evals.1",
+   "spec": "fn-32-world-class-agent-evals",
+   "base_commit": "9bc0531e9d589987e886edd1d32d26ebe076dfe6",
+   "first_commit": "8e53878a197af85d3a6a8fc2d46f44eda51f7dfc",
+   "head_commit": "24a302d8799afe8e2237255a68ea842bcaf834d5",
+   "checkout": "c3d107bb866eae0ddd8214a1e90dbe2eeaaa8846",
+   "downstream": [
+    "fn-32-world-class-agent-evals.2",
+    "fn-32-world-class-agent-evals.3",
+    "fn-32-world-class-agent-evals.4",
+    "fn-32-world-class-agent-evals.5",
+    "fn-32-world-class-agent-evals.6",
+    "fn-32-world-class-agent-evals.7",
+    "fn-32-world-class-agent-evals.8"
+   ],
+   "done_siblings": [],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/DocIQ-Sphere"
+  },
+  {
+   "id": "dociq-04",
+   "task": "fn-52-review-workbook-template-library.2",
+   "spec": "fn-52-review-workbook-template-library",
+   "base_commit": "64cfa4f7e89c6021642318f4a029d615507b0d5e",
+   "first_commit": "c6a285d58d15c7b6ec21f801f23449430f5410e7",
+   "head_commit": "c6a285d58d15c7b6ec21f801f23449430f5410e7",
+   "checkout": "ea3e7370ceacc629648d7de18c15ade59ed398d4",
+   "downstream": [
+    "fn-52-review-workbook-template-library.3",
+    "fn-52-review-workbook-template-library.4"
+   ],
+   "done_siblings": [
+    "fn-52-review-workbook-template-library.1"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/DocIQ-Sphere"
+  },
+  {
+   "id": "dociq-05",
+   "task": "fn-53-docx-human-markup-reader.4",
+   "spec": "fn-53-docx-human-markup-reader",
+   "base_commit": "e53859342128d781c7a5863b25d63bdf2b6d86e3",
+   "first_commit": "79237529477b65bcd3c98be4234d32278b379950",
+   "head_commit": "79237529477b65bcd3c98be4234d32278b379950",
+   "checkout": "7bc421cfaa5263bac335450b91a4d32bed46d2f4",
+   "downstream": [
+    "fn-53-docx-human-markup-reader.5"
+   ],
+   "done_siblings": [
+    "fn-53-docx-human-markup-reader.1",
+    "fn-53-docx-human-markup-reader.2",
+    "fn-53-docx-human-markup-reader.3"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/DocIQ-Sphere"
+  },
+  {
+   "id": "dociq-06",
+   "task": "fn-54-litigation-workflow-playbook-pack.1",
+   "spec": "fn-54-litigation-workflow-playbook-pack",
+   "base_commit": "278e43bd90cb6b2e91d98f97dd1cc143710fde39",
+   "first_commit": "48233ff9de240c2f1dfd4c0c92d0e1aa7924d272",
+   "head_commit": "48233ff9de240c2f1dfd4c0c92d0e1aa7924d272",
+   "checkout": "c4a8690293710990fa4785481c194e4c9e88b709",
+   "downstream": [
+    "fn-54-litigation-workflow-playbook-pack.2",
+    "fn-54-litigation-workflow-playbook-pack.3",
+    "fn-54-litigation-workflow-playbook-pack.4"
+   ],
+   "done_siblings": [],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/DocIQ-Sphere"
+  },
+  {
+   "id": "dociq-07",
+   "task": "fn-55-uk-authority-research-tools.2",
+   "spec": "fn-55-uk-authority-research-tools",
+   "base_commit": "b61adacd1c5f87fec7c4816366c292e7eaef5d3c",
+   "first_commit": "e55a624ba2e0ce7623f54690ca2abb1431e1e3f4",
+   "head_commit": "e55a624ba2e0ce7623f54690ca2abb1431e1e3f4",
+   "checkout": "d713f9b4157066a1368dbc75de91bc3b251bd93c",
+   "downstream": [
+    "fn-55-uk-authority-research-tools.3",
+    "fn-55-uk-authority-research-tools.4"
+   ],
+   "done_siblings": [
+    "fn-55-uk-authority-research-tools.1"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/DocIQ-Sphere"
+  },
+  {
+   "id": "dociq-08",
+   "task": "fn-56-companies-house-intelligence-connector.1",
+   "spec": "fn-56-companies-house-intelligence-connector",
+   "base_commit": "c8d61b5adcfe261591c8d3ede9504147f959aa8a",
+   "first_commit": "a0a6cde0e999b662f255b8257ed28b09c597d440",
+   "head_commit": "a0a6cde0e999b662f255b8257ed28b09c597d440",
+   "checkout": "67203554dedc2c5055719c608e5428a136e95ca6",
+   "downstream": [
+    "fn-56-companies-house-intelligence-connector.2",
+    "fn-56-companies-house-intelligence-connector.3",
+    "fn-56-companies-house-intelligence-connector.4"
+   ],
+   "done_siblings": [],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/DocIQ-Sphere"
+  },
+  {
+   "id": "dociq-09",
+   "task": "fn-57-openai-compatible-model-provider.2",
+   "spec": "fn-57-openai-compatible-model-provider",
+   "base_commit": "9dd7b761134bf6d64dfe9f51fb9392c71aac64c0",
+   "first_commit": "155e4f916c2944275dca9c1f9d134f7ef629a0c3",
+   "head_commit": "155e4f916c2944275dca9c1f9d134f7ef629a0c3",
+   "checkout": "ca835cd1b32a55a3c4b1e2e5c898ab0eb451cf61",
+   "downstream": [
+    "fn-57-openai-compatible-model-provider.3"
+   ],
+   "done_siblings": [
+    "fn-57-openai-compatible-model-provider.1"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/DocIQ-Sphere"
+  },
+  {
+   "id": "gno-01",
+   "task": "fn-79-graph-aware-retrieval-and-agent.1",
+   "spec": "fn-79-graph-aware-retrieval-and-agent",
+   "base_commit": "3453467443ee5cd5e7fd648f1a501e7b4c14a981",
+   "first_commit": "f22b0e90d8424da30bab5c3e2c4ac388478529f6",
+   "head_commit": "f22b0e90d8424da30bab5c3e2c4ac388478529f6",
+   "checkout": "f22b0e90d8424da30bab5c3e2c4ac388478529f6",
+   "downstream": [
+    "fn-79-graph-aware-retrieval-and-agent.2",
+    "fn-79-graph-aware-retrieval-and-agent.3",
+    "fn-79-graph-aware-retrieval-and-agent.4",
+    "fn-79-graph-aware-retrieval-and-agent.5",
+    "fn-79-graph-aware-retrieval-and-agent.6"
+   ],
+   "done_siblings": [],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=head",
+   "notes": [
+    "sibling done-ness via state updated_at timestamp fallback (no usable evidence commits): fn-79-graph-aware-retrieval-and-agent.2,fn-79-graph-aware-retrieval-and-agent.3,fn-79-graph-aware-retrieval-and-agent.4,fn-79-graph-aware-retrieval-and-agent.5,fn-79-graph-aware-retrieval-and-agent.6",
+    "evidence commits pre-squash/branch-side (not on main); checkout=head branch state"
+   ],
+   "repo": "/Users/gordon/work/gno"
+  },
+  {
+   "id": "gno-02",
+   "task": "fn-79-graph-aware-retrieval-and-agent.3",
+   "spec": "fn-79-graph-aware-retrieval-and-agent",
+   "base_commit": "0d1d9408ab722a663cb02d0d25de813ca1707d1f",
+   "first_commit": "db0a84aa7437d305d884a088eb2443cb3fc3542b",
+   "head_commit": "db0a84aa7437d305d884a088eb2443cb3fc3542b",
+   "checkout": "db0a84aa7437d305d884a088eb2443cb3fc3542b",
+   "downstream": [
+    "fn-79-graph-aware-retrieval-and-agent.4",
+    "fn-79-graph-aware-retrieval-and-agent.5",
+    "fn-79-graph-aware-retrieval-and-agent.6"
+   ],
+   "done_siblings": [
+    "fn-79-graph-aware-retrieval-and-agent.1",
+    "fn-79-graph-aware-retrieval-and-agent.2"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=head",
+   "notes": [
+    "sibling done-ness via state updated_at timestamp fallback (no usable evidence commits): fn-79-graph-aware-retrieval-and-agent.4,fn-79-graph-aware-retrieval-and-agent.5,fn-79-graph-aware-retrieval-and-agent.6",
+    "evidence commits pre-squash/branch-side (not on main); checkout=head branch state"
+   ],
+   "repo": "/Users/gordon/work/gno"
+  },
+  {
+   "id": "gno-03",
+   "task": "fn-79-graph-aware-retrieval-and-agent.5",
+   "spec": "fn-79-graph-aware-retrieval-and-agent",
+   "base_commit": "65c0a9ac98a252839d4db30e2759fca0760bf041",
+   "first_commit": "d6035eb39271b8caf02221fb29252d784142cb7f",
+   "head_commit": "d6035eb39271b8caf02221fb29252d784142cb7f",
+   "checkout": "d6035eb39271b8caf02221fb29252d784142cb7f",
+   "downstream": [
+    "fn-79-graph-aware-retrieval-and-agent.6"
+   ],
+   "done_siblings": [
+    "fn-79-graph-aware-retrieval-and-agent.1",
+    "fn-79-graph-aware-retrieval-and-agent.2",
+    "fn-79-graph-aware-retrieval-and-agent.3",
+    "fn-79-graph-aware-retrieval-and-agent.4"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=head",
+   "notes": [
+    "sibling done-ness via state updated_at timestamp fallback (no usable evidence commits): fn-79-graph-aware-retrieval-and-agent.6",
+    "evidence commits pre-squash/branch-side (not on main); checkout=head branch state"
+   ],
+   "repo": "/Users/gordon/work/gno"
+  },
+  {
+   "id": "gno-04",
+   "task": "fn-81-embedding-and-package-hardening.2",
+   "spec": "fn-81-embedding-and-package-hardening",
+   "base_commit": "ceb14530df9e677a8d9561757013fb77a6564aea",
+   "first_commit": "658a072e55376e7a992e013a8e0e1cff3ac62699",
+   "head_commit": "658a072e55376e7a992e013a8e0e1cff3ac62699",
+   "checkout": "658a072e55376e7a992e013a8e0e1cff3ac62699",
+   "downstream": [
+    "fn-81-embedding-and-package-hardening.3",
+    "fn-81-embedding-and-package-hardening.4",
+    "fn-81-embedding-and-package-hardening.5"
+   ],
+   "done_siblings": [
+    "fn-81-embedding-and-package-hardening.1"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=head",
+   "notes": [
+    "sibling done-ness via state updated_at timestamp fallback (no usable evidence commits): fn-81-embedding-and-package-hardening.3,fn-81-embedding-and-package-hardening.4,fn-81-embedding-and-package-hardening.5",
+    "evidence commits pre-squash/branch-side (not on main); checkout=head branch state"
+   ],
+   "repo": "/Users/gordon/work/gno"
+  },
+  {
+   "id": "gno-05",
+   "task": "fn-81-embedding-and-package-hardening.4",
+   "spec": "fn-81-embedding-and-package-hardening",
+   "base_commit": "5953c767493008bbc196ac711060a8338433e1cf",
+   "first_commit": "8dca5768d6e7f0fd5ed7b937e84870188c8735c1",
+   "head_commit": "8dca5768d6e7f0fd5ed7b937e84870188c8735c1",
+   "checkout": "8dca5768d6e7f0fd5ed7b937e84870188c8735c1",
+   "downstream": [
+    "fn-81-embedding-and-package-hardening.5"
+   ],
+   "done_siblings": [
+    "fn-81-embedding-and-package-hardening.1",
+    "fn-81-embedding-and-package-hardening.2",
+    "fn-81-embedding-and-package-hardening.3"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=head",
+   "notes": [
+    "sibling done-ness via state updated_at timestamp fallback (no usable evidence commits): fn-81-embedding-and-package-hardening.5",
+    "evidence commits pre-squash/branch-side (not on main); checkout=head branch state"
+   ],
+   "repo": "/Users/gordon/work/gno"
+  },
+  {
+   "id": "gno-06",
+   "task": "fn-83-second-brain-page-types-and-synthesis.2",
+   "spec": "fn-83-second-brain-page-types-and-synthesis",
+   "base_commit": "f31116e15fefa2836744a06fad7b1f7a7e001295",
+   "first_commit": "e927c16b0805d3d2da2e89e40b6b18ff56220cf8",
+   "head_commit": "e927c16b0805d3d2da2e89e40b6b18ff56220cf8",
+   "checkout": "e927c16b0805d3d2da2e89e40b6b18ff56220cf8",
+   "downstream": [
+    "fn-83-second-brain-page-types-and-synthesis.3",
+    "fn-83-second-brain-page-types-and-synthesis.4"
+   ],
+   "done_siblings": [
+    "fn-83-second-brain-page-types-and-synthesis.1"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=head",
+   "notes": [
+    "sibling done-ness via state updated_at timestamp fallback (no usable evidence commits): fn-83-second-brain-page-types-and-synthesis.3,fn-83-second-brain-page-types-and-synthesis.4",
+    "evidence commits pre-squash/branch-side (not on main); checkout=head branch state"
+   ],
+   "repo": "/Users/gordon/work/gno"
+  },
+  {
+   "id": "gno-07",
+   "task": "fn-83-second-brain-page-types-and-synthesis.3",
+   "spec": "fn-83-second-brain-page-types-and-synthesis",
+   "base_commit": "2b7993a26d6c1209f91ff8f781faa4e9a86ef71e",
+   "first_commit": "c1f3cd7d2273e56a79137add85d20a9aa8825e56",
+   "head_commit": "37bbdc6c05fef19229b53c94abdd77f7030c89c9",
+   "checkout": "37bbdc6c05fef19229b53c94abdd77f7030c89c9",
+   "downstream": [
+    "fn-83-second-brain-page-types-and-synthesis.4"
+   ],
+   "done_siblings": [
+    "fn-83-second-brain-page-types-and-synthesis.1",
+    "fn-83-second-brain-page-types-and-synthesis.2"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=head",
+   "notes": [
+    "sibling done-ness via state updated_at timestamp fallback (no usable evidence commits): fn-83-second-brain-page-types-and-synthesis.4",
+    "evidence commits pre-squash/branch-side (not on main); checkout=head branch state"
+   ],
+   "repo": "/Users/gordon/work/gno"
+  },
+  {
+   "id": "gno-08",
+   "task": "fn-85-agent-recipes-and-ingestion-workflow.2",
+   "spec": "fn-85-agent-recipes-and-ingestion-workflow",
+   "base_commit": "f91a4f8242b9f49bae6bd8fa382b3053271ab5b1",
+   "first_commit": "a429dbcd872719bc6695794552ff808055732847",
+   "head_commit": "a429dbcd872719bc6695794552ff808055732847",
+   "checkout": "a429dbcd872719bc6695794552ff808055732847",
+   "downstream": [
+    "fn-85-agent-recipes-and-ingestion-workflow.3",
+    "fn-85-agent-recipes-and-ingestion-workflow.4",
+    "fn-85-agent-recipes-and-ingestion-workflow.5"
+   ],
+   "done_siblings": [
+    "fn-85-agent-recipes-and-ingestion-workflow.1"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=head",
+   "notes": [
+    "sibling done-ness via state updated_at timestamp fallback (no usable evidence commits): fn-85-agent-recipes-and-ingestion-workflow.1,fn-85-agent-recipes-and-ingestion-workflow.3,fn-85-agent-recipes-and-ingestion-workflow.4,fn-85-agent-recipes-and-ingestion-workflow.5",
+    "evidence commits pre-squash/branch-side (not on main); checkout=head branch state"
+   ],
+   "repo": "/Users/gordon/work/gno"
+  },
+  {
+   "id": "gno-09",
+   "task": "fn-72-backgrounding-flags-for-serve-and-daemon.2",
+   "spec": "fn-72-backgrounding-flags-for-serve-and-daemon",
+   "base_commit": "2919d82225d5985aa5f66aad29472376ac34c4e2",
+   "first_commit": "25322bb4aa7ae31cad9c0f1c2fde9388c5596fc8",
+   "head_commit": "92904def95a36593fe5c1184f4386fb1a3b5aa18",
+   "checkout": "92904def95a36593fe5c1184f4386fb1a3b5aa18",
+   "downstream": [
+    "fn-72-backgrounding-flags-for-serve-and-daemon.3",
+    "fn-72-backgrounding-flags-for-serve-and-daemon.4",
+    "fn-72-backgrounding-flags-for-serve-and-daemon.5",
+    "fn-72-backgrounding-flags-for-serve-and-daemon.6",
+    "fn-72-backgrounding-flags-for-serve-and-daemon.7",
+    "fn-72-backgrounding-flags-for-serve-and-daemon.8"
+   ],
+   "done_siblings": [
+    "fn-72-backgrounding-flags-for-serve-and-daemon.1",
+    "fn-72-backgrounding-flags-for-serve-and-daemon.9"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=head",
+   "notes": [
+    "downstream bodies fn-72-backgrounding-flags-for-serve-and-daemon.3,fn-72-backgrounding-flags-for-serve-and-daemon.4,fn-72-backgrounding-flags-for-serve-and-daemon.5,fn-72-backgrounding-flags-for-serve-and-daemon.7,fn-72-backgrounding-flags-for-serve-and-daemon.8 changed in sweep range; checkout reverted to head (pre-sync state, done summary absent)",
+    "sibling done-ness via state updated_at timestamp fallback (no usable evidence commits): fn-72-backgrounding-flags-for-serve-and-daemon.3"
+   ],
+   "repo": "/Users/gordon/work/gno"
+  },
+  {
+   "id": "transcribe-01",
+   "task": "fn-25.1",
+   "spec": "fn-25",
+   "base_commit": "b86d650012c3412fb37a23adad61ecf987987ee5",
+   "first_commit": "013c8133c8e0422a9a7dd14dec874aaeb915aba7",
+   "head_commit": "013c8133c8e0422a9a7dd14dec874aaeb915aba7",
+   "checkout": "bf6dcd9b9aec7716e0e318d10856df59da5d5b47",
+   "downstream": [
+    "fn-25.2",
+    "fn-25.3",
+    "fn-25.4"
+   ],
+   "done_siblings": [],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/transcribe"
+  },
+  {
+   "id": "transcribe-02",
+   "task": "fn-25.3",
+   "spec": "fn-25",
+   "base_commit": "fa991dd230e553369e5f757a9e304c4faa30bc35",
+   "first_commit": "20a27ac64db5bb8c469d7e8421f4a48cc10192fa",
+   "head_commit": "783a037b9a886a5b65d85ca4fbbe321c8f9a10dd",
+   "checkout": "783a037b9a886a5b65d85ca4fbbe321c8f9a10dd",
+   "downstream": [
+    "fn-25.4"
+   ],
+   "done_siblings": [
+    "fn-25.1",
+    "fn-25.2"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=head",
+   "notes": [
+    "downstream bodies fn-25.4 changed in sweep range; checkout reverted to head (pre-sync state, done summary absent)"
+   ],
+   "repo": "/Users/gordon/work/transcribe"
+  },
+  {
+   "id": "transcribe-03",
+   "task": "fn-61-hosted-cloud-meeting-notes-and-polish.2",
+   "spec": "fn-61-hosted-cloud-meeting-notes-and-polish",
+   "base_commit": "970e4a824860d3c85e6ec09a283e37768a4cb52f",
+   "first_commit": "358b2da89fc168e1b7a1b2d82704a743fdb94285",
+   "head_commit": "358b2da89fc168e1b7a1b2d82704a743fdb94285",
+   "checkout": "1cc380d7344fdc333a53b4cc1e2450d017c3e100",
+   "downstream": [
+    "fn-61-hosted-cloud-meeting-notes-and-polish.3",
+    "fn-61-hosted-cloud-meeting-notes-and-polish.4",
+    "fn-61-hosted-cloud-meeting-notes-and-polish.5"
+   ],
+   "done_siblings": [
+    "fn-61-hosted-cloud-meeting-notes-and-polish.1"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/transcribe"
+  },
+  {
+   "id": "transcribe-04",
+   "task": "fn-61-hosted-cloud-meeting-notes-and-polish.5",
+   "spec": "fn-61-hosted-cloud-meeting-notes-and-polish",
+   "base_commit": "df9388c4318280e5f0d7feb14e88eb7a97f7d6ca",
+   "first_commit": "78d4f3be0075cf481b3589a16155cecc45d0d776",
+   "head_commit": "78d4f3be0075cf481b3589a16155cecc45d0d776",
+   "checkout": "5d591e479653dfb9cafef008702ff3412a5b228a",
+   "downstream": [
+    "fn-61-hosted-cloud-meeting-notes-and-polish.3",
+    "fn-61-hosted-cloud-meeting-notes-and-polish.4"
+   ],
+   "done_siblings": [
+    "fn-61-hosted-cloud-meeting-notes-and-polish.1",
+    "fn-61-hosted-cloud-meeting-notes-and-polish.2"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/transcribe"
+  },
+  {
+   "id": "transcribe-05",
+   "task": "fn-70-hide-first-dictation-stt-cold-start.3",
+   "spec": "fn-70-hide-first-dictation-stt-cold-start",
+   "base_commit": "4df040abaf896bab963ca43429b1d6f952a00370",
+   "first_commit": "907feef7c947fd03aa99ffb04dd10b40d7d81511",
+   "head_commit": "907feef7c947fd03aa99ffb04dd10b40d7d81511",
+   "checkout": "0003ff2efe2076371248c996d8be48cf893b8a07",
+   "downstream": [
+    "fn-70-hide-first-dictation-stt-cold-start.2",
+    "fn-70-hide-first-dictation-stt-cold-start.4"
+   ],
+   "done_siblings": [
+    "fn-70-hide-first-dictation-stt-cold-start.1"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/transcribe"
+  },
+  {
+   "id": "transcribe-06",
+   "task": "fn-71-deterministic-dictionary-correction-for.2",
+   "spec": "fn-71-deterministic-dictionary-correction-for",
+   "base_commit": "847e2029ade4210c9389e4cd19a4b9576126b275",
+   "first_commit": "0ba3988443a0891dc99c71d3d20c2de62d026076",
+   "head_commit": "59198ab87fee018a51f6687d9bdbef1cc0bbb030",
+   "checkout": "6e3275bb88ebe0a858e9cdcccff8b4a9690f3dee",
+   "downstream": [
+    "fn-71-deterministic-dictionary-correction-for.3",
+    "fn-71-deterministic-dictionary-correction-for.4"
+   ],
+   "done_siblings": [
+    "fn-71-deterministic-dictionary-correction-for.1"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/transcribe"
+  },
+  {
+   "id": "transcribe-07",
+   "task": "fn-71-deterministic-dictionary-correction-for.4",
+   "spec": "fn-71-deterministic-dictionary-correction-for",
+   "base_commit": "6e3275bb88ebe0a858e9cdcccff8b4a9690f3dee",
+   "first_commit": "4908e680876bcab01f1528bcd8316d47de13a62f",
+   "head_commit": "4908e680876bcab01f1528bcd8316d47de13a62f",
+   "checkout": "4838f387a484d44d731b1879ada9c6b802b2a0d1",
+   "downstream": [
+    "fn-71-deterministic-dictionary-correction-for.3"
+   ],
+   "done_siblings": [
+    "fn-71-deterministic-dictionary-correction-for.1",
+    "fn-71-deterministic-dictionary-correction-for.2"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/transcribe"
+  },
+  {
+   "id": "transcribe-08",
+   "task": "fn-72-advanced-local-mlx-meeting-note-models.2",
+   "spec": "fn-72-advanced-local-mlx-meeting-note-models",
+   "base_commit": "28287eaa687c6b899ab3b83c7c8a938ddbebc365",
+   "first_commit": "1099d5f474b8cb34e5a9f2d7d24ac1e37a694aa9",
+   "head_commit": "1099d5f474b8cb34e5a9f2d7d24ac1e37a694aa9",
+   "checkout": "0ac2473284dfa9411eb216dbb113870d087d6756",
+   "downstream": [
+    "fn-72-advanced-local-mlx-meeting-note-models.3",
+    "fn-72-advanced-local-mlx-meeting-note-models.4"
+   ],
+   "done_siblings": [
+    "fn-72-advanced-local-mlx-meeting-note-models.1"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/transcribe"
+  },
+  {
+   "id": "transcribe-09",
+   "task": "fn-74-fluidaudio-upgrade-and-local-speech-wins.2",
+   "spec": "fn-74-fluidaudio-upgrade-and-local-speech-wins",
+   "base_commit": "a82a73565f21960ac3f36ce414a53d5a1b1a223d",
+   "first_commit": "3fc6a2c679eb1db689f624cb4debc5b94b714c5c",
+   "head_commit": "3fc6a2c679eb1db689f624cb4debc5b94b714c5c",
+   "checkout": "e0920e2a5d61be0bc884510ac32165bcdd60c996",
+   "downstream": [
+    "fn-74-fluidaudio-upgrade-and-local-speech-wins.3",
+    "fn-74-fluidaudio-upgrade-and-local-speech-wins.4",
+    "fn-74-fluidaudio-upgrade-and-local-speech-wins.5"
+   ],
+   "done_siblings": [
+    "fn-74-fluidaudio-upgrade-and-local-speech-wins.1"
+   ],
+   "cross_spec": false,
+   "derivation": "base=first-evidence-commit^; head=last evidence commit; checkout=first post-head commit touching task md",
+   "notes": [],
+   "repo": "/Users/gordon/work/transcribe"
+  }
+ ]
+}

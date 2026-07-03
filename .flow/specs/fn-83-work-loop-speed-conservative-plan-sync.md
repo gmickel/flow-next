@@ -1,110 +1,90 @@
-# fn-83 Work-loop speed: conservative plan-sync gate + worker anchor bundle (zero quality loss, eval-proven)
+# fn-83 Worker anchor bundle + cross-spec plan-sync fix (plan-sync skip-gate proven non-viable, shelved)
 
 ## Overview
 
-`/flow-next:work`'s wall-clock is dominated by serial machinery around the worker, not by the re-anchor. Measured (fn-81/fn-82 runs, 2026-07-02): plan-sync spawned unconditionally after every task returned "no drift" **3/3 times** at ~70-90k tokens and minutes each; the worker assembles its anchor through many separate reads. Fix: (a) a deterministic probe that PROVES no drift is possible before the plan-sync agent is spawned, (b) one `flowctl anchor` call delivering the same anchor information in one round-trip.
+fn-83 set out to speed the `/flow-next:work` loop two ways: (1) gate the after-every-task plan-sync agent behind a cheap deterministic probe, and (2) collapse the worker's ~8-read anchor into one call. Both were eval-gated on zero quality loss.
 
-**Hard constraint (user-set): ZERO quality loss, PROVEN by an eval set before ship.** Re-anchoring is a core tenet — the bundle never reduces what the worker knows; the gate never skips a plan-sync that could have found drift. Both changes ship only behind their eval proof (`agent_docs/optimizing-skills.md` methodology; the fn-74 real-backend-in-the-loop pattern, `optimization/review-prompt/` is the template). **Precise claim scope:** the proof establishes zero false skips against the frozen real-agent oracle ON LATTICE INPUTS (paths, tokens, a truthful deviation flag). The two flag-dependent residual classes (deviation-only drift, plain-word symbol rename with an untruthful `PLAN_DEVIATION: no`) are closed by three mechanisms shipping together: (1) an explicit worker deviation RUBRIC (see Wiring) making the flag reliable by construction, (2) a RAMPED audit (1-in-2 for a repo's first 20 skips, then 1-in-5 — deterministic, ledger-derived) bounding first-miss exposure during the period the flag is unproven on that repo, (3) the append-only miss loop. Residuals are stated verbatim in the PR — never silent.
+**The plan-sync skip-gate is proven non-viable and does NOT ship.** Cross-repo validation (fn-83.6: 27 real scenarios from DocIQ-Sphere/gno/transcribe against the real plan-sync agent) produced a genuine false skip (semantic drift no path/token can see) and a 6.7% skip-rate (needed ≥50%) — both fundamental, not tunable. Full analysis + "do not re-attempt" is captured in the decision record `.flow/memory/knowledge/decisions/plan-sync-skip-gate-not-viable-2026-07-03.md`. The gate machinery is removed from the shipped CLI; the experiment stays as archived evidence under `optimization/`.
 
-Deferred to a future spec: parallel disjoint-task execution, review pipelining.
+**This spec now ships only the two independently-proven wins:** the `flowctl anchor` bundle (zero-loss, superset + comprehension proven) and the CROSS_SPEC latent-bug fix. Plan-sync continues to spawn unconditionally, exactly as before fn-83.
 
 ## Quick commands
 
 ```bash
-python3 -m pytest plugins/flow-next/tests/ -q               # incl. new lattice-arm + config + superset tests
 (cd "$(mktemp -d)" && bash /Users/gordon/work/flow-next/plugins/flow-next/scripts/smoke_test.sh)
-bash scripts/sync-codex.sh                                   # worker/phases edits mirror; flowctl shared
-python3 plugins/flow-next/tests/run_gate_corpus_check.py     # probe vs FROZEN answer key (exact name at impl)
+python3 -m unittest discover -s plugins/flow-next/tests            # incl. test_anchor_bundle.py
+bash scripts/sync-codex.sh                                          # worker/phases edits mirror; flowctl shared
+flowctl anchor <task-id> --md                                      # the shipped bundle
 ```
 
-## Approach
+## What ships
 
-**1. Probe (`flowctl plan-sync-probe <task-id> --json`) — pure deterministic Python.**
+**1. `flowctl anchor <task-id> [--json|--md]` — single-call worker anchor bundle (DONE, fn-83.3).** Assembles the worker's Phase-1 anchor from the verbatim output of the same production `cmd_*` functions the worker runs today (full task + spec bodies, deps with done-summaries, git state, memory/glossary indices) — byte-identical by construction, deterministic order, pure stdlib 3.8+. worker.md Phase 1 replaces its ~8 discrete reads with one call and keeps its read-more freedom (bundle is a floor). Proven zero-loss two ways: a byte-for-byte superset test and a comprehension-equivalence eval (bundle 7/7 ≥ status-quo 7/7 on 3 frozen real tasks, incl. a non-satisfies-section question).
 
-- **Touched-set (RANGE-BASED — evidence completeness is load-bearing):** the worker today records only HEAD as its evidence commit, but review-fix loops create multiple commits per task — per-commit enumeration of an incomplete list would miss earlier drift-relevant changes. So: (1) the worker captures `BASE_COMMIT` (rev-parse HEAD at Phase-1 end, before any edit) and `flowctl done` evidence gains an additive `base_commit` field plus the full commit list (`git rev-list --reverse <base>..HEAD`); (2) the probe computes the touched-set from ONE RANGE DIFF `git diff --no-renames --name-status <base_commit> <head_commit>` (NEVER `--name-only`, it drops old rename paths; `--no-renames` renders renames as D+A so both paths count; interleaved foreign commits only over-approximate — safe direction), and hunk tokens from `git diff <base>..<head>` unified output; (3) **evidence without `base_commit` (older tasks, foreign writers, empty/missing evidence) ⇒ `spawn`** — completeness is proven or the gate does not apply. Evidence read from runtime state via `load_task_with_state` (flowctl.py:959-979 area; written at cmd_done flowctl.py:16476) — NOT parsed from task markdown.
-- **Downstream reference extraction** (net-new; no parser exists today): from every downstream todo task's body — and, when `planSync.crossSpec=true`, ALSO every open spec's BODY (plan-sync Phase 4b scans spec bodies, not just tasks) — extract path-shaped references — `**Files:**` entries, `## Investigation targets` paths, any path-like token in prose (backtick-tolerant, `path:12-40`-suffix-tolerant, relative/absolute). Compare via `PurePosixPath` (git paths are always `/`), exact + basename + directory-prefix matches all count; Python 3.8-safe (`parts`-tuple prefix compare, NOT `is_relative_to` — 3.9+).
-- **Symbol-token arm (required for recall — git renames are heuristic and symbol renames move NO path):** tokenize the `+`/`-` hunk lines of the base..head range diff (both sides — old names live on `-`) and keep tokens passing a MORPHOLOGICAL identifier predicate (contains `_`, camelCase hump, dotted/`::`/`->` compound, ALL_CAPS≥2, or contains a digit — shape-based, deterministic, NO English stoplist per repo doctrine); any kept token appearing word-bounded in a downstream body ⇒ overlap. Plain-single-word symbols (e.g. `parse`→`read`) deliberately fail the predicate — that class is covered by the deviation flag + audit sampling and is part of the stated residual.
-- **Deviation fact:** worker's mandatory terminal `PLAN_DEVIATION: yes|no` (parsed by anchored prefix regex over the whole return, last match wins — NOT positional; missing/malformed ⇒ `yes`; worker.md instructs "unsure ⇒ yes"). Emission slot: immediately before the DELEGATION lines; all three host parses are prefix-anchored (fixes the last-two-lines fragility while keeping order readable).
-- **Decision lattice (fail-open):** `skip` ONLY when: no path overlap AND no token overlap AND `PLAN_DEVIATION: no` AND probe ran clean AND every scanned body (downstream task; plus each open spec body under crossSpec) yielded ≥1 parseable reference (any body with none ⇒ cannot prove disjoint ⇒ spawn) AND evidence carries `base_commit` (range provably complete) AND (crossSpec off OR cross-spec enumeration succeeded). Anything else ⇒ `spawn`. No pipelines in probe internals (rc-checked subprocess calls).
-- **Gate ledger:** `plan-sync-probe --record <mode>` appends to `.flow/plansync-gate.jsonl` (atomic append) with the FIXED schema `{ts, spec, task, mode, decision, skip_index, audit_spawned, actual_drift: yes|no|null, audit_miss: bool, reason}` — the durable store pairing shadow/audit would-decisions with actual `Drift detected:` verdicts; `skip_index` drives the deterministic audit ramp.
+**2. CROSS_SPEC caller fix.** The plan-sync spawn prompt (phases.md ~3e) never passed the `CROSS_SPEC` flag its own contract documents (plan-sync.md:19) — a latent bug that silently disabled cross-spec drift checking. The spawn now passes `planSync.crossSpec`. Independent of the gate; makes the existing unconditional plan-sync correct.
 
-**2. Config.** `planSync.gate = off | shadow | on` added to the existing materialized `planSync` block (get_default_config, flowctl.py:1185). Matrix: `planSync.enabled=false` ⇒ 3e skipped entirely (today's rule, gate irrelevant). `enabled=true`: `off` ⇒ always spawn (probe not invoked); `shadow` ⇒ probe + record would-decision + ALWAYS spawn (behavior byte-equivalent to today); `on` ⇒ probe-gated with **ramped audit sampling**: deterministic ledger-derived counter — every 2nd skip spawns plan-sync anyway for the repo's first 20 skips, every 5th thereafter — records the pairing; an audit spawn whose verdict is `Drift detected: yes` is an **AUDIT MISS** — surfaced loudly in the run summary + ledger and instructs flipping to `shadow`; the system NEVER mutates the user's config itself. Default **`on`** (justified by the in-PR proof; `shadow` documented as the cautious adoption path).
+## What does NOT ship (removed from the shipped plugin)
 
-**3. Ground-truth eval harness (`optimization/plan-sync-gate/`) — the merge gate.**
+- `flowctl plan-sync-probe` command + probe-specific `_psp_*` helpers (KEEP the shared `_psp_run_git` — `flowctl anchor` reuses it; relocate/rename as needed).
+- `planSync.gate` config enum + the `plansync-gate.jsonl` ledger writer.
+- The probe/gate/config tests: `test_plan_sync_probe.py`, `test_plansync_gate_config.py`, `test_plan_sync_gate_corpus.py` (removed; `test_anchor_bundle.py` stays).
+- REMOVE the `PLAN_DEVIATION` worker terminal line (worker.md ~:430) + its parser prose (phases.md ~:285) — a dead gate SIGNAL whose only consumer (the probe) is gone.
+- KEEP `BASE_COMMIT` and its evidence recording. It is load-bearing INDEPENDENT of the gate: it scopes the impl-review diff (`BASE_COMMIT..HEAD`, worker.md Phase 4), anchors delegation git-ownership/rollback (Phase 2), and records commit-range provenance in done evidence (Phase 5) — all predate or outlive fn-83. Only the removed probe CONSUMED `evidence.base_commit`; the field stays as general provenance. A naive `base_commit` removal would break impl-review/delegation and is explicitly forbidden.
+- NO gate branch / mode matrix / audit sampling / per-task `plan-sync:` gate slot in phases.md. Plan-sync stays unconditional.
 
-- **Corpus:** ≥10 constructed drift-POSITIVE scenarios — API/symbol rename consumed downstream (morphological and plain-word variants), deviation-only drift (zero file overlap), acceptance-semantics staleness, file rename/move listed downstream, cross-spec drift, prose-only shared-contract reference — plus ≥10 drift-NEGATIVE scenarios replayed from real history (fn-81/fn-82 post-task states via `git worktree add --detach <full-SHA>`; task ids are slug-form on disk; husk inputs reconstructed AT the pinned SHA). Corpus is **append-only**; every future live miss becomes a permanent scenario.
-- **Answer key (generated once, then FROZEN):** run the REAL production `agents/plan-sync.md` (its own `model: opus` pin = the held-constant model; record resolved model id) with its full input contract (COMPLETED_TASK_ID, SPEC_ID, FLOWCTL, DOWNSTREAM_TASK_IDS, `DRY_RUN=true`, CROSS_SPEC, at-SHA GLOSSARY_JSON/DECISIONS_JSON/STRATEGY_CONTENT husks) — N=3 runs per scenario, majority vote; ANY flip across runs ⇒ classified drift-positive (wobble = ambiguity = drift; NeurIPS-2025-backed). The parsed `Drift detected: yes|no` P6 line (plan-sync.md:240-288) is the label. Key committed; **CI validates the deterministic probe against the frozen key — the LLM is never re-run in CI.**
-- **Adversarial flag arm:** every drift-positive scenario ALSO probed with `PLAN_DEVIATION=no` forced — the probe must still `spawn` on its path/token arms for every scenario whose drift is path/token-visible. The two classes where flag=no defeats the probe (deviation-only drift, plain-word symbol rename) are the **stated residual**: today they're caught only because plan-sync always runs; under `on` they're caught by (a) the worker flag (instructed unsure⇒yes, missing⇒yes), (b) 1-in-5 audit sampling, (c) the append-only miss loop. This residual is documented in the PR verbatim — the proof claims zero false skips ON THE LATTICE'S INPUTS, plus bounded-and-instrumented residual on untruthful inputs.
-- **Merge gates + honesty:** false-skip count == 0 across the corpus (hard); rule-of-three bound stated explicitly (0 FN in N ⇒ FN-rate ≤3/N @95% — at N=20 that is ≤15%; the audit loop is the ongoing tightener); skip-rate on drift-negatives reported (target ≥80%; <50% ⇒ ship-with-rationale decision point since the gate's complexity must pay).
+## Kept as archived evidence (dev assets, repo-root, NOT shipped in the plugin)
 
-**4. Anchor bundle (`flowctl anchor <task-id> --json|--md`).** Clone/refactor `cmd_spec_export_cognitive_aid`'s section assembly (flowctl.py:14845-15025) + fn-79 fence-aware helpers. Contents — the VERBATIM RAW OUTPUTS of every command worker.md Phase 1 currently runs: `show <TASK_ID> --json`, `cat <TASK_ID>`, `show <SPEC_ID> --json`, `cat <SPEC_ID>` (FULL spec body — no R-ID filtering), `git status` + `git log -5 --oneline` + branch, `config get memory.enabled`, `glossary list --json`, `memory list` index when memory enabled — plus dependency tasks' ids/titles/done-summaries. The superset test compares against these exact command outputs, not paraphrases. Verbatim sections, no summarization, no truncation. **Worker-invoked at its Phase 1** (same point-in-time semantics as today's reads — never host-precomputed, so it observes the prior task's plan-sync edits). Worker retains memory keyword-SEARCH and all read-more freedom (bundle is a floor).
-
-- **Superset test:** deterministic — every artifact worker.md Phase 1 currently reads (worker.md:21-68: show/cat task+spec, git status/log, memory.enabled, glossary list, memory list) present verbatim in the bundle on fixture data.
-- **Comprehension-equivalence eval (`optimization/worker-anchor/`):** ≥3 frozen real tasks; K binary questions graded against a committed ANSWER KEY (not bundle-vs-statusquo agreement — both-wrong must fail); ≥1 question answerable ONLY from a non-`satisfies` spec section (guards any future filtering regression); grading model fixed and recorded. Bundle score ≥ status-quo score AND ≥ key threshold on every set.
-
-**5. Wiring.** phases.md 3e: gate branch (mode matrix, probe call, audit counter, per-task `plan-sync:` summary slot in ALL modes — `spawned (reason) | skipped (proof) | shadow: would-… | audit: …`), and **fix the latent CROSS_SPEC bug** (spawn prompt at phases.md:379-388 omits `CROSS_SPEC` though plan-sync.md:19 documents it — pass it from `planSync.crossSpec`). worker.md: PLAN_DEVIATION line with an explicit RUBRIC — emit `yes` when ANY of: API/function/name change beyond the task spec; contract/schema/shape change; file set differs from the task's Files list; scope grew/shrank; an AC was satisfied differently than specified; dependency assumptions changed; glossary/strategy-relevant wording introduced; test plan diverged; ANY uncertainty ⇒ `yes` — plus single anchor call + floor-not-ceiling prose; a prose regression test asserts the rubric + line grammar survive edits and the mirror. Probe/anchor argparse registration follows the prospect subparser shape (flowctl.py:25991-26019).
+- `optimization/plan-sync-gate/` (this-repo corpus + frozen real-agent answer key + `cross-repo/` verdict) and `optimization/worker-anchor/` (the passing comprehension eval). Add a top-of-README "ARCHIVED — probe removed from flowctl in fn-83.4; kept as the evidence behind the decision record" note.
 
 ## Boundaries / non-goals
 
+- NO plan-sync skip-gate in any form (see decision record — do not re-attempt).
 - NO parallel task execution, NO review pipelining, NO review-backend changes.
-- NO changes to plan-sync's own prompt/judgment (fn-85 Tier B owns that; the CROSS_SPEC wiring fix is caller-side).
-- NO summarizing/filtering of anchor content; NO English stoplists (morphological predicate only).
-- The gate never ships without the zero-false-skip proof; if the corpus defeats the probe, the outcome is "gate not shippable, evidence attached" — never a weakened corpus.
-- The system never mutates `planSync.gate` itself (audit miss surfaces + instructs; the flip is the user's).
+- NO change to plan-sync's own prompt/judgment; the CROSS_SPEC fix is caller-side only.
+- No user config added; no version bump (batched).
 - flowctl stays pure-stdlib Python 3.8+.
 
 ## Strategy Alignment
 
-Active tracks served by this plan:
-- **Ralph autonomous mode** — per-task loop cost drops (the 3/3 wasted plan-syncs were autonomous-run overhead); gate rides receipts, never prompts; audit sampling keeps autonomous quality observable.
-- **Self-improving through normal work** — the gate ledger + append-only corpus turn live operation into eval fuel; harnesses extend the optimization/ methodology surface.
-- **Cross-platform parity** — worker/phases edits mirror via sync-codex; flowctl is shared; Windows-safe path handling (PurePosixPath, 3.8-safe) per fn-77 discipline.
+Active tracks served:
+- **Ralph autonomous mode** — worker anchors via one call instead of ~8 (faster per-task start, proven zero information loss); the CROSS_SPEC fix hardens autonomous plan-sync correctness.
+- **Self-improving through normal work** — the gate experiment + cross-repo corpus are archived as a permanent "don't re-attempt" exhibit + decision record; memory-scout surfaces it to future plan-sync work.
 
 ## Decision context
 
-- User rejected shadow-first ("prove there is no quality loss with an eval set") — the harness is the centerpiece and merge gate; default `on` is justified by the in-PR proof, with `shadow` as the documented cautious path.
-- Symbol-token arm added after research: git rename detection is heuristic and symbol renames move no path — path-intersection alone cannot reach recall-1. Morphological predicate (shape-based) chosen over frequency/stoplist filtering to honor repo doctrine; the plain-word gap is consciously routed to flag+audit rather than a stoplist.
-- Answer-key-frozen design (LLM labels generated once, CI deterministic forever) copies the review-prompt harness; wobble⇒positive is principled under rating indeterminacy (arXiv:2503.05965).
-- Full-spec bundle (no filtering) resolves the superset contradiction the gap analysis caught; the bundle's win is round-trips, not content reduction.
-- Audit sampling is deterministic 1-in-5 (counter, not RNG — flowctl determinism doctrine); config never auto-mutated (autonomous safety: a self-flipping config mid-Ralph-run is worse than a loud miss).
-- Union-of-per-commit-diffs over first^..last range: avoids sweeping unrelated interleaved commits into the touched-set.
-- Residual honesty: the zero-false-skip claim is scoped to lattice inputs; deviation-only drift with an untruthful flag is the named residual, bounded by unsure⇒yes instruction + audit loop + append-only corpus. Stated in the PR, not buried.
+- The skip-gate was killed by its own eval, which is the eval discipline working: a plausible optimization (deterministic drift prediction) was proven to cost quality (a real false skip) AND deliver no speedup (6.7% skip-rate), so it does not ship. Root cause: drift is semantic; a deterministic path/symbol probe cannot see it, and a semantic proxy is just a second LLM. Captured durably so it is not re-attempted.
+- The anchor bundle survives because it is a pure round-trip reduction with a byte-level superset guarantee — no judgment, no prediction, provably no information loss.
+- The CROSS_SPEC fix ships regardless — it is an existing-behavior bug fix surfaced during the work, not gate-dependent.
+- The probe is REMOVED from the shipped CLI (not left as an "unwired dev asset") so it neither ships dead weight to users nor invites a re-attempt; the archived corpus under `optimization/` preserves the evidence.
 
 ## Acceptance Criteria
 
-- **R1:** `flowctl plan-sync-probe` implements the fail-open lattice (paths + morphological tokens + deviation + clean-run + parseable-refs + base-commit-present + cross-spec arms); pure stdlib, 3.8-safe, PurePosixPath, `--no-renames --name-status`, RANGE diff base..head, no pipelines; unit tests cover EVERY lattice arm both ways including multi-commit fix-loop tasks and missing-base fail-open.
-- **R2:** `optimization/plan-sync-gate/` committed: ≥10 constructed drift-positive + ≥10 history-replayed drift-negative scenarios (worktree --detach, full SHAs, at-SHA husks, slug-form ids), append-only README rule, adversarial PLAN_DEVIATION=no arm.
-- **R3:** FROZEN answer key generated from the REAL plan-sync agent (DRY_RUN, full input contract, N=3 majority, wobble⇒positive, model id recorded); CI check validates probe vs key with **zero false skips** (hard merge gate) and never re-runs the LLM; `.github/workflows` path filters extended to cover `optimization/plan-sync-gate/**` + `optimization/worker-anchor/**` so corpus/key changes always trigger the check.
-- **R4:** Rule-of-three bound and skip-rate reported (target ≥80% on drift-negatives; <50% triggers a documented ship-with-rationale decision); the deviation-only/plain-word residual stated verbatim in the PR.
-- **R5:** Worker records `base_commit` + the full base..HEAD commit list in `flowctl done` evidence (additive schema field; multi-commit fix-loop tasks fully covered), and emits `PLAN_DEVIATION: yes|no` governed by the explicit yes-trigger RUBRIC (API/name/contract/files/scope/AC-coverage/dependency/glossary/strategy/test-plan deviations; unsure⇒yes; missing/malformed⇒yes); prefix-anchored parse, last-match-wins; DELEGATION-line parsing prose updated to prefix-anchored alongside; prose regression test covers rubric + grammar + mirror.
-- **R6:** `planSync.gate` config (off|shadow|on, default on) with the enabled×gate matrix documented; config tests per the pipeline-qa string-enum pattern; shadow mode byte-equivalent behavior + ledger records; gate ledger `.flow/plansync-gate.jsonl` written in shadow/on modes.
-- **R7:** Ramped audit sampling in `on` mode: deterministic ledger-derived 1-in-2 for the repo's first 20 skips, 1-in-5 thereafter; AUDIT MISS surfaced in summary + ledger with flip-to-shadow instruction; config never auto-mutated; Ralph path receipt-visible, never prompting.
-- **R8:** `flowctl anchor` implemented (full spec body, no filtering; verbatim; worker-invoked); deterministic superset test green against worker.md Phase 1's current read list.
-- **R9:** Comprehension-equivalence eval green: answer-key-graded, ≥3 frozen tasks, non-satisfies-section question included, bundle ≥ status-quo AND ≥ key threshold; committed under `optimization/worker-anchor/`.
-- **R10:** phases.md 3e gate wiring (mode matrix + summary slot in all modes + audit counter) and worker.md changes landed; **CROSS_SPEC now passed to plan-sync spawns** (latent-bug fix); mirror regenerated; smoke (non-repo cwd) + full pytest green.
-- **R11:** Real multi-task work run on this repo with gate `on` shown in the PR (per-task `plan-sync:` slots + ledger excerpt); anchor round-trip count before/after.
-- **R12:** Docs: flowctl.md (both commands per house style + `planSync.gate` config row with adoption note), architecture.md eval-proof paragraph, optimizing-skills.md harness pointers, GLOSSARY Re-anchoring/Worker touch-up, CHANGELOG under `## Unreleased` (create), docs-site same-workstream edits (work.mdx plan-sync section + mermaid node, configuration.mdx `planSync.gate` section sibling to crossSpec, subagents/execution.mdx + overview.mdx gate footnotes; `pnpm build` green; NO FLOW_NEXT_VERSION bump).
-- **R13:** No version bump (batched); optimization-log.md rows for harness outcomes.
+- **R1:** `flowctl anchor <task-id> [--json|--md]` ships (delivered in fn-83.3): verbatim single-call bundle, deterministic order, pure stdlib; superset test + comprehension-equivalence eval green and committed.
+- **R2:** worker.md Phase 1 uses the single `flowctl anchor <TASK_ID> --md` call with explicit floor-not-ceiling prose (memory keyword-search + read-more freedom retained; Investigation-targets/Design-context reads unchanged).
+- **R3:** CROSS_SPEC caller fix: every plan-sync spawn passes `planSync.crossSpec` (single config-leaf read); plan-sync spawn otherwise byte-unchanged (unconditional).
+- **R4:** Gate machinery removed from the shipped plugin: `plan-sync-probe` + probe-specific `_psp_*` (EXCEPT the retained `_psp_run_git`, reused by `flowctl anchor`), `planSync.gate` config, the ledger writer, and the three probe/gate/config tests — all gone (two grep guards clean: user-surface `plan.sync.probe|planSync.gate|plansync-gate` AND symbol-level `cmd_plan_sync_probe|PLANSYNC_GATE_LEDGER|_psp_` with an explicit `_psp_run_git`-only whitelist); `flowctl anchor` + `test_anchor_bundle.py` intact. The `PLAN_DEVIATION` line + parser prose are DELETED (dead gate signal). `BASE_COMMIT` + its evidence recording are RETAINED unchanged (load-bearing for impl-review diff-scoping + delegation + provenance; only the probe's consumption is gone).
+- **R5:** Decision record `plan-sync-skip-gate-not-viable-2026-07-03.md` committed; `optimization/plan-sync-gate/` + `optimization/worker-anchor/` carry the ARCHIVED-evidence note.
+- **R6:** Docs (streamlined): flowctl.md `anchor` command section (house style); GLOSSARY `Re-anchoring`/`Worker subagent` light refresh (single-call bundle); optimizing-skills.md pointer to `optimization/worker-anchor/`; optimization-log.md rows (anchor eval PASS, gate FAIL/shelved); NO `planSync.gate` doc surface anywhere (repo or docs-site). CHANGELOG `## Unreleased` entry (anchor bundle + CROSS_SPEC fix; gate recorded as shelved with the decision-record pointer).
+- **R7:** Docs-site (same workstream, ~/work/flow-next.dev): plan-sync stays documented as unconditional (no gate config, no mermaid gating, no footnotes); the anchor round-trip win is the only documentable change; `pnpm build` green; no FLOW_NEXT_VERSION bump.
+- **R8:** Mirror regenerated + committed (parity green); PR body carries the anchor round-trip before/after table + a one-paragraph honest note that the skip-gate was proven non-viable (pointer to the decision record) — not sold as a shipped feature.
+- **R9:** smoke (non-repo cwd) + full unittest suite green; no version bump (batched).
 
 ## Early proof point
 
-Task fn-83.1 (probe) + fn-83.2 (harness) are the proof spine: if the corpus defeats the lattice (any false skip survives iteration), STOP — the gate is not shippable and the spec pivots to evidence-attached shelving; the anchor-bundle half (fn-83.3) is independent and proceeds regardless.
+The shipping wins are already proven — `flowctl anchor` passed both its superset test and comprehension eval in fn-83.3. The remaining risk is purely surgical: removing the probe without breaking the anchor's shared `_psp_run_git` dependency (fn-83.4's first check).
 
 ## Requirement coverage
 
-| Req | Description | Task(s) | Gap justification |
-|-----|-------------|---------|-------------------|
-| R1  | probe + lattice + unit tests | fn-83.1 | — |
-| —  | task ordering: .3 depends on .1 (same-file flowctl.py); .4 depends on .1+.2+.3 (wiring never lands before the proof) | deps recorded | — |
-| R2  | corpus (pos+neg, adversarial arm) | fn-83.2 | — |
-| R3  | frozen answer key + CI zero-false-skip | fn-83.2 | — |
-| R4  | bounds + skip-rate + residual statement | fn-83.2 (measured), fn-83.5 (PR) | — |
-| R5  | PLAN_DEVIATION line + parsing | fn-83.4 | — |
-| R6  | gate config + ledger + shadow | fn-83.1 (flowctl), fn-83.4 (skill) | — |
-| R7  | audit sampling + AUDIT MISS | fn-83.4 | — |
-| R8  | anchor + superset test | fn-83.3 | — |
-| R9  | comprehension eval | fn-83.3 | — |
-| R10 | wiring + CROSS_SPEC fix + mirror + gates | fn-83.4 | — |
-| R11 | live-run evidence + round-trip counts | fn-83.5 | — |
-| R12 | repo docs + docs-site | fn-83.5 | — |
-| R13 | no bump + optimization-log | fn-83.5 | — |
+| Req | Description | Task(s) | Notes |
+|-----|-------------|---------|-------|
+| R1  | flowctl anchor + proofs | fn-83.3 (done) | shipped |
+| R2  | worker.md single anchor call | fn-83.4 | — |
+| R3  | CROSS_SPEC caller fix | fn-83.4 | — |
+| R4  | remove gate machinery from shipped CLI | fn-83.4 | keep `_psp_run_git` |
+| R5  | decision record + archive note | fn-83.4 | record written during streamline |
+| R6  | repo docs + CHANGELOG | fn-83.5 | — |
+| R7  | docs-site | fn-83.5 | — |
+| R8  | mirror + PR evidence | fn-83.4 (mirror), fn-83.5 (PR) | — |
+| R9  | gates, no bump | fn-83.4, fn-83.5 | — |
+
+*Historical: fn-83.1 (probe), fn-83.2 (this-repo corpus + proof), fn-83.6 (cross-repo verdict) are DONE — they produced the evidence that shelved the gate. Their shipped-CLI code is removed by R4; their optimization/ evidence is kept by R5.*

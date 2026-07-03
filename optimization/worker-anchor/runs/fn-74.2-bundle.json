@@ -1,0 +1,62 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "api_error_status": null,
+  "duration_ms": 7515,
+  "duration_api_ms": 7208,
+  "ttft_ms": 6139,
+  "ttft_stream_ms": 2854,
+  "time_to_request_ms": 156,
+  "num_turns": 1,
+  "result": "q1: R5, R6, R7, R8, R11, R14\nq2: plugins/flow-next/scripts/flowctl.py\nq3: No \u2014 triage judge stays codex|copilot (no behavior change per Boundaries)\nq4: done\nq5: Resumes via --resume only when the prior receipt's mode == \"cursor\"; a cross-backend receipt starts a fresh session (no --resume)\nq6: It must raise (ValueError, effort rejected)\nq7: effort",
+  "stop_reason": "end_turn",
+  "session_id": "9c387ccf-bef0-4c2d-9e44-a50533dc16e1",
+  "total_cost_usd": 0.4912875,
+  "usage": {
+    "input_tokens": 15608,
+    "cache_creation_input_tokens": 71681,
+    "cache_read_input_tokens": 23025,
+    "output_tokens": 498,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 71681,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 15608,
+        "output_tokens": 498,
+        "cache_read_input_tokens": 23025,
+        "cache_creation_input_tokens": 71681,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 71681
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 15608,
+      "outputTokens": 498,
+      "cacheReadInputTokens": 23025,
+      "cacheCreationInputTokens": 71681,
+      "webSearchRequests": 0,
+      "costUSD": 0.4912875,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "uuid": "bf3318b9-04f2-4592-acc1-ab2c80fa35f5"
+}

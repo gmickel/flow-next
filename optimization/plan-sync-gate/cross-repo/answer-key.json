@@ -1,0 +1,257 @@
+{
+  "frozen": true,
+  "generated_at": "2026-07-03",
+  "generator": "headless `claude -p --model opus --tools \"Read,Grep,Glob\" --output-format json`, cwd = materialized external worktree, prompt = agents/plan-sync.md as complete operating instructions + full input contract (DRY_RUN=true, CROSS_SPEC=false, at-SHA husks). FLOWCTL noted unavailable (read-only session; agent reads .flow files directly). See cross-repo/README.md.",
+  "model_alias": "opus",
+  "model_id": "claude-opus-4-8",
+  "agent_prompt_file": "plugins/flow-next/agents/plan-sync.md",
+  "n_runs": 3,
+  "vote_rule": "majority; ANY flip across runs => drift (wobble = ambiguity = drift); unparseable verdict retried once, then counts as yes",
+  "raw_runs_location": "maintainer-local ~/work/flow-next-fn83-external/ (external-repo prose never committed; regenerate via `python3 replay.py keygen scenarios.json`)",
+  "scenarios": {
+    "dociq-01": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false
+    },
+    "dociq-02": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false
+    },
+    "dociq-03": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false
+    },
+    "dociq-04": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false
+    },
+    "dociq-05": {
+      "votes": [
+        "no",
+        "yes",
+        "no"
+      ],
+      "label": "drift",
+      "wobble": true
+    },
+    "dociq-06": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false
+    },
+    "dociq-07": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false
+    },
+    "dociq-08": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false
+    },
+    "dociq-09": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false
+    },
+    "gno-01": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false
+    },
+    "gno-02": {
+      "votes": [
+        "no",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": true
+    },
+    "gno-03": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false
+    },
+    "gno-04": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false
+    },
+    "gno-05": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false
+    },
+    "gno-06": {
+      "votes": [
+        "no",
+        "yes",
+        "no"
+      ],
+      "label": "drift",
+      "wobble": true
+    },
+    "gno-07": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false
+    },
+    "gno-08": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false
+    },
+    "gno-09": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false
+    },
+    "transcribe-01": {
+      "votes": [
+        "yes",
+        "no",
+        "no"
+      ],
+      "label": "drift",
+      "wobble": true
+    },
+    "transcribe-02": {
+      "votes": [
+        "no",
+        "yes",
+        "no"
+      ],
+      "label": "drift",
+      "wobble": true
+    },
+    "transcribe-03": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false
+    },
+    "transcribe-04": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false
+    },
+    "transcribe-05": {
+      "votes": [
+        "no",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": true,
+      "note": "run with unparseable verdict retried once per procedure; retry verdict used"
+    },
+    "transcribe-06": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false
+    },
+    "transcribe-07": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false
+    },
+    "transcribe-08": {
+      "votes": [
+        "no",
+        "no",
+        "no"
+      ],
+      "label": "no_drift",
+      "wobble": false
+    },
+    "transcribe-09": {
+      "votes": [
+        "yes",
+        "yes",
+        "yes"
+      ],
+      "label": "drift",
+      "wobble": false
+    }
+  }
+}

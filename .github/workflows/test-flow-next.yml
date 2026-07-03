@@ -146,6 +146,29 @@ jobs:
         # + evidence.delegation inline + attribution trailers + REVIEW_MODE=none
         # verification-backstop prose contract.
 
+      # ──────────── fn-83 (plan-sync gate: probe + frozen-key corpus) ────────────
+
+      - name: Python unit tests — worker anchor-call prose + gate-removal guards + done-evidence provenance (fn-83.4)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_worker_anchor_prose.py" \
+            -v
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_anchor_bundle.py" \
+            -v
+        # The plan-sync skip-gate was proven non-viable (fn-83.6 cross-repo
+        # verdict FAIL; decision record plan-sync-skip-gate-not-viable-
+        # 2026-07-03.md) and its machinery removed from the shipped CLI.
+        # Locks: worker Phase 1 = single `flowctl anchor` call (floor, not
+        # ceiling) in canonical AND Codex mirror; CROSS_SPEC passed to the
+        # (still unconditional) plan-sync spawn; both gate-removal grep
+        # guards (user-surface + symbol-level, `_psp_run_git`-only
+        # whitelist); PLAN_DEVIATION fully deleted; BASE_COMMIT + done-
+        # evidence provenance (base_commit + full commit list) retained,
+        # fixture-verified round-trip.
+
       # ──────────── fn-50 (clawpatch wrap) ────────────
       # New readers + scout-fallback contract land here so they run on the full
       # ubuntu / macos / windows matrix. Tests use checked-in fixtures (no

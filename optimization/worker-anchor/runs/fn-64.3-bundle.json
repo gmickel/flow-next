@@ -1,0 +1,62 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "api_error_status": null,
+  "duration_ms": 9087,
+  "duration_api_ms": 8788,
+  "ttft_ms": 7624,
+  "ttft_stream_ms": 2044,
+  "time_to_request_ms": 165,
+  "num_turns": 1,
+  "result": "q1: R1, R3\nq2: linear-mcp.md, linear-graphql.md, linear-ladder.md\nq3: No \u2014 only direct depends_on_epics edges are projected (each as an independent direct relation, no traversal)\nq4: done\nq5: issueRelationCreate(input:{issueId, relatedIssueId, type: blocks}) \u2014 type value \"blocks\"\nq6: Preserve them \u2014 never remove a relation it cannot prove it created\nq7: `relations { nodes {...} }` and `inverseRelations { nodes {...} }`, each requiring an explicit `first:` argument",
+  "stop_reason": "end_turn",
+  "session_id": "9ec6b314-54e4-4a32-8849-c899fda9be11",
+  "total_cost_usd": 0.4121715,
+  "usage": {
+    "input_tokens": 15608,
+    "cache_creation_input_tokens": 57880,
+    "cache_read_input_tokens": 23025,
+    "output_tokens": 744,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 57880,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 15608,
+        "output_tokens": 744,
+        "cache_read_input_tokens": 23025,
+        "cache_creation_input_tokens": 57880,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 57880
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 15608,
+      "outputTokens": 744,
+      "cacheReadInputTokens": 23025,
+      "cacheCreationInputTokens": 57880,
+      "webSearchRequests": 0,
+      "costUSD": 0.4121715,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "uuid": "5b562b30-b9d3-4ce9-bbfb-faf1db97c948"
+}

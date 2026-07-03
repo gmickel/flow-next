@@ -1,0 +1,62 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "api_error_status": null,
+  "duration_ms": 9542,
+  "duration_api_ms": 9223,
+  "ttft_ms": 8155,
+  "ttft_stream_ms": 1933,
+  "time_to_request_ms": 160,
+  "num_turns": 1,
+  "result": "q1: R8, R9, R10, R11, R13\nq2: flow-next-impl-review and flow-next-spec-completion-review\nq3: No \u2014 mirror regen belongs to fn-81-skill-runtime-token-plumbing-single.4\nq4: done\nq5: Default 3, overridden by MAX_REVIEW_ITERATIONS\nq6: flow-next-prime (prime skill's scout-model prose)\nq7: Snapshot-scoped staging \u2014 git status --porcelain before/after the fix, stage only paths that changed between snapshots (pre-dirty paths deferred/escalated, never swept in)",
+  "stop_reason": "end_turn",
+  "session_id": "5ac06923-d4b5-4ddd-9481-eb9f96e3d4de",
+  "total_cost_usd": 0.44461950000000006,
+  "usage": {
+    "input_tokens": 15608,
+    "cache_creation_input_tokens": 63048,
+    "cache_read_input_tokens": 23025,
+    "output_tokens": 840,
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 63048,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 15608,
+        "output_tokens": 840,
+        "cache_read_input_tokens": 23025,
+        "cache_creation_input_tokens": 63048,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 63048
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 15608,
+      "outputTokens": 840,
+      "cacheReadInputTokens": 23025,
+      "cacheCreationInputTokens": 63048,
+      "webSearchRequests": 0,
+      "costUSD": 0.44461950000000006,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "uuid": "0f25545e-a076-4350-9bcf-0a87dd72a132"
+}
