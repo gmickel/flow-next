@@ -19275,7 +19275,7 @@ def _anchor_sections(task_id: str, spec_id: str) -> list:
             None,
             None,
             note=(
-                "memory disabled — skipped (the worker Phase 1 skips this "
+                "memory disabled - skipped (the worker Phase 1 skips this "
                 "read too)"
             ),
         )
@@ -19365,11 +19365,11 @@ def cmd_anchor(args: argparse.Namespace) -> None:
     # markdown content — spec/task bodies never start lines with `===== [`.
     total = len(sections) + 1
     lines: list = [
-        f"# Worker anchor bundle — {task_id} (spec {spec_id})",
+        f"# Worker anchor bundle - {task_id} (spec {spec_id})",
         "",
         "Verbatim outputs of the worker Phase-1 re-anchor reads, fixed "
         "order, no filtering or truncation. The bundle is a floor, not a "
-        "ceiling — memory keyword-search and every further read remain "
+        "ceiling - memory keyword-search and every further read remain "
         "available.",
         "",
     ]
@@ -19379,7 +19379,7 @@ def cmd_anchor(args: argparse.Namespace) -> None:
             lines.append(f"({s['note']})")
         elif s.get("error"):
             lines.append(
-                f"(section unavailable: {s['error']} — run "
+                f"(section unavailable: {s['error']} - run "
                 f"`{s['command']}` directly)"
             )
             if s.get("output"):
@@ -19394,7 +19394,7 @@ def cmd_anchor(args: argparse.Namespace) -> None:
     if not dependencies:
         lines.append("(no dependencies)")
     for d in dependencies:
-        lines.append(f"- {d['id']} [{d.get('status') or '?'}] — {d.get('title', '')}")
+        lines.append(f"- {d['id']} [{d.get('status') or '?'}] - {d.get('title', '')}")
         if d.get("error"):
             lines.append(f"    (error: {d['error']})")
             continue

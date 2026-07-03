@@ -415,7 +415,7 @@ class MarkdownRenderTest(AnchorRepoTestCase):
 
     def test_md_dependency_block(self) -> None:
         md = self._flowctl("anchor", "fn-9.2", "--md").stdout
-        self.assertIn("- fn-9.1 [done] — Seed gadget loader", md)
+        self.assertIn("- fn-9.1 [done] - Seed gadget loader", md)
         self.assertIn("Shipped the seed gadget loader.", md)
 
     def test_default_render_is_md(self) -> None:
@@ -465,7 +465,7 @@ class MemoryDisabledTest(AnchorRepoTestCase):
     def test_md_render_notes_the_skip(self) -> None:
         md = self._flowctl("anchor", "fn-9.2", "--md").stdout
         self.assertIn("===== [10/11] memory_index:", md)
-        self.assertIn("memory disabled — skipped", md)
+        self.assertIn("memory disabled - skipped", md)
 
 
 # ── Resolution + fail-open ────────────────────────────────────────────────
