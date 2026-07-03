@@ -439,6 +439,21 @@ Output:
 }
 ```
 
+Spec-level deps gate the whole spec (same rule as `next`): when the spec's `depends_on_epics` include a spec that is missing or not `done`, `ready` returns empty `ready`/`in_progress`/`blocked` lists plus `blocked_by_specs` (legacy alias `epic_blocked_by` co-emitted through 1.x):
+
+```json
+{
+  "success": true,
+  "spec": "fn-2",
+  "actor": "user@example.com",
+  "ready": [],
+  "in_progress": [],
+  "blocked": [],
+  "blocked_by_specs": ["fn-1"],
+  "epic_blocked_by": ["fn-1"]
+}
+```
+
 **`ready --all`** (fn-68, backlog mode) — a **spec-level** backlog-wide eligibility scan (ignores `--spec`), the deterministic substrate `/flow-next:pilot` backlog mode (`pilot.autonomy=backlog`) consumes:
 
 ```bash
