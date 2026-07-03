@@ -1,6 +1,8 @@
 ---
-satisfies: [R6, R7, R9]
+satisfies: [R6, R7, R8, R9]
 ---
+
+<!-- Updated by plan-sync: added R8 to satisfies — fn-83.5 carries R8's PR-body half (anchor round-trip table + honest shelved-gate note) + the mirror idempotency re-run; fn-83.4 landed R8's mirror half. Matches the spec Requirement coverage table (R8 → fn-83.4 mirror, fn-83.5 PR). -->
 
 ## Description
 

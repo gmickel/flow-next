@@ -22,7 +22,7 @@ A named, reviewable artefact that carries context across a step in the agentic S
 
 ## Re-anchoring
 
-Re-reading the spec, the task, and `git log` since branch base before each task starts. Counters context drift in long-running agent sessions per Anthropic guidance. Worker subagents re-anchor on every iteration; `/flow-next:work` re-anchors every loop turn.
+Re-reading the spec, the task, and `git log` since branch base before each task starts. Counters context drift in long-running agent sessions per Anthropic guidance. Worker subagents re-anchor on every iteration via a single `flowctl anchor <task-id>` call — one deterministic bundle carrying, verbatim, the same information the discrete reads delivered (task + spec records and bodies, git state, memory/glossary indices, dependency done-summaries); the bundle is a floor, not a ceiling. `/flow-next:work` re-anchors every loop turn.
 
 ## Cross-model review
 
@@ -42,7 +42,7 @@ A JSON artefact that gates Ralph state transitions. `flowctl impl-review` writes
 
 ## Worker subagent
 
-A subagent dispatched by `/flow-next:work` to implement a single task with fresh context. Re-anchors the spec + task + git state, implements the task, records evidence (commits + tests + done summary), and exits. The fresh context per task is what enables N tasks to run in parallel without context-bleed.
+A subagent dispatched by `/flow-next:work` to implement a single task with fresh context. Re-anchors on the spec + task + git state (one `flowctl anchor` bundle — same information as the old discrete reads, one call), implements the task, records evidence (commits + tests + done summary), and exits. The fresh context per task is what enables N tasks to run in parallel without context-bleed.
 
 ## Carmack-level review
 

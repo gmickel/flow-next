@@ -2,6 +2,16 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Added
+
+- **`flowctl anchor <task-id> [--json|--md]` — single-call worker anchor bundle** (fn-83) — the `/flow-next:work` worker's Phase-1 re-anchor (~8 discrete CLI/git reads: task + spec `show`/`cat`, `git status`/`log -5`/branch, `memory.enabled`, glossary + memory indices, dependency done-summaries) is now ONE deterministic, pure read; `worker.md` Phase 1 is wired to the single call (the bundle is a floor, not a ceiling — memory keyword-search and all further reads stay available, Investigation-targets/Design-context reads unchanged). Sections are the **verbatim captured stdout of the same production `cmd_*` functions** the discrete commands dispatch to, proven zero-loss twice: a byte-for-byte superset test (`test_anchor_bundle.py`, CI-locked) and a comprehension-equivalence eval (bundle 7/7 ≥ status-quo 7/7 on 3 frozen real tasks; harness at `optimization/worker-anchor/`). Fail-open — a broken section is reported inline and the worker runs that one read directly. fn-83's other half, a deterministic plan-sync skip-gate, was proven non-viable by its own cross-repo eval (a genuine false skip — semantic drift no path/token probe can see — plus a 6.7% true-negative skip-rate against a ≥50% bar) and is shelved, not shipped: plan-sync continues to spawn unconditionally, and the gate machinery was removed from the shipped CLI (decision record: `.flow/memory/knowledge/decisions/plan-sync-skip-gate-not-viable-2026-07-03.md`).
+
+### Fixed
+
+- **Plan-sync spawns now pass the `CROSS_SPEC` flag their own contract documents** (fn-83) — the `/flow-next:work` post-task plan-sync spawn prompt (phases.md 3e) never passed `CROSS_SPEC` despite the agent contract (`plan-sync.md`) documenting it, silently disabling cross-spec drift checking regardless of the `planSync.crossSpec` config. The spawn now reads that single config leaf and passes the flag; plan-sync's own prompt/judgment is untouched and the spawn stays unconditional. Codex mirror regenerated via `scripts/sync-codex.sh`.
+
 ## [flow-next 2.6.1] - 2026-07-02
 
 ### Fixed
