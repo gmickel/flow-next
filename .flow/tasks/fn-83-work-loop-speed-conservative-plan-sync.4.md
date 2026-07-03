@@ -40,9 +40,8 @@ The decision record is already committed (written during the streamline). This t
 - [ ] mirror regenerated + committed, parity green; smoke + full unittest green; no version bump
 
 ## Done summary
-TBD
-
+Wired the surviving fn-83 wins and removed the shelved skip-gate: worker.md Phase 1 now runs the single `flowctl anchor <TASK_ID> --md` call (floor-not-ceiling; BASE_COMMIT captured at Phase-1 end; done evidence records base_commit + the full base..HEAD commit list), phases.md 3e passes CROSS_SPEC to the still-unconditional plan-sync spawn (latent caller-bug fix), and the plan-sync-probe + gate ledger + planSync.gate config + 3 gate tests were surgically removed from the shipped CLI (`_psp_run_git` retained for anchor; dogfood copy re-synced byte-identical; both R4 grep guards now locked by test_worker_anchor_prose.py alongside a done-evidence provenance fixture). Optimization READMEs carry the ARCHIVED/live-evidence notes; Codex mirror regenerated and committed; rp impl-review SHIP (first pass, zero findings).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 54c597af3ad88bdd928dac54193c6e0ec033d1d9
+- Tests: uv run --with pytest python -m pytest plugins/flow-next/tests/ -q (1433 passed, 2 skipped, 188 subtests), (cd $(mktemp -d) && bash plugins/flow-next/scripts/smoke_test.sh) (138 passed, 0 failed), python3 -m unittest discover -s plugins/flow-next/tests -p test_worker_anchor_prose.py (9 passed), python3 -m unittest discover -s plugins/flow-next/tests -p test_anchor_bundle.py (21 passed), bash scripts/sync-codex.sh (parity guards green)
 - PRs:
