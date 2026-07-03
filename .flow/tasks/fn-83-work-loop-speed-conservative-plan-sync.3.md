@@ -36,9 +36,8 @@ Bundle is a FLOOR: worker keeps memory keyword-search and read-more freedom (wor
 - [ ] Full pytest + smoke green
 
 ## Done summary
-TBD
-
+Implemented `flowctl anchor <task-id> [--json|--md]` — the single-call worker anchor bundle delivering the verbatim outputs of every worker Phase-1 re-anchor read (show/cat task+spec, git status/log/branch, memory.enabled, glossary, memory index) plus dependency ids/titles/statuses/done-summaries, verbatim-by-construction via captured production cmd_* stdout. Shipped both proofs: the deterministic superset test (tests/test_anchor_bundle.py, byte-for-byte vs the production CLI wire form) and the comprehension-equivalence eval (optimization/worker-anchor/: 3 frozen real tasks S/M/L, 7 key-graded binary questions each incl. a non-satisfies-section question, recorded model claude-sonnet-5 — MERGE GATE PASS, bundle 7/7 ≥ statusquo 7/7 on every set). RP impl-review: SHIP (first pass, 0 findings).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 792dda15fca9969ccb04ed3580f48b5f519c05d4
+- Tests: uv run --with pytest python -m pytest plugins/flow-next/tests/ -q (1512 passed, 2 skipped, 256 subtests), uv run --with pytest python -m pytest plugins/flow-next/tests/test_anchor_bundle.py -q (21 passed, 20 subtests), (cd $(mktemp -d) && bash plugins/flow-next/scripts/smoke_test.sh) (138 passed, 0 failed), python3 optimization/worker-anchor/run_eval.py (MERGE GATE PASS: bundle 7/7 >= statusquo 7/7 on all 3 sets, model claude-sonnet-5)
 - PRs:
