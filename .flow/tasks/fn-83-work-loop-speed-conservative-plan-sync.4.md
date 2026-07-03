@@ -4,6 +4,16 @@ satisfies: [R5, R7, R10]
 
 ## Description
 
+> **fn-83.6 SHIP-GATE VERDICT (2026-07-03): FAIL — ship WITHOUT gate wiring.**
+> Both R14 clauses failed on the cross-repo proof (1 false skip, production-history-confirmed:
+> transcribe fn-25.3/commit 8f3565b2; aggregate true-negative skip-rate 1/15 = 6.7% vs ≥50%
+> required). Per this task's own FAIL branch below: ship ONLY the worker changes
+> (base_commit evidence, PLAN_DEVIATION rubric + line, anchor call, CROSS_SPEC fix,
+> prefix-anchored parsing prose) and leave 3e as UNCONDITIONAL spawn — no gate branch, no
+> mode matrix, no audit sampling, no probe invocation from phases.md. Also still remove the
+> `planSync.gate` config enum + its tests (R6: no user config either way). Probe/ledger stay
+> in flowctl as dev assets (not wired). Evidence: `optimization/plan-sync-gate/cross-repo/README.md`.
+
 Wire it all into the skills/agents: phases.md 3e gate branch (mode matrix + audit sampling + summary slot), worker.md (PLAN_DEVIATION line + single anchor call), CROSS_SPEC latent-bug fix, prefix-anchored terminal-line parsing prose, mirror validation. Depends on fn-83.1 (probe) + fn-83.2 (safety proof) + fn-83.6 (CROSS-REPO ship gate — wiring never lands unless R14 passed) + fn-83.3 (anchor). NO CONFIG (user decision 2026-07-03): remove the `planSync.gate` enum from get_default_config + delete test_plansync_gate_config.py; the gate is unconditional when `planSync.enabled` is true. If fn-83.6 FAILED the ship gate, this task ships ONLY the worker changes (base_commit evidence, PLAN_DEVIATION, anchor call, CROSS_SPEC fix) and leaves 3e as unconditional spawn.
 
 **Size:** M

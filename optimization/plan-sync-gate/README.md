@@ -191,6 +191,16 @@ any-flip ⇒ drift rule:
   planned move needs no downstream correction; the flip classifies it
   drift. The probe spawns (path arm) either way.
 
+> **Cross-repo ship gate (fn-83.6): FAIL — the gate does not ship.** The
+> fn-83 R14 ship gate extended this methodology to three external
+> flow-managed repos (DocIQ-Sphere / gno / transcribe, 27 replayed
+> scenarios, frozen real-agent keys). Result: 1 false skip
+> (production-history-confirmed) and 1/15 = 6.7% aggregate true-negative
+> skip-rate — both clauses failed. fn-83.4 ships without gate wiring
+> (unconditional plan-sync spawn retained); the probe/ledger/harnesses stay
+> as dev assets. Full methodology, per-scenario table, spawn-reason
+> histogram, and verdict: [`cross-repo/README.md`](cross-repo/README.md).
+
 Headline numbers (recomputed by CI on every run):
 
 - **False skips: 0 / 14 key-drift scenarios** (hard gate, green) — incl.

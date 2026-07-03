@@ -1,0 +1,38 @@
+row_type	subject	outcome	detail
+result	dociq-01	spawn	key=drift votes=yes,yes,yes arm=unparseable-refs task=fn-11-dgd.2
+result	dociq-02	spawn	key=no_drift votes=no,no,no arm=path-overlap task=fn-27-phase-b-strict-denorm-reads.1
+result	dociq-03	spawn	key=drift votes=yes,yes,yes arm=unparseable-refs task=fn-32-world-class-agent-evals.1
+result	dociq-04	spawn	key=no_drift votes=no,no,no arm=path-overlap task=fn-52-review-workbook-template-library.2
+result	dociq-05	spawn	key=drift votes=no,yes,no WOBBLE arm=path-overlap task=fn-53-docx-human-markup-reader.4
+result	dociq-06	spawn	key=drift votes=yes,yes,yes arm=path-overlap task=fn-54-litigation-workflow-playbook-pack.1
+result	dociq-07	spawn	key=no_drift votes=no,no,no arm=path-overlap task=fn-55-uk-authority-research-tools.2
+result	dociq-08	spawn	key=no_drift votes=no,no,no arm=path-overlap task=fn-56-companies-house-intelligence-connector.1
+result	dociq-09	spawn	key=no_drift votes=no,no,no arm=path-overlap task=fn-57-openai-compatible-model-provider.2
+result	gno-01	spawn	key=no_drift votes=no,no,no arm=path-overlap task=fn-79-graph-aware-retrieval-and-agent.1
+result	gno-02	spawn	key=drift votes=no,yes,yes WOBBLE arm=path-overlap task=fn-79-graph-aware-retrieval-and-agent.3
+result	gno-03	skip	key=no_drift votes=no,no,no arm=skip task=fn-79-graph-aware-retrieval-and-agent.5
+result	gno-04	spawn	key=no_drift votes=no,no,no arm=path-overlap task=fn-81-embedding-and-package-hardening.2
+result	gno-05	spawn	key=no_drift votes=no,no,no arm=path-overlap task=fn-81-embedding-and-package-hardening.4
+result	gno-06	spawn	key=drift votes=no,yes,no WOBBLE arm=path-overlap task=fn-83-second-brain-page-types-and-synthesis.2
+result	gno-07	spawn	key=no_drift votes=no,no,no arm=path-overlap task=fn-83-second-brain-page-types-and-synthesis.3
+result	gno-08	spawn	key=no_drift votes=no,no,no arm=path-overlap task=fn-85-agent-recipes-and-ingestion-workflow.2
+result	gno-09	spawn	key=drift votes=yes,yes,yes arm=path-overlap task=fn-72-backgrounding-flags-for-serve-and-daemon.2
+result	transcribe-01	spawn	key=drift votes=yes,no,no WOBBLE arm=token-overlap task=fn-25.1
+result	transcribe-02	skip	key=drift votes=no,yes,no WOBBLE arm=skip task=fn-25.3 FALSE-SKIP
+result	transcribe-03	spawn	key=no_drift votes=no,no,no arm=path-overlap task=fn-61-hosted-cloud-meeting-notes-and-polish.2
+result	transcribe-04	spawn	key=no_drift votes=no,no,no arm=path-overlap task=fn-61-hosted-cloud-meeting-notes-and-polish.5
+result	transcribe-05	spawn	key=drift votes=no,yes,yes WOBBLE arm=path-overlap task=fn-70-hide-first-dictation-stt-cold-start.3
+result	transcribe-06	spawn	key=drift votes=yes,yes,yes arm=path-overlap task=fn-71-deterministic-dictionary-correction-for.2
+result	transcribe-07	spawn	key=no_drift votes=no,no,no arm=token-overlap task=fn-71-deterministic-dictionary-correction-for.4
+result	transcribe-08	spawn	key=no_drift votes=no,no,no arm=path-overlap task=fn-72-advanced-local-mlx-meeting-note-models.2
+result	transcribe-09	spawn	key=drift votes=yes,yes,yes arm=path-overlap task=fn-74-fluidaudio-upgrade-and-local-speech-wins.2
+metric	false_skips	1/12	HARD ship-gate clause — must be 0 across ALL repos; violated by transcribe-02
+metric	skip_rate_on_true_negatives	1/15 (6.7%)	ship-gate clause: aggregate >=50% required; per-repo: DocIQ 0/5, gno 1/6, transcribe 0/4
+metric	spawn_reason_histogram	path-overlap=21; skip=2; token-overlap=2; unparseable-refs=2	per-repo: DocIQ path=7 unparseable-refs=2; gno path=8 skip=1; transcribe path=6 token=2 skip=1
+metric	dir_prefix_counterfactual	0 flips	dropping the ENTIRE dir-prefix match arm flips zero scenarios to skip — every dir-prefix-only overlap scenario also carries morphological token overlaps (real shared symbols). Yield loss is structural, not one-arm tunable.
+verdict	ship_gate	FAIL	BOTH clauses fail: 1 false skip (transcribe-02, fn-25.3 — production plan-sync commit 8f3565b2 materially updated the downstream body at exactly the replayed state: scope bullet, 2 key refs, 1 acceptance line added to fn-25.4.md) AND aggregate true-negative skip-rate 1/15 = 6.7%% << 50%%. Consequence: fn-83.4 ships WITHOUT gate wiring (unconditional plan-sync spawn retained); probe/ledger/harness remain dev assets.
+note	transcribe-02	false-skip anatomy	probe skipped on pre-sync body (no path/token overlap vs touched set; --deviation no per replay convention). Key votes no,yes,no => wobble => drift. The yes vote found task-internal deviation (listed integration point implemented differently) with zero downstream edits proposed; production history nonetheless shows a real downstream update. A truthful PLAN_DEVIATION per the fn-83.4 rubric would likely have been yes (=> spawn), but the gate cannot rest on that flag being reliably truthful — this is exactly the stated deviation-only residual, observed live in external history on the FIRST skip opportunity.
+note	dociq-02	key-vs-history divergence	production plan-sync also edited fn-27-...-reads.2.md post-completion (concrete command + log-grammar tightening), yet the frozen key labels the scenario no_drift (3x no). Probe spawned regardless (path overlap docs/convex-ops.md) — no gate impact; recorded for oracle honesty.
+note	sampling_gno	shortfall context	gno pool thin: 145/183 done tasks carry no usable commit evidence (early-era evidence shapes without hashes); fn-30-retrieval-v2 spec authored on an unmerged private branch (bodies unrecoverable on main) — logged+skipped; branch-side (pre-squash) states used for fn-79/81/83/85 with checkout=head; sibling done-ness via state updated_at timestamps (documented per scenario).
+note	transcribe_fn-71.1	rejected scenario	downstream bodies first committed INSIDE the sweep commit (pre-sync state unrecoverable) — rejected per selection rule, replaced by fn-71.2 (logged, not silent).
+note	transcribe-05	retry rule applied	run-1 hit end_turn without a parseable P6 verdict; retried once per procedure (retry verdict no); votes no,yes,yes => drift. Probe spawned — consistent.
