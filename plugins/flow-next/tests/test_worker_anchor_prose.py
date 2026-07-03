@@ -124,7 +124,11 @@ class PhasesCrossSpecProse(unittest.TestCase):
         text = _read(path)
         # Single config-leaf read + spawn-prompt input.
         self.assertIn("planSync.crossSpec", text, path)
-        self.assertIn("CROSS_SPEC: true|false", text, path)
+        self.assertIn("CROSS_SPEC=$(", text, path)  # reads the actual config value
+        # The spawn template references the READ value, not the ambiguous
+        # literal "true|false" (plan-sync Phase 4b only skips on exact false).
+        self.assertIn("$CROSS_SPEC value read above", text, path)
+        self.assertNotIn("CROSS_SPEC: true|false", text, path)
         # The spawn is gated ONLY on planSync.enabled — today's behavior.
         self.assertIn("planSync.enabled", text, path)
 

@@ -389,7 +389,7 @@ COMPLETED_TASK_ID: fn-X.Y
 SPEC_ID: fn-X
 FLOWCTL: /path/to/flowctl
 DOWNSTREAM_TASK_IDS: fn-X.3,fn-X.4,fn-X.5
-CROSS_SPEC: true|false
+CROSS_SPEC: <the $CROSS_SPEC value read above — literal "true" or "false", NOT the string "true|false">
 
 Follow your phases in plan-sync.md exactly.
 ```
