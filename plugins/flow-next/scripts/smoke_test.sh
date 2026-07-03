@@ -1846,6 +1846,41 @@ PY
 echo -e "${GREEN}✓${NC} depends_on_specs blocks (R31 dual-emit)"
 PASS=$((PASS + 1))
 
+# GH PR #95 regression: per-spec `ready` must honor the same spec-level dep
+# gate as `next` — a blocked spec reports empty lists + blocked_by_specs,
+# never its tasks as ready.
+scripts/flowctl task create --spec "$DEP_CHILD_ID" --title "Child task" --json >/dev/null
+ready_blocked_json="$(scripts/flowctl ready --spec "$DEP_CHILD_ID" --json)"
+"${FLOW_PY[@]}" - "$DEP_BASE_ID" "$ready_blocked_json" <<'PY'
+import json, sys
+base_id = sys.argv[1]
+data = json.loads(sys.argv[2])
+assert data["ready"] == [], f"blocked spec leaked ready tasks: {data['ready']}"
+assert data["blocked_by_specs"] == [base_id], data.get("blocked_by_specs")
+assert data["epic_blocked_by"] == [base_id], data.get("epic_blocked_by")
+PY
+# Unblock: base spec done → child task becomes ready again.
+DEP_BASE_JSON_PATH="$(spec_json_path "$DEP_BASE_ID")"
+"${FLOW_PY[@]}" - "$DEP_BASE_JSON_PATH" <<'PY'
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+data = json.loads(path.read_text())
+data["status"] = "done"
+path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+PY
+ready_open_json="$(scripts/flowctl ready --spec "$DEP_CHILD_ID" --json)"
+"${FLOW_PY[@]}" - "$DEP_CHILD_ID" "$ready_open_json" <<'PY'
+import json, sys
+child_id = sys.argv[1]
+data = json.loads(sys.argv[2])
+ids = [t["id"] for t in data["ready"]]
+assert f"{child_id}.1" in ids, f"unblocked spec's task not ready: {ids}"
+assert "blocked_by_specs" not in data, "gate keys must not appear when unblocked"
+PY
+echo -e "${GREEN}✓${NC} ready honors spec-level deps (GH PR #95)"
+PASS=$((PASS + 1))
+
 echo -e "${YELLOW}--- stdin support ---${NC}"
 cd "$TEST_DIR/repo"
 STDIN_EPIC_JSON="$(scripts/flowctl spec create --title "Stdin test" --json)"

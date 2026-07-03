@@ -12,6 +12,12 @@ All notable changes to the flow-next.
 
 - **Plan-sync spawns now pass the `CROSS_SPEC` flag their own contract documents** (fn-83) — the `/flow-next:work` post-task plan-sync spawn prompt (phases.md 3e) never passed `CROSS_SPEC` despite the agent contract (`plan-sync.md`) documenting it, silently disabling cross-spec drift checking regardless of the `planSync.crossSpec` config. The spawn now reads that single config leaf and passes the flag; plan-sync's own prompt/judgment is untouched and the spawn stays unconditional. Codex mirror regenerated via `scripts/sync-codex.sh`.
 
+## [flow-next 2.6.2] - 2026-07-03
+
+### Fixed
+
+- **`flowctl ready --spec` now honors spec-level dependencies** (GH PR #95) — `ready` only checked task-level `depends_on`, ignoring the spec's own `depends_on_epics`, so a spec blocked by an unfinished prerequisite spec still reported its tasks as ready. `next` and `ready --all` already gated on spec deps; `ready` now applies the same rule (dep spec missing or not `done` ⇒ blocked) and returns empty `ready`/`in_progress`/`blocked` lists plus `blocked_by_specs` (legacy alias `epic_blocked_by` co-emitted through 1.x, per the R31 dual-emit convention). Latent in the default workflow (Ralph uses `next`; `/flow-next:work` calls `ready` only on pre-validated specs) but hit immediately by external consumers calling `ready` per-spec. Regression-tested in `smoke_test.sh`. Thanks to Mike Bannister (@possibilities) for the report and original patch (#95).
+
 ## [flow-next 2.6.1] - 2026-07-02
 
 ### Fixed
