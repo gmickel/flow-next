@@ -23008,6 +23008,21 @@ For EACH requirement from Phase 1:
 1. Find evidence in the diff/code that it's implemented
 2. Mark as: COVERED (with file:line evidence) or GAP (missing)
 
+### Phase 3: Reverse Coverage (Code -> Spec)
+
+For EACH new or modified file in the changed-files list:
+- Identify which spec requirement it serves.
+- Flag any file that does NOT trace to a spec requirement.
+
+If the spec has a `## Requirement coverage` traceability table, use it as the primary file->requirement reference.
+
+Classify each untraced change:
+- `UNDOCUMENTED_ADDITION` - new functionality not in the spec (scope creep)
+- `LEGITIMATE_SUPPORT` - refactoring/infrastructure needed to implement a requirement (OK)
+- `UNRELATED_CHANGE` - changes outside spec scope (may be accidental)
+
+Report untraced changes but do NOT auto-reject. `UNDOCUMENTED_ADDITION` is a flag for acknowledgment, not automatic NEEDS_WORK.
+
 ## What This Catches
 
 - Requirements that never became tasks (decomposition gaps)
@@ -23038,6 +23053,10 @@ For EACH requirement from Phase 1:
 1. [Requirement] - COVERED - evidence: file:line
 2. [Requirement] - GAP - not found in implementation
 ...
+
+## Reverse Coverage (untraced changes)
+
+[For each changed file that does NOT trace to a requirement: `file - <UNDOCUMENTED_ADDITION|LEGITIMATE_SUPPORT|UNRELATED_CHANGE> - <one-line reason>`. Write `None - every changed file traces to a requirement.` when all are traced. This is a flag for acknowledgment; UNDOCUMENTED_ADDITION alone does not force NEEDS_WORK.]
 
 ## Gaps Found
 
