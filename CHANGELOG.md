@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 2.7.1] - 2026-07-05
+
+### Fixed
+
+- **Codex hooks config parsed cleanly again — Ralph guards were silently disabled** (GH #198) — the generated Codex mirror `codex/hooks.json` (installed to `~/.codex/hooks.json` by `install-codex.sh`) carried a top-level `"description"` key. Codex's hooks parser (feature `stable` since Codex 0.142.x) accepts only `"hooks"` at the top level and hard-errors on any sibling key (`unknown field 'description', expected 'hooks'`), printing a warning on every invocation and ignoring the Ralph guard hooks entirely. `sync-codex.sh` no longer emits the key into the mirror (reproduced + verified clean against Codex CLI 0.142.5). The canonical `plugins/flow-next/hooks/hooks.json` keeps its `description` — that key is officially documented for Claude Code plugin hooks files; this is exactly the canonical-vs-mirror rewrite `sync-codex.sh` exists for. **Codex users: re-run `scripts/install-codex.sh` to replace the broken `~/.codex/hooks.json`.** Thanks to @TechupBusiness for the report and root-cause analysis (#198).
+
 ## [flow-next 2.7.0] - 2026-07-04
 
 Fleet-wide capability & efficiency release: two adversarial-review passes (fn-87, fn-88) over the skill/agent fleet plus the fn-84 prose work — one new feature, broad correctness/safety fixes, progressive-disclosure efficiency, and seven A/B-verified model downgrades. No breaking changes.
