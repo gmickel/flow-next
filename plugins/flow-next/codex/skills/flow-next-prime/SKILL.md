@@ -136,8 +136,8 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 - **MUST ask via the plain-text numbered prompt described below** for consent.
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-- Always ask before modifying existing files
-- Don't add dependencies without consent
+- Always ask before modifying existing files — **except** under `--fix-all`, which waives the prompt for **append/merge** edits (adding a `.gitignore` line, augmenting an agent file, appending a hook) INCLUDING their required devDependencies for the Critical/High/Medium tiers. `--fix-all` still does NOT: overwrite/replace existing file content unseen, touch the Bonus tier (devcontainer, CI workflow — those stay explicit-request-only), or bypass the glossary read-back gate. A destructive overwrite always needs consent even under `--fix-all`.
+- Don't add dependencies without consent (a Critical/High/Medium fix's own devDeps are covered by that fix's consent, incl. `--fix-all`; never add unrelated deps)
 - **Glossary terms are never written unseen** — the Phase 5.5 bootstrap shows the full proposal (term + definition + file-ref evidence) at read-back before any `flowctl glossary add`; `--fix-all` does not bypass this gate, and a populated glossary (`total_terms > 0`) is never rewritten
 
 ### Scope Control

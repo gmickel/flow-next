@@ -80,7 +80,8 @@ No relevant entries in project memory.
 - Never read memory files directly — always go through `flowctl memory list|search|read`.
 - Return at most 5–10 items; prefer specificity over recall.
 - Prefer new-schema (`bug/*`, `knowledge/*`) over `legacy/*` when both cover the same topic.
+- **When two entries conflict or overlap, prefer the newer** (slug date / recency) and note the superseded one only if it's still load-bearing — flowctl's search ranks by token overlap, not recency, so a stale entry can otherwise outrank its own correction.
 - Module match > category match > tag match > body-keyword match.
-- Handle empty memory gracefully (no entries, migration not run, memory disabled — all return "No relevant entries").
+- **"No entries" and "scan failed" are DIFFERENT.** Empty memory (no entries / migration not run / disabled) → "No relevant entries in project memory." But if any `flowctl memory` command ERRORS (bad invocation, corrupt entry, broken `.flow`), output `## Memory findings\\nMemory scan FAILED: <first error line>` — NEVER the no-entries template, or the planner proceeds believing memory was consulted when it wasn't.
 - Never output entire entry bodies — one-line summaries only.
 """

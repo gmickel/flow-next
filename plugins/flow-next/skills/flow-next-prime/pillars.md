@@ -79,7 +79,7 @@ Clear docs that tell agents how the project works.
 | ID | Criterion | Pass Condition |
 |----|-----------|----------------|
 | DC1 | README exists | README.md with meaningful content (not just template) |
-| DC2 | CLAUDE.md/AGENTS.md exists | Agent instruction file present |
+| DC2 | CLAUDE.md/AGENTS.md quality | Agent instruction file present AND clears claude-md-scout's coverage bar (score ≥ ~5/8: has real commands + structure, not a stub). A thin stub = ⚠️ → offer *augment*, not a no-op create. |
 | DC3 | Setup documented | Installation/setup instructions in README or docs |
 | DC4 | Build commands documented | How to build/run in README or CLAUDE.md |
 | DC5 | Test commands documented | How to run tests documented |
