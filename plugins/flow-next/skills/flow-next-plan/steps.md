@@ -240,6 +240,8 @@ Default to standard unless complexity demands more or less.
 
 ## Step 5: Write to .flow
 
+**Calibration (read first):** before writing task specs, read [`examples.md`](examples.md) — good/bad task-spec shapes, investigation-target formats, T-shirt sizing, and coverage-table examples. It is the few-shot anchor that keeps task specs well-sized and well-shaped; skipping it is why plans drift toward vague or over-split tasks.
+
 **Efficiency note**: Use stdin (`--file -`) with heredocs to avoid temp files. Use `task set-spec` to set description + acceptance in one call.
 
 **Route A - Input was an existing Flow ID**:
@@ -372,6 +374,10 @@ Default to standard unless complexity demands more or less.
    - New criteria take the next unused number. Gaps are fine — do not compact.
    - R-IDs in `## Acceptance Criteria` and `## Requirement coverage` must match (same IDs, same meanings).
    - R-IDs are plain markdown prose, not YAML — the reviewer matches them via LLM reasoning, not strict parsing.
+
+   **Source-tag consumption (Route A refine of a capture-authored spec):** `/flow-next:capture` tags each acceptance criterion with its provenance — `[user]` (verbatim), `[paraphrase]` (user-grounded), `[inferred]` (the agent filled a gap), `[strategy:<track>]`. capture invests real machinery in these *so plan can scrutinize them* — do not plan an `[inferred]` criterion as established fact. When the spec carries source tags:
+   - `[user]` / `[paraphrase]` / `[strategy:*]` → user- or strategy-grounded; plan normally.
+   - `[inferred]` → **unconfirmed**. Route it through the Step-1 scouts (does the codebase actually support/need it?). A scout-confirmed inference becomes a normal criterion (drop the tag); an **unconfirmed** one moves to `## Open Questions` (or renders as a `⚠️ unconfirmed inference` coverage-table row) rather than being silently planned as a requirement. This closes capture→plan: the provenance capture records is otherwise dropped at the one consumer built to read it.
 
 4. Set spec dependencies (from spec-scout findings):
 
