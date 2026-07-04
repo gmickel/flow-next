@@ -36,14 +36,18 @@ When unsure whether a desktop app exposes CDP, probe for B first (try to launch/
 ```
 observe / list what's open
 navigate to the target (URL, or focus the app window)
-snapshot → fresh element refs (REQUIRED before each act)
+snapshot → fresh element refs (after a DOM change; for ONE known target prefer semantic find)
 act → click / fill / type / press / scroll toward the next step
-verify → confirm the expected text / state appeared
+verify → expected text/state appeared AND console clean + no failed API/network requests
 capture → screenshot + console/errors at the moment of interest (and on failure)
 release → close the tab / end the session when fully done
 ```
 
-Refs (`@e1`, `@e2`, …) go **stale** after any navigation, click, or form submit. Always re-snapshot. "Element X has pointer-events: none" or "ref not found" almost always means a stale snapshot, not a real bug — re-snapshot before concluding.
+**`verify` is not DOM-only.** A UI that *renders* correctly while the API returned 500 or the console threw an uncaught exception is **NOT a pass** — that's exactly the silent breakage a real user hits and `/flow-next:qa` must not green-light (its `qa_verdict` rests on this evidence). On every verify, also check the console is clean and no API/network request failed — the tooling is already on the default rung (`agent-browser console`, `agent-browser network requests --filter api`; the DevTools-MCP rung has richer inspection). A failed request or console error with a green-looking DOM is a finding, not noise.
+
+**Snapshot cost:** a full interactive `snapshot -i` before *every* act is the dominant token cost of a long flow. Re-snapshot after a DOM change, but for a single known target prefer a semantic locator (`find role|text|label … <action>` — no snapshot needed), and use `snapshot -c` / `-d <depth>` when you only need to verify one region.
+
+Refs (`@e1`, `@e2`, …) go **stale** after any navigation, click, or form submit. Re-snapshot after a DOM change. "Element X has pointer-events: none" or "ref not found" almost always means a stale snapshot, not a real bug — re-snapshot before concluding.
 
 ## Step 3 — Web ladder (surfaces A and B)
 
