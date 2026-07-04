@@ -13,7 +13,7 @@ The host agent (Claude Code / Codex / Droid) reads the structured payload from `
 
 flowctl provides only thin plumbing: `flowctl spec export-cognitive-aid <spec-id> --base <ref> --json` aggregates the inputs into a single JSON payload (Task 1 of this spec). The skill renders the body, then pushes and creates the PR **directly — no confirm prompt** (invoking make-pr is the intent; the body is deterministic; the default is a reversible draft). `--dry-run` prints the body without creating; `--ready`/`--draft` set draft state.
 
-**Read [workflow.md](workflow.md) for the full phase-by-phase execution — each phase ends with its inline `### Done when` checklist. Read [mermaid-rules.md](mermaid-rules.md) before emitting any mermaid codefence — it defines reserved words, escape patterns, shape selection, and the pre-emission validation checklist.**
+**Read [workflow.md](workflow.md) for Phases 0–3 (pre-flight → gather → render body → mermaid) + the §4.0 `--dry-run` short-circuit — each phase ends with its inline `### Done when` checklist. The post-render create + finalize machinery (§4.1 title → §4.6 `gh pr create`/`--update` → Phase 5 receipt/footer) lives in [create-and-finalize.md](create-and-finalize.md), read ONLY on a real create (after §4.0 does not short-circuit) — a `--dry-run` preview never loads it. Read [mermaid-rules.md](mermaid-rules.md) before emitting any mermaid codefence — it defines reserved words, escape patterns, shape selection, and the pre-emission validation checklist.**
 
 ## Preamble
 
