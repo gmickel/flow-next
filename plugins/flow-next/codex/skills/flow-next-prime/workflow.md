@@ -10,34 +10,47 @@ Execute these phases in order. Reference [pillars.md](pillars.md) for scoring cr
 
 Run all 9 scouts in parallel (Codex spawns them as multi-agent threads):
 
+**Dispatch contract (every scout prompt).** Each scout returns criteria for a specific pillar — its output must be keyed to those criterion IDs (SV1-6, TS1-6, …), NOT its own internal "X/5 health score" (those denominators don't match the pillars and must never be reused as a pillar score). If you pass a repo-root argument (see below), each scout prompt starts "Assess the repo at ROOT". A scout whose output has no criterion-ID mapping is treated as a failure (below).
+
 ### Agent Readiness Scouts (Pillars 1-5)
 
 ```
-Use the tooling_scout agent # linters, formatters, pre-commit, type checking
-Use the agents_md_scout agent # CLAUDE.md/AGENTS.md quality
-Use the env_scout agent # .env.example, docker, devcontainer
-Use the testing_scout agent # test framework, coverage, commands
-Use the build_scout agent # build system, scripts, CI
-Use the docs_gap_scout agent # README, ADRs, architecture docs
+Use the tooling_scout agent # linters, formatters, pre-commit, type checking → SV1-6
+Use the agents_md_scout agent # CLAUDE.md/AGENTS.md quality → DC2 (+ command-doc)
+Use the env_scout agent # .env.example, docker, devcontainer → DE/BS lock+runtime
+Use the testing_scout agent # test framework, coverage, commands → TS1-6
+Use the build_scout agent # build system, scripts, CI → BS1-6
+Use the docs_gap_scout agent # MODE: inventory (no planned change) — assess DC1/DC3-7 doc currency
 ```
+
+> **docs-gap-scout runs in INVENTORY mode here** (it has no REQUEST to plan against). The dispatch MUST say "MODE: inventory — assess which docs exist and their currency for DC1/DC3/DC4/DC5/DC6/DC7; emit a criterion-ID table; skip 'Likely Updates Needed'." Without this the agent confabulates a change or no-ops, and Pillar 4 scores on no evidence.
 
 ### Production Readiness Scouts (Pillars 6-8)
 
 ```
-Use the observability_scout agent # logging, tracing, metrics, health
-Use the security_scout agent # branch protection, CODEOWNERS, secrets
-Use the workflow_scout agent # CI/CD, templates, automation
+Use the observability_scout agent # logging, tracing, metrics, health → OB1-6
+Use the security_scout agent # branch protection, CODEOWNERS, secrets → SE1-6
+Use the workflow_scout agent # CI/CD, templates, automation → WP1-6
 ```
 
 **Important**: Launch all 9 scout agents in parallel for speed (~15-20 seconds total).
 
 Wait for all scouts to complete. Collect findings.
 
+**Scout-failure rule (no silent drop, no fabrication).** If a scout errors, times out, returns `SCAN INCONCLUSIVE`, or returns output with no criterion-ID mapping: **re-dispatch it once.** If it still fails, mark that pillar's affected criteria **NOT ASSESSED** — exclude them from BOTH numerator and denominator (Phase 3), and list them under a "Not assessed" line in the report header. Never score a pillar from memory, and never let a failed scan read as all-❌ (a false red) or all-✅ (a false green).
+
 ---
 
-## Phase 2: Verification (Optional but Recommended)
+## Phase 2: Verification (MANDATORY for any runnable criterion you intend to score ✅)
 
-After scouts complete, verify key commands actually work.
+After scouts complete, verify key commands actually work. **A criterion whose pass condition
+is "the command runs" (TS4 tests-runnable, and the lint/build runnable checks) may be scored ✅
+ONLY after this phase confirms it** — scoring runnability from config-file existence is the
+evidence-free-PASS failure this phase exists to prevent (a repo with a `lint` script that
+crashes or a build broken for weeks would otherwise score "fast feedback loops"). If the
+framework/command was detected but you do NOT run the verification (e.g. sandbox can't execute
+it), score that criterion **⚠️ unverified — counts as fail**, not ✅. A command that exists but
+verification FAILS is ❌ with the error in the report.
 
 ### Test Verification
 
@@ -88,21 +101,23 @@ pnpm build --help 2>&1 | head -5 || npm run build --help 2>&1 | head -5
 
 Read [pillars.md](pillars.md) for pillar definitions and criteria.
 
+**Three states, not two — and the denominator excludes the non-answers.** Map each criterion to ✅ pass, ❌ fail, or one of the excluded states: **N/A** (genuinely inapplicable — whitelist only: BS6 non-monorepo, TS6 no-E2E-surface, DE5/DE6 no-container-need, DC7 backend-only; the model may NOT invent N/A elsewhere), **⚠️** (scout couldn't check — e.g. `gh` unauth, not on GitHub), or **NOT ASSESSED** (scout failed per Phase 1). Excluded criteria are dropped from **both** numerator and denominator and listed separately — never counted as ❌. This stops a healthy library (no monorepo/E2E/Docker) from being capped at 67% and locked out of Level 5, and stops a GitLab-hosted repo from reporting missing GitHub branch-protection it doesn't need.
+
 ### Agent Readiness Score (Pillars 1-5)
 
 For each pillar (1-5):
-1. Map scout findings to criteria (pass/fail)
-2. Calculate pillar score: `(passed / total) * 100`
+1. Map scout findings to criteria (✅ / ❌ / N-A / ⚠️ / NOT ASSESSED per the rule above)
+2. Calculate pillar score: `passed / (passed + failed)` × 100 — **excluded states are not in the denominator**
 
 Calculate:
 - **Agent Readiness Score**: average of Pillars 1-5 scores
-- **Maturity Level**: based on thresholds in pillars.md
+- **Maturity Level**: from pillars.md — apply BOTH the score band AND the per-pillar floors (pillars.md is the single source; do not compute the level from the SKILL.md summary table)
 
 ### Production Readiness Score (Pillars 6-8)
 
 For each pillar (6-8):
-1. Map scout findings to criteria (pass/fail)
-2. Calculate pillar score: `(passed / total) * 100`
+1. Map scout findings to criteria (same five states)
+2. Calculate pillar score: `passed / (passed + failed)` × 100 — excluded states not in the denominator
 
 Calculate:
 - **Production Readiness Score**: average of Pillars 6-8 scores

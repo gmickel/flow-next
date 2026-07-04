@@ -53,12 +53,18 @@ Accepts:
 - No arguments (scans current repo)
 - `--report-only` or `report only` (skip remediation, just show report)
 - `--fix-all` or `fix all` (apply all agent readiness fixes without asking)
-- Path to different repo root
+- A path to a different repo root (first non-flag argument)
 
 Examples:
 - `/flow-next:prime`
 - `/flow-next:prime --report-only`
 - `/flow-next:prime ~/other-project`
+
+**Resolve `ROOT` from `$ARGUMENTS`** (the first non-flag token; default `.`). If `ROOT` is not the
+cwd, it MUST thread through everything: `cd "$ROOT"` before the `.flow/meta.json` pre-check and the
+Phase 2 verification commands, and every scout dispatch prompt in Phase 1 starts "Assess the repo at
+`ROOT`" (scouts scan cwd by default — without this they'd scan the wrong repo and the report would be
+confidently wrong end-to-end). If threading `ROOT` isn't feasible, error rather than silently scan cwd.
 
 ## The Eight Pillars
 
@@ -105,6 +111,11 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 | 5 | Autonomous | Full autonomous operation capable | 85%+ |
 
 **Level 3 is the target** for most teams. Don't over-engineer.
+
+> **The score band above is necessary but NOT sufficient.** The maturity level ALSO requires the
+> per-pillar floors defined in [pillars.md](pillars.md) (Level 3 needs every pillar ≥40%, L4 ≥60%,
+> L5 ≥80%). pillars.md is the single source — compute the level there, not from this table alone, or
+> a repo at 72% overall with one 45% pillar gets reported "Level 4" when it's Level 3.
 
 ## What Gets Fixed vs Reported
 
