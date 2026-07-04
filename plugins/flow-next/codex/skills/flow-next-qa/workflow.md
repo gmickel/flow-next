@@ -204,14 +204,15 @@ Then, per R-ID in the coverage spine, decide subtract-vs-live with **all three**
 
 Record, per R-ID, a `coverage_source ∈ {live, subtracted:<task-id>:<test-cmd>}` and **carry it into the §2.2 coverage table** (a `subtracted` row is a deliberate non-live row backed by a named re-runnable command, distinct from a `⚠️ no live scenario` gap). When in doubt, **keep the live scenario** — conservative subtraction never trades a live pass for a narrated claim. With zero recorded work-evidence (no `tasks[]`, empty `tests[]`), nothing subtracts — every UI-observable AC stays live (the safe default).
 
-### 2.1 — The four mappings
+### 2.1 — The five mappings
 
 Walk `spec.spec_sections` and build the scenario set:
 
-1. **AC → scenarios.** Each `acceptance_criteria[]` entry with a *user-observable* surface becomes ≥1 scenario: a persona, a goal, and the steps a real user takes to exercise that criterion on the live app. Backend / CLI / non-UI criteria yield **no** scenario (they are covered by static review) — note them as "not live-QA-able" rather than inventing a fake UI path.
+1. **AC → scenarios.** Each `acceptance_criteria[]` entry with a *user-observable* surface becomes ≥1 scenario: a persona, a goal, and the steps a real user takes to exercise that criterion on the live app. Backend / CLI / non-UI criteria yield **no** scenario (they are covered by static review) — note them as "not live-QA-able" rather than inventing a fake UI path. **For every write-path / state-changing scenario, also derive an error-path variant** (invalid input, an empty/error/permission state) — ACs are written as positive assertions, so a happy-path-only set silently misses exactly the states real users hit.
 2. **R-IDs → coverage spine.** Every `acceptance_criteria[].id` is a row in the coverage table (reuse the make-pr R-ID coverage-table pattern — see §2.2). Each scenario maps back to the R-ID(s) it exercises. R-IDs with no scenario are flagged `⚠️ no live scenario` (an honest gap, never a confident PASS).
 3. **Boundaries → exclusions.** Each `boundaries[]` entry is an **explicit non-goal**: a behavior QA must NOT test (e.g. "NOT a code review — drives the live app, not the source"). This suppresses false bugs — a "missing" feature that a boundary declares out of scope is not a finding.
 4. **Decision context → expected behavior.** Each `decision_context[]` `{question, answer}` pair seeds the **Expected** column for the scenario(s) it governs — the resolved-default behavior the live app should exhibit. A scenario's pass/fail is `observed vs this expected`, captured as evidence.
+5. **Prior bugs → regression scenarios.** QA *files* into the bug-memory track (Phase 5) but the derive step never *read* it — a half-closed loop: a bug filed by a previous pass on a touched surface is never re-exercised unless a new AC happens to cover it. Query `flowctl memory search --track bug` scoped to this spec's touched surfaces / modules and turn each still-plausible prior bug into a **regression scenario** (marked `regression`, **no R-ID** — it is coverage-independent, so it never counts toward or against the R-ID spine). Skip entries a `boundaries[]` item excludes or that the diff clearly removed.
 
 ### 2.2 — Coverage spine (R-ID table)
 
@@ -426,6 +427,22 @@ QA has **four** distinct outcomes. Pick exactly one, in this precedence order:
 - A **single open P0 = NEEDS_WORK.** Do not downgrade a P0 to P1 to avoid stopping (Phase 5.2 tie-break).
 - **Incomplete R-ID coverage = NEEDS_WORK**, not SHIP — a `⚠️ no live scenario` row on a UI-observable R-ID is an uncovered gap. A `subtracted` row is **not** a gap (it is covered by a re-runnable check); but never relabel a runtime/UI gap as `subtracted` to manufacture coverage (§2.0).
 - **SHIP is forbidden without captured live-app evidence (R1).** If you cannot point to a screenshot/console/observed-state artifact per passing scenario, the outcome is BLOCKED, never SHIP.
+
+### 6.1b — Evidence enforcement (the hard rule made deterministic)
+
+Rule 426 ("SHIP is forbidden without captured evidence") is load-bearing but was prose — an agent that drifts into narration could still set `SHIP`. Make it **structural**: a SHIP is a *claim about captured evidence*, so a SHIP with an empty evidence dir is impossible by construction. Force-downgrade before projecting the verdict:
+
+```bash
+if [[ "$QA_OUTCOME" == "SHIP" ]]; then
+ EVIDENCE_COUNT="$(find ".flow/tmp/qa-${SPEC_ID}" -maxdepth 1 -type f \( -name '*.png' -o -name '*.log' \) 2>/dev/null | wc -l | tr -d ' ')"
+ if [[ "${EVIDENCE_COUNT:-0}" -eq 0 ]]; then
+ QA_OUTCOME="BLOCKED"
+ BLOCKED_REASON="SHIP claimed without captured live-app evidence — no screenshot/console artifact under .flow/tmp/qa-${SPEC_ID}/ (R1: PASS rests on evidence, never narration)"
+ fi
+fi
+```
+
+This gates only `SHIP` — `NA` (no driveable UI, legitimately no evidence) and `BLOCKED`/`NEEDS_WORK` are untouched. It turns "forbidden" into "impossible": the sole way to a SHIP receipt is to have captured live-app artifacts.
 
 ### 6.2 — Project `qa_outcome` → `verdict` (the Ralph-guard enum)
 
