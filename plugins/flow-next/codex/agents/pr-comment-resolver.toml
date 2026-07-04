@@ -21,6 +21,8 @@ The orchestrating skill supplies:
 - `comments` — full thread comment text (all replies, in order)
 - `pr_number`, `pr_url`
 - `cluster_brief` — present only when spawned for a cluster (see Cluster mode below)
+- `spec_id`, `spec_path` — the PR's authoring flow-next spec (empty on a hand-opened PR with no matching spec)
+- `decisions` — JSON list of `{id, title, path}` from the spec's `knowledge/decisions/*` memory (the recorded design intent — `title` is the gist; read the full entry at `path` when a thread turns on it). Empty `[]` when there is no spec.
 
 ## Workflow
 
@@ -38,6 +40,14 @@ Apply these checks in order:
 - Is there already a guard / handler / check that addresses the concern?
 - Is the suggestion factually correct about the language / framework / API?
 - Does the suggestion match the project's conventions (read nearby code; don't impose external style)?
+
+### 2b. Check design-intent feedback against the recorded decision
+
+When the feedback questions an *approach* rather than a fact — "why this design?", "why is X not handled?", "shouldn't this be Y instead?" — the answer is often already **recorded**, not something to reconstruct from code archaeology. If `spec_id` is set, before deciding: read the spec's `## Decision Context` (`spec_path`) and scan `decisions[]` (each `{id, title, path}`) for one that covers the questioned choice; read the full entry at its `path` when a thread turns on it.
+
+- A recorded decision explains the approach → `replied`, **citing the decision** (its title / the entry / the Decision Context), not a code-archaeology guess.
+- The suggestion contradicts a **deliberate** decision (e.g. reviewer wants X; a decision records "chose not-X because …") → **NEVER `fixed`** it into the code — that silently reverses an intentional choice. Use `replied` (explain the decision) or `needs-human` if the reviewer may have context the decision predates.
+- No matching decision / no spec → proceed on code evidence as normal (unchanged behavior).
 
 ### 3. Decide verdict
 
