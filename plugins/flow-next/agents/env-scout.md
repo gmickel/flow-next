@@ -26,16 +26,18 @@ ls -la .env.example .env.sample .env.template .env.local.example 2>/dev/null
 # Check for .env in gitignore (good practice)
 grep -l "\.env" .gitignore 2>/dev/null
 
-# Find env var usage in code (to compare against template)
-grep -r "process\.env\." --include="*.ts" --include="*.js" -h 2>/dev/null | head -20
-grep -r "os\.environ" --include="*.py" -h 2>/dev/null | head -20
-grep -r "std::env::" --include="*.rs" -h 2>/dev/null | head -10
+# Find env var usage in code (to compare against template).
+# Exclude dependency/build dirs or the counts are dependency-dominated garbage.
+grep -r "process\.env\.\|import\.meta\.env\." --include="*.ts" --include="*.js" --include="*.tsx" --include="*.jsx" --exclude-dir={node_modules,dist,build,.next,.venv,vendor} -h 2>/dev/null | head -20
+grep -r "Deno\.env" --include="*.ts" --exclude-dir={node_modules,dist,vendor} -h 2>/dev/null | head -10
+grep -r "os\.environ\|os\.getenv" --include="*.py" --exclude-dir={.venv,venv,site-packages,vendor} -h 2>/dev/null | head -20
+grep -r "std::env::" --include="*.rs" --exclude-dir={target,vendor} -h 2>/dev/null | head -10
 ```
 
 ### Docker / Containers
 ```bash
-# Docker files
-ls -la Dockerfile Dockerfile.* docker-compose*.yml docker-compose*.yaml 2>/dev/null
+# Docker files (compose.yaml/compose.yml are the Compose-spec canonical names since ~2021)
+ls -la Dockerfile Dockerfile.* docker-compose*.yml docker-compose*.yaml compose.yaml compose.yml 2>/dev/null
 
 # Devcontainer
 ls -la .devcontainer/ .devcontainer.json 2>/dev/null
@@ -56,12 +58,13 @@ grep -E '"(setup|postinstall|prepare)"' package.json 2>/dev/null
 
 ### Dependency Files
 ```bash
-# Check dependency lock files exist
-ls -la package-lock.json pnpm-lock.yaml yarn.lock 2>/dev/null
-ls -la Cargo.lock go.sum poetry.lock Pipfile.lock requirements.txt 2>/dev/null
+# Check dependency lock files exist (uv/bun are 2025+ standards)
+ls -la package-lock.json pnpm-lock.yaml yarn.lock bun.lock bun.lockb 2>/dev/null
+ls -la Cargo.lock go.sum poetry.lock Pipfile.lock uv.lock requirements.txt Gemfile.lock composer.lock 2>/dev/null
 
-# System dependencies documented?
-ls -la .tool-versions .node-version .nvmrc .python-version .ruby-version 2>/dev/null
+# System dependencies documented? (mise is asdf's dominant 2025+ successor; corepack via packageManager)
+ls -la .tool-versions .node-version .nvmrc .python-version .ruby-version .mise.toml mise.toml 2>/dev/null
+grep -E '"packageManager"' package.json 2>/dev/null   # corepack-pinned pm+version
 ```
 
 ### Documentation
@@ -118,4 +121,7 @@ grep -i "## setup\|## installation\|## getting started\|## prerequisites" README
 - Compare env vars in code vs template (flag gaps)
 - Don't read full Dockerfiles - just confirm existence
 - Note if setup requires manual steps not documented
-- Flag security risks (secrets in committed files)
+- Flag a committed `.env` file (real secret-leak risk) — check it, don't just assert it:
+  `git ls-files | grep -E '^(.*/)?\.env(\.[^.]+)?$' | grep -v '\.example$\|\.sample$\|\.template$'`
+  (deep secret scanning is security-scout's job; this is the one env-specific leak)
+- **Missing vs. failed:** if NONE of `.git`, `package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile` exist at the scan root, emit `SCAN INCONCLUSIVE — no repo markers` instead of a wall of ❌ (an all-❌ from scanning the wrong dir must not read as a bare repo).
