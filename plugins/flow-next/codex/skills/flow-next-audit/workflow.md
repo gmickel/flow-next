@@ -38,7 +38,7 @@ Filter results:
 - **Skip** entries whose direct parent is `.flow/memory/` itself (those are legacy flat files, handled in §0.2).
 - **Keep** anything matching `.flow/memory/{bug,knowledge}/<category>/<slug>-<YYYY-MM-DD>.md`.
 
-For each kept path, read the frontmatter (parser pattern from `prospect/workflow.md` §0.2 — stdlib Python is fine; PyYAML when available is nicer). Capture: `entry_id` (from path), `track`, `category`, `slug`, `date`, `title`, `module`, `tags`, `status`, plus the body for later investigation.
+For each kept path, read the frontmatter (parser pattern from `prospect/workflow.md` §0.2 — stdlib Python is fine; PyYAML when available is nicer). Capture: `entry_id` (from path), `track`, `category`, `slug`, `date`, `title`, `module`, `tags`, `status`, `last_audited` (empty when never audited — drives the §0.75 change-detection pre-filter), plus the body for later investigation.
 
 If the entry's `status` is `stale` already, surface it in the report under "Already stale" and skip investigation in autofix mode (mark-stale is idempotent — re-marking adds noise). In interactive mode, offer to refresh-investigate (rare path; user-driven).
 
@@ -282,6 +282,30 @@ Capture the per-term outcomes into a glossary section of the report (see §5.1 b
 
 ---
 
+## Phase 0.75: Change-detection pre-filter — investigate only what changed
+
+**Goal:** a mature store re-audited from scratch dispatches a Phase-1 investigation subagent *per entry*, even for entries whose referenced code hasn't moved since the last audit. Those are still current — auto-Keep them without investigation. This turns the dominant runtime cost from **O(all entries) → O(changed)** and concentrates the model's attention on entries with an actual drift signal.
+
+For each discovered entry (§0.1), decide whether it needs Phase-1 investigation:
+
+```bash
+# per entry: $entry_id, $module (frontmatter), $last_audited (frontmatter, may be empty),
+# $entry_status (the entry's `status` field — NOT named `status`: that is a read-only reserved
+# variable in zsh, which the skills' bash blocks run under; a bare `status=` assignment errors).
+NEEDS_INVESTIGATION=1
+if [[ -n "$module" && -n "$last_audited" && "$entry_status" != "stale" && -e "$module" ]]; then
+ # $module must be a real tracked path for this to be sound: a logical module NAME, or a
+ # DELETED module (path gone → a Delete candidate), both fail `-e` and fall through to investigation.
+ CHANGED="$(git log --oneline --since="$last_audited" -- "$module" 2>/dev/null | head -1)"
+ [[ -z "$CHANGED" ]] && NEEDS_INVESTIGATION=0 # module path untouched since the last audit → still current
+fi
+```
+
+- `NEEDS_INVESTIGATION=0` (has `last_audited`, `module` is an existing tracked path, zero commits to it since, not already `stale`) → **auto-Keep**: `flowctl memory mark-fresh "$entry_id"` (re-stamps `last_audited`), record `auto-Kept — <module> untouched since <last_audited>` in the Phase-5 report, and **exclude the entry from the Phase-1 investigation set**.
+- Otherwise (never audited → no `last_audited`; no `module` or a logical name → can't change-detect; module path gone → possible Delete; module changed; or already `stale`) → keep it in the Phase-1 investigation set.
+
+**Auto-Kept entries STILL flow into Phase 1.75 cross-doc analysis and the Phase-5 report** — the pre-filter skips only the expensive per-entry investigation, never the cheap pairwise contradiction scan, so an entry that went stale because a *different* entry changed is still caught. Autofix always applies the pre-filter; interactive mode may offer "re-investigate all anyway" (rare, user-driven).
+
 ## Phase 1: Investigate (per entry)
 
 **Goal:** for each entry in scope, verify its claims against the current codebase and form a recommendation with evidence.
@@ -510,7 +534,7 @@ Phase 3 only handles per-entry decisions. The CLAUDE.md / AGENTS.md discoverabil
 
 ### 4.1 — Keep flow
 
-No edit. Record `reviewed-without-edit` in the report.
+No content edit — but **stamp `flowctl memory mark-fresh "$entry_id"`** and record `reviewed-without-edit` in the report. The stamp re-sets `last_audited` to today (idempotent — mark-fresh on a non-stale entry just stamps the date), so the next audit's §0.75 change-detection pre-filter can skip this entry for free while its module stays untouched. Without the stamp, every Keep re-investigates from scratch on every future run (the O(all)-not-O(changed) cost §0.75 exists to remove).
 
 ### 4.2 — Update flow
 
