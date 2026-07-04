@@ -528,11 +528,13 @@ The `loosen` path keeps the run going but flags the under-volume in the eventual
 
 ## Phase 3: Critique (R3, R12) — separate prompt, rejection floor enforced
 
-**Goal:** evaluate every candidate from Phase 2 with explicit `keep|drop` verdicts plus a fixed taxonomy reason. The critique pass runs in a **separate prompt** that does **not** see Phase 2's system prompt, the personas, or the focus hint — this prevents sycophancy ("the generator wanted X, the critic finds reasons to keep X"). The critique sees only the grounding snapshot and the candidate list.
+**Goal:** evaluate every candidate from Phase 2 with explicit `keep|drop` verdicts plus a fixed taxonomy reason. The critique must NOT see Phase 2's system prompt, the personas, or the focus hint — otherwise it is self-critique of one's own generations, the exact sycophancy this pass exists to prevent ("the generator wanted X, the critic finds reasons to keep X").
 
-### 3.1 — Build the critique prompt
+**The exclusion is STRUCTURAL, not an instruction.** The critique runs as a **fresh-context read-only subagent** (a single `Task` dispatch — `subagent_type: Explore`, or `general-purpose` if unavailable; `sync-codex.sh` rewrites `Task` → `spawn_agent`) whose prompt contains ONLY the grounding snapshot + the candidate list + the taxonomy/floor instructions below. A separate context window physically cannot attend to the personas / focus hint / generation prompt — where a same-window "separate prompt" section could. This is the **one** subagent dispatch in this otherwise-inline skill, and it is safe: the critique is non-interactive (it emits verdicts, asks nothing), so `AskUserQuestion` reachability — the reason the rest of the skill stays inline — is unaffected; the floor-violation question (§3.2) runs on the main thread after the subagent returns.
 
-Inputs: `CANDIDATES_YAML` (Phase 2 §2.4) + the Phase 1 grounding snapshot. **Excluded:** `FOCUS_HINT`, persona texts, Phase 2 prompt.
+### 3.1 — Build the critique prompt (the subagent's ONLY inputs)
+
+Inputs handed to the critique subagent: `CANDIDATES_YAML` (Phase 2 §2.4) + the Phase 1 grounding snapshot + the taxonomy + the target rejection rate. **Never included in the dispatch:** `FOCUS_HINT`, persona texts, the Phase 2 prompt (they live in THIS context, not the subagent's — the point of the split). The subagent returns the per-candidate `keep|drop|taxonomy|reason` YAML, which §3.2 parses on the main thread.
 
 Rejection taxonomy (R3 anchor — frozen string list):
 
