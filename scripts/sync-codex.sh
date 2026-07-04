@@ -1491,6 +1491,9 @@ echo -e "${BLUE}Generating hooks.json...${NC}"
 # Build Codex hooks from canonical source:
 # - Keep: PreToolUse (Bash only), PostToolUse (Bash only), Stop
 # - Drop: SubagentStop, Edit/Write matchers
+# - Drop: top-level "description" — Codex's hooks parser rejects unknown fields
+#   (`unknown field \`description\`, expected \`hooks\``), which silently disables
+#   all hooks (issue #198)
 # - Invoke via the bash wrapper (`bash scripts/ralph/hooks/ralph-guard`), same as
 #   canonical: the wrapper sources pick-python.sh and runs the guard through a
 #   probed interpreter, so a Windows Store `python3` stub (exits 9009) is skipped
@@ -1499,7 +1502,6 @@ echo -e "${BLUE}Generating hooks.json...${NC}"
 #   ran ralph-init before the wrapper existed; no-op when neither is present.
 cat > "$CODEX_DIR/hooks.json" << 'HOOKS_EOF'
 {
-  "description": "Ralph workflow guards for Codex - only active when FLOW_RALPH=1 and ralph-init has been run",
   "hooks": {
     "PreToolUse": [
       {
