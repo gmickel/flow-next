@@ -162,7 +162,12 @@ $FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 # Dynamic approach (if spec mentions specific paths):
 # CODE_FILES=$(grep -oE 'src/[^ ]+\.(ts|py|js)' .flow/specs/${SPEC_ID}.md | sort -u | paste -sd,)
 # Or list key files manually:
-CODE_FILES="src/main.py,src/config.py"
+# Derive REAL reviewer anchors from the spec's `## Key files / interfaces` (the canonical,
+# scaffold-mandated source); fall back to any file-like tokens in the spec. NEVER a hardcoded
+# guess — the cross-platform backends need real code paths or they only catch spec-internal
+# inconsistency, not "this plan contradicts how the codebase actually works."
+CODE_FILES="$(awk '/^## Key files/{f=1;next} /^## /{f=0} f' ".flow/specs/${SPEC_ID}.md" | grep -oE '`[^`]+\.[A-Za-z0-9]+`' | tr -d '`' | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)"
+[ -z "$CODE_FILES" ] && CODE_FILES="$(grep -oE '[A-Za-z0-9_./-]+\.(py|ts|tsx|js|jsx|go|rs|rb|java|php|c|cpp|h|md|sh)' ".flow/specs/${SPEC_ID}.md" | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)"
 
 $FLOWCTL codex plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
 # Output includes VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK
@@ -183,7 +188,12 @@ $FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 
 # --files: comma-separated CODE files for reviewer context (same shape as codex)
 # Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
-CODE_FILES="src/main.py,src/config.py"
+# Derive REAL reviewer anchors from the spec's `## Key files / interfaces` (the canonical,
+# scaffold-mandated source); fall back to any file-like tokens in the spec. NEVER a hardcoded
+# guess — the cross-platform backends need real code paths or they only catch spec-internal
+# inconsistency, not "this plan contradicts how the codebase actually works."
+CODE_FILES="$(awk '/^## Key files/{f=1;next} /^## /{f=0} f' ".flow/specs/${SPEC_ID}.md" | grep -oE '`[^`]+\.[A-Za-z0-9]+`' | tr -d '`' | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)"
+[ -z "$CODE_FILES" ] && CODE_FILES="$(grep -oE '[A-Za-z0-9_./-]+\.(py|ts|tsx|js|jsx|go|rs|rb|java|php|c|cpp|h|md|sh)' ".flow/specs/${SPEC_ID}.md" | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)"
 
 # Override model + effort (pick one):
 # --spec copilot:claude-opus-4.5:xhigh (preferred)
@@ -209,7 +219,12 @@ $FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 
 # --files: comma-separated CODE files for reviewer context (same shape as codex)
 # Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
-CODE_FILES="src/main.py,src/config.py"
+# Derive REAL reviewer anchors from the spec's `## Key files / interfaces` (the canonical,
+# scaffold-mandated source); fall back to any file-like tokens in the spec. NEVER a hardcoded
+# guess — the cross-platform backends need real code paths or they only catch spec-internal
+# inconsistency, not "this plan contradicts how the codebase actually works."
+CODE_FILES="$(awk '/^## Key files/{f=1;next} /^## /{f=0} f' ".flow/specs/${SPEC_ID}.md" | grep -oE '`[^`]+\.[A-Za-z0-9]+`' | tr -d '`' | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)"
+[ -z "$CODE_FILES" ] && CODE_FILES="$(grep -oE '[A-Za-z0-9_./-]+\.(py|ts|tsx|js|jsx|go|rs|rb|java|php|c|cpp|h|md|sh)' ".flow/specs/${SPEC_ID}.md" | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)"
 
 # Override model (pick one):
 # --spec cursor:gpt-5.5-high (preferred)

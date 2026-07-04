@@ -101,7 +101,8 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
 # --files: comma-separated CODE files for reviewer context
 # Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
 # Read spec to identify affected paths, then list key files
-CODE_FILES="src/main.py,src/config.py" # Customize per spec
+CODE_FILES="$(awk '/^## Key files/{f=1;next} /^## /{f=0} f' ".flow/specs/${SPEC_ID}.md" | grep -oE '`[^`]+\.[A-Za-z0-9]+`' | tr -d '`' | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)"
+[ -z "$CODE_FILES" ] && CODE_FILES="$(grep -oE '[A-Za-z0-9_./-]+\.(py|ts|tsx|js|jsx|go|rs|rb|java|php|c|cpp|h|md|sh)' ".flow/specs/${SPEC_ID}.md" | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)" # real anchors from the spec's Key files, never a hardcoded guess
 
 $FLOWCTL codex plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
 ```
@@ -151,7 +152,8 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
 
 # --files: comma-separated CODE files for reviewer context
 # Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
-CODE_FILES="src/main.py,src/config.py" # Customize per spec
+CODE_FILES="$(awk '/^## Key files/{f=1;next} /^## /{f=0} f' ".flow/specs/${SPEC_ID}.md" | grep -oE '`[^`]+\.[A-Za-z0-9]+`' | tr -d '`' | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)"
+[ -z "$CODE_FILES" ] && CODE_FILES="$(grep -oE '[A-Za-z0-9_./-]+\.(py|ts|tsx|js|jsx|go|rs|rb|java|php|c|cpp|h|md|sh)' ".flow/specs/${SPEC_ID}.md" | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)" # real anchors from the spec's Key files, never a hardcoded guess
 
 # Runtime config:
 # --spec <spec> full spec (backend:model:effort), highest priority
@@ -211,7 +213,8 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
 
 # --files: comma-separated CODE files for reviewer context
 # Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
-CODE_FILES="src/main.py,src/config.py" # Customize per spec
+CODE_FILES="$(awk '/^## Key files/{f=1;next} /^## /{f=0} f' ".flow/specs/${SPEC_ID}.md" | grep -oE '`[^`]+\.[A-Za-z0-9]+`' | tr -d '`' | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)"
+[ -z "$CODE_FILES" ] && CODE_FILES="$(grep -oE '[A-Za-z0-9_./-]+\.(py|ts|tsx|js|jsx|go|rs|rb|java|php|c|cpp|h|md|sh)' ".flow/specs/${SPEC_ID}.md" | grep -vE '^https?:' | sort -u | head -20 | paste -sd, -)" # real anchors from the spec's Key files, never a hardcoded guess
 
 # Runtime config:
 # --spec <spec> full spec (cursor:<model>), highest priority
