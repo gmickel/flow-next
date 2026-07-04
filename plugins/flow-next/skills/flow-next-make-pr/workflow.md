@@ -220,23 +220,31 @@ fi
 
 **Critical: filter on `.state == "OPEN"`.** A bare `gh pr view --json url 2>/dev/null` returns rc=0 for both CLOSED and MERGED PRs — a "JSON returned = refuse" check would false-positive on reused branches (branch had a previous PR closed without merge, or merged + pushed-again-to). Filter via jq so closed/merged PRs don't trigger refusal.
 
-```bash
-EXISTING=$(gh pr view --json url,state,number 2>/dev/null \
-  | jq -r 'select(.state == "OPEN") | .url' \
-  || true)
+**`--update` mode inverts this check.** After resolve-pr / land fix rounds, the created PR body goes stale — the R-ID coverage SHAs, Review-plan buckets, churn numbers, and SHA-pinned blob links all describe a diff that no longer exists (worst on the most-reviewed PRs). `--update` (parsed from `$ARGUMENTS` alongside `--dry-run`/`--ready` → `UPDATE_MODE=1`) re-renders Phases 1-3 against the CURRENT payload and `gh pr edit`s the EXISTING open PR's body (§4.6). So under `--update` an existing OPEN PR is REQUIRED — its number is the edit target — and its absence is the error. resolve-pr / land may invoke `/flow-next:make-pr <spec-id> --update` after committing fixes to refresh the cognitive aid.
 
-if [[ -n "$EXISTING" ]]; then
+```bash
+EXISTING_JSON=$(gh pr view --json url,state,number 2>/dev/null | jq -c 'select(.state == "OPEN")' || true)
+EXISTING=$(printf '%s' "$EXISTING_JSON" | jq -r '.url // empty' 2>/dev/null || true)
+UPDATE_PR_NUMBER=$(printf '%s' "$EXISTING_JSON" | jq -r '.number // empty' 2>/dev/null || true)
+
+if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
+  # --update REFRESHES the existing open PR's body — an OPEN PR is required as the target.
+  if [[ -z "$EXISTING" ]]; then
+    echo "Error: --update needs an existing OPEN pull request on this branch; none found. Run /flow-next:make-pr (without --update) to create one first." >&2
+    exit 1
+  fi
+  echo "Update mode: refreshing PR #$UPDATE_PR_NUMBER body against the current diff." >&2
+elif [[ -n "$EXISTING" ]]; then
   cat <<EOF >&2
 Error: branch already has an OPEN pull request: $EXISTING
 
-This skill creates new PRs only. To address review feedback on the existing PR,
-use:
+This skill creates new PRs only. To refresh the existing PR's body after fix rounds,
+re-run with --update:
 
-  /flow-next:resolve-pr
+  /flow-next:make-pr <spec-id> --update
 
-If you want a fresh PR (e.g. the open one is stale), close it manually first:
-
-  gh pr close <number> --comment "Replaced by upcoming /flow-next:make-pr"
+To address review feedback, use /flow-next:resolve-pr. For a fresh PR, close the open
+one first: gh pr close <number> --comment "Replaced by upcoming /flow-next:make-pr"
 EOF
   exit 1
 fi
@@ -1521,6 +1529,31 @@ fi
 
 sleep 1   # GitHub API eventual-consistency lag (cli/cli #2691)
 
+# --update mode: the PR already exists (from §0.6, captured as $UPDATE_PR_NUMBER) and is
+# already tracker-linked. Skip §4.6a linkage + the create retry loop below — just replace
+# its body with the freshly-rendered content, then fall through to the receipt / PR_URL
+# emission. The push above already landed the fix commits the refreshed body describes.
+if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
+  # Re-derive the target PR number here (the §0.6 var does not survive across tool-call
+  # bash blocks). $BODY_FILE is the known §4.4 tempfile path (same one create mode uses).
+  UPDATE_PR_NUMBER=$(gh pr view --json number,state --jq 'select(.state=="OPEN") | .number' 2>/dev/null || true)
+  if [[ -z "$UPDATE_PR_NUMBER" ]]; then
+    echo "Error: --update: no open PR on this branch at edit time." >&2; exit 1
+  fi
+  if gh pr edit "$UPDATE_PR_NUMBER" --body-file "$BODY_FILE"; then
+    PR_URL=$(gh pr view "$UPDATE_PR_NUMBER" --json url --jq '.url')
+    echo "Updated PR #$UPDATE_PR_NUMBER body (refreshed against the current diff)." >&2
+  else
+    echo "Error: gh pr edit #$UPDATE_PR_NUMBER --body-file failed." >&2
+    exit 1
+  fi
+  # PR_URL is set — the Ralph `PR_URL=` stdout line (§5.4) + receipts emit as usual.
+fi
+```
+
+**When `UPDATE_MODE=1` the block above finished the PR (body refreshed against the current diff, `PR_URL` set) — SKIP the rest of §4.6 (the §4.6a tracker linkage + the `gh pr create` retry loop are CREATE-ONLY, and the PR is already linked) and proceed straight to §5.** Everything below in §4.6 runs only in create mode (`UPDATE_MODE != 1`):
+
+```bash
 # `gh pr create --base` expects a BRANCH name, not a remote-tracking ref —
 # passing `origin/main` opens the PR against a branch literally named
 # `origin/main` and fails. Phase 0.3's cascade prefers `origin/main` (then
