@@ -40,9 +40,18 @@ Optional:
 - [ ] `sync-codex.sh` regenerated + committed; `pytest` + `audit_smoke_test.sh` + `smoke_test.sh` green; `CHANGELOG` `## Unreleased`; no bump (R8)
 
 ## Done summary
-TBD
+New eval suite for `/flow-next:audit` (the memory garbage-collector). This one earned its keep the hard way — the fable review caught a real methodology flaw.
 
+**What happened:** built 3 synthetic memory stores (M1 mixed / M2 clean over-flag guard / M3 stress) with frozen codebase context + hidden answer keys; run-trick = `mode:autofix` EMISSION at sonnet. First baseline scored a clean 4/4 — but the fable review flagged it **NEEDS_WORK: SPOON-FED**. My "frozen contexts" stated the classification CONCLUSION in the taxonomy's own vocabulary ("problem domain no longer exists" = Delete's definition), so classification had degenerated to "don't contradict your own input."
+
+**Fix (fixtures rewritten):** every frozen context restated as RAW investigation FACTS (grep hits, git-log, symbol presence, code snippets) with zero verdict adjectives — the run must DERIVE each verdict. Also: added M3-b to E1's scoring (was scope-header-only), tightened E1 to 6/6, fixed accept-sets for genuine taxonomy tensions.
+
+**Corrected baseline = 4/4, EARNED:** E1 6/6 (audit inferred the `_parse_frontmatter`→`_read_yaml_header` rename from grep facts alone; correctly mark-staled the ambiguous cases), E2 over-flag 0 false positives incl. the HARD M3-a (looks-stale-but-valid: 8mo old + 'old ORM' aside, but audit read the raw fact — N+1 code present+unfixed — over the surface age), E3 delete-discipline, E4 consolidate BOTH directions (M1 dup→Consolidate, M3 distinct→Keep-both).
+
+**Answer-key correction (mine to fix):** I keyed M1-c as Delete; the git-log fact says "superseded by flow-next-tui" → a successor exists → problem domain may persist → Delete unsupported → **mark-stale** is correct. audit classified it mark-stale in both runs — correctly. Chased a Delete-vs-mark-stale lever to "fix" it, confirmed audit was already right, **reverted** (prose byte-identical to baseline).
+
+**Two durable outputs:** (1) a classification + over-flag + consolidate-restraint harness with facts-not-conclusions fixtures; (2) a **standing process lesson** — fable-review the eval DESIGN before the expensive baseline runs (Gordon's call), now saved to memory and applied from fn-84.6 on. **Fixture gap noted:** no clean-Delete case remains — add a no-successor Delete fixture next iteration. No prose change; no version bump.
 ## Evidence
 - Commits:
-- Tests:
+- Tests: no prose change (Delete-vs-mark-stale lever reverted; phases.md byte-identical to baseline) — audit test surface unaffected, fable review of eval DESIGN: NEEDS_WORK (spoon-fed fixtures) -> fixtures rewritten as raw facts; corrected baseline 4/4 earned, 6 audit runs total (spoon-fed baseline x3, facts-only baseline x3, lever x2) at sonnet mode:autofix emission
 - PRs:
