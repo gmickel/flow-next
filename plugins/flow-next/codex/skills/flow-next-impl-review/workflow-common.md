@@ -33,7 +33,12 @@ fi
 # diff review. Passing it lets a per-task `review: <backend>:...` override route to the RIGHT
 # backend before dispatch, even when it differs from the project default. Empty → env/config
 # unchanged (no regression).
-REVIEW_ID="${1:-}" # the review-target positional arg (fn-N.M task / fn-N spec); empty for a standalone diff
+# Substitute the ACTUAL review-target id from $ARGUMENTS here (the `fn-N.M` task / `fn-N`
+# spec being reviewed) — a literal value you fill in, e.g. REVIEW_ID="fn-12-auth.3". Do NOT
+# leave the bash positional `${1}`: a Bash-prompt turn does not populate `$1`, so it would be
+# empty and the per-task `review:` override (fn-74) would silently fall back to the project
+# default. Empty ONLY for a genuine standalone no-spec diff review.
+REVIEW_ID="<fn-N.M task or fn-N spec id from \$ARGUMENTS, or empty for a standalone diff>"
 # Text output is bare backend name for back-compat grep. The same command in --json mode returns
 # {backend, spec, model, effort, source} — use that if you need the model / effort resolved.
 BACKEND=$($FLOWCTL review-backend "$REVIEW_ID")
