@@ -39,9 +39,16 @@ Optional:
 - [ ] `sync-codex.sh` regenerated + committed; `pytest` + `prospect_smoke_test.sh` + `smoke_test.sh` green; `CHANGELOG` `## Unreleased`; no bump (R8)
 
 ## Done summary
-TBD
+New eval suite for `/flow-next:prospect`'s Phase-3 Critique (the candidate-rejection judgment: `{keep|drop, taxonomy, reason}` over a fixed 7-slug taxonomy, ≥40% rejection floor, blind to focus/personas). This suite validated the fn-84.5 process lesson end-to-end: **both a pre-run design review AND a post-run QA review (fable) gated it.**
 
+**Pre-run design review** caught 2 CRITICAL + 3 MAJOR flaws BEFORE any expensive run — E2 was unfalsifiable (YAML-only critique can't self-report the floor → made it a harness computation), C2's "good" keeps were under-grounded (honest drops could hit the floor → added pain-facts), C1-8/9 keeps weren't derivable, C1-1 collided with open-spec fn-77, E1's hard-fail list omitted obvious rejects. All fixed before running. That is the ROI of design-review-first.
+
+**Baseline = 4/4 EARNED** (sonnet, blind emission, facts-only fixtures): E1 9/9 (dups anchored to fn-70, strategy reject cites "Zero-dependency core" verbatim, C1-5 out-of-scope not too-large, C1-7 backward-incompat, C1-3 an on-mission valuable-but-XL idea correctly rejected on SIZE ALONE); E2 over-reject guard CLEAN (5 grounded good candidates all kept, only the dup dropped, held 17% < 40% floor with no padding); E3 taxonomy discipline (frozen slugs, other=0); E4 precision 4/4.
+
+**Two answer-key imprecisions caught + fixed transparently** (the honest way — fix fixture, re-run, disclose; never silently re-read a key): (a) C2-4 under-grounded intra-vs-cross-run — the RUN caught it (a critique precision win); (b) C1-3 was double-defect making E4 ill-posed — the POST-run QA caught it (MAJOR); replaced with a single-defect on-mission-XL candidate, re-ran → too-large, E4 genuinely earned. QA final verdict: SHIP.
+
+**Quality lever + trim honestly discarded** — E4 at ceiling; trim inspection-backed (mostly executable phase mechanics not covered by the critique-only eval; Phase-3 prose load-bearing; fn-82 already dieted). No prose change; no version bump. Durable: a taxonomy-classification + over-reject-guard regression harness for prospect + a second proof that both review gates catch fixture imprecisions cheaply.
 ## Evidence
 - Commits:
-- Tests:
+- Tests: no prose change (quality lever + trim both discarded) — prospect skill unaffected, pre-run fable DESIGN review: FIX-DESIGN-FIRST (2 CRIT+3 MAJOR) -> fixed -> READY-TO-RUN, post-run fable QA review: NEEDS_WORK (E4 integrity) -> fixed transparently (C1-3 replaced + re-run) -> SHIP, 4 sonnet blind Phase-3 critique runs (C1 x2, C2 x2); stable verdicts agreed; 4/4 earned on well-posed evals
 - PRs:
