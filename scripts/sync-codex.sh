@@ -32,9 +32,9 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC
 # verified A/B (fn-84 fleet review — sonnet held quality). Codex has only INTELLIGENT/FAST,
 # and FAST (gpt-5.4-mini) was NOT tested, so keep them INTELLIGENT (gpt-5.5) here = no Codex
 # regression; the Claude-side opus→sonnet cut is the verified saving.
-INTELLIGENT_SCOUTS="spec-scout agents-md-scout docs-gap-scout repo-scout context-scout docs-scout github-scout practice-scout"
+INTELLIGENT_SCOUTS="spec-scout agents-md-scout docs-gap-scout repo-scout context-scout docs-scout github-scout practice-scout plan-sync"
 # Agents that stay on opus in Claude Code (bug/gap detection = horsepower; failures invisible)
-OPUS_AGENTS="quality-auditor flow-gap-analyst plan-sync"
+OPUS_AGENTS="quality-auditor flow-gap-analyst"
 
 rename_agent() {
   case "$1" in
