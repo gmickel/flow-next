@@ -38,9 +38,22 @@ Optional:
 - [ ] `sync-codex.sh` regenerated + committed; `pytest` + `smoke_test.sh` green; `CHANGELOG` `## Unreleased`; no bump (R8)
 
 ## Done summary
-TBD
+Built a novel **fable-judged question-quality eval suite** for `interview` (a core-workflow skill, per your steer) and ran the loop. Outcome: **quality lever tested and honestly REVERTED**; no prose change. Fable review NEEDS_WORK → all defects fixed.
 
+**Suite (`optimization/interview/`):** 4 fixtures (I1 thin flow-native, I2 non-flow-next DocIQ anti-overfit, I3 override-respect, I4 restraint-stress). Run-trick = question EMISSION at `sonnet`; **E4 (NFR coverage) + E5 (overall question quality) judged by an independent `fable` subagent** (your steer); E1–E3 (ask-vs-investigate, format contract, override-respect) host-scored. Baseline: accuracy 12/12, quality 7/8 — questions are strong EXCEPT **I4 E5 FAIL: interview over-asks on a thorough spec** (asked a `[high]`-confidence Q it would just accept + a taste Q; its own "expect 40+ questions" bias). Real, corroborated blind spot.
+
+**Quality lever (restraint/prune cue) — DISCARD-REVERT.** It fixed the target (I4 E5 fail→PASS, 5 padding Qs → 3 sharp) and tightened I3 — BUT it is **not zero-regression**: on the *thin* fixture I1 it dropped the symlinked-`.flow/` + Windows-Ctrl-C NFR probes (flow-next's real sore spots) — the prune cue bled from well-specified into under-specified specs. Reverted: **primary ground = that I1 coverage regression**; secondary = the E5 aggregate is too noisy (~50%-flip; baseline I3 itself flipped 5/5→3/5 at N=2) to show a clean gain. E1–E3 accuracy floor held 12/12; +144 tok not kept.
+
+**Trim (2nd experiment) — DISCARD-HOLD:** question-surface trims are coverage-load-bearing (the I1 regression proves it); non-exercised-prose trims hold trivially = weak-ratchet. Not run; follow-up logged.
+
+**Fable review verdict NEEDS_WORK → addressed every defect:** (1) added the missing trim row; (2) corrected the "no regression anywhere" over-claim → the real I1 coverage loss, in results.tsv + changelog + optimization-log; (3) named the failing cell (I3-E5) + stated the N=2 tie-break (tie→fail) + flagged the asymmetric baseline-N=1 vs lever-N=2 comparator; (4) fixed the 3→4-fixture doc drift (evals.md header math 15/9/6→20/12/8, README); (5) marked E5 ADVISORY-pending-N≥5 (a coin-flip eval can't solely gate a ratchet); (6) added the Major-B note for I4. The revert itself was affirmed by the review.
+
+**Worktree mechanic (Major-1):** still DEFERRED — emission covered interview too (question quality is emission-scorable); the first suite scoring a written side-effect is where it'd be needed.
+
+**R6/R8:** optimization-log row added; **no mirror regen / no CHANGELOG entry** (reverted → prose byte-identical to baseline); test surface unchanged. No version bump.
+
+**Durable deliverables:** a fable-judged question-quality regression harness for a core skill; a diagnosed blind spot (over-asking on thorough specs); two concrete follow-ups (re-scope the prune cue to well-specified specs only; add a per-fixture must-ask-NFR answer-key + majority-vote E5 N≥5, then re-attempt).
 ## Evidence
 - Commits:
-- Tests:
+- Tests: no flowctl/test change (lever reverted, prose byte-identical to baseline) — surface unchanged since fn-84.1's green run, fable-model review of the pass: NEEDS_WORK -> all defects addressed (trim row, no-regression correction, named cell+tie-break, doc-drift, E5-advisory, Major-B note); revert affirmed
 - PRs:
