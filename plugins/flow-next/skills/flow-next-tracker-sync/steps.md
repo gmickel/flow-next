@@ -360,8 +360,21 @@ conflict) lives in that reference:
 
 ```
 reconcile(spec):
-  base    = sync get-state → merge-base snapshot (BOTH forms: mergeBaseFlow + mergeBaseTracker)
+  base    = sync get-state → merge-base snapshot (BOTH forms: mergeBaseFlow + mergeBaseTracker) + lastSyncedAt
   issue   = fetchIssue(trackerId)                [→ ref: transport]
+  # ── UNCHANGED-BOTH-SIDES SHORT-CIRCUIT (R22) ────────────────────────────────────
+  # If the issue has NOT moved since we last synced AND the local spec body still equals
+  # the flow-side merge-base snapshot, there is genuinely nothing to reconcile. Emit a
+  # `noop` receipt WITHOUT loading the 3-way merge doctrine (body-merge.md 526L) or the
+  # status/comments hooks (status-sync.md 707L, comments-sync.md 446L) — the dominant
+  # per-dispatch cost. pilot backlog reconciles EVERY tick, so in steady state (nothing
+  # changed) this skips ~13-17k tokens of ref-instruction load. Both halves are required:
+  # a tracker-only check would false-noop a local-only edit that still needs pushing.
+  if issue.updatedAt <= lastSyncedAt AND read(.flow/specs/<id>.md) == base.mergeBaseFlow:
+     receipt: noop (unchanged both sides since lastSyncedAt); return
+  # Either side moved → fall through to the full reconcile below (loads the merge refs).
+  # Backstop: even if updatedAt is imprecise and we fall through, body-merge Step 1's
+  # echo-fence still reduces a genuinely-unchanged pair to a noop — this just avoids the load.
   prEvidence = mergeEvidenceProbe(spec.branch_name)  → status-sync.md (feeds reconcileStatus; gates terminal)
   projectReadiness(spec, issue)                  → status-sync.md § Readiness projection (rides every issue read; independent of the body merge — runs even when the body diverges)
   projectDepRelations(spec, issue)               → § projectDepRelations below (rides every issue read like projectReadiness; independent of the body merge — runs even when the body diverges or conflicts)
