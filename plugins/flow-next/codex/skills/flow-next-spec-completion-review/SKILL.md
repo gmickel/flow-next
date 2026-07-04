@@ -157,3 +157,15 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 5. **Repeat** until `<verdict>SHIP</verdict>` — or the MAX ITERATIONS cap above breaks the loop (escalate with surviving gaps)
 
 **CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.
+
+## Step 3: Record the verdict (MANDATORY — every backend, every terminal outcome)
+
+The moment the fix loop terminates, write the outcome back so the rest of the pipeline sees it — exactly as `/flow-next:plan-review` writes `set-plan-review-status`. **Without this, a standalone completion review leaves `completion_review_status: unknown`, which keeps `flowctl ready --require-completion-review` demanding a review (pilot's gate), feeds make-pr's Open-items / draft heuristic stale state, and blocks tracker-sync's terminal `verified` rung.**
+
+```bash
+# Final verdict resolved to SHIP → ship; NEEDS_WORK at the iteration cap → needs_work.
+$FLOWCTL spec set-completion-review-status "$SPEC_ID" --status ship --json # on SHIP
+$FLOWCTL spec set-completion-review-status "$SPEC_ID" --status needs_work --json # on NEEDS_WORK at cap
+```
+
+Write it on BOTH terminal paths (SHIP and capped-NEEDS_WORK). This is the same write `/flow-next:work` performs when it runs completion-review inline; a standalone invocation must not skip it.

@@ -1,0 +1,642 @@
+{
+  "success": true,
+  "spec": {
+    "id": "fn-52-tracker-sync-bridge-project-flow-specs",
+    "title": "Tracker sync bridge: project .flow specs to Linear then GitHub, reconciled status/comments",
+    "status": "done",
+    "branch_name": "fn-52-tracker-sync-bridge-project-flow-specs",
+    "spec_path": ".flow/specs/fn-52-tracker-sync-bridge-project-flow-specs.md",
+    "created_at": "2026-06-01T12:34:13.915239Z",
+    "spec_sections": {
+      "goal_and_context": "<!-- scope: business -->\n<!-- Source-tag breakdown: 50% [user] / 35% [paraphrase] / 15% [inferred] -->\n\nflow-next specs (`.flow/specs/<id>.md`) are markdown-of-record but isolated from where teams live (Linear / Jira / GitHub). Gordon already runs this sync by hand in the workunits/Sapient project (Linear canonical; Flow local; copy the spec body 1:1 both ways; attach evidence on completion) \u2014 but that manual protocol has **no real reconciliation**: no conflict detection, no `lastSyncedAt`, no merge. This spec automates a bridge as **projection, not coordination**: the spec stays the single source of truth and the quality layer; the tracker is a **co-editable mirror** for teams that must live in it. \"Not coordination\" means the tracker never drives flow state or spawns agents (Symphony's control-plane model) \u2014 it does NOT mean one-way. Body, status, and comments all sync **two-way**, and body reconciliation is **agentic** (the host agent does a semantic merge, which is exactly what flow-next's \"host agent IS the intelligence\" architecture is for). This unlocks the key flow: a vague PM/PO issue in Linear is pulled into flow, enriched through capture/interview/plan, and the enrichment **syncs back** to the tracker automatically. The design takes the *decisions* from the workunits practice and the *sync engine* (discovery ceremony, per-item `lastSyncedAt`, field-level reconciliation, surface-diffs-never-overwrite) from Ray Fernando's running-bug-review-board `issue-trackers.md` (Apache-2.0 \u2014 credited). **Linear-first** \u2014 where the lived demand is (the workunits team + the Symphony/Linear ecosystem) \u2014 **GitHub next**.",
+      "architecture_overview": "<!-- scope: technical -->\n\nA SKILL drives the sync workflow; thin flowctl plumbing provides atomic helpers \u2014 the canonical flow-next split (flowctl owns \"enumerate / set-field / validate-config / atomic-write\"; the skill, running on the host agent, owns \"call the tracker API / reconcile / merge bodies / ask the user on genuine conflict\"). Per-item sync state lives in spec metadata, written atomically by flowctl: the tracker id (dedupe key), `lastSyncedAt`, and a **merge-base snapshot** of the bo\u2026",
+      "acceptance_criteria": [
+        {
+          "id": "R1",
+          "text": "Sync config in `.flow/` records: an explicit **`enabled`** activation flag (default `false`) and `type` (default `null`, then `linear` first / `github` next). Because `get_default_config()` always returns a `tracker` block, **activation MUST be explicit and value-checked** \u2014 the bridge is active iff raw `tracker.enabled == true` OR raw `tracker.type \u2208 {linear, github}`; absent / `null` / `\"\"` / unknown \u21d2 inactive (a default `type: null` persisted by an unrelated `set_config` write must NOT activate). Also: a `provenance` field (default `null`) recording who/what confirmed the config; a **per-event sync policy** whose keys are **nested to stay dot-path-safe** for `flowctl config get/set` \u2014 `{capture, interview, plan, work: {firstClaim, done}, makePr, resolvePr, completionReview}`, each leaf an enum `off | pull | push | reconcile | comment`, **all defaulting to `off`** (read as `tracker.perEvent.work.firstClaim`, `tracker.perEvent.capture`, etc.); a per-tracker block (team / project id, label / priority map); a `staleAfterHours` threshold (default documented) that drives `list-stale`; and a conflict-tiebreak default (`flow-wins` | `tracker-wins` | `always-ask`) for the rare unresolvable case. Forward-compatible (version field; unknown keys preserved, not dropped).",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R2",
+          "text": "Discovery ceremony \u2014 detect tracker signals (Linear MCP registered, `LINEAR_API_KEY`, `gh auth`, `*.atlassian.net`), surface present AND absent, ASK the user, never assume; write config only on confirmation, with provenance. The ceremony configures *which* tracker/team, NOT *where the user must start* \u2014 the entry point is flexible: author in flow and push, or link an existing tracker issue ad-hoc (e.g. \"grab issue X and spec it\") via an already-installed MCP. The bridge attaches sync state on link rather than imposing a fixed starting point. [user]/",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R3",
+          "text": "Grain \u2014 one flow spec maps to one tracker issue; tasks stay flow-local by default (optionally rendered as a checklist inside the issue body, NOT as sub-issues). [user]/",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R4",
+          "text": "Per-item sync state \u2014 spec metadata carries the tracker id (dedupe key), `lastSyncedAt`, and a body merge-base snapshot at last sync; flowctl owns the atomic write.",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R5",
+          "text": "Enumerate-only flowctl helpers list specs needing push (no tracker id) and stale specs (`lastSyncedAt` old / missing); the SKILL performs the actual tracker API calls, body merge, and reconciliation (flowctl enumerates / validates / atomic-writes; agent acts / merges / judges / asks).",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R6",
+          "text": "Body sync is **two-way**, reconciled **agentically** \u2014 not a text copy. The host agent reads both bodies + the `lastSyncedAt` merge-base (3-way: base vs flow-side vs tracker-side), folds non-conflicting changes from each side together (e.g. PM clarifies the goal in Linear while a dev adds acceptance criteria in flow \u2192 both preserved), and **translates between formats** (flow's structured spec / R-IDs \u2194 the tracker's free-form issue body). Enrichment done in flow (capture/interview/plan) flows back to the tracker; tracker edits fold into the right flow sections. [user]/",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R7",
+          "text": "Status / priority / metadata sync is two-way + reconciled with explicit who-wins rules (tracker wins `done`/`verified`; flow wins `in-progress`; priority + `deferred`/`wontfix` surface to the user, never auto-changed).",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R8",
+          "text": "Comments / evidence sync is two-way append \u2014 flow lifecycle events post structured comments to the issue; tracker comments pull into the spec's sync log; appends only (no conflict).",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R9",
+          "text": "Only a genuine semantic contradiction the agent can't confidently resolve (both sides rewrote the same content to mean different things) is surfaced as a **focused, scoped** conflict for the human \u2014 never the whole body, never a silent overwrite. Interactive: show the merged body for confirmation before write-back. Ralph/autonomous: confident merges proceed; genuine conflicts queue for the human (R11). [user]/",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R10",
+          "text": "Lifecycle sync points \u2014 capture/interview: spec push/pull + merge; plan: no sub-issues by default; per task done: post a status comment + evidence (tests / PR) and move the issue In-Progress on first claim; spec-completion-review: flip the issue Done/verified + post verdict / R-ID coverage; make-pr: attach the PR link to the issue; resolve-pr: optional resolution comment. [user]/",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R11",
+          "text": "Ralph-safe \u2014 genuine body contradictions and unresolvable status conflicts NEVER block in an autonomous loop; they queue for the human (deferred-decisions list). Autonomous runs apply confident body merges + conflict-free status/comment ops.",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R12",
+          "text": "Each sync run emits a proof-of-work receipt (pushed / pulled / merged / updated / diverged / queued / errored / noop), recording every body merge for auditability + rollback, consistent with the existing receipt model.",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R13",
+          "text": "Linear adapter first, via a **transport-agnostic, detect-best-available adapter (mirrors fn-51's driver ladder) \u2014 neither transport is a hard dependency**: use the **Linear MCP** when it's registered (interactive convenience, OAuth handled, the dominant interactive mode), else the **Linear GraphQL API via `LINEAR_API_KEY`** (headless / CI / Ralph-safe, version-stable); when both are absent, no-op + receipt note. The agentic reconciliation is identical regardless of transport \u2014 the transport is a thin, swappable fetch/write detail. When the MCP transport is used, verify/pin tool names at build (they drift); the GraphQL path is stable. GitHub adapter next (via `gh`, headless-safe). [user]/",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R14",
+          "text": "Positioned and documented as projection / co-editable mirror (spec = source of truth; tracker mirrors but never drives the agent loop / spawns agents), NOT coordination; the projection-not-coordination + Linear-first call is recorded as a decision.",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R15",
+          "text": "Version bump + docs across THREE surfaces \u2014 and because this **changes the documented lifecycle flows** (a tracker dimension now rides on capture / interview / plan / work / make-pr), the flow-next.dev **guide / workflow pages need real edits, not just a changelog line**: (a) **repo** \u2014 a new sync reference, `flowctl.md` (sync helpers), `teams.md` (tracker bridge + Symphony contrast), CHANGELOG, root README, CLAUDE.md \"where to look\", `.flow/usage.md`; (b) **flow-next.dev** (`~/work/flow-next.dev`) \u2014 a **broad pass, not a single page** (own task, fn-52.11): a new tracker-sync docs page; a **hybrid id-model / handles explainer** (because R16 introduces a *second user-facing id scheme* \u2014 tracker keys as resolvable handles); **edits to every page that teaches spec referencing** (getting-started, command / usage reference showing `/flow-next:work <id>`, the teams / workflow walkthrough, examples that hardcode `fn-NN`) so the docs stop implying `fn-NN` is the only id form; **plus** the optional, clearly-marked opt-in tracker-sync touchpoints on each lifecycle step (the no-tracker path stays the documented default, shown unchanged) + changelog entry, run the `pnpm build` gate; (c) **mickel.tech** (`~/work/mickel.tech`) \u2014 the flow-next app page, **maintainer-only (Gordon updates post-merge; contributor PRs skip it)**.",
+          "tag": "inferred"
+        },
+        {
+          "id": "R16",
+          "text": "Identity / naming alignment \u2014 for **tracker-first / synced specs, the flow spec id adopts the tracker key as its handle** (canonical `wor-17-<slug>`; task handles `wor-17.M` resolve to canonical `wor-17-slug.M`) instead of a fresh `fn-NN`, matching the manual workunits convention (`wor-2-\u2026`) so the two schemes don't diverge. For flow-first specs (no tracker, or pushed out), the flow id stays the handle and the tracker issue carries it back (a `flow:<id>` label or `[<id>]` title prefix). Either way each side references the other (flow stores the tracker id per R4) and titles stay 1:1 via body sync. **Resolution model \u2014 HYBRID (decided post-review):** the tracker key is a **first-class, resolvable handle**, not just a stored label \u2014 `work wor-17`, `plan wor-17`, `show wor-17`, tasks `wor-17.M` all resolve. flowctl widens `is_spec_id` / `expand_bare_spec_id` so every command inherits resolution (fn-52.10 owns this). The two id schemes coexist:",
+          "tag": ""
+        }
+      ],
+      "boundaries": [
+        "**Fully opt-in** \u2014 with no tracker configured, the lifecycle skills (capture / interview / plan / work / make-pr) behave exactly as today: zero new steps, zero new prerequisites, project-management software not assumed. The bridge activates ONLY when raw config has `tracker.enabled == true` OR `tracker.type \u2208 {linear, github}` (the discovery ceremony writes these) \u2014 NOT merely because `get_default_config()` returns a `tracker` block, and NOT for a stray persisted `type: null`. With `perEvent` keys all defaulting to `off`, even a stray `enabled=true` does nothing until events are opted in. It adds nothing to the base / zero-dep flow (preserves the STRATEGY zero-dep base contract). Tracker touchpoints appear in the guides as optional steps, never mandatory.",
+        "NOT a daemon / control-plane like OpenAI Symphony (Linear-as-state-machine that *spawns* agents / drives flow state) \u2014 this is a projection bridge; flow-next stays spec-canonical and owns the agent loop. A Symphony-like trigger layer (a poller / webhook listener that watches tracker state and fires flow-next actions) is a **separable future addition on top of this bridge** \u2014 explicitly out of scope here, and a separate strategy decision because it would make the tracker a trigger, revisiting the projection-not-coordination line. The sync bridge (linkage + state + headless flowctl actions) is the substrate that makes it cheap to add later.",
+        "NOT auto-creating tracker sub-issues per flow task (tasks stay flow-local).",
+        "NOT auto-importing tracker-only issues into flow without asking (default \"ask\").",
+        "NOT a deterministic text-merge engine \u2014 body reconciliation is agentic; only genuine contradictions surface for a human, never a silent overwrite.",
+        "Jira / Notion adapters are out of scope here (Linear + GitHub only); the adapter shape stays extensible.",
+        "Does NOT copy the workunits manual full-body-overwrite convention \u2014 replaced by the agentic 3-way reconciliation + merge base.",
+        "**One tracker team / workspace per repo** \u2014 the bridge assumes a single team key so a bare `wor-17` resolves unambiguously; cross-workspace same-key collision (two Linear teams both keyed `WOR`) is out of scope and not disambiguated.",
+        "**No rename-on-push** \u2014 existing spec/task ids, branches, and dep edges are never mutated when a spec is synced; the tracker key is added as a resolvable handle/alias, not a replacement of an existing id."
+      ],
+      "decision_context": [],
+      "open_questions": []
+    }
+  },
+  "epic": {
+    "id": "fn-52-tracker-sync-bridge-project-flow-specs",
+    "title": "Tracker sync bridge: project .flow specs to Linear then GitHub, reconciled status/comments",
+    "status": "done",
+    "branch_name": "fn-52-tracker-sync-bridge-project-flow-specs",
+    "spec_path": ".flow/specs/fn-52-tracker-sync-bridge-project-flow-specs.md",
+    "created_at": "2026-06-01T12:34:13.915239Z",
+    "spec_sections": {
+      "goal_and_context": "<!-- scope: business -->\n<!-- Source-tag breakdown: 50% [user] / 35% [paraphrase] / 15% [inferred] -->\n\nflow-next specs (`.flow/specs/<id>.md`) are markdown-of-record but isolated from where teams live (Linear / Jira / GitHub). Gordon already runs this sync by hand in the workunits/Sapient project (Linear canonical; Flow local; copy the spec body 1:1 both ways; attach evidence on completion) \u2014 but that manual protocol has **no real reconciliation**: no conflict detection, no `lastSyncedAt`, no merge. This spec automates a bridge as **projection, not coordination**: the spec stays the single source of truth and the quality layer; the tracker is a **co-editable mirror** for teams that must live in it. \"Not coordination\" means the tracker never drives flow state or spawns agents (Symphony's control-plane model) \u2014 it does NOT mean one-way. Body, status, and comments all sync **two-way**, and body reconciliation is **agentic** (the host agent does a semantic merge, which is exactly what flow-next's \"host agent IS the intelligence\" architecture is for). This unlocks the key flow: a vague PM/PO issue in Linear is pulled into flow, enriched through capture/interview/plan, and the enrichment **syncs back** to the tracker automatically. The design takes the *decisions* from the workunits practice and the *sync engine* (discovery ceremony, per-item `lastSyncedAt`, field-level reconciliation, surface-diffs-never-overwrite) from Ray Fernando's running-bug-review-board `issue-trackers.md` (Apache-2.0 \u2014 credited). **Linear-first** \u2014 where the lived demand is (the workunits team + the Symphony/Linear ecosystem) \u2014 **GitHub next**.",
+      "architecture_overview": "<!-- scope: technical -->\n\nA SKILL drives the sync workflow; thin flowctl plumbing provides atomic helpers \u2014 the canonical flow-next split (flowctl owns \"enumerate / set-field / validate-config / atomic-write\"; the skill, running on the host agent, owns \"call the tracker API / reconcile / merge bodies / ask the user on genuine conflict\"). Per-item sync state lives in spec metadata, written atomically by flowctl: the tracker id (dedupe key), `lastSyncedAt`, and a **merge-base snapshot** of the bo\u2026",
+      "acceptance_criteria": [
+        {
+          "id": "R1",
+          "text": "Sync config in `.flow/` records: an explicit **`enabled`** activation flag (default `false`) and `type` (default `null`, then `linear` first / `github` next). Because `get_default_config()` always returns a `tracker` block, **activation MUST be explicit and value-checked** \u2014 the bridge is active iff raw `tracker.enabled == true` OR raw `tracker.type \u2208 {linear, github}`; absent / `null` / `\"\"` / unknown \u21d2 inactive (a default `type: null` persisted by an unrelated `set_config` write must NOT activate). Also: a `provenance` field (default `null`) recording who/what confirmed the config; a **per-event sync policy** whose keys are **nested to stay dot-path-safe** for `flowctl config get/set` \u2014 `{capture, interview, plan, work: {firstClaim, done}, makePr, resolvePr, completionReview}`, each leaf an enum `off | pull | push | reconcile | comment`, **all defaulting to `off`** (read as `tracker.perEvent.work.firstClaim`, `tracker.perEvent.capture`, etc.); a per-tracker block (team / project id, label / priority map); a `staleAfterHours` threshold (default documented) that drives `list-stale`; and a conflict-tiebreak default (`flow-wins` | `tracker-wins` | `always-ask`) for the rare unresolvable case. Forward-compatible (version field; unknown keys preserved, not dropped).",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R2",
+          "text": "Discovery ceremony \u2014 detect tracker signals (Linear MCP registered, `LINEAR_API_KEY`, `gh auth`, `*.atlassian.net`), surface present AND absent, ASK the user, never assume; write config only on confirmation, with provenance. The ceremony configures *which* tracker/team, NOT *where the user must start* \u2014 the entry point is flexible: author in flow and push, or link an existing tracker issue ad-hoc (e.g. \"grab issue X and spec it\") via an already-installed MCP. The bridge attaches sync state on link rather than imposing a fixed starting point. [user]/",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R3",
+          "text": "Grain \u2014 one flow spec maps to one tracker issue; tasks stay flow-local by default (optionally rendered as a checklist inside the issue body, NOT as sub-issues). [user]/",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R4",
+          "text": "Per-item sync state \u2014 spec metadata carries the tracker id (dedupe key), `lastSyncedAt`, and a body merge-base snapshot at last sync; flowctl owns the atomic write.",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R5",
+          "text": "Enumerate-only flowctl helpers list specs needing push (no tracker id) and stale specs (`lastSyncedAt` old / missing); the SKILL performs the actual tracker API calls, body merge, and reconciliation (flowctl enumerates / validates / atomic-writes; agent acts / merges / judges / asks).",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R6",
+          "text": "Body sync is **two-way**, reconciled **agentically** \u2014 not a text copy. The host agent reads both bodies + the `lastSyncedAt` merge-base (3-way: base vs flow-side vs tracker-side), folds non-conflicting changes from each side together (e.g. PM clarifies the goal in Linear while a dev adds acceptance criteria in flow \u2192 both preserved), and **translates between formats** (flow's structured spec / R-IDs \u2194 the tracker's free-form issue body). Enrichment done in flow (capture/interview/plan) flows back to the tracker; tracker edits fold into the right flow sections. [user]/",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R7",
+          "text": "Status / priority / metadata sync is two-way + reconciled with explicit who-wins rules (tracker wins `done`/`verified`; flow wins `in-progress`; priority + `deferred`/`wontfix` surface to the user, never auto-changed).",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R8",
+          "text": "Comments / evidence sync is two-way append \u2014 flow lifecycle events post structured comments to the issue; tracker comments pull into the spec's sync log; appends only (no conflict).",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R9",
+          "text": "Only a genuine semantic contradiction the agent can't confidently resolve (both sides rewrote the same content to mean different things) is surfaced as a **focused, scoped** conflict for the human \u2014 never the whole body, never a silent overwrite. Interactive: show the merged body for confirmation before write-back. Ralph/autonomous: confident merges proceed; genuine conflicts queue for the human (R11). [user]/",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R10",
+          "text": "Lifecycle sync points \u2014 capture/interview: spec push/pull + merge; plan: no sub-issues by default; per task done: post a status comment + evidence (tests / PR) and move the issue In-Progress on first claim; spec-completion-review: flip the issue Done/verified + post verdict / R-ID coverage; make-pr: attach the PR link to the issue; resolve-pr: optional resolution comment. [user]/",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R11",
+          "text": "Ralph-safe \u2014 genuine body contradictions and unresolvable status conflicts NEVER block in an autonomous loop; they queue for the human (deferred-decisions list). Autonomous runs apply confident body merges + conflict-free status/comment ops.",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R12",
+          "text": "Each sync run emits a proof-of-work receipt (pushed / pulled / merged / updated / diverged / queued / errored / noop), recording every body merge for auditability + rollback, consistent with the existing receipt model.",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R13",
+          "text": "Linear adapter first, via a **transport-agnostic, detect-best-available adapter (mirrors fn-51's driver ladder) \u2014 neither transport is a hard dependency**: use the **Linear MCP** when it's registered (interactive convenience, OAuth handled, the dominant interactive mode), else the **Linear GraphQL API via `LINEAR_API_KEY`** (headless / CI / Ralph-safe, version-stable); when both are absent, no-op + receipt note. The agentic reconciliation is identical regardless of transport \u2014 the transport is a thin, swappable fetch/write detail. When the MCP transport is used, verify/pin tool names at build (they drift); the GraphQL path is stable. GitHub adapter next (via `gh`, headless-safe). [user]/",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R14",
+          "text": "Positioned and documented as projection / co-editable mirror (spec = source of truth; tracker mirrors but never drives the agent loop / spawns agents), NOT coordination; the projection-not-coordination + Linear-first call is recorded as a decision.",
+          "tag": "paraphrase"
+        },
+        {
+          "id": "R15",
+          "text": "Version bump + docs across THREE surfaces \u2014 and because this **changes the documented lifecycle flows** (a tracker dimension now rides on capture / interview / plan / work / make-pr), the flow-next.dev **guide / workflow pages need real edits, not just a changelog line**: (a) **repo** \u2014 a new sync reference, `flowctl.md` (sync helpers), `teams.md` (tracker bridge + Symphony contrast), CHANGELOG, root README, CLAUDE.md \"where to look\", `.flow/usage.md`; (b) **flow-next.dev** (`~/work/flow-next.dev`) \u2014 a **broad pass, not a single page** (own task, fn-52.11): a new tracker-sync docs page; a **hybrid id-model / handles explainer** (because R16 introduces a *second user-facing id scheme* \u2014 tracker keys as resolvable handles); **edits to every page that teaches spec referencing** (getting-started, command / usage reference showing `/flow-next:work <id>`, the teams / workflow walkthrough, examples that hardcode `fn-NN`) so the docs stop implying `fn-NN` is the only id form; **plus** the optional, clearly-marked opt-in tracker-sync touchpoints on each lifecycle step (the no-tracker path stays the documented default, shown unchanged) + changelog entry, run the `pnpm build` gate; (c) **mickel.tech** (`~/work/mickel.tech`) \u2014 the flow-next app page, **maintainer-only (Gordon updates post-merge; contributor PRs skip it)**.",
+          "tag": "inferred"
+        },
+        {
+          "id": "R16",
+          "text": "Identity / naming alignment \u2014 for **tracker-first / synced specs, the flow spec id adopts the tracker key as its handle** (canonical `wor-17-<slug>`; task handles `wor-17.M` resolve to canonical `wor-17-slug.M`) instead of a fresh `fn-NN`, matching the manual workunits convention (`wor-2-\u2026`) so the two schemes don't diverge. For flow-first specs (no tracker, or pushed out), the flow id stays the handle and the tracker issue carries it back (a `flow:<id>` label or `[<id>]` title prefix). Either way each side references the other (flow stores the tracker id per R4) and titles stay 1:1 via body sync. **Resolution model \u2014 HYBRID (decided post-review):** the tracker key is a **first-class, resolvable handle**, not just a stored label \u2014 `work wor-17`, `plan wor-17`, `show wor-17`, tasks `wor-17.M` all resolve. flowctl widens `is_spec_id` / `expand_bare_spec_id` so every command inherits resolution (fn-52.10 owns this). The two id schemes coexist:",
+          "tag": ""
+        }
+      ],
+      "boundaries": [
+        "**Fully opt-in** \u2014 with no tracker configured, the lifecycle skills (capture / interview / plan / work / make-pr) behave exactly as today: zero new steps, zero new prerequisites, project-management software not assumed. The bridge activates ONLY when raw config has `tracker.enabled == true` OR `tracker.type \u2208 {linear, github}` (the discovery ceremony writes these) \u2014 NOT merely because `get_default_config()` returns a `tracker` block, and NOT for a stray persisted `type: null`. With `perEvent` keys all defaulting to `off`, even a stray `enabled=true` does nothing until events are opted in. It adds nothing to the base / zero-dep flow (preserves the STRATEGY zero-dep base contract). Tracker touchpoints appear in the guides as optional steps, never mandatory.",
+        "NOT a daemon / control-plane like OpenAI Symphony (Linear-as-state-machine that *spawns* agents / drives flow state) \u2014 this is a projection bridge; flow-next stays spec-canonical and owns the agent loop. A Symphony-like trigger layer (a poller / webhook listener that watches tracker state and fires flow-next actions) is a **separable future addition on top of this bridge** \u2014 explicitly out of scope here, and a separate strategy decision because it would make the tracker a trigger, revisiting the projection-not-coordination line. The sync bridge (linkage + state + headless flowctl actions) is the substrate that makes it cheap to add later.",
+        "NOT auto-creating tracker sub-issues per flow task (tasks stay flow-local).",
+        "NOT auto-importing tracker-only issues into flow without asking (default \"ask\").",
+        "NOT a deterministic text-merge engine \u2014 body reconciliation is agentic; only genuine contradictions surface for a human, never a silent overwrite.",
+        "Jira / Notion adapters are out of scope here (Linear + GitHub only); the adapter shape stays extensible.",
+        "Does NOT copy the workunits manual full-body-overwrite convention \u2014 replaced by the agentic 3-way reconciliation + merge base.",
+        "**One tracker team / workspace per repo** \u2014 the bridge assumes a single team key so a bare `wor-17` resolves unambiguously; cross-workspace same-key collision (two Linear teams both keyed `WOR`) is out of scope and not disambiguated.",
+        "**No rename-on-push** \u2014 existing spec/task ids, branches, and dep edges are never mutated when a spec is synced; the tracker key is added as a resolvable handle/alias, not a replacement of an existing id."
+      ],
+      "decision_context": [],
+      "open_questions": []
+    }
+  },
+  "tasks": [
+    {
+      "id": "fn-52-tracker-sync-bridge-project-flow-specs.1",
+      "status": "done",
+      "title": "flowctl sync plumbing: config + sync-state + enumerate + receipt + Ralph deferral",
+      "satisfies": [
+        "R1",
+        "R4",
+        "R5",
+        "R11",
+        "R12"
+      ],
+      "done_summary": "Implemented the deterministic flowctl tracker-sync plumbing for fn-52 (R1/R4/R5/R11/R12): a value-checked `tracker` config block + activation predicate, per-spec sync state on the `.flow/specs/<id>.json` sidecar (tracker id + lastSyncedAt + paired flow-form/tracker-form merge base + content hashes), a new `flowctl sync` command group (active/get-state/set-tracker-id/set-last-synced/set-merge-base/clear/list-unsynced/list-stale/check-collisions/receipt/defer), a guard-safe sync receipt under `.flow/sync-runs/`, and a Ralph-safe deferral path. 31 unit tests added. Impl-review (rp) returned SHIP after one NEEDS_WORK fix (enforced the paired merge-base snapshot invariant).",
+      "evidence": {
+        "commits": [
+          "3f7a1a9c",
+          "bb1fa893"
+        ],
+        "tests": [
+          "python3 -m unittest discover -s plugins/flow-next/tests (728 passed, 2 skipped)",
+          "python3 -m unittest plugins.flow-next.tests.test_tracker_config plugins.flow-next.tests.test_tracker_sync_state plugins.flow-next.tests.test_tracker_receipts (31 passed)"
+        ],
+        "files_touched": []
+      }
+    },
+    {
+      "id": "fn-52-tracker-sync-bridge-project-flow-specs.2",
+      "status": "done",
+      "title": "Tracker-sync skill scaffold: discovery ceremony, grain, identity alias, orchestration + adapter interface",
+      "satisfies": [
+        "R2",
+        "R3",
+        "R16"
+      ],
+      "done_summary": "Scaffolded the `flow-next-tracker-sync` skill spine: discovery ceremony (R2: detect/surface/ask/never-assume + provenance + no-signal-no-write), flexible flow-first/tracker-first entry (R2), one-spec-to-one-issue grain with tasks-flow-local + deferred checklist render (R3), hybrid tracker-key identity via fn-52.10's id layer with never-rename (R16), and a transport-blind push/pull/reconcile orchestration skeleton plus a normalized issue/comment/status adapter-interface contract that fn-52.3/.7 (transports) and fn-52.4/.5 (reconcile) plug into. Added the new `/flow-next:tracker-sync` command (distinct from plan-sync's `/flow-next:sync`). No flowctl.py edits \u2014 the skill calls the .1 sync helpers and the .10 tracker-first create/resolver. Canonical files are Claude-native (AskUserQuestion, Task); Codex mirror is regenerated in fn-52.9.",
+      "evidence": {
+        "commits": [
+          "b423c7e3865aec662acbbd0f8d98c0c3423f9b8e"
+        ],
+        "tests": [
+          "plugins/flow-next/scripts/ci_test.sh (58 passed / 0 failed)",
+          "flowctl validate --spec fn-52-tracker-sync-bridge-project-flow-specs (valid)",
+          "impl-review rp backend: SHIP (0 findings, first pass)"
+        ],
+        "files_touched": []
+      }
+    },
+    {
+      "id": "fn-52-tracker-sync-bridge-project-flow-specs.3",
+      "status": "done",
+      "title": "Linear adapter: transport ladder (MCP/GraphQL/no-op) + round-trip spike + tool-name pin",
+      "satisfies": [
+        "R13"
+      ],
+      "done_summary": "Implemented the Linear transport adapter as a detect-best-available ladder (MCP \u2192 GraphQL via LINEAR_API_KEY \u2192 no-op + receipt; neither a hard dependency) across three new skill references \u2014 linear-ladder.md (rung router, normalized-mapping firewall, MCP\u2194GraphQL parity table, runnable round-trip spike with a diff oracle, and the never-crash error contract for 404/deleted/RATELIMITED), linear-mcp.md (interactive rung with a dated tool-name pin: save_issue/save_comment/list_comments/get_issue/list_issue_statuses upsert verbs verified 2026-06-03), and linear-graphql.md (headless rung: auth-no-Bearer asymmetry, id-vs-identifier, complexity rate limit as HTTP-400 RATELIMITED with backoff) \u2014 wired into SKILL.md and steps.md. Live Linear round-trip execution is intentionally deferred to the post-PR smoke phase (no creds in this env); the spike is a complete runnable procedure with an explicit pass/fail oracle.",
+      "evidence": {
+        "commits": [
+          "631d7e1",
+          "863d712",
+          "b0e939b",
+          "adf5fa6"
+        ],
+        "tests": [
+          "flowctl validate --spec fn-52-tracker-sync-bridge-project-flow-specs (Valid: True)",
+          "markdown fence-balance + cross-ref link resolution checks (all pass)",
+          "impl-review rp backend: SHIP (2 NEEDS_WORK rounds -> SHIP; sole findings were unbounded GraphQL connections, both fixed; R13 met across all 5 acceptance criteria)"
+        ],
+        "files_touched": []
+      }
+    },
+    {
+      "id": "fn-52-tracker-sync-bridge-project-flow-specs.4",
+      "status": "done",
+      "title": "Agentic body reconciliation: 3-way merge + format translation + scoped conflict",
+      "satisfies": [
+        "R6",
+        "R9"
+      ],
+      "done_summary": "Implemented the agentic 3-way body reconciliation for the flow-next-tracker-sync skill (R6/R9): a new references/body-merge.md with deterministic pre-reduction (echo/byte-identical/one-side-changed auto-cases), an agentic both-sides-diverged merge, flow-structured<->tracker free-form format translation (idempotent; never invents R-IDs/source-tags on a tracker->flow fold), a structural verification gate before write-back, scoped genuine-conflict surfacing (one section, never whole-body \u2014 interactive confirm vs Ralph queue), no-base bootstrap, an echo fence, and state-advances-only-on-success with item-level batch failure. steps.md Phase 3/4 + SKILL.md now delegate the reconcile body hooks to it (no lingering [stub -> fn-52.4]). Four worked fixtures (A-D) serve as runnable oracles; the strictly-live Linear round-trip is deferred to the post-PR smoke phase. impl-review (rp): SHIP first pass, 0 introduced findings.",
+      "evidence": {
+        "commits": [
+          "faa3748f24ad6a9d2f82fbee1216e883031372b6"
+        ],
+        "tests": [
+          "bash plugins/flow-next/scripts/ci_test.sh (58 passed / 0 failed)",
+          "python3 -m unittest discover -s plugins/flow-next/tests (788 passed, 2 skipped)",
+          "flowctl validate --spec fn-52-tracker-sync-bridge-project-flow-specs (valid: True)",
+          "markdown fence-balance + cross-ref link resolution (0 broken)",
+          "impl-review rp backend: SHIP (first pass, 0 introduced findings; R6 + R9 covered)"
+        ],
+        "files_touched": []
+      }
+    },
+    {
+      "id": "fn-52-tracker-sync-bridge-project-flow-specs.5",
+      "status": "done",
+      "title": "Status/metadata who-wins + comments/evidence two-way append",
+      "satisfies": [
+        "R7",
+        "R8"
+      ],
+      "done_summary": "Implemented status/metadata who-wins (R7) and comments/evidence two-way append (R8) for the flow-next-tracker-sync skill as two new reference files: references/status-sync.md (per-field who-wins \u2014 tracker wins terminal, flow wins in-progress, priority/deferred/wontfix surfaced never auto-changed; status deadlock evaluated FIRST and routed to the R1 conflictTiebreak, queuing under always-ask in Ralph; Linear state.type \u2194 flow status map with a warn+surface unmapped-state fallback; six worked fixtures S-A..S-F) and references/comments-sync.md (append-only two-way comments/evidence with three-layer dedup \u2014 embedded marker, stored posted-id, normalized-text hash that catches a human paste; lifecycle event\u2192comment map; sync-log fold that never promotes to an R-ID; a single opt-in rolling status comment as the sole edit-in-place exception; five fixtures C-A..C-E). Wired the now-implemented reconcile hooks into SKILL.md/steps.md/adapter-interface.md/linear-ladder.md (no lingering fn-52.5 stubs). Strictly-live setStatus/postComment round-trips are deferred to the post-PR smoke phase per the established pattern; all policy/dedup/mapping logic is runnable without a live tracker. impl-review (rp): NEEDS_WORK \u2192 SHIP after fixing a deadlock-ordering bug (terminal-wins fired before the deadlock fallback).",
+      "evidence": {
+        "commits": [
+          "0140f67",
+          "6488231",
+          "fd49b3c"
+        ],
+        "tests": [
+          "bash plugins/flow-next/scripts/ci_test.sh (58 passed / 0 failed)",
+          "cross-ref link resolution on status-sync.md + comments-sync.md (0 broken)",
+          "markdown fence-balance check (both balanced)",
+          "flowctl validate --spec fn-52 (valid: true)",
+          "impl-review rp backend: NEEDS_WORK (1 Major, conf 100) -> fixed -> SHIP (0 introduced findings; R7 + R8 covered)"
+        ],
+        "files_touched": []
+      }
+    },
+    {
+      "id": "fn-52-tracker-sync-bridge-project-flow-specs.6",
+      "status": "done",
+      "title": "Lifecycle sync touchpoints (opt-in across 7 skills) + unlink",
+      "satisfies": [
+        "R10",
+        "R16"
+      ],
+      "done_summary": "Wired optional, opt-in tracker-sync touchpoints into the seven lifecycle skills (capture/interview/plan/work/make-pr/resolve-pr, with completion-review hooked at the work-skill caller that sets completion_review_status) plus the unlink lifecycle \u2014 every touchpoint gated on `flowctl sync active` (value-checked) AND its nested `tracker.perEvent.<key>` leaf (all default `off`), so the no-tracker path is behaviorally unchanged and lifecycle skills only gate + delegate to flow-next-tracker-sync (R10). Widened the work/plan/interview/sync input grammars to route any single-token arg through `flowctl show` (resolving tracker handles like `wor-17`/`wor-17.M` via fn-52.10) before treating it as idea text, removing the hard `fn-`-only checks so handles resolve the existing spec/task instead of creating duplicates (R16).",
+      "evidence": {
+        "commits": [
+          "2edea075d7d4d122f0f9e7b3699acb7498439078"
+        ],
+        "tests": [
+          "flowctl validate --spec fn-52-tracker-sync-bridge-project-flow-specs (success, 0 errors)",
+          "flowctl sync active --json + config get tracker.perEvent.* (verified .active / .value gating shape)",
+          "impl-review rp backend: SHIP, no introduced findings, R10+R16 satisfied"
+        ],
+        "files_touched": []
+      }
+    },
+    {
+      "id": "fn-52-tracker-sync-bridge-project-flow-specs.7",
+      "status": "done",
+      "title": "GitHub adapter via gh (headless-safe, reduced-fidelity status)",
+      "satisfies": [
+        "R13"
+      ],
+      "done_summary": "Added the GitHub transport adapter as a skill reference (plugins/flow-next/skills/flow-next-tracker-sync/references/github.md): a gh-based implementation of the fn-52.2 six-method interface \u2014 single headless rung (GH_TOKEN) plus terminal no-op, mapping gh JSON to/from the normalized issue/comment/status structs and reusing the fn-52.4/.5 reconcile core unchanged. Documents reduced-fidelity status (normalized mapped DOWN to open/closed + stateReason, full status carried via a status: label; deferred/wontfix surfaced not auto-applied), the R13 transport-blind/cross-tracker parity proof + round-trip spike (live exec deferred to the post-PR smoke phase), and the non-destructive 404/rate-limit error contract; wired into SKILL.md and steps.md alongside the Linear ladder links.",
+      "evidence": {
+        "commits": [
+          "b8f10214a01e5a445e998d11fd653b0d7ecedc89"
+        ],
+        "tests": [
+          "impl-review rp backend: triage-skip docs-only -> SHIP (mode: triage_skip)",
+          "link-integrity: github.md sibling .md links resolve; SKILL.md+steps.md cross-link github.md"
+        ],
+        "files_touched": []
+      }
+    },
+    {
+      "id": "fn-52-tracker-sync-bridge-project-flow-specs.8",
+      "status": "done",
+      "title": "Repo docs + positioning/decision record",
+      "satisfies": [
+        "R14",
+        "R15"
+      ],
+      "done_summary": "Documented the fn-52 tracker-sync bridge across the repo docs surface: new `docs/tracker-sync.md` subsystem reference (projection-not-coordination, discovery ceremony, hybrid id model, sync-state schema, transport ladder, lifecycle touchpoints, Ralph-safe conflict queueing), plus edits to flowctl.md (sync subsection + tracker.* config keys + spec create --tracker-first), teams.md (Symphony-contrast bullet + adoption-ladder item + opt-in walkthrough annotations), architecture.md (spec-JSON tracker fields + widened resolver), ralph.md (conflicts queue, never block), root README + .flow/usage.md (distinguish /flow-next:tracker-sync from /flow-next:sync), CLAUDE.md + docs/README.md index rows, GLOSSARY (4 new terms), and an Unreleased CHANGELOG entry. No version bump (fn-52.9) and no flow-next.dev (fn-52.11).",
+      "evidence": {
+        "commits": [
+          "578b47acde3a7681eec6b1d2ca8d69e5c1775f7c"
+        ],
+        "tests": [
+          "flowctl triage-skip (docs-only release-chore \u2192 SHIP)"
+        ],
+        "files_touched": []
+      }
+    },
+    {
+      "id": "fn-52-tracker-sync-bridge-project-flow-specs.9",
+      "status": "done",
+      "title": "Codex mirror + plugin version bump + final integration review",
+      "satisfies": [
+        "R15"
+      ],
+      "done_summary": "Finalized the fn-52 tracker-sync bridge for the repo: registered the new `flow-next-tracker-sync` skill in `sync-codex.sh` (openai.yaml + REQUIRED list) and added a maintainer-breadcrumb strip rule, regenerated the byte-identical-idempotent Codex mirror (also picking up fn-52.6 lifecycle-skill edits that had never been mirrored), and bumped the plugin version 1.4.0\u21921.5.0 across all manifests + README + CHANGELOG. The final-integration impl-review (run against `git merge-base HEAD main`) reached SHIP after fixing one Major cross-task drift \u2014 `sync receipt`/`sync defer` were writing artifacts from raw tracker handles instead of canonicalizing them \u2014 plus stale doc/count fixes.",
+      "evidence": {
+        "commits": [
+          "cd56b13bfd77f614b52fec6f7b19ac6d88ef9f8e",
+          "3b7d1113cea9ba29fa7ad2b5d80281ac448503b5",
+          "b188526393cbe11243b405dbf1fecfdd932ebbd2"
+        ],
+        "tests": [
+          "python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' \u2014 790 pass, 2 skip",
+          "bash scripts/sync-codex.sh \u2014 all validators green; mirror byte-identical idempotent across 2 runs",
+          "flowctl validate --spec fn-52-tracker-sync-bridge-project-flow-specs \u2014 valid, 11 tasks",
+          "impl-review rp --base $(git merge-base HEAD main) \u2014 SHIP (NEEDS_WORK\u2192SHIP, 4 findings fixed)"
+        ],
+        "files_touched": []
+      }
+    },
+    {
+      "id": "fn-52-tracker-sync-bridge-project-flow-specs.10",
+      "status": "done",
+      "title": "Tracker-key identity & id resolution (hybrid: tracker-first canonical, flow-first alias, no rename)",
+      "satisfies": [
+        "R16"
+      ],
+      "done_summary": "Made a tracker key (e.g. Linear WOR-17) a first-class, resolvable flow handle in flowctl (R16, hybrid model): tracker-first specs are natively keyed `wor-17-slug` (tasks `wor-17-slug.M`, branch matches), flow-first specs keep `fn-NN` and gain a resolvable `tracker.identifier` alias on push, and ids are never renamed. A tracker-aware id grammar (`parse_any_id`/`id_sort_key`/`id_task_num`, `parse_id` stays fn-only), a candidate-set resolver in `expand_bare_spec_id` (same-UUID dedupe / distinct-UUID ambiguity), central canonicalizers (`resolve_spec_id_arg`/`resolve_task_arg` with case-insensitive `casefold_handle`) wired into the FULL spec/task/sync command surface before any IO, an fn-only native allocator + collision check, widened enumeration (list/specs/tasks/ready/validate/next see tracker specs), a strict `--tracker-identifier` validator, and no-rename `set-title` for linked specs. Reviewed via rp (SHIP after 3 fix rounds, all 12 R16 acceptance items Met); 60 new tests across two files plus full-suite (788) + ci_test (58) green.",
+      "evidence": {
+        "commits": [
+          "1fa3ffa",
+          "5f701cb",
+          "a83c19a",
+          "fac326a14652a82b34851ad3dc703d8aaf375ddd"
+        ],
+        "tests": [
+          "python3 -m unittest discover -s plugins/flow-next/tests -p test_tracker_id_resolution.py (43)",
+          "python3 -m unittest discover -s plugins/flow-next/tests -p test_tracker_id_generator.py (17)",
+          "python3 -m unittest discover -s plugins/flow-next/tests -p test_*.py (788, full suite)",
+          "ci_test.sh (58 integration cases)"
+        ],
+        "files_touched": []
+      }
+    },
+    {
+      "id": "fn-52-tracker-sync-bridge-project-flow-specs.11",
+      "status": "done",
+      "title": "flow-next.dev docs pass: tracker bridge + hybrid id model (handles explainer + cross-page id edits)",
+      "satisfies": [
+        "R15"
+      ],
+      "done_summary": "Documented the tracker-sync bridge and the hybrid id model on flow-next.dev (1.5.0): a new Tracker Sync page (projection-not-coordination, discovery ceremony, transport ladder, opt-in lifecycle points, Ralph-safe queue), a \"Spec & task ids\" explainer (fn-NN vs tracker key wor-17, case-insensitive, ids-never-rename), cross-page id-referencing edits (introduction, commands, sync skill, teams/collaboration), tracker.* config docs, both nav surfaces (Starlight sidebar + custom navGroups rail), and a strict-format changelog entry with FLOW_NEXT_VERSION + package.json bumped to 1.5.0. Committed separately in the flow-next.dev repo; pnpm build green. Impl-review (rp): NEEDS_WORK \u2192 SHIP. mickel.tech flow-next app page left untouched (maintainer-only).",
+      "evidence": {
+        "commits": [
+          "d006857146ecb11d08d18b060197d6960fec4edc",
+          "e1d8bf8d514e724314336e56dc7e9e60a220ade6"
+        ],
+        "tests": [
+          "cd ~/work/flow-next.dev && pnpm build (astro check && astro build) \u2014 0 errors, 52 pages"
+        ],
+        "files_touched": []
+      }
+    }
+  ],
+  "tasks_summary": {
+    "total": 11,
+    "done": 11,
+    "open": 0,
+    "uncovered_r_ids": []
+  },
+  "memory_during_epic": {
+    "decisions": [
+      {
+        "id": "knowledge/decisions/tracker-sync-is-projection-not-2026-06-01",
+        "title": "Tracker sync is projection, not coordination (Linear-first)",
+        "first_sentence": "Spec fn-52 (tracker sync bridge) is in tension with STRATEGY.md, which positions flow-next AGAINST Jira/Linear's human cadence (\"the spec has to carry the full weight upstream\").",
+        "alternatives_considered": "",
+        "decision_status": ""
+      }
+    ],
+    "bugs": [
+      {
+        "id": "bug/build-errors/id-grammar-widening-must-cover-the-full-2026-06-03",
+        "title": "Id-grammar widening must cover the FULL command surface, not just named commands",
+        "module": "plugins/flow-next/scripts/flowctl.py",
+        "winning_hypothesis_first_sentence": "fn-52.10 widened flowctl's id grammar so a tracker key (WOR-17) resolves as a flow handle."
+      },
+      {
+        "id": "bug/runtime-errors/who-wins-ladder-must-check-the-2026-06-03",
+        "title": "Who-wins ladder must check the collision case before single-field rules",
+        "module": "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md",
+        "winning_hypothesis_first_sentence": "fn-52.5's status who-wins reconcile loop (status-sync.md) documented a \"status deadlock \u2192 conflictTiebreak\" fallback, but the loop evaluated the `tracker \u2208 {done,verified}` terminal-wins branch BEFORE the deadlock branch."
+      },
+      {
+        "id": "bug/performance/linear-graphql-every-nodes-connection-2026-06-03",
+        "title": "Linear GraphQL: every {nodes} connection needs first: \u2014 incl. workflowStates/tea",
+        "module": "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-graphql.md",
+        "winning_hypothesis_first_sentence": "Two impl-review rounds (Major, confidence 100 each) on fn-52.3's Linear GraphQL rung reference: a `workflowStates(...)` query and a `teams(...)` example were written as unbounded GraphQL connections \u2014 directly contradicting the SAME file's\u2026"
+      },
+      {
+        "id": "bug/integration/set-tracker-id-rejected-github-n-2026-06-03",
+        "title": "set-tracker-id rejected GitHub",
+        "module": "plugins/flow-next/scripts/flowctl.py",
+        "winning_hypothesis_first_sentence": "`flowctl sync set-tracker-id` rejected a GitHub issue identifier `#1` (caught live during the fn-52 GitHub round-trip smoke): \"Invalid tracker identifier '#1'."
+      },
+      {
+        "id": "bug/integration/trackers-auto-linkify-issue-key-2026-06-03",
+        "title": "Trackers auto-linkify issue-key substrings inside markers (even in HTML comments",
+        "module": "plugins/flow-next/skills/flow-next-tracker-sync/references/comments-sync.md",
+        "winning_hypothesis_first_sentence": "Linear (verified live during the fn-52 tracker-sync smoke test) **auto-linkifies any tracker issue-key substring** (`WOR-17`, case-insensitive) that appears in issue/comment markdown \u2014 **even inside an HTML comment**."
+      },
+      {
+        "id": "bug/data/paired-snapshot-setter-must-write-both-2026-06-03",
+        "title": "Paired-snapshot setter must write both halves atomically (merge base)",
+        "module": "plugins/flow-next/scripts/flowctl.py",
+        "winning_hypothesis_first_sentence": "`flowctl sync set-merge-base` (fn-52.1) stored the 3-way merge base as two independent fields (`mergeBaseFlow`/`baseHashFlow` and `mergeBaseTracker`/`baseHashTracker`) and updated each only when its CLI flag was passed."
+      },
+      {
+        "id": "bug/ui/flow-nextdev-docs-page-needs-2026-06-03",
+        "title": "flow-next.dev docs page needs registering in BOTH astro sidebar + site.ts navGro",
+        "module": "src/lib/site.ts",
+        "winning_hypothesis_first_sentence": "On the flow-next.dev docs site, adding a new Starlight docs page (`teams/tracker-sync.mdx`) requires registering it in TWO independent navigation sources, not one."
+      }
+    ],
+    "architecture_patterns": []
+  },
+  "glossary_changes": {
+    "added": [],
+    "removed": [],
+    "renamed": []
+  },
+  "strategy_alignment": {
+    "tracks_served": [
+      "Spec-driven team patterns** \u2014 extends `docs/teams.md` with the tracker bridge + Symphony contrast; lets teams who already live in Linear adopt spec-driven flow *without leaving their tracker* (projection, not replacement). Strengthens flow-next's identity-as-methodology.",
+      "Ralph autonomous mode** \u2014 R11 keeps sync conflicts non-blocking (queue to the deferred-decisions sink), preserving the overnight loop; R12 sync receipts extend the proof-of-work receipt model that gates Ralph state transitions.",
+      "Cross-platform parity** \u2014 the new sync skill carries a Codex mirror via `sync-codex.sh`; canonical files stay Claude-native, single source of truth."
+    ],
+    "drift_flagged": []
+  },
+  "diff_summary": {
+    "base_ref": "origin/main",
+    "head_ref": "HEAD",
+    "head_sha": "9457e07bdbac1f5b75e30083e94e64a16b0c013a",
+    "merge_base_sha": "3fbf56f44631c1bb608917f0d3e22edf50b54651",
+    "files_changed": 8,
+    "lines_added": 731,
+    "lines_removed": 209,
+    "files": [
+      {
+        "path": "plugins/flow-next/scripts/flowctl.py",
+        "status": "M",
+        "additions": 418,
+        "deletions": 192,
+        "module": "flowctl"
+      },
+      {
+        "path": "plugins/flow-next/scripts/__init__.py",
+        "status": "M",
+        "additions": 6,
+        "deletions": 3,
+        "module": "flowctl"
+      },
+      {
+        "path": "plugins/flow-next/scripts/credentials.py",
+        "status": "A",
+        "additions": 88,
+        "deletions": 0,
+        "module": "flowctl"
+      },
+      {
+        "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-graphql.md",
+        "status": "M",
+        "additions": 14,
+        "deletions": 9,
+        "module": "tracker-sync"
+      },
+      {
+        "path": "plugins/flow-next/tests/test_credentials.py",
+        "status": "A",
+        "additions": 134,
+        "deletions": 0,
+        "module": "flowctl"
+      },
+      {
+        "path": "plugins/flow-next/docs/flowctl.md",
+        "status": "M",
+        "additions": 58,
+        "deletions": 4,
+        "module": "docs"
+      },
+      {
+        "path": "CHANGELOG.md",
+        "status": "M",
+        "additions": 9,
+        "deletions": 0,
+        "module": "<root>"
+      },
+      {
+        "path": "README.md",
+        "status": "M",
+        "additions": 4,
+        "deletions": 1,
+        "module": "<root>"
+      }
+    ],
+    "modules_touched": [
+      "flowctl",
+      "tracker-sync",
+      "docs"
+    ],
+    "cross_module_changes": [],
+    "public_exports_changed": [
+      {
+        "file": "plugins/flow-next/scripts/__init__.py",
+        "added": [
+          "resolve_credential"
+        ],
+        "removed": [
+          "_legacy_token_env"
+        ]
+      }
+    ],
+    "high_churn_files": [
+      {
+        "path": "plugins/flow-next/scripts/flowctl.py",
+        "additions": 418,
+        "deletions": 192
+      },
+      {
+        "path": "plugins/flow-next/tests/test_credentials.py",
+        "additions": 134,
+        "deletions": 0
+      },
+      {
+        "path": "plugins/flow-next/scripts/credentials.py",
+        "additions": 88,
+        "deletions": 0
+      }
+    ],
+    "security_sensitive_paths": [
+      "plugins/flow-next/scripts/credentials.py"
+    ]
+  },
+  "review_receipts": [],
+  "deferred_findings": []
+}

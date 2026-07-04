@@ -28,19 +28,22 @@ grep -E '"(jest|vitest|mocha|playwright|cypress)"' package.json 2>/dev/null
 ls -la pytest.ini pyproject.toml conftest.py 2>/dev/null
 grep -E "pytest|unittest|nose" pyproject.toml requirements*.txt 2>/dev/null
 
-# Go
-ls -la *_test.go 2>/dev/null | head -5
+# Go (recursive, not root-only)
+find . -path '*/vendor/*' -prune -o -name '*_test.go' -print 2>/dev/null | head -5
 
-# Rust
-grep -l "#\\[test\\]" src/**/*.rs 2>/dev/null | head -5
+# Rust (find, not globstar — `src/**/*.rs` scans one level with globstar off)
+find . -path '*/target/*' -prune -o -name '*.rs' -print 2>/dev/null | xargs grep -l "#\\[test\\]" 2>/dev/null | head -5
+
+# PHP (workflow.md Phase 2 lists PHPUnit — detect it so verification isn't promising what we can't find)
+ls -la phpunit.xml phpunit.xml.dist 2>/dev/null
 ```
 
 ### Test Files
 ```bash
-# Count test files
-find . -name "*.test.*" -o -name "*.spec.*" -o -name "*_test.*" 2>/dev/null | wc -l
-find . -name "test_*.py" -o -name "*_test.py" 2>/dev/null | wc -l
-find . -path "*/tests/*" -name "*.py" 2>/dev/null | wc -l
+# Count test files — MUST prune deps/build, or a dep shipping *.spec.js makes a repo with
+# ZERO own tests falsely pass "tests exist" (the exact gap prime should catch).
+find . \\( -path '*/node_modules/*' -o -path '*/.venv/*' -o -path '*/vendor/*' -o -path '*/dist/*' -o -path '*/target/*' \\) -prune \\
+  -o \\( -name "*.test.*" -o -name "*.spec.*" -o -name "*_test.*" -o -name "test_*.py" \\) -print 2>/dev/null | wc -l
 
 # Test directories
 ls -d tests/ test/ __tests__/ spec/ 2>/dev/null
@@ -65,8 +68,11 @@ ls -la .nycrc* .c8rc* coverage/ .coveragerc 2>/dev/null
 grep -E "coverage|c8|nyc|istanbul" package.json 2>/dev/null
 grep -l "coverage" pyproject.toml 2>/dev/null
 
-# Coverage in CI
-grep -l "coverage" .github/workflows/*.yml 2>/dev/null
+# Coverage config: threshold (only report a % you actually find here — else "Not set")
+grep -rEi "coverageThreshold|--cov-fail-under|fail_under|minimumCoverage" package.json pyproject.toml .nycrc* .c8rc* jest.config.* vitest.config.* 2>/dev/null | head
+
+# Coverage in CI (.yml and .yaml)
+grep -l "coverage" .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null
 ```
 
 ### E2E / Integration
@@ -80,9 +86,9 @@ ls -d integration/ tests/integration/ tests/e2e/ 2>/dev/null
 
 ### CI Test Config
 ```bash
-# GitHub Actions
-ls -la .github/workflows/*.yml 2>/dev/null
-grep -l "test" .github/workflows/*.yml 2>/dev/null
+# GitHub Actions (.yml and .yaml)
+ls -la .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null
+grep -l "test" .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null
 
 # Other CI
 ls -la .gitlab-ci.yml .circleci/config.yml Jenkinsfile .travis.yml 2>/dev/null
@@ -111,12 +117,12 @@ ls -la .gitlab-ci.yml .circleci/config.yml Jenkinsfile .travis.yml 2>/dev/null
 ### Coverage
 - Coverage tool: ✅ [tool] / ❌ Not configured
 - Coverage in CI: ✅ Yes / ❌ No
-- Coverage threshold: [X%] or "Not set"
+- Coverage threshold: [X% ONLY if found in config above] or "Not set" (never guess)
 
 ### CI Integration
 - CI config: ✅ [platform] / ❌ Not found
 - Tests run in CI: ✅ Yes / ❌ No
-- Test status badge: ✅ Yes / ❌ No
+- Test status badge: ✅ Yes (grep README.md for a workflow/coverage badge) / ❌ No / Unknown
 
 ### Test Health Score: X/5
 - [ ] Test framework configured

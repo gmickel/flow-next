@@ -6,7 +6,7 @@ user-invocable: false
 
 # Implementation Review Mode
 
-**Workflow is backend-split. Read [workflow-common.md](workflow-common.md) for Phase 0 (backend detection + philosophy + trivial-diff triage + phase-ordering matrix + cross-backend deep/validator/walkthrough phases), then read ONLY the file matching your active backend:**
+**Workflow is backend-split. Read [workflow-common.md](workflow-common.md) for Phase 0 (backend detection + philosophy + trivial-diff triage + phase-ordering matrix), then read ONLY the file matching your active backend. The opt-in `--deep`/`--validate`/`--interactive` phase detail lives in [optional-phases.md](optional-phases.md), loaded only when a flag fires:**
 
 - `BACKEND=codex` → [workflow-codex.md](workflow-codex.md)
 - `BACKEND=copilot` → [workflow-copilot.md](workflow-copilot.md)
@@ -297,18 +297,20 @@ Follow the phases in the per-backend file end-to-end. Each file owns its own Ide
 
 **CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is production-grade world-class software and architecture. Never use the plain-text numbered prompt in this loop.**
 
-**MAX ITERATIONS (backend-agnostic — applies to ALL backends: rp, codex, copilot, cursor):** keep an iteration counter in agent context, starting at 0. Each fix+re-review cycle increments it. When the counter reaches **${MAX_REVIEW_ITERATIONS:-3}** (default 3; env-overridable, configurable in Ralph's config.env) and the verdict is still NEEDS_WORK, BREAK the loop and escalate: surface the surviving findings to the caller and stop (in Ralph mode output `<promise>RETRY</promise>` so the next iteration starts fresh). Never loop unbounded. The per-backend workflow files defer to this cap.
+**MAJOR_RETHINK is NOT a fix-loop input.** Every backend can emit `MAJOR_RETHINK` (a valid verdict tag), but it means the *design/approach* is wrong — not something to patch finding-by-finding. Do NOT enter the fix loop on it. Escalate immediately: surface the reviewer's rationale to the caller and stop with a typed **`BLOCKED: DESIGN_CONFLICT`** (Ralph mode: output `<promise>RETRY</promise>`). A re-approach is a human/worker decision, never an ad-hoc patch. Only `NEEDS_WORK` drives the loop below.
+
+**MAX ITERATIONS (backend-agnostic — applies to ALL backends: rp, codex, copilot, cursor):** keep an iteration counter in agent context, starting at 0. Each fix+re-review cycle increments it. When the counter reaches **${MAX_REVIEW_ITERATIONS:-3}** (default 3; env-overridable, configurable in Ralph's config.env) and the verdict is still NEEDS_WORK, BREAK the loop and escalate: surface the surviving findings to the caller and stop (in Ralph mode output `<promise>RETRY</promise>` so the next iteration starts fresh). Never loop unbounded. The per-backend workflow files defer to this cap. **This loop is INTERNAL — the caller (e.g. the `worker`) invokes impl-review ONCE and acts on the terminal verdict; a caller-side "re-invoke until SHIP" outer loop would reset this counter every round and make the cap unbounded in aggregate.**
 
 If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 
-0. **Deep-pass phase (only if `DEEP=true`)** — see [workflow-common.md](workflow-common.md) "Deep-Pass Phase" section.
+0. **Deep-pass phase (only if `DEEP=true`)** — see [optional-phases.md](optional-phases.md) § Deep-Pass Phase.
  - After primary review completes (any verdict) and before validator,
  run each selected pass via
  `$FLOWCTL <backend> deep-pass --pass <name> --receipt ... --primary-findings ...`.
  - Passes merge into receipt via fingerprint dedup + cross-pass promotion.
  - Deep may upgrade `SHIP → NEEDS_WORK` if it surfaces new blocking findings;
  it never downgrades `NEEDS_WORK → SHIP`.
-1. **Validator pass (only if `VALIDATE=true`)** — see [workflow-common.md](workflow-common.md) "Validator Pass" section.
+1. **Validator pass (only if `VALIDATE=true`)** — see [optional-phases.md](optional-phases.md) § Validator Pass.
  - Extract findings JSON-lines, dispatch `$FLOWCTL <backend> validate --findings-file ... --receipt ...`
  - If all findings drop → verdict upgrades to SHIP automatically (exit fix loop)
  - Else → only surviving (kept) findings enter the fix loop in step 2

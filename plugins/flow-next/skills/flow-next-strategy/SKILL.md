@@ -201,7 +201,24 @@ On `abandon`, leave the file as-is (partially populated is fine), exit 0.
 
 Read the existing `STRATEGY.md` via `flowctl strategy read --json` and summarize current state in 3-5 lines so the user sees what's on file. Surface section names + 1-line excerpts.
 
-If the focus-hint argument names a specific section, jump to that section. Otherwise, fire the routing question.
+If the focus-hint argument names a specific section, jump to that section. Otherwise, run the evidence scan (2.1b) then fire the routing question.
+
+**2.1b — Evidence scan (ground drift against the repo, not vibes)**
+
+The revisit routing otherwise ranks sections by `<!-- worth revisiting -->` markers + "looks weak" — pure vibes. But real drift is *measurable*: which declared tracks are actually shipping, and whether recent work maps to the stated direction. A maintenance run's job is to surface drift the user didn't notice — not just ask "which section feels stale?". (Ironic asymmetry otherwise: `/flow-next:prospect` does full repo grounding to generate ideas against this doc, while the doc itself is validated by feel.) Scan before asking:
+
+```bash
+LAST_UPDATED="$(flowctl strategy read --json 2>/dev/null | jq -r '.last_updated // ""')"
+RECENT_SPECS="$(flowctl specs --json 2>/dev/null | jq -r '.specs[]? | "\(.id)\t\(.status)\t\(.title // "")"' 2>/dev/null)"
+```
+
+With the current `## Tracks` (from 2.1), the `## Not working on` list, and `RECENT_SPECS`, the host agent JUDGES the mapping (spec subject → track name — the same host-agent judgment prospect uses to ground candidates, NOT a keyword scorer) and surfaces drift signals:
+
+- **Dormant track** — a declared track with **zero** specs mapping to it since `last_updated`: "Track *X* has had 0 specs since the strategy was last updated (<last_updated>)."
+- **Undeclared work** — shipped/open specs whose subject maps to **no** declared track: "<K> of the recent specs map to no declared track: <ids>."
+- **Contradicted boundary** — a spec whose subject matches a `## Not working on` item: "Spec <id> looks like work listed under *Not working on*."
+
+No specs / empty repo → skip silently (nothing to ground against). Feed the findings into 2.2.
 
 **2.2 — Section-revisit routing question (lead-with-recommendation)**
 
@@ -209,7 +226,8 @@ Build the option list dynamically:
 
 - For each of the 5 required sections + included optional sections, check the body for `<!-- worth revisiting -->` markers (priority candidates).
 - Sections with no marker but visibly weak content (≤1 short sentence, or contains placeholder-shaped text) join the priority list.
-- Sections that look strong fall to the bottom.
+- **Any section the 2.1b evidence scan flagged** (dormant/undeclared → the `Tracks` section; a contradicted boundary → `Not working on`) — these are **data-grounded** priorities; list them at the top and cite the specific finding in the question body so the user revisits what the repo shows drifting, not only what feels stale.
+- Sections that look strong (no marker, not weak, no evidence flag) fall to the bottom.
 
 `AskUserQuestion`:
 

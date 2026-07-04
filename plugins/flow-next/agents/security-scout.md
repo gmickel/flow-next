@@ -22,17 +22,19 @@ GitHub protects branches via two independent mechanisms — **classic branch pro
 # Check if gh CLI is authenticated
 gh auth status 2>&1 | head -5
 
+# Resolve the DEFAULT branch first — never assume main/master. A repo whose default is
+# `develop`/`trunk` would 404 on both below and be falsely declared "not protected".
+BR=$(gh api repos/{owner}/{repo} --jq .default_branch 2>/dev/null || echo main)
+
 # 1. Classic branch protection (legacy endpoint)
-gh api /repos/{owner}/{repo}/branches/main/protection 2>&1 || \
-gh api /repos/{owner}/{repo}/branches/master/protection 2>&1
+gh api "/repos/{owner}/{repo}/branches/$BR/protection" 2>&1
 
 # 2. Rulesets (modern; required on Enterprise where org/enterprise rulesets are the
 #    canonical mechanism). Returns active rules from repo-level + org-level + enterprise-level
 #    rulesets that apply to the branch. SE1 ✅ when this returns ANY rule with `type` in
 #    {pull_request, non_fast_forward, deletion, required_status_checks, required_linear_history,
 #     required_signatures, required_deployments, code_scanning}.
-gh api /repos/{owner}/{repo}/rules/branches/main 2>&1 || \
-gh api /repos/{owner}/{repo}/rules/branches/master 2>&1
+gh api "/repos/{owner}/{repo}/rules/branches/$BR" 2>&1
 ```
 
 **SE1 verdict:**
@@ -50,16 +52,22 @@ Note: Parse the repo owner/name from `git remote get-url origin` first.
 ### Secret Scanning
 
 ```bash
-# Check if secret scanning is enabled
-gh api /repos/{owner}/{repo}/secret-scanning/alerts --paginate 2>&1 | head -5
+# Prefer the settings field (one call, clean tri-state) over the alerts endpoint
+gh api repos/{owner}/{repo} --jq '.security_and_analysis.secret_scanning.status' 2>&1
+# Fallback signal if the field is null (older API / no access):
+gh api /repos/{owner}/{repo}/secret-scanning/alerts 2>&1 | head -5
 ```
 
-If response contains "Secret scanning is disabled", mark as ❌.
+**SE2 verdict (tri-state — a permission failure is NOT "disabled"):**
+- ✅ status `enabled`, or alerts endpoint returns a JSON array.
+- ❌ status `disabled`, or the alerts endpoint says "Secret scanning is disabled".
+- ⚠️ **Unable to check** — `403`/`404`/"Must have admin"/`gh` unauthenticated / not on GitHub. A scan you couldn't run must never be reported as ❌ Disabled.
 
 ### CODEOWNERS
 
 ```bash
-ls -la .github/CODEOWNERS CODEOWNERS 2>/dev/null
+# GitHub honors CODEOWNERS in .github/, root, AND docs/
+ls -la .github/CODEOWNERS CODEOWNERS docs/CODEOWNERS 2>/dev/null
 ```
 
 ### Dependency Update Automation
@@ -68,8 +76,9 @@ ls -la .github/CODEOWNERS CODEOWNERS 2>/dev/null
 # Check for Dependabot
 ls -la .github/dependabot.yml .github/dependabot.yaml 2>/dev/null
 
-# Check for Renovate
-ls -la renovate.json .github/renovate.json .renovaterc* 2>/dev/null
+# Check for Renovate (dedicated file, json5, OR the "renovate" key inside package.json)
+ls -la renovate.json renovate.json5 .github/renovate.json .github/renovate.json5 .renovaterc* 2>/dev/null
+grep -l '"renovate"' package.json 2>/dev/null
 ```
 
 ### Secrets Management
@@ -78,22 +87,26 @@ ls -la renovate.json .github/renovate.json .renovaterc* 2>/dev/null
 # Check .gitignore for .env
 grep -E "^\.env" .gitignore 2>/dev/null
 
-# Check for committed secrets (basic scan)
-grep -r "API_KEY=\|SECRET=\|PASSWORD=" --include="*.json" --include="*.yaml" --include="*.yml" . 2>/dev/null | grep -v node_modules | head -5
+# Check for committed secrets (basic scan). Match BOTH `=` (.env/code) and `:` (JSON/YAML),
+# quoted or not, with a non-trivial value — the old `KEY=`-only pattern never matched a
+# single JSON/YAML file it was scanning, so SE5 was falsely "clean" on every repo.
+grep -rE '"?(API_KEY|SECRET|SECRET_KEY|PASSWORD|TOKEN|ACCESS_KEY)"?\s*[:=]\s*["'"'"']?[A-Za-z0-9_\-]{12,}' \
+  --include="*.json" --include="*.yaml" --include="*.yml" --include="*.env" --exclude-dir={node_modules,vendor,dist} . 2>/dev/null | head -5
 ```
 
 ### Security Scanning Tools
 
 ```bash
-# Check for CodeQL
-ls -la .github/workflows/codeql*.yml 2>/dev/null
+# CodeQL — workflow file OR GitHub's settings-based "default setup" (no workflow file; very common)
+ls -la .github/workflows/codeql*.yml .github/workflows/codeql*.yaml 2>/dev/null
+gh api /repos/{owner}/{repo}/code-scanning/default-setup --jq '.state' 2>/dev/null   # "configured" → SE6 ✅
 
-# Check for Snyk
+# Snyk
 ls -la .snyk 2>/dev/null
 grep -l "snyk" package.json 2>/dev/null
 
-# Check for other security tools in CI
-grep -l "trivy\|grype\|anchore" .github/workflows/*.yml 2>/dev/null
+# Other security tools in CI (.yml and .yaml)
+grep -lE "trivy|grype|anchore|gitleaks|semgrep" .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null
 ```
 
 ## Output Format
@@ -109,8 +122,8 @@ grep -l "trivy\|grype\|anchore" .github/workflows/*.yml 2>/dev/null
 - Details: protection rules summary (PR reviews required, force-push blocked, deletion blocked, status checks required, etc.); cite ruleset IDs when applicable
 
 #### Secret Scanning (SE2)
-- Status: ✅ Enabled / ❌ Disabled
-- Details: [any alerts found]
+- Status: ✅ Enabled / ❌ Disabled / ⚠️ Unable to check (permission/not-GitHub)
+- Details: [any alerts found, or why it couldn't be checked]
 
 ### Repository Files
 
@@ -138,8 +151,9 @@ grep -l "trivy\|grype\|anchore" .github/workflows/*.yml 2>/dev/null
 
 ## Rules
 
-- Use `gh` CLI for GitHub API calls
+- Use `gh` CLI for GitHub API calls — **READ-ONLY: only ever GET.** Never pass `-X POST/PUT/PATCH/DELETE` or any mutating endpoint; this scout reports posture, never changes it.
 - Handle errors gracefully (repo might not be on GitHub)
-- Don't fail if gh is not authenticated - just note it
-- Check both .github/CODEOWNERS and root CODEOWNERS
+- Don't fail if gh is not authenticated - just note it (⚠️, never ❌)
+- A `403`/permission error is **⚠️ Unable to check**, never ❌ — a scan you couldn't run is not a finding of absence.
+- Check `.github/CODEOWNERS`, root `CODEOWNERS`, and `docs/CODEOWNERS`
 - This is informational only - no fixes will be offered

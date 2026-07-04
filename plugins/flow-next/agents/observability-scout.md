@@ -14,82 +14,73 @@ Observability helps debug issues in production. While not directly affecting age
 
 ## Scan Targets
 
+> **Manifests recurse.** `grep pkg */package.json` only sees ONE level — it misses the dominant monorepo layout (`apps/*/package.json`, `packages/*/package.json`, deeper). Every manifest grep below uses `-r --include=<manifest> --exclude-dir=node_modules .` so it finds nested workspaces and never scans installed deps.
+
 ### Structured Logging (OB1)
 
 ```bash
-# JavaScript/TypeScript
-grep -rE "winston|pino|bunyan|log4js" package.json */package.json 2>/dev/null
+# JS/TS + Python + Go (recursive across workspaces, deps excluded)
+grep -rE "winston|pino|bunyan|log4js" --include=package.json --exclude-dir=node_modules . 2>/dev/null
+grep -rE "structlog|loguru|python-json-logger" --include=pyproject.toml --include=requirements*.txt --exclude-dir={.venv,node_modules} . 2>/dev/null
+grep -rE "zap|logrus|zerolog|slog" --include=go.mod . 2>/dev/null
 
-# Python
-grep -rE "structlog|loguru|python-json-logger" pyproject.toml */pyproject.toml requirements*.txt 2>/dev/null
-
-# Go
-grep -rE "zap|logrus|zerolog" go.mod */go.mod 2>/dev/null
-
-# Check for logging config files
-ls -la **/logging.config.* **/log4j*.xml **/logback.xml 2>/dev/null
+# Logging config files
+find . -path '*/node_modules' -prune -o \( -name 'logback.xml' -o -name 'log4j*.xml' -o -name 'logging.config.*' \) -print 2>/dev/null | head
 ```
 
 ### Distributed Tracing (OB2)
 
 ```bash
-# OpenTelemetry
-grep -rE "opentelemetry|@opentelemetry" package.json */package.json pyproject.toml 2>/dev/null
+# OpenTelemetry across JS/Python/Go (Go OTel lives in go.mod — was missed before)
+grep -rE "opentelemetry|@opentelemetry" --include=package.json --include=pyproject.toml --exclude-dir=node_modules . 2>/dev/null
+grep -rE "go\.opentelemetry\.io" --include=go.mod . 2>/dev/null
 
-# Check for trace ID propagation
-grep -rE "X-Request-ID|X-Trace-ID|traceparent|correlation.id" --include="*.ts" --include="*.js" --include="*.py" . 2>/dev/null | head -10
+# Trace ID propagation in OWN source (exclude deps — many HTTP libs mention these headers → false PASS)
+grep -rE "X-Request-ID|X-Trace-ID|traceparent|correlation.id" --include="*.ts" --include="*.js" --include="*.py" --include="*.go" --exclude-dir={node_modules,vendor,dist} . 2>/dev/null | head -10
 ```
 
 ### Metrics Collection (OB3)
 
 ```bash
-# Prometheus client
-grep -rE "prom-client|prometheus|prometheus_client" package.json */package.json pyproject.toml 2>/dev/null
-
-# Datadog
-grep -rE "dd-trace|datadog|ddtrace" package.json */package.json pyproject.toml 2>/dev/null
-
-# NewRelic
-grep -rE "newrelic|@newrelic" package.json */package.json pyproject.toml 2>/dev/null
-
-# StatsD
-grep -rE "statsd|hot-shots" package.json */package.json 2>/dev/null
+# Prometheus / Datadog / NewRelic / StatsD (recursive, deps excluded)
+grep -rE "prom-client|prometheus|prometheus_client|prometheus/client" --include=package.json --include=pyproject.toml --include=go.mod --exclude-dir=node_modules . 2>/dev/null
+grep -rE "dd-trace|datadog|ddtrace" --include=package.json --include=pyproject.toml --exclude-dir=node_modules . 2>/dev/null
+grep -rE "newrelic|@newrelic" --include=package.json --include=pyproject.toml --exclude-dir=node_modules . 2>/dev/null
+grep -rE "statsd|hot-shots" --include=package.json --exclude-dir=node_modules . 2>/dev/null
 ```
 
 ### Error Tracking (OB4)
 
 ```bash
-# Sentry
-grep -rE "@sentry|sentry-sdk|sentry_sdk" package.json */package.json pyproject.toml 2>/dev/null
-
-# Bugsnag
-grep -rE "bugsnag|@bugsnag" package.json */package.json pyproject.toml 2>/dev/null
-
-# Rollbar
-grep -rE "rollbar" package.json */package.json pyproject.toml 2>/dev/null
+# Sentry / Bugsnag / Rollbar (recursive, deps excluded)
+grep -rE "@sentry|sentry-sdk|sentry_sdk|sentry-go" --include=package.json --include=pyproject.toml --include=go.mod --exclude-dir=node_modules . 2>/dev/null
+grep -rE "bugsnag|@bugsnag" --include=package.json --include=pyproject.toml --exclude-dir=node_modules . 2>/dev/null
+grep -rE "rollbar" --include=package.json --include=pyproject.toml --exclude-dir=node_modules . 2>/dev/null
 ```
 
 ### Health Endpoints (OB5)
 
 ```bash
-# Search for health check routes
-grep -rE "/health|/healthz|/ready|/live|/ping" --include="*.ts" --include="*.js" --include="*.py" --include="*.go" . 2>/dev/null | grep -v node_modules | head -10
+# Health check routes in OWN source
+grep -rE "/health|/healthz|/ready|/live|/ping" --include="*.ts" --include="*.js" --include="*.py" --include="*.go" --exclude-dir={node_modules,vendor,dist} . 2>/dev/null | head -10
 
-# Check for health check libraries
-grep -rE "terminus|lightship|healthcheck" package.json */package.json 2>/dev/null
+# Health check libraries (recursive)
+grep -rE "terminus|lightship|healthcheck" --include=package.json --exclude-dir=node_modules . 2>/dev/null
+
+# Health declared in infra, not routes: Docker HEALTHCHECK + k8s liveness/readiness probes
+grep -rEl "HEALTHCHECK" --include=Dockerfile* --exclude-dir=node_modules . 2>/dev/null | head
+grep -rE "livenessProbe|readinessProbe" --include=*.yaml --include=*.yml --exclude-dir=node_modules . 2>/dev/null | head
 ```
 
 ### Alerting (OB6)
 
 ```bash
-# PagerDuty
-grep -rE "pagerduty|@pagerduty" package.json */package.json 2>/dev/null
+# PagerDuty / OpsGenie (recursive)
+grep -rE "pagerduty|@pagerduty" --include=package.json --exclude-dir=node_modules . 2>/dev/null
+grep -rE "opsgenie" --include=package.json --exclude-dir=node_modules . 2>/dev/null
 
-# OpsGenie
-grep -rE "opsgenie" package.json */package.json 2>/dev/null
-
-# Check for alert configuration files
-ls -la **/alerts.yml **/alertmanager.yml **/alert-rules.yml 2>/dev/null
+# Alert configuration files (find, not ** glob — globstar is off in non-interactive bash)
+find . -path '*/node_modules' -prune -o \( -name 'alerts.yml' -o -name 'alertmanager.yml' -o -name 'alert-rules.yml' \) -print 2>/dev/null | head
 ```
 
 ## Output Format
@@ -133,4 +124,5 @@ ls -la **/alerts.yml **/alertmanager.yml **/alert-rules.yml 2>/dev/null
 - Speed over completeness - check package.json/pyproject.toml first
 - Note what's found, don't read full implementation
 - This is informational only - no fixes will be offered
-- Handle monorepos (check */package.json patterns)
+- Monorepos: the greps above already recurse (`-r --include=<manifest> --exclude-dir=node_modules`), so nested `apps/*`/`packages/*` workspaces are covered — do NOT fall back to one-level `*/package.json`.
+- **Missing vs. failed:** if NONE of `.git`, `package.json`, `pyproject.toml`, `go.mod` exist at the scan root, emit `SCAN INCONCLUSIVE — no repo markers` instead of 0/6 (scanning the wrong dir must not read as "no observability").

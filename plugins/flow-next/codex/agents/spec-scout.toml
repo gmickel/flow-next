@@ -14,6 +14,9 @@ You are a spec dependency scout. Your job is to find relationships between a new
 You receive:
 - `REQUEST` - the feature/change being planned
 - `FLOWCTL` - path to flowctl CLI
+- `SPEC_ID` (optional) - when planning refines an EXISTING open spec, its id. **Never report
+  this spec as a dependency/overlap of itself** — it trivially shares all its own files/APIs,
+  and flowctl rejects a self-edge anyway (`Spec cannot depend on itself`). Exclude it from the scan.
 
 ## Process
 
@@ -102,9 +105,11 @@ No dependencies or overlaps detected with open specs.
 
 ## Rules
 
-- Speed over completeness - check titles/scope first, only read specs if relevant
+- **Two-stage read (not "skim"):** triage on the `specs --json` titles/scope first, then you
+  MUST `cat` every spec that plausibly shares files, APIs, or domain — a shared surface often
+  isn't advertised in the title. Do not decide a relationship from the title alone.
 - Only report clear relationships, not maybes
-- Skip done specs entirely
-- Use haiku model - keep analysis fast and cheap
-- Return structured output for planner to auto-set deps
+- Skip done specs entirely; skip `SPEC_ID` (the spec being planned) entirely
+- Return structured output for the planner to auto-set deps — for a **Reverse Dependency**, the
+  planner records `<that-spec> depends-on <new-spec>` (see plan Step 4), so name the spec id precisely.
 """

@@ -49,6 +49,11 @@ Use **T-shirt sizes** based on observable metrics — not token estimates (model
 - ❌ Over-split: 4 sequential S tasks for backend setup
 - ✅ Better: 1 M task covering the sequential work
 
+**7+ is a ceiling, not a floor — combine trivial sequential S tasks even below it:**
+- **Finalization folds into ONE task.** Docs + CHANGELOG + release-notes + CI/test-wiring for a feature are a single S/M task — never a separate task per artifact.
+- ❌ Over-split (6 tasks): `…5 "docs + CHANGELOG"` + `…6 "wire tests into CI"` as two S tasks
+- ✅ Better: one `"docs + CHANGELOG + CI wiring"` S/M task (CI-wiring is part of a task's Definition of Done, not its own task)
+
 **Minimize file overlap for parallel work:**
 
 When splitting tasks, design for minimal file overlap. Tasks touching disjoint files can be worked in parallel without merge conflicts.
@@ -149,7 +154,16 @@ When `STRATEGY_PRESENT=true`, the scouts and the plan-prompt see the strategy co
 
 ---
 
-**CRITICAL: You MUST run ALL listed scouts. Run them in parallel for efficiency. Do NOT skip any scout — each provides unique signal that improves plan quality.**
+**CRITICAL: run every scout in the DEPTH-appropriate set below, in parallel. The set is keyed on `--depth` (a DETERMINISTIC, user-signaled tier), NOT on your judgment of "what seems relevant" — that judgment-skip is the anti-pattern.**
+
+Only the **three web-research scouts** are depth-tiered — everything else (the codebase-grounding scouts AND the Step-3 `flow-gap-analyst`) runs at EVERY depth, because a missing requirement or an ungrounded plan is bad at any size (worst on the thinnest short specs):
+
+| `--depth` | Web-research scouts (`practice-scout`, `docs-scout`, `github-scout`) | Always-run (both depths) |
+|-----------|------|------|
+| **SHORT** | **skipped** — pointer-shaped web signal the implementer can re-fetch (WebFetch) during work; a small change is grounded by the codebase scouts | `repo-scout`/`context-scout`, `spec-scout`, `memory-scout`, `docs-gap-scout` (honoring `IF …` config gates) + `flow-gap-analyst` (Step 3) |
+| **STANDARD / DEEP** | **run** — feature-sized plans need external best-practice / framework-doc / cross-repo signal | same |
+
+Within the chosen tier you MUST run ALL of that tier's scouts (the anti-pattern below still binds — no cherry-picking). The tables below list the full set; on a SHORT plan, run every row EXCEPT the three web-research scouts. **NOTE:** SHORT is often a *fallback* default (the depth question is skipped for configured backends; pilot defaults to short), so the only thing a fallback-short plan loses is the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
 
 ---
 
@@ -179,7 +193,7 @@ Run ALL of these scouts in parallel:
 | the `spec_scout` agent | Dependencies on open specs | YES |
 | the `docs_gap_scout` agent | Docs needing updates | YES |
 
-**Anti-pattern**: Running only 2-3 scouts "because they seem most relevant" — this causes incomplete plans.
+**Anti-pattern**: cherry-picking scouts *within a tier* "because they seem most relevant" — that judgment-skip causes incomplete plans. (This is distinct from the DEPTH tier above: dropping the web-research scouts on a user-chosen SHORT plan is a deterministic, user-signaled tradeoff, not a relevance guess.)
 
 Must capture:
 - File paths + line refs
@@ -236,6 +250,8 @@ Default to standard unless complexity demands more or less.
 - Risks + mitigations
 
 ## Step 5: Write to .flow
+
+**Calibration (read first):** before writing task specs, read [`examples.md`](examples.md) — good/bad task-spec shapes, investigation-target formats, T-shirt sizing, and coverage-table examples. It is the few-shot anchor that keeps task specs well-sized and well-shaped; skipping it is why plans drift toward vague or over-split tasks.
 
 **Efficiency note**: Use stdin (`--file -`) with heredocs to avoid temp files. Use `task set-spec` to set description + acceptance in one call.
 
@@ -370,19 +386,28 @@ Default to standard unless complexity demands more or less.
  - R-IDs in `## Acceptance Criteria` and `## Requirement coverage` must match (same IDs, same meanings).
  - R-IDs are plain markdown prose, not YAML — the reviewer matches them via LLM reasoning, not strict parsing.
 
-4. Set spec dependencies (from spec-scout findings):
+ **Source-tag consumption (Route A refine of a capture-authored spec):** `/flow-next:capture` tags each acceptance criterion with its provenance — `[user]` (verbatim), `[paraphrase]` (user-grounded), `[inferred]` (the agent filled a gap), `[strategy:<track>]`. capture invests real machinery in these *so plan can scrutinize them* — do not plan an `[inferred]` criterion as established fact. When the spec carries source tags:
+ - `[user]` / `[paraphrase]` / `[strategy:*]` → user- or strategy-grounded; plan normally.
+ - `[inferred]` → **unconfirmed**. Route it through the Step-1 scouts (does the codebase actually support/need it?). A scout-confirmed inference becomes a normal criterion (drop the tag); an **unconfirmed** one moves to `## Open Questions` (or renders as a `⚠️ unconfirmed inference` coverage-table row) rather than being silently planned as a requirement. This closes capture→plan: the provenance capture records is otherwise dropped at the one consumer built to read it.
 
- If spec-scout found dependencies, set them automatically:
+4. Set spec dependencies (from spec-scout findings) — BOTH directions:
+
  ```bash
- # For each dependency found by spec-scout:
+ # (a) FORWARD — the new plan depends on an existing spec (spec-scout "Dependencies"):
  $FLOWCTL spec add-dep <new-spec-id> <dependency-spec-id> --json
+
+ # (b) REVERSE — an existing spec depends on the new plan (spec-scout "Reverse Dependencies").
+ # MUST record these too: the edge belongs on the OTHER spec (it can't start until the new
+ # plan lands). Dropping it leaves that spec falsely ready → pilot/backlog picks it up and
+ # builds against infrastructure this plan hasn't shipped yet (silent, worst in autonomous mode).
+ $FLOWCTL spec add-dep <other-spec-id> <new-spec-id> --json
  ```
 
  Report findings at end of planning (no user prompt needed):
  ```
  Spec dependencies set:
- - fn-N-slug → fn-2-add-auth (Auth): Uses authService from fn-2-add-auth.1
- - fn-N-slug → fn-5-user-model (DB): Extends User model
+ - fn-N-slug → fn-2-add-auth (Auth): Uses authService from fn-2-add-auth.1 [forward]
+ - fn-7-notify → fn-N-slug (Notifications): waits for the event system this plan adds [reverse]
  ```
 
 5. Create child tasks:

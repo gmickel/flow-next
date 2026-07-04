@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-03T19:15:36.021026Z",
+  "depends_on": [],
+  "id": "fn-84-prose-optimization-pass-tier-a-eval.1",
+  "priority": null,
+  "spec": "fn-84-prose-optimization-pass-tier-a-eval",
+  "spec_path": ".flow/tasks/fn-84-prose-optimization-pass-tier-a-eval.1.md",
+  "status": "todo",
+  "title": "plan: bootstrap eval suite + baseline + ratchet (proof point)",
+  "updated_at": "2026-07-03T19:36:03.689057Z"
+}

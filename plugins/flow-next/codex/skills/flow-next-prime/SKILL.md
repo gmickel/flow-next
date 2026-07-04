@@ -53,12 +53,18 @@ Accepts:
 - No arguments (scans current repo)
 - `--report-only` or `report only` (skip remediation, just show report)
 - `--fix-all` or `fix all` (apply all agent readiness fixes without asking)
-- Path to different repo root
+- A path to a different repo root (first non-flag argument)
 
 Examples:
 - `/flow-next:prime`
 - `/flow-next:prime --report-only`
 - `/flow-next:prime ~/other-project`
+
+**Resolve `ROOT` from `$ARGUMENTS`** (the first non-flag token; default `.`). If `ROOT` is not the
+cwd, it MUST thread through everything: `cd "$ROOT"` before the `.flow/meta.json` pre-check and the
+Phase 2 verification commands, and every scout dispatch prompt in Phase 1 starts "Assess the repo at
+`ROOT`" (scouts scan cwd by default — without this they'd scan the wrong repo and the report would be
+confidently wrong end-to-end). If threading `ROOT` isn't feasible, error rather than silently scan cwd.
 
 ## The Eight Pillars
 
@@ -106,6 +112,11 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 
 **Level 3 is the target** for most teams. Don't over-engineer.
 
+> **The score band above is necessary but NOT sufficient.** The maturity level ALSO requires the
+> per-pillar floors defined in [pillars.md](pillars.md) (Level 3 needs every pillar ≥40%, L4 ≥60%,
+> L5 ≥80%). pillars.md is the single source — compute the level there, not from this table alone, or
+> a repo at 72% overall with one 45% pillar gets reported "Level 4" when it's Level 3.
+
 ## What Gets Fixed vs Reported
 
 | Pillars | Category | Remediation |
@@ -125,8 +136,8 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 - **MUST ask via the plain-text numbered prompt described below** for consent.
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-- Always ask before modifying existing files
-- Don't add dependencies without consent
+- Always ask before modifying existing files — **except** under `--fix-all`, which waives the prompt for **append/merge** edits (adding a `.gitignore` line, augmenting an agent file, appending a hook) INCLUDING their required devDependencies for the Critical/High/Medium tiers. `--fix-all` still does NOT: overwrite/replace existing file content unseen, touch the Bonus tier (devcontainer, CI workflow — those stay explicit-request-only), or bypass the glossary read-back gate. A destructive overwrite always needs consent even under `--fix-all`.
+- Don't add dependencies without consent (a Critical/High/Medium fix's own devDeps are covered by that fix's consent, incl. `--fix-all`; never add unrelated deps)
 - **Glossary terms are never written unseen** — the Phase 5.5 bootstrap shows the full proposal (term + definition + file-ref evidence) at read-back before any `flowctl glossary add`; `--fix-all` does not bypass this gate, and a populated glossary (`total_terms > 0`) is never rewritten
 
 ### Scope Control

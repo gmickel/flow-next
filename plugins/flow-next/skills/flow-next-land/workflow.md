@@ -224,6 +224,27 @@ UNRESOLVED="$(gh api graphql --paginate \
 
 `UNRESOLVED > 0` with green CI → plan `resolve` (dispatch resolve-pr in ACT), provisional verdict `RESOLVING`.
 
+### 2.5b — QA verdict gate (flow-side — land IS the promised gate for QA findings)
+
+The QA stage is advisory to the build loop and pilot advances a `NEEDS_WORK` QA pass explicitly on the promise that *"the human reviewer + the land gate act on its findings"* (pilot workflow §5 / §"For qa"). This is that gate — without it, a PR whose latest `qa_verdict` says `NEEDS_WORK` (an open P0/P1 or an uncovered UI-observable R-ID) auto-merges the moment CI is green.
+
+**Read the receipt from the PR HEAD, not land's working tree.** The receipt is committed on the *un-merged spec branch* (qa §6.3b); land ticks run from `ORIG_BRANCH` (the base) and Phase 2 does no checkout — so a working-tree `[[ -f ]]` would find nothing and the gate would silently no-op on every PR. Read the committed file at `$HEAD_SHA` via the API (read-only, dry-run-safe):
+
+```bash
+QA_JSON="$(gh api -H "Accept: application/vnd.github.raw" \
+  "repos/$OWNER_REPO/contents/.flow/review-receipts/qa-$spec.json?ref=$HEAD_SHA" 2>/dev/null || echo '{}')"
+QA_OUTCOME="$(printf '%s' "$QA_JSON" | jq -r '.qa_outcome // ""' 2>/dev/null || echo "")"
+```
+
+Gate on the latest committed `qa_outcome` for this PR head (the four-outcome field is `SHIP | NEEDS_WORK | BLOCKED | NA`):
+
+| Latest receipt state at the PR head | Land action |
+|---|---|
+| 404 / unparseable / `qa_outcome` ∈ {`SHIP`, `NA`, `BLOCKED`} or any other value | **No QA objection** — continue to 2.6. (`BLOCKED` = "no ship *claim* on a QA basis", not "the app is broken" — advisory, exactly as pilot treats it; QA never hard-blocks on couldn't-verify.) |
+| `qa_outcome == NEEDS_WORK` | verdict `NEEDS_HUMAN`, action `none`, reason `latest QA verdict at the PR head is NEEDS_WORK (open P0/P1 or uncovered UI R-ID) — merge blocked pending human review or a QA re-run to SHIP`. **No further gates for this PR.** |
+
+**No head_sha freshness check, deliberately.** The receipt read at `$HEAD_SHA` IS the latest QA verdict for the commit being merged (each QA run overwrites the committed receipt). Land never re-runs QA, so a `NEEDS_WORK` that predates later commits is NOT proof the P0 was fixed — it could be an unrelated `ci-fix`, a resolve-pr push, or land's own §3.3 rebase. Fail-safe: any `NEEDS_WORK` at the head blocks until QA re-runs to `SHIP` (which overwrites the receipt → no block) or a human clears it. This closes both the wrong-tree read and the stale-head laundering channel a naive `head_sha`-equality check would open.
+
 ### 2.6 — Review signal (`land.reviewSignal`)
 
 Review bots (e.g. chatgpt-codex-connector) post COMMENTED reviews and never APPROVE; `reviewDecision` will not reflect them. An **automated reviewer** is a review author whose login ends in `[bot]` (REST form — fetch reviews via REST so bot logins carry the suffix), or any login in the `land.automatedReviewers` csv.

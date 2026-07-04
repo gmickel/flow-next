@@ -16,13 +16,28 @@ You're invoked after implementation, before shipping. Review the changes and fla
 
 ### 1. Get the Diff
 ```bash
-# What changed?
-git diff main --stat
-git diff main --name-only
+# Resolve the base branch — NEVER hardcode `main`. On a repo whose default is
+# develop/trunk/master (or a shallow worktree with no local `main`), `git diff main`
+# errors and — with no scan-failed branch below — the audit reports "clean" over an
+# EMPTY diff while the risky change goes unreviewed.
+BASE=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+[ -z "$BASE" ] && { git rev-parse --verify -q main >/dev/null 2>&1 && BASE=main || BASE=master; }
+MB=$(git merge-base HEAD "$BASE" 2>/dev/null || git merge-base HEAD "origin/$BASE" 2>/dev/null)
 
-# Full diff for review
-git diff main
+if [ -z "$MB" ]; then
+  echo "Audit FAILED: cannot resolve a diff base (tried origin/HEAD, main, master)." >&2
+  # STOP — report 'Audit FAILED: <reason>'. Do NOT emit a clean/no-issues verdict.
+else
+  # What changed since the merge-base (includes uncommitted work)
+  git diff "$MB" --stat
+  git diff "$MB" --name-only
+  git diff "$MB"
+fi
 ```
+
+**Hard rule:** if the diff cannot be produced (the `Audit FAILED` branch above, or the diff
+command errors), report `Audit FAILED: <reason>` and stop — a clean verdict is ONLY valid
+over a diff you actually saw. An empty diff from a broken base is not "no issues".
 
 ### 2. Quick Scan (find obvious issues fast)
 - **Secrets**: API keys, passwords, tokens in code
@@ -59,6 +74,17 @@ git diff main
 - Flag if test_lines > 2× implementation_lines (may indicate testing implementation details instead of behavior)
 - Flag if existing tests were modified (may indicate assertion-weakening to make broken code pass)
 - This is ADVISORY — over-testing is less dangerous than under-testing
+
+### 7. Vocabulary (only when the repo has a glossary)
+```bash
+# Gate: skip this section entirely when the project has no glossary.
+FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"; [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+$FLOWCTL glossary list --json 2>/dev/null | jq -r '.total_terms // 0'
+```
+When `total_terms > 0`: flag code that redefines, contradicts, or shadows a canonical
+GLOSSARY.md term (a new `Receipt`/`Handover`/`R-ID` that means something different) — the
+same criterion impl-review carries. When `0`, skip silently (no glossary → nothing to drift
+from). This keeps the auditor's rubric aligned with the review fleet.
 
 Red flags:
 - Many test variations with trivial differences (copy-paste tests)

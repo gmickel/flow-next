@@ -78,9 +78,13 @@ Read the files and check for these sections:
 - AGENTS.md: ✅ Found at [path] / ❌ Missing
 - CONTRIBUTING.md: ✅ Found / ❌ Missing
 
-### Content Analysis (if CLAUDE.md exists)
+### Content Analysis (analyze whichever agent file EXISTS — CLAUDE.md or AGENTS.md)
 
-**Coverage Score: X/10**
+Analyze whichever is present (prefer `CLAUDE.md`; if only `AGENTS.md` exists, analyze THAT — a
+Codex-first repo with a rich AGENTS.md must not be scored as if it had nothing). If BOTH exist as
+real files, diff their build/test commands and flag any contradiction as a finding.
+
+**Coverage Score: X/8** (one point per row below — do NOT report X/10; there are 8 rows)
 
 | Section | Status | Notes |
 |---------|--------|-------|
@@ -99,7 +103,7 @@ Read the files and check for these sections:
 **Gaps:**
 - [What's missing or weak]
 
-### If CLAUDE.md Missing
+### If NEITHER CLAUDE.md nor AGENTS.md exists
 
 **Detected from repo scan:**
 - Build tool: [detected or unknown]
@@ -119,8 +123,9 @@ Read the files and check for these sections:
 
 ## Rules
 
-- If CLAUDE.md exists, read and analyze it
-- If missing, scan repo for info that SHOULD be in CLAUDE.md
-- Check for staleness (references to files that don't exist)
-- Note if CONTRIBUTING.md duplicates what should be in CLAUDE.md
+- Read and analyze whichever agent file exists (CLAUDE.md or AGENTS.md); if both are real files, note any command divergence
+- If neither exists, scan repo for info that SHOULD be in the agent file
+- **DC2 is quality-gated, not presence-only:** a stub (coverage ≪ half) is a ⚠️, not a pass — report the score so prime can offer the *augment* remediation, not a no-op "create"
+- Check for staleness — verify up to ~10 referenced paths via `ls`; don't freelance an unbounded audit
+- Note if CONTRIBUTING.md duplicates what should be in the agent file
 - Don't penalize for missing advanced sections in small projects

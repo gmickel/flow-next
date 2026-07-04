@@ -104,7 +104,15 @@ jq '
  .assigned += $ready
  else . end
  ) |
- .result
+ # Emit the phases AND the residue: any open spec never assigned is UNRESOLVABLE — a
+ # dependency cycle (A→B→A), a dep on a missing/closed spec, or a chain deeper than 10.
+ # Dropping it silently is the one way /deps gives a WRONG answer (the graph it exists to
+ # expose hides the deadlock). Surface it, with the offending deps for diagnosis.
+ .assigned as $asg |
+ { phases: .result,
+ deadlocked: [ $open[] | select(.id as $i | ($asg | index($i)) | not)
+ | { id, status,
+ unresolved_deps: [ (.deps // [])[] | select(. as $d | ($asg | index($d)) or ($status[$d] == "done") | not) ] } ] }
 ' "$SPECS_FILE"
 ```
 
@@ -125,16 +133,37 @@ Present results as:
 
 ### Execution Phases
 
+Render from the jq result's `.phases`:
+
 | Phase | Specs | Can Start |
 |-------|-------|-----------|
 | **1** | fn-1-add-auth | **NOW** |
 | 2 | fn-2-add-oauth | After Phase 1 |
 | 3 | fn-3-user-profile | After Phase 2 |
 
+### ⚠️ Deadlocked / Unresolvable
+
+**Only render this section when `.deadlocked` is non-empty** — but when it is, it is the
+most important part of the report. Each entry is an OPEN spec that could not be placed in
+any phase: a dependency **cycle**, a dep on a **missing/closed** spec, or a chain deeper
+than 10. These are invisible to `ready`/pilot (they just never become ready) — this is the
+one place the graph surfaces them.
+
+| Spec | Status | Unresolved deps | Likely cause |
+|------|--------|-----------------|--------------|
+| fn-7-x | blocked | fn-9-y | fn-9-y not found / closed, or a cycle fn-7↔fn-9 |
+
+For each, state the likely cause: if two deadlocked specs list each other → **cycle** (fix
+with `flowctl spec rm-dep`); if an unresolved dep isn't among the open specs → **missing or
+closed dependency**. Never omit a deadlocked spec.
+
 ### Critical Path
 
 fn-1-add-auth → fn-2-add-oauth → fn-3-user-profile (3 phases)
 ```
+
+**Edit dependencies** with `flowctl spec add-dep <spec> <dep>` / `rm-dep <spec> <dep>`
+(this skill is read-only inspection; those commands mutate the edges).
 
 ## Quick One-Liner
 

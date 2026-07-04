@@ -393,22 +393,16 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
 
  # Optional: capture suppression-gate tally (fn-29.3).
  # Reviewer emits a line like "Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0."
- SUPPRESSED_JSON="$(grep -iE '^[>*_` ]*suppressed findings[ *_`]*:' "$RESPONSE_FILE" \
+ # Portable (BSD awk / mawk / gawk alike) — the 3-arg match(str,re,arr) form is
+ # gawk-only and syntax-errors on stock macOS awk, and RP is macOS-gated, so it
+ # would break exactly where it runs. grep -Eio + sed + paste is portable.
+ _SUPPRESSED_PAIRS="$(grep -iE '^[>*_` ]*suppressed findings[ *_`]*:' "$RESPONSE_FILE" \
  | head -n 1 \
  | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//' \
- | awk '
- BEGIN { first=1; printf "{" }
- {
- n=split($0, parts, /,[[:space:]]*/)
- for (i=1; i<=n; i++) {
- if (match(parts[i], /([0-9]+)[[:space:]]+at[[:space:]]+anchor[[:space:]]+(0|25|50|75|100)/, m)) {
- if (!first) printf ","
- printf "\"%s\":%s", m[2], m[1]
- first=0
- }
- }
- }
- END { printf "}" }')"
+ | grep -Eio '[0-9]+[[:space:]]+at[[:space:]]+anchor[[:space:]]+(0|25|50|75|100)' \
+ | sed -E 's/^([0-9]+)[[:space:]]+at[[:space:]]+anchor[[:space:]]+([0-9]+)$/"\2":\1/' \
+ | paste -sd, -)"
+ SUPPRESSED_JSON="{${_SUPPRESSED_PAIRS}}" # empty → {}, populated → {"50":3,...}
 
  # Optional: capture introduced vs pre_existing classification tally (fn-29.4).
  # Reviewer emits a line like "Classification counts: 1 introduced, 0 pre_existing."

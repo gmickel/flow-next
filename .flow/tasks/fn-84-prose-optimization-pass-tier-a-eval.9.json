@@ -1,0 +1,23 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-03T19:15:52.630704Z",
+  "depends_on": [
+    "fn-84-prose-optimization-pass-tier-a-eval.1",
+    "fn-84-prose-optimization-pass-tier-a-eval.2",
+    "fn-84-prose-optimization-pass-tier-a-eval.3",
+    "fn-84-prose-optimization-pass-tier-a-eval.4",
+    "fn-84-prose-optimization-pass-tier-a-eval.5",
+    "fn-84-prose-optimization-pass-tier-a-eval.6",
+    "fn-84-prose-optimization-pass-tier-a-eval.7",
+    "fn-84-prose-optimization-pass-tier-a-eval.8"
+  ],
+  "id": "fn-84-prose-optimization-pass-tier-a-eval.9",
+  "priority": null,
+  "spec": "fn-84-prose-optimization-pass-tier-a-eval",
+  "spec_path": ".flow/tasks/fn-84-prose-optimization-pass-tier-a-eval.9.md",
+  "status": "todo",
+  "title": "consolidation: target-map, ratchet audit, reclassification, net-effect table",
+  "updated_at": "2026-07-03T19:30:10.442284Z"
+}

@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-87-fleet-efficiency-quality-capability",
+  "created_at": "2026-07-04T13:24:27.046575Z",
+  "depends_on_epics": [],
+  "id": "fn-87-fleet-efficiency-quality-capability",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-87-fleet-efficiency-quality-capability.md",
+  "status": "open",
+  "title": "Fleet efficiency + quality (capability-review backlog)",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-04T13:25:50.384186Z"
+}
