@@ -634,7 +634,7 @@ These are guard conditions, not warnings — a body with empty TL;DR or empty R-
 
 **Goal:** turn the structured payload from Phase 1 into the **context half** of the PR body — the sections a reviewer reads *after* deciding where to focus, to anchor judgment in the surrounding intent. Context half = Decisions made + Memory left behind + Glossary / strategy notes + Open items + Where to look. The header half (TL;DR / R-ID coverage / Critical changes) lands in §Phase 2; the mermaid section lands in §Phase 3.
 
-These five sections are **read-only mirrors of structured fields**. The host agent never paraphrases, never extends, never narrates a plausible-sounding rationale to fill a gap. The §2.5 hallucination guardrails (esp. rule 9 "no invented why" and rule 10 "trace every claim") apply here with extra force: the context sections are the surface where fluent fabrication is most tempting, because the underlying data (decisions, memory entries, open questions) is already prose-shaped. Treat them as text to reformat, not text to embellish.
+These five sections are **read-only mirrors of structured fields**. The host agent never paraphrases, never extends, never narrates a plausible-sounding rationale to fill a gap. The §2.5 hallucination guardrails (esp. rule 9 "no invented why" and rule 10 "trace every claim") apply here with extra force — the context sections are where fluent fabrication is most tempting. Treat them as text to reformat, not text to embellish.
 
 ### 2.8 — Decisions made section (R15)
 
@@ -667,7 +667,7 @@ If `memory_during_spec.decisions[]` is empty, the section heading is omitted ent
 
 ### 2.9 — Memory left behind section (R16)
 
-Render `## Memory left behind` when `memory_during_spec.bugs[]` OR `memory_during_spec.architecture_patterns[]` is non-empty. Two sub-lists when both are populated; one sub-list when only one is. Heading omitted entirely if both are empty.
+Render `## Memory left behind` when `memory_during_spec.bugs[]` OR `memory_during_spec.architecture_patterns[]` is non-empty. Two sub-lists when both are populated; one sub-list when only one is. (Omission per the §2.13 table.)
 
 Sub-list structure:
 
@@ -703,7 +703,7 @@ If only one sub-array is populated, emit only that sub-list with its bold preamb
 
 ### 2.10 — Glossary / strategy notes section (R17)
 
-Render `## Glossary / strategy notes` when `glossary_changes` has any non-empty array OR `strategy_alignment.tracks_served[]` is non-empty OR `strategy_alignment.drift_flagged[]` is non-empty. Heading omitted entirely if every contribution is empty.
+Render `## Glossary / strategy notes` when `glossary_changes` has any non-empty array OR `strategy_alignment.tracks_served[]` is non-empty OR `strategy_alignment.drift_flagged[]` is non-empty. (Omission per the §2.13 table.)
 
 The section combines two distinct signals (glossary mutation + strategy alignment) under one heading because (a) both are repo-doc plumbing the reviewer typically skims, (b) each is usually 1-3 lines, and (c) two separate empty-most-of-the-time headings train reviewers to stop looking. One combined heading keeps the signal density per heading high.
 
@@ -904,7 +904,7 @@ Render `## Where to look` when ANY of the five categories below fire. Heading om
 
 This section IS the methodology #4 handover artefact: an explicit reviewer-focus list pointing at the high-leverage decisions the host agent **cannot self-verify**. Where the rest of the body says "here is what changed", Where to look says "here is what *you* should pay attention to, because we cannot judge it from inside".
 
-**Format rule (load-bearing):** every focus prompt is a **question**, not a label. Practice-scout finding: questions activate reviewer cognition more than labels. "**Performance:** `app/server.ts` — Is the new code path on a hot path?" beats "**Performance:** `app/server.ts` — hot path candidate" by a clear margin in reader engagement studies. Skill prose enforces the question-shape across all five categories.
+**Format rule (load-bearing):** every focus prompt is a **question**, not a label — questions activate reviewer cognition (e.g. "Is the new code path on a hot path?" beats "hot path candidate"). Enforce the question-shape across all five categories.
 
 #### Category 1: Architecture
 
@@ -1002,8 +1002,6 @@ Bullets emit in category order: Architecture → Security → Business correctne
 
 Section-level cap: **at most 8 bullets total across all 5 categories** (3+3+2+2+1 = 11 worst case; 8 keeps the section skim-readable). When the cap would be exceeded, drop bullets in reverse-category order (Tests first if multiple Tests bullets exist — though v1 only emits 1; then Performance; then Business correctness; then Security; finally Architecture). Architecture is the highest-value reviewer-focus signal and never trimmed.
 
-**Section purpose framing** — the methodology's "the agent cannot self-verify high-leverage decisions" principle. Architecture, security boundaries, business contracts, hot-path performance, and test-coverage adequacy are all judgments that require whole-codebase visibility, deployment context, runtime understanding, or organizational knowledge the agent does not have. Surfacing them as questions (not labels) primes the reviewer to actually engage rather than rubber-stamp.
-
 **What this section MUST NOT do:**
 
 - MUST NOT use labels instead of questions. Every focus prompt ends with `?`.
@@ -1024,8 +1022,6 @@ The §2.6 omission rule extends to all five context sections. Recap with the add
 | Open items | spec `open_questions` non-empty OR `deferred_findings` non-empty OR `completion_review_status == "needs_work"` | All empty |
 | Live QA | `.flow/review-receipts/qa-<spec-id>.json` exists and parses (§2.11b) | No receipt / unparseable receipt (the common case — QA didn't run) |
 | Where to look | ≥1 of the 5 categories fires | None fire |
-
-The rule preserves skim-readability: a heading with no content trains the reviewer to ignore future headings. One real signal per heading.
 
 ### 2.13b — Footer breadcrumb (section 11 of body order)
 
@@ -1395,7 +1391,7 @@ This same count drives both the §2.11 Open items section bullet count and the d
 
 ### 4.3 — Body delivery via `--body-file` (R20 refinement)
 
-Persist the rendered body to a tempfile so §4.6 can hand it to `gh pr create --body-file` (and `--dry-run` at §4.0 can print it for inspection). This refines the original spec R20 ("heredoc invocation of `gh pr create --body`") because **heredoc input does not survive LLM-generated content cleanly**: backticks, `$`, and quote characters get re-interpreted by the shell on the way to `gh`. Practice-scout finding cli/cli #29619 documents the same failure mode for Claude Code shell invocations; `--body-file` sidesteps it entirely.
+Persist the rendered body to a tempfile so §4.6 can hand it to `gh pr create --body-file` (and `--dry-run` at §4.0 can print it for inspection). Use `--body-file`, never a heredoc: LLM-generated body content contains backticks / `$` / quotes the shell re-interprets on the way to `gh`, corrupting heredoc input; `--body-file` sidesteps it.
 
 ```bash
 BODY_FILE=$(mktemp -t make-pr-body-XXXXXX.md)

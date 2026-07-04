@@ -1,8 +1,13 @@
-# Binary evals (5) — behavioral (body-equivalence). max per run = 5.
+# Binary evals (6) — E1–E5 behavioral body-equivalence (accuracy floor) + E6 Where-to-look quality
 
-Scored on the `--dry-run` rendered PR body for the rich frozen payload. The trim is kept only if it
-holds every eval (a prompt-trim must leave the rendered body behaviorally unchanged). 3 of 5 are
-accuracy evals (hallucination guards) per R3.
+**fn-84.4 extended-schema split:** E1–E5 are the BEHAVIORAL/ACCURACY floor (hallucination guards +
+body-equivalence), scored on the `--dry-run` rendered body for **payload-rich AND payload-risky**
+(accuracy_max = 5 × 2 = **10**). **E6 is the QUALITY-lever scoring eval** (Where-to-look risk
+prioritization), scored on **payload-risky** only — rich/sparse have no risk-differentiated diff, which
+is exactly why the pre-fn-84 suite couldn't measure Where-to-look quality (Major-4). quality_max = 1 × 1
+= **1**. max_score = **11**. E6 authored BEFORE the fresh re-baseline (Major-B). `payload-sparse` is an
+E1 empty-section-omission spot-check (not scored into the total). A prompt-TRIM is kept only if it holds
+every eval AND cuts tokens (efficiency); the QUALITY lever is kept if E6 rises without any E1–E5 regress.
 
 EVAL 1: Section set + order  [BEHAVIORAL]
 Question: Does the body render the expected sections in the load-bearing order (Title/summary →
@@ -36,3 +41,17 @@ Question: Does the body avoid quoting raw diff code, include the footer provenan
 (being --dry-run) render to stdout WITHOUT any push / gh pr create / confirm prompt?
 Pass: no code snippets; breadcrumb present; dry-run short-circuits cleanly (no PR side effect).
 Fail: code quoted, breadcrumb missing, or any push/create/confirm attempted.
+
+EVAL 6: Where-to-look risk prioritization  [QUALITY-LEVER SCORING EVAL — payload-risky only]
+Question: On payload-risky (`diff_summary.security_sensitive_paths = [credentials.py, flowctl.py]`; a removed
+public export `_legacy_token_env`; a high-churn TEST file + low-risk docs), does the `## Where to look` section
+(a) RENDER — its Security category (§2.12 cat 2) triggers on `security_sensitive_paths[]` — and (b) LEAD with
+question-shaped Security bullets for the credential/core files, ahead of the Tests/Business/Performance
+categories (§2.12 order = Architecture → Security → Business → Perf → Tests); AND does `## Critical changes`
+SURFACE the removed public export (`_legacy_token_env`, tier-3 removed-first)?
+Pass: Where to look renders with Security bullets for `credentials.py`/`flowctl.py` FIRST (question-shaped,
+Security ahead of lower categories); the removed `_legacy_token_env` appears in Critical changes.
+Fail: Where to look OMITS the Security category despite `security_sensitive_paths` being set, buries security
+below Tests, uses labels instead of questions, or Critical changes omits the removed public export.
+NOTE: Critical-changes tier-1 CHURN ordering (the test file ranking high by churn) is BY DESIGN (§2.4 5-tier),
+NOT an E6 failure — E6 scores the Where-to-look reviewer-focus surface + the removed-export surfacing.

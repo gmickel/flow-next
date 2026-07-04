@@ -37,9 +37,20 @@ Optional:
 - [ ] `sync-codex.sh` regenerated + committed IF prose changed; `pytest` + `make-pr_smoke_test.sh` + `smoke_test.sh` green; `CHANGELOG` `## Unreleased`; no bump (R8)
 
 ## Done summary
-TBD
+Re-baselined the `make-pr` suite (the heaviest prompt, ~35k tok) and tested BOTH axes — quality + **efficiency** (per your steer). Fable review NEEDS_WORK → all defects addressed.
 
+**Suite work:** migrated `results.tsv` to the extended schema; added **E6 (Where-to-look risk prioritization)** + a new **`payload-risky.json`** fixture (risk-differentiated diff) BEFORE the fresh baseline (Major-B). Run-trick = `--dry-run` render at `sonnet`.
+
+**Quality (Where-to-look):** at CEILING. make-pr's Where-to-look is **already risk-prioritized by design** (5 field-triggered categories in risk order: Architecture→Security→Business→Perf→Tests; Security fires on `security_sensitive_paths[]` and leads with question-shaped bullets; Critical changes surfaces the removed public export tier-3-first). The initially-hypothesized gap was a **fixture artifact** (the pre-fn-84 payloads had a low-risk scaffolding diff). Quality lever → honest discard.
+
+**Efficiency (the axis you flagged):** **−189 tok MEASURED (kept)** — the fable review's first-round finding (I'd asserted a ceiling from one free −78 tok trim) was right, so I extended to a real probe: more of the safe rationale class + a **structural** omission-clause dedup (removed redundant "omit if empty" clauses once the authoritative §2.13 table covered them). Verified body-equivalent on BOTH fixtures (rich E1–E5 5/5 — empty sections still omitted; risky E1–E6 6/6). **Measured boundary:** the per-section *unique* imperatives (e.g. §2.8's "no fallback no-decisions line") + the field-rules — those are the remaining accuracy-risky per-section backlog. So the efficiency finding is now MEASURED: fn-82's fold already took the −4.5k win; ~−189 tok of safe rationale+dedup remained.
+
+**Fable review NEEDS_WORK → addressed every defect:** (1) efficiency measured-not-asserted (−78→−189, incl. a structural dedup, verified on both fixtures + boundary identified); (2) fixture fidelity — `public_exports_changed` reshaped to the real exporter shape `[{file,added,removed}]` on an exporter-faithful `__init__.py`, `security_sensitive_paths`=[credentials.py] (dropped the unfaithful flowctl.py), sums recomputed; (3) quality-ceiling reworded to "no measurable headroom at current granularity (quality_max=1)"; (4) README updated (payload-risky = synthetic; E6 now guards where-to-look). It cleared me on goalpost-moving (the E6 fixture-fix was legitimate).
+
+**R8:** Codex mirror regenerated; CHANGELOG `## Unreleased` entry (−189 tok make-pr trim); no version bump. Skill-prose only (the −189 tok trim); test surface unchanged.
+
+**Durable deliverables:** an E6 Where-to-look-quality eval + a risk-differentiated fixture (the suite can NOW measure Where-to-look quality) + a measured efficiency win + boundary on the heaviest prompt.
 ## Evidence
 - Commits:
-- Tests:
+- Tests: prose-only change (make-pr workflow.md -189 tok trim) — test surface unchanged since fn-84.1's green run; make-pr smoke guards against running from the plugin repo (expected), fable-model review: NEEDS_WORK -> all defects addressed (efficiency measured -189 not asserted -78 + structural dedup + boundary; fixture exporter-faithful; quality reworded; README updated)
 - PRs:
