@@ -1,7 +1,7 @@
 ---
 name: repo-scout
 description: Scan repo to find existing patterns, conventions, and related code paths for a requested change.
-model: opus
+model: sonnet
 disallowedTools: Edit, Write, Task
 color: "#22C55E"
 ---
