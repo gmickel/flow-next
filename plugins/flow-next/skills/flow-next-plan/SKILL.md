@@ -203,7 +203,7 @@ Read [steps.md](steps.md) and follow each step in order.
 
 **Step 8.5 HTML render lens (opt-in)**: when `artifacts.html.enabled` is true, planning regenerates `.flow/artifacts/<spec-id>/spec.html` with the plan layer (task DAG + R-ID coverage) per the shared disclosure reference ([`plugins/flow-next/references/html-artifacts.md`](../../references/html-artifacts.md)) — generated only after the Step 8 refinement loop exits, link line replaced in place in the spec md. With the mode off/unset there is zero artifact-related behavior or output. Details in steps.md Step 8.5.
 
-**CRITICAL — Step 1 (Research)**: You MUST launch ALL scouts listed in steps.md in ONE parallel Task call. Do NOT skip scouts or run them sequentially. Each scout provides unique signal.
+**CRITICAL — Step 1 (Research)**: You MUST launch ALL scouts in the **depth-appropriate set** (steps.md tier table — the full set at STANDARD/DEEP; the full set MINUS the three web-research scouts at SHORT) in ONE parallel Task call. Do NOT skip scouts within that set or run them sequentially. Each scout in the set provides unique signal.
 
 If user chose review:
 - Option 2a: run `/flow-next:plan-review` after Step 4, fix issues until it passes

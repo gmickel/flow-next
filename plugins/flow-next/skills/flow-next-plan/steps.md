@@ -152,7 +152,16 @@ When `STRATEGY_PRESENT=true`, the scouts and the plan-prompt see the strategy co
 
 ---
 
-**CRITICAL: You MUST run ALL listed scouts. Run them in parallel for efficiency. Do NOT skip any scout — each provides unique signal that improves plan quality.**
+**CRITICAL: run every scout in the DEPTH-appropriate set below, in parallel. The set is keyed on `--depth` (a DETERMINISTIC, user-signaled tier), NOT on your judgment of "what seems relevant" — that judgment-skip is the anti-pattern.**
+
+Only the **three web-research scouts** are depth-tiered — everything else (the codebase-grounding scouts AND the Step-3 `flow-gap-analyst`) runs at EVERY depth, because a missing requirement or an ungrounded plan is bad at any size (worst on the thinnest short specs):
+
+| `--depth` | Web-research scouts (`practice-scout`, `docs-scout`, `github-scout`) | Always-run (both depths) |
+|-----------|------|------|
+| **SHORT** | **skipped** — pointer-shaped web signal the implementer can re-fetch (WebFetch) during work; a small change is grounded by the codebase scouts | `repo-scout`/`context-scout`, `spec-scout`, `memory-scout`, `docs-gap-scout` (honoring `IF …` config gates) + `flow-gap-analyst` (Step 3) |
+| **STANDARD / DEEP** | **run** — feature-sized plans need external best-practice / framework-doc / cross-repo signal | same |
+
+Within the chosen tier you MUST run ALL of that tier's scouts (the anti-pattern below still binds — no cherry-picking). The tables below list the full set; on a SHORT plan, run every row EXCEPT the three web-research scouts. **NOTE:** SHORT is often a *fallback* default (the depth question is skipped for configured backends; pilot defaults to short), so the only thing a fallback-short plan loses is the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
 
 ---
 
@@ -182,7 +191,7 @@ Run ALL of these scouts in parallel:
 | `flow-next:spec-scout` | Dependencies on open specs | YES |
 | `flow-next:docs-gap-scout` | Docs needing updates | YES |
 
-**Anti-pattern**: Running only 2-3 scouts "because they seem most relevant" — this causes incomplete plans.
+**Anti-pattern**: cherry-picking scouts *within a tier* "because they seem most relevant" — that judgment-skip causes incomplete plans. (This is distinct from the DEPTH tier above: dropping the web-research scouts on a user-chosen SHORT plan is a deterministic, user-signaled tradeoff, not a relevance guess.)
 
 Must capture:
 - File paths + line refs
