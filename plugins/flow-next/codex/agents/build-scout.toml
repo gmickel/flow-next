@@ -37,8 +37,11 @@ ls -la Makefile 2>/dev/null
 # Rust
 ls -la Cargo.toml 2>/dev/null
 
-# General
-ls -la Makefile CMakeLists.txt build.gradle build.gradle.kts pom.xml 2>/dev/null
+# Bun / Deno (first-class runtimes, not just npm)
+ls -la bunfig.toml bun.lock bun.lockb deno.json deno.jsonc 2>/dev/null
+
+# General (incl. modern task runners)
+ls -la Makefile justfile Justfile Taskfile.yml Taskfile.yaml CMakeLists.txt build.gradle build.gradle.kts pom.xml 2>/dev/null
 ```
 
 ### Build Commands
@@ -58,15 +61,15 @@ head -50 Makefile 2>/dev/null | grep -E "^[a-z]+:"
 # Dev scripts
 grep -E '"(dev|start|serve)"' package.json 2>/dev/null
 
-# Framework detection
-grep -E "next|nuxt|vite|webpack-dev-server|nodemon" package.json 2>/dev/null
+# Framework detection (incl. Bun/Deno tasks)
+grep -E "next|nuxt|vite|webpack-dev-server|nodemon|bun run|deno task" package.json deno.json 2>/dev/null
 ```
 
 ### CI/CD Configuration
 ```bash
-# GitHub Actions
-ls -la .github/workflows/*.yml 2>/dev/null
-cat .github/workflows/*.yml 2>/dev/null | grep -E "build|deploy" | head -10
+# GitHub Actions (.yml and .yaml)
+ls -la .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null
+cat .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null | grep -E "build|deploy" | head -10
 
 # Other CI
 ls -la .gitlab-ci.yml .circleci/config.yml Jenkinsfile azure-pipelines.yml 2>/dev/null

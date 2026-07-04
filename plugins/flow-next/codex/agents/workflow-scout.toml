@@ -29,26 +29,29 @@ ls -la .circleci/config.yml 2>/dev/null
 # Jenkins
 ls -la Jenkinsfile 2>/dev/null
 
-# Azure Pipelines
-ls -la azure-pipelines.yml 2>/dev/null
+# Azure Pipelines / Buildkite / Bitbucket / Woodpecker
+ls -la azure-pipelines.yml azure-pipelines.yaml bitbucket-pipelines.yml 2>/dev/null
+ls -la .buildkite/ .woodpecker.yml .woodpecker/ 2>/dev/null
 
 # If found, check what the CI does
-head -50 .github/workflows/*.yml 2>/dev/null | grep -E "name:|run:|uses:" | head -20
+head -50 .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null | grep -E "name:|run:|uses:" | head -20
 ```
 
-### PR Template (WP2)
+### PR Template (WP2) — GitHub AND GitLab
 
 ```bash
 ls -la .github/PULL_REQUEST_TEMPLATE.md .github/PULL_REQUEST_TEMPLATE/ .github/pull_request_template.md 2>/dev/null
+ls -la .gitlab/merge_request_templates/ 2>/dev/null   # GitLab (flow-next ships a GitLab adapter)
 ```
 
-### Issue Templates (WP3)
+### Issue Templates (WP3) — GitHub AND GitLab
 
 ```bash
 ls -la .github/ISSUE_TEMPLATE/ .github/ISSUE_TEMPLATE.md .github/issue_template.md 2>/dev/null
+ls -la .gitlab/issue_templates/ 2>/dev/null   # GitLab
 
-# Count issue templates if directory exists
-ls -la .github/ISSUE_TEMPLATE/*.md .github/ISSUE_TEMPLATE/*.yml 2>/dev/null | wc -l
+# Count issue templates if directory exists (.md, .yml, .yaml)
+ls -la .github/ISSUE_TEMPLATE/*.md .github/ISSUE_TEMPLATE/*.yml .github/ISSUE_TEMPLATE/*.yaml .gitlab/issue_templates/* 2>/dev/null | wc -l
 ```
 
 ### Automated PR Review (WP4)
@@ -77,8 +80,11 @@ ls -la .changeset/ .changeset/config.json 2>/dev/null
 # release-please
 ls -la release-please-config.json .release-please-manifest.json 2>/dev/null
 
-# Check for release workflows
-grep -l "release\\|publish" .github/workflows/*.yml 2>/dev/null
+# goreleaser (the Go release standard — tag-triggered, often no matching workflow name)
+ls -la .goreleaser.yml .goreleaser.yaml 2>/dev/null
+
+# Check for release workflows (.yml and .yaml)
+grep -l "release\\|publish" .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null
 ```
 
 ### CONTRIBUTING.md (WP6)

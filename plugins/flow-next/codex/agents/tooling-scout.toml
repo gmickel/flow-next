@@ -57,9 +57,10 @@ ls -la rustfmt.toml .rustfmt.toml 2>/dev/null
 
 ### Type Checking
 ```bash
-# TypeScript
+# TypeScript — strict may be set directly OR inherited via `extends` (@tsconfig/strictest,
+# a monorepo base). Check both; if `extends` is present and `strict` isn't local, note "inherited?".
 ls -la tsconfig*.json 2>/dev/null
-grep '"strict"' tsconfig.json 2>/dev/null
+grep -E '"strict"|"extends"' tsconfig.json 2>/dev/null
 
 # Python
 ls -la mypy.ini .mypy.ini pyproject.toml 2>/dev/null
@@ -81,6 +82,16 @@ ls -la lefthook.yml .lefthook.yml 2>/dev/null
 
 # lint-staged
 grep -l '"lint-staged"' package.json 2>/dev/null
+
+# simple-git-hooks (used across the Vite ecosystem — vite itself uses it)
+ls -la .simple-git-hooks.* 2>/dev/null
+grep -l '"simple-git-hooks"' package.json 2>/dev/null
+```
+
+### Package manager (for the output's "Package manager" line — detect, don't guess)
+```bash
+ls -la package-lock.json pnpm-lock.yaml yarn.lock bun.lock bun.lockb 2>/dev/null
+grep -E '"packageManager"' package.json 2>/dev/null
 ```
 
 ### Package Scripts
