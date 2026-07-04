@@ -127,3 +127,24 @@ rationale trim) and shipped an off-schema `payload-risky`. Fable review (NEEDS_W
 Net (corrected): re-baseline confirms; **efficiency −189 tok kept (MEASURED, incl. a structural dedup)**; quality
 at ceiling (Where-to-look risk-prioritized by design). Durable: an E6 eval + a risk-differentiated fixture that
 lets the suite measure Where-to-look quality (which it couldn't pre-fn-84).
+
+## fn-84.4b — REVIEW-EASE capability ("go further — make PRs easier to review")
+
+Gordon's steer after fn-84.4: make-pr "just lists changes + where to look — it should go further." A fable
+DESIGN review found the always-on body dropped THREE payload fields on the floor. Added 4 render-only sections
+(no flowctl change, all trace-to-field, zero new investigation):
+
+- **`## Not in this PR (by design)`** ← `spec_sections.boundaries[]` (verbatim, cap 5 + overflow) — kills
+  scope-objection threads before they're typed. Slots after TL;DR.
+- **`## Verification`** ← `tasks[].evidence.tests[]` verbatim + an honest test-gap FACT ("No test-file change
+  accompanies `flowctl.py` (+418/-192)") — never the inference "untested." Slots after R-ID coverage.
+- **`## Review plan`** (attention budget) ← `diff_summary.files[]` bucketed 🔴Careful/🟠Behavior/🟢Tests/⚪Skim
+  by a deterministic pattern table + a "Careful-review surface: ~707 of 940 lines" line. Ports the HTML lens's
+  review-intent ordering to the surface every reviewer sees. Slots after Critical changes.
+- **R-ID provenance chip** ← `acceptance_criteria[].tag` — ` · inferred` on weak-provenance criteria.
+
+Verified rich + risky (sonnet, --dry-run): **E7–E10 all PASS AND E1–E6 no regression = 15/15**. Risky nailed
+the bucketing (flowctl.py/__init__.py/credentials.py → Careful, test_credentials.py → Tests, docs → Skim), the
+honest flowctl.py test-gap, and the `R15 · inferred` chip. Cost: +1,280 prose tok (34989→36269) — a capability
+gain (quality↑), not an efficiency regression. Deferred to a follow-up spec (need flowctl code): removed-export
+remaining-references (`git grep`) + per-task `evidence.files[]` for exact-hunk R-ID traceability.

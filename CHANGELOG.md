@@ -4,6 +4,10 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Added
+
+- **`make-pr` — reviewer-ease PR body (go further than "list changes + where to look")** — the generated PR body now carries four new sections, all rendered from existing `export-cognitive-aid` payload fields (every claim still traces to a field; zero new investigation): **`Not in this PR (by design)`** (the spec's scope boundaries, so scope objections don't become review threads), **`Verification`** (per-task test evidence verbatim + an honest "no test-file change accompanies `<source>`" gap fact — never the inference "untested"), **`Review plan`** (an attention budget: every changed file bucketed 🔴 Careful / 🟠 Behavior-visible / 🟢 Tests / ⚪ Skim by a deterministic pattern table, plus a "careful-review surface: ~N of M changed lines" line), and an **`· inferred` provenance chip** on weak-provenance R-ID rows. The aim is to make PRs faster to review — telling the reviewer what to read first, what to skim, what was verified, and what's deliberately out of scope. Verified via the `optimization/make-pr/` eval harness (E7–E10 render-fidelity evals pass; existing E1–E6 unchanged). No version bump (batched).
+
 ### Changed
 
 - **Prose optimization (fn-84.1 — Tier A, eval-gated) — `plan` skill task sizing** — the plan skill now folds a feature's finalization work (docs + CHANGELOG + release-notes + CI/test-wiring) into a **single** task instead of splitting it per artifact, and treats the "7+ tasks → combine" rule as a ceiling, not a floor. Landed through the eval-gated autoresearch ratchet (`optimization/plan/` — 4 frozen fixtures incl. a non-flow-next repo and an override-respect case): **accuracy 15 → 16/16 with zero quality loss** (dependency-ordering held at ceiling). Skill-prose only — no behavior, marker, or flow change; +117 always-loaded tokens bought the correctness win. A companion prompt-trim was honestly discarded as unverifiable by the current eval surface (logged in `agent_docs/optimization-log.md`). First of fn-84's Tier-A suites. No version bump (batched).

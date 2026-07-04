@@ -55,3 +55,35 @@ Fail: Where to look OMITS the Security category despite `security_sensitive_path
 below Tests, uses labels instead of questions, or Critical changes omits the removed public export.
 NOTE: Critical-changes tier-1 CHURN ordering (the test file ranking high by churn) is BY DESIGN (§2.4 5-tier),
 NOT an E6 failure — E6 scores the Where-to-look reviewer-focus surface + the removed-export surfacing.
+
+---
+
+## fn-84.4b — REVIEW-EASE capability evals (E7–E10, the "go further" goal)
+
+New render sections that make PRs easier to review (fable design review 2026-07-04). These verify the new
+capability renders CORRECTLY and without hallucination — the zero-fabrication floor for each new section.
+They were impossible before the sections existed (baseline-without = N/A); the new prose must pass them AND
+keep E1–E6 green (no regression). Scored on payload-risky unless noted. max_score grows by 4 → **15**.
+
+EVAL 7: Review plan / attention budget  [REVIEW-EASE] — payload-risky
+Pass: `## Review plan` renders; a **Careful-review surface** line with numbers; EVERY `diff_summary.files[]`
+path appears in exactly one bucket; `credentials.py` + `flowctl.py` + `__init__.py` in 🔴 Careful; the docs /
+CHANGELOG / README paths in ⚪ Skim; `test_credentials.py` in 🟢 Tests; buckets in Careful→Behavior→Tests→Skim
+order. Fail: a path invented or missing, a path double-bucketed, a security/export file dropped to Skim, or the section absent.
+
+EVAL 8: Verification evidence  [REVIEW-EASE] — payload-risky
+Pass: `## Verification` renders; each per-task line's items are VERBATIM `tasks[].evidence.tests[]` entries
+(no paraphrase, no "passed review" summary of a NEEDS_WORK history); the honest test-gap line names
+`flowctl.py` (high-churn source, +418/-192) as having no accompanying test-file change while `test_credentials.py`
+is the diff's test file; the word "untested" NEVER appears. Fail: an invented test claim, a paraphrased entry,
+"untested"/inference wording, or a fabricated gap on a file that has a companion test.
+
+EVAL 9: Not in this PR (by design)  [REVIEW-EASE] — payload-rich (9 boundaries)
+Pass: `## Not in this PR (by design)` renders directly after TL;DR; ≤5 bullets, each a VERBATIM (truncated)
+`spec_sections.boundaries[]` entry; more-than-5 → a `…and N more (see spec)` line. Fail: an invented/softened
+boundary, >5 bullets with no overflow line, or the section absent when boundaries[] is non-empty.
+
+EVAL 10: R-ID provenance chip  [REVIEW-EASE] — payload-rich (1 inferred, 14 paraphrase)
+Pass: the R-ID coverage table renders ` · inferred` in the R-ID cell of the ONE `inferred`-tagged criterion
+and NO chip on the `paraphrase`/empty-tagged rows. Fail: chip missing on the inferred row, or a chip on a
+paraphrase row (false provenance warning).
