@@ -138,6 +138,12 @@ When `GLOSSARY_JSON.total_terms == 0` but `file_count > 0`, every group is a hus
 
 ### Step 6: Spawn Plan-Sync Agent
 
+Read the cross-spec flag first — the same single config-leaf read `/flow-next:work` performs, so a repo that opted into cross-spec propagation (`planSync.crossSpec=true`) gets the SAME behavior from a manual `/flow-next:sync` as from the work-loop auto-trigger. Without this, `CROSS_SPEC` is unset and plan-sync skips the cross-spec phase entirely — the tool you reach for AFTER big drift silently checks only same-spec tasks:
+
+```bash
+CROSS_SPEC=$($FLOWCTL config get planSync.crossSpec --json | jq -r '.value')
+```
+
 Build context and spawn via Task tool:
 
 ```
@@ -148,6 +154,7 @@ FLOWCTL: $HOME/.codex/scripts/flowctl
 SPEC_ID: <spec id>
 DOWNSTREAM_TASK_IDS: <comma-separated list from step 4>
 DRY_RUN: <true|false>
+CROSS_SPEC: <the $CROSS_SPEC value read below — literal "true" or "false", NOT "true|false">
 
 GLOSSARY_JSON: <output of `flowctl glossary list --json` from step 5>
 DECISIONS_JSON: <output of `flowctl memory list --track knowledge --category decisions --json` from step 5>

@@ -2537,7 +2537,7 @@ def get_changed_files(base_branch: str) -> list[str]:
     """Get files changed between base branch and HEAD (committed changes only)."""
     try:
         result = subprocess.run(
-            ["git", "diff", "--name-only", f"{base_branch}..HEAD"],
+            ["git", "diff", "--name-only", f"{base_branch}...HEAD"],
             capture_output=True,
             text=True, encoding="utf-8",
             check=True,
@@ -22484,7 +22484,7 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     diff_summary = ""
     try:
         diff_result = subprocess.run(
-            ["git", "diff", "--stat", f"{base_branch}..HEAD"],
+            ["git", "diff", "--stat", f"{base_branch}...HEAD"],
             capture_output=True,
             text=True, encoding="utf-8",
             cwd=get_repo_root(),
@@ -22500,7 +22500,7 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     max_diff_bytes = 50000
     try:
         proc = subprocess.Popen(
-            ["git", "diff", f"{base_branch}..HEAD"],
+            ["git", "diff", f"{base_branch}...HEAD"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=get_repo_root(),
@@ -23120,7 +23120,7 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
     diff_summary = ""
     try:
         diff_result = subprocess.run(
-            ["git", "diff", "--stat", f"{base_branch}..HEAD"],
+            ["git", "diff", "--stat", f"{base_branch}...HEAD"],
             capture_output=True,
             text=True, encoding="utf-8",
             cwd=get_repo_root(),
@@ -23135,7 +23135,7 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
     max_diff_bytes = 50000
     try:
         proc = subprocess.Popen(
-            ["git", "diff", f"{base_branch}..HEAD"],
+            ["git", "diff", f"{base_branch}...HEAD"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=get_repo_root(),
@@ -23392,7 +23392,7 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
     diff_summary = ""
     try:
         diff_result = subprocess.run(
-            ["git", "diff", "--stat", f"{base_branch}..HEAD"],
+            ["git", "diff", "--stat", f"{base_branch}...HEAD"],
             capture_output=True,
             text=True, encoding="utf-8",
             cwd=get_repo_root(),
@@ -23407,7 +23407,7 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
     max_diff_bytes = 50000
     try:
         proc = subprocess.Popen(
-            ["git", "diff", f"{base_branch}..HEAD"],
+            ["git", "diff", f"{base_branch}...HEAD"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=get_repo_root(),
@@ -23778,7 +23778,7 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
     diff_summary = ""
     try:
         diff_result = subprocess.run(
-            ["git", "diff", "--stat", f"{base_branch}..HEAD"],
+            ["git", "diff", "--stat", f"{base_branch}...HEAD"],
             capture_output=True,
             text=True, encoding="utf-8",
             cwd=get_repo_root(),
@@ -23792,7 +23792,7 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
     max_diff_bytes = 50000
     try:
         proc = subprocess.Popen(
-            ["git", "diff", f"{base_branch}..HEAD"],
+            ["git", "diff", f"{base_branch}...HEAD"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=get_repo_root(),
@@ -24038,7 +24038,7 @@ def cmd_cursor_impl_review(args: argparse.Namespace) -> None:
     diff_summary = ""
     try:
         diff_result = subprocess.run(
-            ["git", "diff", "--stat", f"{base_branch}..HEAD"],
+            ["git", "diff", "--stat", f"{base_branch}...HEAD"],
             capture_output=True,
             text=True, encoding="utf-8",
             cwd=get_repo_root(),
@@ -24054,7 +24054,7 @@ def cmd_cursor_impl_review(args: argparse.Namespace) -> None:
     max_diff_bytes = CURSOR_ARGV_PROMPT_MAX * 2  # generous read cap; budget trims to fit below
     try:
         proc = subprocess.Popen(
-            ["git", "diff", f"{base_branch}..HEAD"],
+            ["git", "diff", f"{base_branch}...HEAD"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=get_repo_root(),
@@ -24464,7 +24464,7 @@ def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
     diff_summary = ""
     try:
         diff_result = subprocess.run(
-            ["git", "diff", "--stat", f"{base_branch}..HEAD"],
+            ["git", "diff", "--stat", f"{base_branch}...HEAD"],
             capture_output=True,
             text=True, encoding="utf-8",
             cwd=get_repo_root(),
@@ -24480,7 +24480,7 @@ def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
     max_diff_bytes = CURSOR_ARGV_PROMPT_MAX * 2  # generous read cap; budget trims to fit below
     try:
         proc = subprocess.Popen(
-            ["git", "diff", f"{base_branch}..HEAD"],
+            ["git", "diff", f"{base_branch}...HEAD"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=get_repo_root(),
