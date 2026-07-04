@@ -213,7 +213,13 @@ already skipped at SELECT**, so they must run here, before triage:
  Resolve the actor exactly as `flowctl.get_actor()` does. (A tracker-only item has
  no flow tasks — this is a no-op for it.)
 - **Strikes / re-bless** — a `count >= 2` ledger entry on a candidate that is **ready
- again** has been human re-blessed: clear the entry and treat the spec as fresh
+ again** has been human re-blessed: clear the entry and treat the spec as fresh.
+ **BUT NOT under an active `tracker.readyState` projection** — 1a re-projects `ready=true`
+ from the board every tick, so a projected "ready again" is MECHANICAL, not a human
+ re-bless; clearing on it re-dispatches the same failing spec forever (the strike limit,
+ defeated). With `tracker.readyState` set, do NOT clear a `count >= 2` strike on
+ projection-set ready — keep the candidate struck (skipped) until a genuine human signal
+ (answers the surfaced failure / an explicit non-projection re-ready) clears it
  (skip the write under `--dry-run`, report would-clear instead).
 - **No gh here** — PR state belongs only to the all-done CLASSIFY branch.
 
