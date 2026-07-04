@@ -6,7 +6,7 @@ user-invocable: false
 
 # Implementation Review Mode
 
-**Workflow is backend-split. Read [workflow-common.md](workflow-common.md) for Phase 0 (backend detection + philosophy + trivial-diff triage + phase-ordering matrix + cross-backend deep/validator/walkthrough phases), then read ONLY the file matching your active backend:**
+**Workflow is backend-split. Read [workflow-common.md](workflow-common.md) for Phase 0 (backend detection + philosophy + trivial-diff triage + phase-ordering matrix), then read ONLY the file matching your active backend. The opt-in `--deep`/`--validate`/`--interactive` phase detail lives in [optional-phases.md](optional-phases.md), loaded only when a flag fires:**
 
 - `BACKEND=codex` → [workflow-codex.md](workflow-codex.md)
 - `BACKEND=copilot` → [workflow-copilot.md](workflow-copilot.md)
