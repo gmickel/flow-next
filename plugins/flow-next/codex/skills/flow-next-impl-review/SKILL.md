@@ -303,14 +303,14 @@ Follow the phases in the per-backend file end-to-end. Each file owns its own Ide
 
 If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 
-0. **Deep-pass phase (only if `DEEP=true`)** — see [workflow-common.md](workflow-common.md) "Deep-Pass Phase" section.
+0. **Deep-pass phase (only if `DEEP=true`)** — see [optional-phases.md](optional-phases.md) § Deep-Pass Phase.
  - After primary review completes (any verdict) and before validator,
  run each selected pass via
  `$FLOWCTL <backend> deep-pass --pass <name> --receipt ... --primary-findings ...`.
  - Passes merge into receipt via fingerprint dedup + cross-pass promotion.
  - Deep may upgrade `SHIP → NEEDS_WORK` if it surfaces new blocking findings;
  it never downgrades `NEEDS_WORK → SHIP`.
-1. **Validator pass (only if `VALIDATE=true`)** — see [workflow-common.md](workflow-common.md) "Validator Pass" section.
+1. **Validator pass (only if `VALIDATE=true`)** — see [optional-phases.md](optional-phases.md) § Validator Pass.
  - Extract findings JSON-lines, dispatch `$FLOWCTL <backend> validate --findings-file ... --receipt ...`
  - If all findings drop → verdict upgrades to SHIP automatically (exit fix loop)
  - Else → only surviving (kept) findings enter the fix loop in step 2
