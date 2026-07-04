@@ -49,10 +49,17 @@ Parse the spec carefully. Identify:
 - Test requirements
 - Quick commands from parent spec (run these for verification)
 
-**Baseline check (if project has tests/lints):**
+**Baseline check (before any edit — run the spec's Quick commands, record the result):**
 ```bash
-# Run project's test/lint commands to confirm green baseline
-# If baseline fails, investigate before proceeding
+# Run the parent spec's Quick commands (the test/lint/build listed above) to establish
+# the pre-edit baseline, and RECORD it so a task-CAUSED failure is distinguishable from
+# an INHERITED one at review time (the impl-review "Tests" criterion judges blind otherwise):
+#   GREEN baseline → proceed.
+#   RED baseline (a Quick command fails BEFORE you touch anything) → do NOT silently
+#     proceed: record `baseline: red (<cmd> failed pre-edit)` in the Phase-5 done evidence,
+#     then either fix the tooling if trivial, or escalate `BLOCKED: TOOLING_FAILURE`.
+#   No Quick commands defined → record `baseline: none` and proceed.
+# Never treat a pre-existing red baseline as your own success or your own failure.
 ```
 
 **Capture the base commit at Phase-1 end — BEFORE any edit — and PERSIST it to a file** (bash variables do NOT survive across separate tool-call Bash blocks; a later block reading a stale `$BASE_COMMIT` would expand to `..HEAD` and record blank/empty evidence):
