@@ -388,19 +388,24 @@ Default to standard unless complexity demands more or less.
    - `[user]` / `[paraphrase]` / `[strategy:*]` → user- or strategy-grounded; plan normally.
    - `[inferred]` → **unconfirmed**. Route it through the Step-1 scouts (does the codebase actually support/need it?). A scout-confirmed inference becomes a normal criterion (drop the tag); an **unconfirmed** one moves to `## Open Questions` (or renders as a `⚠️ unconfirmed inference` coverage-table row) rather than being silently planned as a requirement. This closes capture→plan: the provenance capture records is otherwise dropped at the one consumer built to read it.
 
-4. Set spec dependencies (from spec-scout findings):
+4. Set spec dependencies (from spec-scout findings) — BOTH directions:
 
-   If spec-scout found dependencies, set them automatically:
    ```bash
-   # For each dependency found by spec-scout:
+   # (a) FORWARD — the new plan depends on an existing spec (spec-scout "Dependencies"):
    $FLOWCTL spec add-dep <new-spec-id> <dependency-spec-id> --json
+
+   # (b) REVERSE — an existing spec depends on the new plan (spec-scout "Reverse Dependencies").
+   #     MUST record these too: the edge belongs on the OTHER spec (it can't start until the new
+   #     plan lands). Dropping it leaves that spec falsely ready → pilot/backlog picks it up and
+   #     builds against infrastructure this plan hasn't shipped yet (silent, worst in autonomous mode).
+   $FLOWCTL spec add-dep <other-spec-id> <new-spec-id> --json
    ```
 
    Report findings at end of planning (no user prompt needed):
    ```
    Spec dependencies set:
-   - fn-N-slug → fn-2-add-auth (Auth): Uses authService from fn-2-add-auth.1
-   - fn-N-slug → fn-5-user-model (DB): Extends User model
+   - fn-N-slug → fn-2-add-auth (Auth): Uses authService from fn-2-add-auth.1   [forward]
+   - fn-7-notify → fn-N-slug (Notifications): waits for the event system this plan adds   [reverse]
    ```
 
 5. Create child tasks:
