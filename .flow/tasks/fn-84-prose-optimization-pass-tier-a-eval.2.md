@@ -39,9 +39,20 @@ Optional:
 - [ ] `sync-codex.sh` regenerated + committed IF prose changed; `pytest` + `smoke_test.sh` green; `CHANGELOG` `## Unreleased`; no bump (R8)
 
 ## Done summary
-TBD
+Re-baselined the `capture` suite on current main and confirmed capture holds at ceiling — **no prose change** (a mature, twice-optimized skill, exactly as the spec's ceiling-rule anticipates). Fable review: SHIP.
 
+**Re-baseline (R2):** refreshed `baseline/` from current-main capture prose, migrated `results.tsv` to the fn-84 extended schema (history carried as h0–h3), and added **E6 (`[inferred]`-tagging accuracy)** as the quality-lever scoring eval BEFORE the fresh baseline (Major-B). Fresh baseline **18/18** — accuracy 15/15 + E6 quality 3/3: C1 6/6 (N=2, both clean once the borderline was checked), C2 6/6 (biz-rich: cat-3 metric → outcome-AC R6 + `### Motivation`, SUBSTRUCTURED), C3 6/6 (override refused, exit 2, named fn-91, hand-edit preserved). **Confirms the fn-82 far-copy dedupe did not regress capture**, and E6 shows capture's `[inferred]` discipline is correct (conservative — never falsely attributes to the user).
+
+**Both experiments honestly discarded (ceiling, no verifiable headroom):**
+- Quality lever (`[inferred]`-discipline): E6 at ceiling 3/3 → a clarifier cannot raise a ceiling eval, and capture already tags the safe direction. Discarded (mathematically unkeepable under the ratchet), not run.
+- Trim: routing/taxonomy tables in workflow.md are load-bearing (pre-fn-84 exp1's DRY trim regressed C2 15→14); the only non-routing candidate (§5.0 strategy-override heredoc) is unexercised by C1/C2/C3 → a trim there "holds trivially" = weak-ratchet. Discarded; follow-up logged (needs a strategy-override fixture).
+
+**Fable review SHIP** — it refuted its own adversarial premise (verified against the skill contract that the C1 `[inferred]`-in-Boundaries score is contract-CORRECT, the unrun lever is unkeepable at ceiling, the trim discard follows fn-84's weak-ratchet doctrine). Applied its 2 MINOR suite-text fixes: scoped E2's `[inferred]` prohibition to user biz-SIGNAL content (not any biz-labeled section, per workflow.md L298/L325), and de-overlapped E1 (content fidelity) from E6 (tag direction).
+
+**R6/R8:** `optimization-log.md` row added; **no CHANGELOG entry / no mirror regen** (nothing user-facing changed — capture prose is byte-identical); test surface unchanged (flowctl/tests untouched; suite was green in fn-84.1). No version bump.
+
+**Net:** re-baseline confirms + broadens coverage (E6); zero prose change; both experiments honest discards.
 ## Evidence
 - Commits:
-- Tests:
+- Tests: no flowctl/test change — surface unchanged since fn-84.1's green run (1425 passed / 2 skipped), fable-model review against our review rules: SHIP (refuted its own adversarial premise; 2 suite-text fixes applied)
 - PRs:

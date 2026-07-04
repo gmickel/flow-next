@@ -70,3 +70,37 @@ behavior exp 1 broke. C3 still refuses (exit 2, names fn-91, preserves the hand-
 (Decision Context stayed non-substructured for the zero-biz input; this run omitted the section
 entirely per the empty-by-default rule where baseline wrote a FLAT body — R22-consistent either
 way, no scaffolding leaked). KEEP.
+
+## fn-84.2 pass (2026-07-04) — re-baseline on current main + E6 added; both experiments honest discards
+
+**Model:** opus (suite constant). **Eval set widened to 6:** added **E6 `[inferred]`-tagging accuracy**
+(the quality-lever scoring eval) BEFORE the fresh baseline (Major-B). `results.tsv` migrated to the
+fn-84 extended schema (history carried as `h0–h3`).
+
+### Fresh baseline (f0) — 18/18 (accuracy 15/15, quality E6 3/3)
+- **C1** (clean technical, N=2): both runs 6/6. Run-1 had one borderline `[inferred]`-in-Boundaries line
+  (a scoping non-goal derivable from "short-lived"/"2s TTL"); run-2 was clean, all `[inferred]` in
+  technical sections with explicit bridging justifications. Conservative tagging either way — capture
+  never falsely attributed agent content to the user (the risk E6 guards). FLAT Decision Context (no biz).
+- **C2** (biz-rich): 6/6. cat-3 success-metric ("~15% of support tickets") routed to outcome-AC R6 **and**
+  `### Motivation` → Decision Context SUBSTRUCTURED; biz sections zero `[inferred]`; tally + breakdown present.
+- **C3** (override): 6/6. Refused (exit 2), named `fn-91`, no draft — the user hand-edited boundary preserved.
+
+**Confirms:** the fn-82 far-copy dedupe (exp3) did not regress capture on current main; and the newly-added
+E6 shows capture's `[inferred]` discipline is correct.
+
+### Experiment f1 — quality lever ([inferred]-discipline): DISCARD-HOLD (no headroom)
+E6 is already at ceiling (3/3). A "tagging clarifier" cannot raise a ceiling eval, and capture already
+errs to the SAFE direction (borderline-derivable content → `[inferred]`, never a false `[user]` claim).
+A lever nudging toward `[paraphrase]` would RISK over-crediting the user. Honestly discarded, not run.
+
+### Experiment f2 — prompt trim: DISCARD-HOLD (unverifiable)
+Routing/taxonomy tables in `workflow.md` are load-bearing (pre-fn-84 exp1's DRY trim regressed C2 15→14 —
+proximity). The only non-routing candidate, the verbose §5.0 strategy-override heredoc, is NOT exercised by
+C1/C2/C3, so a trim there "holds trivially" = weak-ratchet false hold (same principle as fn-84.1's discarded
+trim). No safe *verifiable* headroom. Follow-up: a strategy-override fixture would be needed to ratchet a §5.0 trim.
+
+### Net
+Re-baselined (R2), E6 coverage added, both experiments honestly discarded — **no prose change** (capture is a
+mature ceiling skill, exactly as the spec's ceiling-rule anticipates). No mirror regen / no CHANGELOG behavior
+entry (nothing user-facing changed).
