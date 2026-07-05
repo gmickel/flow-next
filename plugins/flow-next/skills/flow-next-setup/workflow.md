@@ -382,6 +382,17 @@ CURRENT_GITHUB_SCOUT=$("${PLUGIN_ROOT}/scripts/flowctl" config get scouts.github
 # so this raw probe reads null until the user explicitly decides — here in 6e
 # or via `flowctl config set`. Merged reads still return the seeded default.
 CURRENT_HTML_ARTIFACTS=$("${PLUGIN_ROOT}/scripts/flowctl" config get artifacts.html.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+
+# Optional model-routing scaffold ceremony (Step 6d question + Step 7 processing)
+# is offered ONLY in an interactive setup. Under ANY non-interactive / autonomous
+# marker, the question is skipped SILENTLY — setup must never block a headless
+# driver. Scan the WHOLE autonomy-marker family (Ralph / receipt-path / autonomous
+# / mode token), not a fixed pair — the same family every lifecycle skill honors.
+ROUTING_ASK=1
+if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
+      || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* ]]; then
+  ROUTING_ASK=0
+fi
 ```
 
 Store detection results for use in questions. When showing options, indicate current value if set (e.g., "(current)" after the matching option label).
@@ -422,7 +433,7 @@ Only include lines for config values that are set. If no config is set, skip thi
 
 Build the questions array dynamically. **Only include questions for config values that are NOT already set** — existing config is preserved, never overwritten. To change an already-set value, the user runs `flowctl config set <key> <value>` directly (the commands are surfaced in 6c's current-config notice).
 
-Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The grouped single-prompt design (a single `AskUserQuestion` call below, with one questions array containing only the unset entries) means a re-run with all config set produces zero config questions and asks only the always-include Docs + Star questions.
+Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The grouped single-prompt design (a single `AskUserQuestion` call below, with one questions array containing only the unset entries) means a re-run with all config set produces zero config questions and asks only the always-include Docs + Star questions (plus the interactive-only Model Routing scaffold question, when `ROUTING_ASK=1`).
 
 Available questions (include only if corresponding config is unset):
 
@@ -510,6 +521,20 @@ Available questions (include only if corresponding config is unset):
 ```
 
 Stored value is a bare backend name by default. Power users can also write a full spec like `codex:gpt-5.4:high`, `copilot:claude-opus-4.5:xhigh`, or `cursor:gpt-5.5-high` (cursor takes a model only — no `:effort`) via `flowctl config set review.backend <spec>` after setup — the review commands accept both forms.
+
+**Model Routing question** (include ONLY when `ROUTING_ASK=1` — interactive setup; skipped silently under any non-interactive/autonomous marker per 6a). Offers the optional model-routing scaffold (composed + written in Step 7). The frozen option set is `Scaffold` / `Scaffold + enable codex delegation` / `Skip`; **include the `Scaffold + enable codex delegation` option ONLY when `HAVE_CODEX=1`** (drop that one object entirely when `HAVE_CODEX=0` — never show a delegation route to a missing binary):
+```json
+{
+  "header": "Model Routing",
+  "question": "Scaffold an opinionated model-routing example into your project instruction file? (a cost/intelligence/taste scores table + how-to-apply rules + flow-next wiring; shown in FULL before writing — yours to edit after)",
+  "options": [
+    {"label": "Scaffold", "description": "Write the model-routing example into the same CLAUDE.md/AGENTS.md the Docs step targets. Shown in full before writing; these are starting opinions you edit down, not up."},
+    {"label": "Scaffold + enable codex delegation", "description": "Also set work.delegate=codex so /flow-next:work can offload bulk implementation to the codex CLI. First-use consent is still required — this never pre-approves it. INCLUDE THIS OPTION ONLY WHEN HAVE_CODEX=1."},
+    {"label": "Skip", "description": "Don't scaffold a routing section (default). Re-run /flow-next:setup later to add it."}
+  ],
+  "multiSelect": false
+}
+```
 
 **Docs question** (always include — adjust default based on platform):
 
@@ -673,6 +698,49 @@ For each chosen file (CLAUDE.md and/or AGENTS.md) — preserve repo-custom conte
 
 The marker-block boundaries are load-bearing: pre-existing prose outside `<!-- BEGIN FLOW-NEXT -->` … `<!-- END FLOW-NEXT -->` is **never** modified by this step. Only the bytes between (and including) those markers are candidates for replacement.
 
+**Model Routing scaffold** (only if the Model Routing question was asked — i.e. `ROUTING_ASK=1`; when `ROUTING_ASK=0` the question was never shown, so this step is a silent no-op — record `not offered` for the summary and skip to Star).
+
+Run this **after** the Docs block above and **before** Star. It may touch the **same** file the Docs block just wrote this run — always **re-read the target from disk here**; never reuse an in-memory copy and never interleave the two writes. Set `ROUTING_OUTCOME=""` for the Step 8 summary and update it at each terminal branch below. Every "done with the block pipeline" terminal below still falls through to **step 7 (delegation)** — the delegation opt-in is independent of whether the block was written — then on to Star.
+
+- If the answer was **`Skip`**: no-op. `ROUTING_OUTCOME="skipped"`. Done with the block pipeline — skip steps 1–7 (there is no delegation to set) and go to Star.
+- Otherwise (**`Scaffold`** or **`Scaffold + enable codex delegation`**), run the block pipeline 1→6, then always run step 7:
+
+**1. Resolve target file(s)** via this deterministic ladder (independent of whether the Docs question fired — evaluate in order, first match wins):
+   a. **Docs answered this run** → mirror that choice: `CLAUDE.md only` → CLAUDE.md; `AGENTS.md only` → AGENTS.md; `Both` → the same block to **both** files; `Skip` → fall through to (b).
+   b. **Docs skipped or already-current** → the file(s) that already carry the `<!-- BEGIN FLOW-NEXT -->` docs marker (marker in both → both).
+   c. **Neither** → the platform-default mapping (the Step 6b buckets): Codex → AGENTS.md; Claude Code / Droid → CLAUDE.md; Cursor → AGENTS.md.
+
+   **Shim guard** (apply to each resolved target before writing): read the file and take its non-empty content lines. If there is exactly **one** non-empty content line and it matches either `@<path>.md` **or** `See[:] <path>.md` (case-insensitive, `<path>` repo-relative), the target is a **shim** — do **not** write into it. Instead follow the pointer: if `<path>.md` exists in-repo, retarget to it (and re-apply the shim guard to that file); if it does not exist, print `Model-routing scaffold: <file> is a shim pointing at a missing <path>.md — skipping` and drop this target. Any other content = a normal file, proceed. Never turn a shim into a mixed file. If every resolved target drops out (all shims to missing files), `ROUTING_OUTCOME="skipped (shim)"`; done with the block pipeline (proceed to step 7).
+
+**2. Compose the block** from [templates/model-routing-snippet.md](templates/model-routing-snippet.md) via a **deterministic line transform** — never hand-write or paraphrase it. Start from the template verbatim, then for **each** line beginning with a probe sentinel:
+   - `<!-- probe:codex --> TEXT` when `HAVE_CODEX=1` → **strip** the `<!-- probe:codex --> ` prefix, leaving the bare active line `TEXT`.
+   - `<!-- probe:codex --> TEXT` when `HAVE_CODEX=0` → **comment the whole route out** as a single inert HTML comment carrying an install note: `<!-- not detected on this machine — install codex, then uncomment: TEXT -->`.
+   - `<!-- probe:cursor --> TEXT` → the same transform keyed on `HAVE_CURSOR` (install note names `cursor-agent`).
+
+   Result invariant (R10): after the transform the composed block contains **no** `<!-- probe:` sentinel and **no active (non-comment) line that invokes a CLI whose probe failed** — every failed-probe route is fully enclosed in an HTML comment with an install note. Both probes failing → all five wiring routes are commented-out notes (the scores table + always-on escalation/graceful-degrade rules still stand); you MAY note in the read-back that with neither CLI installed, `Skip` is reasonable — but still honor the user's choice.
+
+**3. Substitute the invocation syntax per platform** in the composed block (same split the `claude-md-snippet.md` / `agents-md-snippet.md` templates encode): on **Codex** (`PLATFORM=codex`) rewrite every `/flow-next:<cmd>` → `$flow-next-<cmd>` (this covers the provenance line's `/flow-next:setup` **and** the `delegate:codex` work route's `/flow-next:work`); on **Claude Code / Droid / Cursor** keep `/flow-next:` verbatim (Cursor runs the slash commands).
+
+**4. Inspect marker + byte-compare FIRST — before any read-back.** Read the resolved target from disk:
+   - **Marker present** (`<!-- flow-next:model-routing:start -->` … `<!-- flow-next:model-routing:end -->`): extract that block inclusive and **byte-compare** it against the block composed in 2–3 (today's probe + platform state — this is the *current composed canonical*):
+     - **Identical** → silent no-op: show **nothing**, do **not** write, do **not** bump mtime (R11). `ROUTING_OUTCOME="unchanged (already current)"`. Done with the block pipeline (proceed to step 7).
+     - **Different** (user edits **or** probe-state drift, e.g. cursor-agent installed since the last scaffold — drift counts as canonical drift, never a silent rewrite) → ask the user via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror), options `Keep mine (Recommended)` / `Overwrite with canonical` / `Skip`: `Keep mine` → leave unchanged, print the template path `${PLUGIN_ROOT}/skills/flow-next-setup/templates/model-routing-snippet.md` for a manual diff, `ROUTING_OUTCOME="kept (customized)"`, done; `Skip` → leave unchanged, `ROUTING_OUTCOME="skipped"`, done; `Overwrite with canonical` → continue to the read-back (step 5), replacing the existing marked block in place.
+   - **No marker present** → scan for an existing model-routing-shaped heading OUTSIDE our markers (e.g. `## Picking models`, or a heading naming model routing / model selection). If one is found, this is a user-authored routing section: do **not** append a duplicate — ask the user via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror) whether to `Add the flow-next block below yours` / `Skip`; `Skip` → `ROUTING_OUTCOME="skipped"`, done; `Add` → continue to the read-back (step 5), appending after that section. If no such heading is found, continue to the read-back (step 5), appending at end of file.
+
+**5. Read-back (would-write path only).** Show the user the **full** composed block (probes + platform applied), then ask via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror), options `write` / `skip`: `skip` → no write, `ROUTING_OUTCOME="skipped"`, done; `write` → write the block. The block already includes its `<!-- flow-next:model-routing:start -->` / `<!-- flow-next:model-routing:end -->` fence and provenance line — append it (no-marker / augment cases) or replace the existing marked block in place (Overwrite case). Never a silent write.
+
+**6. Post-write confirmation** — print one line inviting free editing: `Model-routing section written to <file> — this section is yours now; edit the scores/rules freely, or re-run /flow-next:setup to regenerate.` `ROUTING_OUTCOME="written to <file>"` (list both files when Both).
+
+**7. Delegation opt-in** (only if the answer was **`Scaffold + enable codex delegation`** — independent of the write branch above; run it even if the block was a no-op/kept, since the user explicitly opted into delegation):
+   ```bash
+   "${PLUGIN_ROOT}/scripts/flowctl" config set work.delegate codex --json
+   ```
+   **NEVER** set or touch `work.delegateConsent` — the first-use consent gate stays live (R9). Then **read the persisted value back to confirm** (ceremony validation reads PERSISTED config, never re-races env):
+   ```bash
+   DELEGATE_SET=$("${PLUGIN_ROOT}/scripts/flowctl" config get work.delegate --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+   ```
+   If `DELEGATE_SET` is `codex`, note `ROUTING_DELEGATE="enabled"`; otherwise print `Warning: work.delegate did not persist as codex — set it manually with flowctl config set work.delegate codex` and note `ROUTING_DELEGATE="failed"`.
+
 **Star:**
 - If "Yes, star it":
   1. Check if `gh` CLI is available: `which gh`
@@ -718,6 +786,10 @@ Configuration (use flowctl config set to change):
 
 Documentation updated:
 - <files updated or "none">
+
+Model routing scaffold: <ROUTING_OUTCOME — e.g. "written to CLAUDE.md" | "kept (customized)" | "unchanged (already current)" | "skipped" | "skipped (shim)" | "not offered">
+<if Scaffold + enable codex delegation was chosen, also:>
+- Codex delegation: <ROUTING_DELEGATE — "enabled (work.delegate=codex; first-use consent still required)" | "failed">
 
 Notes:
 - Re-run /flow-next:setup after plugin updates to refresh scripts

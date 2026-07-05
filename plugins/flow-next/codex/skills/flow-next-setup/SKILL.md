@@ -1,6 +1,6 @@
 ---
 name: flow-next-setup
-description: Optional local install of flowctl CLI and CLAUDE.md/AGENTS.md instructions. Use when user runs /flow-next:setup.
+description: Optional local install of flowctl CLI and CLAUDE.md/AGENTS.md instructions, plus an optional model-routing scaffold for the project instruction file. Use when user runs /flow-next:setup.
 user-invocable: false
 ---
 
