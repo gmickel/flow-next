@@ -33,8 +33,7 @@ Optional:
 - [ ] `optimization-log.md` complete; `CHANGELOG` `## Unreleased` finalized; authoritative `sync-codex.sh` regen on merged main; final `pytest` + `smoke_test.sh` green; no version bump (R8)
 
 ## Done summary
-TBD
-
+Closed as WAIVED at spec-closure (user decision 2026-07-05). The consolidation duties are discharged by the closure record itself: reclassification list = .7 qa + .8 strategy (rationale in their summaries — R9 satisfied, not silent); ratchet-integrity + net-effect evidence for .1–.6 lives in the committed optimization/<skill>/results.tsv ledgers + agent_docs/optimization-log.md and shipped via PR #197 in 2.7.0. No further target-map update: fn-87/fn-88 superseded the prose-ratchet as the optimization track.
 ## Evidence
 - Commits:
 - Tests:

@@ -38,8 +38,7 @@ Optional:
 - [ ] `sync-codex.sh` regenerated + committed; `pytest` + `strategy_smoke_test.sh` + `smoke_test.sh` green; `CHANGELOG` `## Unreleased`; no bump (R8)
 
 ## Done summary
-TBD
-
+Closed WITHOUT execution — reclassified out per R9 (user decision 2026-07-05), same rationale as .7: ratchet saturation across .1–.6 + fleet-audit pivot (fn-87/fn-88). strategy is the smallest, least-frequently-run target; a suite here does not clear the cost/benefit bar the saturation evidence set.
 ## Evidence
 - Commits:
 - Tests:

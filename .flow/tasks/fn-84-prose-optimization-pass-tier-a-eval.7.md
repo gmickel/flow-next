@@ -38,8 +38,7 @@ Optional:
 - [ ] `sync-codex.sh` regenerated + committed; `pytest` (incl. `test_qa_smoke.py`, `test_qa_receipt.py`) + `smoke_test.sh` green; `CHANGELOG` `## Unreleased`; no bump (R8)
 
 ## Done summary
-TBD
-
+Closed WITHOUT execution — reclassified out per the spec's own R9 escape valve (user decision 2026-07-05). Rationale: the Tier-A prose-ratchet saturated across .1–.6 (kept mutations shrinking to near-zero); effort pivoted to the 6-reviewer fleet capability audit (fn-87/fn-88 backlogs, shipped 2.7.0), which found the real remaining headroom. A qa suite would be a weak-eval ratchet — exactly what the spec forbids shipping.
 ## Evidence
 - Commits:
 - Tests:
