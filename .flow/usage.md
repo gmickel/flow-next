@@ -206,9 +206,12 @@ codex exec --sandbox workspace-write -o out.md "<self-contained impl prompt>" </
 
 # cursor-agent: -p print mode; --force actually APPLIES edits (else proposed-only).
 CURSOR_API_KEY=... cursor-agent -p --force --model <id> "<prompt>"                        # model IDs are volatile → cursor-agent --list-models
+
+# claude -p: the same bridge in REVERSE — drive Claude headlessly from a Codex/Cursor host.
+claude -p --output-format text "<self-contained prompt>" </dev/null                       # scope tools via --allowedTools "Read,Bash"; edits need --permission-mode acceptEdits
 ```
 
-Harness-relative: from Claude Code the bridges are `codex exec` / `cursor-agent`; from Codex they are `claude -p` / `cursor-agent`.
+Harness-relative: every direction works — from Claude Code the bridges are `codex exec` / `cursor-agent`; from Codex or Cursor they are `claude -p` / the other CLI. Any harness that can run Bash can conduct the others.
 
 **flow-next shortcuts** — the same bridges, packaged as config:
 
