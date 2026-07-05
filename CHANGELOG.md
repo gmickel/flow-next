@@ -6,7 +6,7 @@ All notable changes to the flow-next.
 
 ### Changed
 
-- **model-routing scaffold — named Claude tiers** — the scores table now lists `fable-5 (session model)`, `opus-4.8`, `sonnet-5`, and `haiku-4.5` explicitly (instead of the role-only `session model` / `fast Claude tier` rows), plus a native-tier mechanics line: Claude-family tiers are reached by spawning subagents with the model parameter — no CLI bridge. Concrete rows are actionable routes; scores stay editable starting opinions. Block is 32 lines (≤ ~45 budget). Downstream (at release): re-sync the verbatim block on the flow-next.dev `/orchestration/` page (done ahead of release 2026-07-05).
+- **model-routing scaffold — named tiers + menu-shaped wiring** — the scores table lists concrete models (`fable-5`, `opus-4.8`, `gpt-5.5`, `composer-2.5`, `sonnet-5`, `haiku-4.5`; "session model" is now a ROLE — whichever row you run as the conductor — not a row annotation, since fable won't always be the session model), and the wiring section became a per-role MENU instead of fixed pairings: implementation routes to native opus/sonnet subagents (model parameter), gpt-5.5 (`delegate:codex` or a direct `codex exec` bridge), or composer-2.5 (`cursor-agent` bridge); reviews cross-family via codex/cursor or same-family heavy via a prompted opus/session-model reviewer; bulk reads native (haiku/sonnet) or via cursor-agent scouts — bridge recipes referenced from `.flow/usage.md` § Orchestration & model steering. The harness picks per task. Block is 37 lines (≤ ~45 budget). Downstream (at release): re-sync the verbatim block on the flow-next.dev `/orchestration/` page (done ahead of release 2026-07-05).
 
 ## [flow-next 2.8.0] - 2026-07-05
 

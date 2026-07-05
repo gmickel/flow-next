@@ -6,8 +6,8 @@ _Scaffolded by `/flow-next:setup` — edit freely; re-run setup to regenerate. T
 Rankings, higher = better. Cost reflects what you actually pay (existing subscriptions), not list price; intelligence = how hard a problem you can hand it unsupervised; taste = UI/UX, code quality, API design, copy.
 
 | model | cost | intelligence | taste |
-|--------------------------|------|--------------|-------|
-| fable-5 (session model) | 2 | 10 | 9 |
+|--------------|------|--------------|-------|
+| fable-5 | 2 | 10 | 9 |
 | opus-4.8 | 4 | 7 | 8 |
 | gpt-5.5 | 9 | 8 | 5 |
 | composer-2.5 | 9 | 6 | 6 |
@@ -16,17 +16,19 @@ Rankings, higher = better. Cost reflects what you actually pay (existing subscri
 
 How to apply — defaults, not limits. Standing permission to escalate: if a cheaper model misses the bar, rerun on a smarter one without asking. Judge the output, not the price tag.
 - For anything that ships, intelligence > taste > cost; cost is a tie-breaker only.
-- Orchestration, planning, review verdicts, anything ambiguous → session model. Never delegate judgment.
+- Orchestration, planning, review verdicts, anything ambiguous → the session model (whichever row you are running as the conductor). Never delegate judgment.
 - Anything user-facing (UI, copy, API design) needs taste ≥ 7 → keep on the session model even if it looks mechanical.
-- Reviews route to a different family than the writer — uncorrelated blind spots.
+- Reviews prefer a different family than the writer — uncorrelated blind spots.
 - Graceful degrade: a routed CLI that is missing, unauthenticated, or errors → report it unavailable and fall back to the session model. Never block.
 
-Claude-family tiers (opus-4.8, sonnet-5, haiku-4.5) run natively — spawn subagents with the model parameter; no bridge required. Heavy same-family review/audit → opus-4.8; mechanical scans → haiku-4.5.
-
-flow-next wiring — the surface each route drives (each line below is live only if its CLI is installed):
-<!-- probe:codex --> Bulk/mechanical implementation (clear spec, low ambiguity) → delegate to gpt-5.5: `/flow-next:work <id> delegate:codex` (`work.delegateModel=gpt-5.5`, `work.delegateEffort=medium`).
-<!-- probe:codex --> Cross-family review from codex → `review.backend codex`; per-task `review:` pins exceptions; escalate reviewer↔worker NEEDS_WORK disagreements to the session model.
-<!-- probe:cursor --> Cross-family review from cursor (speed/reach) → `review.backend cursor:composer-2.5`.
-<!-- probe:cursor --> Bulk, low-judgment reads (codebase sweeps) → flow-next scouts may shell out to `cursor-agent`; only the digest returns.
+flow-next wiring — roles with a MENU, not fixed pairings: pick per task. Claude tiers run natively (spawn subagents with the model parameter); other families ride the headless bridges — recipes in `.flow/usage.md` § Orchestration & model steering. Probe-marked lines are live only if their CLI is installed:
+- Implementation, native: a worker/subagent on opus-4.8 (quality) or sonnet-5 (speed) via the model parameter.
+<!-- probe:codex --> Implementation via gpt-5.5: `/flow-next:work <id> delegate:codex` (packaged — consent-gated, host keeps git/review) or a direct `codex exec` bridge.
+<!-- probe:cursor --> Implementation via composer-2.5: the `cursor-agent` bridge (`--force` to apply); host reviews + commits.
+<!-- probe:codex --> Review, cross-family: `review.backend codex`; per-task `review:` pins exceptions; escalate reviewer↔worker disagreements to the session model.
+<!-- probe:cursor --> Review, cross-family: `review.backend cursor:composer-2.5`.
+- Review, same-family heavy: a fresh-context reviewer subagent on opus-4.8 (or the session model) with the review criteria — no registry rung needed; describe the arrangement.
+<!-- probe:cursor --> Bulk, low-judgment reads (codebase sweeps): scouts may shell out to `cursor-agent`; only the digest returns.
+- Bulk reads, native: haiku-4.5 / sonnet-5 subagents for scans and digests.
 <!-- probe:codex --> Reach gpt-5.5 inside a subagent (thin-wrapper): a cheap wrapper writes a self-contained prompt, runs `codex exec` over Bash, returns the digest.
 <!-- flow-next:model-routing:end -->
