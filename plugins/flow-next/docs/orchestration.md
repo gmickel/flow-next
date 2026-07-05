@@ -121,48 +121,23 @@ The orchestration patterns that emerged in the wild through mid-2026 all have a 
 
 ## Durable routing — a model table in CLAUDE.md
 
-The emergent pattern (mid-2026): a standing "which model for what" section in your agent instructions — a ranking of the models you can reach plus routing rules. This is **prompted orchestration made durable**: the table is interpreted by intelligence, not parsed by a config loader. The host reads it every session and applies it *with judgment* when it dispatches subagents, picks reviewers, or decides to delegate — which is exactly why the rules below grant standing permission to escalate. A complete, copy-paste starting point, adapted to the flow-next pipeline:
+The emergent pattern (mid-2026): a standing "which model for what" section in your agent instructions — a ranking of the models you can reach plus routing rules. This is **prompted orchestration made durable**: the table is interpreted by intelligence, not parsed by a config loader. The host reads it every session and applies it *with judgment* when it dispatches subagents, picks reviewers, or decides to delegate — which is exactly why the rules grant standing permission to escalate.
+
+flow-next ships this as a canonical scaffold — [`../skills/flow-next-setup/templates/model-routing-snippet.md`](../skills/flow-next-setup/templates/model-routing-snippet.md): a scores table (cost / intelligence / taste) over the session model, `gpt-5.5`, `composer-2.5`, and a fast Claude tier, plus how-to-apply rules and the exact flow-next surface each route drives (worker/`delegate:codex`, review backends, scouts, the thin-wrapper). `/flow-next:setup` offers to write it into your `CLAUDE.md`/`AGENTS.md` live, annotated for the CLIs you actually have installed. The shape, illustrated:
 
 ```markdown
-## Picking models for flow-next workflows and subagents
+| model                    | cost | intelligence | taste |
+|--------------------------|------|--------------|-------|
+| session model (frontier) | 2    | 10           | 9     |
+| gpt-5.5                  | 9    | 8            | 5     |
+| composer-2.5             | 9    | 6            | 6     |
 
-Rankings, higher = better. Cost reflects what I actually pay (existing
-subscriptions), not list price. Intelligence is how hard a problem you can
-hand the model unsupervised. Taste covers UI/UX, code quality, API design, copy.
-
-| model                     | cost | intelligence | taste |
-|---------------------------|------|--------------|-------|
-| gpt-5.5 (codex CLI)       | 9    | 8            | 5     |
-| composer-2.5 (cursor CLI) | 9    | 6            | 6     |
-| sonnet-5                  | 5    | 7            | 7     |
-| fable-5 (session model)   | 2    | 10           | 9     |
-
-How to apply:
-- These are defaults, not limits. Standing permission to override: if a
-  cheaper model's output doesn't meet the bar, rerun or redo with a smarter
-  model without asking. Judge the output, not the price tag — escalating
-  costs less than shipping mediocre work.
-- Cost is a tie-breaker only; for anything that ships, intelligence > taste > cost.
-- Orchestration, planning, review verdicts, anything ambiguous: session
-  model. /flow-next:plan, /flow-next:interview, and pilot/land driving stay
-  here — never delegate judgment.
-- Bulk/mechanical implementation (clear spec, low ambiguity): delegate to
-  gpt-5.5 — /flow-next:work <id> delegate:codex. Config:
-  work.delegateModel=gpt-5.5, work.delegateEffort=medium.
-- Anything user-facing (UI, copy, API design) needs taste >= 7 — keep those
-  tasks on the session model even when they look mechanical.
-- Reviews route to a different family than the writer:
-  review.backend=codex (or cursor:composer-2.5 for speed). Escalate
-  NEEDS_WORK disagreements between reviewer and worker to the session model.
-- Token-hungry, low-judgment work (codebase analysis, live-app QA driving):
-  subagents and flow-next scouts — summaries come back, the orchestrator
-  never holds the raw tokens.
-- Mechanics: gpt-5.5 is reached through the Codex CLI (delegate:codex spawns
-  codex exec); composer-2.5 through cursor-agent (review backend
-  cursor:composer-2.5). Claude-family models run natively as subagent tiers.
+- Defaults, not limits — escalate to a smarter model when output misses the bar.
+- Bulk/mechanical → gpt-5.5 (delegate:codex); reviews cross-family; user-facing needs taste ≥ 7.
+- Graceful degrade: a routed CLI that is missing or errors → fall back to the session model.
 ```
 
-Role labels are durable; model IDs are volatile. Write the table in terms of roles, re-rank as the frontier moves, and the routing rules survive every model generation.
+The template is the single source — edit your scaffolded copy freely; the excerpt above only shows the shape. Role labels are durable; model IDs are volatile. Write the table in terms of roles, re-rank as the frontier moves, and the routing rules survive every model generation.
 
 ## Chaining the loops
 
