@@ -47,6 +47,11 @@ fi
 
 For CLAUDE.md and AGENTS.md: if file exists, remove everything between `<!-- BEGIN FLOW-NEXT -->` and `<!-- END FLOW-NEXT -->` (inclusive). This is safe for the AI to execute.
 
+**Also remove the optional model-routing scaffold block** (written by `/flow-next:setup`) from the same files. It is a *second*, independent marker pair: `<!-- flow-next:model-routing:start -->` … `<!-- flow-next:model-routing:end -->`. Apply the deterministic damaged-marker algorithm — line-based, never parsing the fenced content (the block contains a markdown table):
+
+- Count the `<!-- flow-next:model-routing:start -->` and `<!-- flow-next:model-routing:end -->` lines. If there is **exactly one** start marker **and exactly one** end marker **and** the start line precedes the end line → remove the block inclusive (both markers and everything between them).
+- **Any other state** — zero or multiple starts, zero or multiple ends, or end-before-start (out of order) → report the block as damaged and **leave the file untouched**. Never guess which markers pair; a hand-edited file is the user's to fix.
+
 ## Report
 
 ```
@@ -54,6 +59,7 @@ Flow-next uninstall prepared.
 
 Cleaned up:
 - Flow-next sections from docs (if existed)
+- Model-routing scaffold block from docs (if a well-formed marker pair existed; damaged marker states are reported and left untouched)
 
 Run these commands manually to complete removal:
 <commands from above>

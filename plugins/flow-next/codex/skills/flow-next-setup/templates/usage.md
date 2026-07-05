@@ -14,7 +14,7 @@ Task tracking for AI agents. All state lives in `.flow/`.
 ```
 .flow/
 ├── bin/flowctl # CLI (this install)
-├── templates/spec.md # Canonical 7-section spec scaffold (copied by /flow-next:setup)
+├── templates/spec.md # Canonical 7-section spec scaffold (copied by $flow-next-setup)
 ├── specs/fn-N-slug.md # Spec content (canonical)
 ├── specs/fn-N-slug.json # Spec metadata (1.0+ — colocated with the markdown)
 ├── tasks/fn-N-slug.M.md # Task specifications
@@ -29,7 +29,7 @@ Task tracking for AI agents. All state lives in `.flow/`.
 └── meta.json # Project metadata (schema_version, setup_version, setup_date)
 ```
 
-`.flow/epics/` is the pre-1.0 sidecar location. Repos created on 1.0+ never have it; pre-1.0 repos keep working via the alias layer until you run `flowctl migrate-rename --yes` (or `/flow-next:setup`'s upgrade branch).
+`.flow/epics/` is the pre-1.0 sidecar location. Repos created on 1.0+ never have it; pre-1.0 repos keep working via the alias layer until you run `flowctl migrate-rename --yes` (or `$flow-next-setup`'s upgrade branch).
 
 `.flow/.gitignore` is auto-written by `flowctl init` and `flowctl migrate-rename` so `git add -A` doesn't accidentally commit per-developer state (`.checkpoint-*.json`, `receipts/`, `tmp/`) or migration transients (`.backup-pre-1.0/`, `.banner-acknowledged`, `.migrating`, `.migration-manifest`). Idempotent; user patterns added below the auto-managed footer are preserved on update.
 
@@ -96,7 +96,7 @@ The project's strategic intent and canonical vocabulary live **outside** `.flow/
 .flow/bin/flowctl done fn-1-add-oauth.2 --summary-file s.md --evidence-json e.json
 .flow/bin/flowctl block fn-1-add-oauth.2 --reason-file reason.md # Block task with reason
 
-# Spec cognitive-aid export (used by /flow-next:make-pr, v0.42.0+)
+# Spec cognitive-aid export (used by $flow-next-make-pr, v0.42.0+)
 .flow/bin/flowctl spec export-cognitive-aid fn-1-add-oauth # text mode summary
 .flow/bin/flowctl spec export-cognitive-aid fn-1-add-oauth --json # full structured payload
 .flow/bin/flowctl spec export-cognitive-aid fn-1-add-oauth --base main # diff against base ref
@@ -111,8 +111,8 @@ The project's strategic intent and canonical vocabulary live **outside** `.flow/
 .flow/bin/flowctl prospect promote <id> --idea N --force # override idempotency guard
 .flow/bin/flowctl prospect archive <id> # → .flow/prospects/_archive/
 
-# Tracker sync (project a spec to a Linear/GitHub/GitLab/Jira issue — /flow-next:tracker-sync bridge)
-# NOTE: /flow-next:tracker-sync (external tracker bridge) is NOT /flow-next:sync (plan-sync of downstream task specs).
+# Tracker sync (project a spec to a Linear/GitHub/GitLab/Jira issue — $flow-next-tracker-sync bridge)
+# NOTE: $flow-next-tracker-sync (external tracker bridge) is NOT $flow-next-sync (plan-sync of downstream task specs).
 .flow/bin/flowctl sync active # is the bridge active? (enabled OR type ∈ {linear,github,gitlab,jira})
 .flow/bin/flowctl sync get-state <spec-id> # per-spec tracker state (id/identifier/url/lastSyncedAt/merge-base)
 .flow/bin/flowctl sync set-tracker-id <spec-id> <uuid> --identifier WOR-17 --url <url> # link (flow-first alias)
@@ -137,8 +137,8 @@ The project's strategic intent and canonical vocabulary live **outside** `.flow/
 .flow/bin/flowctl memory mark-stale <id> --reason "..." # flag stale (v0.37.0+)
 .flow/bin/flowctl memory mark-fresh <id> # clear stale flag (v0.37.0+)
 .flow/bin/flowctl memory list-legacy # list legacy entries with mechanical defaults (v0.37.0+)
-.flow/bin/flowctl memory list-legacy --json # used by /flow-next:memory-migrate skill
-.flow/bin/flowctl memory migrate [--yes] [--json] # deterministic-only legacy migration (use /flow-next:memory-migrate for agent-native classification)
+.flow/bin/flowctl memory list-legacy --json # used by $flow-next-memory-migrate skill
+.flow/bin/flowctl memory migrate [--yes] [--json] # deterministic-only legacy migration (use $flow-next-memory-migrate for agent-native classification)
 
 # Glossary (project-canonical terms at repo root, v0.39.0+ — survives `rm -rf .flow/`)
 .flow/bin/flowctl glossary add <term> --definition "..." # upsert single-line term
@@ -159,9 +159,9 @@ The project's strategic intent and canonical vocabulary live **outside** `.flow/
 .flow/bin/flowctl strategy read --json # {path, name, last_updated, target_problem, approach, personas, metrics, tracks, milestones, not_working_on}
 .flow/bin/flowctl strategy list --json # {groups, file_count, total_sections} — parallel to glossary list
 
-# /flow-next:strategy skill writes STRATEGY.md directly (no flowctl strategy add — too prose-heavy for atomic CLI).
+# $flow-next-strategy skill writes STRATEGY.md directly (no flowctl strategy add — too prose-heavy for atomic CLI).
 
-# Config (per-project knobs in .flow/config.json — see /flow-next:setup for guided setup)
+# Config (per-project knobs in .flow/config.json — see $flow-next-setup for guided setup)
 .flow/bin/flowctl config get review.backend # rp|codex|copilot|cursor|none, or spec form like codex:gpt-5.4:high / cursor:gpt-5.5-high
 .flow/bin/flowctl config get review.backend --raw --json # bypass merged defaults (null = absent from file)
 .flow/bin/flowctl config set review.backend codex # bare backend
@@ -171,8 +171,8 @@ The project's strategic intent and canonical vocabulary live **outside** `.flow/
 .flow/bin/flowctl config set planSync.crossSpec false # also check other open specs (canonical key; legacy alias planSync.crossEpic removed in 2.0)
 .flow/bin/flowctl config set scouts.github false # GitHub scout (requires gh CLI)
 .flow/bin/flowctl config set artifacts.html.enabled true # optional HTML artifact mode: skills render specs/PRs as self-contained HTML under .flow/artifacts/<spec-id>/ (OFF by default; markdown stays the source of truth)
-.flow/bin/flowctl config set work.delegate codex # /flow-next:work opt-in: offload impl to local `codex exec` (value MUST be `codex` to activate; OFF by default, consent-gated; arg `delegate:codex` overrides per-run)
-.flow/bin/flowctl config set tracker.perEvent.qa comment # /flow-next:qa opt-in: post the live-app QA ship verdict as a tracker comment (off|comment; default off; needs the tracker bridge active)
+.flow/bin/flowctl config set work.delegate codex # $flow-next-work opt-in: offload impl to local `codex exec` (value MUST be `codex` to activate; OFF by default, consent-gated; arg `delegate:codex` overrides per-run)
+.flow/bin/flowctl config set tracker.perEvent.qa comment # $flow-next-qa opt-in: post the live-app QA ship verdict as a tracker comment (off|comment; default off; needs the tracker bridge active)
 
 # Per-spec / per-task backend overrides (override the global review.backend per workstream)
 .flow/bin/flowctl spec set-backend fn-1-add-oauth --review codex:gpt-5.4:high
@@ -185,12 +185,59 @@ The project's strategic intent and canonical vocabulary live **outside** `.flow/
 .flow/bin/flowctl checkpoint restore fn-1-add-oauth # restore from snapshot
 .flow/bin/flowctl checkpoint delete fn-1-add-oauth # delete snapshot
 
-# Ralph (autonomous mode run control — for /flow-next:ralph-init users)
+# Ralph (autonomous mode run control — for $flow-next-ralph-init users)
 .flow/bin/flowctl ralph status # current run state
 .flow/bin/flowctl ralph pause # pause running loop
 .flow/bin/flowctl ralph resume # resume paused loop
 .flow/bin/flowctl ralph stop # request stop after current iteration
 ```
+
+## Orchestration & model steering
+
+flow-next skills are prompts the host agent executes — so you (the host) can route work across model families with zero code. **Defaults are pre-tuned; none of this is required** — reach for it only when your model mix, subscriptions, or taste differ. Full guide: [`docs/orchestration.md`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/orchestration.md) · https://flow-next.dev/orchestration/
+
+**Headless CLI bridges** — drive another harness from a Bash call with a *self-contained* prompt (full context in, digest back). The delegate writes code and never touches git; no recursive delegation.
+
+```bash
+# codex exec DEFAULTS to a read-only sandbox. Redirect stdin from /dev/null —
+# spawned by another agent it hangs indefinitely on inherited non-TTY stdin.
+codex exec -s read-only "<self-contained investigation prompt>" </dev/null # read-only investigation
+codex exec --sandbox workspace-write -o out.md "<self-contained impl prompt>" </dev/null # implement + capture result via -o/--output-last-message (never stdout scraping; --full-auto is deprecated)
+
+# cursor-agent: -p print mode; --force actually APPLIES edits (else proposed-only).
+CURSOR_API_KEY=... cursor-agent -p --force --model <id> "<prompt>" # model IDs are volatile → cursor-agent --list-models
+
+# claude -p: the same bridge in REVERSE — drive Claude headlessly from a Codex/Cursor host.
+claude -p "<self-contained prompt>" --output-format text --allowedTools "Read,Bash" </dev/null # prompt BEFORE --allowedTools (variadic — it swallows trailing args); edits need --permission-mode acceptEdits
+```
+
+Harness-relative: every direction works — from Claude Code the bridges are `codex exec` / `cursor-agent`; from Codex or Cursor they are `claude -p` / the other CLI. Any harness that can run Bash can conduct the others.
+
+**flow-next shortcuts** — the same bridges, packaged as config:
+
+```bash
+# Delegate implementation to codex (host keeps gating/git/review; codex only writes code)
+.flow/bin/flowctl config set work.delegate codex # value MUST be `codex` to activate (OFF by default, consent-gated)
+# …or per-run, no config: $flow-next-work fn-1-add-oauth delegate:codex
+
+# Cross-family review — the model that writes is never the model that reviews
+.flow/bin/flowctl config set review.backend codex # or cursor:composer-2.5
+.flow/bin/flowctl task set-backend fn-1-add-oauth.3 --review cursor:composer-2.5 # per-task review: override
+```
+
+**Prompted orchestration** — describe the policy; the host judges per item, no parameter required:
+
+```text
+Work the ready specs — decide per spec by complexity: auth/migration tasks you
+implement yourself; plain CRUD is delegated (delegate:codex). Reviews from codex either way.
+
+Run $flow-next-work fn-12 with delegate:codex. If a task's review comes back
+NEEDS_WORK twice, stop delegating it and implement it yourself on the session model.
+```
+
+None of these pairings are fixed — any stage of any flow-next pipeline (research, implementation, review, QA) can route to whatever harness you can reach from Bash: describe the arrangement in the invocation or your instruction files and the host builds it.
+
+Make any of this durable by writing it into `CLAUDE.md`/`AGENTS.md` — the host reads your instruction files every session and flow-next skills inherit them automatically.
 
 ## Workflow
 
@@ -224,7 +271,7 @@ flow-next 1.0.0 renamed the spec surface from `epic` to `spec`. The legacy `flow
 
 A pre-1.0 `.flow/` directory keeps working via the alias layer (no auto-migration). To migrate to the canonical 1.0+ layout, run either:
 
-- `/flow-next:setup` (interactive, prompts before writing) — recommended in human-driven sessions.
+- `$flow-next-setup` (interactive, prompts before writing) — recommended in human-driven sessions.
 - `flowctl migrate-rename --yes` (deterministic) — recommended for scripts and CI.
 
 `FLOW_NO_AUTO_MIGRATE=1` suppresses the migration banner entirely; alias mode keeps working.

@@ -46,9 +46,8 @@ Add the `## Orchestration & model steering` section to the setup skill's usage.m
 - [ ] Full pytest + smoke_test.sh green
 
 ## Done summary
-TBD
-
+Added the `## Orchestration & model steering` section to the setup skill's usage.md template (agentic headless-bridge recipes for `codex exec` + `cursor-agent`, harness-relative wording, `delegate:codex`/`review.backend` shortcuts, 2 prompted-orchestration examples, links), mirrored it byte-identically into the repo-root dogfood `.flow/usage.md`, and regenerated the Codex mirror. Section is 42 lines (≤~60 budget), fences balanced; dogfood parity + full pytest + smoke + sync-codex validation all green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 464202b94da12beb82b27bae112eecf9fec7fdb2
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (1425 OK, skipped=2), python3 -m unittest plugins.flow-next.tests.test_dogfood_template_parity (OK), bash plugins/flow-next/scripts/smoke_test.sh (139 passed, 0 failed), ./scripts/sync-codex.sh (validation suite green)
 - PRs:

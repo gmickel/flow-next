@@ -300,7 +300,7 @@ Scope honesty, because the architecture depends on it:
 | `/flow-next:pilot` | **Single-tick build-loop conductor** — advances one ready spec by one pipeline stage (plan → plan-review → work → make-pr, plus an optional `qa` stage when `pipeline.qa==on`) per tick, ends with a `PILOT_VERDICT` line; drive it with `/loop` or `/goal` |
 | `/flow-next:land` | **Cadence-tick ship loop** — babysits the build loop's draft PRs: CI tri-state fix loop, reviewer patience window, resolve-pr convergence, gated explicit merge, spec close, release-follow; ends with a `LAND_VERDICT` line; drive it with `/loop 30m /flow-next:land` |
 | `/flow-next:ralph-init` | Scaffold autonomous loop (`scripts/ralph/`) |
-| `/flow-next:setup` | Per-project setup — `.flow/` init, local flowctl install, CLAUDE.md/AGENTS.md instructions, review-backend + config ceremony |
+| `/flow-next:setup` | Per-project setup — `.flow/` init, local flowctl install, CLAUDE.md/AGENTS.md instructions, review-backend + config ceremony, optional model-routing scaffold |
 | `/flow-next:sync` | **Plan-sync** — update downstream *task* specs after implementation drift inside flow-next |
 | `/flow-next:tracker-sync` | **Tracker bridge** (distinct from `/flow-next:sync`) — project a spec to a Linear/GitHub/GitLab/Jira issue and reconcile body/status/comments two-way; projection, not coordination ([docs](plugins/flow-next/docs/tracker-sync.md)) |
 | `/flow-next:map` | Optional — wrap [openclaw/clawpatch](https://github.com/openclaw/clawpatch)'s `clawpatch map` for a semantic feature index (`.clawpatch/features/*.json`); scouts read it when present, fall back to grep/glob when absent. Requires Node 22+ + `pnpm add -g clawpatch` |

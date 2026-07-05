@@ -46,9 +46,8 @@ Author the canonical opinionated model-routing scaffold as a new setup template 
 - [ ] sync-codex regenerated + green; full pytest + smoke green
 
 ## Done summary
-TBD
-
+Authored the canonical opinionated model-routing scaffold as a new setup template (`templates/model-routing-snippet.md`): marker-fenced block with provenance, a cost/intelligence/taste scores table, always-on escalation + graceful-degrade rules, and explicit flow-next wiring — 28 lines (≤~45 budget). Every CLI-dependent route sits on its own `<!-- probe:codex -->`/`<!-- probe:cursor -->` sentinel line with no active CLI route outside sentinel lines, making fn-88.3 composition a deterministic line transform. De-embedded the full example from `docs/orchestration.md` (trimmed illustrative excerpt + cross-link to the template as canonical + setup-live note; no second full copy) and regenerated the Codex mirror. Early proof point holds: the full wiring fits the always-loaded budget with room to spare.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: bec0370b2cbfc23500bfe8479af154cef9889f64
+- Tests: uvx pytest plugins/flow-next/tests -q (1433 passed, 2 skipped, 188 subtests), bash plugins/flow-next/scripts/smoke_test.sh (139 passed, 0 failed), diff .flow/usage.md templates/usage.md (dogfood parity OK), ./scripts/sync-codex.sh (validation suite green)
 - PRs:
