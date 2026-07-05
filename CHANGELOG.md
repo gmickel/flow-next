@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 2.7.2] - 2026-07-05
+
+### Added
+
+- **New doc — Orchestration & model routing ([`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md))** — Given the trend toward frontier-model orchestration (Fable 5 conducting; implementation, reviews, and bulk reads routed to cheaper/faster models via `codex exec`, `cursor-agent`, tiered subagents), this page maps every routing dial flow-next already ships and the steering principle behind them: skills are prompts executed by the host agent, so routing comes in **two composable methodologies** — deterministic parameters (config keys, flags, per-spec/per-task fields) and *prompted orchestration*, where the host's own intelligence routes per item ("decide per spec, by complexity, which model plans and implements it"), escalates conditionally on outcomes, and can prompt capabilities into existence that no parameter encodes (e.g. a Fable reviewer despite no `fable` backend rung). Covers the tiered subagent fleet (haiku scanners / sonnet scouts / opus auditor / inherit workers + the Codex mirror mapping), the `backend[:model[:effort]]` review grammar and its full precedence chain (per-task `review:` → env → config), `delegate:codex` implementation offload, per-spec `set-backend` fields for external orchestrators, a copy-paste CLAUDE.md model-routing table (durable role labels, volatile model IDs), the pilot+land driver-chaining recipe (`DEFERRED_TO_LAND` → land in one `/loop`), and the invariants that never route away (host judgment, consent gates, human-gated merge, independent verification). The frame throughout: **the defaults are pre-tuned to work well for everyone out of the box — steering is a capability, not a prerequisite.** Linked from the README, the doc index, and CLAUDE.md.
+
 ## [flow-next 2.7.1] - 2026-07-05
 
 ### Fixed
