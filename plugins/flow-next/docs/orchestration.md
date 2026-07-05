@@ -162,6 +162,13 @@ Pilot and land end every tick with machine-readable verdict lines precisely so a
 
 Loop internals: [`../skills/flow-next-pilot/SKILL.md`](../skills/flow-next-pilot/SKILL.md), [`../skills/flow-next-land/SKILL.md`](../skills/flow-next-land/SKILL.md), [`ralph.md`](ralph.md) for the hardened harness.
 
+## In your repo
+
+This page lives in the plugin's doc tree — *outside* the repo you're working in. At use time the host agent reads two files that ship into your project, so the steering recipes are put where agents already look:
+
+- **`.flow/usage.md`** carries an `## Orchestration & model steering` section (installed in every project, read every session): the headless `codex exec` / `cursor-agent` bridge commands and the flow-next shortcuts (`delegate:codex`, `review.backend`, per-task `review:`, prompted-orchestration examples).
+- **`CLAUDE.md` / `AGENTS.md`** can hold the durable model-routing table above: `/flow-next:setup` offers, as an optional ceremony step, to scaffold it live — annotated for the CLIs you actually have installed, shown in full before writing, yours to edit after. Marker-fenced so `/flow-next:uninstall` can remove it cleanly.
+
 ## What stays fixed
 
 Steering is broad but not unbounded — these hold no matter what the routing table says:

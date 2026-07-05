@@ -41,7 +41,7 @@ The spec-to-merge pipeline, in order.
 | [`flow-next-sync`](../skills/flow-next-sync/SKILL.md) | `/flow-next:sync` | Plan-sync — update downstream task specs after implementation drift. Distinct from `tracker-sync`. |
 | [`flow-next-tracker-sync`](../skills/flow-next-tracker-sync/SKILL.md) | `/flow-next:tracker-sync` | Project a spec to a Linear/GitHub/GitLab/Jira issue and reconcile body/status/comments two-way — projection, not coordination; the spec stays the source of truth. |
 | [`flow-next-map`](../skills/flow-next-map/SKILL.md) | `/flow-next:map` | Optional — wrap `clawpatch map` for a semantic feature index at `.clawpatch/features/*.json`; scouts read it when present, fall back to grep/glob when absent. |
-| [`flow-next-setup`](../skills/flow-next-setup/SKILL.md) | `/flow-next:setup` | Per-project setup — `.flow/` init, local flowctl install, CLAUDE.md/AGENTS.md instructions, review-backend + config ceremony. |
+| [`flow-next-setup`](../skills/flow-next-setup/SKILL.md) | `/flow-next:setup` | Per-project setup — `.flow/` init, local flowctl install, CLAUDE.md/AGENTS.md instructions, review-backend + config ceremony, optional model-routing scaffold. |
 
 ## Phrase-triggered skills
 

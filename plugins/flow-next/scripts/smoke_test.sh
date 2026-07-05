@@ -2036,6 +2036,48 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+echo -e "${YELLOW}--- model-routing scaffold ceremony prose (fn-88.4) ---${NC}"
+# Prose-contract checks on the setup workflow, following the same grep-the-skill
+# pattern as the sync block above. These guard the ceremony prose the
+# deterministic transforms (test_model_routing_scaffold.py) depend on.
+MR_WORKFLOW="$PLUGIN_ROOT/skills/flow-next-setup/workflow.md"
+
+# 1: Headless / non-interactive setup skips the Model Routing question silently.
+if grep -q "skipped SILENTLY" "$MR_WORKFLOW"; then
+  echo -e "${GREEN}✓${NC} setup workflow states the headless-skip rule"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} setup workflow missing headless-skip rule"
+  FAIL=$((FAIL + 1))
+fi
+
+# 2: Frozen option strings, as-built casing.
+if grep -qF '`Scaffold` / `Scaffold + enable codex delegation` / `Skip`' "$MR_WORKFLOW"; then
+  echo -e "${GREEN}✓${NC} setup workflow carries the frozen Model Routing option set"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} setup workflow missing frozen option strings"
+  FAIL=$((FAIL + 1))
+fi
+
+# 3: Delegation opt-in never pre-sets the first-use consent gate.
+if grep -qE "NEVER.{0,40}work\.delegateConsent" "$MR_WORKFLOW"; then
+  echo -e "${GREEN}✓${NC} setup workflow never pre-sets work.delegateConsent"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} setup workflow missing never-pre-set-delegateConsent contract"
+  FAIL=$((FAIL + 1))
+fi
+
+# 4: Scaffold processing is ordered AFTER the Docs block.
+if grep -q "the Docs block above" "$MR_WORKFLOW"; then
+  echo -e "${GREEN}✓${NC} scaffold processing ordered after the Docs block"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} setup workflow missing after-Docs-block ordering"
+  FAIL=$((FAIL + 1))
+fi
+
 echo -e "${YELLOW}--- backend spec validation (fn-28.2) ---${NC}"
 # Fresh epic + task for backend spec tests
 BSPEC_EPIC_JSON="$(scripts/flowctl spec create --title "Backend spec test" --json)"
