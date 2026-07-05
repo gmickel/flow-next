@@ -47,9 +47,8 @@ Finalization: uninstall marker removal, test coverage, remaining doc pointers, C
 - [ ] Final sync-codex regen committed
 
 ## Done summary
-TBD
-
+Finalized fn-88: `/flow-next:uninstall` now removes the `<!-- flow-next:model-routing:start/end -->` scaffold block via the deterministic damaged-marker algorithm (exactly-one + ordered → remove inclusive; any other state → report + untouched), with the report line extended. Added the "in your repo" pointer to orchestration.md, the setup-row optional-scaffold clause to README + docs/skills.md (verbatim-matched pair), the troubleshooting uninstall note, and a `## Unreleased` CHANGELOG entry with a `Downstream (at release):` handoff line for the flow-next.dev pages. New deterministic test coverage (`test_model_routing_scaffold.py`) locks the template shape + probe-sentinel invariant, the four-state HAVE_CODEX×HAVE_CURSOR composition transform, the uninstall marker-removal algorithm incl. every damaged case + uninstall.md prose contract, and the setup workflow prose contract on canonical + Codex mirror; smoke_test.sh gained a matching workflow prose-contract block. Full pytest + smoke + sync-codex validation all green; no version bump (batched).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c9e11d89dc590d7e11873ee12287749de4ae6cfe
+- Tests: uvx pytest plugins/flow-next/tests -q (1455 passed, 2 skipped), bash plugins/flow-next/scripts/smoke_test.sh (143 passed, 0 failed; run from outside repo), ./scripts/sync-codex.sh (validation green)
 - PRs:
