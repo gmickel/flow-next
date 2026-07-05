@@ -192,6 +192,48 @@ The project's strategic intent and canonical vocabulary live **outside** `.flow/
 .flow/bin/flowctl ralph stop # request stop after current iteration
 ```
 
+## Orchestration & model steering
+
+flow-next skills are prompts the host agent executes — so you (the host) can route work across model families with zero code. **Defaults are pre-tuned; none of this is required** — reach for it only when your model mix, subscriptions, or taste differ. Full guide: [`docs/orchestration.md`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/orchestration.md) · https://flow-next.dev/orchestration/
+
+**Headless CLI bridges** — drive another harness from a Bash call with a *self-contained* prompt (full context in, digest back). The delegate writes code and never touches git; no recursive delegation.
+
+```bash
+# codex exec DEFAULTS to a read-only sandbox. Redirect stdin from /dev/null —
+# spawned by another agent it hangs indefinitely on inherited non-TTY stdin.
+codex exec -s read-only "<self-contained investigation prompt>" </dev/null # read-only investigation
+codex exec --sandbox workspace-write -o out.md "<self-contained impl prompt>" </dev/null # implement + capture result via -o/--output-last-message (never stdout scraping; --full-auto is deprecated)
+
+# cursor-agent: -p print mode; --force actually APPLIES edits (else proposed-only).
+CURSOR_API_KEY=... cursor-agent -p --force --model <id> "<prompt>" # model IDs are volatile → cursor-agent --list-models
+```
+
+Harness-relative: from Claude Code the bridges are `codex exec` / `cursor-agent`; from Codex they are `claude -p` / `cursor-agent`.
+
+**flow-next shortcuts** — the same bridges, packaged as config:
+
+```bash
+# Delegate implementation to codex (host keeps gating/git/review; codex only writes code)
+.flow/bin/flowctl config set work.delegate codex # value MUST be `codex` to activate (OFF by default, consent-gated)
+# …or per-run, no config: /flow-next:work fn-1-add-oauth delegate:codex
+
+# Cross-family review — the model that writes is never the model that reviews
+.flow/bin/flowctl config set review.backend codex # or cursor:composer-2.5
+.flow/bin/flowctl task set-backend fn-1-add-oauth.3 --review cursor:composer-2.5 # per-task review: override
+```
+
+**Prompted orchestration** — describe the policy; the host judges per item, no parameter required:
+
+```text
+Work the ready specs — decide per spec by complexity: auth/migration tasks you
+implement yourself; plain CRUD is delegated (delegate:codex). Reviews from codex either way.
+
+Run /flow-next:work fn-12 with delegate:codex. If a task's review comes back
+NEEDS_WORK twice, stop delegating it and implement it yourself on the session model.
+```
+
+Make any of this durable by writing it into `CLAUDE.md`/`AGENTS.md` — the host reads your instruction files every session and flow-next skills inherit them automatically.
+
 ## Workflow
 
 1. `.flow/bin/flowctl specs` - list all specs
