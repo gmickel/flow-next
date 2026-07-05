@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-88-orchestration-usability-usagemd",
+  "created_at": "2026-07-05T12:06:57.289795Z",
+  "depends_on_epics": [],
+  "id": "fn-88-orchestration-usability-usagemd",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-88-orchestration-usability-usagemd.md",
+  "status": "open",
+  "title": "Orchestration usability: usage.md steering recipes + optional setup routing scaffold",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-05T12:08:40.261980Z"
+}
