@@ -14,7 +14,7 @@ Rankings, higher = better. Cost reflects what you actually pay (existing subscri
 | sonnet-5 | 5 | 7 | 7 |
 | haiku-4.5 | 8 | 4 | 4 |
 
-How to apply — defaults, not limits. Standing permission to escalate: if a cheaper model misses the bar, rerun on a smarter one without asking. Judge the output, not the price tag.
+How to apply — defaults, not limits. Unless prompted otherwise, route work across these models as you judge best — no permission needed; an explicit user instruction always overrides this table. Standing permission to escalate: if a cheaper model misses the bar, rerun on a smarter one without asking. Judge the output, not the price tag.
 - For anything that ships, intelligence > taste > cost; cost is a tie-breaker only.
 - Orchestration, planning, review verdicts, anything ambiguous → the session model (whichever row you are running as the conductor). Never delegate judgment.
 - Anything user-facing (UI, copy, API design) needs taste ≥ 7 → keep on the session model even if it looks mechanical.
