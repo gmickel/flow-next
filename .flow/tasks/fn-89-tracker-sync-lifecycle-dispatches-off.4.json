@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-05T21:04:35.414669Z",
+  "depends_on": [
+    "fn-89-tracker-sync-lifecycle-dispatches-off.3"
+  ],
+  "id": "fn-89-tracker-sync-lifecycle-dispatches-off.4",
+  "priority": null,
+  "spec": "fn-89-tracker-sync-lifecycle-dispatches-off",
+  "spec_path": ".flow/tasks/fn-89-tracker-sync-lifecycle-dispatches-off.4.md",
+  "status": "todo",
+  "title": "Docs + CHANGELOG + smoke prose contracts + final Codex mirror regen",
+  "updated_at": "2026-07-05T21:07:23.420903Z"
+}

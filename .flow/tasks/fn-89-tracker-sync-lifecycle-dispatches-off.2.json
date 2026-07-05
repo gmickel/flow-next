@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-05T21:04:34.472567Z",
+  "depends_on": [
+    "fn-89-tracker-sync-lifecycle-dispatches-off.1"
+  ],
+  "id": "fn-89-tracker-sync-lifecycle-dispatches-off.2",
+  "priority": null,
+  "spec": "fn-89-tracker-sync-lifecycle-dispatches-off",
+  "spec_path": ".flow/tasks/fn-89-tracker-sync-lifecycle-dispatches-off.2.md",
+  "status": "todo",
+  "title": "Work-skill touchpoints + Phase 5 pre-audit join + per-spec ledger",
+  "updated_at": "2026-07-05T21:29:28.340907Z"
+}
