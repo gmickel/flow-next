@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **model-routing scaffold — named Claude tiers** — the scores table now lists `fable-5 (session model)`, `opus-4.8`, `sonnet-5`, and `haiku-4.5` explicitly (instead of the role-only `session model` / `fast Claude tier` rows), plus a native-tier mechanics line: Claude-family tiers are reached by spawning subagents with the model parameter — no CLI bridge. Concrete rows are actionable routes; scores stay editable starting opinions. Block is 32 lines (≤ ~45 budget). Downstream (at release): re-sync the verbatim block on the flow-next.dev `/orchestration/` page (done ahead of release 2026-07-05).
+
 ## [flow-next 2.8.0] - 2026-07-05
 
 ### Added

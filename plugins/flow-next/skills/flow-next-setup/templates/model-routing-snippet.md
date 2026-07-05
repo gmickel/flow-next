@@ -7,10 +7,12 @@ Rankings, higher = better. Cost reflects what you actually pay (existing subscri
 
 | model                    | cost | intelligence | taste |
 |--------------------------|------|--------------|-------|
-| session model (frontier) | 2    | 10           | 9     |
+| fable-5 (session model)  | 2    | 10           | 9     |
+| opus-4.8                 | 4    | 7            | 8     |
 | gpt-5.5                  | 9    | 8            | 5     |
 | composer-2.5             | 9    | 6            | 6     |
-| fast Claude tier         | 8    | 4            | 4     |
+| sonnet-5                 | 5    | 7            | 7     |
+| haiku-4.5                | 8    | 4            | 4     |
 
 How to apply — defaults, not limits. Standing permission to escalate: if a cheaper model misses the bar, rerun on a smarter one without asking. Judge the output, not the price tag.
 - For anything that ships, intelligence > taste > cost; cost is a tie-breaker only.
@@ -18,6 +20,8 @@ How to apply — defaults, not limits. Standing permission to escalate: if a che
 - Anything user-facing (UI, copy, API design) needs taste ≥ 7 → keep on the session model even if it looks mechanical.
 - Reviews route to a different family than the writer — uncorrelated blind spots.
 - Graceful degrade: a routed CLI that is missing, unauthenticated, or errors → report it unavailable and fall back to the session model. Never block.
+
+Claude-family tiers (opus-4.8, sonnet-5, haiku-4.5) run natively — spawn subagents with the model parameter; no bridge required. Heavy same-family review/audit → opus-4.8; mechanical scans → haiku-4.5.
 
 flow-next wiring — the surface each route drives (each line below is live only if its CLI is installed):
 <!-- probe:codex --> Bulk/mechanical implementation (clear spec, low ambiguity) → delegate to gpt-5.5: `/flow-next:work <id> delegate:codex` (`work.delegateModel=gpt-5.5`, `work.delegateEffort=medium`).
