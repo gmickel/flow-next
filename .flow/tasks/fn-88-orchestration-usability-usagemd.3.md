@@ -13,10 +13,10 @@ Add the optional model-routing scaffold ceremony to the setup skill: one grouped
 
 - **Question (Step 6d):** join the existing grouped-question mechanics (follow whatever chunking the file already does — do not invent a new call shape). Frozen options: `scaffold` / `scaffold + enable codex delegation` (include this option ONLY when `HAVE_CODEX=1`) / `skip` (default). Under any non-interactive marker (Ralph/autonomous family), skip silently — never ask.
 - **Processing (Step 7):** new block AFTER the existing Docs-block processing (~L653-674), operating on the file state on disk (sequential, never interleaved):
-  1. Resolve target file(s): the SAME file(s) the Docs ceremony resolved this run — platform mapping incl. Droid-with-Claude and Cursor buckets; "Both" → write the same block to both. Shim guard: if the target's flow-relevant content is a single-line pointer to another file, follow it when it resolves in-repo, else report + skip (R12).
-  2. Compose the block from `templates/model-routing-snippet.md`, applying probe annotations: `HAVE_CODEX=0` → comment out codex rows/rules with "not detected on this machine — uncomment after installing"; same for `HAVE_CURSOR` (R10). Both probes fail → all cross-CLI content commented + note, or recommend skip.
-  3. Pre-write read-back: show the FULL composed block; options `write` / `skip` (R3). Never silent.
-  4. Write mechanics — clone the Docs-block idiom verbatim (byte-compare family): no marker in file → append; marker present + byte-identical to canonical-composed → silent no-op, no mtime bump; marker present + customized → `Keep mine (Recommended)` / `Overwrite with canonical` / `skip` (R11). Also detect a model-routing-shaped heading WITHOUT our markers → augment-or-skip question, never duplicate.
+  1. Resolve target file(s) via the deterministic ladder (R12), independent of whether the Docs question fired: (a) Docs answered this run → mirror the choice (incl. "Both" → same block to both); (b) Docs skipped/current → the file(s) already carrying the `BEGIN FLOW-NEXT` docs marker (both → Both); (c) neither → platform-default mapping (workflow.md 6b buckets: Droid-with-Claude, Cursor). Shim guard, exact patterns: target whose only non-empty content line matches `@<path>.md` or `See[:] <path>.md` (case-insensitive, repo-relative) → follow the pointer when the file exists in-repo, else report + skip; anything else = normal file.
+  2. Compose the block from `templates/model-routing-snippet.md` via the deterministic sentinel line transform (R10): `HAVE_CODEX=0` → comment out exactly the `<!-- probe:codex -->` lines + install note; same for `HAVE_CURSOR`. Both probes fail → all sentinel lines commented + note, or recommend skip. Also substitute the provenance line's invocation syntax per platform (`/flow-next:setup` on Claude/Droid/Cursor, `$flow-next-setup` on Codex — same split as the snippet templates).
+  3. Inspect marker + byte-compare FIRST (against the current composed canonical): identical → silent no-op, END (nothing shown, no mtime bump — R11). Only on a would-write path continue to step 4.
+  4. Would-write branches: no marker in file → proceed to read-back; marker present + different (user edits OR probe-state drift, e.g. a CLI installed since the last scaffold) → `Keep mine (Recommended)` / `Overwrite with canonical` / `skip` (R11 — probe drift counts as canonical drift, never a silent rewrite); Overwrite chosen → proceed to read-back. Also detect a model-routing-shaped heading WITHOUT our markers → augment-or-skip question, never duplicate. **Read-back (R3, would-write path only):** show the FULL composed block, options `write` / `skip`, immediately before the write.
   5. Post-write: one confirmation line inviting free editing ("this section is yours now; re-run setup to regenerate").
   6. If option was `scaffold + enable codex delegation`: `flowctl config set work.delegate codex` via existing machinery; NEVER touch `work.delegateConsent` (R9). Read persisted config back to confirm (ceremony-validation-reads-persisted rule).
 - **Step 8 summary:** add one line reporting scaffold outcome (written/kept/skipped + file).
@@ -43,10 +43,10 @@ Add the optional model-routing scaffold ceremony to the setup skill: one grouped
 ## Acceptance
 
 - [ ] Question appears in interactive setup with frozen options; delegation option only when HAVE_CODEX=1; silent skip under non-interactive markers
-- [ ] Probe annotations correct for all four HAVE_CODEX×HAVE_CURSOR combinations (both-fail path per R10)
-- [ ] Pre-write read-back shows full composed block; write is marker-fenced with provenance; post-write invitation printed
-- [ ] Re-run: pristine → silent no-op (mtime unchanged); customized → Keep-mine/Overwrite/skip; unmarked routing heading → augment-or-skip, no duplicate
-- [ ] "Both" writes both files; shim target followed or reported+skipped
+- [ ] Sentinel line transform correct for all four HAVE_CODEX×HAVE_CURSOR combinations (both-fail path per R10); provenance invocation syntax platform-correct
+- [ ] Ordering: compare-before-read-back — identical re-run shows nothing; would-write path shows full composed block (write/skip) before the marker-fenced write with provenance; post-write invitation printed
+- [ ] Re-run: identical-to-current-canonical → silent no-op (mtime unchanged); user-edited OR probe-drifted → Keep-mine/Overwrite/skip; unmarked routing heading → augment-or-skip, no duplicate
+- [ ] Target ladder: Docs-answer → marker-location → platform-default all covered; "Both" writes both files; shim patterns exact (follow or report+skip)
 - [ ] Delegation opt-in sets `work.delegate codex` only; `work.delegateConsent` untouched (verified from persisted config)
 - [ ] Mirror regenerated: numbered-prompt rendering verified, zero AskUserQuestion mentions; full pytest + smoke green
 

@@ -11,7 +11,7 @@ Add the `## Orchestration & model steering` section to the setup skill's usage.m
 
 ## Approach
 
-- Insert after `## Config`, before `## Checkpoint` (per docs-gap-scout: ~L164-176 of the template).
+- **Markdown-safe insertion:** `Config`/`Checkpoint` are `#` comments INSIDE the `## Common Commands` bash fence — do NOT insert there. Add the new `## Orchestration & model steering` as a top-level section AFTER the `## Common Commands` fence closes (before the next `##` heading). Verify fences stay balanced.
 - Content per spec R1 — agentic headless-bridge instructions written for the host agent to execute, ≤ ~60 lines:
   - `codex exec` recipe: read-only default sandbox called out; `--sandbox workspace-write` for implementation (`--full-auto` deprecated); `-o/--output-last-message` for result capture; `</dev/null` stdin guard (hang bug when spawned by another agent); `-s read-only` investigation mode; self-contained-prompt discipline (context in, digest back, never touches git); no recursive delegation.
   - `cursor-agent` recipe: `-p` print mode, `--force` to apply edits, `CURSOR_API_KEY` for headless auth, model IDs volatile → `--list-models`.
@@ -40,7 +40,7 @@ Add the `## Orchestration & model steering` section to the setup skill's usage.m
 
 ## Acceptance
 
-- [ ] Section present in template, ≤ ~60 lines, all R1 recipe elements included (sandbox default, `-o` capture, stdin guard, `--force`, `CURSOR_API_KEY`, volatile-IDs note, delegate/review shortcuts, ≥2 prompted examples, both links)
+- [ ] Section present as a top-level `##` after the Common Commands fence (fences balanced), ≤ ~60 lines, all R1 recipe elements included (sandbox default, `-o` capture, stdin guard, `--force`, `CURSOR_API_KEY`, volatile-IDs note, delegate/review shortcuts, ≥2 prompted examples, both links)
 - [ ] `.flow/usage.md` updated byte-identically same commit; `test_dogfood_template_parity.py` green
 - [ ] `./scripts/sync-codex.sh` run, validation suite green, mirror committed
 - [ ] Full pytest + smoke_test.sh green

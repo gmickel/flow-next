@@ -13,8 +13,12 @@ Finalization: uninstall marker removal, test coverage, remaining doc pointers, C
 
 - **Uninstall** (`commands/flow-next/uninstall.md:46-50`): add a paragraph removing the `<!-- flow-next:model-routing:start/end -->` block with the deterministic damaged-marker algorithm (exactly one start AND one end AND ordered → remove inclusive; else report + leave untouched — R6/R14 of spec). Extend the "Cleaned up" report line.
 - **Docs:** `docs/troubleshooting.md` Uninstall section (~L140-149) lists the second marker block; `docs/orchestration.md` gains the "in your repo" pointer (usage.md section + setup ceremony) near "What stays fixed"; `README.md:303` + `docs/skills.md:44` setup one-liner gains the optional-scaffold clause — the two strings must match verbatim (existing pattern).
-- **CHANGELOG:** create `## Unreleased` header above 2.7.2; `### Added` entry (bold lead-in + prose, house style). No version bump, no bump.sh (batched).
-- **Tests (R8):** new `plugins/flow-next/tests/test_model_routing_scaffold.py` (or similar): template exists + markers well-formed + ≤ budget line-count guard; damaged-marker algorithm cases (0/2 starts, out-of-order → untouched; well-formed → removed) — test the removal logic as a pure text transform; probe-annotation shape (CLI-dependent lines individually comment-able). Ceremony default-skip is skill-prose — cover via smoke_test.sh only if a cheap deterministic probe exists; otherwise document as prose-reviewed (do not build an LLM-in-the-loop test).
+- **CHANGELOG:** create `## Unreleased` header above 2.7.2; `### Added` entry (bold lead-in + prose, house style) ending with an explicit `Downstream (at release):` line naming the flow-next.dev orchestration-page + skills/setup-page pointer edits (the tracked handoff artifact — R7). No version bump, no bump.sh (batched).
+- **Tests (R8, all deterministic — prose-only review is NOT acceptable coverage):** new `plugins/flow-next/tests/test_model_routing_scaffold.py`:
+  (a) template shape — exists, markers well-formed, ≤ budget line-count guard, every CLI-dependent route line carries a probe sentinel, no active codex/cursor reference outside sentinel lines;
+  (b) probe composition — a reference implementation of the documented sentinel line transform, asserted for all four HAVE_CODEX×HAVE_CURSOR states (no active route to a failed-probe CLI; install notes present);
+  (c) uninstall removal — pure text transform: well-formed → removed inclusive; 0/2 starts, 0/2 ends, out-of-order → untouched; PLUS prose-contract assertions on `commands/flow-next/uninstall.md` (both marker strings present, exactly-one/ordered rule stated, damaged→report-untouched stated, report line extended);
+  (d) workflow prose contracts (smoke_test.sh, following the existing SKILL.md-Ralph-block prose-contract pattern) — headless-skip rule present, frozen option strings present, "never pre-set work.delegateConsent" present, scaffold processing ordered after the Docs block.
 - **Final regen:** `./scripts/sync-codex.sh` on the merged state; full gate.
 - flow-next.dev pointer edits land in that repo at ship time (R7 downstream half — not files of this task; note in the summary for the maintainer walk).
 
@@ -38,8 +42,8 @@ Finalization: uninstall marker removal, test coverage, remaining doc pointers, C
 
 - [ ] Uninstall removes a well-formed block; damaged states (missing/duplicate/out-of-order markers) → report + untouched; report line extended
 - [ ] troubleshooting.md + orchestration.md pointer + README/docs-skills.md rows (verbatim pair) updated
-- [ ] CHANGELOG `## Unreleased` created with the entry; no version bump
-- [ ] New tests green (markers, budget guard, removal algorithm, annotation shape); full pytest + smoke green
+- [ ] CHANGELOG `## Unreleased` created with the entry + `Downstream (at release):` handoff line; no version bump
+- [ ] New tests green: template shape + sentinel invariant, four-state probe composition, removal algorithm incl. damaged cases, workflow prose contracts; full pytest + smoke green
 - [ ] Final sync-codex regen committed
 
 ## Done summary

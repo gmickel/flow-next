@@ -3,12 +3,14 @@
   "claim_note": "",
   "claimed_at": null,
   "created_at": "2026-07-05T12:57:54.092233Z",
-  "depends_on": [],
+  "depends_on": [
+    "fn-88-orchestration-usability-usagemd.1"
+  ],
   "id": "fn-88-orchestration-usability-usagemd.2",
   "priority": null,
   "spec": "fn-88-orchestration-usability-usagemd",
   "spec_path": ".flow/tasks/fn-88-orchestration-usability-usagemd.2.md",
   "status": "todo",
   "title": "model-routing-snippet.md canonical template + orchestration.md de-embed",
-  "updated_at": "2026-07-05T12:58:40.152828Z"
+  "updated_at": "2026-07-05T13:15:23.754238Z"
 }

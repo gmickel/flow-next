@@ -17,7 +17,7 @@ Author the canonical opinionated model-routing scaffold as a new setup template 
   - Scores table `model | cost | intelligence | taste` (higher = better): session/frontier model, gpt-5.5 (codex CLI), composer-2.5 (cursor-agent), fast Claude tier. Framing line: "cost reflects what you actually pay (existing subscriptions), not list price" + re-rank invitation.
   - How-to-apply rules: defaults-not-limits + standing escalation permission; intelligence > taste > cost for anything that ships; bulk/mechanical → gpt-5.5; user-facing needs taste ≥ threshold; reviews cross-family; graceful degrade (routed CLI missing/unauthenticated/failing → report unavailable, fall back to session model — never block).
   - flow-next wiring: `/flow-next:work` worker + `delegate:codex`; reviews via `review.backend` (codex / cursor:composer-2.5 / per-task `review:`); scouts may shell out to `cursor-agent` for bulk reads; thin-wrapper pattern for gpt-5.5 inside subagent workflows.
-  - Probe-annotation placeholders: the codex- and cursor-dependent rows/rules must be structured so the ceremony (fn-88.3) can comment them out cleanly per-CLI (e.g. each on its own line, annotatable with a `<!-- not detected... -->` suffix or leading comment) — design the shape here, wire the probes in .3.
+  - Probe sentinels (structural requirement): every codex- or cursor-dependent route sits on its OWN line, prefixed `<!-- probe:codex -->` or `<!-- probe:cursor -->`. Composition (fn-88.3) is then a deterministic line transform: failing probe ⇒ comment out exactly its sentinel-tagged lines + append "not detected on this machine — uncomment after installing". This shape is what makes all four probe states mechanically testable (fn-88.4).
   - `<!-- flow-next:model-routing:end -->` closing marker.
 - HARD BUDGET: ≤ ~45 lines including markers/provenance (R13). This is always-loaded context in target repos. If wiring can't fit, escalate per the spec's Early proof point (split block + on-demand reference) rather than shipping a bloated block.
 - `docs/orchestration.md` "Durable routing" (L122-165): replace the full embedded example with a ~10-line illustrative excerpt + cross-link to the template file as canonical + one line noting `/flow-next:setup` offers it live (R15, R17 discipline).
@@ -41,7 +41,7 @@ Author the canonical opinionated model-routing scaffold as a new setup template 
 ## Acceptance
 
 - [ ] `templates/model-routing-snippet.md` exists: markers + provenance + scores table + rules (escalation + graceful-degrade always present) + flow-next wiring, ≤ ~45 lines
-- [ ] CLI-dependent lines structured for clean per-CLI comment-out by the ceremony
+- [ ] Every CLI-dependent route on its own sentinel-prefixed line (`<!-- probe:codex -->` / `<!-- probe:cursor -->`); no active CLI reference outside sentinel lines
 - [ ] `docs/orchestration.md` de-embedded: excerpt + cross-link + setup mention; no second full copy anywhere
 - [ ] sync-codex regenerated + green; full pytest + smoke green
 
