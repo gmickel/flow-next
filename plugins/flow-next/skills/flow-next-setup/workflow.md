@@ -694,7 +694,7 @@ For each chosen file (CLAUDE.md and/or AGENTS.md) — preserve repo-custom conte
      - **options**:
        - `Keep mine (Recommended)` — leave the marker block unchanged. Print the path to the canonical template so the user can diff manually (`${PLUGIN_ROOT}/skills/flow-next-setup/templates/<snippet>.md`).
        - `Overwrite with canonical` — replace the marker block with the canonical snippet. Customizations inside the markers are lost; content outside the markers is preserved.
-       - `abort` — exit cleanly. Earlier steps (init, file copies, config writes, prior docs-file decisions for any already-processed file) may already have run; they are idempotent and safe to leave. Remaining docs files and Star step are skipped. Re-run `/flow-next:setup` later to complete setup.
+       - `abort` — exit cleanly. Earlier steps (init, file copies, config writes, prior docs-file decisions for any already-processed file) may already have run; they are idempotent and safe to leave. Everything from here onward is skipped (remaining docs files, the Model Routing scaffold, and the Star step). Re-run `/flow-next:setup` later to complete setup.
 
 The marker-block boundaries are load-bearing: pre-existing prose outside `<!-- BEGIN FLOW-NEXT -->` … `<!-- END FLOW-NEXT -->` is **never** modified by this step. Only the bytes between (and including) those markers are candidates for replacement.
 

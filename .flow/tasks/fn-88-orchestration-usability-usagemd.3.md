@@ -51,9 +51,8 @@ Add the optional model-routing scaffold ceremony to the setup skill: one grouped
 - [ ] Mirror regenerated: numbered-prompt rendering verified, zero AskUserQuestion mentions; full pytest + smoke green
 
 ## Done summary
-TBD
-
+Added the optional model-routing scaffold ceremony to the setup skill: a frozen-option Model Routing question in Step 6d (interactive-only, delegation option gated on HAVE_CODEX=1) and a Step 7 processing block that resolves the target via the deterministic Docs→marker→platform ladder with the exact shim guard, composes the block from model-routing-snippet.md via a probe-sentinel line transform with per-platform invocation substitution, byte-compares before read-back (silent no-op on identical, Keep-mine/Overwrite/skip on drift, augment-or-skip on an unmarked routing heading), shows the full block before writing, and sets work.delegate=codex (never work.delegateConsent, validated from persisted config) on delegation opt-in. Extended the SKILL.md description and regenerated the Codex mirror.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 63921ddb5a41498904e553cfdc8569d64092c442
+- Tests: uvx pytest plugins/flow-next/tests -q (1433 passed, 2 skipped, 188 subtests), bash plugins/flow-next/scripts/smoke_test.sh (139 passed, 0 failed, run from /private/tmp), uvx pytest plugins/flow-next/tests/test_dogfood_template_parity.py -q (passed), ./scripts/sync-codex.sh (validation suite green; mirror verified: 0 AskUserQuestion, 1 R2 injection)
 - PRs:
