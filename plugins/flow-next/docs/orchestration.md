@@ -1,24 +1,25 @@
 # Orchestration & model routing
 
-flow-next is an orchestration layer, not a single-agent workflow. The host agent (Claude Code / Codex / Droid) conducts: it fans work out to tiered subagents, routes reviews to a *different* model family than the writer, optionally delegates implementation to a second CLI agent, and runs autonomous build/ship loops. Which model does what is a routing decision — and every routing decision in flow-next is either a config surface or a prompt away.
+flow-next is an orchestration layer, not a single-agent workflow. The host agent (Claude Code / Codex / Droid) conducts: it fans work out to tiered subagents, routes reviews to a *different* model family than the writer, optionally delegates implementation to a second CLI agent, and runs autonomous build/ship loops. Which model does what is a routing decision — and every routing decision in flow-next is either a parameter or a sentence of intent away. The second kind carries judgment.
 
 The pattern this page serves: use your smartest model to orchestrate and judge, route mechanical or token-hungry work to faster/cheaper models, and pick reviewers from a different family than the writer. flow-next was built in this shape — this page maps the dials.
 
 **None of this is required.** The skills and subagents ship pre-tuned to work well out of the box for everyone — model tiers A/B-verified before every downgrade, review defaults sensible, the pipeline complete with zero routing config. Steering is a capability, not a prerequisite: reach for the dials below when your model mix, subscriptions, or taste differ from the defaults, and ignore this page entirely until they do.
 
-## The steering principle
+## Two ways to route
 
-**Skills are prompts executed by the host agent, not compiled code.** Nothing in a skill is hidden behind a binary — so steering doesn't need a fork or a flag the skill authors anticipated. Three tiers:
+**Skills are prompts executed by the host agent, not compiled code.** That gives you two genuinely different routing methodologies — use both:
 
-| Tier | Mechanism | Scope | Example |
-|------|-----------|-------|---------|
-| **One-off** | Say it in the invocation | this run | `/flow-next:plan fn-12 — keep the research on the auth migration; skip the web scouts` |
-| **Durable** | Standing rule in `CLAUDE.md` / `AGENTS.md` | every session in the repo | "When running `/flow-next:work` on mechanical tasks, use `delegate:codex`" |
-| **Config** | `.flow/config.json` keys + per-spec/per-task fields | the built-in routing surfaces | `flowctl config set review.backend cursor:composer-2.5` |
+| | **Deterministic — parameters** | **Prompted — agentic intelligence** |
+|---|---|---|
+| What it is | Config keys, flags, env vars, per-spec/per-task fields. Machine-resolved, same answer every time | Policy described in natural language. The host *judges* per item — conditionally, mid-run, against context no parameter can see |
+| Example | `flowctl config set review.backend codex` | "Work the three ready specs — decide per spec, by complexity, whether implementation is delegated or stays on the session model" |
+| Reach | Exactly the surfaces that ship (below) | Anything the host can do — including capabilities that don't exist as parameters |
+| When it wins | Headless/Ralph runs, stable team defaults, reproducibility | Per-item complexity calls, conditional escalation, one-off arrangements, inventing a routing the registry doesn't have |
 
-Extra instruction the skill doesn't parse isn't an error — the host reads it as intent. Focus hints ("push hard on failure modes"), scope restrictions, model preferences, and reviewer choices all route this way. The durable tier is just the one-off tier written down: the host reads your agent instructions every session, and flow-next skills inherit them automatically because the host is the one executing them.
+The two compose: parameters set the floor, prompting steers above it. And either can be made durable by writing it into `CLAUDE.md` / `AGENTS.md` — the host reads your instruction files every session, and flow-next skills inherit them automatically because the host is the one executing them.
 
-## Built-in routing surfaces
+## Deterministic routing — the parameter surfaces
 
 ### The host model — the conductor
 
@@ -30,8 +31,8 @@ The bundled agents are pre-tiered by task shape (each A/B-verified before downgr
 
 | Tier | Agents | Why |
 |------|--------|-----|
-| fast (`haiku`) | prime's pillar scanners (build/env/security/testing/tooling/workflow/observability/memory-scout) | mechanical scan-and-report |
-| judgment (`sonnet`) | planning scouts (repo/context/spec/docs/github/practice), flow-gap-analyst, plan-sync | read-and-judge, bounded scope |
+| fast (`haiku`) | prime's pillar scanners (build/env/security/testing/tooling/workflow/observability) + memory-scout | mechanical scan-and-report |
+| judgment (`sonnet`) | planning scouts (repo/context/spec/docs/github/practice, …), flow-gap-analyst, plan-sync | read-and-judge, bounded scope |
 | heavy (`opus`) | quality-auditor | adversarial audit |
 | `inherit` | worker, pr-comment-resolver | implementation follows the session model |
 
@@ -67,6 +68,45 @@ Or per-invocation: `/flow-next:work fn-12 delegate:codex`. The host retains gati
 
 The data model carries routing even where flow-next itself doesn't consume it: `flowctl spec set-backend fn-1 --impl codex:gpt-5.4 --review claude:opus --sync claude:haiku` sets per-spec impl/review/sync backend specs for orchestration products built on top of flow-next (e.g. control planes that dispatch one CLI per spec). See [`flowctl.md`](flowctl.md#spec-set-backend).
 
+## Prompted orchestration — routing with judgment
+
+This is the mode parameters can't reach: the host is an intelligent orchestrator, so routing policy can be *conditional* and *per-item*, decided against the actual work rather than fixed up front.
+
+**Per-item complexity routing** — the host classifies, then routes:
+
+```text
+Work through the three ready specs. Decide per spec, based on complexity,
+how the work stage runs: anything touching auth or the migration you
+implement yourself on the session model; plain CRUD is delegated to codex
+(delegate:codex). Reviews come from codex either way.
+```
+
+**Focus and scope steering** — instruction the skill never anticipated, read as intent:
+
+```text
+/flow-next:plan fn-12 --depth=deep — focus the research on the migration path; I care about rollback
+/flow-next:interview fn-12 — push hard on failure modes and operational edges, skip UI polish
+/flow-next:work fn-12 — the UI tasks stay with you; delegate the API plumbing to codex
+```
+
+**Conditional escalation** — routing that reacts to outcomes:
+
+```text
+Run /flow-next:work fn-12 with delegate:codex. If a task's review comes back
+NEEDS_WORK twice, stop delegating that task and implement it yourself on the
+session model.
+```
+
+**Prompting a capability into existence** — the registry has no `fable` review backend; that didn't stop this repo's own eval loop from running Fable-reviewed rounds:
+
+```text
+/flow-next:plan-review fn-12 — don't use the configured backend; spawn a
+fresh-context subagent on the session model with the same review criteria,
+and feed its verdict into the fix loop like any other reviewer.
+```
+
+Backends, reviewers, and delegates are prompts plus plumbing — when a rung you want is missing, describe it and the host builds the arrangement on the spot. The deterministic flags (`--review=cursor:composer-2.5`, `delegate:codex`, `--depth=short`) still work inline for the parts that *are* parameterized; prompting composes around them.
+
 ## Field patterns, mapped to flow-next
 
 The orchestration patterns that emerged in the wild through mid-2026 all have a direct flow-next expression — most need one config key or one sentence:
@@ -79,23 +119,9 @@ The orchestration patterns that emerged in the wild through mid-2026 all have a 
 | **Effort discipline** | Run the orchestrator at high, not max — top effort tiers are token furnaces with flat-or-worse output on routine work | Session effort is yours; `work.delegateEffort` floors the delegate (`medium` default, per-batch risk escalation raises it) |
 | **Token-hungry offload** | Computer use, live-app verification, bulk analysis go to other models/agents; results come back as evidence | `/flow-next:qa` drives the app in its own context and files P0/P1/P2 findings; workers run fresh-context and return receipts |
 
-## One-off steering — just ask
-
-Everything above has a prompt-level equivalent, and plenty of steering has no config key at all:
-
-```text
-/flow-next:plan fn-12 --depth=deep — focus the research on the migration path; I care about rollback
-/flow-next:interview fn-12 — push hard on failure modes and operational edges, skip UI polish
-/flow-next:work fn-12 delegate:codex
-/flow-next:work fn-12 — the UI tasks stay with you; delegate the API plumbing to codex
-/flow-next:impl-review fn-12 --review=cursor:composer-2.5
-/flow-next:plan-review fn-12 --review=codex:gpt-5.5:high — second opinion from a different family
-/flow-next:pilot --review=codex --research=grep --depth=short
-```
-
 ## Durable routing — a model table in CLAUDE.md
 
-The emergent pattern (mid-2026): a standing "which model for what" section in your agent instructions — a ranking of the models you can reach plus routing rules. flow-next needs no integration for this: the host reads your instruction files every session and applies them when it dispatches subagents, picks reviewers, or decides to delegate. A complete, copy-paste starting point, adapted to the flow-next pipeline:
+The emergent pattern (mid-2026): a standing "which model for what" section in your agent instructions — a ranking of the models you can reach plus routing rules. This is **prompted orchestration made durable**: the table is interpreted by intelligence, not parsed by a config loader. The host reads it every session and applies it *with judgment* when it dispatches subagents, picks reviewers, or decides to delegate — which is exactly why the rules below grant standing permission to escalate. A complete, copy-paste starting point, adapted to the flow-next pipeline:
 
 ```markdown
 ## Picking models for flow-next workflows and subagents
