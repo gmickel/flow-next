@@ -232,6 +232,8 @@ Run /flow-next:work fn-12 with delegate:codex. If a task's review comes back
 NEEDS_WORK twice, stop delegating it and implement it yourself on the session model.
 ```
 
+None of these pairings are fixed — any stage of any flow-next pipeline (research, implementation, review, QA) can route to whatever harness you can reach from Bash: describe the arrangement in the invocation or your instruction files and the host builds it.
+
 Make any of this durable by writing it into `CLAUDE.md`/`AGENTS.md` — the host reads your instruction files every session and flow-next skills inherit them automatically.
 
 ## Workflow
