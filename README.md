@@ -259,6 +259,7 @@ scripts/ralph/ralph.sh          # Run from terminal
 | Stale project memory polluting future work | **`/flow-next:audit` + categorized memory schema** — agent reviews each entry, flags stale (never deletes) |
 | 10K-line diffs with no focus signal | **PR-as-cognitive-aid** — R-ID coverage, critical changes, decisions, where-to-look |
 | GitHub PR review threads piling up | **`/flow-next:resolve-pr`** — fetch → triage → dispatch resolver agents → reply → resolve via GraphQL |
+| One model doing everything | **Orchestration & model routing** — tiered subagents, per-task reviewer routing, opt-in `codex exec` implementation offload, promptable overrides ([docs](plugins/flow-next/docs/orchestration.md)) |
 
 > *"Flow-next is simply the best coding flow, not even close."* — Tiago Freitas
 >
@@ -306,7 +307,7 @@ Scope honesty, because the architecture depends on it:
 
 **Phrase-triggered skills** (no slash command — just ask): `flow-next-deps` ("what's blocking what?" — dependency graph + execution order), `flow-next-drive` (drive a running app like a real user; powers `/flow-next:qa`), `flow-next-export-context` (export RepoPrompt context for external-LLM review), `flow-next-rp-explorer` (token-efficient codebase exploration via RepoPrompt), `flow-next-worktree-kit` (worktree create/list/switch/cleanup + `.env` copying), and base `flow-next` ("show me my tasks", "what's ready?").
 
-Full catalog of all 28 skills with triggers: [`docs/skills.md`](plugins/flow-next/docs/skills.md). Full CLI reference (every flag, every default): [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md).
+Full catalog of all 28 skills with triggers: [`docs/skills.md`](plugins/flow-next/docs/skills.md). Full CLI reference (every flag, every default): [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md). Steering all of it — model routing, review backends, delegation, loop chaining: [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md).
 
 ---
 

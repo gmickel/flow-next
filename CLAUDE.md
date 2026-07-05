@@ -93,6 +93,7 @@ flow-next is a first-class citizen on Claude Code, Codex, and Factory Droid. **A
 | Spec-driven team workflow + handover objects | [`plugins/flow-next/docs/teams.md`](plugins/flow-next/docs/teams.md) |
 | Build-loop conductor (`/flow-next:pilot` — single-tick spec-to-PR pipeline driven by host `/loop` / `/goal`; verdict grammar, strikes, autonomous-mode signal) | [`plugins/flow-next/skills/flow-next-pilot/SKILL.md`](plugins/flow-next/skills/flow-next-pilot/SKILL.md) |
 | Ralph autonomous mode internals | [`plugins/flow-next/docs/ralph.md`](plugins/flow-next/docs/ralph.md) |
+| Orchestration & model routing (steering tiers, review-backend precedence, `delegate:codex`, CLAUDE.md model tables, pilot+land chaining) | [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md) |
 | Full `flowctl` CLI reference | [`plugins/flow-next/docs/flowctl.md`](plugins/flow-next/docs/flowctl.md) |
 | `.flow/` directory layout + spec-first task model | [`plugins/flow-next/docs/architecture.md`](plugins/flow-next/docs/architecture.md) |
 | Memory schema (bug/knowledge tracks, audit lifecycle) | [`plugins/flow-next/docs/memory-schema.md`](plugins/flow-next/docs/memory-schema.md) |
