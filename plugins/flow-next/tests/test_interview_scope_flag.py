@@ -114,6 +114,20 @@ class TestScopeResolveValidForms(unittest.TestCase):
         self.assertEqual(result["scope"], "technical")
         self.assertEqual(result["remaining_args"], [])
 
+    def test_zero_flag_reports_defaulted_true(self) -> None:
+        """No scope flag → `defaulted: true` so the skill knows to ask the
+        scope question instead of silently running the technical default."""
+        result = _resolve("fn-1")
+        self.assertTrue(result["success"])
+        self.assertEqual(result["scope"], "technical")
+        self.assertTrue(result["defaulted"])
+
+    def test_explicit_flags_report_defaulted_false(self) -> None:
+        for raw in ("--tech", "--biz", "--scope=technical", "--scope=both fn-1"):
+            result = _resolve(raw)
+            self.assertTrue(result["success"], raw)
+            self.assertFalse(result["defaulted"], raw)
+
     def test_zero_flag_plain_default(self) -> None:
         """Plain (non-JSON) mode also defaults to `technical`."""
         result = _resolve("", json_mode=False)
@@ -668,6 +682,21 @@ class TestSkillUsesProductionSubcommands(unittest.TestCase):
 
     def test_skill_invokes_scope_write_policy(self) -> None:
         self.assertIn('scope write-policy', self.body)
+
+    def test_skill_extracts_defaulted_flag(self) -> None:
+        """SKILL.md must read `.defaulted` from the resolve JSON — gates the
+        scope question when no flag was passed."""
+        self.assertIn("'.defaulted // false'", self.body)
+        self.assertIn("Scope selection when no flag passed", self.body)
+
+    def test_skill_carries_skip_contract(self) -> None:
+        """SKILL.md must define the skipped-question contract: skips never
+        resolve to the recommendation; they park under Open Questions and a
+        consent checkpoint fires before write-back."""
+        self.assertIn("Skipped Questions Are Not Answers", self.body)
+        self.assertIn("park-open", self.body)
+        self.assertIn("fill-assumptions", self.body)
+        self.assertIn("*(assumed — unconfirmed)*", self.body)
 
     def test_skill_documents_two_call_both_pass(self) -> None:
         """SKILL.md must document the TWO write-policy calls for

@@ -63,7 +63,7 @@ Per-term: user-wording vs. canonical term, the resolution chosen (use-canonical 
 Per-line: user-wording vs. canonical-strategy-wording (track name or approach), STRATEGY.md path, resolution chosen (align-with-strategy / flag-as-drift / this-is-different). Lets reviewers see where the spec aligns or pushes back on strategic intent. Read-only signal for plan-sync — the interview never edits STRATEGY.md.
 
 ## Open Questions
-Unresolved items that need research during planning
+Unresolved items that need research during planning, plus every skipped interview question (owner hint + the agent's unconfirmed leaning — SKILL.md skip contract). When the write-back checkpoint chose fill-assumptions, the filled prose carries inline `*(assumed — unconfirmed)*` markers and one entry here points at them.
 ```
 
 Then hand flowctl the draft file — the literal path typed verbatim (never a shell variable across tool calls):
@@ -113,7 +113,7 @@ Per-term: user-wording vs. canonical term, the resolution chosen, file:line of t
 Per-line: user-wording vs. canonical-strategy-wording, STRATEGY.md path, resolution chosen.
 
 ## Open Questions
-Unresolved items
+Unresolved items, plus every skipped interview question (owner hint + unconfirmed leaning; `*(assumed — unconfirmed)*` markers when fill-assumptions was chosen)
 ```
 
 Then hand flowctl the draft file — the literal path typed verbatim:

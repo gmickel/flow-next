@@ -57,7 +57,7 @@ If empty, ask: "What should I interview you about? Give me a Flow ID (e.g., fn-1
 
 ### Parse `--scope=business|technical|both` (fn-44.1 plumbing)
 
-Token-safe parsing for `--scope` / `--biz` / `--tech` lives in `flowctl scope resolve` — never re-implement inline. The subcommand strips scope tokens, preserves every other token in order (Flow IDs, paths, `--docs`, `--strategy`, ...), and emits the resolved scope. Default scope when no scope flag is passed: `technical` (1.0.2 backward-compat).
+Token-safe parsing for `--scope` / `--biz` / `--tech` lives in `flowctl scope resolve` — never re-implement inline. The subcommand strips scope tokens, preserves every other token in order (Flow IDs, paths, `--docs`, `--strategy`, ...), and emits the resolved scope plus a `defaulted` flag. The resolver's fallback when no scope flag is passed is `technical` (1.0.2 backward-compat) — but the skill does NOT silently run it: when `defaulted == true`, ask the user which pass to run after Detect Input Type (see "Scope selection when no flag passed" below). `technical` applies only when that question cannot be asked.
 
 ```bash
 # Run BEFORE the --docs / --strategy strip block. Conflict / invalid value
@@ -68,6 +68,10 @@ Token-safe parsing for `--scope` / `--biz` / `--tech` lives in `flowctl scope re
 # Unquoted `$ARGUMENTS` would word-split into broken tokens.
 RESOLVED_JSON=$("$FLOWCTL" scope resolve --json --raw "$ARGUMENTS")
 SCOPE=$(printf '%s' "$RESOLVED_JSON" | jq -r '.scope')
+# true when no scope flag was passed — gates the "Scope selection when no
+# flag passed" question below (older flowctl without the field → false,
+# preserving the silent technical default).
+SCOPE_DEFAULTED=$(printf '%s' "$RESOLVED_JSON" | jq -r '.defaulted // false')
 # `remaining_args` is a JSON array of strings. Re-join with single spaces
 # for downstream consumption; downstream code MUST re-tokenize via the
 # same safe path (shlex) if it might re-encounter quoted paths.
@@ -149,7 +153,7 @@ Each pair is mutually exclusive (the `if/elif` checks the negation first so it w
 
 | Scope | Doc-aware default | Pass behavior |
 |-------|------------------|---------------|
-| `--scope=technical` (default, also `--tech`) | autodetect cascade above runs | tech-owned sections (Architecture / API Contracts / Edge Cases / verifiable AC); preserves biz sections byte-for-byte; reads biz sections when populated, silent when absent |
+| `--scope=technical` (resolver fallback, also `--tech`) | autodetect cascade above runs | tech-owned sections (Architecture / API Contracts / Edge Cases / verifiable AC); preserves biz sections byte-for-byte; reads biz sections when populated, silent when absent |
 | `--scope=business` (also `--biz`) | autodetect cascade still runs; doc-awareness does NOT auto-activate from biz pass alone (`R26` adds project-docs investigation independently) | biz-owned sections (Goal & Context / Boundaries / outcome AC / `### Motivation`); preserves tech sections byte-for-byte; writes placeholder `*Pending technical-scope interview pass.*` ONLY under EMPTY tech sections |
 | `--scope=both` | autodetect cascade runs | runs biz pass first, then tech pass; same merge contract applies in each phase |
 
@@ -213,6 +217,26 @@ When `DOC_AWARE=1`, behaviors (a)-(d) below layer onto the standard interview wo
  - Read file contents
  - If file doesn't exist, ask user to provide valid path
 
+## Scope selection when no flag passed
+
+Fires ONLY when `SCOPE_DEFAULTED=true` (no `--scope` / `--biz` / `--tech` in the invocation). An explicit scope flag always wins and skips this section entirely.
+
+Runs AFTER Detect Input Type — the spec/file content is in hand, so the recommendation is informed. Ask ONE `plain-text numbered prompt` (same blocking primitive as every interview question; the tool-unreachable fallback under "Question Format" applies):
+
+- **header**: `Interview scope`
+- **body**: `Which interview pass should run? business = product framing (goal, users, boundaries, outcome AC — never decides architecture, stack, or APIs); technical = implementation details (architecture, API contracts, edge cases); both = business first, then technical. Recommended: <X> — <one-sentence rationale from the target's current state>. Confidence: [judgment-call].`
+- **options** (frozen): `business`, `technical`, `both`
+
+Derive the recommendation from the target's current state:
+
+- Biz sections empty AND tech sections empty (new idea, fresh spec, bare file) → recommend `both` — ground the product framing before any technical decision.
+- Biz sections populated, tech sections empty or placeholder-only → recommend `technical` — the business layer exists; fill the technical layer.
+- Tech sections populated, biz sections absent (1.0.2-shape solo spec) → recommend `technical` — refine in place.
+
+Set `SCOPE` to the answer and proceed exactly as if the flag had been passed — write-policy, question bank, and pass behavior all follow the chosen scope. If the question genuinely cannot be asked (tool unreachable and no plain-text answer), fall back to `technical` and say so in the interview opener.
+
+Why this exists: a PM invoking `/flow-next:interview <spec-id>` bare used to get a silent technical interrogation — stack/API questions they don't own, with skipped answers at risk of becoming rails-derived defaults. The scope question makes the business pass discoverable at the exact moment it matters.
+
 ## Interview Process
 
 **CRITICAL REQUIREMENT**: For every question, you MUST ask via the plain-text numbered prompt described below.
@@ -245,6 +269,26 @@ Examples (one per tier):
 - `[high]`: "Where should the new validator live? Recommended: `src/utils/validation.ts` — three sibling validators (`validateEmail`, `validatePhone`, `validateUrl`) already live there and the test suite imports from that module. Confidence: [high]." Options: `src/utils/validation.ts`, `src/validators/`, `new module`.
 - `[judgment-call]`: "Cache TTL for the rate-limiter? Recommended: 60s — short enough that drift stays bounded, long enough that the cache earns its keep. Confidence: [judgment-call]." Options: `30s`, `60s`, `300s`, `no cache`.
 - `[your-call]`: "What error code should we return when the upstream API times out? Recommended: none — this depends on what callers expect and I don't see existing convention to copy. Confidence: [your-call]." Options: `502`, `503`, `504`, `408`.
+
+### Skipped Questions Are Not Answers
+
+Leading with a recommendation NEVER implies consent. Distinguish three answer shapes:
+
+- **Explicit answer** (an option picked, or a typed answer) → use it.
+- **Explicit delegation** ("you decide", "go with your recommendation") → adopt the recommendation and note it as user-delegated; that is a real decision with a named consenter.
+- **Skip / decline / no-signal** (question dismissed, "skip", "I don't know", "not my call", "ask someone else") → the question is UNRESOLVED. NEVER write the recommendation into a spec section as decided content — silently filling skipped questions with assumptions is the exact failure this rule exists to prevent.
+
+For every skipped question:
+
+1. Park it under `## Open Questions` with an owner hint and the agent's unconfirmed leaning: `**<question>** — skipped during interview; leaning <X>, unconfirmed. *(owner: engineering | product)*`
+2. A skipped user-judgment question STAYS user-judgment-required — never demote it to codebase-/docs-answerable to backfill an answer (see the Pre-Question Taxonomy in [questions-shared.md](questions-shared.md)).
+3. Keep a running skip count for the write-back checkpoint below and the Completion summary.
+
+**Write-back consent checkpoint** — when the skip count is ≥1, ask ONE `plain-text numbered prompt` BEFORE writing the spec back:
+
+- **header**: `Skipped items`
+- **body**: `<N> question(s) were skipped during this interview. Recommended: park-open — record them under ## Open Questions with my unconfirmed leanings; nothing skipped becomes a decision. Confidence: [high].`
+- **options** (frozen): `park-open` (default — Open Questions entries only), `fill-assumptions` (write the agent's recommendation into the relevant spec section, each marked inline `*(assumed — unconfirmed)*`, plus one Open Questions entry pointing at the markers for later ratification), `re-ask` (walk the skipped questions once more — answers and explicit delegations resolve normally; anything skipped again parks per park-open)
 
 ### Question Order: Walk the Decision Tree
 
@@ -499,6 +543,7 @@ Best-effort: a failed `spec ready` prints a warning and continues — never bloc
 
 Show summary:
 - Number of questions asked
+- Skipped questions (ONLY when ≥1): count + disposition from the write-back checkpoint (parked under `## Open Questions` / filled as `*(assumed — unconfirmed)*` / re-asked) — omit the line entirely when nothing was skipped
 - Key decisions captured
 - What was written (Flow ID updated / file rewritten)
 - Tracker sync: when active and `interview` opted in, whether the spec body was pushed/pulled/reconciled to the linked issue (else a silent no-op)

@@ -12048,11 +12048,14 @@ def cmd_scope_resolve(args: argparse.Namespace) -> None:
             print(f"Error: {conflict_msg}", file=sys.stderr)
         sys.exit(2)
 
+    defaulted = scope is None
     if scope is None:
         scope = "technical"
 
     if use_json:
-        json_output({"scope": scope, "remaining_args": remaining})
+        json_output(
+            {"scope": scope, "remaining_args": remaining, "defaulted": defaulted}
+        )
     else:
         # Plain output: just the resolved scope (single token).
         print(scope)

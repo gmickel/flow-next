@@ -20,6 +20,8 @@ Before asking any question, classify it on three axes:
 
 **If you find yourself answering a "should" question via grep, that's the bug.** Stop and ask the user.
 
+**A skipped "should" question stays a "should" question.** Skipping never demotes it to codebase-/docs-answerable, and the agent's recommendation never silently becomes the answer — park it under `## Open Questions` per the skip contract in SKILL.md ("Skipped Questions Are Not Answers").
+
 **Audit trail:**
 
 - Codebase-resolved items → `## Resolved via Codebase` section with file:line evidence.
@@ -34,3 +36,4 @@ Before asking any question, classify it on three axes:
 4. **Group related questions** when possible (use multiSelect for non-exclusive options)
 5. **Probe contradictions** - if answers don't align, clarify
 6. **Surface hidden complexity** - ask about things user might not have considered
+7. **Skips are not answers** - only an explicit answer or an explicit "you decide" resolves a question; anything skipped parks under `## Open Questions` (SKILL.md skip contract)
