@@ -2,6 +2,16 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 2.9.0] - 2026-07-06
+
+### Changed
+
+- **`/flow-next:interview` no longer silently defaults to a technical interview** — invoking the interview without a scope flag used to run the `--scope=technical` default (1.0.2 backward-compat), which meant a product manager typing `/flow-next:interview <spec-id>` got a stack/architecture/API interrogation they don't own, with no signal that a business mode exists. The skill now asks ONE upfront scope question (`business` / `technical` / `both`) when no `--scope` / `--biz` / `--tech` flag is passed, with a recommendation derived from the target's current state (both biz+tech empty → `both`; biz populated, tech empty → `technical`; 1.0.2-shape tech-only spec → `technical`). An explicit flag skips the question entirely; `technical` remains the fallback when the question can't be asked (tool unreachable). Plumbing: `flowctl scope resolve --json` now emits a `defaulted` boolean alongside `scope` + `remaining_args`. The Codex mirror gets the same question via the standard plain-text numbered-prompt transform — no platform is excluded.
+
+### Added
+
+- **Skipped interview questions are no longer silently answered with assumptions** — the interview leads every question with a recommendation, but the skill previously defined no semantics for a skipped/declined/"I don't know" answer, so the agent's recommendation could flow into the spec as *decided* content (e.g. project-rails-derived stack choices written as "chosen because…" plus founding ADRs — exactly what a downstream team's PM-led interview hit). New skip contract in the interview skill: (1) a skip/decline/no-signal NEVER resolves to the recommendation — only an explicit answer or an explicit "you decide" delegation does; (2) skipped questions park under `## Open Questions` with an owner hint and the agent's *unconfirmed* leaning; (3) a skipped user-judgment question never demotes to codebase-/docs-answerable backfill; (4) when ≥1 question was skipped, a consent checkpoint fires BEFORE write-back — `park-open` (default) / `fill-assumptions` (recommendations written with inline `*(assumed — unconfirmed)*` markers + an Open Questions pointer for later ratification) / `re-ask`; (5) the completion summary reports skip count + disposition. Projects can additionally pin scope discipline repo-locally via the existing `SPEC.md` scaffold-override cascade (guardrail annotations on technical sections) — the upstream contract makes that optional rather than necessary.
+
 ## [flow-next 2.8.1] - 2026-07-05
 
 ### Changed
