@@ -3349,6 +3349,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
     },
     "codex": {
         "models": {
+            "gpt-5.6-sol",  # requires codex CLI >= 0.144 (older CLIs 400: "requires a newer version of Codex" — probed 2026-07-10)
             "gpt-5.5",
             "gpt-5.4",
             "gpt-5.2",
@@ -3398,6 +3399,13 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # new rows + auto-updates the CLI without changelog, so keep this list
         # synced with ``cursor-agent --list-models``.
         "models": {
+            "gpt-5.6-sol-low",
+            "gpt-5.6-sol-medium",
+            "gpt-5.6-sol-high",
+            "gpt-5.6-sol-xhigh",
+            "gpt-5.6-sol-max",
+            "gpt-5.6-terra-high",
+            "gpt-5.6-luna-high",
             "auto",
             "gpt-5.5-high",
             "gpt-5.4-high",
@@ -3411,7 +3419,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         },
         # Cursor bakes reasoning effort into the model name — no ``--effort`` flag.
         "efforts": None,
-        "default_model": "gpt-5.5-high",
+        "default_model": "gpt-5.6-sol-high"  # verified live via cursor-agent --list-models 2026-07-10,
     },
     "none": {
         # Explicit opt-out. Parser still validates it so ``--review=none`` can
@@ -4254,7 +4262,7 @@ def run_cursor_exec(
         spec = BackendSpec("cursor").resolve()
     elif spec.model is None:
         spec = spec.resolve()
-    effective_model = spec.model or "gpt-5.5-high"
+    effective_model = spec.model or "gpt-5.6-sol-high"
 
     cmd = [
         cursor,
@@ -24780,7 +24788,7 @@ def cmd_cursor_impl_review(args: argparse.Namespace) -> None:
 
     # Resolve review spec (task/epic/env/config/defaults or --spec override)
     resolved_spec = _resolve_cursor_review_spec(args, task_id)
-    effective_model = resolved_spec.model or "gpt-5.5-high"
+    effective_model = resolved_spec.model or "gpt-5.6-sol-high"
 
     # fn-90 R7: prepend the cursor persona-override preamble (cursor-agent has no
     # system-prompt mechanism; the rubric rides in the user prompt on top of
@@ -25010,7 +25018,7 @@ def cmd_cursor_plan_review(args: argparse.Namespace) -> None:
 
     # Resolve review spec — plan reviews are epic-scoped (no task_id context)
     resolved_spec = _resolve_cursor_review_spec(args, None, spec_id=epic_id)
-    effective_model = resolved_spec.model or "gpt-5.5-high"
+    effective_model = resolved_spec.model or "gpt-5.6-sol-high"
 
     # fn-90 R7: prepend the cursor persona-override preamble BEFORE the budget
     # fit so total length accounts for it; it sits at the prompt head where
@@ -25236,7 +25244,7 @@ def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
 
     # Resolve review spec — completion reviews are epic-scoped
     resolved_spec = _resolve_cursor_review_spec(args, None, spec_id=epic_id)
-    effective_model = resolved_spec.model or "gpt-5.5-high"
+    effective_model = resolved_spec.model or "gpt-5.6-sol-high"
 
     # Final argv-cap backstop: completion reviews embed the FULL epic spec +
     # every task spec UNBOUNDED (plus the diff) — a large spec overflows

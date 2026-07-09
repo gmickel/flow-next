@@ -67,7 +67,7 @@ class TestRegistryShape(unittest.TestCase):
 
     def test_cursor_default_model(self) -> None:
         self.assertEqual(
-            BACKEND_REGISTRY["cursor"]["default_model"], "gpt-5.5-high"
+            BACKEND_REGISTRY["cursor"]["default_model"], "gpt-5.6-sol-high"
         )
         # No default_effort — effort is not a cursor field.
         self.assertNotIn("default_effort", BACKEND_REGISTRY["cursor"])
@@ -79,6 +79,13 @@ class TestRegistryShape(unittest.TestCase):
             BACKEND_REGISTRY["cursor"]["models"],
             {
                 "auto",
+                "gpt-5.6-sol-low",
+                "gpt-5.6-sol-medium",
+                "gpt-5.6-sol-high",
+                "gpt-5.6-sol-xhigh",
+                "gpt-5.6-sol-max",
+                "gpt-5.6-terra-high",
+                "gpt-5.6-luna-high",
                 "gpt-5.5-high",
                 "gpt-5.4-high",
                 "gpt-5.3-codex",
@@ -391,7 +398,7 @@ class TestResolve(unittest.TestCase):
     def test_bare_cursor_fills_model_effort_stays_none(self) -> None:
         # Model fills from registry default; effort stays None (no effort axis).
         r = BackendSpec.parse("cursor").resolve()
-        self.assertEqual(r, BackendSpec("cursor", "gpt-5.5-high", None))
+        self.assertEqual(r, BackendSpec("cursor", "gpt-5.6-sol-high", None))
 
     def test_cursor_env_fills_missing_model(self) -> None:
         os.environ["FLOW_CURSOR_MODEL"] = "composer-2.5"

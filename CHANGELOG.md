@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 2.10.3] - 2026-07-10
+
+### Changed
+
+- **Cursor review default → `gpt-5.6-sol-high`** (GPT-5.6 Sol, 1M context) — verified live via `cursor-agent --list-models` before the swap; the full Sol effort ladder plus `gpt-5.6-terra-high`/`gpt-5.6-luna-high` join the cursor model catalog. **Codex accepts `gpt-5.6-sol` explicitly** (for CLIs ≥ 0.144) but its default stays `gpt-5.5` — a live probe showed current codex CLIs 400 on it ("requires a newer version of Codex"), and copilot 1.0.65 rejects it outright, so swapping those defaults today would break the happy path for anyone not on the newest CLI (the exact fn-74 Finding-A failure mode). Those defaults move when the CLIs catch up — or, properly, when **fn-76** (smart model resolution: CLI-native/auto defaults, availability probe, fail-soft retry) lands and removes the hardcoded-default class entirely; this is the verified interim.
+
 ## [flow-next 2.10.2] - 2026-07-10
 
 ### Changed

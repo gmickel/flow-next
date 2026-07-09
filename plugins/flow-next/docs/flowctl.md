@@ -1243,7 +1243,7 @@ Spec form: `copilot[:model[:effort]]`. Default model resolved via env (`FLOW_COP
 
 ### cursor
 
-Cursor `cursor-agent` CLI wrappers — alternative review backend, parallel to codex/copilot. Same review criteria (Carmack-level, 7 each for plan/impl), same receipt schema, same session-resume model. Unlocks Cursor-billed review (your existing Cursor subscription, no separate API key) and Cursor reviewer models the others can't reach in one place: `gpt-5.5-high` (1M ctx, the default), the `gpt-5.3-codex` family, `composer-2.5`, `claude-opus-4-8-thinking-high`.
+Cursor `cursor-agent` CLI wrappers — alternative review backend, parallel to codex/copilot. Same review criteria (Carmack-level, 7 each for plan/impl), same receipt schema, same session-resume model. Unlocks Cursor-billed review (your existing Cursor subscription, no separate API key) and Cursor reviewer models the others can't reach in one place: `gpt-5.6-sol-high` (1M ctx, the default since 2.10.3 — verified live via `--list-models`), the `gpt-5.6-terra`/`gpt-5.6-luna` variants, `gpt-5.5-high`, the `gpt-5.3-codex` family, `composer-2.5`, `claude-opus-4-8-thinking-high`.
 
 ```bash
 # Verify cursor availability + auth
