@@ -11,7 +11,7 @@ The fix is one principle: **when the user specified nothing, defer to the CLI's 
 Small, surgical, entirely in flowctl.py (dual-copied):
 
 1. **Registry:** `default_model` → `None` (codex/copilot) / `"auto"` (cursor). The `models` sets stay as documentation/preference — see (3).
-2. **Exec fallbacks:** `run_codex_exec` omits `--model` when `spec.model` is `None`; `run_copilot_exec` passes `--model auto` (probed in fn-74: lets the CLI pick); `run_cursor_exec` passes `--model auto` (first-class list entry). No other exec changes.
+2. **Exec fallbacks:** `run_codex_exec` omits `--model` when `spec.model` is `None`; `run_copilot_exec` passes `--model auto`; `run_cursor_exec` passes `--model auto`. No other exec changes. **All three paths live-verified 2026-07-10** (codex 0.144.1 no-model → OK; copilot 1.0.65 `--model auto` → accepted+completed; cursor 2026.07 `--model auto` → OK) — the implementer inherits verified facts, not fn-74-era assumptions.
 3. **Lenient model validation:** `BackendSpec.parse` accepts an unknown model with a stderr warning instead of rejecting — the CLI is the availability authority; the registry set becomes preference/documentation (kills the every-model-launch release treadmill, e.g. 2.10.3). The effort axis stays strict.
 4. **Effort guard:** when the resolved model is `None`/`auto`, omit `--effort`/effort suffixes (can't know the family's effort support).
 5. **Receipt honesty:** receipts record the model actually used when parseable from CLI output, else the literal `"auto"`/`"default"` — never a fabricated concrete name.
