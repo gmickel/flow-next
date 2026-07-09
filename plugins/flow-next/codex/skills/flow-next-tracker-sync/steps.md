@@ -25,7 +25,7 @@ RALPH=0
 [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
  || "${FLOW_AUTONOMOUS:-}" == "1" || "$ARGUMENTS" == *mode:autonomous* ]] && RALPH=1
 # Lifecycle event tag: the caller's `event:` token, e.g. work.firstClaim |
-# work.done | work.completionReview | capture | makePr | resolvePr. Empty on manual runs.
+# work.done | completionReview | capture | makePr | resolvePr. Empty on manual runs.
 EVENT="<perEvent-key from the invocation, or empty>"
 ```
 

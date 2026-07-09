@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 2.9.1] - 2026-07-09
+
+### Fixed
+
+- **completion-review tracker audit was dead — event key never matched its config leaf** — the work skill dispatched and audited the completion-review tracker touchpoint with the event tag `work.completionReview`, but the config leaf is TOP-LEVEL `tracker.perEvent.completionReview` (fn-66). `flowctl sync check` resolves an event tag to its leaf via `tracker.perEvent.<event>`, so the `work.`-prefixed tag resolved no leaf → the event was treated as configured-off → the end-of-run audit could **never report the touchpoint missing** (and a dead dispatch could never retro-fire). Found during the fn-90 review-loop investigation's cross-backend re-review of fn-89 (three cursor + two codex reviews independently flagged the key mismatch). The event tag is now the top-level `completionReview` everywhere (work phases audit list + dispatch line, tracker-touchpoints reference, tracker-sync Phase 0 example list, tracker-sync doc); the config leaf is unchanged, so existing user configs written by the discovery ceremony keep working. Regression coverage: `test_sync_check.py` gains a parity class asserting the top-level key round-trips the audit (enabled + no receipt → MISSING; tagged receipt clears), that the old `work.`-prefixed shape resolves no leaf (the silent failure mode), and a prose guard that fails if any canonical skill/doc reintroduces the mismatched tag.
+
 ## [flow-next 2.9.0] - 2026-07-06
 
 ### Changed

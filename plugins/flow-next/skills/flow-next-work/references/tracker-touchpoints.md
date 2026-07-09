@@ -11,7 +11,7 @@ Contents:
 - [Bridge overview](#bridge-overview) — active predicate, perEvent table, shared gating predicate, best-effort rules
 - [First claim](#first-claim) — phases.md 3b.1: first task claimed → issue In-Progress (`work.firstClaim`)
 - [Task done](#task-done) — phases.md 3d.1: task done → status comment + evidence (`work.done`)
-- [Completion review](#completion-review) — phases.md 3g: SHIP → verdict comment, never terminal Done (`work.completionReview`)
+- [Completion review](#completion-review) — phases.md 3g: SHIP → verdict comment, never terminal Done (`completionReview`)
 
 ## Bridge overview
 
@@ -92,11 +92,12 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
   # terminal `Done`/`verified` without a MERGED probe, so even if a stale config
   # set this leaf to `reconcile` the gate keeps it non-terminal: at most it leaves
   # the issue at `In Review` (open-PR evidence). land.merged is the SOLE Done driver.
-  #   skill: flow-next-tracker-sync   (operation: comment <spec-id>, event: work.completionReview)
+  #   skill: flow-next-tracker-sync   (operation: comment <spec-id>, event: completionReview)
   #   (the comment carries the verdict + R-ID coverage as evidence — never a status push)
   # Unlinked spec → flow-first push (create + link) first, then the verdict comment
   # (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport; Ralph queues.
-  # The skill's receipts carry --event work.completionReview — audited by Phase 5's sync check.
+  # The skill's receipts carry --event completionReview — audited by Phase 5's sync check. The tag matches
+  # the TOP-LEVEL config leaf (tracker.perEvent.completionReview) — never `work.`-prefixed.
   :
 fi
 ```

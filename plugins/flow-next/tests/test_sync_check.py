@@ -372,5 +372,45 @@ class SyncCheckTestCase(unittest.TestCase):
         self.assertEqual(res["count"], 0)
 
 
+class CompletionReviewEventKeyParity(SyncCheckTestCase):
+    """fn-90 re-review regression (2.9.1): the completion-review event tag must
+    match the TOP-LEVEL `tracker.perEvent.completionReview` leaf. The prose used
+    to dispatch/audit `work.completionReview`, which resolves
+    `tracker.perEvent.work.completionReview` → None → never enabled → the audit
+    could neither clear nor miss the touchpoint (dead retro-fire backstop)."""
+
+    PLUGIN_ROOT = FLOWCTL_PY.parent.parent
+
+    def test_top_level_key_round_trips_the_audit(self) -> None:
+        # Enabled + no receipt → MISSING; a completionReview-tagged receipt clears.
+        self._activate()
+        self._enable_event("completionReview", "comment")
+        self.assertEqual(
+            self._check_json("completionReview")["missing"], ["completionReview"]
+        )
+        self._receipt("completionReview", status="updated")
+        self.assertEqual(self._check_json("completionReview")["missing"], [])
+
+    def test_work_prefixed_key_never_resolves_a_leaf(self) -> None:
+        # The old buggy tag shape: leaf enabled at top level, event audited with
+        # the `work.` prefix → resolves no leaf → never enabled → never MISSING
+        # even with zero receipts (the silent dead-backstop failure mode).
+        self._activate()
+        self._enable_event("completionReview", "comment")
+        self.assertEqual(self._check_json("work.completionReview")["missing"], [])
+
+    def test_canonical_prose_carries_no_work_prefixed_tag(self) -> None:
+        # Prose guard: no canonical skill/doc may reintroduce the mismatched tag
+        # (the Codex mirror is regenerated from these, so it is excluded).
+        offenders = []
+        for root in (self.PLUGIN_ROOT / "skills", self.PLUGIN_ROOT / "docs"):
+            for path in root.rglob("*.md"):
+                if "codex" in path.parts:
+                    continue
+                if "work.completionReview" in path.read_text(encoding="utf-8"):
+                    offenders.append(str(path))
+        self.assertEqual(offenders, [])
+
+
 if __name__ == "__main__":
     unittest.main()

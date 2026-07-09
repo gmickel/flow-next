@@ -500,7 +500,7 @@ done
 # --events: ONLY what actually triggered this run (triggered-set contract):
 # ≥1 task claimed this run → include work.firstClaim
 # ≥1 task reached done this run → include work.done
-# completion review ran this run (3g) → include work.completionReview
+# completion review ran this run (3g) → include completionReview
 # Configured-but-not-triggered events are never checked, never MISSING.
 EVENTS="work.firstClaim,work.done" # ← substitute the actual triggered set
 
@@ -519,7 +519,7 @@ EVENTS="work.firstClaim,work.done" # ← substitute the actual triggered set
 2. For each MISSING event, invoke the **flow-next-tracker-sync skill directly** — the same dispatch as the touchpoint that missed, with its `event:` tag — NEVER this check block as a wrapper (no recursion):
  - `work.firstClaim` → `skill: flow-next-tracker-sync (operation: push <spec-id>, status-only, event: work.firstClaim)`
  - `work.done` → `skill: flow-next-tracker-sync (operation: comment <spec-id>, event: work.done)`
- - `work.completionReview` → `skill: flow-next-tracker-sync (operation: comment <spec-id>, event: work.completionReview)` — comment-shaped (verdict + R-ID coverage as evidence), NEVER terminal (fn-66)
+ - completion review → `skill: flow-next-tracker-sync (operation: comment <spec-id>, event: completionReview)` — comment-shaped (verdict + R-ID coverage as evidence), NEVER terminal (fn-66). Event key is the TOP-LEVEL `completionReview` (matches the `tracker.perEvent.completionReview` leaf — a `work.`-prefixed tag resolves no leaf and the audit can never clear or miss it)
 3. Re-check the missed events only, `--since` = the step-1 anchor:
  `"$FLOWCTL" sync check "$SPEC_ID" --events "<missed-csv>" --since "<retro-fire-start>" --json`
 4. Record the final state in the summary slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the work is already done; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.
