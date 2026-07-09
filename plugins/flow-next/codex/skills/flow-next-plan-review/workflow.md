@@ -422,6 +422,14 @@ EOF
 
 ### Send to RepoPrompt (single-entry response)
 
+**fn-90 R5 — deterministic cap gate (run BEFORE every review dispatch, including this first one):**
+
+```bash
+$FLOWCTL review-rounds increment <SPEC_ID> --kind plan --json
+```
+
+At the cap this refuses with an `ESCALATE:` marker + exit 4. That is NOT a retryable error: do NOT dispatch the review, do NOT retry — surface the ESCALATE message to the caller and stop (Ralph/autonomous: NEEDS_HUMAN). Only proceed to `chat-send` when the increment succeeds.
+
 Redirect the review response to the literal response file — it must enter context exactly ONCE, via a single Read of that file (command substitution + `echo` would be the second copy; redirection keeps stdout out of context entirely):
 
 ```bash
@@ -469,8 +477,9 @@ fi
 ### Update status
 
 ```bash
-# If SHIP
+# If SHIP (convergence — reset the fn-90 R5 deterministic cap counter too)
 $FLOWCTL spec set-plan-review-status <SPEC_ID> --status ship --json
+$FLOWCTL review-rounds reset <SPEC_ID> --kind plan --json
 
 # If NEEDS_WORK or MAJOR_RETHINK
 $FLOWCTL spec set-plan-review-status <SPEC_ID> --status needs_work --json
@@ -488,7 +497,7 @@ If no verdict tag, output `<promise>RETRY</promise>` and stop.
 
 **MAJOR_RETHINK is NOT a fix-loop input.** `MAJOR_RETHINK` is a valid verdict tag, but it means the *plan/approach* is wrong — not something to patch finding-by-finding. Do NOT enter the fix loop on it. Escalate immediately: surface the reviewer's rationale to the caller and stop with a typed **`BLOCKED: DESIGN_CONFLICT`** (Ralph mode: output `<promise>RETRY</promise>`). A re-plan is a human decision, never an ad-hoc patch. Only `NEEDS_WORK` drives the loop below.
 
-**MAX ITERATIONS**: Limit fix+re-review cycles to **${MAX_REVIEW_ITERATIONS:-4}** iterations (default 4, configurable in Ralph's config.env). If still NEEDS_WORK after max rounds, output `<promise>RETRY</promise>` and stop — let the next Ralph iteration start fresh. **The cap is now ALSO enforced deterministically by flowctl (fn-90 R5): each `flowctl <backend> plan-review` dispatch increments a cumulative spec-scoped counter (`plan_review_rounds`) and REFUSES at the cap with an `ESCALATE:` marker + exit 4. The flowctl counter survives across fresh `/flow-next:plan-review` invocations, so a caller-side "re-invoke until SHIP" outer loop can no longer reset the cap by re-entering — it resets ONLY on a SHIP verdict or an explicit re-plan (`flowctl spec reset-review-rounds <spec-id>`), never on a fresh invocation or a spec edit.**
+**MAX ITERATIONS**: Limit fix+re-review cycles to **${MAX_REVIEW_ITERATIONS:-4}** iterations (default 4, configurable in Ralph's config.env). If still NEEDS_WORK after max rounds, output `<promise>RETRY</promise>` and stop — let the next Ralph iteration start fresh. **The cap is now ALSO enforced deterministically by flowctl (fn-90 R5): on codex/copilot/cursor each `flowctl <backend> plan-review` dispatch increments a cumulative spec-scoped counter (`plan_review_rounds`) internally; on rp — which dispatches via `rp chat-send` — this workflow calls `flowctl review-rounds increment <spec-id> --kind plan` before every dispatch (same counter). Either surface REFUSES at the cap with an `ESCALATE:` marker + exit 4. The flowctl counter survives across fresh `/flow-next:plan-review` invocations, so a caller-side "re-invoke until SHIP" outer loop can no longer reset the cap by re-entering — it resets ONLY on a SHIP verdict or an explicit re-plan (`flowctl spec reset-review-rounds <spec-id>`), never on a fresh invocation or a spec edit.**
 
 If verdict is NEEDS_WORK:
 
@@ -540,7 +549,13 @@ If verdict is NEEDS_WORK:
 
  **CRITICAL: Do NOT summarize fixes.** RP auto-refreshes file contents - reviewer sees your changes automatically. Just request re-review. Any summary wastes tokens and duplicates what reviewer already sees.
 
- Redirect the re-review response to the SAME literal response file from Phase 3 (overwrite), then Read it once — the single-entry rule applies to every round:
+ Redirect the re-review response to the SAME literal response file from Phase 3 (overwrite), then Read it once — the single-entry rule applies to every round.
+
+ **fn-90 R5 cap gate first** — increment before EVERY re-review dispatch; exit 4 = cap reached → do NOT dispatch, surface the ESCALATE message and stop (never retry):
+
+ ```bash
+ $FLOWCTL review-rounds increment <SPEC_ID> --kind plan --json
+ ```
 
  ```bash
  cat > "${TMPDIR:-/tmp}/flow-plan-review-rereview-<spec-id>-<suffix>.md" << 'EOF'
