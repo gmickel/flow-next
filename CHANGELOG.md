@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 2.10.2] - 2026-07-10
+
+### Changed
+
+- **Capture's read-back is now a plain-language ratification, and the agent never pre-blesses its own guesses** — the companion to 2.10.1's interview contract, applied to the single most handover-critical question in the system: the Phase 4 approval where a human ratifies the synthesized spec. The read-back body now opens with one sentence of stakes ("approving turns this into the plan the team builds from"), lists **every acceptance criterion's substance in one plain line inside the question** (not only in the draft file), and translates the machinery instead of presenting bare shorthand ("labeled R1-R5 so each can be tracked"; "[inferred] = something I added that you didn't say outright"). **New no-self-blessing rule:** while the draft carries unverified `[inferred]` items, the recommendation is never `approve` — it is "check the N guessed items before choosing"; only a zero-inferred draft may lead with `Recommended: approve`. Option descriptions state their consequences ("this becomes the spec and work can start" / "draft is thrown away"). Eval-validated blind before shipping (same langeval harness as 2.10.1): the current read-back scored legibility 7 / **ratification-safety 4** / precision 8 — the judge's finding was that "Recommended: approve — the inferred items are reasonable" biases the user toward rubber-stamping exactly the items they exist to verify; an intermediate language-only variant fixed legibility but lost the criteria substance (precision 5); the shipped contract scores **9 / 9 / 10**. Interaction Principles gain the same plain-language contract as interview; sizing stays priorities-not-caps (GPT-5.6-safe).
+
 ## [flow-next 2.10.1] - 2026-07-10
 
 ### Changed

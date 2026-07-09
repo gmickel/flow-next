@@ -514,18 +514,25 @@ The **summary payload** rides in the §4.2 question body (autofix: printed to st
 Use `AskUserQuestion`:
 
 - **header**: `Read-back`
-- **body**: `Full draft in the Write render above (expand if collapsed). <summary payload from §4.1: title + branch, source-tag tally, [inferred] breakdown, 8+ split note if applicable, related-memory footnote, rewrite diff if applicable, glossary proposals>. Recommended: approve — <one-sentence summary of confidence>. Confidence: [<tier>].`
-- **options** (frozen):
-  - `approve` — proceed to Phase 5 write
+- **body**, in this order (plain-language ratification contract — eval-validated 2026-07-10, legibility 7→9 / ratification-safety 4→9):
+  1. **One sentence of stakes**: what approving means, in the user's words (e.g. "Approving turns this into the plan the team builds from.").
+  2. `Full draft in the Write render above (expand if collapsed).`
+  3. **Every acceptance criterion's substance, one short plain line each** — the user must see what they are approving inside the question, not only in the file. Translate the machinery, never present bare shorthand: "labeled R1-R5 so each can be tracked"; "[inferred] = something I added that you didn't say outright".
+  4. The rest of the §4.1 summary payload (source-tag tally, 8+ split note, related-memory footnote, rewrite diff, glossary proposals) — tallies rendered in plain words.
+  5. **The recommendation — no self-blessing rule (overrides lead-with-recommendation):** when the draft carries ≥1 `[inferred]` item, do NOT recommend approve — the agent never pre-blesses its own guesses. Lead neutrally instead: `Recommended: check the <N> guessed item(s) marked above before choosing — approve only if they match your intent. Confidence: [<tier>].` Only a zero-`[inferred]` draft may carry `Recommended: approve — <one-sentence rationale>. Confidence: [<tier>].`
+- **options** (frozen — each description states its consequence in plain words, "Choose this if…"):
+  - `approve` — proceed to Phase 5 write ("this becomes the spec and work can start from it")
   - `edit` — revise specific sections (loops back to Phase 2 for those sections)
   - `consider-split` (only when Phase 2.5 fired) — exits 0; suggests user re-invokes capture with a narrower scope, or runs `/flow-next:plan` afterward to stage the breakdown
-  - `abort` — exit 0, no write
+  - `abort` — exit 0, no write ("draft is thrown away, nothing saved")
 
-Confidence tier for the recommendation:
+Confidence tier (attaches to whichever recommendation the rule above produced):
 
 - `[high]` — `[inferred]` count is low (≤2) and no user-facing claims contradict the conversation evidence.
 - `[judgment-call]` — `[inferred]` count is moderate (3-6) or some `[inferred]` items are load-bearing (e.g. core acceptance criteria).
 - `[your-call]` — `[inferred]` count is high (7+) or rewrite-mode with substantive divergence from existing spec.
+
+Sizing is priorities, not a cap: always keep the stakes, the full criteria list, the inferred-items callout, and option consequences; trim repetition and background first.
 
 **Glossary term-add consent (only when `GLOSSARY_PROPOSALS` is non-empty AND the user picked `approve`).** One follow-up question via `AskUserQuestion` — the read-back options above stay frozen; this is a separate ask:
 
