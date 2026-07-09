@@ -286,7 +286,7 @@ re-resolving from config. The skill still handles everything else:
 
 **Foreground rule (do not background the review).** When the impl-review workflow shells a `flowctl <backend> …` review command, run it as one **blocking foreground** Bash call with a generous timeout (10 minutes; verdicts typically land in 1–7). Never launch it with `run_in_background` + a monitor — a background completion does not reliably resume your (subagent) context, and you would idle on an already-finished review. Blocking is safe: the call is bounded. (This does NOT apply to codex-delegation's `codex exec` launch in Phase 2 — that pattern deliberately backgrounds and polls a result file in foreground calls.)
 
-**impl-review runs its OWN internal fix loop** (fix + re-review up to `MAX_REVIEW_ITERATIONS`, default 3). Do **NOT** wrap it in your own re-invoke-until-SHIP loop — that resets the skill's iteration counter every round and makes the cap unbounded in aggregate. Invoke it **once** and act on the **terminal verdict** it returns:
+**impl-review runs its OWN internal fix loop** (fix + re-review up to `MAX_REVIEW_ITERATIONS`, default 4). Do **NOT** wrap it in your own re-invoke-until-SHIP loop — that resets the skill's iteration counter every round and makes the cap unbounded in aggregate. Invoke it **once** and act on the **terminal verdict** it returns:
 
 - **SHIP** → proceed to Phase 4.5.
 - **NEEDS_WORK** → the skill already fixed + re-reviewed `MAX_REVIEW_ITERATIONS` times and findings still survive. Do NOT re-invoke. Escalate: under `SPEC_MODE` / autonomous, stop with a typed `BLOCKED: <surviving-findings summary>` (the escalation format below); interactively, surface the surviving findings to the caller.

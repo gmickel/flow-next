@@ -4587,7 +4587,7 @@ Do NOT skip this tag. The automation depends on it."""
 
 # --- fn-90 R5: deterministic cumulative review-round cap ---
 #
-# The runaway root cause (spec cause #3): ``${MAX_REVIEW_ITERATIONS:-3}`` was
+# The runaway root cause (spec cause #3): ``${MAX_REVIEW_ITERATIONS:-4}`` was
 # prose-only — an instruction to the host LLM to keep a counter "in agent
 # context" — and every fresh ``/flow-next:plan-review`` dispatch (pilot tick,
 # human retry) restarted it at 0. Field loop ≈ 5-6 invocations × 3 internal
@@ -4598,7 +4598,7 @@ Do NOT skip this tag. The automation depends on it."""
 
 
 def get_max_review_iterations() -> int:
-    """Resolve the cumulative review-round cap (``MAX_REVIEW_ITERATIONS``, default 3).
+    """Resolve the cumulative review-round cap (``MAX_REVIEW_ITERATIONS``, default 4).
 
     A non-positive or non-integer env value falls back to the default 3 — the
     cap can never be disabled or made zero (that would reopen the runaway).
@@ -4611,7 +4611,7 @@ def get_max_review_iterations() -> int:
                 return val
         except ValueError:
             pass
-    return 3
+    return 4
 
 
 # Exit code the review commands use when the deterministic cap is hit. Distinct

@@ -7,7 +7,7 @@ findings (round 1 / legacy receipt) it falls back to the original fresh-review
 preamble (back-compatible).
 
 R5 (deterministic cap): a flowctl-owned cumulative round counter on spec state,
-enforced at ``MAX_REVIEW_ITERATIONS`` (default 3), surviving FRESH invocations,
+enforced at ``MAX_REVIEW_ITERATIONS`` (default 4), surviving FRESH invocations,
 reset only on SHIP / re-plan. At the cap the review refuses with an ESCALATE
 marker (exit REVIEW_CAP_EXIT_CODE), never a retryable error.
 
@@ -156,8 +156,8 @@ class TestDeterministicCap(unittest.TestCase):
         )
         return int(data.get("plan_review_rounds", 0) or 0)
 
-    def test_default_cap_is_three(self):
-        self.assertEqual(flowctl.get_max_review_iterations(), 3)
+    def test_default_cap_is_four(self):
+        self.assertEqual(flowctl.get_max_review_iterations(), 4)
 
     def test_env_overrides_cap(self):
         with mock.patch.dict(os.environ, {"MAX_REVIEW_ITERATIONS": "5"}):
@@ -166,7 +166,7 @@ class TestDeterministicCap(unittest.TestCase):
     def test_cap_never_zero_or_negative(self):
         for bad in ("0", "-1", "abc", ""):
             with mock.patch.dict(os.environ, {"MAX_REVIEW_ITERATIONS": bad}):
-                self.assertEqual(flowctl.get_max_review_iterations(), 3)
+                self.assertEqual(flowctl.get_max_review_iterations(), 4)
 
     def test_increment_persists_across_fresh_calls(self):
         """Each enforce call increments and persists — cap survives fresh
@@ -184,9 +184,10 @@ class TestDeterministicCap(unittest.TestCase):
         self.assertEqual(self._rounds(), 3)
 
     def test_refuses_at_cap_with_escalate_exit(self):
-        for _ in range(3):
+        cap = flowctl.get_max_review_iterations()
+        for _ in range(cap):
             flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
-        # 4th call (already at cap 3) must refuse with exit REVIEW_CAP_EXIT_CODE.
+        # next call (already at cap) must refuse with exit REVIEW_CAP_EXIT_CODE.
         with contextlib.redirect_stderr(io.StringIO()) as err:
             with self.assertRaises(SystemExit) as ctx:
                 flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
@@ -194,14 +195,15 @@ class TestDeterministicCap(unittest.TestCase):
         self.assertIn("ESCALATE", err.getvalue())
 
     def test_refusal_is_idempotent_no_further_increment(self):
-        for _ in range(3):
+        cap = flowctl.get_max_review_iterations()
+        for _ in range(cap):
             flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
         with contextlib.redirect_stderr(io.StringIO()):
             for _ in range(3):
                 with self.assertRaises(SystemExit):
                     flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
         # Counter never climbs past the cap.
-        self.assertEqual(self._rounds(), 3)
+        self.assertEqual(self._rounds(), cap)
 
     def test_reset_on_ship_zeroes_counter(self):
         for _ in range(2):
@@ -227,9 +229,10 @@ class TestDeterministicCap(unittest.TestCase):
         self.assertEqual(data["impl_review_rounds"][t2], 1)
 
     def test_impl_cap_independent_per_task(self):
+        cap = flowctl.get_max_review_iterations()
         t1 = f"{self.spec_id}.1"
         t2 = f"{self.spec_id}.2"
-        for _ in range(3):
+        for _ in range(cap):
             flowctl.enforce_and_increment_review_cap(
                 self.spec_id, "impl", task_id=t1
             )
@@ -281,7 +284,8 @@ class TestDeterministicCap(unittest.TestCase):
     def test_completion_review_cap_refuses_and_resets_on_ship(self):
         """A completion review at the shared plan cap refuses (exit 4); a SHIP
         reset (review_kind="plan") re-opens it."""
-        for _ in range(3):
+        cap = flowctl.get_max_review_iterations()
+        for _ in range(cap):
             flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
         with contextlib.redirect_stderr(io.StringIO()) as err:
             with self.assertRaises(SystemExit) as ctx:
