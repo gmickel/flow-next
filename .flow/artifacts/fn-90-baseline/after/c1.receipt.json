@@ -1,0 +1,11 @@
+{
+  "type": "plan_review",
+  "id": "fn-89-tracker-sync-lifecycle-dispatches-off",
+  "mode": "cursor",
+  "verdict": "NEEDS_WORK",
+  "session_id": "8a1950ce-4777-427a-a9c6-921130ab4ae2",
+  "model": "gpt-5.5-high",
+  "spec": "cursor:gpt-5.5-high",
+  "timestamp": "2026-07-09T14:56:19.696209Z",
+  "review": "I\u2019ll review the full on-disk spec/tasks and current diff read-only, then check task alignment against the epic and codebase anchors before giving the required verdict.I\u2019ve got the full spec/tasks. Next I\u2019m checking the actual changed-file surface and key code anchors so the verdict is based on the repo state, not just plan prose.The worktree has uncommitted changes outside the fn-89 spec/task docs, so I\u2019m checking whether any of those affect the plan\u2019s feasibility or reveal mismatches.One concrete task/spec inconsistency is already visible around `completionReview` event naming. I\u2019m doing one more pass over the current touchpoint docs to see if that\u2019s isolated or part of a broader mismatch.- **Severity**: Major\n- **Location**: `fn-89.2 Approach #3` and `fn-89.2 Acceptance #1`\n- **Problem**: Task .2 still instructs implementation to dispatch completion review with `event: work.completionReview`, contradicting the epic and task .2 step 7c, which require top-level `event: completionReview`. Following the task literally reintroduces the shipped 2.9.1 audit bug and conflicts with the prose guard in `test_sync_check.py`.\n- **Suggestion**: Change every task .2 instruction/acceptance reference from `event: work.completionReview` to `event: completionReview`.\n\n<verdict>NEEDS_WORK</verdict>"
+}

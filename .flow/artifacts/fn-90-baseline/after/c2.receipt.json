@@ -1,0 +1,11 @@
+{
+  "type": "plan_review",
+  "id": "fn-89-tracker-sync-lifecycle-dispatches-off",
+  "mode": "cursor",
+  "verdict": "NEEDS_WORK",
+  "session_id": "3929c7b8-0794-4f4d-a2e3-2f6bc7ddde6c",
+  "model": "gpt-5.5-high",
+  "spec": "cursor:gpt-5.5-high",
+  "timestamp": "2026-07-09T14:59:03.291711Z",
+  "review": "I\u2019ll review the full on-disk spec, task breakdown, and current diff before judging plan quality or task alignment. I\u2019ll keep this read-only and focus only on blockers inside the stated plan.I found the spec is much more precise than the embedded copy. I\u2019m checking task-vs-epic alignment and the current repo diff now, especially event-key consistency, Codex mirror rules, and the async join/ledger contract.A concrete inconsistency already surfaced: task .2 still asks for `work.completionReview` in two places, while the epic says the shipped key is top-level `completionReview`. I\u2019m checking whether the current diff has already fixed that or if it remains in the plan artifacts.- **Severity**: Major\n- **Location**: `fn-89.2 Approach` / `fn-89.2 Acceptance`\n- **Problem**: Task .2 still says `event: work.completionReview` in the completion-review dispatch and acceptance, contradicting the epic\u2019s explicit top-level `completionReview` requirement and the same task\u2019s own Step 7c.\n- **Suggestion**: Replace every `work.completionReview` in task .2 with `completionReview`.\n\n- **Severity**: Major\n- **Location**: `fn-89.1 Approach Step 0` / Epic \u201cEarly proof point\u201d\n- **Problem**: The critical \u201cHOST-executed before worker\u201d proof point is not enforceable by the current `/flow-next:work` flow: `phases.md` spawns a worker with config values only, and `worker.md` has `disallowedTools: Task`, so normal task execution can skip the proof entirely.\n- **Suggestion**: Make Step 0 an explicit host preflight outside the worker path, or split it into a prerequisite/manual proof task whose recorded evidence gates fn-89.1 implementation.\n\n<verdict>NEEDS_WORK</verdict>"
+}
