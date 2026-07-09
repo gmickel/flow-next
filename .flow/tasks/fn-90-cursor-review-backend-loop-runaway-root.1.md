@@ -15,9 +15,10 @@ Covers R3, R4, R5 (minimal), R7 (measurement half). Assumption-test task: implem
 
 
 ## Done summary
-TBD
+Implemented and validated the fn-90 root-cause fixes for the Cursor review-backend loop runaway: R3 honest verdict extraction (codex/copilot parse the isolated final agent message, last-match — poison `<verdict>` literals in tool output can no longer win), R4 convergence ratchet (re-review injects prior findings with a shrink-only contract), R5 deterministic cumulative round cap (flowctl-owned counter on spec state, refuses at MAX_REVIEW_ITERATIONS with an ESCALATE marker + exit 4, resets on SHIP/re-plan, plus `spec reset-review-rounds`), and R7 cursor persona-override preamble on all cursor review paths.
 
+Validated live on the pinned fn-89 baseline fixture (cursor gpt-5.5-high + codex gpt-5.5): all verdicts now honest end-to-end (poison confirmed live in both codex streams, correctly isolated); the Cursor fix->re-review ratchet cycle converged to SHIP in 2 rounds (<=3) with the prior finding verified fixed and no genuine >=Major suppressed. All four assumptions HELD. Post-fix outputs + delta archived under .flow/artifacts/fn-90-baseline/after/. +39 new tests; full suite 1512 passing (green baseline); dual flowctl copies kept in sync.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 65933c8f9064d55a834d368f68f617f5bc5c853a
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (1512 passing, baseline: green), live cursor+codex plan-review validation on fn-89 fixture (archived .flow/artifacts/fn-90-baseline/after/)
 - PRs:

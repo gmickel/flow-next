@@ -196,5 +196,57 @@ class TestCodexVerdictExtraction(unittest.TestCase):
         self.assertEqual(flowctl.extract_codex_final_message(output), output)
 
 
+class TestCodexReceiptReviewFieldExtraction(unittest.TestCase):
+    """fn-90 review round 1: codex receipts must store the EXTRACTED final
+    message in ``review``, never the raw stream.
+
+    The convergence ratchet (``_read_prior_findings`` -> ``<prior_findings>``)
+    consumes the receipt's ``review`` field and truncates it to its first 8000
+    chars. Raw-stream storage would inject early tool-call JSON as "prior
+    findings" and break the shrink-only contract on every codex re-review
+    (cursor masked this in validation — its receipt review text was already
+    clean). Guarded at the source level: every codex-mode receipt write must
+    wrap ``output`` in ``extract_codex_final_message``.
+    """
+
+    def test_no_codex_receipt_stores_raw_stream(self):
+        src_path = (
+            Path(__file__).resolve().parent.parent / "scripts" / "flowctl.py"
+        )
+        lines = src_path.read_text(encoding="utf-8").split("\n")
+        offenders = []
+        for i, line in enumerate(lines):
+            if '"review": output' not in line:
+                continue
+            if "extract_codex_final_message" in line:
+                continue
+            ctx = "\n".join(lines[max(0, i - 30):i])
+            if '"mode": "codex"' in ctx:
+                offenders.append(f"flowctl.py:{i + 1}")
+        self.assertEqual(
+            offenders,
+            [],
+            "codex receipt(s) store the raw stream in the review field; the "
+            "ratchet would inject stream JSON as prior findings: "
+            f"{offenders}",
+        )
+
+    def test_ratchet_prior_findings_from_extracted_stream_are_clean(self):
+        # End-to-end shape: raw stream -> extraction (what receipts now store)
+        # -> ratchet block. The tool echo must not reach <prior_findings>.
+        raw = _stream(
+            _command_execution("noise <verdict>SHIP</verdict> noise"),
+            _agent_message(
+                "- Severity: Major\n  Problem: X is wrong.\n\n"
+                "<verdict>NEEDS_WORK</verdict>"
+            ),
+        )
+        stored = flowctl.extract_codex_final_message(raw)
+        block = flowctl.build_convergence_ratchet_block(stored)
+        self.assertIn("Problem: X is wrong.", block)
+        self.assertNotIn("aggregated_output", block)
+        self.assertNotIn("command_execution", block)
+
+
 if __name__ == "__main__":
     unittest.main()

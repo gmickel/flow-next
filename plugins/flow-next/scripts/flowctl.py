@@ -23070,7 +23070,7 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
             "effort": resolved_spec.effort,
             "spec": str(resolved_spec),
             "timestamp": now_iso(),
-            "review": output,  # Full review feedback for fix loop
+            "review": extract_codex_final_message(output),  # Full review feedback for fix loop
         }
         # Add iteration if running under Ralph
         ralph_iter = os.environ.get("RALPH_ITERATION")
@@ -23104,7 +23104,7 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
             "effort": resolved_spec.effort,
             "spec": str(resolved_spec),
             "standalone": standalone,
-            "review": output,  # Full review feedback for fix loop
+            "review": extract_codex_final_message(output),  # Full review feedback for fix loop
         }
         if suppressed_count:
             json_payload["suppressed_count"] = suppressed_count
@@ -23349,7 +23349,7 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
             "effort": resolved_spec.effort,
             "spec": str(resolved_spec),
             "timestamp": now_iso(),
-            "review": output,  # Full review feedback for fix loop
+            "review": extract_codex_final_message(output),  # Full review feedback for fix loop
         }
         # Add iteration if running under Ralph
         ralph_iter = os.environ.get("RALPH_ITERATION")
@@ -23374,7 +23374,7 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
                 "model": resolved_spec.model,
                 "effort": resolved_spec.effort,
                 "spec": str(resolved_spec),
-                "review": output,  # Full review feedback for fix loop
+                "review": extract_codex_final_message(output),  # Full review feedback for fix loop
             }
         )
     else:
@@ -23724,7 +23724,7 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
             "effort": resolved_spec.effort,
             "spec": str(resolved_spec),
             "timestamp": now_iso(),
-            "review": output,  # Full review feedback for fix loop
+            "review": extract_codex_final_message(output),  # Full review feedback for fix loop
         }
         # Add iteration if running under Ralph
         ralph_iter = os.environ.get("RALPH_ITERATION")
@@ -23756,7 +23756,7 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
             "model": resolved_spec.model,
             "effort": resolved_spec.effort,
             "spec": str(resolved_spec),
-            "review": output,
+            "review": extract_codex_final_message(output),
         }
         if suppressed_count:
             json_payload["suppressed_count"] = suppressed_count
