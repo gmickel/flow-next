@@ -261,8 +261,23 @@ Every `AskUserQuestion` body must include the agent's recommended option AND a c
 
 Pattern:
 
-- `question.body`: "<options summary>. Recommended: <X> — <one-sentence rationale>. Confidence: [high | judgment-call | your-call]."
+- `question.body`: "<stakes>. <options summary>. Recommended: <X> — <one-sentence rationale>. Confidence: [high | judgment-call | your-call]."
 - `question.options`: neutral labels (no "(recommended)" markers — recommendation goes in the body; neutral options reduce anchoring)
+
+### Plain-language question contract (fn-90-adjacent field feedback, eval-validated)
+
+Applies to EVERY question, both scopes. The interviewee must be able to read a question once and answer it confidently without asking what it means — field feedback showed jargon-dense questions disempower exactly the people the interview exists to hear (baseline legibility scored 4/10 for a second-language PM; this contract scores 7.5+ at ~30% fewer tokens).
+
+- **Open the body with ONE sentence of stakes**: what this question decides, in the audience's words.
+- **Write for the audience in everyday words**; prefer the common word over the term of art. A term of art you genuinely need gets a plain-word gloss in ≤1 clause at first use (e.g. "counter-metrics — things we'd hate to make worse").
+- **No unexplained acronyms or tool/repo shorthand.** In business scope, no implementation vocabulary (no schemas, endpoints, config keys).
+- **Every option description states its consequence in plain words**: "Choose this if…" / "This means…".
+
+Required content and trim order (priorities — NOT a length cap; never trade required content for brevity):
+
+- **ALWAYS keep, in this order:** the stakes sentence; the recommendation + its one-sentence rationale; the confidence tier; the gloss for any term of art used; each option's consequence.
+- **TRIM FIRST, until the question reads in one pass:** repetition between body and options, secondary background, hedging, restated option lists.
+- **Target shape** (calibration, not a ceiling): a body around 40-60 words with option descriptions around a dozen words each is what "done" usually looks like — reach it by trimming the trim-first list, never by dropping required content.
 
 Confidence tiers (mandatory — pick one per question):
 
@@ -274,9 +289,9 @@ The `[your-call]` tier is **mandatory** when the agent has no basis for a recomm
 
 Examples (one per tier):
 
-- `[high]`: "Where should the new validator live? Recommended: `src/utils/validation.ts` — three sibling validators (`validateEmail`, `validatePhone`, `validateUrl`) already live there and the test suite imports from that module. Confidence: [high]." Options: `src/utils/validation.ts`, `src/validators/`, `new module`.
-- `[judgment-call]`: "Cache TTL for the rate-limiter? Recommended: 60s — short enough that drift stays bounded, long enough that the cache earns its keep. Confidence: [judgment-call]." Options: `30s`, `60s`, `300s`, `no cache`.
-- `[your-call]`: "What error code should we return when the upstream API times out? Recommended: none — this depends on what callers expect and I don't see existing convention to copy. Confidence: [your-call]." Options: `502`, `503`, `504`, `408`.
+- `[high]`: "This decides where the new validation code lives so the next person can find it. Recommended: `src/utils/validation.ts` — three sibling validators already live there and the tests import from that module. Confidence: [high]." Options: `src/utils/validation.ts`, `src/validators/`, `new module` — each description says what choosing it means (e.g. "This means it sits beside the three existing validators").
+- `[judgment-call]`: "This decides how long the rate-limiter remembers a result before re-checking (the cache TTL — time-to-live). Recommended: 60 seconds — short enough that stale answers stay rare, long enough to be worth caching. Confidence: [judgment-call]." Options: `30s`, `60s`, `300s`, `no cache` — with plain consequences ("Choose this if freshness matters more than speed").
+- `[your-call]`: "This decides what error callers see when the upstream service times out. Recommended: none — it depends on what your callers expect and I found no existing convention to copy. Confidence: [your-call]." Options: `502`, `503`, `504`, `408`.
 
 ### Skipped Questions Are Not Answers
 

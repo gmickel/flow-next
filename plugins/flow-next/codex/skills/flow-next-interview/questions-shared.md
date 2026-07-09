@@ -37,3 +37,4 @@ Before asking any question, classify it on three axes:
 5. **Probe contradictions** - if answers don't align, clarify
 6. **Surface hidden complexity** - ask about things user might not have considered
 7. **Skips are not answers** - only an explicit answer or an explicit "you decide" resolves a question; anything skipped parks under `## Open Questions` (SKILL.md skip contract)
+8. **Plain language, explained answers** - every question opens with one sentence of stakes, terms of art get a plain gloss at first use, options state their consequence ("Choose this if…"); trim repetition and background, never required content (SKILL.md plain-language contract)

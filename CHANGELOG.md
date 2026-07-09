@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 2.10.1] - 2026-07-10
+
+### Changed
+
+- **Interview questions now carry a plain-language contract** (field feedback from the first external team: interview language "isn't plain enough" — jargon-dense questions disempower exactly the people the interview exists to hear). Every `AskUserQuestion` now opens with one sentence of stakes (what this question decides, in the audience's words), terms of art get a ≤1-clause plain gloss at first use ("counter-metrics — things we'd hate to make worse"), unexplained acronyms/tool shorthand are banned (business scope additionally bans implementation vocabulary), and every option description states its consequence ("Choose this if… / This means…"). Sizing is expressed as **priorities, not a length cap** — an always-keep list (stakes, recommendation, tier, glosses, consequences) plus a trim-first list (repetition, background, hedging) with a target shape of ~40-60-word bodies — deliberately following OpenAI's GPT-5.6 guidance that generic brevity instructions cause capable models to drop required content (flow-next interviews run on Codex hosts too). Eval-validated before shipping via a 5-variant × 2-fixture blind-judged loop: baseline legibility for a second-language PM scored 4/10 with 4.5/10 answerability at ~146 words/question; the shipped contract scores 7.5/7.0-8.0 with precision held at 8.5 and ~30% fewer tokens. The same loop tested extending the contract to spec write-back prose and REJECTED it (business sections already scored 9/10 PM-legibility; the contract made them 73% longer and worse on every axis) — spec prose is unchanged by design. Tier examples remodeled to carry the new shape; guideline echo in `questions-shared.md`.
+
 ## [flow-next 2.10.0] - 2026-07-09
 
 ### Fixed
