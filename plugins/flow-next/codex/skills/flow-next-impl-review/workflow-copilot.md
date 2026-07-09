@@ -22,7 +22,7 @@ git log ${DIFF_BASE}..HEAD --oneline
 ## Step 2: Execute Review
 
 ```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}" # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 
 # Runtime config:
 # --spec <spec> full spec (backend:model:effort), highest priority
@@ -48,7 +48,7 @@ If `VERDICT=NEEDS_WORK`:
 2. Fix code and run tests
 3. Commit fixes
 4. Re-run step 2 (receipt enables session continuity when `mode == "copilot"`)
-5. Repeat until SHIP — bounded by the backend-agnostic fix-loop cap in [SKILL.md](SKILL.md) (`MAX_REVIEW_ITERATIONS`, default 3): count each fix+re-review cycle; at the cap, surface surviving findings and stop instead of looping
+5. Repeat until SHIP — bounded by the backend-agnostic fix-loop cap in [SKILL.md](SKILL.md) (`MAX_REVIEW_ITERATIONS`, default 4): count each fix+re-review cycle; at the cap, surface surviving findings and stop instead of looping
 
 ## Step 4: Receipt
 

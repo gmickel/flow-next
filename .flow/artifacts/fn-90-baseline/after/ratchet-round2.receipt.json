@@ -1,0 +1,11 @@
+{
+  "type": "plan_review",
+  "id": "fn-89-tracker-sync-lifecycle-dispatches-off",
+  "mode": "cursor",
+  "verdict": "SHIP",
+  "session_id": "8a1950ce-4777-427a-a9c6-921130ab4ae2",
+  "model": "gpt-5.5-high",
+  "spec": "cursor:gpt-5.5-high",
+  "timestamp": "2026-07-09T15:01:01.178595Z",
+  "review": "I\u2019ll re-read the updated fn-89 spec/task files from disk and specifically verify the prior `completionReview` event-key finding before deciding under the ratchet.Prior finding: **fixed**.\n\nThe `fn-89.2` completion-review dispatch now uses `event: completionReview` in both Approach #3 and Acceptance #1. The epic and task .2 Step 7c also consistently require the top-level key. Current plugin docs likewise show `event: completionReview`; remaining `work.completionReview` hits are in archived review artifacts, not plan instructions.\n\nNo new \u2265 Major blocker introduced by the fix.\n\n<verdict>SHIP</verdict>"
+}

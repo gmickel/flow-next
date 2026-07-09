@@ -148,6 +148,23 @@ Set completion review status and timestamp.
 flowctl spec set-completion-review-status fn-1 --status ship|needs_work|unknown [--json]
 ```
 
+### spec reset-review-rounds
+
+Reset the deterministic review-round counter for a spec (fn-90) — the **re-plan** reset path. Zeroes the spec-scoped `plan_review_rounds` (which plan AND completion reviews share); pass `--impl` to also zero every per-task `impl_review_rounds[<task-id>]`. Use this after an explicit re-plan to re-open the review cap; a `SHIP` verdict resets automatically, so this is only for the deliberate re-plan case. See [codex impl-review § Deterministic review cap](#codex-impl-review) for the full cap/reset semantics.
+
+```bash
+flowctl spec reset-review-rounds fn-1 [--impl] [--json]
+```
+
+### review-rounds increment / reset
+
+Prose-facing surface of the deterministic review-round cap (fn-90) for the **rp backend**, whose reviews are dispatched from skill prose via `flowctl rp chat-send` rather than through a `flowctl <backend> *-review` handler. `increment` enforces + increments the same cumulative counter the codex/copilot/cursor handlers wire internally — call it before EVERY rp review dispatch (including the first); at `${MAX_REVIEW_ITERATIONS:-4}` it refuses with an `ESCALATE:` marker + exit `4` (not retryable). `reset` zeroes the counter on a `SHIP` verdict (convergence); for a re-plan use `spec reset-review-rounds` instead. Completion reviews pass `--kind plan` (shared spec-scoped counter); impl reviews require `--task` (per-task counter).
+
+```bash
+flowctl review-rounds increment fn-1 --kind plan|impl [--task fn-1.2] [--json]
+flowctl review-rounds reset fn-1 --kind plan|impl [--task fn-1.2] [--json]
+```
+
 ### spec set-branch
 
 Set spec branch_name.
@@ -1149,6 +1166,21 @@ Completion review receipt:
 ```
 
 **Session continuity:** Receipt includes `session_id` (thread_id from codex). Subsequent reviews read the existing receipt and resume the conversation, maintaining full context across fix → re-review cycles.
+
+**Deterministic review cap + convergence (fn-90 — all backends: codex/copilot/cursor internally; rp via `flowctl review-rounds`):**
+
+The fix→re-review loop is bounded by a **flowctl-owned cumulative round counter on spec state**, not just the host LLM's in-agent iteration counter (which resets on every fresh `/flow-next:*-review` invocation — the loop-runaway root cause). It applies to every backend and every review kind:
+
+- **Counter surfaces:** plan reviews increment a spec-scoped `plan_review_rounds`; impl reviews increment a per-task `impl_review_rounds[<task-id>]`. **Completion reviews reuse the spec-scoped `plan_review_rounds` counter** (they are spec-scoped, no task in context) — a plan review and a completion review on the same spec spend the *same* cap, so neither can independently re-open the runaway. Both surface in `flowctl show --json`.
+- **Enforcement:** each backend dispatch calls the cap check BEFORE running the reviewer (codex/copilot/cursor inside their `flowctl <backend> *-review` handlers; rp — dispatched from skill prose via `rp chat-send` — through an explicit `flowctl review-rounds increment` call in the workflow, see [review-rounds increment / reset](#review-rounds-increment--reset)). At `${MAX_REVIEW_ITERATIONS:-4}` (default 4, env-overridable) it **refuses to dispatch**, prints an `ESCALATE:` marker, and exits with a **dedicated exit code `4`** — distinct from transport/backend-failure codes (`2` = exec failure, `3` = sandbox), so a host or Ralph loop cannot misread the cap refusal as a retryable error. Under Ralph/autonomous the refusal must surface as **NEEDS_HUMAN**, never a retry (a retry loop on the cap re-creates the runaway one level up). The refusal is idempotent — repeated calls at the cap keep refusing without further increment.
+- **Round-counting semantics (deliberate anti-runaway bias):** a "round" is **every dispatch ATTEMPT, including a failed/malformed exec** — NOT only SHIP/NEEDS_WORK-resolved rounds. A reviewer run that produces no parseable verdict still consumes the cap. Worst case is *early* human escalation, which is the safe direction; the alternative (only counting resolved rounds) would let malformed-verdict retries loop unbounded.
+- **Reset semantics:** the counter resets to 0 **only** on a `SHIP` verdict (from the receipt-write path) or an explicit re-plan (`flowctl spec reset-review-rounds <spec-id>` — see [spec reset-review-rounds](#spec-reset-review-rounds)). It does **NOT** reset on a spec/code edit (fix rounds legitimately edit the artifact; resetting there reopens the runaway through the back door) nor on a fresh invocation.
+
+**Receipt convergence-ratchet fields (fn-90, back-compatible):**
+
+- The receipt stores the prior round's review text in a `review` field. On a re-review, flowctl injects it into a **shrink-only convergence-ratchet preamble** (verify each prior finding fixed; only a NEW ≥ Major finding may block; all prior fixed + no new ≥ Major ⇒ verdict MUST be SHIP) instead of ordering a fresh blind review each round. A receipt written by older flowctl **without** the `review` field parses fine and is treated as a **fresh round-1 review** (no ratchet) — full back-compat. The **rp backend needs no injected ratchet**: its re-reviews deliberately stay in the SAME RepoPrompt chat (no `--new-chat`), so the reviewer retains genuine conversational memory of its own prior findings — the fresh-blind churn the ratchet compensates for does not occur there; on rp only the cap applies.
+- **Receipt default paths are spec/task-scoped.** The skill/workflow defaults are now `/tmp/plan-review-receipt-<spec>.json`, `/tmp/completion-review-receipt-<spec>.json`, and `/tmp/impl-review-receipt-<task>.json` (standalone branch review with no task falls back to the unscoped name) — concurrent reviews of different specs/tasks no longer collide on one shared `/tmp` receipt. An explicit **`REVIEW_RECEIPT_PATH`** (or `--receipt`) still wins, unchanged.
+- **Codex/copilot verdict extraction is honest.** The verdict parse isolates the **final agent message** from the stream (dropping `command_execution` / `aggregated_output` tool output) and takes the **last** `<verdict>` match — a verdict literal echoed in tool output or a quoted-grammar literal in the final message can no longer beat the reviewer's real verdict. The offline regression that locks this in: `optimization/review-prompt/reveval_parse_guard.py` (runs in the gate via `test_reveval_parse_guard.py`).
 
 **Sandbox mode (`--sandbox`):** Controls Codex CLI's file system access. Available modes:
 - `read-only` (default on Unix) — Can only read files

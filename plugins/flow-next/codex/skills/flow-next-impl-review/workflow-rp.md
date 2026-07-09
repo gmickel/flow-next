@@ -227,6 +227,16 @@ EOF
 
 ### Send to RepoPrompt (single-entry response)
 
+**fn-90 R5 — deterministic cap gate (run BEFORE every review dispatch, including this first one; task-scoped reviews only — standalone/branch reviews have no spec state, so no cap):**
+
+```bash
+if [[ -n "$TASK_ID" ]]; then
+ $FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json
+fi
+```
+
+At the cap this refuses with an `ESCALATE:` marker + exit 4. That is NOT a retryable error: do NOT dispatch the review, do NOT retry — surface the ESCALATE message to the caller and stop (Ralph/autonomous: NEEDS_HUMAN). Only proceed to `chat-send` when the increment succeeds.
+
 Redirect the review response to the literal response file — it must enter context exactly ONCE, via a single Read of that file (command substitution + `echo` would be the second copy; redirection keeps stdout out of context entirely):
 
 ```bash
@@ -257,6 +267,16 @@ echo "VERDICT=$VERDICT"
 ---
 
 ## Phase 4: Receipt + Status (RP)
+
+### Reset the cap counter on SHIP (fn-90 R5 convergence)
+
+Immediately after parsing a SHIP verdict (task-scoped reviews only):
+
+```bash
+if [[ "$VERDICT" == "SHIP" && -n "$TASK_ID" ]]; then
+ $FLOWCTL review-rounds reset "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json
+fi
+```
 
 ### Write receipt (if REVIEW_RECEIPT_PATH set)
 
@@ -377,7 +397,7 @@ See [workflow-common.md](workflow-common.md) "Phase ordering & flag-combination 
 
 **CRITICAL: You MUST fix the code BEFORE re-reviewing. Never re-review without making changes.**
 
-**MAX ITERATIONS**: Limit fix+re-review cycles to **${MAX_REVIEW_ITERATIONS:-3}** iterations (default 3, configurable in Ralph's config.env). If still NEEDS_WORK after max rounds, output `<promise>RETRY</promise>` and stop — let the next Ralph iteration start fresh.
+**MAX ITERATIONS**: Limit fix+re-review cycles to **${MAX_REVIEW_ITERATIONS:-4}** iterations (default 4, configurable in Ralph's config.env). If still NEEDS_WORK after max rounds, output `<promise>RETRY</promise>` and stop — let the next Ralph iteration start fresh. The `review-rounds increment` gate (step 6 below and Phase 3) enforces this deterministically across fresh invocations: at the cap it refuses with an `ESCALATE:` marker + exit 4, which is NOT retryable — surface it and stop (Ralph: NEEDS_HUMAN).
 
 If verdict is NEEDS_WORK:
 
@@ -427,7 +447,15 @@ If verdict is NEEDS_WORK:
 
  **CRITICAL: Do NOT summarize fixes.** RP auto-refreshes file contents - reviewer sees your changes automatically. Just request re-review. Any summary wastes tokens and duplicates what reviewer already sees.
 
- Redirect the re-review response to the SAME literal response file from Phase 3 (overwrite), then Read it once — the single-entry rule applies to every round:
+ Redirect the re-review response to the SAME literal response file from Phase 3 (overwrite), then Read it once — the single-entry rule applies to every round.
+
+ **fn-90 R5 cap gate first** — increment before EVERY re-review dispatch (task-scoped only); exit 4 = cap reached → do NOT dispatch, surface the ESCALATE message and stop (never retry):
+
+ ```bash
+ if [[ -n "$TASK_ID" ]]; then
+ $FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json
+ fi
+ ```
 
  ```bash
  cat > "${TMPDIR:-/tmp}/flow-impl-review-rereview-<task-id-or-branch-slug>-<suffix>.md" << 'EOF'

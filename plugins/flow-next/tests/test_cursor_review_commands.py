@@ -85,6 +85,12 @@ def _flow_repo():
             "# Demo spec\n\n## Acceptance Criteria\n\n- **R1:** do a thing\n",
             encoding="utf-8",
         )
+        # Spec JSON so fn-90 R5 cap state has somewhere to persist (cap is a
+        # no-op when no spec json exists — standalone/branch reviews).
+        (flow / "specs" / f"{EPIC_ID}.json").write_text(
+            json.dumps({"id": EPIC_ID, "title": "Demo", "status": "in_progress"}),
+            encoding="utf-8",
+        )
         (flow / "tasks" / f"{TASK_ID}.md").write_text(
             "---\nsatisfies: [R1]\n---\n\n## Description\n\nImplement a().\n",
             encoding="utf-8",
@@ -627,6 +633,95 @@ class CursorFallbackCoercion(unittest.TestCase):
             out = flowctl._resolve_cursor_review_spec(args, None)
         self.assertEqual(out.backend, "cursor")
         self.assertIsNone(out.effort)
+
+
+class CursorPersonaOverrideAndCap(unittest.TestCase):
+    """fn-90 R7 (persona override) + R5 (cap) end-to-end on the cursor path."""
+
+    def test_plan_review_prompt_carries_persona_override(self):
+        with _flow_repo() as (repo, base):
+            receipt = repo / "receipt.json"
+            runner = _fake_exec()
+            args = argparse.Namespace(
+                epic=EPIC_ID, files="src/mod.py", base=base,
+                receipt=str(receipt), json=False, spec=None,
+            )
+            with mock.patch.object(flowctl, "run_cursor_exec", runner):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    flowctl.cmd_cursor_plan_review(args)
+            sent = runner.calls[0]["prompt"]
+            self.assertIn("PERSONA OVERRIDE", sent)
+            self.assertIn("superseded", sent)
+
+    def test_impl_review_prompt_carries_persona_override(self):
+        with _flow_repo() as (repo, base):
+            receipt = repo / "receipt.json"
+            runner = _fake_exec()
+            args = _impl_args(repo, base, receipt)
+            with mock.patch.object(flowctl, "run_cursor_exec", runner):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    flowctl.cmd_cursor_impl_review(args)
+            sent = runner.calls[0]["prompt"]
+            self.assertIn("PERSONA OVERRIDE", sent)
+
+    def test_plan_review_increments_cap_counter(self):
+        with _flow_repo() as (repo, base):
+            receipt = repo / "receipt.json"
+            args = argparse.Namespace(
+                epic=EPIC_ID, files="src/mod.py", base=base,
+                receipt=str(receipt), json=False, spec=None,
+            )
+            with mock.patch.object(flowctl, "run_cursor_exec", _fake_exec()):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    flowctl.cmd_cursor_plan_review(args)
+            spec_json = json.loads(
+                (repo / ".flow" / "specs" / f"{EPIC_ID}.json").read_text()
+            )
+            self.assertEqual(spec_json["plan_review_rounds"], 1)
+
+    def test_plan_review_ship_resets_cap_counter(self):
+        with _flow_repo() as (repo, base):
+            receipt = repo / "receipt.json"
+            args = argparse.Namespace(
+                epic=EPIC_ID, files="src/mod.py", base=base,
+                receipt=str(receipt), json=False, spec=None,
+            )
+            # First a NEEDS_WORK round bumps the counter to 1.
+            with mock.patch.object(flowctl, "run_cursor_exec", _fake_exec()):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    flowctl.cmd_cursor_plan_review(args)
+            # Then a SHIP round must reset it to 0.
+            ship_out = REVIEW_OUTPUT.replace(
+                "<verdict>NEEDS_WORK</verdict>", "<verdict>SHIP</verdict>"
+            )
+            with mock.patch.object(
+                flowctl, "run_cursor_exec", _fake_exec(result_text=ship_out)
+            ):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    flowctl.cmd_cursor_plan_review(args)
+            spec_json = json.loads(
+                (repo / ".flow" / "specs" / f"{EPIC_ID}.json").read_text()
+            )
+            self.assertEqual(spec_json["plan_review_rounds"], 0)
+
+    def test_rereview_injects_prior_findings_ratchet(self):
+        with _flow_repo() as (repo, base):
+            receipt = repo / "receipt.json"
+            args = argparse.Namespace(
+                epic=EPIC_ID, files="src/mod.py", base=base,
+                receipt=str(receipt), json=False, spec=None,
+            )
+            # Round 1 writes a receipt (mode:cursor, session_id, review text).
+            with mock.patch.object(flowctl, "run_cursor_exec", _fake_exec()):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    flowctl.cmd_cursor_plan_review(args)
+            # Round 2 (re-review, resumed session) must inject the ratchet.
+            runner2 = _fake_exec()
+            with mock.patch.object(flowctl, "run_cursor_exec", runner2):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    flowctl.cmd_cursor_plan_review(args)
+            sent = runner2.calls[0]["prompt"]
+            self.assertIn("CONVERGENCE RATCHET", sent)
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ $FLOWCTL show "$SPEC_ID" --json
 ## Step 2: Execute Review
 
 ```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt.json}"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt-${SPEC_ID}.json}"  # fn-90 R5: spec-scoped default (concurrent specs no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 
 # Runtime config:
 #   --spec <spec>           full spec (backend:model:effort), highest priority
