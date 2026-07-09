@@ -1,5 +1,5 @@
 ---
-satisfies: [R1, R2, R4, R6, R7, R9, R10, R11, R12]
+satisfies: [R1, R2, R3, R4, R6, R7, R9, R10, R11, R12]
 ---
 
 # make-pr/capture/interview/plan/resolve-pr/qa touchpoints + joins + event-tag fixes
@@ -27,7 +27,7 @@ Rewire the remaining six lifecycle touchpoints to the `tracker-runner`, add the 
 5. **plan (state-shaped, awaited — R2) + event tag (R9).** In `plan/steps.md` Step 6.5 (:531-548, dispatch at :541) change to an AWAITED runner dispatch AND add the missing `event: plan` tag.
 6. **resolve-pr Phase 9.5 (isolated-but-awaited — R1, R10) + event tag (R9).** In `resolve-pr/workflow.md` Phase 9.5 (:437-455, dispatch at :449) change to an isolated-but-AWAITED runner dispatch AND add the missing `event: resolvePr` tag: `operation: comment <spec-id>, event: resolvePr, DISPATCH: forked`. No end-of-run check exists here (verified) → awaited, not fire-and-forget.
 7. **qa A.3 (isolated-but-awaited — R1, R10) + explicit block + event tag (R9).** In `qa/workflow.md` A.3 (:590-604, `:` placeholder at :602) REPLACE the bare `:` placeholder with an EXPLICIT dispatch block: an isolated-but-AWAITED `Task flow-next:tracker-runner` (`operation: comment <spec-id>, event: qa, DISPATCH: forked`). Keep the "comment is the only sensible verb" doctrine. No end-of-run check exists → awaited.
-8. **inline hatch (R5 consumer) + timeout (R12).** Each gate honors `tracker.dispatch` (inline restores today's behavior byte-identical); document the 10-min await bound → errored-on-timeout at each awaited site. Reference the .1 capability gate + leaf; do not re-derive.
+8. **inline hatch (R5 consumer) + timeout (R12) + same-spec pre-await (R3).** Each gate honors `tracker.dispatch` (inline restores today's behavior byte-identical); document the 10-min await bound → errored-on-timeout at each awaited site. Reference the .1 capability gate + leaf; do not re-derive. Before EVERY state-shaped dispatch in this task (make-pr/capture/interview/plan), the host first AWAITS any outstanding same-spec runner handle in the ledger — the R3 cross-skill straddle (e.g. a make-pr reconcile overlapping a still-settling work.done). Comment ops here (resolvePr/qa) are already awaited; on an UNLINKED spec they additionally classify state-shaped (create-if-unlinked writes link state — same rule as .2 Step 7b).
 9. Regenerate the Codex mirror; confirm rewrites + guard + mirror-parity test pass. The `Task flow-next:tracker-runner` tokens introduced across these six skills are covered by the GLOBAL sync-codex sweep landed in .1 — add NO new per-file rewrite rule; just regenerate + verify the guard/mirror-parity are green.
 
 ## Investigation targets
