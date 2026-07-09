@@ -13583,6 +13583,12 @@ def _resolve_review_rounds_args(args: argparse.Namespace) -> "tuple[str, Optiona
             "--kind impl requires --task <task-id> (the counter is per-task)",
             use_json=args.json,
         )
+    # Canonicalize the task handle (fn-52.10 R16) — the in-handler call sites
+    # resolve aliases before touching `impl_review_rounds`; the CLI must match,
+    # or an alias (`fn-52.3`) and its canonical id (`fn-52-slug.3`) would key
+    # SEPARATE counters and split the cap.
+    if task_id:
+        task_id = resolve_task_arg(flow_dir, task_id, use_json=args.json) or task_id
     return spec_id, task_id
 
 

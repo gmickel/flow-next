@@ -451,5 +451,62 @@ class TestReviewRoundsCLI(unittest.TestCase):
         self.assertNotIn("impl_review_rounds", self._spec_json())
 
 
+class TestReviewRoundsCliAliasCanonicalization(unittest.TestCase):
+    """PR #202 round 2: `review-rounds increment --task` must canonicalize the
+    task handle — an alias (`fn-1.1`) and the canonical id (`fn-1-demo.1`)
+    keying separate `impl_review_rounds` entries would split the cap."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        _init_flow_repo(self.root)
+        self.spec_id = "fn-1-demo"
+        self.task_id = f"{self.spec_id}.1"
+        task_json = {"id": self.task_id, "spec": self.spec_id, "status": "todo",
+                     "title": "t1"}
+        (self.root / ".flow" / "tasks" / f"{self.task_id}.json").write_text(
+            json.dumps(task_json)
+        )
+        self._cwd = os.getcwd()
+        os.chdir(self.root)
+        self._old_env = os.environ.pop("MAX_REVIEW_ITERATIONS", None)
+
+    def tearDown(self):
+        os.chdir(self._cwd)
+        if self._old_env is not None:
+            os.environ["MAX_REVIEW_ITERATIONS"] = self._old_env
+        self._tmp.cleanup()
+
+    def _run(self, *argv: str) -> "tuple[int, str, str]":
+        out, err = io.StringIO(), io.StringIO()
+        code = 0
+        with mock.patch.object(sys, "argv", ["flowctl", *argv]):
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                try:
+                    flowctl.main()
+                except SystemExit as e:
+                    code = int(e.code or 0)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_alias_and_canonical_share_one_counter(self):
+        # alias handle first, canonical second — one counter key, two rounds.
+        code, _, err = self._run(
+            "review-rounds", "increment", self.spec_id,
+            "--kind", "impl", "--task", "fn-1.1", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        code, _, err = self._run(
+            "review-rounds", "increment", self.spec_id,
+            "--kind", "impl", "--task", self.task_id, "--json",
+        )
+        self.assertEqual(code, 0, err)
+        data = json.loads(
+            (self.root / ".flow" / "specs" / f"{self.spec_id}.json").read_text()
+        )
+        rounds = data["impl_review_rounds"]
+        self.assertEqual(list(rounds.keys()), [self.task_id])
+        self.assertEqual(rounds[self.task_id], 2)
+
+
 if __name__ == "__main__":
     unittest.main()
