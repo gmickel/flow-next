@@ -440,7 +440,9 @@ Reviews block progress until approved:
 <verdict>SHIP</verdict>
 ```
 
-Fix → re-review → fix → re-review... until the reviewer approves.
+Fix → re-review → fix → re-review... until the reviewer approves — bounded by `MAX_REVIEW_ITERATIONS`.
+
+**The cap is now deterministic (fn-90).** `MAX_REVIEW_ITERATIONS` (default 3) was previously prose-only — an instruction to the host LLM to "keep an iteration counter in agent context" that **reset to 0 on every fresh review invocation** (a new Ralph iteration, a new pilot tick, a human retry). That per-invocation reset was the review-loop-runaway root cause: the field-observed ~11× loop was ≈ 5–6 fresh invocations × ~3 in-agent rounds each. flowctl now owns a **cumulative round counter on spec state** (`plan_review_rounds` spec-scoped; `impl_review_rounds[<task-id>]` per-task; completion reviews reuse the plan counter) that **survives fresh invocations**. At the cap, the backend review command **refuses to dispatch** and exits with the dedicated code **`4`** (distinct from transport-failure `2`/`3`) plus an `ESCALATE:` marker. **Ralph MUST surface this as NEEDS_HUMAN — never a retry** (a retry loop on the cap re-creates the runaway one level up). Round-counting is deliberately biased toward safety: **every dispatch attempt counts, including a failed/malformed exec** (not only resolved SHIP/NEEDS_WORK rounds), so worst case is *early* human escalation. The counter resets only on a `SHIP` verdict or an explicit `flowctl spec reset-review-rounds <spec-id>` (re-plan) — never on a spec/code edit. Full semantics: [`flowctl.md` § Deterministic review cap](flowctl.md#codex-impl-review).
 
 **Verdict tags:**
 
@@ -499,7 +501,7 @@ Edit `scripts/ralph/config.env`:
 | `MAX_ITERATIONS` | `25` | Total loop iterations |
 | `MAX_TURNS` | ∞ | Claude turns per iteration |
 | `MAX_ATTEMPTS_PER_TASK` | `5` | Retries before auto-blocking |
-| `MAX_REVIEW_ITERATIONS` | `3` | Fix+re-review cycles per review |
+| `MAX_REVIEW_ITERATIONS` | `3` | Fix+re-review cycles per review. **Enforced deterministically by flowctl (fn-90)** via a cumulative round counter on spec state that survives fresh invocations — at the cap the review command refuses (exit `4` + `ESCALATE:`). See § [Review Loops Until SHIP](#3-review-loops-until-ship). |
 | `WORKER_TIMEOUT` | `3600` | Seconds before killing stuck worker |
 
 ### Scope

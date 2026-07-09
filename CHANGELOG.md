@@ -2,6 +2,17 @@
 
 All notable changes to the flow-next.
 
+## [Unreleased]
+
+### Fixed
+
+- **Cursor review-backend loop runaway — root-cause fix, not a guard (fn-90)** — the first external team running flow-next live hit a review that looped **~11×** before converging (Gordon has never seen >3 on the default `rp`+Codex setup). Root-cause investigation (live repro on the fn-89 fixture, 3× cursor + 2× codex) found four confirmed causes, all now fixed backend-agnostically:
+  - **The cap was prose-only and reset every invocation.** `MAX_REVIEW_ITERATIONS` (default 3) was just an instruction to the host LLM to keep an in-context counter — which reset to 0 on every fresh review invocation (a new Ralph iteration, pilot tick, or human retry), so the field loop was ≈ 5–6 fresh invocations × ~3 in-agent rounds. flowctl now owns a **cumulative round counter on spec state** (`plan_review_rounds` spec-scoped; `impl_review_rounds[<task-id>]` per-task; **completion reviews reuse the plan counter**) that survives fresh invocations and **refuses to dispatch at the cap** with a dedicated exit code `4` + an `ESCALATE:` marker (distinct from transport-failure `2`/`3` so a host/Ralph loop can't misread the refusal as retryable — surfaces as NEEDS_HUMAN). **Round-counting counts every dispatch attempt, including a failed/malformed exec** (deliberate anti-runaway bias — worst case is *early* human escalation). The counter resets only on a `SHIP` verdict or an explicit re-plan (`flowctl spec reset-review-rounds <spec-id>`), never on a spec/code edit.
+  - **Every re-review was a fresh blind review** (churn lottery — two identical fresh cursor reviews overlapped on only ~50% of findings, making SHIP statistically near-unreachable within the cap). The re-review now injects the prior round's findings via a **shrink-only convergence ratchet** (verify each prior finding fixed; only a NEW ≥ Major finding may block; all prior fixed + no new ≥ Major ⇒ verdict MUST SHIP). Receipts stay back-compatible: one without the prior-findings field is treated as a fresh round 1.
+  - **Codex/copilot verdict parse was poisonable** — a verdict literal echoed in tool output (`command_execution` / `aggregated_output`, e.g. a grep of `smoke_test.sh`'s assertions) or a quoted-grammar literal in the final message could beat the reviewer's real verdict (flowctl reported SHIP while the reviewer said NEEDS_WORK). The parse now isolates the **final agent message** and takes the **last** `<verdict>` match. Locked in by an offline regression guard (`optimization/review-prompt/reveval_parse_guard.py`, run in the gate).
+  - **Cursor's ambient injection** (its built-in persona rubric + auto-attached workspace `AGENTS.md` / skills / MCP blocks — `cursor-agent` has no system-prompt mechanism) diluted the scope anchor and biased toward always-produce-findings (an amplifier, not the root cause). A **persona-override preamble** now rides in every cursor review prompt, declaring the ambient guidance superseded.
+  - Plus: **031a0058 guard parity** ported to plan-review (MAJOR_RETHINK escalates instead of looping; the caller-reset warning), **spec/task-scoped receipt defaults** (`/tmp/plan-review-receipt-<spec>.json`, `-<task>.json` — concurrent reviews no longer collide; explicit `REVIEW_RECEIPT_PATH` still wins), and docs across `orchestration.md` / `flowctl.md` / `ralph.md` / `troubleshooting.md`. No version bump (batched release convention).
+
 ## [flow-next 2.9.1] - 2026-07-09
 
 ### Fixed

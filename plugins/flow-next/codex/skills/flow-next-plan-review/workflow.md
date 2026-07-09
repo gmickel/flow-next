@@ -96,7 +96,7 @@ $FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 ### Step 1: Execute Review
 
 ```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt-${SPEC_ID}.json}" # fn-90 R5: spec-scoped default (concurrent specs no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 
 # --files: comma-separated CODE files for reviewer context
 # Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
@@ -148,7 +148,7 @@ $FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 ### Step 1: Execute Review
 
 ```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt-${SPEC_ID}.json}" # fn-90 R5: spec-scoped default (concurrent specs no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 
 # --files: comma-separated CODE files for reviewer context
 # Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
@@ -209,7 +209,7 @@ $FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 ### Step 1: Execute Review
 
 ```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt.json}"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt-${SPEC_ID}.json}" # fn-90 R5: spec-scoped default (concurrent specs no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 
 # --files: comma-separated CODE files for reviewer context
 # Spec/task specs are auto-included; pass files the plan will CREATE or MODIFY
@@ -486,7 +486,9 @@ If no verdict tag, output `<promise>RETRY</promise>` and stop.
 
 **CRITICAL: You MUST fix the plan BEFORE re-reviewing. Never re-review without making changes.**
 
-**MAX ITERATIONS**: Limit fix+re-review cycles to **${MAX_REVIEW_ITERATIONS:-3}** iterations (default 3, configurable in Ralph's config.env). If still NEEDS_WORK after max rounds, output `<promise>RETRY</promise>` and stop — let the next Ralph iteration start fresh.
+**MAJOR_RETHINK is NOT a fix-loop input.** `MAJOR_RETHINK` is a valid verdict tag, but it means the *plan/approach* is wrong — not something to patch finding-by-finding. Do NOT enter the fix loop on it. Escalate immediately: surface the reviewer's rationale to the caller and stop with a typed **`BLOCKED: DESIGN_CONFLICT`** (Ralph mode: output `<promise>RETRY</promise>`). A re-plan is a human decision, never an ad-hoc patch. Only `NEEDS_WORK` drives the loop below.
+
+**MAX ITERATIONS**: Limit fix+re-review cycles to **${MAX_REVIEW_ITERATIONS:-3}** iterations (default 3, configurable in Ralph's config.env). If still NEEDS_WORK after max rounds, output `<promise>RETRY</promise>` and stop — let the next Ralph iteration start fresh. **The cap is now ALSO enforced deterministically by flowctl (fn-90 R5): each `flowctl <backend> plan-review` dispatch increments a cumulative spec-scoped counter (`plan_review_rounds`) and REFUSES at the cap with an `ESCALATE:` marker + exit 4. The flowctl counter survives across fresh `/flow-next:plan-review` invocations, so a caller-side "re-invoke until SHIP" outer loop can no longer reset the cap by re-entering — it resets ONLY on a SHIP verdict or an explicit re-plan (`flowctl spec reset-review-rounds <spec-id>`), never on a fresh invocation or a spec edit.**
 
 If verdict is NEEDS_WORK:
 

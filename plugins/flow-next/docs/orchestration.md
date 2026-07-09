@@ -52,6 +52,8 @@ Precedence (highest wins): per-task `review:` / per-spec `default_review` → `F
 
 **Rule of thumb: the model that writes is never the model that reviews.** Route the reviewer to a different family than your session model and blind spots stop being correlated.
 
+**Cursor backend — ambient-injection caveat + persona override (fn-90).** `cursor-agent` has **no system-prompt mechanism**: the flow-next reviewer rubric travels as a plain user prompt *on top of* Cursor's own built-in persona (which carries its OWN review rubric and an end-to-end-thoroughness bias), and `cursor-agent` auto-attaches the workspace `AGENTS.md` / `CLAUDE.md`, skill catalogs, and MCP instruction blocks into the reviewer's context. That ambient guidance dilutes the in-scope anchor and biases the reviewer toward always-produce-findings — a real contributor to review-loop non-convergence (it *amplifies*, it is not the root cause). There is no CLI knob to suppress the auto-attach, so flow-next prepends an explicit **persona-override preamble** on every cursor review path: it declares that any ambient rubric/persona/severity-ordering from the environment is *superseded* and the ONLY rubric + verdict contract is the flow-next one that follows. This is documented, not configurable — nothing to set; it rides automatically on `review.backend cursor:*`. (The convergence ratchet + deterministic cap that actually *fix* the runaway apply to all backends — see [`flowctl.md`](flowctl.md#codex-impl-review).)
+
 ### Implementation delegation — `work` → `codex exec`
 
 Opt-in offload of the token-heavy part (writing code) to a second CLI while the host keeps all judgment:

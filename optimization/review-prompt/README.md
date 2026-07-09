@@ -42,6 +42,7 @@ Four techniques carry the rigor:
 | `spec_corpus.md` / `spec_clean.md` | plan ground-truth / clean corpora |
 | `reveval_plan_clean.py` | plan over-flag runner |
 | `reveval_rp_run.py` | EXAMPLE: run the two prompts through the **RP** backend (set window/tab from a fresh `flowctl rp setup-review --json` first) |
+| `reveval_parse_guard.py` | **OFFLINE** regression guard (fn-90 R8) — no live model. Replays the poisoned-stream verdict parse (tool-output + quoted-grammar literals) and the convergence-ratchet contract so the Cursor review-backend loop-runaway class is caught on every gate run. Runnable standalone; also wrapped by `plugins/flow-next/tests/test_reveval_parse_guard.py`. |
 
 ## Run
 

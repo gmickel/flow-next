@@ -22,7 +22,7 @@ git log ${DIFF_BASE}..HEAD --oneline
 ## Step 2: Execute Review
 
 ```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt.json}"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}" # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 
 # Runtime config:
 # --spec <spec> full spec (backend:model:effort), highest priority

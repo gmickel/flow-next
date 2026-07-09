@@ -23655,6 +23655,11 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
     # Resolve review spec — completion reviews are epic-scoped
     resolved_spec = _resolve_codex_review_spec(args, None, spec_id=epic_id)
 
+    # fn-90 R5: deterministic cap — completion reviews reuse the spec-scoped
+    # plan-review counter (they are spec-scoped, no task context). Enforce +
+    # increment BEFORE dispatch; refuses (exit 4) at the cap.
+    enforce_and_increment_review_cap(epic_id, "plan", use_json=args.json)
+
     # Run codex (cwd=repo_root so repo-relative changed-file paths resolve from
     # any subdir; codex reads files from disk — never embedded into the prompt).
     repo_root = get_repo_root()
@@ -23702,6 +23707,11 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
             use_json=args.json,
             code=2,
         )
+
+    # fn-90 R5: convergence — completion reviews reuse the plan counter; reset
+    # on SHIP so the spec-scoped cap re-opens once the reviewer converges.
+    if verdict == "SHIP":
+        reset_review_cap(epic_id, "plan")
 
     # Preserve session_id for continuity (avoid clobbering on resumed sessions)
     session_id_to_write = thread_id or session_id
@@ -24334,6 +24344,11 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
     effective_model = resolved_spec.model or "gpt-5.5"
     effective_effort = resolved_spec.effort or "high"
 
+    # fn-90 R5: deterministic cap — completion reviews reuse the spec-scoped
+    # plan-review counter (spec-scoped, no task context). Enforce + increment
+    # BEFORE dispatch; refuses (exit 4) at the cap.
+    enforce_and_increment_review_cap(epic_id, "plan", use_json=args.json)
+
     repo_root = get_repo_root()
     output, returned_session_id, exit_code, stderr = run_copilot_exec(
         prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
@@ -24362,6 +24377,11 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
             use_json=args.json,
             code=2,
         )
+
+    # fn-90 R5: convergence — completion reviews reuse the plan counter; reset
+    # on SHIP so the spec-scoped cap re-opens once the reviewer converges.
+    if verdict == "SHIP":
+        reset_review_cap(epic_id, "plan")
 
     # Preserve session_id for continuity (avoid clobbering on resumed sessions)
     session_id_to_write = returned_session_id or session_id
@@ -25095,6 +25115,11 @@ def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
         task_ids=task_ids or None,
     )
 
+    # fn-90 R5: deterministic cap — completion reviews reuse the spec-scoped
+    # plan-review counter (spec-scoped, no task context). Enforce + increment
+    # BEFORE dispatch; refuses (exit 4) at the cap.
+    enforce_and_increment_review_cap(epic_id, "plan", use_json=args.json)
+
     output, returned_session_id, exit_code, stderr = run_cursor_exec(
         prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
     )
@@ -25122,6 +25147,11 @@ def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
             use_json=args.json,
             code=2,
         )
+
+    # fn-90 R5: convergence — completion reviews reuse the plan counter; reset
+    # on SHIP so the spec-scoped cap re-opens once the reviewer converges.
+    if verdict == "SHIP":
+        reset_review_cap(epic_id, "plan")
 
     # Preserve session_id for continuity (avoid clobbering on resumed sessions)
     session_id_to_write = returned_session_id or session_id

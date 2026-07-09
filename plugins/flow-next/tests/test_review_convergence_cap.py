@@ -263,6 +263,38 @@ class TestDeterministicCap(unittest.TestCase):
         flowctl.cmd_spec_reset_review_rounds(args)
         self.assertEqual(self._rounds(), 0)
 
+    def test_completion_review_shares_plan_counter(self):
+        """fn-90 R5: completion reviews reuse the spec-scoped plan counter
+        (review_kind="plan", no task context) — a plan review followed by a
+        completion review increments the SAME cumulative counter, so the two
+        cannot each independently spend a full cap and re-open the runaway.
+        """
+        self.assertEqual(
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 1
+        )
+        # A completion review reuses review_kind="plan" — continues the count.
+        self.assertEqual(
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 2
+        )
+        self.assertEqual(self._rounds(), 2)
+
+    def test_completion_review_cap_refuses_and_resets_on_ship(self):
+        """A completion review at the shared plan cap refuses (exit 4); a SHIP
+        reset (review_kind="plan") re-opens it."""
+        for _ in range(3):
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            with self.assertRaises(SystemExit) as ctx:
+                flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+        self.assertEqual(ctx.exception.code, flowctl.REVIEW_CAP_EXIT_CODE)
+        self.assertIn("ESCALATE", err.getvalue())
+        # SHIP on the completion review resets the shared counter.
+        flowctl.reset_review_cap(self.spec_id, "plan")
+        self.assertEqual(self._rounds(), 0)
+        self.assertEqual(
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 1
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
