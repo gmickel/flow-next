@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-09T13:08:59.104029Z",
+  "depends_on": [
+    "fn-90-cursor-review-backend-loop-runaway-root.1"
+  ],
+  "id": "fn-90-cursor-review-backend-loop-runaway-root.2",
+  "priority": 2,
+  "spec": "fn-90-cursor-review-backend-loop-runaway-root",
+  "spec_path": ".flow/tasks/fn-90-cursor-review-backend-loop-runaway-root.2.md",
+  "status": "todo",
+  "title": "Productionize: guards, receipts, evals, docs, changelog, mirror, release staging",
+  "updated_at": "2026-07-09T13:08:59.104213Z"
+}
