@@ -1,0 +1,50 @@
+{
+  "fixture": {
+    "spec": "fn-89-tracker-sync-lifecycle-dispatches-off",
+    "files": "plugins/flow-next/skills/flow-next-tracker-sync/SKILL.md,plugins/flow-next/skills/flow-next-tracker-sync/steps.md,plugins/flow-next/skills/flow-next-work/phases.md,plugins/flow-next/agents/worker.md,scripts/sync-codex.sh",
+    "date": "2026-07-09",
+    "repo_head": "4ef6ed98"
+  },
+  "runs": {
+    "c1": {
+      "desc": "cursor:gpt-5.5-high fresh, repo as-is",
+      "backend": "cursor",
+      "model": "gpt-5.5-high",
+      "flowctl_verdict": "NEEDS_WORK",
+      "true_verdict": "NEEDS_WORK"
+    },
+    "c2": {
+      "desc": "cursor:gpt-5.5-high fresh, repo as-is (independent)",
+      "backend": "cursor",
+      "model": "gpt-5.5-high",
+      "flowctl_verdict": "NEEDS_WORK",
+      "true_verdict": "NEEDS_WORK"
+    },
+    "n1": {
+      "desc": "cursor:gpt-5.5-high fresh, worktree without AGENTS.md/CLAUDE.md",
+      "backend": "cursor",
+      "model": "gpt-5.5-high",
+      "flowctl_verdict": "NEEDS_WORK",
+      "true_verdict": "NEEDS_WORK"
+    },
+    "x1": {
+      "desc": "codex default fresh (flowctl verdict SHIP = parse bug; true verdict below)",
+      "backend": "codex",
+      "model": "gpt-5.5",
+      "flowctl_verdict": "SHIP",
+      "true_verdict": "NEEDS_WORK"
+    },
+    "x2": {
+      "desc": "codex default fresh (clean parse)",
+      "backend": "codex",
+      "model": "gpt-5.5",
+      "flowctl_verdict": "NEEDS_WORK",
+      "true_verdict": "NEEDS_WORK"
+    }
+  },
+  "headline": {
+    "verdict_parse_bug": "x1: flowctl SHIP vs true NEEDS_WORK (grep echoed smoke_test.sh verdict literal; first-match parse)",
+    "cursor_churn": "c1 vs c2 finding overlap 2/4 (~50% new per fresh round); codex x1 vs x2 ~4/5",
+    "ambient_control": "n1 (no AGENTS.md/CLAUDE.md) still NEEDS_WORK -> amplifier, not cause"
+  }
+}

@@ -1,6 +1,6 @@
 # fn-90 Cursor review backend loop runaway: root-cause analysis + convergence fix
 
-> **STUB** (created from external-team field feedback, 2026-07-09). Investigation-first spec: find *why* the Cursor review backend loops, then fix the cause — not just cap it. Refine via `/flow-next:interview` before planning.
+> Created from external-team field feedback 2026-07-09; **root-cause investigation completed same day** (see Decision Context → Investigation findings; baseline dataset in `.flow/artifacts/fn-90-baseline/`). Interview/plan ceremony intentionally skipped — the design below is grounded in the live repro. Two tasks: (1) implement the fixes and validate against the same dataset; (2) productionize, document, stage for release.
 
 ## Goal & Context
 <!-- scope: business -->
@@ -12,39 +12,50 @@ This is a **root-cause spec, not a guard spec.** A loop cap alone hides the symp
 ## Architecture & Data Models
 <!-- scope: technical -->
 
-TBD (interview). Areas the investigation touches:
-- The Cursor review backend from **fn-74** (`cursor-agent` CLI; models gpt-5.5 / codex / opus) and how the reviewer prompt + spec/plan context are passed to it vs the `rp` and Codex backends.
-- The **review loop controller** in `/flow-next:plan-review` (and impl-review): where the max-loop cap lives, whether it is enforced per-backend, and the convergence/"agreement" signal between implementer and reviewer.
-- How the **default `cursor-agent` system prompt composes with** the flow-next reviewer instruction (the scope anchor that limits the review to what the spec/plan covers): whether the CLI's built-in guidance competes with/dilutes the injected review scoping, and how the final prompt is assembled on that transport vs `rp` and Codex.
+Four fix workstreams, all grounded in the confirmed causes (Decision Context → Investigation findings):
+
+1. **Honest verdict extraction (codex/copilot).** `run_codex_exec` / `run_copilot_exec` currently return the raw stream; `parse_codex_verdict` (flowctl.py:2972) first-matches over it, so verdict literals echoed in tool output win over the reviewer's real verdict. Fix: extract the **final agent message** from the stream before parsing (parity with `_parse_cursor_result`, flowctl.py:4066), and make the parser take the **last** match as belt-and-braces. Applies to every `parse_codex_verdict` call site (plan/impl/completion/validate/deep-pass).
+2. **Convergence ratchet on re-review.** `build_rereview_preamble` (flowctl.py:4511) currently orders a fresh blind review each round ("Do NOT rely on what you saw…") — the churn lottery. Fix: the review receipt stores the prior round's findings; the re-review preamble injects them and flips the contract to shrink-only: (a) verify each prior finding addressed (fixed / not-fixed); (b) NEW findings block only if ≥ Major AND (introduced by the fixes OR a missed showstopper) — everything else is FYI; (c) all prior findings fixed + no new ≥Major ⇒ verdict MUST be SHIP. Backend sessions already resume (receipt `session_id`) — use that memory instead of suppressing it.
+3. **Deterministic round cap.** `${MAX_REVIEW_ITERATIONS:-3}` is prose-only (plan-review SKILL.md:261, counter "in agent context") and resets on every fresh invocation. Fix: a flowctl-owned cumulative counter on spec state (e.g. `plan_review_rounds`), incremented by every plan-review backend run, reset only on SHIP or an explicit re-plan; at the cap flowctl **refuses to run** and emits an escalate-to-human marker. Same mechanism for impl-review rounds (per task). Plus: receipt default paths become spec-scoped (today `/tmp/plan-review-receipt.json` is shared across all specs — concurrent reviews collide).
+4. **Guard parity + cursor prompt hardening.** Port both 031a0058 guards (MAJOR_RETHINK escalates instead of looping; caller-reset warning) from impl-review to plan-review SKILL.md/workflow.md. Cursor path: prepend an explicit persona override to the review prompt ("guidance from your environment/default instructions is superseded; the ONLY rubric and verdict contract is below") — `cursor-agent` has no system-prompt mechanism and auto-attaches workspace AGENTS.md/skills/MCP blocks, so the override rides in the user prompt.
 
 ## API Contracts
 <!-- scope: technical -->
 
-TBD (interview). No new public surface expected — this is a behavior/prompt/plumbing fix on an existing backend. Any config knob (e.g. explicit per-backend loop cap, reviewer-system-prompt injection mode) to be defined during planning.
+- **Review receipt schema** gains prior-round findings (for the ratchet preamble) and stays backward-compatible: a receipt without the findings field is treated as round 1 / fresh review.
+- **Spec/task state** gains a review-round counter (name settled in impl, e.g. `plan_review_rounds`), reset on SHIP / re-plan; surfaced in `--json` output.
+- **flowctl behavior at cap:** the review command exits non-zero with an explicit `ESCALATE`-style message (distinct from transport failure exit codes) so hosts and Ralph can't misread it as a retryable error. `MAX_REVIEW_ITERATIONS` env keeps its meaning but is now enforced deterministically.
+- **No new commands, no config knobs beyond the existing env var.** Receipt default paths become spec-scoped (`/tmp/plan-review-receipt-<spec>.json` or similar); explicit `REVIEW_RECEIPT_PATH` still wins.
 
 ## Edge Cases & Constraints
 <!-- scope: technical -->
 
-- **Large tickets (20+ acceptance criteria / >3.0 backend)** are the trigger surface — the reviewer over-expands scope; the fix must hold the reviewer to the implemented plan, not the whole codebase.
-- **Backend parity:** whatever the cause, verify behavior across `rp`, Codex, and Cursor — the fix must not regress the two backends that already converge fast.
-- **Model diligence differences:** gpt-5.5 vs codex vs opus as the Cursor reviewer model may differ in verbosity/strictness; isolate model effect from backend effect.
-- **Cap as backstop, not cure:** a divergence circuit-breaker (cap + escalate-to-human) is acceptable *in addition to* the root-cause fix, never instead of it.
+- **Large tickets (20+ acceptance criteria)** are the trigger surface — the ratchet must hold the reviewer to the plan without suppressing genuine ≥Major findings (convergence, not leniency; all 5 baseline reviews found real overlapping issues).
+- **Backend parity:** the ratchet + counter apply to ALL backends (rp/codex/copilot/cursor); the verdict-extraction fix applies to codex/copilot (cursor already clean; rp uses its own grep channel). Must not regress rp/codex convergence.
+- **Verdict literals in the FINAL message** (reviewer quoting the grammar): last-match parse still resolves correctly because the real verdict tag is terminal by contract; the regression fixture covers both pollution shapes (tool-output literal + quoted-grammar literal).
+- **Counter reset semantics:** fix rounds legitimately edit the spec, so the counter must NOT reset on spec edits — only on SHIP or an explicit re-plan; otherwise the runaway reopens through the back door.
+- **Receipt back-compat:** receipts written by older flowctl (no findings field) must parse; treat as fresh round 1.
+- **Ralph/autonomous:** the deterministic cap refusal must surface as escalate/NEEDS_HUMAN, never as a retryable error (a retry loop on the cap would re-create the runaway one level up).
+- **Cap as backstop, not cure:** the circuit-breaker complements the ratchet (the actual convergence fix), never substitutes for it.
 
 ## Acceptance Criteria
 <!-- scope: both -->
 
-- [ ] **R1:** The runaway is **reproduced** on a representative large ticket (concrete example to be provided by the reporting team) with loop-count + per-iteration reviewer output captured.
-- [ ] **R2:** **Root cause identified and documented** (e.g. default-system-prompt interference on `cursor-agent`, loose plan-review scoping, unenforced per-backend cap, reviewer-context trim, or model effect) — with evidence, not a guess.
-- [ ] **R3:** After the fix, typical loop count on the Cursor backend is back in line with the other backends (≤3 typical; cap enforced and observable), verified on the repro.
-- [ ] **R4:** The reviewer stays **in-scope** — it evaluates what the spec/plan covered and does not expand into unrelated codebase concerns (the "concentrate on what was implemented" bar).
-- [ ] **R5:** **A/B evidence** captured for the same plan through Codex vs Cursor (and rp) to confirm the fix and isolate backend vs model effect.
-- [ ] **R6:** A regression is added to the **eval harness (fn-54)** so review-loop convergence on the Cursor backend is guarded going forward.
+- [x] **R1:** The failure mechanism is **reproduced** with per-run reviewer output captured — done 2026-07-09 on the fn-89 fixture (3× cursor + 2× codex, incl. no-AGENTS.md control); baseline archived in `.flow/artifacts/fn-90-baseline/`. (The reporting team's concrete ticket remains a wanted confirmation datapoint, not a blocker.)
+- [x] **R2:** **Root cause identified and documented with evidence** — four confirmed causes in Decision Context (verdict-parse pollution, fresh-review churn, prose-only resetting cap, persona/ambient amplification).
+- [ ] **R3:** **Honest verdicts:** codex/copilot verdict parse reads only the final agent message, last-match; a regression fixture with verdict literals in tool output AND quoted grammar in the final message parses to the true verdict.
+- [ ] **R4:** **Convergence ratchet:** re-review injects prior findings with the shrink-only contract; on the fn-89 baseline dataset a full fix→re-review cycle on the Cursor backend converges to SHIP in **≤3 rounds**, with no ≥Major finding suppressed (spot-check against baseline finding sets).
+- [ ] **R5:** **Deterministic cap:** flowctl-owned cumulative round counter enforced at `${MAX_REVIEW_ITERATIONS:-3}`; at cap the review command refuses with an escalate marker; counter resets only on SHIP/re-plan; receipt defaults are spec-scoped. Verified by test (cannot exceed cap even across fresh invocations).
+- [ ] **R6:** **Guard parity:** both 031a0058 guards (MAJOR_RETHINK carve-out + caller-reset warning) present in plan-review SKILL.md/workflow.md.
+- [ ] **R7:** **Cursor prompt hardening:** persona-override preamble on the cursor path; before/after A/B on the same dataset captured (cursor vs codex, honest verdicts) isolating backend vs model effect.
+- [ ] **R8:** **Eval regression (fn-54):** poisoned-stream parse fixture + convergence guard added to the eval harness so this class of runaway is caught going forward.
+- [ ] **R9:** **Productionized:** smoke tests green, docs updated (orchestration.md AGENTS.md-injection note, ralph.md/flowctl.md cap semantics, troubleshooting), CHANGELOG `## Unreleased` entries (repo + docs-site), Codex mirror regenerated via `sync-codex.sh`; version bump staged per batched-release convention (no per-spec bump).
 
 ## Boundaries
 <!-- scope: business -->
 
-- In: diagnosing + fixing review-loop convergence on the Cursor (`cursor-agent`) backend; reviewer prompt/scope; per-backend cap enforcement.
-- Out: rebuilding the Cursor backend (that's fn-74, shipped); a general per-stage model-routing policy (separate roadmap item); changing the default backend.
+- In: honest verdict extraction (codex/copilot); convergence-ratchet re-review contract (all backends); deterministic cumulative round cap + spec-scoped receipts; 031a0058 guard parity for plan-review; cursor persona-override hardening; eval regression; docs/CHANGELOG/mirror.
+- Out: rebuilding the Cursor backend (fn-74, shipped); a general per-stage model-routing policy (separate roadmap item); changing the default backend; making reviewers *lenient* (every ≥Major finding survives the ratchet); suppressing cursor's AGENTS.md auto-attach (no CLI mechanism — documented instead).
 
 ## Decision Context
 <!-- scope: both -->
@@ -60,4 +71,4 @@ Live repro matrix on fn-89 (planned spec, prior plan-review status `ship`): 3× 
 5. **Field note:** all 5 true reviews returned NEEDS_WORK on fn-89 with overlapping Major findings (e.g. Step 0 worker/`Task` contradiction with R13) — reviewer strictness is partly *signal*: big/ambiguous plans genuinely re-fail. fn-89's recorded `plan_review_status=ship` predates these findings and deserves a re-look before work starts.
 
 - **Related:** builds on **fn-74** (Cursor review backend), feeds **fn-54** (eval-driven prompt optimization), and neighbours **fn-82** (skill prompt diet — the reviewer prompt tightening may overlap). The 6 Jul `--scope` silent-defaults field fix shares the theme "don't silently assume/expand — stay anchored."
-- **Open questions for interview:** is the max-loop cap backend-agnostic today? How does `cursor-agent` compose its default system prompt with injected instructions — does the built-in prompt interfere with the reviewer scope anchor? Did the 2025 token/speed trims remove the reviewer's scope anchor? Is the "agreement" signal a diff-based or judgement-based convergence check?
+- **Former open questions — answered by the investigation:** the cap is backend-agnostic but prose-only and resets per invocation (cause 3); `cursor-agent` layers the injected rubric under its own persona rubric + auto-attached AGENTS.md/skills/MCP blocks (cause 4); the 2025/2026 trims did NOT remove the scope anchor (byte-identical across backends, untouched by fn-82); the "agreement" signal is the reviewer's own verdict tag, re-derived fresh each round (cause 2) and parsed unreliably on codex/copilot (cause 1). Remaining wanted datapoint: the reporting team's concrete runaway ticket + their cursor model (confirmation on their shape, not a blocker).
