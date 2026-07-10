@@ -1,41 +1,45 @@
-# make-pr reviewer-ease: flowctl-backed traceability
+# make-pr reviewer-ease: deterministic traceability slice (payload data for the review plan)
 
-## Goal & context
+## Goal & Context
 
-Follow-up to the make-pr reviewer-ease render sections (landed on the fn-84 branch, commit 4976833f). Those four sections (Not-in-this-PR, Verification, Review plan, provenance chip) were render-only — no flowctl change. A fable DESIGN review (2026-07-04) ranked two further review-ease wins that need **deterministic flowctl computation** (not renderable from the current payload): they make each removed export and each R-ID claim traceable to exact in-repo evidence. Same discipline: every rendered claim traces to a flowctl-computed field; zero agent investigation; no "non-breaking" inference.
+fn-93's eval-validated "Review plan" render is only as trustworthy as its data. The blind-judge evidence (prbeval 2026-07-10) showed exactly where vibes fail: a traceability table WITHOUT deterministic backing scored worse than none (V3 trust 7 vs V2's 9 — "weakly supported"), the byte-identical dual-copy file inflated apparent risk, and the judge's residual complaint across every round was "no line/hunk anchors". This spec adds the small deterministic slice to `flowctl spec export-cognitive-aid` that turns fn-93's claims into data.
 
-## Non-goals / boundaries
+## Architecture & Data Models
 
-- NOT re-touching the four render-only sections already shipped (they need no flowctl change).
-- NOT reading diff CONTENT to narrate before→after behavior (the payload has no "before" semantics; that stays the fabrication surface make-pr forbids).
-- NOT a second-model review pass or auto-generated review comments (make-pr's stance: the structured payload does the heavy lifting).
-- NOT touching the opt-in HTML lens (its mismatch check already implies the evidence.files computation; this brings it to the default markdown body).
+Four additive payload fields in `export-cognitive-aid` (flowctl.py, dual-copied), all cheap and deterministic:
 
-## Approach
+1. **`diff_summary.files[].changed_symbols`** — the function/section context per changed file, parsed from `git diff` hunk headers (the `@@ … @@ <context>` line; free, language-agnostic where git's xfuncname works). Gives fn-93's must-review items their anchors ("open `_dispatch_review_with_fallback`") — the judge's #1 residual.
+2. **`diff_summary.files[].derived`** — deterministic derived-file classification: `{kind: mirror|dual-copy|state|none, source: <path|tool>}`. Detection: repo-configurable path rules seeded with the flow-next shapes (generated mirror dirs, byte-identical sibling detection via content hash against a named source file, `.flow/` state paths). Backs the safe-to-skim bucket with data ("byte-identical copy of scripts/flowctl.py — verified this export").
+3. **`removed_export_refs`** — exports/symbols DELETED in the diff that are still referenced elsewhere in the repo (grep-based, conservative: report candidates with file:line, never claim completeness). Empty list ⇒ the render states "no removed symbols still referenced (checked at export time)". The classic silent-breakage class a skimming reviewer misses.
+4. **`tasks[].evidence.files`** — surface each task's claimed files (already recorded at `flowctl done` time) into the export payload so the render can map task → files → commits without re-deriving.
 
-Two flowctl extensions to `export-cognitive-aid` plus thin make-pr render additions, each behind the existing trace-to-field discipline:
+## API Contracts
 
-1. **Removed-export remaining-references (R1-R3).** flowctl computes, per removed symbol, a `removed_detail` record `{symbol, remaining_refs: N, locations: [path:line, ...] capped at 5}` via a bounded `git grep -nF <symbol>` at HEAD. make-pr renders it as a clause on the existing Critical-changes tier-3 bullet: "removes `_legacy_token_env` — 0 in-repo references remain at HEAD" or "— 3 references remain (path:line, ...) — confirm intended".
+- All four fields are ADDITIVE — absent/empty fields render nothing (fn-93 degrades gracefully; older payload consumers unaffected). No schema version bump.
+- `export-cognitive-aid` stays a single call, no new flags; derived-file rules read from an optional config leaf (`makePr.derivedPaths`, default = flow-next's own shapes) — projects override, never required.
+- Determinism contract: every field value must be reproducible from the repo state at export time; no LLM judgment inside flowctl (the render layer judges, the payload reports).
 
-2. **Per-task evidence.files (R4-R6).** flowctl computes `tasks[].evidence.files[]` as the union of `git diff-tree --no-commit-id --name-only -r <sha>` over the task's evidence commits (SHAs already in the payload). make-pr upgrades R-ID-table evidence links to per-file `#diff-<sha256(path)>` anchors (the anchor form the linkable-file-references rule already specifies) and renders the HTML lens's mismatch flag in the markdown body too (an evidence commit touching no file in `diff_summary.files[]` becomes a visibly-flagged table row).
+## Edge Cases & Constraints
 
-Extend `optimization/make-pr/` fixtures with the two new fields; add E11 (removed-export refs) + E12 (evidence.files traceability + mismatch flag) to the eval harness; re-baseline.
+- Hunk headers give function context only where git's language detection works — `changed_symbols` may be empty per file; the render falls back to file-level anchoring (never fabricates).
+- `removed_export_refs` is candidates-not-proof: word-boundary grep over the repo minus the diff's own removals; false positives acceptable (they steer a human look), silent false negatives minimized by conservative matching. Cap the scan cost (bounded file set from the diff's languages).
+- Byte-identical dual-copy detection compares content hashes at export time — a drifted copy is NOT marked derived (that's a real review item).
+- Windows-safe (no shell-outs beyond git; existing subprocess discipline); dual flowctl copies; mirror regen.
 
-## Key files / interfaces
+## Acceptance Criteria
 
-- `plugins/flow-next/scripts/flowctl.py` — the `export-cognitive-aid` payload builder (`_export_detect_public_exports`, `_export_path_is_security_sensitive`); add `removed_detail` + `evidence.files[]` computation (bounded git plumbing, no network).
-- `plugins/flow-next/skills/flow-next-make-pr/workflow.md` — the tier-3 bullet (removed-export clause), the R-ID evidence links (per-file anchors + mismatch row), and the no-weakening guardrail (0-refs is a repo-local FACT, NEVER license to write "non-breaking").
-- `optimization/make-pr/` — fixtures + E11/E12 + re-baseline; `plugins/flow-next/tests/` — flowctl unit tests for the two computations.
+- [ ] **R1:** `changed_symbols` per changed file from diff hunk headers; unit-tested on a fixture diff (incl. a file with no detectable symbols → empty list).
+- [ ] **R2:** `derived` classification (mirror/dual-copy/state) with the flow-next default rules + config override; dual-copy verified by hash at export time; unit-tested both directions (identical → derived, drifted → not).
+- [ ] **R3:** `removed_export_refs` conservative candidate scan with file:line refs; empty-clean case explicit; unit-tested (removed-and-referenced, removed-and-unreferenced, added-only).
+- [ ] **R4:** `tasks[].evidence.files` surfaced in the payload; make-pr render contract references all four fields opportunistically (one small prose touch, coordinated with fn-93's sections).
+- [ ] **R5:** Full suite + smoke green; dual-copy parity; mirror regen; docs (flowctl.md export-cognitive-aid section) + CHANGELOG Unreleased.
 
-## Acceptance criteria
+## Boundaries
 
-- **R1:** `export-cognitive-aid` emits per removed export a `removed_detail` record `{symbol, remaining_refs, locations[]}` computed by a bounded `git grep -nF` at HEAD; locations capped at 5; deterministic; no network.
-- **R2:** make-pr renders the remaining-refs clause on the tier-3 removed-export bullet with the verbatim numbers; both 0-refs and N-refs handled.
-- **R3:** the no-weakening guardrail is extended so `remaining_refs: 0` is a fact about THIS repo only and NEVER licenses "non-breaking" / "internal" / "safe" (external consumers are invisible); reviewer judgment preserved.
-- **R4:** `export-cognitive-aid` emits `tasks[].evidence.files[]` as the union of the task's evidence-commit diff-trees; deterministic git plumbing; empty when the task has no evidence commits.
-- **R5:** make-pr R-ID evidence links resolve to per-file `#diff-<sha256(path)>` anchors; an evidence commit touching no `diff_summary.files[]` path renders a visibly-flagged mismatch row (never silently dropped).
-- **R6:** `optimization/make-pr/` gains E11 (removed-refs) + E12 (evidence.files + mismatch), the fixtures carry the new fields, and a re-baseline shows E1-E12 pass with no regression; flowctl unit tests cover both computations.
+- Out: the render/prose layer itself (fn-93 owns it); AST-level analysis or language servers (hunk headers + grep only — cheap and universal beats precise and heavy); HTML lens changes; any LLM call inside flowctl.
 
-## Test / verification notes
+## Decision Context
 
-flowctl computations are unit-tested (deterministic git plumbing — feed known commits, assert `removed_detail` / `evidence.files`). Render additions verified via the `optimization/make-pr/` dry-run harness (E11/E12 plus E1-E10 no-regression). Run the make-pr smoke test + the unittest suite before handoff. Docs: CHANGELOG Unreleased + the flowctl payload-schema reference + the make-pr reference; downstream docs-site in the same workstream.
+Scoped BY eval evidence, not speculation: prbeval showed the render's remaining weaknesses are exactly data gaps — anchors (judge's residual every round), derived-file trust (dual-copy inflated risk), and unsupported traceability (V3 scored below V2 without real data). Each payload field maps 1:1 to a measured gap. fn-93 ships independently (graceful absence); this spec upgrades its trust ceiling. Soft ordering: fn-93 first (prose, immediate), fn-86 second (data), no hard dependency either way.
+
+> Field origin — same external-team AI-SDLC weekly as fn-93 (2026-07-10); this is the deterministic half of the "get to the 20%" promise. Detailed notes in the maintainer's vault (AI-SDLC weekly 2026-07-10).

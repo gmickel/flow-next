@@ -1,64 +1,47 @@
 # make-pr reviewer-effort reduction: risk-ranked review surfacing + reviewer guidance (get to the 20%)
 
-> **STUB** — captured 2026-07-10 from external-team field feedback (an external team's AI-SDLC weekly; their head of software engineering). As agentic throughput rises, PRs get bigger and more numerous (one product team: "wesentlich mehr Code, größere PRs"). Reviewers don't know **where to look** — the promise from Gordon's coaching slide is that a human only has to read the **~20-30%** that actually needs review. make-pr should render the PR so the review lands on the risky minority, and coach the reviewer on HOW to review under the new model. **Complements fn-86** (the deterministic removed-export-refs + `evidence.files` traceability slice) — this is the broader review-surfacing / prioritization + reviewer-guidance layer on the same structured payload. Refine via `/flow-next:interview` before planning.
-
 ## Goal & Context
-<!-- scope: business -->
 
-The pipeline already produces a structured PR body (cognitive-aid) plus a cross-model review, so confidence on most of the diff is high. What's missing is **explicit reviewer prioritization**: which files/changes carry the risk, what a human must actually verify by hand, and what is safe to skim — so review effort collapses to ~20-30% without the reviewer guessing. Two field asks: (1) surface and rank the risky minority; (2) tell reviewers *how* to review now (it is still a manual step, but they don't yet know where to point their attention). Machine reviews / bots add safety, they do not replace the human — the human still enters, just efficiently.
+As agentic throughput rises, PRs get bigger and more numerous; reviewers don't know **where to look** (external-team AI-SDLC weekly, 2026-07-10: "wesentlich mehr Code, größere PRs … wo soll er genau reinschauen?"). The methodology's promise is that a human only carefully reads the **~20-30%** of a diff that carries real judgment risk. Today's make-pr body lists critical changes and a "Where to look" list but gives NO skip-confidence (which 70-80% is safe and WHY) and NO trust calibration (what the pipeline already verified vs what needs human eyes) — blind-judged at reviewer-effort 7/10 and **trust-calibration 5/10** on a real shipped PR.
+
+**Eval-validated contract (prbeval, 2026-07-10, real PR #203 payload, blind codex judge):** the winning render (V4) scores **9/9/9/9** (reviewer-effort / trust-calibration / actionability / honesty) vs baseline 7/5/8/8 — the load-bearing pieces, in order of measured impact: (1) a "How to review this PR" coaching block (trust 5→9), (2) three-bucket risk ranking with a hard focus budget, (3) per-item what-to-check questions, (4) a derived-file rule. Buckets WITHOUT coaching regressed (must-review ballooned to 55% — V1 scored 6/6). Eval harness + all samples archived (scratchpad `prbeval/`; summary in Decision Context).
 
 ## Architecture & Data Models
-<!-- scope: technical -->
 
-TBD (interview). Built on the existing `export-cognitive-aid` payload + make-pr render (see fn-86). Candidate pieces:
+Pure prose changes to the make-pr render contract (`skills/flow-next-make-pr/workflow.md` Phase 2), replacing the "Where to look" section and adding one new section. No flowctl changes (fn-86 owns the deterministic payload slice; this render degrades gracefully when those fields are absent — the eval's winning sample used today's payload).
 
-- **Risk-ranked review surface** — order / annotate changed files by review-priority signals that are already deterministically computable (security-sensitive paths, public-export / API changes, removed exports, large hunks, no-test-touch, R-ID-coverage gaps) so the body says "start here → these N files carry the risk → the rest is mechanical."
-- **Reviewer-guidance block** — a short, standard "how to review this PR" section (what to verify by hand vs trust the cross-model review + bots for), tuned to the change shape; the counterpart to make-pr's existing verification / review-plan sections.
-- **Large-PR degradation** — the current path (and Linear's **Guide** grouping) breaks on very large PRs ("PR zu groß, ich kann nichts machen"); define graceful behavior — chunk / group by feature-area, or emit a "split this PR" recommendation — rather than giving up.
-- **(Coverage, related)** — much of the value only lands if **all** PRs route through make-pr even when the code was hand-written, so the body + tracker write-back stay consistent. Whether make-pr nudges / normalizes a hand-made PR is an open scope question (may be its own item; capture the dependency, don't silently absorb it).
+1. **`## How to review this PR`** (new, renders before the review plan, ≤ ~8 lines): states what the pipeline verified mechanically (test/gate evidence from `tasks[].evidence`, cross-model review verdicts from `review_receipts`, R-ID coverage) and therefore what the human's job is — judge the must-review bucket, spot-check trust, own the judgment calls machines can't (product intent, API taste, risk appetite). **No-overclaim rule:** cite only verification present in the payload; absent verification is stated honestly ("no cross-model review recorded on this PR").
+2. **`## Review plan`** (replaces `## Where to look`): every changed area in exactly one bucket — `### Must review (~X%)` / `### Spot-check` / `### Safe to skim` — with bucket percentages estimated from `diff_summary` churn. Must-review items: file/area + WHY risky (one clause) + WHAT to check (one concrete reviewer-answerable question) + the specific function/symbol to open (from payload evidence; from fn-86's changed-symbols field when present).
+3. **Focus budget:** must-review targets ≤ ~30% of changed lines; when it would exceed, mechanical subsets are carved out explicitly into safe-to-skim.
+4. **Derived-file rule:** generated mirrors, byte-identical dual copies, and task-state files ALWAYS land in safe-to-skim with the derivation named ("regenerated by sync-codex.sh, guard-verified"; "byte-identical copy, parity-tested") — never counted as review risk. Deterministic classification arrives with fn-86; until then the agent names the derivation from repo knowledge (CLAUDE.md/docs).
+5. Existing hallucination guardrails apply: paths only from `diff_summary.files[]`, no invented risk claims — every WHY traces to payload data.
 
 ## API Contracts
-<!-- scope: technical -->
 
-TBD at planning. Anchor points: the make-pr workflow render (verification / review-plan / critical-changes sections), the cognitive-aid payload fields (reuse fn-86's `removed_detail` + `evidence.files`, plus `diff_summary` + the security-sensitive-path detection), and any Linear "Guide" grouping seam. Cross-platform parity via `sync-codex.sh`.
+- Section order change: `How to review this PR` renders directly after `Critical changes`; `Review plan` replaces `Where to look` in the §2.0 order list (reviewers learn the shape — document the change in the skill + docs).
+- Render consumes ONLY existing payload fields (+ fn-86 fields opportunistically when present: `changed_symbols`, `derived_files`, `removed_export_refs`, `evidence.files`).
+- `--no-mermaid` and all existing flags unaffected.
 
 ## Edge Cases & Constraints
-<!-- scope: technical -->
 
-- Risk ranking must trace to flowctl-computed fields — no agent narration of "what the code does" (make-pr's anti-fabrication stance; same discipline as fn-86).
-- Reviewer guidance must NOT imply the human can skip review — it re-points attention, it never green-lights auto-merge.
-- Large-PR handling must never **silently** truncate the review surface — flag what was elided.
-- Do not duplicate fn-86 — build on its computed fields.
+- Tiny PRs (< ~100 changed lines): the three-bucket split collapses naturally — a single must-review bucket with "everything" is honest; no forced percentages.
+- No-evidence payloads (specless/manual PRs): coaching block states the absence honestly (eval-verified behavior).
+- Length: the winning render costs ~2.5× the baseline's focus sections (~600 vs ~240 words) — accepted: reviewer minutes dwarf token cents; but no repetition between coaching block and buckets (plain-language sizing discipline: priorities, not caps).
+- Codex mirror regen; smoke prose contracts guard the new section names.
 
 ## Acceptance Criteria
-<!-- scope: both -->
 
-- **R1 (STUB):** make-pr renders a **risk-ranked review surface** (which files/changes to review first, what is mechanical) from deterministic payload signals.
-- **R2 (STUB):** make-pr includes a **reviewer-guidance** block (what to verify by hand vs trust the automated reviews), tuned to the change shape.
-- **R3 (STUB):** defined **large-PR behavior** (feature-area grouping and/or a "split this PR" recommendation) instead of a hard failure; anything elided is flagged.
-- **R4 (STUB, related):** capture the "all PRs via make-pr even when hand-coded" coverage / write-back concern as a tracked dependency or sibling scope.
-- *(Real R-IDs assigned at planning; reconcile numbering with fn-86 if the two are merged.)*
+- [ ] **R1:** `## How to review this PR` block per contract §1 (mechanically-verified summary + honest gaps + "your job" framing; no-overclaim rule stated in the skill prose).
+- [ ] **R2:** `## Review plan` three-bucket render per contract §2-3 (WHY + what-to-check + symbol anchor per must-review item; focus budget ≤ ~30% with explicit carve-outs; bucket percentages shown).
+- [ ] **R3:** Derived-file rule in the render contract (always safe-to-skim, derivation named).
+- [ ] **R4:** Docs (`make-pr` skill docs + flow-next.dev make-pr page note at release) + CHANGELOG Unreleased + mirror regen + smoke prose contracts green; the prbeval scores table recorded in the spec.
 
 ## Boundaries
-<!-- scope: business -->
 
-- In: reviewer-effort reduction via risk-ranked surfacing + reviewer guidance + graceful large-PR handling, on the existing structured payload.
-- Out: the deterministic removed-export / `evidence.files` traceability already scoped in **fn-86** (reuse, don't redo); auto-generated review *comments* or a second-model review pass (make-pr's stance: the structured body does the lifting); productivity measurement.
-- GitHub-first; GitLab MR parity is tracked in **fn-73**.
+- Out: flowctl/payload changes (fn-86); the HTML render lens (its §5 contract already carries where-to-look — align later); Linear Guide/PR grouping; enforcing PRs route via make-pr (separate write-back idea from the same feedback); reviewer-side tooling.
 
 ## Decision Context
-<!-- scope: both -->
 
-### Motivation
-<!-- scope: business -->
-Agentic throughput has moved the bottleneck to human review; the offering's promise ("only review ~20%") only holds if make-pr actively points the reviewer at the risky minority and coaches the new review habit. fn-86 made individual claims traceable; this makes the *whole PR* triageable, so human review scales with agentic output.
+Eval evidence (prbeval, fixture = real PR #203 payload, sonnet generation, blind codex judge; scores = reviewer-effort/trust/actionability/honesty): B0 baseline 7/5/8/8 @236w · V1 buckets-only 6/6/8/9 (must-review ballooned 55% — buckets NEED the coaching + budget) · V2 +coaching 8/9/9/8 · V4 +anchors+budget+derived-rule **9/9/9/9** @666w. Judge's residual across all rounds: no line/hunk anchors — deterministic answer (diff hunk-header symbols) assigned to fn-86. V3 (simulated traceability table) scored WORSE on trust/honesty — a traceability table without real deterministic data hurts; render it only when fn-86's fields exist.
 
-### Implementation Tradeoffs
-<!-- scope: technical -->
-TBD (interview). Open: which risk signals to rank on and how to weight them; how much to lean on Linear's Guide grouping vs render our own surface; where the "split this PR" threshold sits; how much of the reviewer-guidance is static vs change-shape-driven. Gordon is collecting field experience reports first.
-
-## Strategy Alignment
-- **Review-throughput / cognitive-aid** track — extends make-pr from "trustworthy claims" (fn-86) to "triaged review" so human review scales with agentic output.
-
-## Conversation Evidence
-> Field origin — external-team AI-SDLC weekly, 2026-07-10 (head of software engineering): "[at one product line] merkt man deutlich, wesentlich mehr Code, größere PRs … du hast auf deiner Folie gezeigt, dass man nur noch 20% anschauen muss … wie man dann wirklich einen PR reviewt, wo soll er genau reinschauen?" Gordon: make-pr should already formulate the PR to be review-friendly (cross-model review at PR level → high confidence → review the 20-30%); Linear's Guide groups PRs by feature area (breaks on huge PRs); ensure all PRs route via make-pr even when hand-coded (write-back); make the work-skill next-step messages clearer; bots add safety, they don't replace the human. Detailed notes in the maintainer's vault (AI-SDLC weekly 2026-07-10).
+> Field origin — external-team AI-SDLC weekly, 2026-07-10 (head of software engineering): "[at one product line] merkt man deutlich, wesentlich mehr Code, größere PRs … du hast auf deiner Folie gezeigt, dass man nur noch 20% anschauen muss … wie man dann wirklich einen PR reviewt, wo soll er genau reinschauen?" Gordon: make-pr should already formulate the PR to be review-friendly (cross-model review at PR level → high confidence → review the 20-30%); ensure all PRs route via make-pr even when hand-coded (write-back); bots add safety, they don't replace the human. Detailed notes in the maintainer's vault (AI-SDLC weekly 2026-07-10).
