@@ -125,17 +125,17 @@ The orchestration patterns that emerged in the wild through mid-2026 all have a 
 
 The emergent pattern (mid-2026): a standing "which model for what" section in your agent instructions — a ranking of the models you can reach plus routing rules. This is **prompted orchestration made durable**: the table is interpreted by intelligence, not parsed by a config loader. The host reads it every session and applies it *with judgment* when it dispatches subagents, picks reviewers, or decides to delegate — which is exactly why the rules grant standing permission to escalate.
 
-flow-next ships this as a canonical scaffold — [`../skills/flow-next-setup/templates/model-routing-snippet.md`](../skills/flow-next-setup/templates/model-routing-snippet.md): a scores table (cost / intelligence / taste) over the session model, `gpt-5.5`, `composer-2.5`, and a fast Claude tier, plus how-to-apply rules and the exact flow-next surface each route drives (worker/`delegate:codex`, review backends, scouts, the thin-wrapper). `/flow-next:setup` offers to write it into your `CLAUDE.md`/`AGENTS.md` live, annotated for the CLIs you actually have installed. The shape, illustrated:
+flow-next ships this as a canonical scaffold — [`../skills/flow-next-setup/templates/model-routing-snippet.md`](../skills/flow-next-setup/templates/model-routing-snippet.md): a scores table (cost / intelligence / taste) over the session model, `gpt-5.6` (sol/terra), `composer-2.5`, and a fast Claude tier, plus how-to-apply rules and the exact flow-next surface each route drives (worker/`delegate:codex`, review backends, scouts, the thin-wrapper). `/flow-next:setup` offers to write it into your `CLAUDE.md`/`AGENTS.md` live, annotated for the CLIs you actually have installed. The shape, illustrated:
 
 ```markdown
 | model                    | cost | intelligence | taste |
 |--------------------------|------|--------------|-------|
 | session model (frontier) | 2    | 10           | 9     |
-| gpt-5.5                  | 9    | 8            | 5     |
+| gpt-5.6-sol              | 8    | 9            | 6     |
 | composer-2.5             | 9    | 6            | 6     |
 
 - Defaults, not limits — escalate to a smarter model when output misses the bar.
-- Bulk/mechanical → gpt-5.5 (delegate:codex); reviews cross-family; user-facing needs taste ≥ 7.
+- Delegated implementation → gpt-5.6-sol (delegate:codex, real work — never a cheaper tier); cheap bulk reads → gpt-5.6-terra; reviews cross-family; user-facing needs taste ≥ 7.
 - Graceful degrade: a routed CLI that is missing or errors → fall back to the session model.
 ```
 

@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 2.12.1] - 2026-07-10
+
+### Changed
+
+- **Model-routing scaffold — GPT-5.6 numbers (Sol/Terra) in the example table.** GPT-5.6 (Sol, Terra, Luna) went GA 2026-07-09; the optional routing scaffold that `/flow-next:setup` offers to write into a project's `CLAUDE.md`/`AGENTS.md` still shipped `gpt-5.5` as its OpenAI row. Refreshed the starting-opinion scores in [`skills/flow-next-setup/templates/model-routing-snippet.md`](plugins/flow-next/skills/flow-next-setup/templates/model-routing-snippet.md): `gpt-5.5` → `gpt-5.6-sol` (cost 8 / intelligence 9 / taste 6 — Artificial Analysis has Sol one point below Fable 5 at ~⅓ the cost, ~54% more token-efficient than 5.5 on agentic coding) plus a new `gpt-5.6-terra` row (cost 9 / intelligence 7 / taste 5 — the cheap tier for bulk *reads*/digests only, not implementation; delegated work stays on sol). The two `probe:codex` wiring lines now name the 5.6 family (sol for `delegate:codex` work, terra for the thin-wrapper read), and the provenance line carries an explicit **"as of Jul 2026"** stamp so the scores announce their own staleness (instruction files decay silently). Scores are starting opinions, not defaults — edit down after scaffolding. Codex mirror regenerated; the [`orchestration.md`](plugins/flow-next/docs/orchestration.md) illustration matches; all 22 `test_model_routing_scaffold` checks pass. **No behavior change** — runtime `work.delegateModel` and codex model resolution are unaffected (fn-76 already resolves the strongest available model on the codex backend).
+
 ## [flow-next 2.12.0] - 2026-07-10
 ### Changed
 
