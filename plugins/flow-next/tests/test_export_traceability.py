@@ -345,5 +345,27 @@ class TestRemovedRefsCrossExtension(RemovedExportRefsBase if 'RemovedExportRefsB
             self.assertTrue(hits, "cross-extension .tsx reference must be found")
             self.assertTrue(any(x["path"] == "view.tsx" for x in hits[0]["refs"]))
 
+class TestRemovedSymbolsSignatureEdit(unittest.TestCase):
+    """PR #205 round 2: a definition edited or moved (removed + re-added in the
+    same diff) is NOT a removed symbol — only removed-minus-added reports."""
+
+    DIFF = (
+        "diff --git a/lib.py b/lib.py\n"
+        "--- a/lib.py\n"
+        "+++ b/lib.py\n"
+        "@@ -1,4 +1,4 @@\n"
+        "-def foo(x):\n"
+        "+def foo(x, y=0):\n"
+        "     pass\n"
+        "-def gone(a):\n"
+        "-    pass\n"
+    )
+
+    def test_signature_edit_excluded_genuine_removal_kept(self):
+        out = flowctl._export_extract_removed_symbols(self.DIFF)
+        self.assertNotIn("foo", out)   # signature edit — re-added on + side
+        self.assertIn("gone", out)     # genuinely removed
+        self.assertEqual(out["gone"], "lib.py")
+
 if __name__ == "__main__":
     unittest.main()

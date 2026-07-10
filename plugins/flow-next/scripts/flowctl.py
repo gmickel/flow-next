@@ -15595,6 +15595,7 @@ def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
     if not unified_diff:
         return {}
     out: dict[str, str] = {}
+    added: set[str] = set()
     current_path: Optional[str] = None
     current_is_source = False
     pending_removed_path: Optional[str] = None
@@ -15624,17 +15625,31 @@ def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
             continue
         if not current_is_source or current_path is None:
             continue
-        # Removed content line (but not the `--- a/...` header, handled above).
-        if not line.startswith("-"):
+        # Track BOTH sides: a definition on a `-` line that reappears on a `+`
+        # line anywhere in the diff is a signature edit / move, NOT a removal
+        # (PR #205 round 2) — report only removed-minus-added symbols.
+        if line.startswith("-"):
+            body = line[1:].lstrip()
+            for regex in _EXPORT_REMOVED_DEF_RES:
+                mm = regex.match(body)
+                if mm:
+                    sym = mm.group(1)
+                    if sym and sym not in out:
+                        out[sym] = current_path
+                    break
             continue
-        body = line[1:].lstrip()
-        for regex in _EXPORT_REMOVED_DEF_RES:
-            mm = regex.match(body)
-            if mm:
-                sym = mm.group(1)
-                if sym and sym not in out:
-                    out[sym] = current_path
-                break
+        if line.startswith("+"):
+            body = line[1:].lstrip()
+            for regex in _EXPORT_REMOVED_DEF_RES:
+                mm = regex.match(body)
+                if mm:
+                    sym = mm.group(1)
+                    if sym:
+                        added.add(sym)
+                    break
+            continue
+    for sym in added:
+        out.pop(sym, None)
     return out
 
 
