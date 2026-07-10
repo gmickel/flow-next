@@ -781,13 +781,21 @@ else
   COMBINED="$WF_TEXT
 $PH_TEXT"
 
-  for marker in "## TL;DR" "## R-ID coverage" "## Critical changes" "## Decisions" "## Memory left behind" "## Open items" "## Where to look"; do
+  for marker in "## TL;DR" "## R-ID coverage" "## Critical changes" "## How to review this PR" "## Review plan" "## Decisions" "## Memory left behind" "## Open items"; do
     if grep -qF -- "$marker" <<< "$COMBINED"; then
       ok "T10" "section marker '$marker' present in skill prose"
     else
       fail "T10" "section marker '$marker' missing from skill prose"
     fi
   done
+
+  # fn-93: the risk-ranked Review plan + How-to-review coaching block replace the
+  # old per-category '## Where to look' section — assert it is gone from the render order.
+  if grep -qF -- "## Where to look" <<< "$COMBINED"; then
+    fail "T10" "'## Where to look' still present — fn-93 replaced it with '## Review plan' + '## How to review this PR'"
+  else
+    ok "T10" "'## Where to look' absent from render contract (folded into the Review plan)"
+  fi
 
   # `--dry-run` short-circuit: SKILL.md must document it
   assert_grep "T10" "--dry-run" "$(cat "$SKILL_FILE")" "SKILL.md documents --dry-run flag"

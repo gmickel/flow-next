@@ -54,7 +54,7 @@ A deterministic whitelist pre-check that returns `SHIP` without invoking a revie
 
 ## PR-as-cognitive-aid
 
-A structured PR body synthesizing nine flow-next state streams (spec with R-IDs, per-task done summary + evidence commits, decisions / bug / architecture-patterns memory, glossary changes, strategy alignment, deferred review findings, the diff itself) into a reviewable artefact. Body sections: TL;DR, R-ID coverage table, Critical changes, Decisions, Memory, Glossary/strategy deltas, Open items, Where to look. Produced by `/flow-next:make-pr`.
+A structured PR body synthesizing nine flow-next state streams (spec with R-IDs, per-task done summary + evidence commits, decisions / bug / architecture-patterns memory, glossary changes, strategy alignment, deferred review findings, the diff itself) into a reviewable artefact. Body sections: TL;DR, R-ID coverage table, Critical changes, How to review this PR (trust-calibration coaching block), Review plan (every changed area risk-bucketed into Must review / Spot-check / Safe to skim with a ≤~30% focus budget), Decisions, Memory, Glossary/strategy deltas, Open items. Produced by `/flow-next:make-pr`.
 
 ## Ralph
 

@@ -208,7 +208,7 @@ The QA discipline (P0/P1/P2 taxonomy, evidence rules, session hygiene) is a lean
 8. Deferred review findings (`.flow/review-deferred/<branch>.md`)
 9. The `git diff` itself
 
-Body sections: TL;DR · R-ID coverage table · Critical changes (high-churn / cross-module / public-interface / security-sensitive / behavior-visible) · Decisions · Memory · Glossary/strategy deltas · Open items · Where to look (reviewer-focus list).
+Body sections: TL;DR · R-ID coverage table · Critical changes (high-churn / cross-module / public-interface / security-sensitive / behavior-visible) · How to review this PR (trust-calibration coaching block — what the pipeline already verified mechanically vs the human's job) · Review plan (every changed area risk-bucketed into Must review / Spot-check / Safe to skim, ≤~30% focus budget) · Decisions · Memory · Glossary/strategy deltas · Open items.
 
 Mermaid codefences emit when the diff crosses ≥2 modules (max 3 diagrams × 12 nodes; markdown codefence — GitHub / GitLab / Gitea render natively). Default `--draft` if open items > 0 or under Ralph; `--ready` overrides.
 
@@ -222,9 +222,10 @@ The reviewer reads the PR body before the diff. Reading order:
 
 1. **TL;DR** — does the change match what the team agreed to?
 2. **R-ID coverage** — every acceptance criterion has a satisfying task and an evidence commit, or it's flagged as uncovered with a ⚠️.
-3. **Critical changes** — focus the reading on these files first; the body explicitly tells the reviewer *which lines matter*.
-4. **Decisions** — every load-bearing architectural choice has a decision record under `knowledge/decisions/` with trade-offs and alternatives.
-5. **Where to look** — concrete `path:line` references the reviewer should read in the diff itself.
+3. **Critical changes** — the ≤7 highest-risk highlights; focus the reading on these files first.
+4. **How to review this PR** — the trust-calibration frame: what the pipeline already verified mechanically (tests / gates / R-ID coverage / cross-model review) vs what only a human can judge (product intent, API taste, risk appetite). Absent verification is stated honestly, never overclaimed.
+5. **Review plan** — every changed area risk-bucketed into Must review / Spot-check / Safe to skim with a ≤~30% focus budget. Read the must-review ~20-30% carefully; the buckets tell you which 70-80% is safe to skim and *why* (derived mirrors, byte-identical copies, and task-state files always land in safe-to-skim with the derivation named).
+6. **Decisions** — every load-bearing architectural choice has a decision record under `knowledge/decisions/` with trade-offs and alternatives.
 
 When review threads land, run `/flow-next:resolve-pr <PR#>`. The skill fetches threads, triages by validity, dispatches per-thread resolver agents (parallel on Claude Code, serial on Codex / Copilot / Droid), and replies + resolves via GraphQL. See the [root README — Commands](../../../README.md#commands) row for `/flow-next:resolve-pr`, or [flow-next.dev](https://flow-next.dev) for the narrative.
 
