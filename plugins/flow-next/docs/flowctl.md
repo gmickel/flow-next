@@ -716,6 +716,18 @@ Text output prints the bare backend name (e.g. `codex`) for skill grep back-comp
 
 Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5:high`, `cursor:gpt-5.5-high` (cursor folds effort into the model name — no `:effort` rung). RP is bare only (model set via window config); `none` is an explicit opt-out.
 
+#### Model resolution (strongest-available, never-fail — fn-76)
+
+When a review runs **without an explicit model** (unconfigured `codex` / `copilot` / `cursor`), flow-next resolves the *strongest model the account can actually run* instead of a fixed hardcoded default. The mechanism is **optimistic-first**, so the happy path costs nothing:
+
+- **Ranking.** Each backend's model set is a curated **quality ranking** (strongest first); the ranking's top entry IS the encoded default (`codex` → `gpt-5.6-sol`, `copilot` → `gpt-5.5`, `cursor` → `gpt-5.6-sol-high`). The ranking is a *preference*, never a parse-time gate — an **unknown explicit model warns and is accepted** (the CLI stays the availability authority); the reasoning-effort axis stays strict.
+- **Happy path (zero overhead).** The top model dispatches directly — no probe, no list call, no extra subprocess. On a current CLI where the default just works, the argv is byte-identical to a hardcoded default.
+- **Fallback ladder (failure only).** If — and only if — that dispatch fails with the backend's **distinctive model-unavailable signature** (codex: *"requires a newer version of Codex"* / model-not-found; copilot: *`… from --model flag is not available`*; cursor: *`Cannot use this model: …`*), flow-next resolves a fallback: **cursor** consults `cursor-agent --list-models` and dispatches the best `list ∩ ranking` entry; **codex/copilot** step down the ranking (max 2 steps). The terminal **floor** never fails — codex omits `--model`, copilot/cursor use `--model auto` (and the reasoning-effort flag is dropped). Any *other* failure (auth / network / sandbox / timeout) propagates unchanged — the ladder never masks a real error. A ladder retry is the **same review round** (it does not consume an extra review-cap iteration).
+- **Cache.** The resolved fallback is memoized per **`(backend, CLI version)`** in `.flow/.cache/model-resolution.json` (atomic write, gitignored). A CLI upgrade changes the key → natural re-resolution; a corrupt/missing cache is a cold start, never an error; explicit models bypass the cache entirely. So the one failed round-trip after a ranking-top bump is paid at most once per CLI version.
+- **Hygiene.** A downgrade or floor emits **one** stderr warning naming what was tried and what ran; the receipt records the model **actually used** (else `"auto"` / `"default"`), never a fabricated name.
+
+Explicit pins anywhere in the precedence chain (`--spec` > per-task/per-spec `review` > env > config) are byte-identical to before — no probing, no cache, no retry-downgrade; an explicit unavailable model errors clearly.
+
 ### memory
 
 Manage persistent learnings under `.flow/memory/`.
@@ -1094,7 +1106,7 @@ npm install -g @openai/codex
 codex auth
 ```
 
-**Model:** Uses GPT 5.5 High by default (no user config needed). Override with `FLOW_CODEX_MODEL` env var.
+**Model:** Uses the ranking top, GPT 5.6 Sol at High effort, by default (no user config needed) — resolved strongest-available via the [model-resolution ladder](#model-resolution-strongest-available-never-fail--fn-76) (on an older codex CLI that rejects it, the ladder transparently downgrades to `gpt-5.5` and caches that). Override with `FLOW_CODEX_MODEL` env var.
 
 **Commands:**
 

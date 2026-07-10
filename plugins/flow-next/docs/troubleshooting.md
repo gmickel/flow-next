@@ -75,6 +75,24 @@ Ralph reads receipts to decide whether to advance, retry, or block. A missing or
 - Raise the cap for a genuinely large ticket via `MAX_REVIEW_ITERATIONS` (env / Ralph `config.env`) — but prefer escalation: the cap is a backstop, the ratchet is the actual convergence fix.
 - Full semantics: [`flowctl.md` § Deterministic review cap](flowctl.md#codex-impl-review) and [`ralph.md` § Review Loops Until SHIP](ralph.md#3-review-loops-until-ship).
 
+## Review reports a model downgrade / floor (fn-76 resolution ladder)
+
+**Symptom:** a review prints one stderr line like
+
+```
+warning: codex model 'gpt-5.6-sol' unavailable; downgraded to 'gpt-5.5'. Cached for this CLI version.
+```
+
+(or `… fell back to the never-fail floor (the CLI default / 'auto')`), and the review's receipt records `gpt-5.5` / `auto` / `default` rather than the ranking top.
+
+**This is expected, not an error.** flow-next dispatches the *strongest* model by default and, when the local CLI can't run it, transparently resolves the best available one (the [model-resolution ladder](flowctl.md#model-resolution-strongest-available-never-fail--fn-76)). It fires ONLY on the distinctive model-unavailable signature (codex *"requires a newer version of Codex"*, copilot *`… from --model flag is not available`*, cursor *`Cannot use this model: …`*); auth / network / sandbox / timeout failures propagate unchanged.
+
+**What to do:**
+- **Want the top model?** Upgrade the backend CLI (e.g. `codex` ≥ 0.144 for `gpt-5.6-sol`). The cache key is `(backend, CLI version)`, so the upgrade re-resolves automatically on the next review.
+- **The downgrade repeats every review?** It shouldn't — the result is memoized in `.flow/.cache/model-resolution.json`. If it does, that file may be unwritable (check permissions) or you're on a fresh CLI version each run.
+- **Force a specific model** (skip the ladder + cache entirely): pin it explicitly — `--spec codex:gpt-5.5`, a per-task/per-spec `review:` value, `FLOW_CODEX_MODEL`, or `review.backend`. An explicit unavailable model errors clearly instead of downgrading.
+- **Reset the cache:** `rm -rf .flow/.cache/` — it is regenerated (and gitignored) on the next review; a corrupt file is already treated as a cold start.
+
 ## Custom rp-cli instructions conflicting
 
 > **Caution**: If you have custom instructions for `rp-cli` in your `CLAUDE.md` or `AGENTS.md`, they may conflict with Flow-Next's RepoPrompt integration.

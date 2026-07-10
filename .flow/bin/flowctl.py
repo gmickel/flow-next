@@ -24,7 +24,7 @@ import unicodedata
 import uuid
 from abc import ABC, abstractmethod
 from contextlib import contextmanager, redirect_stdout
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace as dataclass_replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, ContextManager, Optional
@@ -2864,12 +2864,306 @@ def resolve_codex_sandbox(sandbox: str) -> str:
     return "danger-full-access" if os.name == "nt" else "read-only"
 
 
+# ============================================================================
+# fn-76: strongest-available model resolution — optimistic-first, ladder, cache
+# ============================================================================
+#
+# The review-backend exec wrappers dispatch the ranking's TOP model directly —
+# the top IS the encoded default, so the happy path's argv is byte-identical to
+# a hardcoded default and costs ZERO extra subprocess. Fallback machinery engages
+# ONLY when that dispatch fails with the backend's DISTINCTIVE model-unavailable
+# signature; any OTHER failure (auth / network / sandbox / timeout) propagates
+# unchanged, so the ladder can never mask a real failure. A resolved downgrade
+# memoizes per ``(backend, CLI version)`` so the failed round-trip is paid at
+# most once per CLI upgrade. Explicit model pins bypass ladder + cache entirely.
+#
+# The ladder lives BELOW the fn-90 review-round cap: the review handler increments
+# the cap once before calling the exec wrapper, and every ladder rung is the SAME
+# logical dispatch — ``enforce_and_increment_review_cap`` is NEVER called here.
+
+_MODEL_CACHE_FLOOR = "__floor__"  # sentinel: resolution reached the never-fail floor
+
+# Distinctive model-unavailable signatures, captured VERBATIM from live probes
+# 2026-07-10 (all three CLIs). Matching ONLY these keeps the ladder from stepping
+# down on auth / network / sandbox / timeout failures.
+#   codex   : HTTP 400 invalid_request_error "The '<m>' model requires a newer
+#             version of Codex" (CLI < 0.144); OpenAI model-not-found 400.
+#   copilot : 'Model "<m>" from --model flag is not available' (copilot 1.0.65).
+#   cursor  : 'Cannot use this model: <m>. Available models: ...' (cursor-agent,
+#             probed live 2026-07-10 with a fake model id + --mode ask).
+_CODEX_UNAVAILABLE_MARKERS = (
+    "requires a newer version of Codex",
+    "model_not_found",
+)
+_COPILOT_UNAVAILABLE_MARKERS = ("from --model flag is not available",)
+_CURSOR_UNAVAILABLE_MARKERS = ("Cannot use this model:",)
+
+
+def _unavailable_blob(out: Optional[str], err: Optional[str]) -> str:
+    return "\n".join(p for p in (out, err) if p)
+
+
+def _codex_model_unavailable(out: Optional[str], err: Optional[str]) -> bool:
+    blob = _unavailable_blob(out, err)
+    return any(m in blob for m in _CODEX_UNAVAILABLE_MARKERS)
+
+
+def _copilot_model_unavailable(out: Optional[str], err: Optional[str]) -> bool:
+    blob = _unavailable_blob(out, err)
+    return any(m in blob for m in _COPILOT_UNAVAILABLE_MARKERS)
+
+
+def _cursor_model_unavailable(out: Optional[str], err: Optional[str]) -> bool:
+    blob = _unavailable_blob(out, err)
+    return any(m in blob for m in _CURSOR_UNAVAILABLE_MARKERS)
+
+
+def _model_cache_path(repo_root: Optional[Path]) -> Optional[Path]:
+    if repo_root is None:
+        return None
+    return repo_root / ".flow" / ".cache" / "model-resolution.json"
+
+
+def _model_cache_key(backend: str, cli_version: Optional[str]) -> str:
+    return f"{backend}@{cli_version or 'unknown'}"
+
+
+def _read_model_cache(repo_root: Optional[Path]) -> dict:
+    """Load the resolution cache. Corrupt / missing = cold start (never raises)."""
+    path = _model_cache_path(repo_root)
+    if path is None:
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _model_cache_put(
+    repo_root: Optional[Path], backend: str, cli_version: Optional[str], model: str
+) -> None:
+    """Memoize a resolved model. Best-effort — a cache write never fails a review."""
+    path = _model_cache_path(repo_root)
+    if path is None:
+        return
+    try:
+        data = _read_model_cache(repo_root)
+        data[_model_cache_key(backend, cli_version)] = model
+        path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(path, data)
+    except OSError:
+        pass
+
+
+def _model_cache_invalidate(
+    repo_root: Optional[Path], backend: str, cli_version: Optional[str]
+) -> None:
+    """Drop a stale cache entry (a cached model that just failed the signature)."""
+    path = _model_cache_path(repo_root)
+    if path is None:
+        return
+    key = _model_cache_key(backend, cli_version)
+    try:
+        data = _read_model_cache(repo_root)
+        if key in data:
+            del data[key]
+            path.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_json(path, data)
+    except OSError:
+        pass
+
+
+def _warn_model_resolution(
+    backend: str, tried: str, used: Optional[str], *, floor: bool
+) -> None:
+    """One stderr line per resolution event, naming what was tried and what ran."""
+    if floor:
+        used_desc = (
+            "the CLI default (--model omitted)" if used is None else f"'{used}'"
+        )
+        print(
+            f"warning: {backend} model {tried!r} unavailable; fell back to the "
+            f"never-fail floor ({used_desc}). Cached for this CLI version.",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            f"warning: {backend} model {tried!r} unavailable; downgraded to "
+            f"{used!r}. Cached for this CLI version.",
+            file=sys.stderr,
+        )
+
+
+def _dispatch_review_with_fallback(
+    *,
+    backend: str,
+    spec: "BackendSpec",
+    explicit_model: bool,
+    repo_root: Optional[Path],
+    dispatch,
+    is_unavailable,
+    floor_model: Optional[str],
+    version_fn,
+    resolution_out: Optional[dict] = None,
+    list_available=None,
+    max_steps: int = 2,
+) -> tuple[str, Optional[str], int, str]:
+    """Drive one logical review dispatch with strongest-available resolution.
+
+    ``dispatch(model, is_floor)`` runs the backend CLI once and returns the
+    exec 4-tuple ``(out, session_id, exit_code, stderr)``. ``explicit_model`` is
+    True when the model was pinned (spec string / env) — pins bypass the ladder
+    and cache entirely. ``is_unavailable(out, err)`` is the backend's distinctive
+    model-unavailable signature check. ``floor_model`` is the terminal never-fail
+    model (``"auto"`` for copilot / cursor, ``None`` for codex which omits
+    ``--model``). ``version_fn`` returns the CLI version for the cache key and is
+    called LAZILY — never on the pristine happy path. ``list_available`` (cursor
+    only) returns the CLI's live model list, consulted once on the top-model
+    failure. ``resolution_out``, when given, is populated with ``{"model":
+    <used>, "floor": <bool>}`` so the caller can record the actually-used model
+    on the receipt.
+    """
+    reg = BACKEND_REGISTRY[backend]
+    ranking = reg.get("models") or []
+
+    def _record(model: Optional[str], floor: bool) -> None:
+        if resolution_out is not None:
+            resolution_out["model"] = model
+            resolution_out["floor"] = floor
+
+    def _resolved(out, sid, rc, err, model, floor):
+        _record(model, floor)
+        return out, sid, rc, err
+
+    # Explicit pin (or a backend with no ranking) → single dispatch, no ladder,
+    # no cache. An explicit unavailable model errors clearly (failure propagates).
+    if explicit_model or not ranking:
+        out, sid, rc, err = dispatch(spec.model, False)
+        return _resolved(out, sid, rc, err, spec.model, False)
+
+    # --- Unconfigured: ladder-/cache-eligible ---
+    _ver_box: dict = {}
+
+    def _ver() -> Optional[str]:
+        if "v" not in _ver_box:
+            _ver_box["v"] = version_fn()
+        return _ver_box["v"]
+
+    # Cheap pre-check: only consult the version (a subprocess) when the cache
+    # file actually has entries — the pristine happy path never touches it.
+    raw_cache = _read_model_cache(repo_root)
+    cached = raw_cache.get(_model_cache_key(backend, _ver())) if raw_cache else None
+
+    if cached is not None:
+        if cached == _MODEL_CACHE_FLOOR:
+            out, sid, rc, err = dispatch(floor_model, True)
+            return _resolved(out, sid, rc, err, floor_model, True)
+        out, sid, rc, err = dispatch(cached, False)
+        if rc == 0 or not is_unavailable(out, err):
+            return _resolved(out, sid, rc, err, cached, False)
+        # A cached model that now fails the signature (org revoked it mid-version)
+        # → drop it and re-resolve fresh from the ranking top. Self-healing.
+        _model_cache_invalidate(repo_root, backend, _ver())
+
+    top = ranking[0]
+
+    # Cursor: on the top-model failure, consult --list-models and dispatch the
+    # best ``list ∩ ranking`` entry (single retry), else the floor.
+    if list_available is not None:
+        out, sid, rc, err = dispatch(top, False)
+        if rc == 0 or not is_unavailable(out, err):
+            return _resolved(out, sid, rc, err, top, False)
+        avail = list_available() or []
+        best = next((m for m in ranking if m != top and m in avail), None)
+        if best is not None:
+            out, sid, rc, err = dispatch(best, False)
+            if rc == 0 or not is_unavailable(out, err):
+                _model_cache_put(repo_root, backend, _ver(), best)
+                _warn_model_resolution(backend, top, best, floor=False)
+                return _resolved(out, sid, rc, err, best, False)
+        out, sid, rc, err = dispatch(floor_model, True)
+        _model_cache_put(repo_root, backend, _ver(), _MODEL_CACHE_FLOOR)
+        _warn_model_resolution(backend, top, floor_model, floor=True)
+        return _resolved(out, sid, rc, err, floor_model, True)
+
+    # Codex / copilot: step DOWN the ranking, at most ``max_steps`` steps, then
+    # the floor. The top (idx 0) succeeding is the happy path — no cache write.
+    for idx, model in enumerate(ranking):
+        if idx > max_steps:
+            break
+        out, sid, rc, err = dispatch(model, False)
+        if rc == 0 or not is_unavailable(out, err):
+            if idx > 0:
+                _model_cache_put(repo_root, backend, _ver(), model)
+                _warn_model_resolution(backend, top, model, floor=False)
+            return _resolved(out, sid, rc, err, model, False)
+    out, sid, rc, err = dispatch(floor_model, True)
+    _model_cache_put(repo_root, backend, _ver(), _MODEL_CACHE_FLOOR)
+    _warn_model_resolution(backend, top, floor_model, floor=True)
+    return _resolved(out, sid, rc, err, floor_model, True)
+
+
+def _receipt_model_effort(
+    resolved_spec: "BackendSpec", resolution_out: Optional[dict]
+) -> tuple[Optional[str], Optional[str]]:
+    """(model, effort) to stamp on a receipt, reflecting the model ACTUALLY run.
+
+    fn-76 R5: when the fallback ladder downgraded or floored, the receipt records
+    what ran — the downgraded model, or ``"auto"`` (copilot / cursor floor) /
+    ``"default"`` (codex floor, ``--model`` omitted) — never the fabricated
+    ranking-top name. Effort is dropped on the floor. When no ladder fired
+    (``resolution_out`` empty, the happy path), the resolved spec's own
+    model/effort are already correct.
+    """
+    if resolution_out and "model" in resolution_out:
+        used = resolution_out["model"]
+        if resolution_out.get("floor"):
+            return (used if used is not None else "default"), None
+        return used, resolved_spec.effort
+    return resolved_spec.model, resolved_spec.effort
+
+
+def _cursor_list_models() -> Optional[list]:
+    """Return cursor-agent's live model list, or None on any failure.
+
+    One bounded subprocess (``cursor-agent --list-models``, 60s). Lenient parse:
+    the output is comma- and/or newline-delimited (verified from the live
+    ``Available models:`` error stream 2026-07-10) — split on both, strip, drop
+    blanks. Any error (missing CLI, timeout, non-zero) → None → caller floors.
+    """
+    cursor = shutil.which("cursor-agent")
+    if not cursor:
+        return None
+    try:
+        result = subprocess.run(
+            [cursor, "--list-models"],
+            capture_output=True,
+            text=True, encoding="utf-8",
+            check=False,
+            timeout=60,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    raw = result.stdout or ""
+    models: list = []
+    for chunk in re.split(r"[,\n]", raw):
+        m = chunk.strip()
+        # Drop obvious non-model header/prose lines (defensive; keep bare tokens).
+        if m and " " not in m:
+            models.append(m)
+    return models or None
+
+
 def run_codex_exec(
     prompt: str,
     session_id: Optional[str] = None,
     sandbox: str = "read-only",
     spec: Optional["BackendSpec"] = None,
     repo_root: Optional[Path] = None,
+    resolution_out: Optional[dict] = None,
 ) -> tuple[str, Optional[str], int, str]:
     """Run codex exec and return (stdout, thread_id, exit_code, stderr).
 
@@ -2893,11 +3187,18 @@ def run_codex_exec(
     codex = require_codex()
     # Resolve spec so model+effort are populated. Defensive: older call sites
     # (or tests) may pass spec=None; treat that as bare-codex resolution.
+    # fn-76: capture explicitness from the INCOMING spec BEFORE the defensive
+    # resolve fills the registry default — a spec that already carries a model
+    # (directly constructed OR parsed with a model) is an explicit pin, and
+    # ``model_explicit`` additionally carries env-var pins through ``resolve()``.
     if spec is None:
+        explicit_model = False
         spec = BackendSpec("codex").resolve()
-    elif spec.model is None or spec.effort is None:
-        spec = spec.resolve()
-    effective_model = spec.model or "gpt-5.5"
+    else:
+        explicit_model = spec.model is not None or spec.model_explicit
+        if spec.model is None or spec.effort is None:
+            spec = spec.resolve()
+        explicit_model = explicit_model or spec.model_explicit
     effective_effort = spec.effort or "high"
 
     if session_id:
@@ -2926,40 +3227,55 @@ def run_codex_exec(
             # Resume failed - fall through to new session
             pass
 
-    # New session with model + reasoning effort from resolved spec
+    # New session with model + reasoning effort from resolved spec.
+    # fn-76: dispatch goes through the strongest-available fallback driver.
+    # ``_dispatch`` builds argv for ONE model (or the floor, which omits both
+    # ``--model`` and the reasoning-effort ``-c`` per R5). On the unconfigured
+    # happy path the driver dispatches the ranking top == effective_model, so the
+    # argv is byte-identical to the pre-fn-76 hardcoded-default path.
     # --skip-git-repo-check: safe with read-only sandbox, allows reviews from /tmp etc (GH-33)
     # Use '-' to read prompt from stdin - avoids Windows CLI length limits (GH-35)
-    cmd = [
-        codex,
-        "exec",
-        "--model",
-        effective_model,
-        "-c",
-        f'model_reasoning_effort="{effective_effort}"',
-        "--sandbox",
-        sandbox,
-        "--skip-git-repo-check",
-        "--json",
-        "-",
-    ]
-    try:
-        result = subprocess.run(
-            cmd,
-            input=prompt,
-            capture_output=True,
-            text=True, encoding="utf-8",
-            check=False,  # Don't raise on non-zero exit
-            timeout=600,
-            # cwd=repo_root so codex resolves repo-relative changed-file paths
-            # when launched from a subdir (mirrors run_cursor_exec). repo_root
-            # is computed by the handler; --skip-git-repo-check still allows /tmp.
-            cwd=str(repo_root) if repo_root is not None else None,
+    def _dispatch(model, is_floor):
+        cmd = [codex, "exec"]
+        if not is_floor and model is not None:
+            cmd += ["--model", model]
+        if not is_floor:
+            cmd += ["-c", f'model_reasoning_effort="{effective_effort}"']
+        cmd += ["--sandbox", sandbox, "--skip-git-repo-check", "--json", "-"]
+        try:
+            result = subprocess.run(
+                cmd,
+                input=prompt,
+                capture_output=True,
+                text=True, encoding="utf-8",
+                check=False,  # Don't raise on non-zero exit
+                timeout=600,
+                # cwd=repo_root so codex resolves repo-relative changed-file paths
+                # when launched from a subdir (mirrors run_cursor_exec). repo_root
+                # is computed by the handler; --skip-git-repo-check still allows /tmp.
+                cwd=str(repo_root) if repo_root is not None else None,
+            )
+        except subprocess.TimeoutExpired:
+            return "", None, 2, "codex exec timed out (600s)"
+        return (
+            result.stdout,
+            parse_codex_thread_id(result.stdout),
+            result.returncode,
+            result.stderr,
         )
-        output = result.stdout
-        thread_id = parse_codex_thread_id(output)
-        return output, thread_id, result.returncode, result.stderr
-    except subprocess.TimeoutExpired:
-        return "", None, 2, "codex exec timed out (600s)"
+
+    return _dispatch_review_with_fallback(
+        backend="codex",
+        spec=spec,
+        explicit_model=explicit_model,
+        repo_root=repo_root,
+        dispatch=_dispatch,
+        is_unavailable=_codex_model_unavailable,
+        floor_model=None,  # codex floor omits --model (CLI picks its default)
+        version_fn=get_codex_version,
+        resolution_out=resolution_out,
+        max_steps=2,
+    )
 
 
 def parse_codex_thread_id(output: str) -> Optional[str]:
@@ -3348,78 +3664,89 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         "efforts": None,
     },
     "codex": {
-        "models": {
-            "gpt-5.6-sol",  # requires codex CLI >= 0.144 (older CLIs 400: "requires a newer version of Codex" — probed 2026-07-10)
+        # fn-76: ``models`` is an ORDERED quality ranking (strongest first), NOT
+        # a membership set. ``default_model`` MUST equal ``models[0]`` (asserted
+        # by a unit test) — the ranking's top IS the optimistic-first encoded
+        # default that dispatches directly with zero happy-path overhead. The
+        # fallback ladder (run_codex_exec) steps DOWN this list on the codex
+        # model-unavailable signature only. Ranking is a preference, never a
+        # parse-time gate — unknown explicit models warn-and-accept.
+        "models": [
+            "gpt-5.6-sol",  # requires codex CLI >= 0.144 (older CLIs 400: "requires a newer version of Codex" — probed 2026-07-10); ladder downgrades to gpt-5.5
             "gpt-5.5",
             "gpt-5.4",
             "gpt-5.2",
             "gpt-5",
             "gpt-5-mini",
             "gpt-5-codex",
-        },
+        ],
         # ``none`` / ``minimal`` accepted at CLI layer; ``minimal`` is gated by
         # server-side web_search check (not applicable to our reviews).
         "efforts": {"none", "minimal", "low", "medium", "high", "xhigh"},
-        "default_model": "gpt-5.5",
+        "default_model": "gpt-5.6-sol",  # == models[0] (fn-76 invariant)
         "default_effort": "high",
     },
     "copilot": {
-        # Verified via live probe against copilot CLI 1.0.65 — asked the CLI
-        # itself for the exact set of ``--model`` strings it accepts. Keep
-        # this list synced with ``copilot -p "/model"`` output; GitHub ships
-        # new rows without changelog. (1.0.65 dropped ``gpt-5.2`` /
-        # ``gpt-5.2-codex`` — they 400 "Model not available".)
-        "models": {
-            "claude-sonnet-4.5",
-            "claude-haiku-4.5",
+        # fn-76: ORDERED quality ranking (strongest first); ``default_model`` ==
+        # ``models[0]``. copilot 1.0.65 rejects gpt-5.6-sol (``--model flag is
+        # not available``), so the ranking top stays gpt-5.5; the ladder steps
+        # down on that signature. Verified via live probe against copilot CLI
+        # 1.0.65 — asked the CLI itself for the exact ``--model`` strings it
+        # accepts. Keep synced with ``copilot -p "/model"``; GitHub ships new
+        # rows without changelog. (1.0.65 dropped ``gpt-5.2`` / ``gpt-5.2-codex``
+        # — they 400 "Model not available".)
+        "models": [
+            "gpt-5.5",
+            "gpt-5.4",
             "claude-opus-4.7",
             "claude-opus-4.6",
             "claude-opus-4.5",
+            "claude-sonnet-4.5",
             "claude-sonnet-4",
-            "gpt-5.5",
-            "gpt-5.4",
+            "claude-haiku-4.5",
             "gpt-5.4-mini",
             "gpt-5.3-codex",
             "gpt-5-mini",
             "gpt-4.1",
-        },
+        ],
         # Copilot exposes ``xhigh`` in addition to standard tiers. No ``none`` /
         # ``minimal`` — Claude-family models reject ``--effort`` entirely, which
         # ``run_copilot_exec`` handles by dropping the flag when model starts
         # with ``claude-``.
         "efforts": {"low", "medium", "high", "xhigh"},
-        "default_model": "gpt-5.5",
+        "default_model": "gpt-5.5",  # == models[0] (fn-76 invariant)
         "default_effort": "high",
     },
     "cursor": {
-        # NEW registry shape: model accepted, effort folded into the model name
-        # (Cursor convention) so ``efforts`` is ``None`` — ``cursor:<m>:<e>`` is
-        # rejected by the existing parser with no parser edits. Model strings are
-        # verbatim from ``cursor-agent --list-models`` (v2026.06); Cursor ships
-        # new rows + auto-updates the CLI without changelog, so keep this list
-        # synced with ``cursor-agent --list-models``.
-        "models": {
-            "gpt-5.6-sol-low",
-            "gpt-5.6-sol-medium",
+        # NEW registry shape (fn-74): model accepted, effort folded into the
+        # model name (Cursor convention) so ``efforts`` is ``None``. fn-76:
+        # ``models`` is now an ORDERED quality ranking (strongest first);
+        # ``default_model`` == ``models[0]``. Cursor's fallback (run_cursor_exec)
+        # consults ``cursor-agent --list-models`` on failure and dispatches the
+        # best ``list ∩ ranking`` entry. Model strings are verbatim from
+        # ``cursor-agent --list-models`` (v2026.06); keep synced.
+        "models": [
             "gpt-5.6-sol-high",
             "gpt-5.6-sol-xhigh",
             "gpt-5.6-sol-max",
+            "gpt-5.6-sol-medium",
+            "gpt-5.6-sol-low",
             "gpt-5.6-terra-high",
             "gpt-5.6-luna-high",
-            "auto",
-            "gpt-5.5-high",
-            "gpt-5.4-high",
-            "gpt-5.3-codex",
-            "gpt-5.3-codex-high",
-            "gpt-5.3-codex-xhigh",
-            "gpt-5.2",
-            "composer-2.5",
             "claude-opus-4-8-thinking-high",
             "claude-opus-4-7-thinking-high",
-        },
+            "gpt-5.5-high",
+            "gpt-5.4-high",
+            "gpt-5.3-codex-xhigh",
+            "gpt-5.3-codex-high",
+            "gpt-5.3-codex",
+            "gpt-5.2",
+            "composer-2.5",
+            "auto",
+        ],
         # Cursor bakes reasoning effort into the model name — no ``--effort`` flag.
         "efforts": None,
-        "default_model": "gpt-5.6-sol-high"  # verified live via cursor-agent --list-models 2026-07-10,
+        "default_model": "gpt-5.6-sol-high",  # == models[0] (fn-76 invariant)
     },
     "none": {
         # Explicit opt-out. Parser still validates it so ``--review=none`` can
@@ -3448,6 +3775,13 @@ class BackendSpec:
     backend: str
     model: Optional[str] = None
     effort: Optional[str] = None
+    # fn-76: True when ``model`` was pinned explicitly (spec string or
+    # ``FLOW_<BACKEND>_MODEL`` env), False when it came from the registry default
+    # (the optimistic-first ranking top). Only the False (unconfigured) case is
+    # ladder-/cache-eligible in the exec wrappers. Excluded from ``__eq__`` /
+    # ``__hash__`` (``compare=False``) so it never perturbs existing equality
+    # assertions — it is dispatch metadata, not identity.
+    model_explicit: bool = field(default=False, compare=False)
 
     @classmethod
     def parse(cls, spec: str) -> "BackendSpec":
@@ -3501,9 +3835,17 @@ class BackendSpec:
                     f"(got {model!r})"
                 )
             if model not in reg["models"]:
-                raise ValueError(
-                    f"Unknown model for {backend}: {model!r}. "
-                    f"Valid: {sorted(reg['models'])}"
+                # fn-76 R1: the ranking is a PREFERENCE, not a parse-time gate —
+                # the CLI is the availability authority. Warn-and-accept unknown
+                # models so a newer / plan-specific model the registry has not
+                # catalogued yet is never blocked (and an explicit unavailable
+                # model still errors clearly at the CLI layer). Effort axis stays
+                # strict (below).
+                print(
+                    f"warning: model {model!r} is not in flow-next's {backend} "
+                    f"ranking; accepting as-is (the {backend} CLI is the "
+                    f"availability authority).",
+                    file=sys.stderr,
                 )
         if effort is not None:
             if reg["efforts"] is None:
@@ -3516,7 +3858,12 @@ class BackendSpec:
                     f"Unknown effort for {backend}: {effort!r}. "
                     f"Valid: {sorted(reg['efforts'])}"
                 )
-        return cls(backend=backend, model=model, effort=effort)
+        return cls(
+            backend=backend,
+            model=model,
+            effort=effort,
+            model_explicit=model is not None,
+        )
 
     def resolve(self) -> "BackendSpec":
         """Fill missing fields from env vars then registry defaults.
@@ -3535,14 +3882,21 @@ class BackendSpec:
         env_model_key = f"FLOW_{self.backend.upper()}_MODEL"
         env_effort_key = f"FLOW_{self.backend.upper()}_EFFORT"
 
+        # fn-76: track whether the resolved model was pinned explicitly (spec or
+        # env) vs filled from the registry default. Only the default (unconfigured)
+        # case is ladder-/cache-eligible downstream.
         if reg["models"] is None:
             model = None
+            model_explicit = False
+        elif self.model is not None:
+            model = self.model
+            model_explicit = True
+        elif os.environ.get(env_model_key):
+            model = os.environ.get(env_model_key)
+            model_explicit = True
         else:
-            model = (
-                self.model
-                or os.environ.get(env_model_key)
-                or reg.get("default_model")
-            )
+            model = reg.get("default_model")
+            model_explicit = False
 
         if reg["efforts"] is None:
             effort = None
@@ -3553,7 +3907,9 @@ class BackendSpec:
                 or reg.get("default_effort")
             )
 
-        return BackendSpec(self.backend, model, effort)
+        return BackendSpec(
+            self.backend, model, effort, model_explicit=model_explicit
+        )
 
     def __str__(self) -> str:
         """Serialize back to ``backend[:model[:effort]]``.
@@ -3570,6 +3926,29 @@ class BackendSpec:
         # effort set; model may be None
         model_part = self.model if self.model is not None else ""
         return f"{self.backend}:{model_part}:{self.effort}"
+
+
+def _is_legacy_composite_model(backend: str, model: Optional[str]) -> bool:
+    """True for a pre-grammar stored model like ``gpt-5.4-high``.
+
+    fn-76 made ``BackendSpec.parse`` warn-and-accept unknown models, which would
+    otherwise turn a pre-epic dash-joined ``<model>-<effort>`` value (stored
+    before the ``backend:model:effort`` grammar) into a bogus explicit model.
+    The lenient read path keeps degrading those to a bare backend — but ONLY the
+    exact legacy shape: a trailing ``-<known-effort>`` whose base is a known
+    ranking entry. A genuinely-new uncatalogued model (no such decomposition)
+    still passes through warn-and-accept, so a stored pin of a brand-new model
+    is honored (the CLI is the availability authority).
+    """
+    if not model:
+        return False
+    reg = BACKEND_REGISTRY.get(backend) or {}
+    models = reg.get("models")
+    efforts = reg.get("efforts")
+    if not models or not efforts or model in models or "-" not in model:
+        return False
+    base, _, suffix = model.rpartition("-")
+    return base in models and suffix in efforts
 
 
 def parse_backend_spec_lenient(
@@ -3591,6 +3970,25 @@ def parse_backend_spec_lenient(
     """
     if raw is None or not str(raw).strip():
         return None
+    # fn-76: intercept the pre-grammar dash-composite (``backend:model-effort``)
+    # BEFORE parse() warn-and-accepts it as a literal model. Only the two-part
+    # legacy shape whose model decomposes into a known ranking entry + known
+    # effort degrades to bare; everything else (incl. genuinely-new models) is
+    # left to parse().
+    stripped = str(raw).strip()
+    parts = stripped.split(":")
+    if len(parts) == 2:
+        b = parts[0].strip()
+        m = parts[1].strip()
+        if b in BACKEND_REGISTRY and _is_legacy_composite_model(b, m):
+            if warn:
+                print(
+                    f"warning: spec {stripped!r} looks like a pre-grammar value "
+                    f"(dash-joined model+effort); treating as bare backend "
+                    f"{b!r}.",
+                    file=sys.stderr,
+                )
+            return BackendSpec(backend=b)
     try:
         return BackendSpec.parse(raw)
     except ValueError as e:
@@ -3794,6 +4192,7 @@ def run_copilot_exec(
     session_id: str,
     repo_root: Path,
     spec: Optional["BackendSpec"] = None,
+    resolution_out: Optional[dict] = None,
 ) -> tuple[str, str, int, str]:
     """Run copilot and return (stdout, session_id, exit_code, stderr).
 
@@ -3835,104 +4234,106 @@ def run_copilot_exec(
     """
     copilot = require_copilot()
 
+    # fn-76: capture explicitness before the defensive resolve fills the default.
     if spec is None:
+        explicit_model = False
         spec = BackendSpec("copilot").resolve()
-    elif spec.model is None or spec.effort is None:
-        spec = spec.resolve()
-    effective_model = spec.model or "gpt-5.5"
+    else:
+        explicit_model = spec.model is not None or spec.model_explicit
+        if spec.model is None or spec.effort is None:
+            spec = spec.resolve()
+        explicit_model = explicit_model or spec.model_explicit
     effective_effort = spec.effort or "high"
 
     use_stdin = sys.platform == "win32"
 
-    # Common args for both delivery paths (everything except prompt + session flag).
-    common_args = [
-        "--output-format",
-        "text",
-        "-s",
-        "--no-ask-user",
-        "--allow-all-tools",
-        "--add-dir",
-        str(repo_root),
-        "--disable-builtin-mcps",
-        "--no-custom-instructions",
-        "--log-level",
-        "error",
-        "--no-auto-update",
-        "--model",
-        effective_model,
-    ]
-    # Claude models via Copilot reject --effort ("does not support reasoning
-    # effort configuration"). Default model is claude-opus-4.5, so this branch
-    # is the hot path. GPT-5.x models accept --effort.
-    if not effective_model.startswith("claude-"):
-        common_args += ["--effort", effective_effort]
-
-    tmp_prompt_path: Optional[Path] = None
-    marker: Optional[Path] = None
-    subprocess_kwargs: dict = {}
-
-    # Session flag = create-or-resume via a touch marker. Copilot's ``--resume``
-    # is RESUME-ONLY (errors "No session matched" on the first call) — historically
-    # just the Windows stdin path, but copilot >= 1.0.61 enforces it on POSIX argv
-    # too. So BOTH paths use ``--session-id`` for the first call and ``--resume``
-    # afterwards, tracked via the marker.
     marker = _copilot_session_marker(repo_root, session_id)
     marker.parent.mkdir(parents=True, exist_ok=True)
-    session_arg = (
-        f"--resume={session_id}" if marker.exists()
-        else f"--session-id={session_id}"
-    )
 
-    if use_stdin:
-        # Windows stdin path: prompt via subprocess input. No -p, no temp scratch.
-        cmd = [copilot, session_arg, *common_args]
-        subprocess_kwargs["input"] = prompt
-    else:
-        # POSIX argv path: -p + the marker-based session flag (copilot >= 1.0.61
-        # made --resume resume-only here too — the first call must use --session-id).
-        prompt_for_argv = prompt
-        if len(prompt) >= COPILOT_ARGV_PROMPT_MAX:
-            tmp_dir = repo_root / ".flow" / "tmp"
-            tmp_dir.mkdir(parents=True, exist_ok=True)
-            tmp_prompt_path = tmp_dir / f"copilot-prompt-{uuid.uuid4()}.txt"
-            tmp_prompt_path.write_text(prompt, encoding="utf-8")
-            prompt_for_argv = tmp_prompt_path.read_text(encoding="utf-8")
-        cmd = [
-            copilot,
-            "-p",
-            prompt_for_argv,
-            session_arg,
-            *common_args,
+    # fn-76: ONE model per dispatch, driven by the fallback ladder. At the floor
+    # ``model`` is ``"auto"`` and ``--effort`` is omitted (R5). ``--effort`` is
+    # also dropped for Claude-family models (Copilot rejects it) and, since a
+    # failed model-unavailable dispatch never touches the marker, ladder retries
+    # keep using ``--session-id`` until one succeeds.
+    def _dispatch(model, is_floor):
+        common_args = [
+            "--output-format",
+            "text",
+            "-s",
+            "--no-ask-user",
+            "--allow-all-tools",
+            "--add-dir",
+            str(repo_root),
+            "--disable-builtin-mcps",
+            "--no-custom-instructions",
+            "--log-level",
+            "error",
+            "--no-auto-update",
+            "--model",
+            model,
         ]
+        if not is_floor and not model.startswith("claude-"):
+            common_args += ["--effort", effective_effort]
 
-    try:
+        session_arg = (
+            f"--resume={session_id}" if marker.exists()
+            else f"--session-id={session_id}"
+        )
+
+        tmp_prompt_path: Optional[Path] = None
+        subprocess_kwargs: dict = {}
+        if use_stdin:
+            # Windows stdin path: prompt via subprocess input. No -p, no temp.
+            cmd = [copilot, session_arg, *common_args]
+            subprocess_kwargs["input"] = prompt
+        else:
+            # POSIX argv path: -p + the marker-based session flag.
+            prompt_for_argv = prompt
+            if len(prompt) >= COPILOT_ARGV_PROMPT_MAX:
+                tmp_dir = repo_root / ".flow" / "tmp"
+                tmp_dir.mkdir(parents=True, exist_ok=True)
+                tmp_prompt_path = tmp_dir / f"copilot-prompt-{uuid.uuid4()}.txt"
+                tmp_prompt_path.write_text(prompt, encoding="utf-8")
+                prompt_for_argv = tmp_prompt_path.read_text(encoding="utf-8")
+            cmd = [copilot, "-p", prompt_for_argv, session_arg, *common_args]
+
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True, encoding="utf-8",
-                check=False,  # Don't raise on non-zero exit; caller inspects
-                timeout=600,
-                # cwd=repo_root so copilot resolves repo-relative changed-file
-                # paths when launched from a subdir (mirrors run_cursor_exec).
-                cwd=str(repo_root),
-                **subprocess_kwargs,
-            )
-            # Record first-call success (both paths) so subsequent invocations
-            # switch from --session-id to --resume. Touch is idempotent.
-            if marker is not None and result.returncode == 0:
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True, encoding="utf-8",
+                    check=False,  # Don't raise on non-zero exit; caller inspects
+                    timeout=600,
+                    cwd=str(repo_root),
+                    **subprocess_kwargs,
+                )
+            except subprocess.TimeoutExpired:
+                return "", session_id, 2, "copilot timed out (600s)"
+            # Record first-call success so subsequent invocations switch from
+            # --session-id to --resume. Touch is idempotent; failures never touch.
+            if result.returncode == 0:
                 marker.touch(exist_ok=True)
             return result.stdout, session_id, result.returncode, result.stderr
-        except subprocess.TimeoutExpired:
-            return "", session_id, 2, "copilot timed out (600s)"
-    finally:
-        # Clean up temp file on every exit path (success, failure, timeout,
-        # KeyboardInterrupt). unlink(missing_ok=True) avoids TOCTOU races.
-        if tmp_prompt_path is not None:
-            try:
-                tmp_prompt_path.unlink(missing_ok=True)
-            except OSError:
-                pass
+        finally:
+            if tmp_prompt_path is not None:
+                try:
+                    tmp_prompt_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+    return _dispatch_review_with_fallback(
+        backend="copilot",
+        spec=spec,
+        explicit_model=explicit_model,
+        repo_root=repo_root,
+        dispatch=_dispatch,
+        is_unavailable=_copilot_model_unavailable,
+        floor_model="auto",
+        version_fn=get_copilot_version,
+        resolution_out=resolution_out,
+        max_steps=2,
+    )
 
 
 # --- Cursor Backend Helpers (fn-74) ---
@@ -4208,6 +4609,7 @@ def run_cursor_exec(
     *,
     spec: Optional["BackendSpec"] = None,
     repo_root: Path,
+    resolution_out: Optional[dict] = None,
 ) -> tuple[str, str, int, str]:
     """Run cursor-agent headless. Returns (result_text, session_id, exit_code, stderr).
 
@@ -4258,55 +4660,84 @@ def run_cursor_exec(
 
     cursor = require_cursor()
 
+    # fn-76: capture explicitness before the defensive resolve fills the default.
     if spec is None:
+        explicit_model = False
         spec = BackendSpec("cursor").resolve()
-    elif spec.model is None:
-        spec = spec.resolve()
-    effective_model = spec.model or "gpt-5.6-sol-high"
+    else:
+        explicit_model = spec.model is not None or spec.model_explicit
+        if spec.model is None:
+            spec = spec.resolve()
+        explicit_model = explicit_model or spec.model_explicit
 
-    cmd = [
-        cursor,
-        "-p",
-        "--output-format",
-        "json",
-        "--trust",
-        "--mode",
-        "ask",
-        "--model",
-        effective_model,
-    ]
-    # Resume-only: omit --resume on the first call (session_id is None), let
-    # Cursor mint the id, capture it from the result below.
-    if session_id is not None:
-        cmd += ["--resume", session_id]
-    # Prompt is the trailing positional arg (NOT ``-p <prompt>``).
-    cmd.append(prompt)
+    # fn-76: ONE model per dispatch, driven by the fallback ladder. Cursor bakes
+    # effort into the model name, so the floor (``model="auto"``) is a plain
+    # ``--model auto``. The distinctive model-unavailable signature lands on
+    # stderr (``Cannot use this model: ...``); the driver's is_unavailable check
+    # reads both the parsed result text and stderr.
+    def _dispatch(model, is_floor):
+        cmd = [
+            cursor,
+            "-p",
+            "--output-format",
+            "json",
+            "--trust",
+            "--mode",
+            "ask",
+            "--model",
+            model,
+        ]
+        # Resume-only: omit --resume on the first call (session_id is None), let
+        # Cursor mint the id, capture it from the result below.
+        if session_id is not None:
+            cmd += ["--resume", session_id]
+        # Prompt is the trailing positional arg (NOT ``-p <prompt>``).
+        cmd.append(prompt)
 
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True, encoding="utf-8",
-            check=False,  # Don't raise on non-zero exit; caller inspects
-            timeout=600,
-            cwd=str(repo_root),
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True, encoding="utf-8",
+                check=False,  # Don't raise on non-zero exit; caller inspects
+                timeout=600,
+                cwd=str(repo_root),
+            )
+        except subprocess.TimeoutExpired:
+            return "", (session_id or ""), 2, "cursor-agent timed out (600s)"
+
+        result_text, returned_session_id, is_error = _parse_cursor_result(
+            result.stdout
         )
-    except subprocess.TimeoutExpired:
-        return "", (session_id or ""), 2, "cursor-agent timed out (600s)"
+        if returned_session_id is None:
+            returned_session_id = session_id or ""
 
-    result_text, returned_session_id, is_error = _parse_cursor_result(
-        result.stdout
+        exit_code = result.returncode
+        if is_error and exit_code == 0:
+            # CLI reported a logical error without a non-zero exit — surface it so
+            # the caller never treats an errored review as a clean SHIP.
+            exit_code = 1
+
+        # Fold the raw stderr into the returned err so the driver's
+        # model-unavailable signature check (``Cannot use this model:``, printed
+        # by cursor-agent to stderr) is visible even when the JSON result body is
+        # empty. The command handlers only inspect exit_code + result_text, so
+        # this does not change caller-visible behavior on success.
+        return result_text, returned_session_id, exit_code, result.stderr
+
+    return _dispatch_review_with_fallback(
+        backend="cursor",
+        spec=spec,
+        explicit_model=explicit_model,
+        repo_root=repo_root,
+        dispatch=_dispatch,
+        is_unavailable=_cursor_model_unavailable,
+        floor_model="auto",
+        version_fn=get_cursor_version,
+        resolution_out=resolution_out,
+        list_available=_cursor_list_models,
+        max_steps=2,
     )
-    if returned_session_id is None:
-        returned_session_id = session_id or ""
-
-    exit_code = result.returncode
-    if is_error and exit_code == 0:
-        # CLI reported a logical error without a non-zero exit — surface it so
-        # the caller never treats an errored review as a clean SHIP.
-        exit_code = 1
-
-    return result_text, returned_session_id, exit_code, result.stderr
 
 
 # --- Confidence calibration (fn-29.3) ---
@@ -5872,6 +6303,10 @@ FLOW_GITIGNORE_AUTO_PATTERNS = [
     # proof-of-work; accumulate per pilot tick, same runtime-artifact class as
     # sync-runs/ — deliberately NOT a receipts/ path the ralph-guard validates)
     "pilot-runs/",
+    # fn-76 per-CLI-version model-resolution cache (.flow/.cache/): a memoized
+    # ladder result, a runtime artifact keyed on the local CLI version — never
+    # durable repo state.
+    ".cache/",
 ]
 
 
@@ -23114,10 +23549,15 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     # Run codex (cwd=repo_root so repo-relative changed-file paths resolve from
     # any subdir; codex reads files from disk — never embedded into the prompt).
     repo_root = get_repo_root()
+    _resolution: dict = {}
     output, thread_id, exit_code, stderr = run_codex_exec(
         prompt, session_id=session_id, sandbox=sandbox, spec=resolved_spec,
-        repo_root=repo_root,
+        repo_root=repo_root, resolution_out=_resolution,
     )
+    # fn-76 R5: rebind resolved_spec to the model actually run so the receipt +
+    # JSON reflect any ladder downgrade / floor (else the requested spec's own).
+    _rm, _re = _receipt_model_effort(resolved_spec, _resolution)
+    resolved_spec = dataclass_replace(resolved_spec, model=_rm, effort=_re)
 
     # Check for sandbox failures (clear stale receipt and exit)
     if is_sandbox_failure(exit_code, output, stderr):
@@ -23409,10 +23849,13 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
 
     # Run codex (cwd=repo_root so repo-relative changed-file paths resolve from
     # any subdir; codex reads files from disk — never embedded into the prompt).
+    _resolution: dict = {}
     output, thread_id, exit_code, stderr = run_codex_exec(
         prompt, session_id=session_id, sandbox=sandbox, spec=resolved_spec,
-        repo_root=repo_root,
+        repo_root=repo_root, resolution_out=_resolution,
     )
+    _rm, _re = _receipt_model_effort(resolved_spec, _resolution)
+    resolved_spec = dataclass_replace(resolved_spec, model=_rm, effort=_re)
 
     # Check for sandbox failures (clear stale receipt and exit)
     if is_sandbox_failure(exit_code, output, stderr):
@@ -23793,10 +24236,13 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
     # Run codex (cwd=repo_root so repo-relative changed-file paths resolve from
     # any subdir; codex reads files from disk — never embedded into the prompt).
     repo_root = get_repo_root()
+    _resolution: dict = {}
     output, thread_id, exit_code, stderr = run_codex_exec(
         prompt, session_id=session_id, sandbox=sandbox, spec=resolved_spec,
-        repo_root=repo_root,
+        repo_root=repo_root, resolution_out=_resolution,
     )
+    _rm, _re = _receipt_model_effort(resolved_spec, _resolution)
+    resolved_spec = dataclass_replace(resolved_spec, model=_rm, effort=_re)
 
     # Check for sandbox failures
     if is_sandbox_failure(exit_code, output, stderr):
@@ -24089,8 +24535,14 @@ def cmd_copilot_impl_review(args: argparse.Namespace) -> None:
 
     # Run copilot
     repo_root = get_repo_root()
+    _resolution: dict = {}
     output, returned_session_id, exit_code, stderr = run_copilot_exec(
-        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
+        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec,
+        resolution_out=_resolution,
+    )
+    # fn-76 R5: reflect any ladder downgrade / floor ("auto") on the receipt.
+    effective_model, effective_effort = _receipt_model_effort(
+        resolved_spec, _resolution
     )
 
     # Handle failures (no sandbox branch — copilot has no sandbox)
@@ -24299,8 +24751,14 @@ def cmd_copilot_plan_review(args: argparse.Namespace) -> None:
     # plan-review round counter BEFORE dispatch. Refuses (exit 4) at the cap.
     enforce_and_increment_review_cap(epic_id, "plan", use_json=args.json)
 
+    _resolution: dict = {}
     output, returned_session_id, exit_code, stderr = run_copilot_exec(
-        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
+        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec,
+        resolution_out=_resolution,
+    )
+    # fn-76 R5: reflect any ladder downgrade / floor ("auto") on the receipt.
+    effective_model, effective_effort = _receipt_model_effort(
+        resolved_spec, _resolution
     )
 
     if exit_code != 0:
@@ -24489,8 +24947,14 @@ def cmd_copilot_completion_review(args: argparse.Namespace) -> None:
     enforce_and_increment_review_cap(epic_id, "plan", use_json=args.json)
 
     repo_root = get_repo_root()
+    _resolution: dict = {}
     output, returned_session_id, exit_code, stderr = run_copilot_exec(
-        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
+        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec,
+        resolution_out=_resolution,
+    )
+    # fn-76 R5: reflect any ladder downgrade / floor ("auto") on the receipt.
+    effective_model, effective_effort = _receipt_model_effort(
+        resolved_spec, _resolution
     )
 
     if exit_code != 0:
@@ -24816,8 +25280,14 @@ def cmd_cursor_impl_review(args: argparse.Namespace) -> None:
         )
 
     # Run cursor (resume-only; spec carries no effort)
+    _resolution: dict = {}
     output, returned_session_id, exit_code, stderr = run_cursor_exec(
-        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
+        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec,
+        resolution_out=_resolution,
+    )
+    # fn-76 R5: reflect any list-models downgrade / floor ("auto") on the receipt.
+    effective_model, effective_effort = _receipt_model_effort(
+        resolved_spec, _resolution
     )
 
     # Handle failures
@@ -25042,8 +25512,14 @@ def cmd_cursor_plan_review(args: argparse.Namespace) -> None:
     # plan-review round counter BEFORE dispatch. Refuses (exit 4) at the cap.
     enforce_and_increment_review_cap(epic_id, "plan", use_json=args.json)
 
+    _resolution: dict = {}
     output, returned_session_id, exit_code, stderr = run_cursor_exec(
-        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
+        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec,
+        resolution_out=_resolution,
+    )
+    # fn-76 R5: reflect any list-models downgrade / floor ("auto") on the receipt.
+    effective_model, effective_effort = _receipt_model_effort(
+        resolved_spec, _resolution
     )
 
     if exit_code != 0:
@@ -25268,8 +25744,14 @@ def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
     # BEFORE dispatch; refuses (exit 4) at the cap.
     enforce_and_increment_review_cap(epic_id, "plan", use_json=args.json)
 
+    _resolution: dict = {}
     output, returned_session_id, exit_code, stderr = run_cursor_exec(
-        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec
+        prompt, session_id=session_id, repo_root=repo_root, spec=resolved_spec,
+        resolution_out=_resolution,
+    )
+    # fn-76 R5: reflect any list-models downgrade / floor ("auto") on the receipt.
+    effective_model, effective_effort = _receipt_model_effort(
+        resolved_spec, _resolution
     )
 
     if exit_code != 0:

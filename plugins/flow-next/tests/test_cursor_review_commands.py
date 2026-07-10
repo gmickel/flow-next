@@ -115,7 +115,8 @@ def _fake_exec(result_text: str = REVIEW_OUTPUT, session_id: str = MINTED_SID,
 
     returned_sid = session_id
 
-    def _runner(prompt, session_id=None, *, spec=None, repo_root):
+    def _runner(prompt, session_id=None, *, spec=None, repo_root,
+                resolution_out=None):
         calls.append({"session_id": session_id, "spec": spec,
                       "repo_root": repo_root, "prompt": prompt})
         return result_text, returned_sid, exit_code, stderr

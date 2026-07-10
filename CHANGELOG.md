@@ -2,6 +2,17 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Smart model resolution — strongest available, never fail on the default (fn-76).** Review backends no longer inject a fixed hardcoded model on the unconfigured path — a single hardcoded default can't know per-user / per-plan / per-CLI-version availability (the GPT-5.6 launch reproduced it live: `gpt-5.6-sol` ran on cursor, 400'd on codex CLI < 0.144, and was rejected by copilot 1.0.65 — three answers for one string on one machine). Instead flow-next resolves the **strongest model the account can actually run**, and this **removes the interim 2.10.3 hardcoded-default caveat** by making the ranking's top entry the default:
+  - **Ranking, not a set.** Each backend's model catalog is now a curated **quality ranking** (strongest first); the top entry IS the encoded default (`codex` → `gpt-5.6-sol`, `copilot` → `gpt-5.5`, `cursor` → `gpt-5.6-sol-high`). The ranking is a *preference*, never a parse gate — an **unknown explicit model warns and is accepted** (the CLI is the availability authority); the reasoning-effort axis stays strict.
+  - **Optimistic-first (zero happy-path overhead).** The top model dispatches directly — no probe, no list call, no extra subprocess. On a current CLI the argv is byte-identical to a hardcoded default.
+  - **Fallback ladder, on the distinctive failure only.** If that dispatch fails with the backend's model-unavailable signature (codex *"requires a newer version of Codex"* / model-not-found; copilot *`… from --model flag is not available`*; cursor *`Cannot use this model: …`*, captured live), flow-next resolves a fallback — **cursor** consults `cursor-agent --list-models` and picks the best `list ∩ ranking`; **codex/copilot** step down the ranking (max 2 steps). The terminal **floor** never fails (codex omits `--model`; copilot/cursor use `--model auto`, effort dropped). Any *other* failure (auth / network / sandbox / timeout) propagates unchanged. A ladder retry is the **same review round** — it does not consume an extra review-cap iteration (fn-90).
+  - **Per-CLI-version cache.** The resolved fallback is memoized in `.flow/.cache/model-resolution.json` (atomic, gitignored, corrupt-safe) keyed on `(backend, CLI version)`, so the one failed round-trip after a ranking-top bump is paid at most once per CLI upgrade. Explicit model pins bypass ladder + cache entirely and stay byte-identical to before.
+  - **Hygiene.** One stderr warning per downgrade/floor naming what was tried and what ran; the receipt records the model **actually used** (else `"auto"` / `"default"`). New docs: [`flowctl.md` § Model resolution](plugins/flow-next/docs/flowctl.md) + a [troubleshooting entry](plugins/flow-next/docs/troubleshooting.md).
+
 ## [flow-next 2.10.3] - 2026-07-10
 
 ### Changed

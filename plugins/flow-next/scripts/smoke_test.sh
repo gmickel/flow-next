@@ -2094,13 +2094,26 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# Test 2: invalid model rejected
-invalid_out="$(scripts/flowctl task set-backend "$BSPEC_TASK" --review "codex:gpt-99" --json 2>&1 || true)"
-if echo "$invalid_out" | grep -q '"success": false' && echo "$invalid_out" | grep -q "Unknown model for codex"; then
-  echo -e "${GREEN}✓${NC} set-backend rejects unknown codex model with helpful error"
+# Test 2: unknown model warn-and-accepts (fn-76 R1 — ranking is a preference,
+# the CLI is the availability authority; effort axis stays strict).
+unknown_out="$(scripts/flowctl task set-backend "$BSPEC_TASK" --review "codex:gpt-99" --json 2>&1 || true)"
+if echo "$unknown_out" | grep -q '"success": true' \
+   && echo "$unknown_out" | grep -q "codex:gpt-99" \
+   && echo "$unknown_out" | grep -q "not in flow-next's codex ranking"; then
+  echo -e "${GREEN}✓${NC} set-backend warn-and-accepts unknown codex model (fn-76)"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} set-backend didn't reject unknown codex model cleanly: $invalid_out"
+  echo -e "${RED}✗${NC} set-backend didn't warn-and-accept unknown codex model cleanly: $unknown_out"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 2b: a bad EFFORT still hard-fails (effort axis stays strict, fn-76).
+badeffort_out="$(scripts/flowctl task set-backend "$BSPEC_TASK" --review "codex:gpt-5.4:bogus-effort" --json 2>&1 || true)"
+if echo "$badeffort_out" | grep -q '"success": false' && echo "$badeffort_out" | grep -q "Unknown effort for codex"; then
+  echo -e "${GREEN}✓${NC} set-backend rejects unknown codex effort with helpful error"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} set-backend didn't reject unknown codex effort cleanly: $badeffort_out"
   FAIL=$((FAIL + 1))
 fi
 
