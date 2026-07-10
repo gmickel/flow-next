@@ -2,6 +2,17 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Added
+
+- **make-pr reviewer-ease — deterministic traceability slice in `export-cognitive-aid` (fn-86).** fn-93's eval-validated "Review plan" render is only as trustworthy as its data: the blind-judge evidence (prbeval 2026-07-10) showed a traceability table *without* deterministic backing scored **worse than none** (V3 trust 7 vs V2's 9 — "weakly supported"), a byte-identical dual-copy file inflated apparent risk, and the judge's residual complaint every round was "no line/hunk anchors". This spec adds the small deterministic slice that turns those render claims into repo-verifiable data — four **additive** fields on `flowctl spec export-cognitive-aid`, all reproducible from repo state at export time with **no LLM judgment inside flowctl** (the render layer judges, the payload reports). Each maps 1:1 to a measured gap:
+  - **`diff_summary.files[].changed_symbols`** — the function/section context per changed file, parsed from `git diff` hunk headers (the `@@ … @@ <context>` line git derives from its per-language xfuncname detection). Gives must-review items their anchors ("open `_dispatch_review_with_fallback`") — the judge's #1 residual. Empty per file where git can't detect a function; the render falls back to file-level anchoring, never fabricates.
+  - **`diff_summary.files[].derived`** — `{kind: mirror|dual-copy|state|none, source}` classification so the render can bucket generated / copied / bookkeeping files as safe-to-skim with data behind it. A dual-copy **verified byte-identical to its named source at export time** is `dual-copy`; a **drifted** copy is `none` (a real review item, not safe-to-skim). Rules come from the optional `makePr.derivedPaths` config leaf (default = flow-next's own shapes: the `plugins/flow-next/codex/` mirror, the `.flow/bin/flowctl.py` ↔ `plugins/flow-next/scripts/flowctl.py` dual copy, `.flow/` state); projects override, never required.
+  - **`removed_export_refs`** — top-level symbols DELETED in the diff that are STILL referenced elsewhere in the repo (the classic silent-breakage class a skimming reviewer misses). Conservative candidates-not-proof: word-boundary `git grep` over the working tree, bounded to the diff's source extensions; each entry `{symbol, defined_in, refs: [{path, line, text}]}`. Empty ⇒ the render states "no removed symbols still referenced (checked at export time)". False positives are acceptable (they steer a human look); completeness is never claimed.
+  - **`tasks[].evidence.files`** — each task's claimed files (recorded at `flowctl done` time) surfaced verbatim so the render maps task → files → commits without re-deriving.
+  - **Additive + graceful:** absent/empty fields render nothing, so specs without the relevant signal and older payload consumers are unaffected (no schema version bump, no new flags). The make-pr **render consumption** of these fields ships with fn-93's "Review plan" contract (`skills/flow-next-make-pr/workflow.md` §2.4c/§2.4d, PR #204) — it references `changed_symbols` (symbol anchors), `derived` (safe-to-skim bucketing), and the review signal opportunistically, degrading gracefully when the payload lacks them. Docs: [`flowctl.md` § export-cognitive-aid](plugins/flow-next/docs/flowctl.md). Dual flowctl copies; unit-tested (`test_export_traceability.py`).
+
 ## [flow-next 2.11.0] - 2026-07-10
 
 ### Changed
