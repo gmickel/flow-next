@@ -239,6 +239,13 @@ Aggregate spec markdown, tasks, memory, glossary diff, strategy alignment, diff 
 flowctl spec export-cognitive-aid fn-1 --base origin/main [--section spec|tasks|memory|glossary|strategy|diff|reviews] [--json]
 ```
 
+**Deterministic traceability slice.** Four additive fields back the make-pr "Review plan" render with data — all reproducible from repo state at export time, no LLM judgment (the render layer judges, the payload reports). Each is **additive**: absent/empty fields render nothing, so older payload consumers and specs without the relevant signal are unaffected (no schema version bump).
+
+- `diff_summary.files[].changed_symbols` — the function/section context per changed file, parsed from `git diff` hunk headers (the `@@ … @@ <context>` line git derives from its per-language xfuncname detection). Gives must-review items their anchors ("open `_dispatch_review_with_fallback`"). May be empty per file where git can't detect a function — the render falls back to file-level anchoring, never fabricates.
+- `diff_summary.files[].derived` — `{kind: mirror|dual-copy|state|none, source: <path|tool>}`. Classifies generated / copied / bookkeeping files so the render can bucket them as safe-to-skim. Precedence is dual-copy → mirror → state → none; a **dual-copy verified byte-identical to its named source at export time** is `dual-copy`, but a **drifted** copy is `none` (a real review item, not safe-to-skim). Rules come from the optional `makePr.derivedPaths` config leaf (default = flow-next's own shapes: the `plugins/flow-next/codex/` mirror, the `.flow/bin/flowctl.py` ↔ `plugins/flow-next/scripts/flowctl.py` dual copy, `.flow/` state); a configured value fully replaces the default.
+- `removed_export_refs` — top-level list of symbols DELETED in the diff that are STILL referenced elsewhere in the repo (the classic silent-breakage class a skimming reviewer misses). Conservative candidates-not-proof: removed top-level definitions are word-boundary `git grep`-ed against the working tree (the removals are already gone from HEAD, so they never self-match), bounded to the source extensions the diff touched. Each entry is `{symbol, defined_in, refs: [{path, line, text}]}`. Empty list ⇒ the render states "no removed symbols still referenced (checked at export time)". False positives are acceptable (they steer a human look); completeness is never claimed.
+- `tasks[].evidence.files` — each task's claimed files (recorded at `flowctl done` time) surfaced verbatim, so the render maps task → files → commits without re-deriving. Sits alongside the existing `commits` / `tests` / `files_touched` evidence keys.
+
 ### task create
 
 Create task under spec.
