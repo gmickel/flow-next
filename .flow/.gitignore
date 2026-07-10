@@ -8,4 +8,5 @@ tmp/
 .migration-manifest
 sync-runs/
 pilot-runs/
+.cache/
 # End of auto-managed block. User patterns below this line are preserved.

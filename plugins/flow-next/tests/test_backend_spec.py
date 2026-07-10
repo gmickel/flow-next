@@ -75,27 +75,29 @@ class TestRegistryShape(unittest.TestCase):
     def test_cursor_model_catalog(self) -> None:
         # Source of truth: ``cursor-agent --list-models`` (v2026.06). Keep synced
         # — Cursor ships new rows + auto-updates the CLI without changelog.
+        # fn-76: ``models`` is an ORDERED quality ranking (strongest first), a
+        # list — not a set. ``default_model`` MUST equal ``models[0]``.
         self.assertEqual(
             BACKEND_REGISTRY["cursor"]["models"],
-            {
-                "auto",
-                "gpt-5.6-sol-low",
-                "gpt-5.6-sol-medium",
+            [
                 "gpt-5.6-sol-high",
                 "gpt-5.6-sol-xhigh",
                 "gpt-5.6-sol-max",
+                "gpt-5.6-sol-medium",
+                "gpt-5.6-sol-low",
                 "gpt-5.6-terra-high",
                 "gpt-5.6-luna-high",
-                "gpt-5.5-high",
-                "gpt-5.4-high",
-                "gpt-5.3-codex",
-                "gpt-5.3-codex-high",
-                "gpt-5.3-codex-xhigh",
-                "gpt-5.2",
-                "composer-2.5",
                 "claude-opus-4-8-thinking-high",
                 "claude-opus-4-7-thinking-high",
-            },
+                "gpt-5.5-high",
+                "gpt-5.4-high",
+                "gpt-5.3-codex-xhigh",
+                "gpt-5.3-codex-high",
+                "gpt-5.3-codex",
+                "gpt-5.2",
+                "composer-2.5",
+                "auto",
+            ],
         )
 
     def test_rp_rejects_model_and_effort(self) -> None:
@@ -120,7 +122,9 @@ class TestRegistryShape(unittest.TestCase):
         )
 
     def test_codex_defaults(self) -> None:
-        self.assertEqual(BACKEND_REGISTRY["codex"]["default_model"], "gpt-5.5")
+        # fn-76: default_model is the ranking top (gpt-5.6-sol). Older codex CLIs
+        # (< 0.144) 400 on it; the run_codex_exec ladder downgrades to gpt-5.5.
+        self.assertEqual(BACKEND_REGISTRY["codex"]["default_model"], "gpt-5.6-sol")
         self.assertEqual(BACKEND_REGISTRY["codex"]["default_effort"], "high")
 
     def test_copilot_defaults(self) -> None:
@@ -132,26 +136,47 @@ class TestRegistryShape(unittest.TestCase):
         self.assertEqual(BACKEND_REGISTRY["copilot"]["default_effort"], "high")
 
     def test_copilot_model_catalog(self) -> None:
-        # Source of truth: `copilot -p "/model"` against CLI 1.0.36. Keep in
+        # Source of truth: `copilot -p "/model"` against CLI 1.0.65. Keep in
         # sync when GitHub activates new rows; older rows stay listed until
-        # copilot itself rejects them.
+        # copilot itself rejects them. fn-76: ORDERED quality ranking (strongest
+        # first), a list — ``default_model`` MUST equal ``models[0]``.
         self.assertEqual(
             BACKEND_REGISTRY["copilot"]["models"],
-            {
-                "claude-sonnet-4.5",
-                "claude-haiku-4.5",
+            [
+                "gpt-5.5",
+                "gpt-5.4",
                 "claude-opus-4.7",
                 "claude-opus-4.6",
                 "claude-opus-4.5",
+                "claude-sonnet-4.5",
                 "claude-sonnet-4",
-                "gpt-5.5",
-                "gpt-5.4",
+                "claude-haiku-4.5",
                 "gpt-5.4-mini",
                 "gpt-5.3-codex",
                 "gpt-5-mini",
                 "gpt-4.1",
-            },
+            ],
         )
+
+    def test_ranking_is_ordered_list_not_set(self) -> None:
+        # fn-76: every model-bearing backend's ``models`` is an ordered list
+        # (the quality ranking), not a set — order is load-bearing for the
+        # fallback ladder.
+        for backend in ("codex", "copilot", "cursor"):
+            with self.subTest(backend=backend):
+                self.assertIsInstance(
+                    BACKEND_REGISTRY[backend]["models"], list
+                )
+
+    def test_default_model_equals_ranking_top(self) -> None:
+        # fn-76 invariant: the optimistic-first default IS the ranking's first
+        # entry, so the happy-path dispatch argv is byte-identical to a hardcoded
+        # default. If these ever diverge, the happy path stops dispatching the
+        # strongest model.
+        for backend in ("codex", "copilot", "cursor"):
+            with self.subTest(backend=backend):
+                reg = BACKEND_REGISTRY[backend]
+                self.assertEqual(reg["default_model"], reg["models"][0])
 
 
 # --- Valid specs ---
@@ -271,24 +296,25 @@ class TestParseInvalid(unittest.TestCase):
         s = BackendSpec.parse("codex:")
         self.assertEqual(s, BackendSpec("codex", None, None))
 
-    def test_unknown_model_codex(self) -> None:
-        with self.assertRaisesRegex(ValueError, "Unknown model for codex"):
-            BackendSpec.parse("codex:gpt-99")
+    def test_unknown_model_codex_warns_and_accepts(self) -> None:
+        # fn-76 R1: unknown models are a PREFERENCE miss, not a parse error —
+        # warn-and-accept (the CLI is the availability authority). Effort stays
+        # strict (covered separately).
+        err = io.StringIO()
+        with redirect_stderr(err):
+            s = BackendSpec.parse("codex:gpt-99")
+        self.assertEqual(s, BackendSpec("codex", "gpt-99", None))
+        self.assertTrue(s.model_explicit)
+        self.assertIn("not in flow-next's codex ranking", err.getvalue())
 
-    def test_unknown_model_lists_sorted_valid(self) -> None:
-        try:
-            BackendSpec.parse("codex:gpt-99")
-            self.fail("expected ValueError")
-        except ValueError as e:
-            msg = str(e)
-            # Spec says: sorted valid-list in message.
-            self.assertIn("'gpt-5-codex'", msg)
-            self.assertIn("'gpt-5.4'", msg)
-
-    def test_unknown_model_copilot(self) -> None:
-        # Effort-looking string in model slot must fail cleanly.
-        with self.assertRaisesRegex(ValueError, "Unknown model for copilot"):
-            BackendSpec.parse("copilot:xhigh-is-not-a-model")
+    def test_unknown_model_copilot_warns_and_accepts(self) -> None:
+        # An effort-looking string in the model slot is just an unknown model
+        # now — warn-and-accept, no raise.
+        err = io.StringIO()
+        with redirect_stderr(err):
+            s = BackendSpec.parse("copilot:xhigh-is-not-a-model")
+        self.assertEqual(s, BackendSpec("copilot", "xhigh-is-not-a-model", None))
+        self.assertIn("not in flow-next's copilot ranking", err.getvalue())
 
     def test_unknown_effort_codex(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unknown effort for codex"):
@@ -314,17 +340,13 @@ class TestParseInvalid(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "does not accept an effort"):
             BackendSpec.parse("cursor:gpt-5.5-high:high")
 
-    def test_cursor_unknown_model_lists_valid(self) -> None:
-        with self.assertRaisesRegex(ValueError, "Unknown model for cursor"):
-            BackendSpec.parse("cursor:bogus")
-        try:
-            BackendSpec.parse("cursor:bogus")
-            self.fail("expected ValueError")
-        except ValueError as e:
-            msg = str(e)
-            # Sorted valid-list in message — at least these anchors.
-            self.assertIn("'gpt-5.5-high'", msg)
-            self.assertIn("'composer-2.5'", msg)
+    def test_cursor_unknown_model_warns_and_accepts(self) -> None:
+        # fn-76 R1: warn-and-accept for cursor too.
+        err = io.StringIO()
+        with redirect_stderr(err):
+            s = BackendSpec.parse("cursor:bogus")
+        self.assertEqual(s, BackendSpec("cursor", "bogus", None))
+        self.assertIn("not in flow-next's cursor ranking", err.getvalue())
 
     def test_cursor_rejects_gpt5_high_lookalike_in_effort_slot(self) -> None:
         # A copilot/codex-style ``cursor:gpt-5.2:xhigh`` (effort in slot 3) must
@@ -358,10 +380,15 @@ class TestParseInvalid(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unknown backend"):
             BackendSpec.parse("RP")
 
-    def test_case_sensitive_model(self) -> None:
-        # Registry models are lowercase; uppercase must fail.
-        with self.assertRaisesRegex(ValueError, "Unknown model"):
-            BackendSpec.parse("codex:GPT-5.4")
+    def test_case_sensitive_model_warns_and_accepts(self) -> None:
+        # fn-76 R1: an uppercase (unknown) model is no longer a hard error — it
+        # warns and is accepted verbatim (case-preserving); the CLI rejects it if
+        # truly unavailable. Effort case-sensitivity stays strict (below).
+        err = io.StringIO()
+        with redirect_stderr(err):
+            s = BackendSpec.parse("codex:GPT-5.4")
+        self.assertEqual(s.model, "GPT-5.4")
+        self.assertIn("not in flow-next's codex ranking", err.getvalue())
 
     def test_case_sensitive_effort(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unknown effort"):
@@ -389,7 +416,10 @@ class TestResolve(unittest.TestCase):
 
     def test_bare_codex_fills_both_defaults(self) -> None:
         r = BackendSpec.parse("codex").resolve()
-        self.assertEqual(r, BackendSpec("codex", "gpt-5.5", "high"))
+        # fn-76: codex default is now the ranking top (gpt-5.6-sol).
+        self.assertEqual(r, BackendSpec("codex", "gpt-5.6-sol", "high"))
+        # Unconfigured → not explicit → ladder-/cache-eligible downstream.
+        self.assertFalse(r.model_explicit)
 
     def test_bare_copilot_fills_both_defaults(self) -> None:
         r = BackendSpec.parse("copilot").resolve()
@@ -709,12 +739,14 @@ class TestSetBackendValidation(unittest.TestCase):
             # Store raw string exactly as typed (no normalization).
             self.assertEqual(raw["review"], "codex:gpt-5.4:xhigh")
 
-    def test_task_set_backend_rejects_unknown_model(self) -> None:
+    def test_task_set_backend_warns_and_accepts_unknown_model(self) -> None:
+        # fn-76 R1: an unknown model is a preference miss, not a hard error — it
+        # warns and is stored verbatim (the CLI is the availability authority).
         with _flow_fixture() as td:
             _write_epic(td / ".flow", "fn-9-e")
             _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
-            out = io.StringIO()
-            with self.assertRaises(SystemExit) as cm, redirect_stdout(out):
+            out, err = io.StringIO(), io.StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
                 flowctl.cmd_task_set_backend(
                     _ns(
                         id="fn-9-e.1",
@@ -724,11 +756,11 @@ class TestSetBackendValidation(unittest.TestCase):
                         json=True,
                     )
                 )
-            self.assertEqual(cm.exception.code, 1)
-            payload = json.loads(out.getvalue())
-            self.assertFalse(payload["success"])
-            self.assertIn("--review", payload["error"])
-            self.assertIn("Unknown model for codex", payload["error"])
+            raw = json.loads(
+                (td / ".flow" / "tasks" / "fn-9-e.1.json").read_text()
+            )
+            self.assertEqual(raw["review"], "codex:gpt-99")
+            self.assertIn("not in flow-next's codex ranking", err.getvalue())
 
     def test_task_set_backend_rejects_rp_with_model(self) -> None:
         with _flow_fixture() as td:
@@ -776,12 +808,15 @@ class TestSetBackendValidation(unittest.TestCase):
                 td / ".flow", "fn-9-e.1", "fn-9-e", review="codex"
             )
             before = (td / ".flow" / "tasks" / "fn-9-e.1.json").read_text()
+            # A bad EFFORT still hard-fails (effort axis stays strict, fn-76) —
+            # disk must be untouched. (An unknown MODEL now warn-and-accepts, so
+            # it is no longer the rejection case.)
             with self.assertRaises(SystemExit), redirect_stdout(io.StringIO()):
                 flowctl.cmd_task_set_backend(
                     _ns(
                         id="fn-9-e.1",
                         impl=None,
-                        review="codex:gpt-99",
+                        review="codex:gpt-5.4:bogus-effort",
                         sync=None,
                         json=True,
                     )
@@ -933,9 +968,9 @@ class TestShowBackendResolution(unittest.TestCase):
             # resolve() fills in the model from registry default, so str
             # becomes the full form. The important invariant is the resolved
             # dict has both fields populated without raising.
-            self.assertEqual(r["resolved"]["model"], "gpt-5.5")
+            self.assertEqual(r["resolved"]["model"], "gpt-5.6-sol")
             self.assertEqual(r["resolved"]["effort"], "high")
-            self.assertEqual(r["resolved"]["str"], "codex:gpt-5.5:high")
+            self.assertEqual(r["resolved"]["str"], "codex:gpt-5.6-sol:high")
 
     def test_legacy_value_falls_back_with_warning(self) -> None:
         # The hot-path compat case: stored ``codex:gpt-5.4-high`` (dash) from
@@ -958,9 +993,10 @@ class TestShowBackendResolution(unittest.TestCase):
             r = json.loads(out.getvalue())["review"]
             self.assertEqual(r["raw"], "codex:gpt-5.4-high")
             self.assertEqual(r["source"], "task")
-            # Lenient fallback → bare codex → registry defaults fill.
+            # Lenient fallback → bare codex → registry defaults fill (fn-76
+            # ranking top).
             self.assertEqual(r["resolved"]["backend"], "codex")
-            self.assertEqual(r["resolved"]["model"], "gpt-5.5")
+            self.assertEqual(r["resolved"]["model"], "gpt-5.6-sol")
             self.assertEqual(r["resolved"]["effort"], "high")
             self.assertIn("warning:", err.getvalue())
             self.assertIn("codex:gpt-5.4-high", err.getvalue())
@@ -1050,12 +1086,14 @@ class TestRunCodexExecHonorsSpec(unittest.TestCase):
 
     def test_spec_none_falls_back_to_registry_defaults(self) -> None:
         # Defensive path: spec=None must resolve via bare-codex defaults
-        # (gpt-5.5 / high). This keeps non-review callers safe.
+        # (fn-76: ranking top gpt-5.6-sol / high). This keeps non-review callers
+        # safe. repo_root defaults to None → cache/ladder are no-ops, so the
+        # happy path dispatches the ranking top directly.
         captured: list = []
         with _stub_subprocess(flowctl, captured, stdout='{"type":"thread.started","thread_id":"t1"}'):
             flowctl.run_codex_exec("prompt", sandbox="read-only", spec=None)
         argv, _ = captured[0]
-        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.5")
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.6-sol")
         self.assertEqual(
             argv[argv.index("-c") + 1],
             'model_reasoning_effort="high"',
@@ -1070,8 +1108,8 @@ class TestRunCodexExecHonorsSpec(unittest.TestCase):
         with _stub_subprocess(flowctl, captured, stdout='{"type":"thread.started","thread_id":"t1"}'):
             flowctl.run_codex_exec("prompt", sandbox="read-only", spec=spec)
         argv, _ = captured[0]
-        # Registry default model (no env set) + env effort.
-        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.5")
+        # Registry default model (fn-76 ranking top, no env set) + env effort.
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.6-sol")
         self.assertEqual(
             argv[argv.index("-c") + 1],
             'model_reasoning_effort="low"',
@@ -1313,7 +1351,7 @@ class TestResolveReviewSpec(unittest.TestCase):
             _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
             resolved = flowctl.resolve_review_spec("codex", "fn-9-e.1")
             self.assertEqual(resolved.backend, "codex")
-            self.assertEqual(resolved.model, "gpt-5.5")  # registry default
+            self.assertEqual(resolved.model, "gpt-5.6-sol")  # fn-76 ranking top
             self.assertEqual(resolved.effort, "high")
 
     def test_no_task_id_still_resolves(self) -> None:
@@ -1535,7 +1573,10 @@ class TestPerTaskReviewSpecIntegration(unittest.TestCase):
                 receipt=None,
                 json=True,
                 sandbox="read-only",
-                spec="codex:gpt-99",  # unknown model
+                # fn-76: an unknown MODEL now warn-and-accepts, so use a bad
+                # EFFORT (effort axis stays strict) to exercise strict --spec
+                # rejection.
+                spec="codex:gpt-5.4:bogus-effort",
             )
             out = io.StringIO()
             with self.assertRaises(SystemExit), redirect_stdout(out):
@@ -1543,7 +1584,7 @@ class TestPerTaskReviewSpecIntegration(unittest.TestCase):
             payload = json.loads(out.getvalue())
             self.assertFalse(payload["success"])
             self.assertIn("Invalid --spec", payload["error"])
-            self.assertIn("Unknown model for codex", payload["error"])
+            self.assertIn("Unknown effort for codex", payload["error"])
 
 
 # --- cmd_review_backend (fn-28.4) ---
@@ -1612,8 +1653,8 @@ class TestReviewBackendCmd(unittest.TestCase):
         with _flow_fixture():
             payload = self._run_json()
             self.assertEqual(payload["backend"], "codex")
-            self.assertEqual(payload["spec"], "codex:gpt-5.5:high")
-            self.assertEqual(payload["model"], "gpt-5.5")
+            self.assertEqual(payload["spec"], "codex:gpt-5.6-sol:high")
+            self.assertEqual(payload["model"], "gpt-5.6-sol")
             self.assertEqual(payload["effort"], "high")
             self.assertEqual(payload["source"], "env")
 
@@ -1682,8 +1723,9 @@ class TestReviewBackendCmd(unittest.TestCase):
         with _flow_fixture():
             payload = self._run_json()
             self.assertEqual(payload["backend"], "codex")
-            # Full spec resolves to registry defaults since model was unparseable.
-            self.assertEqual(payload["spec"], "codex:gpt-5.5:high")
+            # Full spec resolves to registry defaults since model was unparseable
+            # (fn-76: legacy dash-composite still degrades to bare; ranking top).
+            self.assertEqual(payload["spec"], "codex:gpt-5.6-sol:high")
             self.assertEqual(payload["source"], "env")
 
     def test_garbage_env_returns_ask(self) -> None:
