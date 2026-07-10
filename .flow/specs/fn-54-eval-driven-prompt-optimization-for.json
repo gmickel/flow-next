@@ -14,7 +14,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-54-eval-driven-prompt-optimization-for.md",
-  "status": "open",
+  "status": "done",
   "title": "Eval-driven prompt optimization for flow-next skills & agents",
   "tracker": {
     "baseHashFlow": null,
@@ -26,5 +26,5 @@
     "mergeBaseTracker": null,
     "url": "https://linear.app/gmickel/issue/FLOW-5"
   },
-  "updated_at": "2026-06-11T13:33:35.857981Z"
+  "updated_at": "2026-07-10T20:45:16.766329Z"
 }
