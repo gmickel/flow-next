@@ -3105,7 +3105,11 @@ def _dispatch_review_with_fallback(
 
 
 def _receipt_model_effort(
-    resolved_spec: "BackendSpec", resolution_out: Optional[dict]
+    resolved_spec: "BackendSpec",
+    resolution_out: Optional[dict],
+    *,
+    prior_model: Optional[str] = None,
+    prior_effort: Optional[str] = None,
 ) -> tuple[Optional[str], Optional[str]]:
     """(model, effort) to stamp on a receipt, reflecting the model ACTUALLY run.
 
@@ -3121,6 +3125,11 @@ def _receipt_model_effort(
         if resolution_out.get("floor"):
             return (used if used is not None else "default"), None
         return used, resolved_spec.effort
+    if resolution_out and resolution_out.get("resumed") and prior_model is not None:
+        # Codex resume: the session runs the model the ORIGINAL dispatch used —
+        # keep the prior receipt's model/effort (they already record any ladder
+        # downgrade / floor honestly); never re-stamp the ranking top.
+        return prior_model, prior_effort
     return resolved_spec.model, resolved_spec.effort
 
 
@@ -3235,6 +3244,12 @@ def run_codex_exec(
                 cwd=str(repo_root) if repo_root is not None else None,
             )
             output = result.stdout
+            # Resume succeeded — the session runs whatever model the ORIGINAL
+            # dispatch used (possibly a ladder downgrade/floor); this call never
+            # saw it. Mark the resolution so the receipt preserves the prior
+            # receipt's model instead of re-stamping the ranking top (PR #203 r2).
+            if resolution_out is not None:
+                resolution_out["resumed"] = True
             # For resumed sessions, thread_id stays the same
             return output, session_id, 0, result.stderr
         except subprocess.CalledProcessError as e:
@@ -23541,6 +23556,8 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
     session_id = None
     is_rereview = False
+    prior_receipt_model = None
+    prior_receipt_effort = None
     if receipt_path:
         receipt_file = Path(receipt_path)
         if receipt_file.exists():
@@ -23552,6 +23569,10 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
                 if receipt_data.get("mode") in (None, "codex"):
                     session_id = receipt_data.get("session_id")
                     is_rereview = session_id is not None
+                    # PR #203 r2: a resumed session runs the PRIOR dispatch's
+                    # model — keep it for honest receipt stamping on resume.
+                    prior_receipt_model = receipt_data.get("model")
+                    prior_receipt_effort = receipt_data.get("effort")
             except (json.JSONDecodeError, Exception):
                 pass
 
@@ -23596,7 +23617,10 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     )
     # fn-76 R5: rebind resolved_spec to the model actually run so the receipt +
     # JSON reflect any ladder downgrade / floor (else the requested spec's own).
-    _rm, _re = _receipt_model_effort(resolved_spec, _resolution)
+    _rm, _re = _receipt_model_effort(
+        resolved_spec, _resolution,
+        prior_model=prior_receipt_model, prior_effort=prior_receipt_effort,
+    )
     resolved_spec = dataclass_replace(resolved_spec, model=_rm, effort=_re)
 
     # Check for sandbox failures (clear stale receipt and exit)
@@ -23842,6 +23866,8 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
     session_id = None
     is_rereview = False
+    prior_receipt_model = None
+    prior_receipt_effort = None
     if receipt_path:
         receipt_file = Path(receipt_path)
         if receipt_file.exists():
@@ -23853,6 +23879,10 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
                 if receipt_data.get("mode") in (None, "codex"):
                     session_id = receipt_data.get("session_id")
                     is_rereview = session_id is not None
+                    # PR #203 r2: a resumed session runs the PRIOR dispatch's
+                    # model — keep it for honest receipt stamping on resume.
+                    prior_receipt_model = receipt_data.get("model")
+                    prior_receipt_effort = receipt_data.get("effort")
             except (json.JSONDecodeError, Exception):
                 pass
 
@@ -23894,7 +23924,10 @@ def cmd_codex_plan_review(args: argparse.Namespace) -> None:
         prompt, session_id=session_id, sandbox=sandbox, spec=resolved_spec,
         repo_root=repo_root, resolution_out=_resolution,
     )
-    _rm, _re = _receipt_model_effort(resolved_spec, _resolution)
+    _rm, _re = _receipt_model_effort(
+        resolved_spec, _resolution,
+        prior_model=prior_receipt_model, prior_effort=prior_receipt_effort,
+    )
     resolved_spec = dataclass_replace(resolved_spec, model=_rm, effort=_re)
 
     # Check for sandbox failures (clear stale receipt and exit)
@@ -24233,6 +24266,8 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
     session_id = None
     is_rereview = False
+    prior_receipt_model = None
+    prior_receipt_effort = None
     if receipt_path:
         receipt_file = Path(receipt_path)
         if receipt_file.exists():
@@ -24244,6 +24279,10 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
                 if receipt_data.get("mode") in (None, "codex"):
                     session_id = receipt_data.get("session_id")
                     is_rereview = session_id is not None
+                    # PR #203 r2: a resumed session runs the PRIOR dispatch's
+                    # model — keep it for honest receipt stamping on resume.
+                    prior_receipt_model = receipt_data.get("model")
+                    prior_receipt_effort = receipt_data.get("effort")
             except (json.JSONDecodeError, Exception):
                 pass
 
@@ -24281,7 +24320,10 @@ def cmd_codex_completion_review(args: argparse.Namespace) -> None:
         prompt, session_id=session_id, sandbox=sandbox, spec=resolved_spec,
         repo_root=repo_root, resolution_out=_resolution,
     )
-    _rm, _re = _receipt_model_effort(resolved_spec, _resolution)
+    _rm, _re = _receipt_model_effort(
+        resolved_spec, _resolution,
+        prior_model=prior_receipt_model, prior_effort=prior_receipt_effort,
+    )
     resolved_spec = dataclass_replace(resolved_spec, model=_rm, effort=_re)
 
     # Check for sandbox failures

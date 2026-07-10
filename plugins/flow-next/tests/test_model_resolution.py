@@ -573,5 +573,35 @@ class TestHandlerResolvedSpecs(unittest.TestCase):
         pinned_twice = BackendSpec.parse("cursor:composer-2.5").resolve().resolve()
         self.assertTrue(pinned_twice.model_explicit)
 
+class TestResumePreservesPriorModel(unittest.TestCase):
+    """PR #203 round 2 (codex bot): a resumed codex session runs the model the
+    ORIGINAL dispatch used — the receipt must preserve the prior receipt's
+    (possibly downgraded/floored) model, never re-stamp the ranking top."""
+
+    def test_resume_marks_resolution_and_helper_preserves_prior(self) -> None:
+        calls: list = []
+        resolution: dict = {}
+        with _scripted(flowctl, dispatch_result=lambda m: (CODEX_OK_STREAM, "", 0), calls=calls):
+            with _repo() as root:
+                out, tid, rc, e = flowctl.run_codex_exec(
+                    "p", session_id="thread-1", sandbox="read-only",
+                    spec=BackendSpec("codex").resolve(), repo_root=root,
+                    resolution_out=resolution,
+                )
+        self.assertEqual(rc, 0)
+        self.assertTrue(resolution.get("resumed"))
+        self.assertNotIn("model", resolution)  # resume never saw a model
+        # The stamping helper must keep the prior receipt's downgraded model.
+        spec = BackendSpec("codex").resolve()  # ranking top
+        model, effort = flowctl._receipt_model_effort(
+            spec, resolution, prior_model="gpt-5.5", prior_effort="high",
+        )
+        self.assertEqual((model, effort), ("gpt-5.5", "high"))
+
+    def test_no_resume_no_prior_falls_back_to_spec(self) -> None:
+        spec = BackendSpec("codex").resolve()
+        model, effort = flowctl._receipt_model_effort(spec, {}, prior_model="gpt-5.5")
+        self.assertEqual(model, spec.model)  # no resume marker -> spec values
+
 if __name__ == "__main__":
     unittest.main()
