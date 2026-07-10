@@ -3207,10 +3207,15 @@ def run_codex_exec(
         explicit_model = False
         spec = BackendSpec("codex").resolve()
     else:
-        explicit_model = spec.model is not None or spec.model_explicit
+        # fn-76 PR#203 round 1 (both bot reviewers): a handler-resolved spec
+        # arrives with the REGISTRY DEFAULT already filled in — inferring
+        # explicitness from ``spec.model is not None`` misclassified every
+        # unconfigured review as a pin and bypassed the ladder/cache entirely.
+        # ``model_explicit`` (set by parse for typed models, by resolve for env
+        # pins, and NEVER by a default fill) is the only authority.
         if spec.model is None or spec.effort is None:
             spec = spec.resolve()
-        explicit_model = explicit_model or spec.model_explicit
+        explicit_model = spec.model_explicit
     effective_effort = spec.effort or "high"
 
     if session_id:
@@ -3793,7 +3798,17 @@ class BackendSpec:
     # ladder-/cache-eligible in the exec wrappers. Excluded from ``__eq__`` /
     # ``__hash__`` (``compare=False``) so it never perturbs existing equality
     # assertions — it is dispatch metadata, not identity.
-    model_explicit: bool = field(default=False, compare=False)
+    # None = "infer from construction": a directly-constructed spec that
+    # carries a model IS a pin (a caller who names a model means it — the
+    # ladder must never silently substitute). parse() passes True for typed
+    # models; resolve() passes the propagated flag explicitly (False for a
+    # registry-default fill) — only those code paths may mark a populated
+    # model as non-explicit.
+    model_explicit: Optional[bool] = field(default=None, compare=False)
+
+    def __post_init__(self) -> None:
+        if self.model_explicit is None:
+            object.__setattr__(self, "model_explicit", self.model is not None)
 
     @classmethod
     def parse(cls, spec: str) -> "BackendSpec":
@@ -3902,7 +3917,10 @@ class BackendSpec:
             model_explicit = False
         elif self.model is not None:
             model = self.model
-            model_explicit = True
+            # PROPAGATE the incoming flag — never re-infer from presence: a
+            # default-filled spec that gets re-resolved must stay non-explicit;
+            # a parse()d or env-pinned model already carries True.
+            model_explicit = self.model_explicit
         elif os.environ.get(env_model_key):
             model = os.environ.get(env_model_key)
             model_explicit = True
@@ -4251,10 +4269,15 @@ def run_copilot_exec(
         explicit_model = False
         spec = BackendSpec("copilot").resolve()
     else:
-        explicit_model = spec.model is not None or spec.model_explicit
+        # fn-76 PR#203 round 1 (both bot reviewers): a handler-resolved spec
+        # arrives with the REGISTRY DEFAULT already filled in — inferring
+        # explicitness from ``spec.model is not None`` misclassified every
+        # unconfigured review as a pin and bypassed the ladder/cache entirely.
+        # ``model_explicit`` (set by parse for typed models, by resolve for env
+        # pins, and NEVER by a default fill) is the only authority.
         if spec.model is None or spec.effort is None:
             spec = spec.resolve()
-        explicit_model = explicit_model or spec.model_explicit
+        explicit_model = spec.model_explicit
     effective_effort = spec.effort or "high"
 
     use_stdin = sys.platform == "win32"
@@ -4677,10 +4700,15 @@ def run_cursor_exec(
         explicit_model = False
         spec = BackendSpec("cursor").resolve()
     else:
-        explicit_model = spec.model is not None or spec.model_explicit
+        # fn-76 PR#203 round 1 (both bot reviewers): a handler-resolved spec
+        # arrives with the REGISTRY DEFAULT already filled in — inferring
+        # explicitness from ``spec.model is not None`` misclassified every
+        # unconfigured review as a pin and bypassed the ladder/cache entirely.
+        # ``model_explicit`` (set by parse for typed models, by resolve for env
+        # pins, and NEVER by a default fill) is the only authority.
         if spec.model is None:
             spec = spec.resolve()
-        explicit_model = explicit_model or spec.model_explicit
+        explicit_model = spec.model_explicit
 
     # fn-76: ONE model per dispatch, driven by the fallback ladder. Cursor bakes
     # effort into the model name, so the floor (``model="auto"``) is a plain

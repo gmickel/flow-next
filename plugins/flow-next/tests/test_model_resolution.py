@@ -15,8 +15,10 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import os
 import tempfile
 import unittest
+from unittest import mock
 from contextlib import contextmanager, redirect_stderr
 from pathlib import Path
 from typing import Any, Optional
@@ -194,7 +196,7 @@ class TestHappyPath(unittest.TestCase):
             with _repo() as root:
                 flowctl.run_codex_exec(
                     "p", sandbox="read-only",
-                    spec=BackendSpec("codex", "gpt-5.6-sol", "high"), repo_root=root,
+                    spec=BackendSpec.parse("codex:gpt-5.6-sol:high"), repo_root=root,
                 )
         self.assertEqual(unconf[0], explicit[0])
 
@@ -440,7 +442,7 @@ class TestCache(unittest.TestCase):
             with _scripted(flowctl, dispatch_result=lambda m: (CODEX_OK_STREAM, "", 0), calls=calls):
                 flowctl.run_codex_exec(
                     "p", sandbox="read-only",
-                    spec=BackendSpec("codex", "gpt-5.6-sol", "high"), repo_root=root,
+                    spec=BackendSpec.parse("codex:gpt-5.6-sol:high"), repo_root=root,
                 )
             self.assertNotIn("--version", [tok for c in calls for tok in c])
             self.assertEqual(_model_of([c for c in calls if "exec" in c][0]), "gpt-5.6-sol")
@@ -474,6 +476,102 @@ class TestResolutionOut(unittest.TestCase):
         self.assertEqual(res["model"], "gpt-5.6-sol")
         self.assertFalse(res["floor"])
 
+
+class TestHandlerResolvedSpecs(unittest.TestCase):
+    """PR #203 round 1 regression (found by BOTH bot reviewers): the review
+    handlers pass PRE-RESOLVED specs into ``run_*_exec`` — the registry default
+    is already filled in and ``model_explicit`` is False. Inferring explicitness
+    from ``spec.model is not None`` misclassified that shape as a pin and
+    bypassed the ladder/cache on every real (handler-driven) review; the unit
+    tests only exercised BARE specs, which resolve inside the wrapper and dodge
+    the bug. These tests pin the handler shape."""
+
+    def test_preresolved_default_still_ladders_codex(self) -> None:
+        handler_spec = BackendSpec("codex").resolve()  # what _resolve_codex_review_spec passes
+        self.assertFalse(handler_spec.model_explicit)
+        self.assertIsNotNone(handler_spec.model)
+
+        def result(model):
+            if model == "gpt-5.6-sol":
+                return (CODEX_UNAVAILABLE_STREAM, "", 1)
+            return (CODEX_OK_STREAM, "", 0)
+
+        calls: list = []
+        with _scripted(flowctl, dispatch_result=result, calls=calls):
+            with _repo() as root, redirect_stderr(io.StringIO()):
+                out, tid, rc, e = flowctl.run_codex_exec(
+                    "p", sandbox="read-only", spec=handler_spec, repo_root=root,
+                )
+        self.assertEqual(rc, 0)
+        dispatched = [_model_of(c) for c in calls if "exec" in c]
+        self.assertEqual(dispatched[:2], ["gpt-5.6-sol", "gpt-5.5"])
+
+    def test_preresolved_default_still_ladders_cursor(self) -> None:
+        handler_spec = BackendSpec("cursor").resolve()
+        self.assertFalse(handler_spec.model_explicit)
+
+        def result(model):
+            if model == "gpt-5.6-sol-high":
+                # signature lands on STDERR (live capture 2026-07-10); stdout is
+                # not parseable JSON, so _parse_cursor_result blanks it.
+                return ("", CURSOR_UNAVAILABLE_STREAM, 1)
+            return (CURSOR_OK_STREAM, "", 0)
+
+        calls: list = []
+        with _scripted(
+            flowctl, dispatch_result=result, calls=calls,
+            list_models=["auto", "gpt-5.5-high", "composer-2.5"],
+        ):
+            with _repo() as root, redirect_stderr(io.StringIO()):
+                out, sid, rc, e = flowctl.run_cursor_exec(
+                    "p", spec=handler_spec, repo_root=root,
+                )
+        self.assertEqual(rc, 0)
+        self.assertTrue(any("--list-models" in c for c in calls))
+
+    def test_parsed_pin_bypasses_ladder_and_propagates_failure(self) -> None:
+        pinned = BackendSpec.parse("codex:gpt-5.4")
+        self.assertTrue(pinned.model_explicit)
+        calls: list = []
+        with _scripted(
+            flowctl,
+            dispatch_result=lambda m: (CODEX_UNAVAILABLE_STREAM, "", 1),
+            calls=calls,
+        ):
+            with _repo() as root:
+                out, tid, rc, e = flowctl.run_codex_exec(
+                    "p", sandbox="read-only", spec=pinned, repo_root=root,
+                )
+        self.assertEqual(rc, 1)  # explicit pin: failure propagates, no ladder
+        self.assertEqual(len([c for c in calls if "exec" in c]), 1)
+
+    def test_env_pin_bypasses_ladder(self) -> None:
+        with mock.patch.dict(os.environ, {"FLOW_CODEX_MODEL": "gpt-5.4"}):
+            handler_spec = BackendSpec("codex").resolve()
+        self.assertTrue(handler_spec.model_explicit)
+        calls: list = []
+        with _scripted(
+            flowctl,
+            dispatch_result=lambda m: (CODEX_UNAVAILABLE_STREAM, "", 1),
+            calls=calls,
+        ):
+            with _repo() as root:
+                out, tid, rc, e = flowctl.run_codex_exec(
+                    "p", sandbox="read-only", spec=handler_spec, repo_root=root,
+                )
+        self.assertEqual(rc, 1)
+        self.assertEqual(len([c for c in calls if "exec" in c]), 1)
+
+    def test_double_resolve_keeps_default_unexplicit(self) -> None:
+        # resolve() must PROPAGATE the flag, never re-infer it from presence —
+        # a re-resolved default-filled spec stays ladder-eligible.
+        once = BackendSpec("cursor").resolve()
+        twice = once.resolve()
+        self.assertFalse(once.model_explicit)
+        self.assertFalse(twice.model_explicit)
+        # And a parsed pin survives double-resolve as a pin.
+        pinned_twice = BackendSpec.parse("cursor:composer-2.5").resolve().resolve()
+        self.assertTrue(pinned_twice.model_explicit)
 
 if __name__ == "__main__":
     unittest.main()
