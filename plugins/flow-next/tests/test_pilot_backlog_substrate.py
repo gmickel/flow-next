@@ -162,7 +162,7 @@ class PilotAutonomyConfigTestCase(_FlowctlTmpRepo):
     def test_pilot_block_does_not_clash_with_siblings(self) -> None:
         self._config_set("pilot.autonomy", "backlog")
         # Setting pilot.* leaves the other top-level blocks intact.
-        self.assertEqual(self._config_get("work.delegateModel")["value"], "gpt-5.5")
+        self.assertEqual(self._config_get("work.delegateModel")["value"], "gpt-5.6-sol")
         self.assertEqual(self._config_get("pipeline.qa")["value"], "off")
         self.assertEqual(self._config_get("pilot.gateClasses")["value"], [])
 

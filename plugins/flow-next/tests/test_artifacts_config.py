@@ -217,7 +217,7 @@ class ArtifactsConfigTestCase(unittest.TestCase):
     def test_setting_artifacts_key_does_not_clobber_other_defaults(self) -> None:
         self._run_config_set_cli("artifacts.html.enabled", "true")
         self.assertEqual(
-            self._run_config_get_cli("work.delegateModel")["value"], "gpt-5.5"
+            self._run_config_get_cli("work.delegateModel")["value"], "gpt-5.6-sol"
         )
         self.assertEqual(
             self._run_config_get_cli("land.ciFixBudget")["value"], 3

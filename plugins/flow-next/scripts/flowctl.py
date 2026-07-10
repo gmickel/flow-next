@@ -1207,10 +1207,15 @@ def get_default_config() -> dict:
         # keys (phases.md:94-101) — no clash.
         "work": {
             "delegate": False,
-            "delegateModel": "gpt-5.5",
-            # Effort enum: none|low|medium|high|xhigh (gpt-5.5 supports
-            # `none`, NOT `minimal`). `medium` is the floor default; the
-            # per-batch risk escalation (fn-55.3) floors against it.
+            # Delegated implementation IS real work — never routed to a
+            # cheaper tier. Default is the strongest codex model (gpt-5.6-sol);
+            # requires codex CLI >= 0.144 (older CLIs 400 "requires a newer
+            # version of Codex"). The delegation path passes -m explicitly and
+            # has no fn-76 resolution ladder, so this default is a hard floor,
+            # not a resolved best-available.
+            "delegateModel": "gpt-5.6-sol",
+            # Effort enum: none|low|medium|high|xhigh. `medium` is the floor
+            # default; the per-batch risk escalation (fn-55.3) floors against it.
             "delegateEffort": "medium",
             # Sandbox: yolo (default) | full-auto. Persisted by the
             # one-time consent gate (fn-55.2).

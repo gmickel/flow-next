@@ -7,7 +7,7 @@ Covers two surfaces:
    `work` block so `flowctl config get work.delegate*` returns the spec
    defaults (NOT `null`) on a fresh repo, WITHOUT any prior `config set`:
      * work.delegate         → False
-     * work.delegateModel    → "gpt-5.5"
+     * work.delegateModel    → "gpt-5.6-sol"
      * work.delegateEffort   → "medium"  (floor; enum none|low|medium|high|xhigh)
      * work.delegateSandbox  → "yolo"
      * work.delegateConsent  → False
@@ -57,7 +57,7 @@ def _load_flowctl() -> Any:
     return mod
 
 
-# Effort enum (gpt-5.5 supports `none`, NOT `minimal`); `medium` is the floor.
+# Effort enum: none|low|medium|high|xhigh; `medium` is the floor.
 EFFORT_ENUM = ("none", "low", "medium", "high", "xhigh")
 
 
@@ -119,7 +119,7 @@ class WorkDelegateDefaultsTestCase(unittest.TestCase):
             defaults["work"],
             {
                 "delegate": False,
-                "delegateModel": "gpt-5.5",
+                "delegateModel": "gpt-5.6-sol",
                 "delegateEffort": "medium",
                 "delegateSandbox": "yolo",
                 "delegateConsent": False,
@@ -135,9 +135,9 @@ class WorkDelegateDefaultsTestCase(unittest.TestCase):
         out = self._run_config_get_cli("work.delegate")
         self.assertIs(out["value"], False)
 
-    def test_fresh_get_model_is_gpt55(self) -> None:
+    def test_fresh_get_model_is_gpt56_sol(self) -> None:
         out = self._run_config_get_cli("work.delegateModel")
-        self.assertEqual(out["value"], "gpt-5.5")
+        self.assertEqual(out["value"], "gpt-5.6-sol")
 
     def test_fresh_get_effort_is_medium(self) -> None:
         out = self._run_config_get_cli("work.delegateEffort")
@@ -158,7 +158,7 @@ class WorkDelegateDefaultsTestCase(unittest.TestCase):
         self.assertEqual(out["value"], "auto")
 
     def test_effort_enum_excludes_minimal(self) -> None:
-        # gpt-5.5 supports `none`, NOT `minimal` (plan research / model docs).
+        # effort enum includes `none` (not `minimal`); see plan research / model docs.
         self.assertIn("none", EFFORT_ENUM)
         self.assertNotIn("minimal", EFFORT_ENUM)
         self.assertEqual(EFFORT_ENUM[0], "none")

@@ -60,7 +60,7 @@ Opt-in offload of the token-heavy part (writing code) to a second CLI while the 
 
 ```bash
 flowctl config set work.delegate codex          # activation predicate is exactly the string "codex"
-flowctl config set work.delegateModel gpt-5.5   # default
+flowctl config set work.delegateModel gpt-5.6-sol   # default (codex CLI >= 0.144; real work, never a cheaper tier)
 flowctl config set work.delegateEffort medium   # none|low|medium|high|xhigh floor
 ```
 
@@ -156,7 +156,7 @@ Pilot and land end every tick with machine-readable verdict lines precisely so a
 ```text
 /loop 30m — one tick: run /flow-next:pilot --review=codex --depth=deep.
   If PILOT_VERDICT=DEFERRED_TO_LAND, run /flow-next:land in the same tick.
-  Delegation is on (work.delegate=codex): mechanical tasks go to gpt-5.5,
+  Delegation is on (work.delegate=codex): implementation tasks go to gpt-5.6-sol,
   UI tasks stay on the session model, reviews come from codex.
   Stop when pilot prints NO_WORK and land prints LAND_VERDICT=NO_WORK,
   or on any NEEDS_HUMAN.

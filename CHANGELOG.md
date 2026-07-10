@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 2.12.2] - 2026-07-10
+
+### Changed
+
+- **Delegation default → `gpt-5.6-sol` (was `gpt-5.5`).** `work.delegateModel` now defaults to GPT-5.6 Sol. Delegated implementation via `delegate:codex` is **real work**, not a cheap-bulk lane — so it routes to the strong tier, never a cheaper one (this is the deliberate counterpart to 2.12.1's scaffold, where `gpt-5.6-terra` is the cheap *reads* tier and Sol is the codex *work* tier). `delegateEffort` stays `medium`. **Caveat — hard floor, no fallback:** unlike the review backends (fn-76 gave them a resolve-strongest-available ladder), the delegation path passes `-m` explicitly with **no resolution ladder**, so this default requires **codex CLI ≥ 0.144** (older CLIs 400 with "requires a newer version of Codex"). Users on an older codex CLI must `flowctl config set work.delegateModel gpt-5.5` until they upgrade, or porting the fn-76 ladder to the delegation path is a follow-up. Config default + comment updated ([`flowctl.py`](plugins/flow-next/scripts/flowctl.py)), `codex-delegation.md` reference prose + examples updated (codex mirror regenerated), five config-default tests repinned (`test_work_delegate_config`, `test_pilot_backlog_substrate`, `test_pipeline_qa_config`, `test_land_config`, `test_artifacts_config`).
+
 ## [flow-next 2.12.1] - 2026-07-10
 
 ### Changed
