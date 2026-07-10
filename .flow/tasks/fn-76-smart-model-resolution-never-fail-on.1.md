@@ -19,9 +19,8 @@ Implement fn-76 v3.1 exactly as the epic spec defines (R1-R5). The epic spec IS 
 - [ ] default_model == ranking[0] invariant test; full unittest suite + smoke_test.sh (from outside repo) green; dual-copy parity; mirror regenerated.
 
 ## Done summary
-TBD
-
+Implemented fn-76 strongest-available model resolution in flowctl.py (dual-copied): per-backend model catalogs became ordered quality rankings whose top entry is the encoded default (codex→gpt-5.6-sol, copilot→gpt-5.5, cursor→gpt-5.6-sol-high), with `BackendSpec.parse` warning-and-accepting unknown models (effort stays strict). Review dispatch is optimistic-first (ranking top dispatched directly, zero happy-path overhead, argv byte-identical) via a shared `_dispatch_review_with_fallback` driver wrapping the three exec functions; on the backend's distinctive model-unavailable signature only (captured live 2026-07-10, incl. cursor's) it runs a fallback ladder — cursor consults `cursor-agent --list-models` ∩ ranking, codex/copilot step down max 2 rungs, terminal floor omits `--model`/uses `auto` with effort dropped — any other failure propagates and the ladder stays inside a single fn-90 review-cap round. Resolutions memoize per `(backend, CLI version)` in gitignored `.flow/.cache/model-resolution.json` (atomic, corrupt-safe); explicit pins bypass ladder+cache. Receipts record the model actually used (else auto/default) with one stderr warning per downgrade/floor. Added test_model_resolution.py (23 tests), updated test_backend_spec.py + the smoke suite for warn-and-accept, and documented resolution in flowctl.md + a troubleshooting entry + CHANGELOG (Unreleased). Codex mirror regenerated.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 31d30f14d9c82309ac22370aa2d1d6251c26e962
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (1549 tests OK, incl. new test_model_resolution.py 23 tests), bash plugins/flow-next/scripts/smoke_test.sh from /tmp (144 passed, 0 failed; live codex+copilot plan+impl e2e green with the ladder), dual-copy byte-identical (scripts/flowctl.py == .flow/bin/flowctl.py), scripts/sync-codex.sh regenerated; all structural guards pass
 - PRs:

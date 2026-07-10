@@ -3149,11 +3149,23 @@ def _cursor_list_models() -> Optional[list]:
         return None
     raw = result.stdout or ""
     models: list = []
-    for chunk in re.split(r"[,\n]", raw):
-        m = chunk.strip()
-        # Drop obvious non-model header/prose lines (defensive; keep bare tokens).
-        if m and " " not in m:
-            models.append(m)
+    # REAL ``--list-models`` format (verified live 2026-07-10): one model per
+    # line as ``<id> - <Description>`` (e.g. "gpt-5.6-sol-high - GPT-5.6 Sol 1M
+    # High") under an "Available models" header. Also tolerate bare-id lines and
+    # comma lists (the error-stream "Available models: a, b, c" shape).
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or line.lower().startswith("available models"):
+            continue
+        if " - " in line:
+            cand = line.split(" - ", 1)[0].strip()
+            if cand and " " not in cand:
+                models.append(cand)
+            continue
+        for chunk in line.split(","):
+            m = chunk.strip().rstrip(".")
+            if m and " " not in m:
+                models.append(m)
     return models or None
 
 

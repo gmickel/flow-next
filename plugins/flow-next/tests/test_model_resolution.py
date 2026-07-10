@@ -98,8 +98,13 @@ def _scripted(module, *, dispatch_result, version="0.142", list_models=None, cal
         if "--version" in argv:
             return _Fake(stdout=version, returncode=0)
         if "--list-models" in argv:
-            body = "\n".join(list_models or [])
-            return _Fake(stdout=body, returncode=0 if list_models is not None else 1)
+            # REAL cursor-agent format (live-verified 2026-07-10): a header line
+            # then one "<id> - <Description>" line per model — the parser must
+            # cope with the descriptions, not bare ids (the bug the first cut
+            # of _cursor_list_models had).
+            lines = ["Available models", ""]
+            lines += [f"{m} - Humanized {m.upper()} Description" for m in (list_models or [])]
+            return _Fake(stdout="\n".join(lines), returncode=0 if list_models is not None else 1)
         out, err, rc = dispatch_result(_model_of(argv))
         return _Fake(stdout=out, stderr=err, returncode=rc)
 
