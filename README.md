@@ -11,7 +11,7 @@
 [![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa)](https://github.com/sponsors/gmickel)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/f3DYq8AAm5)
 
-### AI coding agents that ship like engineers — not slot machines.
+### AI coding agents that ship like engineers - not slot machines.
 
 **The workflow layer for AI coding agents: durable specs, re-anchored workers, adversarial reviews, receipts.**
 Everything lives in your repo. Zero external dependencies. Uninstall: `rm -rf .flow/`.
