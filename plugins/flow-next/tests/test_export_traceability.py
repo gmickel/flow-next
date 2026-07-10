@@ -317,5 +317,33 @@ class TestEvidenceBlock(unittest.TestCase):
         self.assertEqual(got["files"], ["a.py", "b.py"])
 
 
+class TestRemovedRefsCrossExtension(RemovedExportRefsBase if 'RemovedExportRefsBase' in dir() else unittest.TestCase):
+    """PR #205 review: a symbol removed from one extension but referenced from a
+    SIBLING extension (.ts removal, .tsx caller) must still be caught — the
+    grep pathspec covers all known source extensions, not diff-touched only."""
+
+    def test_ts_removal_tsx_reference_found(self):
+        import subprocess, tempfile
+        from pathlib import Path as _P
+        with tempfile.TemporaryDirectory() as d:
+            root = _P(d)
+            subprocess.run(["git", "init", "-q"], cwd=d, check=True, capture_output=True)
+            (root / "lib.ts").write_text("export function helper() {}\n")
+            (root / "view.tsx").write_text("import { helper } from './lib';\nhelper();\n")
+            subprocess.run(["git", "add", "-A"], cwd=d, check=True, capture_output=True)
+            subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t",
+                            "commit", "-qm", "base"], cwd=d, check=True, capture_output=True)
+            base = subprocess.run(["git", "rev-parse", "HEAD"], cwd=d, check=True,
+                                  capture_output=True, text=True).stdout.strip()
+            (root / "lib.ts").write_text("")  # symbol removed
+            subprocess.run(["git", "add", "-A"], cwd=d, check=True, capture_output=True)
+            subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t",
+                            "commit", "-qm", "remove"], cwd=d, check=True, capture_output=True)
+            files = [{"path": "lib.ts"}]  # diff touched ONLY .ts
+            refs = flowctl._export_removed_export_refs(base, root, files)
+            hits = [r for r in refs if r["symbol"] == "helper"]
+            self.assertTrue(hits, "cross-extension .tsx reference must be found")
+            self.assertTrue(any(x["path"] == "view.tsx" for x in hits[0]["refs"]))
+
 if __name__ == "__main__":
     unittest.main()

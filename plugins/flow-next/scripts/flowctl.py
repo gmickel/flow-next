@@ -15663,14 +15663,12 @@ def _export_removed_export_refs(
     if not removed:
         return []
 
-    # Bound the grep to the source extensions the diff actually touched.
-    exts: set[str] = set()
-    for f in files:
-        p = f.get("path", "")
-        idx = p.rfind(".")
-        if idx != -1 and p[idx:].lower() in _EXPORT_SOURCE_EXTENSIONS:
-            exts.add("*" + p[idx:].lower())
-    pathspecs = sorted(exts)
+    # Scan ALL known source extensions, not only the ones the diff touched —
+    # a symbol removed from a .ts file can still be referenced by an unchanged
+    # .tsx caller (PR #205 review): diff-touched-only pathspecs would miss it
+    # and falsely report "no removed-symbol references". The scan stays bounded
+    # by the symbol caps; the wider pathspec costs nothing (index-backed grep).
+    pathspecs = sorted("*" + ext for ext in _EXPORT_SOURCE_EXTENSIONS)
 
     results: list[dict[str, Any]] = []
     for sym in sorted(removed)[:_EXPORT_REMOVED_REFS_MAX_SYMBOLS]:
