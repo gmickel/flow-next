@@ -1,3 +1,5 @@
+> **Status: DEFERRED (2026-07-10).** Kept on the backlog, not actively planned. pilot+land cover the default autonomy path; Ralph v2 (hardened bespoke-per-stage harness) is a future hardening track, revisited when there is demand for fully-planned-spec autonomous runs beyond what pilot/land already give. Linear issue moved to Backlog.
+
 ## Conversation Evidence
 
 > user: "it would also be simple to create a ralph mode that builds on pilot/land, put a stub spec for that in our specs maybe if you agree"
