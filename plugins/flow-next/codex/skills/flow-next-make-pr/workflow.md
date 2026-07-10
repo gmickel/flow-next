@@ -606,6 +606,8 @@ Your job — the calls the pipeline can't make:
 - Own what machines can't judge: product intent, API taste, risk appetite.
 ```
 
+**Single-file PRs (Review plan omitted per §2.4d's ≥2-files gate):** the first "your job" line must NOT reference a bucket that isn't rendered — replace it with a direct pointer to the one file: `- Line-review [\`<path>\`](<commit-diff link per §2.4b>) — it is the whole review surface.` The other lines stay. Never point at a section the omission rules removed (§2.6).
+
 Field rules:
 
 - **Mechanically-verified summary** draws from three payload signals ONLY: `tasks[].evidence.tests[]` (the same evidence §2.3b Verification renders), R-ID coverage (`tasks_summary` — `covered` / `total` / `uncovered_r_ids`), and the cross-model review signal (`reviews.deferred` count + `reviews.suppressed_count`; fn-86's `review_receipts` verdicts opportunistically when present).
