@@ -367,5 +367,26 @@ class TestRemovedSymbolsSignatureEdit(unittest.TestCase):
         self.assertIn("gone", out)     # genuinely removed
         self.assertEqual(out["gone"], "lib.py")
 
+    def test_cross_file_readdition_still_reported(self):
+        # PR #205 round 3: removed from lib.py, same NAME added in other.py —
+        # `from lib import helper` callers still break; must stay reported.
+        diff = (
+            "diff --git a/lib.py b/lib.py\n"
+            "--- a/lib.py\n"
+            "+++ b/lib.py\n"
+            "@@ -1,2 +1,1 @@\n"
+            "-def helper(a):\n"
+            "-    pass\n"
+            "diff --git a/other.py b/other.py\n"
+            "--- a/other.py\n"
+            "+++ b/other.py\n"
+            "@@ -1,1 +1,2 @@\n"
+            "+def helper(a):\n"
+            "+    pass\n"
+        )
+        out = flowctl._export_extract_removed_symbols(diff)
+        self.assertIn("helper", out)
+        self.assertEqual(out["helper"], "lib.py")
+
 if __name__ == "__main__":
     unittest.main()

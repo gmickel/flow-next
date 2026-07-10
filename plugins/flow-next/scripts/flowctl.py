@@ -15595,7 +15595,7 @@ def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
     if not unified_diff:
         return {}
     out: dict[str, str] = {}
-    added: set[str] = set()
+    added: set[tuple[str, str]] = set()
     current_path: Optional[str] = None
     current_is_source = False
     pending_removed_path: Optional[str] = None
@@ -15644,12 +15644,17 @@ def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
                 mm = regex.match(body)
                 if mm:
                     sym = mm.group(1)
-                    if sym:
-                        added.add(sym)
+                    if sym and current_path:
+                        added.add((sym, current_path))
                     break
             continue
-    for sym in added:
-        out.pop(sym, None)
+    # Suppress ONLY same-file re-additions (signature edit / move within the
+    # file). A same-named definition added in a DIFFERENT file does not make
+    # the removal safe — callers importing from the OLD module still break
+    # (PR #205 round 3, refining round 2's over-broad name-global subtraction).
+    for sym, path in added:
+        if out.get(sym) == path:
+            out.pop(sym, None)
     return out
 
 
