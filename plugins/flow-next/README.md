@@ -2,6 +2,8 @@
 
 > **Repeatable agentic engineering.** Durable specs, re-anchored workers, adversarial reviews, receipts — everything in your repo, zero external dependencies.
 
+### 🌐 [Full Documentation Site → flow-next.dev](https://flow-next.dev)
+
 This is the plugin source directory. The canonical README for flow-next lives at the [repository root](../../README.md).
 
 - Install + 5-command happy path → [root README](../../README.md#quick-start)

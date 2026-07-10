@@ -18,7 +18,9 @@ Everything lives in your repo. Zero external dependencies. Uninstall: `rm -rf .f
 
 </div>
 
-> 📖 **[Full doc index →](plugins/flow-next/docs/README.md)** · 🌐 **[flow-next.dev](https://flow-next.dev)** · 👥 **[Teams guide](plugins/flow-next/docs/teams.md)** · 💬 **[Discord](https://discord.gg/f3DYq8AAm5)**
+### 🌐 [Full Documentation Site → flow-next.dev](https://flow-next.dev)
+
+> 📖 **[Doc index](plugins/flow-next/docs/README.md)** · 👥 **[Teams guide](plugins/flow-next/docs/teams.md)** · 💬 **[Discord](https://discord.gg/f3DYq8AAm5)**
 
 ---
 
