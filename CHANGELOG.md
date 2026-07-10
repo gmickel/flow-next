@@ -2,8 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
-
+## [flow-next 2.12.0] - 2026-07-10
 ### Changed
 
 - **make-pr reviewer-effort reduction — risk-ranked review surfacing + reviewer guidance (fn-93).** As agentic throughput rises, PRs get bigger and more numerous and reviewers don't know *where to look* (external-team AI-SDLC field feedback, 2026-07-10). The methodology's promise is that a human carefully reads only the **~20-30%** of a diff that carries real judgment risk — but the old make-pr body listed a "Where to look" reviewer-focus list with **no skip-confidence** (which 70-80% is safe, and why) and **no trust calibration** (what the pipeline already verified vs what needs human eyes). The render contract (`skills/flow-next-make-pr/workflow.md` Phase 2) now replaces "Where to look" with two eval-validated constructs:
