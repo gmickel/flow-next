@@ -388,5 +388,24 @@ class TestRemovedSymbolsSignatureEdit(unittest.TestCase):
         self.assertIn("helper", out)
         self.assertEqual(out["helper"], "lib.py")
 
+    def test_same_file_method_readdition_still_reported(self):
+        # PR #205 round 4: top-level helper refactored into a class METHOD in
+        # the same file — the indented re-add does not replace the export;
+        # `from lib import helper` callers still break. Must stay reported.
+        diff = (
+            "diff --git a/lib.py b/lib.py\n"
+            "--- a/lib.py\n"
+            "+++ b/lib.py\n"
+            "@@ -1,2 +1,3 @@\n"
+            "-def helper(a):\n"
+            "-    pass\n"
+            "+class C:\n"
+            "+    def helper(self, a):\n"
+            "+        pass\n"
+        )
+        out = flowctl._export_extract_removed_symbols(diff)
+        self.assertIn("helper", out)
+        self.assertEqual(out["helper"], "lib.py")
+
 if __name__ == "__main__":
     unittest.main()

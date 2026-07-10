@@ -15628,8 +15628,16 @@ def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
         # Track BOTH sides: a definition on a `-` line that reappears on a `+`
         # line anywhere in the diff is a signature edit / move, NOT a removal
         # (PR #205 round 2) — report only removed-minus-added symbols.
+        # TOP-LEVEL only, BOTH sides (PR #205 round 4): the field reports
+        # removed EXPORTS, and only column-0 definitions are exports. An
+        # indented `-def` (method) is not an exported symbol (skip = fewer
+        # false candidates); an indented `+def` (refactor into a class) does
+        # NOT replace the removed top-level export — `from lib import helper`
+        # callers still break, so it must not suppress the report.
         if line.startswith("-"):
-            body = line[1:].lstrip()
+            body = line[1:]
+            if body[:1].isspace():
+                continue
             for regex in _EXPORT_REMOVED_DEF_RES:
                 mm = regex.match(body)
                 if mm:
@@ -15639,7 +15647,9 @@ def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
                     break
             continue
         if line.startswith("+"):
-            body = line[1:].lstrip()
+            body = line[1:]
+            if body[:1].isspace():
+                continue
             for regex in _EXPORT_REMOVED_DEF_RES:
                 mm = regex.match(body)
                 if mm:
