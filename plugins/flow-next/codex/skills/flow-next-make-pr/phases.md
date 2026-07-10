@@ -7,7 +7,7 @@ The per-phase **Done-when checklists live inline in [workflow.md](workflow.md)**
 | Phase 0 | Pre-flight — gh ready, spec resolved, base valid, branch ahead, tasks done, no open PR. |
 | Phase 1 | Gather inputs — single `flowctl spec export-cognitive-aid` call, parse payload. |
 | Phase 1.5 | HTML render lens (opt-in) — PR artifact from payload + diff, narrow commit, body link line. Off/unset/`--dry-run` ⇒ no-op beyond one config read. |
-| Phase 2 | Render body — TL;DR, R-ID table, critical changes; decisions, memory, glossary/strategy, open items, where to look. |
+| Phase 2 | Render body — TL;DR, R-ID table, critical changes, how to review this PR, review plan; decisions, memory, glossary/strategy, open items. |
 | Phase 3 | Mermaid generation — gated triggers, hard caps, fallback prose. |
 | Phase 4 | Push + create PR — `git push`, `gh pr create`, draft/ready, dry-run short-circuit, Ralph behavior. |
 | Phase 5 | Output + footer — PR URL, breadcrumb, optional `--memory` write. |
