@@ -14743,7 +14743,7 @@ _EXPORT_COGNITIVE_AID_SECTION_KEYS: dict[str, tuple[str, ...]] = {
     "memory": ("memory_during_epic",),
     "glossary": ("glossary_changes",),
     "strategy": ("strategy_alignment",),
-    "diff": ("diff_summary",),
+    "diff": ("diff_summary", "removed_export_refs"),
     "reviews": ("review_receipts", "deferred_findings"),
 }
 
@@ -15124,7 +15124,9 @@ def _export_diff_summary(
             else:
                 file_status[parts[1]] = status_letter
 
-    # Build files[] with derived module + status.
+    # Build files[] with derived module + status + derived-file classification
+    # (fn-86 R2). `changed_symbols` (R1) is filled after the unified diff below.
+    derived_rules = _export_derived_rules()
     files: list[dict[str, Any]] = []
     for path, info in files_numstat.items():
         module = _export_path_module(path)
@@ -15136,6 +15138,8 @@ def _export_diff_summary(
                 "additions": info["additions"],
                 "deletions": info["deletions"],
                 "module": module,
+                "changed_symbols": [],
+                "derived": _export_classify_derived(path, derived_rules, repo_root),
             }
         )
     files.sort(key=lambda f: f["path"])
@@ -15181,6 +15185,13 @@ def _export_diff_summary(
     )
     if rc_u == 0:
         cross_module_changes = _export_detect_cross_module(out_u, files)
+
+    # changed_symbols (fn-86 R1): attach per-file hunk-header context from the
+    # same unified diff — empty list where git detects no function context.
+    if rc_u == 0:
+        symbols_by_path = _export_changed_symbols(out_u)
+        for f in files:
+            f["changed_symbols"] = symbols_by_path.get(f["path"], [])
 
     # Public-exports-changed detection: parse +/- lines in index/__init__/lib
     # files to compute added/removed exports.
@@ -15390,6 +15401,333 @@ def _export_detect_public_exports(unified_diff: str) -> list[dict[str, Any]]:
         for path, data in sorted(per_file.items())
         if data["added"] or data["removed"]
     ]
+
+
+# --- fn-86: deterministic traceability slice for the make-pr "Review plan" ---
+#
+# Four additive, deterministic, reproducible-from-repo-state payload fields —
+# no LLM judgment (the render layer judges, the payload reports):
+#   * diff_summary.files[].changed_symbols  — hunk-header function context
+#   * diff_summary.files[].derived          — mirror/dual-copy/state classification
+#   * removed_export_refs                    — deleted symbols still referenced
+#   * tasks[].evidence.files                 — surfaced verbatim (see command)
+
+
+def _export_path_is_source(path: Optional[str]) -> bool:
+    """Return True if `path` has a source-code extension we scan."""
+    if not path:
+        return False
+    idx = path.rfind(".")
+    if idx == -1:
+        return False
+    return path[idx:].lower() in _EXPORT_SOURCE_EXTENSIONS
+
+
+# Hunk header: `@@ -a[,b] +c[,d] @@[ <context>]`. The optional context after
+# the second `@@` is git's per-language xfuncname detection — the enclosing
+# function/section of the hunk.
+_EXPORT_HUNK_HEADER_RE = re.compile(
+    r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@ ?(.*)$"
+)
+
+
+def _export_changed_symbols(unified_diff: str) -> dict[str, list[str]]:
+    """Map each changed file to its list of hunk-context symbols.
+
+    Parses `git diff` hunk headers (`@@ … @@ <context>`); dedupes per file,
+    preserving first-seen order. A file whose language git can't detect (or a
+    pure top-level edit) yields no entry — the render falls back to file-level
+    anchoring, never fabricates. Deleted files anchor under their old path.
+    """
+    if not unified_diff:
+        return {}
+    symbols: dict[str, list[str]] = {}
+    current_path: Optional[str] = None
+    pending_removed_path: Optional[str] = None
+    for line in unified_diff.splitlines():
+        if line.startswith("diff --git "):
+            current_path = None
+            pending_removed_path = None
+            continue
+        if line.startswith("--- a/"):
+            pending_removed_path = line[len("--- a/"):].strip() or None
+            continue
+        if line.startswith("--- "):
+            pending_removed_path = None
+            continue
+        if line.startswith("+++ b/"):
+            current_path = line[len("+++ b/"):].strip() or None
+            pending_removed_path = None
+            continue
+        if line.startswith("+++ /dev/null"):
+            current_path = pending_removed_path
+            pending_removed_path = None
+            continue
+        if line.startswith("+++"):
+            continue
+        if line.startswith("@@"):
+            if current_path is None:
+                continue
+            mm = _EXPORT_HUNK_HEADER_RE.match(line)
+            if not mm:
+                continue
+            ctx = mm.group(1).strip()
+            if not ctx:
+                continue
+            bucket = symbols.setdefault(current_path, [])
+            if ctx not in bucket:
+                bucket.append(ctx)
+    return symbols
+
+
+# Default derived-file rules — flow-next's own shapes. Projects override via
+# the optional `makePr.derivedPaths` config leaf (never required); a configured
+# value fully replaces this default.
+_EXPORT_DEFAULT_DERIVED_PATHS: dict[str, list[dict[str, str]]] = {
+    "dualCopy": [
+        {
+            "path": ".flow/bin/flowctl.py",
+            "source": "plugins/flow-next/scripts/flowctl.py",
+        },
+    ],
+    "mirror": [
+        {
+            "prefix": "plugins/flow-next/codex/",
+            "source": "plugins/flow-next/ (scripts/sync-codex.sh)",
+        },
+    ],
+    "state": [
+        {"prefix": ".flow/"},
+    ],
+}
+
+
+def _export_derived_rules() -> dict[str, Any]:
+    """Return the derived-file classification rules (config or default)."""
+    configured = get_config("makePr.derivedPaths", None)
+    if isinstance(configured, dict):
+        return configured
+    return _EXPORT_DEFAULT_DERIVED_PATHS
+
+
+def _export_files_byte_identical(a: Path, b: Path) -> bool:
+    """True iff both files exist and have byte-identical content."""
+    try:
+        return a.read_bytes() == b.read_bytes()
+    except OSError:
+        return False
+
+
+def _export_classify_derived(
+    path: str,
+    rules: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, Optional[str]]:
+    """Classify a changed file as derived, or `none`.
+
+    Precedence: dual-copy (exact path, hash-verified at export time) → mirror
+    (path prefix) → state (path prefix) → none. A dual-copy whose content has
+    DRIFTED from its named source is NOT marked derived — that is a real review
+    item, not safe-to-skim. Returns `{"kind": ..., "source": ...}`.
+    """
+    none_result: dict[str, Optional[str]] = {"kind": "none", "source": None}
+    if not path:
+        return none_result
+
+    # 1. dual-copy — exact path + byte-identical to its source right now.
+    for rule in rules.get("dualCopy") or []:
+        rule_path = rule.get("path")
+        source = rule.get("source")
+        if rule_path and path == rule_path and source:
+            copy_abs = repo_root / path
+            src_abs = repo_root / source
+            if (
+                copy_abs.exists()
+                and src_abs.exists()
+                and _export_files_byte_identical(copy_abs, src_abs)
+            ):
+                return {"kind": "dual-copy", "source": source}
+            # Drifted / missing → a real review item, not derived.
+            return none_result
+
+    # 2. mirror — generated-tree prefix.
+    for rule in rules.get("mirror") or []:
+        prefix = rule.get("prefix")
+        if prefix and (path == prefix.rstrip("/") or path.startswith(prefix)):
+            return {"kind": "mirror", "source": rule.get("source")}
+
+    # 3. state — flow bookkeeping prefix.
+    for rule in rules.get("state") or []:
+        prefix = rule.get("prefix")
+        if prefix and (path == prefix.rstrip("/") or path.startswith(prefix)):
+            return {"kind": "state", "source": rule.get("source")}
+
+    return none_result
+
+
+# Conservative symbol-DEFINITION patterns, applied to the body (sign stripped)
+# of a removed (`-`) diff line. Only clear top-level definitions — never call
+# sites — so false positives stay rare (they steer a human look; silent false
+# negatives are the risk we minimize). All patterns tried per line.
+_EXPORT_REMOVED_DEF_RES: tuple[re.Pattern, ...] = (
+    re.compile(r"^(?:async\s+)?def\s+(\w+)\s*\("),  # python
+    re.compile(r"^class\s+(\w+)\b"),  # python
+    re.compile(
+        r"^export\s+(?:default\s+)?(?:async\s+)?"
+        r"(?:function|class|const|let|var|interface|type|enum)\s+(\w+)"
+    ),  # ts/js exports
+    re.compile(r"^(?:async\s+)?function\s+(\w+)\s*\("),  # js function
+    re.compile(r"^pub\s+(?:async\s+)?(?:fn|struct|enum|trait)\s+(\w+)"),  # rust
+    re.compile(r"^func\s+(?:\([^)]*\)\s+)?(\w+)\s*\("),  # go
+)
+
+_EXPORT_REMOVED_REFS_MAX_SYMBOLS = 40
+_EXPORT_REMOVED_REFS_MAX_PER_SYMBOL = 25
+
+
+def _export_extract_removed_symbols(unified_diff: str) -> dict[str, str]:
+    """Extract candidate removed symbol definitions from a diff.
+
+    Returns `{symbol: defining_file}` for removed (`-`) lines in *source*
+    files whose body matches a conservative definition pattern. First-seen
+    defining file wins on name collision.
+    """
+    if not unified_diff:
+        return {}
+    out: dict[str, str] = {}
+    current_path: Optional[str] = None
+    current_is_source = False
+    pending_removed_path: Optional[str] = None
+    for line in unified_diff.splitlines():
+        if line.startswith("diff --git "):
+            current_path = None
+            current_is_source = False
+            pending_removed_path = None
+            continue
+        if line.startswith("--- a/"):
+            pending_removed_path = line[len("--- a/"):].strip() or None
+            continue
+        if line.startswith("--- "):
+            pending_removed_path = None
+            continue
+        if line.startswith("+++ b/"):
+            current_path = line[len("+++ b/"):].strip() or None
+            current_is_source = _export_path_is_source(current_path)
+            pending_removed_path = None
+            continue
+        if line.startswith("+++ /dev/null"):
+            current_path = pending_removed_path
+            current_is_source = _export_path_is_source(current_path)
+            pending_removed_path = None
+            continue
+        if line.startswith("+++") or line.startswith("@@"):
+            continue
+        if not current_is_source or current_path is None:
+            continue
+        # Removed content line (but not the `--- a/...` header, handled above).
+        if not line.startswith("-"):
+            continue
+        body = line[1:].lstrip()
+        for regex in _EXPORT_REMOVED_DEF_RES:
+            mm = regex.match(body)
+            if mm:
+                sym = mm.group(1)
+                if sym and sym not in out:
+                    out[sym] = current_path
+                break
+    return out
+
+
+def _export_removed_export_refs(
+    merge_base_sha: str,
+    repo_root: Path,
+    files: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Deleted symbols in the diff that are STILL referenced in the repo.
+
+    Conservative candidates-not-proof scan (epic §3): extract removed
+    top-level definitions, then word-boundary `git grep` the working tree
+    (the removals are already gone from HEAD, so they never self-match),
+    bounded to the source extensions the diff touched. Non-empty refs ⇒ a
+    candidate silent breakage a skimming reviewer misses; empty list ⇒ the
+    render states "no removed symbols still referenced (checked at export
+    time)". Never claims completeness — false positives steer a human look.
+    """
+    rc_u, out_u, _ = _export_run_git(
+        ["diff", "-M", "--unified=0", f"{merge_base_sha}..HEAD"],
+        cwd=repo_root,
+    )
+    if rc_u != 0:
+        return []
+    removed = _export_extract_removed_symbols(out_u)
+    if not removed:
+        return []
+
+    # Bound the grep to the source extensions the diff actually touched.
+    exts: set[str] = set()
+    for f in files:
+        p = f.get("path", "")
+        idx = p.rfind(".")
+        if idx != -1 and p[idx:].lower() in _EXPORT_SOURCE_EXTENSIONS:
+            exts.add("*" + p[idx:].lower())
+    pathspecs = sorted(exts)
+
+    results: list[dict[str, Any]] = []
+    for sym in sorted(removed)[:_EXPORT_REMOVED_REFS_MAX_SYMBOLS]:
+        grep_args = ["grep", "-n", "-w", "-F", "-e", sym]
+        if pathspecs:
+            grep_args += ["--", *pathspecs]
+        rc_g, out_g, _ = _export_run_git(grep_args, cwd=repo_root)
+        if rc_g != 0:  # 1 == no matches; other == error; both → skip
+            continue
+        refs: list[dict[str, Any]] = []
+        for gline in out_g.splitlines():
+            # git grep -n prints `path:line:content`.
+            parts = gline.split(":", 2)
+            if len(parts) < 2:
+                continue
+            try:
+                ref_lineno = int(parts[1])
+            except ValueError:
+                continue
+            snippet = parts[2].strip() if len(parts) > 2 else ""
+            refs.append(
+                {"path": parts[0], "line": ref_lineno, "text": snippet[:200]}
+            )
+            if len(refs) >= _EXPORT_REMOVED_REFS_MAX_PER_SYMBOL:
+                break
+        if refs:
+            results.append(
+                {"symbol": sym, "defined_in": removed[sym], "refs": refs}
+            )
+    return results
+
+
+def _export_task_evidence_block(
+    evidence_runtime: dict[str, Any]
+) -> dict[str, list[str]]:
+    """Build the export payload's per-task evidence block.
+
+    Surfaces `commits` / `tests` / `files_touched` (existing) plus `files`
+    (fn-86 R4) — each task's claimed files, recorded at `flowctl done` time,
+    lifted verbatim so the render maps task → files → commits without
+    re-deriving. Absent keys render as empty lists (additive; old payloads
+    unaffected).
+    """
+    def _strlist(key: str) -> list[str]:
+        raw = evidence_runtime.get(key)
+        if raw is None:
+            return []
+        if isinstance(raw, str):
+            return [raw] if raw else []
+        return [str(x) for x in raw if x]
+
+    return {
+        "commits": _strlist("commits"),
+        "tests": _strlist("tests"),
+        "files_touched": _strlist("files_touched"),
+        "files": _strlist("files"),
+    }
 
 
 def _export_find_glossaries_downward(repo_root: Path) -> list[Path]:
@@ -16076,14 +16414,7 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
             satisfies = _export_parse_task_satisfies(task_spec_text)
             done_summary = get_task_section(task_spec_text, "## Done summary")
             evidence_runtime = task_data.get("evidence") or {}
-            commits_raw = evidence_runtime.get("commits") or []
-            tests_raw = evidence_runtime.get("tests") or []
-            files_touched_raw = evidence_runtime.get("files_touched") or []
-            evidence_block = {
-                "commits": [str(x) for x in commits_raw if x],
-                "tests": [str(x) for x in tests_raw if x],
-                "files_touched": [str(x) for x in files_touched_raw if x],
-            }
+            evidence_block = _export_task_evidence_block(evidence_runtime)
 
             task_entries.append(
                 {
@@ -16145,6 +16476,11 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
     # --- Diff summary ---
     diff_summary = _export_diff_summary(base_ref, merge_base_sha, repo_root)
 
+    # --- Removed-export references (fn-86 R3) ---
+    removed_export_refs = _export_removed_export_refs(
+        merge_base_sha, repo_root, diff_summary["files"]
+    )
+
     # --- Review receipts + deferred findings ---
     branch_slug = _branch_slug(spec_data.get("branch_name") or None)
     review_receipts, deferred_findings = _export_review_receipts(
@@ -16161,6 +16497,7 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
         "glossary_changes": glossary_changes,
         "strategy_alignment": strategy_alignment,
         "diff_summary": diff_summary,
+        "removed_export_refs": removed_export_refs,
         "review_receipts": review_receipts,
         "deferred_findings": deferred_findings,
     }
@@ -16217,6 +16554,10 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
                 f"  Security-sensitive: "
                 f"{len(diff_summary['security_sensitive_paths'])} path(s)"
             )
+    if "removed_export_refs" in payload:
+        n_removed = len(payload["removed_export_refs"])
+        if n_removed:
+            print(f"Removed exports still referenced: {n_removed} symbol(s)")
     if "deferred_findings" in payload:
         total_deferred = sum(len(d.get("items", [])) for d in deferred_findings)
         if total_deferred:
