@@ -149,7 +149,7 @@ The heredoc form survives simple bodies but fails on (a) backtick-wrapped code r
 
 `gh pr create` accepts up to ~65,536 characters in `--body-file` (GitHub PR API limit; `gh` surfaces it as a 422). Our internal soft cap is **65,000 chars** to leave headroom for the footer breadcrumb. When the rendered body exceeds the cap, truncate in this priority order (most-droppable first):
 
-1. **Drop the full file list** in `## Where to look` if present — replace with `(file list elided; see diff)`.
+1. **Collapse the Review plan's low-risk buckets** — in `## Review plan`, replace the enumerated Spot-check + Safe-to-skim file lists with grouped counts (`- [ ] ⚪ <N> files — mechanical/generated (see diff)`). Keep the Must-review items and the How-to-review block intact — they carry the judgment-risk signal; the skim enumeration is the droppable part.
 2. **Trim TL;DR** to 3 bullets if currently 4-5 — keep only the top-priority headline + top 2 task-derived bullets.
 3. **Collapse mermaid section** to overview-only — replace multi-diagram structure with one `graph TB` overview + the lead prose paragraph.
 4. **Last resort: spill to `.flow/pr-bodies/<spec-id>.md`** — write the full body to that path, replace PR body with: `# <spec-title>\n\nFull cognitive-aid body exceeds 65K char limit. Read at \`.flow/pr-bodies/<spec-id>.md\` (committed alongside this PR).` Then `git add .flow/pr-bodies/ && git commit -m "chore: spill PR body for <spec-id>"` before push.
