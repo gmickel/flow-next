@@ -272,7 +272,7 @@ reconcile + write-back**. This is the no-half-advance invariant:
 # the merged body to a second temp copy. The tracker form has no on-disk home,
 # so it keeps a unique temp file (path-persistence rule: literal agent-composed
 # paths, written and consumed in this same block):
-MERGED_TRACKER="${TMPDIR:-/tmp}/flow-merged-tracker-<spec-id>-<suffix>.md" # tracker-form snapshot (from step 1's writeIssue render)
+MERGED_TRACKER="${TMPDIR:-/tmp}/flow-merged-tracker-<spec-id>-<suffix>.md" # tracker-form snapshot: the FETCHED-BACK stored body (fetch-back rule below), NOT the render that was sent
 $FLOWCTL sync set-merge-base "$SPEC_ID" --flow-file ".flow/specs/${SPEC_ID}.md" --tracker-file "$MERGED_TRACKER"
 $FLOWCTL sync set-last-synced "$SPEC_ID"
 # 3. receipt records the merge for audit / rollback (--merges-file = the merge log, unique temp path):
@@ -280,6 +280,16 @@ $FLOWCTL sync receipt "$SPEC_ID" --status merged --transport "$TRANSPORT" ${EVEN
  --merges-file "${TMPDIR:-/tmp}/flow-merges-<spec-id>-<suffix>.json" \
  --note "3-way merge: 2 sections folded, 0 conflicts"
 ```
+
+### Fetch-back rule - snapshot the STORED body, never the SENT render (transport-blind, load-bearing)
+
+After every successful `writeIssue` (create AND update, on every path that snapshots a base: this Step 5, the flow-first bootstrap below, steps.md Phase 2a and create-if-unlinked), the tracker half of the merge base MUST be a **fetch-back of what the tracker actually stored** (`fetchIssue` immediately after the write; apply `trackerBodyForMerge` as always), NOT the `renderFlowToTracker` output that was sent. Trackers rewrite markdown on save, so sent != stored:
+
+- **Linear (confirmed live, 2026-07-11):** ProseMirror-backed storage auto-linkifies slash-joined filenames (`CLAUDE.md/AGENTS.md` becomes a `[..](<http://...>)` link), inserts blank lines before list blocks, and rewrites a list item whose text starts with `>` into a blockquote. A base seeded from the sent render diverged by 149 lines with ZERO human edits - the next reconcile's echo-fence reported a false conflict.
+- **Jira Cloud (`/rest/api/3`):** bodies round-trip through ADF (markdown -> ADF -> markdown); the translation is lossy by design (see jira.md § ADF translation) - fetch-back is the only correct base there.
+- **GitHub / GitLab:** store bodies verbatim, so the echo SHOULD be byte-exact - but the fetch-back costs one bounded read and keeps the rule uniform, so apply it everywhere rather than special-casing backends.
+
+Failure handling: the fetch-back is part of the write-back step - if it errors, treat it like any Step 5 non-success (do NOT advance state from the sent render; emit `errored`). Renderer hygiene (secondary, optional): avoid emitting constructs known to be rewritten (bare `>` at the start of a list item's text; consider backtick-wrapping slash-joined filenames) - this reduces stored-vs-sent noise but never replaces the fetch-back.
 
 **Failure leaves prior state intact.** A failed/errored fetch or write (404,
 transport error, structural-gate failure, partial batch) does NOT advance
@@ -319,7 +329,8 @@ there is no 3-way ancestor — so **never run Step 2** (it would over-surface th
 whole body as a conflict). Bootstrap by origin:
 
 - **Flow-first push, no base** → pure **projection / fast-forward**: render flow →
- tracker, `writeIssue`, then snapshot (`set-merge-base` from the rendered pair +
+ tracker, `writeIssue`, then snapshot (`set-merge-base` from the flow body + the
+ FETCHED-BACK stored tracker body per the Step 5 fetch-back rule, then
  `set-last-synced`). Never a conflict — there is nothing on the tracker side to
  contradict.
 - **Tracker-first link** ("grab issue X and spec it") → **seed the base from the

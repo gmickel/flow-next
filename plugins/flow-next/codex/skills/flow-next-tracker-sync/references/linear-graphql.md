@@ -348,3 +348,11 @@ mapping (shared with the MCP rung) is the status table in
  `first:`, canonicalized to one direction — the same edge is visible from either
  endpoint, and `issueRelationCreate` is not idempotent, so a one-sided read
  silently duplicates the relation on re-run.
+- **Linear normalizes markdown on save - the stored `description` is NOT the string
+ you sent** (confirmed live 2026-07-11): slash-joined filenames like
+ `CLAUDE.md/AGENTS.md` get auto-linkified into `[..](<http://...>)` links, blank
+ lines are inserted before list blocks, and a list item whose text starts with `>`
+ is rewritten into a blockquote. Consequence: after every `issueCreate`/`issueUpdate`
+ that a merge-base snapshot follows, re-`fetchIssue` and snapshot the STORED body,
+ never the sent render — body-merge.md Step 5 § Fetch-back rule (a sent-render base
+ produced a 149-line false divergence with zero human edits).

@@ -227,3 +227,8 @@ see the status table in [linear-ladder.md](linear-ladder.md).
 - **MCP is interactive-only in practice** — treat it as absent on headless / CI /
   cron / Ralph paths; those fall through to the GraphQL rung, which is why parity
   (linear-ladder.md) matters.
+- **Linear normalizes markdown on save** (auto-linkified slash-joined filenames,
+  inserted blank lines before lists, `>`-leading list items rewritten as
+  blockquotes) — the stored body differs from what `save_issue` sent. Every
+  merge-base snapshot after a write must re-fetch and snapshot the STORED body,
+  never the sent render: body-merge.md Step 5 § Fetch-back rule.

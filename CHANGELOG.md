@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **tracker-sync: merge base must snapshot the STORED tracker body, never the sent render (fetch-back rule).** Trackers rewrite markdown on save - Linear (confirmed live 2026-07-11) auto-linkifies slash-joined filenames (`CLAUDE.md/AGENTS.md` -> `[..](<http://...>)`), inserts blank lines before list blocks, and turns `>`-leading list items into blockquotes; Jira Cloud round-trips ADF (lossy by design). A merge base seeded from the `renderFlowToTracker` output that was SENT therefore false-diverges on the next reconcile (observed: 149 diff lines, zero human edits, echo-fence reported a conflict). [`body-merge.md`](plugins/flow-next/skills/flow-next-tracker-sync/references/body-merge.md) Step 5 gains the transport-blind **Fetch-back rule** (re-`fetchIssue` after every `writeIssue` on every base-snapshotting path - Step 5 write-back, flow-first bootstrap, Phase 2a link, create-if-unlinked; GitHub/GitLab store verbatim but the one extra bounded read keeps the rule uniform), plus renderer-hygiene notes; [`steps.md`](plugins/flow-next/skills/flow-next-tracker-sync/steps.md) call sites updated; Linear normalization documented in both rung gotchas ([`linear-graphql.md`](plugins/flow-next/skills/flow-next-tracker-sync/references/linear-graphql.md), [`linear-mcp.md`](plugins/flow-next/skills/flow-next-tracker-sync/references/linear-mcp.md)). Codex mirror regenerated. Docs/prompt-level only - no flowctl change.
+
 ## [flow-next 2.12.3] - 2026-07-10
 
 ### Added
