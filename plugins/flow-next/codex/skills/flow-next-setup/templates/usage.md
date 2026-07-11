@@ -209,6 +209,9 @@ CURSOR_API_KEY=... cursor-agent -p --force --model <id> "<prompt>" # model IDs a
 
 # claude -p: the same bridge in REVERSE — drive Claude headlessly from a Codex/Cursor host.
 claude -p "<self-contained prompt>" --output-format text --allowedTools "Read,Bash" </dev/null # prompt BEFORE --allowedTools (variadic — it swallows trailing args); edits need --permission-mode acceptEdits
+
+# grok -p: xAI's headless one-shot (grok CLI, v0.2.x alpha). Prints the response to stdout and exits.
+grok -p "<self-contained prompt>" -m grok-4.5-high </dev/null # read-only-ish; add --always-approve (or --permission-mode acceptEdits) to let it act. -m/--model + --reasoning-effort; --json-schema for structured output. Grok 4.5 = fast + cheap first-draft; route to bulk/implementation, not UI or final taste-critical work.
 ```
 
 Harness-relative: every direction works — from Claude Code the bridges are `codex exec` / `cursor-agent`; from Codex or Cursor they are `claude -p` / the other CLI. Any harness that can run Bash can conduct the others.

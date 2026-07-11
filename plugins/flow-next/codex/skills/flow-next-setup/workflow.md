@@ -362,6 +362,7 @@ HAVE_RP=$(which rp-cli >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_CURSOR=$(which cursor-agent >/dev/null 2>&1 && echo 1 || echo 0)
+HAVE_GROK=$(which grok >/dev/null 2>&1 && echo 1 || echo 0)
 
 # Read current config values if they exist.
 # NB: pass `--raw` to bypass merged defaults. Without it, `flowctl config get`
@@ -720,8 +721,9 @@ Run this **after** the Docs block above and **before** Star. It may touch the **
  - `<!-- probe:codex --> TEXT` when `HAVE_CODEX=1` → **strip** the `<!-- probe:codex --> ` prefix, leaving the bare active line `TEXT`.
  - `<!-- probe:codex --> TEXT` when `HAVE_CODEX=0` → **comment the whole route out** as a single inert HTML comment carrying an install note: `<!-- not detected on this machine — install codex, then uncomment: TEXT -->`.
  - `<!-- probe:cursor --> TEXT` → the same transform keyed on `HAVE_CURSOR` (install note names `cursor-agent`).
+ - `<!-- probe:grok --> TEXT` → the same transform keyed on `HAVE_GROK` (install note names `grok`).
 
- Result invariant (R10): after the transform the composed block contains **no** `<!-- probe:` sentinel and **no active (non-comment) line that invokes a CLI whose probe failed** — every failed-probe route is fully enclosed in an HTML comment with an install note. Both probes failing → all five wiring routes are commented-out notes (the scores table + always-on escalation/graceful-degrade rules still stand); you MAY note in the read-back that with neither CLI installed, `Skip` is reasonable — but still honor the user's choice.
+ Result invariant (R10): after the transform the composed block contains **no** `<!-- probe:` sentinel and **no active (non-comment) line that invokes a CLI whose probe failed** — every failed-probe route is fully enclosed in an HTML comment with an install note. All three probes (codex, cursor, grok) failing → every probe-gated wiring route is a commented-out note (the scores table + the native routes + always-on escalation/graceful-degrade rules still stand); you MAY note in the read-back that with none of the CLIs installed, `Skip` is reasonable — but still honor the user's choice.
 
 **3. Substitute the invocation syntax per target file** — keyed on the target file's snippet family from the Docs mapping above, NOT on platform alone: rewrite every `/flow-next:<cmd>` → `$flow-next-<cmd>` (this covers the provenance line's `/flow-next:setup` **and** the `delegate:codex` work route's `/flow-next:work`) **only** when the target is AGENTS.md on **Codex** (the `agents-md-snippet.md` family); keep `/flow-next:` verbatim for CLAUDE.md on **every** platform and for AGENTS.md on **Claude Code / Droid / Cursor** (the `claude-md-snippet.md` family — Cursor runs the slash commands). When step 1 resolved **both** files on Codex, compose one copy per file: AGENTS.md gets `$flow-next-`, CLAUDE.md keeps `/flow-next:`.
 

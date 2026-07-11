@@ -32,6 +32,7 @@ Run:
 
 from __future__ import annotations
 
+import itertools
 import pathlib
 import re
 import unittest
@@ -47,14 +48,22 @@ MIRROR_WORKFLOW = PLUGIN / "codex" / "skills" / "flow-next-setup" / "workflow.md
 
 START = "<!-- flow-next:model-routing:start -->"
 END = "<!-- flow-next:model-routing:end -->"
-SENTINEL_RE = re.compile(r"^<!-- probe:(codex|cursor) --> (.*)$")
+SENTINEL_RE = re.compile(r"^<!-- probe:(codex|cursor|grok) --> (.*)$")
 
 # Active-CLI-route tokens: strings that only work if that CLI is installed.
-# Model NAMES (`gpt-5.5`, `composer-2.5`) are deliberately NOT here — they name
-# rows in the scores table and rules and are valid anywhere; only the binary /
-# wiring invocations gate on a probe.
+# Model NAMES (`gpt-5.6-sol`, `composer-2.5`, `grok-4.5`) are deliberately NOT
+# here — they name rows in the scores table and rules and are valid anywhere;
+# only the binary / wiring invocations gate on a probe. (`grok-4.5-high` reached
+# via `cursor-agent --model` is a CURSOR route, not a grok-binary route.)
 CODEX_ROUTE_TOKENS = ("codex exec", "delegate:codex", "review.backend codex")
 CURSOR_ROUTE_TOKENS = ("cursor-agent", "review.backend cursor")
+GROK_ROUTE_TOKENS = ("grok -p",)
+# Probe cli -> (binary name for the install note, route tokens gated on it).
+PROBES = {
+    "codex": ("codex", CODEX_ROUTE_TOKENS),
+    "cursor": ("cursor-agent", CURSOR_ROUTE_TOKENS),
+    "grok": ("grok", GROK_ROUTE_TOKENS),
+}
 
 # Budget: the block is always-loaded context in every future session of the
 # target repo (spec R13, ≤ ~45 lines including markers + provenance).
@@ -73,12 +82,13 @@ def _is_html_comment(line: str) -> bool:
 # ── Reference implementations of the two documented algorithms ────────────────
 
 
-def compose_block(template: str, have_codex: bool, have_cursor: bool) -> str:
+def compose_block(template: str, **have: bool) -> str:
     """Reference of the setup workflow.md step-2 probe line transform.
 
     Start from the template verbatim; for each probe-sentinel line either strip
     the sentinel prefix (probe passed → active route) or wrap the whole route in
     a single inert install-note HTML comment (probe failed → no active route).
+    Keyword args are ``codex=``/``cursor=``/``grok=`` (default False when unset).
     """
     out = []
     for line in template.split("\n"):
@@ -87,9 +97,8 @@ def compose_block(template: str, have_codex: bool, have_cursor: bool) -> str:
             out.append(line)
             continue
         cli, text = m.group(1), m.group(2)
-        have = have_codex if cli == "codex" else have_cursor
-        binary = "codex" if cli == "codex" else "cursor-agent"
-        if have:
+        binary = PROBES[cli][0]
+        if have.get(cli, False):
             out.append(text)  # strip the `<!-- probe:<cli> --> ` prefix
         else:
             out.append(
@@ -157,23 +166,18 @@ class TemplateShape(unittest.TestCase):
         for line in self.lines:
             sentinel = SENTINEL_RE.match(line)
             tagged = sentinel.group(1) if sentinel else None
-            if any(tok in line for tok in CODEX_ROUTE_TOKENS):
-                self.assertEqual(
-                    tagged,
-                    "codex",
-                    f"codex route not behind a <!-- probe:codex --> sentinel:\n  {line}",
-                )
-            if any(tok in line for tok in CURSOR_ROUTE_TOKENS):
-                self.assertEqual(
-                    tagged,
-                    "cursor",
-                    f"cursor route not behind a <!-- probe:cursor --> sentinel:\n  {line}",
-                )
+            for cli, (_binary, tokens) in PROBES.items():
+                if any(tok in line for tok in tokens):
+                    self.assertEqual(
+                        tagged,
+                        cli,
+                        f"{cli} route not behind a <!-- probe:{cli} --> sentinel:\n  {line}",
+                    )
 
     def test_has_scores_table_and_rules(self) -> None:
-        # The opinionated example: a cost/intelligence/taste table + the always-on
-        # escalation and graceful-degrade rules (spec R4).
-        self.assertIn("| cost | intelligence | taste |", self.text)
+        # The opinionated example: a cost/speed/intelligence/taste table + the
+        # always-on escalation and graceful-degrade rules (spec R4).
+        self.assertIn("| cost | speed | intelligence | taste |", self.text)
         self.assertIn("Graceful degrade", self.text)
         self.assertRegex(self.text, re.compile(r"escalate", re.IGNORECASE))
 
@@ -184,65 +188,62 @@ class TemplateShape(unittest.TestCase):
 class ProbeComposition(unittest.TestCase):
     def setUp(self) -> None:
         self.template = _read(TEMPLATE)
-        self.codex_sentinels = sum(
-            1 for l in self.template.split("\n") if l.startswith("<!-- probe:codex -->")
-        )
-        self.cursor_sentinels = sum(
-            1 for l in self.template.split("\n") if l.startswith("<!-- probe:cursor -->")
-        )
-        # The template must actually carry both probe families or the four-state
+        self.sentinels = {
+            cli: sum(
+                1
+                for l in self.template.split("\n")
+                if l.startswith(f"<!-- probe:{cli} -->")
+            )
+            for cli in PROBES
+        }
+        # The template must actually carry every probe family or the state
         # matrix below proves nothing.
-        self.assertGreater(self.codex_sentinels, 0)
-        self.assertGreater(self.cursor_sentinels, 0)
+        for cli, n in self.sentinels.items():
+            self.assertGreater(n, 0, f"template carries no <!-- probe:{cli} --> line")
 
     def _active_lines(self, composed: str) -> list:
         return [l for l in composed.split("\n") if not _is_html_comment(l)]
 
+    def _matrix(self):
+        # Every on/off combination across all three probes.
+        for combo in itertools.product((True, False), repeat=len(PROBES)):
+            yield dict(zip(PROBES.keys(), combo))
+
     def test_no_sentinel_survives_composition(self) -> None:
-        for hc in (True, False):
-            for hu in (True, False):
-                composed = compose_block(self.template, hc, hu)
-                with self.subTest(have_codex=hc, have_cursor=hu):
-                    self.assertNotIn("<!-- probe:codex -->", composed)
-                    self.assertNotIn("<!-- probe:cursor -->", composed)
+        for have in self._matrix():
+            composed = compose_block(self.template, **have)
+            with self.subTest(**have):
+                for cli in PROBES:
+                    self.assertNotIn(f"<!-- probe:{cli} -->", composed)
 
     def test_failed_probe_leaves_no_active_route(self) -> None:
-        for hc in (True, False):
-            for hu in (True, False):
-                composed = compose_block(self.template, hc, hu)
-                active = self._active_lines(composed)
-                with self.subTest(have_codex=hc, have_cursor=hu):
-                    codex_active = [
-                        l for l in active if any(t in l for t in CODEX_ROUTE_TOKENS)
-                    ]
-                    cursor_active = [
-                        l for l in active if any(t in l for t in CURSOR_ROUTE_TOKENS)
-                    ]
-                    if hc:
+        for have in self._matrix():
+            composed = compose_block(self.template, **have)
+            active = self._active_lines(composed)
+            with self.subTest(**have):
+                for cli, (_binary, tokens) in PROBES.items():
+                    cli_active = [l for l in active if any(t in l for t in tokens)]
+                    if have[cli]:
                         # Probe passed → routes are live (sentinel stripped).
-                        self.assertEqual(len(codex_active), self.codex_sentinels)
+                        self.assertEqual(len(cli_active), self.sentinels[cli])
                     else:
-                        # Probe failed → NO active codex route survives.
-                        self.assertEqual(codex_active, [])
-                    if hu:
-                        self.assertEqual(len(cursor_active), self.cursor_sentinels)
-                    else:
-                        self.assertEqual(cursor_active, [])
+                        # Probe failed → NO active route for that CLI survives.
+                        self.assertEqual(cli_active, [])
 
     def test_failed_probe_emits_install_notes(self) -> None:
         # A commented-out route names the missing binary + how to re-enable.
-        composed = compose_block(self.template, have_codex=False, have_cursor=False)
-        self.assertEqual(
-            composed.count("install codex, then uncomment:"), self.codex_sentinels
-        )
-        self.assertEqual(
-            composed.count("install cursor-agent, then uncomment:"),
-            self.cursor_sentinels,
-        )
+        composed = compose_block(self.template)  # all probes default False
+        for cli, (binary, _tokens) in PROBES.items():
+            self.assertEqual(
+                composed.count(f"install {binary}, then uncomment:"),
+                self.sentinels[cli],
+            )
         self.assertIn("not detected on this machine", composed)
 
     def test_both_probes_pass_is_fully_active(self) -> None:
-        composed = compose_block(self.template, have_codex=True, have_cursor=True)
+        composed = compose_block(
+            self.template, codex=True, cursor=True, grok=True
+        )
         self.assertNotIn("not detected on this machine", composed)
         # Markers + provenance + scores table are untouched by the transform.
         self.assertIn(START, composed)

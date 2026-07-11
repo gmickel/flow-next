@@ -48,7 +48,7 @@ flowctl config set review.backend cursor:composer-2.5     # cursor folds effort 
 flowctl config set review.backend codex:gpt-5.4:xhigh     # explicit model + effort
 ```
 
-Precedence (highest wins): per-task `review:` / per-spec `default_review` → `FLOW_REVIEW_BACKEND` → `.flow/config.json` `review.backend` → backend-specific env → registry default. A single task can pin a different reviewer than the project default and the override routes end-to-end. The `cursor` backend unlocks reviewer models the others can't reach in one place (`gpt-5.6-sol-high` at 1M context — the default, `gpt-5.6-terra`/`-luna`, `composer-2.5`, the `gpt-5.3-codex` family, `claude-opus-4-8-thinking-high`) on your existing Cursor subscription. Full grammar + registry: [`flowctl.md`](flowctl.md#review-backend).
+Precedence (highest wins): per-task `review:` / per-spec `default_review` → `FLOW_REVIEW_BACKEND` → `.flow/config.json` `review.backend` → backend-specific env → registry default. A single task can pin a different reviewer than the project default and the override routes end-to-end. The `cursor` backend unlocks reviewer models the others can't reach in one place (`gpt-5.6-sol-high` at 1M context — the default, `gpt-5.6-terra`/`-luna`, `grok-4.5-high` (fast cross-family pass), `composer-2.5`, the `gpt-5.3-codex` family, `claude-opus-4-8-thinking-high`) on your existing Cursor subscription. Full grammar + registry: [`flowctl.md`](flowctl.md#review-backend).
 
 **Rule of thumb: the model that writes is never the model that reviews.** Route the reviewer to a different family than your session model and blind spots stop being correlated.
 
@@ -125,17 +125,18 @@ The orchestration patterns that emerged in the wild through mid-2026 all have a 
 
 The emergent pattern (mid-2026): a standing "which model for what" section in your agent instructions — a ranking of the models you can reach plus routing rules. This is **prompted orchestration made durable**: the table is interpreted by intelligence, not parsed by a config loader. The host reads it every session and applies it *with judgment* when it dispatches subagents, picks reviewers, or decides to delegate — which is exactly why the rules grant standing permission to escalate.
 
-flow-next ships this as a canonical scaffold — [`../skills/flow-next-setup/templates/model-routing-snippet.md`](../skills/flow-next-setup/templates/model-routing-snippet.md): a scores table (cost / intelligence / taste) over the session model, `gpt-5.6` (sol/terra), `composer-2.5`, and a fast Claude tier, plus how-to-apply rules and the exact flow-next surface each route drives (worker/`delegate:codex`, review backends, scouts, the thin-wrapper). `/flow-next:setup` offers to write it into your `CLAUDE.md`/`AGENTS.md` live, annotated for the CLIs you actually have installed. The shape, illustrated:
+flow-next ships this as a canonical scaffold — [`../skills/flow-next-setup/templates/model-routing-snippet.md`](../skills/flow-next-setup/templates/model-routing-snippet.md): a scores table (cost / speed / intelligence / taste) over the session model, `gpt-5.6` (sol/terra), `grok-4.5`, `composer-2.5`, and a fast Claude tier, plus how-to-apply rules and the exact flow-next surface each route drives (worker/`delegate:codex`, review backends, scouts, the thin-wrapper). `/flow-next:setup` offers to write it into your `CLAUDE.md`/`AGENTS.md` live, annotated for the CLIs you actually have installed. The shape, illustrated (cost = subscription-quota lightness, not list $/token; speed = at default reasoning effort):
 
 ```markdown
-| model                    | cost | intelligence | taste |
-|--------------------------|------|--------------|-------|
-| session model (frontier) | 2    | 10           | 9     |
-| gpt-5.6-sol              | 8    | 9            | 6     |
-| composer-2.5             | 9    | 6            | 6     |
+| model                    | cost | speed | intelligence | taste |
+|--------------------------|------|-------|--------------|-------|
+| session model (frontier) | 2    | 2     | 10           | 9     |
+| gpt-5.6-sol              | 8    | 5     | 9            | 6     |
+| grok-4.5                 | 9    | 9     | 7            | 5     |
+| composer-2.5             | 9    | 10    | 6            | 6     |
 
 - Defaults, not limits — escalate to a smarter model when output misses the bar.
-- Delegated implementation → gpt-5.6-sol (delegate:codex, real work — never a cheaper tier); cheap bulk reads → gpt-5.6-terra; reviews cross-family; user-facing needs taste ≥ 7.
+- Delegated implementation → gpt-5.6-sol (delegate:codex, real work — never a cheaper tier); fast/cheap first-draft implementation → grok-4.5 (`grok -p`); cheap bulk reads → gpt-5.6-terra; reviews cross-family; user-facing needs taste ≥ 7.
 - Graceful degrade: a routed CLI that is missing or errors → fall back to the session model.
 ```
 

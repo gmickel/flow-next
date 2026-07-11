@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 2.12.3] - 2026-07-10
+
+### Added
+
+- **Model-routing scaffold: speed column + Grok 4.5 target + grok CLI bridge.** The optional routing table (`/flow-next:setup` scaffold, `templates/model-routing-snippet.md`) gains a **speed** column (1-10, at default reasoning effort - so the reasoning-heavy frontier models score low because they think before answering, which is what you feel) and a **grok-4.5** row (cost 9 / speed 9 / intelligence 7 / taste 5): fast, cheap, Opus-class coding but weaker on UI and higher hallucination, so it is routed to bulk/implementation, never final taste-critical or UI work. Values grounded in Artificial Analysis throughput (haiku ~95 t/s, grok ~90 t/s), hands-on developer reviews, and a 30-day social sweep. The cost caption is sharpened to say what it actually measures - **subscription-quota lightness** (how freely you can reach for it before hitting plan limits), NOT list $/token, with each provider a separate budget. `.flow/usage.md` gains the fourth headless bridge recipe, `grok -p` (xAI's one-shot: prints to stdout and exits; `-m grok-4.5-high`, `--reasoning-effort`, `--json-schema`, `--always-approve` to let it act). Both `grok -p` and `cursor-agent --model grok-4.5-high` (via `review.backend cursor:grok-4.5-high`) verified live. Setup's probe-composition transform gains a third `<!-- probe:grok -->` gate (`command -v grok`); the scaffold test now exercises all three CLI probes. **Routing only activates when a user prompts for it** - defaults are unchanged. Scaffold block stays within the ~45-line budget (37). Codex mirror regenerated.
+
 ## [flow-next 2.12.2] - 2026-07-10
 
 ### Changed
