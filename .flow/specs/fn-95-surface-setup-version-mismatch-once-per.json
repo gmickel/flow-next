@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-95-surface-setup-version-mismatch-once-per",
+  "created_at": "2026-07-11T11:44:49.571936Z",
+  "depends_on_epics": [],
+  "id": "fn-95-surface-setup-version-mismatch-once-per",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-95-surface-setup-version-mismatch-once-per.md",
+  "status": "open",
+  "title": "Surface setup-version mismatch: once-per-version blocking ack in interactive skills, loud verdict line in autonomous skills",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-07-11T11:45:57.416649Z"
+}
