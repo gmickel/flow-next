@@ -1,69 +1,179 @@
 # Opinionated prime mode: project-type & structure-aware readiness (monorepo vs multi-repo, size, mapping)
 
-> **STUB** — captured 2026-07-10 from external-team field feedback (an external team's AI-SDLC weekly; their head of software engineering + a backend lead). Today `/flow-next:prime` largely checks file/config **existence** across its criteria, so repos reach a top readiness level ("Level 5") without the substance behind it — and there's no way to hand-verify hundreds of repos across 10-11 tech stacks. Make prime **opinionated + structure-aware**: reason about what kind of project this is (single repo vs monorepo vs multi-repo constellation), its size/legibility, and recommend concrete next actions instead of ticking boxes. Refine via `/flow-next:interview` before planning.
+> **STUB + RESEARCH** - captured 2026-07-10 from external-team field feedback (an external team's AI-SDLC weekly; their head of software engineering + a backend lead). Research pass completed 2026-07-11 (4 parallel research agents, current 2025-2026 sources; catalogs below). Today `/flow-next:prime` largely checks file/config **existence** across its criteria, so repos reach a top readiness level ("Level 5") without the substance behind it - and there's no way to hand-verify hundreds of repos across 10-11 tech stacks. Make prime **opinionated + structure-aware**: reason about what kind of project this is (single repo vs monorepo vs multi-repo constellation vs greenfield), its size/legibility, and recommend concrete next actions instead of ticking boxes. Refine via `/flow-next:interview` before planning.
 
 ## Goal & Context
 <!-- scope: business -->
 
-At scale, existence-checks lie. A repo can pass prime's criteria — a CLAUDE.md exists, a hook file exists, a script exists — yet be un-agentic in practice: the file is an empty template, the repo is too big to navigate, imports can't be resolved, or it's really one of 99 sibling repos that only make sense together. Leads/reviewers can't hand-verify at portfolio scale, so a top "readiness level" stops meaning anything. Prime should encode the judgment a senior applies on a first look — how big is this, can an agent find its way around, is this a monorepo or a swarm of repos, and what is the ONE next thing that makes it agent-ready — and say so **opinionatedly**, with a concrete recommendation rather than a pass/level.
+At scale, existence-checks lie. A repo can pass prime's criteria - a CLAUDE.md exists, a hook file exists, a script exists - yet be un-agentic in practice: the file is an empty template, the repo is too big to navigate, imports can't be resolved, or it's really one of 99 sibling repos that only make sense together. Leads/reviewers can't hand-verify at portfolio scale, so a top "readiness level" stops meaning anything. Prime should encode the judgment a senior applies on a first look - how big is this, can an agent find its way around, is this a monorepo or a swarm of repos, is it a day-old empty shell, and what is the ONE next thing that makes it agent-ready - and say so **opinionatedly**, with a concrete recommendation rather than a pass/level.
 
-Origin: a portfolio-company rollout (three product lines), 100+ repos across ~10-11 stacks, where "häufig nur Existenz geprüft → Level 5 erreicht, ohne dass es stimmt." Gordon owns the write-up.
+Origin: a portfolio-company rollout (three product lines), 100+ repos across ~10-11 stacks, where "häufig nur Existenz geprüft -> Level 5 erreicht, ohne dass es stimmt." Gordon owns the write-up.
 
 ## Architecture & Data Models
 <!-- scope: technical -->
 
-TBD (interview). Likely a **new prime mode / depth** — the existing 8-pillar / 48-criteria readiness scan stays; this adds a substance-and-structure lens on top (a `--deep` / `--opinionated` variant, or a second pass). Candidate pieces:
+Shape TBD (interview) - likely a **new prime mode / depth** on top of the existing 8-pillar / 48-criteria scan. The research below is the substance of what prime will detect and recommend; the interview decides mode shape, which checks move from existence to substance, and thresholds.
 
-- **Project-type classification** — single repo | monorepo (one repo, many packages) | multi-repo constellation (N sibling repos that compose — e.g. a product's separate API + web-frontend repos). This drives everything downstream.
-- **Structure-legibility probe** — repo size (LOC / file-count / tree depth) and: can the agent actually read the structure (resolve imports/exports, find entrypoints, see the build graph)? If NOT legible → recommend generating a **map** (`/flow-next:map` / clawpatch, or a hand-written map) and where to store it (master/parent repo + link in CLAUDE.md).
-- **Multi-repo guidance** — detect sibling repos and recommend a structuring pattern (the **linked-siblings "fake monorepo"** pattern proven at a pilot team: sibling repos checked out under a parent, work in the parent dir, everything linked in CLAUDE.md, docs-update as Definition-of-Done) instead of priming each repo in isolation.
-- **Substance-not-existence checks** — for hooks / scripts / central-instruction files, judge whether the file holds sensible content vs an empty template or bare header (bounded AI judgment, evidence-anchored); add a **"can I operate / compile / run this app end-to-end, and what's needed for that?"** baseline as the real readiness signal rather than "the file is present."
-- **Opinionated next-action output** — emit a ranked, specific to-do ("write STRATEGY.md"; "generate a map — repo too large to navigate"; "you have 99 repos, consider a fake-monorepo"; "this pre-commit hook is a stub") instead of only a level. Reusable: carry the learnings and apply the same playbook across repos.
+### 1. Project-type classification (drives everything downstream)
+
+Classify FIRST, before scoring: **greenfield | single repo | monorepo (one repo, many packages) | multi-repo constellation (N sibling repos that compose)**. Plus a maturity axis: greenfield / hybrid ("young but real") / brownfield (per Kenogami codebase-readiness precedent). Not binary; degrade gracefully and let the human confirm.
+
+Greenfield detection (cheap, deterministic, multi-signal - never a single heuristic):
+- `git rev-list --count HEAD` < ~25 AND no tags AND no CI dir; or tracked files < ~30 with no domain source beyond a recognizable generator scaffold (create-next-app, cargo new, uv init fingerprints)
+- Corroborators: repo age (first-commit date), single contributor, no lockfile/build config
+
+Constellation detection (from inside ONE repo, bounded):
+- Tier (a) likely: sibling dirs with `.git` (`ls ../*/.git`), shared org in git remotes, shared naming prefix (`acme-api`, `acme-web`)
+- Tier (b) confirmed: parent-level CLAUDE.md/AGENTS.md/manifest (`repos.yaml`, `mani.yaml`, `.meta`, `*.repos`, `workspace.toml`, `default.xml`, `.code-workspace`), parent docker-compose/justfile/mise.toml, `_plans/` dir
+- Tier (c) ask the user: only in-repo external references - compose `build: ../other-service` or same-org images, CI checkout of a second repository, OpenAPI/proto client generation pointing at another repo, `go.mod` replace / pnpm `link:` / `pip -e ../` outside the repo, env files referencing ports of services this repo doesn't define, `.claude/settings.json` `additionalDirectories`
+
+Monorepo signal: workspace/build-graph config (`nx.json`, `WORKSPACE`/`MODULE.bazel`, `turbo.json`, `pnpm-workspace.yaml`, `go.work`, Cargo workspace). Presence of a healthy build graph is itself a LEGIBILITY signal; absence in a 50+ package tree is an illegibility signal.
+
+### 2. Structure-legibility probe + size-tiered recommendations
+
+Empirical anchor (Sourcegraph CodeScaleBench, 2026-05, 1,281 agent runs on 40+ large OSS repos): code-intelligence tooling is NET NEGATIVE below ~400K LOC (pure overhead, reward delta -0.080) and strongly positive at 400K-2M LOC (+0.259). RepoMod-Bench (arXiv 2602.22518): agent pass rates collapse above ~100K LOC. So recommendations tier by size band; recommending heavyweight tooling on a small repo is itself a prime failure.
+
+Cheap deterministic legibility signals (all `git ls-files` / `find -maxdepth` / config-presence / one bounded grep; NO full-repo LLM crawl):
+- Tracked file count + approx LOC bands: <100K LOC fine; 100-400K borderline; >400K structural tooling; 20K+ files = map/index territory
+- Top-level dir count (Anthropic: "hundreds of top-level folders" needs a layered map)
+- Entrypoint discoverability: bounded glob for `main.*`, `index.*`, `cmd/*/main.go`, framework markers; zero hits in a big tree = unconventional layout = recommend a map
+- Packages-vs-instruction-files ratio: many packages, one root CLAUDE.md = recommend nesting (reference point: OpenAI's Codex repo carries 88 AGENTS.md files)
+- Grep-ambiguity probe (one command): grep 2-3 core domain identifiers; hundreds of matches = "wrong file, wrong symbol" mode predicted = recommend LSP
+- Generated/vendored code tracked (`vendor/`, `dist/`, `*_pb2.py`) = recommend read-deny rules
+- Root instruction file > ~300 lines with no nested files = layering signal (Codex hard cap: 32 KiB AGENTS.md chain)
+
+Recommendation ladder for large repos (ranked leverage x low maintenance):
+1. Any size: root orientation map - "where to look" table, pointers-only, 1-2K tokens (Anthropic: "pointers and critical gotchas only")
+2. 3+ subsystems or bloated root: nested per-package CLAUDE.md/AGENTS.md (nearest-wins is now a Linux Foundation-stewarded AGENTS.md spec behavior) + scoping config (read-deny for vendored/generated, sparse worktrees, launch-from-subdir)
+3. 100-400K LOC or ambiguity probe fires: semantic feature map = `/flow-next:map` (clawpatch) + scoped read-only scout fan-out. Map output is ADVISORY anchors to verify against disk, never authoritative; re-run after structural change ("an index that lags by a week is worse than no index" - the reason Anthropic removed vector search and Sourcegraph dropped embeddings)
+4. >400K LOC / 20K+ files / polyglot (3+ languages): LSP code intelligence (official language plugins or Serena MCP; Kubernetes case study: baseline agent 0 after 1.5h, code-search agent 0.90 in 89s); if Nx/Bazel/Turbo present, wire the build graph (Nx MCP, domain tags, affected-only)
+5. Multi-M LOC / code not local: hosted embeddings index, ranked LAST with staleness caveats
+
+### 3. Multi-repo constellation guidance (home-base pattern)
+
+Per-repo priming stays valid - the home base is the coordination layer on top, not a replacement. The pilot team's "linked-siblings fake monorepo" is the documented industry consensus (2025-2026 write-ups call it repo-of-repos / bootstrap repo / virtual monorepo), so prime recommends it with confidence:
+
+- Parent "home base" dir (optionally itself a tiny git repo), siblings as PLAIN gitignored checkouts - NOT submodules (agent-era consensus: update friction, worktree incompatibility, agents forget `submodule update --init`; exception: submodule-pinning when version-locking the constellation matters)
+- **Highest-leverage single artifact: a repo manifest with one-line purposes** (`repos.yaml` / `mani.yaml` / md) that a LEAN parent CLAUDE.md points at. Manifest is the single source of truth; never duplicate the repo list (drift control)
+- Home-base contents: lean CLAUDE.md/AGENTS.md (workspace map, cross-repo change workflow, git-directory-safety rule - "verify which repo you're in", docs-update-as-DoD rule), manifest, clone-all/pull-all/test-all scripts (mani/gita/vcstool or plain scripts; mise `monorepo_root` for task namespace), constellation docker-compose booting everything, ports + env bootstrap map, `_plans/` for cross-repo plans (frontmatter listing affected repos), optional parent-level `.claude/` skills and explorer/worker agent split
+- Platform caveat prime must state: Codex IGNORES an AGENTS.md above the git root (openai/codex#15683), so per-repo files must link BACK to the home base explicitly; Claude Code supports `--add-dir` + `additionalDirectories` (+ env flag to load added dirs' CLAUDE.md) but add-dir solves access, not knowledge - the home base is still needed
+- Cross-repo change choreography to document in the home base: contract-first ordering (schema/shared repo -> provider -> consumers), per-repo workers write in ONE repo each, linked PRs with cross-references, merge order libraries-before-consumers, contract tests at boundaries instead of constellation-wide e2e
+- Scale ladder: manifest + home base at 2-30 repos; dependency/release-ordering registry at 20+ repos (Mabl's 79-repo registry cut context-drift failures from ~40% to <5% of agent failures, PR velocity +291%); recommend TRUE monorepo consolidation only when cross-repo changes dominate (>~30-50% of features touch multiple repos, or the same 2-3 repos always change together) and no isolation/compliance constraint exists - note the counter-datapoint (Faros.ai, 320 teams: median PR cycle 19h mono vs 2h poly); the home base IS the middle option capturing most AI-context benefit at near-zero migration cost
+
+### 4. Substance-not-existence checks
+
+General principle: **for every artifact, prefer "execute it, bounded" over "parse it", and "cross-reference against the code" over "read in isolation."** Cross-reference failures (dangling commands, undeclared env vars, CI/local mismatch) are the cheapest high-precision substance detectors with no LLM judgment needed.
+
+Operability baseline (the real readiness signal - "kann ich die App betreiben / kompilieren?"):
+- OP1 cold-start build actually runs (execute with timeout, record duration - prime already executes test commands in Phase 2; extend to build + lint)
+- OP2 app boots: launch dev/start in background, poll port/health/ready-line within a 30-60s budget, kill
+- OP3 one-command bootstrap (`make bootstrap` / `setup.sh` chaining install -> services -> migrate -> seed; a setup script that only PRINTS instructions = fail)
+- OP4 seeded data/fixtures with real rows, OP5 db reset/teardown, OP6 a single smoke/verify one-liner (Anthropic: self-verification is THE highest-impact practice, 2-3x quality)
+- OP7 non-interactive defaults (default test script not watch-mode; `CI=true` terminates; no TTY prompts)
+- OP8 cloud-agent env config (copilot-setup-steps.yml / devcontainer postCreate that actually installs deps), OP9 required services + ports declared and matching what code connects to
+
+Feedback-loop quality: measured suite wall time (<1 min excellent, >10 min flagged), file-scoped lint/typecheck/single-test commands documented (project-wide-only = slow loops), hooks that actually invoke a linter/test (not empty husky scaffold - delete-`.sample` check), CI/local command parity (CI steps exist as identically-named local scripts).
+
+Instruction-file substance (grade, don't existence-check):
+- Real tells: repo-specific nouns, >=3 fenced copy-paste-runnable commands in the top ~50 lines, commands appear verbatim in package.json/Makefile, 1-3 real code snippets, three-tier boundaries with concrete paths (always/ask/never), don'ts paired with dos, quirks phrased as war stories
+- Template tells: generic personas, restated universal conventions, full directory listings, unedited /init scaffold order, placeholders, zero fenced blocks, symmetrical fully-filled sections (humans leave gaps; generators fill everything)
+- Length band 30-150 lines; >300 flagged - ETH Zurich (arXiv 2602.11988): LLM-generated instruction files REDUCE success ~3% and +20% cost while hand-curated add ~+4%, so prime must DOWNGRADE generated-looking files and must never bulk-generate one as a "fix"
+- The killer check: EXECUTE 1-2 commands quoted in the file; a CLAUDE.md whose stated test command fails is worse than none
+- Drift: every referenced command resolves to an existing script, every referenced path exists; `.env.example` vars diffed against env reads in source (>30% undeclared = stale template)
+- Content the agent could discover itself (directory trees, standard conventions) is NEGATIVE signal (deduction), not neutral
+
+### 5. Greenfield handling
+
+On greenfield, the 48-criterion scorecard is nonsense; swap the report shape:
+- Emit an ordered **bootstrap plan** (~8-12 stage-appropriate items) instead of a scorecard, or collapse whole pillars to "N/A - staged"
+- **Recorded-deferral mechanic** (Kenogami precedent: documented deferrals score one level higher than silent gaps): "no observability yet, deferred until first deploy" written down beats BOTH a silent gap AND a stub file - the stub is the rot generator this spec exists to kill
+- Day-one kit (converged across sources): hand-curated CLAUDE.md/AGENTS.md seed (short, commands-first - never bulk LLM-generated), STRATEGY.md / constitution first (flow-next has `/flow-next:strategy`), stack decision recorded with exact versions, verify loop before feature 1 (test + smoke that boots the app), smallest-possible CI (install+lint+test), hygiene files (.gitignore, lockfile, .env.example, LICENSE, .editorconfig), first spec = first vertical slice with explicit non-goals
+- Explicitly N/A at this stage (with recorded deferral): observability, e2e suites/coverage thresholds, CODEOWNERS/branch protection/PR templates (single contributor), security scanning/dependency automation, deploy pipeline, architecture overviews (rot fast, no measured task-success benefit)
+- Anti-patterns to encode: never emit stub files that would pass prime's own existence checks - every scaffolded artifact must be EXERCISED (command run, smoke executed) in the same pass; no big-bang scaffolding (one runnable path first); no heavyweight spec ceremony on an empty repo (spec-kit critique: 2,000+ line plans for trivial features)
+
+### 6. Opinionated next-action output
+
+Report headline = operability verdict + ranked, repo-specific top-N actions (with the exact file to create/edit and a starter diff where cheap), NOT a level. Any level becomes secondary metadata. Ranked recommendation set (research-backed leverage order):
+1. Single verify/smoke command, documented in CLAUDE.md
+2. Fix/write the agent file BY HAND, short, commands-first (warn against LLM regeneration - measured harm)
+3. One-command bootstrap with seeded data
+4. File-scoped feedback commands (single test / single-file lint)
+5. Non-interactive fast default test command
+6. Advisory rules -> deterministic hooks
+7. `.env.example` covering every env var actually read
+8. Seeded db reset
+9. Cloud-agent env config
+10. Prune doc sprawl, pointers not inlining
+11. Per-package AGENTS.md in monorepos past ~200 root lines
+12. CI/local command alignment
+Plus the structural recommendations from sections 2/3/5 when their detection fires (map, home base + manifest, bootstrap plan).
+
+### Maturity-model failure modes to design against
+- Goodhart/level inflation: headline must be verdict + actions, level demoted to metadata
+- Averaging hides fatal gaps: hard gates (compiles, tests run, agent-file commands work) cap the verdict regardless of score
+- Uniform checklist across project shapes: classify first, N/A out of the denominator (generalize what DC7 partially does)
+- Points-per-section rubrics incentivize the harmful 600-line CLAUDE.md: score bands with deductions for anti-patterns
+- Point-in-time rot: emit freshness/drift findings + re-run cadence, never imply a durable badge
+- Substance judgment is skill/scout work (host agent IS the judge), not new regex in flowctl - per repo architecture rules
 
 ## API Contracts
 <!-- scope: technical -->
 
-TBD at planning. Anchor points to map first: the current prime skill's pillar/criteria model + its command-verification step (where existence-checks live today); `/flow-next:map` (clawpatch, provider-free) as the mapping recommendation seam; how prime assembles + emits its report (extend with a project-type/structure block + a ranked next-actions block). Cross-platform parity via `sync-codex.sh`.
+TBD at planning. Anchor points: `plugins/flow-next/skills/flow-next-prime/pillars.md` (48 criteria), `workflow.md` (Phase 2 command verification - the seam to extend with bounded execution probes), `SKILL.md` (maturity table). `/flow-next:map` (clawpatch, provider-free) as the mapping recommendation seam. Report assembly gains: project-type/structure block, operability verdict, ranked next-actions block. Cross-platform parity via `sync-codex.sh`.
 
 ## Edge Cases & Constraints
 <!-- scope: technical -->
 
-- Monorepo-vs-multi-repo detection is heuristic — degrade gracefully and let the human confirm.
-- Size / legibility probes must be **bounded** — no full-repo LLM crawl on a huge repo (that is the exact case that breaks); prefer cheap structural signals + a "too big, map it" verdict.
-- "Substance" judgment is the fabrication-risk surface — keep it anchored to the file's actual content, never invent.
+- Monorepo-vs-multi-repo detection is heuristic - three-tier confidence (likely / confirmed / ask the user); degrade gracefully.
+- Size / legibility probes must be **bounded** - deterministic commands only (`git ls-files`, `find -maxdepth`, config presence, one grep probe); no full-repo LLM crawl (that is the exact case that breaks). Execution probes get timeouts (build ~5 min, boot ~60s) and run only detected standard commands.
+- "Substance" judgment is the fabrication-risk surface - keep it anchored to the file's actual content and to executed evidence, never invent. Prefer execute/cross-reference over parse/judge.
 - Do not regress the existing existence / readiness scan; this augments, it does not replace.
-- Prime is provider-free by default (clawpatch map is too) — keep that.
+- Prime is provider-free by default (clawpatch map is too) - keep that. LSP/Nx/index recommendations are RECOMMENDATIONS prime emits, not dependencies prime takes.
+- Size-tiered: never recommend heavy tooling below its evidence threshold (~400K LOC crossover) - over-recommending is a failure mode equal to under-recommending.
+- Never scaffold stubs that would pass prime's own checks; scaffolded artifacts must be exercised in-pass.
+- Execution probes on untrusted repos run what the repo already declares (its own scripts) - same trust surface as today's Phase 2; no new arbitrary execution.
 
 ## Acceptance Criteria
 <!-- scope: both -->
 
-- **R1 (STUB):** prime classifies project type (single | monorepo | multi-repo constellation) and reflects it in the report.
-- **R2 (STUB):** prime probes structure legibility (size + import/export/entrypoint resolvability); when a repo isn't legible it recommends generating a map (`flow-next:map` / clawpatch or hand-written) and where to store it.
-- **R3 (STUB):** for a multi-repo constellation prime recommends a concrete structuring pattern (e.g. fake-monorepo) instead of per-repo priming.
-- **R4 (STUB):** readiness checks judge **substance not mere existence** for at least hooks / scripts / central-instruction files, and include a "can the app be operated / compiled" baseline.
-- **R5 (STUB):** prime emits **ranked, specific next-actions** (opinionated), not just a level; reusable across repos.
+- **R1 (STUB):** prime classifies project type (greenfield | single | monorepo | multi-repo constellation, plus greenfield/hybrid/brownfield maturity) and reflects it in the report; detection is deterministic + bounded with a confidence tier, human-confirmable.
+- **R2 (STUB):** prime probes structure legibility (size bands + entrypoint/import/build-graph resolvability + ambiguity probe); recommendations are size-tiered (orientation map -> nested instruction files -> `/flow-next:map` -> LSP/build-graph -> hosted index last) and when a repo isn't legible it recommends generating a map and where to store it.
+- **R3 (STUB):** for a multi-repo constellation prime recommends the home-base pattern (parent dir + lean CLAUDE.md + one-line-purpose manifest + run-everything scripts + compose + ports/env map), states the Codex parent-file caveat, notes per-repo priming stays valid, and gives the consolidation criteria for when a real monorepo is warranted.
+- **R4 (STUB):** readiness checks judge **substance not mere existence** for at least instruction files / hooks / scripts (execute-quoted-commands, cross-reference drift checks, template-tell grading) and include the operability baseline (cold build, boot probe, bootstrap, seed, smoke, non-interactive).
+- **R5 (STUB):** prime emits **ranked, specific next-actions** with an operability verdict as the headline; any level is secondary metadata; hard gates cap the verdict; reusable across repos.
+- **R6 (STUB):** greenfield repos get a bootstrap-plan report shape with recorded-deferral N/A handling instead of the scorecard; prime never emits stub artifacts that would pass its own checks (anything scaffolded is exercised in the same pass).
 - *(Real R-IDs assigned at planning.)*
 
 ## Boundaries
 <!-- scope: business -->
 
-- In: a more opinionated, structure- / type- / size-aware prime that detects monorepo-vs-multi-repo and recommends concrete next steps.
-- Out: auto-**fixing** the repo structure (prime recommends; it does not restructure); the mapping engine itself (that is clawpatch / `flow-next:map` — this consumes it); turning readiness into a KPI / score surface (keep strictly separate from PSVI / any measurement — DX guidance only).
-- Not a rewrite of the existing 8-pillar scan — additive.
+- In: a more opinionated, structure- / type- / size-aware prime that detects greenfield/monorepo/multi-repo and recommends concrete next steps; substance + operability checks; ranked next-action output.
+- Out: auto-**fixing** the repo structure (prime recommends; it does not restructure); the mapping engine itself (clawpatch / `flow-next:map` - this consumes it); turning readiness into a KPI / score surface (keep strictly separate from PSVI / any measurement - DX guidance only); building/hosting any index or LSP integration (recommend-only).
+- Not a rewrite of the existing 8-pillar scan - additive.
 
 ## Decision Context
 <!-- scope: both -->
 
 ### Motivation
 <!-- scope: business -->
-At portfolio scale the binary existence-check produces false "ready" signals and no actionable guidance, and leads cannot hand-verify hundreds of repos across many stacks. Encoding a senior's first-look judgment — size, legibility, repo topology, single most-valuable next action — makes prime trustworthy at scale and directly unblocks portfolio-scale multi-repo, multi-stack rollouts (the current bottleneck). Stub first: the exact mode shape and which checks move from existence to substance need an interview.
+At portfolio scale the binary existence-check produces false "ready" signals and no actionable guidance, and leads cannot hand-verify hundreds of repos across many stacks. Encoding a senior's first-look judgment - size, legibility, repo topology, single most-valuable next action - makes prime trustworthy at scale and directly unblocks portfolio-scale multi-repo, multi-stack rollouts (the current bottleneck). Research pass (2026-07-11) grounded the recommendation catalogs in current industry evidence; the interview still decides mode shape and thresholds.
 
 ### Implementation Tradeoffs
 <!-- scope: technical -->
-TBD (interview). Open: new mode/flag vs deepening the existing criteria in place; how much structural analysis to do natively vs delegating to `flow-next:map`; heuristics + thresholds for "too big to navigate" and "monorepo vs multi-repo"; keeping the substance-judgment bounded and non-fabricating.
+Open for interview: new mode/flag vs deepening existing criteria in place; how much structural analysis natively vs delegating to `flow-next:map`; exact size-band thresholds (research anchors: ~100K LOC degradation onset, ~400K LOC tooling crossover, 20K files, ~25 commits greenfield) vs what fits portfolio stacks; how far to take execution probes (boot-the-app is the riskiest/slowest - opt-in?); whether greenfield gets a separate report template or a collapsed scorecard; where the ranked-actions catalog lives (pillars.md sibling reference file?) so it stays maintainable.
 
 ## Strategy Alignment
-- **Agent-readiness / adoption-at-scale** track — makes prime a trustworthy gate for large multi-repo, multi-stack portfolios (the rollout bottleneck); pairs with `/flow-next:map`.
+- **Agent-readiness / adoption-at-scale** track - makes prime a trustworthy gate for large multi-repo, multi-stack portfolios (the rollout bottleneck); pairs with `/flow-next:map`.
 
 ## Conversation Evidence
-> Field origin — external-team AI-SDLC weekly, 2026-07-10 (head of software engineering + backend lead): "dadurch, dass häufig nur Existenz geprüft wird, haben die jetzt aus irgendeinem Grund Level 5 erreicht … es ist nicht möglich, dass wir das händisch überprüfen … hunderte Repositories, 10-11 verschiedene Tech-Stacks." Gordon's steer: check repo size + can it read structure / imports-exports → else recommend a mapping tool; if multiple repos, propose how to structure them (fake-monorepo); judge whether a pre-commit hook / script has sensible content vs just a template/header; baseline = "kann ich die App betreiben / kompilieren?" — "vielleicht braucht es einen neuen Mode … kann man wiederverwenden, Erfahrungen mitnehmen und überall applizieren." Detailed notes in the maintainer's vault (AI-SDLC weekly 2026-07-10).
+> Field origin - external-team AI-SDLC weekly, 2026-07-10 (head of software engineering + backend lead): "dadurch, dass häufig nur Existenz geprüft wird, haben die jetzt aus irgendeinem Grund Level 5 erreicht ... es ist nicht möglich, dass wir das händisch überprüfen ... hunderte Repositories, 10-11 verschiedene Tech-Stacks." Gordon's steer: check repo size + can it read structure / imports-exports -> else recommend a mapping tool; if multiple repos, propose how to structure them (fake-monorepo); judge whether a pre-commit hook / script has sensible content vs just a template/header; baseline = "kann ich die App betreiben / kompilieren?" - "vielleicht braucht es einen neuen Mode ... kann man wiederverwenden, Erfahrungen mitnehmen und überall applizieren." Detailed notes in the maintainer's vault (AI-SDLC weekly 2026-07-10). Follow-up steer 2026-07-11: per-repo priming stays valid alongside a home-base folder; greenfield repos need their own handling (stub-vs-skip researched above).
+
+## Research Sources (2026-07-11 pass)
+
+Substance checks / readiness rubrics: Factory.ai Agent Readiness (factory.ai/news/agent-readiness, docs.factory.ai 9-pillar gated levels); kodustech/agent-readiness (skip-not-fail mechanic); Kenogami-AI/codebase-readiness (greenfield/brownfield classification, ceiling scoring, deferral credit); GitHub blog "great agents.md, 2,500 repos"; ETH Zurich arXiv 2602.11988 (LLM-generated instruction files harm); Augment Code agents-md guides; roborhythms.com/make-your-repo-agent-ready (8 checks); Marmelab agent-experience (2026-01-21); gmoigneu readiness-checklist gist; agent-next/agent-ready; USENIX Reliability Maturity Model (anti-Goodhart).
+
+Large codebases: Sourcegraph CodeScaleBench (sourcegraph.com/blog/why-coding-agents-fail-large-codebases, 2026-05-08, 400K LOC crossover, Kubernetes 67x case); RepoMod-Bench arXiv 2602.22518; code.claude.com/docs/en/large-codebases (nested CLAUDE.md, read-deny, sparsePaths, LSP plugins); aider.chat/docs/repomap.html; Cognition/Windsurf Codemaps (2025-11); oraios/serena; nx.dev agent skills + monorepo.tools/ai; Chroma context-rot (2025-07); Cursor indexing internals; AGENTS.md spec (Linux Foundation stewarded, agents.md); codegateway.dev AGENTS.md playbook (32 KiB cap).
+
+Multi-repo: raffertyuy.com repo-of-repos (2026-05-02); karun.me bootstrap-repo + mani (2026-03-26); rajiv.com polyrepo synthesis (2025-11-30); Mabl 75+ repos parts 1-2 (2026-04, registry data); riftmap.dev cross-repo context; claude.com/blog large-codebases best practices (2026-05-14); Codex ancestor-AGENTS.md issue openai/codex#15683; Cursor 3.2 multi-root changelog (2026-04-24); dortort.com monorepo-vs-multi-repo AI (2026-05-20); Faros.ai mono-vs-poly benchmark; tools: mani, gita, vcstool, meta, git-workspace, mise monorepo tasks.
+
+Greenfield: koder.ai greenfield vertical-slice workflow; github/spec-kit constitution-first + Scott Logic critique (2025-11-26) + Marmelab "waterfall strikes back" (2025-11-12); handsonarchitects.com Harness Model maturity matrix (2026 Q1); TestMu loop engineering; dev.to "Debloating the AI-Grown Codebase"; arXiv 2601.18345 + 2606.07448 (repo-maturity heuristics).
