@@ -5,7 +5,8 @@
   "created_at": "2026-07-12T09:46:11.640460Z",
   "depends_on": [
     "fn-92-opinionated-prime-mode-project-type.6",
-    "fn-92-opinionated-prime-mode-project-type.1"
+    "fn-92-opinionated-prime-mode-project-type.1",
+    "fn-92-opinionated-prime-mode-project-type.4"
   ],
   "id": "fn-92-opinionated-prime-mode-project-type.12",
   "priority": null,
@@ -13,5 +14,5 @@
   "spec_path": ".flow/tasks/fn-92-opinionated-prime-mode-project-type.12.md",
   "status": "todo",
   "title": "workflow.md Phase 3 synthesis: AO/DR/TO/HP groups + scoring + verdict assembly",
-  "updated_at": "2026-07-12T09:53:23.623837Z"
+  "updated_at": "2026-07-12T11:09:00.277389Z"
 }

@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-12T11:09:39.551127Z",
+  "depends_on": [
+    "fn-92-opinionated-prime-mode-project-type.4",
+    "fn-92-opinionated-prime-mode-project-type.1"
+  ],
+  "id": "fn-92-opinionated-prime-mode-project-type.13",
+  "priority": null,
+  "spec": "fn-92-opinionated-prime-mode-project-type",
+  "spec_path": ".flow/tasks/fn-92-opinionated-prime-mode-project-type.13.md",
+  "status": "todo",
+  "title": "Emitter substance collectors + redaction + perf accounting + fixtures + CI oracle",
+  "updated_at": "2026-07-12T11:09:42.339154Z"
+}

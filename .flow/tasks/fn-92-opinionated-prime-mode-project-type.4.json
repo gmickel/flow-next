@@ -4,7 +4,8 @@
   "claimed_at": null,
   "created_at": "2026-07-12T09:26:07.711463Z",
   "depends_on": [
-    "fn-92-opinionated-prime-mode-project-type.2"
+    "fn-92-opinionated-prime-mode-project-type.2",
+    "fn-92-opinionated-prime-mode-project-type.1"
   ],
   "id": "fn-92-opinionated-prime-mode-project-type.4",
   "priority": null,
@@ -12,5 +13,5 @@
   "spec_path": ".flow/tasks/fn-92-opinionated-prime-mode-project-type.4.md",
   "status": "todo",
   "title": "flowctl prime classify emitter (both copies) + synthetic-fixture CI oracle",
-  "updated_at": "2026-07-12T09:53:22.425384Z"
+  "updated_at": "2026-07-12T11:09:41.890170Z"
 }

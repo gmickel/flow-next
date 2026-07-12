@@ -9,7 +9,7 @@ New reference files: classification.md + stacks.md.
 
 ## Approach
 - classification.md: the five axes verbatim from spec Architecture Phase 0.5 - lifecycle signals, TWO-BIT topology (monorepo bit with the cross-referenced-manifests rule; constellation bit with tiers a/b/c incl. prose cross-repo references and the workspace-parent dampener), size bands with the FULL exclusion list (tool-managed dirs, vendored, fixtures, hash-duplicates, script-regenerated, legacy snapshots), manifest-gated stacks with LOC-histogram corroboration, multi-valued delivery shape with the ordering rule (markers first, denominators recomputed once - resolution 9).
-- Per-axis confidence fields (never punctuation); thresholds as a tunable table.
+- Per-axis confidence fields (never punctuation); thresholds as a tunable table; the orthogonal `assessment_scope` field (repository | workspace-member | constellation-home-base) with evidence + playbook routing (final review round).
 - Edge-case ladder per resolution 8: unborn HEAD, non-git dir, worktree-sibling exclusion (gitdir resolves to same repo), cwd-below-toplevel member detection, portable timeout pattern (no bare timeout binary), POSIX classes.
 - `--classify-only` output contract per resolutions 7+19: the deterministic axes emit from `flowctl prime classify --json` (this task specifies the emitter JSON schema in classification.md; the flowctl implementation itself lands in task 4); the skill layer adds shape/confidence/asks.
 - stacks.md: 15+ rows per the spec matrix (TS/JS through COBOL) with detect / verify / LSP / map / gotchas columns; the map column gates the DE7 `/flow-next:map` suggestion; LEG-pattern instantiations live in rows, never in skill logic; unknown-stack degrade line.

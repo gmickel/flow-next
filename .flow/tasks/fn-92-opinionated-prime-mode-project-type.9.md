@@ -9,7 +9,7 @@ Flip the eval green + re-baseline the smoke expectation.
 
 ## Approach
 - Run the task-4 harness against fixtures + the reference-repo expectation rows; fix skill-side regressions it finds; un-skip the unittest wrapper.
-- Re-baseline R13: assessment of this repo produces the NEW headline shape with all 48 legacy criteria present and scored (resolution 14) - record as an expectation row, not byte-parity.
+- Re-baseline R13 as a BLOCKING non-CI full-prime smoke protocol (final review round): controlled scout/emitter evidence + disposable repos; a documented runner command executes the COMPLETE prime flow and asserts: all 48 legacy criterion IDs present and scored, hard-gate Level-2 cap fires on a broken-build fixture, group scores excluded from maturity math, per-surface aggregation, the verdict headline shape, and `git status --porcelain` unchanged pre/post (non-mutating policy proof); model/version/result provenance persisted with a pass threshold.
 - Prose-contract tests per test_model_routing_scaffold.py pattern: canonical AND mirror carry the SV4 contract strings, whitelist table entries, stacks.md row schema.
 
 ## Key context

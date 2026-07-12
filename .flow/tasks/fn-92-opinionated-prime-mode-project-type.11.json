@@ -4,7 +4,9 @@
   "claimed_at": null,
   "created_at": "2026-07-12T09:46:11.214586Z",
   "depends_on": [
-    "fn-92-opinionated-prime-mode-project-type.4"
+    "fn-92-opinionated-prime-mode-project-type.4",
+    "fn-92-opinionated-prime-mode-project-type.3",
+    "fn-92-opinionated-prime-mode-project-type.13"
   ],
   "id": "fn-92-opinionated-prime-mode-project-type.11",
   "priority": null,
@@ -12,5 +14,5 @@
   "spec_path": ".flow/tasks/fn-92-opinionated-prime-mode-project-type.11.md",
   "status": "todo",
   "title": "Non-CI agentic eval harness (live-repo + judgment-layer rubric, provenance)",
-  "updated_at": "2026-07-12T09:53:23.209683Z"
+  "updated_at": "2026-07-12T11:09:43.233401Z"
 }
