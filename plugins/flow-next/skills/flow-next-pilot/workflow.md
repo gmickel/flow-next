@@ -27,6 +27,7 @@ Hard-stop when pilot is invoked under the Ralph harness. Emit the parseable term
 ```bash
 if [[ -n "${FLOW_RALPH:-}" || -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   echo "Ralph and pilot are alternative drivers — never nest them" >&2
+  [[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale
   echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="nested under Ralph harness (FLOW_RALPH/REVIEW_RECEIPT_PATH set) — refuse to run"'
   exit 1
 fi
@@ -38,6 +39,7 @@ Refuse a dirty non-`.flow/` tree at tick start. Leave state untouched for diagno
 if git -C "$REPO_ROOT" status --porcelain | grep -v '^.. \.flow/' >/dev/null; then
   echo "Evidence: dirty non-.flow working tree at tick start"
   git -C "$REPO_ROOT" status --porcelain | grep -v '^.. \.flow/' || true
+  [[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale
   echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="dirty working tree at tick start"'
   exit 0
 fi
@@ -146,7 +148,7 @@ Apply the full predicate:
 3. Strikes: a ledger entry with `count >= 2` normally means the spec was unreadied after failure, but a candidate that is ready again has been human re-blessed. Clear that ledger entry (write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, then atomic `jq` plus `mv`) and treat the spec as fresh. Under `--dry-run`, do not write — report the entry as would-clear in the classification report instead. **EXCEPTION — active `tracker.readyState` projection:** backlog 1a re-projects `ready=true` from the board on **every tick**, so a "ready again" under a configured `tracker.readyState` is MECHANICAL, not a human re-bless. Clearing the strike on it would re-dispatch the same failing spec every tick forever — the strike limit's entire purpose, defeated. So when `tracker.readyState` is set, **do NOT clear a `count >= 2` strike on projection-set ready**; the strikeout stands (skip the candidate as still-struck) until a genuine human signal clears it — the human answering the surfaced failure, or an explicit re-ready made after the failure is understood (not a projection echo). The `BLOCKED spec=… reason="strike 2/2"` terminal already surfaces the failure for that human.
 4. No gh here. PR state belongs exclusively to the all-done classification branch.
 
-The first candidate passing everything becomes `SELECTED_SPEC`. If none pass, echo a compact skip table with counts by reason and stop:
+The first candidate passing everything becomes `SELECTED_SPEC`. If none pass, echo a compact skip table with counts by reason and stop (emit the stashed setup-mismatch line first if present — `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale`):
 
 ```text
 PILOT_VERDICT=NO_WORK spec=- stage=- reason="no ready spec with satisfied deps"
@@ -546,6 +548,8 @@ PILOT_VERDICT=ASKED spec=<id> stage=ask reason="parked behind <n> open question(
 (`spec=<id>` is the spec id for a spec-backed subject, else the tracker id for a tracker-only subject.)
 
 ## Phase 6 — REPORT + strikes ledger
+
+Before printing whichever terminal `PILOT_VERDICT` line below applies, emit the stashed setup-mismatch line if present, so it sits immediately before the verdict (SKILL.md verdict contract): `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale`.
 
 On `ADVANCED`, clear the selected spec's ledger entry if present and write the ledger atomically with `jq` plus `mv`:
 
