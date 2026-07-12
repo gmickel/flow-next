@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-12T09:26:08.633786Z",
+  "depends_on": [
+    "fn-92-opinionated-prime-mode-project-type.5",
+    "fn-92-opinionated-prime-mode-project-type.3"
+  ],
+  "id": "fn-92-opinionated-prime-mode-project-type.6",
+  "priority": null,
+  "spec": "fn-92-opinionated-prime-mode-project-type",
+  "spec_path": ".flow/tasks/fn-92-opinionated-prime-mode-project-type.6.md",
+  "status": "todo",
+  "title": "workflow.md Phase 2/3 extensions (ladder + gates + substance execution + AO/DR/TO/HP inline + verdict)",
+  "updated_at": "2026-07-12T09:30:12.300952Z"
+}

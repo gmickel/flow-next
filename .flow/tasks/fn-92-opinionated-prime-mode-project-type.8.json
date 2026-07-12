@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-12T09:26:09.584582Z",
+  "depends_on": [
+    "fn-92-opinionated-prime-mode-project-type.7"
+  ],
+  "id": "fn-92-opinionated-prime-mode-project-type.8",
+  "priority": null,
+  "spec": "fn-92-opinionated-prime-mode-project-type",
+  "spec_path": ".flow/tasks/fn-92-opinionated-prime-mode-project-type.8.md",
+  "status": "todo",
+  "title": "Scout updates (claude-md-scout rubric, dispatch context lines) + sync-codex audit",
+  "updated_at": "2026-07-12T09:30:13.138825Z"
+}

@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-07-12T09:26:10.507901Z",
+  "depends_on": [
+    "fn-92-opinionated-prime-mode-project-type.9"
+  ],
+  "id": "fn-92-opinionated-prime-mode-project-type.10",
+  "priority": null,
+  "spec": "fn-92-opinionated-prime-mode-project-type",
+  "spec_path": ".flow/tasks/fn-92-opinionated-prime-mode-project-type.10.md",
+  "status": "todo",
+  "title": "Docs finalization: 13 in-repo docs + CHANGELOG Unreleased + fn-85 cross-edit",
+  "updated_at": "2026-07-12T09:30:14.408009Z"
+}
