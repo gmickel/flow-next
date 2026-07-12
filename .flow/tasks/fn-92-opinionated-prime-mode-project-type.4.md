@@ -23,9 +23,8 @@ satisfies: [R19]
 - [ ] test_prime_eval.py wired into the workflow's explicit test list
 
 ## Done summary
-TBD
-
+Implemented the `flowctl prime classify [ROOT] --json` emitter FRAMEWORK (fn-92.4): a bounded, pure-stdlib, judgment-free Phase-0.5 classifier that emits the pinned classification.md schema — axes 1-4 raw signals + Axis-5 shape markers + assessment_scope, each wrapped in the per-collector completeness-diagnostics envelope (resolution 21b), with blob-ID content-hash dedup (git ls-files -s, no content reads), path exclusions, and per-collector budget scaffolding. Landed byte-identically in both flowctl copies with 34 framework tests (test_prime_eval.py) wired into CI. Substance collectors, redaction, the full R19 fixture corpus, and perf accounting are deferred to fn-92.13.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 4c78a721d829d70bf56298f0084f6558733cd4e3
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p test_prime_eval.py (34 tests, OK), python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (1615 tests, OK skipped=2), python3 -m py_compile plugins/flow-next/scripts/flowctl.py, diff -q both flowctl.py copies (byte-identical)
 - PRs:
