@@ -470,13 +470,52 @@ The verdict is the DATA assembled here; the shape-specific RENDERING (report bod
 
 ## Phase 4: Present Report
 
+**This phase RENDERS the Phase 3 verdict assembly - it never recomputes it.** The classification
+block, the operability tier + cheapest move, the hard-gate status, the top-5 ranked actions, the
+QA-readiness line, the FH8 latency line, the FH9 gh-CLI host line, and the P0 findings are all
+DATA already assembled in Phase 3's "Verdict assembly" section - Phase 4 lays them out. Playbook
+SELECTION happened in Phase 0.5; the per-shape BODY templates live in [playbooks.md](playbooks.md)
+("Report shapes per classification") and the compression rule lives there too - reference them,
+never restate them.
+
+The report **LEADS with the verdict headline; the maturity level is DEMOTED to secondary metadata**
+below the scores table (R3). The headline order is fixed: classification -> operability tier ->
+hard-gate status -> top-5 ranked next-actions.
+
 ```markdown
 # Agent Readiness Report
 
 **Repository**: [name]
 **Assessed**: [timestamp]
+**Host**: [FH9 gh-CLI line from Phase 3 — informational, excluded from every repo score]
+
+## Verdict
+
+**Classification**: [Phase 0.5 five-axis line — lifecycle · topology (monorepo bit + constellation bit) · size band · stack(s) · delivery shape(s) · assessment_scope]. Any low-confidence axis carries its stated assumption inline.
+
+**Operability**: tier N/3 — [min-deployable headline tier across deployable surfaces, §2.9]. Cheapest move up one tier: [from the ladder / playbooks catalog], OR "N/N at ceiling" + the sideways AO/DR move for a library/plugin/prose/docs shape. Monorepos print per-member tiers; non-deployable surfaces are listed at their own ceilings and never cap a runnable surface.
+
+**Hard gates**: G1 [✅/❌] · G2 [✅/❌] · G3 [✅/❌]. [Any failing gate NAMED here — "G1 build fails: <error>" — caps the maturity level at 2.]
+
+**P0 findings** (if any — surface regardless of score): [HP9 inline secret — KEY NAME only + "rotate it, it is already in git history"; HP7 suspicious hook — the flagged command shape].
+
+### Top 5 next actions
+
+Drawn from the [playbooks.md](playbooks.md) ranked-actions catalog in leverage order, selected from the ACTUAL gaps across Pillars 1-5 + the scored groups. Each is file-level and specific, and carries its catalog tier + consent boundary:
+
+1. **[tier]** [specific action, exact file to create/edit] — [starter diff where cheap] · [consent: `--fix-all` in-root / explicit-consent]
+2. …
+3. …
+4. …
+5. …
+
+**QA-readiness**: [the single line from Phase 3's DR-core determination — RENDER ONLY, never recompute: "QA-ready: consider `/flow-next:qa` / enabling `pipeline.qa`" | "QA stage would fail here: <missing DR-core items>" | "QA stage not applicable to this shape"].
+
+**Feedback latency** (FH8, report-only): [local suite wall time from the Phase 2 runs that already executed, or "not measured locally"] · CI median: [from `gh run list`, or "not available (gh)"] · build caching: [turbo/nx/actions-cache or none].
 
 ## Scores Summary
+
+_Secondary metadata — the verdict above leads; the level is retained for cross-repo comparability._
 
 | Category | Score | Level |
 |----------|-------|-------|
@@ -484,9 +523,22 @@ The verdict is the DATA assembled here; the shape-specific RENDERING (report bod
 | Production Readiness (Pillars 6-8) | X% | — |
 | **Overall** | X% | — |
 
-## Agent Readiness (Pillars 1-5)
+**Scored groups (excluded from the level, resolution 1):** AO n/m pass · DR n/m pass · TO n/m pass · HP(core) n/m pass · FH(scored) n/m pass — excluded members named inline. DT1/DT2 informational (suggestion line only).
 
-These affect your maturity level and are eligible for fixes.
+## [Per-shape body — playbooks.md "Report shapes per classification"]
+
+Emit the body for the shape(s) the Phase 0.5 selector fired (more than one block can fire — a monorepo that is also a constellation member gets both). Reference [playbooks.md](playbooks.md), never restate:
+
+- **Greenfield** — scorecard SUPPRESSED; emit the ordered bootstrap plan (~8-12 items) + recorded-deferral N/A lines. No scores table for a greenfield repo.
+- **Standard** — the scored pillar tables below + size-tiered recommendations.
+- **Monorepo** — the monorepo block (per-member tiers, nested-instruction-file recommendation past the thresholds, scoping config, build-graph wiring) additive on the standard report.
+- **Huge/legacy** — the legibility-first LEG1-LEG9 block AHEAD of pillar detail (generic patterns; stack instantiations from [stacks.md](stacks.md)).
+- **Constellation-member** — per-repo scored report UNCHANGED + the additive constellation block (full home-base OR light product-family variant per the playbooks.md selector).
+- **Constellation home-base** — the constellation-layer assessment IN PLACE OF the per-repo scorecard.
+
+## Pillar tables (compression rule — [playbooks.md](playbooks.md) resolution 13)
+
+**Failing and ⚠️ criteria render in DETAIL; passing rows compress to one line per pillar.** Spend the report budget on what needs action, never on a wall of green checkmarks. Group pass-count lines follow the same rule — one line each unless a member fails.
 
 | Pillar | Score | Status |
 |--------|-------|--------|
@@ -496,9 +548,7 @@ These affect your maturity level and are eligible for fixes.
 | Documentation | X% (N/6) | ✅/⚠️/❌ |
 | Dev Environment | X% (N/6) | ✅/⚠️/❌ |
 
-## Production Readiness (Pillars 6-8)
-
-Informational only. No fixes offered — address independently if desired.
+Production Readiness (Pillars 6-8) — informational, no fixes offered:
 
 | Pillar | Score | Status |
 |--------|-------|--------|
@@ -506,36 +556,30 @@ Informational only. No fixes offered — address independently if desired.
 | Security | X% (N/6) | ✅/⚠️/❌ |
 | Workflow & Process | X% (N/6) | ✅/⚠️/❌ |
 
-## Detailed Findings
+### Detailed findings (failing / ⚠️ only, per the compression rule)
 
-### Pillar 1: Style & Validation (X%)
+For each pillar with a failing or ⚠️ criterion, expand ONLY those rows with the quoted evidence and the ranked fix. A pillar whose criteria all pass renders as its one-line score above.
 
-| Criterion | Status | Evidence |
-|-----------|--------|----------|
-| SV1: Linter | ✅/❌ | [details] |
-| SV2: Formatter | ✅/❌ | [details] |
-| ... | ... | ... |
-
-[Repeat for each pillar]
-
-## Top Recommendations (Agent Readiness)
-
-1. **[Category]**: [specific action] — [why it helps agents]
-2. **[Category]**: [specific action] — [why it helps agents]
-3. **[Category]**: [specific action] — [why it helps agents]
+| Criterion | Status | Evidence (quoted) | Ranked fix |
+|-----------|--------|-------------------|------------|
+| SV4: … | ❌/⚠️ | [file line or command output] | [catalog item + tier] |
+| … | … | … | … |
+```
 
 ### Informational suggestions (not scored)
 
-When DE7 fires negative (no `.clawpatch/` or `flowctl repo-map list --count` returns 0), append this line to Top Recommendations:
+**DE7 `/flow-next:map` — stack-GATED via the [stacks.md](stacks.md) Map column.** The suggestion fires ONLY when (a) no map exists yet AND (b) the detected stack's Map cell is `yes` (`none` / `partial` SUPPRESSES it and routes to the LEG3 substitute-navigation class — a generated dependency-graph artifact, a hand-written orientation map, or static analysis as the proxy verifier; never suggest `/flow-next:map` on a stack clawpatch cannot parse). It is also size-gated: below ~400K LOC recommend the orientation map + tighter loops instead of heavy index tooling (Axis 3, measured net-negative). When all gates pass, append:
 
 > Consider: `/flow-next:map` — builds a semantic feature index for richer scope anchoring (optional).
 
-Detection — `flowctl` is **bundled, not on `PATH`** after install, so use the same `FLOWCTL` prelude pattern as the other skills (canonical Droid+Claude fallback; sync-codex.sh rewrites it to `$HOME/.codex/scripts/flowctl` for the Codex mirror):
+Detection — `flowctl` is **bundled, not on `PATH`** after install, so use the same `FLOWCTL` prelude pattern as the other skills (canonical Droid+Claude fallback; sync-codex.sh rewrites it to `$HOME/.codex/scripts/flowctl` for the Codex mirror). Each fenced block re-declares its own vars; POSIX shell:
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-[[ -d .clawpatch ]] && [ "$("$FLOWCTL" repo-map list --count 2>/dev/null)" -gt 0 ]
+# Suggestion fires only when NO map exists AND the detected stack's stacks.md Map cell is `yes`.
+[ -d .clawpatch ] && [ "$("$FLOWCTL" repo-map list --count 2>/dev/null)" -gt 0 ] && MAP_EXISTS=1 || MAP_EXISTS=0
+# MAP_EXISTS=0 AND stacks.md Map(detected stack) == yes AND size >= ~400K LOC → append the suggestion.
 ```
 
 DE7 is informational — surface as a suggestion only; do NOT include it in Phase 5 remediation prompts.
@@ -552,10 +596,19 @@ Glossary (DC8) lines — driven by the Phase 3 glossary signal:
 
 DC8 is informational like DE7, but its remediation path differs: it is handled exclusively by the Phase 5.5 bootstrap (read-back gated), never as a Phase 5 question option.
 
-## Production Readiness Notes
+### Unresolved questions (from Phase 0.6)
 
-[Key observations from Pillars 6-8 that the team should be aware of]
-```
+When Phase 0.6 asks were SUPPRESSED (`--report-only`, `--classify-only`, or an autonomous marker) OR a low-confidence axis was assumed rather than confirmed, emit an **"Unresolved questions"** section listing each assumption inline — what was inferred, the evidence, and what hangs on the answer — so a human can settle them once. An interactive run that already resolved every ask via the AskUserQuestion call omits this section (nothing is outstanding). This section never blocks; it is the non-interactive substitute for the ask.
+
+### Freshness caveat + re-run cadence
+
+Close the report with a freshness caveat and a suggested re-run cadence — prime findings are a point-in-time snapshot, **never a durable badge** (the exact failure mode fn-92 exists to retire):
+
+> _Snapshot taken [timestamp] against commit [short-sha]. Readiness drifts as the repo changes — re-run `/flow-next:prime` after significant structural or tooling changes (new stack, major dependency bump, CI change), or on a periodic cadence (e.g. monthly) for actively developed repos. `--classify-only` is the cheap portfolio-triage sweep between full runs._
+
+### Production Readiness Notes
+
+Close with key observations from Pillars 6-8 (informational — no fixes offered). Compress per the same rule: passing pillars as one line, failing/⚠️ criteria expanded with quoted evidence.
 
 **If `--report-only`**: Stop here. Show report and exit.
 
@@ -563,7 +616,9 @@ DC8 is informational like DE7, but its remediation path differs: it is handled e
 
 ## Phase 5: Interactive Remediation
 
-**If `--fix-all`**: Skip the questions below and continue at Phase 5.5 (the glossary bootstrap keeps its read-back gate even under `--fix-all`); Phase 6 then applies all recommendations from Pillars 1-5.
+**Remediation is CATALOG-DRIVEN.** The questions below are NOT a fixed four — they are assembled from the [playbooks.md](playbooks.md) ranked-actions catalog, filtered to the ACTUAL gaps found across Pillars 1-5 + the scored groups (AO / DR / TO / HP-core / FH-scored). Each option maps to a catalog row and carries that row's **tier** (Critical / High / Medium / Bonus) and **consent boundary**. Never offer a fix for a criterion that already passes; never invent an option not in the catalog.
+
+**If `--fix-all`** — the catalog tier column + consent boundaries govern what auto-applies (resolution 5). `--fix-all` auto-applies ONLY the Pillars 1-5 **in-ROOT** fixes at **Critical / High / Medium** tier. **Explicit-consent-only regardless of `--fix-all`:** anything outside the repo ROOT (the home-base kit), any harness settings / hook file (deny/ask/hook scaffolds), and ALL structural / playbook artifacts (a generated map, nested instruction files, the home base, the greenfield bootstrap plan). **On greenfield, `--fix-all` applies ONLY to exercised hygiene files** (`.gitignore`, lockfile, `.env.example`, `.editorconfig`) — never structural or generated artifacts (playbooks.md greenfield anti-pattern rules). When `--fix-all` is set, skip the questions, apply exactly the auto-eligible set, and continue at Phase 5.5 (the glossary bootstrap keeps its read-back gate even under `--fix-all`); Phase 6 then applies the selected fixes.
 
 **CRITICAL**: You MUST use the `AskUserQuestion` tool for consent. Do NOT just print questions as text. (Call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded. sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.)
 
@@ -573,35 +628,13 @@ The tool provides an interactive UI. Each question should:
 - Have a clear header (max 12 chars)
 - Explain what each option does and WHY it helps agents
 - Use `multiSelect: true` so users can pick multiple items
-- Include impact description for each option
+- Include impact description for each option, and its catalog tier + consent boundary
 
-### Question Structure
+### Question structure — catalog-driven
 
-Ask ONE question per category that has recommendations. Skip categories with no gaps.
+Group the gap-matched catalog items by category (Documentation, Tooling, Testing, Environment, Drivability/Observability, …) and ask **ONE question per category that has gaps** — skip any category with none. The options in each question are the catalog rows that apply to THIS repo's gaps, each labelled with its tier and (where not the default `--fix-all` in-root) its consent boundary. Explicit-consent-only items (structural artifacts, harness files, out-of-ROOT kit) are asked here even under `--fix-all`.
 
-**Question 1: Documentation (if gaps exist)**
-
-```json
-{
-  "questions": [{
-    "question": "Which documentation improvements should I create? These help agents understand your project without guessing.",
-    "header": "Docs",
-    "multiSelect": true,
-    "options": [
-      {
-        "label": "Create CLAUDE.md (Recommended)",
-        "description": "Agent instruction file with commands, conventions, and project structure. Critical for agents to work effectively."
-      },
-      {
-        "label": "Create .env.example",
-        "description": "Template with [N] detected env vars. Prevents agents from guessing required configuration."
-      }
-    ]
-  }]
-}
-```
-
-**Question 2: Tooling (if gaps exist)**
+Illustrative shape (Tooling category — the exact options come from the catalog filtered to the repo's gaps, NOT this fixed list):
 
 ```json
 {
@@ -611,64 +644,20 @@ Ask ONE question per category that has recommendations. Skip categories with no 
     "multiSelect": true,
     "options": [
       {
-        "label": "Add pre-commit hooks (Recommended)",
-        "description": "Husky + lint-staged for instant lint/format feedback. Catches errors in 5 seconds instead of 10 minutes."
+        "label": "Layered deterministic gates (Recommended)",
+        "description": "Catalog #6 (High). Format/lint at the edit or commit layer (harness hook OR staged-files commit hook, file-scoped, <10s, auto-fix) — tests stay at the verify command + acceptance requirements + CI required check. Prime NEVER wires test suites into a pre-commit hook (known agent bypass/stall risk). Harness-hook portion is explicit-consent."
       },
       {
-        "label": "Add linter config",
-        "description": "[Tool] configuration for code quality checks. Agents can run lint to verify their changes."
+        "label": "File-scoped feedback commands",
+        "description": "Catalog #4 (High). Single-test + single-file lint/typecheck commands so agents verify a change in seconds, not a full-suite wait. In-root, `--fix-all`."
       },
       {
-        "label": "Add formatter config",
-        "description": "[Tool] configuration for consistent code style. Prevents style drift across agent sessions."
+        "label": "Add linter/formatter config",
+        "description": "Catalog-adjacent (SV1/SV2). Only if NONE detected — never replace an existing tool. In-root, `--fix-all`."
       },
       {
         "label": "Add runtime version file",
-        "description": "Pin [runtime] version. Ensures consistent environment across machines."
-      }
-    ]
-  }]
-}
-```
-
-**Question 3: Testing (if gaps exist)**
-
-```json
-{
-  "questions": [{
-    "question": "Which testing improvements should I add? These let agents verify their work.",
-    "header": "Testing",
-    "multiSelect": true,
-    "options": [
-      {
-        "label": "Add test config (Recommended)",
-        "description": "[Framework] configuration file. Enables test command for agents to verify changes."
-      },
-      {
-        "label": "Add test script",
-        "description": "Adds 'test' command that agents can discover and run."
-      }
-    ]
-  }]
-}
-```
-
-**Question 4: Environment (if gaps exist)**
-
-```json
-{
-  "questions": [{
-    "question": "Which environment improvements should I add?",
-    "header": "Environment",
-    "multiSelect": true,
-    "options": [
-      {
-        "label": "Add .gitignore entries (Recommended)",
-        "description": "Ignore .env, build outputs, node_modules. Prevents accidental commits of sensitive data."
-      },
-      {
-        "label": "Create devcontainer (Bonus)",
-        "description": "VS Code devcontainer config for reproducible environment. Nice-to-have, not essential for agents."
+        "description": "Catalog-adjacent (DE3). Pin the runtime from an evidenced version, never a literal. In-root, `--fix-all`."
       }
     ]
   }]
@@ -678,14 +667,16 @@ Ask ONE question per category that has recommendations. Skip categories with no 
 ### Rules for Questions
 
 1. **MUST use `AskUserQuestion` tool** — Never just print questions as text
-2. **Mark recommended items** — Add "(Recommended)" to high-impact options
-3. **Mark bonus items** — Add "(Bonus)" to nice-to-have options
-4. **Explain agent benefit** — Each description should say WHY it helps agents
-5. **Skip empty categories** — Don't ask if no recommendations
-6. **Max 4 options per question** — Tool limit, prioritize if more
-7. **Never offer Pillar 6-8 items** — Production readiness is informational only
-8. **Never offer informational sub-criteria (DC7, DE7)** — Surface as suggestions in Top Recommendations only; no auto-run from Phase 5
-9. **Never offer DC8 (glossary) as a Phase 5 option** — Its remediation is the dedicated Phase 5.5 bootstrap with its own read-back; a Phase 5 checkbox would bypass the never-write-terms-unseen gate
+2. **Options come from the [playbooks.md](playbooks.md) catalog** — each labelled with its tier (Critical / High / Medium / Bonus) and consent boundary; never an option outside the catalog
+3. **Mark recommended items** — Add "(Recommended)" to high-impact (Critical/High) options; "(Bonus)" to nice-to-have (Bonus tier)
+4. **Explain agent benefit** — Each description says WHY it helps agents AND names its catalog #/tier
+5. **Skip empty categories** — Don't ask if no gaps in that category
+6. **Max 4 options per question** — Tool limit, prioritize by catalog leverage order if more
+7. **Hooks = layered gates, never test-runners** — the hook option is ALWAYS framed as fast file/staged-scoped format+lint at the edit/commit layer; prime NEVER offers a test-running pre-commit hook (SV4 / catalog #6). Tests belong at the verify command + acceptance requirements + CI. Any offered hook is built from Phase-2-verified commands, read-back gated, and exercised in the same pass (HP7 read-vs-exercise; harness.md)
+8. **Never offer Pillar 6-8 items** — Production readiness is informational only
+9. **Never offer informational sub-criteria (DC7, DE7)** — Surface as suggestions in Top Recommendations only; no auto-run from Phase 5
+10. **Never offer DC8 (glossary) as a Phase 5 option** — Its remediation is the dedicated Phase 5.5 bootstrap with its own read-back; a Phase 5 checkbox would bypass the never-write-terms-unseen gate
+11. **Structural / out-of-ROOT / harness items are explicit-consent** — even under `--fix-all`; ask before a map, nested instruction files, the home base, the bootstrap plan, or any harness settings/hook file
 
 ---
 
@@ -795,7 +786,8 @@ Offer re-assessment only if changes were made:
 Run assessment again to see updated score?
 ```
 
-If yes, run Phase 1-4 again and show:
+**Re-run reuse (resolution 6).** A re-assessment **reuses this session's Phase 0.5 classification and the R15 (Phase 0.6) answers** — it does NOT re-classify from scratch and does NOT re-ask a question already answered this session. Only the criteria/gates **affected by the fixes just applied** re-verify (the ranked catalog is re-ranked from the new state, not re-derived); untouched pillars carry their prior grades forward. Show:
+
 - New Agent Readiness score and maturity level
-- Score changes per pillar
-- Remaining recommendations
+- Score changes per pillar (only the re-verified criteria move)
+- Remaining recommendations, re-ranked
