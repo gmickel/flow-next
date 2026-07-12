@@ -368,6 +368,27 @@ jobs:
         #   never-merge / never-author enforcing guards + the byte-identical
         #   gate-off path survive in the mirror.
 
+      # ──────────── fn-92 (opinionated prime: classify emitter) ────────────
+
+      - name: Python unit tests — prime classify emitter framework (fn-92.4)
+        run: |
+          python -m unittest discover \
+            -s plugins/flow-next/tests \
+            -p "test_prime_eval.py" \
+            -v
+        # Deterministic Phase-0.5 `flowctl prime classify` emitter FRAMEWORK:
+        # pinned-schema field structure + the per-collector completeness-
+        # diagnostics envelope (resolution 21b confidence ceiling), axes 1-4 raw
+        # signals + Axis-5 shape MARKERS (never shape values) + assessment_scope,
+        # blob-ID content-hash dedup via `git ls-files -s` (no content read),
+        # per-collector budget scaffolding, path exclusions (own-tooling never
+        # pollutes classification), lifecycle greenfield/unborn-HEAD, monorepo /
+        # workspace-parent-dampener / worktree-sibling-exclusion topology,
+        # manifest-gated stacks, workspace-member + non-git home-base scope, the
+        # byte-identical dual-copy invariant, and the live-subcommand smoke.
+        # Substance-grep collectors + redaction + the full R19 fixture corpus +
+        # perf accounting land in fn-92.13.
+
       # ──────────── Functional smokes (ordered cheap-first) ────────────
       # All smokes refuse to run from the main plugin repo, so cd into the
       # runner's temp dir before invoking. $RUNNER_TEMP is set on every
