@@ -329,11 +329,15 @@ unverified-counts-as-fail rule extends to every executed gate.
 
 ---
 
-## Phase 3: Score & Synthesize
+## Phase 3: Score, Synthesize & Assemble the Verdict
 
 Read [pillars.md](pillars.md) for pillar definitions and criteria.
 
-**Three states, not two — and the denominator excludes the non-answers.** Map each criterion to ✅ pass, ❌ fail, or one of the excluded states: **N/A** (genuinely inapplicable — whitelist only: BS6 non-monorepo, TS6 no-E2E-surface, DE5/DE6 no-container-need, DC7 backend-only; the model may NOT invent N/A elsewhere), **⚠️** (scout couldn't check — e.g. `gh` unauth, not on GitHub), or **NOT ASSESSED** (scout failed per Phase 1). Excluded criteria are dropped from **both** numerator and denominator and listed separately — never counted as ❌. This stops a healthy library (no monorepo/E2E/Docker) from being capped at 67% and locked out of Level 5, and stops a GitLab-hosted repo from reporting missing GitHub branch-protection it doesn't need.
+This phase (a) scores the 48 legacy criteria into the maturity level, (b) evaluates the host-inline agent-readiness GROUPS (AO / DR / TO / HP) and consumes the emitter-owned scored FH rows, (c) derives the DR-core QA-readiness line, (d) computes the feedback-latency + gh-CLI lines, and (e) assembles the verdict headline inputs. Everything here is HOST-INLINE and synthesis-only - it introduces **no new execution budget** (the group probes reuse the Phase 2 boot / `--help` output plus bounded greps). **Emitter-owned signals are CONSUMED from the Phase 0.5 `flowctl prime classify --json` payload, never recomputed inline** - the probe-owner column of the [pillars.md](pillars.md) criterion-to-score map (resolution 21a) is authoritative on which rows are emitter-owned vs host-inline. All asks are suppressed in this phase; it is autonomous-safe (any low-confidence assumption is stated inline, never blocked on).
+
+**Three states, not two — and the denominator excludes the non-answers.** Map each criterion to ✅ pass, ❌ fail, or one of the excluded states: **N/A** (genuinely inapplicable - the single [pillars.md](pillars.md) N/A whitelist table (resolution 11) is the ONLY source of N/A entries; the model may NOT invent N/A elsewhere), **⚠️** (scout couldn't check - e.g. `gh` unauth, not on GitHub), or **NOT ASSESSED** (scout failed per Phase 1). Excluded criteria are dropped from **both** numerator and denominator and listed separately - never counted as ❌. This stops a healthy library (no monorepo/E2E/Docker) from being capped at 67% and locked out of Level 5, and stops a GitLab-hosted repo from reporting missing GitHub branch-protection it doesn't need.
+
+**Where each Pillar 1-5 criterion's grade comes from (probe-owner column, [pillars.md](pillars.md)).** Most criteria map from Phase 1 scout findings. The host-owned substance criteria draw their grade from executed evidence + host judgment, never the scout alone: SV5 / SV6 (check-mode lint / format), BS2 (bounded build), BS3 (boot probe), the DC2 execute check, DE1 (env cross-ref), DE4 / DE5 - all graded in Phase 2 and consumed here as-is. **SV4 (deterministic feedback gate) is a host-inline TOPOLOGY judgment made HERE in Phase 3:** grade which layer owns what from the CI required-check + verify-command + acceptance-requirement config plus the emitter-provided hook content, never from hook existence - report the L1/L2-absence headroom warn, the heavyweight-hook and advisory-only flags, and the "one verify command is the single source of truth" divergence flag per [pillars.md](pillars.md) SV4. SV4 grades gate TOPOLOGY only; workflow TRIGGER correctness is FH3, never double-scored (resolution 2).
 
 ### Agent Readiness Score (Pillars 1-5)
 
@@ -357,6 +361,72 @@ Calculate:
 ### Overall Score
 
 **Overall Score** = average of all 8 pillar scores
+
+The tier GROUPS below are scored separately and reported as pass-count lines; per resolution 1 they are **NOT** part of any pillar average, the maturity level, or the floor checks.
+
+### Agent-readiness GROUP evaluation (host-inline - EXCLUDED from the level)
+
+The agent-readiness tier GROUPS - **AO, DR, TO, HP**, plus the scored gap-diff rows **FH1-FH6** - are scored and fix-offered but NEVER fold into the maturity level (resolution 1). Each surfaces as a **group pass-count line** and feeds the verdict headline + ranked actions + remediation. The five states (✅ / ❌ / N/A / ⚠️ / NOT ASSESSED) and the single [pillars.md](pillars.md) N/A whitelist apply unchanged; excluded members (shape/tier N/A, inactive harness) drop from the group's own denominator and are named on the line, never counted as ❌. Pass conditions live in [pillars.md](pillars.md) and are pointed at here, never restated; every verdict quotes its evidence (a file line or a command-output line - no evidence, no verdict).
+
+**AO - Agent observability (AO1-AO5).** Reuse the §2.5 boot-probe output: its parseable ready line + bound port ARE the AO3 evidence (never re-run the boot probe). AO1 / AO2 / AO4 / AO5 are bounded greps (POSIX classes) against the agent file + dev config - a readable dev-log path/recipe, a browser-console-capture entry, dev request-logging middleware, a documented DEBUG/LOG_LEVEL escalation path - each quoting the file line it passes or fails on. Non-web shapes and tier-1/2-ceiling stacks take the [pillars.md](pillars.md) whitelist N/A entries.
+
+**DR - Drivability (DR1-DR7).** Bounded greps for a one-command seed/demo, a documented env-gated dev login / test user, a curl-able API + health endpoint, stable selectors (data-testid/roles/labels), and a browser-automation harness. **DR6 (agent-first CLI) reuses the §2.6 `--help` pattern already executed - never a second run.** DR7 is stack-gated via the [stacks.md](stacks.md) map column (N/A when the stack ships no framework dev-MCP). CLI-shaped repos swap DR3/DR4/DR5 for DR6 as the drivability surface, per the [pillars.md](pillars.md) whitelist.
+
+**TO - Test observability (TO1-TO4).** Bounded greps against the e2e config: failure-artifact retention (trace on-first-retry, screenshot only-on-failure, video retain-on-failure), app-log capture on failure (webServer stdout `pipe`), a real reporter emitting assertion diffs, and retry + annotated-quarantine config (>~5-10% quarantined = systemic flag). Evidence = the config line quoted.
+
+**HP - Harness & permissions (scored core HP1 / HP2 / HP5 / HP7 / HP9 / HP12).** FIRST run active-harness detection ([harness.md](harness.md) detection table) - grade ONLY active harnesses (config dir present AND not stale by commit recency), mapping each criterion to that harness's native mechanism (the per-harness instantiation table), N/A otherwise. Never fail a Codex-only repo for a missing `.claude/hooks`; grade Cursor HP5 against `.cursorignore`. Collection is HOST-INLINE config reads with **key-names-only quoting - never secret values** (same redaction contract as the emitter). HP7 hook content is **READ, never executed** during assessment (committed hook config is an RCE vector, CVE-2025-59536 class); its classification INPUTS come from the emitter, the READ/classify judgment is host-inline. Two findings fire **P0 regardless of the group score** (per [harness.md](harness.md)'s P0 rules): an inline literal secret in MCP config (HP9 - quote the **KEY NAME only** + "rotate it, it is already in git history") and suspicious hook content (HP7 - network calls / credential paths / obfuscation). A stub hook is a ❌-with-quote, not a P0. Probe + mechanism view in [harness.md](harness.md); pass conditions + scored-core designation in [pillars.md](pillars.md).
+
+**FH scored rows (FH1-FH6) - CONSUMED from the emitter.** These are emitter-owned per the criterion-to-score map (docs-freshness timestamps vs src churn, scc large-file metrics, CI trigger + mutating-lint greps, secrets-gate config presence, destructive-scan raw hits + context class, conditional API-contract globs). **CONSUME the emitter payload's corresponding fields - do NOT re-grep here.** FH3 alone adds a host step: when `gh` is authed (FH9 below), corroborate the emitter's CI-trigger evidence with required-status / branch-protection; without `gh` the emitter trigger evidence stands and the corroboration is ⚠️ unavailable. FH5 severity is read from the emitter's context class (string-literal/comment/doc-snippet -> dropped; repo-internal dir the same script regenerates -> informational + a LEG7 never-edit line; `$HOME`/bounded path -> ask-tier mention; unbounded or parameterized target -> P1). FH6 is N/A when no HTTP framework was detected.
+
+**Group pass-count aggregates (resolution 1).** Each scored group reports exactly ONE line - `AO: n/m pass`, `DR: n/m pass`, `TO: n/m pass`, `HP: n/m pass` (scored core only), `FH(scored): n/m pass` - with excluded members named inline. These lines NEVER enter the maturity-level formula, the pillar averages, or the floor checks; they feed the verdict headline, the ranked actions, and remediation only. DT1/DT2 are informational (suggestion line only, never a pass-count). Per the [playbooks.md](playbooks.md) compression rule, a group whose members all pass renders as its single pass-count line; a group with a failing member expands only that member with its quoted evidence + ranked fix.
+
+### DR-core & the QA-readiness line
+
+DR-core is the named four-ID QA-readiness set (defined in [pillars.md](pillars.md)); the report emits the QA-readiness line ONLY from here. Evaluate the four IDs against the group results above, scoped to the **deployable web surface only** (resolution 17):
+
+1. seeded / demo data one-command (**DR1**)
+2. documented dev login / test user (**DR2**)
+3. a drivable surface (**DR3** curl-able API + health **OR DR5** browser harness)
+4. readable runtime evidence (**AO1** agent-readable logs **OR TO1** e2e failure artifacts)
+
+Emit exactly one QA-readiness line:
+
+- **operability tier 3 (§2.9) AND all four DR-core pass** -> "QA-ready: consider `/flow-next:qa` / enabling `pipeline.qa`". This is the ONLY place the enable-QA recommendation fires.
+- **anything less** (tier < 3 or any DR-core member failing) -> "QA stage would fail here: <name the missing DR-core items>", so the team fixes the prerequisites before switching the stage on.
+- **shape/tier-capped repo** (library / plugin / prose, or a tier 1-2 ceiling stack per [classification.md](classification.md)) -> "QA stage not applicable to this shape" - never a gap, never a fabricated pass.
+
+### Feedback latency (FH8, report-only) + gh-CLI host line (FH9, informational)
+
+**FH8 latency - time only what ALREADY executed (resolution 3).** Local suite wall time is taken from the Phase 2 runs that ALREADY happened - the bounded build (§2.3), the test-discovery run (§2.2), the verify command when a gate ran it. **NEVER run a full suite for timing.** When nothing timeable executed, report **"not measured locally"** and fall back to the CI median. Build-caching config (turbo / nx / actions-cache) is reported alongside. FH8 is report-only - no fix, no score.
+
+**CI median - derived locally; no `durationMs` field exists.** Pull the last runs and compute `updatedAt - startedAt` per COMPLETED default-branch run, then take the median (the `gh` JSON surface has NO duration field - it must be derived). Each fenced block re-declares its own vars; POSIX shell:
+
+```bash
+ROOT="${ROOT:-.}"
+DEFAULT_BRANCH="$(git -C "$ROOT" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
+[ -n "$DEFAULT_BRANCH" ] || DEFAULT_BRANCH="$(git -C "$ROOT" branch --show-current 2>/dev/null)"
+gh run list --limit 20 --json startedAt,updatedAt,status,conclusion,headBranch 2>/dev/null \
+ | jq -r --arg br "$DEFAULT_BRANCH" '
+ [ .[] | select(.status == "completed" and .headBranch == $br)
+ | (( .updatedAt | fromdateiso8601 ) - ( .startedAt | fromdateiso8601 )) ]
+ | sort
+ | if length == 0 then "CI median: no completed default-branch runs"
+ else "CI median: \(.[(length / 2) | floor])s over \(length) runs" end'
+```
+
+`fromdateiso8601` is a jq builtin (portable - it avoids the non-portable `date -d`). A `>~10 min` median caps agent iteration and is called out in the report. When `gh` is absent or unauthenticated, the CI median is **"not available (gh)"**, never a fabricated zero.
+
+**FH9 gh-CLI - a host line EXCLUDED from every repo score.** `gh` availability is a property of the ASSESSOR's machine, not the repo - it must never make the same repo score differently per assessor. It is reported as a header line only and gates both the FH3 corroboration and the CI-median availability above:
+
+```bash
+GH_LINE="gh CLI: not installed"
+if command -v gh >/dev/null 2>&1; then
+ if gh auth status >/dev/null 2>&1; then GH_LINE="gh CLI: present + authed"; else GH_LINE="gh CLI: present, not authed"; fi
+fi
+echo "$GH_LINE"
+```
+
+FH9 is informational (host env) - it feeds the report header (Phase 4) and is excluded from the AO / DR / TO / HP / FH group scores and from every pillar.
 
 ### Glossary signal (DC8 — deterministic, no scout)
 
@@ -382,6 +452,19 @@ Generate prioritized recommendations from **Pillars 1-5 only** (excluding inform
 
 **Never offer fixes for Pillars 6-8** — these are informational only.
 **Never offer fixes for DC7/DE7** — informational sub-criteria; surface as suggestions in Top Recommendations only.
+
+### Verdict assembly (the headline inputs - R3)
+
+Assemble the inputs the Phase 4 headline renders. The maturity level is DEMOTED to secondary metadata below the scores table; the headline LEADS with:
+
+1. **Classification line** - the Phase 0.5 five-axis block (shape + topology + size + lifecycle + assessment scope), with any low-confidence axis carrying its stated assumption.
+2. **Operability tier** - the min-deployable headline tier from §2.9 (per-member tiers for a monorepo; non-deployable surfaces reported at their own ceilings, never capping a runnable surface), plus the cheapest move up one tier - or the sideways AO/DR move at a shape ceiling.
+3. **Hard-gate status** - G1 / G2 / G3 from §2.10; any failing gate is NAMED here and caps the maturity level at 2.
+4. **Top-5 ranked next-actions** - drawn from the [playbooks.md](playbooks.md) ranked-actions catalog in leverage order, selected from the ACTUAL gaps across Pillars 1-5 + the scored groups (AO / DR / TO / HP / FH-scored). File-level and specific; each carries its catalog tier (Critical / High / Medium / Bonus) and consent boundary. Reference the catalog - never restate it.
+
+Thread the three lines computed above into the headline block: the **QA-readiness line** (DR-core), the **FH8 latency** line, and the **FH9 gh-CLI** host line. **P0 findings** (HP9 inline secret, HP7 suspicious hook) surface in the headline regardless of any score.
+
+The verdict is the DATA assembled here; the shape-specific RENDERING (report body per classification, the passing-row compression rule) is Phase 4 / [playbooks.md](playbooks.md), and playbook SELECTION is the Phase 0.5 classification block. Under `--report-only` the verdict still assembles and renders (Phase 4), only remediation is skipped.
 
 ---
 

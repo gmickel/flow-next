@@ -124,7 +124,7 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 0.6. **Targeted clarification** - the bounded R15 ask protocol: at most one question call for low-confidence or uninferable facts that change a playbook or verdict; confirmed answers offered for durable recording in the agent file. Suppressed under `--classify-only` / `--report-only` / autonomous.
 1. **Parallel Assessment** - 9 scouts run in parallel (7 haiku fast scanners; claude-md-scout + docs-gap-scout on sonnet for judgment), each consuming the Phase 0.5 classification (~15-20 seconds)
 2. **Verification** — Verify test commands actually work
-3. **Score & Synthesize** — Calculate scores, determine maturity level (includes the deterministic DC8 glossary signal — `flowctl glossary list --json`, gated on `total_terms == 0`, never file presence)
+3. **Score, Synthesize & Assemble the Verdict** — Calculate pillar scores + maturity level (includes the deterministic DC8 glossary signal — `flowctl glossary list --json`, gated on `total_terms == 0`, never file presence); evaluate the host-inline AO/DR/TO/HP groups as level-excluded pass-count lines; derive the DR-core QA-readiness line + feedback-latency + gh-CLI host lines; assemble the verdict headline inputs
 4. **Present Report** — Full report with all 8 pillars
 5. **Interactive Remediation** — `AskUserQuestion` for agent readiness fixes only
 5.5. **Glossary Bootstrap** — when the glossary has zero terms (absent or husk), propose evidence-backed terms from the repo and seed `GLOSSARY.md` via `flowctl glossary add` after read-back approval; a populated glossary gets a coverage line, never a rewrite
