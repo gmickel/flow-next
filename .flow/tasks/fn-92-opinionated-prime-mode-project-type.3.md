@@ -25,9 +25,8 @@ New reference files: playbooks.md + harness.md.
 - [ ] Report compression rule stated; zero dispatch/ask tokens (grep)
 
 ## Done summary
-TBD
-
+Created the two remaining prime reference files: playbooks.md (shape selector; greenfield bootstrap plan + recorded-deferral mechanic; standard/monorepo/huge-legacy playbooks; LEG1-LEG9 generic pattern definitions with LEG4/6/7 marked all-shapes and instantiations pointing at stacks.md; constellation full home-base + lightweight product-family variant + selector; 15-item ranked-actions catalog with Critical/High/Medium/Bonus tier column + consent boundaries; report-shape templates + compression rule) and harness.md (five function classes; active-harness detection; HP1-HP16 probe/mechanism table with scored-core HP1/2/5/7/9/12 per pillars.md; per-harness instantiation table for six harnesses; P0 rules; HP7 read-never-execute vs remediation exercise distinction; remediation safety rules verbatim). One-line-pointer discipline throughout, zero dispatch/ask tokens, no em dashes; codex mirror regenerated.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0a4c391c8f30678e25c5ea3459ea549096853ff6
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests (1581 tests, OK; baseline green, post-edit exit 0), bash scripts/sync-codex.sh (all validators pass), grep: zero ask-tool/dispatch tokens + zero em dashes in both new files
 - PRs:
