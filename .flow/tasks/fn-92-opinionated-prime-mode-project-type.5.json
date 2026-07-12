@@ -5,7 +5,8 @@
   "created_at": "2026-07-12T09:26:08.154961Z",
   "depends_on": [
     "fn-92-opinionated-prime-mode-project-type.1",
-    "fn-92-opinionated-prime-mode-project-type.2"
+    "fn-92-opinionated-prime-mode-project-type.2",
+    "fn-92-opinionated-prime-mode-project-type.3"
   ],
   "id": "fn-92-opinionated-prime-mode-project-type.5",
   "priority": null,
@@ -13,5 +14,5 @@
   "spec_path": ".flow/tasks/fn-92-opinionated-prime-mode-project-type.5.md",
   "status": "todo",
   "title": "SKILL.md rewrite + Phase 0.5/0.6 (classification inline, --classify-only, R15 ask + Repo context)",
-  "updated_at": "2026-07-12T09:30:11.471232Z"
+  "updated_at": "2026-07-12T09:39:17.888987Z"
 }
