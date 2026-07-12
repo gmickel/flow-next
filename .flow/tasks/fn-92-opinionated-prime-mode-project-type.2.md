@@ -26,9 +26,8 @@ New reference files: classification.md + stacks.md.
 - [ ] Zero scout-dispatch or bare ask-tool tokens in either file (grep, executable-context scoped)
 
 ## Done summary
-TBD
-
+Added two new prime skill reference files (flat skill-root siblings, matching pillars.md/remediation.md): classification.md pins the five classification axes (lifecycle, two-bit topology with workspace dampener + tier-c prose refs, size band with the full exclusion list, manifest-gated stacks, multi-valued delivery shape), a tunable thresholds table, per-axis confidence, the orthogonal assessment_scope field, the resolution-8 edge-case ladder, and the `flowctl prime classify --json` emitter schema + `--classify-only` block contract (resolutions 7/19/21b). stacks.md ships the 15-row matrix (TS/JS through COBOL) with detect/verify/LSP/map/gotchas, honest none-practical cells for Delphi/VB6/PowerBuilder/COBOL/PL-SQL, the DR7 dev-MCP gate, per-stack LEG1-LEG9 instantiations as data, DE7 /flow-next:map gating on the Map column, and the unknown-stack generic degrade. Codex mirror regenerated via sync-codex.sh.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 6bfcabda7ca0011e05810ee78589eb4067655e75
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (1581 tests, OK skipped=2, exit 0 - baseline green, post-edit green), bash scripts/sync-codex.sh (all validation gates pass; mirror regenerated), grep guard: zero AskUserQuestion/scout-dispatch tokens and zero em/en dashes in both new files
 - PRs:
