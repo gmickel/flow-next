@@ -20,7 +20,7 @@ NOW_EPOCH="$(date -u +%s)"
 ORIG_BRANCH="$(git -C "$REPO_ROOT" branch --show-current)"
 ```
 
-`jq`, `git`, and `gh` must be on PATH; confirm `gh auth status >/dev/null 2>&1` up-front (failure → `LAND_VERDICT=NEEDS_HUMAN prs=0 pr=- reason="gh not authenticated"`). `LAND_DRY_RUN` comes from SKILL.md Mode Detection. gh surfaces below are verified against gh 2.93.0.
+`jq`, `git`, and `gh` must be on PATH; confirm `gh auth status >/dev/null 2>&1` up-front (failure → emit the stashed setup-mismatch line first if present - `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale` - then `LAND_VERDICT=NEEDS_HUMAN prs=0 pr=- reason="gh not authenticated"`). `LAND_DRY_RUN` comes from SKILL.md Mode Detection. gh surfaces below are verified against gh 2.93.0.
 
 ## Phase 0 — Guards, config, ledger
 
@@ -29,6 +29,7 @@ Hard-stop when land is invoked under the Ralph harness. Emit the parseable termi
 ```bash
 if [[ -n "${FLOW_RALPH:-}" || -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
  echo "Ralph and land are alternative drivers — never nest them" >&2
+ [[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale
  echo 'LAND_VERDICT=NEEDS_HUMAN prs=0 pr=- reason="nested under Ralph harness (FLOW_RALPH/REVIEW_RECEIPT_PATH set) — refuse to run"'
  exit 1
 fi
@@ -40,6 +41,7 @@ Refuse a dirty non-`.flow/` tree at tick start. Leave state untouched for diagno
 if git -C "$REPO_ROOT" status --porcelain | grep -v '^.. \.flow/' >/dev/null; then
  echo "Evidence: dirty non-.flow working tree at tick start"
  git -C "$REPO_ROOT" status --porcelain | grep -v '^.. \.flow/' || true
+ [[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale
  echo 'LAND_VERDICT=NEEDS_HUMAN prs=0 pr=- reason="dirty working tree at tick start"'
  exit 0
 fi
@@ -127,7 +129,7 @@ else
 fi
 ```
 
-Zero candidates (no babysit, no re-entry, no NEEDS_HUMAN discovery entries) ends the tick:
+Zero candidates (no babysit, no re-entry, no NEEDS_HUMAN discovery entries) ends the tick (emit the stashed setup-mismatch line first if present - `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale`):
 
 ```text
 LAND_VERDICT=NO_WORK prs=0 pr=- reason="no open build-loop-authored PRs"
@@ -547,7 +549,7 @@ NEEDS_HUMAN > BLOCKED > FIXING_CI > RESOLVING > AWAITING_REVIEW > RELEASED > MER
 
 Assert tick-end hygiene before printing: current branch is `ORIG_BRANCH` (or the merged base when 3.5/3.6 ran) and the non-`.flow/` tree is clean — a violation downgrades the tick to `NEEDS_HUMAN` with the hygiene failure as the reason.
 
-The terminal line is always the LAST line of the tick output. Print nothing after it:
+The terminal line is always the LAST line of the tick output. Immediately before it, emit the stashed setup-mismatch line if present (SKILL.md verdict contract): `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale`. Print nothing after the verdict:
 
 ```text
 LAND_VERDICT=<verdict|NO_WORK> prs=<n> pr=<deciding-pr-url|-> reason="<one line>"

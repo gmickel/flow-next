@@ -122,20 +122,37 @@ When data is missing, the body says so honestly (e.g. `*No decision-track memory
 - **Opening a Lavish session or running `lavish-axi poll` from make-pr.** The PR artifact is a read-only review instrument — no annotate loop, interactive or autonomous. Review conversation belongs to the code host.
 - **Emitting an artifact blob link that can 404.** Gitignored `.flow/artifacts/` → local-open guidance only; committed mode links only after the narrow artifact commit landed on the branch being pushed.
 
-## Pre-check: local setup version
+## Pre-check: Local setup version
 
-Same pattern as `/flow-next:plan` and `/flow-next:audit` — non-blocking notice when `.flow/meta.json` `setup_version` lags the plugin version:
+Compare `.flow/meta.json` `setup_version` to the plugin version; on mismatch, escalate once per plugin version. Fail-open throughout: a missing `jq`, `.flow/meta.json`, or plugin manifest silently continues.
 
 ```bash
-if [[ -f .flow/meta.json ]]; then
-  SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
-  PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
-  PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
-  if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
-    echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})." >&2
+SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
+PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
+PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
+VERSION_ACK=$(jq -r '.version_ack // empty' .flow/meta.json 2>/dev/null)
+if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
+  if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
+        || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* \
+        || "$VERSION_ACK" == "$PLUGIN_VER" ]]; then
+    echo "Local setup v${SETUP_VER} differs from plugin v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts." >&2
+  else
+    echo "FLOW_SETUP_ASK ${SETUP_VER} ${PLUGIN_VER}"
   fi
 fi
 ```
+
+If the block printed a `FLOW_SETUP_ASK` line, before proceeding ask the user with AskUserQuestion (local setup differs from the plugin; refresh now?), offering exactly the options **Refresh now**, **Remind me next version**, **Skip this run**, then continue the skill whichever is chosen:
+- **Refresh now**: pause and have the user run `/flow-next:setup` in this session (do not run setup yourself), then continue once it finishes.
+- **Remind me next version**: record the acknowledgement so this version is not re-asked (only a later plugin version re-arms it), then continue. Run this self-contained write (fail-open: on any error, continue anyway):
+  ```bash
+  PJ="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
+  PV=$(jq -r '.version' "$PJ" 2>/dev/null)
+  [[ -n "$PV" && "$PV" != "null" ]] && rm -f .flow/meta.json.tmp && jq --arg v "$PV" '.version_ack = $v' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
+  ```
+- **Skip this run**: continue without writing anything; the next invocation asks again.
+
+Any other output (the one-line differs notice, or nothing) is non-blocking: continue.
 
 ## Workflow
 

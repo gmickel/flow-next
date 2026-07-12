@@ -24,18 +24,25 @@ FLOWCTL="$HOME/.codex/scripts/flowctl"
 
 ## Pre-check: Local setup version
 
-Non-blocking, same pattern as `/flow-next:plan` — one-line nag when the local setup lags the plugin:
+Non-blocking, never asks (autonomous). On mismatch, stash a `SETUP_STALE` line so the verdict contract can co-locate it with the terminal `PILOT_VERDICT` (a stderr echo alone gets buried); `version_ack` never suppresses it. Detection logic is unchanged:
 
 ```bash
+[[ -d .flow/tmp && ! -L .flow/tmp ]] && rm -f .flow/tmp/setup_stale 2>/dev/null
 SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
 PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-plugin/plugin.json"
 PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
 if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
- echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})." >&2
+ if [[ ! -L .flow/tmp ]]; then
+ mkdir -p .flow/tmp 2>/dev/null
+ rm -f .flow/tmp/setup_stale 2>/dev/null # drop a planted setup_stale symlink before tee follows it
+ echo "SETUP_STALE: local v${SETUP_VER}, plugin v${PLUGIN_VER}, run /flow-next:setup" | tee .flow/tmp/setup_stale >&2
+ else
+ echo "SETUP_STALE: local v${SETUP_VER}, plugin v${PLUGIN_VER}, run /flow-next:setup" >&2
+ fi
 fi
 ```
 
-Continue regardless (never blocks; silent when setup was never run or versions match).
+Continue regardless (never blocks; fail-open - silent when setup was never run, versions match, or any read fails). **Symlink guard (autonomous-safety):** a repo-committed symlink at `.flow/tmp` (or at the `setup_stale` file) would redirect the `tee` write outside the workspace during an unattended tick. When `.flow/tmp` is a symlink pilot refuses to stash - stderr echo only, no file write - so the verdict-time `cat` simply finds nothing (acceptable degradation, never an out-of-tree write); the cleanup guard is likewise symlink-aware (`! -L`), and the pre-`tee` `rm -f` drops a planted `setup_stale` symlink so `tee` creates a fresh regular file. See the verdict contract for how the stashed line is emitted before the terminal verdict.
 
 ## Hard guards (before anything else)
 
@@ -44,11 +51,13 @@ Run these guards before selection, ledger writes, branch changes, or skill dispa
 ```bash
 if [[ -n "${FLOW_RALPH:-}" || -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
  echo "Ralph and pilot are alternative drivers — never nest them" >&2
+ [[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale
  echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="nested under Ralph harness (FLOW_RALPH/REVIEW_RECEIPT_PATH set) — refuse to run"'
  exit 1
 fi
 
 if git status --porcelain | grep -v '^.. \.flow/' >/dev/null; then
+ [[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale
  echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="dirty working tree at tick start"'
  exit 0
 fi
@@ -124,6 +133,8 @@ PILOT_VERDICT=<ADVANCED|ASKED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec
 ```
 
 Use `spec=-` and `stage=-` when no spec was selected. Stage values are exactly `plan`, `plan-review`, `work`, `qa` (opt-in — only when `pipeline.qa==on`), `make-pr`, `land`, plus `triage`/`ask` (backlog mode only), or `-`.
+
+**SETUP_STALE line.** Whenever the pre-check detected a setup-version mismatch it wrote `.flow/tmp/setup_stale`. At EVERY terminal `PILOT_VERDICT` emission - the Phase 6 line, each hard-guard exit, the backlog invariant-assert exits (Phase 0.5 / 1.5), and the dry-run early-terminal lines (Phase 1.6 `TRIAGED`, Phase 2 classification stop) - first print that file's `SETUP_STALE: local v<X>, plugin v<Y>, run /flow-next:setup` line, so it lands in the same output block immediately before the verdict and survives into driver logs. Emit it verbatim (`cat .flow/tmp/setup_stale` in bash blocks; a plain preceding line when the verdict is printed as text). It never blocks, is never suppressed, and fail-opens to nothing when the file is absent.
 
 `DEFERRED_TO_LAND` is a distinct *non-terminal-work* verdict (stage `land`): every remaining all-done candidate has an open PR that land — not pilot — owns. It is deliberately separated from `NO_WORK` so a driver can route it to `/flow-next:land` instead of stopping; an all-done spec with an open PR is real outstanding work, never absence of work.
 
