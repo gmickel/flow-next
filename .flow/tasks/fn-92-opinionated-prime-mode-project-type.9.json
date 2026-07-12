@@ -5,7 +5,8 @@
   "created_at": "2026-07-12T09:26:10.034925Z",
   "depends_on": [
     "fn-92-opinionated-prime-mode-project-type.8",
-    "fn-92-opinionated-prime-mode-project-type.4"
+    "fn-92-opinionated-prime-mode-project-type.4",
+    "fn-92-opinionated-prime-mode-project-type.11"
   ],
   "id": "fn-92-opinionated-prime-mode-project-type.9",
   "priority": null,
@@ -13,5 +14,5 @@
   "spec_path": ".flow/tasks/fn-92-opinionated-prime-mode-project-type.9.md",
   "status": "todo",
   "title": "Eval green: fixtures + real-repo expectations pass, smoke re-baseline (R19/R13)",
-  "updated_at": "2026-07-12T09:39:17.084773Z"
+  "updated_at": "2026-07-12T09:46:14.205573Z"
 }

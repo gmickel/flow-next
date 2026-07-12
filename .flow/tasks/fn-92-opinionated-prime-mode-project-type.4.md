@@ -3,25 +3,25 @@ satisfies: [R19]
 ---
 
 ## Description
-Eval skeleton first (design-before-build): fixtures + expectation harness, landing red/pending.
+The `flowctl prime classify --json` emitter + synthetic-fixture CI oracle (resolution 19, two-oracle split).
 
-**Size:** M | **Files:** `optimization/prime/` (new dir: fixture builders + expectation table + runner), `plugins/flow-next/tests/test_prime_eval.py` (thin unittest wrapper)
+**Size:** M | **Files:** `plugins/flow-next/scripts/flowctl.py` AND `.flow/bin/flowctl.py` (byte-identical dual-copy invariant - update BOTH), `plugins/flow-next/tests/test_prime_eval.py`, `.github/workflows/test-flow-next.yml` (add the new test file to the explicit list), fixture-builder module under `plugins/flow-next/tests/`
 
 ## Approach
-- Fixture builders create temp git-init repos (NEVER in-tree .git dirs - test_scout_fallback_contract.py L20-25 gotcha): workspace-parent (25+ sibling repos, shared org), tier-a plain siblings, tier-b home base (parent manifest + compose), greenfield, greenfield-x-constellation, worktree-sibling (git worktree of the same repo).
-- Expectation table as data (per-row iteration per memory: tests drive source-of-truth tables): fixture/repo -> expected lifecycle, topology bits, band, shapes, and the substance true-positive + no-false-positive sets from the spec's eval-validation section (echo string-literals dropped, fixture-corpus env reads excluded, per-package .env.example found, extraction-failure flagged).
-- Implement `flowctl prime classify --json` (resolution 19): pure-stdlib deterministic emitter for axes 1-4 signals + shape markers + deterministic substance greps, bounded, schema per classification.md (task 2). unittest drives the EMITTER across the fixtures (fully deterministic, 3-OS safe). Runner harness in optimization/prime/ per the reveval precedent for the NON-CI live-repo eval (captured metadata snapshots + provenance); unittest wrapper for prose contracts marks pending/skip until task 9 flips it.
+- Emitter: pure-stdlib deterministic probes - axes 1-4 raw signals (lifecycle counters, topology bits + workspace dampener inputs, size/exclusion-filtered LOC + legibility sub-signals, manifest-gated stack detection), shape MARKERS (not final shapes - judgment is skill-side), and the deterministic substance greps (hook classification inputs, env cross-ref counts, destructive-scan raw hits with context class). Schema per classification.md (task 2). `--json` threads; bounded; portable (no bare timeout binary; POSIX classes).
+- Redaction contract: evidence carries key names only, never secret values or complete sensitive config lines; a fixture asserts it.
+- Fixture builders: temp git-init repos (never in-tree .git): workspace-parent, tier-a siblings, tier-b home base, greenfield, greenfield-x-constellation, worktree-sibling.
+- CI oracle: unittest drives the emitter over the fixtures asserting RAW signals/markers/exclusions only (per-row over the expectation table); wire test_prime_eval.py into the workflow's explicit test list; parity test asserts the two flowctl copies stay byte-identical; one live-subcommand smoke (`prime classify --json` on a fixture).
 
 ## Key context
-- unittest, not pytest; CI = python -m unittest discover, 3-OS matrix - keep builders portable.
-- This lands BEFORE the skill rewrite per fable-review-evals discipline; task 9 makes it green.
+- Judgment outputs (final shapes, confidence, asks) are OUT of scope here - the non-CI agentic eval (task 11) owns those.
+- unittest not pytest; 3-OS matrix portability.
 
 ## Acceptance
-- [ ] `flowctl prime classify --json` emitter implemented (stdlib-only, bounded, --json threading) with its schema matching classification.md
-- [ ] Fixture builders produce all six synthetic shapes in tmpdirs via git init (R19); unittest drives the emitter over them deterministically
-- [ ] Expectation table covers classification axes + substance TP/no-FP sets as data rows
-- [ ] unittest wrapper present, pending/skipped cleanly (suite stays green), portable on 3-OS
-- [ ] No in-tree nested .git; no fixture depends on the host workspace layout
+- [ ] Emitter in BOTH flowctl copies, parity-tested, live-subcommand test passes (resolution 19)
+- [ ] Raw-signal schema matches classification.md; --json threads; redaction fixture green
+- [ ] Six fixture builders + expectation table as data rows; CI oracle asserts signals/markers/exclusions only
+- [ ] test_prime_eval.py wired into .github/workflows/test-flow-next.yml explicit list; suite green on the emitter tests
 
 ## Done summary
 TBD
