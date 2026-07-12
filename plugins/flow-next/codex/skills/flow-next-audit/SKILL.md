@@ -87,20 +87,37 @@ The goal is automated maintenance with human oversight on judgment calls — not
 - **Setting `context: fork`** — plain-text numbered prompt must stay reachable.
 - **Running parallel replacement subagents.** Investigation subagents can run in parallel for 3+ independent entries; replacement subagents run sequentially to protect orchestrator context.
 
-## Pre-check: local setup version
+## Pre-check: Local setup version
 
-Same pattern as `/flow-next:plan` and `/flow-next:prospect` — non-blocking notice when `.flow/meta.json` `setup_version` lags the plugin version:
+Compare `.flow/meta.json` `setup_version` to the plugin version; on mismatch, escalate once per plugin version. Fail-open throughout: a missing `jq`, `.flow/meta.json`, or plugin manifest silently continues.
 
 ```bash
-if [[ -f .flow/meta.json ]]; then
- SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
- PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-plugin/plugin.json"
- PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
- if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
- echo "Plugin updated to v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts (current: v${SETUP_VER})." >&2
+SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
+PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-plugin/plugin.json"
+PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
+VERSION_ACK=$(jq -r '.version_ack // empty' .flow/meta.json 2>/dev/null)
+if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
+ if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
+ || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* \
+ || "$VERSION_ACK" == "$PLUGIN_VER" ]]; then
+ echo "Local setup v${SETUP_VER} differs from plugin v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts." >&2
+ else
+ echo "FLOW_SETUP_ASK ${SETUP_VER} ${PLUGIN_VER}"
  fi
 fi
 ```
+
+If the block printed a `FLOW_SETUP_ASK` line, before proceeding ask the user with plain-text numbered prompt (local setup differs from the plugin; refresh now?), offering exactly the options **Refresh now**, **Remind me next version**, **Skip this run**, then continue the skill whichever is chosen:
+- **Refresh now**: pause and have the user run `/flow-next:setup` in this session (do not run setup yourself), then continue once it finishes.
+- **Remind me next version**: record the acknowledgement so this version is not re-asked (only a later plugin version re-arms it), then continue. Run this self-contained write (fail-open: on any error, continue anyway):
+ ```bash
+ PJ="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-plugin/plugin.json"
+ PV=$(jq -r '.version' "$PJ" 2>/dev/null)
+ [[ -n "$PV" && "$PV" != "null" ]] && jq --arg v "$PV" '.version_ack = $v' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
+ ```
+- **Skip this run**: continue without writing anything; the next invocation asks again.
+
+Any other output (the one-line differs notice, or nothing) is non-blocking: continue.
 
 ## Workflow
 
