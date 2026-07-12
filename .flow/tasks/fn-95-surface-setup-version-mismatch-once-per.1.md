@@ -25,9 +25,8 @@ Escalate the version-mismatch pre-check in INTERACTIVE skills from silent echo t
 - [ ] No ask-tool token in autonomous prose; sync-codex validation passes
 
 ## Done summary
-TBD
-
+Escalated the `## Pre-check: Local setup version` block in all 16 interactive lifecycle skills from a silent echo to a blocking AskUserQuestion asked once per plugin version (Refresh now / Remind me next version / Skip this run), persisting the acknowledgement in a new optional `.flow/meta.json` `version_ack` field via a self-contained jq + same-dir tmp + atomic mv write. Autonomy markers (FLOW_RALPH/REVIEW_RECEIPT_PATH/FLOW_AUTONOMOUS/mode:autonomous) and a matching version_ack fall back to the one-line echo; fail-open is preserved throughout. Autonomy-suppression prose never names the ask tool (sync-codex R2-injection hazard), added AskUserQuestion to flow-next-map's allowed-tools, and regenerated the Codex mirror (R2 blocks land at genuine ask sites, none in pilot/land). flowctl init/doctor already tolerate version_ack (verified, no code change).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f48ecb2aaa12d26349086583d808aff77a4d97ef
+- Tests: python3 -m unittest discover plugins/flow-next/tests (1581 tests, OK, skipped=2), python3 -m unittest test_sync_check test_pilot_backlog_mirror_safety test_tracker_sync_mirror_parity test_worker_anchor_prose (87, OK), R8 manual: flowctl init/detect/validate --all clean against meta.json carrying version_ack (field preserved, not flagged)
 - PRs:
