@@ -78,24 +78,90 @@ Wait for all scouts to complete. Collect findings.
 
 ---
 
-## Phase 2: Verification (MANDATORY for any runnable criterion you intend to score ✅)
+## Phase 2: Verification, Operability Ladder & Hard Gates (MANDATORY for any executed criterion)
 
-After scouts complete, verify key commands actually work. **A criterion whose pass condition
-is "the command runs" (TS4 tests-runnable, and the lint/build runnable checks) may be scored ✅
-ONLY after this phase confirms it** — scoring runnability from config-file existence is the
-evidence-free-PASS failure this phase exists to prevent (a repo with a `lint` script that
-crashes or a build broken for weeks would otherwise score "fast feedback loops"). If the
-framework/command was detected but you do NOT run the verification (e.g. sandbox can't execute
-it), score that criterion **⚠️ unverified — counts as fail**, not ✅. A command that exists but
-verification FAILS is ❌ with the error in the report.
+After scouts complete, verify commands actually work - this phase produces the **executed
+evidence** the operability ladder, the hard gates (G1-G3), and the substance pass-conditions
+(SV5/SV6, BS2/BS3, TS4, DC2 execute check, DE1) all grade from. **Runnability is NEVER scored
+from config-file existence** - a repo with a `lint` script that crashes, a build broken for
+weeks, or a CLAUDE.md whose stated test command fails would otherwise false-pass. The absolutes,
+inherited from Phase 1 and pillars.md and never relaxed here:
 
-### Test Verification
+- **Unverified counts as fail.** A framework/command was detected but you did NOT run its probe
+ (sandbox can't execute it, host-incompatible, budget exhausted) → score that criterion
+ **⚠️ unverified - counts as fail**, never ✅. A command that exists but whose probe FAILS is
+ **❌ with the error quoted**.
+- **Every verdict quotes its evidence** - a file line or a command-output line. No evidence, no
+ verdict: the criterion is **NOT ASSESSED**, never guessed (fabrication guard).
+- **Host-sensitive quoting.** When a probe surfaces harness/MCP/secret content (HP7 hooks, HP9
+ MCP config), quote **key names only, never values** - same redaction contract as the emitter.
 
-If test framework detected by testing-scout, verify tests are runnable using the **appropriate command for the detected framework**.
+### 2.0 Non-mutating execution policy (READ FIRST - hard; governs every executed probe below)
 
-**Common examples** (adapt to whatever framework is detected):
+Assessment must **never mutate the assessed repo**. This supersedes any looser trust-surface
+wording. Seven rules bound what this phase may run:
 
-| Framework | Verification Command |
+1. **Static resolution is always safe** - for every documented command, checking that it exists
+ in a manifest / on `PATH` never mutates and is always allowed.
+2. **Execution only for allowlisted evidence classes:** lint/typecheck in **check mode**, test
+ discovery/list (dry-run), a **bounded build**, `--help` / `--dry-run`, and the gated tier-3
+ boot probe. Nothing else executes.
+3. **Formatters run in check mode only** - never `--write` / `--fix` against the worktree.
+4. **NEVER executed** (static + cross-reference evidence only): setup, migrate, seed, deploy,
+ destructive, or network commands. DE4 grades by content, not execution (§2.8).
+5. **BS3 dev-command evidence rides the tier-3 boot probe** (§2.5) - never a second long-lived
+ server run. Absent a boot probe, BS3 is reported as resolving statically.
+6. **Worktree snapshot guard.** Take a `git status --porcelain` snapshot immediately BEFORE and
+ AFTER every executed probe. Any **unexpected tracked change** INVALIDATES that probe's
+ evidence (the criterion falls to ⚠️ unverified) AND is itself a finding - a probe that dirties
+ the tree is misbehaving.
+7. **G3 splits two questions:** "resolves" (checked for **ALL** quoted commands, always safe) vs
+ "safe sampled execution" (run only for the allowlisted classes above). §2.6.
+
+Windows-only / license-bound / host-incompatible builds (Delphi, .NET Framework - see the
+`stacks.md` verify + gotcha columns) that cannot run on the current host are recorded
+**"not probed on this host"**, never a fabricated ✅ (rule: unverified counts as fail, extended
+to every executed criterion).
+
+```bash
+# Worktree snapshot guard - wrap EVERY executed probe. Re-declare vars per block.
+ROOT="${ROOT:-.}"
+PRE_SNAP="$(git -C "$ROOT" status --porcelain 2>/dev/null)"
+# … run one allowlisted probe here …
+POST_SNAP="$(git -C "$ROOT" status --porcelain 2>/dev/null)"
+[ "$PRE_SNAP" = "$POST_SNAP" ] || echo "TAINTED: probe mutated the worktree - evidence invalid, finding raised"
+```
+
+### 2.1 Portable timeout + stack-driven commands
+
+Every executed probe is time-bounded with a **portable** pattern - the harness timeout parameter
+or a background + kill helper. **Never bare `timeout(1)`** (absent on stock macOS), and **POSIX
+character classes** in every probe pattern (per classification.md's edge-case rules).
+
+```bash
+# Portable bounded run: run_bounded <seconds> <command...>. Re-declared per block.
+run_bounded() {
+ _limit="$1"; shift
+ "$@" & _pid=$!
+ ( sleep "$_limit"; kill -TERM "$_pid" 2>/dev/null; sleep 2; kill -KILL "$_pid" 2>/dev/null ) & _watch=$!
+ wait "$_pid" 2>/dev/null; _rc=$?
+ kill "$_watch" 2>/dev/null
+ return "$_rc"
+}
+```
+
+**Which command to run is DATA, not logic.** The detected stack's **verify column in
+[stacks.md](stacks.md)** drives the exact non-interactive command per surface (build-scout and
+testing-scout already carry that column from their Phase 1 dispatch). The examples below are
+illustrative; the stacks.md row is authoritative, and an unknown stack degrades to the generic
+ladder with an honest no-playbook line (per stacks.md's last section).
+
+### 2.2 Test discovery (G2 / TS4)
+
+Verify tests are **discoverable** (list / dry-run - never a full run) using the detected
+framework's command. Illustrative equivalents (the stacks.md verify column wins):
+
+| Framework | Discovery command |
 |-----------|---------------------|
 | pytest | `pytest --collect-only` |
 | Jest | `npx jest --listTests` |
@@ -105,32 +171,161 @@ If test framework detected by testing-scout, verify tests are runnable using the
 | Cargo test | `cargo test --no-run` |
 | PHPUnit | `phpunit --list-tests` |
 
-These are examples. For other frameworks, find the equivalent "list tests" or "dry run" command. The goal is to verify tests are discoverable without actually running them.
+Use the detected package manager (pnpm/npm/yarn/bun); activate a detected venv first. TS4 is ✅
+only when discovery succeeds; a claimed framework whose discovery fails is ❌ with the error.
+**G2 = tests discoverable when a test framework is claimed.**
 
-**For monorepos**: Run verification in each app directory that has tests.
+### 2.3 Tier-1 build execution (G1 / BS2)
 
-**Adapt to project**: Use the package manager detected (pnpm/npm/yarn/bun). If venv detected for Python, activate it first.
-
-Example:
-```bash
-# Python with venv
-cd apps/api && source .venv/bin/activate && pytest --collect-only 2>&1 | head -20
-
-# JS with pnpm
-pnpm test --passWithNoTests 2>&1 | head -10
-
-# Go
-go test ./... -list . 2>&1 | head -20
-```
-
-Mark TS4 as ✅ only if verification succeeds (tests are discoverable and runnable).
-
-### Build Verification (Quick)
+Run the stack's build command **bounded (~5 min)** in the allowlisted, non-mutating form, under
+the worktree guard:
 
 ```bash
-# Check if build command exists and is valid
-pnpm build --help 2>&1 | head -5 || npm run build --help 2>&1 | head -5
+ROOT="${ROOT:-.}"
+run_bounded() { _limit="$1"; shift; "$@" & _pid=$!; ( sleep "$_limit"; kill -TERM "$_pid" 2>/dev/null; sleep 2; kill -KILL "$_pid" 2>/dev/null ) & _watch=$!; wait "$_pid" 2>/dev/null; _rc=$?; kill "$_watch" 2>/dev/null; return "$_rc"; }
+PRE_SNAP="$(git -C "$ROOT" status --porcelain 2>/dev/null)"
+run_bounded 300 sh -c 'cd "$0" && <stacks.md verify build command>' "$ROOT" 2>&1 | tail -20
+BUILD_RC=$?
+POST_SNAP="$(git -C "$ROOT" status --porcelain 2>/dev/null)"
+[ "$PRE_SNAP" = "$POST_SNAP" ] || echo "TAINTED: build mutated the worktree"
 ```
+
+Build exits 0 (and clean) → **tier ≥ 1** evidence for that surface + BS2 ✅. A build that fails
+= BS2 ❌ with the error quoted. Host-unbuildable = "not probed on this host". **G1 = the detected
+build command actually runs OR operability tier ≥ 1 evidence exists.**
+
+### 2.4 Per-surface / per-member sampling (resolution 18) with progress lines (resolution 20)
+
+Operability and the executed substance checks are graded **PER SURFACE / PER MEMBER, never per
+repo** (resolution 17). For a monorepo (the emitter's topology + workspace members from
+`flowctl prime classify --json`, see [classification.md](classification.md)), verification is
+**SAMPLED, not exhaustive**:
+
+- **Sampling order:** deployable members first (web service/app, CLI, desktop), then default /
+ entry members. **Max ~5 member executions** and a **~10 min global wall-clock cap** per run.
+- **Graph-native `affected` commands may substitute** for per-member runs where the toolchain
+ provides them (`turbo run … --affected`, `nx affected`) - one bounded affected run can stand in
+ for many member runs.
+- **Unsampled members are listed NOT ASSESSED** - never silently skipped.
+
+**Progress observability (resolution 20) - a ~10-minute silent run is not acceptable UX.** Emit a
+concise line per surface/member as the loop runs, with elapsed vs the global budget, and print the
+NOT ASSESSED list as the budget exhausts:
+
+```
+[2.4] api (web) build … ok (12s) | elapsed 0:12 / 10:00
+[2.4] cli (CLI) --help … ok (1s) | elapsed 0:13 / 10:00
+[2.4] worker (web) boot probe … ready (28s) | elapsed 0:41 / 10:00
+[2.4] budget: 5/5 member executions used - NOT ASSESSED: web-admin, docs-site, packages/ui
+```
+
+### 2.5 Tier-3 boot probe (BS3, AO3) - ready-signal gated, SaaS-gated, host-honest
+
+A tier-3 "runs" claim requires an **executed** boot probe - it is the SOLE evidence source for
+BS3 and for AO3 (parseable ready line + deterministic port). Rules:
+
+- **Ready-signal gate.** Run the boot probe **only when a cheap ready signal is detectable** - a
+ health endpoint, a dev-server ready line - and always **time-bounded (~60s)**. If no ready
+ signal is detectable, the tier is recorded **"not probed"**, never failed.
+- **External-SaaS gate.** A ready line + bound port is **NOT tier 3** when the backend of record
+ is a cloud service requiring interactive auth (Convex/Firebase-class repos boot a nonfunctional
+ shell). Report **"tier 3 gated on <service> credentials"** - never fabricate a pass.
+- **Not-probed-on-this-host.** A surface whose boot cannot run here (platform/toolchain/license)
+ is "not probed on this host", never ❌ and never ✅.
+
+```bash
+ROOT="${ROOT:-.}"
+run_bounded() { _limit="$1"; shift; "$@" & _pid=$!; ( sleep "$_limit"; kill -TERM "$_pid" 2>/dev/null; sleep 2; kill -KILL "$_pid" 2>/dev/null ) & _watch=$!; wait "$_pid" 2>/dev/null; _rc=$?; kill "$_watch" 2>/dev/null; return "$_rc"; }
+# Boot only behind a detected ready signal; capture the ready line + bound port as evidence.
+run_bounded 60 sh -c 'cd "$0" && <stacks.md dev/boot command>' "$ROOT" 2>&1 | grep -aiE '(ready|listening|started).*[0-9]{2,5}' | head -3
+```
+
+The boot probe's ready line + port also feed AO3; BS3 never triggers a second long-lived run
+(non-mutating rule 5).
+
+### 2.6 Agent-file quoted-command extraction + execution (G3 / DC2 execute check)
+
+Extraction is **HOST-AGENT work** (the flowctl carve-out forbids a regex engine here): read the
+agent instruction file(s), pull commands from **fenced blocks AND inline backticks**, take each
+command's **leading token**, and resolve it against tracked files / manifest scripts / `PATH`
+(the "resolves" half of G3 - checked for ALL quoted commands). Then **execute 1-2** of the
+quoted, allowlisted-class commands (the DC2 execute check) under the §2.0 policy + worktree guard.
+
+- A CLAUDE.md whose stated test command **fails** is worse than none → feeds G3 ❌ with the error.
+- **Extraction-failure flag (load-bearing).** Zero commands extracted from a file that HAS fenced
+ blocks = an **extraction-failure flag**, NEVER a vacuous G3 pass or a stub grade. (Eval: naive
+ extraction found 1 of 15+ commands in a best-in-class file and 0 of 26 in another - both would
+ have silently gutted the gate.) Re-extract more thoroughly before flagging.
+
+**G3 = agent-file quoted commands resolve/execute.**
+
+### 2.7 Hook-content reads (HP7 - READ, never execute)
+
+Enumerate configured harness hooks and **READ each, including the command strings** (bounded) -
+the emitter provides the hook-content inputs; see [harness.md](harness.md) for the collection
+view. **Never execute a hook during assessment** - committed hook config is an RCE vector
+(CVE-2025-59536 class). Classify real gate / stub / suspicious; a **stub = ❌ with the content
+quoted**, **suspicious (network calls, credential paths, obfuscation) = P0 security finding**.
+Capturing `hooks: true` without content leaves HP7/HP8 unfireable - read the content. Quote key
+names / command shapes, never secret values.
+
+### 2.8 DE1 env cross-reference (per-member scoping)
+
+Diff declared `.env.example` vars against **env reads in SOURCE** (`process.env`, `os.environ`,
+`getenv`), NOT executed - static cross-reference only (setup/migrate never run, rule 4). Scoping,
+eval-hardened:
+
+- **Iterate WORKSPACE MEMBER dirs, not root-only** - per-package `.env.example` is the correct
+ monorepo pattern (a root-only probe false-negatived 4 real files).
+- **Scan only source extensions in the git index** - exclude tests/fixtures/eval corpora/docs
+ snippets/`node_modules` (two eval repos' "stale" evidence was markdown runbook snippets and
+ teaching content inside a test fixture - the quote-your-evidence rule makes such hits
+ self-evidently invalid).
+- **Filter well-known platform/CI vars.** `>~30%` undeclared = **"stale template" ⚠️**; downgrade
+ to "template does not mirror documented config" when the vars are documented in a config doc.
+
+DE4 setup scripts are graded here too, **by content not execution** (rule 4): a setup script must
+chain real stages (install AND migrate/seed keywords found) - one that only prints instructions
+is ❌.
+
+### 2.9 Operability ladder computation (per-surface tiers → min-deployable headline)
+
+Grade the 4-tier ladder (0 static-parse-only / 1 compile-only / 2 compile+test-subset / 3 run)
+**from the executed evidence above, never from config existence** - the tier table + verify
+evidence live in the Operability-ladder section of the spec and [pillars.md](pillars.md):
+
+- **Per-surface tiers.** Each surface/member gets its own tier from its own executed evidence
+ (§2.3 build → tier 1; §2.2 test discovery → tier 2; §2.5 boot probe → tier 3).
+- **Shape ceilings (Axis 5, from classification.md).** Library / plugin / prose surfaces cap at
+ **tier 2** - report **"N/N at ceiling"** (never "2 of 3"), suppress the move-up, and offer the
+ cheapest move **SIDEWAYS** into observable/drivable (AO/DR) instead. Desktop's honest tier
+ evidence is the repo's own packaged-runtime smoke, not a boot probe. Never prescribe "start the
+ app" for a stack OR shape whose realistic ceiling is tier 1-2.
+- **Min-deployable aggregation (resolution 17).** The **headline tier = the MINIMUM verified tier
+ across deployable surfaces** (web service/app, CLI, desktop). Non-deployable surfaces (library,
+ plugin/prose, docs) are reported **separately at their own ceilings and NEVER cap a runnable
+ surface**. Monorepos carry **per-member tiers**, not one repo tier (a real repo was tier 3 in
+ one app and cloud-gated in another).
+- The report (Phase 4 / playbooks.md catalog) names the CURRENT tier and the **cheapest move up
+ one tier** (e.g. "add a console DUnitX target compiled in CI" at tier 1; "add `make bootstrap`
+ chaining install → services → migrate → seed" at tier 2) - or the sideways move at ceiling.
+ QA-readiness (per pillars.md's DR-core) evaluates the deployable web surface only.
+
+### 2.10 Hard gates G1-G3 + the Level-2 cap
+
+The three gates (defined verbatim in [pillars.md](pillars.md) "Hard gates") cap agent readiness
+at **Level 2 regardless of score**, with the failing gate **named in the headline** - this kills
+"Level 5 with a broken build":
+
+- **G1** - the detected build command actually runs (§2.3) OR operability tier ≥ 1 evidence
+ exists (§2.9). Feeds from BS2 + the ladder.
+- **G2** - tests are discoverable when a test framework is claimed (§2.2 / TS4).
+- **G3** - agent-file quoted commands resolve/execute (§2.6); an extraction-failure on a file that
+ HAS fenced blocks is itself a flag, **never a vacuous pass**.
+
+Any gate failing → cap the maturity level at 2 and name the failure in the verdict headline.
+Windows-only / host-unbuildable targets are "not probed on this host", never a fabricated ✅; the
+unverified-counts-as-fail rule extends to every executed gate.
 
 ---
 
