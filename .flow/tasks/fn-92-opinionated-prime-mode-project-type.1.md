@@ -27,7 +27,8 @@ Own ALL scoring architecture in one place: pillars.md rewrite.
 - [ ] Single N/A whitelist table exists incl. classification-driven entries; floor rule handles all-excluded pillars
 - [ ] Census arithmetic + level floors updated; hard-gate cap rule stated; 48 legacy criteria all present
 - [ ] DC2 has ONE published scale; SV4/CI-gates boundary stated per resolution 2
-- [ ] Criterion-to-score map present for every new row; DR-core four-ID set named with the all-four QA-readiness rule
+- [ ] Criterion-to-score map present for every new row WITH the probe-owner column (emitter / host-inline / scout, per resolution 21a); DR-core four-ID set named with the all-four QA-readiness rule
+- [ ] SV6/DE4/BS3 pass conditions comply with the non-mutating execution policy (check-mode formatters, DE4 static+cross-ref only, BS3 evidence = boot probe)
 
 ## Done summary
 TBD

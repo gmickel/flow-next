@@ -21,6 +21,7 @@ workflow.md Phase 3 synthesis: AO/DR/TO/HP inline groups + scoring integration +
 - [ ] Scoring uses the pillars.md map + whitelist table; group aggregates never fold into the level (resolution 1)
 - [ ] Latency lines use derived durations; gh-CLI is informational host line (R18 as amended)
 - [ ] Verdict assembly produces the headline inputs (R3)
+- [ ] Every host-owned row of the resolution-21a matrix has prose-contract coverage; emitter-owned signals consumed, never recomputed inline
 
 ## Done summary
 TBD

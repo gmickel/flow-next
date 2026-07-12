@@ -12,6 +12,6 @@
   "spec": "fn-92-opinionated-prime-mode-project-type",
   "spec_path": ".flow/tasks/fn-92-opinionated-prime-mode-project-type.6.md",
   "status": "todo",
-  "title": "workflow.md Phase 2/3 extensions (ladder + gates + substance execution + AO/DR/TO/HP inline + verdict)",
-  "updated_at": "2026-07-12T09:47:02.869835Z"
+  "title": "workflow.md Phase 2: execution evidence + operability ladder + hard gates (non-mutating policy)",
+  "updated_at": "2026-07-12T09:53:22.808030Z"
 }
