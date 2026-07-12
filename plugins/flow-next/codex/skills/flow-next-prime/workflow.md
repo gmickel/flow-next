@@ -6,11 +6,48 @@ Execute these phases in order. Reference [pillars.md](pillars.md) for scoring cr
 
 ---
 
+## Phase 0.5: Classify (before scout dispatch)
+
+Classify what KIND of project this is BEFORE anything downstream runs. The classification block parameterizes scout dispatch, the N/A denominators, the report shape, and the playbook selection. **Mechanics live in [classification.md](classification.md) - read it; this phase does not restate the axes, thresholds, exclusions, or the emitter schema.**
+
+Classification is **deterministic and host-inline**: the raw signals come from the `flowctl prime classify --json` emitter; the skill layers the Axis-5 shape reasoning, the per-axis confidence, and playbook selection on top. Invoke the emitter (`ROOT` is its positional argument; every fenced block re-declares its own vars):
+
+```bash
+FLOWCTL="$HOME/.codex/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+ROOT="${ROOT:-.}"
+"$FLOWCTL" prime classify --json "$ROOT" # JSON on stdout; progress/diagnostics on stderr
+```
+
+From the emitter payload, derive the five-axis classification per [classification.md](classification.md): resolve the Axis-5 delivery shape(s) from the raw `shape_markers`; set the final per-axis confidence, downgrading to `low` and using NOT ASSESSED wherever a `collectors[]` entry reports `complete: false` / `sampled` / `truncated` / `cap_hit` (partial data never yields high confidence). If the emitter is unavailable or errors, fall back to the bounded probes named in classification.md (never `cloc`, never exhaustive reads; POSIX character classes; portable timeouts - never bare `timeout(1)`); a classification that cannot be computed is reported as low-confidence with the reason, never guessed.
+
+**Low-confidence confirm (interactive only).** A `low` on any axis that changes a playbook or a verdict routes to the Phase 0.6 clarification. Autonomous / `--report-only` runs never block - they state the assumption inline and list it under "Unresolved questions" (see Phase 0.6). Misclassification degrades gracefully: a monorepo misread as a single repo still gets a correct base report; only the playbook block is off.
+
+**`--classify-only` (early exit).** When `--classify-only` is set, this phase wraps the emitter plus the judgment layer, prints the classification block in the fixed schema pinned in [classification.md](classification.md) (the `--classify-only` block: one line per axis with value + confidence + evidence-count, plus a `would-ask` list in place of the Phase 0.6 clarification), and **EXITS here** - no Phase 0.6, no scouts, no verification, no report, no remediation. It must stay cheap (<~10s on a multi-M-LOC repo) - it is the portfolio-triage entry point for 100+ repos.
+
+---
+
+## Phase 0.6: Targeted clarification (bounded ask protocol)
+
+Some classification facts are LOW-CONFIDENCE (probes disagree) or UNINFERABLE IN PRINCIPLE from the working tree alone - org context the filesystem cannot show: do sibling repos exist elsewhere? does a headless-build toolchain / license exist for CI? which subsystems are frozen vs safe agent territory? is this repo's "missing CI" actually run by an external system? Prime asks instead of guessing, under a strict budget.
+
+**Budget (resolution 4 - scoped).** At most **one question call (up to 3 questions) per run**, ONLY for facts that (a) scored low-confidence or are uninferable AND (b) change the playbook or a verdict. This budget covers the Phase 0.5 classification clarification ONLY - it is SEPARATE from and does NOT consume: the Phase 5 remediation consent, the Phase 5.5 glossary read-back, and the setup-version pre-check ask (each has its own gate). Never ask what a probe already answered; every question states what WAS inferred, the evidence, and what hangs on the answer (the stakes + consequences, per the plain-language question contract).
+
+**Interactive branch.** Ask via the `plain-text numbered prompt` tool. Each question names the inferred value, its evidence, and the playbook/verdict that changes with the answer.
+
+**Suppression (hard).** All asks are SUPPRESSED under `--classify-only` (it never asks - Phase 0.5 already exited), `--report-only`, and autonomous markers (`FLOW_RALPH=1`, a review receipt path, `FLOW_AUTONOMOUS=1`, or `mode:autonomous` in the arguments). A suppressed run NEVER blocks: it states each assumption inline and emits an **"Unresolved questions"** list in the report so a human can settle them once.
+
+**Repo-context recording offer.** Answers become durable repo facts, not session trivia. On confirmation, offer to record them where the next run can INFER instead of re-asking - a short **"Repo context"** block appended to the repo's agent instruction file (e.g. "part of the acme constellation, home base `../acme`"; "CI builds via `Build.cmd` on a licensed runner"; "modules X, Y frozen"). This simultaneously closes the corresponding DC2 gap. Declined = noted in the report and re-derived next run. (The Repo-context write is an agent-file augment - it follows the same consent + never-bulk-generate rules as any agent-file edit; it is offered here, applied in Phase 6.)
+
+**Re-run reuse (resolution 6).** A Phase 7 re-assessment reuses this session's Phase 0.5 classification and the answers gathered here - only affected criteria/gates re-verify, and a question already answered this session is NOT re-asked.
+
+---
+
 ## Phase 1: Parallel Assessment
 
 Run all 9 scouts in parallel (Codex spawns them as multi-agent threads):
 
-**Dispatch contract (every scout prompt).** Each scout returns criteria for a specific pillar — its output must be keyed to those criterion IDs (SV1-6, TS1-6, …), NOT its own internal "X/5 health score" (those denominators don't match the pillars and must never be reused as a pillar score). If you pass a repo-root argument (see below), each scout prompt starts "Assess the repo at ROOT". A scout whose output has no criterion-ID mapping is treated as a failure (below).
+**Dispatch contract (every scout prompt).** Each scout returns criteria for a specific pillar — its output must be keyed to those criterion IDs (SV1-6, TS1-6, …), NOT its own internal "X/5 health score" (those denominators don't match the pillars and must never be reused as a pillar score). If you pass a repo-root argument (see below), each scout prompt starts "Assess the repo at ROOT". A scout whose output has no criterion-ID mapping is treated as a failure (below). **Every scout prompt also carries a one-line classification context sentence from Phase 0.5** so the scout probes the right thing and does not fail the repo against conventions that do not apply (e.g. "This is a huge Delphi tier-1 repo - assess the Delphi verify command per stacks.md, do not assess Node/TS conventions"; "This is a greenfield scaffold - expect deferrals, not gaps"; "This is a CLI-shaped library - grade the agent-first-CLI drivability row, not a web boot"). build-scout and testing-scout additionally receive the detected stack's `stacks.md` verify column so they probe the correct commands.
 
 ### Agent Readiness Scouts (Pillars 1-5)
 
