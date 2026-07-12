@@ -129,7 +129,7 @@ else
 fi
 ```
 
-Zero candidates (no babysit, no re-entry, no NEEDS_HUMAN discovery entries) ends the tick (emit the stashed setup-mismatch line first if present — `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale`):
+Zero candidates (no babysit, no re-entry, no NEEDS_HUMAN discovery entries) ends the tick (emit the stashed setup-mismatch line first if present - `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale`):
 
 ```text
 LAND_VERDICT=NO_WORK prs=0 pr=- reason="no open build-loop-authored PRs"

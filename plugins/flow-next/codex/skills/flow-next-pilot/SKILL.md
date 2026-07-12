@@ -36,7 +36,7 @@ if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_
 fi
 ```
 
-Continue regardless (never blocks; fail-open — silent when setup was never run, versions match, or any read fails). See the verdict contract for how the stashed line is emitted before the terminal verdict.
+Continue regardless (never blocks; fail-open - silent when setup was never run, versions match, or any read fails). See the verdict contract for how the stashed line is emitted before the terminal verdict.
 
 ## Hard guards (before anything else)
 
@@ -128,7 +128,7 @@ PILOT_VERDICT=<ADVANCED|ASKED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec
 
 Use `spec=-` and `stage=-` when no spec was selected. Stage values are exactly `plan`, `plan-review`, `work`, `qa` (opt-in — only when `pipeline.qa==on`), `make-pr`, `land`, plus `triage`/`ask` (backlog mode only), or `-`.
 
-**SETUP_STALE line.** Whenever the pre-check detected a setup-version mismatch it wrote `.flow/tmp/setup_stale`. At EVERY terminal `PILOT_VERDICT` emission — the Phase 6 line and each hard-guard exit — first print that file's `SETUP_STALE: local v<X>, plugin v<Y>, run /flow-next:setup` line, so it lands in the same output block immediately before the verdict and survives into driver logs. Emit it verbatim (`cat .flow/tmp/setup_stale` in bash blocks; a plain preceding line when the verdict is printed as text). It never blocks, is never suppressed, and fail-opens to nothing when the file is absent.
+**SETUP_STALE line.** Whenever the pre-check detected a setup-version mismatch it wrote `.flow/tmp/setup_stale`. At EVERY terminal `PILOT_VERDICT` emission - the Phase 6 line and each hard-guard exit - first print that file's `SETUP_STALE: local v<X>, plugin v<Y>, run /flow-next:setup` line, so it lands in the same output block immediately before the verdict and survives into driver logs. Emit it verbatim (`cat .flow/tmp/setup_stale` in bash blocks; a plain preceding line when the verdict is printed as text). It never blocks, is never suppressed, and fail-opens to nothing when the file is absent.
 
 `DEFERRED_TO_LAND` is a distinct *non-terminal-work* verdict (stage `land`): every remaining all-done candidate has an open PR that land — not pilot — owns. It is deliberately separated from `NO_WORK` so a driver can route it to `/flow-next:land` instead of stopping; an all-done spec with an open PR is real outstanding work, never absence of work.
 

@@ -40,7 +40,7 @@ if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_
 fi
 ```
 
-Continue regardless (never blocks; fail-open — silent when setup was never run, versions match, or any read fails). See the verdict contract for how the stashed line is emitted before the terminal verdict.
+Continue regardless (never blocks; fail-open - silent when setup was never run, versions match, or any read fails). See the verdict contract for how the stashed line is emitted before the terminal verdict.
 
 ## Hard guards (before anything else)
 
@@ -97,7 +97,7 @@ LAND_VERDICT=<verdict|NO_WORK> prs=<n> pr=<deciding-pr-url|-> reason="<one line>
 
 The tick-level verdict is the worst severity across PRs by priority `NEEDS_HUMAN > BLOCKED > FIXING_CI > RESOLVING > AWAITING_REVIEW > RELEASED > MERGED`; `pr=` is the URL of the PR that decided it (`-` when none). `NO_WORK` when discovery finds zero authored PRs. `prs=` is the number of PRs processed this tick.
 
-**SETUP_STALE line.** Whenever the pre-check detected a setup-version mismatch it wrote `.flow/tmp/setup_stale`. At EVERY terminal `LAND_VERDICT` emission — the report line and each hard-guard exit — first print that file's `SETUP_STALE: local v<X>, plugin v<Y>, run /flow-next:setup` line, so it lands in the same output block immediately before the verdict and survives into driver logs. Emit it verbatim (`cat .flow/tmp/setup_stale` in bash blocks; a plain preceding line when the verdict is printed as text). It never blocks, is never suppressed, and fail-opens to nothing when the file is absent.
+**SETUP_STALE line.** Whenever the pre-check detected a setup-version mismatch it wrote `.flow/tmp/setup_stale`. At EVERY terminal `LAND_VERDICT` emission - the report line and each hard-guard exit - first print that file's `SETUP_STALE: local v<X>, plugin v<Y>, run /flow-next:setup` line, so it lands in the same output block immediately before the verdict and survives into driver logs. Emit it verbatim (`cat .flow/tmp/setup_stale` in bash blocks; a plain preceding line when the verdict is printed as text). It never blocks, is never suppressed, and fail-opens to nothing when the file is absent.
 
 Driver condition examples:
 
