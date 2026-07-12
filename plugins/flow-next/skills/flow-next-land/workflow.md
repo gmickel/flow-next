@@ -20,7 +20,7 @@ NOW_EPOCH="$(date -u +%s)"
 ORIG_BRANCH="$(git -C "$REPO_ROOT" branch --show-current)"
 ```
 
-`jq`, `git`, and `gh` must be on PATH; confirm `gh auth status >/dev/null 2>&1` up-front (failure → `LAND_VERDICT=NEEDS_HUMAN prs=0 pr=- reason="gh not authenticated"`). `LAND_DRY_RUN` comes from SKILL.md Mode Detection. gh surfaces below are verified against gh 2.93.0.
+`jq`, `git`, and `gh` must be on PATH; confirm `gh auth status >/dev/null 2>&1` up-front (failure → emit the stashed setup-mismatch line first if present - `[[ -f .flow/tmp/setup_stale ]] && cat .flow/tmp/setup_stale` - then `LAND_VERDICT=NEEDS_HUMAN prs=0 pr=- reason="gh not authenticated"`). `LAND_DRY_RUN` comes from SKILL.md Mode Detection. gh surfaces below are verified against gh 2.93.0.
 
 ## Phase 0 — Guards, config, ledger
 
