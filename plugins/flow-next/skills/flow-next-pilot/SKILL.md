@@ -27,11 +27,12 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 Non-blocking, never asks (autonomous). On mismatch, stash a `SETUP_STALE` line so the verdict contract can co-locate it with the terminal `PILOT_VERDICT` (a stderr echo alone gets buried); `version_ack` never suppresses it. Detection logic is unchanged:
 
 ```bash
-mkdir -p .flow/tmp 2>/dev/null; rm -f .flow/tmp/setup_stale 2>/dev/null
+[[ -d .flow/tmp ]] && rm -f .flow/tmp/setup_stale 2>/dev/null
 SETUP_VER=$(jq -r '.setup_version // empty' .flow/meta.json 2>/dev/null)
 PLUGIN_JSON="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
 PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
 if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
+  mkdir -p .flow/tmp 2>/dev/null
   echo "SETUP_STALE: local v${SETUP_VER}, plugin v${PLUGIN_VER}, run /flow-next:setup" | tee .flow/tmp/setup_stale >&2
 fi
 ```

@@ -45,7 +45,7 @@ If the block printed a `FLOW_SETUP_ASK` line, before proceeding ask the user wit
  ```bash
  PJ="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}/.codex-plugin/plugin.json"
  PV=$(jq -r '.version' "$PJ" 2>/dev/null)
- [[ -n "$PV" && "$PV" != "null" ]] && jq --arg v "$PV" '.version_ack = $v' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
+ [[ -n "$PV" && "$PV" != "null" ]] && rm -f .flow/meta.json.tmp && jq --arg v "$PV" '.version_ack = $v' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
  ```
 - **Skip this run**: continue without writing anything; the next invocation asks again.
 

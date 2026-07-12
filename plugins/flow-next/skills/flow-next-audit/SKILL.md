@@ -96,7 +96,7 @@ PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "unknown")
 VERSION_ACK=$(jq -r '.version_ack // empty' .flow/meta.json 2>/dev/null)
 if [[ -n "$SETUP_VER" && "$PLUGIN_VER" != "unknown" && "$SETUP_VER" != "$PLUGIN_VER" ]]; then
   if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
-        || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* \
+        || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* || "${ARGUMENTS:-}" == *mode:autofix* \
         || "$VERSION_ACK" == "$PLUGIN_VER" ]]; then
     echo "Local setup v${SETUP_VER} differs from plugin v${PLUGIN_VER}. Run /flow-next:setup to refresh local scripts." >&2
   else
@@ -111,7 +111,7 @@ If the block printed a `FLOW_SETUP_ASK` line, before proceeding ask the user wit
   ```bash
   PJ="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json"
   PV=$(jq -r '.version' "$PJ" 2>/dev/null)
-  [[ -n "$PV" && "$PV" != "null" ]] && jq --arg v "$PV" '.version_ack = $v' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
+  [[ -n "$PV" && "$PV" != "null" ]] && rm -f .flow/meta.json.tmp && jq --arg v "$PV" '.version_ack = $v' .flow/meta.json > .flow/meta.json.tmp && mv .flow/meta.json.tmp .flow/meta.json
   ```
 - **Skip this run**: continue without writing anything; the next invocation asks again.
 
