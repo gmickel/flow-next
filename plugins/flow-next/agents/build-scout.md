@@ -143,6 +143,7 @@ ls -d packages/ apps/ libs/ modules/ 2>/dev/null
 
 ## Rules
 
+- **When the dispatch provides a detected-stack row (from `stacks.md`), probe its `Detect` and `Verify (non-interactive)` entries FIRST**: those are the authoritative build/verify commands for this stack; the generic scans above are the fallback for an unknown stack (no row passed). Report the commands as findings; you stay read-only (no execution here - the bounded build/boot probe is host-side in prime Phase 2). Return your findings keyed to the build criteria (BS1-6); never reuse your own X/5 health score as a pillar score.
 - Speed over completeness - config file detection first
 - Extract actual commands from package.json/Makefile
 - Detect monorepo setups (affects how agents should build)

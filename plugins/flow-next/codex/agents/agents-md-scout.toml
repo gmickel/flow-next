@@ -55,19 +55,49 @@ Read the files and check for these sections:
 - Performance considerations
 - Security guidelines
 
-## Quality Signals
+## Quality Signals - grade SUBSTANCE, not existence
 
-**Good AGENTS.md:**
-- Specific commands (not "run tests" but `pnpm test`)
-- File paths with context (`src/api/` for API routes)
-- Do/Don't lists with rationale
-- Links to detailed docs for deep dives
+DC2 is a substance criterion. A heading is not a pass; the *content under it* is.
+Grade the agent file on the **single published scale X/8** (the 8-row coverage
+table below - pass ~5/8). Every file normalizes to this one scale; there is no
+/10 variant. Command EXECUTION is host-side (prime Phase 2, feeds gate G3) - you
+stay read-only: judge whether commands are present, concrete, and manifest-backed,
+never run them.
 
-**Weak AGENTS.md:**
-- Generic advice ("write clean code")
-- Missing build/test commands
-- No mention of project structure
-- Outdated information (references removed files)
+**Substance tells (each pushes rows toward ✅):**
+- Repo-specific nouns - real module / service / directory names, not generic personas.
+- >=3 fenced, copy-paste-runnable commands in the top ~50 lines.
+- Commands that appear verbatim in the manifest (package.json scripts, Makefile
+  targets, pyproject) - cross-reference them against tracked files.
+- 1-3 real code snippets (not pseudo-code).
+- Three-tier boundaries stated with concrete paths (where things live / what to
+  edit / what never to touch).
+- Don'ts paired with dos (a forbidden pattern next to the sanctioned one).
+
+**Template tells are DEDUCTIONS (each pushes rows toward ❌):**
+- Generic personas ("You are an expert engineer…").
+- Restated universal conventions the agent already knows ("write clean code",
+  "use meaningful names").
+- Full directory listings the agent could `ls` itself.
+- Unedited `/init` scaffold order / boilerplate section sequence.
+- Placeholders (`<your-command-here>`, `TODO`, `[fill in]`).
+- Zero fenced blocks.
+
+**Length band 30-150 lines.** >300 lines is a **REVIEW TRIGGER** routing to the
+prune-to-pointers remediation - NEVER an automatic deduction. A 659-line file that
+passes every substance tell earns the *prune* recommendation, not a downgrade.
+
+**Sprawl flag:** multiple root instruction files beyond the canonical-plus-bridge
+pattern (one AGENTS.md plus one thin AGENTS.md import / symlink) - flag it as a finding.
+
+**Generated-looking files are downgraded** (ETH Zurich, arXiv 2602.11988:
+LLM-generated instruction files harm agent performance). Content the agent could
+discover itself (directory trees, restated conventions) is NEGATIVE signal, never
+neutral.
+
+**A thin stub** (coverage well under half) = ⚠️ -> the score routes prime to the
+*augment* remediation, not a no-op "create". Always report the number so prime
+offers the right fix.
 
 ## Output Format
 
@@ -85,18 +115,23 @@ Analyze whichever is present (prefer `AGENTS.md`; if only `AGENTS.md` exists, an
 Codex-first repo with a rich AGENTS.md must not be scored as if it had nothing). If BOTH exist as
 real files, diff their build/test commands and flag any contradiction as a finding.
 
-**Coverage Score: X/8** (one point per row below — do NOT report X/10; there are 8 rows)
+**Coverage Score: X/8** (one point per row below - do NOT report X/10; there are 8 rows).
+Score each row on the **substance tells above**, not heading presence: a row earns its
+point only when its content is repo-specific, concrete, and (for command rows)
+manifest-backed / runnable - a bare heading over generic advice or a placeholder scores
+❌. Apply the template-tell deductions and note the length band + any sprawl / generated /
+stub finding beneath the table.
 
-| Section | Status | Notes |
+| Section | Status | Notes (name the substance tell or the deduction) |
 |---------|--------|-------|
-| Project overview | ✅/❌ | [brief note] |
-| Build commands | ✅/❌ | [brief note] |
-| Test commands | ✅/❌ | [brief note] |
-| Directory structure | ✅/❌ | [brief note] |
-| Code conventions | ✅/❌ | [brief note] |
-| Patterns to follow | ✅/❌ | [brief note] |
-| Things to avoid | ✅/❌ | [brief note] |
-| Setup instructions | ✅/❌ | [brief note] |
+| Project overview | ✅/❌ | [repo-specific purpose vs generic persona] |
+| Build commands | ✅/❌ | [fenced + manifest-backed vs missing/placeholder] |
+| Test commands | ✅/❌ | [fenced + manifest-backed vs missing/placeholder] |
+| Directory structure | ✅/❌ | [concrete-path boundaries vs full listing the agent could ls] |
+| Code conventions | ✅/❌ | [repo-specific rule vs restated universal convention] |
+| Patterns to follow | ✅/❌ | [real code snippet / concrete path vs generic advice] |
+| Things to avoid | ✅/❌ | [don'ts paired with dos vs absent] |
+| Setup instructions | ✅/❌ | [runnable setup steps vs prose-only/placeholder] |
 
 **Strengths:**
 - [What's done well]
@@ -127,6 +162,8 @@ real files, diff their build/test commands and flag any contradiction as a findi
 - Read and analyze whichever agent file exists (AGENTS.md or AGENTS.md); if both are real files, note any command divergence
 - If neither exists, scan repo for info that SHOULD be in the agent file
 - **DC2 is quality-gated, not presence-only:** a stub (coverage ≪ half) is a ⚠️, not a pass — report the score so prime can offer the *augment* remediation, not a no-op "create"
+- **Stay read-only.** Grade command rows on presence + concreteness + manifest-backing; the actual command EXECUTION (the DC2 execute check that feeds gate G3) is host-side in prime Phase 2, never yours
+- **Length is a review trigger, not a deduction:** >300 lines routes to prune-to-pointers; a long file passing every substance tell keeps its score and earns the prune recommendation
 - Check for staleness — verify up to ~10 referenced paths via `ls`; don't freelance an unbounded audit
 - Note if CONTRIBUTING.md duplicates what should be in the agent file
 - Don't penalize for missing advanced sections in small projects

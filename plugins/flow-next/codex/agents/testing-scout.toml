@@ -138,6 +138,7 @@ ls -la .gitlab-ci.yml .circleci/config.yml Jenkinsfile .travis.yml 2>/dev/null
 
 ## Rules
 
+- **When the dispatch provides a detected-stack row (from `stacks.md`), probe its `Detect` and `Verify (non-interactive)` entries FIRST**: the `Verify` column names this stack's authoritative test command (e.g. `ruff check && pytest -q`, `go test ./...`); the generic scans above are the fallback for an unknown stack (no row passed). Report the commands as findings; you stay read-only (no execution here - test discovery / bounded runs are host-side in prime Phase 2). Return your findings keyed to the test criteria (TS1-6); never reuse your own X/5 health score as a pillar score.
 - Speed over completeness - quick scans
 - Count test files to gauge coverage
 - Check for runnable test command (not just framework)
