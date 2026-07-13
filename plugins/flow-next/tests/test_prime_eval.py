@@ -1965,6 +1965,24 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         ci = self._classify()["substance"]["ci_gate"]
         self.assertTrue(ci["mutating_lint"])
 
+    def test_ruff_format_default_write_is_mutating(self) -> None:
+        # Regression (PR #207 round 26): ruff format writes by default;
+        # --check is its no-write mode.
+        _write(
+            self.repo, ".github/workflows/fmt.yml",
+            "on: [push]\njobs:\n  f:\n    steps:\n      - run: ruff format .\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["mutating_lint"])
+
+    def test_ruff_format_check_not_mutating(self) -> None:
+        _write(
+            self.repo, ".github/workflows/fmt.yml",
+            "on: [push]\njobs:\n  f:\n    steps:\n      - run: ruff format --check .\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertFalse(ci["mutating_lint"])
+
     def test_black_check_mode_not_mutating(self) -> None:
         _write(
             self.repo, ".github/workflows/fmt.yml",

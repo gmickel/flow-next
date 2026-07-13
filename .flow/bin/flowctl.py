@@ -29680,7 +29680,9 @@ def _prime_collect_ci_gate(
         # `--write` step (e.g. a cache updater) false-flags a check-only linter.
         # Formatters that WRITE BY DEFAULT (black/isort without --check/--diff)
         # are mutating with no flag at all.
-        default_write_re = re.compile(r"(?i)\b(black|isort)\b")
+        # ruff format also writes by default (--check/--diff are its no-write
+        # modes), same as black/isort.
+        default_write_re = re.compile(r"(?i)\b(black|isort)\b|\bruff\s+format\b")
         no_write_flag_re = re.compile(r"(?i)--(?:check(?:-only)?|diff)\b")
         for exec_line in exec_text.splitlines():
             if lint_re.search(exec_line) and mutating_re.search(exec_line):
@@ -29984,7 +29986,9 @@ def _prime_collect_type_strictness(
     for cfg in ("mypy.ini", "setup.cfg", "pyproject.toml", "pyrightconfig.json"):
         if (root / cfg).exists():
             c.op()
-            txt = _prime_read_text(root / cfg, cap=200_000)
+            # Cap-detecting read: a strictness flag past the cap must mark the
+            # collector truncated, never silently report as missing.
+            txt = _prime_read_tracked(root, cfg, c, cap=200_000)
             if not txt:
                 continue
             # Scope `strict = true` to the [mypy] / [tool.mypy] section only -
