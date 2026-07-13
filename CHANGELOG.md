@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 2.13.0] - 2026-07-13
 
 ### Changed
 
@@ -17,7 +17,7 @@ All notable changes to the flow-next.
   - **Supporting rewrites** - `pillars.md` (substance pass-conditions, new group tables, single N/A whitelist, and a criterion-to-score map carrying a probe-owner column: emitter / host-inline / scout); four new reference files under the skill (`classification.md`, `playbooks.md`, `stacks.md`, `harness.md`) plus `remediation.md` for the new artifacts (orientation map, home-base kit, encoding guard, compile wrapper, deny-rules baseline, run-and-observe recipe); `claude-md-scout` gains a DC2 substance rubric + stack-row dispatch context. Codex mirror regenerated.
   - **Vocabulary** - `GLOSSARY.md` gains **Operability ladder**, **Hard gate**, **Delivery shape**, and **Classification (prime)** as public terms.
   - **Pending downstream (flow-next.dev, deferred to the maintainer's release walk per amended R14):** a public prime docs-site page reflecting the verdict/classification framing, plus its entries in **both** navigation sources (the `DocsRail.astro`/`site.ts` left rail AND the `astro.config.mjs` Starlight sidebar), and a docs-site changelog entry. In-repo docs keep `skills.md` (+ the SKILL.md and its four references) as the canonical surface; there is deliberately **no** `plugins/flow-next/docs/prime.md` page.
-  - No version bump (batched releases).
+  - **Post-plan hardening via PR review (29 bot-review waves on PR #207)** - the emitter absorbed a long adversarial review cycle: envelope truthfulness (capped reads/scans mark truncated, sampled LOC never ranks stacks), CI-gate honesty (`gated_test_step`/`gated_lint_step` per-workflow conjunction, executable-content-only matching, installer/echo/comment segments excluded, gitlab/bitbucket/azure/CircleCI trigger semantics, default-write formatters count as mutating), security hardening (metacharacter-rejection/argv-only rule in §2.6 pinned by prose-contract tests, build probe captures its own exit status, hook `matched_tokens` whitelist, root-containment + symlink guards on all tracked reads, eval-harness isolation breaches incl. projection tamper/stderr leaks/deleted sentinels), and classification fixes (single-squash source imports are brownfield, lockfile is a corroborator only, workspace-member re-rooting, gitdir-pointer resolution, LOC-weighted stack shares). 187 emitter tests in the CI oracle.
 
 ## [flow-next 2.12.4] - 2026-07-12
 
