@@ -251,6 +251,13 @@ command's **leading token**, and resolve it against tracked files / manifest scr
 (the "resolves" half of G3 - checked for ALL quoted commands). Then **execute 1-2** of the
 quoted, allowlisted-class commands (the DC2 execute check) under the §2.0 policy + worktree guard.
 
+- **Metacharacter rejection (argv-only execution).** An allowlisted leading token licenses ONLY
+ that binary + simple arguments - conceptually argv-only execution. Before running any
+ repo-derived command, REJECT (do not run; record as skipped with the reason) any candidate
+ containing shell chaining, redirection, or substitution constructs beyond the bare argv:
+ `;`, `&&`, `||`, `|`, backticks, `$(`, `>`, `>>`, `<`, `&`, or embedded newlines. A quoted
+ `npm test && curl …` matches the allowlisted starter yet smuggles a chained action - rejection
+ still counts the candidate for the "resolves" half of G3.
 - A CLAUDE.md whose stated test command **fails** is worse than none → feeds G3 ❌ with the error.
 - **Extraction-failure flag (load-bearing).** Zero commands extracted from a file that HAS fenced
  blocks = an **extraction-failure flag**, NEVER a vacuous G3 pass or a stub grade. (Eval: naive

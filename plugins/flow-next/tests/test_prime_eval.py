@@ -384,6 +384,64 @@ class TopologyTestCase(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_monorepo_detected_from_maven_modules(self) -> None:
+        # Regression (PR #207): a root pom.xml <modules> graph IS a workspace -
+        # multi-module Maven repos must not emit monorepo=false.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "mvn"
+            _init_repo(repo)
+            _write(
+                repo, "pom.xml",
+                "<project>\n  <modules>\n    <module>core</module>\n"
+                "    <module>web</module>\n  </modules>\n</project>\n",
+            )
+            _write(repo, "core/pom.xml", "<project/>\n")
+            _commit_all(repo, "seed")
+            mono = self.flowctl._prime_classify(repo)["axes"]["topology"]["monorepo"]
+            self.assertTrue(mono["value"])
+            self.assertIn(
+                "pom.xml <modules> (2 modules, maven-modules)",
+                mono["signals"]["workspace_config"],
+            )
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_monorepo_detected_from_gradle_settings_include(self) -> None:
+        # Regression (PR #207): settings.gradle(.kts) include(...) declarations
+        # are Gradle's workspace graph.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "gradle"
+            _init_repo(repo)
+            _write(
+                repo, "settings.gradle.kts",
+                'rootProject.name = "demo"\ninclude(":app", ":lib")\n',
+            )
+            _write(repo, "app/build.gradle.kts", "plugins {}\n")
+            _commit_all(repo, "seed")
+            mono = self.flowctl._prime_classify(repo)["axes"]["topology"]["monorepo"]
+            self.assertTrue(mono["value"])
+            self.assertIn(
+                "settings.gradle.kts include (2 modules, gradle-modules)",
+                mono["signals"]["workspace_config"],
+            )
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_pom_without_modules_is_not_a_workspace(self) -> None:
+        # A single-module pom.xml (no <modules>) must not flip monorepo.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "single"
+            _init_repo(repo)
+            _write(repo, "pom.xml", "<project>\n  <artifactId>x</artifactId>\n</project>\n")
+            _commit_all(repo, "seed")
+            mono = self.flowctl._prime_classify(repo)["axes"]["topology"]["monorepo"]
+            self.assertFalse(mono["value"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_worktree_sibling_excluded_from_constellation(self) -> None:
         # A sibling whose `.git` is a FILE (gitdir: pointer) resolves to the
         # SAME repo - a worktree, not a constellation sibling (R19 edge case).
@@ -1249,6 +1307,27 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         self.assertIn("gitleaks", sec["tools_found"])
         self.assertIn(".github/workflows/scan.yml", sec["locations"])
 
+    def test_secrets_scanner_in_bitbucket_pipelines_counts(self) -> None:
+        # Regression (PR #207): the secrets-gate CI surface covers every
+        # `_prime_ci_exec_lines`-parseable system - a `script:` gitleaks gate
+        # in bitbucket-pipelines.yml must not yield tools_found=[].
+        _write(
+            self.repo, "bitbucket-pipelines.yml",
+            "pipelines:\n  default:\n    - step:\n        script:\n          - gitleaks detect\n",
+        )
+        sec = self._classify()["substance"]["secrets_gate"]
+        self.assertIn("gitleaks", sec["tools_found"])
+        self.assertIn("bitbucket-pipelines.yml", sec["locations"])
+
+    def test_secrets_scanner_in_azure_pipelines_counts(self) -> None:
+        _write(
+            self.repo, "azure-pipelines.yml",
+            "trigger:\n  - main\nsteps:\n  - script: trufflehog filesystem .\n",
+        )
+        sec = self._classify()["substance"]["secrets_gate"]
+        self.assertIn("trufflehog", sec["tools_found"])
+        self.assertIn("azure-pipelines.yml", sec["locations"])
+
     def test_api_contract_globs_and_http_flag(self) -> None:
         _write(self.repo, "package.json", json.dumps({"dependencies": {"express": "^4"}}))
         _write(self.repo, "api/openapi.yaml", "openapi: 3.0.0\n")
@@ -1678,6 +1757,9 @@ class PrimeProseContractTestCase(unittest.TestCase):
     def _stacks(self, base: Path) -> str:
         return (base / "stacks.md").read_text(encoding="utf-8")
 
+    def _workflow(self, base: Path) -> str:
+        return (base / "workflow.md").read_text(encoding="utf-8")
+
     def _assert_sv4_contract(self, base: Path) -> None:
         text = self._pillars(base)
         # The SV4 feedback-gate rewrite - the layer-agnostic contract.
@@ -1723,6 +1805,23 @@ class PrimeProseContractTestCase(unittest.TestCase):
 
     def test_mirror_stacks_row_schema(self) -> None:
         self._assert_stacks_row_schema(PRIME_MIRROR_DIR)
+
+    def _assert_metachar_rejection(self, base: Path) -> None:
+        # Regression (PR #207, security): §2.6 executes commands quoted in
+        # repo-authored agent files; an allowlisted leading token must never
+        # license chained shell actions. The argv-only rejection rule is
+        # load-bearing and must survive the mirror sync.
+        text = self._workflow(base)
+        self.assertIn("Metacharacter rejection (argv-only execution)", text, base)
+        self.assertIn("REJECT (do not run; record as skipped with the reason)", text, base)
+        for construct in ("`;`", "`&&`", "`||`", "`|`", "`$(`", "`>>`"):
+            self.assertIn(construct, text, f"{base}: missing rejected construct {construct}")
+
+    def test_canonical_metachar_rejection(self) -> None:
+        self._assert_metachar_rejection(PRIME_SKILL_DIR)
+
+    def test_mirror_metachar_rejection(self) -> None:
+        self._assert_metachar_rejection(PRIME_MIRROR_DIR)
 
 
 class AgenticEvalIsolationTestCase(unittest.TestCase):
@@ -1798,6 +1897,22 @@ class AgenticEvalIsolationTestCase(unittest.TestCase):
         iso = self._report()
         self.assertTrue(iso["projection_tampered"])
         self.assertTrue(self.harness._isolation_breached(iso))
+
+    def test_deleted_sentinel_is_a_breach_not_a_crash(self) -> None:
+        # Regression (PR #207 round 3): a backend that DELETES the outside
+        # sentinel used to crash _isolation_report with FileNotFoundError -
+        # it must instead record sentinel_deleted and count as a breach.
+        self.sentinel.unlink()
+        iso = self._report(stdout="{}")
+        self.assertTrue(iso["sentinel_deleted"])
+        self.assertTrue(iso["sentinel_modified"])
+        self.assertTrue(self.harness._isolation_breached(iso))
+        self.assertFalse(iso["clean"])
+
+    def test_intact_sentinel_reports_not_deleted(self) -> None:
+        iso = self._report(stdout="{}")
+        self.assertFalse(iso["sentinel_deleted"])
+        self.assertFalse(iso["sentinel_modified"])
 
 
 if __name__ == "__main__":

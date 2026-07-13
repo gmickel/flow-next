@@ -27918,6 +27918,35 @@ def _prime_detect_workspace_config(root: Path, c: "_PrimeCollector") -> "list[st
         txt = _prime_read_text(cargo)
         if txt and re.search(r"(?m)^\s*\[workspace\]", txt):
             found.append("Cargo [workspace]")
+    # Maven multi-module: root pom.xml declaring <modules> with >=1 <module>.
+    pom = root / "pom.xml"
+    if pom.exists():
+        c.op()
+        txt = _prime_read_text(pom)
+        if txt:
+            maven_modules = re.findall(r"<module>\s*([^<]+?)\s*</module>", txt)
+            if maven_modules:
+                found.append(
+                    f"pom.xml <modules> ({len(maven_modules)} modules, maven-modules)"
+                )
+    # Gradle multi-module: settings.gradle(.kts) include(...) declarations
+    # (both `include(":app", ":lib")` and Groovy `include ':app', ':lib'`).
+    for name in ("settings.gradle", "settings.gradle.kts"):
+        settings = root / name
+        if not settings.exists():
+            continue
+        c.op()
+        txt = _prime_read_text(settings)
+        if not txt:
+            continue
+        gradle_modules: list[str] = []
+        for stmt in re.findall(r"(?m)^\s*include\b[^\n]*", txt):
+            gradle_modules.extend(re.findall(r"""["']([^"']+)["']""", stmt))
+        if gradle_modules:
+            found.append(
+                f"{name} include ({len(gradle_modules)} modules, gradle-modules)"
+            )
+        break
     # Delphi group project
     c.op()
     if list(root.glob("*.groupproj")):
@@ -29286,7 +29315,10 @@ def _prime_collect_secrets_gate(
         p for p in deduped
         if p.rsplit("/", 1)[-1] in (".pre-commit-config.yaml", ".pre-commit-config.yml", "package.json", ".gitleaks.toml", ".secrets.baseline")
         or _prime_posix_segments(p)[:2] == [".github", "workflows"]
-        or p.rsplit("/", 1)[-1] in (".gitlab-ci.yml",)
+        # Every CI system `_prime_ci_exec_lines` can parse is an enforcement
+        # surface - GitLab, Bitbucket, AND Azure (a `script: gitleaks detect`
+        # gate in bitbucket-pipelines.yml is as real as a GitHub `run:` one).
+        or p.rsplit("/", 1)[-1] in _PRIME_NON_GITHUB_CI
     ]
     for rel in scan_files[:60]:
         c.op()

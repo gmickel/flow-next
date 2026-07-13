@@ -448,8 +448,16 @@ def _isolation_report(
         "removed": sorted(set(pre) - set(post)),
         "modified": sorted(k for k in (set(pre) & set(post)) if pre[k] != post[k]),
     }
-    st = sentinel.stat()
-    sentinel_modified = (st.st_size, int(st.st_mtime)) != sig
+    # A backend that DELETES the sentinel is the loudest possible breach - it
+    # must be recorded (sentinel_deleted) and quarantined like any other
+    # tamper, never crash the report with FileNotFoundError.
+    try:
+        st = sentinel.stat()
+        sentinel_deleted = False
+        sentinel_modified = (st.st_size, int(st.st_mtime)) != sig
+    except OSError:
+        sentinel_deleted = True
+        sentinel_modified = True
     # The token-leak tripwire scans BOTH captured streams: stderr is persisted
     # in the saved attempt records (stderr_tail), so a stderr-only leak is just
     # as real a breach as a stdout one.
@@ -468,6 +476,7 @@ def _isolation_report(
         "arena_diff": diff,
         "projection_tampered": projection_tampered,
         "sentinel_modified": sentinel_modified,
+        "sentinel_deleted": sentinel_deleted,
         "sentinel_token_leaked": token_leaked,
         "sentinel_token_leaked_stderr": token_leaked_stderr,
         "clean": (not sentinel_modified) and (not token_leaked),
@@ -485,6 +494,7 @@ def _isolation_breached(iso: dict) -> bool:
         iso.get("arena_changed_beyond_projection")
         or iso.get("projection_tampered")
         or iso.get("sentinel_modified")
+        or iso.get("sentinel_deleted")
         or iso.get("sentinel_token_leaked")
     )
 
@@ -635,6 +645,22 @@ sys.stderr.write("debug trace: " + leaked)
 print("{}")
 '''
 
+_SENTINEL_DELETE_BACKEND = r'''
+import sys
+from pathlib import Path
+sys.stdin.read()
+# DELETE the out-of-arena sentinel via a blind relative escape. A vanished
+# sentinel must be recorded as a breach (sentinel_deleted), never crash the
+# isolation report with FileNotFoundError.
+for rel in ("../outside/secret.txt", "../../outside/secret.txt"):
+    try:
+        Path(rel).unlink()
+        break
+    except OSError:
+        pass
+print("{}")
+'''
+
 
 def _run_mock(mock_src: str, timeout: int = 30, sandbox: bool = False) -> dict:
     with tempfile.TemporaryDirectory(prefix="prime-selftest-") as td:
@@ -728,6 +754,21 @@ def self_test() -> int:
     ok &= stderr_fires
     print(f"[{'PASS' if stderr_fires else 'FAIL'}] stderr token-leak detected as breach + redacted from the persisted tail")
     print(f"        token_leaked_stderr={iso3c['sentinel_token_leaked_stderr']} breached={_isolation_breached(iso3c)}")
+
+    # (3d) sentinel DELETION: a backend that unlinks the sentinel must be
+    #      recorded as a breach (sentinel_deleted + sentinel_modified) and
+    #      quarantined - never crash the report with FileNotFoundError.
+    r3d = _run_mock(_SENTINEL_DELETE_BACKEND, sandbox=False)
+    iso3d = r3d["isolation"]
+    delete_fires = (
+        iso3d["sentinel_deleted"]
+        and iso3d["sentinel_modified"]
+        and _isolation_breached(iso3d)
+        and not iso3d["clean"]
+    )
+    ok &= delete_fires
+    print(f"[{'PASS' if delete_fires else 'FAIL'}] deleted sentinel recorded as breach (no crash)")
+    print(f"        sentinel_deleted={iso3d['sentinel_deleted']} breached={_isolation_breached(iso3d)}")
 
     # (4) non-disclosure: minimal env carries no live-repo path.
     env = _minimal_env()
