@@ -4,7 +4,7 @@ Templates for fixing agent readiness gaps. Focus on what helps agents work effec
 
 **Priority order:**
 1. **Critical**: CLAUDE.md, .env.example, lint/format commands
-2. **High**: Pre-commit hooks, test command, runtime version
+2. **High**: format/lint commit hook (explicit-consent), test command, runtime version
 3. **Medium**: Build scripts, .gitignore entries
 4. **Low/Bonus**: Devcontainer, Docker (nice-to-have, not essential)
 

@@ -27580,6 +27580,10 @@ def _prime_git(
 def _prime_read_text(path: Path, cap: int = _PRIME_MAX_FILE_BYTES) -> Optional[str]:
     """Bounded, defensive text read (never raises; None on any failure)."""
     try:
+        # Containment: a tracked path may be a symlink pointing outside the
+        # tree - skip it (callers handle the None sentinel).
+        if path.is_symlink():
+            return None
         with path.open("r", encoding="utf-8", errors="replace") as fh:
             return fh.read(cap)
     except (OSError, ValueError):
@@ -27739,10 +27743,13 @@ def _prime_collect_lifecycle(root: Path) -> "tuple[dict[str, Any], _PrimeCollect
             break
 
     generator_scaffold = None
-    if (root / "next.config.js").exists() or (root / "next.config.mjs").exists() or (
-        root / "next.config.ts"
-    ).exists():
-        # Only a scaffold fingerprint if the repo is otherwise thin (checked below).
+    if (
+        (root / "next.config.js").exists()
+        or (root / "next.config.mjs").exists()
+        or (root / "next.config.ts").exists()
+    ) and tracked_files < _PRIME_GREENFIELD_FILES:
+        # Only a scaffold fingerprint if the repo is otherwise thin - gate the
+        # emitted value on the same thin-repo check that gates its scoring use.
         generator_scaffold = "create-next-app"
     elif (root / "Cargo.toml").exists() and tracked_files < _PRIME_GREENFIELD_FILES:
         generator_scaffold = "cargo"
@@ -27935,7 +27942,11 @@ def _prime_collect_topology(
     }
 
     # ---- Bit 2: constellation-member ----
-    cc = _PrimeCollector("topology-constellation", budget=40)
+    # Siblings are scanned in ~two bounded passes (op(1+N) tally + shared-org
+    # probe) plus ~20 fixed config/marker probes; the real bound is the sibling
+    # cap counted twice, so size the budget to it (a completed scan → cap_hit
+    # False / complete True on a normal repo).
+    cc = _PrimeCollector("topology-constellation", budget=2 * _PRIME_MAX_SIBLINGS + 50)
     self_dir = top if top is not None else root.resolve()
     parent = self_dir.parent
     sibling_git_dirs_list: list[str] = []
@@ -28083,6 +28094,9 @@ def _prime_collect_topology(
 def _prime_count_lines(root: Path, path: str) -> Optional[int]:
     try:
         fp = root / path
+        # Containment: skip symlinks (may point outside the tree).
+        if fp.is_symlink():
+            return None
         with fp.open("rb") as fh:
             data = fh.read(_PRIME_MAX_FILE_BYTES)
         if not data:
@@ -28267,7 +28281,10 @@ def _prime_tokei_total(out: str) -> int:
 def _prime_collect_stacks(
     root: Path, deduped: "list[str]"
 ) -> "tuple[list[dict[str, Any]], _PrimeCollector]":
-    c = _PrimeCollector("stacks", budget=200)
+    # One op per tracked file (single pass over `deduped`), so the real bound is
+    # the upstream ls-files cap; size the budget to it so a completed scan on a
+    # normal repo reports cap_hit=False / complete=True.
+    c = _PrimeCollector("stacks", budget=_PRIME_MAX_TRACKED_FILES + 200)
 
     # Manifest gating: (manifest-basename, stack, is-glob).
     manifest_rules = [
@@ -28579,7 +28596,10 @@ def _prime_env_declared(root: Path, deduped: "list[str]", c: "_PrimeCollector") 
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            key = line.split("=", 1)[0].strip().lstrip("export ").strip()
+            key = line.split("=", 1)[0].strip()
+            # Strip the literal `export ` prefix, NOT the character set - lstrip
+            # would mangle lowercase keys (token->ken, repo_url->_url).
+            key = key[7:].strip() if key.startswith("export ") else key
             if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
                 declared.add(key)
     return declared
@@ -28773,7 +28793,8 @@ def _prime_collect_atomic_pairs(
     deduped: "list[str]"
 ) -> "tuple[dict[str, Any], _PrimeCollector]":
     """LEG6: designer/generator atomic-pair CANDIDATES from the tracked list."""
-    c = _PrimeCollector("substance-atomic-pairs", budget=200)
+    # One op per tracked file; bound is the upstream ls-files cap, not 200.
+    c = _PrimeCollector("substance-atomic-pairs", budget=_PRIME_MAX_TRACKED_FILES + 200)
     tracked = set(deduped)
     pairs: list[dict[str, Any]] = []
 
@@ -28820,7 +28841,8 @@ def _prime_collect_tool_managed(
     deduped: "list[str]", destructive: "dict[str, Any]"
 ) -> "tuple[dict[str, Any], _PrimeCollector]":
     """LEG7: tool-managed / regenerated-dir never-edit CANDIDATES (raw)."""
-    c = _PrimeCollector("substance-tool-managed", budget=200)
+    # One op per tracked file; bound is the upstream ls-files cap, not 200.
+    c = _PrimeCollector("substance-tool-managed", budget=_PRIME_MAX_TRACKED_FILES + 200)
     suffixes = (".suo", ".dproj", ".dsk", ".identcache", ".user", ".ncb", ".sln.docstates")
     opaque_dirs = frozenset({"__history", "__recovery"})
     tool_files: list[str] = []
@@ -28963,7 +28985,8 @@ def _prime_collect_api_contract(
     deduped: "list[str]", framework_markers: "list[str]"
 ) -> "tuple[dict[str, Any], _PrimeCollector]":
     """FH6: API-contract file globs; http_framework flag from shape markers."""
-    c = _PrimeCollector("substance-api-contract", budget=100)
+    # One op per tracked file; bound is the upstream ls-files cap, not 100.
+    c = _PrimeCollector("substance-api-contract", budget=_PRIME_MAX_TRACKED_FILES + 200)
     contract_re = re.compile(
         r"(?i)(^|/)(openapi|swagger)\.(ya?ml|json)$|\.(graphql|gql|proto)$|(^|/)schema\.graphql$"
     )
@@ -29159,6 +29182,10 @@ def _prime_collect_coverage_threshold(
             val = next((g for g in (m.group(2), m.group(3), m.group(4)) if g), None)
             if val is not None:
                 zero_only = (int(val) == 0) if zero_only in (None, True) else False
+    # A keyword-only match (e.g. `coverageThreshold` with no parsed number) means
+    # a threshold is configured but not zero-only - report False, never null.
+    if found_in and zero_only is None:
+        zero_only = False
     return (
         {"threshold_found": bool(found_in), "locations": found_in, "zero_threshold": zero_only},
         c,
@@ -29465,7 +29492,23 @@ def cmd_prime_classify(args: argparse.Namespace) -> None:
     root_arg = getattr(args, "root", None) or "."
     root = Path(root_arg)
     if not root.exists() or not root.is_dir():
-        error_exit(f"root path not found or not a directory: {root_arg}", use_json=use_json)
+        if use_json:
+            # Align the bad-root branch with the classify-exception branch: exit 0
+            # with the schema_version/error/collectors shape so the skill's
+            # judgment layer reads a consistent envelope, not a divergent exit-1.
+            print(
+                json.dumps(
+                    {
+                        "schema_version": PRIME_SCHEMA_VERSION,
+                        "error": f"root path not found or not a directory: {root_arg}",
+                        "collectors": [],
+                    },
+                    indent=2,
+                    default=str,
+                )
+            )
+            return
+        error_exit(f"root path not found or not a directory: {root_arg}", use_json=False)
         return
 
     try:

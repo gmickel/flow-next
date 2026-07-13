@@ -175,7 +175,7 @@ Read [workflow.md](workflow.md) and execute each phase in order.
 
 ### `--fix-all` boundaries (resolutions 5/6)
 
-`--fix-all` auto-applies ONLY the in-`ROOT` Pillars 1-5 fixes at the Critical/High/Medium tier (the ranked catalog carries the tier column - see [playbooks.md](playbooks.md)). It NEVER waives consent for:
+`--fix-all` auto-applies ONLY **in-`ROOT`, non-structural, non-harness** fixes at the Critical/High/Medium tier - the in-root Pillars 1-5 fixes PLUS scored-group agent-file content whose catalog row is marked `--fix-all`-eligible in its consent column (the ranked catalog carries the tier AND consent columns and **is authoritative** on which scored-group items qualify - see [playbooks.md](playbooks.md)). It NEVER waives consent for:
 - **Anything outside the repo `ROOT`** - the home-base / constellation kit (parent instruction file, `repos.yaml`, run-everything scripts) is always explicit-consent-only.
 - **Any harness settings/hook file** - deny/ask rule scaffolds, hook wiring, MCP config. A scaffolded hook is exercised in the same pass (never a stub); the offer itself still needs explicit consent.
 - **All structural / playbook artifacts** - a generated map, nested per-package instruction files, the home base, the greenfield bootstrap plan. Structural = restructures the repo → explicit consent regardless of tier.

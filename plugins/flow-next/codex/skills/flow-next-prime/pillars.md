@@ -5,7 +5,7 @@ Eight pillars for comprehensive codebase assessment. Pillars 1-5 measure **agent
 **Substance, not existence.** Pass conditions grade what a criterion actually delivers - executed evidence (bounded) over parsed config, cross-referenced against the code over read in isolation. Every substance verdict quotes its evidence (a file line or command output); a criterion with no evidence is NOT ASSESSED, never guessed (fabrication guard). A stub artifact that would previously pass now scores ❌/⚠️ with the stub named.
 
 **Three scoring layers:**
-1. **The maturity level** = average of Pillars 1-5 scores ONLY (Pillars 6-8 are report-only). The 48 legacy criteria are the stable level denominator for cross-repo comparability - never diluted by the new groups.
+1. **The maturity level** = average of Pillars 1-5 scores ONLY (Pillars 6-8 are report-only). The legacy Pillars 1-5 criteria are the stable level denominator for cross-repo comparability; the full 48 legacy set is never diluted by the new groups.
 2. **Agent-readiness tier GROUPS** (AO, DR, TO, HP scored-core, the scored gap-diff FH criteria) are scored and fix-offered but **EXCLUDED from the maturity-level formula** (resolution 1). They report as group pass-count lines and feed the verdict headline + ranked actions, never the level.
 3. **Report-only / informational** rows (Pillars 6-8, DT, HP-informational, FH report-only, gh-CLI) are surfaced but never scored.
 

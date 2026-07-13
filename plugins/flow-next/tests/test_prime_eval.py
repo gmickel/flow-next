@@ -654,6 +654,17 @@ class SubstanceEnvCrossrefTestCase(_SubstanceBase):
         self.assertIn("PY_VAR", env["undeclared_vars"])
         self.assertIn("GO_VAR", env["undeclared_vars"])
 
+    def test_lowercase_declared_vars_unmangled(self) -> None:
+        # Regression: a char-set `lstrip("export ")` mangled lowercase keys
+        # (token->ken, repo_url->_url). The literal-prefix strip keeps them whole,
+        # including on a line that actually carries the `export ` prefix.
+        _write(self.repo, ".env.example", "token=abc\nexport repo_url=x\n")
+        env = self._classify()["substance"]["env_crossref"]
+        self.assertIn("token", env["declared_vars"])
+        self.assertIn("repo_url", env["declared_vars"])
+        self.assertNotIn("ken", env["declared_vars"])
+        self.assertNotIn("_url", env["declared_vars"])
+
 
 class SubstanceDestructiveTestCase(_SubstanceBase):
     def test_context_classes_are_raw_never_severity(self) -> None:
@@ -911,6 +922,28 @@ class PerformanceAccountingTestCase(_SubstanceBase):
             subs["substance-large-files"]["operations"],
             self.flowctl._PRIME_MAX_LOC_FILES + 50,
         )
+
+    def test_medium_scan_bounded_collectors_report_complete(self) -> None:
+        # A completed bounded scan on a normal-sized repo must NOT trip cap_hit /
+        # complete=False on the collectors whose budgets are sized to the
+        # upstream ls-files / sibling caps. (Regression: these budgets were
+        # previously undersized at 40-200 ops, producing spurious cap_hit +
+        # degraded confidence on ordinary repos.)
+        for i in range(1200):  # a medium fixture, well under the ls-files cap
+            _write(self.repo, f"pkg/f{i}.py", f"v{i} = {i}\n")
+        _write(self.repo, "package.json", '{"name":"x"}\n')  # a manifest for stacks
+        payload = self._classify()
+        cols = {c["name"]: c for c in payload["collectors"]}
+        for name in (
+            "stacks",
+            "substance-api-contract",
+            "substance-atomic-pairs",
+            "substance-tool-managed",
+            "topology-constellation",
+        ):
+            self.assertIn(name, cols, name)
+            self.assertFalse(cols[name]["cap_hit"], f"{name} cap_hit")
+            self.assertTrue(cols[name]["complete"], f"{name} complete")
 
     def test_sampling_flag_set_when_read_cap_hit(self) -> None:
         # Force the cap low to prove sampling is recorded (progress/partial
