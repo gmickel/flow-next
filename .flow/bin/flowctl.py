@@ -27963,6 +27963,11 @@ def _prime_collect_lifecycle(
     # only when another brownfield signal already exists - never alone.
     if lockfile and brown > 0:
         brown += 1
+    # Real domain source is brownfield by default (contract): a single-squash
+    # source IMPORT (one commit, hundreds of tracked files) is legacy code,
+    # not a fresh scaffold - it must not ride the greenfield bootstrap path.
+    if tracked_files >= _PRIME_GREENFIELD_FILES * 4:
+        brown += 1
     if generator_scaffold is not None and tracked_files < _PRIME_GREENFIELD_FILES:
         green += 1
 
@@ -29431,9 +29436,12 @@ def _prime_ci_triggers(text: str) -> "set[str]":
         inline = m.group(2).split("#", 1)[0].strip()
         if inline:
             # Inline scalar (`on: push`) or flow-list (`on: [push, ...]`).
-            for tok in ("push", "pull_request"):
-                if re.search(r"\b" + tok + r"\b", inline):
-                    found.add(tok)
+            # pull_request_target is GitHub's PR-event family too - normalize
+            # it to the pull_request trigger token.
+            if re.search(r"\bpush\b", inline):
+                found.add("push")
+            if re.search(r"\bpull_request(?:_target)?\b", inline):
+                found.add("pull_request")
             continue
         # Block form: scan only lines indented deeper than the `on:` key;
         # the first non-blank line at <= its indent ends the block.
@@ -29444,12 +29452,12 @@ def _prime_ci_triggers(text: str) -> "set[str]":
                 if indent <= on_indent:
                     break
                 body = line.strip()
-                km = re.match(r"(?i)^(pull_request|push)\s*:", body)
+                km = re.match(r"(?i)^(pull_request(?:_target)?|push)\s*:", body)
                 if km:
-                    found.add(km.group(1).lower())
-                sm = re.match(r"(?i)^-\s*(pull_request|push)\b", body)
+                    found.add("pull_request" if km.group(1).lower().startswith("pull_request") else "push")
+                sm = re.match(r"(?i)^-\s*(pull_request(?:_target)?|push)\b", body)
                 if sm:
-                    found.add(sm.group(1).lower())
+                    found.add("pull_request" if sm.group(1).lower().startswith("pull_request") else "push")
             idx += 1
     return found
 

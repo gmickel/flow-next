@@ -438,6 +438,22 @@ class LifecycleTestCase(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_single_commit_source_import_is_not_greenfield(self) -> None:
+        # Regression (PR #207 round 25): a single-squash import of real domain
+        # source (one commit, hundreds of files) is legacy code by contract,
+        # never the greenfield bootstrap path.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "imported"
+            _init_repo(repo)
+            for i in range(150):
+                _write(repo, f"src/m{i:03d}.py", f"x = {i}\n")
+            _commit_all(repo, "import legacy code")
+            life = self.flowctl._prime_classify(repo)["axes"]["lifecycle"]
+            self.assertNotEqual(life["value"], "greenfield")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_lockfile_alone_does_not_demote_greenfield(self) -> None:
         # Regression (PR #207 round 21): scaffolds commit a lockfile on the
         # first commit - a lockfile is a corroborator, never brownfield
@@ -1585,6 +1601,18 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         self.assertTrue(ci["has_gate_trigger"])
         self.assertIn("push", ci["triggers"])
         self.assertIn("pull_request", ci["triggers"])
+
+    def test_pull_request_target_counts_as_pr_gate(self) -> None:
+        # Regression (PR #207 round 25): pull_request_target is GitHub's
+        # PR-event family - it gates PRs and normalizes to pull_request.
+        _write(
+            self.repo, ".github/workflows/pr.yml",
+            "on: pull_request_target\njobs:\n  t:\n    steps:\n      - run: pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_gate_trigger"])
+        self.assertIn("pull_request", ci["triggers"])
+        self.assertTrue(ci["gated_test_step"])
 
     def test_ci_trigger_tokens_outside_on_block_ignored(self) -> None:
         # Regression: `- push` list items / `push:` keys OUTSIDE the `on:`
