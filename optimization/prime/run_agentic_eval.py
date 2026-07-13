@@ -406,16 +406,18 @@ def _prepare_arena(base: Path, projection: dict) -> Path:
     return arena
 
 
-def _plant_sentinel(base: Path) -> tuple[Path, str, tuple]:
+def _plant_sentinel(base: Path) -> tuple[Path, str, str]:
     """A sentinel in a SEPARATE temp tree (NOT a parent of the arena). Its path
-    is never written into the prompt or env. Returns (path, token, stat-sig)."""
+    is never written into the prompt or env. Returns (path, token, sha256-sig):
+    a content hash, not coarse stat data - a same-length same-second overwrite
+    must still trip the sentinel_modified tripwire (same rigor as the
+    projection.json hash)."""
     outside = base / "outside"
     outside.mkdir()
     token = "SENTINEL-" + os.urandom(8).hex()
     sfile = outside / "secret.txt"
     sfile.write_text(token + "\n", encoding="utf-8")
-    st = sfile.stat()
-    return sfile, token, (st.st_size, int(st.st_mtime))
+    return sfile, token, hashlib.sha256(sfile.read_bytes()).hexdigest()
 
 
 def _projection_hash(arena: Path) -> Optional[str]:
@@ -436,7 +438,7 @@ def _isolation_report(
     pre: dict,
     sentinel: Path,
     token: str,
-    sig: tuple,
+    sig: str,
     stdout: str,
     projection_hash: Optional[str] = None,
     stderr: str = "",
@@ -452,9 +454,8 @@ def _isolation_report(
     # must be recorded (sentinel_deleted) and quarantined like any other
     # tamper, never crash the report with FileNotFoundError.
     try:
-        st = sentinel.stat()
         sentinel_deleted = False
-        sentinel_modified = (st.st_size, int(st.st_mtime)) != sig
+        sentinel_modified = hashlib.sha256(sentinel.read_bytes()).hexdigest() != sig
     except OSError:
         sentinel_deleted = True
         sentinel_modified = True
@@ -556,8 +557,14 @@ def run_fixture(family: str, backend: str, model: str, expectations: dict, timeo
                 breached_any = True
                 parsed = None
                 continue
+            if timed_out:
+                # A timed-out backend never completed its judgment: its
+                # captured stdout is NOT trusted even when it parses, so a
+                # hang after printing valid JSON can never be scored.
+                parsed = None
+                continue
             parsed = attempt_parsed
-            if parsed is not None and not timed_out:
+            if parsed is not None:
                 break
 
     if parsed is None:

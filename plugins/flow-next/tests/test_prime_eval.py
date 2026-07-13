@@ -1277,6 +1277,26 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         self.assertEqual(sec["tools_found"], [])
         self.assertEqual(sec["locations"], [])
 
+    def test_secrets_scanner_in_precommit_comment_is_not_enforcement(self) -> None:
+        # Regression (PR #207 round 4): a scanner named only in a comment line
+        # of .pre-commit-config.yaml is not an enforced hook.
+        _write(
+            self.repo, ".pre-commit-config.yaml",
+            "repos: []\n# TODO: add gitleaks later\n",
+        )
+        sec = self._classify()["substance"]["secrets_gate"]
+        self.assertEqual(sec["tools_found"], [])
+        self.assertEqual(sec["locations"], [])
+
+    def test_secrets_scanner_in_precommit_hook_still_counts(self) -> None:
+        _write(
+            self.repo, ".pre-commit-config.yaml",
+            "repos:\n  - repo: https://github.com/gitleaks/gitleaks\n"
+            "    hooks:\n      - id: gitleaks\n",
+        )
+        sec = self._classify()["substance"]["secrets_gate"]
+        self.assertIn("gitleaks", sec["tools_found"])
+
     def test_secrets_scanner_in_package_scripts_counts(self) -> None:
         _write(
             self.repo, "package.json",
@@ -1913,6 +1933,55 @@ class AgenticEvalIsolationTestCase(unittest.TestCase):
         iso = self._report(stdout="{}")
         self.assertFalse(iso["sentinel_deleted"])
         self.assertFalse(iso["sentinel_modified"])
+
+    def test_same_length_sentinel_overwrite_is_a_breach(self) -> None:
+        # Regression (PR #207 round 4): the sentinel signature is a content
+        # hash, not (size, int(mtime)) - a same-length overwrite within the
+        # same second must still trip sentinel_modified.
+        original = self.sentinel.read_text(encoding="utf-8")
+        forged = ("X" * (len(original) - 1)) + "\n"
+        self.assertEqual(len(forged), len(original))
+        self.sentinel.write_text(forged, encoding="utf-8")
+        iso = self._report()
+        self.assertTrue(iso["sentinel_modified"])
+        self.assertFalse(iso["sentinel_deleted"])
+        self.assertTrue(self.harness._isolation_breached(iso))
+
+    def test_timed_out_parseable_output_never_scored(self) -> None:
+        # Regression (PR #207 round 4): a backend that prints valid JSON then
+        # hangs (timed_out=True) must never be scored - even when every
+        # attempt returns parseable output.
+        fam = "timeouttest"
+        fixtures = self.tmp / "fixtures"
+        fixtures.mkdir()
+        (fixtures / f"{fam}.json").write_text(
+            json.dumps({"family": fam, "emitter": {}, "file_listing": []}),
+            encoding="utf-8",
+        )
+        saved = (
+            self.harness.FIXTURES_DIR,
+            self.harness._backend_cmd,
+            self.harness._run_backend,
+        )
+        try:
+            self.harness.FIXTURES_DIR = fixtures
+            self.harness._backend_cmd = lambda backend, model, schema_path: ["true"]
+            self.harness._run_backend = (
+                lambda cmd, prompt, arena, timeout, protect_dir=None: (
+                    124, '{"classification": {}}', "", True, False
+                )
+            )
+            res = self.harness.run_fixture(fam, "mock", "m", {"rows": {fam: {}}}, timeout=1)
+        finally:
+            (
+                self.harness.FIXTURES_DIR,
+                self.harness._backend_cmd,
+                self.harness._run_backend,
+            ) = saved
+        self.assertNotEqual(res["status"], "scored")
+        self.assertIsNone(res["score"])
+        self.assertTrue(res["attempts"])
+        self.assertTrue(all(a["timed_out"] for a in res["attempts"]))
 
 
 if __name__ == "__main__":

@@ -29344,7 +29344,12 @@ def _prime_collect_secrets_gate(
             # CI files: executable lines only (consistent with the FH3 scoping).
             scan_text = "\n".join(_prime_ci_exec_lines(base, txt))
         else:
-            scan_text = txt
+            # Pre-commit configs: strip comment lines first - a scanner named
+            # only in a `# TODO: add gitleaks later` comment is not an
+            # enforced hook and must not land in tools_found.
+            scan_text = "\n".join(
+                ln for ln in txt.splitlines() if not ln.lstrip().startswith("#")
+            )
         found = {m.group(1).lower() for m in tool_re.finditer(scan_text)}
         if found:
             tools |= found
