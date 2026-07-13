@@ -1261,6 +1261,18 @@ class SubstanceEnvCrossrefTestCase(_SubstanceBase):
 
 
 class SubstanceDestructiveTestCase(_SubstanceBase):
+    def test_echo_prefixed_wipe_still_classified(self) -> None:
+        # Regression (PR #207 round 19): `echo cleaning && <wipe> /` is a real
+        # unbounded wipe - the echo prefix must not launder it into
+        # string-literal (which the skill drops).
+        _write(
+            self.repo, "scripts/clean.sh",
+            "#!/bin/sh\necho cleaning && rm -rf /\n",
+        )
+        hits = self._classify()["substance"]["destructive_scan"]["hits"]
+        wipe = next(h for h in hits if h["pattern"] == "recursive-delete")
+        self.assertEqual(wipe["context_class"], "unbounded")
+
     def test_parent_relative_delete_is_unbounded(self) -> None:
         # Regression (PR #207 round 9): `rm -rf ../sibling` escapes the repo -
         # never self-managed, never a regenerated-dir sizing exclusion.
@@ -1771,6 +1783,40 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         ci = self._classify()["substance"]["ci_gate"]
         self.assertTrue(ci["has_lint_step"])
         self.assertFalse(ci["mutating_lint"])
+
+    def test_black_default_write_is_mutating(self) -> None:
+        # Regression (PR #207 round 19): black writes by default - no
+        # --fix/--write flag needed to mutate the checkout; --check is clean.
+        _write(
+            self.repo, ".github/workflows/fmt.yml",
+            "on: [push]\njobs:\n  f:\n    steps:\n      - run: black .\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["mutating_lint"])
+
+    def test_black_check_mode_not_mutating(self) -> None:
+        _write(
+            self.repo, ".github/workflows/fmt.yml",
+            "on: [push]\njobs:\n  f:\n    steps:\n      - run: black --check .\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertFalse(ci["mutating_lint"])
+
+    def test_azure_nested_resource_trigger_none_still_gated(self) -> None:
+        # Regression (PR #207 round 19): a nested pipeline-resource
+        # `trigger: none` is not the top-level CI trigger.
+        _write(
+            self.repo, "azure-pipelines.yml",
+            "resources:\n"
+            "  pipelines:\n"
+            "    - pipeline: upstream\n"
+            "      trigger: none\n"
+            "steps:\n"
+            "  - script: pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_gate_trigger"])
+        self.assertIn("push", ci["triggers"])
 
     def test_mutating_lint_same_line_still_flagged(self) -> None:
         _write(

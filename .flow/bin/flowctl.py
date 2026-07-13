@@ -29066,30 +29066,43 @@ def _prime_collect_destructive(
     hits: list[dict[str, Any]] = []
     for path, text in _prime_scan_scripts(root, deduped, c):
         for line in text.splitlines():
-            for label, pat in _PRIME_DESTRUCTIVE_PATTERNS:
-                m = pat.search(line)
-                if not m:
-                    continue
-                # Extract a target token following the match for context class.
-                tail = line[m.end():].strip()
-                target = tail.split()[0] if tail and not tail.startswith("-") else (
-                    tail.split()[1] if len(tail.split()) > 1 else ""
-                )
-                # Strip surrounding quotes so a parameterized target like
-                # "$BUILD_DIR" or '"${TARGET}"' classifies into the
-                # variable/unbounded tier instead of downgrading to
-                # self-managed on the leading quote character.
-                target = target.strip("'\"")
-                hits.append(
-                    {
-                        "file": path,
-                        "pattern": label,
-                        "context_class": _prime_destructive_context(line, target),
-                        "target": target[:80],
-                    }
-                )
+            # Classify by the SEGMENT containing the match, not the whole
+            # line: `echo cleaning && rm -rf /` is a logged label followed by
+            # a REAL wipe - the echo prefix must not launder it into
+            # string-literal (which the skill drops).
+            comment_prefix = line.strip().startswith(("#", "//", "*"))
+            for seg in re.split(r"&&|\|\||;", line):
+                for label, pat in _PRIME_DESTRUCTIVE_PATTERNS:
+                    m = pat.search(seg)
+                    if not m:
+                        continue
+                    # Extract a target token following the match for context class.
+                    tail = seg[m.end():].strip()
+                    target = tail.split()[0] if tail and not tail.startswith("-") else (
+                        tail.split()[1] if len(tail.split()) > 1 else ""
+                    )
+                    # Strip surrounding quotes so a parameterized target like
+                    # "$BUILD_DIR" or '"${TARGET}"' classifies into the
+                    # variable/unbounded tier instead of downgrading to
+                    # self-managed on the leading quote character.
+                    target = target.strip("'\"")
+                    ctx = (
+                        "comment"
+                        if comment_prefix
+                        else _prime_destructive_context(seg, target)
+                    )
+                    hits.append(
+                        {
+                            "file": path,
+                            "pattern": label,
+                            "context_class": ctx,
+                            "target": target[:80],
+                        }
+                    )
+                    if len(hits) >= 200:
+                        c.note_truncated()
+                        break
                 if len(hits) >= 200:
-                    c.note_truncated()
                     break
             if len(hits) >= 200:
                 break
@@ -29403,7 +29416,9 @@ def _prime_ci_triggers_non_github(basename: str, text: str) -> "set[str]":
         return found
     if basename == "azure-pipelines.yml":
         found_az: set[str] = set()
-        if not re.search(r"(?m)^\s*trigger\s*:\s*none\s*(?:#.*)?$", text):
+        # Top-level `trigger:` only - a nested pipeline-resource
+        # `resources: ... trigger: none` must not suppress the CI push gate.
+        if not re.search(r"(?m)^trigger\s*:\s*none\s*(?:#.*)?$", text):
             found_az.add("push")
         # A top-level `pr:` key (not `pr: none`) is Azure's PR trigger - a
         # trigger:none + pr:... file is a valid PR-only gate.
@@ -29547,8 +29562,15 @@ def _prime_collect_ci_gate(
         # Mutating-lint is a PER-LINE property: the --fix/--write flag must sit
         # on the SAME executable line as the lint command, or an unrelated
         # `--write` step (e.g. a cache updater) false-flags a check-only linter.
+        # Formatters that WRITE BY DEFAULT (black/isort without --check/--diff)
+        # are mutating with no flag at all.
+        default_write_re = re.compile(r"(?i)\b(black|isort)\b")
+        no_write_flag_re = re.compile(r"(?i)--(?:check(?:-only)?|diff)\b")
         for exec_line in exec_text.splitlines():
             if lint_re.search(exec_line) and mutating_re.search(exec_line):
+                mutating_lint = True
+                break
+            if default_write_re.search(exec_line) and not no_write_flag_re.search(exec_line):
                 mutating_lint = True
                 break
     return (
