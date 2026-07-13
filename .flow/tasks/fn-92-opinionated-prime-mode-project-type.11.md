@@ -21,9 +21,8 @@ Non-CI agentic eval harness: judgment-layer classification eval with rubric + pr
 - [ ] Real-repo expectations run from committed sanitized snapshots, not live paths
 
 ## Done summary
-TBD
-
+Non-CI agentic eval harness at optimization/prime/: run_agentic_eval.py (pure stdlib) with the pinned protocol - claude -p headless runner with codex exec fallback and skip-with-note when neither is available; prompt assembled from classification.md judgment rules + emitter JSON + bounded fixture listing; enforced isolation (temp cwd with copied projections, sandbox flags, no network, minimal env, timeout + process-tree kill, post-run fs-diff assertion, malicious-fixture sentinel test); JSON-schema structured output (five axes + confidence + would-ask + playbook); retries(1); deterministic scorer vs expectations.json; results with model/version/effort provenance. gen_fixtures.py builds the six families; README documents runner/rubric/blocking threshold/provenance and the task-9 command. Non-CI by design - unittest suite untouched and green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 03f3ea58aff6183890ec37d9d6c1c87f9a325d9a
+- Tests: python3 -m unittest discover plugins/flow-next/tests (OK, exit 0 - harness is non-CI, suite unaware)
 - PRs:
