@@ -1784,6 +1784,45 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         self.assertTrue(ci["has_lint_step"])
         self.assertFalse(ci["mutating_lint"])
 
+    def test_gated_flags_require_same_workflow_conjunction(self) -> None:
+        # Regression (PR #207 round 20): a dispatch-only test workflow next to
+        # a push-gated deploy workflow is NOT a test gate - gated_* requires
+        # trigger AND step in the SAME file.
+        _write(
+            self.repo, ".github/workflows/deploy.yml",
+            "on: [push]\njobs:\n  d:\n    steps:\n      - run: ./deploy.sh\n",
+        )
+        _write(
+            self.repo, ".github/workflows/manual-tests.yml",
+            "on:\n  workflow_dispatch:\njobs:\n  t:\n    steps:\n      - run: pytest && eslint .\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_gate_trigger"])
+        self.assertTrue(ci["has_test_step"])
+        self.assertFalse(ci["gated_test_step"])
+        self.assertFalse(ci["gated_lint_step"])
+
+    def test_gated_flags_true_when_same_workflow(self) -> None:
+        _write(
+            self.repo, ".github/workflows/ci.yml",
+            "on: [push]\njobs:\n  t:\n    steps:\n      - run: pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["gated_test_step"])
+
+    def test_force_push_and_db_drop_not_self_managed(self) -> None:
+        # Regression (PR #207 round 20): non-filesystem destructive ops have
+        # no repo-relative target - they must not launder into self-managed.
+        _write(
+            self.repo, "scripts/danger.sh",
+            "#!/bin/sh\ngit push --force origin main\n"
+            'psql -c "DROP TABLE users"\n',
+        )
+        hits = self._classify()["substance"]["destructive_scan"]["hits"]
+        for pat in ("force-push", "db-drop"):
+            h = next(x for x in hits if x["pattern"] == pat)
+            self.assertEqual(h["context_class"], "unbounded", pat)
+
     def test_black_default_write_is_mutating(self) -> None:
         # Regression (PR #207 round 19): black writes by default - no
         # --fix/--write flag needed to mutate the checkout; --check is clean.

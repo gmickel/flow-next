@@ -29091,6 +29091,15 @@ def _prime_collect_destructive(
                         if comment_prefix
                         else _prime_destructive_context(seg, target)
                     )
+                    # Non-filesystem destructive ops (remote force-push, DB
+                    # drop/truncate) have no repo-relative target dir - the
+                    # path classifier would launder them into self-managed and
+                    # Phase 3 would downgrade them to informational. They stay
+                    # high-risk unless they are prose (comment/string-literal).
+                    if label in ("force-push", "db-drop", "truncate") and ctx in (
+                        "self-managed", "bounded"
+                    ):
+                        ctx = "unbounded"
                     hits.append(
                         {
                             "file": path,
@@ -29533,6 +29542,7 @@ def _prime_collect_ci_gate(
     lint_re = re.compile(r"(?i)\b(eslint|biome|oxlint|ruff|flake8|golangci-lint|clippy|black|prettier|rubocop|\blint\b)")
     mutating_re = re.compile(r"(?i)(--fix|--write|format:write|ruff\s+.*--fix|eslint\s+.*--fix|biome\s+(?:check\s+)?.*--(?:write|apply))")
     has_test = has_lint = has_trigger = mutating_lint = False
+    gated_test = gated_lint = False
     triggers: set[str] = set()
     files: list[str] = []
     for path, text in workflows:
@@ -29547,10 +29557,10 @@ def _prime_collect_ci_gate(
         exec_text = "\n".join(
             _prime_strip_prose_segments(_prime_ci_exec_lines(base, text))
         )
-        if test_re.search(exec_text):
-            has_test = True
-        if lint_re.search(exec_text):
-            has_lint = True
+        file_test = bool(test_re.search(exec_text))
+        file_lint = bool(lint_re.search(exec_text))
+        has_test = has_test or file_test
+        has_lint = has_lint or file_lint
         if base in _PRIME_NON_GITHUB_CI or base == _PRIME_CIRCLECI:
             # Route by filename: never force GitHub `on:` parsing on other CI systems.
             file_triggers = _prime_ci_triggers_non_github(base, text)
@@ -29559,6 +29569,12 @@ def _prime_collect_ci_gate(
         if file_triggers:
             triggers |= file_triggers
             has_trigger = True
+            # PER-WORKFLOW conjunction: "CI actually gates" means the SAME
+            # workflow that has a push/PR trigger runs the test/lint step - a
+            # dispatch-only test workflow next to a gated deploy workflow is
+            # not a gate.
+            gated_test = gated_test or file_test
+            gated_lint = gated_lint or file_lint
         # Mutating-lint is a PER-LINE property: the --fix/--write flag must sit
         # on the SAME executable line as the lint command, or an unrelated
         # `--write` step (e.g. a cache updater) false-flags a check-only linter.
@@ -29579,6 +29595,11 @@ def _prime_collect_ci_gate(
             "has_test_step": has_test,
             "has_lint_step": has_lint,
             "has_gate_trigger": has_trigger,
+            # Per-workflow conjunction: the SAME workflow carries the trigger
+            # AND the step. These are the load-bearing FH3 signals; the plain
+            # booleans above are whole-repo aggregates.
+            "gated_test_step": gated_test,
+            "gated_lint_step": gated_lint,
             "triggers": sorted(triggers),
             "mutating_lint": mutating_lint,
         },
@@ -30130,7 +30151,12 @@ def _prime_collect_hooks(
             m = pat.search(text)
             classes[label] = bool(m)
             if m:
-                tokens.add((m.group(1) if m.groups() and m.group(1) else m.group(0))[:24])
+                # Redaction boundary: only a whitelisted KEYWORD group is ever
+                # emitted; a group-less match (URL scheme, obfuscation shape)
+                # emits the class label - never raw matched content from a
+                # (possibly local, untracked) hook config.
+                kw = m.group(1) if m.groups() and m.group(1) else None
+                tokens.add(kw[:24] if kw else label)
         stripped = re.sub(r"\s+", "", text)
         is_stub = (not stripped) or bool(re.fullmatch(r"(?:echo[^\n]*)+", text.strip()))
         results.append(
