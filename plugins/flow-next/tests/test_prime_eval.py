@@ -257,6 +257,20 @@ class BlobDedupTestCase(unittest.TestCase):
         # 3 tracked files, 1 is a content duplicate → 2 unique.
         self.assertEqual(size["files"], 2)
 
+    def test_regenerated_dirs_excluded_from_sizing(self) -> None:
+        # Regression (PR #207 round 8): a tracked script wiping a repo-internal
+        # dir marks it generated output - those files must not count toward
+        # size/band, per the classification contract's `regenerated` exclusion.
+        _write(self.repo, "scripts/gen.sh", "#!/bin/sh\nrm -rf generated\nmake gen\n")
+        _write(self.repo, "generated/big.js", "// gen\n" + ("x();\n" * 500))
+        _write(self.repo, "src/app.py", "x = 1\n")
+        _commit_all(self.repo, "seed")
+        size = self.flowctl._prime_classify(self.repo)["axes"]["size"]
+        self.assertIn("regenerated", size["exclusions_applied"])
+        # scripts/gen.sh + src/app.py only - generated/ never counted.
+        self.assertEqual(size["files"], 2)
+        self.assertLess(size["loc"], 100)
+
     def test_staged_parse_returns_blob_and_path_no_read(self) -> None:
         _write(self.repo, "x.py", "y = 2\n")
         _commit_all(self.repo, "seed")
@@ -469,6 +483,50 @@ class TopologyTestCase(unittest.TestCase):
             self.assertEqual(len(markers["serve_health_code"]), 10)
             self.assertIn("cmd/zztool/main.go", markers["bin_exports"])
             self.assertIn("zz/launcher.desktop", markers["desktop_markers"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_separate_git_dir_sibling_counts_as_constellation(self) -> None:
+        # Regression (PR #207 round 8): a sibling whose .git is a gitdir:
+        # FILE pointing OUTSIDE this repo (separate-git-dir / submodule-style
+        # checkout) is a real constellation sibling, not a worktree.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            parent = tmp / "org"
+            parent.mkdir()
+            repo = parent / "svc-a"
+            _init_repo(repo)
+            _write(repo, "main.py", "x = 1\n")
+            _commit_all(repo, "seed")
+            gitstore = tmp / "gitstore"
+            gitstore.mkdir()
+            sib = parent / "svc-b"
+            sib.mkdir()
+            (sib / ".git").write_text(f"gitdir: {gitstore}\n", encoding="utf-8")
+            sibs, worktrees = self.flowctl._prime_sibling_git_dirs(parent, repo.resolve())
+            self.assertIn("svc-b", sibs)
+            self.assertEqual(worktrees, 0)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_worktree_gitdir_pointer_still_excluded(self) -> None:
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            parent = tmp / "org"
+            parent.mkdir()
+            repo = parent / "svc-a"
+            _init_repo(repo)
+            _write(repo, "main.py", "x = 1\n")
+            _commit_all(repo, "seed")
+            wt = parent / "svc-a-wt"
+            wt.mkdir()
+            (wt / ".git").write_text(
+                f"gitdir: {repo.resolve() / '.git' / 'worktrees' / 'svc-a-wt'}\n",
+                encoding="utf-8",
+            )
+            sibs, worktrees = self.flowctl._prime_sibling_git_dirs(parent, repo.resolve())
+            self.assertNotIn("svc-a-wt", sibs)
+            self.assertEqual(worktrees, 1)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -1323,6 +1381,35 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         ci = self._classify()["substance"]["ci_gate"]
         self.assertTrue(ci["has_gate_trigger"])
         self.assertIn("push", ci["triggers"])
+
+    def test_mutating_lint_requires_same_line(self) -> None:
+        # Regression (PR #207 round 8): a check-only lint step plus an
+        # unrelated --write step in the SAME workflow is not a mutating lint
+        # gate - the flag needs both patterns on one executable line.
+        _write(
+            self.repo, ".github/workflows/ci.yml",
+            "on: [push]\n"
+            "jobs:\n"
+            "  t:\n"
+            "    steps:\n"
+            "      - run: eslint .\n"
+            "      - run: node update-cache.js --write\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_lint_step"])
+        self.assertFalse(ci["mutating_lint"])
+
+    def test_mutating_lint_same_line_still_flagged(self) -> None:
+        _write(
+            self.repo, ".github/workflows/ci.yml",
+            "on: [push]\n"
+            "jobs:\n"
+            "  t:\n"
+            "    steps:\n"
+            "      - run: eslint --fix .\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["mutating_lint"])
 
     def test_bitbucket_pull_requests_section_counts_as_gated(self) -> None:
         # Regression (PR #207 round 7): a PR-only Bitbucket pipeline

@@ -27709,12 +27709,20 @@ def _prime_git_toplevel(root: Path) -> Optional[Path]:
 def _prime_sibling_git_dirs(parent: Path, self_dir: Path) -> "tuple[list[str], int]":
     """Return (constellation-eligible sibling names, worktree_siblings_excluded).
 
-    A sibling whose ``.git`` is a FILE (a `gitdir:` pointer) resolves to the
-    SAME repo — a git worktree, not a constellation sibling — and is excluded
-    (classification.md edge-case ladder / R19 worktree-sibling fixture).
+    A sibling whose ``.git`` is a FILE (a `gitdir:` pointer) is excluded as a
+    worktree ONLY when the pointer resolves into THIS repo's git dir - an
+    independent `--separate-git-dir` checkout or submodule-style sibling is a
+    real constellation sibling and must count (classification.md edge-case
+    ladder / R19 worktree-sibling fixture). An unreadable/unparseable pointer
+    stays excluded (conservative: never invent a constellation).
     """
     siblings: list[str] = []
     worktrees = 0
+    self_git = None
+    try:
+        self_git = (self_dir / ".git").resolve()
+    except (OSError, ValueError):
+        pass
     try:
         children = sorted(parent.iterdir())
     except (OSError, ValueError):
@@ -27731,7 +27739,26 @@ def _prime_sibling_git_dirs(parent: Path, self_dir: Path) -> "tuple[list[str], i
         if not git_marker.exists():
             continue
         if git_marker.is_file():
-            worktrees += 1
+            pointer = None
+            try:
+                first = git_marker.read_text(encoding="utf-8", errors="replace")[:4096].splitlines()
+                m = re.match(r"\s*gitdir:\s*(.+?)\s*$", first[0]) if first else None
+                if m:
+                    raw = m.group(1)
+                    pointer = (
+                        Path(raw) if os.path.isabs(raw) else (child / raw)
+                    ).resolve()
+            except (OSError, ValueError):
+                pointer = None
+            same_repo = (
+                pointer is not None
+                and self_git is not None
+                and (pointer == self_git or str(pointer).startswith(str(self_git) + os.sep))
+            )
+            if pointer is not None and not same_repo:
+                siblings.append(child.name)
+            else:
+                worktrees += 1
             continue
         siblings.append(child.name)
     return (siblings, worktrees)
@@ -28209,11 +28236,16 @@ def _prime_collect_size(
     root: Path,
     staged: "list[tuple[str, str]]",
     ls_truncated: bool,
+    regenerated_dirs: "Optional[set[str]]" = None,
 ) -> "tuple[dict[str, Any], _PrimeCollector, list[str]]":
     c = _PrimeCollector("size", budget=_PRIME_MAX_LOC_FILES + 200)
     if ls_truncated:
         c.note_truncated()
 
+    # Regenerated-dir candidates from the destructive pre-pass: a tracked
+    # script that wipes a repo-internal dir marks it generated output, which
+    # the classification contract excludes from sizing.
+    regen = {d.strip("/") for d in (regenerated_dirs or set()) if d and d.strip("/")}
     exclusions_applied: set[str] = set()
     # Path-based exclusions.
     filtered: list[tuple[str, str]] = []
@@ -28221,6 +28253,9 @@ def _prime_collect_size(
         cat = _prime_exclusion_category(path)
         if cat is not None:
             exclusions_applied.add(cat)
+            continue
+        if regen and any(path == d or path.startswith(d + "/") for d in regen):
+            exclusions_applied.add("regenerated")
             continue
         filtered.append((sha, path))
 
@@ -29323,8 +29358,13 @@ def _prime_collect_ci_gate(
         if file_triggers:
             triggers |= file_triggers
             has_trigger = True
-        if lint_re.search(exec_text) and mutating_re.search(exec_text):
-            mutating_lint = True
+        # Mutating-lint is a PER-LINE property: the --fix/--write flag must sit
+        # on the SAME executable line as the lint command, or an unrelated
+        # `--write` step (e.g. a cache updater) false-flags a check-only linter.
+        for exec_line in exec_text.splitlines():
+            if lint_re.search(exec_line) and mutating_re.search(exec_line):
+                mutating_lint = True
+                break
     return (
         {
             "workflow_files": files,
@@ -29865,10 +29905,16 @@ def _prime_collect_substance(
     deduped: "list[str]",
     framework_markers: "list[str]",
     pre_dedup: "Optional[list[str]]" = None,
+    destructive: "Optional[tuple[dict[str, Any], _PrimeCollector]]" = None,
 ) -> "tuple[dict[str, Any], list[_PrimeCollector]]":
     """Assemble every emitter-owned substance-grep row (raw signals only)."""
     env, env_c = _prime_collect_env_crossref(root, deduped)
-    destructive, destr_c = _prime_collect_destructive(root, deduped)
+    # Reuse the destructive pre-pass from _prime_classify when provided (it
+    # runs before sizing to feed regenerated-dir exclusions).
+    if destructive is not None:
+        destructive, destr_c = destructive
+    else:
+        destructive, destr_c = _prime_collect_destructive(root, deduped)
     encoding, enc_c = _prime_collect_encoding(root, deduped)
     atomic, atomic_c = _prime_collect_atomic_pairs(deduped, pre_dedup)
     tool_managed, tm_c = _prime_collect_tool_managed(deduped, destructive)
@@ -29930,14 +29976,28 @@ def _prime_classify(root: Path) -> "dict[str, Any]":
 
     lifecycle, life_c = _prime_collect_lifecycle(collect_root)
     topology, mono_c, con_c = _prime_collect_topology(collect_root, top, tracked_paths)
-    size, size_c, deduped = _prime_collect_size(collect_root, staged, ls_truncated)
+    # Post-exclusion PRE-dedup list: feeds the destructive pre-pass (below) and
+    # the atomic-pair scan, where byte-identical dual copies collapse under the
+    # blob dedup and must stay visible.
+    pre_dedup = [p for _sha, p in staged if _prime_exclusion_category(p) is None]
+    # Destructive pre-pass BEFORE sizing: self-managed wipe targets are
+    # regenerated-dir candidates, and the classification contract lists
+    # `regenerated` as a size exclusion - bulky checked-in generated mirrors
+    # must not push the repo into the wrong size playbook.
+    destructive, destr_c = _prime_collect_destructive(collect_root, pre_dedup)
+    regenerated_dirs = {
+        h["target"].rstrip("/").lstrip("./")
+        for h in destructive.get("hits", [])
+        if h.get("context_class") == "self-managed" and h.get("target")
+    }
+    size, size_c, deduped = _prime_collect_size(
+        collect_root, staged, ls_truncated, regenerated_dirs
+    )
     stacks, stacks_c = _prime_collect_stacks(collect_root, deduped)
     shape_markers, shape_c = _prime_collect_shape_markers(collect_root, deduped)
-    # Post-exclusion PRE-dedup list for the atomic-pair scan: byte-identical
-    # dual copies collapse under the blob dedup and must stay visible there.
-    pre_dedup = [p for _sha, p in staged if _prime_exclusion_category(p) is None]
     substance, substance_collectors = _prime_collect_substance(
-        collect_root, deduped, shape_markers["framework_markers"], pre_dedup
+        collect_root, deduped, shape_markers["framework_markers"], pre_dedup,
+        destructive=(destructive, destr_c),
     )
 
     payload: dict[str, Any] = {
