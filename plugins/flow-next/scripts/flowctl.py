@@ -28367,11 +28367,15 @@ def _prime_collect_stacks(
         "go.mod": "Go",
         "Cargo.toml": "Rust",
         "pom.xml": "Java",
-        "build.gradle": "Java",
-        "build.gradle.kts": "Java",
-        "settings.gradle": "Java",
-        "gradlew": "Java",
-        "settings.gradle.kts": "Kotlin/Android",
+        # Gradle manifests resolve to ONE stack after the scan (Kotlin vs Java
+        # by source-file evidence; generic JVM/Gradle when ambiguous) - a repo
+        # tracking both build.gradle.kts + settings.gradle.kts is one project,
+        # never a dual Java + Kotlin/Android stack pair.
+        "build.gradle": "__gradle__",
+        "build.gradle.kts": "__gradle__",
+        "settings.gradle": "__gradle__",
+        "gradlew": "__gradle__",
+        "settings.gradle.kts": "__gradle__",
         "composer.json": "PHP",
         "Gemfile": "Ruby",
         "CMakeLists.txt": "C/C++",
@@ -28414,12 +28418,41 @@ def _prime_collect_stacks(
         if ".xcodeproj/" in path or lower.endswith(".xcodeproj"):
             detected.setdefault("Swift/iOS", (path, subproject))
 
+    # Resolve the Gradle sentinel to exactly ONE stack. Stronger signals first:
+    # tracked .kt sources -> Kotlin/Android, .java sources -> Java; with no
+    # sources, a cheap grep of the gradle build files for a kotlin plugin
+    # marker; still ambiguous -> a single generic JVM/Gradle stack.
+    gradle_hit = detected.pop("__gradle__", None)
+    if gradle_hit is not None:
+        kt_files = sum(1 for p in deduped if p.endswith(".kt"))
+        java_files = sum(1 for p in deduped if p.endswith(".java"))
+        if kt_files or java_files:
+            gradle_stack = "Kotlin/Android" if kt_files >= java_files else "Java"
+        else:
+            kotlin_re = re.compile(r"(?i)org\.jetbrains\.kotlin|kotlin-android|\bkotlin\s*\(")
+            gradle_files = [
+                p for p in deduped
+                if p.rsplit("/", 1)[-1] in (
+                    "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"
+                )
+            ]
+            kotlin_marker = False
+            for rel in gradle_files[:5]:
+                c.op()
+                txt = _prime_read_tracked(root, rel, c, cap=100_000)
+                if txt and kotlin_re.search(txt):
+                    kotlin_marker = True
+                    break
+            gradle_stack = "Kotlin/Android" if kotlin_marker else "JVM/Gradle"
+        detected.setdefault(gradle_stack, gradle_hit)
+
     # Manifest-stack name -> extension-histogram bucket(s) for loc_share.
     share_buckets = {
         "JavaScript/TypeScript": ("JavaScript", "TypeScript"),
         "C/C++": ("C", "C++"),
         "C#/.NET": ("C#",),
         "Kotlin/Android": ("Kotlin",),
+        "JVM/Gradle": ("Java", "Kotlin"),
         "Swift/iOS": ("Swift",),
         "SQL/PLSQL": ("PL/SQL",),
         "VB6/PowerBuilder": ("VB6",),
@@ -28570,14 +28603,22 @@ def _prime_collect_scope(
         # cwd below the git toplevel → workspace member.
         try:
             rel = root_resolved.relative_to(top)
-            member = str(rel)
+            member = rel.as_posix()
         except (ValueError, OSError):
             member = root_resolved.name
         value, agreement = "workspace-member", "high"
         evidence.append(f"assessing workspace member `{member}` of `{top.name}`")
-    else:
-        value, agreement = "repository", "high"
-        evidence.append("standalone git checkout at toplevel")
+        return (
+            {
+                "value": value,
+                "member_path": member,
+                "confidence": _prime_cap_confidence(agreement, c),
+                "evidence": evidence,
+            },
+            c,
+        )
+    value, agreement = "repository", "high"
+    evidence.append("standalone git checkout at toplevel")
 
     return (
         {"value": value, "confidence": _prime_cap_confidence(agreement, c), "evidence": evidence},
@@ -29078,23 +29119,98 @@ def _prime_ci_triggers_non_github(basename: str, text: str) -> "set[str]":
       on push; `only:`/`rules:` narrowing such as schedules-only is out of
       scope for the raw signal - the skill judges edge cases).
     - bitbucket-pipelines.yml: a `pipelines:` config with a `default:` or
-      `branches:` section -> push-gated; a custom-/manual-only file is not.
+      `branches:` section as a DIRECT child of the top-level `pipelines:` key
+      -> push-gated. The walk is indent-scoped (same approach as the GitHub
+      `on:`-block scan): a `branches:` line nested deeper - e.g. under
+      `pipelines.custom.<name>` - never gates; a custom-/manual-only file is
+      not push-gated.
     - azure-pipelines.yml: `trigger: none` -> not gated; otherwise gated (an
       explicit `trigger:` key AND the absent-key default both mean CI on push).
     """
     if basename == ".gitlab-ci.yml":
         return {"push"}
     if basename == "bitbucket-pipelines.yml":
-        if re.search(r"(?m)^pipelines\s*:", text) and re.search(
-            r"(?m)^\s+(?:default|branches)\s*:", text
-        ):
-            return {"push"}
+        lines = text.splitlines()
+        idx = 0
+        n = len(lines)
+        while idx < n:
+            m = re.match(r"^pipelines\s*:\s*(?:#.*)?$", lines[idx])
+            idx += 1
+            if not m:
+                continue
+            # Scan the pipelines: block; only its FIRST-level children count.
+            child_indent = None
+            while idx < n:
+                line = lines[idx]
+                body = line.strip()
+                if not body or body.startswith("#"):
+                    idx += 1
+                    continue
+                indent = len(line) - len(line.lstrip())
+                if indent <= 0:
+                    break  # dedent back to top level ends the pipelines: block
+                if child_indent is None:
+                    child_indent = indent
+                if indent == child_indent and re.match(
+                    r"(?i)^(?:default|branches)\s*:", body
+                ):
+                    return {"push"}
+                idx += 1
         return set()
     if basename == "azure-pipelines.yml":
         if re.search(r"(?m)^\s*trigger\s*:\s*none\s*(?:#.*)?$", text):
             return set()
         return {"push"}
     return set()
+
+
+def _prime_ci_exec_lines(basename: str, text: str) -> "list[str]":
+    """Executable-content lines of a CI config (FH3/FH4).
+
+    Test/lint/scanner detection must only see what CI actually RUNS - never
+    `name:` values, job ids, comments, or matrix entries (a `name: test lint`
+    step must not set has_test_step). Deterministic indent-block walk:
+
+    - GitHub workflows: `run:` step values - inline (`run: pytest`) and block
+      scalars (the indented block after `run: |` / `run: >`).
+    - GitLab / Bitbucket / Azure: `script:`-family values (`script`,
+      `before_script`, `after_script`, `bash`, `pwsh`, `powershell`) - inline,
+      block-scalar, and `- item` list forms.
+
+    Comment lines are stripped in both modes.
+    """
+    if basename in _PRIME_NON_GITHUB_CI:
+        keys = r"(?:script|before_script|after_script|bash|pwsh|powershell)"
+    else:
+        keys = r"run"
+    key_re = re.compile(r"^(\s*(?:-\s+)?)" + keys + r"\s*:\s*(.*)$")
+    out: list[str] = []
+    lines = text.splitlines()
+    idx = 0
+    n = len(lines)
+    while idx < n:
+        m = key_re.match(lines[idx])
+        idx += 1
+        if not m:
+            continue
+        key_indent = len(m.group(1))
+        inline = m.group(2).strip()
+        if inline and not re.fullmatch(r"[|>][+-]?\d*", inline):
+            if not inline.startswith("#"):
+                out.append(inline)
+            continue
+        # Block scalar / block sequence: lines indented deeper than the key.
+        while idx < n:
+            line = lines[idx]
+            body = line.strip()
+            if body:
+                indent = len(line) - len(line.lstrip())
+                if indent <= key_indent:
+                    break
+                if not body.startswith("#"):
+                    out.append(body[2:].strip() if body.startswith("- ") else body)
+            idx += 1
+    return out
 
 
 def _prime_collect_ci_gate(
@@ -29111,11 +29227,14 @@ def _prime_collect_ci_gate(
     files: list[str] = []
     for path, text in workflows:
         files.append(path)
-        if test_re.search(text):
-            has_test = True
-        if lint_re.search(text):
-            has_lint = True
         base = path.rsplit("/", 1)[-1]
+        # Test/lint detection sees only EXECUTABLE content (run:/script: values)
+        # - a `name: test lint` step or matrix entry never sets the flags.
+        exec_text = "\n".join(_prime_ci_exec_lines(base, text))
+        if test_re.search(exec_text):
+            has_test = True
+        if lint_re.search(exec_text):
+            has_lint = True
         if base in _PRIME_NON_GITHUB_CI:
             # Route by filename: never force GitHub `on:` parsing on other CI systems.
             file_triggers = _prime_ci_triggers_non_github(base, text)
@@ -29124,7 +29243,7 @@ def _prime_collect_ci_gate(
         if file_triggers:
             triggers |= file_triggers
             has_trigger = True
-        if lint_re.search(text) and mutating_re.search(text):
+        if lint_re.search(exec_text) and mutating_re.search(exec_text):
             mutating_lint = True
     return (
         {
@@ -29149,6 +29268,13 @@ def _prime_collect_secrets_gate(
     scanner config/baseline files (.gitleaks.toml, .secrets.baseline) are
     EVIDENCE-ONLY and land in `configs_found` - config presence alone is never
     an enforced gate.
+
+    Invocation surfaces are scoped: package.json matches count only inside the
+    `"scripts"` object values (a gitleaks devDependency is metadata, not
+    enforcement; unparseable package.json is skipped, never wholesale-grepped),
+    and CI files count only executable lines (`run:`/`script:` values via
+    `_prime_ci_exec_lines`). Pre-commit configs keep whole-file matching -
+    every hook entry there IS an enforcement surface.
     """
     c = _PrimeCollector("substance-secrets-gate", budget=60)
     tool_re = re.compile(r"(?i)\b(gitleaks|detect-secrets|trufflehog|ggshield|git-secrets)\b")
@@ -29171,7 +29297,23 @@ def _prime_collect_secrets_gate(
         txt = _prime_read_tracked(root, rel, c, cap=200_000)
         if not txt:
             continue
-        found = {m.group(1).lower() for m in tool_re.finditer(txt)}
+        if base == "package.json":
+            # Only "scripts" values are enforcement; deps mentioning a scanner
+            # are metadata. A parse failure skips the file (never wholesale-grep).
+            try:
+                pkg = json.loads(txt)
+            except ValueError:
+                continue
+            scripts = pkg.get("scripts") if isinstance(pkg, dict) else None
+            if not isinstance(scripts, dict):
+                continue
+            scan_text = "\n".join(str(v) for v in scripts.values())
+        elif base in _PRIME_NON_GITHUB_CI or _prime_posix_segments(rel)[:2] == [".github", "workflows"]:
+            # CI files: executable lines only (consistent with the FH3 scoping).
+            scan_text = "\n".join(_prime_ci_exec_lines(base, txt))
+        else:
+            scan_text = txt
+        found = {m.group(1).lower() for m in tool_re.finditer(scan_text)}
         if found:
             tools |= found
             locations.append(rel)
@@ -29669,18 +29811,24 @@ def _prime_classify(root: Path) -> "dict[str, Any]":
 
     scope, scope_c = _prime_collect_scope(root, top)
 
+    # Workspace-member scope: classify against the ROOT (classification.md) -
+    # the inventory and every topology/substance collector run from the git
+    # toplevel so root workspace config, CI, and sibling manifests stay
+    # visible; the member subpath is recorded in `assessment_scope.member_path`.
+    collect_root = top if (top is not None and scope["value"] == "workspace-member") else root
+
     # Tracked-file inventory (single ls-files -s parse feeds size + topology + stacks).
     ls_collector = _PrimeCollector("inventory", budget=2)
-    staged, ls_truncated = _prime_parse_ls_files_staged(root, ls_collector)
+    staged, ls_truncated = _prime_parse_ls_files_staged(collect_root, ls_collector)
     tracked_paths = [p for _sha, p in staged]
 
-    lifecycle, life_c = _prime_collect_lifecycle(root)
-    topology, mono_c, con_c = _prime_collect_topology(root, top, tracked_paths)
-    size, size_c, deduped = _prime_collect_size(root, staged, ls_truncated)
-    stacks, stacks_c = _prime_collect_stacks(root, deduped)
-    shape_markers, shape_c = _prime_collect_shape_markers(root, deduped)
+    lifecycle, life_c = _prime_collect_lifecycle(collect_root)
+    topology, mono_c, con_c = _prime_collect_topology(collect_root, top, tracked_paths)
+    size, size_c, deduped = _prime_collect_size(collect_root, staged, ls_truncated)
+    stacks, stacks_c = _prime_collect_stacks(collect_root, deduped)
+    shape_markers, shape_c = _prime_collect_shape_markers(collect_root, deduped)
     substance, substance_collectors = _prime_collect_substance(
-        root, deduped, shape_markers["framework_markers"]
+        collect_root, deduped, shape_markers["framework_markers"]
     )
 
     payload: dict[str, Any] = {
@@ -29767,7 +29915,8 @@ def cmd_prime_classify(args: argparse.Namespace) -> None:
     life = payload["axes"]["lifecycle"]
     topo = payload["axes"]["topology"]
     size = payload["axes"]["size"]
-    print(f"assessment_scope: {sc['value']} ({sc['confidence']})")
+    member = f" member={sc['member_path']}" if sc.get("member_path") else ""
+    print(f"assessment_scope: {sc['value']} ({sc['confidence']}){member}")
     print(f"lifecycle:        {life['value']} ({life['confidence']})")
     print(
         "topology:         "

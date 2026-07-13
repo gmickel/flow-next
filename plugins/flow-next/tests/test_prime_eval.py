@@ -528,6 +528,9 @@ class StacksAndShapeTestCase(unittest.TestCase):
             _init_repo(repo)
             _write(repo, "Package.swift", "// swift-tools-version:5.9\n")
             _write(repo, "android/settings.gradle.kts", 'rootProject.name = "app"\n')
+            # A .kt source resolves the gradle manifest to Kotlin/Android (the
+            # gradle rows share one sentinel and emit a SINGLE stack).
+            _write(repo, "android/app/src/main/kotlin/Main.kt", "fun main() {}\n")
             _write(repo, "sql/pkg.pks", "CREATE OR REPLACE PACKAGE pkg AS END;\n")
             _write(repo, "sql/pkg.pkb", "CREATE OR REPLACE PACKAGE BODY pkg AS END;\n")
             _write(repo, "legacy/app.vbp", "Type=Exe\n")
@@ -557,6 +560,64 @@ class StacksAndShapeTestCase(unittest.TestCase):
             _commit_all(repo, "seed")
             stacks = self.flowctl._prime_classify(repo)["axes"]["stacks"]
             self.assertIn("Java", {s["name"] for s in stacks})
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_gradle_dual_manifests_yield_single_kotlin_stack(self) -> None:
+        # Regression (PR #207): a Kotlin/Android repo tracks BOTH
+        # build.gradle.kts and settings.gradle.kts - one project must emit
+        # exactly ONE stack (Kotlin/Android via .kt sources), never a dual
+        # Java + Kotlin/Android pair.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "android"
+            _init_repo(repo)
+            _write(repo, "build.gradle.kts", 'plugins { id("com.android.application") }\n')
+            _write(repo, "settings.gradle.kts", 'rootProject.name = "app"\n')
+            _write(repo, "gradlew", "#!/bin/sh\n")
+            _write(repo, "app/src/main/kotlin/Main.kt", "fun main() {}\n")
+            _commit_all(repo, "seed")
+            stacks = self.flowctl._prime_classify(repo)["axes"]["stacks"]
+            names = [s["name"] for s in stacks]
+            jvm_names = [n for n in names if n in ("Java", "Kotlin/Android", "JVM/Gradle")]
+            self.assertEqual(jvm_names, ["Kotlin/Android"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_gradle_ambiguous_falls_back_to_generic_jvm_stack(self) -> None:
+        # No .kt/.java sources and no kotlin plugin marker -> a single generic
+        # JVM/Gradle stack, never a guess between Java and Kotlin/Android.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "bare"
+            _init_repo(repo)
+            _write(repo, "build.gradle.kts", "plugins { }\n")
+            _write(repo, "settings.gradle.kts", 'rootProject.name = "bare"\n')
+            _commit_all(repo, "seed")
+            stacks = self.flowctl._prime_classify(repo)["axes"]["stacks"]
+            names = [s["name"] for s in stacks]
+            jvm_names = [n for n in names if n in ("Java", "Kotlin/Android", "JVM/Gradle")]
+            self.assertEqual(jvm_names, ["JVM/Gradle"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_gradle_kotlin_plugin_marker_resolves_without_sources(self) -> None:
+        # No sources, but the gradle build file names the kotlin plugin ->
+        # Kotlin/Android via the cheap grep tiebreaker.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "ktplugin"
+            _init_repo(repo)
+            _write(
+                repo, "build.gradle.kts",
+                'plugins { kotlin("android") version "2.0.0" }\n',
+            )
+            _write(repo, "settings.gradle.kts", 'rootProject.name = "kt"\n')
+            _commit_all(repo, "seed")
+            stacks = self.flowctl._prime_classify(repo)["axes"]["stacks"]
+            names = [s["name"] for s in stacks]
+            jvm_names = [n for n in names if n in ("Java", "Kotlin/Android", "JVM/Gradle")]
+            self.assertEqual(jvm_names, ["Kotlin/Android"])
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -592,6 +653,36 @@ class AssessmentScopeTestCase(unittest.TestCase):
             member_dir = repo / "packages" / "pkg-a"
             scope = self.flowctl._prime_classify(member_dir)["assessment_scope"]
             self.assertEqual(scope["value"], "workspace-member")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_workspace_member_classified_against_repo_root(self) -> None:
+        # Regression (PR #207): with scope=workspace-member the inventory and
+        # topology/substance collectors must run against the git TOPLEVEL -
+        # otherwise root workspace config / CI / sibling manifests are
+        # invisible (monorepo=false for a pnpm-workspace member). The member
+        # subpath is recorded in assessment_scope.member_path.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "mono"
+            _init_repo(repo)
+            _write(repo, "pnpm-workspace.yaml", "packages:\n  - packages/*\n")
+            _write(repo, "package.json", json.dumps({"name": "mono", "private": True}))
+            _write(
+                repo, ".github/workflows/ci.yml",
+                "on:\n  push:\njobs:\n  t:\n    steps:\n      - run: pytest\n",
+            )
+            _write(repo, "packages/a/package.json", json.dumps({"name": "a"}))
+            _write(repo, "packages/a/index.ts", "export const a = 1\n")
+            _commit_all(repo, "seed")
+            payload = self.flowctl._prime_classify(repo / "packages" / "a")
+            scope = payload["assessment_scope"]
+            self.assertEqual(scope["value"], "workspace-member")
+            self.assertEqual(scope["member_path"], "packages/a")
+            # Root workspace config visible -> monorepo bit true.
+            self.assertTrue(payload["axes"]["topology"]["monorepo"]["value"])
+            # Root CI visible to the substance collectors too.
+            self.assertTrue(payload["substance"]["ci_gate"]["has_gate_trigger"])
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -1019,6 +1110,75 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         self.assertFalse(ci["has_gate_trigger"])
         self.assertEqual(ci["triggers"], [])
 
+    def test_bitbucket_nested_branches_under_custom_not_gated(self) -> None:
+        # Regression (PR #207): a `branches:` line NESTED inside a custom
+        # (manual-only) pipeline subtree is not a direct child of the
+        # top-level `pipelines:` key and must never count as push-gated.
+        _write(
+            self.repo, "bitbucket-pipelines.yml",
+            "pipelines:\n"
+            "  custom:\n"
+            "    deploy:\n"
+            "      branches:\n"
+            "        main:\n"
+            "          - step:\n"
+            "              script:\n"
+            "                - ./deploy.sh\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertFalse(ci["has_gate_trigger"])
+        self.assertEqual(ci["triggers"], [])
+
+    def test_bitbucket_toplevel_branches_still_gated(self) -> None:
+        # Direct-child `branches:` of `pipelines:` keeps gating (indent-scoped
+        # walk must not lose the true positive).
+        _write(
+            self.repo, "bitbucket-pipelines.yml",
+            "pipelines:\n"
+            "  branches:\n"
+            "    main:\n"
+            "      - step:\n"
+            "          script:\n"
+            "            - pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_gate_trigger"])
+        self.assertIn("push", ci["triggers"])
+
+    def test_ci_test_lint_flags_require_executable_content(self) -> None:
+        # Regression (PR #207): `name: test lint` and matrix values are not
+        # executable content - a deploy-only workflow stays test/lint-less.
+        _write(
+            self.repo, ".github/workflows/deploy.yml",
+            "on: push\n"
+            "jobs:\n"
+            "  deploy:\n"
+            "    steps:\n"
+            "      - name: test lint\n"
+            "        run: ./deploy.sh --target prod\n"
+            "      # comment mentioning pytest and eslint\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertFalse(ci["has_test_step"])
+        self.assertFalse(ci["has_lint_step"])
+
+    def test_ci_run_step_sets_test_flag_including_block_scalar(self) -> None:
+        _write(
+            self.repo, ".github/workflows/ci.yml",
+            "on: push\n"
+            "jobs:\n"
+            "  t:\n"
+            "    steps:\n"
+            "      - name: unit\n"
+            "        run: |\n"
+            "          pip install -e .\n"
+            "          pytest -q\n"
+            "      - run: eslint .\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_test_step"])
+        self.assertTrue(ci["has_lint_step"])
+
     def test_azure_trigger_none_not_gated(self) -> None:
         _write(
             self.repo, "azure-pipelines.yml",
@@ -1047,6 +1207,47 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         configs = {(e["tool"], e["path"]) for e in sec["configs_found"]}
         self.assertIn(("gitleaks", ".gitleaks.toml"), configs)
         self.assertIn(("detect-secrets", ".secrets.baseline"), configs)
+
+    def test_secrets_scanner_in_dev_dependencies_is_not_enforcement(self) -> None:
+        # Regression (PR #207): a scanner named only in package.json
+        # dependencies is metadata, never an enforced invocation.
+        _write(
+            self.repo, "package.json",
+            json.dumps({"name": "x", "devDependencies": {"gitleaks": "^8.0.0"}}),
+        )
+        sec = self._classify()["substance"]["secrets_gate"]
+        self.assertEqual(sec["tools_found"], [])
+        self.assertEqual(sec["locations"], [])
+
+    def test_secrets_scanner_in_package_scripts_counts(self) -> None:
+        _write(
+            self.repo, "package.json",
+            json.dumps({
+                "name": "x",
+                "devDependencies": {"gitleaks": "^8.0.0"},
+                "scripts": {"scan": "gitleaks detect --no-banner"},
+            }),
+        )
+        sec = self._classify()["substance"]["secrets_gate"]
+        self.assertIn("gitleaks", sec["tools_found"])
+        self.assertIn("package.json", sec["locations"])
+
+    def test_secrets_scanner_in_ci_counts_only_in_executable_lines(self) -> None:
+        # A workflow that merely NAMES a scanner in a step name is not an
+        # enforced invocation; a run: line invoking it is.
+        _write(
+            self.repo, ".github/workflows/name-only.yml",
+            "on: push\njobs:\n  s:\n    steps:\n      - name: gitleaks mention\n        run: ./deploy.sh\n",
+        )
+        sec = self._classify()["substance"]["secrets_gate"]
+        self.assertEqual(sec["tools_found"], [])
+        _write(
+            self.repo, ".github/workflows/scan.yml",
+            "on: push\njobs:\n  s:\n    steps:\n      - run: gitleaks detect\n",
+        )
+        sec = self._classify()["substance"]["secrets_gate"]
+        self.assertIn("gitleaks", sec["tools_found"])
+        self.assertIn(".github/workflows/scan.yml", sec["locations"])
 
     def test_api_contract_globs_and_http_flag(self) -> None:
         _write(self.repo, "package.json", json.dumps({"dependencies": {"express": "^4"}}))
@@ -1527,7 +1728,10 @@ class PrimeProseContractTestCase(unittest.TestCase):
 class AgenticEvalIsolationTestCase(unittest.TestCase):
     """Regression (PR #207): tampering with projection.json - the ONLY arena
     file - leaves the created-files diff empty, so the harness must catch it
-    via the pre-run content hash and treat the run as an isolation breach."""
+    via the pre-run content hash and treat the run as an isolation breach.
+    Also (PR #207 round 2): the sentinel token-leak scan covers stderr too
+    (stderr is persisted in stderr_tail), and a leaked token is redacted
+    before persistence."""
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -1547,16 +1751,41 @@ class AgenticEvalIsolationTestCase(unittest.TestCase):
     def tearDown(self) -> None:
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def _report(self) -> dict:
+    def _report(self, stdout: str = "", stderr: str = "") -> dict:
         return self.harness._isolation_report(
-            self.arena, self.pre, self.sentinel, self.token, self.sig, "",
-            projection_hash=self.proj_hash,
+            self.arena, self.pre, self.sentinel, self.token, self.sig, stdout,
+            projection_hash=self.proj_hash, stderr=stderr,
         )
 
     def test_untouched_projection_is_not_a_breach(self) -> None:
         iso = self._report()
         self.assertFalse(iso["projection_tampered"])
         self.assertFalse(self.harness._isolation_breached(iso))
+
+    def test_stderr_token_leak_is_a_breach(self) -> None:
+        # Regression (PR #207): stderr is captured and persisted in
+        # stderr_tail, so a sentinel token leaked on stderr ONLY (clean
+        # stdout) must count as a breach.
+        iso = self._report(stdout="{}", stderr=f"debug: {self.token}\n")
+        self.assertTrue(iso["sentinel_token_leaked"])
+        self.assertTrue(iso["sentinel_token_leaked_stderr"])
+        self.assertTrue(self.harness._isolation_breached(iso))
+        self.assertFalse(iso["clean"])
+
+    def test_stdout_token_leak_still_a_breach(self) -> None:
+        iso = self._report(stdout=f"answer {self.token}", stderr="")
+        self.assertTrue(iso["sentinel_token_leaked"])
+        self.assertFalse(iso["sentinel_token_leaked_stderr"])
+        self.assertTrue(self.harness._isolation_breached(iso))
+
+    def test_leaked_token_redacted_from_persisted_tail(self) -> None:
+        # A leaked token is never persisted verbatim - redaction runs BEFORE
+        # the tail slice so a boundary-spanning token cannot survive.
+        long_prefix = "x" * 500
+        raw = f"{long_prefix}{self.token} tail"
+        redacted = self.harness._redact_token(raw, self.token)[-400:]
+        self.assertNotIn(self.token, redacted)
+        self.assertIn("[REDACTED-SENTINEL]", redacted)
 
     def test_overwritten_projection_is_a_breach(self) -> None:
         (self.arena / "projection.json").write_text("{}", encoding="utf-8")

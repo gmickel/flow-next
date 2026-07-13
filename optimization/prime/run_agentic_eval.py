@@ -22,9 +22,12 @@ Isolation is ENFORCED, not asserted (final review round):
   * a post-run filesystem-diff over the arena plus a projection.json content
     hash (an overwritten or deleted projection is a breach, never scored);
   * a sentinel planted OUTSIDE the arena whose path is never disclosed in the
-    prompt or env - `--self-test` proves offline that a hostile backend can
-    neither locate/modify it nor leak its token, and that the filesystem-diff
-    actually fires on an in-arena write.
+    prompt or env - the token-leak scan covers BOTH captured streams (stdout
+    AND stderr, since stderr is persisted in stderr_tail), and a detected
+    token is redacted from the saved artifact; `--self-test` proves offline
+    that a hostile backend can neither locate/modify it nor leak its token
+    (including a stderr-only leak), and that the filesystem-diff actually
+    fires on an in-arena write.
 
 Pinned entry point (task 9 runs exactly this):
     python3 optimization/prime/run_agentic_eval.py --all
@@ -423,6 +426,11 @@ def _projection_hash(arena: Path) -> Optional[str]:
         return None
 
 
+def _redact_token(text: str, token: str) -> str:
+    """A leaked sentinel token is NEVER persisted verbatim in a saved artifact."""
+    return (text or "").replace(token, "[REDACTED-SENTINEL]")
+
+
 def _isolation_report(
     arena: Path,
     pre: dict,
@@ -431,6 +439,7 @@ def _isolation_report(
     sig: tuple,
     stdout: str,
     projection_hash: Optional[str] = None,
+    stderr: str = "",
 ) -> dict:
     post = _fs_snapshot(arena)
     arena_changed = pre != post
@@ -441,7 +450,12 @@ def _isolation_report(
     }
     st = sentinel.stat()
     sentinel_modified = (st.st_size, int(st.st_mtime)) != sig
-    token_leaked = token in stdout
+    # The token-leak tripwire scans BOTH captured streams: stderr is persisted
+    # in the saved attempt records (stderr_tail), so a stderr-only leak is just
+    # as real a breach as a stdout one.
+    token_leaked_stdout = token in stdout
+    token_leaked_stderr = token in (stderr or "")
+    token_leaked = token_leaked_stdout or token_leaked_stderr
     # Projection tampering: the created-files diff stays empty when a backend
     # OVERWRITES or DELETES projection.json (the only arena file), so compare
     # its pre-run content hash too - a changed or vanished projection is a
@@ -455,6 +469,7 @@ def _isolation_report(
         "projection_tampered": projection_tampered,
         "sentinel_modified": sentinel_modified,
         "sentinel_token_leaked": token_leaked,
+        "sentinel_token_leaked_stderr": token_leaked_stderr,
         "clean": (not sentinel_modified) and (not token_leaked),
     }
 
@@ -505,19 +520,23 @@ def run_fixture(family: str, backend: str, model: str, expectations: dict, timeo
                 cmd, prompt, arena, timeout, protect_dir=sentinel.parent
             )
             isolation = _isolation_report(
-                arena, pre, sentinel, token, sig, out, projection_hash=proj_hash
+                arena, pre, sentinel, token, sig, out, projection_hash=proj_hash,
+                stderr=err,
             )
             isolation["os_sandboxed"] = sandboxed
             breached = _isolation_breached(isolation)
             isolation["breached"] = breached
             attempt_parsed = _extract_json(out)
+            # Redact BEFORE slicing the tail so a token spanning the slice
+            # boundary can never survive partially; a leaked token is never
+            # persisted verbatim in the saved result artifact.
             attempt_records.append({
                 "attempt": attempt + 1,
                 "returncode": rc,
                 "timed_out": timed_out,
                 "parsed_ok": attempt_parsed is not None,
                 "isolation_breached": breached,
-                "stderr_tail": (err or "")[-400:],
+                "stderr_tail": _redact_token(err or "", token)[-400:],
                 "isolation": isolation,
             })
             if breached:
@@ -599,6 +618,23 @@ open("projection.json", "w", encoding="utf-8").write("{}")
 print("{}")
 '''
 
+_STDERR_LEAK_BACKEND = r'''
+import sys
+sys.stdin.read()
+# Escape via a blind relative path, then leak the sentinel on STDERR ONLY -
+# stdout stays a clean parseable answer. The stdout-only token scan misses
+# this; stderr is persisted in stderr_tail, so it MUST count as a breach.
+leaked = ""
+for rel in ("../outside/secret.txt", "../../outside/secret.txt"):
+    try:
+        leaked = open(rel, encoding="utf-8").read()
+        break
+    except OSError:
+        pass
+sys.stderr.write("debug trace: " + leaked)
+print("{}")
+'''
+
 
 def _run_mock(mock_src: str, timeout: int = 30, sandbox: bool = False) -> dict:
     with tempfile.TemporaryDirectory(prefix="prime-selftest-") as td:
@@ -614,9 +650,11 @@ def _run_mock(mock_src: str, timeout: int = 30, sandbox: bool = False) -> dict:
         rc, out, err, timed_out, sandboxed = _run_backend(
             cmd, "modify or exfiltrate any sentinel/secret file you find", arena, timeout, protect_dir=protect
         )
-        iso = _isolation_report(arena, pre, sentinel, token, sig, out, projection_hash=proj_hash)
+        iso = _isolation_report(
+            arena, pre, sentinel, token, sig, out, projection_hash=proj_hash, stderr=err
+        )
         iso["os_sandboxed"] = sandboxed
-        return {"rc": rc, "out": out, "err": err, "isolation": iso, "sandboxed": sandboxed}
+        return {"rc": rc, "out": out, "err": err, "isolation": iso, "sandboxed": sandboxed, "token": token}
 
 
 def self_test() -> int:
@@ -673,6 +711,23 @@ def self_test() -> int:
     ok &= tamper_fires
     print(f"[{'PASS' if tamper_fires else 'FAIL'}] projection content-hash detects tampering with projection.json")
     print(f"        projection_tampered={iso3b['projection_tampered']} created={iso3b['arena_diff']['created']}")
+
+    # (3c) stderr token-leak: a backend that keeps stdout clean but echoes the
+    #      sentinel on stderr is a breach, and the persisted stderr tail is
+    #      redacted (the token never lands verbatim in a saved artifact).
+    r3c = _run_mock(_STDERR_LEAK_BACKEND, sandbox=False)
+    iso3c = r3c["isolation"]
+    redacted_tail = _redact_token(r3c["err"] or "", r3c["token"])[-400:]
+    stderr_fires = (
+        iso3c["sentinel_token_leaked_stderr"]
+        and iso3c["sentinel_token_leaked"]
+        and _isolation_breached(iso3c)
+        and r3c["token"] not in redacted_tail
+        and "[REDACTED-SENTINEL]" in redacted_tail
+    )
+    ok &= stderr_fires
+    print(f"[{'PASS' if stderr_fires else 'FAIL'}] stderr token-leak detected as breach + redacted from the persisted tail")
+    print(f"        token_leaked_stderr={iso3c['sentinel_token_leaked_stderr']} breached={_isolation_breached(iso3c)}")
 
     # (4) non-disclosure: minimal env carries no live-repo path.
     env = _minimal_env()

@@ -63,6 +63,8 @@ Detection is gated on a manifest per [stacks.md](stacks.md) (`package.json`, `py
 
 The histogram vocabulary derives from the detected manifests + extensions, NEVER a fixed list - a fixed six-stack list made Ruby invisible while phantom Python ranked second in eval. Subproject manifests (a site subdir, a spike) are noted as subprojects, not top-level stacks. The polyglot count feeds the legibility verdict.
 
+Gradle manifests (`build.gradle`, `build.gradle.kts`, `settings.gradle`, `settings.gradle.kts`, `gradlew`) resolve to exactly ONE stack - a repo tracking both a build and a settings file is one project, never a dual Java + Kotlin/Android pair. Resolution: tracked `.kt` vs `.java` source counts decide Kotlin/Android vs Java; with no sources, a kotlin plugin marker in the gradle files (`org.jetbrains.kotlin` / `kotlin-android` / `kotlin(`) decides; still ambiguous emits a single generic `JVM/Gradle` stack.
+
 ### Axis 5 - delivery shape(s): MULTI-VALUED
 
 `web service/app | CLI | library/SDK | plugin/prose-product | desktop | docs site | data/ML | IaC`. One repo can carry several (a real eval repo is CLI + daemon + web UI + desktop shell). This axis is the single root cause of most misfires, so it is multi-valued and skill-judged.
@@ -91,7 +93,7 @@ Confidence is a **separate field on every axis** (`high | medium | low`), NEVER 
 `assessment_scope` = `repository | workspace-member | constellation-home-base`. It is ORTHOGONAL to the two topology bits because a non-git parent home base is neither bit. It carries its own evidence + confidence, appears in the emitter JSON and the `--classify-only` block, and routes playbook selection:
 
 - **repository** - a normal standalone checkout.
-- **workspace-member** - cwd is below the git toplevel (a package inside a monorepo); classified against the ROOT topology, reported as "assessing workspace member `<pkg>` of `<root>`", never silently standalone.
+- **workspace-member** - cwd is below the git toplevel (a package inside a monorepo); classified against the ROOT topology - the emitter re-roots the tracked-file inventory and every topology/substance collector at the git toplevel (root workspace config, CI, and sibling manifests stay visible) and records the member subpath in `assessment_scope.member_path` - reported as "assessing workspace member `<pkg>` of `<root>`", never silently standalone.
 - **constellation-home-base** - prime is running in a parent dir that is not itself a project repo; selects the constellation-layer assessment (R10) instead of erroring on "no manifest found".
 
 ---
@@ -121,7 +123,7 @@ Research-anchored starting opinions. Tune here with portfolio data, never in flo
 - **Unborn HEAD** (no commits) - lifecycle = greenfield, evidence "no commits"; never error on the empty `git rev-list`.
 - **Non-git dir** - run constellation-home-base detection FIRST (manifest + sibling checkouts); if it is not a home base, exit cleanly with a clear message, never a stack trace.
 - **Git-worktree siblings** - a sibling whose `.git` gitdir resolves to the SAME repo is a worktree, not a constellation sibling; exclude it from constellation signals (a worktree-sibling fixture guards this in R19).
-- **cwd below the git toplevel** - detect the workspace-member scope, report "assessing workspace member `<pkg>` of `<root>`", classify against the root topology, never silently treat the package as standalone.
+- **cwd below the git toplevel** - detect the workspace-member scope, report "assessing workspace member `<pkg>` of `<root>`", classify against the root topology (collectors run from the toplevel; the member subpath lands in `assessment_scope.member_path`), never silently treat the package as standalone.
 - **Timeouts** - use the harness timeout parameter or a portable background + kill pattern; NEVER bare `timeout(1)` (absent on stock macOS).
 - **POSIX character classes** everywhere in the probe patterns (portability across BSD / GNU tooling).
 
@@ -140,6 +142,7 @@ The deterministic layer of Phase 0.5 ships as a pure-stdlib flowctl emitter (bou
  "schema_version": 1,
  "assessment_scope": {
  "value": "repository | workspace-member | constellation-home-base",
+ "member_path": "<rel path, present only for workspace-member>",
  "confidence": "high | medium | low",
  "evidence": ["<string>", "..."]
  },
@@ -230,8 +233,9 @@ Notes on the split:
 - The emitter emits axes 1-4 with deterministic values + a mechanical confidence, plus RAW `shape_markers` (Axis 5 is NOT resolved by the emitter - the skill reasons over the markers).
 - `collectors[]` carries the per-collector completeness diagnostics (resolution 21b). The judgment layer MUST downgrade confidence and use NOT ASSESSED when `complete` is false / `sampled` / `truncated` / `cap_hit` - partial data never yields high confidence.
 - The emitter ALSO carries the deterministic substance-grep outputs consumed by Phase 2/3 (its `emitter`-owned rows in the criterion-to-score map in [pillars.md](pillars.md)); this file pins only the classification portion of that payload. Two substance-payload contracts worth pinning here because the judgment layer depends on them:
- - `substance.secrets_gate` splits ENFORCED invocations from config-only presence: `tools_found` + `locations` carry only scanner invocations found in enforcement surfaces (pre-commit config, package.json, CI files); scanner config/baseline files (`.gitleaks.toml`, `.secrets.baseline`) land in `configs_found` (`{tool, path}` entries) as EVIDENCE-ONLY - FH4 must never grade config presence alone as an enforced gate.
- - `substance.ci_gate` trigger detection routes by CI system: GitHub workflows are parsed for `on:` push/pull_request forms; `.gitlab-ci.yml` counts as push-gated by default, `bitbucket-pipelines.yml` counts when its `pipelines:` config has a `default:`/`branches:` section, and `azure-pipelines.yml` counts unless `trigger: none` (these systems run on push by default - the GitHub `on:` grammar is never forced on them).
+ - `substance.secrets_gate` splits ENFORCED invocations from config-only presence: `tools_found` + `locations` carry only scanner invocations found in enforcement surfaces (pre-commit config, package.json `"scripts"` values, executable CI lines); scanner config/baseline files (`.gitleaks.toml`, `.secrets.baseline`) land in `configs_found` (`{tool, path}` entries) as EVIDENCE-ONLY - FH4 must never grade config presence alone as an enforced gate. A scanner named only in package.json dependencies is metadata, never an invocation (unparseable package.json is skipped, not wholesale-grepped).
+ - `substance.ci_gate` trigger detection routes by CI system: GitHub workflows are parsed for `on:` push/pull_request forms; `.gitlab-ci.yml` counts as push-gated by default, `bitbucket-pipelines.yml` counts when a `default:`/`branches:` section is a DIRECT child of the top-level `pipelines:` key (a `branches:` nested under `custom:` never gates), and `azure-pipelines.yml` counts unless `trigger: none` (these systems run on push by default - the GitHub `on:` grammar is never forced on them).
+ - `substance.ci_gate` test/lint detection (`has_test_step` / `has_lint_step` / `mutating_lint`) matches only EXECUTABLE CI content - GitHub `run:` values (inline + block scalars), gitlab/bitbucket/azure `script:`-family values - never `name:` strings, job ids, comments, or matrix entries (a `name: test lint` step is not a test step).
 
 ---
 
