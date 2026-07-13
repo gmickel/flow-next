@@ -10,7 +10,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 init, detect, status, config, review-backend, memory, prospect, glossary, strategy,
 spec, task, dep, show, specs, tasks, list, cat, anchor, ready, next, start, done, block,
 state-path, migrate-state, migrate-rename, migrate-rollback, validate, triage-skip,
-checkpoint, prep-chat, repo-map, sync,
+checkpoint, prep-chat, repo-map, prime, sync,
 ralph, rp, codex, copilot, cursor,
 review-deep-auto, review-walkthrough-defer, review-walkthrough-record
 ```
@@ -954,6 +954,21 @@ flowctl repo-map since-ref <ref> [--json]
 **`since-ref --json` shape:** identical to `list --json` with two extra keys — `ref` (echoed input) and `changed_files` (sorted list of paths returned by `git diff --name-only <ref>..HEAD`).
 
 `--count` (list only) prints just the scalar feature count in plain mode — used by `/flow-next:prime`'s DE7 detection (`flowctl repo-map list --count > 0`). Under `--json`, `--count` is ignored (the JSON `count` field IS the contract).
+
+### prime classify
+
+The **only** flowctl surface `/flow-next:prime` adds: a pure-stdlib, bounded, **no-LLM** emitter for the deterministic layer of the skill's Phase 0.5 project classification. It emits the raw signals (axes 1-4 values + a mechanical confidence, plus raw Axis-5 `shape_markers`); the **skill** layers all judgment on top - Axis-5 shape reasoning, final per-axis confidence, the bounded clarification asks, and playbook selection. No judgment ever lands in flowctl (the CLAUDE.md agentic-vs-deterministic carve-out). The pinned schema lives in [`classification.md`](../skills/flow-next-prime/classification.md); the emitter is dual-copy byte-identical across `plugins/flow-next/scripts/flowctl.py` and `.flow/bin/flowctl.py` (parity-tested).
+
+```bash
+flowctl prime classify [root] --json   # root defaults to "."
+```
+
+- **`root`** (positional, optional) - directory to classify; defaults to the current directory.
+- **`--json`** - emit the pinned schema on **stdout** (progress + diagnostics go to **stderr**).
+
+**Bounds (R2 cheapness contract):** every collector is individually budgeted - `git ls-files` counts, `find -maxdepth`, config-presence globs, ONE sampled ambiguity grep, `scc`/`tokei` when present (never `cloc`, never exhaustive reads). It stays under ~10s even on a multi-M-LOC repo, so the skill's `--classify-only` mode (which wraps this emitter plus the judgment layer) is a viable portfolio-triage sweep across 100+ repos. **Redaction (hard contract):** emitted evidence NEVER carries secret values or complete sensitive config lines - key names only (fixture-asserted).
+
+**`--json` shape (fixed field order):** top-level `schema_version`, `assessment_scope` (`repository | workspace-member | constellation-home-base` + confidence + evidence), `axes` (`lifecycle`, `topology.monorepo` + `topology.constellation_member`, `size`, `stacks[]` - each with values, mechanical `confidence`, raw `signals`, and `evidence[]`), raw `shape_markers` (Axis 5 is resolved by the skill, not the emitter), and `collectors[]` (per-collector completeness diagnostics - `status` / `complete` / `sampled` / `truncated` / `cap_hit` / `operations`; the judgment layer downgrades confidence and uses NOT ASSESSED when any collector is incomplete). Full field-level schema + the `--classify-only` human block: [`classification.md`](../skills/flow-next-prime/classification.md).
 
 ### glossary
 

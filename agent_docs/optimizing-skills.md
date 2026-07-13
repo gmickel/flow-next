@@ -169,8 +169,11 @@ for these must measure *fidelity + respect-for-override*, never "is the skill's 
 **free-form, local** scouts whose prose flows into the planner — `repo-scout` ✅ and `context-scout`
 ✅ are both done (60–70% leaner, accuracy held). It has **little headroom on the prime scouts**
 (`build`/`testing`/`security`/`tooling`/`env`/`observability`/`workflow`/`docs`/`agents-md`): their
-output is already a **bounded template** (fixed sections, ✅/❌ flags, a scores checklist), and
-`prime` is a once-per-onboarding command (low frequency → low ROI per the cost rule). The
+output is still a **bounded template** (fixed sections, ✅/❌ flags, a scores checklist) even after
+fn-92 rebuilt them onto a substance rubric that consumes per-stack rows - so the output-budget lever
+does not pay there. The frequency argument softened, though: fn-92's `--classify-only` makes `prime`
+a **re-runnable portfolio-triage sweep**, not just a once-per-onboarding command, so it is no longer
+a reflexively-low-ROI target - but any win is in prompt weight, not scout output budget. The
 **research scouts** (`practice-scout`, `github-scout`) are **external/non-deterministic** (live
 web/`gh` search, sources are URLs not local files) — noisy to score and not groundable against a
 fixed repo; treat them as smoke-test territory, not this loop. Net: the scout-tier budget prizes
@@ -208,9 +211,10 @@ modest) and NOT on agents whose output is already a **bounded template**. That p
 - **Done ✅:** `repo-scout`, `context-scout`, `flow-gap-analyst` (the last: 50-70% leaner, 26/27 gaps
   preserved — proof the lever generalizes past the scouts), plus `quality-auditor` and the plan scouts
   (`spec-scout`/`memory-scout`/`docs-scout`) — all now output-budgeted.
-- **No uncapped free-form agents remain.** The prime scouts (`build`/`testing`/`security`/…) are a
-  bounded ✅/❌ template (fixed size — leave); `practice-scout`/`github-scout` are external/
-  non-deterministic (smoke-test territory, not this loop). Do not burn a loop re-confirming these.
+- **No uncapped free-form agents remain.** The prime scouts (`build`/`testing`/`security`/…) stay a
+  bounded ✅/❌ template even after fn-92's substance-rubric rebuild (fixed size - leave);
+  `practice-scout`/`github-scout` are external/non-deterministic (smoke-test territory, not this
+  loop). Do not burn a loop re-confirming these.
 
 **Where the big wins live NOW — always-loaded skill weight (fn-82).** With the agent output-budget pool
 harvested, the remaining ROI prize is the **always-loaded prompt weight of the hot-path skills** — the

@@ -151,3 +151,29 @@ The PR's render lens at `.flow/artifacts/<spec-id>/pr.html`, emitted by `/flow-n
 ## Lavish (lavish-axi)
 
 An optional detect-on-PATH companion (npm: `lavish-axi`) for annotating spec artifacts in the browser — never wrapped, bundled, or required (same shape as clawpatch/`/flow-next:map`). Feedback is pull-only and session-spanning: annotations queue in the global `~/.lavish-axi/state.json` (not per-workspace), survive agent death, and any later agent session drains them via the `lavish-axi poll` CLI, mapping each annotation to a markdown-source edit followed by lens regeneration. Sessions key on the absolute artifact path (different worktrees = separate sessions); the local server idle-stops after ~30 min and `lavish-axi <file>` resumes it — absence or idle-stop is invisible because the artifact is a self-contained static page. Autonomous contexts never open a session and never poll.
+
+## Operability ladder
+
+Prime's tiered measure of whether an agent can actually *operate* a repo, scored from executed evidence rather than file existence: tier 1 = the build command actually runs, tier 2 = tests are discoverable and run, tier 3 = the app boots to a ready signal. Tiers are per-surface with a min-deployable headline (a monorepo carries per-member tiers, never one repo tier); a shape whose realistic ceiling is tier 1-2 reports "N/N at ceiling" and is offered a sideways move into observability/drivability instead of a fabricated tier bump. The verdict headline names the current operability tier and the single cheapest move up. Introduced by fn-92.
+
+_Relates to_: Hard gate, Classification
+
+## Hard gate
+
+One of prime's three pass/fail gates that catch the existence-passes-but-execution-fails failure mode: G1 = the detected build command actually runs (or tier >= 1 operability evidence exists), G2 = tests are discoverable when a test framework is claimed, G3 = the agent instruction file's quoted commands resolve and execute. Any failing gate is NAMED in the verdict headline with its error and caps the computed maturity level at 2, so a repo cannot reach a high "readiness level" on existence checks alone. Introduced by fn-92.
+
+_Relates to_: Operability ladder, Classification
+
+## Delivery shape
+
+Axis 5 of prime's classification: the multi-valued kind(s) of thing a repo delivers (web-service, CLI, library, desktop app, prose/docs, and so on). The `flowctl prime classify` emitter emits raw shape markers (bin exports, framework markers, serve/health code, desktop markers, prose ratio); the skill resolves the final shape value(s) from those markers. Delivery shape selects the per-shape playbook and sets the realistic operability-tier ceiling (a library or prose repo honestly tops out below a bootable web service). Introduced by fn-92.
+
+_Avoid_: project type, repo type
+
+_Relates to_: Classification, Operability ladder
+
+## Classification (prime)
+
+Prime's Phase 0.5 five-axis profile of a repo: lifecycle (greenfield / hybrid / brownfield), topology (two independent bits: monorepo, constellation-member), size/legibility band, stack(s), and delivery shape(s), plus an orthogonal `assessment_scope` (repository / workspace-member / constellation-home-base). The deterministic signals come from the `flowctl prime classify --json` emitter (bounded, pure-stdlib, no LLM); the skill layers judgment on top (Axis-5 shape reasoning, final per-axis confidence, bounded clarification asks, playbook selection). Classification parameterizes everything downstream: scout dispatch hints, N/A denominators, report shape, and playbook selection. `--classify-only` prints just this block for cheap portfolio triage. Introduced by fn-92.
+
+_Relates to_: Operability ladder, Delivery shape, Hard gate

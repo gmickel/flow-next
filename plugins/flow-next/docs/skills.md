@@ -35,7 +35,7 @@ The spec-to-merge pipeline, in order.
 
 | Skill | Trigger | What it does |
 |---|---|---|
-| [`flow-next-prime`](../skills/flow-next-prime/SKILL.md) | `/flow-next:prime` | 8-pillar / 48-criteria agent-readiness assessment with parallel scouts — verifies commands actually run, checks GitHub settings, fixes agent readiness with consent. |
+| [`flow-next-prime`](../skills/flow-next-prime/SKILL.md) | `/flow-next:prime` | Opinionated codebase assessment - classifies the project (lifecycle / topology / size / stack / delivery shape), probes size/legibility + operability with bounded deterministic evidence (the `flowctl prime classify` emitter), judges **substance not existence**, and leads with an operability verdict + ranked next-actions instead of a bare level. Scans the pillars as the evidence layer, verifies commands actually run, checks GitHub settings, fixes agent readiness with consent. `--classify-only` = cheap portfolio-triage sweep across many repos. |
 | [`flow-next-audit`](../skills/flow-next-audit/SKILL.md) | `/flow-next:audit` | Memory garbage collection — review each `.flow/memory/` entry against current code; Keep / Update / Consolidate / Replace / Delete. |
 | [`flow-next-memory-migrate`](../skills/flow-next-memory-migrate/SKILL.md) | `/flow-next:memory-migrate` | Lift pre-fn-30 legacy flat memory files into the categorized YAML schema. |
 | [`flow-next-sync`](../skills/flow-next-sync/SKILL.md) | `/flow-next:sync` | Plan-sync — update downstream task specs after implementation drift. Distinct from `tracker-sync`. |
