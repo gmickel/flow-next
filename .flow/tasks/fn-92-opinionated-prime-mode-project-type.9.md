@@ -22,9 +22,8 @@ Flip the eval green + re-baseline the smoke expectation.
 - [ ] Wide-base impl-review noted for reviewers
 
 ## Done summary
-TBD
-
+Flipped the prime eval fully green and re-baselined the R13 smoke. Emitter fix: env-crossref now emits `declared_vars` (names only; values stripped) to satisfy the key-name-only redaction contract (dual-copy, byte-identical). Fixed 2 test-harness bugs (identical-content files collapsing under blob-SHA dedup; empty-repo fail-open commit needing `--allow-empty`). Added the resolution-14 R13 smoke (all 51 legacy criterion IDs present in pillars.md, hard-gate G1-G3/Level-2-cap/verdict-headline machinery resolves, emitter classify proven non-mutating) plus prose contracts pinning SV4 wording, the N/A whitelist, and the stacks.md row schema on canonical AND codex mirror. Full suite 1655 OK (skipped=2). Non-CI agentic harness ran once (not wired into CI). LAST implementation task: reviewers should use a wide base (`git merge-base HEAD main` = 3e4e4481).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 401413ef1d60804da13d03183ceff5efd2bc4c82
+- Tests: python3 -m unittest plugins.flow-next.tests.test_prime_eval (65 -> all green), python3 -m unittest discover -s plugins/flow-next/tests (1655 OK, skipped=2), python3 optimization/prime/run_agentic_eval.py --all (ran; backend=claude/sonnet; nested OAuth expired in sandbox; exit 0 non-blocking)
 - PRs:
