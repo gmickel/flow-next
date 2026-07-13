@@ -291,6 +291,32 @@ class BlobDedupTestCase(unittest.TestCase):
         self.assertIn("regenerated", size["exclusions_applied"])
         self.assertEqual(size["files"], 2)
 
+    def test_streamed_inventory_caps_and_truncates(self) -> None:
+        # Regression (PR #207 round 22): the ls-files read streams and stops
+        # at the cap - entries bounded, truncated flagged.
+        saved_cap = self.flowctl._PRIME_MAX_TRACKED_FILES
+        try:
+            self.flowctl._PRIME_MAX_TRACKED_FILES = 4
+            for i in range(6):
+                _write(self.repo, f"f{i}.py", f"x = {i}\n")
+            _commit_all(self.repo, "seed")
+            col = self.flowctl._PrimeCollector("inventory", budget=2)
+            entries, truncated = self.flowctl._prime_parse_ls_files_staged(self.repo, col)
+            self.assertEqual(len(entries), 4)
+            self.assertTrue(truncated)
+            self.assertTrue(col.truncated)
+        finally:
+            self.flowctl._PRIME_MAX_TRACKED_FILES = saved_cap
+
+    def test_force_flag_target_not_a_never_edit_candidate(self) -> None:
+        # Regression (PR #207 round 22): LEG7 regenerated candidates come only
+        # from wipe patterns - `tool --force src` is not a never-edit marker.
+        _write(self.repo, "scripts/pub2.sh", "#!/bin/sh\ntool --force src\n")
+        _write(self.repo, "src/keep.py", "x = 1\n")
+        _commit_all(self.repo, "seed")
+        tm = self.flowctl._prime_classify(self.repo)["substance"]["tool_managed"]
+        self.assertNotIn("src", tm["regenerated_dir_candidates"])
+
     def test_regenerated_dirs_excluded_from_sizing(self) -> None:
         # Regression (PR #207 round 8): a tracked script wiping a repo-internal
         # dir marks it generated output - those files must not count toward
@@ -1840,6 +1866,16 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
             h = next(x for x in hits if x["pattern"] == pat)
             self.assertEqual(h["context_class"], "unbounded", pat)
 
+    def test_default_write_check_exemption_is_per_segment(self) -> None:
+        # Regression (PR #207 round 22): in `black --check . && isort .` the
+        # --check protects only black - the chained isort still writes.
+        _write(
+            self.repo, ".github/workflows/fmt.yml",
+            "on: [push]\njobs:\n  f:\n    steps:\n      - run: black --check . && isort .\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["mutating_lint"])
+
     def test_black_default_write_is_mutating(self) -> None:
         # Regression (PR #207 round 19): black writes by default - no
         # --fix/--write flag needed to mutate the checkout; --check is clean.
@@ -2165,6 +2201,20 @@ class SubstanceLegacyRowsTestCase(_SubstanceBase):
         cov = self._classify()["substance"]["coverage_threshold"]
         self.assertTrue(cov["threshold_found"])
         self.assertTrue(cov["zero_threshold"])  # 0 is the stub pattern
+
+    def test_block_commented_threshold_not_enforced(self) -> None:
+        # Regression (PR #207 round 22): a `/* ... */` block hides the
+        # threshold example on its own line - block comments strip first.
+        _write(
+            self.repo, "jest.config.js",
+            "module.exports = {\n"
+            "  /*\n"
+            "  coverageThreshold: { global: { lines: 80 } },\n"
+            "  */\n"
+            "};\n",
+        )
+        cov = self._classify()["substance"]["coverage_threshold"]
+        self.assertFalse(cov["threshold_found"])
 
     def test_jest_zero_coverage_threshold_detected(self) -> None:
         # Regression (PR #207 round 5): the keyword `coverageThreshold`

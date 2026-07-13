@@ -27666,27 +27666,72 @@ def _prime_parse_ls_files_staged(
     Format per entry: ``<mode> <sha> <stage>\\t<path>`` (NUL-separated with -z).
     Only the blob SHA + path are used — NO content read — so content-hash
     duplicate files are detected purely from the object name.
+
+    The read is STREAMED and stops at the cap: on a huge monorepo the full
+    ls-files output is never materialized - the bounded-scan promise holds for
+    `--classify-only` portfolio triage instead of timing out on the parse.
     """
-    rc, out, _err = _prime_git(root, ["ls-files", "-s", "-z"], collector)
-    if rc != 0:
-        return ([], False)
+    collector.op()
     entries: list[tuple[str, str]] = []
     truncated = False
-    for chunk in out.split("\0"):
-        if not chunk:
-            continue
-        if len(entries) >= _PRIME_MAX_TRACKED_FILES:
-            truncated = True
-            break
-        # Split the "<mode> <sha> <stage>" head from the "<path>" tail on TAB.
-        tab = chunk.find("\t")
-        if tab < 0:
-            continue
-        head = chunk[:tab].split()
-        path = chunk[tab + 1 :]
-        if len(head) < 2:
-            continue
-        entries.append((head[1], path))
+    try:
+        proc = subprocess.Popen(
+            ["git", "-C", str(root), "ls-files", "-s", "-z"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, ValueError):
+        return ([], False)
+    try:
+        buf = b""
+        while True:
+            chunk = proc.stdout.read(65536) if proc.stdout else b""
+            if not chunk:
+                break
+            buf += chunk
+            parts = buf.split(b"\0")
+            buf = parts.pop()  # trailing partial entry
+            for raw in parts:
+                if not raw:
+                    continue
+                if len(entries) >= _PRIME_MAX_TRACKED_FILES:
+                    truncated = True
+                    break
+                tab = raw.find(b"\t")
+                if tab < 0:
+                    continue
+                head = raw[:tab].split()
+                if len(head) < 2:
+                    continue
+                path = raw[tab + 1 :].decode("utf-8", errors="replace")
+                entries.append((head[1].decode("ascii", errors="replace"), path))
+            if truncated:
+                break
+        if truncated:
+            # Cap reached: stop consuming - kill the producer, don't drain it.
+            proc.kill()
+        elif buf:
+            raw = buf
+            tab = raw.find(b"\t")
+            if tab >= 0:
+                head = raw[:tab].split()
+                if len(head) >= 2 and len(entries) < _PRIME_MAX_TRACKED_FILES:
+                    entries.append(
+                        (
+                            head[1].decode("ascii", errors="replace"),
+                            raw[tab + 1 :].decode("utf-8", errors="replace"),
+                        )
+                    )
+        rc = proc.wait(timeout=_PRIME_GIT_TIMEOUT)
+        if rc != 0 and not truncated and not entries:
+            return ([], False)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        if not entries:
+            return ([], False)
     if truncated:
         collector.note_truncated()
     return (entries, truncated)
@@ -29254,12 +29299,16 @@ def _prime_collect_tool_managed(
         elif set(_prime_posix_segments(rel)) & opaque_dirs:
             tool_files.append(rel)
     # Regenerated dirs: the self-managed destructive hits name a repo-internal
-    # dir the same script wipes → a never-edit candidate.
+    # dir the same script wipes → a never-edit candidate. Only actual WIPE
+    # patterns qualify - a generic `--force` flag is not a delete and must not
+    # mark its argument a never-edit dir.
     regenerated_dirs = sorted(
         {
             h["target"].rstrip("/")
             for h in destructive.get("hits", [])
-            if h.get("context_class") == "self-managed" and h.get("target")
+            if h.get("context_class") == "self-managed"
+            and h.get("target")
+            and h.get("pattern") in ("recursive-delete", "git-clean")
         }
     )
     return (
@@ -29589,8 +29638,14 @@ def _prime_collect_ci_gate(
             if lint_re.search(exec_line) and mutating_re.search(exec_line):
                 mutating_lint = True
                 break
-            if default_write_re.search(exec_line) and not no_write_flag_re.search(exec_line):
-                mutating_lint = True
+            # Default-write exemption is PER SEGMENT: in
+            # `black --check . && isort .` the --check protects only black -
+            # the chained isort still writes.
+            for seg in re.split(r"&&|\|\||;", exec_line):
+                if default_write_re.search(seg) and not no_write_flag_re.search(seg):
+                    mutating_lint = True
+                    break
+            if mutating_lint:
                 break
     return (
         {
@@ -29945,8 +30000,12 @@ def _prime_collect_coverage_threshold(
         if not txt:
             continue
         # A threshold left only in a comment (`# fail_under = 80`,
-        # `// coverageThreshold: ...`) does not run - strip comment lines so
-        # TS5 never reports a disabled example as an enforced threshold.
+        # `// coverageThreshold: ...`, or a `/* ... */` block) does not run -
+        # strip block comments THEN comment lines so TS5 never reports a
+        # disabled example as an enforced threshold.
+        txt = re.sub(r"/\*.*?\*/", "", txt, flags=re.S)
+        # An unterminated `/*` comments out the rest of the file.
+        txt = re.sub(r"/\*.*$", "", txt, flags=re.S)
         txt = "\n".join(
             ln for ln in txt.splitlines()
             if not re.match(r"\s*(?:#|//|;|\*|/\*)", ln)
