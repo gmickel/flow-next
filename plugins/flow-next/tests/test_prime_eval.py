@@ -864,6 +864,27 @@ class StacksAndShapeTestCase(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_workspace_pyproject_scripts_feed_shape_markers(self) -> None:
+        # Regression (PR #207 round 12): [project.scripts] in a workspace
+        # pyproject.toml is CLI-shape evidence, same as workspace package.json.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "pymono"
+            _init_repo(repo)
+            _write(repo, "pyproject.toml", "[project]\nname = 'root'\n")
+            _write(
+                repo, "packages/cli/pyproject.toml",
+                "[project]\nname = 'cli'\n[project.scripts]\ncli = 'cli:main'\n",
+            )
+            _commit_all(repo, "seed")
+            markers = self.flowctl._prime_classify(repo)["shape_markers"]
+            self.assertIn(
+                "packages/cli/pyproject.toml [project.scripts]",
+                markers["bin_exports"],
+            )
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_loc_share_is_loc_weighted(self) -> None:
         # Regression (PR #207 round 11): one large Python service file must
         # outrank many tiny TS helpers - loc_share is LOC-weighted, not
@@ -1493,6 +1514,24 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         )
         ci = self._classify()["substance"]["ci_gate"]
         self.assertFalse(ci["has_gate_trigger"])
+
+    def test_trailing_ci_comment_not_executable(self) -> None:
+        # Regression (PR #207 round 12): a trailing shell/YAML comment on an
+        # inline run value is prose (`npm ci # pytest lint later`), while a
+        # URL anchor (no whitespace before #) survives.
+        _write(
+            self.repo, ".github/workflows/ci.yml",
+            "on: [push]\n"
+            "jobs:\n"
+            "  t:\n"
+            "    steps:\n"
+            "      - run: npm ci # pytest lint gitleaks later\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertFalse(ci["has_test_step"])
+        self.assertFalse(ci["has_lint_step"])
+        sec = self._classify()["substance"]["secrets_gate"]
+        self.assertEqual(sec["tools_found"], [])
 
     def test_command_chained_after_echo_still_counts(self) -> None:
         # Regression (PR #207 round 10): only echo/printf SEGMENTS are prose -

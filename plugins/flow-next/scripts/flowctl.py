@@ -28635,14 +28635,22 @@ def _prime_collect_shape_markers(
             if dm in deps and dm not in desktop_markers:
                 desktop_markers.append(dm)
 
-    pyproject = root / "pyproject.toml"
-    if pyproject.exists():
+    # ALL tracked pyproject.toml manifests (bounded), matching the
+    # package.json scan: a Python CLI in a workspace package
+    # (packages/cli/pyproject.toml [project.scripts]) drives Axis 5 too.
+    py_paths = [p for p in deduped if p.rsplit("/", 1)[-1] == "pyproject.toml"][:30]
+    if len([p for p in deduped if p.rsplit("/", 1)[-1] == "pyproject.toml"]) > 30:
+        c.note_sampled()
+    for rel in py_paths:
         c.op()
-        txt = _prime_read_text(pyproject)
-        if txt and re.search(r"(?m)^\s*\[project\.scripts\]", txt):
-            bin_exports.append("pyproject [project.scripts]")
-        if txt and re.search(r"(?m)^\s*\[tool\.poetry\.scripts\]", txt):
-            bin_exports.append("pyproject [tool.poetry.scripts]")
+        txt = _prime_read_tracked(root, rel, c)
+        if not txt:
+            continue
+        label = "pyproject" if rel == "pyproject.toml" else rel
+        if re.search(r"(?m)^\s*\[project\.scripts\]", txt):
+            bin_exports.append(f"{label} [project.scripts]")
+        if re.search(r"(?m)^\s*\[tool\.poetry\.scripts\]", txt):
+            bin_exports.append(f"{label} [tool.poetry.scripts]")
 
     cargo = root / "Cargo.toml"
     if cargo.exists():
@@ -29363,13 +29371,20 @@ def _prime_ci_exec_lines(basename: str, text: str) -> "list[str]":
       `before_script`, `after_script`, `bash`, `pwsh`, `powershell`) - inline,
       block-scalar, and `- item` list forms.
 
-    Comment lines are stripped in both modes.
+    Comment lines are stripped in both modes, and TRAILING comments are
+    stripped from every collected value (`npm ci # pytest later` must not
+    read as a pytest invocation) - whitespace-then-# only, so URL anchors
+    survive.
     """
     if basename in _PRIME_NON_GITHUB_CI:
         keys = r"(?:script|before_script|after_script|bash|pwsh|powershell)"
     else:
         keys = r"run"
     key_re = re.compile(r"^(\s*(?:-\s+)?)" + keys + r"\s*:\s*(.*)$")
+
+    def _no_trailing_comment(value: str) -> str:
+        return re.sub(r"\s+#.*$", "", value).strip()
+
     out: list[str] = []
     lines = text.splitlines()
     idx = 0
@@ -29383,7 +29398,9 @@ def _prime_ci_exec_lines(basename: str, text: str) -> "list[str]":
         inline = m.group(2).strip()
         if inline and not re.fullmatch(r"[|>][+-]?\d*", inline):
             if not inline.startswith("#"):
-                out.append(inline)
+                inline = _no_trailing_comment(inline)
+                if inline:
+                    out.append(inline)
             continue
         # Block scalar / block sequence: lines indented deeper than the key.
         while idx < n:
@@ -29394,7 +29411,11 @@ def _prime_ci_exec_lines(basename: str, text: str) -> "list[str]":
                 if indent <= key_indent:
                     break
                 if not body.startswith("#"):
-                    out.append(body[2:].strip() if body.startswith("- ") else body)
+                    val = _no_trailing_comment(
+                        body[2:].strip() if body.startswith("- ") else body
+                    )
+                    if val:
+                        out.append(val)
             idx += 1
     return out
 
