@@ -257,6 +257,19 @@ class BlobDedupTestCase(unittest.TestCase):
         # 3 tracked files, 1 is a content duplicate → 2 unique.
         self.assertEqual(size["files"], 2)
 
+    def test_overcap_file_marks_size_collector_truncated(self) -> None:
+        # Regression (PR #207 round 17): a partial line count of a file larger
+        # than the per-file read cap is a SAMPLE - the size envelope must
+        # report truncated/incomplete, never complete high-confidence.
+        big = "x = 1\n" * 400_000  # ~2.4 MB, over _PRIME_MAX_FILE_BYTES
+        _write(self.repo, "legacy/monolith.py", big)
+        _write(self.repo, "src/app.py", "x = 1\n")
+        _commit_all(self.repo, "seed")
+        payload = self.flowctl._prime_classify(self.repo)
+        size_env = next(c for c in payload["collectors"] if c["name"] == "size")
+        self.assertTrue(size_env["truncated"])
+        self.assertFalse(size_env["complete"])
+
     def test_globbed_regenerated_target_excluded(self) -> None:
         # Regression (PR #207 round 16): `rm -rf src/generated/*` names the
         # directory - its files must be excluded, not only literal-`*` paths.

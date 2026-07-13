@@ -28255,7 +28255,14 @@ def _prime_count_lines(
         if fp.is_symlink():
             return None
         with fp.open("rb") as fh:
-            data = fh.read(_PRIME_MAX_FILE_BYTES)
+            data = fh.read(_PRIME_MAX_FILE_BYTES + 1)
+        if len(data) > _PRIME_MAX_FILE_BYTES:
+            # Envelope truthfulness: a partial count of an over-cap file is a
+            # SAMPLE, never authoritative - the collector must say so instead
+            # of reporting complete/high-confidence evidence.
+            if collector is not None:
+                collector.note_truncated()
+            data = data[:_PRIME_MAX_FILE_BYTES]
         if not data:
             return 0
         return data.count(b"\n") + (0 if data.endswith(b"\n") else 1)
