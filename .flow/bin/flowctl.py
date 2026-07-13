@@ -27626,7 +27626,14 @@ def _prime_read_tracked(
     if _prime_contained(root, rel) is None:
         collector.fail("path escapes root: " + rel)
         return None
-    return _prime_read_text(root / rel, cap)
+    # Envelope truthfulness: read cap+1 so a capped read is DETECTED - a
+    # partial prefix must mark the collector truncated, never pass as a
+    # complete read (a signal past the cap would silently report as missing).
+    txt = _prime_read_text(root / rel, cap + 1)
+    if txt is not None and len(txt) > cap:
+        collector.note_truncated()
+        return txt[:cap]
+    return txt
 
 
 def _prime_posix_segments(path: str) -> "list[str]":
@@ -28881,12 +28888,17 @@ def _prime_collect_scope(
 
 # Source-code extensions for env-read / large-file / encoding scans (post the
 # path exclusions the size collector already applied).
+# Source scans stay ALIGNED with the recognized stack extensions (minus prose
+# and shell) - Delphi/PLSQL/VB6/COBOL playbooks depend on FH2/LEG5 inspecting
+# exactly the files those stacks are made of.
 _PRIME_SOURCE_EXTS = frozenset(
     {
         ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs",
         ".py", ".go", ".rs", ".java", ".kt", ".cs", ".php", ".rb",
         ".c", ".h", ".cc", ".cpp", ".hpp", ".pas", ".swift",
     }
+) | frozenset(
+    ext for ext, stack in _PRIME_EXT_STACK.items() if stack not in ("Markdown", "Shell")
 )
 
 # Platform / CI vars filtered from the DE1 undeclared-env cross-ref (never a

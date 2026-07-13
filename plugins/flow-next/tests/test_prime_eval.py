@@ -291,6 +291,30 @@ class BlobDedupTestCase(unittest.TestCase):
         self.assertIn("regenerated", size["exclusions_applied"])
         self.assertEqual(size["files"], 2)
 
+    def test_capped_text_read_marks_truncated(self) -> None:
+        # Regression (PR #207 round 24): a text read that hits its cap is a
+        # partial prefix - the collector must say truncated, and the content
+        # is sliced to the cap.
+        _write(self.repo, "big.txt", "a" * 500)
+        _commit_all(self.repo, "seed")
+        col = self.flowctl._PrimeCollector("probe")
+        txt = self.flowctl._prime_read_tracked(self.repo, "big.txt", col, cap=100)
+        self.assertEqual(len(txt), 100)
+        self.assertTrue(col.truncated)
+        col2 = self.flowctl._PrimeCollector("probe2")
+        txt2 = self.flowctl._prime_read_tracked(self.repo, "big.txt", col2, cap=1000)
+        self.assertEqual(len(txt2), 500)
+        self.assertFalse(col2.truncated)
+
+    def test_legacy_source_extensions_scanned(self) -> None:
+        # Regression (PR #207 round 24): FH2/LEG5 must inspect the files the
+        # legacy playbooks depend on - .pkb/.cbl/.dpr are source.
+        for ext in (".dpr", ".pks", ".pkb", ".bas", ".frm", ".cbl", ".cob"):
+            self.assertIn(ext, self.flowctl._PRIME_SOURCE_EXTS, ext)
+        src = self.flowctl._prime_iter_source(["pkg/body.pkb", "readme.md", "app.py"])
+        self.assertIn("pkg/body.pkb", src)
+        self.assertNotIn("readme.md", src)
+
     def test_streamed_inventory_caps_and_truncates(self) -> None:
         # Regression (PR #207 round 22): the ls-files read streams and stops
         # at the cap - entries bounded, truncated flagged.
