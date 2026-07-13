@@ -184,8 +184,13 @@ the worktree guard:
 ROOT="${ROOT:-.}"
 run_bounded() { _limit="$1"; shift; "$@" & _pid=$!; ( sleep "$_limit"; kill -TERM "$_pid" 2>/dev/null; sleep 2; kill -KILL "$_pid" 2>/dev/null ) & _watch=$!; wait "$_pid" 2>/dev/null; _rc=$?; kill "$_watch" 2>/dev/null; return "$_rc"; }
 PRE_SNAP="$(git -C "$ROOT" status --porcelain 2>/dev/null)"
-run_bounded 300 sh -c 'cd "$0" && <stacks.md verify build command>' "$ROOT" 2>&1 | tail -20
+# Capture the BUILD's exit status BEFORE truncating output - `$?` after a
+# pipeline is the LAST command's status (tail), which would mark a broken
+# build as passing BS2/G1.
+BUILD_OUT="$(mktemp)"
+run_bounded 300 sh -c 'cd "$0" && <stacks.md verify build command>' "$ROOT" > "$BUILD_OUT" 2>&1
 BUILD_RC=$?
+tail -20 "$BUILD_OUT"
 POST_SNAP="$(git -C "$ROOT" status --porcelain 2>/dev/null)"
 [ "$PRE_SNAP" = "$POST_SNAP" ] || echo "TAINTED: build mutated the worktree"
 ```

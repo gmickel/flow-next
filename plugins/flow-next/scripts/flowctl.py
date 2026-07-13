@@ -29294,9 +29294,16 @@ def _prime_ci_triggers_non_github(basename: str, text: str) -> "set[str]":
                 idx += 1
         return found
     if basename == "azure-pipelines.yml":
-        if re.search(r"(?m)^\s*trigger\s*:\s*none\s*(?:#.*)?$", text):
-            return set()
-        return {"push"}
+        found_az: set[str] = set()
+        if not re.search(r"(?m)^\s*trigger\s*:\s*none\s*(?:#.*)?$", text):
+            found_az.add("push")
+        # A top-level `pr:` key (not `pr: none`) is Azure's PR trigger - a
+        # trigger:none + pr:... file is a valid PR-only gate.
+        if re.search(r"(?m)^pr\s*:", text) and not re.search(
+            r"(?m)^pr\s*:\s*none\s*(?:#.*)?$", text
+        ):
+            found_az.add("pull_request")
+        return found_az
     return set()
 
 
@@ -29366,12 +29373,19 @@ def _prime_collect_ci_gate(
         base = path.rsplit("/", 1)[-1]
         # Test/lint detection sees only EXECUTABLE content (run:/script: values)
         # - a `name: test lint` step or matrix entry never sets the flags.
-        # echo/printf lines are prose, not invocation: a placeholder step like
-        # `echo "test lint not configured"` must not report a gate.
-        exec_text = "\n".join(
-            ln for ln in _prime_ci_exec_lines(base, text)
-            if not re.match(r"\s*(?:-\s*)?(?:echo|printf)\b", ln)
-        )
+        # echo/printf SEGMENTS are prose, not invocation - but commands chained
+        # after them (`echo "running tests" && pytest`) are real: split on
+        # shell chain operators, drop only the echo/printf segments, keep the
+        # rest.
+        exec_lines: list[str] = []
+        for ln in _prime_ci_exec_lines(base, text):
+            kept = [
+                seg for seg in re.split(r"&&|\|\||;|\|", ln)
+                if seg.strip() and not re.match(r"\s*(?:-\s*)?(?:echo|printf)\b", seg)
+            ]
+            if kept:
+                exec_lines.append(" ; ".join(s.strip() for s in kept))
+        exec_text = "\n".join(exec_lines)
         if test_re.search(exec_text):
             has_test = True
         if lint_re.search(exec_text):

@@ -1421,6 +1421,46 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         self.assertTrue(ci["has_gate_trigger"])
         self.assertIn("push", ci["triggers"])
 
+    def test_azure_pr_only_pipeline_counts_as_gated(self) -> None:
+        # Regression (PR #207 round 10): `trigger: none` + a top-level `pr:`
+        # key is Azure's documented PR-only gate.
+        _write(
+            self.repo, "azure-pipelines.yml",
+            "trigger: none\n"
+            "pr:\n"
+            "  branches:\n"
+            "    include:\n"
+            "      - main\n"
+            "steps:\n"
+            "  - script: pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_gate_trigger"])
+        self.assertIn("pull_request", ci["triggers"])
+        self.assertNotIn("push", ci["triggers"])
+
+    def test_azure_pr_none_not_gated(self) -> None:
+        _write(
+            self.repo, "azure-pipelines.yml",
+            "trigger: none\npr: none\nsteps:\n  - script: ./deploy.sh\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertFalse(ci["has_gate_trigger"])
+
+    def test_command_chained_after_echo_still_counts(self) -> None:
+        # Regression (PR #207 round 10): only echo/printf SEGMENTS are prose -
+        # `echo "running tests" && pytest` runs a real gate.
+        _write(
+            self.repo, ".github/workflows/ci.yml",
+            "on: [push]\n"
+            "jobs:\n"
+            "  t:\n"
+            "    steps:\n"
+            "      - run: echo \"running tests\" && pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_test_step"])
+
     def test_echoed_prose_is_not_a_test_or_lint_gate(self) -> None:
         # Regression (PR #207 round 9): echo/printf lines are prose - a
         # placeholder step echoing the words test/lint is not an invocation.
@@ -2159,6 +2199,20 @@ class PrimeProseContractTestCase(unittest.TestCase):
 
     def test_mirror_metachar_rejection(self) -> None:
         self._assert_metachar_rejection(PRIME_MIRROR_DIR)
+
+    def _assert_build_rc_captured_before_tail(self, base: Path) -> None:
+        # Regression (PR #207 round 10, P1): `cmd | tail; BUILD_RC=$?` records
+        # tail's status - the build probe must capture its own exit code
+        # before truncating output, or a broken build passes BS2/G1.
+        text = self._workflow(base)
+        self.assertIn('> "$BUILD_OUT" 2>&1', text, base)
+        self.assertNotIn("| tail -20\nBUILD_RC=$?", text, base)
+
+    def test_canonical_build_rc_capture(self) -> None:
+        self._assert_build_rc_captured_before_tail(PRIME_SKILL_DIR)
+
+    def test_mirror_build_rc_capture(self) -> None:
+        self._assert_build_rc_captured_before_tail(PRIME_MIRROR_DIR)
 
 
 class AgenticEvalIsolationTestCase(unittest.TestCase):
