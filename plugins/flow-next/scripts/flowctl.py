@@ -28480,6 +28480,932 @@ def _prime_collect_scope(
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Substance collectors (fn-92.13) — deterministic substance-grep outputs the
+# skill CONSUMES in Phase 2/3 (the `emitter`-owned rows of the pillars.md
+# criterion-to-score map, resolution 21a). RAW SIGNALS ONLY — no judgment, no
+# verdicts, no severities resolved here (that is skill-side). Each collector is
+# bounded (a per-collector operation budget) and wrapped in the same
+# completeness envelope as the classification collectors.
+#
+# REDACTION (hard contract, classification.md + pillars.md HP9/DE1): emitted
+# evidence carries KEY NAMES / matched-pattern TOKENS ONLY — never a secret
+# value, never a complete sensitive config line, never a full hook command
+# string. A fixture asserts key-name-only redaction (test_prime_eval.py).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Source-code extensions for env-read / large-file / encoding scans (post the
+# path exclusions the size collector already applied).
+_PRIME_SOURCE_EXTS = frozenset(
+    {
+        ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs",
+        ".py", ".go", ".rs", ".java", ".kt", ".cs", ".php", ".rb",
+        ".c", ".h", ".cc", ".cpp", ".hpp", ".pas", ".swift",
+    }
+)
+
+# Platform / CI vars filtered from the DE1 undeclared-env cross-ref (never a
+# real ".env.example" omission — they come from the host, not the app).
+_PRIME_WELLKNOWN_ENV = frozenset(
+    {
+        "NODE_ENV", "CI", "PATH", "HOME", "PORT", "PWD", "USER", "LANG",
+        "TERM", "SHELL", "TZ", "HOSTNAME", "DEBUG", "LOG_LEVEL", "VERBOSE",
+        "PYTHONPATH", "PYTHONUNBUFFERED", "TMPDIR", "TEMP", "TMP",
+        "GITHUB_ACTIONS", "GITHUB_TOKEN", "GITHUB_SHA", "GITHUB_REF",
+        "RUNNER_OS", "RUNNER_TEMP", "GOPATH", "GOROOT", "VIRTUAL_ENV",
+    }
+)
+
+# Env-read patterns across the common runtimes (var NAME captured; the value is
+# never touched → redaction-safe by construction).
+_PRIME_ENV_READ_RE = re.compile(
+    r"""(?x)
+      process\.env\.([A-Za-z_][A-Za-z0-9_]*)
+    | process\.env\[\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]
+    | os\.environ(?:\.get)?\(?\[?\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]
+    | os\.getenv\(\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]
+    | os\.Getenv\(\s*"([A-Za-z_][A-Za-z0-9_]*)"
+    | \bENV\[\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]
+    | \bgetenv\(\s*"([A-Za-z_][A-Za-z0-9_]*)"
+    """
+)
+
+# Destructive-command patterns (FH5). POSIX character classes only; matched over
+# manifest scripts / Makefiles / shell scripts, NEVER executed.
+_PRIME_DESTRUCTIVE_PATTERNS = (
+    ("recursive-delete", re.compile(r"\brm\s+-[A-Za-z]*[rf][A-Za-z]*\b")),
+    ("force-flag", re.compile(r"--force\b")),
+    ("force-push", re.compile(r"\bpush\s+(?:-[A-Za-z]*f|--force)\b")),
+    ("git-clean", re.compile(r"\bgit\s+clean\b")),
+    ("db-drop", re.compile(r"(?i)\bDROP\s+(?:TABLE|DATABASE|SCHEMA)\b")),
+    ("truncate", re.compile(r"(?i)\bTRUNCATE\s+TABLE\b")),
+)
+
+# Hook content-class patterns (HP7). Only the matched keyword TOKEN is emitted.
+_PRIME_HOOK_CLASSES = (
+    ("network_call", re.compile(r"\b(curl|wget|nc|ncat|Invoke-WebRequest)\b|https?://")),
+    ("credential_path", re.compile(
+        r"(?i)(\.env\b|credentials|secret|_token\b|id_rsa|\.aws|\.npmrc|\.netrc)")),
+    ("obfuscation", re.compile(r"base64|\beval\b|\|\s*(?:sh|bash)\b|\$\(\s*echo|\\x[0-9a-f]{2}")),
+    ("destructive", re.compile(r"\brm\s+-[A-Za-z]*[rf]|\bgit\s+clean\b|--force\b")),
+)
+
+_PRIME_SUBSTANCE_READ_CAP = 4000  # max source files read across substance scans
+
+
+def _prime_iter_source(deduped: "list[str]") -> "list[str]":
+    """Source-extension subset of the already-excluded/deduped tracked paths."""
+    return [p for p in deduped if os.path.splitext(p)[1].lower() in _PRIME_SOURCE_EXTS]
+
+
+def _prime_env_declared(root: Path, deduped: "list[str]", c: "_PrimeCollector") -> "set[str]":
+    """Var NAMES declared across every `.env.example`-family file (per-member).
+
+    Only the KEY before `=` is captured — the value is never read into the
+    payload (redaction). Workspace-member `.env.example` files count (the
+    correct monorepo pattern), not root-only.
+    """
+    declared: set[str] = set()
+    candidates = [
+        p for p in deduped
+        if p.rsplit("/", 1)[-1] in (".env.example", ".env.sample", ".env.template", ".env.dist")
+    ]
+    for rel in candidates[:50]:
+        c.op()
+        txt = _prime_read_text(root / rel, cap=200_000)
+        if not txt:
+            continue
+        for line in txt.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            key = line.split("=", 1)[0].strip().lstrip("export ").strip()
+            if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
+                declared.add(key)
+    return declared
+
+
+def _prime_collect_env_crossref(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """DE1: diff declared env vars against env READS in source.
+
+    Emits COUNTS + the undeclared var NAMES (safe: names, never values). The
+    skill applies the ~30% "stale template" judgment.
+    """
+    c = _PrimeCollector("substance-env-crossref", budget=_PRIME_SUBSTANCE_READ_CAP + 100)
+    declared = _prime_env_declared(root, deduped, c)
+    read_vars: set[str] = set()
+    sources = _prime_iter_source(deduped)
+    for idx, rel in enumerate(sources):
+        if idx >= _PRIME_SUBSTANCE_READ_CAP:
+            c.note_sampled()
+            break
+        c.op()
+        txt = _prime_read_text(root / rel)
+        if not txt:
+            continue
+        for m in _PRIME_ENV_READ_RE.finditer(txt):
+            name = next((g for g in m.groups() if g), None)
+            if name:
+                read_vars.add(name)
+    undeclared = sorted(
+        v for v in read_vars if v not in declared and v not in _PRIME_WELLKNOWN_ENV
+    )
+    raw = {
+        "env_example_present": bool(declared) or any(
+            p.rsplit("/", 1)[-1].startswith(".env.") for p in deduped
+        ),
+        "declared_count": len(declared),
+        "source_read_count": len(read_vars),
+        "undeclared_count": len(undeclared),
+        "undeclared_vars": undeclared[:100],
+    }
+    return (raw, c)
+
+
+def _prime_destructive_context(line: str, target: str) -> str:
+    """Classify a destructive-command hit by CONTEXT AND TARGET (FH5, raw).
+
+    Returns one of: comment | doc-snippet | string-literal | self-managed |
+    bounded | unbounded. The skill maps these to severities.
+    """
+    stripped = line.strip()
+    if stripped.startswith("#") or stripped.startswith("//") or stripped.startswith("*"):
+        return "comment"
+    if re.match(r'^\s*echo\s', line) or re.search(r'echo\s+["\'].*(?:rm|clean|force)', line):
+        return "string-literal"
+    if not target:
+        return "unbounded"
+    # $HOME / ~ / a single ${VAR} anchored to a subpath = bounded.
+    if re.search(r"\$HOME\b|(^|/)~($|/)|^\~/", target) or re.match(r"^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/\S+", target):
+        return "bounded"
+    # bare / , ~ alone, or a lone parameter expansion = unbounded / parameterized.
+    if target in ("/", "~", "$HOME") or re.match(r"^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/?$", target) or target.startswith("$"):
+        return "unbounded"
+    # relative, repo-internal literal dir (no leading / or ~) = self-managed
+    # candidate (the same script often regenerates it; skill confirms via LEG7).
+    if not target.startswith("/") and not target.startswith("~"):
+        return "self-managed"
+    return "unbounded"
+
+
+def _prime_scan_scripts(root: Path, deduped: "list[str]", c: "_PrimeCollector") -> "list[tuple[str, str]]":
+    """Return (path, text) for manifest scripts + Makefiles + shell scripts.
+
+    package.json `scripts` values are flattened into a synthetic text blob so
+    the destructive/secret patterns match them uniformly.
+    """
+    out: list[tuple[str, str]] = []
+    pkg = root / "package.json"
+    if pkg.exists():
+        c.op()
+        txt = _prime_read_text(pkg)
+        if txt:
+            try:
+                scripts = json.loads(txt).get("scripts", {}) or {}
+                blob = "\n".join(f"{k}: {v}" for k, v in scripts.items() if isinstance(v, str))
+                out.append(("package.json[scripts]", blob))
+            except (ValueError, TypeError, AttributeError):
+                pass
+    script_paths = [
+        p for p in deduped
+        if p.rsplit("/", 1)[-1] in ("Makefile", "makefile", "GNUmakefile", "justfile", "Justfile", "Taskfile.yml")
+        or _prime_posix_segments(p)[:1] == ["scripts"]
+        or p.endswith((".sh", ".bash", ".zsh"))
+    ]
+    for rel in script_paths[:200]:
+        c.op()
+        txt = _prime_read_text(root / rel, cap=200_000)
+        if txt:
+            out.append((rel, txt))
+    return out
+
+
+def _prime_collect_destructive(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH5: raw destructive-command hits WITH context class (never executed)."""
+    c = _PrimeCollector("substance-destructive", budget=500)
+    hits: list[dict[str, Any]] = []
+    for path, text in _prime_scan_scripts(root, deduped, c):
+        for line in text.splitlines():
+            for label, pat in _PRIME_DESTRUCTIVE_PATTERNS:
+                m = pat.search(line)
+                if not m:
+                    continue
+                # Extract a target token following the match for context class.
+                tail = line[m.end():].strip()
+                target = tail.split()[0] if tail and not tail.startswith("-") else (
+                    tail.split()[1] if len(tail.split()) > 1 else ""
+                )
+                hits.append(
+                    {
+                        "file": path,
+                        "pattern": label,
+                        "context_class": _prime_destructive_context(line, target),
+                        "target": target[:80],
+                    }
+                )
+                if len(hits) >= 200:
+                    c.note_truncated()
+                    break
+            if len(hits) >= 200:
+                break
+        if len(hits) >= 200:
+            break
+    return ({"hits": hits, "hit_count": len(hits)}, c)
+
+
+def _prime_collect_encoding(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """LEG5: BOM / non-UTF-8 sniff on a SAMPLE per extension (read-only)."""
+    c = _PrimeCollector("substance-encoding", budget=300)
+    by_ext: dict[str, list[str]] = {}
+    for rel in _prime_iter_source(deduped):
+        ext = os.path.splitext(rel)[1].lower()
+        by_ext.setdefault(ext, []).append(rel)
+    samples: list[dict[str, Any]] = []
+    for ext, files in sorted(by_ext.items()):
+        non_utf8 = 0
+        encodings: set[str] = set()
+        sample = files[:3]
+        if len(files) > 3:
+            c.note_sampled()
+        for rel in sample:
+            c.op()
+            try:
+                with (root / rel).open("rb") as fh:
+                    head = fh.read(4096)
+            except (OSError, ValueError):
+                continue
+            if head.startswith(b"\xef\xbb\xbf"):
+                encodings.add("utf-8-bom")
+            elif head.startswith(b"\xff\xfe"):
+                encodings.add("utf-16-le")
+                non_utf8 += 1
+            elif head.startswith(b"\xfe\xff"):
+                encodings.add("utf-16-be")
+                non_utf8 += 1
+            else:
+                try:
+                    head.decode("utf-8")
+                    encodings.add("utf-8")
+                except UnicodeDecodeError:
+                    encodings.add("non-utf-8")
+                    non_utf8 += 1
+        samples.append(
+            {
+                "ext": ext,
+                "files_total": len(files),
+                "sampled": len(sample),
+                "non_utf8_count": non_utf8,
+                "encodings": sorted(encodings),
+            }
+        )
+    return ({"per_extension": samples}, c)
+
+
+def _prime_collect_atomic_pairs(
+    deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """LEG6: designer/generator atomic-pair CANDIDATES from the tracked list."""
+    c = _PrimeCollector("substance-atomic-pairs", budget=200)
+    tracked = set(deduped)
+    pairs: list[dict[str, Any]] = []
+
+    def _add(kind: str, a: str, b: str) -> None:
+        pairs.append({"kind": kind, "files": sorted([a, b])})
+
+    for rel in deduped:
+        c.op()
+        low = rel.lower()
+        if low.endswith(".pas"):
+            dfm = rel[:-4] + ".dfm"
+            if dfm in tracked or (rel[:-4] + ".dfm").lower() in {t.lower() for t in tracked}:
+                _add("delphi-form", rel, dfm)
+        if low.endswith(".designer.cs"):
+            base = rel[: -len(".designer.cs")] + ".cs"
+            if base in tracked:
+                _add("winforms-designer", rel, base)
+        if low.endswith(".proto"):
+            stem = rel[:-6]
+            for gen in (stem + "_pb2.py", stem + ".pb.go", stem + "_pb.js"):
+                if gen in tracked:
+                    _add("protobuf", rel, gen)
+    # Dual-copy invariant candidates: identical basename in >=2 distinct dirs.
+    by_base: dict[str, list[str]] = {}
+    for rel in deduped:
+        base = rel.rsplit("/", 1)[-1]
+        if base.endswith((".py", ".ts", ".js", ".go")) and "/" in rel:
+            by_base.setdefault(base, []).append(rel)
+    for base, locs in by_base.items():
+        if len(locs) >= 2:
+            pairs.append({"kind": "dual-copy-candidate", "files": sorted(locs)[:4]})
+    # Dedup identical pair entries.
+    seen: set[str] = set()
+    uniq: list[dict[str, Any]] = []
+    for p in pairs:
+        key = p["kind"] + "|" + "|".join(p["files"])
+        if key not in seen:
+            seen.add(key)
+            uniq.append(p)
+    return ({"candidates": uniq[:100], "candidate_count": len(uniq)}, c)
+
+
+def _prime_collect_tool_managed(
+    deduped: "list[str]", destructive: "dict[str, Any]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """LEG7: tool-managed / regenerated-dir never-edit CANDIDATES (raw)."""
+    c = _PrimeCollector("substance-tool-managed", budget=200)
+    suffixes = (".suo", ".dproj", ".dsk", ".identcache", ".user", ".ncb", ".sln.docstates")
+    opaque_dirs = frozenset({"__history", "__recovery"})
+    tool_files: list[str] = []
+    for rel in deduped:
+        c.op()
+        if rel.lower().endswith(suffixes):
+            tool_files.append(rel)
+        elif set(_prime_posix_segments(rel)) & opaque_dirs:
+            tool_files.append(rel)
+    # Regenerated dirs: the self-managed destructive hits name a repo-internal
+    # dir the same script wipes → a never-edit candidate.
+    regenerated_dirs = sorted(
+        {
+            h["target"].rstrip("/")
+            for h in destructive.get("hits", [])
+            if h.get("context_class") == "self-managed" and h.get("target")
+        }
+    )
+    return (
+        {
+            "tool_managed_files": tool_files[:100],
+            "regenerated_dir_candidates": regenerated_dirs[:50],
+        },
+        c,
+    )
+
+
+def _prime_collect_docs_freshness(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH1: last-commit timestamps for instruction/docs files vs src churn."""
+    c = _PrimeCollector("substance-docs-freshness", budget=30)
+    instruction_files: list[dict[str, Any]] = []
+    for doc in ("CLAUDE.md", "AGENTS.md", "README.md"):
+        rc, out, _err = _prime_git(root, ["log", "-1", "--format=%ct", "--", doc], c)
+        ts = int(out.strip()) if rc == 0 and out.strip().isdigit() else None
+        if ts is not None:
+            instruction_files.append({"path": doc, "last_commit_ts": ts})
+    # Newest source-file commit timestamp (pathspec-restricted to source exts).
+    src_exts = sorted({os.path.splitext(p)[1] for p in _prime_iter_source(deduped)})
+    src_pathspecs = [f"*{ext}" for ext in src_exts[:12]]
+    src_last_ts: Optional[int] = None
+    if src_pathspecs:
+        rc, out, _err = _prime_git(
+            root, ["log", "-1", "--format=%ct", "--", *src_pathspecs], c
+        )
+        if rc == 0 and out.strip().isdigit():
+            src_last_ts = int(out.strip())
+    return (
+        {"instruction_files": instruction_files, "src_last_commit_ts": src_last_ts},
+        c,
+    )
+
+
+def _prime_read_ci_workflows(root: Path, deduped: "list[str]", c: "_PrimeCollector") -> "list[tuple[str, str]]":
+    out: list[tuple[str, str]] = []
+    wf = [
+        p for p in deduped
+        if _prime_posix_segments(p)[:2] == [".github", "workflows"]
+        and p.endswith((".yml", ".yaml"))
+    ]
+    wf += [p for p in deduped if p.rsplit("/", 1)[-1] in (".gitlab-ci.yml", "bitbucket-pipelines.yml", "azure-pipelines.yml")]
+    for rel in wf[:40]:
+        c.op()
+        txt = _prime_read_text(root / rel, cap=200_000)
+        if txt:
+            out.append((rel, txt))
+    return out
+
+
+def _prime_collect_ci_gate(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH3: CI trigger + test/lint step + mutating-lint greps (raw)."""
+    c = _PrimeCollector("substance-ci-gate", budget=100)
+    workflows = _prime_read_ci_workflows(root, deduped, c)
+    test_re = re.compile(r"(?i)\b(pytest|jest|vitest|mocha|go\s+test|cargo\s+test|npm\s+(?:run\s+)?test|rspec|phpunit|dotnet\s+test|gradle\s+test|mvn\s+test|\btest\b)")
+    lint_re = re.compile(r"(?i)\b(eslint|biome|oxlint|ruff|flake8|golangci-lint|clippy|black|prettier|rubocop|\blint\b)")
+    trigger_re = re.compile(r"(?im)^\s*(pull_request|push)\s*:")
+    mutating_re = re.compile(r"(?i)(--fix|--write|format:write|ruff\s+.*--fix|eslint\s+.*--fix|biome\s+(?:check\s+)?.*--(?:write|apply))")
+    has_test = has_lint = has_trigger = mutating_lint = False
+    triggers: set[str] = set()
+    files: list[str] = []
+    for path, text in workflows:
+        files.append(path)
+        if test_re.search(text):
+            has_test = True
+        if lint_re.search(text):
+            has_lint = True
+        for m in trigger_re.finditer(text):
+            triggers.add(m.group(1))
+            has_trigger = True
+        if lint_re.search(text) and mutating_re.search(text):
+            mutating_lint = True
+    return (
+        {
+            "workflow_files": files,
+            "has_test_step": has_test,
+            "has_lint_step": has_lint,
+            "has_gate_trigger": has_trigger,
+            "triggers": sorted(triggers),
+            "mutating_lint": mutating_lint,
+        },
+        c,
+    )
+
+
+def _prime_collect_secrets_gate(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH4: secrets-scanner presence in the commit gate or CI (config-presence)."""
+    c = _PrimeCollector("substance-secrets-gate", budget=60)
+    tool_re = re.compile(r"(?i)\b(gitleaks|detect-secrets|trufflehog|ggshield|git-secrets)\b")
+    tools: set[str] = set()
+    locations: list[str] = []
+    scan_files = [
+        p for p in deduped
+        if p.rsplit("/", 1)[-1] in (".pre-commit-config.yaml", ".pre-commit-config.yml", "package.json", ".gitleaks.toml", ".secrets.baseline")
+        or _prime_posix_segments(p)[:2] == [".github", "workflows"]
+        or p.rsplit("/", 1)[-1] in (".gitlab-ci.yml",)
+    ]
+    for rel in scan_files[:60]:
+        c.op()
+        base = rel.rsplit("/", 1)[-1]
+        if base in (".gitleaks.toml", ".secrets.baseline"):
+            tools.add(base.lstrip(".").split(".")[0])
+            locations.append(rel)
+            continue
+        txt = _prime_read_text(root / rel, cap=200_000)
+        if not txt:
+            continue
+        found = {m.group(1).lower() for m in tool_re.finditer(txt)}
+        if found:
+            tools |= found
+            locations.append(rel)
+    return ({"tools_found": sorted(tools), "locations": sorted(set(locations))}, c)
+
+
+def _prime_collect_api_contract(
+    deduped: "list[str]", framework_markers: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH6: API-contract file globs; http_framework flag from shape markers."""
+    c = _PrimeCollector("substance-api-contract", budget=100)
+    contract_re = re.compile(
+        r"(?i)(^|/)(openapi|swagger)\.(ya?ml|json)$|\.(graphql|gql|proto)$|(^|/)schema\.graphql$"
+    )
+    contracts: list[str] = []
+    for rel in deduped:
+        c.op()
+        if contract_re.search(rel):
+            contracts.append(rel)
+        if len(contracts) >= 100:
+            c.note_truncated()
+            break
+    http_fw = {"next", "react", "vue", "svelte", "@angular/core", "express", "fastify", "nestjs"}
+    http_framework = any(fw in http_fw for fw in framework_markers) or any(
+        m in ("next.config", "django", "rails", "vite") for m in framework_markers
+    )
+    return (
+        {"contract_files": contracts, "http_framework_present": http_framework},
+        c,
+    )
+
+
+def _prime_collect_config_presence(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH7 / FH11 / FH12 / FH13: config-presence rows (raw booleans + evidence)."""
+    c = _PrimeCollector("substance-config-presence", budget=120)
+    tracked = set(deduped)
+    basenames = {p.rsplit("/", 1)[-1] for p in deduped}
+
+    def _grep_any(files: "list[str]", pat: "re.Pattern") -> "Optional[str]":
+        for rel in files:
+            c.op()
+            txt = _prime_read_text(root / rel, cap=200_000)
+            if txt and pat.search(txt):
+                return rel
+        return None
+
+    manifests = [p for p in deduped if p.rsplit("/", 1)[-1] in (
+        "package.json", "pyproject.toml", "setup.cfg", "tox.ini", "pytest.ini",
+        "jest.config.js", "jest.config.ts", "vitest.config.ts", "playwright.config.ts",
+        "playwright.config.js", ".importlinter",
+    )]
+
+    # FH7 module-boundary.
+    mb_files = {".dependency-cruiser.js", ".dependency-cruiser.cjs", ".importlinter"}
+    module_boundary = sorted(basenames & mb_files)
+    if not module_boundary:
+        hit = _grep_any(
+            manifests,
+            re.compile(r"(?i)(eslint-plugin-boundaries|import-linter|\[tool\.importlinter\]|dependency-cruiser|@nx/enforce-module-boundaries|archunit)"),
+        )
+        if hit:
+            module_boundary = [hit]
+
+    # FH11 test-isolation / parallel safety.
+    ti_hit = _grep_any(
+        manifests,
+        re.compile(r"(?i)(pytest-xdist|-n\s+auto|maxWorkers|--parallel|test\.concurrent|\bworkers\s*:)"),
+    )
+
+    # FH12 flaky-test signals (retry config).
+    flaky_hit = _grep_any(
+        manifests,
+        re.compile(r"(?i)(pytest-rerunfailures|--reruns\b|retryTimes|\bretries\s*:|flaky)"),
+    )
+
+    # FH13 LLM-eval harness (deps-gated).
+    llm_sdks: set[str] = set()
+    pkg = root / "package.json"
+    if pkg.exists():
+        c.op()
+        txt = _prime_read_text(pkg)
+        if txt:
+            try:
+                data = json.loads(txt)
+                deps = {}
+                deps.update(data.get("dependencies", {}) or {})
+                deps.update(data.get("devDependencies", {}) or {})
+                for sdk in ("openai", "@anthropic-ai/sdk", "langchain", "@langchain/core", "cohere-ai", "llamaindex", "ai"):
+                    if sdk in deps:
+                        llm_sdks.add(sdk)
+            except (ValueError, TypeError, AttributeError):
+                pass
+    for cfg in ("pyproject.toml", "requirements.txt"):
+        if cfg in basenames:
+            c.op()
+            txt = _prime_read_text(root / cfg, cap=200_000)
+            if txt:
+                for sdk in ("openai", "anthropic", "langchain", "llama-index", "llama_index", "cohere", "litellm"):
+                    if re.search(r"(?im)^\s*['\"]?" + re.escape(sdk) + r"\b", txt) or sdk in txt:
+                        llm_sdks.add(sdk)
+    eval_harness: list[str] = []
+    if llm_sdks:
+        if any(_prime_posix_segments(p)[:1] == ["evals"] for p in deduped):
+            eval_harness.append("evals/")
+        if basenames & {"promptfooconfig.yaml", "promptfoo.yaml", "braintrust.config.ts"}:
+            eval_harness.append("promptfoo/braintrust config")
+
+    return (
+        {
+            "module_boundary": module_boundary,
+            "test_isolation": ti_hit,
+            "flaky_signals": flaky_hit,
+            "llm_sdk_present": bool(llm_sdks),
+            "llm_sdks": sorted(llm_sdks),
+            "eval_harness": eval_harness,
+        },
+        c,
+    )
+
+
+def _prime_collect_type_strictness(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """SV3: strict-flag config + a bounded `: any` ratio probe on TS sources."""
+    c = _PrimeCollector("substance-type-strictness", budget=400)
+    ts_flags: dict[str, bool] = {}
+    tsconfig = root / "tsconfig.json"
+    if tsconfig.exists():
+        c.op()
+        txt = _prime_read_text(tsconfig)
+        if txt:
+            for flag in ("strict", "noImplicitAny", "strictNullChecks"):
+                m = re.search(r'"' + flag + r'"\s*:\s*(true|false)', txt)
+                if m:
+                    ts_flags[flag] = m.group(1) == "true"
+    mypy_strict = False
+    pyright_strict = False
+    for cfg in ("mypy.ini", "setup.cfg", "pyproject.toml", "pyrightconfig.json"):
+        if (root / cfg).exists():
+            c.op()
+            txt = _prime_read_text(root / cfg, cap=200_000)
+            if not txt:
+                continue
+            if re.search(r"(?im)^\s*strict\s*=\s*true", txt) or "[tool.mypy]" in txt and re.search(r"(?im)strict\s*=\s*true", txt):
+                mypy_strict = True
+            if re.search(r'"typeCheckingMode"\s*:\s*"strict"', txt) or re.search(r"(?im)typeCheckingMode\s*=\s*[\"']?strict", txt):
+                pyright_strict = True
+    # Bounded `: any` ratio probe on TS sources (sample).
+    ts_files = [p for p in deduped if p.endswith((".ts", ".tsx", ".mts", ".cts"))]
+    any_hits = 0
+    lines_sampled = 0
+    sampled_files = 0
+    any_re = re.compile(r":\s*any\b|<any>|as\s+any\b")
+    for idx, rel in enumerate(ts_files):
+        if idx >= 300:
+            c.note_sampled()
+            break
+        c.op()
+        txt = _prime_read_text(root / rel)
+        if not txt:
+            continue
+        sampled_files += 1
+        lines_sampled += txt.count("\n") + 1
+        any_hits += len(any_re.findall(txt))
+    return (
+        {
+            "ts_strict_flags": ts_flags,
+            "mypy_strict": mypy_strict,
+            "pyright_strict": pyright_strict,
+            "any_hits": any_hits,
+            "ts_files_sampled": sampled_files,
+            "ts_lines_sampled": lines_sampled,
+        },
+        c,
+    )
+
+
+def _prime_collect_coverage_threshold(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """TS5: an ENFORCED coverage threshold quoted from config (raw presence)."""
+    c = _PrimeCollector("substance-coverage-threshold", budget=60)
+    basenames = {p.rsplit("/", 1)[-1] for p in deduped}
+    candidates = [
+        p for p in deduped if p.rsplit("/", 1)[-1] in (
+            "pyproject.toml", "setup.cfg", ".coveragerc", "tox.ini", "pytest.ini",
+            "jest.config.js", "jest.config.ts", "vitest.config.ts", "package.json",
+            "nyc.config.js", ".nycrc", ".nycrc.json",
+        )
+    ]
+    thr_re = re.compile(r"(?i)(fail_under\s*=\s*(\d+)|--cov-fail-under[=\s]+(\d+)|coverageThreshold|\"(?:branches|lines|functions|statements)\"\s*:\s*(\d+))")
+    found_in: list[str] = []
+    zero_only = None
+    for rel in candidates[:60]:
+        c.op()
+        txt = _prime_read_text(root / rel, cap=200_000)
+        if not txt:
+            continue
+        m = thr_re.search(txt)
+        if m:
+            found_in.append(rel)
+            val = next((g for g in (m.group(2), m.group(3), m.group(4)) if g), None)
+            if val is not None:
+                zero_only = (int(val) == 0) if zero_only in (None, True) else False
+    return (
+        {"threshold_found": bool(found_in), "locations": found_in, "zero_threshold": zero_only},
+        c,
+    )
+
+
+def _prime_collect_setup_stages(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """DE4: setup script chains real stages (static content grep, never run)."""
+    c = _PrimeCollector("substance-setup-stages", budget=60)
+    scripts: list[tuple[str, str]] = []
+    for rel in deduped:
+        base = rel.rsplit("/", 1)[-1]
+        if base in ("setup.sh", "bootstrap.sh", "install.sh", "Makefile", "makefile") or (
+            _prime_posix_segments(rel)[:1] == ["scripts"] and base.startswith("setup")
+        ):
+            c.op()
+            txt = _prime_read_text(root / rel, cap=200_000)
+            if txt:
+                scripts.append((rel, txt))
+    pkg = root / "package.json"
+    if pkg.exists():
+        c.op()
+        txt = _prime_read_text(pkg)
+        if txt:
+            try:
+                sc = json.loads(txt).get("scripts", {}) or {}
+                blob = "\n".join(str(v) for v in sc.values())
+                if blob:
+                    scripts.append(("package.json[scripts]", blob))
+            except (ValueError, TypeError, AttributeError):
+                pass
+    install_re = re.compile(r"(?i)\b(install|npm ci|pnpm i|yarn|pip install|poetry install|uv sync|go mod download|bundle install)\b")
+    migrate_re = re.compile(r"(?i)\b(migrate|migration|seed|db:push|db:create|prisma migrate|alembic|rake db)\b")
+    has_install = any(install_re.search(t) for _p, t in scripts)
+    has_migrate_seed = any(migrate_re.search(t) for _p, t in scripts)
+    return (
+        {
+            "setup_scripts": [p for p, _t in scripts],
+            "has_install": has_install,
+            "has_migrate_seed": has_migrate_seed,
+        },
+        c,
+    )
+
+
+def _prime_collect_devcontainer(
+    root: Path
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """DE5: devcontainer non-empty (features / postCreateCommand present)."""
+    c = _PrimeCollector("substance-devcontainer", budget=10)
+    present = False
+    has_features = False
+    has_post_create = False
+    for rel in (".devcontainer/devcontainer.json", ".devcontainer.json"):
+        p = root / rel
+        if p.exists():
+            present = True
+            c.op()
+            txt = _prime_read_text(p)
+            if txt:
+                if re.search(r'"features"\s*:\s*\{[^}]*[^\s{}]', txt):
+                    has_features = True
+                if re.search(r'"postCreateCommand"\s*:\s*"[^"]+', txt) or re.search(r'"postCreateCommand"\s*:\s*\[', txt):
+                    has_post_create = True
+            break
+    return (
+        {"present": present, "has_features": has_features, "has_post_create": has_post_create},
+        c,
+    )
+
+
+def _prime_collect_large_files(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH2: p50 / max file LOC + top-N offenders (bounded reads over source)."""
+    c = _PrimeCollector("substance-large-files", budget=_PRIME_MAX_LOC_FILES + 50)
+    sources = _prime_iter_source(deduped)
+    counts: list[tuple[str, int]] = []
+    for idx, rel in enumerate(sources):
+        if idx >= _PRIME_MAX_LOC_FILES:
+            c.note_sampled()
+            break
+        c.op()
+        n = _prime_count_lines(root, rel)
+        if n is not None:
+            counts.append((rel, n))
+    p50 = 0
+    mx = 0
+    top: list[dict[str, Any]] = []
+    if counts:
+        nums = sorted(n for _p, n in counts)
+        p50 = nums[len(nums) // 2]
+        mx = nums[-1]
+        top = [
+            {"path": p, "lines": n}
+            for p, n in sorted(counts, key=lambda t: t[1], reverse=True)[:10]
+        ]
+    return ({"p50_lines": p50, "max_lines": mx, "top_offenders": top, "files_measured": len(counts)}, c)
+
+
+def _prime_collect_runtime_currency(
+    root: Path
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """FH10: declared runtime major versions from manifests (report-only, raw)."""
+    c = _PrimeCollector("substance-runtime-currency", budget=20)
+    runtimes: list[dict[str, str]] = []
+    pkg = root / "package.json"
+    if pkg.exists():
+        c.op()
+        txt = _prime_read_text(pkg)
+        if txt:
+            m = re.search(r'"node"\s*:\s*"([^"]+)"', txt)
+            if m:
+                runtimes.append({"lang": "node", "version": m.group(1)})
+    pyproject = root / "pyproject.toml"
+    if pyproject.exists():
+        c.op()
+        txt = _prime_read_text(pyproject, cap=200_000)
+        if txt:
+            m = re.search(r'requires-python\s*=\s*"([^"]+)"', txt)
+            if m:
+                runtimes.append({"lang": "python", "version": m.group(1)})
+    gomod = root / "go.mod"
+    if gomod.exists():
+        c.op()
+        txt = _prime_read_text(gomod, cap=200_000)
+        if txt:
+            m = re.search(r"(?m)^go\s+(\d+\.\d+)", txt)
+            if m:
+                runtimes.append({"lang": "go", "version": m.group(1)})
+    cargo = root / "Cargo.toml"
+    if cargo.exists():
+        c.op()
+        txt = _prime_read_text(cargo, cap=200_000)
+        if txt:
+            m = re.search(r'edition\s*=\s*"(\d+)"', txt)
+            if m:
+                runtimes.append({"lang": "rust", "version": "edition " + m.group(1)})
+    return ({"runtimes": runtimes}, c)
+
+
+def _prime_collect_hooks(
+    root: Path, deduped: "list[str]"
+) -> "tuple[dict[str, Any], _PrimeCollector]":
+    """HP7: hook content-class raw signals — key/keyword TOKENS ONLY (redaction).
+
+    The COMMAND STRING is NEVER emitted; only per-source boolean content
+    classes + the matched keyword token. Hooks are READ, never executed (a
+    committed hook config is an RCE vector, CVE-2025-59536 class).
+    """
+    c = _PrimeCollector("substance-hooks", budget=60)
+    sources: list[tuple[str, str]] = []
+    # Harness hook config (Claude settings) — extract the hooks section only.
+    for rel in (".claude/settings.json", ".claude/settings.local.json"):
+        p = root / rel
+        if p.exists():
+            c.op()
+            txt = _prime_read_text(p)
+            if txt:
+                try:
+                    hooks = json.loads(txt).get("hooks")
+                    sources.append((rel, json.dumps(hooks) if hooks else ""))
+                except (ValueError, TypeError, AttributeError):
+                    sources.append((rel, txt))
+    # git/husky/pre-commit hook files.
+    hook_files = [
+        p for p in deduped
+        if _prime_posix_segments(p)[:1] == [".husky"]
+        or p.rsplit("/", 1)[-1] in (".pre-commit-config.yaml", ".pre-commit-config.yml")
+    ]
+    for rel in hook_files[:30]:
+        c.op()
+        txt = _prime_read_text(root / rel, cap=200_000)
+        if txt is not None:
+            sources.append((rel, txt))
+    results: list[dict[str, Any]] = []
+    for rel, text in sources:
+        classes: dict[str, bool] = {}
+        tokens: set[str] = set()
+        for label, pat in _PRIME_HOOK_CLASSES:
+            m = pat.search(text)
+            classes[label] = bool(m)
+            if m:
+                tokens.add((m.group(1) if m.groups() and m.group(1) else m.group(0))[:24])
+        stripped = re.sub(r"\s+", "", text)
+        is_stub = (not stripped) or bool(re.fullmatch(r"(?:echo[^\n]*)+", text.strip()))
+        results.append(
+            {
+                "source": rel,
+                "content_classes": classes,
+                "matched_tokens": sorted(tokens),
+                "stub": is_stub,
+            }
+        )
+    return ({"hooks": results, "hook_source_count": len(results)}, c)
+
+
+def _prime_collect_substance(
+    root: Path,
+    deduped: "list[str]",
+    framework_markers: "list[str]",
+) -> "tuple[dict[str, Any], list[_PrimeCollector]]":
+    """Assemble every emitter-owned substance-grep row (raw signals only)."""
+    env, env_c = _prime_collect_env_crossref(root, deduped)
+    destructive, destr_c = _prime_collect_destructive(root, deduped)
+    encoding, enc_c = _prime_collect_encoding(root, deduped)
+    atomic, atomic_c = _prime_collect_atomic_pairs(deduped)
+    tool_managed, tm_c = _prime_collect_tool_managed(deduped, destructive)
+    docs_fresh, docs_c = _prime_collect_docs_freshness(root, deduped)
+    ci_gate, ci_c = _prime_collect_ci_gate(root, deduped)
+    secrets, sec_c = _prime_collect_secrets_gate(root, deduped)
+    api, api_c = _prime_collect_api_contract(deduped, framework_markers)
+    config, cfg_c = _prime_collect_config_presence(root, deduped)
+    strictness, strict_c = _prime_collect_type_strictness(root, deduped)
+    coverage, cov_c = _prime_collect_coverage_threshold(root, deduped)
+    setup, setup_c = _prime_collect_setup_stages(root, deduped)
+    devc, devc_c = _prime_collect_devcontainer(root)
+    large, large_c = _prime_collect_large_files(root, deduped)
+    runtime, rt_c = _prime_collect_runtime_currency(root)
+    hooks, hooks_c = _prime_collect_hooks(root, deduped)
+
+    substance = {
+        "type_strictness": strictness,       # SV3
+        "coverage_threshold": coverage,      # TS5
+        "env_crossref": env,                 # DE1
+        "setup_stages": setup,               # DE4
+        "devcontainer": devc,                # DE5
+        "docs_freshness": docs_fresh,        # FH1
+        "large_files": large,                # FH2
+        "ci_gate": ci_gate,                  # FH3
+        "secrets_gate": secrets,             # FH4
+        "destructive_scan": destructive,     # FH5
+        "api_contract": api,                 # FH6
+        "config_presence": config,           # FH7 / FH11 / FH12 / FH13
+        "runtime_currency": runtime,         # FH10
+        "encoding_sample": encoding,         # LEG5
+        "atomic_pairs": atomic,              # LEG6
+        "tool_managed": tool_managed,        # LEG7
+        "hooks": hooks,                      # HP7
+    }
+    collectors = [
+        strict_c, cov_c, env_c, setup_c, devc_c, docs_c, large_c, ci_c, sec_c,
+        destr_c, api_c, cfg_c, rt_c, enc_c, atomic_c, tm_c, hooks_c,
+    ]
+    return (substance, collectors)
+
+
 def _prime_classify(root: Path) -> "dict[str, Any]":
     """Assemble the full pinned classification payload for ``root``."""
     top = _prime_git_toplevel(root)
@@ -28496,6 +29422,9 @@ def _prime_classify(root: Path) -> "dict[str, Any]":
     size, size_c, deduped = _prime_collect_size(root, staged, ls_truncated)
     stacks, stacks_c = _prime_collect_stacks(root, deduped)
     shape_markers, shape_c = _prime_collect_shape_markers(root, deduped)
+    substance, substance_collectors = _prime_collect_substance(
+        root, deduped, shape_markers["framework_markers"]
+    )
 
     payload: dict[str, Any] = {
         "schema_version": PRIME_SCHEMA_VERSION,
@@ -28507,6 +29436,7 @@ def _prime_classify(root: Path) -> "dict[str, Any]":
             "stacks": stacks,
         },
         "shape_markers": shape_markers,
+        "substance": substance,
         "collectors": [
             scope_c.to_dict(),
             ls_collector.to_dict(),
@@ -28516,6 +29446,7 @@ def _prime_classify(root: Path) -> "dict[str, Any]":
             size_c.to_dict(),
             stacks_c.to_dict(),
             shape_c.to_dict(),
+            *(sc.to_dict() for sc in substance_collectors),
         ],
     }
     return payload
