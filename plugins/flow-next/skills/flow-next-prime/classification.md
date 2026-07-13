@@ -39,7 +39,7 @@ A single XOR verdict silently drops constellation guidance for a monorepo that i
 
 ### Axis 3 - size / legibility band: `small (<100K) | medium (100-400K) | large (400K-2M) | huge (>2M LOC or >20K files)`
 
-LOC via `scc` when available (seconds even at 15M LoC), else `tokei`, else file-count x estimate. Never `cloc` (8-20x slower), never exhaustive reads.
+The banded LOC is the bounded file-estimate over the EXCLUDED, deduped blob list, so the number honors the exclusions below (and content-hash dedup) exactly. `scc` (seconds even at 15M LoC) / `tokei`, when present, run only as whole-checkout **corroboration** (emitted under `loc_corroboration`) - they count the whole tree and can't see the per-file/blob exclusions, so they never set the band. Never `cloc` (8-20x slower), never exhaustive reads.
 
 **Exclusions applied BEFORE counting** (each hit a real repo in eval):
 
@@ -180,8 +180,9 @@ The deterministic layer of Phase 0.5 ships as a pure-stdlib flowctl emitter (bou
       "confidence": "high | medium | low",
       "loc": 0,
       "files": 0,
-      "tool": "scc | tokei | file-estimate",
+      "tool": "file-estimate",
       "exclusions_applied": ["tool-managed", "vendored", "fixtures", "agent-state", "hash-duplicate", "regenerated", "legacy-snapshot"],
+      "loc_corroboration": { "tool": "scc | tokei", "loc_wholetree": 0 },
       "legibility": {
         "top_level_dirs": 0,
         "entrypoints": [],

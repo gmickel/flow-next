@@ -27590,6 +27590,42 @@ def _prime_read_text(path: Path, cap: int = _PRIME_MAX_FILE_BYTES) -> Optional[s
         return None
 
 
+def _prime_contained(root: Path, rel: str) -> Optional[Path]:
+    """Join a git-tracked relative path onto `root` and confirm (via realpath)
+    it stays inside `root`. Returns None on ANY escape - a `..` traversal, an
+    absolute entry, or a parent symlink resolving outside the tree. Defense in
+    depth over the git index (which normally forbids `..`); callers treat the
+    None sentinel as a skip. Does NOT open the file.
+    """
+    try:
+        base = os.path.realpath(str(root))
+        target = os.path.realpath(os.path.join(base, rel))
+    except (OSError, ValueError):
+        return None
+    if target != base and not target.startswith(base + os.sep):
+        return None
+    return Path(target)
+
+
+def _prime_read_tracked(
+    root: Path,
+    rel: str,
+    collector: "_PrimeCollector",
+    cap: int = _PRIME_MAX_FILE_BYTES,
+) -> Optional[str]:
+    """Read a git-tracked relative path with root-containment + symlink guards.
+
+    Verifies `root / rel` stays under `root` (realpath prefix check) BEFORE any
+    open; an escape is skipped and counted as a collector error. The unresolved
+    join is handed to `_prime_read_text`, so its symlink skip still applies (a
+    tracked symlink pointing inside the tree is skipped, not followed).
+    """
+    if _prime_contained(root, rel) is None:
+        collector.fail("path escapes root: " + rel)
+        return None
+    return _prime_read_text(root / rel, cap)
+
+
 def _prime_posix_segments(path: str) -> "list[str]":
     return [seg for seg in path.replace("\\", "/").split("/") if seg]
 
@@ -27711,7 +27747,11 @@ def _prime_origin_org(root: Path) -> Optional[str]:
 
 
 def _prime_collect_lifecycle(root: Path) -> "tuple[dict[str, Any], _PrimeCollector]":
-    c = _PrimeCollector("lifecycle", budget=12)
+    # Op bound: 5 git probes (rev-list, tag, ls-files, log, shortlog) + up to 6
+    # CI-config probes (loop runs all 6 when NONE match) + 1 generator-scaffold
+    # op + 1 lockfile op = 13. Budget with headroom so a full scan on a real
+    # repo reports cap_hit=False / complete=True.
+    c = _PrimeCollector("lifecycle", budget=16)
     evidence: list[str] = []
 
     rc, out, _err = _prime_git(root, ["rev-list", "--count", "HEAD"], c)
@@ -27965,6 +28005,11 @@ def _prime_collect_topology(
     prefix_family = [
         n for n in sibling_git_dirs_list if n.split("-", 1)[0] == self_prefix
     ]
+    # The assessed repo ALWAYS shares its own prefix, so it counts as a family
+    # member: a `svc-a` + `svc-b` pair is a 2-repo cluster even though only ONE
+    # sibling matches. The LIKELY threshold is >=2 repos in the family, i.e.
+    # >=1 matching sibling.
+    prefix_cluster = len(prefix_family) >= 1
 
     # shared_org: origin org appears in a sibling's .git/config url.
     shared_org = False
@@ -28033,7 +28078,7 @@ def _prime_collect_topology(
 
     # Tier resolution with the workspace-parent dampener.
     tier = "none"
-    likely_signal = bool(prefix_family and len(prefix_family) >= 2) or shared_org
+    likely_signal = prefix_cluster or shared_org
     ask_signal = bool(in_repo_external_refs or prose_cross_repo_refs)
     if parent_confirmed:
         tier = "b"
@@ -28042,8 +28087,9 @@ def _prime_collect_topology(
     elif likely_signal:
         if workspace_parent:
             # shared_org alone is meaningless in a workspace parent; only a
-            # prefix-family cluster (>=2) keeps it LIKELY (and it always asks).
-            tier = "a" if len(prefix_family) >= 2 else "none"
+            # prefix-family cluster (self + >=1 sibling) keeps it LIKELY (and it
+            # always asks).
+            tier = "a" if prefix_cluster else "none"
         else:
             tier = "a"
 
@@ -28091,8 +28137,15 @@ def _prime_collect_topology(
     return ({"monorepo": monorepo, "constellation_member": constellation}, cm, cc)
 
 
-def _prime_count_lines(root: Path, path: str) -> Optional[int]:
+def _prime_count_lines(
+    root: Path, path: str, collector: "Optional[_PrimeCollector]" = None
+) -> Optional[int]:
     try:
+        # Containment: reject a `..`/absolute escape before any open.
+        if _prime_contained(root, path) is None:
+            if collector is not None:
+                collector.fail("path escapes root: " + path)
+            return None
         fp = root / path
         # Containment: skip symlinks (may point outside the tree).
         if fp.is_symlink():
@@ -28140,34 +28193,37 @@ def _prime_collect_size(
 
     files = len(deduped)
 
-    # LOC: scc > tokei > file-estimate (bounded line reads over unique blobs).
+    # LOC: the band-authoritative count is ALWAYS the bounded file-estimate over
+    # the EXCLUDED, deduped blob list, so `loc` honors `exclusions_applied` (and
+    # content-hash dedup) exactly. scc/tokei count the WHOLE checkout - they can
+    # NOT see our per-file path/blob exclusions - so they run only as
+    # whole-tree corroboration and never set the band. This keeps the envelope
+    # truthful: `tool` always names what produced the reported `loc`.
     tool = "file-estimate"
     loc = 0
-    if shutil.which("scc"):
-        tool = "scc"
-        rc, out, _err = _prime_git_free_tool(root, ["scc", "--format", "json"], c)
-        loc = _prime_scc_total(out) if rc == 0 else 0
-        if rc != 0:
-            tool = "file-estimate"
-    elif shutil.which("tokei"):
-        tool = "tokei"
-        rc, out, _err = _prime_git_free_tool(
-            root, ["tokei", "--output", "json"], c
-        )
-        loc = _prime_tokei_total(out) if rc == 0 else 0
-        if rc != 0:
-            tool = "file-estimate"
+    read_budget = _PRIME_MAX_LOC_FILES
+    for idx, path in enumerate(deduped):
+        if idx >= read_budget:
+            c.note_sampled()
+            break
+        c.op()
+        n = _prime_count_lines(root, path, c)
+        if n is not None:
+            loc += n
 
-    if tool == "file-estimate":
-        read_budget = _PRIME_MAX_LOC_FILES
-        for idx, path in enumerate(deduped):
-            if idx >= read_budget:
-                c.note_sampled()
-                break
-            c.op()
-            n = _prime_count_lines(root, path)
-            if n is not None:
-                loc += n
+    # Corroboration only (whole-checkout, NOT exclusion-aware, does NOT band).
+    corroborating_tool: Optional[str] = None
+    loc_wholetree: Optional[int] = None
+    if shutil.which("scc"):
+        rc, out, _err = _prime_git_free_tool(root, ["scc", "--format", "json"], c)
+        if rc == 0:
+            corroborating_tool = "scc"
+            loc_wholetree = _prime_scc_total(out)
+    elif shutil.which("tokei"):
+        rc, out, _err = _prime_git_free_tool(root, ["tokei", "--output", "json"], c)
+        if rc == 0:
+            corroborating_tool = "tokei"
+            loc_wholetree = _prime_tokei_total(out)
     c.tool = tool
 
     # Band.
@@ -28216,6 +28272,11 @@ def _prime_collect_size(
         evidence.append(f"{duplicates} content-hash duplicate file(s) deduped")
     if exclusions_applied:
         evidence.append("exclusions: " + ", ".join(sorted(exclusions_applied)))
+    if corroborating_tool is not None:
+        evidence.append(
+            f"{loc_wholetree} LOC via {corroborating_tool} "
+            "(whole-checkout corroboration; not exclusion-aware; not banded)"
+        )
 
     size = {
         "band": band,
@@ -28224,6 +28285,11 @@ def _prime_collect_size(
         "files": files,
         "tool": tool,
         "exclusions_applied": sorted(exclusions_applied),
+        "loc_corroboration": (
+            {"tool": corroborating_tool, "loc_wholetree": loc_wholetree}
+            if corroborating_tool is not None
+            else None
+        ),
         "legibility": legibility,
         "evidence": evidence,
     }
@@ -28589,7 +28655,7 @@ def _prime_env_declared(root: Path, deduped: "list[str]", c: "_PrimeCollector") 
     ]
     for rel in candidates[:50]:
         c.op()
-        txt = _prime_read_text(root / rel, cap=200_000)
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
         if not txt:
             continue
         for line in txt.splitlines():
@@ -28623,7 +28689,7 @@ def _prime_collect_env_crossref(
             c.note_sampled()
             break
         c.op()
-        txt = _prime_read_text(root / rel)
+        txt = _prime_read_tracked(root, rel, c)
         if not txt:
             continue
         for m in _PRIME_ENV_READ_RE.finditer(txt):
@@ -28698,7 +28764,7 @@ def _prime_scan_scripts(root: Path, deduped: "list[str]", c: "_PrimeCollector") 
     ]
     for rel in script_paths[:200]:
         c.op()
-        txt = _prime_read_text(root / rel, cap=200_000)
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
         if txt:
             out.append((rel, txt))
     return out
@@ -28757,8 +28823,16 @@ def _prime_collect_encoding(
             c.note_sampled()
         for rel in sample:
             c.op()
+            fp = root / rel
+            # Same guards as the text readers: skip tracked symlinks, and reject
+            # a `..`/absolute escape before opening (count it in the envelope).
+            if fp.is_symlink():
+                continue
+            if _prime_contained(root, rel) is None:
+                c.fail("path escapes root: " + rel)
+                continue
             try:
-                with (root / rel).open("rb") as fh:
+                with fp.open("rb") as fh:
                     head = fh.read(4096)
             except (OSError, ValueError):
                 continue
@@ -28907,10 +28981,40 @@ def _prime_read_ci_workflows(root: Path, deduped: "list[str]", c: "_PrimeCollect
     wf += [p for p in deduped if p.rsplit("/", 1)[-1] in (".gitlab-ci.yml", "bitbucket-pipelines.yml", "azure-pipelines.yml")]
     for rel in wf[:40]:
         c.op()
-        txt = _prime_read_text(root / rel, cap=200_000)
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
         if txt:
             out.append((rel, txt))
     return out
+
+
+def _prime_ci_triggers(text: str) -> "set[str]":
+    """Extract push / pull_request GitHub Actions triggers across ALL `on:`
+    forms, not just the mapping-key style:
+
+    - mapping keys:   `on:\\n  push:\\n  pull_request:`
+    - inline scalar:  `on: push`
+    - inline flow-list: `on: [push, pull_request]`
+    - block sequence: `on:\\n  - push\\n  - pull_request`
+
+    (`on` may be written quoted - `"on":` - since YAML 1.1 reads bare `on` as a
+    boolean.) Recognizing all four keeps FH3's CI-gate signal from falsely
+    reporting no commit/PR gate on common valid workflows.
+    """
+    found: set[str] = set()
+    # Mapping keys under `on:` (`push:` / `pull_request:`).
+    for m in re.finditer(r"(?im)^\s*(pull_request|push)\s*:", text):
+        found.add(m.group(1))
+    # Block-sequence items (`- push` / `- pull_request`).
+    for m in re.finditer(r"(?im)^\s*-\s*(pull_request|push)\b", text):
+        found.add(m.group(1))
+    # Inline scalar or flow-list value on the `on:` line itself.
+    m = re.search(r"""(?im)^\s*['"]?on['"]?\s*:\s*(.+)$""", text)
+    if m:
+        val = m.group(1).split("#", 1)[0]
+        for tok in ("push", "pull_request"):
+            if re.search(r"\b" + tok + r"\b", val):
+                found.add(tok)
+    return found
 
 
 def _prime_collect_ci_gate(
@@ -28921,7 +29025,6 @@ def _prime_collect_ci_gate(
     workflows = _prime_read_ci_workflows(root, deduped, c)
     test_re = re.compile(r"(?i)\b(pytest|jest|vitest|mocha|go\s+test|cargo\s+test|npm\s+(?:run\s+)?test|rspec|phpunit|dotnet\s+test|gradle\s+test|mvn\s+test|\btest\b)")
     lint_re = re.compile(r"(?i)\b(eslint|biome|oxlint|ruff|flake8|golangci-lint|clippy|black|prettier|rubocop|\blint\b)")
-    trigger_re = re.compile(r"(?im)^\s*(pull_request|push)\s*:")
     mutating_re = re.compile(r"(?i)(--fix|--write|format:write|ruff\s+.*--fix|eslint\s+.*--fix|biome\s+(?:check\s+)?.*--(?:write|apply))")
     has_test = has_lint = has_trigger = mutating_lint = False
     triggers: set[str] = set()
@@ -28932,8 +29035,9 @@ def _prime_collect_ci_gate(
             has_test = True
         if lint_re.search(text):
             has_lint = True
-        for m in trigger_re.finditer(text):
-            triggers.add(m.group(1))
+        file_triggers = _prime_ci_triggers(text)
+        if file_triggers:
+            triggers |= file_triggers
             has_trigger = True
         if lint_re.search(text) and mutating_re.search(text):
             mutating_lint = True
@@ -28971,7 +29075,7 @@ def _prime_collect_secrets_gate(
             tools.add(base.lstrip(".").split(".")[0])
             locations.append(rel)
             continue
-        txt = _prime_read_text(root / rel, cap=200_000)
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
         if not txt:
             continue
         found = {m.group(1).lower() for m in tool_re.finditer(txt)}
@@ -29019,7 +29123,7 @@ def _prime_collect_config_presence(
     def _grep_any(files: "list[str]", pat: "re.Pattern") -> "Optional[str]":
         for rel in files:
             c.op()
-            txt = _prime_read_text(root / rel, cap=200_000)
+            txt = _prime_read_tracked(root, rel, c, cap=200_000)
             if txt and pat.search(txt):
                 return rel
         return None
@@ -29098,6 +29202,26 @@ def _prime_collect_config_presence(
     )
 
 
+def _prime_ini_section(txt: str, headers: "tuple[str, ...]") -> str:
+    """Return the concatenated body of the given INI/TOML section header(s).
+
+    Header match is whitespace-normalized (`[ tool.mypy ]` -> `[tool.mypy]`), so
+    a scoped probe never leaks across into an unrelated section. Everything
+    after the next `[...]` header ends the section.
+    """
+    want = {h.replace(" ", "") for h in headers}
+    body: list[str] = []
+    in_section = False
+    for line in txt.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            in_section = stripped.replace(" ", "") in want
+            continue
+        if in_section:
+            body.append(line)
+    return "\n".join(body)
+
+
 def _prime_collect_type_strictness(
     root: Path, deduped: "list[str]"
 ) -> "tuple[dict[str, Any], _PrimeCollector]":
@@ -29121,7 +29245,10 @@ def _prime_collect_type_strictness(
             txt = _prime_read_text(root / cfg, cap=200_000)
             if not txt:
                 continue
-            if re.search(r"(?im)^\s*strict\s*=\s*true", txt) or "[tool.mypy]" in txt and re.search(r"(?im)strict\s*=\s*true", txt):
+            # Scope `strict = true` to the [mypy] / [tool.mypy] section only -
+            # an unrelated `strict = true` elsewhere in the file must NOT set it.
+            mypy_section = _prime_ini_section(txt, ("[mypy]", "[tool.mypy]"))
+            if mypy_section and re.search(r"(?im)^\s*strict\s*=\s*true", mypy_section):
                 mypy_strict = True
             if re.search(r'"typeCheckingMode"\s*:\s*"strict"', txt) or re.search(r"(?im)typeCheckingMode\s*=\s*[\"']?strict", txt):
                 pyright_strict = True
@@ -29136,7 +29263,7 @@ def _prime_collect_type_strictness(
             c.note_sampled()
             break
         c.op()
-        txt = _prime_read_text(root / rel)
+        txt = _prime_read_tracked(root, rel, c)
         if not txt:
             continue
         sampled_files += 1
@@ -29173,7 +29300,7 @@ def _prime_collect_coverage_threshold(
     zero_only = None
     for rel in candidates[:60]:
         c.op()
-        txt = _prime_read_text(root / rel, cap=200_000)
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
         if not txt:
             continue
         m = thr_re.search(txt)
@@ -29204,7 +29331,7 @@ def _prime_collect_setup_stages(
             _prime_posix_segments(rel)[:1] == ["scripts"] and base.startswith("setup")
         ):
             c.op()
-            txt = _prime_read_text(root / rel, cap=200_000)
+            txt = _prime_read_tracked(root, rel, c, cap=200_000)
             if txt:
                 scripts.append((rel, txt))
     pkg = root / "package.json"
@@ -29271,7 +29398,7 @@ def _prime_collect_large_files(
             c.note_sampled()
             break
         c.op()
-        n = _prime_count_lines(root, rel)
+        n = _prime_count_lines(root, rel, c)
         if n is not None:
             counts.append((rel, n))
     p50 = 0
@@ -29360,7 +29487,7 @@ def _prime_collect_hooks(
     ]
     for rel in hook_files[:30]:
         c.op()
-        txt = _prime_read_text(root / rel, cap=200_000)
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
         if txt is not None:
             sources.append((rel, txt))
     results: list[dict[str, Any]] = []

@@ -406,6 +406,29 @@ class TopologyTestCase(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_prefix_family_includes_assessed_repo(self) -> None:
+        # Regression (finding 6): `svc-a` + `svc-b` is a 2-repo prefix cluster
+        # even though only ONE sibling matches - the assessed repo counts itself,
+        # so the LIKELY tier fires for the common two-repo naming pattern.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            parent = tmp / "cluster"
+            parent.mkdir()
+            repo = parent / "svc-a"
+            _init_repo(repo)
+            _write(repo, "main.py", "x = 1\n")
+            _commit_all(repo, "seed")
+            sib = parent / "svc-b"
+            _init_repo(sib)
+            _write(sib, "main.py", "y = 1\n")
+            _commit_all(sib, "seed")
+            con = self.flowctl._prime_classify(repo)["axes"]["topology"]["constellation_member"]
+            self.assertEqual(con["tier"], "a")
+            self.assertTrue(con["value"])
+            self.assertIn("svc-b", con["signals"]["prefix_family"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_workspace_parent_dampener(self) -> None:
         # A parent holding many git dirs is a developer WORKSPACE - shared-org
         # is meaningless there and must not auto-confirm a constellation.
@@ -423,6 +446,48 @@ class TopologyTestCase(unittest.TestCase):
                 _init_repo(sib)
             con = self.flowctl._prime_classify(repo)["axes"]["topology"]["constellation_member"]
             self.assertTrue(con["workspace_parent"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ── Tracked-path containment (finding 8) ───────────────────────────────────────
+
+
+class PathContainmentTestCase(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.flowctl = _load_flowctl()
+
+    def test_escape_paths_rejected_and_errored(self) -> None:
+        # A git index path that resolves outside `root` (via `..` or an absolute
+        # entry) must be skipped BEFORE any open, and counted as a collector
+        # error - not read as if it were tracked content.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            root = tmp / "repo"
+            root.mkdir()
+            (tmp / "outside.txt").write_text("SECRET\n", encoding="utf-8")
+            (root / "inside.txt").write_text("ok\n", encoding="utf-8")
+            # Contained relative path resolves under root.
+            self.assertIsNotNone(self.flowctl._prime_contained(root, "inside.txt"))
+            # `..` traversal and an absolute entry are rejected.
+            self.assertIsNone(self.flowctl._prime_contained(root, "../outside.txt"))
+            self.assertIsNone(
+                self.flowctl._prime_contained(root, str(tmp / "outside.txt"))
+            )
+            # _prime_read_tracked skips the escape AND records the error.
+            c = self.flowctl._PrimeCollector("t")
+            self.assertIsNone(
+                self.flowctl._prime_read_tracked(root, "../outside.txt", c)
+            )
+            self.assertEqual(c.status, "error")
+            self.assertTrue(c.errors)
+            # A contained tracked file still reads normally.
+            c2 = self.flowctl._PrimeCollector("t")
+            self.assertEqual(
+                self.flowctl._prime_read_tracked(root, "inside.txt", c2), "ok\n"
+            )
+            self.assertEqual(c2.status, "ok")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -808,6 +873,35 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         self.assertIn("push", ci["triggers"])
         self.assertTrue(ci["mutating_lint"])  # eslint --fix in CI can never fail
 
+    def test_ci_inline_list_trigger_recognized(self) -> None:
+        # Regression (finding 2): `on: [push, pull_request]` is a valid gate and
+        # must NOT report has_gate_trigger=false.
+        _write(
+            self.repo, ".github/workflows/ci.yml",
+            "on: [push, pull_request]\n"
+            "jobs:\n  t:\n    steps:\n      - run: pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_gate_trigger"])
+        self.assertIn("push", ci["triggers"])
+        self.assertIn("pull_request", ci["triggers"])
+
+    def test_ci_scalar_and_block_sequence_triggers(self) -> None:
+        # Regression (finding 2): inline scalar (`on: push`) and block-sequence
+        # (`on:\n  - pull_request`) trigger forms are recognized too.
+        _write(
+            self.repo, ".github/workflows/scalar.yml",
+            "on: push\njobs:\n  t:\n    steps:\n      - run: pytest\n",
+        )
+        _write(
+            self.repo, ".github/workflows/seq.yml",
+            "on:\n  - pull_request\njobs:\n  t:\n    steps:\n      - run: pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_gate_trigger"])
+        self.assertIn("push", ci["triggers"])
+        self.assertIn("pull_request", ci["triggers"])
+
     def test_api_contract_globs_and_http_flag(self) -> None:
         _write(self.repo, "package.json", json.dumps({"dependencies": {"express": "^4"}}))
         _write(self.repo, "api/openapi.yaml", "openapi: 3.0.0\n")
@@ -855,6 +949,22 @@ class SubstanceLegacyRowsTestCase(_SubstanceBase):
         self.assertEqual(strict["ts_strict_flags"]["noImplicitAny"], False)
         self.assertGreaterEqual(strict["any_hits"], 2)
         self.assertGreaterEqual(strict["ts_files_sampled"], 1)
+
+    def test_mypy_strict_scoped_to_mypy_section(self) -> None:
+        # Regression (finding 7): an unrelated `strict = true` under a DIFFERENT
+        # table must not set mypy_strict - the probe is section-scoped.
+        _write(
+            self.repo, "pyproject.toml",
+            "[tool.other]\nstrict = true\n\n[tool.ruff]\nline-length = 88\n",
+        )
+        strict = self._classify()["substance"]["type_strictness"]
+        self.assertFalse(strict["mypy_strict"])
+
+    def test_mypy_strict_detected_in_tool_mypy_section(self) -> None:
+        # Regression (finding 7): `strict = true` inside [tool.mypy] still counts.
+        _write(self.repo, "pyproject.toml", "[tool.mypy]\nstrict = true\n")
+        strict = self._classify()["substance"]["type_strictness"]
+        self.assertTrue(strict["mypy_strict"])
 
     def test_coverage_threshold_presence_and_zero_flag(self) -> None:
         _write(self.repo, ".coveragerc", "[report]\nfail_under = 0\n")

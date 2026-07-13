@@ -433,6 +433,19 @@ def _isolation_report(arena: Path, pre: dict, sentinel: Path, token: str, sig: t
     }
 
 
+def _isolation_breached(iso: dict) -> bool:
+    """True if a run breached the arena in ANY way - an arena write beyond the
+    projection, a sentinel modification, or a token leak. `clean` alone omits
+    the arena-write case, so the blocking-threshold gate uses this stricter
+    predicate: a breached run is never parsed as a valid scored judgment.
+    """
+    return bool(
+        iso.get("arena_changed_beyond_projection")
+        or iso.get("sentinel_modified")
+        or iso.get("sentinel_token_leaked")
+    )
+
+
 # ── one fixture run ──────────────────────────────────────────────────────────────
 
 
@@ -447,6 +460,7 @@ def run_fixture(family: str, backend: str, model: str, expectations: dict, timeo
     attempt_records: list[dict] = []
     parsed: Optional[dict] = None
     isolation: Optional[dict] = None
+    breached_any = False
 
     for attempt in range(RETRIES + 1):
         with tempfile.TemporaryDirectory(prefix="prime-eval-") as td:
@@ -463,23 +477,35 @@ def run_fixture(family: str, backend: str, model: str, expectations: dict, timeo
             )
             isolation = _isolation_report(arena, pre, sentinel, token, sig, out)
             isolation["os_sandboxed"] = sandboxed
-            parsed = _extract_json(out)
+            breached = _isolation_breached(isolation)
+            isolation["breached"] = breached
+            attempt_parsed = _extract_json(out)
             attempt_records.append({
                 "attempt": attempt + 1,
                 "returncode": rc,
                 "timed_out": timed_out,
-                "parsed_ok": parsed is not None,
+                "parsed_ok": attempt_parsed is not None,
+                "isolation_breached": breached,
                 "stderr_tail": (err or "")[-400:],
                 "isolation": isolation,
             })
+            if breached:
+                # Harness contract: a run that wrote in the arena, modified the
+                # sentinel, or leaked the token is NEVER trusted. Discard its
+                # output and retry in a fresh arena - it can never be scored.
+                breached_any = True
+                parsed = None
+                continue
+            parsed = attempt_parsed
             if parsed is not None and not timed_out:
                 break
 
     if parsed is None:
         return {
             "family": family,
-            "status": "no_output",
+            "status": "isolation_failure" if breached_any else "no_output",
             "attempts": attempt_records,
+            "isolation": isolation,
             "score": None,
         }
 
