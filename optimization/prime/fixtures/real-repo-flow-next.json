@@ -1,0 +1,1298 @@
+{
+  "family": "real-repo-flow-next",
+  "note": "Example real-repo baseline generated from the flow-next repo itself via `flowctl prime classify`. SAFE to commit: emitter redaction is key-names-only and gen_fixtures.py rewrites every home/absolute path to a placeholder. Demonstrates the committed-projection format for real-repo baselines - never a live path or CI dependency.",
+  "emitter": {
+    "schema_version": 1,
+    "assessment_scope": {
+      "value": "repository",
+      "confidence": "high",
+      "evidence": [
+        "standalone git checkout at toplevel"
+      ]
+    },
+    "axes": {
+      "lifecycle": {
+        "value": "brownfield",
+        "confidence": "high",
+        "signals": {
+          "commit_count": 1133,
+          "tags": 175,
+          "ci_config": true,
+          "tracked_files": 1877,
+          "generator_scaffold": null,
+          "first_commit_days": 198,
+          "single_contributor": false,
+          "lockfile": false
+        },
+        "evidence": [
+          "1133 commits",
+          "CI config: .github/workflows",
+          "brownfield: established history / CI / tags"
+        ]
+      },
+      "topology": {
+        "monorepo": {
+          "value": false,
+          "confidence": "high",
+          "signals": {
+            "workspace_config": [],
+            "cross_referenced_manifests": 0,
+            "downweighted_subprojects": []
+          },
+          "evidence": [
+            "no workspace / build-graph config"
+          ]
+        },
+        "constellation_member": {
+          "value": false,
+          "tier": "c",
+          "confidence": "low",
+          "workspace_parent": true,
+          "signals": {
+            "sibling_git_dirs": 63,
+            "shared_org": true,
+            "prefix_family": [
+              "flow-next-opencode",
+              "flow-next.dev",
+              "flow-swarm",
+              "flow-test-nextjs"
+            ],
+            "in_repo_external_refs": [],
+            "prose_cross_repo_refs": [
+              "CLAUDE.md: <redacted-path>",
+              "AGENTS.md: <redacted-path>",
+              "README.md: <redacted-path>"
+            ]
+          },
+          "evidence": [
+            "63 sibling git dir(s)",
+            "2 worktree sibling(s) excluded",
+            "workspace-parent dampener active (>20 git dirs)",
+            "prefix family: flow-next-opencode, flow-next.dev, flow-swarm, flow-test-nextjs",
+            "shared org: gmickel",
+            "CLAUDE.md: <redacted-path>",
+            "AGENTS.md: <redacted-path>",
+            "README.md: <redacted-path>"
+          ]
+        }
+      },
+      "size": {
+        "band": "medium",
+        "confidence": "high",
+        "loc": 223691,
+        "files": 747,
+        "tool": "file-estimate",
+        "exclusions_applied": [
+          "fixtures",
+          "hash-duplicate",
+          "tool-managed"
+        ],
+        "legibility": {
+          "top_level_dirs": 8,
+          "entrypoints": [
+            "flow-next-tui/src/index.ts",
+            "flow-next-tui/src/themes/index.ts"
+          ],
+          "generated_vendored_tracked": [
+            "fixtures"
+          ],
+          "instruction_file_lines": 204,
+          "ambiguity_probe_hits": 0
+        },
+        "evidence": [
+          "223691 LOC / 747 files via file-estimate",
+          "band medium",
+          "38 content-hash duplicate file(s) deduped",
+          "exclusions: fixtures, hash-duplicate, tool-managed"
+        ]
+      },
+      "stacks": [
+        {
+          "name": "JavaScript/TypeScript",
+          "manifest": "flow-next-tui/package.json",
+          "loc_share": 0.056,
+          "subproject": true,
+          "confidence": "medium",
+          "evidence": [
+            "manifest flow-next-tui/package.json",
+            "file-share 0.056"
+          ]
+        }
+      ]
+    },
+    "shape_markers": {
+      "bin_exports": [],
+      "framework_markers": [],
+      "serve_health_code": [
+        "flow-next-tui/src/app.ts"
+      ],
+      "desktop_markers": [],
+      "prose_ratio": 0.618
+    },
+    "substance": {
+      "type_strictness": {
+        "ts_strict_flags": {},
+        "mypy_strict": false,
+        "pyright_strict": false,
+        "any_hits": 0,
+        "ts_files_sampled": 35,
+        "ts_lines_sampled": 10871
+      },
+      "coverage_threshold": {
+        "threshold_found": false,
+        "locations": [],
+        "zero_threshold": null
+      },
+      "env_crossref": {
+        "env_example_present": false,
+        "declared_count": 0,
+        "source_read_count": 39,
+        "undeclared_count": 36,
+        "undeclared_vars": [
+          "API_HOST",
+          "CODEX_SANDBOX",
+          "DB_PASSWORD",
+          "EPICS_FILE",
+          "FLOW_ACTOR",
+          "FLOW_CODEX_EFFORT",
+          "FLOW_CODEX_MODEL",
+          "FLOW_COPILOT_EFFORT",
+          "FLOW_COPILOT_MODEL",
+          "FLOW_CURSOR_EFFORT",
+          "FLOW_CURSOR_MODEL",
+          "FLOW_NEXT_ROOT",
+          "FLOW_NONE_MODEL",
+          "FLOW_NO_AUTO_MIGRATE",
+          "FLOW_NO_DEPRECATION",
+          "FLOW_RALPH",
+          "FLOW_REVIEW_BACKEND",
+          "FLOW_RP_EFFORT",
+          "FLOW_RP_MODEL",
+          "FLOW_RP_TIMEOUT",
+          "FLOW_STATE_DIR",
+          "FLOW_TEST_CURSOR_TIMEOUT",
+          "GO_VAR",
+          "MAX_REVIEW_ITERATIONS",
+          "NO_COLOR",
+          "PY_VAR",
+          "RALPH_ITERATION",
+          "REVEVAL_EFFORT",
+          "REVEVAL_MODEL",
+          "REVEVAL_RUNS",
+          "REVIEW_RECEIPT_PATH",
+          "SECRET_TOKEN",
+          "SPECS_FILE",
+          "V",
+          "XREPO_KEYS_DIR",
+          "XREPO_WORK_DIR"
+        ]
+      },
+      "setup_stages": {
+        "setup_scripts": [],
+        "has_install": false,
+        "has_migrate_seed": false
+      },
+      "devcontainer": {
+        "present": false,
+        "has_features": false,
+        "has_post_create": false
+      },
+      "docs_freshness": {
+        "instruction_files": [
+          {
+            "path": "CLAUDE.md",
+            "last_commit_ts": 1783773130
+          },
+          {
+            "path": "AGENTS.md",
+            "last_commit_ts": 1766790570
+          },
+          {
+            "path": "README.md",
+            "last_commit_ts": 1783883966
+          }
+        ],
+        "src_last_commit_ts": 1783927430
+      },
+      "large_files": {
+        "p50_lines": 290,
+        "max_lines": 31928,
+        "top_offenders": [
+          {
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "lines": 31928
+          },
+          {
+            "path": "plugins/flow-next/tests/test_backend_spec.py",
+            "lines": 1859
+          },
+          {
+            "path": "plugins/flow-next/tests/test_prime_eval.py",
+            "lines": 1085
+          },
+          {
+            "path": "plugins/flow-next/scripts/hooks/ralph-guard.py",
+            "lines": 971
+          },
+          {
+            "path": "plugins/flow-next/tests/test_r22_invariant.py",
+            "lines": 906
+          },
+          {
+            "path": "flow-next-tui/src/components/task-list.test.ts",
+            "lines": 822
+          },
+          {
+            "path": "flow-next-tui/src/app.ts",
+            "lines": 759
+          },
+          {
+            "path": "plugins/flow-next/tests/test_codex_delegation_classify.py",
+            "lines": 756
+          },
+          {
+            "path": "plugins/flow-next/tests/test_migrate_rename.py",
+            "lines": 746
+          },
+          {
+            "path": "plugins/flow-next/tests/test_cursor_review_commands.py",
+            "lines": 729
+          }
+        ],
+        "files_measured": 131
+      },
+      "ci_gate": {
+        "workflow_files": [
+          ".github/workflows/docs-linkcheck.yml",
+          ".github/workflows/publish-tui.yml",
+          ".github/workflows/release.yml",
+          ".github/workflows/test-flow-next.yml"
+        ],
+        "has_test_step": true,
+        "has_lint_step": true,
+        "has_gate_trigger": true,
+        "triggers": [
+          "pull_request",
+          "push"
+        ],
+        "mutating_lint": false
+      },
+      "secrets_gate": {
+        "tools_found": [],
+        "locations": []
+      },
+      "destructive_scan": {
+        "hits": [
+          {
+            "file": "plugins/flow-next/codex/skills/flow-next-ralph-init/templates/ralph.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$tmpfile\""
+          },
+          {
+            "file": "plugins/flow-next/codex/skills/flow-next-ralph-init/templates/ralph.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$REVIEW_RECEIPT_PATH\""
+          },
+          {
+            "file": "plugins/flow-next/codex/skills/flow-next-ralph-init/templates/ralph.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$REVIEW_RECEIPT_PATH\""
+          },
+          {
+            "file": "plugins/flow-next/codex/skills/flow-next-ralph-init/templates/ralph.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$REVIEW_RECEIPT_PATH\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/alias_smoke.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/audit_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "{}"
+          },
+          {
+            "file": "plugins/flow-next/scripts/ci_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/ci_test.sh",
+            "pattern": "force-flag",
+            "context_class": "comment",
+            "target": "to"
+          },
+          {
+            "file": "plugins/flow-next/scripts/ci_test.sh",
+            "pattern": "force-flag",
+            "context_class": "self-managed",
+            "target": ">/dev/null"
+          },
+          {
+            "file": "plugins/flow-next/scripts/ci_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "scripts/ralph/runs/test-run"
+          },
+          {
+            "file": "plugins/flow-next/scripts/ci_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "scripts/ralph/runs/auto-test"
+          },
+          {
+            "file": "plugins/flow-next/scripts/ci_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "scripts/ralph/runs/run-a"
+          },
+          {
+            "file": "plugins/flow-next/scripts/ci_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "scripts/ralph/runs/completed-test"
+          },
+          {
+            "file": "plugins/flow-next/scripts/glossary_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "comment",
+            "target": ".flow/"
+          },
+          {
+            "file": "plugins/flow-next/scripts/glossary_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "{}"
+          },
+          {
+            "file": "plugins/flow-next/scripts/glossary_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"'\"$PARENT_GLOSSARY\"'\";"
+          },
+          {
+            "file": "plugins/flow-next/scripts/glossary_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "comment",
+            "target": ".flow/"
+          },
+          {
+            "file": "plugins/flow-next/scripts/glossary_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "comment",
+            "target": ".flow/"
+          },
+          {
+            "file": "plugins/flow-next/scripts/glossary_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "{}"
+          },
+          {
+            "file": "plugins/flow-next/scripts/impl-review_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/make-pr_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "{}"
+          },
+          {
+            "file": "plugins/flow-next/scripts/make-pr_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "unbounded",
+            "target": "<fixture-root>"
+          },
+          {
+            "file": "plugins/flow-next/scripts/make-pr_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "unbounded",
+            "target": "<fixture-root>"
+          },
+          {
+            "file": "plugins/flow-next/scripts/make-pr_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "unbounded",
+            "target": "<fixture-root>"
+          },
+          {
+            "file": "plugins/flow-next/scripts/make-pr_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "unbounded",
+            "target": "<fixture-root>"
+          },
+          {
+            "file": "plugins/flow-next/scripts/make-pr_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "unbounded",
+            "target": "<fixture-root>"
+          },
+          {
+            "file": "plugins/flow-next/scripts/make-pr_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "unbounded",
+            "target": "<fixture-root>"
+          },
+          {
+            "file": "plugins/flow-next/scripts/make-pr_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "unbounded",
+            "target": "<fixture-root>"
+          },
+          {
+            "file": "plugins/flow-next/scripts/map_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "{}"
+          },
+          {
+            "file": "plugins/flow-next/scripts/migration_smoke.sh",
+            "pattern": "force-flag",
+            "context_class": "comment",
+            "target": "proceeds"
+          },
+          {
+            "file": "plugins/flow-next/scripts/migration_smoke.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/migration_smoke.sh",
+            "pattern": "force-flag",
+            "context_class": "comment",
+            "target": "proceeds"
+          },
+          {
+            "file": "plugins/flow-next/scripts/migration_smoke.sh",
+            "pattern": "force-flag",
+            "context_class": "string-literal",
+            "target": "---${NC}\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/migration_smoke.sh",
+            "pattern": "force-flag",
+            "context_class": "self-managed",
+            "target": "--json"
+          },
+          {
+            "file": "plugins/flow-next/scripts/migration_smoke.sh",
+            "pattern": "force-flag",
+            "context_class": "self-managed",
+            "target": "flag"
+          },
+          {
+            "file": "plugins/flow-next/scripts/migration_smoke.sh",
+            "pattern": "force-flag",
+            "context_class": "self-managed",
+            "target": "flag"
+          },
+          {
+            "file": "plugins/flow-next/scripts/migration_smoke.sh",
+            "pattern": "force-flag",
+            "context_class": "self-managed",
+            "target": "completed"
+          },
+          {
+            "file": "plugins/flow-next/scripts/migration_smoke.sh",
+            "pattern": "force-flag",
+            "context_class": "self-managed",
+            "target": "did"
+          },
+          {
+            "file": "plugins/flow-next/scripts/migration_smoke.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": ".flow/.flow_version"
+          },
+          {
+            "file": "plugins/flow-next/scripts/migration_smoke.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": ".flow/.flow_version"
+          },
+          {
+            "file": "plugins/flow-next/scripts/migration_smoke.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": ".flow/epics"
+          },
+          {
+            "file": "plugins/flow-next/scripts/migration_smoke.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": ".flow/.flow_version"
+          },
+          {
+            "file": "plugins/flow-next/scripts/pick_python_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/prospect_smoke_test.sh",
+            "pattern": "force-flag",
+            "context_class": "comment",
+            "target": "+"
+          },
+          {
+            "file": "plugins/flow-next/scripts/prospect_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "{}"
+          },
+          {
+            "file": "plugins/flow-next/scripts/prospect_smoke_test.sh",
+            "pattern": "force-flag",
+            "context_class": "comment",
+            "target": "\u2192"
+          },
+          {
+            "file": "plugins/flow-next/scripts/prospect_smoke_test.sh",
+            "pattern": "force-flag",
+            "context_class": "self-managed",
+            "target": "\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/prospect_smoke_test.sh",
+            "pattern": "force-flag",
+            "context_class": "comment",
+            "target": "\u2192"
+          },
+          {
+            "file": "plugins/flow-next/scripts/prospect_smoke_test.sh",
+            "pattern": "force-flag",
+            "context_class": "self-managed",
+            "target": ">"
+          },
+          {
+            "file": "plugins/flow-next/scripts/prospect_smoke_test.sh",
+            "pattern": "force-flag",
+            "context_class": "self-managed",
+            "target": "promote"
+          },
+          {
+            "file": "plugins/flow-next/scripts/prospect_smoke_test.sh",
+            "pattern": "force-flag",
+            "context_class": "self-managed",
+            "target": "success=True\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/ralph_e2e_rp_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/ralph_e2e_short_rp_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/ralph_e2e_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/ralph_smoke_rp.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/ralph_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/ralph_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$summary\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/resolve-pr_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": ".flow/bin/flowctl.cmd"
+          },
+          {
+            "file": "plugins/flow-next/scripts/smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\".flow/tasks/${EPIC1}.1-evidence.json\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/smoke_test.sh",
+            "pattern": "force-flag",
+            "context_class": "self-managed",
+            "target": ">/dev/null"
+          },
+          {
+            "file": "plugins/flow-next/scripts/smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": ".flow/memory/knowledge/workflow/stale-example-2026-01-01.md"
+          },
+          {
+            "file": "plugins/flow-next/scripts/smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": ".flow/memory/pitfalls.md"
+          },
+          {
+            "file": "plugins/flow-next/scripts/smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$TRIAGE_TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$CHORE_TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "unbounded",
+            "target": "<fixture-root>"
+          },
+          {
+            "file": "plugins/flow-next/scripts/smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$MIG_TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$LL_TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$DISC_TEST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$DISC_SHIM_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$DISC_LIST_DIR\""
+          },
+          {
+            "file": "plugins/flow-next/scripts/smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$VALIDATE_TEST_DIR\"'"
+          },
+          {
+            "file": "plugins/flow-next/scripts/strategy_smoke_test.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "{}"
+          },
+          {
+            "file": "scripts/install-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$CODEX_DIR/skills/$(basename"
+          },
+          {
+            "file": "scripts/install-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "2>/dev/null"
+          },
+          {
+            "file": "scripts/install-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$CODEX_DIR/bin/flowctl\""
+          },
+          {
+            "file": "scripts/install-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$CODEX_DIR/templates/flow-next-ralph-init\""
+          },
+          {
+            "file": "scripts/install-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"${CONFIG}.bak\""
+          },
+          {
+            "file": "scripts/install-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"${CONFIG}.bak\""
+          },
+          {
+            "file": "scripts/install-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"${CONFIG}.bak\""
+          },
+          {
+            "file": "scripts/install-cursor.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$DEST\""
+          },
+          {
+            "file": "scripts/install-cursor.sh",
+            "pattern": "recursive-delete",
+            "context_class": "string-literal",
+            "target": "\\\"$DEST\\\"\""
+          },
+          {
+            "file": "scripts/sync-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"$CODEX_DIR\""
+          },
+          {
+            "file": "scripts/sync-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"${f}.bak\""
+          },
+          {
+            "file": "scripts/sync-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"${phases}.bak\""
+          },
+          {
+            "file": "scripts/sync-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"${work_skill}.bak\""
+          },
+          {
+            "file": "scripts/sync-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"${setup_usage}.bak\""
+          },
+          {
+            "file": "scripts/sync-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"${plan_steps}.bak\""
+          },
+          {
+            "file": "scripts/sync-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"${plan_skill}.bak\""
+          },
+          {
+            "file": "scripts/sync-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"${prime_wf}.bak\""
+          },
+          {
+            "file": "scripts/sync-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"${sk}.bak\""
+          },
+          {
+            "file": "scripts/sync-codex.sh",
+            "pattern": "recursive-delete",
+            "context_class": "self-managed",
+            "target": "\"${f}.bak\""
+          }
+        ],
+        "hit_count": 93
+      },
+      "api_contract": {
+        "contract_files": [],
+        "http_framework_present": false
+      },
+      "config_presence": {
+        "module_boundary": [],
+        "test_isolation": null,
+        "flaky_signals": null,
+        "llm_sdk_present": false,
+        "llm_sdks": [],
+        "eval_harness": []
+      },
+      "runtime_currency": {
+        "runtimes": []
+      },
+      "encoding_sample": {
+        "per_extension": [
+          {
+            "ext": ".py",
+            "files_total": 96,
+            "sampled": 3,
+            "non_utf8_count": 1,
+            "encodings": [
+              "non-utf-8",
+              "utf-8"
+            ]
+          },
+          {
+            "ext": ".ts",
+            "files_total": 35,
+            "sampled": 3,
+            "non_utf8_count": 0,
+            "encodings": [
+              "utf-8"
+            ]
+          }
+        ]
+      },
+      "atomic_pairs": {
+        "candidates": [
+          {
+            "kind": "dual-copy-candidate",
+            "files": [
+              "flow-next-tui/src/index.ts",
+              "flow-next-tui/src/themes/index.ts"
+            ]
+          }
+        ],
+        "candidate_count": 1
+      },
+      "tool_managed": {
+        "tool_managed_files": [],
+        "regenerated_dir_candidates": [
+          "\"",
+          "\"$CHORE_TEST_DIR\"",
+          "\"$CODEX_DIR\"",
+          "\"$CODEX_DIR/bin/flowctl\"",
+          "\"$CODEX_DIR/skills/$(basename",
+          "\"$CODEX_DIR/templates/flow-next-ralph-init\"",
+          "\"$DEST\"",
+          "\"$DISC_LIST_DIR\"",
+          "\"$DISC_SHIM_DIR\"",
+          "\"$DISC_TEST_DIR\"",
+          "\"$LL_TEST_DIR\"",
+          "\"$MIG_TEST_DIR\"",
+          "\"$REVIEW_RECEIPT_PATH\"",
+          "\"$TEST_DIR\"",
+          "\"$TRIAGE_TEST_DIR\"",
+          "\"$VALIDATE_TEST_DIR\"'",
+          "\"$summary\"",
+          "\"$tmpfile\"",
+          "\"${CONFIG}.bak\"",
+          "\"${f}.bak\"",
+          "\"${phases}.bak\"",
+          "\"${plan_skill}.bak\"",
+          "\"${plan_steps}.bak\"",
+          "\"${prime_wf}.bak\"",
+          "\"${setup_usage}.bak\"",
+          "\"${sk}.bak\"",
+          "\"${work_skill}.bak\"",
+          "\"'\"$PARENT_GLOSSARY\"'\";",
+          "\".flow/tasks/${EPIC1}.1-evidence.json\"",
+          "--json",
+          ".flow/.flow_version",
+          ".flow/bin/flowctl.cmd",
+          ".flow/epics",
+          ".flow/memory/knowledge/workflow/stale-example-2026-01-01.md",
+          ".flow/memory/pitfalls.md",
+          "2>/dev/null",
+          ">",
+          ">/dev/null",
+          "completed",
+          "did",
+          "flag",
+          "promote",
+          "scripts/ralph/runs/auto-test",
+          "scripts/ralph/runs/completed-test",
+          "scripts/ralph/runs/run-a",
+          "scripts/ralph/runs/test-run",
+          "success=True\"",
+          "{}"
+        ]
+      },
+      "hooks": {
+        "hooks": [
+          {
+            "source": ".claude/settings.json",
+            "content_classes": {
+              "network_call": false,
+              "credential_path": false,
+              "obfuscation": false,
+              "destructive": false
+            },
+            "matched_tokens": [],
+            "stub": true
+          },
+          {
+            "source": ".claude/settings.local.json",
+            "content_classes": {
+              "network_call": false,
+              "credential_path": false,
+              "obfuscation": false,
+              "destructive": false
+            },
+            "matched_tokens": [],
+            "stub": true
+          }
+        ],
+        "hook_source_count": 2
+      }
+    },
+    "collectors": [
+      {
+        "name": "assessment-scope",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 0
+      },
+      {
+        "name": "inventory",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 1
+      },
+      {
+        "name": "lifecycle",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 8
+      },
+      {
+        "name": "topology-monorepo",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 10
+      },
+      {
+        "name": "topology-constellation",
+        "status": "ok",
+        "complete": false,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": true,
+        "errors": [],
+        "tool": "",
+        "operations": 68
+      },
+      {
+        "name": "size",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "file-estimate",
+        "operations": 747
+      },
+      {
+        "name": "stacks",
+        "status": "ok",
+        "complete": false,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": true,
+        "errors": [],
+        "tool": "",
+        "operations": 747
+      },
+      {
+        "name": "shape-markers",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 7
+      },
+      {
+        "name": "substance-type-strictness",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 35
+      },
+      {
+        "name": "substance-coverage-threshold",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 1
+      },
+      {
+        "name": "substance-env-crossref",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 131
+      },
+      {
+        "name": "substance-setup-stages",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 0
+      },
+      {
+        "name": "substance-devcontainer",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 0
+      },
+      {
+        "name": "substance-docs-freshness",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 4
+      },
+      {
+        "name": "substance-large-files",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 131
+      },
+      {
+        "name": "substance-ci-gate",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 4
+      },
+      {
+        "name": "substance-secrets-gate",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 5
+      },
+      {
+        "name": "substance-destructive",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 32
+      },
+      {
+        "name": "substance-api-contract",
+        "status": "ok",
+        "complete": false,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": true,
+        "errors": [],
+        "tool": "",
+        "operations": 747
+      },
+      {
+        "name": "substance-config-presence",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 3
+      },
+      {
+        "name": "substance-runtime-currency",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 0
+      },
+      {
+        "name": "substance-encoding",
+        "status": "ok",
+        "complete": false,
+        "sampled": true,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 6
+      },
+      {
+        "name": "substance-atomic-pairs",
+        "status": "ok",
+        "complete": false,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": true,
+        "errors": [],
+        "tool": "",
+        "operations": 747
+      },
+      {
+        "name": "substance-tool-managed",
+        "status": "ok",
+        "complete": false,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": true,
+        "errors": [],
+        "tool": "",
+        "operations": 747
+      },
+      {
+        "name": "substance-hooks",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 2
+      }
+    ]
+  },
+  "file_listing": [
+    ".DS_Store",
+    ".agents/plugins/marketplace.json",
+    ".claude-plugin/marketplace.json",
+    ".clawpatch/.gitignore",
+    ".clawpatch/config.json",
+    ".clawpatch/features/feat_agent-tool_a4aa3ba312.json",
+    ".clawpatch/features/feat_agent-tool_b46f99acc8.json",
+    ".clawpatch/features/feat_cli-command_9dd4eebd82.json",
+    ".clawpatch/features/feat_config_be95708fd7.json",
+    ".clawpatch/features/feat_library_8868279c0a.json",
+    ".clawpatch/features/feat_library_fb322b123c.json",
+    ".clawpatch/features/feat_release_3b3fdeb398.json",
+    ".clawpatch/features/feat_service_5a607bc421.json",
+    ".clawpatch/features/feat_ui-flow_f7671d6581.json",
+    ".clawpatch/project.json",
+    ".gitattributes",
+    ".github/FUNDING.yml",
+    ".github/ISSUE_TEMPLATE/bug_report.yml",
+    ".github/ISSUE_TEMPLATE/config.yml",
+    ".github/ISSUE_TEMPLATE/feature_request.yml",
+    ".github/pull_request_template.md",
+    ".github/workflows/docs-linkcheck.yml",
+    ".github/workflows/publish-tui.yml",
+    ".github/workflows/release.yml",
+    ".github/workflows/test-flow-next.yml",
+    ".gitignore",
+    ".pytest_cache/.gitignore",
+    ".pytest_cache/CACHEDIR.TAG",
+    ".pytest_cache/README.md",
+    ".pytest_cache/v/cache/lastfailed",
+    ".pytest_cache/v/cache/nodeids",
+    ".ruff_cache/.gitignore",
+    ".ruff_cache/0.14.11/13838498051598803206",
+    ".ruff_cache/0.14.11/1801834048351153073",
+    ".ruff_cache/0.14.11/694946084302557781",
+    ".ruff_cache/0.15.11/5757049795382042291",
+    ".ruff_cache/CACHEDIR.TAG",
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "CLAUDE.md"
+  ]
+}

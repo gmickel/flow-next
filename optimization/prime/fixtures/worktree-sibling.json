@@ -1,0 +1,476 @@
+{
+  "family": "worktree-sibling",
+  "note": "Sanitized metadata projection for the prime judgment-layer agentic eval. Emitter payload + bounded file listing only; no live checkout, no CI path, no secret values (key-names-only redaction).",
+  "emitter": {
+    "schema_version": 1,
+    "assessment_scope": {
+      "value": "repository",
+      "confidence": "high",
+      "evidence": [
+        "standalone git checkout at toplevel"
+      ]
+    },
+    "axes": {
+      "lifecycle": {
+        "value": "greenfield",
+        "confidence": "medium",
+        "signals": {
+          "commit_count": 1,
+          "tags": 0,
+          "ci_config": false,
+          "tracked_files": 1,
+          "generator_scaffold": null,
+          "first_commit_days": 0,
+          "single_contributor": true,
+          "lockfile": false
+        },
+        "evidence": [
+          "1 commits",
+          "greenfield: no history/tags/CI/lockfile signals"
+        ]
+      },
+      "topology": {
+        "monorepo": {
+          "value": false,
+          "confidence": "high",
+          "signals": {
+            "workspace_config": [],
+            "cross_referenced_manifests": 0,
+            "downweighted_subprojects": []
+          },
+          "evidence": [
+            "no workspace / build-graph config"
+          ]
+        },
+        "constellation_member": {
+          "value": false,
+          "tier": "none",
+          "confidence": "high",
+          "workspace_parent": false,
+          "signals": {
+            "sibling_git_dirs": 0,
+            "shared_org": false,
+            "prefix_family": [],
+            "in_repo_external_refs": [],
+            "prose_cross_repo_refs": []
+          },
+          "evidence": [
+            "1 worktree sibling(s) excluded"
+          ]
+        }
+      },
+      "size": {
+        "band": "small",
+        "confidence": "high",
+        "loc": 1,
+        "files": 1,
+        "tool": "file-estimate",
+        "exclusions_applied": [],
+        "legibility": {
+          "top_level_dirs": 0,
+          "entrypoints": [],
+          "generated_vendored_tracked": [],
+          "instruction_file_lines": 0,
+          "ambiguity_probe_hits": 0
+        },
+        "evidence": [
+          "1 LOC / 1 files via file-estimate",
+          "band small"
+        ]
+      },
+      "stacks": []
+    },
+    "shape_markers": {
+      "bin_exports": [],
+      "framework_markers": [],
+      "serve_health_code": [
+        "app.py"
+      ],
+      "desktop_markers": [],
+      "prose_ratio": 0.0
+    },
+    "substance": {
+      "type_strictness": {
+        "ts_strict_flags": {},
+        "mypy_strict": false,
+        "pyright_strict": false,
+        "any_hits": 0,
+        "ts_files_sampled": 0,
+        "ts_lines_sampled": 0
+      },
+      "coverage_threshold": {
+        "threshold_found": false,
+        "locations": [],
+        "zero_threshold": null
+      },
+      "env_crossref": {
+        "env_example_present": false,
+        "declared_count": 0,
+        "source_read_count": 0,
+        "undeclared_count": 0,
+        "undeclared_vars": []
+      },
+      "setup_stages": {
+        "setup_scripts": [],
+        "has_install": false,
+        "has_migrate_seed": false
+      },
+      "devcontainer": {
+        "present": false,
+        "has_features": false,
+        "has_post_create": false
+      },
+      "docs_freshness": {
+        "instruction_files": [],
+        "src_last_commit_ts": 1783927864
+      },
+      "large_files": {
+        "p50_lines": 1,
+        "max_lines": 1,
+        "top_offenders": [
+          {
+            "path": "app.py",
+            "lines": 1
+          }
+        ],
+        "files_measured": 1
+      },
+      "ci_gate": {
+        "workflow_files": [],
+        "has_test_step": false,
+        "has_lint_step": false,
+        "has_gate_trigger": false,
+        "triggers": [],
+        "mutating_lint": false
+      },
+      "secrets_gate": {
+        "tools_found": [],
+        "locations": []
+      },
+      "destructive_scan": {
+        "hits": [],
+        "hit_count": 0
+      },
+      "api_contract": {
+        "contract_files": [],
+        "http_framework_present": false
+      },
+      "config_presence": {
+        "module_boundary": [],
+        "test_isolation": null,
+        "flaky_signals": null,
+        "llm_sdk_present": false,
+        "llm_sdks": [],
+        "eval_harness": []
+      },
+      "runtime_currency": {
+        "runtimes": []
+      },
+      "encoding_sample": {
+        "per_extension": [
+          {
+            "ext": ".py",
+            "files_total": 1,
+            "sampled": 1,
+            "non_utf8_count": 0,
+            "encodings": [
+              "utf-8"
+            ]
+          }
+        ]
+      },
+      "atomic_pairs": {
+        "candidates": [],
+        "candidate_count": 0
+      },
+      "tool_managed": {
+        "tool_managed_files": [],
+        "regenerated_dir_candidates": []
+      },
+      "hooks": {
+        "hooks": [],
+        "hook_source_count": 0
+      }
+    },
+    "collectors": [
+      {
+        "name": "assessment-scope",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 0
+      },
+      {
+        "name": "inventory",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 1
+      },
+      {
+        "name": "lifecycle",
+        "status": "ok",
+        "complete": false,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": true,
+        "errors": [],
+        "tool": "",
+        "operations": 13
+      },
+      {
+        "name": "topology-monorepo",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 10
+      },
+      {
+        "name": "topology-constellation",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 12
+      },
+      {
+        "name": "size",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "file-estimate",
+        "operations": 1
+      },
+      {
+        "name": "stacks",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 1
+      },
+      {
+        "name": "shape-markers",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 7
+      },
+      {
+        "name": "substance-type-strictness",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 0
+      },
+      {
+        "name": "substance-coverage-threshold",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 0
+      },
+      {
+        "name": "substance-env-crossref",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 1
+      },
+      {
+        "name": "substance-setup-stages",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 0
+      },
+      {
+        "name": "substance-devcontainer",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 0
+      },
+      {
+        "name": "substance-docs-freshness",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 4
+      },
+      {
+        "name": "substance-large-files",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 1
+      },
+      {
+        "name": "substance-ci-gate",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 0
+      },
+      {
+        "name": "substance-secrets-gate",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 0
+      },
+      {
+        "name": "substance-destructive",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 0
+      },
+      {
+        "name": "substance-api-contract",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 1
+      },
+      {
+        "name": "substance-config-presence",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 0
+      },
+      {
+        "name": "substance-runtime-currency",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 0
+      },
+      {
+        "name": "substance-encoding",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 1
+      },
+      {
+        "name": "substance-atomic-pairs",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 1
+      },
+      {
+        "name": "substance-tool-managed",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 1
+      },
+      {
+        "name": "substance-hooks",
+        "status": "ok",
+        "complete": true,
+        "sampled": false,
+        "truncated": false,
+        "cap_hit": false,
+        "errors": [],
+        "tool": "",
+        "operations": 0
+      }
+    ]
+  },
+  "file_listing": [
+    "app.py"
+  ]
+}
