@@ -257,6 +257,17 @@ class BlobDedupTestCase(unittest.TestCase):
         # 3 tracked files, 1 is a content duplicate → 2 unique.
         self.assertEqual(size["files"], 2)
 
+    def test_globbed_regenerated_target_excluded(self) -> None:
+        # Regression (PR #207 round 16): `rm -rf src/generated/*` names the
+        # directory - its files must be excluded, not only literal-`*` paths.
+        _write(self.repo, "scripts/gen.sh", "#!/bin/sh\nrm -rf src/generated/*\nmake gen\n")
+        _write(self.repo, "src/generated/big.js", "// gen\n" + ("x();\n" * 400))
+        _write(self.repo, "src/app.py", "x = 1\n")
+        _commit_all(self.repo, "seed")
+        size = self.flowctl._prime_classify(self.repo)["axes"]["size"]
+        self.assertIn("regenerated", size["exclusions_applied"])
+        self.assertEqual(size["files"], 2)
+
     def test_regenerated_dirs_excluded_from_sizing(self) -> None:
         # Regression (PR #207 round 8): a tracked script wiping a repo-internal
         # dir marks it generated output - those files must not count toward

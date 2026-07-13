@@ -28276,7 +28276,16 @@ def _prime_collect_size(
     # Regenerated-dir candidates from the destructive pre-pass: a tracked
     # script that wipes a repo-internal dir marks it generated output, which
     # the classification contract excludes from sizing.
-    regen = {d.strip("/") for d in (regenerated_dirs or set()) if d and d.strip("/")}
+    # Strip trailing glob segments before matching: `rm -rf src/generated/*`
+    # names the DIRECTORY src/generated - the exclusion must cover its files,
+    # not only paths literally containing `*`.
+    regen = set()
+    for d in regenerated_dirs or set():
+        d = d.strip("/")
+        while d.endswith(("/*", "/**")):
+            d = d.rsplit("/", 1)[0]
+        if d and d not in ("*", "**"):
+            regen.add(d)
     exclusions_applied: set[str] = set()
     # Path-based exclusions.
     filtered: list[tuple[str, str]] = []
