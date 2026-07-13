@@ -32,6 +32,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -47,6 +48,8 @@ REPO_ROOT = PLUGIN_DIR.parent.parent
 FLOWCTL_PY = PLUGIN_DIR / "scripts" / "flowctl.py"
 DOGFOOD_FLOWCTL_PY = REPO_ROOT / ".flow" / "bin" / "flowctl.py"
 CLASSIFICATION_MD = PLUGIN_DIR / "skills" / "flow-next-prime" / "classification.md"
+PRIME_SKILL_DIR = PLUGIN_DIR / "skills" / "flow-next-prime"
+PRIME_MIRROR_DIR = PLUGIN_DIR / "codex" / "skills" / "flow-next-prime"
 
 
 def _load_flowctl() -> Any:
@@ -94,7 +97,9 @@ def _write(repo: Path, rel: str, content: str) -> None:
 
 def _commit_all(repo: Path, msg: str) -> None:
     _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "-m", msg)
+    # --allow-empty so a deliberately empty fixture (fail-open probe) still gets
+    # its implicit commit instead of aborting on "nothing to commit".
+    _git(repo, "commit", "-q", "--allow-empty", "-m", msg)
 
 
 # ── Schema-shape / envelope framework tests (in-process) ──────────────────────
@@ -712,6 +717,8 @@ class SubstanceRedactionTestCase(_SubstanceBase):
         _write(self.repo, ".env.example", "DB_PASSWORD=hunter2-not-a-real-secret\n")
         _write(self.repo, "app.py", "import os\nos.environ['DB_PASSWORD']\n")
         payload = self._classify()
+        # The declared var NAME is captured (safe); its VALUE is stripped.
+        self.assertIn("DB_PASSWORD", payload["substance"]["env_crossref"]["declared_vars"])
         blob = json.dumps(payload)
         self.assertIn("DB_PASSWORD", blob)  # key name is fine
         self.assertNotIn("hunter2-not-a-real-secret", blob)  # value must not leak
@@ -912,8 +919,10 @@ class PerformanceAccountingTestCase(_SubstanceBase):
         orig = flowctl._PRIME_MAX_LOC_FILES
         try:
             flowctl._PRIME_MAX_LOC_FILES = 3
+            # Distinct content per file: identical blobs collapse under the
+            # size collector's SHA dedup, which would leave < cap unique files.
             for i in range(8):
-                _write(self.repo, f"s{i}.py", "x = 1\n")
+                _write(self.repo, f"s{i}.py", f"x = {i}\n")
             payload = self._classify()
             large = {c["name"]: c for c in payload["collectors"]}["substance-large-files"]
             self.assertTrue(large["sampled"])
@@ -1079,6 +1088,151 @@ class FixtureFamiliesTestCase(unittest.TestCase):
                 self.assertNotIn("shape", payload["axes"])
                 self.assertIn("substance", payload)
                 assert_raw(payload)
+
+
+# ── R13 re-baselined smoke: report inputs are derivable (resolution 14) ────────
+
+
+# The 48 SCORED legacy criteria + the 3 legacy INFORMATIONAL rows (DC7 frontend-
+# only, DC8 glossary, DE7 feature-map) — the full stable legacy denominator R13
+# forbids diluting. `substance upgrades tighten pass conditions, never remove
+# checks`: every one of these IDs must still carry a table row in pillars.md.
+_LEGACY_CRITERION_IDS = (
+    tuple(f"SV{i}" for i in range(1, 7))    # Pillar 1
+    + tuple(f"BS{i}" for i in range(1, 7))  # Pillar 2
+    + tuple(f"TS{i}" for i in range(1, 7))  # Pillar 3
+    + tuple(f"DC{i}" for i in range(1, 9))  # Pillar 4 (DC7/DC8 informational)
+    + tuple(f"DE{i}" for i in range(1, 8))  # Pillar 5 (DE7 informational)
+    + tuple(f"OB{i}" for i in range(1, 7))  # Pillar 6 (report-only)
+    + tuple(f"SE{i}" for i in range(1, 7))  # Pillar 7 (report-only)
+    + tuple(f"WP{i}" for i in range(1, 7))  # Pillar 8 (report-only)
+)
+_LEGACY_INFORMATIONAL = ("DC7", "DC8", "DE7")
+
+
+class ReportInputDerivabilityTestCase(unittest.TestCase):
+    """R13 re-baselined (resolution 14): instead of a heavyweight full-prime run,
+    a lightweight CI smoke that the INPUTS the Phase-3 verdict/scoring machinery
+    consumes are still derivable — (a) every legacy criterion ID is present in
+    pillars.md (the level denominator is never silently shrunk), (b) the
+    hard-gate / verdict-headline machinery the skill references actually resolves
+    in the doc, and (c) the emitter classify path is non-mutating (`git status
+    --porcelain` byte-identical pre/post)."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.flowctl = _load_flowctl()
+        cls.pillars = (PRIME_SKILL_DIR / "pillars.md").read_text(encoding="utf-8")
+        cls.workflow = (PRIME_SKILL_DIR / "workflow.md").read_text(encoding="utf-8")
+
+    def test_all_legacy_criterion_ids_present(self) -> None:
+        # 48 scored + 3 informational = 51 total legacy rows.
+        self.assertEqual(len(_LEGACY_CRITERION_IDS), 51)
+        scored = [c for c in _LEGACY_CRITERION_IDS if c not in _LEGACY_INFORMATIONAL]
+        self.assertEqual(len(scored), 48)
+        missing = [
+            c for c in _LEGACY_CRITERION_IDS
+            if not re.search(rf"\|\s*{c}\s*\|", self.pillars)
+        ]
+        self.assertEqual(missing, [], f"legacy criterion rows dropped from pillars.md: {missing}")
+
+    def test_hard_gate_machinery_resolves(self) -> None:
+        # The three gates + the Level-2 cap are defined verbatim in pillars.md,
+        # and the workflow references resolve back to that definition.
+        self.assertIn("## Hard gates", self.pillars)
+        self.assertIn("cap agent readiness at **Level 2**", self.pillars)
+        for gate in ("**G1**", "**G2**", "**G3**"):
+            self.assertIn(gate, self.pillars, gate)
+        # Workflow §2.10 cites the pillars "Hard gates" section and names the
+        # failing gate in the verdict headline; the verdict-assembly section
+        # (the headline inputs the scoring feeds) exists.
+        self.assertIn("Hard gates G1-G3", self.workflow)
+        self.assertIn("name the failure in the verdict headline", self.workflow)
+        self.assertIn("Verdict assembly", self.workflow)
+
+    def test_emitter_classify_is_non_mutating(self) -> None:
+        # Non-mutation proof for the emitter path: a full classify over a
+        # representative repo must not touch the worktree or the git index.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "repo"
+            _init_repo(repo)
+            _write(repo, "src/main.py", "import os\nx = os.getenv('API_HOST')\n")
+            _write(repo, ".env.example", "API_HOST=example.com\n")
+            _write(repo, "package.json", json.dumps({"scripts": {"build": "tsc"}}))
+            _write(repo, "README.md", "# repo\n")
+            _write(repo, ".github/workflows/ci.yml", "on: [push]\njobs:\n  t:\n    steps:\n      - run: pytest\n")
+            _commit_all(repo, "seed")
+            _write(repo, "untracked.txt", "scratch\n")  # dirty state must survive too
+
+            before_status = _git(repo, "status", "--porcelain")
+            before_head = _git(repo, "rev-parse", "HEAD")
+
+            self.flowctl._prime_classify(repo)
+
+            self.assertEqual(_git(repo, "status", "--porcelain"), before_status)
+            self.assertEqual(_git(repo, "rev-parse", "HEAD"), before_head)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+class PrimeProseContractTestCase(unittest.TestCase):
+    """Prose contracts the host-inline scoring depends on, locked on the
+    canonical file AND the Codex mirror (sync-codex.sh must not drop the frozen
+    SV4 wording, the N/A whitelist, or the stacks.md row schema). Prose-only
+    review is NOT acceptable coverage — the strings are pinned in CI."""
+
+    def _pillars(self, base: Path) -> str:
+        return (base / "pillars.md").read_text(encoding="utf-8")
+
+    def _stacks(self, base: Path) -> str:
+        return (base / "stacks.md").read_text(encoding="utf-8")
+
+    def _assert_sv4_contract(self, base: Path) -> None:
+        text = self._pillars(base)
+        # The SV4 feedback-gate rewrite — the layer-agnostic contract.
+        self.assertIn("Deterministic feedback gate (layer-agnostic)", text, base)
+        self.assertIn('Rewritten from "pre-commit hooks configured".', text, base)
+        self.assertIn("headroom warn, never a pass-blocker", text, base)
+        self.assertIn("Prime **NEVER** recommends test-running pre-commit hooks.", text, base)
+        # Boundary vs FH3 (no double-scoring of trigger correctness).
+        self.assertIn("SV4 grades gate TOPOLOGY", text, base)
+
+    def _assert_na_whitelist(self, base: Path) -> None:
+        text = self._pillars(base)
+        # The single N/A whitelist table — the ONLY source of N/A entries.
+        self.assertIn("N/A Whitelist (single source", text, base)
+        self.assertIn("| Criterion(s) | N/A condition |", text, base)
+        # Representative rows must survive the mirror sync.
+        self.assertRegex(text, re.compile(r"\|\s*BS6\s*\|.*[Nn]on-monorepo", re.DOTALL), base)
+        self.assertIn("Greenfield lifecycle", text, base)
+
+    def _assert_stacks_row_schema(self, base: Path) -> None:
+        text = self._stacks(base)
+        # The stacks.md map header columns — the dispatch schema the skill reads.
+        self.assertIn(
+            "| Stack | Detect | Verify (non-interactive) | LSP for agents | Map tooling | Gotchas |",
+            text,
+            base,
+        )
+
+    def test_canonical_sv4(self) -> None:
+        self._assert_sv4_contract(PRIME_SKILL_DIR)
+
+    def test_mirror_sv4(self) -> None:
+        self._assert_sv4_contract(PRIME_MIRROR_DIR)
+
+    def test_canonical_na_whitelist(self) -> None:
+        self._assert_na_whitelist(PRIME_SKILL_DIR)
+
+    def test_mirror_na_whitelist(self) -> None:
+        self._assert_na_whitelist(PRIME_MIRROR_DIR)
+
+    def test_canonical_stacks_row_schema(self) -> None:
+        self._assert_stacks_row_schema(PRIME_SKILL_DIR)
+
+    def test_mirror_stacks_row_schema(self) -> None:
+        self._assert_stacks_row_schema(PRIME_MIRROR_DIR)
 
 
 if __name__ == "__main__":

@@ -28590,8 +28590,9 @@ def _prime_collect_env_crossref(
 ) -> "tuple[dict[str, Any], _PrimeCollector]":
     """DE1: diff declared env vars against env READS in source.
 
-    Emits COUNTS + the undeclared var NAMES (safe: names, never values). The
-    skill applies the ~30% "stale template" judgment.
+    Emits COUNTS + declared var NAMES + undeclared var NAMES (safe: names only,
+    never values - `_prime_env_declared` strips everything after `=`). The skill
+    applies the ~30% "stale template" judgment.
     """
     c = _PrimeCollector("substance-env-crossref", budget=_PRIME_SUBSTANCE_READ_CAP + 100)
     declared = _prime_env_declared(root, deduped, c)
@@ -28617,6 +28618,7 @@ def _prime_collect_env_crossref(
             p.rsplit("/", 1)[-1].startswith(".env.") for p in deduped
         ),
         "declared_count": len(declared),
+        "declared_vars": sorted(declared)[:100],
         "source_read_count": len(read_vars),
         "undeclared_count": len(undeclared),
         "undeclared_vars": undeclared[:100],
