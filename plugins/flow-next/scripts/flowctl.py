@@ -29453,6 +29453,22 @@ def _prime_ci_exec_lines(basename: str, text: str) -> "list[str]":
                     val = _no_trailing_comment(
                         body[2:].strip() if body.startswith("- ") else body
                     )
+                    # CircleCI map-form `run:` steps nest label fields - only
+                    # executable fields count: `name: Test` must not read as a
+                    # test invocation, and a `command:` value is unwrapped so
+                    # the prose filter sees the actual command.
+                    if basename == _PRIME_CIRCLECI:
+                        if re.match(
+                            r"(?:name|when|environment|no_output_timeout|working_directory|background)\s*:",
+                            val,
+                        ):
+                            val = ""
+                        else:
+                            cm = re.match(r"(?:command|shell)\s*:\s*(.*)$", val)
+                            if cm:
+                                val = cm.group(1).strip()
+                                if re.fullmatch(r"[|>][+-]?\d*", val):
+                                    val = ""  # block scalar: content follows
                     if val:
                         out.append(val)
             idx += 1
@@ -29842,6 +29858,13 @@ def _prime_collect_coverage_threshold(
         txt = _prime_read_tracked(root, rel, c, cap=200_000)
         if not txt:
             continue
+        # A threshold left only in a comment (`# fail_under = 80`,
+        # `// coverageThreshold: ...`) does not run - strip comment lines so
+        # TS5 never reports a disabled example as an enforced threshold.
+        txt = "\n".join(
+            ln for ln in txt.splitlines()
+            if not re.match(r"\s*(?:#|//|;|\*|/\*)", ln)
+        )
         # Walk ALL matches in the file - the common Jest/Vitest form puts the
         # keyword-only `coverageThreshold` BEFORE the numeric lines/branches
         # values, and stopping at the first match would hide an all-zero

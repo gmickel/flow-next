@@ -1564,6 +1564,24 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         ci = self._classify()["substance"]["ci_gate"]
         self.assertFalse(ci["has_gate_trigger"])
 
+    def test_circleci_name_label_not_executable(self) -> None:
+        # Regression (PR #207 round 15): map-form run steps nest label fields -
+        # `name: Test` is not a test invocation, and a `command:` value is
+        # unwrapped so echo-prose filtering applies to it.
+        _write(
+            self.repo, ".circleci/config.yml",
+            "version: 2.1\n"
+            "jobs:\n"
+            "  build:\n"
+            "    steps:\n"
+            "      - run:\n"
+            "          name: Test\n"
+            "          command: echo \"not configured\"\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertFalse(ci["has_test_step"])
+        self.assertFalse(ci["has_lint_step"])
+
     def test_circleci_config_counts_as_ci_gate(self) -> None:
         # Regression (PR #207 round 14): .circleci/config.yml is a CI gate
         # surface - run steps count for test/lint and push-gating.
@@ -1977,6 +1995,19 @@ class SubstanceLegacyRowsTestCase(_SubstanceBase):
         cov = self._classify()["substance"]["coverage_threshold"]
         self.assertTrue(cov["threshold_found"])
         self.assertFalse(cov["zero_threshold"])
+
+    def test_commented_out_threshold_not_enforced(self) -> None:
+        # Regression (PR #207 round 15): a threshold that exists only in a
+        # comment is a disabled example, not an enforced gate.
+        _write(self.repo, ".coveragerc", "[report]\n# fail_under = 80\n")
+        _write(
+            self.repo, "jest.config.js",
+            "module.exports = {\n"
+            "  // coverageThreshold: { global: { lines: 80 } },\n"
+            "};\n",
+        )
+        cov = self._classify()["substance"]["coverage_threshold"]
+        self.assertFalse(cov["threshold_found"])
 
     def test_jest_unquoted_zero_threshold_detected(self) -> None:
         # Regression (PR #207 round 7): bare JS object keys (`lines: 0`) are
