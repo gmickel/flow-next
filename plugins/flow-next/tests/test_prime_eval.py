@@ -902,6 +902,31 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         self.assertIn("push", ci["triggers"])
         self.assertIn("pull_request", ci["triggers"])
 
+    def test_ci_trigger_tokens_outside_on_block_ignored(self) -> None:
+        # Regression: `- push` list items / `push:` keys OUTSIDE the `on:`
+        # block (steps, matrices, unrelated mappings) must NOT count as gate
+        # triggers - a workflow_dispatch-only workflow stays gate-less.
+        _write(
+            self.repo, ".github/workflows/manual.yml",
+            "on:\n"
+            "  workflow_dispatch:\n"
+            "jobs:\n"
+            "  t:\n"
+            "    strategy:\n"
+            "      matrix:\n"
+            "        mode:\n"
+            "          - push\n"
+            "          - pull_request\n"
+            "    steps:\n"
+            "      - run: pytest\n"
+            "      - name: notify\n"
+            "        with:\n"
+            "          push: true\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertFalse(ci["has_gate_trigger"])
+        self.assertEqual(ci["triggers"], [])
+
     def test_api_contract_globs_and_http_flag(self) -> None:
         _write(self.repo, "package.json", json.dumps({"dependencies": {"express": "^4"}}))
         _write(self.repo, "api/openapi.yaml", "openapi: 3.0.0\n")

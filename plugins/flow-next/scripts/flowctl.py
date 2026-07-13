@@ -28997,23 +28997,43 @@ def _prime_ci_triggers(text: str) -> "set[str]":
     - block sequence: `on:\\n  - push\\n  - pull_request`
 
     (`on` may be written quoted - `"on":` - since YAML 1.1 reads bare `on` as a
-    boolean.) Recognizing all four keeps FH3's CI-gate signal from falsely
-    reporting no commit/PR gate on common valid workflows.
+    boolean.) Matching is scoped to the `on:` block ONLY - a `- push` list item
+    or `push:` key elsewhere in the workflow (steps, matrices, unrelated
+    mappings) must never count as a gate trigger.
     """
     found: set[str] = set()
-    # Mapping keys under `on:` (`push:` / `pull_request:`).
-    for m in re.finditer(r"(?im)^\s*(pull_request|push)\s*:", text):
-        found.add(m.group(1))
-    # Block-sequence items (`- push` / `- pull_request`).
-    for m in re.finditer(r"(?im)^\s*-\s*(pull_request|push)\b", text):
-        found.add(m.group(1))
-    # Inline scalar or flow-list value on the `on:` line itself.
-    m = re.search(r"""(?im)^\s*['"]?on['"]?\s*:\s*(.+)$""", text)
-    if m:
-        val = m.group(1).split("#", 1)[0]
-        for tok in ("push", "pull_request"):
-            if re.search(r"\b" + tok + r"\b", val):
-                found.add(tok)
+    on_re = re.compile(r"""(?i)^(\s*)['"]?on['"]?\s*:\s*(.*)$""")
+    lines = text.splitlines()
+    idx = 0
+    while idx < len(lines):
+        m = on_re.match(lines[idx])
+        idx += 1
+        if not m:
+            continue
+        on_indent = len(m.group(1))
+        inline = m.group(2).split("#", 1)[0].strip()
+        if inline:
+            # Inline scalar (`on: push`) or flow-list (`on: [push, ...]`).
+            for tok in ("push", "pull_request"):
+                if re.search(r"\b" + tok + r"\b", inline):
+                    found.add(tok)
+            continue
+        # Block form: scan only lines indented deeper than the `on:` key;
+        # the first non-blank line at <= its indent ends the block.
+        while idx < len(lines):
+            line = lines[idx]
+            if line.strip():
+                indent = len(line) - len(line.lstrip())
+                if indent <= on_indent:
+                    break
+                body = line.strip()
+                km = re.match(r"(?i)^(pull_request|push)\s*:", body)
+                if km:
+                    found.add(km.group(1).lower())
+                sm = re.match(r"(?i)^-\s*(pull_request|push)\b", body)
+                if sm:
+                    found.add(sm.group(1).lower())
+            idx += 1
     return found
 
 
