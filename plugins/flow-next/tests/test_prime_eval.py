@@ -840,6 +840,53 @@ class StacksAndShapeTestCase(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_workspace_package_manifests_feed_shape_markers(self) -> None:
+        # Regression (PR #207 round 11): framework/bin markers in a workspace
+        # package (packages/web/package.json) must reach Axis 5, not just root.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "mono"
+            _init_repo(repo)
+            _write(repo, "package.json", json.dumps({"name": "root", "private": True}))
+            _write(repo, "pnpm-workspace.yaml", "packages:\n  - packages/*\n")
+            _write(
+                repo, "packages/web/package.json",
+                json.dumps({"name": "web", "dependencies": {"next": "^14"}}),
+            )
+            _write(
+                repo, "packages/cli/package.json",
+                json.dumps({"name": "cli", "bin": {"cli": "index.js"}}),
+            )
+            _commit_all(repo, "seed")
+            markers = self.flowctl._prime_classify(repo)["shape_markers"]
+            self.assertIn("next", markers["framework_markers"])
+            self.assertIn("packages/cli/package.json bin", markers["bin_exports"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_loc_share_is_loc_weighted(self) -> None:
+        # Regression (PR #207 round 11): one large Python service file must
+        # outrank many tiny TS helpers - loc_share is LOC-weighted, not
+        # file-count-weighted.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "mixed"
+            _init_repo(repo)
+            _write(repo, "pyproject.toml", "[project]\nname = 'svc'\n")
+            _write(repo, "package.json", json.dumps({"name": "helpers"}))
+            _write(repo, "service.py", "x = 0\n" * 800)
+            for i in range(6):
+                _write(repo, f"helpers/h{i}.ts", f"export const h{i} = {i};\n")
+            _commit_all(repo, "seed")
+            stacks = self.flowctl._prime_classify(repo)["axes"]["stacks"]
+            names = [s["name"] for s in stacks]
+            self.assertEqual(names[0], "Python")
+            py = next(s for s in stacks if s["name"] == "Python")
+            ts = next(s for s in stacks if s["name"] == "JavaScript/TypeScript")
+            self.assertGreater(py["loc_share"], ts["loc_share"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
 
 # ── Assessment scope edge cases ────────────────────────────────────────────────
 
@@ -1595,6 +1642,29 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         sec = self._classify()["substance"]["secrets_gate"]
         self.assertEqual(sec["tools_found"], [])
         self.assertEqual(sec["locations"], [])
+
+    def test_echoed_scanner_name_is_not_enforcement(self) -> None:
+        # Regression (PR #207 round 11): a script/CI line that only LOGS a
+        # scanner name (`echo "gitleaks not configured"`) is not an enforced
+        # gate; a chained real invocation still counts.
+        _write(
+            self.repo, "package.json",
+            json.dumps({"scripts": {"check": 'echo "gitleaks not configured"'}}),
+        )
+        _write(
+            self.repo, ".github/workflows/sec.yml",
+            "on: [push]\njobs:\n  s:\n    steps:\n      - run: echo trufflehog skipped\n",
+        )
+        sec = self._classify()["substance"]["secrets_gate"]
+        self.assertEqual(sec["tools_found"], [])
+
+    def test_scanner_chained_after_echo_still_counts(self) -> None:
+        _write(
+            self.repo, "package.json",
+            json.dumps({"scripts": {"check": 'echo "scanning" && gitleaks detect'}}),
+        )
+        sec = self._classify()["substance"]["secrets_gate"]
+        self.assertIn("gitleaks", sec["tools_found"])
 
     def test_secrets_scanner_in_precommit_comment_is_not_enforcement(self) -> None:
         # Regression (PR #207 round 4): a scanner named only in a comment line

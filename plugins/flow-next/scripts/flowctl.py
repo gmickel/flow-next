@@ -28254,7 +28254,7 @@ def _prime_collect_size(
     staged: "list[tuple[str, str]]",
     ls_truncated: bool,
     regenerated_dirs: "Optional[set[str]]" = None,
-) -> "tuple[dict[str, Any], _PrimeCollector, list[str]]":
+) -> "tuple[dict[str, Any], _PrimeCollector, list[str], dict[str, int]]":
     c = _PrimeCollector("size", budget=_PRIME_MAX_LOC_FILES + 200)
     if ls_truncated:
         c.note_truncated()
@@ -28299,6 +28299,10 @@ def _prime_collect_size(
     # truthful: `tool` always names what produced the reported `loc`.
     tool = "file-estimate"
     loc = 0
+    # Per-stack LOC aggregation rides the same bounded read pass - it feeds the
+    # stacks collector's LOC-weighted loc_share (file counts alone let many
+    # tiny config files outrank one large service file).
+    loc_by_stack: dict[str, int] = {}
     read_budget = _PRIME_MAX_LOC_FILES
     for idx, path in enumerate(deduped):
         if idx >= read_budget:
@@ -28308,6 +28312,9 @@ def _prime_collect_size(
         n = _prime_count_lines(root, path, c)
         if n is not None:
             loc += n
+            stack = _PRIME_EXT_STACK.get(os.path.splitext(path)[1].lower())
+            if stack is not None:
+                loc_by_stack[stack] = loc_by_stack.get(stack, 0) + n
 
     # Corroboration only (whole-checkout, NOT exclusion-aware, does NOT band).
     corroborating_tool: Optional[str] = None
@@ -28391,7 +28398,7 @@ def _prime_collect_size(
         "legibility": legibility,
         "evidence": evidence,
     }
-    return (size, c, deduped)
+    return (size, c, deduped, loc_by_stack)
 
 
 def _prime_git_free_tool(
@@ -28443,7 +28450,7 @@ def _prime_tokei_total(out: str) -> int:
 
 
 def _prime_collect_stacks(
-    root: Path, deduped: "list[str]"
+    root: Path, deduped: "list[str]", loc_by_stack: "Optional[dict[str, int]]" = None
 ) -> "tuple[list[dict[str, Any]], _PrimeCollector]":
     # One op per tracked file (single pass over `deduped`), so the real bound is
     # the upstream ls-files cap; size the budget to it so a completed scan on a
@@ -28484,8 +28491,9 @@ def _prime_collect_stacks(
         ((".cbl", ".cob"), "COBOL"),
     ]
 
-    # Extension histogram (file-count-weighted; LOC-weighted refinement lands in
-    # fn-92.13). Vocabulary derives from what is actually present.
+    # Extension histogram. loc_share is LOC-weighted when the size pass
+    # provided per-stack line counts (one large service file outranks many tiny
+    # config files); the file-count histogram is the fallback.
     hist: dict[str, int] = {}
     total = 0
     for path in deduped:
@@ -28552,13 +28560,21 @@ def _prime_collect_stacks(
         "SQL/PLSQL": ("PL/SQL",),
         "VB6/PowerBuilder": ("VB6",),
     }
+    total_loc = sum((loc_by_stack or {}).values())
     stacks: list[dict[str, Any]] = []
     for stack, (manifest, subproject) in detected.items():
-        # loc_share from histogram (map the manifest stack to its extensions).
+        # loc_share: LOC-weighted from the size pass when available, else the
+        # file-count histogram (map the manifest stack to its ext buckets).
         buckets = share_buckets.get(stack, (stack,))
-        share_files = sum(hist.get(b, 0) for b in buckets)
-        loc_share = round(share_files / total, 3) if total else 0.0
-        agreement = "high" if (loc_share > 0 or not total) else "low"
+        if total_loc:
+            share_loc = sum((loc_by_stack or {}).get(b, 0) for b in buckets)
+            loc_share = round(share_loc / total_loc, 3)
+            share_label = "loc-share"
+        else:
+            share_files = sum(hist.get(b, 0) for b in buckets)
+            loc_share = round(share_files / total, 3) if total else 0.0
+            share_label = "file-share"
+        agreement = "high" if (loc_share > 0 or not (total_loc or total)) else "low"
         stacks.append(
             {
                 "name": stack,
@@ -28568,7 +28584,7 @@ def _prime_collect_stacks(
                 "confidence": _prime_cap_confidence(agreement, c),
                 "evidence": [
                     f"manifest {manifest}",
-                    f"file-share {loc_share}",
+                    f"{share_label} {loc_share}",
                 ],
             }
         )
@@ -28586,28 +28602,38 @@ def _prime_collect_shape_markers(
     serve_health_code: list[str] = []
     desktop_markers: list[str] = []
 
-    pkg = root / "package.json"
-    if pkg.exists():
+    # ALL tracked package.json manifests (bounded), not root-only: in
+    # pnpm/Nx/Turborepo layouts the web/CLI app lives in a workspace package
+    # and its framework/bin markers drive Axis 5.
+    pkg_paths = [
+        p for p in deduped if p.rsplit("/", 1)[-1] == "package.json"
+    ][:30]
+    if len([p for p in deduped if p.rsplit("/", 1)[-1] == "package.json"]) > 30:
+        c.note_sampled()
+    for rel in pkg_paths:
         c.op()
-        txt = _prime_read_text(pkg)
-        if txt:
-            try:
-                data = json.loads(txt)
-                if data.get("bin"):
-                    bin_exports.append("package.json bin")
-                if data.get("exports"):
-                    bin_exports.append("package.json exports")
-                deps = {}
-                deps.update(data.get("dependencies", {}) or {})
-                deps.update(data.get("devDependencies", {}) or {})
-                for fw in ("next", "react", "vue", "svelte", "@angular/core", "express", "fastify", "nestjs"):
-                    if fw in deps:
-                        framework_markers.append(fw)
-                for dm in ("electron", "@tauri-apps/cli", "electrobun"):
-                    if dm in deps:
-                        desktop_markers.append(dm)
-            except (ValueError, TypeError):
-                pass
+        txt = _prime_read_tracked(root, rel, c)
+        if not txt:
+            continue
+        try:
+            data = json.loads(txt)
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        if data.get("bin"):
+            bin_exports.append(f"{rel} bin")
+        if data.get("exports"):
+            bin_exports.append(f"{rel} exports")
+        deps = {}
+        deps.update(data.get("dependencies", {}) or {})
+        deps.update(data.get("devDependencies", {}) or {})
+        for fw in ("next", "react", "vue", "svelte", "@angular/core", "express", "fastify", "nestjs"):
+            if fw in deps and fw not in framework_markers:
+                framework_markers.append(fw)
+        for dm in ("electron", "@tauri-apps/cli", "electrobun"):
+            if dm in deps and dm not in desktop_markers:
+                desktop_markers.append(dm)
 
     pyproject = root / "pyproject.toml"
     if pyproject.exists():
@@ -28808,6 +28834,23 @@ _PRIME_TEST_DIR_SEGMENTS = frozenset(
 _PRIME_TEST_BASENAME_RE = re.compile(
     r"(?i)(^test_[^/]*$|_test\.[a-z0-9]+$|\.(test|spec)\.[a-z0-9]+$|^conftest\.py$)"
 )
+
+
+def _prime_strip_prose_segments(lines: "list[str]") -> "list[str]":
+    """Drop echo/printf SEGMENTS from executable lines, keeping commands
+    chained after them (`echo "running tests" && pytest` keeps `pytest`;
+    an echo-only placeholder line drops entirely). Shared by the CI test/lint
+    detector and the secrets-gate enforcement scan - a logged tool NAME is
+    prose, not an invocation."""
+    out: "list[str]" = []
+    for ln in lines:
+        kept = [
+            seg for seg in re.split(r"&&|\|\||;|\|", ln)
+            if seg.strip() and not re.match(r"\s*(?:-\s*)?(?:echo|printf)\b", seg)
+        ]
+        if kept:
+            out.append(" ; ".join(s.strip() for s in kept))
+    return out
 
 
 def _prime_is_test_path(path: str) -> bool:
@@ -29374,18 +29417,10 @@ def _prime_collect_ci_gate(
         # Test/lint detection sees only EXECUTABLE content (run:/script: values)
         # - a `name: test lint` step or matrix entry never sets the flags.
         # echo/printf SEGMENTS are prose, not invocation - but commands chained
-        # after them (`echo "running tests" && pytest`) are real: split on
-        # shell chain operators, drop only the echo/printf segments, keep the
-        # rest.
-        exec_lines: list[str] = []
-        for ln in _prime_ci_exec_lines(base, text):
-            kept = [
-                seg for seg in re.split(r"&&|\|\||;|\|", ln)
-                if seg.strip() and not re.match(r"\s*(?:-\s*)?(?:echo|printf)\b", seg)
-            ]
-            if kept:
-                exec_lines.append(" ; ".join(s.strip() for s in kept))
-        exec_text = "\n".join(exec_lines)
+        # after them (`echo "running tests" && pytest`) are real.
+        exec_text = "\n".join(
+            _prime_strip_prose_segments(_prime_ci_exec_lines(base, text))
+        )
         if test_re.search(exec_text):
             has_test = True
         if lint_re.search(exec_text):
@@ -29470,10 +29505,17 @@ def _prime_collect_secrets_gate(
             scripts = pkg.get("scripts") if isinstance(pkg, dict) else None
             if not isinstance(scripts, dict):
                 continue
-            scan_text = "\n".join(str(v) for v in scripts.values())
+            # Prose-segment filter: `echo "gitleaks not configured"` in a
+            # script logs a name, it does not enforce a gate.
+            scan_text = "\n".join(
+                _prime_strip_prose_segments([str(v) for v in scripts.values()])
+            )
         elif base in _PRIME_NON_GITHUB_CI or _prime_posix_segments(rel)[:2] == [".github", "workflows"]:
-            # CI files: executable lines only (consistent with the FH3 scoping).
-            scan_text = "\n".join(_prime_ci_exec_lines(base, txt))
+            # CI files: executable lines only (consistent with the FH3 scoping),
+            # with the same echo/printf prose-segment filter.
+            scan_text = "\n".join(
+                _prime_strip_prose_segments(_prime_ci_exec_lines(base, txt))
+            )
         else:
             # Pre-commit configs: strip comment lines first - a scanner named
             # only in a `# TODO: add gitleaks later` comment is not an
@@ -30036,10 +30078,10 @@ def _prime_classify(root: Path) -> "dict[str, Any]":
             t = t[2:]
         if t and not t.startswith(".."):
             regenerated_dirs.add(t)
-    size, size_c, deduped = _prime_collect_size(
+    size, size_c, deduped, loc_by_stack = _prime_collect_size(
         collect_root, staged, ls_truncated, regenerated_dirs
     )
-    stacks, stacks_c = _prime_collect_stacks(collect_root, deduped)
+    stacks, stacks_c = _prime_collect_stacks(collect_root, deduped, loc_by_stack)
     shape_markers, shape_c = _prime_collect_shape_markers(collect_root, deduped)
     substance, substance_collectors = _prime_collect_substance(
         collect_root, deduped, shape_markers["framework_markers"], pre_dedup,
