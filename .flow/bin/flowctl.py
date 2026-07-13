@@ -27718,11 +27718,28 @@ def _prime_sibling_git_dirs(parent: Path, self_dir: Path) -> "tuple[list[str], i
     """
     siblings: list[str] = []
     worktrees = 0
+    # Resolve THIS repo's git dir to its COMMON dir: when the assessed checkout
+    # is itself a linked worktree, `.git` is a gitdir: file pointing at
+    # `<main>/.git/worktrees/<name>` - normalize to `<main>/.git` so OTHER
+    # worktrees of the same repo (`.git/worktrees/<other>`) still compare as
+    # same-repo instead of becoming false constellation siblings.
     self_git = None
     try:
-        self_git = (self_dir / ".git").resolve()
+        marker = self_dir / ".git"
+        if marker.is_file():
+            first = marker.read_text(encoding="utf-8", errors="replace")[:4096].splitlines()
+            m = re.match(r"\s*gitdir:\s*(.+?)\s*$", first[0]) if first else None
+            if m:
+                raw = m.group(1)
+                self_git = (
+                    Path(raw) if os.path.isabs(raw) else (self_dir / raw)
+                ).resolve()
+        else:
+            self_git = marker.resolve()
+        if self_git is not None and self_git.parent.name == "worktrees":
+            self_git = self_git.parent.parent
     except (OSError, ValueError):
-        pass
+        self_git = None
     try:
         children = sorted(parent.iterdir())
     except (OSError, ValueError):
@@ -28898,6 +28915,10 @@ def _prime_destructive_context(line: str, target: str) -> str:
     # bare / , ~ alone, or a lone parameter expansion = unbounded / parameterized.
     if target in ("/", "~", "$HOME") or re.match(r"^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/?$", target) or target.startswith("$"):
         return "unbounded"
+    # Parent-relative traversal escapes the repo: `rm -rf ../sibling` is an
+    # out-of-repo wipe, never a regenerated-dir candidate.
+    if target.startswith("..") or "/../" in target:
+        return "unbounded"
     # relative, repo-internal literal dir (no leading / or ~) = self-managed
     # candidate (the same script often regenerates it; skill confirms via LEG7).
     if not target.startswith("/") and not target.startswith("~"):
@@ -29345,7 +29366,12 @@ def _prime_collect_ci_gate(
         base = path.rsplit("/", 1)[-1]
         # Test/lint detection sees only EXECUTABLE content (run:/script: values)
         # - a `name: test lint` step or matrix entry never sets the flags.
-        exec_text = "\n".join(_prime_ci_exec_lines(base, text))
+        # echo/printf lines are prose, not invocation: a placeholder step like
+        # `echo "test lint not configured"` must not report a gate.
+        exec_text = "\n".join(
+            ln for ln in _prime_ci_exec_lines(base, text)
+            if not re.match(r"\s*(?:-\s*)?(?:echo|printf)\b", ln)
+        )
         if test_re.search(exec_text):
             has_test = True
         if lint_re.search(exec_text):
@@ -29985,11 +30011,17 @@ def _prime_classify(root: Path) -> "dict[str, Any]":
     # `regenerated` as a size exclusion - bulky checked-in generated mirrors
     # must not push the repo into the wrong size playbook.
     destructive, destr_c = _prime_collect_destructive(collect_root, pre_dedup)
-    regenerated_dirs = {
-        h["target"].rstrip("/").lstrip("./")
-        for h in destructive.get("hits", [])
-        if h.get("context_class") == "self-managed" and h.get("target")
-    }
+    # NOTE: prefix-strip `./` properly (lstrip is a char-class strip and would
+    # mangle `../x`); self-managed context already excludes `..` traversal.
+    regenerated_dirs = set()
+    for h in destructive.get("hits", []):
+        if h.get("context_class") != "self-managed" or not h.get("target"):
+            continue
+        t = h["target"].rstrip("/")
+        while t.startswith("./"):
+            t = t[2:]
+        if t and not t.startswith(".."):
+            regenerated_dirs.add(t)
     size, size_c, deduped = _prime_collect_size(
         collect_root, staged, ls_truncated, regenerated_dirs
     )

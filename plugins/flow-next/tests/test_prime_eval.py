@@ -509,6 +509,33 @@ class TopologyTestCase(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_assessed_worktree_excludes_sibling_worktrees(self) -> None:
+        # Regression (PR #207 round 9): when Prime runs FROM a linked worktree,
+        # self .git is a gitdir: file - other worktrees of the same repo must
+        # still compare as same-repo (common-dir normalization), not become
+        # false tier-a constellation siblings.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            main = tmp / "main"
+            _init_repo(main)
+            _write(main, "x.py", "x = 1\n")
+            _commit_all(main, "seed")
+            parent = tmp / "wts"
+            parent.mkdir()
+            wt_a = parent / "wt-a"
+            wt_b = parent / "wt-b"
+            for name, wt in (("wt-a", wt_a), ("wt-b", wt_b)):
+                wt.mkdir()
+                (wt / ".git").write_text(
+                    f"gitdir: {main.resolve() / '.git' / 'worktrees' / name}\n",
+                    encoding="utf-8",
+                )
+            sibs, worktrees = self.flowctl._prime_sibling_git_dirs(parent, wt_a.resolve())
+            self.assertNotIn("wt-b", sibs)
+            self.assertEqual(worktrees, 1)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_worktree_gitdir_pointer_still_excluded(self) -> None:
         tmp = Path(tempfile.mkdtemp()).resolve()
         try:
@@ -1058,6 +1085,18 @@ class SubstanceEnvCrossrefTestCase(_SubstanceBase):
 
 
 class SubstanceDestructiveTestCase(_SubstanceBase):
+    def test_parent_relative_delete_is_unbounded(self) -> None:
+        # Regression (PR #207 round 9): `rm -rf ../sibling` escapes the repo -
+        # never self-managed, never a regenerated-dir sizing exclusion.
+        _write(self.repo, "scripts/clean.sh", "#!/bin/sh\nrm -rf ../sibling\n")
+        _write(self.repo, "sibling/keep.py", "x = 1\n")
+        payload = self._classify()
+        hits = payload["substance"]["destructive_scan"]["hits"]
+        hit = next(h for h in hits if h["target"].startswith(".."))
+        self.assertEqual(hit["context_class"], "unbounded")
+        # The in-repo `sibling/` dir is NOT excluded by the regen pre-pass.
+        self.assertNotIn("regenerated", payload["axes"]["size"]["exclusions_applied"])
+
     def test_context_classes_are_raw_never_severity(self) -> None:
         _write(
             self.repo, "scripts/build.sh",
@@ -1381,6 +1420,22 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         ci = self._classify()["substance"]["ci_gate"]
         self.assertTrue(ci["has_gate_trigger"])
         self.assertIn("push", ci["triggers"])
+
+    def test_echoed_prose_is_not_a_test_or_lint_gate(self) -> None:
+        # Regression (PR #207 round 9): echo/printf lines are prose - a
+        # placeholder step echoing the words test/lint is not an invocation.
+        _write(
+            self.repo, ".github/workflows/ci.yml",
+            "on: [push]\n"
+            "jobs:\n"
+            "  t:\n"
+            "    steps:\n"
+            "      - run: echo \"test lint not configured\"\n"
+            "      - run: ./deploy.sh\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertFalse(ci["has_test_step"])
+        self.assertFalse(ci["has_lint_step"])
 
     def test_mutating_lint_requires_same_line(self) -> None:
         # Regression (PR #207 round 8): a check-only lint step plus an
