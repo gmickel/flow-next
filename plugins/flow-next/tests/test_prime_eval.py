@@ -1827,6 +1827,33 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         self.assertTrue(ci["has_lint_step"])
         self.assertFalse(ci["mutating_lint"])
 
+    def test_installer_arguments_are_not_invocations(self) -> None:
+        # Regression (PR #207 round 23): `pip install pytest black` installs
+        # tools, it does not run them - installer segments never set the
+        # test/lint flags; the chained real invocation still counts.
+        _write(
+            self.repo, ".github/workflows/setup-only.yml",
+            "on: [push]\n"
+            "jobs:\n"
+            "  s:\n"
+            "    steps:\n"
+            "      - run: pip install pytest black\n"
+            "      - run: ./deploy.sh\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertFalse(ci["has_test_step"])
+        self.assertFalse(ci["has_lint_step"])
+        self.assertFalse(ci["gated_test_step"])
+
+    def test_install_then_run_still_counts(self) -> None:
+        _write(
+            self.repo, ".github/workflows/ci.yml",
+            "on: [push]\njobs:\n  t:\n    steps:\n      - run: pip install pytest && pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_test_step"])
+        self.assertTrue(ci["gated_test_step"])
+
     def test_gated_flags_require_same_workflow_conjunction(self) -> None:
         # Regression (PR #207 round 20): a dispatch-only test workflow next to
         # a push-gated deploy workflow is NOT a test gate - gated_* requires

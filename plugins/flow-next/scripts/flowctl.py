@@ -27840,7 +27840,11 @@ def _prime_origin_org(root: Path) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def _prime_collect_lifecycle(root: Path) -> "tuple[dict[str, Any], _PrimeCollector]":
+def _prime_collect_lifecycle(
+    root: Path,
+    tracked_count: "Optional[int]" = None,
+    ls_truncated: bool = False,
+) -> "tuple[dict[str, Any], _PrimeCollector]":
     # Op bound: 5 git probes (rev-list, tag, ls-files, log, shortlog) + up to 6
     # CI-config probes (loop runs all 6 when NONE match) + 1 generator-scaffold
     # op + 1 lockfile op = 13. Budget with headroom so a full scan on a real
@@ -27858,8 +27862,18 @@ def _prime_collect_lifecycle(root: Path) -> "tuple[dict[str, Any], _PrimeCollect
     rc, out, _err = _prime_git(root, ["tag"], c)
     tags = len([ln for ln in out.splitlines() if ln.strip()]) if rc == 0 else 0
 
-    rc, out, _err = _prime_git(root, ["ls-files"], c)
-    tracked_files = len([ln for ln in out.splitlines() if ln.strip()]) if rc == 0 else 0
+    # Reuse the CAPPED streamed inventory count instead of re-materializing
+    # the full ls-files listing (the bounded-scan contract). A capped count is
+    # marked truncated; the standalone fallback keeps the old probe for
+    # direct callers.
+    if tracked_count is not None:
+        c.op()
+        tracked_files = tracked_count
+        if ls_truncated:
+            c.note_truncated()
+    else:
+        rc, out, _err = _prime_git(root, ["ls-files"], c)
+        tracked_files = len([ln for ln in out.splitlines() if ln.strip()]) if rc == 0 else 0
 
     ci_config = False
     for probe in (
@@ -28937,17 +28951,31 @@ _PRIME_TEST_BASENAME_RE = re.compile(
 )
 
 
+_PRIME_INSTALLER_SEG_RE = re.compile(
+    r"(?i)^\s*(?:-\s*)?(?:sudo\s+)?(?:"
+    r"(?:pip3?|pipx)\s+install\b"
+    r"|python3?\s+-m\s+pip\s+install\b"
+    r"|uv\s+(?:pip\s+)?(?:install|add)\b"
+    r"|(?:npm|pnpm|yarn|bun)\s+(?:install|ci|i|add)\b"
+    r"|(?:cargo|gem|brew|apk|choco)\s+install\b"
+    r"|apt(?:-get)?\s+(?:-y\s+)?install\b"
+    r")"
+)
+
+
 def _prime_strip_prose_segments(lines: "list[str]") -> "list[str]":
-    """Drop echo/printf SEGMENTS from executable lines, keeping commands
-    chained after them (`echo "running tests" && pytest` keeps `pytest`;
-    an echo-only placeholder line drops entirely). Shared by the CI test/lint
-    detector and the secrets-gate enforcement scan - a logged tool NAME is
-    prose, not an invocation."""
+    """Drop echo/printf AND installer SEGMENTS from executable lines, keeping
+    commands chained after them (`echo "running tests" && pytest` keeps
+    `pytest`; `pip install pytest black` drops entirely). Shared by the CI
+    test/lint detector and the secrets-gate enforcement scan - a logged or
+    merely INSTALLED tool name is not an invocation."""
     out: "list[str]" = []
     for ln in lines:
         kept = [
             seg for seg in re.split(r"&&|\|\||;|\|", ln)
-            if seg.strip() and not re.match(r"\s*(?:-\s*)?(?:echo|printf)\b", seg)
+            if seg.strip()
+            and not re.match(r"\s*(?:-\s*)?(?:echo|printf)\b", seg)
+            and not _PRIME_INSTALLER_SEG_RE.match(seg)
         ]
         if kept:
             out.append(" ; ".join(s.strip() for s in kept))
@@ -30313,7 +30341,9 @@ def _prime_classify(root: Path) -> "dict[str, Any]":
     staged, ls_truncated = _prime_parse_ls_files_staged(collect_root, ls_collector)
     tracked_paths = [p for _sha, p in staged]
 
-    lifecycle, life_c = _prime_collect_lifecycle(collect_root)
+    lifecycle, life_c = _prime_collect_lifecycle(
+        collect_root, tracked_count=len(staged), ls_truncated=ls_truncated
+    )
     topology, mono_c, con_c = _prime_collect_topology(collect_root, top, tracked_paths)
     # Post-exclusion PRE-dedup list: feeds the destructive pre-pass (below) and
     # the atomic-pair scan, where byte-identical dual copies collapse under the
