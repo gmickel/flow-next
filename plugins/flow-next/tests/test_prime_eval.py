@@ -895,6 +895,24 @@ class StacksAndShapeTestCase(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_workspace_cargo_bin_feeds_shape_markers(self) -> None:
+        # Regression (PR #207 round 14): [[bin]] in a workspace crate manifest
+        # is CLI-shape evidence, same as workspace package.json/pyproject.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "rustmono"
+            _init_repo(repo)
+            _write(repo, "Cargo.toml", "[workspace]\nmembers = ['crates/*']\n")
+            _write(
+                repo, "crates/cli/Cargo.toml",
+                "[package]\nname = 'cli'\n[[bin]]\nname = 'cli'\n",
+            )
+            _commit_all(repo, "seed")
+            markers = self.flowctl._prime_classify(repo)["shape_markers"]
+            self.assertIn("crates/cli/Cargo.toml [[bin]]", markers["bin_exports"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_workspace_pyproject_scripts_feed_shape_markers(self) -> None:
         # Regression (PR #207 round 12): [project.scripts] in a workspace
         # pyproject.toml is CLI-shape evidence, same as workspace package.json.
@@ -1545,6 +1563,38 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         )
         ci = self._classify()["substance"]["ci_gate"]
         self.assertFalse(ci["has_gate_trigger"])
+
+    def test_circleci_config_counts_as_ci_gate(self) -> None:
+        # Regression (PR #207 round 14): .circleci/config.yml is a CI gate
+        # surface - run steps count for test/lint and push-gating.
+        _write(
+            self.repo, ".circleci/config.yml",
+            "version: 2.1\n"
+            "jobs:\n"
+            "  build:\n"
+            "    steps:\n"
+            "      - run: npm test\n"
+            "      - run:\n"
+            "          command: npm run lint\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertIn(".circleci/config.yml", ci["workflow_files"])
+        self.assertTrue(ci["has_test_step"])
+        self.assertTrue(ci["has_lint_step"])
+        self.assertTrue(ci["has_gate_trigger"])
+        self.assertIn("push", ci["triggers"])
+
+    def test_workspace_package_destructive_scripts_scanned(self) -> None:
+        # Regression (PR #207 round 14): a workspace package's scripts are a
+        # destructive-scan surface, same as the root manifest.
+        _write(
+            self.repo, "packages/app/package.json",
+            json.dumps({"name": "app", "scripts": {"clean": "rm -rf /"}}),
+        )
+        d = self._classify()["substance"]["destructive_scan"]
+        self.assertTrue(
+            any(h["file"] == "packages/app/package.json[scripts]" for h in d["hits"])
+        )
 
     def test_commented_block_scalar_still_parsed(self) -> None:
         # Regression (PR #207 round 13): `run: | # main tests` is a block

@@ -28666,12 +28666,19 @@ def _prime_collect_shape_markers(
         if re.search(r"(?m)^\s*\[tool\.poetry\.scripts\]", txt):
             bin_exports.append(f"{label} [tool.poetry.scripts]")
 
-    cargo = root / "Cargo.toml"
-    if cargo.exists():
+    # ALL tracked Cargo.toml manifests (bounded), matching the package.json /
+    # pyproject scans: a CLI crate under crates/cli/Cargo.toml drives Axis 5.
+    cargo_paths = [p for p in deduped if p.rsplit("/", 1)[-1] == "Cargo.toml"][:30]
+    if len([p for p in deduped if p.rsplit("/", 1)[-1] == "Cargo.toml"]) > 30:
+        c.note_sampled()
+    for rel in cargo_paths:
         c.op()
-        txt = _prime_read_text(cargo)
-        if txt and re.search(r"(?m)^\s*\[\[bin\]\]", txt):
-            bin_exports.append("Cargo [[bin]]")
+        txt = _prime_read_tracked(root, rel, c)
+        if not txt:
+            continue
+        if re.search(r"(?m)^\s*\[\[bin\]\]", txt):
+            label = "Cargo" if rel == "Cargo.toml" else rel
+            bin_exports.append(f"{label} [[bin]]")
 
     # go cmd/*/main.go entrypoint marker.
     for path in deduped:
@@ -28998,17 +29005,21 @@ def _prime_scan_scripts(root: Path, deduped: "list[str]", c: "_PrimeCollector") 
     the destructive/secret patterns match them uniformly.
     """
     out: list[tuple[str, str]] = []
-    pkg = root / "package.json"
-    if pkg.exists():
+    # ALL tracked package.json manifests (bounded) - a workspace package's
+    # `scripts.clean` is as destructive as the root's.
+    pkg_paths = [p for p in deduped if p.rsplit("/", 1)[-1] == "package.json"][:30]
+    for rel in pkg_paths:
         c.op()
-        txt = _prime_read_text(pkg)
-        if txt:
-            try:
-                scripts = json.loads(txt).get("scripts", {}) or {}
-                blob = "\n".join(f"{k}: {v}" for k, v in scripts.items() if isinstance(v, str))
-                out.append(("package.json[scripts]", blob))
-            except (ValueError, TypeError, AttributeError):
-                pass
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
+        if not txt:
+            continue
+        try:
+            scripts = json.loads(txt).get("scripts", {}) or {}
+            blob = "\n".join(f"{k}: {v}" for k, v in scripts.items() if isinstance(v, str))
+            if blob:
+                out.append((f"{rel}[scripts]", blob))
+        except (ValueError, TypeError, AttributeError):
+            continue
     script_paths = [
         p for p in deduped
         if p.rsplit("/", 1)[-1] in ("Makefile", "makefile", "GNUmakefile", "justfile", "Justfile", "Taskfile.yml")
@@ -29246,6 +29257,7 @@ def _prime_read_ci_workflows(root: Path, deduped: "list[str]", c: "_PrimeCollect
         and p.endswith((".yml", ".yaml"))
     ]
     wf += [p for p in deduped if p.rsplit("/", 1)[-1] in (".gitlab-ci.yml", "bitbucket-pipelines.yml", "azure-pipelines.yml")]
+    wf += [p for p in deduped if p == ".circleci/config.yml" or p.endswith("/.circleci/config.yml")]
     for rel in wf[:40]:
         c.op()
         txt = _prime_read_tracked(root, rel, c, cap=200_000)
@@ -29305,6 +29317,9 @@ def _prime_ci_triggers(text: str) -> "set[str]":
 
 
 _PRIME_NON_GITHUB_CI = (".gitlab-ci.yml", "bitbucket-pipelines.yml", "azure-pipelines.yml")
+# Pseudo-basename routing token for CircleCI (its real basename `config.yml`
+# is too generic to route on).
+_PRIME_CIRCLECI = ".circleci/config.yml"
 
 
 def _prime_ci_triggers_non_github(basename: str, text: str) -> "set[str]":
@@ -29327,6 +29342,10 @@ def _prime_ci_triggers_non_github(basename: str, text: str) -> "set[str]":
       explicit `trigger:` key AND the absent-key default both mean CI on push).
     """
     if basename == ".gitlab-ci.yml":
+        return {"push"}
+    if basename == _PRIME_CIRCLECI:
+        # CircleCI builds on push by default; schedule-only narrowing is out of
+        # scope for the raw signal (the skill judges edge cases).
         return {"push"}
     if basename == "bitbucket-pipelines.yml":
         found: set[str] = set()
@@ -29390,7 +29409,10 @@ def _prime_ci_exec_lines(basename: str, text: str) -> "list[str]":
     read as a pytest invocation) - whitespace-then-# only, so URL anchors
     survive.
     """
-    if basename in _PRIME_NON_GITHUB_CI:
+    if basename == _PRIME_CIRCLECI:
+        # CircleCI steps: inline `- run: cmd` and the full `run:\n  command:` form.
+        keys = r"(?:run|command)"
+    elif basename in _PRIME_NON_GITHUB_CI:
         keys = r"(?:script|before_script|after_script|bash|pwsh|powershell)"
     else:
         keys = r"run"
@@ -29452,6 +29474,8 @@ def _prime_collect_ci_gate(
     for path, text in workflows:
         files.append(path)
         base = path.rsplit("/", 1)[-1]
+        if path == _PRIME_CIRCLECI or path.endswith("/" + _PRIME_CIRCLECI):
+            base = _PRIME_CIRCLECI  # pseudo-basename routing token
         # Test/lint detection sees only EXECUTABLE content (run:/script: values)
         # - a `name: test lint` step or matrix entry never sets the flags.
         # echo/printf SEGMENTS are prose, not invocation - but commands chained
@@ -29463,7 +29487,7 @@ def _prime_collect_ci_gate(
             has_test = True
         if lint_re.search(exec_text):
             has_lint = True
-        if base in _PRIME_NON_GITHUB_CI:
+        if base in _PRIME_NON_GITHUB_CI or base == _PRIME_CIRCLECI:
             # Route by filename: never force GitHub `on:` parsing on other CI systems.
             file_triggers = _prime_ci_triggers_non_github(base, text)
         else:
@@ -29520,13 +29544,17 @@ def _prime_collect_secrets_gate(
         if p.rsplit("/", 1)[-1] in (".pre-commit-config.yaml", ".pre-commit-config.yml", "package.json", ".gitleaks.toml", ".secrets.baseline")
         or _prime_posix_segments(p)[:2] == [".github", "workflows"]
         # Every CI system `_prime_ci_exec_lines` can parse is an enforcement
-        # surface - GitLab, Bitbucket, AND Azure (a `script: gitleaks detect`
-        # gate in bitbucket-pipelines.yml is as real as a GitHub `run:` one).
+        # surface - GitLab, Bitbucket, Azure, AND CircleCI (a `script: gitleaks
+        # detect` gate in bitbucket-pipelines.yml is as real as a GitHub
+        # `run:` one).
         or p.rsplit("/", 1)[-1] in _PRIME_NON_GITHUB_CI
+        or p == _PRIME_CIRCLECI or p.endswith("/" + _PRIME_CIRCLECI)
     ]
     for rel in scan_files[:60]:
         c.op()
         base = rel.rsplit("/", 1)[-1]
+        if rel == _PRIME_CIRCLECI or rel.endswith("/" + _PRIME_CIRCLECI):
+            base = _PRIME_CIRCLECI
         if base in config_files:
             configs.append({"tool": config_files[base], "path": rel})
             continue
@@ -29548,7 +29576,11 @@ def _prime_collect_secrets_gate(
             scan_text = "\n".join(
                 _prime_strip_prose_segments([str(v) for v in scripts.values()])
             )
-        elif base in _PRIME_NON_GITHUB_CI or _prime_posix_segments(rel)[:2] == [".github", "workflows"]:
+        elif (
+            base in _PRIME_NON_GITHUB_CI
+            or base == _PRIME_CIRCLECI
+            or _prime_posix_segments(rel)[:2] == [".github", "workflows"]
+        ):
             # CI files: executable lines only (consistent with the FH3 scoping),
             # with the same echo/printf prose-segment filter.
             scan_text = "\n".join(
