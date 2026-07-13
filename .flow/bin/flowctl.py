@@ -27651,7 +27651,9 @@ def _prime_exclusion_category(path: str) -> Optional[str]:
         return "vendored"
     if seg_set & _PRIME_FIXTURE_DIRS:
         return "fixtures"
-    if seg_set & _PRIME_AGENT_STATE_DIRS:
+    # Agent-workflow state lives at the repo ROOT (plans/, _plans/, history/);
+    # a nested src/history/ or app/plans/ is domain code and must count.
+    if segs and segs[0] in _PRIME_AGENT_STATE_DIRS:
         return "agent-state"
     return None
 
@@ -29194,18 +29196,19 @@ def _prime_ci_triggers_non_github(basename: str, text: str) -> "set[str]":
     - .gitlab-ci.yml: present -> push-gated by default (GitLab runs pipelines
       on push; `only:`/`rules:` narrowing such as schedules-only is out of
       scope for the raw signal - the skill judges edge cases).
-    - bitbucket-pipelines.yml: a `pipelines:` config with a `default:` or
-      `branches:` section as a DIRECT child of the top-level `pipelines:` key
-      -> push-gated. The walk is indent-scoped (same approach as the GitHub
-      `on:`-block scan): a `branches:` line nested deeper - e.g. under
-      `pipelines.custom.<name>` - never gates; a custom-/manual-only file is
-      not push-gated.
+    - bitbucket-pipelines.yml: a `pipelines:` config with a `default:` /
+      `branches:` (push gate) or `pull-requests:` (PR gate) section as a
+      DIRECT child of the top-level `pipelines:` key -> gated. The walk is
+      indent-scoped (same approach as the GitHub `on:`-block scan): a
+      `branches:` line nested deeper - e.g. under `pipelines.custom.<name>` -
+      never gates; a custom-/manual-only file is not gated.
     - azure-pipelines.yml: `trigger: none` -> not gated; otherwise gated (an
       explicit `trigger:` key AND the absent-key default both mean CI on push).
     """
     if basename == ".gitlab-ci.yml":
         return {"push"}
     if basename == "bitbucket-pipelines.yml":
+        found: set[str] = set()
         lines = text.splitlines()
         idx = 0
         n = len(lines)
@@ -29227,12 +29230,13 @@ def _prime_ci_triggers_non_github(basename: str, text: str) -> "set[str]":
                     break  # dedent back to top level ends the pipelines: block
                 if child_indent is None:
                     child_indent = indent
-                if indent == child_indent and re.match(
-                    r"(?i)^(?:default|branches)\s*:", body
-                ):
-                    return {"push"}
+                if indent == child_indent:
+                    if re.match(r"(?i)^(?:default|branches)\s*:", body):
+                        found.add("push")
+                    elif re.match(r"(?i)^pull-requests\s*:", body):
+                        found.add("pull_request")
                 idx += 1
-        return set()
+        return found
     if basename == "azure-pipelines.yml":
         if re.search(r"(?m)^\s*trigger\s*:\s*none\s*(?:#.*)?$", text):
             return set()
@@ -29622,7 +29626,9 @@ def _prime_collect_coverage_threshold(
             "nyc.config.js", ".nycrc", ".nycrc.json",
         )
     ]
-    thr_re = re.compile(r"(?i)(fail_under\s*=\s*(\d+)|--cov-fail-under[=\s]+(\d+)|coverageThreshold|\"(?:branches|lines|functions|statements)\"\s*:\s*(\d+))")
+    # The numeric-key arm accepts quoted AND bare JS object keys - Jest/Vitest
+    # configs commonly write `lines: 0` without quotes.
+    thr_re = re.compile(r"(?i)(fail_under\s*=\s*(\d+)|--cov-fail-under[=\s]+(\d+)|coverageThreshold|[\"']?(?:branches|lines|functions|statements)[\"']?\s*:\s*(\d+))")
     found_in: list[str] = []
     zero_only = None
     for rel in candidates[:60]:
@@ -29825,6 +29831,15 @@ def _prime_collect_hooks(
             sources.append((rel, txt))
     results: list[dict[str, Any]] = []
     for rel, text in sources:
+        # Pre-commit config METADATA is not hook execution: `repo:`/`rev:`
+        # lines legitimately carry remote URLs (repo: https://github.com/...)
+        # and must not trip the network_call class into a false P0 - only the
+        # executable hook surface (entry/args/additional_dependencies) counts.
+        if rel.rsplit("/", 1)[-1].startswith(".pre-commit-config"):
+            text = "\n".join(
+                ln for ln in text.splitlines()
+                if not re.match(r"^\s*-?\s*(?:repo|rev)\s*:", ln)
+            )
         classes: dict[str, bool] = {}
         tokens: set[str] = set()
         for label, pat in _PRIME_HOOK_CLASSES:

