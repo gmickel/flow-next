@@ -27892,7 +27892,10 @@ def _prime_collect_lifecycle(root: Path) -> "tuple[dict[str, Any], _PrimeCollect
         brown += 1
     if ci_config:
         brown += 1
-    if lockfile:
+    # Lockfile is a CORROBORATOR only (Phase 0.5 contract): npm/pnpm/Cargo/uv
+    # scaffolds generate one on the first commit, so it counts toward brown
+    # only when another brownfield signal already exists - never alone.
+    if lockfile and brown > 0:
         brown += 1
     if generator_scaffold is not None and tracked_files < _PRIME_GREENFIELD_FILES:
         green += 1
@@ -29861,6 +29864,13 @@ def _prime_collect_type_strictness(
         txt = _prime_read_tracked(root, rel, c, cap=200_000)
         if not txt:
             continue
+        # tsconfig is JSONC: strip `//` line comments and `/* */` blocks so a
+        # commented template option (`// "strict": true`) never outranks the
+        # real setting below it.
+        txt = re.sub(r"/\*.*?\*/", "", txt, flags=re.S)
+        txt = "\n".join(
+            ln for ln in txt.splitlines() if not ln.lstrip().startswith("//")
+        )
         for flag in ("strict", "noImplicitAny", "strictNullChecks"):
             m = re.search(r'"' + flag + r'"\s*:\s*(true|false)', txt)
             if m:

@@ -388,6 +388,23 @@ class LifecycleTestCase(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_lockfile_alone_does_not_demote_greenfield(self) -> None:
+        # Regression (PR #207 round 21): scaffolds commit a lockfile on the
+        # first commit - a lockfile is a corroborator, never brownfield
+        # evidence on its own (Phase 0.5 contract).
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "scaffold"
+            _init_repo(repo)
+            _write(repo, "package.json", json.dumps({"name": "x"}))
+            _write(repo, "package-lock.json", json.dumps({"lockfileVersion": 3}))
+            _write(repo, "index.js", "console.log(1)\n")
+            _commit_all(repo, "init")
+            life = self.flowctl._prime_classify(repo)["axes"]["lifecycle"]
+            self.assertEqual(life["value"], "greenfield")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_unborn_head_is_greenfield_no_crash(self) -> None:
         tmp = Path(tempfile.mkdtemp()).resolve()
         try:
@@ -2100,6 +2117,21 @@ class SubstanceLegacyRowsTestCase(_SubstanceBase):
         self.assertEqual(strict["ts_strict_flags"]["noImplicitAny"], False)
         self.assertGreaterEqual(strict["any_hits"], 2)
         self.assertGreaterEqual(strict["ts_files_sampled"], 1)
+
+    def test_jsonc_commented_flag_not_detected(self) -> None:
+        # Regression (PR #207 round 21): tsconfig is JSONC - a commented
+        # template option must not outrank the real setting.
+        _write(
+            self.repo, "tsconfig.json",
+            "{\n"
+            "  \"compilerOptions\": {\n"
+            "    // \"strict\": true,\n"
+            "    \"strict\": false\n"
+            "  }\n"
+            "}\n",
+        )
+        strict = self._classify()["substance"]["type_strictness"]
+        self.assertEqual(strict["ts_strict_flags"].get("strict"), False)
 
     def test_workspace_tsconfig_strictness_detected(self) -> None:
         # Regression (PR #207 round 13): a strict tsconfig owned by a
