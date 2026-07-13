@@ -28089,13 +28089,27 @@ def _prime_collect_topology(
     # >=1 matching sibling.
     prefix_cluster = len(prefix_family) >= 1
 
-    # shared_org: origin org appears in a sibling's .git/config url.
+    # shared_org: origin org appears in a sibling's .git/config url. A sibling
+    # kept by the gitdir-file resolution (--separate-git-dir checkout) stores
+    # its config at the POINTER target, not under `.git/` - resolve it first.
     shared_org = False
     org = _prime_origin_org(root)
     if org and sibling_git_dirs_list:
         for name in sibling_git_dirs_list[:_PRIME_MAX_SIBLINGS]:
             cc.op()
-            cfg = _prime_read_text(parent / name / ".git" / "config")
+            marker = parent / name / ".git"
+            cfg_path = marker / "config"
+            try:
+                if marker.is_file():
+                    first = marker.read_text(encoding="utf-8", errors="replace")[:4096].splitlines()
+                    gm = re.match(r"\s*gitdir:\s*(.+?)\s*$", first[0]) if first else None
+                    if gm:
+                        raw = gm.group(1)
+                        gd = Path(raw) if os.path.isabs(raw) else (parent / name / raw)
+                        cfg_path = gd.resolve() / "config"
+            except (OSError, ValueError):
+                pass
+            cfg = _prime_read_text(cfg_path)
             if cfg and re.search(r"[:/]" + re.escape(org) + r"/", cfg):
                 shared_org = True
                 break
@@ -29395,12 +29409,15 @@ def _prime_ci_exec_lines(basename: str, text: str) -> "list[str]":
         if not m:
             continue
         key_indent = len(m.group(1))
+        # Strip the trailing comment BEFORE the block-scalar decision:
+        # `run: | # main tests` is a block scalar, not an inline `|` command.
         inline = m.group(2).strip()
+        if inline.startswith("#"):
+            inline = ""
+        else:
+            inline = _no_trailing_comment(inline)
         if inline and not re.fullmatch(r"[|>][+-]?\d*", inline):
-            if not inline.startswith("#"):
-                inline = _no_trailing_comment(inline)
-                if inline:
-                    out.append(inline)
+            out.append(inline)
             continue
         # Block scalar / block sequence: lines indented deeper than the key.
         while idx < n:
@@ -29702,15 +29719,29 @@ def _prime_collect_type_strictness(
     """SV3: strict-flag config + a bounded `: any` ratio probe on TS sources."""
     c = _PrimeCollector("substance-type-strictness", budget=400)
     ts_flags: dict[str, bool] = {}
-    tsconfig = root / "tsconfig.json"
-    if tsconfig.exists():
+    # ALL tracked tsconfig*.json (bounded), not root-only: in workspace
+    # layouts the app package owns its tsconfig and SV3 must see its flags.
+    # A flag reported true by ANY tsconfig stays true (strict-anywhere
+    # beats a root shell config with no flags).
+    ts_paths = [
+        p for p in deduped
+        if re.fullmatch(r"tsconfig[^/]*\.json", p.rsplit("/", 1)[-1])
+    ][:30]
+    if len([
+        p for p in deduped
+        if re.fullmatch(r"tsconfig[^/]*\.json", p.rsplit("/", 1)[-1])
+    ]) > 30:
+        c.note_sampled()
+    for rel in ts_paths:
         c.op()
-        txt = _prime_read_text(tsconfig)
-        if txt:
-            for flag in ("strict", "noImplicitAny", "strictNullChecks"):
-                m = re.search(r'"' + flag + r'"\s*:\s*(true|false)', txt)
-                if m:
-                    ts_flags[flag] = m.group(1) == "true"
+        txt = _prime_read_tracked(root, rel, c, cap=200_000)
+        if not txt:
+            continue
+        for flag in ("strict", "noImplicitAny", "strictNullChecks"):
+            m = re.search(r'"' + flag + r'"\s*:\s*(true|false)', txt)
+            if m:
+                val = m.group(1) == "true"
+                ts_flags[flag] = ts_flags.get(flag, False) or val
     mypy_strict = False
     pyright_strict = False
     for cfg in ("mypy.ini", "setup.cfg", "pyproject.toml", "pyrightconfig.json"):

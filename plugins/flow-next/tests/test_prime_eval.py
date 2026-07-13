@@ -486,6 +486,37 @@ class TopologyTestCase(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_separate_git_dir_sibling_shared_org_detected(self) -> None:
+        # Regression (PR #207 round 13): a gitdir-file sibling stores its
+        # config at the pointer target - shared_org must resolve it, not read
+        # `<sibling>/.git/config` as a directory path.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            parent = tmp / "org"
+            parent.mkdir()
+            repo = parent / "alpha"
+            _init_repo(repo)
+            _write(repo, "main.py", "x = 1\n")
+            _commit_all(repo, "seed")
+            subprocess.run(
+                ["git", "remote", "add", "origin", "git@github.com:acme/alpha.git"],
+                cwd=repo, check=True,
+            )
+            gitstore = tmp / "betastore"
+            gitstore.mkdir()
+            (gitstore / "config").write_text(
+                '[remote "origin"]\n\turl = git@github.com:acme/beta.git\n',
+                encoding="utf-8",
+            )
+            sib = parent / "zeta"  # different prefix - no prefix-family signal
+            sib.mkdir()
+            (sib / ".git").write_text(f"gitdir: {gitstore}\n", encoding="utf-8")
+            member = self.flowctl._prime_classify(repo)["axes"]["topology"]["constellation_member"]
+            self.assertEqual(member["tier"], "a")
+            self.assertTrue(member["signals"]["shared_org"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_separate_git_dir_sibling_counts_as_constellation(self) -> None:
         # Regression (PR #207 round 8): a sibling whose .git is a gitdir:
         # FILE pointing OUTSIDE this repo (separate-git-dir / submodule-style
@@ -1515,6 +1546,21 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
         ci = self._classify()["substance"]["ci_gate"]
         self.assertFalse(ci["has_gate_trigger"])
 
+    def test_commented_block_scalar_still_parsed(self) -> None:
+        # Regression (PR #207 round 13): `run: | # main tests` is a block
+        # scalar - the trailing comment must not hide the indented commands.
+        _write(
+            self.repo, ".github/workflows/ci.yml",
+            "on: [push]\n"
+            "jobs:\n"
+            "  t:\n"
+            "    steps:\n"
+            "      - run: | # main tests\n"
+            "          pytest\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertTrue(ci["has_test_step"])
+
     def test_trailing_ci_comment_not_executable(self) -> None:
         # Regression (PR #207 round 12): a trailing shell/YAML comment on an
         # inline run value is prose (`npm ci # pytest lint later`), while a
@@ -1823,6 +1869,17 @@ class SubstanceLegacyRowsTestCase(_SubstanceBase):
         self.assertEqual(strict["ts_strict_flags"]["noImplicitAny"], False)
         self.assertGreaterEqual(strict["any_hits"], 2)
         self.assertGreaterEqual(strict["ts_files_sampled"], 1)
+
+    def test_workspace_tsconfig_strictness_detected(self) -> None:
+        # Regression (PR #207 round 13): a strict tsconfig owned by a
+        # workspace package (no root tsconfig) must reach ts_strict_flags.
+        _write(
+            self.repo, "packages/app/tsconfig.json",
+            json.dumps({"compilerOptions": {"strict": True}}),
+        )
+        _write(self.repo, "packages/app/src/x.ts", "export const a = 1;\n")
+        strict = self._classify()["substance"]["type_strictness"]
+        self.assertEqual(strict["ts_strict_flags"].get("strict"), True)
 
     def test_mypy_strict_scoped_to_mypy_section(self) -> None:
         # Regression (finding 7): an unrelated `strict = true` under a DIFFERENT
