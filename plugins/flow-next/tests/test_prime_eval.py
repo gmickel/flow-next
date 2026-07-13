@@ -270,6 +270,16 @@ class BlobDedupTestCase(unittest.TestCase):
         self.assertTrue(size_env["truncated"])
         self.assertFalse(size_env["complete"])
 
+    def test_force_flag_target_not_a_regenerated_dir(self) -> None:
+        # Regression (PR #207 round 18): a generic --force flag is not a wipe -
+        # `tool --force src` must never exclude src/ from sizing.
+        _write(self.repo, "scripts/pub.sh", "#!/bin/sh\ntool --force src\n")
+        _write(self.repo, "src/app.py", "x = 1\n" * 50)
+        _commit_all(self.repo, "seed")
+        size = self.flowctl._prime_classify(self.repo)["axes"]["size"]
+        self.assertNotIn("regenerated", size["exclusions_applied"])
+        self.assertEqual(size["files"], 2)
+
     def test_globbed_regenerated_target_excluded(self) -> None:
         # Regression (PR #207 round 16): `rm -rf src/generated/*` names the
         # directory - its files must be excluded, not only literal-`*` paths.
@@ -958,6 +968,31 @@ class StacksAndShapeTestCase(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_sampled_loc_falls_back_to_file_count_ranking(self) -> None:
+        # Regression (PR #207 round 18): a capped LOC slice in git path order
+        # is not a representative sample - ranking from it zeroes any stack
+        # whose files sort after the cap. Sampled -> file-count fallback.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        saved_cap = self.flowctl._PRIME_MAX_LOC_FILES
+        try:
+            self.flowctl._PRIME_MAX_LOC_FILES = 5
+            repo = tmp / "big"
+            _init_repo(repo)
+            _write(repo, "package.json", json.dumps({"name": "x"}))
+            _write(repo, "pyproject.toml", "[project]\nname = 'x'\n")
+            for i in range(8):
+                _write(repo, f"a{i:02d}.py", f"x = {i}\n")
+            _write(repo, "zz/late.ts", "export const a = 1;\n")
+            _commit_all(repo, "seed")
+            stacks = self.flowctl._prime_classify(repo)["axes"]["stacks"]
+            ts = next(s for s in stacks if s["name"] == "JavaScript/TypeScript")
+            # Fallback ranking sees ALL files: the late TS file still shares.
+            self.assertGreater(ts["loc_share"], 0)
+            self.assertTrue(any("file-share" in e for e in ts["evidence"]))
+        finally:
+            self.flowctl._PRIME_MAX_LOC_FILES = saved_cap
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_loc_share_is_loc_weighted(self) -> None:
         # Regression (PR #207 round 11): one large Python service file must
         # outrank many tiny TS helpers - loc_share is LOC-weighted, not
@@ -1601,6 +1636,25 @@ class SubstanceCiSecretsApiTestCase(_SubstanceBase):
             "      - run:\n"
             "          name: Test\n"
             "          command: echo \"not configured\"\n",
+        )
+        ci = self._classify()["substance"]["ci_gate"]
+        self.assertFalse(ci["has_test_step"])
+        self.assertFalse(ci["has_lint_step"])
+
+    def test_circleci_environment_children_not_executable(self) -> None:
+        # Regression (PR #207 round 18): children of a skipped non-exec block
+        # (`environment:` -> `TEST: "1"`) are config metadata, not commands.
+        _write(
+            self.repo, ".circleci/config.yml",
+            "version: 2.1\n"
+            "jobs:\n"
+            "  deploy:\n"
+            "    steps:\n"
+            "      - run:\n"
+            "          environment:\n"
+            "            TEST: \"1\"\n"
+            "            LINT: \"0\"\n"
+            "          command: ./deploy.sh\n",
         )
         ci = self._classify()["substance"]["ci_gate"]
         self.assertFalse(ci["has_test_step"])

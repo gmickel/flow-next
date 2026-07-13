@@ -28333,10 +28333,12 @@ def _prime_collect_size(
     # stacks collector's LOC-weighted loc_share (file counts alone let many
     # tiny config files outrank one large service file).
     loc_by_stack: dict[str, int] = {}
+    loc_reads_sampled = False
     read_budget = _PRIME_MAX_LOC_FILES
     for idx, path in enumerate(deduped):
         if idx >= read_budget:
             c.note_sampled()
+            loc_reads_sampled = True
             break
         c.op()
         n = _prime_count_lines(root, path, c)
@@ -28345,6 +28347,12 @@ def _prime_collect_size(
             stack = _PRIME_EXT_STACK.get(os.path.splitext(path)[1].lower())
             if stack is not None:
                 loc_by_stack[stack] = loc_by_stack.get(stack, 0) + n
+    if loc_reads_sampled:
+        # A capped slice in git path order is NOT a representative sample -
+        # ranking stacks from it would zero out any stack whose files sort
+        # after the cap. The stacks collector falls back to the file-count
+        # histogram (complete over ALL deduped paths) instead.
+        loc_by_stack = {}
 
     # Corroboration only (whole-checkout, NOT exclusion-aware, does NOT band).
     corroborating_tool: Optional[str] = None
@@ -29458,6 +29466,7 @@ def _prime_ci_exec_lines(basename: str, text: str) -> "list[str]":
             out.append(inline)
             continue
         # Block scalar / block sequence: lines indented deeper than the key.
+        skip_deeper_than: Optional[int] = None
         while idx < n:
             line = lines[idx]
             body = line.strip()
@@ -29465,6 +29474,13 @@ def _prime_ci_exec_lines(basename: str, text: str) -> "list[str]":
                 indent = len(line) - len(line.lstrip())
                 if indent <= key_indent:
                     break
+                # Inside a skipped non-exec mapping block (e.g. the children of
+                # `environment:` - `TEST: "1"` is config, not an invocation).
+                if skip_deeper_than is not None:
+                    if indent > skip_deeper_than:
+                        idx += 1
+                        continue
+                    skip_deeper_than = None
                 if not body.startswith("#"):
                     val = _no_trailing_comment(
                         body[2:].strip() if body.startswith("- ") else body
@@ -29479,6 +29495,7 @@ def _prime_ci_exec_lines(basename: str, text: str) -> "list[str]":
                             val,
                         ):
                             val = ""
+                            skip_deeper_than = indent
                         else:
                             cm = re.match(r"(?:command|shell)\s*:\s*(.*)$", val)
                             if cm:
@@ -30194,6 +30211,11 @@ def _prime_classify(root: Path) -> "dict[str, Any]":
     # mangle `../x`); self-managed context already excludes `..` traversal.
     regenerated_dirs = set()
     for h in destructive.get("hits", []):
+        # Only actual WIPE patterns mark a dir regenerated - a generic
+        # `--force` flag (`tool --force src`) is not a delete and must never
+        # exclude real source from sizing.
+        if h.get("pattern") not in ("recursive-delete", "git-clean"):
+            continue
         if h.get("context_class") != "self-managed" or not h.get("target"):
             continue
         t = h["target"].rstrip("/")
