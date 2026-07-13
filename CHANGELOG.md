@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 2.13.1] - 2026-07-13
+
+### Fixed
+
+- **Prime classify: tier-(c) constellation ASK noise on ordinary repos** (found dogfooding 2.13.0 on real repos, shipped directly as a patch). The prose cross-repo-ref scan now (1) drops SELF-references - a README mentioning the repo's own absolute path (`~/work/<this-repo>/src`) is not a cross-repo signal (realpath-resolved against the assessed root), (2) dedupes repeated refs (four mentions of the same script burned the 20-ref cap), and (3) ignores well-known user DATA dirs that never hold sibling repos (`~/Downloads`, `~/Desktop`, `~/Library`, `~/.cache`, `~/.config`, `~/.local`, `/tmp`). On a real affected repo the ref list dropped from 20 (capped, noisy) to 8 genuinely cross-repo entries; repos whose only "constellation signal" was self/data-path noise no longer raise the Phase 0.6 clarification or pollute `--classify-only` portfolio triage. Dogfood also confirmed the 2.13.0 envelope truthfulness live (an over-cap file correctly marked a real repo's size collector truncated) and sub-2s classify on 1K-file repos.
+
 ## [flow-next 2.13.0] - 2026-07-13
 
 ### Changed

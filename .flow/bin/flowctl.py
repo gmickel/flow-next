@@ -28207,7 +28207,35 @@ def _prime_collect_topology(
                 in_repo_external_refs.append(f"go.mod replace {m}")
 
     # prose cross-repo refs (agent file / README path references).
+    # SELF-references are dropped (2.13.1 dogfood finding): a README mentioning
+    # `~/work/<this-repo>/src` or a `../x` path that resolves back inside the
+    # repo is not a cross-repo signal, and un-deduped repeats burned the cap -
+    # both made tier-(c) ASK noise on ordinary repos and degraded
+    # --classify-only portfolio triage.
     prose_cross_repo_refs: list[str] = []
+    seen_refs: set[str] = set()
+    try:
+        root_real = os.path.realpath(str(root))
+    except (OSError, ValueError):
+        root_real = str(root)
+
+    # Well-known user DATA dirs never hold sibling repos - a doc pointing at
+    # ~/Downloads or ~/.cache is describing files, not a constellation.
+    _non_repo_prefixes = (
+        "~/Downloads", "~/Desktop", "~/Library", "~/.cache", "~/.config",
+        "~/.local", "/tmp", "~/tmp",
+    )
+
+    def _ref_is_self(ref: str) -> bool:
+        if any(ref == p or ref.startswith(p + "/") for p in _non_repo_prefixes):
+            return True
+        try:
+            expanded = os.path.expanduser(ref) if ref.startswith("~") else os.path.join(root_real, ref)
+            target = os.path.realpath(expanded)
+        except (OSError, ValueError):
+            return False
+        return target == root_real or target.startswith(root_real + os.sep)
+
     for doc in ("CLAUDE.md", "AGENTS.md", "README.md"):
         df = root / doc
         if df.exists():
@@ -28215,7 +28243,11 @@ def _prime_collect_topology(
             txt = _prime_read_text(df)
             if txt:
                 for m in re.findall(r"(~/[\w./-]+|\.\./[\w./-]+)", txt):
-                    prose_cross_repo_refs.append(f"{doc}: {m}")
+                    entry = f"{doc}: {m}"
+                    if entry in seen_refs or _ref_is_self(m):
+                        continue
+                    seen_refs.add(entry)
+                    prose_cross_repo_refs.append(entry)
         if len(prose_cross_repo_refs) >= 20:
             prose_cross_repo_refs = prose_cross_repo_refs[:20]
             cc.note_sampled()

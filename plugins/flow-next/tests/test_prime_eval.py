@@ -603,6 +603,51 @@ class TopologyTestCase(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_self_referential_prose_refs_dropped_and_deduped(self) -> None:
+        # Regression (2.13.1 dogfood): a README mentioning the repo's own
+        # absolute path is not a cross-repo signal, and repeats are deduped -
+        # both made tier-(c) ASK noise on ordinary repos.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "selfref"
+            _init_repo(repo)
+            self_home = os.path.relpath(str(repo), os.path.expanduser("~"))
+            _write(
+                repo, "README.md",
+                f"See ~/{self_home}/src for the code.\n"
+                "Run ~/scripts/other-tool.sh twice.\n"
+                "Run ~/scripts/other-tool.sh twice.\n",
+            )
+            _write(repo, "src/app.py", "x = 1\n")
+            _commit_all(repo, "seed")
+            member = self.flowctl._prime_classify(repo)["axes"]["topology"]["constellation_member"]
+            refs = member["signals"]["prose_cross_repo_refs"]
+            self.assertFalse(any("/src" in r for r in refs), refs)
+            self.assertEqual(len([r for r in refs if "other-tool.sh" in r]), 1, refs)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_user_data_dirs_not_cross_repo_refs(self) -> None:
+        # 2.13.1 dogfood: ~/Downloads / ~/.cache / ~/.config are data paths,
+        # never sibling repos - no tier-(c) ASK from them.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "datapaths"
+            _init_repo(repo)
+            _write(
+                repo, "README.md",
+                "Export lands in ~/Downloads/export.json and caches in ~/.cache/tool/.\n"
+                "Config at ~/.config/tool/config.yml. Sibling repo at ~/repos/other-svc.\n",
+            )
+            _write(repo, "app.py", "x = 1\n")
+            _commit_all(repo, "seed")
+            member = self.flowctl._prime_classify(repo)["axes"]["topology"]["constellation_member"]
+            refs = member["signals"]["prose_cross_repo_refs"]
+            self.assertFalse(any("Downloads" in r or ".cache" in r or ".config" in r for r in refs), refs)
+            self.assertTrue(any("other-svc" in r for r in refs), refs)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_separate_git_dir_sibling_shared_org_detected(self) -> None:
         # Regression (PR #207 round 13): a gitdir-file sibling stores its
         # config at the pointer target - shared_org must resolve it, not read
