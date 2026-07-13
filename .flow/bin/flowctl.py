@@ -28107,6 +28107,18 @@ def _prime_collect_topology(
             if (parent / marker).exists():
                 parent_confirmed = True
                 break
+        # Suffix-form CONFIRMED markers documented in classification.md:
+        # a parent-level `*.repos` manifest or `*.code-workspace` file is as
+        # deliberate a home-base signal as the exact-name markers above.
+        if not parent_confirmed:
+            cc.op()
+            try:
+                for entry in sorted(parent.iterdir())[:200]:
+                    if entry.name.endswith((".repos", ".code-workspace")):
+                        parent_confirmed = True
+                        break
+            except OSError:
+                pass
 
     # Tier resolution with the workspace-parent dampener.
     tier = "none"
@@ -28565,10 +28577,13 @@ def _prime_collect_shape_markers(
             bin_exports.append(path)
         if path.endswith(".desktop"):
             desktop_markers.append(path)
-        if re.search(r"(^|/)(server|main|app)\.(py|ts|js|go)$", path):
+        # Cap serve/health hits WITHOUT stopping the scan - later CLI
+        # entrypoints (cmd/*/main.go) or desktop markers must still be seen
+        # regardless of git path order, since Axis 5 drives playbook selection.
+        if len(serve_health_code) < 10 and re.search(
+            r"(^|/)(server|main|app)\.(py|ts|js|go)$", path
+        ):
             serve_health_code.append(path)
-        if len(serve_health_code) >= 10:
-            break
 
     # Framework config-file markers.
     for cfg, label in (
@@ -29583,12 +29598,18 @@ def _prime_collect_coverage_threshold(
         txt = _prime_read_tracked(root, rel, c, cap=200_000)
         if not txt:
             continue
-        m = thr_re.search(txt)
-        if m:
-            found_in.append(rel)
+        # Walk ALL matches in the file - the common Jest/Vitest form puts the
+        # keyword-only `coverageThreshold` BEFORE the numeric lines/branches
+        # values, and stopping at the first match would hide an all-zero
+        # (stub) threshold.
+        matched = False
+        for m in thr_re.finditer(txt):
+            matched = True
             val = next((g for g in (m.group(2), m.group(3), m.group(4)) if g), None)
             if val is not None:
                 zero_only = (int(val) == 0) if zero_only in (None, True) else False
+        if matched:
+            found_in.append(rel)
     # A keyword-only match (e.g. `coverageThreshold` with no parsed number) means
     # a threshold is configured but not zero-only - report False, never null.
     if found_in and zero_only is None:

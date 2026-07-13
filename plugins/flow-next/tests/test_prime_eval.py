@@ -442,6 +442,61 @@ class TopologyTestCase(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_shape_scan_continues_past_serve_cap(self) -> None:
+        # Regression (PR #207 round 5): ten early server/main/app hits used to
+        # BREAK the whole tracked-file scan, hiding later cmd/*/main.go and
+        # *.desktop markers and skewing Axis 5 by git path order.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            repo = tmp / "shapes"
+            _init_repo(repo)
+            # Unique contents - identical files would collapse under the
+            # content-hash dedup and never reach the serve cap.
+            for i in range(10):
+                _write(repo, f"a{i:02d}/app.py", f"x = {i}\n")
+            _write(repo, "cmd/zztool/main.go", "package main\n")
+            _write(repo, "zz/launcher.desktop", "[Desktop Entry]\n")
+            _commit_all(repo, "seed")
+            markers = self.flowctl._prime_classify(repo)["shape_markers"]
+            self.assertEqual(len(markers["serve_health_code"]), 10)
+            self.assertIn("cmd/zztool/main.go", markers["bin_exports"])
+            self.assertIn("zz/launcher.desktop", markers["desktop_markers"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_parent_code_workspace_confirms_constellation(self) -> None:
+        # Regression (PR #207 round 5): suffix-form parent markers (`*.repos`,
+        # `*.code-workspace`) are documented CONFIRMED tier-b signals but were
+        # never checked by the exact-name marker tuple.
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            parent = tmp / "base"
+            parent.mkdir()
+            (parent / "team.code-workspace").write_text("{}\n", encoding="utf-8")
+            repo = parent / "svc"
+            _init_repo(repo)
+            _write(repo, "main.py", "x = 1\n")
+            _commit_all(repo, "seed")
+            member = self.flowctl._prime_classify(repo)["axes"]["topology"]["constellation_member"]
+            self.assertEqual(member["tier"], "b")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_parent_repos_manifest_confirms_constellation(self) -> None:
+        tmp = Path(tempfile.mkdtemp()).resolve()
+        try:
+            parent = tmp / "base2"
+            parent.mkdir()
+            (parent / "team.repos").write_text("repositories: []\n", encoding="utf-8")
+            repo = parent / "svc"
+            _init_repo(repo)
+            _write(repo, "main.py", "x = 1\n")
+            _commit_all(repo, "seed")
+            member = self.flowctl._prime_classify(repo)["axes"]["topology"]["constellation_member"]
+            self.assertEqual(member["tier"], "b")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_worktree_sibling_excluded_from_constellation(self) -> None:
         # A sibling whose `.git` is a FILE (gitdir: pointer) resolves to the
         # SAME repo - a worktree, not a constellation sibling (R19 edge case).
@@ -1417,6 +1472,31 @@ class SubstanceLegacyRowsTestCase(_SubstanceBase):
         cov = self._classify()["substance"]["coverage_threshold"]
         self.assertTrue(cov["threshold_found"])
         self.assertTrue(cov["zero_threshold"])  # 0 is the stub pattern
+
+    def test_jest_zero_coverage_threshold_detected(self) -> None:
+        # Regression (PR #207 round 5): the keyword `coverageThreshold`
+        # matches BEFORE the numeric values in the same file - the scan must
+        # walk all matches, or an all-zero stub threshold reports False.
+        _write(
+            self.repo, "jest.config.js",
+            "module.exports = {\n"
+            "  coverageThreshold: {\n"
+            '    global: { "lines": 0, "branches": 0 },\n'
+            "  },\n"
+            "};\n",
+        )
+        cov = self._classify()["substance"]["coverage_threshold"]
+        self.assertTrue(cov["threshold_found"])
+        self.assertTrue(cov["zero_threshold"])
+
+    def test_jest_nonzero_coverage_threshold_not_zero_only(self) -> None:
+        _write(
+            self.repo, "jest.config.js",
+            'module.exports = { coverageThreshold: { global: { "lines": 80 } } };\n',
+        )
+        cov = self._classify()["substance"]["coverage_threshold"]
+        self.assertTrue(cov["threshold_found"])
+        self.assertFalse(cov["zero_threshold"])
 
     def test_setup_stages_install_and_migrate(self) -> None:
         _write(self.repo, "setup.sh", "#!/bin/sh\nnpm ci\nnpx prisma migrate deploy\n")
